@@ -1,5 +1,6 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dugme, DurumKutusu, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
@@ -19,7 +20,7 @@ import { Gelenler } from './Gelenler.tsx';
 import { gelenler } from './gelenler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
@@ -54,6 +55,31 @@ const Kokpit3B = lazy(async () => ({ default: (await import('./Kokpit3B.tsx')).K
 // Onay ve canlı bölümü Stüdyo'nun ekranını ve stillerini getirir; düğmeye basılınca yüklenir.
 const KokpitOnay = lazy(async () => ({ default: (await import('./KokpitOnay.tsx')).KokpitOnay }));
 const Sayi = ({ n }: { n: number }) => (n > 0 ? <b className="tc-pyq-rozet" aria-hidden="true">{n}</b> : null);
+const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
+const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
+
+// Üst şeritte açılır menü (3297): az kullanılan araçlar ve planın yönü tek düğmenin altında durur. Dışarı tıklamak, Esc ve seçim kapatır.
+function Acilir({ ad, etiket, simge, sinif, etkin, disabled, children }: {
+  ad: string; etiket: string; simge: SimgeAdi; sinif?: string; etkin?: boolean; disabled?: boolean; children: (kapat: () => void) => ReactNode;
+}) {
+  const [acik, setAcik] = useState(false);
+  const kok = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!acik) return undefined;
+    const dis = (ev: PointerEvent): void => { if (!kok.current?.contains(ev.target as Node)) setAcik(false); };
+    const tus = (ev: KeyboardEvent): void => { if (ev.key === 'Escape') { ev.stopPropagation(); setAcik(false); kok.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', dis); document.addEventListener('keydown', tus, true);
+    return () => { document.removeEventListener('pointerdown', dis); document.removeEventListener('keydown', tus, true); };
+  }, [acik]);
+  return (
+    <span className={`tc-pyq-acilir${sinif ? ` ${sinif}` : ''}`} ref={kok}>
+      <button type="button" className="tc-pyq-ok" aria-haspopup="menu" aria-expanded={acik} data-etkin={etkin ? '' : undefined} disabled={disabled} title={etiket} onClick={() => { setAcik(!acik); }}>
+        <Simge ad={simge} boyut="k" /><span>{ad}</span><Simge ad="down" boyut="k" />
+      </button>
+      {acik && <div className="tc-pyq-acilir-menu" role="menu" aria-label={etiket}>{children(() => { setAcik(false); })}</div>}
+    </span>
+  );
+}
 
 export function Kokpit(o: PlanlamaEkranOzellikleri) {
   if (!o.calisma) return <div className="tc-pyq"><DurumKutusu durum="bos" mesaj="Henüz plan yok. Plan, Planlama motoru sayfasında kurulur." /></div>;
@@ -339,6 +365,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     sec(id, null); setGoster(emir.get(id)?.adimlar.find((a) => m.isler[a.id])?.id ?? null);
   }, [sec, emir, m]);
 
+  const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
   const kartlar = useMemo(() => siraKartlari(m), [m]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
   useEffect(() => { if (secEmir !== null) setKart(kokKimligi(secEmir)); }, [secEmir]);
@@ -364,6 +391,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <button type="button" key={d} data-d={d} aria-pressed={suz === d} onClick={() => { setSuz(suz === d ? null : d); }}><b>{say[d]}</b>{DURUM_ADI[d]}{fark(d)}</button>
           ))}
         </span>
+        {arizali > 0 && (
+          <button type="button" className="tc-pyq-ok tc-pyq-ariza" aria-pressed={kapasiteAcik} title="Şu anda arızada ya da bakımda olan tezgâhlar; Duruş ve mesai açılır" disabled={tur !== null || onayAcik}
+            onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setGelenAcik(false); setKapasiteAcik(!kapasiteAcik); }}>
+            <Simge ad="wrench" boyut="k" /><b>{arizali}</b><span>Arıza</span>
+          </button>
+        )}
         <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Emir, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
         <span className="tc-pyq-seg" role="group" aria-label="Görünüm">
           {GOZLER.map(([k, ad]) => <button type="button" key={k} data-goz={k} aria-pressed={goz === k} onClick={() => { setGoz(k); }}>{ad}</button>)}
@@ -374,18 +407,27 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-gi" role="group" aria-label="Geri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
         </span>
-        <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
-        <span className="tc-pyq-seg tc-pyq-yon" role="group" aria-label="Planın yönü">
-          {(['ileri', 'geri'] as const).map((y) => (
-            <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' : 'Bütün planı ileriye diz: iş ilk boş saatte başlar'} disabled={!yazabilir || tur !== null || onayAcik}
-              onClick={() => { sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(planYonu(c) === y ? null : y); setAyarAcik(true); }}>
-              <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}</span>
+        <Acilir ad={`Yön: ${YON_ADI[planYonu(c)]}`} etiket="Planın yönü" simge="route" sinif="tc-pyq-yon" disabled={!yazabilir || tur !== null || onayAcik}>
+          {(kapat) => (['ileri', 'geri'] as const).map((y) => (
+            <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y}
+              onClick={() => { kapat(); sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(planYonu(c) === y ? null : y); setAyarAcik(true); }}>
+              <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}<small>{YON_ACIKLAMASI[y]}</small></span>
             </button>
           ))}
-        </span>
-        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
-        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setGelenAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+        </Acilir>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
+        <Acilir ad="Araçlar" etiket="Araçlar" simge="wrench" etkin={onceAcik || ayarAcik || kapasiteAcik}>
+          {(kapat) => (
+            <>
+              <button type="button" role="menuitem" title="Plan sayfasında motor daha iyi bir plan arar" onClick={() => { kapat(); o.git('plan'); }}><Simge ad="play" boyut="k" /><span>Plan iyileştirme ara</span></button>
+              <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { kapat(); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
+              <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
+                onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setGelenAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+              <button type="button" role="menuitemcheckbox" aria-checked={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik}
+                onClick={() => { kapat(); if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+            </>
+          )}
+        </Acilir>
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
           <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}

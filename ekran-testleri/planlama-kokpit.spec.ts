@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test';
+import type { Locator, Page, Route } from '@playwright/test';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kart 3151: Kokpit (Planlama > Kokpit). Genişlik projeden gelir (360, 768, 1280). Çalışma okuması ve sunucu komutları ağ katmanında uydurma
@@ -72,6 +72,11 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
 }
 const ILK_DURUM: Durum = { ops: ILK, locks: {}, w: { dondurma: 4 } };
 const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.down ?? [], ekMesai: d.ekMesai ?? [] });
+// 3297: Önce / sonra, Duruş ve mesai, Ayarlar ve Plan iyileştirme ara üst şeritte tek "Araçlar" menüsündedir.
+async function arac(kokpit: Locator, ad: string) {
+  await kokpit.getByRole('button', { name: 'Araçlar' }).click();
+  await kokpit.getByRole('menu', { name: 'Araçlar' }).locator('button', { hasText: ad }).click();
+}
 async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
   const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
   const gorunum = () => oynat(s.ortak, s.satirlar.map((x) => x.komut));
@@ -685,7 +690,7 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  await kokpit.getByTitle('Plan ayarları').click();
+  await arac(kokpit, 'Ayarlar');
   const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
   await expect(panel).toBeVisible();
   await expect(panel.getByText('ATCS (öncelik, termin ve süre birlikte)')).toBeVisible();
@@ -726,16 +731,22 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  // Üst şeritteki yön düğmesi paneli o yönle açar; değişiklik panelde etkisiyle uygulanır. Telefonda üst şeritte yön yoktur, panelde seçilir.
-  const ustYon = kokpit.getByRole('group', { name: 'Planın yönü' });
+  // Üst şeritte yön tek seçimdir (3297): düğme geçerli yönü yazar, menüde iki yön açıklamasıyla durur; seçim paneli o yönle açar, değişiklik
+  // panelde etkisiyle uygulanır. Telefonda üst şeritte yön yoktur, panelde seçilir.
+  const ustYon = kokpit.getByRole('button', { name: /^Yön:/ });
+  const yonMenusu = kokpit.getByRole('menu', { name: 'Planın yönü' });
   const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
   if (bilgi.project.name === 'g360') {
     await expect(ustYon).toBeHidden();
-    await kokpit.getByTitle('Plan ayarları').click();
+    await arac(kokpit, 'Ayarlar');
     await panel.getByLabel('Planlama yönü').selectOption('geri');
   } else {
-    await expect(ustYon.getByRole('button', { name: 'İleriye planla' })).toHaveAttribute('aria-pressed', 'true');
-    await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
+    await expect(ustYon).toContainText('Yön: İleriye');
+    await ustYon.click();
+    await expect(yonMenusu.getByRole('menuitemradio', { name: /İleriye planla/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(yonMenusu.getByRole('menuitemradio', { name: /Teslimden geriye/ })).toContainText('iş termine yetişecek en geç saatte başlar');
+    await yonMenusu.getByRole('menuitemradio', { name: /Teslimden geriye/ }).click();
+    await expect(yonMenusu).toHaveCount(0);
   }
   await expect(panel.getByLabel('Planlama yönü')).toHaveValue('geri');
   await expect(panel.getByLabel(/Geri planlama tamponu/)).toHaveValue('0');
@@ -756,12 +767,14 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
     t.s.komutlar.length = 0;
     // Geçerli yönün düğmesi ölü değildir: paneli açar, plana dokunmaz.
     await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
-    await ustYon.getByRole('button', { name: 'İleriye planla' }).click();
+    await ustYon.click();
+    await yonMenusu.getByRole('menuitemradio', { name: /İleriye planla/ }).click();
     await expect(panel.getByLabel('Planlama yönü')).toHaveValue('ileri');
     expect(t.s.komutlar).toEqual([]);
     // Etki beklerken panel X ile kapatılırsa kilit kalkar: komut taslakta kalır, Canlıya al yeniden açılır (Test T1).
     await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
-    await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
+    await ustYon.click();
+    await yonMenusu.getByRole('menuitemradio', { name: /Teslimden geriye/ }).click();
     await expect(yonEtkisi.getByRole('button', { name: 'Uygula' })).toBeVisible();
     const canli = kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Canlıya al' });
     await expect(canli).toBeDisabled();
@@ -770,7 +783,8 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
     await kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Geri al' }).click();
     await expect.poll(() => t.s.satirlar.length).toBe(0);
     t.s.komutlar.length = 0;
-    await ustYon.getByRole('button', { name: 'İleriye planla' }).click();
+    await ustYon.click();
+    await yonMenusu.getByRole('menuitemradio', { name: /İleriye planla/ }).click();
   }
   await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
   await kokpit.locator('[data-kart="S4"]').click();
@@ -801,7 +815,7 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza 
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  await kokpit.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi').click();
+  await arac(kokpit, 'Duruş ve mesai');
   const panel = kokpit.getByRole('complementary', { name: 'Duruş ve mesai' });
   await panel.getByLabel('Tezgâh').selectOption('M2');
   const oto = panel.getByRole('listitem').filter({ hasText: 'kendiliğinden geldi' });
@@ -842,7 +856,7 @@ test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görün�
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  await kokpit.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi').click();
+  await arac(kokpit, 'Duruş ve mesai');
   const panel = kokpit.getByRole('complementary', { name: 'Duruş ve mesai' });
   await panel.getByLabel('Tezgâh').selectOption('M2');
   const form = panel.getByRole('form', { name: 'Ek mesai ekle' });
