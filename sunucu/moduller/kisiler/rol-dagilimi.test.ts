@@ -296,4 +296,26 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
       }, beklenen, kod);
     }
   });
+
+  // Yapan ile onaylayan ayrı (kullanıcı kararı 3277-4 a): ayna testi göç, beklenti ve belgenin eşitliğine bakar; üçü birlikte
+  // değişirse yeşil kalır. Bu test dağılımın kendisini göçün kurduğu veritabanından ölçer.
+  test('proses mühendisi rota, şartname, CNC kurulum ve değişiklik işini yazar; hiçbir onay, yayın ya da karar işlemini taşımaz', async () => {
+    const islemler = new Set((await vt().sorgu<{ islem: string }>(
+      'SELECT ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = $1', ['proses_muhendisi'],
+    )).map((r) => r.islem));
+    const yazar = [
+      'rota.taslak-ac', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.talimat-yaz', 'rota.sartname-yaz', 'rota.sure-kabul',
+      'cnc-kurulum.yaz', 'degisiklik-yonetimi.talep-ac', 'degisiklik-yonetimi.revizyon-hazirla',
+    ];
+    const tasimaz = [
+      'rota.onayla', 'rota.sartname-yayinla', 'rota.emre-kopyala', 'cnc-kurulum.hazirlik-onayla',
+      'kalite-merkezi.yaz', 'kalite-merkezi.onayla',
+      'degisiklik-yonetimi.siniflandir', 'degisiklik-yonetimi.ccb-karar', 'degisiklik-yonetimi.karar-ver',
+      'degisiklik-yonetimi.mrb-karar', 'degisiklik-yonetimi.fai-onayla', 'degisiklik-yonetimi.musteri-onayi',
+      'degisiklik-yonetimi.yayinla', 'degisiklik-yonetimi.kapat',
+    ];
+    assert.deepEqual(yazar.filter((i) => !islemler.has(i)), [], 'eksik yazma işlemi');
+    assert.deepEqual(tasimaz.filter((i) => islemler.has(i)), [], 'onay ya da karar işlemi');
+    assert.deepEqual([...islemler].filter((i) => i.endsWith('.onayla')), [], 'onay işlemi');
+  });
 });
