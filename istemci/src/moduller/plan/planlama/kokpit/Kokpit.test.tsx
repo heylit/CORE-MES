@@ -338,6 +338,23 @@ describe('Kokpit', () => {
     vi.unstubAllGlobals();
   });
 
+  // 3282 2a-1: Kapasite üst şeritten açılır (düğme basılı görünür) ve seçimi kaldırır; Ayarlar açılınca kapanır.
+  it('Kapasite üst şeritteki düğmeyle açılır ve kapanır; Ayarlar onu kapatır', () => {
+    ac();
+    const dugme = screen.getByTitle('Tezgâhın arıza ve bakım duruşları');
+    expect(dugme.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(dugme);
+    expect(screen.getByRole('complementary', { name: 'Duruşlar' })).toBeTruthy();
+    expect(dugme.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTitle('Plan ayarları'));
+    expect(screen.queryByRole('complementary', { name: 'Duruşlar' })).toBeNull();
+    expect(dugme.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(dugme);
+    expect(screen.getByRole('complementary', { name: 'Duruşlar' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Duruşları kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Duruşlar' })).toBeNull();
+  });
+
   // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.
   it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; Onay ve canlı açıkken üst düğme ikincildir ve Ayarlar kapalıdır', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
