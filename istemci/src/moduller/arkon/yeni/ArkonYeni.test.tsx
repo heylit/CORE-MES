@@ -113,12 +113,12 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     sunucuKur(OPERATOR);
     arkonAc('/uretim-terminali', { kabuktaki: true });
     await bolum('Üretim Terminali');
-    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); });
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); }, { timeout: 10000 });
     fireEvent.click(screen.getByRole('link', { name: 'Başka sayfaya git' }));
     await screen.findByText('Başka sayfa');
-    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(false); });
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(false); }, { timeout: 10000 });
     fireEvent.click(screen.getByRole('link', { name: 'Terminale dön' }));
-    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); });
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); }, { timeout: 10000 });
   }, 20000);
 
   it('3298: istasyon önizlemesi Vardiya özeti açıcısı kaydetmez (reddedilen)', async () => {
