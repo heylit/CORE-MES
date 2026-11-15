@@ -37,6 +37,17 @@ test.describe('operatör', () => {
     await expect(terminal.locator('.tc-ay1-kadran')).not.toContainText('kaldı');
   });
 
+  // 3298: üst şeritte tema, Menü ve vardiya kişi düğmesi yok; Vardiya özeti ve devir kabuğun Hesap menüsünden açılır.
+  test('3298: Vardiya özeti ve devir Hesap menüsünden açılır; şeritte tema ve Menü yok', async ({ page, ag, ac }) => {
+    await ac('/uretim-terminali');
+    await expect(page.getByRole('button', { name: 'İş kartı okut' }).first()).toBeVisible();
+    for (const ad of ['Tema değiştir', 'Menü']) await expect(page.getByRole('button', { name: ad, exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await page.getByRole('menuitem', { name: 'Vardiya özeti ve devir' }).click();
+    await expect(page.getByRole('dialog', { name: /Vardiya/ })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+
   test('eski terminal adresi çerçeve açmaz; kişi menüsünde görünüm geçişi yoktur', async ({ page, ac }) => {
     await ac('/uretim-terminali/eski');
     await expect(page.getByRole('heading', { name: 'Yetkiniz yok' }).or(page.getByRole('region', { name: 'Üretim Terminali' })).first()).toBeVisible();
