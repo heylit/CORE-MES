@@ -1256,10 +1256,10 @@ async function ayriEmirOlarakBol(
   const ilk = [...kendi].sort((a, b) => a.sira - b.sira)[0];
   if (ilk === undefined) throw cakisma('Emrin adımı yok; önce adım ekleyin.');
   const ihlal = farkliRotaliBolmeIhlali({
-    turAdi: EMIR_TURU_ADLARI[g.emirTuru], rotaAdi: hedef.ad, revizyonVar: hedef.revizyonId !== null,
-    adimBasladi: kendi.some((i) => i.durum !== 'bekliyor'), kolVeyaEk: g.kolVeyaEk,
+    turAdi: EMIR_TURU_ADLARI[g.emirTuru], adimBasladi: kendi.some((i) => i.durum !== 'bekliyor'), kolVeyaEk: g.kolVeyaEk,
   });
-  if (ihlal !== null || hedef.revizyonId === null) throw cakisma(ihlal ?? farkliRotaYururlukteDegilIletisi(EMIR_TURU_ADLARI[g.emirTuru], hedef.ad));
+  if (ihlal !== null) throw cakisma(ihlal);
+  if (hedef.revizyonId === null) throw cakisma(farkliRotaYururlukteDegilIletisi(EMIR_TURU_ADLARI[g.emirTuru], hedef.ad));
   if (rota.rezervesiVar !== undefined && await rota.rezervesiVar(db, e.id)) throw cakisma(farkliRotaRezerveliIletisi(EMIR_TURU_ADLARI[g.emirTuru]));
   const adetIhlali = bolmeIhlali(await bolmeDurumu(db, e, kendi, ilk.sira), ilk.sira, g.adet, null);
   if (adetIhlali === BOLME_ADET || adetIhlali === BOLME_URETILMIS) throw dogrulama(adetIhlali, 'adet');
