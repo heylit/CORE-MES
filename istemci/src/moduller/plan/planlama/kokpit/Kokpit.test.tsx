@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
@@ -10,6 +11,7 @@ import { saatiSabitle } from '../test-saati.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { Kokpit } from './index.tsx';
+import { onayAcIste } from './istek.ts';
 
 // Örnek çalışma uydurmadır (iki emir: biri geç, biri riskli). Sunucu çağrısı yapılmaz; taşıma ve tur ekran testindedir
 // (ekran-testleri/planlama-kokpit.spec.ts).
@@ -26,12 +28,12 @@ function komutKur(adim: number): CalismaKomutu {
 function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true) {
   const sec = vi.fn();
   render(
-    <BildirimSaglayici>
+    <MemoryRouter><BildirimSaglayici>
       <Kokpit
         depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} {...oz}
       />
-    </BildirimSaglayici>,
+    </BildirimSaglayici></MemoryRouter>,
   );
   return { sec };
 }
@@ -179,7 +181,9 @@ describe('Kokpit', () => {
     ac();
     const d = screen.getByRole('button', { name: 'Onaya gönder' });
     expect(d.className).not.toContain('tc-dugme-birincil');
-    expect(d.hasAttribute('disabled')).toBe(true);
+    // 3282: engel varken de bölüm açılır (müdür onaydakini onaylar); nedeni ipucundadır.
+    expect(d.hasAttribute('disabled')).toBe(false);
+    expect(d.getAttribute('title')).toMatch(/^Gönderilemez/);
     cleanup();
     ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
     expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).not.toContain('tc-dugme-birincil');
@@ -206,6 +210,61 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('region', { name: 'Emirler' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: "Matris'e geç" }));
     expect(document.querySelector('.tc-pyq-mat-kap')).not.toBeNull();
+  });
+
+  // 3282-4 a: canlıya alma yetkisi olana düğme Canlıya al'dır; Onay ve canlı bölümü Kokpit'te açılır, tahtaya düğmeyle dönülür.
+  it('Canlıya al Onay ve canlı bölümünü Kokpit\'te açar; onay bekleyen sayısı düğmededir; Planı düzenle tahtaya döner', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const senaryo = (id: number, ad: string, durum: string) => ({
+      id, ad, aciklama: null, durum, acan: 'ORN-Planlamaci', benim: false, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
+      gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: false, canliyaAl: false },
+    });
+    const senaryolar = { canli: null, canliSurum: 3, senaryolar: [senaryo(1, 'Onay Pzt', 'onayda'), senaryo(2, 'Deneme', 'acik')] };
+    render(
+      <MemoryRouter><BildirimSaglayici>
+        <Kokpit
+          depo={{ ...DEPO, senaryolar } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
+          yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
+        />
+      </BildirimSaglayici></MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /^Onaya gönder/ })).toBeNull();
+    const d = screen.getByRole('button', { name: /^Canlıya al/ });
+    expect(d.textContent).toBe('Canlıya al1');
+    fireEvent.click(d);
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(document.querySelector('.tc-pyq-tahta')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Planı düzenle' }));
+    expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
+  });
+
+  it('Stüdyo\'dan "Kokpit\'te aç" ile gelinince Onay ve canlı açık başlar; istek bir kez alınır', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    onayAcIste();
+    ac();
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    cleanup();
+    ac();
+    expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
+  });
+
+  it('Gelenler: saha olayları emir Kokpit\'teyse Göster ile emri seçer; emri olmayan olayda düğme yok; liste kapanır', () => {
+    const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
+      { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
+      { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
+    ] };
+    vi.stubGlobal('CSS', { escape: (x: string) => x });
+    const { sec } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
+    const kutu = screen.getByRole('region', { name: 'Gelenler' });
+    const satirlar = within(kutu).getAllByRole('listitem');
+    expect(satirlar.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01'), expect.stringContaining('Satın alma termini')]);
+    expect(within(satirlar[0]!).queryByRole('button')).toBeNull();
+    expect(satirlar[0]!.textContent).toContain('Arıza / bakım');
+    fireEvent.click(within(kutu).getByRole('button', { name: 'Göster' }));
+    expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
+    fireEvent.click(within(kutu).getByRole('button', { name: /Gelenler/ }));
+    expect(within(kutu).queryAllByRole('listitem')).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 
   it('çalışma yokken boş durum gösterir', () => {

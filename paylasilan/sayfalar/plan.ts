@@ -3,6 +3,7 @@ import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 // Planlama plan modülünün tek sayfasıdır (658 b, 661 a): Reçete ve Rota planı besler, planı Planlama ve motoru kurar. Maddeler eski
 // Reçete ve Rota > Planlama grubunun aynısıdır; madde anahtarı görünümün adıdır. Planlama maddeleri planlama sayfalarını görme işlemini
 // ister (yönetici, müdür ve planlama; 195 a, 663 a), maliyet ve kâr gösteren üçü birim maliyet okumasını (planlama rolü maliyet görmez, 200 a).
+// Kokpit planın tek yeridir (3282-1 a, 3282-2 b): ilk madde ve kök adres odur; Motor ve Stüdyo okunur olarak menüde kalır.
 // Kapasite tek maddedir: yük haritası, ek mesai, fason ve yıllık plan onun bölümleridir (planlama/gorunumler.ts KAPASITE_BOLUMLERI).
 export const PLAN_SAYFALARI = [
   { yol: '/plan', islem: 'sayfa.plan', baslik: 'Planlama', simge: 'dash', grup: 'Planlama', sira: 10 },
@@ -14,9 +15,9 @@ export const PLAN_IKINCI_MENU = {
   simge: 'dash',
   gruplar: [
     { maddeler: [
-      { anahtar: 'plan', baslik: 'Motor', yol: '/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
+      { anahtar: 'kokpit', baslik: 'Kokpit', yol: '/plan', simge: 'target', islem: 'plan.planlama-oku' },
+      { anahtar: 'plan', baslik: 'Motor', yol: '/plan/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
       { anahtar: 'studio', baslik: 'Stüdyo', yol: '/plan/studio', simge: 'flag', islem: 'plan.planlama-oku' },
-      { anahtar: 'kokpit', baslik: 'Kokpit', yol: '/plan/kokpit', simge: 'target', islem: 'plan.planlama-oku' },
       { anahtar: 'ysiparis', baslik: 'Siparişler', yol: '/plan/ysiparis', simge: 'list', islem: 'plan.planlama-oku' },
       { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/plan/maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
       { anahtar: 'giderler', baslik: 'Genel gider', yol: '/plan/giderler', simge: 'layers', islem: 'finans.maliyet-oku' },

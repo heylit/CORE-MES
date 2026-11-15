@@ -14,9 +14,9 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('PlanlamaYeni', () => {
   it('kök adres Planlama motoru görünümüdür; görünüm sırası ikinci menünündür; kayıt varken açılış yalnız okur', async () => {
     const istekler = sunucuKur(YONETICI, [CALISMA_KAYDI]);
-    ac('/plan');
+    ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
-    expect(screen.getByTestId('adres').textContent).toBe('/plan');
+    expect(screen.getByTestId('adres').textContent).toBe('/plan/plan');
     expect(GORUNUM_KAYITLARI.map((k) => k.baslik)).toEqual(MENU.map((m) => m.baslik));
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
     expect(istekler).toEqual(expect.arrayContaining(['GET /recete-rota/ben', 'GET /recete-rota/kayitlar', 'GET /plan/planlama-kaynagi', 'GET /plan/senaryolar']));
@@ -34,7 +34,7 @@ describe('PlanlamaYeni', () => {
 
   it('1395 a: kayıt yoksa açılış yazmaz; yazabilen düğmeyle boş çalışmayı kurdurur ve yeniden okunur; yazamayana düğme çıkmaz', async () => {
     const istekler = sunucuKur(YONETICI);
-    ac('/plan');
+    ac('/plan/plan');
     const dugme = await screen.findByRole('button', { name: 'Planlama çalışmasını aç' }, { timeout: 10000 });
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
     fireEvent.click(dugme);
@@ -42,7 +42,7 @@ describe('PlanlamaYeni', () => {
     await waitFor(() => { expect(istekler.filter((i) => i === 'GET /plan/planlama-calismasi')).toHaveLength(2); }, { timeout: 10000 });
     cleanup(); vi.unstubAllGlobals();
     const okuyan = sunucuKur(MALIYETSIZ);
-    ac('/plan');
+    ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: 'Planlama çalışmasını aç' })).toBeNull();
     expect(okuyan.filter((i) => !i.startsWith('GET'))).toEqual([]);
@@ -54,7 +54,7 @@ describe('PlanlamaYeni', () => {
     const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
     expect(cubuk.querySelector('[aria-current]')).toBeNull();
     fireEvent.click(within(cubuk).getByRole('button', { name: 'Motor' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); });
     await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
   }, 20000);
 
@@ -87,25 +87,25 @@ describe('PlanlamaYeni', () => {
 
   it('planlama okuması olmayan kişi ekranı açamaz ve hiçbir planlama ucunu sormaz', async () => {
     const istekler = sunucuKur(PLANLAMASIZ);
-    ac('/plan');
+    ac('/plan/plan');
     expect(await screen.findByText('Planlama sayfalarını görme yetkiniz yok.', {}, { timeout: 10000 })).toBeTruthy();
     expect(istekler.filter((i) => i !== 'GET /oturum')).toEqual([]);
   }, 20000);
 
   it('659 a: ekran yönetici kapısı istemez; planlama işlemi olan kişi açar', async () => {
     sunucuKur(KAPISIZ);
-    ac('/plan');
+    ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
   }, 20000);
 
   it('zorunlu okuma düşerse hata ve yeniden deneme gösterilir; isteğe bağlı okuma düşerse ekran açılır', async () => {
     sunucuKur(YONETICI, [], { ret: (y) => y === '/recete-rota/kayitlar' });
-    ac('/plan');
+    ac('/plan/plan');
     expect(await screen.findByText('Bu işlem için yetkiniz yok.', {}, { timeout: 10000 })).toBeTruthy();
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(YONETICI, [], { ret: (y) => y === '/plan/senaryolar' });
-    ac('/plan');
+    ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
   }, 20000);
 });

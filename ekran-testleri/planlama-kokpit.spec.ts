@@ -98,7 +98,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   await expect(tur.locator('[data-hamle="M2"]')).toContainText(/termine yetişir/);
   await expect(tur.getByRole('button', { name: 'Uygula, sıradaki' })).toBeInViewport({ ratio: 1 });
   // Tur her hamleyi o anda taslağa yazar: tur sürerken onaya gönderilmez. 768 ve üstünde panel tahtanın yanındadır, üstüne binmez.
-  await expect(kokpit.getByRole('button', { name: 'Onaya gönder' })).toBeDisabled();
+  await expect(kokpit.getByRole('button', { name: /^Canlıya al/ })).toBeDisabled();
   if (bilgi.project.name !== 'g360') {
     const pk = await tur.boundingBox(), tk = await kokpit.locator('.tc-pyq-tahta').boundingBox();
     expect(pk && tk && pk.x >= tk.x + tk.width).toBe(true);
@@ -351,6 +351,43 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
 });
 
 // Kart 3229 a: plansız emir adım adım plana alınır. S4 burada iki adımlıdır; ikinci adımın rotasında F-01 ve F-02 vardır, T-01 yoktur.
+// Kart 3282 (dilim 1a): Planlama Kokpit'le açılır; Gelenler plansız emri ve saha olayını gösterir, Yerleştir emrin ayrıntısında plana alma
+// seçeneklerini açar. Canlıya al Onay ve canlı bölümünü Kokpit'te açar; Planı düzenle tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
+test('Kokpit 3282: /plan Kokpit\'i açar; Gelenler ve Yerleştir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum: 1 }));
+  await page.route('**/api/plan/surum', (r) => json(r, {
+    planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
+    bayat: { bayat: true, sonCanliyaAlma: '2026-10-19T05:00:00Z', olaylar: [{ neden: 'durus', zaman: '2026-10-19T06:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'F-01' }] },
+  }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: 1, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }], bitis: S + 4 });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const gelen = kokpit.getByRole('region', { name: 'Gelenler' });
+  await expect(gelen.getByRole('listitem')).toHaveCount(2);
+  await expect(gelen.getByRole('listitem').first()).toContainText('S4');
+  await expect(gelen.getByRole('listitem').nth(1)).toContainText('Arıza / bakım');
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-kokpit-${bilgi.project.name}.png` });
+  await gelen.getByRole('button', { name: 'Yerleştir' }).click();
+  const s4 = kokpit.getByRole('complementary', { name: /S4 ayrıntısı/ });
+  await expect(s4.getByRole('heading', { name: 'Plana al' })).toBeVisible();
+  await expect(s4.locator('[data-hamle]').first()).toBeVisible();
+  await s4.getByRole('button', { name: 'Ayrıntıyı kapat' }).click();
+  await kokpit.getByRole('button', { name: /^Canlıya al/ }).click();
+  await expect(page.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeVisible({ timeout: 10_000 });
+  await expect(kokpit.locator('.tc-pyq-tahta')).toHaveCount(0);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-onay-${bilgi.project.name}.png` });
+  await page.getByRole('button', { name: 'Planı düzenle' }).click();
+  await expect(kokpit.getByRole('region', { name: 'Gelenler' })).toBeVisible();
+  expect(ag.hatalar).toEqual([]);
+});
+
 test('Kokpit: adım adım plana alma; seçilen tezgâh ve saat önizlemeye ve komuta gider, rota dışı tezgâh seçilemez; yatay taşma yok', async ({ page, ac, ag }) => {
   const c = calisma({ ...ILK }, {});
   c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }] }];

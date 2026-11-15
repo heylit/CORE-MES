@@ -48,6 +48,32 @@
 /* --- gövde --- */
 .tc-pyq-govde { display: flex; align-items: flex-start; gap: var(--b-3); min-width: 0; }
 .tc-pyq-ana { flex: 1 1 0; min-width: 0; }
+/* Gelenler (3282): geniş ekranda tahtanın solunda dar sütun, daha darda tahtanın üstünde kapanabilir şerit. */
+.tc-pyq-gelenler {
+  display: flex; flex-direction: column; gap: var(--b-2); flex: 0 0 calc(var(--b-6) * 7.5); min-width: 0; max-height: var(--ekran-boy-70); padding: var(--b-2);
+  overflow: auto; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid);
+}
+.tc-pyq-gelenler h2 { margin: 0; font-size: var(--yazi-s); }
+.tc-pyq-gelenler h2 button {
+  display: flex; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dokunma); padding: 0 var(--b-1); border: 0; background: transparent;
+  color: var(--muted); font: inherit; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.tc-pyq-gelenler h2 button > span { flex: 1 1 auto; text-align: start; }
+/* Sayı başlığın içinde durur; düğmelerdeki köşe rozeti değildir. */
+.tc-pyq-gelenler h2 .tc-pyq-rozet { position: static; }
+.tc-pyq-gelenler ul { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-gelenler li { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-pyq-gelenler li[aria-current="true"] { border-color: var(--hazard); }
+.tc-pyq-gelenler li p { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyq-gelen-bas { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-pyq-gelen-bas b { min-width: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.tc-pyq-gelen-dugme { align-self: flex-start; }
+.tc-pyq-onay { flex: 1 1 0; min-width: 0; }
+@media (max-width: 1279px) {
+  .tc-pyq-govde:has(> .tc-pyq-gelenler) { flex-wrap: wrap; }
+  .tc-pyq-gelenler { flex: 1 1 100%; max-height: none; }
+  .tc-pyq-gelenler ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--b-6) * 7), 1fr)); }
+}
 .tc-pyq-liste { display: none; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
 .tc-pyq-liste ul { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
 .tc-pyq-liste section { display: flex; flex-direction: column; gap: var(--b-1); margin-bottom: var(--b-2); }

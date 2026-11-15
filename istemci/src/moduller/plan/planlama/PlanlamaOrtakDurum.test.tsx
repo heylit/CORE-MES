@@ -23,7 +23,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Görünümler arası ölçek ve seçim', () => {
   it('açılışta Hafta ve boş seçim; ölçek kaymayı sıfırlar, seçim alan alan değişir, görünüm değişince korunur, yazma gitmez', async () => {
     const istekler = sunucuKur(YONETICI, [CALISMA_KAYDI]);
-    ac('/plan');
+    ac('/plan/plan');
     const olcek = await screen.findByTestId('olcek', {}, { timeout: 10000 });
     expect(olcek.textContent).toBe('hafta 0');
     expect(screen.getByTestId('secim').textContent).toBe('- - - -');

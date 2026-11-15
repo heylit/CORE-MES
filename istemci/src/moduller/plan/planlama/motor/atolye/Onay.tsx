@@ -90,9 +90,16 @@ export interface OnayOzellikleri {
   sen: SenaryolarCevabi | null;
   senYaz: (s: SenaryolarCevabi) => void;
   planSekmesi: () => void;
+  // 3282-4 a: canlıya alma ve onay yalnız Kokpit'tedir; Stüdyo bu bölümü okunur gösterir ve Kokpit'e yönlendirir.
+  saltOkunur?: { kokpiteGit: () => void };
 }
 
-export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }: OnayOzellikleri) {
+// Okunur görünüm: yazma yetkileri ve çalışma komutu düşer; düğmeler yetkiye göre çizildiği için hepsi gizlenir. Ret yine sunucudadır.
+const okunur = (o: PlanlamaEkranOzellikleri): PlanlamaEkranOzellikleri =>
+  ({ ...o, komut: null, yetki: { ...o.yetki, planYaz: false, planStudyo: false, planCanliyaAl: false, calismaYazabilir: false } });
+
+export function OnaySekmesi({ o: oGelen, c, p, cf: cfSunucu, sen, senYaz, planSekmesi, saltOkunur }: OnayOzellikleri) {
+  const o = useMemo(() => (saltOkunur ? okunur(oGelen) : oGelen), [oGelen, saltOkunur]);
   const { bildir } = useBildirim();
   const hataBildir = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, hataBildir);
@@ -253,8 +260,9 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   return (
     <div className="tc-pym-pa">
       <header className="tc-pym-pa-bas">
-        <div><p>Yeni plan, değişiklik ve denemeler burada canlıyla karşılaştırılır, kontrol edilir ve onaylanır. Canlı plan yalnız burada onaylanınca değişir; o zamana kadar tezgâh kuyrukları ve operatör ekranı eski planı gösterir.</p></div>
+        <div><p>{saltOkunur ? 'Bu bölüm okunurdur. Planlar Kokpit\'te onaya gönderilir, onaylanır ve canlıya alınır; burada yalnız karşılaştırılır.' : 'Yeni plan, değişiklik ve denemeler burada canlıyla karşılaştırılır, kontrol edilir ve onaylanır. Canlı plan yalnız burada onaylanınca değişir; o zamana kadar tezgâh kuyrukları ve operatör ekranı eski planı gösterir.'}</p></div>
         <div className="tc-pym-pa-dugmeler">
+          {saltOkunur && <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" onClick={saltOkunur.kokpiteGit}><Simge ad="target" boyut="k" />Kokpit'te aç</button>}
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={planSekmesi}><Simge ad="layers" boyut="k" />Planı düzenle</button>
           {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" title="Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." onClick={() => { o.git('plan'); }}><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
         </div>
@@ -319,7 +327,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
               gonder={(h) => { if (h === 'canli') setCalSor(true); else void calGonder(h); }} />
           )}
           {secS && (
-            <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} K={paKontrol(secS, canli, canliSurum, planK(secS.id))} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
+            <Secili s={saltOkunur ? { ...secS, yapabilir: undefined } : secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} K={paKontrol(secS, canli, canliSurum, planK(secS.id))} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
               gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); }, ac: async (s) => { acIste(s); } }}
               motorDegisti={() => { api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined); }} />
           )}

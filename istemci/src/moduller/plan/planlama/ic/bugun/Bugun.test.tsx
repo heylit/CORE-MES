@@ -195,7 +195,7 @@ describe('Bugünün kararları sayfaya bağlı', () => {
   const bugun = () => document.querySelector('[data-parca="bugun"]');
   it('Başka menüsünün Sayfalar\'ından açılır; adresle doğrudan açılır; Plan düğmesi tahtaya döner', async () => {
     sunucuKur(YONETICI, KAYIT);
-    sayfaAc('/plan');
+    sayfaAc('/plan/plan');
     fireEvent.click(await screen.findByRole('button', { name: 'Kartlar' }, { timeout: 10000 }));
     fireEvent.click(within(screen.getByRole('group', { name: 'Sayfalar' })).getByRole('menuitem', { name: 'Bugünün kararları' }));
     await waitFor(() => { expect(bugun()).not.toBeNull(); }, { timeout: 10000 });
