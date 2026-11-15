@@ -418,6 +418,7 @@ export const TASLAK_KOMUTU_EN_COK = 200;
 const taslakKimlik = z.string().trim().min(1).max(120);
 // Motorun en uzun ufku 182 gün (motor/engine.js UFUK_ENCOK); ufkun kendisi çalışmanın ayarıdır, sunucu komutta ayrıca sınar.
 const durusSaati = z.number().min(0).max(182 * 24).multipleOf(0.25);
+const ekMesaiGunu = z.number().int().min(0).max(182);
 // Ayar komutu Kokpit Ayarlar panelinin alanlarıdır (istemci kokpit/ayarlar.ts AYAR_ALANLARI); sınırlar aynı.
 export const taslakAyarlari = z.object({
   w: z.object({
@@ -439,6 +440,9 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   // gününün 00:00'ı 0), çeyrek saat adımlı. Silme satırı değeriyle bulur; otomatik (arızadan ya da bakım planından gelen) satır silinmez.
   z.object({ tur: z.literal('durus'), tezgah: taslakKimlik, bas: durusSaati, bit: durusSaati, neden: z.enum(['arıza', 'bakım']) }).strict(),
   z.object({ tur: z.literal('durus-sil'), tezgah: taslakKimlik, bas: durusSaati, bit: durusSaati }).strict(),
+  // 3282 2a-2: ek mesai tezgâha gün ve vardiya açar; personel o vardiyada tezgâhı çalıştıracak kişidir (3282-7 b), boşsa operatörsüz.
+  z.object({ tur: z.literal('ek-mesai'), tezgah: taslakKimlik, gun: ekMesaiGunu, vardiya: taslakKimlik, personel: taslakKimlik.nullable() }).strict(),
+  z.object({ tur: z.literal('ek-mesai-sil'), tezgah: taslakKimlik, gun: ekMesaiGunu, vardiya: taslakKimlik }).strict(),
 ]);
 // taslakSurumu: sayfanın gördüğü taslak sürümü (taslak yoksa null); iki sekmede aynı kişinin yazması birbirini ezmez.
 export const taslakKomutGovdesi = z.object({ taslakSurumu: z.number().int().nullable(), komut: taslakKomutu }).strict();

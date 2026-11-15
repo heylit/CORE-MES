@@ -341,18 +341,18 @@ describe('Kokpit', () => {
   // 3282 2a-1: Kapasite üst şeritten açılır (düğme basılı görünür) ve seçimi kaldırır; Ayarlar açılınca kapanır.
   it('Kapasite üst şeritteki düğmeyle açılır ve kapanır; Ayarlar onu kapatır', () => {
     ac();
-    const dugme = screen.getByTitle('Tezgâhın arıza ve bakım duruşları');
+    const dugme = screen.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi');
     expect(dugme.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(dugme);
-    expect(screen.getByRole('complementary', { name: 'Duruşlar' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
     expect(dugme.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByTitle('Plan ayarları'));
-    expect(screen.queryByRole('complementary', { name: 'Duruşlar' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
     expect(dugme.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(dugme);
-    expect(screen.getByRole('complementary', { name: 'Duruşlar' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Duruşları kapat' }));
-    expect(screen.queryByRole('complementary', { name: 'Duruşlar' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Duruş ve mesaiyi kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
   });
 
   // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.

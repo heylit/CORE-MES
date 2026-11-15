@@ -466,11 +466,12 @@ export const carpanTaslaktanSil = (db: Db, senaryoId: number, siparisId: number 
 
 /* ---------------- ek mesai (507 2 a, 508 1 a) ---------------- */
 
-// Hedefin (boş: canlı) ek vardiyaları; saat yazıldığı andaki vardiya süresidir.
-export interface EkMesaiSatiri { makineId: number; gun: string; vardiyaId: number; saat: number }
+// Hedefin (boş: canlı) ek vardiyaları; saat yazıldığı andaki vardiya süresidir. personelId (3282 2a-2): tezgâhı çalıştıracak kişi; boşsa
+// motor sanal kişi ekler.
+export interface EkMesaiSatiri { makineId: number; gun: string; vardiyaId: number; saat: number; personelId: number | null }
 export async function ekMesailer(db: Db, hedef: Hedef): Promise<EkMesaiSatiri[]> {
   const r = await db.sorgu<Omit<EkMesaiSatiri, 'saat'> & { saat: string }>(
-    `SELECT makine_id AS "makineId", to_char(gun, 'YYYY-MM-DD') AS gun, vardiya_id AS "vardiyaId", saat FROM plan_senaryo_ek_mesai
+    `SELECT makine_id AS "makineId", to_char(gun, 'YYYY-MM-DD') AS gun, vardiya_id AS "vardiyaId", saat, personel_kisi_id AS "personelId" FROM plan_senaryo_ek_mesai
       WHERE senaryo_id IS NOT DISTINCT FROM $1 ORDER BY gun, makine_id, vardiya_id`, [hedef]);
   return r.map((x) => ({ ...x, saat: Number(x.saat) }));
 }
@@ -479,11 +480,11 @@ export async function ekMesaiYaz(db: Db, senaryoId: number, satirlar: readonly E
   await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [senaryoId]);
   if (satirlar.length === 0) return;
   await db.sorgu(
-    `INSERT INTO plan_senaryo_ek_mesai (senaryo_id, makine_id, gun, vardiya_id, saat)
-     SELECT $1, * FROM unnest($2::int[], $3::date[], $4::int[], $5::numeric[])`,
-    [senaryoId, satirlar.map((x) => x.makineId), satirlar.map((x) => x.gun), satirlar.map((x) => x.vardiyaId), satirlar.map((x) => x.saat)]);
+    `INSERT INTO plan_senaryo_ek_mesai (senaryo_id, makine_id, gun, vardiya_id, saat, personel_kisi_id)
+     SELECT $1, * FROM unnest($2::int[], $3::date[], $4::int[], $5::numeric[], $6::int[])`,
+    [senaryoId, satirlar.map((x) => x.makineId), satirlar.map((x) => x.gun), satirlar.map((x) => x.vardiyaId), satirlar.map((x) => x.saat), satirlar.map((x) => x.personelId)]);
 }
-const EK_MESAI_SUTUN = 'makine_id, gun, vardiya_id, saat';
+const EK_MESAI_SUTUN = 'makine_id, gun, vardiya_id, saat, personel_kisi_id';
 // Yeni taslak canlının, çoğaltılan kaynağının ek vardiyalarıyla açılır (kaynak boş: canlı).
 export const ekMesaiKopyala = (db: Db, kaynak: Hedef, senaryoId: number) =>
   db.sorgu(`INSERT INTO plan_senaryo_ek_mesai (senaryo_id, ${EK_MESAI_SUTUN}) SELECT $2, ${EK_MESAI_SUTUN} FROM plan_senaryo_ek_mesai

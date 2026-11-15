@@ -40,7 +40,7 @@ export async function coz(
       ...(istek.kisiAdaylari?.length ? { kisiAdaylari: istek.kisiAdaylari.map((x) => ({ anahtar: x.anahtar, kisiIdler: [...x.kisiIdler] })) } : {}),
       ...(istek.kisiSabitleri?.length ? { kisiSabitleri: istek.kisiSabitleri.map((x) => ({ ...x })) } : {}),
       calisanlar: istek.calisanlar.map((c) => ({ anahtar: c.anahtar, makineId: c.makineId, baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk })),
-      ...(istek.ekMesai ? { ekMesai: istek.ekMesai.map((e) => ({ makineId: e.makineId, gun: e.gun, vardiyaId: e.vardiyaId })) } : {}),
+      ...(istek.ekMesai ? { ekMesai: istek.ekMesai.map((e) => ({ makineId: e.makineId, gun: e.gun, vardiyaId: e.vardiyaId, ...(e.personelId == null ? {} : { personelId: e.personelId }) })) } : {}),
       ...(istek.baglar ? { baglar: istek.baglar.map((x) => ({ anahtar: x.anahtar, oncul: x.oncul })) } : {}),
       ...(istek.ekAdimlar ? { ekAdimlar: istek.ekAdimlar.map((e) => ({ ...e })) } : {}),
       ...(istek.fasonBekleme ? { fasonBekleme: istek.fasonBekleme.map((x) => ({ anahtar: x.anahtar, gun: x.gun })) } : {}),

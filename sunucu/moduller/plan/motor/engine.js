@@ -161,14 +161,22 @@ function compile(st){olcekKur(st.w);
       if(p.ayar)addW(capAyar,w,1);
     }
   }
-  for(const e of ek){const w=inst(e.gun,e.vardiya);if(!w)continue;const g=M[e.m]&&M[e.m].grup;addW(capTot,w,1);if(g)addW(capG[g],w,1);addW(capAyar,w,1);}
+  /* 3282 2a-2 (3282-7 b): operatörlü ek mesai o kişinin vardiya dışı kapasitesidir. Kişi listede yoksa, o gün devamsızsa ya da ek vardiya
+     kişinin kendi vardiyasıyla (o gün ya da önceki gün başlayan) kesişiyorsa ek kapasite yoktur (sunucu taslak denetimiyle aynı kural).
+     Ayar kapasitesine yalnız ayarcı operatör eklenir; operatörsüz ek mesai bugünkü gibi sanal kişidir (ayara da sayılır). */
+  const kisiMap=new Map(D.personel.map(p=>[String(p.id),p]));
+  const ekKisi=e=>{if(e.personel==null)return null;const p=kisiMap.get(String(e.personel));if(!p||devam.has(p.id+'@'+e.gun))return false;
+    const w=inst(e.gun,e.vardiya);if(!w)return false;
+    for(const d of [e.gun-1,e.gun]){if(d<-1||!gun(d).vard.includes(p.vardiya)||devam.has(p.id+'@'+d))continue;const o=inst(d,p.vardiya);if(o&&o[0]<w[1]&&w[0]<o[1])return false;}
+    return p;};
+  for(const e of ek){const w=inst(e.gun,e.vardiya);if(!w)continue;const p=ekKisi(e);if(p===false)continue;const g=M[e.m]&&M[e.m].grup;addW(capTot,w,1);if(g)addW(capG[g],w,1);if(p===null||p.ayar)addW(capAyar,w,1);}
   /* 563 c: en az bir kişinin listesinde geçen tezgâh "kayıtlı"dır; çalışırken oranı her dilimde listesinde o tezgâh olan, o dilimde çalışan
-     kişilere dağıtılır (kisiDagit). Ek mesai o tezgâha sanal bir kişi ekler. Kaydı olmayan tezgâh grup ve toplam kapasiteyle hesaplanır. */
+     kişilere dağıtılır (kisiDagit). Ek mesai o tezgâha operatörünü, operatör yoksa sanal bir kişi ekler. Kaydı olmayan tezgâh grup ve toplam kapasiteyle hesaplanır. */
   const PK=[];
   for(const p of D.personel){const ms=(p.makineler||[]).filter(id=>M[id]);if(!ms.length)continue;const av=new Float32Array(NS);
     for(let d=-1;d<HDAYS;d++){if(!gun(d).vard.includes(p.vardiya)||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(w)addW(av,w,1);}
     PK.push({id:p.id,mk:new Set(ms),enCok:+p.enCok>0?+p.enCok:Infinity,av});}
-  if(PK.length)for(const e of ek){if(!M[e.m])continue;const w=inst(e.gun,e.vardiya);if(!w)continue;const av=new Float32Array(NS);addW(av,w,1);PK.push({id:'~ek',mk:new Set([e.m]),enCok:Infinity,av,ek:1});}
+  if(PK.length)for(const e of ek){if(!M[e.m])continue;const w=inst(e.gun,e.vardiya);if(!w)continue;const p=ekKisi(e);if(p===false)continue;const av=new Float32Array(NS);addW(av,w,1);PK.push({id:p?p.id:'~ek',mk:new Set([e.m]),enCok:p?1:Infinity,av,ek:1});}
   for(const id in M){if(!PK.some(p=>p.mk.has(id)&&!p.ek))continue;
     M[id].kisiler=PK.map((p,i)=>p.mk.has(id)?i:-1).filter(i=>i>=0);const kav=new Uint8Array(NS);for(const i of M[id].kisiler)for(let k=0;k<NS;k++)if(PK[i].av[k]>0)kav[k]=1;M[id].kav=kav;}
   for(const c of st.eksik||[]){const w=inst(c.gun,c.vardiya);if(!w)continue;

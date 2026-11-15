@@ -40,6 +40,8 @@ export interface KokpitModeli {
   acik: Record<string, readonly (readonly [number, number])[]>;
   // Tezgâhın duruşları (saat aralığı). ariza: makine arızası olayından gelen; değilse planlı duruş (bakım).
   durus: Record<string, readonly KokpitDurusu[]>;
+  // Tezgâhın bugünden sonraki ek mesaileri (3282 2a-2); satır başlığında "+ ek mesai" yazılır.
+  mesai?: Record<string, readonly (KokpitEkMesaisi & { vardiyaAd: string })[]>;
 }
 
 const FASON_SATIRI = '@';
@@ -82,8 +84,14 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
     const plan = c.down.find((x) => String(x['m']) === d.m && x['from'] === d.from && x['to'] === d.to);
     (durus[d.m] ??= []).push(plan ? { a: d.from, b: d.to, ariza: false, neden: plan['neden'] === 'bakım' ? 'bakım' : 'arıza' } : { a: d.from, b: d.to, ariza: true });
   }
-  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus };
+  const mesai: Record<string, (KokpitEkMesaisi & { vardiyaAd: string })[]> = {};
+  for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bas) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
+  for (const l of Object.values(mesai)) l.sort((x, y) => x.gun - y.gun);
+  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
 }
+export const gunYazisi = (g: number, zaman: (t: number) => string): string => zaman(g * 24).replace(/ \d\d:\d\d$/, '');
+export const ekMesaiYazisi = (l: readonly (KokpitEkMesaisi & { vardiyaAd: string })[], zaman: (t: number) => string): string =>
+  `Ek mesai: ${l.map((e) => `${gunYazisi(e.gun, zaman)} ${e.vardiyaAd}`).join(', ')}`;
 
 // Tezgâh şu anda arızadaysa o arıza (başlığa "arızada · bitiş" yazılır). Planlı duruş kapalı saat gibi taralıdır, başlığa yazılmaz.
 export const suAndakiDurus = (m: Pick<KokpitModeli, 'durus' | 'simdi'>, tezgah: string): KokpitDurusu | null =>
@@ -358,4 +366,112 @@ export function onayliGecSayisi(m: KokpitModeli, once: Record<string, OnayliYer>
     for (const a of e.adimlar) { const x = once[a.id]; if (!x) return false; bitis = Math.max(bitis, x.C); }
     return bitis > e.termin + 0.01;
   }).length;
+}
+
+// Ek mesai (3282 2a-2, 3282-7 b): vardiya dışı ek kapasite, operatörüyle. Kurallar sunucudakinin aynısıdır (sunucu taslak-kurallar.ts
+// operatorSorunu ve ekMesaiUygula); burada seçenek listesini ve bütçe yazısını kurar, son söz sunucunundur.
+type Nesne = Record<string, unknown>;
+const nesneMi = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
+const HAFTA_GUNLERI = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'] as const;
+// Motorun varsayılan haftalık ek mesai bütçesi (saat); 0 sınırsız.
+export const MESAI_HAFTA_VARSAYILAN = 8;
+const saatDegeri = (x: unknown): number => { const [h, d] = String(x).split(':').map(Number); return (h ?? 0) + (d ?? 0) / 60; };
+const tarihMs = (b: string): number => { const [y, a, g] = b.split('-').map(Number); return Date.UTC(y ?? 0, (a ?? 1) - 1, g ?? 1); };
+
+export interface KokpitEkMesaisi { m: string; gun: number; vardiya: string; personel: string | null }
+export const kokpitEkMesaileri = (c: PlanlamaCalismasi): KokpitEkMesaisi[] => c.ekMesai.flatMap((e) =>
+  typeof e['m'] === 'string' && typeof e['gun'] === 'number' && Number.isInteger(e['gun']) && e['vardiya'] !== undefined && e['vardiya'] !== null
+    ? [{ m: e['m'], gun: e['gun'], vardiya: String(e['vardiya']), personel: e['personel'] === undefined || e['personel'] === null ? null : String(e['personel']) }] : []);
+
+// Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.
+export function vardiyaAdi(c: PlanlamaCalismasi, id: string): string {
+  const v = (c.D.vardiyalar ?? []).find((x) => String(x['id']) === id);
+  if (!v) return id;
+  return typeof v['ad'] === 'string' && v['ad'] !== '' ? v['ad'] : `${String(v['bas'] ?? '')}–${String(v['bit'] ?? '')}`;
+}
+export function mesaiTakvimi(c: PlanlamaCalismasi) {
+  const D = c.D as unknown as Nesne;
+  const b = nesneMi(D['meta']) && typeof D['meta']['baslangic'] === 'string' ? D['meta']['baslangic'] : '1970-01-01';
+  const taban = tarihMs(b);
+  const gunOf = (x: unknown): number | null =>
+    typeof x === 'number' ? Math.floor(x / 24) : typeof x === 'string' && /^\d{4}-\d{2}-\d{2}/.test(x) ? Math.floor((tarihMs(x.slice(0, 10)) - taban) / 86_400_000) : null;
+  const tatil = new Set((Array.isArray(D['tatiller']) ? D['tatiller'] : []).map(gunOf));
+  const cg = nesneMi(D['calismaGunleri']) ? D['calismaGunleri'] : {};
+  const vardiyalari = (d: number): string[] => {
+    if (tatil.has(d)) return [];
+    const l = cg[HAFTA_GUNLERI[(new Date(taban + d * 86_400_000).getUTCDay() + 6) % 7]!];
+    return Array.isArray(l) ? l.map(String) : [];
+  };
+  const vl = (Array.isArray(D['vardiyalar']) ? D['vardiyalar'] : []).filter(nesneMi);
+  const vardiya = (id: string): Nesne | null => vl.find((v) => String(v['id']) === id) ?? null;
+  const pencere = (d: number, id: string): [number, number] | null => {
+    const v = vardiya(id);
+    if (v === null) return null;
+    const a = d * 24 + saatDegeri(v['bas']);
+    let z = d * 24 + saatDegeri(v['bit']);
+    if (z <= a) z += 24;
+    return [a, z];
+  };
+  const netSaat = (id: string): number => {
+    const v = vardiya(id);
+    if (v === null) return 0;
+    const a = saatDegeri(v['bas']);
+    let z = saatDegeri(v['bit']);
+    if (z <= a) z += 24;
+    let h = z - a;
+    for (const mo of Array.isArray(v['molalar']) ? v['molalar'] : []) {
+      if (!nesneMi(mo)) continue;
+      let x = saatDegeri(mo['bas']), y = saatDegeri(mo['bit']);
+      if (x < a) x += 24;
+      if (y <= x) y += 24;
+      h -= Math.max(0, Math.min(y, z) - Math.max(x, a));
+    }
+    return Math.max(0, h);
+  };
+  const haftaNo = (gun: number): number => Math.floor((gun + (new Date(taban).getUTCDay() + 6) % 7) / 7);
+  const devamsiz = new Set((Array.isArray(D['devamsizlik']) ? D['devamsizlik'] : []).flatMap((x) => (nesneMi(x) ? [`${String(x['personel'])}@${String(gunOf(x['gun']))}`] : [])));
+  return { vardiyalar: vl.map((v) => String(v['id'])), vardiyalari, pencere, netSaat, haftaNo, devamsiz };
+}
+
+export function operatorSorunu(c: PlanlamaCalismasi, e: { tezgah: string; gun: number; vardiya: string; personel: string }): string | null {
+  const p = (c.D.personel ?? []).find((x) => String(x.id) === e.personel);
+  if (!p) return 'Operatör çalışmanın personelinde yok.';
+  const t = c.D.tezgahlar.find((x) => x.id === e.tezgah);
+  const makineler = Array.isArray(p['makineler']) ? (p['makineler'] as unknown[]).map(String) : [], gruplar = (p.gruplar ?? []).map(String);
+  if (!makineler.includes(e.tezgah) && !(t?.grup !== undefined && gruplar.includes(String(t.grup)))) return 'Operatör bu tezgâhı çalıştırmıyor.';
+  const k = mesaiTakvimi(c);
+  if (k.devamsiz.has(`${e.personel}@${String(e.gun)}`)) return 'Operatör o gün devamsız.';
+  const w = k.pencere(e.gun, e.vardiya);
+  const kendi = p.vardiya == null ? '' : String(p.vardiya);
+  if (w !== null && kendi !== '') {
+    for (const d of [e.gun - 1, e.gun]) {
+      if (!k.vardiyalari(d).includes(kendi) || k.devamsiz.has(`${e.personel}@${String(d)}`)) continue;
+      const o = k.pencere(d, kendi);
+      if (o !== null && o[0] < w[1] && w[0] < o[1]) return 'Ek vardiya operatörün kendi vardiyasıyla çakışıyor.';
+    }
+  }
+  if (kokpitEkMesaileri(c).some((x) => x.personel === e.personel && x.gun === e.gun && x.vardiya === e.vardiya)) return 'Operatör o gün ve vardiyada başka bir ek mesaide.';
+  return null;
+}
+
+// O tezgâh, gün ve vardiyada seçilebilen operatörler; boşsa ilk kişinin nedeni (kimse yoksa çalışmanın personeli boştur).
+export function uygunOperatorler(c: PlanlamaCalismasi, e: { tezgah: string; gun: number; vardiya: string }): { kisiler: { id: string; ad: string }[]; neden: string | null } {
+  const l = c.D.personel ?? [];
+  const nedenler = l.map((p) => operatorSorunu(c, { ...e, personel: String(p.id) }));
+  const kisiler = l.filter((_, i) => nedenler[i] === null).map((p) => ({ id: String(p.id), ad: p.ad ?? String(p.id) }));
+  if (kisiler.length) return { kisiler, neden: null };
+  const sayac = new Map<string, number>();
+  for (const n of nedenler) if (n !== null) sayac.set(n, (sayac.get(n) ?? 0) + 1);
+  const en = [...sayac.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return { kisiler, neden: en === undefined ? 'Çalışmada operatör yok.' : `Uygun operatör yok: ${en.charAt(0).toLocaleLowerCase('tr')}${en.slice(1)}` };
+}
+
+// Günün haftasındaki ek mesai (saat) ve bütçe; bütçe null ise sınırsız.
+export function mesaiButcesi(c: PlanlamaCalismasi, gun: number): { kullanilan: number; sinir: number | null; vardiyaSaati: (v: string) => number } {
+  const t = mesaiTakvimi(c);
+  const ham = c.param['mesaiHafta'];
+  const s = ham === undefined || ham === null ? MESAI_HAFTA_VARSAYILAN : Number(ham);
+  const h = t.haftaNo(gun);
+  const kullanilan = kokpitEkMesaileri(c).filter((x) => t.haftaNo(x.gun) === h).reduce((a, x) => a + t.netSaat(x.vardiya), 0);
+  return { kullanilan, sinir: Number.isFinite(s) && s > 0 ? s : null, vardiyaSaati: t.netSaat };
 }

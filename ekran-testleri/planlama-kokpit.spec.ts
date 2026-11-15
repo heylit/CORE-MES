@@ -40,10 +40,10 @@ const json = (r: Route, v: unknown) => r.fulfill({ json: v });
 // Kişinin taslağı uydurmadır (3282 1d-2b): komutlar sırayla tutulur, görünüm her okumada ortak duruma oynatılarak kurulur. Taşı ve plana al
 // işi yerine koyar, ayar ve yön w'ye yazar; dizilmemiş komut planı bekletir (bekleyen), dizme temizler. Uygula (taslak çubuğunda Canlıya al) görünümü ortak yapar.
 type Komut = { tur: string } & Record<string, unknown>;
-interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown>; down?: Record<string, unknown>[] }
+interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown>; down?: Record<string, unknown>[]; ekMesai?: Record<string, unknown>[] }
 const IS = '00000000-0000-4000-8000-0000000000a1';
 function oynat(d: Durum, l: readonly Komut[]): Durum {
-  let { ops, locks, w } = d, down = d.down ?? [];
+  let { ops, locks, w } = d, down = d.down ?? [], ekMesai = d.ekMesai ?? [];
   for (const k of l) {
     const S = Number(k['baslangic']), m = String(k['tezgah']);
     if (k.tur === 'tasi') {
@@ -62,12 +62,16 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
       down = [...down, { m, from: k['bas'], to: k['bit'], neden: k['neden'] }];
     } else if (k.tur === 'durus-sil') {
       down = down.filter((x) => !(x['m'] === m && x['from'] === k['bas'] && x['to'] === k['bit']));
+    } else if (k.tur === 'ek-mesai') {
+      ekMesai = [...ekMesai, { m, gun: k['gun'], vardiya: k['vardiya'], ...(k['personel'] === null ? {} : { personel: k['personel'] }) }];
+    } else if (k.tur === 'ek-mesai-sil') {
+      ekMesai = ekMesai.filter((x) => !(x['m'] === m && x['gun'] === k['gun'] && x['vardiya'] === k['vardiya']));
     }
   }
-  return { ops, locks, w, down };
+  return { ops, locks, w, down, ekMesai };
 }
 const ILK_DURUM: Durum = { ops: ILK, locks: {}, w: { dondurma: 4 } };
-const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.down ?? [] });
+const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.down ?? [], ekMesai: d.ekMesai ?? [] });
 async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
   const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
   const gorunum = () => oynat(s.ortak, s.satirlar.map((x) => x.komut));
@@ -679,15 +683,15 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   expect(ag.hatalar).toEqual([]);
 });
 
-test('Kokpit 3282 2a-1: üst şeritteki Duruşlar; tahtada çubuk; arıza taslağa yazılır, etkisi görünür, Uygula; kendiliğinden gelen bakım silinmez; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza taslağa yazılır, etkisi görünür, Uygula; kendiliğinden gelen bakım silinmez; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   t.s.ortak = { ...t.s.ortak, down: [{ m: 'M2', from: 30, to: 34, neden: 'bakım', oto: 1, bakim: 'ORN-b1' }] };
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  await kokpit.getByTitle('Tezgâhın arıza ve bakım duruşları').click();
-  const panel = kokpit.getByRole('complementary', { name: 'Duruşlar' });
+  await kokpit.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi').click();
+  const panel = kokpit.getByRole('complementary', { name: 'Duruş ve mesai' });
   await panel.getByLabel('Tezgâh').selectOption('M2');
   const oto = panel.getByRole('listitem').filter({ hasText: 'kendiliğinden geldi' });
   await expect(oto).toBeVisible();
@@ -702,7 +706,7 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruşlar; tahtada çubuk; arıza tasla�
   expect(t.s.komutlar).toEqual([{ tur: 'durus', tezgah: 'M2', bas: 32, bit: 40, neden: 'arıza' }]);
   await etki.getByRole('button', { name: 'Uygula' }).click();
   await expect(etki).toHaveCount(0);
-  const yeni = panel.getByRole('listitem').filter({ hasText: /^Arıza/ });
+  const yeni = panel.getByRole('listitem').filter({ hasText: /^Arıza/ }).first();
   await expect(yeni).toBeVisible();
   await expect(yeni).toBeFocused();
   // Planlı duruşlar tahtada tezgâhın satırında kesik kenarlı çubuktur (arıza ve kendiliğinden gelen bakım).
@@ -714,5 +718,44 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruşlar; tahtada çubuk; arıza tasla�
   await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a1-kapasite-sonra-${bilgi.project.name}.png` });
+  expect(ag.hatalar).toEqual([]);
+});
+
+// 3282 2a-2: ek mesai operatörle. Kişiler uydurmadır; Deneme gündüz kendi vardiyası 1 (08:00–16:00), cumartesi de çalışır.
+test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görünür, Uygula; kendi vardiyasıyla kesişen operatör listede yok; tezgâhta işaret; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page, (d) => {
+    const x = calismaKur(d);
+    return { ...x, D: { ...x.D, personel: [{ id: '7', ad: 'Deneme gündüz', vardiya: '1', gruplar: [], makineler: ['M2'] }, { id: '8', ad: 'Deneme gece', vardiya: '2', gruplar: [], makineler: ['M2'] }] } };
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi').click();
+  const panel = kokpit.getByRole('complementary', { name: 'Duruş ve mesai' });
+  await panel.getByLabel('Tezgâh').selectOption('M2');
+  const form = panel.getByRole('form', { name: 'Ek mesai ekle' });
+  await form.getByLabel('Gün').fill('2026-10-24');
+  await form.getByLabel('Vardiya').selectOption('1');
+  await expect(form.getByLabel('Operatör').locator('option')).toHaveText(['Deneme gece']);
+  await form.getByLabel('Vardiya').selectOption('2');
+  await expect(form.getByLabel('Operatör').locator('option')).toHaveText(['Deneme gündüz', 'Deneme gece']);
+  await form.getByLabel('Operatör').selectOption('7');
+  await expect(form.getByText('Bu hafta ek mesai: 0 / 8 saat.')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a2-mesai-${bilgi.project.name}.png` });
+  await form.getByRole('button', { name: 'Ek mesai ekle, etkisini gör' }).click();
+  const etki = panel.getByRole('region', { name: 'Ek mesainin etkisi' });
+  await expect(etki).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar).toEqual([{ tur: 'ek-mesai', tezgah: 'M2', gun: 5, vardiya: '2', personel: '7' }]);
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(etki).toHaveCount(0);
+  const yeni = panel.getByRole('listitem').filter({ hasText: '24.10 Cmt 16:00–00:00 · Deneme gündüz' });
+  await expect(yeni).toBeFocused();
+  await expect(panel.getByRole('button', { name: 'F-01 24.10 Cmt 16:00–00:00 ek mesaisini sil' })).toBeVisible();
+  // Tezgâhın satır başlığında işaret (telefonda listede).
+  await expect(kokpit.locator('.tc-pyq-mesai-isaret:visible').first()).toHaveAttribute('title', 'Ek mesai: 24.10 Cmt 16:00–00:00');
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a2-mesai-sonra-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
 });

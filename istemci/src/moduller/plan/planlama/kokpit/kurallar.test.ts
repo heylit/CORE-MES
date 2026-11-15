@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durusYazisi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -296,5 +296,52 @@ describe('3B hücreleri', () => {
     expect(onayliGecSayisi(m, { 'A.1': { m: 'T1', S: 10, C: 24 }, 'B.1': { m: 'T1', S: 0, C: 8 } })).toBe(1);
     expect(onayliGecSayisi(m, { 'B.1': { m: 'T1', S: 0, C: 30 } })).toBe(1);
     expect(onayliGecSayisi(m, {})).toBe(0);
+  });
+});
+
+// 3282 2a-2: ek mesai operatörü. Kural sunucunun operatorSorunu'nun aynısıdır; örnek çalışma 2026-10-19 pazartesi başlar.
+describe('ek mesai operatörü (3282 2a-2)', () => {
+  const k = (personel: string, ek: { tezgah?: string; gun?: number; vardiya?: string } = {}) => ({ tezgah: '1', gun: 1, vardiya: '2', personel, ...ek });
+  it('her ret nedeni ayrı yazılır; uygun kişide null', () => {
+    const c = ornekCalisma();
+    expect(operatorSorunu(c, k('4'))).toBeNull();
+    expect(operatorSorunu(c, k('99'))).toBe('Operatör çalışmanın personelinde yok.');
+    expect(operatorSorunu(c, k('5', { tezgah: '1' }))).toBe('Operatör bu tezgâhı çalıştırmıyor.');
+    expect(operatorSorunu(c, k('4', { gun: 14 }))).toBe('Operatör o gün devamsız.');
+    expect(operatorSorunu(c, k('4', { vardiya: '1' }))).toBe('Ek vardiya operatörün kendi vardiyasıyla çakışıyor.');
+    // Gece vardiyası (16:00–00:00) ertesi günün 08:00'ine değmez; önceki günün kendi vardiyası denetlenir.
+    expect(operatorSorunu(c, k('5', { tezgah: '3', vardiya: '1', gun: 2 }))).toBeNull();
+    const c2 = { ...c, ekMesai: [{ m: '2', gun: 1, vardiya: '2', personel: '4' }] };
+    expect(operatorSorunu(c2, k('4'))).toBe('Operatör o gün ve vardiyada başka bir ek mesaide.');
+  });
+
+  it('önceki gün başlayan gece vardiyası ertesi sabahın ek mesaisiyle kesişir (gece yarısı aşımı)', () => {
+    const c = ornekCalisma();
+    const gece = { ...c, D: { ...c.D,
+      vardiyalar: [...(c.D.vardiyalar ?? []), { id: '3', bas: '22:00', bit: '06:00' }, { id: '9', bas: '04:00', bit: '08:00' }],
+      calismaGunleri: { ...c.D.calismaGunleri, pzt: ['1', '3'] },
+      personel: [...(c.D.personel ?? []), { id: '30', ad: 'Örnek Gece', vardiya: '3', gruplar: ['1'] }] } };
+    expect(operatorSorunu(gece, k('30', { gun: 1, vardiya: '9' }))).toBe('Ek vardiya operatörün kendi vardiyasıyla çakışıyor.');
+    expect(operatorSorunu(gece, k('30', { gun: 2, vardiya: '9' }))).toBeNull();
+  });
+
+  it('uygun liste ve boşsa en sık neden; bütçe molasız net saatle', () => {
+    const c = ornekCalisma();
+    expect(uygunOperatorler(c, { tezgah: '1', gun: 1, vardiya: '1' }).kisiler.map((x) => x.id)).toEqual(['2', '14']);
+    const yalniz = { ...c, D: { ...c.D, personel: c.D.personel!.filter((p) => p.id === '4') } };
+    expect(uygunOperatorler(yalniz, { tezgah: '1', gun: 1, vardiya: '1' })).toEqual({ kisiler: [], neden: 'Uygun operatör yok: ek vardiya operatörün kendi vardiyasıyla çakışıyor.' });
+    expect(uygunOperatorler({ ...c, D: { ...c.D, personel: [] } }, { tezgah: '1', gun: 1, vardiya: '1' }).neden).toBe('Çalışmada operatör yok.');
+    const b = mesaiButcesi({ ...c, ekMesai: [{ m: '1', gun: 2, vardiya: '1' }, { m: '1', gun: 7, vardiya: '1' }] }, 1);
+    expect([b.kullanilan, b.sinir, b.vardiyaSaati('2')]).toEqual([7.5, 8, 7.5]);
+    expect(mesaiButcesi({ ...c, param: { ...c.param, mesaiHafta: 0 } }, 1).sinir).toBeNull();
+    expect(vardiyaAdi(c, '2')).toBe('16:00–00:00');
+  });
+
+  it('model tezgâhın gelecek ek mesailerini taşır; satır başlığı yazısı', () => {
+    const { c } = ornek();
+    const c2 = { ...c, ekMesai: [{ m: '1', gun: 400, vardiya: '1', personel: '2' }, { m: '1', gun: 0, vardiya: '1' }] };
+    const m = modelKur(c2, planOku(c2), derle(girdiKur(c2, plandanBitenler(c2, planOku(c2)))), (id) => id);
+    expect(m.mesai?.['1']?.map((e) => e.gun)).toEqual(m.bas > 0 ? [400] : [0, 400]);
+    expect(ekMesaiYazisi([{ m: '1', gun: 2, vardiya: '1', personel: null, vardiyaAd: '08:00–16:00' }], (x) => `21.10 Çar ${x === 48 ? '00:00' : '?'}`)).toBe('Ek mesai: 21.10 Çar 08:00–16:00');
   });
 });

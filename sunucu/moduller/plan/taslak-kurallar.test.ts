@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -305,5 +305,105 @@ describe('3282 2a-1: duruş komutu', () => {
     assert.deepEqual(uygulaKarari(kaydi, imza(c()), l, { '*': 'benim' }, kisi, {} as TaslakHesaplari), { durum: 'bozuk', ileti: `Taslaktaki şu değişiklikler artık uygulanamıyor: arıza T2: ${EKSEN_DEGISTI}` });
     const { eksen: _, ...eksensiz } = l[0]!;
     assert.deepEqual(oynat(kaydi, [eksensiz], kisi, {} as TaslakHesaplari).hatalar, [null]);
+  });
+});
+
+// 3282 2a-2 (3282-7 b): ek mesai operatörle. Başlangıç 2026-11-16 pazartesi; kişinin anı başlangıç gününün gece yarısı. Veriler uydurmadır.
+describe('3282 2a-2: ek mesai komutu', () => {
+  const D = {
+    meta: { baslangic: '2026-11-16' }, siparisler: [{ id: 'S1' }],
+    vardiyalar: [{ id: 'V1', bas: '08:00', bit: '16:00' }, { id: 'V2', bas: '16:00', bit: '24:00', molalar: [{ bas: '20:00', bit: '20:30' }] }],
+    calismaGunleri: { pzt: ['V1'], sal: ['V1'], car: ['V1'], per: ['V1'], cum: ['V1'], cmt: [], paz: [] },
+    tezgahlar: [{ id: 'T1', grup: 'G1' }, { id: 'T2', grup: 'G2' }],
+    personel: [{ id: 'P1', vardiya: 'V1', gruplar: ['G1'], makineler: [] }, { id: 'P2', vardiya: 'V1', gruplar: [], makineler: ['T2'] }],
+    devamsizlik: [{ personel: 'P1', gun: '2026-11-22' }],
+  };
+  const c = (ekMesai: unknown[] = [], ek: Record<string, unknown> = {}) => calisma({ D, ekMesai, ...ek });
+  const kisi = { ...k, t: Date.UTC(2026, 10, 15, 21) };
+  const mesai = (tezgah: string, gun: number, vardiya: string, personel: string | null = null): TaslakKomutu => ({ tur: 'ek-mesai', tezgah, gun, vardiya, personel });
+  const hata = (x: ReturnType<typeof ekMesaiUygula>) => ('hata' in x ? x.hata.ileti : null);
+
+  test('ekler (operatörle), geri yaması önceki listedir; aynı satır, geçmiş gün, ufuk dışı, çalışmada olmayan tezgâh ve vardiya eklenmez', () => {
+    const r = ekMesaiUygula(c(), { tezgah: 'T1', gun: 5, vardiya: 'V1', personel: 'P1' }, kisi);
+    assert.ok('deger' in r && r.degisti);
+    const d = r.deger as { ekMesai: unknown[]; bekleyen: { geri: unknown[] }[] };
+    assert.deepEqual(d.ekMesai, [{ m: 'T1', gun: 5, vardiya: 'V1', personel: 'P1' }]);
+    assert.deepEqual(d.bekleyen.at(-1)?.geri, [{ yol: ['ekMesai'], once: [] }]);
+    const r0 = ekMesaiUygula(c(), { tezgah: 'T1', gun: 5, vardiya: 'V1', personel: null }, kisi);
+    assert.ok('deger' in r0);
+    assert.deepEqual((r0.deger as { ekMesai: unknown[] }).ekMesai, [{ m: 'T1', gun: 5, vardiya: 'V1' }]);
+    assert.equal(hata(ekMesaiUygula(r.deger, { tezgah: 'T1', gun: 5, vardiya: 'V1', personel: null }, kisi)), 'Bu tezgâhta o gün ve vardiyada ek mesai zaten var.');
+    assert.equal(hata(ekMesaiUygula(c(), { tezgah: 'T1', gun: 5, vardiya: 'V1', personel: null }, { ...kisi, t: Date.UTC(2026, 10, 22, 0) })), 'Geçmiş güne ek mesai eklenemez.');
+    assert.equal(hata(ekMesaiUygula(c(), { tezgah: 'T1', gun: 120, vardiya: 'V1', personel: null }, kisi)), 'Gün planın ufkunun dışında.');
+    assert.equal(hata(ekMesaiUygula(c(), { tezgah: 'T9', gun: 5, vardiya: 'V1', personel: null }, kisi)), 'Tezgâh çalışmada yok.');
+    assert.equal(hata(ekMesaiUygula(c(), { tezgah: 'T1', gun: 5, vardiya: 'V9', personel: null }, kisi)), 'Vardiya çalışmada yok.');
+  });
+
+  test('operatör: personelde, tezgâhı çalıştırır (makine ya da grup), devamsız değil, kendi vardiyasıyla kesişmez, aynı pencerede tek', () => {
+    const sorun = (tezgah: string, gun: number, vardiya: string, personel: string, ek: unknown[] = []) => operatorSorunu(c(ek), { tezgah, gun, vardiya, personel });
+    assert.equal(sorun('T1', 5, 'V1', 'P1'), null, 'cumartesi V1, grubu');
+    assert.equal(sorun('T2', 5, 'V1', 'P2'), null, 'makinesi');
+    assert.equal(sorun('T1', 5, 'V1', 'P9'), 'Operatör çalışmanın personelinde yok.');
+    assert.equal(sorun('T2', 5, 'V1', 'P1'), 'Operatör bu tezgâhı çalıştırmıyor.');
+    assert.equal(sorun('T1', 6, 'V1', 'P1'), 'Operatör o gün devamsız.');
+    assert.equal(sorun('T1', 0, 'V1', 'P1'), 'Ek vardiya operatörün kendi vardiyasıyla çakışıyor.');
+    assert.equal(sorun('T1', 0, 'V2', 'P1'), null, 'kendi vardiyasından sonra');
+    assert.equal(sorun('T1', 5, 'V1', 'P1', [{ m: 'T3', gun: 5, vardiya: 'V1', personel: 'P1' }]), 'Operatör o gün ve vardiyada başka bir ek mesaide.');
+    assert.equal(hata(ekMesaiUygula(c(), { tezgah: 'T2', gun: 5, vardiya: 'V1', personel: 'P1' }, kisi)), 'Operatör bu tezgâhı çalıştırmıyor.');
+  });
+
+  test('operatör: önceki gün başlayan gece vardiyası ertesi sabahın ek mesaisiyle kesişir (gece yarısı aşımı)', () => {
+    const gece = calisma({ D: { ...D,
+      vardiyalar: [...D.vardiyalar, { id: 'V3', bas: '22:00', bit: '06:00' }, { id: 'VS', bas: '04:00', bit: '08:00' }],
+      calismaGunleri: { ...D.calismaGunleri, pzt: ['V1', 'V3'] },
+      personel: [...D.personel, { id: 'P3', vardiya: 'V3', gruplar: ['G1'], makineler: [] }] } });
+    assert.equal(operatorSorunu(gece, { tezgah: 'T1', gun: 1, vardiya: 'VS', personel: 'P3' }), 'Ek vardiya operatörün kendi vardiyasıyla çakışıyor.', 'pazartesi gecesi salı 06:00\'ya kadar');
+    assert.equal(operatorSorunu(gece, { tezgah: 'T1', gun: 2, vardiya: 'VS', personel: 'P3' }), null, 'salı gecesi çalışmaz');
+  });
+
+  test('haftalık bütçe (molası düşülmüş vardiya saati, hafta pazartesi başlar) aşılınca eklenmez; 0 sınırsızdır', () => {
+    const dolu = [{ m: 'T2', gun: 5, vardiya: 'V1' }];
+    assert.equal(hata(ekMesaiUygula(c(dolu), { tezgah: 'T1', gun: 6, vardiya: 'V1', personel: null }, kisi)), 'Haftalık ek mesai bütçesi doldu (8 / 8 saat).');
+    assert.equal(hata(ekMesaiUygula(c(dolu), { tezgah: 'T1', gun: 7, vardiya: 'V1', personel: null }, kisi)), null, 'ertesi hafta');
+    assert.equal(hata(ekMesaiUygula(c(dolu, { param: { mesaiHafta: 16 } }), { tezgah: 'T1', gun: 6, vardiya: 'V1', personel: null }, kisi)), null);
+    assert.equal(hata(ekMesaiUygula(c(dolu, { param: { mesaiHafta: 0 } }), { tezgah: 'T1', gun: 6, vardiya: 'V1', personel: null }, kisi)), null);
+    assert.equal(hata(ekMesaiUygula(c([], { param: { mesaiHafta: 7.5 } }), { tezgah: 'T1', gun: 6, vardiya: 'V2', personel: null }, kisi)), null, 'V2 molayla 7,5 saat');
+  });
+
+  test('silme tek satırı siler, geri yaması önceki listedir; olmayan satır uygulanamaz', () => {
+    const iki = [{ m: 'T1', gun: 5, vardiya: 'V1', personel: 'P1' }, { m: 'T2', gun: 5, vardiya: 'V1' }];
+    const r = ekMesaiSilUygula(c(iki), { tezgah: 'T1', gun: 5, vardiya: 'V1' }, kisi);
+    assert.ok('deger' in r);
+    const d = r.deger as { ekMesai: unknown[]; bekleyen: { geri: unknown[] }[] };
+    assert.deepEqual(d.ekMesai, [{ m: 'T2', gun: 5, vardiya: 'V1' }]);
+    assert.deepEqual(d.bekleyen.at(-1)?.geri, [{ yol: ['ekMesai'], once: iki }]);
+    assert.equal('hata' in ekMesaiSilUygula(c(), { tezgah: 'T1', gun: 5, vardiya: 'V1' }, kisi) ? 'Ek mesai artık yok.' : null, 'Ek mesai artık yok.');
+    assert.equal(komutAdi(mesai('T1', 5, 'V1', 'P1')), 'T1 ek mesai: 6. gün V1, operatör P1');
+    assert.equal(komutAdi({ tur: 'ek-mesai-sil', tezgah: 'T1', gun: 5, vardiya: 'V1' }), 'T1 ek mesaisi silindi: 6. gün V1');
+  });
+
+  test('imza: ek mesai tezgâh ve operatör başına; başkasının ek mesaisi o tezgâhta ve o operatörde çatışır (S10); mesaisiz eski taban hep sorar', () => {
+    const taban = imza(c());
+    assert.deepEqual([taban.mesai, taban.mesaiKisi], [{}, {}]);
+    assert.deepEqual(komutAnahtarlari(mesai('T1', 5, 'V1', 'P1'), taban), ['tezgah:T1', 'kisi:P1']);
+    const baskasi = imza(c([{ m: 'T2', gun: 5, vardiya: 'V1', personel: 'P1' }]));
+    assert.deepEqual(catismalar(taban, baskasi, [satir(mesai('T1', 5, 'V1', 'P1'), 'mesai T1'), satir(mesai('T1', 6, 'V1'), 'mesai T1 operatörsüz')]).map((x) => [x.anahtar, x.ad]),
+      [['kisi:P1', 'P1 numaralı operatör']]);
+    assert.deepEqual(catismalar(taban, baskasi, [satir(tasi('S1.10', 'T2'), 'taşı')]).map((x) => x.anahtar), ['tezgah:T2'], 'ek mesai o tezgâhın kapasitesidir');
+    const { mesai: _, mesaiKisi: __, ...eski } = taban;
+    assert.deepEqual(catismalar(eski, baskasi, [satir(tasi('S1.10', 'T2'), 'taşı')]), []);
+    assert.deepEqual(catismalar(eski, imza(c()), [satir(mesai('T1', 5, 'V1'), 'mesai')]).map((x) => x.anahtar), ['tezgah:T1']);
+    assert.notEqual(dizImzasi(c([{ m: 'T1', gun: 5, vardiya: 'V1' }]), c()), dizImzasi(c(), c()), 'dizme imzasına girer');
+    // Silme de tezgâhın kapasitesini değiştirir: başkası aynı tezgâha ek mesai yazdıysa seçim ister.
+    const sil: TaslakKomutu = { tur: 'ek-mesai-sil', tezgah: 'T1', gun: 5, vardiya: 'V1' };
+    const tabanBir = imza(c([{ m: 'T1', gun: 5, vardiya: 'V1' }]));
+    assert.deepEqual(catismalar(tabanBir, imza(c([{ m: 'T1', gun: 5, vardiya: 'V1' }, { m: 'T1', gun: 6, vardiya: 'V1' }])), [satir(sil, 'sil')]).map((x) => x.anahtar), ['tezgah:T1']);
+    assert.deepEqual(catismalar(tabanBir, imza(c([{ m: 'T1', gun: 5, vardiya: 'V1' }, { m: 'T2', gun: 6, vardiya: 'V1' }])), [satir(sil, 'sil')]), [], 'başka tezgâh');
+  });
+
+  test('oynatma: eksen kayınca ek mesai komutu uygulanamaz (Risk 2a-1 K1, gün de göreli)', () => {
+    const l: TaslakSatiri[] = [{ komut: mesai('T1', 5, 'V1'), ne: 'mesai', t: 1, eksen: '2026-11-16' }];
+    assert.deepEqual(oynat(c(), l, kisi, {} as TaslakHesaplari).hatalar, [null]);
+    assert.deepEqual(oynat(c([], { D: { ...D, meta: { baslangic: '2026-11-23' } } }), l, kisi, {} as TaslakHesaplari).hatalar, [EKSEN_DEGISTI]);
   });
 });

@@ -45,11 +45,11 @@ export function planGunu(baslangic: string, gun: number): string {
 }
 // 512 1 a: sunucu motoruna plan taslağının kabul edilmiş ek vardiyası verilir; çalışmanınkinin yerine geçer. Gün çalışmanın ekseninde
 // (D.meta.baslangic); motor ekseni kaydırırken ek vardiyayı da kaydırır. Ekseni olmayan çalışma değişmez.
-export function taslakEkMesaisi(calisma: unknown, ekMesai: readonly { makineId: number; gun: string; vardiyaId: number }[]): unknown {
+export function taslakEkMesaisi(calisma: unknown, ekMesai: readonly { makineId: number; gun: string; vardiyaId: number; personelId?: number | null }[]): unknown {
   const c = calisma as { D?: { meta?: { baslangic?: unknown } } } | null;
   const baslangic = c?.D?.meta?.baslangic;
   if (typeof baslangic !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(baslangic)) return calisma;
-  return { ...c, ekMesai: ekMesai.map((e) => ({ m: String(e.makineId), gun: (gunMs(e.gun) - gunMs(baslangic)) / GUN_MS, vardiya: String(e.vardiyaId) })) };
+  return { ...c, ekMesai: ekMesai.map((e) => ({ m: String(e.makineId), gun: (gunMs(e.gun) - gunMs(baslangic)) / GUN_MS, vardiya: String(e.vardiyaId), ...(e.personelId == null ? {} : { personel: String(e.personelId) }) })) };
 }
 export function planAni(baslangic: string, saat: number): string {
   const dk = Math.round(saat * 60); const gun = Math.floor(dk / 1440);
@@ -290,14 +290,14 @@ export function calismaKilitleri(kayit: unknown): Set<string> {
 }
 
 // 507 2 a: çalışmanın ek vardiyaları plan modülünün diliyle (makine ve vardiya kimliği sayı, gün takvim günü). Sayı olmayan kimlik
-// (sayfada elle girilmiş tezgâh ya da vardiya) yazılamaz; sayısı döner.
-export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun: number; vardiya: string }[]) {
-  const satirlar: { makineId: number; gun: string; vardiyaId: number }[] = [];
+// (sayfada elle girilmiş tezgâh ya da vardiya) yazılamaz; sayısı döner. 3282 2a-2: operatör kişi kimliğidir; sayı değilse operatörsüz.
+export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun: number; vardiya: string; personel?: string }[]) {
+  const satirlar: { makineId: number; gun: string; vardiyaId: number; personelId: number | null }[] = [];
   const anahtarlar = new Set<string>();
   let yazilamaz = 0;
   for (const e of l) {
     if (!/^\d+$/.test(e.m) || !/^\d+$/.test(e.vardiya) || Number(e.m) === 0 || Number(e.vardiya) === 0) { yazilamaz++; continue; }
-    const x = { makineId: Number(e.m), gun: planGunu(baslangic, e.gun), vardiyaId: Number(e.vardiya) };
+    const x = { makineId: Number(e.m), gun: planGunu(baslangic, e.gun), vardiyaId: Number(e.vardiya), personelId: e.personel !== undefined && /^[1-9]\d*$/.test(e.personel) ? Number(e.personel) : null };
     const a = `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}`;
     if (!anahtarlar.has(a)) { anahtarlar.add(a); satirlar.push(x); }
   }

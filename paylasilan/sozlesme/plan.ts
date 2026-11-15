@@ -84,7 +84,8 @@ export const planEmri = z.object({
 // 8 saat, 0 ise sınır yok (haftaSiniriSaat 0, hiçbir hafta aşmaz). saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). 512 1 a:
 // satırlar kabul edilmiş ek vardiyalardır, makinenin kapasitesine girer.
 export const planEkMesai = z.object({
-  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number() })),
+  // 3282 2a-2: personelId tezgâhı çalıştıracak kişi; boşsa operatör seçilmemiştir.
+  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number(), personelId: KIMLIK.nullable().optional() })),
   toplamSaat: z.number(),
   haftaSiniriSaat: z.number(),
   haftalar: z.array(z.object({ hafta: tarih, saat: z.number() })),
@@ -342,7 +343,8 @@ export const geriGonderGovdesi = senaryoSurumGovdesi.extend({ neden: z.string().
 export const onaydanCekGovdesi = senaryoSurumGovdesi;
 // 507 2 a: taslağın ek vardiyaları baştan yazılır (liste eskisinin yerine geçer). Aynı makine, gün ve vardiya bir kez. 512 1 a: yazılan
 // ek vardiya kabul edilmiştir, kapasiteye girer.
-const ekMesaiSatirlari = z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK })).max(500, 'En çok 500 ek vardiya yazılır.')
+// 3282 2a-2: personelId verilmezse taslaktaki aynı satırın operatörü korunur; null operatörü kaldırır.
+const ekMesaiSatirlari = z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, personelId: KIMLIK.nullable().optional() })).max(500, 'En çok 500 ek vardiya yazılır.')
   .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.');
 export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({ satirlar: ekMesaiSatirlari });
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).

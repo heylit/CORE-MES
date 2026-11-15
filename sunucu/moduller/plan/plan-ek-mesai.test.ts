@@ -40,7 +40,7 @@ describe('plan (gerçek PostgreSQL): ek mesai taslakta', () => {
     assert.equal(r.statusCode, 200, r.body);
     const y = r.json<PlanCevabi>();
     assert.equal(y.taslak!.surum, p.taslak!.surum + 1);
-    assert.deepEqual(y.ekMesai!.satirlar, [{ makineId: makineA, gun: g1, vardiyaId: gece, saat: 8 }, { makineId: makineA, gun: g2, vardiyaId: sabah, saat: 2.5 }]);
+    assert.deepEqual(y.ekMesai!.satirlar, [{ makineId: makineA, gun: g1, vardiyaId: gece, saat: 8, personelId: null }, { makineId: makineA, gun: g2, vardiyaId: sabah, saat: 2.5, personelId: null }]);
     assert.equal(y.ekMesai!.toplamSaat, 10.5);
     const ayniHafta = haftaBasi(g1) === haftaBasi(g2);
     assert.equal(y.ekMesai!.asildi, ayniHafta, 'aynı haftada 10,5 saat 8 saatlik sınırı aşar');

@@ -298,4 +298,31 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     assert.deepEqual((await ortak())['down'], once);
   });
 
+  test('TS-12: ek mesai taslakta; olmayan operatör 400; aynı tezgâha başkasının ek mesaisi seçim ister; silinen satır yoksa 409', async () => {
+    const T1 = String((await vt().tek<{ id: number }>("SELECT id FROM makine WHERE kod = 'TS-M1'"))!.id);
+    const V = String((await vt().tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Deneme ek', '16:00', '24:00') RETURNING id"))!.id);
+    const bugun = new Date().toISOString().slice(0, 10);
+    const kaydi = (await ortak()) as Record<string, unknown> & { D: Record<string, unknown> };
+    await vt().sorgu('UPDATE plan_planlama_kaydi SET deger = $2::jsonb WHERE anahtar = $1', [PLANLAMA_ANAHTARI, JSON.stringify({ ...kaydi, ekMesai: [], D: { ...kaydi.D, meta: { ad: 'Ornek', baslangic: bugun } } })]);
+    // TS-11'in sonunda eksen kaydığı için reddedilen taslak kalır; bu test kendi taslağıyla başlar.
+    await vt().sorgu('DELETE FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]);
+    const mesai = (gun: number, personel: string | null = null) => ({ tur: 'ek-mesai', tezgah: T1, gun, vardiya: V, personel });
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: mesai(2, 'ORN-yok') }, 400);
+    const ta = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: mesai(2) });
+    assert.deepEqual(ta.calisma?.['ekMesai'], [{ m: T1, gun: 2, vardiya: V }]);
+    assert.deepEqual(ta.taslak?.satirlar.map((x) => x.ne), [`${T1} ek mesai: 3. gün ${V}`]);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: ta.taslak!.surum, komut: mesai(2) }, 400);
+    const c = await islemliKisi('planlayici_d', ['plan.oku', 'plan.yaz', 'plan.planlama-oku', 'sayfa.istasyonlar']);
+    const tb = await istek<TaslakCevabi>(c, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: mesai(9) });
+    assert.equal((await istek<TaslakUygulaCevabi>(c, 'POST', '/plan/taslagim/uygula', { taslakSurumu: tb.taslak!.surum })).durum, 'uygulandi');
+    const s = await istek<TaslakUygulaCevabi>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: ta.taslak!.surum });
+    assert.deepEqual(s.durum === 'secim' && s.catismalar.map((x) => x.anahtar), [`tezgah:${T1}`]);
+    assert.equal((await istek<TaslakUygulaCevabi>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: ta.taslak!.surum, secimler: { [`tezgah:${T1}`]: 'benim' } })).durum, 'uygulandi');
+    assert.deepEqual((await ortak())['ekMesai'], [{ m: T1, gun: 9, vardiya: V }, { m: T1, gun: 2, vardiya: V }]);
+    const td = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'ek-mesai-sil', tezgah: T1, gun: 9, vardiya: V } });
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: td.taslak!.surum, komut: { tur: 'ek-mesai-sil', tezgah: T1, gun: 9, vardiya: V } }, 409);
+    await istek(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: td.taslak!.surum });
+    assert.deepEqual((await ortak())['ekMesai'], [{ m: T1, gun: 2, vardiya: V }]);
+  });
+
 });

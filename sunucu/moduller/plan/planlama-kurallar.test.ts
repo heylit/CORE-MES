@@ -72,7 +72,7 @@ describe('planlama kuralları: çalışma planı ve canlı plan', () => {
     const r = calismaEkMesaisi('2026-10-30', [
       { m: '5', gun: 2, vardiya: '3' }, { m: '5', gun: 2, vardiya: '3' }, { m: 'T1', gun: 0, vardiya: '3' }, { m: '5', gun: 0, vardiya: 'V3' },
     ]);
-    assert.deepEqual(r, { satirlar: [{ makineId: 5, gun: '2026-11-01', vardiyaId: 3 }], yazilamaz: 2 });
+    assert.deepEqual(r, { satirlar: [{ makineId: 5, gun: '2026-11-01', vardiyaId: 3, personelId: null }], yazilamaz: 2 });
   });
 
   test('RR-507-3: taslağın yeri çalışmanın ekseninde yazılır, ayar başlangıcı ve ilk parti aynı kayar; kilit taslağınki; biten ve olmayan işlem atlanır', () => {
