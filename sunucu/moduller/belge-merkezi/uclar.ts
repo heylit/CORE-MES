@@ -19,7 +19,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/cizimler/menu-sayaclari',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: ikinciMenuSayacSemasi,
     // Okuyamayan kişiye sayı verilmez: kabuk eksik anahtarda sayı göstermez.
     isle: async ({ db, kullanici }) => (kullanici.islemler.some((i) => OKUYAN_ISLEMLER.includes(i)) ? servis.menuSayaclari(db) : {}),
@@ -160,7 +160,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/cizimler/kucuk-resimler',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     sorgu: kucukResimSorgusu,
     cevap: kucukResimlerCevabi,
     isle: async ({ db, sorgu }) => ({ resimler: [...(await servis.kayitlarinKucukResimleri(db, sorgu.hedefModul, sorgu.idler)).values()] }),
@@ -168,7 +168,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/cizimler/kucuk-resim/:revizyonId/:kare',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     parametre: kucukResimKareParametresi,
     cevap: ikiliCevap,
     isle: ({ db, parametre }) => servis.kucukResimKaresi(db, parametre.revizyonId, parametre.kare),

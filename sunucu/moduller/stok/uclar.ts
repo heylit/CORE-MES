@@ -48,8 +48,8 @@ const ESLEME = { biri: STOK_ESLEME_ISLEMLERI } as const;
 const ACIK_SIPARIS_OKUMA = { biri: ['stok.giris', 'plan.planlama-oku'] } as const;
 export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/is-kutusu', yetki: OKUMA, cevap: isKutusuCevabi, isle: ({ db, kullanici }) => s.isKutusu(db, kullanici.islemler, kullanici.id) }),
-  uc({ yontem: 'GET', yol: '/stok/ozet', yetki: 'oturum', cevap: stokOzetiCevabi, isle: ({ db, kullanici }) => s.stokOzeti(db, kullanici.islemler) }),
-  uc({ yontem: 'GET', yol: '/stok/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => s.menuSayaclari(db, kullanici.islemler, kullanici.id) }),
+  uc({ yontem: 'GET', yol: '/stok/ozet', yetki: 'oturum', sahiplik: 'yok', cevap: stokOzetiCevabi, isle: ({ db, kullanici }) => s.stokOzeti(db, kullanici.islemler) }),
+  uc({ yontem: 'GET', yol: '/stok/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => s.menuSayaclari(db, kullanici.islemler, kullanici.id) }),
   uc({ yontem: 'GET', yol: '/stok/panel', yetki: OKUMA, cevap: panelCevabi, isle: ({ db, kullanici }) => s.panel(db, kullanici.islemler) }),
   // 1382 d: değer finans rakamıdır (#680); stoğu okuyan uca ulaşır, değeri yalnız finans.oku olan görür.
   uc({ yontem: 'GET', yol: '/stok/deger', yetki: OKUMA, sorgu: stokDegeriSorgusu, cevap: stokDegeriCevabi, isle: ({ db, kullanici, sorgu }) => s.stokDegeriOku(db, kullanici.islemler, sorgu.yontem) }),
@@ -97,7 +97,7 @@ export const uclar = [
     isle: async ({ db, parametre, sorgu }) => ({ partiler: await s.sonPartiler(db, parametre.id, sorgu.sinir) }) }),
   uc({ yontem: 'GET', yol: '/stok/malzemeler/:id/goz-onerisi', yetki: OKUMA, parametre: kimlikParametresi, cevap: gozOnerisiCevabi, isle: ({ db, parametre }) => s.gozOnerisi(db, parametre.id) }),
   // Malzeme kartı (Malzemeler ve Hizmetler) bu iki değeri gösterir; kartı açabilen herkes görür.
-  uc({ yontem: 'GET', yol: '/stok/malzeme-kart-bilgileri', yetki: 'oturum', sorgu: sayfaSorgusu, cevap: malzemeKartBilgileriCevabi, isle: ({ db, sorgu }) => s.malzemeKartBilgileri(db, sorgu) }),
+  uc({ yontem: 'GET', yol: '/stok/malzeme-kart-bilgileri', yetki: 'oturum', sahiplik: 'yok', sorgu: sayfaSorgusu, cevap: malzemeKartBilgileriCevabi, isle: ({ db, sorgu }) => s.malzemeKartBilgileri(db, sorgu) }),
   uc({ yontem: 'POST', yol: '/stok/malzemeler/:id/ayar-duzenle', yetki: 'stok.malzeme-ayari', parametre: kimlikParametresi, govde: malzemeAyarGovdesi, cevap: malzemeAyrintiCevabi, isle: ({ db, parametre, govde }) => s.malzemeAyariYaz(db, parametre.id, govde) }),
 
   uc({ yontem: 'GET', yol: '/stok/partiler', yetki: OKUMA, sorgu: partilerSorgusu, cevap: partilerCevabi, isle: ({ db, sorgu }) => s.partiListesi(db, sorgu) }),

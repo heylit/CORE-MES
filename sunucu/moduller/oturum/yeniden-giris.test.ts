@@ -45,7 +45,7 @@ describe('yeniden giriş: aynı tarayıcının eski oturumu (gerçek PostgreSQL)
     hataYonetiminiKur(app);
     const testUclari = [
       uc({
-        yontem: 'GET', yol: '/test/ben', yetki: 'oturum', cevap: z.object({ id: z.number() }),
+        yontem: 'GET', yol: '/test/ben', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({ id: z.number() }),
         isle: ({ kullanici }) => ({ id: kullanici.id }),
       }),
     ];

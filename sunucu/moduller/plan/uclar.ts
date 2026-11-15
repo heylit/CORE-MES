@@ -91,8 +91,8 @@ export const uclar = [
   // 2752 (2750 b): TL'siz grup bedel sırası; planlama sayfalarını gören rol (Mimar: ayrı uç, TL'li uç olduğu gibi). Parametresiz.
   uc({ yontem: 'GET', yol: '/plan/mesai-grup-sirasi', yetki: PLANLAMA_OKUR, sorgu: mesaiGrupSirasiSorgusu, cevap: mesaiGrupSirasiCevabi,
     isle: ({ db }) => mesaiGrupSirasi(db) }),
-  uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db, kullanici }) => servis.canliSurum(db, kullanici) }),
-  uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
+  uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', sahiplik: 'yok', cevap: planSurumCevabi, isle: ({ db, kullanici }) => servis.canliSurum(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
   uc({ yontem: 'POST', yol: '/plan/yerlestir', yetki: 'plan.yaz', tekrarKorumali: true, govde: yerlestirGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, govde }) => servis.yerlestir(db, kullanici, govde) }),

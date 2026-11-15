@@ -94,7 +94,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'POST',
       yol: '/hesabim/gizlilik-taahhudu',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       govde: gizlilikTaahhuduGovdesi,
       cevap: oturumCevabi,
       isle: async ({ db, kullanici, istek }) => ({
@@ -104,7 +104,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'POST',
       yol: '/hesabim/parola-degistir',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       govde: kendiParolaGovdesi,
       cevap: parolaCevabi,
       isle: async ({ db, kullanici, govde, istek, gunluk }) => {
@@ -123,7 +123,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'POST',
       yol: '/oturum/nabiz',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       denetim: 'yok',
       govde: nabizGovdesi,
       cevap: nabizCevabi,
@@ -137,7 +137,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'POST',
       yol: '/hesabim/pin-degistir',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       govde: kendiPinGovdesi,
       cevap: parolaCevabi,
       isle: async ({ db, kullanici, govde, istek, gunluk }) => {
@@ -173,7 +173,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'POST',
       yol: '/hesabim/saat-onayla',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       govde: saatOnaylaGovdesi,
       cevap: saatCihaziKapatCevabi,
       isle: async ({ db, kullanici, govde, istek, gunluk }) => {
@@ -185,28 +185,28 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'GET',
       yol: '/hesabim/oturumlar',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       cevap: acikOturumlarCevabi,
       isle: async ({ db, kullanici, istek }) => ({ oturumlar: await acikOturumlarim(db, kullanici.id, istektekiOturumOzeti(istek)) }),
     }),
     uc({
       yontem: 'POST',
       yol: '/hesabim/oturumlar/digerlerini-kapat',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       cevap: digerOturumlariKapatCevabi,
       isle: async ({ db, kullanici, istek }) => ({ kapanan: await digerOturumlarimiKapat(db, kullanici.id, istektekiOturumOzeti(istek)) }),
     }),
     uc({
       yontem: 'GET',
       yol: '/hesabim/saat-cihazlari',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       cevap: saatCihazlariCevabi,
       isle: async ({ db, kullanici }) => ({ cihazlar: await saatCihazlari(db, kullanici.id) }),
     }),
     uc({
       yontem: 'POST',
       yol: '/hesabim/saat-cihazlari/:id/kapat',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       parametre: saatCihaziParametresi,
       cevap: saatCihaziKapatCevabi,
       isle: async ({ db, kullanici, parametre }) => {
@@ -237,7 +237,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
     uc({
       yontem: 'GET',
       yol: '/oturum/cihaz',
-      yetki: 'oturum',
+      yetki: 'oturum', sahiplik: 'kendi',
       cevap: cihazDurumuCevabi,
       isle: async ({ db, istek }) => {
         const belirtec = istek.cerez(CIHAZ_CEREZI);

@@ -108,7 +108,7 @@ export function genelAramaUcu(vt: Veritabani, kaynaklar: readonly ModulKaynagi[]
   return uc({
     yontem: 'GET',
     yol: GENEL_ARAMA_YOLU,
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     txDisi: true,
     sorgu: genelAramaSorguSemasi,
     cevap: genelAramaCevapSemasi,

@@ -263,7 +263,8 @@ test('aynı yöntem ve yol iki kez kaydedilemez (aynı çağrıda ya da ayrı ç
 
 test('uç tanımı yalnız kayıtlı veri işlemini, açık ya da oturum işaretini kabul eder', () => {
   const ortak = { yontem: 'GET', yol: '/x', cevap: z.object({}), isle: () => ({}) } as const;
-  for (const yetki of ['kisiler.oku', 'acik', 'oturum'] as const) assert.equal(uc({ ...ortak, yetki }).yetki, yetki);
+  for (const yetki of ['kisiler.oku', 'acik'] as const) assert.equal(uc({ ...ortak, yetki }).yetki, yetki);
+  assert.equal(uc({ ...ortak, yetki: 'oturum', sahiplik: 'yok' }).yetki, 'oturum');
   // @ts-expect-error kayıtlı olmayan işlem derlenmez; çalışma anında da durur.
   assert.throws(() => uc({ ...ortak, yetki: 'stok.yaz' }), /kayıtlı olmayan işlem istiyor \(stok\.yaz\): GET \/x/);
   // @ts-expect-error sayfa işlemi menü görünürlüğüdür, uç onu isteyemez.
@@ -307,7 +308,7 @@ test('işlemler birbirini kapsamaz: sayfa işlemi de başka veri işlemi de okum
 
 test('yalnız oturum isteyen uç: kimliksiz 401; hiç işlemi olmayan kullanıcı 200 ve işleyici kullanıcıyı alır', async () => {
   const kendi = uc({
-    yontem: 'POST', yol: '/ben/ayar', yetki: 'oturum',
+    yontem: 'POST', yol: '/ben/ayar', yetki: 'oturum', sahiplik: 'yok',
     cevap: z.object({ kim: z.string() }),
     isle: ({ kullanici }) => ({ kim: kullanici.ad }),
   });
@@ -704,18 +705,18 @@ test('veritabanına ulaşılamayınca yalnız transaction dışı açık uç kim
 });
 
 test('denetim kipi yalnız oturumlu yazma ucunda tanımlanabilir: GET (transaction dışı dahil), açık uç ve bilinmeyen kip tanım hatasıdır', () => {
-  const ortak = { yol: '/x', yetki: 'oturum', cevap: z.object({}), isle: () => ({}) } as const;
+  const ortak = { yol: '/x', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({}), isle: () => ({}) } as const;
   for (const denetim of ['govdesiz', 'yok'] as const) {
     assert.throws(() => uc({ ...ortak, yontem: 'GET', denetim }), /GET ucu denetim kipi alamaz \(okuma denetlenmez\): GET \/x/);
     assert.throws(() => uc({ ...ortak, yontem: 'GET', txDisi: true, denetim }), /GET ucu denetim kipi alamaz/);
-    assert.throws(() => uc({ ...ortak, yontem: 'POST', yetki: 'acik', denetim }), /Açık uç denetim kipi alamaz: POST \/x/);
+    assert.throws(() => uc({ ...ortak, yontem: 'POST', yetki: 'acik', sahiplik: undefined, denetim }), /Açık uç denetim kipi alamaz: POST \/x/);
     for (const yontem of ['POST', 'PUT', 'DELETE'] as const) {
       assert.equal(uc({ ...ortak, yontem, denetim }).denetim, denetim);
-      assert.equal(uc({ ...ortak, yontem, yetki: 'kisiler.yaz', denetim }).denetim, denetim);
+      assert.equal(uc({ ...ortak, yontem, yetki: 'kisiler.yaz', sahiplik: undefined, denetim }).denetim, denetim);
     }
   }
   assert.equal(uc({ ...ortak, yontem: 'POST' }).denetim, 'tam');
-  assert.equal(uc({ ...ortak, yontem: 'POST', yetki: 'acik' }).denetim, 'tam');
+  assert.equal(uc({ ...ortak, yontem: 'POST', yetki: 'acik', sahiplik: undefined }).denetim, 'tam');
   // @ts-expect-error tanımda yalnız 'govdesiz' ve 'yok' yazılır; yanlış yazılmış kip sessizce tam sayılmaz.
   assert.throws(() => uc({ ...ortak, yontem: 'POST', denetim: 'govdesz' }), /Bilinmeyen denetim kipi \(govdesz\): POST \/x/);
 });

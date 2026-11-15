@@ -54,7 +54,7 @@ describe('tekrar korumalı komut (gerçek PostgreSQL)', () => {
   const sayUcu = (yol: string) => uc({
     yontem: 'POST',
     yol,
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     tekrarKorumali: true,
     parametre: z.object({ tur: z.string() }),
     govde: govdeSemasi,
@@ -78,18 +78,18 @@ describe('tekrar korumalı komut (gerçek PostgreSQL)', () => {
       isle: () => { islemliKosma += 1; return { kosma: islemliKosma }; },
     }),
     uc({
-      yontem: 'POST', yol: '/deneme-tekrar/sorgulu', yetki: 'oturum', tekrarKorumali: true,
+      yontem: 'POST', yol: '/deneme-tekrar/sorgulu', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true,
       sorgu: z.object({ zorla: z.string().optional() }), cevap: z.object({ zorla: z.string().nullable() }),
       isle: ({ sorgu }) => { kosma += 1; return { zorla: sorgu.zorla ?? null }; },
     }),
     sayUcu(SAY_YOLU),
     sayUcu('/deneme-tekrar/:tur/baska'),
     uc({
-      yontem: 'POST', yol: '/deneme-tekrar/bos', yetki: 'oturum', tekrarKorumali: true, cevap: z.undefined(),
+      yontem: 'POST', yol: '/deneme-tekrar/bos', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap: z.undefined(),
       isle: () => { kosma += 1; return undefined; },
     }),
     uc({
-      yontem: 'POST', yol: '/deneme-tekrar/cerez', yetki: 'oturum', tekrarKorumali: true, cevap: z.object({ tamam: z.boolean() }),
+      yontem: 'POST', yol: '/deneme-tekrar/cerez', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap: z.object({ tamam: z.boolean() }),
       isle: async ({ db, istek }) => {
         await db.sorgu("INSERT INTO deneme_sayim (tur, adet) VALUES ('cerez', 1)");
         istek.cerezYaz('deneme', 'x', 60);
@@ -97,7 +97,7 @@ describe('tekrar korumalı komut (gerçek PostgreSQL)', () => {
       },
     }),
     uc({
-      yontem: 'POST', yol: '/deneme-tekrar/duz', yetki: 'oturum', govde: govdeSemasi, cevap: z.object({ adet: z.number() }),
+      yontem: 'POST', yol: '/deneme-tekrar/duz', yetki: 'oturum', sahiplik: 'yok', govde: govdeSemasi, cevap: z.object({ adet: z.number() }),
       isle: async ({ db, govde }) => {
         kosma += 1;
         await db.sorgu("INSERT INTO deneme_sayim (tur, adet) VALUES ('duz', $1)", [govde.adet]);

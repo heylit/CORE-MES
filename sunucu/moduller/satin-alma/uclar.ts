@@ -26,7 +26,7 @@ const FATURA_BAGLAR = ['satin-alma.yaz', 'satin-alma.fatura-bagla'] as const;
 export const uclar = [
   // İkinci menü sayaçları (şartname): oturum yeter, sayıyı kullanıcının yetkisine göre sunucu süzer.
   // Ana sayfa pano kartları (kart #489): oturum yeter, sayıyı kullanıcının işlemlerine göre sunucu süzer.
-  uc({ yontem: 'GET', yol: '/satin-alma/ozet', yetki: 'oturum', cevap: satinAlmaOzetiCevabi, isle: ({ db, kullanici }) => servis.panoOzeti(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/satin-alma/ozet', yetki: 'oturum', sahiplik: 'yok', cevap: satinAlmaOzetiCevabi, isle: ({ db, kullanici }) => servis.panoOzeti(db, kullanici) }),
   // Dış operasyonlar sayfası (kart #542, D1 a): satın almayı okuyan ya da yazan görür.
   uc({
     yontem: 'GET', yol: '/satin-alma-dis-operasyonlar', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: disOperasyonlarCevabi,
@@ -50,7 +50,7 @@ export const uclar = [
   }),
   // İş kutusu kartı (kart #435): stokta karşılanamayan istekler, salt okunur; yalnız satın alma yazıcısı görür.
   uc({ yontem: 'GET', yol: '/satin-alma-stok-yok-istekleri', yetki: 'satin-alma.yaz', cevap: stokYokIstekleriCevabi, isle: ({ db }) => servis.stokYokIstekleri(db) }),
-  uc({ yontem: 'GET', yol: '/satin-alma-menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/satin-alma-menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
   // Açılış: satın almanın ekranı, role göre süzülmüş bütün (SAT-53, SAT-65). Yalnız talep açabilen buraya giremez (#375):
   // bütçe, onay limiti, kur ve teklifler talep edene gitmez; o kendi taleplerini ana sayfadaki uçtan görür.
   uc({

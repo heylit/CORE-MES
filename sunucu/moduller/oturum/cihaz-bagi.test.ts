@@ -133,7 +133,7 @@ describe('cihaza bağlı oturum akışı (gerçek PostgreSQL)', () => {
     app = Fastify();
     hataYonetiminiKur(app);
     const testUclari = [
-      uc({ yontem: 'GET', yol: '/test/ben', yetki: 'oturum', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) }),
+      uc({ yontem: 'GET', yol: '/test/ben', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) }),
     ];
     uclariKaydet(app, [...oturumUclari(), ...testUclari], { vt: ortam.vt, kimlik: kimlikCozucu(ortam.vt) });
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kişi', kullaniciAdi: 'bag-kisi', parola: PAROLA }));

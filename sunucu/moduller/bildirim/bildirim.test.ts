@@ -147,7 +147,7 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await liste('bakim')).satirlar.length, 0);
   });
 
-  test('başkasının bildirimi görünmez, okundu ve arşiv işaretlenemez (404)', async () => {
+  test('başkasının bildirimi görünmez, okundu, arşiv ve onay işaretlenemez (404)', async () => {
     await bosalt();
     await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Yalnız bakıma', kisiler: [], haric: yoneticiId });
     const bakimin = (await liste('bakim')).satirlar[0];
@@ -155,6 +155,8 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await liste('cam')).satirlar.length, 0);
     assert.equal((await istek('cam', 'POST', `/bildirimler/${bakimin.id}/okundu`)).durum, 404);
     assert.equal((await istek('cam', 'POST', `/bildirimler/${bakimin.id}/arsivle`)).durum, 404);
+    // Kendi satırı olsaydı onay istemediği için 400 alırdı; 404 satırın kişiye ait olmadığını söyler.
+    assert.equal((await istek('cam', 'POST', `/bildirimler/${bakimin.id}/onayla`)).durum, 404);
     assert.equal((await istek('cam', 'POST', '/bildirimler/tumunu-okundu')).durum, 200);
     const sonra = (await liste('bakim')).satirlar[0];
     assert.equal(sonra?.okundu, null);

@@ -25,7 +25,7 @@ const cerezdenKisi = (cerez: string | undefined): Kullanici | null => {
 const gorulenTarihler: string[] = [];
 const UCLAR: readonly Uc[] = [
   uc({ yontem: 'GET', yol: '/deneme/liste', yetki: { biri: ['sayfa.istasyonlar', 'kisiler.oku'] }, cevap: z.object({}), isle: () => ({}) }),
-  uc({ yontem: 'GET', yol: '/deneme/ben', yetki: 'oturum', cevap: z.object({}), isle: () => ({}) }),
+  uc({ yontem: 'GET', yol: '/deneme/ben', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({}), isle: () => ({}) }),
   uc({ yontem: 'GET', yol: '/deneme/acik', yetki: 'acik', cevap: z.object({}), isle: () => ({}) }),
   uc({
     yontem: 'POST', yol: '/deneme/:id/yaz', yetki: 'malzemeler.yaz',

@@ -22,7 +22,9 @@ const KISILER: Record<string, Kullanici> = {
 
 const cevap = z.object({ tamam: z.literal(true) });
 const isle = (): { tamam: true } => ({ tamam: true });
-const ucKur = (yol: string, yetki: Uc['yetki'], yontem: 'GET' | 'POST' = 'GET'): Uc => uc({ yontem, yol, yetki, cevap, isle });
+const ucKur = (yol: string, yetki: Uc['yetki'], yontem: 'GET' | 'POST' = 'GET'): Uc => (yetki === 'oturum'
+  ? uc({ yontem, yol, yetki, sahiplik: 'yok', cevap, isle })
+  : uc({ yontem, yol, yetki, cevap, isle }));
 const dosyaUcu = (yol: string): Uc => uc({
   yontem: 'GET', yol, yetki: 'kisiler.oku', cevap: ikiliCevap,
   isle: () => ({ tur: 'application/pdf', ad: 'a.pdf', boyut: 1, akis: async function* () { yield Buffer.from('x'); } }),

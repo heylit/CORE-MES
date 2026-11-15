@@ -85,13 +85,13 @@ export const paraUclari = [
     isle: async ({ db, parametre }) => ({ sabitKiymetler: await servis.makineSabitKiymetleri(db, parametre.makineId) }) }),
   uc({ yontem: 'GET', yol: '/finans/amortisman', yetki: 'finans.oku', cevap: amortismanCevabi, isle: ({ db }) => servis.amortismanAylari(db) }),
   // 952 a: ortak kur ve faiz şeridi her sayfadadır; giriş yapan herkes okur (yalnız kur, faiz ve giren kişi; finans rakamı yok).
-  uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: 'oturum', cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
+  uc({ yontem: 'GET', yol: '/finans/kur-ozeti', yetki: 'oturum', sahiplik: 'yok', cevap: kurFaizOzetiCevabi, isle: ({ db }) => servis.kurFaizOzeti(db, tesisGunu(new Date())) }),
   // 1089 a: şeridin kur grafiği ve toplu yükleme önizlemesi; şerit gibi giriş yapan herkes okur (yalnız kur ve faiz).
-  uc({ yontem: 'GET', yol: '/finans/kur-faiz-araligi', yetki: 'oturum', sorgu: kurFaizAraligiSorgusu, cevap: kurFaizAraligiCevabi,
+  uc({ yontem: 'GET', yol: '/finans/kur-faiz-araligi', yetki: 'oturum', sahiplik: 'yok', sorgu: kurFaizAraligiSorgusu, cevap: kurFaizAraligiCevabi,
     isle: ({ db, sorgu }) => servis.kurFaizAraligi(db, sorgu.baslangic, sorgu.bitis) }),
   // Kart 2238: kur ve faiz matrisi; şerit gibi giriş yapan herkes okur (952 a).
-  uc({ yontem: 'GET', yol: '/finans/oran-ozeti', yetki: 'oturum', cevap: oranOzetiCevabi, isle: ({ db }) => servis.oranOzeti(db, tesisGunu(new Date())) }),
-  uc({ yontem: 'GET', yol: '/finans/oran-araligi', yetki: 'oturum', sorgu: kurFaizAraligiSorgusu, cevap: oranAraligiCevabi,
+  uc({ yontem: 'GET', yol: '/finans/oran-ozeti', yetki: 'oturum', sahiplik: 'yok', cevap: oranOzetiCevabi, isle: ({ db }) => servis.oranOzeti(db, tesisGunu(new Date())) }),
+  uc({ yontem: 'GET', yol: '/finans/oran-araligi', yetki: 'oturum', sahiplik: 'yok', sorgu: kurFaizAraligiSorgusu, cevap: oranAraligiCevabi,
     isle: ({ db, sorgu }) => servis.oranAraligi(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'GET', yol: '/finans/ayar', yetki: 'finans.oku', cevap: ayarCevabi, isle: async ({ db }) => ({ ayar: await servis.ayarOku(db) as zod.output<typeof ayarCevabi>['ayar'] }) }),
   uc({ yontem: 'GET', yol: '/finans/aylik-seri', yetki: 'finans.oku', sorgu: aylikSeriSorgusu, cevap: aylikSeriCevabi,
@@ -107,7 +107,7 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/beklenen-tahsilatlar', yetki: 'finans.oku', cevap: beklenenTahsilatlarCevabi, isle: ({ db }) => servis.beklenenTahsilatlar(db) }),
   // Sayaç oturumla açılır; finans.oku yoksa sayılar null döner (rakam sızmaz).
   uc({
-    yontem: 'GET', yol: '/finans/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
+    yontem: 'GET', yol: '/finans/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi,
     isle: async ({ db, kullanici }) => {
       if (!kullanici.islemler.includes('finans.oku')) return { firmalar: null, cekler: null };
       return servis.menuSayaclari(db);

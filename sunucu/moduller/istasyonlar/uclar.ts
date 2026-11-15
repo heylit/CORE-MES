@@ -53,7 +53,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/istasyonlar/secim',
     // Seçim her ekranda gerekir (terminal, emir açma); kişinin kısıtını servis uygular.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: istasyonSecimiCevabi,
     isle: async ({ db, kullanici }) => ({ gruplar: await servis.istasyonSecimi(db, kullanici) }),
   }),
@@ -79,7 +79,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/kisi-is-merkezleri/:kisiId',
     // Kişi kendi kısıtını okur; başkasınınkini yalnız tesisi yöneten ya da amir. Ayrımı servis yapar.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'kendi',
     parametre: kisiParametresi,
     cevap: kisiIsMerkezleriCevabi,
     isle: async ({ db, kullanici, parametre }) => ({

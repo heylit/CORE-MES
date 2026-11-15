@@ -35,6 +35,11 @@ export interface OkumaYetkisi {
   readonly biri: readonly [Islem, ...Islem[]];
 }
 
+// Yalnız 'oturum' ucunda zorunlu: işlem listesi yetkiyi daraltmadığı için kimin kaydına dokunduğu tanımda görünmelidir.
+// 'kendi': yalnız oturumdaki kişinin kendi kaydı; başkasının kaydına dokunan istek 403 alır ve bunun testi vardır.
+// 'yok': kişiye ait kayıt yok; her oturumun görmesi gereken ortak veri (sayaç, kurum, takvim, kur).
+export type Sahiplik = 'kendi' | 'yok';
+
 const okumaYetkisiMi = (yetki: unknown): yetki is OkumaYetkisi =>
   typeof yetki === 'object' && yetki !== null && 'biri' in yetki;
 
@@ -223,7 +228,18 @@ export interface IsleBaglami<P, S, G, Y extends UcYetkisi> {
   gunluk: Gunluk;
 }
 
-export interface UcTanimi<
+// İşlem istemeyen 'oturum' ucu sahiplik beyanı olmadan derlenmez; öteki uçlarda yetki işlemdedir, alan verilmez.
+type SahiplikBeyani<Y extends UcYetkisi> = [Y] extends ['oturum'] ? { sahiplik: Sahiplik } : { sahiplik?: never };
+
+export type UcTanimi<
+  P extends Sema,
+  S extends Sema,
+  G extends Sema,
+  C extends Sema,
+  Y extends UcYetkisi,
+> = UcTanimiGovdesi<P, S, G, C, Y> & SahiplikBeyani<Y>;
+
+interface UcTanimiGovdesi<
   P extends Sema,
   S extends Sema,
   G extends Sema,
@@ -269,6 +285,8 @@ export interface Uc {
   readonly yontem: Yontem;
   readonly yol: string;
   readonly yetki: UcYetkisi;
+  // Yalnız 'oturum' ucunda dolu.
+  readonly sahiplik: Sahiplik | null;
   readonly txDisi: boolean;
   readonly tekrarKorumali: boolean;
   readonly kilitlenmedeYinele: boolean;
@@ -289,6 +307,8 @@ export interface UcOzeti {
   yontem: Yontem;
   yol: string;
   yetki: UcYetkisi;
+  // Yalnız 'oturum' ucunda vardır.
+  sahiplik?: Sahiplik;
   txDisi: boolean;
   // Yalnız 'tam' değilse vardır.
   denetim?: Exclude<DenetimKipi, 'tam'>;
@@ -399,6 +419,13 @@ export function uc<
   } else if (tanim.yetki !== 'acik' && tanim.yetki !== 'oturum' && !veriIslemiMi(tanim.yetki)) {
     throw new Error(`Uç kayıtlı olmayan işlem istiyor (${String(tanim.yetki)}): ${ad}`);
   }
+  const sahiplik: unknown = (tanim as { sahiplik?: unknown }).sahiplik;
+  if (tanim.yetki === 'oturum') {
+    // Tipi aşan tanım (eksik ya da yanlış yazılmış değer) sessizce bir tarafa sayılmasın.
+    if (sahiplik !== 'kendi' && sahiplik !== 'yok') throw new Error(`'oturum' ucu sahiplik beyanı ister ('kendi' | 'yok'): ${ad}`);
+  } else if (sahiplik !== undefined) {
+    throw new Error(`Sahiplik beyanı yalnız 'oturum' ucunda verilir: ${ad}`);
+  }
   if (tanim.onbellek !== undefined && tanim.yontem !== 'GET') throw new Error(`Önbellek etiketi yalnız GET ucunda verilebilir: ${ad}`);
   if (tanim.txDisi === true && tanim.yontem !== 'GET') {
     throw new Error(`Yalnız GET ucu transaction dışında koşabilir: ${ad}`);
@@ -441,6 +468,7 @@ export function uc<
     yetki: okumaYetkisiMi(tanim.yetki)
       ? Object.freeze({ biri: Object.freeze([...tanim.yetki.biri]) as OkumaYetkisi['biri'] })
       : tanim.yetki,
+    sahiplik: tanim.yetki === 'oturum' ? (sahiplik as Sahiplik) : null,
     txDisi: tanim.txDisi === true,
     tekrarKorumali: tanim.tekrarKorumali === true,
     kilitlenmedeYinele: tanim.kilitlenmedeYinele === true,
@@ -458,8 +486,8 @@ export function uc<
 }
 
 export function ucEnvanteri(uclar: readonly Uc[]): UcOzeti[] {
-  return uclar.map(({ yontem, yol, yetki, txDisi, denetim, denetimOzeti, kendiligindenYuklenir }) => ({
-    yontem, yol, yetki, txDisi, ...(denetim === 'govdesiz' || denetim === 'yok' ? { denetim } : {}),
+  return uclar.map(({ yontem, yol, yetki, sahiplik, txDisi, denetim, denetimOzeti, kendiligindenYuklenir }) => ({
+    yontem, yol, yetki, ...(sahiplik === 'kendi' || sahiplik === 'yok' ? { sahiplik } : {}), txDisi, ...(denetim === 'govdesiz' || denetim === 'yok' ? { denetim } : {}),
     // Modül dosyasından `uc()` ile kurulmamış düz nesne de gelebilir (harita): alanı olmayan uç seçicili sayılmaz.
     ...(typeof denetimOzeti === 'function' ? { denetimSecimi: true as const } : {}),
     ...(kendiligindenYuklenir === true ? { kendiligindenYuklenir: true as const } : {}),

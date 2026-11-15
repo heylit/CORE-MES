@@ -15,7 +15,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/nizamiye/menu-sayaclari',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: ikinciMenuSayacSemasi,
     // Okuyamayan kişiye sayı verilmez: kabuk eksik anahtarda sayı göstermez.
     isle: async ({ db, kullanici }) => (kullanici.islemler.includes('nizamiye.oku') ? servis.menuSayaclari(db) : {}),
@@ -98,15 +98,15 @@ export const uclar = [
     isle: ({ db, parametre, govde }) => servis.rafaAl(db, parametre.id, govde.surum),
   }),
   uc({
-    yontem: 'GET', yol: '/ziyaretcilerim', yetki: 'oturum', cevap: ziyaretcilerimCevabi,
+    yontem: 'GET', yol: '/ziyaretcilerim', yetki: 'oturum', sahiplik: 'kendi', cevap: ziyaretcilerimCevabi,
     isle: ({ db, kullanici }) => servis.ziyaretcilerim(db, kullanici),
   }),
   uc({
-    yontem: 'POST', yol: '/ziyaretcilerim/on-kayit', yetki: 'oturum', tekrarKorumali: true, govde: onKayitGovdesi, cevap: benimZiyaretcimSemasi,
+    yontem: 'POST', yol: '/ziyaretcilerim/on-kayit', yetki: 'oturum', sahiplik: 'kendi', tekrarKorumali: true, govde: onKayitGovdesi, cevap: benimZiyaretcimSemasi,
     isle: ({ db, kullanici, govde }) => servis.onKayitAc(db, kullanici, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/ziyaretcilerim/:id/iptal', yetki: 'oturum', parametre: idParametresi, govde: surumGovdesi, cevap: benimZiyaretcimSemasi,
+    yontem: 'POST', yol: '/ziyaretcilerim/:id/iptal', yetki: 'oturum', sahiplik: 'kendi', parametre: idParametresi, govde: surumGovdesi, cevap: benimZiyaretcimSemasi,
     isle: ({ db, kullanici, parametre, govde }) => servis.kendiZiyaretiniIptalEt(db, kullanici, parametre.id, govde.surum),
   }),
 ];

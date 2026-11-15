@@ -14,9 +14,9 @@ import * as servis from './servis.ts';
 const TANIM = { biri: ['vardiya.yaz', 'vardiya.tanim-yaz'] } as const;
 
 export const uclar = [
-  uc({ yontem: 'GET', yol: '/vardiya-takvimi', yetki: 'oturum', cevap: takvimCevabi, isle: ({ db }) => servis.takvim(db) }),
+  uc({ yontem: 'GET', yol: '/vardiya-takvimi', yetki: 'oturum', sahiplik: 'yok', cevap: takvimCevabi, isle: ({ db }) => servis.takvim(db) }),
   uc({
-    yontem: 'GET', yol: '/calisma-takvimi', yetki: 'oturum', sorgu: calismaTakvimiSorgusu, cevap: calismaTakvimiCevabi,
+    yontem: 'GET', yol: '/calisma-takvimi', yetki: 'oturum', sahiplik: 'kendi', sorgu: calismaTakvimiSorgusu, cevap: calismaTakvimiCevabi,
     isle: async ({ db, kullanici, sorgu }) => ({
       takvim: await servis.kaynakTakvimiOku(db, kullanici, { tur: sorgu.tur, id: sorgu.id }, { baslangic: sorgu.baslangic, bitis: sorgu.bitis }),
     }),
@@ -95,7 +95,7 @@ export const uclar = [
   }),
   // Planlı duruş (kart #519): okuma oturumla açık (takvim gibi); yazma `vardiya.durus-yaz`, kapsam ve kurallar serviste.
   uc({
-    yontem: 'GET', yol: '/planli-duruslar', yetki: 'oturum', sorgu: planliDurusListeSorgusu, cevap: planliDurusListeCevabi,
+    yontem: 'GET', yol: '/planli-duruslar', yetki: 'oturum', sahiplik: 'yok', sorgu: planliDurusListeSorgusu, cevap: planliDurusListeCevabi,
     isle: ({ db, sorgu }) => servis.planliDurusListesi(db, sorgu),
   }),
   uc({

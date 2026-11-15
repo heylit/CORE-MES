@@ -31,10 +31,10 @@ const alanUclari: Uc[] = IK_ALAN_ADLARI.flatMap((alan) => {
 });
 
 export const uclar: Uc[] = [
-  uc({ yontem: 'GET', yol: '/ik/ben', yetki: 'oturum', cevap: ikBenCevabi, isle: ({ db, kullanici }) => servis.benGetir(db, kullanici) }),
-  uc({ yontem: 'GET', yol: '/ik/veri', yetki: 'oturum', cevap: ikVeriCevabi, isle: ({ db, kullanici }) => servis.veriGetir(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/ik/ben', yetki: 'oturum', sahiplik: 'kendi', cevap: ikBenCevabi, isle: ({ db, kullanici }) => servis.benGetir(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/ik/veri', yetki: 'oturum', sahiplik: 'kendi', cevap: ikVeriCevabi, isle: ({ db, kullanici }) => servis.veriGetir(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/ik/ozet', yetki: 'ik.oku', cevap: ikOzetiCevabi, isle: ({ db, kullanici }) => servis.panoOzeti(db, kullanici) }),
-  uc({ yontem: 'GET', yol: '/ik/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/ik/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
   ...alanUclari,
   // BES takibi (kart 1939, 1940 a): okuma İK kapsamına göre süzülür; hareket ve iptal ayrı komutlar, ücret yetkisiyle (BES kesintisi bordroya girer).
   uc({ yontem: 'GET', yol: '/ik/bes', yetki: 'ik.oku', cevap: ikBesCevabi, isle: ({ db, kullanici }) => servis.besGetir(db, kullanici) }),
@@ -67,7 +67,7 @@ export const uclar: Uc[] = [
   }),
   // Kişinin kendi kaydı: işlem istemez, kural kaydın kendisine ait olmasını ister (IK-14).
   uc({
-    yontem: 'POST', yol: '/ik/personel/:kimlik/iletisim', yetki: 'oturum', parametre: ikKimlikParametresi, govde: ikIletisimGovdesi, cevap: ikYazCevabi,
+    yontem: 'POST', yol: '/ik/personel/:kimlik/iletisim', yetki: 'oturum', sahiplik: 'kendi', parametre: ikKimlikParametresi, govde: ikIletisimGovdesi, cevap: ikYazCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.iletisimGuncelle(db, kullanici, parametre.kimlik, govde.alanlar, govde.surum),
   }),
   // Ağ kopup yeniden gönderilen kesinleştirme kilidi yeniden denemez: aynı istek kimliği ilk cevabı alır (borç 170).
@@ -83,16 +83,16 @@ export const uclar: Uc[] = [
   // Puantaj (kart #1571): kişi sayfası ve toplu matris aynı uçtan okur; okuma kişiye göre süzülür (IK-67), yazma devam yetkisiyle (IK-0).
   // Soru 74: izin ekranının gün önerisi; görünürlük puantajla aynıdır (İK kapsamı, çalışan kendisi).
   uc({
-    yontem: 'GET', yol: '/ik/izin-gunu', yetki: 'oturum', sorgu: ikIzinGunuSorgusu, cevap: ikIzinGunuCevabi,
+    yontem: 'GET', yol: '/ik/izin-gunu', yetki: 'oturum', sahiplik: 'kendi', sorgu: ikIzinGunuSorgusu, cevap: ikIzinGunuCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.izinGunuGetir(db, kullanici, sorgu.personel, sorgu.baslangic, sorgu.bitis),
   }),
   // Soru 75: kişi sayfasının salt okunur Vardiya bölümü; görünürlük puantajla aynıdır. Vardiya yazma Vardiya ekranında kalır.
   uc({
-    yontem: 'GET', yol: '/ik/kisi-vardiyasi', yetki: 'oturum', sorgu: ikKisiVardiyasiSorgusu, cevap: ikKisiVardiyasiCevabi,
+    yontem: 'GET', yol: '/ik/kisi-vardiyasi', yetki: 'oturum', sahiplik: 'kendi', sorgu: ikKisiVardiyasiSorgusu, cevap: ikKisiVardiyasiCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.kisiVardiyasiGetir(db, kullanici, sorgu.personel),
   }),
   uc({
-    yontem: 'GET', yol: '/ik/puantaj', yetki: 'oturum', sorgu: ikPuantajSorgusu, cevap: ikPuantajCevabi,
+    yontem: 'GET', yol: '/ik/puantaj', yetki: 'oturum', sahiplik: 'kendi', sorgu: ikPuantajSorgusu, cevap: ikPuantajCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.puantajGetir(db, kullanici, sorgu.ay, sorgu.personel),
   }),
   uc({

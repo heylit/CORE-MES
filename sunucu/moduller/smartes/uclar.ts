@@ -16,7 +16,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/smartes/menu-sayaclari',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: ikinciMenuSayacSemasi,
     // Sayfayı göremeyene sayı verilmez: kabuk eksik anahtarda sayı göstermez.
     isle: async ({ db, kullanici }) => (kullanici.islemler.includes('sayfa.smartes') ? servis.menuSayaclari(db) : {}),

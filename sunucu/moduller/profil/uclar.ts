@@ -14,9 +14,9 @@ import {
 // Geri Bildirim Merkezi (kart 2192): okuma profil.geri-bildirim-oku; yanıt, iç not ve takip profil.geri-bildirim-yanitla;
 // kategori yazma profil.geri-bildirim-kategori-yaz. Her yazma ayrı uçtur; takip ve kategori okunan sürümle yazılır.
 export const uclar = [
-  uc({ yontem: 'GET', yol: '/profil', yetki: 'oturum', cevap: profilCevabi, isle: ({ db, kullanici }) => profilOku(db, kullanici, new Date()) }),
+  uc({ yontem: 'GET', yol: '/profil', yetki: 'oturum', sahiplik: 'kendi', cevap: profilCevabi, isle: ({ db, kullanici }) => profilOku(db, kullanici, new Date()) }),
   uc({
-    yontem: 'POST', yol: '/profil/geri-bildirim-gonder', yetki: 'oturum', tekrarKorumali: true,
+    yontem: 'POST', yol: '/profil/geri-bildirim-gonder', yetki: 'oturum', sahiplik: 'kendi', tekrarKorumali: true,
     govde: geriBildirimGonderGovdesi, cevap: geriBildirimGonderCevabi,
     isle: ({ db, kullanici, govde }) => geriBildirimGonder(db, kullanici, govde),
   }),
@@ -64,23 +64,23 @@ export const uclar = [
     isle: ({ db, parametre, govde }) => geriBildirimKategoriGuncelle(db, parametre.id, govde),
   }),
   // Görünüm teması kişinin kendi tercihidir (2072 a): okuma ve seçme yalnız oturum ister, kişi oturumdan gelir.
-  uc({ yontem: 'GET', yol: '/profil/tema', yetki: 'oturum', cevap: temaCevabi, isle: ({ db, kullanici }) => temaOku(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/profil/tema', yetki: 'oturum', sahiplik: 'kendi', cevap: temaCevabi, isle: ({ db, kullanici }) => temaOku(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/profil/tema-sec', yetki: 'oturum', tekrarKorumali: true,
+    yontem: 'POST', yol: '/profil/tema-sec', yetki: 'oturum', sahiplik: 'kendi', tekrarKorumali: true,
     govde: temaSecGovdesi, cevap: temaCevabi,
     isle: ({ db, kullanici, govde }) => temaSec(db, kullanici, govde),
   }),
   // Mini pano seçimi kişinin kendi tercihidir (2425-3 a): okuma ve seçme yalnız oturum ister, kişi oturumdan gelir.
-  uc({ yontem: 'GET', yol: '/profil/mini-pano', yetki: 'oturum', cevap: miniPanoCevabi, isle: ({ db, kullanici }) => miniPanoOku(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/profil/mini-pano', yetki: 'oturum', sahiplik: 'kendi', cevap: miniPanoCevabi, isle: ({ db, kullanici }) => miniPanoOku(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/profil/mini-pano-sec', yetki: 'oturum', tekrarKorumali: true,
+    yontem: 'POST', yol: '/profil/mini-pano-sec', yetki: 'oturum', sahiplik: 'kendi', tekrarKorumali: true,
     govde: miniPanoSecGovdesi, cevap: miniPanoCevabi,
     isle: ({ db, kullanici, govde }) => miniPanoSec(db, kullanici, govde),
   }),
   // Sık kullanılanlar kişinin kendi menüsüdür (2951): yetki vermez, yalnız oturum ister; kişi oturumdan gelir.
-  uc({ yontem: 'GET', yol: '/profil/menu', yetki: 'oturum', cevap: menuTercihiCevabi, isle: ({ db, kullanici }) => menuTercihiOku(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/profil/menu', yetki: 'oturum', sahiplik: 'kendi', cevap: menuTercihiCevabi, isle: ({ db, kullanici }) => menuTercihiOku(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/profil/menu-sec', yetki: 'oturum', tekrarKorumali: true,
+    yontem: 'POST', yol: '/profil/menu-sec', yetki: 'oturum', sahiplik: 'kendi', tekrarKorumali: true,
     govde: menuSecGovdesi, cevap: menuTercihiCevabi,
     isle: ({ db, kullanici, govde }) => menuTercihiSec(db, kullanici, govde),
   }),

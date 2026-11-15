@@ -35,7 +35,7 @@ function uygulama(denetle: Denetle): FastifyInstance {
       isle: () => ({ veri: 'ic-veri' }),
     }),
   ], { vt, kimlik, denetle, modul: 'kayit' });
-  uclariKaydet(app, [uc({ yontem: 'GET', yol: '/oturum-ben', yetki: 'oturum', cevap, isle: () => ({ veri: 'ben' }) })], {
+  uclariKaydet(app, [uc({ yontem: 'GET', yol: '/oturum-ben', yetki: 'oturum', sahiplik: 'yok', cevap, isle: () => ({ veri: 'ben' }) })], {
     vt, kimlik, denetle, modul: 'oturum',
   });
   return app;

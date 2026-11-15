@@ -24,7 +24,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/kapali-sayfalar',
     // Kabuk her oturumda menüyü bununla süzer; liste yalnız sayfa yollarıdır.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: kapaliSayfalarCevabi,
     isle: ({ db }) => kapaliSayfalariOku(db),
   }),
@@ -49,7 +49,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/kurum-logosu',
     // Kabuk her oturumda çizer; logo kurumun herkese görünen işaretidir.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: kurumLogosuCevabi,
     isle: ({ db }) => kurumLogosuOku(db),
   }),
@@ -65,7 +65,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/karsilama',
     // Kabuk girişten sonra herkese çizer; yazma genel değiştirme ucundan, ayar yazan kişiyledir.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: karsilamaCevabi,
     isle: ({ db }) => karsilamaOku(db),
   }),
@@ -73,7 +73,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/gorunum',
     // Kabuk her oturumda hareket dilini ve açılışı bununla uygular; yazma genel değiştirme ucundan, ayar yazan kişiyledir.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: gorunumCevabi,
     isle: ({ db }) => gorunumOku(db),
   }),
@@ -97,7 +97,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/kurum',
     // Modül başlıkları her oturumda yazar; yazma genel değiştirme ucundan, ayar yazan kişiyledir.
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: kurumCevabi,
     isle: ({ db }) => kurumOku(db),
   }),

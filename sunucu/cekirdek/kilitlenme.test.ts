@@ -21,10 +21,10 @@ const sunucuHatasi = (db: Db, kod: string): Promise<unknown> =>
   db.sorgu(`DO $$ BEGIN RAISE EXCEPTION 'deneme' USING ERRCODE = '${kod}'; END $$`);
 
 test('kilitlenmede yineleme yalnız yazma ucunda tanımlanabilir; verilmezse kapalıdır', () => {
-  const ortak = { yol: '/x', yetki: 'oturum', kilitlenmedeYinele: true, cevap, isle } as const;
+  const ortak = { yol: '/x', yetki: 'oturum', sahiplik: 'yok', kilitlenmedeYinele: true, cevap, isle } as const;
   assert.throws(() => uc({ ...ortak, yontem: 'GET' }), /Kilitlenmede yineleme yalnız yazma ucunda verilebilir: GET \/x/);
   for (const yontem of ['POST', 'PUT', 'DELETE'] as const) assert.equal(uc({ ...ortak, yontem }).kilitlenmedeYinele, true);
-  assert.equal(uc({ yontem: 'POST', yol: '/x', yetki: 'oturum', cevap, isle }).kilitlenmedeYinele, false);
+  assert.equal(uc({ yontem: 'POST', yol: '/x', yetki: 'oturum', sahiplik: 'yok', cevap, isle }).kilitlenmedeYinele, false);
 });
 
 test('kilitlenmedeYinele: geçici çakışmada her denemede yeni transaction açar, aralarda 10-50 ms bekler; tükenince son hatayı, başka hatayı ilk seferde verir', async () => {

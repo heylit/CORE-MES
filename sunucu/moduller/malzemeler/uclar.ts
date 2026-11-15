@@ -25,7 +25,7 @@ export const uclar = [
     isle: ({ db, sorgu }) => servis.malzemeSecimAra(db, sorgu),
   }),
   // Pano kartı: oturumu olan sorar, her sayı kendi işlemiyle dolar (stok özetiyle aynı yol).
-  uc({ yontem: 'GET', yol: '/malzemeler/ozet', yetki: 'oturum', cevap: malzemelerOzetiCevabi, isle: ({ db, kullanici }) => servis.malzemelerOzeti(db, kullanici.islemler) }),
+  uc({ yontem: 'GET', yol: '/malzemeler/ozet', yetki: 'oturum', sahiplik: 'yok', cevap: malzemelerOzetiCevabi, isle: ({ db, kullanici }) => servis.malzemelerOzeti(db, kullanici.islemler) }),
   uc({ yontem: 'GET', yol: '/malzeme-katalogu-kartlari', yetki: OKUMA, sorgu: katalogKartlariSorgusu, cevap: katalogKartlariCevabi, isle: ({ db, sorgu }) => servis.katalogKartlariniGetir(db, sorgu) }),
   uc({
     yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/kaydet', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,
