@@ -49,6 +49,9 @@ describe('Sipariş metni', () => {
       expect(alan.readOnly).toBe(false);
       expect(alan.value).toContain('Kalite şartı: ORN şart: her partide rapor');
       expect(kap.querySelector(`#${alan.getAttribute('aria-describedby') ?? ''}`)?.textContent).toBe('Değişiklik kaydedilmez; kopyalayıp tedarikçiye gönderin.');
+      // 3279-2 a: proje müşterisinin şartı da yazılır.
+      ONAYLI.veri = { ...ORNEK_LISTE, projeMusterileri: [{ projeId: 8, musteriFirmaId: 51, musteriAd: 'ORN-Müşteri Kara' }] };
+      expect(poText({ ...rk, projeId: 8 } as PurchaseRequest, { ...o, supplierId: '1' } as OrderInfo)).toContain('ORN-Müşteri Kara şartı: ORN müşteri şartı');
     } finally {
       ONAYLI.veri = onceki;
       S.materials = malzemeler;

@@ -252,6 +252,7 @@ export interface PurchaseRequest {
   /** Talebin açıldığı üretim emri (boş: bağlı değil); merkez değiştirmez, kaydederken olduğu gibi geri yollar. */
   uretimEmriId?: number | null;
   uretimEmriNo?: string | null;
+  projeId?: number | null;
   /** 2876: güncelleme grubu (kök önce; tek üyeli grup yok); sunucu yazar, merkez yalnız gösterir. */
   guncellemeGrubu?: { id: string; no: string; status: RequestStatus; kok: boolean }[];
   weights?: Weights | null;

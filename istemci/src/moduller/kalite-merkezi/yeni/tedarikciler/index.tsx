@@ -9,7 +9,7 @@ import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { AdimliForm, type KmAdim, type KmAlan, type KmSecenek } from '../AdimliForm.tsx';
 import { trd, YOK } from '../bicim.ts';
-import { Ekler } from '../Ekler.tsx';
+import { Ekler, belgeleri } from '../Ekler.tsx';
 import { Damga, KayitListesi } from '../KayitListesi.tsx';
 import { tedarikciNcr, tedarikciNotu, tedarikciRiski, type KmTon } from '../kurallar.ts';
 import { SERTS, SUP_KAT } from '../sabitler.ts';
@@ -20,7 +20,7 @@ import type { KmYetkisi } from '../yetki.ts';
 import { Grafik, VeriYok } from '../gostergeler/Grafik.tsx';
 import { Panel } from '../gostergeler/index.tsx';
 import { GenelBelge } from './GenelBelge.tsx';
-import { KategoriOnaylari } from './KategoriOnaylari.tsx';
+import { Onaylar } from './Onaylar.tsx';
 import '../gostergeler/k4.css';
 
 // Uygulamanın SUP_F'i. Kod önerisi kayıt sayısından (TED-001).
@@ -85,11 +85,16 @@ function TedarikciFormu({ veri, yetki, kayit, kapat }: { veri: KmVerisi; yetki: 
         ? <Ekler veri={veri} yetki={yetki} kol="sup" kimlik={kayit._id} no={kayit.kod || kayit.ad} tur="Tedarikçi sistem sertifikası" />
         : <p className="tc-km-soluk">Sertifika belgelerini tedarikçiyi kaydettikten sonra ekleyebilirsiniz.</p>),
     },
-    // 2466 (2461-2 a): kategori başına Kalite kararı onay yetkisinindir; adım yalnız ona görünür ve kayıtlı firma bağıyla çalışır.
+    // 2466 (2461-2 a), 3279-2 a: şirket, müşteri ve diğer onaylar onay yetkisinindir; adım yalnız ona görünür ve kayıtlı firma bağıyla çalışır.
     ...(yetki.onayla ? [{
-      baslik: 'Kategori onayları',
-      ipucu: 'Her kategori kararı hemen kaydedilir; Satın Alma bu kararları salt okur.',
-      icerik: () => <KategoriOnaylari firmaId={typeof kayit?.firmaId === 'number' ? kayit.firmaId : null} />,
+      baslik: 'Onaylar',
+      ipucu: 'Her onay hemen kaydedilir; Satın Alma onayları salt okur.',
+      icerik: () => (
+        <Onaylar
+          firmaId={typeof kayit?.firmaId === 'number' ? kayit.firmaId : null}
+          belgeler={kayit ? belgeleri(veri, 'sup', kayit._id).map((b) => ({ kimlik: b._id, ad: b.ad ?? b.belgeNo ?? b._id })) : []}
+        />
+      ),
     } satisfies KmAdim] : []),
     { baslik: 'Performans', alanlar: ['kaliteSkor', 'teslimatSkor', 'not'] },
   ];

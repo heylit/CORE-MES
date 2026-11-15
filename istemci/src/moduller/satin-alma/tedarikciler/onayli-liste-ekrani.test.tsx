@@ -29,7 +29,7 @@ describe('3279 a Onaylı liste sekmesi', () => {
     ac(ORNEK_LISTE);
     // Açılışta ilk kararlı kategori seçili; firma geneli ağaçtan seçilir.
     const ilk = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
-    expect(within(ilk).getByRole('columnheader', { name: 'Bu kategoride' })).toBeTruthy();
+    expect(within(ilk).getByRole('columnheader', { name: 'Onaylar (bu kategoride)' })).toBeTruthy();
     expect(within(ilk).getByText('12.03.2026 · ORN-Kalite Sorumlusu')).toBeTruthy();
     expect(within(ilk).getByText("Firmanın Kalite Merkezi'nde kaydı yok")).toBeTruthy();
     expect(screen.getByText('Onaylı firma').closest('div')?.parentElement?.textContent).toContain('en az bir kategoride');
@@ -44,7 +44,7 @@ describe('3279 a Onaylı liste sekmesi', () => {
     ac(ORNEK_LISTE, ['satin-alma.oku', 'sayfa.kalite-merkezi']);
     const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
     expect(within(tablo).queryByText('ORN-Kuzey')).toBeNull();
-    expect(within(tablo).getByText('ORN şart: her partide rapor')).toBeTruthy();
+    expect(within(tablo).getByText(/ORN şart: her partide rapor/)).toBeTruthy();
     expect(within(tablo).getAllByRole('link', { name: "Kalite'de aç" }).map((a) => a.getAttribute('href'))).toEqual(['/kalite-merkezi/tedarikciler', '/kalite-merkezi/tedarikciler']);
     expect(within(tablo).getByRole('link', { name: "Kalite'de firmaya bağla" })).toBeTruthy();
   });
@@ -60,6 +60,17 @@ describe('3279 a Onaylı liste sekmesi', () => {
     expect(within(m).getByTitle('Kalite kaydı yok').textContent).toBe('?');
     fireEvent.click(within(m).getByRole('button', { name: /ORN-Demir, Isıl işlem: Şartlı/ }));
     expect(screen.getByRole('status').textContent).toContain('ORN şart: her partide rapor');
+  });
+
+  it('3279-2 a: onay rozetinde tür simgesi; firma penceresinde Kalite\'de aç uygulama içi bağlantı', async () => {
+    ac(ORNEK_LISTE, ['satin-alma.oku', 'sayfa.kalite-merkezi']);
+    const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
+    const kimler = [...tablo.querySelectorAll('.sa-ol-onay > small')];
+    expect(kimler.length).toBeGreaterThan(1);
+    expect(kimler.every((k) => k.querySelector('svg.tc-simge') !== null)).toBe(true);
+    fireEvent.click(within(tablo).getByRole('button', { name: 'ORN-Anka' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByRole('link', { name: "Kalite'de aç" }).getAttribute('href')).toBe('/kalite-merkezi/tedarikciler');
   });
 
   it('istek düşerse hata kutusu', async () => {

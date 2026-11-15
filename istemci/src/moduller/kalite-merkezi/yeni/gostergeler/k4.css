@@ -63,3 +63,8 @@
 .tc-km4-sag { text-align: right; }
 .tc-km4-cok-satir { white-space: pre-line; }
 .tc-km4-evet { color: var(--run); font-weight: 600; }
+/* 3279-2 a: tedarikçi Onaylar adımı; kapsam kutuları dar ekranda tek sütun. */
+.tc-km-onay-baslik { margin: var(--b-3) 0 var(--b-1); font-size: var(--yazi-s); }
+.tc-km-onay-kapsam { display: grid; gap: var(--b-1); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 5)), 1fr)); margin: 0; padding: var(--b-2); border: 1px solid var(--edge); border-radius: var(--yari-1); }
+.tc-km-onay-kapsam legend { padding-inline: var(--b-1); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-km-onay-kapsam > p { grid-column: 1 / -1; margin: 0; }

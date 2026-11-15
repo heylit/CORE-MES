@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUGUN, ORNEK_LISTE } from '../tedarikciler/ornek.ts';
-import { firmaRehberi, kontrolluKategoriler, rehberSirasi, talepKategorileri } from './onayli.ts';
+import { firmaRehberi, kontrolluKategoriler, musteriOnayi, rehberSirasi, talepKategorileri } from './onayli.ts';
 import type { Material } from './tipler.ts';
 
 const mal = (id: string, malzemeNo?: number): Material => ({ id, code: id, name: id, category: '', unit: 'adet', spec: '', notes: '', aliases: [], createdAt: 0, ...(malzemeNo === undefined ? {} : { malzemeNo }) });
@@ -30,5 +30,35 @@ describe('3279 a teklif rehberi', () => {
     expect(firmaRehberi(ORNEK_LISTE, 4, ['hizmet|isil'], BUGUN)?.sinif).toBe('kayitsiz');
     expect(firmaRehberi({ ...ORNEK_LISTE, kaliteBagli: false }, 1, ['hizmet|isil'], BUGUN)).toBeNull();
     expect(firmaRehberi(null, 1, [], BUGUN)).toBeNull();
+  });
+});
+
+describe('3279-2 a müşteri onayı birleştirme', () => {
+  it('talebin bir kategorisi kapsanmıyorsa "yok"; kategoriler arasında en kötüsü, şartı ile', () => {
+    // ORN-Anka (1): ORN-Müşteri Hava (50) yalnız ısıl işlemde onaylı.
+    expect(musteriOnayi(ORNEK_LISTE, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil'])).toEqual({ ad: 'ORN-Müşteri Hava', durum: 'onayli', sartlar: [] });
+    expect(musteriOnayi(ORNEK_LISTE, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil', 'sarf|kesici']).durum).toBe('yok');
+    // Aynı müşteri kesici takımda şartlı: iki kategorili talep şartlı görünür, şart taşınır.
+    const veri = {
+      ...ORNEK_LISTE,
+      firmalar: ORNEK_LISTE.firmalar.map((f) => (f.firmaId !== 1 || f.kalite === null ? f : {
+        ...f, kalite: { ...f.kalite, onaylar: [...f.kalite.onaylar, {
+          tur: 'musteri' as const, musteriFirmaId: 50, musteriAd: 'ORN-Müşteri Hava', ad: null, kapsamTumu: false, kapsam: [{ kategoriTuru: 'sarf' as const, kategoriKodu: 'kesici' }],
+          durum: 'sartli' as const, suresiGecti: false, aciklama: 'ORN kesici şartı', bitis: null, belgeVar: false,
+        }] },
+      })),
+    };
+    expect(musteriOnayi(veri, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil', 'sarf|kesici'])).toEqual({ ad: 'ORN-Müşteri Hava', durum: 'sartli', sartlar: ['ORN kesici şartı'] });
+    // Başka müşterinin onayı sayılmaz.
+    expect(musteriOnayi(veri, 1, 99, 'ORN-Başka', ['hizmet|isil']).durum).toBe('yok');
+    // Aynı kategoride iki onay: en iyisi geçerli (süresi geçip onaysız düşen eskisi yenisini bastırmaz).
+    const iki = { ...veri, firmalar: veri.firmalar.map((f) => (f.firmaId !== 1 || f.kalite === null ? f : {
+      ...f, kalite: { ...f.kalite, onaylar: [...f.kalite.onaylar, { ...f.kalite.onaylar[0]!, durum: 'onaysiz' as const, suresiGecti: true }] },
+    })) };
+    expect(musteriOnayi(iki, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil']).durum).toBe('onayli');
+    // Kategorisiz talep: müşterinin bu firmadaki en iyi onayı.
+    expect(musteriOnayi(veri, 1, 50, 'ORN-Müşteri Hava', []).durum).toBe('onayli');
+    expect(musteriOnayi(veri, 2, 50, 'ORN-Müşteri Hava', []).durum).toBe('onaysiz');
+    expect(musteriOnayi(veri, 3, 50, 'ORN-Müşteri Hava', []).durum).toBe('yok');
   });
 });

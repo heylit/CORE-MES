@@ -16,7 +16,10 @@ import {
 import * as studyo from './studyo.ts';
 import { kmCmmOnizlemeCevabi, kmCmmOnizleGovdesi, kmCmmPlaniCevabi, kmCmmYazCevabi, kmCmmYazGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-cmm.ts';
 import * as cmm from './cmm.ts';
-import { kmKategoriKarariCevabi, kmKategoriKarariGovdesi, kmKategoriOnaylariCevabi, kmKategoriOnayiSorgusu } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import {
+  kmKategoriKarariCevabi, kmKategoriKarariGovdesi, kmKategoriOnaylariCevabi, kmKategoriOnayiSorgusu, kmTedarikciOnayiCevabi, kmTedarikciOnayiGovdesi,
+  kmTedarikciOnaylariCevabi,
+} from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import * as kategoriOnayi from './kategori-onayi/servis.ts';
 
 // Uygulamanın yerel sunucu sözleşmesinin (sunucu.py: sync, doc, files, restore) TMI karşılığı. Okuma tek akıştan, yazma
@@ -108,6 +111,23 @@ export const uclar: Uc[] = [
     govde: kmKategoriKarariGovdesi,
     cevap: kmKategoriKarariCevabi,
     isle: ({ db, kullanici, govde }) => kategoriOnayi.kararVer(db, kullanici, govde),
+  }),
+  // 3279-2 a: şirket dışı onaylar (müşteri, diğer); yazan ve okuyan kategori kararıyla aynı onay yetkisi (yeni işlem yok).
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/tedarikci-onaylari',
+    yetki: 'kalite-merkezi.onayla',
+    sorgu: kmKategoriOnayiSorgusu,
+    cevap: kmTedarikciOnaylariCevabi,
+    isle: ({ db, sorgu }) => kategoriOnayi.digerOnaylariEkran(db, sorgu.firmaId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/tedarikci-onaylari/kaydet',
+    yetki: 'kalite-merkezi.onayla',
+    govde: kmTedarikciOnayiGovdesi,
+    cevap: kmTedarikciOnayiCevabi,
+    isle: ({ db, kullanici, govde }) => kategoriOnayi.digerOnayKaydet(db, kullanici, govde),
   }),
   uc({
     yontem: 'GET',

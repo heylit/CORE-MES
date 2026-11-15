@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { KmKategoriKarariGovdesi, KmKategoriOnaylariCevabi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import type { KmKategoriKarariGovdesi, KmKategoriOnaylariCevabi, KmTedarikciOnayiGovdesi, KmTedarikciOnaylariCevabi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import { kmAc, MUHENDIS } from '../test-ortak.tsx';
 import { eklenebilirKategoriler } from './KategoriOnaylari.tsx';
+import { gecerlilik } from './Onaylar.tsx';
 
-// 2466 (2461-2 a): tedarikçi formundaki "Kategori onayları" adımı. Veri uydurmadır; cevaplar sözleşme tipine uyar.
+// 2466 (2461-2 a), 3279-2 a: tedarikçi formundaki "Onaylar" adımı (şirket kategori kararları ve müşteri ya da diğer onaylar). Veri uydurmadır; cevaplar sözleşme tipine uyar.
 beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
 
@@ -20,12 +21,24 @@ const CEVAP = {
 } satisfies KmKategoriOnaylariCevabi;
 const TED = { _id: 's1', kod: 'TED-001', ad: 'Deneme Tedarik', onay: 'Onaylı', firmaId: 7 };
 
-function uclar(cevap: KmKategoriOnaylariCevabi = CEVAP) {
+const DIGER: KmTedarikciOnaylariCevabi = {
+  onaylar: [{
+    id: 4, tur: 'musteri', musteriFirmaId: 9, musteriAd: 'Deneme Müşteri', ad: null, kapsamTumu: true, kapsam: [], durum: 'onayli', aciklama: null, bitis: '2020-01-01',
+    belgeKimligi: null, kisiAd: 'Deneme Kalite', tarih: '2026-10-28T09:00:00+03:00', surum: 3,
+  }],
+  musteriler: [{ id: 9, ad: 'Deneme Müşteri' }],
+};
+function uclar(cevap: KmKategoriOnaylariCevabi = CEVAP, diger: KmTedarikciOnaylariCevabi = DIGER) {
   const asil = globalThis.fetch;
-  const kararlar: KmKategoriKarariGovdesi[] = [];
+  const kararlar: (KmKategoriKarariGovdesi | KmTedarikciOnayiGovdesi)[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     if (adres.endsWith('/kalite-merkezi/tedarikci-firmalari')) return new Response(JSON.stringify({ firmalar: [{ id: 7, kod: null, ad: 'Deneme Tedarik' }] }), { status: 200 });
     if (adres.includes('/kalite-merkezi/kategori-onaylari?firmaId=7')) return new Response(JSON.stringify(cevap), { status: 200 });
+    if (adres.includes('/kalite-merkezi/tedarikci-onaylari?firmaId=7')) return new Response(JSON.stringify(diger), { status: 200 });
+    if (adres.endsWith('/kalite-merkezi/tedarikci-onaylari/kaydet')) {
+      kararlar.push(JSON.parse(String(istek?.body)) as KmTedarikciOnayiGovdesi);
+      return new Response(JSON.stringify({ id: 5, surum: 1 }), { status: 200 });
+    }
     if (adres.endsWith('/kalite-merkezi/kategori-onaylari/karar')) {
       kararlar.push(JSON.parse(String(istek?.body)) as KmKategoriKarariGovdesi);
       return new Response(JSON.stringify({ surum: 1 }), { status: 200 });
@@ -39,7 +52,7 @@ function uclar(cevap: KmKategoriOnaylariCevabi = CEVAP) {
 async function adimaGit() {
   const kip = screen.queryByRole('button', { name: 'Tüm alanları göster' });
   if (kip) fireEvent.click(kip);
-  fireEvent.click(await screen.findByRole('button', { name: /Kategori onayları/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Onaylar/ }));
 }
 
 describe('tedarikçi kategori onayları (2466)', () => {
@@ -52,13 +65,14 @@ describe('tedarikçi kategori onayları (2466)', () => {
     const kararlar = uclar();
     fireEvent.click(await screen.findByRole('button', { name: /Düzenle/ }));
     await adimaGit();
-    expect(await screen.findByText('Isıl işlem')).toBeTruthy();
-    expect(screen.getByText('İlk partide tam kontrol')).toBeTruthy();
-    expect(screen.getByText('Deneme Kalite')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Kategori ekle/ }));
-    const pencere = await screen.findByRole('dialog', { name: 'Kategori ekle' });
-    fireEvent.change(within(pencere).getByLabelText(/^Kategori/), { target: { value: 'hizmet:yuzey' } });
-    fireEvent.change(within(pencere).getByLabelText(/Kalite kararı/), { target: { value: 'sartli' } });
+    const sirket = await screen.findByRole('table', { name: 'Kategori onayları' });
+    expect(await within(sirket).findByText('Isıl işlem')).toBeTruthy();
+    expect(within(sirket).getByText('İlk partide tam kontrol')).toBeTruthy();
+    expect(within(sirket).getByText('Deneme Kalite')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Onay ekle/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Onay ekle' });
+    fireEvent.click(within(pencere).getByLabelText('Hizmet › Yüzey işlem'));
+    fireEvent.change(within(pencere).getByLabelText(/^Durum/), { target: { value: 'sartli' } });
     const kaydet = within(pencere).getByRole('button', { name: 'Kaydet' });
     expect((kaydet as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(within(pencere).getByLabelText(/Şart/), { target: { value: ' İlk üç parti tam kontrol ' } });
@@ -72,12 +86,44 @@ describe('tedarikçi kategori onayları (2466)', () => {
     const kararlar = uclar();
     fireEvent.click(await screen.findByRole('button', { name: /Düzenle/ }));
     await adimaGit();
-    fireEvent.click(await screen.findByRole('button', { name: /Değiştir/ }));
+    const sirket = await screen.findByRole('table', { name: 'Kategori onayları' });
+    fireEvent.click(await within(sirket).findByRole('button', { name: /Değiştir/ }));
     const pencere = await screen.findByRole('dialog', { name: 'Kategori kararı' });
     fireEvent.change(within(pencere).getByLabelText(/Kalite kararı/), { target: { value: 'onayli' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(kararlar).toHaveLength(1));
     expect(kararlar[0]).toMatchObject({ kategoriKodu: 'isil', durum: 'onayli', surum: 2 });
+  });
+
+  it('3279-2: müşteri onayı listelenir, süresi geçen onaysız görünür; yeni müşteri onayı müşteri, kapsam ve bitişle gider', async () => {
+    kmAc('tedarikciler', MUHENDIS, { sup: [TED] });
+    const kararlar = uclar();
+    fireEvent.click(await screen.findByRole('button', { name: /Düzenle/ }));
+    await adimaGit();
+    const tablo = await screen.findByRole('table', { name: 'Müşteri ve diğer onaylar' });
+    expect(within(tablo).getByText('Deneme Müşteri')).toBeTruthy();
+    expect(within(tablo).getByText('Onaysız')).toBeTruthy();
+    expect(within(tablo).getByText(/süresi geçti/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Onay ekle/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Onay ekle' });
+    fireEvent.change(within(pencere).getByLabelText(/Onay türü/), { target: { value: 'musteri' } });
+    const kaydet = within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
+    fireEvent.change(within(pencere).getByLabelText(/^Müşteri/), { target: { value: '9' } });
+    fireEvent.click(within(pencere).getByLabelText('Hizmet › Isıl işlem'));
+    fireEvent.change(within(pencere).getByLabelText(/Geçerlilik bitişi/), { target: { value: '2027-06-30' } });
+    expect(kaydet.disabled).toBe(false);
+    fireEvent.click(kaydet);
+    await waitFor(() => expect(kararlar).toHaveLength(1));
+    expect(kararlar[0]).toEqual({
+      id: null, firmaId: 7, tur: 'musteri', musteriFirmaId: 9, ad: null, kapsamTumu: false, kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'isil' }], durum: 'onayli',
+      aciklama: null, bitis: '2027-06-30', belgeKimligi: null, surum: null,
+    });
+  });
+
+  it('3279-2 geçerlilik: süresiz, 30 gün içinde yakın, geçen onaysız', () => {
+    expect(gecerlilik(null, '2026-11-15')).toEqual({ metin: 'süresiz', ton: null, gecti: false });
+    expect(gecerlilik('2026-12-05', '2026-11-15').ton).toBe('uyari');
+    expect(gecerlilik('2026-11-14', '2026-11-15').gecti).toBe(true);
   });
 
   it('firma askıdaysa uyarı görünür; firma bağı yoksa karar istenmez', async () => {
