@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
-import { aralikYuku, durumYazisi, durusYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { aralikYuku, durumYazisi, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
 // düğmeyle); Sipariş gözü: emirler, geç olan üstte. Satıra dokununca ayrıntı alttan açılır.
@@ -67,7 +67,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec }: Liste
         const tum = acik.has(t.id) || isler.some((x) => x.id === secIs);
         return (
           <section key={t.id}>
-            <h3><b>{t.kod}</b><small>{t.ad}</small>{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : yuzde !== null && <i>%{yuzde}</i>}</h3>
+            <h3><b>{t.kod}</b><small>{t.ad}</small>{m.mesai?.[t.id]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[t.id]!, zaman)}>+ ek mesai</i> : null}{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : yuzde !== null && <i>%{yuzde}</i>}</h3>
             <ul>
               {(tum ? isler : isler.slice(0, ILK)).map(isSatiri)}
               {isler.length > ILK && (

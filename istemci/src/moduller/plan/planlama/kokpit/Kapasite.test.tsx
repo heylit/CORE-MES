@@ -21,7 +21,7 @@ function kur(yazabilir = true, down: unknown[] = [OTO, ELLE, GECMIS]) {
   const kapat = vi.fn();
   const ciz = (cc: PlanlamaCalismasi) => <Kapasite c={cc} m={{ tezgahlar: TEZGAHLAR, simdi: 10 }} taslak={t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={kapat} />;
   const { rerender } = render(ciz(c));
-  return { c, t, yazilan, kapat, yenile: (down: unknown[]) => { rerender(ciz({ ...c, down } as unknown as PlanlamaCalismasi)); }, panel: screen.getByRole('complementary', { name: 'Duruşlar' }) };
+  return { c, t, yazilan, kapat, yenile: (down: unknown[]) => { rerender(ciz({ ...c, down } as unknown as PlanlamaCalismasi)); }, panel: screen.getByRole('complementary', { name: 'Duruş ve mesai' }) };
 }
 
 describe('Kokpit kapasite bölümü (3282 2a-1)', () => {
@@ -81,8 +81,75 @@ describe('Kokpit kapasite bölümü (3282 2a-1)', () => {
 
   it('yazamayan kişi duruşları görür, ekleyemez ve silemez', () => {
     const { panel } = kur(false);
-    expect(within(panel).getByText('Duruşu yalnız planı yazabilen kişi ekler ya da siler.')).toBeTruthy();
+    expect(within(panel).getByText('Duruşu ve ek mesaiyi yalnız planı yazabilen kişi ekler ya da siler.')).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: /sil$/ })).toBeNull();
     expect(within(panel).queryByRole('form')).toBeNull();
+  });
+});
+
+// 3282 2a-2: ek mesai operatörle. Örnek çalışmada tezgâh 1'in grubu 1; Operatör Bir'in kendi vardiyası 1 (08:00–16:00), 20.10 salı.
+describe('Kokpit ek mesai (3282 2a-2)', () => {
+  const T = [{ id: '1', kod: 'T1', ad: 'Torna', fason: false }];
+  function kurMesai(ekMesai: unknown[] = [], yazabilir = true, degis: (c: PlanlamaCalismasi) => void = () => undefined) {
+    const c = { ...ornekCalisma(), down: [], ekMesai } as unknown as PlanlamaCalismasi;
+    degis(c);
+    const { t, yazilan } = sahteTaslak(c.dataVer);
+    const ciz = (cc: PlanlamaCalismasi) => <Kapasite c={cc} m={{ tezgahlar: T, simdi: 10 }} taslak={t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={vi.fn()} />;
+    const { rerender } = render(ciz(c));
+    return { t, yazilan, yenile: (l: unknown[]) => { rerender(ciz({ ...c, ekMesai: l } as unknown as PlanlamaCalismasi)); }, panel: screen.getByRole('complementary', { name: 'Duruş ve mesai' }) };
+  }
+  const form = (panel: HTMLElement) => within(panel).getByRole('form', { name: 'Ek mesai ekle' });
+  const secenekler = (panel: HTMLElement) => within(form(panel)).getAllByRole('option').filter((o) => o.parentElement?.id === 'tc-pyq-mesai-kisi').map((o) => o.textContent);
+
+  it('operatör listesinde yalnız o pencerede çalışabilenler durur; kendi vardiyasıyla kesişen çıkar', () => {
+    const { panel } = kurMesai();
+    expect(within(form(panel)).getByLabelText('Gün')).toHaveProperty('value', '2026-10-20');
+    expect(secenekler(panel)).toEqual(['Örnek Müdür', 'Örnek Vardiya Sorumlusu']);
+    fireEvent.change(within(form(panel)).getByLabelText('Vardiya'), { target: { value: '2' } });
+    expect(secenekler(panel)).toEqual(['Örnek Müdür', 'Örnek Operatör Bir', 'Örnek Vardiya Sorumlusu']);
+    expect(within(panel).getByText('Bu hafta ek mesai: 0 / 8 saat.')).toBeTruthy();
+  });
+
+  it('ekle taslağa operatörlü ek mesai yazar, etkisini gösterir; Uygula sonrası odak yeni satırda', async () => {
+    const { t, yazilan, panel, yenile } = kurMesai();
+    fireEvent.change(within(form(panel)).getByLabelText('Vardiya'), { target: { value: '2' } });
+    fireEvent.change(within(form(panel)).getByLabelText('Operatör'), { target: { value: '4' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Ek mesai ekle, etkisini gör' }));
+    const etki = await screen.findByRole('region', { name: 'Ek mesainin etkisi' });
+    expect(yazilan).toEqual([{ tur: 'ek-mesai', tezgah: '1', gun: 1, vardiya: '2', personel: '4' }]);
+    expect(within(panel).queryByRole('form', { name: 'Ek mesai ekle' })).toBeNull();
+    expect(within(panel).queryByRole('form', { name: 'Arıza ya da bakım ekle' })).toBeNull();
+    fireEvent.click(within(etki).getByRole('button', { name: 'Uygula' }));
+    await vi.waitFor(() => { expect(t.dizmeyiYaz).toHaveBeenCalled(); });
+    yenile([{ m: '1', gun: 1, vardiya: '2', personel: '4' }]);
+    await vi.waitFor(() => { expect(document.activeElement?.textContent).toBe('20.10 Sal 16:00–00:00 · Örnek Operatör Bir'); });
+  });
+
+  it('satır adıyla silinir; bütçe dolunca ve aynı satır varken ekle kapalı, nedeni yazılı', async () => {
+    const { yazilan, panel } = kurMesai([{ m: '1', gun: 2, vardiya: '1' }]);
+    expect(within(panel).getAllByRole('listitem').map((x) => x.textContent)).toEqual(['21.10 Çar 08:00–16:00 · operatör seçilmedi']);
+    expect(within(panel).getByText('Bu hafta ek mesai: 7.5 / 8 saat.')).toBeTruthy();
+    const ekle = within(panel).getByRole('button', { name: 'Ek mesai ekle, etkisini gör' });
+    expect(ekle).toHaveProperty('disabled', true);
+    expect(within(panel).getByText('Haftalık ek mesai bütçesi doldu (7.5 / 8 saat).')).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'T1 21.10 Çar 08:00–16:00 ek mesaisini sil' }));
+    await screen.findByRole('region', { name: 'Ek mesainin etkisi' });
+    expect(yazilan).toEqual([{ tur: 'ek-mesai-sil', tezgah: '1', gun: 2, vardiya: '1' }]);
+  });
+
+  it('uygun operatör yoksa ekle kapalı ve nedeni yazılı; geçmiş gün eklenmez', () => {
+    const { panel } = kurMesai([], true, (c) => { c.D.personel = c.D.personel!.filter((p) => p.id === '4'); Object.assign(c, { param: { ...c.param, mesaiHafta: 0 } }); });
+    expect(within(panel).getByText('Uygun operatör yok: ek vardiya operatörün kendi vardiyasıyla çakışıyor.')).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Ek mesai ekle, etkisini gör' })).toHaveProperty('disabled', true);
+    expect(within(panel).getByText('Bu hafta ek mesai: 0 saat (bütçe sınırsız).')).toBeTruthy();
+    fireEvent.change(within(form(panel)).getByLabelText('Gün'), { target: { value: '2026-10-18' } });
+    expect(within(panel).getByText('Geçmiş güne ek mesai eklenemez.')).toBeTruthy();
+  });
+
+  it('yazamayan kişi ek mesaiyi görür, ekleyemez ve silemez', () => {
+    const { panel } = kurMesai([{ m: '1', gun: 2, vardiya: '1', personel: '2' }], false);
+    expect(within(panel).getAllByRole('listitem').map((x) => x.textContent)).toEqual(['21.10 Çar 08:00–16:00 · Örnek Müdür']);
+    expect(within(panel).queryByRole('button', { name: /ek mesaisini sil$/ })).toBeNull();
+    expect(within(panel).queryByRole('form', { name: 'Ek mesai ekle' })).toBeNull();
   });
 });

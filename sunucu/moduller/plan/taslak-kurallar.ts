@@ -16,9 +16,13 @@ const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null &&
 const kopya = <T>(x: T): T => structuredClone(x);
 
 // yon: emir başına yön (w.yonEmir); emir düzeyinde çatışır, plan ayarına girmez. Eski imzada yoksa boş sayılır.
-// kapasite (3282 2a-1): tezgâh başına elle girilen duruşlar; eksen: planın başlangıç günü (saatler ona göre). İkisi de bu alanlardan önce
-// açılmış taslağın tabanında yoktur; yoksa karşılaştırılmaz (Risk 2a S4: boş sayılsa her tezgâh sahte çatışırdı).
-export interface TaslakImzasi { yer: Record<string, string>; kilit: Record<string, string>; ayar: string; yon?: Record<string, string>; kapasite?: Record<string, string>; eksen?: string | null }
+// kapasite (3282 2a-1): tezgâh başına elle girilen duruşlar; eksen: planın başlangıç günü (saatler ona göre). mesai ve mesaiKisi (2a-2):
+// tezgâh ve operatör başına ek mesai satırları. Hepsi bu alanlardan önce açılmış taslağın tabanında yoktur; yoksa karşılaştırılmaz (Risk 2a
+// S4: boş sayılsa her tezgâh sahte çatışırdı).
+export interface TaslakImzasi {
+  yer: Record<string, string>; kilit: Record<string, string>; ayar: string; yon?: Record<string, string>; kapasite?: Record<string, string>; eksen?: string | null;
+  mesai?: Record<string, string>; mesaiKisi?: Record<string, string>;
+}
 // İmzaya giren plan ayarı alanları: Kokpit'in yazdığı çalışma ayarları ve kapalı kısıtlar (taslakAyarlari ile aynı küme).
 const W_ALANLARI = ['dondurma', 'mat', 'yon'] as const;
 const PARAM_ALANLARI = ['tampon', 'tamponZ', 'mesaiHafta', 'maxChg', 'geriTamponGun'] as const;
@@ -37,7 +41,7 @@ export function imza(c: unknown): TaslakImzasi {
   const ayar = JSON.stringify([W_ALANLARI.map((k) => w[k] ?? null), PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
   const yon = Object.fromEntries(Object.entries(nesne(w.yonEmir) ? w.yonEmir : {}).filter(([, v]) => v === 'ileri' || v === 'geri').map(([id, v]) => [id, String(v)]));
   const D = nesne(d.D) ? d.D : {}, meta = nesne(D.meta) ? D.meta : {};
-  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null };
+  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d) };
 }
 
 // Elle girilen duruş: otomatik olmayan (oto taşımayan) down satırı. Otomatik satırlar arızadan ve bakım planından gelir (motor/girdi.js
@@ -51,7 +55,23 @@ function kapasiteImzasi(c: unknown): Record<string, string> {
   for (const x of elleDuruslar(c)) (t[x.m] ??= []).push([x.from, x.to]);
   return Object.fromEntries(Object.entries(t).map(([m, l]) => [m, JSON.stringify(l.sort((a, b) => a[0] - b[0] || a[1] - b[1]))]));
 }
-const KAPASITE_KOMUTLARI = new Set(['durus', 'durus-sil']);
+// Ek mesai (3282 2a-2): tezgâh, gün ve vardiya bir satırdır; operatör (personel) boş olabilir.
+type EkMesai = { m: string; gun: number; vardiya: string; personel: string | null };
+const ekMesailer = (c: unknown): EkMesai[] => (nesne(c) && Array.isArray(c.ekMesai) ? c.ekMesai : [])
+  .filter((x): x is Nesne => nesne(x) && typeof x.gun === 'number')
+  .map((x) => ({ m: String(x.m), gun: x.gun as number, vardiya: String(x.vardiya), personel: x.personel == null ? null : String(x.personel) }));
+function mesaiImzasi(c: unknown): { mesai: Record<string, string>; mesaiKisi: Record<string, string> } {
+  const t: Record<string, string[]> = {}, k: Record<string, string[]> = {};
+  for (const e of ekMesailer(c)) {
+    (t[e.m] ??= []).push(`${String(e.gun)}|${e.vardiya}|${e.personel ?? ''}`);
+    if (e.personel !== null) (k[e.personel] ??= []).push(`${String(e.gun)}|${e.vardiya}|${e.m}`);
+  }
+  const yaz = (x: Record<string, string[]>) => Object.fromEntries(Object.entries(x).map(([a, l]) => [a, JSON.stringify(l.sort())]));
+  return { mesai: yaz(t), mesaiKisi: yaz(k) };
+}
+const DURUS_KOMUTLARI = new Set(['durus', 'durus-sil']);
+const MESAI_KOMUTLARI = new Set(['ek-mesai', 'ek-mesai-sil']);
+const KAPASITE_KOMUTLARI = new Set([...DURUS_KOMUTLARI, ...MESAI_KOMUTLARI]);
 
 // İşlem kimliği 'emir.adım' (motorun kimliği; paralel pay '~n' eki taşır). Emir kimliği son noktadan öncesidir.
 export const emirOf = (isId: string): string => { const i = isId.lastIndexOf('.'); return i > 0 ? isId.slice(0, i) : isId; };
@@ -69,15 +89,19 @@ export function komutAnahtarlari(k: SatirKomutu, taban: TaslakImzasi): string[] 
     case 'plana-al': return [`emir:${k.emirId}`, `tezgah:${k.tezgah}`, ...(k.adimlar ?? []).map((a) => `tezgah:${a.tezgah}`)];
     case 'yon': return [`emir:${k.emirId}`];
     case 'ayar': return ['*'];
-    case 'durus': case 'durus-sil': return [`tezgah:${k.tezgah}`];
+    case 'durus': case 'durus-sil': case 'ek-mesai-sil': return [`tezgah:${k.tezgah}`];
+    // Risk 2a S10: operatörün başka bir ek mesaisi de çatışır (aynı kişi aynı pencerede iki tezgâhta olamaz).
+    case 'ek-mesai': return [`tezgah:${k.tezgah}`, ...(k.personel === null ? [] : [`kisi:${k.personel}`])];
   }
 }
 
 // Başkasının taslak açıldığından beri değiştirdikleri: yeri ya da kilidi değişen işlerin emirleri ve eski ile yeni tezgâhları, yönü değişen
 // emirler; plan ayarı
 // değiştiyse '*'. Kendi taslağı ortak çalışmaya yazılmadığı için bu fark yalnız başkasınındır.
-export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): { emir: Set<string>; tezgah: Set<string>; hepsi: boolean; bos: boolean; kapasiteBilinmez: boolean } {
-  const emir = new Set<string>(), tezgah = new Set<string>();
+export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): {
+  emir: Set<string>; tezgah: Set<string>; kisi: Set<string>; hepsi: boolean; bos: boolean; kapasiteBilinmez: boolean; mesaiBilinmez: boolean;
+} {
+  const emir = new Set<string>(), tezgah = new Set<string>(), kisi = new Set<string>();
   for (const [a, b] of [[taban.yer, simdi.yer], [taban.kilit, simdi.kilit]] as const) {
     for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
       if (a[id] === b[id]) continue;
@@ -90,11 +114,22 @@ export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): {
   // Başkasının değiştirdiği kapasite o tezgâhı, eksenin kayması bütün planı etkiler (saatler başka güne düşer; Risk 2a S2).
   const tk = taban.kapasite, sk = simdi.kapasite ?? {};
   if (tk !== undefined) for (const m of new Set([...Object.keys(tk), ...Object.keys(sk)])) if (tk[m] !== sk[m]) tezgah.add(m);
+  const fark = (a: Record<string, string> | undefined, b: Record<string, string> | undefined, hedef: Set<string>): void => {
+    if (a === undefined) return;
+    const bb = b ?? {};
+    for (const x of new Set([...Object.keys(a), ...Object.keys(bb)])) if (a[x] !== bb[x]) hedef.add(x);
+  };
+  fark(taban.mesai, simdi.mesai, tezgah);
+  fark(taban.mesaiKisi, simdi.mesaiKisi, kisi);
   const hepsi = taban.ayar !== simdi.ayar || (taban.eksen !== undefined && taban.eksen !== (simdi.eksen ?? null));
-  return { emir, tezgah, hepsi, bos: !hepsi && emir.size === 0 && tezgah.size === 0, kapasiteBilinmez: tk === undefined };
+  return {
+    emir, tezgah, kisi, hepsi, bos: !hepsi && emir.size === 0 && tezgah.size === 0 && kisi.size === 0,
+    kapasiteBilinmez: tk === undefined, mesaiBilinmez: taban.mesai === undefined,
+  };
 }
 
-const anahtarAdi = (a: string): string => (a === '*' ? 'Plan ayarı ya da bütün plan' : a.startsWith('emir:') ? `${a.slice(5)} emri` : `${a.slice(7)} tezgâhı`);
+const anahtarAdi = (a: string): string => (a === '*' ? 'Plan ayarı ya da bütün plan' : a.startsWith('emir:') ? `${a.slice(5)} emri`
+  : a.startsWith('kisi:') ? `${a.slice(5)} numaralı operatör` : `${a.slice(7)} tezgâhı`);
 
 type Diger = ReturnType<typeof digerDegisiklikleri>;
 // Komutun çatıştığı anahtarlar: '*' komutu başkasının herhangi bir değişikliğiyle, başkasının ayar değişikliği her komutla, öteki komut
@@ -102,11 +137,12 @@ type Diger = ReturnType<typeof digerDegisiklikleri>;
 function catisanAnahtarlar(d: Diger, komut: SatirKomutu, taban: TaslakImzasi): string[] {
   const ak = komutAnahtarlari(komut, taban);
   // Tabanında kapasite olmayan taslakta başkasının o tezgâhın kapasitesine dokunup dokunmadığı bilinmez: kapasite komutu hep sorulur.
-  if (d.kapasiteBilinmez && KAPASITE_KOMUTLARI.has(komut.tur)) return d.hepsi ? ['*'] : ak;
+  if ((d.kapasiteBilinmez && DURUS_KOMUTLARI.has(komut.tur)) || (d.mesaiBilinmez && MESAI_KOMUTLARI.has(komut.tur))) return d.hepsi ? ['*'] : ak;
   if (d.bos) return [];
   if (ak.length === 0) return [];
   if (d.hepsi || ak.includes('*')) return ['*'];
-  return ak.filter((a) => (a.startsWith('emir:') && d.emir.has(a.slice(5))) || (a.startsWith('tezgah:') && d.tezgah.has(a.slice(7))));
+  return ak.filter((a) => (a.startsWith('emir:') && d.emir.has(a.slice(5))) || (a.startsWith('tezgah:') && d.tezgah.has(a.slice(7)))
+    || (a.startsWith('kisi:') && d.kisi.has(a.slice(5))));
 }
 
 // Çatışmalar anahtar başına, komut adları kişinin okuyacağı satırlardır.
@@ -206,6 +242,124 @@ export function durusSilUygula(deger: unknown, k: { tezgah: string; bas: number;
   return { deger: isle(deger, yeni, { ne: 'Duruş silindi', ayrinti: durusAyrintisi(k.tezgah, k.bas, k.bit), isler: ['*'], geri: [{ yol: ['down'], once: eski }] }, kisi), degisti: true };
 }
 
+// Ek mesai (3282 2a-2, 3282-7 b): tezgâha gün ve vardiya açılır, operatör seçilir. Denetim ortak çalışmanın verisiyle, uygulama anında
+// (oynatmada da) yeniden yapılır (Risk 2a S2): tezgâh ve vardiya çalışmada, gün geçmişte değil, aynı satır yok, haftalık bütçe aşılmıyor (S6).
+// Operatör (S9): çalışmanın personelinde, tezgâhı çalıştırabilir (makineleri ya da grubu), o gün devamsız değil, ek vardiya kendi vardiyasıyla
+// kesişmiyor, aynı gün ve vardiyada başka ek mesaide değil. Motor da aynı kuralla operatörü kapasiteye katar (motor/engine.js compile).
+const GUNLER = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'] as const;
+const saatOf = (x: unknown): number => { const [h, m] = String(x).split(':').map(Number); return (h ?? 0) + (m ?? 0) / 60; };
+const gunMsOf = (b: string): number => { const [y, a, g] = b.split('-').map(Number); return Date.UTC(y ?? 0, (a ?? 1) - 1, g ?? 1); };
+function takvim(D: Nesne) {
+  const b = nesne(D.meta) && typeof D.meta.baslangic === 'string' ? D.meta.baslangic : '1970-01-01';
+  const taban = gunMsOf(b);
+  // motor parseT: sayı saattir, tarih (YYYY-MM-DD) başlangıçtan saat.
+  const saatiOf = (x: unknown): number | null => typeof x === 'number' ? x : typeof x === 'string' && /^\d{4}-\d{2}-\d{2}/.test(x) ? (gunMsOf(x.slice(0, 10)) - taban) / 3_600_000 : null;
+  const gunOf = (x: unknown): number | null => { const h = saatiOf(x); return h === null ? null : Math.floor(h / 24); };
+  const tatil = new Set((Array.isArray(D.tatiller) ? D.tatiller : []).map(gunOf));
+  const cg = nesne(D.calismaGunleri) ? D.calismaGunleri : {};
+  const vardiyalari = (d: number): string[] => {
+    if (tatil.has(d)) return [];
+    const wd = GUNLER[(new Date(taban + d * 86_400_000).getUTCDay() + 6) % 7]!;
+    return Array.isArray(cg[wd]) ? (cg[wd] as unknown[]).map(String) : [];
+  };
+  const vardiya = (id: string): Nesne | null => (Array.isArray(D.vardiyalar) ? D.vardiyalar : []).find((v): v is Nesne => nesne(v) && String(v.id) === id) ?? null;
+  const pencere = (d: number, id: string): [number, number] | null => {
+    const v = vardiya(id);
+    if (v === null) return null;
+    const a = d * 24 + saatOf(v.bas);
+    let z = d * 24 + saatOf(v.bit);
+    if (z <= a) z += 24;
+    return [a, z];
+  };
+  // motor vardiyaNetSaat: molalar düşülür.
+  const netSaat = (id: string): number => {
+    const v = vardiya(id);
+    if (v === null) return 0;
+    const a = saatOf(v.bas);
+    let z = saatOf(v.bit);
+    if (z <= a) z += 24;
+    let h = z - a;
+    for (const m of Array.isArray(v.molalar) ? v.molalar : []) {
+      if (!nesne(m)) continue;
+      let x = saatOf(m.bas), y = saatOf(m.bit);
+      if (x < a) x += 24;
+      if (y <= x) y += 24;
+      h -= Math.max(0, Math.min(y, z) - Math.max(x, a));
+    }
+    return Math.max(0, h);
+  };
+  // motor haftaNo: hafta pazartesi başlar.
+  const haftaNo = (gun: number): number => Math.floor((gun + (new Date(taban).getUTCDay() + 6) % 7) / 7);
+  const devamsiz = new Set((Array.isArray(D.devamsizlik) ? D.devamsizlik : []).flatMap((x) => (nesne(x) ? [`${String(x.personel)}@${String(gunOf(x.gun))}`] : [])));
+  return { vardiyalari, pencere, netSaat, haftaNo, devamsiz };
+}
+// Operatörün o ek mesaide çalışamama nedeni; çalışabiliyorsa null. İstemci Kokpit aynı kuralı seçenek listesinde uygular (kokpit/kurallar.ts).
+export function operatorSorunu(deger: unknown, e: { tezgah: string; gun: number; vardiya: string; personel: string }): string | null {
+  const D = nesne(deger) && nesne(deger.D) ? deger.D : {};
+  const p = (Array.isArray(D.personel) ? D.personel : []).find((x): x is Nesne => nesne(x) && String(x.id) === e.personel);
+  if (!p) return 'Operatör çalışmanın personelinde yok.';
+  const t = (Array.isArray(D.tezgahlar) ? D.tezgahlar : []).find((x): x is Nesne => nesne(x) && String(x.id) === e.tezgah);
+  const makineler = Array.isArray(p.makineler) ? p.makineler.map(String) : [], gruplar = Array.isArray(p.gruplar) ? p.gruplar.map(String) : [];
+  if (!makineler.includes(e.tezgah) && !(t && t.grup !== undefined && gruplar.includes(String(t.grup)))) return 'Operatör bu tezgâhı çalıştırmıyor.';
+  const k = takvim(D);
+  if (k.devamsiz.has(`${e.personel}@${String(e.gun)}`)) return 'Operatör o gün devamsız.';
+  const w = k.pencere(e.gun, e.vardiya);
+  const kendi = p.vardiya == null ? '' : String(p.vardiya);
+  if (w !== null && kendi !== '') {
+    for (const d of [e.gun - 1, e.gun]) {
+      if (!k.vardiyalari(d).includes(kendi) || k.devamsiz.has(`${e.personel}@${String(d)}`)) continue;
+      const o = k.pencere(d, kendi);
+      if (o !== null && o[0] < w[1] && w[0] < o[1]) return 'Ek vardiya operatörün kendi vardiyasıyla çakışıyor.';
+    }
+  }
+  if (ekMesailer(deger).some((x) => x.personel === e.personel && x.gun === e.gun && x.vardiya === e.vardiya)) return 'Operatör o gün ve vardiyada başka bir ek mesaide.';
+  return null;
+}
+const MOTOR_MESAI_HAFTA = 8;
+const ekMesaiAyrintisi = (m: string, gun: number, vardiya: string, personel: string | null): string =>
+  `${m} · ${String(gun + 1)}. gün · ${vardiya}${personel === null ? '' : ` · operatör ${personel}`}`;
+export function ekMesaiUygula(deger: unknown, k: { tezgah: string; gun: number; vardiya: string; personel: string | null }, kisi: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const D = nesne(deger.D) ? deger.D : {};
+  const varMi = (l: unknown, id: string) => Array.isArray(l) && l.some((x) => nesne(x) && String(x.id) === id);
+  if (!varMi(D.tezgahlar, k.tezgah)) return { hata: { tur: 'dogrulama', ileti: 'Tezgâh çalışmada yok.', alan: 'tezgah' } };
+  if (!varMi(D.vardiyalar, k.vardiya)) return { hata: { tur: 'dogrulama', ileti: 'Vardiya çalışmada yok.', alan: 'vardiya' } };
+  const simdi = simdiSaati(deger, kisi.t);
+  if (simdi === null) return { hata: { tur: 'cakisma', ileti: 'Çalışmada başlangıç günü yok; sayfada planı kurup kaydedin.' } };
+  if (k.gun < Math.floor(simdi / 24)) return { hata: { tur: 'dogrulama', ileti: 'Geçmiş güne ek mesai eklenemez.', alan: 'gun' } };
+  if (k.gun * 24 >= ufukSaati(deger)) return { hata: { tur: 'dogrulama', ileti: 'Gün planın ufkunun dışında.', alan: 'gun' } };
+  const l = ekMesailer(deger);
+  if (l.some((x) => x.m === k.tezgah && x.gun === k.gun && x.vardiya === k.vardiya)) return { hata: { tur: 'dogrulama', ileti: 'Bu tezgâhta o gün ve vardiyada ek mesai zaten var.', alan: 'vardiya' } };
+  const t = takvim(D);
+  const param = nesne(deger.param) ? deger.param : {};
+  // motorla aynı okuma (girdi.js stKur): girilmemişse 8 saat, 0 sınırsız.
+  const sinir = param.mesaiHafta === undefined || param.mesaiHafta === null ? MOTOR_MESAI_HAFTA : Number(param.mesaiHafta);
+  if (Number.isFinite(sinir) && sinir > 0) {
+    const h = t.haftaNo(k.gun);
+    const kullanilan = l.filter((x) => t.haftaNo(x.gun) === h).reduce((a, x) => a + t.netSaat(x.vardiya), 0);
+    if (kullanilan + t.netSaat(k.vardiya) > sinir + 1e-9) {
+      return { hata: { tur: 'dogrulama', ileti: `Haftalık ek mesai bütçesi doldu (${String(Math.round(kullanilan * 10) / 10)} / ${String(sinir)} saat).`, alan: 'gun' } };
+    }
+  }
+  if (k.personel !== null) {
+    const sorun = operatorSorunu(deger, { tezgah: k.tezgah, gun: k.gun, vardiya: k.vardiya, personel: k.personel });
+    if (sorun !== null) return { hata: { tur: 'dogrulama', ileti: sorun, alan: 'personel' } };
+  }
+  const eski = Array.isArray(deger.ekMesai) ? deger.ekMesai : [];
+  const yeni = kopya(deger);
+  yeni.ekMesai = [...kopya(eski), { m: k.tezgah, gun: k.gun, vardiya: k.vardiya, ...(k.personel === null ? {} : { personel: k.personel }) }];
+  return { deger: isle(deger, yeni, { ne: 'Ek mesai eklendi', ayrinti: ekMesaiAyrintisi(k.tezgah, k.gun, k.vardiya, k.personel), isler: ['*'], geri: [{ yol: ['ekMesai'], once: eski }] }, kisi), degisti: true };
+}
+export function ekMesaiSilUygula(deger: unknown, k: { tezgah: string; gun: number; vardiya: string }, kisi: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const eski = Array.isArray(deger.ekMesai) ? deger.ekMesai : [];
+  const i = eski.findIndex((x) => nesne(x) && String(x.m) === k.tezgah && x.gun === k.gun && String(x.vardiya) === k.vardiya);
+  if (i < 0) return { hata: { tur: 'cakisma', ileti: 'Ek mesai artık yok.' } };
+  const yeni = kopya(deger);
+  yeni.ekMesai = kopya(eski).filter((_, j) => j !== i);
+  return { deger: isle(deger, yeni, { ne: 'Ek mesai silindi', ayrinti: ekMesaiAyrintisi(k.tezgah, k.gun, k.vardiya, null), isler: ['*'], geri: [{ yol: ['ekMesai'], once: eski }] }, kisi), degisti: true };
+}
+
 // Komutun kişinin okuyacağı adı (taslak listesi ve çatışma satırı).
 export function komutAdi(k: SatirKomutu): string {
   switch (k.tur) {
@@ -216,6 +370,8 @@ export function komutAdi(k: SatirKomutu): string {
     case 'ayar': return k.ayrinti === '' ? 'Plan ayarı' : `Plan ayarı: ${k.ayrinti}`;
     case 'durus': return `${k.tezgah} ${k.neden === 'bakım' ? 'bakım' : 'arıza'}: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
     case 'durus-sil': return `${k.tezgah} duruşu silindi: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
+    case 'ek-mesai': return `${k.tezgah} ek mesai: ${String(k.gun + 1)}. gün ${k.vardiya}${k.personel === null ? '' : `, operatör ${k.personel}`}`;
+    case 'ek-mesai-sil': return `${k.tezgah} ek mesaisi silindi: ${String(k.gun + 1)}. gün ${k.vardiya}`;
   }
 }
 
@@ -225,7 +381,7 @@ export interface TaslakHesaplari { tasima: Parameters<typeof isTasi>[3]; planaAl
 export interface TaslakSatiri { komut: SatirKomutu; ne: string; t: number; eksen?: string | null }
 export const kapasiteKomutuMu = (k: SatirKomutu): boolean => KAPASITE_KOMUTLARI.has(k.tur);
 export const eksenOf = (c: unknown): string | null => imza(c).eksen ?? null;
-export const EKSEN_DEGISTI = 'Planın başlangıç günü değişti; saatler başka güne düşer. Duruşu geri alıp yeniden girin.';
+export const EKSEN_DEGISTI = 'Planın başlangıç günü değişti; saat ve günler başka güne düşer. Değişikliği geri alıp yeniden girin.';
 
 export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, h: TaslakHesaplari): KomutSonucu {
   switch (k.tur) {
@@ -235,6 +391,8 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
     case 'yon': return yonUygula(deger, k.emirId, k.yon, kisi);
     case 'durus': return durusUygula(deger, k, kisi);
     case 'durus-sil': return durusSilUygula(deger, k, kisi);
+    case 'ek-mesai': return ekMesaiUygula(deger, k, kisi);
+    case 'ek-mesai-sil': return ekMesaiSilUygula(deger, k, kisi);
   }
 }
 
@@ -267,7 +425,7 @@ export function oynat(c: unknown, l: readonly { komut: SatirKomutu; eksen?: stri
 // (kişinin ve başkasının kararları; Risk 2a S5). Yer görünümden alınmaz: kişinin önceki dizmesinin planı düştüğünde (yalnız son dizme plan taşır) sonraki bayatlamasın.
 export const dizImzasi = (gorunum: unknown, taban: unknown): string => {
   const g = imza(gorunum);
-  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}]);
+  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}]);
 };
 export const dataVerOf = (c: unknown): number => (nesne(c) && typeof c.dataVer === 'number' ? c.dataVer : 0);
 

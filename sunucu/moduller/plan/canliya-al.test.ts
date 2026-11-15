@@ -624,7 +624,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const y = await tamam<CalismaTaslagiCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/taslak-yaz', { ad: 'Deneme ek mesai', calismaSurumu: surum });
     assert.deepEqual(y.ekMesai, { yazilan: 1, atlanan: 1 });
     const p = await tamam<PlanCevabi>(c.planlama, 'GET', `/plan?taslak=${String(y.taslak.id)}`);
-    assert.deepEqual(p.ekMesai!.satirlar, [{ makineId: makineA, gun: tesisGunu(tesisGunBasi(bugun) + 36 * 3_600_000), vardiyaId: vardiya, saat: 4 }]);
+    assert.deepEqual(p.ekMesai!.satirlar, [{ makineId: makineA, gun: tesisGunu(tesisGunBasi(bugun) + 36 * 3_600_000), vardiyaId: vardiya, saat: 4, personelId: null }]);
 
     // Taslakta i2 ileri taşınır, i1 kilitlenir.
     const ileri = new Date(Date.now() + 30 * 3_600_000).toISOString();

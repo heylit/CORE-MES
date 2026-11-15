@@ -73,7 +73,7 @@ export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promis
 // Yazılamayan (sunucuda olmayan ya da kapsam dışı makine, kullanımda olmayan vardiya) atlanır. sabitler (B-2500-1): çalışmada sabitlenen
 // işlerin `emirNo|opNo` anahtarı; önizlemedeki saatine konur ve kilitlenir.
 export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
-  ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number }[]; sabitler?: ReadonlySet<string>;
+  ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number; personelId: number | null }[]; sabitler?: ReadonlySet<string>;
 }): Promise<{ taslak: { id: number; surum: number }; yazilan: number; atlanan: number; ekMesai: { yazilan: number; atlanan: number } }> {
   if (!islemVarMi(k, 'plan.studyo') || !islemVarMi(k, 'plan.yaz')) throw yetkiYok('Plan taslağı yazmak plan stüdyosu ve plan yazma yetkisi ister.');
   const ad = senaryoGovdesi.safeParse({ ad: g.ad });

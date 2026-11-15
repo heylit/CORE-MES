@@ -199,7 +199,8 @@ export interface CozumIstegi extends PlanBenzetimi {
   sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[];
   calisanlar: { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }[];
   // 512 1 a: plan taslağının kabul edilmiş ek vardiyaları (gün takvim günü); verilirse çalışmanın ek vardiyalarının yerine geçer.
-  ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
+  // 3282 2a-2: personelId tezgâhı çalıştıracak kişi (boş: motorun sanal kişisi).
+  ekMesai?: { makineId: number; gun: string; vardiyaId: number; personelId?: number | null }[];
   // 690 b: emirler arası öncül (parti kolu); anahtar, oncul bitmeden başlamaz.
   baglar?: { anahtar: string; oncul: string }[];
   // 686 a: rotada olmayan ek adım (emrin kendi adımı); öncül ve ardıl emrin içindeki komşu adımların anahtarı, süreler dakika.
@@ -256,7 +257,7 @@ export interface CalismaPlani {
   // Çalışmada plan yoksa null.
   ops: CalismaIslemi[] | null;
   // Ek vardiyalar (507 2 a): m tezgâh kimliği, gun planın ekseninde gün, vardiya kimliği; ikisi de metin.
-  ekMesai: { m: string; gun: number; vardiya: string }[];
+  ekMesai: { m: string; gun: number; vardiya: string; personel?: string }[];
 }
 
 // Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.

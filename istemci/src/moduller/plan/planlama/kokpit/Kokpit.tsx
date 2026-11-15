@@ -99,7 +99,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
   const [onayTaslaktan, setOnayTaslaktan] = useState(false);
   const [ayarAcik, setAyarAcik] = useState(false);
-  // Duruşlar bölümü (3282 2a-1): üst şeritteki düğmeyle açılır (ayrıntı sütunu boşken yer tutmaz: tahta dar kalmasın); açılınca seçim
+  // Duruş ve mesai bölümü (3282 2a-1, 2a-2): üst şeritteki düğmeyle açılır (ayrıntı sütunu boşken yer tutmaz: tahta dar kalmasın); açılınca seçim
   // kalkar, ayar paneli kapanır.
   const [kapasiteAcik, setKapasiteAcik] = useState(false);
   // Üst şeritteki yön düğmesi paneli o yönle açar (3282 1c); değişiklik panelde etkisiyle uygulanır.
@@ -359,7 +359,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           ))}
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
-        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza ve bakım duruşları" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruşlar</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (

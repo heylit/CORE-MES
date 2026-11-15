@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
@@ -401,7 +402,7 @@ export interface PlanMotoruIstegi extends PlanBenzetimi {
   kip: 'sabit' | 'yeni'; simdi: Date; kuyruklar: { makineId: number; anahtarlar: string[] }[];
   sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[]; calisanlar: CalisanAdim[]; taslakId: number | null;
   // 512 1 a: taslağın kabul edilmiş ek vardiyaları (gün takvim günü); verilirse motorun kapasitesi bunlardır, çalışmanınki değil.
-  ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
+  ekMesai?: { makineId: number; gun: string; vardiyaId: number; personelId?: number | null }[];
   // 690 b: emirler arası öncül (parti kolu, B7); motor öncülü yalnız rotadan, emrin içinde kurar.
   baglar?: { anahtar: string; oncul: string }[];
   // 686 a: rotada olmayan ek adım; öncül ve ardıl emrin içindeki komşu adımların anahtarı, süreler dakika.
@@ -718,7 +719,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
     return i.bagimlilik !== 'bagimsiz' && (i.fasonBekleGun ?? 0) > 0 ? [{ id, anahtar: anahtarOf(id)!, gun: i.fasonBekleGun! }] : [];
   });
   let malzemeBekleyen = 0;
-  const ekMesai = (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId }) => ({ makineId, gun, vardiyaId }));
+  const ekMesai = (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId, personelId }) => ({ makineId, gun, vardiyaId, personelId }));
   // 1036 a, 1034: yerleşmeyen kol ya da ek adım öncülünü bekleyen iş (bekleyenAdimlar) bu koşuda yerleşmez; motor onlarsız yeniden koşar.
   const sabitAnahtar = new Set([...sabitParcalar.map((x) => x.anahtar), ...calisan]);
   const bekleyen = new Map<number, YerlesmemeNedeni>();
@@ -1453,27 +1454,46 @@ async function taslagaYaz(
   return planOku(db, k, sonra, acildi);
 }
 
-// 507 2 a: ek vardiya kullanımdaki vardiyadır, makine kişinin kapsamındadır; saat vardiyanın süresidir (molalar düşülmez).
-async function ekMesaiSatirlari(db: Db, b: Baglam, l: readonly { makineId: number; gun: string; vardiyaId: number }[]) {
+// 507 2 a: ek vardiya kullanımdaki vardiyadır, makine kişinin kapsamındadır; saat vardiyanın süresidir (molalar düşülmez). 3282 2a-2:
+// operatör verildiyse kişi var ve kullanımdadır; verilmeyen (undefined) satır taslaktaki aynı satırın operatörünü korur (Stüdyo operatör
+// göndermez, yazması operatörü düşürmesin). null operatörü kaldırır.
+type EkMesaiGirdisi = Omit<s.EkMesaiSatiri, 'personelId'> & { personelId: number | null | undefined };
+async function ekMesaiSatirlari(db: Db, b: Baglam, l: readonly { makineId: number; gun: string; vardiyaId: number; personelId?: number | null | undefined }[]) {
   const vardiyalar = new Map((await vardiyaTanimlari(db)).map((v) => [v.id, v]));
-  const gecerli: s.EkMesaiSatiri[] = [];
+  const gecerli: EkMesaiGirdisi[] = [];
   const hatali: string[] = [];
   for (const x of l) {
     const v = vardiyalar.get(x.vardiyaId);
     const m = await kaynakBilgisi(db, b, { tur: 'makine', id: x.makineId });
+    const p = x.personelId == null ? null : await kaynakBilgisi(db, b, { tur: 'kisi', id: x.personelId });
     if (!v || !v.aktif) hatali.push(`${x.gun}: vardiya ${String(x.vardiyaId)} kullanımda değil`);
     else if (!m || !m.aktif || !izinliMi(b, m)) hatali.push(`${x.gun}: makine ${String(x.makineId)} yok ya da kapsam dışı`);
-    else gecerli.push({ ...x, saat: vardiyaSaati(v.baslangic, v.bitis) });
+    else if (x.personelId != null && (!p || !p.aktif)) hatali.push(`${x.gun}: operatör ${String(x.personelId)} yok ya da kullanımda değil`);
+    else gecerli.push({ makineId: x.makineId, gun: x.gun, vardiyaId: x.vardiyaId, saat: vardiyaSaati(v.baslangic, v.bitis), personelId: x.personelId });
+  }
+  // Aynı operatör aynı gün ve vardiyada iki tezgâhta olamaz (Risk 2a S9; veritabanında da tekil).
+  const kisiPenceresi = new Set<string>();
+  for (const x of gecerli) {
+    if (x.personelId == null) continue;
+    const a = `${String(x.personelId)}|${x.gun}|${String(x.vardiyaId)}`;
+    if (kisiPenceresi.has(a)) hatali.push(`${x.gun}: operatör ${String(x.personelId)} aynı vardiyada iki ek mesaide`);
+    kisiPenceresi.add(a);
   }
   return { gecerli, hatali };
 }
 // 512 2 a: defter kaydı düşer; kaydı kaldırmak ve "değişiklikleri at" canlının ek vardiyalarına döndürür.
 // Liste değişmediyse (aynı satırlar) yazılmaz, defter kaydı düşmez.
-async function ekMesaiTaslagaYaz(db: Db, k: Kullanici, id: number, l: readonly s.EkMesaiSatiri[]): Promise<void> {
-  const anahtar = (x: s.EkMesaiSatiri) => `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}|${String(x.saat)}`;
-  const once = new Set((await s.ekMesailer(db, id)).map(anahtar));
+const EK_MESAI_KISITLARI = { plan_senaryo_ek_mesai_personel_taslakta_tek: { ileti: 'Operatör o gün ve vardiyada başka bir ek mesaide.', alan: 'satirlar' } } as const;
+async function ekMesaiTaslagaYaz(db: Db, k: Kullanici, id: number, girdi: readonly EkMesaiGirdisi[]): Promise<void> {
+  const yer = (x: { makineId: number; gun: string; vardiyaId: number }) => `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}`;
+  const anahtar = (x: s.EkMesaiSatiri) => `${yer(x)}|${String(x.saat)}|${String(x.personelId)}`;
+  const eski = await s.ekMesailer(db, id);
+  const eskiKisi = new Map(eski.map((x) => [yer(x), x.personelId]));
+  const l: s.EkMesaiSatiri[] = girdi.map((x) => ({ ...x, personelId: x.personelId === undefined ? eskiKisi.get(yer(x)) ?? null : x.personelId }));
+  const once = new Set(eski.map(anahtar));
   if (once.size === l.length && l.every((x) => once.has(anahtar(x)))) return;
-  await s.ekMesaiYaz(db, id, l);
+  // Stüdyo'nun mirasla taşıdığı operatör yeniden denetlenmez; aynı kişi aynı pencerede ikinci kez düşerse veritabanı dizini 409 verir (Risk 2a N2).
+  await kisitKorumali(EK_MESAI_KISITLARI, () => s.ekMesaiYaz(db, id, l));
   await s.degisiklikEkle(db, id, ekMesaiKaydi(l), k.id);
 }
 const ekMesaiKaydi = (l: readonly s.EkMesaiSatiri[]) => ({

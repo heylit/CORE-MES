@@ -148,6 +148,7 @@
   border-inline: var(--cizgi) dashed var(--muted);
 }
 .tc-pyq-bas[data-durus] small, .tc-pyq-liste h3 i[data-durus] { color: var(--d-gec); font-family: inherit; }
+.tc-pyq-mesai-isaret { color: var(--d-sur); font-family: inherit; font-size: var(--yazi-xs); font-style: normal; font-weight: 600; white-space: nowrap; }
 .tc-pyq-satir-termin { position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--cizgi); background: var(--muted); pointer-events: none; }
 .tc-pyq-satir-termin::before { content: ""; position: absolute; top: 0; left: 50%; width: var(--b-2); height: var(--b-2); border: var(--cizgi) solid var(--muted); background: var(--panel-solid); transform: translate(-50%, -25%) rotate(45deg); }
 .tc-pyq-satir-termin[data-d="gec"], .tc-pyq-satir-termin[data-d="gec"]::before { background-color: var(--d-gec); border-color: var(--d-gec); }
@@ -262,6 +263,8 @@
   border-top: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid);
 }
 .tc-pyq-ayarlar .tc-pyq-ayar-etki:empty { display: none; }
+/* Duruş ve mesai panelinde iki ekleme formu alt alta durur; yapışırlarsa biri ötekini ve listeyi örter. Etki bölümü yapışık kalır. */
+.tc-pyq-kapasite form.tc-pyq-ayar-etki { position: static; }
 .tc-pyq-ayarlar .tc-pyq-ayar-fark { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); font-weight: 600; }
 .tc-pyq-ayarlar .tc-pyq-ayar-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 /* 3282 2a-1: kapasite bölümü; duruş satırı ve sil düğmesi. Kendiliğinden gelen satır soluk yazılır, silinmez. */

@@ -3,7 +3,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import {
-  SAAT_ENI, aralikYuku, durumYazisi, durusYazisi, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, aralikYuku, durumYazisi, durusYazisi, ekMesaiYazisi, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 
@@ -307,6 +307,7 @@ export function Tahta(o: TahtaOzellikleri) {
           >
             <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={`${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
               <b>{r.bas}</b><small>{r.durus ?? r.alt}</small>
+              {goz === 'T' && m.mesai?.[r.kimlik]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[r.kimlik]!, zaman)}>+ ek mesai</i> : null}
               {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
             </div>
             <div className="tc-pyq-alan">
