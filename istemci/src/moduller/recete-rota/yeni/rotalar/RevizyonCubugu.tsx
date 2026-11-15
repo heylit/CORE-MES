@@ -49,6 +49,16 @@ export interface Duzenleme {
   sablonEkle: (() => void) | null; sablonSakla: (() => void) | null; panelDugmesi: ReactNode;
 }
 
+// Revizyon satırında sarı (birincil) eylem var mı: üstteki "Üretim emri oluştur" o zaman ikincil kalır (2155-9 a, tek birincil).
+export function revizyonAnaEylemiVar(r: RotaEkrani, urunId: string): boolean {
+  const { duzen, yetki } = r;
+  const m = duzen.h.malzeme.get(urunId);
+  if (!m || m.type === 'ham') return false;
+  const V = duzen.gorulen(urunId);
+  const durumu = V ? V.status : duzen.taslakVar(urunId) ? 'taslak' : null;
+  return (yetki.rotaGonder && durumu === 'taslak') || (yetki.rotaOnayla && (durumu === 'onay' || durumu === 'onayli'));
+}
+
 export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
   r: RotaEkrani; agac: readonly string[]; urunId: string; urunSec: (id: string) => void; duzenleme?: Duzenleme | null;
 }) {

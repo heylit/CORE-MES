@@ -143,6 +143,9 @@ describe('Ürün ve rotalar düzeni: tek satır, görüntüleme kipi, rozet, sor
     const secim = within(rev).getByRole('combobox', { name: /gösterilen revizyon/ });
     expect([...(secim as HTMLSelectElement).options].map((x) => x.textContent)).toEqual(['Rev B · taslak', 'Rev A · yürürlükte']);
     expect(within(rev).getByText(/plan yürürlükteki Rev A ile devam ediyor|açık taslağı düzenlemek için onu seç/)).toBeTruthy();
+    // Okurken de revizyon satırında sarı "Onaya gönder" varken üstteki "Üretim emri oluştur" ikincildir (2155-9 a, Arayüz ön bakışı).
+    expect(within(rev).getByRole('button', { name: 'Onaya gönder…' }).className).toContain('tc-dugme-birincil');
+    expect(bolge.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
   });
 
   it('ara kart kutuları varsayılan gizli, kutuda "Statülü" rozeti; ⋯ menüsünden açılır', async () => {

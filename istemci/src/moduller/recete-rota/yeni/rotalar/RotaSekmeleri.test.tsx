@@ -115,6 +115,18 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(within(bolge).queryByRole('group', { name: 'Ürünün rotaları' })).toBeNull();
   });
 
+  it('iki rotalı üründe rota açamayan sekmeleri görür; "Yeni rota" ve "Rotanın adı ve emir türleri" menüde yoktur (3295 a)', async () => {
+    kur(OKUYAN);
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    await within(g).findByRole('button', { name: /FAI rotası/ });
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    const d = within(bolge).queryByRole('button', { name: 'Rota işlemleri' });
+    if (d) fireEvent.click(d);
+    expect(screen.queryByRole('menuitem', { name: 'Yeni rota' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Rotanın adı ve emir türleri' })).toBeNull();
+  });
+
   // Arayüz ön bakışı (3247): rota listesi okunamazsa ekran sessizce tek rotalı ürün gibi görünmez.
   it('rota listesi okunamazsa sekme satırının yerinde hata ve yeniden dene görünür', async () => {
     let ilk = true;

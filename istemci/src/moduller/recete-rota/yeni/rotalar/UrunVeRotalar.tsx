@@ -18,7 +18,7 @@ import { AdimPaneli } from './AdimPaneli.tsx';
 import { EkleListesi } from './EkleListesi.tsx';
 import { DuzenlemePaneli, PanelSeridi } from './DuzenlemePaneli.tsx';
 import { PanelTutamagi } from './PanelTutamagi.tsx';
-import { RevizyonCubugu, type Duzenleme } from './RevizyonCubugu.tsx';
+import { RevizyonCubugu, revizyonAnaEylemiVar, type Duzenleme } from './RevizyonCubugu.tsx';
 import { UrunListesi } from './UrunListesi.tsx';
 import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
 import { useKalanBoy } from './kalanBoy.ts';
@@ -344,8 +344,9 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
         )}
         {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
-          // Düzenlerken sarı düğme düzenleme çubuğundaki "Onaya gönder"dir (2155-9 a).
-          <Dugme className="tc-rr1-kd" tur={duzenKipi && duzenlemeAcar(o.yetki, taslakAcik) ? 'ikincil' : 'birincil'} simge="clipboard-check"
+          // Revizyon satırında ya da düzenleme çubuğunda sarı eylem varken bu düğme ikincildir (2155-9 a).
+          <Dugme className="tc-rr1-kd" simge="clipboard-check"
+            tur={(duzenKipi && duzenlemeAcar(o.yetki, taslakAcik)) || (revId !== null && revizyonAnaEylemiVar(r, revId)) ? 'ikincil' : 'birincil'}
             onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
         )}
         <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />

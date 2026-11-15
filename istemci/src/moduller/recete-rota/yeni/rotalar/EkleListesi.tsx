@@ -19,7 +19,7 @@ export function EkleListesi({ r, yer, yerMetni, ekle, kapat }: {
   const dalSecilir = onceki !== undefined && adimDali(onceki) === null && !yer.dal;
   const sonraki = onceki ? liste[liste.indexOf(onceki) + 1] : undefined;
 
-  // Konum: tıklanan "+"nın altı; çapa yoksa (rotanın başı, düzenleme alanındaki düğme) hattın üstü. Sayfa kayınca birlikte gider.
+  // Konum: tıklanan "+"nın altı (yer yoksa üstü); çapa yoksa (rotanın başı, düzenleme alanındaki düğme) hattın üstü. Sayfa kayınca birlikte gider.
   useLayoutEffect(() => {
     const el = kutu.current;
     if (!el) return undefined;
@@ -30,12 +30,19 @@ export function EkleListesi({ r, yer, yerMetni, ekle, kapat }: {
       const c = capa.getBoundingClientRect();
       const en = el.offsetWidth;
       el.style.setProperty('--tc-rr1-ekle-x', `${String(Math.max(0, Math.min(c.left, window.innerWidth - en)))}px`);
-      el.style.setProperty('--tc-rr1-ekle-y', `${String(arti ? c.bottom : c.top)}px`);
+      // Altta yer yoksa "+"nın üstüne açılır; ikisine de sığmazsa ekranın içinde kalacak yere kayar.
+      const boy = el.offsetHeight;
+      const alt = arti ? c.bottom : c.top;
+      const y = alt + boy + 8 <= window.innerHeight ? alt : c.top - boy >= 0 ? c.top - boy : Math.max(0, window.innerHeight - boy);
+      el.style.setProperty('--tc-rr1-ekle-y', `${String(y)}px`);
     };
     yerlestir();
+    // Operasyon listesi sonradan gelince kutu uzar: konum yeniden hesaplanır.
+    const gozcu = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(yerlestir);
+    gozcu?.observe(el);
     window.addEventListener('resize', yerlestir);
     window.addEventListener('scroll', yerlestir, true);
-    return () => { window.removeEventListener('resize', yerlestir); window.removeEventListener('scroll', yerlestir, true); };
+    return () => { gozcu?.disconnect(); window.removeEventListener('resize', yerlestir); window.removeEventListener('scroll', yerlestir, true); };
   }, [yer.sonraId]);
 
   // Dışarı tıklanınca ve Esc ile kapanır; "+" düğmesine tıklama listeyi yeniden açar, kapatmaz.
