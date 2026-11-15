@@ -129,6 +129,8 @@ export const stokMiktariCozucusu = (cozucu: servis.StokMiktariCozucusu): void =>
 export { tuketimSerisiCozucusuKaydet as tuketimSerisiCozucusu } from './analiz.ts';
 // E-13, 236 a: Kalite Merkezi'nin tedarikçi onay durumu, firma kimliğiyle (kablolama kalite-merkezi/disari tedarikciOnayDurumlari ile bağlar).
 export const kaliteDurumuCozucusu = (cozucu: servis.KaliteDurumuCozucusu): void => servis.kaliteDurumuCozucusuKaydet(cozucu);
+// 3279 a: onaylı tedarikçi listesinin Kalite parçası (kablolama kalite-merkezi/disari onayliListe ile bağlar).
+export const onayliListeCozucusu = (cozucu: servis.OnayliListeCozucusu): void => servis.onayliListeCozucusuKaydet(cozucu);
 // 2424: dış operasyonlarda planlanan gidiş canlı plandan (plan satın almayı okuduğu için bağ kablolamada).
 export const fasonKonumuCozucusu = (cozucu: servis.FasonKonumuCozucusu): void => servis.fasonKonumuCozucusuKaydet(cozucu);
 export const planlananGidisCozucusu = (cozucu: servis.PlanlananGidisCozucusu): void => servis.planlananGidisCozucusuKaydet(cozucu);

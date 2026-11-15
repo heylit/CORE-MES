@@ -49,7 +49,9 @@ describe('Merkez bağlama', () => {
   it('ekran yeniden açılınca başka sayfada açılan talep sunucudan alınır; yenileme düşerse eldeki talepler kalır', async () => {
     const cevaplar = [() => json(200, acilis([talep(ILK, 'ST-2026-001')])), () => json(200, acilis([talep(ILK, 'ST-2026-001'), talep(YENI, 'ST-2026-002')])),
       () => json(500, { hata: { kod: 'SUNUCU', ileti: 'x' } })];
-    const f = vi.fn(async () => cevaplar.shift()!());
+    // Onaylı liste (3279 a) ayrı istektir; sayım yalnız açılış isteğini sayar.
+    const f = vi.fn(async (adres: string) => (adres.includes('/satin-alma-onayli-liste') ? json(200, {}) : cevaplar.shift()!()));
+    const acilisSayisi = () => f.mock.calls.filter(([adres]) => !adres.includes('/satin-alma-onayli-liste')).length;
     vi.stubGlobal('fetch', f);
     const ac = () => {
       const kok = document.createElement('div');
@@ -64,7 +66,7 @@ describe('Merkez bağlama', () => {
     await vi.waitFor(() => expect(Object.keys(S.requests).sort()).toEqual([ILK, YENI]));
     kapat();
     kapat = ac();
-    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(acilisSayisi()).toBe(3));
     await new Promise((r) => setTimeout(r, 0));
     expect(Object.keys(S.requests).sort()).toEqual([ILK, YENI]);
     expect(document.querySelector('[data-sa-merkez] #main')?.textContent).not.toContain('Sunucuya bağlanılamadı');

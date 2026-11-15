@@ -19,6 +19,8 @@ import type {
   Supplier, SupplierStatus,
 } from './tipler.ts';
 
+import { ONAYLI } from './onayli.ts';
+
 const uc = ucCagrisi<SatinAlmaUclari>();
 // Cevap bu sürede gelmezse istek kesilir (TMI kalıbı; modülün sabiti).
 export const ISTEK_ZAMAN_ASIMI_MS = 15_000;
@@ -149,7 +151,7 @@ export function tedarikciEkrana(t: Tedarikci): Supplier {
   sunucudaki.suppliers.add(id);
   return {
     id, name: t.ad, categories: t.kategoriler, contact: t.yetkili ?? '', phone: t.telefon ?? '', email: t.eposta ?? '', city: t.sehir ?? '',
-    taxNo: t.vergiNo ?? '', status: t.kaliteDurumu === null ? 'approved' : KALITE_EKRAN_DURUMU[t.kaliteDurumu], kaliteDurumu: t.kaliteDurumu, active: t.firmaAktif, rating: t.puan, notes: t.notlar,
+    taxNo: t.vergiNo ?? '', status: t.kaliteDurumu === null ? 'unregistered' : KALITE_EKRAN_DURUMU[t.kaliteDurumu], kaliteDurumu: t.kaliteDurumu, active: t.firmaAktif, rating: t.puan, notes: t.notlar,
     evals: t.degerlendirmeler.map((d) => ({ id: d.id, date: d.tarih, rating: d.puan, text: d.metin, name: d.degerlendiren, by: kullaniciEkle(d.kisiId, d.kisiAdi) })),
     createdAt: ms(t.olusturma), version: t.surum,
   };
@@ -395,6 +397,12 @@ async function yukle(): Promise<void> {
   FIRMA_KARTLARI.splice(0, FIRMA_KARTLARI.length, ...a.firmaKartlari.map((f) => ({ id: String(f.id), ad: f.ad })));
   S.materials = kimlikle(a.katalog.map(katalogEkrana));
   S.settings = ayarEkrana(a.ayarlar);
+  // 3279 a: Kalite rehberi; okunamazsa rehber çıkmaz (kimse onaylı sayılmaz), ekranın geri kalanı açılır.
+  // Eksik ya da beklenmeyen cevap (ör. uç henüz olmayan sunucu) rehbersiz açılır; kimse onaylı sayılmaz.
+  try {
+    const v = await uc.get('/satin-alma-onayli-liste', sure);
+    ONAYLI.veri = Array.isArray(v?.firmalar) && Array.isArray(v.kategoriler) && Array.isArray(v.malzemeKategorileri) ? v : null;
+  } catch { ONAYLI.veri = null; }
   // Henüz gitmemiş değişiklik sunucudan gelen hâlin üstünde kalır: yeniden yükleme onu ekrandan silmez (S-07).
   for (const [anahtar, w] of Q) {
     const d = w.sonraki !== undefined ? w.sonraki : w.belirsiz?.d;

@@ -5,6 +5,7 @@ import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
+import { kmOnayliListeSatiri } from './kalite-merkezi-kategori-onayi.ts';
 import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
@@ -702,6 +703,7 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-dis-operasyonlar': { cevap: DisOperasyonlarCevabi };
   'GET /satin-alma-fason-sureleri': { sorgu: z.input<typeof fasonSureleriSorgusu>; cevap: FasonSureleriCevabi };
   'GET /satin-alma-acilis': { cevap: AcilisCevabi };
+  'GET /satin-alma-onayli-liste': { cevap: OnayliListeCevabi };
   'GET /satin-alma-acik-emirler': { cevap: AcikEmirlerCevabi };
   'GET /satin-alma-talepleri/proje-secenekleri': { cevap: ProjeSecenekleriCevabi };
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
@@ -1132,3 +1134,22 @@ export const faturaEslemesiKaydetGovdesi = z.object({
   satirlar: z.array(z.object({ siparisSatiriId: z.number().int().positive().max(2147483647), tutar: ondalikMetinSemasi })).max(500),
 }).strict();
 export type FaturaEslemesiKaydetGovdesi = z.output<typeof faturaEslemesiKaydetGovdesi>;
+
+// 3279 a: Satın Alma > Tedarikçiler > Onaylı liste ve teklif rehberi. Kaynak Kalite Merkezi'dir; satın alma yazmaz. `kaliteBagli` false ise
+// Kalite okunamadı (ekran "Kalite bilgisi alınamadı" der, kimseyi onaylı saymaz). Firma: satın alma tedarikçisi ya da Kalite kaydı ya da
+// kararı olan; `kalite` null ise Kalite kaydı yok. Kategoriler Malzemeler ağacının düğümleri; kalem eşlemesi katalog kartının (tür, kod) anahtarıyla.
+export const onayliListeCevabi = z.object({
+  kaliteBagli: z.boolean(),
+  firmalar: z.array(z.object({
+    firmaId: firmaKimligi,
+    ad: z.string(),
+    satinAlmaTedarikcisi: z.boolean(),
+    kalite: kmOnayliListeSatiri.nullable(),
+    // Son 12 ay: satın alma siparişi sayısı ve firma karnesinin zamanında teslim oranı (yüzde; teslim yoksa null). Karnenin en az teslim
+    // sayısının altında `yetersizVeri` (ekranda "veri az").
+    sonYil: z.object({ siparis: z.number().int().nonnegative(), teslim: z.number().int().nonnegative(), zamanindaYuzde: z.number().nullable(), yetersizVeri: z.boolean() }),
+  })),
+  kategoriler: z.array(z.object({ tur: z.string(), kod: z.string(), ad: z.string(), ustAd: z.string(), aktif: z.boolean() })),
+  malzemeKategorileri: z.array(z.object({ malzemeNo: z.number().int().positive(), tur: z.string(), kod: z.string() })),
+});
+export type OnayliListeCevabi = z.output<typeof onayliListeCevabi>;

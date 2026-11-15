@@ -6,6 +6,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmOnayliListeSatiri } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import type {
   AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, SiparisLogoBekletYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
@@ -13,15 +14,15 @@ import type {
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
-import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
-import type { KalemBagiCikisi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
+import type { KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
 import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
   acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
@@ -48,6 +49,7 @@ import { alimBildir } from './alim-olayi.ts';
 import { degisenMalzemeler, terminBildir } from './termin-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
+import { KARNE_EN_AZ_TESLIM } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 const ad = (harita: Map<number, string>, id: number | null) => (id === null ? null : harita.get(id) ?? null);
 
@@ -879,6 +881,37 @@ let kaliteDurumuCozucu: KaliteDurumuCozucusu | null = null;
 export function kaliteDurumuCozucusuKaydet(cozucu: KaliteDurumuCozucusu | null): void { kaliteDurumuCozucu = cozucu; }
 const kaliteDurumlari = async (db: Db, firmaIdler: readonly number[]): Promise<ReadonlyMap<number, KmTedarikciDurumu>> =>
   kaliteDurumuCozucu === null || firmaIdler.length === 0 ? new Map() : kaliteDurumuCozucu(db, firmaIdler);
+
+// 3279 a: onaylı listenin Kalite parçası kablolamayla bağlanır (kalite-merkezi onayliListe). Bağ yoksa liste "Kalite bilgisi alınamadı"
+// der; kimse onaylı sayılmaz.
+export type OnayliListeCozucusu = (db: Db) => Promise<ReadonlyMap<number, KmOnayliListeSatiri>>;
+let onayliListeCozucu: OnayliListeCozucusu | null = null;
+export function onayliListeCozucusuKaydet(cozucu: OnayliListeCozucusu | null): void { onayliListeCozucu = cozucu; }
+
+// 3279 a: firmalar satın alma tedarikçileri ile Kalite kaydı ya da kararı olanların birleşimi; malzeme eşlemesi katalog kartlarıdır.
+export async function onayliListe(db: Db): Promise<OnayliListeCevabi> {
+  const tedarikciler = new Set((await s.tedarikcileriOku(db)).map((t) => t.firmaId));
+  const kalite = onayliListeCozucu === null ? null : await onayliListeCozucu(db);
+  const idler = [...new Set([...tedarikciler, ...(kalite?.keys() ?? [])])];
+  const adlar = await firmaOzetleri(db, idler);
+  const gorunen = idler.filter((id) => adlar.has(id) || tedarikciler.has(id));
+  const siparis = new Map((await s.sonYilSiparisSayilari(db, tesisGunu(Date.now()))).map((x) => [x.firmaId, x.sayi]));
+  const karne = await karneOzetleri(db, gorunen);
+  const sonYil = (id: number) => {
+    const k = karne.get(id);
+    return { siparis: siparis.get(id) ?? 0, teslim: k?.teslim.toplam ?? 0, zamanindaYuzde: k?.teslim.oran ?? null, yetersizVeri: (k?.teslim.toplam ?? 0) < KARNE_EN_AZ_TESLIM };
+  };
+  const firmalar = gorunen
+    .map((id) => ({ firmaId: id, ad: adlar.get(id)?.ad ?? `#${id}`, satinAlmaTedarikcisi: tedarikciler.has(id), kalite: kalite?.get(id) ?? null, sonYil: sonYil(id) }))
+    .sort((a, b) => a.ad.localeCompare(b.ad, 'tr-TR'));
+  const kartlar = await malzemeKategorileri(db, (await s.katalogOku(db)).map((k) => k.malzemeNo));
+  return {
+    kaliteBagli: kalite !== null,
+    firmalar,
+    kategoriler: (await kategoriAgaci(db)).map((d) => ({ tur: d.tur, kod: d.kod, ad: d.ad, ustAd: d.ustAd, aktif: d.aktif })),
+    malzemeKategorileri: [...kartlar].flatMap(([malzemeNo, k]) => (k === null ? [] : [{ malzemeNo, tur: k.tur, kod: k.kod }])),
+  };
+}
 
 // SAT-76, E-13 (236 a): tedarikçinin Kalite Merkezi onayı "Aday" ya da "Askıda" ise yeni sipariş verilmez. Durum firma kimliğiyle okunur;
 // satın almanın eski durum sütunu bakılmaz. Ad firma kartından okunur; kartı olmayan firmanın kimliği yazılır.

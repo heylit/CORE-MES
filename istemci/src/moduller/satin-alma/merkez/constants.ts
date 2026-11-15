@@ -20,7 +20,7 @@ export const stLabel = (k: RequestStatus): string => (STATUSES.find((s) => s.k =
 export const OPEN: RequestStatus[] = ["draft", "rfq", "eval", "approval"];
 export const COMMITTED: RequestStatus[] = ["ordered", "received"];
 export const PRIO: Record<Priority, string> = { urgent: "Acil", normal: "Normal", low: "Düşük" };
-export const SUP_STATUS: Record<SupplierStatus, string> = { approved: "Onaylı", trial: "Deneme", suspended: "Askıda" };
+export const SUP_STATUS: Record<SupplierStatus, string> = { approved: "Onaylı", trial: "Deneme", suspended: "Askıda", unregistered: "Kalite kaydı yok" };
 export const QUALITY: Record<Quality, string> = { ok: "Sorunsuz", partial: "Kısmi sorun", rejected: "Red / iade" };
 export const DELIVERY = [
   "Fabrikamıza teslim, nakliye dahil", "Tedarikçi deposundan teslim (EXW)", "Kargo ile, alıcı ödemeli",
