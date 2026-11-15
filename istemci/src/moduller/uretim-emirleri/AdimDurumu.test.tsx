@@ -11,10 +11,10 @@ const EMIR = {
 const HAZIRLIK: HazirlikCevabi = { maddeler: [], muafiyetler: [], isEmirleri: [] };
 const ADIM = {
   isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'tamam', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 40, yuzde: 100,
-  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [], tedarik: [], liste: [],
+  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [], tedarik: [], liste: [], ekMaddeler: [], sablon: null,
 } satisfies AdimDurumuCevabi['adimlar'][number];
 const CEVAP = {
-  emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK,
+  emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK, yetki: { ekMadde: false, sablon: false },
   adimlar: [
     ADIM,
     {
@@ -249,6 +249,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
   describe('3249 b: açılan satırlar, tik, Boşluk, Geri al, madde ekleme', () => {
     const MADDE_A = {
       adimId: 701, ad: 'Bağlama aparatı hazır', aciklama: null, asama: 'on_hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null,
+      kontrol: null, olcum: null, secim: null, fotoOzet: null, sinirDisi: null,
     } as const;
     const MADDE_B = {
       ...MADDE_A, adimId: 702, ad: 'Takım ölçüldü', asama: 'hazirlik', tamam: true, kisiAdi: 'Deneme Operatör', zaman: '2026-11-11T07:00:00.000Z', kaynak: 'terminal',
@@ -333,8 +334,134 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
       fireEvent.click(ekle);
       await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
       const istek = istekler.find((i) => i.yontem === 'POST');
-      expect(istek?.govde).toEqual({ ad: 'İlk parça ölçüldü', asama: 'hazirlik' });
+      expect(istek?.govde).toEqual({ ad: 'İlk parça ölçüldü', asama: 'hazirlik', kontrol: { tur: 'onay' }, sablonaEkle: false });
       expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+    });
+  });
+  describe('3249-2 a: türlü kontrol, kanıt, ek madde, Şablona da ekle', () => {
+    type Madde = AdimDurumuCevabi['adimlar'][number]['liste'][number];
+    const TABAN = {
+      aciklama: null, asama: 'hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null,
+      olcum: null, secim: null, fotoOzet: null, sinirDisi: null,
+    } as const;
+    const OLCUM: Madde = { ...TABAN, adimId: 801, ad: 'Delik çapı', kontrol: { tur: 'olcum', ad: 'Delik çapı', alt: 12, ust: 12.018, birim: 'mm' } };
+    const OLCULMUS: Madde = {
+      ...TABAN, adimId: 802, ad: 'Toplam boy', tamam: true, kisiAdi: 'Deneme Müdür', zaman: '2026-11-11T07:00:00.000Z', kaynak: 'adim-durumu',
+      kontrol: { tur: 'olcum', ad: 'Toplam boy', alt: 24.95, ust: 25.05, birim: 'mm' }, olcum: 25.07, sinirDisi: true,
+    };
+    const SECIM: Madde = { ...TABAN, adimId: 803, ad: 'Çapak durumu', kontrol: { tur: 'secim', secenekler: ['Çapaksız', 'Hafif', 'Çapaklı'] } };
+    const FOTO: Madde = { ...TABAN, adimId: 804, ad: 'Bağlama fotoğrafı', kontrol: { tur: 'foto', aciklama: 'Ayna görünsün' } };
+    const FOTOLU: Madde = { ...TABAN, adimId: 805, ad: 'Ayna temizliği', tamam: true, kontrol: { tur: 'foto', aciklama: null }, fotoOzet: 'a'.repeat(64) };
+    const EK = { id: 91, ad: 'Özel pabuç alındı', tamam: false, kisiAdi: null, zaman: null, ekleyenAdi: 'Deneme Hazırlık' } as const;
+    const turlu = (yetki: AdimDurumuCevabi['yetki']) => ({
+      ...CEVAP, yetki,
+      adimlar: [CEVAP.adimlar[0]!, { ...CEVAP.adimlar[1]!, liste: [OLCUM, OLCULMUS, SECIM, FOTO, FOTOLU], ekMaddeler: [EK], sablon: { id: 4, kod: 'TOR-HAZ', ad: 'Torna hazırlık' } }],
+    }) satisfies AdimDurumuCevabi;
+    const YAZAR: Parameters<typeof sunucuKur>[0] = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] };
+    const matrisAc = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+      const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+      fireEvent.click(within(tablo).getByRole('button', { name: 'OP 20 maddeleri' }));
+      return tablo;
+    };
+    const postlar = (istekler: ReturnType<typeof sunucuKur>) => istekler.filter((i) => i.yontem === 'POST');
+
+    it('sınır dışı ölçüm simge ve metinle görünür; işaretsiz ölçüm tiki pencere açar, değer virgülle girilir, uyarı verir, kanıtla gider', async () => {
+      const V = turlu({ ekMadde: false, sablon: false });
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, V),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      expect(within(tablo).getAllByText(/25,07 mm · sınır dışı \(\+0,02\)/).length).toBeGreaterThan(0);
+      fireEvent.click(within(tablo).getByRole('checkbox', { name: 'OP 20 Delik çapı' }));
+      const pencere = await screen.findByRole('dialog', { name: 'Delik çapı' });
+      expect(postlar(istekler)).toHaveLength(0);
+      fireEvent.change(within(pencere).getByLabelText('Ölçülen değer (mm)'), { target: { value: '12,024' } });
+      expect(within(pencere).getByRole('status').textContent).toContain('Sınır dışı.');
+      fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet ve işaretle' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
+      expect(postlar(istekler)[0]?.govde).toEqual({ adimId: 801, tamam: true, kanit: { olcum: 12.024 } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(2));
+      expect(postlar(istekler)[1]?.govde).toEqual({ adimId: 801, tamam: false });
+    });
+
+    it('kanıtlı işaret kaldırılınca Geri al eski kanıtı yeniden gönderir; seçim düğmesi seçimle işaretler', async () => {
+      const V = turlu({ ekMadde: false, sablon: false });
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, V),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      fireEvent.click(within(tablo).getByRole('checkbox', { name: 'OP 20 Toplam boy' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
+      expect(postlar(istekler)[0]?.govde).toEqual({ adimId: 802, tamam: false });
+      fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(2));
+      expect(postlar(istekler)[1]?.govde).toEqual({ adimId: 802, tamam: true, kanit: { olcum: 25.07 } });
+      const grup = within(tablo).getAllByRole('radiogroup', { name: 'Çapak durumu' })[0]!;
+      fireEvent.click(within(grup).getByRole('radio', { name: 'Hafif' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(3));
+      expect(postlar(istekler)[2]?.govde).toEqual({ adimId: 803, tamam: true, kanit: { secim: 'Hafif' } });
+      expect(within(tablo).getAllByRole('button', { name: 'Fotoğraf ekle' }).length).toBeGreaterThan(0);
+      const resim = within(tablo).getAllByRole('img', { name: 'Ayna temizliği fotoğrafı' })[0] as HTMLImageElement;
+      expect(resim.getAttribute('src')).toBe(`/api/adimli-emirler/5/liste-fotografi/805/${'a'.repeat(64)}`);
+      expect(within(tablo).getAllByRole('link', { name: 'Görüntüle' }).length).toBeGreaterThan(0);
+    });
+
+    it('ek madde Üretim Hazırlık yetkisi olmayan yazarda kilitli; yetkilide tik ek madde komutunu gönderir', async () => {
+      const kilitli = turlu({ ekMadde: false, sablon: false });
+      sunucuKur(YAZAR, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, kilitli) });
+      ac(ekran, '/adim-durumu?emir=5');
+      let tablo = await matrisAc();
+      expect((within(tablo).getByRole('checkbox', { name: 'OP 20 Özel pabuç alındı' }) as HTMLInputElement).disabled).toBe(true);
+      expect(within(tablo).getByText(/Üretim Hazırlık yetkisi gerekir/)).toBeTruthy();
+      cleanup();
+      const acik = turlu({ ekMadde: true, sablon: false });
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, acik), 'POST /adimli-emirler/5/is-emirleri/52/ek-madde-isaretle': () => json(200, acik),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      tablo = await matrisAc();
+      fireEvent.click(within(tablo).getByRole('checkbox', { name: 'OP 20 Özel pabuç alındı' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
+      expect(postlar(istekler)[0]?.govde).toEqual({ maddeId: 91, tamam: true });
+    });
+
+    it('kontrol adımı türlü eklenir; Şablona da ekle yalnız talimat yetkisiyle görünür, varsayılan kapalı', async () => {
+      const yetkisiz = turlu({ ekMadde: false, sablon: false });
+      sunucuKur(YAZAR, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, yetkisiz) });
+      ac(ekran, '/adim-durumu?emir=5');
+      let tablo = await matrisAc();
+      fireEvent.click(within(tablo).getAllByRole('button', { name: 'Kontrol adımı' })[0]!);
+      expect(within(await screen.findByRole('dialog', { name: 'OP 20 · Kontrol adımı ekle' })).queryByLabelText('Şablona da ekle')).toBeNull();
+      cleanup();
+      const V = turlu({ ekMadde: false, sablon: true });
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-ekle': () => json(200, V),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      tablo = await matrisAc();
+      fireEvent.click(within(tablo).getAllByRole('button', { name: 'Kontrol adımı' })[0]!);
+      const pencere = await screen.findByRole('dialog', { name: 'OP 20 · Kontrol adımı ekle' });
+      const sablon = within(pencere).getByLabelText('Şablona da ekle') as HTMLInputElement;
+      expect(sablon.checked).toBe(false);
+      fireEvent.change(within(pencere).getByLabelText('Kontrol adımı'), { target: { value: 'Delik çapı' } });
+      fireEvent.click(within(pencere).getByRole('radio', { name: 'Ölçüm' }));
+      fireEvent.change(within(pencere).getByLabelText('Alt sınır'), { target: { value: '12,02' } });
+      fireEvent.change(within(pencere).getByLabelText('Üst sınır'), { target: { value: '12' } });
+      fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+      expect(within(pencere).getByRole('alert').textContent).toContain('Alt sınır üst sınırdan büyük.');
+      expect(postlar(istekler)).toHaveLength(0);
+      fireEvent.change(within(pencere).getByLabelText('Alt sınır'), { target: { value: '12' } });
+      fireEvent.change(within(pencere).getByLabelText('Üst sınır'), { target: { value: '12,018' } });
+      fireEvent.click(sablon);
+      fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+      await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
+      expect(postlar(istekler)[0]?.govde).toEqual({
+        ad: 'Delik çapı', asama: 'hazirlik', kontrol: { tur: 'olcum', ad: 'Delik çapı', alt: 12, ust: 12.018, birim: 'mm' }, sablonaEkle: true,
+      });
     });
   });
 });

@@ -1058,11 +1058,12 @@ export const EMIR_ACIKLAMASI_EN_COK = 300;
 
 // Adımlı sürümde kontrol listesi maddesi adımın başlığı, açıklaması adımın metnidir (emir adımı açıklaması en çok 300 karakter).
 // Aşama maddeyle emre gider (2098-1 a): terminal hazırlık listelerini emrin kendi kopyasından kurar.
+// 3249-2 a: maddeyle birlikte kontrol noktası da emre gider; Adım Durumu kanıtı buna göre ister ('yok' kontrolsüzdür).
 export function adimliKontrolListesi(
-  adimlar: readonly { baslik: string; metin: string | null; asama: TalimatAsamasi }[],
-): { ad: string; aciklama: string | null; asama: TalimatAsamasi }[] {
+  adimlar: readonly { baslik: string; metin: string | null; asama: TalimatAsamasi; kontrol?: KontrolNoktasi }[],
+): { ad: string; aciklama: string | null; asama: TalimatAsamasi; kontrol: KontrolNoktasi | null }[] {
   return adimlar.map((a) => ({
-    ad: a.baslik, asama: a.asama,
+    ad: a.baslik, asama: a.asama, kontrol: a.kontrol === undefined || a.kontrol.tur === 'yok' ? null : a.kontrol,
     aciklama: a.metin === null || a.metin.length <= EMIR_ACIKLAMASI_EN_COK ? a.metin : `${a.metin.slice(0, EMIR_ACIKLAMASI_EN_COK - 1)}…`,
   }));
 }

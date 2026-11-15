@@ -352,3 +352,35 @@ export async function talimatSablonDurumuYaz(db: Db, id: number, g: { surum: num
   await s.talimatSablonDurumu(db, id, g.aktif);
   return talimatSablonu(db, id);
 }
+
+// 3249-2 a: Adım Durumu'nun "Şablona da ekle"si. Hedef adımın operasyon tipinin emre gelen aktif şablonudur; madde şablonun sonuna
+// eklenir ve şablon kaydetle aynı yoldan (aynı adım kuralları, sürüm artışı, denetim) yeni sürüm alır. Açık emirler değişmez: şablon
+// emre kopyalanır, bağ kurulmaz. Yetki çağıran ucun işidir (iki yetki birlikte, Risk K2).
+const EMRE_GELEN_SABLON_YOK = 'Bu adımın operasyon tipinin emre gelen şablonu yok.';
+const SABLON_DOLU = 'Şablonda en çok 30 adım olur.';
+export async function emreGelenSablonOzetleri(db: Db, tipIdleri: readonly number[]): Promise<Map<number, { id: number; kod: string; ad: string }>> {
+  const tekil = [...new Set(tipIdleri)];
+  if (tekil.length === 0) return new Map();
+  const baglar = await s.emreGelenSablonlar(db, tekil);
+  const satirlar = new Map((await s.talimatSablonlari(db, baglar.map((b) => b.id))).map((x) => [x.id, x]));
+  return new Map(baglar.flatMap((b) => {
+    const x = satirlar.get(b.id);
+    return x === undefined ? [] : [[b.operasyonTipiId, { id: x.id, kod: x.kod, ad: x.ad }] as const];
+  }));
+}
+export async function emreGelenSablonaAdimEkle(
+  db: Db, kullanici: Kullanici, operasyonTipiId: number, adim: { baslik: string; kontrol: TalimatAdimi['kontrol']; asama: TalimatAdimi['asama'] }, denetimEki: DenetimEki,
+): Promise<{ id: number; kod: string; surum: number }> {
+  const bag = (await s.emreGelenSablonlar(db, [operasyonTipiId]))[0];
+  if (bag === undefined) throw cakisma(EMRE_GELEN_SABLON_YOK);
+  const x = (await s.talimatSablonlari(db, [bag.id]))[0];
+  if (x === undefined) throw cakisma(EMRE_GELEN_SABLON_YOK);
+  const mevcut = (await talimatSablonu(db, bag.id)).sablon.adimlar;
+  if (mevcut.length >= 30) throw cakisma(SABLON_DOLU);
+  const adimlar: TalimatAdimiYazisi[] = [
+    ...mevcut.map((a) => ({ baslik: a.baslik, metin: a.metin, kontrol: a.kontrol, zorunlu: a.zorunlu, medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })), asama: a.asama, hedefSureDk: a.hedefSureDk })),
+    { baslik: adim.baslik, metin: null, kontrol: adim.kontrol, zorunlu: false, medya: [], asama: adim.asama, hedefSureDk: null },
+  ];
+  const c = await talimatSablonKaydet(db, kullanici, bag.id, { surum: x.surum, ad: x.ad, sartnameId: x.sartnameId, adimlar, operasyonTipiId: x.operasyonTipiId, emreGelir: x.emreGelir }, denetimEki);
+  return { id: c.sablon.id, kod: c.sablon.kod, surum: c.sablon.surum };
+}

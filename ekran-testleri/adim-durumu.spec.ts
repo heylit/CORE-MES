@@ -121,3 +121,67 @@ test.describe('müdür, açılan satır', () => {
     expect(ag.yazmalar, 'açmak ve Vazgeç yazmaz').toEqual([]);
   });
 });
+
+// 3249-2 a (müdür, Üretim Hazırlık yetkisi yok): türlü kontrol satırları ve ek madde görünür. Örnek veride türlü madde olmadığından
+// adım durumu cevabına uydurma ORN- maddeler eklenir; yetki bayrakları sunucunun gerçek cevabıdır. Ek madde kutusu kilitli, sınır dışı
+// ölçüm metniyle okunur, ölçüm penceresi uyarır; Vazgeç yazmaz; sayfa üç genişlikte yatay taşmaz.
+test.describe('müdür, türlü kontrol', () => {
+  test.use({ hesap: 'ornek.mudur' });
+  test('kanıt hücreleri, kilitli ek madde, ölçüm ve kontrol adımı pencereleri; sayfa taşmaz, yazmaz', async ({ page, ag, ac }) => {
+    const taban = { aciklama: null, asama: 'hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null, olcum: null, secim: null, fotoOzet: null, sinirDisi: null };
+    let yetki = { ekMadde: true, sablon: false };
+    await page.route('**/api/adimli-emirler/*/adim-durumu', async (r) => {
+      const c = await r.fetch();
+      const g = (await c.json()) as { yetki: typeof yetki; adimlar: { liste: unknown[]; ekMaddeler: unknown[]; sablon: unknown }[] };
+      yetki = g.yetki;
+      const [ilk, ...kalan] = g.adimlar;
+      if (!ilk) throw new Error('adım yok');
+      const liste = [
+        ...ilk.liste,
+        { ...taban, adimId: 990001, ad: 'ORN delik çapı', kontrol: { tur: 'olcum', ad: 'ORN delik çapı', alt: 12, ust: 12.018, birim: 'mm' } },
+        { ...taban, adimId: 990002, ad: 'ORN toplam boy', tamam: true, kisiAdi: 'ORN Kişi', zaman: '2026-11-15T05:00:00.000Z', kaynak: 'adim-durumu', kontrol: { tur: 'olcum', ad: 'ORN toplam boy', alt: 24.95, ust: 25.05, birim: 'mm' }, olcum: 25.07, sinirDisi: true },
+        { ...taban, adimId: 990003, ad: 'ORN çapak durumu', kontrol: { tur: 'secim', secenekler: ['Çapaksız', 'Hafif, temizlendi', 'Çapaklı'] } },
+        { ...taban, adimId: 990004, ad: 'ORN bağlama fotoğrafı', kontrol: { tur: 'foto', aciklama: 'Ayna ve pabuçlar görünsün' } },
+      ];
+      const ekMaddeler = [{ id: 990011, ad: 'ORN özel sıkma pabucu', tamam: false, kisiAdi: null, zaman: null, ekleyenAdi: 'ORN Kişi' }];
+      await r.fulfill({ response: c, json: { ...g, adimlar: [{ ...ilk, liste, ekMaddeler, sablon: { id: 990021, kod: 'ORN-HAZ', ad: 'ORN hazırlık' } }, ...kalan] } });
+    });
+    await ac('/adim-durumu');
+    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Matris' }).click();
+    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
+    await tablo.getByRole('button', { name: /^OP \d+ maddeleri$/ }).first().click();
+    await expect(tablo.getByText(/25,07 mm · sınır dışı \(\+0,02\)/).filter({ visible: true })).toBeVisible();
+    await expect(tablo.getByRole('radiogroup', { name: 'ORN çapak durumu' })).toBeVisible();
+    await expect(tablo.getByRole('button', { name: 'Fotoğraf ekle' })).toBeVisible();
+    const ek = tablo.getByRole('checkbox', { name: /ORN özel sıkma pabucu$/ });
+    if (yetki.ekMadde) await expect(ek).toBeEnabled(); else await expect(ek).toBeDisabled();
+    const genislik = page.viewportSize()?.width ?? 0;
+    if (genislik < 768) {
+      for (const d of [tablo.getByRole('button', { name: 'Değer gir' }), tablo.getByRole('radio', { name: 'Çapaksız' })]) {
+        expect((await d.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      }
+    }
+    const tasma = async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(await tasma(), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
+    await tablo.getByRole('button', { name: 'Değer gir' }).click();
+    const olcum = page.getByRole('dialog', { name: 'ORN delik çapı' });
+    await olcum.getByLabel('Ölçülen değer (mm)').fill('12,024');
+    await expect(olcum.getByRole('status')).toContainText('Sınır dışı.');
+    await olcum.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(olcum).toBeHidden();
+    await tablo.getByRole('button', { name: 'Kontrol adımı', exact: true }).first().click();
+    const pencere = page.getByRole('dialog');
+    await pencere.getByRole('radio', { name: 'Seçim' }).click();
+    await expect(pencere.getByRole('textbox', { name: 'Seçenek 2' })).toBeVisible();
+    await pencere.getByRole('radio', { name: 'Ölçüm' }).click();
+    await expect(pencere.getByLabel('Alt sınır')).toBeVisible();
+    await expect(pencere.getByLabel('Şablona da ekle')).toHaveCount(yetki.sablon ? 1 : 0);
+    if (yetki.sablon) await expect(pencere.getByLabel('Şablona da ekle')).not.toBeChecked();
+    expect(await tasma(), 'pencere açıkken sayfa yatay taşmaz').toBeLessThanOrEqual(0);
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toBeHidden();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar, 'açmak ve Vazgeç yazmaz').toEqual([]);
+  });
+});

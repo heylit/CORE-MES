@@ -32,7 +32,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -76,8 +76,8 @@ export interface IsEmriGirdisi {
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
   talimatSurumu: number | null;
-  // Aşaması olmayan madde (düz talimat, rotasız emir) üretimdir.
-  kontrolListesi: { ad: string; aciklama: string | null; asama?: TalimatAsamasi }[];
+  // Aşaması olmayan madde (düz talimat, rotasız emir) üretimdir. Kontrol (3249-2 a) talimat adımının kontrol noktasıdır; yoksa onay.
+  kontrolListesi: { ad: string; aciklama: string | null; asama?: TalimatAsamasi; kontrol?: { tur: string } | null }[];
   adaylar?: { kaynak: AtanabilirKaynak; ayarSuresiDk: string | null; birimSureDk: string | null }[];
   bilesenler?: { malzemeNo: number; miktar: string; fireYuzde?: string }[];
   firePayiYuzde?: string;
@@ -243,7 +243,9 @@ async function eklerYaz(db: Db, emirId: number, isEmriId: number, g: IsEmriGirdi
     await s.adayEkle(db, isEmriId, { makineId: k.makineId, kisiId: k.kisiId, ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk });
   }
   for (const b of g.bilesenler ?? []) await s.bilesenEkle(db, isEmriId, { malzemeNo: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde ?? '0' });
-  for (const [i, m] of g.kontrolListesi.entries()) await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId, m.asama ?? 'uretim');
+  for (const [i, m] of g.kontrolListesi.entries()) {
+    await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId, m.asama ?? 'uretim', talimatKontrolu(m.kontrol));
+  }
 }
 
 function girdiDenetle(isEmirleri: readonly IsEmriGirdisi[]): void {

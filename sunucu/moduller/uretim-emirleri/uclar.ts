@@ -1,4 +1,4 @@
-import { uc } from '#cekirdek/uc.ts';
+import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, bekletGovdesi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
@@ -9,10 +9,10 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
@@ -292,7 +292,7 @@ const adimliUclar = [
     yetki: ADIM_DURUMU_OKUMA,
     parametre: emirParametresi,
     cevap: adimDurumuCevabi,
-    isle: ({ db, parametre }) => adimDurumu(db, parametre.id),
+    isle: ({ db, kullanici, parametre }) => adimDurumu(db, parametre.id, kullanici),
   }),
   uc({
     yontem: 'GET',
@@ -351,7 +351,7 @@ const adimliUclar = [
     govde: listeIsaretleGovdesi,
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
-    isle: ({ db, kullanici, parametre, govde }) => listeIsaretle(db, kullanici, parametre.id, parametre.isEmriId, govde),
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => listeIsaretle(db, kullanici, parametre.id, parametre.isEmriId, govde, denetimEki),
   }),
   uc({
     yontem: 'POST',
@@ -361,7 +361,27 @@ const adimliUclar = [
     govde: listeEkleGovdesi,
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
-    isle: ({ db, kullanici, parametre, govde }) => listeMaddesiEkle(db, kullanici, parametre.id, parametre.isEmriId, govde),
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => listeMaddesiEkle(db, kullanici, parametre.id, parametre.isEmriId, govde, denetimEki),
+  }),
+  // 3249-2 a: Üretim Hazırlık ek maddesi; uç adim-durumu-yaz'ı, servis Üretim Hazırlık yazma yetkisini arar (Risk K1).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/ek-madde-isaretle',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: ekMaddeIsaretleGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => ekMaddeIsaretle(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  // Ofisten ya da terminalden eklenmiş liste fotoğrafı; Adım Durumu'nu okuyan görür.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/liste-fotografi/:adimId/:ozet',
+    yetki: ADIM_DURUMU_OKUMA,
+    parametre: listeFotografiParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, parametre }) => listeFotografi(db, parametre.id, parametre.adimId, parametre.ozet),
   }),
   uc({
     yontem: 'POST',

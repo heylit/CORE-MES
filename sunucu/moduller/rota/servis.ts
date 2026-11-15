@@ -4,6 +4,7 @@ export { adimEkipmaniKaydet, fark, taslakAc, karttanTaslaklar, kaydet, onayaGond
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
   talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
+  emreGelenSablonOzetleri, emreGelenSablonaAdimEkle,
 } from './servis/talimat.ts';
 export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGetir, patlatmaOnizlemesi, agac, araHalCozucusuKaydet, type AraHalCozucusu, type AraHalCozumu } from './servis/agac.ts';
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';

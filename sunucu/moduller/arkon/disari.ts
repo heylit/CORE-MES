@@ -1,9 +1,12 @@
 import type { Db } from '#cekirdek/db.ts';
+import { bulunamadi } from '#cekirdek/hata.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
 import { yayindakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
-import { ekMaddeHazirligi, emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari, periyodikBakimPlanlari } from './kurallar.ts';
+import { HAZIRLIK_MADDESI_ILETILERI, ekMaddeHazirligi, emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari, periyodikBakimPlanlari } from './kurallar.ts';
 import type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
+import { hazirlikMaddesiIsaretle } from './servis.ts';
 
 export type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 
@@ -79,4 +82,22 @@ export async function emirCizimDurumlari(db: Db, emirIdler: readonly number[]): 
 // 2319 (S10): periyodik bakım planları plan girdisine (plan ADR 0006 gereği Arkon'u okumaz; bağ sunucu/kablolama.ts'te). Yetki çağıranın işidir.
 export async function periyodikBakimlar(db: Db): Promise<PeriyodikBakimPlani[]> {
   return periyodikBakimPlanlari(await sorgular.periyodikBakimBelgeleri(db));
+}
+
+// 3249-2 a: Adım Durumu ek maddeleri tek tek gösterir ve işaretler (bağı kablolama.ts kurar; uretim-emirleri Arkon'u ithal edemez).
+// Liste ekleniş sırasıyladır, kaldırılan madde yoktur. Yazım Üretim Hazırlık'ın kendi komutuyla (aynı kilit, kapalı iş emri ve aynı hâl
+// reddi) yapılır; madde verilen iş emrinin değilse bulunamadı. Yetki çağıran ucun işidir (Risk K1: iki yetki birlikte).
+export interface EkMadde { id: number; ad: string; tamam: boolean; ekleyenId: number; tamamlayanId: number | null; tamamlanma: string | null }
+export async function isEmriEkMaddeleri(db: Db, isEmriIdler: readonly number[]): Promise<Map<number, EkMadde[]>> {
+  const tekil = [...new Set(isEmriIdler)];
+  const sonuc = new Map<number, EkMadde[]>(tekil.map((id) => [id, []]));
+  for (const r of tekil.length === 0 ? [] : await sorgular.hazirlikMaddeleri(db, tekil)) {
+    sonuc.get(r.isEmriId)?.push({ id: r.id, ad: r.ad, tamam: r.tamam, ekleyenId: r.kisiId, tamamlayanId: r.tamamlayanId, tamamlanma: r.tamamlanma });
+  }
+  return sonuc;
+}
+export async function isEmriEkMaddesiIsaretle(db: Db, kullanici: Kullanici, isEmriId: number, maddeId: number, tamam: boolean): Promise<void> {
+  const madde = await sorgular.hazirlikMaddesiBul(db, maddeId);
+  if (madde === null || madde.isEmriId !== isEmriId) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
+  await hazirlikMaddesiIsaretle(db, kullanici, maddeId, tamam ? 'tamamla' : 'geri-al');
 }

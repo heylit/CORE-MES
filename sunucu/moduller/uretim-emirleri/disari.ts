@@ -464,6 +464,9 @@ export const aparatHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { ha
 export const olcuAletiHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('olcu-aleti', c); };
 // 2893 D2: Adım Durumu'nun açık tedarik okuması (satın alma verir).
 export { tedarikCozucusuKaydet as adimTedarikCozucusu } from './adim-durumu.ts';
+// 3249-2 a: Adım Durumu'nun Üretim Hazırlık ek maddeleri (Arkon) ve "Şablona da ekle" hedefi (rota); bağı kablolama.ts kurar.
+export { ekMaddeIsaretleyiciKaydet, ekMaddeListeleyiciKaydet, sablonOzetleyiciKaydet, sablonaEkleyiciKaydet } from './adim-durumu.ts';
+export type { EkMaddeSatiri } from './adim-durumu.ts';
 export type { EmirTedarikSatiri, TedarikCozucusu } from './adim-durumu.ts';
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
