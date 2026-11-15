@@ -19,9 +19,11 @@ export interface AdimSatiri {
 
 export async function adimEkle(
   db: Db, emirId: number, sira: number, ad: string, aciklama: string | null, isEmriId: number | null = null, asama: TalimatAsamasi = 'uretim',
+  kontrol: object | null = null,
 ): Promise<void> {
   await db.sorgu(
-    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama) VALUES ($1, $2, $3, $4, $5, $6)', [emirId, sira, ad, aciklama, isEmriId, asama],
+    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama, kontrol) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
+    [emirId, sira, ad, aciklama, isEmriId, asama, kontrol === null ? null : JSON.stringify(kontrol)],
   );
 }
 

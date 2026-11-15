@@ -1,5 +1,6 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { ListeKanitiGirdisi, ListeKontrolu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1826,14 +1827,53 @@ export const LISTE_MADDESI_YOK = 'Bu madde adımın hazırlık listesinde yok.';
 export const LISTE_ZATEN = 'Madde zaten bu durumda. Güncel listeyi görüp yeniden deneyin.';
 export const LISTE_ADIM_BITTI = 'Biten adımın hazırlık listesi değişmez.';
 export const LISTE_DOLU = 'Bir adımın hazırlık listesine en çok 40 madde olur.';
-export function listeIsaretReddi(adimBitti: boolean, simdiTamam: boolean, istenen: boolean): string | null {
+// 3249-2 a: işaretli kanıtlı maddeye yeni kanıtla yeniden işaret değeri değiştirir (önce geri almak gerekmez); onay maddesinde aynı
+// hâle ikinci geçiş yine reddedilir.
+export function listeIsaretReddi(adimBitti: boolean, simdiTamam: boolean, istenen: boolean, kanitVar = false): string | null {
   if (adimBitti) return LISTE_ADIM_BITTI;
+  if (simdiTamam && istenen && kanitVar) return null;
   return simdiTamam === istenen ? LISTE_ZATEN : null;
 }
-// Biten adımın listesine madde eklenmez; liste en çok AZAMI_LISTE_MADDESI maddedir (ön hazırlık ve hazırlık birlikte).
-export function listeEkleReddi(adimBitti: boolean, maddeSayisi: number): string | null {
+// Biten adımın listesine madde eklenmez; liste en çok AZAMI_LISTE_MADDESI maddedir (ön hazırlık ve hazırlık birlikte). Onaydan başka
+// kontrol yalnız hazırlık aşamasına eklenir (ilk parça kontrolü, Risk K5); ölçüm sınırları ve seçenekler rota talimatının kuralıyla aynıdır.
+export const KONTROL_ASAMASI = 'Ölçüm, fotoğraf ve seçim kontrolü yalnız hazırlık aşamasına eklenir.';
+export const OLCUM_SINIRLARI = 'Ölçümün alt sınırı üst sınırdan büyük.';
+export const SECENEK_TEKRAR = 'Seçenekler birbirinden farklı olmalı.';
+export function listeEkleReddi(adimBitti: boolean, maddeSayisi: number, asama: 'on_hazirlik' | 'hazirlik' = 'hazirlik', kontrol: ListeKontrolu = { tur: 'onay' }): string | null {
   if (adimBitti) return LISTE_ADIM_BITTI;
-  return maddeSayisi >= AZAMI_LISTE_MADDESI ? LISTE_DOLU : null;
+  if (maddeSayisi >= AZAMI_LISTE_MADDESI) return LISTE_DOLU;
+  if (kontrol.tur !== 'onay' && asama !== 'hazirlik') return KONTROL_ASAMASI;
+  if (kontrol.tur === 'olcum' && kontrol.alt !== null && kontrol.ust !== null && kontrol.alt > kontrol.ust) return OLCUM_SINIRLARI;
+  if (kontrol.tur === 'secim' && new Set(kontrol.secenekler.map((x) => x.toLocaleLowerCase('tr'))).size !== kontrol.secenekler.length) return SECENEK_TEKRAR;
+  return null;
+}
+// Tablodaki kontrol (jsonb) sözleşmeden geçmezse ya da yoksa madde onaydır: eski satır ve bozuk ayar kanıt istemez.
+export function listeKontrolu(ham: unknown): ListeKontrolu | null {
+  if (ham === null || ham === undefined) return null;
+  const k = listeKontrolSemasi.safeParse(ham);
+  return k.success ? k.data : null;
+}
+// Rota talimatının kontrol noktası listeye kopyalanırken: 'yok' kontrolsüz maddedir (null), öteki türler aynen.
+export function talimatKontrolu(k: { tur: string } | null | undefined): ListeKontrolu | null {
+  return k === null || k === undefined || k.tur === 'yok' ? null : listeKontrolu(k);
+}
+// Sınır dışı bayrağını sunucu hesaplar (Risk K3): sınırı ya da ölçümü olmayanda null.
+export function sinirDisiMi(kontrol: ListeKontrolu | null, olcum: number | null): boolean | null {
+  if (kontrol?.tur !== 'olcum' || olcum === null || (kontrol.alt === null && kontrol.ust === null)) return null;
+  return (kontrol.alt !== null && olcum < kontrol.alt) || (kontrol.ust !== null && olcum > kontrol.ust);
+}
+// Ofisten kanıt maddenin türüyle eşleşir (Risk K3): onay kanıtsız, öteki türler yalnız kendi kanıtıyla işaretlenir. Geri almada kanıt yok.
+export const KANIT_GEREK = 'Bu madde kanıtla işaretlenir: ölçüm, seçim ya da fotoğraf girin.';
+export const KANIT_TURU = 'Kanıt maddenin kontrol türüyle uyuşmuyor.';
+export const SECIM_YOK = 'Seçim maddenin seçeneklerinde yok.';
+export function listeKanitiReddi(kontrol: ListeKontrolu | null, tamam: boolean, kanit: ListeKanitiGirdisi | undefined): string | null {
+  const tur = kontrol?.tur ?? 'onay';
+  if (!tamam || tur === 'onay') return kanit === undefined ? null : KANIT_TURU;
+  if (kanit === undefined) return KANIT_GEREK;
+  const verilen = kanit.olcum !== undefined ? 'olcum' : kanit.secim !== undefined ? 'secim' : 'foto';
+  if (verilen !== tur) return KANIT_TURU;
+  if (kontrol?.tur === 'secim' && !kontrol.secenekler.includes(kanit.secim ?? '')) return SECIM_YOK;
+  return null;
 }
 // Kanıtın ekrandaki kısa metni: ölçüm sayı, seçim kendisi, fotoğraf yalnız "Fotoğraf" (özet gösterilmez).
 export function kanitMetni(k: { olcum: number | null; secim: string | null; foto: string | null }): string | null {

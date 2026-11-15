@@ -1099,19 +1099,58 @@ export const hazirlikOnayiKaldirGovdesi = z.object({ madde: hazirlikMaddesi }).s
 // parça başında yaptığıdır ve matristen yazılmaz (Risk K5). İşaret kaynağıyla saklanır (K4): 'terminal' operatör, 'adim-durumu' ofis.
 export const LISTE_ASAMALARI = ['on_hazirlik', 'hazirlik'] as const satisfies readonly (typeof TALIMAT_ASAMALARI)[number][];
 export const AZAMI_LISTE_MADDESI = 40;
+// 3249-2 a: listenin kontrol noktası; rota talimatının kontrol şemasıyla aynı biçim ('yok' listede onay sayılır). Sözleşme rota.ts'i
+// ithal edemez (rota.ts bu dosyayı ithal eder); sınırlar rota KONTROL şemasındakiyle aynıdır.
+export const LISTE_KONTROL_TURLERI = ['onay', 'olcum', 'foto', 'secim'] as const;
+export const AZAMI_LISTE_SECENEGI = 10;
+export const listeKontrolSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('onay') }).strict(),
+  z.object({
+    tur: z.literal('olcum'), ad: metin(60, 'Ölçümün adı zorunlu.'), alt: z.number().finite().nullable(), ust: z.number().finite().nullable(),
+    birim: z.string().trim().max(12),
+  }).strict(),
+  z.object({ tur: z.literal('foto'), aciklama: z.string().trim().max(120).nullable() }).strict(),
+  z.object({
+    tur: z.literal('secim'),
+    secenekler: z.array(metin(60, 'Seçenek boş olamaz.')).min(2, 'Seçimde en az iki seçenek olur.').max(AZAMI_LISTE_SECENEGI, `Seçimde en çok ${String(AZAMI_LISTE_SECENEGI)} seçenek olur.`),
+  }).strict(),
+]);
+// Ofisten girilen kanıt (3249-2 a, Risk K3): ölçüm, seçim ya da yüklenmiş fotoğrafın özeti ve adı; en çok biri. Türü maddenin
+// kontrolüyle sunucu eşler. Fotoğraf önce dosya modülüne yüklenir, bağ bu komutta kurulur.
+export const listeKanitiGirdisi = z.object({
+  olcum: z.number().finite().optional(),
+  secim: z.string().trim().min(1).max(AZAMI_KANIT_SECIMI).optional(),
+  foto: z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/, 'Geçersiz dosya özeti.'), ad: metin(120, 'Dosya adı zorunlu.') }).strict().optional(),
+}).strict().refine((k) => [k.olcum, k.secim, k.foto].filter((x) => x !== undefined).length === 1, { message: 'Kanıt tek değer olur.' });
 export const listeIsaretleGovdesi = z.object({
   adimId: KIMLIK,
   tamam: z.boolean(),
+  // Ölçüm, seçim ya da fotoğraf maddesi kanıtla işaretlenir; işaretli maddeye yeni kanıt değeri değiştirir. Onay maddesinde verilmez.
+  kanit: listeKanitiGirdisi.optional(),
 }).strict();
 export const listeEkleGovdesi = z.object({
   ad: metin(120, 'Madde adı zorunlu.'),
   asama: z.enum(LISTE_ASAMALARI),
+  // Gönderilmeyen kontrol onaydır (ilk dilimin istemcisi). Onaydan başka tür yalnız hazırlık aşamasında eklenir (Risk K5).
+  kontrol: listeKontrolSemasi.prefault({ tur: 'onay' }),
+  // "Şablona da ekle" (3249-2 a, Risk K2): adımın operasyon tipinin emre gelen şablonuna da yeni sürümle eklenir; varsayılan kapalı.
+  sablonaEkle: z.boolean().prefault(false),
 }).strict();
+// Üretim Hazırlık ek maddesinin işareti (3249-2 a): madde Arkon'undur, yazım Arkon'un dışarı komutuyla yapılır.
+export const ekMaddeIsaretleGovdesi = z.object({ maddeId: KIMLIK, tamam: z.boolean() }).strict();
+export const listeFotografiParametresi = z.object({
+  id: z.coerce.number().int().positive().max(TAM_SAYI_UST), adimId: z.coerce.number().int().positive().max(TAM_SAYI_UST),
+  ozet: z.string().regex(/^[0-9a-f]{64}$/),
+});
 const listeMaddesiSemasi = z.object({
   adimId: KIMLIK, ad: z.string(), aciklama: z.string().nullable(), asama: z.enum(LISTE_ASAMALARI), tamam: z.boolean(),
   kisiAdi: z.string().nullable(), zaman: zamanSemasi.nullable(), kaynak: z.enum(['terminal', 'adim-durumu']).nullable(),
   // Ölçüm, seçim ya da fotoğraf kanıtının kısa metni; yoksa null.
   kanit: z.string().nullable(),
+  // 3249-2 a: maddenin kontrolü (eski ve talimatsız maddede null: onay sayılır), kanıtın kendisi ve sınır dışı bayrağı (sunucu hesaplar;
+  // sınırı ya da ölçümü olmayanda null). Fotoğraf özeti liste fotoğrafı ucundan okunur.
+  kontrol: listeKontrolSemasi.nullable(),
+  olcum: z.number().nullable(), secim: z.string().nullable(), fotoOzet: z.string().nullable(), sinirDisi: z.boolean().nullable(),
   // Adım Durumu'ndan eklenen maddede ekleyen ve zaman; talimattan ya da şablondan gelende null.
   ekleyenAdi: z.string().nullable(), eklenme: zamanSemasi.nullable(),
 });
@@ -1157,7 +1196,15 @@ export const adimDurumuCevabi = z.object({
     })),
     // 3249 b: adımın ön hazırlık ve hazırlık listesi, sırasıyla.
     liste: z.array(listeMaddesiSemasi),
+    // 3249-2 a: Üretim Hazırlık'ın bu iş emrine özel maddeleri (Arkon), ekleniş sırasıyla; bağlı değilse boş.
+    ekMaddeler: z.array(z.object({
+      id: KIMLIK, ad: z.string(), tamam: z.boolean(), kisiAdi: z.string().nullable(), zaman: zamanSemasi.nullable(), ekleyenAdi: z.string().nullable(),
+    })),
+    // Adımın operasyon tipinin emre gelen şablonu ("Şablona da ekle" hedefi); yoksa null.
+    sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
   })),
+  // 3249-2 a: okuyanın ek yetkileri; yazma uçları aynısını sunucuda arar. ekMadde: Üretim Hazırlık yazma; sablon: talimat yazma.
+  yetki: z.object({ ekMadde: z.boolean(), sablon: z.boolean() }),
 });
 // Terminal okuması (2893-3 b): operatör yalnız statüyü, nedeni ve elle yazılmış statünün kendisini görür; kişi adı, gerekçe ve geçmiş yok.
 export const adimDurumuTerminalCevabi = z.object({
@@ -1177,6 +1224,9 @@ export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;
 export type HazirlikOnayiGovdesi = z.output<typeof hazirlikOnayiGovdesi>;
 export type ListeIsaretleGovdesi = z.output<typeof listeIsaretleGovdesi>;
 export type ListeEkleGovdesi = z.output<typeof listeEkleGovdesi>;
+export type ListeKontrolu = z.output<typeof listeKontrolSemasi>;
+export type ListeKanitiGirdisi = z.output<typeof listeKanitiGirdisi>;
+export type EkMaddeIsaretleGovdesi = z.output<typeof ekMaddeIsaretleGovdesi>;
 export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
 export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
 export type AdimDurumuTerminalCevabi = z.output<typeof adimDurumuTerminalCevabi>;

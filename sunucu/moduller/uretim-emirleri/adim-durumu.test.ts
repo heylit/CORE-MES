@@ -407,4 +407,103 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     assert.equal((await isaretle({ adimId: ilk, tamam: true })).durum, 409, 'kapalı emirde yazılmaz');
     assert.equal((await ekle({ ad: 'Geç', asama: 'hazirlik' })).durum, 409);
   });
+
+  // 3249-2 a: türlü kontrol ve ofis kanıtı (Risk K3), Üretim Hazırlık ek maddeleri (K1, iki yetki), "Şablona da ekle" (K2), K5.
+  const rolKur = async (kod: string, islemler: readonly string[]): Promise<void> => {
+    const rol = await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ($1, 'Deneme') RETURNING id", [kod]);
+    for (const i of islemler) await o().sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [rol?.id, i]);
+    await kisiEkle(kod, kod);
+  };
+  test('3249-2 a: türlü kontrol kanıtla işaretlenir, sınır dışı bayrağı sunucuda; ek madde ve şablon iki yetki ister', async () => {
+    await rolKur('ad_yalniz', ['sayfa.adim-durumu', 'sayfa.uretim-emirleri', 'uretim-emirleri.adim-durumu-yaz']);
+    await rolKur('ad_hazirlik', ['sayfa.adim-durumu', 'sayfa.uretim-emirleri', 'uretim-emirleri.adim-durumu-yaz', 'arkon.hazirlik']);
+    await rolKur('hazirlik_yalniz', ['sayfa.adim-durumu', 'sayfa.uretim-emirleri', 'arkon.hazirlik']);
+    const sablon = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO rota_talimat_sablonu (kod, ad, operasyon_tipi_id, emre_gelir) VALUES ('AD-SBL', 'Deneme şablon', $1, true) RETURNING id", [tipId]))!.id;
+    await o().sahip.sorgu("INSERT INTO rota_talimat_sablon_adimi (sablon_id, sira, baslik, kontrol_turu, zorunlu, asama) VALUES ($1, 1, 'Ayna temiz', 'onay', false, 'hazirlik')", [sablon]);
+    const m = await makineKur();
+    const kontrolListesi = [
+      { ad: 'Dış çap', aciklama: null, asama: 'hazirlik' as const, kontrol: { tur: 'olcum', ad: 'Çap', alt: 41.95, ust: 42, birim: 'mm' } },
+      { ad: 'Talimatsız', aciklama: null, asama: 'hazirlik' as const, kontrol: { tur: 'yok' } },
+    ];
+    const r = await o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
+      malzemeNo: urunNo, adet: 4, teslim: null, kaynakRotaRevizyonId: rev, projeId, isEmirleri: [{ ...adim(1, m), kontrolListesi }, adim(2, m)],
+    }));
+    const id = r.uretimEmriId;
+    const [ie1 = 0] = r.isEmriIdleri;
+    const yol = (son: string) => `/adimli-emirler/${id}/is-emirleri/${ie1}/${son}`;
+    const d0 = await oku(id);
+    assert.deepEqual(d0.adimlar[0]?.liste.map((x) => x.kontrol?.tur ?? null), ['olcum', null], 'talimatın kontrolü emre kopyalanır; yok kontrolsüzdür');
+    assert.deepEqual(d0.adimlar[0]?.sablon, { id: sablon, kod: 'AD-SBL', ad: 'Deneme şablon' });
+    assert.deepEqual(d0.yetki, { ekMadde: false, sablon: true }, 'planlama: talimat yazar, Üretim Hazırlık yazmaz');
+    const olcumId = d0.adimlar[0]!.liste[0]!.adimId;
+
+    // Kanıt (K3): ölçüm maddesi kanıtsız ya da başka türle işaretlenmez; sınır dışı değer kaydolur, bayrağı sunucu verir.
+    const isaretle = (govde: unknown, kisi = 'planlama_proje') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('liste-isaretle'), govde);
+    assert.equal((await isaretle({ adimId: olcumId, tamam: true })).durum, 400, 'ölçüm kanıtsız işaretlenmez');
+    assert.equal((await isaretle({ adimId: olcumId, tamam: true, kanit: { secim: 'Uygun' } })).durum, 400, 'tür eşleşmez');
+    assert.equal((await isaretle({ adimId: olcumId, tamam: true, kanit: { olcum: 1, secim: 'x' } })).durum, 400, 'tek kanıt');
+    const disi = await isaretle({ adimId: olcumId, tamam: true, kanit: { olcum: 42.03 } });
+    assert.equal(disi.durum, 200, JSON.stringify(disi.govde));
+    assert.deepEqual([disi.govde.adimlar[0]?.liste[0]?.olcum, disi.govde.adimlar[0]?.liste[0]?.sinirDisi, disi.govde.adimlar[0]?.liste[0]?.kanit], [42.03, true, '42.03']);
+    const degisti = await isaretle({ adimId: olcumId, tamam: true, kanit: { olcum: 41.98 } });
+    assert.equal(degisti.durum, 200, 'işaretli maddeye yeni değer değiştirir');
+    assert.equal(degisti.govde.adimlar[0]?.liste[0]?.sinirDisi, false);
+    assert.equal((await isaretle({ adimId: olcumId, tamam: false, kanit: { olcum: 1 } })).durum, 400, 'geri almada kanıt yok');
+
+    // Ekleme: türlü kontrol yalnız hazırlıkta (K5); seçim kanıtı listede olmalı; fotoğraf yüklenmemiş özetle bağlanmaz.
+    const ekle = (govde: unknown, kisi = 'planlama_proje') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('liste-ekle'), govde);
+    assert.equal((await ekle({ ad: 'Çapak', asama: 'on_hazirlik', kontrol: { tur: 'secim', secenekler: ['Yok', 'Var'] } })).durum, 400, 'K5');
+    assert.equal((await ekle({ ad: 'Boy', asama: 'hazirlik', kontrol: { tur: 'olcum', ad: 'Boy', alt: 5, ust: 4, birim: 'mm' } })).durum, 400, 'alt > üst');
+    assert.equal((await ekle({ ad: 'Çapak', asama: 'hazirlik', kontrol: { tur: 'secim', secenekler: ['Yok', 'yok'] } })).durum, 400, 'aynı seçenek');
+    const secimli = await ekle({ ad: 'Çapak', asama: 'hazirlik', kontrol: { tur: 'secim', secenekler: ['Yok', 'Var'] } });
+    assert.equal(secimli.durum, 200, JSON.stringify(secimli.govde));
+    const secimId = secimli.govde.adimlar[0]!.liste.at(-1)!.adimId;
+    assert.equal((await isaretle({ adimId: secimId, tamam: true, kanit: { secim: 'Belki' } })).durum, 400, 'seçenek listede değil');
+    const secildi = await isaretle({ adimId: secimId, tamam: true, kanit: { secim: 'Var' } });
+    assert.deepEqual([secildi.durum, secildi.govde.adimlar[0]?.liste.at(-1)?.secim], [200, 'Var']);
+    const fotolu = await ekle({ ad: 'Bağlama fotoğrafı', asama: 'hazirlik', kontrol: { tur: 'foto', aciklama: 'Ayna' } });
+    const fotoId = fotolu.govde.adimlar[0]!.liste.at(-1)!.adimId;
+    assert.equal((await isaretle({ adimId: fotoId, tamam: true, kanit: { foto: { ozet: 'a'.repeat(64), ad: 'x.jpg' } } })).durum, 400, 'yüklenmemiş dosya bağlanmaz (K4)');
+    assert.equal((await istek('planlama_proje', 'GET', `/adimli-emirler/${id}/liste-fotografi/${fotoId}/${'a'.repeat(64)}`)).durum, 404);
+
+    // "Şablona da ekle" (K2): talimat yazma yetkisi de aranır; şablon yeni sürüm alır, açık emir ve öteki iş emri değişmez.
+    assert.equal((await ekle({ ad: 'Yeni kontrol', asama: 'hazirlik', sablonaEkle: true }, 'ad_yalniz')).durum, 403, 'talimat yazmayan şablona eklemez');
+    assert.equal((await ekle({ ad: 'Yeni kontrol', asama: 'hazirlik', sablonaEkle: true }, 'kalite')).durum, 403);
+    const once = (await o().sahip.tek<{ surum: number }>('SELECT surum FROM rota_talimat_sablonu WHERE id = $1', [sablon]))!.surum;
+    const sablonlu = await ekle({ ad: 'Pabuç sıkılığı', asama: 'hazirlik', kontrol: { tur: 'olcum', ad: 'Tork', alt: 20, ust: 25, birim: 'Nm' }, sablonaEkle: true });
+    assert.equal(sablonlu.durum, 200, JSON.stringify(sablonlu.govde));
+    const adimlar = await o().sahip.sorgu<{ baslik: string; kontrol_turu: string; kontrol_ayari: unknown }>(
+      'SELECT baslik, kontrol_turu, kontrol_ayari FROM rota_talimat_sablon_adimi WHERE sablon_id = $1 ORDER BY sira', [sablon]);
+    assert.deepEqual(adimlar.map((x) => [x.baslik, x.kontrol_turu]), [['Ayna temiz', 'onay'], ['Pabuç sıkılığı', 'olcum']]);
+    assert.equal((await o().sahip.tek<{ surum: number }>('SELECT surum FROM rota_talimat_sablonu WHERE id = $1', [sablon]))!.surum, once + 1, 'yeni sürüm');
+    assert.deepEqual(sablonlu.govde.adimlar[1]?.liste, [], 'öteki iş emri değişmez');
+    const yazilan = await o().sahip.tek<{ govde: unknown }>("SELECT govde FROM denetim_kaydi WHERE yol LIKE '%/liste-ekle' ORDER BY id DESC LIMIT 1");
+    assert.ok(yazilan, 'liste-ekle ucunun denetim kaydı var');
+    assert.match(JSON.stringify(yazilan.govde), new RegExp(`"sablona-ekle".*"AD-SBL".*${String(once + 1)}|"AD-SBL".*"sablona-ekle"`), 'şablon kodu ve sürüm ucun denetim kaydında');
+    await o().sahip.sorgu('UPDATE rota_talimat_sablonu SET emre_gelir = false WHERE id = $1', [sablon]);
+    assert.equal((await ekle({ ad: 'Şablonsuz', asama: 'hazirlik', sablonaEkle: true })).durum, 409, 'emre gelen şablon yoksa 409');
+
+    // Ek maddeler (K1): tek tek okunur; işaret Üretim Hazırlık yazma + adım durumu yazma birlikte ister.
+    const madde = (await o().sahip.tek<{ id: number }>("INSERT INTO arkon_hazirlik_maddesi (is_emri_id, ad, kisi_id) VALUES ($1, 'Özel pabuç', $2) RETURNING id", [ie1, yoneticiId]))!.id;
+    const d1 = await oku(id, 'ad_hazirlik');
+    assert.deepEqual(d1.adimlar[0]?.ekMaddeler.map((x) => [x.id, x.ad, x.tamam, x.ekleyenAdi]), [[madde, 'Özel pabuç', false, 'Deneme Yönetici']]);
+    assert.deepEqual(d1.yetki, { ekMadde: true, sablon: false });
+    const ek = (govde: unknown, kisi: string) => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('ek-madde-isaretle'), govde);
+    assert.equal((await ek({ maddeId: madde, tamam: true }, 'planlama_proje')).durum, 403, 'Üretim Hazırlık yazmayan');
+    assert.equal((await ek({ maddeId: madde, tamam: true }, 'hazirlik_yalniz')).durum, 403, 'adım durumu yazmayan');
+    const baska = (await o().sahip.tek<{ id: number }>("INSERT INTO arkon_hazirlik_maddesi (is_emri_id, ad, kisi_id) VALUES ($1, 'Başka', $2) RETURNING id", [r.isEmriIdleri[1], yoneticiId]))!.id;
+    assert.equal((await ek({ maddeId: baska, tamam: true }, 'ad_hazirlik')).durum, 404, 'başka iş emrinin maddesi');
+    const tik = await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik');
+    assert.equal(tik.durum, 200, JSON.stringify(tik.govde));
+    assert.deepEqual([tik.govde.adimlar[0]?.ekMaddeler[0]?.tamam, tik.govde.adimlar[0]?.ekMaddeler[0]?.kisiAdi], [true, 'Deneme ad_hazirlik']);
+    assert.equal((await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik')).durum, 409, 'aynı hâl');
+    assert.equal((await ek({ maddeId: madde, tamam: false }, 'ad_hazirlik')).govde.adimlar[0]?.ekMaddeler[0]?.tamam, false, 'tik kaldırılır');
+
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
+    assert.equal((await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik')).durum, 409, 'kapanmış emre yazılmaz');
+    assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 409);
+    await assert.rejects(o().sahip.sorgu(`INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama, kontrol) VALUES ($1, $2, 99, 'X', 'hazirlik', '{"tur":"yok"}')`, [id, ie1]),
+      /emir_adimi_kontrol_turu/);
+  });
 });
