@@ -70,7 +70,7 @@ export function atamaMetni(kisiAd: string | null, rolAd: string | null, bos = '�
 
 // 3269: şablon kaleminin bağlanabildiği hazırlık maddeleri (sahibi Üretim Emirleri); bağlı kalem emir başına görev doğurur (3269-B).
 export const HAZIRLIK_METNI: Record<(typeof HAZIRLIK_MADDELERI)[number], string> = {
-  cnc: 'CNC kurulumu', cizim: 'Çizim revizyonu', yayin: 'Paket yayını', rota: 'Rota yürürlükte', malzeme: 'Malzeme (girdi stoğu)',
+  cnc: 'CNC kurulumu', cizim: 'Çizim revizyonu', yayin: 'Terminale gönderildi', rota: 'Rota yürürlükte', malzeme: 'Malzeme (girdi stoğu)',
   'takim-omru': 'Takım ömrü', 'takim-hazirla': 'Takım hazırla', makine: 'Makine durumu', talimat: 'Hazırlık talimatı',
   'ek-madde': 'Ek hazırlık maddesi', aparat: 'Aparat', 'olcu-aleti': 'Ölçü aleti (kalibrasyon)',
 };

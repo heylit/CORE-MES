@@ -82,7 +82,7 @@ test.describe('A2 Hazırlık', () => {
     const duzen = page.getByRole('region', { name: 'İş paketi' });
     await expect(duzen.getByRole('heading', { name: /IE-EKRAN-1/ })).toBeVisible();
     const adimlar = duzen.getByRole('list', { name: 'Hazırlık adımları' });
-    for (const sekme of ['Bilgiler', 'Dokümanlar', 'Kontrol planı', 'Numune', 'Adımlar', 'Kurallar', 'Yayınla']) {
+    for (const sekme of ['Bilgiler', 'Dokümanlar', 'Kontrol planı', 'Numune', 'Adımlar', 'Kurallar', 'Terminale gönder']) {
       await adimlar.getByRole('button', { name: sekme }).click();
       await expect(adimlar.getByRole('button', { name: sekme })).toHaveAttribute('aria-current', 'step');
       expect(await tasma(page), sekme).toBeLessThanOrEqual(0);

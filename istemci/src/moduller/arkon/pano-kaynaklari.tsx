@@ -29,7 +29,7 @@ function kaynakOzet(donustur: (o: ArkonOzetiCevabi) => IsKalemi[]) {
 
 // Kalite ve arıza başkasının işini durdurur: "bekliyor"; hazırlık planın önündeki iştir: "bugün".
 const Hazirlik = kaynakOzet((o) => ozetKalemi(o, 'hazirlikBekleyen', {
-  baslik: (n) => `${n.toLocaleString('tr-TR')} iş paketi hazırlık bekliyor`, ayrinti: 'Yayına girmemiş', aciliyet: 'bugun', yol: '/arkon/hazirlik', eylem: 'Hazırla',
+  baslik: (n) => `${n.toLocaleString('tr-TR')} iş paketi hazırlık bekliyor`, ayrinti: 'Terminale gönderilmemiş', aciliyet: 'bugun', yol: '/arkon/hazirlik', eylem: 'Hazırla',
 }));
 const Kalite = kaynakOzet((o) => ozetKalemi(o, 'kaliteBekleyen', {
   baslik: (n) => `${n.toLocaleString('tr-TR')} numune ölçüm bekliyor`, ayrinti: 'Bekleyen ya da ölçülen numune', aciliyet: 'bekliyor',

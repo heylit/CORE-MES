@@ -8,7 +8,7 @@ export const ARKON_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Operatöre yalnız canlı plandaki iş düşer',
-    aciklama: 'Açıkken rotalı iş, canlı planda bu istasyona yerleşmeden Üretim Terminali\'nde görünmez ve başlatılamaz. Kapalıyken yayınlanan iş plansız da operatöre düşer ve başlatılabilir.',
+    aciklama: 'Açıkken rotalı iş, canlı planda bu istasyona yerleşmeden Üretim Terminali\'nde görünmez ve başlatılamaz. Kapalıyken terminale gönderilen iş plansız da operatöre düşer ve başlatılabilir.',
   },
   'arkon.anomali-giris-yok-dk': {
     modul: 'arkon',

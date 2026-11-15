@@ -53,7 +53,7 @@ describe('A6 Ayarlar', () => {
     arkonAc('/arkon/ayarlar');
     const b = await bolum();
     await altSekmeler(b);
-    const anahtar = await within(b).findByRole('switch', { name: 'Paket yayınında kalite onayı' });
+    const anahtar = await within(b).findByRole('switch', { name: 'Terminale göndermede kalite onayı' });
     fireEvent.click(anahtar);
     fireEvent.click(within(b).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/arkon/belgeler/kv/policy/yaz')).toBe(true); }, { timeout: 10000 });

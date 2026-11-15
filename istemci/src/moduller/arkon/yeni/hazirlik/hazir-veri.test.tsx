@@ -26,8 +26,8 @@ describe('Hazırlık yayını PDF hazır verisi (731 A2)', () => {
     const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     arkonAc('/arkon/hazirlik');
     const d = await screen.findByRole('region', { name: 'İş paketi' }, { timeout: 10000 });
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
-    fireEvent.click(await within(d).findByRole('button', { name: /Operatöre gönder/ }));
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
+    fireEvent.click(await within(d).findByRole('button', { name: 'Terminale gönder' }));
     await waitFor(() => { expect(paketYazimi(istekler).some((p) => p.status === 'published')).toBe(true); }, { timeout: 10000 });
     const yayin = paketYazimi(istekler).find((p) => p.status === 'published')!;
     expect(yayin.derived).toEqual({ 'pdf:sahte#1': { w: 4, h: 2, png: {} } });

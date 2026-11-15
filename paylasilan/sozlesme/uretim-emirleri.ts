@@ -1080,8 +1080,9 @@ export const ADIM_STATULERI = [
 ] as const;
 export const adimStatusu = z.enum(ADIM_STATULERI);
 // Elle yazılabilen statüler: çalışma, bitiş ve "Başlayabilir" sistemden gelir; yanlış "Bitti" ya da "Üretimde" planı yanıltır.
+// "Terminale gönderilmedi" (yayin) da sistemden gelir (3299 a): gönderimi Arkon bilir, elle kayıt onunla çelişebilir. Eski elle kayıt okunur.
 export const ELLE_YAZILAN_STATULER = [
-  'program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger',
+  'program', 'cizim', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger',
 ] as const satisfies readonly (typeof ADIM_STATULERI)[number][];
 export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir'] as const;
 // Durduran maddede gerekçe zorunlu; uyaran maddede boş olabilir (sunucu kuralı, kurallar.ts).

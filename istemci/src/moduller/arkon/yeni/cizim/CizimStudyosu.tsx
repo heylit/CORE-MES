@@ -180,7 +180,7 @@ export function CizimStudyosu() {
     const p = curPkg; if (!p || !send) return;
     await depo.DB.put('pkgs', { ...p, ...paketDegisikligi(p, w, send, ayarDuzelt(applied), Date.now()) });
     depo.Bus.send({ type: 'pkg-draft', id: p.id }); paketler.yenile(); setSend(null);
-    say(p.no + ' paketine aktarıldı · Hazırlıkta yayınlayınca operatöre gider');
+    say(p.no + ' paketine aktarıldı · Hazırlıkta terminale gönderince operatöre gider');
   };
   const useAll = () => { cihazAyariYaz(yerel, cfg); say('Ayarlar bu cihazda tüm ekranlarda kullanılacak'); };
   const reset = () => setCfg(ayarDuzelt({}));

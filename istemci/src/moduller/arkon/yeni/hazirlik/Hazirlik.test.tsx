@@ -59,8 +59,8 @@ describe('A2 Hazırlık ekranı', () => {
     expect(within(d).getByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
     expect(within(screen.getByRole('complementary', { name: 'İş paketleri' })).getByRole('button', { name: /IE-DENEME-1/, pressed: true })).toBeTruthy();
     expect(yazmalar(istekler)).toEqual([]);
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
-    const gonder = await within(d).findByRole('button', { name: /Operatöre gönder/ });
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
+    const gonder = await within(d).findByRole('button', { name: 'Terminale gönder' });
     expect(gonder.hasAttribute('disabled')).toBe(false);
     fireEvent.click(gonder);
     await waitFor(() => { expect(paketYazimi(istekler).some((p) => p.status === 'published' && p.version === 1 && !p.dirty)).toBe(true); }, { timeout: 10000 });
@@ -79,9 +79,9 @@ describe('A2 Hazırlık ekranı', () => {
     const yazim = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${planYok.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
     expect(await within(d).findByText('Eksik · gönderirken uyarı onayı istenir')).toBeTruthy();
-    const gonder = await within(d).findByRole('button', { name: /Operatöre gönder/ });
+    const gonder = await within(d).findByRole('button', { name: 'Terminale gönder' });
     expect(gonder.hasAttribute('disabled')).toBe(false);
 
     fireEvent.click(gonder);
@@ -104,8 +104,8 @@ describe('A2 Hazırlık ekranı', () => {
     const yazim = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${planli.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
-    fireEvent.click(await within(d).findByRole('button', { name: /Operatöre gönder/ }));
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
+    fireEvent.click(await within(d).findByRole('button', { name: 'Terminale gönder' }));
     await waitFor(() => { expect(yazim(istekler).some((p) => p.status === 'published')).toBe(true); }, { timeout: 10000 });
     expect(screen.queryByRole('dialog', { name: 'Kontrol planı yok' })).toBeNull();
     expect(yazim(istekler).find((p) => p.status === 'published')?.history?.at(-1)).not.toHaveProperty('planYok');
@@ -156,9 +156,9 @@ describe('A2 Hazırlık ekranı', () => {
     expect(within(d).getByPlaceholderText('S355J2').matches(':disabled')).toBe(true);
     expect(screen.queryByRole('button', { name: 'Yeni paket' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Paket dosyası uygula' })).toBeNull();
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
-    await within(d).findByText('Yayın öncesi kontrol');
-    expect(within(d).queryByRole('button', { name: /Operatöre gönder/ })).toBeNull();
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
+    await within(d).findByText('Gönderim öncesi kontrol');
+    expect(within(d).queryByRole('button', { name: 'Terminale gönder' })).toBeNull();
     expect(within(d).queryByRole('button', { name: /Paketi sil/ })).toBeNull();
     expect(within(d).queryByRole('button', { name: /geri çek/ })).toBeNull();
     expect(within(d).getByRole('button', { name: /Önizle/ })).toBeTruthy();
@@ -340,7 +340,7 @@ describe('A2 Hazırlık ekranı', () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
     fireEvent.click(await within(d).findByRole('button', { name: 'Paketi sil' }));
     expect(istekler.some((i) => i.yontem === 'POST' && i.yol.includes('/sil'))).toBe(false);
     fireEvent.click(within(d).getByRole('button', { name: /Emin misin/ }));
@@ -374,7 +374,7 @@ describe('A2 Hazırlık ekranı', () => {
     const d = await ekran();
     const kart = within(liste).getAllByRole('button', { name: /IE-DENEME-73/ }).find((b) => b.hasAttribute('aria-pressed'));
     fireEvent.click(kart!);
-    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
     const hz = await within(d).findByRole('region', { name: 'Hazırlık' }, { timeout: 10000 });
     expect(within(hz).getByText('Çizim revizyonu')).toBeTruthy();
     expect(within(hz).getAllByText('emir geneli').length).toBe(2);

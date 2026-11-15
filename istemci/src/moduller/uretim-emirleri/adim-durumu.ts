@@ -14,7 +14,7 @@ export const STATU: Readonly<Record<AdimStatusu, StatuGorunumu>> = {
   beklemede: { ad: 'Beklemede', ton: 'uyari', simge: 'pause' },
   program: { ad: 'Program hazır değil', ton: 'hata', simge: 'cpu' },
   cizim: { ad: 'Çizim revizyonu bekleniyor', ton: 'hata', simge: 'ruler' },
-  yayin: { ad: 'Paket yayınlanmadı', ton: 'hata', simge: 'flag' },
+  yayin: { ad: 'Terminale gönderilmedi', ton: 'hata', simge: 'flag' },
   makine: { ad: 'Makine hazır değil', ton: 'uyari', simge: 'wrench' },
   talep: { ad: 'Talep bekliyor', ton: 'uyari', simge: 'list' },
   siparis: { ad: 'Sipariş bekliyor', ton: 'uyari', simge: 'cart' },
@@ -26,7 +26,7 @@ export const STATU: Readonly<Record<AdimStatusu, StatuGorunumu>> = {
 };
 
 // Elle yazılabilen statüler; sunucu aynı listeyi sözleşmede zorlar (ElleYazilanStatu), burada yalnız seçenek sırasıdır.
-export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger'];
+export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger'];
 
 export const ADIM_DURUMU_YAZ = 'uretim-emirleri.adim-durumu-yaz';
 export const adimDurumuUcu = (emirId: number): string => `/adimli-emirler/${String(emirId)}/adim-durumu`;
