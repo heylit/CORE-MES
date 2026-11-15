@@ -48,6 +48,7 @@ describe('Sipariş metni', () => {
       const alan = kap.querySelector('textarea')!;
       expect(alan.readOnly).toBe(false);
       expect(alan.value).toContain('Kalite şartı: ORN şart: her partide rapor');
+      expect(kap.querySelector(`#${alan.getAttribute('aria-describedby') ?? ''}`)?.textContent).toBe('Değişiklik kaydedilmez; kopyalayıp tedarikçiye gönderin.');
     } finally {
       ONAYLI.veri = onceki;
       S.materials = malzemeler;

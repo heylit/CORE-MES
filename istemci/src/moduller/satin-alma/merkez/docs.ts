@@ -91,7 +91,8 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
 
 /** Sipariş metni penceresinin gövdesi: metin (Kalite şartı satırları dahil) önceden dolu ve gönderilmeden değiştirilebilir; kopyalanan, alandaki son haldir. */
 export function siparisMetniGovdesi(r: PurchaseRequest, o: OrderInfo): string {
-  return `<label class="f"><span>Sipariş metni ve notu <small>— gönderilmeden değiştirilebilir</small></span><textarea id="po-out" rows="18">${esc(poText(r, o))}</textarea></label>`;
+  return `<label class="f"><span>Sipariş metni ve notu <small>— gönderilmeden değiştirilebilir</small></span><textarea id="po-out" rows="18" aria-describedby="po-out-not">${esc(poText(r, o))}</textarea></label>
+    <p class="small muted" id="po-out-not">Değişiklik kaydedilmez; kopyalayıp tedarikçiye gönderin.</p>`;
 }
 
 /** Yazdırma: belgeyi sayfanın dışındaki yazdırma alanına koyar ve yazdırma penceresini açar */
