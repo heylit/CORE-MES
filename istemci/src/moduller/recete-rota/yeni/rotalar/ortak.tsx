@@ -10,8 +10,8 @@ export type Secim =
   | { tur: 'urun'; urunId: string; nid: string; miktar: number }
   | { tur: 'adim'; urunId: string; adimId: string; seq: number; miktar: number }
   | { tur: 'giren' | 'yan'; urunId: string; adimId: string; sira: number; nid: string; miktar: number }
-  // dal: "Buradan kol aç" (2542 A); eklenecek ilk adım bu yeni kola düşer.
-  | { tur: 'adimEkle'; urunId: string; sonraId: string | null; dal?: string }
+  // dal: "Buradan kol aç" (2542 A); eklenecek ilk adım bu yeni kola düşer. katilir: 3248-2 bağımsız dalın ana hatta katıldığı adım.
+  | { tur: 'adimEkle'; urunId: string; sonraId: string | null; dal?: string; katilir?: string }
   | { tur: 'girenEkle' | 'yanEkle'; urunId: string; adimId: string; yerine: number | null }
   | { tur: 'yeniRota' };
 
@@ -35,6 +35,8 @@ export interface RotaEkrani {
   araKartlar: boolean;
   // Sürükleme sürerken şemada bırakma şeritleri görünür.
   surukleniyor: boolean;
+  // 3248-2: yatay hat görünümü açık; adım alanında şeritte "Öne / Geriye" düğmeleri bunun içindir.
+  hatli: boolean;
   surukleBasla: () => void;
   surukleBitti: () => void;
 }

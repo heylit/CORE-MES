@@ -9,7 +9,7 @@ import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz,
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
 import { adimAdi, turKisa, yerelTur } from './kurallar.ts';
-import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, dalYerlesimi, serbestDal } from './kurallar.ts';
+import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, dalYerlesimi, katilanDalEkle, serbestDal, seritteKaydir, seritteYerlestir } from './kurallar.ts';
 import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
 
@@ -438,6 +438,72 @@ describe('1709 hammadde önerisi (1726 a, 1727 a)', () => {
       malzemeNo, kod: '', ad: null, kalite: null, form: 'cubuk' as const, olcu: { d: 30, l: 3000 }, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 1,
     });
     expect(onerilebilirKartlar([1, 2, 3, 9].map(oneri), harita).map((x) => x.kart.id)).toEqual(['1']);
+  });
+});
+
+describe('3248-2 ana hatta katılan bağımsız dal (göçsüz, veri biçimi aynı)', () => {
+  const rota = (): Adim[] => [adim('a', 10), adim('b', 20), adim('c', 30), adim('d', 40)];
+  it('yeni adım hedefin önüne dalla ve bağımsız girer; hedef dalı birleştirir; numaralar yeniden dizilir', () => {
+    const l = sirali(katilanDalEkle(rota(), 'c', adim('y', 0), 'B'));
+    expect(l.map((x) => x.id)).toEqual(['a', 'b', 'y', 'c', 'd']);
+    expect(l.map((x) => x.seq)).toEqual([10, 20, 30, 40, 50]);
+    expect(l.find((x) => x.id === 'y')).toMatchObject({ dal: 'B', dep: 'bagimsiz', birlesen: [] });
+    expect(l.find((x) => x.id === 'c')?.birlesen).toEqual(['B']);
+  });
+  it('paylaşılan öncül kuralında dalın ilk adımı hiçbir adımı beklemez, birleşen adım ana hattı ve dalı bekler; dal denetimi geçer', () => {
+    const l = sirali(katilanDalEkle(rota(), 'c', adim('y', 0), 'B'));
+    const onc = adimOnculleri(l);
+    expect(onc[2]).toEqual([]);
+    expect(onc[3]?.map((x) => x.id)).toEqual(['b', 'y']);
+    expect(dalHatasi(l)).toBeNull();
+  });
+  it('bağımsız dalın çatalı yoktur; etiket bunu söyler', () => {
+    const b = dalBilgileri(katilanDalEkle(rota(), 'c', adim('y', 0), 'B'))[0]!;
+    expect(b).toMatchObject({ bagimsiz: true, catal: null });
+    expect(b.birlesme?.id).toBe('c');
+    expect(dalEtiketi(b)).toBe('Dal B: bağımsız dal, hiçbir adımı beklemeden rotanın başından başlar, OP 30 adımında birleşir.');
+  });
+  it('dal adımına katılan dal eklenmez', () => {
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { birlesen: ['A'] })];
+    expect(katilanDalEkle(l, 'b', adim('y', 0), 'B')).toEqual(l);
+  });
+});
+
+describe('3248-2 kendi şeridinde taşıma (sürükle-bırak ve Öne / Geriye)', () => {
+  // Ana hat a, b; Dal A c, d (b ardından); ana hat e; f A'yı birleştirir.
+  const rota = (): Adim[] => [adim('a', 10), adim('b', 20), adim('c', 30, { dal: 'A' }), adim('d', 40, { dal: 'A' }), adim('e', 50), adim('f', 60, { birlesen: ['A'] })];
+  const sira = (l: Adim[]) => sirali(l).map((x) => x.id).join('');
+  it('ana hatta taşınan adım dal adımlarının yerine girmez; dalın konumu kalır', () => {
+    expect(sira(seritteYerlestir(rota(), 'a', 'e'))).toBe('becdaf');
+    expect(sira(seritteYerlestir(rota(), 'e', null))).toBe('eacdbf');
+    expect(dalHatasi(seritteYerlestir(rota(), 'e', null))).toBeNull();
+  });
+  it('dalda yer değiştirir, ana hat yerinden oynamaz; başka şeride bırakmak sırayı değiştirmez', () => {
+    expect(sira(seritteYerlestir(rota(), 'c', 'd'))).toBe('abdcef');
+    expect(sira(seritteYerlestir(rota(), 'c', 'b'))).toBe('abcdef');
+    expect(sira(seritteYerlestir(rota(), 'c', 'c'))).toBe('abcdef');
+  });
+  it('bağımsız dalın ilk adımı geriye taşınınca "beklemez" bilgisi şeridin başında kalır; öncüller buna göre', () => {
+    // Ana hat a, b; bağımsız Dal B y, z; c B'yi birleştirir.
+    const l = [adim('a', 10), adim('b', 20), adim('y', 30, { dal: 'B', dep: 'bagimsiz' }), adim('z', 40, { dal: 'B' }), adim('c', 50, { birlesen: ['B'] })];
+    const t = seritteYerlestir(l, 'y', 'z');
+    expect(sira(t)).toBe('abzyc');
+    const s = sirali(t);
+    expect(s.map((x) => x.dep)).toEqual(['bagimli', 'bagimli', 'bagimsiz', 'bagimli', 'bagimli']);
+    const onc = adimOnculleri(t);
+    expect(onc[2]).toEqual([]);
+    expect(onc[3]?.map((x) => x.id)).toEqual(['z']);
+    expect(onc[4]?.map((x) => x.id)).toEqual(['b', 'y']);
+    expect(dalHatasi(t)).toBeNull();
+    expect(dalBilgileri(t)[0]).toMatchObject({ bagimsiz: true, catal: null });
+  });
+  it('Öne ve Geriye şeritteki komşuyla yer değiştirir; uçta değişmez; numaralar yeniden dizilir', () => {
+    const l = seritteKaydir(rota(), 'e', -1);
+    expect(sira(l)).toBe('aecdbf');
+    expect(sirali(l).map((x) => x.seq)).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(sira(seritteKaydir(rota(), 'b', 1))).toBe('aecdbf');
+    expect(sira(seritteKaydir(rota(), 'c', -1))).toBe('abcdef');
+    expect(sira(seritteKaydir(rota(), 'd', -1))).toBe('abdcef');
   });
 });
 

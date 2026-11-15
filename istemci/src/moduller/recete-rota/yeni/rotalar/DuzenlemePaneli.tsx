@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
-  adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
+  seritKomsusu, seritteKaydir, adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
@@ -236,6 +236,12 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             Buradan kol aç
           </Dugme>
         )}
+        {duzen && adimDali(a) === null && (
+          <Dugme tur="ikincil" simge="up" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : 'Rotanın başından başlayıp bu adımda ana hatta katılan bağımsız dal'}
+            onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: liste[idx - 1]?.id ?? null, dal: yeniDal, katilir: a.id }); r.paletAc(); } }}>
+            Buraya katılan dal ekle
+          </Dugme>
+        )}
         {duzen && birlesmemis.length > 0 && (
           <Dugme tur="ikincil" simge="layers" onClick={() => { dz.degistir(s.urunId, (l) => kollariBirlestir(l, a.id), `Dal ${birlesmemis.join(', ')} bu adımda birleşti`); }}>
             Kolları burada birleştir ({birlesmemis.map((d) => `Dal ${d}`).join(', ')})
@@ -465,8 +471,18 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
       )}
       {duzen && (
         <div className="tc-rr1-isec tc-rr1-btnrow">
-          <Dugme tur="ikincil" simge="up" disabled={idx === 0} onClick={() => { const p = liste[idx - 1]; if (p) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>Yukarı</Dugme>
-          <Dugme tur="ikincil" simge="down" disabled={son} onClick={() => { const n = liste[idx + 1]; if (n) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>Aşağı</Dugme>
+          {/* 3248-2: yatay hatta taşıma yalnız kendi şeridindedir (ana hat ya da aynı dal); dalın hattaki yeri kalır. */}
+          {r.hatli ? ([[-1, 'chev-left', 'Öne'], [1, 'chev-right', 'Geriye']] as const).map(([yon, simge, ad]) => (
+            <Dugme key={ad} tur="ikincil" simge={simge} disabled={seritKomsusu(liste, a.id, yon) === null}
+              onClick={() => { dz.tasi(s.urunId, (l) => seritteKaydir(l, a.id, yon), `Adım ${ad === 'Öne' ? 'öne' : 'geriye'} taşındı`); }}>
+              {ad}
+            </Dugme>
+          )) : (
+            <>
+              <Dugme tur="ikincil" simge="up" disabled={idx === 0} onClick={() => { const p = liste[idx - 1]; if (p) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>Yukarı</Dugme>
+              <Dugme tur="ikincil" simge="down" disabled={son} onClick={() => { const n = liste[idx + 1]; if (n) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>Aşağı</Dugme>
+            </>
+          )}
           <Dugme tur="ikincil" simge="plus" onClick={() => { r.paletAc(); }}>Sonrasına adım</Dugme>
           <Dugme tur="tehlike" simge="trash" onClick={() => { if (dz.degistir(s.urunId, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`)) r.sec(null); }}>Adımı sil</Dugme>
         </div>
@@ -586,16 +602,25 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
   const sahip = dz.h.malzeme.get(s.urunId);
   if (!sahip) return <BosPanel r={r} />;
   const sonra = s.sonraId ? dz.adimlar(s.urunId).find((x) => x.id === s.sonraId) : undefined;
+  const katilan = s.katilir ? dz.adimlar(s.urunId).find((x) => x.id === s.katilir) : undefined;
   return (
     <>
       <Baslik baslik="Adım ekle" etiket={sahip.code} kapat={kapat} />
       {/* Operasyon listesi tek yerdedir: soldaki palet (1113 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
-      {s.dal && sonra && (
+      {s.dal && s.katilir && (
+        <>
+          <p className="tc-rr1-ipucu" data-parca="yeni-kol">
+            Yeni bağımsız Dal {s.dal}: hiçbir adımı beklemeden rotanın başından başlar, {katilan ? `OP ${String(statuNo(katilan))}` : 'seçilen'} adımında ana hatta katılır. Paletten ilk adımını seç.
+          </p>
+          <p className="tc-rr1-ipucu" data-parca="yari-mamul-ipucu">Bu parça stoğa girecek ya da başka üründe de kullanılacaksa yarı mamul olarak açın.</p>
+        </>
+      )}
+      {s.dal && !s.katilir && sonra && (
         <p className="tc-rr1-ipucu" data-parca="yeni-kol">
           Yeni Dal {s.dal}: OP {String(statuNo(sonra))} ardından çatallanır. Paletten ilk adımını seç; ardına eklenen adımlar da bu dala düşer.
         </p>
       )}
-      <p className="tc-rr1-ipucu">{sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek.` : 'Rotanın başına eklenecek.'} Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
+      <p className="tc-rr1-ipucu">{s.katilir ? '' : sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek. ` : 'Rotanın başına eklenecek. '}Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
       {/* Operasyon tipi kataloğu İstasyonlar'da tanımlanır (1927 a); yeni tip orada açılınca palete gelir. */}
       <SahibindeDuzenle sahip="operasyon" metin="Yeni operasyonu İstasyonlar'da tanımla" />
     </>
