@@ -651,6 +651,149 @@ export function ozellikleriTani(yuzler: readonly TanimaYuzu[], kenarlar: readonl
   return sonuc;
 }
 
+// Özellik grupları, desen ve diş adayı (kart 3281-1; 3281 a). Saf; her okumada kayıttan hesaplanır, yalnız öneridir.
+// Toleranslar VARSAYIM (geri alma ucuz): ölçü 0,01 mm, yön 1e-6, açı 0,5 derece (dip ve havşa), desen açısı 0,1 derece.
+const DESEN_ACI_TOL = 0.1, DIP_ACI_TOL = 0.5, DIS_TOL = 0.05;
+export const LD_UYARI_ESIGI = 10;
+
+// ISO metrik kaba diş için alışılmış kılavuz matkabı çapları (VARSAYIM: standart belgesi açılmadı; ayarla değiştirilir).
+export const YERLESIK_DIS_TABLOSU: readonly { ad: string; capMm: number }[] = [
+  { ad: 'M3', capMm: 2.5 }, { ad: 'M4', capMm: 3.3 }, { ad: 'M5', capMm: 4.2 }, { ad: 'M6', capMm: 5 }, { ad: 'M8', capMm: 6.8 },
+  { ad: 'M10', capMm: 8.5 }, { ad: 'M12', capMm: 10.2 }, { ad: 'M14', capMm: 12 }, { ad: 'M16', capMm: 14 }, { ad: 'M20', capMm: 17.5 },
+];
+
+// Ayar metni "M6=5; M8=6,8" (satır sonu da ayırır). Okunamayan satır yok sayılır; hiç satır okunamazsa yerleşik tablo.
+export function disTablosuOku(metin: string | null | undefined): { ad: string; capMm: number }[] {
+  const satirlar = (metin ?? '').split(/[;\n]/).flatMap((p) => {
+    const m = /^\s*([^=]{1,20}?)\s*=\s*(\d+(?:[.,]\d+)?)\s*$/.exec(p);
+    if (m === null) return [];
+    const capMm = Number(m[2]!.replace(',', '.'));
+    return capMm > 0 ? [{ ad: m[1]!, capMm }] : [];
+  });
+  return satirlar.length > 0 ? satirlar : [...YERLESIK_DIS_TABLOSU];
+}
+
+export function disAdayi(capMm: number | null, tablo: readonly { ad: string; capMm: number }[]): string | null {
+  if (capMm === null) return null;
+  let en: { ad: string; fark: number } | null = null;
+  for (const t of tablo) {
+    const fark = Math.abs(t.capMm - capMm);
+    if (fark <= DIS_TOL + 1e-9 && (en === null || fark < en.fark)) en = { ad: t.ad, fark };
+  }
+  return en?.ad ?? null;
+}
+
+export interface GrupOzelligi {
+  sira: number; tur: GeometriOzellikTuru; ust: number | null; capMm: number | null; yaricapMm: number | null; derinlikMm: number | null;
+  aciDerece: number | null; genislikMm: number | null; boyMm: number | null; gecis: boolean | null; dip: GeometriDelikDibi | null; ic: boolean | null;
+  eksen: readonly number[] | null; konum: readonly number[] | null;
+}
+export interface Desen {
+  tur: 'izgara' | 'dogrusal' | 'daire' | 'daginik';
+  capMm: number | null; adimMm: number | null; adim2Mm: number | null; adimDerece: number | null; satir: number | null; sutun: number | null;
+}
+export interface OzellikGrubu { tur: 'delik' | 'pah' | 'radyus'; adet: number; siralar: number[]; desen: Desen | null; disAdayi: string | null; ldOrani: number | null }
+
+const DAGINIK: Desen = { tur: 'daginik', capMm: null, adimMm: null, adim2Mm: null, adimDerece: null, satir: null, sutun: null };
+
+// Kümeleme: sıralı değerleri tolerans içinde aynı kabul eder; küme ortalamalarını döner.
+function kumeler(degerler: readonly number[]): number[] {
+  const s = [...degerler].sort((a, b) => a - b);
+  const k: number[][] = [];
+  for (const x of s) { const son = k[k.length - 1]; if (son !== undefined && x - son[son.length - 1]! <= UZ_TOL) son.push(x); else k.push([x]); }
+  return k.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
+}
+const esitAdim = (d: readonly number[]): number | null => {
+  if (d.length < 2) return null;
+  const adim = d[1]! - d[0]!;
+  for (let i = 1; i < d.length; i++) if (Math.abs(d[i]! - d[i - 1]! - adim) > UZ_TOL) return null;
+  return adim;
+};
+
+// Desen: girişler eksene dik tek düzlemde olmalı. Sıra: ızgara (2 x 2 ve üstü), doğrusal (3 ve üstü, eşit adım), daire (3 ve üstü, merkeze eşit
+// uzak, eşit açı adımı; kare 2 x 2 ızgara sayılır). Kısmi yay ve eşit olmayan aralık dağınıktır.
+export function desenBul(konumlar: readonly (readonly number[])[], eksen: readonly number[]): Desen {
+  if (konumlar.length < 3) return DAGINIK;
+  const n = birim([eksen[0] ?? 0, eksen[1] ?? 0, eksen[2] ?? 1]);
+  const p = konumlar.map((k) => [k[0] ?? 0, k[1] ?? 0, k[2] ?? 0] as V3);
+  const d0 = ic(p[0]!, n);
+  if (p.some((x) => Math.abs(ic(x, n) - d0) > UZ_TOL)) return DAGINIK;
+  // Düzlem tabanı: birinci yön en yakın iki girişin farkı (ızgarada bir kenar), ikinci yön ona dik.
+  let en: { i: number; j: number; d: number } | null = null;
+  for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) {
+    const d = Math.hypot(...cikar(p[j]!, p[i]!));
+    if (en === null || d < en.d - UZ_TOL) en = { i, j, d };
+  }
+  if (en === null || en.d <= UZ_TOL) return DAGINIK;
+  const u = birim(cikar(p[en.j]!, p[en.i]!));
+  const v = birim(capraz(n, u));
+  const s = p.map((x) => ic(x, u)), t = p.map((x) => ic(x, v));
+  const ks = kumeler(s), kt = kumeler(t);
+  if (ks.length >= 2 && kt.length >= 2 && ks.length * kt.length === p.length) {
+    const as = esitAdim(ks), at = esitAdim(kt);
+    const hepsi = ks.every((a) => kt.every((b) => p.some((_, i) => Math.abs(s[i]! - a) <= UZ_TOL && Math.abs(t[i]! - b) <= UZ_TOL)));
+    if (as !== null && at !== null && hepsi) {
+      return { ...DAGINIK, tur: 'izgara', adimMm: r4(as), adim2Mm: r4(at), sutun: ks.length, satir: kt.length };
+    }
+  }
+  for (const [a, b] of [[ks, kt], [kt, ks]] as const) {
+    if (b.length === 1 && a.length === p.length) {
+      const adim = esitAdim(a);
+      if (adim !== null) return { ...DAGINIK, tur: 'dogrusal', adimMm: r4(adim), sutun: p.length };
+    }
+  }
+  const ms = s.reduce((x, y) => x + y, 0) / p.length, mt = t.reduce((x, y) => x + y, 0) / p.length;
+  const r = Math.hypot(s[0]! - ms, t[0]! - mt);
+  if (r > UZ_TOL && p.every((_, i) => Math.abs(Math.hypot(s[i]! - ms, t[i]! - mt) - r) <= UZ_TOL)) {
+    const acilar = p.map((_, i) => derece(Math.atan2(t[i]! - mt, s[i]! - ms))).sort((x, y) => x - y);
+    const adim = 360 / p.length;
+    const farklar = acilar.map((x, i) => (i === 0 ? x + 360 - acilar[acilar.length - 1]! : x - acilar[i - 1]!));
+    if (farklar.every((f) => Math.abs(f - adim) <= DESEN_ACI_TOL)) return { ...DAGINIK, tur: 'daire', capMm: r4(2 * r), adimDerece: r4(adim) };
+  }
+  return DAGINIK;
+}
+
+const anahtarSayi = (x: number | null, tol: number): string => (x === null ? '-' : String(Math.round(x / tol)));
+const anahtarYon = (e: readonly number[] | null): string => (e === null ? '-' : e.map((x) => String(Math.round(x * 1e5))).join(','));
+
+// Gruplar: delikte çap, derinlik, geçiş, dip, dip açısı, giriş yönü ve bağlı kademe/havşa zinciri; pahta genişlik, açı, çap; radyüste
+// yarıçap ve iç/dış. Yalnız üst düzey özellik gruplanır (kademe ve havşa deliğin parçasıdır). Sıra: adet çok olan önce, eşitse ölçü büyük.
+export function ozellikGruplari(ozellikler: readonly GrupOzelligi[], disTablosu: readonly { ad: string; capMm: number }[]): OzellikGrubu[] {
+  const bagli = new Map<number, GrupOzelligi[]>();
+  for (const o of ozellikler) if (o.ust !== null) bagli.set(o.ust, [...(bagli.get(o.ust) ?? []), o]);
+  const anahtar = (o: GrupOzelligi): string | null => {
+    const u = (x: number | null) => anahtarSayi(x, UZ_TOL);
+    if (o.tur === 'delik') {
+      const zincir = (bagli.get(o.sira) ?? []).map((b) => `${b.tur}:${u(b.capMm)}:${u(b.derinlikMm)}:${anahtarSayi(b.aciDerece, DIP_ACI_TOL)}`).sort().join('|');
+      return ['delik', u(o.capMm), u(o.derinlikMm), String(o.gecis), String(o.dip), anahtarSayi(o.aciDerece, DIP_ACI_TOL), anahtarYon(o.eksen), zincir].join('/');
+    }
+    if (o.tur === 'pah') return ['pah', u(o.genislikMm), anahtarSayi(o.aciDerece, DIP_ACI_TOL), u(o.capMm)].join('/');
+    if (o.tur === 'radyus') return ['radyus', u(o.yaricapMm), String(o.ic)].join('/');
+    return null;
+  };
+  const gruplar = new Map<string, GrupOzelligi[]>();
+  for (const o of ozellikler) {
+    if (o.ust !== null) continue;
+    const a = anahtar(o);
+    if (a !== null) gruplar.set(a, [...(gruplar.get(a) ?? []), o]);
+  }
+  const olcu = (o: GrupOzelligi): number => o.capMm ?? o.yaricapMm ?? o.genislikMm ?? -1;
+  return [...gruplar.values()]
+    .sort((a, b) => b.length - a.length || olcu(b[0]!) - olcu(a[0]!) || a[0]!.sira - b[0]!.sira)
+    .map((g): OzellikGrubu => {
+      const t = g[0]!;
+      const siralar = g.map((o) => o.sira).sort((a, b) => a - b);
+      if (t.tur !== 'delik') return { tur: t.tur as 'pah' | 'radyus', adet: g.length, siralar, desen: null, disAdayi: null, ldOrani: null };
+      const konumlar = g.every((o) => o.konum !== null) ? g.map((o) => o.konum!) : null;
+      return {
+        tur: 'delik', adet: g.length, siralar,
+        desen: konumlar === null || t.eksen === null ? DAGINIK : desenBul(konumlar, t.eksen),
+        disAdayi: disAdayi(t.capMm, disTablosu),
+        ldOrani: t.capMm === null || t.derinlikMm === null || t.capMm <= 0 ? null : yuvarla(t.derinlikMm / t.capMm, 2) + 0,
+      };
+    });
+}
+
 // Montaj ağacı (kart 2109, M1). occt-import-js çıktısı: düğümler montajdır, parçalar düğümün ağlarıdır (`meshes`); ağ konumları dünya
 // koordinatındadır (montaj yerleşimi uygulanmış). Alt düğümü olmayan ve tek ağlı düğüm parçanın kendisidir (bazı yazıcılar parçayı
 // düğüm yapar, ağa genel ad verir). Ölçüler yalnız öneridir (2101-2 b): gerçek montaj dosyasıyla denenmedi.

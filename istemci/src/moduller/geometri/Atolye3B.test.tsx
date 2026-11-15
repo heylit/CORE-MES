@@ -13,13 +13,13 @@ const kurulum = vi.hoisted(() => ({ sayi: 0 }));
 vi.mock('./Goruntu3B.tsx', async () => {
   const { useEffect: etki } = await import('react');
   return {
-    default: function Sahte({ vurgu, onizleme }: { vurgu?: { capMm: number; konum: readonly number[] } | null; onizleme?: { etiket: string; delikler: readonly unknown[] } | null }) {
+    default: function Sahte({ vurgu, onizleme }: { vurgu?: readonly { capMm: number; konum: readonly number[] }[] | null; onizleme?: { etiket: string; delikler: readonly unknown[] } | null }) {
       // Görüntünün kaç kez kurulduğu: çalışma değişince yeniden kurulmamalı (2396).
       etki(() => { kurulum.sayi += 1; }, []);
       return (
         <>
           <div>görüntü</div>
-          {vurgu ? <div>{`vurgu Ø${String(vurgu.capMm)} @ ${vurgu.konum.join(',')}`}</div> : null}
+          {vurgu?.map((v) => <div key={v.konum.join(',')}>{`vurgu Ø${String(v.capMm)} @ ${v.konum.join(',')}`}</div>)}
           {onizleme ? <div>{`önizleme: ${onizleme.etiket}`}</div> : null}
         </>
       );
@@ -107,11 +107,21 @@ const OZELLIK: GeometriOzellikCevabi = {
   ozellikler: [
     oz({ sira: 1, tur: 'delik', capMm: 10, derinlikMm: 20, gecis: true, eksen: [0, 0, -1], konum: [15, 15, 20] }),
     oz({ sira: 2, tur: 'havsa', ust: 1, capMm: 16, aciDerece: 90, derinlikMm: 3 }),
-    oz({ sira: 3, tur: 'delik', capMm: 6, derinlikMm: 8, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 0, -1], konum: [40, 24, 20] }),
+    oz({ sira: 3, tur: 'delik', capMm: 5, derinlikMm: 8, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 0, -1], konum: [40, 24, 20] }),
     oz({ sira: 4, tur: 'delik', capMm: 8, derinlikMm: 60, gecis: true, eksen: [1, 0, 0], konum: [0, 15, 8] }),
     oz({ sira: 5, tur: 'kademe', ust: 4, capMm: 11, derinlikMm: 4 }),
     oz({ sira: 6, tur: 'pah', genislikMm: 2.1213, aciDerece: 45, boyMm: 20 }),
     oz({ sira: 7, tur: 'radyus', yaricapMm: 2, ic: false, boyMm: 20 }),
+    oz({ sira: 8, tur: 'delik', capMm: 5, derinlikMm: 8, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 0, -1], konum: [50, 24, 20] }),
+    oz({ sira: 9, tur: 'delik', capMm: 5, derinlikMm: 8, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 0, -1], konum: [60, 24, 20] }),
+  ],
+  // Sunucu kuralının (ozellikGruplari) bu listeye verdiği gruplar: adet çok olan önce, eşitse ölçü büyük.
+  gruplar: [
+    { tur: 'delik', adet: 3, siralar: [3, 8, 9], desen: { tur: 'dogrusal', capMm: null, adimMm: 10, adim2Mm: null, adimDerece: null, satir: null, sutun: 3 }, disAdayi: 'M6', ldOrani: 1.6 },
+    { tur: 'delik', adet: 1, siralar: [1], desen: { tur: 'daginik', capMm: null, adimMm: null, adim2Mm: null, adimDerece: null, satir: null, sutun: null }, disAdayi: null, ldOrani: 2 },
+    { tur: 'delik', adet: 1, siralar: [4], desen: { tur: 'daginik', capMm: null, adimMm: null, adim2Mm: null, adimDerece: null, satir: null, sutun: null }, disAdayi: null, ldOrani: 7.5 },
+    { tur: 'pah', adet: 1, siralar: [6], desen: null, disAdayi: null, ldOrani: null },
+    { tur: 'radyus', adet: 1, siralar: [7], desen: null, disAdayi: null, ldOrani: null },
   ],
 };
 const DOSYA = () => new Response(new Uint8Array([1, 2, 3]), { status: 200 });
@@ -324,7 +334,7 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('Model kapalı değil, hesaplanamadı')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('button', { name: /Yeniden hesapla/ }).hasAttribute('disabled')).toBe(false));
   });
-  it('2044-2: özellikler kartı delikleri bağlı havşa ve kademeyle, pah ve radyüsü listeler; delik satırı modelde vurgulanır, ikinci dokunuş kaldırır', async () => {
+  it('3281-1: özellikler kartı delikleri gruplu gösterir (adet, desen, diş adayı, özet); grup seçilince bütün delikleri vurgulanır ve açılır, ikinci dokunuş kaldırır', async () => {
     sunucuKur({
       'GET /geometri/modeller': () => json(200, LISTE),
       'GET /geometri/analizler/41': () => json(200, ANALIZ),
@@ -335,25 +345,69 @@ describe('3D Atölyesi', () => {
     expect(await screen.findByText('Özellikler (öneri)')).toBeTruthy();
     // Önizleme: konumu olan bütün delikler.
     expect(await screen.findByText(/^önizleme: \d+ delik$/)).toBeTruthy();
-    expect(await screen.findByText('5 özellik')).toBeTruthy();
-    expect(screen.getByText('3 delik')).toBeTruthy();
-    expect(screen.getByText('Ø10 geçiş · 20 mm')).toBeTruthy();
-    expect(screen.getByText('Havşa Ø16 x 90°')).toBeTruthy();
-    expect(screen.getByText('Ø6 kör · 8 mm')).toBeTruthy();
-    expect(screen.getByText('Üst yüz (Z) · matkap ucu 118°')).toBeTruthy();
-    expect(screen.getByText('Yan yüz (X)')).toBeTruthy();
-    expect(screen.getByText('Kademe Ø11 x 4 mm')).toBeTruthy();
+    expect(await screen.findByText('5 delik · 3 grup')).toBeTruthy();
+    expect(screen.getByText('giriş yönü').nextElementSibling?.textContent).toBe('2');
+    expect(screen.getByText('en derin L/D').nextElementSibling?.textContent).toBe('7,5');
+    const grup = screen.getByRole('button', { name: /Ø5 kör · 8 mm/ });
+    expect(grup.textContent).toContain('× 3');
+    expect(grup.textContent).toContain('doğrusal · adım 10');
+    expect(grup.textContent).toContain('M6 adayı');
+    expect(screen.getByRole('button', { name: /Ø10 geçiş · 20 mm/ }).textContent).toContain('Havşa Ø16 x 90° · Üst yüz (Z)');
+    expect(screen.getByRole('button', { name: /Ø8 geçiş/ }).textContent).toContain('Kademe Ø11 x 4 mm · Yan yüz (X)');
     expect(screen.getByText('Pah 1,5 x 45°')).toBeTruthy();
     expect(screen.getByText('R2 dış kenar')).toBeTruthy();
-    const satir = screen.getByRole('button', { name: /Ø10 geçiş/ });
-    expect(satir.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(satir);
-    expect(await screen.findByText('vurgu Ø10 @ 15,15,20')).toBeTruthy();
-    expect(satir.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(satir);
+    expect(screen.queryByText(/derin delik/)).toBeNull();
+    expect(grup.getAttribute('aria-expanded')).toBe('false');
+    expect(grup.hasAttribute('aria-pressed')).toBe(false);
+    fireEvent.click(grup);
+    expect(await screen.findByText('vurgu Ø5 @ 40,24,20')).toBeTruthy();
+    expect(screen.getByText('vurgu Ø5 @ 50,24,20')).toBeTruthy();
+    expect(screen.getByText('vurgu Ø5 @ 60,24,20')).toBeTruthy();
+    expect(screen.queryByText('vurgu Ø10 @ 15,15,20')).toBeNull();
+    expect(grup.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Delik 3')).toBeTruthy();
+    fireEvent.click(grup);
     await waitFor(() => expect(screen.queryByText(/^vurgu/)).toBeNull());
+    expect(screen.queryByText('Delik 3')).toBeNull();
     // Pah ve radyüsün konumu yok: seçilemez (düğme değildir).
     expect(screen.queryByRole('button', { name: /Pah/ })).toBeNull();
+  });
+
+  it('3281-1: L/D 10 üstü grup derin delik uyarısı taşır ve özet sayısı uyarı görünümündedir', async () => {
+    const derin: GeometriOzellikCevabi = {
+      revizyonId: 41, motor: 'libcascade@3.1.0',
+      ozellikler: [oz({ sira: 1, tur: 'delik', capMm: 3, derinlikMm: 36, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 1, 0], konum: [60, 0, 10] })],
+      gruplar: [{ tur: 'delik', adet: 1, siralar: [1], desen: { tur: 'daginik', capMm: null, adimMm: null, adim2Mm: null, adimDerece: null, satir: null, sutun: null }, disAdayi: null, ldOrani: 12 }],
+    };
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, derin),
+    });
+    ac('/geometri/ozellikler?rev=41');
+    expect(await screen.findByText('derin delik L/D 12')).toBeTruthy();
+    expect(screen.getByText('1 delik · 1 grup')).toBeTruthy();
+    expect(screen.getByText('en derin L/D').parentElement?.className).toContain('tc-g3b-oz-uyari');
+  });
+
+  it('3281-1: yalnız pah ve radyüs tanınan parçada başlık özellik sayısını yazar, delik sayıları çizilmez (sıfır uydurulmaz)', async () => {
+    const kenar: GeometriOzellikCevabi = {
+      revizyonId: 41, motor: 'libcascade@3.1.0',
+      ozellikler: [oz({ sira: 1, tur: 'pah', genislikMm: 2.1213, aciDerece: 45, boyMm: 20 }), oz({ sira: 2, tur: 'pah', genislikMm: 2.1213, aciDerece: 45, boyMm: 20 })],
+      gruplar: [{ tur: 'pah', adet: 2, siralar: [1, 2], desen: null, disAdayi: null, ldOrani: null }],
+    };
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, kenar),
+    });
+    ac('/geometri/ozellikler?rev=41');
+    expect(await screen.findByText('2 özellik')).toBeTruthy();
+    expect(screen.getByText('Pah 1,5 x 45°')).toBeTruthy();
+    expect(screen.queryByText(/0 delik/)).toBeNull();
+    expect(screen.queryByText('giriş yönü')).toBeNull();
   });
 
   it('2044-2: yüzler okunamadıysa ve özellik yoksa ayrı ileti; hesap sürerken özellik okunmaz', async () => {
@@ -361,7 +415,7 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller': () => json(200, LISTE),
       'GET /geometri/analizler/41': () => json(200, ANALIZ),
       'GET /geometri/modeller/41/dosya': DOSYA,
-      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: null, ozellikler: null }),
+      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: null, ozellikler: null, gruplar: null }),
     });
     ac('/geometri/ozellikler?rev=41');
     expect(await screen.findByText(/yüzleri okunamadı; özellik tanınamadı/)).toBeTruthy();
@@ -370,7 +424,7 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller': () => json(200, LISTE),
       'GET /geometri/analizler/41': () => json(200, ANALIZ),
       'GET /geometri/modeller/41/dosya': DOSYA,
-      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: 'libcascade@3.1.0', ozellikler: [] }),
+      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: 'libcascade@3.1.0', ozellikler: [], gruplar: [] }),
     });
     ac('/geometri/ozellikler?rev=41');
     expect(await screen.findByText('Tanınan delik, pah ya da radyüs yok.')).toBeTruthy();

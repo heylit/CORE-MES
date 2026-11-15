@@ -14,7 +14,7 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, bilesenListesi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, saglikDegerlendir, STOK_FORMLARI,
+  bicimDenetimi, bilesenListesi, disTablosuOku, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
   stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { YuzeyIsaretGirdisi } from './kurallar.ts';
@@ -151,9 +151,11 @@ export async function analizOku(db: Db, revizyonId: number): Promise<GeometriAna
 export async function ozellikOku(db: Db, revizyonId: number): Promise<GeometriOzellikCevabi> {
   const m = await model(db, revizyonId);
   const a = await sorgular.analiz(db, revizyonId);
-  if (a === null || a.ozet !== m.ozet || (await sorgular.yuzOzeti(db, revizyonId)).length === 0) return { revizyonId, motor: null, ozellikler: null };
-  const satirlar = await sorgular.ozellikler(db, revizyonId);
-  return { revizyonId, motor: YUZ_MOTORU, ozellikler: satirlar.map(({ motor: _m, ...o }) => o) };
+  if (a === null || a.ozet !== m.ozet || (await sorgular.yuzOzeti(db, revizyonId)).length === 0) return { revizyonId, motor: null, ozellikler: null, gruplar: null };
+  const ozellikler = (await sorgular.ozellikler(db, revizyonId)).map(({ motor: _m, ...o }) => o);
+  // 3281-1: gruplar her okumada hesaplanır; diş tablosu sistem ayarından (boşsa yerleşik).
+  const tablo = disTablosuOku(await sistemAyariOku(db, 'geometri.dis-matkap-tablosu'));
+  return { revizyonId, motor: YUZ_MOTORU, ozellikler, gruplar: ozellikGruplari(ozellikler, tablo) };
 }
 
 // Montaj ağacı ve bileşen listesi (kart 2109, M1). Bileşen listesi kayıttan her okumada hesaplanır (saf kural); yalnız öneridir.
