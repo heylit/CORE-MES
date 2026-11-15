@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dugme, DurumKutusu, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
-import { calismayiYolla, gonderHataIletisi, gonderIletisi, isTasiOnizle, isiTasi, otomatikUygulaIste, useOtomatikUygula } from '../motor/atolye/gonder.ts';
+import { gonderHataIletisi, isTasiOnizle, isiTasi, otomatikUygulaIste, useOtomatikUygula } from '../motor/atolye/gonder.ts';
 import { gonderEngeli } from '../motor/atolye/Kartlar.tsx';
 import { useBekleyenUygula } from '../motor/coz.ts';
 import { useCanliPlan } from '../motor/fark.ts';
@@ -10,6 +10,9 @@ import { useAn } from '../motor/saat.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayrinti } from './Ayrinti.tsx';
+import { Gelenler } from './Gelenler.tsx';
+import { gelenler } from './gelenler.ts';
+import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
   OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
@@ -21,8 +24,9 @@ import { emriPlanaAl, planaAlOnizle } from './plana-al.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
 
-// Kokpit (kart 3151): planın tek tahtası. Taslak, planlama çalışmasıdır: her taşıma sunucunun iş taşı komutuyla çalışmaya yazılır
-// (öteki emirler yerinde kalır), Geri / İleri çalışmanın geri alma geçmişidir, Onaya gönder çalışmayı onay taslağına çevirir.
+// Kokpit (kart 3151, 3282): planın tek yeri. Taslak, planlama çalışmasıdır: her taşıma sunucunun iş taşı komutuyla çalışmaya yazılır
+// (öteki emirler yerinde kalır), Geri / İleri çalışmanın geri alma geçmişidir. Gelenler yeni ve değişen işleri toplar; Canlıya al (yetkisi
+// olmayanda Onaya gönder) Onay ve canlı bölümünü açar: onaya gönderme, müdür onayı ve canlıya alma yalnız buradadır (3282-4 a).
 
 type Goz = 'T' | 'S' | 'M' | 'B';
 const GOZLER: readonly (readonly [Goz, string])[] = [['T', 'Tezgâh'], ['S', 'Sipariş'], ['M', 'Matris'], ['B', '3B']];
@@ -37,6 +41,8 @@ const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeE
 const tutuluyor = (): boolean => document.querySelector('.tc-pyq [data-tasinan], .tc-pyq-menu') !== null;
 // 3B görünümü three'yi getirir; Planlama açılırken değil, 3B seçilince yüklenir.
 const Kokpit3B = lazy(async () => ({ default: (await import('./Kokpit3B.tsx')).Kokpit3B }));
+// Onay ve canlı bölümü Stüdyo'nun ekranını ve stillerini getirir; düğmeye basılınca yüklenir.
+const KokpitOnay = lazy(async () => ({ default: (await import('./KokpitOnay.tsx')).KokpitOnay }));
 const Sayi = ({ n }: { n: number }) => (n > 0 ? <b className="tc-pyq-rozet" aria-hidden="true">{n}</b> : null);
 
 export function Kokpit(o: PlanlamaEkranOzellikleri) {
@@ -71,8 +77,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [tur, setTur] = useState<TurDurumu | null>(null);
   const [onay, setOnay] = useState<Onay | null>(null);
   const [oneri, setOneri] = useState<TurAdayi | null>(null);
-  const [gonderSor, setGonderSor] = useState(false);
-  const [gidiyor, setGidiyor] = useState(false);
+  // Stüdyo'dan "Kokpit'te aç" ile gelindiyse Onay ve canlı açık başlar.
+  const [onayAcik, setOnayAcik] = useState(onayIstegiVar);
+  useEffect(() => { onayIstegiAl(); }, []);
   const [yaziliyor, setYaziliyor] = useState(false);
   // Sorun turunda uygulanan hamleler tek değişiklik sayılır: Geri hepsini birlikte alır. `ust` grubun bittiği andaki adım sayısıdır.
   const [gruplar, setGruplar] = useState<{ ust: number; n: number }[]>([]);
@@ -317,17 +324,17 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     return () => { document.removeEventListener('keydown', tus); };
   }, [geri, ileri, sorunSec, tur, secEmir, sec, okla]);
 
-  // --- onaya gönder ---
-  // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); gönderme o zaman kapalıdır ve birincil değildir.
-  // Emir ayrıntısı açıkken birincil, ayrıntıdaki en iyi seçenektir (Uygula / Plana al): sayfada tek birincil kalır.
+  // --- canlıya al ---
+  // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
+  // ipucundadır. Emir ayrıntısı açıkken birincil, ayrıntıdaki en iyi seçenektir (Uygula / Plana al): sayfada tek birincil kalır.
+  // Bölüm engel varken de açılır: müdür onaydaki planı onaylar, kontrol listesi engeli gösterir.
   const engel = gonderEngeli(c);
-  const gonder = async (): Promise<void> => {
-    setGidiyor(true);
-    try {
-      const g = await calismayiYolla({ o, c, sen: o.depo.senaryolar, hedef: 'onay', not: null });
-      bildir('tamam', gonderIletisi('onay', g)); setGonderSor(false); yenile();
-    } catch (h) { bildir('hata', gonderHataIletisi(h)); } finally { setGidiyor(false); }
-  };
+  const canliyaAlir = yetki.planCanliyaAl;
+  const onayda = o.depo.senaryolar?.senaryolar.filter((x) => x.durum === 'onayda').length ?? 0;
+  const gelenListesi = useMemo(() => gelenler(m.emirler, o.depo.planSurumu?.bayat?.olaylar ?? [], zaman), [m, o.depo.planSurumu, zaman]);
+  const gelenSec = useCallback((id: string) => {
+    sec(id, null); setGoster(emir.get(id)?.adimlar.find((a) => m.isler[a.id])?.id ?? null);
+  }, [sec, emir, m]);
 
   const secili = secEmir ? emir.get(secEmir) ?? null : null;
   // Sonuç satırı uygulandığı emrin ayrıntısında kalır; başka emir seçilince silinir.
@@ -355,7 +362,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {yazabilir && <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
+        {(yazabilir || canliyaAlir) && (
+          <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
+            disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayAcik(!onayAcik); }}>
+            {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
+          </Dugme>
+        )}
       </div>
       {(adim > 0 || mesgul) && (
         <p className="tc-pyq-degisim" role="status">
@@ -364,7 +376,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           {mesgul && <span>yazılıyor</span>}
         </p>
       )}
+      {onayAcik ? (
+        <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+          <KokpitOnay o={o} c={c} p={p} kapat={() => { setOnayAcik(false); }} />
+        </Suspense>
+      ) : (
       <div className="tc-pyq-govde">
+        <Gelenler l={gelenListesi} sec={gelenSec} yazabilir={yazabilir} secEmir={secEmir} />
         <div className="tc-pyq-ana">
           {goz === 'B' ? (
             <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
@@ -395,14 +413,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}
       </div>
+      )}
       <OnayPenceresi
         acik={onay !== null} baslik={onay?.baslik ?? ''} onayMetni={onay?.dugme ?? ''}
         vazgec={() => { setOnay(null); }}
         onayla={() => { const x = onay; setOnay(null); if (x) void yaz(x.aday).then((tamam) => { if (tamam && x.turda) turKarar(true); }); }}
       >{onay?.ileti}</OnayPenceresi>
-      <OnayPenceresi acik={gonderSor} baslik="Plan onaya gönderilsin mi?" onayMetni="Onaya gönder" yukleniyor={gidiyor} vazgec={() => { setGonderSor(false); }} onayla={() => { void gonder(); }}>
-        Taslaktaki {adim} değişiklik onay taslağına yazılır; canlıya onaylayan alır.
-      </OnayPenceresi>
     </div>
   );
 }

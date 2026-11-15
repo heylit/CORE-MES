@@ -9,6 +9,7 @@ import { usePlanKur } from '../coz.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { useCanliFarki } from './canli-farki.ts';
 import type { CanliFark } from './kurallar.ts';
+import { onayAcIste } from '../../kokpit/istek.ts';
 import { OnaySekmesi } from './Onay.tsx';
 import { Pano } from './Pano.tsx';
 import { PlanGercek } from './PlanGercek.tsx';
@@ -23,7 +24,7 @@ export type AtolyeSekmesi = 'plan' | 'onay' | 'pg';
 const SEKMELER: [AtolyeSekmesi, SimgeAdi, string][] = [['plan', 'layers', 'Plan'], ['onay', 'check', 'Onay ve canlı'], ['pg', 'chart', 'Plan ve gerçekleşen']];
 const IPUCU: Record<AtolyeSekmesi, string | null> = {
   plan: null,
-  onay: 'Çalışma planını canlıyla karşılaştırın, onaya gönderin ya da canlıya alın. Canlıya alınmış planlar silinmez; Geçmiş planlar listesindedir.',
+  onay: 'Planları canlıyla karşılaştırın. Onaya gönderme ve canlıya alma Kokpit\'tedir. Canlıya alınmış planlar silinmez; Geçmiş planlar listesindedir.',
   pg: 'Taban plan, son canlı plan ve gerçekleşeni karşılaştırın. Nedenler sayım, arıza, malzeme ve fason kayıtlarından kendiliğinden çıkar; buradan plan değişmez.',
 };
 
@@ -53,7 +54,7 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}
-      {sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
+      {sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} saltOkunur={{ kokpiteGit: () => { onayAcIste(); o.git('kokpit'); } }} />
         : <PlanSekmesi o={o} c={c} p={p} cf={cf} sek={sek} sekSec={setSek} onayda={onayda} sen={sen} senYaz={setSen} />}
     </div>
   );

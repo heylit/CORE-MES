@@ -10,6 +10,8 @@ import { ESKI_DEGISIKLIK, type CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
+import { KokpitOnay } from '../../kokpit/KokpitOnay.tsx';
+import { onayIstegiAl } from '../../kokpit/istek.ts';
 import { PlanlamaAtolyesi } from '../index.tsx';
 import { HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
 import { planOku, tabanMs } from '../kurallar.ts';
@@ -50,7 +52,7 @@ const DEPO = {
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc']; altSec?: PlanlamaEkranOzellikleri['altSec'] } = {}) {
+function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc']; altSec?: PlanlamaEkranOzellikleri['altSec']; onay?: boolean } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
@@ -59,7 +61,8 @@ function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: bool
     depo: o.depo ?? DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}), ...(o.altSec ? { altSec: o.altSec } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])]),
   };
-  render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
+  // 3282-4 a: Onay ve canlı Kokpit'tedir; onay testleri bölümü Kokpit'in kullandığı haliyle açar.
+  render(<MemoryRouter><BildirimSaglayici>{o.onay && c ? <KokpitOnay o={{ ...oz, olcek: ACILIS_OLCEGI, olcekSec: vi.fn(), kaydir: vi.fn(), secim: BOS_SECIM, sec: vi.fn() }} c={c} p={planOku(c)} kapat={vi.fn()} /> : <Iskelet {...oz} />}</BildirimSaglayici></MemoryRouter>);
   return { git, yenile };
 }
 function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
@@ -174,9 +177,8 @@ describe('PlanlamaAtolyesi', () => {
     });
     const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => (yol.startsWith('/plan/motor-ayarlari') ? Promise.reject(new Error('yok'))
       : Promise.resolve(yol === '/plan' ? plan(1, '2026-10-21T08:00:00Z') : plan(2, '2026-10-21T11:00:00Z'))) as never);
-    ac();
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
-    expect(screen.getByText(/Çalışma planını canlıyla karşılaştırın/)).toBeTruthy();
+    ac({ onay: true });
+    expect(screen.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeTruthy();
     await waitFor(() => expect(screen.getByText('1 tezgâh, 0 saat, 0 yeni')).toBeTruthy());
     expect(get).toHaveBeenCalledWith('/plan?taslak=1');
     expect(screen.getByText('Başlamış işler yerinde')).toBeTruthy();
@@ -207,8 +209,7 @@ describe('PlanlamaAtolyesi', () => {
     const post = vi.spyOn(api, 'post')
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } }))
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: engel }));
-    ac();
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    ac({ onay: true });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'M2 dolu' } });
     fireEvent.click(screen.getByRole('button', { name: 'Geri gönder' }));
     expect(await screen.findByText('Plan bu arada değişti; liste yenilendi, yeniden deneyin.')).toBeTruthy();
@@ -227,8 +228,7 @@ describe('PlanlamaAtolyesi', () => {
     const post = vi.spyOn(api, 'post')
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: ileti, ayrinti: { neden: 'sonradan-baslayan', isler: [{ emirNo: 'E-1', opNo: 10 }] } }))
       .mockResolvedValue({ ...DEPO.senaryolar, canliSurum: 4 });
-    ac({ mudur: true });
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    ac({ mudur: true, onay: true });
     const dugmeler = screen.getAllByRole('button', { name: 'Onayla ve canlıya al' });
     fireEvent.click(dugmeler[dugmeler.length - 1]!);
     fireEvent.click(within(kart()).getByRole('button', { name: /canlıya al$/ }));
@@ -248,8 +248,7 @@ describe('PlanlamaAtolyesi', () => {
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Canlı plan değişti.', ayrinti: { neden: 'canli-degisti', tabanSurumu: 3, canliSurumu: 4 } }))
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlayan iş var.', ayrinti: { neden: 'sonradan-baslayan', isler: [{ emirNo: 'E-1', opNo: 10 }] } }))
       .mockResolvedValue({ ...DEPO.senaryolar, canliSurum: 5 });
-    ac({ mudur: true });
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    ac({ mudur: true, onay: true });
     const dugmeler = screen.getAllByRole('button', { name: 'Onayla ve canlıya al' });
     fireEvent.click(dugmeler[dugmeler.length - 1]!);
     fireEvent.click(within(kart()).getByRole('button', { name: /canlıya al$/ }));
@@ -271,8 +270,7 @@ describe('PlanlamaAtolyesi', () => {
     const post = vi.spyOn(api, 'post')
       .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: ileti, ayrinti: { neden: 'dort-saat', gerekceIle: true } }))
       .mockResolvedValue({ ...DEPO.senaryolar, canliSurum: 4 });
-    ac({ mudur: true });
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    ac({ mudur: true, onay: true });
     const dugmeler = screen.getAllByRole('button', { name: 'Onayla ve canlıya al' });
     fireEvent.click(dugmeler[dugmeler.length - 1]!);
     fireEvent.click(within(kart()).getByRole('button', { name: /canlıya al$/ }));
@@ -287,8 +285,8 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif; onaya gönder kartı doğrudan gönderir ve Onay sekmesine götürür', async () => {
-    ac({ c: guncel() });
+  it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif; onaya gönder kartı Kokpit\'i açar (3282-4 a)', () => {
+    const { git } = ac({ c: guncel() });
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
@@ -299,17 +297,12 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
     fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).getByText('1 → 1')).toBeTruthy();
-    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('/taslak-yaz')
-      ? { taslak: { id: 9, surum: 1 }, yazilan: 4, atlanan: 0, yazilamaz: [] }
-      : { ...DEPO.senaryolar, senaryolar: [...DEPO.senaryolar!.senaryolar, senaryo(9, 'onayda')] })) as never);
-    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true'));
-    expect(post.mock.calls.map((x) => x[0])).toEqual(['/plan/planlama-calismasi/taslak-yaz', '/plan/senaryolar/9/onaya-gonder']);
-    expect(post.mock.calls[0]?.[1]).toMatchObject({ calismaSurumu: 8, planSurumu: 3 });
-    expect(String((post.mock.calls[0]?.[1] as { ad: string }).ad)).toMatch(/^Onay .+ · Ayşe$/);
-    expect(post.mock.calls.map((x) => x[0])).not.toContain('/plan/senaryolar/9/canliya-al');
-    expect(screen.getByText('Plan onaya gönderildi: 4 iş taslağa yazıldı. Canlıya onaylayan alır.')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).textContent).toBe('Onay ve canlı2');
+    // 3282-4 a: Stüdyo gönderip canlıya almaz; kart Kokpit'in Onay ve canlı bölümünü açar.
+    const post = vi.spyOn(api, 'post');
+    fireEvent.click(within(kart()).getByRole('button', { name: "Kokpit'te aç" }));
+    expect(git).toHaveBeenCalledWith('kokpit');
+    expect(onayIstegiAl()).toBe(true);
+    expect(post).not.toHaveBeenCalled();
     post.mockRestore();
   });
 
@@ -331,17 +324,19 @@ describe('PlanlamaAtolyesi', () => {
     expect(screen.queryByText('Bütün işler yerleşti')).toBeNull();
   });
 
-  it('onaya gönder kartı: sunucu reddederse iletisi gösterilir, kart açık kalır, taslaktan vazgeçilir', async () => {
-    ac({ c: guncel() });
-    fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
-    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol.endsWith('/onaya-gonder')
-      ? Promise.reject(new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }))
-      : Promise.resolve(yol.endsWith('/taslak-yaz') ? { taslak: { id: 9, surum: 1 }, yazilan: 4, atlanan: 0, yazilamaz: [] } : DEPO.senaryolar))) as never);
-    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
-    await waitFor(() => expect(screen.getByText('Plan onaya gönderilemedi: Bu işlem için yetkiniz yok.')).toBeTruthy());
-    expect(kart()).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('aria-selected')).toBe('true');
-    await waitFor(() => expect(post.mock.calls.map((x) => x[0])).toContain('/plan/senaryolar/9/vazgec'));
+  it('Onay ve canlı sekmesi Stüdyo\'da okunurdur (3282-4 a): onay, geri gönderme ve canlıya alma düğmesi yok; Kokpit\'te aç bölümü orada açar', () => {
+    const { git } = ac({ c: guncel(), mudur: true });
+    const post = vi.spyOn(api, 'post');
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    expect(screen.getByText(/Bu bölüm okunurdur/)).toBeTruthy();
+    expect(document.querySelector('.tc-pym-pa-aday[aria-current="true"]')?.textContent).toContain('Senaryo 1');
+    for (const ad of ['Onayla ve canlıya al', 'Geri gönder', 'Onaya gönder', 'Çalışmaya aç']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    expect(screen.queryByRole('button', { name: 'Onayla ve canlıya al' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Kokpit'te aç" }));
+    expect(git).toHaveBeenCalledWith('kokpit');
+    expect(onayIstegiAl()).toBe(true);
+    expect(post).not.toHaveBeenCalled();
     post.mockRestore();
   });
 
@@ -363,15 +358,16 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez; neden kartta önceden yazılır, düğme Onay sekmesine götürür (1786 PLN-1)', () => {
-    ac();
+  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez; neden kartta önceden yazılır, düğme Kokpit\'i açar (1786 PLN-1, 3282-4 a)', () => {
+    const { git } = ac();
     const post = vi.spyOn(api, 'post');
     fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).queryByRole('button', { name: 'Gönder' })).toBeNull();
     expect(within(kart()).getByText(/^Gönderilemez: 1 bekleyen değişiklik plana uygulanmadı/)).toBeTruthy();
-    fireEvent.click(within(kart()).getByRole('button', { name: 'Onay sekmesine git' }));
+    fireEvent.click(within(kart()).getByRole('button', { name: "Kokpit'te aç" }));
     expect(post).not.toHaveBeenCalled();
-    expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true');
+    expect(git).toHaveBeenCalledWith('kokpit');
+    onayIstegiAl();
     post.mockRestore();
   });
 
@@ -384,10 +380,9 @@ describe('PlanlamaAtolyesi', () => {
     ];
     const { komut } = komutKur(c);
     const reddet = vi.fn((_idler: readonly string[], _gerekce: string) => null);
-    ac({ c, komut: { ...komut, bekleyeniReddet: reddet } as CalismaKomutu });
+    ac({ c, komut: { ...komut, bekleyeniReddet: reddet } as CalismaKomutu, onay: true });
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
     const post = vi.spyOn(api, 'post').mockImplementation((() => Promise.reject(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'x' }))) as never);
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
     expect(screen.getByText('2 bekleyen değişiklik var; aşağıda uygulayın ya da reddedin')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Onaya gönder' }) as HTMLButtonElement).disabled).toBe(true);
@@ -419,9 +414,8 @@ describe('PlanlamaAtolyesi', () => {
   });
 
   it('Onay sekmesi, çalışma: notla onaya gönderir; Onayla ve canlıya al ayrı düğmedir, ret sunucunun iletisiyle gösterilir ve plan onayda kalır', async () => {
-    ac({ c: guncel(), mudur: true });
+    ac({ c: guncel(), mudur: true, onay: true });
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
     const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => {
       if (yol.endsWith('/canliya-al')) return Promise.reject(new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }));
@@ -446,9 +440,8 @@ describe('PlanlamaAtolyesi', () => {
   });
 
   it('Onay sekmesi, senaryo: Çalışmaya aç önce sorar, taslağı çalışmaya yazar, sayfayı yeniden okur; bildirimden geri alınır', async () => {
-    const { yenile } = ac({ c: guncel() });
+    const { yenile } = ac({ c: guncel(), onay: true });
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Senaryo 2/ }));
     const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('/taslaktan-yaz')
       ? { calismaSurumu: 9, oncekiSurum: 8, yazilan: 3, kilitli: 0, atlanan: [] }
@@ -472,8 +465,7 @@ describe('PlanlamaAtolyesi', () => {
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan' ? Promise.resolve(plan(em('2026-10-27', false)))
       : yol.startsWith('/plan?taslak=') ? Promise.resolve(plan({ ...em('2026-10-26', true), satirlar: [{ makineId: 1, gun: '2026-10-26', vardiyaId: 3, saat: 8 }, { makineId: 1, gun: '2026-10-27', vardiyaId: 3, saat: 8 }], toplamSaat: 16 }))
         : Promise.reject(new Error('yok')))) as never);
-    ac({ c: guncel() });
-    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    ac({ c: guncel(), onay: true });
     fireEvent.click(screen.getByRole('button', { name: /^Senaryo 2/ }));
     await waitFor(() => expect(screen.getByText('Ek mesai: M1, 26.10 Pzt, vardiya 3')).toBeTruthy());
     expect(screen.getByText('16,0 sa')).toBeTruthy();
@@ -967,10 +959,10 @@ describe('PlanlamaAtolyesi', () => {
     cleanup();
     ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi });
     expect(screen.getByText('Plan henüz kurulmadı')).toBeTruthy();
-    // Planı kur sunucudaki motorla açık (576): boş kartta ve Onay sekmesinin çalışma planı kutusunda
+    // Planı kur sunucudaki motorla açık (576): boş kartta; Onay sekmesi Stüdyo'da okunurdur (3282-4 a), oradaki düğme kapalıdır.
     expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('tab', { name: 'Onay ve canlı' }));
-    expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(true);
     cleanup();
     ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi, yaz: false });
     fireEvent.click(screen.getByRole('tab', { name: 'Onay ve canlı' }));
