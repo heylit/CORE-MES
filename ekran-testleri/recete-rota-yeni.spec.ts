@@ -255,3 +255,59 @@ test.describe('R2 ayarlar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+// 3273 a (D): boş rotada hazır şablon seçici ve Rota şablonları sayfası. Yazan rol (planlama) seçiciyi ve düzenlemeyi görür;
+// rota yazamayan rol (müdür) sayfayı salt okur, boş rotada seçici görmez. Pencere vazgeçilerek kapanır: yazma gitmez.
+const bosRotaAc = async (page: Page): Promise<boolean> => {
+  const sec = page.getByRole('combobox', { name: 'Şemadaki ürün' });
+  await sec.waitFor({ timeout: 15_000 });
+  for (const v of await sec.locator('option').evaluateAll((l) => l.map((o) => (o as HTMLOptionElement).value))) {
+    await sec.selectOption(v);
+    if (await page.getByRole('region', { name: 'Rotaya başla' }).isVisible().catch(() => false)) return true;
+    if (await page.getByText('Rota yok.', { exact: true }).first().isVisible().catch(() => false)) return true;
+  }
+  return false;
+};
+test.describe('3273 rota şablonları', () => {
+  test.describe('rota yazan (planlama)', () => {
+    test.use({ hesap: 'ornek.planlama' });
+    test('boş rotada şablon kartları ve Bütün şablonlar; şablon sayfası düzenlenebilir; yatay taşma yok, yazma yok', async ({ page, ag, ac }) => {
+      await ac('/recete-rota/schema');
+      expect(await bosRotaAc(page)).toBe(true);
+      const secici = page.getByRole('region', { name: 'Rotaya başla' });
+      await expect(secici.getByRole('button', { name: 'Boş başla' })).toBeVisible();
+      await expect(secici.getByRole('button', { name: 'Başla' }).first()).toBeVisible({ timeout: 15_000 });
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await secici.getByRole('button', { name: /^Bütün şablonlar/ }).click();
+      const pencere = page.getByRole('dialog', { name: 'Bütün şablonlar' });
+      await expect(pencere.getByRole('radiogroup', { name: 'Şablonlar' })).toBeVisible();
+      await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+      await ac('/recete-rota/rota-sablonlari');
+      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
+      await tablo.getByRole('button', { name: /^Düzenle/ }).first().click({ timeout: 15_000 });
+      const panel = page.getByRole('region', { name: /şablonunu düzenle$/ });
+      await expect(panel.getByRole('group', { name: 'Operasyon ekle' })).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await panel.getByRole('button', { name: 'Paneli kapat' }).click();
+      expect(ag.yazmalar.filter((x) => x !== 'POST /api/rota/karttan-taslaklar')).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+  });
+  test.describe('rota yazamayan (müdür)', () => {
+    test.use({ hesap: 'ornek.mudur' });
+    test('şablon sayfası salt okunur; boş rotada seçici yok', async ({ page, ag, ac }) => {
+      await ac('/recete-rota/rota-sablonlari');
+      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
+      // Ornek veride tek sablon (Standart rota) olabilir; dar ekranda baslik satiri gorunmez: satir basligi aranir.
+      await expect(tablo.getByRole('rowheader').first()).toBeVisible({ timeout: 15_000 });
+      await expect(tablo.getByRole('button')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Yeni şablon' })).toHaveCount(0);
+      await expect(page.getByText(/liste salt okunur/)).toBeVisible();
+      await ac('/recete-rota/schema');
+      if (await bosRotaAc(page)) await expect(page.getByRole('region', { name: 'Rotaya başla' })).toHaveCount(0);
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      expect(ag.yazmalar.filter((x) => x !== 'POST /api/rota/karttan-taslaklar')).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+  });
+});

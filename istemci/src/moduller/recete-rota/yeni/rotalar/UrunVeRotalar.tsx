@@ -21,6 +21,7 @@ import { RevizyonCubugu } from './RevizyonCubugu.tsx';
 import { UrunListesi } from './UrunListesi.tsx';
 import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
 import { useKalanBoy } from './kalanBoy.ts';
+import { SablonPenceresi, SablonSaklaPenceresi } from './SablonSecici.tsx';
 
 // Ürün ve rotalar: ürün listesi, akış şeması ya da akış tablosu, revizyon çubuğu ve düzenleme paneli. Açılışta yazma yoktur; rota
 // değişikliği ilk düzenlemede taslağa yazılır.
@@ -43,6 +44,8 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const [revUrun, setRevUrun] = useState<string | null>(null);
   const [liste, setListe] = useState(false);
   const [excelAcik, setExcelAcik] = useState(false);
+  // 3273 a: dolu taslağa şablon ekleme ve gösterilen rotayı şablon olarak saklama.
+  const [sablonPenceresi, setSablonPenceresi] = useState<'ekle' | 'sakla' | null>(null);
   const [gorunumTercihi, setGorunum] = useState(() => tercihOku('gorunum', 'hat'));
   // 3248: açılış yatay hattır; eski dikey şema 'dikey' adıyla seçilince açılır (eski 'sema' tercihi hatta düşer). Patlamış rota (1476-F)
   // emri açabilenindir; işlemi olmayanda kalmış tercih hatta düşer.
@@ -279,6 +282,14 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
           aria-label="Operasyon paleti" title={adimPaneli ? 'Operasyon paletini kapat' : 'Operasyon paletini aç'} onClick={() => { paletYaz(!adimPaneli); }}><span className="tc-rr1-dar-gizli">Palet</span></Dugme>
       )}
+      {duzenlemeAcar(o.yetki, taslakAcik) && revId && duzen.adimlar(revId).length > 0 && (
+        <Dugme className="tc-rr1-kd" tur="ikincil" simge="route" aria-label="Şablondan ekle" title="Hazır şablonun adımlarını başa, seçili adımdan sonra, sona ya da yerine ekle"
+          onClick={() => { setSablonPenceresi('ekle'); }}><span className="tc-rr1-dar-gizli">Şablondan ekle</span></Dugme>
+      )}
+      {o.yetki.sablonYaz && revId && duzen.adimlar(revId).length > 0 && (
+        <Dugme className="tc-rr1-kd" tur="ikincil" simge="check" aria-label="Şablon olarak sakla" title="Bu rotanın operasyon sırasını hazır şablon olarak sakla"
+          onClick={() => { setSablonPenceresi('sakla'); }}><span className="tc-rr1-dar-gizli">Şablon olarak sakla</span></Dugme>
+      )}
       {!hatli && panelDugmesi}
       {o.yetki.rotaYaz && taslakAcik && <span className="tc-rr1-kipmetni" data-parca="taslak-acik"><Simge ad="clock" boyut="k" /> Taslak açık</span>}
     </span>
@@ -346,6 +357,11 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         )}
         <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
         {excelAcik && <RotaExcelPenceresi durum={o.veri.durum} kapat={() => { setExcelAcik(false); }} />}
+        {revId && sablonPenceresi === 'ekle' && (
+          <SablonPenceresi r={r} urunId={revId} acik kapat={() => { setSablonPenceresi(null); }}
+            seciliId={secim?.tur === 'adim' && secim.urunId === revId ? secim.adimId : null} />
+        )}
+        {revId && <SablonSaklaPenceresi r={r} urunId={revId} acik={sablonPenceresi === 'sakla'} kapat={() => { setSablonPenceresi(null); }} />}
       </div>
       <OnayPenceresi
         acik={duzen.tasimaOnayi !== null} baslik="Dalın yeri değişsin mi?" onayMetni="Taşı" vazgec={() => { duzen.tasimaKarari(false); }}

@@ -49,7 +49,7 @@ const dallar = (v: unknown): string[] => {
 };
 const KULLANIMLAR = ['tek', 'paralel'] as const;
 const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
-const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
+const TASLAK_KAYNAKLARI = ['revizyon', 'sablon', 'bos'] as const;
 const SURE_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
 // 2564 a: kabul edilen değer seçilen ölçüm ya da penceresinin ortancası; ortancayı sahibi hesaplar, ekran süre göndermez.
 const KABUL_DEGERLERI = ['olcum', 'ortanca'] as const;
@@ -117,7 +117,7 @@ const olcumGovdesi = (g: Nesne): Nesne => ({
 });
 
 export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
-  // Taslak açma tekrar korumalıdır (sahibinde); kaynak yürürlükteki revizyon ya da boş rotadır.
+  // Taslak açma tekrar korumalıdır (sahibinde); kaynak yürürlükteki revizyon, rota şablonu (3273 a) ya da boş rotadır.
   'rota-taslak-ac': {
     hafif: true,
     hazirla: (g) => {
@@ -126,7 +126,8 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
       return {
         yol: `/rota/urunler/${String(tamSayi(g['urunId'], 'ürün'))}/taslak-ac`,
         govde: {
-          kaynak: tur === 'revizyon' ? { tur, revizyonId: tamSayi(k['revizyonId'], 'revizyon') } : { tur },
+          kaynak: tur === 'revizyon' ? { tur, revizyonId: tamSayi(k['revizyonId'], 'revizyon') }
+            : tur === 'sablon' ? { tur, sablonId: tamSayi(k['sablonId'], 'şablon') } : { tur },
           // 3247 a: taslağın açılacağı rota; verilmezse Standart.
           ...(g['rotaId'] === undefined ? {} : { rotaId: tamSayi(g['rotaId'], 'rota') }),
         },

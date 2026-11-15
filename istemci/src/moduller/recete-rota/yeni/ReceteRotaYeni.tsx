@@ -37,13 +37,15 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
   planlanabilirlik: 'Plana girmeyen adımın her kontrolü ayrı satırdır: süre, istasyon, makine, yetkin kişi, vardiya, malzeme, ufuk ve önceki adım. '
     + 'Kırmızı satırdaki düğme düzeltileceği sayfayı açar; önceki adımı bekleyen adımlar o adım düzelince kendiliğinden yerleşir.',
   sartnameler: null,
+  'rota-sablonlari': 'Boş rotada önerilen hazır operasyon sıraları. Ürün adında öneri sözcüğü geçen şablon önce gelir; adımların istasyon ve süresi '
+    + 'her kullanımda operasyon kataloğundan alınır (tahmini). Kullanılmış şablon silinmez, kullanımdan kaldırılır.',
   kapanis: null,
   ayarlar: 'Operasyona bağlı olmayan statüler (karantina, giriş onaylı, ret gibi) burada tanımlanır; operasyon statüleri rotadan otomatik gelir.',
 };
 // Şartname ve talimatlar (prototip) ve kapanış onayları kendi başlığını çizer.
 const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler', 'kapanis']);
-// Kütüphane, kapanış ve ayarlar sayfası planla ilgisizdir: plan şeridi çizilmez.
-const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis', 'ayarlar']);
+// Kütüphaneler, kapanış ve ayarlar sayfası planla ilgisizdir: plan şeridi çizilmez.
+const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'rota-sablonlari', 'kapanis', 'ayarlar']);
 
 // İkinci menü sayıları, eski ekranın kuralıyla (Sayaclar.hesapla): aktif emir (serbest ve üretimde), minimumun altındaki kalem, onayda
 // (yoksa taslak) rota revizyonu, operasyon ve malzeme sayısı. Okunamayan dilimin sayısı null'dır. Eski ekran boş stoğu 0 sayardı; burada

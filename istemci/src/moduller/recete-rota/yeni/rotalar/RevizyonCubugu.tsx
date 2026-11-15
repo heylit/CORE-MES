@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Dugme, OnayPenceresi, Tablo } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, OnayPenceresi, Simge, Tablo } from '../../../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { tarih } from '../bicim.ts';
 import {
@@ -122,7 +122,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
       <div className="tc-rr1-rv-row">
         {rotalar.rotaAdi === null ? urunEtiketi : <span className="tc-rr1-ipucu">{rotalar.rotaAdi} revizyonları</span>}
         <span className="tc-rr1-rv-list" role="group" aria-label="Revizyonlar">
-          {revs.length === 0 && !taslak && <span className="tc-rr1-ipucu">Henüz revizyon yok</span>}
+          {revs.length === 0 && !taslak && <span className="tc-rr1-rvchip tc-rr1-rotayok" data-parca="rota-yok"><Simge ad="route" boyut="k" /> Rota yok</span>}
           {revs.map((x) => (
             <button key={x.id} type="button" className={`tc-rr1-rvtab tc-rr1-rv-${x.status}${V?.id === x.id ? ' tc-rr1-on' : ''}`}
               aria-pressed={V?.id === x.id} title={`${REV_DURUMU[x.status]}${x.note ? `: ${x.note}` : ''}`}

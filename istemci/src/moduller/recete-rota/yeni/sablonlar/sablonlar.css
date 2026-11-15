@@ -1,0 +1,60 @@
+/* 3273 a: Rota şablonları sayfası: tablo ve yanında düzenleme paneli; dar ekranda panel tablonun altına iner, satırlar kart olur. */
+.tc-rs { display: grid; gap: var(--b-3); padding: var(--b-3); min-width: 0; }
+.tc-rs-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: end; justify-content: flex-end; }
+.tc-rs-ust > :first-child { flex: 0 1 24rem; min-width: 0; }
+.tc-rs-govde { display: grid; gap: var(--b-3); align-items: start; min-width: 0; }
+.tc-rs-iki .tc-rs-govde { grid-template-columns: minmax(0, 1fr) minmax(0, 22rem); }
+.tc-rs-tablo-kap {
+  min-width: 0; overflow-x: auto; border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); padding: var(--b-1) var(--b-2);
+}
+.tc-rs-tablo { width: 100%; border-collapse: collapse; }
+.tc-rs-tablo th, .tc-rs-tablo td { text-align: left; vertical-align: middle; padding: var(--b-2); border-bottom: 1px solid var(--edge); }
+.tc-rs-tablo thead th { font-size: var(--yazi-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.tc-rs-tablo tbody th { font-weight: 400; }
+.tc-rs-tablo tbody th > * + * { margin-left: var(--b-1); }
+.tc-rs-ad { font-weight: 700; overflow-wrap: anywhere; }
+.tc-rs-tablo td[data-baslik="Öneri sözcükleri"] { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rs-tablo td[data-baslik="Adımlar"] { min-width: 9rem; }
+.tc-rs-islem { width: 1%; white-space: nowrap; }
+.tc-rs-sayi { font-family: var(--font-mono); }
+.tc-rs-secili { background: var(--panel2); box-shadow: inset var(--pay-ince) 0 0 var(--hazard); }
+.tc-rs-pasif .tc-rs-ad { text-decoration: line-through; color: var(--muted); }
+.tc-rs-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-rs-panel {
+  display: grid; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1);
+  background: var(--panel-solid); color: var(--ink); min-width: 0;
+}
+.tc-rs-panel h3, .tc-rs-panel h4 { margin: 0; overflow-wrap: anywhere; }
+.tc-rs-panel h4 { font-size: var(--yazi-s); }
+.tc-rs-panel-bas { display: flex; gap: var(--b-2); align-items: center; }
+.tc-rs-panel-bas h3 { flex: 1 1 auto; font-size: var(--yazi-m); }
+.tc-rs-adimlar { list-style: none; margin: 0; padding: 0; display: grid; }
+.tc-rs-adimlar li {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: var(--b-2); align-items: center;
+  padding: var(--b-1) 0; border-bottom: 1px dashed var(--edge);
+}
+.tc-rs-no { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rs-adimad { overflow-wrap: anywhere; }
+.tc-rs-adimdugme { display: inline-flex; gap: var(--b-1); }
+.tc-rs-opler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-rs-opekle {
+  display: inline-flex; gap: var(--b-1); align-items: center; min-height: var(--dokunma); padding: 0 var(--b-2); cursor: pointer;
+  font-family: var(--font-mono); font-size: var(--yazi-xs); border: 1px dashed var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink);
+}
+.tc-rs-opekle:hover { border-color: var(--ink); }
+.tc-rs-ipucu { color: var(--muted); font-size: var(--yazi-xs); margin: 0; }
+.tc-rs-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-rs-sil { color: var(--stop); }
+@media (max-width: 72rem) {
+  .tc-rs-iki .tc-rs-govde { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 48rem) {
+  /* Başlıklar ekran okuyucuda kalır: sütun adları hücrelerin önünde yazılı, satır yine tablo satırıdır. */
+  .tc-rs-tablo thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tc-rs-tablo, .tc-rs-tablo tbody, .tc-rs-tablo tr, .tc-rs-tablo th, .tc-rs-tablo td { display: block; }
+  .tc-rs-tablo tr { padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); }
+  .tc-rs-tablo th, .tc-rs-tablo td { border: 0; padding: var(--b-1) 0; }
+  .tc-rs-tablo td[data-baslik="Adımlar"] { min-width: 0; }
+  .tc-rs-ust > :first-child { flex: 1 1 12rem; }
+  .tc-rs-tablo td[data-baslik]::before { content: attr(data-baslik) ": "; color: var(--muted); font-size: var(--yazi-xs); }
+}
