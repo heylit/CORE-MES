@@ -1,0 +1,12 @@
+Birlestirici konunun kurallari; kurulum/proje-talimati.md'nin parcasidir (ayni oncelik ve kilit). Birlestirici bu dosyayi, talimatin ROLUN ve ONAY bolumlerini okur.
+
+BIRLESTIRME (yalniz Birlestirici)
+- Her degisiklik cekme istegiyle; zorunlu `kontrol` (Windows dahil) yesil olmadan birlesmez; dal korumasi dolanilmaz. Zorla gonderme, bos commit, test atlama yok; dal silme kullanici onayiyla.
+- Isin onayi tasimayi da kapsar, yeniden uretilmis yamanin da. Once `teslim-denetle` (gerekirse `--vt`'yi kendisi) kosar ve eklenen satirlari acik depo taramasindan gecirir; iletide yol, sha ve kilit yeniden yazilmaz. Sade olmayanda onay satirlarini denetler; degisiklik onaylanan turlerin disindaysa uygulamaz, durur ve sorar. Kirmizi teslim nedeniyle sahibine doner; catisan yamayi elle birlestirmez, sahibi yeniden uretir.
+- Birlesmeyi tutar: kirmizi CI, yetki acigi, veri kaybi, yanlis sayi ya da para, kirmizi cizgi, baska parcanin klasorune yazim, FARK.md'de olmayan degisiklik, toplayicida kendi satiri disina tasan commit. Oteki bulgu UYUM-BORCU.md'ye ya da karta. Yalniz CI'i yesil, taslakta olmayan, sirasi gelmis istek birlesir; taslaktaki istege dokunulmaz ve beklenmez.
+- Kullaniciya sorulur: rol x islem, veri silen ya da donusturen goc, yeni paket, CLAUDE.md, .claude, .github, sahibi disarida olan module dokunan is.
+- Grup: `npm run teslim-denetle -- --grup <klasor> ...` grubu ve ayri turu basar; uygun birden cok teslim varken tek kartlik istek acilmaz. Grup (en cok 8) gecici birlesim dalinda ust uste uygulanir; `kontrol` yesilse sirayla birlesir, kirmiziysa ikiye bolunur; main agaci denenen agacla ayni olmali. Gocler 4-6'lik, damga sirali grupla ayri turda. Bir grup birlesirken siradaki hazirlanir.
+- Istegin tabani main'in ucuysa kapi kendi `kontrol`udur, main push kosusu beklenmeden siradakine gecilir; degilse guncel main'e alinip CI yeniden beklenir. Cekirdek ve ortak arayuz once; koordinatorun sirasi bozulmaz.
+- Goc damgasi yazarin aldigi 14 haneli UTC zamanidir (`date -u +%Y%m%d%H%M%S`), main'deki en buyukten buyuk; ayni daldaki gocler birer saniye arayla; eskiyse yazar dalin butun yeni goclerini birlikte yeniden damgalar (CI `goc-damgasi`).
+- Main push kosusu her birlesmeden sonra izlenir; kirmiziysa dur, kirani kullaniciya soyle, geri alma onun kararidir. Oneriden once dusen test birlesmeden onceki tabanda kosulur; orada da dusuyorsa oneri yok, iki son satir rapora.
+- Rapor: birlesen ve birlesmeyenler, main commit'i, kapanan kartlar, sorulanlar; kullaniciya "main'e girdi, git pull sonrasi dene", goc varsa guncelleme adimlari.

@@ -1,0 +1,12 @@
+Kavram sahipligi; kurulum/proje-talimati.md'nin parcasidir (ayni oncelik ve kilit). Sahiplik, sema ya da baska module dokunan iste okunur.
+
+SAHIPLIK (Asama 2 sahiplik kararlari OS1-OS10 dahil)
+Kavram, sahip modul, tablo ve zorunlu bag listesi `araclar/sahiplik.test.ts`'tedir; burada tabloya dokulemeyen notlar durur. Baglama (yabanci anahtar, kopyalarin kaldirilmasi) Asama 2'dedir; o zamana kadar veri yerinde kalir.
+- Malzeme kimligi malzeme_katalog_karti.no; sayfa Malzemeler ve Hizmetler (modul, tablo ve islem adlari malzemeler). Ofis ve temizlik sarfi kategoriyle ayrilir; hizmet alinan / verilen yonlu, Logo'da ayri kayit; ticari_mal alinir, stoklanir, satilir, recetede girdi olmaz (Logo kart turu 1, dogrulanmadi).
+- Firma ayri sayfadir; finans, satin alma, sevkiyat ondan beslenir; cok adres ve koordinat. Fason iscilik rota adimidir; firmasi fason isaretli firma, alimi alinan hizmet kartiyla satin almadan.
+- Uretim emri mamul ya da yari mamul icindir; rotanin her adimi bir is emri, istasyon is emrine aittir; kopyalamayi rota ucu tetikler, emri uretim-emirleri yazar; UE serisi; planlama ve tek motor plan'da (ADR 0020). Rota tanimdir; malzemelerdeki recete Asama 2'de kalkar; kart onaylaninca operasyon listesi Rota'ya tek yonlu taslak olarak aktarilir.
+- Arkon operator ekrani ve gunlugudur; asil uretim kaydi emirde, Arkon bagi emir_adimi'na tasinir. Olcu aleti kalibrasyon'dadir, Arkon ve malzeme demirbasi oradan okur. Mal kabul stokta; faturanin asil kaydi Logo'da; bakim modul gelene kadar Arkon'da.
+- Vardiya ve vardiya devri vardiya modulundedir. Planli durus Vardiya ekranindan ve Arkon formundan Vardiya'ya yazilir, takvimden ve kapasiteden dusulur; eski Arkon duruslari tasinmaz. Satin alma birimi malzemeden, kur ve fiyati finanstan okur (finans gelene kadar kendinde).
+- Satin alma kalemi yalniz Malzemeler ve Hizmetler'de acilir; ad, birim, kategori malzemeden okunur, kopya tutulmaz. Stok kendi konum tablosunu birakip dogrudan harita gozune baglanir; malzeme lojistigi stokta.
+- Arkon kalite istasyonu ve Hazirlik kalite verisini salt okur; Uretim Terminali kalite istasyonu Kabul/Red verir, Kalite Merkezi disari.ts komutuyla yazilir. Dosyanin sahibi belge merkezi; Kalite Merkezi yayindaki revizyonu belge kimligi ve ozetle tutar. Eski kayitlarin tasinmasi ayri goc ve onaydir.
+- Sistem capi ve dort goz ayarlari ayarlar'da, calisma ayarlari modulun kendisinde. Guvenlik merkezi cekirdegindir.
