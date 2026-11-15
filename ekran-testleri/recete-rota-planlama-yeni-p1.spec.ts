@@ -16,7 +16,7 @@ const BOLUMLER = ['Plan nasıl gidiyor?', 'Siparişler nerede bekliyor?', 'Ne ya
 
 test.describe('P1a Planlama motoru', () => {
   test('Özet: altı bölüm ve tezgâh haritası ya da boş durum; çubuklar ve Başka menüsü; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     const ozet = page.getByRole('region', { name: 'Plan nasıl gidiyor?' });
@@ -66,7 +66,7 @@ test.describe('P1a Planlama motoru', () => {
 // P1b: Harita görünümü (tezgâh haritası, kılavuz, yakınlık, oynatıcı ve zaman imleci). Sürükleme kapalıdır (459/4 a); test yazma göndermez.
 test.describe('P1b Tezgâh haritası', () => {
   test('Harita: tuval, yakınlık ve oynatıcı; kılavuz açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
@@ -114,7 +114,7 @@ test.describe('P1b Tezgâh haritası', () => {
 
 test.describe('P1c Çizelge', () => {
   test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran, yan paneller; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
@@ -189,7 +189,7 @@ test.describe('P1c Çizelge', () => {
 // P1d-1: Keşfet (pay şeridi, sipariş hatları, hazırlık, planı anlat). Seçim yazma göndermez.
 test.describe('P1d Keşfet', () => {
   test('Keşfet: dört gösterim, sipariş seçimi, planı anlat adımları; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
@@ -220,7 +220,7 @@ test.describe('P1d Keşfet', () => {
 // P1d-2: seçim yan paneli (sipariş, iş adımı ve tezgâh kartı). Motor hamleleri pasif; seçim ve sekme yazma göndermez.
 test.describe('P1d Yan panel', () => {
   test('Yan panel: seçim kartı açılır, sekmeler (Rota, Takvim), yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();

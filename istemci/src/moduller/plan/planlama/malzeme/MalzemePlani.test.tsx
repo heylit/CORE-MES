@@ -105,7 +105,7 @@ describe('Malzeme satın alma planı', () => {
     expect(screen.getByText('Tüm satırlar')).toBeTruthy();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
     fireEvent.click(within(acilim).getByRole('button', { name: /E-1 çizelgede/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); }, { timeout: 10000 });
   }, 20000);
 
   it('plan yoksa plan kurulmasını ister', async () => {

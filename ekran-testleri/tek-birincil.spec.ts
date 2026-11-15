@@ -12,7 +12,8 @@ test.use({ hesap: 'ornek.yonetici' });
 const BORC: Readonly<Record<string, number>> = {
   '/ayarlar': 15,
   '/cnc-kurulum': 3,
-  '/plan': 3,
+  // Motor'un borcu; kök adres (/plan) Kokpit'tir ve sınırdadır.
+  '/plan/plan': 3,
   // Planlama'nın ikinci menü görünümleri (B-2483-48): ekranlar teslim olduğu gibidir; sayı yalnız düşebilir.
   '/plan/studio': 3,
   '/plan/ysiparis': 3,

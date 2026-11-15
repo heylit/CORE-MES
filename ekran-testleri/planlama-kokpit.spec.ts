@@ -351,9 +351,9 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
 });
 
 // Kart 3229 a: plansız emir adım adım plana alınır. S4 burada iki adımlıdır; ikinci adımın rotasında F-01 ve F-02 vardır, T-01 yoktur.
-// Kart 3282 (dilim 1a): Gelenler plansız emri ve saha olayını gösterir, Yerleştir emrin ayrıntısında plana alma
+// Kart 3282 (dilim 1a): Planlama Kokpit'le açılır; Gelenler plansız emri ve saha olayını gösterir, Yerleştir emrin ayrıntısında plana alma
 // seçeneklerini açar. Canlıya al Onay ve canlı bölümünü Kokpit'te açar; Planı düzenle tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
-test('Kokpit 3282: Kokpit açılır; Gelenler ve Yerleştir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3282: /plan Kokpit\'i açar; Gelenler ve Yerleştir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum: 1 }));
   await page.route('**/api/plan/surum', (r) => json(r, {
     planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
@@ -364,7 +364,7 @@ test('Kokpit 3282: Kokpit açılır; Gelenler ve Yerleştir; Canlıya al Onay ve
     return json(r, { calismaSurumu: 1, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }], bitis: S + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   const gelen = kokpit.getByRole('region', { name: 'Gelenler' });

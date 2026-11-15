@@ -22,8 +22,8 @@ export function kapasiteBolumuOku(q: URLSearchParams): KapasiteBolumu {
   const b = q.get('bolum');
   return kapasiteBolumuMu(b) ? b : 'ufuk';
 }
-// Kök adres Planlama motoru'dur (ikinci menünün ilk maddesi, adresi `/plan`).
-export const ACILIS: PlanlamaGorunumu = 'plan';
+// Kök adres Kokpit'tir (ikinci menünün ilk maddesi, adresi `/plan`; 3282). Motor `/plan/plan`'dadır.
+export const ACILIS: PlanlamaGorunumu = 'kokpit';
 
 // Dönem ölçeği eski ekranda bütün görünümlerin ortak düğmesiydi (zs-olcek-ortak: varsayılan Hafta, ölçek değişince kayma sıfırlanır).
 export const DONEM_OLCEKLERI = [['gun', 'Gün'], ['hafta', 'Hafta'], ['ay', 'Ay'], ['yil', 'Yıl']] as const;
