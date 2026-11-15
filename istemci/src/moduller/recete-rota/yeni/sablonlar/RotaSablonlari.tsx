@@ -162,13 +162,14 @@ export function RotaSablonlari(o: EkranOzellikleri) {
                       {!s.aktif && <Rozet ton="pasif" gorunum="cizgi">kullanımdan kalktı</Rozet>}
                     </th>
                     <td data-baslik="Adımlar"><OpSeridi ogeler={sablonSeridi(s, opBul)} etiket={`${s.ad} operasyonları`} /></td>
-                    <td data-baslik="Öneri sözcükleri">{s.oneriSozcukleri.length > 0 ? s.oneriSozcukleri.join(', ') : '-'}</td>
+                    <td data-baslik="Öneri sözcükleri">{s.oneriSozcukleri.length > 0 ? s.oneriSozcukleri.join(', ') : '—'}</td>
                     <td data-baslik="Kullanım" className="tc-rs-sayi">{String(s.kullanim.revizyon)}</td>
                     {o.yetki.sablonYaz && (
                       <td className="tc-rs-islem">
-                        <Dugme tur="ikincil" simge="edit" aria-label={`Düzenle: ${s.ad}`} aria-pressed={secili?.id === s.id}
+                        {/* Panel açıkken tablo daralır: düğme yalnız simgedir, adı ve ipucu yine "Düzenle: <ad>". */}
+                        <Dugme tur="ikincil" simge="edit" aria-label={`Düzenle: ${s.ad}`} title={`Düzenle: ${s.ad}`} aria-pressed={secili?.id === s.id}
                           onClick={() => { setDuzenlenen({ tur: 'var', id: s.id }); }}>
-                          Düzenle
+                          {panelAcik ? null : 'Düzenle'}
                         </Dugme>
                       </td>
                     )}
