@@ -45,6 +45,46 @@ export interface TabloAraci<S> {
   sag?: ReactNode;
 }
 
+// Satırlar dıştan içe başlıklarla gruplanır (kart 3284). Grup sırası satırların ilk göründüğü sıradır; ekran satırları
+// grup sırasına göre dizer. Sayı verilmezse grubun bu tablodaki satır sayısı yazılır; sayfalı listede ekran toplamı verir.
+export interface TabloGrubu<S> {
+  // Satırın grup yolu, dıştan içe (ör. ['hammadde', 'metal']). Boş yol: satır grupsuz, başlıksız çizilir.
+  yol: (satir: S) => readonly string[];
+  baslik: (yol: readonly string[]) => ReactNode;
+  sayi?: (yol: readonly string[]) => number;
+  // Başlığın önünde ek denetim (ör. grubu seçen kutu); katlama düğmesinin dışındadır.
+  on?: (yol: readonly string[], satirlar: readonly S[]) => ReactNode;
+}
+
+type Ogesi<S> = { tur: 'grup'; yol: readonly string[]; satirlar: S[] } | { tur: 'satir'; satir: S };
+
+const YOL_AYRACI = '\u001f';
+const yolAnahtari = (yol: readonly string[]) => yol.join(YOL_AYRACI);
+
+export function grupOgeleri<S>(satirlar: readonly S[], yolu: (satir: S) => readonly string[]): Ogesi<S>[] {
+  interface Dugum { yol: readonly string[]; satirlar: S[]; cocuk: Map<string, Dugum>; sira: ({ grup: Dugum } | { satir: S })[] }
+  const kok: Dugum = { yol: [], satirlar: [], cocuk: new Map(), sira: [] };
+  for (const satir of satirlar) {
+    let d = kok;
+    for (const parca of yolu(satir)) {
+      let c = d.cocuk.get(parca);
+      if (!c) { c = { yol: [...d.yol, parca], satirlar: [], cocuk: new Map(), sira: [] }; d.cocuk.set(parca, c); d.sira.push({ grup: c }); }
+      c.satirlar.push(satir);
+      d = c;
+    }
+    d.sira.push({ satir });
+  }
+  const cikti: Ogesi<S>[] = [];
+  const gez = (d: Dugum) => {
+    for (const o of d.sira) {
+      if ('grup' in o) { cikti.push({ tur: 'grup', yol: o.grup.yol, satirlar: o.grup.satirlar }); gez(o.grup); }
+      else cikti.push({ tur: 'satir', satir: o.satir });
+    }
+  };
+  gez(kok);
+  return cikti;
+}
+
 const SIRA_METNI = { artan: 'artan sıralı', azalan: 'azalan sıralı' } as const;
 const ARIA_SIRA = { artan: 'ascending', azalan: 'descending' } as const;
 
@@ -78,6 +118,8 @@ interface Ozellikler<S> {
   // 'kaydir': sığmayan tablo kart kipine geçmez, kendi kabında yatay ve dikey kayar; başlık kabın üstünde, `sabit` sütunlar
   // yanlarda kalır. Çok sütunlu izleme listeleri içindir. Verilmezse uyarlanır (sığmayınca kart kipi).
   kip?: 'uyarlanir' | 'kaydir';
+  // Verilince satırlar katlanır başlıklarla gruplanır (kart 3284); katlama tablo açık kaldıkça sürer.
+  grup?: TabloGrubu<S>;
 }
 
 export interface TopluEylem<S> {
@@ -256,8 +298,9 @@ function BosHucre() {
 
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
-  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir',
+  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', grup,
 }: Ozellikler<S>) {
+  const [katli, katliYaz] = useState<ReadonlySet<string>>(() => new Set());
   const kaydir = kip === 'kaydir';
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
@@ -349,6 +392,90 @@ export function Tablo<S>({
     return <span className="tc-tablo-sirasiz"><Simge ad="sort" boyut="k" /></span>;
   };
 
+  const sutunSayisi = sutunlar.length + (topluAcik ? 1 : 0) + (kart && satirEylemi ? 1 : 0);
+  const ogeler: Ogesi<S>[] = grup ? grupOgeleri(satirlar, grup.yol) : satirlar.map((satir) => ({ tur: 'satir', satir }));
+  // Katlanmış grubun altındaki satırlar ve alt gruplar çizilmez.
+  const gizli = (yol: readonly string[], kendisi: boolean) => {
+    for (let n = 1; n <= yol.length - (kendisi ? 1 : 0); n++) if (katli.has(yolAnahtari(yol.slice(0, n)))) return true;
+    return false;
+  };
+  const grupCiz = (yol: readonly string[], grupSatirlari: readonly S[]) => {
+    if (!grup || gizli(yol, true)) return null;
+    const k = yolAnahtari(yol);
+    const kapali = katli.has(k);
+    return (
+      <tr key={`grup:${k}`} className="tc-tablo-grup" data-duzey={yol.length}>
+        <th scope="rowgroup" colSpan={sutunSayisi}>
+          <span className="tc-tablo-grup-ic">
+            {grup.on?.(yol, grupSatirlari)}
+            <button
+              type="button" className="tc-tablo-grup-dugme" aria-expanded={!kapali}
+              onClick={() => { katliYaz((o) => { const y = new Set(o); if (kapali) y.delete(k); else y.add(k); return y; }); }}
+            >
+              <Simge ad="chev-right" boyut="k" />
+              {grup.baslik(yol)}
+              <span className="tc-tablo-grup-sayi">{grup.sayi ? grup.sayi(yol) : grupSatirlari.length}</span>
+            </button>
+          </span>
+        </th>
+      </tr>
+    );
+  };
+  const satirCiz = (satir: S) => {
+    if (grup && gizli(grup.yol(satir), false)) return null;
+    return (
+            <tr
+              key={satirAnahtari(satir)}
+              data-satir={anahtar(satir)}
+              data-secili={topluAcik && secili.has(anahtar(satir)) ? '' : undefined}
+              className={satirSec ? 'tc-tablo-secilir' : undefined}
+              tabIndex={satirSec ? 0 : undefined}
+              {...kaydirma()}
+              onClick={satirSec ? () => satirSec(satir) : undefined}
+              onKeyDown={satirSec ? (o) => {
+                if (o.target !== o.currentTarget || (o.key !== 'Enter' && o.key !== ' ')) return;
+                o.preventDefault();
+                satirSec(satir);
+              } : undefined}
+            >
+              {topluAcik && (
+                <td className="tc-tablo-sec" data-baslik="Seç" onClick={(o) => { o.stopPropagation(); }}>
+                  <input
+                    type="checkbox" aria-label={`Seç: ${String(sutunlar[0]?.hucre(satir) ?? anahtar(satir))}`}
+                    checked={secili.has(anahtar(satir))}
+                    onChange={(o) => {
+                      const k = anahtar(satir);
+                      const acik = o.target.checked;
+                      seciliYaz((onceki) => { const y = new Set(onceki); if (acik) y.add(k); else y.delete(k); return y; });
+                    }}
+                  />
+                </td>
+              )}
+              {sutunlar.map((s) => {
+                const icerik = s.hucre(satir);
+                const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', sabitSinif(s)].filter(Boolean).join(' ');
+                return (
+                  <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
+                    {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />
+                      : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
+                  </td>
+                );
+              })}
+              {kart && satirEylemi && (
+                <td className="tc-tablo-eylem">
+                  <button
+                    type="button" className={`tc-tablo-eylem-dugme${satirEylemi.ton === 'tehlike' ? ' tc-tablo-eylem-tehlike' : ''}`}
+                    onClick={(o) => { o.stopPropagation(); o.currentTarget.closest('tr')?.removeAttribute('data-eylem-acik'); satirEylemi.yap(satir); }}
+                  >
+                    <Simge ad={satirEylemi.simge} />
+                    <span>{satirEylemi.etiket(satir)}</span>
+                  </button>
+                </td>
+              )}
+            </tr>
+    );
+  };
+
   return (
     <>
       {ust}
@@ -396,57 +523,7 @@ export function Tablo<S>({
             </tr>
           </thead>
           <tbody>
-            {satirlar.map((satir) => (
-              <tr
-                key={satirAnahtari(satir)}
-                data-satir={anahtar(satir)}
-                data-secili={topluAcik && secili.has(anahtar(satir)) ? '' : undefined}
-                className={satirSec ? 'tc-tablo-secilir' : undefined}
-                tabIndex={satirSec ? 0 : undefined}
-                {...kaydirma()}
-                onClick={satirSec ? () => satirSec(satir) : undefined}
-                onKeyDown={satirSec ? (o) => {
-                  if (o.target !== o.currentTarget || (o.key !== 'Enter' && o.key !== ' ')) return;
-                  o.preventDefault();
-                  satirSec(satir);
-                } : undefined}
-              >
-                {topluAcik && (
-                  <td className="tc-tablo-sec" data-baslik="Seç" onClick={(o) => { o.stopPropagation(); }}>
-                    <input
-                      type="checkbox" aria-label={`Seç: ${String(sutunlar[0]?.hucre(satir) ?? anahtar(satir))}`}
-                      checked={secili.has(anahtar(satir))}
-                      onChange={(o) => {
-                        const k = anahtar(satir);
-                        const acik = o.target.checked;
-                        seciliYaz((onceki) => { const y = new Set(onceki); if (acik) y.add(k); else y.delete(k); return y; });
-                      }}
-                    />
-                  </td>
-                )}
-                {sutunlar.map((s) => {
-                  const icerik = s.hucre(satir);
-                  const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', sabitSinif(s)].filter(Boolean).join(' ');
-                  return (
-                    <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
-                      {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />
-                        : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
-                    </td>
-                  );
-                })}
-                {kart && satirEylemi && (
-                  <td className="tc-tablo-eylem">
-                    <button
-                      type="button" className={`tc-tablo-eylem-dugme${satirEylemi.ton === 'tehlike' ? ' tc-tablo-eylem-tehlike' : ''}`}
-                      onClick={(o) => { o.stopPropagation(); o.currentTarget.closest('tr')?.removeAttribute('data-eylem-acik'); satirEylemi.yap(satir); }}
-                    >
-                      <Simge ad={satirEylemi.simge} />
-                      <span>{satirEylemi.etiket(satir)}</span>
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
+            {ogeler.map((o) => (o.tur === 'satir' ? satirCiz(o.satir) : grupCiz(o.yol, o.satirlar)))}
           </tbody>
         </table>
       </div>
