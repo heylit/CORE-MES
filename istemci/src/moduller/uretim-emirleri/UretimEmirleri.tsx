@@ -47,7 +47,7 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[
   { anahtar: 'suAn', baslik: 'Şu an', hucre: suAnMetni },
   { anahtar: 'durum', baslik: 'Durum', hucre: (e) => {
       const d = durumGosterimi(e);
-      return <><Rozet ton={d.ton}>{d.etiket}</Rozet>{e.bekletme && <> <Rozet ton="uyari">Beklemede</Rozet></>}</>;
+      return <><Rozet ton={d.ton}>{d.etiket}</Rozet>{e.bekletme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{e.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}</>;
     } },
   { anahtar: 'acilma', baslik: 'Açılma', kirilmaz: true, hucre: (e) => zamanMetni(e.acilma) },
 ];

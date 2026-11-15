@@ -114,3 +114,9 @@
 .tc-sp-parti-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2) var(--b-3); }
 .tc-sp-parti-toplam { margin-right: auto; color: var(--muted); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
 .tc-sp-parti-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+
+/* 3272: onay penceresinde açılacak proje ve emirler; "Proje ve emirler" kartının düğmeleri. */
+.tc-sp-acilis-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-sp-acilis-ad { display: grid; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-sp-kart-dugmeleri { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
+.tc-sp-mono { font-family: var(--font-mono); }

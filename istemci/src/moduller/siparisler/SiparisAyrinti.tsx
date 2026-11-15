@@ -11,6 +11,7 @@ import { SIPARIS_DURUMU, fiyatMetni, kalanGun, miktarMetni, paraMetni, tarihMetn
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
+import { SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
@@ -191,7 +192,8 @@ export function SiparisAyrinti() {
 
       <SiparisProjeleri siparis={s} />
 
-      {komut !== null && (
+      {komut === 'onayla' && <SiparisOnayPenceresi siparis={s} kapat={kapat} />}
+      {komut !== null && komut !== 'onayla' && (
         <OnayPenceresi
           acik
           baslik={KOMUT_METNI[komut].baslik}

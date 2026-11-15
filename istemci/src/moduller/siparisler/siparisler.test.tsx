@@ -9,6 +9,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type { SiparisAcilisiCevabi } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
   AdetDenemesiCevabi, AtolyeTaslaklariCevabi, MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
@@ -74,6 +75,21 @@ const MALZEMELER = {
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 } satisfies MalzemeSecenekleriCevabi;
 
+// 3272: onayda açılacak proje ve emirler (Üretim Emirleri'nin cevabı); bir kalem rotalı, biri rota bekler, biri üretilmez.
+const ACILIS_SATIRI = {
+  kalemId: 50, kalemSira: 1, partiId: null, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', emirTuru: 'seri', adet: 100,
+  teslim: '2026-10-30', rota: { ad: 'Standart', harf: 'B' }, emir: null, atlama: null,
+} satisfies SiparisAcilisiCevabi['satirlar'][number];
+const ACILIS = {
+  acik: true, proje: { id: null, kod: 'SS_2026_0005', ad: 'Deneme Musteri A SS-2026-0005', bitis: '2026-10-30' },
+  satirlar: [
+    ACILIS_SATIRI,
+    { ...ACILIS_SATIRI, kalemId: 51, kalemSira: 2, malzemeNo: 32, malzemeKodu: 'DNM-002', malzemeAdi: 'Deneme Mil', adet: 5, rota: null },
+    { ...ACILIS_SATIRI, kalemId: 52, kalemSira: 3, malzemeNo: 33, malzemeKodu: 'DNM-003', malzemeAdi: 'Deneme Civata', adet: 8, rota: null, atlama: 'uretilmez' },
+  ],
+  eksikIslemler: [],
+} satisfies SiparisAcilisiCevabi;
+
 // 195 a: elle çarpan Plan uçlarında; kayıt yoksa geçerli null.
 const CARPAN_YOK = { siparisId: 5, gecerli: null, gecmis: [] } satisfies SiparisCarpaniCevabi;
 const CARPAN_KAYDI = { carpan: 1.5, gerekce: 'Deneme gerekce', kisiId: 4, kisiAdi: 'Deneme Planlamaci', zaman: '2026-10-03T09:00:00+03:00' };
@@ -107,6 +123,7 @@ function sunucuKur(kullanici: Kullanici, ozel: Ozel = () => undefined) {
       if (yol.startsWith('/musteri-tedarikci/firmalar/secim')) return json(200, FIRMALAR);
       if (yol.startsWith('/siparisler/malzeme-secenekleri')) return json(200, MALZEMELER);
       if (/^\/plan\/siparisler\/\d+\/carpan$/.test(yol)) return json(200, CARPAN_YOK);
+      if (yol === '/uretim-emirleri/siparis-acilisi/5') return json(200, ACILIS);
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
@@ -269,7 +286,7 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/5');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
+    fireEvent.click(await within(pencere).findByRole('button', { name: 'Onayla, proje ve 2 emri aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/5/onayla', govde: { surum: 2 } });
     await screen.findByText('Sipariş onaylandı');
@@ -284,8 +301,61 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/5');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
+    fireEvent.click(await within(pencere).findByRole('button', { name: 'Onayla, proje ve 2 emri aç' }));
     expect((await within(pencere).findByRole('alert')).textContent).toBe('Onaylı sipariş onaylanamaz.');
+  });
+
+  it('3272: onay penceresi açılacak projeyi, emirleri ve rota bekleyeni gösterir; proje no değişince gövdeye girer', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/5/onayla' ? json(200, AYRINTI_ONAYLI) : undefined));
+    ac('/siparisler/5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
+    const kod = await within(pencere).findByLabelText(/Proje no/);
+    expect((kod as HTMLInputElement).value).toBe('SS_2026_0005');
+    expect(within(pencere).getByText('1 proje açılır')).toBeTruthy();
+    expect(within(pencere).getByText('1 emir dolu')).toBeTruthy();
+    expect(within(pencere).getByText('1 emir rota bekliyor')).toBeTruthy();
+    expect(within(pencere).getByText('Standart · Rev B')).toBeTruthy();
+    expect(within(pencere).getByText('Üretilmez, emir açılmaz')).toBeTruthy();
+    expect(within(pencere).getByText(/DNM-002 için yürürlükte rota yok/)).toBeTruthy();
+    fireEvent.change(kod, { target: { value: 'ss_ozel.1' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla, proje ve 2 emri aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/5/onayla', govde: { surum: 2, projeKodu: 'SS_OZEL.1' } });
+  });
+
+  it('3272: onaylı siparişin "Proje ve emirler" kartı açılmış emirleri, rota bekleyeni ve atlananı gösterir; emir no sondan kısalır', async () => {
+    const emirli = {
+      ...ACILIS, proje: { id: 9, kod: 'SS_2026_0006', ad: 'Deneme', bitis: null },
+      satirlar: [
+        { ...ACILIS_SATIRI, emir: { id: 70, no: 'ORN-A-SS_2026_0006-DNM001-26-11-001', durum: 'taslak', rotaBekliyor: false } },
+        { ...ACILIS.satirlar[1]!, emir: { id: 71, no: 'ORN-A-SS_2026_0006-DNM002-26-11-002', durum: 'taslak', rotaBekliyor: true } },
+        ACILIS.satirlar[2]!,
+      ],
+    } satisfies SiparisAcilisiCevabi;
+    // AYRINTI_ONAYLI taslağın onaylı hâlidir (id 5).
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, emirli) : undefined));
+    ac('/siparisler/6');
+    const tablo = await screen.findByRole('table', { name: 'Siparişin emirleri' });
+    expect(within(tablo).getByText('Rota bekliyor')).toBeTruthy();
+    expect(within(tablo).getByText('Taslak')).toBeTruthy();
+    expect(within(tablo).getByText('Üretilmez, emir açılmaz')).toBeTruthy();
+    expect(within(tablo).getByTitle('ORN-A-SS_2026_0006-DNM001-26-11-001').textContent).toBe('…0006-DNM001-26-11-001');
+    expect(screen.queryByRole('button', { name: 'Proje ve emirleri aç' })).toBeNull();
+  });
+
+  it('3272-1 b: proje ve emir açma yetkisi eksikse pencere eksik yetkiyi söyler ve onay düğmesi pasiftir', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5'
+      ? json(200, { ...ACILIS, eksikIslemler: ['projeler.yaz'] } satisfies SiparisAcilisiCevabi)
+      : undefined));
+    ac('/siparisler/5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
+    expect((await within(pencere).findByRole('alert')).textContent).toContain('projeler.yaz');
+    const dugme = within(pencere).getByRole('button', { name: 'Onayla, proje ve 2 emri aç' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.click(dugme);
+    expect(yazmalar(istekler)).toHaveLength(0);
   });
 
   it('iptal nedeni olmadan istek gitmez; nedenle gövdede gider', async () => {
