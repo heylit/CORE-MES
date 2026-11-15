@@ -224,6 +224,25 @@ export const geometriSureKalemi = z.object({
   // delikte delik sayısı; kaba ve finişte null.
   adet: z.number().int().min(0).nullable(),
 });
+// 3278 D: rotadaki talaşlı adımlar (yalnız okuma; rotaya yazılmaz). islemDk adımın teorik işlem süresi (birim); olcumOrtancaDk son 5
+// ölçülmüş işlem süresinin ortancası (ölçüm yoksa null). Rota bağı kurulmadıysa 'rota-bagli-degil', yürürlükte rota yoksa 'rota-yok'.
+export const GEOMETRI_SURE_ROTA_DURUMLARI = ['bagli', 'rota-yok', 'rota-bagli-degil'] as const;
+export const geometriTalasliAdim = z.object({
+  opNo: z.number().int(),
+  ad: z.string(),
+  islemDk: dk.nullable(),
+  olcumOrtancaDk: dk.nullable(),
+  olcumAdedi: z.number().int().min(0),
+});
+export type GeometriTalasliAdim = z.output<typeof geometriTalasliAdim>;
+export const geometriSureRotasi = z.object({
+  durum: z.enum(GEOMETRI_SURE_ROTA_DURUMLARI),
+  adimlar: z.array(geometriTalasliAdim),
+  // Teorik işlem toplamı; işlem süresi boş adım varsa toplam o adımı saymaz ve eksik true olur.
+  islemToplamDk: dk.nullable(),
+  olcumToplamDk: dk.nullable(),
+  eksik: z.boolean(),
+});
 export const geometriSureCevabi = z.object({
   revizyonId: z.number().int(),
   oneri: z.literal(true),
@@ -244,6 +263,7 @@ export const geometriSureCevabi = z.object({
   ustDk: dk.nullable(),
   // Delik kalemi yoksa nedeni: tanıma yoksa false (yüzler okunamadı), tanındı ama delik yoksa true.
   ozellikOkundu: z.boolean(),
+  rota: geometriSureRotasi,
   neden: z.enum(GEOMETRI_SURE_NEDENLERI).nullable(),
 });
 export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;

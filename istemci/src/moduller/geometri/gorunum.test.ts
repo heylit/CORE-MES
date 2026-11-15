@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
 import {
-  agYuzAlanlari, agYuzNormalleri, islemAnahtari, m2Metni, PATLATMA_KATI, patlatmaKaymasi, pozitifSayi, sartnameSayisi, taslakAlanlari, tozKg,
+  agYuzAlanlari, agYuzNormalleri, aralikMetni, cubukYeri, olcekUstu, islemAnahtari, m2Metni, PATLATMA_KATI, patlatmaKaymasi, pozitifSayi, sartnameSayisi, taslakAlanlari, tozKg,
   ucgeninYuzu, yuzGruplari, yuzSirasiUyar, type TaslakIsaret, type Yon3,
   analizKatilari, BIRIM_EKSENLER, eksenAraliklari, hamKatisi, kapsayanDaire,
 } from './gorunum.ts';
@@ -168,5 +168,19 @@ describe('önizleme katıları (2396)', () => {
     const ar = eksenAraliklari(L, [[0, Math.SQRT1_2, Math.SQRT1_2]])!;
     expect(ar.en[0]).toBeCloseTo(0, 5);
     expect(ar.ust[0]).toBeCloseTo(50 * Math.SQRT1_2, 4);
+  });
+});
+
+describe('süre kartı biçimleri (3278 D)', () => {
+  it('toplam 10 dk üstünde tam dakika, kısa ondalıklı, 0,1 altı "< 0,1"; ölçek 5/10/25/50, aşınca 50 katı; çubuk ölçeğe göre, dar aralık en az 1', () => {
+    expect(aralikMetni(4.1, 14.4, true)).toBe('4 – 14 dk');
+    expect(aralikMetni(0.54, 1.89, true)).toBe('0,5 – 1,9 dk');
+    expect(aralikMetni(2.7, 10.7, false)).toBe('2,7 – 10,7 dk');
+    expect(aralikMetni(0.03, 0.09, false)).toBe('< 0,1 dk');
+    expect(aralikMetni(0.03, 0.25, false)).toBe('< 0,1 – 0,3 dk');
+    expect([olcekUstu(1.9), olcekUstu(5), olcekUstu(6), olcekUstu(14), olcekUstu(50), olcekUstu(51), olcekUstu(140)]).toEqual([5, 5, 10, 25, 50, 100, 150]);
+    expect(cubukYeri(5, 15, 50)).toEqual({ x: 10, en: 20 });
+    expect(cubukYeri(0.1, 0.2, 50).en).toBe(1);
+    expect(cubukYeri(40, 80, 50)).toEqual({ x: 80, en: 20 });
   });
 });

@@ -14,7 +14,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { delikDk, kabaHiziCm3Dk, sureTahmini } from './kurallar.ts';
+import { talasliAdimCozucusu } from './disari.ts';
+import { delikDk, kabaHiziCm3Dk, rotaToplamlari, sureTahmini } from './kurallar.ts';
 
 // Talaştan kaba süre (kart 3278). Saf kural: elle hesaplanmış değerlerle; uç: gerçek PostgreSQL, analiz satırı elle (agirlik.test.ts gibi).
 const yakin = (x: number, beklenen: number, m = ''): void => assert.ok(Math.abs(x - beklenen) < 1e-3, `${m} ${String(x)} != ${String(beklenen)}`);
@@ -52,6 +53,13 @@ describe('geometri: talaştan süre kuralları (3278)', () => {
     assert.equal(delik.adet, 1);
     yakin(delik.altDk, delikDk('P', { capMm: 6, derinlikMm: 10 }) * 0.7);
     yakin(delik.ustDk, delikDk('P', { capMm: 6, derinlikMm: 10 }) * 1.5);
+  });
+  test('GEO-SU11 rota toplamları: teorik toplam dolu adımlardan, boş adım eksik der; ölçüm toplamı ölçülü adımlardan; adım yoksa null', () => {
+    const a = (opNo: number, islemDk: number | null, olcumOrtancaDk: number | null) => ({ opNo, ad: `OP ${opNo}`, islemDk, olcumOrtancaDk, olcumAdedi: olcumOrtancaDk === null ? 0 : 3 });
+    assert.deepEqual(rotaToplamlari([]), { adimlar: [], islemToplamDk: null, olcumToplamDk: null, eksik: false });
+    const t = rotaToplamlari([a(10, 2.5, 3), a(20, null, null), a(30, 1.25, null)]);
+    assert.deepEqual([t.islemToplamDk, t.olcumToplamDk, t.eksik, t.adimlar.length], [3.75, 3, true, 3]);
+    assert.deepEqual([rotaToplamlari([a(10, 2, null)]).olcumToplamDk, rotaToplamlari([a(10, 2, null)]).eksik], [null, false]);
   });
 });
 
@@ -113,6 +121,8 @@ describe('geometri süre tahmini ucu (3278; gerçek PostgreSQL, gerçek giriş)'
   test('GEO-SU5 analiz yokken süre gelmez, neden söylenir; ISO verilmezse P ve kaynağı varsayılan', async () => {
     const r = await sure('?payMm=2');
     assert.deepEqual([r.neden, r.altDk, r.kalemler, r.iso, r.isoKaynagi, r.oneri, r.kalibre], ['analiz-yok', null, [], 'P', 'varsayilan', true, false]);
+    // kablolama.ts bağı test koşusunda kurulur (araclar/kablolama-yukle.ts): gerçek rota okunur, örnek milin yürürlükte rotası yok.
+    assert.equal(r.rota.durum, 'rota-yok');
   });
 
   test('GEO-SU6 stok yoksa ham kutu + paydır; talaş, kaba ve finiş aralığı; tanıma yoksa delik kalemi yok', async () => {
@@ -163,6 +173,30 @@ describe('geometri süre tahmini ucu (3278; gerçek PostgreSQL, gerçek giriş)'
     assert.deepEqual([r.neden, r.hamHacimMm3, r.parcaHacimMm3, r.talasMm3, r.kalemler, r.altDk, r.ortaDk, r.ustDk],
       ['talas-yok', 44 * 24 * 14, 20000, null, [], null, null, null]);
     await o().sahip.sorgu('UPDATE geometri_analiz SET hacim_mm3 = 8000 WHERE revizyon_id = $1', [model.revizyonId]);
+  });
+
+  test('GEO-SU12 rota karşılaştırması: bağ yoksa rota-bagli-degil, rota yoksa rota-yok; varsa talaşlı adımlar ve toplamlar; analiz olmasa da gelir', async () => {
+    const onceki = talasliAdimCozucusu(null);
+    try {
+      assert.deepEqual((await sure('?payMm=2')).rota, { durum: 'rota-bagli-degil', adimlar: [], islemToplamDk: null, olcumToplamDk: null, eksik: false });
+      let istenen: number | null = null;
+      talasliAdimCozucusu(async (_db, malzemeNo) => { istenen = malzemeNo; return null; });
+      assert.equal((await sure('?payMm=2')).rota.durum, 'rota-yok');
+      assert.equal(istenen, await o().vt.tx((db) => ornekMalzemeNo(db, 'mil')), 'çözücü modelin malzemesiyle çağrılır');
+      const adimlar = [
+        { opNo: 10, ad: 'Tornalama', islemDk: 4.5, olcumOrtancaDk: 5, olcumAdedi: 5 },
+        { opNo: 20, ad: 'Frezeleme', islemDk: null, olcumOrtancaDk: null, olcumAdedi: 0 },
+      ];
+      talasliAdimCozucusu(async () => adimlar);
+      const r = await sure('?payMm=2&kalite=YOK');
+      assert.deepEqual(r.rota, { durum: 'bagli', adimlar, islemToplamDk: 4.5, olcumToplamDk: 5, eksik: true });
+      assert.equal(r.neden, null, 'rota tahmini değiştirmez');
+      await o().sahip.sorgu('UPDATE geometri_analiz SET hacim_mm3 = NULL, kapali = false WHERE revizyon_id = $1', [model.revizyonId]);
+      assert.deepEqual([(await sure('?payMm=2&kalite=YOK')).neden, (await sure('?payMm=2&kalite=YOK')).rota.durum], ['hacim-yok', 'bagli']);
+      await o().sahip.sorgu('UPDATE geometri_analiz SET hacim_mm3 = 8000, kapali = true WHERE revizyon_id = $1', [model.revizyonId]);
+    } finally {
+      talasliAdimCozucusu(onceki);
+    }
   });
 
   test('GEO-SU9 yetki: geometri.oku olan görür; işlemsiz 403, oturumsuz 401', async () => {

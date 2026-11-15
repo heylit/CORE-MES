@@ -14,6 +14,8 @@ export type { OperasyonKimligi, YururlukteOperasyon } from './sorgular.ts';
 export { emirBittiYansit, isEmriKopyalandiYansit } from './servis.ts';
 // İş emri bitti (2578 a): ölçüm emrin kapanmasını beklemeden yazılır.
 export { adimBittiYansit } from './servis/sureler.ts';
+// 3D Atölyesi süre kartı (3278 D): yürürlükteki rotanın talaşlı adımları, teorik işlem ve son ölçümler; bağı kablolama.ts kurar.
+export { talasliAdimSureleri } from './servis/sureler.ts';
 // Emre sabitlenen işlem şartnameleri (971 a): kalite, sevkiyat ve satın alma okur; tabloya yazmaz.
 export { isEmriSartnameleri } from './servis.ts';
 export type { IsEmriSartnamesi } from '#paylasilan/sozlesme/rota.ts';
