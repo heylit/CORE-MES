@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { AyarlarCevabi, DosyalarCevabi, Klasor, KlasorlerCevabi, MevcutAcCevabi, MevcutCevabi } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import type { AyarlarCevabi, DosyalarCevabi, KaynakKlasoruCevabi, Klasor, KlasorlerCevabi, MevcutAcCevabi, MevcutCevabi } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici, KlasorBaglantisi } from '../../ortak/arayuz/index.ts';
 import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
@@ -40,7 +41,9 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
       return json(200, { klasor: CIZIM, altKlasorler: [], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: 'Çizim-ve-model' } } satisfies DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/4/yukle') return json(200, {});
-    if (yol === '/ortak-dosyalar/kayit/siparis/77') return json(200, { klasorId: 3 });
+    if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.ortak-dosyalar'] } } satisfies OturumCevabi);
+    if (yol === '/ortak-dosyalar/kayit/siparis/77') return json(200, { klasorId: 3 } satisfies KaynakKlasoruCevabi);
+    if (yol === '/ortak-dosyalar/kayit/proje/5') return json(200, { klasorId: null } satisfies KaynakKlasoruCevabi);
     if (yol === '/ortak-dosyalar/ayarlar' || yol === '/ortak-dosyalar/ayarlar/kok-ac' || yol === '/ortak-dosyalar/ayarlar/sablon') {
       return json(200, {
         kok: yol.endsWith('kok-ac') ? { id: 1, ad: 'Müşteriler' } : null, sablon: { siparis: ['Teklif'], proje: [] }, acilamayan: [], topluIsler: [], ...ayar,

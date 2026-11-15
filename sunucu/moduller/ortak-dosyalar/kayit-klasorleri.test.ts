@@ -163,12 +163,15 @@ describe('kayda bağlı klasörler (kart 3288; gerçek PostgreSQL, gerçek giri�
     assert.equal((await oku(operator, `/ortak-dosyalar/klasorler/${cizim?.id ?? 0}/dosyalar`)).statusCode, 404);
   });
 
-  test('KK-10 kayıt bağlantısı: görebilen klasör kimliğini alır; göremeyen ve klasörü olmayan 404', async () => {
-    const c = await oku(depo, `/ortak-dosyalar/kayit/siparis/${S1.id}`);
-    assert.equal(c.statusCode, 200, c.body);
-    assert.equal(c.json<{ klasorId: number }>().klasorId, (await kaynakli('siparis', S1.id))?.id);
-    assert.equal((await oku(operator, `/ortak-dosyalar/kayit/siparis/${S1.id}`)).statusCode, 404);
-    assert.equal((await oku(yonetici, '/ortak-dosyalar/kayit/siparis/999999')).statusCode, 404);
+  test('KK-10 kayıt bağlantısı: görebilen klasör kimliğini alır; göremeyen ve klasörü olmayan 200 ile null alır', async () => {
+    const klasorId = async (k: typeof depo, yol: string) => {
+      const c = await oku(k, yol);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ klasorId: number | null }>().klasorId;
+    };
+    assert.equal(await klasorId(depo, `/ortak-dosyalar/kayit/siparis/${S1.id}`), (await kaynakli('siparis', S1.id))?.id);
+    assert.equal(await klasorId(operator, `/ortak-dosyalar/kayit/siparis/${S1.id}`), null);
+    assert.equal(await klasorId(yonetici, '/ortak-dosyalar/kayit/siparis/999999'), null);
   });
 
   test('KK-1 ad kayıttan izler; ad çakışması kaydı durdurmaz, hata listesine düşer', async () => {
@@ -202,7 +205,7 @@ describe('kayda bağlı klasörler (kart 3288; gerçek PostgreSQL, gerçek giri�
     assert.ok(!(await klasorler(satis)).some((k) => k.id === id));
     assert.ok(!(await klasorler(yonetici)).some((k) => k.id === id));
     assert.equal((await oku(satis, `/ortak-dosyalar/klasorler/${id}/dosyalar`)).statusCode, 404);
-    assert.equal((await oku(satis, `/ortak-dosyalar/kayit/proje/5001`)).statusCode, 404);
+    assert.equal((await oku(satis, `/ortak-dosyalar/kayit/proje/5001`)).json<{ klasorId: number | null }>().klasorId, null);
     await vt().tx((db) => kayitKlasoruArsivle(db, yonetici.id, 'siparis', S1.id, false));
     assert.ok((await klasorler(satis)).some((k) => k.id === id));
   });

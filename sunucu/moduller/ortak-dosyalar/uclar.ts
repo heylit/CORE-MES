@@ -83,7 +83,7 @@ export const uclar = [
     cevap: yetkiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => yetkiYazKomutu(db, kullanici, parametre.klasorId, govde),
   }),
-  // Kayda bağlı klasörler (kart 3288). Kayıt ekranındaki "Klasör" bağlantısı; görünmeyen klasörde 404.
+  // Kayda bağlı klasörler (kart 3288). Kayıt ekranındaki "Klasör" bağlantısı; klasör yoksa ya da görünmüyorsa null.
   uc({
     yontem: 'GET', yol: '/ortak-dosyalar/kayit/:tur/:id', yetki: SAYFA, parametre: kayitParametresi, cevap: kaynakKlasoruCevabi,
     isle: ({ db, kullanici, parametre }) => kaynakKlasoruBul(db, kullanici, parametre.tur, parametre.id),

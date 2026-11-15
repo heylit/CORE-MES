@@ -12,7 +12,7 @@ import {
   sablonDenetle, siparisKlasorAdi, zincirKaynagi,
 } from './kurallar.ts';
 import type { FirmaBilgisi, KayitZinciri, SiparisBilgisi } from './kurallar.ts';
-import { gorunumKur, klasorIste } from './servis.ts';
+import { gorunumKur } from './servis.ts';
 import * as s from './sorgular.ts';
 
 // Kayda bağlı klasörler (kart 3288; 2067-4 a, ADR 0030 eki). Müşteri, sipariş ve proje açılınca kaynak modülün olayı klasörü buradan
@@ -242,7 +242,6 @@ export async function topluArsiv(db: Db, kullanici: Kullanici, topluIs: string, 
 // Kayıt ekranındaki "Klasör" bağlantısı: klasör kişiye görünmüyorsa 404 (ADR 0030, 5); bağlantı sunucunun cevabına dayanır.
 export async function kaynakKlasoruBul(db: Db, kullanici: Kullanici, tur: KayitTuru, id: number): Promise<KaynakKlasoruCevabi> {
   const k = await s.kaynakKlasoru(db, tur, id);
-  if (k === null) throw bulunamadi(KAYIT_ILETILERI.kaynakYok);
-  klasorIste(await gorunumKur(db, kullanici), k.id, 'gorur');
-  return { klasorId: k.id };
+  if (k === null) return { klasorId: null };
+  return { klasorId: (await gorunumKur(db, kullanici)).gorunur(k.id) ? k.id : null };
 }
