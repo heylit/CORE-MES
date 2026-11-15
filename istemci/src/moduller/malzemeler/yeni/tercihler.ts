@@ -1,9 +1,11 @@
 import { useCallback, useState, useSyncExternalStore } from 'react';
+import { gruplamaMi, type Gruplama } from './katalog/kategori.ts';
 import type { BirimSistemi, KartKaydi } from './tipler.ts';
 
-// K4 a (VARSAYIM, geri alma ucuz): yalnız üç kişisel kolaylık tarayıcıda kalır; ortak veri sunucudadır. Depo kapalıysa
+// K4 a (VARSAYIM, geri alma ucuz): yalnız kişisel kolaylıklar tarayıcıda kalır (3275 ile katalog gruplaması ve gizli sütunlar); ortak veri sunucudadır. Depo kapalıysa
 // (gizli pencere) tercih bellekte yaşar, ekran yine çalışır.
-const ANAHTAR = { birim: 'tmi-malzemeler-birim', son: 'tmi-malzemeler-son-kaliteler', taslak: 'tmi-malzemeler-yarim-taslak' } as const;
+const ANAHTAR = { birim: 'tmi-malzemeler-birim', son: 'tmi-malzemeler-son-kaliteler', taslak: 'tmi-malzemeler-yarim-taslak',
+  gruplama: 'tmi-malzemeler-katalog-gruplama', sutunlar: 'tmi-malzemeler-katalog-gizli-sutunlar' } as const;
 
 function oku<T>(anahtar: string, dogrula: (v: unknown) => v is T): T | null {
   try {
@@ -58,3 +60,8 @@ export interface YarimTaslak { d: KartKaydi; adim: number }
 const taslakMi = (v: unknown): v is YarimTaslak | null =>
   v === null || (typeof v === 'object' && 'd' in v && typeof (v as { adim?: unknown }).adim === 'number');
 export const useYarimTaslak = () => useKalici<YarimTaslak | null>(ANAHTAR.taslak, taslakMi, null);
+
+export const useKatalogGruplama = () => useKalici<Gruplama>(ANAHTAR.gruplama, gruplamaMi, 'tur-kategori');
+const metinListesiMi = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+// Güncelleme varsayılan gizli: süzgeç kutusu açıkken 1280'de öteki sütunlar yatay kaymadan sığsın (3275, Arayüz bakışı).
+export const useGizliSutunlar = () => useKalici<string[]>(ANAHTAR.sutunlar, metinListesiMi, ['guncelleme']);

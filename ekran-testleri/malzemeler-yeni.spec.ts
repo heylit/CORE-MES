@@ -132,22 +132,30 @@ test.describe('M2 katalog', () => {
     await tasmaz(page);
   });
 
-  test('satırlar ayrık kart, sol kenarda tür rengi şerit; seçim sütununun başlığı yok (prototip)', async ({ page, ac }) => {
+  // 3275 a: katalog düz tablodur; satır tür ve kategori başlıkları altında, tür rengi Malzeme hücresinde ince şerit, seçim kutusu
+  // Malzeme hücresinde (ayrı başlıksız sütun yok).
+  test('gruplu tablo: tür ve kategori başlıkları, Malzeme hücresinde tür rengi şerit ve seçim kutusu (3275 a)', async ({ page, ac }) => {
     await ac('/malzemeler');
     const tablo = page.locator('.tc-mk-ana .tc-tablo');
-    await expect(tablo.locator('tbody tr').first()).toBeVisible();
+    await expect(tablo.locator('tbody tr[data-satir]').first()).toBeVisible();
+    await expect(tablo.locator('tbody tr.tc-tablo-grup').first().getByRole('button')).toHaveAttribute('aria-expanded', 'true');
     const olcu = await tablo.evaluate((el) => {
-      const malzeme = el.querySelector('tbody .tc-mk-malzeme');
-      const serit = malzeme ? getComputedStyle(malzeme, '::before') : null;
+      const serit = el.querySelector('tbody tr[data-satir] .tc-mk-serit');
       return {
-        secBaslik: el.querySelector('thead th')?.textContent?.trim() ?? null,
-        seritGenislik: serit ? parseFloat(serit.width) : 0,
-        seritRenk: serit?.backgroundColor ?? '',
+        ilkBaslik: el.querySelector('thead th')?.textContent?.trim() ?? null,
+        seritGenislik: serit ? serit.getBoundingClientRect().width : 0,
+        seritRenk: serit ? getComputedStyle(serit).backgroundColor : '',
+        kutu: el.querySelector('tbody tr[data-satir] .tc-mk-malzeme input[type="checkbox"]') !== null,
       };
     });
-    expect(olcu.secBaslik).toBe('');
+    expect(olcu.ilkBaslik).toMatch(/^Malzeme/);
     expect(olcu.seritGenislik).toBeGreaterThan(0);
     expect(olcu.seritRenk).not.toBe('rgba(0, 0, 0, 0)');
+    expect(olcu.kutu).toBe(true);
+    // 1280'de tablo yatay kaymadan sığar: kaydırma çubuğu uzun listenin altında kalır, fareyle ulaşılmaz.
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      expect(await page.locator('.tc-mk-ana .tc-tablo-kap').evaluate((el) => el.scrollWidth - el.clientWidth), 'tablo yatay taşma').toBeLessThanOrEqual(0);
+    }
     await tasmaz(page);
   });
 
@@ -155,14 +163,17 @@ test.describe('M2 katalog', () => {
   test('fareyle eski yoğunluk: satır <= 64 px, süzgeç satırı <= 30 px, ad kalın, kod soluk', async ({ page, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
     await ac('/malzemeler');
-    const satir = page.locator('.tc-mk-ana .tc-tablo tbody tr').first();
+    // 3275: 1440 altında süzgeç kutusu kapalı açılır; süzgeç satırı ölçüsü için açılır.
+    const kutu = page.locator('details.tc-mk-yan');
+    if (!(await kutu.evaluate((d) => (d as HTMLDetailsElement).open))) await kutu.locator('summary').click();
+    const satir = page.locator('.tc-mk-ana .tc-tablo tbody tr[data-satir]').first();
     await expect(satir).toBeVisible();
     const olcu = await page.evaluate(() => {
-      const tr = document.querySelector('.tc-mk-ana .tc-tablo tbody tr');
+      const tr = document.querySelector('.tc-mk-ana .tc-tablo tbody tr[data-satir]');
       const isaret = document.querySelector('.tc-mk-yan .tc-isaret');
       const ad = document.querySelector('.tc-mk-ad');
       const kod = document.querySelector('.tc-mk-kod');
-      const rozet = document.querySelector('.tc-mk-malzeme .tc-rozet');
+      const rozet = document.querySelector('.tc-mk-ana .tc-tablo .tc-rozet');
       return {
         satir: tr?.getBoundingClientRect().height ?? 0,
         isaret: isaret?.getBoundingClientRect().height ?? 0,
@@ -306,15 +317,18 @@ test.describe('1937 hiza', () => {
     await expect(page.getByRole('button', { name: 'JSON dışa aktar' })).toBeVisible();
     expect(await ust('JSON dışa aktar'), 'CSV ve JSON aynı satırda').toBe(await ust('CSV dışa aktar'));
     if ((page.viewportSize()?.width ?? 0) >= 720) expect(await ust('JSON dışa aktar'), 'üç düğme aynı satırda').toBe(await ust('Excel: şablon, dışa ve içe aktar'));
-    await expect(page.locator('.tc-mk-ana tbody tr').first()).toBeVisible();
-    const olcu = await page.locator('.tc-mk-ana tbody tr').first().evaluate((tr) => [...tr.querySelectorAll('td')].filter((td) => td.querySelector('.tc-mk-deger'))
+    await expect(page.locator('.tc-mk-ana tbody tr[data-satir]').first()).toBeVisible();
+    const satir = page.locator('.tc-mk-ana tbody tr[data-satir]').first();
+    // 3275 a: ağırlık ve birim her satırda değer + alt yazıdır, hammaddede kalite ve form da; Güncelleme varsayılan gizlidir.
+    const hammadde = (await satir.locator('.tc-mk-malzeme').getAttribute('data-tur')) === 'hammadde';
+    const olcu = await satir.evaluate((tr) => [...tr.querySelectorAll('td')].filter((td) => td.querySelector('.tc-mk-deger'))
       .map((td) => {
         const d = td.querySelector('.tc-mk-deger')!.getBoundingClientRect();
         const t = td.getBoundingClientRect();
         const s = getComputedStyle(td);
         return { cocuk: td.children.length, sagBosluk: t.right - parseFloat(s.paddingRight) - d.right, kart: td.closest('[data-kip="kart"]') !== null };
       }));
-    expect(olcu.length, 'ağırlık, birim, güncelleme').toBe(3);
+    expect(olcu.length, hammadde ? 'kalite, form, ağırlık, birim' : 'ağırlık, birim').toBe(hammadde ? 4 : 2);
     for (const h of olcu) {
       expect(h.cocuk, 'hücrede tek parça').toBe(1);
       if (h.kart) expect(Math.abs(h.sagBosluk), 'kart görünümünde değer sağa yaslı').toBeLessThanOrEqual(1);

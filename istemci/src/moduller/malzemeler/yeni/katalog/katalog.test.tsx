@@ -433,8 +433,9 @@ describe('688: çizim merkezinin resmi katalogda', () => {
     kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
     yeniEkranAc(KOK);
     await screen.findByText('YM-DNM-00021');
-    expect(resimIstekleri.at(-1)).toEqual([21, 22]);
-    expect(screen.getAllByTestId('kucuk-resim').map((e) => [e.textContent, e.dataset['uyum']])).toEqual([['YM-DNM-00021 Deneme braket', 'false'], ['HM-DNM-00022 Çubuk', 'false']]);
+    // 3275 a: liste tür grubuyla dizilir; hammadde grubu yarı mamulden önce gelir.
+    expect(resimIstekleri.at(-1)).toEqual([22, 21]);
+    expect(screen.getAllByTestId('kucuk-resim').map((e) => [e.textContent, e.dataset['uyum']])).toEqual([['HM-DNM-00022 Çubuk', 'false'], ['YM-DNM-00021 Deneme braket', 'false']]);
   });
 
   test('kart penceresinde panel kart no ile açılır, hammaddede de (2872-1 a; okuyan da görür, yazmayı panel denetler)', async () => {
@@ -448,5 +449,60 @@ describe('688: çizim merkezinin resmi katalogda', () => {
     yeniEkranAc(KOK);
     const ikinci = await kartiAc('HM-DNM-00022');
     expect(within(ikinci).getByTestId('resim-paneli').textContent).toBe('22');
+  });
+});
+
+describe('3275 a: katalog gruplu tablo', () => {
+  beforeEach(() => { try { localStorage.clear(); } catch { /* depo kapalı */ } });
+  const dort = () => kartlar(
+    satir('m1', 1, ornekKayit('m1', 'HM-DNM-00001', 'Birinci çubuk')),
+    satir('m2', 2, ornekKayit('m2', 'SF-DNM-00002', 'Birinci sarf', 'sarf')),
+    satir('m3', 3, { ...ornekKayit('m3', 'HM-DNM-00003', 'Plastik çubuk'), fam: 'plastik' }),
+    satir('m4', 4, ornekKayit('m4', 'HM-DNM-00004', 'İkinci çubuk')),
+  );
+
+  test('tür ve kategori başlıkları süzülmüş toplamla görünür; başlık katlanır', async () => {
+    kur(OKUYAN, dort());
+    yeniEkranAc(KOK);
+    await screen.findByText('HM-DNM-00001');
+    const tablo = screen.getByRole('table', { name: 'Malzeme kataloğu' });
+    const hm = within(tablo).getByRole('button', { name: /Hammadde\s*3/ });
+    expect(within(tablo).getByRole('button', { name: /Metal\s*2/ })).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: /Kalite · sınıf/ })).toBeTruthy();
+    fireEvent.click(hm);
+    expect(hm.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('HM-DNM-00001')).toBeNull();
+    expect(screen.getByText('SF-DNM-00002')).toBeTruthy();
+  });
+
+  test('grup kutusu grubun bütün kartlarını seçer', async () => {
+    kur(OKUYAN, dort());
+    yeniEkranAc(KOK);
+    await screen.findByText('HM-DNM-00001');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Grubu seç: Metal' }));
+    expect(screen.getByText('2 kayıt seçili')).toBeTruthy();
+  });
+
+  test('gruplama kapatılınca başlık kalmaz, tür satırda yazılır; seçim kalıcıdır', async () => {
+    kur(OKUYAN, dort());
+    yeniEkranAc(KOK);
+    await screen.findByText('HM-DNM-00001');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Grupla' }), { target: { value: 'yok' } });
+    expect(screen.queryByRole('button', { name: /Hammadde\s*3/ })).toBeNull();
+    expect(screen.getAllByText('Hammadde').length).toBeGreaterThan(0);
+    expect(localStorage.getItem('tmi-malzemeler-katalog-gruplama')).toBe('"yok"');
+  });
+
+  test('Sütunlar seçimi sütunu gizler; Güncelleme varsayılan gizlidir', async () => {
+    kur(OKUYAN, dort());
+    yeniEkranAc(KOK);
+    await screen.findByText('HM-DNM-00001');
+    expect(screen.queryByRole('checkbox', { name: 'Onay' })).toBeNull();
+    expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: /Güncelleme/ })).toBeNull();
+    const pencere = screen.getByText('Sütunlar').closest('details') as HTMLDetailsElement;
+    pencere.open = true;
+    fireEvent(pencere, new Event('toggle'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Onay' }));
+    expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: 'Onay' })).toBeNull();
   });
 });
