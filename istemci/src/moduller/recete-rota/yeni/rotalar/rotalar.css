@@ -69,7 +69,7 @@
 .tc-rr1-rvtab small { font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-rvtab.tc-rr1-on { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 .tc-rr1-rvtab.tc-rr1-on small { color: inherit; }
-/* 3247 a: rota sekmesi üç satırdır (ad, emir türleri, yürürlükteki revizyon); seçili sekmenin altı kalın çizilir. */
+/* 3247 a: rota sekmesi iki satırdır (ad; emir türleri ve yürürlükteki revizyon, 3295 a); seçili sekmenin altı kalın çizilir. */
 .tc-rr1-rotasekme { padding: var(--b-1) var(--b-2); gap: var(--b-1); text-align: left; }
 .tc-rr1-rotasekme.tc-rr1-cur { border-bottom-width: var(--cizgi-kalin); border-bottom-color: var(--hazard); }
 .tc-rr1-rvchip {
@@ -85,6 +85,44 @@
 .tc-rr1-rvtab.tc-rr1-rv-yururlukte small, .tc-rr1-rvtab.tc-rr1-rv-onay small { color: inherit; font-weight: 600; }
 .tc-rr1-rv-onayli { border-color: var(--run); color: var(--run); background: color-mix(in srgb, var(--run) 14%, var(--panel-solid)); }
 .tc-rr1-rv-panel { border-top: 1px solid var(--edge); padding-top: var(--b-2); }
+/* 3295 a: revizyon tek seçim kutusunda; düzenlerken koyu düzenleme çubuğu, durum bilgisi tek soluk satır. */
+.tc-rr1-revsec { min-height: var(--alan-boy); font-weight: 700; max-width: 100%; }
+.tc-rr1-duzencubugu {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: var(--ink); color: var(--bg);
+}
+.tc-rr1-dc-ad { font-size: var(--yazi-m); }
+.tc-rr1-dc-fark { font-size: var(--yazi-s); opacity: .8; }
+.tc-rr1-duzencubugu .tc-dugme-ikincil { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
+.tc-rr1-duzencubugu .tc-dugme-ikincil:disabled { opacity: .5; }
+.tc-rr1-rv-status { gap: var(--b-1) var(--b-2); color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr1-rv-status .tc-rr1-ipucu { margin: 0; }
+@media (max-width: 767px) {
+  .tc-rr1-duzencubugu > .tc-rr1-dc-ad { flex: 1 1 calc(100% - var(--dokunma)); }
+  .tc-rr1-duzencubugu > .tc-rr1-grow { display: none; }
+}
+/* Yatay hatta "+" listesi: tıklanan artının altında, telefonda alttan açılan levha. */
+.tc-rr1-ekle-liste {
+  position: fixed; left: var(--tc-rr1-ekle-x, var(--b-3)); top: calc(var(--tc-rr1-ekle-y, var(--b-6)) + var(--b-1)); z-index: var(--z-katman);
+  width: min(calc(100vw - var(--b-4)), calc(var(--menu-genis) * 1.6)); max-height: var(--ekran-boy-60); overflow: auto; overscroll-behavior: contain;
+  background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-2); box-shadow: var(--shadow); padding: var(--b-3);
+  display: flex; flex-direction: column; gap: var(--b-2);
+}
+.tc-rr1-ekle-liste .tc-rr1-cekmece-bas b { font-size: var(--yazi-s); }
+.tc-rr1-ekle-liste .tc-rr1-tiles { grid-template-columns: 1fr; }
+.tc-rr1-ekle-liste .tc-rr1-isec { display: flex; flex-direction: column; gap: var(--b-1); }
+/* Dal seçenekleri uzun operasyon listesinin ardında kaybolmaz: listenin altında yapışık durur. */
+.tc-rr1-ekle-liste > .tc-rr1-isec {
+  position: sticky; bottom: calc(-1 * var(--b-3)); margin: 0 calc(-1 * var(--b-3)) calc(-1 * var(--b-3)); padding: var(--b-2) var(--b-3) var(--b-3);
+  background: var(--panel-solid); border-top: 1px solid var(--edge);
+}
+/* Telefonda alttan açılır; kabuğun alt menü çubuğunun üstünde durur. */
+@media (max-width: 767px) {
+  .tc-rr1-ekle-liste {
+    left: var(--b-2); right: var(--b-2); top: auto; width: auto; max-height: var(--ekran-boy-70);
+    bottom: calc(var(--alt-cubuk) + env(safe-area-inset-bottom, 0px) + var(--b-2));
+  }
+}
 .tc-rr1-son { font-size: var(--yazi-s); color: var(--muted); }
 .tc-rr1-warnbox {
   border: 1px solid var(--hold); background: color-mix(in srgb, var(--hold) 10%, var(--panel-solid)); color: var(--ink);
@@ -124,28 +162,24 @@
   writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--yazi-s); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tc-rr1-tam .tc-rr1-body { min-height: var(--ekran-boy-70); }
-/* 3095: 768 ve üstünde gövde kaydırma kabının kalan boyunu alır (--tc-rr1-govde-boy, kalanBoy.ts); sayfa ayrıca kaymaz, şema, tablo ve
-   çekmeceler kendi içinde kayar. Kısa ekranda en az boy korunur. */
+/* 3095: 768 ve üstünde şema gövdesi kaydırma kabının kalan boyunu alır (--tc-rr1-govde-boy, kalanBoy.ts); şema sürüklenerek gezilir,
+   çekmeceler kendi içinde kayar. Kısa ekranda en az boy korunur. Tablo sabit boy almaz: sayfa kayar, tablonun ayrıca dikey kaydırması
+   yoktur; iki dikey kaydırma çubuğu üst üste çıkmasın (3295). */
 @media (min-width: 768px) {
-  .tc-rr1-body, .tc-rr1-tam .tc-rr1-body {
+  .tc-rr1-body:not(.tc-rr1-tbl), .tc-rr1-tam .tc-rr1-body:not(.tc-rr1-tbl) {
     height: max(var(--ekran-boy-40), var(--tc-rr1-govde-boy, var(--ekran-boy-70))); min-height: 0; grid-template-rows: minmax(0, 1fr);
   }
   /* Lejant tuvalin altında akışta kalır; tuval kalan boyu alır. */
   .tc-rr1-body .tc-rr1-canvas-kap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .tc-rr1-body .tc-rr1-canvas { flex: 1 1 auto; height: auto; min-height: 0; }
-  /* Kendi içinde kayan kutular konumlu olur: içlerindeki gizli etiketler (mutlak konumlu) kutuyla kırpılır, sayfayı uzatmaz. */
-  .tc-rr1-body > .tc-rr1-rtab-wrap { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 @media (min-width: 1024px) {
   .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp, .tc-rr1-body .tc-rr1-insp-serit { max-height: 100%; }
   .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp { position: relative; }
-}
-.tc-rr1-duzen-grup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
-/* Revizyon satırı dar kalınca (küçük pencere, Geri al ve Yinele açık) Palet ve Panel yalnız simge olur; satır kırılıp çalışma alanını
-   kısaltmasın. Ad aria-label ve title'da kalır. */
-.tc-rr1-revbar > .tc-rr1-rv-row:not(.tc-rr1-rv-status) { container: rr1-rv / inline-size; }
-@container rr1-rv (max-width: 1080px) {
-  .tc-rr1-duzen-grup .tc-rr1-dar-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Tabloda gövde sayfayla uzar; palet ve panel sayfa kayarken üstte kalır, uzunsa yalnız kendi içinde kayar. */
+  .tc-rr1-body.tc-rr1-tbl { align-items: start; }
+  .tc-rr1-body.tc-rr1-tbl > .tc-rr1-adimpanel, .tc-rr1-body.tc-rr1-tbl > .tc-rr1-insp-kap { position: sticky; top: 0; }
+  .tc-rr1-body.tc-rr1-tbl .tc-rr1-adimpanel, .tc-rr1-body.tc-rr1-tbl .tc-rr1-insp, .tc-rr1-body.tc-rr1-tbl .tc-rr1-insp-serit { max-height: var(--ekran-boy-70); }
 }
 .tc-rr1-adimpanel, .tc-rr1-insp {
   min-width: 0; max-height: var(--ekran-boy-70); overflow: auto; background: var(--panel); border: 1px solid var(--edge);
@@ -768,6 +802,7 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-hat-suruk .tc-rr1-hat-arti-disari { visibility: hidden; }
 .tc-rr1-hat-suruk .tc-rr1-hat-ekle { border-style: solid; border-color: var(--done); color: var(--done); }
 .tc-rr1-hat-arti-ustunde .tc-rr1-hat-ekle { background: var(--done); color: var(--on-sig); }
+.tc-rr1-hat-hucre-ustunde .tc-rr1-hk { outline: var(--pay-ince) dashed var(--done); outline-offset: var(--pay-ince); }
 .tc-rr1-hat-ym { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; gap: var(--b-1); min-width: 0; padding-bottom: var(--b-2); }
 .tc-rr1-hat-ymbas { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1); }
 .tc-rr1-hat-ymet { --renk-dal: var(--bp); }

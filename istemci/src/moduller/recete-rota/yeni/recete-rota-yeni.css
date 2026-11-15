@@ -1,7 +1,8 @@
 /* Yeni Reçete ve Rota ekranı: yalnız tasarım değişkenleri. Parçaların stilleri kendi klasörlerindedir (önekler PARCA-SOZLESMESI.md). */
 /* Kök çerçevelidir: kabuğun içerik alanı dolgusuz ve kaydırmasızdır; yeni ekran kaydırmayı kendi yapar. Plan şeridi kenardan kenaradır,
    dolgu gövdededir (eski ekranın main ve .wrap'i). */
-.tc-rry { display: flex; flex-direction: column; min-width: 0; height: 100%; overflow-y: auto; }
+/* Konumlu kök: içindeki mutlak konumlu gizli etiketler kökle kayar; kabuğun içerik alanını uzatıp ikinci kaydırma açmaz (3295). */
+.tc-rry { position: relative; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow-y: auto; }
 .tc-rry > * { flex-shrink: 0; }
 .tc-rry-govde { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; padding: var(--b-5) var(--b-4) var(--b-6); }
 /* Bölüm başı (eski sec-head): simgesiz başlık, altında soluk açıklama; açıklama iki satıra kısalır, dokununca açılır. */

@@ -81,8 +81,8 @@ describe('Ekranda OP numarası (B-2482-R4)', () => {
     kur();
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'Revizyon' }));
-    fireEvent.click(within(bolge).getByRole('button', { name: /^Geçmiş/ }));
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Rota işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Revizyonlar ve geçmiş/ }));
     const p = await waitFor(() => {
       const e = bolge.querySelector('[data-parca="kullanilmis-op"]');
       expect(e).not.toBeNull();

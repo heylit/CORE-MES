@@ -77,7 +77,8 @@ describe('3273 a: dolu taslağa şablondan ekleme', () => {
     rrAc('/recete-rota/schema');
     const b = await bolge();
     fireEvent.click(await within(b).findByRole('button', { name: 'Düzenle' }, BEKLE));
-    fireEvent.click(within(b).getByRole('button', { name: 'Şablondan ekle' }));
+    fireEvent.click(within(b).getByRole('button', { name: 'Rota işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Şablondan ekle' }));
     const p = await screen.findByRole('dialog', { name: 'Şablondan ekle' }, BEKLE);
     await within(p).findByRole('radio', { name: /Mil hattı/ }, BEKLE);
     fireEvent.click(within(p).getByRole('radio', { name: 'Başa' }));

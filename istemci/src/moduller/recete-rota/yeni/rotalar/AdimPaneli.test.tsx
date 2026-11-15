@@ -47,7 +47,8 @@ describe('R1 operasyon paleti (1110 a, 1111 b, 1112 a, 1113 a)', () => {
     const bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
-    expect(within(bolge).getByRole('button', { name: 'Operasyon paleti' }).getAttribute('aria-expanded')).toBe('false');
+    // 3295 a: palet düğmesi yoktur; operasyon listesi "+" ve "Adım ekle" ile açılır.
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
 
     fireEvent.click(within(bolge).getByRole('button', { name: 'Adım ekle' }));
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
@@ -60,29 +61,27 @@ describe('R1 operasyon paleti (1110 a, 1111 b, 1112 a, 1113 a)', () => {
     expect(adimlar(k.govde)).toEqual([10, null]);
   });
 
-  it('palet tercihi yalnız üst düğmeyle yazılır; "Adım ekle" ile açılan palet yeniden açılışta kapalıdır', async () => {
+  it('"Adım ekle" ile açılan palet yeniden açılışta kapalıdır; eski "palet açık" tercihi okunmaz (3295 a)', async () => {
     kaydedici();
+    try { localStorage.setItem('tc-rr1-adim-paneli', '1'); } catch { /* test ortamında depo yoksa */ }
     rrAc('/recete-rota/schema');
     let bolge = await bolumAc();
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'Adım ekle' }));
+    await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
+    expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Adım ekle' }));
     expect(within(bolge).getByRole('complementary', { name: 'Operasyon paleti' })).toBeTruthy();
     cleanup();
     rrAc('/recete-rota/schema');
     bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paleti' }));
-    cleanup();
-    rrAc('/recete-rota/schema');
-    bolge = await bolumAc();
-    expect(await within(bolge).findByRole('complementary', { name: 'Operasyon paleti' })).toBeTruthy();
   });
 
   it('gruplama operasyon grubuna göre; iş merkezine geçilir, başlık kapanınca kutucuk gizlenir', async () => {
     kaydedici();
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'Operasyon paleti' }));
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Adım ekle' }));
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     const grup = within(palet).getByRole('button', { name: /Talaşlı\s*1/ });
     expect(grup.getAttribute('aria-expanded')).toBe('true');
@@ -98,7 +97,7 @@ describe('R1 operasyon paleti (1110 a, 1111 b, 1112 a, 1113 a)', () => {
     const k = kaydedici();
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'Operasyon paleti' }));
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Adım ekle' }));
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     const t = tasima();
     fireEvent.dragStart(within(palet).getByRole('button', { name: /^T\s*Tornalama/ }), t);

@@ -265,13 +265,23 @@ describe('R1 Ürün ve rotalar: geri gönderme nedeni (ROT-3)', () => {
   }, 30000);
 });
 
+// Kopyala, Rev'den taslak ve yeni rota revizyon satırındaki "Rota işlemleri" menüsündedir (3295 a); menü yoksa liste boştur.
+const rotaMenusu = (bolge: HTMLElement): string[] => {
+  const d = within(bolge).queryByRole('button', { name: 'Rota işlemleri' });
+  if (!d) return [];
+  fireEvent.click(d);
+  const adlar = screen.queryAllByRole('menuitem').map((m) => m.textContent?.trim() ?? '');
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+  return adlar;
+};
+
 describe('R1 Ürün ve rotalar: reddedilen', () => {
   it('rota yazma işlemi olmayan düzenleme düğmelerini görmez, alanlar kapalı, istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
-    expect(within(bolge).queryByRole('button', { name: 'Yeni rota' })).toBeNull();
+    expect(rotaMenusu(bolge)).not.toContain('Yeni rota');
     // 2558 b/5: yazma yetkisi olmayan "Düzenle"yi görmez.
     expect(within(bolge).queryByRole('button', { name: 'Düzenle' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
@@ -296,7 +306,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     let bolge = await bolumAc();
     expect(await hazirlikKapali(bolge)).toBe(false);
     expect(within(bolge).queryByRole('button', { name: 'Onaya gönder…' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: 'Yeni rota' })).toBeNull();
+    expect(rotaMenusu(bolge)).not.toContain('Yeni rota');
     cleanup();
     // Yalnız düzenleyen, açık taslak yok: ilk düzenleme taslak açacağı için alan kapalıdır.
     sunucuKur(ile('rota.revizyon-yaz'), { durum: rotaDurumu() });
@@ -329,7 +339,6 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     };
     const revizyonPaneli = async (bolge: HTMLElement) => {
       await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
-      fireEvent.click(within(bolge).getByRole('button', { name: 'Revizyon' }));
     };
     // Yalnız düzenleyen, açık taslak yok: Düzenle ve Excel yok (sunucu taslak açmayı reddeder).
     sunucuKur(ile('rota.revizyon-yaz'), { durum: rotaDurumu() });
@@ -338,8 +347,8 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     await revizyonPaneli(bolge);
     expect(within(bolge).queryByRole('button', { name: 'Düzenle' })).toBeNull();
     expect(menu(bolge)).not.toContain('Excel ile rota adımları');
-    expect(within(bolge).queryByRole('button', { name: 'Rotayı başka ürüne kopyala' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: "Rev A'dan yeni taslak aç" })).toBeNull();
+    expect(rotaMenusu(bolge)).not.toContain('Rotayı başka ürüne kopyala');
+    expect(rotaMenusu(bolge)).not.toContain("Rev A'dan yeni taslak aç");
     cleanup();
     // Yalnız düzenleyen, açık taslak var: Düzenle ve Excel var; kopyala ve yeni rota yok.
     sunucuKur(ile('rota.revizyon-yaz'), { durum: rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 4)]) });
@@ -350,16 +359,16 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     const adlar = menu(bolge);
     expect(adlar).toContain('Excel ile rota adımları');
     expect(adlar).not.toContain('Yeni rota');
-    expect(within(bolge).queryByRole('button', { name: 'Rotayı başka ürüne kopyala' })).toBeNull();
+    expect(rotaMenusu(bolge)).not.toContain('Rotayı başka ürüne kopyala');
     cleanup();
     // Yalnız taslak açan: Rev'den yeni taslak açar; Düzenle, kopyala, yeni rota yok.
     sunucuKur(ile('rota.taslak-ac'), { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');
     bolge = await bolumAc();
     await revizyonPaneli(bolge);
-    expect(within(bolge).getByRole('button', { name: "Rev A'dan yeni taslak aç" })).toBeTruthy();
+    expect(rotaMenusu(bolge)).toContain("Rev A'dan yeni taslak aç");
     expect(within(bolge).queryByRole('button', { name: 'Düzenle' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: 'Rotayı başka ürüne kopyala' })).toBeNull();
+    expect(rotaMenusu(bolge)).not.toContain('Rotayı başka ürüne kopyala');
     expect(menu(bolge)).not.toContain('Yeni rota');
     cleanup();
     // İkisi birlikte: Düzenle, Excel, yeni rota ve kopyala açılır.
@@ -368,7 +377,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     bolge = await bolumAc();
     await revizyonPaneli(bolge);
     expect(within(bolge).getByRole('button', { name: 'Düzenle' })).toBeTruthy();
-    expect(within(bolge).getByRole('button', { name: 'Rotayı başka ürüne kopyala' })).toBeTruthy();
+    expect(rotaMenusu(bolge)).toContain('Rotayı başka ürüne kopyala');
     expect(menu(bolge)).toEqual(expect.arrayContaining(['Yeni rota', 'Excel ile rota adımları']));
   }, 30000);
 

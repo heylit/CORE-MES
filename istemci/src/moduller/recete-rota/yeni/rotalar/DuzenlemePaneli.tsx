@@ -606,7 +606,7 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
   return (
     <>
       <Baslik baslik="Adım ekle" etiket={sahip.code} kapat={kapat} />
-      {/* Operasyon listesi tek yerdedir: soldaki palet (1113 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
+      {/* Operasyon listesi tek yerdedir: "+" ile açılan liste ya da şemada palet (3295 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
       {s.dal && s.katilir && (
         <>
           <p className="tc-rr1-ipucu" data-parca="yeni-kol">
@@ -617,10 +617,10 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
       )}
       {s.dal && !s.katilir && sonra && (
         <p className="tc-rr1-ipucu" data-parca="yeni-kol">
-          Yeni Dal {s.dal}: OP {String(statuNo(sonra))} ardından çatallanır. Paletten ilk adımını seç; ardına eklenen adımlar da bu dala düşer.
+          Yeni Dal {s.dal}: OP {String(statuNo(sonra))} ardından çatallanır. Listeden ilk adımını seç; ardına eklenen adımlar da bu dala düşer.
         </p>
       )}
-      <p className="tc-rr1-ipucu">{s.katilir ? '' : sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek. ` : 'Rotanın başına eklenecek. '}Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
+      <p className="tc-rr1-ipucu">{s.katilir ? '' : sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek. ` : 'Rotanın başına eklenecek. '}Açılan operasyon listesinden operasyona dokun; istasyon ve süreler katalogdan gelir.</p>
       {/* Operasyon tipi kataloğu İstasyonlar'da tanımlanır (1927 a); yeni tip orada açılınca palete gelir. */}
       <SahibindeDuzenle sahip="operasyon" metin="Yeni operasyonu İstasyonlar'da tanımla" />
     </>

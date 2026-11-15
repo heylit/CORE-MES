@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Dugme, OnayPenceresi, Simge, Tablo } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Menu, OnayPenceresi, Simge, Tablo, type MenuOgesi } from '../../../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { tarih } from '../bicim.ts';
 import {
@@ -13,7 +13,7 @@ import type { RevEylemi } from './useRotaDuzeni.ts';
 // Sahibinin sınırı (sozlesme/rota.ts AZAMI_GERI_GONDERME_NEDENI); istemci sözleşmeyi değer olarak ithal edemez, aşan metni sahibi 400 ile reddeder.
 const AZAMI_GERI_GONDERME_NEDENI = 500;
 
-type Panel = 'gonder' | 'onay' | 'fark' | 'daha' | 'gecmis' | 'kopya' | null;
+type Panel = 'gonder' | 'onay' | 'fark' | 'gecmis' | 'kopya' | null;
 interface Onay { baslik: string; metin: string; onayMetni: string; tehlikeli?: boolean; yap: () => Promise<unknown> }
 
 // RT-31 (2519 a): verilmiş numara silinse de yeniden verilmez; geçmişte görünür ki boşluk açıklansın.
@@ -43,10 +43,24 @@ function SonDegisiklik({ r }: { r: RotaEkrani }) {
 }
 
 // Revizyon çubuğu (bugünkü ekranın revBar'ı): gösterilen revizyon, onay akışı, fark, geçmiş ve kopyalama.
-export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null }: {
-  r: RotaEkrani; agac: readonly string[]; urunId: string; urunSec: (id: string) => void;
-  // Düzenle ve Palet (UrunVeRotalar verir): düzenlenen revizyonun yanında durur.
-  duzenDugmeleri?: ReactNode;
+// Düzenleme kipi ve şablon işleri UrunVeRotalar'dandır; panelDugmesi yalnız şema ve tabloda (yatay hatta düzenleme alanı alttadır).
+export interface Duzenleme {
+  acar: boolean; kipi: boolean; yaz: (v: boolean) => void;
+  sablonEkle: (() => void) | null; sablonSakla: (() => void) | null; panelDugmesi: ReactNode;
+}
+
+// Revizyon satırında sarı (birincil) eylem var mı: üstteki "Üretim emri oluştur" o zaman ikincil kalır (2155-9 a, tek birincil).
+export function revizyonAnaEylemiVar(r: RotaEkrani, urunId: string): boolean {
+  const { duzen, yetki } = r;
+  const m = duzen.h.malzeme.get(urunId);
+  if (!m || m.type === 'ham') return false;
+  const V = duzen.gorulen(urunId);
+  const durumu = V ? V.status : duzen.taslakVar(urunId) ? 'taslak' : null;
+  return (yetki.rotaGonder && durumu === 'taslak') || (yetki.rotaOnayla && (durumu === 'onay' || durumu === 'onayli'));
+}
+
+export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
+  r: RotaEkrani; agac: readonly string[]; urunId: string; urunSec: (id: string) => void; duzenleme?: Duzenleme | null;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [not, setNot] = useState('');
@@ -92,26 +106,113 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
     </select>
   ) : <b className="tc-rr1-rv-t">{m.code} rotası</b>;
 
+  const yeniTaslakAcilir = yetki.rotaTaslakAc && !O && !taslak && V !== null && (V.status === 'onayli' || V.status === 'yururlukte');
+  // 3295 a: seyrek işler tek "⋯" menüsündedir; görünür düğme yalnız o anki ana iştir.
+  const menuOgeleri: MenuOgesi[] = [
+    { anahtar: 'gecmis', baslik: `Revizyonlar ve geçmiş (${String(revs.length)})`, simge: 'clock', sec: () => { setPanel('gecmis'); } },
+    ...(rotalar.ayarAc ? [{ anahtar: 'ayar', baslik: 'Rotanın adı ve emir türleri', simge: 'edit' as const, sec: rotalar.ayarAc }] : []),
+    ...(fark.length > 0 ? [{ anahtar: 'fark', baslik: `Yürürlükteki ile farkı (${String(fark.length)})`, simge: 'list' as const, sec: () => { setPanel('fark'); } }] : []),
+    ...(duzenleme?.sablonEkle ? [{ anahtar: 'sablon-ekle', baslik: 'Şablondan ekle', simge: 'route' as const, sec: duzenleme.sablonEkle }] : []),
+    ...(duzenleme?.sablonSakla ? [{ anahtar: 'sablon-sakla', baslik: 'Şablon olarak sakla', simge: 'check' as const, sec: duzenleme.sablonSakla }] : []),
+    ...(yeniTaslakAcilir ? [{ anahtar: 'yeni-taslak', baslik: `Rev ${V.no}'dan yeni taslak aç`, simge: 'plus' as const, sec: () => { void duzen.yeniTaslak(urunId, V); } }] : []),
+    ...(yetki.rotaYaz && (O || taslak) && revs.length > 0
+      ? [{ anahtar: 'ilk-rev', baslik: 'Taslağı ilk revizyona çevir', simge: 'back' as const, sec: () => { duzen.ilkRevizyonaCevir(urunId); } }] : []),
+    ...(yetki.rotaYaz && yetki.rotaTaslakAc ? [{ anahtar: 'kopya', baslik: 'Rotayı başka ürüne kopyala', simge: 'next' as const, sec: () => { setPanel('kopya'); } }] : []),
+    ...(rotalar.yeniAc ? [{ anahtar: 'yeni-rota', baslik: 'Yeni rota', simge: 'plus' as const, sec: rotalar.yeniAc }] : []),
+    ...(yetki.rotaYaz && (O || taslak) ? [{
+      anahtar: 'sil', baslik: 'Taslağı sil', simge: 'trash' as const, ton: 'tehlike' as const,
+      sec: () => {
+        setOnay({ baslik: 'Taslak silinsin mi?', metin: `${m.code} ${O ? `Rev ${O.no}` : 'yeni'} taslağı silinir; yürürlükteki rota kalır.`, onayMetni: 'Taslağı sil',
+          tehlikeli: true, yap: () => eylem('sil', O) });
+      },
+    }] : []),
+  ];
+  const islemMenusu = <Menu etiket="Rota işlemleri" ogeler={menuOgeleri} />;
+  const anaIs = (
+    <>
+      {yetki.rotaGonder && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
+      {onaylayabilir && durumu === 'onay' && <Dugme tur="birincil" simge="check" onClick={() => { ac('onay'); }}>Onayla…</Dugme>}
+      {onaylayabilir && V?.status === 'onayli' && (
+        <Dugme tur="birincil" onClick={() => {
+          setOnay({ baslik: `Rev ${V.no} yürürlüğe alınsın mı?`, metin: 'Plan ve Kanban bu revizyonla hesaplanır; önceki revizyon "Onaylı" olarak durur.',
+            onayMetni: 'Yürürlüğe al', yap: () => eylem('yururlugeAl', V) });
+        }}>Rev {V.no}&apos;yı yürürlüğe al</Dugme>
+      )}
+    </>
+  );
+  const duzenleniyor = duzenleme?.kipi === true;
+  const duzenlenenAd = O ? `Rev ${O.no} taslak` : taslak ? 'Yeni taslak' : 'Taslak';
+  const revSecimi = revs.length === 0 ? (
+    taslak ? <span className="tc-rr1-rvchip tc-rr1-rv-taslak"><b>Yeni taslak</b> kaydediliyor</span>
+      : <span className="tc-rr1-rvchip tc-rr1-rotayok" data-parca="rota-yok"><Simge ad="route" boyut="k" /> Rota yok</span>
+  ) : (
+    <select className="tc-rr1-secim tc-rr1-revsec" value={V?.id ?? ''} aria-label={`${rotalar.rotaAdi ?? `${m.code} rotası`}: gösterilen revizyon`}
+      onChange={(e) => { duzen.revSec(urunId, e.target.value); if (panel === 'gecmis') setPanel(null); }}>
+      {V === null && <option value="">Yeni taslak</option>}
+      {[...revs].reverse().map((x) => <option key={x.id} value={x.id}>Rev {x.no} · {REV_DURUMU[x.status].toLocaleLowerCase('tr-TR')}</option>)}
+    </select>
+  );
+  // Durum satırı: son değişiklik, öteki taslaklar ve gösterilen revizyonun planla ilişkisi tek soluk satırdadır.
+  const durumNotu = V && V.status !== 'yururlukte'
+    ? `${V.status === 'onayli'
+      ? `Rev ${V.no} gösteriliyor (onaylı, yürürlükte değil).${O || taslak ? ` Açık taslak Rev ${O?.no ?? ''} var; değiştirmek için onu seç.` : ' Değiştirirsen bundan yeni bir taslak açılır.'}`
+      : `Rev ${V.no} ${V.status === 'onay' ? 'onay bekliyor' : 'taslak'}: plan yürürlükteki Rev ${A?.no ?? '–'} ile devam ediyor.`}${V.note ? ` Not: ${V.note}` : ''}`
+    : V?.status === 'yururlukte' && (O || taslak) ? `Yürürlükteki Rev ${V.no} gösteriliyor; açık taslağı düzenlemek için onu seç.` : null;
+  const digerTaslaklar = taslaklar.filter((x) => x !== urunId);
+
   return (
     <div className={`tc-rr1-revbar${durumu && durumu !== 'yururlukte' ? ' tc-rr1-has-open' : ''}`}>
-      {rotalar.satir && (
+      {(rotalar.satir || agac.length > 1) && (
         <div className="tc-rr1-rv-row">
-          {agac.length > 1 ? urunEtiketi : <span><b className="tc-rr1-rv-t">{m.code}</b> {m.name}</span>}
-          <span className="tc-rr1-grow" />
-          {rotalar.yeniDugmesi}
+          {agac.length > 1 && urunEtiketi}
+          {rotalar.satir}
         </div>
       )}
-      {rotalar.satir}
-      {(taslaklar.length > 0 || duzen.sonDegisiklik) && (
+      {duzenleniyor ? (
+        <div className="tc-rr1-duzencubugu" role="toolbar" aria-label="Rota düzenleme" data-parca="duzen-cubugu">
+          <Simge ad="edit" boyut="k" />
+          <b className="tc-rr1-dc-ad">{duzenlenenAd} düzenleniyor</b>
+          {fark.length > 0 && <span className="tc-rr1-dc-fark">{fark.length} değişiklik</span>}
+          <span className="tc-rr1-grow" />
+          {duzen.duzenlenebilir(urunId) && gosterilenAcik && (
+            <>
+              <Dugme tur="ikincil" simge="back" aria-label="Geri al" disabled={!duzen.geriAlinabilir(urunId)} title="Geri al (Ctrl+Z)"
+                onClick={() => { duzen.geriAl(urunId, 'geri'); }} />
+              <Dugme tur="ikincil" simge="rotate" aria-label="Yinele" disabled={!duzen.yinelenebilir(urunId)} title="Yinele (Ctrl+Y)"
+                onClick={() => { duzen.geriAl(urunId, 'ileri'); }} />
+            </>
+          )}
+          {duzenleme.panelDugmesi}
+          <Dugme tur="ikincil" simge="check" title="Görüntülemeye dön; kayıtlar taslakta kalır" onClick={() => { duzenleme.yaz(false); }}>Bitir</Dugme>
+          {yetki.rotaGonder && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
+          {islemMenusu}
+        </div>
+      ) : (
+        <div className="tc-rr1-rv-row">
+          {!rotalar.satir && agac.length <= 1 && <span><b className="tc-rr1-rv-t">{m.code}</b> {m.name}</span>}
+          {revSecimi}
+          <span className="tc-rr1-grow" />
+          {duzenleme?.acar && (
+            <Dugme tur="ikincil" simge="wrench" title="Rotayı düzenle: ilk değişiklikte taslak açılır, yürürlükteki rota değişmez"
+              onClick={() => { duzenleme.yaz(true); }}>Düzenle</Dugme>
+          )}
+          {duzenleme?.panelDugmesi}
+          {anaIs}
+          {islemMenusu}
+        </div>
+      )}
+      {(duzen.sonDegisiklik || digerTaslaklar.length > 0 || durumNotu) && (
         <div className="tc-rr1-rv-row tc-rr1-rv-status">
+          <Simge ad="clock" boyut="k" />
           <SonDegisiklik r={r} />
-          {taslaklar.length > 0 && <span className="tc-rr1-ipucu">Bu şemadaki taslaklar:</span>}
-          {taslaklar.map((x) => {
+          {durumNotu && <span className="tc-rr1-ipucu">{durumNotu}</span>}
+          {digerTaslaklar.length > 0 && <span className="tc-rr1-ipucu">Bu şemadaki öteki taslaklar:</span>}
+          {digerTaslaklar.map((x) => {
             const xo = acikRevizyon(duzen.revler(x));
             const xa = yururlukteki(duzen.revler(x));
             const n = rotaFarki(xa?.data.steps ?? [], duzen.adimlar(x), adlar).length;
             return (
-              <button key={x} type="button" className={`tc-rr1-rvchip tc-rr1-rv-${xo?.status ?? 'taslak'} tc-rr1-as-btn${x === urunId ? ' tc-rr1-cur' : ''}`}
+              <button key={x} type="button" className={`tc-rr1-rvchip tc-rr1-rv-${xo?.status ?? 'taslak'} tc-rr1-as-btn`}
                 onClick={() => { urunSec(x); setPanel('fark'); }}>
                 {h.malzeme.get(x)?.code} {xo ? `Rev ${xo.no} ${xo.status === 'onay' ? 'onayda' : 'taslak'}` : 'yeni taslak'}, {n} değişiklik
               </button>
@@ -119,48 +220,12 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
           })}
         </div>
       )}
-      <div className="tc-rr1-rv-row">
-        {rotalar.rotaAdi === null ? urunEtiketi : <span className="tc-rr1-ipucu">{rotalar.rotaAdi} revizyonları</span>}
-        <span className="tc-rr1-rv-list" role="group" aria-label="Revizyonlar">
-          {revs.length === 0 && !taslak && <span className="tc-rr1-rvchip tc-rr1-rotayok" data-parca="rota-yok"><Simge ad="route" boyut="k" /> Rota yok</span>}
-          {revs.map((x) => (
-            <button key={x.id} type="button" className={`tc-rr1-rvtab tc-rr1-rv-${x.status}${V?.id === x.id ? ' tc-rr1-on' : ''}`}
-              aria-pressed={V?.id === x.id} title={`${REV_DURUMU[x.status]}${x.note ? `: ${x.note}` : ''}`}
-              onClick={() => { duzen.revSec(urunId, x.id); if (panel === 'gecmis') setPanel(null); }}>
-              <b>Rev {x.no}</b><small>{REV_DURUMU[x.status]}</small>
-            </button>
-          ))}
-          {taslak && !O && <span className="tc-rr1-rvtab tc-rr1-rv-taslak tc-rr1-on"><b>Yeni taslak</b><small>kaydediliyor</small></span>}
-        </span>
-        {duzenDugmeleri}
-        {duzen.duzenlenebilir(urunId) && gosterilenAcik && (
-          <>
-            <Dugme tur="ikincil" disabled={!duzen.geriAlinabilir(urunId)} title="Geri al (Ctrl+Z)" onClick={() => { duzen.geriAl(urunId, 'geri'); }}>Geri al</Dugme>
-            <Dugme tur="ikincil" disabled={!duzen.yinelenebilir(urunId)} title="Yinele (Ctrl+Y)" onClick={() => { duzen.geriAl(urunId, 'ileri'); }}>Yinele</Dugme>
-          </>
-        )}
-        <span className="tc-rr1-grow" />
-        {yetki.rotaGonder && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
-        {onaylayabilir && durumu === 'onay' && <Dugme tur="birincil" simge="check" onClick={() => { ac('onay'); }}>Onayla…</Dugme>}
-        {onaylayabilir && V?.status === 'onayli' && (
-          <Dugme tur="birincil" onClick={() => {
-            setOnay({ baslik: `Rev ${V.no} yürürlüğe alınsın mı?`, metin: 'Plan ve Kanban bu revizyonla hesaplanır; önceki revizyon "Onaylı" olarak durur.',
-              onayMetni: 'Yürürlüğe al', yap: () => eylem('yururlugeAl', V) });
-          }}>Rev {V.no}&apos;yı yürürlüğe al</Dugme>
-        )}
-        {fark.length > 0 && (
-          <Dugme tur="ikincil" aria-pressed={panel === 'fark'} onClick={() => { ac('fark'); }}>{fark.length} fark</Dugme>
-        )}
-        <GecmisDugmesi kayitlar={revs.flatMap((x) => (Number.isSafeInteger(Number(x.id)) ? [{ tablo: 'rota_revizyonu', anahtar: { id: Number(x.id) } }] : []))} />
-        {rotalar.ayarDugmesi}
-        <Dugme tur="ikincil" simge="more" aria-pressed={panel === 'daha' || panel === 'gecmis' || panel === 'kopya'} onClick={() => { ac('daha'); }}>Revizyon</Dugme>
-      </div>
       {rotalar.panel}
       {eksikler.length > 0 && (
         <div className="tc-rr1-warnbox" role="alert">
           Rota eksik: {eksikler.map((x) => x.metin).join('; ')}.{' '}
           {V && (V.status === 'yururlukte' || V.status === 'onayli')
-            ? `Bu rotanın emirleri plana alınmaz; ${yetki.rotaYaz ? `düzeltmek için Revizyon menüsünden "Rev ${V.no}'dan yeni taslak aç"ı seçin.` : 'düzeltmeyi rota yazma yetkisi olan biri yapar.'}`
+            ? `Bu rotanın emirleri plana alınmaz; ${yetki.rotaYaz ? `düzeltmek için "⋯" menüsünden "Rev ${V.no}'dan yeni taslak aç"ı seçin.` : 'düzeltmeyi rota yazma yetkisi olan biri yapar.'}`
             : 'Taslak kaydedilir ama onaya gönderilemez ve emri plana alınmaz.'}
         </div>
       )}
@@ -172,21 +237,8 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
       {duzen.kayitHatasi(urunId) && (
         <div className="tc-rr1-warnbox" role="alert">Taslak rota modülüne kaydedilemedi: {duzen.kayitHatasi(urunId)}</div>
       )}
-      {V && V.status !== 'yururlukte' && (
-        <div className="tc-rr1-rv-row tc-rr1-rv-note">
-          <span className="tc-rr1-ipucu">
-            {V.status === 'onayli'
-              ? `Rev ${V.no} gösteriliyor (onaylı, yürürlükte değil).${O || taslak ? ` Açık taslak Rev ${O?.no ?? ''} var; değiştirmek için onu göster.` : ' Değiştirirsen bundan yeni bir taslak açılır.'}`
-              : `Rev ${V.no} ${V.status === 'onay' ? 'onay bekliyor' : 'taslak'}: plan yürürlükteki Rev ${A?.no ?? '–'} ile devam ediyor.`}
-            {V.note ? ` Not: ${V.note}` : ''}
-          </span>
-        </div>
-      )}
       {V?.status === 'taslak' && V.geriGondermeNedeni && (
         <div className="tc-rr1-warnbox" role="status">Rev {V.no} onaydan düzeltmeye geri gönderildi: {V.geriGondermeNedeni}</div>
-      )}
-      {V?.status === 'yururlukte' && (O || taslak) && (
-        <div className="tc-rr1-rv-row tc-rr1-rv-note"><span className="tc-rr1-ipucu">Yürürlükteki Rev {V.no} gösteriliyor; açık taslağı düzenlemek için onu seç.</span></div>
       )}
       {panel === 'gonder' && durumu === 'taslak' && (
         <div className="tc-rr1-rv-panel tc-rr1-rv-row">
@@ -218,28 +270,13 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
           {fark.length > 0 ? <ul className="tc-rr1-liste">{fark.map((t, i) => <li key={i}>{t}</li>)}</ul> : <p className="tc-rr1-ipucu">Fark yok.</p>}
         </div>
       )}
-      {panel === 'daha' && (
-        <div className="tc-rr1-rv-panel tc-rr1-rv-row">
-          {yetki.rotaYaz && (O || taslak) && revs.length > 0 && (
-            <Dugme tur="ikincil" onClick={() => { duzen.ilkRevizyonaCevir(urunId); setPanel(null); }}>Taslağı ilk revizyona çevir</Dugme>
-          )}
-          {yetki.rotaYaz && (O || taslak) && (
-            <Dugme tur="tehlike" simge="trash" onClick={() => {
-              setOnay({ baslik: 'Taslak silinsin mi?', metin: `${m.code} ${O ? `Rev ${O.no}` : 'yeni'} taslağı silinir; yürürlükteki rota kalır.`, onayMetni: 'Taslağı sil',
-                tehlikeli: true, yap: () => eylem('sil', O) });
-            }}>Taslağı sil</Dugme>
-          )}
-          {yetki.rotaTaslakAc && !O && !taslak && V && (V.status === 'onayli' || V.status === 'yururlukte') && (
-            <Dugme tur="ikincil" disabled={duzen.mesgul} onClick={() => { void duzen.yeniTaslak(urunId, V).then(() => { setPanel(null); }); }}>
-              Rev {V.no}&apos;dan yeni taslak aç
-            </Dugme>
-          )}
-          <Dugme tur="ikincil" onClick={() => { setPanel('gecmis'); }}>Geçmiş ({revs.length})</Dugme>
-          {yetki.rotaYaz && yetki.rotaTaslakAc && <Dugme tur="ikincil" onClick={() => { setPanel('kopya'); }}>Rotayı başka ürüne kopyala</Dugme>}
-        </div>
-      )}
       {panel === 'gecmis' && (
         <div className="tc-rr1-rv-panel">
+          <div className="tc-rr1-rv-row">
+            <b>Revizyonlar</b><span className="tc-rr1-grow" />
+            <GecmisDugmesi kayitlar={revs.flatMap((x) => (Number.isSafeInteger(Number(x.id)) ? [{ tablo: 'rota_revizyonu', anahtar: { id: Number(x.id) } }] : []))} />
+            <Dugme tur="ikincil" simge="x" aria-label="Revizyonları kapat" onClick={() => { setPanel(null); }} />
+          </div>
           <KullanilmisNumaralar urunId={urunId} adimlar={adimlar} />
           <Tablo
             etiket={`${m.code} revizyon geçmişi`} satirlar={[...revs].reverse()} satirAnahtari={(x) => x.id} bosMesaj="Henüz revizyon yok."

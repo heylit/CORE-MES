@@ -63,11 +63,29 @@ describe('3248-2 çalışma alanı', () => {
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Buraya katılan dal ekle' }));
     expect(within(bolge).getByText('Bu parça stoğa girecek ya da başka üründe de kullanılacaksa yarı mamul olarak açın.')).toBeTruthy();
-    const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
+    const palet = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
     expect(within(palet).getByText('MM-0001: yeni bağımsız Dal B, OP 40 Tornalama adımında ana hatta katılır')).toBeTruthy();
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
     expect(within(hatAl(bolge)).getByText(/Dal B \(bağımsız\) · ana hatta OP 40'de katılır/)).toBeTruthy();
     expect(within(within(bolge).getByRole('region', { name: 'Süre şeridi' })).getByText('Dal B (bağımsız)')).toBeTruthy();
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)).toEqual([
+      [10, null, '', 'bekleyen'], [20, null, '', 'bekleyen'], [30, 'A', '', 'bekleyen'], [null, 'B', '', 'bagimsiz'], [40, null, 'B', 'bekleyen'], [50, null, 'A', 'bekleyen'],
+    ]);
+  }, 30000);
+
+  it('ayrı başlayan dal hattaki + listesinden açılır: "Bu adıma katılan dal" (3295 a)', async () => {
+    const k = kur();
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(hatAl(bolge)).getByRole('button', { name: 'OP 40 ardına adım ekle' }));
+    const liste = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
+    fireEvent.click(within(liste).getByRole('button', { name: /Bu adıma katılan dal \(OP 40; rotanın başından başlar\)/ }));
+    const yeni = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
+    expect(within(yeni).getByText('MM-0001: yeni bağımsız Dal B, OP 40 Tornalama adımında ana hatta katılır')).toBeTruthy();
+    expect(within(yeni).queryByRole('button', { name: /Bu adıma katılan dal/ })).toBeNull();
+    fireEvent.click(within(yeni).getByRole('button', { name: /Tornalama/ }));
+    expect(within(bolge).queryByRole('dialog', { name: 'Adım ekle' })).toBeNull();
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(sira(k.govde)).toEqual([
       [10, null, '', 'bekleyen'], [20, null, '', 'bekleyen'], [30, 'A', '', 'bekleyen'], [null, 'B', '', 'bagimsiz'], [40, null, 'B', 'bekleyen'], [50, null, 'A', 'bekleyen'],
@@ -90,6 +108,39 @@ describe('3248-2 çalışma alanı', () => {
     fireEvent.click(within(bildirim.closest('[role="status"], [role="alert"], div')!.parentElement!).getByRole('button', { name: 'Geri al' }));
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(sira(k.govde)?.map((x) => x[0])).toEqual([10, 20, 30, 40, 50]);
+  }, 30000);
+
+  it('adımın üstüne bırakılan adım onun yerini alır; şeridin başına da taşınır (3295)', async () => {
+    const k = kur();
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const hat = hatAl(bolge);
+    // Başka şeridin adımının üstüne bırakılmaz.
+    expect(surukle(kart(hat, 30), kart(hat, 40).parentElement!)).toBe(false);
+    // Arkadaki öne gelir: OP 20, OP 10'un üstüne bırakılınca şeridin başına geçer.
+    // OP 20 dalın çatalı olduğundan taşıma önce onay ister (2542 E).
+    expect(surukle(kart(hat, 20), kart(hat, 10).parentElement!)).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Taşı' }));
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([20, 10, 30, 40, 50]);
+  }, 30000);
+
+  // Test ön bakışı (3295 T1): ileri giden hedefin ardına, ortadaki hedefe geri gelen onun önüne geçer.
+  it('ileri bırakılan adım hedefin ardına, ortadaki hedefe geri bırakılan onun önüne geçer (3295)', async () => {
+    const duz = () => [10, 20, 30, 40].map((n) => adimOrnegi(n === 10 ? {} : { id: `o${String(n)}`, seq: n, opNo: n, ins: [] }));
+    let k = kur(duz());
+    rrAc('/recete-rota/schema');
+    let hat = hatAl(await bolumAc());
+    expect(surukle(kart(hat, 10), kart(hat, 30).parentElement!)).toBe(true);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([20, 30, 10, 40]);
+    cleanup();
+    k = kur(duz());
+    rrAc('/recete-rota/schema');
+    hat = hatAl(await bolumAc());
+    expect(surukle(kart(hat, 40), kart(hat, 20).parentElement!)).toBe(true);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([10, 40, 20, 30]);
   }, 30000);
 
   it('Öne / Geriye yatay hatta kendi şeridinde yer değiştirir', async () => {
