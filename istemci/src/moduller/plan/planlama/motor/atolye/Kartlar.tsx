@@ -12,7 +12,7 @@ import { elleSayilari, saatOku, saatYazi, simdiSaati } from '../kurallar.ts';
 import { mesaiAdaylari } from '../secim/kurallar.ts';
 import { gunDondurmasiniKaldir, gunuDondur, sabitleriKaldir } from '../cizelge/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
-import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
+import { onayAcIste } from '../../kokpit/istek.ts';
 import {
   bitisFarklari, DONUK_SECENEKLERI, donukEtiketi, IZ_KARAR, IZ_ONAY, duruslar, GOSTERGE_GECIKEN_IPUCU, gostergeGecikenSay, gercekOku, gs, gunAnahtari, gunKaydi, gunluk, kilitGunleri, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
@@ -154,7 +154,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       return {
         ad: 'Onaya gönder', simge: 'upload', ic: (
           <>
-            <Not>Canlı plan onaylanana kadar değişmez. Çalışma planı kontrolden geçer ve onaya gider; sonucu Onay sekmesinde görürsün.</Not>
+            <Not>Canlı plan onaylanana kadar değişmez. Onaya gönderme ve canlıya alma Kokpit'te yapılır.</Not>
             {canli ? (
               <>
                 <Satir a="Canlı sürüm" b={canli} />
@@ -164,7 +164,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
             {engel && <Not uyari>{engel}</Not>}
             <div className="tc-pym-tp-eylem">
-              <GonderDugmesi ort={ort} bildir={bildir} engel={engel} />
+              <GonderDugmesi ort={ort} />
               <button type="button" className="tc-dugme" onClick={ort.kartKapat}>Vazgeç</button>
             </div>
           </>
@@ -471,25 +471,10 @@ export function gonderEngeli(c: PlanlamaCalismasi): string | null {
     : 'Gönderilemez: veri plandan sonra değişti. Önce planı yeniden çözün.';
 }
 
-function GonderDugmesi({ ort, bildir, engel }: { ort: Ortam; bildir: Bildir; engel: string | null }) {
-  const [gidiyor, setGidiyor] = useState(false);
-  if (engel !== null) {
-    return <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" onClick={() => { ort.kartKapat(); ort.sekSec('onay'); }}><Simge ad="check" boyut="k" />Onay sekmesine git</button>;
-  }
-  const gonder = async () => {
-    setGidiyor(true);
-    try {
-      const g = await calismayiYolla({ o: ort.o, c: ort.c, sen: ort.sen, hedef: 'onay', not: null });
-      if (g.senaryolar) ort.senYaz(g.senaryolar);
-      ort.kartKapat(); ort.sekSec('onay');
-      bildir('tamam', gonderIletisi('onay', g));
-    } catch (e) {
-      setGidiyor(false);
-      bildir('hata', gonderHataIletisi(e));
-    }
-  };
+// 3282-4 a: canlıya alma ve onaya gönderme yalnız Kokpit'tedir; bu kart Kokpit'in Onay ve canlı bölümünü açar.
+function GonderDugmesi({ ort }: { ort: Ortam }) {
   return (
-    <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" disabled={gidiyor} onClick={() => void gonder()}><Simge ad="upload" boyut="k" />{gidiyor ? 'Gönderiliyor' : 'Gönder'}</button>
+    <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" onClick={() => { ort.kartKapat(); onayAcIste(); ort.o.git('kokpit'); }}><Simge ad="target" boyut="k" />Kokpit'te aç</button>
   );
 }
 
