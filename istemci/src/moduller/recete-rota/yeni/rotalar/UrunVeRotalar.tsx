@@ -77,7 +77,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   });
   // Gövde sayfanın kalan boyunu alır; tam ekranda kaydıran kap değişir, ürün listesi ve patlamış rota gövdesizdir.
   // Yatay hatta gövde boy almaz: sayfa kayar, hat yalnız yana kayar, alttaki düzenleme alanı kendi boyundadır (3248).
-  useKalanBoy(govdeRef, !liste && gorunum !== 'patlamis' && !hatli, `${gorunum}|${String(tamEkran)}|${kok ?? ''}`);
+  useKalanBoy(govdeRef, !liste && gorunum === 'dikey', `${gorunum}|${String(tamEkran)}|${kok ?? ''}`);
   // Kap 1200 px'ten darsa iki çekmece birlikte açılınca şema ya da tablo okunmaz: biri açılınca öteki kapanır. 1000'de menü açık
   // 1280 ekranda palet, şema ve panel birlikte kalıyor, ortadaki adım kartı taşıyordu (3095).
   const katmanli = () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;

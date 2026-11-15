@@ -68,6 +68,26 @@ test.describe('R0 iskelet', () => {
 });
 
 test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
+  // 3295: içerik tek dikey kaydırmayla kayar. Kabuğun yan menüsü ve sabit çekmeceler ayrı katmandır, sayılmaz; yan sütundaki
+  // palet ve panel listesi kendi içinde kayabilir.
+  test('her görünümde içerik tek dikey kaydırmayla kayar', async ({ page, ac }) => {
+    const kayanlar = () => [...document.querySelectorAll<HTMLElement>('*')].filter((el) => {
+      const s = getComputedStyle(el);
+      if (s.position === 'fixed' || el.closest('.tc-kabuk-menu, .tc-rr1-adimpanel, .tc-rr1-insp')) return false;
+      return (s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1;
+    }).map((el) => el.className);
+    await ac('/recete-rota/schema');
+    const sema = page.getByRole('region', { name: 'Ürün ve rotalar' });
+    await expect(sema.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
+    for (const gorunum of ['Yatay hat', 'Akış şeması', 'Akış tablosu']) {
+      const dugme = sema.getByRole('button', { name: new RegExp(gorunum) });
+      if (await dugme.count() === 0) continue;
+      await dugme.first().click();
+      await expect(dugme.first()).toHaveAttribute('aria-pressed', 'true');
+      expect((await page.evaluate(kayanlar)).length, gorunum).toBeLessThanOrEqual(1);
+    }
+  });
+
   // Açılışta yazma yok: bölümleri gezmek rota modülüne ve operasyon kataloğuna istek yollamaz.
   const yazma = (u: string, yontem: string) => yontem === 'POST' && /\/api\/(rota\/(urunler|revizyonlar)|operasyon-tipleri)/.test(u);
   // Genişlikler (360, 768, 1280) yapılandırmanın projeleridir.

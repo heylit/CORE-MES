@@ -124,21 +124,24 @@
   writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--yazi-s); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tc-rr1-tam .tc-rr1-body { min-height: var(--ekran-boy-70); }
-/* 3095: 768 ve üstünde gövde kaydırma kabının kalan boyunu alır (--tc-rr1-govde-boy, kalanBoy.ts); sayfa ayrıca kaymaz, şema, tablo ve
-   çekmeceler kendi içinde kayar. Kısa ekranda en az boy korunur. */
+/* 3095: 768 ve üstünde şema gövdesi kaydırma kabının kalan boyunu alır (--tc-rr1-govde-boy, kalanBoy.ts); şema sürüklenerek gezilir,
+   çekmeceler kendi içinde kayar. Kısa ekranda en az boy korunur. Tablo sabit boy almaz: sayfa kayar, tablonun ayrıca dikey kaydırması
+   yoktur; iki dikey kaydırma çubuğu üst üste çıkmasın (3295). */
 @media (min-width: 768px) {
-  .tc-rr1-body, .tc-rr1-tam .tc-rr1-body {
+  .tc-rr1-body:not(.tc-rr1-tbl), .tc-rr1-tam .tc-rr1-body:not(.tc-rr1-tbl) {
     height: max(var(--ekran-boy-40), var(--tc-rr1-govde-boy, var(--ekran-boy-70))); min-height: 0; grid-template-rows: minmax(0, 1fr);
   }
   /* Lejant tuvalin altında akışta kalır; tuval kalan boyu alır. */
   .tc-rr1-body .tc-rr1-canvas-kap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .tc-rr1-body .tc-rr1-canvas { flex: 1 1 auto; height: auto; min-height: 0; }
-  /* Kendi içinde kayan kutular konumlu olur: içlerindeki gizli etiketler (mutlak konumlu) kutuyla kırpılır, sayfayı uzatmaz. */
-  .tc-rr1-body > .tc-rr1-rtab-wrap { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 @media (min-width: 1024px) {
   .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp, .tc-rr1-body .tc-rr1-insp-serit { max-height: 100%; }
   .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp { position: relative; }
+  /* Tabloda gövde sayfayla uzar; palet ve panel sayfa kayarken üstte kalır, uzunsa yalnız kendi içinde kayar. */
+  .tc-rr1-body.tc-rr1-tbl { align-items: start; }
+  .tc-rr1-body.tc-rr1-tbl > .tc-rr1-adimpanel, .tc-rr1-body.tc-rr1-tbl > .tc-rr1-insp-kap { position: sticky; top: 0; }
+  .tc-rr1-body.tc-rr1-tbl .tc-rr1-adimpanel, .tc-rr1-body.tc-rr1-tbl .tc-rr1-insp, .tc-rr1-body.tc-rr1-tbl .tc-rr1-insp-serit { max-height: var(--ekran-boy-70); }
 }
 .tc-rr1-duzen-grup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 /* Revizyon satırı dar kalınca (küçük pencere, Geri al ve Yinele açık) Palet ve Panel yalnız simge olur; satır kırılıp çalışma alanını
