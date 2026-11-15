@@ -1,5 +1,5 @@
 /* 3279 a Onaylı liste: masaüstünde solda kategori ağacı, sağda tablo; tablet ve telefonda ağacın yerine kategori seçimi. */
-.sa-ol { display: grid; gap: var(--b-4); min-width: 0; }
+.sa-ol { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
 .sa-ol-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
 .sa-ol-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
 .sa-ol-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); }
@@ -7,6 +7,7 @@
 .sa-ol-iki > small { color: var(--muted); font-size: var(--yazi-xs); }
 .sa-ol-iki > small.sa-ol-sartli, .sa-ol-iki > small.sa-ol-yakin { color: var(--hold); }
 .sa-ol-iki > small.sa-ol-gecti { color: var(--stop); }
+.sa-ol-tablo { min-width: 0; }
 .sa-ol-iki-kolon { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr); align-items: start; }
 .sa-ol-agac { display: grid; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .sa-ol-grup { display: grid; gap: var(--b-1); }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
@@ -105,13 +106,15 @@ export function OnayliListe() {
   const { data: kullanici } = useOturum();
   const kaliteAcar = kullanici?.islemler.includes('sayfa.kalite-merkezi') ?? false;
   const l = useQuery({ queryKey: ONAYLI_LISTE_ANAHTARI, queryFn: () => cagri.get('/satin-alma-onayli-liste', SURE) });
-  const [kategori, kategoriYaz] = useState<string>(TUM_FIRMALAR);
+  const [kategoriSecimi, kategoriYaz] = useState<string | null>(null);
   const [durum, durumYaz] = useState<DurumSuzgeci>('hepsi');
   const [ara, araYaz] = useState('');
   const [gorunum, gorunumYaz] = useState<'liste' | 'matris'>('liste');
   const bugun = tesisGunu(Date.now());
   const veri = l.data ?? null;
   const secenekler = useMemo(() => (veri === null ? [] : kategoriSecenekleri(veri)), [veri]);
+  // Açılışta ilk kararlı kategori seçili ("Bu kategoride" sütunu görünür); karar yoksa firma geneli.
+  const kategori = kategoriSecimi ?? secenekler.find((k) => k.kararli)?.deger ?? TUM_FIRMALAR;
   const genel = useMemo(() => (veri === null ? [] : satirlariKur(veri, TUM_FIRMALAR, bugun)), [veri, bugun]);
   const hepsi = useMemo(() => (veri === null ? [] : kategori === TUM_FIRMALAR ? genel : satirlariKur(veri, kategori, bugun)), [veri, kategori, genel, bugun]);
   const gorunen = suz(hepsi, durum, ara);
@@ -134,6 +137,7 @@ export function OnayliListe() {
         <span className="sa-ol-iki">
           <Rozet ton={x.durum.ton}>{x.durum.metin}</Rozet>
           {x.sart !== null && <small className="sa-ol-sartli">{x.sart}</small>}
+          {x.kararAlt !== null && <small>{x.kararAlt}</small>}
         </span>
       ),
     } satisfies Sutun<Satir>]),
@@ -154,8 +158,8 @@ export function OnayliListe() {
       hucre: (x) => (
         <span className="sa-ol-iki">
           <span>{gun(x.sonDenetim)}</span>
-          {x.adIleEslendi && <small className="sa-ol-sartli">Ad ile eşlendi: yazdırma ve CSV'de onaylı sayılmaz</small>}
-          {kaliteAcar && <small><a href={KALITE_TEDARIKCI_YOLU}>Kalite'de aç</a></small>}
+          {x.adIleEslendi && <small className="sa-ol-sartli">Ad ile eşlendi: onaylı sayılmaz</small>}
+          {kaliteAcar && <small><Link to={KALITE_TEDARIKCI_YOLU}>{x.adIleEslendi ? "Kalite'de firmaya bağla" : "Kalite'de aç"}</Link></small>}
         </span>
       ),
     },
@@ -174,8 +178,8 @@ export function OnayliListe() {
         <Dugme simge="printer" onClick={() => window.print()}>Yazdır</Dugme>
       </div>
       <div className="sa-ol-ozet">
-        <SayiKarti baslik="Onaylı firma" simge="check" sayi={o.onayli} altMetin="Firma geneli onaylı" />
-        <SayiKarti baslik="Şartlı" simge="flag" sayi={o.sartli} ton={o.sartli > 0 ? 'uyari' : 'bilgi'} altMetin="Şart metni listede görünür" />
+        <SayiKarti baslik="Onaylı firma" simge="check" sayi={o.onayli} altMetin="en az bir kategoride" />
+        <SayiKarti baslik="Şartlı" simge="flag" sayi={o.sartli} ton={o.sartli > 0 ? 'uyari' : 'bilgi'} altMetin="en az bir kategoride; şart teklifte görünür" />
         <SayiKarti baslik={`Sertifikası ${SERTIFIKA_ESIGI_GUN} gün içinde biten`} simge="calendar" sayi={o.sertifika} ton={o.sertifika > 0 ? 'uyari' : 'bilgi'}
           altMetin={o.sertifikaGecmis > 0 ? `${o.sertifikaGecmis} tanesi geçmiş` : 'Geçmiş sertifika yok'} />
         <SayiKarti baslik="Kalite kaydı yok" simge="alert" sayi={o.kayitsiz} ton={o.kayitsiz > 0 ? 'hata' : 'bilgi'} altMetin="Kalite Merkezi'nde kaydı yok" />
@@ -193,6 +197,8 @@ export function OnayliListe() {
             <Secim etiket="Kategori" value={kategori} onChange={(e) => kategoriYaz(e.target.value)}
               secenekler={[{ deger: TUM_FIRMALAR, baslik: 'Tüm firmalar (firma geneli)' }, ...secenekler.map((k) => ({ deger: k.deger, baslik: k.ad }))]} />
           </div>
+          {/* Tablo araç çubuğu ve tabloyu kardeş olarak çizer; ikisi tek ızgara hücresinde kalsın. */}
+          <div className="sa-ol-tablo">
           <Tablo etiket={secili === null ? 'Onaylı liste' : `Onaylı liste: ${secili.ad}`} sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(x) => x.firmaId}
             bosMesaj={hepsi.length === 0 && kategori !== TUM_FIRMALAR ? "Bu kategoride Kalite kararı yok. Kalite Merkezi'nde tedarikçi kaydından verilir." : 'Bu süzgece uyan firma yok.'}
             arac={{
@@ -201,6 +207,7 @@ export function OnayliListe() {
               // Ad ile eşlenen kayıt CSV'de onaylı sayılmaz (Risk K3); tablonun kendi CSV'si ekran metnini aldığından ayrı düğme.
               sag: <Dugme simge="download" onClick={() => csvIndir(csvAdi, CSV_BASLIKLARI, csvSatirlari(gorunen, secili?.ad ?? null))}>Dışa aktar (CSV)</Dugme>,
             }} />
+          </div>
         </div>
       )}
     </div>

@@ -193,14 +193,20 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     assert.equal(a.statusCode, 200, a.body);
     const m = await vt().tx((db) => onayliListe(db));
     assert.deepEqual(m.get(f.ted), {
-      durum: 'Onaylı', adIleEslendi: false, kritiklik: 'Kritik', sertifikalar: ['AS9100'], sertifikaBitisi: '2027-01-31', sonDenetim: null,
+      durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: 'Kritik', sertifikalar: ['AS9100'], sertifikaBitisi: '2027-01-31', sonDenetim: null,
       kategoriler: m.get(f.ted)!.kategoriler,
     });
+    assert.ok(m.get(f.ted)!.kategoriler.every((k) => k.kisiAd !== null), 'karari veren listede');
     assert.deepEqual(m.get(f.ted)!.kategoriler.map((k) => [k.kategoriKodu, k.durum, k.aciklama]), [['isil', 'sartli', 'İlk partide tam kontrol'], ['yuzey', 'onayli', null]]);
     assert.equal(m.get(adla)?.durum, 'Şartlı onaylı');
     assert.equal(m.get(adla)?.adIleEslendi, true);
     assert.equal(m.has(f.pasif), false);
     assert.equal(m.has(f.musteri), false);
+    const ask = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste/onayla', { govde: { ad: 'Deneme', onay: 'Askıda', firmaId: f.ted }, surum: (s.json() as { surum: number }).surum });
+    assert.equal(ask.statusCode, 200, ask.body);
+    const m2 = await vt().tx((db) => onayliListe(db));
+    assert.notEqual(m2.get(f.ted)!.firmaAskida, null);
+    assert.deepEqual(m2.get(f.ted)!.kategoriler.map((k) => [k.durum, k.tarih]), m2.get(f.ted)!.kategoriler.map(() => ['onaysiz', m2.get(f.ted)!.firmaAskida]));
   });
 });
 

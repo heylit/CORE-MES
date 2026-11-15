@@ -62,9 +62,12 @@ export const kmOnayliListeKategorisi = z.object({
   durum: z.enum(KM_KATEGORI_DURUMLARI),
   aciklama: z.string().nullable(),
   tarih: zamanSemasi,
+  kisiAd: z.string().nullable(),
 });
 export const kmOnayliListeSatiri = z.object({
   durum: z.enum(KM_TEDARIKCI_DURUMLARI).nullable(),
+  /** Firma askıdaysa askının zamanı; kategori kararları o an onaysız sayılır. */
+  firmaAskida: zamanSemasi.nullable(),
   adIleEslendi: z.boolean(),
   kritiklik: z.enum(KM_KRITIKLIKLER).nullable(),
   sertifikalar: z.array(z.string()),

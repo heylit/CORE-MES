@@ -53,7 +53,7 @@ describe('satin-alma onaylı tedarikçi listesi (3279 a, gerçek PostgreSQL)', (
     (await ortam!.sahip.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, aktif, olusturan_id) VALUES ($1, 'tedarikci', true, $2) RETURNING id",
       [ad, yoneticiId]))!.id;
   const kaliteSatiri = (k: Partial<KmOnayliListeSatiri>): KmOnayliListeSatiri => ({
-    durum: 'Onaylı', adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], ...k,
+    durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], ...k,
   });
 
   before(async () => {
@@ -131,6 +131,7 @@ describe('satin-alma onaylı tedarikçi listesi (3279 a, gerçek PostgreSQL)', (
     await siparis(await gun('-11 months'));
     await siparis(await gun('-1 month'), 'iptal');
     await siparis(await gun('-13 months'));
+    await siparis(await gun('+1 month'));
     onayliListeCozucusuKaydet(null);
     const t = (await liste()).firmalar.find((x) => x.firmaId === f.ted)!;
     assert.equal(t.sonYil.siparis, 2);
@@ -138,7 +139,7 @@ describe('satin-alma onaylı tedarikçi listesi (3279 a, gerçek PostgreSQL)', (
   });
 
   test('Kalite kaydı olan firma satın alma tedarikçisi olmasa da listede; bilinmeyen firma kimliği atlanır', async () => {
-    const satir = kaliteSatiri({ kritiklik: 'Kritik', kategoriler: [{ kategoriTuru: 'hammadde', kategoriKodu: 'metal', durum: 'sartli', aciklama: 'Deneme şart', tarih: '2026-11-01T08:00:00.000Z' }] });
+    const satir = kaliteSatiri({ kritiklik: 'Kritik', kategoriler: [{ kategoriTuru: 'hammadde', kategoriKodu: 'metal', durum: 'sartli', aciklama: 'Deneme şart', tarih: '2026-11-01T08:00:00.000Z', kisiAd: 'Deneme Kalite' }] });
     onayliListeCozucusu(async () => new Map([[f.kaliteli, satir], [f.ted, kaliteSatiri({ durum: 'Askıda' })], [2147483000, satir]]));
     const l = await liste();
     assert.deepEqual(l.firmalar.map((x) => [x.ad, x.satinAlmaTedarikcisi, x.kalite?.durum ?? null]), [['Deneme Kaliteli', false, 'Onaylı'], ['Deneme Tedarik', true, 'Askıda']]);

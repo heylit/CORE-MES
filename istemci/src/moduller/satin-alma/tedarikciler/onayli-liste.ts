@@ -1,4 +1,5 @@
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 
 // 3279 a: Satın Alma > Tedarikçiler > Onaylı liste satırları. Kaynak Kalite Merkezi; satın alma yazmaz. Tek sözlük: Onaylı, Şartlı,
 // Onaysız, Karar yok, Kalite kaydı yok. Ad ile eşlenen kayıt yazdırma ve CSV'de onaylı sayılmaz (Risk K3).
@@ -20,6 +21,11 @@ export interface Satir {
   genel: Satir['durum'];
   satinAlmaTedarikcisi: boolean;
   sart: string | null;
+  /** Kategori durumunun alt satırı: karar tarihi ve kararı veren, firma askısı ya da Kalite kaydı yok; firma genelinde null. */
+  kararAlt: string | null;
+  /** Özet sayımı için: en az bir kategoride onaylı ya da şartlı karar (firma askıdaysa kararlar zaten onaysız gelir). */
+  kategorideOnayli: boolean;
+  kategorideSartli: boolean;
   sertifikalar: string[];
   sertifikaBitisi: string | null;
   /** Sertifika bitişine kalan gün (geçtiyse eksi); bitiş yoksa null. */
@@ -30,6 +36,8 @@ export interface Satir {
 
 const gunFarki = (bugun: string, gun: string): number => Math.round((Date.parse(`${gun}T00:00:00Z`) - Date.parse(`${bugun}T00:00:00Z`)) / 86_400_000);
 export const kategoriAnahtari = (tur: string, kod: string): string => `${tur}|${kod}`;
+const gunMetni = (g: string): string => `${g.slice(8, 10)}.${g.slice(5, 7)}.${g.slice(0, 4)}`;
+const zamanGunu = (z: string): string => gunMetni(tesisGunu(Date.parse(z)));
 
 function genelDurum(f: Firma): Satir['durum'] {
   const d = f.kalite?.durum ?? null;
@@ -48,6 +56,7 @@ export function satirlar(c: OnayliListeCevabi, kategori: string, bugun: string):
     const genel = genelDurum(f);
     let durum = genel;
     let sart: string | null = null;
+    let kararAlt: string | null = null;
     if (kategori !== TUM_FIRMALAR) {
       const karar = k?.kategoriler.find((x) => kategoriAnahtari(x.kategoriTuru, x.kategoriKodu) === kategori);
       if (karar === undefined && k !== null) continue;
@@ -57,11 +66,15 @@ export function satirlar(c: OnayliListeCevabi, kategori: string, bugun: string):
           : karar.durum === 'sartli' ? { metin: 'Şartlı', ton: 'uyari', sinif: 'sartli' }
             : { metin: 'Onaysız', ton: 'hata', sinif: 'onaysiz' };
         sart = karar.durum === 'sartli' ? karar.aciklama : null;
-      }
+        kararAlt = karar.durum === 'sartli' ? null
+          : k?.firmaAskida != null && karar.durum === 'onaysiz' ? `Firma askıda: ${zamanGunu(k.firmaAskida)}`
+            : [zamanGunu(karar.tarih), karar.kisiAd].filter((v) => v !== null).join(' · ');
+      } else kararAlt = "Firmanın Kalite Merkezi'nde kaydı yok";
     }
     const bitis = k?.sertifikaBitisi ?? null;
     sonuc.push({
-      firmaId: f.firmaId, ad: f.ad, kritiklik: k?.kritiklik ?? null, adIleEslendi: k?.adIleEslendi ?? false, durum, genel, satinAlmaTedarikcisi: f.satinAlmaTedarikcisi, sart,
+      firmaId: f.firmaId, ad: f.ad, kritiklik: k?.kritiklik ?? null, adIleEslendi: k?.adIleEslendi ?? false, durum, genel, satinAlmaTedarikcisi: f.satinAlmaTedarikcisi, sart, kararAlt,
+      kategorideOnayli: (k?.kategoriler ?? []).some((x) => x.durum === 'onayli'), kategorideSartli: (k?.kategoriler ?? []).some((x) => x.durum === 'sartli'),
       sertifikalar: k?.sertifikalar ?? [], sertifikaBitisi: bitis, sertifikaGun: bitis === null ? null : gunFarki(bugun, bitis), sonDenetim: k?.sonDenetim ?? null, sonYil: f.sonYil,
     });
   }
@@ -136,11 +149,12 @@ export function matris(c: OnayliListeCevabi, bugun: string): { sutunlar: { deger
   return { sutunlar, satirlar: sonuc };
 }
 
-/** Üstteki özet: firma geneli satırlardan sayılır (kategori seçiminden bağımsız). */
+/** Üstteki özet (kategori seçiminden bağımsız): onaylı ve şartlı, en az bir kategoride o kararı olan firma. Kategori kararı firma kimliğiyle
+ * verildiğinden ad ile eşlenen kayıt bu sayıma girmez (Risk K3). */
 export function ozet(s: readonly Satir[]): { onayli: number; sartli: number; sertifika: number; sertifikaGecmis: number; kayitsiz: number } {
   return {
-    onayli: s.filter((x) => x.genel.sinif === 'onayli').length,
-    sartli: s.filter((x) => x.genel.sinif === 'sartli').length,
+    onayli: s.filter((x) => x.kategorideOnayli).length,
+    sartli: s.filter((x) => x.kategorideSartli).length,
     sertifika: s.filter((x) => x.sertifikaGun !== null && x.sertifikaGun <= SERTIFIKA_ESIGI_GUN).length,
     sertifikaGecmis: s.filter((x) => x.sertifikaGun !== null && x.sertifikaGun < 0).length,
     kayitsiz: s.filter((x) => x.genel.sinif === 'kayitsiz').length,

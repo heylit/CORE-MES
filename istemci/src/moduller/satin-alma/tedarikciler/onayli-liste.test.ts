@@ -14,6 +14,17 @@ describe('3279 a onaylı liste satırları', () => {
     const s = satirlar(ORNEK_LISTE, 'hizmet|isil', BUGUN);
     expect(s.map((x) => [x.ad, x.durum.metin, x.sart])).toEqual([['ORN-Anka', 'Onaylı', null], ['ORN-Demir', 'Şartlı', 'ORN şart: her partide rapor'], ['ORN-Ege', 'Kalite kaydı yok', null]]);
     expect(s[1]!.genel.metin).toBe('Şartlı onaylı');
+    expect(s.map((x) => x.kararAlt)).toEqual(['12.03.2026 · ORN-Kalite Sorumlusu', null, "Firmanın Kalite Merkezi'nde kaydı yok"]);
+  });
+
+  it('firma askıdaysa kategori alt satırı askı tarihi; özet en az bir kategoride sayar, ad ile eşlenen firma geneli onaylı sayılmaz', () => {
+    const askida = { ...ORNEK_LISTE, firmalar: ORNEK_LISTE.firmalar.map((f) => (f.firmaId !== 1 || f.kalite === null ? f : {
+      ...f, kalite: { ...f.kalite, durum: 'Askıda' as const, firmaAskida: '2026-11-01T09:00:00.000Z', kategoriler: f.kalite.kategoriler.map((k) => ({ ...k, durum: 'onaysiz' as const, tarih: '2026-11-01T09:00:00.000Z' })) },
+    })) };
+    expect(satirlar(askida, 'hizmet|isil', BUGUN)[0]!.kararAlt).toBe('Firma askıda: 01.11.2026');
+    expect(ozet(satirlar(askida, TUM_FIRMALAR, BUGUN))).toMatchObject({ onayli: 0, sartli: 1 });
+    const adla = { ...ORNEK_LISTE, firmalar: ORNEK_LISTE.firmalar.map((f) => (f.firmaId !== 2 || f.kalite === null ? f : { ...f, kalite: { ...f.kalite, durum: 'Onaylı' as const, kategoriler: [] } })) };
+    expect(ozet(satirlar(adla, TUM_FIRMALAR, BUGUN)).onayli).toBe(1);
   });
 
   it('sertifika: geçmiş eksi gün, 30 gün süzgeci geçmişi de alır', () => {

@@ -27,6 +27,13 @@ describe('3279 a Onaylı liste sekmesi', () => {
 
   it('firma geneli: Kalite kaydı yok rozeti, ad ile eşlenen not; Kalite\'de aç yalnız Kalite sayfası işlemi olana', async () => {
     ac(ORNEK_LISTE);
+    // Açılışta ilk kararlı kategori seçili; firma geneli ağaçtan seçilir.
+    const ilk = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
+    expect(within(ilk).getByRole('columnheader', { name: 'Bu kategoride' })).toBeTruthy();
+    expect(within(ilk).getByText('12.03.2026 · ORN-Kalite Sorumlusu')).toBeTruthy();
+    expect(within(ilk).getByText("Firmanın Kalite Merkezi'nde kaydı yok")).toBeTruthy();
+    expect(screen.getByText('Onaylı firma').closest('div')?.parentElement?.textContent).toContain('en az bir kategoride');
+    fireEvent.click(screen.getByRole('button', { name: /Tüm firmalar/ }));
     const tablo = await screen.findByRole('table', { name: 'Onaylı liste' });
     expect(within(tablo).getAllByText('Kalite kaydı yok').length).toBeGreaterThan(0);
     expect(within(tablo).getByText(/Ad ile eşlendi/)).toBeTruthy();
@@ -35,16 +42,16 @@ describe('3279 a Onaylı liste sekmesi', () => {
 
   it('kategori seçilince yalnız kararlılar ve kaydı olmayan satın alma tedarikçisi; şart görünür', async () => {
     ac(ORNEK_LISTE, ['satin-alma.oku', 'sayfa.kalite-merkezi']);
-    fireEvent.click(await screen.findByRole('button', { name: /Isıl işlem/ }));
     const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
     expect(within(tablo).queryByText('ORN-Kuzey')).toBeNull();
     expect(within(tablo).getByText('ORN şart: her partide rapor')).toBeTruthy();
-    expect(within(tablo).getAllByText("Kalite'de aç").length).toBe(3);
+    expect(within(tablo).getAllByRole('link', { name: "Kalite'de aç" }).map((a) => a.getAttribute('href'))).toEqual(['/kalite-merkezi/tedarikciler', '/kalite-merkezi/tedarikciler']);
+    expect(within(tablo).getByRole('link', { name: "Kalite'de firmaya bağla" })).toBeTruthy();
   });
 
   it('Son 12 ay sütunu ve matris: tür çipi, Kalite kaydı yok "?", şartlı hücre şartı gösterir', async () => {
     ac(ORNEK_LISTE);
-    const tablo = await screen.findByRole('table', { name: 'Onaylı liste' });
+    const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
     expect(within(tablo).getByText('23 sipariş')).toBeTruthy();
     expect(within(tablo).getByText('%96 zamanında')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Firma × kategori' }));

@@ -25,6 +25,8 @@ describe('3279 a teklif rehberi', () => {
   it('V7: kararsız kategoride uyarı yok, firma geneli; Kalite kaydı yok ayrı; Kalite bağlı değilse rehber yok', () => {
     expect(firmaRehberi(ORNEK_LISTE, 1, ['sarf|kesici'], BUGUN)).toEqual({ sinif: 'firma', etiket: 'Onaylı', sartlar: [], uyarilar: [] });
     expect(firmaRehberi(ORNEK_LISTE, 3, ['sarf|kesici'], BUGUN)?.etiket).toBe('Askıda');
+    // Risk K3: ad ile eşlenen kayıt (ORN-Demir) kontrolsüz kategoride onaylı ya da firma sırasında görünmez.
+    expect(firmaRehberi(ORNEK_LISTE, 2, ['sarf|kesici'], BUGUN)).toMatchObject({ sinif: 'kayitsiz', etiket: 'Ad ile eşlendi' });
     expect(firmaRehberi(ORNEK_LISTE, 4, ['hizmet|isil'], BUGUN)?.sinif).toBe('kayitsiz');
     expect(firmaRehberi({ ...ORNEK_LISTE, kaliteBagli: false }, 1, ['hizmet|isil'], BUGUN)).toBeNull();
     expect(firmaRehberi(null, 1, [], BUGUN)).toBeNull();

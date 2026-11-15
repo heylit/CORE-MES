@@ -57,6 +57,8 @@ export function firmaRehberi(veri: OnayliListeCevabi | null, firmaId: number, ka
   const bakilan = kategoriler.filter((a) => kontrollu.has(a));
   if (bakilan.length === 0) {
     if (k.durum === "Aday" || k.durum === "Askıda") return { sinif: "onaysiz", etiket: k.durum, sartlar: [], uyarilar };
+    // Ad ile eşlenen kayıt firma kartına bağlı değil: onaylı sayılmaz, Kalite kaydı olmayanla aynı sırada (Risk K3).
+    if (k.adIleEslendi) return { sinif: "kayitsiz", etiket: "Ad ile eşlendi", sartlar: [], uyarilar: ["Kalite kaydı firma kartına bağlı değil; onaylı sayılmaz", ...uyarilar] };
     return { sinif: "firma", etiket: k.durum ?? "Karar yok", sartlar: [], uyarilar };
   }
   const kararlar = bakilan.map((a) => k.kategoriler.find((x) => anahtar(x.kategoriTuru, x.kategoriKodu) === a) ?? null);

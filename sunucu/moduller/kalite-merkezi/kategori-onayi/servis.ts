@@ -89,9 +89,9 @@ export async function onayliListe(db: Db): Promise<Map<number, KmOnayliListeSati
   return new Map(idler.map((id) => {
     const k = kayitlar.get(id);
     return [id, {
-      durum: k?.durum ?? null, adIleEslendi: k?.adIleEslendi ?? false, kritiklik: k?.kritiklik ?? null, sertifikalar: k?.sertifikalar ?? [],
+      durum: k?.durum ?? null, firmaAskida: kararlar.get(id)?.firmaAskida?.tarih ?? null, adIleEslendi: k?.adIleEslendi ?? false, kritiklik: k?.kritiklik ?? null, sertifikalar: k?.sertifikalar ?? [],
       sertifikaBitisi: k?.sertifikaBitisi ?? null, sonDenetim: k?.sonDenetim ?? null,
-      kategoriler: (kararlar.get(id)?.kategoriler ?? []).map((x) => ({ kategoriTuru: x.kategoriTuru, kategoriKodu: x.kategoriKodu, durum: x.durum, aciklama: x.aciklama, tarih: x.tarih })),
+      kategoriler: (kararlar.get(id)?.kategoriler ?? []).map((x) => ({ kategoriTuru: x.kategoriTuru, kategoriKodu: x.kategoriKodu, durum: x.durum, aciklama: x.aciklama, tarih: x.tarih, kisiAd: x.kisiAd })),
     }];
   }));
 }
