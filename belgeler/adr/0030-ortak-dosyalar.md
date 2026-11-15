@@ -48,6 +48,26 @@ Seçenek a.
 10. **Windows paylaşımı ayrıdır.** Sunucudaki gerçek paylaşım klasörünü ya da NTFS yetkisini değiştiren bağlayıcı bu ADR'nin
     kapsamında değildir; ayrı kart ve ADR ile sorulur. Sunucu servis hesabına işletim sistemi yönetici yetkisi verilmez.
 
+## Ek: kayda bağlı (sistem) klasörler (kart 3288; 2067-4 a ve 2067-5 a, 15.11.2026)
+
+Kullanıcı onay kartında bu eki açıkça seçti (Ne değişti 8). Miras (4), görünmezlik (5) ve silme yok (6) aynen kalır.
+
+1. **Kök.** "Müşteriler" kökünü yönetici Ortak Dosyalar ayarlarından bir kez açar; göç açmaz (olusturan kişi yok, aynı adlı kök
+   olabilir). Üst düzeyde aynı adlı klasör varsa komut durur, iki klasörü birleştirmez. Kökün rol düzeyleri 2067-5 a'dır ve açılışta
+   bir kez yazılır; sonra Yetkiler sekmesinden değişir.
+2. **Sistem klasörü.** Müşteri, sipariş ve proje açılınca kaynak modülün olayı klasörü açar: müşteri kökün, sipariş müşterinin, proje
+   siparişin (siparişsizse müşterinin "Siparişsiz projeler"inin, firmasızsa kökteki "Firmasız projeler"in) altına. Klasör kaynağını
+   (`kaynak_tur`, `kaynak_id`) taşır, bir kayda tek klasör açılır. Sistem yazması klasör düzeyine takılmaz; yetki kaydın kendi ucunda
+   denetlenmiştir. Görme yine düzeye bağlıdır.
+3. **Daralma.** Sistem klasöründe ad, taşıma ve arşivi yalnız sistem yapar; Yönetir düzeyi orada alt klasör ve dosya ile sınırlıdır
+   (3'ü daraltır). Ad kayıttan üretilir ve kayıt adı değişince izler; sipariş iptalinde klasör arşive kalkar, iptal geri alınınca döner.
+4. **Hata kaydı durdurmaz.** Klasör kaydın kendi transaction'ında, ara noktayla açılır; kural reddinde ara noktaya dönülür, satır
+   "Açılamayan klasörler" listesine aynı transaction'da düşer, yönetici yeniden dener. Kural reddi dışındaki hata kaydı da durdurur.
+5. **Mevcut kayıtlar.** Yönetici, sayıyı görüp onaylayarak tek komutla açar (yeni işlem açılmaz, `ortak-dosyalar.yetki-ver`). Komut
+   eşgüçlüdür, gruplar halinde ve her grup kendi transaction'ında ilerler, açtıklarını toplu iş kimliğiyle işaretler; toplu iş tek
+   komutla arşive kalkar (içinde dosya olan klasör atlanır) ve geri alınır.
+6. **Şablon.** Sipariş ve proje klasörünün alt klasörleri yönetici şablonundan gelir; şablon kişi klasörüdür, değişiklik yalnız sonra
+   açılanlara uygulanır.
 ## Sonuçlar
 
 - `paylasilan/sozlesme/dosya.ts` tür listesi genişler (ortak nokta, ayrı kart ve kilit). Ofis belgesi diğer modüllere açılmaz;

@@ -9,12 +9,15 @@ export interface KlasorSatiri {
   ozelYetki: boolean;
   surum: number;
   dosyaSayisi: number;
+  kaynakTur: string | null;
+  kaynakId: number | null;
+  arsiv: boolean;
 }
 
 // Ağacın tamamı tek sorguda: yetki her istekte bütün zincirden çözülür (klasör sayısı yüzlerle sınırlı, VARSAYIM).
 export function klasorleriOku(db: Db): Promise<KlasorSatiri[]> {
   return db.sorgu<KlasorSatiri>(
-    `SELECT k.id, k.ust_id AS "ustId", k.ad, k.ozel_yetki AS "ozelYetki", k.surum,
+    `SELECT k.id, k.ust_id AS "ustId", k.ad, k.ozel_yetki AS "ozelYetki", k.surum, k.kaynak_tur AS "kaynakTur", k.kaynak_id AS "kaynakId", k.arsiv,
             (SELECT count(*)::int FROM ortak_dosyalar_dosya d WHERE d.klasor_id = k.id AND NOT d.arsiv) AS "dosyaSayisi"
        FROM ortak_dosyalar_klasor k ORDER BY k.id`,
   );
@@ -29,11 +32,16 @@ export function klasorKilitle(db: Db, id: number): Promise<{ id: number } | null
 }
 
 export async function klasorEkle(
-  db: Db, k: { ustId: number | null; ad: string; adAnahtari: string; ozelYetki: boolean; kisiId: number },
+  db: Db,
+  k: {
+    ustId: number | null; ad: string; adAnahtari: string; ozelYetki: boolean; kisiId: number;
+    kaynakTur?: string | null; kaynakId?: number | null; topluIs?: string | null;
+  },
 ): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO ortak_dosyalar_klasor (ust_id, ad, ad_anahtari, ozel_yetki, olusturan_kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [k.ustId, k.ad, k.adAnahtari, k.ozelYetki, k.kisiId],
+    `INSERT INTO ortak_dosyalar_klasor (ust_id, ad, ad_anahtari, ozel_yetki, olusturan_kisi_id, kaynak_tur, kaynak_id, toplu_is)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [k.ustId, k.ad, k.adAnahtari, k.ozelYetki, k.kisiId, k.kaynakTur ?? null, k.kaynakId ?? null, k.topluIs ?? null],
   );
   if (satir === null) throw new Error('Klasör eklenemedi.');
   return satir.id;
@@ -198,4 +206,101 @@ export function gecmisOku(db: Db, klasorId: number, sinir: number): Promise<Gecm
 // Sürüm, bağın kaydı (sürüm kimliği) için önce açılır; boyut bağ kurulunca, aynı komutta yazılır.
 export function surumBoyutuYaz(db: Db, surumId: number, boyut: number): Promise<unknown> {
   return db.sorgu('UPDATE ortak_dosyalar_surum SET boyut = $2 WHERE id = $1', [surumId, boyut]);
+}
+
+// Kayda bağlı klasörler (kart 3288).
+
+export function kaynakKlasoru(db: Db, tur: string, id: number | null): Promise<{ id: number; ad: string; arsiv: boolean } | null> {
+  return db.tek(
+    'SELECT id, ad, arsiv FROM ortak_dosyalar_klasor WHERE kaynak_tur = $1 AND COALESCE(kaynak_id, 0) = COALESCE($2::int, 0)',
+    [tur, id],
+  );
+}
+
+// Üst düzeyde aynı adlı kişi klasörü (kök açılırken; Risk K1).
+export function kokAdiDolu(db: Db, adAnahtari: string): Promise<{ id: number } | null> {
+  return db.tek('SELECT id FROM ortak_dosyalar_klasor WHERE ust_id IS NULL AND ad_anahtari = $1', [adAnahtari]);
+}
+
+export function sistemAdiYaz(db: Db, id: number, ad: string, adAnahtari: string): Promise<unknown> {
+  return db.sorgu(
+    'UPDATE ortak_dosyalar_klasor SET ad = $2, ad_anahtari = $3, surum = surum + 1 WHERE id = $1 AND (ad <> $2 OR ad_anahtari <> $3)',
+    [id, ad, adAnahtari],
+  );
+}
+
+// Arşivden çıkarmada son arşivin kişisi ve zamanı iz olarak kalır.
+export function klasorArsivYaz(db: Db, idler: readonly number[], arsiv: boolean, kisiId: number): Promise<{ id: number }[]> {
+  if (!arsiv) {
+    return db.sorgu('UPDATE ortak_dosyalar_klasor SET arsiv = false, surum = surum + 1 WHERE id = ANY($1::int[]) AND arsiv RETURNING id', [[...idler]]);
+  }
+  return db.sorgu(
+    `UPDATE ortak_dosyalar_klasor SET arsiv = true, arsiv_kisi_id = $2, arsiv_zamani = now(), surum = surum + 1
+      WHERE id = ANY($1::int[]) AND NOT arsiv RETURNING id`,
+    [[...idler], kisiId],
+  );
+}
+
+export function sablonOku(db: Db): Promise<{ hedef: 'siparis' | 'proje'; ad: string }[]> {
+  return db.sorgu('SELECT hedef, ad FROM ortak_dosyalar_sablon ORDER BY hedef, sira');
+}
+
+export async function sablonYaz(db: Db, hedef: 'siparis' | 'proje', adlar: readonly { ad: string; adAnahtari: string }[]): Promise<void> {
+  await db.sorgu('DELETE FROM ortak_dosyalar_sablon WHERE hedef = $1', [hedef]);
+  if (adlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO ortak_dosyalar_sablon (hedef, sira, ad, ad_anahtari)
+     SELECT $1, t.sira, t.ad, t.anahtar FROM unnest($2::text[], $3::text[]) WITH ORDINALITY AS t(ad, anahtar, sira)`,
+    [hedef, adlar.map((a) => a.ad), adlar.map((a) => a.adAnahtari)],
+  );
+}
+
+export function acilamayanYaz(
+  db: Db, a: { tur: string; id: number; neden: string; zincir: unknown; kisiId: number },
+): Promise<unknown> {
+  return db.sorgu(
+    `INSERT INTO ortak_dosyalar_acilamayan (kaynak_tur, kaynak_id, neden, zincir, kisi_id) VALUES ($1, $2, $3, $4::jsonb, $5)
+     ON CONFLICT (kaynak_tur, kaynak_id) DO UPDATE SET neden = EXCLUDED.neden, zincir = EXCLUDED.zincir, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [a.tur, a.id, a.neden.slice(0, 500), JSON.stringify(a.zincir), a.kisiId],
+  );
+}
+
+export function acilamayanSil(db: Db, tur: string, id: number): Promise<unknown> {
+  return db.sorgu('DELETE FROM ortak_dosyalar_acilamayan WHERE kaynak_tur = $1 AND kaynak_id = $2', [tur, id]);
+}
+
+export function acilamayanOku(db: Db, tur: string, id: number): Promise<{ zincir: unknown } | null> {
+  return db.tek('SELECT zincir FROM ortak_dosyalar_acilamayan WHERE kaynak_tur = $1 AND kaynak_id = $2 FOR UPDATE', [tur, id]);
+}
+
+export function acilamayanlar(db: Db): Promise<{ tur: 'firma' | 'siparis' | 'proje'; id: number; neden: string; zincir: unknown; zaman: string }[]> {
+  return db.sorgu(
+    `SELECT kaynak_tur AS tur, kaynak_id AS id, neden, zincir, ${zamanMetni('zaman')} AS zaman FROM ortak_dosyalar_acilamayan ORDER BY zaman DESC LIMIT 200`,
+  );
+}
+
+// Klasörü olan kayıtların kimlikleri (toplu komutun klasörsüz sayımı için).
+export function kaynakliKimlikler(db: Db): Promise<{ tur: string; id: number }[]> {
+  return db.sorgu(`SELECT kaynak_tur AS tur, kaynak_id AS id FROM ortak_dosyalar_klasor WHERE kaynak_tur IN ('firma', 'siparis', 'proje')`);
+}
+
+export function topluIsler(db: Db): Promise<{ id: string; klasorSayisi: number; arsivde: number; zaman: string }[]> {
+  return db.sorgu(
+    `SELECT toplu_is AS id, count(*)::int AS "klasorSayisi", count(*) FILTER (WHERE arsiv)::int AS arsivde, ${zamanMetni('min(olusturma_zamani)')} AS zaman
+       FROM ortak_dosyalar_klasor WHERE toplu_is IS NOT NULL GROUP BY toplu_is ORDER BY min(olusturma_zamani) DESC LIMIT 50`,
+  );
+}
+
+// Toplu işin klasörleri; alt ağacında (şablon klasörleri dahil) dosya bulunanlar `dolu` işaretlidir: geri almada atlanır.
+export function topluIsKlasorleri(db: Db, topluIs: string): Promise<{ id: number; dolu: boolean }[]> {
+  return db.sorgu(
+    `WITH RECURSIVE agac AS (
+       SELECT id AS kok, id FROM ortak_dosyalar_klasor WHERE toplu_is = $1
+       UNION ALL
+       SELECT a.kok, k.id FROM ortak_dosyalar_klasor k JOIN agac a ON k.ust_id = a.id
+     )
+     SELECT a.kok AS id, bool_or(EXISTS (SELECT 1 FROM ortak_dosyalar_dosya d WHERE d.klasor_id = a.id)) AS dolu
+       FROM agac a GROUP BY a.kok ORDER BY a.kok`,
+    [topluIs],
+  );
 }

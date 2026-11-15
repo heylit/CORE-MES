@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
@@ -12,9 +12,10 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { Ayarlar } from './Ayarlar.tsx';
 import './ortak-dosyalar.css';
 
-export type Gorunum = 'klasorler' | 'son' | 'arsiv';
+export type Gorunum = 'klasorler' | 'son' | 'arsiv' | 'ayarlar';
 type SekmeAdi = 'dosyalar' | 'yetkiler' | 'gecmis';
 
 const DUZEY_ADI: Record<KlasorDuzeyi, string> = { yok: 'Yok', gorur: 'Görür', ekler: 'Ekler', yonetir: 'Yönetir' };
@@ -38,11 +39,42 @@ function indir(d: { klasorId: number; id: number }, sira: number): void {
   a.click();
 }
 
+// Kayda bağlı (sistem) klasör: adı kayıttan gelir, kişi değiştiremez (kart 3288, ADR 0030 eki).
+const KAYDA_BAGLI = 'Kayda bağlı: adı kayıttan gelir';
+const KAYNAK_ADI = { firma: 'müşteriye', siparis: 'siparişe', proje: 'projeye' } as const;
+function kaynakBaglantisi(k: Klasor): { yol: string; metin: string; tur: keyof typeof KAYNAK_ADI } | null {
+  const kaynak = k.kaynak;
+  if (kaynak === null || kaynak.id === null) return null;
+  if (kaynak.tur === 'firma') return { yol: `/musteri-tedarikci?firma=${kaynak.id}`, metin: 'Müşteri kartını aç', tur: 'firma' };
+  if (kaynak.tur === 'siparis') return { yol: `/siparisler/${kaynak.id}`, metin: `Sipariş ${k.ad.split(' ')[0] ?? ''} aç`, tur: 'siparis' };
+  if (kaynak.tur === 'proje') return { yol: `/projeler/${kaynak.id}`, metin: `Proje ${k.ad.split(' ')[0] ?? ''} aç`, tur: 'proje' };
+  return null;
+}
+
+// Ağaç araması: adı uyan klasör, üstleri ve altları görünür kalır (her müşteriye klasör açıldığı için ağaç büyür).
+function agacSuz(klasorler: readonly Klasor[], ara: string): readonly Klasor[] {
+  const a = ara.trim().toLocaleLowerCase('tr-TR');
+  if (a === '') return klasorler;
+  const harita = new Map(klasorler.map((k) => [k.id, k]));
+  const eslesen = new Set(klasorler.filter((k) => k.ad.toLocaleLowerCase('tr-TR').includes(a)).map((k) => k.id));
+  let degisti = true;
+  while (degisti) {
+    degisti = false;
+    for (const k of klasorler) if (!eslesen.has(k.id) && k.ustId !== null && eslesen.has(k.ustId)) { eslesen.add(k.id); degisti = true; }
+  }
+  const kalan = new Set(eslesen);
+  for (const id of eslesen) {
+    let u = harita.get(id);
+    while (u !== undefined && u.ustId !== null && !kalan.has(u.ustId)) { kalan.add(u.ustId); u = harita.get(u.ustId); }
+  }
+  return klasorler.filter((k) => kalan.has(k.id));
+}
+
 function sirala(liste: readonly Klasor[]): Klasor[] {
   return [...liste].sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
 }
 
-function Agac({ klasorler, secili, sec }: { klasorler: readonly Klasor[]; secili: number | null; sec: (id: number) => void }) {
+function Agac({ klasorler, secili, sec, aranan }: { klasorler: readonly Klasor[]; secili: number | null; sec: (id: number) => void; aranan: boolean }) {
   const dal = (ust: number | null) => {
     const altlar = sirala(klasorler.filter((k) => k.ustId === ust));
     if (altlar.length === 0) return null;
@@ -53,7 +85,9 @@ function Agac({ klasorler, secili, sec }: { klasorler: readonly Klasor[]; secili
             <button type="button" className="tc-od-klasor" aria-current={secili === k.id ? 'true' : undefined} onClick={() => sec(k.id)}>
               <Simge ad="layers" boyut="k" />
               <span>{k.ad}</span>
-              {k.ozelYetki && <span className="tc-od-kilit" title="Özel yetki"><Simge ad="lock" boyut="k" /></span>}
+              {k.kaynak !== null
+                ? <span className="tc-od-kilit" title={KAYDA_BAGLI} aria-label={KAYDA_BAGLI}><Simge ad="pin" boyut="k" /></span>
+                : k.ozelYetki && <span className="tc-od-kilit" title="Özel yetki"><Simge ad="lock" boyut="k" /></span>}
             </button>
             {dal(k.id)}
           </li>
@@ -61,7 +95,7 @@ function Agac({ klasorler, secili, sec }: { klasorler: readonly Klasor[]; secili
       </ul>
     );
   };
-  return <nav className="tc-od-agac">{dal(null) ?? <p className="tc-od-bos">Görebileceğiniz klasör yok</p>}</nav>;
+  return <nav className="tc-od-agac">{dal(null) ?? <p className="tc-od-bos">{aranan ? 'Eşleşen klasör yok' : 'Görebileceğiniz klasör yok'}</p>}</nav>;
 }
 
 function KlasorPenceresi({ ust, ustAdi, kapat, acildi }: { ust: number | null; ustAdi: string | null; kapat: () => void; acildi: (k: Klasor) => void }) {
@@ -206,7 +240,53 @@ function useYukleme() {
     }
     if (tamam > 0) bildir('tamam', `${tamam} dosya yüklendi.`);
   };
-  return { yukle, suruyor };
+  // Ad önerisi penceresinden gelen tek dosya.
+  const yukleDosya = async (klasorId: number, f: File, ad: string): Promise<void> => {
+    if (suruyor) return;
+    suruyorYaz(true);
+    try {
+      const ozet = await dosyaYukle(new Uint8Array(await f.arrayBuffer()), () => {});
+      await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, { ad, ozet } satisfies YukleGovdesi, { istekKimligi: yeniIstekKimligi() });
+      bildir('tamam', `${ad} yüklendi.`);
+    } catch (h) {
+      bildir('hata', `${ad}: ${h instanceof DosyaHatasi ? h.message : hataIletisi(h, 'Yüklenemedi')}`);
+    } finally {
+      suruyorYaz(false);
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+    }
+  };
+  return { yukle, yukleDosya, suruyor };
+}
+
+// Yükleme adı önerisi (zorunlu değil): "<no>_<alt klasör>_r1.<uzantı>"; aynı ad yeni sürüm olur.
+function oneriAdi(o: { onek: string; altKlasor: string | null }, dosyaAdi: string): string {
+  const nokta = dosyaAdi.lastIndexOf('.');
+  const uzanti = nokta > 0 ? dosyaAdi.slice(nokta) : '';
+  return `${[o.onek, o.altKlasor].filter(Boolean).join('_')}_r1${uzanti}`;
+}
+
+function AdPenceresi({ dosya, oneri, kapat, yukle }: { dosya: File; oneri: string; kapat: () => void; yukle: (ad: string) => void }) {
+  const [ad, adYaz] = useState(oneri);
+  return (
+    <Pencere
+      acik kapat={kapat} baslik="Dosya adı"
+      alt={(
+        <>
+          <Dugme onClick={kapat}>Vazgeç</Dugme>
+          <Dugme tur="birincil" simge="upload" disabled={ad.trim() === ''} onClick={() => yukle(ad.trim())}>Yükle</Dugme>
+        </>
+      )}
+    >
+      <div className="tc-od-form">
+        <Girdi etiket="Dosya adı" required maxLength={120} value={ad} onChange={(o) => adYaz(o.target.value)} autoFocus />
+        <p className="tc-od-ipucu tc-od-oneri">
+          Önerilen ad: sipariş ya da proje no, alt klasör, revizyon. Değiştirebilirsiniz.{' '}
+          <button type="button" className="tc-od-baglanti" onClick={() => adYaz(dosya.name)}>Özgün adı kullan</button>
+        </p>
+        <p className="tc-od-ipucu">Bu klasörde aynı adlı dosya varsa yeni sürüm olarak eklenir.</p>
+      </div>
+    </Pencere>
+  );
 }
 
 function DosyalarSekmesi({ klasorId, ara, sec, yeniKlasor }: { klasorId: number; ara: string; sec: (id: number) => void; yeniKlasor: () => void }) {
@@ -216,17 +296,42 @@ function DosyalarSekmesi({ klasorId, ara, sec, yeniKlasor }: { klasorId: number;
   });
   const secim = useRef<HTMLInputElement | null>(null);
   const yukleme = useYukleme();
+  const [adla, adlaYaz] = useState<File | null>(null);
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Klasör okunamadı')} yenile={() => { void q.refetch(); }} />;
-  const { klasor, altKlasorler, dosyalar } = q.data;
+  const { klasor, altKlasorler, dosyalar, adOnerisi } = q.data;
+  const kaynak = kaynakBaglantisi(klasor);
+  // Tek dosyada öneri penceresi açılır; birden çok dosya kendi adlarıyla yüklenir.
+  const secildi = (o: ChangeEvent<HTMLInputElement>) => {
+    const f = o.target.files;
+    if (adOnerisi !== null && f !== null && f.length === 1 && f[0] !== undefined) { adlaYaz(f[0]); o.target.value = ''; return; }
+    void yukleme.yukle(klasor.id, o);
+  };
   return (
     <div>
       <div className="tc-od-arac">
         <Dugme tur="birincil" simge="upload" disabled={!enAz(klasor.duzey, 'ekler')} yukleniyor={yukleme.suruyor} onClick={() => secim.current?.click()}>Dosya yükle</Dugme>
         {enAz(klasor.duzey, 'yonetir') && <Dugme simge="plus" onClick={yeniKlasor}>Alt klasör</Dugme>}
         <span className="tc-od-bilgi"><Simge ad="lock" boyut="k" />Yetkiniz: {DUZEY_ADI[klasor.duzey]}</span>
-        <input ref={secim} type="file" multiple hidden onChange={(o) => { void yukleme.yukle(klasor.id, o); }} />
+        <input ref={secim} type="file" multiple hidden onChange={secildi} />
       </div>
+      {klasor.kaynak !== null && (
+        <div className="tc-od-kaynak">
+          <Rozet ton="bilgi">{KAYDA_BAGLI}</Rozet>
+          {kaynak !== null && (
+            <span>
+              {`Bu klasör ${KAYNAK_ADI[kaynak.tur]} bağlı: `}
+              <Link to={kaynak.yol}>{kaynak.metin}</Link>
+            </span>
+          )}
+        </div>
+      )}
+      {adla !== null && adOnerisi !== null && (
+        <AdPenceresi
+          dosya={adla} oneri={oneriAdi(adOnerisi, adla.name)} kapat={() => adlaYaz(null)}
+          yukle={(ad) => { const f = adla; adlaYaz(null); void yukleme.yukleDosya(klasor.id, f, ad); }}
+        />
+      )}
       {altKlasorler.length > 0 && (
         <ul className="tc-od-altlar">
           {sirala(altKlasorler).map((k) => (
@@ -397,6 +502,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
   const [sekme, sekmeYaz] = useState<SekmeAdi>('dosyalar');
   const [ara, araYaz] = useState('');
   const [agacAcik, agacAcikYaz] = useState(false);
+  const [agacAra, agacAraYaz] = useState('');
   const [pencere, pencereYaz] = useState<{ ust: number | null } | null>(null);
   const q = useQuery({ queryKey: anahtarlar.klasorler, queryFn: () => api.get<KlasorlerCevabi>('/ortak-dosyalar/klasorler') });
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -407,7 +513,8 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
   const sec = (id: number) => { seciliYaz(id); agacAcikYaz(false); if (gorunum !== 'klasorler') void git('/ortak-dosyalar'); };
   const gecerliSekme: SekmeAdi = !yonetici && sekme === 'yetkiler' ? 'dosyalar' : sekme;
   let govde;
-  if (gorunum === 'son') govde = <SonEklenenler ara={ara} klasorler={klasorler} />;
+  if (gorunum === 'ayarlar') govde = yonetici ? <Ayarlar /> : <p className="tc-od-bos">Ayarlar yalnız yöneticidedir.</p>;
+  else if (gorunum === 'son') govde = <SonEklenenler ara={ara} klasorler={klasorler} />;
   else if (gorunum === 'arsiv') govde = <Arsiv />;
   else if (seciliKlasor === null) govde = <p className="tc-od-bos">Bu rolün görebildiği klasör yok.</p>;
   else if (gecerliSekme === 'yetkiler') govde = <YetkilerSekmesi key={seciliKlasor.id} klasorId={seciliKlasor.id} ustVar={seciliKlasor.ustId !== null} />;
@@ -417,18 +524,25 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
     <div className="tc-od-sayfa">
       <div className="tc-od-bas">
         <h1><Simge ad="file" />Ortak Dosyalar</h1>
-        <label className="tc-od-ara">
-          <Simge ad="search" boyut="k" />
-          <input type="search" placeholder="Dosya ara" aria-label="Dosya ara" value={ara} onChange={(o) => araYaz(o.target.value)} />
-        </label>
+        {gorunum !== 'ayarlar' && (
+          <label className="tc-od-ara">
+            <Simge ad="search" boyut="k" />
+            <input type="search" placeholder="Dosya ara" aria-label="Dosya ara" value={ara} onChange={(o) => araYaz(o.target.value)} />
+          </label>
+        )}
       </div>
+      {gorunum === 'ayarlar' ? govde : (
       <div className="tc-od-izgara">
         <div className={`tc-od-agac-kart${agacAcik ? ' tc-od-acik' : ''}`}>
           <Kart
             baslik="Klasörler" simge="layers"
             sag={yonetici ? <Dugme simge="plus" title="Üst düzeyde klasör aç" aria-label="Üst düzeyde klasör aç" onClick={() => pencereYaz({ ust: null })} /> : undefined}
           >
-            <Agac klasorler={klasorler} secili={gorunum === 'klasorler' ? seciliKlasor?.id ?? null : null} sec={sec} />
+            <label className="tc-od-ara tc-od-agac-ara">
+              <Simge ad="search" boyut="k" />
+              <input type="search" placeholder="Klasör ara (müşteri, sipariş no, proje)" aria-label="Klasör ara" value={agacAra} onChange={(o) => agacAraYaz(o.target.value)} />
+            </label>
+            <Agac klasorler={agacSuz(klasorler, agacAra)} aranan={agacAra.trim() !== ''} secili={gorunum === 'klasorler' ? seciliKlasor?.id ?? null : null} sec={sec} />
           </Kart>
         </div>
         <Kart>
@@ -460,6 +574,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
           {govde}
         </Kart>
       </div>
+      )}
       {pencere && (
         <KlasorPenceresi
           ust={pencere.ust}
