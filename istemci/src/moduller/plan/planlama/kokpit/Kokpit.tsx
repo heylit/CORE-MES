@@ -354,16 +354,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {(yazabilir || canliyaAlir) && (
-          <Dugme className="tc-pyq-gonder" tur={tur || taslakVar || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
-            disabled={mesgul || tur !== null || taslakVar} title={tur ? 'Tur bitince açılır' : taslakVar ? 'Önce taslağı plana yazın ya da vazgeçin.' : engel ?? undefined} onClick={() => { setOnayAcik(!onayAcik); }}>
+        {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
+        {(yazabilir || canliyaAlir) && !taslakVar && (
+          <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
+            disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayAcik(!onayAcik); }}>
             {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
           </Dugme>
         )}
       </div>
       {taslak && (
         <TaslakCubugu
-          taslak={taslak} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
+          taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
+          onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
       )}

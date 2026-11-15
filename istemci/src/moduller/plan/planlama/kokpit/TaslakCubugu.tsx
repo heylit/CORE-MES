@@ -3,20 +3,26 @@ import type { TaslakCatismasi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, OnayPenceresi, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
 import { taslakOzeti, type TaslakYazici } from './taslak.ts';
 
-// Taslak çubuğu (3282 1d-2b): kişinin taslağı varken üst şeridin altında durur. Değişiklik sayısı, artık uygulanamayanlar ve bayat dizme
-// burada görünür; Geri al son değişikliği, Vazgeç bütün taslağı siler, "Plana yaz" ortak çalışmaya yazar. Başkası aynı emre, tezgâha ya da
-// plan ayarına dokunduysa önce anahtar başına "benimki / onunki" seçilir.
+// Taslak çubuğu (3282 1d-2b, 1d-3): kişinin taslağı varken üst şeridin altında durur. Değişiklik sayısı, artık uygulanamayanlar ve bayat dizme
+// burada görünür; Geri al son değişikliği, Vazgeç bütün taslağı siler. Tek birincil düğme (Canlıya al ya da Onaya gönder, 3282-5 a) taslağı
+// ortak çalışmaya yazar ve aynı adımda Onay ve canlı bölümünü açar: canlıya alma onaylı onay akışıyla kalır (dört göz, müşteri, kayma).
+// Başkası aynı emre, tezgâha ya da plan ayarına dokunduysa önce anahtar başına "benimki / onunki" seçilir.
 
 export interface TaslakCubuguOzellikleri {
   taslak: TaslakYazici;
   // Durum sayılarının önce ve sonrası (Kokpit'in sayımı).
   ozet: ReactNode;
+  // plan.canliya-al olan "Canlıya al", olmayan "Onaya gönder" görür.
+  canliyaAlir: boolean;
+  // Sayfanın birincil düğmeyi kapatan durumu (ör. tur sürerken); null ise yok.
+  kilit?: string | null;
   yazildi: (ileti: string) => void;
+  onayiAc: () => void;
 }
 
 type Secim = Record<string, 'benim' | 'onun'>;
 
-export function TaslakCubugu({ taslak, ozet, yazildi }: TaslakCubuguOzellikleri) {
+export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
   const t = taslak.cevap?.taslak ?? null;
   const o = taslakOzeti(t);
   const [vazgecAcik, setVazgecAcik] = useState(false);
@@ -24,14 +30,18 @@ export function TaslakCubugu({ taslak, ozet, yazildi }: TaslakCubuguOzellikleri)
   const [secim, setSecim] = useState<Secim>({});
   if (t === null && !taslak.mesgul) return null;
   const bekle = taslak.mesgul || taslak.diziliyor;
-  const engel = o.bozuk.length > 0 ? 'Önce artık uygulanamayan değişikliği geri alın.' : o.bayat ? 'Önce taslağı yeniden dizin.' : null;
+  const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık uygulanamayan değişikliği geri alın.' : o.bayat ? 'Önce taslağı yeniden dizin.' : null);
+  const ad = canliyaAlir ? 'Canlıya al' : 'Onaya gönder';
 
   const yaz = async (s?: Secim) => {
     const r = await taslak.uygula(s);
     if (r === null) return;
     if (r.durum === 'secim') { setCatisma(r.catismalar); setSecim((x) => Object.fromEntries(Object.entries(x).filter(([k]) => r.catismalar.some((c) => c.anahtar === k)))); return; }
     setCatisma(null); setSecim({});
-    yazildi(r.dusen > 0 ? `Taslak plana yazıldı; ${String(r.dusen)} değişiklik başkasınınki seçildiği için düştü.` : 'Taslak plana yazıldı.');
+    // Onay ve canlı bölümünde vazgeçilirse taslak ortak planda kalır; bildirim bunu söyler.
+    const dusen = r.dusen > 0 ? ` ${String(r.dusen)} değişiklik başkasınınki seçildiği için düştü.` : '';
+    yazildi(`Taslak plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için Onay ve canlı bölümünü tamamlayın.`);
+    onayiAc();
   };
   const tamam = catisma !== null && catisma.every((c) => secim[c.anahtar] !== undefined);
 
@@ -52,7 +62,7 @@ export function TaslakCubugu({ taslak, ozet, yazildi }: TaslakCubuguOzellikleri)
       <span className="tc-pyq-taslak-dugmeler">
         <Dugme simge="chev-left" disabled={bekle || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
         <Dugme simge="x" disabled={bekle} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
-        <Dugme tur="birincil" simge="check" disabled={bekle || engel !== null} title={engel ?? undefined} onClick={() => { void yaz(); }}>Plana yaz</Dugme>
+        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Taslağı plana yazar, Onay ve canlı bölümünü açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
       </span>
       <OnayPenceresi
         acik={vazgecAcik} baslik="Taslaktan vazgeçilsin mi?" onayMetni="Taslağı sil" tehlikeli
@@ -63,7 +73,7 @@ export function TaslakCubugu({ taslak, ozet, yazildi }: TaslakCubuguOzellikleri)
         alt={(
           <>
             <Dugme onClick={() => { setCatisma(null); }} data-ilk-odak>Vazgeç</Dugme>
-            <Dugme tur="birincil" simge="check" disabled={!tamam || bekle} onClick={() => { void yaz(secim); }}>Plana yaz</Dugme>
+            <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={!tamam || bekle} onClick={() => { void yaz(secim); }}>{ad}</Dugme>
           </>
         )}
       >
