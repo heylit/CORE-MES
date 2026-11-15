@@ -59,6 +59,8 @@
   color: var(--muted); font: inherit; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
 }
 .tc-pyq-gelenler h2 button > span { flex: 1 1 auto; text-align: start; }
+/* Sayı başlığın içinde durur; düğmelerdeki köşe rozeti değildir. */
+.tc-pyq-gelenler h2 .tc-pyq-rozet { position: static; }
 .tc-pyq-gelenler ul { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-pyq-gelenler li { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
 .tc-pyq-gelenler li[aria-current="true"] { border-color: var(--hazard); }
