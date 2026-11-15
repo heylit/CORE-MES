@@ -42,7 +42,7 @@ describe('2542 çatallı rota: izinli', () => {
     const bolge = await bolumAc();
     const panel = await adimSec(bolge, 20);
     fireEvent.click(within(panel).getByRole('button', { name: 'Buradan kol aç' }));
-    expect(within(bolge).getByText('Yeni Dal A: OP 20 ardından çatallanır. Paletten ilk adımını seç; ardına eklenen adımlar da bu dala düşer.')).toBeTruthy();
+    expect(within(bolge).getByText('Yeni Dal A: OP 20 ardından çatallanır. Listeden ilk adımını seç; ardına eklenen adımlar da bu dala düşer.')).toBeTruthy();
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     expect(within(palet).getByText('MM-0001: yeni Dal A, OP 20 Tornalama ardından çatallanır')).toBeTruthy();
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
@@ -173,7 +173,7 @@ describe('2542 C ve 3188: dallar şemada yana açılır', () => {
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     const b = await within(bolge).findByRole('group', { name: 'Dal B kolu' });
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paleti' }));
+    fireEvent.click(within(bolge).getAllByRole('button', { name: 'Adım ekle' })[0]!);
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     const t = tasima();
     fireEvent.dragStart(within(palet).getAllByRole('button', { name: /Tornalama/ })[0]!, t);

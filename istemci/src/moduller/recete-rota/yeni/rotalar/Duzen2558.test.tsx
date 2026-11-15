@@ -76,22 +76,21 @@ describe('Ürün ve rotalar düzeni: çekmeceler ve odak (2558 b)', () => {
     expect(ic(bolge).classList.contains('tc-rr1-odakta')).toBe(false);
   });
 
-  it('palet yan çekmecedir: şerit açar, çarpı kapatır; dar kapta biri açılınca öteki kapanır', async () => {
+  it('palet yan çekmecedir: "Adım ekle" açar, çarpı kapatır; dar kapta biri açılınca öteki kapanır; palet düğmesi ve şeridi yoktur (3295 a)', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
     const bolge = await bolumAc();
-    const paletDugme = within(bolge).getByRole('button', { name: 'Operasyon paleti' });
-    expect(paletDugme.getAttribute('aria-expanded')).toBe('false');
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paletini aç' })).toBeNull();
     expect(govde(bolge).classList.contains('tc-rr1-palet-dar')).toBe(true);
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paletini aç' }));
+    fireEvent.click(within(bolge).getAllByRole('button', { name: 'Adım ekle' })[0]!);
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     expect(palet.id).toBe('tc-rr1-palet');
-    expect(paletDugme.getAttribute('aria-expanded')).toBe('true');
 
     fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenleme paneli' }));
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(false);
     expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
 
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paletini aç' }));
+    fireEvent.click(within(bolge).getAllByRole('button', { name: 'Adım ekle' })[0]!);
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(true);
     fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paletini kapat' }));
     expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
@@ -116,7 +115,7 @@ describe('Ürün ve rotalar düzeni: tek satır, görüntüleme kipi, rozet, sor
     return bolge;
   };
 
-  it('görüntüleme kipinde açılır: ekleme düğmesi ve palet yok; "Düzenle" açar ve kip yazıyla belli olur; tek birincil düğme', async () => {
+  it('görüntüleme kipinde açılır: ekleme düğmesi ve palet yok; "Düzenle" düzenleme çubuğunu açar; aynı anda tek birincil düğme (3295 a)', async () => {
     const bolge = await ac();
     const ust = bolge.querySelector('.tc-rr1-top') as HTMLElement;
     expect(ust.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
@@ -124,19 +123,26 @@ describe('Ürün ve rotalar düzeni: tek satır, görüntüleme kipi, rozet, sor
     expect(within(bolge).queryByRole('button', { name: 'Adım ekle' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
-    const duzenle = within(bolge).getByRole('button', { name: 'Düzenle' });
-    expect(duzenle.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(duzenle);
-    expect(within(bolge).getByRole('button', { name: 'Düzenlemeyi bitir' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(bolge).queryByRole('toolbar', { name: 'Rota düzenleme' })).toBeNull();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenle' }));
+    const cubuk = within(bolge).getByRole('toolbar', { name: 'Rota düzenleme' });
+    expect(within(cubuk).getByText('Taslak düzenleniyor')).toBeTruthy();
     expect(within(bolge).getByRole('button', { name: 'Adım ekle' })).toBeTruthy();
-    expect(within(bolge).getByRole('button', { name: 'Operasyon paleti' })).toBeTruthy();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenlemeyi bitir' }));
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
+    // Düzenlerken sarı düğme çubuktadır; Üretim emri oluştur ikincil olur (2155-9 a).
+    expect(ust.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+    expect(bolge.querySelectorAll('.tc-dugme-birincil').length).toBeLessThanOrEqual(1);
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Bitir' }));
+    expect(within(bolge).queryByRole('toolbar', { name: 'Rota düzenleme' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'Adım ekle' })).toBeNull();
   });
 
-  it('açık taslak görüntüleme kipinde yazıyla belli olur', async () => {
+  it('açık taslak görüntüleme kipinde durum satırında yazıyla belli olur; revizyon tek seçim kutusundadır (3295 a)', async () => {
     const bolge = await ac(rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 1)]));
-    expect(within(bolge).getByText('Taslak açık')).toBeTruthy();
+    const rev = bolge.querySelector('.tc-rr1-revbar') as HTMLElement;
+    const secim = within(rev).getByRole('combobox', { name: /gösterilen revizyon/ });
+    expect([...(secim as HTMLSelectElement).options].map((x) => x.textContent)).toEqual(['Rev B · taslak', 'Rev A · yürürlükte']);
+    expect(within(rev).getByText(/plan yürürlükteki Rev A ile devam ediyor|açık taslağı düzenlemek için onu seç/)).toBeTruthy();
   });
 
   it('ara kart kutuları varsayılan gizli, kutuda "Statülü" rozeti; ⋯ menüsünden açılır', async () => {

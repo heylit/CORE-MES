@@ -63,11 +63,29 @@ describe('3248-2 çalışma alanı', () => {
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Buraya katılan dal ekle' }));
     expect(within(bolge).getByText('Bu parça stoğa girecek ya da başka üründe de kullanılacaksa yarı mamul olarak açın.')).toBeTruthy();
-    const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
+    const palet = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
     expect(within(palet).getByText('MM-0001: yeni bağımsız Dal B, OP 40 Tornalama adımında ana hatta katılır')).toBeTruthy();
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
     expect(within(hatAl(bolge)).getByText(/Dal B \(bağımsız\) · ana hatta OP 40'de katılır/)).toBeTruthy();
     expect(within(within(bolge).getByRole('region', { name: 'Süre şeridi' })).getByText('Dal B (bağımsız)')).toBeTruthy();
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)).toEqual([
+      [10, null, '', 'bekleyen'], [20, null, '', 'bekleyen'], [30, 'A', '', 'bekleyen'], [null, 'B', '', 'bagimsiz'], [40, null, 'B', 'bekleyen'], [50, null, 'A', 'bekleyen'],
+    ]);
+  }, 30000);
+
+  it('ayrı başlayan dal hattaki + listesinden açılır: "Bu adıma katılan dal" (3295 a)', async () => {
+    const k = kur();
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(hatAl(bolge)).getByRole('button', { name: 'OP 40 ardına adım ekle' }));
+    const liste = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
+    fireEvent.click(within(liste).getByRole('button', { name: /Bu adıma katılan dal \(OP 40; rotanın başından başlar\)/ }));
+    const yeni = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
+    expect(within(yeni).getByText('MM-0001: yeni bağımsız Dal B, OP 40 Tornalama adımında ana hatta katılır')).toBeTruthy();
+    expect(within(yeni).queryByRole('button', { name: /Bu adıma katılan dal/ })).toBeNull();
+    fireEvent.click(within(yeni).getByRole('button', { name: /Tornalama/ }));
+    expect(within(bolge).queryByRole('dialog', { name: 'Adım ekle' })).toBeNull();
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(sira(k.govde)).toEqual([
       [10, null, '', 'bekleyen'], [20, null, '', 'bekleyen'], [30, 'A', '', 'bekleyen'], [null, 'B', '', 'bagimsiz'], [40, null, 'B', 'bekleyen'], [50, null, 'A', 'bekleyen'],

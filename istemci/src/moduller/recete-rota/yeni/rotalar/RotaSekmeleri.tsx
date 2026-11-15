@@ -24,9 +24,9 @@ export function rotaTurMetni(rota: RotaTanimi, rotalar: readonly RotaTanimi[]): 
   return rotalar.some((x) => !x.standart && x.emirTurleri.length > 0) ? 'Öteki bütün türler' : 'Bütün türler';
 }
 
-// satir: sekmeler; yeniDugmesi ürün başlığının yanına, ayarDugmesi revizyon satırına konur (onaylı ön izleme A); rotaAdi revizyon satırının başlığıdır.
-interface Parcalar { satir: ReactNode; yeniDugmesi: ReactNode; ayarDugmesi: ReactNode; panel: ReactNode; rotaAdi: string | null }
-const BOS: Parcalar = { satir: null, yeniDugmesi: null, ayarDugmesi: null, panel: null, rotaAdi: null };
+// satir: sekmeler; yeniAc ve ayarAc revizyon çubuğunun "⋯" menüsündedir (3295 a); rotaAdi revizyon satırının başlığıdır.
+interface Parcalar { satir: ReactNode; yeniAc: (() => void) | null; ayarAc: (() => void) | null; panel: ReactNode; rotaAdi: string | null }
+const BOS: Parcalar = { satir: null, yeniAc: null, ayarAc: null, panel: null, rotaAdi: null };
 
 // 3247 a: ürünün rotaları revizyon çubuğunun üstünde sekme olur; altta seçili rotanın revizyonları durur. Parçalar ayrı döner ki
 // "Adı ve türleri" onaylı ön izlemedeki gibi revizyon satırında dursun.
@@ -121,20 +121,15 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
             <button key={x.id} type="button" className={`tc-rr1-rvtab tc-rr1-rotasekme${secili ? ' tc-rr1-cur' : ''}`} aria-pressed={secili}
               onClick={() => { sec(x); }}>
               <b>{x.ad}</b>
-              <small>{rotaTurMetni(x, rotalar)}</small>
-              <small>{y ? `Rev ${y.no} yürürlükte` : 'Yürürlükte revizyon yok'}{acik ? ` · ${acik.status === 'onay' ? 'onayda' : 'taslak var'}` : ''}</small>
+              <small>{rotaTurMetni(x, rotalar)} · {y ? `Rev ${y.no}` : 'yürürlükte revizyon yok'}{acik ? ` · ${acik.status === 'onay' ? 'onayda' : 'taslak var'}` : ''}</small>
             </button>
           );
         })}
       </span>
     </div>
   );
-  const yeniDugmesi = yetki.rotaTaslakAc
-    ? <Dugme tur="ikincil" simge="plus" aria-pressed={panel === 'yeni'} onClick={() => { ac('yeni'); }}>Yeni rota</Dugme>
-    : null;
-  const ayarDugmesi = yetki.rotaTaslakAc && aktif
-    ? <Dugme tur="ikincil" simge="edit" aria-pressed={panel === 'ayar'} onClick={() => { ac('ayar'); }}>Adı ve türleri</Dugme>
-    : null;
+  const yeniAc = yetki.rotaTaslakAc ? () => { ac('yeni'); } : null;
+  const ayarAc = yetki.rotaTaslakAc && aktif ? () => { ac('ayar'); } : null;
   const panelNode = (
     <>
       {panel === 'yeni' && (
@@ -178,5 +173,5 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
       )}
     </>
   );
-  return { satir, yeniDugmesi, ayarDugmesi, panel: panelNode, rotaAdi: aktif?.ad ?? null };
+  return { satir, yeniAc, ayarAc, panel: panelNode, rotaAdi: aktif?.ad ?? null };
 }

@@ -62,15 +62,19 @@ describe('3248 yatay hat ekranı', () => {
     expect(within(hat).getByRole('button', { name: 'OP 40 Tornalama' }).getAttribute('aria-pressed')).toBe('true');
   }, 30000);
 
-  it('dalın ilk adımı dal etiketini taşır; adımın ardındaki + paleti o adımın ardına açar', async () => {
+  it('dalın ilk adımı dal etiketini taşır; adımın ardındaki + o adımın ardına operasyon listesi açar, palet yoktur (3295 a)', async () => {
     kur();
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     const hat = within(bolge).getByRole('group', { name: 'Yatay hat' });
     expect(within(hat).getByText(/Dal A · 1 adet \/ mamul/)).toBeTruthy();
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
     fireEvent.click(within(hat).getByRole('button', { name: 'OP 20 ardına adım ekle' }));
-    const palet = await within(bolge).findByRole('complementary', { name: 'Operasyon paleti' });
-    expect(palet.textContent).toContain('OP 20 Tornalama ardına');
+    const liste = await within(bolge).findByRole('dialog', { name: 'Adım ekle' });
+    expect(liste.textContent).toContain('OP 20 Tornalama ardına');
+    expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
+    fireEvent.keyDown(liste, { key: 'Escape' });
+    expect(within(bolge).queryByRole('dialog', { name: 'Adım ekle' })).toBeNull();
   }, 30000);
 
   it('yalnız okuyan kişide ekleme düğmeleri yoktur, bağlılık değiştirilemez', async () => {

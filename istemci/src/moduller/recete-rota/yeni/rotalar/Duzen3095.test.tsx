@@ -17,18 +17,16 @@ const bolumAc = async () => {
 };
 
 describe('Düzenle düğmesinin yeri ve gövde boyu (3095)', () => {
-  it('Düzenle, Palet ve Panel revizyon satırında, revizyonun yanında; üst çubukta değil', async () => {
+  it('Düzenle ve Panel revizyon çubuğunda; düzenlerken Bitir ve Panel düzenleme çubuğunda; palet düğmesi yok (3295 a)', async () => {
     const bolge = await bolumAc();
     const ust = bolge.querySelector('.tc-rr1-top') as HTMLElement;
     const rev = bolge.querySelector('.tc-rr1-revbar') as HTMLElement;
     expect(within(ust).queryByRole('button', { name: 'Düzenle' })).toBeNull();
-    const grup = within(rev).getByRole('group', { name: 'Rota düzenleme' });
-    fireEvent.click(within(grup).getByRole('button', { name: 'Düzenle' }));
-    expect(within(grup).getByRole('button', { name: 'Düzenlemeyi bitir' }).getAttribute('aria-pressed')).toBe('true');
-    expect(within(grup).getByRole('button', { name: 'Operasyon paleti' })).toBeTruthy();
-    expect(within(ust).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
-    // Kart 3095 b: Panel de aynı satırda.
-    expect(within(grup).getByRole('button', { name: 'Düzenleme paneli' })).toBeTruthy();
+    fireEvent.click(within(rev).getByRole('button', { name: 'Düzenle' }));
+    const cubuk = within(rev).getByRole('toolbar', { name: 'Rota düzenleme' });
+    expect(within(cubuk).getByRole('button', { name: 'Bitir' })).toBeTruthy();
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
+    expect(within(cubuk).getByRole('button', { name: 'Düzenleme paneli' })).toBeTruthy();
     expect(within(ust).queryByRole('button', { name: 'Düzenleme paneli' })).toBeNull();
   });
 

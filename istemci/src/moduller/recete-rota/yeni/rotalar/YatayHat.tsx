@@ -290,7 +290,7 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
       {liste.length > 0 && <SureSeridi r={r} d={kok} z={z} miktar={kok.miktar} ymler={ymSatirlari} />}
       {liste.length > 0 && !kok.dongu && (
         <div className="tc-rr1-hat-cubuk">
-          {duzen && <span className="tc-rr1-ipucu tc-rr1-hat-surukipucu"><Simge ad="sort" boyut="k" /> Adımı tutup kendi şeridindeki artıya bırak; operasyonu paletten artıya sürükle.</span>}
+          {duzen && <span className="tc-rr1-ipucu tc-rr1-hat-surukipucu"><Simge ad="sort" boyut="k" /> Adımı tutup kendi şeridinde bir adımın ya da artının üstüne bırak; yeni adım için artıya dokun.</span>}
           <HatHaritasi hat={kap} hatId={hatId} kutular={haritaKutulari} kolon={Math.max(1, y.kolonSayisi)} satir={Math.max(1, ymBantlari.length + y.seritler.length)}
             imza={`${String(liste.length)}|${String(ymBantlari.length)}`} />
         </div>
@@ -431,7 +431,7 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
                     }}
                     onDragLeave={() => { if (birakYeri === a.id) setBirakYeri(null); }}
                     onDrop={(e) => { e.preventDefault(); birak(a.id, e.dataTransfer.getData(SURUKLE_TURU)); }}>
-                    <button type="button" className="tc-rr1-hat-ekle" aria-label={`${adimAdi(a)} ardına adım ekle`} title={`${adimAdi(a)} ardına adım ekle`}
+                    <button type="button" className="tc-rr1-hat-ekle" data-ekle-capa={a.id} aria-label={`${adimAdi(a)} ardına adım ekle`} title={`${adimAdi(a)} ardına adım ekle`}
                       onClick={() => { r.sec({ tur: 'adimEkle', urunId: kok.id, sonraId: a.id }); r.paletAc(); }}>
                       <Simge ad="plus" boyut="k" />
                     </button>
