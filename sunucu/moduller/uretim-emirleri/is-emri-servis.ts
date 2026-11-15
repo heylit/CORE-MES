@@ -37,6 +37,7 @@ import {
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
+import { rotaBekliyorIhlali } from './siparis-acilisi-kurallar.ts';
 import { dilimUstEmirleri } from './sorgular/ust-emir/sorgular.ts';
 import type { AdimDugumu, AdimUretimBilgisi } from './disari.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
@@ -350,6 +351,7 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
 
 async function basligiYaz(
   db: Db, acanId: number, g: EmirBasligi, b: DenetlenmisBaslik, kaynakRotaRevizyonId: number | null, istasyonId: number | null,
+  ek: { acilisKaynagi: 'siparis_onayi'; rotaBekliyor: boolean } | null = null,
 ): Promise<number> {
   const parcaNo = b.urun.kod.slice(0, 60);
   // Numara ve sayaç "Numara kuralları" ayarındadır; sayaç bu işlemin içinde ilerler, emir eklenmezse geri alınır.
@@ -362,6 +364,7 @@ async function basligiYaz(
     malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: b.teslim, aciklama: b.aciklama,
     durum: g.taslak === true ? 'taslak' : 'planli', emirTuru: b.emirTuru, emirNo, projeId: b.proje?.id ?? null,
     siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null, teslimBagli: b.teslimBagli, siparisPartiId: b.siparisPartiId,
+    acilisKaynagi: ek?.acilisKaynagi ?? null, rotaBekliyor: ek?.rotaBekliyor ?? false,
   }, acanId);
 }
 
@@ -392,6 +395,14 @@ export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.rotasiz-ac']);
   if (!(await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'))) throw cakisma(ROTASIZ_EMIR_KAPALI);
   return { uretimEmriId: await basligiYaz(db, acanId, g, await basligiDenetle(db, g), null, null) };
+}
+
+// UE-SA-04 (3272-2 a): sipariş onayında yürürlükte rotası olmayan kalemin emri adımsız, "rota bekliyor" ve taslak açılır. Rotasız emir
+// ayarına bağlı değildir: emir planlanmaz ve başlatılmaz, rota yürürlüğe girince dolar (224'ün amacı korunur).
+export async function rotaBekleyenEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi): Promise<{ uretimEmriId: number }> {
+  const acanId = islemDenetle(kullanici, ['uretim-emirleri.emir-ac', 'rota.emre-kopyala']);
+  const b = await basligiDenetle(db, g);
+  return { uretimEmriId: await basligiYaz(db, acanId, { ...g, taslak: true }, b, null, null, { acilisKaynagi: 'siparis_onayi', rotaBekliyor: true }) };
 }
 
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
@@ -524,7 +535,7 @@ function ozet(e: UstEmirSatiri, kendi: readonly IsEmriSatiri[], ad: Adlar, altEm
     baslangic: e.baslangic, teslim: e.teslim, durum: gorunenDurum(e.durum, kendi.some((i) => i.durum !== 'bekliyor')), arsiv: e.arsiv,
     parti: { ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, altEmirIdleri, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo },
     kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, projeId: e.projeId, siparisSatiriId: e.siparisSatiriId,
-    teslimBagli: e.teslimBagli, siparisPartiId: e.siparisPartiId, adimSayisi: kendi.length, tamamAdim: kendi.filter((i) => i.durum === 'tamam').length,
+    teslimBagli: e.teslimBagli, siparisPartiId: e.siparisPartiId, rotaBekliyor: e.rotaBekliyor, adimSayisi: kendi.length, tamamAdim: kendi.filter((i) => i.durum === 'tamam').length,
     siradaki: sira === null ? null : {
       id: sira.id, opNo: sira.opNo, ad: sira.ad, durum: sira.durum, kaynak: kaynakAdi(ad, sira), istasyon: istasyonAdi(ad, sira.istasyonId),
     },
@@ -748,7 +759,7 @@ export async function planaAl(db: Db, kullanici: Kullanici, id: number, surum?: 
   islemDenetle(kullanici, ['uretim-emirleri.plana-al', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, surum);
-  const ihlal = planaAlIhlali(e.durum, e.arsiv);
+  const ihlal = planaAlIhlali(e.durum, e.arsiv) ?? rotaBekliyorIhlali(e.rotaBekliyor);
   if (ihlal !== null) throw cakisma(ihlal);
   await s.planaAlYaz(db, id, e.surum);
 }

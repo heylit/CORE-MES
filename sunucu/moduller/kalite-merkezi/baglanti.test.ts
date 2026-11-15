@@ -70,6 +70,8 @@ describe('Kalite Merkezi iş emri, sipariş ve parça bağlantısı (gerçek Pos
     yonId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'kmb-yon', parola: PAROLA }));
     const yukle = await ornekVeriYukle(ortam.vt, await zincir('uretim-emirleri'), { ortam: 'test', bildir: () => undefined });
     assert.equal(yukle.durum, 'yuklendi');
+    // 3272: onayda kendiliğinden proje ve emir açılışı burada ölçülmez (uretim-emirleri/siparis-acilisi.test.ts); ayar kapalıdır.
+    await ortam.sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('uretim-emirleri.siparis-onayinda-ac', 'false', $1)", [yonId]);
 
     const o = await girisYap('kmb-okuyan', 'operator');
     await vt().sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'kalite-merkezi.oku', $2)", [o.id, yonId]);

@@ -14,6 +14,8 @@ import {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
+import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
+import { siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
 import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
@@ -558,6 +560,27 @@ const adimliUclar = [
     sorgu: acilisSecenekleriSorgusu,
     cevap: acilisSecenekleriCevabi,
     isle: ({ db, kullanici, sorgu }) => isEmri.acilisSecenekleri(db, kullanici, sorgu.malzemeNo, sorgu.emirTuru),
+  }),
+  // 3272: sipariş onay penceresi ve "Proje ve emirler" kartı; siparişi okuyan da görür (fiyat yok).
+  uc({
+    yontem: 'GET',
+    yol: '/uretim-emirleri/siparis-acilisi/:siparisId',
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'siparisler.oku', 'siparisler.onayla'] },
+    parametre: siparisAcilisiParametresi,
+    cevap: siparisAcilisiCevabi,
+    isle: ({ db, kullanici, parametre }) => siparisAcilisiDurumu(db, kullanici, parametre.siparisId),
+  }),
+  // 3272: onaylı siparişin eksik projesi ve emirleri elle açılır (ayar kapalıyken ya da ayardan önce onaylanmış sipariş). Proje yazma
+  // işlemi ayrıca aranır (3272-1 b).
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/siparis-acilisi/:siparisId/ac',
+    yetki: { biri: ['uretim-emirleri.emir-ac', 'rota.emre-kopyala'] },
+    tekrarKorumali: true,
+    parametre: siparisAcilisiParametresi,
+    govde: siparisAcilisiGovdesi,
+    cevap: siparisAcilisiSonucu,
+    isle: ({ db, kullanici, parametre, govde }) => siparisAcilisiYap(db, kullanici, parametre.siparisId, govde.projeKodu),
   }),
   // Rotasız emir (B13): "Rotasız üretim emri" ayarı açıkken malzemeli emir rotasız, adımsız açılır; yinelenirse iki emir açılır.
   uc({

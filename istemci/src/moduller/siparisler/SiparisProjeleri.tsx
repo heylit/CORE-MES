@@ -8,6 +8,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { tarihMetni } from './gorunum.ts';
+import { AcilisTablosu, eksikVar, useEksikleriAc, useSiparisAcilisi } from './SiparisAcilisi.tsx';
 
 // Proje no sınırı Projeler sözleşmesindeki PROJE_KODU_EN_COK'tur (istemci sözleşmeden değer ithal etmez); aşan girdiyi sunucu reddeder.
 const PROJE_KODU_EN_COK = 24;
@@ -29,35 +30,55 @@ const SUTUNLAR: Sutun<Proje>[] = [
 ];
 
 // 176 a: sipariş açılır, siparişten proje, projeden üretim emri. Proje yalnız onaylı siparişten açılır (Projeler PRJ-07).
+// 3272: onayda proje ve emirler kendiliğinden açılır; kart ikisini birlikte gösterir. Eksik kalan (ayar kapalıyken onaylanmış sipariş,
+// yeni kalem) "Proje ve emirleri aç" ile açılır; onaydaki kural ve ileti aynıdır.
+const EMIR_ACMA = ['uretim-emirleri.emir-ac', 'rota.emre-kopyala'] as const;
 export function SiparisProjeleri({ siparis }: { siparis: SiparisAyrintisi }) {
   const islemler = useOturum().data?.islemler ?? [];
   const okur = PROJE_OKUMA.some((i) => islemler.includes(i));
-  const acabilir = islemler.includes('projeler.yaz') && siparis.durum === 'onayli';
+  const onayli = siparis.durum === 'onayli';
+  const acabilir = islemler.includes('projeler.yaz') && onayli;
+  const emirAcabilir = acabilir && EMIR_ACMA.some((i) => islemler.includes(i));
   const [form, formYaz] = useState(false);
   const sorgu = useQuery({
     queryKey: anahtarlar.siparisProjeleri(siparis.id),
     queryFn: () => api.get<SiparisProjeleriCevabi>(`/projeler/siparis/${siparis.id}`),
     enabled: okur,
   });
-  if (!okur) return null;
+  const acilis = useSiparisAcilisi(siparis.id, onayli || siparis.durum === 'kapandi');
+  const eksikleriAc = useEksikleriAc(siparis.id);
+  const emirliSatirlar = (acilis.data?.satirlar ?? []).filter((s) => s.emir !== null || s.atlama !== null);
+  if (!okur && acilis.data === undefined) return null;
 
   return (
     <Kart
-      baslik="Projeler"
-      sag={acabilir ? <Dugme simge="plus" onClick={() => formYaz(true)}>Siparişten proje aç</Dugme> : undefined}
+      baslik="Proje ve emirler"
+      sag={(acabilir || emirAcabilir) ? (
+        <span className="tc-sp-kart-dugmeleri">
+          {emirAcabilir && eksikVar(acilis.data) && (
+            <Dugme tur="birincil" simge="layers" yukleniyor={eksikleriAc.isPending} onClick={() => { eksikleriAc.mutate(); }}>Proje ve emirleri aç</Dugme>
+          )}
+          {acabilir && <Dugme simge="plus" onClick={() => formYaz(true)}>Siparişten proje aç</Dugme>}
+        </span>
+      ) : undefined}
     >
-      {sorgu.isError
-        ? <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Projeler alınamadı')} yenile={() => { void sorgu.refetch(); }} />
-        : (
-          <Tablo
-            etiket="Siparişin projeleri"
-            sutunlar={SUTUNLAR}
-            satirlar={sorgu.data?.projeler ?? []}
-            satirAnahtari={(p) => p.id}
-            mesgul={sorgu.isPending}
-            bosMesaj={siparis.durum === 'onayli' ? 'Bu siparişten açılmış proje yok.' : 'Proje onaylı siparişten açılır.'}
-          />
-        )}
+      <div className="tc-sp-yigin">
+        {okur && (sorgu.isError
+          ? <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Projeler alınamadı')} yenile={() => { void sorgu.refetch(); }} />
+          : (
+            <Tablo
+              etiket="Siparişin projeleri"
+              sutunlar={SUTUNLAR}
+              satirlar={sorgu.data?.projeler ?? []}
+              satirAnahtari={(p) => p.id}
+              mesgul={sorgu.isPending}
+              bosMesaj={onayli ? 'Bu siparişten açılmış proje yok.' : 'Proje onaylı siparişten açılır.'}
+            />
+          ))}
+        {eksikleriAc.isError && <p className="tc-sp-hata" role="alert">{hataIletisi(eksikleriAc.error, 'Proje ve emirler açılamadı.')}</p>}
+        {acilis.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(acilis.error, 'Emirler alınamadı')} yenile={() => { void acilis.refetch(); }} />}
+        {emirliSatirlar.length > 0 && <AcilisTablosu satirlar={acilis.data?.satirlar ?? []} emirli />}
+      </div>
       {form && <ProjeAcmaFormu siparis={siparis} kapat={() => formYaz(false)} />}
     </Kart>
   );

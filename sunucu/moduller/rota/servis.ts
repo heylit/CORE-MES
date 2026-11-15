@@ -23,3 +23,4 @@ export {
   isEmriSartnameleri, isEmriSartnameleriCevabi, ekAdimSartnameleriSabitle,
 } from './servis/sartname.ts';
 export { talimatSahneleri, talimatSahnesiKaydet, talimatSahnesi } from './servis/sahne.ts';
+export { siparisAcilisiRotasi, bekleyenEmreUygula, bekleyenEmirlereUygula, ROTA_BEKLEMIYOR, BEKLEYEN_ROTA_YOK } from './servis/bekleyen-emir.ts';

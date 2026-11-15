@@ -231,6 +231,8 @@ export const emirSemasi = z.object({
   kapanisSonucu: z.enum(KAPANIS_SONUCLARI).nullable().optional(),
   // 3050 a: emir beklemedeyse neden, not, kim, ne zaman; değilse null. İsteğe bağlı: bu alandan önce yazılmış istemci verisi geçerli kalır.
   bekletme: bekletmeSemasi.nullable().optional(),
+  // 3272-2 a: siparişten rotasız açılmış emir rotasını bekler; adımı yoktur, planlanmaz. İsteğe bağlı: önceki istemci verisi geçerli kalır.
+  rotaBekliyor: z.boolean().optional(),
 });
 
 export const adimSemasi = z.object({
@@ -610,6 +612,8 @@ export const adimliEmirOzeti = z.object({
   // İsteğe bağlı: sunucu her zaman yazar.
   teslimBagli: z.boolean().optional(),
   siparisPartiId: KIMLIK.nullable().optional(),
+  // 3272-2 a: siparişten rotasız açılmış emir rotasının yürürlüğe girmesini bekler; adımı yoktur, planlanmaz. İsteğe bağlı: sunucu her zaman yazar.
+  rotaBekliyor: z.boolean().optional(),
   adimSayisi: z.number().int().nonnegative(),
   tamamAdim: z.number().int().nonnegative(),
   // Bitmemiş ilk iş emri; hepsi bitmişse ya da emir iş emirsizse null.

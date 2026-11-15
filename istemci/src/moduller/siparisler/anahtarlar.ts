@@ -18,6 +18,8 @@ export const anahtarlar = {
   atolyeTaslaklari: ['siparisler', 'teklif', 'atolye-taslaklari'] as const,
   // Projeler modülünün verisi; sipariş ayrıntısında yalnız okunur.
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
+  // 3272: Üretim Emirleri'nin cevabı; onay penceresi ve "Proje ve emirler" kartı okur.
+  siparisAcilisi: (id: number) => ['siparisler', 'siparis', 'acilis', id] as const,
   // Plan modülünün elle çarpanı (195 a); sipariş ayrıntısında okunur ve yazılır.
   siparisCarpani: (id: number) => ['siparisler', 'siparis', 'carpan', id] as const,
   // 3245 d: şablonlar ve antet; Sistem Ayarları > Formlar yazınca yenilenir. Form verisi sürüm ve KDV oranıyla önbelleklenir.

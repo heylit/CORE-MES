@@ -87,3 +87,4 @@ yazmasına uygulanmaz; VARSAYIM, ON-PAKET V6).
 | POST /rota/urunler/:urunId/talimat-sahnesi-kaydet | rota.talimat-yaz | Sıkı şema (RT-94); yalnız yayınlanmış sürüm (RT-92); RT-90, RT-91, RT-95 (model ürünün); okunan sahne sürümü (RT-93); yalnız ekleme tetikleyicisi; istek kimliği; kişi ve zaman sunucudan | U sahne.test.ts (planlama yazar, tekrar koruması) | U sahne.test.ts (operatör 403, 404, 400, 409) |
 
 Model revizyonunun ürünün yayındaki modeli olduğu sunucuda denetlenir (RT-95, Risk R2; UYUM-BORCU B50 kapandı). Denetim kaydı tam gövdedir (gövde en çok 100 adım).
+| POST /rota/emirler/:id/bekleyen-rotayi-uygula | rota.emre-kopyala | 3272-2 a: yalnız rota bekleyen taslak emir; emir sürümüyle (`isEmirleriniYenile`), kilitli; istek kimliği | U bekleyen-emir.test.ts | U bekleyen-emir.test.ts (409, 422) |

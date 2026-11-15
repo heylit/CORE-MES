@@ -18,4 +18,12 @@ export const URETIM_EMIRLERI_AYARLARI = {
     baslik: 'Rotasız üretim emri',
     aciklama: 'Açıkken üretim emri rota seçmeden, yalnız parça, adet ve istasyonla açılabilir. Kapalıyken emir yalnız Reçete ve Rota\'dan, yürürlükteki revizyondan açılır.',
   },
+  // 3272 a: sipariş onaylanınca proje ve her kalem partisi için taslak emir kendiliğinden açılır; varsayılan açık (kullanıcı isteği).
+  'uretim-emirleri.siparis-onayinda-ac': {
+    modul: 'uretim-emirleri',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Sipariş onayında proje ve emir aç',
+    aciklama: 'Açıkken sipariş onaylanınca projesi ve her kalem partisi için taslak üretim emri açılır. Yürürlükte rotası olmayan kalemin emri "Rota bekliyor" diye adımsız açılır, rota yürürlüğe girince dolar. Kapalıyken proje ve emir elle açılır.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

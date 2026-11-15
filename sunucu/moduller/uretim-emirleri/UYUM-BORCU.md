@@ -39,3 +39,9 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 
 - Kaldırıldı (238 H3, 266 a): `POST /uretim-emirleri`, `/:id/{iptal, baslat, bitir, sayim, devam, durdur, sayim-ayarla}`. Terminal bu komutları Arkon üzerinden `disari.ts` ile yapar. `POST /uretim-emirleri/:id/{ayar, makine-devral}` de istemcide ve Arkon web'de çağrılmıyor (DOĞRULANDI, `istemci/src` ve `arkon/web/src` araması, 23.10.2026); kaldırma kararı sorulmadı.
+
+### 3272 (sipariş onayında proje ve emir) - bağlamada kapanacak
+
+- Kokpit Gelenler satırı (siparişten gelen emir, "Rota bekliyor" ve bekleme yaşı) 3282 ile gelir; bu teslimde yok.
+- Reçete ve Rota emir listesinde "Rota bekliyor" rozeti ve rota sayfasında "bekleyen emir" şeridi 3273-2'den sonra.
+- Satın alma talebi bağlı dokunulmamış emirde iptal ve kalemden çözme uyarısı (3272-3 a "talep varsa uyarı") yok; talep kilitlemez.

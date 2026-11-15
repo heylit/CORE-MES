@@ -125,6 +125,8 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
     const rol = await vt().tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('prj_maliyetsiz', 'Deneme proje yazarı') RETURNING id");
     for (const islem of ['sayfa.projeler', 'projeler.yaz']) await vt().sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [rol?.id, islem]);
     maliyetsizYazar = (await girisYap('prj_maliyetsiz', y.id)).cerez;
+    // 3272: onayda kendiliğinden proje ve emir açılışı burada ölçülmez (uretim-emirleri/siparis-acilisi.test.ts); ayar kapalıdır.
+    await vt().sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('uretim-emirleri.siparis-onayinda-ac', 'false', $1)", [y.id]);
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 

@@ -23,7 +23,7 @@ import {
 } from './kurallar.ts';
 import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu } from './kurallar.ts';
-import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
+import { siparisIptalEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { BaslikAlanlari, KalemSatiri, SiparisSatiri as BaslikSatiri } from './sorgular.ts';
 
@@ -193,7 +193,7 @@ export async function siparisGuncelle(
 }
 
 export async function durumDegistir(
-  db: Db, kullanici: Kullanici, id: number, komut: DurumKomutu, g: { surum: number; neden?: string },
+  db: Db, kullanici: Kullanici, id: number, komut: DurumKomutu, g: { surum: number; neden?: string; projeKodu?: string | undefined },
 ): Promise<SiparisAyrintisi> {
   const mevcut = await kilitle(db, id);
   const ret = gecisReddi(mevcut.durum, komut);
@@ -214,7 +214,9 @@ export async function durumDegistir(
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));
-  if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici });
+  if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici, projeKodu: g.projeKodu });
+  if (komut === 'geri-al') await siparisOnayiGeriAlindiBildir(db, { siparisId: id, kullanici });
+  if (komut === 'iptal') await siparisIptalEdildiBildir(db, { siparisId: id, kullanici });
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
   if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
   return siparisAyrintisi(db, id);

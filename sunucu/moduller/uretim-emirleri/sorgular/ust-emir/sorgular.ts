@@ -36,6 +36,9 @@ export interface UstEmirSatiri {
   // 3244 b: teslim kalemin terminine bağlı mı; emir hangi kalem partisinden açıldı (partisiz emirde null).
   teslimBagli: boolean;
   siparisPartiId: number | null;
+  // 3272: sipariş onayıyla kendiliğinden açıldı mı; yürürlükte rotası olmadığı için adımsız mı bekliyor.
+  acilisKaynagi: 'siparis_onayi' | null;
+  rotaBekliyor: boolean;
   surum: number;
 }
 
@@ -45,7 +48,8 @@ const UST = `e.id, e.emir_no AS "emirNo", e.parca_no AS "parcaNo", e.parca_ad AS
   ${NULLU_ISO('e.baslama')} AS baslama, ${NULLU_ISO('e.bitis')} AS bitis, e.saglam_adet AS "saglamAdet",
   e.ust_emir_id AS "ustEmirId", e.bolunme_sira AS "bolunmeSira", e.birlestigi_emir_id AS "birlestigiEmirId",
   e.birlesme_op_no AS "birlesmeOpNo", e.emir_turu AS "emirTuru", e.proje_id AS "projeId", e.siparis_satiri_id AS "siparisSatiriId",
-  e.teslim_bagli AS "teslimBagli", e.siparis_parti_id AS "siparisPartiId", e.surum`;
+  e.teslim_bagli AS "teslimBagli", e.siparis_parti_id AS "siparisPartiId",
+  e.acilis_kaynagi AS "acilisKaynagi", e.rota_bekliyor AS "rotaBekliyor", e.surum`;
 
 // Liste iş emirli emirleri ya da arşivi verir; bugünkü adımsız (istasyonlu) emir bu listede yoktur.
 // Arşiv ve proje listesi bütün durumları verir; ana liste `hepsi` değilse yalnız açık emirleri (kart #1323).
@@ -113,17 +117,19 @@ export interface UstEmirYazisi {
   patlatmaId?: number | null;
   teslimBagli?: boolean;
   siparisPartiId?: number | null;
+  acilisKaynagi?: 'siparis_onayi' | null;
+  rotaBekliyor?: boolean;
 }
 
 export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, oncelik, baslangic, teslim,
        aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id,
-       teslim_bagli, siparis_parti_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
+       teslim_bagli, siparis_parti_id, acilis_kaynagi, rota_bekliyor)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING id`,
     [e.parcaNo, e.parcaAd, e.adet, e.istasyonId, acanId, e.malzemeNo, e.kaynakRotaRevizyonId, e.oncelik, e.baslangic, e.teslim, e.aciklama, e.durum,
       e.ustEmirId ?? null, e.bolunmeSira ?? null, e.birlesmeOpNo ?? null, e.emirTuru, e.emirNo ?? null, e.projeId ?? null,
-      e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null],
+      e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null, e.acilisKaynagi ?? null, e.rotaBekliyor ?? false],
   );
   if (satir === null) throw new Error('Üretim emri eklenemedi.');
   return satir.id;
@@ -330,7 +336,8 @@ export function emirIstasyonuYaz(db: Db, id: number, istasyonId: number | null):
 }
 
 export function emirKaynakRevizyonuYaz(db: Db, id: number, revizyonId: number): Promise<unknown> {
-  return db.sorgu('UPDATE uretim_emri SET kaynak_rota_revizyonu_id = $2, surum = surum + 1 WHERE id = $1', [id, revizyonId]);
+  // 3272-2 a: rota uygulanan emir artık rota beklemez.
+  return db.sorgu('UPDATE uretim_emri SET kaynak_rota_revizyonu_id = $2, rota_bekliyor = false, surum = surum + 1 WHERE id = $1', [id, revizyonId]);
 }
 
 // Biten iş emrinden sonra iş emri kalırsa emir, sıradakinin istasyonunda yeniden planlı olur (ilk sistemdeki gibi).

@@ -21,6 +21,7 @@ import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
 import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, useBekletOgesi } from './Bekletme.tsx';
+import { RotaBekliyorSeridi } from './RotaBekliyor.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
@@ -258,7 +259,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     </nav>
     <Kart
       baslik={emir ? emir.emirNo : 'Üretim emri'}
-      baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}</>}
+      baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{emir.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}</>}
       sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id, bekletOgesi)}</div> : undefined}
     >
       {ayrinti.isPending && <DurumKutusu durum="yukleniyor" />}
@@ -277,6 +278,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
           </div>
           <TeslimBagi emirId={emir.id} />
           {bekleme && <BeklemeSeridi emirId={emir.id} bilgi={bekleme} />}
+          {emir.rotaBekliyor === true && <RotaBekliyorSeridi emirId={emir.id} />}
           <YasamSeridi emir={emir} bekleme={bekleme} />
           <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} bekleme={bekleme} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
           <BekletPenceresi emirId={emir.id} emirNo={emir.emirNo} />
