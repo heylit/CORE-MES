@@ -9,7 +9,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/dosyalar/eksikler',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'kendi',
     denetim: 'govdesiz',
     govde: eksiklerGovdesi,
     cevap: eksiklerCevabi,
@@ -18,7 +18,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/dosyalar/:ozet/parca',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'kendi',
     denetim: 'govdesiz',
     parametre: dosyaParametresi,
     govde: dosyaParcasiGovdesi,
@@ -29,7 +29,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/dosyalar/:ozet',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'kendi',
     parametre: dosyaParametresi,
     cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => servis.kendiDosyam(db, kullanici, parametre.ozet),

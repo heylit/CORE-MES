@@ -11,7 +11,7 @@ import * as servis from './servis.ts';
 // yöneticidedir. Tarama uç değildir (isler.ts).
 export const uclar = [
   uc({
-    yontem: 'GET', yol: '/guvenlik/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
+    yontem: 'GET', yol: '/guvenlik/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici.islemler),
   }),
   uc({ yontem: 'GET', yol: '/guvenlik/ozet', yetki: 'guvenlik.oku', cevap: ozetCevabi, isle: ({ db }) => servis.ozet(db) }),

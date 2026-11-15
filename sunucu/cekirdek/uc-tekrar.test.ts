@@ -28,28 +28,28 @@ const bosDepo: TekrarDeposu = {
 };
 
 test('tekrar koruması yalnız yazma ucunda tanımlanabilir: GET tanım hatasıdır, POST/PUT/DELETE kabul edilir', () => {
-  const ortak = { yol: '/x', yetki: 'oturum', tekrarKorumali: true, cevap, isle } as const;
+  const ortak = { yol: '/x', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap, isle } as const;
   assert.throws(() => uc({ ...ortak, yontem: 'GET' }), /GET ucu tekrar korumalı olamaz: GET \/x/);
   for (const yontem of ['POST', 'PUT', 'DELETE'] as const) {
     assert.equal(uc({ ...ortak, yontem }).tekrarKorumali, true);
   }
-  assert.equal(uc({ yontem: 'POST', yol: '/x', yetki: 'oturum', cevap, isle }).tekrarKorumali, false);
+  assert.equal(uc({ yontem: 'POST', yol: '/x', yetki: 'oturum', sahiplik: 'yok', cevap, isle }).tekrarKorumali, false);
 });
 
 test('açık uç tekrar korumalı olamaz; oturumlu ve işlemli uç olabilir', () => {
   const ortak = { yontem: 'POST', yol: '/x', tekrarKorumali: true, cevap, isle } as const;
   assert.throws(() => uc({ ...ortak, yetki: 'acik' }), /Açık uç tekrar korumalı olamaz: POST \/x/);
-  assert.equal(uc({ ...ortak, yetki: 'oturum' }).tekrarKorumali, true);
+  assert.equal(uc({ ...ortak, yetki: 'oturum', sahiplik: 'yok' }).tekrarKorumali, true);
   assert.equal(uc({ ...ortak, yetki: 'kisiler.yaz' }).tekrarKorumali, true);
 });
 
 test('depo verilmeden kurulan uygulamada tekrar korumalı uç kaydedilir ama korumasız koşmaz: istek açık hatayla 500 alır; öbür uçlar ve depolu kurulum çalışır', async () => {
   let kosma = 0;
   const korumali = uc({
-    yontem: 'POST', yol: '/korumali', yetki: 'oturum', tekrarKorumali: true, cevap,
+    yontem: 'POST', yol: '/korumali', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap,
     isle: () => { kosma += 1; return { tamam: true }; },
   });
-  const duz = uc({ yontem: 'POST', yol: '/duz', yetki: 'oturum', cevap, isle });
+  const duz = uc({ yontem: 'POST', yol: '/duz', yetki: 'oturum', sahiplik: 'yok', cevap, isle });
   const kimlik: Kimlik = async (istek) => (istek.headers['x-kim'] === 'var' ? { id: 7, ad: 'deneme', islemler: [] } : null);
   const basliklar = { 'x-kim': 'var', 'istek-kimligi': '6f1b2c3d-0000-4000-8000-000000000002' };
   const hatalar: unknown[] = [];
@@ -81,7 +81,7 @@ test('depo verilmeden kurulan uygulamada tekrar korumalı uç kaydedilir ama kor
 test('saklı cevap işleyiciyi koşturmadan döner; cevapsız kalmış satır saklı cevap sayılmaz (500)', async () => {
   let kosma = 0;
   const korumali = uc({
-    yontem: 'POST', yol: '/korumali', yetki: 'oturum', tekrarKorumali: true, cevap,
+    yontem: 'POST', yol: '/korumali', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap,
     isle: () => { kosma += 1; return { tamam: true }; },
   });
   const kimlik = async () => ({ id: 7, ad: 'deneme', islemler: [] });
@@ -132,9 +132,9 @@ test('istek özeti alan sırasına bakmaz; yöntem, yol, parametre, sorgu ve gö
 
 test('korumasız yazma ucuna istek kimliği gelirse uç adıyla günlüğe uyarı yazılır, istek reddedilmez; kimliksiz istek, korumalı uç ve GET uyarı yazmaz', async () => {
   let kosma = 0;
-  const duz = uc({ yontem: 'POST', yol: '/duz', yetki: 'oturum', cevap, isle: () => { kosma += 1; return { tamam: true }; } });
-  const korumali = uc({ yontem: 'POST', yol: '/korumali', yetki: 'oturum', tekrarKorumali: true, cevap, isle });
-  const okuma = uc({ yontem: 'GET', yol: '/oku', yetki: 'oturum', cevap, isle });
+  const duz = uc({ yontem: 'POST', yol: '/duz', yetki: 'oturum', sahiplik: 'yok', cevap, isle: () => { kosma += 1; return { tamam: true }; } });
+  const korumali = uc({ yontem: 'POST', yol: '/korumali', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap, isle });
+  const okuma = uc({ yontem: 'GET', yol: '/oku', yetki: 'oturum', sahiplik: 'yok', cevap, isle });
   const satirlar: string[] = [];
   const app = Fastify({ logger: { level: 'warn', stream: { write: (s: string) => { satirlar.push(s); } } } });
   hataYonetiminiKur(app);

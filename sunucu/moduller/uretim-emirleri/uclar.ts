@@ -173,7 +173,7 @@ const adimliUclar = [
   uc({
     yontem: 'GET',
     yol: '/uretim-emirleri/ozet',
-    yetki: 'oturum',
+    yetki: 'oturum', sahiplik: 'yok',
     cevap: ozetCevabi,
     isle: ({ db, kullanici }) => anaSayfaOzeti(db, kullanici.id, ADIMLI_OKUMA.biri.some((i) => islemVarMi(kullanici, i))),
   }),

@@ -49,19 +49,19 @@ describe('denetim kipi (gerçek PostgreSQL)', () => {
   const parametre = z.object({ tur: z.string() });
   const isle = (): { tamam: boolean } => { kosma += 1; return { tamam: true }; };
   const sahteUclar = [
-    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/tam', yetki: 'oturum', parametre, govde, cevap, isle }),
-    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/govdesiz', yetki: 'oturum', denetim: 'govdesiz', parametre, govde, cevap, isle }),
-    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/yok', yetki: 'oturum', denetim: 'yok', parametre, govde, cevap, isle }),
+    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/tam', yetki: 'oturum', sahiplik: 'yok', parametre, govde, cevap, isle }),
+    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/govdesiz', yetki: 'oturum', sahiplik: 'yok', denetim: 'govdesiz', parametre, govde, cevap, isle }),
+    uc({ yontem: 'POST', yol: '/deneme-denetim/:tur/yok', yetki: 'oturum', sahiplik: 'yok', denetim: 'yok', parametre, govde, cevap, isle }),
     uc({
-      yontem: 'POST', yol: '/deneme-denetim/:tur/secili', yetki: 'oturum', denetim: 'govdesiz', parametre, govde, cevap, isle,
+      yontem: 'POST', yol: '/deneme-denetim/:tur/secili', yetki: 'oturum', sahiplik: 'yok', denetim: 'govdesiz', parametre, govde, cevap, isle,
       denetimOzeti: (g) => ({ durum: g.ic?.not ?? null, uzunluk: g.veri.length, parola: g.parola ?? null }),
     }),
     uc({
-      yontem: 'POST', yol: '/deneme-denetim/:tur/tekrar', yetki: 'oturum', denetim: 'govdesiz', tekrarKorumali: true,
+      yontem: 'POST', yol: '/deneme-denetim/:tur/tekrar', yetki: 'oturum', sahiplik: 'yok', denetim: 'govdesiz', tekrarKorumali: true,
       parametre, govde, cevap, isle,
     }),
     ...(['tam', 'govdesiz'] as const).map((kip) => uc({
-      yontem: 'POST', yol: `/deneme-denetim/:tur/yol-${kip}/:token/:parola/:id/:ozet/:kimlik`, yetki: 'oturum',
+      yontem: 'POST', yol: `/deneme-denetim/:tur/yol-${kip}/:token/:parola/:id/:ozet/:kimlik`, yetki: 'oturum', sahiplik: 'yok',
       ...(kip === 'govdesiz' ? { denetim: kip } : {}),
       parametre: z.object({ tur: z.string(), token: z.string(), parola: z.string(), id: z.coerce.number<number>(), ozet: z.string(), kimlik: z.string() }),
       govde, cevap, isle,

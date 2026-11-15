@@ -21,7 +21,9 @@ const KISILER: Record<string, Kullanici> = {
 
 const cevap = z.object({ tamam: z.literal(true) });
 const isle = (): { tamam: true } => ({ tamam: true });
-const ucKur = (yol: string, yetki: Uc['yetki'], yontem: 'GET' | 'POST' = 'GET'): Uc => uc({ yontem, yol, yetki, cevap, isle });
+const ucKur = (yol: string, yetki: Uc['yetki'], yontem: 'GET' | 'POST' = 'GET'): Uc => (yetki === 'oturum'
+  ? uc({ yontem, yol, yetki, sahiplik: 'yok', cevap, isle })
+  : uc({ yontem, yol, yetki, cevap, isle }));
 
 function kur(app: FastifyInstance, uclar: readonly Uc[], modul?: string): void {
   uclariKaydet(app, uclar, {

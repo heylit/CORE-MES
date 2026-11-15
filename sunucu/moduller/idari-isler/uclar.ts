@@ -17,7 +17,7 @@ import * as servis from './servis.ts';
 // filo-yaz yazar ve iptal eder. Demirbaşı ve zimmet geçmişini oku okur; demirbaş kaydı, zimmetleme, iade ve kişiye bağlama zimmet-yaz'dır.
 export const uclar = [
   uc({
-    yontem: 'GET', yol: '/idari-isler/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
+    yontem: 'GET', yol: '/idari-isler/menu-sayaclari', yetki: 'oturum', sahiplik: 'yok', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici),
   }),
   uc({

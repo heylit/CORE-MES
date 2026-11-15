@@ -22,32 +22,32 @@ const YAYIN_GORME = { biri: ['bildirim.yayinla', 'bildirim.yayin-oku'] } as cons
 // gövde başka kişiyi seçemez. Başkasının bildirim kimliği "bulunamadı" döner.
 export const uclar = [
   uc({
-    yontem: 'GET', yol: '/bildirimler', yetki: 'oturum', sorgu: bildirimListeSorgusu, cevap: bildirimListeCevabi,
+    yontem: 'GET', yol: '/bildirimler', yetki: 'oturum', sahiplik: 'kendi', sorgu: bildirimListeSorgusu, cevap: bildirimListeCevabi,
     isle: ({ db, kullanici, sorgu }) => bildirimListesi(db, kullanici, sorgu),
   }),
-  uc({ yontem: 'GET', yol: '/bildirimler/sayac', yetki: 'oturum', cevap: bildirimSayacCevabi, isle: ({ db, kullanici }) => bildirimSayaci(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/sayac', yetki: 'oturum', sahiplik: 'kendi', cevap: bildirimSayacCevabi, isle: ({ db, kullanici }) => bildirimSayaci(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/:id/okundu', yetki: 'oturum', parametre: bildirimParametresi, cevap: bildirimCevabi,
+    yontem: 'POST', yol: '/bildirimler/:id/okundu', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimParametresi, cevap: bildirimCevabi,
     isle: ({ db, kullanici, parametre }) => okundu(db, kullanici, parametre.id),
   }),
-  uc({ yontem: 'POST', yol: '/bildirimler/tumunu-okundu', yetki: 'oturum', cevap: tumunuOkunduCevabi, isle: ({ db, kullanici }) => tumunuOkundu(db, kullanici) }),
+  uc({ yontem: 'POST', yol: '/bildirimler/tumunu-okundu', yetki: 'oturum', sahiplik: 'kendi', cevap: tumunuOkunduCevabi, isle: ({ db, kullanici }) => tumunuOkundu(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/:id/arsivle', yetki: 'oturum', parametre: bildirimParametresi, cevap: bildirimCevabi,
+    yontem: 'POST', yol: '/bildirimler/:id/arsivle', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimParametresi, cevap: bildirimCevabi,
     isle: ({ db, kullanici, parametre }) => arsivle(db, kullanici, parametre.id),
   }),
-  uc({ yontem: 'GET', yol: '/bildirimler/tercihler', yetki: 'oturum', cevap: bildirimTercihleriCevabi, isle: ({ db, kullanici }) => tercihler(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/tercihler', yetki: 'oturum', sahiplik: 'kendi', cevap: bildirimTercihleriCevabi, isle: ({ db, kullanici }) => tercihler(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/tercihler/degistir', yetki: 'oturum', govde: bildirimTercihDegistirGovdesi, cevap: bildirimTercihleriCevabi,
+    yontem: 'POST', yol: '/bildirimler/tercihler/degistir', yetki: 'oturum', sahiplik: 'kendi', govde: bildirimTercihDegistirGovdesi, cevap: bildirimTercihleriCevabi,
     isle: ({ db, kullanici, govde }) => tercihDegistir(db, kullanici, govde),
   }),
   // Web Push (ADR 0031): kişi yalnız kendi cihazını açar ve kapatır; gövde kişi seçemez. Açık anahtar gizli değildir.
-  uc({ yontem: 'GET', yol: '/bildirimler/push', yetki: 'oturum', cevap: bildirimPushDurumuCevabi, isle: ({ db, kullanici }) => pushDurumu(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/push', yetki: 'oturum', sahiplik: 'kendi', cevap: bildirimPushDurumuCevabi, isle: ({ db, kullanici }) => pushDurumu(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/push/abone-ol', yetki: 'oturum', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
+    yontem: 'POST', yol: '/bildirimler/push/abone-ol', yetki: 'oturum', sahiplik: 'kendi', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
     isle: ({ db, kullanici, govde }) => pushAboneOl(db, kullanici, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/push/abonelik-sil', yetki: 'oturum', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
+    yontem: 'POST', yol: '/bildirimler/push/abonelik-sil', yetki: 'oturum', sahiplik: 'kendi', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
     isle: ({ db, kullanici, govde }) => pushAbonelikSil(db, kullanici, govde),
   }),
   // Türe göre sinyal (ADR 0031 madde 7): Sistem Ayarları'nın işlemiyle okunur ve yazılır.
@@ -59,7 +59,7 @@ export const uclar = [
   }),
   // Ekip çağrısı yönlendirmesi (298 a): Sistem Ayarları'nın işlemiyle okunur ve yazılır; rol yetkisi vermez, yalnız alıcıyı seçer.
   // Arkon çağrı bandı için: oturumdaki kişinin hangi ekip çağrılarını aldığı; eşlemenin kendisini ve başka kişiyi göstermez.
-  uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme/benim', yetki: 'oturum', cevap: cagriEkiplerimCevabi, isle: ({ db, kullanici }) => cagriEkiplerim(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme/benim', yetki: 'oturum', sahiplik: 'kendi', cevap: cagriEkiplerimCevabi, isle: ({ db, kullanici }) => cagriEkiplerim(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme', yetki: 'ayarlar.yaz', cevap: cagriYonlendirmeCevabi, isle: ({ db }) => cagriYonlendirmesi(db) }),
   uc({
     yontem: 'POST', yol: '/bildirimler/cagri-yonlendirme/:ekip/degistir', yetki: 'ayarlar.yaz', parametre: cagriYonlendirmeParametresi,
@@ -81,9 +81,9 @@ export const uclar = [
     isle: ({ db, kullanici, parametre, govde }) => bildirimGosterimiYaz(db, kullanici, parametre.tur, govde),
   }),
   // Ekran ortası (2147-3 a): kişinin kendi bekleyenleri; onay yalnız kendi satırına.
-  uc({ yontem: 'GET', yol: '/bildirimler/ortada', yetki: 'oturum', cevap: ortadakiBildirimlerCevabi, isle: ({ db, kullanici }) => ortadakiBildirimler(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/ortada', yetki: 'oturum', sahiplik: 'kendi', cevap: ortadakiBildirimlerCevabi, isle: ({ db, kullanici }) => ortadakiBildirimler(db, kullanici) }),
   uc({
-    yontem: 'POST', yol: '/bildirimler/:id/onayla', yetki: 'oturum', parametre: bildirimParametresi, cevap: bildirimOnayCevabi,
+    yontem: 'POST', yol: '/bildirimler/:id/onayla', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimParametresi, cevap: bildirimOnayCevabi,
     isle: ({ db, kullanici, parametre }) => onayla(db, kullanici, parametre.id),
   }),
   // Elle bildirim (2147-2 c): yayınlamak `bildirim.yayinla` ister; işlem hiçbir role göçle verilmedi, başta yalnız yönetici.
@@ -106,7 +106,7 @@ export const uclar = [
   }),
   // Görsel alıcıya da açıktır: oturum ister, servis alıcı, yazan ya da rapor işlemi olmayana "bulunamadı" der.
   uc({
-    yontem: 'GET', yol: '/bildirimler/yayinlar/:id/gorsel', yetki: 'oturum', parametre: bildirimYayinParametresi, cevap: ikiliCevap,
+    yontem: 'GET', yol: '/bildirimler/yayinlar/:id/gorsel', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimYayinParametresi, cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => yayinGorseli(db, kullanici, parametre.id),
   }),
 ];

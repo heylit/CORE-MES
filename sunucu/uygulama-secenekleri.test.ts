@@ -31,7 +31,7 @@ test('sunucunun kablolaması denetimi ve tekrar deposunu verir: korumalı uç an
 
   let kosma = 0;
   const korumali = uc({
-    yontem: 'POST', yol: '/korumali', yetki: 'oturum', tekrarKorumali: true, cevap: z.object({ tamam: z.boolean() }),
+    yontem: 'POST', yol: '/korumali', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap: z.object({ tamam: z.boolean() }),
     isle: () => { kosma += 1; return { tamam: true }; },
   });
   const app = Fastify();

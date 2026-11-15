@@ -59,11 +59,11 @@ describe('yazma ucu değişikliği yapan kişiyi transaction ayarına yazar (ger
     uclariKaydet(
       app,
       [
-        uc({ yontem: 'POST', yol: '/oturumlu', yetki: 'oturum', govde, cevap: bos, isle: ekle }),
+        uc({ yontem: 'POST', yol: '/oturumlu', yetki: 'oturum', sahiplik: 'yok', govde, cevap: bos, isle: ekle }),
         uc({ yontem: 'POST', yol: '/islemli', yetki: 'kisiler.yaz', govde, cevap: bos, isle: ekle }),
         uc({ yontem: 'POST', yol: '/acik', yetki: 'acik', govde, cevap: bos, isle: ekle }),
         uc({
-          yontem: 'GET', yol: '/okuma', yetki: 'oturum', cevap: kisi,
+          yontem: 'GET', yol: '/okuma', yetki: 'oturum', sahiplik: 'yok', cevap: kisi,
           isle: async ({ db }) => ({ kisi: (await db.tek<{ kisi: number | null }>(`SELECT ${KISI_IFADESI} AS kisi`))?.kisi ?? null }),
         }),
       ],

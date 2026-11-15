@@ -47,8 +47,8 @@ describe('dış izleyici: portal kapalıyken firma ataması oturumu etkilemez (g
     app = Fastify();
     hataYonetiminiKur(app);
     const kimlik = kimlikCozucu(ortam.vt);
-    const icUc = uc({ yontem: 'GET', yol: '/ic/okuma', yetki: 'oturum', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) });
-    const portalUcu = uc({ yontem: 'GET', yol: '/portal/deneme', yetki: 'oturum', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) });
+    const icUc = uc({ yontem: 'GET', yol: '/ic/okuma', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) });
+    const portalUcu = uc({ yontem: 'GET', yol: '/portal/deneme', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({ id: z.number() }), isle: ({ kullanici }) => ({ id: kullanici.id }) });
     uclariKaydet(app, oturumUclari(), { vt: ortam.vt, kimlik, modul: 'oturum' });
     uclariKaydet(app, [icUc], { vt: ortam.vt, kimlik, modul: 'rota' });
     uclariKaydet(app, [portalUcu], { vt: ortam.vt, kimlik, modul: 'portal' });

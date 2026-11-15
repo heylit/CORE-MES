@@ -49,11 +49,11 @@ describe('oturum kapatma: bir kişinin oturumları (gerçek PostgreSQL)', () => 
     // Kapatma yalnız bu test uçlarından çağrılır; üretimde çağıran parola akışlarıdır.
     const testUclari = [
       uc({
-        yontem: 'GET', yol: '/test/ben', yetki: 'oturum', cevap: z.object({ id: z.number() }),
+        yontem: 'GET', yol: '/test/ben', yetki: 'oturum', sahiplik: 'yok', cevap: z.object({ id: z.number() }),
         isle: ({ kullanici }) => ({ id: kullanici.id }),
       }),
       uc({
-        yontem: 'POST', yol: '/test/kapat', yetki: 'oturum', sorgu: z.object({ haric: z.string() }),
+        yontem: 'POST', yol: '/test/kapat', yetki: 'oturum', sahiplik: 'yok', sorgu: z.object({ haric: z.string() }),
         cevap: z.object({ kapanan: z.number() }),
         isle: async ({ db, kullanici, istek, sorgu }) => ({
           kapanan: await kisiOturumlariniKapat(db, kullanici.id, sorgu.haric === '1' ? istektekiOturumOzeti(istek) : null),

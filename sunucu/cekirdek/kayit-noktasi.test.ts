@@ -284,10 +284,10 @@ describe('kayıt noktası (gerçek PostgreSQL)', () => {
         return yanit.code(hata instanceof UygulamaHatasi ? hata.durum : 500).send({});
       });
       uclariKaydet(app, [
-        uc({ yontem: 'POST', yol: '/kn/duz', yetki: 'oturum', cevap, isle }),
-        uc({ yontem: 'POST', yol: '/kn/korumali', yetki: 'oturum', tekrarKorumali: true, cevap, isle }),
+        uc({ yontem: 'POST', yol: '/kn/duz', yetki: 'oturum', sahiplik: 'yok', cevap, isle }),
+        uc({ yontem: 'POST', yol: '/kn/korumali', yetki: 'oturum', sahiplik: 'yok', tekrarKorumali: true, cevap, isle }),
         uc({
-          yontem: 'GET', yol: '/kn/oku', yetki: 'oturum', cevap,
+          yontem: 'GET', yol: '/kn/oku', yetki: 'oturum', sahiplik: 'yok', cevap,
           isle: async ({ db }) => ({ reddedildi: !(await kayitNoktasi(db, async () => undefined)).tamam }),
         }),
       ], { vt: acik(), kimlik, tekrar: depo });
