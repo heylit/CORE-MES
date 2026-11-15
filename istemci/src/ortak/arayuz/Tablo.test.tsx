@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { csvIndir } from '../veri/csv.ts';
-import { Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci } from './Tablo.tsx';
+import { grupOgeleri, Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci } from './Tablo.tsx';
 
 vi.mock('../veri/csv.ts', async (asil) => ({ ...await asil<object>(), csvIndir: vi.fn() }));
 
@@ -144,5 +144,63 @@ describe('Tablo kesilen sütun', () => {
     render(<Tablo etiket="Gider" kip="kaydir" sutunlar={[{ anahtar: 'b', baslik: 'Boş', kes: true, hucre: () => null }]} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
     expect(document.querySelector('.tc-tablo-kes')).toBeNull();
     expect(screen.getByText('Girilmemiş')).toBeTruthy();
+  });
+});
+
+describe('Tablo grupları (3284)', () => {
+  interface G { no: number; ad: string; tur: string; kat: string }
+  const GS: readonly Sutun<G>[] = [{ anahtar: 'ad', baslik: 'Ad', hucre: (s) => s.ad }];
+  const VERI: G[] = [
+    { no: 1, ad: 'ORN-A', tur: 'hm', kat: 'metal' },
+    { no: 2, ad: 'ORN-B', tur: 'sf', kat: 'takim' },
+    { no: 3, ad: 'ORN-C', tur: 'hm', kat: 'plastik' },
+    { no: 4, ad: 'ORN-D', tur: 'hm', kat: 'metal' },
+  ];
+  const yol = (s: G) => [s.tur, s.kat];
+
+  it('grup sırası ilk görünüş sırasıdır; aynı gruptaki satırlar bir araya gelir', () => {
+    const o = grupOgeleri(VERI, yol).map((x) => (x.tur === 'grup' ? `g:${x.yol.join('/')}:${String(x.satirlar.length)}` : x.satir.ad));
+    expect(o).toEqual(['g:hm:3', 'g:hm/metal:2', 'ORN-A', 'ORN-D', 'g:hm/plastik:1', 'ORN-C', 'g:sf:1', 'g:sf/takim:1', 'ORN-B']);
+  });
+
+  it('boş yol grupsuz satırdır', () => {
+    expect(grupOgeleri([VERI[0]!], () => [])).toEqual([{ tur: 'satir', satir: VERI[0] }]);
+  });
+
+  it('grup verilmezse başlık satırı çizilmez', () => {
+    render(<Tablo etiket="Liste" sutunlar={GS} satirlar={VERI} satirAnahtari={(s) => s.no} />);
+    expect(screen.queryAllByRole('button', { expanded: true })).toHaveLength(0);
+    expect(screen.getAllByRole('row')).toHaveLength(5);
+  });
+
+  it('başlık sayıyı yazar; katlanınca alt satırlar gizlenir, açılınca döner', () => {
+    render(
+      <Tablo
+        etiket="Liste" sutunlar={GS} satirlar={VERI} satirAnahtari={(s) => s.no}
+        grup={{ yol, baslik: (y) => `T ${y.join('/')}`, sayi: (y) => (y.length === 1 && y[0] === 'hm' ? 30 : 1) }}
+      />,
+    );
+    const hm = screen.getByRole('button', { name: /T hm 30/ });
+    expect(hm.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(hm);
+    expect(hm.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('ORN-A')).toBeNull();
+    expect(screen.queryByRole('button', { name: /T hm\/metal/ })).toBeNull();
+    expect(screen.getByText('ORN-B')).toBeTruthy();
+    fireEvent.click(hm);
+    expect(screen.getByText('ORN-A')).toBeTruthy();
+  });
+
+  it('alt grup tek başına katlanır; sayı verilmezse satır sayısı yazılır', () => {
+    render(<Tablo etiket="Liste" sutunlar={GS} satirlar={VERI} satirAnahtari={(s) => s.no} grup={{ yol, baslik: (y) => `T ${y.join('/')}` }} />);
+    fireEvent.click(screen.getByRole('button', { name: /T hm\/metal 2/ }));
+    expect(screen.queryByText('ORN-A')).toBeNull();
+    expect(screen.getByText('ORN-C')).toBeTruthy();
+  });
+
+  it('başlığın önündeki denetim grubun satırlarını alır', () => {
+    const on = vi.fn(() => <span>on</span>);
+    render(<Tablo etiket="Liste" sutunlar={GS} satirlar={VERI} satirAnahtari={(s) => s.no} grup={{ yol: (s) => [s.tur], baslik: (y) => y[0], on }} />);
+    expect(on).toHaveBeenCalledWith(['hm'], [VERI[0], VERI[2], VERI[3]]);
   });
 });

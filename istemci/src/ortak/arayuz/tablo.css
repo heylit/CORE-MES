@@ -188,3 +188,23 @@
   }
   .tc-tablo-kap[data-kaydir]:not(:has(.tc-tablo-sabit-sol)) .tc-tablo thead tr > th:first-child:not(.tc-tablo-sec) { z-index: 3; }
 }
+
+/* Grup başlıkları (kart 3284): tablonun tam genişliğinde katlanır satır; ikinci düzey içeri girer. Kart kipinde kartların üstünde başlık. */
+.tc-tablo tr.tc-tablo-grup > th {
+  padding: var(--b-1) var(--b-3); font-size: var(--yazi-s); font-weight: 700; color: var(--ink); text-align: left;
+  background: var(--panel2); border-bottom: 1px solid var(--edge2); white-space: normal;
+}
+.tc-tablo tr.tc-tablo-grup[data-duzey="2"] > th { padding-left: calc(var(--b-3) + var(--b-5)); font-weight: 600; background: none; }
+.tc-tablo-grup-ic { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-tablo-grup-dugme {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dugme-boy); min-width: 0; padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tc-tablo-grup-dugme > .tc-simge { transition: transform var(--hareket-sure); }
+.tc-tablo-grup-dugme[aria-expanded="true"] > .tc-simge { transform: rotate(90deg); }
+.tc-tablo-grup-sayi { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-tablo-kap[data-kaydir] .tc-tablo tr.tc-tablo-grup > th { background: var(--panel-solid); }
+.tc-tablo-kap[data-kaydir] .tc-tablo tr.tc-tablo-grup > th > .tc-tablo-grup-ic { position: sticky; left: var(--b-3); width: max-content; }
+[data-kip="kart"] .tc-tablo tr.tc-tablo-grup { border: 0; background: none; box-shadow: none; padding: 0; }
+[data-kip="kart"] .tc-tablo tr.tc-tablo-grup > th { padding: var(--b-2) 0 0; background: none; border-bottom: 0; }
+[data-kip="kart"] .tc-tablo tr.tc-tablo-grup[data-duzey="2"] > th { padding-left: 0; }
