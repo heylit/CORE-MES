@@ -51,11 +51,60 @@ describe('3294: metal durum ve işlem listeleri', () => {
     expect(al.indexOf('T6')).toBeLessThan(al.indexOf('T651'));
   });
 
-  test('işlem listesi tekrar etmez ve önceki değerleri korur (kayıtlı kart seçtiği metni saklar)', () => {
+  test('işlem listesi tekrar etmez ve önceki 20 değerin hepsini korur (kayıtlı kart seçtiği metni saklar)', () => {
     expect(new Set(M_ISLEM).size).toBe(M_ISLEM.length);
-    for (const v of ['Gerilim giderme', 'Islah', 'Sementasyon', 'Nitrasyon', 'Pasivasyon', 'Fosfatlama', 'Sert krom', 'Kimyasal nikel', 'Toz boya', 'Sert eloksal']) {
-      expect(M_ISLEM).toContain(v);
-    }
+    const onceki = ['Gerilim giderme', 'Normalizasyon', 'Islah', 'İndüksiyon sertleştirme', 'Sementasyon', 'Nitrasyon', 'Nitrokarbürleme', 'Kriyojenik işlem',
+      'Bilyalı dövme (shot peening)', 'Pasivasyon', 'Elektropolisaj', 'Asitleme', 'Fosfatlama', 'Siyah oksit (karartma)', 'Sert krom', 'Kimyasal nikel',
+      'Çinko-nikel kaplama', 'PVD / CVD kaplama', 'Toz boya', 'Sert eloksal'];
+    expect(onceki).toHaveLength(20);
+    for (const v of onceki) expect(M_ISLEM, v).toContain(v);
+  });
+
+  // Her yeni kural için hem kuralın tuttuğu hem tutmadığı örnek: kural silinir ya da kayarsa biri kırmızıya döner.
+  const durumu = (cls: string, grade: string, k: string, v: string, form: string | null = 'cubuk') => optStatus(k, v, taslak(cls, grade, form)).s;
+  test.each([
+    ['yay', 'C75S', 'durum', 'Patentlenmiş (tel)', 'tel', 'ok'],
+    ['yay', 'C75S', 'durum', 'Patentlenmiş (tel)', 'cubuk', 'no'],
+    ['paslanmaz', '301', 'durum', 'Soğuk sertleştirilmiş (+C1000)', 'levha', 'ok'],
+    ['paslanmaz', '301', 'durum', 'Soğuk sertleştirilmiş (+C1000)', 'blok', 'no'],
+    ['paslanmaz', '301', 'durum', '¼ sert (ASTM A666)', 'blok', 'no'],
+    ['sac', 'DC01', 'durum', 'Soğuk hadde, tavsız (+C, tam sert)', 'cubuk', 'no'],
+    ['aluminyum', '1050', 'durum', 'H26', 'levha', 'ok'],
+    ['aluminyum', '1050', 'durum', 'H26', 'blok', 'no'],
+    ['aluminyum', '5083', 'durum', 'H38', 'blok', 'no'],
+    ['aluminyum', '6082', 'durum', 'T6510', 'cubuk', 'ok'],
+    ['aluminyum', '6082', 'durum', 'T6510', 'levha', 'no'],
+    ['paslanmaz', '174PH', 'durum', 'Çökelme sertleştirilmiş (H950)', 'cubuk', 'warn'],
+    ['paslanmaz', '174PH', 'durum', 'Çökelme sertleştirilmiş (H1050)', 'cubuk', 'warn'],
+    ['paslanmaz', '138MO', 'durum', 'Çökelme sertleştirilmiş (H1050)', 'cubuk', 'ok'],
+    ['islah', 'C45', 'islem', 'Östemperleme', 'cubuk', 'ok'],
+    ['dokme', 'GJS600', 'islem', 'Östemperleme', 'cubuk', 'ok'],
+    ['aluminyum', '6061', 'islem', 'Östemperleme', 'cubuk', 'no'],
+    ['paslanmaz', '316L', 'islem', 'Östemperleme', 'cubuk', 'no'],
+    ['islah', '42CRMO4', 'islem', 'Karbonitrürleme', 'cubuk', 'ok'],
+    ['aluminyum', '6061', 'islem', 'Karbonitrürleme', 'cubuk', 'no'],
+    ['aluminyum', '6061', 'islem', 'Borlama', 'cubuk', 'no'],
+    ['bakir', 'CUETP', 'islem', 'Vakum sertleştirme', 'cubuk', 'no'],
+    ['titanyum', 'GR5', 'islem', 'Alevle sertleştirme', 'cubuk', 'no'],
+    ['nikel', 'A718', 'islem', 'Lazerle sertleştirme', 'cubuk', 'no'],
+    ['takim', '2379', 'islem', 'Vakum sertleştirme', 'cubuk', 'ok'],
+    ['aluminyum', '6061', 'islem', 'Hidrojen gevrekliği giderme', 'cubuk', 'no'],
+    ['islah', 'C45', 'islem', 'Kromik asit eloksal (Tip I)', 'cubuk', 'no'],
+    ['aluminyum', '6061', 'islem', 'Kromik asit eloksal (Tip I)', 'cubuk', 'ok'],
+    ['aluminyum', '7075', 'islem', 'Eloksal (Tip II, sülfürik)', 'cubuk', 'warn'],
+    ['islah', 'C45', 'islem', 'Kadmiyum kaplama', 'cubuk', 'warn'],
+    ['aluminyum', '6061', 'islem', 'Kadmiyum kaplama', 'cubuk', 'no'],
+    ['aluminyum', '6061', 'islem', 'Çinko lamel kaplama', 'cubuk', 'no'],
+    ['aluminyum', '6061', 'islem', 'Mangan fosfat', 'cubuk', 'no'],
+    ['islah', 'C45', 'islem', 'Mangan fosfat', 'cubuk', 'ok'],
+    ['paslanmaz', '316L', 'islem', 'Tuz banyosu nitrokarbürleme (QPQ)', 'cubuk', 'warn'],
+    ['islah', '42CRMO4', 'islem', 'Tuz banyosu nitrokarbürleme (QPQ)', 'cubuk', 'ok'],
+    ['aluminyum', '6061', 'islem', 'Tuz banyosu nitrokarbürleme (QPQ)', 'cubuk', 'no'],
+    ['karbon', 'S235', 'islem', 'Yaşlandırma (çökelme sertleştirme)', 'cubuk', 'warn'],
+    ['paslanmaz', '174PH', 'islem', 'Yaşlandırma (çökelme sertleştirme)', 'cubuk', 'ok'],
+    ['aluminyum', '6061', 'islem', 'Yaşlandırma (çökelme sertleştirme)', 'cubuk', 'ok']
+  ] as const)('%s %s %s "%s" (%s): %s', (cls, grade, k, v, form, beklenen) => {
+    expect(durumu(cls, grade, k, v, form)).toBe(beklenen);
   });
 
   test.each([
