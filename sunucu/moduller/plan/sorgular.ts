@@ -638,3 +638,27 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
 export async function okumaTransactioniMi(db: Db): Promise<boolean> {
   return (await db.tek<{ salt: boolean }>("SELECT current_setting('transaction_read_only') = 'on' AS salt"))?.salt === true;
 }
+
+// 3282 1d: kişinin taslağı (plan_taslagi). Satır yalnız sahibinin kimliğiyle okunur ve yazılır.
+export interface TaslakSatiri { tabanSurum: number; tabanImzasi: unknown; komutlar: unknown; surum: number }
+export async function taslakOku(db: Db, kisiId: number, kilit = false): Promise<TaslakSatiri | null> {
+  return db.tek<TaslakSatiri>(
+    `SELECT taban_surum::float8 AS "tabanSurum", taban_imzasi AS "tabanImzasi", komutlar, surum FROM plan_taslagi WHERE kisi_id = $1${kilit ? ' FOR UPDATE' : ''}`,
+    [kisiId]);
+}
+// Yeni taslak: aynı anda ikinci açılış eklemez (null döner, çağıran çakışma der).
+export async function taslakEkle(db: Db, g: { kisiId: number; tabanSurum: number; tabanImzasi: unknown; komutlar: unknown }): Promise<number | null> {
+  return (await db.tek<{ surum: number }>(
+    `INSERT INTO plan_taslagi (kisi_id, taban_surum, taban_imzasi, komutlar) VALUES ($1, $2, $3::jsonb, $4::jsonb)
+     ON CONFLICT (kisi_id) DO NOTHING RETURNING surum`,
+    [g.kisiId, g.tabanSurum, JSON.stringify(g.tabanImzasi), JSON.stringify(g.komutlar)]))?.surum ?? null;
+}
+// Komut listesi beklenen sürümdeyse yazılır; değilse null.
+export async function taslakKomutlariYaz(db: Db, g: { kisiId: number; beklenenSurum: number; komutlar: unknown }): Promise<number | null> {
+  return (await db.tek<{ surum: number }>(
+    `UPDATE plan_taslagi SET komutlar = $3::jsonb, surum = surum + 1, guncellendi = now() WHERE kisi_id = $1 AND surum = $2 RETURNING surum`,
+    [g.kisiId, g.beklenenSurum, JSON.stringify(g.komutlar)]))?.surum ?? null;
+}
+export async function taslakSil(db: Db, kisiId: number, beklenenSurum: number): Promise<boolean> {
+  return (await db.tek<{ kisi_id: number }>('DELETE FROM plan_taslagi WHERE kisi_id = $1 AND surum = $2 RETURNING kisi_id', [kisiId, beklenenSurum])) !== null;
+}

@@ -110,6 +110,14 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/planlama-calismasi/plana-al-onizlemesi': 'plan.yaz',
   'POST /plan/planlama-calismasi/olay-ekle': 'plan.yaz',
   'POST /plan/planlama-calismasi/ek-mesai-ekle': 'plan.yaz',
+  // 3282 1d: kişinin taslağı; satır yalnız çağıranın kimliğiyle okunur ve yazılır.
+  'GET /plan/taslagim': 'plan.yaz',
+  'POST /plan/taslagim/komut': 'plan.yaz',
+  'POST /plan/taslagim/geri-al': 'plan.yaz',
+  'POST /plan/taslagim/vazgec': 'plan.yaz',
+  'POST /plan/taslagim/uygula': 'plan.yaz',
+  'POST /plan/taslagim/degerlendirme': 'plan.yaz',
+  'POST /plan/taslagim/diz': 'plan.yaz',
   // Değerlendirme ve yıllık çözüm kayıt yazmaz; planlama sayfasını gören başlatır.
   'POST /plan/planlama-degerlendirmesi': 'plan.planlama-oku',
   'GET /plan/planlama-degerlendirmesi/:is': 'plan.planlama-oku',
