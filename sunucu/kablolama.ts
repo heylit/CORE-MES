@@ -18,6 +18,7 @@ import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
+import * as ortakDosyalar from './moduller/ortak-dosyalar/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
 import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
@@ -26,11 +27,11 @@ import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
-import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
+import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisIptalEdildiDinle, siparisListesi, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import * as stok from './moduller/stok/disari.ts';
@@ -81,6 +82,71 @@ function kartIzleriTopla(kaynaklar: Readonly<Record<string, KartIzleri | undefin
     for (const [modul, sayim] of liste) for (const iz of await sayim!(db, kartlar)) izler.push({ ...iz, modul });
     return izler;
   };
+}
+
+// 2067 (kart 3288-2): müşteri, sipariş ve proje klasörleri. Ortak Dosyalar kaynak modülleri ithal etmez; kaydın zinciri (firma,
+// sipariş, proje) burada kaynakların `disari.ts`'inden kurulur. Yalnız müşteri (ya da ikisi) türündeki firmaya klasör açılır.
+type Zincir = ortakDosyalar.KayitZinciri;
+const musteriMi = (tur: string) => tur === 'musteri' || tur === 'ikisi';
+const firmaBilgisi = (f: { id: number; kod: string | null; ad: string }) => ({ id: f.id, kod: f.kod, ad: f.ad });
+const siparisBilgisi = (s: { id: number; no: string; musteriSiparisNo: string | null; durum: string }) =>
+  ({ id: s.id, no: s.no, musteriSiparisNo: s.musteriSiparisNo, iptal: s.durum === 'iptal' });
+
+async function siparisOku(db: Db, id: number) {
+  try {
+    return await siparisAyrintisi(db, id);
+  } catch (h) {
+    if (h instanceof UygulamaHatasi && h.durum === 404) return null;
+    throw h;
+  }
+}
+async function firmaZinciri(db: Db, id: number): Promise<Zincir | null> {
+  const f = await firmaOzeti(db, id);
+  return f === null || !musteriMi(f.tur) ? null : { tur: 'firma', firma: firmaBilgisi(f) };
+}
+async function siparisZinciri(db: Db, id: number): Promise<Zincir | null> {
+  const sp = await siparisOku(db, id);
+  const f = sp === null ? null : await firmaOzeti(db, sp.firmaId);
+  return sp === null || f === null ? null : { tur: 'siparis', firma: firmaBilgisi(f), siparis: siparisBilgisi(sp) };
+}
+async function projeZinciri(db: Db, id: number): Promise<Zincir | null> {
+  const p = await projeler.projeGetir(db, id);
+  if (p === null) return null;
+  const f = p.firmaId === null ? null : await firmaOzeti(db, p.firmaId);
+  const sp = p.siparisId === null ? null : await siparisOku(db, p.siparisId);
+  return { tur: 'proje', firma: f === null ? null : firmaBilgisi(f), siparis: sp === null ? null : siparisBilgisi(sp), proje: { id: p.id, kod: p.kod, ad: p.ad } };
+}
+const esitle = (oku: (db: Db, id: number) => Promise<Zincir | null>) => async (db: Db, kisiId: number, id: number) => {
+  const z = await oku(db, id);
+  if (z !== null) await ortakDosyalar.kayitEsitle(db, kisiId, z);
+};
+const firmaEsitle = esitle(firmaZinciri);
+const siparisEsitle = esitle(siparisZinciri);
+const projeEsitle = esitle(projeZinciri);
+
+// Toplu komutun kaynağı: bütün müşteri firmaları, siparişler (sayfa sayfa) ve projeler; zincir firma ve sipariş başına bir kez okunur.
+async function mevcutKayitlar(db: Db): Promise<Zincir[]> {
+  const firmalar = new Map((await tumFirmalar(db)).map((f) => [f.id, f]));
+  const sonuc: Zincir[] = [...firmalar.values()].filter((f) => musteriMi(f.tur)).map((f) => ({ tur: 'firma', firma: firmaBilgisi(f) }));
+  const siparisler = new Map<number, ReturnType<typeof siparisBilgisi> & { firmaId: number }>();
+  for (let sayfa = 1; ; sayfa += 1) {
+    const l = await siparisListesi(db, siparisListesiSorgusu.parse({ sayfa, sayfaBoyu: 200, sirala: 'no', yon: 'artan' }));
+    for (const sp of l.satirlar) siparisler.set(sp.id, { ...siparisBilgisi(sp), firmaId: sp.firmaId });
+    if (l.satirlar.length < l.sayfaBoyu) break;
+  }
+  for (const { firmaId, ...sp } of siparisler.values()) {
+    const f = firmalar.get(firmaId);
+    if (f !== undefined) sonuc.push({ tur: 'siparis', firma: firmaBilgisi(f), siparis: sp });
+  }
+  for (const p of await projeler.projeSecenekleri(db, { yalnizAktif: false })) {
+    const f = p.firmaId === null ? undefined : firmalar.get(p.firmaId);
+    const sp = p.siparisId === null ? undefined : siparisler.get(p.siparisId);
+    sonuc.push({
+      tur: 'proje', firma: f === undefined ? null : firmaBilgisi(f), siparis: sp === undefined ? null : { id: sp.id, no: sp.no, musteriSiparisNo: sp.musteriSiparisNo, iptal: sp.iptal },
+      proje: { id: p.id, kod: p.kod, ad: p.ad },
+    });
+  }
+  return sonuc;
 }
 
 export function sunucununBaglari(): Bag[] {
@@ -246,6 +312,12 @@ export function sunucununBaglari(): Bag[] {
     // 2133-1 b ve 2133-4 a: firma ya da fabrika ayarı kaydedilince sevkiyat noktası açılır ya da eşitlenir.
     bag('firma değişti -> sevkiyat noktası', firmaDegistiDinle, sevkiyat.firmaDegistiYansit),
     bag('ayar değişti -> sevkiyat fabrika noktası', ayarDegistiDinle, sevkiyat.ayarDegistiYansit),
+    // 2067 (3288-2): kayıt yazılınca klasörü aynı işlemde açılır ya da adı eşitlenir; klasör açılamazsa kayıt sürer (KK-8).
+    bag('firma değişti -> ortak dosyalar müşteri klasörü', firmaDegistiDinle, (db: Db, o: { firmaId: number; kisiId: number }) => firmaEsitle(db, o.kisiId, o.firmaId)),
+    bag('sipariş değişti -> ortak dosyalar sipariş klasörü', siparisDegistiDinle, (db: Db, o: { siparisId: number; kullanici: { id: number } }) => siparisEsitle(db, o.kullanici.id, o.siparisId)),
+    bag('proje açıldı -> ortak dosyalar proje klasörü', projeler.projeAcildiDinle, (db: Db, o: { projeId: number; kisiId: number }) => projeEsitle(db, o.kisiId, o.projeId)),
+    bag('proje değişti -> ortak dosyalar proje klasörü', projeler.projeDegistiDinle, (db: Db, o: { projeId: number; kisiId: number }) => projeEsitle(db, o.kisiId, o.projeId)),
+    bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),
     bag('istasyon kişileri -> bildirim yayını', bildirimIstasyonCozucusu, [aktifIstasyonlar, istasyondakiKisiler].every((f) => typeof f === 'function')

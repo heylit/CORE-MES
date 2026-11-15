@@ -27,6 +27,7 @@ import {
   gorevIzinleri, gorevlerimTuru, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
+import { projeAcildiBildir, projeDegistiBildir } from './proje-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { GorevSatiri, ProjeSatiri, SablonKalemiSatiri, SablonSatiri, StatuKaydiSatiri, StatuSatiri } from './sorgular.ts';
 
@@ -107,6 +108,7 @@ export async function projeDuzenle(db: Db, kisiId: number, id: number, g: ProjeG
   if (yenidenAcmaMi(mevcut.durum, g.durum)) {
     await sorgular.statuKaydiEkle(db, id, { statuId: null, metin: YENIDEN_ACILDI, not: g.yenidenAcmaGerekcesi }, kisiId);
   }
+  await projeDegistiBildir(db, { projeId: id, kisiId });
   return projeAyrintisi(db, id, maliyetGorur);
 }
 
@@ -126,6 +128,7 @@ export async function siparistenProjeAc(
   };
   const id = await kisitKorumali(KISITLAR, () => sorgular.projeEkle(db, g.kod, alan, kisiId, siparis.id, bitis.bagli));
   await acilisSablonu(db, kisiId, id, g.sablonId);
+  await projeAcildiBildir(db, { projeId: id, kisiId });
   return projeAyrintisi(db, id, maliyetGorur);
 }
 

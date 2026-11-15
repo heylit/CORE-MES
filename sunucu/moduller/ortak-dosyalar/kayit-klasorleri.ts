@@ -16,7 +16,7 @@ import { gorunumKur, klasorIste } from './servis.ts';
 import * as s from './sorgular.ts';
 
 // Kayda bağlı klasörler (kart 3288; 2067-4 a, ADR 0030 eki). Müşteri, sipariş ve proje açılınca kaynak modülün olayı klasörü buradan
-// açtırır; dinleyici sunucu/kablolama.ts'te bağlanır (bu modül kaynak modülleri ithal etmez, onlar da bunu). Sistem yazması klasör
+// açtırır; dinleyici ve kaydı okuyan karşılıklar sunucu/kablolama.ts'te bağlanır (bu modül kaynak modülleri ithal etmez, onlar da bunu). Sistem yazması klasör
 // düzeyine takılmaz: kayıt sahibi modülün ucunda yetki zaten denetlenmiştir. Olusturan kişi kaydı açan kişidir.
 
 const KLASOR_KISITLARI = { ortak_dosyalar_klasor_ad_tekil: { ileti: KAYIT_ILETILERI.adCakisti, alan: 'ad' } };
@@ -114,6 +114,16 @@ export async function kayitKlasoruAdiniGuncelle(db: Db, kisiId: number, zincir: 
 export async function kayitKlasoruArsivle(db: Db, kisiId: number, tur: KayitTuru, id: number, arsiv: boolean): Promise<void> {
   const k = await s.kaynakKlasoru(db, tur, id);
   if (k !== null) await s.klasorArsivYaz(db, [k.id], arsiv, kisiId);
+}
+
+// Kaynak olayı (kart 3288-2): kaydın klasörü yoksa açılır; varsa adı kayda, siparişte arşiv durumu iptale eşitlenir. Olay her
+// yazmada gelir; değişmeyen ad ve arşiv yazılmaz. Klasörün taşınması (kaydın firması ya da siparişi değişti) yoktur (UYUM-BORCU 10).
+export async function kayitEsitle(db: Db, kisiId: number, zincir: KayitZinciri): Promise<void> {
+  const kaynak = zincirKaynagi(zincir);
+  const k = await s.kaynakKlasoru(db, kaynak.tur, kaynak.id);
+  if (k === null) { await kayitKlasoruAc(db, kisiId, zincir); return; }
+  await kayitKlasoruAdiniGuncelle(db, kisiId, zincir);
+  if (zincir.tur === 'siparis' && k.arsiv !== zincir.siparis.iptal) await s.klasorArsivYaz(db, [k.id], zincir.siparis.iptal, kisiId);
 }
 
 // Mevcut kayıtların kaynağı (toplu komut): kablolama.ts kaynak modüllerin `disari.ts`'inden kurar. Bağlı değilse sayım "bağlı değil" döner.

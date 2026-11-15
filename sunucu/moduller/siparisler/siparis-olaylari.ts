@@ -47,3 +47,9 @@ export const siparisOnayiGeriAlindiDinle = onayiGeriAlindi.dinle;
 export const siparisOnayiGeriAlindiBildir = onayiGeriAlindi.bildir;
 export const siparisIptalEdildiDinle = iptalEdildi.dinle;
 export const siparisIptalEdildiBildir = iptalEdildi.bildir;
+
+// Sipariş değişti (2067, kart 3288-2): açılış, düzenleme ve her durum geçişi aynı işlemde verilir; Ortak Dosyalar siparişin klasörünü
+// açar, adını ve arşiv durumunu eşitler. Dinleyici güncel kaydı kendisi okur.
+const degisti = olay<SiparisDurumOlayi>();
+export const siparisDegistiDinle = degisti.dinle;
+export const siparisDegistiBildir = degisti.bildir;

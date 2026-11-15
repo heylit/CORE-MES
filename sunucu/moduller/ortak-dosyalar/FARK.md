@@ -31,3 +31,10 @@ Başvuru: onaylı prototip (2067-1 a) ve ADR 0030 (2067-2 a), kodu "2067 teyit".
   klasörü menüsündeki pasif "Adı değiştir / Taşı / Arşive kaldır" maddeleri çizilmedi, çünkü klasör için bu uçlar hiç yok (UYUM-BORCU 4).
 - Ayarlar'da ön izlemede çizilmemiş "Müşteriler klasörü" ve "Toplu işler" kartları (onaylı madde 8 ve 7). Bakış sonrası şablon
   ekleme biçimi ("Alt klasör ekle", hemen kayıt), açılamayanlar tablosu, onay penceresindeki sayı kutuları ve uyarı bandı ön izlemeye uyduruldu.
+
+## Kart 3288-2 (dilim 2; taban main d03f9fa)
+- Kaynak olayları: `FirmaDegistiOlayi`'na `kisiId` (6 yazma yeri), siparişlerde `siparisDegistiBildir` (açılış, düzenleme, her durum geçişi),
+  projelerde `proje-olaylari.ts` (`projeAcildiBildir`, `projeDegistiBildir`; 3272 ile ortak, imza yalnız eklenerek değişir).
+- `kayitEsitle`: klasör yoksa açar, varsa adı ve sipariş arşivini eşitler. Zincir ve mevcut kayıt listesi `sunucu/kablolama.ts`'te kaynakların
+  `disari.ts`'inden kurulur (bu modül kaynakları ithal etmez). Yalnız müşteri ya da ikisi türündeki firmaya klasör açılır.
+- Ekran: firma, sipariş ve proje ayrıntısında "Klasör" bağlantısı (ortak arayüzde, CEKIRDEK-ISTEKLERI 3); Ortak Dosyalar `?klasor=` ile açılır.

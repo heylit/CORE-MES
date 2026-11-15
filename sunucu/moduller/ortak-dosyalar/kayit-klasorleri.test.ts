@@ -224,6 +224,8 @@ describe('kayda bağlı klasörler (kart 3288; gerçek PostgreSQL, gerçek giri�
   });
 
   test('KK-11 toplu komut: sayım, değişen sayıda durur, gruplar halinde açar, eşgüçlü, toplu işle arşivlenir (dolu klasör atlanır)', async () => {
+    // test:modul kablolamayı önceden yükler; bağsız durum için gerçek kaynak bırakılır.
+    kayitKaynagiKaydet(null);
     const bagsiz = (await oku(yonetici, '/ortak-dosyalar/ayarlar/mevcut')).json<MevcutCevabi>();
     assert.equal(bagsiz.bagli, false);
     const zincirler: KayitZinciri[] = [

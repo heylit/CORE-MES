@@ -28,3 +28,4 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 | Proje | kimlik; kod ve ad klasör adında | `kaynak_tur = 'proje'` | projeler (`projeler_proje.id`); olayla |
 | Alt klasör şablonu | sahibi | `ortak_dosyalar_sablon` | başka modüle açılmaz |
 | Açılamayan klasör | sahibi; zincir (kayıt adları) | `ortak_dosyalar_acilamayan` | başka modüle açılmaz |
+| Kayıt olayları (3288-2) | dinler | `firmaDegistiDinle`, `siparisDegistiDinle`, `projeAcildiDinle`, `projeDegistiDinle` | bağ `sunucu/kablolama.ts`; olay kimlik ve kişi taşır |

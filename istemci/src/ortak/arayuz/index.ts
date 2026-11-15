@@ -6,6 +6,7 @@ export { Rozet, type RozetTonu } from './Rozet.tsx';
 export { Qr } from './Qr.tsx';
 export { QR_SESSIZ_PAY, qrKareleri, qrSvgMetni } from './qr.ts';
 export { Kart } from './Kart.tsx';
+export { KlasorBaglantisi } from './KlasorBaglantisi.tsx';
 export { AnaSayfa } from './AnaSayfa.tsx';
 export { SayiKarti, type SayiTonu } from './SayiKarti.tsx';
 export { GrafikKarti, type GrafikNoktasi } from './GrafikKarti.tsx';
