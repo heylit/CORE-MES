@@ -408,7 +408,7 @@ export const KATMANLAR: Katmanlar = {
     /* 9 */ ['kaynak-izi', 'portal', 'sevkiyat'],
     /* 10 */ ['stok', 'takvim'],
     /* 11 */ ['cnc-kurulum', 'degisiklik-yonetimi', 'etiket-merkezi', 'kalite-merkezi', 'logo', 'recete-rota'],
-    /* 12 */ ['guvenlik', 'malzeme-izi', 'plan'],
+    /* 12 */ ['guvenlik', 'malzeme-izi', 'plan', 'proses'],
     /* 13 */ ['akis', 'arkon', 'proje-maliyet'],
     /* 14 */ ['saat'],
   ],
@@ -416,7 +416,7 @@ export const KATMANLAR: Katmanlar = {
     /* 0 */ [
       'akis', 'atolye', 'bildirim', 'degisiklik-yonetimi', 'denetim', 'denetim-hazirlik', 'durus-nedenleri', 'etiket-merkezi',
       'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
-      'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
+      'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'proses', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
     ],
     /* 1 */ ['ayarlar', 'guvenlik', 'ik', 'istasyonlar', 'kisiler', 'musteri-tedarikci', 'projeler', 'siparisler'],
     /* 2 */ ['belge-merkezi', 'vardiya'],

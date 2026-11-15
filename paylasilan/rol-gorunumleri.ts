@@ -52,6 +52,11 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
       'malzemeler-onay-bekleyen',
     ],
   },
+  // Proses mühendisi (3277-4 a, 3290): parça dosyası başta, ardından halkaların sahip sayfaları.
+  proses_muhendisi: {
+    sayfalar: ['/proses', '/recete-rota', '/cnc-kurulum', '/cizimler', '/kalite-merkezi', '/uretim-emirleri', '/adim-durumu', KISISEL],
+    kartlar: ['rota-acik-revizyon', 'rota-onay-bekleyen', 'kalite-merkezi-ilk-parca'],
+  },
   depo: {
     sayfalar: ['/stok', '/malzemeler', '/etiket-merkezi', '/sevkiyat', '/taleplerim', KISISEL],
     kartlar: [

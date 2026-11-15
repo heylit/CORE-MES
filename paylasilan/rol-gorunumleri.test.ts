@@ -15,6 +15,10 @@ describe('rol görünümleri (1390 a)', () => {
     }
   });
 
+  test('3290: proses mühendisinin menüsü parça dosyasıyla başlar', () => {
+    assert.equal(ROL_GORUNUMLERI.proses_muhendisi?.sayfalar[0], '/proses');
+  });
+
   test('1851 a: Akış Süresi müdür ve planlama menüsünde, telefon alt çubuğunun (ilk dört) dışında', () => {
     for (const rol of ['mudur', 'planlama_proje']) assert.ok((ROL_GORUNUMLERI[rol]?.sayfalar.indexOf('/akis') ?? -1) >= 4, rol);
   });
