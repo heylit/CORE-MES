@@ -32,6 +32,7 @@ export const ONERILEN_IKINCI_MENU = {
       { anahtar: 'res', baslik: 'Kaynaklar', yol: '/recete-rota/res', simge: 'cpu', islem: 'sayfa.recete-rota' },
       { anahtar: 'planlanabilirlik', baslik: 'Planlanabilirlik', yol: '/recete-rota/planlanabilirlik', simge: 'gauge', islem: 'sayfa.recete-rota' },
       { anahtar: 'sartnameler', baslik: 'Şartname ve talimatlar', yol: '/recete-rota/sartnameler', simge: 'clipboard-check', islem: 'sayfa.recete-rota' },
+      { anahtar: 'rota-sablonlari', baslik: 'Rota şablonları', yol: '/recete-rota/rota-sablonlari', simge: 'route', islem: 'sayfa.recete-rota' },
       { anahtar: 'kapanis', baslik: 'Kapanış onayları', yol: '/recete-rota/kapanis', simge: 'check', islem: 'uretim-emirleri.kapanis-oku' },
       // 2584 a: Reçete ve Rota'nın kendi ayarları (elle tanımlanan statüler); yazma recete-rota.yaz ile.
       { anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/recete-rota/ayarlar', simge: 'gear', islem: 'sayfa.recete-rota' },

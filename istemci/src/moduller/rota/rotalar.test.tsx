@@ -28,7 +28,7 @@ describe('eski Rota adresleri', () => {
     ['/rota', '/recete-rota/schema'],
     ['/rota/12', '/recete-rota/schema'],
     ['/rota/operasyonlar', '/recete-rota/schema'],
-    ['/rota/sablonlar', '/recete-rota/schema'],
+    ['/rota/sablonlar', '/recete-rota/rota-sablonlari'],
     ['/rota/operator', '/recete-rota/schema'],
     ['/rota/stok', '/recete-rota/stock'],
     ['/rota/malzemeler', '/recete-rota/items'],

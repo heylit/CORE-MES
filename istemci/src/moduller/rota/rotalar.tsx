@@ -15,7 +15,7 @@ function EmirlerYonlendirme() {
 // Operatör Üretim Terminali'ni kullanır; eski yer imi Reçete ve Rota'ya düşer (terminal yetkisi herkeste yok).
 const YONLENDIRMELER: readonly [string, string][] = [
   ['/rota', '/recete-rota/schema'], ['/rota/:urunId', '/recete-rota/schema'], ['/rota/operator', '/recete-rota/schema'],
-  ['/rota/operasyonlar', '/recete-rota/schema'], ['/rota/sablonlar', '/recete-rota/schema'],
+  ['/rota/operasyonlar', '/recete-rota/schema'], ['/rota/sablonlar', '/recete-rota/rota-sablonlari'],
   ['/rota/stok', '/recete-rota/stock'], ['/rota/malzemeler', '/recete-rota/items'], ['/rota/kaynaklar', '/recete-rota/res'],
   ['/rota/plan', '/recete-rota/plan'], ['/rota/plan-studyosu', '/recete-rota/studio'], ['/rota/kanban', '/recete-rota/kanban'],
   ['/cizelge', '/recete-rota/plan'], ['/matris', '/recete-rota/plan'],
