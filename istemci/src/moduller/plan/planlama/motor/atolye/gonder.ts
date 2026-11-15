@@ -122,6 +122,11 @@ export const gonderIletisi = (hedef: GonderHedefi, g: GonderSonucu): string =>
     : hedef === 'onay' ? `Plan onaya gönderildi: ${gonderOzeti(g)} Canlıya onaylayan alır.`
       : `Plan canlıda: ${gonderOzeti(g)} Tezgâh kuyrukları ve operatör ekranı bu planı gösterir.`;
 
+// Senaryo komutunun 409'u iki türlüdür: sürüm eskidi (liste yenilenince yeniden denenir) ya da sunucunun kendi engeli (taslak kapandı,
+// başlamış iş, eksik stok ...). Engelde yeniden denemek aynı engele takılır; "plan değişti" demek nedeni gizler, sunucunun iletisi gösterilir.
+export const SURUM_ESKIDI = 'Plan bu arada değişti; liste yenilendi, yeniden deneyin.';
+export const senaryoHataIletisi = (h: unknown, yedek: string): string => (nedeni(h) === ESKI_SURUM ? SURUM_ESKIDI : hataIletisi(h, yedek));
+
 export const gonderHataIletisi = (h: unknown): string => (h instanceof GonderHatasi ? h.message : hataIletisi(h, 'İşlem tamamlanamadı; sayfayı yenileyip yeniden deneyin.'));
 
 // Çalışmaya aç (eski 'sen-ac', 507 3 a): bekleyen değişiklik önce kaydedilir, sonra taslağın yerleşimleri ve kilitleri kayıtlı çalışmanın

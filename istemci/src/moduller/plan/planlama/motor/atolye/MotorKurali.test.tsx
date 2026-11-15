@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
-import { api } from '../../../../../ortak/veri/api.ts';
+import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { SunucuSenaryosu } from './kurallar.ts';
 import { MotorKurali } from './MotorKurali.tsx';
 
@@ -41,5 +41,21 @@ describe('atölye: taslağın motor ayarı', () => {
     expect(await screen.findByText('Sıralama kuralı: En erken teslim (EDD)')).toBeTruthy();
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.queryByRole('button', { name: /Güncel ayarları uygula/ })).toBeNull();
+  });
+
+  // 3270-1: yalnız sürüm eskiyince "plan değişti" denir; sunucunun başka engelinde (409) iletisi gösterilir, yeniden denemek işe yaramaz.
+  it('409 eski sürümde "plan değişti", başka engelde sunucunun iletisini gösterir', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(cevap(false, null));
+    const post = vi.spyOn(api, 'post')
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } }))
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Taslak kapanmış; yalnız açık taslak değişir.' }));
+    const degisti = ciz(true);
+    const secim = await screen.findByLabelText('Sıralama kuralı');
+    fireEvent.change(secim, { target: { value: 'edd' } });
+    expect(await screen.findByText('Plan bu arada değişti; liste yenilendi, yeniden deneyin.')).toBeTruthy();
+    fireEvent.change(secim, { target: { value: '' } });
+    expect(await screen.findByText(/Taslak kapanmış; yalnız açık taslak değişir\./)).toBeTruthy();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(degisti).toHaveBeenCalledTimes(2);
   });
 });

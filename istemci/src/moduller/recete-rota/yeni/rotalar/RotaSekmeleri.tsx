@@ -4,7 +4,7 @@ import { EMIR_TURLERI, EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turler
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
-import { Dugme, IsaretKutusu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, IsaretKutusu } from '../../../../ortak/arayuz/index.ts';
 import { RR_ANAHTARI, RrHatasi } from '../veri.ts';
 import { acikRevizyon, yururlukteki } from './kurallar.ts';
 import type { RotaEkrani } from './ortak.tsx';
@@ -45,6 +45,11 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
       try { return await api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${encodeURIComponent(urunId)}`); } catch (h) { throw new RrHatasi(h); }
     },
   });
+  // Liste okunamazsa ekran tek rotalı ürün gibi görünmesin: sekme satırının yerinde hata ve yeniden dene durur. 404 rotasız üründür
+  // (sahibi ürünü bulamadı); o zaman bugünkü gibi sekme satırı yoktur.
+  if (sorgu.isError && !(sorgu.error instanceof RrHatasi && sorgu.error.durum === 404)) {
+    return { ...BOS, satir: <DurumKutusu durum="hata" mesaj={`Ürünün rotaları alınamadı: ${sorgu.error.message}`} yenile={() => { void sorgu.refetch(); }} /> };
+  }
   const rotalar = sorgu.data?.rotalar ?? [];
   const standart = rotalar.find((x) => x.standart) ?? null;
   // Tek rota varken ve rota açamayan kullanıcıya sekme satırı gösterilmez: ekran bugünkü gibi kalır.

@@ -200,6 +200,27 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
+  // 3270-1: senaryo komutunun 409'unda "plan değişti" yalnız sürüm eskiyince; sunucunun öteki engeli kendi iletisiyle görünür.
+  it('Onay sekmesi, senaryo (3270-1): eski sürümde "plan değişti", başka 409 engelinde sunucunun iletisi gösterilir', async () => {
+    const get = vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const engel = 'Taslak kapanmış; yalnız açık taslak değişir.';
+    const post = vi.spyOn(api, 'post')
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } }))
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: engel }));
+    ac();
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'M2 dolu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Geri gönder' }));
+    expect(await screen.findByText('Plan bu arada değişti; liste yenilendi, yeniden deneyin.')).toBeTruthy();
+    expect(get).toHaveBeenCalledWith('/plan/senaryolar');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'M2 dolu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Geri gönder' }));
+    expect(await screen.findByText(new RegExp(engel.replace('.', '\\.')))).toBeTruthy();
+    expect(post).toHaveBeenCalledTimes(2);
+    post.mockRestore();
+    get.mockRestore();
+  });
+
   it('Onay sekmesi, senaryo (984 a): taslaktan sonra başlayan iş canlıya almayı durdurursa sabitleme sorulur; onaylanınca sabitle ile yeniden gönderilir', async () => {
     const get = vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     const ileti = 'Taslak açıldıktan sonra başlayan iş var (E-1 OP 10); taslakta o makinede onunla çakışan iş var.';

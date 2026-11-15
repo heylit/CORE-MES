@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { MotorAyarlari, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Secim, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
-import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
+import { api, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
 import { AYAR_SECENEKLERI, degerAdi, surumMetni } from '../../../motor-ayarlari/kurallar.ts';
+import { senaryoHataIletisi } from './gonder.ts';
 import type { SunucuSenaryosu } from './kurallar.ts';
 
 // Kart 811 (833 a): seçili taslağın motor ayarı sürümü ve taslağa özel sıralama kuralı (830 a). Taslak açıldığı sürümde kalır (774 a);
@@ -28,7 +29,7 @@ export function MotorKurali({ s, yazabilir, degisti }: { s: SunucuSenaryosu; yaz
       await tekrarKorumaliGonder((d) => api.post(`/plan/senaryolar/${String(s.id)}/${yol}`, { surum: s.surum, ...govde }, d));
       bildir('tamam', tamam);
     } catch (e) {
-      bildir('hata', e instanceof ApiHatasi && e.durum === 409 ? 'Plan bu arada değişti; liste yenilendi, yeniden deneyin.' : hataIletisi(e, 'Motor ayarı değiştirilemedi.'));
+      bildir('hata', senaryoHataIletisi(e, 'Motor ayarı değiştirilemedi.'));
     } finally { setGidiyor(false); degisti(); }
   };
   const acik = yazabilir && s.durum === 'acik';
