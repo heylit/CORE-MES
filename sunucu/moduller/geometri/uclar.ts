@@ -1,11 +1,12 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi, geometriSaglikCevabi,
+  geometriSureCevabi, geometriSureSorgusu,
   geometriYuzeyCevabi, geometriYuzeyKaydetGovdesi, revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, sureTahminiOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -71,6 +72,12 @@ export const uclar = [
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, sorgu: geometriHamSorgusu, cevap: geometriHamCevabi,
     isle: ({ db, parametre, sorgu }) => hamOnerisi(db, parametre.revizyonId, sorgu),
+  }),
+  // 3278: talaştan kaba süre aralığı (kalibresiz, yalnız ekranda; 1195 c rotaya yazmaz).
+  uc({
+    yontem: 'GET', yol: '/geometri/sure-tahmini/:revizyonId', yetki: 'geometri.oku',
+    parametre: revizyonParametresi, sorgu: geometriSureSorgusu, cevap: geometriSureCevabi,
+    isle: ({ db, parametre, sorgu }) => sureTahminiOku(db, parametre.revizyonId, sorgu),
   }),
   // 1704 a: kart yazan da okur (net ağırlığı forma yalnız düğmeyle yazar); geometri okuyan da.
   uc({

@@ -178,6 +178,47 @@ export const geometriHamCevabi = z.object({
 });
 export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 
+// Talaştan kaba işleme süresi (kart 3278; 1195 c): yalnız ekranda gösterilen, kalibresiz aralıktır; rotaya ya da plana yazılmaz.
+// Talaş = ham hacmi (en az talaşlı stok önerisi, yoksa döndürülmüş kutu + pay) - parça hacmi. ISO grubu (P, M, K, N, S, H) sorguda
+// yoksa P alınır ve kaynağı 'varsayilan' döner; ekran bunu söyler. Kalem: kaba (talaş / kaldırma hızı), finis (yüzey alanı / finiş hızı),
+// delik (tanınan delikler, çap ve derinlikten). Kalem hesaplanamazsa null; sıfır uydurulmaz.
+export const GEOMETRI_ISO_GRUPLARI = ['P', 'M', 'K', 'N', 'S', 'H'] as const;
+export type GeometriIsoGrubu = (typeof GEOMETRI_ISO_GRUPLARI)[number];
+export const GEOMETRI_SURE_KALEMLERI = ['kaba', 'finis', 'delik'] as const;
+export const GEOMETRI_SURE_NEDENLERI = ['analiz-yok', 'hacim-yok', 'talas-yok'] as const;
+export const geometriSureSorgusu = geometriHamSorgusu.extend({ iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional() });
+const dk = z.number().min(0);
+export const geometriSureKalemi = z.object({
+  kalem: z.enum(GEOMETRI_SURE_KALEMLERI),
+  altDk: dk,
+  ustDk: dk,
+  // delikte delik sayısı; kaba ve finişte null.
+  adet: z.number().int().min(0).nullable(),
+});
+export const geometriSureCevabi = z.object({
+  revizyonId: z.number().int(),
+  oneri: z.literal(true),
+  kalibre: z.literal(false),
+  iso: z.enum(GEOMETRI_ISO_GRUPLARI),
+  isoKaynagi: z.enum(['istek', 'varsayilan']),
+  payMm: z.number(),
+  payKaynagi: z.enum(HAM_PAY_KAYNAKLARI),
+  hamKaynagi: z.enum(['stok', 'kutu']).nullable(),
+  // stok önerisinde kart kodu; kutuda null.
+  hamKodu: z.string().nullable(),
+  hamHacimMm3: mm.nullable(),
+  parcaHacimMm3: mm.nullable(),
+  talasMm3: mm.nullable(),
+  kalemler: z.array(geometriSureKalemi),
+  altDk: dk.nullable(),
+  ortaDk: dk.nullable(),
+  ustDk: dk.nullable(),
+  // Delik kalemi yoksa nedeni: tanıma yoksa false (yüzler okunamadı), tanındı ama delik yoksa true.
+  ozellikOkundu: z.boolean(),
+  neden: z.enum(GEOMETRI_SURE_NEDENLERI).nullable(),
+});
+export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;
+
 // İş henüz yoksa null gönderilir (ekran 'yok' gördü); iş varsa okunan sürüm.
 export const yenidenHesaplaGovdesi = z.object({ surum: surumSemasi.nullable() }).strict();
 export const yenidenHesaplaCevabi = geometriAnalizCevabi;

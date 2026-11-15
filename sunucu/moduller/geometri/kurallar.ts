@@ -1,7 +1,7 @@
 // Geometri kuralları: saf hesap, veritabanı ve saat yok. Ölçüler mm.
 
 import { GEOMETRI_YUZ_TURLERI, HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
-import type { GeometriDelikDibi, GeometriOzellikTuru } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriDelikDibi, GeometriIsoGrubu, GeometriOzellikTuru } from '#paylasilan/sozlesme/geometri.ts';
 
 // Güvenilmeyen girdi sınırları (VARSAYIM, kart 1441; geri alma ucuz).
 export const DOSYA_EN_BUYUK_BAYT = 200 * 1024 * 1024;
@@ -1001,4 +1001,69 @@ export function yuzleriEslestir(eski: readonly EslesenYuz[], yeni: readonly Esle
     sonuc.set(e.sira, bulunan.sira);
   }
   return sonuc;
+}
+
+// ---- Talaştan kaba süre (kart 3278; 1195 c: yalnız ekranda, rotaya yazılmaz) ----
+// Kaldırma hızı güç sınırından: Q = Pc x verim x 60000 / kc (cm³/dk; Sandvik Coromant freze formülleri, Pc = ap ae vf kc / 60e6).
+// kc P, M, K, N için Mitsubishi Materials freze gücü tablosunda fz 0,2 değeri; S ve H ile tezgâh gücü, verim, alt oran, finiş ve
+// matkap değerleri VARSAYIM (kart 3278; geri alma ucuz: ölçümle kalibrasyon katmanı gelince değişir). kavrama CNC Kurulum'un
+// malzeme davranışı kaba kavrama çarpanıyla aynı değerlerdir. Sonuç kalibresiz aralıktır.
+export const SURE_TEZGAH_GUCU_KW = 7.5;
+export const SURE_VERIM = 0.8;
+export const SURE_KABA_ALT_ORAN = 0.3;
+export const SURE_FINIS_CM2_DK = { alt: 20, ust: 80 } as const;
+export const SURE_DELIK_KONUM_DK = 0.1;
+export const SURE_DELIK_BANT = { alt: 0.7, ust: 1.5 } as const;
+interface IsoSureKatsayisi { kc: number; kavrama: number; vcMatkap: number }
+export const SURE_ISO: Readonly<Record<GeometriIsoGrubu, IsoSureKatsayisi>> = {
+  P: { kc: 1950, kavrama: 1, vcMatkap: 80 },
+  M: { kc: 1970, kavrama: 0.8, vcMatkap: 50 },
+  K: { kc: 2500, kavrama: 1, vcMatkap: 90 },
+  N: { kc: 480, kavrama: 1.1, vcMatkap: 200 },
+  S: { kc: 2800, kavrama: 0.6, vcMatkap: 25 },
+  H: { kc: 3500, kavrama: 0.45, vcMatkap: 30 },
+};
+
+export interface SureDeligi { capMm: number; derinlikMm: number }
+export interface SureGirdisi { iso: GeometriIsoGrubu; hamHacimMm3: number; parcaHacimMm3: number; alanMm2: number; delikler: readonly SureDeligi[] | null }
+export interface SureKalemi { kalem: 'kaba' | 'finis' | 'delik'; altDk: number; ustDk: number; adet: number | null }
+export interface SureSonucu { talasMm3: number; kalemler: SureKalemi[]; altDk: number; ortaDk: number; ustDk: number }
+
+const dk4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+
+// GEO-SU1: kaba üst hız güç sınırıdır, alt hız onun SURE_KABA_ALT_ORAN katı (takım, strateji, hava kesme).
+export function kabaHiziCm3Dk(iso: GeometriIsoGrubu): { alt: number; ust: number } {
+  const k = SURE_ISO[iso];
+  const ust = (SURE_TEZGAH_GUCU_KW * SURE_VERIM * 60_000 / k.kc) * k.kavrama;
+  return { alt: ust * SURE_KABA_ALT_ORAN, ust };
+}
+
+// GEO-SU2: matkap süresi boy / (f x n); n = 1000 vc / (pi D), f = 0,015 D (0,05-0,4 mm/dev), delik başına konumlama eklenir.
+export function delikDk(iso: GeometriIsoGrubu, d: SureDeligi): number {
+  const n = (1000 * SURE_ISO[iso].vcMatkap) / (Math.PI * d.capMm);
+  const f = Math.min(0.4, Math.max(0.05, 0.015 * d.capMm));
+  return d.derinlikMm / (f * n) + SURE_DELIK_KONUM_DK;
+}
+
+// GEO-SU3: talaş ham - parça; delik hacmi matkapla alındığı için kabadan düşülür. Talaş yoksa (ham parçadan küçük ya da eşit) null.
+// Aralık kalemlerin alt ve üst toplamıdır; orta, ikisinin geometrik ortalamasıdır (süre hataları çarpımsaldır).
+export function sureTahmini(g: SureGirdisi): SureSonucu | null {
+  const talas = g.hamHacimMm3 - g.parcaHacimMm3;
+  if (!(talas > 0)) return null;
+  const delikler = (g.delikler ?? []).filter((d) => d.capMm > 0 && d.derinlikMm > 0);
+  const delikHacmi = delikler.reduce((t, d) => t + (Math.PI * d.capMm ** 2 / 4) * d.derinlikMm, 0);
+  const kabaCm3 = Math.max(0, talas - delikHacmi) / 1000;
+  const q = kabaHiziCm3Dk(g.iso);
+  const oran = SURE_ISO[g.iso].vcMatkap / SURE_ISO.P.vcMatkap;
+  const alanCm2 = g.alanMm2 / 100;
+  const kalemler: SureKalemi[] = [
+    { kalem: 'kaba', altDk: dk4(kabaCm3 / q.ust), ustDk: dk4(kabaCm3 / q.alt), adet: null },
+    { kalem: 'finis', altDk: dk4(alanCm2 / (SURE_FINIS_CM2_DK.ust * oran)), ustDk: dk4(alanCm2 / (SURE_FINIS_CM2_DK.alt * oran)), adet: null },
+  ];
+  if (g.delikler !== null && delikler.length > 0) {
+    const t = delikler.reduce((s, d) => s + delikDk(g.iso, d), 0);
+    kalemler.push({ kalem: 'delik', altDk: dk4(t * SURE_DELIK_BANT.alt), ustDk: dk4(t * SURE_DELIK_BANT.ust), adet: delikler.length });
+  }
+  const alt = kalemler.reduce((s, k) => s + k.altDk, 0), ust = kalemler.reduce((s, k) => s + k.ustDk, 0);
+  return { talasMm3: dk4(talas), kalemler, altDk: dk4(alt), ortaDk: dk4(Math.sqrt(alt * ust)), ustDk: dk4(ust) };
 }

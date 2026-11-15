@@ -34,3 +34,6 @@
   ölçüldü); bu yüzden tolerans bulgudur. Onarımdan sonra geçersiz kalan yüzü üreten sentetik dosya bulunamadı: geçersiz yüz yolu yalnız saf
   kural testiyle denendi. Değerlendirme (`saglikDegerlendir`) okumada yapılır, eşikler kayıtta değil kuraldadır. Sağlık ölçümü yüz
   sınırından (`YUZ_EN_COK`) bağımsızdır. Gerçek dosyayla denenmedi.
+- Talaştan süre (3278; 1195 c): saf kural, okumada hesaplanır, tabloya yazılmaz. Parça hacmi ağ hacmidir (yaklaşık); ham ilk stok önerisi,
+  yoksa döndürülmüş kutu + pay. Katsayılar kaynakla ve VARSAYIM olarak `kurallar.ts`'te; kalibrasyon (gerçekleşen süre) ve ISO grubunun
+  kaliteden okunması sonraki dilim. Kurgu DEVIR dışı proje dosyasında (`devir-heylit/3278/KURGU.md`).
