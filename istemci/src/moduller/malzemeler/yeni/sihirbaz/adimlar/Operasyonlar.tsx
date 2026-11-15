@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dugme, OnayPenceresi, Simge } from '../../../../../ortak/arayuz/index.ts';
 import * as K from '../../kurallar/index.ts';
 import * as S from '../../sabitler/index.ts';
-import { useKartRotasi, useRotaliUrunler, useRotaSablonlari } from '../../veri.ts';
+import { sablonOnerisi, useKartRotasi, useRotaliUrunler, useRotaSablonlari, type SecilebilirSablon } from '../../veri.ts';
 import { useSihirbaz } from '../baglam.ts';
 import { RECETE_KAYNAGI, receteKaynagi } from '../durum.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
@@ -200,35 +200,94 @@ function OpNo({ deger, cift, yaz }: { deger: number | string; cift: boolean; yaz
   );
 }
 
-// Rota şablonları Rota modülündedir; kart yalnız kopyasını alır. Dolu rotayı değiştirmeden önce sorulur.
+// Rota şablonları Rota modülündedir; kart yalnız kopyasını alır. Dolu rotayı değiştirmeden önce sorulur. 3273 a (D): Reçete ve Rota'daki
+// seçicinin aynısı: kartın adıyla eşleşen iki şablon kartı ("Başla", "İçine bak"), benzer ürün, bütün şablonlar ve boş başlama.
+// Kullanımdan kalkan şablon listelenmez.
+const sozcukler = (m: string): Set<string> => new Set(m.toLocaleUpperCase('tr-TR').split(/[^0-9A-ZÇĞİÖŞÜ]+/).filter((x) => x.length >= 3));
 function RotaSablonu() {
-  const { taslak: d, yetki, degistir, bildir, git } = useSihirbaz();
+  const { taslak: d, b, yetki, kartlar, degistir, bildir, git } = useSihirbaz();
   const sablonlar = useRotaSablonlari();
+  const uygun = yetki.yaz && (d.tur === 'mamul' || d.tur === 'yarimamul');
+  const urunler = useRotaliUrunler(uygun);
   const [secili, seciliYaz] = useState('');
-  const [soru, soruYaz] = useState(false);
+  const [bak, bakYaz] = useState<number | null>(null);
+  const [soru, soruYaz] = useState<SecilebilirSablon | null>(null);
   if (!yetki.yaz) return null;
   const duzenle = <BagDugmesi tikla={() => { git.disari('rota-sablonlari'); }}>Şablonları düzenle</BagDugmesi>;
-  if (sablonlar.isPending) return <div className="tc-my-ops-sablon"><span className="tc-my-kucuk">Rota şablonları yükleniyor…</span></div>;
+  const bosBasla = (
+    <Dugme simge="plus" onClick={() => { document.querySelector<HTMLInputElement>('input[aria-label="Operasyon ara"]')?.focus(); }}>Boş başla</Dugme>
+  );
   const l = sablonlar.data ?? [];
-  if (!l.length) return <div className="tc-my-ops-sablon"><span className="tc-my-kucuk">{sablonlar.isError ? 'Rota şablonları okunamadı.' : 'Kayıtlı rota şablonu yok.'}</span>{duzenle}</div>;
-  const sec = l.some((s) => String(s.id) === secili) ? secili : String((l.find((s) => s.varsayilan) ?? l[0])?.id ?? '');
+  // Ad kaydedilirken üretilen addır (elle yazılmadıysa parça adı ve tipinden).
+  const kartAdi = String(K.finalAd(d, b));
+  const oneri = sablonOnerisi(l, kartAdi);
+  const sec = l.some((s) => String(s.id) === secili) ? secili : String((oneri[0]?.sablon ?? l[0])?.id ?? '');
   const sablon = l.find((s) => String(s.id) === sec);
   const dolu = (d.ops ?? []).length > 0;
-  const doldur = () => {
-    if (!sablon) return;
-    degistir((t) => { t.ops = sablon.adimlar.map((a, i) => ({ no: (i + 1) * 10, kod: a.kod, ad: a.ad })); });
-    bildir(`${sablon.ad}: ${String(sablon.adimlar.length)} operasyon rotaya yazıldı.`);
-    soruYaz(false);
+  const doldur = (s: SecilebilirSablon) => {
+    degistir((t) => { t.ops = s.adimlar.map((a, i) => ({ no: (i + 1) * 10, kod: a.kod, ad: a.ad })); });
+    bildir(`${s.ad}: ${String(s.adimlar.length)} operasyon rotaya yazıldı.`);
+    soruYaz(null);
   };
+  const uygula = (s: SecilebilirSablon | undefined) => { if (!s) return; if (dolu) soruYaz(s); else doldur(s); };
+  // Benzer ürün: rotası olan ürünlerden adı kartın adıyla en çok ortak sözcük taşıyan (3 harften kısa sözcük sayılmaz).
+  const kendi = d.id ? kartlar.find((k) => k.kimlik === d.id)?.no : undefined;
+  const ad = sozcukler(kartAdi);
+  const benzer = uygun && !receteKaynagi(d) ? (urunler.data ?? []).filter((u) => u.no !== kendi)
+    .map((u) => ({ u, n: [...sozcukler(u.ad)].filter((x) => ad.has(x)).length })).filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || (a.u.kod ?? '').localeCompare(b.u.kod ?? '', 'tr'))[0]?.u ?? null : null;
+  const benzerAdi = benzer ? (benzer.kod ? `${benzer.kod} · ${benzer.ad}` : benzer.ad) : '';
   return (
-    <div className="tc-my-ops-sablon">
-      <select aria-label="Rota şablonu" value={sec} onChange={(e) => { seciliYaz(e.target.value); }}>
-        {l.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.ad}{s.varsayilan ? ' (varsayılan)' : ''} · {s.adimlar.length} op.</option>)}
-      </select>
-      <Dugme onClick={() => { if (dolu) soruYaz(true); else doldur(); }}>{dolu ? 'Şablonla değiştir' : 'Şablondan doldur'}</Dugme>
-      {duzenle}
-      <OnayPenceresi acik={soru} baslik="Rota değişsin mi?" onayMetni="Şablonla değiştir" tehlikeli onayla={doldur} vazgec={() => { soruYaz(false); }}>
-        <p>Karttaki {(d.ops ?? []).length} operasyon silinir, yerine "{sablon?.ad}" şablonunun adımları yazılır.</p>
+    <div className="tc-my-oneri" role="group" aria-label="Rota şablonları">
+      {sablonlar.isPending && <span className="tc-my-kucuk">Rota şablonları yükleniyor…</span>}
+      {sablonlar.isError && (
+        <span className="tc-my-kucuk" role="status">Rota şablonları okunamadı. Benzer ürün ve boş başlama yine kullanılabilir.{' '}
+          <Dugme simge="rotate" onClick={() => { void sablonlar.refetch(); }}>Yeniden dene</Dugme>
+        </span>
+      )}
+      {sablonlar.isSuccess && !l.length && <span className="tc-my-kucuk">Kayıtlı rota şablonu yok. {duzenle}</span>}
+      <div className="tc-my-ops-sablon">
+        {oneri.map((o) => (
+          <div key={o.sablon.id} className="tc-my-kutu" role="group" aria-label={`${o.sablon.ad} şablonu`}>
+            <b>{o.sablon.ad}{o.sablon.varsayilan ? ' (varsayılan)' : ''}</b>
+            <span className="tc-my-kucuk">{`${o.neden} · ${String(o.sablon.adimlar.length)} adım`}</span>
+            <span className="tc-my-kucuk">{o.sablon.adimlar.map((a) => a.kod).join(' › ')}</span>
+            {bak === o.sablon.id && <ol className="tc-my-kucuk">{o.sablon.adimlar.map((a, i) => <li key={`${String(i)}-${a.kod}`}>{a.ad}</li>)}</ol>}
+            <span className="tc-my-ops-sablon">
+              <Dugme tur="birincil" simge="play" onClick={() => { uygula(o.sablon); }}>Başla</Dugme>
+              <Dugme simge="eye" aria-expanded={bak === o.sablon.id} onClick={() => { bakYaz(bak === o.sablon.id ? null : o.sablon.id); }}>İçine bak</Dugme>
+            </span>
+          </div>
+        ))}
+        {benzer && (
+          <div className="tc-my-kutu" role="group" aria-label="Benzer ürün">
+            <b>Benzer ürün: {benzer.kod ?? benzer.ad}</b>
+            <span className="tc-my-kucuk">{benzer.ad} · yürürlükteki rota; kart kaydedilince Reçete ve Rota'da taslak açılır</span>
+            <span className="tc-my-ops-sablon">
+              <Dugme tur="birincil" simge="layers" onClick={() => {
+                degistir((t) => { t[RECETE_KAYNAGI] = { no: benzer.no, ad: benzerAdi }; });
+                bildir(`${benzerAdi}: reçete ve rota kart kaydedilince Reçete ve Rota'da taslak olarak açılacak.`);
+              }}
+              >Kopyala
+              </Dugme>
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="tc-my-ops-sablon">
+        {l.length > 0 && (
+          <>
+            <select aria-label={`Bütün şablonlar (${String(l.length)})`} value={sec} onChange={(e) => { seciliYaz(e.target.value); }}>
+              {l.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.ad}{s.varsayilan ? ' (varsayılan)' : ''} · {s.adimlar.length} op.</option>)}
+            </select>
+            <Dugme onClick={() => { uygula(sablon); }}>{dolu ? 'Şablonla değiştir' : 'Şablondan doldur'}</Dugme>
+          </>
+        )}
+        {!dolu && bosBasla}
+        {l.length > 0 && duzenle}
+      </div>
+      <OnayPenceresi acik={soru !== null} baslik="Rota değişsin mi?" onayMetni="Şablonla değiştir" tehlikeli onayla={() => { if (soru) doldur(soru); }} vazgec={() => { soruYaz(null); }}>
+        <p>Karttaki {(d.ops ?? []).length} operasyon silinir, yerine "{soru?.ad}" şablonunun adımları yazılır.</p>
       </OnayPenceresi>
     </div>
   );

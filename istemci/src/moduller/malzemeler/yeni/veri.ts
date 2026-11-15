@@ -170,15 +170,31 @@ export function useSablonlar() {
   });
 }
 
-// Rota şablonları Rota modülündedir (kart #688); kart yalnız sıra, kod ve adın kopyasını alır.
+// Rota şablonları Rota modülündedir (kart #688); kart yalnız sıra, kod ve adın kopyasını alır. 3273 a: kullanımdan kalkan şablon
+// gelmez (Risk K2); öneri sözcükleri ve kullanım sayısı öneri sırası içindir.
+export type SecilebilirSablon = RotaSablonu & { oneriSozcukleri: string[]; kullanim: number };
 export function useRotaSablonlari() {
   return useQuery({
     queryKey: anahtar.rotaSablonlari,
-    queryFn: async (): Promise<RotaSablonu[]> => (await api.get<SablonlarCevabi>('/rota/sablonlar')).sablonlar.map((s) => ({
-      id: s.id, ad: s.ad, varsayilan: s.varsayilan,
+    queryFn: async (): Promise<SecilebilirSablon[]> => (await api.get<SablonlarCevabi>('/rota/sablonlar')).sablonlar.filter((s) => s.aktif).map((s) => ({
+      id: s.id, ad: s.ad, varsayilan: s.varsayilan, oneriSozcukleri: s.oneriSozcukleri, kullanim: s.kullanim.revizyon,
       adimlar: [...s.adimlar].sort((a, b) => a.sira - b.sira).map((a) => ({ kod: a.operasyonTipi.kod, ad: a.ad || a.operasyonTipi.ad })),
     })),
   });
+}
+
+// Kartın adında bir sözcüğün başında öneri sözcüğü geçen şablon önce, sonra çok kullanılan, sonra varsayılan (Reçete ve Rota'daki sırayla
+// aynı). Karşılaştırma büyük-küçük harf ve Türkçe harf farkına bakmaz.
+const ASCII: Readonly<Record<string, string>> = { İ: 'I', Ş: 'S', Ğ: 'G', Ü: 'U', Ö: 'O', Ç: 'C' };
+const sade = (m: string): string => m.toLocaleUpperCase('tr-TR').replace(/[İŞĞÜÖÇ]/g, (h) => ASCII[h] ?? h);
+export function sablonOnerisi(l: readonly SecilebilirSablon[], kartAdi: string, adet = 2): { sablon: SecilebilirSablon; neden: string }[] {
+  const ad = ` ${sade(kartAdi).replace(/[^A-Z0-9]+/g, ' ')} `;
+  const eslesen = (s: SecilebilirSablon) => s.oneriSozcukleri.find((x) => sade(x).trim() !== '' && ad.includes(` ${sade(x).trim()}`)) ?? null;
+  return l.map((s) => ({ s, z: eslesen(s) }))
+    .sort((a, b) => Number(b.z !== null) - Number(a.z !== null) || b.s.kullanim - a.s.kullanim || Number(b.s.varsayilan) - Number(a.s.varsayilan)
+      || a.s.ad.localeCompare(b.s.ad, 'tr'))
+    .slice(0, adet)
+    .map(({ s, z }) => ({ sablon: s, neden: z !== null ? `adında "${z}" geçiyor` : s.kullanim > 0 ? `${String(s.kullanim)} rotada kullanıldı` : s.varsayilan ? 'varsayılan şablon' : 'henüz kullanılmadı' }));
 }
 
 // Reçete ve rotası kopyalanabilen ürünler (306 a): yürürlükte rotası olan, kullanımdaki mamul ve yarı mamul kartlar.
