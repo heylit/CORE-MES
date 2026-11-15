@@ -30,10 +30,19 @@ export function EkleListesi({ r, yer, yerMetni, ekle, kapat }: {
       const c = capa.getBoundingClientRect();
       const en = el.offsetWidth;
       el.style.setProperty('--tc-rr1-ekle-x', `${String(Math.max(0, Math.min(c.left, window.innerWidth - en)))}px`);
-      // Altta yer yoksa "+"nın üstüne açılır; ikisine de sığmazsa ekranın içinde kalacak yere kayar.
-      const boy = el.offsetHeight;
+      // "+"nın altına sığarsa altına, üstüne sığarsa üstüne açılır. İkisine de sığmazsa ekran boyunun %70'ine kadar uzar ve "+"ya en
+      // yakın, ekranın içinde kalan yere oturur (dar alanda iki operasyonla kalmasın).
+      const pay = 8;
+      const boy = el.scrollHeight;
       const alt = arti ? c.bottom : c.top;
-      const y = alt + boy + 8 <= window.innerHeight ? alt : c.top - boy >= 0 ? c.top - boy : Math.max(0, window.innerHeight - boy);
+      const asagida = window.innerHeight - alt - pay;
+      const yukarida = c.top - pay;
+      const tavan = Math.min(boy, window.innerHeight * 0.7);
+      let y = alt;
+      let alan = asagida;
+      if (boy > asagida && boy <= yukarida) { y = c.top - boy; alan = yukarida; }
+      else if (boy > asagida) { y = Math.max(pay, Math.min(alt, window.innerHeight - pay - tavan)); alan = window.innerHeight - y - pay; }
+      el.style.setProperty('--tc-rr1-ekle-boy', `${String(Math.max(0, alan))}px`);
       el.style.setProperty('--tc-rr1-ekle-y', `${String(y)}px`);
     };
     yerlestir();
