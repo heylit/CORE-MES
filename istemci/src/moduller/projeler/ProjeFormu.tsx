@@ -1,7 +1,7 @@
 import { useDeferredValue, useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  FirmaSecenekleriCevabi, Proje, ProjeDurumu, ProjeGuncelleGovdesi, ProjeOlusturGovdesi, SiparisSecenekleriCevabi,
+  FirmaSecenekleriCevabi, Proje, ProjeDurumu, ProjeGuncelleGovdesi, ProjeOlusturGovdesi, SablonSecenekleriCevabi, SiparisSecenekleriCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, Girdi, Pencere, Secim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -62,6 +62,27 @@ function SiparisSecimi({ siparisId, hata, degistir }: {
   );
 }
 
+// 3269 a: yeni proje açılınca görev şablonu uygulanır. Boş seçim varsayılan şablondur (varsa); "Şablonsuz" görev doğurmaz.
+const SABLONSUZ = 'yok';
+function SablonSecimi({ deger, degistir }: { deger: string; degistir: (d: string) => void }) {
+  const sablonlar = useQuery({ queryKey: anahtarlar.sablonSecenekleri, queryFn: () => api.get<SablonSecenekleriCevabi>('/projeler/sablon-secenekleri') });
+  const liste = sablonlar.data?.sablonlar ?? [];
+  const varsayilan = liste.find((x) => x.varsayilan);
+  const secenekler = [
+    ...liste.filter((x) => !x.varsayilan).map((x) => ({ deger: String(x.id), baslik: `${x.ad} · ${x.gorevSayisi} görev` })),
+    { deger: SABLONSUZ, baslik: 'Şablonsuz (görevleri sonra eklerim)' },
+  ];
+  return (
+    <Secim
+      etiket="Görev şablonu" value={deger} secenekler={secenekler}
+      bosSecenek={varsayilan === undefined ? 'Varsayılan şablon yok' : `${varsayilan.ad} (varsayılan) · ${varsayilan.gorevSayisi} görev`}
+      ipucu="Görevler projenin başlangıç ve bitişine göre tarihlenir."
+      hata={sablonlar.isError ? hataIletisi(sablonlar.error, 'Şablonlar alınamadı') : undefined}
+      onChange={(e) => { degistir(e.target.value); }}
+    />
+  );
+}
+
 function bitisIpucu(proje: Proje | null, bitis: string, termin: string | null): string | undefined {
   if (proje === null) return termin !== null && bitis === termin ? 'Sipariş termininden; termin değişince bitiş de değişir.' : undefined;
   if (!proje.bitisBagli) return undefined;
@@ -75,6 +96,7 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const [ad, adYaz] = useState(proje?.ad ?? '');
   const [firmaId, firmaYaz] = useState(proje?.firmaId === null || proje === null ? '' : String(proje.firmaId));
   const [siparisId, siparisYaz] = useState('');
+  const [sablon, sablonYaz] = useState('');
   const [siparisHatasi, siparisHatasiYaz] = useState<string | undefined>(undefined);
   // 3244 b: yeni projede bitiş seçilen siparişin termininden gelir; termine eşit kalan bitiş sipariş terminine bağlı açılır.
   const [termin, terminYaz] = useState<string | null>(null);
@@ -97,7 +119,10 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   };
   const komut = useMutation({
     mutationFn: () => (proje === null
-      ? api.post<Proje>('/projeler', { kod, ...ortak, siparisId: Number(siparisId) } satisfies ProjeOlusturGovdesi)
+      ? api.post<Proje>('/projeler', {
+        kod, ...ortak, siparisId: Number(siparisId),
+        ...(sablon === '' ? {} : { sablonId: sablon === SABLONSUZ ? null : Number(sablon) }),
+      } satisfies ProjeOlusturGovdesi)
       : api.post<Proje>(`/projeler/${proje.id}/guncelle`, {
         ...ortak, firmaId: firmaId === '' ? null : Number(firmaId), durum, surum: proje.surum,
         ...(yenidenAcma ? { yenidenAcmaGerekcesi: gerekce } : {}),
@@ -145,6 +170,7 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
         {proje !== null && proje.siparisId !== null && (
           <Girdi etiket="Müşteri" value={proje.firmaAd ?? '—'} disabled ipucu="Siparişe bağlı projenin müşterisi siparişten gelir." />
         )}
+        {proje === null && <SablonSecimi deger={sablon} degistir={sablonYaz} />}
         <Girdi etiket="Başlangıç" type="date" value={baslangic} onChange={(e) => { baslangicYaz(e.target.value); }} />
         <Girdi etiket="Bitiş" type="date" value={bitis} ipucu={bitisIpucu(proje, bitis, termin)} onChange={(e) => { bitisYaz(e.target.value); }} />
         {maliyetGorur && (
