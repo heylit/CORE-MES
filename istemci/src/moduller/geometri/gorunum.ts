@@ -1,5 +1,5 @@
 import type {
-  GeometriDesen, GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, GeometriOzellikGrubu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
+  GeometriDesen, GeometriDurumu, GeometriIsoGrubu, GeometriMontajDugumu, GeometriOzellik, GeometriOzellikGrubu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
@@ -446,3 +446,31 @@ export const GORUNUMLER = {
   izo: { baslik: 'İzometrik', yon: [1, 1, 1] },
 } as const satisfies Record<string, { baslik: string; yon: Yon3 }>;
 export type GorunumAdi = keyof typeof GORUNUMLER;
+
+// ---------------- Süre kartı (3278 D) ----------------
+
+// ISO grubu düğmelerinin adı (ön izleme D); seçim kaydedilmez, sayfa açılınca P.
+export const ISO_ADI: Readonly<Record<GeometriIsoGrubu, string>> = {
+  P: 'Çelik', M: 'Paslanmaz', K: 'Döküm', N: 'Alüminyum', S: 'Süper alaşım', H: 'Sert',
+};
+// Düğme sırası adların sırasıdır; kayıt türü her grubun adını ister (sözleşmenin değeri istemciye ithal edilmez).
+export const ISO_GRUPLARI = Object.keys(ISO_ADI) as GeometriIsoGrubu[];
+const dk1 = bicim(1);
+export const dakika = (x: number): string => `${dk1.format(x)} dk`;
+// Toplam aralık 10 dakikadan uzunsa tam dakikadır (kalibresiz tahminde ondalık yanıltır); kısa aralık ondalıkla yazılır.
+// 0,1 dakikanın altı sıfır görünmesin diye "< 0,1" yazılır.
+export function aralikMetni(alt: number, ust: number, yuvarla: boolean): string {
+  if (ust < 0.1) return '< 0,1 dk';
+  const f = (x: number): string => (yuvarla && ust >= 10 ? tam.format(x) : dk1.format(x));
+  return `${alt < 0.05 ? '< 0,1' : f(alt)} – ${f(ust)} dk`;
+}
+// Ölçek üst sınırı aralığı içine alan ilk basamaktır (5, 10, 25, 50); daha uzun süre 50'nin katına büyür. Kısa sürede çubuk
+// görünür kalır (Arayüz notu, 3278-2).
+const OLCEK_BASAMAKLARI = [5, 10, 25, 50] as const;
+export const olcekUstu = (ust: number): number => OLCEK_BASAMAKLARI.find((b) => ust <= b) ?? Math.ceil(ust / 50) * 50;
+// Çubuğun yeri ölçeğe göre 0-100; dar aralık en az 1 genişlikte çizilir.
+export function cubukYeri(alt: number, ust: number, olcek: number): { x: number; en: number } {
+  const y = (v: number): number => Math.min(100, Math.max(0, (v / olcek) * 100));
+  return { x: y(alt), en: Math.max(1, y(ust) - y(alt)) };
+}
+export const hacimCm3 = (mm3: number): string => `${dk1.format(mm3 / 1000)} cm³`;

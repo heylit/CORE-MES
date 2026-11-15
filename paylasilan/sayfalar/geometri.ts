@@ -14,6 +14,7 @@ export const GEOMETRI_IKINCI_MENU = {
   gruplar: [{ maddeler: [
     { anahtar: 'analiz', baslik: 'Analiz', yol: '/geometri', simge: 'ruler', islem: 'sayfa.geometri' },
     { anahtar: 'ham', baslik: 'Ham önerisi', yol: '/geometri/ham', simge: 'box', islem: 'sayfa.geometri' },
+    { anahtar: 'sure', baslik: 'Süre', yol: '/geometri/sure', simge: 'clock', islem: 'sayfa.geometri' },
     { anahtar: 'ozellikler', baslik: 'Özellikler', yol: '/geometri/ozellikler', simge: 'target', islem: 'sayfa.geometri' },
     { anahtar: 'yuzey', baslik: 'Boya ve maske', yol: '/geometri/yuzey', simge: 'edit', islem: 'sayfa.geometri' },
     { anahtar: 'montaj', baslik: 'Montaj', yol: '/geometri/montaj', simge: 'layers', islem: 'sayfa.geometri' },

@@ -1,7 +1,7 @@
 // Geometri kuralları: saf hesap, veritabanı ve saat yok. Ölçüler mm.
 
 import { GEOMETRI_YUZ_TURLERI, HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
-import type { GeometriDelikDibi, GeometriIsoGrubu, GeometriOzellikTuru } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriDelikDibi, GeometriIsoGrubu, GeometriOzellikTuru, GeometriTalasliAdim } from '#paylasilan/sozlesme/geometri.ts';
 
 // Güvenilmeyen girdi sınırları (VARSAYIM, kart 1441; geri alma ucuz).
 export const DOSYA_EN_BUYUK_BAYT = 200 * 1024 * 1024;
@@ -1209,4 +1209,15 @@ export function sureTahmini(g: SureGirdisi): SureSonucu | null {
   }
   const alt = kalemler.reduce((s, k) => s + k.altDk, 0), ust = kalemler.reduce((s, k) => s + k.ustDk, 0);
   return { talasMm3: dk4(talas), kalemler, altDk: dk4(alt), ortaDk: dk4(Math.sqrt(alt * ust)), ustDk: dk4(ust) };
+}
+
+// GEO-SU11 (3278 D): rota karşılaştırmasının toplamları. Teorik toplam işlem süresi dolu adımlardır; boş adım varsa eksik true. Ölçüm toplamı
+// ölçülmüş adımların ortancalarıdır; hiç ölçüm yoksa null. Talaşlı adım yoksa iki toplam da null (sıfır uydurulmaz).
+export function rotaToplamlari(adimlar: readonly GeometriTalasliAdim[]): {
+  adimlar: GeometriTalasliAdim[]; islemToplamDk: number | null; olcumToplamDk: number | null; eksik: boolean;
+} {
+  const islem = adimlar.flatMap((a) => (a.islemDk === null ? [] : [a.islemDk]));
+  const olcum = adimlar.flatMap((a) => (a.olcumOrtancaDk === null ? [] : [a.olcumOrtancaDk]));
+  const topla = (x: number[]) => (x.length === 0 ? null : dk4(x.reduce((s, v) => s + v, 0)));
+  return { adimlar: [...adimlar], islemToplamDk: topla(islem), olcumToplamDk: topla(olcum), eksik: islem.length < adimlar.length };
 }

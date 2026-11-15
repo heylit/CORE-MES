@@ -20,6 +20,7 @@ import {
 import type { Onizleme, ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
 import { ModelEkle, TaslakModel, useModelYetkisi } from './ModelEkle.tsx';
 import { MontajKarti } from './MontajKarti.tsx';
+import { SureKarti } from './SureKarti.tsx';
 import { YuzeyKarti, type YuzeySahnesi } from './YuzeyKarti.tsx';
 import './geometri.css';
 
@@ -402,10 +403,10 @@ function useOnizleme(calisma: CalismaAdi, revizyonId: number, cevap: GeometriAna
         katilar: (n) => analizKatilari(yon, [a.obb.a, a.obb.b, a.obb.c], [a.kutu.x, a.kutu.y, a.kutu.z], n),
       };
     }
-    if (calisma === 'ham') {
+    if (calisma === 'ham' || calisma === 'sure') {
       if (ham === null) return null;
       return {
-        anahtar: `ham:${JSON.stringify(ham)}`, etiket: `${FORM_ADI[ham.form]} ${stokOlcuMetni(ham)} (yaklaşık)`, delikler: [],
+        anahtar: `${calisma}:${JSON.stringify(ham)}`, etiket: `${FORM_ADI[ham.form]} ${stokOlcuMetni(ham)}${calisma === 'sure' ? ', talaş aradaki hacim' : ''} (yaklaşık)`, delikler: [],
         katilar: (n) => { const k = hamKatisi(ham, yon, n); return k === null ? [] : [k]; },
       };
     }
@@ -473,6 +474,7 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
         {calisma === 'ham' && (
           <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} onizlemeYaz={hamYaz} />
         )}
+        {calisma === 'sure' && <SureKarti revizyonId={revizyonId} alanMm2={analiz.data.analiz?.alanMm2 ?? null} onizlemeYaz={hamYaz} />}
         {calisma === 'ozellikler' && <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.ilk.sira ?? null} sec={seciliYaz} />}
         {calisma === 'yuzey' && (
           <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} revKodu={satir?.revKodu ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}

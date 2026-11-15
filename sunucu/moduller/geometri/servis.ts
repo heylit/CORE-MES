@@ -6,7 +6,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi, GeometriSaglikCevabi,
-  GeometriIsoGrubu, GeometriSureCevabi, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
+  GeometriIsoGrubu, GeometriSureCevabi, GeometriTalasliAdim, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliTaslakBelgeler, kayitlaraBagliYayindakiBelgeler, taslagiGorur } from '../belge-merkezi/disari.ts';
@@ -15,7 +15,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   bicimDenetimi, bilesenListesi, disTablosuOku, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
-  stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
+  rotaToplamlari, stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { YuzeyIsaretGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -208,6 +208,24 @@ export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: nu
 // Talaştan kaba süre (kart 3278; 1195 c): yalnız ekranda gösterilen kalibresiz aralık; rotaya ve plana yazılmaz. Ham, ham önerisinin
 // ilk (en az talaşlı) stok kartıdır; yoksa döndürülmüş kutu + pay. Parça hacmi ağ hacmidir (kapalı ağda; yaklaşık). Delikler özellik
 // tanımasından; tanıma yoksa delik kalemi yazılmaz ve ozellikOkundu false döner.
+// 3278 D: süre kartının rota karşılaştırması. Talaşlı adımları rota verir (yalnız okuma, rotaya yazılmaz); bağı kablolama.ts kurar
+// (ADR 0006 madde 6). Çözücü malzemenin yürürlükteki rotasındaki talaşlı adımları verir; rota yoksa null. Yetki denetlemez.
+export type TalasliAdimCozucusu = (db: Db, malzemeNo: number) => Promise<GeometriTalasliAdim[] | null>;
+let talasliAdimlar: TalasliAdimCozucusu | null = null;
+// Önceki çözücüyü döner (test kurup geri koyar).
+export function talasliAdimCozucusuKaydet(cozucu: TalasliAdimCozucusu | null): TalasliAdimCozucusu | null {
+  const onceki = talasliAdimlar;
+  talasliAdimlar = cozucu;
+  return onceki;
+}
+
+async function sureRotasi(db: Db, malzemeNo: number): Promise<GeometriSureCevabi['rota']> {
+  const bos = { adimlar: [], islemToplamDk: null, olcumToplamDk: null, eksik: false };
+  if (talasliAdimlar === null) return { durum: 'rota-bagli-degil', ...bos };
+  const adimlar = await talasliAdimlar(db, malzemeNo);
+  return adimlar === null ? { durum: 'rota-yok', ...bos } : { durum: 'bagli', ...rotaToplamlari(adimlar) };
+}
+
 export async function sureTahminiOku(
   db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; iso?: GeometriIsoGrubu | undefined },
 ): Promise<GeometriSureCevabi> {
@@ -216,7 +234,7 @@ export async function sureTahminiOku(
   const bos = {
     revizyonId, oneri: true as const, kalibre: false as const, iso, isoKaynagi: sorgu.iso === undefined ? 'varsayilan' as const : 'istek' as const,
     payMm: ham.payMm, payKaynagi: ham.payKaynagi, hamKaynagi: null, hamKodu: null, hamHacimMm3: null, parcaHacimMm3: null, talasMm3: null,
-    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false,
+    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: await sureRotasi(db, (await model(db, revizyonId)).malzemeNo),
   };
   const a = (await analizOku(db, revizyonId)).analiz;
   if (a === null || ham.enAz === null) return { ...bos, neden: 'analiz-yok' };

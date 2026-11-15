@@ -52,6 +52,20 @@ const MONTAJ = {
     { sira: 2, ad: 'ornek-pim', adet: 2, obb: { a: 30, b: 10, c: 10 }, hacimMm3: 3000, alanMm2: 100, kapali: true, dugumler: [4, 5] },
   ],
 };
+// Süre kartının okuduğu cevap (3278 D): sentetik kalibresiz aralık, kutu hamı, rotada iki talaşlı adım (biri ölçümsüz).
+const SURE = {
+  revizyonId: 8, oneri: true, kalibre: false, iso: 'P', isoKaynagi: 'istek', payMm: 0, payKaynagi: 'yok', hamKaynagi: 'kutu', hamKodu: null,
+  hamHacimMm3: 9000 * 1.5, parcaHacimMm3: 9000, talasMm3: 4500,
+  kalemler: [{ kalem: 'kaba', altDk: 0.03, ustDk: 0.09, adet: null }, { kalem: 'finis', altDk: 0.39, ustDk: 1.55, adet: null }, { kalem: 'delik', altDk: 0.12, ustDk: 0.25, adet: 1 }],
+  altDk: 0.54, ortaDk: 1.07, ustDk: 1.89, ozellikOkundu: true, neden: null,
+  rota: {
+    durum: 'bagli', islemToplamDk: 2.5, olcumToplamDk: 3.1, eksik: false,
+    adimlar: [
+      { opNo: 10, ad: 'Örnek tornalama adımı uzun adlı', islemDk: 1.5, olcumOrtancaDk: 3.1, olcumAdedi: 5 },
+      { opNo: 20, ad: 'Örnek frezeleme', islemDk: 1, olcumOrtancaDk: null, olcumAdedi: 0 },
+    ],
+  },
+};
 const BULUNAMADI = { kod: 'BULUNAMADI', mesaj: 'Bu revizyon bir malzeme kartına bağlı, yayındaki STEP ya da IGES modeli değil.' };
 
 async function sunucu(page: Page): Promise<void> {
@@ -63,6 +77,7 @@ async function sunucu(page: Page): Promise<void> {
     if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, HAM);
     if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
     if (yol === '/geometri/montaj/8') return json(200, MONTAJ);
+    if (yol === '/geometri/sure-tahmini/8') return json(200, SURE);
     // Boya ve maske kartı (2144) bu testlerin konusu değil; analiz yok cevabıyla boş durur.
     if (yol === '/geometri/yuzey/8') {
       return json(200, {
@@ -161,6 +176,20 @@ test.describe('3D Atölyesi', () => {
     await kart.getByRole('tab', { name: /Bileşen listesi/ }).click();
     await kart.getByText('ornek-pim', { exact: true }).first().click();
     await expect(kart.getByText('ornek-pim (2 adet)')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
+  });
+
+  test('süre kartı (3278 D): aralık, kalemler, ham ve rotadaki talaşlı adımlar her genişlikte taşmadan görünür; ISO düğmesi seçilir', async ({ page, ac, ag }) => {
+    await sunucu(page);
+    await ac('/geometri/sure?rev=8');
+    await expect(page.getByRole('heading', { name: 'Kaba süre (öneri)' })).toBeVisible();
+    await expect(page.getByText('0,5 – 1,9 dk', { exact: true })).toBeVisible();
+    const rota = page.getByRole('region', { name: 'Rotadaki talaşlı adımlar' });
+    await expect(rota.getByText('OP10 Örnek tornalama adımı uzun adlı')).toBeVisible();
+    await expect(rota.getByText('ölçüm yok')).toBeVisible();
+    await page.getByRole('button', { name: 'S · Süper alaşım' }).click();
+    await expect(page.getByRole('button', { name: 'S · Süper alaşım' })).toHaveAttribute('aria-pressed', 'true');
     expect((await tasmaOlc(page)).belge).toBe(0);
     expect(beklenmeyen(ag.hatalar)).toEqual([]);
   });

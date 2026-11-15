@@ -37,3 +37,5 @@
 - Talaştan süre (3278; 1195 c): saf kural, okumada hesaplanır, tabloya yazılmaz. Parça hacmi ağ hacmidir (yaklaşık); ham ilk stok önerisi,
   yoksa döndürülmüş kutu + pay. Katsayılar kaynakla ve VARSAYIM olarak `kurallar.ts`'te; kalibrasyon (gerçekleşen süre) ve ISO grubunun
   kaliteden okunması sonraki dilim. Kurgu DEVIR dışı proje dosyasında (`devir-heylit/3278/KURGU.md`).
+- Süre kartı rota karşılaştırması (3278 görünüm d): talaşlı adımlar rotanın `disari.ts`'inden çözücüyle gelir, bağ `kablolama.ts`'te (ADR 0006
+  madde 6). Yalnız işlem süresi karşılaştırılır (hazırlık ve değişim hariç); fark hesaplanmaz, kalibrasyonun girdisidir.
