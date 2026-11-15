@@ -112,4 +112,23 @@ describe('Rota sekmeleri (3247 a)', () => {
     await within(bolge).findByRole('group', { name: 'Revizyonlar' });
     expect(within(bolge).queryByRole('group', { name: 'Ürünün rotaları' })).toBeNull();
   });
+
+  // Arayüz ön bakışı (3247): rota listesi okunamazsa ekran sessizce tek rotalı ürün gibi görünmez.
+  it('rota listesi okunamazsa sekme satırının yerinde hata ve yeniden dene görünür', async () => {
+    let ilk = true;
+    sunucuKur(YONETICI, {
+      durum: () => json(200, rotaDurumu([standartRev, faiRev])),
+      yazmalar: {
+        'GET /rota/urunler/11': () => {
+          if (ilk) { ilk = false; return json(500, { kod: 'IC_HATA', mesaj: 'Sunucu hatası.' }); }
+          return json(200, cevap([rota(1, 'Standart', true), rota(2, 'FAI rotası', false, ['fai'])]));
+        },
+      },
+    });
+    rrAc('/recete-rota/schema');
+    const uyari = await screen.findByRole('alert');
+    expect(uyari.textContent).toContain('Ürünün rotaları alınamadı');
+    fireEvent.click(within(uyari).getByRole('button', { name: 'Yeniden dene' }));
+    expect(await sekmeler()).toBeTruthy();
+  });
 });
