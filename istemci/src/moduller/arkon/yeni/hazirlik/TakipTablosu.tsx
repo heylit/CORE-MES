@@ -106,7 +106,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
                     <td className="tc-ay2-takip-kutu" onClick={(o) => o.stopPropagation()}>
                       <input
                         type="checkbox" aria-label={`${p.no} Op ${String(s.opNo ?? '')} seç`} checked={toplu && secili.has(p.id)} disabled={!toplu}
-                        title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'Yayında değil'}
+                        title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'Terminalde değil'}
                         onChange={(o) => isaretle(p.id, o.target.checked)}
                       />
                     </td>
@@ -175,7 +175,7 @@ export function GeriCekPenceresi({ paketler, sonuclar, mesgul, kapat, onayla }: 
         </>
       ) : null}
       {calisan ? <p className="tc-ay2-kirmizi tc-ay2-takip-uyari"><Simge ad="alert" boyut="k" /><span>{l.length === 1 ? 'Bu iş' : `${String(calisan)} iş`} şu an operatörde başlamış durumda; operatörün ekranından düşer.</span></p> : null}
-      {l.length ? <p>Sayım, ölçüm ve yayın geçmişi silinmez. Yeniden yayınlayana kadar operatör göremez.</p> : <p>Geri çekilecek iş yok.</p>}
+      {l.length ? <p>Sayım, ölçüm ve gönderim geçmişi silinmez. Yeniden terminale gönderene kadar operatör göremez.</p> : <p>Geri çekilecek iş yok.</p>}
     </OnayPenceresi>
   );
 }

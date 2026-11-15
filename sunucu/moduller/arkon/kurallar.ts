@@ -53,7 +53,7 @@ export const ILETILER = {
   yerelPaket: 'Yeni paket CORE\'da emir açılınca oluşur (Rota > Üretim emirleri); emir dışı paket açılmaz.',
   isEmriNo: 'Kaydın emir numarası paketin iş emrininki değil.',
   planCanliDegil: 'Plan canlıya alınmadı: bu iş canlı planda bu istasyona yerleşmeden başlatılamaz.',
-  paketYayinlanmadi: 'Paket yayınlanmadı: iş Üretim Hazırlık\'ta yayınlanmadan başlatılamaz.',
+  paketYayinlanmadi: 'Terminale gönderilmedi: iş Üretim Hazırlık\'ta terminale gönderilmeden başlatılamaz.',
   planSiraYetki: 'İş sırasını değiştirme yetkiniz yok.',
   planSiraEski: 'Plan değişti: ekranı yenileyip yeniden sıralayın.',
   planSiraGecersiz: 'Yeni sıra aynı işlerden oluşmalı.',
@@ -75,7 +75,7 @@ export const ILETILER = {
   emirIptal: 'Bu iş emri CORE\'da iptal edildi; iş için kayıt yazılmaz.',
   bitmisIs: 'Bu iş bitti: sayı ve durum değişmez.',
   tmiIstasyonu: 'Bu paketin istasyonu CORE planından değişir.',
-  onaysizYayin: 'Paket kalite onayı olmadan yayınlanamaz.',
+  onaysizYayin: 'Paket kalite onayı olmadan terminale gönderilemez.',
   onayEskidi: 'Onaydan sonra paketin içeriği değişti: yeniden kaliteye onaya gönderin.',
   stokIstegi: 'Bu malzeme isteği stokta açıldı; durumu Stok Merkezi\'nden değişir.',
   stokMalzemesi: 'Malzeme kartını seçin.',
@@ -885,7 +885,7 @@ function kisiAlaniTuruHatasi(depo: ArkonDeposu, govde: unknown, kimlik: string):
   if (!kayitMi(govde)) return null;
   switch (depo) {
     case 'pkgs':
-      if (!nesneListesi(govde['history'])) return hata('history', 'Yayın geçmişi nesne listesi olmalı.');
+      if (!nesneListesi(govde['history'])) return hata('history', 'Gönderim geçmişi nesne listesi olmalı.');
       if (!nesneVeyaYok(govde['apReq'])) return hata('apReq', 'Onay isteği nesne olmalı.');
       return nesneVeyaYok(govde['approval']) ? null : hata('approval', 'Onay nesne olmalı.');
     case 'results': {
@@ -1060,7 +1060,7 @@ export function bitmisIsReddi(depo: ArkonDeposu, govde: unknown, onceki: unknown
 
 // Yayın en az bir operasyon adımı ister (#199 T5): taslaktan yayına geçiş ya da yayındaki paketin yeni sürümü (version değişir). Sürümü
 // değişmeyen düzenleme (yayındaki eski adımsız paketin başka alanı) reddedilmez. Ekran aynı koşulu yayın düğmesinde denetler (hazirlik.ts).
-export const ADIMSIZ_YAYIN = 'Adımı olmayan paket yayınlanamaz: en az bir operasyon adımı gerekir.';
+export const ADIMSIZ_YAYIN = 'Adımı olmayan paket terminale gönderilemez: en az bir operasyon adımı gerekir.';
 // Kart #1257 (kullanıcı kararı): istasyonu seçilmemiş TMI işi operatöre gönderilemez, onayla da. Arkon'un eski yerel paketi bu kurala girmez.
 export const ISTASYONSUZ_YAYIN = 'İstasyonu seçilmemiş iş operatöre gönderilemez: adımın makinesini ya da kişisini Reçete ve Rota\'da seçin.';
 

@@ -216,7 +216,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         const n = ayni(hepsi);
         if (m.type === 'pkg-approved' && n) {
           bip(m['ok'] ? 'ok' : 'nok');
-          soyle(m['ok'] ? n.no + ' kalitece onaylandı · yayınlayabilirsin' : n.no + ' geri gönderildi · ' + String(m['note'] || ''), m['ok'] ? 'run' : 'stop');
+          soyle(m['ok'] ? n.no + ' kalitece onaylandı · terminale gönderebilirsin' : n.no + ' geri gönderildi · ' + String(m['note'] || ''), m['ok'] ? 'run' : 'stop');
         }
       });
     } else if (m.type === 'pkg-draft') void yenile().then(ayni);
@@ -337,7 +337,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const yayinla = async (planOnayli = false, planYokOnayli = false) => {
     if (!p || !yayinlar) return;
     const v = paketDenetimi(p, tesis);
-    if (v.some((x) => !x.ok && !x.soft)) { soyle(istasyonsuzMu(p) ? ISTASYONSUZ_GONDERIM : rotaEksigi(p) ? rotaEksigi(p) + ' · yayınlanamadı' : 'Eksikler var · yayınlanamadı', 'stop'); return; }
+    if (v.some((x) => !x.ok && !x.soft)) { soyle(istasyonsuzMu(p) ? ISTASYONSUZ_GONDERIM : rotaEksigi(p) ? rotaEksigi(p) + ' · terminale gönderilemedi' : 'Eksikler var · terminale gönderilemedi', 'stop'); return; }
     // 1307 b: kontrol planı olmayan talaşlı iş yalnız gönderen uyarıyı onaylayınca gider.
     const planYok = planYokUyarisiGerekir(p);
     if (planYok && !planYokOnayli) { planYokSorYaz(true); return; }
@@ -349,7 +349,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       const n: Pkg = { ...p, apReq: { at: Date.now(), by: ben, version: (p.version || 0) + 1 } };
       await depo.DB.put('pkgs', n); seciliYaz(n); await yenile();
       depo.Bus.send({ type: 'pkg-approval', id: n.id, no: n.no });
-      soyle('Kaliteye onaya gönderildi · onaylanınca yayınlayabilirsin', 'done'); return;
+      soyle('Kaliteye onaya gönderildi · onaylanınca terminale gönderebilirsin', 'done'); return;
     }
     // Kart #1257: canlı planda olmayan iş onaysız gönderilmez; pencere nedeni ve plan bağlantısını gösterir.
     const uyari = planOnayli ? null : gonderimUyarisi(p);
@@ -477,7 +477,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     { id: 'info', l: 'Bilgiler' }, { id: 'docs', l: 'Dokümanlar' },
     p && tur !== 'cnc' ? { id: 'st', l: IS_TURLERI[tur].tab || IS_TURLERI[tur].l } : null,
     { id: 'plan', l: 'Kontrol planı' }, p && tur === 'cnc' ? { id: 'samp', l: 'Numune' } : null,
-    { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Yayınla' },
+    { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
   const hzSecili = p ? paketHazirligi(hz.harita, p) : null;
@@ -618,7 +618,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             <button type="button" className="tc-ay2-geri" onClick={() => duzenAcikYaz(false)}><Simge ad="back" />Paketler</button>
             <div className="tc-ay2-emir">
               <div>
-                <span className="tc-ay2-ust-yazi">İş paketi · v{p.version || 0} {p.dirty ? '· kaydedildi (yayınlanmadı)' : '· yayında'}</span>
+                <span className="tc-ay2-ust-yazi">İş paketi · v{p.version || 0} {p.dirty ? '· kaydedildi (terminale gönderilmedi)' : '· terminalde'}</span>
                 <h1>{p.no}<span className="tc-ay2-rev">Rev {p.rev}</span></h1>
                 <p>{p.part || 'Parça adı girilmedi'} · {p.op} · {p.machine}</p>
               </div>
@@ -858,8 +858,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     </div>
                   ) : null}
                   {paketIsEmriId(p) !== null ? <EkHazirlikMaddeleri isEmriId={paketIsEmriId(p) ?? 0} degisti={hz.yenile} /> : null}
-                  <section className="tc-ay2-kart" aria-label="Yayın öncesi kontrol">
-                    <span className="tc-ay2-ust-yazi">Yayın öncesi kontrol</span>
+                  <section className="tc-ay2-kart" aria-label="Gönderim öncesi kontrol">
+                    <span className="tc-ay2-ust-yazi">Gönderim öncesi kontrol</span>
                     {v.map((x, i) => (
                       <div key={i} className="tc-ay2-denetim" data-durum={x.ok ? 'tamam' : x.soft ? 'yumusak' : 'eksik'}>
                         <span>{x.ok ? <Simge ad="check" boyut="k" /> : '!'}</span>
@@ -872,7 +872,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                         <span className="tc-ay2-ust-yazi">Hedef makine</span>
                         <b title={p.machine}>{(istasyon && istasyon.name) || p.machine}</b>
                         <small>
-                          {p.status === 'draft' ? 'İlk yayın' : 'Güncelleme · v' + ((p.version || 0) + 1)}
+                          {p.status === 'draft' ? 'İlk gönderim' : 'Güncelleme · v' + ((p.version || 0) + 1)}
                           {planDisiEki(p)}
                           {beklemeEki(p)}
                         </small>
@@ -884,7 +884,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                           disabled={v.some((x) => !x.ok && !x.soft) || (!p.dirty && p.status !== 'draft') || onayBekliyor(p)}
                           onClick={() => { void yayinla(); }}
                         >
-                          {onayBekliyor(p) ? 'Onay bekleniyor' : onayGerekir(p, ayarlar.kurallar) ? 'Kaliteye onaya gönder' : p.status === 'draft' ? 'Operatöre gönder' : p.dirty ? 'Güncellemeyi gönder' : 'Gönderildi'}
+                          {onayBekliyor(p) ? 'Onay bekleniyor' : onayGerekir(p, ayarlar.kurallar) ? 'Kaliteye onaya gönder' : p.status === 'draft' ? 'Terminale gönder' : p.dirty ? 'Güncellemeyi gönder' : 'Gönderildi'}
                         </Dugme>
                       ) : null}
                     </div>
@@ -926,7 +926,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     ) : null}
                     {(p.history || []).length ? (
                       <details className="tc-ay2-gecmis">
-                        <summary>Yayın geçmişi · {(p.history || []).length}</summary>
+                        <summary>Gönderim geçmişi · {(p.history || []).length}</summary>
                         {(p.history || []).slice().reverse().map((h, i) => (
                           <div key={i} className="tc-ay2-gecmis-satir">
                             <b>v{h.v}</b><span>Rev {h.rev}</span>
@@ -940,7 +940,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                   <section className="tc-ay2-kart" aria-label="İletim kanalları">
                     <span className="tc-ay2-ust-yazi">İletim kanalları</span>
                     <div className="tc-ay2-kanal">
-                      <Simge ad="gauge" /><div><b>Bu bilgisayardaki operatör ekranları</b><small>Anında · {p.status !== 'draft' ? 'iletildi' : 'yayınlanınca'}</small></div>
+                      <Simge ad="gauge" /><div><b>Bu bilgisayardaki operatör ekranları</b><small>Anında · {p.status !== 'draft' ? 'iletildi' : 'gönderilince'}</small></div>
                       <Cip ton="run">Hazır</Cip>
                     </div>
                     <div className="tc-ay2-kanal">
@@ -1030,9 +1030,9 @@ export function KontrolPlaniYokPenceresi({ kapat, gonder, plana }: { kapat: () =
         </>
       )}
     >
-      <span className="tc-ay2-ust-yazi">Operatöre gönder</span>
+      <span className="tc-ay2-ust-yazi">Terminale gönder</span>
       <p>Bu talaşlı işte kontrol noktası yok: operatör ölçü girmeden üretir, ilk parça ve numune ölçüsü istenmez.</p>
-      <p>Gönderirsen uyarıyı onayladığın, adın ve zamanıyla yayın geçmişine yazılır.</p>
+      <p>Gönderirsen uyarıyı onayladığın, adın ve zamanıyla gönderim geçmişine yazılır.</p>
     </Pencere>
   );
 }
@@ -1050,7 +1050,7 @@ export function PlanOnayPenceresi({ uyari, kapat, gonder, plana }: { uyari: Gond
         </>
       )}
     >
-      <span className="tc-ay2-ust-yazi">Operatöre gönder</span>
+      <span className="tc-ay2-ust-yazi">Terminale gönder</span>
       {uyari.taslakta ? <p>Plana git ve taslağı "Canlıya al" ile yayınla (plan canlıya alma yetkisi gerekir); iş o zaman canlı plana geçer.</p> : null}
       <p>{uyari.gorunmez ? 'Ayar açık: iş, plan canlıya alınana kadar Üretim Terminali\'nde görünmez ve başlatılamaz.' : 'İş operatöre düşer ve plansız başlatılabilir. Plan sırası ve süreleri bu işi içermez.'}</p>
     </Pencere>

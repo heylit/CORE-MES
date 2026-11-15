@@ -14,7 +14,7 @@ export const rehber: readonly SayfaRehberi[] = [
     sinirlar: [
       'Başlatma, sayım ve bitirme üretim kaydı yetkisi ister.',
       'İlk parça kalite onayı olmadan seri üretim başlamaz; bitmiş işte sayı değişmez.',
-      'Ayarlarda "Operatöre yalnız canlı plandaki iş düşer" açıksa rotalı iş, canlı planda bu istasyona yerleşmeden başlatılamaz; kapalıyken (varsayılan) yayınlanan iş plansız da başlatılır. Çoğu işlemde kısa süre "Geri al" çıkar.',
+      'Ayarlarda "Operatöre yalnız canlı plandaki iş düşer" açıksa rotalı iş, canlı planda bu istasyona yerleşmeden başlatılamaz; kapalıyken (varsayılan) terminale gönderilen iş plansız da başlatılır. Çoğu işlemde kısa süre "Geri al" çıkar.',
     ],
     sozcukler: ['operatör', 'sayım', 'hurda', 'duruş', 'andon', 'başlat', 'bitir', 'vardiya devri'],
   },
@@ -25,10 +25,10 @@ export const rehber: readonly SayfaRehberi[] = [
       'Başlığın altındaki sekmelerden bölümü seçin: Pano, Plan Kuyruğu, Üretim Terminali Hazırlık, Kalite, Bakım, Raporlar.',
       '"Üretim Terminali Hazırlık"ta paketi seçin; teknik resmi ya da modeli ekleyin ("Çizim Merkezi\'nden ekle").',
       '"Kontrol planı"nda ölçüleri onaylayın, "Adım ekle" ile operasyon adımı ekleyin.',
-      '"Yayın öncesi kontrol"den geçin, "Önizle", sonra "Operatöre gönder". Geri almak için "Operatörden geri çek".',
+      '"Gönderim öncesi kontrol"den geçin, "Önizle", sonra "Terminale gönder". Geri almak için "Operatörden geri çek".',
     ],
     sinirlar: [
-      'Yeni paket yalnız üretim emri açılınca oluşur; kalite onayı olmadan yayınlanamaz.',
+      'Yeni paket yalnız üretim emri açılınca oluşur; kalite onayı olmadan terminale gönderilemez.',
       'Karara bağlanmış kalite kaydını yalnız kararı veren rol ve yönetici değiştirir.',
       'Bölümler yetkiye göre görünür.',
     ],

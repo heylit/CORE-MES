@@ -28,7 +28,7 @@ export function Onaylar({ paketler, soyle }: { paketler: Record<string, Pkg>; so
 
   return (
     <div className="tc-ay3-sayfa">
-      <span className="tc-ay3-ust">Hazırlıkta “Kaliteye onaya gönder” denilen paketler. Onaylanan paket hazırlıkta yayınlanabilir; onaydan sonra değişirse yeniden onay ister.</span>
+      <span className="tc-ay3-ust">Hazırlıkta “Kaliteye onaya gönder” denilen paketler. Onaylanan paket hazırlıkta terminale gönderilebilir; onaydan sonra değişirse yeniden onay ister.</span>
       {liste.length ? liste.map((p) => (
         <div key={p.id} className="tc-ay3-kutu" aria-label={`${p.no} onay bekliyor`}>
           <div className="tc-ay3-arac">
@@ -49,7 +49,7 @@ export function Onaylar({ paketler, soyle }: { paketler: Record<string, Pkg>; so
           </div>
         </div>
       )) : (
-        <DurumKutusu durum="bos" mesaj={`Onay bekleyen paket yok. Yayın onayı Ayarlar › Üretim › Çalışma kurallarından açılır${ayarlar.kurallar.approval ? ' (şu an açık)' : ' (şu an kapalı)'}.`} />
+        <DurumKutusu durum="bos" mesaj={`Onay bekleyen paket yok. Terminale gönderme onayı Ayarlar › Üretim › Çalışma kurallarından açılır${ayarlar.kurallar.approval ? ' (şu an açık)' : ' (şu an kapalı)'}.`} />
       )}
       {son.length > 0 && (
         <details className="tc-ay3-kutu">

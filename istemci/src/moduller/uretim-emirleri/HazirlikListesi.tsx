@@ -33,7 +33,7 @@ const LEJANT: readonly Gorunum[] = [HAL.tamam, HAL.eksik, UYARI, HAL.muaf, HAL.g
 // Sözleşmedeki değer zod taşıdığından istemciye yalnız tipi girer; `uyarir` bayrağı tip düzeyinde uyaran madde listesine bağlıdır.
 type Uyaran = (typeof UYARAN_HAZIRLIK_MADDELERI)[number];
 interface MaddeBilgisi<K extends HazirlikMaddesi = HazirlikMaddesi> {
-  ad: string; kisa: string; sahip: string; git: { yol: string; islem: string; ad: string } | null; uyarir: K extends Uyaran ? true : false;
+  ad: string; kisa: string; sahip: string; not?: string; git: { yol: string; islem: string; ad: string } | null; uyarir: K extends Uyaran ? true : false;
 }
 export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   cnc: { ad: 'CNC kurulumu', kisa: 'CNC', sahip: 'CNC Kurulum', git: { yol: '/cnc-kurulum', islem: 'sayfa.cnc-kurulum', ad: "CNC Kurulum'da aç" }, uyarir: false },
@@ -44,7 +44,7 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   // 3199 (D): plan işin içine özel takım değişimi koyduysa uyarır; kaynak Planlama'daki kayıtlı plandır.
   'takim-hazirla': { ad: 'Takım hazırla', kisa: 'Takım hazırla', sahip: 'Planlama', git: { yol: '/plan', islem: 'sayfa.plan', ad: "Planlama'da aç" }, uyarir: true },
   makine: { ad: 'Makine durumu', kisa: 'Makine', sahip: 'İstasyonlar', git: { yol: '/istasyonlar', islem: 'sayfa.istasyonlar', ad: "İstasyonlar'da aç" }, uyarir: true },
-  yayin: { ad: 'Paket yayını', kisa: 'Yayın', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: false },
+  yayin: { ad: 'Terminale gönderildi', kisa: 'Terminal', sahip: 'Üretim Hazırlık', not: 'Terminale gönderilen iş, seçili istasyonun operatör ekranında başlatılabilir.', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: false },
   // 2227-1: ön hazırlık ve hazırlık adımları terminalde işaretlenir; matris yalnız uyarır.
   talimat: { ad: 'Hazırlık talimatı', kisa: 'Talimat', sahip: 'Terminal', git: null, uyarir: true },
   // 2227-1 b: iş emrine özel madde Üretim Hazırlık'ta eklenir ve işaretlenir.
@@ -177,6 +177,7 @@ function Ayrinti({ v, h, islemler, muafVerir, git, muafAc }: {
     <div className="tc-hz-ayrinti">
       <b>{md.ad}{satir ? ` · OP ${satir.opNo} ${satir.ad}` : ' · emir geneli'}</b>
       <span>{halGorunumu(h.madde, hal).aciklama} <span className="tc-emir-not">Sahibi: {md.sahip}</span></span>
+      {md.not && <span className="tc-emir-not">{md.not}</span>}
       {kayitlar.map((x) => (
         <span key={`${x.madde}-${x.isEmriId ?? 'emir'}`} className="tc-emir-not">
           <Simge ad="lock" /> {x.kisiAdi ?? 'Bilinmeyen kişi'} · {zamanMetni(x.zaman) ?? ''} · {x.isEmriId === null ? 'bütün iş emirleri' : 'bu iş emri'} · Gerekçe: {x.gerekce}

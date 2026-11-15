@@ -2206,7 +2206,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const taslakta = ieOlay(ie1!, 'running', { machine: r.ilk });
     const ret = await ekle(operator, 'events', taslakta);
     assert.equal(ret.durum, 400, JSON.stringify(ret.govde));
-    assert.match(JSON.stringify(ret.govde), /Paket yayınlanmadı/);
+    assert.match(JSON.stringify(ret.govde), /Terminale gönderilmedi/);
     assert.equal(await kayitSayisi(taslakta.cid), 0);
     assert.equal((await emirOku(r.emirId)).durum, 'planli');
     await yayinla(ieKimligi(ie1!));

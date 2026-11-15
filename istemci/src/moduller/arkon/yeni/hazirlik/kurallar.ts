@@ -173,7 +173,7 @@ export const SIKLIKLAR = ['İlk parça', 'Her 10 parça', 'Her 50 parça', 'Saat
 export type PaketDurumu = 'draft' | 'review' | 'published' | 'production' | 'done';
 // Bu iş paketinin durumudur, üretim emrinin değil: ad "Paket:" ile başlar ki emir durumuyla karışmasın (1417 a).
 export const PAKET_DURUMLARI: Readonly<Record<PaketDurumu, { l: string; ton: Ton }>> = {
-  draft: { l: 'Paket: Taslak', ton: 'idle' }, review: { l: 'Paket: Onayda', ton: 'done' }, published: { l: 'Paket: Yayında', ton: 'run' },
+  draft: { l: 'Paket: Taslak', ton: 'idle' }, review: { l: 'Paket: Onayda', ton: 'done' }, published: { l: 'Paket: Terminalde', ton: 'run' },
   production: { l: 'Paket: Üretimde', ton: 'hazard' }, done: { l: 'Paket: Tamamlandı', ton: 'done' },
 };
 // Paket kartındaki durum: üretimden sonuç geldiyse ona göre.
@@ -368,7 +368,7 @@ export interface TakipSatiri {
 export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
 export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'beklemede' | 'bitti' | 'hepsi';
 export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
-  ['acik', 'Açık işler'], ['yayinda', 'Yayında'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
+  ['acik', 'Açık işler'], ['yayinda', 'Terminalde'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
 ];
 const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi'>, readonly PaketDurumu[]>> = {
   acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'],

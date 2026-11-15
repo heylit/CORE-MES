@@ -14,7 +14,7 @@ function useOzet() {
 
 function HazirlikBekleyen() {
   const o = useOzet();
-  return <SayiKarti baslik="Hazırlık bekleyen iş" simge="layers" sayi={o.data?.hazirlikBekleyen} altMetin="Yayına girmemiş iş paketi" yol="/arkon/hazirlik" hata={o.isError} />;
+  return <SayiKarti baslik="Hazırlık bekleyen iş" simge="layers" sayi={o.data?.hazirlikBekleyen} altMetin="Terminale gönderilmemiş iş paketi" yol="/arkon/hazirlik" hata={o.isError} />;
 }
 function KaliteBekleyen() {
   const o = useOzet();

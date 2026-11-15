@@ -296,7 +296,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (msg && msg.type === 'pkg') {
       bip('call');
       if (msg['machine'] === MACHINE) say(`${Number(msg['version']) > 1 ? 'Paket güncellendi: ' : 'Yeni iş paketi: '}${String(msg['no'])} · Rev ${String(msg['rev'])}`, 'layers', 'hazard');
-      else say(`${String(msg['machine'])} için paket yayınlandı · bu makine değil`, 'layers', 'idle');
+      else say(`${String(msg['machine'])} için iş terminale gönderildi · bu makine değil`, 'layers', 'idle');
     }
     if (msg && msg.type === 'pin-resolved') say(`Hazırlık notunu yanıtladı: ${String(msg['reply'] || 'çözüldü')}`, 'check', 'run');
   };

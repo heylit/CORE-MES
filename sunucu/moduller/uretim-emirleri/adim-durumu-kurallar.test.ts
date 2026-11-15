@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { elleStatuGovdesi, type HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
   BEKLETME_DURUMU, BEKLETME_VAR, BEKLETME_YOK, EMIR_BEKLEMEDE, GEREKCE_GEREK, ONAY_GEREKSIZ, acikElleStatu, bekletmeBaslatmaIhlali, bekletmeIhlali,
   bekletmeKaldirmaIhlali, acikOnaylar, adimSistemStatusu, hazirlikOnayiReddi, onayGecerliMi, oncekiBekleniyor,
@@ -12,6 +12,10 @@ const g = (ek: Partial<AdimStatuGirdisi> = {}, hal: [HazirlikMaddesi, HazirlikHa
 });
 
 describe('uretim-emirleri adım durumu kuralları (2893)', () => {
+  test('3299 a: "Terminale gönderilmedi" elle yazılmaz, sistemden gelir; öteki durduran statü elle yazılır', () => {
+    assert.equal(elleStatuGovdesi.safeParse({ statu: 'yayin', not: null, sistemStatusu: 'yayin' }).success, false);
+    assert.equal(elleStatuGovdesi.safeParse({ statu: 'cizim', not: null, sistemStatusu: 'yayin' }).success, true);
+  });
   test('sistem statüsü öncelik sırasıyla: bitti, çalışma, fason, durduran eksik, uyaran eksik, önceki adım', () => {
     assert.deepEqual(adimSistemStatusu(g({ durum: 'tamam' }, [['cnc', 'eksik']])), { statu: 'bitti', nedenler: [] });
     assert.equal(adimSistemStatusu(g({ durum: 'calisiyor', calisma: 'calisiyor' })).statu, 'uretimde');

@@ -345,8 +345,8 @@ function KuralDuzenleyici() {
         acik={p.autoCall} degistir={(v) => S('autoCall', v)}
       />
       <Anahtar
-        etiket="Paket yayınında kalite onayı"
-        aciklama="Hazırlık paketi önce kaliteye onaya gönderir; kalite onaylamadan operatöre yayınlanmaz. Onaydan sonra değişiklik olursa yeniden onay gerekir."
+        etiket="Terminale göndermede kalite onayı"
+        aciklama="Hazırlık paketi önce kaliteye onaya gönderir; kalite onaylamadan terminale gönderilmez. Onaydan sonra değişiklik olursa yeniden onay gerekir."
         acik={p.approval} degistir={(v) => S('approval', v)}
       />
       <Anahtar
@@ -434,7 +434,7 @@ function DegisiklikGunlugu() {
         }}
       />
       <small className="tc-ay6-soluk">
-        Paket yayını/onayı/silme, plan ve istasyon değişikliği, planlı duruş, bakım, kalibrasyon, tesis, kullanıcı, yetki, vardiya ve kural değişiklikleri kaydedilir.
+        Terminale gönderme, paket onayı ve silme, plan ve istasyon değişikliği, planlı duruş, bakım, kalibrasyon, tesis, kullanıcı, yetki, vardiya ve kural değişiklikleri kaydedilir.
       </small>
     </div>
   );

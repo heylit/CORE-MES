@@ -98,7 +98,7 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     const taslak = baslat(ie);
     const taslakRed = await taslak.cevap;
     assert.equal(taslakRed.statusCode, 400, taslakRed.body);
-    assert.match(taslakRed.body, /Paket yayınlanmadı/);
+    assert.match(taslakRed.body, /Terminale gönderilmedi/);
     await kayitYok(taslak.satir.cid);
     assert.equal(await emirDurumu(ie), 'planli');
 
