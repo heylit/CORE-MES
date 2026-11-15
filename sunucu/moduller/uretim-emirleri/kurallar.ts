@@ -414,11 +414,10 @@ export const farkliRotaYururlukteDegilIletisi = (turAdi: string, rotaAdi: string
 export const farkliRotaRezerveliIletisi = (turAdi: string): string =>
   `Bu emre stoktan malzeme ayrılmış; ${turAdi} partisi ayrı emir olarak ayrılırsa ayrılan malzeme ana emirde kalır. Önce rezerveyi Stok Merkezi'nde azaltın ya da ${turAdi} partisini yeni emir olarak açın.`;
 export function farkliRotaliBolmeIhlali(
-  g: { turAdi: string; rotaAdi: string; revizyonVar: boolean; adimBasladi: boolean; kolVeyaEk: boolean },
+  g: { turAdi: string; adimBasladi: boolean; kolVeyaEk: boolean },
 ): string | null {
   if (g.adimBasladi) return farkliRotaBaslamisIletisi(g.turAdi);
   if (g.kolVeyaEk) return farkliRotaKolIletisi(g.turAdi);
-  if (!g.revizyonVar) return farkliRotaYururlukteDegilIletisi(g.turAdi, g.rotaAdi);
   return null;
 }
 export function turDegisimIhlali(e: { durum: EmirDurumu; arsiv: boolean; ustEmirId: number | null; projeId: number | null }, yeniTur: string): string | null {
