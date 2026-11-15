@@ -4,7 +4,8 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  ayarUygula, catismalar, emirOf, imza, komutAnahtarlari, oynat, secimeGore, uygulaKarari, yonUygula, type TaslakHesaplari, type TaslakSatiri,
+  DIZ_BAYAT, DIZ_ESKI_VERI, ayarUygula, catismalar, dizImzasi, dizUygula, emirOf, imza, komutAnahtarlari, oynat, secimeGore, uygulaKarari, yonUygula,
+  type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
 // 3282 1d: taslağın saf kuralları. Veriler uydurmadır.
@@ -154,5 +155,69 @@ describe('3282 1d: taslağın yeniden oynatılması', () => {
     // Eski imzada yön yoksa boş sayılır.
     const { yon: _, ...eski } = imza(ortak());
     assert.deepEqual(catismalar(eski, imza(ortak()), l), []);
+  });
+});
+
+// 3282 1d-2: dizme komutu (Risk 1d-2 K4, K5). Plan uydurmadır.
+describe('3282 1d-2: dizme', () => {
+  const PLAN = { ops: { 'S1.10': op('S1.10', 'T3', 40) }, ozet: { gec: 0 } };
+  const b = (id: string, isler: string[]) => ({ id, ne: 'x', ayrinti: '', kim: '', t: 1, isler, geri: [] });
+  // gorunum: dizmenin hesaplandığı görünüm; taban: o anki ortak çalışma.
+  const diz = (gorunum: unknown, n: number, isler = ['*'], taban: unknown = gorunum, plan: Record<string, unknown> | null = PLAN): DizKomutu =>
+    ({ tur: 'diz', isler, plan, onceki: { imza: dizImzasi(gorunum, taban), n, dataVer: (taban as { dataVer: number }).dataVer } });
+
+  test('dizilen plan yazılır, kapsadığı bekleyenler düşer, veri sürümü artar; bekleyen kalırsa plan güncel sayılmaz', () => {
+    const c = ortak({ dataVer: 5, plan: { dataVer: 3, ozet: { gec: 2 }, ops: {} }, bekleyen: [b('a', ['S1']), b('b', ['S2'])], iz: [] });
+    const r = dizUygula(c, diz(c, 0), KISI, 5);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as Record<string, unknown> & { plan: Record<string, unknown> };
+    assert.deepEqual([d.dataVer, d.plan['dataVer'], d.plan['kaynak'], d.plan['oncekiOzet'], d.plan['kim'], d.bekleyen], [6, 6, 'uygula', { gec: 2 }, KISI.kim, []]);
+    assert.deepEqual(d.plan['ops'], PLAN.ops);
+    assert.deepEqual((d.iz as { ne: string; ayrinti: string }[])[0], { t: KISI.t, kim: KISI.kim, rol: '', sayfa: 'Kokpit', ne: 'Plan yeniden dizildi', ayrinti: 'Bütün işler' });
+    // Kısmi dizme yalnız işlerinin hepsi kapsanan bekleyeni düşürür (S1 ve S2'ye dokunan kalır).
+    const kc = { ...c, bekleyen: [b('a', ['S1']), b('b', ['S2']), b('c', ['S1', 'S2'])] };
+    const k = dizUygula(kc, diz(kc, 0, ['S1']), KISI, 5);
+    assert.ok(!('hata' in k));
+    const kd = k.deger as { dataVer: number; plan: { dataVer: number }; bekleyen: { id: string }[] };
+    assert.deepEqual([kd.dataVer, kd.plan.dataVer, kd.bekleyen.map((x) => x.id)], [6, 3, ['b', 'c']]);
+    assert.ok('hata' in dizUygula(ortak({ plan: null }), diz(c, 0), KISI, 5), 'plansız çalışmada dizme yazılmaz');
+    // K4a: dizmeden sonra veri sürümü değiştiyse (saha olayı) plan yazılır ama güncel sayılmaz; iz bunu söyler.
+    const e = dizUygula({ ...c, dataVer: 7 }, diz(c, 0), KISI, 7);
+    assert.ok(!('hata' in e));
+    const ed = e.deger as { dataVer: number; plan: { dataVer: number; ops: unknown }; bekleyen: unknown[]; iz: { ayrinti: string }[] };
+    assert.deepEqual([ed.dataVer, ed.plan.dataVer, ed.plan.ops, ed.bekleyen, ed.iz[0]!.ayrinti], [8, 3, PLAN.ops, [], `Bütün işler; ${DIZ_ESKI_VERI}`]);
+  });
+
+  test('dizme hesaplandığı yerde uygulanır; başkasının taşıması ya da önündeki komutun düşmesi onu bayatlatır, saha olayı bayatlatmaz', () => {
+    const c = ortak();
+    const once = oynat(c, [sat({ tur: 'yon', emirId: 'S1', yon: 'geri' }, 'yön S1')], KISI, HESAP).deger;
+    const l = [sat({ tur: 'yon', emirId: 'S1', yon: 'geri' }, 'yön S1'), { komut: diz(once, 1, ['*'], c), ne: 'Plan yeniden dizildi', t: KISI.t }];
+    assert.deepEqual(oynat(c, l, KISI, HESAP).hatalar, [null, null]);
+    // Saha olayı ve veri sürümü dizmenin girdisine girmez (Risk 1d-2 açık b).
+    assert.deepEqual(oynat(ortak({ dataVer: 9, olaylar: [{ tip: 'ariza', m: 'T1', bas: 30, saat: 2 }] }), l, KISI, HESAP).hatalar, [null, null]);
+    assert.deepEqual(oynat(ortak({ locks: { 'S2.10': { m: 'T3', S: 50 } } }), l, KISI, HESAP).hatalar, [null, DIZ_BAYAT]);
+    // Sıra: aynı yerde hesaplanmış ama önüne komut girmiş dizme bayattır.
+    assert.deepEqual(oynat(c, [l[0]!, { ...l[1]!, komut: { ...(l[1]!.komut as DizKomutu), onceki: { ...(l[1]!.komut as DizKomutu).onceki, n: 0 } } }], KISI, HESAP).hatalar, [null, DIZ_BAYAT]);
+    // K5: 'onun' ile önündeki komut düşerse dizme bayattır, Uygula hiçbirini yazmaz.
+    const taban = imza(c), simdi = ortak({ w: { dondurma: 4, yonEmir: { S1: 'ileri' } } });
+    assert.deepEqual(uygulaKarari(simdi, taban, l, { 'emir:S1': 'onun' }, KISI, HESAP), { durum: 'bozuk', ileti: `Taslaktaki şu değişiklikler artık uygulanamıyor: Plan yeniden dizildi: ${DIZ_BAYAT}` });
+    assert.deepEqual(komutAnahtarlari(diz(c, 0), taban), []);
+  });
+
+  test('ikinci dizme, birincinin planı düşünce de geçerli kalır (yalnız son dizme plan taşır; Test 1d-2a T1)', () => {
+    const c = ortak();
+    const ilk = { komut: diz(c, 0, ['*'], c), ne: 'Plan yeniden dizildi', t: KISI.t };
+    const v1 = oynat(c, [ilk], KISI, HESAP).deger;
+    assert.notDeepEqual(imza(v1).yer, imza(c).yer, 'birinci dizme işlerin yerini değiştirdi');
+    const ikinci = { komut: diz(v1, 1, ['*'], c, { ops: { 'S1.10': op('S1.10', 'T2', 44) }, ozet: { gec: 1 } }), ne: 'Plan yeniden dizildi', t: KISI.t };
+    const dusmus = { ...ilk, komut: { ...ilk.komut, plan: null } };
+    const o = oynat(c, [dusmus, ikinci], KISI, HESAP);
+    assert.deepEqual(o.hatalar, [null, null]);
+    const d = o.deger as { plan: { ops: unknown; dataVer: number }; dataVer: number };
+    assert.deepEqual(d.plan.ops, { 'S1.10': op('S1.10', 'T2', 44) });
+    assert.equal(d.plan.dataVer, d.dataVer, 'veri değişmedi, plan güncel');
+    // Başkası ortak planı yeniden dizdiyse (yer değişti) ikinci dizme bayattır.
+    const baska = ortak({ plan: { dataVer: 3, ops: { 'S1.10': op('S1.10', 'T1', 22) } } });
+    assert.deepEqual(oynat(baska, [dusmus, ikinci], KISI, HESAP).hatalar, [null, DIZ_BAYAT]);
   });
 });

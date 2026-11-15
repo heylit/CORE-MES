@@ -1,14 +1,17 @@
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  TASLAK_KOMUTU_EN_COK, taslakKomutu, type TaslakCevabi, type TaslakKomutu, type TaslakUygulaCevabi,
+  TASLAK_KOMUTU_EN_COK, taslakKomutu, type DegerlendirmeIstegi, type TaslakCevabi, type TaslakKomutu, type TaslakSatirKomutu, type TaslakUygulaCevabi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { degerCokBuyukMu } from '../recete-rota/disari.ts';
+import { DEGERLENDIRME_SURESI_MS, degerlendirmeBaslat, degerlendirmeYap } from './degerlendirme.ts';
 import { planaAlmaHesabi } from './plana-al.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
-import { imza, komutAdi, komutUygula, oynat, uygulaKarari, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir } from './taslak-kurallar.ts';
+import {
+  dataVerOf, dizImzasi, imza, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
+} from './taslak-kurallar.ts';
 import { tasimaHesabi } from './tasima.ts';
 
 // 3282 1d: kişinin taslağı. Akış: yetki (plan.yaz, uçta ve burada; satır yalnız çağıranın kimliğiyle okunur ve yazılır), taslak sürümü,
@@ -21,18 +24,27 @@ const BUYUK = 'Taslak çok büyüdü; bir kısmını uygulayıp yeniden deneyin.
 const HESAPLAR: TaslakHesaplari = { tasima: tasimaHesabi, planaAlma: planaAlmaHesabi };
 const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sayfa: SAYFA, t: simdi });
 
-// Satırları bu modül yazar; okurken yine de sözleşmeden geçer, bozuk satır oynatılmaz.
+// Satırları bu modül yazar; okurken yine de sözleşmeden geçer (dizme satırı kendi biçimiyle), bozuk satır oynatılmaz.
+const nesneMi = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+function dizKomutu(x: Record<string, unknown>): DizKomutu | null {
+  const { isler, plan, onceki } = x;
+  if (!Array.isArray(isler) || !isler.every((i) => typeof i === 'string') || !(plan === null || nesneMi(plan)) || !nesneMi(onceki)) return null;
+  const { imza: i, n, dataVer } = onceki;
+  return typeof i === 'string' && typeof n === 'number' && typeof dataVer === 'number' ? { tur: 'diz', isler: isler as string[], plan, onceki: { imza: i, n, dataVer } } : null;
+}
 function satirlar(x: unknown): Satir[] {
   if (!Array.isArray(x)) return [];
   const l: Satir[] = [];
   for (const s of x as unknown[]) {
-    if (typeof s !== 'object' || s === null) continue;
-    const r = taslakKomutu.safeParse((s as Record<string, unknown>).komut);
-    const { ne, t } = s as { ne?: unknown; t?: unknown };
-    if (r.success && typeof ne === 'string' && typeof t === 'number') l.push({ komut: r.data, ne, t });
+    if (!nesneMi(s)) continue;
+    const k = s.komut;
+    const komut: SatirKomutu | null = nesneMi(k) && k.tur === 'diz' ? dizKomutu(k) : ((r) => (r.success ? r.data : null))(taslakKomutu.safeParse(k));
+    if (komut !== null && typeof s.ne === 'string' && typeof s.t === 'number') l.push({ komut, ne: s.ne, t: s.t });
   }
   return l;
 }
+// Cevapta dizmenin planı ve tabanı gösterilmez.
+const disKomut = (k: SatirKomutu): TaslakSatirKomutu => (k.tur === 'diz' ? { tur: 'diz', isler: k.isler } : k);
 
 async function gorunum(db: Db, kullanici: Kullanici, t: sorgular.TaslakSatiri | null, simdi: number): Promise<TaslakCevabi> {
   const c = await planlamaCalismasi(db, kullanici, simdi);
@@ -40,7 +52,7 @@ async function gorunum(db: Db, kullanici: Kullanici, t: sorgular.TaslakSatiri | 
   const l = satirlar(t.komutlar);
   const o = oynat(c.calisma, l, kisiOf(kullanici, simdi), HESAPLAR);
   return {
-    taslak: { surum: t.surum, tabanSurum: t.tabanSurum, satirlar: l.map((s, i) => ({ ...s, hata: o.hatalar[i] ?? null })) },
+    taslak: { surum: t.surum, tabanSurum: t.tabanSurum, satirlar: l.map((s, i) => ({ ...s, komut: disKomut(s.komut), hata: o.hatalar[i] ?? null })) },
     calisma: o.deger as Record<string, unknown>, surum: c.surum,
   };
 }
@@ -112,4 +124,56 @@ export async function taslagiUygula(db: Db, kullanici: Kullanici, g: { taslakSur
   }
   await sorgular.taslakSil(db, kullanici.id, t!.surum);
   return { durum: 'uygulandi', calismaSurumu, uygulanan: k.uygulanan, dusen: k.dusen };
+}
+
+// 3282 1d-2 dizme (Risk 1d-2 K1-K4). Değerlendirme taslağın görünümünde, uç transaction'ının dışında işçide koşar (degerlendirme.ts, kişi
+// başına tek iş). Plan-uygula sonucu yalnız bellekte, başlatan kişi ve taslağın o sürümü için tutulur; diz onu yeni bir istekte, taslak
+// kilitliyken ve sürümü hâlâ aynıysa taslağa komut olarak yazar. Sonuç okunmazsa değerlendirme sonucu gibi silinir.
+const DIZ_OMRU_MS = 5 * 60_000;
+interface DizIsi { kisi: number; basla: number; taslakSurumu: number; isler: string[]; onceki: DizKomutu['onceki']; plan: Record<string, unknown> | null; bitis: number | null }
+const dizler = new Map<string, DizIsi>();
+// Hatayla biten değerlendirmenin dizmesi bitişsiz kalır; değerlendirme süresinden sonra o da silinir.
+const dizTemizle = (simdi: number): void => { for (const [k, d] of dizler) if (simdi - (d.bitis ?? d.basla + DEGERLENDIRME_SURESI_MS) > DIZ_OMRU_MS) dizler.delete(k); };
+export function taslakDizleriniSifirla(): void { dizler.clear(); }
+
+export async function taslakDegerlendirmesi(
+  db: Db, kullanici: Kullanici, g: { taslakSurumu: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
+): Promise<{ is: string }> {
+  planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  dizTemizle(simdi);
+  const t = await sorgular.taslakOku(db, kullanici.id);
+  surumDenetle(t, g.taslakSurumu);
+  const c = await planlamaCalismasi(db, kullanici, simdi);
+  if (c.calisma === null || c.surum === null) throw cakisma('Planlama çalışması yok; önce planı kurun.');
+  const l = satirlar(t!.komutlar);
+  const o = oynat(c.calisma, l, kisiOf(kullanici, simdi), HESAPLAR);
+  const d: DizIsi | null = g.istek.tur === 'plan-uygula'
+    ? { kisi: kullanici.id, basla: simdi, taslakSurumu: t!.surum, isler: g.istek.isler.map(String), onceki: { imza: dizImzasi(o.deger, c.calisma), n: l.length, dataVer: dataVerOf(c.calisma) }, plan: null, bitis: null } : null;
+  const r = await degerlendirmeBaslat(db, kullanici, { surum: c.surum, istek: g.istek }, simdi, yap, {
+    calisma: o.deger,
+    bitince: (s) => { if (d !== null && s.tur === 'plan-uygula') { d.plan = s.plan as Record<string, unknown>; d.bitis = Date.now(); } },
+  });
+  if (d !== null) dizler.set(r.is, d);
+  return r;
+}
+
+export async function taslakDiz(db: Db, kullanici: Kullanici, g: { taslakSurumu: number; is: string }, simdi: number = Date.now()): Promise<TaslakCevabi> {
+  planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  dizTemizle(simdi);
+  const d = dizler.get(g.is);
+  if (d === undefined || d.kisi !== kullanici.id) throw bulunamadi('Dizme bulunamadı; yeniden dizin.');
+  if (d.plan === null) throw cakisma('Plan hâlâ diziliyor; bitince yeniden deneyin.');
+  const t = await sorgular.taslakOku(db, kullanici.id, true);
+  surumDenetle(t, g.taslakSurumu);
+  // Dizme başladıktan sonra taslağa komut eklendiyse ya da geri alındıysa sonuç o taslağın değildir (K2).
+  if (t!.surum !== d.taslakSurumu) { dizler.delete(g.is); throw cakisma('Taslak dizme sürerken değişti; yeniden dizin.'); }
+  // Yalnız son dizme planı taşır (boyut); öncekilerin planı düşer, satırları kalır.
+  const eski = satirlar(t!.komutlar).map((s) => (s.komut.tur === 'diz' ? { ...s, komut: { ...s.komut, plan: null } } : s));
+  if (eski.length >= TASLAK_KOMUTU_EN_COK) throw dogrulama(`Taslakta en çok ${String(TASLAK_KOMUTU_EN_COK)} değişiklik durur; önce uygulayın.`, 'komut');
+  const komut: DizKomutu = { tur: 'diz', isler: d.isler, plan: d.plan, onceki: d.onceki };
+  const komutlar = [...eski, { komut, ne: komutAdi(komut), t: simdi }];
+  if (degerCokBuyukMu(komutlar)) throw cokBuyuk(BUYUK);
+  if ((await sorgular.taslakKomutlariYaz(db, { kisiId: kullanici.id, beklenenSurum: t!.surum, komutlar })) === null) throw cakisma(ESKI);
+  dizler.delete(g.is);
+  return gorunum(db, kullanici, await sorgular.taslakOku(db, kullanici.id), simdi);
 }

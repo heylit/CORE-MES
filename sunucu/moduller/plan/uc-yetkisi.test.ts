@@ -116,6 +116,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/taslagim/geri-al': 'plan.yaz',
   'POST /plan/taslagim/vazgec': 'plan.yaz',
   'POST /plan/taslagim/uygula': 'plan.yaz',
+  'POST /plan/taslagim/degerlendirme': 'plan.yaz',
+  'POST /plan/taslagim/diz': 'plan.yaz',
   // Değerlendirme ve yıllık çözüm kayıt yazmaz; planlama sayfasını gören başlatır.
   'POST /plan/planlama-degerlendirmesi': 'plan.planlama-oku',
   'GET /plan/planlama-degerlendirmesi/:is': 'plan.planlama-oku',

@@ -6,7 +6,10 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
+import { ISLEMLER } from '#paylasilan/islemler.ts';
 import type { TaslakCevabi, TaslakUygulaCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { DegerlendirmeGirdisi, DegerlendirmeZarfi } from './degerlendirme.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -14,6 +17,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
+import { taslakDegerlendirmesi } from './taslak.ts';
+import { DIZ_BAYAT } from './taslak-kurallar.ts';
 
 // 3282 1d: kişinin taslağı uçtan uca (gerçek PostgreSQL). İki planlayıcı aynı ortak çalışmada; biri taslağını uygularken öteki etkilenmez,
 // çatışan ayar seçim ister. Veriler uydurmadır.
@@ -176,5 +181,71 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     const surum = await satirYaz(yoneticiId, Array.from({ length: 200 }, (_, i) => ({ komut: ayar({ dondurma: i % 2 === 0 ? 5 : 6 }), ne: 'Plan ayarı', t: i })));
     await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: surum, komut: ayar({ mat: 'sert' }) }, 400);
     await vt().sorgu('DELETE FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]);
+  });
+
+  // 3282 1d-2: dizme. Hesap enjekte edilir (işçi ve motor degerlendirme testlerinde): girdinin taslağın görünümü olduğunu ve sonucun
+  // yalnız sunucudan taslağa yazıldığını ölçer. Plan uydurmadır.
+  const DIZILEN = { ops: {}, ozet: { gec: 0 }, ORN: 'dizilen' };
+  const dizBaslat = async (taslakSurumu: number, gorulen: unknown[] = []): Promise<string> => {
+    const k: Kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
+    const yap = (g: DegerlendirmeGirdisi) => { gorulen.push(g.calisma); return Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc: { tur: 'plan-uygula', plan: DIZILEN } } as DegerlendirmeZarfi); };
+    const { is } = await vt().tx((db) => taslakDegerlendirmesi(db, k, { taslakSurumu, istek: { tur: 'plan-uygula', isler: ['*'] } }, Date.now(), yap));
+    await new Promise((coz) => setImmediate(coz));
+    return is;
+  };
+  const w = (c: Record<string, unknown> | null | undefined) => (c?.['w'] ?? {}) as Record<string, unknown>;
+
+  test('TS-09: dizme taslağın görünümünde hesaplanır, plan taslağa sunucudan yazılır; ortak çalışma Uygula ile değişir', async () => {
+    await vt().sorgu('DELETE FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]);
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = jsonb_set(deger, '{plan}', $2::jsonb) WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, JSON.stringify({ dataVer: 0, ops: {}, ozet: { gec: 3 } })]);
+    const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: ayar({ dondurma: 11 }) });
+    assert.equal((t.calisma?.['bekleyen'] as unknown[]).length > 0, true, 'ayar bekleyen yazdı');
+    const gorulen: unknown[] = [];
+    const is = await dizBaslat(t.taslak!.surum, gorulen);
+    assert.equal(w(gorulen[0] as Record<string, unknown>)['dondurma'], 11, 'değerlendirme taslağın görünümünde');
+    // Başkası başkasının dizmesini yazamaz; gövde plan taşıyamaz.
+    await istek(b, 'POST', '/plan/taslagim/diz', { taslakSurumu: t.taslak!.surum, is }, 404);
+    await istek(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: t.taslak!.surum, is, plan: { ops: {} } }, 400);
+    const d = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: t.taslak!.surum, is });
+    assert.deepEqual(d.taslak?.satirlar.map((x) => [x.komut, x.hata]), [[ayar({ dondurma: 11 }), null], [{ tur: 'diz', isler: ['*'] }, null]]);
+    const plan = d.calisma?.['plan'] as Record<string, unknown>;
+    assert.deepEqual([plan['ORN'], plan['kaynak'], plan['oncekiOzet'], plan['dataVer']], ['dizilen', 'uygula', { gec: 3 }, d.calisma?.['dataVer']]);
+    assert.deepEqual(d.calisma?.['bekleyen'], []);
+    assert.equal(((await ortak())['plan'] as Record<string, unknown>)['ORN'], undefined, 'ortak değişmedi');
+    // Aynı dizme ikinci kez yazılmaz.
+    await istek(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: d.taslak!.surum, is }, 404);
+    const u = await istek<TaslakUygulaCevabi>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: d.taslak!.surum });
+    assert.equal(u.durum, 'uygulandi');
+    const o = await ortak();
+    assert.deepEqual([(o['plan'] as Record<string, unknown>)['ORN'], o['bekleyen'], w(o)['dondurma']], ['dizilen', [], 11]);
+  });
+
+  test('TS-10: dizme sürerken taslak değiştiyse yazılmaz (409); başkası plan ayarını değiştirince dizme bayatlar, Uygula durur', async () => {
+    const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: ayar({ dondurma: 13 }) });
+    // Hesap bitmeden yazılmaz.
+    const k: Kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
+    let bitir: (z: DegerlendirmeZarfi) => void = () => undefined;
+    const bekleyen = () => new Promise<DegerlendirmeZarfi>((coz) => { bitir = coz; });
+    const suren = (await vt().tx((db) => taslakDegerlendirmesi(db, k, { taslakSurumu: t.taslak!.surum, istek: { tur: 'plan-uygula', isler: ['*'] } }, Date.now(), bekleyen))).is;
+    const h = await istek<{ hata: { ileti: string } }>(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: t.taslak!.surum, is: suren }, 409);
+    assert.match(JSON.stringify(h), /hâlâ diziliyor/);
+    bitir({ dataVer: 1, baslangic: null, simdi: 0, sonuc: { tur: 'plan-uygula', plan: DIZILEN } } as DegerlendirmeZarfi);
+    await new Promise((coz) => setImmediate(coz));
+    const is = await dizBaslat(t.taslak!.surum);
+    const t2 = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: t.taslak!.surum, komut: ayar({ mat: 'sert' }) });
+    await istek(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: t2.taslak!.surum, is }, 409);
+    const d = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/diz', { taslakSurumu: t2.taslak!.surum, is: await dizBaslat(t2.taslak!.surum) });
+    assert.equal(d.taslak?.satirlar.at(-1)?.hata, null);
+    // B, A'nın dokunmadığı bir plan ayarını yazar: A'nın dizmesi artık hesaplandığı yerde değildir. (A'nın kendi komutunun yine
+    // örttüğü bir ayarı yazsaydı dizmenin girdisi aynı kalır, bayatlamazdı: dar ölçüt, Risk 1d-2 K4.)
+    const tb = await istek<TaslakCevabi>(b, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'ayar', ayar: { w: {}, param: { tampon: true }, ac: [], kapat: [] }, ayrinti: '' } });
+    await istek(b, 'POST', '/plan/taslagim/uygula', { taslakSurumu: tb.taslak!.surum });
+    const g = await istek<TaslakCevabi>(a, 'GET', '/plan/taslagim');
+    assert.equal(g.taslak?.satirlar.at(-1)?.hata, DIZ_BAYAT);
+    const once = await ortak();
+    const u = await istek<{ hata: { ileti: string } }>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: g.taslak!.surum, secimler: { '*': 'benim' } }, 409);
+    assert.match(JSON.stringify(u), /yeniden dizin/);
+    assert.deepEqual(await ortak(), once);
+    await istek(a, 'POST', '/plan/taslagim/vazgec', { taslakSurumu: g.taslak!.surum });
   });
 });

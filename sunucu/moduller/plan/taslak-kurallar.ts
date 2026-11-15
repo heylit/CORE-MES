@@ -1,11 +1,17 @@
 import type { TaslakAyarlari, TaslakCatismasi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
-import { isTasi, isle, planaAl, type GeriYama, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import { IZ_SINIRI, isTasi, isle, planaAl, type GeriYama, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
 
 // 3282 1d: kişinin taslağının saf kuralları. Taslak komut listesidir; görünüm ve Uygula komutları güncel ortak çalışmaya sırayla yeniden
 // oynatır (Risk K1: bekleyen satırı yalnız geri yama taşır, ileri farkı yoktur). Çatışma, taslak açıldığında alınan imzayla bugünkü
 // imzanın farkıdır: başkasının yerini, kilidini ya da yönünü değiştirdiği emir ve tezgâh, plan ayarı değiştiyse bütün plan ('*').
 
 type Nesne = Record<string, unknown>;
+
+// 3282 1d-2: yeniden dizme komutu. Planı sunucu hesaplar ve yazar (Risk 1d-2 K1); onceki, planın hesaplandığı yerdir: dizme imzası
+// (dizImzasi), önceki komut sayısı (K4) ve ortak çalışmanın veri sürümü. İmza ya da sıra tutmuyorsa plan bayattır, uygulanmaz. Yalnız veri
+// sürümü tutmuyorsa (saha olayı, başlayan iş) plan yazılır ama güncel sayılmaz (K4a). Yalnız son dizme planı taşır.
+export interface DizKomutu { tur: 'diz'; isler: string[]; plan: Nesne | null; onceki: { imza: string; n: number; dataVer: number } }
+export type SatirKomutu = TaslakKomutu | DizKomutu;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
 const kopya = <T>(x: T): T => structuredClone(x);
 
@@ -36,8 +42,10 @@ export const emirOf = (isId: string): string => { const i = isId.lastIndexOf('.'
 const tezgahOf = (y: string | undefined): string | null => (y === undefined ? null : y.slice(0, y.lastIndexOf('|')));
 
 // Komutun dokunduğu anahtarlar. Taşımada işin eski tezgâhı taban imzasından okunur.
-export function komutAnahtarlari(k: TaslakKomutu, taban: TaslakImzasi): string[] {
+export function komutAnahtarlari(k: SatirKomutu, taban: TaslakImzasi): string[] {
   switch (k.tur) {
+    // Dizmenin geçerliliği çatışmayla değil bayatlıkla ölçülür: başkasının değişikliği ya da düşen önceki komut onu bayatlatır.
+    case 'diz': return [];
     case 'tasi': {
       const eski = tezgahOf(taban.yer[k.isId]);
       return [`emir:${emirOf(k.isId)}`, `tezgah:${k.tezgah}`, ...(eski !== null && eski !== k.tezgah ? [`tezgah:${eski}`] : [])];
@@ -71,15 +79,16 @@ const anahtarAdi = (a: string): string => (a === '*' ? 'Plan ayarı ya da bütü
 type Diger = ReturnType<typeof digerDegisiklikleri>;
 // Komutun çatıştığı anahtarlar: '*' komutu başkasının herhangi bir değişikliğiyle, başkasının ayar değişikliği her komutla, öteki komut
 // aynı emir ya da tezgâhla çatışır (Risk açık b: emir düzeyi yetmez, kaynak da).
-function catisanAnahtarlar(d: Diger, komut: TaslakKomutu, taban: TaslakImzasi): string[] {
+function catisanAnahtarlar(d: Diger, komut: SatirKomutu, taban: TaslakImzasi): string[] {
   if (d.bos) return [];
   const ak = komutAnahtarlari(komut, taban);
+  if (ak.length === 0) return [];
   if (d.hepsi || ak.includes('*')) return ['*'];
   return ak.filter((a) => (a.startsWith('emir:') && d.emir.has(a.slice(5))) || (a.startsWith('tezgah:') && d.tezgah.has(a.slice(7))));
 }
 
 // Çatışmalar anahtar başına, komut adları kişinin okuyacağı satırlardır.
-export function catismalar(taban: TaslakImzasi, simdi: TaslakImzasi, komutlar: readonly { komut: TaslakKomutu; ne: string }[]): TaslakCatismasi[] {
+export function catismalar(taban: TaslakImzasi, simdi: TaslakImzasi, komutlar: readonly { komut: SatirKomutu; ne: string }[]): TaslakCatismasi[] {
   const d = digerDegisiklikleri(taban, simdi);
   const m = new Map<string, string[]>();
   for (const { komut, ne } of komutlar) {
@@ -89,7 +98,7 @@ export function catismalar(taban: TaslakImzasi, simdi: TaslakImzasi, komutlar: r
 }
 
 // Seçime göre kalan komutlar: çatıştığı anahtarlardan biri 'onun' seçilen komut düşer. Seçilmemiş çatışma varsa null (seçim istenir).
-export function secimeGore<T extends { komut: TaslakKomutu }>(taban: TaslakImzasi, simdi: TaslakImzasi, l: readonly T[], secim: Readonly<Record<string, 'benim' | 'onun'>>): T[] | null {
+export function secimeGore<T extends { komut: SatirKomutu }>(taban: TaslakImzasi, simdi: TaslakImzasi, l: readonly T[], secim: Readonly<Record<string, 'benim' | 'onun'>>): T[] | null {
   const d = digerDegisiklikleri(taban, simdi);
   const anahtarlar = l.map(({ komut }) => catisanAnahtarlar(d, komut, taban));
   if (anahtarlar.some((ak) => ak.some((a) => secim[a] === undefined))) return null;
@@ -138,8 +147,9 @@ export function yonUygula(deger: unknown, emirId: string, yon: 'plan' | 'ileri' 
 }
 
 // Komutun kişinin okuyacağı adı (taslak listesi ve çatışma satırı).
-export function komutAdi(k: TaslakKomutu): string {
+export function komutAdi(k: SatirKomutu): string {
   switch (k.tur) {
+    case 'diz': return 'Plan yeniden dizildi';
     case 'tasi': return `${k.isId} → ${k.tezgah}`;
     case 'plana-al': return `${k.emirId} plana alındı (${k.tezgah})`;
     case 'yon': return `${k.emirId} yönü: ${k.yon === 'plan' ? 'planınki' : k.yon === 'geri' ? 'teslimden geriye' : 'ileriye'}`;
@@ -149,7 +159,7 @@ export function komutAdi(k: TaslakKomutu): string {
 
 // Taşıma ve plana alma hesapları motorun takvimiyle dışarıda yapılır (tasima.ts, plana-al.ts); kural saf kalsın diye verilir.
 export interface TaslakHesaplari { tasima: Parameters<typeof isTasi>[3]; planaAlma: Parameters<typeof planaAl>[3] }
-export interface TaslakSatiri { komut: TaslakKomutu; ne: string; t: number }
+export interface TaslakSatiri { komut: SatirKomutu; ne: string; t: number }
 
 export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, h: TaslakHesaplari): KomutSonucu {
   switch (k.tur) {
@@ -160,16 +170,57 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
   }
 }
 
+export const DIZ_BAYAT = 'Plan bu arada değişti; taslağı yeniden dizin.';
+export const DIZ_ESKI_VERI = 'dizmeden sonra veri değişti, plan güncel sayılmadı';
 // Komutlar sırayla oynatılır; uygulanamayan komut atlanır, nedeni satırın sırasında döner (görünüm onu "artık uygulanamıyor" diye gösterir).
-export function oynat(c: unknown, l: readonly { komut: TaslakKomutu }[], kisi: KomutKisisi, h: TaslakHesaplari): { deger: unknown; hatalar: (string | null)[] } {
+// Dizme yalnız hesaplandığı yerde (aynı imza, aynı sıra) uygulanır.
+export function oynat(c: unknown, l: readonly { komut: SatirKomutu }[], kisi: KomutKisisi, h: TaslakHesaplari): { deger: unknown; hatalar: (string | null)[] } {
   let deger = c;
-  const hatalar = l.map((s) => {
-    const r = komutUygula(deger, s.komut, kisi, h);
+  const tabanDataVer = dataVerOf(c);
+  const hatalar = l.map((s, i) => {
+    const k = s.komut;
+    const r = k.tur !== 'diz' ? komutUygula(deger, k, kisi, h)
+      // Planı düşmüş (sonraki dizmenin örttüğü) dizme hiçbir şey yazmaz; bayatlığı da sorulmaz.
+      : k.plan === null ? { deger, degisti: false }
+      : k.onceki.n !== i || k.onceki.imza !== dizImzasi(deger, c) ? { hata: { tur: 'cakisma' as const, ileti: DIZ_BAYAT } }
+        : dizUygula(deger, k, kisi, tabanDataVer);
     if ('hata' in r) return r.hata.ileti;
     deger = r.deger;
     return null;
   });
   return { deger, hatalar };
+}
+
+// Dizme imzası: işlerin yeri ortak çalışmadan (başkasının yeniden dizmesi), kilit, yön ve plan ayarı görünümden (kişinin ve başkasının
+// kararları). Yer görünümden alınmaz: kişinin önceki dizmesinin planı düştüğünde (yalnız son dizme plan taşır) sonraki bayatlamasın.
+export const dizImzasi = (gorunum: unknown, taban: unknown): string => {
+  const g = imza(gorunum);
+  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}]);
+};
+export const dataVerOf = (c: unknown): number => (nesne(c) && typeof c.dataVer === 'number' ? c.dataVer : 0);
+
+// Dizilen planı görünüme işler (istemci motor/coz.ts uygulananiAl ve kayit.ts degistir planKoru'nun sunucudaki karşılığı): plan yerine
+// yazılır, kapsadığı bekleyen satırları düşer, veri sürümü artar; kalan bekleyen yoksa plan güncel sayılır. Bekleyen satırı yazılmaz, iz yazılır.
+// tabanDataVer: ortak çalışmanın şimdiki veri sürümü; dizme başka bir sürümde hesaplandıysa plan güncel sayılmaz.
+export function dizUygula(deger: unknown, k: DizKomutu, kisi: KomutKisisi, tabanDataVer: number): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  if (k.plan === null) return { deger, degisti: false };
+  const eski = nesne(deger.plan) ? deger.plan : null;
+  if (eski === null) return { hata: { tur: 'cakisma', ileti: 'Önce plan kurulmalı.' } };
+  const hepsi = k.isler.includes('*');
+  const kalan = (Array.isArray(deger.bekleyen) ? deger.bekleyen : []).filter((b) => !(hepsi || (nesne(b) && Array.isArray(b.isler) && b.isler.every((x) => k.isler.includes(String(x))))));
+  const onceki = typeof deger.dataVer === 'number' ? deger.dataVer : 0;
+  const dataVer = onceki + 1;
+  // Dizmeden sonra giren veri (imzaya girmeyen saha yazmaları) planda yoktur: plan güncel işaretlenmez, sayfa yeniden dizmeyi önerir.
+  const eskiVeri = tabanDataVer !== k.onceki.dataVer;
+  const yeni = kopya(deger);
+  yeni.plan = { ...kopya(k.plan), dataVer: kalan.length === 0 && !eskiVeri ? dataVer : eski.dataVer, kim: kisi.kim, zaman: kisi.t, kaynak: 'uygula', oncekiOzet: eski.ozet ?? null,
+    kapali: Array.isArray(deger.kapali) ? [...deger.kapali] : [] };
+  yeni.bekleyen = kalan;
+  yeni.dataVer = dataVer;
+  const ayrinti = `${hepsi ? 'Bütün işler' : k.isler.join(', ')}${eskiVeri ? `; ${DIZ_ESKI_VERI}` : ''}`;
+  yeni.iz = [{ t: kisi.t, kim: kisi.kim, rol: '', sayfa: kisi.sayfa, ne: 'Plan yeniden dizildi', ayrinti }, ...(Array.isArray(deger.iz) ? deger.iz : [])].slice(0, IZ_SINIRI);
+  return { deger: yeni, degisti: true };
 }
 
 // Uygula'nın kararı (Risk K2): seçim eksikse çatışmalar; seçimden kalan komutlardan biri uygulanamıyorsa hiçbiri yazılmaz (bozuk);

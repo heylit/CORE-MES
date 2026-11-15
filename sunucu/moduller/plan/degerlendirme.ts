@@ -122,8 +122,12 @@ function temizle(simdi: number): void {
 
 // Başlatma (463 a). Akış: oturum ve plan.planlama-oku uçta; burada maliyet görüşü, kişi başına tek iş, girdi ve sürüm. Girdi uç
 // transaction'ında okunur; hesap iş parçacığında koşar, sonuç bellekte kısa süre tutulur. Kayıt yazılmaz.
+// 3282 1d-2: taslak verilirse değerlendirme ortak çalışma yerine kişinin taslağının görünümünde koşar (görünüm aynı sürümün çalışmasından
+// kurulmuştur); bitince kişinin göreceği sonuç taslak modülüne de verilir. Kişi başına tek iş ve işçi sınırı aynıdır (Risk 1d-2 K3).
+export interface TaslakDegerlendirmesi { calisma: unknown; bitince: (sonuc: DegerlendirmeSonucu, dataVer: number) => void }
 export async function degerlendirmeBaslat(
   db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
+  taslak: TaslakDegerlendirmesi | null = null,
 ): Promise<{ is: string }> {
   const maliyetGorunur = islemVarMi(kullanici, MALIYET_ISLEMI);
   const fiyatGorunur = islemVarMi(kullanici, FIYAT_ISLEMI);
@@ -143,7 +147,7 @@ export async function degerlendirmeBaslat(
   const karGizli = genelGiderGizliMi(k.girdi.calisma);
   // Güvenlik K3 (2760 b): ek mesai seçenekleri her rolde aynı İK değeriyle seçilir, görmeyenin TL'si null döner. Öteki türlerde görmeyen
   // yalın kalır: sonuçları kâr farkına göre sıralanabilir (termin uzatma) ve değer sıra yoluyla taşınmasın.
-  let girdi = k.girdi;
+  let girdi: PlanCozumKaynagi = taslak === null ? k.girdi : { ...k.girdi, calisma: taslak.calisma };
   try {
     if (maliyetGorunur || g.istek.tur === 'plan-secenekleri') girdi = await mesaiSaatliGirdi(db, girdi, simdi);
   } catch (e) { isler.delete(is); throw e; }
@@ -153,6 +157,7 @@ export async function degerlendirmeBaslat(
     const sonuc = r.sonuc as DegerlendirmeSonucu;
     const gorunen = !maliyetGorunur ? maliyetsiz(sonuc) : !fiyatGorunur ? fiyatsiz(sonuc) : karGizli ? karsiz(sonuc) : sonuc;
     const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: gorunen };
+    taslak?.bitince(gorunen, r.dataVer);
     isler.set(is, { kisi, durum: 'bitti', cevap, bitis: Date.now() });
   }).catch((e: unknown) => {
     // Beklenmeyen hata (iş parçacığı çöktü) iç ayrıntı taşımaz.

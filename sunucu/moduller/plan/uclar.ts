@@ -10,7 +10,7 @@ import {
 import {
   calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
-  taslakCevabi, taslakKomutGovdesi, taslakSurumGovdesi, taslakUygulaCevabi, taslakUygulaGovdesi,
+  taslakCevabi, taslakDegerlendirmeGovdesi, taslakDizGovdesi, taslakKomutGovdesi, taslakSurumGovdesi, taslakUygulaCevabi, taslakUygulaGovdesi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
@@ -25,7 +25,7 @@ import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recet
 import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
-import { taslagim, taslagiUygula, taslakGeriAl, taslakKomutuEkle, taslaktanVazgec } from './taslak.ts';
+import { taslagim, taslagiUygula, taslakDegerlendirmesi, taslakDiz, taslakGeriAl, taslakKomutuEkle, taslaktanVazgec } from './taslak.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
 import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
@@ -271,6 +271,11 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => taslakGeriAl(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/taslagim/vazgec', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakSurumGovdesi, cevap: taslakCevabi,
     isle: ({ db, kullanici, govde }) => taslaktanVazgec(db, kullanici, govde) }),
+  // 3282 1d-2: taslağın görünümünde değerlendirme (sonuç ortak değerlendirme ucundan okunur) ve dizilen planın taslağa yazılması.
+  uc({ yontem: 'POST', yol: '/plan/taslagim/degerlendirme', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakDegerlendirmeGovdesi, cevap: degerlendirmeBaslatCevabi,
+    isle: ({ db, kullanici, govde }) => taslakDegerlendirmesi(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/taslagim/diz', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakDizGovdesi, cevap: taslakCevabi,
+    isle: ({ db, kullanici, govde }) => taslakDiz(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/taslagim/uygula', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakUygulaGovdesi, cevap: taslakUygulaCevabi,
     isle: ({ db, kullanici, govde }) => taslagiUygula(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,

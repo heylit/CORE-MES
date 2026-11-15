@@ -442,8 +442,15 @@ export const taslakUygulaGovdesi = z.object({
   taslakSurumu: z.number().int(),
   secimler: z.record(z.string().max(130), z.enum(['benim', 'onun'])).optional(),
 }).strict();
-// Komut satırı: sunucunun yazdığı ad ve zamanla. hata: güncel ortak çalışmaya artık uygulanamıyorsa nedeni (başladı, emir kalktı...).
-export const taslakSatiri = z.object({ komut: taslakKomutu, ne: z.string(), t: z.number(), hata: z.string().nullable() });
+// 3282 1d-2: taslağın yeniden dizilmesi. Değerlendirme taslağın görünümünde koşar (ortak çalışmanınki gibi, işçi ve kişi başına tek iş);
+// sonucu yalnız sunucu tutar. diz o işin planını taslağa komut olarak yazar; plan istemciden alınmaz (Risk 1d-2 K1).
+export const taslakDegerlendirmeGovdesi = z.object({ taslakSurumu: z.number().int(), istek: degerlendirmeIstegi }).strict();
+export const taslakDizGovdesi = z.object({ taslakSurumu: z.number().int(), is: z.guid() }).strict();
+// Satırdaki komut: kişinin gönderdikleri ve sunucunun yazdığı dizme (planı satırda gösterilmez).
+export const taslakSatirKomutu = z.union([taslakKomutu, z.object({ tur: z.literal('diz'), isler: z.array(z.string()) }).strict()]);
+// Komut satırı: sunucunun yazdığı ad ve zamanla. hata: güncel ortak çalışmaya artık uygulanamıyorsa nedeni (başladı, emir kalktı, plan
+// yeniden dizilmeli...).
+export const taslakSatiri = z.object({ komut: taslakSatirKomutu, ne: z.string(), t: z.number(), hata: z.string().nullable() });
 export const taslakCevabi = z.object({
   taslak: z.object({ surum: z.number().int(), tabanSurum: z.number().int(), satirlar: z.array(taslakSatiri) }).nullable(),
   // Taslağın uygulanmış görünümü; taslak yoksa ortak çalışma. surum ortak çalışmanın sürümüdür.
@@ -457,6 +464,8 @@ export const taslakUygulaCevabi = z.discriminatedUnion('durum', [
   z.object({ durum: z.literal('secim'), catismalar: z.array(taslakCatismasi) }),
 ]);
 export type TaslakKomutu = z.output<typeof taslakKomutu>;
+export type TaslakSatirKomutu = z.output<typeof taslakSatirKomutu>;
+export type TaslakDegerlendirmeGovdesi = z.output<typeof taslakDegerlendirmeGovdesi>;
 export type TaslakAyarlari = z.output<typeof taslakAyarlari>;
 export type TaslakCevabi = z.output<typeof taslakCevabi>;
 export type TaslakUygulaCevabi = z.output<typeof taslakUygulaCevabi>;
