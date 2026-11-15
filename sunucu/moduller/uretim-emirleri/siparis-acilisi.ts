@@ -26,7 +26,8 @@ export interface SiparisAcilisiCozuculeri {
   emreKopyala: (db: Db, kullanici: Kullanici, revizyonId: number, g: {
     adet: number; teslim: null; oncelik: number; taslak: true; projeId: number; siparisSatiriId: number; siparisPartiId: number | null; emirTuru: EmirTuru;
   }) => Promise<{ uretimEmriId: number }>;
-  emirBaglari: (db: Db, emirIdleri: readonly number[]) => Promise<{ tedarik: ReadonlySet<number>; stok: ReadonlySet<number> }>;
+  // tedarik: satın alma siparişi aşamasında (kilitler); talep: yalnız talep aşamasında (uyarır, 3272-2); stok: fişi olan (kilitler).
+  emirBaglari: (db: Db, emirIdleri: readonly number[]) => Promise<{ tedarik: ReadonlySet<number>; talep: ReadonlySet<number>; stok: ReadonlySet<number> }>;
 }
 let cozucu: SiparisAcilisiCozuculeri | null = null;
 export function siparisAcilisiCozuculeriKaydet(c: SiparisAcilisiCozuculeri | null): void { cozucu = c; }
@@ -102,7 +103,21 @@ export async function siparisAcilisiDurumu(db: Db, kullanici: Kullanici, siparis
       : { id: d.proje.id, kod: d.proje.kod, ad: d.proje.ad, bitis: null },
     satirlar,
     eksikIslemler: eksikAcmaIslemleri((i) => islemVarMi(kullanici, i as Islem)),
+    geriAlmaUyarilari: await geriAlmaUyarilari(db, d.emirler),
   };
+}
+
+// 3272-2: kalemden çözülecek ya da iptal olacak (dokunulmamış) emirlerin talep ve hazırlık uyarısı; kilitleyen bağı olan emir burada yoktur.
+async function geriAlmaUyarilari(db: Db, emirler: readonly s.SiparisEmriSatiri[]): Promise<SiparisAcilisiCevabi['geriAlmaUyarilari']> {
+  const dokunulmamis = await dokunulmamisEmirler(db, emirler);
+  if (dokunulmamis.length === 0) return [];
+  const idler = dokunulmamis.map((e) => e.id);
+  const { talep } = await cozuculer().emirBaglari(db, idler);
+  const hazirlik = await s.hazirligiTamamlananEmirler(db, idler);
+  return dokunulmamis.flatMap((e) => {
+    const nedenler = [...(talep.has(e.id) ? ['talep' as const] : []), ...(hazirlik.has(e.id) ? ['hazirlik' as const] : [])];
+    return nedenler.length === 0 ? [] : [{ emirId: e.id, emirNo: e.emirNo, nedenler }];
+  });
 }
 
 // UE-SA-02, UE-SA-05, UE-SA-06: projesi yoksa açılır, eksik partilerin emri açılır ya da çözülmüş emir yeniden bağlanır. Onayla aynı

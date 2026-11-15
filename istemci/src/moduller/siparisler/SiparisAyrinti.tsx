@@ -11,7 +11,7 @@ import { SIPARIS_DURUMU, fiyatMetni, kalanGun, miktarMetni, paraMetni, tarihMetn
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
-import { SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
+import { GeriAlmaUyarisi, SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
@@ -209,6 +209,7 @@ export function SiparisAyrinti() {
         >
           <div className="tc-sp-yigin">
             <p>{`${s.no}: ${KOMUT_METNI[komut].govde}`}</p>
+            {GEREKCELI.has(komut) && <GeriAlmaUyarisi siparisId={s.id} iptal={komut === 'iptal'} />}
             {GEREKCELI.has(komut) && (
               <CokSatir etiket={komut === 'iptal' ? 'İptal nedeni' : 'Geri alma nedeni'} required value={neden} onChange={(o) => nedenYaz(o.target.value)} maxLength={500} />
             )}

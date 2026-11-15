@@ -69,3 +69,16 @@ export function rotaBekleyenEmirler(db: Db, malzemeNolari: readonly number[]): P
     [[...malzemeNolari]],
   );
 }
+
+// 3272-2: son olayı "tamamla" olan ön hazırlık ya da hazırlık maddesi bulunan emirler (emrin kendi adımı ya da iş emrinin maddesi).
+export async function hazirligiTamamlananEmirler(db: Db, emirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  if (emirIdleri.length === 0) return new Set();
+  const satirlar = await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT a.emir_id AS id
+       FROM emir_adimi a
+       JOIN LATERAL (SELECT olay FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON o.olay = 'tamamla'
+      WHERE a.emir_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik')`,
+    [[...emirIdleri]],
+  );
+  return new Set(satirlar.map((r) => r.id));
+}

@@ -86,3 +86,28 @@ test('"Proje ve emirler" kartı: uzun emir no kısalır, rota bekleyen emir roze
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
 });
+
+test('3272-2: onay geri alma penceresi talebi ya da hazırlığı olan emri uyarıyla gösterir; taşma yok, yazma yok', async ({ page, ag, ac }) => {
+  const id = await siparisAc(page);
+  ag.sifirla();
+  const uyarili = {
+    ...ACILIS, proje: { id: 1, kod: 'ORN_SS_2099_014', ad: 'ORN-Müşteri A ORN-SS-2099-014', bitis: null },
+    geriAlmaUyarilari: [{ emirId: 901, emirNo: 'ORN-A-ORN_SS_2099_014-ORN-MIL-100-99-07-001', nedenler: ['talep', 'hazirlik'] }],
+  };
+  await page.route(`**/api/siparisler/${String(id)}`, async (r) => {
+    const c = await r.fetch();
+    await r.fulfill({ response: c, json: { ...(await c.json() as object), durum: 'onayli', onayZamani: '2099-06-01T09:00:00+03:00' } });
+  });
+  await page.route(`**/api/uretim-emirleri/siparis-acilisi/${String(id)}`, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(uyarili) }));
+  await ac(`/siparisler/${String(id)}`);
+  await page.getByRole('button', { name: 'Onayı geri al' }).click();
+  const pencere = page.getByRole('dialog', { name: 'Onayı geri al' });
+  const uyari = pencere.getByRole('status').filter({ hasText: 'Bu emirler kalemden çözülür' });
+  await expect(uyari).toBeVisible();
+  await expect(uyari).toContainText('malzeme talebi var, hazırlık maddesi tamamlanmış');
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(pencere).toBeHidden();
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});

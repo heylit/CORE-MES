@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SiparisAcilisiCevabi, SiparisAcilisiSatiri, SiparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
+import type { SiparisAcilisiCevabi, SiparisAcilisiSatiri, SiparisAcilisiSonucu, SiparisAcilisiUyarisi } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import type { SiparisAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
@@ -165,3 +165,23 @@ export function useEksikleriAc(siparisId: number) {
 }
 
 export const eksikVar = (c: SiparisAcilisiCevabi | undefined): boolean => c !== undefined && (c.proje.id === null || acilacaklar(c).length > 0);
+
+// 3272-2 (Atölye şartı): onay geri alma ve iptal dokunulmamış emri kilitlemez; talebi ya da tamamlanmış hazırlığı olan emir sessiz geçmez.
+const UYARI_METNI: Record<SiparisAcilisiUyarisi, string> = { talep: 'malzeme talebi var', hazirlik: 'hazırlık maddesi tamamlanmış' };
+export function GeriAlmaUyarisi({ siparisId, iptal }: { siparisId: number; iptal: boolean }) {
+  const acilis = useSiparisAcilisi(siparisId);
+  if (acilis.isError) return <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">Bağlı talep ve hazırlık denetlenemedi.</p>;
+  const uyarilar = acilis.data?.geriAlmaUyarilari ?? [];
+  if (uyarilar.length === 0) return null;
+  const emirler = uyarilar.map((u) => `${u.emirNo} (${u.nedenler.map((n) => UYARI_METNI[n]).join(', ')})`).join('; ');
+  const talepVar = uyarilar.some((u) => u.nedenler.includes('talep'));
+  const ek = iptal
+    ? (talepVar ? ' Malzeme talebi satın almada açık kalır; gerekmiyorsa satın almadan kapatın.' : '')
+    : ` Emir taslak kalır; ${talepVar ? 'talep ve hazırlık' : 'hazırlık'} emirde durur, yeniden onayda emir kaleme döner.${talepVar ? ' Adet değişirse talebi kontrol edin.' : ''}`;
+  return (
+    <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
+      <strong>{iptal ? 'Bu emirler iptal olur' : 'Bu emirler kalemden çözülür'}</strong>
+      {`${emirler}.${ek}`}
+    </p>
+  );
+}

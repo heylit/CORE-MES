@@ -296,6 +296,36 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
     assert.ok(await projesi(s.id), 'proje kalır');
   });
 
+  test('3272-2: dokunulmamış emirde malzeme talebi ya da tamamlanmış hazırlık uyarı olarak döner; geri alma ve iptal kilitlenmez', async () => {
+    const s = await siparis([{ malzemeNo: await malzeme(), miktar: 3 }]);
+    assert.equal((await onayla('yonetici', s.id)).durum, 200);
+    const [e] = await emirler(s.satirlar);
+    assert.deepEqual((await acilis(s.id)).govde.geriAlmaUyarilari, []);
+    const t = randomUUID();
+    await o().sahip.sorgu(`INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, iptal_nedeni, uretim_emri_id)
+                           VALUES ($1, 2099, 93272, 'Deneme talep', $2, $2, 'onayda', '', $3)`, [t, yoneticiId, e!.id]);
+    await o().sahip.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, miktar, birim) VALUES ($1, $2, 1, 'Deneme kalem', 10, 'adet')", [t, randomUUID()]);
+    const yalnizTalep = (await acilis(s.id)).govde.geriAlmaUyarilari;
+    assert.deepEqual(yalnizTalep.map((u) => [u.emirId, u.nedenler]), [[e!.id, ['talep']]]);
+    const adim = async (sira: number, asama: string) => tek('INSERT INTO emir_adimi (emir_id, sira, ad, asama) VALUES ($1, $2, $3, $4) RETURNING id', [e!.id, sira, `Deneme ${asama}`, asama]);
+    const olay = (id: number, o2: 'tamamla' | 'geri-al') => o().sahip.sorgu('INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay) VALUES ($1, $2, $3)', [id, yoneticiId, o2]);
+    const nedenler = async () => (await acilis(s.id)).govde.geriAlmaUyarilari.map((u) => u.nedenler);
+    const uretim = await adim(89, 'uretim');
+    await olay(uretim, 'tamamla');
+    assert.deepEqual(await nedenler(), [['talep']], 'tamamlanmış üretim adımı hazırlık sayılmaz');
+    const hazirlik = await adim(90, 'hazirlik');
+    await olay(hazirlik, 'tamamla');
+    assert.deepEqual(await nedenler(), [['talep', 'hazirlik']]);
+    await olay(hazirlik, 'geri-al');
+    assert.deepEqual(await nedenler(), [['talep']], 'geri alınmış madde tamamlanmış sayılmaz');
+    const onHazirlik = await adim(91, 'on_hazirlik');
+    await olay(onHazirlik, 'tamamla');
+    assert.deepEqual(await nedenler(), [['talep', 'hazirlik']], 'ön hazırlık maddesi de hazırlıktır');
+    const ip = await iptal(s.id);
+    assert.equal(ip.durum, 200, JSON.stringify(ip.govde));
+    assert.deepEqual((await emirler(s.satirlar)).map((x) => x.durum), ['iptal']);
+  });
+
   test('3272-3 a, Risk K4: plana alınmış (dokunulmuş) emir sipariş iptalini kilitler', async () => {
     const s = await siparis([{ malzemeNo: await malzeme(), miktar: 2 }]);
     assert.equal((await onayla('yonetici', s.id)).durum, 200);

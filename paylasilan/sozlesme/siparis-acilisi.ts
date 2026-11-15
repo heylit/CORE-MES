@@ -10,6 +10,10 @@ const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] as cons
 // Emri açılmayacak kalem partisinin nedeni: malzeme üretilmiyor (ticari mal, hammadde) ya da adet tam sayı değil.
 export const SIPARIS_ACILISI_ATLAMALARI = ['uretilmez', 'tam-sayi-degil'] as const;
 
+// 3272-2 (Atölye şartı, KURGU 9): dokunulmamış emirde malzeme talebi ya da tamamlanmış hazırlık maddesi varsa onay geri alma ve iptal
+// kilitlemez ama uyarır (satın alma siparişi ve stok fişi kilitler).
+export const SIPARIS_ACILISI_UYARILARI = ['talep', 'hazirlik'] as const;
+
 export const siparisAcilisiParametresi = z.object({ siparisId: z.coerce.number<number>().int().positive().max(2147483647) });
 
 export const siparisAcilisiSatiri = z.object({
@@ -37,6 +41,8 @@ export const siparisAcilisiCevabi = z.object({
   satirlar: z.array(siparisAcilisiSatiri),
   // Okuyan kişide onayla birlikte açmak için eksik olan işlemler (3272-1 b: eksikse onay reddedilir).
   eksikIslemler: z.array(z.string()),
+  // Onay geri alınınca kalemden çözülecek, iptalde iptal olacak emirlerden talebi ya da tamamlanmış hazırlığı olanlar.
+  geriAlmaUyarilari: z.array(z.object({ emirId: KIMLIK, emirNo: z.string(), nedenler: z.array(z.enum(SIPARIS_ACILISI_UYARILARI)).min(1) })),
 });
 
 export const siparisAcilisiGovdesi = z.object({ projeKodu: z.string().trim().min(1).max(24).optional() });
@@ -46,4 +52,5 @@ export type SiparisAcilisiCevabi = z.output<typeof siparisAcilisiCevabi>;
 export type SiparisAcilisiSatiri = z.output<typeof siparisAcilisiSatiri>;
 export type SiparisAcilisiGovdesi = z.input<typeof siparisAcilisiGovdesi>;
 export type SiparisAcilisiSonucu = z.output<typeof siparisAcilisiSonucu>;
+export type SiparisAcilisiUyarisi = (typeof SIPARIS_ACILISI_UYARILARI)[number];
 export type SiparisAcilisiAtlamasi = (typeof SIPARIS_ACILISI_ATLAMALARI)[number];
