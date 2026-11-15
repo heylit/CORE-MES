@@ -46,7 +46,8 @@ function PlanlamaEkrani() {
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler) : null),
     [durum, kullanici],
   );
-  const gorunum = parca === undefined ? ACILIS : gorunumOku(parca);
+  // Kök adres Kokpit'tir (3282); Motor'un ekranlı eski adresi (`/plan?ekran=veri`) Motor'u açmaya devam eder.
+  const gorunum = parca === undefined ? (sorgu.has('ekran') ? 'plan' : ACILIS) : gorunumOku(parca);
   const { bildir } = useBildirim();
   // 657 a, 1395 a: çalışma kaydı yoksa sayfa açılışta yazmaz; yazabilen kişi boş çalışmayı düğmeyle sunucuya kurdurur (Reçete ve Rota
   // kaydından) ve sayfa düzenlenebilir açılır. Yazamayan salt okunur boş görür.

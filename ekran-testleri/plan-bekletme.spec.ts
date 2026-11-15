@@ -72,7 +72,7 @@ test.describe('3050 Bekleyen emir planda', () => {
 
   test('Çizelge gününde ve haftasında bekleyen işin bloğu desenli, ipucu "Beklemede" ile başlar, lejantta yazar; öteki iş desensiz', async ({ page, ag, ac }) => {
     await kur(page);
-    await ac('/plan');
+    await ac('/plan/plan');
     await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
     await page.getByRole('toolbar', { name: 'Plan araçları' }).getByRole('button', { name: 'Gün', exact: true }).click();
     const gun = page.getByRole('region', { name: /^Gün katmanı: / });
