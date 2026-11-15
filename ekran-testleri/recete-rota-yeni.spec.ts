@@ -263,7 +263,8 @@ const bosRotaAc = async (page: Page): Promise<boolean> => {
   await sec.waitFor({ timeout: 15_000 });
   for (const v of await sec.locator('option').evaluateAll((l) => l.map((o) => (o as HTMLOptionElement).value))) {
     await sec.selectOption(v);
-    if (await page.getByText('Rota yok.', { exact: false }).first().isVisible().catch(() => false)) return true;
+    if (await page.getByRole('region', { name: 'Rotaya başla' }).isVisible().catch(() => false)) return true;
+    if (await page.getByText('Rota yok.', { exact: true }).first().isVisible().catch(() => false)) return true;
   }
   return false;
 };
@@ -282,9 +283,12 @@ test.describe('3273 rota şablonları', () => {
       await expect(pencere.getByRole('radiogroup', { name: 'Şablonlar' })).toBeVisible();
       await pencere.getByRole('button', { name: 'Vazgeç' }).click();
       await ac('/recete-rota/rota-sablonlari');
-      const liste = page.getByRole('list', { name: 'Rota şablonları' });
-      await expect(liste.getByRole('button', { name: 'Düzenle' }).first()).toBeVisible({ timeout: 15_000 });
+      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
+      await tablo.getByRole('button', { name: /^Düzenle/ }).first().click({ timeout: 15_000 });
+      const panel = page.getByRole('region', { name: /şablonunu düzenle$/ });
+      await expect(panel.getByRole('group', { name: 'Operasyon ekle' })).toBeVisible();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await panel.getByRole('button', { name: 'Paneli kapat' }).click();
       expect(ag.yazmalar.filter((x) => x !== 'POST /api/rota/karttan-taslaklar')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
@@ -293,9 +297,10 @@ test.describe('3273 rota şablonları', () => {
     test.use({ hesap: 'ornek.mudur' });
     test('şablon sayfası salt okunur; boş rotada seçici yok', async ({ page, ag, ac }) => {
       await ac('/recete-rota/rota-sablonlari');
-      const liste = page.getByRole('list', { name: 'Rota şablonları' });
-      await expect(liste.getByRole('listitem').first()).toBeVisible({ timeout: 15_000 });
-      await expect(liste.getByRole('button')).toHaveCount(0);
+      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
+      await expect(tablo.getByRole('row').nth(1)).toBeVisible({ timeout: 15_000 });
+      await expect(tablo.getByRole('button')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Yeni şablon' })).toHaveCount(0);
       await expect(page.getByText(/liste salt okunur/)).toBeVisible();
       await ac('/recete-rota/schema');
       if (await bosRotaAc(page)) await expect(page.getByRole('region', { name: 'Rotaya başla' })).toHaveCount(0);

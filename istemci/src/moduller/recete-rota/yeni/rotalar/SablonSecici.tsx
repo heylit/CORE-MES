@@ -1,28 +1,33 @@
 import { useState } from 'react';
-import { Dugme, Girdi, Pencere, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { duzenlemeAcar } from '../yetki.ts';
-import { acikRevizyon, sirali } from './kurallar.ts';
-import type { RotaEkrani } from './ortak.tsx';
+import { acikRevizyon, sirali, yururlukteki } from './kurallar.ts';
+import { OpCipi, OpSeridi, sablonSeridi } from './OpSeridi.tsx';
+import { renkSinifi, type RotaEkrani } from './ortak.tsx';
 import { benzerUrun, KONUM_ADI, katalogSuresi, onerilenler, sade, type EklemeKonumu, type RotaSablonu } from './sablonSecimi.ts';
 import { useRotaSablonKomutu, useRotaSablonlari } from './sablonVerisi.ts';
 
 // 3273 a (D): boş rotada iki önerilen şablon ve bir benzer ürün; "Başla" tek dokunuştur, ardından "Geri al" bildirimi gelir.
 // Şablonlar okunamazsa ya da hiç yoksa benzer ürün ve boş başlama yine durur.
 
-const adimOzeti = (s: RotaSablonu): string => {
-  const l = [...s.adimlar].sort((a, b) => a.sira - b.sira).map((x) => x.operasyonTipi.kod);
-  return l.length > 4 ? `${l.slice(0, 4).join(' › ')} +${String(l.length - 4)}` : l.join(' › ');
-};
+const kullanimMetni = (s: RotaSablonu): string => (s.kullanim.revizyon > 0 ? `${String(s.kullanim.revizyon)} kez kullanıldı` : 'henüz kullanılmadı');
 
-function IcineBak({ r, s }: { r: RotaEkrani; s: RotaSablonu }) {
+// Adım adım ön izleme: OP numarası şablon sırasından (10, 20, ...) tahminidir; istasyon ve süre katalogdandır.
+function AdimOnizlemesi({ r, s }: { r: RotaEkrani; s: RotaSablonu }) {
   return (
     <ol className="tc-rr1-sb-adimlar" aria-label={`${s.ad} adımları`}>
-      {[...s.adimlar].sort((a, b) => a.sira - b.sira).map((x) => {
+      {[...s.adimlar].sort((a, b) => a.sira - b.sira).map((x, i) => {
         const op = r.duzen.h.op.get(String(x.operasyonTipi.id));
-        const ist = op?.stationId ? r.duzen.h.istasyon.get(op.stationId)?.code ?? null : null;
+        const ist = op?.stationId ? r.duzen.h.istasyon.get(op.stationId) ?? null : null;
         return (
           <li key={x.sira}>
-            <b>{x.ad}</b> <span className="tc-rr1-ipucu">{op ? `${ist ?? 'istasyon yok'} · ${katalogSuresi(op)}` : 'katalogda yok, eklenmez'}</span>
+            <span className="tc-rr1-sb-opno">{`OP ${String((i + 1) * 10)}`}</span>
+            <OpCipi kod={op?.abbr ?? x.operasyonTipi.kod} renk={renkSinifi(op?.stationId ?? null)} />
+            <span className="tc-rr1-sb-adimad">
+              {x.ad}
+              <small>{op ? <>{ist ? `${ist.code} ${ist.name}` : 'istasyon yok'} <i>katalogdan, tahmini</i></> : 'katalogda yok, eklenmez'}</small>
+            </span>
+            <span className="tc-rr1-sb-sure">{op ? katalogSuresi(op) : ''}</span>
           </li>
         );
       })}
@@ -30,17 +35,34 @@ function IcineBak({ r, s }: { r: RotaEkrani; s: RotaSablonu }) {
   );
 }
 
-function SablonKarti({ r, s, neden, basla, mesgul }: { r: RotaEkrani; s: RotaSablonu; neden: string; basla: () => void; mesgul: boolean }) {
-  const [acik, setAcik] = useState(false);
+function IcineBakPaneli({ r, s }: { r: RotaEkrani; s: RotaSablonu }) {
   return (
-    <div className="tc-rr1-sb-kart" role="group" aria-label={`${s.ad} şablonu`}>
-      <span className="tc-rr1-sb-ad"><Simge ad="route" boyut="k" /> <b>{s.ad}</b>{s.varsayilan && <small> · varsayılan</small>}</span>
-      <small className="tc-rr1-ipucu">{neden} · {String(s.adimlar.length)} adım</small>
-      <span className="tc-rr1-sb-ozet">{adimOzeti(s)}</span>
-      {acik && <IcineBak r={r} s={s} />}
+    <section className="tc-rr1-sb-kutu tc-rr1-sb-icine" aria-label={`İçine bak: ${s.ad}`}>
+      <header className="tc-rr1-sb-baslik">
+        <h4>{`İçine bak: ${s.ad}`}</h4>
+        <small>{`${String(s.adimlar.length)} adım · ${kullanimMetni(s)}`}</small>
+      </header>
+      <p className="tc-rr1-ipucu">"Başla" tek dokunuşta taslağı açar ve adımları getirir; beğenmezsen "Geri al" ile boş rotaya dönersin.</p>
+      <AdimOnizlemesi r={r} s={s} />
+    </section>
+  );
+}
+
+function SablonKarti({ r, s, neden, basla, mesgul, bakilan, bak }: {
+  r: RotaEkrani; s: RotaSablonu; neden: string; basla: () => void; mesgul: boolean; bakilan: boolean; bak: () => void;
+}) {
+  return (
+    <div className={`tc-rr1-sb-kart${bakilan ? ' tc-rr1-sb-kart-secili' : ''}`} role="group" aria-label={`${s.ad} şablonu`}>
+      <span className="tc-rr1-sb-ad">
+        <b>{s.ad}</b>
+        <span title={neden}><Rozet ton="tamam">önerilen</Rozet></span>
+        {s.varsayilan && <Rozet ton="pasif" gorunum="cizgi">varsayılan</Rozet>}
+      </span>
+      <OpSeridi ogeler={sablonSeridi(s, (id) => r.duzen.h.op.get(id))} etiket={`${s.ad} operasyonları`} />
+      <small className="tc-rr1-ipucu">{`${String(s.adimlar.length)} adım · ${kullanimMetni(s)}`}</small>
       <span className="tc-rr1-sb-dugmeler">
         <Dugme tur="birincil" simge="play" yukleniyor={mesgul} onClick={basla}>Başla</Dugme>
-        <Dugme tur="ikincil" simge="eye" aria-expanded={acik} onClick={() => { setAcik(!acik); }}>{acik ? 'Kapat' : `İçine bak: ${s.ad}`}</Dugme>
+        <Dugme tur="ikincil" simge="eye" aria-label={`İçine bak: ${s.ad}`} aria-pressed={bakilan} onClick={bak}>İçine bak</Dugme>
       </span>
     </div>
   );
@@ -52,6 +74,8 @@ export function SablonSecici({ r, urunId }: { r: RotaEkrani; urunId: string }) {
   const sorgu = useRotaSablonlari(yazabilir);
   const [galeri, setGaleri] = useState(false);
   const [kaynak, setKaynak] = useState<string | null>(null);
+  const [baskaAcik, setBaskaAcik] = useState(false);
+  const [bakilan, setBakilan] = useState<number | null>(null);
   const urun = duzen.h.malzeme.get(urunId);
   if (!yazabilir || !urun) return <div className="tc-rr1-noroute">Rota yok.</div>;
   const sablonlar = sorgu.data ?? [];
@@ -60,12 +84,22 @@ export function SablonSecici({ r, urunId }: { r: RotaEkrani; urunId: string }) {
   const kopyalanabilir = [...duzen.h.malzeme.values()].filter((m) => m.id !== urunId && duzen.adimlar(m.id).length > 0)
     .sort((a, b) => a.code.localeCompare(b.code, 'tr'));
   const kaynakId = kaynak !== null && kopyalanabilir.some((m) => m.id === kaynak) ? kaynak : benzer?.urun.id ?? kopyalanabilir[0]?.id ?? '';
+  const kaynakUrun = duzen.h.malzeme.get(kaynakId) ?? null;
+  const kaynakRev = kaynakUrun ? yururlukteki(duzen.revler(kaynakUrun.id)) : null;
   const basla = (s: RotaSablonu) => { void duzen.sablondanBasla(urunId, s).then((ok) => { if (ok) setGaleri(false); }); };
   const aktifSayisi = sablonlar.filter((s) => s.aktif).length;
+  const bakilanSablon = oneri.find((x) => x.sablon.id === bakilan)?.sablon ?? null;
+  const urunSeridi = (id: string) => sirali(duzen.adimlar(id)).map((a) => {
+    const op = duzen.h.op.get(a.opId);
+    return { anahtar: a.id, kod: op?.abbr ?? op?.code ?? '?', renk: renkSinifi(a.stationId ?? op?.stationId ?? null) };
+  });
   return (
-    <div className="tc-rr1-noroute tc-rr1-sb" role="region" aria-label="Rotaya başla">
-      <p><b>Rota yok.</b> Hazır şablonla başla, benzer üründen kopyala ya da ilk adımı kendin ekle.</p>
-      <div className="tc-rr1-sb-kartlar">
+    <div className="tc-rr1-sb" role="region" aria-label="Rotaya başla">
+      <div className="tc-rr1-sb-kutu">
+        <header className="tc-rr1-sb-baslik">
+          <h3>Bu ürünün rotası yok. Nasıl başlayalım?</h3>
+          {oneri.length > 0 && <small>Ürün adına göre önerildi</small>}
+        </header>
         {sorgu.isPending && <span className="tc-rr1-ipucu">Şablonlar okunuyor…</span>}
         {sorgu.isError && (
           <span className="tc-rr1-ipucu" role="status">
@@ -79,24 +113,38 @@ export function SablonSecici({ r, urunId }: { r: RotaEkrani; urunId: string }) {
             <Dugme tur="ikincil" simge="route" onClick={() => { r.git('rota-sablonlari'); }}>Rota şablonları</Dugme>
           </span>
         )}
-        {oneri.map((x) => <SablonKarti key={x.sablon.id} r={r} s={x.sablon} neden={x.neden} mesgul={duzen.mesgul} basla={() => { basla(x.sablon); }} />)}
-        {(benzer || kopyalanabilir.length > 0) && (
-          <div className="tc-rr1-sb-kart" role="group" aria-label="Benzer ürün">
-            <span className="tc-rr1-sb-ad"><Simge ad="layers" boyut="k" /> <b>{benzer ? `Benzer ürün: ${benzer.urun.code}` : 'Başka üründen kopyala'}</b></span>
-            {benzer && <small className="tc-rr1-ipucu">{benzer.urun.name} · {String(duzen.adimlar(benzer.urun.id).length)} adım · gösterilen rota, süre ve makineleriyle</small>}
-            <select className="tc-rr1-secim" aria-label="Başka ürün" value={kaynakId} onChange={(e) => { setKaynak(e.target.value); }}>
-              {kopyalanabilir.map((m) => <option key={m.id} value={m.id}>{m.code} {m.name}</option>)}
-            </select>
-            <span className="tc-rr1-sb-dugmeler">
-              <Dugme tur="birincil" simge="layers" disabled={kaynakId === ''} onClick={() => { duzen.kopyala(kaynakId, urunId); }}>Kopyala</Dugme>
-            </span>
-          </div>
-        )}
+        <div className="tc-rr1-sb-kartlar">
+          {oneri.map((x) => (
+            <SablonKarti key={x.sablon.id} r={r} s={x.sablon} neden={x.neden} mesgul={duzen.mesgul} basla={() => { basla(x.sablon); }}
+              bakilan={bakilan === x.sablon.id} bak={() => { setBakilan(bakilan === x.sablon.id ? null : x.sablon.id); }} />
+          ))}
+          {kopyalanabilir.length > 0 && (
+            <div className="tc-rr1-sb-kart" role="group" aria-label="Benzer ürün">
+              <span className="tc-rr1-sb-ad">
+                <Simge ad="layers" boyut="k" /> <b className="tc-rr1-sb-kod">{kaynakUrun?.code ?? ''}</b>
+                {benzer && kaynakId === benzer.urun.id && (
+                  <Rozet ton="pasif" gorunum="cizgi">{`benzer ürün${kaynakRev ? ` · rev ${kaynakRev.no}` : ''}`}</Rozet>
+                )}
+              </span>
+              {kaynakUrun && <OpSeridi ogeler={urunSeridi(kaynakUrun.id)} etiket={`${kaynakUrun.code} operasyonları`} />}
+              {kaynakUrun && <small className="tc-rr1-ipucu">{`${kaynakUrun.name} · gösterilen rota, süre ve makineleriyle`}</small>}
+              {baskaAcik && (
+                <Secim etiket="Başka ürün" value={kaynakId} onChange={(e) => { setKaynak(e.target.value); }}
+                  secenekler={kopyalanabilir.map((m) => ({ deger: m.id, baslik: `${m.code} ${m.name}` }))} />
+              )}
+              <span className="tc-rr1-sb-dugmeler">
+                <Dugme tur="birincil" simge="layers" disabled={kaynakId === ''} onClick={() => { duzen.kopyala(kaynakId, urunId); }}>Kopyala</Dugme>
+                <Dugme tur="ikincil" simge="down" aria-expanded={baskaAcik} onClick={() => { setBaskaAcik(!baskaAcik); }}>Başka ürün</Dugme>
+              </span>
+            </div>
+          )}
+        </div>
+        <span className="tc-rr1-sb-dugmeler">
+          {aktifSayisi > 0 && <Dugme tur="ikincil" simge="grid" onClick={() => { setGaleri(true); }}>{`Bütün şablonlar (${String(aktifSayisi)})`}</Dugme>}
+          <Dugme tur="ikincil" simge="plus" onClick={() => { r.sec({ tur: 'adimEkle', urunId, sonraId: null }); r.paletAc(); }}>Boş başla</Dugme>
+        </span>
       </div>
-      <span className="tc-rr1-sb-dugmeler">
-        {aktifSayisi > 0 && <Dugme tur="ikincil" simge="grid" onClick={() => { setGaleri(true); }}>{`Bütün şablonlar (${String(aktifSayisi)})`}</Dugme>}
-        <Dugme tur="ikincil" simge="plus" onClick={() => { r.sec({ tur: 'adimEkle', urunId, sonraId: null }); r.paletAc(); }}>Boş başla</Dugme>
-      </span>
+      {bakilanSablon && <IcineBakPaneli r={r} s={bakilanSablon} />}
       <SablonPenceresi r={r} urunId={urunId} acik={galeri} kapat={() => { setGaleri(false); }} bos basla={basla} />
     </div>
   );
@@ -135,7 +183,9 @@ export function SablonPenceresi({ r, urunId, acik, kapat, bos = false, basla, se
           {liste.map((x) => (
             <button key={x.sablon.id} type="button" role="radio" aria-checked={s?.id === x.sablon.id} className="tc-rr1-sb-satir"
               onClick={() => { setSecili(x.sablon.id); }}>
-              <b>{x.sablon.ad}</b> <small className="tc-rr1-ipucu">{x.neden} · {String(x.sablon.adimlar.length)} adım · {adimOzeti(x.sablon)}</small>
+              <b>{x.sablon.ad}</b>
+              <OpSeridi ogeler={sablonSeridi(x.sablon, (id) => r.duzen.h.op.get(id))} etiket={`${x.sablon.ad} operasyonları`} />
+              <small className="tc-rr1-ipucu">{`${x.neden} · ${String(x.sablon.adimlar.length)} adım`}</small>
             </button>
           ))}
         </div>
@@ -150,7 +200,7 @@ export function SablonPenceresi({ r, urunId, acik, kapat, bos = false, basla, se
             ))}
           </fieldset>
         )}
-        {s && <><h4>{s.ad}</h4>{s.aciklama && <p>{s.aciklama}</p>}<IcineBak r={r} s={s} /></>}
+        {s && <><h4>{s.ad}</h4>{s.aciklama && <p>{s.aciklama}</p>}<AdimOnizlemesi r={r} s={s} /></>}
       </div>
     </Pencere>
   );

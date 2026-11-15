@@ -20,24 +20,61 @@ const kur = () => sunucuKur(YONETICI, {
   yazmalar: {
     'GET /rota/sablonlar': () => json(200, { sablonlar: SABLONLAR }),
     'POST /rota/sablonlar/2/durum': () => json(200, { sablon: { ...SABLONLAR[1], aktif: false, surum: 2 } }),
+    'POST /rota/sablonlar/3/kaydet': () => json(200, { sablon: { ...SABLONLAR[2], surum: 2 } }),
   },
 });
 const yazilar = (ist: Istek[], yol: string) => ist.filter((x) => x.yontem === 'POST' && x.yol === yol);
 
 describe('3273 a: Rota şablonları sayfası', () => {
-  it('kullanım sayısı görünür; varsayılan kullanımdan kalkmaz; kullanılmış şablon silinmez, kaldırılır', async () => {
+  it('tabloda kullanım sayısı görünür; panelde varsayılan kullanımdan kalkmaz, kullanılmış şablon silinmez, kaldırılır', async () => {
     const ist = kur();
     rrAc('/recete-rota/rota-sablonlari');
-    const liste = await screen.findByRole('list', { name: 'Rota şablonları' }, BEKLE);
-    const satirlar = within(liste).getAllByRole('listitem');
+    const tablo = await screen.findByRole('table', { name: 'Rota şablonları' }, BEKLE);
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
     expect(satirlar).toHaveLength(3);
-    expect(within(satirlar[2]!).getByRole('button', { name: 'Sil' })).toBeTruthy();
-    const [genel, cok] = satirlar;
-    expect(within(genel!).queryByRole('button', { name: 'Kullanımdan kaldır' })).toBeNull();
-    expect(within(cok!).getByText(/4 rotada kullanıldı/)).toBeTruthy();
-    expect(within(cok!).queryByRole('button', { name: 'Sil' })).toBeNull();
-    fireEvent.click(within(cok!).getByRole('button', { name: 'Kullanımdan kaldır' }));
+    expect(within(satirlar[1]!).getByRole('cell', { name: /^4$|Kullanım/ })).toBeTruthy();
+    fireEvent.click(within(satirlar[0]!).getByRole('button', { name: 'Düzenle: Genel' }));
+    let panel = await screen.findByRole('region', { name: 'Genel şablonunu düzenle' }, BEKLE);
+    expect(within(panel).queryByRole('button', { name: 'Kullanımdan kaldır' })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Sil' })).toBeNull();
+    fireEvent.click(within(satirlar[2]!).getByRole('button', { name: 'Düzenle: Mil hattı' }));
+    panel = await screen.findByRole('region', { name: 'Mil hattı şablonunu düzenle' }, BEKLE);
+    expect(within(panel).getByRole('button', { name: 'Sil' })).toBeTruthy();
+    fireEvent.click(within(satirlar[1]!).getByRole('button', { name: 'Düzenle: Çok kullanılan' }));
+    panel = await screen.findByRole('region', { name: 'Çok kullanılan şablonunu düzenle' }, BEKLE);
+    expect(within(panel).getByText(/açılmış 4 rota değişmez/)).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Sil' })).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kullanımdan kaldır' }));
     await waitFor(() => { expect(yazilar(ist, '/rota/sablonlar/2/durum')).toHaveLength(1); }, BEKLE);
     expect(yazilar(ist, '/rota/sablonlar/2/durum')[0]?.govde).toEqual({ aktif: false, surum: 1 });
+  });
+
+  it('panelde adım eklenir, sırası değişir ve kaydette bütün adımlar sürümle gider', async () => {
+    const ist = kur();
+    rrAc('/recete-rota/rota-sablonlari');
+    fireEvent.click(await screen.findByRole('button', { name: 'Düzenle: Mil hattı' }, BEKLE));
+    const panel = await screen.findByRole('region', { name: 'Mil hattı şablonunu düzenle' }, BEKLE);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Tornalama ekle' }));
+    fireEvent.change(within(panel).getByLabelText('Ad'), { target: { value: 'Mil hattı 2' } });
+    const adimlar = within(panel).getByRole('list', { name: 'Adımlar' });
+    expect(within(adimlar).getAllByRole('listitem')).toHaveLength(2);
+    fireEvent.click(within(adimlar).getAllByRole('button', { name: 'Tornalama yukarı' })[0]!);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazilar(ist, '/rota/sablonlar/3/kaydet')).toHaveLength(1); }, BEKLE);
+    expect(yazilar(ist, '/rota/sablonlar/3/kaydet')[0]?.govde).toEqual({
+      ad: 'Mil hattı 2', aciklama: null, oneriSozcukleri: ['MİL'], surum: 1,
+      adimlar: [{ operasyonTipiId: 21, ad: 'Tornalama' }, { operasyonTipiId: 21, ad: 'Ön tornalama' }],
+    });
+  });
+
+  it('Yeni şablon boş paneli açar; adımsız kaydedilemez', async () => {
+    kur();
+    rrAc('/recete-rota/rota-sablonlari');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni şablon' }, BEKLE));
+    const panel = await screen.findByRole('region', { name: 'Yeni şablon' }, BEKLE);
+    fireEvent.change(within(panel).getByLabelText('Ad'), { target: { value: 'Yeni hat' } });
+    expect((within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Tornalama ekle' }));
+    expect((within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

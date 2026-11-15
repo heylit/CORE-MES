@@ -74,11 +74,11 @@ export function sablonuYerlestir(var_: readonly Adim[], yeni: readonly Adim[], k
   return sonuc;
 }
 
-// Ön izlemede adımın süresi: katalog değeri tahminidir; değer yoksa sıfır gösterilmez.
+// Ön izlemede adımın süresi: katalog değeri tahminidir (ekran ayrıca "katalogdan, tahmini" yazar); değer yoksa sıfır gösterilmez.
+const dk = (x: number): string => x.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 export function katalogSuresi(op: Operasyon | undefined): string {
   const islem = sureSayisi(op?.cycle ?? null);
   const ayar = sureSayisi(op?.setup ?? null);
   if (islem === null && ayar === null) return 'katalogda süre yok';
-  const p = [ayar === null ? null : `hazırlık ${String(ayar)} dk`, islem === null ? null : `işlem ${String(islem)} dk`].filter((x) => x !== null);
-  return `${p.join(', ')} (katalogdan, tahmini)`;
+  return `ayar ${ayar === null ? 'katalogda yok' : `${dk(ayar)} dk`} · ${islem === null ? 'katalogda yok' : `${dk(islem)} dk/ad`}`;
 }

@@ -57,7 +57,8 @@ describe('3273 a: şablondan adım', () => {
     expect(eksik).toEqual(['Tornalama']);
   });
   it('katalog süresi tahmini işaretlenir; süre yoksa sıfır gösterilmez', () => {
-    expect(katalogSuresi(op('1', { setup: 5, cycle: 2 }))).toBe('hazırlık 5 dk, işlem 2 dk (katalogdan, tahmini)');
+    expect(katalogSuresi(op('1', { setup: 5, cycle: 2 }))).toBe('ayar 5 dk · 2 dk/ad');
+    expect(katalogSuresi(op('1', { setup: null, cycle: 0.6 }))).toBe('ayar katalogda yok · 0,6 dk/ad');
     expect(katalogSuresi(op('1', { setup: null, cycle: null }))).toBe('katalogda süre yok');
   });
 });
