@@ -171,8 +171,6 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const digerIslemler: MenuOgesi[] = [
     { anahtar: 'liste', baslik: liste ? 'Şemaya dön' : 'Ürün listesi', simge: 'list', sec: () => { setListe(!liste); } },
     ...(yeniRotaAcar(o.yetki) ? [{ anahtar: 'yeni', baslik: 'Yeni rota', simge: 'plus' as const, sec: () => { setListe(false); secimYaz({ tur: 'yeniRota' }); } }] : []),
-    ...(o.yetki.sablonYaz && revId && duzen.adimlar(revId).length > 0
-      ? [{ anahtar: 'sablon-sakla', baslik: 'Şablon olarak sakla', simge: 'route' as const, sec: () => { setSablonPenceresi('sakla'); } }] : []),
     ...(duzenlemeAcar(o.yetki, taslakAcik) ? [{ anahtar: 'excel', baslik: 'Excel ile rota adımları', simge: 'file' as const, sec: () => { setExcelAcik(true); } }] : []),
     ...(!liste && kokId ? [
       { anahtar: 'ara', baslik: araKartlar ? 'Ara kartları gizle' : 'Ara kartları göster', simge: 'box' as const,
@@ -284,9 +282,13 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
           aria-label="Operasyon paleti" title={adimPaneli ? 'Operasyon paletini kapat' : 'Operasyon paletini aç'} onClick={() => { paletYaz(!adimPaneli); }}><span className="tc-rr1-dar-gizli">Palet</span></Dugme>
       )}
-      {duzenlemeAcar(o.yetki, taslakAcik) && duzenKipi && revId && duzen.adimlar(revId).length > 0 && (
+      {duzenlemeAcar(o.yetki, taslakAcik) && revId && duzen.adimlar(revId).length > 0 && (
         <Dugme className="tc-rr1-kd" tur="ikincil" simge="route" aria-label="Şablondan ekle" title="Hazır şablonun adımlarını başa, seçili adımdan sonra, sona ya da yerine ekle"
           onClick={() => { setSablonPenceresi('ekle'); }}><span className="tc-rr1-dar-gizli">Şablondan ekle</span></Dugme>
+      )}
+      {o.yetki.sablonYaz && revId && duzen.adimlar(revId).length > 0 && (
+        <Dugme className="tc-rr1-kd" tur="ikincil" simge="check" aria-label="Şablon olarak sakla" title="Bu rotanın operasyon sırasını hazır şablon olarak sakla"
+          onClick={() => { setSablonPenceresi('sakla'); }}><span className="tc-rr1-dar-gizli">Şablon olarak sakla</span></Dugme>
       )}
       {!hatli && panelDugmesi}
       {o.yetki.rotaYaz && taslakAcik && <span className="tc-rr1-kipmetni" data-parca="taslak-acik"><Simge ad="clock" boyut="k" /> Taslak açık</span>}

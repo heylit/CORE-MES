@@ -52,8 +52,9 @@ describe('3273 a: boş rotada şablon seçici', () => {
     kur(rotaDurumu([]), null);
     rrAc('/recete-rota/schema');
     const secici = await within(await bolge()).findByRole('region', { name: 'Rotaya başla' }, BEKLE);
-    expect(await within(secici).findByText('Şablonlar okunamadı.', undefined, BEKLE)).toBeTruthy();
+    expect(await within(secici).findByText(/Şablonlar okunamadı\./, undefined, BEKLE)).toBeTruthy();
     expect(within(secici).getByRole('button', { name: 'Boş başla' })).toBeTruthy();
+    expect(within(secici).getByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
   });
 
   it('rota yazamayan kişide seçici yoktur, şablonlar okunmaz', async () => {
