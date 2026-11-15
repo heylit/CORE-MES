@@ -38,7 +38,7 @@ const calisma = (ops: Record<string, Is>, locks: Record<string, unknown>) => ({
 const json = (r: Route, v: unknown) => r.fulfill({ json: v });
 
 // Kişinin taslağı uydurmadır (3282 1d-2b): komutlar sırayla tutulur, görünüm her okumada ortak duruma oynatılarak kurulur. Taşı ve plana al
-// işi yerine koyar, ayar ve yön w'ye yazar; dizilmemiş komut planı bekletir (bekleyen), dizme temizler. Plana yaz görünümü ortak yapar.
+// işi yerine koyar, ayar ve yön w'ye yazar; dizilmemiş komut planı bekletir (bekleyen), dizme temizler. Uygula (taslak çubuğunda Canlıya al) görünümü ortak yapar.
 type Komut = { tur: string } & Record<string, unknown>;
 interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown> }
 const IS = '00000000-0000-4000-8000-0000000000a1';
@@ -97,7 +97,7 @@ async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unkn
   return { s, gorunum, tasinan: () => tur('tasi'), alinan: () => tur('plana-al'), sifirla: () => { s.ortak = ILK_DURUM; s.satirlar = []; s.surum += 1; } };
 }
 
-test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matris, sorun turu; telefonda liste; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Matris, sorun turu; telefonda liste; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   const { tasinan, alinan } = t;
   const onizleme: string[] = [];
@@ -152,9 +152,16 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matri
   await expect(tur.getByRole('button', { name: 'Sonraki adım' }).locator('.tc-pyq-rozet')).toHaveText('1');
   await tur.getByRole('button', { name: 'Sonraki adım' }).click();
   await expect(tur).toContainText('2 / 3');
+  // Turda yazılan hamleyle taslak açılır; tur bitene kadar taslak çubuğundaki Canlıya al da kapalıdır.
+  await tur.getByRole('button', { name: 'Uygula, sıradaki' }).click();
+  const turCanli = kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Canlıya al' });
+  await expect(turCanli).toBeDisabled();
+  await expect(turCanli).toHaveAttribute('title', 'Tur bitince açılır');
   await tur.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(tur).toBeHidden();
-  expect(t.s.komutlar).toEqual([]);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeHidden();
+  expect(t.s.komutlar.length).toBe(1);
+  Object.assign(t.s, { komutlar: [], degerlendirme: [], taslakSurumu: 0 });
 
   if (bilgi.project.name === 'g360') {
     // Telefon: tahta yok, liste var. Tezgâh gözünde işler tezgâha göre toplanır; Sipariş gözünde emirler sıralanır.
@@ -211,7 +218,9 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matri
     const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
     await expect(cubuk.getByText('Taslak · 1 değişiklik')).toBeVisible();
-    await expect(kokpit.getByRole('button', { name: /^Canlıya al/ })).toHaveAttribute('title', 'Önce taslağı plana yazın ya da vazgeçin.');
+    // Taslak varken canlıya alma taslak çubuğundaki tek düğmededir (3282-5 a).
+    await expect(kokpit.locator('.tc-pyq-gonder')).toHaveCount(0);
+    await expect(cubuk.getByRole('button', { name: 'Canlıya al' })).toBeVisible();
     await tasma();
     await geri.click();
     await expect(cubuk).toHaveCount(0);
@@ -355,14 +364,16 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matri
   await tur.getByRole('button', { name: 'Taslağa yaz' }).click();
   await expect(tur).toBeHidden();
 
-  // Plana yaz taslağı ortak çalışmaya yazar; taslak çubuğu kalkar, Canlıya al açılır.
+  // Taslak çubuğundaki Canlıya al taslağı ortak çalışmaya yazar ve aynı adımda Onay ve canlı bölümünü açar (3282-5 a); canlıya alma oradadır.
   const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
   await expect(cubuk.getByText('Taslak · 3 değişiklik')).toBeVisible();
   await tasma();
-  await cubuk.getByRole('button', { name: 'Plana yaz' }).click();
+  await cubuk.getByRole('button', { name: 'Canlıya al' }).click();
   await expect(cubuk).toHaveCount(0);
   expect(t.s.uygulandi).toBe(1);
-  await expect(page.getByText('Taslak plana yazıldı.')).toBeVisible();
+  await expect(page.getByText('Taslak plana yazıldı. Canlıya almak için Onay ve canlı bölümünü tamamlayın.')).toBeVisible();
+  await expect(page.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeVisible({ timeout: 10_000 });
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-1d3-onay-${bilgi.project.name}.png` });
 
   await tasma();
   expect(ag.hatalar).toEqual([]);
@@ -624,11 +635,17 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  // Üst şeritteki yön düğmesi paneli o yönle açar; değişiklik panelde etkisiyle uygulanır.
+  // Üst şeritteki yön düğmesi paneli o yönle açar; değişiklik panelde etkisiyle uygulanır. Telefonda üst şeritte yön yoktur, panelde seçilir.
   const ustYon = kokpit.getByRole('group', { name: 'Planın yönü' });
-  await expect(ustYon.getByRole('button', { name: 'İleriye planla' })).toHaveAttribute('aria-pressed', 'true');
-  await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
   const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
+  if (bilgi.project.name === 'g360') {
+    await expect(ustYon).toBeHidden();
+    await kokpit.getByTitle('Plan ayarları').click();
+    await panel.getByLabel('Planlama yönü').selectOption('geri');
+  } else {
+    await expect(ustYon.getByRole('button', { name: 'İleriye planla' })).toHaveAttribute('aria-pressed', 'true');
+    await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
+  }
   await expect(panel.getByLabel('Planlama yönü')).toHaveValue('geri');
   await expect(panel.getByLabel(/Geri planlama tamponu/)).toHaveValue('0');
   await expect(panel.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeVisible();

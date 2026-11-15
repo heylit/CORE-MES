@@ -13,14 +13,14 @@ const TASI = { tur: 'tasi', emirId: 'ORN-e1', tezgahId: 'ORN-t2' } as unknown as
 const DIZ = { tur: 'diz', isler: ['*'] } as TaslakSatiri['komut'];
 const cevap = (satirlar: TaslakSatiri[]): TaslakCevabi => ({ taslak: { surum: 3, tabanSurum: 1, satirlar }, calisma: null, surum: 1 });
 
-function ac(satirlar: TaslakSatiri[] | null, uygula: (TaslakUygulaCevabi | null)[] = []) {
+function ac(satirlar: TaslakSatiri[] | null, uygula: (TaslakUygulaCevabi | null)[] = [], canliyaAlir = true, kilit: string | null = null) {
   const { t } = sahteTaslak(1);
   t.cevap = satirlar === null ? null : cevap(satirlar);
   const u = vi.fn(() => Promise.resolve(uygula.shift() ?? null));
   t.uygula = u;
-  const yazildi = vi.fn();
-  render(<TaslakCubugu taslak={t} ozet={<span>ORN özet</span>} yazildi={yazildi} />);
-  return { t, u, yazildi };
+  const yazildi = vi.fn(), onayiAc = vi.fn();
+  render(<TaslakCubugu taslak={t} ozet={<span>ORN özet</span>} canliyaAlir={canliyaAlir} kilit={kilit} yazildi={yazildi} onayiAc={onayiAc} />);
+  return { t, u, yazildi, onayiAc };
 }
 const dugme = (ad: string, kok: HTMLElement = screen.getByRole('region', { name: 'Taslak' })) => within(kok).getByRole('button', { name: ad });
 
@@ -44,13 +44,21 @@ describe('TaslakCubugu', () => {
     expect(t.vazgec).toHaveBeenCalledTimes(1);
   });
 
-  it('artık uygulanamayan değişiklik varken Plana yaz kapalıdır ve nedeni yazılır', () => {
+  it('artık uygulanamayan değişiklik varken Canlıya al kapalıdır ve nedeni yazılır', () => {
     const { u } = ac([satir(TASI, '3.10 → T2', 'tezgâh yok')]);
     expect(screen.getByRole('alert').textContent).toBe('Artık uygulanamıyor: 3.10 → T2 (tezgâh yok)');
-    const yaz = dugme('Plana yaz');
+    const yaz = dugme('Canlıya al');
     expect([yaz.hasAttribute('disabled'), yaz.getAttribute('title')]).toEqual([true, 'Önce artık uygulanamayan değişikliği geri alın.']);
     fireEvent.click(yaz);
     expect(u).not.toHaveBeenCalled();
+  });
+
+  it('kilit verilince Canlıya al kapalıdır, ipucu kilidin nedenidir ve yazmaz', () => {
+    const { u, onayiAc } = ac([satir(TASI, 'a')], [], true, 'Tur bitince açılır');
+    const yaz = dugme('Canlıya al');
+    expect([yaz.hasAttribute('disabled'), yaz.getAttribute('title')]).toEqual([true, 'Tur bitince açılır']);
+    fireEvent.click(yaz);
+    expect([u.mock.calls.length, onayiAc.mock.calls.length]).toEqual([0, 0]);
   });
 
   it('aynı adlı iki bozuk satır ikisi de gösterilir', () => {
@@ -58,20 +66,20 @@ describe('TaslakCubugu', () => {
     expect(screen.getAllByRole('alert').map((e) => e.textContent)).toEqual(['Artık uygulanamıyor: Plan ayarı (x)', 'Artık uygulanamıyor: Plan ayarı (y)']);
   });
 
-  it('dizme bayatsa yeniden dizme önerilir; Plana yaz o zamana kadar kapalıdır', () => {
+  it('dizme bayatsa yeniden dizme önerilir; Canlıya al o zamana kadar kapalıdır', () => {
     const { t } = ac([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
     expect(screen.getByText(/Plan bu arada değişti; kararlarınız yeni plana göre yeniden dizilir\./)).toBeTruthy();
-    expect(dugme('Plana yaz').getAttribute('title')).toBe('Önce taslağı yeniden dizin.');
+    expect(dugme('Canlıya al').getAttribute('title')).toBe('Önce taslağı yeniden dizin.');
     fireEvent.click(dugme('Yeniden diz'));
     expect(t.diz).toHaveBeenCalledTimes(1);
   });
 
   it('başkası da değiştirdiyse anahtar başına seçim ister; hepsi seçilince seçimle yazar', async () => {
     const catismalar = [{ anahtar: 'emir:ORN-e1', ad: 'ORN-E1', komutlar: ['3.10 → T2'] }, { anahtar: '*', ad: 'Plan ayarı', komutlar: ['Dondurma 7'] }];
-    const { u, yazildi } = ac([satir(TASI, 'a')], [{ durum: 'secim', catismalar }, { durum: 'uygulandi', calismaSurumu: 5, uygulanan: 1, dusen: 1 }]);
-    fireEvent.click(dugme('Plana yaz'));
+    const { u, yazildi, onayiAc } = ac([satir(TASI, 'a')], [{ durum: 'secim', catismalar }, { durum: 'uygulandi', calismaSurumu: 5, uygulanan: 1, dusen: 1 }]);
+    fireEvent.click(dugme('Canlıya al'));
     const p = await screen.findByRole('dialog', { name: 'Başkası da değiştirdi' });
-    const yaz = within(p).getByRole('button', { name: 'Plana yaz' });
+    const yaz = within(p).getByRole('button', { name: 'Canlıya al' });
     expect(yaz.hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(within(p).getByRole('group', { name: 'ORN-E1' })).getByRole('button', { name: 'Benimki' }));
     expect(yaz.hasAttribute('disabled')).toBe(true);
@@ -79,8 +87,22 @@ describe('TaslakCubugu', () => {
     fireEvent.click(onunki);
     expect(onunki.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(yaz);
-    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı; 1 değişiklik başkasınınki seçildiği için düştü.'); });
+    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. 1 değişiklik başkasınınki seçildiği için düştü. Canlıya almak için Onay ve canlı bölümünü tamamlayın.'); });
     expect(u.mock.calls).toEqual([[undefined], [{ 'emir:ORN-e1': 'benim', '*': 'onun' }]]);
+    // Çatışma seçilene kadar Onay ve canlı açılmaz; yazılınca aynı adımda açılır.
+    expect(onayiAc).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'Başkası da değiştirdi' })).toBeNull();
+  });
+
+  // 3282-5 a: tek düğme taslağı yazar ve Onay ve canlı bölümünü açar; canlıya alma yetkisi olmayan "Onaya gönder" görür.
+  it('canlıya alma yetkisi yoksa düğme Onaya gönder der; yazılınca Onay ve canlı açılır, yazılamazsa açılmaz', async () => {
+    const { u, yazildi, onayiAc } = ac([satir(TASI, 'a')], [null, { durum: 'uygulandi', calismaSurumu: 5, uygulanan: 1, dusen: 0 }], false);
+    expect(screen.queryByRole('button', { name: 'Canlıya al' })).toBeNull();
+    fireEvent.click(dugme('Onaya gönder'));
+    await waitFor(() => { expect(u).toHaveBeenCalledTimes(1); });
+    expect([yazildi.mock.calls.length, onayiAc.mock.calls.length]).toEqual([0, 0]);
+    fireEvent.click(dugme('Onaya gönder'));
+    await waitFor(() => { expect(onayiAc).toHaveBeenCalledTimes(1); });
+    expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. Onaya göndermek için Onay ve canlı bölümünü tamamlayın.');
   });
 });

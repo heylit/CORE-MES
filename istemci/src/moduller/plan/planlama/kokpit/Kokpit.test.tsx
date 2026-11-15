@@ -154,15 +154,15 @@ describe('Kokpit', () => {
     return { post };
   }
 
-  it('taslak varken Geri taslağın değişiklik sayısını gösterir, son değişikliği dizmesiyle birlikte geri alır; Canlıya al kapalıdır', async () => {
+  it('taslak varken Geri taslağın değişiklik sayısını gösterir, son değişikliği dizmesiyle birlikte geri alır; Canlıya al yalnız taslak çubuğundadır', async () => {
     const { post } = taslakSunucusu([satir(AYAR, 'Plan ayarı'), satir(TASI, '3.10 → T2'), satir({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi')]);
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
     const cubuk = await screen.findByRole('region', { name: 'Taslak' });
     expect(within(cubuk).getByText('Taslak · 2 değişiklik')).toBeTruthy();
     const geri = within(screen.getByRole('group', { name: 'Geri' })).getByRole('button', { name: /Geri/ });
     expect(geri.querySelector('.tc-pyq-rozet')?.textContent).toBe('2');
-    const canli = screen.getByRole('button', { name: /Canlıya al/ });
-    expect([canli.hasAttribute('disabled'), canli.getAttribute('title')]).toEqual([true, 'Önce taslağı plana yazın ya da vazgeçin.']);
+    // Taslak varken canlıya alma taslak çubuğundaki tek düğmededir; üst şeritte ikincisi yoktur.
+    expect(screen.getAllByRole('button', { name: /Canlıya al/ }).map((b) => cubuk.contains(b))).toEqual([true]);
     fireEvent.click(geri);
     await waitFor(() => { expect(within(cubuk).getByText('Taslak · 1 değişiklik')).toBeTruthy(); });
     // Geri alınca kalan taslak yeniden dizilir: önce iki geri-al, sonra taslağın görünümünde değerlendirme.
