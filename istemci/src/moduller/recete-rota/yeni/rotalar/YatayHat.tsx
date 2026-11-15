@@ -8,6 +8,7 @@ import {
 import { SURUKLE_TURU, surukleAdim, surukleCoz } from './AkisSemasi.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
+import { SablonSecici } from './SablonSecici.tsx';
 import { SureSeridi, sureGirdisi, type YmSatiri } from './SureSeridi.tsx';
 import { ANA_HAT, hatYerlesimi, zamanCizelgesi, type AdimZamani } from './yatayHat.ts';
 
@@ -286,14 +287,7 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
         </div>
       )}
       {kok.dongu ? <div className="tc-rr1-noroute">Döngü: {m.code} kendi akışında tekrar geçiyor</div> : liste.length === 0 ? (
-        <div className="tc-rr1-noroute">
-          Rota yok. İlk adımı ekle{duzen ? ': + Adım ekle ile operasyon seç' : ''}.
-          {duzen && (
-            <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adimEkle', urunId: kok.id, sonraId: null }); r.paletAc(); }}>
-              <Simge ad="plus" boyut="k" /> Adım ekle
-            </button>
-          )}
-        </div>
+        <SablonSecici r={r} urunId={kok.id} />
       ) : (
         <div className="tc-rr1-hat" ref={kap} id={hatId} role="group" aria-label="Yatay hat">
           <div className={`tc-rr1-hat-ic${suruklenen !== null || r.surukleniyor ? ' tc-rr1-hat-suruk' : ''}`} ref={ic}>

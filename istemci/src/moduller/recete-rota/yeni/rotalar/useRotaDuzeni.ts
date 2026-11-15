@@ -6,6 +6,7 @@ import {
   acikMi, acikRevizyon, catalFarki, islemSuresiEksik, kaydetGovdesi, revizyonlari, rotaEksikleri, rotaHataMetni, sirali, yururlukteki,
   type Adim, type IsMerkezi, type Istasyon, type Makine, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
+import { sablonAdimlari, sablonuYerlestir, type EklemeKonumu, type RotaSablonu } from './sablonSecimi.ts';
 
 // Rota düzenlemesi bugünkü bağlı ekranın yoludur (208 a): değişiklik yerel taslakta tutulur, 800 ms sonra sırayla rota modülüne yazılır
 // (açık revizyon yoksa önce taslak açılır, onaydaki revizyon önce taslağa döner). Eski sürümde yerel taslak atılır, ekran sunucudakini gösterir.
@@ -387,11 +388,44 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     return true;
   };
 
+  // 3273 a: dolu taslağa şablon eklemek yerel düzenlemedir (Geri al ile döner); adımın istasyonu ve süresi katalogdandır.
+  const sablonEkle = (urunId: string, s: RotaSablonu, konum: EklemeKonumu, seciliId: string | null): boolean => {
+    const { adimlar: yeni, eksik } = sablonAdimlari(s, (x) => h.op.get(x), yeniKimlik);
+    if (yeni.length === 0) { bildir('hata', `${s.ad} şablonunun operasyonları katalogda yok; eklenmedi.`); return false; }
+    if (!degistir(urunId, (l) => sablonuYerlestir(l, yeni, konum, seciliId), `${s.ad} şablonundan ${String(yeni.length)} adım eklendi`)) return false;
+    bildir('tamam', `${s.ad} şablonundan ${String(yeni.length)} adım eklendi; süreler katalogdan, tahmini.${eksik.length ? ` Katalogda olmadığı için eklenmeyen: ${eksik.join(', ')}.` : ''}`,
+      { eylem: { etiket: 'Geri al', yap: () => { geriAl(urunId, 'geri'); } } });
+    return true;
+  };
+
+  // 3273 a: boş rotada şablonla başlama taslağı sunucuda açar; kaynak şablon bağını yalnız sunucu yazar (Risk K3). Açık taslak ya da yerel
+  // taslak varsa adımlar yerelde yerine yazılır (bağ yazılmaz). Geri al taslağı boş adımlara döndürür.
+  async function sablondanBasla(urunId: string, s: RotaSablonu): Promise<boolean> {
+    if (!yetki.rotaYaz) return false;
+    if (acikRevizyon(revler(urunId)) !== null || taslakVar(urunId)) return sablonEkle(urunId, s, 'yerine', null);
+    if (!yetki.rotaTaslakAc) return false;
+    setMesgul(true);
+    try {
+      await gonder('rota-taslak-ac', { urunId: Number(urunId), kaynak: { tur: 'sablon', sablonId: s.id }, ...rotaGovdesi(urunId) });
+    } catch (x) {
+      bildir('hata', `Şablondan rota açılamadı: ${(x as Error).message}`);
+      return false;
+    } finally {
+      setMesgul(false);
+      ciz();
+    }
+    revSecimi.current.delete(urunId);
+    gecmisler.current.set(urunId, { u: [[]], r: [] });
+    setSonDegisiklik({ urunId, metin: `${s.ad} şablonuyla başlandı`, zaman: Date.now() });
+    bildir('tamam', `${s.ad} şablonuyla taslak açıldı; süreler katalogdan, tahmini.`, { eylem: { etiket: 'Geri al', yap: () => { geriAl(urunId, 'geri'); } } });
+    return true;
+  }
+
   return {
     h, durum: d, mesgul, sonDegisiklik,
     revler: (id: string) => revler(id), gorulen, seciliRev, adimlar, taslakVar, duzenlenebilir,
     kayitHatasi: (id: string) => hatalar.current.get(id) ?? null,
-    degistir, tasi, tasimaOnayi, tasimaKarari, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala,
+    degistir, tasi, tasimaOnayi, tasimaKarari, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala, sablonEkle, sablondanBasla,
     aktifRota, rotaSec,
     // Sekmedeki rotanın revizyonları (null: Standart); sekme özeti ve yeni rotanın kaynağı için.
     rotaRevleri: (id: string, rotaId: string | null) => revizyonlari(d.routeRevs, id, rotaId),
