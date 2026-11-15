@@ -51,6 +51,7 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
     cerez['yonetici'] = await giris('yonetici');
     await kisi('proses', 'proses_muhendisi');
     await kisi('operator', 'operator');
+    await kisi('kalite', 'kalite');
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('PR-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     urunNo = (await ortam.sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
@@ -148,7 +149,8 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
     assert.deepEqual([b.govde.rota, r?.durum, r?.ozet], [null, 'eksik', 'Taslak var, yürürlükte rota yok']);
   });
 
-  test('yetki: proses.oku olmayan rol 403; olmayan kart 404', async () => {
+  test('yetki: okuyucu rol (kalite, 3290-1 a) okur; proses.oku olmayan rol 403; olmayan kart 404', async () => {
+    assert.equal((await oku('kalite', urunNo)).durum, 200);
     assert.equal((await oku('operator', urunNo)).durum, 403);
     assert.equal((await oku('yonetici', 999999999)).durum, 404);
   });
