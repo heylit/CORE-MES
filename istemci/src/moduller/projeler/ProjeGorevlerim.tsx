@@ -10,7 +10,7 @@ import { GorevPaneli } from './GorevPaneli.tsx';
 import { gorevGecikiyor } from './ProjeGorevleri.tsx';
 import './projeler.css';
 
-type Suzgec = 'hepsi' | GorevlerimTuru;
+type Suzgec = 'hepsi' | 'geciken' | GorevlerimTuru;
 
 const TUR_METNI: Record<GorevlerimTuru, string> = {
   bana: 'Bana atanan', rolume: 'Rolüme açık', kontrolumde: 'Kontrolümde', yaptim: 'Kontrol bekleyen işim',
@@ -26,11 +26,14 @@ export function ProjeGorevlerim() {
   const gun = bugun();
   const hepsi = [...(l.data?.gorevler ?? [])].sort((a, b) => SIRA[a.tur] - SIRA[b.tur] || a.planBitis.localeCompare(b.planBitis));
   const say = (t: GorevlerimTuru): number | undefined => (l.data === undefined ? undefined : hepsi.filter((g) => g.tur === t).length);
-  const geciken = l.data === undefined ? undefined : hepsi.filter((g) => g.tur !== 'yaptim' && gorevGecikiyor(g, gun)).length;
-  const satirlar = suzgec === 'hepsi' ? hepsi : hepsi.filter((g) => g.tur === suzgec);
+  // Kutular sekmelerin alt kümesidir: her kutunun aynı adlı sekmesi var.
+  const gecikenler = hepsi.filter((g) => g.tur !== 'yaptim' && gorevGecikiyor(g, gun));
+  const geciken = l.data === undefined ? undefined : gecikenler.length;
+  const satirlar = suzgec === 'hepsi' ? hepsi : suzgec === 'geciken' ? gecikenler : hepsi.filter((g) => g.tur === suzgec);
   const sekmeler: Sekme<Suzgec>[] = [
     { anahtar: 'hepsi', baslik: 'Hepsi' },
     ...(['bana', 'rolume', 'kontrolumde', 'yaptim'] as const).map((t) => ({ anahtar: t, baslik: TUR_METNI[t], sayi: say(t) ?? 0 })),
+    { anahtar: 'geciken', baslik: 'Geciken', sayi: geciken ?? 0 },
   ];
   const sutunlar: Sutun<GorevlerimSatiri>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
@@ -47,7 +50,7 @@ export function ProjeGorevlerim() {
 
   return (
     <div className="tc-prj-icerik">
-      <div className="tc-prj-ozet">
+      <div className="tc-prj-ozet tc-prj-ozet-dort">
         <SayiKarti baslik="Bana atanan" simge="clipboard-check" sayi={say('bana')} hata={l.isError} />
         <SayiKarti baslik="Rolüme açık" simge="users" sayi={say('rolume')} hata={l.isError} />
         <SayiKarti baslik="Kontrolümde" simge="eye" sayi={say('kontrolumde')} ton="uyari" hata={l.isError} />

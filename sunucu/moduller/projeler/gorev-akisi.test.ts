@@ -199,6 +199,30 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await vt().tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [g.id]))?.durum, 'yapilacak');
   });
 
+  test('dört göz (K2): kontrolde bekleyen görevin kontrol edeni ve yedeği düzenlemeyle değişmez (409); başka alan değişir', async () => {
+    const p = await projeAc();
+    const g = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolRolId: rolId('operator') });
+    await basarili(kalite1, g.id, 'basla');
+    await basarili(kalite1, g.id, 'bitir');
+    const x = (await ayrinti(planlama, g.id)).gorev;
+    assert.equal(x.durum, 'kontrolde');
+    const govde = (d: Record<string, unknown>) => ({
+      kilometreTasiId: null, ad: x.ad, aciklama: null, sorumluKisiId: x.sorumluKisiId, planBaslangic: x.planBaslangic, planBitis: x.planBitis,
+      oncekiGorevId: null, gercekBaslangic: x.gercekBaslangic, gercekBitis: x.gercekBitis, ilerleme: x.ilerleme, durum: x.durum, surum: x.surum,
+      kontrolRolId: x.kontrolRolId, ...d,
+    });
+    const yol = `/projeler/gorevler/${g.id}/guncelle`;
+    const kontrolDegisir = await gonder(planlama, yol, govde({ kontrolRolId: null, kontrolKisiId: planlama.id }));
+    assert.equal(kontrolDegisir.statusCode, 409, kontrolDegisir.body);
+    assert.equal((await gonder(planlama, yol, govde({ yedekKontrolRolId: rolId('kalite') }))).statusCode, 409, 'yedek eklemek de değiştirmektir');
+    assert.equal((await gonder(planlama, yol, govde({ kontrolRolId: null }))).statusCode, 409, 'kontrol edeni kaldırmak da');
+    const ad = await gonder(planlama, yol, govde({ ad: 'Akış görevi (adı düzeldi)' }));
+    assert.equal(ad.statusCode, 200, ad.body);
+    const son = await vt().tek<{ durum: string; kontrol_rol_id: number | null; kontrol_kisi_id: number | null }>(
+      'SELECT durum, kontrol_rol_id, kontrol_kisi_id FROM projeler_gorev WHERE id = $1', [g.id]);
+    assert.deepEqual(son, { durum: 'kontrolde', kontrol_rol_id: rolId('operator'), kontrol_kisi_id: null });
+  });
+
   test('ayrıntı: projeyi okuyamayan yalnız kendisine düşen görevi açar; ötekisi 404; işlemsiz 403', async () => {
     const p = await projeAc();
     const kendi = await gorevAc(p, { sorumluKisiId: operator1.id });

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  BASKASI_USTLENDI, GOREV_KAPALI, KENDI_ISIN, KONTROLDE_DEGIL, KONTROLLU_DURUM, KONTROLSUZ_KONTROLDE, KONTROLUN_DEGIL, SANA_ATANMADI, USTLENILEMEZ,
-  YEDEK_GUN, bitirSonucu, duzenlemeDurumReddi, gorevIzinleri, gorevlerimTuru, kontrolReddi, sablonTarihleri, ustlenReddi,
+  BASKASI_USTLENDI, GOREV_KAPALI, KENDI_ISIN, KONTROLDE_ATAMA, KONTROLDE_DEGIL, KONTROLLU_DURUM, KONTROLSUZ_KONTROLDE, KONTROLUN_DEGIL, SANA_ATANMADI, USTLENILEMEZ,
+  YEDEK_GUN, bitirSonucu, duzenlemeDurumReddi, gorevIzinleri, kontroldeAtamaReddi, gorevlerimTuru, kontrolReddi, sablonTarihleri, ustlenReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi } from './kurallar.ts';
 
@@ -46,6 +46,14 @@ describe('3269 görev kuralları (saf)', () => {
     assert.equal(duzenlemeDurumReddi('bitti', 'bitti', true), null);
     assert.equal(duzenlemeDurumReddi('kontrolde', 'suruyor', true), null);
     assert.equal(duzenlemeDurumReddi('suruyor', 'bitti', false), null);
+  });
+
+  test('düzenleme (K2): kontrolde bekleyen görevde kontrol eden ve yedek değişmez; başka durumda değişir', () => {
+    const a = { kontrolKisiId: null, kontrolRolId: 3, yedekKontrolKisiId: null, yedekKontrolRolId: null };
+    assert.equal(kontroldeAtamaReddi('kontrolde', a, a), null);
+    assert.equal(kontroldeAtamaReddi('kontrolde', a, { ...a, kontrolRolId: null, kontrolKisiId: 9 }), KONTROLDE_ATAMA);
+    assert.equal(kontroldeAtamaReddi('kontrolde', a, { ...a, yedekKontrolKisiId: 4 }), KONTROLDE_ATAMA);
+    assert.equal(kontroldeAtamaReddi('suruyor', a, { ...a, kontrolRolId: 5 }), null);
   });
 
   test('görevlerim türü: bana, rolüme, kontrolümde, yaptım; kapanmış görev yok', () => {

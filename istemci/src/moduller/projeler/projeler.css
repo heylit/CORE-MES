@@ -59,3 +59,7 @@ button.tc-prj-pano-kart { cursor: pointer; }
 /* 3269: şablon kalemi formda çerçeveli bir blok; alanlar ortak form ızgarasında. */
 .tc-prj-kalem { display: flex; flex-direction: column; gap: var(--b-3); margin: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); min-width: 0; }
 .tc-prj-kalem legend { padding: 0 var(--b-2); font-weight: 700; }
+/* Dört özet kutusu 1024 ve üstünde tek satır, tablette iki iki; telefonda alt alta. */
+.tc-prj-ozet.tc-prj-ozet-dort { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1024px) { .tc-prj-ozet.tc-prj-ozet-dort { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 767px) { .tc-prj-ozet.tc-prj-ozet-dort { grid-template-columns: minmax(0, 1fr); } }

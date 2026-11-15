@@ -24,7 +24,7 @@ import {
   YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
-  gorevIzinleri, gorevlerimTuru, kontrolluMu, kontrolReddi, sablonTarihleri, ustlenReddi,
+  gorevIzinleri, gorevlerimTuru, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -371,6 +371,11 @@ export async function gorevDuzenle(db: Db, kisiId: number, id: number, g: GorevG
   if ('ileti' in d) throw dogrulama(d.ileti, d.alan);
   // Kontrol edeni kaldırıp aynı yazmada bitirmek de dört gözü atlar: eski ya da yeni atamada kontrol eden varsa kontrollüdür.
   const kontrollu = kontrolluMu({ kontrolKisiId: mevcut.kontrol_kisi_id, kontrolRolId: mevcut.kontrol_rol_id }) || kontrolluMu(g);
+  const atamaReddi = kontroldeAtamaReddi(mevcut.durum, {
+    kontrolKisiId: mevcut.kontrol_kisi_id, kontrolRolId: mevcut.kontrol_rol_id,
+    yedekKontrolKisiId: mevcut.yedek_kontrol_kisi_id, yedekKontrolRolId: mevcut.yedek_kontrol_rol_id,
+  }, g);
+  if (atamaReddi !== null) throw cakisma(atamaReddi);
   const durumReddi = duzenlemeDurumReddi(mevcut.durum, g.durum, kontrollu);
   if (durumReddi !== null) throw dogrulama(durumReddi, 'durum');
   if (g.oncekiGorevId !== null) {

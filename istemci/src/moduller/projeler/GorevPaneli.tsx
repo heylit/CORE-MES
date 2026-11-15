@@ -29,14 +29,14 @@ export function useAtamaSecenekleri(): { secenekler: Secenek[]; hata: string | u
 }
 
 // Seçili atama listede yoksa (pasif kişi gibi) adıyla eklenir; seçim kaybolmaz.
-export function AtamaSecimi({ etiket, deger, ad, secenekler, hata, bos, ipucu, degistir }: {
+export function AtamaSecimi({ etiket, deger, ad, secenekler, hata, bos, ipucu, kilitli = false, degistir }: {
   etiket: string; deger: string; ad: string | null; secenekler: readonly Secenek[]; hata: string | undefined; bos: string; ipucu?: string;
-  degistir: (deger: string) => void;
+  kilitli?: boolean; degistir: (deger: string) => void;
 }) {
   const liste = deger !== '' && !secenekler.some((s) => s.deger === deger) ? [{ deger, baslik: ad ?? deger }, ...secenekler] : secenekler;
   return (
     <Secim
-      etiket={etiket} value={deger} bosSecenek={bos} secenekler={liste} hata={hata} {...(ipucu === undefined ? {} : { ipucu })}
+      etiket={etiket} value={deger} bosSecenek={bos} secenekler={liste} hata={hata} disabled={kilitli} {...(ipucu === undefined ? {} : { ipucu })}
       onChange={(e) => { degistir(e.target.value); }}
     />
   );

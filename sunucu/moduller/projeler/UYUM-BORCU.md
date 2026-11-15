@@ -16,6 +16,8 @@
 - 3269-B'ye kalan (3269 a): rol görevi 2 gün sahipsiz kalınca ve kontrol 2 gün bekleyince yedeğe bildirim zamanlayıcı ister; bugün yedek 2 gün sonra onaylayabilir ama bildirim almaz (kendisi ekranda görür). Ana sayfa sayı kutusu ortak mekanizma ister; bugün Proje görevlerim sayfasında dört sayı kartı var.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kod tekilliği (`projeler_proje_kod_tekil`) çift kaydı önlüyor; yalnız bilgi notu. Kullanmadığı çekirdek kalıbı: tekrar koruması yok (açma komutu kod tekilliğiyle zaten çift kayıt açmaz). Veri kapsamı yok (proje iş merkezine bağlı değil).
 
+- Risk N1 (3269-A kod bakışı): görev yazan, kontrolde bekleyen görevi düzenlemeyle gerekçesiz 'suruyor'a çevirebilir; olay defterine yazılmaz. Kapatılmadı: kontrol eden ve yedek değişmediğinden (409) bu yol kalkarsa kontrol edeni ayrılan görev kilitli kalır. Düzenlemeyle çıkışın 'geri' olayı yazması 3269-B'de.
+
 ## Bilgi (borç değil)
 
 Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).

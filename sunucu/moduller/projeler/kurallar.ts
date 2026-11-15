@@ -219,6 +219,16 @@ export function duzenlemeDurumReddi(eski: string, yeni: string, kontrollu: boole
   return null;
 }
 
+export const KONTROLDE_ATAMA = 'Kontrol bekleyen görevin kontrol edeni ve yedeği değişmez; önce onaylanmalı ya da geri gönderilmeli.';
+type KontrolAtamasi = { kontrolKisiId: number | null; kontrolRolId: number | null; yedekKontrolKisiId: number | null; yedekKontrolRolId: number | null };
+// K2: kontrolü kimin yapacağı iş bittikten sonra seçilmez; kontrolde bekleyen görevde kontrol eden ve yedeği sabittir.
+export function kontroldeAtamaReddi(durum: string, eski: KontrolAtamasi, yeni: KontrolAtamasi): string | null {
+  if (durum !== 'kontrolde') return null;
+  const degisti = eski.kontrolKisiId !== yeni.kontrolKisiId || eski.kontrolRolId !== yeni.kontrolRolId
+    || eski.yedekKontrolKisiId !== yeni.yedekKontrolKisiId || eski.yedekKontrolRolId !== yeni.yedekKontrolRolId;
+  return degisti ? KONTROLDE_ATAMA : null;
+}
+
 // Kişinin bu görevde açılan düğmeleri (ekran); yazma aynı kurallarla ayrıca denetlenir.
 export function gorevIzinleri(
   g: GorevAtamasi, k: Isleyen, islem: { isle: boolean; kontrol: boolean }, bitirenId: number | null, kontroldeGun: number,

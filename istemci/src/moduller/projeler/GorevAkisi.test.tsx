@@ -28,6 +28,7 @@ const LISTE: GorevlerimCevabi = {
     satir({}),
     satir({ id: 8, ad: 'İlk parça onayı', durum: 'yapilacak', tur: 'rolume', sorumluKisiId: null, sorumluAd: null, yapanRolId: 2, yapanRolAd: 'Kalite',
       kontrolRolId: null, kontrolRolAd: null, izinler: { ...IZIN, onaylayabilir: false, ustlenebilir: true } }),
+    satir({ id: 10, ad: 'Gecikmiş sertifika', durum: 'suruyor', tur: 'bana', planBitis: '2020-01-03', izinler: { ...IZIN, onaylayabilir: false } }),
   ],
 };
 const ayrinti = (g: Gorev): GorevAyrintisiCevabi => ({
@@ -92,6 +93,17 @@ describe('3269 proje görevlerim ve şablon', () => {
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
     expect(cagrilar.find((c) => c.yontem === 'POST')).toMatchObject({ yol: '/projeler/gorevler/7/onayla', govde: { surum: 4 } });
     expect(await within(panel).findByText('Onaylandı')).toBeTruthy();
+  });
+
+  it('Geciken kutusunun aynı adlı sekmesi yalnız geciken görevi gösterir', async () => {
+    sunucuKur(KONTROLCU);
+    ac('/proje-gorevlerim');
+    const tablo = await screen.findByRole('table', { name: 'Proje görevlerim' });
+    await within(tablo).findByText('Gecikmiş sertifika');
+    fireEvent.click(screen.getByRole('tab', { name: /Geciken/ }));
+    await waitFor(() => { expect(within(tablo).queryByText('İlk parça onayı')).toBeNull(); });
+    expect(within(tablo).getByText('Gecikmiş sertifika')).toBeTruthy();
+    expect(within(tablo).queryByText('Teknik resim kontrolü')).toBeNull();
   });
 
   it('geri gönderme gerekçesiz gitmez; gerekçeyle gider', async () => {

@@ -135,6 +135,7 @@ function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: 
 }
 
 // "Kontrolde" yalnız akışla gelinir (yapan "Bitti" der); düzenlemede seçenek olarak yalnız görev zaten kontroldeyse durur.
+const KONTROLDE_IPUCU = 'Kontrol bekliyor: önce onaylanmalı ya da geri gönderilmeli.';
 const durumSecenekleri = (mevcut: GorevDurumu | undefined) => GOREV_DURUMLARI
   .filter((d) => d !== 'kontrolde' || mevcut === 'kontrolde')
   .map((d) => ({ deger: d, baslik: GOREV_DURUM_METNI[d] }));
@@ -201,6 +202,8 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   const [gercekBitis, gercekBitisYaz] = useState(gorev?.gercekBitis ?? '');
   const [ilerleme, ilerlemeYaz] = useState(gorev === null ? '0' : String(gorev.ilerleme));
   const [durum, durumYaz] = useState<GorevDurumu>(gorev?.durum ?? 'yapilacak');
+  // Sunucu da reddeder (409): kontrolde bekleyen görevin kontrol edeni iş bittikten sonra seçilmez.
+  const kontrolKilitli = gorev?.durum === 'kontrolde';
   const atamalar = useAtamaSecenekleri();
   const tasSecenekleri = yonetim.kilometreTaslari
     .filter((t) => t.etkin || t.id === gorev?.kilometreTasiId)
@@ -269,14 +272,14 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
         />
         <AtamaSecimi
           etiket="Kontrol eden" deger={kontrol} ad={gorev === null ? null : atamaMetni(gorev.kontrolKisiAd, gorev.kontrolRolAd)}
-          secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok" ipucu="Seçilirse görev onayla biter; yapan kendi işini onaylayamaz."
-          degistir={kontrolYaz}
+          secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok" kilitli={kontrolKilitli}
+          ipucu={kontrolKilitli ? KONTROLDE_IPUCU : 'Seçilirse görev onayla biter; yapan kendi işini onaylayamaz.'} degistir={kontrolYaz}
         />
         {kontrol !== '' && (
           <AtamaSecimi
             etiket="Yedek kontrol eden" deger={yedek} ad={gorev === null ? null : atamaMetni(gorev.yedekKontrolKisiAd, gorev.yedekKontrolRolAd)}
-            secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok"
-            ipucu="Kontrol 2 gün bekler ya da kontrol eden işi yapan kişiyse yedek onaylar." degistir={yedekYaz}
+            secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok" kilitli={kontrolKilitli}
+            ipucu={kontrolKilitli ? KONTROLDE_IPUCU : 'Kontrol 2 gün bekler ya da kontrol eden işi yapan kişiyse yedek onaylar.'} degistir={yedekYaz}
           />
         )}
         <Girdi etiket="Plan başlangıç" type="date" required value={planBaslangic} onChange={(e) => { planBaslangicYaz(e.target.value); }} />
