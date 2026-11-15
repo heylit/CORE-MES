@@ -197,18 +197,18 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
   const ymSatirlari: YmSatiri[] = ymBantlari.map((b) => ({ kod: b.gm.code, hedef: b.a, dugum: b.alt }));
   const suruk = duzen ? { basla: (id: string) => { setSuruklenen(id); }, bitir: () => { setSuruklenen(null); setBirakYeri(null); } } : null;
   // Bırakma: hattın adımı yalnız kendi şeridinde yer değiştirir; paletteki operasyon bırakılan yerin ardına (o adımın şeridine) eklenir.
-  const birak = (sonraId: string, v: string) => {
+  const birak = (sonraId: string | null, v: string) => {
     r.surukleBitti(); setSuruklenen(null); setBirakYeri(null);
     const c = surukleCoz(v);
     const geriAl = { etiket: 'Geri al', yap: () => { r.duzen.geriAl(kok.id, 'geri'); } };
     if (c?.tur === 'adim' && c.urunId === kok.id) {
       const tasinan = liste.find((x) => x.id === c.adimId);
-      const sonra = liste.find((x) => x.id === sonraId);
-      if (!tasinan || !sonra || adimDali(tasinan) !== adimDali(sonra)) return;
+      const sonra = sonraId === null ? null : liste.find((x) => x.id === sonraId);
+      if (!tasinan || sonra === undefined || (sonra && adimDali(tasinan) !== adimDali(sonra))) return;
       if (r.duzen.tasi(kok.id, (l) => seritteYerlestir(l, c.adimId, sonraId), 'Adım taşındı')) {
-        bildir('tamam', `${adimAdi(tasinan)} ${adimAdi(sonra)} ardına taşındı.`, { eylem: geriAl });
+        bildir('tamam', sonra ? `${adimAdi(tasinan)} ${adimAdi(sonra)} ardına taşındı.` : `${adimAdi(tasinan)} şeridin başına taşındı.`, { eylem: geriAl });
       }
-    } else if (c?.tur === 'op') {
+    } else if (c?.tur === 'op' && sonraId !== null) {
       const op = h.op.get(c.opId);
       const yeni = yeniAdim(op, yeniKimlik());
       const l2 = kolaEkle(r.duzen.adimlar(kok.id), sonraId, yeni);
@@ -217,6 +217,15 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
         bildir('tamam', `${op?.name ?? 'Adım'} eklendi.`, { eylem: geriAl });
       }
     }
+  };
+
+  // Adımın üstüne bırakma: öndeki adım arkaya giderse hedefin ardına, arkadaki öne gelirse hedeften önceye (şeridin başı dahil).
+  const yerineBirak = (tasinan: Adim, hedef: Adim, v: string) => {
+    const serit = liste.filter((x) => adimDali(x) === adimDali(hedef));
+    const ileri = serit.indexOf(tasinan) < serit.indexOf(hedef);
+    if (ileri) { birak(hedef.id, v); return; }
+    const once = serit.filter((x) => x.id !== tasinan.id);
+    birak(once[once.indexOf(hedef) - 1]?.id ?? null, v);
   };
 
   const sonImza = useRef('');
@@ -379,7 +388,16 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
                     </button>
                   )}
                 </div>,
-                <div key={`k${a.id}`} className={`tc-rr1-hat-hucre tc-rr1-dalserit-${String(Math.min(seritNo(a), 7))}`} data-k={sut(c)} data-s={sat(a, 1)}>
+                <div key={`k${a.id}`} className={`tc-rr1-hat-hucre tc-rr1-dalserit-${String(Math.min(seritNo(a), 7))}${birakYeri === `k${a.id}` ? ' tc-rr1-hat-hucre-ustunde' : ''}`}
+                  data-k={sut(c)} data-s={sat(a, 1)}
+                  // 3295: şeritteki bir adımın üstüne bırakılan adım onun yerini alır; ilk adımın yerine de böyle taşınır (artı yalnız "ardına" idi).
+                  onDragOver={surukAdimi && surukAdimi.id !== a.id && adimDali(surukAdimi) === dal ? (e) => {
+                    e.preventDefault(); if (birakYeri !== `k${a.id}`) setBirakYeri(`k${a.id}`);
+                  } : undefined}
+                  onDragLeave={() => { if (birakYeri === `k${a.id}`) setBirakYeri(null); }}
+                  onDrop={surukAdimi && surukAdimi.id !== a.id && adimDali(surukAdimi) === dal ? (e) => {
+                    e.preventDefault(); yerineBirak(surukAdimi, a, e.dataTransfer.getData(SURUKLE_TURU));
+                  } : undefined}>
                   <HatKarti r={r} d={kok} a={a} t={z.zaman.get(a.id)} secili={seciliAdim === a.id} suruk={suruk} />
                 </div>,
                 <div key={`c${a.id}`} className="tc-rr1-hat-alt" data-k={sut(c)} data-s={sat(a, 2)}>

@@ -92,6 +92,21 @@ describe('3248-2 çalışma alanı', () => {
     expect(sira(k.govde)?.map((x) => x[0])).toEqual([10, 20, 30, 40, 50]);
   }, 30000);
 
+  it('adımın üstüne bırakılan adım onun yerini alır; şeridin başına da taşınır (3295)', async () => {
+    const k = kur();
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const hat = hatAl(bolge);
+    // Başka şeridin adımının üstüne bırakılmaz.
+    expect(surukle(kart(hat, 30), kart(hat, 40).parentElement!)).toBe(false);
+    // Arkadaki öne gelir: OP 20, OP 10'un üstüne bırakılınca şeridin başına geçer.
+    // OP 20 dalın çatalı olduğundan taşıma önce onay ister (2542 E).
+    expect(surukle(kart(hat, 20), kart(hat, 10).parentElement!)).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Taşı' }));
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([20, 10, 30, 40, 50]);
+  }, 30000);
+
   it('Öne / Geriye yatay hatta kendi şeridinde yer değiştirir', async () => {
     const k = kur();
     rrAc('/recete-rota/schema');
