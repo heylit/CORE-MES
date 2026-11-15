@@ -373,7 +373,9 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
   expect(t.s.uygulandi).toBe(1);
   await expect(page.getByText('Taslak plana yazıldı. Canlıya almak için Onay ve canlı bölümünü tamamlayın.')).toBeVisible();
   await expect(page.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeVisible({ timeout: 10_000 });
-  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-1d3-onay-${bilgi.project.name}.png` });
+  // Bildirim kaybolsa da bölüm, kişi oradayken taslağın ortak plana yazıldığını ve canlının değişmediğini söyler (Risk 3282 1d-3 N1).
+  await expect(kokpit.locator('[data-sek="onay"]').getByRole('status').filter({ hasText: 'Taslak ortak plana yazıldı; canlı plan değişmedi.' })).toBeVisible();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-1d4-onay-${bilgi.project.name}.png` });
 
   await tasma();
   expect(ag.hatalar).toEqual([]);

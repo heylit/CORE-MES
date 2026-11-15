@@ -95,6 +95,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [oneri, setOneri] = useState<TurAdayi | null>(null);
   // Stüdyo'dan "Kokpit'te aç" ile gelindiyse Onay ve canlı açık başlar.
   const [onayAcik, setOnayAcik] = useState(onayIstegiVar);
+  // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
+  const [onayTaslaktan, setOnayTaslaktan] = useState(false);
   const [ayarAcik, setAyarAcik] = useState(false);
   // Üst şeritteki yön düğmesi paneli o yönle açar (3282 1c); değişiklik panelde etkisiyle uygulanır.
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
@@ -357,7 +359,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
           <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
-            disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayAcik(!onayAcik); }}>
+            disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(!onayAcik); }}>
             {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
           </Dugme>
         )}
@@ -365,13 +367,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {taslak && (
         <TaslakCubugu
           taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
-          onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayAcik(true); }}
+          onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayTaslaktan(true); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
       )}
       {onayAcik ? (
         <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-          <KokpitOnay o={o} c={c} p={p} kapat={() => { setOnayAcik(false); }} />
+          <KokpitOnay o={o} c={c} p={p} taslakYazildi={onayTaslaktan} kapat={() => { setOnayTaslaktan(false); setOnayAcik(false); }} />
         </Suspense>
       ) : (
       <div className="tc-pyq-govde">

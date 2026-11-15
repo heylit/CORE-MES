@@ -149,6 +149,7 @@ describe('Kokpit', () => {
     vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve((yol === '/plan/taslagim' ? taslakCevabi(simdi) : null) as never));
     const post = vi.spyOn(api, 'post').mockImplementation((yol: string) => {
       if (yol === '/plan/taslagim/geri-al') simdi = simdi.slice(0, -1);
+      if (yol === '/plan/taslagim/uygula') { simdi = []; return Promise.resolve({ durum: 'uygulandi', calismaSurumu: 5, uygulanan: 1, dusen: 0 } as never); }
       return Promise.resolve(taslakCevabi(simdi) as never);
     });
     return { post };
@@ -171,6 +172,32 @@ describe('Kokpit', () => {
       ['/plan/taslagim/geri-al', { taslakSurumu: 13 }], ['/plan/taslagim/geri-al', { taslakSurumu: 12 }],
       ['/plan/taslagim/degerlendirme', { taslakSurumu: 11, istek: { tur: 'plan-uygula', isler: ['*'] } }],
     ]);
+  });
+
+  // Risk 3282 1d-3 N1: tek düğme ortak plana yazar; Onay ve canlı bunu kalıcı söyler, canlı değişince ya da bölüm kapanınca söylemez.
+  it('taslak çubuğundan yazılınca Onay ve canlıda taslağın yazıldığı satırı durur; canlı değişince ve üst düğmeyle açılınca yoktur', async () => {
+    taslakSunucusu([satir(TASI, '3.10 → T2')]);
+    const sen = (canliSurum: number) => ({ canli: null, canliSurum, senaryolar: [] });
+    const sayfa = (canliSurum: number) => (
+      <MemoryRouter><BildirimSaglayici>
+        <Kokpit
+          depo={{ ...DEPO, senaryolar: sen(canliSurum) } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
+          yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
+        />
+      </BildirimSaglayici></MemoryRouter>
+    );
+    const { rerender } = render(sayfa(3));
+    const SATIR = 'Taslak ortak plana yazıldı; canlı plan değişmedi.';
+    const satirVar = () => screen.queryAllByRole('status').some((e) => e.textContent === SATIR);
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(satirVar()).toBe(true);
+    rerender(sayfa(4));
+    await waitFor(() => { expect(satirVar()).toBe(false); });
+    fireEvent.click(screen.getByRole('button', { name: 'Planı düzenle' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(satirVar()).toBe(false);
   });
 
   // Komut başka sayfada çalışmayı değiştirdiyse ortak plan kendiliğinden yeniden dizilir; taslak varken dizilmez (örnek çalışmanın planı bayattır).
