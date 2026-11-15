@@ -56,6 +56,11 @@ const UC: DegerlendirmeUcu = {
 };
 export async function degerlendirmeIste(surum: number, istek: SunucuIstegi, u: DegerlendirmeUcu = UC): Promise<SunucuCevabi> {
   const { is } = await u.post<{ is: string }>(DEGERLENDIRME_YOLU, { surum, istek });
+  return degerlendirmeBekle(is, u);
+}
+
+// Başlatılmış işin sonucu (3282 1d-2: taslağın değerlendirmesi kendi ucundan başlar, sonucu aynı uçtan okunur).
+export async function degerlendirmeBekle(is: string, u: DegerlendirmeUcu = UC): Promise<SunucuCevabi> {
   const son = u.simdi() + SONUC_SINIRI_MS;
   for (let tur = 0; u.simdi() < son; tur++) {
     const d = await u.get<DegerlendirmeDurumuCevabi>(`${DEGERLENDIRME_YOLU}/${is}`);

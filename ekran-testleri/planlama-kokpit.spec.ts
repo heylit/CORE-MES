@@ -1,9 +1,9 @@
-import type { Route } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kart 3151: Kokpit (Planlama > Kokpit). Genişlik projeden gelir (360, 768, 1280). Çalışma okuması ve sunucu komutları ağ katmanında uydurma
 // cevaplarla verilir (page.route); veritabanına yazılmaz. Akış: tahta açılır, iş sağ tıkla tutulup bırakılır (önizleme, sonra iş taşı),
-// Geri / İleri sayar, Matris yükü ve emirleri tek ekranda gösterir, ayrıntı ve çözüm yerinde açılır, sorun turu adım adım ilerler, plansız emir ayrıntıdan plana alınır. Telefonda tahta yerine liste ve
+// taslağa yazar ve Geri sayar, Matris yükü ve emirleri tek ekranda gösterir, ayrıntı ve çözüm yerinde açılır, sorun turu adım adım ilerler, plansız emir ayrıntıdan plana alınır. Telefonda tahta yerine liste ve
 // alttan ayrıntı vardır. Sayfa hiçbir adımda yatay taşmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
@@ -37,46 +37,80 @@ const calisma = (ops: Record<string, Is>, locks: Record<string, unknown>) => ({
 });
 const json = (r: Route, v: unknown) => r.fulfill({ json: v });
 
-test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sorun turu; telefonda liste; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
-  let surum = 1;
-  let ops = { ...ILK };
-  let locks: Record<string, unknown> = {};
-  const tasinan: unknown[] = [];
+// Kişinin taslağı uydurmadır (3282 1d-2b): komutlar sırayla tutulur, görünüm her okumada ortak duruma oynatılarak kurulur. Taşı ve plana al
+// işi yerine koyar, ayar ve yön w'ye yazar; dizilmemiş komut planı bekletir (bekleyen), dizme temizler. Plana yaz görünümü ortak yapar.
+type Komut = { tur: string } & Record<string, unknown>;
+interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown> }
+const IS = '00000000-0000-4000-8000-0000000000a1';
+function oynat(d: Durum, l: readonly Komut[]): Durum {
+  let { ops, locks, w } = d;
+  for (const k of l) {
+    const S = Number(k['baslangic']), m = String(k['tezgah']);
+    if (k.tur === 'tasi') {
+      const id = String(k['isId']), x = ops[id];
+      if (x) { ops = { ...ops, [id]: { ...x, m, S, C: S + (x.C - x.S) } }; locks = { ...locks, [id]: { m, S } }; }
+    } else if (k.tur === 'plana-al') {
+      const job = String(k['emirId']);
+      ops = { ...ops, [`${job}.a1`]: { job, m, S, C: S + 4 } }; locks = { ...locks, [`${job}.a1`]: { m, S } };
+    } else if (k.tur === 'ayar') {
+      w = { ...w, ...(k['ayar'] as { w: Record<string, unknown> }).w };
+    } else if (k.tur === 'yon') {
+      const y = { ...(w['yonEmir'] as Record<string, unknown> | undefined) }, id = String(k['emirId']);
+      if (k['yon'] === 'plan') delete y[id]; else y[id] = k['yon'];
+      w = { ...w, yonEmir: y };
+    }
+  }
+  return { ops, locks, w };
+}
+const ILK_DURUM: Durum = { ops: ILK, locks: {}, w: { dondurma: 4 } };
+const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w });
+async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
+  const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
+  const gorunum = () => oynat(s.ortak, s.satirlar.map((x) => x.komut));
+  const bekleyen = [{ id: 'ORN-b', ne: 'Taslak değişikliği', ayrinti: '', kim: '', t: 0, isler: ['*'], geri: null }];
+  const cevap = () => {
+    if (s.satirlar.length === 0) return { taslak: null, calisma: kur(s.ortak), surum: s.surum };
+    const c = kur(gorunum()), dizildi = s.satirlar.at(-1)?.komut.tur === 'diz';
+    return { taslak: { surum: s.taslakSurumu, tabanSurum: s.surum, satirlar: s.satirlar }, calisma: dizildi ? c : { ...c, dataVer: 4, bekleyen }, surum: s.surum };
+  };
+  const ekle = (komut: Komut, ne: string) => { s.satirlar.push({ komut, ne, t: 0, hata: null }); s.taslakSurumu += 1; };
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: kur(s.ortak), surum: s.surum }));
+  await page.route('**/api/plan/taslagim', (r) => json(r, cevap()));
+  await page.route('**/api/plan/taslagim/komut', (r) => {
+    const k = (r.request().postDataJSON() as { komut: Komut }).komut;
+    s.komutlar.push(k); ekle(k, `${k.tur} ${String(k['isId'] ?? k['emirId'] ?? '')}`);
+    return json(r, cevap());
+  });
+  await page.route('**/api/plan/taslagim/geri-al', (r) => { s.satirlar.pop(); s.taslakSurumu += 1; return json(r, cevap()); });
+  await page.route('**/api/plan/taslagim/vazgec', (r) => { s.satirlar = []; return json(r, cevap()); });
+  await page.route('**/api/plan/taslagim/degerlendirme', (r) => { s.degerlendirme.push(r.request().postDataJSON()); return json(r, { is: IS }); });
+  await page.route(`**/api/plan/planlama-degerlendirmesi/${IS}`, (r) => json(r, {
+    durum: 'bitti', cevap: { calismaSurumu: s.surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan(gorunum().ops), ozet: { wT: 8, T: 8, late: 0 } } } },
+  }));
+  await page.route('**/api/plan/taslagim/diz', (r) => { ekle({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi'); return json(r, cevap()); });
+  await page.route('**/api/plan/taslagim/uygula', (r) => {
+    const n = s.satirlar.filter((x) => x.komut.tur !== 'diz').length;
+    s.ortak = gorunum(); s.satirlar = []; s.surum += 1; s.uygulandi += 1;
+    return json(r, { durum: 'uygulandi', calismaSurumu: s.surum, uygulanan: n, dusen: 0 });
+  });
+  const tur = (t: string) => s.komutlar.filter((k) => k.tur === t);
+  return { s, gorunum, tasinan: () => tur('tasi'), alinan: () => tur('plana-al'), sifirla: () => { s.ortak = ILK_DURUM; s.satirlar = []; s.surum += 1; } };
+}
+
+test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matris, sorun turu; telefonda liste; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  const { tasinan, alinan } = t;
   const onizleme: string[] = [];
-  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma(ops, locks), surum }));
   await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
     const q = new URL(r.request().url()).searchParams;
-    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = ops[id];
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
     onizleme.push(id);
-    return json(r, { calismaSurumu: surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
   });
-  await page.route('**/api/plan/planlama-calismasi/is-tasi', (r) => {
-    const g = r.request().postDataJSON() as { isId: string; tezgah: string; baslangic: number };
-    const x = ops[g.isId];
-    tasinan.push(g);
-    const onceki = surum;
-    if (x) { ops = { ...ops, [g.isId]: { ...x, m: g.tezgah, S: g.baslangic, C: g.baslangic + (x.C - x.S) } }; locks = { ...locks, [g.isId]: { m: g.tezgah, S: g.baslangic } }; surum += 1; }
-    return json(r, { calismaSurumu: surum, oncekiSurum: onceki, ileti: null });
-  });
-  // Plana alma: önizleme ilk adımı istenen yerde gösterir; komut emri plana koyar (gerçekte motor yeniden dizince olur).
-  const alinan: unknown[] = [];
+  // Plana alma: önizleme ilk adımı istenen yerde gösterir; komut taslakta emri plana koyar.
   await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
     const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
     return json(r, { calismaSurumu: Number(q.get('calismaSurumu')), gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }], bitis: S + 4 });
-  });
-  await page.route('**/api/plan/planlama-calismasi/plana-al', (r) => {
-    const g = r.request().postDataJSON() as { emirId: string; tezgah: string; baslangic: number };
-    alinan.push(g);
-    const onceki = surum;
-    ops = { ...ops, 'S4.a1': { job: 'S4', m: g.tezgah, S: g.baslangic, C: g.baslangic + 4 } }; locks = { ...locks, 'S4.a1': { m: g.tezgah, S: g.baslangic } }; surum += 1;
-    return json(r, { calismaSurumu: surum, oncekiSurum: onceki, ileti: null });
-  });
-  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
-    const g = r.request().postDataJSON() as { anahtar: string; deger: { plan?: { ops?: Record<string, Is> }; locks?: Record<string, unknown> } };
-    if (g.deger.plan?.ops) ops = g.deger.plan.ops;
-    locks = g.deger.locks ?? {};
-    surum += 1;
-    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan/kokpit');
@@ -120,7 +154,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   await expect(tur).toContainText('2 / 3');
   await tur.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(tur).toBeHidden();
-  expect(tasinan).toEqual([]);
+  expect(t.s.komutlar).toEqual([]);
 
   if (bilgi.project.name === 'g360') {
     // Telefon: tahta yok, liste var. Tezgâh gözünde işler tezgâha göre toplanır; Sipariş gözünde emirler sıralanır.
@@ -142,8 +176,8 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await expect(hamle).toContainText(/termine yetişir/);
     await tasma();
     await hamle.getByRole('button', { name: 'Uygula' }).click();
-    await expect.poll(() => tasinan.length).toBe(1);
-    expect(tasinan[0]).toMatchObject({ isId: 'S1.a2', tezgah: 'M3' });
+    await expect.poll(() => tasinan().length).toBe(1);
+    expect(tasinan()[0]).toMatchObject({ isId: 'S1.a2', tezgah: 'M3' });
     await expect(suzgec.getByRole('button', { name: /Geç/ })).toContainText('0');
     await tasma();
     await ayr.getByRole('button', { name: 'Ayrıntıyı kapat' }).click();
@@ -166,21 +200,22 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await page.mouse.move(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2, { steps: 4 });
     await expect(tahta.locator('.tc-pyq-hayalet')).toBeVisible();
     await page.mouse.click(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2);
-    await expect.poll(() => tasinan.length).toBe(1);
+    await expect.poll(() => tasinan().length).toBe(1);
     expect(onizleme).toContain('S2.a1');
-    expect(tasinan[0]).toMatchObject({ isId: 'S2.a1', tezgah: 'M2' });
-    expect((tasinan[0] as { baslangic: number }).baslangic).toBeGreaterThan(32);
-    // Geri / İleri o yönde kaç adım olduğunu gösterir.
-    const gi = kokpit.getByRole('group', { name: 'Geri ve ileri' });
-    const geri = gi.getByRole('button', { name: /Geri/ }), ileri = gi.getByRole('button', { name: /İleri/ });
+    expect(tasinan()[0]).toMatchObject({ isId: 'S2.a1', tezgah: 'M2' });
+    expect((tasinan()[0] as { baslangic: number }).baslangic).toBeGreaterThan(32);
+    // Taşıma taslağa yazılır, plan taslağın görünümünde yeniden dizilir. Geri taslağın değişiklik sayısını gösterir; geri alınınca taslak boşalır.
+    await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['tasi', 'diz']);
+    expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
+    const geri = kokpit.getByRole('group', { name: 'Geri' }).getByRole('button', { name: /Geri/ });
+    const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
-    await expect(kokpit.getByText(/Taslak · 1 değişiklik/)).toBeVisible();
+    await expect(cubuk.getByText('Taslak · 1 değişiklik')).toBeVisible();
+    await expect(kokpit.getByRole('button', { name: /^Canlıya al/ })).toHaveAttribute('title', 'Önce taslağı plana yazın ya da vazgeçin.');
     await tasma();
     await geri.click();
+    await expect(cubuk).toHaveCount(0);
     await expect(geri.locator('.tc-pyq-rozet')).toHaveCount(0);
-    await expect(ileri.locator('.tc-pyq-rozet')).toHaveText('1');
-    await ileri.click();
-    await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
 
     // Space imlecin altındaki işi tutar, Esc vazgeçer.
     await tahta.locator('[data-is="S3.a1"]').hover();
@@ -198,16 +233,16 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await expect(olcek.getByRole('button', { name: 'Gün', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await olcek.getByRole('button', { name: '3 gün' }).click();
 
-    // Turda iki hamle uygulanır; "Taslağa yaz" turu tek değişiklik bırakır: Geri ikisini birlikte alır, İleri birlikte yineler.
+    // Turda iki hamle uygulanır; her hamle taslakta ayrı değişikliktir, Geri sonuncuyu alır.
     await kokpit.getByRole('button', { name: 'Sorunları sırayla çöz' }).click();
     await tur.locator('[data-baska="M3"]').click();
     await tur.locator('[data-hamle="M3"]').getByRole('button', { name: 'Uygula, sıradaki' }).click();
-    await expect.poll(() => tasinan.length).toBe(2);
-    expect(tasinan[1]).toMatchObject({ isId: 'S1.a2', tezgah: 'M3' });
+    await expect.poll(() => tasinan().length).toBe(2);
+    expect(tasinan()[1]).toMatchObject({ isId: 'S1.a2', tezgah: 'M3' });
     await expect(tur).toContainText('2 / 3');
     await tur.locator('[data-hamle]').first().getByRole('button', { name: 'Uygula' }).click();
-    await expect.poll(() => tasinan.length).toBe(3);
-    expect(tasinan[2]).toMatchObject({ isId: 'S3.a1' });
+    await expect.poll(() => tasinan().length).toBe(3);
+    expect(tasinan()[2]).toMatchObject({ isId: 'S3.a1' });
     // Üçüncü adım plansız emirdir: plana alma seçeneği önizlemeyle gelir; burada atlanır.
     await expect(tur).toContainText('3 / 3');
     await expect(tur).toContainText('S4');
@@ -219,12 +254,11 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await tur.getByRole('button', { name: 'Taslağa yaz' }).click();
     await expect(tur).toBeHidden();
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('2');
-    await expect(kokpit.getByText(/Taslak · 2 değişiklik/)).toBeVisible();
+    await expect(cubuk.getByText('Taslak · 2 değişiklik')).toBeVisible();
+    await tasma();
     await geri.click();
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
-    await expect(ileri.locator('.tc-pyq-rozet')).toHaveText('1');
-    await ileri.click();
-    await expect(geri.locator('.tc-pyq-rozet')).toHaveText('2');
+    await expect(cubuk.getByText('Taslak · 1 değişiklik')).toBeVisible();
     await page.keyboard.press('Escape');
   }
 
@@ -267,12 +301,12 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   if (bilgi.project.name !== 'g360') await goz.getByRole('button', { name: 'Tezgâh' }).click();
   if (bilgi.project.name !== 'g360') {
     // Seçili iş ok tuşuyla yarım saat kayar; her basış bir taşımadır.
-    const n = tasinan.length, eski = ops['S3.a1']?.S ?? 0;
+    const n = tasinan().length, eski = t.gorunum().ops['S3.a1']?.S ?? 0;
     await page.keyboard.press('ArrowLeft');
-    await expect.poll(() => tasinan.length).toBe(n + 1);
-    expect(tasinan[n]).toMatchObject({ isId: 'S3.a1', baslangic: eski - 0.5 });
+    await expect.poll(() => tasinan().length).toBe(n + 1);
+    expect(tasinan()[n]).toMatchObject({ isId: 'S3.a1', baslangic: eski - 0.5 });
     // Taşıma yazılırken yeni bırakma alınmaz (bildirimle geri çevrilir): sonraki adım yazma bitince başlar.
-    await expect(kokpit.locator('.tc-pyq-degisim span', { hasText: 'yazılıyor' })).toHaveCount(0);
+    await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByRole('status')).toHaveCount(0);
   }
 
   // Plana alma. Geniş ekranda tepsideki emir sağ tıkla tutulur ve ilk adımının aday tezgâhına bırakılır; ötekilerde emrin ayrıntısında ilk
@@ -290,8 +324,8 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await page.mouse.move(alan.x + 420, alan.y + alan.height / 2, { steps: 4 });
     await expect(tahta.locator('[data-satir="M2"] .tc-pyq-hayalet')).toContainText('plana al');
     await page.mouse.click(alan.x + 420, alan.y + alan.height / 2);
-    await expect.poll(() => alinan.length).toBe(1);
-    expect(alinan[0]).toMatchObject({ emirId: 'S4', tezgah: 'M2' });
+    await expect.poll(() => alinan().length).toBe(1);
+    expect(alinan()[0]).toMatchObject({ emirId: 'S4', tezgah: 'M2' });
   } else {
     await goz.getByRole('button', { name: 'Matris' }).click();
     await matris.locator('tr[data-emir="S4"] button').first().click();
@@ -299,31 +333,40 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await expect(s4.locator('[data-hamle="M1"]')).toContainText(/termine yetişir/);
     await tasma();
     await s4.locator('[data-hamle="M1"]').getByRole('button', { name: 'Plana al' }).click();
-    await expect.poll(() => alinan.length).toBe(1);
-    expect(alinan[0]).toMatchObject({ emirId: 'S4', tezgah: 'M1' });
+    await expect.poll(() => alinan().length).toBe(1);
+    expect(alinan()[0]).toMatchObject({ emirId: 'S4', tezgah: 'M1' });
     // Sonuç ayrıntıda yazar; sayfa Matris'te kalır.
-    await expect(s4).toContainText('Emir plana alındı');
+    await expect(s4).toContainText('Emir taslakta plana alındı');
     await expect(goz.getByRole('button', { name: 'Matris' })).toHaveAttribute('aria-pressed', 'true');
   }
   await expect(suzgec.getByRole('button', { name: /Plansız/ })).toContainText('0');
 
   // Kalanını oynat (baştaki planla): kalan adımlarda öne çıkan hamle kendiliğinden uygulanır, plansız emir plana alınır; tur sonunda durur.
-  ops = { ...ILK }; locks = {}; surum += 1;
-  const tasinmis = tasinan.length;
+  t.sifirla();
+  const tasinmis = tasinan().length;
   await page.reload();
   await kokpit.getByRole('button', { name: 'Sorunları sırayla çöz' }).click();
   await expect(tur).toContainText('1 / 3');
   await tur.getByRole('button', { name: 'Kalanını oynat' }).click();
   await expect(tur).toContainText('tur bitti');
   await expect(tur).toContainText('3 hamle uygulandı');
-  expect(tasinan.length).toBe(tasinmis + 2);
-  expect(alinan.length).toBe(2);
+  expect(tasinan().length).toBe(tasinmis + 2);
+  expect(alinan().length).toBe(2);
   await tur.getByRole('button', { name: 'Taslağa yaz' }).click();
   await expect(tur).toBeHidden();
 
+  // Plana yaz taslağı ortak çalışmaya yazar; taslak çubuğu kalkar, Canlıya al açılır.
+  const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
+  await expect(cubuk.getByText('Taslak · 3 değişiklik')).toBeVisible();
+  await tasma();
+  await cubuk.getByRole('button', { name: 'Plana yaz' }).click();
+  await expect(cubuk).toHaveCount(0);
+  expect(t.s.uygulandi).toBe(1);
+  await expect(page.getByText('Taslak plana yazıldı.')).toBeVisible();
+
   await tasma();
   expect(ag.hatalar).toEqual([]);
-  expect(ag.yazmalar.every((y) => /planlama-calismasi\/is-tasi|planlama-calismasi\/plana-al|planlama-kayitlari\/yaz|duzenleyen/.test(y))).toBe(true);
+  expect(ag.yazmalar.every((y) => /plan\/taslagim\/|duzenleyen/.test(y))).toBe(true);
 });
 
 // Tezgâh çoksa yük şeridi emirleri ilk ekrandan itmesin: her genişlikte yalnız dolu tezgâhlar görünür, düğme hepsini açar.
@@ -392,21 +435,14 @@ test('Kokpit: adım adım plana alma; seçilen tezgâh ve saat önizlemeye ve ko
   const c = calisma({ ...ILK }, {});
   c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }] }];
   c.D.siparisler = c.D.siparisler.map((x) => (x.id === 'S4' ? { ...x, urun: 'U3' } : x));
-  let surum = 1;
-  const onizlenen: (string | null)[] = [], alinan: unknown[] = [];
-  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum }));
+  const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(d.ops) }));
+  const onizlenen: (string | null)[] = [];
   await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
     const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
     const sec = (JSON.parse(q.get('adimlar') ?? '[]') as { isId: string; tezgah?: string; baslangic?: number }[])[0];
     onizlenen.push(q.get('adimlar'));
     const S2 = Math.max(S + 4, sec?.baslangic ?? 0);
-    return json(r, { calismaSurumu: surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }, { isId: 'S4.a2', tezgah: sec?.tezgah ?? 'M2', S: S2, C: S2 + 4 }], bitis: S2 + 4 });
-  });
-  await page.route('**/api/plan/planlama-calismasi/plana-al', (r) => { alinan.push(r.request().postDataJSON()); surum += 1; return json(r, { calismaSurumu: surum, oncekiSurum: surum - 1, ileti: null }); });
-  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
-    const g = r.request().postDataJSON() as { anahtar: string; deger: unknown };
-    surum += 1;
-    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }, { isId: 'S4.a2', tezgah: sec?.tezgah ?? 'M2', S: S2, C: S2 + 4 }], bitis: S2 + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan/kokpit');
@@ -432,8 +468,8 @@ test('Kokpit: adım adım plana alma; seçilen tezgâh ve saat önizlemeye ve ko
   const al = s4.getByRole('button', { name: 'Plana al', exact: true });
   await expect(al).toBeInViewport({ ratio: 1 });
   await al.click();
-  await expect.poll(() => alinan.length).toBe(1);
-  expect(alinan[0]).toMatchObject({ emirId: 'S4', adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
+  await expect.poll(() => t.alinan().length).toBe(1);
+  expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4', adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
   expect(ag.hatalar).toEqual([]);
 });
 
@@ -539,20 +575,9 @@ test('Kokpit 3B: tezgâh çoksa yalnız yükü olan tezgâhlar çizilir, düğme
 // 3282 1b: Ayarlar paneli seçili emrin yerinde (telefonda alttan) açılır; değişiklik önce etkisiyle gösterilir (değerlendirme ucu, plan-uygula),
 // Uygula planı alır. Sunucu cevapları uydurmadır.
 test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce ve sonra görünür, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
-  let surum = 1;
-  const degerlendirme: unknown[] = [];
-  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum }));
-  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
-    const g = r.request().postDataJSON() as { anahtar: string; deger: unknown };
-    surum += 1;
-    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
-  });
+  const t = await taslakSunucusu(page);
   await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
     guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
-  }));
-  await page.route('**/api/plan/planlama-degerlendirmesi', (r) => { degerlendirme.push(r.request().postDataJSON()); return json(r, { is: 'ayar' }); });
-  await page.route('**/api/plan/planlama-degerlendirmesi/ayar', (r) => json(r, {
-    durum: 'bitti', cevap: { calismaSurumu: surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan({ ...ILK }), ozet: { wT: 8, T: 8, late: 0 } } } },
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan');
@@ -571,7 +596,9 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await panel.getByRole('button', { name: 'Etkisini gör' }).click();
   const etki = panel.getByRole('region', { name: 'Ayarın etkisi' });
   await expect(etki.getByText('1 → 0')).toBeVisible({ timeout: 10_000 });
-  expect(degerlendirme).toEqual([{ surum: expect.any(Number) as unknown, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
+  // Ayar taslağa yazılır, etkisi taslağın görünümünde hesaplanır; ortak çalışma değişmez.
+  expect(t.s.komutlar).toEqual([{ tur: 'ayar', ayar: { w: { dondurma: 8 }, param: {}, ac: [], kapat: [] }, ayrinti: expect.any(String) as unknown }]);
+  expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   // Değişiklik bildirimi (Geri al) panelin altını örter; görüntü için kapatılır.
   for (const k of await page.getByRole('button', { name: 'Bildirimi kapat' }).all()) await k.click();
@@ -579,26 +606,19 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayar-etki-${bilgi.project.name}.png` });
   await etki.getByRole('button', { name: 'Uygula' }).click();
   await expect(panel).toHaveCount(0);
+  // Uygula hesaplanan planı taslağa yazar; taslak çubuğu bir değişiklik gösterir.
+  expect(t.s.satirlar.map((x) => x.komut.tur)).toEqual(['ayar', 'diz']);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByText('Taslak · 1 değişiklik')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-taslak-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
 });
 
 // Kart 3282 (dilim 1c): teslimden geriye planlama. Planın yönü üst şeritte ve Ayarlar panelinde, emrin yönü emrin ayrıntısında; ikisi de etkisiyle gelir.
 test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisini gösterir, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
-  let surum = 1;
-  const yazilan: Record<string, unknown>[] = [];
-  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum }));
-  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
-    const g = r.request().postDataJSON() as { anahtar: string; deger: { w?: Record<string, unknown> } };
-    if (g.deger.w) yazilan.push(g.deger.w);
-    surum += 1;
-    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
-  });
+  const t = await taslakSunucusu(page);
   await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
     guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
-  }));
-  await page.route('**/api/plan/planlama-degerlendirmesi', (r) => json(r, { is: 'yon' }));
-  await page.route('**/api/plan/planlama-degerlendirmesi/yon', (r) => json(r, {
-    durum: 'bitti', cevap: { calismaSurumu: surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan({ ...ILK }), ozet: { wT: 8, T: 8, late: 0 } } } },
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan');
@@ -623,7 +643,7 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   await yon.getByRole('button', { name: 'Teslimden geriye' }).click();
   const etki = s4.getByRole('region', { name: 'Yönün etkisi' });
   await expect(etki.getByText('1 → 0')).toBeVisible({ timeout: 10_000 });
-  expect(yazilan.at(-1)?.['yonEmir']).toEqual({ S4: 'geri' });
+  expect(t.s.komutlar).toEqual([{ tur: 'yon', emirId: 'S4', yon: 'geri' }]);
   for (const k of await page.getByRole('button', { name: 'Bildirimi kapat' }).all()) await k.click();
   await etki.scrollIntoViewIfNeeded();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);

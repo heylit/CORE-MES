@@ -6,37 +6,36 @@ import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { AYAR_SECENEKLERI, degerAdi, surumMetni } from '../../motor-ayarlari/kurallar.ts';
 import { altEkranAdresi } from '../gorunumler.ts';
 import { kisitBul } from '../ic/veri/kurallar.ts';
-import type { CalismaKomutu } from '../kayit.ts';
-import type { degerlendirmeIste } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, YON_ALANLARI, alanDegeri, alanYaz, ayarTaslagi, ayarlariYaz, farklar, kisitYaz, sayiOku,
+  AYAR_ALANLARI, PANEL_KISITLARI, YON_ALANLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, sayiOku,
   type AyarAlani, type AyarTaslagi,
 } from './ayarlar.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
+import { ayarKomutu, type TaslakYazici } from './taslak.ts';
 
-// Kokpit'in ayarlar paneli (3282 1b): Kokpit'in motorunun okuduğu çalışma ayarları. Değişiklik önce etkisiyle gösterilir (etki.tsx).
+// Kokpit'in ayarlar paneli (3282 1b): Kokpit'in motorunun okuduğu çalışma ayarları. Değişiklik kişinin taslağına yazılır ve önce
+// etkisiyle gösterilir (etki.tsx).
 // Motor ayarı ve dört göz kendi sayfalarındadır.
 
 export interface AyarlarOzellikleri {
   c: PlanlamaCalismasi;
-  komut: CalismaKomutu | null;
+  taslak: TaslakYazici | null;
   yazabilir: boolean;
   kim: string;
   kapat: () => void;
   // Üst şeritteki yön düğmesinden açılınca taslak o yönle başlar.
   yon?: 'ileri' | 'geri' | null;
-  iste?: typeof degerlendirmeIste;
 }
 
-export function Ayarlar({ c, komut, yazabilir, kim, kapat, yon = null, iste }: AyarlarOzellikleri) {
+export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzellikleri) {
   const [t, setT] = useState<AyarTaslagi>(() => {
     const t0 = ayarTaslagi(c), a = AYAR_ALANLARI.find((x) => x.k === 'yon');
     return yon !== null && a ? alanYaz(t0, a, yon) : t0;
   });
   const [tazele, setTazele] = useState(false);
   useEffect(() => { if (tazele) { setT(ayarTaslagi(c)); setTazele(false); } }, [c, tazele]);
-  const { durum, setDurum, dene, uygula, vazgec } = useEtki({ c, komut, kim, iste, sonuc: (x) => { if (x === 'uygulandi') kapat(); else setTazele(true); } });
+  const { durum, setDurum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: (x) => { if (x === 'uygulandi') kapat(); else setTazele(true); } });
   const [hatalar, setHatalar] = useState<Record<string, string>>({});
   const [motor, setMotor] = useState<MotorAyarlariCevabi['guncel'] | { hata: string } | null>(null);
   useEffect(() => {
@@ -45,12 +44,13 @@ export function Ayarlar({ c, komut, yazabilir, kim, kapat, yon = null, iste }: A
     return () => { canli = false; };
   }, []);
   const degisen = farklar(c, t);
-  const kilitli = !yazabilir || komut === null || durum.tur === 'hesap' || durum.tur === 'etki';
+  const kilitli = !yazabilir || taslak === null || durum.tur === 'hesap' || durum.tur === 'etki';
   const hataVar = Object.keys(hatalar).length > 0;
 
   const etkisiniGor = async () => {
     if (degisen.length === 0 || hataVar) return;
-    await dene('Plan ayarı değişti', (x) => ayarlariYaz(x, t), degisen.join('; '));
+    const k = ayarKomutu(c, t, degisen.join('; '));
+    if (k !== null) await dene(k);
   };
 
   const alan = (a: AyarAlani) => {
@@ -113,7 +113,7 @@ export function Ayarlar({ c, komut, yazabilir, kim, kapat, yon = null, iste }: A
       {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
       <p className="tc-pyq-not">Dört göz (onaylayan gönderenden başkası olsun) <Link to="/ayarlar">Sistem Ayarları</Link> &gt; Plan altındadır.</p>
       {durum.tur === 'etki' ? (
-        <EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { uygula('Plan ayarı uygulandı', durum.e); }} vazgec={() => { vazgec(durum.e); }} />
+        <EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} />
       ) : (
         <section className="tc-pyq-ayar-etki" aria-label="Değişiklik">
           {degisen.length > 0 && <ul className="tc-pyq-ayar-fark">{degisen.map((d) => <li key={d}>{d}</li>)}</ul>}
