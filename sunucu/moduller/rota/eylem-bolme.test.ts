@@ -43,8 +43,9 @@ describe('rota eylemlerine bölme (saf)', () => {
   test('B2: hiçbir uç eski işlemi istemez; bir eylem isteyen her yazma ucu tam bir eylem ister; her eylem en az bir ucu açar', () => {
     for (const u of uclar) assert.equal(yetkiListesi(ucYetkisi(u)).includes(ESKI), false, `${u.yontem} ${u.yol}`);
     const yazma = uclar.filter((u) => u.yontem === 'POST' && yetkiListesi(ucYetkisi(u)).some((i) => YENI.includes(i)));
-    // 15 uç yalnız rota.yaz isterdi, kopya isteği onu kart yazımıyla birlikte kabul ederdi; 3247 a rota açma ve rota adı uçlarını ekledi.
-    assert.equal(yazma.length, 18);
+    // 15 uç yalnız rota.yaz isterdi, kopya isteği onu kart yazımıyla birlikte kabul ederdi; 3247 a rota açma ve rota adı uçlarını,
+    // 3273 a şablon kullanımdan kaldırma ucunu ekledi.
+    assert.equal(yazma.length, 19);
     for (const u of yazma) assert.equal(yetkiListesi(ucYetkisi(u)).filter((i) => YENI.includes(i)).length, 1, u.yol);
     for (const e of YENI) assert.equal(yazma.some((u) => yetkiListesi(ucYetkisi(u)).includes(e)), true, e);
   });

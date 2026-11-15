@@ -16,7 +16,7 @@ export {
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
 export { rotaEkle, rotaAdiYaz, rotaTurleriYaz } from './servis/rotalar.ts';
 export { rotaAdimlariToplu } from './servis/adim-toplu.ts';
-export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil } from './servis/sablon.ts';
+export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil, sablonDurumuYaz } from './servis/sablon.ts';
 export {
   sartnameListesi, sartnameAyrintisi, sartnameEkle, sartnameKopyala, sartnameKunyeKaydet, sartnameSurumAc, sartnameTaslakKaydet, sartnameYayinla,
   sartnameTaslakSil, sartnameAktifYap, standartEkle, revizyonSartnameleri, yuzeyIslemiAdimlari, adimSartnameleriKaydet, isEmriKopyalandiYansit,

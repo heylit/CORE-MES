@@ -256,11 +256,17 @@ export function revizyonKunyeleri(db: Db, idler: readonly number[]): Promise<{ i
 
 /* ---------------- şablonlar (#698) ---------------- */
 
-export interface SablonSatiri { id: number; ad: string; varsayilan: boolean; surum: number }
+export interface SablonSatiri {
+  id: number; ad: string; varsayilan: boolean; surum: number; aciklama: string | null; oneriSozcukleri: string[]; aktif: boolean;
+  kullanim: { revizyon: number; son: string | null };
+}
+const SABLON_SUTUNLARI = `s.id, s.ad, s.varsayilan, s.surum, s.aciklama, s.oneri_sozcukleri AS "oneriSozcukleri", s.aktif,
+  json_build_object('revizyon', (SELECT count(*) FROM rota_revizyonu r WHERE r.kaynak_sablon_id = s.id)::int,
+                    'son', (SELECT to_char(max(r.acilma) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM rota_revizyonu r WHERE r.kaynak_sablon_id = s.id)) AS kullanim`;
 export interface SablonAdimSatiri { sablonId: number; sira: number; operasyonTipiId: number; ad: string }
 
 export function sablonlar(db: Db): Promise<SablonSatiri[]> {
-  return db.sorgu<SablonSatiri>('SELECT id, ad, varsayilan, surum FROM rota_sablonu ORDER BY varsayilan DESC, ad, id');
+  return db.sorgu<SablonSatiri>(`SELECT ${SABLON_SUTUNLARI} FROM rota_sablonu s ORDER BY s.varsayilan DESC, s.aktif DESC, s.ad, s.id`);
 }
 
 export function sablonAdimlari(db: Db, idler: readonly number[]): Promise<SablonAdimSatiri[]> {
@@ -275,16 +281,25 @@ export async function varsayilanSablonId(db: Db): Promise<number | null> {
   return (await db.tek<{ id: number }>('SELECT id FROM rota_sablonu WHERE varsayilan'))?.id ?? null;
 }
 
+// Kilit şablondan taslak açmayla silme ve kullanımdan kaldırmayı sıraya koyar (Risk K1).
 export function sablonKilitle(db: Db, id: number): Promise<SablonSatiri | null> {
-  return db.tek<SablonSatiri>('SELECT id, ad, varsayilan, surum FROM rota_sablonu WHERE id = $1 FOR UPDATE', [id]);
+  return db.tek<SablonSatiri>(`SELECT ${SABLON_SUTUNLARI} FROM rota_sablonu s WHERE s.id = $1 FOR UPDATE OF s`, [id]);
 }
 
-export async function sablonEkle(db: Db, ad: string): Promise<number> {
-  return (await db.tek<{ id: number }>('INSERT INTO rota_sablonu (ad) VALUES ($1) RETURNING id', [ad]))!.id;
+export interface SablonBilgisi { ad: string; aciklama: string | null; oneriSozcukleri: string[] }
+
+export async function sablonEkle(db: Db, g: SablonBilgisi): Promise<number> {
+  return (await db.tek<{ id: number }>('INSERT INTO rota_sablonu (ad, aciklama, oneri_sozcukleri) VALUES ($1, $2, $3) RETURNING id',
+    [g.ad, g.aciklama, g.oneriSozcukleri]))!.id;
 }
 
-export async function sablonAdiYaz(db: Db, id: number, ad: string, surum: number): Promise<boolean> {
-  return (await db.tek('UPDATE rota_sablonu SET ad = $2, surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING id', [id, ad, surum])) !== null;
+export async function sablonBilgisiYaz(db: Db, id: number, g: SablonBilgisi, surum: number): Promise<boolean> {
+  return (await db.tek('UPDATE rota_sablonu SET ad = $2, aciklama = $3, oneri_sozcukleri = $4, surum = surum + 1 WHERE id = $1 AND surum = $5 RETURNING id',
+    [id, g.ad, g.aciklama, g.oneriSozcukleri, surum])) !== null;
+}
+
+export async function sablonAktifYaz(db: Db, id: number, aktif: boolean, surum: number): Promise<boolean> {
+  return (await db.tek('UPDATE rota_sablonu SET aktif = $2, surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING id', [id, aktif, surum])) !== null;
 }
 
 export async function sablonAdimlariniYaz(db: Db, id: number, adimlar: readonly { operasyonTipiId: number; ad: string }[]): Promise<void> {
@@ -338,12 +353,16 @@ export function yururluktekiBilesenler(db: Db, malzemeIdleri: readonly number[])
 }
 
 export async function revizyonEkle(
-  db: Db, g: { malzemeId: number; malzemeTuru: 'mamul' | 'yarimamul'; harf: string; acanKisiId: number; kaynakRevizyonId: number | null; rotaId?: number | null },
+  db: Db, g: {
+    malzemeId: number; malzemeTuru: 'mamul' | 'yarimamul'; harf: string; acanKisiId: number; kaynakRevizyonId: number | null; rotaId?: number | null;
+    kaynakSablonId?: number | null;
+  },
 ): Promise<number> {
   // Rota verilmezse veritabanı ürünün Standart rotasını yazar (rota_revizyonu_rotasi).
   const satir = await db.tek<{ id: number }>(
-    'INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id, kaynak_revizyon_id, rota_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-    [g.malzemeId, g.malzemeTuru, g.harf, g.acanKisiId, g.kaynakRevizyonId, g.rotaId ?? null],
+    `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id, kaynak_revizyon_id, rota_id, kaynak_sablon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [g.malzemeId, g.malzemeTuru, g.harf, g.acanKisiId, g.kaynakRevizyonId, g.rotaId ?? null, g.kaynakSablonId ?? null],
   );
   return satir!.id;
 }

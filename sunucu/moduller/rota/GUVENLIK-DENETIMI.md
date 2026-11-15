@@ -53,7 +53,14 @@ yazmasına uygulanmaz; VARSAYIM, ON-PAKET V6).
 | emre-kopyala, yururlukteki-rotayi-uygula (var olan uçlar) | rota.emre-kopyala | Sabitleme aynı işlemde; yayınlanmamış ya da zorunlu alanı boş şartname emri geri alır; sabitleme yalnız eklenir | 971 a; emre uygulama | emir açılırken (422, emir sayısı değişmez) |
 | POST /rota/emirler/:emirId/is-emirleri/:isEmriId/sartnameler (1034) | uretim-emirleri.yaz ya da plan.canliya-al (rework adımı komutuyla aynı) | İstek kimliği; emrin okunan sürümü; yalnız bekleyen rework/tamir/ek adımı ve açık emir; iş emri o emirde olmalı; kapsam, yürürlükteki sürüm, zorunlu alan; sabitleyen kişi sunucudan; aynı iş emrine eşzamanlı komut kilitle sıraya girer | 1034 rework adımına şartname | aynı test (operatör 403, rota adımı 409, eski sürüm 409, başka emrin iş emri 404, zorunlu boş ve kapsam dışı 400) |
 
-## Eylemlere bölme (3165 a)
+## Rota şablonları (3273 a)
+
+| Yol | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| POST /rota/sablonlar/:id/durum | rota.sablon-yaz | Kilit altında sürüm denetimi; varsayılan şablon kalkmaz (serviste ve CHECK `rota_sablonu_varsayilan_aktif`) | U "3273: şablon öneri sözcüğü" (kaldır, geri al) | U aynı test (kalite 403, eski sürüm 409, varsayılan 422, SQL ile kısıt) |
+| POST /rota/sablonlar/:id/sil | rota.sablon-yaz | Kullanılmış şablon silinmez: kilit altında kullanım sayısı (409) ve yabancı anahtar `rota_revizyonu_kaynak_sablon_bagi` ON DELETE NO ACTION | U "3273" (kullanılmamış silinir) | U "3273" (kullanılmış 409; SQL silme kısıtla reddedilir) |
+| POST /rota/urunler/:urunId/taslak-ac (kaynak sablon, standart) | rota.taslak-ac | Şablon kilitlenir; kullanımdan kalkmış şablondan açılmaz (422); `kaynak_sablon_id` yalnız sunucu yazar, istemci gövdesinden alınmaz; adım istasyon ve süreyi katalogdan alır, yoksa boş | U "3273" (bağ yazılır, kullanım sayılır; katalog değerleri) | U "3273" (kalkmış şablon 422) |
+
 
 `rota.yaz` beş eyleme bölündü; eski işlem hiçbir ucu açmaz (okumayı da), satırı ayrı kartla kalkar. Göç `kisiler_rota_eylemleri` eski işlemi taşıyan role, kişi ekine ve kişiden alınana beşini kopyalar.
 
@@ -61,7 +68,7 @@ yazmasına uygulanmaz; VARSAYIM, ON-PAKET V6).
 |---|---|
 | rota.revizyon-yaz | /rota/revizyonlar/:id/kaydet, /iptal, /kopyala, /adim-sartnameleri, /adim-ekipmani; /rota/adimlar/toplu-kaydet (Excel) |
 | rota.onaya-gonder | /rota/revizyonlar/:id/onaya-gonder |
-| rota.sablon-yaz | /rota/sablonlar/ekle, /:id/kaydet, /:id/varsayilan-yap, /:id/sil |
+| rota.sablon-yaz | /rota/sablonlar/ekle, /:id/kaydet, /:id/varsayilan-yap, /:id/sil, /:id/durum (3273 a) |
 | rota.taslak-ac | /rota/karttan-taslaklar, /rota/urunler/:urunId/taslak-ac, /rota/urunler/:urunId/kopya-iste (ya da malzemeler.yaz) |
 | rota.sure-kabul | /rota/adimlar/:id/gerceklesen-sure, /gerceklesen-sure/kabul |
 

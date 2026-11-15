@@ -14,6 +14,7 @@ async function sablonlariKur(db: Db, satirlar: readonly s.SablonSatiri[]): Promi
   const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, { id: t.id, kod: t.kod, ad: t.ad, aktif: t.aktif }]));
   return satirlar.map((x) => ({
     ...x,
+    oneriSozcukleri: [...x.oneriSozcukleri],
     adimlar: adimlar.filter((a) => a.sablonId === x.id).map((a) => ({
       sira: a.sira, ad: a.ad, operasyonTipi: tipler.get(a.operasyonTipiId) ?? { id: a.operasyonTipiId, kod: '?', ad: 'Bilinmeyen tip', aktif: false },
     })),
@@ -49,21 +50,34 @@ async function adiKoru<T>(is: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function sablonEkle(db: Db, g: { ad: string; adimlar: { operasyonTipiId: number; ad: string }[] }): Promise<SablonCevabi> {
+interface SablonGirdisi {
+  ad: string; aciklama?: string | null | undefined; oneriSozcukleri?: string[] | undefined; adimlar: { operasyonTipiId: number; ad: string }[];
+}
+
+// Sözcükler büyük harfe çevrilip tekilleştirilir: "mil" ile "MİL" aynı sözcüktür (karşılaştırma istemcide harf farkını gözetmez).
+const sozcukler = (l: readonly string[]): string[] => [...new Set(l.map((x) => x.trim().toLocaleUpperCase('tr')).filter((x) => x !== ''))];
+
+const bilgi = (g: SablonGirdisi, eski: s.SablonSatiri | null): s.SablonBilgisi => ({
+  ad: g.ad,
+  aciklama: g.aciklama === undefined ? eski?.aciklama ?? null : g.aciklama,
+  oneriSozcukleri: g.oneriSozcukleri === undefined ? eski?.oneriSozcukleri ?? [] : sozcukler(g.oneriSozcukleri),
+});
+
+export async function sablonEkle(db: Db, g: SablonGirdisi): Promise<SablonCevabi> {
   await sablonAdimlariDenetle(db, g.adimlar, new Set());
-  const id = await adiKoru(() => s.sablonEkle(db, g.ad));
+  const id = await adiKoru(() => s.sablonEkle(db, bilgi(g, null)));
   await s.sablonAdimlariniYaz(db, id, g.adimlar);
   // İlk şablon kendiliğinden varsayılandır: "Standart rotadan başla" boşa düşmesin.
   if ((await s.varsayilanSablonId(db)) === null) await s.varsayilanYap(db, id);
   return sablonGetir(db, id);
 }
 
-export async function sablonKaydet(db: Db, id: number, g: { ad: string; surum: number; adimlar: { operasyonTipiId: number; ad: string }[] }): Promise<SablonCevabi> {
+export async function sablonKaydet(db: Db, id: number, g: SablonGirdisi & { surum: number }): Promise<SablonCevabi> {
   const mevcut = await s.sablonKilitle(db, id);
   if (!mevcut) throw bulunamadi('Şablon bulunamadı.');
   if (mevcut.surum !== g.surum) throw eskiSurum();
   await sablonAdimlariDenetle(db, g.adimlar, new Set((await s.sablonAdimlari(db, [id])).map((a) => a.operasyonTipiId)));
-  if (!(await adiKoru(() => s.sablonAdiYaz(db, id, g.ad, g.surum)))) throw eskiSurum();
+  if (!(await adiKoru(() => s.sablonBilgisiYaz(db, id, bilgi(g, mevcut), g.surum)))) throw eskiSurum();
   await s.sablonAdimlariniYaz(db, id, g.adimlar);
   return sablonGetir(db, id);
 }
@@ -72,15 +86,38 @@ export async function sablonuVarsayilanYap(db: Db, id: number, surum: number): P
   const mevcut = await s.sablonKilitle(db, id);
   if (!mevcut) throw bulunamadi('Şablon bulunamadı.');
   if (mevcut.surum !== surum) throw eskiSurum();
+  if (!mevcut.aktif) throw gecersiz(KULLANIMDA_DEGIL);
   await s.varsayilanYap(db, id);
   return sablonGetir(db, id);
 }
 
-// Varsayılan şablon silinmez: önce başka bir şablon varsayılan yapılır. Şablondan açılmış rotalar etkilenmez (kopya alınır).
+const VARSAYILAN_SILINMEZ = 'Varsayılan şablon silinmez; önce başka bir şablonu varsayılan yapın.';
+const VARSAYILAN_KALDIRILMAZ = 'Varsayılan şablon kullanımdan kaldırılmaz; önce başka bir şablonu varsayılan yapın.';
+export const KULLANIMDA_DEGIL = 'Bu şablon kullanımdan kaldırılmış.';
+export const KULLANILMIS_SABLON = 'Bu şablondan rota açıldı; silinmez, kullanımdan kaldırılabilir.';
+
+// Varsayılan şablon silinmez: önce başka bir şablon varsayılan yapılır. Kullanılmış şablon da silinmez (3273 a, Risk K1): veritabanı
+// bağı (ON DELETE NO ACTION) aynı kuralı tutar; kullanım denetimi kilit altındadır, şablondan taslak açmayla yarışmaz.
 export async function sablonuSil(db: Db, id: number, surum: number): Promise<void> {
   const mevcut = await s.sablonKilitle(db, id);
   if (!mevcut) throw bulunamadi('Şablon bulunamadı.');
   if (mevcut.surum !== surum) throw eskiSurum();
-  if (mevcut.varsayilan) throw gecersiz('Varsayılan şablon silinmez; önce başka bir şablonu varsayılan yapın.');
-  await s.sablonSil(db, id);
+  if (mevcut.varsayilan) throw gecersiz(VARSAYILAN_SILINMEZ);
+  if (mevcut.kullanim.revizyon > 0) throw cakisma(KULLANILMIS_SABLON);
+  try {
+    await s.sablonSil(db, id);
+  } catch (hata) {
+    if (kisitIhlali(hata)?.iz.kisit === 'rota_revizyonu_kaynak_sablon_bagi') throw cakisma(KULLANILMIS_SABLON);
+    throw hata;
+  }
+}
+
+// Kullanımdan kalkan şablon seçicide görünmez ve ondan taslak açılmaz; açılmış rotalar etkilenmez. Geri alınabilir.
+export async function sablonDurumuYaz(db: Db, id: number, g: { aktif: boolean; surum: number }): Promise<SablonCevabi> {
+  const mevcut = await s.sablonKilitle(db, id);
+  if (!mevcut) throw bulunamadi('Şablon bulunamadı.');
+  if (mevcut.surum !== g.surum) throw eskiSurum();
+  if (!g.aktif && mevcut.varsayilan) throw gecersiz(VARSAYILAN_KALDIRILMAZ);
+  if (mevcut.aktif !== g.aktif && !(await s.sablonAktifYaz(db, id, g.aktif, g.surum))) throw eskiSurum();
+  return sablonGetir(db, id);
 }

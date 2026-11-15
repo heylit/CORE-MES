@@ -424,11 +424,90 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(eski.varsayilan, false);
     // Eski varsayılanı geri getir: sonraki testler standart rotayı on bir adım bekler.
     await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${eski.id}/varsayilan-yap`, { surum: eski.surum });
+    // 3273 a: şablondan açılmış rota varken şablon silinmez (409); kullanımdan kalkar, açılmış taslak değişmez.
     const son = (await tamam<SablonlarCevabi>(c.planlama, 'GET', '/rota/sablonlar')).sablonlar.find((x) => x.id === yeni.id)!;
-    const sil = await tamam<SablonlarCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/sil`, { surum: son.surum });
-    assert.equal(sil.sablonlar.some((x) => x.id === yeni.id), false);
-    // Şablondan açılmış taslak şablon silinince değişmez.
+    assert.equal(son.kullanim.revizyon, 2);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/sil`, { surum: son.surum })).statusCode, 409);
+    const kalkti = await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/durum`, { aktif: false, surum: son.surum });
+    assert.equal(kalkti.sablon.aktif, false);
     assert.equal((await ayrinti(ac.json<KomutCevabi>().id)).adimlar.length, 2);
+  });
+
+  test('3273: şablon öneri sözcüğü ve açıklama taşır; kullanılmış şablon silinmez, kullanımdan kalkar; kalkmış şablondan taslak açılmaz; varsayılan kalkmaz', async () => {
+    const yeni = (await tamam<SablonCevabi>(c.planlama, 'POST', '/rota/sablonlar/ekle', {
+      ad: 'ORN mil şablonu', aciklama: '  ', oneriSozcukleri: ['mil', 'MİL', ' şaft '], adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }],
+    })).sablon;
+    assert.deepEqual([yeni.aciklama, yeni.oneriSozcukleri, yeni.aktif, yeni.kullanim], [null, ['MİL', 'ŞAFT'], true, { revizyon: 0, son: null }]);
+    // Kaydette verilmeyen alan korunur.
+    const kayit = (await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/kaydet`, {
+      ad: 'ORN mil şablonu', aciklama: 'Isıl işlemsiz', surum: yeni.surum, adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }],
+    })).sablon;
+    assert.deepEqual([kayit.aciklama, kayit.oneriSozcukleri], ['Isıl işlemsiz', ['MİL', 'ŞAFT']]);
+    assert.equal((await istek(c.kalite, 'POST', `/rota/sablonlar/${yeni.id}/durum`, { aktif: false, surum: kayit.surum })).statusCode, 403);
+
+    // Kullanılmamış şablon silinir.
+    const gecici = (await tamam<SablonCevabi>(c.planlama, 'POST', '/rota/sablonlar/ekle', { ad: 'ORN geçici', adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }] })).sablon;
+    const sil = await tamam<SablonlarCevabi>(c.planlama, 'POST', `/rota/sablonlar/${gecici.id}/sil`, { surum: gecici.surum });
+    assert.equal(sil.sablonlar.some((x) => x.id === gecici.id), false);
+
+    // Taslak bağı sunucuda yazılır; kullanım sayılır.
+    const ac = await taslakAc(await mamulAc(), { tur: 'sablon', sablonId: yeni.id });
+    assert.equal(ac.statusCode, 200, ac.body);
+    const bag = await vt().tek<{ kaynak_sablon_id: number }>('SELECT kaynak_sablon_id FROM rota_revizyonu WHERE id = $1', [ac.json<KomutCevabi>().id]);
+    assert.equal(bag?.kaynak_sablon_id, yeni.id);
+    const sayili = (await tamam<SablonlarCevabi>(c.planlama, 'GET', '/rota/sablonlar')).sablonlar.find((x) => x.id === yeni.id)!;
+    assert.equal(sayili.kullanim.revizyon, 1);
+    assert.match(sayili.kullanim.son ?? '', /^\d{4}-\d{2}-\d{2}T/);
+
+    // Kullanılmış şablon silinmez; veritabanı bağı da tutar (servis atlansa bile).
+    const sil409 = await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/sil`, { surum: sayili.surum });
+    assert.equal(sil409.statusCode, 409);
+    assert.match(sil409.body, /kullanımdan kaldırılabilir/);
+    await assert.rejects(vt().tx(async (db) => {
+      await db.sorgu('DELETE FROM rota_sablon_adimi WHERE sablon_id = $1', [yeni.id]);
+      await db.sorgu('DELETE FROM rota_sablonu WHERE id = $1', [yeni.id]);
+    }), /rota_revizyonu_kaynak_sablon_bagi/);
+
+    // Kullanımdan kalkan şablondan taslak açılmaz; geri alınınca açılır.
+    const kalkti = (await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/durum`, { aktif: false, surum: sayili.surum })).sablon;
+    assert.equal(kalkti.aktif, false);
+    const red = await taslakAc(await mamulAc(), { tur: 'sablon', sablonId: yeni.id });
+    assert.equal(red.statusCode, 422);
+    assert.match(red.body, /kullanımdan kaldırılmış/);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/varsayilan-yap`, { surum: kalkti.surum })).statusCode, 422);
+    const dondu = (await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/durum`, { aktif: true, surum: kalkti.surum })).sablon;
+    assert.equal((await taslakAc(await mamulAc(), { tur: 'sablon', sablonId: yeni.id })).statusCode, 200);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/durum`, { aktif: false, surum: kalkti.surum })).statusCode, 409, 'eski sürüm');
+
+    // Varsayılan şablon kullanımdan kalkmaz; veritabanı kısıtı da tutar.
+    const varsayilan = (await tamam<SablonlarCevabi>(c.planlama, 'GET', '/rota/sablonlar')).sablonlar.find((x) => x.varsayilan)!;
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${varsayilan.id}/durum`, { aktif: false, surum: varsayilan.surum })).statusCode, 422);
+    await assert.rejects(vt().sorgu('UPDATE rota_sablonu SET aktif = false WHERE id = $1', [varsayilan.id]), /rota_sablonu_varsayilan_aktif/);
+    assert.equal(dondu.aktif, true);
+  });
+
+  test('3273: şablondan açılan adım istasyon ve süreyi katalogdan alır; katalogda değer yoksa alan boş kalır', async () => {
+    const trn = tip('TRN');
+    const bm = tip('BM');
+    const eski = await vt().tek<{ a: string | null; b: string | null; i: number | null }>(
+      'SELECT varsayilan_ayar_dk::text AS a, varsayilan_birim_dk::text AS b, varsayilan_istasyon_id AS i FROM istasyonlar_operasyon_tipi WHERE id = $1', [trn]);
+    const eskiBm = await vt().tek<{ a: string | null; b: string | null; i: number | null }>(
+      'SELECT varsayilan_ayar_dk::text AS a, varsayilan_birim_dk::text AS b, varsayilan_istasyon_id AS i FROM istasyonlar_operasyon_tipi WHERE id = $1', [bm]);
+    await vt().sorgu('UPDATE istasyonlar_operasyon_tipi SET varsayilan_ayar_dk = 35, varsayilan_birim_dk = 4.5, varsayilan_istasyon_id = $2 WHERE id = $1', [trn, istasyonA]);
+    await vt().sorgu('UPDATE istasyonlar_operasyon_tipi SET varsayilan_ayar_dk = NULL, varsayilan_birim_dk = NULL, varsayilan_istasyon_id = NULL WHERE id = $1', [bm]);
+    try {
+      const sablon = (await tamam<SablonCevabi>(c.planlama, 'POST', '/rota/sablonlar/ekle', {
+        ad: 'ORN katalog şablonu', adimlar: [{ operasyonTipiId: trn, ad: 'Torna' }, { operasyonTipiId: bm, ad: 'Muayene' }],
+      })).sablon;
+      const ac = await taslakAc(await mamulAc(), { tur: 'sablon', sablonId: sablon.id });
+      assert.equal(ac.statusCode, 200, ac.body);
+      const [a, b] = (await ayrinti(ac.json<KomutCevabi>().id)).adimlar;
+      assert.deepEqual([a?.kaynak?.tur, a?.kaynak?.id, Number(a?.ayarSuresiDk), Number(a?.islemSuresiDk), a?.ayar], ['istasyon', istasyonA, 35, 4.5, true]);
+      assert.deepEqual([b?.kaynak, b?.ayarSuresiDk, b?.islemSuresiDk], [null, null, null]);
+    } finally {
+      await vt().sorgu('UPDATE istasyonlar_operasyon_tipi SET varsayilan_ayar_dk = $2, varsayilan_birim_dk = $3, varsayilan_istasyon_id = $4 WHERE id = $1', [trn, eski?.a ?? null, eski?.b ?? null, eski?.i ?? null]);
+      await vt().sorgu('UPDATE istasyonlar_operasyon_tipi SET varsayilan_ayar_dk = $2, varsayilan_birim_dk = $3, varsayilan_istasyon_id = $4 WHERE id = $1', [bm, eskiBm?.a ?? null, eskiBm?.b ?? null, eskiBm?.i ?? null]);
+    }
   });
 
   test('#688: karttaki operasyonlar ilk taslağa aktarılır; kod tipe eşlenir, eşleşmeyen varsayılan tiple kalır; rotası olan üründe ve operasyonsuz kartta reddedilir', async () => {
