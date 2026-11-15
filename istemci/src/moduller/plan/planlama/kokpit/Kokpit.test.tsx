@@ -267,6 +267,27 @@ describe('Kokpit', () => {
     vi.unstubAllGlobals();
   });
 
+  // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.
+  it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; Onay ve canlı açıkken üst düğme ikincildir ve Ayarlar kapalıdır', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const c = ornekCalisma();
+    const { sec } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
+    const ust = (): HTMLElement => screen.getByRole('button', { name: /^Canlıya al/ });
+    expect(ust().className).toContain('tc-dugme-birincil');
+    const ayar = screen.getByRole('button', { name: 'Ayarlar' });
+    fireEvent.click(ayar);
+    expect(ayar.getAttribute('aria-pressed')).toBe('true');
+    expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(ust().className).not.toContain('tc-dugme-birincil');
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarları kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
+    fireEvent.click(ust());
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(ust().className).not.toContain('tc-dugme-birincil');
+    expect(screen.getByTitle('Plan ayarları').hasAttribute('disabled')).toBe(true);
+  });
+
   it('çalışma yokken boş durum gösterir', () => {
     ac({ calisma: null });
     expect(screen.getByText(/Henüz plan yok/)).toBeTruthy();

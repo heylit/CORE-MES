@@ -9,6 +9,7 @@ import { bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz } from '..
 import { useAn } from '../motor/saat.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
+import { Ayarlar } from './Ayarlar.tsx';
 import { Ayrinti } from './Ayrinti.tsx';
 import { Gelenler } from './Gelenler.tsx';
 import { gelenler } from './gelenler.ts';
@@ -79,6 +80,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [oneri, setOneri] = useState<TurAdayi | null>(null);
   // Stüdyo'dan "Kokpit'te aç" ile gelindiyse Onay ve canlı açık başlar.
   const [onayAcik, setOnayAcik] = useState(onayIstegiVar);
+  const [ayarAcik, setAyarAcik] = useState(false);
   useEffect(() => { onayIstegiAl(); }, []);
   const [yaziliyor, setYaziliyor] = useState(false);
   // Sorun turunda uygulanan hamleler tek değişiklik sayılır: Geri hepsini birlikte alır. `ust` grubun bittiği andaki adım sayısıdır.
@@ -338,7 +340,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   const secili = secEmir ? emir.get(secEmir) ?? null : null;
   // Sonuç satırı uygulandığı emrin ayrıntısında kalır; başka emir seçilince silinir.
-  useEffect(() => { setSonuc(null); }, [secEmir]);
+  useEffect(() => { setSonuc(null); if (secEmir !== null) setAyarAcik(false); }, [secEmir]);
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
 
   return (
@@ -361,9 +363,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y)" disabled={!yazabilir || mesgul || tur !== null || ileriSayisi === 0} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriSayisi} /></button>
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
         {(yazabilir || canliyaAlir) && (
-          <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
+          <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
             disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayAcik(!onayAcik); }}>
             {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
           </Dugme>
@@ -409,6 +412,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             oynat={oynuyor ? oynatKarar : null} oynatAc={yazabilir ? () => { setOynuyor(true); } : null} oynatDur={() => { setOynuyor(false); }}
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
+        ) : ayarAcik ? (
+          <Ayarlar c={c} komut={komut} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} kapat={() => { setAyarAcik(false); }} />
         ) : secili && (
           <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}

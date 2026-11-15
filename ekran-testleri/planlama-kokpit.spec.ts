@@ -535,3 +535,49 @@ test('Kokpit 3B: tezgâh çoksa yalnız yükü olan tezgâhlar çizilir, düğme
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
 });
+
+// 3282 1b: Ayarlar paneli seçili emrin yerinde (telefonda alttan) açılır; değişiklik önce etkisiyle gösterilir (değerlendirme ucu, plan-uygula),
+// Uygula planı alır. Sunucu cevapları uydurmadır.
+test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce ve sonra görünür, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  let surum = 1;
+  const degerlendirme: unknown[] = [];
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum }));
+  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
+    const g = r.request().postDataJSON() as { anahtar: string; deger: unknown };
+    surum += 1;
+    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
+  });
+  await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
+    guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
+  }));
+  await page.route('**/api/plan/planlama-degerlendirmesi', (r) => { degerlendirme.push(r.request().postDataJSON()); return json(r, { is: 'ayar' }); });
+  await page.route('**/api/plan/planlama-degerlendirmesi/ayar', (r) => json(r, {
+    durum: 'bitti', cevap: { calismaSurumu: surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan({ ...ILK }), ozet: { wT: 8, T: 8, late: 0 } } } },
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByTitle('Plan ayarları').click();
+  const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText('ATCS (öncelik, termin ve süre birlikte)')).toBeVisible();
+  const dondurma = panel.getByLabel(/Dondurulmuş bölge/);
+  await dondurma.fill('8');
+  await dondurma.blur();
+  await expect(panel.getByText('Dondurulmuş bölge: 4 sa → 8 sa')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayarlar-${bilgi.project.name}.png` });
+  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
+  const etki = panel.getByRole('region', { name: 'Ayarın etkisi' });
+  await expect(etki.getByText('1 → 0')).toBeVisible({ timeout: 10_000 });
+  expect(degerlendirme).toEqual([{ surum: expect.any(Number) as unknown, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  // Değişiklik bildirimi (Geri al) panelin altını örter; görüntü için kapatılır.
+  for (const k of await page.getByRole('button', { name: 'Bildirimi kapat' }).all()) await k.click();
+  await etki.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayar-etki-${bilgi.project.name}.png` });
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(panel).toHaveCount(0);
+  expect(ag.hatalar).toEqual([]);
+});
