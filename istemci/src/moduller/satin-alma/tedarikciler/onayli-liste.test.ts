@@ -41,8 +41,8 @@ describe('3279 a onaylı liste satırları', () => {
     const s = satirlar(ORNEK_LISTE, 'hizmet|isil', BUGUN);
     const csv = csvSatirlari(s, 'Hizmet · Isıl işlem');
     expect(csv[1]).toEqual(['ORN-Demir', null, 'Hizmet · Isıl işlem', 'Şartlı (ad ile eşlendi, onaylı sayılmaz)', 'Şartlı onaylı (ad ile eşlendi, onaylı sayılmaz)',
-      'ORN şart: her partide rapor', 'ISO 9001', '2026-12-02', null, 1, null]);
-    expect(csvSatirlari(s, null)[0]!.slice(9)).toEqual([23, 96]);
+      'ORN şart: her partide rapor', 'ISO 9001', '2026-12-02', null, 1, null, 'ORN-Müşteri Hava: Onaysız · süresi geçti 01.10.2026']);
+    expect(csvSatirlari(s, null)[0]!.slice(9, 11)).toEqual([23, 96]);
     expect(csv[0]![3]).toBe('Onaylı');
   });
 

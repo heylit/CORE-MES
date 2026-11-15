@@ -77,7 +77,10 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
   L.push(`Ödeme: ${payText(o.q)}`);
   if (o.q.deliveryTerm) L.push(`Teslim şekli: ${o.q.deliveryTerm}`);
   // 3279 a: Kalite'nin şartlı onayındaki şart tedarikçiye giden sipariş metnine yazılır (on izleme: "şart sipariş notuna eklenir").
-  for (const sart of talepRehberi(r, o.supplierId)?.sartlar ?? []) L.push(`Kalite şartı: ${sart}`);
+  const rehber = talepRehberi(r, o.supplierId);
+  for (const sart of rehber?.sartlar ?? []) L.push(`Kalite şartı: ${sart}`);
+  // 3279-2 a: proje müşterisinin şartlı onayındaki şart da yazılır.
+  for (const sart of rehber?.musteri?.sartlar ?? []) L.push(`${rehber?.musteri?.ad ?? 'Müşteri'} şartı: ${sart}`);
   const due = orderDue(o);
   if (due) L.push(`Beklenen teslim tarihi: ${fmtDate(due)}`);
   // Teslimat adresi kayıtta tutulmuyor; uydurma yer tutucu yerine satır yazılmaz (kural: veri yoksa yazılmaz).

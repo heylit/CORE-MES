@@ -110,6 +110,8 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     id: t.id, no: t.no, title: t.baslik, department: t.birim ?? '', requester: t.talepEdenAdi ?? '', priority: ONCELIK_T[t.oncelik],
     needDate: t.ihtiyacTarihi ?? '', notes: t.notlar, status: DURUM_T[t.durum], ...(t.iptalNedeni ? { cancelReason: t.iptalNedeni } : {}), teslimYontemi: t.teslimYontemi,
     uretimEmriId: t.uretimEmriId, uretimEmriNo: t.uretimEmriNo,
+    // 3279-2 a: teklifte projenin müşterisinin onayı (emirli talepte proje emirdedir; burada gelmez).
+    projeId: t.proje?.id ?? null,
     ...(t.guncellemeGrubu ? { guncellemeGrubu: t.guncellemeGrubu.map((x) => ({ id: x.id, no: x.no, status: DURUM_T[x.durum], kok: x.kok })) } : {}),
     weights: t.agirliklar === null ? null : { cost: t.agirliklar.maliyet, lead: t.agirliklar.termin, supplier: t.agirliklar.tedarikci, warranty: t.agirliklar.garanti },
     items: t.kalemler.map((i) => {

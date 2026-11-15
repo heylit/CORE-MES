@@ -5,7 +5,7 @@ import { expect, kesilenBasliklar, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const kalite = (k: Record<string, unknown>) => ({
-  durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], ...k,
+  durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], onaylar: [], ...k,
 });
 const karar = (kod: string, durum: string, aciklama: string | null = null) => ({
   kategoriTuru: 'hizmet', kategoriKodu: kod, durum, aciklama, tarih: '2026-03-12T08:00:00.000Z', kisiAd: 'ORN-Kalite Sorumlusu',

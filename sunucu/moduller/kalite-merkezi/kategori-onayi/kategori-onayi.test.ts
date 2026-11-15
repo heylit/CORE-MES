@@ -5,12 +5,13 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { KmKategoriDugumu, KmKategoriOnayi, KmKategoriOnaylariCevabi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
-import { kmKategoriKarariGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import { kmKategoriKarariGovdesi, kmTedarikciOnayiGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import type { KmTedarikciOnaylariCevabi } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import { denetimYaz } from '../../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../../kisiler/disari.ts';
 import { kimlikCozucu } from '../../oturum/disari.ts';
 import { kategoriOnaylari, onayliListe } from '../disari.ts';
-import { askidakiFirmalar, gecerliKararlar, kategoriReddi, KATEGORI_ILETILERI, listeFirmalari } from './kurallar.ts';
+import { askidakiFirmalar, gecerliKararlar, kapsamiDuzenle, kategoriReddi, KATEGORI_ILETILERI, listeFirmalari, onayGecerliligi } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -194,7 +195,7 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     const m = await vt().tx((db) => onayliListe(db));
     assert.deepEqual(m.get(f.ted), {
       durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: 'Kritik', sertifikalar: ['AS9100'], sertifikaBitisi: '2027-01-31', sonDenetim: null,
-      kategoriler: m.get(f.ted)!.kategoriler,
+      kategoriler: m.get(f.ted)!.kategoriler, onaylar: [],
     });
     assert.ok(m.get(f.ted)!.kategoriler.every((k) => k.kisiAd !== null), 'karari veren listede');
     assert.deepEqual(m.get(f.ted)!.kategoriler.map((k) => [k.kategoriKodu, k.durum, k.aciklama]), [['isil', 'sartli', 'İlk partide tam kontrol'], ['yuzey', 'onayli', null]]);
@@ -207,6 +208,111 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     const m2 = await vt().tx((db) => onayliListe(db));
     assert.notEqual(m2.get(f.ted)!.firmaAskida, null);
     assert.deepEqual(m2.get(f.ted)!.kategoriler.map((k) => [k.durum, k.tarih]), m2.get(f.ted)!.kategoriler.map(() => ['onaysiz', m2.get(f.ted)!.firmaAskida]));
+  });
+
+  // 3279-2 a: şirket dışı onaylar.
+  const onay = (cerez: string, g: Record<string, unknown>) => istek(cerez, '/kalite-merkezi/tedarikci-onaylari/kaydet', {
+    id: null, firmaId: f.ted, tur: 'musteri', musteriFirmaId: f.musteri, ad: null, kapsamTumu: false, kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'isil' }],
+    durum: 'onayli', aciklama: null, bitis: null, belgeKimligi: null, surum: null, ...g,
+  });
+  const onaylar = async (): Promise<KmTedarikciOnaylariCevabi> => {
+    const r = await istek(kalite, `/kalite-merkezi/tedarikci-onaylari?firmaId=${f.ted}`);
+    assert.equal(r.statusCode, 200, r.body);
+    return r.json() as KmTedarikciOnaylariCevabi;
+  };
+
+  test('3279-2 yetki: yalnız onay işlemi okur ve yazar; yazan ve okuyan 403', async () => {
+    for (const c of [yazan, okuyan]) {
+      assert.equal((await onay(c, {})).statusCode, 403);
+      assert.equal((await istek(c, `/kalite-merkezi/tedarikci-onaylari?firmaId=${f.ted}`)).statusCode, 403);
+    }
+    const e = await onaylar();
+    assert.deepEqual(e.onaylar, []);
+    assert.ok(e.musteriler.some((m) => m.id === f.musteri));
+    assert.ok(!e.musteriler.some((m) => m.id === f.ted));
+  });
+
+  test('3279-2 müşteri ve diğer onay: kişi sunucudan, kapsam ve geçmiş yazılır; değiştirme sürümle, firma ve tür değişmez', async () => {
+    await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('belge', 'blg_onay', '{\"ad\":\"Deneme.pdf\"}', $1)", [yonId]);
+    const r = await onay(kalite, { belgeKimligi: 'blg_onay', bitis: '2027-12-31' });
+    assert.equal(r.statusCode, 200, r.body);
+    const { id } = r.json() as { id: number; surum: number };
+    const d = await onay(kalite, { tur: 'diger', musteriFirmaId: null, ad: 'Deneme sınıf onayı', kapsamTumu: true, kapsam: [], durum: 'sartli', aciklama: 'Deneme şart' });
+    assert.equal(d.statusCode, 200, d.body);
+    const e = await onaylar();
+    assert.deepEqual(e.onaylar.map((o) => [o.tur, o.musteriAd, o.ad, o.kapsamTumu, o.kapsam.map((k) => k.kategoriKodu), o.durum, o.bitis, o.belgeKimligi, o.kisiAd]), [
+      ['musteri', 'Deneme Müşteri', null, false, ['isil'], 'onayli', '2027-12-31', 'blg_onay', 'Deneme kko-kalite'],
+      ['diger', null, 'Deneme sınıf onayı', true, [], 'sartli', null, null, 'Deneme kko-kalite'],
+    ]);
+    const g = await onay(kalite, { id, surum: 1, durum: 'onaysiz', belgeKimligi: 'blg_onay', kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'isil' }, { kategoriTuru: 'hizmet', kategoriKodu: 'yuzey' }] });
+    assert.equal(g.statusCode, 200, g.body);
+    assert.deepEqual(g.json(), { id, surum: 2 });
+    assert.equal((await onay(kalite, { id, surum: 1 })).statusCode, 409);
+    assert.equal((await onay(kalite, { id, surum: 2, tur: 'diger', musteriFirmaId: null, ad: 'X' })).statusCode, 400);
+    assert.equal((await onay(kalite, { id: 2147480000, surum: 1 })).statusCode, 404);
+    const gecmis = await vt().sorgu<{ onceki_durum: string | null; durum: string; kapsam: string[] }>(
+      'SELECT onceki_durum, durum, kapsam FROM kalite_merkezi_tedarikci_onayi_gecmisi WHERE onay_id = $1 ORDER BY id', [id]);
+    assert.deepEqual(gecmis, [{ onceki_durum: null, durum: 'onayli', kapsam: ['hizmet|isil'] }, { onceki_durum: 'onayli', durum: 'onaysiz', kapsam: ['hizmet|isil', 'hizmet|yuzey'] }]);
+    await assert.rejects(vt().sorgu('DELETE FROM kalite_merkezi_tedarikci_onayi_gecmisi WHERE onay_id = $1', [id]));
+    await assert.rejects(vt().sorgu("UPDATE kalite_merkezi_tedarikci_onayi SET musteri_firma_id = NULL WHERE id = $1", [id]), /kalite_merkezi_tedarikci_onayi_musteri_turu/);
+  });
+
+  test('3279-2 red: müşterisiz müşteri onayı, müşteri olmayan müşteri, kendisi, olmayan belge ve kategori, şartsız şartlı, kapsamsız 400', async () => {
+    const red = async (g: Record<string, unknown>, alan: string) => {
+      const r = await onay(kalite, g);
+      assert.equal(r.statusCode, 400, r.body);
+      assert.equal((r.json() as { alan?: string }).alan, alan, r.body);
+    };
+    await red({ musteriFirmaId: null }, 'musteriFirmaId');
+    await red({ musteriFirmaId: f.pasif }, 'musteriFirmaId');
+    await red({ musteriFirmaId: f.ted }, 'musteriFirmaId');
+    await red({ firmaId: f.musteri, musteriFirmaId: f.musteri }, 'firmaId');
+    await red({ belgeKimligi: 'blg_yok' }, 'belgeKimligi');
+    await red({ kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'olmayan' }] }, 'kapsam');
+    await red({ kapsam: [] }, 'kapsam');
+    await red({ durum: 'sartli' }, 'aciklama');
+    await red({ tur: 'diger', musteriFirmaId: null }, 'ad');
+  });
+
+  test('3279-2 onaylı liste: şirket dışı onaylar belge yerine yalnız var mı ile; süresi geçen onaysız; Askıda reddi gevşemez (K4)', async () => {
+    await vt().sorgu("UPDATE kalite_merkezi_tedarikci_onayi SET bitis = DATE '2020-01-01' WHERE tur = 'diger' AND firma_id = $1", [f.ted]);
+    const m = (await vt().tx((db) => onayliListe(db))).get(f.ted)!;
+    assert.deepEqual(m.onaylar.map((o) => [o.tur, o.musteriAd, o.durum, o.suresiGecti, o.belgeVar]), [['musteri', 'Deneme Müşteri', 'onaysiz', false, true], ['diger', null, 'onaysiz', true, false]]);
+    assert.ok(!('belgeKimligi' in m.onaylar[0]!));
+    const s = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste/onayla', { govde: { ad: 'Deneme', onay: 'Askıda', firmaId: f.ted }, surum: (await vt().tek<{ surum: string }>("SELECT surum FROM kalite_merkezi_belge WHERE koleksiyon = 'sup' AND kimlik = 'sup_liste'"))!.surum });
+    assert.equal(s.statusCode, 200, s.body);
+    const askida = (await vt().tx((db) => onayliListe(db))).get(f.ted)!;
+    assert.equal(askida.durum, 'Askıda');
+    assert.ok(askida.kategoriler.every((k) => k.durum === 'onaysiz'));
+  });
+});
+
+describe('Şirket dışı onay kuralları (3279-2)', () => {
+  const agac: KmKategoriDugumu[] = [
+    { tur: 'hizmet', kod: 'isil', ad: 'Isıl işlem', ustAd: 'Hizmet', aktif: true },
+    { tur: 'sarf', kod: 'eski', ad: 'Eski sarf', ustAd: 'Sarf', aktif: false },
+  ];
+  test('KMK-5: kapsam tekil ve sıralı; bütün kategoride boş; yeni pasif kategori reddedilir, eskiden kapsamdaki kalır', () => {
+    const isil = { kategoriTuru: 'hizmet', kategoriKodu: 'isil' } as const;
+    const eski = { kategoriTuru: 'sarf', kategoriKodu: 'eski' } as const;
+    assert.deepEqual(kapsamiDuzenle(agac, true, [isil], []), { kapsam: [], red: null });
+    assert.deepEqual(kapsamiDuzenle(agac, false, [isil, isil], []), { kapsam: [isil], red: null });
+    assert.equal(kapsamiDuzenle(agac, false, [eski], []).red, KATEGORI_ILETILERI.kategoriPasif);
+    assert.deepEqual(kapsamiDuzenle(agac, false, [isil, eski], ['sarf|eski']), { kapsam: [isil, eski], red: null });
+  });
+  test('KMK-6: bitişi bugünden önce olan onaysız; bugün biten ve süresiz geçerli', () => {
+    assert.deepEqual(onayGecerliligi('onayli', '2026-11-14', '2026-11-15'), { durum: 'onaysiz', suresiGecti: true });
+    assert.deepEqual(onayGecerliligi('sartli', '2026-11-15', '2026-11-15'), { durum: 'sartli', suresiGecti: false });
+    assert.deepEqual(onayGecerliligi('onayli', null, '2026-11-15'), { durum: 'onayli', suresiGecti: false });
+  });
+  test('gövde: yeni onayda sürüm yok, değiştirmede var; boş ad ve açıklama boştur', () => {
+    const g = { id: null, firmaId: 1, tur: 'diger', musteriFirmaId: null, ad: ' Deneme ', kapsamTumu: true, kapsam: [], durum: 'onayli', aciklama: '', bitis: null, belgeKimligi: null, surum: null };
+    const o = kmTedarikciOnayiGovdesi.parse(g);
+    assert.deepEqual([o.ad, o.aciklama], ['Deneme', null]);
+    assert.equal(kmTedarikciOnayiGovdesi.safeParse({ ...g, surum: 1 }).success, false);
+    assert.equal(kmTedarikciOnayiGovdesi.safeParse({ ...g, id: 3, surum: 1 }).success, true);
+    assert.equal(kmTedarikciOnayiGovdesi.safeParse({ ...g, ad: '' }).success, false);
+    assert.equal(kmTedarikciOnayiGovdesi.safeParse({ ...g, bitis: '2026-02-30' }).success, false);
   });
 });
 

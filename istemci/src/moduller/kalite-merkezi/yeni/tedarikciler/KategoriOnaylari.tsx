@@ -91,7 +91,7 @@ function KararPenceresi({ firmaId, agac, onaylar, duzenlenen, kapat }: {
 
 // 2466 (2461-2 a): tedarikçinin kategori başına Kalite kararı. Tedarikçi formunda adım içeriğidir; karar formun Kaydet'ini beklemez.
 // Satın Alma bu kararları salt okur; firma geneli kayıt Askıda ise orada bütün kategoriler onaysız okunur (2466-2 a).
-export function KategoriOnaylari({ firmaId }: { firmaId: number | null }) {
+export function KategoriOnaylari({ firmaId, ekleGizli = false }: { firmaId: number | null; ekleGizli?: boolean }) {
   const [duzenlenen, duzenlenenYaz] = useState<Duzenlenen | null>(null);
   const veri = useQuery({
     queryKey: kategoriOnayiAnahtari(firmaId ?? 0),
@@ -120,9 +120,11 @@ export function KategoriOnaylari({ firmaId }: { firmaId: number | null }) {
   ];
   return (
     <>
-      <div className="tc-km4-eylemler">
-        <Dugme tur="birincil" simge="plus" disabled={!d || eklenebilirKategoriler(agac, onaylar).length === 0} onClick={() => { duzenlenenYaz({ onay: null }); }}>Kategori ekle</Dugme>
-      </div>
+      {!ekleGizli && (
+        <div className="tc-km4-eylemler">
+          <Dugme tur="birincil" simge="plus" disabled={!d || eklenebilirKategoriler(agac, onaylar).length === 0} onClick={() => { duzenlenenYaz({ onay: null }); }}>Kategori ekle</Dugme>
+        </div>
+      )}
       {d?.firmaAskida && (
         <p className="tc-km4-risk">Firma geneli onay durumu Askıda ({trd(d.firmaAskida.tarih)}): Satın Alma bu firmanın bütün kategorilerini onaysız okur.</p>
       )}

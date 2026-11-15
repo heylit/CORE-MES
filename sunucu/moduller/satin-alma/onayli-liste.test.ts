@@ -53,7 +53,7 @@ describe('satin-alma onaylı tedarikçi listesi (3279 a, gerçek PostgreSQL)', (
     (await ortam!.sahip.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, aktif, olusturan_id) VALUES ($1, 'tedarikci', true, $2) RETURNING id",
       [ad, yoneticiId]))!.id;
   const kaliteSatiri = (k: Partial<KmOnayliListeSatiri>): KmOnayliListeSatiri => ({
-    durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], ...k,
+    durum: 'Onaylı', firmaAskida: null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kategoriler: [], onaylar: [], ...k,
   });
 
   before(async () => {

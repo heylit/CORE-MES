@@ -1151,5 +1151,7 @@ export const onayliListeCevabi = z.object({
   })),
   kategoriler: z.array(z.object({ tur: z.string(), kod: z.string(), ad: z.string(), ustAd: z.string(), aktif: z.boolean() })),
   malzemeKategorileri: z.array(z.object({ malzemeNo: z.number().int().positive(), tur: z.string(), kod: z.string() })),
+  // 3279-2 a: talebin projesinin müşterisi (teklifte o müşterinin onayı olan firmalar önde); müşterisi olmayan proje yoktur.
+  projeMusterileri: z.array(z.object({ projeId: z.number().int().positive(), musteriFirmaId: firmaKimligi, musteriAd: z.string() })),
 });
 export type OnayliListeCevabi = z.output<typeof onayliListeCevabi>;

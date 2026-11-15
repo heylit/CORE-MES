@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { KmKategoriDurumu, KmKategoriTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import type { KmKategoriDurumu, KmKategoriTuru, KmOnayTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 
 export interface KararSatiri {
   firmaId: number; kategoriTuru: KmKategoriTuru; kategoriKodu: string; durum: KmKategoriDurumu; aciklama: string | null; kisiId: number; zaman: string; surum: number;
@@ -84,4 +84,75 @@ export function listeKayitlari(db: Db): Promise<ListeKaydi[]> {
 // 3279 a: kategori kararı olan firmalar (kayıtları olmasa da listede görünürler).
 export async function kararliFirmalar(db: Db): Promise<number[]> {
   return (await db.sorgu<{ firmaId: number }>('SELECT DISTINCT firma_id AS "firmaId" FROM kalite_merkezi_kategori_onayi ORDER BY 1')).map((r) => r.firmaId);
+}
+
+// 3279-2 a: şirket dışı onaylar. Kapsam satırları dizi olarak gelir ("tür|kod"); bitiş metin (YYYY-AA-GG).
+export interface DigerOnaySatiri {
+  id: number; firmaId: number; tur: KmOnayTuru; musteriFirmaId: number | null; ad: string | null; kapsamTumu: boolean; kapsam: string[];
+  durum: KmKategoriDurumu; aciklama: string | null; bitis: string | null; belgeKimligi: string | null; kisiId: number; zaman: string; surum: number;
+}
+export function digerOnaylar(db: Db, firmaIdler: readonly number[] | null): Promise<DigerOnaySatiri[]> {
+  return db.sorgu(
+    `SELECT o.id, o.firma_id AS "firmaId", o.tur, o.musteri_firma_id AS "musteriFirmaId", o.ad, o.kapsam_tumu AS "kapsamTumu",
+            ARRAY(SELECT k.kategori_turu || '|' || k.kategori_kodu FROM kalite_merkezi_tedarikci_onayi_kapsami k WHERE k.onay_id = o.id
+                  ORDER BY k.kategori_turu, k.kategori_kodu) AS kapsam,
+            o.durum, o.aciklama, to_char(o.bitis, 'YYYY-MM-DD') AS bitis, o.belge_kimligi AS "belgeKimligi", o.kisi_id AS "kisiId",
+            ${zamanMetni('o.zaman')} AS zaman, o.surum
+     FROM kalite_merkezi_tedarikci_onayi o WHERE $1::int[] IS NULL OR o.firma_id = ANY($1::int[]) ORDER BY o.firma_id, o.id`,
+    [firmaIdler === null ? null : [...firmaIdler]],
+  );
+}
+
+export interface DigerOnayYazimi {
+  firmaId: number; tur: KmOnayTuru; musteriFirmaId: number | null; ad: string | null; kapsamTumu: boolean; durum: KmKategoriDurumu;
+  aciklama: string | null; bitis: string | null; belgeKimligi: string | null; kisiId: number;
+}
+export function digerOnayEkle(db: Db, o: DigerOnayYazimi): Promise<{ id: number; surum: number } | null> {
+  return db.tek(
+    `INSERT INTO kalite_merkezi_tedarikci_onayi (firma_id, tur, musteri_firma_id, ad, kapsam_tumu, durum, aciklama, bitis, belge_kimligi, kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, surum`,
+    [o.firmaId, o.tur, o.musteriFirmaId, o.ad, o.kapsamTumu, o.durum, o.aciklama, o.bitis, o.belgeKimligi, o.kisiId],
+  );
+}
+
+// Değiştirme satırı kilitler: sürüm denetimi ile yazma arasına başkası giremez; firma ve tür değişmez.
+export function digerOnayKilitle(db: Db, id: number): Promise<{ firmaId: number; tur: KmOnayTuru; durum: KmKategoriDurumu; surum: number } | null> {
+  return db.tek('SELECT firma_id AS "firmaId", tur, durum, surum FROM kalite_merkezi_tedarikci_onayi WHERE id = $1 FOR UPDATE', [id]);
+}
+
+export function digerOnayGuncelle(db: Db, id: number, o: DigerOnayYazimi): Promise<{ id: number; surum: number } | null> {
+  return db.tek(
+    `UPDATE kalite_merkezi_tedarikci_onayi SET musteri_firma_id = $2, ad = $3, kapsam_tumu = $4, durum = $5, aciklama = $6, bitis = $7, belge_kimligi = $8,
+       kisi_id = $9, zaman = clock_timestamp(), surum = surum + 1
+     WHERE id = $1 RETURNING id, surum`,
+    [id, o.musteriFirmaId, o.ad, o.kapsamTumu, o.durum, o.aciklama, o.bitis, o.belgeKimligi, o.kisiId],
+  );
+}
+
+// Kapsam alt tablosu her yazmada yeniden kurulur (ana satırın sürümü yazmayla artar).
+export async function kapsamYaz(db: Db, onayId: number, kapsam: readonly { kategoriTuru: string; kategoriKodu: string }[]): Promise<void> {
+  await db.sorgu('DELETE FROM kalite_merkezi_tedarikci_onayi_kapsami WHERE onay_id = $1', [onayId]);
+  if (kapsam.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_tedarikci_onayi_kapsami (onay_id, kategori_turu, kategori_kodu)
+     SELECT $1, t, k FROM unnest($2::text[], $3::text[]) AS u(t, k)`,
+    [onayId, kapsam.map((x) => x.kategoriTuru), kapsam.map((x) => x.kategoriKodu)],
+  );
+}
+
+export async function digerOnayGecmisiYaz(db: Db, onayId: number, oncekiDurum: KmKategoriDurumu | null, o: DigerOnayYazimi, kapsam: readonly string[]): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_tedarikci_onayi_gecmisi (onay_id, onceki_durum, durum, aciklama, bitis, kapsam_tumu, kapsam, kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [onayId, oncekiDurum, o.durum, o.aciklama, o.bitis, o.kapsamTumu, [...kapsam], o.kisiId],
+  );
+}
+
+// Belge Kalite Merkezi'nin belge deposundadır (koleksiyon 'belge'); onay yalnız kimliğiyle bağlanır.
+export async function belgeVarMi(db: Db, kimlik: string): Promise<boolean> {
+  return (await db.tek<{ v: boolean }>("SELECT EXISTS (SELECT 1 FROM kalite_merkezi_belge WHERE koleksiyon = 'belge' AND kimlik = $1 AND govde IS NOT NULL) AS v", [kimlik]))?.v ?? false;
+}
+
+export async function digerOnayliFirmalar(db: Db): Promise<number[]> {
+  return (await db.sorgu<{ firmaId: number }>('SELECT DISTINCT firma_id AS "firmaId" FROM kalite_merkezi_tedarikci_onayi ORDER BY 1')).map((r) => r.firmaId);
 }

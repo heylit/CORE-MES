@@ -889,6 +889,13 @@ let onayliListeCozucu: OnayliListeCozucusu | null = null;
 export function onayliListeCozucusuKaydet(cozucu: OnayliListeCozucusu | null): void { onayliListeCozucu = cozucu; }
 
 // 3279 a: firmalar satın alma tedarikçileri ile Kalite kaydı ya da kararı olanların birleşimi; malzeme eşlemesi katalog kartlarıdır.
+// 3279-2 a: projenin müşterisi ve adı; müşterisi olmayan ya da firması bulunamayan proje listede yoktur (ad uydurulmaz).
+async function projeMusterileri(db: Db): Promise<OnayliListeCevabi['projeMusterileri']> {
+  const projeler = (await projeSecenekleri(db, { yalnizAktif: false })).flatMap((p) => (p.firmaId === null ? [] : [{ projeId: p.id, musteriFirmaId: p.firmaId }]));
+  const adlar = await firmaAdlari(db, projeler.map((p) => p.musteriFirmaId));
+  return projeler.flatMap((p) => { const ad = adlar.get(p.musteriFirmaId); return ad === undefined ? [] : [{ ...p, musteriAd: ad }]; });
+}
+
 export async function onayliListe(db: Db): Promise<OnayliListeCevabi> {
   const tedarikciler = new Set((await s.tedarikcileriOku(db)).map((t) => t.firmaId));
   const kalite = onayliListeCozucu === null ? null : await onayliListeCozucu(db);
@@ -910,6 +917,7 @@ export async function onayliListe(db: Db): Promise<OnayliListeCevabi> {
     firmalar,
     kategoriler: (await kategoriAgaci(db)).map((d) => ({ tur: d.tur, kod: d.kod, ad: d.ad, ustAd: d.ustAd, aktif: d.aktif })),
     malzemeKategorileri: [...kartlar].flatMap(([malzemeNo, k]) => (k === null ? [] : [{ malzemeNo, tur: k.tur, kod: k.kod }])),
+    projeMusterileri: await projeMusterileri(db),
   };
 }
 

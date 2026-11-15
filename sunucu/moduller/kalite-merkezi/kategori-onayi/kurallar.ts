@@ -1,4 +1,4 @@
-import type { KmKategoriDugumu, KmKategoriOnayi, KmKategoriTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import type { KmKategoriDugumu, KmKategoriDurumu, KmKategoriOnayi, KmKategoriTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import { KM_KRITIKLIKLER } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { TEDARIKCI_ASKIDA, tedarikciOnayDurumlari } from '../kurallar.ts';
@@ -75,3 +75,31 @@ export function listeFirmalari(kayitlar: readonly ListeKaydi[], firmalar: readon
   }
   return new Map([...sonuc].map(([id, { kimlikle, serts, ...o }]) => [id, { ...o, adIleEslendi: !kimlikle, sertifikalar: [...serts].sort((a, b) => a.localeCompare(b, 'tr')) }]));
 }
+
+export const ONAY_ILETILERI = {
+  firma: 'Onay yalnız Müşteri-Tedarikçi\'deki aktif tedarikçi firmaya verilir.',
+  musteri: 'Müşteri onayında müşteri, Müşteri-Tedarikçi\'deki aktif müşteri firması olmalıdır.',
+  kendisi: 'Firma kendi kendisinin müşterisi olamaz.',
+  belge: 'Belge Kalite Merkezi belgelerinde bulunamadı.',
+  onayYok: 'Onay bulunamadı.',
+  degismez: 'Onayın firması ve türü değişmez; yeni onay ekleyin.',
+} as const;
+
+// KMK-5 (3279-2 a): kapsam kategorileri tekilleşir ve sıralanır; bütün kategorilerde liste boştur. Yeni kapsam kategorisi ağaçta var ve
+// aktif olmalı; değiştirmede önceden kapsamda olan (sonradan pasifleşen) kategori kalabilir (KMK-1 ile aynı).
+export function kapsamiDuzenle(
+  agac: readonly KmKategoriDugumu[], kapsamTumu: boolean, kapsam: readonly { kategoriTuru: KmKategoriTuru; kategoriKodu: string }[], onceki: readonly string[],
+): { kapsam: { kategoriTuru: KmKategoriTuru; kategoriKodu: string }[]; red: string | null } {
+  if (kapsamTumu) return { kapsam: [], red: null };
+  const tekil = new Map(kapsam.map((k) => [`${k.kategoriTuru}|${k.kategoriKodu}`, k]));
+  for (const [a, k] of tekil) {
+    if (onceki.includes(a)) continue;
+    const red = kategoriReddi(agac, k.kategoriTuru, k.kategoriKodu, true);
+    if (red !== null) return { kapsam: [], red };
+  }
+  return { kapsam: [...tekil.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, k]) => k), red: null };
+}
+
+// KMK-6 (3279-2 a): okurken geçerli durum. Bitişi bugünden önce olan onay onaysızdır; bitiş boşsa süresiz. `bugun` YYYY-AA-GG.
+export const onayGecerliligi = (durum: KmKategoriDurumu, bitis: string | null, bugun: string): { durum: KmKategoriDurumu; suresiGecti: boolean } =>
+  bitis !== null && bitis < bugun ? { durum: 'onaysiz', suresiGecti: true } : { durum, suresiGecti: false };

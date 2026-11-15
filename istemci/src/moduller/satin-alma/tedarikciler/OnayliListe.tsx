@@ -3,13 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
 import {
-  CSV_BASLIKLARI, SERTIFIKA_ESIGI_GUN, TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, matris, ozet, satirlar as satirlariKur, sertifikaMetni, sonYilNotu, suz,
-  type DurumSuzgeci, type KategoriSecenegi, type MatrisHucresi, type Satir,
+  CSV_BASLIKLARI, SERTIFIKA_ESIGI_GUN, TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, firmaOnaylari, matris, onaySecenekleri, ozet, satirlar as satirlariKur, sertifikaMetni, sonYilNotu, suz,
+  type DurumSuzgeci, type FirmaOnaySatiri, type KategoriSecenegi, type MatrisHucresi, type OnaySuzgeci, type Satir,
 } from './onayli-liste.ts';
 import './onayli-liste.css';
 
@@ -102,6 +102,27 @@ function Matris({ veri, bugun }: { veri: OnayliListeCevabi; bugun: string }) {
   );
 }
 
+// Üçten fazla onay "+N" ile kısaltılır; tıklayınca firmanın bütün onayları açılır (3279-2 a).
+const ONAY_SINIRI = 3;
+const FIRMA_ONAY_SUTUNLARI: Sutun<FirmaOnaySatiri>[] = [
+  { anahtar: 'tur', baslik: 'Tür', hucre: (x) => x.tur },
+  { anahtar: 'kim', baslik: 'Kimin onayı', hucre: (x) => x.kim },
+  { anahtar: 'kapsam', baslik: 'Kapsam', hucre: (x) => x.kapsam },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <span className="sa-ol-iki"><Rozet ton={x.durum.ton}>{x.durum.metin}</Rozet>{x.sart !== null && <small className="sa-ol-sartli">{x.sart}</small>}</span> },
+  { anahtar: 'gecerlilik', baslik: 'Geçerlilik', hucre: (x) => x.gecerlilik },
+  { anahtar: 'belge', baslik: 'Belge', hucre: (x) => (x.belge ? 'Belgesi var' : '—') },
+];
+
+function FirmaPenceresi({ veri, satir, kaliteAcar, kapat }: { veri: OnayliListeCevabi; satir: Satir; kaliteAcar: boolean; kapat: () => void }) {
+  const l = firmaOnaylari(veri, satir.firmaId);
+  return (
+    <Pencere acik kapat={kapat} baslik={satir.ad} alt={<>{kaliteAcar && <a className="sa-ol-kalite" href={KALITE_TEDARIKCI_YOLU}>Kalite'de aç</a>}<Dugme tur="ikincil" onClick={kapat}>Kapat</Dugme></>}>
+      <p className="sa-ol-not">Salt okunur; onaylar Kalite Merkezi'nde değişir. Müşteri onayının belgesi burada açılmaz.</p>
+      <Tablo etiket={`${satir.ad}: onaylar`} sutunlar={FIRMA_ONAY_SUTUNLARI} satirlar={l} satirAnahtari={(x) => x.anahtar} bosMesaj="Bu firmanın onayı yok." />
+    </Pencere>
+  );
+}
+
 export function OnayliListe() {
   const { data: kullanici } = useOturum();
   const kaliteAcar = kullanici?.islemler.includes('sayfa.kalite-merkezi') ?? false;
@@ -110,6 +131,8 @@ export function OnayliListe() {
   const [durum, durumYaz] = useState<DurumSuzgeci>('hepsi');
   const [ara, araYaz] = useState('');
   const [gorunum, gorunumYaz] = useState<'liste' | 'matris'>('liste');
+  const [onay, onayYaz] = useState<OnaySuzgeci>('hepsi');
+  const [acikFirma, acikFirmaYaz] = useState<Satir | null>(null);
   const bugun = tesisGunu(Date.now());
   const veri = l.data ?? null;
   const secenekler = useMemo(() => (veri === null ? [] : kategoriSecenekleri(veri)), [veri]);
@@ -117,7 +140,8 @@ export function OnayliListe() {
   const kategori = kategoriSecimi ?? secenekler.find((k) => k.kararli)?.deger ?? TUM_FIRMALAR;
   const genel = useMemo(() => (veri === null ? [] : satirlariKur(veri, TUM_FIRMALAR, bugun)), [veri, bugun]);
   const hepsi = useMemo(() => (veri === null ? [] : kategori === TUM_FIRMALAR ? genel : satirlariKur(veri, kategori, bugun)), [veri, kategori, genel, bugun]);
-  const gorunen = suz(hepsi, durum, ara);
+  const gorunen = suz(hepsi, durum, ara, onay);
+  const onaySecimi = useMemo(() => (veri === null ? [] : onaySecenekleri(veri)), [veri]);
   const secili = secenekler.find((k) => k.deger === kategori) ?? null;
 
   if (l.isError) return <DurumKutusu durum="hata" hata={l.error} yenile={() => void l.refetch()} />;
@@ -129,18 +153,28 @@ export function OnayliListe() {
   const sutunlar: Sutun<Satir>[] = [
     {
       anahtar: 'ad', baslik: 'Firma',
-      hucre: (x) => <span className="sa-ol-iki"><b>{x.ad}</b><small>{x.kritiklik ?? (x.satinAlmaTedarikcisi ? 'Satın alma tedarikçisi' : '—')}</small></span>,
-    },
-    ...(kategori === TUM_FIRMALAR ? [] : [{
-      anahtar: 'kategoride', baslik: 'Bu kategoride',
-      hucre: (x: Satir) => (
+      hucre: (x) => (
         <span className="sa-ol-iki">
-          <Rozet ton={x.durum.ton}>{x.durum.metin}</Rozet>
-          {x.sart !== null && <small className="sa-ol-sartli">{x.sart}</small>}
-          {x.kararAlt !== null && <small>{x.kararAlt}</small>}
+          {x.onaylar.length > 0 ? <button type="button" className="sa-ol-firma" onClick={() => acikFirmaYaz(x)}><b>{x.ad}</b></button> : <b>{x.ad}</b>}
+          <small>{x.kritiklik ?? (x.satinAlmaTedarikcisi ? 'Satın alma tedarikçisi' : '—')}</small>
         </span>
       ),
-    } satisfies Sutun<Satir>]),
+    },
+    {
+      anahtar: 'onaylar', baslik: kategori === TUM_FIRMALAR ? 'Onaylar' : 'Onaylar (bu kategoride)',
+      hucre: (x) => (x.onaylar.length === 0 ? <span className="sa-ol-iki"><Rozet ton={x.durum.ton}>{x.durum.metin}</Rozet>{x.kararAlt !== null && <small>{x.kararAlt}</small>}</span> : (
+        <span className="sa-ol-iki">
+          <span className="sa-ol-onaylar">
+            {x.onaylar.slice(0, ONAY_SINIRI).map((r, i) => <span key={i} className="sa-ol-onay"><small>{r.kim}</small><Rozet ton={r.ton}>{r.metin}</Rozet></span>)}
+            {x.onaylar.length > ONAY_SINIRI && (
+              <button type="button" className="sa-ol-arti" aria-label={`${x.ad}: bütün onaylar (${x.onaylar.length})`} onClick={() => acikFirmaYaz(x)}>{`+${x.onaylar.length - ONAY_SINIRI}`}</button>
+            )}
+          </span>
+          {x.onaylar.filter((r) => r.sart !== null).map((r, i) => <small key={i} className="sa-ol-sartli">{`${r.kim}: ${r.sart ?? ''}`}</small>)}
+          {x.kararAlt !== null && <small>{x.kararAlt}</small>}
+        </span>
+      )),
+    },
     {
       anahtar: 'genel', baslik: 'Firma geneli',
       hucre: (x) => <Rozet ton={x.genel.ton}>{x.genel.metin}</Rozet>,
@@ -205,11 +239,17 @@ export function OnayliListe() {
               arama: { deger: ara, degistir: araYaz, etiket: 'Firma ara', yerTutucu: 'Firma adı' },
               suzgec: { etiket: 'Durum', secenekler: SUZGECLER, secili: durum, sec: (d) => durumYaz(d as DurumSuzgeci) },
               // Ad ile eşlenen kayıt CSV'de onaylı sayılmaz (Risk K3); tablonun kendi CSV'si ekran metnini aldığından ayrı düğme.
-              sag: <Dugme simge="download" onClick={() => csvIndir(csvAdi, CSV_BASLIKLARI, csvSatirlari(gorunen, secili?.ad ?? null))}>Dışa aktar (CSV)</Dugme>,
+              sag: (
+                <span className="sa-ol-arac">
+                  {onaySecimi.length > 2 && <Secim etiket="Onay" value={onay} onChange={(e) => onayYaz(e.target.value as OnaySuzgeci)} secenekler={onaySecimi} />}
+                  <Dugme simge="download" onClick={() => csvIndir(csvAdi, CSV_BASLIKLARI, csvSatirlari(gorunen, secili?.ad ?? null))}>Dışa aktar (CSV)</Dugme>
+                </span>
+              ),
             }} />
           </div>
         </div>
       )}
+      {acikFirma !== null && <FirmaPenceresi veri={veri} satir={acikFirma} kaliteAcar={kaliteAcar} kapat={() => acikFirmaYaz(null)} />}
     </div>
   );
 }

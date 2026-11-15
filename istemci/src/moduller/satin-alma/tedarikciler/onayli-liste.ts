@@ -32,6 +32,29 @@ export interface Satir {
   sertifikaGun: number | null;
   sonDenetim: string | null;
   sonYil: Firma['sonYil'];
+  /** 3279-2 a: bu kategoride (kategori seçilmediyse bütün) onaylar; ilki şirket onayı (Kalite kaydı varsa). */
+  onaylar: OnayRozeti[];
+}
+
+export type OnayTuru = 'sirket' | 'musteri' | 'diger';
+export interface OnayRozeti { tur: OnayTuru; kim: string; musteriFirmaId: number | null; metin: string; ton: Ton; sart: string | null }
+type DigerOnay = NonNullable<Firma['kalite']>['onaylar'][number];
+const DURUM_METNI = { onayli: 'Onaylı', sartli: 'Şartlı', onaysiz: 'Onaysız' } as const;
+const DURUM_TONU = { onayli: 'tamam', sartli: 'uyari', onaysiz: 'hata' } as const;
+const tarih = (g: string): string => `${g.slice(8, 10)}.${g.slice(5, 7)}.${g.slice(0, 4)}`;
+const onayKimi = (o: DigerOnay): string => (o.tur === 'musteri' ? o.musteriAd ?? 'Müşteri' : o.ad ?? 'Diğer');
+const onayMetni = (o: DigerOnay): string => (o.suresiGecti ? `Onaysız · süresi geçti ${o.bitis === null ? '' : tarih(o.bitis)}`.trim()
+  : o.bitis === null ? DURUM_METNI[o.durum] : `${DURUM_METNI[o.durum]} · ${tarih(o.bitis)}`);
+const kapsar = (o: DigerOnay, kategori: string): boolean =>
+  kategori === TUM_FIRMALAR || o.kapsamTumu || o.kapsam.some((k) => kategoriAnahtari(k.kategoriTuru, k.kategoriKodu) === kategori);
+function onayRozetleri(f: Firma, durum: Satir['durum'], sart: string | null, kategori: string): OnayRozeti[] {
+  if (f.kalite === null) return [];
+  return [
+    { tur: 'sirket', kim: 'Şirket', musteriFirmaId: null, metin: durum.metin, ton: durum.ton, sart },
+    ...f.kalite.onaylar.filter((o) => kapsar(o, kategori)).map((o): OnayRozeti => ({
+      tur: o.tur, kim: onayKimi(o), musteriFirmaId: o.musteriFirmaId, metin: onayMetni(o), ton: DURUM_TONU[o.durum], sart: o.durum === 'sartli' ? o.aciklama : null,
+    })),
+  ];
 }
 
 const gunFarki = (bugun: string, gun: string): number => Math.round((Date.parse(`${gun}T00:00:00Z`) - Date.parse(`${bugun}T00:00:00Z`)) / 86_400_000);
@@ -59,8 +82,11 @@ export function satirlar(c: OnayliListeCevabi, kategori: string, bugun: string):
     let kararAlt: string | null = null;
     if (kategori !== TUM_FIRMALAR) {
       const karar = k?.kategoriler.find((x) => kategoriAnahtari(x.kategoriTuru, x.kategoriKodu) === kategori);
-      if (karar === undefined && k !== null) continue;
+      // 3279-2 a: şirket kararı olmasa da kategoride müşteri ya da diğer onayı olan firma listededir (şirket rozeti "Karar yok").
+      const digerVar = (k?.onaylar ?? []).some((o) => kapsar(o, kategori));
+      if (karar === undefined && k !== null && !digerVar) continue;
       if (k === null && !f.satinAlmaTedarikcisi) continue;
+      if (karar === undefined && k !== null) durum = { metin: 'Karar yok', ton: 'pasif', sinif: 'onaysiz' };
       if (karar !== undefined) {
         durum = karar.durum === 'onayli' ? { metin: 'Onaylı', ton: 'tamam', sinif: 'onayli' }
           : karar.durum === 'sartli' ? { metin: 'Şartlı', ton: 'uyari', sinif: 'sartli' }
@@ -69,21 +95,39 @@ export function satirlar(c: OnayliListeCevabi, kategori: string, bugun: string):
         kararAlt = karar.durum === 'sartli' ? null
           : k?.firmaAskida != null && karar.durum === 'onaysiz' ? `Firma askıda: ${zamanGunu(k.firmaAskida)}`
             : [zamanGunu(karar.tarih), karar.kisiAd].filter((v) => v !== null).join(' · ');
-      } else kararAlt = "Firmanın Kalite Merkezi'nde kaydı yok";
+      } else if (k === null) kararAlt = "Firmanın Kalite Merkezi'nde kaydı yok";
     }
     const bitis = k?.sertifikaBitisi ?? null;
     sonuc.push({
       firmaId: f.firmaId, ad: f.ad, kritiklik: k?.kritiklik ?? null, adIleEslendi: k?.adIleEslendi ?? false, durum, genel, satinAlmaTedarikcisi: f.satinAlmaTedarikcisi, sart, kararAlt,
       kategorideOnayli: (k?.kategoriler ?? []).some((x) => x.durum === 'onayli'), kategorideSartli: (k?.kategoriler ?? []).some((x) => x.durum === 'sartli'),
-      sertifikalar: k?.sertifikalar ?? [], sertifikaBitisi: bitis, sertifikaGun: bitis === null ? null : gunFarki(bugun, bitis), sonDenetim: k?.sonDenetim ?? null, sonYil: f.sonYil,
+      sertifikalar: k?.sertifikalar ?? [], sertifikaBitisi: bitis, sertifikaGun: bitis === null ? null : gunFarki(bugun, bitis), sonDenetim: k?.sonDenetim ?? null, sonYil: f.sonYil, onaylar: onayRozetleri(f, durum, sart, kategori),
     });
   }
   return sonuc;
 }
 
-export function suz(s: readonly Satir[], durum: DurumSuzgeci, ara: string): Satir[] {
+/** 3279-2 a: onay süzgeci; `musteri:<firma>` o müşterinin onayı olan firmalar. */
+export type OnaySuzgeci = 'hepsi' | 'sirket' | 'diger' | `musteri:${number}`;
+const onayaUyar = (x: Satir, o: OnaySuzgeci): boolean => o === 'hepsi'
+  || x.onaylar.some((r) => (o === 'sirket' ? r.tur === 'sirket' : o === 'diger' ? r.tur === 'diger' : r.tur === 'musteri' && `musteri:${String(r.musteriFirmaId)}` === o));
+export function onaySecenekleri(c: OnayliListeCevabi): { deger: OnaySuzgeci; baslik: string }[] {
+  const musteriler = new Map<number, string>();
+  let diger = false;
+  for (const f of c.firmalar) for (const o of f.kalite?.onaylar ?? []) {
+    if (o.tur === 'musteri' && o.musteriFirmaId !== null) musteriler.set(o.musteriFirmaId, o.musteriAd ?? 'Müşteri');
+    if (o.tur === 'diger') diger = true;
+  }
+  return [
+    { deger: 'hepsi', baslik: 'Bütün onaylar' }, { deger: 'sirket', baslik: 'Şirket onayı' },
+    ...[...musteriler].sort((a, b) => a[1].localeCompare(b[1], 'tr')).map(([id, ad]) => ({ deger: `musteri:${id}` as const, baslik: `Müşteri: ${ad}` })),
+    ...(diger ? [{ deger: 'diger' as const, baslik: 'Diğer onaylar' }] : []),
+  ];
+}
+
+export function suz(s: readonly Satir[], durum: DurumSuzgeci, ara: string, onay: OnaySuzgeci = 'hepsi'): Satir[] {
   const a = ara.trim().toLocaleLowerCase('tr-TR');
-  return s.filter((x) => (a === '' || x.ad.toLocaleLowerCase('tr-TR').includes(a))
+  return s.filter((x) => (a === '' || x.ad.toLocaleLowerCase('tr-TR').includes(a)) && onayaUyar(x, onay)
     && (durum === 'hepsi' || (durum === 'sertifika' ? x.sertifikaGun !== null && x.sertifikaGun <= SERTIFIKA_ESIGI_GUN : x.durum.sinif === durum)));
 }
 
@@ -93,6 +137,7 @@ export const csvDurumu = (x: Satir): string => k3(x, x.durum.metin);
 
 export const CSV_BASLIKLARI = [
   'Firma', 'Kritiklik', 'Kategori', 'Bu kategoride', 'Firma geneli', 'Şart', 'Sertifikalar', 'Sertifika bitişi', 'Son denetim', 'Son 12 ay sipariş', 'Zamanında teslim (%)',
+  'Müşteri ve diğer onaylar',
 ] as const;
 /** "Son 12 ay" alt satırı: zamanında oranı; teslim karnenin en az sayısının altındaysa "veri az". */
 export const sonYilNotu = (x: Pick<Satir, 'sonYil'>): string =>
@@ -102,6 +147,7 @@ export function csvSatirlari(s: readonly Satir[], kategoriAdi: string | null): (
   return s.map((x) => [
     x.ad, x.kritiklik, kategoriAdi, kategoriAdi === null ? null : csvDurumu(x), k3(x, x.genel.metin), x.sart,
     x.sertifikalar.join(', '), x.sertifikaBitisi, x.sonDenetim, x.sonYil.siparis, x.sonYil.yetersizVeri ? null : x.sonYil.zamanindaYuzde,
+    x.onaylar.filter((o) => o.tur !== 'sirket').map((o) => `${o.kim}: ${o.metin}`).join('; ') || null,
   ]);
 }
 
@@ -159,4 +205,27 @@ export function ozet(s: readonly Satir[]): { onayli: number; sartli: number; ser
     sertifikaGecmis: s.filter((x) => x.sertifikaGun !== null && x.sertifikaGun < 0).length,
     kayitsiz: s.filter((x) => x.genel.sinif === 'kayitsiz').length,
   };
+}
+
+/** 3279-2 a: firmaya tıklanınca açılan onay tablosu (salt okunur). Şirket kararları duruma göre tek satırda toplanır; belge açılmaz (Risk K3). */
+export interface FirmaOnaySatiri { anahtar: string; tur: string; kim: string; kapsam: string; durum: { metin: string; ton: Ton }; sart: string | null; gecerlilik: string; belge: boolean }
+export function firmaOnaylari(c: OnayliListeCevabi, firmaId: number): FirmaOnaySatiri[] {
+  const k = c.firmalar.find((f) => f.firmaId === firmaId)?.kalite ?? null;
+  if (k === null) return [];
+  const ad = (tur: string, kod: string) => c.kategoriler.find((x) => x.tur === tur && x.kod === kod)?.ad ?? kod;
+  const sirket = (['onayli', 'sartli', 'onaysiz'] as const).flatMap((d): FirmaOnaySatiri[] => {
+    const l = k.kategoriler.filter((x) => x.durum === d);
+    return l.length === 0 ? [] : [{
+      anahtar: `sirket-${d}`, tur: 'Şirket onayı', kim: 'Şirket (Kalite kararı)', kapsam: l.map((x) => ad(x.kategoriTuru, x.kategoriKodu)).join(', '),
+      durum: { metin: DURUM_METNI[d], ton: DURUM_TONU[d] }, sart: [...new Set(l.flatMap((x) => (x.aciklama === null || d !== 'sartli' ? [] : [x.aciklama])))].join('; ') || null,
+      gecerlilik: 'süresiz', belge: false,
+    }];
+  });
+  const digerleri = k.onaylar.map((o, i): FirmaOnaySatiri => ({
+    anahtar: `diger-${i}`, tur: o.tur === 'musteri' ? 'Müşteri onayı' : 'Diğer', kim: onayKimi(o),
+    kapsam: o.kapsamTumu ? 'Bütün kategoriler' : o.kapsam.map((x) => ad(x.kategoriTuru, x.kategoriKodu)).join(', '),
+    durum: { metin: o.suresiGecti ? 'Onaysız' : DURUM_METNI[o.durum], ton: DURUM_TONU[o.durum] }, sart: o.durum === 'sartli' && !o.suresiGecti ? o.aciklama : null,
+    gecerlilik: o.bitis === null ? 'süresiz' : o.suresiGecti ? `${tarih(o.bitis)} · süresi geçti` : tarih(o.bitis), belge: o.belgeVar,
+  }));
+  return [...sirket, ...digerleri];
 }

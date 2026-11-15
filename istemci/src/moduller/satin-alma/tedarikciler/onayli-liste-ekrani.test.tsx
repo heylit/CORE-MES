@@ -29,7 +29,7 @@ describe('3279 a Onaylı liste sekmesi', () => {
     ac(ORNEK_LISTE);
     // Açılışta ilk kararlı kategori seçili; firma geneli ağaçtan seçilir.
     const ilk = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
-    expect(within(ilk).getByRole('columnheader', { name: 'Bu kategoride' })).toBeTruthy();
+    expect(within(ilk).getByRole('columnheader', { name: 'Onaylar (bu kategoride)' })).toBeTruthy();
     expect(within(ilk).getByText('12.03.2026 · ORN-Kalite Sorumlusu')).toBeTruthy();
     expect(within(ilk).getByText("Firmanın Kalite Merkezi'nde kaydı yok")).toBeTruthy();
     expect(screen.getByText('Onaylı firma').closest('div')?.parentElement?.textContent).toContain('en az bir kategoride');
@@ -44,7 +44,7 @@ describe('3279 a Onaylı liste sekmesi', () => {
     ac(ORNEK_LISTE, ['satin-alma.oku', 'sayfa.kalite-merkezi']);
     const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
     expect(within(tablo).queryByText('ORN-Kuzey')).toBeNull();
-    expect(within(tablo).getByText('ORN şart: her partide rapor')).toBeTruthy();
+    expect(within(tablo).getByText(/ORN şart: her partide rapor/)).toBeTruthy();
     expect(within(tablo).getAllByRole('link', { name: "Kalite'de aç" }).map((a) => a.getAttribute('href'))).toEqual(['/kalite-merkezi/tedarikciler', '/kalite-merkezi/tedarikciler']);
     expect(within(tablo).getByRole('link', { name: "Kalite'de firmaya bağla" })).toBeTruthy();
   });
