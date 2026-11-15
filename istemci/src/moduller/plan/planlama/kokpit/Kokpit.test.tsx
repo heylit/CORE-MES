@@ -129,7 +129,7 @@ describe('Kokpit', () => {
     ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' }));
     const ayr = screen.getByRole('complementary', { name: /ayrıntısı/ });
-    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar']);
+    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar', 'Planlama yönü']);
     expect(document.querySelector('tbody tr[data-emir="2"]')?.hasAttribute('data-sec')).toBe(true);
     // Seçili emrin geçtiği tezgâh-günler yükte çerçevelidir.
     expect(document.querySelectorAll('tr[data-yuk-satiri] td[data-iz]').length).toBeGreaterThan(0);

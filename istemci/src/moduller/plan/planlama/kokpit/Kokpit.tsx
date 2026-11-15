@@ -10,6 +10,7 @@ import { useAn } from '../motor/saat.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayarlar } from './Ayarlar.tsx';
+import { planYonu } from './ayarlar.ts';
 import { Ayrinti } from './Ayrinti.tsx';
 import { Gelenler } from './Gelenler.tsx';
 import { gelenler } from './gelenler.ts';
@@ -81,6 +82,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   // Stüdyo'dan "Kokpit'te aç" ile gelindiyse Onay ve canlı açık başlar.
   const [onayAcik, setOnayAcik] = useState(onayIstegiVar);
   const [ayarAcik, setAyarAcik] = useState(false);
+  // Üst şeritteki yön düğmesi paneli o yönle açar (3282 1c); değişiklik panelde etkisiyle uygulanır.
+  const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   useEffect(() => { onayIstegiAl(); }, []);
   const [yaziliyor, setYaziliyor] = useState(false);
   // Sorun turunda uygulanan hamleler tek değişiklik sayılır: Geri hepsini birlikte alır. `ust` grubun bittiği andaki adım sayısıdır.
@@ -363,7 +366,15 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y)" disabled={!yazabilir || mesgul || tur !== null || ileriSayisi === 0} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriSayisi} /></button>
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
-        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+        <span className="tc-pyq-seg tc-pyq-yon" role="group" aria-label="Planın yönü">
+          {(['ileri', 'geri'] as const).map((y) => (
+            <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Teslimden geriye planla' : 'İleriye planla'} disabled={!yazabilir || tur !== null || onayAcik}
+              onClick={() => { if (planYonu(c) !== y) { sec(null, null); setAyarYon(y); setAyarAcik(true); } }}>
+              <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}</span>
+            </button>
+          ))}
+        </span>
+        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
         {(yazabilir || canliyaAlir) && (
           <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
@@ -413,9 +424,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
         ) : ayarAcik ? (
-          <Ayarlar c={c} komut={komut} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} kapat={() => { setAyarAcik(false); }} />
+          <Ayarlar key={ayarYon ?? ''} c={c} komut={komut} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : secili && (
-          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
+          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, komut, yazabilir, kim: o.depo.ben?.kisi.ad ?? '' }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}
       </div>
       )}

@@ -423,6 +423,7 @@
 .tc-pyq[data-goz="M"] .tc-pyq-olcek { display: none; }
 
 @media (max-width: 1279px) {
+  .tc-pyq-ust .tc-pyq-yon button > span,
   .tc-pyq-ust .tc-pyq-ok > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 /* Telefon: zaman tahtası yerine liste; taşıma ayrıntıdaki seçeneklerle. Ölçek ve tutma yoktur. */

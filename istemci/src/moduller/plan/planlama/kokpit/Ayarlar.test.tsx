@@ -13,7 +13,7 @@ const MOTOR: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs
 // Çalışma uydurmadır; sunucu yerine komut ve değerlendirme sahtedir. Değişiklik kopyaya uygulanır (kayit.ts degistir gibi).
 afterEach(() => { cleanup(); vi.restoreAllMocks(); planKurSifirla(); });
 
-function kur(c: PlanlamaCalismasi, yazabilir = true) {
+function kur(c: PlanlamaCalismasi, yazabilir = true, yon: 'ileri' | 'geri' | null = null) {
   vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: null, degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
   const yazilan: { ne: string; c: PlanlamaCalismasi; planKoru: boolean }[] = [];
   const komut: CalismaKomutu = {
@@ -30,7 +30,7 @@ function kur(c: PlanlamaCalismasi, yazabilir = true) {
     sonuc: { tur: 'plan-uygula' as const, plan: { ozet: { wT: 20, late: 0, n: 2 } } },
   }));
   const kapat = vi.fn();
-  render(<MemoryRouter><Ayarlar c={c} komut={komut} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} iste={iste as never} /></MemoryRouter>);
+  render(<MemoryRouter><Ayarlar c={c} komut={komut} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} yon={yon} iste={iste as never} /></MemoryRouter>);
   return { komut, iste, kapat, yazilan };
 }
 
@@ -100,5 +100,11 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     expect(screen.getByText('Ayarları yalnız planı yazabilen kişi değiştirir.')).toBeTruthy();
     expect((screen.getByLabelText(/Dondurulmuş bölge/) as HTMLInputElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: /Etkisini gör/ })).toBeNull();
+  });
+
+  it('üst şeritteki yön düğmesinden açılınca taslak o yönle başlar, fark görünür (3282 1c)', () => {
+    kur(ornekCalisma(), true, 'geri');
+    expect((screen.getByLabelText('Planlama yönü') as HTMLSelectElement).value).toBe('geri');
+    expect(screen.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeTruthy();
   });
 });

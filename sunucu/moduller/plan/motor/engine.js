@@ -48,6 +48,8 @@ function subtract(W,D){if(!D.length)return W;const o=[];for(const [a,b] of W){le
 function wi(W,t){let lo=0,hi=W.length;while(lo<hi){const m=(lo+hi)>>1;if(W[m][1]<=t+1e-9)lo=m+1;else hi=m;}return lo;}
 function openAt(W,t){const i=wi(W,t);return i<W.length?Math.max(W[i][0],t):Infinity;}
 function adv(W,t,d){if(d<=1e-9)return t;let i=wi(W,t),cur=t;while(i<W.length){const a=Math.max(W[i][0],cur),b=W[i][1];const take=Math.min(d,b-a);if(take>0){d-=take;cur=a+take;}if(d<=1e-9)return cur;i++;}return Infinity;}
+/* adv'nin tersi: t'den geriye d çalışma saati; pencereler yetmezse -Infinity. */
+function geriAdv(W,t,d){if(d<=1e-9)return t;let i=wi(W,t);if(i>=W.length||W[i][0]>=t)i--;let cur=t;while(i>=0){const a=W[i][0],b=Math.min(W[i][1],cur);const take=Math.min(d,b-a);if(take>0){d-=take;cur=b-take;}if(d<=1e-9)return cur;i--;}return -Infinity;}
 function workIn(W,a,b){let s=0;for(let i=wi(W,a);i<W.length&&W[i][0]<b;i++)s+=Math.max(0,Math.min(b,W[i][1])-Math.max(a,W[i][0]));return s;}
 function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.max(0,Math.ceil(a/SL-1e-9)),k1=Math.min(NS,Math.floor(b/SL+1e-9));for(let k=k0;k<k1;k++)m[k]=1;}return m;}
 
@@ -227,6 +229,21 @@ function compile(st){olcekKur(st.w);
       else{const f=FS[(o.c[0]||{m:'@'}).m.slice(1)];if(f&&f.sapmaGun)v+=(f.sapmaGun*24)**2;}}
     j.buf=st.w.tampon?(+st.w.tamponZ||0)*Math.sqrt(v):0;j.dueB=j.due==null?null:j.due-j.buf;}
   const succ={};for(const o of ops)for(const [p,t] of o.pr)(succ[p]=succ[p]||[]).push([o.id,t]);
+  /* 3282 1c: geriye planlama. Yönü geri olan emir (emrin yönü, yoksa planınki) en geç başlamasından önce başlamaz: termin - geri tamponu -
+     emrin kritik yolu. Kritik yol adımların en kısa aday süresiyle (ayar + işleme) en uzun öncül zinciridir; tezgâh süresi fabrikanın çalışma
+     saatinde geriye, fason süresi takvim saatiyle sayılır. Kapasite sayılmaz: tezgâh doluysa emir ileri kayar, gecikmesi bugünkü gibi görünür.
+     En geç başlama şimdiden önceyse emir ileri planlanır, plan uyarı verir (evaluate). Başlamış ya da kilitli adımı olan emir geciktirilmez:
+     kalan adımları yarım işi bekletir. */
+  const geriT=Math.max(0,Math.min(30,+st.w.geriTampon||0))*24;
+  for(const jid in jobs){const j=jobs[jid];if(j.due==null||(j.yon==='geri'||j.yon==='ileri'?j.yon:st.w.yon)!=='geri')continue;
+    if(j.ops.some(o=>(st.gercek||{})[o.id]||(st.locks||{})[o.id]))continue;
+    const sure={},yol=o=>{if(sure[o.id])return sure[o.id];sure[o.id]=[0,0];const m=o.c.filter(c=>!c.fas);
+      const w=m.length?Math.min(...m.map(c=>c.su+c.run)):0,f=m.length?0:+((FS[(o.c[0]||{m:'@'}).m.slice(1)]||{}).sureGun||0)*24;
+      let bw=0,bf=0;for(const [p] of o.pr){const q=byId[p];if(q&&q.job===jid){const [a,b]=yol(q);if(a+b>bw+bf){bw=a;bf=b;}}}
+      return sure[o.id]=[bw+w,bf+f];};
+    let kw=0,kf=0;for(const o of j.ops){const [a,b]=yol(o);if(a+b>kw+kf){kw=a;kf=b;}}
+    const enGec=geriAdv(gen,j.due-geriT-kf,kw);j.enGec=isFinite(enGec)?enGec:null;
+    if(j.enGec!=null&&j.enGec>=st.now)j.rel=j.rel!=null?Math.max(j.rel,j.enGec):j.enGec;else j.geriSigmadi=true;}
   // malzeme
   const mat=matAlloc(st,jobs);
   // program
@@ -687,6 +704,7 @@ function evaluate(plan,st,ref,fast){
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
+  if(!fast)for(const jid in cx.jobs)if(cx.jobs[jid].geriSigmadi)warn.push({t:'geri',j:jid,txt:`${jid}: teslimden geriye sığmadı; en geç başlama ${cx.jobs[jid].enGec==null?'takvimden önce':fmtDT(cx.D,cx.jobs[jid].enGec)}, emir ileri planlandı`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],id,txt:`${id} planlanamadı: ${failNedenMetni((plan.failNeden||{})[id])}`});
   /* 3199: ikincil kaynağın aşımı (İzle kaynakta plan sınırlamaz; Sert kaynakta kilitli ya da başlamış iş aşabilir) ve takım değişimi uyarıdır */

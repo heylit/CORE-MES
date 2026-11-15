@@ -767,8 +767,13 @@ function stKur(S, ek = [], gevset = true) {
       /* 1477 a: motor ölçeği (sistem ayarı); yoksa motor varsayılanı (engine olcekKur) */
       ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null,
       /* 1952 (1958 a): rotada "paralel böl" adımı motor kendisi böler; çalışmanın bölme ayarı "kapali" değilse, en çok bolmeMaks paya */
-      bol: (S.param && S.param.bolmeKip) !== 'kapali', bolMaks: +((S.param && S.param.bolmeMaks) ?? 3) },
+      bol: (S.param && S.param.bolmeKip) !== 'kapali', bolMaks: +((S.param && S.param.bolmeMaks) ?? 3),
+      /* 3282 1c: planın yönü (emrin yönü D.siparisler[].yon onu ezer) ve geriye planlamanın termin tamponu (gün) */
+      yon: S.w.yon === 'geri' ? 'geri' : 'ileri', geriTampon: +((S.param && S.param.geriTamponGun) ?? 0) || 0 },
   };
+  /* 3282 1c: emir başına yön çalışmanın ağırlığında durur (w.yonEmir); sipariş listesi sunucudan yeniden kurulsa da kaybolmaz */
+  const yonEmir = S.w && S.w.yonEmir && typeof S.w.yonEmir === 'object' ? S.w.yonEmir : {};
+  for (const s of D.siparisler) if (yonEmir[s.id] === 'geri' || yonEmir[s.id] === 'ileri') s.yon = yonEmir[s.id];
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */

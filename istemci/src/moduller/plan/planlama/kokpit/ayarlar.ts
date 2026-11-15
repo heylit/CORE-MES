@@ -5,12 +5,15 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 // (sunucu calismayaMotorAyari çalışmanınkini ezer); panel onları yalnız gösterir. Saf.
 
 export type AyarAlani =
-  | { tur: 'sayi'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; birim: string; min: number; max: number; adim: number }
+  | { tur: 'sayi'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; birim: string; min: number; max: number; adim: number; varsayilan?: number }
   | { tur: 'acik'; yer: ParametreYeri; k: string; etiket: string; ipucu: string }
-  | { tur: 'sec'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; secenekler: readonly (readonly [string, string])[] };
+  | { tur: 'sec'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; secenekler: readonly (readonly [string, string])[]; varsayilan?: string };
 
 // Sınırlar Kısıtlar sayfası ve Hesaplar'la aynıdır (ic/veri/kurallar.ts KATALOG, ic/hesap mesai bütçesi 0-60).
+// Yön ve geri tamponu (3282 1c) motorun girdi.js stKur'unda okunur; yazılmamışsa ileri ve 0'dır.
 export const AYAR_ALANLARI: readonly AyarAlani[] = [
+  { tur: 'sec', yer: 'w', k: 'yon', etiket: 'Planlama yönü', ipucu: 'Geri: terminli iş, termine yetişecek en geç saatte başlar; erken bitip beklemez.', secenekler: [['ileri', 'İleri: hemen başla'], ['geri', 'Geri: teslimden geriye']], varsayilan: 'ileri' },
+  { tur: 'sayi', yer: 'param', k: 'geriTamponGun', etiket: 'Geri planlama tamponu', ipucu: 'Geriye planlanan iş termininden bu kadar gün önce bitecek şekilde dizilir.', birim: 'gün', min: 0, max: 30, adim: 1, varsayilan: 0 },
   { tur: 'sayi', yer: 'w', k: 'dondurma', etiket: 'Dondurulmuş bölge', ipucu: 'Bu süre içinde başlayan işler plan yeniden dizilirken yerinden oynamaz.', birim: 'sa', min: 0, max: 72, adim: 1 },
   { tur: 'acik', yer: 'param', k: 'tampon', etiket: 'Arıza payı ve termin tamponu', ipucu: 'Tezgâhın arıza geçmişinden süreye pay, süre sapmasından termin tamponu.' },
   { tur: 'sayi', yer: 'param', k: 'tamponZ', etiket: 'Tampon katsayısı (z)', ipucu: 'Büyüdükçe tampon uzar; termin daha güvenli, plan daha seyrek.', birim: '', min: 0, max: 3, adim: 0.05 },
@@ -18,6 +21,7 @@ export const AYAR_ALANLARI: readonly AyarAlani[] = [
   { tur: 'sayi', yer: 'param', k: 'maxChg', etiket: 'Değişiklik bütçesi', ipucu: 'Onarımda canlı plana göre en çok bu kadar iş yer değiştirir.', birim: 'iş', min: 0, max: 500, adim: 1 },
   { tur: 'sec', yer: 'w', k: 'mat', etiket: 'Malzeme kuralı', ipucu: 'Geliş tarihi belli olan malzemeden önce iş başlamaz; ötekinde uyarı verilir.', secenekler: [['karma', 'Belliyse sert'], ['uyari', 'Yalnız uyarı'], ['sert', 'Her zaman sert']] },
 ];
+export const YON_ALANLARI = new Set(['yon', 'geriTamponGun']);
 // Panelde açılıp kapanan kısıtlar: planlamacının en sık değiştirdikleri; tam liste Kısıtlar sayfasındadır.
 export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'malzeme'] as const;
 
@@ -28,8 +32,8 @@ const anahtar = (a: AyarAlani): string => `${a.yer}.${a.k}`;
 function deger(c: PlanlamaCalismasi, a: AyarAlani): AyarDegeri {
   const v = parametreDegeri(c, a.yer, a.k);
   if (a.tur === 'acik') return Boolean(v);
-  if (a.tur === 'sayi') return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  return typeof v === 'string' ? v : null;
+  if (a.tur === 'sayi') return typeof v === 'number' && Number.isFinite(v) ? v : (a.varsayilan ?? null);
+  return typeof v === 'string' ? v : (a.varsayilan ?? null);
 }
 export function ayarTaslagi(c: PlanlamaCalismasi): AyarTaslagi {
   return {
@@ -96,3 +100,22 @@ export function etkiSatirlari(once: PlanOzeti | null, sonra: PlanOzeti): { ad: s
     { ad: 'Ağırlıklı gecikme', once: once ? sa(once.wT) : null, sonra: sa(sonra.wT), yon: yon(once?.wT, sonra.wT) },
   ];
 }
+
+// Emrin yönü (3282 1c): çalışmanın w.yonEmir'inde emir kimliğiyle durur; yoksa planın yönü geçerlidir (motor girdi.js stKur).
+export type EmirYonu = 'plan' | 'ileri' | 'geri';
+const yonEmri = (c: PlanlamaCalismasi): Record<string, unknown> => {
+  const v = (c.w as Record<string, unknown>)['yonEmir'];
+  return typeof v === 'object' && v !== null ? v as Record<string, unknown> : {};
+};
+export const planYonu = (c: PlanlamaCalismasi): 'ileri' | 'geri' => ((c.w as Record<string, unknown>)['yon'] === 'geri' ? 'geri' : 'ileri');
+export function emirYonu(c: PlanlamaCalismasi, id: string): EmirYonu {
+  const v = yonEmri(c)[id];
+  return v === 'geri' || v === 'ileri' ? v : 'plan';
+}
+export function emirYonuYaz(c: PlanlamaCalismasi, id: string, y: EmirYonu): boolean {
+  if (emirYonu(c, id) === y) return false;
+  const { [id]: _, ...kalan } = yonEmri(c);
+  (c.w as Record<string, unknown>)['yonEmir'] = y === 'plan' ? kalan : { ...kalan, [id]: y };
+  return true;
+}
+export const yonAdi = (y: 'ileri' | 'geri'): string => (y === 'geri' ? 'geri (teslimden)' : 'ileri');

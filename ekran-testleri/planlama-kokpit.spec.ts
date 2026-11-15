@@ -246,7 +246,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   await expect(akis.locator('tbody tr[data-emir="S3"]')).toHaveAttribute('data-sec', '');
   await expect(akis.locator('tbody tr[data-emir="S3"]')).toBeInViewport();
   // Matriste çözüm adımlardan önce gelir.
-  expect(await s3.locator('h3').allTextContents()).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar']);
+  expect(await s3.locator('h3').allTextContents()).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar', 'Planlama yönü']);
   // Seçili emrin geçtiği tezgâh-gün yükte çerçevelidir; o hücre emirleri süzer, süzgeç kalkınca hepsi döner.
   const izli = akis.locator('tr[data-yuk-satiri] td[data-iz] button').first();
   await expect(izli).toBeVisible();
@@ -579,5 +579,59 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayar-etki-${bilgi.project.name}.png` });
   await etki.getByRole('button', { name: 'Uygula' }).click();
   await expect(panel).toHaveCount(0);
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3282 (dilim 1c): teslimden geriye planlama. Planın yönü üst şeritte ve Ayarlar panelinde, emrin yönü emrin ayrıntısında; ikisi de etkisiyle gelir.
+test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisini gösterir, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  let surum = 1;
+  const yazilan: Record<string, unknown>[] = [];
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum }));
+  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
+    const g = r.request().postDataJSON() as { anahtar: string; deger: { w?: Record<string, unknown> } };
+    if (g.deger.w) yazilan.push(g.deger.w);
+    surum += 1;
+    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
+  });
+  await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
+    guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
+  }));
+  await page.route('**/api/plan/planlama-degerlendirmesi', (r) => json(r, { is: 'yon' }));
+  await page.route('**/api/plan/planlama-degerlendirmesi/yon', (r) => json(r, {
+    durum: 'bitti', cevap: { calismaSurumu: surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan({ ...ILK }), ozet: { wT: 8, T: 8, late: 0 } } } },
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  // Üst şeritteki yön düğmesi paneli o yönle açar; değişiklik panelde etkisiyle uygulanır.
+  const ustYon = kokpit.getByRole('group', { name: 'Planın yönü' });
+  await expect(ustYon.getByRole('button', { name: 'İleriye planla' })).toHaveAttribute('aria-pressed', 'true');
+  await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
+  const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
+  await expect(panel.getByLabel('Planlama yönü')).toHaveValue('geri');
+  await expect(panel.getByLabel(/Geri planlama tamponu/)).toHaveValue('0');
+  await expect(panel.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-yon-panel-${bilgi.project.name}.png` });
+  await panel.getByRole('button', { name: 'Sıfırla' }).click();
+  await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
+  await kokpit.getByRole('region', { name: 'Gelenler' }).getByRole('button', { name: 'Yerleştir' }).click();
+  const s4 = kokpit.getByRole('complementary', { name: /S4 ayrıntısı/ });
+  const yon = s4.getByRole('group', { name: 'Planlama yönü' });
+  await expect(yon.getByRole('button', { name: 'Planınki' })).toHaveAttribute('aria-pressed', 'true');
+  await yon.getByRole('button', { name: 'Teslimden geriye' }).click();
+  const etki = s4.getByRole('region', { name: 'Yönün etkisi' });
+  await expect(etki.getByText('1 → 0')).toBeVisible({ timeout: 10_000 });
+  expect(yazilan.at(-1)?.['yonEmir']).toEqual({ S4: 'geri' });
+  for (const k of await page.getByRole('button', { name: 'Bildirimi kapat' }).all()) await k.click();
+  await etki.scrollIntoViewIfNeeded();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-yon-emir-${bilgi.project.name}.png` });
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(etki).toHaveCount(0);
+  await expect(yon.getByRole('button', { name: 'Teslimden geriye' })).toHaveAttribute('aria-pressed', 'true');
+  // Etki hesabı bitince plana alma seçenekleri yeniden hesaplanır; "hesaplanıyor" kalmaz.
+  await expect(s4.getByText('hesaplanıyor')).toHaveCount(0, { timeout: 10_000 });
   expect(ag.hatalar).toEqual([]);
 });

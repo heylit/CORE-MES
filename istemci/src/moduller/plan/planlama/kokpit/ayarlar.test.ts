@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ornekCalisma } from '../motor/ornek.ts';
-import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, etkiSatirlari, farklar, kisitYaz, ozetOku, sayiOku } from './ayarlar.ts';
+import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kisitYaz, ozetOku, planYonu, sayiOku } from './ayarlar.ts';
 
 const alan = (k: string) => {
   const a = AYAR_ALANLARI.find((x) => x.k === k);
@@ -50,5 +50,33 @@ describe('Kokpit ayarları (3282 1b)', () => {
     expect(etkiSatirlari(null, { wT: 10, late: 3, n: 4 })[0]).toEqual({ ad: 'Geciken iş', once: null, sonra: '3 / 4', yon: 'ayni' });
     expect(ozetOku({ ozet: { late: 1 } })).toBeNull();
     expect(etkiSatirlari({ wT: 20, late: 1, n: null }, { wT: 8, late: 0, n: null })[0]).toEqual({ ad: 'Geciken iş', once: '1', sonra: '0', yon: 'iyi' });
+  });
+});
+
+describe('Kokpit planlama yönü (3282 1c)', () => {
+  it('yön ve geri tamponu yazılmamışsa ileri ve 0 görünür, fark sayılmaz; geri seçilince çalışmaya yazılır', () => {
+    const c = ornekCalisma();
+    const t = ayarTaslagi(c);
+    expect(t.alan['w.yon']).toBe('ileri');
+    expect(t.alan['param.geriTamponGun']).toBe(0);
+    expect(ayarlariYaz(structuredClone(c), t)).toBe(false);
+    const g = alanYaz(alanYaz(t, alan('yon'), 'geri'), alan('geriTamponGun'), 2);
+    expect(farklar(c, g)).toEqual(['Planlama yönü: İleri: hemen başla → Geri: teslimden geriye', 'Geri planlama tamponu: 0 gün → 2 gün']);
+    expect(ayarlariYaz(c, g)).toBe(true);
+    expect(c.w['yon']).toBe('geri');
+    expect(c.param['geriTamponGun']).toBe(2);
+    expect(planYonu(c)).toBe('geri');
+  });
+
+  it('emrin yönü planınkinden ayrılır ve geri döner; aynı yön yazılmaz', () => {
+    const c = ornekCalisma();
+    expect(emirYonu(c, 'S1')).toBe('plan');
+    expect(emirYonuYaz(c, 'S1', 'plan')).toBe(false);
+    expect(emirYonuYaz(c, 'S1', 'geri')).toBe(true);
+    expect(emirYonuYaz(c, 'S2', 'ileri')).toBe(true);
+    expect(c.w['yonEmir']).toEqual({ S1: 'geri', S2: 'ileri' });
+    expect(emirYonuYaz(c, 'S1', 'geri')).toBe(false);
+    expect(emirYonuYaz(c, 'S1', 'plan')).toBe(true);
+    expect(c.w['yonEmir']).toEqual({ S2: 'ileri' });
   });
 });
