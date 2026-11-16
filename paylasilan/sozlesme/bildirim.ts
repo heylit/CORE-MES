@@ -170,12 +170,14 @@ export const BILDIRIM_TURLERI = {
     baslik: 'Geri bildirimin sonuçlandı', onem: 'bilgi', alanIslemler: [], yol: '/profil', varsayilan: { mesaj: false, eposta: false },
   },
   // 3269 a: görev kişiye ya da rolüne atanınca ve geri gönderilince; alıcı kayda bağlı kişilerdir. Metinde görev adı yoktur.
+  // 3303: işlem, türün kişinin tercihlerinde görünmesi içindir; gönderim yalnız kayda bağlı kişilere gider (yalnızKisiler),
+  // Bildirim yönetimi'ndeki alıcı seçimi yalnız daraltır, başka projelerin görevini yaymaz.
   'projeler.gorev-atandi': {
-    baslik: 'Sana proje görevi var', onem: 'bilgi', alanIslemler: [], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+    baslik: 'Sana proje görevi var', onem: 'bilgi', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
   },
   // 3269 a: görev kontrole düşünce kontrol edene (kişi ya da roldeki kişiler); onay ya da geri gönderilince projeler kapatır.
   'projeler.gorev-kontrol-bekliyor': {
-    baslik: 'Proje görevi kontrolünü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: [], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+    baslik: 'Proje görevi kontrolünü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['projeler.gorev-kontrol'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
   },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
@@ -299,7 +301,10 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // Bildirim alıcıları (760 c, 761 b): tür başına alıcı roller ve kişiler. Seçim yapılmış türde alıcı yalnız seçilenlerdir (yönetici
 // dahil: seçilmediyse almaz); seçimsiz türde türün işlem kuralı geçer. Kayda bağlı kişi (talebi açan, istasyona atanmış) iki
 // durumda da alır. Ekip çağrısı kendi yönlendirmesiyle seçildiği için bu ayarda yoktur. Okuma ve yazma `ayarlar.yaz` ister.
-export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => t !== 'arkon.ekip-cagrisi') as [BildirimTuru, ...BildirimTuru[]];
+// Alıcısı kayda bağlı türler (proje görevinin atananı, kontrol edeni) alıcı seçimine girmez: seçim ya başka projelerin görevini
+// yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
+const KAYDA_BAGLI_TURLER: readonly string[] = ['arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor'];
+export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];
 export const ALICI_ROL_EN_COK = 20;
 export const ALICI_KISI_EN_COK = 50;
 

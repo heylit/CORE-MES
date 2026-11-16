@@ -285,11 +285,12 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await tercihler('yonetici')).satirlar.find((s) => s.tur === 'istasyonlar.makine-durdu')?.varsayilan, true);
   });
 
-  test('operatör e-posta seçemez ve tercih listesi boştur: alan null; listede olmayan türe tercih 400, satır açılmaz', async () => {
+  // 3303: operatör yalnız proje görevi türlerini alır (görevi işler ve kontrol eder); başka tür listesine girmez.
+  test('operatör e-posta seçemez ve tercih listesi yalnız alabildiği türlerdir: listede olmayan türe tercih 400, satır açılmaz', async () => {
     const t = await tercihler('operator');
     assert.equal(t.epostaSecilebilir, false);
-    assert.deepEqual(alabilecegi('operator'), []);
-    assert.deepEqual(t.satirlar, []);
+    assert.deepEqual(alabilecegi('operator'), ['projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor']);
+    assert.deepEqual(t.satirlar.map((s) => s.tur), alabilecegi('operator'));
     for (const eposta of [true, false]) {
       const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta });
       assert.equal(d.durum, 400);
