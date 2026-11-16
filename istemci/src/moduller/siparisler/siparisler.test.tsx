@@ -860,7 +860,8 @@ describe('Teklifler', () => {
     expect((birim as HTMLInputElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
     // Alanın altında ve düğmenin üstündeki özette (3301): uzun formda hata ekran dışında kalmaz.
-    expect(await screen.findAllByText('Birim fiyat zorunlu.')).toHaveLength(2);
+    expect(await screen.findByText('Birim fiyat zorunlu.')).toBeTruthy();
+    expect(screen.getByText('Deneme Mil 20mm: Birim fiyat zorunlu.')).toBeTruthy();
     expect(screen.getByText(/Kaydedilmedi: \d+ alanda eksik/)).toBeTruthy();
     expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(birim, { target: { value: '10,5' } });

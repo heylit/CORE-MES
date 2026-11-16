@@ -312,7 +312,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           {!(terminDener && kartli) && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
         </div>
         <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />
-        <GonderimHatasi form={form} />
+        <GonderimHatasi form={form} etiket={(yol) => { const i = /^fiyatlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : (teklif.satirlar[Number(i)]?.tanim ?? null); }} />
         <div className="tc-sp-alt-cubuk">
           {planli && <Dugme simge="file" disabled={deneniyor} onClick={() => { void taslakAc(); }}>Deneme taslağı kaydet</Dugme>}
           <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor} disabled={deneniyor}>{ilk ? 'Teklifi ver' : `Sürüm ${(teklif.sonSurumNo ?? 0) + 1} olarak ver`}</Dugme>

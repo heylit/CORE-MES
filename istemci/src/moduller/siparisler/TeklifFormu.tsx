@@ -172,7 +172,7 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
           </ol>
         </Kart>
 
-        <GonderimHatasi form={form} />
+        <GonderimHatasi form={form} etiket={(yol) => { const i = /^satirlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : `Kalem ${String(Number(i) + 1)}`; }} />
         <div className="tc-sp-alt-cubuk">
           <Dugme onClick={() => { void gezin(geri); }} disabled={form.gonderiliyor}>Vazgeç</Dugme>
           <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{teklif === null ? 'Talebi aç' : 'Kaydet'}</Dugme>

@@ -3,8 +3,12 @@ import { ESKI_SURUM_ILETISI } from './yazma.ts';
 
 // Gönderim düğmesinin hemen üstünde: uzun formda alan hatası ekranın dışında kalabilir, ya da sunucunun bağladığı alan o kipte çizilmiyor
 // olabilir (planlı sürümde termin tarihi). İletiler burada da yazılır; ilk hatalı alana ayrıca gidilir (useHataOdagi).
-export function GonderimHatasi<D extends object>({ form }: { form: FormDurumu<D> }) {
-  const iletiler = [...new Set(Object.values(form.hatalar))];
+// etiket: alan yolundan kalemin adı (aynı ileti birden çok kalemde çıkınca hangisi olduğu okunur); null ise ileti yalın yazılır.
+export function GonderimHatasi<D extends object>({ form, etiket }: { form: FormDurumu<D>; etiket?: (yol: string) => string | null }) {
+  const iletiler = [...new Set(Object.entries(form.hatalar).map(([yol, ileti]) => {
+    const ad = etiket?.(yol) ?? null;
+    return ad === null ? ileti : `${ad}: ${ileti}`;
+  }))];
   if (form.genelHata === null && iletiler.length === 0) return null;
   return (
     <div className="tc-sp-hata" role="alert">
