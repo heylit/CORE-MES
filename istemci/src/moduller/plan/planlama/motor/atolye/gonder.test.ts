@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, canliDegistiIletisi, GonderHatasi, gonderHataIletisi, gonderOzeti, senaryoHataIletisi, SURUM_ESKIDI, taslakAdi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, canliDegistiIletisi, GonderHatasi, gonderHataIletisi, gonderOzeti, senaryoHataIletisi, soruEki, SURUM_ESKIDI, taslakAdi } from './gonder.ts';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -9,26 +9,25 @@ const TASLAK = { taslak: { id: 12, surum: 1 }, yazilan: 5, atlanan: 1, yazilamaz
 const liste = (durum: string, surum = 2) => ({ canli: null, canliSurum: 3, senaryolar: [{ id: 12, durum, surum }] });
 const komut = (surum: number | null) => ({ kaydet: vi.fn(async () => surum) }) as unknown as CalismaKomutu;
 const yollar = (post: { mock: { calls: unknown[][] } }) => post.mock.calls.map((x) => x[0]);
+const ONAY = '/plan/planlama-calismasi/onaya-gonder';
+const CANLI = '/plan/planlama-calismasi/canliya-al';
 // Sunucunun yollarına göre cevap; `ret` verilen yol o hatayla reddedilir.
 const sunucu = (ret: Record<string, ApiHatasi> = {}) => vi.spyOn(api, 'post').mockImplementation(((yol: string) => {
   if (ret[yol]) return Promise.reject(ret[yol]);
-  if (yol.endsWith('/taslak-yaz')) return Promise.resolve(TASLAK);
-  if (yol.endsWith('/onaya-gonder')) return Promise.resolve(liste('onayda'));
-  if (yol.endsWith('/canliya-al')) return Promise.resolve(liste('canliya_alindi', 3));
-  return Promise.resolve(liste('vazgecildi'));
+  if (yol === ONAY) return Promise.resolve({ ...TASLAK, senaryolar: liste('onayda') });
+  if (yol === CANLI) return Promise.resolve({ ...TASLAK, senaryolar: liste('canliya_alindi', 3) });
+  return Promise.resolve(TASLAK);
 }) as never);
 
 describe('calismayiGonder', () => {
-  it('önce kaydeder, kayıtlı sürümle taslak yazar ve onaya gönderir; canlıya almaz', async () => {
+  it('önce kaydeder, kayıtlı sürümle tek komutta onaya gönderir; canlıya almaz', async () => {
     const post = sunucu();
     const k = komut(8);
     const g = await calismayiGonder({ komut: k, ad: 'Onay 25.10 Cum · Ayşe', not: 'acil', planSurumu: 3, hedef: 'onay' });
     expect(k.kaydet).toHaveBeenCalledOnce();
-    expect(post.mock.calls[0]?.[0]).toBe('/plan/planlama-calismasi/taslak-yaz');
-    expect(post.mock.calls[0]?.[1]).toEqual({ ad: 'Onay 25.10 Cum · Ayşe', calismaSurumu: 8, planSurumu: 3 });
-    expect(post.mock.calls[1]).toEqual(['/plan/senaryolar/12/onaya-gonder', { surum: 1, not: 'acil' }]);
-    expect(yollar(post)).toHaveLength(2);
+    expect(post.mock.calls.map((x) => x.slice(0, 2))).toEqual([[ONAY, { ad: 'Onay 25.10 Cum · Ayşe', calismaSurumu: 8, planSurumu: 3, not: 'acil' }]]);
     expect(g).toMatchObject({ taslak: 12, yazilan: 5, atlanan: 1, yazilamaz: ['A-1 / 10'] });
+    expect(g.senaryolar?.senaryolar[0]?.durum).toBe('onayda');
     expect(gonderOzeti(g)).toBe('5 iş taslağa yazıldı, 1 iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş); 1 iş sunucuda karşılığı olmadığı için yazılmadı (A-1 / 10).');
   });
 
@@ -38,57 +37,50 @@ describe('calismayiGonder', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('sunucu onaya göndermeyi reddederse (yetki) sunucunun iletisi gösterilir ve açılan taslaktan vazgeçilir', async () => {
-    const post = sunucu({ '/plan/senaryolar/12/onaya-gonder': new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) });
+  it('sunucu reddederse (yetki, çalışma arada değişti) iletisi gösterilir; başka istek gitmez', async () => {
+    const post = sunucu({ [ONAY]: new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) });
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
     expect(gonderHataIletisi(h)).toBe('Plan onaya gönderilemedi: Bu işlem için yetkiniz yok.');
-    await vi.waitFor(() => expect(yollar(post)).toContain('/plan/senaryolar/12/vazgec'));
+    expect(yollar(post)).toEqual([ONAY]);
   });
 
-  it('taslak yazma reddedilirse (çalışma arada değişti) plan modülüne gidilmez', async () => {
-    const post = sunucu({ '/plan/planlama-calismasi/taslak-yaz': new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Çalışma başkası tarafından değiştirildi.' }) });
-    const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
-    expect(gonderHataIletisi(h)).toBe('Plan onaya gönderilemedi: Çalışma başkası tarafından değiştirildi.');
-    expect(yollar(post)).toEqual(['/plan/planlama-calismasi/taslak-yaz']);
-  });
-
-  it('Onayla ve canlıya al: onaya gönderdikten sonra onaydaki sürümle canlıya alır', async () => {
+  it('Onayla ve canlıya al: tek komut; gerekçe verilmediyse boş gider', async () => {
     const post = sunucu();
-    const g = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' });
-    expect(post.mock.calls[2]?.[0]).toBe('/plan/senaryolar/12/canliya-al');
-    expect(post.mock.calls[2]?.[1]).toEqual({ surum: 2, cakismalariKabul: false });
+    const g = await calismayiGonder({ komut: komut(8), ad: 'x', not: 'n', planSurumu: 3, hedef: 'canli' });
+    expect(post.mock.calls.map((x) => x.slice(0, 2))).toEqual([[CANLI, { ad: 'x', calismaSurumu: 8, planSurumu: 3, not: 'n', dortSaatGerekcesi: null }]]);
     expect(g.senaryolar?.senaryolar[0]?.durum).toBe('canliya_alindi');
   });
 
-  it('canlıya alma reddedilirse (dört göz) plan onayda kalır: vazgeçilmez, iletide söylenir', async () => {
-    const post = sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }) });
+  it('canlıya alma reddedilirse (dört göz) hiçbir şey yazılmaz; ileti planın onaya da gitmediğini söyler', async () => {
+    const post = sunucu({ [CANLI]: new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }) });
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
-    expect(gonderHataIletisi(h)).toBe('Plan canlıya alınamadı, onayda bekliyor: Kendi gönderdiğiniz planı canlıya alamazsınız.');
-    expect(yollar(post)).not.toContain('/plan/senaryolar/12/vazgec');
+    expect(gonderHataIletisi(h)).toBe('Plan canlıya alınamadı, onaya da gönderilmedi: Kendi gönderdiğiniz planı canlıya alamazsınız.');
+    expect((h as GonderHatasi).gerekceIster).toBe(false);
+    expect((h as GonderHatasi).canliDegisti).toBe(false);
+    expect(yollar(post)).toEqual([CANLI]);
   });
 
-  it('2311 S1: canlıya alma "canlı değişti" ile reddedilirse plan onayda kalır, hata soruyu ve taslağı taşır; onaylanınca bayrakla gider', async () => {
-    const post = sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Canlı plan değişti.', ayrinti: { neden: 'canli-degisti', tabanSurumu: 3, canliSurumu: 4 } }) });
+  it('2311 S1: "canlı değişti" reddi soruyu taşır; onaylanınca komut okunan canlı sürüm olmadan yeniden gider', async () => {
+    sunucu({ [CANLI]: new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Canlı plan değişti.', ayrinti: { neden: 'canli-degisti', tabanSurumu: 3, canliSurumu: 4 } }) });
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
-    expect((h as GonderHatasi).canliDegisti).toBe(12);
-    expect((h as GonderHatasi).gerekceTaslagi).toBeNull();
-    expect(yollar(post)).not.toContain('/plan/senaryolar/12/vazgec');
+    expect((h as GonderHatasi).canliDegisti).toBe(true);
+    expect((h as GonderHatasi).gerekceIster).toBe(false);
     vi.restoreAllMocks();
     const kabul = sunucu();
     await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli', canliKabul: true });
-    expect(kabul.mock.calls[2]?.[1]).toEqual({ surum: 2, cakismalariKabul: true });
+    expect(kabul.mock.calls[0]?.[1]).toEqual({ ad: 'x', calismaSurumu: 8, not: null, dortSaatGerekcesi: null });
   });
 
-  it('2311 S1: taslak yazma eski sürüm döner ve canlı ilerlemişse soru sorulur; canlı aynıysa düz hata kalır', async () => {
+  it('2311 S1: eski sürüm döner ve canlı ilerlemişse soru sorulur; canlı aynıysa düz hata kalır', async () => {
     const eski = new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } });
-    sunucu({ '/plan/planlama-calismasi/taslak-yaz': eski });
+    sunucu({ [ONAY]: eski });
     const get = vi.spyOn(api, 'get').mockResolvedValue({ planSurumu: 4, sonCanliyaAlma: { zaman: '2026-11-08T09:00:00Z', kisi: 'Deneme B' } } as never);
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
     expect(get).toHaveBeenCalledWith('/plan/surum');
-    expect((h as GonderHatasi).canliDegisti).toBe('taslak-yaz');
+    expect((h as GonderHatasi).canliDegisti).toBe(true);
     get.mockResolvedValue({ planSurumu: 3, sonCanliyaAlma: null } as never);
     const d = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
-    expect((d as GonderHatasi).canliDegisti).toBeNull();
+    expect((d as GonderHatasi).canliDegisti).toBe(false);
     expect(gonderHataIletisi(d)).toBe('Plan onaya gönderilemedi: Bu kayıt siz açtıktan sonra değiştirildi.');
   });
 
@@ -97,15 +89,27 @@ describe('calismayiGonder', () => {
     expect(canliDegistiIletisi(null)).toBe('Bu plan hazırlandıktan sonra canlı plan değişti. Canlıya alırsanız o değişiklikler bu planla değişir; önce canlıya alan kişiyle konuşun.');
   });
 
-  it('990 a: canlıya alma 4 saat kuralına takılırsa hata gerekçe isteyen onaydaki taslağı taşır; öteki retlerde taşımaz', async () => {
-    sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'İş 4 saatten kısa sürede başlayacak.', ayrinti: { neden: 'dort-saat', gerekceIle: true } }) });
+  it('990 a: 4 saat kuralına takılırsa hata gerekçe ister; gerekçeyle yeniden yollanınca gövdede gider; onaya göndermede istemez', async () => {
+    const dort = new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'İş 4 saatten kısa sürede başlayacak.', ayrinti: { neden: 'dort-saat', gerekceIle: true } });
+    sunucu({ [CANLI]: dort, [ONAY]: dort });
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
     expect(h).toBeInstanceOf(GonderHatasi);
-    expect((h as GonderHatasi).gerekceTaslagi).toBe(12);
+    expect((h as GonderHatasi).gerekceIster).toBe(true);
+    const o = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
+    expect((o as GonderHatasi).gerekceIster).toBe(false);
     vi.restoreAllMocks();
-    sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }) });
-    const d = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
-    expect((d as GonderHatasi).gerekceTaslagi).toBeNull();
+    const post = sunucu();
+    await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli', dortSaatGerekcesi: 'Acil sevkiyat' });
+    expect(post.mock.calls[0]?.[1]).toMatchObject({ dortSaatGerekcesi: 'Acil sevkiyat' });
+  });
+
+  it('Risk 3308-5-2 K1: iki soru art arda gelince cevaplar birikir; komut sürümsüz ve gerekçeyle birlikte gider', async () => {
+    expect(soruEki({ canliOnay: true }, { gerekce: 'Acil' })).toEqual({ canliOnay: true, gerekce: 'Acil' });
+    expect(soruEki({ gerekce: 'Acil' }, { canliOnay: true })).toEqual({ canliOnay: true, gerekce: 'Acil' });
+    expect(soruEki(undefined, { canliOnay: true })).toEqual({ canliOnay: true });
+    const post = sunucu();
+    await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli', canliKabul: true, dortSaatGerekcesi: 'Acil' });
+    expect(post.mock.calls[0]?.[1]).toEqual({ ad: 'x', calismaSurumu: 8, not: null, dortSaatGerekcesi: 'Acil' });
   });
 
   it('Deneme olarak kaydet: taslak açık kalır, liste yeniden okunur', async () => {
