@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
@@ -8,7 +8,7 @@ import type { HaritaKomutu } from './harita/Harita.tsx';
 import { aralik, haritaGruplari, pencereSonu, sahneKur, yerlesim, zamanSinirla } from './harita/kurallar.ts';
 import { BosCalisma, BosPlan } from './BosPlan.tsx';
 import { useBekleyenUygula, usePlanKur } from './coz.ts';
-import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati } from './kurallar.ts';
+import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz, simdiSaati } from './kurallar.ts';
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
 import { Ozet, type OzetDurumu } from './ozet/Ozet.tsx';
 import { panelSecimi } from './secim/kurallar.ts';
@@ -21,6 +21,10 @@ import { nabizYazmalari, PlanSeridi } from './ust/PlanSeridi.tsx';
 import './motor.css';
 import { useAn } from './saat.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
+import { DegisiklikOzeti, Degisiklikler } from '../kokpit/Degisiklikler.tsx';
+import { bekleyenDegisiklikleri, degisiklikler } from '../kokpit/degisiklikler.ts';
+import { modelKur } from '../kokpit/kurallar.ts';
+import { SeritYuvasi } from './ust/yuva.ts';
 
 // Planlama motoru (3308-2 a): plan şeridi, görünüm ve dönem çubuğu, üç görünüm (Özet, Harita, Keşfet) ve seçim kartı. Sayfa planı okur ve
 // yeniden kurar (357 b, 576 coz.ts); iş taşıma ve düzenleme Kokpit'tedir. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -87,6 +91,22 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const kartAc = useCallback(() => { dk.current?.scrollIntoView?.({ block: 'nearest' }); dk.current?.focus(); }, []);
   const kilavuzYok = useCallback(() => undefined, []);
 
+  // Planı etkileyen değişiklikler (3317-1b): Kokpit'in şeridindeki listenin aynısı; bu sayfa yalnız gösterir, düzeltme Kokpit'tedir.
+  const dis = useContext(SeritYuvasi).dis ?? null;
+  const [dgAcik, setDgAcik] = useState(false);
+  const degisiklikListesi = useMemo(() => (p === null ? [] : degisiklikler({
+    m: modelKur(c, p, cx, emirNo), zaman: (t) => saatYaz(c.D, t), an: (ms) => new Date(ms).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }),
+    bekleyen: bekleyenDegisiklikleri(c, dis), olaylar: o.depo.planSurumu?.bayat?.olaylar ?? [],
+  })), [c, p, cx, emirNo, dis, o.depo.planSurumu]);
+  const veriSayisi = degisiklikListesi.filter((x) => x.baslik === 'veri').length;
+  const git = o.git;
+  const degisiklikEki = p === null ? null : {
+    satir: <DegisiklikOzeti l={degisiklikListesi} acik={dgAcik} ac={setDgAcik} salt />,
+    alt: dgAcik && degisiklikListesi.length > 0
+      ? <Degisiklikler l={degisiklikListesi} kart={null} suzgec={false} suzgecKoy={() => undefined} goster={null} toplu={yetki.planYaz && komut !== null && veriSayisi > 0 ? veriSayisi : null} kokpiteGit={() => { git('kokpit'); }} />
+      : null,
+  };
+
   const { bildir } = useBildirim();
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
@@ -121,7 +141,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   return (
     <div className="tc-pym" data-gorunum={gorunum}>
       <Cubuk plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc}
-        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c.olaylar} />
+        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c.olaylar} ek={degisiklikEki} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
           {gorunum === 'atolye' && p ? (

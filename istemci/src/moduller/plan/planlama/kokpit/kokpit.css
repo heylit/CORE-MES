@@ -95,6 +95,8 @@
 .tc-pyq-dg-ne small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-pyq-dg-suzgec { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: var(--b-1) 0 0; font-size: var(--yazi-s); }
 .tc-pyq-dg .tc-pyq-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+/* Yalnız gösteren sayfada (Motor) listenin altındaki Kokpit bağlantısı satırı doldurmaz. */
+.tc-pyq-dg > .tc-pyq-dg-dugme { align-self: flex-start; justify-self: start; margin-top: var(--b-2); }
 @container (max-width: 899px) { .tc-pyq-dg-ozet { flex: 1 1 auto; } .tc-pyq-dg-ozet > button { margin-left: auto; } }
 @container (max-width: 599px) {
   .tc-pyq-dg-dokum { display: none; }

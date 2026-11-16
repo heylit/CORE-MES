@@ -5,12 +5,13 @@ import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
-import type { PlanlamaCalismasi } from '../tipler.ts';
+import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { KAYDEDILEMEDI } from './coz.ts';
 import { PlanlamaMotoru } from './index.tsx';
 import { YOK_NOTU } from './ortak.tsx';
+import { SeritYuvasi } from './ust/yuva.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ufukKur } from '../ufuk-olcegi.ts';
 
@@ -22,15 +23,15 @@ afterEach(cleanup);
 
 // İş emri durumu okunamamış depo: biten iş kayıtlı plandan çıkar.
 const DEPO = { durum: null } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
+function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; depo?: PlanlamaDeposu; dis?: BekleyenDegisiklik | null } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile,
+    depo: o.depo ?? DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile,
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])]),
   };
-  render(<BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici>);
+  render(<BildirimSaglayici><SeritYuvasi.Provider value={{ satir: null, alt: null, dis: o.dis ?? null }}><Iskelet {...oz} /></SeritYuvasi.Provider></BildirimSaglayici>);
   return { git, yenile };
 }
 // İskeletin ortak ölçek ve seçimi (PlanlamaYeni.tsx'teki gibi).
@@ -66,6 +67,9 @@ describe('PlanlamaMotoru', () => {
     for (const b of screen.getAllByRole('button', { name: 'Planı kur' })) expect(b.getAttribute('aria-disabled')).toBe('true');
     expect(screen.getByRole('button', { name: 'Veri ve kısıtlar' }).getAttribute('title')).toBe(`Veri ve kısıtlar: ${YOK_NOTU}`);
     expect(screen.queryByRole('toolbar', { name: 'Görünüm' })).toBeNull();
+    // Plan yokken değişiklik özeti çizilmez (ölçülecek plan yok); çubuk "Plan yok" der.
+    expect(document.querySelector('[data-degisiklik-ozeti]')).toBeNull();
+    expect(within(screen.getByRole('toolbar', { name: 'Plan çubuğu' })).getByText('Plan yok')).toBeTruthy();
   });
 
   it('yazabilene Planı kur açık (576): çubuk ve kart sunucudaki motoru ister; çalışma kaydedilemezse iletisi gelir, plan değişmez', async () => {
@@ -102,6 +106,57 @@ describe('PlanlamaMotoru', () => {
     const g = ornekCalisma(); g.dataVer = g.plan?.dataVer ?? 0;
     ac({ c: g, komut: { kaydet, degistir: vi.fn() } as unknown as CalismaKomutu });
     expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
+  });
+
+  // 3317-1b: Kokpit'in şeridindeki değişiklik listesi Motor'da da aynı yerdedir; Motor yalnız gösterir, düzeltme Kokpit'tedir.
+  it('planı etkileyen değişiklikler şeritte özetlenir; liste üç başlıkta açılır, satırda Göster yoktur; bağlantı Kokpit\'i açar; toplu düğme birincil kalır', () => {
+    const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
+      { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
+      { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
+    ] };
+    const { git } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu, komut: { kaydet: vi.fn(), degistir: vi.fn() } as unknown as CalismaKomutu });
+    const cubuk = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
+    const ozet = cubuk.querySelector('[data-degisiklik-ozeti]') as HTMLElement;
+    expect(ozet.textContent).toMatch(/^\d+ değişiklik1 veri · 2 saha/);
+    // Plan durumu rozeti ve olay sayısı satırda ikinci kez yazılmaz; toplu düğme sayfanın birincilidir.
+    expect(within(cubuk).queryByText('Veri değişti')).toBeNull();
+    expect(cubuk.querySelector('[data-olaylar]')).toBeNull();
+    expect(within(cubuk).getByRole('button', { name: 'Planı güncelle' }).className).toContain('tc-dugme-birincil');
+    expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri gör' }));
+    const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem').length).toBe(1);
+    expect(within(within(liste).getByRole('region', { name: 'Sahada oldu' })).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Duruş: ORN-T01', 'Malzemenin geliş tarihi değişti: 3']);
+    expect(within(liste).queryByRole('button', { name: 'Göster' })).toBeNull();
+    expect(liste.textContent).toContain('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
+    expect(liste.textContent).toContain('emre gitmek ve düzeltmek Kokpit\'tedir');
+    fireEvent.click(within(liste).getByRole('button', { name: 'Kokpit\'te gör ve düzelt' }));
+    expect(git).toHaveBeenCalledWith('kokpit');
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri kapat' }));
+    expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
+  });
+
+  it('bu açılışta gelen, kayda yazılmamış başka sayfa değişikliği plan güncelken de listede "Veri değişti" altındadır', () => {
+    const g = ornekCalisma(); g.dataVer = g.plan?.dataVer ?? 0;
+    ac({ c: g, yaz: false, dis: { id: 'ORN-dis', ne: 'Ürün rotası değişti', ayrinti: '', kim: '', t: 0, isler: ['*'], geri: null, dis: true } });
+    const ozet = document.querySelector('[data-degisiklik-ozeti]') as HTMLElement;
+    expect(ozet.textContent).toContain('1 veri');
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri gör' }));
+    const veri = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Veri değişti' });
+    expect(within(veri).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Ürün rotası değişti']);
+    expect(veri.textContent).toContain('Başka sayfa');
+  });
+
+  it('değişiklik yokken şeritte "Plan güncel" yazar, düğme yoktur; yazamayana toplu uygulama notu çıkmaz', () => {
+    const g = ornekCalisma(); g.dataVer = g.plan?.dataVer ?? 0;
+    ac({ c: g });
+    const ozet = document.querySelector('[data-degisiklik-ozeti]') as HTMLElement;
+    expect(ozet.textContent).toBe('Plan güncel');
+    expect(within(ozet).queryByRole('button')).toBeNull();
+    cleanup();
+    ac({ yaz: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri gör' }));
+    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).not.toContain('Planı güncelle');
   });
 
   it('plan yazma yetkisi yoksa Planı kur görünmez ya da pasif kalır', () => {

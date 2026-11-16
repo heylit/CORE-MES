@@ -15,7 +15,7 @@ import {
 import { CalismaYazici } from './kayit.ts';
 import { KaynakAdlariBaglami, kaynakAdlariKur } from './kaynak-kodu.tsx';
 import { DegisiklikSeridi } from './ortak/degisiklik-seridi/DegisiklikSeridi.tsx';
-import { canliBayatMetni, kaynakSatiri, seritListesi } from './ortak/degisiklik-seridi/kurallar.ts';
+import { kaynakSatiri } from './ortak/degisiklik-seridi/kurallar.ts';
 import { DuzenleyenSeridi, useDuzenleyen } from './ortak/duzenleyen-seridi/DuzenleyenSeridi.tsx';
 import { SeritYuvasi, type SeritYuvaBaglari, type SeritYuvalari } from './motor/ust/yuva.ts';
 import { usePlanlamaDeposu } from './veri.ts';
@@ -162,11 +162,8 @@ function PlanlamaEkrani() {
 
   const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
   const canliBayat = ((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat);
-  // Değişiklik satırı yalnız bekleyen değişiklik ya da eskiyen canlı plan varken yer kaplar (3042).
-  const motorEkrani = gorunum === 'plan';
-  // Kokpit'te bekleyen değişiklikler ve eskiten olaylar plan şeridindeki tek listededir (3317 a); ayrı satır çizilmez.
-  const serit = calisma !== null && calisma.plan !== null && gorunum !== 'kokpit'
-    && (!motorEkrani || seritListesi(calisma, disSatir).length > 0 || (canliBayat !== null && canliBayatMetni(canliBayat) !== null));
+  // Kokpit'te ve Motor'da bekleyen değişiklikler ve eskiten olaylar plan şeridindeki tek listededir (3317 a); ayrı satır çizilmez.
+  const serit = calisma !== null && calisma.plan !== null && gorunum !== 'kokpit' && gorunum !== 'plan';
   // Üst alan tek satırdır (2320 S1 d): düzenleyen, değişiklik ve çalışma açma şeritleri aynı kapta alt alta.
   const ust = serit || calismaYok || duzenleyen !== null;
 
@@ -175,7 +172,7 @@ function PlanlamaEkrani() {
       {ust && (
         <div className="tc-py-ust">
           {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={yazTazele} />}
-          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={canliBayat} bosGizle={motorEkrani} />}
+          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={canliBayat} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
               <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>

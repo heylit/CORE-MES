@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { BekleyenDegisiklik } from '../tipler.ts';
+import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
-import { degisiklikDokumu, degisiklikler } from './degisiklikler.ts';
+import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler } from './degisiklikler.ts';
 
 // Uydurma örnek (ORN-): şimdi 10. saat; torna 8'de başlayacaktı ve başlamadı, freze başladı, taşlama on dakika önce başlayacaktı.
 const is = (id: string, S: number, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S, C: S + 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
@@ -64,5 +64,26 @@ describe('degisiklikler (3317 a)', () => {
   it('dökümde sıfır olan tür yazılmaz; boş listede döküm boştur', () => {
     expect(degisiklikDokumu(degisiklikler({ m: M, bekleyen: [], olaylar: [], zaman, an }))).toBe('2 geride');
     expect(degisiklikDokumu([])).toBe('');
+  });
+});
+
+// 3317-1b: "Veri değişti" satırlarının kaynağı Kokpit'te ve Motor'da aynı işlevdir.
+describe('bekleyenDegisiklikleri', () => {
+  const c = (dataVer: number, planVer: number | null, l: BekleyenDegisiklik[]): PlanlamaCalismasi =>
+    ({ dataVer, plan: planVer === null ? null : { dataVer: planVer }, bekleyen: l }) as unknown as PlanlamaCalismasi;
+
+  it('plan veriden eskiyse kayıtlı bekleyenleri verir; plan güncelse, plan yoksa ya da çalışma yoksa kayıtlı satır vermez', () => {
+    expect(bekleyenDegisiklikleri(c(5, 4, [bekleyen('a'), bekleyen('b')]), null).map((b) => b.id)).toEqual(['a', 'b']);
+    expect(bekleyenDegisiklikleri(c(5, 5, [bekleyen('a')]), null)).toEqual([]);
+    expect(bekleyenDegisiklikleri(c(5, null, [bekleyen('a')]), null)).toEqual([]);
+    expect(bekleyenDegisiklikleri(null, null)).toEqual([]);
+  });
+
+  it('bu açılışta gelen yazılmamış satır sona eklenir, plan güncelken de; kayıtlıysa ikinci kez yazılmaz', () => {
+    const dis = bekleyen('dis', { dis: true });
+    expect(bekleyenDegisiklikleri(c(5, 4, [bekleyen('a')]), dis).map((b) => b.id)).toEqual(['a', 'dis']);
+    expect(bekleyenDegisiklikleri(c(5, 5, []), dis).map((b) => b.id)).toEqual(['dis']);
+    expect(bekleyenDegisiklikleri(null, dis).map((b) => b.id)).toEqual(['dis']);
+    expect(bekleyenDegisiklikleri(c(5, 4, [bekleyen('a'), bekleyen('dis')]), dis).map((b) => b.id)).toEqual(['a', 'dis']);
   });
 });

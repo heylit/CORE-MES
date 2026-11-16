@@ -968,6 +968,34 @@ test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster 
   await expect(liste).toHaveCount(0);
   await expect(serit.locator('[data-kart="S1"]')).toHaveAttribute('aria-pressed', 'true');
   await tasma();
+
+  // 3317-1b: Motor sayfasında aynı özet ve liste aynı yerdedir; Motor yalnız gösterir (satırda "Göster" yok), bağlantı Kokpit'i açar.
+  await ac('/plan/plan');
+  const motor = page.locator('.tc-pym[data-gorunum]');
+  await expect(motor).toBeVisible({ timeout: 20_000 });
+  const mKarsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await mKarsilama.isVisible().catch(() => false)) await mKarsilama.click();
+  const mCubuk = motor.getByRole('toolbar', { name: 'Plan çubuğu' });
+  const mOzet = mCubuk.locator('[data-degisiklik-ozeti]');
+  await expect(mOzet.locator('b')).toHaveText('4 değişiklik');
+  await expect(mCubuk.getByText('Veri değişti')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Değişiklik akışı' })).toHaveCount(0);
+  await expect(mCubuk.getByRole('button', { name: 'Planı güncelle' })).toHaveClass(/tc-dugme-birincil/);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-1b-motor-kapali-${bilgi.project.name}.png` });
+  const mAc = mOzet.getByRole('button', { name: 'Değişiklikleri gör' });
+  if (telefon) expect((await mAc.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await mAc.click();
+  const mListe = page.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+  await expect(mListe.getByRole('listitem')).toHaveCount(4);
+  await expect(mListe.getByRole('region', { name: 'Plan geride' }).getByRole('listitem')).toContainText('S1 · Torna · T-01');
+  await expect(mListe.getByRole('button', { name: 'Göster' })).toHaveCount(0);
+  const kGit = mListe.getByRole('button', { name: "Kokpit'te gör ve düzelt" });
+  expect((await kGit.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(telefon ? 44 : 24);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-1b-motor-liste-${bilgi.project.name}.png`, fullPage: true });
+  await kGit.click();
+  await expect(page.locator('.tc-pyq')).toBeVisible({ timeout: 20_000 });
   expect(ag.hatalar).toEqual([]);
 });
 
