@@ -1,50 +1,14 @@
 import { useState } from 'react';
-import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import '../../../../../ortak/arayuz/tablo.css';
-import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { IZ_SINIRI } from '../../kayit.ts';
 import type { IzSatiri, PlanlamaCalismasi } from '../../tipler.ts';
 import { VeriKarti, VeriTablosu, type Sutun } from '../veri/ortak.tsx';
 import '../veri/veri.css';
 import './gecmis.css';
-import { DegisiklikDefteri } from './Defter.tsx';
-import { SenaryolarBolumu } from './Senaryolar.tsx';
-import { GECMIS_BOLUMLERI, ILK_GECMIS, izKisileri, izSuz, izZamani, type GecmisBolumu } from './kurallar.ts';
+import { izKisileri, izSuz, izZamani } from './kurallar.ts';
 
-export { gecmisBolumuOku, type GecmisBolumu } from './kurallar.ts';
-
-// "Geçmiş" ekranı (bugünkü sayfa b-kabuk.betik EKRANLAR gecmis; 575 a): Senaryolar ve Değişiklik izi. Bölüm adresin `bolum`'undadır.
-// Değişiklik izi planlama çalışmasının kaydındadır (her çalışma yazması bir satır ekler); değişiklik defteri kalıcıdır ve sunucudan okunur (2129-2 b); senaryolar plan modülündendir (221 c). Ekran yalnız okur.
-export interface GecmisOzellikleri extends PlanlamaEkranOzellikleri {
-  bolum?: GecmisBolumu;
-  bolumSec?: (b: GecmisBolumu) => void;
-}
-
-export function GecmisEkrani(o: GecmisOzellikleri) {
-  const c = o.calisma;
-  const [ic, icYaz] = useState<GecmisBolumu>(ILK_GECMIS);
-  const bolum = o.bolum ?? ic;
-  const sec = (b: GecmisBolumu) => { if (o.bolumSec) o.bolumSec(b); else icYaz(b); };
-  return (
-    <div className="tc-pyi" data-parca="gecmis" data-bolum={bolum}>
-      <nav className="tc-pyi-serit-menu" aria-label="Geçmiş">
-        {GECMIS_BOLUMLERI.map(([k, ad, s]) => (
-          <button key={k} type="button" aria-current={k === bolum ? 'page' : undefined} onClick={() => { sec(k); }}>
-            <Simge ad={s} boyut="k" /><span>{ad}</span>
-          </button>
-        ))}
-      </nav>
-      {bolum === 'iz' && !c ? (
-        <div className="tc-pyi-bos"><Simge ad="book" /><strong>Planlama çalışması yok</strong><span>Çalışma kaydı açılınca değişiklik izi burada görünür.</span></div>
-      ) : (
-        <section className="tc-pyi-icerik" aria-label={GECMIS_BOLUMLERI.find((x) => x[0] === bolum)?.[1]}>
-          {bolum === 'iz' && c ? <DegisiklikIzi c={c} /> : bolum === 'defter' ? <DegisiklikDefteri siparisler={c?.D.siparisler} /> : <SenaryolarBolumu v={o.depo.senaryolar} planlamaAc={() => { o.git('studio'); }} />}
-        </section>
-      )}
-    </div>
-  );
-}
-
+// Değişiklik izi planlama çalışmasının kaydındadır (her çalışma yazması bir satır ekler); ekran yalnız okur. Değişiklik defteri kalıcıdır ve
+// sunucudan okunur (2129-2 b, Defter.tsx). İkisi de Veri sayfasının bölümüdür (3308-2 a).
 const IZ_SUTUNLARI: readonly Sutun<IzSatiri>[] = [
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (x) => <span className="mono">{izZamani(x.t)}</span>, kirilmaz: true },
   { anahtar: 'kim', baslik: 'Kişi', hucre: (x) => x.kim || '—' },
@@ -54,7 +18,7 @@ const IZ_SUTUNLARI: readonly Sutun<IzSatiri>[] = [
   { anahtar: 'ayrinti', baslik: 'Ayrıntı', hucre: (x) => <span className="tc-pyi-k">{x.ayrinti}</span> },
 ];
 
-function DegisiklikIzi({ c }: { c: PlanlamaCalismasi }) {
+export function DegisiklikIzi({ c }: { c: PlanlamaCalismasi }) {
   const [kim, kimYaz] = useState<string | null>(null);
   const kisiler = izKisileri(c.iz); const l = izSuz(c.iz, kim);
   return (

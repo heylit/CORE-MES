@@ -60,7 +60,7 @@ export function SiparisListesi({ c, p, cizelgede }: ListeOzellikleri) {
           {SIPARIS_SUZGECLERI.map(([k, ad]) => <button key={k} type="button" aria-pressed={suz === k} onClick={() => { suzYaz(k); }}>{ad}</button>)}
         </div>
         <input className="tc-alan-kutu tc-pyi-ara" type="search" placeholder="Sipariş no ya da ürün ara" aria-label="Sipariş ara" value={ara} onChange={(e) => { araYaz(e.target.value); }} />
-        <SahipDugmesi ad="Yeni sipariş" simge="plus" metin="Yeni sipariş" birincil />
+        <SahipDugmesi ad="Yeni sipariş" simge="plus" metin="Yeni sipariş" />
       </div>
       <VeriKarti baslik="Siparişler" ek={`${l.length} / ${D.siparisler.length}`}>
         <VeriTablosu etiket="Siparişler" sutunlar={sutunlar} satirlar={l} anahtar={(s) => s.id} />
@@ -88,7 +88,7 @@ export function TezgahListesi({ c, maliyet }: ListeOzellikleri) {
     <div className="tc-pyi-dik">
       <div className="tc-pyi-sira">
         <span className="tc-pyi-alt tc-pyi-ara">{l.length} tezgâh, {new Set(l.map((t) => t.grup)).size} grup. Tezgâh kodu rotada kullanılır; kod değişmez.</span>
-        <SahipDugmesi ad="Yeni tezgâh" simge="plus" metin="Yeni tezgâh" birincil />
+        <SahipDugmesi ad="Yeni tezgâh" simge="plus" metin="Yeni tezgâh" />
       </div>
       <VeriKarti baslik="Tezgâhlar"><VeriTablosu etiket="Tezgâhlar" sutunlar={sutunlar} satirlar={l} anahtar={(x) => x.id} /></VeriKarti>
       <SahipNotu />
@@ -142,7 +142,7 @@ export function PersonelListesi({ c }: ListeOzellikleri) {
           <div className="tc-pyi-sira tc-pyi-ust-pay"><SahipDugmesi ad="Devamsızlık ekle" simge="plus" metin="Devamsızlık ekle" /></div>
         </VeriKarti>
       </div>
-      <VeriKarti baslik="Personel" ek={String(per.length)} sag={<SahipDugmesi ad="Yeni personel" simge="plus" metin="Yeni personel" birincil />}>
+      <VeriKarti baslik="Personel" ek={String(per.length)} sag={<SahipDugmesi ad="Yeni personel" simge="plus" metin="Yeni personel" />}>
         <VeriTablosu
           etiket="Personel" satirlar={per} anahtar={(x) => x.id}
           sutunlar={[

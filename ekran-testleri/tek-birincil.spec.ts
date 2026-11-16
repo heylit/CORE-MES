@@ -15,7 +15,6 @@ const BORC: Readonly<Record<string, number>> = {
   // Motor'un borcu; kök adres (/plan) Kokpit'tir ve sınırdadır.
   '/plan/plan': 3,
   // Planlama'nın ikinci menü görünümleri (B-2483-48): ekranlar teslim olduğu gibidir; sayı yalnız düşebilir.
-  '/plan/studio': 3,
   '/plan/ysiparis': 3,
   '/plan/terminler': 3,
   '/plan/denge': 3,

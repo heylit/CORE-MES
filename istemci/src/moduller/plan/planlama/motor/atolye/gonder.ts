@@ -6,7 +6,8 @@ import type { AtolyeKomutuCevabi, AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi
 import { useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
-import type { CalismaKomutu } from '../../kayit.ts';
+import { planGuncel } from '../../durum.ts';
+import { bekleyenListesi, type CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { useBekleyenUygula } from '../coz.ts';
@@ -237,3 +238,12 @@ export function isTasiOnizle(g: { isId: string; tezgah: string; baslangic: numbe
 
 // Taşımanın saati çeyrek saate yuvarlanır ve şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
 export const tasimaSaati = (S: number, now: number): number => Math.max(Math.ceil(now * 4 - 1e-9) / 4, Math.round(S * 4) / 4);
+
+// Plan veriden eskiyse gönderilmez (1786 PLN-1): neden önceden yazılır, düğme kişiyi engelin kalktığı yere götürür.
+export function gonderEngeli(c: PlanlamaCalismasi): string | null {
+  if (planGuncel(c)) return null;
+  const n = bekleyenListesi(c).length;
+  return n > 0
+    ? `Gönderilemez: ${String(n)} bekleyen değişiklik plana uygulanmadı. Onay ve canlı bölümünde uygulayın ya da reddedin, sonra gönderin.`
+    : 'Gönderilemez: veri plandan sonra değişti. Önce planı yeniden çözün.';
+}

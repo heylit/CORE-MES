@@ -29,7 +29,7 @@ interface Ozellikler {
 export function HaritaGorunumu(o: Ozellikler) {
   const { c, p, cx, r, now } = o;
   const harita = useRef<HaritaKomutu | null>(null);
-  const kok = useRef<HTMLElement>(null); const ustEl = useRef<HTMLDivElement>(null); const altEl = useRef<HTMLDivElement>(null);
+  const kok = useRef<HTMLElement>(null); const ustEl = useRef<HTMLDivElement>(null); const altEl = useRef<HTMLDivElement>(null); const okuEl = useRef<HTMLButtonElement>(null);
   const [oynat, setOynat] = useState(false);
   const [hiz, setHiz] = useState(4);
   const [okuma, setOkuma] = useState(false);
@@ -43,6 +43,8 @@ export function HaritaGorunumu(o: Ozellikler) {
 
   const komutKur = useCallback((k: HaritaKomutu | null) => { harita.current = k; o.komut?.(k); }, [o]);
   // Kılavuz kendiliğinden açılmaz: eski sayfa taze tarayıcıda da Özet'te ve Harita'da açmadı (denetim 2, A8); Başka menüsünden açılır.
+  // İlk kare, üstteki düğmeler yerleşmeden çizilir; açılışta paylar belli olunca bir kez daha sığdırılır.
+  useEffect(() => { harita.current?.sigdir(); }, []);
   // Alttaki oynatıcının boyu yerleşimden düşülür.
   useEffect(() => {
     const el = altEl.current; if (!el || typeof ResizeObserver !== 'function') return undefined;
@@ -50,7 +52,8 @@ export function HaritaGorunumu(o: Ozellikler) {
   }, []);
   const paylar = useCallback((): [number, number] => {
     const k = kok.current?.getBoundingClientRect(); if (!k) return [0, 0];
-    const u = ustEl.current ? Math.max(0, ustEl.current.getBoundingClientRect().bottom - k.top) : 0;
+    // Okuma düğmesi haritanın üstünde durur; sığdırma onun altından başlar ki grup başlığını örtmesin.
+    const u = Math.max(0, ...[ustEl.current, okuEl.current].map((el) => (el ? el.getBoundingClientRect().bottom - k.top : 0)));
     let a = altEl.current?.offsetHeight ? Math.max(0, k.bottom - altEl.current.getBoundingClientRect().top) : 0; if (a > k.height / 2) a = 0;
     return [u, a];
   }, []);
@@ -88,7 +91,7 @@ export function HaritaGorunumu(o: Ozellikler) {
       {o.katman?.(bag)}
       <div ref={ustEl} className="tc-pym-at-ust">{o.ust}</div>
       <div className="tc-pym-hl" data-acik={okuma ? '' : undefined}>
-        <button type="button" aria-expanded={okuma} onClick={() => setOkuma((x) => !x)}><Simge ad="help" boyut="k" /><span>Haritayı okuma</span><Simge ad="down" boyut="k" /></button>
+        <button ref={okuEl} type="button" aria-label="Haritayı okuma" aria-expanded={okuma} onClick={() => setOkuma((x) => !x)}><Simge ad="help" boyut="k" /><span>Haritayı okuma</span><Simge ad="down" boyut="k" /></button>
         {okuma && <HaritaOkuma />}
       </div>
       {o.kilavuz && <KilavuzKarti ornek={o.ornek} kapat={() => o.kilavuzAc(false)} />}

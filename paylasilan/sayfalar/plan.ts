@@ -17,7 +17,7 @@ export const PLAN_IKINCI_MENU = {
     { maddeler: [
       { anahtar: 'kokpit', baslik: 'Kokpit', yol: '/plan', simge: 'target', islem: 'plan.planlama-oku' },
       { anahtar: 'plan', baslik: 'Motor', yol: '/plan/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
-      { anahtar: 'studio', baslik: 'Stüdyo', yol: '/plan/studio', simge: 'flag', islem: 'plan.planlama-oku' },
+      { anahtar: 'veri', baslik: 'Veri', yol: '/plan/veri', simge: 'layers', islem: 'plan.planlama-oku' },
       { anahtar: 'ysiparis', baslik: 'Siparişler', yol: '/plan/ysiparis', simge: 'list', islem: 'plan.planlama-oku' },
       { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/plan/maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
       { anahtar: 'giderler', baslik: 'Genel gider', yol: '/plan/giderler', simge: 'layers', islem: 'finans.maliyet-oku' },

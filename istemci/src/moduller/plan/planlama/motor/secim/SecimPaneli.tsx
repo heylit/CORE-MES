@@ -2,42 +2,26 @@ import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
-import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { Dg } from '../cizelge/Dugme.tsx';
 import { HAZIRLIK_YOK } from '../kesif/kurallar.ts';
 import '../kesif/kesif.css';
 import {
   bekleme, dilimAdi, dilimBoyu, durusOku, gecikmeEtkisi, gecMetin, siparisRengi, tezgahDurumu, type Aralik, type Sahne,
 } from '../harita/kurallar.ts';
 import { ayristir, KATEGORI_AD, ONCELIK_AD, saatYaz, saatYazi, type Derleme, type OkunanPlan, type SureKategorisi } from '../kurallar.ts';
-import { degisken, HAZIRLANIYOR, MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
-import { isoYerel, mesaiAdaylari, tezgahYazi, yolculuk, type PanelSecimi } from './kurallar.ts';
-import { RotaSekmesi, TakvimSekmesi } from './Sekmeler.tsx';
+import { degisken } from '../ortak.tsx';
+import { tezgahYazi, yolculuk, type PanelSecimi } from './kurallar.ts';
 import './secim.css';
-import type { AtolyeKomutlari } from '../atolye/gonder.ts';
-import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
 import { tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
 
-// Yan panel (zl-yan dkHtml) ve seçim kartı (zc-tahta tkSecim, z-komuta kmSiparis, kmTezgah, kmIs): Özet, Harita ve Keşfet'te seçim olunca
-// görünümün sağında açılır, dar ekranda alttan. Taşı, kaydır ve ek mesai sunucu komutudur (1982 a, 2053); öteki motor hamleleri (öne al,
-// öncelik, hedefe yetiştir, boşalt, sıra) yerinde ve pasiftir (357 b); sabitlemek çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz).
-export type PanelSekmesi = 'yon' | 'rota' | 'takvim';
+// Seçim kartı (3308-2 a): Özet, Harita ve Keşfet'te seçim olunca görünümün sağında açılır, dar ekranda alttan. Kart yalnız okur: siparişin
+// bitişi ve yolculuğu, tezgâhın durumu ve sırası, işin zamanı. Düzenleme Kokpit'tedir; yazabilen kişiye oraya giden tek düğme gösterilir.
 export interface Ozellikler {
   kok?: MutableRefObject<HTMLElement | null>;
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; s: Sahne; r: Aralik; olcek: DonemOlcegi; t: number;
-  secim: PanelSecimi; sek: PanelSekmesi; sekSec: (x: PanelSekmesi) => void;
-  komut: CalismaKomutu | null; planYaz: boolean; planKilitle: boolean;
+  secim: PanelSecimi; planYaz: boolean;
   kapat: () => void; opSec: (id: string) => void; sipSec: (j: string) => void; zamanSec: (t: number) => void;
-  // Rota sekmesindeki seçim kutusu siparişi değiştirir, sekme Rota'da kalır (mz-rota-j).
-  rotaSec: (j: string) => void;
-  gunPlani: (t: number, sec: { adim?: string; tezgah?: string }) => void; hazirlikAc: () => void;
-  // Tezgâhın odak tahtasını açar (577a); verilmezse Odakla pasif.
-  odakla?: ((m: string) => void) | null;
-  // Sunucu komutları (1982 a, 2053): taşı ve ek mesai; verilmezse pasif.
-  tasi?: AtolyeKomutlari['tasi'] | undefined; ekMesai?: AtolyeKomutlari['ekMesai'] | undefined;
-  // 2129-1 b: öne al önizlemesi; verilmezse pasif.
-  hamle?: Hamleci | null;
+  hazirlikAc: () => void; kokpitAc: () => void;
 }
 
 const Bolum = ({ baslik, simge, children }: { baslik: string; simge: SimgeAdi; children: ReactNode }) => (
@@ -76,11 +60,7 @@ function useGorunurBoy(kok?: MutableRefObject<HTMLElement | null>) {
 export function SecimPaneli(o: Ozellikler) {
   const { secim } = o;
   const kok = useGorunurBoy(o.kok);
-  const sekmeler: [PanelSekmesi, string][] = secim.tur === 'siparis' ? [['yon', 'Yön ver'], ['rota', 'Rota']] : secim.tur === 'tezgah' ? [['yon', 'Yön ver'], ['takvim', 'Takvim']] : [];
-  const k = sekmeler.some(([x]) => x === o.sek) ? o.sek : 'yon';
-  const govde = k === 'rota' ? <RotaSekmesi {...o} j={secim.id} />
-    : k === 'takvim' ? <TakvimSekmesi {...o} m={secim.id} />
-    : secim.tur === 'is' ? <IsKarti {...o} id={secim.id} />
+  const govde = secim.tur === 'is' ? <IsKarti {...o} id={secim.id} />
     : secim.tur === 'siparis' ? <SiparisKarti {...o} j={secim.id} />
     : <TezgahKarti {...o} m={secim.id} />;
   return (
@@ -90,17 +70,17 @@ export function SecimPaneli(o: Ozellikler) {
       </div>
       <div className="tc-pym-dk-ic">
         <section className="tc-pym-tk-secim" aria-label="Seçim kartı">
-          {sekmeler.length > 0 && (
-            <div className="tc-pym-tk-sek" role="tablist">
-              {sekmeler.map(([x, ad]) => <button key={x} type="button" role="tab" aria-selected={k === x} onClick={() => o.sekSec(x)}>{ad}</button>)}
-            </div>
-          )}
-          <div className="tc-pym-km" data-k={`secim-${secim.tur}-${k}`}>{govde}</div>
+          <div className="tc-pym-km" data-k={`secim-${secim.tur}`}>{govde}</div>
           {secim.tur === 'siparis' && (
             <div className="tc-pym-ks tc-pym-km-hz">
               <div className="tc-pym-km-hz-durum"><Simge ad="check" boyut="k" /><span>Hazırlık</span></div>
               <p>{HAZIRLIK_YOK}</p>
               <button type="button" className="tc-pym-link" onClick={o.hazirlikAc}>Hazırlık listesinde aç</button>
+            </div>
+          )}
+          {o.planYaz && (
+            <div className="tc-pym-km-kokpit">
+              <button type="button" className="tc-dugme tc-dugme-birincil" onClick={o.kokpitAc}><Simge ad="target" boyut="k" />Kokpit'te düzenle</button>
             </div>
           )}
         </section>
@@ -111,11 +91,11 @@ export function SecimPaneli(o: Ozellikler) {
 
 // Bitişi ne belirliyor (kmSiparis): süre ayrışımının çubuğu, en büyük dört kalem; tezgâhta sıra beklemesi.
 const KAT_SIRA = Object.keys(KATEGORI_AD) as SureKategorisi[];
-function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani, hamle }: Ozellikler & { j: string }) {
+function SiparisKarti({ c, p, cx, s, t, j, opSec }: Ozellikler & { j: string }) {
   const D = c.D; const sp = D.siparisler.find((x) => x.id === j); const J = p.J[j]; const due = cx.jobs[j]?.due ?? null;
   const urun = D.urunler.find((u) => u.id === sp?.urun)?.ad ?? sp?.urun ?? '';
   const a = ayristir(p, cx, j); const m = bekleme(p, cx, j); const l = yolculuk(c, s, j, t);
-  const gec = (J?.T ?? 0) > 0.05; const pasif = yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.';
+  const gec = (J?.T ?? 0) > 0.05;
   const sira = a && a !== 'eksik' ? KAT_SIRA.filter((x) => (a.seg[x] ?? 0) > 0.01) : [];
   const top = a && a !== 'eksik' ? a.toplam || 1 : 1;
   const mm = Object.entries(m).sort((x, y) => y[1] - x[1]);
@@ -125,7 +105,6 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani, hamle 
       <p className="tc-pym-km-durum" data-ton={gec ? 'hata' : 'tamam'}>
         {J?.C != null ? <>Bitiş <b className="tc-pym-mono">{saatYaz(D, J.C)}</b>{due != null && <> · termin <span className="tc-pym-mono">{saatYaz(D, due)}</span></>} · {gec ? <b>{gecMetin(J.T ?? null)} geç</b> : 'termine yetişiyor'}</> : 'Bitiş belirsiz'}
       </p>
-      <Bolum baslik="Gecikmenin bedeli" simge="lira"><p className="tc-pym-kucuk-yazi">{HAZIRLANIYOR}</p></Bolum>
       <Bolum baslik="Bitişi ne belirliyor" simge="search">
         {a && a !== 'eksik' && (
           <div className="tc-pym-km-neden">
@@ -145,23 +124,6 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani, hamle 
             : 'Tezgâh beklemesi yok; bitişi işleme, ayar ve fason süreleri belirliyor.'}
         </p>
       </Bolum>
-      <Bolum baslik="Yön ver" simge="target">
-        <div className="tc-pym-km-hamleler">
-          <Dg ad="Öne al" simge="flag" birincil={gec} {...(yaz ? hamleYapisi(hamle, (h) => { h.oneAl(j); }) : { not: pasif })} ipucu="Öne almanın yollarını dener, en iyisini önizler" />
-          {l[0] && <Dg ad="Gün planı" simge="gantt" hayalet yap={() => { const r = l[0]?.r; if (r) gunPlani(r.S, { adim: r.id }); }} />}
-        </div>
-        <p className="tc-pym-km-alt">Öncelik</p>
-        <div className="tc-pym-seg" role="group" aria-label="Öncelik">
-          {[1, 2, 3].map((v) => <button key={v} type="button" aria-pressed={Number(sp?.oncelik) === v} aria-disabled="true" title={`${ONCELIK_AD[v]}: ${pasif}`}>{ONCELIK_AD[v]}</button>)}
-        </div>
-        <div className="tc-pym-km-hedef">
-          <label className="tc-alan">
-            <span className="tc-alan-etiket">Şu saate yetiştir</span>
-            <input className="tc-alan-kutu" type="datetime-local" readOnly aria-disabled="true" title={pasif} value={due == null ? '' : isoYerel(D, due)} />
-          </label>
-          <Dg ad="Seçenek ara" simge="search" not={pasif} />
-        </div>
-      </Bolum>
       <Bolum baslik="Yolculuk" simge="gantt">
         <ol className="tc-pym-at-yol">
           {l.map((x, i) => (
@@ -176,10 +138,9 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani, hamle 
     </>
   );
 }
-function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani, odakla, ekMesai }: Ozellikler & { m: string }) {
+function TezgahKarti({ c, p, cx, s, r, olcek, t, m, opSec, sipSec, zamanSec }: Ozellikler & { m: string }) {
   const D = c.D; const st = tezgahDurumu(s, durusOku(c), m, t); const d = s.dol[m] ?? [];
   const e = gecikmeEtkisi(D, p, cx).m[m]; const L = dilimBoyu(r);
-  const mesai = yaz && !m.startsWith('@') ? mesaiAdaylari(c, cx, m).slice(0, 4) : [];
   return (
     <>
       <Baslik tur="Tezgâh" ad={m} alt={s.ist[m]?.ad ?? ''} />
@@ -200,21 +161,6 @@ function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec,
           </button>
         ))}
       </div>
-      <Bolum baslik="Yön ver" simge="target">
-        <div className="tc-pym-km-hamleler">
-          <Dg ad="Odakla" simge="zin" birincil not={YOK_NOTU} yap={odakla ? () => odakla(m) : null} ipucu="Bu tezgâhın kendi tahtasını aç: gün gün işler, kuyruk, takvim" />
-          <Dg ad="Bugün boşalt" simge="upload" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
-          <Dg ad="Hepsini boşalt" simge="upload" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
-          <Dg ad="Sırayı düzenle" simge="sort" />
-          <Dg ad="Gün planı" simge="gantt" hayalet yap={() => gunPlani(t, { tezgah: m })} />
-        </div>
-        {mesai.length > 0 && (
-          <>
-            <p className="tc-pym-km-alt"><Simge ad="clock" boyut="k" />Ek mesai ekle, motor yeniden dizsin:</p>
-            <div className="tc-pym-km-hamleler">{mesai.map((x) => <Dg key={`${x.gun}|${x.vardiya}`} ad={x.ad} yap={ekMesai ? () => ekMesai(m, x.gun, x.vardiya) : null} />)}</div>
-          </>
-        )}
-      </Bolum>
       <Bolum baslik={`Sıra (${st.bekleyen})`} simge="list">
         <ol className="tc-pym-at-yol">
           {st.sira.length ? st.sira.map((x, i) => (
@@ -230,43 +176,16 @@ function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec,
   );
 }
 
-function IsKarti({ c, p, cx, s, id, komut, planYaz: yaz, planKilitle, sipSec, tasi: o0 }: Ozellikler & { id: string }) {
+function IsKarti({ c, p, cx, id, sipSec }: Ozellikler & { id: string }) {
   const D = c.D; const r = p.ops[id]; if (!r) return null;
   const o = cx.byId[id]; const kl = !!c.locks[id];
-  const al = (o?.c ?? []).filter((m) => m !== r.m);
-  const pasif = yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.';
-  // Fason, biten ve başlamış iş taşınmaz (sunucu da reddeder).
-  const tasi = o0 && !r.fas && !r.act && r.C > s.now ? o0 : null;
-  const sabit = planKilitle && komut ? () => {
-    komut.degistir(kl ? 'Sabitlik kaldırıldı' : 'İş sabitlendi', (x) => { if (kl) delete x.locks[id]; else x.locks[id] = { m: r.m, S: r.S }; }, { ayrinti: id, planKoru: true });
-  } : null;
   return (
     <>
       <Baslik tur="İş adımı" ad={id} alt={`${o?.ad ?? ''} · ${tezgahKodu(r.m, tezgahKodlari(D))}${kl ? ' · sabit' : ''}`} />
       <p className="tc-pym-km-durum">
         <span className="tc-pym-mono">{saatYaz(D, r.S)} → {saatYaz(D, r.C)}</span> · <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => sipSec(r.job)}>{r.job} siparişine git</button>
       </p>
-      <Bolum baslik="Başka tezgâha taşı" simge="next">
-        {al.length ? (
-          <ul className="tc-pym-km-secenek">
-            {al.map((m) => (
-              <li key={m}>
-                <span><b className="tc-pym-mono">{tezgahYazi(m)}</b><small className="tc-pym-mono">aynı saatte</small></span>
-                <Dg ad="Taşı" not={pasif} yap={tasi ? () => tasi(id, m, r.S) : null} />
-              </li>
-            ))}
-          </ul>
-        ) : <p className="tc-pym-kucuk-yazi">Bu adımı başka tezgâh yapamıyor.</p>}
-      </Bolum>
-      <Bolum baslik="Zamanı" simge="clock">
-        <div className="tc-pym-km-hamleler">
-          {([[-24, '−1 gün'], [-2, '−2 sa'], [2, '+2 sa'], [24, '+1 gün']] as const).map(([v, ad]) => (
-            <Dg key={v} ad={ad} not={r.S + v < s.now ? 'Geçmiş saate taşınamaz.' : pasif} yap={tasi && r.S + v >= s.now ? () => tasi(id, r.m, r.S + v) : null} />
-          ))}
-          <Dg ad={kl ? 'Sabitliği kaldır' : 'Burada sabitle'} simge="lock" yap={sabit} not="Sabitleme yetkiniz yok." />
-        </div>
-        <p className="tc-pym-kucuk-yazi">Sabit iş motorun yeniden dizmesinde yerinden oynamaz.</p>
-      </Bolum>
+      {kl && <p className="tc-pym-kucuk-yazi">Sabit iş motorun yeniden dizmesinde yerinden oynamaz.</p>}
     </>
   );
 }

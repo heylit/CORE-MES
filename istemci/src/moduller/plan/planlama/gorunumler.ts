@@ -44,40 +44,28 @@ export interface PlanlamaSecimi {
 }
 export const BOS_SECIM: PlanlamaSecimi = { siparis: null, adim: null, tezgah: null, zaman: null };
 
-// Planlama motoru sayfasının ekranları (eski b-kabuk EKRANLAR: tahta, veri, geçmiş; stüdyo ayrı görünümdür) ve Plan ekranının iki sayfası (zk-kabuk:
-// Bugünün kararları, Nasıl hesaplandı; Başka menüsünden açılır). Ekran ve bölümü adresin sorgusundadır (`?ekran=veri&bolum=kisitlar`): görünüm anahtarı ikinci menünündür, ekran onun içindedir. Bölüm ekranın kendi anahtarıdır.
-export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis', 'bugun', 'hesap'] as const;
+// Motor sayfasının tek ekranı tahtadır; Veri ikinci menüde ayrı sayfadır ve geçmişin bölümleri onun içindedir (3308-2 a). `altSec` Veri
+// sayfasını bölümüyle açar. Eski adresler (`plan?ekran=veri&bolum=kisitlar`) yeni yerine yönlenir.
+export const MOTOR_EKRANLARI = ['tahta', 'veri'] as const;
 export type MotorEkrani = (typeof MOTOR_EKRANLARI)[number];
 export interface PlanlamaAltEkrani { ekran: MotorEkrani; bolum: string | null }
-// Planlama atölyesine istek (zz36 TP.istek): stüdyo düğmeleri (tezgâhın "Stüdyoda aç"ı) atölyeyi açar, pano isteneni açar: tezgâhta süzgeç ve
-// tezgâh günlüğü, siparişte rayda sipariş, olayda olay formu (v olay türüdür, formda ön seçili gelir; 2171). Adresin sorgusundadır
-// (`studio?istek=tez&v=T1`); pano işleyince sorgu silinir.
-export const STUDYO_OLAY_TURLERI = ['ariza', 'acil', 'malzeme', 'eksik', 'fason'] as const;
-export type StudyoOlayTuru = (typeof STUDYO_OLAY_TURLERI)[number];
-export type StudyoIstegi = { tur: 'tez' | 'sip'; v: string } | { tur: 'olay'; v: StudyoOlayTuru };
-export function studyoIstegiOku(q: URLSearchParams): StudyoIstegi | null {
-  const t = q.get('istek'), v = q.get('v');
-  if (t === 'olay') { const o = STUDYO_OLAY_TURLERI.find((x) => x === v); return o ? { tur: 'olay', v: o } : null; }
-  return (t === 'tez' || t === 'sip') && v ? { tur: t, v } : null;
-}
-// Tahtadaki olay düğmeleri (plan çubuğu, yardımcı) atölyenin olay formunu açar; tahta bağlamla verir, yazamayana ve tahta dışında null.
-export const OLAY_YOK = 'Olay Planlama atölyesinden eklenir.';
-export const OlayAcBaglami = createContext<((t: StudyoOlayTuru) => void) | null>(null);
-export const useOlayAc = (): ((t: StudyoOlayTuru) => void) | null => useContext(OlayAcBaglami);
-export function studyoAdresi(i: StudyoIstegi | null): string {
-  return i ? `${gorunumAdresi('studio')}?${new URLSearchParams({ istek: i.tur, v: i.v }).toString()}` : gorunumAdresi('studio');
-}
-export const TAHTA: PlanlamaAltEkrani = { ekran: 'tahta', bolum: null };
-export function altEkranOku(q: URLSearchParams): PlanlamaAltEkrani {
-  const e = MOTOR_EKRANLARI.find((x) => x === q.get('ekran'));
-  return !e || e === 'tahta' ? TAHTA : { ekran: e, bolum: q.get('bolum') };
-}
 export function altEkranAdresi(a: PlanlamaAltEkrani): string {
   if (a.ekran === 'tahta') return gorunumAdresi('plan');
-  const q = new URLSearchParams({ ekran: a.ekran }); if (a.bolum) q.set('bolum', a.bolum);
-  return `${gorunumAdresi('plan')}?${q.toString()}`;
+  return a.bolum ? `${gorunumAdresi('veri')}?${new URLSearchParams({ bolum: a.bolum }).toString()}` : gorunumAdresi('veri');
 }
-
+export function eskiEkranAdresi(q: URLSearchParams): string | null {
+  const e = q.get('ekran'); const b = q.get('bolum');
+  if (e === 'veri') return altEkranAdresi({ ekran: 'veri', bolum: b });
+  if (e === 'gecmis') return altEkranAdresi({ ekran: 'veri', bolum: b === 'iz' ? 'iz' : 'defter' });
+  return e === 'bugun' || e === 'hesap' ? gorunumAdresi('plan') : null;
+}
+// Olay formu her planlama sayfasının üstündeki şeritten açılır (3308-1 a); tür formda ön seçili gelir. Yazamayana null, düğme pasif kalır.
+export const PLAN_OLAY_TURLERI = ['ariza', 'acil', 'malzeme', 'eksik', 'fason'] as const;
+export type PlanOlayTuru = (typeof PLAN_OLAY_TURLERI)[number];
+export const OLAY_YOK = 'Olay eklemek plan yazma yetkisi ister.';
+export const OlayAcBaglami = createContext<((t: PlanOlayTuru) => void) | null>(null);
+export const useOlayAc = (): ((t: PlanOlayTuru) => void) | null => useContext(OlayAcBaglami);
+export const TAHTA: PlanlamaAltEkrani = { ekran: 'tahta', bolum: null };
 // Her görünüme verilen ortak özellikler. `git` başka görünüme geçer; `yenile` açılış okumalarını yeniden yapar. `calisma` çalışmanın güncel
 // halidir (değişiklikten sonra yenisi gelir; `depo.calisma` açılıştakidir). `komut` yazma yetkisi yoksa ya da çalışma kaydı yoksa null'dır.
 // `olcek` ve `secim` görünüm değişince korunur, sayfa yenilenince açılış haline döner (eski ekranda da kaydedilmezdi); çalışmaya yazılmaz.
@@ -94,13 +82,9 @@ export interface PlanlamaEkranOzellikleri {
   kaydir: (n: number) => void;
   secim: PlanlamaSecimi;
   sec: (s: Partial<PlanlamaSecimi>) => void;
-  // Motor sayfasının ekranı (yalnız `plan` görünümünde tahta dışı olabilir) ve ona geçiş; geçiş `plan` görünümüne gider. Verilmezse ekran tahtadır,
-  // ekran düğmeleri pasif kalır (iskeletsiz çizim, testler).
+  // Motor'un ekranı (hep tahta) ve Veri sayfasına bölümüyle geçiş. Verilmezse Veri bağlantıları pasif kalır (iskeletsiz çizim, testler).
   alt?: PlanlamaAltEkrani;
   altSec?: (a: PlanlamaAltEkrani) => void;
-  // Atölyeye istek ve ona geçiş; null isteği adresten siler. Verilmezse stüdyo düğmeleri pasiftir.
-  istek?: StudyoIstegi | null;
-  studyoAc?: (i: StudyoIstegi | null) => void;
 }
 
 export interface GorunumKaydi {
@@ -115,11 +99,13 @@ const parca = <M extends Record<string, unknown>>(yukle: () => Promise<M>, ad: k
   lazy(async () => ({ default: (await yukle())[ad] as ComponentType<PlanlamaEkranOzellikleri> }));
 
 // Her sayfanın üstündeki plan çubuğu (Soru 497/10 a) P1'indir; motor sayfası kendi çubuğunu çizer, iskelet ötekilerin üstüne koyar.
+// Olay formu da P1'indir; iskelet onu plan yazabilen kişide yükler, pencere tür seçilince açılır.
+export const OlayPenceresi = lazy(async () => ({ default: (await import('./motor/olay/OlayFormu.tsx')).OlayPenceresi }));
 export const PlanSeridi = lazy(async () => ({ default: (await import('./motor/ust/PlanSeridi.tsx')).PlanSeridi }));
 
 const BILESENLER: Record<MenuGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> = {
   plan: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaMotoru') },
-  studio: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaAtolyesi') },
+  veri: { parca: 'P1', bilesen: parca(() => import('./ic/veri/Sayfa.tsx'), 'VeriSayfasi') },
   kokpit: { parca: 'P7', bilesen: parca(() => import('./kokpit/index.tsx'), 'Kokpit') },
   ysiparis: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'Siparisler') },
   terminler: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'Terminler') },
