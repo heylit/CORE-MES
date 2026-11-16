@@ -1441,6 +1441,44 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza 
   expect(ag.hatalar).toEqual([]);
 });
 
+// 3335 a, tezgâhta sorun bildir: tahtada tezgâh adına (telefonda listedeki tezgâh başlığının düğmesine) basınca Duruş ve mesai o tezgâhla
+// açılır; arıza aynı taslak komutuyla yazılır ve etkisi görünür.
+test('Kokpit 3335-3a: tezgâh adından sorun bildir; Duruş ve mesai o tezgâhla açılır, arıza taslağa yazılır, etkisi görünür; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const telefon = bilgi.project.name === 'g360';
+  const dugme = kokpit.locator(`${telefon ? '.tc-pyq-liste' : '.tc-pyq-satir'} [data-sorun-bildir="M2"]`);
+  await expect(dugme).toHaveAccessibleName('F-01 için sorun bildir');
+  const kutu = await dugme.boundingBox();
+  expect(kutu?.height ?? 0).toBeGreaterThanOrEqual(telefon ? 44 : 24);
+  // Karşılama penceresi görüntüyü örtmesin.
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible().catch(() => false)) await karsilama.click();
+  await dugme.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3a-dugme-${bilgi.project.name}.png` });
+  await dugme.click();
+  const panel = kokpit.getByRole('complementary', { name: 'Duruş ve mesai' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel('Tezgâh')).toHaveValue('M2');
+  await expect(panel.getByLabel('Tür')).toBeFocused();
+  // Bölümün başı görünür kalır: hangi tezgâh için açıldığı dar ekranda da okunur.
+  await expect(panel.getByLabel('Tezgâh')).toBeInViewport({ ratio: 1 });
+  await expect(panel.getByLabel('Tür')).toBeInViewport({ ratio: 1 });
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3a-form-${bilgi.project.name}.png` });
+  await panel.getByLabel('Başlangıç').fill('2026-10-20T08:00');
+  await panel.getByLabel('Bitiş').fill('2026-10-20T16:00');
+  await panel.getByRole('button', { name: 'Duruş ekle, etkisini gör' }).click();
+  await expect(panel.getByRole('region', { name: 'Duruşun etkisi' })).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar).toEqual([{ tur: 'durus', tezgah: 'M2', bas: 32, bit: 40, neden: 'arıza' }]);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3a-etki-${bilgi.project.name}.png` });
+  expect(ag.hatalar).toEqual([]);
+});
+
 // 3282 2a-2: ek mesai operatörle. Kişiler uydurmadır; Deneme gündüz kendi vardiyası 1 (08:00–16:00), cumartesi de çalışır.
 test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görünür, Uygula; kendi vardiyasıyla kesişen operatör listede yok; tezgâhta işaret; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page, (d) => {

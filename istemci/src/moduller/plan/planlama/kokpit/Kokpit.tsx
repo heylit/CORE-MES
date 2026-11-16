@@ -152,6 +152,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Duruş ve mesai bölümü (3282 2a-1, 2a-2): üst şeritteki düğmeyle açılır (ayrıntı sütunu boşken yer tutmaz: tahta dar kalmasın); açılınca seçim
   // kalkar, ayar paneli kapanır.
   const [kapasiteAcik, setKapasiteAcik] = useState(false);
+  const [sorunTezgahi, setSorunTezgahi] = useState<{ tezgah: string; n: number } | null>(null);
   // Üst şeritteki yön düğmesi paneli o yönle açar ve etkisini hesaplatır; geçerli yönün düğmesi paneli yön bölümüyle açar (ölü tıklama olmasın).
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
@@ -464,6 +465,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   useEffect(() => { if (secEmir !== null) setAyarAcik(false); }, [secEmir]);
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
 
+  // Tezgâhta sorun bildir (3335 a): tezgâh adından Duruş ve mesai o tezgâhla açılır; aynı taslak komutu ve etki akışı.
+  const sorunBildir = yazabilir && !tur
+    ? (tezgah: string): void => { sec(null, null); setAyarAcik(false); setSorunTezgahi((x) => ({ tezgah, n: (x?.n ?? 0) + 1 })); setKapasiteAcik(true); }
+    : null;
   return (
     <div className="tc-pyq" data-goz={goz} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
       {!onayAcik && (
@@ -511,7 +516,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </span>
         {arizali > 0 && (
           <button type="button" className="tc-pyq-ok tc-pyq-ariza" aria-pressed={kapasiteAcik} title="Şu anda arızada ya da bakımda olan tezgâhlar; Duruş ve mesai açılır" disabled={tur !== null || onayAcik}
-            onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}>
+            onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setKapasiteAcik(!kapasiteAcik); }}>
             <Simge ad="wrench" boyut="k" /><b>{arizali}</b><span>Arıza</span>
           </button>
         )}
@@ -531,7 +536,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <>
               <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { kapat(); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
-                onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+                onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
               {(['ileri', 'geri'] as const).map((y) => (
                 <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={!yazabilir || tur !== null || onayAcik}
                   onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setAyarYon(y); setAyarAcik(true); }}>
@@ -604,8 +609,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                   m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={secimiKaldir}
+                  sorunBildir={sorunBildir}
                 />
-                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} />
+                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} sorunBildir={sorunBildir} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
                   <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li>
                   {yanan && !tur && <><li data-ok-aciklama=""><i data-t="ok-b" />Önceki adım bitince başlar</li><li data-ok-aciklama=""><i data-t="ok-o" />Örtüşmeli: önceki bitmeden başlayabilir</li></>}
@@ -623,7 +629,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : ayarAcik ? (
           <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} etkiBekliyor={setAyarEtkisi} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : kapasiteAcik ? (
-          <Kapasite c={c} m={m} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setKapasiteAcik(false); }} />
+          <Kapasite c={c} m={m} taslak={taslak} yazabilir={yazabilir} zaman={zaman} istenen={sorunTezgahi} kapat={() => { setKapasiteAcik(false); setSorunTezgahi(null); }} />
         ) : null}
       </div>
       )}

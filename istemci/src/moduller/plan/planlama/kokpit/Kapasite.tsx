@@ -33,11 +33,13 @@ export interface KapasiteOzellikleri {
   yazabilir: boolean;
   zaman: (t: number) => string;
   kapat: () => void;
+  // Tahtada tezgâh adından "sorun bildir" ile gelinen tezgâh (3335 a); n her basışta artar, aynı tezgâha yeniden basınca da form öne gelir.
+  istenen?: { tezgah: string; n: number } | null;
 }
 
-export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat }: KapasiteOzellikleri) {
+export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null }: KapasiteOzellikleri) {
   const tezgahlar = m.tezgahlar.filter((t) => !t.fason);
-  const [tezgah, setTezgah] = useState(tezgahlar[0]?.id ?? '');
+  const [tezgah, setTezgah] = useState(() => (istenen && tezgahlar.some((t) => t.id === istenen.tezgah) ? istenen.tezgah : tezgahlar[0]?.id ?? ''));
   const [neden, setNeden] = useState<'arıza' | 'bakım'>('arıza');
   const ilk = Math.ceil(m.simdi);
   const [bas, setBas] = useState(() => girdiSaati(c.D, ilk));
@@ -75,6 +77,16 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat }: KapasiteOzel
     li.scrollIntoView?.({ block: 'nearest' });
     setOdak(null);
   }, [odak, durum.tur, l]);
+
+  // Etki gösterilirken tezgâh değişmez (bekleyen deneme o tezgâhındır); form açıkken tür alanı odağa gelir, bölümün başı (hangi tezgâh) görünür kalır. Yalnız yeni istekte çalışır:
+  // bekleme durumu ve tezgâh listesi o andaki değeriyle okunur.
+  const bekliyor = durum.tur === 'hesap' || durum.tur === 'etki';
+  useEffect(() => {
+    if (!istenen) return;
+    if (!bekliyor && tezgahlar.some((t) => t.id === istenen.tezgah)) setTezgah(istenen.tezgah);
+    kok.current?.querySelector<HTMLElement>('#tc-pyq-kap-neden')?.focus({ preventScroll: true });
+    kok.current?.scrollIntoView?.({ block: 'start' });
+  }, [istenen]);
 
   const ekle = (e: FormEvent) => {
     e.preventDefault();

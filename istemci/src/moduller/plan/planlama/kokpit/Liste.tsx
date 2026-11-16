@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import { aralikYuku, bagimlilik, durumYazisi, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
@@ -16,9 +17,11 @@ export interface ListeOzellikleri {
   sec: (job: string, isId: string | null) => void;
   // 3330: seçili kartın emirleri; satırları öne çıkar, ötekiler solar ve adımın bağı satırda yazar (listede ok yoktur).
   yanan?: ReadonlySet<string> | null;
+  // Tezgâhta sorun bildir (3335 a): tezgâh başlığındaki düğme o tezgâhın arıza ve bakım formunu açar; fason satırında yok.
+  sorunBildir?: ((tezgah: string) => void) | null;
 }
 
-export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null }: ListeOzellikleri) {
+export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null, sorunBildir = null }: ListeOzellikleri) {
   const isaret = (job: string) => ({ 'data-yanan': yanan?.has(job) ? '' : undefined, 'data-sonuk': yanan && !yanan.has(job) ? '' : undefined });
   const [acik, setAcik] = useState<ReadonlySet<string>>(new Set());
   const emir = useMemo(() => new Map(emirler.map((e) => [e.id, e])), [emirler]);
@@ -72,7 +75,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
         const tum = acik.has(t.id) || isler.some((x) => x.id === secIs);
         return (
           <section key={t.id}>
-            <h3><b>{t.kod}</b><small>{t.ad}</small>{m.mesai?.[t.id]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[t.id]!, zaman)}>+ ek mesai</i> : null}{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : yuzde !== null && <i>%{yuzde}</i>}</h3>
+            <h3><b>{t.kod}</b><small>{t.ad}</small>{m.mesai?.[t.id]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[t.id]!, zaman)}>+ ek mesai</i> : null}{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : yuzde !== null && <i>%{yuzde}</i>}{sorunBildir && !t.fason && <button type="button" className="tc-pyq-simge-dugme" data-sorun-bildir={t.id} aria-label={`${t.kod} için sorun bildir`} title="Sorun bildir: arıza ya da bakım" onClick={() => { sorunBildir(t.id); }}><Simge ad="wrench" boyut="k" /></button>}</h3>
             <ul>
               {(tum ? isler : isler.slice(0, ILK)).map(isSatiri)}
               {isler.length > ILK && (
