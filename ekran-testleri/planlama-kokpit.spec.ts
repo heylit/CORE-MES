@@ -780,15 +780,13 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
   await expect(panel.locator('[data-odak-yer]')).toHaveCount(2);
   await expect(panel.locator('[data-odak-yer="M2"]')).toHaveAttribute('data-ilk', '');
   // Panel yerleşimi bir kare sonra oturur; ölçüm hizalanma bitince alınır.
-  if (genis) await expect.poll(async () => Math.abs((await kutu(panel)).y - (await kutu(bolum.locator('.tc-pyq-optablo'))).y)).toBeLessThanOrEqual(2);
   const tablo = await kutu(bolum.locator('.tc-pyq-optablo')), pk = await kutu(panel), bk = await kutu(bolum);
   if (genis) {
-    // Geniş ekranda panel tablonun sağında, aynı hizada.
+    // Geniş ekranda panel tablonun altında, boydan boya; tablo bütün sütunlarıyla durur.
     await expect(bolum.locator('[data-satir-odagi]')).toHaveCount(0);
-    // Panel yandayken tabloda "Bağımlılık" sütunu yoktur (kısa yazı operasyon adının altındadır); tablo panele taşmaz.
-    await expect(bolum.locator('.tc-pyq-optablo th[data-ad="Bağımlılık"]')).toBeHidden();
-    expect(pk.x).toBeGreaterThanOrEqual(tablo.x + tablo.width - 1);
-    expect(Math.abs(pk.y - tablo.y)).toBeLessThanOrEqual(2);
+    await expect(bolum.locator('.tc-pyq-optablo th[data-ad="Bağımlılık"]')).toBeVisible();
+    expect(pk.y).toBeGreaterThanOrEqual(tablo.y + tablo.height - 1);
+    expect(pk.width).toBeGreaterThanOrEqual(tablo.width * 0.95);
   } else {
     // Dar ekranda panel seçili satırın hemen altında, tam genişlikte.
     await expect(bolum.locator('[data-satir-odagi="S4.a1"]')).toBeVisible();
@@ -851,6 +849,40 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
   await expect.poll(() => t.tasinan().length).toBe(1);
   expect(t.tasinan()[0]).toMatchObject({ tur: 'tasi', isId: 'S1.a2', tezgah: 'M3', baslangic: 16 });
   await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3318: panel altta boydan boya durunca uzak tarihe yerleşmiş iş de pencerede görünür; gün yazıları seyrelir ve üst üste binmez.
+test('Kokpit 3318-4: odaklı tezgâh panelinde haftalar sonraya yerleşmiş iş görünür; gün yazıları binmez; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const c = calisma({ ...ILK }, {});
+  const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan({ ...d.ops, 'S1.a2': { job: 'S1', m: 'M2', S: 393, C: 401 } }) }));
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [] }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
+  await kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' }).locator('[data-kart="S1"]').click();
+  await bolum.locator('[data-adim="S1.a2"]').click();
+  const panel = bolum.getByRole('complementary', { name: 'Freze için tezgâhlar' });
+  await expect(panel).toBeVisible();
+  const kutu = async (l: Locator) => { const b = await l.boundingBox(); if (!b) throw new Error('kutu'); return b; };
+  const kendi = panel.locator('.tc-pyq-odak-is[data-kendi]');
+  await expect(kendi).toHaveCount(1);
+  const serit = await kutu(panel.locator('[data-odak-satir="M2"] .tc-pyq-odak-serit')), kk = await kutu(kendi);
+  expect(kk.width).toBeGreaterThanOrEqual(2);
+  expect(kk.x).toBeGreaterThanOrEqual(serit.x - 1);
+  expect(kk.x + kk.width).toBeLessThanOrEqual(serit.x + serit.width + 1);
+  const yazilar = panel.locator('.tc-pyq-odak-eksen > i');
+  const n = await yazilar.count();
+  expect(n).toBeGreaterThan(1);
+  expect(n).toBeLessThanOrEqual(8);
+  const kutular = await Promise.all(Array.from({ length: n }, (_, i) => kutu(yazilar.nth(i))));
+  kutular.sort((a, b) => a.x - b.x);
+  for (let i = 1; i < n; i++) expect(kutular[i]!.x, `gün yazısı ${String(i)} öncekine biniyor`).toBeGreaterThanOrEqual(kutular[i - 1]!.x + kutular[i - 1]!.width);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await panel.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-4-ileri-${bilgi.project.name}.png`, fullPage: true });
   expect(ag.hatalar).toEqual([]);
 });
 

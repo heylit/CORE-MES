@@ -19,17 +19,20 @@ export interface OdakPaneliOzellikleri {
   fiil: 'Yerleştir' | 'Taşı';
   // Yazamayan kişide null: yerler görünür, basılamaz.
   sec: ((tezgah: string) => void) | null;
+  // Panel dar ekranda seçili satırın altındadır; gün yazısı daha seyrek yazılır.
+  dar?: boolean;
 }
 
-// Pencere şimdiden başlar; en az iki gün, en çok bir hafta: boş yerler ve operasyonun kendi işi içinde kalır.
-const EN_AZ = 48, EN_COK = 168, PAY = 4;
+// Pencere şimdiden başlar; en az iki gün, en çok üç hafta: boş yerler ve operasyonun kendi işi (ileri tarihe yerleşmiş olsa da) içinde
+// kalır. Gün yazıları üst üste binmesin diye en çok ETIKET (dar ekranda ETIKET_DAR) kadarı yazılır; çizgiler her gün için durur.
+const EN_AZ = 48, EN_COK = 504, PAY = 4, ETIKET = 8, ETIKET_DAR = 4;
 const konum = (el: HTMLElement | null, x: number, w?: number): void => {
   if (!el) return;
   el.style.setProperty('--x', `${String(Math.round(x * 100) / 100)}%`);
   if (w !== undefined) el.style.setProperty('--w', `${String(Math.round(w * 100) / 100)}%`);
 };
 
-export function OdakPaneli({ m, ad, isId, tezgahlar, yerler, secilen, zaman, fiil, sec }: OdakPaneliOzellikleri) {
+export function OdakPaneli({ m, ad, isId, tezgahlar, yerler, secilen, zaman, fiil, sec, dar = false }: OdakPaneliOzellikleri) {
   const [hepsi, setHepsi] = useState(false);
   const kendi = isId !== null ? m.isler[isId] : undefined;
   const t0 = Math.floor(m.simdi);
@@ -66,7 +69,7 @@ export function OdakPaneli({ m, ad, isId, tezgahlar, yerler, secilen, zaman, fii
       </div>
       <div className="tc-pyq-odak-eksen" aria-hidden="true">
         <span>{zaman(t0)}</span>
-        {gunler.map((g) => <i key={g} ref={(el) => { konum(el, yuzde(g)); }}>{zaman(g).slice(0, 5)}</i>)}
+        {gunler.filter((_, i) => i % Math.ceil(gunler.length / (dar ? ETIKET_DAR : ETIKET)) === 0).map((g) => <i key={g} ref={(el) => { konum(el, yuzde(g)); }}>{zaman(g).slice(0, 5)}</i>)}
         <span>{zaman(t1)}</span>
       </div>
       <ul className="tc-pyq-odak-satirlar">
