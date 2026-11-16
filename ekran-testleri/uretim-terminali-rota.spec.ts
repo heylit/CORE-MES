@@ -124,7 +124,7 @@ test.describe('rota şeridi elle kayar', () => {
     // Ölçüm maddesi açılınca değer alanı ve Tamam; sınır dışı değer uyarılır, yazma gitmez.
     await page.getByRole('button', { name: 'Sıfır noktasını probla · zorunlu' }).click();
     await page.getByRole('textbox', { name: 'Sıfır noktasını probla · Z' }).fill('0,05');
-    await expect(page.getByText('Sınır dışı · -0,02–0,02 mm')).toBeVisible();
+    await expect(page.getByText('Sınır dışı (-0,02–0,02 mm) · yine kaydedilir')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Tamam', exact: true })).toBeEnabled();
     if (klasor) await page.screenshot({ path: `${klasor}/olcum-${bilgi.project.name}.png` });
     expect(ag.hatalar).toEqual([]);
