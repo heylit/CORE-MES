@@ -623,6 +623,8 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
   if (genis) {
     // Geniş ekranda panel tablonun sağında, aynı hizada.
     await expect(bolum.locator('[data-satir-odagi]')).toHaveCount(0);
+    // Panel yandayken tabloda "Bağımlılık" sütunu yoktur (kısa yazı operasyon adının altındadır); tablo panele taşmaz.
+    await expect(bolum.locator('.tc-pyq-optablo th[data-ad="Bağımlılık"]')).toBeHidden();
     expect(pk.x).toBeGreaterThanOrEqual(tablo.x + tablo.width - 1);
     expect(Math.abs(pk.y - tablo.y)).toBeLessThanOrEqual(2);
   } else {
@@ -765,6 +767,109 @@ test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster 
 
 // Kart 3297-4: planlı operasyon seç-yerleştir ile taşınır. Operasyona basılınca taşınabileceği yerler listelenir ve tahtada çerçevelenir;
 // yere basınca taşıma taslağa tek değişiklik olarak yazılır. Önizleme uydurmadır: istenen yer geçerlidir.
+test('Kokpit 3330: kart seçilince siparişin işleri parlak, ötekiler soluk ama okunur; adımlar arasında bağ oku (düz bitince, kesik örtüşmeli); Esc ve boş alan seçimi kaldırır; telefonda bağ satırda; operasyonlar tablosunda bağımlılık; yatay taşma yok', async ({ page, ac }, bilgi) => {
+  // S1 üç adımlıdır: Freze Torna bitince başlar, Çapak Freze ile örtüşür (Freze bitmeden başlar).
+  const ops = { ...ILK, 'S1.a3': { job: 'S1', m: 'M3', S: 61, C: 69 } };
+  const c = calisma(ops, {});
+  c.D.urunler = c.D.urunler.map((u) => (u.id === 'U1' ? { ...u, rota: [...u.rota, { k: 'a3', ad: 'Capak', bag: [['a2', 'o']], tezgahlar: [{ id: 'M3', cevrim: 60 }] }] } : u));
+  await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan({ ...ops, ...d.ops }) }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const telefon = bilgi.project.name === 'g360';
+  const kart = kokpit.locator('[data-kart="S1"]');
+  const oklar = kokpit.locator('.tc-pyq-oklar [data-ok]');
+  // Operasyonlar tablosu: geniş ekranda "Bağımlılık" sütunu, 900 px altında sütun yerine operasyon adının altında kısa yazı.
+  const bagDenetle = async (): Promise<void> => {
+    const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    const hucre = (id: string) => bolum.locator(`[data-adim-satir="${id}"] td[data-ad="Bağımlılık"]`), kisa = (id: string) => bolum.locator(`[data-adim-satir="${id}"] .tc-pyq-bag-kisa`);
+    await expect(bolum.locator('[data-adim-satir="S1.a1"]')).toBeVisible();
+    if (bilgi.project.name === 'g1280') {
+      await expect(hucre('S1.a1')).toHaveText('öncül yok');
+      await expect(hucre('S1.a2')).toHaveText('1 Torna · bitince');
+      await expect(hucre('S1.a3')).toHaveText('2 Freze · örtüşmeli (bitmeden başlayabilir)');
+      await expect(kisa('S1.a2')).toBeHidden();
+    } else {
+      await expect(hucre('S1.a2')).toBeHidden();
+      await expect(kisa('S1.a1')).toHaveCount(0);
+      await expect(kisa('S1.a2')).toHaveText('1 Torna bitince');
+      await expect(kisa('S1.a3')).toHaveText('2 Freze ile örtüşmeli');
+      await expect(kisa('S1.a3')).toBeVisible();
+    }
+    await bolum.locator('[data-adim-satir="S1.a2"]').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3330-ops-${bilgi.project.name}.png`, fullPage: true });
+  };
+
+  if (telefon) {
+    await kart.click();
+    const liste = kokpit.locator('.tc-pyq-liste');
+    await expect(liste.locator('button[data-yanan]')).toHaveCount(3);
+    await expect(liste.locator('button[data-yanan]', { hasText: '1 Torna bitince' })).toHaveCount(1);
+    await expect(liste.locator('button[data-yanan]', { hasText: '2 Freze ile örtüşmeli' })).toHaveCount(1);
+    expect(await liste.locator('button[data-sonuk]').count()).toBeGreaterThan(0);
+    await liste.locator('button[data-yanan]').first().scrollIntoViewIfNeeded();
+    await page.screenshot({ path: '/tmp/tmiv2-ekran/kart-3330-g360.png', fullPage: true });
+    await bagDenetle();
+    await tasma();
+    return;
+  }
+
+  // Kart açıkça seçilmeden tahta solmaz, ok yoktur.
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  await expect(tahta.locator('[data-sonuk]')).toHaveCount(0);
+  await expect(oklar).toHaveCount(0);
+  await kart.click();
+  await expect(tahta.locator('.tc-pyq-is[data-yanan]')).toHaveCount(3);
+  await expect(tahta.locator('.tc-pyq-is[data-sonuk]')).toHaveCount(2);
+  // Soluk iş okunur: saydamlık yarının üstünde, yazısı mürekkep rengi.
+  const soluk = tahta.locator('.tc-pyq-is[data-sonuk]').first();
+  await expect.poll(() => soluk.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThanOrEqual(0.5);
+  await expect(oklar).toHaveCount(2);
+  await expect(kokpit.locator('[data-ok="S1.a1>S1.a2"]')).toHaveAttribute('data-tur', 'b');
+  await expect(kokpit.locator('[data-ok="S1.a2>S1.a3"]')).toHaveAttribute('data-tur', 'o');
+  expect(await kokpit.locator('[data-ok="S1.a1>S1.a2"] path').first().evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe('none');
+  expect(await kokpit.locator('[data-ok="S1.a2>S1.a3"] path').first().evaluate((el) => getComputedStyle(el).strokeDasharray)).not.toBe('none');
+  // Ok öncülden çıkar, ardılın sol kenarının ortasına girer (iş yerine oturduktan sonra ölçülür).
+  const uclar = async (ok: string, kimden: string, kime: string) => {
+    await expect.poll(async () => {
+      const yol = await kokpit.locator(`[data-ok="${ok}"] path`).first().evaluate((el) => {
+        const p = el as unknown as SVGPathElement, k = (p.ownerSVGElement as SVGSVGElement).getBoundingClientRect(), a = p.getPointAtLength(0), b = p.getPointAtLength(p.getTotalLength());
+        return { bas: { x: a.x + k.left, y: a.y + k.top }, son: { x: b.x + k.left, y: b.y + k.top } };
+      });
+      const o = (await tahta.locator(`[data-is="${kimden}"]`).boundingBox())!, x = (await tahta.locator(`[data-is="${kime}"]`).boundingBox())!;
+      return { giris: Math.abs(yol.son.x - x.x) <= 2 && Math.abs(yol.son.y - (x.y + x.height / 2)) <= 3, cikis: yol.bas.x >= o.x - 1 && yol.bas.x <= o.x + o.width + 1 && yol.bas.y >= o.y - 1 && yol.bas.y <= o.y + o.height + 1 };
+    }, { timeout: 5000 }).toEqual({ giris: true, cikis: true });
+  };
+  await uclar('S1.a1>S1.a2', 'S1.a1', 'S1.a2');
+  await uclar('S1.a2>S1.a3', 'S1.a2', 'S1.a3');
+  // Oklar tıklamayı yutmaz: altındaki iş seçilebilir.
+  expect(await kokpit.locator('.tc-pyq-oklar').evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+  await expect(kokpit.locator('[data-ok-aciklama]')).toHaveText(['Önceki adım bitince başlar', 'Örtüşmeli: önceki bitmeden başlayabilir']);
+  await tahta.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3330-${bilgi.project.name}.png`, fullPage: true });
+  await bagDenetle();
+  await tasma();
+
+  // Esc, karta yeniden basma ve boş tahta alanı seçimi kaldırır.
+  await page.keyboard.press('Escape');
+  await expect(tahta.locator('[data-yanan]')).toHaveCount(0);
+  await expect(tahta.locator('[data-sonuk]')).toHaveCount(0);
+  await expect(oklar).toHaveCount(0);
+  await kart.click();
+  await expect(oklar).toHaveCount(2);
+  await kart.click();
+  await expect(oklar).toHaveCount(0);
+  await kart.click();
+  // Boş alan: T-01 satırının görünen sağ ucu (orada iş yok; kapalı saat taraması da boş alandır).
+  await tahta.locator('[data-satir="M1"]').scrollIntoViewIfNeeded();
+  const kutu = (await tahta.boundingBox())!, satir = (await tahta.locator('[data-satir="M1"]').boundingBox())!;
+  await page.mouse.click(kutu.x + kutu.width - 30, satir.y + satir.height / 2);
+  await expect(oklar).toHaveCount(0);
+  await tasma();
+});
+
 test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun tezgâhlar öne çıkar; telefonda yer listesi; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {

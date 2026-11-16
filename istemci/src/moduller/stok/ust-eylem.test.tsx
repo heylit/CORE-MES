@@ -46,7 +46,7 @@ function ciz(yollar: Record<string, (govde: unknown) => Response>, kutu: TeslimK
 
 describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('yalniz stok.istek ile gorunur; gelen teslim sayisini rozetle gosterir', async () => {
-    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['malzeme-teslim', 'stok.istek']]);
+    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['malzeme-teslim', 'stok.istek'], ['tasima-sepeti', 'stok.istek']]);
     ciz({});
     expect(await screen.findByRole('button', { name: /1 gelen teslim/ })).toBeTruthy();
   });

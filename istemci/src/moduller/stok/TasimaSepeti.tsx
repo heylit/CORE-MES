@@ -15,8 +15,8 @@ import './stok.css';
 // Taşıma sepeti (1338 a): kişinin sunucudaki sepetidir (Soru 133); depo sepetiyle aynı satırlar, aynı önbellek. Art arda okutulan
 // malzeme buraya düşer; sepet doluyken okutulan yer bırakma hedefi olur. Sepet stok ayırmaz (1342 a): bırakırken sunucu yeniden denetler.
 export const SEPET_ANAHTARI = [...anahtarlar.hepsi, 'sepet'] as const;
-export function useTasimaSepeti(acik = true) {
-  return useQuery({ queryKey: SEPET_ANAHTARI, queryFn: () => api.get<SepetCevabi>('/stok/sepet'), enabled: acik });
+export function useTasimaSepeti(acik = true, yenile?: number) {
+  return useQuery({ queryKey: SEPET_ANAHTARI, queryFn: () => api.get<SepetCevabi>('/stok/sepet'), enabled: acik, ...(yenile ? { refetchInterval: yenile } : {}) });
 }
 // Sepet miktarı üç ondalıklıdır; kalan kayan nokta hatası taşımasın diye bindelikle hesaplanır.
 const kalanMiktar = (sepette: string, giden: string): string => String(Math.round(Number(sepette) * 1000 - Number(giden) * 1000) / 1000);
@@ -31,33 +31,59 @@ const kaynakMetni = (s: SepetSatiri): string =>
 const hedefMetni = (h: OkutHedefi): string =>
   (kisiHedefiMi(h) ? `${h.alici.ad ?? 'Okutulan kişi'} · ${h.istasyon.ad}` : `${h.ad ?? h.kod} · ${KONUM_ETIKETI[h.tur]}`);
 
-// Panelin altındaki şerit: sepet her ekranda görünür; dokununca satırlar açılır, satır çıkarılır.
-export function SepetSeridi({ satirlar }: { satirlar: SepetSatiri[] }) {
-  const [acik, setAcik] = useState(false);
+// 3339 a: sepet okuyucudan ayrı bölmedir. Genişte okuyucunun yanında hep açık; dar ekranda panelin altında sabit çubuk, Aç ile yarım
+// ekran çekmece (kamera üstte açık kalır). Okuyucu her durumda dinler. Bölmede yazı alanı yok: el okuyucunun tuşları başka alana yazılmaz.
+// Bırakma formu `birakmaYeri`ne çizilir (OkutAlani); form açıkken liste gizlenir, çekmece açılır (CSS).
+export function SepetBolmesi({ satirlar: gelen, acik, degistir, birakmaYeri }: {
+  satirlar: SepetSatiri[] | undefined; acik: boolean; degistir: (acik: boolean) => void; birakmaYeri: (el: HTMLDivElement | null) => void;
+}) {
   const cikar = useStokKomutu((g: { id: number }) => api.post<SepetCevabi>(`/stok/sepet/satirlar/${g.id}/sil`, {}), 'Sepetten çıkarıldı.');
-  if (satirlar.length === 0) return null;
+  // Panel açıldıktan sonra eklenen en son satır vurgulanır; açılışta var olanlar vurgulanmaz.
+  // `satirlar` yüklenmemişse undefined: açılıştaki en büyük kimlik ilk yüklemede alınır.
+  const satirlar = gelen ?? [];
+  const enBuyuk = satirlar.reduce((m, s) => Math.max(m, s.id), 0);
+  const [ilk, setIlk] = useState<number | null>(gelen === undefined ? null : enBuyuk);
+  useEffect(() => { if (ilk === null && gelen !== undefined) setIlk(enBuyuk); }, [ilk, gelen, enBuyuk]);
+  const yeniId = ilk !== null && enBuyuk > ilk ? enBuyuk : null;
+  const sayi = satirlar.length;
   return (
-    <section className="tc-stok-sepet-serit" aria-label="Taşıma sepetim">
-      <button type="button" className="tc-stok-sepet-serit-bas" aria-expanded={acik} onClick={() => setAcik((a) => !a)}>
-        <Simge ad="cart" />
-        <strong>Taşıma sepetim</strong>
-        <span className="tc-stok-sepet-sayi">{satirlar.length}</span>
-        <span className="tc-stok-sepet-adlar">{satirlar.slice(0, 2).map(satirAdi).join(', ')}{satirlar.length > 2 ? ` +${satirlar.length - 2}` : ''}</span>
-        <span className="tc-stok-not">{acik ? 'Kapat' : 'Bırakmak için yeri okut'}</span>
-      </button>
-      {acik && (
-        <ul className="tc-stok-satirlar" aria-label="Sepetteki kalemler">
-          {satirlar.map((s) => (
-            <li key={s.id}>
-              <span><strong>{satirAdi(s)}</strong> <span className="tc-stok-mono">{kaynakMetni(s)}</span></span>
-              <strong>{miktarMetni(s.miktar)}</strong>
-              <Dugme simge="x" aria-label={`${satirAdi(s)} sepetten çıkar`} yukleniyor={cikar.komut.isPending && cikar.komut.variables?.id === s.id}
-                onClick={() => cikar.komut.mutate({ id: s.id })} />
-            </li>
-          ))}
-        </ul>
-      )}
+    <section className="tc-stok-sepet-bolme" aria-label="Sepetim" {...(acik ? { 'data-acik': '' } : {})} {...(sayi === 0 ? { 'data-bos': '' } : {})}>
+      <div className="tc-stok-sepet-bolme-bas">
+        <SepetIkonu sayi={sayi} />
+        <div className="tc-stok-sepet-bolme-baslik">
+          <strong>Sepetim{sayi > 0 ? ` · ${sayi} kalem` : ''}</strong>
+          <span className="tc-stok-not tc-stok-sepet-ozet">{satirlar.slice(0, 2).map(satirAdi).join(', ')}{sayi > 2 ? ` +${sayi - 2}` : ''}</span>
+          <span className="tc-stok-not tc-stok-sepet-ipucu">{sayi > 0 ? 'Bırakmak için yer ya da kişi okut' : 'Malzeme ya da lot okut, buraya düşer'}</span>
+        </div>
+        {sayi > 0 && <Dugme className="tc-stok-sepet-ac" simge={acik ? 'down' : 'up'} aria-expanded={acik} onClick={() => degistir(!acik)}>{acik ? 'Kapat' : 'Aç'}</Dugme>}
+      </div>
+      <div className="tc-stok-sepet-govde">
+        {sayi > 0 && (
+          <ul className="tc-stok-satirlar" aria-label="Sepetteki kalemler">
+            {satirlar.map((s) => (
+              <li key={s.id} {...(s.id === yeniId ? { 'data-yeni': '' } : {})}>
+                <span><strong>{satirAdi(s)}</strong> <span className="tc-stok-mono">{kaynakMetni(s)}</span>
+                  {s.id === yeniId && <Rozet ton="tamam">Az önce eklendi</Rozet>}</span>
+                <strong>{miktarMetni(s.miktar)}</strong>
+                <Dugme simge="x" aria-label={`${satirAdi(s)} sepetten çıkar`} yukleniyor={cikar.komut.isPending && cikar.komut.variables?.id === s.id}
+                  onClick={() => cikar.komut.mutate({ id: s.id })} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div ref={birakmaYeri} className="tc-stok-sepet-birakma" />
+      </div>
     </section>
+  );
+}
+
+// Sepet simgesi ve kalem sayısı (3339 a): bölme başlığında ve üst çubukta aynı işaret.
+export function SepetIkonu({ sayi }: { sayi: number }) {
+  return (
+    <span className="tc-stok-sepet-ikon" aria-hidden="true">
+      <Simge ad="cart" />
+      {sayi > 0 && <span className="tc-stok-sepet-rozet">{sayi > 99 ? '99+' : sayi}</span>}
+    </span>
   );
 }
 

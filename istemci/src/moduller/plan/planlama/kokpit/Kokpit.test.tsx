@@ -548,6 +548,78 @@ describe('Kokpit', () => {
     expect(arac('Ayarlar').hasAttribute('disabled')).toBe(true);
   });
 
+  // 3330: vurgu ve okun çizilmediği durumlar. Hiç adımı planda olmayan kart tahtayı soldurmaz (yer aranırken dolu yerler olduğu gibi görünür);
+  // Ay ve Yıl ölçeğinde (yük hücreleri) ok yoktur; seçim başka yerden (arama, liste) gelince de sipariş yanar.
+  it('plansız kart tahtayı soldurmaz ve ok çizmez; uzak ölçekte ok yoktur; dışarıdan seçilen sipariş yanar (3330)', () => {
+    const c = ornekCalisma();
+    const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
+    // Sahadan okunan emir durumu boş: planda işi olmayan emir bitmiş sayılmaz, plansız görünür.
+    ac({ calisma: plansiz, depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu });
+    const tahta = () => document.querySelector('.tc-pyq-tahta') as HTMLElement;
+    const kart = (k: string) => document.querySelector(`[data-kart="${k}"]`) as HTMLElement;
+    fireEvent.click(kart('2'));
+    expect(kart('2').getAttribute('aria-pressed')).toBe('true');
+    expect(tahta().querySelectorAll('[data-sonuk], [data-yanan]')).toHaveLength(0);
+    expect(tahta().querySelector('.tc-pyq-oklar')).toBeNull();
+    expect(document.querySelector('[data-ok-aciklama]')).toBeNull();
+    // Planlı kartta ok vardır; Ay ölçeğine geçince kalkar, 3 güne dönünce geri gelir.
+    fireEvent.click(kart('3'));
+    expect(tahta().querySelectorAll('.tc-pyq-oklar [data-ok]').length).toBeGreaterThan(0);
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    fireEvent.click(olcek('Ay'));
+    expect(tahta().querySelector('.tc-pyq-oklar')).toBeNull();
+    fireEvent.click(olcek('3 gün'));
+    expect(tahta().querySelectorAll('.tc-pyq-oklar [data-ok]').length).toBeGreaterThan(0);
+    cleanup();
+    ac({ secim: { ...BOS_SECIM, siparis: '3' } });
+    expect([...tahta().querySelectorAll('[data-yanan]')].every((el) => el.getAttribute('data-is')?.startsWith('3.'))).toBe(true);
+    expect(tahta().querySelectorAll('[data-yanan]').length).toBeGreaterThan(1);
+    expect(tahta().querySelectorAll('[data-sonuk]').length).toBeGreaterThan(0);
+  });
+
+  it('kart seçilince o siparişin işleri yanar, ötekiler solar, adımlar arasına bağ oku ve açıklaması gelir; karta yeniden basınca, Esc ile ve boş alana tıklayınca kalkar (3330)', () => {
+    ac();
+    const tahta = document.querySelector('.tc-pyq-tahta') as HTMLElement;
+    const yanan = () => [...tahta.querySelectorAll('[data-yanan]')].map((el) => el.getAttribute('data-is'));
+    const sonuk = () => [...tahta.querySelectorAll('[data-sonuk]')].map((el) => el.getAttribute('data-is'));
+    const kart = (k: string) => document.querySelector(`[data-kart="${k}"]`) as HTMLElement;
+    // İlk kart kendiliğinden gösterilirken tahta solmaz, ok yoktur.
+    expect(yanan()).toEqual([]);
+    expect(sonuk()).toEqual([]);
+    expect(tahta.querySelector('.tc-pyq-oklar')).toBeNull();
+    expect(document.querySelector('[data-ok-aciklama]')).toBeNull();
+
+    fireEvent.click(kart('3'));
+    const uc = yanan();
+    expect(uc.length).toBeGreaterThan(1);
+    expect(uc.every((id) => id?.startsWith('3.'))).toBe(true);
+    expect(sonuk().length).toBeGreaterThan(0);
+    expect(sonuk().every((id) => id?.startsWith('2.'))).toBe(true);
+    // Ok, planda yeri olan ardışık adımlar arasındadır; örnek rotada bütün bağlar "bitince"dir.
+    const oklar = [...tahta.querySelectorAll('.tc-pyq-oklar [data-ok]')];
+    expect(oklar.length).toBe(uc.length - 1);
+    expect(oklar.every((el) => el.getAttribute('data-tur') === 'b' && /^3\.\d+>3\.\d+$/.test(el.getAttribute('data-ok') ?? '') && el.querySelectorAll('path').length === 2)).toBe(true);
+    expect([...document.querySelectorAll('[data-ok-aciklama]')].map((el) => el.textContent)).toEqual(['Önceki adım bitince başlar', 'Örtüşmeli: önceki bitmeden başlayabilir']);
+    // Telefon listesinde ok yoktur; seçili siparişin satırı öne çıkar ve bağ satırda yazar.
+    const liste = document.querySelector('.tc-pyq-liste') as HTMLElement;
+    expect(within(liste).getAllByRole('button').filter((b) => b.hasAttribute('data-yanan')).some((b) => / · \d+ .+ bitince$/.test(b.textContent))).toBe(true);
+    expect(within(liste).getAllByRole('button').some((b) => b.hasAttribute('data-sonuk'))).toBe(true);
+
+    fireEvent.click(kart('3'));
+    expect(yanan()).toEqual([]);
+    expect(tahta.querySelector('.tc-pyq-oklar')).toBeNull();
+
+    fireEvent.click(kart('2'));
+    expect(yanan().every((id) => id?.startsWith('2.'))).toBe(true);
+    expect(sonuk().every((id) => id?.startsWith('3.'))).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(yanan()).toEqual([]);
+    expect(sonuk()).toEqual([]);
+
+    fireEvent.click(kart('2'));
+    fireEvent.click(tahta.querySelector('[data-satir] .tc-pyq-alan') as HTMLElement);
+    expect(yanan()).toEqual([]);
+  });
   it('çalışma yokken boş durum gösterir', () => {
     ac({ calisma: null });
     expect(screen.getByText(/Henüz plan yok/)).toBeTruthy();

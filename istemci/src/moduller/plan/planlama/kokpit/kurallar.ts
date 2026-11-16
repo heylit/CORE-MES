@@ -16,7 +16,71 @@ export interface KokpitIsi {
   // Rotadaki yeri (0'dan).
   sira: number;
 }
-export interface KokpitAdimi { id: string; ad: string; adaylar: string[] }
+// onculler: adımın rotadaki bitmemiş öncülleri ve bağ türü (b: öncül bitince başlar, o: örtüşmeli, öncül bitmeden başlayabilir).
+export type BagTuru = 'b' | 'o';
+export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; onculler?: readonly (readonly [string, BagTuru])[] }
+// Tahtada çizilen bağ: öncülün ve ardılın planda yeri vardır. ters: "bitince" bağlı ardıl öncülü bitmeden başlıyor (geçersiz sıra).
+export interface AdimBagi { kimden: string; kime: string; tur: BagTuru; ters: boolean }
+export function adimBaglari(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): AdimBagi[] {
+  return emirler.flatMap((e) => e.adimlar.flatMap((a) => (a.onculler ?? []).flatMap(([kimden, tur]): AdimBagi[] => {
+    const o = isler[kimden], x = isler[a.id];
+    return o && x ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && x.S < o.C - 0.01 }] : [];
+  })));
+}
+// Adımın bağımlılık yazısı (3330): öncül, emrin operasyon listesindeki sıra numarasıyla (tablodaki # sütunu). uzun tablo sütunudur
+// ("1 Torna · bitince"), kisa dar ekranda ve listede adın yanındadır ("1 Torna bitince", "2 Freze ile örtüşmeli"). Bekleyen öncülü yoksa null.
+export function bagimlilik(e: Pick<KokpitEmri, 'adimlar'>, a: KokpitAdimi): { uzun: string; kisa: string } | null {
+  const l = (a.onculler ?? []).flatMap(([q, tur]) => { const i = e.adimlar.findIndex((x) => x.id === q); return i < 0 ? [] : [{ no: String(i + 1), ad: e.adimlar[i]!.ad, tur }]; });
+  if (l.length === 0) return null;
+  return {
+    uzun: l.map((x) => `${x.no} ${x.ad} · ${x.tur === 'o' ? 'örtüşmeli (bitmeden başlayabilir)' : 'bitince'}`).join('; '),
+    kisa: l.map((x) => `${x.no} ${x.ad} ${x.tur === 'o' ? 'ile örtüşmeli' : 'bitince'}`).join(' · '),
+  };
+}
+// Bağ okunun yolu (px). Kutu: işin sol ve sağ kenarı, orta yüksekliği, yüksekliği ve satırının yüksekliği. Ok başka işlerin yazısının
+// üstünden geçmesin diye yatayda yalnız satır aralarından (iki satırın sınırı) yürür: öncülden çıkar, kendi satırının ardıla bakan sınırına
+// iner, aradaki satırlarda boş bir hizadan ardılın satır sınırına geçer ve ardılın sol kenarının ortasına soldan girer. Bitince: öncülün
+// sağ kenarından; örtüşmeli: öncülün ardıla bakan kenarından, ardılın başlangıç hizasında. Köşeler yuvarlaktır.
+export interface OkKutusu { x1: number; x2: number; y: number; h: number; satir: number }
+export interface OkEngeli { x1: number; x2: number; y: number }
+const OK_PAYI = 8, OK_KOSE = 12;
+const yuvarla = (n: number): number => Math.round(n * 10) / 10;
+type Nokta = readonly [number, number];
+function yuvarlakYol(noktalar: readonly Nokta[]): string {
+  // Üst üste ve aynı doğrultudaki ara noktalar düşer.
+  const l: Nokta[] = [];
+  for (const n of noktalar) {
+    const son = l.at(-1), onceki = l.at(-2);
+    if (son && Math.abs(son[0] - n[0]) < 0.05 && Math.abs(son[1] - n[1]) < 0.05) continue;
+    if (son && onceki && ((Math.abs(onceki[0] - son[0]) < 0.05 && Math.abs(son[0] - n[0]) < 0.05) || (Math.abs(onceki[1] - son[1]) < 0.05 && Math.abs(son[1] - n[1]) < 0.05))) l.pop();
+    l.push(n);
+  }
+  const uz = (a: Nokta, b: Nokta): number => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+  const yaklas = (a: Nokta, b: Nokta, r: number): Nokta => { const u = uz(a, b) || 1; return [a[0] + (b[0] - a[0]) * r / u, a[1] + (b[1] - a[1]) * r / u]; };
+  const yaz = (n: Nokta): string => `${String(yuvarla(n[0]))},${String(yuvarla(n[1]))}`;
+  let d = `M${yaz(l[0]!)}`;
+  for (let i = 1; i < l.length - 1; i++) {
+    const r = Math.min(OK_KOSE, uz(l[i - 1]!, l[i]!) / 2, uz(l[i]!, l[i + 1]!) / 2);
+    d += ` L${yaz(yaklas(l[i]!, l[i - 1]!, r))} Q${yaz(l[i]!)} ${yaz(yaklas(l[i]!, l[i + 1]!, r))}`;
+  }
+  return `${d} L${yaz(l.at(-1)!)}`;
+}
+export function okYolu(a: OkKutusu, b: OkKutusu, tur: BagTuru, engeller: readonly OkEngeli[] = []): string {
+  const ex = b.x1, ey = b.y, ayniSatir = Math.abs(ey - a.y) < 1;
+  // Aynı satırda art arda duran iki iş arasında ok düz gider.
+  if (ayniSatir && tur === 'b' && ex >= a.x2 && ex - a.x2 <= 3 * OK_PAYI) return yuvarlakYol([[a.x2, a.y], [ex, ey]]);
+  const yon = ayniSatir || ey > a.y ? 1 : -1;
+  const sinirA = a.y + yon * a.satir / 2, sinirB = ayniSatir ? sinirA : ey - yon * b.satir / 2;
+  const bas: Nokta[] = tur === 'o'
+    ? [[Math.min(Math.max(ex, a.x1 + 4), a.x2 - 4), a.y + yon * a.h / 2]]
+    : [[a.x2, a.y], [a.x2 + OK_PAYI, a.y]];
+  // Aradaki satırlarda dikey geçişin denk geldiği iş varsa geçiş o işin sağına kayar.
+  const arada = engeller.filter((g) => (g.y - sinirA) * (g.y - sinirB) < 0).sort((p, q) => p.x1 - q.x1);
+  let x = bas.at(-1)![0];
+  for (const g of arada) if (x > g.x1 - OK_PAYI && x < g.x2 + OK_PAYI) x = g.x2 + OK_PAYI;
+  return yuvarlakYol([...bas, [bas.at(-1)![0], sinirA], [x, sinirA], [x, sinirB], [ex - OK_PAYI, sinirB], [ex - OK_PAYI, ey], [ex, ey]]);
+}
+export const okUcu = (b: OkKutusu): string => `M${yuvarla(b.x1)},${yuvarla(b.y)} l-6,-3.5 v7 z`;
 export interface KokpitEmri {
   id: string; no: string; urun: string; adet: number;
   termin: number | null; bitis: number | null;
@@ -71,7 +135,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
     if (!j.ops.length) continue;
     emirler.push({
       id: j.id, no: emirNo(j.id), urun: urunAdi.get(s?.urun ?? '') ?? s?.ad ?? '', adet: j.adet, termin: j.due, bitis: plansiz ? null : bitis, durum, gecikme,
-      adimlar: j.ops.map((a) => ({ id: a.id, ad: a.ad, adaylar: a.c })),
+      adimlar: j.ops.map((a) => ({ id: a.id, ad: a.ad, adaylar: a.c, ...(a.pr.length ? { onculler: a.pr.map(([q, t]) => [q, t === 'o' ? 'o' : 'b'] as const) } : {}) })),
     });
   }
   const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.ad ?? t.id, ad: t.kod ? t.ad ?? '' : '', fason: false, ...(t.grup ? { grup: t.grup } : {}), ...(t.grupAd ?? t.grupKod ? { grupAdi: t.grupAd ?? t.grupKod } : {}) }));

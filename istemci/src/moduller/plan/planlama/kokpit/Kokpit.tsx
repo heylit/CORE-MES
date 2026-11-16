@@ -151,6 +151,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [ayarEtkisi, setAyarEtkisi] = useState(false);
   // Sıra şeridinde seçili kart (kök emir); seçilmediyse yerleşmesi eksik ilk kart. Tahtadan ya da listeden emir seçilince kart onu izler.
   const [kart, setKart] = useState<string | null>(null);
+  // 3330: kart açıkça seçilince tahtada vurgulanır; Esc, karta yeniden basma ve boş tahta alanı vurguyu kaldırır, kart bölümde kalır.
+  const [vurgu, setVurgu] = useState(false);
   // Planı etkileyen değişiklikler (3317 a): plan şeridinin altında açılan liste; süzgeç seçili kartın satırlarını bırakır.
   const [degisiklikAcik, setDegisiklikAcik] = useState(false);
   const [degisiklikSuzgeci, setDegisiklikSuzgeci] = useState(false);
@@ -378,12 +380,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       else if (k === 'arrowleft' && tur) turTusu.current.onceki();
       else if (k === 'arrowright' && tur) turTusu.current.sonraki();
       else if (k.startsWith('arrow') && !tur && !tutuluyor() && okla(k, ev.shiftKey)) ev.preventDefault();
-      else if (k === 'escape' && !tur && secEmir) sec(null, null);
+      else if (k === 'escape' && !tur && secEmir) { sec(null, null); setVurgu(false); }
       else if (k === 'escape' && !tur && tasinacak !== null) setTasinacak(null);
+      else if (k === 'escape' && !tur && vurgu) setVurgu(false);
     };
     document.addEventListener('keydown', tus);
     return () => { document.removeEventListener('keydown', tus); };
-  }, [geri, sorunSec, tur, secEmir, sec, okla, tasinacak]);
+  }, [geri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
 
   // --- canlıya al ---
   // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
@@ -417,7 +420,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
   const kartlar = useMemo(() => siraKartlari(m, bag), [m, bag]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
-  useEffect(() => { if (secEmir !== null) setKart(kartAnahtari(secEmir, bag)); }, [secEmir]);
+  useEffect(() => { if (secEmir !== null) { setKart(kartAnahtari(secEmir, bag)); setVurgu(true); } }, [secEmir]);
+  // 3330: kart açıkça seçildiyse (ilk kart kendiliğinden gösterilirken değil) tahtada o siparişin emirleri yanar, ötekiler solar. Hiçbir adımı
+  // planda olmayan kartta tahta solmaz: yerleştirirken dolu yerler olduğu gibi görünür.
+  const yanan = useMemo(() => { const k = !vurgu || kart === null ? undefined : kartlar.find((x) => x.kok === kart); return k && k.yerlesen > 0 ? new Set(k.emirler.map((e) => e.id)) : null; }, [vurgu, kart, kartlar]);
+  const secimiKaldir = useCallback(() => { sec(null, null); setVurgu(false); }, [sec]);
+  const kartSec = useCallback((k: string) => { if (k === kart && vurgu) secimiKaldir(); else { setKart(k); setVurgu(true); } }, [kart, vurgu, secimiKaldir]);
   // Karta bağlı değişiklikler (saha olayı, geride kalan iş) kartta sayıyla görünür.
   const kartOlayi = useMemo(() => {
     const k = new Map<string, number>();
@@ -506,7 +514,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       <div className="tc-pyq-govde">
         <div className="tc-pyq-ana">
           <SiraSeridi
-            kartlar={kartlar} secili={seciliKart?.kok ?? null} sec={setKart} zaman={zaman} olay={kartOlayi} bagVar={bag !== null}
+            kartlar={kartlar} secili={seciliKart?.kok ?? null} sec={kartSec} zaman={zaman} olay={kartOlayi} bagVar={bag !== null}
           />
           {seciliKart && (
             <EmirAdimlari
@@ -532,11 +540,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                 <Tahta
                   m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
-                  yerlestirme={tur ? null : yerHedefi}
+                  yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={secimiKaldir}
                 />
-                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
+                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
                   <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li>
+                  {yanan && !tur && <><li data-ok-aciklama=""><i data-t="ok-b" />Önceki adım bitince başlar</li><li data-ok-aciklama=""><i data-t="ok-o" />Örtüşmeli: önceki bitmeden başlayabilir</li></>}
                 </ul>
               </>
             )}

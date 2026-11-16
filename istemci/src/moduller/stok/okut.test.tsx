@@ -13,6 +13,9 @@ const OPERATOR: Kullanici = { id: 9, ad: 'Deneme Operatör', islemler: ['stok.is
 const KODLAR: Record<string, OkutCozCevabi> = {
   'MLZ:901': { tur: 'malzeme', malzeme: { id: 901, kod: 'HM-1', ad: 'Deneme sac', birim: 'kg' }, parti: null,
     yerler: [{ konumId: 20, kod: 'T1', ad: 'Torna 1', tur: 'istasyon', istasyonId: 1, partiId: 4, partiEtiketi: 'TP-4', statuId: null, miktar: '2.000' }] },
+  // 3339: ikinci ayrı kalem (başka malzeme, başka yer).
+  'MLZ:902': { tur: 'malzeme', malzeme: { id: 902, kod: 'HM-2', ad: 'Başka', birim: 'adet' }, parti: null,
+    yerler: [{ konumId: 40, kod: 'T3', ad: 'Torna 3', tur: 'istasyon', istasyonId: 3, partiId: null, partiEtiketi: null, statuId: null, miktar: '5.000' }] },
   T2: { tur: 'yer', yer: { konumId: 21, kod: 'T2', ad: 'Torna 2', tur: 'istasyon', istasyonId: 2 }, satirlar: null },
   KABUL: { tur: 'yer', yer: { konumId: 5, kod: 'KABUL', ad: 'Mal kabul', tur: 'kabul', istasyonId: null }, satirlar: [
     { malzemeId: 901, kod: 'HM-1', ad: 'Deneme sac', partiId: 4, partiEtiketi: 'TP-4', statuId: null, miktar: '6.000' },
@@ -43,7 +46,7 @@ const KUTU: TeslimKutusuCevabi = {
   depoKonumlari: [], araAlanlar: [], buradakiIstasyonId: 1, harita: null, zemin: null,
 };
 
-function ciz(kullanici: Kullanici, yollar: Record<string, (govde: unknown) => Response> = {}) {
+function ciz(kullanici: Kullanici, yollar: Record<string, (govde: unknown) => Response> = {}, sepetDugmesi = false) {
   // Taşıma sepeti (1338 a) sunucudadır: eklenen satır sonraki okumada gelir.
   const sepet: SepetSatiri[] = [];
   const tum: Record<string, (govde: unknown) => Response> = {
@@ -80,7 +83,8 @@ function ciz(kullanici: Kullanici, yollar: Record<string, (govde: unknown) => Re
   });
   const eylem = ustEylemler.find((e) => e.anahtar === 'malzeme-teslim')!;
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><eylem.dugme /></BildirimSaglayici></QueryClientProvider>);
+  const sepetEylemi = ustEylemler.find((e) => e.anahtar === 'tasima-sepeti')!;
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici>{sepetDugmesi && <sepetEylemi.dugme />}<eylem.dugme /></BildirimSaglayici></QueryClientProvider>);
   return istekler;
 }
 async function okut(pencere: HTMLElement, kod: string) {
@@ -107,6 +111,52 @@ async function sonucKarti(pencere: HTMLElement): Promise<string> {
 }
 
 describe('Malzeme penceresinin okuyucusu (372 a)', () => {
+  it('3339 a: sepet okuyucudan ayrı bölmedir; okutulan satır vurgulanır, bırakma sepet bölmesinde açılır', async () => {
+    ciz(OPERATOR);
+    const pencere = await pencereAc();
+    const bolme = await within(pencere).findByRole('region', { name: 'Sepetim' });
+    expect(within(bolme).getByText('Malzeme ya da lot okut, buraya düşer')).toBeTruthy();
+    expect(within(bolme).queryByRole('textbox')).toBeNull();
+    await okut(pencere, 'MLZ:901');
+    expect(await within(bolme).findByText('Sepetim · 1 kalem')).toBeTruthy();
+    expect(await within(bolme).findByText('Az önce eklendi')).toBeTruthy();
+    expect(bolme.querySelector('.tc-stok-sepet-rozet')?.textContent).toBe('1');
+    await okut(pencere, 'T2');
+    expect(await within(bolme).findByText(/^Buraya bırak: Torna 2/)).toBeTruthy();
+    expect(within(pencere).getByRole('textbox', { name: /Kod/ })).toBeTruthy();
+  });
+
+  it('3339 a: dolu sepetle açılışta vurgu yok; panel açıkken eklenen satır "Az önce eklendi" ile vurgulanır', async () => {
+    ciz(OPERATOR);
+    let pencere = await pencereAc();
+    await okut(pencere, 'MLZ:901');
+    await within(pencere).findByText('Sepete eklendi');
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kapat/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    pencere = await pencereAc();
+    const bolme = await within(pencere).findByRole('region', { name: 'Sepetim' });
+    await within(bolme).findByText('Sepetim · 1 kalem');
+    expect(within(bolme).queryByText('Az önce eklendi')).toBeNull();
+    await okut(pencere, 'MLZ:902');
+    await within(bolme).findByText('Sepetim · 2 kalem');
+    const satirlar = within(within(bolme).getByRole('list', { name: 'Sepetteki kalemler' })).getAllByRole('listitem');
+    expect(within(satirlar[0]!).queryByText('Az önce eklendi')).toBeNull();
+    expect(await within(satirlar[1]!).findByText('Az önce eklendi')).toBeTruthy();
+  });
+
+  it('3339 a: üst çubuktaki sepet ikonu boş sepette görünmez; doluyken kalem sayısıyla durur ve paneli açar', async () => {
+    ciz(OPERATOR, {}, true);
+    const pencere = await pencereAc();
+    expect(screen.queryByRole('button', { name: /^Sepetim,/ })).toBeNull();
+    await okut(pencere, 'MLZ:901');
+    await within(pencere).findByText('Sepete eklendi');
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kapat/ }));
+    const dugme = await screen.findByRole('button', { name: 'Sepetim, 1 kalem' });
+    fireEvent.click(dugme);
+    const yeni = await screen.findByRole('dialog');
+    expect(within(yeni).getByRole('button', { name: 'Kapat', expanded: true })).toBeTruthy();
+  });
+
   it('ayrı QR tuşu yok; okuyucu pencere açılınca kutucukların üstünde hazır', async () => {
     expect(ustEylemler.some((e) => e.anahtar === 'qr-okut')).toBe(false);
     ciz(OPERATOR);
@@ -126,7 +176,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     await okut(pencere, 'MLZ:901');
     await sepeteEklendi(pencere, /Deneme sac · 2/);
     expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')?.govde).toEqual({ malzemeId: 901, miktar: '2.000', kaynakKonumId: 20, partiId: 4 });
-    expect(await within(pencere).findByRole('region', { name: 'Taşıma sepetim' })).toBeTruthy();
+    expect(await within(pencere).findByRole('region', { name: 'Sepetim' })).toBeTruthy();
     await okut(pencere, 'T1');
     expect(await within(pencere).findByText('Kod tanınmadı: T1')).toBeTruthy();
     await okut(pencere, 'T2');
@@ -148,7 +198,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
     await within(pencere).findByText('Sepete eklendi');
-    await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
+    await within(pencere).findByRole('region', { name: 'Sepetim' });
     await okut(pencere, 'T2');
     await within(pencere).findByText(/^Buraya bırak: Torna 2/);
     expect(within(pencere).getByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
@@ -170,7 +220,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
     await within(pencere).findByText('Sepete eklendi');
-    await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
+    await within(pencere).findByRole('region', { name: 'Sepetim' });
     expect(await okutVeBekle(pencere, 'KSI-7', /Buraya bırak: Deneme Alıcı · Torna 2/)).toBeTruthy();
     expect(within(pencere).getByText('Alıcı: Deneme Alıcı. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.')).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: 'Bıraktım' })).toBeNull();
@@ -276,7 +326,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const goz = await within(pencere).findByRole('generic', { name: 'Göz KABUL içeriği' });
     expect(istekler.some((i) => i.yol === '/stok/sepet/satir-ekle')).toBe(false);
     fireEvent.click(within(goz).getAllByRole('button', { name: 'Al' })[0]!);
-    await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
+    await within(pencere).findByRole('region', { name: 'Sepetim' });
     await okut(pencere, 'LOC:A-01-01');
     fireEvent.click(await within(pencere).findByRole('button', { name: '1 kalemi bırak' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/tasima')).toMatchObject({

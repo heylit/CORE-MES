@@ -4,7 +4,7 @@ import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -451,6 +451,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
                 >
                   <b>{a.ad}</b>
+                  {bagimlilik(e, a) && <small data-bag-kisa="">{bagimlilik(e, a)!.kisa}</small>}
                   <small>{x ? `${x.fason ? 'Fason' : tz(x.m)} · ${an(x.S, x.C)}` : yer === 'fason' ? 'Fason · sistem yerleştirir' : s !== undefined ? `${tz(s)} seçildi` : 'yerleşmedi'}</small>
                 </button>
               </li>
@@ -460,7 +461,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
       ) : (
         <div className="tc-pyq-optablo-kap" data-yanda={odak && yanda ? '' : undefined}>
         <table className="tc-pyq-optablo">
-          <thead><tr><th scope="col">#</th><th scope="col">Operasyon</th><th scope="col">Süre</th><th scope="col">Tezgâh</th><th scope="col">Başlangıç</th><th scope="col">Bitiş</th><th scope="col">Durum</th></tr></thead>
+          <thead><tr><th scope="col">#</th><th scope="col">Operasyon</th><th scope="col" data-ad="Bağımlılık">Bağımlılık</th><th scope="col">Süre</th><th scope="col">Tezgâh</th><th scope="col">Başlangıç</th><th scope="col">Bitiş</th><th scope="col">Durum</th></tr></thead>
           <tbody>
             {e.adimlar.map((a, sira) => {
               const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id];
@@ -482,6 +483,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                 if (x) { if (c !== null) setDuzen(c === x.S && (duzenli?.tezgah ?? x.m) === x.m ? null : { isId: a.id, tezgah: duzenli?.tezgah ?? x.m, baslangic: c }); } else { etkinlestir(); y.alanYaz(a.id, { baslangic: c ?? undefined }); }
               };
               const notKimligi = `tc-pyq-not-${a.id}`;
+              const bag = bagimlilik(e, a);
               const tezgahDegisti = (v: string): void => {
                 if (x) { const b0 = duzenli?.baslangic ?? x.S; setDuzen(v === x.m && b0 === x.S ? null : { isId: a.id, tezgah: v, baslangic: b0 }); } else { etkinlestir(); y.alanYaz(a.id, { tezgah: v === '' ? undefined : v }); }
               };
@@ -494,7 +496,9 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                       type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} aria-current={vurgu === a.id && !secildi ? 'true' : undefined} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
                       onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
                     ><b>{a.ad}</b></button>
+                    {bag && <small className="tc-pyq-bag-kisa">{bag.kisa}</small>}
                   </td>
+                  <td data-ad="Bağımlılık" data-bag={bag ? '' : 'yok'}>{bag ? bag.uzun : 'öncül yok'}</td>
                   <td data-ad="Süre" title="Yerleşimin başından sonuna geçen süre; vardiya dışı saatler içindedir.">{x ? sureYaz(x.C - x.S) : tahmin ? sureYaz(tahmin.C - tahmin.S) : '—'}</td>
                   <td data-ad="Tezgâh">
                     {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">Fason</span> : (

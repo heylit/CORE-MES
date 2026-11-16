@@ -284,6 +284,7 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-sekmeler-sar .tc-sekmeler { flex-wrap: wrap; overflow-x: visible; }
 /* Malzeme penceresinin üstündeki okuyucu (372 a; eski QR okut paneli, karar 91 a): okuyucu alanı, adım çizgisi ve seçilen kaynak. */
 .tc-stok-okut-ust { display: grid; gap: var(--b-2); padding-bottom: var(--b-3); border-bottom: var(--cizgi) solid var(--edge); }
+.tc-stok-okut-son { block-size: 0; margin-block-start: calc(var(--b-2) * -1); }
 .tc-stok-okut-adimlar { display: flex; gap: var(--b-2); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); color: var(--muted); }
 .tc-stok-okut-adimlar li { flex: 1; padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi) solid var(--edge); text-align: center; }
 .tc-stok-okut-adimlar li[aria-current="step"] { color: var(--ink); border-color: var(--hazard); font-weight: 600; }
@@ -459,12 +460,37 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 
 /* 1338 a: taşıma sepeti, raf içeriği, bırakma, tek istasyon çipi. */
 .tc-stok-istasyon-cipi { display: flex; align-items: center; gap: var(--b-2); }
-.tc-stok-sepet-serit { position: sticky; inset-block-end: 0; z-index: 1; display: grid; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); }
-.tc-stok-sepet-serit-bas { display: flex; align-items: center; gap: var(--b-2); inline-size: 100%; padding: var(--b-2); border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
-.tc-stok-sepet-serit-bas .tc-stok-not { margin-inline-start: auto; }
-/* Bırakma formu açıkken şerit aynı kalemleri tekrarlar ve formun düğmelerini örterdi. */
-.tc-stok-teslim-panel:has(.tc-stok-birakma) .tc-stok-sepet-serit { display: none; }
-.tc-stok-sepet-sayi { min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2); background: var(--hold); color: var(--ink); font-weight: 700; text-align: center; }
+/* 3339 a: sepet bölmesi. Genişte hep açık liste; dar ekranda altta sabit çubuk, Aç ile yarım ekran çekmece. */
+.tc-stok-sepet-bolme { display: grid; gap: var(--b-2); align-content: start; min-inline-size: 0; padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-stok-sepet-bolme-bas { display: flex; align-items: center; gap: var(--b-3); min-inline-size: 0; }
+.tc-stok-sepet-bolme-baslik { display: grid; flex: 1; min-inline-size: 0; }
+.tc-stok-sepet-bolme-baslik > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-stok-sepet-ozet, .tc-stok-sepet-ac { display: none; }
+.tc-stok-sepet-govde { display: grid; gap: var(--b-2); min-inline-size: 0; }
+.tc-stok-sepet-govde:has(.tc-stok-birakma) > .tc-stok-satirlar { display: none; }
+.tc-stok-sepet-birakma:empty { display: none; }
+.tc-stok-sepet-govde li[data-yeni] { border-radius: var(--yari-1); background: var(--panel2); }
+.tc-stok-sepet-govde li .tc-rozet { margin-inline-start: var(--b-2); }
+/* Sepet bölmesi okuyucudan dar: bırakma satırında ad tam genişlik, miktar altta (adın 4-6 satıra kırılmaması için). */
+.tc-stok-sepet-govde .tc-stok-birakma-satir { grid-template-columns: minmax(0, 1fr); }
+.tc-stok-sepet-ikon { position: relative; display: inline-flex; padding-block-start: var(--b-2); padding-inline-end: var(--b-3); }
+.tc-stok-sepet-rozet {
+  position: absolute; inset-block-start: calc(var(--b-1) * -1); inset-inline-end: calc(var(--b-1) * -1);
+  min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2);
+  background: var(--hazard); color: var(--on-hazard); font-size: var(--yazi-xs); font-weight: 700; line-height: var(--b-5); text-align: center;
+}
+@media (max-width: 759px) {
+  .tc-stok-sepet-bolme { position: sticky; inset-block-end: 0; z-index: 1; padding: var(--b-2) var(--b-3); }
+  .tc-stok-sepet-bolme[data-bos] { display: none; }
+  /* Alttaki sabit çubuk kaydırılan içeriğin üstünde durur: odak ve kaydırma çubuğun altında kalmasın. */
+  .tc-pencere-govde:has(.tc-stok-sepet-bolme:not([data-bos])) { scroll-padding-block-end: calc(var(--dokunma-ana) * 2); }
+  .tc-stok-okut-duzen:has(> .tc-stok-sepet-bolme:not([data-bos])) > .tc-stok-okut-alt { padding-block-end: var(--b-3); }
+  .tc-stok-sepet-bolme:not([data-acik]):not(:has(.tc-stok-birakma)) .tc-stok-sepet-govde { display: none; }
+  .tc-stok-sepet-bolme:not([data-acik]):not(:has(.tc-stok-birakma)) .tc-stok-sepet-ozet { display: block; }
+  .tc-stok-sepet-bolme:not([data-acik]):not(:has(.tc-stok-birakma)) .tc-stok-sepet-ipucu { display: none; }
+  .tc-stok-sepet-bolme:not(:has(.tc-stok-birakma)) .tc-stok-sepet-ac { display: inline-flex; }
+  .tc-stok-sepet-govde { max-block-size: var(--ekran-boy-40); overflow-y: auto; }
+}
 .tc-stok-birakma-hedef { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
 .tc-stok-birakma-hedef > div { display: grid; gap: var(--b-1); }
 .tc-stok-birakma-satir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8rem); align-items: end; gap: var(--b-2); }
@@ -672,13 +698,13 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 /* 3085: Okut paneli düzeni. Dar ekranda gelen + sepet, okuyucu + okutulan, kutucuklar + Son yaptıklarım alt alta; genişte iki sütun. */
 .tc-stok-okut-duzen { display: grid; gap: var(--b-4); }
 .tc-stok-okut-yan, .tc-stok-okut-ana, .tc-stok-okut-alt { display: grid; gap: var(--b-3); align-content: start; min-inline-size: 0; }
-.tc-stok-okut-yan .tc-stok-sepet-serit { position: static; }
 @media (min-width: 760px) {
-  .tc-stok-okut-duzen { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-areas: "ana yan" "ana alt"; align-items: start; }
-  .tc-stok-okut-duzen:not(:has(.tc-stok-okut-yan)) { grid-template-areas: "ana alt"; }
+  .tc-stok-okut-duzen { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: "ana yan" "ana sepet" "alt alt"; align-items: start; }
+  .tc-stok-okut-duzen:not(:has(.tc-stok-okut-yan)) { grid-template-rows: 1fr auto; grid-template-areas: "ana sepet" "alt alt"; }
   .tc-stok-okut-yan { grid-area: yan; }
   .tc-stok-okut-ana { grid-area: ana; }
   .tc-stok-okut-alt { grid-area: alt; }
+  .tc-stok-okut-duzen > .tc-stok-sepet-bolme { grid-area: sepet; }
 }
 .tc-stok-akis-adimlar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-1); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); color: var(--muted); }
 .tc-stok-akis-adimlar li { display: flex; align-items: center; justify-content: center; gap: var(--b-1); padding: var(--b-1) var(--b-2); border-block-end: var(--cizgi) solid var(--edge); }

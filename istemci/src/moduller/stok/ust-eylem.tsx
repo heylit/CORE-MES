@@ -25,10 +25,10 @@ import { OkutarakAl } from './OkutarakAl.tsx';
 import { OkutmaSonucu, type Okunan, type SonucEylemi } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useAcilanKartBildirimi } from './kart-bildirimi.tsx';
-import { bekleyenPanelIstegi, MALZEME_PANELI_AC, type PanelIstegi } from './panel-olayi.ts';
+import { bekleyenPanelIstegi, MALZEME_PANELI_AC, paneliAc, type PanelIstegi } from './panel-olayi.ts';
 import { PanelMalKabul } from './PanelMalKabul.tsx';
 import { PanelSevk } from './PanelSevk.tsx';
-import { SepetSeridi, useTasimaSepeti } from './TasimaSepeti.tsx';
+import { SepetBolmesi, SepetIkonu, useTasimaSepeti } from './TasimaSepeti.tsx';
 import { KonumSatiri, SonYaptiklarim, useSonIslemlerim } from './OkutDuzeni.tsx';
 import { DepoSepeti } from './Sepet.tsx';
 import { GelenTeslim, OncekiSepetSatiri, RotayaGoreGonder, SepetSatiri } from './sepet-satirlari.tsx';
@@ -129,6 +129,9 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
   const [sifir, setSifir] = useState(0);
   const kutu = useQuery({ queryKey: KUTU, queryFn: () => api.get<TeslimKutusuCevabi>('/stok/teslim-kutusu') });
   const tasimaSepeti = useTasimaSepeti();
+  // 3339 a: dar ekranda sepet çekmecesi; üst çubuktaki sepet ikonuyla açılınca açık gelir.
+  const [cekmece, setCekmece] = useState(istek?.sekme === 'sepet');
+  const [birakmaYeri, setBirakmaYeri] = useState<HTMLDivElement | null>(null);
   // Bulunduğum istasyon (1338 a, madde 1): panelde tek seçim; Bana gelen, sepet, Malzeme iste ve Teslim et bunu kullanır.
   const oturum = useOturum().data;
   const kisiId = oturum?.id ?? null;
@@ -169,9 +172,9 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
     : gorunum === 'istenen' ? <IstasyonIstekleri istenenler={kutu.data.bendenIstenenler ?? []} alinanlar={(kutu.data.okutarakAlinanlar ?? []).filter((t) => !hedefTarafi(kutu.data, t))} />
     : <MalzemeIste key={okunan?.sira ?? 0} kutu={kutu.data} okunan={okunan} istasyonId={istasyonId} />;
   const yer = kutu.data ? <KonumSatiri kutu={kutu.data} istasyonId={istasyonId} sec={istasyonSec} depocu={depocu} /> : null;
-  const serit = <SepetSeridi satirlar={tasimaSepeti.data?.satirlar ?? []} />;
-  // 3085 (Kurgu 4): dar ekranda gelen teslim ve sepet okuyucunun üstünde, kutucuklar ve Son yaptıklarım altında;
-  // genişte sol sütun okuyucu ve okutulan, sağ sütun gelen, sepet, kutucuklar ve Son yaptıklarım.
+  const sepetBolmesi = <SepetBolmesi satirlar={tasimaSepeti.data?.satirlar} acik={cekmece} degistir={setCekmece} birakmaYeri={setBirakmaYeri} />;
+  // 3339 a: okuyucu ve sepet ayrı bölmeler. Genişte sol sütun okuyucu, sağ sütun gelen teslim ve hep açık sepet, altta kutucuklar ve
+  // Son yaptıklarım; dar ekranda sepet panelin altında sabit çubuk (Aç ile çekmece), okuyucu dinlemeyi sürdürür.
   const gelenler = kutu.data?.gelenler ?? [];
   return (
     <Pencere acik kapat={kapat} baslik={gorunum === 'ana' ? 'Okut' : GORUNUM_BASLIGI[gorunum]} tur="yan" genis>
@@ -187,15 +190,14 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
               : mod === 'topla' ? <ToplaModu ustKomut={panelKomutu} />
               : (
                 <div className="tc-stok-okut-duzen">
-                  {(gelenler.length > 0 || (tasimaSepeti.data?.satirlar.length ?? 0) > 0) && (
+                  {gelenler.length > 0 && (
                     <div className="tc-stok-okut-yan">
-                      {gelenler.length > 0 && <GelenlerKarti gelenler={gelenler} ac={() => git('al')} />}
-                      {serit}
+                      <GelenlerKarti gelenler={gelenler} ac={() => git('al')} />
                     </div>
                   )}
                   <div className="tc-stok-okut-ana">
                     <OkutAlani key={mod} kamerali sepetli komut={panelKomutu} teslimEteGec={(hedef) => { setGorunum('et'); setKisiHedefi((k) => ({ hedef, sira: (k?.sira ?? 0) + 1 })); }}
-                      {...(mod === 'otomatik' ? { okundu, sonuc } : {})} sifir={sifir} {...(kutu.data ? { kutu: kutu.data } : {})} kayitlar={sonIslemler.data?.islemler ?? []}>
+                      {...(mod === 'otomatik' ? { okundu, sonuc } : {})} sifir={sifir} {...(kutu.data ? { kutu: kutu.data } : {})} kayitlar={sonIslemler.data?.islemler ?? []} birakmaYeri={birakmaYeri}>
                       {mod === 'otomatik' ? null : <p className="tc-stok-not">Malzeme ya da lot okut, sepete düşer; sonra bırakacağın yeri ya da alacak kişiyi okut.</p>}
                     </OkutAlani>
                   </div>
@@ -203,6 +205,7 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
                     {mod === 'otomatik' && <>{yer}{icerik}</>}
                     <SonYaptiklarim sorgu={sonIslemler} />
                   </div>
+                  {sepetBolmesi}
                 </div>
               )}
           </>
@@ -213,7 +216,7 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
               {yer}
             </div>
             {icerik}
-            {serit}
+            {sepetBolmesi}
           </>
         )}
       </div>
@@ -932,7 +935,22 @@ function MalzemeIste({ kutu, okunan, istasyonId }: { kutu: TeslimKutusuCevabi; o
   );
 }
 
+// Sepet ikonu (3339 a): sepet doluyken üst çubukta kalem sayısıyla durur; basınca Okut paneli sepet açık gelir. Boşken yer tutmaz.
+function SepetDugmesi() {
+  const sepet = useTasimaSepeti(true, 60_000);
+  const sayi = sepet.data?.satirlar.length ?? 0;
+  if (sayi === 0) return null;
+  const etiket = `Sepetim, ${sayi} kalem`;
+  return (
+    <button type="button" className="tc-kabuk-tema tc-stok-teslim-dugme" onClick={() => paneliAc({ sekme: 'sepet' })} aria-haspopup="dialog" aria-label={etiket} title={etiket}>
+      <SepetIkonu sayi={sayi} />
+    </button>
+  );
+}
+
 export const ustEylemler: readonly UstEylem[] = [
   // Terminalde de görünür (2137-1 a): operatör teslim ve malzeme isteğine terminalden ulaşır.
   { anahtar: 'malzeme-teslim', sira: 100, islem: 'stok.istek', seritte: true, dugme: TeslimDugmesi },
+  // Sepet ikonu Okut'un solunda durur (sira küçük önce).
+  { anahtar: 'tasima-sepeti', sira: 99, islem: 'stok.istek', seritte: true, dugme: SepetDugmesi },
 ];

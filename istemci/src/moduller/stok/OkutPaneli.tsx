@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, SepetCevabi, SonIslem, TeslimCevabi, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Rozet, useOkutmaGecmisi, type KomutIsleyici } from '../../ortak/arayuz/index.ts';
@@ -42,10 +43,11 @@ const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.i
 // `komut` (1909, 1912): okuyucunun komut barkodu işleyicisi (Okut panelinde mod seçimi).
 // 3085: `sonuc` okutulan kartını çizer; `ust` (adım şeridi, sepet durumu, ana eylem) kartın başlığının altına girer, `sepette` kartın
 // "Depo sepetine ekle"yi gizlemesi içindir. `kutu` Listeden seç'in yerleridir; `kayitlar` sonuç kartının Yolda -> Alındı dönüşünü okur.
-export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, sepetli = false, komut, kutu, kayitlar, children }: {
+// `birakmaYeri` (3339 a): verilirse bırakma formu okuyucunun altında değil orada (sepet bölmesi) açılır; davranış aynıdır.
+export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, sepetli = false, komut, kutu, kayitlar, birakmaYeri = null, children }: {
   teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number;
   sonuc?: ((ust: ReactNode, sepette: boolean) => ReactNode) | null; kamerali?: boolean; sepetli?: boolean;
-  komut?: KomutIsleyici; kutu?: TeslimKutusuCevabi; kayitlar?: readonly SonIslem[]; children: ReactNode;
+  komut?: KomutIsleyici; kutu?: TeslimKutusuCevabi; kayitlar?: readonly SonIslem[]; birakmaYeri?: HTMLElement | null; children: ReactNode;
 }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonucMetni] = useState<string | null>(null);
@@ -159,6 +161,9 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
   };
   const okuyucuyaDon = () => { okuyucuKutusu.current?.scrollIntoView?.({ block: 'start' }); kodAlaninaOdak(); };
   useEffect(() => { if (!birakHedefi && durum.adim !== 'onay') kodAlaninaOdak(); }, [islemSonucu, sepeteAlinan, sonCevap, birakHedefi, durum.adim]);
+  // 3339: dar ekranda sepet altta sabit çubuktur; sepete alınınca kartın ana eylemi çubuğun altında kalmasın (kaydırma payı CSS'te).
+  const sonucSonu = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (sepeteAlinan || zatenSepette) sonucSonu.current?.scrollIntoView?.({ block: 'nearest' }); }, [sepeteAlinan, zatenSepette]);
   // Aynı kod 2 sn içinde ikinci kez gelirse yok sayılır (kameradaki kural el okuyucuya da; ARASTIRMA K-E); sunucuda sepet tavanı ayrıca korur.
   const sonKod = useRef<{ kod: string; an: number } | null>(null);
   const okut = (kod: string) => {
@@ -213,6 +218,10 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
       {listeAcik && kutu && <HedefListesi kutu={kutu} sec={birakmaAc} kapat={() => setListeAcik(false)} />}
     </div>
   );
+  const birakma = (h: OkutHedefi) => (
+    <Birakma key={birakmaAnahtari(h)} hedef={h} satirlar={sepetSatirlari} okutma={birakOkutma} gonder={birakGonder}
+      bitti={(x) => { birakAc(null); setSonuc(x); }} vazgec={() => birakAc(null)} />
+  );
   const sonucAlani = islemSonucu ? <SonucKarti sonuc={islemSonucu} kayitlar={kayitlar ?? []} yeniOkut={() => { setIslemSonucuHam(null); okuyucuyaDon(); }} /> : null;
   // Tek kart (614 1a): okutmanın sonuç kartı varken "nereye" adımı ayrı adım şeridi açmaz; sonraki okutma nereyedir.
   const tekKart = sonucKarti != null && durum.adim === 'nereye';
@@ -240,11 +249,9 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         {sonucAlani}
         {/* Bırakma açıkken okutulan kartı gizlenir: tek birincil "bırak" kalır (Arayüz K2). */}
         {!islemSonucu && !birakHedefi && sonucKarti ? sonucKarti(akis, sepetDolu) : !islemSonucu && akis && <section className="tc-stok-is tc-stok-okut-sonuc">{akis}</section>}
+        <div ref={sonucSonu} className="tc-stok-okut-son" aria-hidden="true" />
       </div>
-      {birakHedefi ? (
-        <Birakma key={birakmaAnahtari(birakHedefi)} hedef={birakHedefi} satirlar={sepetSatirlari} okutma={birakOkutma} gonder={birakGonder}
-          bitti={(x) => { birakAc(null); setSonuc(x); }} vazgec={() => birakAc(null)} />
-      ) : durum.adim === 'ne' || (akis !== null && (durum.adim === 'kaynak-sec' || durum.adim === 'nereye')) ? (durum.adim === 'ne' ? children : null) : (
+      {birakHedefi ? (birakmaYeri ? createPortal(birakma(birakHedefi), birakmaYeri) : birakma(birakHedefi)) : durum.adim === 'ne' || (akis !== null && (durum.adim === 'kaynak-sec' || durum.adim === 'nereye')) ? (durum.adim === 'ne' ? children : null) : (
         <div className="tc-stok-form tc-stok-okut-paneli">
           {!tekKart && <AdimSeridi adim={adim} />}
           {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sepetli={sepetli}

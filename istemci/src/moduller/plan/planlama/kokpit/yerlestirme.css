@@ -121,7 +121,12 @@
 .tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-optablo-kap { order: 1; }
 .tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-yerler { order: 2; }
 .tc-pyq-optablo td[data-ad="Tezgâh"] { min-width: calc(var(--dokunma) * 3); }
+.tc-pyq-optablo .tc-pyq-bag-kisa { display: none; }
+.tc-pyq-optablo td[data-bag="yok"] { color: var(--muted); }
+.tc-pyq-optablo-kap[data-yanda] .tc-pyq-bag-kisa { display: block; }
 @media (max-width: 899px) {
+  .tc-pyq-optablo td[data-ad="Bağımlılık"] { display: none; }
+  .tc-pyq-optablo .tc-pyq-bag-kisa { display: block; }
   .tc-pyq-optablo thead { display: none; }
   .tc-pyq-optablo, .tc-pyq-optablo tbody { display: block; }
   .tc-pyq-optablo tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-1) var(--b-2); padding: var(--b-2) 0; border-bottom: var(--cizgi-ince) solid var(--edge); }
@@ -142,9 +147,9 @@
 }
 
 /* Odaklı tezgâh paneli (3318 a): geniş ekranda tablonun yanında, dar ekranda seçili satırın altında. Yanda dururken tablo daralır:
-   sıra ve süre sütunları gizlenir. */
+   sıra, bağımlılık ve süre sütunları gizlenir; bağımlılık operasyon adının altındaki kısa yazıdır. */
 .tc-pyq-optablo-kap[data-yanda] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--b-6) * 9)); gap: var(--b-3); align-items: start; }
-.tc-pyq-optablo-kap[data-yanda] .tc-pyq-optablo tr:not(.tc-pyq-optablo-alt) > :is(th, td):is(:nth-child(1), :nth-child(3)) { display: none; }
+.tc-pyq-optablo-kap[data-yanda] .tc-pyq-optablo tr:not(.tc-pyq-optablo-alt) > :is(th, td):is(:nth-child(1), :nth-child(3), :nth-child(4)) { display: none; }
 .tc-pyq-odak { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); font-size: var(--yazi-s); }
 .tc-pyq-optablo-odak .tc-pyq-odak { width: 100%; }
 .tc-pyq-odak-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }

@@ -14,7 +14,7 @@ const is = (id: string, m: string, S: number, C: number): KokpitIsi => ({ id, jo
 const PLANLI: KokpitEmri = { id: '1', no: 'ORN-UE-1', urun: 'ORN-Flanş', adet: 8, termin: 60, bitis: 12, durum: 'iyi', gecikme: -48, adimlar: [{ id: '1.10', ad: 'Torna', adaylar: ['T1'] }] };
 const YENI: KokpitEmri = {
   id: '2', no: 'ORN-UE-2', urun: 'ORN-Burç', adet: 40, termin: 40, bitis: null, durum: 'plansiz', gecikme: null,
-  adimlar: [{ id: '2.10', ad: 'Torna', adaylar: ['T1', 'T2'] }, { id: '2.20', ad: 'Kaplama', adaylar: ['@F1'] }, { id: '2.30', ad: 'Freze', adaylar: ['F1', 'F2'] }],
+  adimlar: [{ id: '2.10', ad: 'Torna', adaylar: ['T1', 'T2'] }, { id: '2.20', ad: 'Kaplama', adaylar: ['@F1'], onculler: [['2.10', 'b']] }, { id: '2.30', ad: 'Freze', adaylar: ['F1', 'F2'], onculler: [['2.20', 'o']] }],
 };
 const M: KokpitModeli = {
   simdi: 8, tezgahlar: ['T1', 'T2', 'F1', 'F2'].map((id) => ({ id, kod: `ORN-${id}`, ad: '', fason: false })),
@@ -136,7 +136,7 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     const adim = screen.getByRole('button', { name: /Torna/ });
     const satir = screen.getByRole('region', { name: 'Emirler ve operasyonlar' }).querySelector('[data-adim-satir="1.10"]') as HTMLElement;
     expect((within(satir).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement).value).toBe('T1');
-    expect([...satir.querySelectorAll('td')].map((d) => d.textContent)).toEqual(['1', 'Torna', '4 sa', 'ORN-T1', '01.01 Pzt 08:00', '01.01 Pzt 12:00', 'Yerleşti']);
+    expect([...satir.querySelectorAll('td')].map((d) => d.textContent)).toEqual(['1', 'Torna', 'öncül yok', '4 sa', 'ORN-T1', '01.01 Pzt 08:00', '01.01 Pzt 12:00', 'Yerleşti']);
     fireEvent.click(adim);
     expect(adimAc).toHaveBeenCalledWith('1', '1.10');
     expect(oz).not.toHaveBeenCalled();
@@ -347,7 +347,10 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
   it('operasyonlar tabloda: sütunlar sabit, fason adımda giriş yok, yerleşmemiş adımda sistemin öngörüsü; "Akış" eski kutulara döner', async () => {
     onizlemeKur();
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
-    expect([...bolum().querySelectorAll('thead th')].map((h) => h.textContent)).toEqual(['#', 'Operasyon', 'Süre', 'Tezgâh', 'Başlangıç', 'Bitiş', 'Durum']);
+    expect([...bolum().querySelectorAll('thead th')].map((h) => h.textContent)).toEqual(['#', 'Operasyon', 'Bağımlılık', 'Süre', 'Tezgâh', 'Başlangıç', 'Bitiş', 'Durum']);
+    // Bağımlılık (3330): öncül sıra numarası ve adıyla; sütun geniş ekranda, kısa yazı dar ekranda görünür (ikisi de DOM'dadır).
+    expect(['2.10', '2.20', '2.30'].map((id) => satir(id).querySelector('td[data-ad="Bağımlılık"]')?.textContent)).toEqual(['öncül yok', '1 Torna · bitince', '2 Kaplama · örtüşmeli (bitmeden başlayabilir)']);
+    expect(['2.10', '2.20', '2.30'].map((id) => satir(id).querySelector('.tc-pyq-bag-kisa')?.textContent ?? null)).toEqual([null, '1 Torna bitince', '2 Kaplama ile örtüşmeli']);
     expect(within(satir('2.10')).getByRole('combobox', { name: 'Torna tezgâhı' }).querySelectorAll('option')).toHaveLength(3);
     expect(within(satir('2.10')).getByRole('combobox', { name: 'Torna tezgâhı' }).querySelector('option')?.textContent).toBe('Sistem seçsin');
     expect(satir('2.20').querySelector('select, input')).toBeNull();
@@ -364,6 +367,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Operasyon görünümü' })).getByRole('button', { name: 'Akış' }));
     expect(bolum().querySelector('table')).toBeNull();
     expect(bolum().querySelector('[data-adim="2.10"]')?.textContent).toContain('yerleşmedi');
+    expect(bolum().querySelector('[data-adim="2.30"] [data-bag-kisa]')?.textContent).toBe('2 Kaplama ile örtüşmeli');
   });
 
   it('akış görünümünde seçilen tezgâh kutuda yazar', async () => {
