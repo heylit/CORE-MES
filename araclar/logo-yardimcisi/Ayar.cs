@@ -26,11 +26,13 @@ namespace LogoYardimcisi
         public int? DenemeHedefAmbar;
         // Kart 2987: satın alma siparişi içeriği okuması (fiyat taşır). Varsayılan kapalı; yalnız "siparis_icerigi=acik" açar.
         public bool SiparisIcerigi;
+        // 3315: Logo Objects'te proje kartı veri nesnesinin numarası. Gerçek Logo'da ölçülmedi; yazılmazsa proje uçları kapalıdır (501).
+        public int? ProjeNesnesi;
 
         static readonly string[] Adlar =
         {
             "port", "anahtar", "logo_kullanici", "logo_parola", "firma_no", "donem_no", "sql_baglanti", "ambar_no", "isyeri_no",
-            "deneme_satici", "deneme_alici", "deneme_hedef_ambar", "siparis_icerigi",
+            "deneme_satici", "deneme_alici", "deneme_hedef_ambar", "siparis_icerigi", "proje_nesnesi",
         };
 
         public static Ayar DosyadanOku(string yol)
@@ -72,6 +74,7 @@ namespace LogoYardimcisi
             var icerik = Metin(d, "siparis_icerigi", false) ?? "kapali";
             if (icerik != "acik" && icerik != "kapali") throw new GecersizIstek("Ayar geçersiz: siparis_icerigi 'acik' ya da 'kapali' olmalı.");
             a.SiparisIcerigi = icerik == "acik";
+            if (Metin(d, "proje_nesnesi", false) != null) a.ProjeNesnesi = Tam(d, "proje_nesnesi", 0, 9999, null);
             return a;
         }
 

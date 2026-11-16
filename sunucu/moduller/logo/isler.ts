@@ -7,6 +7,7 @@ import {
 } from '../satin-alma/disari.ts';
 import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
+import { emirlerinProjeleri } from '../uretim-emirleri/disari.ts';
 import { disDuzeltmeAcik, ortamKoprusu } from './baglanti.ts';
 import { disDuzeltmeTuru, disSiparisOku } from './dis-siparis.ts';
 import type { DisDuzeltmeOrtami } from './dis-siparis.ts';
@@ -20,6 +21,9 @@ import type { DisSiparisCevabi, LogoKartAlislariCevabi, LogoKartHareketleriCevab
 import { kartAlislari, kartHareketleri } from './kart-bolumu.ts';
 import { yardimciSurumunuSor } from './yardimci-surumu.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { projeSecenekleri } from '../projeler/disari.ts';
+import { projeTuru } from './proje.ts';
+import type { ProjeKaynagi, ProjeTurOrtami } from './proje.ts';
 
 const YARDIMCI_SURUM_ARALIGI_MS = 60 * 60 * 1000;
 
@@ -48,6 +52,12 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
     case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali': case 'kullanim-kapali': case 'dis-duzeltme-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
+    case 'proje-kapali':
+      return isBekliyor(BEKLEME_NEDENLERI['proje-kapali']);
+    case 'proje-kurulum-bekliyor':
+      return isBekliyor(sonuc.ileti);
+    case 'proje': case 'proje-niyet':
+      return undefined;
     case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'bekletme': case 'karsilama': case 'liste':
     case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
     case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
@@ -80,6 +90,15 @@ export function malzemeFisiIsi(kaynak: MalzemeFisiKaynagi): IsTanimi {
   const fisBellegi = yeniSurecBellegi();
   return kopruIsi('logo-malzeme-fisi-gonderimi', IS_ARALIGI_MS, (vt) => malzemeFisiTuru(vt, { kopru: ortamKoprusu, bellek: fisBellegi, saat: () => new Date(), kaynak }));
 }
+
+// 3315 c: proje kartı; kaynağı projelerin disari.ts'idir (aktif projeler). Belleği ayrıdır: anahtar proje kimliğidir.
+export function projeIsi(kaynak: ProjeKaynagi, kopru: KopruIstemcisi | null = ortamKoprusu): IsTanimi {
+  const o: ProjeTurOrtami = { kopru, bellek: yeniSurecBellegi(), saat: () => new Date(), kaynak, kurulum: { son: null, ileti: null } };
+  return kopruIsi('logo-proje-gonderimi', IS_ARALIGI_MS, (vt) => projeTuru(vt, o));
+}
+const projeKaynagi: ProjeKaynagi = {
+  aktifProjeler: async (db) => (await projeSecenekleri(db, { yalnizAktif: true })).map((p) => ({ id: p.id, kod: p.kod, ad: p.ad })),
+};
 
 // Okuma işleri (logo -> TMI): ayrı bellek; her biri kendi anahtarı açıkken istek atar, okunanı yalnız saklar.
 const okumaBellegi = yeniSurecBellegi();
@@ -119,7 +138,8 @@ export const isler = [
     siparisGidecekler: logoyaGidecekSatisSiparisleri,
     siparisSonucu: satisSiparisiLogoSonucu,
   }),
-  malzemeFisiIsi(stokMalzemeFisiKaynagi({ degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri })),
+  projeIsi(projeKaynagi),
+  malzemeFisiIsi(stokMalzemeFisiKaynagi({ degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri, emirProjeleri: emirlerinProjeleri })),
   kopruIsi('logo-mal-kabul-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malKabulTuru(vt, okumaOrtami())),
   kopruIsi('logo-liste-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => listeOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-fatura-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => faturaTuru(vt, okumaOrtami())),

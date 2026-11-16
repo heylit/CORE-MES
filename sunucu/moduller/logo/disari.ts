@@ -20,3 +20,5 @@ export function logoBaglantisiAcikMi(env: Readonly<Record<string, string | undef
 }
 // 3314: güncelleyici (araclar/logo-yardimcisi-guncelle.ts) yeni paketteki yardımcı kaynağının özetini aynı kuralla hesaplar.
 export { pakettekiOzet } from './yardimci-surumu.ts';
+// 3315 madde 7: proje değişti olayı (sunucu/kablolama.ts bağlar); duran proje yeniden sıraya girer.
+export { projeDegisti as logoProjesiDegisti } from './proje.ts';

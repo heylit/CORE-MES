@@ -45,6 +45,14 @@ namespace LogoYardimcisi
         List<string> AlanDokumu(int nesne, int kayit);
     }
 
+    // 3315: Logo'daki proje kartı (kayıt numarası, kod, ad).
+    public sealed class ProjeKaydi
+    {
+        public int Ref;
+        public string Kod;
+        public string Ad;
+    }
+
     public sealed class KodAd
     {
         public string Kod;
@@ -274,6 +282,8 @@ namespace LogoYardimcisi
         List<KodAd> Ambarlar();
         List<KodAd> Cariler();
         int CariRef(string kod);
+        // 3315: proje kartı koduyla; yoksa null. Tablo adı gerçek Logo'da ölçülmedi (kurulum/logo-yardimcisi.md).
+        ProjeKaydi Proje(string kod);
         HizmetKaydi Hizmet(string kod, int kartTuru);
         FisBasligi Siparis(string no, int trcode);
         FisBasligi SiparisRefIle(int kayit, int trcode);

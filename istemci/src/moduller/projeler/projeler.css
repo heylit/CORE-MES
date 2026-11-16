@@ -51,6 +51,8 @@ button.tc-prj-pano-kart { cursor: pointer; }
   .tc-prj-liste-tablo [data-kip="kart"] .tc-tablo td:is([data-baslik="Müşteri"], [data-baslik="Başlangıç"], [data-baslik="Bitiş"]) { display: none; }
 }
 /* 3244: bitiş ve kalem termini yanında bağ işareti; sipariş kalemlerinde parti çipleri ve kalemden açılan emirler. */
+.tc-prj-logo-kod { font-family: var(--font-mono); user-select: all; }
+.tc-prj-logo-not { color: var(--muted); }
 .tc-prj-bag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; }
 .tc-prj-tarih { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tc-prj-parti-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-1); }

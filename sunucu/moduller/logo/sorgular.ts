@@ -9,7 +9,7 @@ import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAn
 export type FisTuru = LogoFisTuru;
 export const GIDEN_BELGELERI = [
   'malzeme', 'hizmet', 'malzeme-guncelleme', 'siparis', 'siparis-guncelleme', 'siparis-kapatma', 'siparis-bekletme', 'siparis-iptal', 'talep', 'karsilama',
-  'satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi',
+  'satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi', 'proje',
 ] as const;
 export type BelgeTuru = (typeof GIDEN_BELGELERI)[number] | FisTuru;
 export const belgeTuruMu = (b: string): b is BelgeTuru => (GIDEN_BELGELERI as readonly string[]).includes(b) || (LOGO_FIS_TURLERI as readonly string[]).includes(b);
@@ -93,6 +93,16 @@ export async function denemeYaz(db: Db, belgeTuru: BelgeTuru, no: number, d: Den
        ardisik_hata = CASE WHEN $10 THEN 0 ELSE g.ardisik_hata + 1 END,
        son_deneme = $3, son_sonuc = $4, son_hata = $5, sonraki_deneme = $6, logo_kayit_no = $7`,
     [belgeTuru, no, d.zaman, d.sonuc, d.hata, sonrakiDenemeYazilir(d.sonuc, d.sonrakiDeneme), d.logoKayitNo, d.niyetZamani !== undefined, d.niyetZamani ?? null, d.basarili, ...islemDegeri(belgeTuru, islem)],
+  );
+}
+
+// 3315: Logo'da açılmış ya da bağlanmış projeler (kimlik ve Logo kaydı); kuyruktan düşülür, proje kartında gösterilir.
+export function logodakiProjeler(db: Db, nolar?: readonly number[]): Promise<{ belgeNo: number; logoKayitNo: string }[]> {
+  return db.sorgu<{ belgeNo: number; logoKayitNo: string }>(
+    `SELECT belge_no AS "belgeNo", logo_kayit_no AS "logoKayitNo" FROM logo_giden
+      WHERE belge_turu = 'proje' AND islem = 'gonder' AND son_sonuc IN ('gonderildi', 'zaten-vardi') AND logo_kayit_no IS NOT NULL
+        AND ($1::int[] IS NULL OR belge_no = ANY($1::int[]))`,
+    [nolar ?? null],
   );
 }
 

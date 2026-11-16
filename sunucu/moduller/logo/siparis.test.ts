@@ -445,6 +445,39 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await bekleyenler(), [], 'kart gidince izlemeden düşer');
   });
 
+  test('LGS-30 (3315 a) projesi Logo\'ya gitmemiş talep ve sipariş "Proje bekliyor"; proje gidince proje koduyla gider; anahtar kapalıyken projesiz gider', async () => {
+    const projeId = (await vt().tek<{ id: number }>(
+      `INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('ORN.LGS30', 'Deneme proje', (SELECT id FROM kisi WHERE kullanici_adi = 'ls-yonetici')) RETURNING id`))!.id;
+    const t = talepEkle();
+    kaynak.talepler.set(t.id, { ...kaynak.talepler.get(t.id)!, projeId });
+    const sip = siparisEkle({ projeId });
+    const bellek = yeniSurecBellegi();
+    await ayar('logo.proje-gonderimi', true);
+    try {
+      const once = kopru.istekler.length;
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
+      assert.equal(kopru.istekler.length, once, 'köprüye istek yok');
+      assert.match(kaynak.talepler.get(t.id)?.hata ?? '', /^Proje bekliyor: ORN\.LGS30\./);
+      assert.equal(await giden('talep', t.id), null, 'deneme sayılmaz');
+      const izleme = await vt().tx((db) => gidenIzleme(db, new Date(simdi)));
+      assert.equal(izleme.sayac.projeBekliyor, 2, 'sunucu sayacı (Test T7)');
+      const iz = izleme.belgeler.filter((b) => b.durum === 'proje-bekliyor');
+      assert.deepEqual(iz.map((b) => `${b.belge}:${b.no}`).sort(), [`siparis:${sip.id}`, `talep:${t.id}`].sort());
+      assert.equal(iz[0]?.neden, 'ORN.LGS30 Logo\'ya gidince belge kendiliğinden gider.', 'neden durumu tekrarlamaz');
+      await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, son_deneme, son_sonuc, logo_kayit_no) VALUES ('proje', $1, 1, now(), 'gonderildi', '7001')`, [projeId]);
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep-niyet', no: t.id });
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
+      assert.equal((kopru.istekler.find((i) => i.yol === '/api/DemandFiche/AddRich')?.govde as Record<string, unknown>).projectCode, 'ORN.LGS30');
+      await ayar('logo.proje-gonderimi', false);
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: sip.id });
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: sip.id, sonuc: 'gonderildi' });
+      assert.equal('projectCode' in (kopru.istekler.find((i) => i.yol === '/api/PurchaseOrder/AddRich')?.govde as object), false, 'kapalıyken projesiz');
+    } finally {
+      await ayar('logo.proje-gonderimi', false);
+      await vt().sorgu("DELETE FROM logo_giden WHERE belge_turu = 'proje'");
+    }
+  });
+
   test('LGS-28 (3313 Test T2) Logo reddedip duran satın alma siparişi, satın alma onu yeniden "bekliyor" verince sonraki turda gider; deneme geçmişi kalır', async () => {
     const s = siparisEkle();
     kopru.senaryo = 'dogrulama';

@@ -97,13 +97,14 @@ export function BaglantiIzleme() {
               <Rozet ton="hata">{say.durdu} durdu</Rozet>
               <Rozet ton="uyari">{say['yeniden-denenecek']} yeniden</Rozet>
               <Rozet ton="bilgi">{say['kart-bekliyor']} kart bekliyor</Rozet>
+              {say['proje-bekliyor'] > 0 && <Rozet ton="bilgi">{say['proje-bekliyor']} proje bekliyor</Rozet>}
             </div>
           </div>
         </section>
       </div>
       <div className="tc-guvenlik-cipler" role="group" aria-label="Görünüm">
         {([['gitmeyen', `Gitmeyenler ${gitmeyen}`], ['durdu', `Durdu ${say.durdu}`], ['yeniden-denenecek', `Yeniden denenecek ${say['yeniden-denenecek']}`],
-          ['kart-bekliyor', `Kart bekliyor ${say['kart-bekliyor']}`], ['sirada', `Sırada ${say.sirada}`], ['akislar', 'Akışlar']] as const).map(([g, metin]) => (
+          ['kart-bekliyor', `Kart bekliyor ${say['kart-bekliyor']}`], ['proje-bekliyor', `Proje bekliyor ${say['proje-bekliyor']}`], ['sirada', `Sırada ${say.sirada}`], ['akislar', 'Akışlar']] as const).map(([g, metin]) => (
           <Dugme key={g} className="tc-guvenlik-cip" aria-pressed={g === gorunum} onClick={() => gorunumYaz(g)}>{metin}</Dugme>
         ))}
       </div>

@@ -2946,7 +2946,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(kuyruk.map((x) => x.id), [ia, ib].sort((x, y) => x - y));
     const A = kuyruk.find((x) => x.id === ia)!;
     assert.deepEqual({ ...A, satirlar: undefined }, {
-      id: ia, no: siparisi(s, a).no, tarih: '2026-10-07', firmaId: firmaA, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0', termin: null, durum: 'bekliyor', satirlar: undefined,
+      id: ia, no: siparisi(s, a).no, tarih: '2026-10-07', firmaId: firmaA, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0', termin: null, durum: 'bekliyor', projeId: null, satirlar: undefined,
     });
     assert.deepEqual(A.satirlar, [{ satirId: siparisi(s, a).satirlar[0]!.id, stokKodu: 'HM-SAT-00004', hizmet: false, miktar: '4', birim: 'adet', birimFiyat: '5' }]);
     // Siparişe dönmemiş talebin siparişi yoktur; kuyruğa sipariş verilmeden girilmez.
@@ -3080,7 +3080,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([siparisi(fiyat, a).logo?.guncellemeDurumu, siparisi(fiyat, b).logo?.guncellemeDurumu], ['bekliyor', null]);
     const [g] = await guncellemeKuyrugu([ia, ib]);
     assert.deepEqual({ ...g!, satirlar: undefined }, {
-      id: ia, no: siparisi(s, a).no, tarih: '2026-10-07', firmaId: firmaA, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0', termin: null, durum: 'bekliyor',
+      id: ia, no: siparisi(s, a).no, tarih: '2026-10-07', firmaId: firmaA, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0', termin: null, durum: 'bekliyor', projeId: null,
       logoKayitNo: '5001', kaldirilanSatirRefleri: [], satirlar: undefined,
     });
     assert.deepEqual(g!.satirlar, [{ satirId: satirA, stokKodu: 'HM-SAT-00004', hizmet: false, miktar: '4', birim: 'adet', birimFiyat: '5.5', logoSatirRef: '9001' }]);
@@ -3360,7 +3360,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const id = await talepNo(s.id);
     const [n1, n2] = [await kalemNo(s.id, k1), await kalemNo(s.id, k2)];
     const [t] = await talepKuyrugu([id]);
-    assert.deepEqual({ ...t!, satirlar: undefined, tarih: undefined }, { id, no: s.no, ihtiyacTarihi: s.ihtiyacTarihi, durum: 'bekliyor', satirlar: undefined, tarih: undefined });
+    assert.deepEqual({ ...t!, satirlar: undefined, tarih: undefined }, { id, no: s.no, ihtiyacTarihi: s.ihtiyacTarihi, durum: 'bekliyor', projeId: null, satirlar: undefined, tarih: undefined });
     assert.equal(t!.tarih, (await vt().tx((db) => db.tek<{ g: string }>("SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date::text AS g")))!.g);
     assert.deepEqual(t!.satirlar.map((r) => [r.satirId, r.miktar, r.birim]), [[n1, '10', 'adet'], [n2, '4', 'adet']]);
     assert.equal(t!.satirlar[1]!.stokKodu, 'HM-SAT-00004');

@@ -113,7 +113,7 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
     const c = r.json() as { sayac: Record<string, number>; belgeler: Record<string, unknown>[]; kesildi: boolean };
     const ozet = c.belgeler.map((b) => `${String(b.belge)}:${String(b.no)}:${String(b.islem)}:${String(b.durum)}:${String(b.yenidenGonderilebilir)}`).sort();
     assert.deepEqual(ozet, ['malzeme:4:pasif:durdu:true', 'sarf-fisi:5:gonder:durdu:true', 'siparis:1:gonder:durdu:true', 'siparis:2:gonder:yeniden-denenecek:false']);
-    assert.deepEqual(c.sayac, { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 0, sirada: 0 });
+    assert.deepEqual(c.sayac, { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 0, projeBekliyor: 0, sirada: 0 });
     assert.equal(c.kesildi, false);
     const bir = c.belgeler.find((b) => b.belge === 'siparis' && b.no === 1)!;
     assert.equal(bir.neden, 'Logo reddetti: Deneme');

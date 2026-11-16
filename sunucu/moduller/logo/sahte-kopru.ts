@@ -19,6 +19,7 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 // Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Material/usage (3079), /api/Material/search (3080), /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
 // /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Kartı kullanım dışı bırakma (2114b):
 // POST /api/Material/{ref}/deactivate ve /api/{Purchase|Sales}Service/{ref}/deactivate (gövde { code }). Hepsinin cevap biçimi VARSAYIM.
+// Proje kartı (3315): GET /api/Project/exists/{kod} (yoksa logicalRef 0), POST /api/Project/AddRich { code, name }; ölçüm yokken 501.
 
 const FIS_UCLARI = Object.values(MALZEME_FISI_UCU).join('|');
 const FIS_EKLE = new RegExp(`^/api/MaterialSlip/(Add(?:${FIS_UCLARI}))$`);
@@ -109,6 +110,12 @@ export interface SahteKopru {
   // kayıtsız satır eklenir). Gelen düzeltme gövdeleri sırayla `disGuncellemeler`de.
   disSiparisler: Map<string, Record<string, unknown>>;
   disGuncellemeler: Record<string, unknown>[];
+  // 3315: Logo'daki proje kartları (kod -> kayıt), kod başına açılan sayı. projeNesnesi false iken iki uç yardımcı gibi 501 döner.
+  projeler: Map<string, number>;
+  projeAcilan: Map<string, number>;
+  projeNesnesi: boolean;
+  // Proje uçları olmayan eski yardımcı gibi bilinmeyen yola 404 "Not found" döner.
+  projeUcuYok: boolean;
   kapat(): Promise<void>;
 }
 
@@ -152,6 +159,10 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     siparisler: new Map(),
     disSiparisler: new Map(),
     disGuncellemeler: [],
+    projeler: new Map(),
+    projeAcilan: new Map(),
+    projeNesnesi: true,
+    projeUcuYok: false,
     siparisAcilan: new Map(),
     iptaller: new Map(),
     cariler: new Set(),
@@ -221,6 +232,36 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       }
       if (istek.method === 'GET' && yol === '/api/Material/codes') {
         json(cevap, 200, [...kopru.kartlar.keys()].sort());
+        return;
+      }
+      const projeVarMi = /^\/api\/Project\/exists\/(.+)$/.exec(yol);
+      if ((istek.method === 'GET' && projeVarMi) || (istek.method === 'POST' && yol === '/api/Project/AddRich')) {
+        if (kopru.projeUcuYok) {
+          json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null });
+          return;
+        }
+        if (!kopru.projeNesnesi) {
+          json(cevap, 501, { success: false, logicalRef: 0, error: 'Proje kartı Logo\'da ölçülmedi; ayar dosyasına proje_nesnesi yazılınca açılır (kurulum/logo-yardimcisi.md).', validate: null });
+          return;
+        }
+        if (projeVarMi) {
+          json(cevap, 200, { success: true, logicalRef: kopru.projeler.get(projeVarMi[1] ?? '') ?? 0, error: null, validate: null });
+          return;
+        }
+        const g = (govde ?? {}) as { code?: unknown; name?: unknown };
+        const kod = typeof g.code === 'string' ? g.code : '';
+        if (kod === '' || typeof g.name !== 'string' || g.name === '') {
+          json(cevap, 400, { success: false, logicalRef: 0, error: 'code ve name gerekli.', validate: null });
+          return;
+        }
+        if (kopru.projeler.has(kod)) {
+          json(cevap, 200, { success: false, logicalRef: 0, error: `Bu kodla proje kartı zaten var (logicalRef ${kopru.projeler.get(kod)}).`, validate: null });
+          return;
+        }
+        if (kopru.senaryo === 'dogrulama') { json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['CODE gecersiz'] }); return; }
+        const ref = ac(kopru.projeler, kopru.projeAcilan, kod);
+        if (kopru.senaryo === 'cevap-kayboldu') { istek.socket.destroy(); return; }
+        json(cevap, 200, { success: true, logicalRef: ref, error: null, validate: null });
         return;
       }
       const hizmetVarMi = /^\/sahte\/hizmet-var-mi\/(alinan|verilen)\/(.+)$/.exec(yol);

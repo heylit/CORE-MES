@@ -282,8 +282,8 @@ export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme
 
 // 3313: bağlantı izleme. Başarıyla gitmemiş giden kutusu satırının ekrandaki durumu ve ne yapılacağı tek yerde; "Yeniden gönder" yalnız
 // duran belgede (belirsiz sonuç elle öne alınmaz; kart bekleyen belge kart gidince kendiliğinden gider). Başarılı satır izlemeye girmez (sorgu dışlar).
-export type GidenIzlemeDurumu = 'durdu' | 'yeniden-denenecek' | 'kart-bekliyor' | 'sirada';
-export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null }): Exclude<GidenIzlemeDurumu, 'kart-bekliyor'> {
+export type GidenIzlemeDurumu = 'durdu' | 'yeniden-denenecek' | 'kart-bekliyor' | 'proje-bekliyor' | 'sirada';
+export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null }): Exclude<GidenIzlemeDurumu, 'kart-bekliyor' | 'proje-bekliyor'> {
   if (g.sonSonuc === null) return 'sirada';
   if (durduMu(g)) return 'durdu';
   return SONUC_SINIFI[g.sonSonuc] === 'durdu' ? 'sirada' : 'yeniden-denenecek';
@@ -291,6 +291,7 @@ export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDene
 export const GIDEN_NE_YAPMALI: Readonly<Record<GidenIzlemeDurumu, string>> = Object.freeze({
   durdu: 'Logo reddetti. Nedeni düzeltin (kart, cari, eşleme ya da belge), sonra "Yeniden gönder".',
   'yeniden-denenecek': 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse Logo yardımcısının çalıştığını denetleyin.',
+  'proje-bekliyor': 'Bir şey yapmanız gerekmez: proje Logo\'ya gidince belge kendiliğinden gider. Proje durduysa izlemedeki "Proje kartı" satırına bakın.',
   'kart-bekliyor': 'Eksik kartı Logo\'ya gönderin; kart Logo\'da varsa Logo geçişinde kodla canlı arayıp bağlayın. Belge kendiliğinden gider.',
   sirada: 'Sırada; ilk turda gider.',
 });
@@ -315,6 +316,7 @@ export const GIDEN_BELGE_ADLARI: Readonly<Record<string, string>> = Object.freez
   'siparis-iptal': 'Sipariş iptali', talep: 'Talep fişi', karsilama: 'Talep karşılama', 'satis-teklifi': 'Satış teklifi', 'satis-siparisi': 'Satış siparişi',
   'siparisler-teklifi': 'Satış teklifi', 'siparisler-siparisi': 'Satış siparişi', 'sarf-fisi': 'Sarf fişi', 'uretim-girisi': 'Üretimden giriş fişi',
   'fire-fisi': 'Fire fişi', 'ambar-fisi': 'Ambar transferi', 'sayim-fazlasi': 'Sayım fazlası fişi', 'sayim-eksigi': 'Sayım eksiği fişi',
+  proje: 'Proje kartı',
 });
 export const gidenBelgeAdi = (belge: string, islem: 'gonder' | 'pasif'): string =>
   `${GIDEN_BELGE_ADLARI[belge] ?? belge}${islem === 'pasif' ? ' (pasife alma)' : ''}`;
@@ -330,6 +332,19 @@ export function kartBekliyorMetni(eksik: readonly string[]): string {
   const ilk = eksik.slice(0, 5).join(', ');
   const kalan = eksik.length > 5 ? ` ve ${eksik.length - 5} kart daha` : '';
   return kirp(`Kart bekliyor: ${ilk}${kalan}. Kart Logo'ya gidince (ya da Logo geçişinde bağlanınca) belge kendiliğinden gider.`);
+}
+// 3315 madde 8: belgenin sahibine yazılan tam metin; izlemedeki Neden sütunu durumu tekrarlamaz.
+export const projeBekliyorMetni = (kod: string): string => kirp(`Proje bekliyor: ${kod}. Proje Logo'ya gidince belge kendiliğinden gider.`);
+export const projeBekliyorNedeni = (kod: string): string => kirp(`${kod} Logo'ya gidince belge kendiliğinden gider.`);
+// Gövde kuralı hata verdiyse olduğu gibi döner; proje kodu yalnız doluysa eklenir (yardımcı alanı yoksa yazmaz).
+// 3315 VARSAYIM: satış siparişinin tek projesi varsa onun kodu gider; projesiz ya da çok projeli sipariş projesiz gider.
+export function satisSiparisiProjesi(projeler: readonly { id: number }[]): number | null {
+  return projeler.length === 1 ? projeler[0]!.id : null;
+}
+
+export function projeliGovde<G extends Record<string, unknown>>(r: { govde: G } | { hata: string }, projeKodu: string | null): { govde: G } | { hata: string } {
+  if ('hata' in r || projeKodu === null) return r;
+  return { govde: { ...r.govde, projectCode: projeKodu } };
 }
 export const TALEP_HIZMET_ILETISI = 'Talep fişine hizmet satırı yazılamaz; hizmet satırını talepten çıkarın ya da satın alma siparişiyle gönderin.';
 
@@ -352,6 +367,25 @@ export function kartEylemi(g: GidenDurumu | null, simdi: Date, tazeNiyet: boolea
   if (!g?.niyetZamani) return 'niyet-yaz';
   if (tazeNiyet) return 'gonder';
   return simdi.getTime() - g.niyetZamani.getTime() >= BELIRSIZ_BEKLEME_MS ? 'gonder' : 'bekle';
+}
+
+/* ---------------- Proje kartı (3315 c) ---------------- */
+
+// CORE proje kodu Logo'ya aynen gider (eşleme yok); 24 CORE'un kod kısıtıdır, Logo proje kodu sınırı DOĞRULANMADI (yardımcıda da 24).
+export const PROJE_KODU_EN_COK = 24;
+export const PROJE_AYARI = 'logo.proje-gonderimi';
+export const PROJE_KURULUM_ILETISI = 'Logo yardımcısında proje kartı açık değil (ayar dosyasında proje_nesnesi yok ya da yardımcı eski); projeler bekliyor.';
+export interface GonderilecekProje {
+  id: number;
+  kod: string;
+  ad: string;
+}
+export function projeGovdesi(p: GonderilecekProje): { govde: { code: string; name: string } } | { hata: string } {
+  const kod = p.kod.trim();
+  if (kod === '' || kod.length > PROJE_KODU_EN_COK) return { hata: `Proje kodu 1-${PROJE_KODU_EN_COK} karakter olmalı.` };
+  const ad = p.ad.trim();
+  if (ad === '') return { hata: 'Projenin adı yok.' };
+  return { govde: { code: kod, name: ad } };
 }
 
 /* ---------------- Satın alma siparişi (#205 karar 1; kullanıcının köprü notu, 2.3) ---------------- */
@@ -395,6 +429,8 @@ export interface GonderilecekSiparis {
   iskontoYuzdesi: string;
   termin: string | null;
   satirlar: readonly GonderilecekSiparisSatiri[];
+  // 3315: siparişin CORE projesi (talebinin projesi); yoksa null.
+  projeId?: number | null;
 }
 
 export interface SiparisGovdeSecenegi {
@@ -574,6 +610,8 @@ export interface GonderilecekTalep {
   tarih: string;
   ihtiyacTarihi: string | null;
   satirlar: readonly { satirId: number; stokKodu: string | null; miktar: string; birim: string }[];
+  // 3315: talebin CORE projesi (2611 a); yoksa null.
+  projeId?: number | null;
 }
 
 export function talepGovdesi(t: GonderilecekTalep): { govde: Record<string, unknown> } | { hata: string } {
@@ -749,6 +787,8 @@ export interface GonderilecekSatisSiparisi {
   tarih: string;
   teklifKayitNo: string | null;
   satirlar: readonly { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null }[];
+  // 3315: Siparişler'deki sipariş kimliği; projesi buradan bulunur.
+  siparisId?: number | null;
 }
 
 export function satisSiparisiGovdesi(s: GonderilecekSatisSiparisi): { govde: Record<string, unknown> } | { hata: string } {
@@ -1275,6 +1315,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'satis', yon: 'tmi-logo', baslik: 'Satış teklifi ve siparişi', kaynak: 'bagli', ayarlar: ['logo.satis-gonderimi'],
     belgeTurleri: ['siparisler-teklifi', 'siparisler-siparisi'],
     aciklama: 'Siparişler\'de müşteriye verilen her teklif sürümü SalesOffer olarak, onaylanan sipariş kabul edilen sürümün teklifinden açılır.' },
+  { anahtar: 'proje-karti', yon: 'tmi-logo', baslik: 'Proje kartı', kaynak: 'bagli', ayarlar: ['logo.proje-gonderimi'], belgeTurleri: ['proje'],
+    aciklama: 'Aktif CORE projesi Logo\'da aynı kodla açılır (Project/AddRich); önce "var mı" okunur, varsa bağlanır. Yardımcının ayar dosyasında proje_nesnesi yazılı olmalı.' },
   { anahtar: 'malzeme-fisi', yon: 'tmi-logo', baslik: 'Malzeme fişi', kaynak: 'bagli', ayarlar: ['logo.malzeme-fisi-gonderimi'],
     belgeTurleri: [...LOGO_FIS_TURLERI],
     aciklama: 'Stok\'taki malzeme fişleri (sarf, üretimden giriş, fire, sayım fazlası ve eksiği, ambar transferi) MaterialSlip uçlarıyla gider; her türün gönderim şekli (kapalı, otomatik, elle) ayrı ayardadır. Değişen fiş Logo\'da silinip aynı numarayla yeniden açılır.' },

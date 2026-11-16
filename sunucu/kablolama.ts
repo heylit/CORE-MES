@@ -318,6 +318,8 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş değişti -> ortak dosyalar sipariş klasörü', siparisDegistiDinle, (db: Db, o: { siparisId: number; kullanici: { id: number } }) => siparisEsitle(db, o.kullanici.id, o.siparisId)),
     bag('proje açıldı -> ortak dosyalar proje klasörü', projeler.projeAcildiDinle, (db: Db, o: { projeId: number; kisiId: number }) => projeEsitle(db, o.kisiId, o.projeId)),
     bag('proje değişti -> ortak dosyalar proje klasörü', projeler.projeDegistiDinle, (db: Db, o: { projeId: number; kisiId: number }) => projeEsitle(db, o.kisiId, o.projeId)),
+    // 3315 madde 7: proje kartı kaydedilince Logo'nun reddettiği proje yeniden sıraya girer.
+    bag('proje değişti -> Logo proje kartı', projeler.projeDegistiDinle, (db: Db, o: { projeId: number }) => logo.logoProjesiDegisti(db, o.projeId, new Date())),
     bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),

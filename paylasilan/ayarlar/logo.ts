@@ -52,6 +52,14 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: satın alma gönderimi',
     aciklama: 'Açıkken onaylı satın alma talepleri talep fişi, verilen siparişler satın alma siparişi olarak Logo\'ya gider; düzenleme, kapatma, iptal ve talep karşılaması da gider. Sipariş bekletme ve talep fişi iptali ayrı anahtarla açılır. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
+  // 3315 c, 3315 a: proje kartı Logo Objects nesnesi gerçek Logo'da ölçülmedi; kapalı gelir. Kapalıyken belgeler proje kodu olmadan gider.
+  'logo.proje-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: proje kartı gönderimi',
+    aciklama: 'Açıkken aktif projeler Logo\'da aynı kodla açılır (önce Logo\'da var mı diye bakılır, varsa bağlanır) ve belgeler proje koduyla gider; projesi Logo\'ya gitmemiş belge "Proje bekliyor" olarak bekler. Kapalıyken proje gönderilmez, belgeler proje kodu olmadan gider. "Logo bağlantısı" da açık olmalı. Logo yardımcısında proje nesnesi (proje_nesnesi) ölçülüp yazılmadan açmayın: açılırsa projeli belgeler bekler.',
+  },
   // Satış teklifi gövdesinin adları köprü notunda (2.6), tekliften sipariş ucu notta (2.7); gerçek köprüyle denenince açılır.
   'logo.satis-gonderimi': {
     modul: 'logo',

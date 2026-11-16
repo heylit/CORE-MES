@@ -60,7 +60,12 @@ namespace LogoYardimcisi
             { Nesne.AlinanHizmet, K("DESCRIPTION", Islemler.KayitDurumuAlani) },
             { Nesne.VerilenHizmet, K("DESCRIPTION", Islemler.KayitDurumuAlani) },
             { Nesne.TalepFisi, K("STATUS") },
+            // 3315: proje kartı alanları gerçek Logo'da ölçülmedi; sahte yalnız CODE ve NAME tanır.
+            { ProjeNesnesi, K("CODE", "NAME") },
         };
+
+        // 3315: testte ayar dosyasındaki proje_nesnesi yerine geçen numara.
+        public const int ProjeNesnesi = 9001;
 
         static readonly Dictionary<int, HashSet<string>> AlanSatir = new Dictionary<int, HashSet<string>>
         {
@@ -99,6 +104,7 @@ namespace LogoYardimcisi
         public List<Fis> Fisler = new List<Fis>();
         public List<Karsilama> Pegler = new List<Karsilama>();
         public Dictionary<string, int> CariKartlari = new Dictionary<string, int>();
+        public List<ProjeKaydi> Projeler = new List<ProjeKaydi>();
         public Dictionary<string, string> CrmMusterileri = new Dictionary<string, string>();
         public List<KodAd> Birimler = new List<KodAd>();
         public List<MalKabulSatiri> MalKabulSatirlari = new List<MalKabulSatiri>();
@@ -326,6 +332,17 @@ namespace LogoYardimcisi
                     h = AlanDenetle(AlanSatir[nesne], s);
                     if (h != null) return h;
                 }
+
+            if (nesne == ProjeNesnesi)
+            {
+                var pr = new ProjeKaydi();
+                pr.Ref = YeniRef();
+                pr.Kod = (string)baslik.Deger("CODE");
+                pr.Ad = (string)baslik.Deger("NAME");
+                Projeler.Add(pr);
+                yeniRef = pr.Ref;
+                return null;
+            }
 
             if (nesne == Nesne.TalepKarsilama)
             {
@@ -593,6 +610,8 @@ namespace LogoYardimcisi
         }
 
         public int CariRef(string kod) { int r; return CariKartlari.TryGetValue(kod, out r) ? r : 0; }
+
+        public ProjeKaydi Proje(string kod) { return Projeler.FirstOrDefault(x => x.Kod == kod); }
 
         public HizmetKaydi Hizmet(string kod, int kartTuru)
         {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { satisSiparisiGovdesi, satisTeklifiGovdesi } from './kurallar.ts';
+import { satisSiparisiGovdesi, satisSiparisiProjesi, satisTeklifiGovdesi } from './kurallar.ts';
 import type { GonderilecekSatisSiparisi, GonderilecekSatisTeklifi } from './kurallar.ts';
 
 const teklif: GonderilecekSatisTeklifi = {
@@ -65,5 +65,11 @@ describe('Logo satış teklifi ve tekliften sipariş gövdesi (köprü notu 2.6,
     assert.deepEqual(satisSiparisiGovdesi({ ...siparis, teklifKayitNo: null }), { hata: 'Siparişin teklifi Logo\'da yok.' });
     assert.deepEqual(satisSiparisiGovdesi({ ...siparis, satirlar: [{ ...siparis.satirlar[0]!, teklifSatirRef: null }] }),
       { hata: 'Satır 1: teklif satırı Logo\'da yok.' });
+  });
+
+  test('LGT-12 (3315 Test T4) satış siparişinin projesi: tek projeli sipariş o projeyle, projesiz ve çok projeli sipariş projesiz gider', () => {
+    assert.equal(satisSiparisiProjesi([{ id: 7 }]), 7);
+    assert.equal(satisSiparisiProjesi([]), null);
+    assert.equal(satisSiparisiProjesi([{ id: 7 }, { id: 8 }]), null);
   });
 });

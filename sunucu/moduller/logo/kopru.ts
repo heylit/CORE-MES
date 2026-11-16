@@ -1,5 +1,5 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import { agHatasiniYorumla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
 import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
@@ -68,6 +68,9 @@ export interface KopruIstemcisi {
   malzemeFisiEkle(tur: LogoFisTuru, govde: Record<string, unknown>): Promise<KopruSonucu>;
   // 233: fişi numarasıyla siler (değişen fiş silinip aynı numarayla yeniden açılır); 404 "fiş yok" başarı sayılır (logicalRef null).
   malzemeFisiSil(tur: LogoFisTuru, no: string): Promise<KopruSonucu>;
+  // 3315: proje kartı. Yardımcı proje nesnesi ölçülmeden 501 döner, eski yardımcı yolu tanımaz: ikisi de "kurulum bekliyor"dur (deneme sayılmaz).
+  projeVarMi(kod: string): Promise<KopruSonucu | ProjeKurulumu>;
+  projeEkle(govde: { code: string; name: string }): Promise<KopruSonucu | ProjeKurulumu>;
   // Hizmet "var mı" yolu verildi mi; verilmediyse hizmet açma çift gönderim kalkanının yalnız niyet kısmıyla yapılır.
   readonly hizmetVarMiYoluVar: boolean;
   // Bağlantı kontrolü: yalnız GET, ham durum ve gövde; ağ hatası yorumlanmış döner.
@@ -79,6 +82,8 @@ export type SatirliSonuc = { tur: 'basarili'; logicalRef: number | null; satirRe
 
 // Alınan hizmet: kılavuz (2.2). Verilen hizmet: kılavuz yalnız "/api/SalesService/..." diyor; AddRich VARSAYIM.
 const HIZMET_KOKU: Readonly<Record<HizmetYonu, string>> = { alinan: '/api/PurchaseService', verilen: '/api/SalesService' };
+
+export type ProjeKurulumu = { tur: 'kurulum-bekliyor'; ileti: string };
 
 export type OkumaSonucu<T> = { tur: 'basarili'; veri: T } | Exclude<KopruSonucu, { tur: 'basarili' }>;
 
@@ -185,6 +190,14 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     const c = await istek('GET', yol);
     if (!('tur' in c) && c.durum === 404) return { tur: 'basarili', logicalRef: null };
     return yorumla(c);
+  };
+  const projeCevabi = (c: { durum: number; govde: unknown } | KopruSonucu): KopruSonucu | ProjeKurulumu => {
+    if (!('tur' in c) && c.durum === 501) {
+      const g = zarfMi(c.govde) ? (c.govde as { error?: unknown }).error : null;
+      return { tur: 'kurulum-bekliyor', ileti: typeof g === 'string' && g.trim() !== '' ? kirp(g.trim()) : PROJE_KURULUM_ILETISI };
+    }
+    const r = yorumla(c);
+    return r.tur === 'reddedildi' && r.ileti === ESKI_YARDIMCI_ILETISI ? { tur: 'kurulum-bekliyor', ileti: r.ileti } : r;
   };
   const satirli = (c: { durum: number; govde: unknown } | KopruSonucu): SatirliSonuc => {
     const r = yorumla(c);
@@ -335,6 +348,12 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     },
     async hizmetPasifeAl(yon, no, kod) {
       return yorumla(await istek('POST', `${HIZMET_KOKU[yon]}/${encodeURIComponent(no)}/deactivate`, { code: kod }));
+    },
+    async projeVarMi(kod) {
+      return projeCevabi(await istek('GET', `/api/Project/exists/${encodeURIComponent(kod)}`));
+    },
+    async projeEkle(govde) {
+      return projeCevabi(await istek('POST', '/api/Project/AddRich', govde));
     },
     hizmetVarMiYoluVar: secenek.hizmetVarMiYolu !== undefined,
     async kontrolOku(yol) {
