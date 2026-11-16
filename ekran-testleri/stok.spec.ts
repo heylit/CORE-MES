@@ -44,7 +44,8 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
   await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
   const panel = page.getByRole('dialog', { name: 'Okut' });
   await expect(panel).toBeVisible();
-  // 372 a, 809: ayrı QR tuşu yok; okuyucu kutucuklardan önce görünür. 3096 a: geniş ekranda iki sütun, okuyucu solda.
+  // 372 a, 809: ayrı QR tuşu yok; okuyucu kutucuklardan önce görünür. 3339 a: geniş ekranda okuyucu solda, sepet bölmesi sağda,
+  // kutucuklar altta; dar ekranda kutucuklar okuyucunun altında, sepet (doluysa) altta sabit çubuk.
   await expect(page.getByRole('button', { name: 'QR okut', exact: true })).toHaveCount(0);
   const kod = panel.getByRole('textbox', { name: /Kod/ }).first();
   await expect(kod).toBeVisible();
@@ -53,8 +54,14 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
     'okuyucu belge sırasında kutucuklardan önce').toBe(true);
   const [k, s] = [await kod.boundingBox(), await gelen.boundingBox()];
   const ikiSutun = (page.viewportSize()?.width ?? 0) >= 760;
-  if (ikiSutun) expect(k !== null && s !== null && k.x + k.width <= s.x, 'iki sütunda okuyucu sol sütunda, kutucuklar sağda').toBe(true);
-  else expect(k !== null && s !== null && k.y + k.height <= s.y, 'tek sütunda okuyucu kutucukların üstünde').toBe(true);
+  expect(k !== null && s !== null && k.y + k.height <= s.y, 'okuyucu kutucukların üstünde').toBe(true);
+  if (ikiSutun) {
+    const sepet = panel.getByRole('region', { name: 'Sepetim' });
+    await expect(sepet).toBeVisible();
+    const b = await sepet.boundingBox();
+    expect(k !== null && b !== null && k.x + k.width <= b.x, 'iki sütunda sepet okuyucunun sağında').toBe(true);
+  }
+  expect(await panel.evaluate((e) => e.scrollWidth - e.clientWidth), 'panel yana taşmaz').toBeLessThanOrEqual(0);
   for (const [ad, baslik] of [[/^Bana gelen/, 'Bana gelen'], [/^Elimdekiler/, 'Elimdekiler'], [/^Malzeme iste/, 'Malzeme iste']] as const) {
     await panel.getByRole('button', { name: ad }).click();
     await expect(page.getByRole('dialog', { name: baslik })).toBeVisible();

@@ -264,7 +264,7 @@ describe('Okutarak birakma (1919 a)', () => {
     });
     const p = await panelAc();
     fireEvent.click(await within(p).findByRole('radio', { name: 'Taşı' }));
-    await within(p).findByRole('region', { name: 'Taşıma sepetim' });
+    await within(p).findByRole('region', { name: 'Sepetim' });
     okut(p, 'LOC:A-01-1');
     const form = await within(p).findByRole('list', { name: 'Bırakılacaklar' });
     await waitFor(() => expect(within(form).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([true, true]));
