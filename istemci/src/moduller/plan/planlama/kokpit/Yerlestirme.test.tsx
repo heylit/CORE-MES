@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import * as gonder from '../motor/atolye/gonder.ts';
 import * as planaAl from './plana-al.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
+import { OdakPaneli } from './OdakPaneli.tsx';
 import { EmirAdimlari, SiraSeridi } from './Yerlestirme.tsx';
 import { siraKartlari } from './yerlestirme.ts';
 
@@ -634,5 +635,163 @@ describe('Kokpit toplu yerleştirme (3318 a, 2. dilim)', () => {
     await waitFor(() => { expect(d2.disabled).toBe(false); });
     fireEvent.click(d2);
     expect(uygula).toHaveBeenLastCalledWith({ isId: '2.10', tezgah: 'T1', baslangic: 8, planaAl: '2' }, false);
+  });
+});
+
+describe('Kokpit odaklı tezgâh paneli (3318 a, 3. dilim)', () => {
+  const pad = (t: number): string => String(t).padStart(2, '0');
+  const girdi = { yaz: (t: number): string => `2026-01-01T${pad(t)}:00`, oku: (v: string): number | null => (v ? Number(v.slice(11, 13)) : null) };
+  const bolum = (): HTMLElement => screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+  const satir = (id: string): HTMLElement => bolum().querySelector(`[data-adim-satir="${id}"]`) as HTMLElement;
+  const yer = (p: HTMLElement, t: string): HTMLButtonElement | null => p.querySelector(`[data-odak-yer="${t}"]`);
+  const E: KokpitEmri = { ...PLANLI, bitis: 24, adimlar: [{ id: '1.10', ad: 'Torna', adaylar: ['T1', 'T2', 'T3'] }] };
+  const MT: KokpitModeli = { ...M, tezgahlar: ['T1', 'T2', 'T3'].map((id) => ({ id, kod: `ORN-${id}`, ad: '', fason: false })), isler: { '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna' } }, emirler: [E] };
+  const k1 = () => { const k = siraKartlari(MT).find((x) => x.kok === '1'); if (!k) throw new Error('kart'); return k; };
+  const tasiOnizle = () => vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => Promise.resolve(g.tezgah === 'T3'
+    ? { calismaSurumu: 4, gecerli: false, ileti: 'ORN-neden', isler: [] }
+    : { calismaSurumu: 4, gecerli: true, ileti: null, isler: [{ isId: g.isId, tezgah: g.tezgah, S: g.baslangic, C: g.baslangic + 4, eskiTezgah: 'T1', eskiS: 20, tur: 'tasinan' as const }] }));
+
+  it('seçili operasyonun uygun tezgâhları dolu işleri ve boş yerleriyle görünür; boş yere basınca tezgâh ve saat satıra yazılır, plana yazılmaz', async () => {
+    onizlemeKur();
+    const uygula = vi.fn();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
+    const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    // Dar ekranda panel seçili satırın altındadır.
+    expect(panel.closest('[data-satir-odagi]')?.getAttribute('data-satir-odagi')).toBe('2.10');
+    expect([...panel.querySelectorAll('[data-odak-satir]')].map((x) => x.getAttribute('data-odak-satir'))).toEqual(['T1', 'T2']);
+    // T1'deki dolu iş (ORN-UE-1, 8-12) şeritte durur.
+    expect(panel.querySelector('[data-odak-satir="T1"] .tc-pyq-odak-is')?.textContent).toBe('ORN-UE-1');
+    expect(panel.querySelector('[data-odak-satir="T2"] .tc-pyq-odak-is')).toBeNull();
+    await waitFor(() => {
+      expect(yer(panel, 'T2')?.hasAttribute('data-ilk')).toBe(true);
+      expect(yer(panel, 'T1')?.hasAttribute('data-ilk')).toBe(false);
+      expect(yer(panel, 'T1')?.getAttribute('aria-label')).toBe('ORN-T1 · 01.01 Pzt 12:00 boş yer: satıra yaz');
+    });
+    fireEvent.click(yer(panel, 'T1') as HTMLElement);
+    expect(uygula).not.toHaveBeenCalled();
+    expect((within(satir('2.10')).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement).value).toBe('T1');
+    expect((within(satir('2.10')).getByLabelText('Torna başlangıcı') as HTMLInputElement).value).toBe('2026-01-01T12:00');
+    expect(satir('2.10').querySelector('[data-yazilmadi]')).toBeTruthy();
+    await waitFor(() => { expect(yer(screen.getByRole('complementary', { name: 'Torna için tezgâhlar' }), 'T1')?.getAttribute('aria-pressed')).toBe('true'); });
+    // Seçim birikti: "İleriye yerleştir" panelden seçilen yeri yazar.
+    const d = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d.disabled).toBe(false); });
+    fireEvent.click(d);
+    expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T1', baslangic: 12, planaAl: '2' }, false);
+  });
+
+  it('"Bütün tezgâhlar" öteki tezgâhları da gösterir; uygun olmayanda boş yer çıkmaz', async () => {
+    onizlemeKur();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    await waitFor(() => { expect(yer(panel, 'T2')).toBeTruthy(); });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Bütün tezgâhlar' }));
+    expect([...panel.querySelectorAll('[data-odak-satir]')].map((x) => `${x.getAttribute('data-odak-satir') ?? ''}:${x.getAttribute('data-uygun') ?? ''}`)).toEqual(['T1:evet', 'T2:evet', 'F1:hayir', 'F2:hayir']);
+    expect(panel.querySelectorAll('[data-odak-yer]')).toHaveLength(2);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Uygun tezgâhlar' }));
+    expect(panel.querySelectorAll('[data-odak-satir]')).toHaveLength(2);
+  });
+
+  it('başka satır seçilince panel o operasyona geçer; fason satırda ve Akış görünümünde panel yoktur', async () => {
+    onizlemeKur();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    fireEvent.click(bolum().querySelector('[data-adim="2.30"]') as HTMLElement);
+    const panel = await screen.findByRole('complementary', { name: 'Freze için tezgâhlar' });
+    expect(panel.closest('[data-satir-odagi]')?.getAttribute('data-satir-odagi')).toBe('2.30');
+    expect([...panel.querySelectorAll('[data-odak-satir]')].map((x) => x.getAttribute('data-odak-satir'))).toEqual(['F1', 'F2']);
+    expect(screen.queryByRole('complementary', { name: 'Torna için tezgâhlar' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Akış' }));
+    expect(screen.queryByRole('complementary')).toBeNull();
+  });
+
+  it('boş yer bulunamazsa panel bunu yazar; yazamayan kişide boş yer basılamaz', async () => {
+    vi.spyOn(planaAl, 'planaAlOnizle').mockResolvedValue({ calismaSurumu: 4, gecerli: false, ileti: 'ORN-uymuyor', bitis: null, isler: [] });
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    expect(await within(panel).findByText('Bu tezgâhlarda boş yer yok.')).toBeTruthy();
+    expect(panel.querySelector('[data-odak-yer]')).toBeNull();
+    unmount();
+  });
+
+  it('seçim verilmeyen panelde (yazamayan kişi) boş yerler görünür, basılamaz; not bunu söyler', () => {
+    const yerler = [{ adimId: '2.10', tezgah: 'T2', S: 8, C: 14, enErken: true }, { adimId: '2.10', tezgah: 'T1', S: 12, C: 18, enErken: false }];
+    const { unmount } = render(<OdakPaneli m={M} ad="Torna" isId={null} tezgahlar={['T1', 'T2']} yerler={yerler} secilen={null} zaman={zaman} fiil="Yerleştir" sec={null} />);
+    const dugmeler = [...document.querySelectorAll<HTMLButtonElement>('[data-odak-yer]')];
+    expect(dugmeler.map((b) => [b.getAttribute('data-odak-yer'), b.disabled])).toEqual([['T1', true], ['T2', true]]);
+    expect(screen.getByText('Boş yerler yalnız gösterilir.')).toBeTruthy();
+    unmount();
+    // Seçim verilince aynı yerler basılır ve tezgâhı bildirir.
+    const sec = vi.fn();
+    render(<OdakPaneli m={M} ad="Torna" isId={null} tezgahlar={['T1', 'T2']} yerler={yerler} secilen="T2" zaman={zaman} fiil="Yerleştir" sec={sec} />);
+    const t2 = document.querySelector<HTMLButtonElement>('[data-odak-yer="T2"]');
+    expect([t2?.disabled, t2?.getAttribute('aria-pressed')]).toEqual([false, 'true']);
+    fireEvent.click(t2 as HTMLElement);
+    expect(sec).toHaveBeenCalledWith('T2');
+  });
+
+  it('yazamayan kişide tabloda panel boş yerleri gösterir, basılamaz; basmak satırı değiştirmez', async () => {
+    onizlemeKur();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={null} surum={4} adimAc={vi.fn()} />);
+    const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    await waitFor(() => { expect(panel.querySelectorAll('[data-odak-yer]')).toHaveLength(2); });
+    expect([...panel.querySelectorAll<HTMLButtonElement>('[data-odak-yer]')].map((b) => b.disabled)).toEqual([true, true]);
+    expect(within(panel).getByText('Boş yerler yalnız gösterilir.')).toBeTruthy();
+    fireEvent.click(yer(panel, 'T1') as HTMLElement);
+    expect(satir('2.10').querySelector('[data-yazilmadi]')).toBeNull();
+    expect(yer(panel, 'T1')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('yerleşmiş operasyonda kendi işi işaretlidir; boş yere basınca yeni yer satırda önizlenir, "Taşı" ile yazılır', async () => {
+    tasiOnizle();
+    const tasi = vi.fn();
+    render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={tasi} saatGirdisi={girdi} />);
+    const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+    expect(panel.querySelector('[data-odak-satir="T1"] .tc-pyq-odak-is')?.hasAttribute('data-kendi')).toBe(true);
+    await waitFor(() => { expect(yer(panel, 'T2')).toBeTruthy(); });
+    // Geçersiz dönen tezgâhta (T3) boş yer çıkmaz.
+    expect(yer(panel, 'T3')).toBeNull();
+    // T1 ve T2 aynı anda biter: en erken işareti rota sırasındaki ilk tezgâhta kalır.
+    expect(yer(panel, 'T1')?.getAttribute('aria-label')).toBe('ORN-T1 · 01.01 Pzt 08:00 boş yer, en erken biten: buraya taşı');
+    expect(yer(panel, 'T2')?.getAttribute('aria-label')).toBe('ORN-T2 · 01.01 Pzt 08:00 boş yer: buraya taşı');
+    fireEvent.click(yer(panel, 'T2') as HTMLElement);
+    expect(tasi).not.toHaveBeenCalled();
+    await waitFor(() => { expect(bolum().querySelector('[data-satir-tasi="1.10"]')).toBeTruthy(); });
+    expect((within(satir('1.10')).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement).value).toBe('T2');
+    expect(yer(screen.getByRole('complementary', { name: 'Torna için tezgâhlar' }), 'T2')?.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(bolum().querySelector('[data-satir-tasi="1.10"]') as HTMLElement);
+    expect(tasi).toHaveBeenCalledWith('1.10', 'T2', 8);
+  });
+
+  it('uymayan saatin yanında seçili tezgâhın en yakın boş yeri önerilir; uyan saatte öneri kalkar', async () => {
+    // T1'de 9'da başlamak reddedilir; saat verilmeden sorulunca T1'in boş yeri 12'dir. En erken biten yer T2'dedir (8-14): öneri en erken
+    // yerden değil, satırda seçili tezgâhtan gelmelidir.
+    vi.spyOn(planaAl, 'planaAlOnizle').mockImplementation((g) => Promise.resolve(g.tezgah === 'T1' && g.baslangic === 9
+      ? { calismaSurumu: 4, gecerli: false, ileti: 'ORN-dolu', bitis: null, isler: [] }
+      : { calismaSurumu: 4, gecerli: true, ileti: null, bitis: 30, isler: [{ isId: '2.10', tezgah: g.tezgah, S: g.tezgah === 'T1' ? 12 : 8, C: g.tezgah === 'T1' ? 18 : 14 }, { isId: '2.30', tezgah: 'F1', S: 24, C: 28 }] }));
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
+    fireEvent.change(within(satir('2.10')).getByRole('combobox', { name: 'Torna tezgâhı' }), { target: { value: 'T1' } });
+    fireEvent.change(within(satir('2.10')).getByLabelText('Torna başlangıcı'), { target: { value: '2026-01-01T09:00' } });
+    await waitFor(() => { expect(bolum().querySelector('[data-satir-notu="2.10"] [role="alert"]')?.textContent).toBe('ORN-dolu'); });
+    await waitFor(() => { expect(bolum().querySelector('[data-satir-notu="2.10"] [data-yakin-bos]')?.textContent).toBe('En yakın boş: ORN-T1 · 01.01 Pzt 12:00'); });
+    expect(bolum().querySelector('[data-yakin-bos]')?.getAttribute('data-yakin-bos')).toBe('T1');
+    // Satırdaki saat boş yerin saati değildir: paneldeki yer seçili görünmez.
+    expect(yer(screen.getByRole('complementary', { name: 'Torna için tezgâhlar' }), 'T1')?.getAttribute('aria-pressed')).toBe('false');
+    // Uyan saat girilince hata da öneri de kalkar.
+    fireEvent.change(within(satir('2.10')).getByLabelText('Torna başlangıcı'), { target: { value: '2026-01-01T12:00' } });
+    await waitFor(() => { expect(bolum().querySelector('[data-satir-notu="2.10"]')).toBeNull(); });
+    expect(bolum().querySelector('[data-yakin-bos]')).toBeNull();
+  });
+
+  it('geniş ekranda panel tablonun yanındadır, satırın altında değil', async () => {
+    onizlemeKur();
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(min-width: 1100px)', media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    try {
+      render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+      const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
+      expect(bolum().querySelector('[data-satir-odagi]')).toBeNull();
+      expect(panel.parentElement?.hasAttribute('data-yanda')).toBe(true);
+      expect(panel.parentElement?.querySelector('table')).toBeTruthy();
+    } finally { vi.unstubAllGlobals(); }
   });
 });

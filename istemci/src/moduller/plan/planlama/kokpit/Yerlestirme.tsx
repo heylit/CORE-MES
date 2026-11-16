@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
+import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
 import { adimSecimleri, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
@@ -138,9 +139,10 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
     void (async () => {
       const oz: Onizleme[] = [];
       for (const t of uygunTezgahlar(e, secili).slice(0, ADAY_SINIRI)) {
-        const deneme = { ...sec, [secili]: { ...sec[secili], tezgah: t } };
+        // Boş yer, tezgâhın en erken yeridir: adımın satırda girilmiş saati bu soruya girmez (öteki adımların seçimleri girer).
+        const deneme = { ...sec, [secili]: { tezgah: t } };
         const adimlar = adimSecimleri(e, deneme);
-        const x = await sor({ emirId: e.id, tezgah: ilkMi ? t : ilkTezgah ?? t, baslangic: ilkBas, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum);
+        const x = await sor({ emirId: e.id, tezgah: ilkMi ? t : ilkTezgah ?? t, baslangic: ilkMi ? ilkSaat : ilkBas, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum);
         if (!gecerli) return;
         if (x !== null) oz.push({ tezgah: t, oz: x });
       }
@@ -329,6 +331,19 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
 export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void; fiil?: 'tasi' }
 interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart' | 'ilkGorunum'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void; gorunum: OperasyonGorunumu }
 
+// Odaklı tezgâh paneli geniş ekranda tablonun yanında, dar ekranda seçili satırın altında durur.
+const YANDA = '(min-width: 1100px)';
+function useYanda(): boolean {
+  const [v, setV] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia(YANDA).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(YANDA), f = (): void => { setV(mq.matches); };
+    mq.addEventListener('change', f);
+    return () => { mq.removeEventListener('change', f); };
+  }, []);
+  return v;
+}
+
 function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
@@ -394,6 +409,24 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
     return ` · emir ${zaman(bitis).slice(6)} biter${kazanc !== null && kazanc > 0.01 ? ` · ${sureYaz(kazanc)} erken` : ''}${gec === null ? '' : gec > 0.01 ? ` · ${sureYaz(gec)} geç` : ' · termine yetişir'}`;
   };
   const seciliAd = e.adimlar.find((a) => a.id === seciliAdim)?.ad;
+  // Odaklı tezgâh paneli (3318 a): tabloda seçili operasyonun uygun tezgâhları. Yerleşmemiş adımda boş yere basınca tezgâh ve başlangıç
+  // satıra yazılır (seçim birikir); yerleşmiş operasyonda yeni yer satırda önizlenir, "Taşı" ile yazılır.
+  const yanda = useYanda();
+  const tasimaAcik = tasinanIs !== undefined && engel === null && tasi !== null;
+  // Paneldeki boş yer, satırdaki seçim o yerin kendisiyse (aynı tezgâh; saat girilmemiş ya da yerin saati) seçili görünür.
+  const secim = seciliAdim !== null ? y.sec[seciliAdim] : undefined;
+  const seciliYer = secim?.tezgah !== undefined && y.yerler?.some((b) => b.tezgah === secim.tezgah && (secim.baslangic === undefined || Math.abs(b.S - secim.baslangic) < 0.01)) ? secim.tezgah : null;
+  const odak = gorunum !== 'tablo' ? null
+    : tasinanIs && tasimaAcik ? { adimId: tasinanIs.id, ad: tasinanIs.ad, isId: tasinanIs.id as string | null, tezgahlar: tasimaTezgahlari, yerler: tasima as readonly BosYer[] | null, secilen: duzen?.isId === tasinanIs.id && tasima?.some((b) => b.tezgah === duzen.tezgah && Math.abs(b.baslangic - duzen.baslangic) < 0.01) ? duzen.tezgah : null, fiil: 'Taşı' as const }
+      : seciliAdim !== null && !tasinanIs ? { adimId: seciliAdim, ad: seciliAd ?? '', isId: null, tezgahlar, yerler: y.yerler as readonly BosYer[] | null, secilen: seciliYer, fiil: 'Yerleştir' as const }
+        : null;
+  const odakSec = (t: string): void => {
+    if (!odak) return;
+    if (tasinanIs && tasimaAcik) { const b = tasima?.find((x) => x.tezgah === t); if (b) setDuzen(t === tasinanIs.m && b.baslangic === tasinanIs.S ? null : { isId: tasinanIs.id, tezgah: t, baslangic: b.baslangic }); return; }
+    const b = y.yerler?.find((x) => x.tezgah === t);
+    if (b) y.alanYaz(odak.adimId, { tezgah: t, baslangic: b.S });
+  };
+  const odakPaneli = odak && <OdakPaneli m={m} ad={odak.ad} isId={odak.isId} tezgahlar={odak.tezgahlar} yerler={odak.yerler} secilen={odak.secilen} zaman={zaman} fiil={odak.fiil} sec={uygula || tasimaAcik ? odakSec : null} />;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   const secimVar = Object.keys(y.sec).length > 0;
   return (
@@ -425,6 +458,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           })}
         </ol>
       ) : (
+        <div className="tc-pyq-optablo-kap" data-yanda={odak && yanda ? '' : undefined}>
         <table className="tc-pyq-optablo">
           <thead><tr><th scope="col">#</th><th scope="col">Operasyon</th><th scope="col">Süre</th><th scope="col">Tezgâh</th><th scope="col">Başlangıç</th><th scope="col">Bitiş</th><th scope="col">Durum</th></tr></thead>
           <tbody>
@@ -440,6 +474,9 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
               const girilir = yer !== 'fason' && (x ? tasi !== null && kilit === null : plansiz && uygula !== null);
               const hata = duzenli && duzenOz !== null && duzenOz !== 'hesap' ? (duzenOz === 'okunamadi' ? 'Önizleme okunamadı; yeniden deneyin.' : duzenOz.gecerli ? null : duzenOz.ileti ?? 'Bu yer uygun değil.')
                 : !x && y.sonAlan === a.id && y.ongoru !== null && !y.ongoru.gecerli ? y.ongoru.ileti ?? 'Bu seçimle emir yerleşmiyor.' : null;
+              // Uymayan yerin yanında seçili tezgâhın en yakın boş yeri önerilir (tezgâh seçilmediyse en erken biten yer).
+              const istenen = x ? duzenli?.tezgah : y.sec[a.id]?.tezgah;
+              const yakin = hata === null || odak?.adimId !== a.id ? undefined : odak.yerler?.find((b) => (istenen ? b.tezgah === istenen : b.enErken));
               const saatDegisti = (v: string): void => {
                 const h = saatGirdisi?.oku(v) ?? null, c = h === null ? null : Math.round(h * 4) / 4;
                 if (x) { if (c !== null) setDuzen(c === x.S && (duzenli?.tezgah ?? x.m) === x.m ? null : { isId: a.id, tezgah: duzenli?.tezgah ?? x.m, baslangic: c }); } else { etkinlestir(); y.alanYaz(a.id, { baslangic: c ?? undefined }); }
@@ -483,7 +520,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   <tr className="tc-pyq-optablo-alt" data-satir-notu={a.id}>
                     <td colSpan={7}>
                       <div className="tc-pyq-optablo-not">
-                      {hata !== null ? <><Simge ad="alert" boyut="k" /><span className="tc-pyq-ayar-hata" role="alert" id={notKimligi}>{hata}</span></>
+                      {hata !== null ? <><Simge ad="alert" boyut="k" /><span className="tc-pyq-ayar-hata" role="alert" id={notKimligi}>{hata}</span>{yakin && <span className="tc-pyq-not" data-yakin-bos={yakin.tezgah}>En yakın boş: {kod.get(yakin.tezgah) ?? yakin.tezgah} · {zaman(yakin.S)}</span>}</>
                         : duzenOz === 'hesap' || duzenOz === null ? <span className="tc-pyq-not" role="status">Hesaplanıyor</span>
                           : (
                             <>
@@ -496,11 +533,16 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                     </td>
                   </tr>
                 )}
+                {odak && !yanda && odak.adimId === a.id && (
+                  <tr className="tc-pyq-optablo-alt tc-pyq-optablo-odak" data-satir-odagi={a.id}><td colSpan={7}>{odakPaneli}</td></tr>
+                )}
                 </Fragment>
               );
             })}
           </tbody>
         </table>
+        {odak && yanda && odakPaneli}
+        </div>
       )}
       {yon && e.termin !== null && <EmirYonu key={e.id} {...yon} emirId={e.id} no={e.no} />}
       {tasinanIs && (
