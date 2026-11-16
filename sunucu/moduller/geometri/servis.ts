@@ -6,16 +6,16 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi, GeometriSaglikCevabi,
-  GeometriIsoGrubu, GeometriSureCevabi, GeometriTalasliAdim, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
+  GeometriIsoGrubu, GeometriSureCevabi, GeometriTalasliAdim, HamStokFormu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliTaslakBelgeler, kayitlaraBagliYayindakiBelgeler, taslagiGorur } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { hammaddeKaliteleri, hammaddeStokOlculeri, kesmeKatsayisi, makineIsMiliGucu, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   bicimDenetimi, bilesenListesi, disTablosuOku, donelEksen, DOSYA_EN_BUYUK_BAYT, enAzHam, enYakinKart, formGerekleri, HAM_KESME_VARSAYILAN_MM, hamGeregi, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
-  rotaToplamlari, stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
+  kienzleKc, rotaToplamlari, stokEslestir, SURE_HM_MM, SURE_ISO, SURE_TEZGAH_GUCU_KW, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { YuzeyIsaretGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -200,7 +200,7 @@ export async function hamOnerisi(
   const payKaynagi = sorgu.payMm !== undefined ? 'istek' : ayar !== null ? 'ayar' : 'yok';
   const kesmeMm = sorgu.kesmeMm ?? HAM_KESME_VARSAYILAN_MM;
   const c = await analizOku(db, revizyonId);
-  const bos: Omit<GeometriHamCevabi, 'neden'> = { revizyonId, payMm, payKaynagi, kesmeMm, enAz: null, oneriler: [], kaliteler: [], donel: null, formlar: [] };
+  const bos: Omit<GeometriHamCevabi, 'neden'> = { revizyonId, payMm, payKaynagi, kesmeMm, enAz: null, oneriler: [], kaliteler: [], donel: null, formlar: [], rotaMalzemesi: null };
   if (c.analiz === null) return { ...bos, neden: 'analiz-yok' };
   const enAz = enAzHam(c.analiz.obb, payMm);
   const donel = donelEksen(c.analiz.obb, await sorgular.yuzler(db, revizyonId));
@@ -221,7 +221,9 @@ export async function hamOnerisi(
 // tanımasından; tanıma yoksa delik kalemi yazılmaz ve ozellikOkundu false döner.
 // 3278 D: süre kartının rota karşılaştırması. Talaşlı adımları rota verir (yalnız okuma, rotaya yazılmaz); bağı kablolama.ts kurar
 // (ADR 0006 madde 6). Çözücü malzemenin yürürlükteki rotasındaki talaşlı adımları verir; rota yoksa null. Yetki denetlemez.
-export type TalasliAdimCozucusu = (db: Db, malzemeNo: number) => Promise<GeometriTalasliAdim[] | null>;
+// 3321-2: adımın makinesi (kaynak makineyse) ve bileşen kartları; süre kartı tezgâh gücünü ve varsayılan malzemeyi bunlardan bulur.
+export type TalasliRotaAdimi = GeometriTalasliAdim & { makineId: number | null; makineKod: string | null; hammaddeNolari: number[] };
+export type TalasliAdimCozucusu = (db: Db, malzemeNo: number) => Promise<TalasliRotaAdimi[] | null>;
 let talasliAdimlar: TalasliAdimCozucusu | null = null;
 // Önceki çözücüyü döner (test kurup geri koyar).
 export function talasliAdimCozucusuKaydet(cozucu: TalasliAdimCozucusu | null): TalasliAdimCozucusu | null {
@@ -230,33 +232,80 @@ export function talasliAdimCozucusuKaydet(cozucu: TalasliAdimCozucusu | null): T
   return onceki;
 }
 
-async function sureRotasi(db: Db, malzemeNo: number): Promise<GeometriSureCevabi['rota']> {
+async function talasliRotaOku(db: Db, malzemeNo: number): Promise<TalasliRotaAdimi[] | null | 'bagli-degil'> {
+  return talasliAdimlar === null ? 'bagli-degil' : talasliAdimlar(db, malzemeNo);
+}
+
+function sureRotasi(adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'): GeometriSureCevabi['rota'] {
   const bos = { adimlar: [], islemToplamDk: null, olcumToplamDk: null, eksik: false };
-  if (talasliAdimlar === null) return { durum: 'rota-bagli-degil', ...bos };
-  const adimlar = await talasliAdimlar(db, malzemeNo);
-  return adimlar === null ? { durum: 'rota-yok', ...bos } : { durum: 'bagli', ...rotaToplamlari(adimlar) };
+  if (adimlar === 'bagli-degil') return { durum: 'rota-bagli-degil', ...bos };
+  if (adimlar === null) return { durum: 'rota-yok', ...bos };
+  const yalin = adimlar.map(({ opNo, ad, islemDk, olcumOrtancaDk, olcumAdedi }) => ({ opNo, ad, islemDk, olcumOrtancaDk, olcumAdedi }));
+  return { durum: 'bagli', ...rotaToplamlari(yalin) };
+}
+
+// 3321-2: varsayılan malzeme ilk talaşlı adımın (sıra düzeninde) ilk aktif hammadde girdisidir; tezgâh gücü ilk talaşlı adımın makinesinin
+// demirbaş kartından (makine yoksa ya da kartta güç yoksa sıradaki adıma bakılmaz: tahmin parçanın ana tezgâhıdır, VARSAYIM).
+async function rotaMalzemesi(db: Db, adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'): Promise<GeometriHamCevabi['rotaMalzemesi']> {
+  if (adimlar === 'bagli-degil' || adimlar === null) return null;
+  const kartlar = new Map((await hammaddeKaliteleri(db, [...new Set(adimlar.flatMap((a) => a.hammaddeNolari))])).map((k) => [k.no, k]));
+  for (const a of adimlar) {
+    const k = a.hammaddeNolari.map((no) => kartlar.get(no)).find((x) => x !== undefined);
+    if (k === undefined) continue;
+    const sinif = k.aile !== null && k.sinif !== null ? `${k.aile}/${k.sinif}` : null;
+    return { malzemeNo: k.no, kod: k.kod, kalite: k.kalite, aile: k.aile, sinif, kaliteKodu: k.kaliteKodu, opNo: a.opNo };
+  }
+  return null;
+}
+
+async function tezgahGucu(db: Db, adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'): Promise<GeometriSureCevabi['tezgah']> {
+  const ilk = adimlar === 'bagli-degil' || adimlar === null ? undefined : adimlar[0];
+  const guc = ilk?.makineId == null ? null : await makineIsMiliGucu(db, ilk.makineId);
+  return guc === null
+    ? { gucKw: SURE_TEZGAH_GUCU_KW, kaynak: 'varsayilan', makineKod: ilk?.makineKod ?? null }
+    : { gucKw: guc, kaynak: 'demirbas', makineKod: ilk?.makineKod ?? null };
+}
+
+// Ham önerisi ucu (3D Atölyesi Ham kartı): hamOnerisi ve rotadan varsayılan malzeme. Sihirbaz ve CNC Kurulum rotayı okumaz.
+export async function hamOnerisiRotayla(
+  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined },
+): Promise<GeometriHamCevabi> {
+  const ham = await hamOnerisi(db, revizyonId, sorgu);
+  if (ham.neden === 'analiz-yok') return ham;
+  return { ...ham, rotaMalzemesi: await rotaMalzemesi(db, await talasliRotaOku(db, (await model(db, revizyonId)).malzemeNo)) };
 }
 
 export async function sureTahminiOku(
-  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined; iso?: GeometriIsoGrubu | undefined },
+  db: Db, revizyonId: number,
+  sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined; iso?: GeometriIsoGrubu | undefined; sinif?: string | undefined; form?: HamStokFormu | undefined },
 ): Promise<GeometriSureCevabi> {
-  const iso = sorgu.iso ?? 'P';
+  const katsayi = kesmeKatsayisi(sorgu.sinif ?? null);
+  const iso = sorgu.iso ?? katsayi?.iso ?? 'P';
+  const isoKaynagi = sorgu.iso !== undefined ? 'istek' as const : katsayi !== null ? 'sinif' as const : 'varsayilan' as const;
+  // Elle seçilen grup sınıfınkinden başkaysa sınıfın kc'si kullanılmaz (kullanıcı malzemenin davranışını değiştirdi).
+  const kienzle = katsayi !== null && katsayi.kc1 !== null && katsayi.mc !== null && katsayi.iso === iso ? { kc1: katsayi.kc1, mc: katsayi.mc } : null;
+  const kc = kienzle === null
+    ? { degerNmm2: SURE_ISO[iso].kc, kc1: null, mc: null, hmMm: null, kaynak: 'iso' as const }
+    : { degerNmm2: kienzleKc(kienzle.kc1, kienzle.mc), kc1: kienzle.kc1, mc: kienzle.mc, hmMm: SURE_HM_MM, kaynak: 'kienzle' as const };
   const ham = await hamOnerisi(db, revizyonId, sorgu);
+  const adimlar = await talasliRotaOku(db, (await model(db, revizyonId)).malzemeNo);
+  const tezgah = await tezgahGucu(db, adimlar);
   const bos = {
-    revizyonId, oneri: true as const, kalibre: false as const, iso, isoKaynagi: sorgu.iso === undefined ? 'varsayilan' as const : 'istek' as const,
+    revizyonId, oneri: true as const, kalibre: false as const, iso, isoKaynagi, sinif: katsayi === null ? null : sorgu.sinif ?? null,
+    sinifIso: katsayi?.iso ?? null, kc, tezgah, hamFormu: null,
     payMm: ham.payMm, payKaynagi: ham.payKaynagi, hamKaynagi: null, hamKodu: null, hamHacimMm3: null, parcaHacimMm3: null, talasMm3: null,
-    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: await sureRotasi(db, (await model(db, revizyonId)).malzemeNo),
+    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: sureRotasi(adimlar),
   };
   const a = (await analizOku(db, revizyonId)).analiz;
   if (a === null || ham.enAz === null) return { ...bos, neden: 'analiz-yok' };
-  const stok = ham.oneriler[0];
+  const stok = ham.oneriler.find((o) => o.form === sorgu.form) ?? ham.oneriler[0];
   const hamHacimMm3 = stok?.hamHacimMm3 ?? ham.enAz.a * ham.enAz.b * ham.enAz.c;
-  const hamBilgisi = { hamKaynagi: stok === undefined ? 'kutu' as const : 'stok' as const, hamKodu: stok?.kod ?? null, hamHacimMm3 };
+  const hamBilgisi = { hamKaynagi: stok === undefined ? 'kutu' as const : 'stok' as const, hamKodu: stok?.kod ?? null, hamFormu: stok?.form ?? null, hamHacimMm3 };
   if (a.hacimMm3 === null) return { ...bos, ...hamBilgisi, neden: 'hacim-yok' };
   const oz = (await ozellikOku(db, revizyonId)).ozellikler;
   const delikler = oz === null ? null : oz.flatMap((o) =>
     o.tur === 'delik' && o.capMm !== null && o.derinlikMm !== null ? [{ capMm: o.capMm, derinlikMm: o.derinlikMm }] : []);
-  const t = sureTahmini({ iso, hamHacimMm3, parcaHacimMm3: a.hacimMm3, alanMm2: a.alanMm2, delikler });
+  const t = sureTahmini({ iso, hamHacimMm3, parcaHacimMm3: a.hacimMm3, alanMm2: a.alanMm2, delikler, kc: kc.degerNmm2, gucKw: tezgah.gucKw });
   const parca = { ...hamBilgisi, parcaHacimMm3: a.hacimMm3, ozellikOkundu: oz !== null };
   if (t === null) return { ...bos, ...parca, neden: 'talas-yok' };
   return { ...bos, ...parca, talasMm3: t.talasMm3, kalemler: t.kalemler, altDk: t.altDk, ortaDk: t.ortaDk, ustDk: t.ustDk, neden: null };

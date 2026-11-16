@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { KATEGORI_AGACI_TURLERI, TABAN_HAMMADDE_AILELERI } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
-import { kategoriAgaciDuzenleYolu } from './disari.ts';
+import { kategoriAgaciDuzenleYolu, yerlesikKaliteSecenekleri } from './disari.ts';
 import { FAMS } from './yeni/sabitler/index.ts';
 import { AYAR_MENUSU } from './yeni/ayarlar/menu.ts';
 import { bolumYolu } from './yeni/sekmeler.ts';
@@ -20,5 +20,15 @@ describe('kategori ağacı (2465)', () => {
       expect(bolumler).toContain(new URLSearchParams(sorgu).get('bolum'));
     }
     expect(kategoriAgaciDuzenleYolu('hammadde')).toBe('/malzemeler/ayarlar?bolum=aile');
+  });
+});
+
+describe('kalite seçenekleri (3321-2)', () => {
+  test('her yerleşik kalite aile/sinif anahtarıyla gelir; yoğunluk tablodan, yazılı değilse null', async () => {
+    const l = await yerlesikKaliteSecenekleri();
+    expect(l.find((k) => k.kod === 'C45')).toMatchObject({ aile: 'metal', sinif: 'metal/islah', yogunluk: 7.85 });
+    expect(l.find((k) => k.kod === '304')?.sinif).toBe('metal/paslanmaz');
+    expect(l.length).toBe(Object.values(FAMS).reduce((t, a) => t + Object.values(a.classes).reduce((u, c) => u + c.grades.length, 0), 0));
+    expect(l.every((k) => /^[a-z_]+\/[a-z_]+$/.test(k.sinif))).toBe(true);
   });
 });

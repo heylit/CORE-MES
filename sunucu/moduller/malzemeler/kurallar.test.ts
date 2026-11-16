@@ -9,6 +9,7 @@ import {
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
+import { KESME_SINIFLARI, kesmeKatsayisi } from './kurallar.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ---------------- */
 
@@ -458,4 +459,16 @@ test('Arşiv (2114c, 2114-4 a): kalıcı silme kodu, Logo kaydı, bilinmeyen ba�
   assert.deepEqual([arsivdenDonusDurumu(true), arsivdenDonusDurumu(false)], ['pasif', 'taslak']);
   assert.deepEqual(arsivIzAdetleri(null), { kesin: null, olasi: null });
   assert.deepEqual(arsivIzAdetleri([iz('kesin', 2), iz('kesin', 1), iz('olasi', 4)]), { kesin: 3, olasi: 4 });
+});
+
+test('3321-2 kesme katsayısı: sınıf "aile/sinif" anahtarıyla; aynı sınıf adı başka ailede tabloda yok; katsayısı bilinmeyen sınıfta yalnız ISO', () => {
+  assert.deepEqual(kesmeKatsayisi('metal/islah'), { iso: 'P', kc1: 1900, mc: 0.24 });
+  assert.deepEqual(kesmeKatsayisi('metal/paslanmaz')?.iso, 'M');
+  assert.deepEqual(kesmeKatsayisi('metal/dokme')?.iso, 'K');
+  assert.deepEqual(kesmeKatsayisi('metal/magnezyum'), { iso: 'N', kc1: null, mc: null });
+  assert.equal(kesmeKatsayisi('kompozit/karbon'), null);
+  assert.equal(kesmeKatsayisi('metal/toString'), null);
+  assert.equal(kesmeKatsayisi(null), null);
+  // Sertleştirilmiş çelik bir sınıf değildir; H grubu tabloda yoktur (kullanıcı elle seçer).
+  assert.ok(Object.values(KESME_SINIFLARI).every((k) => k.iso !== 'H'));
 });

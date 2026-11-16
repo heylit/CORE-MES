@@ -3,7 +3,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { GerceklesenKabulCevabi, GerceklesenTuru, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
-import type { GeometriTalasliAdim } from '../../geometri/disari.ts';
+import type { TalasliRotaAdimi } from '../../geometri/disari.ts';
 import { istasyonlar as istasyonListesi, makineler as makineListesi } from '../../istasyonlar/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { adimliEmirAyrintisi, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
@@ -80,14 +80,16 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
 // 3278 D: 3D Atölyesi süre kartının rota karşılaştırması. Yürürlükteki revizyonun talaşlı adımları (kaynağı talaşlı istasyon ya da talaşlı
 // istasyondaki makine), sıra düzeninde; teorik işlem süresi (birim) ve pencerenin son 5 işlem ölçümünün ortancası. Yürürlükte rota yoksa
 // null. Yalnız okur, yetki denetlemez; geometri rotayı ithal edemediği için bağı kablolama.ts kurar (ADR 0006 madde 6).
+// 3321-2: adımın makinesi (kaynak makineyse; istasyonda null) ve bileşen kartları süre kartının tezgâh gücü ve varsayılan malzemesidir.
 const TALASLI_OLCUM_SAYISI = 5;
-export async function talasliAdimSureleri(db: Db, malzemeId: number): Promise<GeometriTalasliAdim[] | null> {
+export async function talasliAdimSureleri(db: Db, malzemeId: number): Promise<TalasliRotaAdimi[] | null> {
   const revizyonId = await s.yururluktekiRevizyonId(db, malzemeId);
   if (revizyonId === null) return null;
   const icerik = await s.icerikOku(db, revizyonId);
   const talasliIstasyon = new Set((await istasyonListesi(db, { pasiflerDahil: true })).filter((x) => x.tip === 'talasli').map((x) => x.id));
-  const talasliMakine = new Set((await makineListesi(db, { pasiflerDahil: true }))
-    .filter((m) => m.istasyonId !== null && talasliIstasyon.has(m.istasyonId)).map((m) => m.id));
+  const makineler = await makineListesi(db, { pasiflerDahil: true });
+  const talasliMakine = new Set(makineler.filter((m) => m.istasyonId !== null && talasliIstasyon.has(m.istasyonId)).map((m) => m.id));
+  const makineKodu = new Map(makineler.map((m) => [m.id, m.kod]));
   const adimlar = [...icerik.adimlar].sort((p, q) => p.sira - q.sira).filter((a) =>
     (a.kaynak?.tur === 'istasyon' && talasliIstasyon.has(a.kaynak.id)) || (a.kaynak?.tur === 'makine' && talasliMakine.has(a.kaynak.id)));
   if (adimlar.length === 0) return [];
@@ -96,9 +98,12 @@ export async function talasliAdimSureleri(db: Db, malzemeId: number): Promise<Ge
     const son = olcumPenceresi(gerceklesenSatirlari(kayitlar, a.operasyonId), null).islem.slice(-TALASLI_OLCUM_SAYISI)
       .flatMap((x) => (x.sureDk === null ? [] : [x.sureDk]));
     const o = olcumOzeti(son);
+    const makineId = a.kaynak?.tur === 'makine' ? a.kaynak.id : null;
     return {
       opNo: a.opNo, ad: a.ad, islemDk: teorikAyrim(sayiMi(a.birimSureDk), sayiMi(a.islemSuresiDk), sayiMi(a.degisimSuresiDk)).islem,
       olcumOrtancaDk: o?.ortanca ?? null, olcumAdedi: o?.n ?? 0,
+      makineId, makineKod: makineId === null ? null : makineKodu.get(makineId) ?? null,
+      hammaddeNolari: icerik.bilesenler.filter((b) => b.adimId === a.id).map((b) => b.malzemeId),
     };
   });
 }

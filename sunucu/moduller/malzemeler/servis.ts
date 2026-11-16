@@ -966,6 +966,14 @@ export async function hammaddeStokOlculeri(db: Db, formlar: readonly string[], k
   }));
 }
 
+// 3321-2: rota girdisi kartlarının kalitesi ve sınıfı; makinenin demirbaş kartındaki iş mili gücü. Yetki denetlemez.
+export function hammaddeKaliteleri(db: Db, nolar: readonly number[]): Promise<s.HammaddeKaliteSatiri[]> {
+  return nolar.length === 0 ? Promise.resolve([]) : s.hammaddeKaliteSatirlari(db, nolar);
+}
+export async function makineIsMiliGucu(db: Db, makineId: number): Promise<number | null> {
+  return (await s.makineIsMiliGucleri(db, [makineId]))[0]?.gucKw ?? null;
+}
+
 /* ---------------- Demirbaş teknik bilgisi (1595) ---------------- */
 const DEMIRBAS_KISITLARI = {
   malzemeler_demirbas_teknik_makine_tek: { ileti: 'Bu makine başka bir demirbaş kartına bağlı.', alan: 'makineId' },

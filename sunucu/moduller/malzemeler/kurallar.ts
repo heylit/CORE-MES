@@ -1198,6 +1198,40 @@ export function ayarKaliteYogunluklari(ayar: Readonly<Record<string, unknown>> |
   return m;
 }
 
+/* ---------------- Kesme katsayısı (3321-2) ---------------- */
+// Malzemeler sınıfından ISO grubu ve Kienzle katsayıları (kc = kc1 x hm^-mc; kc1 N/mm², hm 1 mm'deki özgül kesme kuvveti). Değerler
+// Machining Doctor "Specific cutting force (kc, kc1)" tablosundan (KURGU 3321 ARASTIRMA bölüm 1); sınıfın tablodaki en yakın satırı.
+// kc1 null olan sınıfta ISO grubu bilinir, katsayı bilinmez (okuyan ISO grubunun ortalamasını kullanır). Tabloda olmayan sınıf null.
+// Sertleştirilmiş çelik (H) bir ısıl işlem hâlidir, sınıf değildir: kullanıcı elle seçer.
+export const KESME_ISO_GRUPLARI = ['P', 'M', 'K', 'N', 'S', 'H'] as const;
+export interface KesmeKatsayisi { iso: (typeof KESME_ISO_GRUPLARI)[number]; kc1: number | null; mc: number | null }
+export const KESME_SINIFLARI: Readonly<Record<string, KesmeKatsayisi>> = {
+  'metal/karbon': { iso: 'P', kc1: 1350, mc: 0.21 },
+  'metal/sac': { iso: 'P', kc1: 1350, mc: 0.21 },
+  'metal/islah': { iso: 'P', kc1: 1900, mc: 0.24 },
+  'metal/celikdokum': { iso: 'P', kc1: 1900, mc: 0.24 },
+  'metal/yay': { iso: 'P', kc1: 2450, mc: 0.23 },
+  'metal/takim': { iso: 'P', kc1: 2450, mc: 0.23 },
+  'metal/paslanmaz': { iso: 'M', kc1: 2150, mc: 0.2 },
+  'metal/dokme': { iso: 'K', kc1: 1150, mc: 0.2 },
+  'metal/aluminyum': { iso: 'N', kc1: 700, mc: 0.25 },
+  'metal/aldokum': { iso: 'N', kc1: 700, mc: 0.25 },
+  'metal/bakir': { iso: 'N', kc1: 700, mc: 0.27 },
+  'metal/magnezyum': { iso: 'N', kc1: null, mc: null },
+  'metal/cinko': { iso: 'N', kc1: null, mc: null },
+  'metal/titanyum': { iso: 'S', kc1: 1700, mc: 0.23 },
+  'metal/nikel': { iso: 'S', kc1: 3300, mc: 0.24 },
+  'metal/kobalt': { iso: 'S', kc1: 3300, mc: 0.24 },
+  'metal/wha': { iso: 'S', kc1: null, mc: null },
+  'metal/refrakter': { iso: 'S', kc1: null, mc: null },
+};
+
+// Sınıf anahtarı "aile/sinif" (ör. metal/islah); aynı sınıf adı başka ailede başka malzemedir (kompozit/karbon).
+export function kesmeKatsayisi(sinif: string | null): KesmeKatsayisi | null {
+  if (sinif === null || !Object.hasOwn(KESME_SINIFLARI, sinif)) return null;
+  return KESME_SINIFLARI[sinif] ?? null;
+}
+
 /* ---------------- Demirbaş teknik bilgisi (1595) ---------------- */
 // İlk kayıt sürümsüz gelir, sonrakiler okunan sürümle; ikisi karışırsa kayıt sessizce ezilmez.
 export function demirbasTeknikYazimi(mevcutSurum: number | null, istenenSurum: number | null): 'ekle' | 'guncelle' | 'eski-surum' {

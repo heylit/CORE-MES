@@ -1340,17 +1340,28 @@ export const SURE_ISO: Readonly<Record<GeometriIsoGrubu, IsoSureKatsayisi>> = {
   H: { kc: 3500, kavrama: 0.45, vcMatkap: 30 },
 };
 
+// 3321-2: Kienzle bağıntısı kc = kc1 x hm^-mc (ISCAR "Machining calculations"); hm kaba frezede ortalama talaş kalınlığı, VARSAYIM 0,1 mm
+// (ISCAR örneği; geri alma ucuz, kalibrasyon farkı taşır). kc1 ve mc Malzemeler sınıfından (malzemeler KESME_SINIFLARI).
+export const SURE_HM_MM = 0.1;
+export function kienzleKc(kc1: number, mc: number, hmMm: number = SURE_HM_MM): number {
+  return Math.round(kc1 * hmMm ** -mc);
+}
+
 export interface SureDeligi { capMm: number; derinlikMm: number }
-export interface SureGirdisi { iso: GeometriIsoGrubu; hamHacimMm3: number; parcaHacimMm3: number; alanMm2: number; delikler: readonly SureDeligi[] | null }
+// kc ve gucKw verilmezse ISO grubunun ortalama kc'si ve SURE_TEZGAH_GUCU_KW.
+export interface SureGirdisi {
+  iso: GeometriIsoGrubu; hamHacimMm3: number; parcaHacimMm3: number; alanMm2: number; delikler: readonly SureDeligi[] | null;
+  kc?: number | undefined; gucKw?: number | undefined;
+}
 export interface SureKalemi { kalem: 'kaba' | 'finis' | 'delik'; altDk: number; ustDk: number; adet: number | null }
 export interface SureSonucu { talasMm3: number; kalemler: SureKalemi[]; altDk: number; ortaDk: number; ustDk: number }
 
 const dk4 = (x: number): number => Math.round(x * 1e4) / 1e4;
 
 // GEO-SU1: kaba üst hız güç sınırıdır, alt hız onun SURE_KABA_ALT_ORAN katı (takım, strateji, hava kesme).
-export function kabaHiziCm3Dk(iso: GeometriIsoGrubu): { alt: number; ust: number } {
+export function kabaHiziCm3Dk(iso: GeometriIsoGrubu, kc?: number, gucKw?: number): { alt: number; ust: number } {
   const k = SURE_ISO[iso];
-  const ust = (SURE_TEZGAH_GUCU_KW * SURE_VERIM * 60_000 / k.kc) * k.kavrama;
+  const ust = ((gucKw ?? SURE_TEZGAH_GUCU_KW) * SURE_VERIM * 60_000 / (kc ?? k.kc)) * k.kavrama;
   return { alt: ust * SURE_KABA_ALT_ORAN, ust };
 }
 
@@ -1369,7 +1380,7 @@ export function sureTahmini(g: SureGirdisi): SureSonucu | null {
   const delikler = (g.delikler ?? []).filter((d) => d.capMm > 0 && d.derinlikMm > 0);
   const delikHacmi = delikler.reduce((t, d) => t + (Math.PI * d.capMm ** 2 / 4) * d.derinlikMm, 0);
   const kabaCm3 = Math.max(0, talas - delikHacmi) / 1000;
-  const q = kabaHiziCm3Dk(g.iso);
+  const q = kabaHiziCm3Dk(g.iso, g.kc, g.gucKw);
   const oran = SURE_ISO[g.iso].vcMatkap / SURE_ISO.P.vcMatkap;
   const alanCm2 = g.alanMm2 / 100;
   const kalemler: SureKalemi[] = [

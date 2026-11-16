@@ -12,7 +12,9 @@ import { Yetkili } from '../../ortak/veri/yetki.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { CALISMALAR, calismaOku, KOK, type CalismaAdi } from './calismalar.ts';
+import { CALISMALAR, calismaOku, calismaYolu, KOK, type CalismaAdi } from './calismalar.ts';
+import { MalzemeSecimi } from './MalzemeSecimi.tsx';
+import { useHamSecimi } from './ham-secimi.ts';
 import {
   agirlikKg, analizKatilari, donelMetni, formNedeni, hamKatisi, agirlikMetni, LEVHA_NOTU, talasYuzdesi, bagliMetni, buyukSayi, delikMetni, delikOzeti, desenMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, FORM_NEDENI_ADI, grupSatirlari, kutuMetni, LD_UYARI, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
   uzunluk, yogunlukBicimi, yogunlukOku, type GrupSatiri, type Yon3,
@@ -218,65 +220,47 @@ function SiraTablosu({ v, yogunluk }: { v: GeometriHamCevabi; yogunluk: (o: HamS
 function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
   revizyonId: number; analizVar: boolean; hacimMm3: number | null; onizlemeYaz: (o: HamStokOnerisi | null) => void;
 }) {
-  const [pay, payYaz] = useState('');
-  // Yoğunluğu kullanıcı yazar (1446 a, 1468 a), kaydedilmez. Boşken her önerinin kendi kalitesinin yoğunluğu (1480) kullanılır;
-  // net ağırlıkta ön değer listedeki ilk öneri (kalite süzgeci seçiliyse o kalite).
+  const { search } = useLocation();
+  // 3321-2: pay, kesme payı, malzeme ve seçilen ham adres satırındadır; Süre kartı aynı seçimi okur.
+  const secim = useHamSecimi(revizyonId, analizVar);
+  const { pay, kesme, payGecerli, kesmeGecerli, payMm, malzeme } = secim;
+  // Yoğunluğu kullanıcı yazar (1446 a, 1468 a), kaydedilmez. Boşken seçilen malzemenin, malzeme yoksa her önerinin kendi kalitesinin
+  // yoğunluğu (1480) kullanılır.
   const [yogunlukMetni, yogunlukYaz] = useState('');
   const yazilan = yogunlukOku(yogunlukMetni);
-  const [kalite, kaliteYaz] = useState('');
-  const [kesme, kesmeYaz] = useState('');
-  const payMm = pay.trim() === '' ? null : Number(pay.replace(',', '.'));
-  const kesmeMm = kesme.trim() === '' ? null : Number(kesme.replace(',', '.'));
-  // Üst sınırı sunucu denetler (sözleşme PAY_EN_COK_MM, KESME_EN_COK_MM); aşan değer sunucunun iletisiyle döner.
-  const payGecerli = payMm === null || (Number.isFinite(payMm) && payMm >= 0);
-  const kesmeGecerli = kesmeMm === null || (Number.isFinite(kesmeMm) && kesmeMm >= 0);
   const gecerli = payGecerli && kesmeGecerli;
-  const sorgu = useQuery({
-    queryKey: anahtarlar.ham(revizyonId, payMm ?? -1, kalite, kesmeMm ?? -1),
-    queryFn: () => {
-      const q = new URLSearchParams();
-      if (payMm !== null) q.set('payMm', String(payMm));
-      if (kesmeMm !== null) q.set('kesmeMm', String(kesmeMm));
-      if (kalite !== '') q.set('kalite', kalite);
-      const ek = q.toString();
-      return api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(revizyonId)}${ek === '' ? '' : `?${ek}`}`);
-    },
-    enabled: gecerli && analizVar,
-    placeholderData: keepPreviousData,
-  });
+  const sorgu = secim.ham;
   const v = sorgu.data;
-  // Önizlemedeki öneri (2396): ilk öneri (en az talaş) önizlenir; kullanıcı başka satırı seçebilir.
-  const [onizlenen, onizlenenYaz] = useState<string | null>(null);
+  // Önizlemedeki öneri (2396): adresteki form, yoksa ilk öneri (en az talaş); kullanıcı başka satırı seçebilir, Süre aynı hamı kullanır.
   const oneriler = v?.neden === null ? v.oneriler : [];
-  const gosterilen = oneriler.find((o) => o.form === onizlenen) ?? oneriler[0] ?? null;
+  const gosterilen = oneriler.find((o) => o.form === secim.form) ?? oneriler[0] ?? null;
   const gosterilenAnahtari = gosterilen === null ? '' : `${gosterilen.form}:${String(gosterilen.malzemeNo)}:${String(gosterilen.kesimBoyuMm)}`;
   const gosterilenRef = useRef(gosterilen);
   gosterilenRef.current = gosterilen;
   useEffect(() => { onizlemeYaz(gosterilenRef.current); }, [gosterilenAnahtari, onizlemeYaz]);
   useEffect(() => () => onizlemeYaz(null), [onizlemeYaz]);
   const kaliteYogunlugu = useKaliteYogunluklari(v?.oneriler ?? []);
-  const onerininYogunlugu = (o: HamStokOnerisi): number | null => yazilan ?? kaliteYogunlugu(o);
-  const onDeger = (v?.oneriler ?? []).map((o) => ({ o, ro: kaliteYogunlugu(o) })).find((x) => x.ro !== null) ?? null;
+  const malzemeYogunlugu = malzeme?.secenek?.yogunluk ?? null;
+  const onerininYogunlugu = (o: HamStokOnerisi): number | null => yazilan ?? malzemeYogunlugu ?? kaliteYogunlugu(o);
+  const onDeger = malzeme !== null && malzemeYogunlugu !== null ? { ad: malzeme.kalite, ro: malzemeYogunlugu }
+    : ((v?.oneriler ?? []).map((o) => ({ ad: o.kalite ?? o.kod, ro: kaliteYogunlugu(o) })).find((x) => x.ro !== null) ?? null);
   const yogunluk = yazilan ?? onDeger?.ro ?? null;
   const payIpucu = v === undefined || payMm !== null ? undefined
     : v.payKaynagi === 'ayar' ? `Boş bırakılırsa sistem ayarı: ${uzunluk(v.payMm)} mm` : 'Pay ayarı boş; pay 0 mm alındı.';
   return (
     <Kart baslik="Ham önerisi" simge="box">
-      <Girdi etiket="İşleme payı (her yüz, mm)" inputMode="decimal" value={pay} onChange={(o) => payYaz(o.target.value)}
-        ipucu={payIpucu} hata={!payGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
-      <Girdi etiket="Kesme payı (testere, mm)" inputMode="decimal" value={kesme} onChange={(o) => kesmeYaz(o.target.value)}
-        ipucu={kesme.trim() === '' && v !== undefined ? `Boş bırakılırsa ${uzunluk(v.kesmeMm)} mm; disk ve blokta yok.` : undefined}
-        hata={!kesmeGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+      <MalzemeSecimi secim={secim} kaliteler={v?.kaliteler ?? []} />
       <Girdi etiket="Yoğunluk (g/cm³)" inputMode="decimal" value={yogunlukMetni} onChange={(o) => yogunlukYaz(o.target.value)}
         placeholder={yazilan === null && onDeger !== null ? yogunlukBicimi(onDeger.ro!) : undefined}
         ipucu={yogunlukMetni.trim() === '' && onDeger !== null
-          ? `Boş bırakılırsa ${onDeger.o.kalite ?? onDeger.o.kod} kalitesinin yoğunluğu: ${yogunlukBicimi(onDeger.ro!)} g/cm³`
+          ? `${onDeger.ad} kalitesinden (Malzemeler): ${yogunlukBicimi(onDeger.ro!)} g/cm³; yazarsanız değişir`
           : 'Yazılınca net ve ham ağırlık görünür (yaklaşık).'}
         hata={yogunlukMetni.trim() !== '' && yazilan === null ? 'Pozitif bir sayı yazın.' : undefined} />
-      {v !== undefined && v.kaliteler.length > 0 && (
-        <Secim etiket="Kalite" value={kalite} bosSecenek="Tüm kaliteler" onChange={(o) => kaliteYaz(o.target.value)}
-          secenekler={v.kaliteler.map((k) => ({ deger: k, baslik: k }))} />
-      )}
+      <Girdi etiket="İşleme payı (her yüz, mm)" inputMode="decimal" value={pay} onChange={(o) => secim.yaz({ pay: o.target.value === '' ? null : o.target.value })}
+        ipucu={payIpucu} hata={!payGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+      <Girdi etiket="Kesme payı (testere, mm)" inputMode="decimal" value={kesme} onChange={(o) => secim.yaz({ kesme: o.target.value === '' ? null : o.target.value })}
+        ipucu={kesme.trim() === '' && v !== undefined ? `Boş bırakılırsa ${uzunluk(v.kesmeMm)} mm; disk ve blokta yok.` : undefined}
+        hata={!kesmeGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
       {!analizVar ? <p className="tc-g3b-soluk">{HAM_NEDEN['analiz-yok']}</p>
         : !gecerli ? null
           : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
@@ -303,7 +287,7 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
                           return (
                             <li key={o.form}>
                               <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}
-                                <Dugme simge="eye" className="tc-g3b-oneri-onizle" aria-pressed={gosterilen?.form === o.form} onClick={() => onizlenenYaz(o.form)}>Önizle</Dugme>
+                                <Dugme simge="eye" className="tc-g3b-oneri-onizle" aria-pressed={gosterilen?.form === o.form} onClick={() => secim.yaz({ form: o.form })}>Önizle</Dugme>
                               </span>
                               <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
                               {(i === 0 || neden !== null) && (
@@ -319,6 +303,13 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
                           );
                         })}
                       </ul>
+                      {gosterilen !== null && (
+                        <p className="tc-g3b-eylem">
+                          <Link className="tc-g3b-bag" to={`${calismaYolu('sure')}${search}`}>
+                            <Simge ad="clock" />Süreyi bu hamla hesapla ({FORM_ADI[gosterilen.form]} {stokOlcuMetni(gosterilen)})
+                          </Link>
+                        </p>
+                      )}
                     </>
                   )}
                   <KartiOlmayanFormlar v={sorgu.data} hacimMm3={hacimMm3} />

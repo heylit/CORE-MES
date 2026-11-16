@@ -81,6 +81,11 @@ export { malzemeOlculeri } from './servis.ts';
 export type { OlcuDegeri } from './kurallar.ts';
 // 1469 a: 3D Atölyesi'nin ham önerisi için aktif hammadde kartlarının formu ve ölçüleri (`dims` olduğu gibi). Yetki denetlemez.
 export { hammaddeStokOlculeri } from './servis.ts';
+// 3321-2: 3D Atölyesi süre kartı: rota girdisinin kalitesi ve sınıfı, makinenin iş mili gücü, sınıftan ISO grubu ve Kienzle katsayısı.
+export { hammaddeKaliteleri, makineIsMiliGucu } from './servis.ts';
+export type { HammaddeKaliteSatiri as HammaddeKalitesi } from './sorgular.ts';
+export { KESME_SINIFLARI, kesmeKatsayisi } from './kurallar.ts';
+export type { KesmeKatsayisi } from './kurallar.ts';
 export type { HammaddeStokOlcusu } from './servis.ts';
 // Kart #688: çizim merkezi resmi kartla teknik resim no ve revizyonla eşler. Yalnız yarı mamul ve mamulde dolu; boş ya da yalnız
 // boşluk null; olmayan kart haritada yok. Yetki denetlemez.

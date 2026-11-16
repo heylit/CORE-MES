@@ -6,7 +6,7 @@ import {
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, sureTahminiOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisiRotayla, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, sureTahminiOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -71,7 +71,7 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, sorgu: geometriHamSorgusu, cevap: geometriHamCevabi,
-    isle: ({ db, parametre, sorgu }) => hamOnerisi(db, parametre.revizyonId, sorgu),
+    isle: ({ db, parametre, sorgu }) => hamOnerisiRotayla(db, parametre.revizyonId, sorgu),
   }),
   // 3278: talaştan kaba süre aralığı (kalibresiz, yalnız ekranda; 1195 c rotaya yazmaz).
   uc({

@@ -478,6 +478,17 @@ export function hammaddeStokSatirlari(db: Db, formlar: readonly string[], kalite
       WHERE form = ANY($1::text[]) AND ($2::text IS NULL OR kalite = $2) ORDER BY no`, [formlar, kalite]);
 }
 
+// 3321-2: rotadaki hammadde girdisinin kalitesi ve sınıfı (3D Atölyesi süre kartının varsayılan malzemesi). Yalnız aktif hammadde kartı;
+// sınıf kartın `cls` alanıdır (eski kartta boş olabilir, okuyan Malzemeler kalite tablosundan bulur).
+export interface HammaddeKaliteSatiri { no: number; kod: string; kalite: string | null; aile: string | null; sinif: string | null; kaliteKodu: string | null }
+export function hammaddeKaliteSatirlari(db: Db, nolar: readonly number[]): Promise<HammaddeKaliteSatiri[]> {
+  return db.sorgu<HammaddeKaliteSatiri>(
+    `SELECT k.no, k.stok_kodu AS kod, ${KATALOG_KALITE} AS kalite, ${KATALOG_METIN('fam')} AS aile, ${KATALOG_METIN('cls')} AS sinif,
+            ${KATALOG_METIN('grade')} AS "kaliteKodu"
+       FROM malzeme_katalog_karti k
+      WHERE k.no = ANY($1::int[]) AND k.onay_durumu = 'aktif' AND k.tur = 'hammadde' ORDER BY k.no`, [nolar]);
+}
+
 export function katalogKartKaydiNoIle(db: Db, no: number): Promise<{ kayit: Record<string, unknown> } | null> {
   return db.tek<{ kayit: Record<string, unknown> }>(`SELECT kayit FROM malzeme_katalog_karti WHERE no = $1`, [no]);
 }
@@ -893,6 +904,13 @@ export async function demirbasTeknikGetir(db: Db, kimlik: string, kilit = false)
   if (!satir) return null;
   const alanlar = Object.fromEntries(DEMIRBAS_TEKNIK_SUTUNLARI.map(([ad]) => [ad, satir[ad] ?? null])) as DemirbasTeknikAlanlari;
   return { surum: satir.surum, makineId: satir.makineId, guncelleme: satir.guncelleme, alanlar };
+}
+
+// 3321-2: makineye bağlı demirbaş kartının iş mili gücü (kW); bağ ya da değer yoksa satır dönmez.
+export function makineIsMiliGucleri(db: Db, makineIdler: readonly number[]): Promise<{ makineId: number; gucKw: number }[]> {
+  return db.sorgu<{ makineId: number; gucKw: number }>(
+    `SELECT makine_id AS "makineId", is_mili_gucu_kw::float8 AS "gucKw" FROM malzemeler_demirbas_teknik
+      WHERE makine_id = ANY($1::int[]) AND is_mili_gucu_kw > 0`, [makineIdler]);
 }
 
 export function demirbasOzellikleri(db: Db, kimlik: string): Promise<DemirbasOzelligi[]> {

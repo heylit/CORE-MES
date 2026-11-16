@@ -175,6 +175,7 @@ export const geometriHamSorgusu = z.object({
   kesmeMm: z.coerce.number<number>().min(0).max(KESME_EN_COK_MM).optional(),
 });
 export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok', 'boru', 'disk'] as const;
+export type HamStokFormu = (typeof HAM_STOK_FORMLARI)[number];
 // Form önerilmezse nedeni: dönel olmayan parçaya disk ve boru, boydan boya deliği olmayana boru, kalın parçaya levha önerilmez.
 export const HAM_FORM_NEDENLERI = ['donel-degil', 'delik-yok', 'plaka-degil'] as const;
 export const HAM_PAY_KAYNAKLARI = ['istek', 'ayar', 'yok'] as const;
@@ -229,6 +230,12 @@ export const geometriHamCevabi = z.object({
     hamHacimMm3: mm.nullable(),
     enYakinKart: z.object({ malzemeNo: z.number().int(), kod: z.string(), olcu: z.record(z.string(), z.number()), eksik: z.array(z.string()) }).nullable(),
   })),
+  // 3321-2: varsayılan malzeme, yürürlükteki rotanın ilk talaşlı adımının hammadde girdisi (aktif hammadde kartı). sinif kartın
+  // "aile/sinif" anahtarıdır (eski kartta boş; ekran Malzemeler kalite tablosundan bulur). Rota, girdi ya da bağ yoksa null.
+  rotaMalzemesi: z.object({
+    malzemeNo: z.number().int(), kod: z.string(), kalite: z.string().nullable(), aile: z.string().nullable(),
+    sinif: z.string().nullable(), kaliteKodu: z.string().nullable(), opNo: z.number().int(),
+  }).nullable(),
 });
 export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 
@@ -240,7 +247,17 @@ export const GEOMETRI_ISO_GRUPLARI = ['P', 'M', 'K', 'N', 'S', 'H'] as const;
 export type GeometriIsoGrubu = (typeof GEOMETRI_ISO_GRUPLARI)[number];
 export const GEOMETRI_SURE_KALEMLERI = ['kaba', 'finis', 'delik'] as const;
 export const GEOMETRI_SURE_NEDENLERI = ['analiz-yok', 'hacim-yok', 'talas-yok'] as const;
-export const geometriSureSorgusu = geometriHamSorgusu.extend({ iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional() });
+// 3321-2: sinif Malzemeler sınıfı ("aile/sinif"); ISO grubu ve Kienzle katsayısı ondan. iso elle seçimdir, sınıfın grubunu ezer.
+// form Ham önerisinde seçilen formdur; yoksa (ya da o formda öneri yoksa) ilk öneri.
+export const SINIF_ANAHTARI = /^[a-z_]{1,30}\/[a-z_]{1,30}$/;
+export const geometriSureSorgusu = geometriHamSorgusu.extend({
+  iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional(),
+  sinif: z.string().regex(SINIF_ANAHTARI).optional(),
+  form: z.enum(HAM_STOK_FORMLARI).optional(),
+});
+export const GEOMETRI_ISO_KAYNAKLARI = ['istek', 'sinif', 'varsayilan'] as const;
+// Tezgâh gücü rotadaki ilk talaşlı adımın makinesine bağlı demirbaş kartından; yoksa varsayılan (7,5 kW).
+export const GEOMETRI_GUC_KAYNAKLARI = ['demirbas', 'varsayilan'] as const;
 const dk = z.number().min(0);
 export const geometriSureKalemi = z.object({
   kalem: z.enum(GEOMETRI_SURE_KALEMLERI),
@@ -273,7 +290,14 @@ export const geometriSureCevabi = z.object({
   oneri: z.literal(true),
   kalibre: z.literal(false),
   iso: z.enum(GEOMETRI_ISO_GRUPLARI),
-  isoKaynagi: z.enum(['istek', 'varsayilan']),
+  isoKaynagi: z.enum(GEOMETRI_ISO_KAYNAKLARI),
+  // 3321-2: istenen sınıf (tabloda varsa); sınıfın ISO grubu (elle seçim varsa karşılaştırma için); kc kaba hızın özgül kesme kuvveti:
+  // sınıfta Kienzle katsayısı varsa kc1 x hm^-mc, yoksa ISO grubunun ortalaması.
+  sinif: z.string().nullable(),
+  sinifIso: z.enum(GEOMETRI_ISO_GRUPLARI).nullable(),
+  kc: z.object({ degerNmm2: z.number().positive(), kc1: z.number().positive().nullable(), mc: z.number().positive().nullable(), hmMm: z.number().positive().nullable(), kaynak: z.enum(['kienzle', 'iso']) }),
+  tezgah: z.object({ gucKw: z.number().positive(), kaynak: z.enum(GEOMETRI_GUC_KAYNAKLARI), makineKod: z.string().nullable() }),
+  hamFormu: z.enum(HAM_STOK_FORMLARI).nullable(),
   payMm: z.number(),
   payKaynagi: z.enum(HAM_PAY_KAYNAKLARI),
   hamKaynagi: z.enum(['stok', 'kutu']).nullable(),
