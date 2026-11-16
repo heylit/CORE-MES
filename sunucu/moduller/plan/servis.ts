@@ -2820,7 +2820,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     throw cakisma('Bu taslak, aynı canlı plandan açılmış başka bir taslak canlıya alındığı için kapandı; canlı planla yeni taslak açın.');
   }
   const { x, dortGozsuz } = await onayGecisi(db, k, id, g.surum, 'canliya-al');
-  await yeniIslerDenetle(db, id, x.acilma, 'taslağı geri gönderin; sahibi Planı kur ile yerleştirsin.');
+  await yeniIslerDenetle(db, id, x.acilma, 'bu plan o işlerden önce hazırlandı. Planı geri gönderin; güncel çalışma planını canlıya alın.');
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
   const kapanan = defter.filter((d) => d.tur === 'gun_kapat');

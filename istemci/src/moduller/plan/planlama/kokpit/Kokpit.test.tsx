@@ -201,6 +201,34 @@ describe('Kokpit', () => {
     expect(satirVar()).toBe(false);
   });
 
+  // Onayda bekleyen eski bir plan varken: taslağını yazan kişi çalışma planıyla açar (eski planı kendi planı sanıp canlıya almaya çalışmasın);
+  // üst düğmeyle açan (müdür) onaydaki planı görür.
+  it.each([[true, 'Çalışma planı'], [false, 'ORN-Eski plan']])('onayda plan varken taslaktan gelindi mi %s: seçili plan "%s"', async (taslaktan, secili) => {
+    taslakSunucusu(taslaktan ? [satir(TASI, '3.10 → T2')] : []);
+    // Onaydaki planın motor ayarı bu testte okunmaz.
+    const temel = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(((yol: string) => (yol.startsWith('/plan/motor-ayarlari') ? Promise.reject(new Error('yok')) : temel(yol))) as never);
+    const eski = {
+      id: 7, ad: 'ORN-Eski plan', aciklama: null, durum: 'onayda', acan: 'ORN-Planlamaci', benim: true, acilma: '2026-10-01T05:00:00Z', surum: 2, tabanPlanSurumu: 2, canliDegisti: false,
+      gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: true, geriGonder: true, canliyaAl: true },
+    };
+    render(
+      <MemoryRouter><BildirimSaglayici>
+        <Kokpit
+          depo={{ ...DEPO, senaryolar: { canli: null, canliSurum: 3, senaryolar: [eski] } } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
+          yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
+        />
+      </BildirimSaglayici></MemoryRouter>,
+    );
+    if (taslaktan) fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
+    else fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
+    await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 });
+    const karar = (await screen.findByRole('heading', { name: 'Karar' })).closest('.tc-kart') as HTMLElement;
+    expect(within(karar).getByRole('heading', { name: secili })).toBeTruthy();
+    // Öteki plan listede kalır; seçilebilir.
+    expect(screen.getAllByText('ORN-Eski plan').length).toBeGreaterThan(0);
+  });
+
   // Komut başka sayfada çalışmayı değiştirdiyse ortak plan kendiliğinden yeniden dizilir; taslak varken dizilmez (örnek çalışmanın planı bayattır).
   it.each([[true, 0], [false, 1]])('taslak %s iken ortak çalışmanın kendiliğinden dizilmesi %i kez başlar', async (taslakVar, n) => {
     taslakSunucusu(taslakVar ? [satir(TASI, '3.10 → T2')] : []);

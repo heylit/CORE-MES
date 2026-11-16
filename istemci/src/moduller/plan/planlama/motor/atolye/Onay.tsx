@@ -92,19 +92,22 @@ export interface OnayOzellikleri {
   planSekmesi: () => void;
   // 3282-4 a: canlıya alma ve onay yalnız Kokpit'tedir; Stüdyo bu bölümü okunur gösterir ve Kokpit'e yönlendirir.
   saltOkunur?: { kokpiteGit: () => void };
+  // Açılışta seçili gelecek plan. Verilmezse onay bekleyen ilk plan seçilir (müdürün işi odur); çalışmasını az önce plana yazan kişi
+  // çalışma planıyla açar, yoksa onayda bekleyen eski bir planı kendi planı sanıp canlıya almaya çalışır.
+  ilkSecim?: 'calisma';
 }
 
 // Okunur görünüm: yazma yetkileri ve çalışma komutu düşer; düğmeler yetkiye göre çizildiği için hepsi gizlenir. Ret yine sunucudadır.
 const okunur = (o: PlanlamaEkranOzellikleri): PlanlamaEkranOzellikleri =>
   ({ ...o, komut: null, yetki: { ...o.yetki, planYaz: false, planStudyo: false, planCanliyaAl: false, calismaYazabilir: false } });
 
-export function OnaySekmesi({ o: oGelen, c, p, cf: cfSunucu, sen, senYaz, planSekmesi, saltOkunur }: OnayOzellikleri) {
+export function OnaySekmesi({ o: oGelen, c, p, cf: cfSunucu, sen, senYaz, planSekmesi, saltOkunur, ilkSecim }: OnayOzellikleri) {
   const o = useMemo(() => (saltOkunur ? okunur(oGelen) : oGelen), [oGelen, saltOkunur]);
   const { bildir } = useBildirim();
   const hataBildir = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, hataBildir);
   const karar = useBekleyenKarari(o, hataBildir);
-  const [secim, setSecim] = useState<Secim>(null);
+  const [secim, setSecim] = useState<Secim>(ilkSecim ?? null);
   const [kars, setKars] = useState<number[]>([]);
   const [notlar, setNotlar] = useState<Record<string, string>>({});
   const [sor, setSor] = useState<SunucuSenaryosu | null>(null);
