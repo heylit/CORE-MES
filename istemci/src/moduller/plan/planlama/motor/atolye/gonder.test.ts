@@ -111,23 +111,11 @@ describe('calismayiGonder', () => {
     await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli', canliKabul: true, dortSaatGerekcesi: 'Acil' });
     expect(post.mock.calls[0]?.[1]).toEqual({ ad: 'x', calismaSurumu: 8, not: null, dortSaatGerekcesi: 'Acil' });
   });
-
-  it('Deneme olarak kaydet: taslak açık kalır, liste yeniden okunur', async () => {
-    const post = sunucu();
-    const get = vi.spyOn(api, 'get').mockResolvedValue(liste('acik', 1));
-    const g = await calismayiGonder({ komut: komut(8), ad: 'Deneme 1 · 25.10 Cum', not: null, planSurumu: null, hedef: 'deneme' });
-    expect(yollar(post)).toEqual(['/plan/planlama-calismasi/taslak-yaz']);
-    expect(post.mock.calls[0]?.[1]).toEqual({ ad: 'Deneme 1 · 25.10 Cum', calismaSurumu: 8 });
-    expect(get).toHaveBeenCalledWith('/plan/senaryolar');
-    expect(g.senaryolar?.senaryolar[0]?.durum).toBe('acik');
-  });
 });
 
 describe('taslakAdi', () => {
-  it('eski adlar: onay kişiyle, deneme sırayla', () => {
-    expect(taslakAdi('onay', '25.10 Cum ', 'Ayşe', 2)).toBe('Onay 25.10 Cum · Ayşe');
-    expect(taslakAdi('canli', '25.10 Cum', 'Ayşe', 2)).toBe('Onay 25.10 Cum · Ayşe');
-    expect(taslakAdi('deneme', '25.10 Cum', 'Ayşe', 2)).toBe('Deneme 3 · 25.10 Cum');
+  it('onaya giden planın adı günü ve kişiyi taşır', () => {
+    expect(taslakAdi('25.10 Cum ', 'Ayşe')).toBe('Onay 25.10 Cum · Ayşe');
   });
 });
 

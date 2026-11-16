@@ -436,8 +436,14 @@ export const PA_NOT: Record<(typeof PA_ADIM)[number][0], string> = {
   hazirla: 'Planı kurun ya da değiştirin.', incele: 'Farkı ve kontrolleri inceleyin.', onaya: 'Planlamacı onaya gönderir.', canli: 'Müdür onaylar; canlı ancak o zaman değişir.',
 };
 export const PA_DURUM: Record<SunucuSenaryosu['durum'] | 'calisma', [string, 'bilgi' | 'tamam' | 'uyari' | 'pasif']> = {
-  calisma: ['Çalışma', 'bilgi'], onayda: ['Onay bekliyor', 'uyari'], acik: ['Deneme', 'bilgi'], canliya_alindi: ['Önceki canlı', 'pasif'], vazgecildi: ['Vazgeçildi', 'pasif'],
+  calisma: ['Çalışma', 'bilgi'], onayda: ['Onay bekliyor', 'uyari'], acik: ['Kayıtlı plan', 'bilgi'], canliya_alindi: ['Önceki canlı', 'pasif'], vazgecildi: ['Vazgeçildi', 'pasif'],
 };
+// Açık plan onaydan geri gönderildiyse rozet bunu söyler; yeniden gönderilip çekilen plan (son gönderme geri göndermeden sonra) kayıtlı plandır.
+export function paRozet(s: Pick<SunucuSenaryosu, 'durum' | 'onay'>): (typeof PA_DURUM)[keyof typeof PA_DURUM] {
+  const geri = s.onay?.geriGonderme ?? null;
+  if (s.durum === 'acik' && geri !== null && (s.onay?.gonderme == null || geri >= s.onay.gonderme)) return ['Geri gönderildi', 'uyari'];
+  return PA_DURUM[s.durum];
+}
 
 // Akışın şimdiki adımı (paAkis): plan yoksa hazırla, onay bekleyen varsa canlıya al, çalışma canlıdan farklıysa incele ya da onaya gönder.
 export function paAdim(plan: boolean, onayda: number, farkli: boolean, seciliSenaryo: boolean): PaAdimi {

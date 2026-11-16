@@ -3,7 +3,7 @@ import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import {
+import { paRozet,
   akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, emirNoOkuyucu, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
   kilitGunleri, kilitOzeti, siraKomsu, siraTasi, kenarHizi,
@@ -156,6 +156,14 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     id, ad: `S${id}`, aciklama: null, durum, acan: null, benim: true, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 2, canliDegisti: false,
     gostergeler: g, degisiklikler: [], etki: null, bekleyenler: [], ...ek,
   });
+  it('açık planın rozeti: onaydan geri gönderilen ayrı söylenir; yeniden gönderilip çekilen ve hiç gönderilmeyen kayıtlı plandır', () => {
+    const onay = (gonderme: string | null, geriGonderme: string | null) => ({ gonderme, geriGonderme }) as SunucuSenaryosu['onay'];
+    expect(paRozet(s(1, 'acik'))).toEqual(['Kayıtlı plan', 'bilgi']);
+    expect(paRozet(s(1, 'acik', { onay: onay('2026-10-20T08:00:00Z', '2026-10-20T09:00:00Z') }))).toEqual(['Geri gönderildi', 'uyari']);
+    expect(paRozet(s(1, 'acik', { onay: onay('2026-10-20T10:00:00Z', '2026-10-20T09:00:00Z') }))).toEqual(['Kayıtlı plan', 'bilgi']);
+    expect(paRozet(s(1, 'onayda', { onay: onay('2026-10-20T10:00:00Z', '2026-10-20T09:00:00Z') }))).toEqual(['Onay bekliyor', 'uyari']);
+  });
+
   it('akış adımı ve seçim: onay bekleyen önce, yoksa çalışma', () => {
     expect(paAdim(false, 0, false, false)).toBe('hazirla');
     expect(paAdim(true, 1, false, false)).toBe('canli');
