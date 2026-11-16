@@ -11,7 +11,6 @@ import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
-import { TerminFiyat } from './TerminFiyat.tsx';
 import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
@@ -125,6 +124,11 @@ export function TeklifAyrinti() {
       {formBasilir && <Dugme simge="printer" onClick={() => formAcikYaz(true)}>Teklif formu</Dugme>}
       {iskontoOnaylanir && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('iskonto')}>İskontoyu onayla</Dugme>}
       {terminOnaylanir && <Dugme tur="birincil" simge="gantt" onClick={() => dialogYaz('termin')}>Termini onayla</Dugme>}
+      {yazabilir && fiyatGorur && surumVerilir && (
+        <Dugme tur={t.durum === 'yeni' || t.durum === 'revizyon' ? 'birincil' : 'ikincil'} simge="next" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/teklif-ver`); }}>
+          {t.surumler.length === 0 ? 'Teklif ver' : 'Yeni sürüm ver'}
+        </Dugme>
+      )}
       {yazabilir && t.durum === 'yeni' && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/duzenle`); }}>Düzenle</Dugme>}
       {yazabilir && t.durum === 'verildi' && son && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('kabul')}>Müşteri kabulünü kaydet</Dugme>}
       {yazabilir && t.durum === 'verildi' && <Dugme simge="rotate" onClick={() => dialogYaz('revizyon')}>Revizyon iste</Dugme>}
@@ -164,7 +168,7 @@ export function TeklifAyrinti() {
 
       {t.durum === 'yeni' && (
         <p className="tc-sp-bildirim" role="status">
-          <strong>Fiyat bekleniyor</strong> {fiyatGorur ? 'Kalemlere fiyat girip ilk sürümü verin.' : 'Fiyatı fiyat yetkisi olan girip ilk sürümü verir.'}
+          <strong>Fiyat bekleniyor</strong> {fiyatGorur ? '"Teklif ver" ile termin ve fiyatı girip ilk sürümü verin.' : 'Fiyatı fiyat yetkisi olan girip ilk sürümü verir.'}
         </p>
       )}
       {t.durum === 'onay-bekliyor' && son && (iskontoBekler || bekleyenTaslak === null) && (
@@ -206,7 +210,6 @@ export function TeklifAyrinti() {
             {t.aciklama && <p className="tc-sp-not">{t.aciklama}</p>}
           </Kart>
           {gosterilen && <TeklifSurumu teklif={t} surum={gosterilen} kabul={t.kabulSurumu === gosterilen.surumNo} />}
-          {yazabilir && fiyatGorur && surumVerilir && <TerminFiyat key={t.surum} teklif={t} />}
         </div>
         <div className="tc-sp-sutun">
           {(taslaklar.data?.taslaklar.length ?? 0) > 0 && (

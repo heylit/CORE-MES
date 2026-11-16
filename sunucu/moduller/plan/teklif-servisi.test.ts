@@ -124,6 +124,21 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     assert.ok(siparis.every((b) => b.is === 'O1' && b.emirNo === 'E-1' && b.kalem === null));
   });
 
+  // 3301: yerleşim motora geçer. 'arkaya'da istenen termin yalnız ölçülür: kalem termin yokmuş gibi siparişin arkasına girer, kimse
+  // kaymaz; 'geriye'de aynı istenen termin kalemi terminden geriye oturtur. Kayıtta plan yok: sipariş de dondurulmamıştır, istenen termin
+  // kaleme termin olarak verilseydi onun önüne geçerdi.
+  test('3301: arkaya ekleme istenen terminde de siparişin önüne geçmez; geriye aynı girdide terminden geriye oturur', async () => {
+    const termsiz = await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI));
+    const arkaya = await vt().tx((db) => teklifDene(db, kullanici, girdi({ istenenTermin: '2026-10-20', yerlesim: 'arkaya' }), SIMDI));
+    const geriye = await vt().tx((db) => teklifDene(db, kullanici, girdi({ istenenTermin: '2026-10-20', yerlesim: 'geriye' }), SIMDI));
+    assert.ok(termsiz && arkaya && geriye);
+    assert.deepEqual(arkaya.kayan, []);
+    assert.equal(arkaya.kalemler[0]?.bitis, termsiz.kalemler[0]?.bitis);
+    // geriye: kalem istenen termine en geç başlamayla oturur (terminden geriye), arkayadan farklı biter
+    assert.notEqual(geriye.kalemler[0]?.bitis, arkaya.kalemler[0]?.bitis);
+    assert.match(geriye.kalemler[0]?.bitis ?? '', /^2026-10-20T/);
+  });
+
   test('geçerli satış taslağı yerinde kalır, süresi dolan taslak denemeye girmez', async () => {
     const yer = { makineId: String(makineId), baslangic: '2026-10-28T05:00:00.000Z' };
     const taslak = (id: string, gecerlilik: string) => ({ id, gecerlilik, kalemler: [{ malzemeNo: 50, adet: 2, termin: '2026-11-06', yerlesim: { 10: yer } }] });

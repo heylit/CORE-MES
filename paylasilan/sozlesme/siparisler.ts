@@ -208,11 +208,24 @@ export const teklifGuncelleGovdesi = z.object({ ...teklifAlanlari, ...beklenenSu
 
 // Kâr maliyet üstü yüzdedir (44): fiyat = birim maliyet x (1 + kâr / 100).
 export const karOraniSemasi = z.string().trim().regex(ORAN, 'Kâr oranı en çok iki ondalıklı bir yüzde olmalı (örnek: 25).');
+// 3301: termin yerleşimi. 'arkaya': plan dondurulur, teklif mevcut yükün ardına eklenir, hiçbir sipariş kaymaz; istenen termin verilirse
+// yalnız yetişip yetişmediği söylenir. 'geriye': istenen terminden geriye en geç başlamayla, atölye yeniden dağıtır; geciken sipariş
+// plancı onayı ister (63 b). Verilmezse istenen terminin varlığından çıkar (boş: arkaya, dolu: geriye); bu, 3301'den önceki davranıştır.
+export const TERMIN_YERLESIMLERI = ['arkaya', 'geriye'] as const;
+export const GERIYE_TERMIN_ZORUNLU = 'Terminden geriye yerleşimde istenen termin zorunlu.';
+const yerlesimAlani = z.enum(TERMIN_YERLESIMLERI).nullish().transform((y) => y ?? null);
+const yerlesimDenetimi = (d: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null }, ctx: z.RefinementCtx): void => {
+  if (d.yerlesim === 'geriye' && d.istenenTermin === null) ctx.addIssue({ code: 'custom', path: ['istenenTermin'], message: GERIYE_TERMIN_ZORUNLU });
+};
+export const terminYerlesimi = (istenenTermin: string | null, yerlesim: TerminYerlesimi | null): TerminYerlesimi =>
+  yerlesim ?? (istenenTermin === null ? 'arkaya' : 'geriye');
+
 // 49, 48 b: verilen sürüm planda satış taslağı olarak yer tutar. İstenen termin boşsa teklif planın arkasına eklenir.
 export const planTaslagiGovdesi = z.object({
   karOrani: karOraniSemasi,
   istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
-});
+  yerlesim: yerlesimAlani,
+}).superRefine(yerlesimDenetimi);
 export const PLAN_TASLAGI_GECERLILIK = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
 export const PLAN_TASLAGI_TERMINI = 'Plan taslağıyla verilen sürümün termini denemeden gelir; termin elle girilmez.';
 
@@ -368,12 +381,14 @@ export type MalzemeSecenekleriCevabi = z.output<typeof malzemeSecenekleriCevabi>
 export const terminDenemesiSorgusu = z.object({
   gecerlilik: tarihSemasi.optional().transform((t) => t ?? null),
   istenenTermin: tarihSemasi.optional().transform((t) => t ?? null),
-});
+  yerlesim: yerlesimAlani,
+}).superRefine(yerlesimDenetimi);
 export const denemeTaslagiGovdesi = z.object({
   gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
   istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
+  yerlesim: yerlesimAlani,
   karOrani: karOraniSemasi,
-});
+}).superRefine(yerlesimDenetimi);
 export const terminOnayGovdesi = z.object(beklenenSurum);
 
 const tutar = ondalikMetinSemasi.nullable();
@@ -438,6 +453,7 @@ export const terminDenemesiCevabi = z.object({
   planSurumu: z.string().nullable(),
   gecerlilik: tarihSemasi.nullable(),
   istenenTermin: tarihSemasi.nullable(),
+  yerlesim: z.enum(TERMIN_YERLESIMLERI),
   planTermini: tarihSemasi.nullable(),
   // İstenen termin varsa odur, yoksa plan termini; 59 a: geçerlilik tarihinden itibaren gün olarak da yazılır.
   termin: tarihSemasi.nullable(),
@@ -502,6 +518,7 @@ export const planTaslagiSemasi = z.object({
   planSurumu: z.string().nullable(),
   gecerlilik: tarihSemasi.nullable(),
   istenenTermin: tarihSemasi.nullable(),
+  yerlesim: z.enum(TERMIN_YERLESIMLERI),
   planTermini: tarihSemasi.nullable(),
   termin: tarihSemasi.nullable(),
   karOrani: tutar,
@@ -516,6 +533,7 @@ export const planTaslagiSemasi = z.object({
 });
 export const planTaslaklariCevabi = z.object({ taslaklar: z.array(planTaslagiSemasi) });
 
+export type TerminYerlesimi = (typeof TERMIN_YERLESIMLERI)[number];
 export type PlanTaslagiVerisi = z.output<typeof planTaslagiGovdesi>;
 export type TerminDenemesiSuzgeci = z.output<typeof terminDenemesiSorgusu>;
 export type DenemeTaslagiVerisi = z.output<typeof denemeTaslagiGovdesi>;

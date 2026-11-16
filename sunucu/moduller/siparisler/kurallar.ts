@@ -1,6 +1,6 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, type TerminAraligi } from '#paylasilan/sozlesme/siparisler.ts';
+import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
@@ -408,7 +408,7 @@ const enGec = (tarihler: readonly string[]): string | null => (tarihler.length =
 // yerleşmeyen kalem varsa plan termini yoktur. Kartsız kalem plansızdır. İstenen termin bir siparişi geciktiriyorsa plancı onayı gerekir.
 export function denemeCevabi(
   satirlar: readonly Pick<TeklifSatiri, 'id' | 'sira' | 'malzemeNo' | 'tanim' | 'miktar'>[], sonuc: DenemeSonucu | null,
-  g: { gecerlilik: string | null; istenenTermin: string | null; genelGiderSaatBasi: number | null; genelGiderGizli?: boolean },
+  g: { gecerlilik: string | null; istenenTermin: string | null; yerlesim?: TerminYerlesimi; genelGiderSaatBasi: number | null; genelGiderGizli?: boolean },
 ): TerminDenemesiCevabi {
   // 2661 a, 2669 b: gizli oranlı ayda oran, genel gider payı ve onu içeren her maliyet null; genel gider hariç maliyet de verilmez.
   const gizli = g.genelGiderGizli === true;
@@ -435,18 +435,24 @@ export function denemeCevabi(
   const planli = kalemler.filter((k) => !k.plansiz);
   const planTermini = sonuc === null || planli.length === 0 || planli.some((k) => k.planTermini === null)
     ? null : enGec(planli.map((k) => k.planTermini ?? ''));
-  const termin = g.istenenTermin ?? planTermini;
   const kayanlar = sonuc?.kayanlar ?? [];
+  const yerlesim = g.yerlesim ?? terminYerlesimi(g.istenenTermin, null);
+  // Arkaya eklemede plan değişmez: istenen termine yetişmeyen teklifte müşteriye planın verdiği tarih gider (Risk 3301 K-ek). Terminden
+  // geriye yerleşimde istenen termin kalır; başka sipariş gecikirse plancı onayı ister.
+  const yetismez = g.istenenTermin !== null && planTermini !== null && planTermini > g.istenenTermin;
+  const termin = yerlesim === 'arkaya' && yetismez ? planTermini : g.istenenTermin ?? planTermini;
   return {
     durum: sonuc === null && planli.length > 0 ? 'cozucu-yok' : 'hazir',
     planSurumu: sonuc?.planSurumu ?? null,
     gecerlilik: g.gecerlilik,
     istenenTermin: g.istenenTermin,
+    yerlesim,
     planTermini,
     termin,
     terminGun: termin !== null && g.gecerlilik !== null ? gunFarki(g.gecerlilik, termin) : null,
     yetisir: g.istenenTermin === null ? null : planTermini !== null && planTermini <= g.istenenTermin,
-    onayGerekli: g.istenenTermin !== null && kayanlar.some((k) => k.gecikir),
+    // 3301: arkaya eklemede plan dondurulur, kimse kaymaz; onay yalnız terminden geriye yerleşimde doğar.
+    onayGerekli: yerlesim === 'geriye' && g.istenenTermin !== null && kayanlar.some((k) => k.gecikir),
     satinalmaGerekli: kalemler.some((k) => k.satinalma.length > 0),
     kalemler,
     maliyetToplami: planli.length === 0 ? null : tl(toplamVeyaNull(planli.map((k) => (k.toplamMaliyet === null ? null : Number(k.toplamMaliyet))))),
@@ -503,6 +509,7 @@ export interface MotorGirdisi {
   kalemler: { malzemeNo: number; adet: number }[];
   gecerlilik: string;
   istenenTermin: string | null;
+  yerlesim: TerminYerlesimi;
   taslakId: string | null;
   taslaklar: { id: string; gecerlilik: string; kalemler: { malzemeNo: number; adet: number; termin: string; yerlesim: Record<string, MotorYerlesimi> }[] }[];
 }
@@ -593,9 +600,12 @@ export function motorTaslaklari(t: readonly {
   });
 }
 
-// TKL-17 (49): yer tutan satış taslağı yalnız istenen termin değişince yeniden yerleşir; geçerliliği geçmişse yeri kalkmıştır.
-export function yenidenYerlesirMi(mevcut: { istenenTermin: string | null; gecerli: boolean } | null, istenenTermin: string | null): boolean {
-  return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin;
+// TKL-17 (49): yer tutan satış taslağı yalnız istenen termin ya da yerleşim (3301) değişince yeniden yerleşir; geçerliliği geçmişse yeri
+// kalkmıştır. Yerleşimi yazılmamış eski taslak istenen terminden çıkar (boş: arkaya, dolu: geriye); böylece yeniden dizilmez.
+export function yenidenYerlesirMi(
+  mevcut: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null; gecerli: boolean } | null, istenenTermin: string | null, yerlesim: TerminYerlesimi,
+): boolean {
+  return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin || terminYerlesimi(mevcut.istenenTermin, mevcut.yerlesim) !== yerlesim;
 }
 
 // Takvimde siparişin durum adı ve kapanmışlığı (891); iptal takvime gelmez.

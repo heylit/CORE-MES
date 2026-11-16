@@ -278,6 +278,14 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(denemeCevabi([satir(1, 11)], { ...sonuc, kayanlar: [{ ...kayan, gecikir: false }] }, { ...g, istenenTermin: '2099-07-10' }).yetisir, true);
     // Arkaya eklemede kayma bilgidir, onay istemez.
     assert.equal(denemeCevabi([satir(1, 11)], sonuc, g).onayGerekli, false);
+    // 3301: yerleşim verilmezse istenen terminden çıkar; istenen terminle arkaya eklemede termin ve yetişme yazılır, onay doğmaz.
+    assert.equal(c.yerlesim, 'geriye');
+    assert.equal(denemeCevabi([satir(1, 11)], sonuc, g).yerlesim, 'arkaya');
+    const arkaya = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-05', yerlesim: 'arkaya' });
+    // Risk 3301 K-ek: arkaya eklemede istenen termine yetişmeyen teklifte termin planınkidir (müşteriye istenen termin yazılmaz).
+    assert.deepEqual([arkaya.yerlesim, arkaya.termin, arkaya.yetisir, arkaya.onayGerekli], ['arkaya', '2099-07-08', false, false]);
+    const yetisen = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-10', yerlesim: 'arkaya' });
+    assert.deepEqual([yetisen.termin, yetisen.yetisir], ['2099-07-10', true]);
     assert.equal(gunFarki('2099-02-27', '2099-03-01'), 2);
   });
 
@@ -304,13 +312,18 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(denemeSuzgeci(c, { toplam: true, dokum: true }).kalemler[0]?.dokum?.length, 3);
   });
 
-  test('TKL-17 (49) yer tutan satış taslağı yalnız istenen termin değişince yeniden yerleşir; geçerliliği geçmişse yeri yoktur', () => {
-    assert.equal(yenidenYerlesirMi(null, null), true);
-    assert.equal(yenidenYerlesirMi({ istenenTermin: null, gecerli: true }, null), false);
-    assert.equal(yenidenYerlesirMi({ istenenTermin: '2099-07-05', gecerli: true }, '2099-07-05'), false);
-    assert.equal(yenidenYerlesirMi({ istenenTermin: null, gecerli: true }, '2099-07-05'), true);
-    assert.equal(yenidenYerlesirMi({ istenenTermin: '2099-07-05', gecerli: true }, null), true);
-    assert.equal(yenidenYerlesirMi({ istenenTermin: null, gecerli: false }, null), true);
+  test('TKL-17 (49) yer tutan satış taslağı yalnız istenen termin ya da yerleşim (3301) değişince yeniden yerleşir; geçerliliği geçmişse yeri yoktur', () => {
+    const y = (istenenTermin: string | null, yerlesim: 'arkaya' | 'geriye' | null = null, gecerli = true) => ({ istenenTermin, yerlesim, gecerli });
+    assert.equal(yenidenYerlesirMi(null, null, 'arkaya'), true);
+    assert.equal(yenidenYerlesirMi(y(null), null, 'arkaya'), false);
+    assert.equal(yenidenYerlesirMi(y('2099-07-05'), '2099-07-05', 'geriye'), false);
+    assert.equal(yenidenYerlesirMi(y(null), '2099-07-05', 'geriye'), true);
+    assert.equal(yenidenYerlesirMi(y('2099-07-05'), null, 'arkaya'), true);
+    assert.equal(yenidenYerlesirMi(y(null, null, false), null, 'arkaya'), true);
+    // 3301: yerleşimi yazılmamış eski taslak istenen terminden çıkar; aynı termin ve yerleşimle yeniden dizilmez, yerleşim değişince dizilir.
+    assert.equal(yenidenYerlesirMi(y('2099-07-05'), '2099-07-05', 'arkaya'), true);
+    assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'arkaya'), false);
+    assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'geriye'), true);
     assert.deepEqual(kilitler({ planSurumu: null, kalemler: [kalem(1)], kayanlar: [], plan: null }).map((k) => [k.satirId, k.opId, k.tezgah]), [[1, '1.10', 'T1']]);
   });
 

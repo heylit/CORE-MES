@@ -1,18 +1,15 @@
 import { useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import type { TeklifAyrintiCevabi, TeklifEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { CokSatir, Dugme, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { api } from '../../ortak/veri/api.ts';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
+import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, paraBirimiSecenekleri, sayiGirdisi } from './gorunum.ts';
 import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
-import { SayfaBasligi } from './SayfaBasligi.tsx';
-import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { eskiyseYenile, useKorumaliGonderim } from './yazma.ts';
-import './siparisler.css';
 
 interface SatirDegeri {
   anahtar: number;
@@ -30,6 +27,8 @@ interface Degerler {
   aciklama: string;
   satirlar: SatirDegeri[];
 }
+
+export type TalepKademesi = 1 | 2;
 
 let satirSayaci = 0;
 const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, kart: null, tanim: '', miktar: '' });
@@ -51,20 +50,25 @@ function ilkDegerler(t: TeklifAyrintiCevabi | null): Degerler {
   };
 }
 
-function dogrula(d: Degerler): AlanHatalari {
-  const hata: AlanHatalari = {};
-  if (d.firma === null) hata['firma'] = 'Firma seçin.';
-  if (d.baslik.trim() === '') hata['baslik'] = 'Başlık zorunlu.';
-  if (d.paraBirimi.trim() === '') hata['paraBirimi'] = 'Para birimi zorunlu.';
-  d.satirlar.forEach((s, i) => {
-    if (s.tanim.trim() === '') hata[`satirlar.${i}.tanim`] = 'Satır tanımı zorunlu.';
-    if (s.miktar.trim() === '') hata[`satirlar.${i}.miktar`] = 'Miktar zorunlu.';
-    else if (belirsizSayi(s.miktar)) hata[`satirlar.${i}.miktar`] = BELIRSIZ_SAYI;
-  });
-  return hata;
+// Kademe 1 yalnız talep bilgilerini, kademe 2 bütün talebi denetler (kalemlerde Devam talebi kaydeder).
+function dogrula(kademe: TalepKademesi) {
+  return (d: Degerler): AlanHatalari => {
+    const hata: AlanHatalari = {};
+    if (d.firma === null) hata['firma'] = 'Firma seçin.';
+    if (d.baslik.trim() === '') hata['baslik'] = 'Başlık zorunlu.';
+    if (d.paraBirimi.trim() === '') hata['paraBirimi'] = 'Para birimi zorunlu.';
+    if (kademe === 1) return hata;
+    d.satirlar.forEach((s, i) => {
+      if (s.tanim.trim() === '') hata[`satirlar.${i}.tanim`] = 'Satır tanımı zorunlu.';
+      if (s.miktar.trim() === '') hata[`satirlar.${i}.miktar`] = 'Miktar zorunlu.';
+      else if (belirsizSayi(s.miktar)) hata[`satirlar.${i}.miktar`] = BELIRSIZ_SAYI;
+    });
+    return hata;
+  };
 }
 
 const alanEsle = (alan: string): string => (alan === 'firmaId' ? 'firma' : alan.replace(/^(satirlar\.\d+)\.malzemeNo$/, '$1.kart'));
+const kalemAdi = (yol: string): string | null => { const i = /^satirlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : `Kalem ${String(Number(i) + 1)}`; };
 
 function govdeKur(d: Degerler) {
   return {
@@ -77,29 +81,44 @@ function govdeKur(d: Degerler) {
   } satisfies TeklifEkleGovdesi;
 }
 
-function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
-  const gezin = useNavigate();
+interface Ozellikler {
+  teklif: TeklifAyrintiCevabi | null;
+  kademe: TalepKademesi;
+  kademeYaz: (k: TalepKademesi) => void;
+  // Fiyat yetkisi olan Devam ile kademe 3'e geçer; olmayanın talebi burada biter ("Talebi aç").
+  fiyatVerir: boolean;
+  // Talep kaydedildi (açıldı ya da güncellendi): sayfa teklifin adresine geçer.
+  kaydedildi: (cevap: TeklifAyrintiCevabi) => void;
+}
+
+// 3301 (D): teklif vermenin ilk iki kademesi, talep bilgileri ve kalemler. Talep yalnız ilk sürüm verilmeden düzenlenir (TKL-03).
+export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedildi }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const ekle = useKorumaliGonderim();
   const [acilisSurumu] = useState(teklif?.surum ?? null);
   const [secilecek, secilecekYaz] = useState<number | null>(null);
+  const kademeRef = useRef(kademe);
+  kademeRef.current = kademe;
 
-  const form = useForm<Degerler, TeklifAyrintiCevabi>({
+  const form = useForm<Degerler, TeklifAyrintiCevabi | null>({
     ilk: ilkDegerler(teklif),
-    dogrula,
+    dogrula: (d) => dogrula(kademeRef.current)(d),
     alanEsle,
-    hataIletisi: 'Teklif kaydedilemedi.',
+    hataIletisi: 'Teklif talebi kaydedilemedi.',
+    // Kademe 1'de kayıt yoktur: denetim geçince kalemlere geçilir.
     kaydet: (d) => {
+      if (kademeRef.current === 1) return Promise.resolve(null);
       const govde = govdeKur(d);
       if (teklif === null || acilisSurumu === null) return ekle<TeklifAyrintiCevabi>('/siparisler/teklifler/ekle', govde);
-      return api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${teklif.id}/guncelle`, { ...govde, surum: acilisSurumu });
+      return api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${String(teklif.id)}/guncelle`, { ...govde, surum: acilisSurumu });
     },
     basarili: (cevap) => {
+      if (cevap === null) { kademeYaz(2); return; }
       istemci.setQueryData(anahtarlar.teklif(cevap.id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.teklifListeleri });
       bildir('tamam', teklif === null ? 'Teklif talebi açıldı.' : 'Teklif talebi güncellendi.');
-      void gezin(`/siparisler/teklifler/${cevap.id}`);
+      kaydedildi(cevap);
     },
     hatada: (hata) => { if (teklif !== null) eskiyseYenile(istemci, anahtarlar.teklif(teklif.id), hata); },
   });
@@ -109,17 +128,11 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
 
   const satirDegistir = (i: number, yama: Partial<SatirDegeri>) =>
     form.degistir({ satirlar: d.satirlar.map((s, j) => (j === i ? { ...s, ...yama } : s)) });
-  const geri = teklif === null ? '/siparisler/teklifler' : `/siparisler/teklifler/${teklif.id}`;
+  const birincil = kademe === 1 ? 'Devam' : fiyatVerir ? 'Kaydet ve devam' : teklif === null ? 'Talebi aç' : 'Kaydet';
 
   return (
-    <section className="tc-sp">
-      <SayfaBasligi
-        baslik={teklif === null ? 'Yeni teklif' : `Düzenle: ${teklif.no}`}
-        alt={teklif === null ? 'Müşteri adına teklif talebi açın; ardından fiyatları girip sürüm verin.' : 'Talep yalnız ilk sürüm verilmeden düzenlenir.'}
-        geriYol={geri}
-        geriMetni={teklif === null ? 'Tekliflere dön' : 'Teklife dön'}
-      />
-      <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate>
+    <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate aria-label={kademe === 1 ? 'Müşteri ve konu' : 'Kalemler'}>
+      {kademe === 1 && (
         <Kart baslik="Talep bilgileri">
           <div className="tc-sp-izgara">
             <FirmaSecici etiket="Müşteri" zorunlu deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
@@ -129,7 +142,9 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
           </div>
           <CokSatir etiket="Açıklama" placeholder="Teknik resim revizyonu, malzeme, kaplama, teslim yeri" {...form.alan('aciklama')} />
         </Kart>
+      )}
 
+      {kademe === 2 && (
         <Kart baslik="Kalemler" sag={<Dugme simge="plus" onClick={() => form.degistir({ satirlar: [...d.satirlar, bosSatir()] })}>Kalem ekle</Dugme>}>
           <ol className="tc-sp-kalemler">
             {d.satirlar.map((s, i) => (
@@ -171,13 +186,15 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
             ))}
           </ol>
         </Kart>
+      )}
 
-        <GonderimHatasi form={form} etiket={(yol) => { const i = /^satirlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : `Kalem ${String(Number(i) + 1)}`; }} />
+      <div className="tc-sp-kademe-cubuk">
+        <GonderimHatasi form={form} etiket={kalemAdi} />
         <div className="tc-sp-alt-cubuk">
-          <Dugme onClick={() => { void gezin(geri); }} disabled={form.gonderiliyor}>Vazgeç</Dugme>
-          <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{teklif === null ? 'Talebi aç' : 'Kaydet'}</Dugme>
+          {kademe === 2 && <Dugme simge="back" onClick={() => kademeYaz(1)} disabled={form.gonderiliyor}>Geri</Dugme>}
+          <Dugme tur="birincil" type="submit" simge={kademe === 1 || fiyatVerir ? 'next' : 'check'} yukleniyor={form.gonderiliyor}>{birincil}</Dugme>
         </div>
-      </form>
+      </div>
       <MalzemeSecici
         acik={secilecek !== null}
         kapat={() => secilecekYaz(null)}
@@ -191,22 +208,6 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
           secilecekYaz(null);
         }}
       />
-    </section>
+    </form>
   );
-}
-
-export function TeklifFormu({ duzenle = false }: { duzenle?: boolean }) {
-  const id = Number(useParams()['id']);
-  const teklif = useQuery({
-    queryKey: anahtarlar.teklifDuzenle(id),
-    queryFn: () => api.get<TeklifAyrintiCevabi>(`/siparisler/teklifler/${id}`),
-    enabled: duzenle,
-    gcTime: 0,
-    refetchOnWindowFocus: false,
-  });
-  if (!duzenle) return <Form teklif={null} />;
-  if (teklif.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (teklif.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(teklif.error, 'Teklif alınamadı')} yenile={() => { void teklif.refetch(); }} />;
-  if (teklif.data.durum !== 'yeni') return <DurumKutusu durum="bos" mesaj="Talep yalnız ilk sürüm verilmeden düzenlenir." />;
-  return <Form teklif={teklif.data} />;
 }

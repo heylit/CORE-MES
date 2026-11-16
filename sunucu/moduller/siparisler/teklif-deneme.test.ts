@@ -52,7 +52,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
         }],
         eksik: [],
       })),
-      kayan: istek.istenenTermin === null ? [] : [{
+      // Arkaya eklemede plan dondurulur, kimse kaymaz (3301).
+      kayan: istek.istenenTermin === null || istek.yerlesim === 'arkaya' ? [] : [{
         siparis: 'p-1', emirNo: 'S-DENEME', once: '2099-07-01T10:00:00+03:00', sonra: geciktirir ? '2099-07-04T10:00:00+03:00' : '2099-07-02T10:00:00+03:00',
         termin: '2099-07-02T23:00:00+03:00',
       }],
@@ -265,6 +266,30 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     const onayli = (await taslaklar(t))[0]!;
     assert.deepEqual([onayli.gorunum, onayli.onaylayan?.startsWith('Deneme tdeneme-'), onayli.onayAni !== null], ['satis', true, true]);
     await komut(t, 'termin-onayla', {}, 422, planlama.cerez);
+  });
+
+  test('3301 yerleşim: istenen terminle arkaya ekleme onay istemez ve saklanır; yalnız yerleşim değişince yeniden denenir; geriye termin ister', async () => {
+    let t = await teklifAc();
+    geciktirir = true;
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '25', istenenTermin: '2099-07-05', yerlesim: 'arkaya' } }));
+    // Plan istenen termine yetişmiyor (plan termini 2099-07-14): sürüme ve müşteriye planın tarihi gider (Risk 3301 K-ek).
+    assert.deepEqual([t.durum, t.surumler[0]?.terminTarihi], ['verildi', '2099-07-14']);
+    assert.deepEqual(istekler.map((i) => [i.istenenTermin, i.yerlesim]), [['2099-07-05', 'arkaya']]);
+    let l = await taslaklar(t);
+    assert.deepEqual(l.map((x) => [x.gorunum, x.yerlesim, x.onayGerekli]), [['satis', 'arkaya', false]]);
+    t = await komut(t, 'revizyon-iste', { not: 'Fiyat yüksek' });
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '20', istenenTermin: '2099-07-05', yerlesim: 'arkaya' } }));
+    assert.equal(istekler.length, 1);
+    t = await komut(t, 'revizyon-iste', { not: 'Termine göre yerleştir' });
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '20', istenenTermin: '2099-07-05', yerlesim: 'geriye' } }));
+    assert.deepEqual(istekler.map((i) => i.yerlesim), ['arkaya', 'geriye']);
+    assert.equal(t.durum, 'onay-bekliyor');
+    l = await taslaklar(t);
+    assert.deepEqual(l.map((x) => [x.gorunum, x.yerlesim]), [['onay-bekliyor', 'geriye'], ['kalkti', 'arkaya']]);
+    const bos = await oku(yonetici, `/siparisler/teklifler/${t.id}/termin-denemesi?yerlesim=geriye`);
+    assert.equal(bos.statusCode, 400);
+    const deneme = (await oku(yonetici, `/siparisler/teklifler/${t.id}/termin-denemesi?istenenTermin=2099-07-05&yerlesim=arkaya`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([deneme.yerlesim, deneme.onayGerekli, deneme.yetisir, deneme.termin], ['arkaya', false, false, '2099-07-14']);
   });
 
   test('TKL-15 iskonto ve termin onayı birlikte: ikisi de verilmeden teklif müşteriye gitmez', async () => {
