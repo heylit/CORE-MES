@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { bol, ekranModulleri, ekranSureleri, PARCA, planKur, secimHesapla, sureleriBirlestir, tumDosyalar } from './ci-plan.ts';
+import { bol, ekranModulleri, onYuklemeyeUlasir, ekranSureleri, PARCA, planKur, secimHesapla, sureleriBirlestir, tumDosyalar } from './ci-plan.ts';
 import type { Etki } from './etki.ts';
 import { sureEkle } from './test-rapor-github.ts';
 
@@ -29,10 +29,10 @@ const ICERIK = new Map([
 const SUNUCU_ICERIK = new Map([
   ['sunucu/cekirdek/a.test.ts', "readFileSync('CLAUDE.md')"],
   ['sunucu/moduller/plan/b.test.ts', "join(KOK, 'sunucu', 'gocler')"],
-  ['sunucu/moduller/stok/c.test.ts', 'const x = 1;'],
+  ['sunucu/moduller/stok/c.test.ts', "const KLASOR = new URL('./islemler/', import.meta.url);"],
 ]);
 const sec = (degisenler: string[], e: Partial<Etki>) =>
-  secimHesapla({ degisenler, etki: etki(e), tum: TUM, ekranIcerikleri: ICERIK, istemciModulleri: MODULLER, sunucuIcerikleri: SUNUCU_ICERIK });
+  secimHesapla({ degisenler, etki: etki(e), tum: TUM, ekranIcerikleri: ICERIK, istemciModulleri: MODULLER, sunucuIcerikleri: SUNUCU_ICERIK, onYuklemeDegisti: false });
 
 test('ci-plan: bölme en uzun dosyayı en hafif parçaya verir, her dosya tek parçadadır, plan her koşuda aynıdır', () => {
   const sureler = new Map([['a', 90], ['b', 60], ['c', 50], ['d', 40], ['e', 10]]);
@@ -76,10 +76,29 @@ test('ci-plan: modül değişikliği etkilenen testleri, o modülün ve modüls�
   });
 });
 
-test('ci-plan: içe aktarılmayan dosya (göç, kural metni) onu adıyla ya da klasörüyle anan testi seçer; kod dosyası adıyla seçmez', () => {
-  assert.deepEqual(sec(['sunucu/gocler/20990101000000_x.sql'], { digerDosyalar: ['sunucu/gocler/20990101000000_x.sql'] }).sunucu, ['sunucu/moduller/plan/b.test.ts']);
+test('ci-plan: göç bütün sunucu testlerini koşturur; içe aktarılmayan başka dosya (kural metni) onu adıyla anan testi seçer; kod dosyası adıyla seçmez', () => {
+  const goc = sec(['sunucu/gocler/20990101000000_x.sql'], { digerDosyalar: ['sunucu/gocler/20990101000000_x.sql'] });
+  assert.deepEqual([goc.sunucu, goc.windows], [TUM.sunucu, TUM.windows], 'göç bütün sunucu testlerini koşturur');
   assert.deepEqual(sec(['CLAUDE.md'], { digerDosyalar: ['CLAUDE.md'] }).sunucu, ['sunucu/cekirdek/a.test.ts']);
   assert.deepEqual(sec(['sunucu/cekirdek/CLAUDE.md.ts'], {}).sunucu, []);
+  // Klasörü readdir ile tarayan test, o klasöre eklenen (kimsenin ithal etmediği) dosyayla seçilir; başka klasörün eşi seçilmez.
+  assert.deepEqual(sec(['sunucu/moduller/stok/islemler/yeni.ts'], {}).sunucu, ['sunucu/moduller/stok/c.test.ts']);
+  assert.deepEqual(sec(['sunucu/moduller/plan/islemler/yeni.ts'], {}).sunucu, []);
+});
+
+test('ci-plan: her sunucu testine --import ile giren ön yüklemeye ulaşan değişiklik bütün sunucu testlerini koşturur', () => {
+  const ters = new Map([['araclar/ortam.ts', new Set(['araclar/ortam-yukle-goc.ts', 'araclar/ortam.test.ts'])], ['sunucu/kablolama.ts', new Set(['araclar/kablolama-yukle.ts'])]]);
+  assert.equal(onYuklemeyeUlasir(['araclar/ortam-yukle-goc.ts'], ters), true);
+  assert.equal(onYuklemeyeUlasir(['araclar/kablolama-yukle.ts'], ters), true);
+  assert.equal(onYuklemeyeUlasir(['araclar/ortam.ts'], ters), true);
+  assert.equal(onYuklemeyeUlasir(['sunucu/moduller/plan/servis.ts'], ters), false);
+  // Kablolama her modülü ithal eder; ondan geçen yol sayılmaz (yoksa her değişiklik tam küme olurdu).
+  const kablolu = new Map([...ters, ['sunucu/moduller/plan/servis.ts', new Set(['sunucu/kablolama.ts'])]]);
+  assert.equal(onYuklemeyeUlasir(['sunucu/moduller/plan/servis.ts'], kablolu), false);
+  assert.equal(onYuklemeyeUlasir(['sunucu/kablolama.ts'], kablolu), false);
+  const s = secimHesapla({ degisenler: ['araclar/ortam-yukle-goc.ts'], etki: etki({}), tum: TUM, ekranIcerikleri: ICERIK,
+    istemciModulleri: MODULLER, sunucuIcerikleri: SUNUCU_ICERIK, onYuklemeDegisti: true });
+  assert.deepEqual([s.sunucu, s.windows], [TUM.sunucu, TUM.windows]);
 });
 
 test('ci-plan: değişen ekran testi koşar; ortak ekran dosyası ya da modül dışı istemci dosyası bütün ekran testlerini koşturur', () => {

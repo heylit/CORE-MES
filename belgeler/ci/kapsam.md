@@ -41,6 +41,11 @@ her parça kendi listesini (`ci-plan/<iş>-<parça>.txt`) indirir. Matris planda
   modülün sayfasını açan test (`ac('/<modül>/...')`) ve modüle bağlanamayan test (sayfayı değişkenle açan, modül klasörü olmayan
   yolu açan) koşar. Grafiğin bilmediği değişiklik (paket, yapılandırma, `arkon/`), ekranın ortak dosyası ya da modül dışı istemci
   dosyası etkilenirse ilgili işte bütün dosyalar koşar.
+- Göç (`sunucu/gocler/`) bütün şemayı değiştirir: bütün sunucu ve Windows testleri koşar (kısıt listesi gibi şema çapındaki
+  denetimler göçü adıyla anmaz). Her sunucu testine `--import` ile giren ön yüklemeye (`araclar/ortam-yukle-goc.ts`,
+  `araclar/kablolama-yukle.ts` ve ithal ettikleri; `sunucu/kablolama.ts` üzerinden geçen yol sayılmaz, onu kablolama bağları taşır)
+  ulaşan değişiklikte de bütün sunucu ve Windows testleri koşar. Grafikte olmayan başka değişen dosya (kural metni gibi) onu yoluyla
+  ya da adıyla anan testi seçer; klasörü `new URL('./<klasör>/', import.meta.url)` ile tarayan test o klasördeki her değişiklikte seçilir.
 - Görmediği bağlar: uç üzerinden HTTP çağrısı, SQL ile başka tabloya bakış, dizgeyle kurulan ithal. Bunların kırığı çekme isteğinde
   değil ana dal koşusunda görünür; canlı paket yalnız `windows-yesil` etiketli commit'ten çıktığı için canlıya geçmez.
 - Ana dal ve elle koşu: her dosya koşar.
