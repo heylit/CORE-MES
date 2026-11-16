@@ -35,6 +35,24 @@
 .tc-pyq-emir-ad { min-width: 0; font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-pyq-emir-ad .tc-pyq-mono { font-family: var(--font-mono); }
 .tc-pyq-emir-ad small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-emir-ad small b[data-d="gec"] { color: var(--d-gec); }
+.tc-pyq-emir-ad small b[data-d="risk"] { color: var(--d-risk); }
+/* Emrin yönü: emrin adının altında tek satır; seçenekler ve etkisi Değiştir'le satırın tam genişliğinde açılır (adımlar yerinden oynamaz). */
+.tc-pyq-emir-yon { display: contents; }
+.tc-pyq-emir-yon-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); grid-column: 1; min-width: 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-emir-yon-acik { display: flex; flex-direction: column; gap: var(--b-2); grid-column: 1 / -1; min-width: 0; padding-top: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-pyq-emir-yon-acik .tc-pyq-seg { flex-wrap: wrap; align-self: flex-start; }
+.tc-pyq-emir-yon-acik .tc-pyq-not { margin: 0; }
+.tc-pyq-emir-yon-acik .tc-pyq-ayar-etki { display: flex; flex-direction: column; gap: var(--b-2); max-width: calc(var(--b-6) * 12); }
+.tc-pyq-emir-yon-acik h3 { margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; }
+.tc-pyq-emir-yon-acik dl { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); }
+.tc-pyq-emir-yon-acik dl div { display: flex; justify-content: space-between; gap: var(--b-2); }
+.tc-pyq-emir-yon-acik dt { color: var(--muted); }
+.tc-pyq-emir-yon-acik dd { margin: 0; font-weight: 600; text-align: right; }
+.tc-pyq-emir-yon-acik dd[data-yon="iyi"] { color: var(--d-iyi); }
+.tc-pyq-emir-yon-acik dd[data-yon="kotu"] { color: var(--d-gec); }
+.tc-pyq-emir-yon-acik .tc-pyq-ayar-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pyq-rota button[aria-current="true"] { border-style: solid; border-color: var(--ink); }
 .tc-pyq-rota { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-pyq-rota li { display: flex; align-items: center; gap: var(--b-2); }
 .tc-pyq-rota li + li::before { content: "→"; color: var(--muted); }

@@ -8,7 +8,7 @@ import { altEkranAdresi } from '../gorunumler.ts';
 import { kisitBul } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, YON_ALANLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, planYonu, sayiOku,
+  AYAR_ALANLARI, PANEL_KISITLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, planYonu, sayiOku,
   type AyarAlani, type AyarTaslagi,
 } from './ayarlar.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
@@ -30,14 +30,18 @@ export interface AyarlarOzellikleri {
   etkiBekliyor?: (bekliyor: boolean) => void;
 }
 
+const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
+
 export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor }: AyarlarOzellikleri) {
   const [t, setT] = useState<AyarTaslagi>(() => {
     const t0 = ayarTaslagi(c), a = AYAR_ALANLARI.find((x) => x.k === 'yon');
     return yon !== null && a ? alanYaz(t0, a, yon) : t0;
   });
+  // Yön paneli açıldığı andaki yönü yazar: komut taslağa girince plan yeni yönü gösterir, başlık "eski → yeni" kalmalıdır.
+  const [oncekiYon] = useState(() => planYonu(c));
   const [tazele, setTazele] = useState(false);
   useEffect(() => { if (tazele) { setT(ayarTaslagi(c)); setTazele(false); } }, [c, tazele]);
-  const { durum, setDurum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: (x) => { if (x === 'uygulandi') kapat(); else setTazele(true); } });
+  const { durum, setDurum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: (x) => { if (x === 'uygulandi' || yon !== null) kapat(); else setTazele(true); } });
   const [hatalar, setHatalar] = useState<Record<string, string>>({});
   const [motor, setMotor] = useState<MotorAyarlariCevabi['guncel'] | { hata: string } | null>(null);
   useEffect(() => {
@@ -109,6 +113,18 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
     </section>
   );
 
+  // Üst şeritteki Yön seçiminden açıldıysa (3304 a) panel yalnız yönün etkisini taşır: öteki ayarlar Araçlar > Ayarlar'dadır.
+  if (yon !== null) {
+    return (
+      <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Planın yönü">
+        <header>
+          <div><b>Planın yönü</b><small>{YON_ADI[oncekiYon]} → {YON_ADI[yon]}</small></div>
+          <button type="button" className="tc-pyq-simge-dugme" aria-label="Yönü kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
+        </header>
+        {eylem}
+      </aside>
+    );
+  }
   return (
     <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Plan ayarları">
       <header>
@@ -116,11 +132,8 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Ayarları kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!yazabilir && <p className="tc-pyq-not">Ayarları yalnız planı yazabilen kişi değiştirir.</p>}
-      {yon !== null && eylem}
-      <h3>Yön</h3>
-      {AYAR_ALANLARI.filter((a) => YON_ALANLARI.has(a.k)).map(alan)}
       <h3>Zaman ve tampon</h3>
-      {AYAR_ALANLARI.filter((a) => a.k !== 'mat' && !YON_ALANLARI.has(a.k)).map(alan)}
+      {AYAR_ALANLARI.filter((a) => a.k !== 'mat' && a.k !== 'yon').map(alan)}
       <h3>Kısıtlar</h3>
       {PANEL_KISITLARI.map((k) => (
         <IsaretKutusu key={k} etiket={kisitBul(k)?.ad ?? k} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
@@ -142,7 +155,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
       </dl>
       {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
       <p className="tc-pyq-not">Dört göz (onaylayan gönderenden başkası olsun) <Link to="/ayarlar">Sistem Ayarları</Link> &gt; Plan altındadır.</p>
-      {yon === null && eylem}
+      {eylem}
     </aside>
   );
 }

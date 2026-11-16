@@ -89,8 +89,12 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
 
   it('üst şeritteki yön düğmesinden açılınca taslak o yönle başlar ve etkisi sorulmadan hesaplanır; Vazgeç geri alır', async () => {
     const bekliyor = vi.fn();
-    const { t, yazilan } = kur(ornekCalisma(), true, 'geri', bekliyor);
-    expect((screen.getByLabelText('Planlama yönü') as HTMLSelectElement).value).toBe('geri');
+    const { t, yazilan, kapat } = kur(ornekCalisma(), true, 'geri', bekliyor);
+    // 3304 a: Yön seçiminden açılan panel yalnız yönün etkisini taşır; öteki ayarlar çizilmez.
+    const panel = screen.getByRole('complementary', { name: 'Planın yönü' });
+    expect(panel.textContent).toContain('İleriye → Teslimden geriye');
+    expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Zaman ve tampon' })).toBeNull();
     const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
     expect(yazilan).toEqual([{ tur: 'ayar', ayar: { w: { yon: 'geri' }, param: {}, ac: [], kapat: [] }, ayrinti: 'Planlama yönü: İleri: hemen başla → Geri: teslimden geriye' }]);
     expect(t.yaz).toHaveBeenCalledTimes(1);
@@ -99,6 +103,25 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
     await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(false); });
+    // Vazgeçince panel kapanır: yön yalnız üst şeritten seçilir.
+    await waitFor(() => { expect(kapat).toHaveBeenCalled(); });
+  });
+
+  it('yön panelinin başlığı komut taslağa girip plan yeni yönü gösterince de "eski → yeni" kalır', () => {
+    vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: null, degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
+    const c = ornekCalisma(), { t } = sahteTaslak(c.dataVer);
+    const ciz = (x: PlanlamaCalismasi) => <MemoryRouter><Ayarlar c={x} taslak={t} yazabilir kim="ORN-Planlamaci" kapat={() => {}} yon="geri" /></MemoryRouter>;
+    const { rerender } = render(ciz(c));
+    rerender(ciz({ ...c, w: { ...c.w, yon: 'geri' } }));
+    expect(screen.getByRole('complementary', { name: 'Planın yönü' }).textContent).toContain('İleriye → Teslimden geriye');
+  });
+
+  it('Araçlar > Ayarlar ile açılan panelde yön seçimi yoktur; teslim tamponu durur (3304 a)', () => {
+    kur(ornekCalisma());
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Yön' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Zaman ve tampon' })).toBeTruthy();
   });
 
   it('etki beklerken panel kapanırsa (kaldırılırsa) bekleme bildirimi düşer: Canlıya al kilitli kalmaz', async () => {

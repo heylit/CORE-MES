@@ -78,13 +78,15 @@ describe('Kokpit', () => {
     expect(sec.mock.calls[0]?.[0]).toMatchObject({ adim: expect.any(String) as unknown });
   });
 
-  it('seçili emrin ayrıntısı adımları ve yerlerini gösterir; kapatmak seçimi kaldırır', () => {
-    const { sec } = ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
-    const ayr = screen.getByRole('complementary', { name: /ayrıntısı/ });
-    expect(within(ayr).getByRole('button', { name: /1\. / }).getAttribute('aria-current')).toBe('true');
-    expect(within(ayr).getByText('Başlamış iş taşınmaz')).toBeTruthy();
-    fireEvent.click(within(ayr).getByRole('button', { name: 'Ayrıntıyı kapat' }));
-    expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
+  // 3304 a: ayrı ayrıntı paneli yoktur; seçili emrin kartı açılır, bilgileri ve seçili işi Operasyonlar bölümündedir.
+  it('seçili emrin ayrıntı paneli açılmaz; kartı seçilir, operasyonu bölümde işaretlenir, durum ve termin emrin satırındadır', () => {
+    ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    expect(screen.queryByRole('complementary', { name: /ayrıntısı/ })).toBeNull();
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-emir="2"]')).not.toBeNull();
+    expect(bolum.querySelector('[data-adim="2.20"]')?.getAttribute('aria-current')).toBe('true');
+    expect(bolum.querySelector('[data-emir="2"] [data-emir-ozet]')?.textContent).toMatch(/adet · .* · termin /);
+    expect(within(bolum).queryByRole('button', { name: /ayrıntısını aç/ })).toBeNull();
   });
 
   it('Matris yükü ve emirleri tek tabloda gösterir; tıklama görünümü değiştirmez, emri ve adımı seçer', () => {
@@ -127,11 +129,10 @@ describe('Kokpit', () => {
     expect(within(yuk).getAllByRole('row')).toHaveLength(6);
   });
 
-  it('Matriste seçili emrin ayrıntısı aynı ekranda açılır; çözüm adımlardan önce gelir', () => {
+  it('Matriste seçili emir aynı ekranda işaretlenir; ayrı panel açılmaz', () => {
     ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' }));
-    const ayr = screen.getByRole('complementary', { name: /ayrıntısı/ });
-    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar', 'Planlama yönü']);
+    expect(screen.queryByRole('complementary', { name: /ayrıntısı/ })).toBeNull();
     expect(document.querySelector('tbody tr[data-emir="2"]')?.hasAttribute('data-sec')).toBe(true);
     // Seçili emrin geçtiği tezgâh-günler yükte çerçevelidir.
     expect(document.querySelectorAll('tr[data-yuk-satiri] td[data-iz]').length).toBeGreaterThan(0);
@@ -255,9 +256,6 @@ describe('Kokpit', () => {
     // 3282: engel varken de bölüm açılır (müdür onaydakini onaylar); nedeni ipucundadır.
     expect(d.hasAttribute('disabled')).toBe(false);
     expect(d.getAttribute('title')).toMatch(/^Gönderilemez/);
-    cleanup();
-    ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
-    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).not.toContain('tc-dugme-birincil');
   });
 
   it('3B görünümünde WebGL yoksa sahne açılmaz, Matris önerilir; emirler ve bakışlar yine çalışır', async () => {
@@ -354,7 +352,7 @@ describe('Kokpit', () => {
     expect(ana?.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
 
-  // 3297: Önce / sonra, Duruş ve mesai, Ayarlar ve Plan iyileştirme ara tek "Araçlar" menüsündedir; menü seçimle kapanır, açık araç işaretlidir.
+  // 3297, 3304 a: Önce / sonra, Duruş ve mesai ve Ayarlar tek "Araçlar" menüsündedir (Plan iyileştirme ara Kokpit'te yoktur); menü seçimle kapanır, açık araç işaretlidir.
   const arac = (ad: string): HTMLElement => {
     if (!screen.queryByRole('menu', { name: 'Araçlar' })) fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
     return within(screen.getByRole('menu', { name: 'Araçlar' })).getByText(ad).closest('button')!;
@@ -363,7 +361,10 @@ describe('Kokpit', () => {
     ac();
     expect(within(screen.getByRole('button', { name: 'Araçlar' })).queryByText('Araçlar')).not.toBeNull();
     expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('false');
-    expect(['Plan iyileştirme ara', 'Önce / sonra', 'Duruş ve mesai', 'Ayarlar'].map((x) => arac(x).textContent)).toEqual(['Plan iyileştirme ara', 'Önce / sonra', 'Duruş ve mesai', 'Ayarlar']);
+    arac('Ayarlar');
+    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map((x) => x.textContent)).toEqual(['Önce / sonra', 'Duruş ve mesai', 'Ayarlar']);
+    // Sorun turu şimdilik kapalıdır: üst şeritte düğmesi yoktur.
+    expect(screen.queryByRole('button', { name: 'Sorunları sırayla çöz' })).toBeNull();
     fireEvent.click(arac('Duruş ve mesai'));
     expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
@@ -391,7 +392,7 @@ describe('Kokpit', () => {
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
   });
 
-  it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; seçim Ayarlar panelini o yönle açar', () => {
+  it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
     const yon = screen.getByRole('button', { name: /Yön: İleriye/ });
     fireEvent.click(yon);
@@ -399,9 +400,14 @@ describe('Kokpit', () => {
     const l = within(menu).getAllByRole('menuitemradio');
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
-    fireEvent.click(l[1]!);
+    fireEvent.click(l[0]!);
     expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(screen.queryByRole('complementary')).toBeNull();
+    fireEvent.click(yon);
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Planın yönü' })).getAllByRole('menuitemradio')[1]!);
+    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Planın yönü' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 
   // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.

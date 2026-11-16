@@ -21,7 +21,6 @@ export const AYAR_ALANLARI: readonly AyarAlani[] = [
   { tur: 'sayi', yer: 'param', k: 'maxChg', etiket: 'Değişiklik bütçesi', ipucu: 'Onarımda canlı plana göre en çok bu kadar iş yer değiştirir.', birim: 'iş', min: 0, max: 500, adim: 1 },
   { tur: 'sec', yer: 'w', k: 'mat', etiket: 'Malzeme kuralı', ipucu: 'Geliş tarihi belli olan malzemeden önce iş başlamaz; ötekinde uyarı verilir.', secenekler: [['karma', 'Belliyse sert'], ['uyari', 'Yalnız uyarı'], ['sert', 'Her zaman sert']] },
 ];
-export const YON_ALANLARI = new Set(['yon', 'geriTamponGun']);
 // Panelde açılıp kapanan kısıtlar: planlamacının en sık değiştirdikleri; tam liste Kısıtlar sayfasındadır.
 export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'malzeme'] as const;
 
