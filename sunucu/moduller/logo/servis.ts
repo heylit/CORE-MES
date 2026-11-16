@@ -977,7 +977,7 @@ export function logodaKullanilanMalzemeKodlari(db: Db, kodlar: readonly string[]
   return s.logodaOlanMalzemeKodlari(db, kodlar);
 }
 
-// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur yalnız ilk açılışta başlar (3077 a; 3316'dan sonra istek yolu yok). Okunan yalnız logo
+// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur ilk açılışta ve ayar kapatılıp açılınca başlar (3077 a, 3316-K2 a). Okunan yalnız logo
 // modülünün aynasına yazılır, TMI kartına ya da stoğuna işlenmez (2116-1 a, 2116-2 a); Logo'ya hiçbir şey gitmez.
 function sayfaliOkumaTuru<T>(
   akis: s.SayfaliAkis, ayar: LogoAyarAnahtari, kapali: 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali',
@@ -986,7 +986,10 @@ function sayfaliOkumaTuru<T>(
 ): (vt: TxAcan, o: TurOrtami) => Promise<TurSonucu> {
   return (vt, o) => turuKos(vt, async (db) => {
     const kopru = await okumaKapisi(db, o, ayar, kapali);
-    if ('tur' in kopru) return kopru;
+    if ('tur' in kopru) {
+      if (kopru.tur === kapali) await s.acilistaTurIste(db, akis);
+      return kopru;
+    }
     if (!okumaSirasiGeldi(o, akis)) return { tur: 'bos' };
     const imlec = await s.okumaImleci(db, akis);
     const sira = sayfaliOkumaSirasi(imlec);

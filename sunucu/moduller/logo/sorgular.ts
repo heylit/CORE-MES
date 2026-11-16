@@ -466,6 +466,11 @@ export function okumaImleci(db: Db, akis: SayfaliAkis): Promise<OkumaImleci | nu
   );
 }
 
+// 3316-K2 a: okuma ayarı kapalıyken görülürse, tamamlanmış tur bir sonraki açılışta baştan okunur (ayarı kapatıp açmak aynayı tazeler).
+export async function acilistaTurIste(db: Db, akis: SayfaliAkis): Promise<void> {
+  await db.sorgu('UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis = $1 AND NOT tur_istendi AND son_tamam IS NOT NULL', [akis]);
+}
+
 // Sayfa yazılır; son sayfada turda görülmeyen satırlar silinir ve imleç başa döner. Boş tam tur (okuma kazası olabilir) aynayı boşaltmaz.
 export async function sayfaYaz(
   db: Db, akis: SayfaliAkis, turBasi: Date, zaman: Date, sonraki: number | null, sayfaSayisi: number,

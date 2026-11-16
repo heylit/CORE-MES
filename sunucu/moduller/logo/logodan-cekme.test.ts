@@ -153,11 +153,19 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
   const yazmaIstegiYok = (): void => {
     assert.deepEqual(kopru.istekler.filter((i) => i.yontem !== 'GET'), [], 'Logo\'ya yazma isteği yok');
   };
-  // 3316: ekrandan toplu okuma kalktı; okuma motorunun yeniden tur isteğini doğrudan imleçte işaretler.
-  const turuYenidenIste = async (): Promise<void> => {
+  // 3316-K2 a: ekranda toplu okuma yok; yeniden tam tur, okuma ayarı kapalıyken bir tur görülüp yeniden açılınca başlar.
+  const turuYenidenIste = async (kullanim = false): Promise<void> => {
+    if (kullanim) {
+      await ayar('logo.kullanim-okumasi', false);
+      assert.deepEqual(await kullanimOkumaTuru(vt(), ortami()), { tur: 'kullanim-kapali' });
+      await ayar('logo.kullanim-okumasi', true);
+    }
+    await ayar('logo.malzeme-okumasi', false);
+    await ayar('logo.stok-okumasi', false);
+    assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami()), { tur: 'malzeme-karti-kapali' });
+    assert.deepEqual(await stokOkumaTuru(vt(), ortami()), { tur: 'stok-kapali' });
     await ayar('logo.malzeme-okumasi', true);
     await ayar('logo.stok-okumasi', true);
-    await vt().sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok', 'kullanim')");
   };
   const gecisiBitir = async (c = cerez): Promise<number> =>
     (await app.inject({ method: 'POST', url: '/api/logo-gecisi/bitir', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: {} })).statusCode;
@@ -369,7 +377,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     yazmaIstegiYok();
   });
 
-  test('LGC-15 kullanım okuması (3079 a): kendi ayarıyla kapalı gelir; açıkken sayfa sayfa yazılır ve özete girer; yeniden tur isteği açmaz ama açıksa yeniden okutur; "Geçişi bitir" kapatır', async () => {
+  test('LGC-15 kullanım okuması (3079 a): kendi ayarıyla kapalı gelir; açıkken sayfa sayfa yazılır ve özete girer; yeniden tur isteği açmaz; ayarı kapatıp açmak baştan okutur (3316-K2 a); "Geçişi bitir" kapatır', async () => {
     kopru.sayfaBoyu = 1;
     kopru.logoKartlari.push(kart(1, 'LG-1'), kart(2, 'LG-2'), kart(3, 'LG-3'));
     kopru.logoKullanimlari.push(
@@ -401,9 +409,10 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.notEqual(ozet.kullanim.sonTamam, null);
 
     simdi += 60_000;
-    await turuYenidenIste();
+    assert.deepEqual(await kullanimOkumaTuru(vt(), ortami(bellek)), { tur: 'bos' }, 'ayar açık kaldıkça tam tur yinelenmez');
+    await turuYenidenIste(true);
     kopru.logoKullanimlari.splice(0, 1);
-    assert.equal((await kullanimOkumaTuru(vt(), ortami(bellek))).tur, 'okuma', 'açıkken yeniden tur isteği okutur');
+    assert.equal((await kullanimOkumaTuru(vt(), ortami(bellek))).tur, 'okuma', '3316-K2 a: ayar kapatılıp açılınca baştan okunur');
     const sonra = await vt().tx((db) => logodakiMalzemeOzeti(db, {}));
     assert.deepEqual(sonra.kartlar.map((k) => k.sonHareket), [null, null, null], 'Logo\'da izi kalmayan kart son tam turda düşer');
     assert.equal(await gecisiBitir(), 200);
