@@ -1167,6 +1167,20 @@ namespace LogoYardimcisi
             }
         }
 
+        // Sunucudaki yardimciKaynakOzeti (yardimci-surumu.test.ts) aynı örnekte aynı değeri bekler; iki uygulama kayarsa biri kırmızı olur.
+        static void T_kaynak_ozeti_sunucuyla_ayni_ornekte_ayni()
+        {
+            var ornek = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("b.cs", "x\r\ny"),
+                new KeyValuePair<string, string>("A.cs", "\uFEFFz\u00e7"),
+                new KeyValuePair<string, string>("Testler.cs", "t"),
+                new KeyValuePair<string, string>("not.txt", "n"),
+                new KeyValuePair<string, string>("a.cs", ""),
+            };
+            Esit("0fb1db2fbccd041eca237e4861d17ee2ac4c6c53b82ba24ce485f000fcf3de65", LogoYardimcisiSurum.Program.Ozet(ornek), "ortak örnek özeti");
+        }
+
         static void T_http_surum_ve_yetkili_kapat()
         {
             var s = Logo();

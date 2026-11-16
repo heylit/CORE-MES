@@ -23,6 +23,14 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 
 const YARDIMCI_SURUM_ARALIGI_MS = 60 * 60 * 1000;
 
+// Köprü parametre olarak verilir ki "bağlantı kapalıyken istek yok" kuralı sahte köprüyle ölçülebilsin (3314 Test T2).
+export async function yardimciSurumIsi(vt: TxAcan, kopru: KopruIstemcisi | null): Promise<IsBekliyor | undefined> {
+  if (kopru === null) return isBekliyor(BEKLEME_NEDENLERI['ortam-degiskeni-yok']);
+  if ((await vt.tx((db) => sistemAyariOku(db, 'logo.baglanti'))) !== true) return isBekliyor(BEKLEME_NEDENLERI.kapali);
+  await yardimciSurumunuSor(kopru);
+  return undefined;
+}
+
 // İş her zaman koşar; istek ancak "Logo bağlantısı" ayarı açık ve köprü değişkenleri varken çıkar (malzemeTuru).
 const bellek = yeniSurecBellegi();
 
@@ -122,12 +130,7 @@ export const isler = [
   kopruIsi('logo-stok-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => stokOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-kullanim-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => kullanimOkumaTuru(vt, okumaOrtami())),
   // 3314: çalışan yardımcının sürümü saatte bir sorulur (yalnız GET); bağlantı kapalıyken ya da köprü yokken istek atılmaz.
-  isTanimi({ ad: 'logo-yardimci-surumu', aralikMs: YARDIMCI_SURUM_ARALIGI_MS, txDisi: (vt) => sirali(async () => {
-    if (ortamKoprusu === null) return isBekliyor(BEKLEME_NEDENLERI['ortam-degiskeni-yok']);
-    if ((await vt.tx((db) => sistemAyariOku(db, 'logo.baglanti'))) !== true) return isBekliyor(BEKLEME_NEDENLERI.kapali);
-    await yardimciSurumunuSor(ortamKoprusu);
-    return undefined;
-  }) }),
+  isTanimi({ ad: 'logo-yardimci-surumu', aralikMs: YARDIMCI_SURUM_ARALIGI_MS, txDisi: (vt) => sirali(() => yardimciSurumIsi(vt, ortamKoprusu)) }),
   // D7: Logo'da açılmış siparişin düzeltmesi; istek ancak TMIV2_LOGO_SIPARIS_DUZELTME=acik ve "Logo bağlantısı" açıkken çıkar.
   kopruIsi('logo-dis-siparis-duzeltme', IS_ARALIGI_MS, (vt) => disDuzeltmeTuru(vt, disDuzeltmeIsOrtami())),
 ];

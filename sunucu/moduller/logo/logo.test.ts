@@ -10,7 +10,7 @@ import { isiBirKezCalistir, isTanimi, modulIsleriniKesfet, zamanlayiciKur } from
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { isler } from './isler.ts';
+import { isler, yardimciSurumIsi } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
@@ -533,6 +533,22 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.equal(kopru.istekler.length, 0, 'sahte köprüye istek gelmedi');
     assert.equal(await giden(k.no), null);
     assert.equal((await kartLogo(k.no))?.durum, 'bekliyor', 'kuyruk birikir');
+  });
+
+  test('3314 T2: bağlantı kapalıyken yardımcı sürümü sorulmaz; açıkken /api/version gider', async () => {
+    const surumIstegi = () => kopru.istekler.filter((i) => i.yol.startsWith('/api/version')).length;
+    const k = kopruIstemcisiKur({ adres: kopru.adres, anahtar: kopru.anahtar }, { sureMs: TEST_ISTEK_SURESI_MS });
+    const once = surumIstegi();
+    await anahtar(false);
+    try {
+      assert.equal((await yardimciSurumIsi(vt(), k))?.durum, 'bekliyor');
+    } finally {
+      await anahtar(true);
+    }
+    assert.equal(surumIstegi(), once, 'kapalıyken yardımcıya istek gitmez');
+    assert.equal(await yardimciSurumIsi(vt(), k), undefined);
+    assert.equal(surumIstegi(), once + 1, 'açıkken sürüm sorulur');
+    assert.equal((await yardimciSurumIsi(vt(), null))?.durum, 'bekliyor', 'köprü değişkeni yoksa istek atılmaz');
   });
 
   test('LGB-1 anahtar açık + değişken yok: istek çıkmaz, iş "bekliyor" döner; neden sağlık ayrıntısında görünür', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -95,6 +95,8 @@ describe('Bağlantı hazırlığı', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Bağlantıyı dene' })[0] as HTMLElement);
     expect(await screen.findByText('Köprüye ulaşılamadı (ECONNREFUSED). (12 ms)')).toBeTruthy();
     expect(istekler.filter((y) => y.endsWith('/kontrol'))).toEqual(['/logo/hazirlik/kontrol']);
+    // 3314 T5: deneme yardımcının sürümünü de yeniler; hazırlık ucu ikinci kez okunur.
+    await waitFor(() => expect(istekler.filter((y) => y === '/logo/hazirlik')).toHaveLength(2));
     const tmiLogo = screen.getByRole('region', { name: 'CORE → Logo' });
     expect(within(tmiLogo).getByText('Bağlantı yok')).toBeTruthy();
     expect(within(tmiLogo).queryByText('Hazır')).toBeNull();

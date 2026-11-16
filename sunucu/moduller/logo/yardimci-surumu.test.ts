@@ -18,6 +18,11 @@ describe('3314 Logo yardımcısı sürümü', () => {
     assert.match(a, /^[0-9a-f]{64}$/);
   });
 
+  test('3314 T1: C# SurumUret.Ozet ile aynı sabit örnekte aynı değer (Testler.cs T_kaynak_ozeti_sunucuyla_ayni_ornekte_ayni)', () => {
+    const ornek = [{ ad: 'b.cs', icerik: 'x\r\ny' }, { ad: 'A.cs', icerik: '\uFEFFz\u00e7' }, { ad: 'Testler.cs', icerik: 't' }, { ad: 'not.txt', icerik: 'n' }, { ad: 'a.cs', icerik: '' }];
+    assert.equal(yardimciKaynakOzeti(ornek), '0fb1db2fbccd041eca237e4861d17ee2ac4c6c53b82ba24ce485f000fcf3de65');
+  });
+
   test('paketteki özet depodaki kaynaktan okunur; klasör yoksa null', async () => {
     assert.match((await pakettekiOzet()) ?? '', /^[0-9a-f]{64}$/);
     assert.equal(await pakettekiOzet('/yok/boyle/bir/klasor/'), null);

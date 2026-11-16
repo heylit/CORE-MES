@@ -77,7 +77,16 @@ Sıra: kaynak `<kurulum>\logo-yardimcisi-<sürüm>-<özet>` klasörüne kopyalan
 iş biter). Geçerse yeni exe yolu `<kurulum>\logo-yardimcisi-guncel.txt` dosyasına yazılır, eski yardımcıya `POST /api/kapat` gider
 (aynı `X-Api-Key`; elindeki isteği bitirir, Logo oturumunu kapatıp çıkar, yönetici yetkisi gerekmez), kapı en çok 30 sn içinde
 boşalmazsa yenisi açılmaz (tek Logo oturumu, tek lisans: aynı anda iki yardımcı olmaz). Boşalınca başlatma betiği çalıştırılır ve
-yeni yardımcının özeti doğrulanır. Sonuç güncelleyici günlüğüne "Logo yardımcısı: ..." satırıyla yazılır; paket geri alınmaz.
+yeni yardımcının özeti doğrulanır. Yeni yardımcı 60 sn içinde bu paketin özetini bildirmezse gösterge dosyası önceki exe'ye geri
+yazılır, yeni yardımcı kapatılır, betik bir kez daha çalışır ve eski özet doğrulanır; günlükte "eskisine dönüldü" yazar. Gösterge dosyası
+önceden yoksa (ilk geçiş) dönülecek exe yoktur; günlük bunu ayrıca söyler ve yardımcı elle başlatılır. Sonuç güncelleyici günlüğüne
+"Logo yardımcısı: ..." satırıyla yazılır; paket geri alınmaz. Adres yalnız `http://127.0.0.1:<port>` olabilir; başkası verilirse
+güncelleyici yardımcıya dokunmaz.
+
+İlk geçiş bir kez elle yapılır: canlıdaki eski yardımcı `/api/version` ve `/api/kapat` uçlarını bilmez. Güncelleyici onu kapatamaz,
+30 sn sonra "kapanmadı" yazar; yeni exe gösterge dosyasında hazır kalır. Bu geçişte: başlatma betiğini aşağıdaki örneğe göre değiştirin,
+gösterge dosyasına yeni exe yolunu yazın (güncelleyici yazmışsa olduğu gibi kalır), eski yardımcıyı Görev Zamanlayıcı'dan durdurup
+görevi yeniden çalıştırın ve Bağlantı izleme'de "Eski sürüm" uyarısının kalktığını görün. Sonraki güncellemeler kendiliğinden olur.
 
 Başlatma betiği bir kez elle değişir: exe yolunu sabit yazmak yerine gösterge dosyasından okur. Böylece bilgisayar yeniden açılınca da
 yeni exe gelir. Örnek (`<kurulum>` yer tutucudur; mevcut gizli pencere sarmalayıcısı ve günlük yönlendirmesi olduğu gibi kalır):

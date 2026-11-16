@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { cp, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { isAbsolute, join, sep } from 'node:path';
 import { pakettekiOzet } from '../sunucu/moduller/logo/disari.ts';
@@ -10,6 +10,8 @@ import { pakettekiOzet } from '../sunucu/moduller/logo/disari.ts';
 export const GOSTERGE_DOSYASI = 'logo-yardimcisi-guncel.txt';
 export const KAPANMA_SURESI_MS = 30_000;
 export const ACILMA_SURESI_MS = 60_000;
+// Ortamdan gelen kabuk yolu yerine sabit: güncelleyici yalnız Windows'ta koşar ve cmd.exe her zaman PATH'tedir.
+const CMD = 'cmd.exe';
 
 export interface YardimciGuncellemeAyari {
   kurulum: string;
@@ -30,6 +32,8 @@ export function yardimciGuncellemeAyariOku(env: Ortamlar): YardimciGuncellemeAya
   if (!isAbsolute(kurulum)) return { hata: 'TMIV2_LOGO_YARDIMCI_KURULUM mutlak yol olmalı.' };
   if (baslat === '' || !isAbsolute(baslat)) return { hata: 'TMIV2_LOGO_YARDIMCI_BASLAT (yardımcıyı başlatan betiğin mutlak yolu) eksik.' };
   if (adres === '' || anahtar === '') return { hata: 'TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI olmadan yardımcı kapatılamaz.' };
+  // Yardımcı yalnız aynı makinede dinler (ADR 0017); güncelleyici anahtarı başka adrese göndermez.
+  if (!/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(adres)) return { hata: 'TMIV2_LOGO_KOPRU_ADRESI yalnız http://127.0.0.1:<port> olabilir.' };
   return { kurulum, baslat, adres, anahtar };
 }
 
@@ -43,6 +47,7 @@ export type YardimciSurumOkumasi = { tur: 'ozet'; ozet: string | null } | { tur:
 export interface YardimciGuncellemeAdimlari {
   surumOku(): Promise<YardimciSurumOkumasi>;
   hazirla(): Promise<string>;
+  gostergeOku(): Promise<string | null>;
   gostergeYaz(exe: string): Promise<void>;
   kapat(): Promise<void>;
   kapiBosMu(): Promise<boolean>;
@@ -60,7 +65,7 @@ async function kosulaKadar(kosul: () => Promise<boolean>, sureMs: number, bekle:
   }
 }
 
-// Sıra: derle ve test et (geçmezse eskisi çalışır), gösterge dosyası, eskisini kapat, kapı boşalınca yenisini aç, özeti doğrula.
+// Sıra: derle ve test et (geçmezse eskisi çalışır), gösterge dosyası, eskisini kapat, kapı boşalınca yenisini aç, özeti doğrula; doğrulanmazsa gösterge önceki exe'ye döner ve o açılır.
 export async function yardimciyiGuncelle(
   paketteki: string | null, a: YardimciGuncellemeAdimlari, sure = { kapanma: KAPANMA_SURESI_MS, acilma: ACILMA_SURESI_MS },
 ): Promise<YardimciGuncellemeSonucu> {
@@ -73,6 +78,7 @@ export async function yardimciyiGuncelle(
   } catch (hata) {
     return { sonuc: 'hata', ileti: `Logo yardımcısı derlenemedi ya da testi geçmedi; eski yardımcı çalışıyor: ${hata instanceof Error ? hata.message : String(hata)}` };
   }
+  const onceki = await a.gostergeOku();
   await a.gostergeYaz(exe);
   if (once.tur === 'ozet') {
     await a.kapat().catch(() => undefined);
@@ -87,9 +93,32 @@ export async function yardimciyiGuncelle(
     const s = await a.surumOku();
     return s.tur === 'ozet' && s.ozet === paketteki;
   }, sure.acilma, (ms) => a.bekle(ms));
-  return dogru
-    ? { sonuc: 'guncellendi', ileti: 'Logo yardımcısı yenilendi.' }
-    : { sonuc: 'hata', ileti: `Yeni Logo yardımcısı ${String(sure.acilma / 1000)} sn'de bu paketin sürümünü bildirmedi; başlatma betiğini ve yardımcı günlüğünü kontrol edin.` };
+  if (dogru) return { sonuc: 'guncellendi', ileti: 'Logo yardımcısı yenilendi.' };
+  const neden = `Yeni Logo yardımcısı ${String(sure.acilma / 1000)} sn'de bu paketin sürümünü bildirmedi`;
+  return { sonuc: 'hata', ileti: `${neden}; ${await eskisineDon(onceki, once, a, sure)}` };
+}
+
+// 3314 Risk K1: yeni exe doğrulanmazsa gösterge önceki exe'ye geri yazılır ve o açılır; Logo bağlantısı elle müdahaleye kadar kapalı kalmaz.
+async function eskisineDon(
+  onceki: string | null, once: YardimciSurumOkumasi, a: YardimciGuncellemeAdimlari, sure: { kapanma: number; acilma: number },
+): Promise<string> {
+  if (onceki === null) {
+    return 'gösterge dosyası önceden yoktu (ilk geçiş), eskisine dönülemedi. Yardımcıyı elle başlatın ve günlüğünü kontrol edin (kurulum/logo-yardimcisi.md).';
+  }
+  await a.gostergeYaz(onceki);
+  await a.kapat().catch(() => undefined);
+  if (!(await kosulaKadar(() => a.kapiBosMu(), sure.kapanma, (ms) => a.bekle(ms)))) {
+    return `gösterge eski exe'ye geri yazıldı ama yeni yardımcı ${String(sure.kapanma / 1000)} sn'de kapanmadı; eskisi açılmadı (iki yardımcı olmaz). Yardımcıyı yeniden başlatın.`;
+  }
+  a.baslat();
+  const eskiOzet = once.tur === 'ozet' ? once.ozet : undefined;
+  const geldi = await kosulaKadar(async () => {
+    const s = await a.surumOku();
+    return s.tur === 'ozet' && (eskiOzet === undefined || s.ozet === eskiOzet);
+  }, sure.acilma, (ms) => a.bekle(ms));
+  return geldi
+    ? 'eskisine dönüldü; Logo yardımcısı önceki exe ile çalışıyor. Başlatma betiğini ve yardımcı günlüğünü kontrol edin.'
+    : `eskisine dönülmeye çalışıldı ama önceki exe de ${String(sure.acilma / 1000)} sn'de cevap vermedi. Yardımcıyı elle başlatın (kurulum/logo-yardimcisi.md).`;
 }
 
 function calistir(komut: string, argumanlar: readonly string[], cwd: string): Promise<void> {
@@ -105,6 +134,11 @@ export function yardimciAdimlari(ayar: YardimciGuncellemeAyari, kaynak: string, 
   const url = new URL(ayar.adres);
   const kapi = { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port || '80') };
   const basliklar = { 'X-Api-Key': ayar.anahtar };
+  const gostergeOku = async (): Promise<string | null> => {
+    const metin = await readFile(join(ayar.kurulum, GOSTERGE_DOSYASI), 'utf8').catch(() => null);
+    const exe = metin?.trim() ?? '';
+    return exe === '' ? null : exe;
+  };
   return {
     surumOku: async () => {
       const c = await fetch(`${ayar.adres}/api/version`, { headers: basliklar, signal: AbortSignal.timeout(5000) }).catch(() => null);
@@ -116,15 +150,20 @@ export function yardimciAdimlari(ayar: YardimciGuncellemeAyari, kaynak: string, 
     },
     hazirla: async () => {
       const hedef = join(ayar.kurulum, klasorAdi);
+      const calisan = await gostergeOku();
+      if (calisan !== null && (calisan === hedef || calisan.startsWith(`${hedef}${sep}`))) {
+        throw new Error(`hedef klasör çalışan yardımcının klasörü (${klasorAdi}); silinmedi`);
+      }
       const yarim = `${hedef}.yarim`;
       await rm(yarim, { recursive: true, force: true });
       const cikti = join(kaynak, 'cikti');
       await cp(kaynak, yarim, { recursive: true, filter: (y) => y !== cikti && !y.startsWith(`${cikti}${sep}`) });
-      await calistir(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/c', 'derle.cmd', 'test'], yarim);
+      await calistir(CMD, ['/d', '/c', 'derle.cmd', 'test'], yarim);
       await rm(hedef, { recursive: true, force: true });
       await rename(yarim, hedef);
       return join(hedef, 'cikti', 'logo-yardimcisi.exe');
     },
+    gostergeOku,
     gostergeYaz: async (exe) => {
       const yol = join(ayar.kurulum, GOSTERGE_DOSYASI);
       await writeFile(`${yol}.yeni`, `${exe}\r\n`, 'utf8');
@@ -140,7 +179,7 @@ export function yardimciAdimlari(ayar: YardimciGuncellemeAyari, kaynak: string, 
     }),
     baslat: () => {
       // Ayrık ve kabuksuz değil: betik cmd ister. Güncelleyici kapansa da yardımcı yaşar (DOĞRULANMADI: Windows'ta denenmeli).
-      const s = spawn(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/c', ayar.baslat], { detached: true, stdio: 'ignore', windowsHide: true });
+      const s = spawn(CMD, ['/d', '/c', ayar.baslat], { detached: true, stdio: 'ignore', windowsHide: true });
       s.unref();
     },
     bekle: (ms) => new Promise((coz) => setTimeout(coz, ms)),

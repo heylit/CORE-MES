@@ -137,6 +137,14 @@ describe('Bağlantı izleme (3313)', () => {
       const kart2 = await screen.findByRole('region', { name: 'Logo yardımcısı' });
       await waitFor(() => expect(within(kart2).getByText('Açık')).toBeTruthy());
       expect(within(kart2).queryByText('Eski sürüm')).toBeNull();
+      cleanup();
+      // 3314 T4: canlıdaki ilk geçiş: yardımcıda sürüm ucu yok (404) ve "eski" de uyarır.
+      const eskiIleti = 'Logo yardımcısı sürüm bildirmiyor; bu paketten eski. Yardımcıyı güncelleyin (kurulum/logo-yardimcisi.md).';
+      logoHazirlik.yardimci = { ...logoHazirlik.yardimci, durum: 'eski', calisanOzet: null, derlemeZamani: null, ileti: eskiIleti };
+      cizdir(yalnizGoren);
+      const kart3 = await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      await waitFor(() => expect(within(kart3).getByText('Eski sürüm')).toBeTruthy());
+      expect(within(kart3).getByText(eskiIleti)).toBeTruthy();
     } finally {
       delete logoHazirlik.yardimci;
     }
