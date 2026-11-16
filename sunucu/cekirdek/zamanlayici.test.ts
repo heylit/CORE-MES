@@ -308,7 +308,8 @@ describe('çalışma (gerçek PostgreSQL)', { timeout: 40_000 }, () => {
       await olana(() => girdi);
       const once = Date.now();
       await asili.durdur(100);
-      assert.equal(Date.now() - once < 1000, true);
+      // Takılı tur hiç bitmez: dönmesi yeter. Sınır Windows çalıştırıcısında yük altında 1 sn'yi aşmıştı; 5 sn'lik bekleme yine ayrılır.
+      assert.equal(Date.now() - once < 3000, true);
     } finally {
       takili.coz();
     }
