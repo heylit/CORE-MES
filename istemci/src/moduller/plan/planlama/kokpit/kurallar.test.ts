@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
-  adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
+  adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
   acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
@@ -343,5 +343,63 @@ describe('ek mesai operatörü (3282 2a-2)', () => {
     const m = modelKur(c2, planOku(c2), derle(girdiKur(c2, plandanBitenler(c2, planOku(c2)))), (id) => id);
     expect(m.mesai?.['1']?.map((e) => e.gun)).toEqual(m.bas > 0 ? [400] : [0, 400]);
     expect(ekMesaiYazisi([{ m: '1', gun: 2, vardiya: '1', personel: null, vardiyaAd: '08:00–16:00' }], (x) => `21.10 Çar ${x === 48 ? '00:00' : '?'}`)).toBe('Ek mesai: 21.10 Çar 08:00–16:00');
+  });
+});
+
+describe('Kokpit bağ okları (3330)', () => {
+  it('model adımın bitmemiş öncüllerini bağ türüyle taşır; ilk adımda öncül yoktur', () => {
+    const { m } = ornek();
+    const e = m.emirler.find((x) => x.adimlar.length === 3)!;
+    expect(e.adimlar.map((a) => a.onculler ?? [])).toEqual([[], [[e.adimlar[0]!.id, 'b']], [[e.adimlar[1]!.id, 'b']]]);
+    // Öncül, emrin operasyon listesindeki sıra numarası ve adıyla yazılır (iç anahtarla değil).
+    expect(e.adimlar.map((a) => bagimlilik(e, a)?.kisa ?? null)).toEqual([null, `1 ${e.adimlar[0]!.ad} bitince`, `2 ${e.adimlar[1]!.ad} bitince`]);
+    const iki = { adimlar: [{ id: 'x.a', ad: 'Torna', adaylar: [] }, { id: 'x.b', ad: 'Freze', adaylar: [] }, { id: 'x.c', ad: 'Çapak', adaylar: [], onculler: [['x.a', 'o'], ['x.b', 'b'], ['x.yok', 'b']] as const }] };
+    expect(bagimlilik(iki, iki.adimlar[2]!)).toEqual({ uzun: '1 Torna · örtüşmeli (bitmeden başlayabilir); 2 Freze · bitince', kisa: '1 Torna ile örtüşmeli · 2 Freze bitince' });
+  });
+  it('derlemedeki örtüşmeli bağ (tür "o") modelde örtüşmeli kalır; başka her tür "bitince" sayılır', () => {
+    const { c, p, cx } = ornek();
+    const j = Object.values(cx.jobs).find((x) => x.ops.length === 3)!;
+    const [a1, a2, a3] = j.ops as [typeof j.ops[number], typeof j.ops[number], typeof j.ops[number]];
+    const cx2 = { ...cx, jobs: { ...cx.jobs, [j.id]: { ...j, ops: [a1, { ...a2, pr: [[a1.id, 'o']] }, { ...a3, pr: [[a2.id, 'ss']] }] } } } as typeof cx;
+    const e = modelKur(c, p, cx2, (id) => id).emirler.find((x) => x.id === j.id)!;
+    expect(e.adimlar.map((a) => a.onculler ?? [])).toEqual([[], [[a1.id, 'o']], [[a2.id, 'b']]]);
+  });
+  it('bağ yalnız iki ucu da planda olan adımlar arasında çizilir; bitince bağlı ardıl öncül bitmeden başlıyorsa terstir, örtüşmelide değildir', () => {
+    const e = emir('1', { adimlar: [
+      { id: '1.10', ad: '', adaylar: ['T1'] }, { id: '1.20', ad: '', adaylar: ['T2'], onculler: [['1.10', 'b']] },
+      { id: '1.30', ad: '', adaylar: ['T1'], onculler: [['1.20', 'o']] }, { id: '1.40', ad: '', adaylar: ['T1'], onculler: [['1.30', 'b']] },
+    ] });
+    const isler = Object.fromEntries([is('1.10', 'T1', 0, 4), is('1.20', 'T2', 3, 6), is('1.30', 'T1', 5, 8)].map((x) => [x.id, x]));
+    expect(adimBaglari([e], isler)).toEqual([
+      { kimden: '1.10', kime: '1.20', tur: 'b', ters: true },
+      { kimden: '1.20', kime: '1.30', tur: 'o', ters: false },
+    ]);
+    isler['1.20'] = is('1.20', 'T2', 4, 6);
+    expect(adimBaglari([e], isler)[0]).toEqual({ kimden: '1.10', kime: '1.20', tur: 'b', ters: false });
+  });
+  it('ok yolu satır aralarından yürür: bitince öncülün sağından, örtüşmeli ardıla bakan kenarından çıkar; aradaki satırda işe denk gelen dikey geçiş işin sağına kayar; ardılın sol ortasına soldan girer', () => {
+    const kutu = (x1: number, x2: number, y: number) => ({ x1, x2, y, h: 30, satir: 40 });
+    const noktalar = (d: string) => d.match(/-?\d+(\.\d+)?,-?\d+(\.\d+)?/g)!.map((n) => n.split(',').map(Number));
+    const a = kutu(100, 200, 20);
+    // Komşu satır: sağdan çık, iki satırın sınırından (y 40) yürü, ardılın soluna in, soldan gir.
+    const komsu = okYolu(a, kutu(300, 360, 60), 'b');
+    expect(komsu).toBe('M200,20 L204,20 Q208,20 208,24 L208,30 Q208,40 218,40 L282,40 Q292,40 292,50 L292,56 Q292,60 296,60 L300,60');
+    // Yatay parçalar yalnız satır sınırındadır (öncülün ve ardılın orta hizasındaki kısa çıkış ve giriş dışında).
+    const yataylar = (d: string) => { const n = noktalar(d); return n.slice(1).flatMap((p, i) => (Math.abs(p[1]! - n[i]![1]!) < 0.05 && Math.abs(p[0]! - n[i]![0]!) > 12 ? [p[1]!] : [])); };
+    expect(yataylar(komsu)).toEqual([40]);
+    // İki satır aşağı: aradaki satırda (y 60) dikey geçişin hizasında iş varsa geçiş işin sağına kayar; yoksa öncülün hemen sağından iner.
+    const uzak = kutu(400, 460, 100);
+    expect(noktalar(okYolu(a, uzak, 'b')).some((p) => p[0] === 208 && p[1]! > 40 && p[1]! < 80)).toBe(true);
+    const engelli = noktalar(okYolu(a, uzak, 'b', [{ x1: 190, x2: 250, y: 60 }, { x1: 500, x2: 560, y: 60 }, { x1: 190, x2: 250, y: 140 }]));
+    expect(engelli.some((p) => p[0] === 208 && p[1]! > 40 && p[1]! < 80)).toBe(false);
+    expect(engelli.some((p) => p[0] === 258 && p[1]! > 40 && p[1]! < 80)).toBe(true);
+    expect(engelli.at(-1)).toEqual([400, 100]);
+    // Örtüşmeli: öncülün alt kenarından, ardılın başlangıç hizasında (150) çıkar; ardıl yukarıdaysa üst kenarından.
+    expect(okYolu(a, kutu(150, 240, 60), 'o').startsWith('M150,35 ')).toBe(true);
+    expect(okYolu(a, kutu(150, 240, -20), 'o').startsWith('M150,5 ')).toBe(true);
+    // Aynı satırda art arda iki iş arasında düz; araya iş girebilecek kadar uzaksa satırın alt sınırından dolaşır.
+    expect(okYolu(a, kutu(210, 260, 20), 'b')).toBe('M200,20 L210,20');
+    expect(yataylar(okYolu(a, kutu(400, 460, 20), 'b'))).toEqual([40]);
+    expect(okUcu(kutu(260, 320, 70))).toBe('M260,70 l-6,-3.5 v7 z');
   });
 });

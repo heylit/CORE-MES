@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
-import { aralikYuku, durumYazisi, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { aralikYuku, bagimlilik, durumYazisi, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
 // düğmeyle); Sipariş gözü: emirler, geç olan üstte. Satıra dokununca ayrıntı alttan açılır.
@@ -14,9 +14,12 @@ export interface ListeOzellikleri {
   secEmir: string | null; secIs: string | null;
   zaman: (t: number) => string;
   sec: (job: string, isId: string | null) => void;
+  // 3330: seçili kartın emirleri; satırları öne çıkar, ötekiler solar ve adımın bağı satırda yazar (listede ok yoktur).
+  yanan?: ReadonlySet<string> | null;
 }
 
-export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec }: ListeOzellikleri) {
+export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null }: ListeOzellikleri) {
+  const isaret = (job: string) => ({ 'data-yanan': yanan?.has(job) ? '' : undefined, 'data-sonuk': yanan && !yanan.has(job) ? '' : undefined });
   const [acik, setAcik] = useState<ReadonlySet<string>>(new Set());
   const emir = useMemo(() => new Map(emirler.map((e) => [e.id, e])), [emirler]);
   const gruplar = useMemo(() => {
@@ -30,17 +33,19 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec }: Liste
 
   const emirSatiri = (e: KokpitEmri) => (
     <li key={e.id}>
-      <button type="button" data-d={e.durum} aria-current={secEmir === e.id} onClick={() => { sec(e.id, null); }}>
+      <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} onClick={() => { sec(e.id, null); }}>
         <b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? (e.termin === null ? '' : ` · termin ${zaman(e.termin).slice(0, 9)}`) : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
       </button>
     </li>
   );
   const isSatiri = (x: KokpitIsi) => {
     const e = emir.get(x.job);
+    const adim = yanan?.has(x.job) ? e?.adimlar.find((a) => a.id === x.id) : undefined;
+    const bag = e && adim ? bagimlilik(e, adim)?.kisa ?? '' : '';
     return (
       <li key={x.id}>
-        <button type="button" data-d={e?.durum ?? 'iyi'} aria-current={secIs === x.id} onClick={() => { sec(x.job, x.id); }}>
-          <b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}</span><small>{zaman(x.S).slice(6)}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}</small>
+        <button type="button" data-d={e?.durum ?? 'iyi'} aria-current={secIs === x.id} {...isaret(x.job)} onClick={() => { sec(x.job, x.id); }}>
+          <b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}</span><small>{zaman(x.S).slice(6)}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}{bag ? ` · ${bag}` : ''}</small>
         </button>
       </li>
     );
