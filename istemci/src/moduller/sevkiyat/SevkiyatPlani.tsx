@@ -388,7 +388,7 @@ function akisAdimlari(d: { veri: GunPlaniCevabi; onayli: boolean; yerlesen: numb
   ];
 }
 // Adım seçilmediyse planın durumundan sıradaki adım açılır.
-function varsayilanAdim(d: { veri: GunPlaniCevabi; onayli: boolean; yerlesen: number; sevkeHazir: number; yuk: YukOzeti }): AkisAdimi {
+export function varsayilanAdim(d: { veri: GunPlaniCevabi; onayli: boolean; yerlesen: number; sevkeHazir: number; yuk: YukOzeti }): AkisAdimi {
   if (d.onayli) return d.yuk.cikis || d.yuk.irsaliye ? 'yukle' : 'teslim';
   if (!d.yerlesen && !d.veri.bekleyen.length) return d.sevkeHazir ? 'hazirla' : 'dagit';
   return d.veri.bekleyen.length ? 'dagit' : 'onay';

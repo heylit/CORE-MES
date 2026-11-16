@@ -703,6 +703,13 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const isId = isCevabi.parse(is.govde).is.id;
     const kalemsiz = isCevabi.parse((await istek('planlama_proje', 'POST', '/sevkiyat/isler/ekle', isGovdesi(g, f.noktaId!))).govde).is.id;
 
+    // Test T1, T3: firma taşımalı kalemi olan iş ve iptal edilmiş iş tetiklenmez.
+    await o().sahip.sorgu("UPDATE sevkiyat_bekleyen SET tasima = 'firma' WHERE id = $1", [kalemId]);
+    assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId])), [], 'firma taşımalı kalem tetiklenmez');
+    await o().sahip.sorgu("UPDATE sevkiyat_bekleyen SET tasima = 'biz' WHERE id = $1", [kalemId]);
+    await o().sahip.sorgu('UPDATE sevkiyat_isi SET iptal_edildi = now() WHERE id = $1', [isId]);
+    assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId])), [], 'iptal iş tetiklenmez');
+    await o().sahip.sorgu('UPDATE sevkiyat_isi SET iptal_edildi = NULL WHERE id = $1', [isId]);
     assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId, kalemsiz])), [isId], 'kalemsiz iş tetiklenmez');
     assert.equal((await satir(`kalem:${kalemId}`))?.asama, 'depoda');
     assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId])), [], 'tetiklenmiş iş ikinci kez tetiklenmez');
@@ -734,6 +741,12 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'yolda' WHERE id = $1", [is.id]);
     const yolda = await yaz(yazilan.surum + 1, 'IRS-0004');
     assert.equal(yolda.durum, 422, JSON.stringify(yolda.govde));
+    await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'havuzda' WHERE id = $1", [is.id]);
+    // Test T2: tamamlanmış işin irsaliye numarası servisçe reddedilir (veritabanı kuralından önce, okunur iletiyle).
+    await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'tamamlandi' WHERE id = $1", [is.id]);
+    const biten = await yaz(yazilan.surum + 1, 'IRS-0005');
+    assert.equal(biten.durum, 422);
+    assert.match(JSON.stringify(biten.govde), /Tamamlanmış işin irsaliye/);
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'havuzda' WHERE id = $1", [is.id]);
     assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 200);
     assert.equal((await yaz(yazilan.surum + 1, 'IRS-0003')).durum, 404);

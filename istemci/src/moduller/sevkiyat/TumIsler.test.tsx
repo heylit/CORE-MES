@@ -118,6 +118,17 @@ describe('Tüm işler', () => {
     expect(yazmalar(istekler)).toHaveLength(0);
   });
 
+  it('Test T9: "Gününde aç" işin gününe gider', async () => {
+    sunucuKur(SEVKIYATCI);
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Adres = () => <output data-testid="adres">{useLocation().pathname + useLocation().search}</output>;
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/tum-isler']}><TumIsler /><Adres /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('tab', { name: /Sevkiyattaki/ }));
+    const tablo = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
+    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-13')).getByRole('button', { name: 'Gününde aç' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe(`/sevkiyat?tarih=${BUGUN}`));
+  });
+
   it('depocu düşen gidişin son çıkışını yapar; okuyucu düğme görmez', async () => {
     const istekler = sunucuKur(DEPOCU);
     ac();

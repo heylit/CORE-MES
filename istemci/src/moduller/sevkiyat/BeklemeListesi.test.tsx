@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BekleyenlerCevabi, HaritaCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { BekleyenlerCevabi, HaritaCevabi, TumIsSatiri, TumIslerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { SevkiyatPlani } from './SevkiyatPlani.tsx';
 import { GUN_PLANI } from './test-verisi.ts';
 
@@ -22,6 +22,19 @@ const BEKLEYENLER = {
   ],
 } satisfies BekleyenlerCevabi;
 
+const satir = (s: Partial<TumIsSatiri> & Pick<TumIsSatiri, 'anahtar' | 'asama'>): TumIsSatiri => ({
+  kalemId: null, kaynak: 'urun', yon: 'gidis', hazirTarihi: null, istenenTarih: null, uretimEmriId: null, emirNo: null, isEmriId: null, opNo: null, adim: null, ilerleme: null,
+  siparisNo: null, malzemeNo: 5, malzemeAd: null, adet: '4.0000', firmaId: 9, firmaAd: 'Örnek Firma B', noktaId: 3, tasima: null, elleTuru: null,
+  aciklama: null, is: null, depo: null, erken: null, sonYazan: null, bagliAnahtar: null, ...s,
+});
+const TUM_ISLER = {
+  satirlar: [
+    satir({ anahtar: 'urun:21', asama: 'hazir', malzemeAd: 'Deneme hazır mamul', emirNo: 'DENEME-UE-21' }),
+    satir({ anahtar: 'kalem:22', kalemId: 22, asama: 'bekliyor', malzemeAd: 'Deneme bekleyen mamul', emirNo: 'DENEME-UE-22', tasima: 'biz', ilerleme: 'OP 20 sürüyor' }),
+    satir({ anahtar: 'kalem:23', kalemId: 23, asama: 'havuzda', malzemeAd: 'Deneme havuz mamul', emirNo: 'DENEME-UE-23', tasima: 'biz' }),
+  ],
+} satisfies TumIslerCevabi;
+
 interface Istek { yontem: string; yol: string; govde: unknown }
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -34,6 +47,8 @@ function sunucuKur(kullanici: Kullanici) {
     if (istek.yol === '/sevkiyat/harita') return json(200, { harita: null } satisfies HaritaCevabi);
     if (istek.yol === `/sevkiyat/planlar/${TARIH}`) return json(200, GUN_PLANI);
     if (istek.yol === '/sevkiyat/bekleyenler') return json(200, BEKLEYENLER);
+    if (istek.yol.startsWith('/sevkiyat/tum-isler?')) return json(200, TUM_ISLER);
+    if (istek.yol === '/sevkiyat/tum-isler/serbest-birak') return json(200, { kalemIdleri: [51] });
     if (istek.yol.endsWith('/ise-cevir')) return json(200, { is: GUN_PLANI.isler[3] });
     if (istek.yol.endsWith('/kaldir')) return json(200, { id: 7 });
     if (istek.yol.endsWith('/bol')) return json(200, { id: 7, yeniId: 13 });
@@ -62,6 +77,24 @@ describe('Hazırla adımı: sevke hazır liste', () => {
     const yazma = yazmalar(istekler)[0]!;
     expect(yazma.yol).toBe('/sevkiyat/bekleyenler/8/ise-cevir');
     expect(yazma.govde).toMatchObject({ tarih: TARIH, tur: 'teslimat', birakisNoktasiId: 3, alisNoktasiId: null, paletSayisi: 1, agirlikKilogram: 0 });
+  });
+
+  it('Test T4, T5, T8: bırakılmamış hazır kalem "Sevkiyata al" ile bizim araca bırakılır; hazır olmayan nedeniyle görünür; Hazırla\'da dağıt ve onay yok', async () => {
+    const istekler = sunucuKur(PLANCI);
+    ac();
+    const birakilmamis = await screen.findByRole('region', { name: 'Sevkiyata bırakılmamış' });
+    expect(within(birakilmamis).getByText('Deneme hazır mamul')).toBeTruthy();
+    expect(within(birakilmamis).queryByText('Deneme havuz mamul')).toBeNull();
+    const bekleyen = screen.getByRole('region', { name: 'Hazır olunca düşecek' });
+    expect(within(bekleyen).getByText('Deneme bekleyen mamul')).toBeTruthy();
+    expect(within(bekleyen).getByText('OP 20 sürüyor')).toBeTruthy();
+    expect(within(bekleyen).queryByText('Deneme hazır mamul')).toBeNull();
+    expect(screen.queryByText('Deneme havuz mamul')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Otomatik dağıt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Planı onayla' })).toBeNull();
+    fireEvent.click(within(birakilmamis).getByRole('button', { name: 'Sevkiyata al' }));
+    await waitFor(() => expect(yazmalar(istekler).length).toBe(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/sevkiyat/tum-isler/serbest-birak', govde: { anahtarlar: ['urun:21'], tasima: 'biz', erkenGerekce: null } });
   });
 
   it('fason kaydı firmanın noktasıyla işe çevrilir; gün, yük ve belge no formdan gider', async () => {
