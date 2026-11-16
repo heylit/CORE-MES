@@ -1173,10 +1173,12 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 .tc-ay1-gosterge > small[data-eksik] { color: var(--hold); font-weight: 700; }
 .tc-ay1-dar .tc-ay1-gosterge { inline-size: calc(var(--dokunma) * 1.5); }
 .tc-ay1-dar .tc-ay1-gosterge-cubuk { inline-size: var(--b-5); }
-/* Telefonda kadranın solu malzeme göstergesinindir: Hatalı yazısı kadran kutusunun sol alt köşesine (dairenin dışı) geçer. */
+/* Telefonda kadranın solu malzeme göstergesinindir: Hatalı yazısı kadranın altına, halkanın dışına geçer (köşede halkaya biniyordu). */
 .tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-kanat:has(> button.tc-ay1-gosterge) .tc-ay1-kadran-sol {
-  inset-inline-end: auto; inset-inline-start: 0; inset-block-end: 0; inset-block-start: auto; text-align: start;
+  display: flex; align-items: baseline; gap: var(--b-1); inset-inline: 0; inset-block-start: 100%; inset-block-end: auto; justify-content: center; text-align: center;
 }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-kanat:has(> button.tc-ay1-gosterge) .tc-ay1-kadran-sol b { font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-kanat:has(> button.tc-ay1-gosterge) .tc-ay1-kadran { margin-block-end: var(--b-5); }
 .tc-ay1-dar .tc-ay1-gosterge > b { font-size: var(--yazi-s); }
 .tc-ay1-dar .tc-ay1-kadran-kanat { gap: var(--b-2); }
 
