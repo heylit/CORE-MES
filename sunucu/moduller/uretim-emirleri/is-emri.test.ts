@@ -26,7 +26,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIM_BASLAMAMIS, ADIM_YOK, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
+  ADIM_BASLAMAMIS, ADIM_YOK, KAPSAM_DISI, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -475,6 +475,35 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await karar(ie2)).adet, 2);
     assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 0]]);
     assert.equal((await o().vt.tx((db) => adimKararSayaclari(db, []))).size, 0);
+  });
+
+  test('3338-4 a: eksik talimat kaydı iş emrinin adımında görünür, eylemi ve yazanı taşır; kapsam dışı kişi yazamaz', async () => {
+    const ist = await istasyonKur();
+    const m = await makineKur(ist);
+    const zorunlu = (ad: string, asama: 'on_hazirlik' | 'bitis') => ({ kontrolListesi: [{ ad, aciklama: null, asama, zorunlu: true }] });
+    const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: m }, zorunlu('Bağla', 'on_hazirlik')), adim(2, { tur: 'makine', id: m }, zorunlu('Sök', 'bitis'))]);
+    // Terminal çalışan iş emrinin listesini okur: burada yalnız ilk adımın maddesi.
+    const liste = (await istek<{ adimlar: { id: number; ad: string }[] } & Hata>('operator', 'GET', `/uretim-emirleri/${id}`)).govde.adimlar;
+    assert.deepEqual(liste.map((a) => a.ad), ['Bağla']);
+    const atla = (govde: unknown) => istek<{ kayitId: number } & Hata>('operator', 'POST', `/uretim-emirleri/${id}/talimat-atlama`, govde, randomUUID());
+    assert.equal((await atla({ eylem: 'baslat', adimIdler: [liste[0]!.id] })).durum, 200);
+    assert.equal((await atla({ eylem: 'bitir', adimIdler: [liste[0]!.id] })).durum, 200);
+    const durum = (await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`)).govde.adimlar;
+    assert.deepEqual(durum.map((a) => a.gecmis.filter((g) => g.olay === 'talimat-atlama').map((g) => [g.deger, g.not, g.kisiAdi])), [
+      [['bitir', 'Bağla', 'Deneme operator'], ['baslat', 'Bağla', 'Deneme operator']], [],
+    ], 'kayıt yalnız kendi iş emrinin adımında, yenisi önde');
+    // İş merkezi kısıtı başka merkezdeyse ve kişi bu istasyonda yetkin değilse bu emre yazamaz.
+    const op = kim('operator').id;
+    const baska = await o().sahip.tek<{ id: number }>('SELECT is_merkezi_id AS id FROM istasyon WHERE id = $1', [await istasyonKur()]);
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [op, baska!.id]);
+    await o().sahip.sorgu('DELETE FROM istasyonlar_yetkinlik WHERE kisi_id = $1 AND istasyon_id = $2', [op, ist]);
+    try {
+      const red = await atla({ eylem: 'baslat', adimIdler: [liste[0]!.id] });
+      assert.equal(red.govde.mesaj, KAPSAM_DISI);
+    } finally {
+      await o().sahip.sorgu('DELETE FROM kisi_is_merkezi WHERE kisi_id = $1', [op]);
+      await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2)', [op, ist]);
+    }
   });
 
   test('2098d: ön hazırlık planlı emirde, üretim hazırlığı ayardan sonra işaretlenir, üretim adımı başlamadan işaretlenmez; kanıt ve geçen sefer notu', async () => {
