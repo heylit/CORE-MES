@@ -4,7 +4,7 @@ import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -296,6 +296,8 @@ export interface EmirAdimlariOzellikleri {
   saatGirdisi?: SaatGirdisi;
   // Bölümün açılış görünümü; verilmezse tablo.
   ilkGorunum?: OperasyonGorunumu;
+  // Fason adımın firma tarihi yazısı (3330 a), adım kimliğiyle; verilmezse satır yazmaz (emir okunamadı).
+  firma?: Record<string, FirmaYazisi> | null;
   // "Planla" menüsünden gelen istek (3335-2): sıradaki plansız emre uygulanır. n her istekte artar; aynı istek bir kez işlenir.
   planla?: PlanlaIstegi | null;
   // Sıradaki plansız emrin durumu menüye bildirilir (işaretli adım sayısı; önizleme hazır mı). Plansız emir yoksa null.
@@ -307,7 +309,7 @@ export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => n
 export type OperasyonGorunumu = 'tablo' | 'akis';
 const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null }: EmirAdimlariOzellikleri) {
   const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
@@ -327,7 +329,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
         ))}
       </div>
     </section>
@@ -352,7 +354,7 @@ function useGenis(): boolean {
   return v;
 }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
   const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
@@ -435,6 +437,15 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
     if (b) y.alanYaz(odak.adimId, { tezgah: t, baslangic: b.S });
   };
   const odakPaneli = odak && <OdakPaneli m={m} ad={odak.ad} isId={odak.isId} tezgahlar={odak.tezgahlar} yerler={odak.yerler} secilen={odak.secilen} zaman={zaman} fiil={odak.fiil} sec={uygula || tasimaAcik ? odakSec : null} dar={!genis} />;
+  // Fason adımda firma tarihi: sipariş varsa tarihi ve numarası, yoksa dönüşün tahmin olduğu yazar; emir okunamadıysa satır yazmaz.
+  // Plan firma tarihi girilmeden önce dizildiyse dönüş günü tarihten farklıdır; satır farkın nedenini ve nasıl kapanacağını yazar.
+  const firmaNotu = (id: string): ReactNode => {
+    if (firma === null) return null;
+    const f = firma[id], x = m.isler[id];
+    if (!f) return <small data-firma="yok">Firma tarihi yok · dönüş tahmini</small>;
+    const eski = !f.gecti && x !== undefined && zaman(x.C).slice(0, 5) !== f.gun;
+    return <small data-firma="" data-gecti={f.gecti ? '' : undefined} data-eski={eski ? '' : undefined}>{f.yazi}{f.gecti ? ' · firma tarihi geçti' : eski ? ' · plan güncellenince dönüş bu güne kayar' : ''}</small>;
+  };
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   const secimVar = Object.keys(y.sec).length > 0;
   // "Planla" menüsü (3335-2): menü bu emrin durumunu okur, isteği buradaki düğmelerle aynı yoldan uygular.
@@ -477,6 +488,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   <b>{a.ad}</b>
                   {bagimlilik(e, a) && <small data-bag-kisa="">{bagimlilik(e, a)!.kisa}</small>}
                   <small>{x ? `${x.fason ? 'Fason' : tz(x.m)} · ${an(x.S, x.C)}` : yer === 'fason' ? 'Fason · sistem yerleştirir' : s !== undefined ? `${tz(s)} seçildi` : 'yerleşmedi'}</small>
+                  {(yer === 'fason' || x?.fason) && firmaNotu(a.id)}
                 </button>
               </li>
             );
@@ -525,7 +537,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   <td data-ad="Bağımlılık" data-bag={bag ? '' : 'yok'}>{bag ? bag.uzun : 'öncül yok'}</td>
                   <td data-ad="Süre" title="Yerleşimin başından sonuna geçen süre; vardiya dışı saatler içindedir.">{x ? sureYaz(x.C - x.S) : tahmin ? sureYaz(tahmin.C - tahmin.S) : '—'}</td>
                   <td data-ad="Tezgâh">
-                    {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">Fason</span> : (
+                    {yer === 'fason' || x?.fason ? <><span className="tc-pyq-not">Fason</span>{firmaNotu(a.id)}</> : (
                       <select className="tc-alan-kutu" aria-label={`${a.ad} tezgâhı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? duzenli?.tezgah ?? x.m : s?.tezgah ?? ''} onChange={(ev) => { tezgahDegisti(ev.target.value); }}>
                         {!x && <option value="">Sistem seçsin</option>}
                         {(x && !adaylar.includes(x.m) ? [x.m, ...adaylar] : adaylar).map((t) => <option key={t} value={t}>{tz(t)}</option>)}

@@ -539,3 +539,32 @@ export function mesaiButcesi(c: PlanlamaCalismasi, gun: number): { kullanilan: n
   const kullanilan = kokpitEkMesaileri(c).filter((x) => t.haftaNo(x.gun) === h).reduce((a, x) => a + t.netSaat(x.vardiya), 0);
   return { kullanilan, sinir: Number.isFinite(s) && s > 0 ? s : null, vardiyaSaati: t.netSaat };
 }
+
+// 3330 a: bitmemiş fason adımın açık satın alma siparişindeki firma tarihi satırda yazar. Kök emrin adımında tarih ve sipariş numarası
+// sunucunun emir okumasındadır (opYer; numara Satın Alma'yı göremeyene null gelir), çok katmanlı emrin alt düğümünde yalnız tarih vardır
+// (dugumFirma). Plan dönüşü o günün sabahına sabitler; elle girilmiş dönüş termini farklıysa ikisi de yazar. bugun: tesisin günü.
+// gun: firma tarihinin 'GG.AA' yazısı; planın dönüş günüyle kıyaslanır (plan tarih girilmeden önce dizildiyse farklıdır).
+export interface FirmaYazisi { yazi: string; gecti: boolean; gun: string }
+const gunAy = (t: string): string => `${t.slice(8, 10)}.${t.slice(5, 7)}`;
+export function firmaYazilari(c: PlanlamaCalismasi, emirler: unknown, bugun: string): Record<string, FirmaYazisi> {
+  const y: Record<string, FirmaYazisi> = {};
+  const yer = nesneMi(emirler) && nesneMi(emirler['opYer']) ? emirler['opYer'] : {};
+  const elle = nesneMi(c.D['fasonTermin']) ? c.D['fasonTermin'] : {};
+  const urun = new Map(c.D.urunler.map((u) => [u.id, u]));
+  for (const s of c.D.siparisler) {
+    const dugum = s['dugum'] ? (nesneMi(s['dugumFirma']) ? s['dugumFirma'] : {}) : null;
+    (urun.get(s.urun)?.rota ?? []).forEach((a, i) => {
+      const id = `${s.id}.${a.k}`, kok = dugum ? null : yer[`${s.id}|root|${String(i + 1)}`];
+      const fs = nesneMi(kok) && nesneMi(kok['fasonSiparis']) ? kok['fasonSiparis'] : null;
+      const tarih = dugum ? dugum[a.k] : fs?.['tarih'];
+      if (typeof tarih !== 'string' || tarih.length < 10) return;
+      const no = typeof fs?.['siparisNo'] === 'string' ? fs['siparisNo'] : null, e = elle[id];
+      const elleGun = typeof e === 'string' && e.slice(0, 10) !== tarih ? e.slice(0, 10) : null;
+      y[id] = {
+        yazi: elleGun !== null ? `Firma ${gunAy(tarih)} · elle ${gunAy(elleGun)}, plan firma tarihine göre` : `Firma tarihi ${gunAy(tarih)}${no !== null ? ` · sipariş ${no}` : ''}`,
+        gecti: tarih < bugun, gun: gunAy(tarih),
+      };
+    });
+  }
+  return y;
+}

@@ -1120,6 +1120,34 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3330 a, dilim 3c: fason adımın satırında açık satın alma siparişindeki firma tarihi ve sipariş numarası yazar. Burada S1'in ikinci
+// adımı fasondur; tarih ve numara kaynağın gerçek cevabına eklenen uydurma emir okumasındadır.
+test('Kokpit 3330-3c: fason adımın satırında firma tarihi ve sipariş numarası; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  // Plan firma tarihine göre dizilmiştir: fason adım 24.10 08:00'de döner (eksen 19.10 00:00'dan saat: 128).
+  const ops = { ...ILK, 'S1.a2': { job: 'S1', m: '@F1', S: 57, C: 128, fas: 1 } } as unknown as Record<string, Is>;
+  const c = calisma(ops, {});
+  c.D.urunler = c.D.urunler.map((u) => (u.id === 'U1' ? { ...u, rota: [u.rota[0]!, { k: 'a2', ad: 'Kaplama', bag: [['a1', 'FS']], fason: 'F1', tezgahlar: [] }] } : u)) as typeof c.D.urunler;
+  (c.D as Record<string, unknown>)['fasoncular'] = [{ id: 'F1', ad: 'Deneme Kaplama', kapasite: 999, sureGun: 1, cikisGunleri: ['pzt', 'sal', 'car', 'per', 'cum', 'cmt'], cikisSaat: 16 }];
+  await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(ops) }));
+  await page.route('**/api/plan/planlama-kaynagi', async (r) => {
+    const cevap = await r.fetch();
+    const yer = { fasonId: 'F1', terminGun: 2, stationId: null, setup: null, cycle: null, fasonSiparis: { tarih: '2026-10-24', siparisNo: 'ORN-SA-7' } };
+    await r.fulfill({ response: cevap, json: { ...(await cevap.json()) as object, emirler: { orders: [], opStatus: {}, opProg: {}, opYer: { 'S1|root|2': yer } } } });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.locator('[data-kart="S1"]').click();
+  const not = kokpit.locator('[data-adim-satir="S1.a2"] small[data-firma]');
+  await expect(not).toHaveText('Firma tarihi 24.10 · sipariş ORN-SA-7');
+  await not.scrollIntoViewIfNeeded();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await expect(kokpit.locator('[data-adim-satir="S1.a2"] td[data-ad="Bitiş"]')).toContainText('24.10');
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3330-3c-firma-${bilgi.project.name}.png` });
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3297-5 a: üstteki kartlar müşteri siparişidir. Bağ plan kaynağından gelir; burada kaynağın gerçek cevabına uydurma bağ eklenir:
 // S1 ve S3 aynı siparişte, S4 başka siparişte, S2 siparişe bağlı değil.
 test('Kokpit 3297-5: kartlar müşteri siparişine göre toplanır; siparişin emirleri alt alta; siparişsiz emir kendi kartında; arama siparişle bulur; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
