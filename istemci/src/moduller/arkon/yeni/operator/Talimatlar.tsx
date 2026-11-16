@@ -109,7 +109,7 @@ function Madde({ a, kapali, isaretle }: { a: TmiAdim; kapali: boolean; isaretle:
         {acik && !a.tamam && k?.tur === 'olcum' ? (
           <span className="tc-ay1-tl-deger">
             <label>{k.ad || 'Ölçüm'}<input inputMode="decimal" value={deger} onChange={(e) => degerYaz(e.target.value)} aria-label={`${a.ad} · ${k.ad || 'ölçüm'}`} />{k.birim ? <small>{k.birim}</small> : null}</label>
-            {disarida ? <small className="tc-ay1-tl-disarida" role="status"><Simge ad="alert" boyut="k" />Sınır dışı{sinir ? ` · ${sinir}` : ''}</small> : null}
+            {disarida ? <small className="tc-ay1-tl-disarida" role="status"><Simge ad="alert" boyut="k" />Sınır dışı{sinir ? ` (${sinir})` : ''} · yine kaydedilir</small> : null}
             <button type="button" className="tc-ay1-tl-tamam" disabled={sayi === null} onClick={() => { if (sayi !== null) { isaretle(a.id, true, { olcum: sayi }); acikYaz(false); degerYaz(''); } }}>Tamam</button>
           </span>
         ) : null}

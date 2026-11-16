@@ -56,7 +56,7 @@ describe('operatör talimatları (3338-4 a)', () => {
     expect(tamam).toHaveProperty('disabled', true);
     const kutu = within(satir).getByRole('textbox', { name: 'Sıfırı probla · Z' });
     fireEvent.change(kutu, { target: { value: '0,05' } });
-    expect(within(satir).getByRole('status').textContent).toBe('Sınır dışı · -0,02–0,02 mm');
+    expect(within(satir).getByRole('status').textContent).toBe('Sınır dışı (-0,02–0,02 mm) · yine kaydedilir');
     fireEvent.change(kutu, { target: { value: '0,015' } });
     expect(within(satir).queryByRole('status')).toBeNull();
     fireEvent.click(tamam);
