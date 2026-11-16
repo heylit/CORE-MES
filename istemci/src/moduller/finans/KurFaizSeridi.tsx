@@ -88,12 +88,14 @@ export function KurFaizSeridi() {
   if (!o || gizli) return null;
   const kur = (p: string) => o.kurlar.find((k) => k.paraBirimi === p);
   const faiz = (t: FaizTuru) => o.faizler.find((f) => f.tur === t && f.paraBirimi === 'TRY');
-  const bugunEksik = KUR_BIRIMLERI.some((p) => kur(p)?.tarih !== o.bugun);
   // 2996 a: hiç kur ve faiz girilmemişken altı "yok" yerine tek satır; kur girebilene giriş bağlantısı. Şerit herkese görünmeye devam eder (952 a).
   const hicGirilmedi = KUR_BIRIMLERI.every((p) => !kur(p)) && FAIZ_TURLERI.every((t) => !faiz(t));
   const sonGiris = o.sonGiris
     ? `Son ${TUR_ADI[o.sonGiris.tur]} girişi: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}`
     : 'Kur ve faiz ayrıntısı';
+  // Şerit uyarı değil bilgi verir: son girişin günü ve saati herkese görünür. Tek para biriminin bugün eksik olması bütün şeridi
+  // "girilmedi" göstermesin; eski kalan kalemin yanında zaten günü yazar.
+  const sonGirisKisa = o.sonGiris ? `Son giriş ${girisMetni(o.sonGiris.giris, o.bugun)}` : null;
   return (
     <section className="tc-kfs" aria-label="Kur ve faiz">
       <div className="tc-kfs-satir">
@@ -131,7 +133,7 @@ export function KurFaizSeridi() {
               </span>
             );
           })}
-          {yazabilir && bugunEksik && <span className="tc-kfs-uyari"><span className="tc-kfs-isaret" aria-hidden="true" />Bugün girilmedi</span>}
+          {sonGirisKisa && <span className="tc-kfs-son" data-kfs="son-giris">{sonGirisKisa}</span>}
         </button>
         )}
       </div>
