@@ -253,7 +253,7 @@ describe('Hazırlık: emre giden teslimde refakat kartı bildirimi', () => {
   const EMRIN: MalzemeIstegi = { ...ISTEK, uretimEmriId: 77 };
   const KART: RefakatPartisi = {
     id: 51, qr: 'RP:51', etiket: 'UE-000077-P1', uretimEmriId: 77, emirNo: 'UE-000077', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'adet',
-    partiId: 8, lotNo: 'LT-8', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null, verilen: '3', durum: 'acik', surum: 1,
+    partiId: 8, lotNo: 'LT-8', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null, verilen: '3', adet: null, durum: 'acik', surum: 1,
     kayitZamani: '2026-11-11T08:00:00Z', ust: null, birlestigi: null, birlesmeZamani: null,
   };
   const MERKEZLI: Kullanici = { ...DEPOCU, islemler: [...DEPOCU.islemler, 'sayfa.etiket-merkezi'] };
@@ -336,7 +336,7 @@ describe('Hazırlık: lot bekleyen kartlar (kart #154)', () => {
   it('lotsuz düşülen kartlar listelenir, Aç kartı açar; liste boşken bölüm görünmez', async () => {
     const kart = {
       id: 12, qr: 'RP:12', etiket: 'UE-000001-P2', uretimEmriId: 1, emirNo: 'UE-000001', sira: 2, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
-      partiId: null, lotNo: null, tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '0', durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-23T08:00:00+03:00',
+      partiId: null, lotNo: null, tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '0', adet: null, durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-23T08:00:00+03:00',
       lotaBaglanmaZamani: null, ust: null, birlestigi: null, birlesmeZamani: null,
     };
     const cevap: LotBekleyenKartlarCevabi = { kartlar: [{ refakat: kart, bekleyen: '4' }] };

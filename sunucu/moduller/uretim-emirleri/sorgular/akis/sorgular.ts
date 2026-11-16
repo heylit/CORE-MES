@@ -234,11 +234,13 @@ export function muafiyetEkle(db: Db, m: { uretimEmriId: number; isEmriId: number
   );
 }
 
-// Kart başına adım sayımı (Soru 136 a): toplam, adımın tükettiği bütün parça (sağlam, karar bekleyen, red, hurda); sağlam, sonraki adıma geçen.
-export function kartSayimlariGetir(db: Db, emirId: number, kartIdleri: readonly number[]): Promise<{ isEmriId: number; kartId: number; saglam: number; toplam: number }[]> {
+// Kart başına adım sayımı (Soru 136 a): toplam, adımın tükettiği bütün parça (sağlam, karar bekleyen, red, hurda); sağlam, sonraki adıma geçen;
+// kayip, kartın adedinden düşen (hurda ve red, 3337-3 a).
+export function kartSayimlariGetir(db: Db, emirId: number, kartIdleri: readonly number[]): Promise<{ isEmriId: number; kartId: number; saglam: number; kayip: number; toplam: number }[]> {
   return db.sorgu(
     `SELECT is_emri_id AS "isEmriId", refakat_partisi_id AS "kartId",
-            coalesce(sum(adet) FILTER (WHERE tur = 'saglam'), 0)::int AS saglam, sum(adet)::int AS toplam
+            coalesce(sum(adet) FILTER (WHERE tur = 'saglam'), 0)::int AS saglam,
+            coalesce(sum(adet) FILTER (WHERE tur IN ('hurda', 'red')), 0)::int AS kayip, sum(adet)::int AS toplam
        FROM uretim_sayimi WHERE emir_id = $1 AND refakat_partisi_id = ANY($2::int[]) AND is_emri_id IS NOT NULL
       GROUP BY is_emri_id, refakat_partisi_id`,
     [emirId, [...kartIdleri]],

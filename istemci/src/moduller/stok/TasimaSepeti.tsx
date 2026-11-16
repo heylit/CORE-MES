@@ -63,6 +63,7 @@ export function SepetBolmesi({ satirlar: gelen, acik, degistir, birakmaYeri }: {
             {satirlar.map((s) => (
               <li key={s.id} {...(s.id === yeniId ? { 'data-yeni': '' } : {})}>
                 <span><strong>{satirAdi(s)}</strong> <span className="tc-stok-mono">{kaynakMetni(s)}</span>
+                  {s.partiId !== null && !s.refakat && <Rozet ton="uyari">Kartsız</Rozet>}
                   {s.id === yeniId && <Rozet ton="tamam">Az önce eklendi</Rozet>}</span>
                 <strong>{miktarMetni(s.miktar)}</strong>
                 <Dugme simge="x" aria-label={`${satirAdi(s)} sepetten çıkar`} yukleniyor={cikar.komut.isPending && cikar.komut.variables?.id === s.id}

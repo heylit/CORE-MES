@@ -6,7 +6,7 @@ export const t = (dk: number): string => new Date(Date.UTC(2026, 9, 21, 6, 14) +
 
 export const ORNEK_KART: RefakatPartisi = {
   id: 12, qr: 'RP:12', etiket: 'UE-000120-P2', uretimEmriId: 1, emirNo: 'UE-000120', sira: 2, malzemeId: 901, malzemeKod: 'ORN-HM-40', malzemeAd: 'Çubuk 40 (örnek)',
-  birim: 'adet', partiId: 40, lotNo: 'L-26-00417', tedarikciPartiNo: 'TP-1', dokumNo: 'D-1', sertifikaNo: 'S-1', verilen: '60', durum: 'acik', surum: 1,
+  birim: 'adet', partiId: 40, lotNo: 'L-26-00417', tedarikciPartiNo: 'TP-1', dokumNo: 'D-1', sertifikaNo: 'S-1', verilen: '60', adet: null, durum: 'acik', surum: 1,
   kayitZamani: t(4188), lotaBaglanmaZamani: null, ust: null, birlestigi: null, birlesmeZamani: null,
 };
 

@@ -59,7 +59,7 @@ import {
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, cizimOnayiGecer, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
-  icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, planYokDamgala, uyariBirlestir, baslatmaKaydiKarti, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, sayimKaynagiAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi,
@@ -1266,7 +1266,7 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
       // 626 a: sıra dışı başlatmanın uyarısı operatöre kaydın uyarısı olarak döner.
       is = async () => {
         if (emir.durum !== 'planli') return kayitAniyla(db, kayitAni, (an) => emirDevam(db, kullanici, emir.id, makineler, an, adimli));
-        ek.uyari = uyariBirlestir(ek.uyari, (await kayitAniyla(db, kayitAni, (an) => emirBaslat(db, kullanici, emir.id, makineler, an, adimli))).uyari);
+        ek.uyari = uyariBirlestir(ek.uyari, (await kayitAniyla(db, kayitAni, (an) => emirBaslat(db, kullanici, emir.id, makineler, an, adimli, komut.kart))).uyari);
       };
       break;
     }
@@ -1399,7 +1399,7 @@ export async function refakatKartlari(db: Db, kullanici: Kullanici, istasyonKodu
     for (const k of await emrinRefakatKartlari(db, emirId, istasyon.id)) {
       kartlar.push({
         id: k.id, uretimEmriId: emirId, etiket: k.etiket, lotNo: k.lotNo, malzemeKod: k.malzemeKod, malzemeAd: k.malzemeAd, birim: k.birim,
-        verilen: k.verilen, istasyondaSatirVar: k.istasyondaSatirVar, sayilan: k.sayilan, sinir: k.sinir,
+        verilen: k.verilen, istasyondaSatirVar: k.istasyondaSatirVar, sayilan: k.sayilan, sinir: k.sinir, adet: k.adet, dagilim: k.dagilim,
       });
     }
   }
@@ -2108,7 +2108,12 @@ export async function kayitEkle(
 // kuralı TMI komutundadır; burada yalnız kayıt yazabilen Arkon rolü aranır. Reddedilmiş başlatma kaydının yansıması çözülmüş sayılır.
 export async function makineDevralOnayla(db: Db, kullanici: Kullanici, g: MakineDevralGovdesi): Promise<void> {
   if (kayitRoluReddi('events', {}, await rolGerekli(db, kullanici)) !== null) throw yetkiYok(ILETILER.kayitRolYetmez);
-  await makineDevral(db, kullanici, g.emirId, g.kullanimId);
+  // 3337-2 a: devralma işi başlatırsa kart, devralmayı doğuran başlatma kaydındakidir; gövdede verilen önce gelir.
+  const kayit = g.cid === undefined ? null : await sorgular.reddedilenBaslatmaGovdesi(db, g.cid, kullanici.id, g.emirId);
+  const kayittaki = kayit === null ? { refakatPartisiId: null, gerekce: null } : baslatmaKaydiKarti(kayit);
+  await makineDevral(db, kullanici, g.emirId, g.kullanimId, undefined, undefined, {
+    refakatPartisiId: g.refakatPartisiId ?? kayittaki.refakatPartisiId, gerekce: g.kartsizGerekce ?? kayittaki.gerekce,
+  });
   if (g.cid !== undefined) await sorgular.yansimaDevralindi(db, g.cid, kullanici.id, g.emirId);
   await devralmaHaliniYay(db, g.emirId, g.durdurulanEmirId);
 }

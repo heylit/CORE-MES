@@ -6,6 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { useDogrudanBasim } from '../etiket-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EmirSecici } from './EmirSecici.tsx';
 import { birimliMiktar, zamanMetni } from './gorunum.ts';
@@ -174,21 +175,36 @@ export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: 
 }
 
 // Emre ayır (Soru 116 b): lot okutulmuştur ya Okut sonucunda (`lotKodu`) ya da sepete eklenirken (`sepetSatirId`); emir seçilir.
-// Aynı emir ve lotun kartı varsa o açılır; yoksa yeni kart. Sepet satırı karta geçince sepetten çıkar.
+// Aynı emir ve lotun kartı varsa o açılır; yoksa yeni kart. 3337 (3337-2 a): sepet satırı karta dönüşür ve sepette kalır; kart bu
+// cihazın varsayılan yazıcısına basılır (yoksa Etiket Merkezi'nde bekler), pencere kapanır, satır kartla teslim edilir.
 export function RefakatAcPenceresi({ kaynak, ad, kapat }: { kaynak: { lotKodu: string } | { sepetSatirId: number }; ad: string; kapat: () => void }) {
   const [emir, setEmir] = useState('');
+  const [adet, setAdet] = useState('');
   const [kart, setKart] = useState<number | null>(null);
+  const adetGecerli = adet === '' || /^[1-9]\d{0,5}$/.test(adet);
+  const sepetten = 'sepetSatirId' in kaynak;
+  const basim = useDogrudanBasim('refakat-partisi');
   const ac = useStokKomutu((g: RefakatPartisiAcGovdesi) => korumaliPost<RefakatPartisiCevabi>('/stok/refakat-partileri/ac', g).then((c) => {
-    setKart(c.refakat.id); return c;
-  }), 'Refakat kartı hazır.');
+    if (!sepetten) { setKart(c.refakat.id); return c; }
+    if (basim.yazici !== null) basim.bas([c.refakat.id]);
+    kapat();
+    return c;
+  }), sepetten ? (basim.yazici !== null ? 'Refakat kartı açıldı, yazıcıya gönderildi.' : "Refakat kartı açıldı; bu cihazda varsayılan yazıcı yok, kartı Etiket Merkezi'nden basın.") : 'Refakat kartı hazır.');
   if (kart !== null) return <RefakatKartPenceresi id={kart} kapat={kapat} />;
   return (
-    <Pencere acik kapat={kapat} baslik="Refakat kartına geç" tur="yan"
-      alt={<Dugme tur="birincil" simge="tag" disabled={emir === ''} yukleniyor={ac.komut.isPending}
-        onClick={() => ac.komut.mutate({ uretimEmriId: Number(emir), ...kaynak })}>Kartı aç</Dugme>}>
+    <Pencere acik kapat={kapat} baslik={sepetten ? 'Refakat kartına dönüştür' : 'Refakat kartına geç'} tur="yan"
+      alt={<Dugme tur="birincil" simge={sepetten ? 'printer' : 'tag'} disabled={emir === '' || !adetGecerli} yukleniyor={ac.komut.isPending}
+        onClick={() => ac.komut.mutate({ uretimEmriId: Number(emir), ...kaynak, ...(adet === '' ? {} : { adet: Number(adet) }) })}>{sepetten ? 'Dönüştür ve bas' : 'Kartı aç'}</Dugme>}>
       <div className="tc-stok-form">
-        <p className="tc-stok-not">{ad}. Lot bu emre bağlanır; bundan sonra malzeme refakat kartıyla teslim edilir.</p>
+        <p className="tc-stok-not">{ad}. {sepetten
+          ? 'Lot bu emrin refakat kartına dönüşür; satır sepette kalır ve kartla teslim edilir. Lot etiketi depoda kalır.'
+          : 'Lot bu emre bağlanır; bundan sonra malzeme refakat kartıyla teslim edilir.'}</p>
         <EmirSecici deger={emir} degistir={setEmir} zorunlu />
+        {/* 3337-3 a: kart adedi açılışta bir kez yazılır, sonra değişmez; boşsa sunucu lot miktarından ve emrin kalanından önerir. */}
+        <Girdi etiket="Karttaki parça adedi" inputMode="numeric" value={adet} onChange={(o) => setAdet(o.target.value.trim())}
+          ipucu={sepetten
+            ? 'Kart bu kadar parça taşır, sonra değişmez. Boşsa satırdaki miktar reçetede parça başına düşen malzemeye bölünür; emrin kartsız kalanını geçmez.'
+            : 'Kart bu kadar parça taşır, sonra değişmez. Boşsa emrin kartsız kalan parça adedi yazılır.'} {...(adetGecerli ? {} : { hata: 'Pozitif tam sayı yazın.' })} />
         {ac.komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(ac.komut.error)}</p>}
       </div>
     </Pencere>

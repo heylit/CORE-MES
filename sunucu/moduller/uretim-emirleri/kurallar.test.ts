@@ -8,12 +8,13 @@ import {
   AYAR_PLANLI_DEGIL, AYAR_YINELENDI, REFAKAT_IPTAL, adimliOzetSay, ayarIhlali, isEmriSureOzeti, refakatIhlali, refakatQrMetni,
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, adimNotuIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
-  KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
+  KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartDagilimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
+import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
 
@@ -359,4 +360,37 @@ test('3249 b: biten adımın listesi işaretlenmez ve madde almaz; liste en çok
   assert.equal(kanitMetni({ olcum: null, secim: 'Geçti', foto: null }), 'Geçti');
   assert.equal(kanitMetni({ olcum: null, secim: null, foto: 'ORN-ozet-ab12' }), 'Fotoğraf', 'fotoğraf özeti gösterilmez');
   assert.equal(kanitMetni({ olcum: null, secim: null, foto: null }), null);
+});
+
+test('3337-2 a: kartsız başlatma gerekçesi yetki ister; kartla birlikte, boş ya da uzun gerekçe geçersizdir', () => {
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: 4, gerekce: null }, false), null, 'kartla başlatma yetki aramaz');
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: null }, false), null, 'kartsızı stok denetler');
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'Kart basılamadı' }, false), { tur: 'yetki', ileti: KARTSIZ_YETKI_YOK });
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'Kart basılamadı' }, true), null);
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: 4, gerekce: 'x' }, true), { tur: 'gecersiz', ileti: KARTLA_GEREKCE_BIRDEN });
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: '  ' }, true)?.tur, 'gecersiz');
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'x'.repeat(KARTSIZ_GEREKCE_AZAMI + 1) }, true), { tur: 'gecersiz', ileti: KARTSIZ_GEREKCE_UZUN });
+});
+
+describe('3337-3 a: kartın sabit adedi ve dağılımı', () => {
+  const adimlar = [{ id: 1, sira: 1 }, { id: 2, sira: 2 }, { id: 3, sira: 3 }];
+  const sayimlar = new Map([[1, { saglam: 27, kayip: 2 }], [2, { saglam: 12, kayip: 1 }], [3, { saglam: 4, kayip: 5 }]]);
+  test('toplam sabit: sağlam + hurda + işlemde = adet; sınır önceki adımların kaybı kadar düşer', () => {
+    const { sinir, dagilim } = kartDagilimi(30, adimlar, 2, (i) => sayimlar.get(i));
+    assert.equal(sinir, 28);
+    assert.deepEqual(dagilim, { adet: 30, saglam: 12, hurda: 3, kolda: 0, islemde: 15 });
+    assert.equal(dagilim.saglam + dagilim.hurda + dagilim.islemde, dagilim.adet);
+  });
+  test('ilk adımda sınır adettir; sayım yoksa hepsi işlemde', () => {
+    assert.deepEqual(kartDagilimi(30, adimlar, 1, () => undefined), { sinir: 30, dagilim: { adet: 30, saglam: 0, hurda: 0, kolda: 0, islemde: 30 } });
+  });
+  test('bölünmüş kola giden parça kolda görünür; sınır ve işlemde o kadar düşer, toplam yine adet', () => {
+    const { sinir, dagilim } = kartDagilimi(30, adimlar, 2, (i) => sayimlar.get(i), 6);
+    assert.equal(sinir, 22);
+    assert.deepEqual(dagilim, { adet: 30, saglam: 12, hurda: 3, kolda: 6, islemde: 9 });
+    assert.equal(dagilim.saglam + dagilim.hurda + dagilim.kolda + dagilim.islemde, dagilim.adet);
+  });
+  test('kayıp adedi aşsa da sınır ve işlemde eksiye düşmez', () => {
+    assert.deepEqual(kartDagilimi(3, adimlar, 3, (i) => sayimlar.get(i)), { sinir: 0, dagilim: { adet: 3, saglam: 4, hurda: 8, kolda: 0, islemde: 0 } });
+  });
 });

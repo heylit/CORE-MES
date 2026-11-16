@@ -13,6 +13,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar, miktarMetni } from './gorunum.ts';
 import { KartOnayiPenceresi, kartOnayiBilgisi } from './KartOnayi.tsx';
 import type { KartOnayi } from './KartOnayi.tsx';
+import { KartaDonusturPenceresi, kartsizBilgisi, type KartsizBilgi } from './KartsizTeslim.tsx';
 
 // Sunucuda tekrar korumalı stok komutu (mal kabul, hareket yazan komutlar, sepet, toplama açma): tek kimlikle gider; cevabı
 // yitirilen gönderim aynı kimlikle yeniden denenir, komut en çok bir kez uygulanır. Denemeler sonucu bilinmeden tükenirse
@@ -115,6 +116,7 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
   const { bildir } = useBildirim();
   const [onay, setOnay] = useState<{ govde: G; mevcut: string } | null>(null);
   const [kartOnayi, setKartOnayi] = useState<{ govde: G; bilgi: KartOnayi } | null>(null);
+  const [kartsiz, setKartsiz] = useState<{ govde: G; bilgi: KartsizBilgi } | null>(null);
   // 2099-5 a: SKT'si geçmiş lot; onayı yalnız stok.skt-onayla taşıyan verir, öteki kişiye yalnız neden gösterilir.
   const [skt, setSkt] = useState<{ govde: G; sonKullanma: string | null } | null>(null);
   const sktOnaylayabilir = useIslem('stok.skt-onayla');
@@ -123,6 +125,7 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
     onSuccess: async () => {
       setOnay(null);
       setKartOnayi(null);
+      setKartsiz(null);
       setSkt(null);
       if (basarili !== null) bildir('tamam', basarili);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
@@ -132,6 +135,9 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
       const kart = kartOnayiBilgisi(hata);
       if (kart) { setKartOnayi({ govde, bilgi: kart }); return; }
       setKartOnayi(null);
+      const kartsizBilgi = kartsizBilgisi(hata);
+      if (kartsizBilgi) { setKartsiz({ govde, bilgi: kartsizBilgi }); return; }
+      setKartsiz(null);
       if (hata instanceof ApiHatasi && hata.govde.kod === 'ONAY_GEREKLI') {
         const ayrinti = (hata.govde as { ayrinti?: { mevcut?: string; sktOnayi?: boolean; sonKullanma?: string | null } }).ayrinti;
         if (ayrinti?.sktOnayi === true) { setSkt({ govde, sonKullanma: ayrinti.sonKullanma ?? null }); return; }
@@ -158,6 +164,10 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
     <KartOnayiPenceresi bilgi={kartOnayi?.bilgi ?? null} yukleniyor={komut.isPending}
       onayla={() => { if (kartOnayi) komut.mutate({ ...kartOnayi.govde, kartOnayi: true }); }} vazgec={() => setKartOnayi(null)} />
   );
+  const kartsizPenceresi = (
+    <KartaDonusturPenceresi bilgi={kartsiz?.bilgi ?? null} yukleniyor={komut.isPending} vazgec={() => setKartsiz(null)}
+      gonder={(refakatPartisiId, partiId) => { if (kartsiz) komut.mutate({ ...kartsiz.govde, refakatPartisiId, partiId }); }} />
+  );
   const sktPenceresi = (
     <OnayPenceresi
       acik={skt !== null}
@@ -171,7 +181,7 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
       <p>Lotun son kullanma tarihi <strong>{skt?.sonKullanma ?? '—'}</strong>. {sktOnaylayabilir ? 'Onaylarsanız çıkış yazılır ve onay hareketle kalır.' : 'Bu çıkışı müdür onaylar.'}</p>
     </OnayPenceresi>
   );
-  return { komut, onayPenceresi: <>{onayPenceresi}{kartPenceresi}{sktPenceresi}</> };
+  return { komut, onayPenceresi: <>{onayPenceresi}{kartPenceresi}{kartsizPenceresi}{sktPenceresi}</> };
 }
 
 export const hataMetni = (hata: unknown): string =>

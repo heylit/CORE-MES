@@ -32,6 +32,22 @@ export const makineYetkinlikIhlali = (
 };
 // Soru 185 a: sayımı yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; düzeltme işlemi olan (yönetici, vardiya sorumlusu) da yazar.
 export const SAYIM_DUZELTME_ISLEMI = 'uretim-emirleri.sayim-duzelt' satisfies Islem;
+
+// 3337-2 a: iş adımı refakat kartı okutularak başlar; kartsız başlatmayı yalnız bu işlemi olan kişi gerekçeyle yapar.
+export const KARTSIZ_BASLATMA_ISLEMI = 'uretim-emirleri.kartsiz-baslat' satisfies Islem;
+export const KARTSIZ_GEREKCE_AZAMI = 500;
+export const KARTSIZ_YETKI_YOK = 'Refakat kartı okutulmadan iş başlatmak yetkili kişinin işidir. Kartı okutun ya da yetkiliye başlattırın.';
+export const KARTLA_GEREKCE_BIRDEN = 'Kart okutulduysa gerekçe yazılmaz.';
+export const KARTSIZ_GEREKCE_UZUN = `Gerekçe en çok ${KARTSIZ_GEREKCE_AZAMI} karakter olur.`;
+export function kartsizBaslatmaIhlali(
+  kart: { refakatPartisiId: number | null; gerekce: string | null }, yetkili: boolean,
+): { tur: 'yetki' | 'gecersiz'; ileti: string } | null {
+  if (kart.gerekce === null) return null;
+  if (kart.refakatPartisiId !== null) return { tur: 'gecersiz', ileti: KARTLA_GEREKCE_BIRDEN };
+  if (kart.gerekce.trim() === '') return { tur: 'gecersiz', ileti: 'Kartsız başlatmanın gerekçesi yazılmalı.' };
+  if (kart.gerekce.length > KARTSIZ_GEREKCE_AZAMI) return { tur: 'gecersiz', ileti: KARTSIZ_GEREKCE_UZUN };
+  return yetkili ? null : { tur: 'yetki', ileti: KARTSIZ_YETKI_YOK };
+}
 export const SAYIM_KATILIMSIZ = 'Bu işe başlamadınız ya da katılmadınız; sayımı işteki kişi, yönetici ya da vardiya sorumlusu girer.';
 export const sayimYetkiIhlali = (katilmis: boolean, duzeltebilir: boolean): string | null => (katilmis || duzeltebilir ? null : SAYIM_KATILIMSIZ);
 export const KATILIM_CALISMIYOR = 'Yalnız çalışan işe katılınır; iş duraklatılmış ya da durdurulmuşsa önce devam ettirin.';
@@ -1226,6 +1242,21 @@ export function kartSiniri(
   const adim = adimlar.find((a) => a.id === adimId);
   const onculler = adim === undefined ? [] : adetOnculleri(adimlar, adim);
   return adim === undefined || onculler.length === 0 ? null : Math.min(...onculler.map((o) => onculdenGelen(oncekiSaglam(o.id), o, adim)));
+}
+
+// 3337-3 a: adetli kartta toplam sabittir. Sınır, adetten önceki adımlarda düşen (hurda, red) ve kollara giden; dağılım bu adımda:
+// sağlam (adımı geçen), hurda (bu adıma kadar düşen), kolda (bölünmüş kolların açık kartlarının adedi), işlemde (geri kalan).
+// Sonraki adımların sayımı katılmaz (o parçalar bu adımın sağlamındadır).
+export interface KartDagilimi { adet: number; saglam: number; hurda: number; kolda: number; islemde: number }
+export function kartDagilimi(
+  adet: number, adimlar: readonly { id: number; sira: number }[], adimId: number, sayim: (isEmriId: number) => { saglam: number; kayip: number } | undefined,
+  kolda = 0,
+): { sinir: number; dagilim: KartDagilimi } {
+  const sira = adimlar.find((a) => a.id === adimId)?.sira ?? Number.POSITIVE_INFINITY;
+  const kayip = (onceki: boolean) => adimlar.filter((a) => (onceki ? a.sira < sira : a.sira <= sira)).reduce((t, a) => t + (sayim(a.id)?.kayip ?? 0), 0);
+  const hurda = kayip(false);
+  const saglam = sayim(adimId)?.saglam ?? 0;
+  return { sinir: Math.max(0, adet - kayip(true) - kolda), dagilim: { adet, saglam, hurda, kolda, islemde: Math.max(0, adet - saglam - hurda - kolda) } };
 }
 
 // Kartın sayıldığı adım: istasyondaki çalışan iş emri, yoksa istasyonun sıradaki iş emri; istasyon verilmezse ya da istasyonda

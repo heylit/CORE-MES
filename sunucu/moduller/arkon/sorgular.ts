@@ -166,6 +166,12 @@ export function reddedilenYansimalar(
 }
 
 // Reddedilmiş başlatmanın devralmayla yazıldığı kayıt: satır çözülmüştür (yalnız kişinin kendi kaydı ve yalnız reddedilmiş satır). Satır sayısını döner.
+// 3337-2 a: devralmayı doğuran reddedilmiş başlatma kaydının gövdesi (kartı ya da kartsız gerekçesi oradadır).
+export async function reddedilenBaslatmaGovdesi(db: Db, cid: string, kisiId: number, emirId: number): Promise<Readonly<Record<string, unknown>> | null> {
+  return (await db.tek<{ govde: Record<string, unknown> }>(
+    `SELECT k.govde FROM arkon_tmi_yansima y JOIN arkon_kayit k ON k.id = y.kayit_id
+      WHERE k.tur = 'events' AND k.cid = $1 AND y.kisi_id = $2 AND y.emir_id = $3 AND y.sonuc = 'reddedildi' ORDER BY y.id DESC LIMIT 1`, [cid, kisiId, emirId]))?.govde ?? null;
+}
 export async function yansimaDevralindi(db: Db, cid: string, kisiId: number, emirId: number): Promise<number> {
   const satirlar = await db.sorgu<{ id: number }>(
     `UPDATE arkon_tmi_yansima y SET sonuc = 'yazildi', neden = NULL, son_deneme = now()

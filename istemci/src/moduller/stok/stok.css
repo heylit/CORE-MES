@@ -837,3 +837,11 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-kod-gecisi-metin p + p { margin-block-start: var(--b-1); }
 .tc-stok-kod-gecisi-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 @media (pointer: coarse) { .tc-stok-kod-gecisi-dugmeler { gap: var(--b-3); } .tc-stok-kod-gecisi-dugmeler .tc-dugme { min-block-size: var(--dokunma); } }
+
+/* 3337: depo sepeti satırı telefonda sarılır; lot ve kart etiketi ile "Refakat kartına dönüştür" paneli genişletmesin. */
+.tc-stok-depo-sepeti { grid-template-columns: minmax(0, 1fr); }
+.tc-stok-depo-sepeti .tc-stok-mono { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .tc-stok-depo-sepeti > .tc-stok-teslim-satir { flex-wrap: wrap; }
+  .tc-stok-depo-sepeti > .tc-stok-teslim-satir > div { flex: 1 1 100%; }
+}

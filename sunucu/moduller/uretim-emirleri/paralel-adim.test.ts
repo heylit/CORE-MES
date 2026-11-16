@@ -15,8 +15,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, geridekiOnculler, katil, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
-import type { IsEmriGirdisi } from './disari.ts';
+import { acikEmir, baslatmaDenetle, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, geridekiOnculler, katil, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
+import type { BaslatmaKarti, IsEmriGirdisi } from './disari.ts';
 import { ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, IS_EMRI_YOK, MAKINE_DOLU } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -318,5 +318,31 @@ describe('uretim-emirleri paralel adım (kart 639, gerçek PostgreSQL)', () => {
     await tx((db) => emirBaslat(db, kim('operator2'), id, undefined, undefined, ie2));
     await sayim(id, 2, ie2);
     assert.deepEqual(await canli(), [3, 2, null], 'iki adım birlikte çalışırken her biri kendi sayısını taşır');
+  });
+
+  // 3337-2 a: iki makine devralma ucu başlatmaya kart alanını taşır (iç çağrı taşımaz); başlatma denetçisi bunu görür.
+  test('3337-2 a: makine devralma uçları kartı başlatma denetimine verir', async () => {
+    const gelen: (BaslatmaKarti | undefined)[] = [];
+    const birak = baslatmaDenetle(async (_db, olay) => { gelen.push(olay.kart); return null; });
+    try {
+      const a = await makineliIstasyon();
+      const { id, adimlar: [, ie2] } = await ac([adim(1, a.makine), adim(2, a.makine, { bagimlilik: 'bagimsiz' })]) as { id: number; adimlar: [number, number] };
+      await tx((db) => emirBaslat(db, op(), id));
+      assert.deepEqual(gelen, [undefined], 'iç çağrı kart taşımaz');
+      const kullanim = (await o().sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 AND bitis IS NULL', [id]))!.id;
+      const devral = await istek<Emir>('operator', 'POST', adimYolu(id, ie2, 'makine-devral'), { kullanimId: kullanim });
+      assert.equal(devral.durum, 200, JSON.stringify(devral.govde));
+      assert.deepEqual(gelen.at(-1), { refakatPartisiId: null, gerekce: null }, 'adımlı uç kartsızı da taşır');
+      // Emir ucu: aynı makinedeki öteki emir duraklar, bu emrin ilk adımı devralınır.
+      const ikinci = await ac([adim(1, a.makine)]);
+      const kullanim2 = (await o().sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 AND bitis IS NULL', [id]))!.id;
+      const yetkisiz = await istek<{ mesaj: string }>('operator', 'POST', `/uretim-emirleri/${ikinci.id}/makine-devral`, { kullanimId: kullanim2, kartsizGerekce: 'Kart basılamadı' });
+      assert.equal(yetkisiz.durum, 403, 'gerekçe yetki ister');
+      const emirUcu = await istek<Emir>('operator', 'POST', `/uretim-emirleri/${ikinci.id}/makine-devral`, { kullanimId: kullanim2 });
+      assert.equal(emirUcu.durum, 200, JSON.stringify(emirUcu.govde));
+      assert.deepEqual(gelen.at(-1), { refakatPartisiId: null, gerekce: null }, 'emir ucu kartı taşır');
+    } finally {
+      birak();
+    }
   });
 });

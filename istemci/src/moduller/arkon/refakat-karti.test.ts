@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, girdiAdaylari, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, sinirMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
+import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, girdiAdaylari, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, sinirMetni, dagilimMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
 import type { RefakatKarti } from '../../../../arkon/web/src/data/refakat-karti.ts';
 
 // Kart #156 (Soru 134): Arkon'da okutma yok; iş, işin altındaki refakat kartından "Aç" ile ya da Malzeme Teslim'den kartla açılır.
@@ -19,6 +19,11 @@ describe('refakat kartı listesi', () => {
     expect(sinirMetni({ sayilan: null, sinir: null })).toBeNull();
     expect(sinirMetni({ sayilan: 4, sinir: null })).toBeNull();
     expect(sinirMetni({ sayilan: 4, sinir: 10 })).toBe('4 / 10');
+    // 3337-3 a: adetli kartta toplam sabit; dağılım yazılır, adetsiz kartta yazılmaz.
+    expect(dagilimMetni({ dagilim: { adet: 30, saglam: 12, hurda: 1, islemde: 17 } })).toBe('Kart 30 · sağlam 12 · hurda 1 · işlemde 17');
+    expect(dagilimMetni({ dagilim: { adet: 10, saglam: 1, hurda: 0, kolda: 4, islemde: 5 } })).toBe('Kart 10 · sağlam 1 · hurda 0 · kolda 4 · işlemde 5');
+    expect(dagilimMetni({ dagilim: null })).toBeNull();
+    expect(dagilimMetni({})).toBeNull();
     expect([kartDoldu({ sayilan: 9, sinir: 10 }), kartDoldu({ sayilan: 10, sinir: 10 }), kartDoldu({ sayilan: 12, sinir: 10 }), kartDoldu({ sayilan: 3, sinir: null })]).toEqual([false, true, true, false]);
   });
 

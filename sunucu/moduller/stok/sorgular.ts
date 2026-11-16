@@ -34,7 +34,7 @@ export {
   type EmirHareketiHam, emrinHareketleri, type EmirRezerveKaydi, emrinRezerveKayitlari, emrinRezerveToplamlari,
 } from './sorgular/emir/sorgular.ts';
 export {
-  type SepetHam, sepetSatirlari, sepeteEkle, lotunGozdekiSerbesti, sepetMiktari, sepettenSil, sepetiBosalt, fisAc, fisSatiriYaz, type FisHam, fisBul, FIS_SIRALAMASI, fisSay,
+  type SepetHam, sepetSatirlari, sepeteEkle, lotunGozdekiSerbesti, sepetMiktari, sepettenSil, sepetSatirinaKartBagla, sepetiBosalt, fisAc, fisSatiriYaz, type FisHam, fisBul, FIS_SIRALAMASI, fisSay,
   fisler, fisinHareketleri, toplamaAc, toplamaKalemiYaz, toplamaAdimiYaz, konumRotaBilgisi, type ToplamaHam, toplamaBul, TOPLAMA_SIRALAMASI, toplamaSay,
   toplamalar, toplamaKalemleri, type AdimHam, toplamaAdimlari, adimBul, adimToplandi, toplamaSurumu, toplamaKapat, toplamaVarMi, toplamaHedefiYaz,
   konumIstasyonu, toplamaHedefi, toplamaIstegiBagla, toplamaIstekBaglariniSil, toplamaIstekBaginiSil, type IstekHam, toplamaIstekleri, yoldaTeslimleri,
@@ -63,7 +63,7 @@ export {
   lotunRefakatPartileri, refakatSoyu, lotunKartlari, type RefakatCiktisiHam, refakatCiktilari, type RefakatSevkiHam, refakatSevkleri, refakatPartisiIptal,
   refakatPartisiVarMi, acikIstisnaKarti, istisnaKartiAc, istisnaDusumuYaz, istisnaDusumuMu, istisnaDusumuTasi, type IstisnaDusumuHam, istisnaDusumleri,
   istisnaDusumuBagla, type LotBekleyenKartHam, lotBekleyenKartlar, refakatLotaBagla, lotunBaglamaBakiyeleri, refakatYoldakiTeslimleri,
-  kartliYoldakiTeslimler, type KartSatiriHam, kartSatirlari,
+  kartliYoldakiTeslimler, type KartSatiriHam, kartSatirlari, refakatBaslatmaYaz, emrinKartAdetleri, kollardakiAdetler,
 } from './sorgular/refakat/sorgular.ts';
 export {
   emirFisleriniAc, emirFisiDegisti, type MalzemeFisiHam, MALZEME_FISI_SIRALAMASI, type MalzemeFisiSuzgeci, malzemeFisiSay, malzemeFisleri,

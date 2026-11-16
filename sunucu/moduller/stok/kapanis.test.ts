@@ -213,8 +213,12 @@ describe('stok: kapanış maddeleri (gerçek PostgreSQL)', () => {
     const kaynak = (await o().vt.tek<{ konum_id: number }>(
       'SELECT konum_id FROM stok_bakiye WHERE malzeme_id = $1 AND miktar > 0 ORDER BY konum_id LIMIT 1', [hm]))!.konum_id;
     const [e1, e2] = [await emirAc(2, [{ malzemeNo: hm, miktar: '1' }]), await emirAc(2, [{ malzemeNo: hm, miktar: '1' }])];
+    // 3337: emre giden lotlu hammadde kartla gider.
+    const lot = (await o().vt.tek<{ lot_no: string }>('SELECT lot_no FROM stok_parti WHERE malzeme_id = $1 ORDER BY id LIMIT 1', [hm]))!.lot_no;
+    const kart = await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e1, lotKodu: `LOT:${lot}` });
+    assert.equal(kart.durum, 200, JSON.stringify(kart.govde));
     const g = await istek<{ teslim: { id: number; surum: number; hedef: { konumId: number; kod: string } } }>('depo', 'POST', '/stok/teslimler/gonder', {
-      malzemeId: hm, miktar: '3', statuId: null, kaynak: { konumId: kaynak }, hedef: { istasyonId }, uretimEmriId: e1, not: null, kaynakKimligi: randomUUID(), kartOnayi: true,
+      malzemeId: hm, miktar: '3', statuId: null, kaynak: { konumId: kaynak }, hedef: { istasyonId }, not: null, kaynakKimligi: randomUUID(), refakatPartisiId: kart.govde.refakat.id,
     });
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
     const al = await istek('yonetici', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '3' });

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { irsaliyeBelgeAdi } from './kurallar.ts';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM, baslatmaKartiEngeli, kartAdediOnerisi, kartAdediEngeli, KART_ADEDI_FAZLA, KARTSIZ_BASLATMA, BASLATMA_KARTI_YOK, BASLATMA_KARTI_KAPALI, BASLATMA_KARTI_BASKA,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -1070,5 +1070,44 @@ describe('3094 a istek kapsamı', () => {
     assert.equal(istekKapsamindanMuafMi(['stok.toplama', 'sayfa.stok']), false);
     assert.equal(istekKapsamindanMuafMi(['stok.istek']), false);
     assert.equal(istekKapsamindanMuafMi([]), false);
+  });
+  test('3337 (3337-2 a): emre giden lotlu hammadde kartsız gitmez; kartlı, lotsuz, statülü, başka tür ve emirsiz teslim serbest', () => {
+    const g = { kartVar: false, partiId: 5, statuId: null, malzemeTuru: 'hammadde', emreGider: true };
+    assert.equal(kartsizLotTeslimEngeli(g), KARTSIZ_TESLIM);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, kartVar: true }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, partiId: null }), null, 'lotsuz: istisna kartı yolu');
+    assert.equal(kartsizLotTeslimEngeli({ ...g, statuId: 3 }), null, 'adım statüsündeki parça');
+    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: 'sarf' }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: null }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, emreGider: false }), null, 'emirsiz taşıma');
+  });
+});
+
+test('3337-2 a: başlatma kartı bu emrin ya da yakın emrin açık kartı olmalı; girdisiz emirde ve gerekçede kart aranmaz', () => {
+  const g = { refakatPartisiId: 7 as number | null, gerekce: null as string | null, girdiVar: true, kart: { durum: 'acik' as const, uretimEmriId: 1 } as { durum: 'acik' | 'iptal'; uretimEmriId: number } | null, uretimEmriId: 1, yakinEmirler: [] as number[] };
+  assert.equal(baslatmaKartiEngeli(g), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null }), KARTSIZ_BASLATMA);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null, girdiVar: false }), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null, gerekce: 'Kart basılamadı' }), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: null }), BASLATMA_KARTI_YOK);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'iptal', uretimEmriId: 1 } }), BASLATMA_KARTI_KAPALI);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'acik', uretimEmriId: 2 } }), BASLATMA_KARTI_BASKA);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'acik', uretimEmriId: 2 }, yakinEmirler: [2] }), null, 'montaj girdisi ya da bölünmüş emrin üstü');
+});
+
+describe('3337-3 a: kart adedi önerisi', () => {
+  test('lot miktarının karşıladığı parça emrin kalanıyla sınırlı; bilinmeyende kalan; pozitif değilse null', () => {
+    // Emir 10 adet, parça başı 2 kg (brüt 20): 8 kg lot 4 parça taşır.
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 0, brut: 20, miktar: '8.000' }), 4);
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 8, brut: 20, miktar: '8.000' }), 2, 'kalan sınırlar');
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 3, brut: null, miktar: '8.000' }), 7, 'girdi bilinmezse kalan');
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 3, brut: 20, miktar: null }), 7, 'miktar bilinmezse kalan');
+    assert.equal(kartAdediOnerisi({ emirAdet: 3, ayrilmis: 0, brut: 1.5, miktar: '1.5' }), 3, 'ondalık bölme tam çıkar');
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 10, brut: 20, miktar: '8' }), null);
+    assert.equal(kartAdediOnerisi({ emirAdet: 10, ayrilmis: 0, brut: 20, miktar: '1' }), null, 'bir parçaya yetmeyen lot');
+  });
+  test('depocunun adedi emrin adedini geçemez', () => {
+    assert.equal(kartAdediEngeli(10, 10), null);
+    assert.equal(kartAdediEngeli(11, 10), KART_ADEDI_FAZLA);
   });
 });

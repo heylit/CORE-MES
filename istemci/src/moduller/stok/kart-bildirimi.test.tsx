@@ -16,7 +16,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const MERKEZLI: Kullanici = { ...DEPOCU, islemler: [...DEPOCU.islemler, 'sayfa.etiket-merkezi'] };
 const KART: RefakatPartisi = {
   id: 51, qr: 'RP:51', etiket: 'UE-000077-P1', uretimEmriId: 77, emirNo: 'UE-000077', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'adet',
-  partiId: 8, lotNo: 'LT-8', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null, verilen: '3', durum: 'acik', surum: 1,
+  partiId: 8, lotNo: 'LT-8', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null, verilen: '3', adet: null, durum: 'acik', surum: 1,
   kayitZamani: '2026-11-11T08:00:00Z', ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const BASKA_LOT: RefakatPartisi = { ...KART, id: 50, etiket: 'UE-000077-P2', sira: 2, partiId: 9 };

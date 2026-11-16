@@ -105,6 +105,8 @@ export const kayitEkleCevabi = z.object({
 export const makineDevralGovdesi = z.object({
   emirId: z.number().int().positive(), kullanimId: z.number().int().positive(), cid: z.string().min(1).max(200).optional(),
   durdurulanEmirId: z.number().int().positive().optional(),
+  // 3337-2 a: devralma işi başlatıyorsa işin refakat kartı ya da yetkilinin kartsız gerekçesi.
+  refakatPartisiId: z.number().int().positive().max(2147483647).optional(), kartsizGerekce: z.string().max(500).optional(),
 }).strict();
 // cid: devralmayı doğuran reddedilmiş başlatma kaydı; devralma yazılınca o yansıma satırı çözülmüş sayılır.
 export const calismaDevralGovdesi = z.object({
@@ -574,6 +576,9 @@ export const refakatKartiSemasi = z.object({
   id: z.number().int(), uretimEmriId: z.number().int(), etiket: z.string(), lotNo: z.string().nullable(),
   malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), verilen: z.string(),
   istasyondaSatirVar: z.boolean(), sayilan: z.number().nullable(), sinir: z.number().nullable(),
+  // 3337-3 a: kartın sabit adedi ve bu adımdaki dağılımı (toplam = adet); eski kartta null.
+  adet: z.number().int().nullable(),
+  dagilim: z.object({ adet: z.number().int(), saglam: z.number().int(), hurda: z.number().int(), kolda: z.number().int(), islemde: z.number().int() }).nullable(),
 });
 export const refakatKartlariCevabi = z.object({ kartlar: z.array(refakatKartiSemasi) });
 export type ArkonRefakatKarti = z.infer<typeof refakatKartiSemasi>;

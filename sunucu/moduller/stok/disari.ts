@@ -5,7 +5,7 @@ import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.t
 import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
 import { binde, bindenMetin, planaSayilirMi, statuKirilimi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
+import { isEmriPlanBilgileri, refakatKartiSayimlari, type KartDagilimi } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
@@ -321,18 +321,22 @@ export interface RefakatKartiOzeti {
   // malzemeNo: kartın malzemesinin katalog numarası (iş emri girdileri bununla tutulur). verilenNet: kart sınırının girdisi (Soru 136 a); verilen ile aynıdır (Soru 137 a), alan Arkon ve üretim emirleri okuduğu için kalır.
   malzemeNo: number; malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string; verilenNet: string;
   istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
+  // 3337-3 a: kartın sabit adedi ve bu adımdaki dağılımı; eski (adetsiz) kartta null.
+  adet: number | null; dagilim: KartDagilimi | null;
 }
 export async function emrinRefakatKartlari(db: Db, uretimEmriId: number, istasyonId: number | null): Promise<RefakatKartiOzeti[]> {
   const { partiler } = await servis.emrinRefakatPartileri(db, uretimEmriId);
   const acik = partiler.filter((r) => r.durum === 'acik' && r.birlestigi === null);
   const burada = istasyonId === null ? new Set<number>() : await sorgular.istasyondaSatiriOlanKartlar(db, acik.map((r) => r.id), istasyonId);
   // Sınır üretim emirlerinin hesabıdır (Soru 136 a); haritada olmayan kartta (adımsız emir) sayılan ve sınır null kalır.
-  const sayim = acik.length === 0 ? new Map<number, { sayilan: number; sinir: number | null }>()
-    : await refakatKartiSayimlari(db, uretimEmriId, istasyonId, acik.map((r) => ({ id: r.id, malzemeNo: r.malzemeId, verilen: r.verilen })));
+  const kolda = acik.length === 0 ? new Map<number, number>() : await sorgular.kollardakiAdetler(db, acik.map((r) => r.id));
+  const sayim = acik.length === 0 ? new Map<number, { sayilan: number; sinir: number | null; dagilim: KartDagilimi | null }>()
+    : await refakatKartiSayimlari(db, uretimEmriId, istasyonId, acik.map((r) => ({ id: r.id, malzemeNo: r.malzemeId, verilen: r.verilen, adet: r.adet, kolda: kolda.get(r.id) ?? 0 })));
   return acik.map((r) => ({
     id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeNo: r.malzemeId, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
     verilenNet: r.verilen,
     istasyondaSatirVar: burada.has(r.id), sayilan: sayim.get(r.id)?.sayilan ?? null, sinir: sayim.get(r.id)?.sinir ?? null,
+    adet: r.adet, dagilim: sayim.get(r.id)?.dagilim ?? null,
   }));
 }
 // Lot bekleyen (istisna) kart da null döner: lotsuz kartla iş açılmaz ve lot satırı basılmaz (Soru 129; Etiket Merkezi isteği BASKA-MODUL-ISTEKLERI'nde).

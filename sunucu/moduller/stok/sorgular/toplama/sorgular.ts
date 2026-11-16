@@ -42,6 +42,9 @@ export const lotunGozdekiSerbesti = async (db: Db, malzemeId: number, konumId: n
     [malzemeId, konumId, partiId]))?.serbest ?? null;
 export const sepetMiktari = (db: Db, id: number, kisiId: number, miktar: string): Promise<{ id: number } | null> =>
   db.tek('UPDATE stok_sepet_satiri SET miktar = $3 WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId, miktar]);
+// 3337: sepet satırı refakat kartına dönüşür; satır sepette kalır, kartla teslim edilir. Hedef verilmişse eski hedefin yerine geçer.
+export const sepetSatirinaKartBagla = (db: Db, id: number, kisiId: number, refakatPartisiId: number, hedefKonumId: number | null): Promise<{ id: number } | null> =>
+  db.tek('UPDATE stok_sepet_satiri SET refakat_partisi_id = $3, hedef_konum_id = COALESCE($4, hedef_konum_id) WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId, refakatPartisiId, hedefKonumId]);
 export const sepettenSil = (db: Db, id: number, kisiId: number): Promise<{ id: number } | null> =>
   db.tek('DELETE FROM stok_sepet_satiri WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId]);
 export const sepetiBosalt = (db: Db, kisiId: number, idler: number[]): Promise<unknown[]> =>

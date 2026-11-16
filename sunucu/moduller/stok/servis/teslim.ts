@@ -15,7 +15,7 @@ import type {
   TeslimCevabi, TeslimKutusuCevabi, SonIslemlerimCevabi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi,
   OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, SepettenCekGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { malzemeIstegiAcGirdisi, type IstekTeslimGovdesi, type KartlaAlGovdesi, type RefakatKartSatiri } from '#paylasilan/sozlesme/stok.ts';
+import { malzemeIstegiAcGirdisi, type IstekTeslimGovdesi, type KartlaAlGovdesi, type RefakatKartSatiri, type RefakatPartisiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { kodTuru, type KodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../../ayarlar/disari.ts';
@@ -38,7 +38,7 @@ import { zeminDurumu, say, anaDepo } from './depo.ts';
 import { kaynakPartisi, sevkCikisiniDenetle, eksiKaliteDenetle } from './hareket.ts';
 import { STOKLANIR_TURLER } from './malzeme.ts';
 import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket, teslimYaz, sktBugun } from './ortak.ts';
-import { refakatPartileriCevir } from './refakat.ts';
+import { refakatPartileriCevir, refakatPartisiAc } from './refakat.ts';
 import { sarfEmriDenetle, emreKartiSagla, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
 
 // ---- Sepet (DEP-54: kişiye özel) ------------------------------------------------------------------------------------------
@@ -136,6 +136,19 @@ export async function sepetGonder(db: Db, k: Kullanici, g: SepetTeslimEtKomutu):
     else kalanlar.push({ satirId, neden: sonuc.hata.message });
   }
   return { teslimler, kalanlar };
+}
+// 3337 (3337-2 a): "Refakat kartına dönüştür". Lotlu sepet satırı seçilen emrin kartına dönüşür ve sepette kalır; Teslim et satırı kartla
+// gönderir. Hedefi olmayan satıra kartın emrinden hedef önerilir. Kart zaten açıksa aynı kart bağlanır.
+export async function sepetSatiriniKartaDonustur(db: Db, kisiId: number, g: { uretimEmriId: number; sepetSatirId: number; adet?: number | undefined }): Promise<RefakatPartisiCevabi> {
+  const satir = (await sorgular.sepetSatirlari(db, kisiId, true)).find((x) => x.id === g.sepetSatirId);
+  if (!satir) throw bulunamadi('Sepet satırı bulunamadı.');
+  if (satir.refakatPartisiId !== null) throw cakisma('Bu satır zaten refakat kartına dönüştü.');
+  const c = await refakatPartisiAc(db, kisiId, g);
+  const kart = (await sorgular.refakatPartisiBul(db, c.refakat.id))!;
+  const hedef = satir.hedefKonumId !== null ? null : await sepetHedefOnerisi(db, satir.malzemeId, satir.kaynakKonumId, kart);
+  const hedefKonumId = hedef === null ? null : await istasyonKonumuBul(db, hedef, 'hedef');
+  if (!(await sorgular.sepetSatirinaKartBagla(db, satir.id, kisiId, kart.id, hedefKonumId === satir.kaynakKonumId ? null : hedefKonumId))) throw bulunamadi('Sepet satırı bulunamadı.');
+  return c;
 }
 export async function sepetSatiriDegistir(db: Db, kisiId: number, id: number, miktar: string): Promise<SepetCevabi> {
   if (!(await sorgular.sepetMiktari(db, id, kisiId, bindenMetin(binde(miktar))))) throw bulunamadi('Sepet satırı bulunamadı.');

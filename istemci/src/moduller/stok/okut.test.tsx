@@ -142,6 +142,9 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const satirlar = within(within(bolme).getByRole('list', { name: 'Sepetteki kalemler' })).getAllByRole('listitem');
     expect(within(satirlar[0]!).queryByText('Az önce eklendi')).toBeNull();
     expect(await within(satirlar[1]!).findByText('Az önce eklendi')).toBeTruthy();
+    // 3337-2 a: kartsız lotlu satır bölmede de "Kartsız" görünür; lotsuz satırda rozet yok.
+    expect(within(satirlar[0]!).getByText('Kartsız')).toBeTruthy();
+    expect(within(satirlar[1]!).queryByText('Kartsız')).toBeNull();
   });
 
   it('3339 a: üst çubuktaki sepet ikonu boş sepette görünmez; doluyken kalem sayısıyla durur ve paneli açar', async () => {

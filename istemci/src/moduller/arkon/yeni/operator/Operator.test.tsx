@@ -407,7 +407,13 @@ describe('A1 Üretim Terminali hatalı parça (1034)', () => {
     expect(screen.queryByRole('button', { name: /Hurda \+1/ })).toBeNull();
     expect(document.querySelector('.tc-ay1-kadran-etiket')?.textContent).toBe('Hatalı1');
     fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    // 3337-2 a: kartsız CORE işinde önce kart sorulur; okutulan kart başlatma kaydıyla gider.
+    const kartPenceresi = await screen.findByRole('dialog', { name: 'Refakat kartını okut' });
+    expect(within(kartPenceresi).queryByRole('button', { name: /Kartsız başlat/ })).toBeNull();
+    fireEvent.change(within(kartPenceresi).getByLabelText(/^Kart/), { target: { value: 'RP:5' } });
+    fireEvent.click(within(kartPenceresi).getByRole('button', { name: /Kartla başlat/ }));
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    expect(olaylar(istekler).find((e) => e.state === 'running')).toMatchObject({ refakatPartisiId: 5 });
     fireEvent.click(screen.getByRole('button', { name: /^Hatalı$/ }));
     const pencere = await screen.findByRole('dialog', { name: 'Hatalı parça' });
     fireEvent.click(within(pencere).getByRole('radio', { name: /Takım kırılması/ }));
@@ -535,7 +541,10 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
       if (String(adres).includes('/arkon/refakat-kartlari')) {
         kartOkundu = true;
-        return new Response(JSON.stringify({ kartlar: [{ id: 4, uretimEmriId: 8, etiket: 'UE-DENEME-8-P4', lotNo: 'LT-1', malzemeKod: null, malzemeAd: null, birim: null, verilen: '10', istasyondaSatirVar: true, sayilan: null, sinir: null }] }), { status: 200 });
+        return new Response(JSON.stringify({ kartlar: [
+          { id: 4, uretimEmriId: 8, etiket: 'UE-DENEME-8-P4', lotNo: 'LT-1', malzemeKod: null, malzemeAd: null, birim: null, verilen: '10', istasyondaSatirVar: true, sayilan: null, sinir: null },
+          { id: 6, uretimEmriId: 98, etiket: 'UE-DENEME-98-P6', lotNo: 'LT-2', malzemeKod: null, malzemeAd: null, birim: null, verilen: '10', istasyondaSatirVar: true, sayilan: null, sinir: null },
+        ] }), { status: 200 });
       }
       return asil(adres, istek);
     });
@@ -553,6 +562,27 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
     await new Promise((r) => setTimeout(r, 700));
     expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
+  }, 40000);
+
+  it('3337-2 a: kartla açılmış iş Başlat\'ta kart sormaz, kartıyla başlar; kartsız işte pencere yalnız bu işin kartlarını yazar', async () => {
+    const istekler = kur();
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-8/ })).toBeTruthy();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartını okut' });
+    expect(within(pencere).getByText(/Bu işin kartları: UE-DENEME-8-P4\./)).toBeTruthy();
+    expect(within(pencere).queryByText(/UE-DENEME-98-P6/)).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull(); });
+    okut('RP:4');
+    expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    expect(olaylar(istekler).find((e) => e.state === 'running')).toMatchObject({ refakatPartisiId: 4 });
+    expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull();
   }, 40000);
 
   it('kart dışı kod ve bu istasyonun olmayan kart işi açmaz, söyler (reddedilen)', async () => {
