@@ -16,9 +16,11 @@ export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uy
   ileti?: string | null;
   // Emrin planlama yönü (3282 1c); verilmezse gösterilmez.
   yon?: Omit<EmirYonuOzellikleri, 'emirId' | 'no'>;
+  // Seçili adımın taşıma yerleri Operasyonlar bölümünde listeleniyorsa true: aynı seçenekler burada ikinci kez durmaz.
+  tasimaListede?: boolean;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null, yon }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null, yon, tasimaListede = false }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   // Plana alma yolu (3229 a): açılış bugünkü hızlı yoldur.
   const [adimAdim, setAdimAdim] = useState(false);
@@ -59,7 +61,9 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
   ) : (
     <>
       <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
-      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} yalnizKazanc={matris} />}
+      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p>
+        : secili && tasimaListede ? <p className="tc-pyq-not" data-tasima-listede="">Taşıma yerleri Operasyonlar bölümünde.</p>
+          : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} yalnizKazanc={matris} />}
     </>
   );
   return (

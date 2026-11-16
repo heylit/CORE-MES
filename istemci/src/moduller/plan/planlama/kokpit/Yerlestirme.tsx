@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, durumYazisi, fasonMu, tasimaSaati, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
-import { adimYeri, bosYerler, siradakiAdim, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
+import { adimSecimleri, durumYazisi, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
 // Kokpit'in yukarıdan aşağı düzeninin üst iki bölümü (3297 a): 1 sıra kartları, 2 seçilen kartın emirleri ve adımları. Plansız emirde
@@ -155,6 +156,46 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
   return { sec, secili, adimSec: setAdim, sistem, yerler: yerler !== null && yerler.adim === secili ? yerler.l : null, tezgahSec, hepsi, sifirla: () => { setSec({}); setAdim(null); } };
 }
 
+// Planlı adımın taşınabileceği yerler (3297-4): aday yerler sırayla sunucu önizlemesine sorulur, geçersiz yer listeye girmez. Sorular
+// sürüm başına bellekte tutulur; adım, plan ya da sürüm değişince kalan sorular düşer. `isId` null iken sorulmaz.
+// bitis: taşımadan sonra emrin biteceği an (itilen adımlarla); hesaplanamıyorsa null.
+export interface TasimaYeri extends BosYer { baslangic: number; bitis: number | null }
+export function useTasima(m: KokpitModeli, e: KokpitEmri, isId: string | null, surum: number | null): TasimaYeri[] | null {
+  const [yerler, setYerler] = useState<{ anahtar: string; l: TasimaYeri[] } | null>(null);
+  const bellek = useRef(new Map<string, ReturnType<typeof isTasiOnizle>>());
+  useEffect(() => { bellek.current.clear(); }, [e.id, surum]);
+  const adaylar = useMemo(() => (isId === null ? [] : tasimaAdaylari(m, e, isId, ADAY_SINIRI)), [m, e, isId]);
+  const anahtar = JSON.stringify([isId, adaylar]);
+  useEffect(() => {
+    if (isId === null) { setYerler(null); return undefined; }
+    let gecerli = true;
+    setYerler(null);
+    void (async () => {
+      const oz: { tezgah: string; gecerli: boolean; isler: { isId: string; tezgah: string; S: number; C: number }[] }[] = [];
+      for (const a of adaylar) {
+        const k = `${isId}|${a.tezgah}|${String(a.baslangic)}`;
+        let soz = bellek.current.get(k);
+        if (!soz) {
+          const yeni = isTasiOnizle({ isId, tezgah: a.tezgah, baslangic: a.baslangic }).then((x) => {
+            if (x === null && bellek.current.get(k) === yeni) bellek.current.delete(k);
+            return x;
+          });
+          bellek.current.set(k, yeni); soz = yeni;
+        }
+        const x = await soz;
+        if (!gecerli) return;
+        if (x !== null) oz.push({ tezgah: a.tezgah, gecerli: x.gecerli, isler: x.isler });
+      }
+      const baslangic = new Map(adaylar.map((a) => [a.tezgah, a.baslangic]));
+      const bitis = (t: string): number | null => onizlemeBitisi(m, e, oz.find((o) => o.tezgah === t)?.isler ?? []);
+      setYerler({ anahtar, l: bosYerler(isId, oz).map((b) => ({ ...b, baslangic: baslangic.get(b.tezgah) ?? b.S, bitis: bitis(b.tezgah) })) });
+    })();
+    return () => { gecerli = false; };
+    // Aday yerler anahtarda toplanır; liste her hesapta yeni dizidir.
+  }, [anahtar, surum]);
+  return yerler !== null && yerler.anahtar === anahtar ? yerler.l : null;
+}
+
 export interface EmirAdimlariOzellikleri {
   m: KokpitModeli;
   kart: SiraKarti;
@@ -170,19 +211,28 @@ export interface EmirAdimlariOzellikleri {
   emirAc?: (emirId: string) => void;
   // Kişinin taslağında değişiklik varsa true: önizleme ortak plandan hesaplanır, taslaktaki değişiklikleri görmez; kişiye söylenir.
   taslakVar?: boolean;
+  // Seçili planlı adım (3297-4): taşınabileceği yerler listelenir ve tahtada işaretlenir. `tasi` yazamayan kişide ve turda null.
+  secIs?: string | null;
+  tasi?: ((isId: string, tezgah: string, baslangic: number) => void) | null;
+  // Planlı adım seçiliyken yerleşmemiş adıma basılınca seçimi bırakır (yerleştirme öne geçer).
+  birak?: () => void;
+  // Seçili operasyonun ayrıntısını açar; yalnız operasyona basmanın ayrıntı açmadığı yerde (telefon) verilir.
+  adimAyrinti?: (emirId: string, isId: string) => void;
 }
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emirAc, taslakVar = false }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emirAc, taslakVar = false, secIs = null, tasi = null, birak, adimAyrinti }: EmirAdimlariOzellikleri) {
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
-  const etkin = kart.emirler.find((e) => e.id === dokunulan && e.durum === 'plansiz')?.id ?? kart.emirler.find((e) => e.durum === 'plansiz')?.id ?? null;
+  // Planlı adım seçiliyken tahtadaki işaretler onundur; plansız emrin yerleştirmesi bekler (tahtada tek hedef olur).
+  const tasinan = secIs !== null && m.isler[secIs] ? kart.emirler.find((e) => e.adimlar.some((a) => a.id === secIs))?.id ?? null : null;
+  const etkin = tasinan !== null ? null : kart.emirler.find((e) => e.id === dokunulan && e.durum === 'plansiz')?.id ?? kart.emirler.find((e) => e.durum === 'plansiz')?.id ?? null;
   const bas = kart.emirler[0];
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler ve operasyonlar">
       <h2><b className="tc-pyq-bolum-no">2</b>{bas?.no ?? kart.kok} · operasyonlar</h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); }} taslakVar={taslakVar} {...(hedef ? { hedef } : {})} {...(emirAc ? { emirAc } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} {...(adimAyrinti ? { adimAyrinti } : {})} {...(hedef ? { hedef } : {})} {...(emirAc ? { emirAc } : {})} />
         ))}
       </div>
     </section>
@@ -190,29 +240,42 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emi
 }
 
 // Seçili adımın uygun tezgâhları ve boş yerleri; tahta bunları işaretler, boş yere basınca `yerlestir` çağrılır.
-export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void }
+// fiil: yer planlı operasyonun taşınacağı yerse 'tasi' (tahtadaki yazı ona göre).
+export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void; fiil?: 'tasi' }
 interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, etkinlestir, taslakVar = false }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, adimAyrinti }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
+  const tasinanIs = secIs !== null ? m.isler[secIs] : undefined;
+  const engel = tasinanIs ? tasinabilir(tasinanIs) : null;
+  const tasima = useTasima(m, e, tasinanIs && engel === null && tasi ? tasinanIs.id : null, surum);
   const kod = useMemo(() => new Map(m.tezgahlar.map((t) => [t.id, t.kod])), [m]);
   const tz = (id: string): string => kod.get(id) ?? id;
   const an = (a: number, b: number): string => `${zaman(a).slice(6)} → ${zaman(b).slice(-5)}`;
   const plansiz = e.durum === 'plansiz';
   const seciliAdim = etkin && plansiz ? y.secili : null;
   const tezgahlar = useMemo(() => uygunTezgahlar(e, seciliAdim), [e, seciliAdim]);
-  const hedefAnahtari = seciliAdim === null ? null : JSON.stringify([e.id, seciliAdim, y.yerler]);
+  const tasimaTezgahlari = useMemo(() => uygunTezgahlar(e, tasinanIs && engel === null ? tasinanIs.id : null), [e, tasinanIs?.id, engel]);
+  const hedefAnahtari = tasinanIs ? JSON.stringify([e.id, tasinanIs.id, tasima, engel]) : seciliAdim === null ? null : JSON.stringify([e.id, seciliAdim, y.yerler]);
   useEffect(() => {
-    if (!hedef || !etkin) return undefined;
-    hedef(seciliAdim === null || !uygula ? null : { emirId: e.id, adimId: seciliAdim, tezgahlar, yerler: y.yerler ?? [], yerlestir: (t) => { yerlestir.current(t); } });
+    if (!hedef || (!etkin && !tasinanIs)) return undefined;
+    if (tasinanIs) hedef(engel !== null || !tasi ? null : { emirId: e.id, adimId: tasinanIs.id, tezgahlar: tasimaTezgahlari, yerler: tasima ?? [], yerlestir: (t) => { yerlestir.current(t); }, fiil: 'tasi' });
+    else hedef(seciliAdim === null || !uygula ? null : { emirId: e.id, adimId: seciliAdim, tezgahlar, yerler: y.yerler ?? [], yerlestir: (t) => { yerlestir.current(t); } });
     return () => { hedef(null); };
     // Hedef anahtarda toplanır; yer listesi her hesapta yeni dizidir.
-  }, [hedefAnahtari, etkin, hedef, uygula === null]);
+  }, [hedefAnahtari, etkin, hedef, uygula === null, tasi === null]);
 
   const yaz = (h: { aday: TurAdayi; gecBirakir: boolean } | null): void => { if (h && uygula) { uygula(h.aday, h.gecBirakir); y.sifirla(); } };
   // Tahtadaki boş yere basılınca çağrılır; her çizimde güncel seçimleri görür.
   const yerlestir = useRef<(t: string) => void>(() => undefined);
-  useEffect(() => { yerlestir.current = (t) => { yaz(y.tezgahSec(t)); }; });
+  const tasiYere = (t: string): void => { const b = tasima?.find((x) => x.tezgah === t); if (b && tasinanIs && tasi) tasi(tasinanIs.id, t, b.baslangic); };
+  useEffect(() => { yerlestir.current = tasinanIs ? tasiYere : (t) => { yaz(y.tezgahSec(t)); }; });
+  // Taşımanın emre etkisi: yeni bitiş, bugünkü bitişe göre kazanç ve termine göre durum.
+  const etki = (bitis: number | null): string => {
+    if (bitis === null) return '';
+    const kazanc = e.bitis !== null ? e.bitis - bitis : null, gec = e.termin !== null ? bitis - e.termin : null;
+    return ` · emir ${zaman(bitis).slice(6)} biter${kazanc !== null && kazanc > 0.01 ? ` · ${sureYaz(kazanc)} erken` : ''}${gec === null ? '' : gec > 0.01 ? ` · ${sureYaz(gec)} geç` : ' · termine yetişir'}`;
+  };
   const seciliAd = e.adimlar.find((a) => a.id === seciliAdim)?.ad;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   return (
@@ -225,7 +288,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
       <ol className="tc-pyq-rota">
         {e.adimlar.map((a) => {
           const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id]?.tezgah;
-          const secildi = seciliAdim === a.id;
+          const secildi = seciliAdim === a.id || (tasinanIs?.id === a.id);
           return (
             <li key={a.id}>
               <button
@@ -239,6 +302,30 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
           );
         })}
       </ol>
+      {tasinanIs && (
+        <div className="tc-pyq-yerler" role="group" aria-label={`${tasinanIs.ad} için taşınacak yerler`}>
+          {!tasi ? <p className="tc-pyq-not">Operasyonu yalnız planı yazabilen kişi taşır.</p>
+            : engel !== null ? <p className="tc-pyq-not">{engel}.</p>
+              : tasima === null ? <p className="tc-pyq-not" role="status">Taşınacak yerler hesaplanıyor</p>
+                : tasima.length === 0 ? <p className="tc-pyq-not" role="status">Bu operasyon için başka uygun boş yer bulunamadı.</p>
+                  : (
+                    <>
+                      <p className="tc-pyq-not"><b>{tasinanIs.ad}</b> seçili ({tz(tasinanIs.m)} · {an(tasinanIs.S, tasinanIs.C)}). Taşımak için bir yer seçin.</p>
+                      <ul>
+                        {tasima.map((b) => (
+                          <li key={b.tezgah} data-ilk={b.enErken ? '' : undefined}>
+                            <span><b className="tc-pyq-mono">{tz(b.tezgah)}</b> · {an(b.S, b.C)}</span>
+                            <small>{b.tezgah === tasinanIs.m ? 'Aynı tezgâh' : 'Başka tezgâh'}{b.enErken ? ' · en erken biten yer' : ''}{etki(b.bitis)}</small>
+                            <Dugme tur="ikincil" simge="check" data-tasi-tezgah={b.tezgah} onClick={() => { tasiYere(b.tezgah); }}>Taşı</Dugme>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+          {adimAyrinti && <button type="button" className="tc-pyq-kucuk" data-adim-ayrinti="" onClick={() => { adimAyrinti(e.id, tasinanIs.id); }}><Simge ad="list" boyut="k" /> {tasinanIs.ad} ayrıntısı</button>}
+          {tasi && engel === null && taslakVar && <p className="tc-pyq-not" data-taslak-notu="">Taslağınızdaki değişiklikler bu yerlerde hesaba katılmadı; taşıyınca plan taslağınızla yeniden dizilir ve sonucu tahtada görünür.</p>}
+        </div>
+      )}
       {plansiz && etkin && (
         <div className="tc-pyq-yerler" role="group" aria-label={seciliAd ? `${seciliAd} için boş yerler` : 'Boş yerler'}>
           {!uygula ? <p className="tc-pyq-not">Emri yalnız planı yazabilen kişi yerleştirir.</p>

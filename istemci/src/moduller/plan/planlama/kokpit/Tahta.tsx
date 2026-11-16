@@ -334,12 +334,12 @@ export function Tahta(o: TahtaOzellikleri) {
                 <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, FIS_SAATI * px); }}>{zaman(oneri.baslangic).slice(6)} · plana al</span>
               )}
               {!tasinan && yerlestirme?.yerler.filter((b) => b.tezgah === r.kimlik).map((b) => {
-                const ad = `${r.bas} · ${zaman(b.S).slice(6)} → ${zaman(b.C).slice(-5)} · ${b.enErken ? 'en erken biten yer' : 'boş yer'} · yerleştir`;
+                const ad = `${r.bas} · ${zaman(b.S).slice(6)} → ${zaman(b.C).slice(-5)} · ${b.enErken ? 'en erken biten yer' : 'boş yer'} · ${yerlestirme.fiil === 'tasi' ? 'taşı' : 'yerleştir'}`;
                 return (
                   <button
                     type="button" key={`bos-${b.adimId}`} className="tc-pyq-hayalet tc-pyq-bosyer" data-bos-yer={b.tezgah} data-ilk={b.enErken ? '' : undefined} title={ad} aria-label={ad}
                     ref={(el) => { yerYaz(el, (b.S - m.bas) * px, (b.C - b.S) * px); }} onClick={() => { yerlestirme.yerlestir(b.tezgah); }}
-                  >{b.enErken ? 'En erken' : 'Buraya'} · {zaman(b.S).slice(-5)}</button>
+                  >{b.enErken ? 'En erken' : yerlestirme.fiil === 'tasi' ? 'Taşı' : 'Buraya'} · {zaman(b.S).slice(-5)}</button>
                 );
               })}
               {tasinan?.fis !== undefined && hedef?.satir === r.kimlik && (

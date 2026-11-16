@@ -1,4 +1,4 @@
-import { fasonMu, type AdimSecimi, type EmirDurumu, type KokpitAdimi, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
+import { fasonMu, ilkBosluk, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitAdimi, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
 // Kokpit'in yukarıdan aşağı düzeninin saf kuralları (3297): üstte sıra kartları, altında seçilen kartın emirleri ve adımları, en altta
 // tezgâhlar. Kart kök emirdir: çok katmanlı emrin düğümleri ("<emir>-Y<n>") ve parçaları ("<emir>/<n>") kökünün kartında toplanır.
@@ -76,4 +76,15 @@ export function bosYerler(
     return y ? [{ adimId, tezgah: o.tezgah, S: y.S, C: y.C, enErken: false }] : [];
   }).sort((a, b) => a.C - b.C);
   return l.map((y, i) => ({ ...y, enErken: i === 0 }));
+}
+
+// Planlı adımın taşınabileceği yer adayları (3297-4): her aday tezgâhta, rotadaki önceki adımlar bittikten sonra adımın süresine yeten
+// ilk boşluk. Adımın bugünkü yeri aday değildir. Yeri ve itilen adımları sunucu önizlemesi denetler; burada yalnız sorulacak yerler seçilir.
+export function tasimaAdaylari(m: KokpitModeli, e: Pick<KokpitEmri, 'adimlar'>, isId: string, enCok: number): { tezgah: string; baslangic: number }[] {
+  const x = m.isler[isId], k = e.adimlar.findIndex((a) => a.id === isId);
+  if (!x || k < 0 || tasinabilir(x) !== null) return [];
+  const onceki = e.adimlar.slice(0, k).reduce((t, a) => Math.max(t, m.isler[a.id]?.C ?? t), m.simdi);
+  return uygunTezgahlar(e, isId).slice(0, enCok)
+    .map((tezgah) => ({ tezgah, baslangic: tasimaSaati(ilkBosluk(m, tezgah, x.C - x.S, onceki, x.id), m.simdi) }))
+    .filter((a) => a.tezgah !== x.m || Math.abs(a.baslangic - x.S) > 0.25);
 }
