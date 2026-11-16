@@ -17,6 +17,7 @@ import { StatuGecmisi } from './StatuGecmisi.tsx';
 import { StatuCipi, StatuPenceresi } from './StatuPenceresi.tsx';
 import { EMIR_OKUMA_ISLEMLERI, ProjeEmirleri } from './ProjeEmirleri.tsx';
 import { ProjeFormu } from './ProjeFormu.tsx';
+import { ProjeIptal } from './ProjeIptal.tsx';
 import { BitisBagi, ProjeKalemleri } from './ProjeKalemleri.tsx';
 import './projeler.css';
 
@@ -74,6 +75,7 @@ export function ProjeAyrinti() {
         <div className="tc-prj-bas-sag">
           <KlasorBaglantisi tur="proje" id={p.id} />
           {yazabilir && <Dugme simge="edit" onClick={() => { duzenleYaz(true); }}>Düzenle</Dugme>}
+          {yazabilir && p.durum === 'aktif' && <ProjeIptal proje={p} />}
         </div>
       </header>
       <Sekmeler etiket="Proje bölümleri" sekmeler={sekmeler} secili={sekme} sec={sec} />

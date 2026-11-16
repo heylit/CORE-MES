@@ -66,6 +66,16 @@ const istek = (ek: Partial<DenemeIstegi>): DenemeIstegi => ({
 });
 
 describe('satış teklifi denemesi (Y4)', () => {
+  test('3301: planın yönü geri olsa da arkaya ekleme kalemi mevcut yükün ardına koyar, ufkun sonuna itmez', async () => {
+    const ileri = await teklifDenemesi(istek({}));
+    const c = tabanli() as { w: Record<string, unknown> };
+    c.w = { ...c.w, yon: 'geri' };
+    const geri = await teklifDenemesi(istek({ calisma: c }));
+    assert.ok(ileri && geri);
+    assert.equal(geri.kalemler[0]!.bitis, ileri.kalemler[0]!.bitis);
+    assert.equal(geri.kalemler[0]!.planTerminGun, ileri.kalemler[0]!.planTerminGun);
+    assert.deepEqual(geri.kayan, []);
+  });
   test('istenen termin yoksa plan dondurulur: başka siparişin bitişi değişmez, kalem arkaya yerleşir ve plan termini çalışma gününe düşer', async () => {
     const r = await teklifDenemesi(istek({}));
     assert.ok(r);
