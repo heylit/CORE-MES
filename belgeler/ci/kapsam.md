@@ -4,14 +4,16 @@ Kod: `araclar/ci-kapsam.sh` (karar), `.github/workflows/kontrol.yml` `kapsam` i�
 Değişen dosya listesi `git diff --name-only --no-renames` ile alınır (taşımada eski ve yeni yol birlikte gelir); paket yoktur. Süzgeç `kapsam` işinin içindedir, `on.paths`'e taşınmaz:
 dal koruması `kontrol` işini bekler, yol süzgeciyle hiç açılmayan koşu birleşmeyi kilitler.
 
-Süzgeç yalnız üç ağır işi daraltır: `sunucu-test` (Windows işi de buna bağlı), `istemci-test`, `ekran`. `tip`, `denetim`, `lint`
+Süzgeç yalnız üç ağır işi daraltır: `sunucu-test` (Windows işi de buna bağlı), `istemci-test`, `ekran`; dosya düzeyindeki
+seçim aşağıdaki "Dosya seçimi ve parça planı" bölümündedir. `tip`, `denetim`, `lint`
 ve `kontrol` her koşuda koşar.
 
 ## Eşleme (çekme isteği; yukarıdan aşağı ilk eşleşen satır geçerlidir)
 
 | Değişen yol | sunucu | istemci | ekran |
 |---|---|---|---|
-| `belgeler/`, `kurulum/` | - | - | - |
+| `CLAUDE.md`, `kurulum/*.md` (kural metni boyu testle denetlenir) | evet | - | - |
+| `belgeler/`, `kurulum/` (geri kalan) | - | - | - |
 | `paylasilan/`, `istemci/src/ortak/`, `sunucu/cekirdek/`, `package.json`, `package-lock.json`, `.github/`, `araclar/` | evet | evet | evet |
 | `sunucu/gocler/` | evet | - | evet |
 | `ekran-testleri/benzetim/` (test robotu, ADR 0019) | evet | - | - |
@@ -28,6 +30,25 @@ Bir değişiklikteki satırların birleşimi koşar. Modül klasöründeki `.md`
 "Sunucunun ithal ettiği klasör" listesi her koşuda koddan okunur: `sunucu`, `araclar` ve `paylasilan` altındaki `.ts`
 dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle liste tutulmaz.
 
+## Dosya seçimi ve parça planı (3310 a)
+
+Kod: `araclar/ci-plan.ts` (`kapsam` işinin `plan` adımı), denemesi `araclar/ci-plan.test.ts`. Yukarıdaki tablo hangi işin açılacağını
+söyler; plan, açılan işin hangi dosyaları koşacağını ve kaç parçaya bölüneceğini söyler. Plan `ci-plan` eseri olarak yüklenir;
+her parça kendi listesini (`ci-plan/<iş>-<parça>.txt`) indirir. Matris plandan gelir (`<iş>_matris`); seçilen dosya kalmayan iş atlanır.
+
+- Çekme isteği: değişen dosyalardan ithal grafiğinde geriye yürünür (`araclar/etki.ts`, kablolama bağları dahil); yalnız ulaşılan
+  sunucu ve istemci testleri koşar. Windows'ta bunların Windows kümesindeki kesişimi koşar. Ekran: değişen ekran testi, etkilenen
+  modülün sayfasını açan test (`ac('/<modül>/...')`) ve modüle bağlanamayan test (sayfayı değişkenle açan, modül klasörü olmayan
+  yolu açan) koşar. Grafiğin bilmediği değişiklik (paket, yapılandırma, `arkon/`), ekranın ortak dosyası ya da modül dışı istemci
+  dosyası etkilenirse ilgili işte bütün dosyalar koşar.
+- Görmediği bağlar: uç üzerinden HTTP çağrısı, SQL ile başka tabloya bakış, dizgeyle kurulan ithal. Bunların kırığı çekme isteğinde
+  değil ana dal koşusunda görünür; canlı paket yalnız `windows-yesil` etiketli commit'ten çıktığı için canlıya geçmez.
+- Ana dal ve elle koşu: her dosya koşar.
+- Bölme: ölçülmüş dosya süresiyle, en uzun dosya en hafif parçaya (LPT); eşitlikte ad sırası, plan her makinede aynıdır. Süreler
+  ana dal koşularında ölçülür (sunucu ve Windows: `araclar/test-rapor-github.ts`, ekran: playwright json raporu) ve `sureler`
+  işi önbelleğe (`ci-sureler-<koşu>`) yazar; plan en yenisini alır. Ölçüsü olmayan dosya bilinenlerin ortancasıdır; hiç ölçü yoksa
+  sayıyla bölünür. İstemci süresi ölçülmez (iş kısa), sayıyla bölünür. Parça sayısının üst sınırı `PARCA`'dadır.
+
 ## Daraltılmayan durumlar
 
 - Ana dala gönderim: her iş koşar, yalnız belge değişse de. Önceki birleşmenin ağır işleri atlanmış olabilir; onların testlerini bu koşu taşır (2705 a, 3045 a).
@@ -38,7 +59,7 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 - Çekme isteği: koşunun tamamı iptal edilir. `concurrency.group` ref'tir; `cancel-in-progress` yalnız `pull_request` olayında açıktır.
 - Ana dal (3045 a): hiçbir koşu ve hiçbir iş iptal edilmez. Koşu düzeyindeki grup commit sha'sıdır; iş düzeyinde iptal grubu yoktur. `kapsam`, `tip`, `denetim` (göç damgası dahil), `lint` ve `kontrol` her birleşmede koşar.
 - Linux'taki ağır işler (`istemci-test`, `sunucu-test`, `ekran`): `kapsam` koşu açılırken `git ls-remote` ile ana dalın ucuna bakar. Uç bu commit değilse (arkadan birleşme geldiyse) `eski=true` verir ve ağır işler atlanır. Karar açılış anındadır: yeni koşu, ondan da yeni bir birleşme yoksa atlanmaz; eski koşu ucu göremezse iki koşu da tam koşar. İş düzeyindeki iptal grubu kaldırıldı, çünkü sırayı commit'e göre değil gruba giriş anına göre kuruyordu; aynı anda açılan eski koşu yeniyi iptal edebiliyordu (11.11, cfa82dcb).
-- `windows` (3018 a) dört parçalıdır ve iptal edilmez: her ana dal commit'inin kendi Windows sonucu vardır. Dosyalar ad sırasıyla dönüşümlü dağılır; her parça node'a verdiği dosya listesini günlüğe yazar ve yalnız testleri yeşil bitince yükler; `windows-butunluk` dört listeyi arar, birleşimini aynı desenlerin bulduğu tam kümeyle karşılaştırır (eksik, fazla ya da iki parçada koşan dosya kırmızı). Etiket `windows-butunluk` yeşilken konur. Kırmızı Windows'ta bozan birleşme, son yeşilden sonraki ilk kırmızı koşunun commit'idir; aynı kırmızı parçayı yerelde koşmak için o parçanın günlüğündeki dosya listesi kullanılır.
+- `windows` (3018 a) en çok dört parçalıdır ve iptal edilmez: her ana dal commit'inin kendi Windows sonucu vardır. Dosyalar plandan gelir; her parça node'a verdiği dosya listesini günlüğe yazar ve yalnız testleri yeşil bitince yükler; `windows-butunluk` her parçanın listesini arar, birleşimini planla, ana dalda ayrıca aynı desenlerin bulduğu tam kümeyle karşılaştırır (eksik, fazla ya da iki parçada koşan dosya kırmızı). Etiket `windows-butunluk` yeşilken konur. Kırmızı Windows'ta bozan birleşme, son yeşilden sonraki ilk kırmızı koşunun commit'idir; aynı kırmızı parçayı yerelde koşmak için o parçanın günlüğündeki dosya listesi kullanılır.
 - Ağır işleri ana dal ilerlediği için atlanan (ya da elle iptal edilen) koşuda `kontrol` kırmızıdır ve "testleri sonraki koşuda" iletisini yazar. O commit'in sonucu ana daldaki sonraki koşudur.
 - Bedel: ana dal kırmızıya dönerse bozan birleşme, son yeşil koşudan bu yana birleşenlerin arasındadır; tek commit'e inmez. Birleştirici her birleşmeden sonra değil, son koşuya bakar.
 - Elle koşuda grup koşuya özgüdür ve hiçbir şey iptal edilmez.

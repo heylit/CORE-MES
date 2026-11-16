@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,15 +26,27 @@ export function parcaOku(deger: string | undefined): string | null {
   return `${sira}/${toplam}`;
 }
 
+// Liste dosyası verildiyse boş olamaz: boş liste node'a desensiz gider ve sıfır testle yeşil biterdi.
+export function dosyaListesiOku(yol: string | undefined): string[] | null {
+  if (yol === undefined || yol.trim() === '') return null;
+  const dosyalar = readFileSync(yol.trim(), 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (dosyalar.length === 0) throw new Error(`TMIV2_TEST_DOSYALARI boş: ${yol}`);
+  return dosyalar;
+}
+
 // CI'da kırmızı test ayrıca uyarı satırı olarak basılır: günlük okunamasa da adı ve iletisi API'den alınır (#641).
 // Desenler tırnaksız: koşu kabuksuzdur, node'un kendi glob'u açar. Test robotunun testleri saftır (ADR 0019): veritabanı istemez.
-export function sunucuTestArgv(eszamanli: number | null, ci = false, parca: string | null = null): string[] {
+export const SUNUCU_TEST_DESENLERI = ['sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts', 'ekran-testleri/benzetim/**/*.test.ts'];
+
+// CI'da parçanın dosyaları `araclar/ci-plan.ts`'in yazdığı listeden gelir (TMIV2_TEST_DOSYALARI, satır başına bir yol); liste
+// verilince desenler ve node'un kendi bölmesi kullanılmaz.
+export function sunucuTestArgv(eszamanli: number | null, ci = false, parca: string | null = null, dosyalar: readonly string[] | null = null): string[] {
   return [
     '--import', './araclar/ortam-yukle-goc.ts', '--import', './araclar/kablolama-yukle.ts', '--test',
     ...(eszamanli === null ? [] : [`--test-concurrency=${eszamanli}`]),
-    ...(parca === null ? [] : [`--test-shard=${parca}`]),
+    ...(parca === null || dosyalar !== null ? [] : [`--test-shard=${parca}`]),
     ...(ci ? ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=./araclar/test-rapor-github.ts', '--test-reporter-destination=stdout'] : []),
-    'sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts', 'ekran-testleri/benzetim/**/*.test.ts',
+    ...(dosyalar ?? SUNUCU_TEST_DESENLERI),
   ];
 }
 
@@ -42,13 +55,15 @@ const dogrudanKosuyor = process.argv[1] !== undefined && resolve(process.argv[1]
 if (dogrudanKosuyor) {
   let eszamanli: number | null;
   let parca: string | null;
+  let dosyalar: string[] | null;
   try {
     eszamanli = eszamanliOku(process.env['TMIV2_TEST_ESZAMANLI']);
     parca = parcaOku(process.env['TMIV2_TEST_PARCA']);
+    dosyalar = dosyaListesiOku(process.env['TMIV2_TEST_DOSYALARI']);
   } catch (hata) {
     console.error((hata as Error).message);
     process.exit(1);
   }
   const kok = fileURLToPath(new URL('../', import.meta.url));
-  process.exit(spawnSync(process.execPath, sunucuTestArgv(eszamanli, process.env['GITHUB_ACTIONS'] === 'true', parca), { cwd: kok, stdio: 'inherit', shell: false }).status ?? 1);
+  process.exit(spawnSync(process.execPath, sunucuTestArgv(eszamanli, process.env['GITHUB_ACTIONS'] === 'true', parca, dosyalar), { cwd: kok, stdio: 'inherit', shell: false }).status ?? 1);
 }

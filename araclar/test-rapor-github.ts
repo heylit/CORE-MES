@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,10 +41,24 @@ export function hataSatiri(veri: KirmiziVeri): string | null {
   return `::error ${ozellikler.join(',')}::${veriKodla(govde)}\n`;
 }
 
+interface BitenVeri { nesting?: number; file?: string; details?: { duration_ms?: number } }
+
+// Dosya süresi: dosyadaki en üst düzey test ve takımların süreleri toplamı. Parçaları süreye göre bölmek içindir
+// (araclar/ci-plan.ts); dosya kurulumu takımın süresine girer, en üst düzeydeki kancalar girmez.
+export function sureEkle(sureler: Map<string, number>, veri: BitenVeri): void {
+  if (veri.nesting !== 0 || veri.file === undefined || typeof veri.details?.duration_ms !== 'number') return;
+  const dosya = relative(KOK, veri.file.startsWith('file:') ? fileURLToPath(veri.file) : veri.file).replaceAll('\\', '/');
+  sureler.set(dosya, (sureler.get(dosya) ?? 0) + veri.details.duration_ms);
+}
+
 export default async function* raporla(olaylar: AsyncIterable<Olay>): AsyncGenerator<string> {
+  const sureler = new Map<string, number>();
   for await (const olay of olaylar) {
+    if (olay.type === 'test:pass' || olay.type === 'test:fail') sureEkle(sureler, olay.data as BitenVeri);
     if (olay.type !== 'test:fail') continue;
     const satir = hataSatiri(olay.data as KirmiziVeri);
     if (satir !== null) yield satir;
   }
+  const hedef = process.env['TMIV2_TEST_SURE_DOSYASI']?.trim();
+  if (hedef) writeFileSync(hedef, `${JSON.stringify(Object.fromEntries([...sureler].map(([d, ms]) => [d, Math.round(ms)])), null, 0)}\n`);
 }

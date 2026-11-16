@@ -44,7 +44,10 @@ test('ci-kapsam: göç sunucu ve ekran işini her zaman koşturur', () => {
 });
 
 test('ci-kapsam: yalnız belge değişince ağır işler atlanır; modül klasöründeki .md çekme isteğinde koşturur', () => {
-  assert.deepEqual(kapsam('pull_request', ['belgeler/a.md', 'kurulum/b.md', 'OKU.md']), HICBIRI);
+  assert.deepEqual(kapsam('pull_request', ['belgeler/a.md', 'kurulum/b.txt', 'OKU.md']), HICBIRI);
+  // Kural metninin boyunu araclar/kural-metni.test.ts denetler; plan yalnız o metni anan testi seçer.
+  assert.deepEqual(kapsam('pull_request', ['CLAUDE.md']), { sunucu: true, istemci: false, ekran: false });
+  assert.deepEqual(kapsam('pull_request', ['kurulum/proje-talimati.md']), { sunucu: true, istemci: false, ekran: false });
   assert.deepEqual(kapsam('pull_request', ['istemci/src/moduller/stok/NOT.md']), { sunucu: false, istemci: true, ekran: true });
 });
 
@@ -85,23 +88,37 @@ test('kontrol.yml: ana dalda hiçbir iş iptal edilmez; ana dal ilerlemişse ağ
   assert.match(kontrol, /any\(\.\[\]; \.result == "cancelled"\)/, 'elle iptal de kırmızı');
 });
 
-test('kontrol.yml: Windows dört parçalı, parçalar test kümesinin tamamını sayarak alır (3018 a)', () => {
-  const blok = isBlogu(readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n'), 'windows');
-  assert.match(blok, /\n {4}strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}parca: \[1, 2, 3, 4\]\n/);
-  assert.match(blok, /p=\$\(\( k % 4 \+ 1 \)\)/, 'dönüşümlü dağıtım');
-  assert.match(blok, /parcalar\[0\] \+ parcalar\[1\] \+ parcalar\[2\] \+ parcalar\[3\] \)\) -eq "\$toplam"/, 'toplam denetimi');
-  assert.match(blok, /--test-reporter=tap "\$\{benim\[@\]\}"/, 'parça yalnız kendi dosyalarını koşar');
-  assert.match(blok, /\n {10}PARCA: \$\{\{ matrix\.parca \}\}\n/, 'PARCA matris parçasından gelir');
-  assert.match(blok, /\n {12}\[ "\$p" -eq "\$PARCA" \] && benim\+=\("\$\{sirali\[\$k\]\}"\)\n/, 'parça yalnız kendi sırasındaki dosyayı seçer');
+test('kontrol.yml: ağır işlerin parçaları plandan; Windows birleşimi plana, ana dalda tam kümeye eşit (3018 a, 3310 a)', () => {
+  const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n');
+  const kapsam = isBlogu(is, 'kapsam');
+  assert.match(kapsam, /node araclar\/ci-plan\.ts plan --olay "\$OLAY" --cikti ci-plan --sureler \.ci-sureler\/sureler\.json/);
+  for (const [ad, cikti] of [['istemci-test', 'istemci'], ['sunucu-test', 'sunucu'], ['ekran', 'ekran'], ['windows', 'windows']] as const) {
+    assert.match(kapsam, new RegExp(`\\n {6}${cikti}: \\$\\{\\{ steps\\.plan\\.outputs\\.${cikti} \\}\\}\\n`), `${cikti} çıktısı plandan`);
+    assert.match(isBlogu(is, ad), new RegExp(`\\n {8}parca: \\$\\{\\{ fromJSON\\(needs\\.kapsam\\.outputs\\.${cikti}_matris\\) \\}\\}\\n`), `${ad} matrisi plandan`);
+    assert.match(isBlogu(is, ad), /\n {10}name: ci-plan\n {10}path: ci-plan\n/, `${ad} planı indirir`);
+  }
+  assert.match(isBlogu(is, 'sunucu-test'), /\n {6}TMIV2_TEST_DOSYALARI: ci-plan\/sunucu-\$\{\{ matrix\.parca \}\}\.txt\n/);
+  const blok = isBlogu(is, 'windows');
+  assert.match(blok, /\n {4}if: needs\.kapsam\.outputs\.windows == 'true'\n/);
+  assert.match(blok, /mapfile -t benim < <\(tr -d '\\r' < "ci-plan\/windows-\$PARCA\.txt" \| grep -v '\^\$'\)/, 'parça yalnız plandaki dosyalarını koşar');
+  assert.match(blok, /\[ "\$\{#benim\[@\]\}" -gt 0 \] \|\| \{ echo "Parça \$PARCA boş"; exit 1; \}/, 'boş parça kırmızı');
   assert.match(blok, /printf '%s\\n' "\$\{benim\[@\]\}" > "windows-parca-\$PARCA\.txt"/, 'koşan liste dosyaya yazılır');
+  assert.match(blok, /--test-reporter=tap --test-reporter-destination=stdout[^\n]*\n[^\n]*\n {12}"\$\{benim\[@\]\}" 2>&1 \| tee sunucu-test-cikti\.txt/);
   assert.match(blok, /name: windows-parca-\$\{\{ matrix\.parca \}\}\n {10}path: windows-parca-\$\{\{ matrix\.parca \}\}\.txt\n {10}if-no-files-found: error\n/);
   assert.ok(!/- name: Parçanın koştuğu dosya listesi\n {8}if:/.test(blok), 'liste yalnız yeşil parçada yüklenir (varsayılan koşul)');
-  const butun = isBlogu(readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n'), 'windows-butunluk');
-  assert.match(butun, /for p in 1 2 3 4; do\n {12}\[ -s "parcalar\/windows-parca-\$p\.txt" \] \|\| \{/, 'dört liste aranır');
-  assert.match(butun, /tekrar=\$\(uniq -d kosan\.txt\)/, 'iki parçada koşan dosya kırmızı');
-  assert.match(butun, /diff tam\.txt kosan\.txt \|\|/, 'birleşim tam kümeye eşit');
-  assert.match(butun, /sunucu\/cekirdek\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/stok\/\*\*\/\*\.test\.ts'\n {12}'sunucu\/moduller\/uretim-emirleri\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/plan\/\*\*\/\*\.test\.ts'\)/, 'aynı desenler');
   assert.match(blok, /grep -qx '# skipped 0'[^\n]*grep -qx '# todo 0'/, 'atlanan test kırmızı');
+  const butun = isBlogu(is, 'windows-butunluk');
+  assert.match(butun, /\[ -s "parcalar\/windows-parca-\$p\.txt" \] \|\| \{/, 'her parçanın listesi aranır');
+  assert.match(butun, /tekrar=\$\(uniq -d kosan\.txt\)/, 'iki parçada koşan dosya kırmızı');
+  assert.match(butun, /diff plan\.txt kosan\.txt \|\|/, 'birleşim plana eşit');
+  assert.match(butun, /else\n {12}diff tam\.txt plan\.txt \|\|/, 'ana dalda plan tam kümeye eşit');
+  assert.match(butun, /sunucu\/cekirdek\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/stok\/\*\*\/\*\.test\.ts'\n {12}'sunucu\/moduller\/uretim-emirleri\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/plan\/\*\*\/\*\.test\.ts'\)/, 'aynı desenler');
+});
+
+test('kontrol.yml: Windows tam kümesinin desenleri plan aracıyla aynı', async () => {
+  const { WINDOWS_DESENLERI } = await import('./ci-plan.ts');
+  const butun = isBlogu(readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n'), 'windows-butunluk');
+  for (const d of WINDOWS_DESENLERI) assert.ok(butun.includes(`'${d}'`), d);
 });
 
 function isBlogu(is: string, ad: string): string {

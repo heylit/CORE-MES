@@ -24,6 +24,8 @@ while IFS= read -r yol; do
   [ -z "$yol" ] && continue
   echo "$yol"
   case "$yol" in
+    # Kural metninin boyu testle denetlenir (araclar/kural-metni.test.ts): sunucu işi açılır, plan yalnız o metni anan testi seçer.
+    CLAUDE.md|kurulum/*.md) sunucu=true ;;
     belgeler/*|kurulum/*) ;;
     # Ortak parçalar: her iş bunlara dayanır.
     paylasilan/*|istemci/src/ortak/*|sunucu/cekirdek/*|package.json|package-lock.json|.github/*|araclar/*) hepsi ;;
