@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { LOGO_FIS_TURLERI } from './kurallar.ts';
+import { LOGO_FIS_TURLERI, sonrakiDenemeYazilir } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
@@ -9,7 +9,8 @@ import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAn
 export type FisTuru = LogoFisTuru;
 export type BelgeTuru = 'malzeme' | 'hizmet' | 'malzeme-guncelleme' | 'siparis' | 'siparis-guncelleme' | 'siparis-kapatma' | 'siparis-bekletme' | 'siparis-iptal' | 'talep' | 'karsilama' | 'satis-teklifi' | 'satis-siparisi'
   | 'siparisler-teklifi' | 'siparisler-siparisi' | FisTuru;
-export type GidenSonucu = 'gonderildi' | 'zaten-vardi' | 'silindi' | 'reddedildi' | 'yetkisiz' | 'ulasilamadi' | 'belirsiz' | 'yazilamadi';
+export type { GidenSonucu } from './kurallar.ts';
+import type { GidenSonucu } from './kurallar.ts';
 
 export interface GidenSatiri {
   belgeNo: number;
@@ -87,8 +88,19 @@ export async function denemeYaz(db: Db, belgeTuru: BelgeTuru, no: number, d: Den
        deneme_sayisi = g.deneme_sayisi + 1,
        ardisik_hata = CASE WHEN $10 THEN 0 ELSE g.ardisik_hata + 1 END,
        son_deneme = $3, son_sonuc = $4, son_hata = $5, sonraki_deneme = $6, logo_kayit_no = $7`,
-    [belgeTuru, no, d.zaman, d.sonuc, d.hata, d.sonrakiDeneme, d.logoKayitNo, d.niyetZamani !== undefined, d.niyetZamani ?? null, d.basarili, ...islemDegeri(belgeTuru, islem)],
+    [belgeTuru, no, d.zaman, d.sonuc, d.hata, sonrakiDenemeYazilir(d.sonuc, d.sonrakiDeneme), d.logoKayitNo, d.niyetZamani !== undefined, d.niyetZamani ?? null, d.basarili, ...islemDegeri(belgeTuru, islem)],
   );
+}
+
+// 3313: duran belgeyi (kalıcı ret, sonraki deneme boş) yeniden sıraya alır: sonraki deneme "şimdi" olur, deneme geçmişi kalır. Koşulludur: arada
+// tur başka sonuç yazdıysa ya da belge zaten durmuyorsa hiçbir şey değişmez ve false döner.
+export async function duraniYenidenAc(db: Db, belgeTuru: BelgeTuru, no: number, simdi: Date, islem: GidenIslemi = 'gonder'): Promise<boolean> {
+  const r = await db.sorgu<{ x: number }>(
+    `UPDATE ${tablo(belgeTuru)} SET sonraki_deneme = $3
+      WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 4)} AND son_sonuc = 'reddedildi' AND sonraki_deneme IS NULL RETURNING 1 AS x`,
+    [belgeTuru, no, simdi, ...islemDegeri(belgeTuru, islem)],
+  );
+  return r.length > 0;
 }
 
 // 3070: kartı Logo'da TMI mi açtı. Yalnız açma isteğinin kesin sonucu ("gonderildi") sayılır; "zaten-vardi" Logo'da bulunan karttır, "Al" ve
@@ -359,7 +371,9 @@ export async function fisDegisikligiYaz(db: Db, tur: FisTuru, id: number, degisi
 export async function fisIsaretle(db: Db, tur: FisTuru, id: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO logo_malzeme_fisi_giden AS g (belge_turu, belge_no, bekleyen_degisiklik) VALUES ($1, $2, 1)
-     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET bekleyen_degisiklik = g.bekleyen_degisiklik + 1`,
+     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET bekleyen_degisiklik = g.bekleyen_degisiklik + 1,
+       -- 3313: fiş değişti; duran fiş (kurallar.ts durduMu) yeniden sıraya girer.
+       sonraki_deneme = CASE WHEN g.son_sonuc = 'reddedildi' AND g.sonraki_deneme IS NULL THEN g.son_deneme ELSE g.sonraki_deneme END`,
     [tur, id],
   );
 }
@@ -368,7 +382,9 @@ export async function fisIsaretle(db: Db, tur: FisTuru, id: number): Promise<voi
 // bırakılması, sonucu bilinmeyen eski isteğe rağmen yeniden göndermedir; ekran bunu kullanıcıya söyler (295 a).
 export async function fisIstegiYaz(db: Db, tur: FisTuru, id: number, istek: string): Promise<void> {
   await db.sorgu(
-    `UPDATE logo_malzeme_fisi_giden SET son_istek = $3, istek_bekliyor = true, niyet_zamani = NULL, sonraki_deneme = NULL,
+    `UPDATE logo_malzeme_fisi_giden SET son_istek = $3, istek_bekliyor = true, niyet_zamani = NULL,
+            -- 3313: duran fiş (kurallar.ts durduMu) son denemesinin zamanına alınır, yani hemen sıradadır; öteki beklemeden gider.
+            sonraki_deneme = CASE WHEN son_sonuc = 'reddedildi' THEN son_deneme END,
             bekleyen_degisiklik = GREATEST(bekleyen_degisiklik, 1)
       WHERE belge_turu = $1 AND belge_no = $2 AND (son_istek IS NULL OR son_istek < $3)`,
     [tur, id, istek],
@@ -386,6 +402,7 @@ export function malzemeFisiKuyrugu(db: Db, a: { otomatik: readonly FisTuru[]; el
     `SELECT belge_turu AS tur, belge_no AS id
        FROM logo_malzeme_fisi_giden
       WHERE bekleyen_degisiklik > 0 AND (belge_turu = ANY($1::text[]) OR (belge_turu = ANY($2::text[]) AND istek_bekliyor))
+        AND (son_sonuc IS DISTINCT FROM 'reddedildi' OR sonraki_deneme IS NOT NULL) -- 3313: duran fiş (kurallar.ts durduMu) sırayı tutmaz
       ORDER BY sonraki_deneme NULLS FIRST, belge_no, belge_turu LIMIT $3`,
     [[...a.otomatik], [...a.elle], a.sinir],
   );
@@ -446,7 +463,7 @@ export async function pasifHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zama
     `UPDATE logo_malzeme_fisi_giden SET son_sonuc = $3, son_hata = $4, son_deneme = $5, sonraki_deneme = $6, deneme_sayisi = deneme_sayisi + 1,
             ardisik_hata = ardisik_hata + 1
       WHERE belge_turu = $1 AND belge_no = $2`,
-    [tur, id, d.sonuc, d.hata, d.zaman, d.sonrakiDeneme],
+    [tur, id, d.sonuc, d.hata, d.zaman, sonrakiDenemeYazilir(d.sonuc, d.sonrakiDeneme)],
   );
 }
 

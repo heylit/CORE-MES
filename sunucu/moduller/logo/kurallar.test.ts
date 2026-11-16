@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, GIDEN_SONUCLARI, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -274,5 +274,33 @@ describe('kod çakışması ve Logo kod listesi (2089)', () => {
     assert.deepEqual(malzemeKodlariniAyikla([' A-1 ', 'A-1', '', 5, null, 'X'.repeat(65), 'B-2']), ['A-1', 'B-2']);
     assert.deepEqual(malzemeKodlariniAyikla([]), []);
     for (const g of [null, {}, { data: ['A'] }, 'A']) assert.equal(malzemeKodlariniAyikla(g), null, JSON.stringify(g));
+  });
+});
+
+describe('3313 kalıcı ret durur', () => {
+  // Her sonuç türünün sınıfı açıkça seçilir; yeni tür eklenince bu tablo da karar ister.
+  const BEKLENEN = {
+    gonderildi: 'basari', 'zaten-vardi': 'basari', silindi: 'basari', reddedildi: 'durdu',
+    yetkisiz: 'yinelenir', ulasilamadi: 'yinelenir', belirsiz: 'yinelenir', yazilamadi: 'yinelenir',
+  } as const;
+  test('T1 sonuç sınıfları: yalnız Logo reddi durur; bağlantı, anahtar, belirsiz ve CORE\'a yazılamadı yinelenir', () => {
+    assert.deepEqual([...GIDEN_SONUCLARI].sort(), Object.keys(BEKLENEN).sort());
+    for (const t of GIDEN_SONUCLARI) assert.equal(SONUC_SINIFI[t], BEKLENEN[t], t);
+  });
+  test('T1 durma: kalıcı sonuçta sonraki deneme yazılmaz; duran belge süre geçse de sıraya girmez, yeniden açılınca girer', () => {
+    const bekleme = new Date('2026-11-16T08:00:00Z');
+    const simdi = new Date('2026-11-17T08:00:00Z');
+    for (const t of GIDEN_SONUCLARI) {
+      const yazilan = sonrakiDenemeYazilir(t, bekleme);
+      assert.equal(yazilan, BEKLENEN[t] === 'durdu' ? null : bekleme, t);
+      const g = { sonSonuc: t, sonrakiDeneme: yazilan };
+      assert.equal(durduMu(g), BEKLENEN[t] === 'durdu', t);
+      assert.equal(denemeZamaniMi(g, simdi), BEKLENEN[t] !== 'durdu', t);
+    }
+    assert.equal(durduMu(null), false, 'hiç denenmemiş belge durmaz');
+    assert.equal(denemeZamaniMi(null, simdi), true);
+    assert.equal(denemeZamaniMi({ sonSonuc: 'reddedildi', sonrakiDeneme: simdi }, simdi), true, 'yeniden açılan belge sırada');
+    assert.equal(denemeZamaniMi({ sonSonuc: 'ulasilamadi', sonrakiDeneme: new Date(simdi.getTime() + 1) }, simdi), false, 'bekleme dolmadan girmez');
+    assert.equal(denemeZamaniMi({ sonSonuc: null, sonrakiDeneme: null }, simdi), true, 'niyeti yazılmış, sonucu yok');
   });
 });

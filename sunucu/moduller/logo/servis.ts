@@ -11,7 +11,7 @@ import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -194,6 +194,7 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
   for (const belge of ['malzeme', 'hizmet'] as const) {
     const nolar = kuyruk.filter((k) => belgeTuru(k) === belge).map((k) => k.no);
     if (nolar.length > 0) for (const g of await s.gidenSatirlari(db, belge, nolar)) satirlar.set(g.belgeNo, g);
+    await yenidenVerilenleriAc(db, o.saat(), belge, kuyruk.filter((k) => belgeTuru(k) === belge).map((k) => ({ id: k.no, durum: k.durum })), satirlar);
   }
   const simdi = o.saat();
   for (const kart of kuyruk) {
@@ -239,6 +240,7 @@ async function pasifTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<T
     }
     const belge: BelgeTuru = kart.tur === 'hizmet' ? 'hizmet' : 'malzeme';
     const g = await s.gidenSatiri(db, belge, kart.no, 'pasif');
+    // Kalıcı reddi malzemeler tutar (kart "reddedildi" kalır, kuyruğa yalnız kullanıcı yeniden isteyince girer); burada yalnız bekleme sayılır.
     if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
     if (!g?.niyetZamani) {
       await s.niyetYaz(db, belge, kart.no, o.saat(), 'pasif');
@@ -268,7 +270,7 @@ async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Prom
   const kaynak = o.malzemeGuncelleme;
   for (const kart of await kaynak.gidecekler(db, KUYRUK_SINIRI)) {
     const g = await s.gidenSatiri(db, 'malzeme-guncelleme', kart.no);
-    if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
+    if (!denemeZamaniMi(g, o.saat())) continue;
     // Hizmet Logo'da açılırken TMI adıyla açılır (hizmetGovdesi); açıklama kuralı yalnız malzeme kartınındır.
     const logodaki = await logoKoduyla(db, kart);
     const r = malzemeGuncellemeGovdesi(kart.tur === 'hizmet' ? { stokKodu: logodaki.stokKodu, ad: kart.ad } : logodaki);
@@ -487,6 +489,16 @@ const FIS_ANAHTAR_KAYMASI = 1_000_000_000;
 const bellekAnahtari = (belge: BelgeTuru, id: number): number =>
   (LOGO_FIS_TURLERI as readonly string[]).includes(belge) ? FIS_ANAHTAR_KAYMASI + id : belge === 'talep' || belge === 'siparisler-siparisi' ? -id : id;
 
+// 3313: sahibi modül belgeyi yeniden "bekliyor"a aldıysa (düzenlendi, yeniden verildi) durdurma kalkar; "hata"da kalan belge durur.
+async function yenidenVerilenleriAc(
+  db: Db, simdi: Date, belge: BelgeTuru, isler: readonly { id: number; durum?: string }[], satirlar: Map<number, GidenSatiri>, islem?: GidenIslemi,
+): Promise<void> {
+  for (const is of isler) {
+    const g = satirlar.get(is.id) ?? null;
+    if (g !== null && is.durum === 'bekliyor' && durduMu(g) && (await s.duraniYenidenAc(db, belge, is.id, simdi, islem))) satirlar.set(is.id, { ...g, sonrakiDeneme: simdi });
+  }
+}
+
 async function kalkanEylemi(o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null) {
   const anahtar = bellekAnahtari(belge, id);
   const taze = g?.niyetZamani != null && o.bellek.niyetler.get(anahtar) === g.niyetZamani.getTime();
@@ -541,6 +553,7 @@ async function siparisAcmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemc
   if (kuyruk.length === 0) return null;
   const satirlar = new Map<number, GidenSatiri>();
   for (const g of await s.gidenSatirlari(db, 'siparis', kuyruk.map((k) => k.id))) satirlar.set(g.belgeNo, g);
+  await yenidenVerilenleriAc(db, o.saat(), 'siparis', kuyruk, satirlar);
   const kdv = await sistemAyariOku(db, 'logo.kdv-orani');
   const hizmetKdv = await sistemAyariOku(db, 'logo.hizmet-kdv-orani');
   for (const sip of kuyruk) {
@@ -623,6 +636,7 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
   if (a.kuyruk.length === 0) return null;
   const satirlar = new Map<number, GidenSatiri>();
   for (const g of await s.gidenSatirlari(db, a.belge, a.kuyruk.map((k) => k.id))) satirlar.set(g.belgeNo, g);
+  await yenidenVerilenleriAc(db, o.saat(), a.belge, a.kuyruk as readonly { id: number; durum?: string }[], satirlar);
   for (const t of a.kuyruk) {
     const g = satirlar.get(t.id) ?? null;
     const { anahtar, taze, eylem } = await kalkanEylemi(o, a.belge, t.id, g);
@@ -674,8 +688,10 @@ async function talepTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemcisi): 
 // Bekleme süresi dolmamış adım atlanır.
 async function sirasiGelen<T extends { id: number }>(db: Db, o: TurOrtami, belge: BelgeTuru, kuyruk: readonly T[]): Promise<{ is: T; g: GidenSatiri | null } | null> {
   for (const is of kuyruk) {
-    const g = await s.gidenSatiri(db, belge, is.id);
-    if (!g?.sonrakiDeneme || g.sonrakiDeneme.getTime() <= o.saat().getTime()) return { is, g };
+    let g = await s.gidenSatiri(db, belge, is.id);
+    const durum = (is as { durum?: unknown }).durum;
+    if (durum === 'bekliyor' && durduMu(g) && (await s.duraniYenidenAc(db, belge, is.id, o.saat()))) g = await s.gidenSatiri(db, belge, is.id);
+    if (denemeZamaniMi(g, o.saat())) return { is, g };
   }
   return null;
 }
@@ -1057,6 +1073,12 @@ export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise
 // silinmez. Değişiklik ayar geçmişine yazılır.
 const GECIS_AYARLARI = ['logo.malzeme-okumasi', 'logo.stok-okumasi'] as const;
 const GECIS_KAYNAGI = { modul: 'logo', yetki: 'ayarlar.yaz' } as const;
+// 3313: "Yeniden gönder". Yalnız duran belge (kalıcı ret) yeniden sıraya girer; belirsiz sonuçlu belge (ulaşılamadı, zaman aşımı, CORE'a
+// yazılamadı) elle gönderilmez, kendi beklemesiyle yinelenir. Belge sıradaki ilk turda gider; deneme geçmişi kalır.
+export async function gidenYenidenGonder(db: Db, g: { belge: BelgeTuru; no: number; islem?: GidenIslemi }, simdi: Date): Promise<boolean> {
+  return s.duraniYenidenAc(db, g.belge, g.no, simdi, g.islem);
+}
+
 export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {
   for (const a of [...GECIS_AYARLARI, 'logo.kullanim-okumasi'] as const) {
     const simdi = (await sistemAyariOku(db, a)) === true;
@@ -1312,7 +1334,7 @@ async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurS
       continue;
     }
     if (logoda !== null) {
-      if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
+      if (!denemeZamaniMi(g, o.saat())) continue;
       return fisSilmeAdimi(o, kopru, f, g);
     }
     if (f.fis === null) {

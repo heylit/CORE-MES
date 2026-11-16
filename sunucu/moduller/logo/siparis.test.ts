@@ -17,7 +17,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
+import { gidenYenidenGonder, malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
 import type {
   LogoyaBekletmeGidecekSiparis, LogoyaGidecekKarsilama, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaGuncellemeGidecekMalzeme, SatinAlmaKaynagi, SatirBaglari,
   SatinAlmaTurOrtami, SiparisLogoSonucu, Tamam, TurOrtami, TurSonucu, TxAcan,
@@ -337,7 +337,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.match((await giden('siparis', r.id))?.son_hata ?? '', /CORE kaydına yazılamadı: Sipariş bu arada değişti/);
   });
 
-  test('LGS-14 iptal: gönderim kuyruğu boşken Logo\'ya gitmiş siparişin iptali gider; reddedilen iptal "hata" ve bekleme sonrası yinelenir', async () => {
+  test('LGS-14 iptal: gönderim kuyruğu boşken Logo\'ya gitmiş siparişin iptali gider; reddedilen iptal "hata" ve durur, "Yeniden gönder" ile gider (3313)', async () => {
     kopru.siparisler.set('SP-2026-901', { ref: 901, satirlar: [902] });
     kopru.siparisler.set('SP-2026-911', { ref: 911, satirlar: [912] });
     kaynak.iptaller.set(901, { no: 'SP-2026-901', logoKayitNo: '901', durum: 'bekliyor', hata: null });
@@ -352,7 +352,9 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await tur(ortami()), { tur: 'bos' }, 'bekleme dolmadan yinelenmez');
     kopru.senaryo = 'basari';
     simdi += 3600_000;
-    assert.deepEqual(await tur(ortami()), { tur: 'iptal', no: 911, sonuc: 'gonderildi' });
+    assert.deepEqual(await tur(ortami()), { tur: 'bos' }, 'kalıcı ret süre geçse de yinelenmez');
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'siparis-iptal', no: 911 }, new Date(simdi))), true);
+    assert.deepEqual(await tur(ortami()), { tur: 'iptal', no: 911, sonuc: 'gonderildi' }, '"Yeniden gönder" ile gider');
   });
   function talepEkle(satirSayisi = 2): GonderilecekTalep {
     const id = ++siparisSayac;
@@ -419,10 +421,9 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     simdi += 60_000;
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' }, 'bekleme dolmadan istek yok');
     simdi += BELIRSIZ_BEKLEME_MS;
-    for (const b of [bellek, yeniSurecBellegi()]) {
-      assert.deepEqual(await tur(ortami(b)), { tur: 'talep', no: t.id, sonuc: 'reddedildi' });
-      simdi += 3600_000;
-    }
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'reddedildi' });
+    simdi += 3600_000;
+    assert.deepEqual(await tur(ortami(yeniSurecBellegi())), { tur: 'bos' }, 'durur; yeni süreçte de açılmaz (3313)');
     assert.equal(kopru.talepAcilan.get(t.no), 1, 'Logo\'da tek talep fişi');
     assert.match(kaynak.talepler.get(t.id)?.hata ?? '', /Logo'da kontrol edin/);
   });

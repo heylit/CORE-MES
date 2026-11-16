@@ -257,10 +257,34 @@ export function geriCekilmeMs(ardisikHata: number): number {
   return Math.min(GERI_CEKILME_ILK_MS * 2 ** us, GERI_CEKILME_EN_COK_MS);
 }
 
+// 3313: giden kutusu sonuçları ve sınıfları. Logo'nun kesin reddi kalıcıdır: belge kendiliğinden yeniden denenmez ("Durdu"), kullanıcı veriyi
+// düzeltip "Yeniden gönder" der ya da sahibi modül belgeyi yeniden sıraya koyar. Bağlantı, anahtar, belirsiz cevap ve CORE'a yazılamama artan
+// beklemeyle kendiliğinden yinelenir. Yeni sonuç eklenince sınıfı burada seçilmeden derlenmez.
+export const GIDEN_SONUCLARI = ['gonderildi', 'zaten-vardi', 'silindi', 'reddedildi', 'yetkisiz', 'ulasilamadi', 'belirsiz', 'yazilamadi'] as const;
+export type GidenSonucu = (typeof GIDEN_SONUCLARI)[number];
+export type SonucSinifi = 'basari' | 'durdu' | 'yinelenir';
+export const SONUC_SINIFI: Readonly<Record<GidenSonucu, SonucSinifi>> = Object.freeze({
+  gonderildi: 'basari', 'zaten-vardi': 'basari', silindi: 'basari',
+  reddedildi: 'durdu',
+  yetkisiz: 'yinelenir', ulasilamadi: 'yinelenir', belirsiz: 'yinelenir', yazilamadi: 'yinelenir',
+});
+// Kalıcı sonuçta sonraki deneme yazılmaz; "Durdu" = son sonuç kalıcı ve sonraki deneme boş. Yeniden gönderme sonraki denemeyi doldurur.
+export const sonrakiDenemeYazilir = (sonuc: GidenSonucu, bekleme: Date | null): Date | null => (SONUC_SINIFI[sonuc] === 'durdu' ? null : bekleme);
+export function durduMu(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null): boolean {
+  return g !== null && g.sonSonuc != null && SONUC_SINIFI[g.sonSonuc] === 'durdu' && g.sonrakiDeneme === null;
+}
+// Tur bu belgeye bakar mı: durmamış ve bekleme dolmuş (ya da hiç beklemesi yok).
+export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null, simdi: Date): boolean {
+  if (g === null) return true;
+  if (durduMu(g)) return false;
+  return g.sonrakiDeneme === null || g.sonrakiDeneme.getTime() <= simdi.getTime();
+}
+
 export interface GidenDurumu {
   // Dolu iken bu kart için Logo'da kart açılmış olabilir (niyet yazılı ve kalıcı; açma isteği ondan sonra gider).
   niyetZamani: Date | null;
   sonrakiDeneme: Date | null;
+  sonSonuc?: GidenSonucu | null;
 }
 
 export type KartEylemi = 'niyet-yaz' | 'gonder' | 'bekle';
@@ -270,7 +294,7 @@ export type KartEylemi = 'niyet-yaz' | 'gonder' | 'bekle';
 // 2. Taze olmayan niyet (başka süreç, yeniden başlayan süreç, sonucu bilinmeyen deneme) BELIRSIZ_BEKLEME_MS dolmadan gönderilmez.
 // 3. Her gönderim "var mı" okumasıyla başlar; varsa yeni kart açılmaz.
 export function kartEylemi(g: GidenDurumu | null, simdi: Date, tazeNiyet: boolean, sonAcmaIstegi: Date | null): KartEylemi {
-  if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > simdi.getTime()) return 'bekle';
+  if (!denemeZamaniMi(g, simdi)) return 'bekle';
   if (sonAcmaIstegi && simdi.getTime() - sonAcmaIstegi.getTime() < BELIRSIZ_BEKLEME_MS) return 'bekle';
   if (!g?.niyetZamani) return 'niyet-yaz';
   if (tazeNiyet) return 'gonder';

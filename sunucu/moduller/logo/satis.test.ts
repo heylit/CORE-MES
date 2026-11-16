@@ -183,10 +183,9 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     simdi += 60_000;
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
     simdi += BELIRSIZ_BEKLEME_MS;
-    for (const b of [bellek, yeniSurecBellegi()]) {
-      assert.deepEqual(await tur(ortami(b)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'reddedildi' });
-      simdi += 3600_000;
-    }
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'reddedildi' });
+    simdi += 3600_000;
+    assert.deepEqual(await tur(ortami(yeniSurecBellegi())), { tur: 'bos' }, 'durur; yeni süreçte de açılmaz (3313)');
     assert.equal(kopru.satisTeklifAcilan.get(t.no), 1, 'Logo\'da tek teklif');
     assert.match(kaynak.teklifler.get(t.id)?.hata ?? '', /Logo'da kontrol edin/);
   });
