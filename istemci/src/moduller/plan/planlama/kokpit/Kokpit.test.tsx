@@ -1,3 +1,4 @@
+import { useMemo, useState, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -5,9 +6,12 @@ import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
-import type { CalismaKomutu } from '../kayit.ts';
+import { bekleyenListesi, type CalismaKomutu } from '../kayit.ts';
+import type { BekleyenDegisiklik } from '../tipler.ts';
+import { kaynakSatiri } from '../ortak/degisiklik-seridi/kurallar.ts';
 import { otomatikUygulaIste, otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
 import { planKurSifirla } from '../motor/coz.ts';
+import { SeritYuvasi, type SeritYuvalari } from '../motor/ust/yuva.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -27,15 +31,31 @@ function komutKur(adim: number): CalismaKomutu {
     geriDon: () => true, yinele: vi.fn(() => true), yinelenebilir: () => false, kaydet: () => Promise.resolve(4),
   };
 }
-function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true) {
+// Plan şeridi iskelettedir; Kokpit değişiklik özetini ve listesini şeridin iki yuvasına taşır (3317). Testte yuvalar burada kurulur.
+function Yuvali({ children, dis = null }: { children: ReactNode; dis?: BekleyenDegisiklik | null }) {
+  const [y, kur] = useState<SeritYuvalari>({ satir: null, alt: null });
+  // Bağlar sabit kalmalı: her çizimde yeni işlev verilirse React önce null sonra öğeyle çağırır ve çizim döner.
+  const bag = useMemo(() => ({
+    satir: (el: HTMLElement | null) => { kur((x) => (x.satir === el ? x : { ...x, satir: el })); },
+    alt: (el: HTMLElement | null) => { kur((x) => (x.alt === el ? x : { ...x, alt: el })); },
+  }), []);
+  return (
+    <SeritYuvasi.Provider value={{ ...y, dis }}>
+      <div data-test-yuva="satir" ref={bag.satir} />
+      <div data-test-yuva="alt" ref={bag.alt} />
+      {children}
+    </SeritYuvasi.Provider>
+  );
+}
+function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true, dis: BekleyenDegisiklik | null = null) {
   const sec = vi.fn();
   render(
-    <MemoryRouter><BildirimSaglayici>
+    <MemoryRouter><BildirimSaglayici><Yuvali dis={dis}>
       <Kokpit
         depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} {...oz}
       />
-    </BildirimSaglayici></MemoryRouter>,
+    </Yuvali></BildirimSaglayici></MemoryRouter>,
   );
   return { sec };
 }
@@ -345,9 +365,9 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
 
-  // 3297 (Risk K5): Gelenler kutusu kalktı; olaylar kaybolmaz. "Tümü" bütün gelenleri sayar; emre bağlanamayan olay listede en üstte ayrı
-  // bölümdedir, emre bağlı olay kartında sayıyla görünür.
-  it('Gelenler "Tümü" ile açılır: sayı bütün olayları kapsar, emre bağlı olmayan olay üstte ayrı bölümde; Göster emri seçer; kartta olay sayısı', () => {
+  // 3317 a (1. adım): Gelenler ve "Tümü" kalktı; planı etkileyen değişiklikler plan şeridindeki özet ve listededir. Olaylar kaybolmaz: emre
+  // bağlanamayan olay listede "Göster"siz durur, emre bağlı olay kartında sayıyla görünür.
+  it('değişiklikler şeritte özetlenir; liste üç başlıkta açılır; emre bağlı olmayan satırda Göster yok; Göster emri seçer ve listeyi kapatır', () => {
     const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
       { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
       { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
@@ -355,48 +375,90 @@ describe('Kokpit', () => {
     vi.stubGlobal('CSS', { escape: (x: string) => x });
     const { sec } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
     expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Tümü \(/ })).toBeNull();
+    const ozet = document.querySelector('[data-test-yuva="satir"] [data-degisiklik-ozeti]') as HTMLElement;
+    expect(ozet.textContent).toBe('3 değişiklik1 veri · 2 sahaGör ve uygula');
     const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
-    expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 olay');
-    fireEvent.click(within(serit).getByRole('button', { name: /Tümü \(2\)/ }));
-    const kutu = screen.getByRole('complementary', { name: 'Gelenler' });
-    const kartsiz = within(kutu).getByRole('region', { name: 'Emre bağlı olmayan olaylar' });
-    expect(kutu.querySelector('section')).toBe(kartsiz);
-    const ilk = within(kartsiz).getAllByRole('listitem');
-    expect(ilk.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01')]);
-    expect(within(ilk[0]!).queryByRole('button')).toBeNull();
-    expect(ilk[0]!.textContent).toContain('Arıza / bakım');
-    fireEvent.click(within(kutu).getByRole('button', { name: 'Göster' }));
+    expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 değişiklik');
+    expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
+    const dugme = within(ozet).getByRole('button', { name: 'Gör ve uygula' });
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(dugme);
+    const liste = within(document.querySelector('[data-test-yuva="alt"]') as HTMLElement).getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    expect([...liste.querySelectorAll('[data-baslik]')].map((x) => [x.getAttribute('data-baslik'), x.querySelectorAll('li').length])).toEqual([['veri', 1], ['saha', 2]]);
+    const saha = within(liste).getByRole('region', { name: 'Sahada oldu' });
+    const satirlar = within(saha).getAllByRole('listitem');
+    // Yeniden eskiye: duruş (09:00) önce. Emre bağlanamadığı için "Göster" yok.
+    expect(satirlar[0]?.textContent).toContain('Duruş: ORN-T01');
+    expect(within(satirlar[0] as HTMLElement).queryByRole('button')).toBeNull();
+    expect(satirlar[1]?.textContent).toContain('Malzemenin geliş tarihi değişti: 3');
+    expect(satirlar[1]?.textContent).toContain('Satın alma');
+    // Veri değişikliği emre bağlı değildir; toplu düğmenin ne uygulayacağı notta yazar.
+    expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).queryByRole('button')).toBeNull();
+    expect(liste.textContent).toContain('"Veri değişikliklerini uygula (1)" yalnız "Veri değişti" satırlarının');
+    fireEvent.click(within(satirlar[1] as HTMLElement).getByRole('button', { name: 'Göster' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
-    fireEvent.click(within(kutu).getByRole('button', { name: 'Gelenleri kapat' }));
-    expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
     vi.unstubAllGlobals();
   });
 
-  // 3297-5 (Test T2): emir siparişe bağlıysa olay sayısı emrin kök kartında değil sipariş kartında durur.
-  it('siparişe bağlı emrin olayı sipariş kartında sayılır', () => {
+  it('değişiklik yokken şeritte "Plan güncel" yazar, düğme yoktur; yazamayan kişide toplu uygulama notu çıkmaz', () => {
+    const guncel = ornekCalisma();
+    const c = { ...guncel, dataVer: guncel.plan?.dataVer ?? guncel.dataVer } as ReturnType<typeof ornekCalisma>;
+    ac({ calisma: c });
+    const ozet = document.querySelector('[data-degisiklik-ozeti]') as HTMLElement;
+    expect(ozet.textContent).toBe('Plan güncel');
+    expect(within(ozet).queryByRole('button')).toBeNull();
+    cleanup();
+    ac({}, false);
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    expect(liste.textContent).not.toContain('Veri değişikliklerini uygula');
+    expect(liste.textContent).toContain('"Sahada oldu" ve "Plan geride" satırları bilgi içindir');
+  });
+
+  // Salt okunur kişide başka sayfadaki değişiklik kayda yazılmaz; sayfa üstündeki satır Kokpit'te çizilmediği için liste onu da taşır.
+  it('yazılmamış başka sayfa değişikliği plan güncelken de listede "Veri değişti" altında görünür; kayıtlıysa ikinci kez yazılmaz', () => {
+    const guncel = ornekCalisma();
+    const c = { ...guncel, dataVer: guncel.plan?.dataVer ?? guncel.dataVer } as ReturnType<typeof ornekCalisma>;
+    const dis = kaynakSatiri({ alanlar: ['urunler'], farklar: [], kesik: false } as unknown as Parameters<typeof kaynakSatiri>[0], 0, c.dataVer);
+    ac({ calisma: c }, false, dis);
+    expect((document.querySelector('[data-degisiklik-ozeti] b') as HTMLElement).textContent).toBe('1 değişiklik');
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    const veri = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Veri değişti' });
+    expect(within(veri).getAllByRole('listitem')).toHaveLength(1);
+    expect(veri.textContent).toContain(dis.ne);
+    cleanup();
+    ac({}, false);
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    const once = within(screen.getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem').length;
+    cleanup();
+    const kayitli = bekleyenListesi(ornekCalisma())[0]!;
+    ac({}, false, kayitli);
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    expect(within(screen.getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem')).toHaveLength(once);
+  });
+
+  // 3297-5 (Test T2): emir siparişe bağlıysa değişiklik sayısı emrin kök kartında değil sipariş kartında durur; liste o karta süzülür.
+  it('siparişe bağlı emrin olayı sipariş kartında sayılır; liste seçili karta süzülür ve "Tümünü göster" ile açılır', () => {
     const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
+      { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
       { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
     ] };
     const durum = { siparisBaglari: { '3': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 1 } } };
     ac({ depo: { ...DEPO, durum, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
     const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
     expect(serit.querySelector('[data-kart="3"]')).toBeNull();
-    expect(serit.querySelector('[data-kart="sp:50"] [data-olay]')?.textContent).toContain('1 olay');
-  });
-
-  // 3297-5 (Test T1): Gelenler'de plansız emrin Yerleştir'i emrin kök kartını değil siparişinin kartını seçer. Seçilen kart ilk eksik kart
-  // olmamalı, yoksa bulunamayan anahtarın düştüğü varsayılan kartla ayırt edilemez.
-  it('Gelenler: siparişe bağlı plansız emrin Yerleştir düğmesi sipariş kartını seçer', () => {
-    const c = { ...ornekCalisma(), plan: null } as unknown as ReturnType<typeof ornekCalisma>;
-    const durum = { siparisBaglari: { '3': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 1 } } };
-    ac({ calisma: c, depo: { ...DEPO, durum } as unknown as PlanlamaDeposu });
-    const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
-    const hedef = serit.querySelector('[data-kart="sp:50"]');
-    expect(hedef?.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(within(serit).getByRole('button', { name: /Tümü/ }));
-    const satir = within(screen.getByRole('complementary', { name: 'Gelenler' })).getAllByRole('listitem').find((x) => x.querySelector('b')?.textContent === '3');
-    fireEvent.click(within(satir!).getByRole('button', { name: 'Yerleştir' }));
-    expect(hedef?.getAttribute('aria-pressed')).toBe('true');
+    expect(serit.querySelector('[data-kart="sp:50"] [data-olay]')?.textContent).toContain('1 değişiklik');
+    fireEvent.click(serit.querySelector('[data-kart="sp:50"]') as HTMLElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    expect(liste.querySelectorAll('li')).toHaveLength(3);
+    fireEvent.click(within(liste).getByRole('button', { name: 'Yalnız ORN-SP-50' }));
+    expect(liste.querySelectorAll('li')).toHaveLength(1);
+    expect(liste.textContent).toContain('ORN-SP-50 için · 1 değişiklik');
+    fireEvent.click(within(liste).getByRole('button', { name: 'Tümünü göster' }));
+    expect(liste.querySelectorAll('li')).toHaveLength(3);
   });
 
   it('gövde yukarıdan aşağıdır: sıra kartları, seçilen kartın operasyonları, plan bölümü; yan sütun yoktur', () => {

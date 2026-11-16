@@ -17,12 +17,13 @@ export function tasimaHesabi(calisma: Nesne, simdi: number, g: { isId: string; t
   const biten = new Set<string>();
   for (const [id, r] of Object.entries(ops)) {
     if (!nesne(r) || typeof r.S !== 'number' || typeof r.C !== 'number' || !Number.isFinite(r.S) || !Number.isFinite(r.C)) continue;
-    const gecmis = Boolean(r.done) && !r.act;
-    if (r.done && r.act) biten.add(id);
+    const bitti = Boolean(r.done) && (Boolean(r.act) || Boolean(r.bitti));
+    const gecmis = Boolean(r.done) && !bitti;
+    if (bitti) biten.add(id);
     const lot1 = typeof r.lot1 === 'number' && Number.isFinite(r.lot1) ? r.lot1 : r.C;
     isler.set(id, {
       id, job: String(r.job), opNo: t.opNo[id] ?? id, m: String(r.m), S: r.S, C: r.C, lot1,
-      sabit: Boolean(r.act) || (!gecmis && id !== g.isId && r.S < t.donuk - E), fas: Boolean(r.fas),
+      sabit: Boolean(r.act) || bitti || (!gecmis && id !== g.isId && r.S < t.donuk - E), fas: Boolean(r.fas),
     });
   }
   const onculler = new Map<string, (readonly [string, BagTuru])[]>();

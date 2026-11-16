@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import type { BekleyenDegisiklik } from '../tipler.ts';
+import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
+import { degisiklikDokumu, degisiklikler } from './degisiklikler.ts';
+
+// Uydurma örnek (ORN-): şimdi 10. saat; torna 8'de başlayacaktı ve başlamadı, freze başladı, taşlama on dakika önce başlayacaktı.
+const is = (id: string, S: number, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S, C: S + 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
+const emir = (id: string, termin: number | null): KokpitEmri => ({ id, no: `ORN-UE-${id}`, urun: 'ORN-Flanş', adet: 1, termin, bitis: null, durum: 'iyi', gecikme: null, adimlar: [] });
+const M: KokpitModeli = {
+  simdi: 10, bas: 0, son: 336, acik: {}, durus: {}, tezgahlar: [{ id: 'T1', kod: 'ORN-T1', ad: '', fason: false }], emirler: [emir('1', 40), emir('2', null)],
+  isler: { '1.10': is('1.10', 8), '1.20': is('1.20', 6, { basladi: true }), '2.10': is('2.10', 9.9), '2.20': is('2.20', 5, { fason: true }), '2.30': is('2.30', 12), '9.10': is('9.10', 7) },
+};
+const zaman = (t: number): string => `S${String(t)}`;
+const an = (ms: number): string => `A${String(ms)}`;
+const bekleyen = (id: string, ek: Partial<BekleyenDegisiklik> = {}): BekleyenDegisiklik => ({ id, ne: `Değişti ${id}`, ayrinti: '', kim: '', t: 0, isler: ['*'], geri: null, ...ek });
+
+describe('degisiklikler (3317 a)', () => {
+  it('plan geride: başlangıcı çeyrek saatten çok geçmiş, başlamamış, fason olmayan işler; en eski önce; emir ve termin yazılır', () => {
+    const l = degisiklikler({ m: M, bekleyen: [], olaylar: [], zaman, an });
+    expect(l.map((d) => [d.baslik, d.isId, d.emirId])).toEqual([['geride', '9.10', null], ['geride', '1.10', '1']]);
+    expect(l[1]?.ne).toBe('ORN-UE-1 · Adım 1.10 · ORN-T1 · S8 başlayacaktı');
+    expect(l[1]?.alt).toBe('2 sa geride · termin S40');
+    // Modelde emri olmayan iş: emir numarası yerine iş kimliğinin emri yazılır, termin yazılmaz.
+    expect(l[0]?.ne).toBe('9 · Adım 9.10 · ORN-T1 · S7 başlayacaktı');
+    expect(l[0]?.alt).toBe('3 sa geride');
+  });
+
+  it('gecikme süresi dakika ve saatle yazılır', () => {
+    const m = { ...M, simdi: 10.5, isler: { a: is('1.10', 8), b: is('2.10', 10) } };
+    expect(degisiklikler({ m, bekleyen: [], olaylar: [], zaman, an }).map((d) => d.alt)).toEqual(['2 sa 30 dk geride · termin S40', '30 dk geride']);
+  });
+
+  it('veri değişikliği: kaynak, kişi, zaman ve ayrıntı ikinci satırda; boş alan yazılmaz; emre bağlanmaz', () => {
+    const l = degisiklikler({ m: { ...M, isler: {} }, olaylar: [], zaman, an, bekleyen: [bekleyen('a', { dis: true, kim: 'Deneme Kişi', t: 5, ayrinti: 'ORN-fark' }), bekleyen('b')] });
+    expect(l.map((d) => [d.baslik, d.ne, d.alt, d.emirId])).toEqual([
+      ['veri', 'Değişti a', 'Başka sayfa · Deneme Kişi · A5 · ORN-fark', null],
+      ['veri', 'Değişti b', 'Bu sayfa', null],
+    ]);
+  });
+
+  it('saha olayları yeniden eskiye; emir numarasıyla emre bağlanır; satın alma olayı kaynağıyla ayrılır; sıra veri, saha, geride', () => {
+    const olaylar = [
+      { neden: 'satin-alma-termini' as const, zaman: '2026-10-20T08:00:00Z', uretimEmriId: 2, emirNo: 'ORN-UE-2', makineId: null, makineKod: null },
+      { neden: 'durus' as const, zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T1' },
+      { neden: 'emir-iptal' as const, zaman: '2026-10-20T07:00:00Z', uretimEmriId: 8, emirNo: 'ORN-UE-8', makineId: null, makineKod: null },
+    ];
+    const l = degisiklikler({ m: M, bekleyen: [bekleyen('a')], olaylar, zaman, an });
+    expect(l.map((d) => d.baslik)).toEqual(['veri', 'saha', 'saha', 'saha', 'geride', 'geride']);
+    const saha = l.filter((d) => d.baslik === 'saha');
+    expect(saha.map((d) => [d.ne, d.emirId])).toEqual([['Duruş: ORN-T1', null], ['Malzemenin geliş tarihi değişti: ORN-UE-2', '2'], ['Emir iptal edildi: ORN-UE-8', null]]);
+    expect(saha[1]?.alt).toBe(`Satın alma · A${String(Date.parse('2026-10-20T08:00:00Z'))} · emrin başlangıcı etkilenebilir`);
+    expect(saha[0]?.alt.startsWith('Saha · ')).toBe(true);
+    expect(degisiklikDokumu(l)).toBe('1 veri · 3 saha · 2 geride');
+  });
+
+  it('dökümde sıfır olan tür yazılmaz; boş listede döküm boştur', () => {
+    expect(degisiklikDokumu(degisiklikler({ m: M, bekleyen: [], olaylar: [], zaman, an }))).toBe('2 geride');
+    expect(degisiklikDokumu([])).toBe('');
+  });
+});

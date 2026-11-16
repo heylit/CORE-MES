@@ -116,3 +116,47 @@ describe('açık şeritte nabız referansı', () => {
     expect(sabitle).toHaveBeenCalledTimes(1);
   });
 });
+
+// 3317 a: Kokpit şeride kendi özetini çizer. Yuva verilince plan durumu rozeti çizilmez (durumu sayfa söyler), toplu düğme veri
+// değişikliklerini adıyla söyler ve ikincildir; yuva verilmeyen sayfalarda şerit eskisi gibidir.
+describe('plan şeridinde sayfa yuvaları (3317)', () => {
+  const uygulayici = (uygula = vi.fn()) => ({ uygula, suruyor: false, say: 2 });
+  const yuvali = (yuva: { satir: (el: HTMLElement | null) => void; alt: (el: HTMLElement | null) => void } | null, uygula = vi.fn()) => render(
+    <Cubuk plan guncel={false} planYaz nabiz={nabiz(0)} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null}
+      bekleyenUygula={uygulayici(uygula)} yuva={yuva} />,
+  );
+
+  it('yuva verilince iki öğe bağlanır; rozet yoktur; toplu düğme "Veri değişikliklerini uygula (2)" ve ikincildir, basınca uygular', () => {
+    const satir = vi.fn(), alt = vi.fn(), uygula = vi.fn();
+    yuvali({ satir, alt }, uygula);
+    expect(satir.mock.calls.at(-1)?.[0]).toBeInstanceOf(HTMLElement);
+    expect(alt.mock.calls.at(-1)?.[0]).toBeInstanceOf(HTMLElement);
+    // Satır yuvası çubuğun içinde, alt yuva çubuğun dışında (altında) durur.
+    const cubukEl = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
+    expect(cubukEl.contains(satir.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(true);
+    expect(cubukEl.contains(alt.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(false);
+    expect(cubuk().queryByText('Veri değişti')).toBeNull();
+    const d = cubuk().getByRole('button', { name: 'Veri değişikliklerini uygula' });
+    expect(d.querySelector('[data-uzun]')?.textContent).toBe('Veri değişikliklerini uygula (2)');
+    // Orta genişlikte görünen kısa ad ekran okuyucuya ikinci kez okunmaz.
+    expect(d.querySelector('[data-kisa]')?.textContent).toBe('Uygula (2)');
+    expect(d.querySelector('[data-kisa]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(d.classList.contains('tc-dugme-birincil')).toBe(false);
+    fireEvent.click(d);
+    expect(uygula).toHaveBeenCalledTimes(1);
+  });
+
+  it('yuva verilmeyince şerit eskisi gibidir: "Veri değişti" rozeti ve birincil "Değişiklikleri uygula (2)"', () => {
+    yuvali(null);
+    expect(cubuk().getByText('Veri değişti')).toBeTruthy();
+    const d = cubuk().getByRole('button', { name: 'Değişiklikleri uygula' });
+    expect(d.textContent).toBe('Değişiklikleri uygula (2)');
+    expect(d.classList.contains('tc-dugme-birincil')).toBe(true);
+    expect(document.querySelector('.tc-pym-sb-yuva, .tc-pym-sb-alt-yuva')).toBeNull();
+  });
+
+  it('plan yokken yuva verilse de "Plan yok" rozeti kalır', () => {
+    render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} yuva={{ satir: () => {}, alt: () => {} }} />);
+    expect(cubuk().getByText('Plan yok')).toBeTruthy();
+  });
+});

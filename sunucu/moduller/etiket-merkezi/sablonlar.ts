@@ -115,6 +115,13 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     ...buyukUst('konum', 'KONUM', '=STOK KONUMU'), metin(50, 21.5, 48, 17, 7, 'kod', true),
     baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 3.6, 3.2, 'ad', true), metin(50, 45.4, 48, 3.2, 2.6, 'yer'),
   ] },
+  // Raf etiketi rafta uzaktan okutulur (3336 b): kare etikette QR enin çoğunu alır, kod üstte, ad ve yer altta, piktogram köşede.
+  // QR ile yazı arasında kendi iki modülüne ek 3 mm boşluk kalır (#707). Raf türünde ilk sıradadır (varsayılan).
+  { anahtar: 'raf-100x100', ad: 'Raf 100x100', tur: 'raf', genislik: 100, yukseklik: 100, ogeler: [
+    simge(88, 2, 10, '=siyah:raf'), metin(3, 2.4, 83, 10, 9.5, 'kod', true),
+    qr(14, 15.4, 72),
+    metin(3, 90.4, 94, 4.4, 3.8, 'ad', true), metin(3, 95.2, 94, 4, 3.2, 'yer'),
+  ] },
   { anahtar: 'raf-100x50', ad: 'Raf 100x50', tur: 'raf', genislik: 100, yukseklik: 50, ogeler: [
     ...buyukUst('raf', 'RAF', '=FABRİKA HARİTASI'), metin(50, 21.5, 48, 17, 9, 'kod', true),
     baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 3.6, 3.2, 'ad', true), metin(50, 45.4, 48, 3.2, 2.6, 'yer'),
