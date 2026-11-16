@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
@@ -20,6 +20,7 @@ import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
 import { OzelOlcuAyari } from './OzelOlcu.tsx';
+import { VarsayilanOlcu } from './VarsayilanOlcu.tsx';
 import { olcuCoz, olcuYazisi, ozelOlcuOku, ozelOlcuYaz } from './ozel-olcu.ts';
 import { VektorelYazdir } from './Yazdir.tsx';
 import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciDegistir, yaziciEsle, type UsbAygit } from './web-usb.ts';
@@ -546,33 +547,53 @@ export function EskiBasAdresi({ pano }: { pano: () => ReactNode }) {
 function Katalog({ deneme }: { deneme: boolean }) {
   const oturum = useOturum();
   const basabilir = deneme && (oturum.data?.islemler.includes('etiket-merkezi.bas') ?? false);
+  const olcuYazar = !deneme && (oturum.data?.islemler.includes('etiket-merkezi.sablon-yaz') ?? false);
   const liste = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonlarCevabi>('/etiket-merkezi/sablonlar') });
   const [secili, setSecili] = useState<string | null>(null);
+  const ayrinti = useRef<HTMLDivElement>(null);
   const baslik = deneme ? 'Yazıcı denemesi' : 'Şablonlar';
   if (liste.isPending) return <Kart baslik={baslik}><DurumKutusu durum="yukleniyor" /></Kart>;
   if (liste.isError) return <Kart baslik={baslik}><DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} /></Kart>;
   const sablonlar = liste.data.sablonlar.filter((s) => deneme === (s.tur === 'deneme'));
   const sablon = sablonlar.find((s) => s.anahtar === secili) ?? sablonlar[0];
+  // Telefonda liste ayrıntının üstündedir: seçilen şablonun ayrıntısı görünür olsun.
+  const sec = (anahtar: string) => {
+    setSecili(anahtar);
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches) requestAnimationFrame(() => { ayrinti.current?.scrollIntoView({ block: 'start' }); ayrinti.current?.focus({ preventScroll: true }); });
+  };
   return (
     <Kart baslik={baslik}>
       <p className="tc-etk-not">
         {deneme
           ? 'Deneme etiketi Türkçe harfleri, iki yazı boyunu, çerçeveyi ve QR\'ı basar. Harfler eksik çıkarsa yazıcı ayarında "sadeleştir"i açın; QR\'ı telefonla okutun.'
-          : 'Bütün etiket ölçüleri örnek değerlerle. Basmak için Etiket bas sayfasını kullanın.'}
+          : olcuYazar ? 'Bütün etiket ölçüleri örnek değerlerle. Varsayılan ölçüyü değiştirmek için şablonu seçin.' : 'Bütün etiket ölçüleri örnek değerlerle. Basmak için Etiket bas sayfasını kullanın.'}
       </p>
       <div className="tc-etk-duzen">
         <ul className="tc-etk-liste" aria-label="Şablonlar">
           {sablonlar.map((s) => (
             <li key={s.anahtar}>
-              <button type="button" className="tc-etk-satir" aria-pressed={s.anahtar === sablon?.anahtar} onClick={() => setSecili(s.anahtar)}>
+              <button type="button" className="tc-etk-satir" aria-pressed={s.anahtar === sablon?.anahtar} onClick={() => sec(s.anahtar)}>
                 <strong>{s.ad}</strong>
-                <span className="tc-etk-satir-alt"><Rozet ton="bilgi">{liste.data.secenekler.turAdlari[s.tur] ?? s.tur}</Rozet>{olcuYazisi(s)}</span>
+                <span className="tc-etk-satir-alt">
+                  <Rozet ton="bilgi">{liste.data.secenekler.turAdlari[s.tur] ?? s.tur}</Rozet>{olcuYazisi(s)}
+                  {(s.genislik !== s.tasarim.genislik || s.yukseklik !== s.tasarim.yukseklik) && <Rozet ton="bilgi">{`Değişti · tasarım ${olcuYazisi(s.tasarim)}`}</Rozet>}
+                </span>
               </button>
             </li>
           ))}
         </ul>
-        {sablon ? <BaskiPaneli key={sablon.anahtar} sablonlar={[sablon]} secili={sablon} sec={() => undefined} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={null} kayitCikar={() => undefined} />
-          : <DurumKutusu durum="bos" mesaj="Şablon yok." />}
+        {sablon ? (
+          <div className="tc-etk-katalog-ayrinti" ref={ayrinti} tabIndex={-1} aria-label={`${sablon.ad} ayrıntısı`}>
+            {/* 3306 a: ölçü yazan Şablonlar'da baskı denetimlerini görmez; tek önizleme Varsayılan ölçü bölümündedir. */}
+            {olcuYazar ? <VarsayilanOlcu key={`olcu-${sablon.anahtar}-${olcuYazisi(sablon)}`} sablon={sablon} yazar />
+              : (
+                <>
+                  <BaskiPaneli key={`${sablon.anahtar}-${olcuYazisi(sablon)}`} sablonlar={[sablon]} secili={sablon} sec={() => undefined} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={null} kayitCikar={() => undefined} />
+                  {!deneme && <VarsayilanOlcu key={`olcu-${sablon.anahtar}-${olcuYazisi(sablon)}`} sablon={sablon} yazar={false} />}
+                </>
+              )}
+          </div>
+        ) : <DurumKutusu durum="bos" mesaj="Şablon yok." />}
       </div>
     </Kart>
   );

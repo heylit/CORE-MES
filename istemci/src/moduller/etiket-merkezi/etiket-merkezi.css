@@ -110,3 +110,24 @@ a.tc-etk-tur-karti { text-decoration: none; }
   .tc-etk-bas .tc-etk-kagit-alani:not(.tc-etk-kagit-alani-gercek) .tc-etk-onizleme { max-inline-size: 22rem; }
   .tc-etk-pano-alt { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* 3306 a: Şablonlar ayrıntısı önizleme panelinin altına varsayılan ölçüyü dizer; telefonda seçimden sonra buraya kaydırılır. */
+.tc-etk-katalog-ayrinti { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; scroll-margin-block-start: var(--b-4); }
+.tc-etk-katalog-ayrinti:focus { outline: none; }
+/* 3306 a: Otomatik baskılar açılır kapanır satırları. Kapalıyken olay ve özet; telefonda özet adın altına iner. */
+.tc-etk-ak-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-etk-ak-liste { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-etk-ak { border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel); min-width: 0; }
+.tc-etk-ak-ozet { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--b-2) var(--b-3); min-block-size: var(--dokunma); padding: var(--b-2) var(--b-3); cursor: pointer; list-style: none; }
+.tc-etk-ak-ozet::-webkit-details-marker { display: none; }
+.tc-etk-ak-ozet::after { content: '›'; grid-column: -2 / -1; color: var(--muted); transition: transform .15s ease; }
+.tc-etk-ak[open] > .tc-etk-ak-ozet::after { transform: rotate(90deg); }
+.tc-etk-ak-ad { display: flex; flex-direction: column; min-width: 0; }
+.tc-etk-ak-ic { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--b-3); padding: var(--b-3); border-block-start: thin solid var(--edge); }
+.tc-etk-ak-alan { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-etk-ak-genis { grid-column: 1 / -1; }
+.tc-etk-ak .tc-etk-yapilacak { padding: var(--b-3); }
+@media (max-width: 767px) {
+  .tc-etk-ak-ozet { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tc-etk-ak-rozet { grid-column: 2; grid-row: 2; justify-self: start; }
+  .tc-etk-ak-ozet::after { grid-column: 3; grid-row: 1; }
+}
