@@ -22,6 +22,26 @@ test('Otomatik baskılar olay tablosunu ve kendiliğinden basılmadığını gö
   expect(ag.yazmalar).toEqual([]);
 });
 
+// 3306 a: Şablonlar'da varsayılan ölçü; girilen ölçü önizlenir, kaydedilmez (örnek veri değişmez).
+test('Şablonlar\'da varsayılan ölçü denenir; ölçek yazılır, kaydet açılır; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+  await ac('/etiket-merkezi/sablonlar');
+  await page.getByRole('button', { name: /^Lot 100x50/ }).click();
+  const bolum = page.getByRole('region', { name: 'Varsayılan ölçü' });
+  await expect(bolum).toBeVisible();
+  await bolum.getByLabel('Etiket boyu (mm)').fill('60');
+  await expect(bolum.getByText(/Ölçek %100/)).toBeVisible();
+  await expect(bolum.getByRole('button', { name: 'Ölçüyü kaydet' })).toBeEnabled();
+  // Tek önizleme: ölçü yazan baskı denetimlerini görmez. Telefonda alt çubuk Kaydet'in üstüne binmez.
+  await expect(page.getByRole('img', { name: /önizleme$/ })).toHaveCount(1);
+  await expect(page.getByRole('checkbox', { name: 'Standart dışı etikete bas' })).toHaveCount(0);
+  const kaydet = bolum.getByRole('button', { name: 'Ölçüyü kaydet' });
+  await kaydet.scrollIntoViewIfNeeded();
+  expect(await kaydet.evaluate((d) => { const r = d.getBoundingClientRect(); return d.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), 'Kaydet örtülmez').toBe(true);
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});
+
 test('eski adres seçimiyle Etiket bas\'a gider', async ({ page, ac }) => {
   await ac('/etiket-merkezi?tur=lot');
   await expect(page).toHaveURL(/\/etiket-merkezi\/bas\?tur=lot$/);
@@ -81,11 +101,13 @@ test('kayıt seçiliyken Bas düğmesi tek sütunda alt şeritte kalır, masaüs
 test.describe('depocu (bas + oku, yazıcı yazmaz)', () => {
   test.use({ hesap: 'ornek.depo' });
 
-  test('Pano sayıları ve Otomatik baskılar\'da "Yazıcı ata" görünür; Yazıcılar\'da ekleme yoktur', async ({ page, ag, ac }) => {
+  test('Pano sayıları ve Otomatik baskılar\'da açılan satırda yazıcı seçimi görünür; Yazıcılar\'da ekleme yoktur', async ({ page, ag, ac }) => {
     await ac('/etiket-merkezi');
     await expect(page.getByRole('link', { name: /^Basılacak etiket/ })).toBeVisible();
     await ac('/etiket-merkezi/otomatik');
-    await expect(page.getByRole('button', { name: 'Yazıcı ata' }).first()).toBeVisible();
+    await page.getByText('Mal kabul kaydedilince').click();
+    await expect(page.getByRole('combobox', { name: 'Yazıcı' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     await ac('/etiket-merkezi/yazicilar');
     await expect(page.getByRole('heading', { name: 'Yazıcılar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Yazıcı ekle' })).toHaveCount(0);

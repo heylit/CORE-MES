@@ -1,16 +1,27 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  atlaCevabi, atlaGovdesi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
+  atlaCevabi, atlaGovdesi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonListesiOgesi, sablonOlcusuGovdesi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi, yazdirCevabi, yazdirGovdesi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { atla, bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
+import { atla, bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, sablonOlcusuYaz, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
 const YAZICI_OKUMA = { biri: ['etiket-merkezi.oku', 'etiket-merkezi.yazici-yaz'] } as const;
 
 export const uclar = [
-  uc({ yontem: 'GET', yol: '/etiket-merkezi/sablonlar', yetki: OKUMA, cevap: sablonlarCevabi, isle: () => sablonlar() }),
+  uc({ yontem: 'GET', yol: '/etiket-merkezi/sablonlar', yetki: OKUMA, cevap: sablonlarCevabi, isle: ({ db }) => sablonlar(db) }),
+  // 3306 a: varsayılan ölçü bütün cihazlarda geçerlidir; şablon düzenleme işlemi (sablon-yaz) olan değiştirir. Yineleme ikinci satır açmaz.
+  uc({
+    yontem: 'POST',
+    yol: '/etiket-merkezi/sablonlar/:anahtar/olcu',
+    yetki: 'etiket-merkezi.sablon-yaz',
+    tekrarKorumali: true,
+    parametre: sablonParametresi,
+    govde: sablonOlcusuGovdesi,
+    cevap: sablonListesiOgesi,
+    isle: ({ db, kullanici, parametre, govde }) => sablonOlcusuYaz(db, kullanici, parametre.anahtar, govde.olcu),
+  }),
   // Etiket listesi katalogdur, kayıt taşımaz: şablon listesi gibi sayfayı görene açık.
   uc({ yontem: 'GET', yol: '/etiket-merkezi/etiketler', yetki: OKUMA, cevap: etiketlerCevabi, isle: ({ db }) => etiketler(db) }),
   uc({
@@ -20,7 +31,7 @@ export const uclar = [
     parametre: sablonParametresi,
     sorgu: ciktiSorgusu,
     cevap: ciktiCevabi,
-    isle: ({ parametre, sorgu }) => ornekCikti(parametre.anahtar, sorgu),
+    isle: ({ db, parametre, sorgu }) => ornekCikti(db, parametre.anahtar, sorgu),
   }),
   uc({
     yontem: 'GET',

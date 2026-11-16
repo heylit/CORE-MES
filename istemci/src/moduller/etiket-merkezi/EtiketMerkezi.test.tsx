@@ -21,11 +21,11 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 const SABLONLAR: SablonlarCevabi = {
   sablonlar: [
-    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [] },
-    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [] },
-    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [] },
-    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [] },
-    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [] },
+    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null },
+    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
+    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
+    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [], tasarim: { genislik: 100, yukseklik: 150 }, degisiklik: null },
+    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [], tasarim: { genislik: 100, yukseklik: 75 }, degisiklik: null },
   ],
   alanlar: {},
   secenekler: {
@@ -110,7 +110,7 @@ interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 const INDIRILEN_KOMUT = '\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n';
 const INDIRILEN_BAYTLAR = [...new TextEncoder().encode('\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n', (h) => h.charCodeAt(0))];
 
-function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi } = {}) {
+function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi; sablonlar?: SablonlarCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
@@ -121,6 +121,12 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
       const basliklar = (init.headers ?? {}) as Record<string, string>;
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)), kimlik: basliklar[ISTEK_KIMLIGI_BASLIGI] ?? null });
       if (yol.endsWith('/atla')) return json(200, { atlanan: 1 });
+      const olcuEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/olcu$/.exec(yol);
+      if (olcuEslesme?.[1]) {
+        const s = (secenek.sablonlar ?? SABLONLAR).sablonlar.find((x) => x.anahtar === olcuEslesme[1])!;
+        const o = (JSON.parse(String(init.body)) as { olcu: { genislik: number; yukseklik: number } | null }).olcu ?? s.tasarim;
+        return json(200, { ...s, ...o, ad: `Lot ${String(o.genislik)}x${String(o.yukseklik)}`, degisiklik: { kisi: 'Örnek', zaman: '2026-11-16T05:40:00Z' } });
+      }
       if (yol.endsWith('/bas')) return json(200, { baskiId: 9, sonuc: 'gonderildi', ileti: null });
       const yazdirEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/yazdir$/.exec(yol);
       if (yazdirEslesme?.[1]) {
@@ -138,7 +144,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
       return json(200, { ...YAZICILAR.yazicilar[0], id: 3, ad: 'Yeni', surum: 1 });
     }
     if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Örnek', islemler: secenek.islemler ?? [] } });
-    if (yol === '/etiket-merkezi/sablonlar') return json(200, SABLONLAR);
+    if (yol === '/etiket-merkezi/sablonlar') return json(200, secenek.sablonlar ?? SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
     if (yol === '/etiket-merkezi/etiketler') return json(200, secenek.etiketler ?? ETIKETLER);
@@ -255,6 +261,65 @@ describe('EtiketMerkezi', () => {
     fireEvent.change(adetAlani(), { target: { value: '501' } });
     expect(screen.getByText('Adet 1 ile 500 arasında olur.')).toBeTruthy();
     expect((screen.getByRole('button', { name: /^Önizleme için indir \(.*, deftere yazılmaz\)$/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('3306 a: şablon düzenleyen varsayılan ölçüyü dener ve kaydeder; okunmayan ölçü alanın altında söylenir ve kaydedilmez', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.sablon-yaz'] });
+    ac(<SablonKatalogu />);
+    const kaydet = await screen.findByRole('button', { name: 'Ölçüyü kaydet' });
+    expect((kaydet as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Etiket boyu (mm)'), { target: { value: '60' } });
+    expect(await screen.findByText(/Ölçek %100/)).toBeTruthy();
+    expect(istekler.gonderilenler).toHaveLength(0);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Ölçüyü kaydet' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Ölçüyü kaydet' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/olcu', govde: { olcu: { genislik: 100, yukseklik: 60 } } });
+    expect(await screen.findByText('Lot 100x60 artık 100x60 mm basılır.')).toBeTruthy();
+    // Okunmayan ölçü: sunucunun iletisi alanın altında, kaydet kapalı.
+    fireEvent.change(screen.getByLabelText('Etiket eni (mm)'), { target: { value: '20' } });
+    expect(await screen.findByText(/Bu etiket için en küçük ölçü 54x27 mm/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Ölçüyü kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // 3306 a: Lot'un varsayılan ölçüsü 100x60'a değişmiş (tasarım 100x50).
+  const DEGISMIS: SablonlarCevabi = {
+    ...SABLONLAR,
+    sablonlar: SABLONLAR.sablonlar.map((x) => (x.anahtar === 'lot-100x50'
+      ? { ...x, ad: 'Lot 100x60', yukseklik: 60, degisiklik: { kisi: 'Örnek', zaman: '2026-11-16T05:40:00Z' } } : x)),
+  };
+
+  it('3306 a (Test T1): kayıttan sonra şablon listesi sunucudan yeniden okunur', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.sablon-yaz'] });
+    ac(<SablonKatalogu />);
+    fireEvent.change(await screen.findByLabelText('Etiket boyu (mm)'), { target: { value: '60' } });
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Ölçüyü kaydet' }) as HTMLButtonElement).disabled).toBe(false));
+    const once = istekler.filter((i) => i === '/etiket-merkezi/sablonlar?').length;
+    fireEvent.click(screen.getByRole('button', { name: 'Ölçüyü kaydet' }));
+    await waitFor(() => expect(istekler.filter((i) => i === '/etiket-merkezi/sablonlar?').length).toBeGreaterThan(once));
+  });
+
+  it('3306 a (Test T2): değişmiş şablon listede ve okuyanda rozetle görünür; yazan tasarım ölçüsüne döndürür', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'], sablonlar: DEGISMIS });
+    ac(<SablonKatalogu />);
+    expect(await screen.findByText('Değişti · tasarım 100x50 mm')).toBeTruthy();
+    expect(screen.getByText('Varsayılan ölçü 100x60 mm')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Tasarım ölçüsüne dön/ })).toBeNull();
+    cleanup();
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.sablon-yaz'], sablonlar: DEGISMIS });
+    ac(<SablonKatalogu />);
+    expect(await screen.findByText('Son değişiklik')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Tasarım ölçüsüne dön (100x50 mm)' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/olcu', govde: { olcu: null } });
+  });
+
+  it('3306 a: şablon düzenleme işlemi olmayan varsayılan ölçüyü değiştiremez', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<SablonKatalogu />);
+    await screen.findByText('LT-000123');
+    expect(screen.queryByRole('button', { name: 'Ölçüyü kaydet' })).toBeNull();
+    expect(screen.queryByLabelText('Etiket boyu (mm)')).toBeNull();
   });
 
   it('yazıcı denemesi yalnız deneme şablonlarını gösterir', async () => {
@@ -1012,29 +1077,69 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
     for (const is of OTOMATIK_ISLER) expect(screen.getByText(is.olay)).toBeTruthy();
     expect(screen.getAllByText('Etiket Merkezi\'ni açar')).toHaveLength(OTOMATIK_ISLER.filter((i) => i.tekDokunus === 'hayir').length);
     expect(screen.getAllByText('Yazıcı atanmadı')).toHaveLength(OTOMATIK_ISLER.filter((i) => i.tekDokunus !== 'hayir').length);
-    expect(screen.getByRole('link', { name: 'Stok · Refakat kartları' }).getAttribute('href')).toBe('/stok/refakat-kartlari');
     expect(screen.getByText('Kalibrasyon etiketi')).toBeTruthy();
-    // Yalnız okuyan yazıcı atayamaz.
-    expect(screen.queryByRole('button', { name: 'Yazıcı ata' })).toBeNull();
+    // 3306 a: satırlar kapalı açılır; olay sayısı listeden gelir. Yalnız okuyan yazıcı atayamaz.
+    expect(screen.getByText(`${String(OTOMATIK_ISLER.length)} olay · ayrıntı için satıra dokunun`)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hepsini aç' }));
+    expect(screen.getByRole('button', { name: 'Hepsini kapat' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Stok · Refakat kartları' }).getAttribute('href')).toBe('/stok/refakat-kartlari');
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
     expect(await screen.findByText('Lot etiketi')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');
   });
 
-  it('basabilen türe bu cihazda yazıcı atar: yalnız ağ yazıcısı sunulur (dosya ve Windows yazdırma tek dokunuş olmaz)', async () => {
+  it('basabilen türe bu cihazda yazıcı atar: yalnız ağ yazıcısı sunulur (dosya ve Windows yazdırma tek dokunuş olmaz); seçim kendiliğinden kaydedilir', async () => {
     sunucuKur({ islemler: BASAN });
     ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Yazıcı ata' }))[0]!);
-    expect(await screen.findByText('Mal kabul lot etiketleri: tek dokunuş yazıcısı')).toBeTruthy();
-    const secim = await screen.findByRole('combobox', { name: 'Yazıcı' });
+    fireEvent.click(await screen.findByText('Mal kabul kaydedilince'));
+    const secim = (await screen.findAllByRole('combobox', { name: 'Yazıcı' }))[0]!;
     await waitFor(() => expect(screen.getByRole('option', { name: 'Zebra depo · ağ' })).toBeTruthy());
     expect(screen.queryByRole('option', { name: /Argox masa/ })).toBeNull();
     expect(screen.queryByRole('option', { name: /Windows/ })).toBeNull();
     fireEvent.change(secim, { target: { value: 'ag:1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bu cihazda kaydet' }));
     expect(cihazYazicilari().lot).toEqual(ZEBRA_LOT);
+    expect(screen.getByText('Kaydedildi')).toBeTruthy();
     // Lot şablonunu kullanan iki iş (mal kabul, tek lot) birlikte tek dokunuşa geçer.
     expect(await screen.findAllByText('Tek dokunuş · Zebra depo')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Yazıcı atamasını kaldır' }));
+    expect(cihazYazicilari().lot).toBeUndefined();
+  });
+
+  it('3306 a (Test T3): açılan satırda türün ölçüsü seçilir ve bu cihazda kendiliğinden kaydedilir', async () => {
+    const IKI_OLCU: SablonlarCevabi = {
+      ...SABLONLAR,
+      sablonlar: [...SABLONLAR.sablonlar, { anahtar: 'malzeme-etiketi-100x50', ad: 'Malzeme etiketi 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null }],
+    };
+    cihazYazicisiKaydet('lot', ZEBRA_LOT);
+    const IKI_AG: YazicilarCevabi = { ...YAZICILAR, yazicilar: [...YAZICILAR.yazicilar, { id: 3, ad: 'Zebra kabul', dil: 'zpl', dpi: 203, baglanti: 'ag', adres: '10.0.5.21', sade: false, aktif: true, surum: 1 }] };
+    sunucuKur({ islemler: BASAN, sablonlar: IKI_OLCU, yazicilar: IKI_AG });
+    ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
+    fireEvent.click(await screen.findByText('Mal kabul kaydedilince'));
+    const olcu = await screen.findByRole('combobox', { name: 'Ölçü' });
+    await waitFor(() => expect(screen.getByRole('option', { name: '100x50 mm · Malzeme etiketi 100x50' })).toBeTruthy());
+    fireEvent.change(olcu, { target: { value: 'malzeme-etiketi-100x50' } });
+    expect(cihazYazicilari().lot).toMatchObject({ yaziciId: 1, sablonAnahtar: 'malzeme-etiketi-100x50', sablonAd: 'Malzeme etiketi 100x50' });
+    expect(screen.getByText('Kaydedildi')).toBeTruthy();
+    // Yazıcı değişince seçilen ölçü korunur.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Yazıcı' }), { target: { value: 'ag:3' } });
+    expect(cihazYazicilari().lot).toMatchObject({ yaziciId: 3, sablonAnahtar: 'malzeme-etiketi-100x50' });
+    // Atama kalkınca ölçü seçilemez.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Yazıcı' }), { target: { value: '' } });
+    expect(cihazYazicilari().lot).toBeUndefined();
+    expect((screen.getByRole('combobox', { name: 'Ölçü' }) as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it('3306 a (Test T4): yalnız okuyan açılan satırda yazıcı seçemez ve atamayı kaldıramaz; atanmış yazıcıyı görür', async () => {
+    cihazYazicisiKaydet('lot', ZEBRA_LOT);
+    sunucuKur({ islemler: OKUR });
+    ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
+    fireEvent.click(await screen.findByText('Mal kabul kaydedilince'));
+    expect(await screen.findByText('Zebra depo · Lot 100x50')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Ölçü' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yazıcı atamasını kaldır' })).toBeNull();
+    expect(cihazYazicilari().lot).toEqual(ZEBRA_LOT);
   });
 
   it('USB açık ve tarayıcı destekliyken dosya yazıcısı USB olarak atanır ve öyle kaydedilir', async () => {
@@ -1042,11 +1147,10 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
     Object.defineProperty(navigator, 'usb', { value: { getDevices: async () => [], requestDevice: async () => null }, configurable: true });
     sunucuKur({ islemler: BASAN, yazicilar: { ...YAZICILAR, usbBaski: true } });
     ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Yazıcı ata' }))[0]!);
-    const secim = await screen.findByRole('combobox', { name: 'Yazıcı' });
+    fireEvent.click(await screen.findByText('Mal kabul kaydedilince'));
+    const secim = (await screen.findAllByRole('combobox', { name: 'Yazıcı' }))[0]!;
     await waitFor(() => expect(screen.getByRole('option', { name: 'Argox masa · USB, bu bilgisayar' })).toBeTruthy());
     fireEvent.change(secim, { target: { value: 'usb:2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bu cihazda kaydet' }));
     expect(cihazYazicilari().lot).toMatchObject({ yaziciId: 2, yaziciAd: 'Argox masa', baglanti: 'usb' });
     Reflect.deleteProperty(navigator, 'usb');
   });
