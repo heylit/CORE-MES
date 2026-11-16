@@ -63,7 +63,8 @@ export function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string;
 }
 
 // Taşınabilirlik: başlamış, biten ve fason iş taşınmaz; geçmişe konan kilidi motor yok sayardı, burada reddedilir. Geçerse çalışma ve
-// planın ekseninde şimdi döner. Önizleme de aynı denetimden geçer.
+// planın ekseninde şimdi döner. Önizleme de aynı denetimden geçer. Motor, planlanan saati geçmiş ama gerçekleşme kaydı olmayan işi de
+// done sayar (act yok); o iş bitmemiştir, yeniden yerleştirilebilmelidir.
 export function tasimaDenetimi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, an: number): { hata: KomutHatasi } | { deger: Nesne; simdi: number } {
   const h = (r: KomutSonucu): { hata: KomutHatasi } => r as { hata: KomutHatasi };
   if (!nesne(deger)) return h(cakisma('Çalışma kaydı okunamadı; sayfayı yenileyin.'));
@@ -72,8 +73,7 @@ export function tasimaDenetimi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSu
   if (ops === null) return h(cakisma('Çalışmada plan yok; önce planı kurun.'));
   const r = ops[g.isId];
   if (!nesne(r)) return h(cakisma('İş planda bulunamadı; plan değişmiş olabilir, sayfayı yenileyin.'));
-  if (r.done) return h(cakisma('Biten iş taşınamaz.'));
-  if (r.act) return h(cakisma('Başlamış iş taşınamaz.'));
+  if (r.act) return h(cakisma(r.done ? 'Biten iş taşınamaz.' : 'Başlamış iş taşınamaz.'));
   if (r.fas) return h(cakisma('Fason iş tezgâha taşınamaz.'));
   if (!kimligiVar(veriOf(deger).tezgahlar, 'id', g.tezgah)) return h(dogrulama('Tezgâh çalışmada yok.', 'tezgah'));
   const simdi = simdiSaati(deger, an);
