@@ -421,19 +421,19 @@ describe('Kokpit', () => {
 
   it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
-    const yon = screen.getByRole('button', { name: /Yön: İleriye/ });
+    const yon = screen.getByRole('button', { name: /Tüm plan: İleriye/ });
     fireEvent.click(yon);
-    const menu = screen.getByRole('menu', { name: 'Planın yönü' });
+    const menu = screen.getByRole('menu', { name: 'Tüm planın yönü' });
     const l = within(menu).getAllByRole('menuitemradio');
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
     fireEvent.click(l[0]!);
-    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
+    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     fireEvent.click(yon);
-    fireEvent.click(within(screen.getByRole('menu', { name: 'Planın yönü' })).getAllByRole('menuitemradio')[1]!);
-    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Planın yönü' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Tüm planın yönü' })).getAllByRole('menuitemradio')[1]!);
+    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 

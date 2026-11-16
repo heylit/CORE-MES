@@ -427,7 +427,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-gi" role="group" aria-label="Geri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
         </span>
-        <Acilir ad={`Yön: ${YON_ADI[planYonu(c)]}`} etiket="Planın yönü" simge="route" sinif="tc-pyq-yon" disabled={!yazabilir || tur !== null || onayAcik}>
+        <Acilir ad={`Tüm plan: ${YON_ADI[planYonu(c)]}`} etiket="Tüm planın yönü" simge="route" sinif="tc-pyq-yon" disabled={!yazabilir || tur !== null || onayAcik}>
           {(kapat) => (['ileri', 'geri'] as const).map((y) => (
             <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y}
               onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(y); setAyarAcik(true); }}>

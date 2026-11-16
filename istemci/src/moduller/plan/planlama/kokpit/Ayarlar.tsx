@@ -116,9 +116,9 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
   // Üst şeritteki Yön seçiminden açıldıysa (3304 a) panel yalnız yönün etkisini taşır: öteki ayarlar Araçlar > Ayarlar'dadır.
   if (yon !== null) {
     return (
-      <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Planın yönü">
+      <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Tüm planın yönü">
         <header>
-          <div><b>Planın yönü</b><small>{YON_ADI[oncekiYon]} → {YON_ADI[yon]}</small></div>
+          <div><b>Tüm planın yönü</b><small>{YON_ADI[oncekiYon]} → {YON_ADI[yon]}</small></div>
           <button type="button" className="tc-pyq-simge-dugme" aria-label="Yönü kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
         </header>
         {eylem}

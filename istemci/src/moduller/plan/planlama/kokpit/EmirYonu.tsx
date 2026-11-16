@@ -27,7 +27,7 @@ export function EmirYonu({ c, taslak, yazabilir, emirId, no }: EmirYonuOzellikle
   return (
     <div className="tc-pyq-emir-yon" data-ayri={simdi === 'plan' ? undefined : ''}>
       <span className="tc-pyq-emir-yon-ozet">
-        <span>{simdi === 'plan' ? `Yön: planın yönüyle (${YON_ADI[plan]})` : `Bu emir: ${YON_ADI[simdi]} (plan: ${YON_ADI[plan]})`}</span>
+        <span>{simdi === 'plan' ? `Bu emir: tüm planla aynı (${YON_ADI[plan]})` : `Bu emir: ${YON_ADI[simdi]} (tüm plan: ${YON_ADI[plan]})`}</span>
         {simdi !== 'plan' && <Rozet ton="bilgi" gorunum="cizgi">Plandan ayrı</Rozet>}
         <button type="button" className="tc-pyq-kucuk" aria-expanded={acikMi} aria-label={`${no} yönünü değiştir`} disabled={!yazabilir || taslak === null} onClick={() => { setAcik(!acikMi); }}>Değiştir</button>
       </span>
@@ -36,7 +36,7 @@ export function EmirYonu({ c, taslak, yazabilir, emirId, no }: EmirYonuOzellikle
           <span className="tc-pyq-seg" role="group" aria-label="Bu emrin yönü">
             {(['plan', 'ileri', 'geri'] as const).map((y) => (
               <button key={y} type="button" aria-pressed={simdi === y} disabled={kilitli} onClick={() => { sec(y); }}>
-                {y !== 'plan' && <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" />}{y === 'plan' ? `Planın yönüyle (${YON_ADI[plan]})` : YON_ADI[y]}
+                {y !== 'plan' && <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" />}{y === 'plan' ? `Tüm planla aynı (${YON_ADI[plan]})` : YON_ADI[y]}
               </button>
             ))}
           </span>
