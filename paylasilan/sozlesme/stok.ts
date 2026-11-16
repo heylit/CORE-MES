@@ -738,6 +738,10 @@ export const acikSiparisSatiri = z.object({
   kalanMiktar: ondalikMetinSemasi,
   birim: z.string(),
   beklenenTeslim: z.string().nullable(),
+  // 3332: kartın stok birimi ve sipariş birimiyle dönüşümü (stok kurallar malKabulDonusumu). Sipariş katsayısı 1 sipariş biriminin kaç
+  // stok birimi olduğu, kgBasina stok biriminin kg'ı, parcaKg kg stoklu kartta bir parçanın kg'ı; bilinmeyen null. Kartsız satırda donusum null.
+  stokBirimi: z.string().nullable().optional(),
+  donusum: z.object({ siparisKatsayisi: ondalikMetinSemasi.nullable(), kgBasina: ondalikMetinSemasi.nullable(), parcaKg: ondalikMetinSemasi.nullable() }).nullable().optional(),
   // Mal kabul araması: satırın üretim emri (talebin ya da kalemin kaynak talebinin emri; fason satırında iş emrinin emri) ve
   // emrin projesi. Emre bağlı olmayan satırda hepsi null; projesiz emirde yalnız proje alanları null. Sunucu hep yazar; seçimli
   // olmaları bu satırı kuran başka modül fikstürlerinin (plan) değişmemesi için.

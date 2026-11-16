@@ -18,6 +18,7 @@ import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { BekleyenIrsaliyeler, IrsaliyeSecici, OkunanBilgilerKutusu, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, useSayfaOkumalari, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { bekleyenDosyasi, bekleyeniSil, sayfalardanSakla, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { BirimKarsiligi, IkinciBirimGirdisi, KalanHucresi, onerilenMiktar, type SiparisDonusumu } from './birim-donusumu.tsx';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
 import { useMalKabulTaslagi } from './MalKabulTaslagi.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
@@ -29,6 +30,8 @@ interface Satir {
   ambalajTur: '' | AmbalajTuru; ambalajOlcu: string; ozelL: string; ozelW: string; ozelH: string; ambalajSayisi: string; ambalajIci: string; elleMiktar: boolean;
   // Satın alma kabulünde seçilen sipariş satırı (boşsa bağsız); etiket ekranda gösterilir.
   siparisSatirId: string; siparisEtiketi: string;
+  // 3332: seçilen sipariş satırının miktarı, birimi ve kartın dönüşümü (eski taslakta yok); miktarın öbür birimi bundan hesaplanır.
+  siparisDonusumu?: SiparisDonusumu | null;
   // 2877: sipariş satırının parça revizyonu ve yürürlükteki revizyon ('' bilinmiyor); uyuşmazlık sunucudan gelir.
   siparisRevizyonu: string; yururlukRevizyonu: string; revizyonUyusmuyor: boolean;
   // Hizmet siparişi (K-080 c): fasondan malzeme döndüyse satırın kartı dönen malzemedir, giden fason kutusundan düşer;
@@ -246,7 +249,7 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       {id > 0 && <MalzemeResmi id={id} ad={o.data?.ozet.ad ?? o.data?.ozet.kod ?? ''} />}
       {s.siparisSatirId && (
         <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{s.siparisRevizyonu && <> · Rev. <strong>{s.siparisRevizyonu}</strong></>}{' '}
-          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', ...SIPARIS_REVIZYONSUZ, hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
+          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', siparisDonusumu: null, ...SIPARIS_REVIZYONSUZ, hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
       )}
       {s.siparisSatirId && s.revizyonUyusmuyor && <RevizyonUyarisi siparis={s.siparisRevizyonu} yururlukte={s.yururlukRevizyonu} />}
       {s.sevkKalemiId && (
@@ -262,7 +265,11 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       </> : <>
       <MalzemeSecici etiket={s.hizmetKarti ? 'Dönen malzeme' : 'Malzeme'} deger={s.kart} degistir={(kart) => degistir({ kart })} />
       <AmbalajSecimi s={s} degistir={degistir} />
-      <Girdi etiket={`Sayılan miktar (toplam${o.data?.ozet.birim ? `, ${o.data.ozet.birim}` : ''})`} inputMode="decimal" value={toplamHesapla(s)} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required />
+      <div className="tc-stok-tam tc-stok-iki">
+        <Girdi etiket={`Sayılan miktar (toplam${o.data?.ozet.birim ? `, ${o.data.ozet.birim}` : ''})`} inputMode="decimal" value={toplamHesapla(s)} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required />
+        {s.siparisSatirId && s.siparisDonusumu && <IkinciBirimGirdisi d={s.siparisDonusumu} stokMiktar={toplamHesapla(s)} degistir={(miktar) => degistir({ miktar, elleMiktar: true })} />}
+      </div>
+      {s.siparisSatirId && s.siparisDonusumu && <BirimKarsiligi d={s.siparisDonusumu} girilen={toplamHesapla(s)} />}
       <Secim etiket="Konum" value={s.konumId} onChange={(e) => degistir({ konumId: e.target.value })} secenekler={konumlar} bosSecenek="Mal kabul alanı (KABUL)" />
       {oneri.data && (
         <p className="tc-stok-tam tc-stok-bilgi">
@@ -370,7 +377,7 @@ function AcikSiparisler({ sec, ara, araYaz }: { sec: (x: AcikSiparisSatiri) => v
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (x) => x.emirNo ?? '—' },
     { anahtar: 'proje', baslik: 'Proje', kes: true, hucre: (x) => x.projeAdi ?? '—' },
     { anahtar: 'miktar', baslik: 'Sipariş miktarı', hizala: 'sag', hucre: (x) => birimliMiktar(x.miktar, x.birim) },
-    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: (x) => birimliMiktar(x.kalanMiktar, x.birim) },
+    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: (x) => <KalanHucresi x={x} /> },
     { anahtar: 'termin', baslik: 'Beklenen', hucre: (x) => x.beklenenTeslim ?? '—' },
     { anahtar: 'sec', baslik: '', sabit: 'sag', hucre: (x) => <Dugme tur="ikincil" onClick={() => sec(x)}>Seç</Dugme> },
   ];
@@ -387,8 +394,8 @@ export const hizmetRozeti = (x: Pick<AcikSiparisSatiri, 'isEmriId'>) =>
   (x.isEmriId != null ? <Rozet ton="bilgi">Fason dönüşü</Rozet> : <Rozet ton="pasif">Hizmet</Rozet>);
 const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({
   ...s, ...(x.malzemeTur === 'hizmet' ? { kart: '', hizmetKarti: String(x.malzemeId), donus: 'fason' as const } : { kart: x.malzemeId === null ? s.kart : String(x.malzemeId), hizmetKarti: '' }),
-  miktar: miktarMetni(x.kalanMiktar).replace(/\./g, ''), elleMiktar: true,
-  siparisSatirId: String(x.id), siparisEtiketi: [x.siparisNo || x.talepNo, x.tedarikciAdi, x.kalemAdi].filter(Boolean).join(' · '),
+  miktar: onerilenMiktar(x), elleMiktar: true,
+  siparisSatirId: String(x.id), siparisDonusumu: { miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, stokBirimi: x.stokBirimi ?? null, donusum: x.donusum ?? null }, siparisEtiketi: [x.siparisNo || x.talepNo, x.tedarikciAdi, x.kalemAdi].filter(Boolean).join(' · '),
   siparisRevizyonu: x.parcaRevizyonu ?? '', yururlukRevizyonu: x.yururlukRevizyonu ?? '', revizyonUyusmuyor: x.revizyonUyusmuyor === true,
 });
 

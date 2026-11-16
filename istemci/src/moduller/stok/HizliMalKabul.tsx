@@ -8,8 +8,9 @@ import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_KATALOGU } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
-import { AMBALAJ_TURLERI, birimliMiktar, lotluMu, LOT_IPUCU, miktarGirdisi } from './gorunum.ts';
+import { AMBALAJ_TURLERI, lotluMu, LOT_IPUCU, miktarGirdisi } from './gorunum.ts';
 import { hataMetni, korumaliPost, useStokKomutu } from './ortak.tsx';
+import { BirimKarsiligi, IkinciBirimGirdisi, kalanMetni } from './birim-donusumu.tsx';
 
 // Okutarak mal kabul (soru 91 a): satın alma teslimi yalnız açık sipariş satırıyla yazılır, sipariş teslimi de işlensin; siparişi
 // olmayan mal "diğer" girişidir. Ambalaj seçimi (Otomatik ya da tip), miktar; aktif konum varsa oraya, yoksa "rafı okut" bekleyen
@@ -50,7 +51,7 @@ function SiparisSecimi({ malzemeId, secim, sec }: { malzemeId: number; secim: st
       <Secim etiket="Sipariş" value={secim} onChange={(e) => sec(e.target.value)} required
         secenekler={[
           ...(satirlar.length > 1 ? [{ deger: '', baslik: 'Sipariş satırını seçin' }] : []),
-          ...satirlar.map((x) => ({ deger: String(x.id), baslik: `${x.siparisNo || x.talepNo} · ${x.tedarikciAdi} · kalan ${birimliMiktar(x.kalanMiktar, x.birim)}` })),
+          ...satirlar.map((x) => ({ deger: String(x.id), baslik: `${x.siparisNo || x.talepNo} · ${x.tedarikciAdi} · kalan ${kalanMetni(x)}` })),
           { deger: SIPARISSIZ, baslik: 'Siparişsiz: diğer giriş' },
         ]} />
       {satirlar.length === 0 && <p className="tc-stok-not">Bu malzemenin açık siparişi yok; diğer giriş olarak alınır.</p>}
@@ -70,6 +71,9 @@ export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme
   const kilitli = useGonderimKilidi();
   const giris = (): BekleyenGiris => ({ malzemeId: malzeme.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi, siparisSatirId: siparis === SIPARISSIZ ? null : Number(siparis) });
   const secildi = siparis !== '';
+  // 3332: seçili sipariş satırının dönüşümü (SiparisSecimi ile aynı sorgu, ikinci istek gitmez).
+  const acik = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
+  const secilen = acik.data?.satirlar.find((x) => String(x.id) === siparis);
   return (
     <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (secildi) { const g = kabulGovdesi(giris(), konumId); kilitli(() => komut.mutateAsync(g)); } }}>
       <SiparisSecimi malzemeId={malzeme.id} secim={siparis} sec={setSiparis} />
@@ -78,7 +82,9 @@ export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme
         {AMBALAJ_TURLERI.map((t) => <button key={t} type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === t} onClick={() => setAmbalaj(t)}><AmbalajIkonu tur={t} /><strong>{AMBALAJ_KATALOGU[t].ad}</strong><span>{AMBALAJ_KATALOGU[t].olculer.find((o) => o.kod === AMBALAJ_KATALOGU[t].varsayilan)?.ad}</span></button>)}
       </div>
       <div className="tc-stok-iki">
-        <Girdi etiket="Sayılan miktar" inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} required autoFocus />
+        <Girdi etiket={`Sayılan miktar${malzeme.birim ? ` (${malzeme.birim})` : ''}`} inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} required autoFocus />
+        {secilen && <IkinciBirimGirdisi d={{ ...secilen, stokBirimi: secilen.stokBirimi ?? null, donusum: secilen.donusum ?? null }} stokMiktar={miktar} degistir={setMiktar} />}
+        {secilen && <BirimKarsiligi d={{ ...secilen, stokBirimi: secilen.stokBirimi ?? null, donusum: secilen.donusum ?? null }} girilen={miktar} />}
         {ambalaj !== 'oto' && <Girdi etiket="Ambalaj sayısı" inputMode="numeric" value={sayi} onChange={(e) => setSayi(e.target.value)} />}
         {malzeme.tur !== 'demirbas' && <Girdi etiket="Tedarikçi parti no" value={parti} onChange={(e) => setParti(e.target.value)} {...(lotluMu(malzeme.tur) ? { ipucu: LOT_IPUCU } : {})} />}
       </div>
