@@ -2,8 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
-import { onayliTalepGelisi, tedarikAsamasi } from './kurallar.ts';
-import type { TedarikAsamasi } from './kurallar.ts';
+import { fasonSiparisTarihiSec, onayliTalepGelisi, tedarikAsamasi } from './kurallar.ts';
+import type { FasonSiparisTarihi, TedarikAsamasi } from './kurallar.ts';
 // 1237: Ctrl K genel aramasının talep ve sipariş kaynakları; çekirdek ad kuralıyla bulur (1233).
 export { kayitAramaKaynaklari } from './arama/kaynaklar.ts';
 // Stok modülünün mal kabul belgesi teslim bekleyen sipariş satırlarını buradan okur (fiyatsız; SAT-37).
@@ -156,4 +156,10 @@ export async function emirTedarikDurumlari(db: Db, uretimEmriIdleri: readonly nu
       termin: asama === 'siparis' ? s.beklenenTeslim : null,
     }];
   });
+}
+// Fason iş emrinin firmadan dönüş günü: açık siparişindeki teslim tarihi (en geç olan) ve o siparişin numarası. Siparişi ya da tarihi olmayan
+// iş emri haritada yoktur. Plan ve reçete-rota aynı kuralı buradan okur.
+export type { FasonSiparisTarihi } from './kurallar.ts';
+export async function fasonSiparisTarihleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, FasonSiparisTarihi>> {
+  return fasonSiparisTarihiSec(await emirTedarikDurumlari(db, [], isEmriIdleri));
 }

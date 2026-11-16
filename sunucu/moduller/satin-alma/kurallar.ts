@@ -1741,6 +1741,19 @@ export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; t
   return toplam > Math.round(Number(belgeTutari) * 100) ? ILETILER.eslemeAsim : null;
 }
 
+// 3257 a: fason iş emrinin açık siparişlerindeki teslim tarihi; adım birden çok siparişle gittiyse en geç dönüş esastır (numara o siparişindir).
+// Tarihsiz sipariş ve talep aşamasındaki kalem sayılmaz (sıra termin gününe, tahmine ya da varsayılana kalır).
+export interface FasonSiparisTarihi { tarih: string; siparisNo: string | null }
+export function fasonSiparisTarihiSec(l: readonly { isEmriId: number | null; asama: string; termin: string | null; siparisNo: string | null }[]): Map<number, FasonSiparisTarihi> {
+  const m = new Map<number, FasonSiparisTarihi>();
+  for (const x of l) {
+    if (x.isEmriId === null || x.asama !== 'siparis' || x.termin === null) continue;
+    const eski = m.get(x.isEmriId);
+    if (eski === undefined || x.termin > eski.tarih) m.set(x.isEmriId, { tarih: x.termin, siparisNo: x.siparisNo });
+  }
+  return m;
+}
+
 // 2893 D2: talep kaleminin tedarik aşaması. Siparişi yoksa talep aşamasındadır (taslaktan onaya kadar); sipariş satırı açıksa ve net
 // teslim sipariş miktarına ulaşmadıysa sipariş bekleniyordur. Teslim alınan, tamamı gelen ya da kapatılan sipariş beklenmez (null).
 export type TedarikAsamasi = 'talep' | 'siparis';
