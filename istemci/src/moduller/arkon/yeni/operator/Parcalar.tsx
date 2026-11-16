@@ -202,9 +202,22 @@ function MiniHalka({ oran }: { oran: number }) {
 }
 export { MiniHalka };
 
-export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }: {
+// İşin yeri: istasyon kodu ve makine (kod ve ad). Makinesi seçilmemiş işte bu açıkça yazar; operatör işin hangi tezgâhın olduğunu kartta görür.
+export interface IsYeriBilgisi { istasyon: string; makine: string | null; makineAd: string | null }
+export const isYeriMetni = (y: IsYeriBilgisi): string =>
+  `${y.istasyon} · ${y.makine ? [y.makine, y.makineAd].filter(Boolean).join(' ') : 'Makine seçilmedi'}`;
+export function IsYeri({ yer }: { yer: IsYeriBilgisi }) {
+  return (
+    <span className="tc-ay1-is-yer" title={isYeriMetni(yer)}>
+      <span><Simge ad="layers" boyut="k" />{yer.istasyon}</span>
+      <span data-yok={yer.makine ? undefined : ''}><Simge ad={yer.makine ? 'cpu' : 'alert'} boyut="k" />{yer.makine ? <>{yer.makine}{yer.makineAd ? <small> · {yer.makineAd}</small> : null}</> : 'Makine seçilmedi'}</span>
+    </span>
+  );
+}
+
+export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla, yer }: {
   isler: readonly Is[]; aktif: number; sec: (i: number) => void; siradaki: string | undefined; onde: string | null;
-  kartlar: readonly RefakatKarti[]; kartla: ((i: number, k: RefakatKarti) => void) | null;
+  kartlar: readonly RefakatKarti[]; kartla: ((i: number, k: RefakatKarti) => void) | null; yer?: (i: number) => IsYeriBilgisi;
 }) {
   const { acik, biten } = bitenleriAyir(isler);
   const kart = ([o, i]: [Is, number]) => {
@@ -218,6 +231,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
         <span className="tc-ay1-is-govde">
           <span className="tc-ay1-is-no">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}{o.fresh ? <span className="tc-ay1-etiket" data-durum="ayar">Yeni</span> : null}</span>
           <span className="tc-ay1-is-parca">{o.part}{o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
+          {yer ? <IsYeri yer={yer(i)} /> : null}
           {/* 3126: satırda malzeme kodu, proje ve iyi / hedef adet de yazar; boş alan yazılmaz. */}
           <span className="tc-ay1-is-ayrinti">
             {[o.op, o.pkg?.partNo, o.pkg?.proje, o.empty ? null : `${sayi(o.good)} / ${sayi(o.target)} adet`, o.due ? `Termin ${o.due}` : null]

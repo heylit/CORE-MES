@@ -276,6 +276,10 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-is-govde, .tc-ay1-is-no, .tc-ay1-is-parca { display: block; min-width: 0; }
 .tc-ay1-is-no { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-ay1-is-parca { font-weight: 700; font-size: var(--yazi-m); line-height: 1.25; margin: var(--pay-ince) 0; overflow-wrap: anywhere; }
+.tc-ay1-is-yer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); min-width: 0; font-size: var(--yazi-s); font-weight: 700; color: var(--ink); }
+.tc-ay1-is-yer > span { display: inline-flex; align-items: center; gap: var(--b-1); min-width: 0; font-family: var(--font-mono); }
+.tc-ay1-is-yer small { font-family: var(--font-ana); font-weight: 400; color: var(--muted); }
+.tc-ay1-is-yer > span[data-yok] { color: var(--hold); font-family: inherit; }
 .tc-ay1-is-ayrinti { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-ay1-is-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-block-start: var(--b-2); }
 .tc-ay1-is-govde .tc-ay1-adimtur { margin-block-start: var(--b-1); }
@@ -1059,18 +1063,17 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 .tc-ay1-genis:has(> :is(.tc-ra, .tc-ay1-ds)) > * { flex: none; }
 .tc-ay1-genis:has(> :is(.tc-ra, .tc-ay1-ds)) > .tc-ay1-izgara { flex: 1 1 0; min-block-size: 0; }
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-kadran { --kadran-sinir: clamp(calc(var(--kadran-enaz) * .6), calc(var(--tc-ay-vh, 100vh) - var(--kadran-dusey-pay) - var(--b-6) - var(--dokunma-ana) * 2.4), var(--kadran-encok)); }
-/* Telefonda: adlar gizlenir, OP, simge ve yüzde kalır. */
-.tc-ay1-dar .tc-ra { flex: none; gap: var(--b-1); padding: var(--b-1) var(--b-2); }
+/* Telefonda: kartlar daha dar, ad küçük yazıyla iki satıra kadar; ok düğmesi yok, şerit parmakla kayar. */
+.tc-ay1-dar .tc-ra { --tc-ra-kart: calc(var(--dokunma) * 2.75); flex: none; gap: var(--b-1); padding: var(--b-1) var(--b-2); }
 .tc-ay1-dar .tc-ra-ust { font-size: var(--yazi-s); }
-.tc-ay1-dar .tc-ra .tc-ra-ad { display: none; }
+.tc-ay1-dar .tc-ra-kaydir { display: none; }
 .tc-ay1-dar .tc-ra-dugum { inline-size: var(--b-5); block-size: var(--b-5); }
+.tc-ay1-dar .tc-ra .tc-ra-dugum { grid-row: auto; }
 .tc-ay1-dar .tc-ra-op { font-size: var(--yazi-xs); }
 .tc-ay1-dar .tc-ra-op em { display: none; }
+.tc-ay1-dar .tc-ra .tc-ra-ad { grid-column: 1 / -1; font-size: var(--yazi-xs); }
 .tc-ay1-dar .tc-ra-yuzde small { font-size: var(--yazi-xs); }
-.tc-ay1-dar .tc-ra li { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: var(--b-1); gap: 0; }
-.tc-ay1-dar .tc-ra .tc-ra-dugum { grid-row: auto; }
-.tc-ay1-dar .tc-ra .tc-ra-yuzde small { display: none; }
-.tc-ay1-dar .tc-ra .tc-ra-yuzde { inline-size: 100%; }
+.tc-ay1-dar .tc-ra li { padding: var(--b-1); }
 .tc-ay1-dar .tc-ay1-uretim > .tc-ra { flex: none; }
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-sahne > .tc-ay1-sayac { min-block-size: 0; }
 .tc-ay1-uretim:has(> .tc-ra) .tc-ay1-is-baslik > .tc-ay1-kimlik-alt { flex: none; }
@@ -1090,27 +1093,22 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
   .tc-ay1-genis:has(> .tc-ra) .tc-ay1-sahne { gap: var(--b-2); padding-block: var(--b-2); }
   .tc-ay1-genis:has(> .tc-ra) .tc-ay1-simdi :is(.tc-ay1-gorev-metin > small, .tc-ay1-gorev-metin > .tc-ay1-ust-yazi, .tc-ay1-numune-serit) { display: none; }
 }
+/* 1280 altında kart daralır, ad yine iki satıra kadar yazar. */
 @media (max-width: 1279px) {
-  .tc-ay1-genis .tc-ra li { grid-template-columns: auto auto minmax(0, 1fr); align-items: center; }
-  .tc-ay1-genis .tc-ra :is(.tc-ra-dugum, .tc-ra-op, .tc-ra-yuzde) { grid-row: auto; grid-column: auto; }
-  .tc-ay1-genis .tc-ra .tc-ra-ad { display: none; }
+  .tc-ay1-genis .tc-ra { --tc-ra-kart: calc(var(--dokunma-ana) * 3.2); }
   .tc-ay1-genis .tc-ra .tc-ra-dugum { inline-size: var(--b-5); block-size: var(--b-5); }
-  .tc-ay1-genis .tc-ra .tc-ra-op em { display: none; }
-  .tc-ay1-genis .tc-ra .tc-ra-yuzde small { display: none; }
 }
 @media (max-width: 1279px) {
   .tc-ay1-genis .tc-ra { padding-block: var(--b-1); }
 }
-/* Alçak telefon (700 altı): rota tek satır; solda "Rota 1/6 %28", sağda adımların simgeleri (renk durum, dolu daire bu adım). OP ve yüzdeler Adımlar'da. */
+/* Alçak telefon (700 altı): rota başlığı ve kartlar tek satır; kartta düğüm ve OP, ad ve yüzdeler Adımlar'da. Şerit yine elle kayar. */
 @media (max-height: 700px) {
-  .tc-ay1-dar .tc-ra { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--b-2); }
+  .tc-ay1-dar .tc-ra { --tc-ra-kart: calc(var(--dokunma) * 1.8); grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--b-2); }
   .tc-ay1-dar .tc-ra-ust > span:not(.tc-ra-toplam) { display: none; }
   .tc-ay1-dar .tc-ra-toplam { margin: 0; flex: none; }
   .tc-ay1-dar .tc-ra-toplam progress { display: none; }
-  .tc-ay1-dar .tc-ra ol { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--b-1); }
-  .tc-ay1-dar .tc-ra li { display: grid; justify-items: center; padding: var(--b-1); border: 0; background: none; outline: 0; }
-  .tc-ay1-dar .tc-ra li > :not(.tc-ra-dugum) { display: none; }
-  .tc-ay1-dar .tc-ra li[aria-current='step'] { background: none; outline: 0; }
+  .tc-ay1-dar .tc-ra li { grid-template-columns: auto minmax(0, 1fr); }
+  .tc-ay1-dar .tc-ra li > :is(.tc-ra-ad, .tc-ra-yuzde) { display: none; }
 }
 @media (max-height: 760px) {
   .tc-ay1-dar .tc-ay1-uretim:has(> .tc-ra) > .tc-ay1-uyari-seridi { display: none; }
@@ -1124,7 +1122,6 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 .tc-ra .tc-ay1-kd svg { inline-size: var(--b-4); block-size: var(--b-4); }
 .tc-ay1-genis .tc-ra-ust > .tc-ra-canli { display: none; }
 .tc-ay1-genis .tc-ra li > .tc-ra-canli { grid-column: 1 / -1; }
-.tc-ay1-genis .tc-ra li[data-canli] { grid-column: span 2; }
 .tc-ay1-dar .tc-ra li > .tc-ra-canli { display: none; }
 .tc-ay1-dar .tc-ra-ust > .tc-ra-canli { flex: none; margin-inline-start: var(--b-1); }
 .tc-ay1-dar .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
@@ -1136,7 +1133,6 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 /* Tablette adım kartında yer yok: anlık durum ve süre soldaki rota başlığına geçer, "1/6 adım bitti" ve çubuk yerine yalnız toplam yüzde kalır. */
 @media (max-width: 1279px) {
   .tc-ay1-genis .tc-ra li > .tc-ra-canli { display: none; }
-  .tc-ay1-genis .tc-ra li[data-canli] { grid-column: auto; }
   .tc-ay1-genis .tc-ra-ust > span.tc-ra-canli { display: flex; flex: 1 1 100%; }
   .tc-ay1-genis .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
   .tc-ay1-genis .tc-ra .tc-ay1-kd { font-size: var(--yazi-s); letter-spacing: 0; }
@@ -1144,35 +1140,6 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
   .tc-ay1-genis .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam progress { display: none; }
   .tc-ay1-genis .tc-ra:has(.tc-ra-canli) { grid-template-columns: auto minmax(0, 1fr); }
 }
-/* Bilgisayarda adım adı okunur kalsın: kısaltma yerine en çok iki satır. */
-@media (min-width: 1280px) {
-  .tc-ay1-genis .tc-ra .tc-ra-ad { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
-}
-/* Dokuz ve daha çok adımda kartlar sıkışır: bilgisayarda kart dikey (düğüm, OP, çubuk), ad yalnız üstüne gelince; telefonda yalnız düğüm ve çubuk.
-   Taşan yazı kartın dışına çıkmaz, yan kart üstüne binmez. */
-.tc-ra:has(li:nth-child(9)) li { overflow: hidden; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li { grid-template-columns: minmax(0, 1fr); justify-items: center; padding-inline: var(--b-1); }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) :is(.tc-ra-dugum, .tc-ra-op, .tc-ra-ad, .tc-ra-yuzde) { grid-row: auto; grid-column: auto; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) :is(.tc-ra-ad, .tc-ra-op em, .tc-ra-yuzde small) { display: none; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-op { font-size: var(--yazi-xs); }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-yuzde { inline-size: 100%; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) ol { gap: var(--b-1); }
-@media (max-width: 1279px) {
-  .tc-ay1-genis .tc-ra:has(li:nth-child(9)) li { padding-block: 0 var(--b-1); }
-  .tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-op { line-height: 1; }
-}
-.tc-ay1-dar .tc-ra:has(li:nth-child(9)) .tc-ra-op { display: none; }
-.tc-ay1-dar .tc-ra:has(li:nth-child(9)) li { padding-inline: 0; }
-.tc-ay1-dar .tc-ra:has(li:nth-child(9)) .tc-ra-dugum { inline-size: 100%; max-inline-size: var(--b-5); block-size: auto; aspect-ratio: 1; }
-/* Sıkışık kartta anlık durum sığmaz: bilgisayarda da 1280 altındaki gibi rota başlığına geçer. */
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li > .tc-ra-canli { display: none; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li[data-canli] { grid-column: auto; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust > span.tc-ra-canli { display: flex; flex: 1 1 100%; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam { flex: none; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam progress { display: none; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ay1-kd { font-size: var(--yazi-s); letter-spacing: 0; }
-.tc-ay1-genis .tc-ra:has(li:nth-child(9)):has(.tc-ra-canli) { grid-template-columns: auto minmax(0, 1fr); }
 /* Rota boy alınca teknik resim araçları kendi içinde kaymasın: araçlar arasız ve biraz alçak. */
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-araclar { gap: 0; }
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-arac { block-size: calc(var(--dokunma) - var(--b-1)); }
@@ -1181,3 +1148,33 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 .tc-ay1-smartes { display: flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); font-size: var(--yazi-s); }
 
 .tc-ay1-cubuk-bilgi { flex: 2 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: var(--b-2); padding: 0 var(--b-2); border: 1px dashed var(--edge); border-radius: var(--yari-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 700; text-align: center; }
+/* Sayacın iki yanında dikey gösterge: solda malzeme (istasyondakinin kalan işe yetmesi), sağda üretilen. Kadran ortada kalsın diye
+   veri yokken de yer tutulur. Dolgu SVG'dir; renk tonun değişkeninden. */
+.tc-ay1-kadran-kanat { display: flex; align-items: stretch; justify-content: center; gap: var(--b-3); inline-size: 100%; min-width: 0; }
+.tc-ay1-kadran-kanat > .tc-ay1-kadran { flex: 0 1 auto; min-width: 0; align-self: center; }
+.tc-ay1-gosterge {
+  --c: var(--done); flex: none; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; justify-items: center; gap: var(--b-1); inline-size: calc(var(--dokunma) * 1.5);
+  padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: center;
+}
+button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
+.tc-ay1-gosterge[data-bos] { visibility: hidden; }
+.tc-ay1-gosterge[data-ton='tamam'] { --c: var(--run); }
+.tc-ay1-gosterge[data-ton='uyari'] { --c: var(--hold); }
+.tc-ay1-gosterge[data-ton='hata'] { --c: var(--stop); }
+.tc-ay1-gosterge-ad { font-size: var(--yazi-xs); font-weight: 800; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
+.tc-ay1-gosterge-cubuk {
+  position: relative; display: block; inline-size: var(--b-6); min-block-size: var(--b-6);
+  border: var(--cizgi) solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); overflow: hidden;
+}
+.tc-ay1-gosterge-cubuk svg { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; }
+.tc-ay1-gosterge-cubuk rect { fill: var(--c); }
+.tc-ay1-gosterge > b { font-size: var(--yazi-m); white-space: nowrap; }
+.tc-ay1-gosterge > small { font-size: var(--yazi-s); color: var(--muted); }
+.tc-ay1-dar .tc-ay1-gosterge { inline-size: calc(var(--dokunma) * 1.5); }
+.tc-ay1-dar .tc-ay1-gosterge-cubuk { inline-size: var(--b-5); }
+/* Telefonda kadranın solu malzeme göstergesinindir: Hatalı yazısı kadran kutusunun sol alt köşesine (dairenin dışı) geçer. */
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-kanat:has(> button.tc-ay1-gosterge) .tc-ay1-kadran-sol {
+  inset-inline-end: auto; inset-inline-start: 0; inset-block-end: 0; inset-block-start: auto; text-align: start;
+}
+.tc-ay1-dar .tc-ay1-gosterge > b { font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-kadran-kanat { gap: var(--b-2); }

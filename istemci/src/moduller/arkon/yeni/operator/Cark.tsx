@@ -3,6 +3,7 @@ import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { IS_DURUMLARI, type IsDurumu } from '../cekirdek/sabitler.ts';
 import type { Is } from './tipler.ts';
+import { IsYeri, type IsYeriBilgisi } from './Parcalar.tsx';
 import './cark.css';
 
 /* 790: iş ve makine çarkı (CNC Kurulum'un kart dizisi gibi). Tek çark, şerit başına bir liste. Çevirmek yalnız bakar: düğme, yana
@@ -118,7 +119,7 @@ const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada'
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
 
 // Çarktaki iş kartı (prototip): ekrandaki iş de çarkta bu kısa kartla durur; tam iş kartı çarkın altındadır.
-export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { is: Is; siradaki: boolean; ekranda?: boolean; makine?: string | null }) {
+export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null, yer = null }: { is: Is; siradaki: boolean; ekranda?: boolean; makine?: string | null; yer?: IsYeriBilgisi | null }) {
   const oran = is.target > 0 ? Math.min(1, Math.max(0, is.good / is.target)) : 0;
   return (
     <article className="tc-ay1-tcark-kart" data-durum={durumRengi(is.state)} data-ekranda={ekranda || undefined}>
@@ -130,6 +131,7 @@ export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { 
       </span>
       <b className="tc-ay1-mono">{is.no}</b>
       <span className="tc-ay1-tcark-ad">{is.part || '—'}</span>
+      {yer ? <IsYeri yer={yer} /> : null}
       {/* Kompakt kipte satır kısalır; tam metin ipucunda kalır. */}
       {((t) => <small title={t}>{t}</small>)([is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null, is.pkg?.proje].filter(Boolean).join(' · '))}
       {is.empty ? null : (
@@ -138,7 +140,7 @@ export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { 
           <small className="tc-ay1-mono">{[`${is.good} / ${is.target} adet`, is.due ? `Termin ${is.due}` : null].filter(Boolean).join(' · ')}</small>
         </>
       )}
-      {makine ? <small className="tc-ay1-tcark-makine">Makine: {makine}</small> : null}
+      {makine && !yer ? <small className="tc-ay1-tcark-makine">Makine: {makine}</small> : null}
     </article>
   );
 }

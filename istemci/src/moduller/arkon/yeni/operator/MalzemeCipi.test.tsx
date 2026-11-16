@@ -16,7 +16,7 @@ afterEach(() => { cleanup(); ac.mockReset(); });
 
 describe('terminalin malzeme çipi (618)', () => {
   it('eksik varsa söyler; dokununca panel bu işle (bütün malzeme) açılır', () => {
-    durum.deger = { girdi: 2, eksik: 1, istendi: 0, gelen: 0 };
+    durum.deger = { girdi: 2, eksik: 1, istendi: 0, gelen: 0, yetme: null };
     durum.istasyonId = 7;
     render(<MalzemeCipi istasyon="IST-1" emirId={42} />);
     fireEvent.click(screen.getByRole('button', { name: /Malzeme.*1 eksik/ }));
@@ -24,8 +24,8 @@ describe('terminalin malzeme çipi (618)', () => {
   });
   it('girdisiz rotada, istasyon bilinmezken, emirsiz işte ve veri yokken çip çıkmaz', () => {
     for (const [d, ist, emir] of [
-      [{ girdi: 0, eksik: 0, istendi: 0, gelen: 0 }, 7, 42], [{ girdi: 1, eksik: 1, istendi: 0, gelen: 0 }, null, 42],
-      [{ girdi: 1, eksik: 1, istendi: 0, gelen: 0 }, 7, null], [null, 7, 42],
+      [{ girdi: 0, eksik: 0, istendi: 0, gelen: 0, yetme: null }, 7, 42], [{ girdi: 1, eksik: 1, istendi: 0, gelen: 0, yetme: null }, null, 42],
+      [{ girdi: 1, eksik: 1, istendi: 0, gelen: 0, yetme: null }, 7, null], [null, 7, 42],
     ] as const) {
       durum.deger = d; durum.istasyonId = ist;
       render(<MalzemeCipi istasyon="IST-1" emirId={emir} />);
