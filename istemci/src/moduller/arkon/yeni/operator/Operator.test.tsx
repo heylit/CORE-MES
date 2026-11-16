@@ -540,6 +540,53 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
   }, 40000);
 });
 
+describe('A1 Üretim Terminali üst düzen (3338-6 a)', () => {
+  const ikinci = { ...PAKET, id: 'pk-deneme-ust', no: 'IE-DENEME-6', part: 'Deneme altıncı parça' };
+  const ikiIs = (tesis: unknown = TESIS) => sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 11, govde: { v: tesis } }] } });
+  const telefon = () => {
+    Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+  };
+  afterEach(() => { Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight'); });
+
+  it('genişte şerit varken "İşler" düğmesi yok; kartta bu istasyonun kodu yazmaz; sıradaki iş işaretli', async () => {
+    ikiIs();
+    arkonAc('/uretim-terminali');
+    const serit = await screen.findByRole('region', { name: 'Sıradaki işler' }, { timeout: 10000 });
+    await waitFor(() => { expect(within(serit).getAllByRole('listitem').length).toBe(2); }, { timeout: 10000 });
+    expect(screen.queryByRole('button', { name: /^İşler · / })).toBeNull();
+    expect(within(serit).queryByText('IST-1')).toBeNull();
+    expect(within(serit).getByText('Sıradaki')).toBeTruthy();
+  }, 40000);
+
+  it('işsiz istasyonda şerit yok, "İşler" düğmesi var', async () => {
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [], kv: [{ kimlik: 'plant', surum: 12, govde: { v: TESIS } }] } });
+    arkonAc('/uretim-terminali');
+    expect(await screen.findByRole('button', { name: /^İşler · 0/ }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Sıradaki işler' })).toBeNull();
+  }, 40000);
+
+  it('telefonda tek işte şerit yok; iş satırı Bilgiler\'i açar; üst kutuda istasyonun altında makine kodu', async () => {
+    telefon();
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 13, govde: { v: { ...TESIS, mcs: [{ id: 'MK-7', name: 'Deneme makine 7', st: 'IST-1' }] } } }] } });
+    arkonAc('/uretim-terminali');
+    const satir = await screen.findByRole('button', { name: /^Aktif iş: / }, { timeout: 10000 });
+    expect(screen.queryByRole('region', { name: 'Sıradaki işler' })).toBeNull();
+    await waitFor(() => { expect(document.querySelector('.tc-ay1-mobil-ust .tc-ay1-istasyon-makine')?.textContent).toBe('MK-7'); }, { timeout: 10000 });
+    fireEvent.click(satir);
+    expect(await screen.findByRole('dialog', { name: 'Bilgiler' })).toBeTruthy();
+  }, 40000);
+
+  it('telefonda iki işte şerit var, iş satırı sırayı ("1 / 2") yinelemez', async () => {
+    telefon();
+    ikiIs();
+    arkonAc('/uretim-terminali');
+    const serit = await screen.findByRole('region', { name: 'Sıradaki işler' }, { timeout: 10000 });
+    await waitFor(() => { expect(within(serit).getAllByRole('listitem').length).toBe(2); }, { timeout: 10000 });
+    expect(screen.getByRole('button', { name: /^Aktif iş: / }).textContent).not.toMatch(/\d+ \/ \d+/);
+  }, 40000);
+});
+
 describe('A1 Üretim Terminali rota akışı (3136 a)', () => {
   const ADIMLAR = { emirId: 8, adimlar: [
     { isEmriId: 79, opNo: 10, ad: 'Testere kesim', statu: 'bitti', elle: false, yuzde: 100, nedenler: [], tedarik: [] },
