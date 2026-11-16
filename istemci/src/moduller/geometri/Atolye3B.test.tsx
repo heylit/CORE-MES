@@ -94,7 +94,7 @@ const ANALIZ: GeometriAnalizCevabi = {
   },
 };
 const HAM: GeometriHamCevabi = {
-  revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null, kesmeMm: 3, donel: null, formlar: [],
+  revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null, kesmeMm: 3, donel: null, formlar: [], rotaMalzemesi: null,
   oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 21598.4, kesimEnMm: null, eksen: 'a' as const }],
 };
 const HAM_AYAR: GeometriHamCevabi = { ...HAM, payMm: 3, payKaynagi: 'ayar', enAz: { a: 46, b: 26, c: 16 } };
@@ -162,11 +162,15 @@ describe('3D Atölyesi', () => {
     // Önizleme ilk öneridir; başka satır seçilince o önizlenir.
     expect(await screen.findByText(/^önizleme: Yuvarlak çubuk Ø 25 x 3.000 mm/)).toBeTruthy();
     expect(screen.getByText(/pay her yüzde eşit varsayılır/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Kalite'), { target: { value: 'C45' } });
+    // 3321-2: Malzeme listesi Malzemeler'in kaliteleridir (sınıf adıyla); seçim ham listesini o kaliteye süzer.
+    await screen.findByRole('option', { name: 'C45 · Islah, otomat, sementasyon ve havacılık çelikleri' }, { timeout: 15000 });
+    expect(screen.getByText("Seçilmedi: bütün kaliteler listelenir; ISO grubu Süre'de elle seçilir.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Malzeme'), { target: { value: 'metal/islah|C45' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
     expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41')).toBe(true);
     // 1480: yoğunluk boşken önerinin kalitesinden (C45, Malzemeler tablosu 7,85); 1446 a: yazılan geçerlidir.
-    expect(await screen.findByText('Boş bırakılırsa C45 kalitesinin yoğunluğu: 7,85 g/cm³', undefined, { timeout: 15000 })).toBeTruthy();
+    expect(await screen.findByText('C45 kalitesinden (Malzemeler): 7,85 g/cm³; yazarsanız değişir', undefined, { timeout: 15000 })).toBeTruthy();
+    expect(screen.getByText('Metal · Islah, otomat, sementasyon ve havacılık çelikleri')).toBeTruthy();
     expect(screen.getByText('≈ 0,063 kg')).toBeTruthy();
     expect(screen.getByText('Ham ağırlık ≈ 0,17 kg')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '2,7' } });
@@ -174,6 +178,35 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('Ham ağırlık ≈ 0,058 kg')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '-1' } });
     expect(await screen.findByText('Pozitif bir sayı yazın.')).toBeTruthy();
+  });
+
+  it('3321-2: malzeme rotadaki hammaddeden gelir, ham o kaliteyle okunur; Önizle seçimi adrese yazar, Süre bağlantısı aynı seçimle gider', async () => {
+    const lama = { ...HAM.oneriler[0]!, malzemeNo: 10, kod: 'ORN-LAMA-50', ad: null, form: 'lama' as const, olcu: { a: 50, b: 30, l: 6000 }, hamHacimMm3: 66000 };
+    const rotali: GeometriHamCevabi = {
+      ...HAM, oneriler: [HAM.oneriler[0]!, lama],
+      rotaMalzemesi: { malzemeNo: 12, kod: 'ORN-HM-0012', kalite: 'C45', aile: 'metal', sinif: null, kaliteKodu: 'C45', opNo: 20 },
+    };
+    const istekler = sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ham-onerisi/41': () => json(200, rotali),
+    });
+    ac('/geometri/ham?rev=41');
+    expect(await screen.findByText('Rotadaki hammadde kartından: ORN-HM-0012', undefined, { timeout: 15000 })).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?kalite=C45')).toBe(true));
+    await screen.findByRole('option', { name: 'C45 · Islah, otomat, sementasyon ve havacılık çelikleri' }, { timeout: 15000 });
+    await waitFor(() => expect((screen.getByLabelText('Malzeme') as HTMLSelectElement).value).toBe('metal/islah|C45'));
+    const sureye = await screen.findByRole('link', { name: /Süreyi bu hamla hesapla \(Yuvarlak çubuk/ });
+    expect(sureye.getAttribute('href')).toBe('/geometri/sure?rev=41');
+    const liste = screen.getByRole('list', { name: 'Stok önerileri' });
+    fireEvent.click(within(liste).getAllByRole('button', { name: 'Önizle' })[1]!);
+    await waitFor(() => expect(adresIzi.son).toBe('/geometri/ham?rev=41&form=lama'));
+    expect(await screen.findByRole('link', { name: /Süreyi bu hamla hesapla \(Lama/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Süreyi bu hamla hesapla/ }).getAttribute('href')).toBe('/geometri/sure?rev=41&form=lama');
+    fireEvent.change(screen.getByLabelText(/İşleme payı/), { target: { value: '2' } });
+    await waitFor(() => expect(adresIzi.son).toBe('/geometri/ham?rev=41&form=lama&pay=2'));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
   });
 
   it('3321-1: dönel parçada dönme ekseni satırı, rozetler, kartı olmayan form "Malzemeler\'de kart aç" ile; levha neden yazılı; kesme payı isteğe girer', async () => {
@@ -481,8 +514,10 @@ describe('3D Atölyesi', () => {
     expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler') || i.yol.startsWith('/geometri/montaj'))).toBe(false);
   });
 
-  it('2396: ikinci menü maddeleri çalışma listesiyle aynı sırada, hepsi sayfa.geometri', () => {
-    const maddeler = GEOMETRI_IKINCI_MENU.gruplar.flatMap((g) => g.maddeler);
+  it('2396: ikinci menü maddeleri çalışma listesiyle aynı sırada, hepsi sayfa.geometri; Süre kalibrasyonu ayrı grupta geometri.kalibrasyon', () => {
+    const [calismalar, ayarlar] = GEOMETRI_IKINCI_MENU.gruplar;
+    expect(ayarlar?.maddeler.map((m) => [m.yol, m.islem])).toEqual([['/geometri/kalibrasyon', 'geometri.kalibrasyon']]);
+    const maddeler = calismalar!.maddeler;
     expect(maddeler.map((m) => m.yol)).toEqual(CALISMA_ADLARI.map(calismaYolu));
     expect(maddeler.map((m) => m.baslik)).toEqual(CALISMA_ADLARI.map((a) => CALISMALAR[a].baslik));
     expect(new Set(maddeler.map((m) => m.islem))).toEqual(new Set(['sayfa.geometri']));

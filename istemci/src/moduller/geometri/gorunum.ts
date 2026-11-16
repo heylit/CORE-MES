@@ -17,6 +17,9 @@ const bicim = (basamak: number) => new Intl.NumberFormat('tr-TR', { maximumFract
 const mm = bicim(1);
 const tam = bicim(0);
 export const uzunluk = (x: number): string => mm.format(x);
+const iki = bicim(2);
+// Katsayı (Kienzle mc gibi): iki basamak.
+export const katsayiMetni = (x: number): string => iki.format(x);
 export const kutuMetni = (a: number, b: number, c: number): string => `${uzunluk(a)} x ${uzunluk(b)} x ${uzunluk(c)} mm`;
 export const buyukSayi = (x: number | null, birim: string): string => (x === null ? '-' : `${tam.format(x)} ${birim}`);
 

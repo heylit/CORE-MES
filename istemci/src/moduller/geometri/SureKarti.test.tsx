@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriSureCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriKalibrasyonCevabi, GeometriModelListeCevabi, GeometriSureCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 
@@ -54,14 +54,15 @@ const ANALIZ: GeometriAnalizCevabi = {
   },
 };
 const HAM: GeometriHamCevabi = {
-  revizyonId: 41, payMm: 2, payKaynagi: 'ayar', enAz: { a: 84, b: 64, c: 29 }, kaliteler: ['S235'], neden: null, kesmeMm: 3, donel: null, formlar: [],
+  revizyonId: 41, payMm: 2, payKaynagi: 'ayar', enAz: { a: 84, b: 64, c: 29 }, kaliteler: ['S235'], neden: null, kesmeMm: 3, donel: null, formlar: [], rotaMalzemesi: null,
   oneriler: [{
     malzemeNo: 90, kod: 'ORN-LAMA-90x30', ad: 'Örnek lama', kalite: 'S235', form: 'lama', olcu: { a: 90, b: 30, l: 6000 }, aile: null, kaliteKodu: null,
     yogunluk: null, kesimBoyuMm: 70, hamHacimMm3: 189000, kesimEnMm: null, eksen: 'a' as const,
   }],
 };
 const SURE: GeometriSureCevabi = {
-  revizyonId: 41, oneri: true, kalibre: false, iso: 'P', isoKaynagi: 'istek', payMm: 2, payKaynagi: 'ayar', hamKaynagi: 'stok', hamKodu: 'ORN-LAMA-90x30',
+  revizyonId: 41, oneri: true, kalibre: false, kalibrasyon: null, iso: 'P', isoKaynagi: 'varsayilan', payMm: 2, payKaynagi: 'ayar', hamKaynagi: 'stok', hamKodu: 'ORN-LAMA-90x30',
+  sinif: null, sinifIso: null, kc: { degerNmm2: 1950, kc1: null, mc: null, hmMm: null, kaynak: 'iso' }, tezgah: { gucKw: 7.5, kaynak: 'varsayilan', makineKod: null }, hamFormu: 'lama',
   hamHacimMm3: 189000, parcaHacimMm3: 82400, talasMm3: 106600,
   kalemler: [
     { kalem: 'kaba', altDk: 0.5, ustDk: 1.8, adet: null },
@@ -77,12 +78,17 @@ const SURE: GeometriSureCevabi = {
     ],
   },
 };
-const temel = (sure: (iso: string) => Response) => ({
+const KAL: GeometriKalibrasyonCevabi = {
+  asama: 'kalibresiz', esikler: { tek: 5, grup: 20, regresyon: 40 }, n: 3, disarida: 0, olcumuEksik: 2, carpan: null, hataYuzde: null,
+  kalibresizHataYuzde: 31, aralik: null, regresyon: null, gruplar: [], parcalar: [],
+};
+const temel = (sure: (iso: string) => Response, kal: GeometriKalibrasyonCevabi = KAL) => ({
+  'GET /geometri/kalibrasyon': () => json(200, kal),
   'GET /geometri/modeller?sayfa=1': () => json(200, LISTE),
   'GET /geometri/analizler/41': () => json(200, ANALIZ),
   'GET /geometri/modeller/41/dosya': () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
   'GET /geometri/ham-onerisi/41': () => json(200, HAM),
-  'GET /geometri/sure-tahmini/41?iso=P': () => sure('P'),
+  'GET /geometri/sure-tahmini/41': () => sure('P'),
   'GET /geometri/sure-tahmini/41?iso=N': () => sure('N'),
   'GET /oturum': () => json(200, { kullanici: { id: 9, kullaniciAdi: 'deneme', adSoyad: 'Deneme', roller: [], islemler: [] } }),
 });
@@ -90,7 +96,7 @@ const kart = async () => (await screen.findByRole('heading', { name: 'Kaba süre
 
 describe('3D Atölyesi süre kartı (3278 D)', () => {
   it('aralık, olası değer, kalemler ve ham; önizlemede ham; rotadaki talaşlı adımlar ve toplamlar; ISO değişince yeniden sorar', async () => {
-    const istekler = sunucuKur(temel((iso) => json(200, iso === 'P' ? SURE : { ...SURE, iso: 'N', altDk: 1.9, ortaDk: 3.4, ustDk: 6.1 })));
+    const istekler = sunucuKur(temel((iso) => json(200, iso === 'P' ? SURE : { ...SURE, iso: 'N', isoKaynagi: 'istek', altDk: 1.9, ortaDk: 3.4, ustDk: 6.1 })));
     ac();
     const k = await kart();
     expect(within(k).getByText('Kalibresiz')).toBeTruthy();
@@ -111,11 +117,44 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     expect(within(rota).getByText('İşlem süresi girilmemiş adım toplama katılmadı.')).toBeTruthy();
     expect(within(rota).getByText('11,8 dk · eksik (1 / 2)')).toBeTruthy();
     expect(within(rota).getByText('Ölçüm toplamı yalnız ölçülen adımlarındır; rota toplamıyla karşılaştırılmaz.')).toBeTruthy();
+    expect(within(k).getByText('Malzeme grubu (ISO) · malzeme seçilmedi, Çelik varsayıldı')).toBeTruthy();
+    expect(within(k).getByText('iş mili 7,5 kW (varsayılan; rotada talaşlı tezgâh yok)')).toBeTruthy();
+    expect(within(k).getByText(/P grubunun ortalaması/)).toBeTruthy();
     expect(within(k).getByRole('button', { name: 'P · Çelik' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(within(k).getByRole('button', { name: 'N · Alüminyum' }));
     expect(await within(k).findByText('1,9 – 6,1 dk')).toBeTruthy();
     expect(istekler).toContain('GET /geometri/sure-tahmini/41?iso=N');
     expect(istekler.some((i) => i.startsWith('POST'))).toBe(false);
+  });
+
+  it('3321-2: malzeme rotadaki hammaddeden; ham o kaliteyle, süre sınıfla sorulur; ISO kaliteden, elle değişir ve geri alınır; tezgâh demirbaştan', async () => {
+    const C45: GeometriSureCevabi = {
+      ...SURE, isoKaynagi: 'sinif', sinif: 'metal/islah', sinifIso: 'P', kc: { degerNmm2: 3302, kc1: 1900, mc: 0.24, hmMm: 0.1, kaynak: 'kienzle' },
+      tezgah: { gucKw: 11, kaynak: 'demirbas', makineKod: 'ORN-CNC-02' },
+    };
+    const rotali = { ...HAM, rotaMalzemesi: { malzemeNo: 12, kod: 'ORN-HM-0012', kalite: 'C45', aile: 'metal', sinif: null, kaliteKodu: 'C45', opNo: 20 } };
+    const istekler = sunucuKur({
+      ...temel(() => json(200, SURE)),
+      'GET /geometri/ham-onerisi/41': () => json(200, rotali),
+      'GET /geometri/ham-onerisi/41?kalite=C45': () => json(200, rotali),
+      'GET /geometri/sure-tahmini/41?kalite=C45&sinif=metal%2Fislah': () => json(200, C45),
+      'GET /geometri/sure-tahmini/41?kalite=C45&sinif=metal%2Fislah&iso=M': () => json(200, { ...C45, iso: 'M', isoKaynagi: 'istek', kc: { degerNmm2: 1970, kc1: null, mc: null, hmMm: null, kaynak: 'iso' } }),
+    });
+    ac();
+    const k = await kart();
+    // İlk süre isteği iki adımlı ham sorgusunu ve Malzemeler kalite tablosunun yüklenmesini bekler (koşu yükünde 1 sn'yi aşabiliyor).
+    expect(await within(k).findByText('Malzeme grubu (ISO) · C45 kalitesinden', undefined, { timeout: 5000 })).toBeTruthy();
+    expect(within(k).getByRole('link', { name: 'C45' }).getAttribute('href')).toBe('/geometri/ham?rev=41');
+    expect(within(k).getByText(/Islah.*rotadaki hammaddeden/)).toBeTruthy();
+    expect(within(k).getByText('ORN-CNC-02 · iş mili 11 kW (demirbaş kartından)')).toBeTruthy();
+    expect(within(k).getByText(/kc ≈ 3.302 N\/mm²/)).toBeTruthy();
+    expect(within(k).getByText(/Kienzle: kc1 1.900 N\/mm², mc 0,24, talaş kalınlığı 0,1 mm/)).toBeTruthy();
+    expect(istekler).not.toContain('GET /geometri/sure-tahmini/41');
+    fireEvent.click(within(k).getByRole('button', { name: 'M · Paslanmaz' }));
+    expect(await within(k).findByText('Malzeme grubu (ISO) · elle seçildi (kaliteden: P)')).toBeTruthy();
+    expect(within(k).getByText(/M grubunun ortalaması/)).toBeTruthy();
+    fireEvent.click(within(k).getByRole('button', { name: 'Kaliteden al (P)' }));
+    expect(await within(k).findByText('Malzeme grubu (ISO) · C45 kalitesinden')).toBeTruthy();
   });
 
   it('neden varsa süre yazılmaz, ham ve rota yine görünür; yürürlükte rota yoksa söyler; tanıma yoksa delik notu', async () => {
@@ -142,5 +181,34 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     expect(within(k).getByText('Özellikler henüz okunmadı; delik süresi yok.')).toBeTruthy();
     expect(within(k).queryByRole('region', { name: 'Rotadaki talaşlı adımlar' })).toBeNull();
     await waitFor(() => expect(screen.queryByText(/^önizleme:/)).toBeNull());
+  });
+
+  it('3321-3 kalibre süre: rozet parça sayısıyla, ana aralık düzeltilmiş, kalibresiz aralık cümlede; kalemler kalibresiz; aşama tablosu', async () => {
+    const kalibre: GeometriSureCevabi = {
+      ...SURE, kalibre: true,
+      kalibrasyon: { asama: 'tek', n: 12, carpan: 1.32, altDk: 7, ortaDk: 9.2, ustDk: 12.4, genis: false, hataYuzde: 18.6, regresyon: false },
+    };
+    sunucuKur(temel(() => json(200, kalibre), { ...KAL, asama: 'tek', n: 12, olcumuEksik: 0, carpan: 1.32 }));
+    ac();
+    const k = await kart();
+    expect(await within(k).findByText('Kalibre')).toBeTruthy();
+    expect(within(k).queryByText('Kalibresiz')).toBeNull();
+    expect(within(k).getByText('7 – 12 dk')).toBeTruthy();
+    expect(within(k).getByText('olası ≈ 9,2 dk / parça')).toBeTruthy();
+    expect(within(k).getByText(/^Kalibre aralık: ölçülmüş 12 parçanın %80'i bu aralıkta kaldı\. Kalibresiz hesap 4 – 14 dk idi; düzeltme ×1,32, ölçülmüş parçalarda ortanca hata %19\.$/)).toBeTruthy();
+    expect(within(k).getByText('Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)')).toBeTruthy();
+    expect(within(k).getByText('Bağlama, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.')).toBeTruthy();
+    const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
+    const satirlar = (await within(d).findAllByRole('row')).slice(1).map((r) => r.textContent);
+    expect(satirlar).toEqual(['Kalibresiz5 parçadan azgeçti', 'Tek çarpan5 parça ve üstüşimdi', 'Grup ve tezgâh çarpanı20 parça8 parça daha', 'Kalem kalem uyum40 parça28 parça daha']);
+    expect(within(d).queryByRole('link', { name: 'Süre kalibrasyonu' })).toBeNull();
+  });
+
+  it('3321-3 kalibresizde aşama tablosu ölçümü eksik parçayı söyler', async () => {
+    sunucuKur(temel(() => json(200, SURE)));
+    ac();
+    const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
+    expect(await within(d).findByText(/Şimdi 3 parça; ölçümü eksik 2 parça\./)).toBeTruthy();
+    expect(within(d).getByText('2 parça daha')).toBeTruthy();
   });
 });

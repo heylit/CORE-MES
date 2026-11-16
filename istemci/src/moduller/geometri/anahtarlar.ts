@@ -9,4 +9,5 @@ export const anahtarlar = {
   ozellik: (revizyonId: number) => ['geometri', 'ozellik', revizyonId] as const,
   montaj: (revizyonId: number) => ['geometri', 'montaj', revizyonId] as const,
   yuzey: (revizyonId: number) => ['geometri', 'yuzey', revizyonId] as const,
+  kalibrasyon: () => ['geometri', 'kalibrasyon'] as const,
 };

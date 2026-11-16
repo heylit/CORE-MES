@@ -18,5 +18,8 @@ export const GEOMETRI_IKINCI_MENU = {
     { anahtar: 'ozellikler', baslik: 'Özellikler', yol: '/geometri/ozellikler', simge: 'target', islem: 'sayfa.geometri' },
     { anahtar: 'yuzey', baslik: 'Boya ve maske', yol: '/geometri/yuzey', simge: 'edit', islem: 'sayfa.geometri' },
     { anahtar: 'montaj', baslik: 'Montaj', yol: '/geometri/montaj', simge: 'layers', islem: 'sayfa.geometri' },
+  ] }, { baslik: 'Ayarlar', maddeler: [
+    // 3321-3 (S2 a): yalnız "dışarıda bırak" yazabilen (Yönetici, Proses Mühendisi) görür; okuma geometri.oku ile süre kartındadır.
+    { anahtar: 'kalibrasyon', baslik: 'Süre kalibrasyonu', yol: '/geometri/kalibrasyon', simge: 'gauge', islem: 'geometri.kalibrasyon' },
   ] }],
 } as const satisfies IkinciMenuTanimi;

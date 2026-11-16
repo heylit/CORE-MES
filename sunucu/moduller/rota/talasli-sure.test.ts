@@ -137,9 +137,12 @@ describe('rota talaşlı adım süreleri (gerçek PostgreSQL)', () => {
     ]);
     const adimlar = await vt().tx((db) => talasliAdimSureleri(db, urun));
     // İşlem süresi girilmiş adımda işlem, girilmemişte birim süre (teorikAyrim); değişim karşılaştırmaya girmez.
+    // 3321-2: makine kaynağında makine (kod), istasyonda null; bileşen kartları süre kartının varsayılan malzemesidir.
+    const makineKod = (await vt().tx((db) => db.tek<{ kod: string }>('SELECT kod FROM makine WHERE id = $1', [talasliMakine])))!.kod;
+    const tipAdi = tipler.find((t) => t.kod === 'TRN')!.ad;
     assert.deepEqual(adimlar, [
-      { opNo: 10, ad: 'Tornalama', islemDk: 2, olcumOrtancaDk: null, olcumAdedi: 0 },
-      { opNo: 30, ad: 'Frezeleme', islemDk: 3.5, olcumOrtancaDk: null, olcumAdedi: 0 },
+      { opNo: 10, ad: 'Tornalama', islemDk: 2, olcumOrtancaDk: null, olcumAdedi: 0, makineId: talasliMakine, makineKod, islemTuru: tipAdi, hammaddeNolari: [hammadde] },
+      { opNo: 30, ad: 'Frezeleme', islemDk: 3.5, olcumOrtancaDk: null, olcumAdedi: 0, makineId: null, makineKod: null, islemTuru: tipAdi, hammaddeNolari: [hammadde] },
     ]);
   });
 

@@ -24,7 +24,7 @@ const ANALIZ = {
     hacimMm3: 9000, alanMm2: 3100, govdeSayisi: 1, kapali: true, ucgenSayisi: 12, hesapSuresiMs: 20, hesapZamani: '2026-11-01T20:00:02+03:00',
   },
 };
-const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok', kesmeMm: 3, donel: null, formlar: [] };
+const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok', kesmeMm: 3, donel: null, formlar: [], rotaMalzemesi: null };
 // Özellikler kartının okuduğu cevap (2044-2): yayındaki rev 8 için gerçek uç 200 döner; sentetik tek geçiş deliği.
 const OZELLIK = {
   revizyonId: 8, motor: 'ornek-motor',
@@ -54,7 +54,8 @@ const MONTAJ = {
 };
 // Süre kartının okuduğu cevap (3278 D): sentetik kalibresiz aralık, kutu hamı, rotada iki talaşlı adım (biri ölçümsüz).
 const SURE = {
-  revizyonId: 8, oneri: true, kalibre: false, iso: 'P', isoKaynagi: 'istek', payMm: 0, payKaynagi: 'yok', hamKaynagi: 'kutu', hamKodu: null,
+  revizyonId: 8, oneri: true, kalibre: false, kalibrasyon: null, iso: 'P', isoKaynagi: 'varsayilan', payMm: 0, payKaynagi: 'yok', hamKaynagi: 'kutu', hamKodu: null,
+  sinif: null, sinifIso: null, kc: { degerNmm2: 1950, kc1: null, mc: null, hmMm: null, kaynak: 'iso' }, tezgah: { gucKw: 7.5, kaynak: 'varsayilan', makineKod: null }, hamFormu: null,
   hamHacimMm3: 9000 * 1.5, parcaHacimMm3: 9000, talasMm3: 4500,
   kalemler: [{ kalem: 'kaba', altDk: 0.03, ustDk: 0.09, adet: null }, { kalem: 'finis', altDk: 0.39, ustDk: 1.55, adet: null }, { kalem: 'delik', altDk: 0.12, ustDk: 0.25, adet: 1 }],
   altDk: 0.54, ortaDk: 1.07, ustDk: 1.89, ozellikOkundu: true, neden: null,
@@ -73,6 +74,7 @@ const BULUNAMADI = { kod: 'BULUNAMADI', mesaj: 'Bu revizyon bir malzeme kartına
 const olmayan = { kesimEnMm: null, enYakinKart: null };
 const HAM_FLANS = {
   revizyonId: 8, payMm: 2, payKaynagi: 'ayar', kesmeMm: 3, enAz: { a: 104, b: 104, c: 14 }, kaliteler: ['C45'], neden: null,
+  rotaMalzemesi: { malzemeNo: 12, kod: 'ORN-HM-0012', kalite: 'C45', aile: 'metal', sinif: 'metal/islah', kaliteKodu: 'C45', opNo: 10 },
   donel: { kenar: 'c', capMm: 100, boyMm: 10, icCapMm: null },
   oneriler: [
     { malzemeNo: 12, kod: 'ORN-HM-0012', ad: 'Örnek çubuk Ø105', kalite: 'C45', form: 'cubuk', olcu: { d: 105, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85,
@@ -92,7 +94,30 @@ const HAM_FLANS = {
   ],
 };
 
-async function sunucu(page: Page, ham: unknown = HAM, analiz: unknown = ANALIZ): Promise<void> {
+// Süre kalibrasyonu (3321-3): sentetik ölçülmüş parçalar (ORN-), iki malzeme grubu; biri dışarıda.
+const kp = (malzemeNo: number, kod: string, malzeme: string, tahminDk: number, olcumDk: number, disarida = false) => ({
+  malzemeNo, kod, ad: null, revizyonId: 100 + malzemeNo, tahminDk, olcumDk, kalibreDk: Math.round(tahminDk * 131) / 100,
+  gruplar: { malzeme, tezgah: malzemeNo % 2 === 0 ? 'ORN-CNC-02' : 'ORN-TORNA-01', islem: 'Kaba frezeleme' }, disarida, disaridaNedeni: null,
+});
+const KALIBRASYON = {
+  asama: 'grup', esikler: { tek: 5, grup: 20, regresyon: 40 }, n: 24, disarida: 1, olcumuEksik: 3, carpan: 1.31, hataYuzde: 19, kalibresizHataYuzde: 34,
+  aralik: { altLn: -0.18, ustLn: 0.22, genis: false }, regresyon: null,
+  gruplar: [
+    { tur: 'malzeme', anahtar: 'N', n: 9, carpan: 1.24, hataYuzde: 21, azVeri: true },
+    { tur: 'malzeme', anahtar: 'P', n: 15, carpan: 1.28, hataYuzde: 16, azVeri: true },
+    { tur: 'tezgah', anahtar: 'ORN-CNC-02', n: 12, carpan: 1.22, hataYuzde: 17, azVeri: true },
+    { tur: 'tezgah', anahtar: 'ORN-TORNA-01', n: 12, carpan: 1.4, hataYuzde: 18, azVeri: true },
+    { tur: 'islem', anahtar: 'Kaba frezeleme', n: 24, carpan: 1.35, hataYuzde: 18, azVeri: false },
+  ],
+  parcalar: [
+    kp(1, 'ORN-MIL-01', 'P', 1.3, 1.8), kp(2, 'ORN-MIL-02', 'P', 2.1, 2.6), kp(3, 'ORN-MIL-03', 'P', 3.2, 4.4), kp(4, 'ORN-MIL-04', 'P', 4.1, 5),
+    kp(5, 'ORN-MIL-05', 'P', 6, 8.4), kp(6, 'ORN-MIL-06', 'P', 9, 11.5), kp(7, 'ORN-MIL-07', 'P', 14, 19), kp(8, 'ORN-MIL-08', 'P', 4, 21, true),
+    kp(9, 'ORN-KAP-01', 'N', 1.6, 2), kp(10, 'ORN-KAP-02', 'N', 2.5, 3.1), kp(11, 'ORN-KAP-03', 'N', 5, 6.6),
+  ],
+};
+const KALIBRESIZ = { ...KALIBRASYON, asama: 'kalibresiz', n: 3, disarida: 0, carpan: null, hataYuzde: null, aralik: null, gruplar: [], parcalar: [] };
+
+async function sunucu(page: Page, ham: unknown = HAM, analiz: unknown = ANALIZ, sure: unknown = SURE, kalibrasyon: unknown = KALIBRESIZ): Promise<void> {
   await page.route('**/api/geometri/**', async (r: Route) => {
     const yol = new URL(r.request().url()).pathname.replace('/api', '');
     const json = (status: number, govde: unknown) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(govde) });
@@ -101,7 +126,12 @@ async function sunucu(page: Page, ham: unknown = HAM, analiz: unknown = ANALIZ):
     if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, ham);
     if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
     if (yol === '/geometri/montaj/8') return json(200, MONTAJ);
-    if (yol === '/geometri/sure-tahmini/8') return json(200, SURE);
+    if (yol === '/geometri/sure-tahmini/8') return json(200, sure);
+    if (yol === '/geometri/kalibrasyon') return json(200, kalibrasyon);
+    if (yol === '/geometri/kalibrasyon/4/disarida-birak') {
+      const k = kalibrasyon as typeof KALIBRASYON;
+      return json(200, { ...k, n: k.n - 1, disarida: k.disarida + 1, parcalar: k.parcalar.map((p) => (p.malzemeNo === 4 ? { ...p, disarida: true } : p)) });
+    }
     // Boya ve maske kartı (2144) bu testlerin konusu değil; analiz yok cevabıyla boş durur.
     if (yol === '/geometri/yuzey/8') {
       return json(200, {
@@ -222,6 +252,66 @@ test.describe('3D Atölyesi', () => {
     const genislik = page.viewportSize()?.width ?? 0;
     await page.setViewportSize({ width: genislik, height: 2600 });
     await page.locator('.tc-kart', { has: page.getByRole('heading', { name: 'Ham önerisi' }) }).screenshot({ path: bilgi.outputPath(`3321-1-ham-${String(genislik)}.png`) });
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
+  });
+
+  test('süre kartı (3321-2): malzeme rotadan, ISO kaliteden, tezgâh demirbaştan, kc Kienzle; Ham kartında Malzeme seçimi; taşma yok', async ({ page, ac, ag }, bilgi) => {
+    const flans = { ...ANALIZ, analiz: { ...ANALIZ.analiz, kutu: { x: 100, y: 100, z: 10 }, obb: { a: 100, b: 100, c: 10, cap: 100.5, yon: ANALIZ.analiz.obb.yon }, hacimMm3: 67700 } };
+    const sure = {
+      ...SURE, isoKaynagi: 'sinif', sinif: 'metal/islah', sinifIso: 'P', hamKaynagi: 'stok', hamKodu: 'ORN-HM-0012', hamFormu: 'cubuk',
+      kc: { degerNmm2: 3302, kc1: 1900, mc: 0.24, hmMm: 0.1, kaynak: 'kienzle' }, tezgah: { gucKw: 11, kaynak: 'demirbas', makineKod: 'ORN-CNC-02' },
+      hamHacimMm3: 147200, parcaHacimMm3: 67700, talasMm3: 79500,
+      // Kaba kalem hesapla tutarlı: 79,5 cm³ / (11 kW x 0,8 x 60000 / 3302) = 0,5 dk; alt hız 0,3 katı ile 1,66 dk.
+      kalemler: [{ kalem: 'kaba', altDk: 0.5, ustDk: 1.66, adet: null }, SURE.kalemler[1], SURE.kalemler[2]], altDk: 1.01, ortaDk: 1.87, ustDk: 3.46,
+    };
+    await sunucu(page, HAM_FLANS, flans, sure);
+    await ac('/geometri/ham?rev=8');
+    await expect(page.getByText('Rotadaki hammadde kartından: ORN-HM-0012')).toBeVisible();
+    await expect(page.getByLabel('Malzeme', { exact: true })).toHaveValue('metal/islah|C45');
+    const genislik = page.viewportSize()?.width ?? 0;
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    await page.setViewportSize({ width: genislik, height: 2600 });
+    await page.locator('.tc-kart', { has: page.getByRole('heading', { name: 'Ham önerisi' }) }).screenshot({ path: bilgi.outputPath(`3321-2-ham-${String(genislik)}.png`) });
+    await page.getByRole('link', { name: /Süreyi bu hamla hesapla/ }).click();
+    await expect(page.getByText('Malzeme grubu (ISO) · C45 kalitesinden')).toBeVisible();
+    await expect(page.getByText('ORN-CNC-02 · iş mili 11 kW (demirbaş kartından)')).toBeVisible();
+    await expect(page.getByText(/kc ≈ 3.302 N\/mm²/)).toBeVisible();
+    await expect(page.getByText('(Ham önerisinde seçili)')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    await page.setViewportSize({ width: genislik, height: 2600 });
+    await page.locator('.tc-kart', { has: page.getByRole('heading', { name: 'Kaba süre (öneri)' }) }).screenshot({ path: bilgi.outputPath(`3321-2-sure-${String(genislik)}.png`) });
+    await page.getByRole('button', { name: 'M · Paslanmaz' }).click();
+    await expect(page).toHaveURL(/iso=M/);
+    await expect(page.getByRole('button', { name: 'M · Paslanmaz' })).toHaveAttribute('aria-pressed', 'true');
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
+  });
+
+  test('süre kalibrasyonu (3321-3): kalibre süre kartı ve aşama tablosu; sayfada eğri, grup çipi, nokta ayrıntısı, dışarıda bırak, çarpanlar; taşma yok', async ({ page, ac, ag }, bilgi) => {
+    const sure = { ...SURE, kalibre: true, // SURE'nin olası değeri 1,07 dk; x 1,31 = 1,4 dk, bant exp(-0,18) ve exp(0,22) ile 1,17-1,74 dk.
+    kalibrasyon: { asama: 'grup', n: 24, carpan: 1.31, altDk: 1.17, ortaDk: 1.4, ustDk: 1.74, genis: false, hataYuzde: 18.6, regresyon: false } };
+    await sunucu(page, HAM, ANALIZ, sure, KALIBRASYON);
+    await ac('/geometri/sure?rev=8');
+    await expect(page.getByText('Kalibre', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Kalibre aralık: ölçülmüş 24 parçanın %80'i/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Kalibrasyon durumu' })).toBeVisible();
+    const genislik = page.viewportSize()?.width ?? 0;
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    await page.setViewportSize({ width: genislik, height: 2600 });
+    await page.locator('.tc-kart', { has: page.getByRole('heading', { name: 'Kaba süre (öneri)' }) }).screenshot({ path: bilgi.outputPath(`3321-3-sure-${String(genislik)}.png`) });
+    await page.getByRole('link', { name: 'Süre kalibrasyonu' }).first().click();
+    await expect(page).toHaveURL(/\/geometri\/kalibrasyon$/);
+    await expect(page.getByRole('heading', { name: 'Kalibrasyon eğrisi' })).toBeVisible();
+    await page.getByRole('button', { name: 'P · Çelik · 15' }).click();
+    await expect(page.getByRole('button', { name: /^ORN-KAP-/ })).toHaveCount(0);
+    await page.getByRole('button', { name: /^ORN-MIL-04:/ }).click();
+    await expect(page.getByRole('button', { name: 'Dışarıda bırak' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    await page.locator('.tc-g3b-ka').screenshot({ path: bilgi.outputPath(`3321-3-kalibrasyon-${String(genislik)}.png`) });
+    await page.getByRole('button', { name: 'Dışarıda bırak' }).click();
+    await expect(page.getByRole('button', { name: 'Geri al' })).toBeVisible();
+    await page.getByRole('button', { name: 'Tablo olarak göster' }).click();
+    await expect(page.locator('.tc-g3b-ka-parcalar tbody tr')).toHaveCount(8);
+    expect((await tasmaOlc(page)).belge).toBe(0);
     expect(beklenmeyen(ag.hatalar)).toEqual([]);
   });
 

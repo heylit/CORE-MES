@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
-import type { GeometriHamCevabi, GeometriIsoGrubu, GeometriSureCevabi, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriSureCevabi, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
 import { DurumKutusu, Dugme, Kart, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { calismaYolu } from './calismalar.ts';
-import { aralikMetni, cubukYeri, dakika, FORM_ADI, hacimCm3, ISO_ADI, ISO_GRUPLARI, kutuMetni, olcekUstu, stokOlcuMetni, uzunluk } from './gorunum.ts';
+import { aralikMetni, buyukSayi, katsayiMetni, cubukYeri, dakika, FORM_ADI, hacimCm3, ISO_ADI, ISO_GRUPLARI, kutuMetni, olcekUstu, stokOlcuMetni, uzunluk } from './gorunum.ts';
+import { sorguMetni, useHamSecimi } from './ham-secimi.ts';
+import { kalibreMetni } from './kalibrasyon.ts';
+import { KalibrasyonDurumu } from './KalibrasyonSayfasi.tsx';
 
 type GeometriSureKalemi = GeometriSureCevabi['kalemler'][number];
 
@@ -18,13 +21,13 @@ const NEDEN: Readonly<Record<NonNullable<GeometriSureCevabi['neden']>, string>> 
 };
 const KALEM_SIMGESI: Readonly<Record<GeometriSureKalemi['kalem'], SimgeAdi>> = { kaba: 'tool', finis: 'ruler', delik: 'target' };
 
-function Cubuk({ alt, ust, olcek, orta }: { alt: number; ust: number; olcek: number; orta?: number | null }) {
+function Cubuk({ alt, ust, olcek, orta, kalibre = false }: { alt: number; ust: number; olcek: number; orta?: number | null; kalibre?: boolean }) {
   const y = cubukYeri(alt, ust, olcek);
   const o = orta == null ? null : cubukYeri(orta, orta, olcek).x;
   return (
     <svg className="tc-g3b-su-cubuk" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
       <rect width="100" height="6" className="tc-g3b-su-zemin" />
-      <rect x={y.x} width={y.en} height="6" className="tc-g3b-su-aralik" />
+      <rect x={y.x} width={y.en} height="6" className={kalibre ? 'tc-g3b-su-aralik tc-g3b-su-kalibre' : 'tc-g3b-su-aralik'} />
       {o !== null && <rect x={Math.max(0, o - 0.5)} width="1" height="6" className="tc-g3b-su-orta" />}
     </svg>
   );
@@ -75,52 +78,71 @@ function RotaBolumu({ rota }: { rota: GeometriSureCevabi['rota'] }) {
   );
 }
 
-// Talaştan kaba süre (3278 D): sunucunun kalibresiz aralığı, kalemleri ve rotadaki talaşlı adımlar. ISO grubu kaydedilmez; ham, Ham önerisi
-// kartının varsayılan payıyla aynı ilk stok önerisidir ve önizlemede çizilir.
+// Talaştan kaba süre (3278 D): sunucunun kalibresiz aralığı, kalemleri ve rotadaki talaşlı adımlar. 3321-2: malzeme, pay ve ham Ham önerisi
+// kartındaki seçimdir (adres satırı); ISO grubu ve kesme katsayısı malzemenin sınıfından, elle değişir (kaydedilmez); tezgâh gücü rotadaki
+// ilk talaşlı adımın makinesinin demirbaş kartından. Ham önizlemede çizilir.
 export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
   revizyonId: number; alanMm2: number | null; onizlemeYaz: (o: HamStokOnerisi | null) => void;
 }) {
   const { search } = useLocation();
-  const [iso, isoYaz] = useState<GeometriIsoGrubu>('P');
+  const secim = useHamSecimi(revizyonId);
+  const m = secim.malzeme;
+  const istek = { payMm: secim.payMm, kesmeMm: secim.kesmeMm, kalite: secim.hamKalitesi, sinif: m?.sinif ?? null, iso: secim.iso, form: secim.form };
   const sorgu = useQuery({
-    queryKey: anahtarlar.sure(revizyonId, iso),
-    queryFn: () => api.get<GeometriSureCevabi>(`/geometri/sure-tahmini/${String(revizyonId)}?iso=${iso}`),
+    queryKey: anahtarlar.sure(revizyonId, sorguMetni(istek)),
+    queryFn: () => api.get<GeometriSureCevabi>(`/geometri/sure-tahmini/${String(revizyonId)}${sorguMetni(istek)}`),
+    enabled: secim.hazir && secim.payGecerli && secim.kesmeGecerli,
     placeholderData: keepPreviousData,
   });
-  // Ham önerisi kartıyla aynı sorgu (pay ve kalite boş): önizlenen ham ve ölçüsü buradandır.
-  const ham = useQuery({
-    queryKey: anahtarlar.ham(revizyonId, -1, ''),
-    queryFn: () => api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(revizyonId)}`),
-    enabled: sorgu.data?.hamKaynagi != null,
-  });
-  const ilk = ham.data?.neden === null ? (ham.data.oneriler[0] ?? null) : null;
-  const stok = sorgu.data?.hamKaynagi === 'stok' && ilk !== null && ilk.kod === sorgu.data.hamKodu ? ilk : null;
+  // Ham önerisi kartıyla aynı sorgu: önizlenen ham ve ölçüsü buradandır.
+  const ham = secim.ham;
+  const oneriler = ham.data?.neden === null ? ham.data.oneriler : [];
+  const stokAday = oneriler.find((o) => o.form === sorgu.data?.hamFormu) ?? null;
+  const stok = sorgu.data?.hamKaynagi === 'stok' && stokAday !== null && stokAday.kod === sorgu.data.hamKodu ? stokAday : null;
   useEffect(() => { onizlemeYaz(stok); }, [stok, onizlemeYaz]);
   useEffect(() => () => onizlemeYaz(null), [onizlemeYaz]);
   const v = sorgu.data;
-  const olcek = v?.ustDk == null ? 50 : olcekUstu(v.ustDk);
+  // 3321-3: kalibre ise ana aralık düzeltilmiş aralıktır; kalemler kalibresiz kalır (çarpan yalnız toplama).
+  const kb = v?.kalibrasyon ?? null;
+  const ana = kb ?? (v?.altDk == null || v.ustDk == null ? null : { altDk: v.altDk, ustDk: v.ustDk, ortaDk: v.ortaDk });
+  const olcek = v?.ustDk == null ? 50 : olcekUstu(Math.max(v.ustDk, kb?.ustDk ?? 0));
   const olcekMetni = (x: number): string => uzunluk(x);
   return (
-    <Kart baslik="Kaba süre (öneri)" simge="clock" sag={<Rozet ton="uyari">Kalibresiz</Rozet>}>
-      <p className="tc-g3b-su-etiket">Malzeme grubu (ISO) · seçim kaydedilmez, sayfa açılınca Çelik</p>
+    <>
+    <Kart baslik="Kaba süre (öneri)" simge="clock" sag={kb === null ? <Rozet ton="uyari">Kalibresiz</Rozet> : <Rozet ton="tamam">Kalibre</Rozet>}>
+      <p className="tc-g3b-su-etiket">Malzeme grubu (ISO) · {isoKaynakMetni(v, m?.kalite ?? null)}</p>
       <div className="tc-g3b-su-iso" role="group" aria-label="Malzeme grubu (ISO)">
         {ISO_GRUPLARI.map((g) => (
-          <Dugme key={g} aria-pressed={iso === g} onClick={() => isoYaz(g)}>{g} · {ISO_ADI[g]}</Dugme>
+          <Dugme key={g} aria-pressed={(secim.iso ?? v?.iso ?? 'P') === g} onClick={() => secim.yaz({ iso: g })}>{g} · {ISO_ADI[g]}</Dugme>
         ))}
       </div>
-      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+      {v?.isoKaynagi === 'istek' && v.sinifIso !== null && (
+        <p className="tc-g3b-soluk">Seçim kaydedilmez; sayfa yeniden açılınca kaliteden gelir.{' '}
+          <Dugme tur="ikincil" simge="rotate" onClick={() => secim.yaz({ iso: null })}>Kaliteden al ({v.sinifIso})</Dugme>
+        </p>
+      )}
+      {!secim.payGecerli || !secim.kesmeGecerli ? <p className="tc-g3b-soluk">Ham önerisi kartındaki pay geçersiz; düzeltilince hesaplanır.</p>
+        : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
         : sorgu.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Süre tahmini okunamadı.')} />
           : v === undefined ? null : (
             <>
-              {v.neden !== null || v.altDk === null || v.ustDk === null ? <p className="tc-g3b-soluk">{NEDEN[v.neden ?? 'analiz-yok']}</p> : (
+              {v.neden !== null || v.altDk === null || v.ustDk === null || ana === null ? <p className="tc-g3b-soluk">{NEDEN[v.neden ?? 'analiz-yok']}</p> : (
                 <>
                   <p className="tc-g3b-su-toplam">
-                    <strong>{aralikMetni(v.altDk, v.ustDk, true)}</strong>
-                    {v.ortaDk !== null && <span className="tc-g3b-soluk">olası ≈ {dakika(v.ortaDk)} / parça</span>}
+                    <strong>{aralikMetni(ana.altDk, ana.ustDk, true)}</strong>
+                    {ana.ortaDk !== null && <span className="tc-g3b-soluk">olası ≈ {dakika(ana.ortaDk)} / parça</span>}
                   </p>
-                  <Cubuk alt={v.altDk} ust={v.ustDk} olcek={olcek} orta={v.ortaDk} />
+                  <Cubuk alt={ana.altDk} ust={ana.ustDk} olcek={olcek} orta={ana.ortaDk} kalibre={kb !== null} />
                   <p className="tc-g3b-su-olcek" aria-hidden="true"><span>0</span><span>{olcekMetni(olcek / 2)} dk</span><span>{olcekMetni(olcek)} dk</span></p>
-                  <p className="tc-g3b-soluk">Olası değer alt ve üst sınırın geometrik ortasıdır (süre hataları oransaldır). Kalem çubukları aynı 0-{olcekMetni(olcek)} dk ölçeğindedir.</p>
+                  {kb === null
+                    ? <p className="tc-g3b-soluk">Olası değer alt ve üst sınırın geometrik ortasıdır (süre hataları oransaldır). Kalem çubukları aynı 0-{olcekMetni(olcek)} dk ölçeğindedir.</p>
+                    : (
+                      <p className="tc-g3b-soluk">
+                        {kalibreMetni(kb)} Kalibresiz hesap {aralikMetni(v.altDk, v.ustDk, true)} idi; düzeltme ×{katsayiMetni(kb.carpan)}
+                        {kb.hataYuzde === null ? '' : `, ölçülmüş parçalarda ortanca hata %${String(Math.round(kb.hataYuzde))}`}.
+                      </p>
+                    )}
+                  {kb !== null && <p className="tc-g3b-su-etiket">Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)</p>}
                   <ul className="tc-g3b-su-kalemler" aria-label="Süre kalemleri">
                     {v.kalemler.map((k) => (
                       <li key={k.kalem}>
@@ -134,6 +156,23 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
                   {!v.ozellikOkundu && <p className="tc-g3b-soluk">Özellikler henüz okunmadı; delik süresi yok.</p>}
                 </>
               )}
+              <dl className="tc-g3b-degerler">
+                <div>
+                  <dt>Malzeme</dt>
+                  <dd>
+                    <Link className="tc-g3b-bag" to={`${calismaYolu('ham')}${search}`}>{m === null ? 'Seçilmedi' : m.kalite}</Link>
+                    {m !== null && <span className="tc-g3b-soluk"> · {m.secenek?.sinifAdi ?? 'Malzemeler tablosunda yok'}{m.kaynak === 'rota' ? ' · rotadaki hammaddeden' : ''}</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Tezgâh</dt>
+                  <dd>{tezgahMetni(v.tezgah)}</dd>
+                </div>
+                <div>
+                  <dt>Kesme kuvveti</dt>
+                  <dd>kc ≈ {buyukSayi(v.kc.degerNmm2, "N/mm²")}<span className="tc-g3b-soluk"> · {kcMetni(v)}</span></dd>
+                </div>
+              </dl>
               {v.hamHacimMm3 !== null && (
                 <dl className="tc-g3b-degerler">
                   <div>
@@ -145,6 +184,7 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
                           : v.hamKaynagi === 'stok' ? (v.hamKodu ?? 'Stok önerisi')
                             : `En az ham (kutu + pay)${ham.data?.enAz ? `: ${kutuMetni(ham.data.enAz.a, ham.data.enAz.b, ham.data.enAz.c)}` : ''}`}
                       </Link>
+                      {stok !== null && <span className="tc-g3b-soluk"> (Ham önerisinde seçili)</span>}
                     </dd>
                   </div>
                   <div><dt>Ham hacmi</dt><dd>{hacimCm3(v.hamHacimMm3)}</dd></div>
@@ -157,7 +197,29 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
               <RotaBolumu rota={v.rota} />
             </>
           )}
-      <p className="tc-g3b-su-uyari"><Simge ad="alert" /><span>Kalibresiz kaba tahmin: tezgâh gücü 7,5 kW varsayıldı; bağlama, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.</span></p>
+      <p className="tc-g3b-su-uyari"><Simge ad="alert" /><span>{`${kb === null ? 'Kalibresiz kaba tahmin: bağlama' : 'Bağlama'}, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.`}</span></p>
     </Kart>
+    <KalibrasyonDurumu />
+    </>
   );
+}
+
+function isoKaynakMetni(v: GeometriSureCevabi | undefined, kalite: string | null): string {
+  if (v === undefined) return 'okunuyor';
+  if (v.isoKaynagi === 'sinif') return `${kalite ?? 'malzeme'} kalitesinden`;
+  if (v.isoKaynagi === 'istek') return v.sinifIso === null ? 'elle seçildi' : `elle seçildi (kaliteden: ${v.sinifIso})`;
+  return kalite === null ? 'malzeme seçilmedi, Çelik varsayıldı' : `${kalite} için grup bilinmiyor, Çelik varsayıldı`;
+}
+
+function tezgahMetni(t: GeometriSureCevabi['tezgah']): string {
+  const guc = `iş mili ${uzunluk(t.gucKw)} kW`;
+  if (t.kaynak === 'demirbas') return `${t.makineKod ?? 'Rotadaki tezgâh'} · ${guc} (demirbaş kartından)`;
+  return t.makineKod === null ? `${guc} (varsayılan; rotada talaşlı tezgâh yok)` : `${t.makineKod} · ${guc} (varsayılan; demirbaş kartında iş mili gücü yok)`;
+}
+
+function kcMetni(v: GeometriSureCevabi): string {
+  if (v.kc.kaynak === 'kienzle' && v.kc.kc1 !== null && v.kc.mc !== null && v.kc.hmMm !== null) {
+    return `malzeme sınıfından (Kienzle: kc1 ${buyukSayi(v.kc.kc1, "N/mm²")}, mc ${katsayiMetni(v.kc.mc)}, talaş kalınlığı ${uzunluk(v.kc.hmMm)} mm)`;
+  }
+  return `${v.iso} grubunun ortalaması`;
 }

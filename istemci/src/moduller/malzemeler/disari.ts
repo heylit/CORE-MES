@@ -14,6 +14,20 @@ export async function yerlesikKaliteYogunlugu(aile: string, kod: string): Promis
   return null;
 }
 
+// 3321-2: 3D Atölyesi Ham kartının Malzeme seçimi. Yerleşik kaliteler aile ve sınıf sırasıyla; sinif "aile/sinif" anahtarıdır (sunucunun
+// kesme katsayısı tablosu bu anahtarla bakar). Yoğunluk yazılı değilse null. Tablo ilk istekte ayrı parça olarak yüklenir.
+export interface KaliteSecenegi { aile: string; aileAdi: string; sinif: string; sinifAdi: string; kod: string; ad: string; yogunluk: number | null }
+export async function yerlesikKaliteSecenekleri(): Promise<KaliteSecenegi[]> {
+  const { FAMS } = await import('./yeni/sabitler/index.ts');
+  return Object.entries(FAMS).flatMap(([aile, a]) => Object.entries(a.classes).flatMap(([sinif, c]) => c.grades.map((g) => {
+    const ro = g.p?.ro;
+    return {
+      aile, aileAdi: a.ad, sinif: `${aile}/${sinif}`, sinifAdi: c.ad, kod: g.kod, ad: g.ad,
+      yogunluk: typeof ro === 'number' && Number.isFinite(ro) && ro > 0 ? ro : null,
+    };
+  })));
+}
+
 // 2465 (2459 a): kategori ağacının "Malzemeler'de düzenle" bağlantısı, türün Malzeme ayarları bölümü. Hizmet grupları yerleşiktir,
 // ayarda düzenlenmez: null (bağlantı çizilmez). Yol sabit yazılır; ekran parçalarını yüklememek için sekmeler ithal edilmez (test denetler).
 export function kategoriAgaciDuzenleYolu(tur: KategoriAgaciTuru): string | null {

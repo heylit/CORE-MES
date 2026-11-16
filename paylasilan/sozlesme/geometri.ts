@@ -175,6 +175,7 @@ export const geometriHamSorgusu = z.object({
   kesmeMm: z.coerce.number<number>().min(0).max(KESME_EN_COK_MM).optional(),
 });
 export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok', 'boru', 'disk'] as const;
+export type HamStokFormu = (typeof HAM_STOK_FORMLARI)[number];
 // Form önerilmezse nedeni: dönel olmayan parçaya disk ve boru, boydan boya deliği olmayana boru, kalın parçaya levha önerilmez.
 export const HAM_FORM_NEDENLERI = ['donel-degil', 'delik-yok', 'plaka-degil'] as const;
 export const HAM_PAY_KAYNAKLARI = ['istek', 'ayar', 'yok'] as const;
@@ -229,6 +230,12 @@ export const geometriHamCevabi = z.object({
     hamHacimMm3: mm.nullable(),
     enYakinKart: z.object({ malzemeNo: z.number().int(), kod: z.string(), olcu: z.record(z.string(), z.number()), eksik: z.array(z.string()) }).nullable(),
   })),
+  // 3321-2: varsayılan malzeme, yürürlükteki rotanın ilk talaşlı adımının hammadde girdisi (aktif hammadde kartı). sinif kartın
+  // "aile/sinif" anahtarıdır (eski kartta boş; ekran Malzemeler kalite tablosundan bulur). Rota, girdi ya da bağ yoksa null.
+  rotaMalzemesi: z.object({
+    malzemeNo: z.number().int(), kod: z.string(), kalite: z.string().nullable(), aile: z.string().nullable(),
+    sinif: z.string().nullable(), kaliteKodu: z.string().nullable(), opNo: z.number().int(),
+  }).nullable(),
 });
 export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 
@@ -240,7 +247,18 @@ export const GEOMETRI_ISO_GRUPLARI = ['P', 'M', 'K', 'N', 'S', 'H'] as const;
 export type GeometriIsoGrubu = (typeof GEOMETRI_ISO_GRUPLARI)[number];
 export const GEOMETRI_SURE_KALEMLERI = ['kaba', 'finis', 'delik'] as const;
 export const GEOMETRI_SURE_NEDENLERI = ['analiz-yok', 'hacim-yok', 'talas-yok'] as const;
-export const geometriSureSorgusu = geometriHamSorgusu.extend({ iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional() });
+// 3321-2: sinif Malzemeler sınıfı ("aile/sinif"); ISO grubu ve Kienzle katsayısı ondan. iso elle seçimdir, sınıfın grubunu ezer.
+// form Ham önerisinde seçilen formdur; yoksa (ya da o formda öneri yoksa) ilk öneri.
+export const SINIF_ANAHTARI = /^[a-z_]{1,30}\/[a-z_]{1,30}$/;
+export const KALIBRASYON_ASAMALARI = ['kalibresiz', 'tek', 'grup', 'regresyon'] as const;
+export const geometriSureSorgusu = geometriHamSorgusu.extend({
+  iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional(),
+  sinif: z.string().regex(SINIF_ANAHTARI).optional(),
+  form: z.enum(HAM_STOK_FORMLARI).optional(),
+});
+export const GEOMETRI_ISO_KAYNAKLARI = ['istek', 'sinif', 'varsayilan'] as const;
+// Tezgâh gücü rotadaki ilk talaşlı adımın makinesine bağlı demirbaş kartından; yoksa varsayılan (7,5 kW).
+export const GEOMETRI_GUC_KAYNAKLARI = ['demirbas', 'varsayilan'] as const;
 const dk = z.number().min(0);
 export const geometriSureKalemi = z.object({
   kalem: z.enum(GEOMETRI_SURE_KALEMLERI),
@@ -271,9 +289,22 @@ export const geometriSureRotasi = z.object({
 export const geometriSureCevabi = z.object({
   revizyonId: z.number().int(),
   oneri: z.literal(true),
-  kalibre: z.literal(false),
+  // 3321-3: kalibrasyon aşaması ölçülmüş parçalardan (5 parçadan az kalibresiz); kalibre true ise kalibrasyon dolu ve ekranın ana
+  // aralığı odur. Kalemler kalibresizdir (çarpan yalnız toplama uygulanır).
+  kalibre: z.boolean(),
+  kalibrasyon: z.object({
+    asama: z.enum(KALIBRASYON_ASAMALARI), n: z.number().int().min(0), carpan: z.number().positive(),
+    altDk: dk, ortaDk: dk, ustDk: dk, genis: z.boolean(), hataYuzde: z.number().min(0).nullable(), regresyon: z.boolean(),
+  }).nullable(),
   iso: z.enum(GEOMETRI_ISO_GRUPLARI),
-  isoKaynagi: z.enum(['istek', 'varsayilan']),
+  isoKaynagi: z.enum(GEOMETRI_ISO_KAYNAKLARI),
+  // 3321-2: istenen sınıf (tabloda varsa); sınıfın ISO grubu (elle seçim varsa karşılaştırma için); kc kaba hızın özgül kesme kuvveti:
+  // sınıfta Kienzle katsayısı varsa kc1 x hm^-mc, yoksa ISO grubunun ortalaması.
+  sinif: z.string().nullable(),
+  sinifIso: z.enum(GEOMETRI_ISO_GRUPLARI).nullable(),
+  kc: z.object({ degerNmm2: z.number().positive(), kc1: z.number().positive().nullable(), mc: z.number().positive().nullable(), hmMm: z.number().positive().nullable(), kaynak: z.enum(['kienzle', 'iso']) }),
+  tezgah: z.object({ gucKw: z.number().positive(), kaynak: z.enum(GEOMETRI_GUC_KAYNAKLARI), makineKod: z.string().nullable() }),
+  hamFormu: z.enum(HAM_STOK_FORMLARI).nullable(),
   payMm: z.number(),
   payKaynagi: z.enum(HAM_PAY_KAYNAKLARI),
   hamKaynagi: z.enum(['stok', 'kutu']).nullable(),
@@ -294,6 +325,36 @@ export const geometriSureCevabi = z.object({
 export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;
 
 // İş henüz yoksa null gönderilir (ekran 'yok' gördü); iş varsa okunan sürüm.
+// Süre kalibrasyonu (3321-3; S1 a, S2 a, S3 b): okumada hesaplanır. Parça, yayındaki modeli ve rotadaki bütün talaşlı adımları ölçülmüş
+// malzemedir; tahmin parçanın varsayılan malzeme ve hamla kalibresiz olası süresi, ölçüm adımların son 5 ölçüm ortancalarının toplamı.
+// Grup: malzeme (ISO grubu, rotadaki hammaddenin sınıfından), tezgâh (ilk talaşlı adımın makinesi), işlem (ilk talaşlı adımın operasyon
+// tipi). olcumuEksik: modeli ve rotası olup bir talaşlı adımı ölçülmemiş parça sayısı.
+export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem'] as const;
+const kalibrasyonGruplari = z.object({ malzeme: z.string().nullable(), tezgah: z.string().nullable(), islem: z.string().nullable() });
+export const geometriKalibrasyonCevabi = z.object({
+  asama: z.enum(KALIBRASYON_ASAMALARI),
+  esikler: z.object({ tek: z.number().int(), grup: z.number().int(), regresyon: z.number().int() }),
+  n: z.number().int().min(0),
+  disarida: z.number().int().min(0),
+  olcumuEksik: z.number().int().min(0),
+  carpan: z.number().positive().nullable(),
+  hataYuzde: z.number().min(0).nullable(),
+  kalibresizHataYuzde: z.number().min(0).nullable(),
+  aralik: z.object({ altLn: z.number(), ustLn: z.number(), genis: z.boolean() }).nullable(),
+  regresyon: z.object({ kaba: z.number().min(0), finis: z.number().min(0), delik: z.number().min(0), ozellik: z.number().min(0) }).nullable(),
+  gruplar: z.array(z.object({
+    tur: z.enum(KALIBRASYON_GRUP_TURLERI), anahtar: z.string(), n: z.number().int().min(1), carpan: z.number().positive(),
+    hataYuzde: z.number().min(0).nullable(), azVeri: z.boolean(),
+  })),
+  parcalar: z.array(z.object({
+    malzemeNo: z.number().int(), kod: z.string(), ad: z.string().nullable(), revizyonId: z.number().int(),
+    tahminDk: z.number().positive(), olcumDk: z.number().positive(), kalibreDk: z.number().positive().nullable(),
+    gruplar: kalibrasyonGruplari, disarida: z.boolean(), disaridaNedeni: z.string().nullable(),
+  })),
+});
+export type GeometriKalibrasyonCevabi = z.output<typeof geometriKalibrasyonCevabi>;
+export const disaridaBirakGovdesi = z.object({ neden: z.string().trim().max(200).nullable().transform((x) => (x === '' ? null : x)) }).strict();
+
 export const yenidenHesaplaGovdesi = z.object({ surum: surumSemasi.nullable() }).strict();
 export const yenidenHesaplaCevabi = geometriAnalizCevabi;
 

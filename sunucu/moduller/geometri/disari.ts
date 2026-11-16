@@ -9,7 +9,7 @@ export type { YuzeyAdimlariCozucusu } from './servis.ts';
 export type { GeometriYuzeyAdimi } from '#paylasilan/sozlesme/geometri.ts';
 // 3B süre kartı (3278 D): rota yürürlükteki talaşlı adımlarını verir (yalnız okuma); bağı kablolama.ts kurar (ADR 0006 madde 6).
 export { talasliAdimCozucusuKaydet as talasliAdimCozucusu } from './servis.ts';
-export type { TalasliAdimCozucusu } from './servis.ts';
+export type { TalasliAdimCozucusu, TalasliRotaAdimi } from './servis.ts';
 export type { GeometriTalasliAdim } from '#paylasilan/sozlesme/geometri.ts';
 // Rota talimat sahnesi (3209 a): malzemenin yayındaki 3B model revizyonları; kayıtta model sahipliği denetimi. Yetki denetlemez.
 export { malzemeModelRevizyonlari } from './servis.ts';

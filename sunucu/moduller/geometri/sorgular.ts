@@ -319,3 +319,20 @@ export async function yuzeyYaz(
   }
   return baslik.surum;
 }
+
+// 3321-3: süre kalibrasyonundan çıkarılan parçalar (S2 a). Bırakma tekrar edilirse neden ve kişi güncellenir; geri alma satırı siler.
+export function kalibrasyonDisaridalar(db: Db): Promise<{ malzemeNo: number; neden: string | null }[]> {
+  return db.sorgu<{ malzemeNo: number; neden: string | null }>('SELECT malzeme_no AS "malzemeNo", neden FROM geometri_kalibrasyon_disarida');
+}
+
+export async function kalibrasyonDisaridaYaz(db: Db, malzemeNo: number, neden: string | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO geometri_kalibrasyon_disarida (malzeme_no, neden, kisi_id) VALUES ($1, $2, $3)
+     ON CONFLICT (malzeme_no) DO UPDATE SET neden = EXCLUDED.neden, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [malzemeNo, neden, kisiId],
+  );
+}
+
+export async function kalibrasyonDisaridaSil(db: Db, malzemeNo: number): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_kalibrasyon_disarida WHERE malzeme_no = $1', [malzemeNo]);
+}
