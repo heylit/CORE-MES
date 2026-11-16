@@ -223,6 +223,25 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCD', 'EFGH', 'IJ'], 'ayıraç yoksa satır sonundan');
   });
 
+  test('Raf etiketi: varsayılan raf şablonu karedir, QR enin en az yüzde 70\'i, kod QR\'ın üstünde, ad altında', () => {
+    const raf = HAZIR_SABLONLAR.find((s) => s.tur === 'raf');
+    assert.equal(raf?.anahtar, 'raf-100x100');
+    assert.ok(raf);
+    const ogeler = yerlesim(raf, ORNEK_DEGERLER.raf, false);
+    const kare = ogeler.find((o) => o.tur === 'qr');
+    assert.ok(kare?.tur === 'qr' && kare.boyut >= raf.genislik * 0.7);
+    const yazi = (deger: string) => ogeler.find((o) => o.tur === 'metin' && o.satirlar.join(' ') === deger);
+    assert.ok(kare.tur === 'qr' && (yazi('A12')?.y ?? Infinity) < kare.y);
+    assert.ok(kare.tur === 'qr' && (yazi('Örnek palet rafı')?.y ?? 0) > kare.y + kare.boyut);
+    // #707: QR'ın kendi iki modülüne ek, üstteki kod ve alttaki ad kutusuyla arasında en az 3 mm boşluk.
+    const qrOgesi = raf.ogeler.find((o) => o.tur === 'qr');
+    const kutuOf = (alan: string) => raf.ogeler.find((o) => o.tur === 'metin' && o.alan === alan);
+    const kod = kutuOf('kod'), ad = kutuOf('ad');
+    assert.ok(qrOgesi?.tur === 'qr' && kod?.tur === 'metin' && ad?.tur === 'metin');
+    assert.ok(qrOgesi.y - (kod.y + kod.yukseklik) >= 3 - 1e-9, 'kod ile QR arası');
+    assert.ok(ad.y - (qrOgesi.y + qrOgesi.boyut) >= 3 - 1e-9, 'QR ile ad arası');
+  });
+
   test('EM-39: hazır şablonlarda metin kutusundan taşmaz, simge ve QR ile çakışmaz (standart ve 100x100)', () => {
     const uzun = (alan: string) => `ORN-${'ÖRNEK UZUN DEĞER WM '.repeat(4)}${alan}`;
     for (const s of HAZIR_SABLONLAR) {
