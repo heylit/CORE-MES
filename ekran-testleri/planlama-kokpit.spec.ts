@@ -461,8 +461,20 @@ test('Kokpit 3335: 4 saat kuralı reddedince karar alanı zorunlu gerekçe olur,
   await kokpit.getByRole('tab', { name: 'Onay bekleyenler (1)' }).click();
   await expect(kokpit.getByRole('heading', { name: 'Onay bekleyen ve kayıtlı planlar' })).toBeVisible();
   await expect(kokpit.getByText('ORN-Onay plani').first()).toBeVisible();
+  // 3335-1b: sekme sadedir; dört sayı ve karar görünür, karşılaştırma kutusu yoktur, ayrıntı kapalı gelir ve açılınca taşmaz.
+  await expect(kokpit.locator('[data-sekme="bekleyen"] .tc-pym-pa-ozet dt')).toHaveCount(4);
+  await expect(kokpit.getByRole('checkbox', { name: /karşılaştır/ })).toHaveCount(0);
+  await expect(kokpit.getByRole('heading', { name: 'Karar', exact: true })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-bekleyen-${bilgi.project.name}.png`, fullPage: true });
+  // Onaylayanın eylemi kartın altındadır: not alanı ve karar düğmeleri.
+  await kokpit.getByRole('heading', { name: 'Karar', exact: true }).scrollIntoViewIfNeeded();
+  await expect(kokpit.locator('[data-sekme="bekleyen"] .tc-pym-pa-karar .tc-pym-pa-dugmeler button').first()).toBeVisible();
+  await kokpit.locator('details.tc-pym-pa-ayrinti > summary').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-bekleyen-karar-${bilgi.project.name}.png` });
+  await kokpit.locator('details.tc-pym-pa-ayrinti > summary').click();
+  await expect(kokpit.getByRole('heading', { name: 'Tezgâh başına değişen iş' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   // Beklenen: 4 saat reddi (409) ve uydurma onay planının sunucuda olmayan ayrıntısı (404).
   expect(ag.hatalar.filter((h) => !/409|404 GET \/api\/plan(\/motor-ayarlari)?\?taslak=7$|404 \(Not Found\)/.test(h))).toEqual([]);
 });

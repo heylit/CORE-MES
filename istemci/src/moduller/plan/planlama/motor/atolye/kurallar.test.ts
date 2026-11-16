@@ -183,6 +183,9 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
       '1 iş yerleşmedi', 'Geciken sipariş canlıya göre 1 artıyor', 'Canlıya alınamaz, bekliyor: Müşteri önceliği', 'Canlı plandan farkı yok',
     ]);
     expect(paRedVar(K)).toBe(false);
+    // Canlı plan yokken "farkı yok" denmez: kıyaslanacak plan yoktur.
+    expect(paKontrol(s(1, 'acik'), null, null).map((k) => k[1])).toContain('Karşılaştırılacak canlı plan yok');
+    expect(paKontrol(s(1, 'acik'), null, null).map((k) => k[1])).not.toContain('Canlı plandan farkı yok');
   });
   it('plan hazırlandıktan sonra açılan plansız iş uyarıdır, engel değil', () => {
     const uyarilar = (plansizYeniIsler?: { adet: number; isler: string[] }) =>

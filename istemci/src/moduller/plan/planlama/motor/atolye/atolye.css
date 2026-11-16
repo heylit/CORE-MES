@@ -92,3 +92,8 @@
 .tc-pym-pa-kiyas small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pym-pa-not { display: flex; gap: var(--b-1); align-items: center; margin: 0; }
 
+/* Karşılaştırma kutusu olmayan liste (ayrı onay sayfası): ad satırın başından başlar. */
+.tc-pym-pa-adaylar[data-karsilastirmasiz] .tc-pym-pa-aday { grid-template-columns: minmax(0, 1fr) auto; }
+@media (max-width: 599px) { .tc-pym-pa-adaylar[data-karsilastirmasiz] .tc-pym-pa-aday { grid-template-columns: minmax(0, 1fr); } .tc-pym-pa-adaylar[data-karsilastirmasiz] .tc-pym-pa-aday-sag { grid-column: 1; } }
+.tc-pym-pa-ayrinti > summary { display: flex; align-items: center; min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-s); font-weight: 600; cursor: pointer; }
+.tc-pym-pa-ayrinti > * + * { margin-top: var(--b-3); }
