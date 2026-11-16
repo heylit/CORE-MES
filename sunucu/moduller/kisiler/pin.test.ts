@@ -53,6 +53,16 @@ describe('PIN ile giriş (gerçek PostgreSQL, gerçek giriş)', () => {
       method: 'POST', url: `/api/kisiler/${kisiId}/pin-ver`, headers: { cookie: cerezi }, payload: { pin, surum: satir?.surum ?? 1 },
     });
   };
+  const hataliSayisi = async (kullaniciAdi: string): Promise<number> =>
+    (await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM giris_denemesi WHERE kullanici_adi = $1 AND sonuc = 'hatali'", [kullaniciAdi]))!.n;
+  // Tek hatalı denemenin beklemesi 1 sn ve denemenin zamanı parola özetinden önce yazılır: yüklü makinede bir sonraki istek gelmeden
+  // dolabiliyordu. Aynı cihazdan beş hatalı deneme daha eklenince bekleme 32 sn olur; denemenin sayıldığı sayıyla ayrıca ölçülür.
+  const beklemeyiUzat = (kullaniciAdi: string): Promise<unknown> => vt().sorgu(
+    `INSERT INTO giris_denemesi (kullanici_adi, sonuc, ip)
+       SELECT d.kullanici_adi, 'hatali', d.ip FROM giris_denemesi d, generate_series(1, 5)
+        WHERE d.id = (SELECT max(id) FROM giris_denemesi WHERE kullanici_adi = $1 AND sonuc = 'hatali')`,
+    [kullaniciAdi],
+  );
   const oturumdaki = async (cerezi: string): Promise<unknown> =>
     (await app.inject({ method: 'GET', url: '/api/oturum', headers: { cookie: cerezi } })).json().kullanici;
 
@@ -122,9 +132,12 @@ describe('PIN ile giriş (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await pinVer(yoneticiCerezi, kisi.id, GECICI)).statusCode, 200);
     assert.equal((await pinBelirle(kisi.ad, GECICI, KENDI)).statusCode, 200);
 
+    const once = await hataliSayisi(kisi.ad);
     const yeniden = await pinBelirle(kisi.ad, KENDI, '864209');
     assert.equal(yeniden.statusCode, 401);
     assert.equal(yeniden.json().mesaj, 'Kullanıcı adı ya da geçici PIN hatalı.');
+    assert.equal(await hataliSayisi(kisi.ad), once + 1, 'deneme hatalı sayılır');
+    await beklemeyiUzat(kisi.ad);
     const beklemede = await giris(kisi.ad, { pin: KENDI });
     assert.equal(beklemede.statusCode, 401);
     assert.match(beklemede.json().mesaj, /^Çok sık deneme/);
@@ -136,6 +149,8 @@ describe('PIN ile giriş (gerçek PostgreSQL, gerçek giriş)', () => {
     const yanlis = await giris(kisi.ad, { pin: '864209' });
     assert.equal(yanlis.statusCode, 401);
     assert.equal(yanlis.json().mesaj, 'Kullanıcı adı, PIN ya da parola hatalı.');
+    assert.equal(await hataliSayisi(kisi.ad), 1, 'deneme hatalı sayılır');
+    await beklemeyiUzat(kisi.ad);
     const beklemede = await giris(kisi.ad, { pin: GECICI });
     assert.equal(beklemede.statusCode, 401);
     assert.match(beklemede.json().mesaj, /^Çok sık deneme/);
