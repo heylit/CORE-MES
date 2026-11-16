@@ -436,9 +436,17 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     const foy = await screen.findByRole('complementary', { name: 'Canlı föy önizlemesi' });
     const raf = within(foy).getByRole('region', { name: 'Çizimler' });
     expect(within(raf).getByText(/Kayıtta ORN-2045-01 · Rev B ile Çizim Merkezi'ne gider/)).toBeTruthy();
-    const girdi = within(raf).getByLabelText('STEP ya da PDF seç') as HTMLInputElement;
+    // 3305 a: iki grup; PDF 3B model alanına bırakılsa da teknik resim grubuna geçer.
+    const modelGrubu = within(raf).getByRole('region', { name: '3B model' });
+    const resimGrubu = within(raf).getByRole('region', { name: 'Teknik resim' });
+    const girdi = within(modelGrubu).getByLabelText('3B model seç (STEP, STP)') as HTMLInputElement;
+    expect(girdi.accept).toBe('.step,.stp');
+    expect((within(resimGrubu).getByLabelText('Teknik resim seç (PDF)') as HTMLInputElement).accept).toBe('.pdf');
     fireEvent.change(girdi, { target: { files: [new File(['x'], 'ORN-2045-01_Rev-B.pdf'), new File(['y'], 'ORN-2045-01_Rev-B.step'), new File(['z'], 'kroki.dxf')] } });
     expect(await screen.findByText('Yalnız PDF ve STEP eklenir: kroki.dxf.')).toBeTruthy();
+    expect(await screen.findByText('ORN-2045-01_Rev-B.pdf teknik resim olarak alındı.')).toBeTruthy();
+    expect(within(resimGrubu).getByRole('listitem', { name: 'ORN-2045-01_Rev-B.pdf' }).className).toContain('tc-my-cz-tasindi');
+    expect(within(modelGrubu).getByRole('listitem', { name: 'ORN-2045-01_Rev-B.step' })).toBeTruthy();
     expect(within(raf).getAllByText('Kayıtta gönderilir')).toHaveLength(2);
     expect(within(raf).getAllByText('ORN-2045-01 · Rev B')).toHaveLength(2);
     expect(yukleme.cagrilar).toHaveLength(0);
@@ -454,7 +462,7 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     expect(await within(raf).findByText('Yayında')).toBeTruthy();
     expect(await within(raf).findByText('Taslak')).toBeTruthy();
     expect(within(raf).queryByRole('button', { name: /kaldır/ })).toBeNull();
-    expect(within(raf).queryByLabelText('STEP ya da PDF seç')).toBeNull();
+    expect(within(raf).queryByLabelText(/ seç \(/)).toBeNull();
   });
 
   test('3242 d: yükleme hata verirse kart kayıtlı kalır, raf "Gönderilemedi" ve yeniden dener; hammaddede ve kayıtlı kartta raf yok', async () => {
@@ -480,9 +488,16 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     ac();
     const raf = within(await screen.findByRole('complementary', { name: 'Canlı föy önizlemesi' })).getByRole('region', { name: 'Çizimler' });
     expect(within(raf).getByText(/ORN-2046-01 · Rev —/)).toBeTruthy();
-    fireEvent.change(within(raf).getByLabelText('STEP ya da PDF seç'), { target: { files: [new File(['x'], 'BOZUK.pdf')] } });
+    fireEvent.change(within(raf).getByLabelText('Teknik resim seç (PDF)'), { target: { files: [new File(['x'], 'BOZUK.pdf')] } });
+    // 3305 a: kendi grubuna bırakılan dosya taşınmaz; ileti ve vurgu yok.
+    const pdf = within(within(raf).getByRole('region', { name: 'Teknik resim' })).getByRole('listitem', { name: 'BOZUK.pdf' });
+    expect(pdf.className).not.toContain('tc-my-cz-tasindi');
+    expect(screen.queryByText(/olarak alındı\.$/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Kataloğa kaydet' }));
     expect(await within(raf).findByText('Gönderilemedi')).toBeTruthy();
+    // Kayıtlı kartta yalnız dosyası olan grup kalır.
+    expect(within(raf).queryByRole('region', { name: '3B model' })).toBeNull();
+    expect(within(raf).getByRole('region', { name: 'Teknik resim' })).toBeTruthy();
     expect(within(raf).getByRole('alert').textContent).toBe("Dosya Çizim Merkezi'ne gönderilemedi; kart kaydedildi.");
     expect(await screen.findByText(/^Kataloğa kaydedildi/)).toBeTruthy();
     fireEvent.click(within(raf).getByRole('button', { name: 'Yeniden dene' }));

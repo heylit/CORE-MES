@@ -21,7 +21,7 @@ import { modelOku } from './goruntu/model.ts';
 import { IZINLI_DOSYA_TURLERI, dosyaTuruBul, gorunumTuru, kabulMetni, modelBicimi } from './gosterim.ts';
 import { COZUNURLUKLER, KARE_BAYT_SINIRI, KARE_SAYISI, OnizlemeAtlandi, kareAcisi, sinirdaKareler } from './onizleme-kurallari.ts';
 import { KucukResimKutusu } from './KucukResim.tsx';
-import { ResimPaneli, resimUretilir } from './ResimPaneli.tsx';
+import { ResimPaneli, resimUretilir, turGruplari } from './ResimPaneli.tsx';
 
 // Çizim (three, occt) tarayıcı ister; üretimin kendisi taklit edilir, akış gerçektir.
 const { onizlemeKareleri } = vi.hoisted(() => ({ onizlemeKareleri: vi.fn() }));
@@ -790,6 +790,38 @@ describe('cizimler malzeme kartında 3B model (3028 b)', () => {
     paneliAc(['malzemeler.yaz'], model('yayinda'));
     expect(await screen.findByText('Deneme braket')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /3D Atölyesi'nde aç/ })).toBeNull();
+  });
+});
+
+describe('cizimler malzeme kartında türe göre gruplar (3305 a)', () => {
+  const REV = AYRINTI.revizyonlar[0]!;
+  const belge = (id: number, ad: string, tur: MalzemeBelgeleriCevabi['belgeler'][number]['tur']): MalzemeBelgeleriCevabi['belgeler'][number] =>
+    ({ id, ad, tur, resimNo: null, surum: 1, kapak: false, revizyonlar: [{ ...REV, id: id * 10 }] });
+
+  it('sıra rafla aynı: 3B model, teknik resim, fotoğraf, öteki türler; boş grup çıkmaz', () => {
+    const l = [belge(1, 'ORN foto', 'fotograf'), belge(2, 'ORN resim', 'teknik-resim'), belge(3, 'ORN rapor', 'rapor'), belge(4, 'ORN model', '3b-model'), belge(5, 'ORN model 2', '3b-model')];
+    expect(turGruplari(l).map(([t, b]) => [t, b.map((x) => x.id)])).toEqual([['3b-model', [4, 5]], ['teknik-resim', [2]], ['fotograf', [1]], ['rapor', [3]]]);
+    expect(turGruplari([belge(2, 'ORN resim', 'teknik-resim')]).map(([t]) => t)).toEqual(['teknik-resim']);
+  });
+
+  it('panelde her grup başlığı ve sayısıyla görünür; belge kendi grubunun altındadır', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/oturum') return json(200, { kullanici: { id: 4, ad: 'Deneme Kişi', islemler: ['malzemeler.yaz'] } } as OturumCevabi);
+      if (yol === '/cizimler/malzemeler/41/belgeler') {
+        return json(200, { belgeler: [belge(2, 'ORN resim', 'teknik-resim'), belge(4, 'ORN model', '3b-model'), belge(5, 'ORN model 2', '3b-model')], oneriler: [], kucukResim: null, kartRevizyon: '00' } satisfies MalzemeBelgeleriCevabi);
+      }
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><ResimPaneli malzemeNo={41} /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+    const model = await screen.findByRole('region', { name: '3B model' });
+    const resim = screen.getByRole('region', { name: 'Teknik resim' });
+    expect(screen.queryByRole('region', { name: 'Fotoğraf' })).toBeNull();
+    expect(within(model).getAllByRole('listitem').map((li) => li.textContent)).toEqual([expect.stringContaining('ORN model'), expect.stringContaining('ORN model 2')]);
+    expect(within(resim).getByText('ORN resim')).toBeTruthy();
+    expect(within(model).queryByText('ORN resim')).toBeNull();
+    expect(model.compareDocumentPosition(resim) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

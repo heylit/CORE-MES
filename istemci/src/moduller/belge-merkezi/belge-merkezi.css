@@ -83,6 +83,10 @@
 .tc-cz-rp { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
 .tc-cz-rp-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
 .tc-cz-rp-ust p { margin: 0; }
+.tc-cz-rp-gruplar { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-cz-rp-grup { min-width: 0; padding-inline-start: var(--b-3); border-inline-start: var(--cizgi-kalin) solid var(--edge); }
+.tc-cz-rp-grup-bas { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); font-weight: 600; }
+.tc-cz-rp-grup-bas .tc-rozet { margin-left: auto; }
 .tc-cz-rp-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .tc-cz-rp-liste li {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);

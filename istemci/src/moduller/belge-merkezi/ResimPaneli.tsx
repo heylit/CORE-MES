@@ -223,6 +223,14 @@ function RevizyonYukle({ no, belge, kartRev, kapat }: { no: number; belge: Malze
   );
 }
 
+// Belgeler türüne göre gruplanır (3305 a): sıra malzeme açılışındaki rafla aynı (3B model, teknik resim, foto), öteki
+// türler arkadan; boş grup çıkmaz.
+const GRUP_SIRASI: readonly MalzemeBelgesi['tur'][] = ['3b-model', 'teknik-resim', 'fotograf'];
+export function turGruplari(belgeler: readonly MalzemeBelgesi[]): [MalzemeBelgesi['tur'], MalzemeBelgesi[]][] {
+  const turler = [...GRUP_SIRASI, ...belgeler.map((b) => b.tur).filter((t) => !GRUP_SIRASI.includes(t))];
+  return [...new Set(turler)].map((t) => [t, belgeler.filter((b) => b.tur === t)] as [MalzemeBelgesi['tur'], MalzemeBelgesi[]]).filter(([, l]) => l.length > 0);
+}
+
 // Son revizyon: yayındaki varsa o, yoksa en yenisi (liste sıra azalan gelir).
 const gosterilenRevizyon = (b: MalzemeBelgesi): Revizyon | undefined => b.revizyonlar.find((r) => r.durum === 'yayinda') ?? b.revizyonlar[0];
 
@@ -273,58 +281,65 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
             {veri.belgeler.length === 0
               ? <DurumKutusu durum="bos" mesaj="Bağlı resim ya da çizim yok" />
               : (
-                <ul className="tc-cz-rp-liste">
-                  {veri.belgeler.map((b) => {
-                    const r = gosterilenRevizyon(b);
-                    const karesiz = karesizYayinda(b);
-                    const yayinlanmis = b.revizyonlar.some((x) => x.durum !== 'taslak');
-                    const yayindaki = b.revizyonlar.find((x) => x.durum === 'yayinda');
-                    const taslakModel = b.tur === '3b-model' && yayindaki === undefined ? b.revizyonlar.find((x) => x.durum === 'taslak') : undefined;
-                    return (
-                      <li key={b.id}>
-                        <span className="tc-cz-rp-ad">
-                          <Simge ad={TUR_SIMGESI[b.tur]} />
-                          {merkezGorur ? <Link to={`/cizimler/belge/${b.id}`}>{b.ad}</Link> : b.ad}
-                        </span>
-                        {r && <span className="mono">{revKoduMetni(r.revKodu)}</span>}
-                        {r && <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>}
-                        {b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}
-                        {b.tur === '3b-model' && atolyeGorur && yayindaki && OLCULEN.has(yayindaki.dosyaTuru) && (
-                          <Link className="tc-cz-rp-atolye" to={`/geometri?rev=${String(yayindaki.id)}`}><Simge ad="expand" />3D Atölyesi'nde aç</Link>
-                        )}
-                        {taslakModel && yayinlar && (
-                          <Dugme
-                            simge="check" tur="birincil" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} yayınla`}
-                            onClick={() => { void islem(b.id, async () => { await api.post(`/cizimler/${String(b.id)}/revizyonlar/${String(taslakModel.id)}/yayinla`, { surum: b.surum }); bildir('bilgi', 'Model yayınlandı; 3D Atölyesi yarım dakika içinde ölçer.'); }, 'Yayınlanamadı'); }}
-                          >
-                            Yayınla
-                          </Dugme>
-                        )}
-                        {yazar && (
-                          <span className="tc-cz-rev-arac">
-                            {!b.kapak && yayinlanmis && (
-                              <Dugme
-                                simge="flag" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} kapak olsun`}
-                                onClick={() => { void islem(b.id, () => api.post(`${kok(malzemeNo)}/belgeler/${b.id}/kapak`, { surum: b.surum }), 'Kapak seçilemedi'); }}
-                              >
-                                Kapak yap
-                              </Dugme>
-                            )}
-                            {karesiz && merkezGorur && (
-                              <Dugme
-                                simge="scan" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} için küçük resim üret`}
-                                onClick={() => { void islem(b.id, () => kareUret(malzemeNo, b.id, karesiz), 'Küçük resim üretilemedi'); }}
-                              >
-                                Resim üret
-                              </Dugme>
-                            )}
-                            <Dugme simge="upload" disabled={isleyen !== null} onClick={() => { acikYaz({ revizyon: b }); }} aria-label={`${b.ad} yeni revizyon`}>Revizyon</Dugme>
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="tc-cz-rp-gruplar">
+                  {turGruplari(veri.belgeler).map(([tur, belgeler]) => (
+                    <section key={tur} className="tc-cz-rp-grup" aria-label={TUR_ADI[tur]}>
+                      <h4 className="tc-cz-rp-grup-bas"><Simge ad={TUR_SIMGESI[tur]} />{TUR_ADI[tur]}<Rozet ton="pasif" gorunum="cizgi">{belgeler.length}</Rozet></h4>
+                      <ul className="tc-cz-rp-liste">
+                        {belgeler.map((b) => {
+                          const r = gosterilenRevizyon(b);
+                          const karesiz = karesizYayinda(b);
+                          const yayinlanmis = b.revizyonlar.some((x) => x.durum !== 'taslak');
+                          const yayindaki = b.revizyonlar.find((x) => x.durum === 'yayinda');
+                          const taslakModel = b.tur === '3b-model' && yayindaki === undefined ? b.revizyonlar.find((x) => x.durum === 'taslak') : undefined;
+                          return (
+                            <li key={b.id}>
+                              <span className="tc-cz-rp-ad">
+                                <Simge ad={TUR_SIMGESI[b.tur]} />
+                                {merkezGorur ? <Link to={`/cizimler/belge/${b.id}`}>{b.ad}</Link> : b.ad}
+                              </span>
+                              {r && <span className="mono">{revKoduMetni(r.revKodu)}</span>}
+                              {r && <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>}
+                              {b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}
+                              {b.tur === '3b-model' && atolyeGorur && yayindaki && OLCULEN.has(yayindaki.dosyaTuru) && (
+                                <Link className="tc-cz-rp-atolye" to={`/geometri?rev=${String(yayindaki.id)}`}><Simge ad="expand" />3D Atölyesi'nde aç</Link>
+                              )}
+                              {taslakModel && yayinlar && (
+                                <Dugme
+                                  simge="check" tur="birincil" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} yayınla`}
+                                  onClick={() => { void islem(b.id, async () => { await api.post(`/cizimler/${String(b.id)}/revizyonlar/${String(taslakModel.id)}/yayinla`, { surum: b.surum }); bildir('bilgi', 'Model yayınlandı; 3D Atölyesi yarım dakika içinde ölçer.'); }, 'Yayınlanamadı'); }}
+                                >
+                                  Yayınla
+                                </Dugme>
+                              )}
+                              {yazar && (
+                                <span className="tc-cz-rev-arac">
+                                  {!b.kapak && yayinlanmis && (
+                                    <Dugme
+                                      simge="flag" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} kapak olsun`}
+                                      onClick={() => { void islem(b.id, () => api.post(`${kok(malzemeNo)}/belgeler/${b.id}/kapak`, { surum: b.surum }), 'Kapak seçilemedi'); }}
+                                    >
+                                      Kapak yap
+                                    </Dugme>
+                                  )}
+                                  {karesiz && merkezGorur && (
+                                    <Dugme
+                                      simge="scan" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} için küçük resim üret`}
+                                      onClick={() => { void islem(b.id, () => kareUret(malzemeNo, b.id, karesiz), 'Küçük resim üretilemedi'); }}
+                                    >
+                                      Resim üret
+                                    </Dugme>
+                                  )}
+                                  <Dugme simge="upload" disabled={isleyen !== null} onClick={() => { acikYaz({ revizyon: b }); }} aria-label={`${b.ad} yeni revizyon`}>Revizyon</Dugme>
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
               )}
             {yazar && veri.oneriler.length > 0 && (
               <>
