@@ -230,7 +230,7 @@ namespace LogoYardimcisi
             c = C(s, "POST", yol, N("code", Malzeme));
             Dogru(Basari(c), Json.Yaz(c.Govde));
             Esit(r, Ref(c), "kayıt numarası döner");
-            Esit("Guncelle " + Nesne.Malzeme + " " + r + " ACTIVE=1", s.Cagrilar.Last(), "Logo Objects ACTIVE yazılır");
+            Esit("Guncelle " + Nesne.Malzeme + " " + r + " RECORD_STATUS=1", s.Cagrilar.Last(), "Logo Objects RECORD_STATUS yazılır (ACTIVE nesne alanı değil)");
             Dogru(s.Malzeme(Malzeme) != null && s.Malzeme(Malzeme).Pasif, "kart duruyor, kullanım dışı");
             var sayi = s.Cagrilar.Count;
             Dogru(Basari(C(s, "POST", yol, N("code", Malzeme))), "zaten kullanım dışı: başarı");
@@ -250,7 +250,7 @@ namespace LogoYardimcisi
             Esit(404, c.Durum, "verilen hizmette yok");
             c = C(s, "POST", "/api/PurchaseService/" + r + "/deactivate", N("code", "HZM-1"));
             Dogru(Basari(c), Json.Yaz(c.Govde));
-            Esit("Guncelle " + Nesne.AlinanHizmet + " " + r + " ACTIVE=1", s.Cagrilar.Last(), "alınan hizmet nesnesi");
+            Esit("Guncelle " + Nesne.AlinanHizmet + " " + r + " RECORD_STATUS=1", s.Cagrilar.Last(), "alınan hizmet nesnesi");
             Dogru(s.Hizmet("HZM-1", 1) != null && s.Hizmet("HZM-1", 1).Pasif, "hizmet duruyor, kullanım dışı");
         }
 

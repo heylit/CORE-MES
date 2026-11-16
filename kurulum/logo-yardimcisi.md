@@ -148,11 +148,12 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
 
 - TMI'de silinen ve Logo'ya gönderilmiş kart Logo'dan silinmez, kullanım dışı bırakılır: `POST /api/Material/{kayıtNo}/deactivate`, hizmet
   kartı `POST /api/PurchaseService|SalesService/{kayıtNo}/deactivate`, gövde `{ "code": kod }`. Kayıttaki kartın kodu tutmazsa dokunulmaz.
-  Logo Objects ile `ACTIVE = 1` yazılır, SQL'den doğrulanır; zaten kullanım dışıysa yazılmaz. Kart yoksa `404 Card not found` (TMI ret sayar).
+  Logo Objects ile `RECORD_STATUS = 1` yazılır, SQL'den (`ACTIVE = 1`) doğrulanır; zaten kullanım dışıysa yazılmaz. Kart yoksa `404 Card not found` (TMI ret sayar).
 - TMI'de istek yalnız "Logo bağlantısı" açıkken alınır; kart o sürede pasif bekler, Logo gönderimi sayfasında "Logo'da pasife alınmayı
   bekliyor" görünür. Logo reddederse kart pasif kalır ve neden aynı satırda görünür; Logo onaylarsa kart Arşiv'e düşer, Logo'da kullanım dışı durur.
 - Eski yardımcı bu ucu bilmez: bilinmeyen yol 404 "Not found" döner, TMI bunu ret sayar (kart pasif kalır). Yardımcıyı güncelleyip kartı yeniden silin.
-- DOĞRULANMADI: Logo Objects'te `ACTIVE` alanı gerçek Logo'da denenmedi. `--deneme` test malzemesine dokunmaz; ucu yanlış kodla çağırıp kod
+- Canlıda (16.11.2026) Logo Objects `ACTIVE` alanını tanımadı (`[code=14] Alan yok: ACTIVE`); `ACTIVE` tablo sütunudur, nesne alanı değil.
+- DOĞRULANMADI: nesne alanı `RECORD_STATUS` gerçek Logo'da denenmedi. `--olc malzeme <kod>` dökümünde alanın adı görülür. `--deneme` test malzemesine dokunmaz; ucu yanlış kodla çağırıp kod
   kalkanını dener. İlk gerçek isteği deneme firmasında bir kartla yapın ve kartın Logo'da "kullanım dışı" göründüğüne bakın.
 
 ## Malzeme fişi
@@ -219,7 +220,7 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 5. Logo bilgisayarında .NET Framework 4.x kurulu; yardımcı yönetici olmadan kullanıcı süreci olarak çalışır.
 6. Malzeme fişi TRCODE'ları (sarf 12, giriş 13, fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51) ve ambar fişinin `SOURCE_WH`/`DEST_WH` alanları.
 7. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
-8. Kartı pasife alma: Logo Objects'te malzeme ve hizmet kartının `ACTIVE` alanı (1 kullanım dışı) ve `SRVCARD.ACTIVE` sütunu.
+8. Kartı pasife alma: Logo Objects'te malzeme ve hizmet kartının `RECORD_STATUS` alanı (1 kullanım dışı) ve `ITEMS.ACTIVE`, `SRVCARD.ACTIVE` sütunları.
 9. Sipariş içeriği (2987): `ORFICHE.DATE_`; `ORFLINE.PRICE`, `PRPRICE`, `VAT`, `UOMREF`, `DUEDATE`, `LINEEXP` sütun adları ve anlamları
    ölçülmedi (Logo bilgisayarında ölçüm şimdilik yok). Anlam, Logo ekranındaki siparişle okunanın karşılaştırılmasıyla doğrulanır.
 

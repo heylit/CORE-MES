@@ -1425,8 +1425,11 @@ namespace LogoYardimcisi
         public const string KartYok = "Card not found";
 
         // Kart kayıt numarasıyla bulunur; kayıttaki kartın kodu TMI'nin verdiği kodla karşılaştırılır (başka karta dokunulmaz). Kart silinmez:
-        // Logo Objects ile ACTIVE = 1 yazılır, ardından SQL'den kartın kullanım dışı olduğu doğrulanır. Zaten kullanım dışıysa yazılmaz, başarıdır
-        // (yinelenen istek aynı sonucu verir). ACTIVE alan adı ve değeri gerçek Logo'da denenmedi (kurulum/logo-yardimcisi.md).
+        // Logo Objects ile KayitDurumuAlani = 1 yazılır, ardından SQL'den kartın kullanım dışı olduğu (ACTIVE = 1) doğrulanır. Zaten kullanım
+        // dışıysa yazılmaz, başarıdır (yinelenen istek aynı sonucu verir).
+        // Canlıda Logo Objects "ACTIVE" alanını tanımadı ([code=14] Alan yok, 16.11.2026): tablo sütunu ACTIVE, nesne alanı RECORD_STATUS
+        // (VARSAYIM: Logo Objects kart alanlarının adlandırması; gerçek Logo'da --olc malzeme <kod> dökümüyle doğrulanır).
+        public const string KayitDurumuAlani = "RECORD_STATUS";
         Cevap KartPasifeAl(string uc, string refMetni, Dictionary<string, object> g)
         {
             int kayit;
@@ -1439,7 +1442,7 @@ namespace LogoYardimcisi
             if (k.Item1 != kod) return Cevap.Ret("Kayıttaki kartın kodu farklı (" + k.Item1 + "); kullanım dışı bırakılmadı.");
             if (k.Item2) return Cevap.Basari(kayit);
             var nesne = !hizmet ? Nesne.Malzeme : uc == "PurchaseService" ? Nesne.AlinanHizmet : Nesne.VerilenHizmet;
-            var h = yaz.Guncelle(nesne, kayit, new AlanListesi().Ekle("ACTIVE", 1), new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
+            var h = yaz.Guncelle(nesne, kayit, new AlanListesi().Ekle(KayitDurumuAlani, 1), new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
             if (h != null) return Cevap.Ret(h);
             var y = KayittakiKart(hizmet, kayit, kartTuru);
             if (y == null || !y.Item2) return DogrulamaTutmadi(hizmet ? "Hizmet kartı" : "Malzeme kartı", kayit, new List<string> { "ACTIVE beklenen '1', Logo'da '" + (y == null ? "kart yok" : "0") + "'" });
