@@ -87,12 +87,22 @@ namespace LogoYardimcisi
             }
         }
 
+        // 3314: hangi kaynaktan derlendiği; CORE paketteki kaynağın özetiyle karşılaştırır. Logo'ya gitmez.
+        static Cevap SurumBilgisi()
+        {
+            var g = new Dictionary<string, object>();
+            g["kaynakOzeti"] = Surum.KaynakOzeti;
+            g["derlemeZamani"] = Surum.DerlemeZamani;
+            return new Cevap(200, g);
+        }
+
         Cevap Yonlendir(string yontem, string yol, Dictionary<string, string> sorgu, string govde)
         {
             Match m;
             if (yontem == "GET")
             {
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
+                if (yol == "/api/version") return SurumBilgisi();
                 if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
                 if (yol == "/api/Material/list") return MalzemeListesi(sorgu);
                 if ((m = MalzemeOkumasi.Match(yol)).Success)

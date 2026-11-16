@@ -92,7 +92,7 @@ describe('LOGO-H2/H3 canlı kontrol yalnız okur', () => {
       const r = await kontrol(kopruIstemcisiKur({ adres: k.adres, anahtar: k.anahtar }, { sureMs: 5000 }), () => new Date('2026-10-15T10:00:00Z'));
       assert.equal(r.ulasildi, true);
       assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['tamam', 'tamam', 'tamam']);
-      assert.deepEqual(k.istekler.map((i) => `${i.yontem} ${i.yol}`), LOGO_KONTROL_ADIMLARI.map((a) => `GET ${a.yol}`));
+      assert.deepEqual(k.istekler.map((i) => `${i.yontem} ${i.yol}`), [...LOGO_KONTROL_ADIMLARI.map((a) => `GET ${a.yol}`), 'GET /api/version'], 'sürüm sorusu da yalnız okur');
       assert.ok(k.istekler.every((i) => i.anahtar === k.anahtar));
       assert.equal(k.acilan.size + k.siparisAcilan.size + k.hizmetAcilan.size, 0, 'kontrol Logo\'da kayıt açmaz');
     } finally {

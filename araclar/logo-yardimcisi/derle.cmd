@@ -8,8 +8,11 @@ if not exist "%CSC%" (
   exit /b 1
 )
 if not exist cikti mkdir cikti
+rem Kaynak ozeti (3314): once kucuk uretici derlenir ve Surum.g.cs'i yazar; exe ozeti /api/version ile bildirir.
+"%CSC%" /nologo /target:exe /warnaserror+ /out:cikti\surum-uret.exe SurumUret.cs || exit /b 1
+cikti\surum-uret.exe . || exit /b 1
 set REFS=/r:System.Data.dll /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Xml.dll
-"%CSC%" /nologo /platform:x86 /target:exe /warnaserror+ %REFS% /out:cikti\logo-yardimcisi.exe Temel.cs Arayuzler.cs Ayar.cs LogoXml.cs Islemler.cs HttpSunucu.cs ComLogo.cs SqlOkuma.cs Deneme.cs Program.cs || exit /b 1
+"%CSC%" /nologo /platform:x86 /target:exe /warnaserror+ %REFS% /out:cikti\logo-yardimcisi.exe Temel.cs Arayuzler.cs Ayar.cs LogoXml.cs Islemler.cs HttpSunucu.cs ComLogo.cs SqlOkuma.cs Deneme.cs Program.cs Surum.g.cs || exit /b 1
 "%CSC%" /nologo /platform:x86 /target:exe /warnaserror+ %REFS% /main:LogoYardimcisi.Testler /out:cikti\testler.exe *.cs || exit /b 1
 echo Derlendi: cikti\logo-yardimcisi.exe
 if "%1"=="test" (cikti\testler.exe || exit /b 1)

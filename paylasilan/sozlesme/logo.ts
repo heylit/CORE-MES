@@ -38,6 +38,18 @@ export type LogoBaglantiDurumu = (typeof LOGO_BAGLANTI_DURUMLARI)[number];
 export const BAGLANTI_AKIS_DURUMLARI = ['hazir', 'kapali', 'ayar-eksik', 'baglanmadi', 'kodda-yok'] as const;
 export const LOGO_AKIS_YONLERI = ['tmi-logo', 'logo-tmi'] as const;
 
+// 3314: çalışan yardımcının kaynak özeti paketteki kaynağınkiyle aynı mı. "eski": sürüm ucu yok; "bilinmiyor": ulaşılamadı ya da karşılaştırılamadı.
+export const LOGO_YARDIMCI_SURUM_DURUMLARI = ['ayni', 'farkli', 'eski', 'bilinmiyor'] as const;
+export const logoYardimciSurumu = z.object({
+  durum: z.enum(LOGO_YARDIMCI_SURUM_DURUMLARI),
+  ileti: z.string(),
+  calisanOzet: z.string().nullable(),
+  derlemeZamani: z.string().nullable(),
+  pakettekiOzet: z.string().nullable(),
+  sonBakis: zamanSemasi,
+});
+export type LogoYardimciSurumu = z.output<typeof logoYardimciSurumu>;
+
 export const logoHazirlikCevabi = z.object({
   baglanti: z.enum(LOGO_BAGLANTI_DURUMLARI),
   ortam: z.object({
@@ -58,6 +70,8 @@ export const logoHazirlikCevabi = z.object({
     sonDeneme: zamanSemasi.nullable(),
   })),
   sonBirimSetiOkuma: zamanSemasi.nullable(),
+  // 3314: son sürüm bakışı (saatte bir ve canlı kontrolde); henüz bakılmadıysa null. Alan sonradan eklendi, eski istemci görmezden gelir.
+  yardimci: logoYardimciSurumu.nullable().optional(),
 });
 
 export const BAGLANTI_KONTROL_SONUCLARI = ['tamam', 'hata', 'atlandi'] as const;

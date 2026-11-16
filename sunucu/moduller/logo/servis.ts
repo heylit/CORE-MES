@@ -9,6 +9,7 @@ import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
+import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
   BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
@@ -1590,6 +1591,7 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
       };
     }),
     sonBirimSetiOkuma: okuma?.sonOkuma ?? null,
+    yardimci: yardimciSurumu(),
   };
 }
 
@@ -1614,5 +1616,7 @@ export async function kontrol(kopru: KopruIstemcisi | null, saat: () => Date = (
     adimlar.push({ ...a, sonuc: r.sonuc, sureMs: Date.now() - bas, ileti: r.ileti });
     devam = r.devam;
   }
+  // 3314: canlı kontrol sürümü de sorar; sonuç hazırlık ve bağlantı izleme ekranında görünür.
+  if (adimlar.some((a) => a.sonuc === 'tamam')) await yardimciSurumunuSor(kopru, saat);
   return { zaman, ulasildi: adimlar.some((a) => a.sonuc === 'tamam'), adimlar };
 }
