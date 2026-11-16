@@ -426,7 +426,8 @@ export function denemeCevabi(
       };
     }
     const m = kalemMaliyeti(k, Number(s.miktar), g.genelGiderSaatBasi);
-    const eksik = g.genelGiderSaatBasi === null ? [...k.eksikVeri, GENEL_GIDER_YOK] : k.eksikVeri;
+    // 3347: genel gider yalnız maliyeti eksik bırakır; yerleşmeyen kalemin maliyeti zaten yoktur, not yalnız yerleşende yazılır.
+    const eksik = g.genelGiderSaatBasi === null && k.yerlesti ? [...k.eksikVeri, GENEL_GIDER_YOK] : k.eksikVeri;
     return {
       ...ortak, yerlesti: k.yerlesti, bitis: k.bitis, planTermini: k.planTermini, malzemeGelisi: k.malzemeGelisi,
       satinalma: k.satinalma.map((a) => ({ kod: a.kod, miktar: String(a.miktar), birim: a.birim, gelis: a.gelis })),
