@@ -423,3 +423,9 @@ export const gozSilmeEngelleri = async (db: Db, gozIdler: readonly number[]): Pr
     ...(e.malzeme ? [{ gozId: e.gozId, engel: 'malzeme' as const }] : []),
     ...(e.acikIs ? [{ gozId: e.gozId, engel: 'acik-is' as const }] : []),
   ]);
+
+// 3345 a: Logo satış iade irsaliyesinin CORE karşılığı; irsaliye numarası -> iade mal kabulü. Boş dizide sorgu atılmaz.
+export async function iadeMalKabulleri(db: Db, irsaliyeNolar: readonly string[]): Promise<Map<string, { id: number; no: string }>> {
+  if (irsaliyeNolar.length === 0) return new Map();
+  return new Map((await sorgular.iadeMalKabulleri(db, irsaliyeNolar)).map(({ irsaliyeNo, ...x }) => [irsaliyeNo, x]));
+}

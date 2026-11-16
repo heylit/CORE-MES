@@ -13,6 +13,8 @@ namespace LogoYardimcisi
         public const int StokKoduEnCok = 24;
         public const int FisNoEnCok = 16;
         public const int MalKabulEnCok = 500;
+        // 3345 a: irsaliye sayfası başlık sayısıdır (satırlarıyla birlikte gelir).
+        public const int IrsaliyeSayfasi = 100;
         // 2116 ve 2118 okumaları: sayfa başına kart sayısı ve arama sonucu sınırı.
         public const int KartSayfasi = 500;
         public const int CariAramaEnCok = 20;
@@ -120,6 +122,8 @@ namespace LogoYardimcisi
                 if ((m = ProjeVarMi.Match(yol)).Success) return ProjeVarMiOku(Coz(m, 1));
                 if ((m = HizmetVarMi.Match(yol)).Success) return HizmetVarMiOku(m.Groups[1].Value == "Purchase", Coz(m, 2));
                 if (yol == "/api/PurchaseOrder/receipts") return MalKabul(sorgu);
+                if (yol == "/api/Dispatch/list") return IrsaliyeListesi(sorgu);
+                if (yol == "/api/Dispatch/refs") return IrsaliyeRefleri(sorgu);
                 if ((m = SiparisBul.Match(yol)).Success)
                 {
                     var s = oku.Siparis(Coz(m, 1), 2);
@@ -1064,6 +1068,91 @@ namespace LogoYardimcisi
                 l.Add(o);
             }
             return new Cevap(200, l);
+        }
+
+        // 3345 a: irsaliyeler yalnız okunur. from zorunludur (ilk okuma tarihle sınırlı, Risk N2); changedAfter verilirse değişenler okunur
+        // (Logo'nun değişme zamanı ve eşitte başlık kaydı; since o zamandaki son başlık kaydıdır). Firma ve dönem cevaptadır: imleç dönem başına tutulur.
+        Cevap IrsaliyeListesi(Dictionary<string, string> sorgu)
+        {
+            var son = Imlec(sorgu);
+            var baslangic = GunZorunlu(sorgu, "from");
+            string m;
+            List<IrsaliyeBasligi> l;
+            if (sorgu.TryGetValue("changedAfter", out m) && m != "")
+            {
+                DateTime sonra;
+                if (!DateTime.TryParseExact(m, DegismeBicimi, CultureInfo.InvariantCulture, DateTimeStyles.None, out sonra))
+                    throw new GecersizIstek("changedAfter " + DegismeBicimi + " olmalı.");
+                l = oku.DegisenIrsaliyeler(sonra, son, baslangic, IrsaliyeSayfasi);
+            }
+            else l = oku.Irsaliyeler(son, baslangic, IrsaliyeSayfasi);
+            var d = new List<object>();
+            foreach (var b in l) d.Add(IrsaliyeNesnesi(b));
+            var g = DonemliCevap();
+            g["dispatches"] = d;
+            return new Cevap(200, g);
+        }
+
+        Cevap IrsaliyeRefleri(Dictionary<string, string> sorgu)
+        {
+            var g = DonemliCevap();
+            g["refs"] = oku.IrsaliyeRefleri(GunZorunlu(sorgu, "from"));
+            return new Cevap(200, g);
+        }
+
+        const string DegismeBicimi = "yyyy-MM-ddTHH:mm:ss.fff";
+
+        Dictionary<string, object> DonemliCevap()
+        {
+            var g = new Dictionary<string, object>();
+            g["firm"] = ayar.FirmaNo;
+            g["period"] = ayar.DonemNo;
+            return g;
+        }
+
+        static DateTime GunZorunlu(Dictionary<string, string> sorgu, string ad)
+        {
+            string m;
+            DateTime t;
+            if (!sorgu.TryGetValue(ad, out m) || !DateTime.TryParseExact(m, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out t))
+                throw new GecersizIstek(ad + " yyyy-MM-dd olmalı.");
+            return t;
+        }
+
+        static Dictionary<string, object> IrsaliyeNesnesi(IrsaliyeBasligi b)
+        {
+            var o = new Dictionary<string, object>();
+            o["logicalRef"] = b.Ref;
+            o["trCode"] = b.Tur;
+            o["ficheNo"] = b.FisNo;
+            o["docNumber"] = b.BelgeNo;
+            o["date"] = b.Tarih.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            o["cancelled"] = b.Iptal;
+            o["warehouseNr"] = b.AmbarNo;
+            o["arpCode"] = b.CariKodu;
+            o["arpName"] = b.CariAdi;
+            o["invoiceNo"] = b.FaturaNo;
+            o["eDespatch"] = b.EIrsaliye;
+            o["modifiedAt"] = b.Degisme.HasValue ? b.Degisme.Value.ToString(DegismeBicimi, CultureInfo.InvariantCulture) : null;
+            var l = new List<object>();
+            foreach (var s in b.Satirlar)
+            {
+                var x = new Dictionary<string, object>();
+                x["logicalRef"] = s.Ref;
+                x["itemCode"] = s.MalzemeKodu;
+                x["itemName"] = s.MalzemeAdi;
+                x["quantity"] = s.Miktar;
+                x["unitCode"] = s.Birim;
+                x["price"] = s.Fiyat;
+                x["currency"] = s.DovizTuru;
+                x["currencyPrice"] = s.DovizFiyati;
+                x["orderRef"] = s.SiparisRef;
+                x["orderLineRef"] = s.SiparisSatirRef;
+                x["orderNo"] = s.SiparisNo;
+                l.Add(x);
+            }
+            o["lines"] = l;
+            return o;
         }
 
         Cevap Faturalar(string no)

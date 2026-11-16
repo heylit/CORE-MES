@@ -26,7 +26,7 @@ import { KALIBRASYON_IKINCI_MENU, KALIBRASYON_SAYFALARI } from './sayfalar/kalib
 import { KALITE_MERKEZI_IKINCI_MENU, KALITE_MERKEZI_SAYFALARI } from './sayfalar/kalite-merkezi.ts';
 import { KISILER_IKINCI_MENU, KISILER_SAYFALARI } from './sayfalar/kisiler.ts';
 import { KUYRUK_SAYFALARI } from './sayfalar/kuyruk.ts';
-import { LOGO_SAYFALARI } from './sayfalar/logo.ts';
+import { LOGO_IRSALIYELERI_IKINCI_MENU, LOGO_SAYFALARI } from './sayfalar/logo.ts';
 import { MALZEMELER_IKINCI_MENU, MALZEMELER_SAYFALARI } from './sayfalar/malzemeler.ts';
 import { MARKALAMA_IKINCI_MENU, MARKALAMA_SAYFALARI } from './sayfalar/markalama.ts';
 import { MATRIS_SAYFALARI } from './sayfalar/matris.ts';
@@ -117,6 +117,7 @@ export const SAYFALAR = TUM_SAYFALAR.filter((s) => !kapaliModulYoluMu(s.yol));
 // Satır başına tek menü: aynı turda menü ekleyen modüllerin değişiklikleri ayrı satırlara düşer. Sıra menüyü etkilemez (kökle bulunur).
 export const TUM_IKINCI_MENULER = [
   ARKON_IKINCI_MENU,
+  LOGO_IRSALIYELERI_IKINCI_MENU,
   IK_IKINCI_MENU,
   IK_ISLEMLERIM_IKINCI_MENU,
   SATIN_ALMA_IKINCI_MENU,

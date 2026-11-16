@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI, sonrakiDenemeYazilir } from './kurallar.ts';
-import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
+import type { FaturaKaydi, FisGidenDurumu, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
@@ -759,4 +759,176 @@ export async function cariAdlari(db: Db, kodlar: readonly string[]): Promise<Map
   if (kodlar.length === 0) return new Map();
   const l = await db.sorgu<{ kod: string; ad: string | null }>('SELECT kod, ad FROM logo_cari WHERE kod = ANY($1::text[])', [kodlar]);
   return new Map(l.map((x) => [x.kod, x.ad]));
+}
+
+/* ---------------- Logo irsaliyeleri (3345 a): ayna, yalnız okunur ---------------- */
+
+export interface IrsaliyeImleci {
+  firma: number;
+  donem: number;
+  sonRef: number;
+  degisme: string | null;
+  degismeRef: number;
+  sira: IrsaliyeOkumaSirasi;
+  refDenetimi: Date | null;
+}
+
+// En son okunan dönem; yardımcı başka döneme geçince o dönemin imleci ayrı açılır (Risk K2).
+export function irsaliyeImleci(db: Db): Promise<IrsaliyeImleci | null> {
+  return db.tek<IrsaliyeImleci>(
+    `SELECT firma, donem, son_ref AS "sonRef", degisme, degisme_ref AS "degismeRef", sira, ref_denetimi AS "refDenetimi"
+       FROM logo_irsaliye_imleci ORDER BY son_okuma DESC, firma DESC, donem DESC LIMIT 1`,
+  );
+}
+
+export function irsaliyeSonOkumasi(db: Db): Promise<string | null> {
+  return db.tek<{ son: string | null }>(`SELECT ${zamanMetni('max(son_okuma)')} AS son FROM logo_irsaliye_imleci`).then((r) => r?.son ?? null);
+}
+
+// Kayıt imleci ve değişme imleci geri gitmez; ref denetimi zamanı yalnız verilince değişir.
+export async function irsaliyeImleciYaz(db: Db, i: IrsaliyeImleci, zaman: Date): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO logo_irsaliye_imleci (firma, donem, son_ref, degisme, degisme_ref, sira, son_okuma, ref_denetimi)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (firma, donem) DO UPDATE SET
+       son_ref = GREATEST(logo_irsaliye_imleci.son_ref, EXCLUDED.son_ref),
+       degisme = CASE WHEN logo_irsaliye_imleci.degisme IS NULL OR (EXCLUDED.degisme, EXCLUDED.degisme_ref) > (logo_irsaliye_imleci.degisme, logo_irsaliye_imleci.degisme_ref)
+                      THEN EXCLUDED.degisme ELSE logo_irsaliye_imleci.degisme END,
+       degisme_ref = CASE WHEN logo_irsaliye_imleci.degisme IS NULL OR (EXCLUDED.degisme, EXCLUDED.degisme_ref) > (logo_irsaliye_imleci.degisme, logo_irsaliye_imleci.degisme_ref)
+                      THEN EXCLUDED.degisme_ref ELSE logo_irsaliye_imleci.degisme_ref END,
+       sira = EXCLUDED.sira, son_okuma = EXCLUDED.son_okuma,
+       ref_denetimi = COALESCE(EXCLUDED.ref_denetimi, logo_irsaliye_imleci.ref_denetimi)`,
+    [i.firma, i.donem, i.sonRef, i.degisme, i.degismeRef, i.sira, zaman, i.refDenetimi],
+  );
+}
+
+// Başlık yeniden okununca alanları ve satırları Logo'daki son hâle getirilir (iptal, faturalanma, satır değişimi); Logo'da yok işareti kalkar.
+export async function irsaliyeleriYaz(db: Db, firma: number, donem: number, basliklar: readonly IrsaliyeBasligiOkuma[], zaman: Date): Promise<void> {
+  if (basliklar.length === 0) return;
+  const b = basliklar;
+  await db.sorgu(
+    `INSERT INTO logo_irsaliye (firma, donem, logical_ref, tur, fis_no, belge_no, tarih, iptal, ambar_no, cari_kodu, cari_adi, fatura_no, e_irsaliye, logo_degisme, logoda_yok, okuma_zamani)
+     SELECT $1, $2, t.*, NULL, $15 FROM unnest($3::bigint[], $4::smallint[], $5::text[], $6::text[], $7::date[], $8::boolean[], $9::int[], $10::text[], $11::text[], $12::text[], $13::boolean[], $14::text[]) AS t
+     ON CONFLICT (firma, donem, logical_ref) DO UPDATE SET
+       tur = EXCLUDED.tur, fis_no = EXCLUDED.fis_no, belge_no = EXCLUDED.belge_no, tarih = EXCLUDED.tarih, iptal = EXCLUDED.iptal, ambar_no = EXCLUDED.ambar_no,
+       cari_kodu = EXCLUDED.cari_kodu, cari_adi = EXCLUDED.cari_adi, fatura_no = EXCLUDED.fatura_no, e_irsaliye = EXCLUDED.e_irsaliye,
+       logo_degisme = EXCLUDED.logo_degisme, logoda_yok = NULL, okuma_zamani = EXCLUDED.okuma_zamani`,
+    [firma, donem, b.map((x) => x.kayitNo), b.map((x) => x.tur), b.map((x) => x.fisNo), b.map((x) => x.belgeNo), b.map((x) => x.tarih), b.map((x) => x.iptal),
+      b.map((x) => x.ambarNo), b.map((x) => x.cariKodu), b.map((x) => x.cariAdi), b.map((x) => x.faturaNo), b.map((x) => x.eIrsaliye), b.map((x) => x.degisme), zaman],
+  );
+  await db.sorgu('DELETE FROM logo_irsaliye_satiri WHERE firma = $1 AND donem = $2 AND irsaliye_ref = ANY($3::bigint[])', [firma, donem, b.map((x) => x.kayitNo)]);
+  const s = b.flatMap((x) => x.satirlar.map((y, i) => ({ ...y, irsaliye: x.kayitNo, sira: i + 1 })));
+  if (s.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO logo_irsaliye_satiri (firma, donem, logical_ref, irsaliye_ref, sira, malzeme_kodu, malzeme_adi, miktar, birim, fiyat, doviz_turu, doviz_fiyati, siparis_ref, siparis_satir_ref, siparis_no)
+     SELECT $1, $2, t.* FROM unnest($3::bigint[], $4::bigint[], $5::smallint[], $6::text[], $7::text[], $8::numeric[], $9::text[], $10::numeric[], $11::int[], $12::numeric[],
+       $13::bigint[], $14::bigint[], $15::text[]) AS t
+     ON CONFLICT (firma, donem, logical_ref) DO UPDATE SET irsaliye_ref = EXCLUDED.irsaliye_ref, sira = EXCLUDED.sira, malzeme_kodu = EXCLUDED.malzeme_kodu,
+       malzeme_adi = EXCLUDED.malzeme_adi, miktar = EXCLUDED.miktar, birim = EXCLUDED.birim, fiyat = EXCLUDED.fiyat, doviz_turu = EXCLUDED.doviz_turu,
+       doviz_fiyati = EXCLUDED.doviz_fiyati, siparis_ref = EXCLUDED.siparis_ref, siparis_satir_ref = EXCLUDED.siparis_satir_ref, siparis_no = EXCLUDED.siparis_no`,
+    [firma, donem, s.map((x) => x.kayitNo), s.map((x) => x.irsaliye), s.map((x) => x.sira), s.map((x) => x.malzemeKodu), s.map((x) => x.malzemeAdi), s.map((x) => x.miktar),
+      s.map((x) => x.birim), s.map((x) => x.fiyat), s.map((x) => x.dovizTuru), s.map((x) => x.dovizFiyati), s.map((x) => x.siparisRef), s.map((x) => x.siparisSatirRef),
+      s.map((x) => x.siparisNo)],
+  );
+}
+
+// Denetim penceresindeki (tarih >= başlangıç) ve Logo'nun kayıt listesinde olmayan başlık "Logo'da yok" işaretlenir; listede yeniden görünen işaretten çıkar.
+export async function irsaliyeYoklariniIsaretle(db: Db, firma: number, donem: number, baslangic: string, refler: readonly number[], zaman: Date): Promise<number> {
+  const r = await db.sorgu<{ logical_ref: number }>(
+    `UPDATE logo_irsaliye SET logoda_yok = $5
+      WHERE firma = $1 AND donem = $2 AND tarih >= $3::date AND logoda_yok IS NULL AND NOT (logical_ref = ANY($4::bigint[])) RETURNING logical_ref`,
+    [firma, donem, baslangic, refler, zaman],
+  );
+  await db.sorgu(
+    'UPDATE logo_irsaliye SET logoda_yok = NULL WHERE firma = $1 AND donem = $2 AND logoda_yok IS NOT NULL AND logical_ref = ANY($3::bigint[])',
+    [firma, donem, refler],
+  );
+  return r.length;
+}
+
+export interface IrsaliyeAynaBasligi {
+  firma: number;
+  donem: number;
+  kayitNo: number;
+  tur: IrsaliyeTuru;
+  fisNo: string | null;
+  belgeNo: string | null;
+  tarih: string;
+  iptal: boolean;
+  logodaYok: boolean;
+  cariKodu: string | null;
+  cariAdi: string | null;
+  eIrsaliye: boolean;
+  faturaNo: string | null;
+  ambar: string | null;
+  okumaZamani: string;
+}
+export interface IrsaliyeAynaSatiri {
+  firma: number;
+  donem: number;
+  irsaliyeRef: number;
+  kayitNo: number;
+  malzemeKodu: string | null;
+  malzemeAdi: string | null;
+  miktar: string | null;
+  birim: string | null;
+  fiyat: string | null;
+  tutar: string | null;
+  dovizTuru: number | null;
+  dovizFiyati: string | null;
+  siparisSatirRef: number | null;
+  siparisNo: string | null;
+}
+
+const BASLIK_ALANLARI = `i.firma, i.donem, i.logical_ref AS "kayitNo", i.tur, i.fis_no AS "fisNo", i.belge_no AS "belgeNo", i.tarih, i.iptal,
+  (i.logoda_yok IS NOT NULL) AS "logodaYok", i.cari_kodu AS "cariKodu", i.cari_adi AS "cariAdi", i.e_irsaliye AS "eIrsaliye", i.fatura_no AS "faturaNo",
+  CASE WHEN i.ambar_no IS NULL THEN NULL ELSE COALESCE(a.ad, 'Ambar ' || i.ambar_no::text) END AS ambar, ${zamanMetni('i.okuma_zamani')} AS "okumaZamani"`;
+const SATIR_ALANLARI = `s.firma, s.donem, s.irsaliye_ref AS "irsaliyeRef", s.logical_ref AS "kayitNo", s.malzeme_kodu AS "malzemeKodu", s.malzeme_adi AS "malzemeAdi",
+  s.miktar::text AS miktar, s.birim, s.fiyat::text AS fiyat, (s.miktar * s.fiyat)::text AS tutar, s.doviz_turu AS "dovizTuru", s.doviz_fiyati::text AS "dovizFiyati",
+  s.siparis_satir_ref AS "siparisSatirRef", s.siparis_no AS "siparisNo"`;
+
+// Liste: türler ve günle süzülür, arama fiş no, belge no, cari ve satırdaki malzemede (Türkçe sadeleştirmeyle); en yeni tarih önce. Eşleşme bellekte hesaplanır.
+export function irsaliyeBasliklari(db: Db, f: { turler: readonly number[]; baslangic: string; ara: string | null }): Promise<IrsaliyeAynaBasligi[]> {
+  return db.sorgu<IrsaliyeAynaBasligi>(
+    `SELECT ${BASLIK_ALANLARI}
+       FROM logo_irsaliye i LEFT JOIN logo_ambar a ON a.kod = i.ambar_no::text
+      WHERE i.tur = ANY($1::smallint[]) AND i.tarih >= $2::date
+        AND ($3::text IS NULL OR public.arama_sade(i.fis_no) LIKE $3 OR public.arama_sade(i.belge_no) LIKE $3
+             OR public.arama_sade(i.cari_kodu) LIKE $3 OR public.arama_sade(i.cari_adi) LIKE $3
+             OR EXISTS (SELECT 1 FROM logo_irsaliye_satiri s WHERE s.firma = i.firma AND s.donem = i.donem AND s.irsaliye_ref = i.logical_ref
+                          AND (public.arama_sade(s.malzeme_kodu) LIKE $3 OR public.arama_sade(s.malzeme_adi) LIKE $3)))
+      ORDER BY i.tarih DESC, i.logical_ref DESC`,
+    [f.turler, f.baslangic, f.ara === null ? null : icindeDeseni(f.ara)],
+  );
+}
+
+export function irsaliyeBasligi(db: Db, firma: number, donem: number, kayitNo: number): Promise<IrsaliyeAynaBasligi | null> {
+  return db.tek<IrsaliyeAynaBasligi>(
+    `SELECT ${BASLIK_ALANLARI} FROM logo_irsaliye i LEFT JOIN logo_ambar a ON a.kod = i.ambar_no::text
+      WHERE i.firma = $1 AND i.donem = $2 AND i.logical_ref = $3`,
+    [firma, donem, kayitNo],
+  );
+}
+
+export function irsaliyeSatirlari(db: Db, basliklar: readonly Pick<IrsaliyeAynaBasligi, 'firma' | 'donem' | 'kayitNo'>[]): Promise<IrsaliyeAynaSatiri[]> {
+  if (basliklar.length === 0) return Promise.resolve([]);
+  return db.sorgu<IrsaliyeAynaSatiri>(
+    `SELECT ${SATIR_ALANLARI} FROM logo_irsaliye_satiri s
+       JOIN unnest($1::int[], $2::int[], $3::bigint[]) AS k(firma, donem, ref) ON k.firma = s.firma AND k.donem = s.donem AND k.ref = s.irsaliye_ref
+      ORDER BY s.firma, s.donem, s.irsaliye_ref, s.sira`,
+    [basliklar.map((b) => b.firma), basliklar.map((b) => b.donem), basliklar.map((b) => b.kayitNo)],
+  );
+}
+
+// Sipariş satırı başına aynadaki net alış irsaliyesi: satın alma (1) eksi satın alma iade (6); iptal ve Logo'da olmayan başlık sayılmaz.
+export async function logoSiparisNetleri(db: Db, firma: number, donem: number, siparisSatirRefleri: readonly number[]): Promise<Map<number, string>> {
+  if (siparisSatirRefleri.length === 0) return new Map();
+  const r = await db.sorgu<{ ref: number; net: string }>(
+    `SELECT s.siparis_satir_ref AS ref, sum(CASE WHEN i.tur = 6 THEN -s.miktar ELSE s.miktar END)::text AS net
+       FROM logo_irsaliye_satiri s JOIN logo_irsaliye i ON i.firma = s.firma AND i.donem = s.donem AND i.logical_ref = s.irsaliye_ref
+      WHERE s.firma = $1 AND s.donem = $2 AND s.siparis_satir_ref = ANY($3::bigint[]) AND i.tur IN (1, 6) AND NOT i.iptal AND i.logoda_yok IS NULL AND s.miktar IS NOT NULL
+      GROUP BY s.siparis_satir_ref`,
+    [firma, donem, [...new Set(siparisSatirRefleri)]],
+  );
+  return new Map(r.map((x) => [Number(x.ref), x.net]));
 }

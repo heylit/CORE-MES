@@ -1904,3 +1904,14 @@ export function sonYilSiparisSayilari(db: Db, bugun: string): Promise<{ firmaId:
     [bugun],
   );
 }
+
+// 3345 a: Logo irsaliye satırının bağlı olduğu sipariş satırı (Logo satır kaydıyla) ve net teslimi; Logo irsaliyeleri sayfası eşleşme için okur.
+export function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly string[]): Promise<{ logoSatirRef: string; siparisSatiriId: number; siparisNo: string | null; birim: string; teslim: string }[]> {
+  return db.sorgu(
+    `SELECT s.logo_satir_ref AS "logoSatirRef", s.id AS "siparisSatiriId", p.no AS "siparisNo", s.birim,
+            coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim
+       FROM satin_alma_siparis_satiri s JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+      WHERE s.logo_satir_ref = ANY($1::text[])`,
+    [[...new Set(logoSatirRefleri)]],
+  );
+}

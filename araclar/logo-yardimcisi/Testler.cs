@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
@@ -789,6 +790,49 @@ namespace LogoYardimcisi
             Dogru(Basari(C(s, "GET", "/api/Arp/find/" + Satici, null)), "cari var");
         }
 
+        /* ---------------- 3345 a: irsaliye okuması ---------------- */
+
+        static IrsaliyeBasligi Irsaliye(int kayit, int tur, string tarih, string degisme)
+        {
+            var b = new IrsaliyeBasligi { Ref = kayit, Tur = tur, FisNo = "IRS-" + kayit, BelgeNo = "B-" + kayit, CariKodu = Satici, CariAdi = "Satici", EIrsaliye = true };
+            b.Tarih = DateTime.ParseExact(tarih, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            b.Degisme = degisme == null ? (DateTime?)null : DateTime.ParseExact(degisme, "yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
+            b.Satirlar.Add(new IrsaliyeSatiri { Ref = kayit * 10, MalzemeKodu = Malzeme, Miktar = 2.5m, Birim = "ADET", Fiyat = 10, SiparisRef = 4, SiparisSatirRef = 5, SiparisNo = "SP-1" });
+            return b;
+        }
+
+        static void T_irsaliyeler_since_ve_tarihle_okunur_degisenler_zaman_ve_kayitla_sayfalanir()
+        {
+            var s = Logo();
+            s.IrsaliyeKayitlari.Add(Irsaliye(10, 1, "2026-10-01", "2026-10-01T09:00:00.000"));
+            s.IrsaliyeKayitlari.Add(Irsaliye(20, 8, "2026-11-01", "2026-11-02T09:00:00.497"));
+            s.IrsaliyeKayitlari.Add(Irsaliye(30, 6, "2026-11-03", "2026-11-02T09:00:00.497"));
+            var q = new Dictionary<string, string> { { "since", "0" }, { "from", "2026-10-15" } };
+            var c = Z(C(s, "GET", "/api/Dispatch/list", null, q));
+            Esit(1, c["firm"], "firma");
+            Esit(1, c["period"], "dönem");
+            var l = (object[])c["dispatches"];
+            Esit(2, l.Length, "from'dan eski gelmez");
+            var b = D(l[0]);
+            Esit(20, b["logicalRef"], "kayıt sırası");
+            Esit(8, b["trCode"], "tür");
+            Esit("2026-11-01", b["date"], "tarih");
+            Esit("2026-11-02T09:00:00.497", b["modifiedAt"], "değişme zamanı milisaniyeyle");
+            var satir = D(((object[])b["lines"])[0]);
+            Esit(5, satir["orderLineRef"], "sipariş satırı");
+            Esit("SP-1", satir["orderNo"], "sipariş no");
+            q["since"] = "20";
+            Esit(1, ((object[])Z(C(s, "GET", "/api/Dispatch/list", null, q))["dispatches"]).Length, "since'ten sonrası");
+            var d = new Dictionary<string, string> { { "since", "20" }, { "from", "2026-10-15" }, { "changedAfter", "2026-11-02T09:00:00.497" } };
+            var dl = (object[])Z(C(s, "GET", "/api/Dispatch/list", null, d))["dispatches"];
+            Esit(1, dl.Length, "eşit değişme zamanında kayıt sırası");
+            Esit(30, D(dl[0])["logicalRef"], "eşitte sonraki kayıt");
+            Esit(400, C(s, "GET", "/api/Dispatch/list", null, new Dictionary<string, string> { { "since", "0" } }).Durum, "from zorunlu");
+            Esit(400, C(s, "GET", "/api/Dispatch/list", null, new Dictionary<string, string> { { "from", "2026-10-15" }, { "changedAfter", "dün" } }).Durum, "zaman biçimi");
+            var r = (object[])Z(C(s, "GET", "/api/Dispatch/refs", null, new Dictionary<string, string> { { "from", "2026-10-15" } }))["refs"];
+            Esit(2, r.Length, "var olan kayıtlar");
+        }
+
         /* ---------------- 2116 ve 2118: kart, stok ve cari okumaları ---------------- */
 
         static Dictionary<string, object> D(object o) { return (Dictionary<string, object>)o; }
@@ -1181,7 +1225,10 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(38, hepsi.Count, "sorgu sayısı");
+            Esit(42, hepsi.Count, "sorgu sayısı");
+            Icerir(q.IrsaliyeBasliklari, "F.TRCODE IN (" + Sorgular.IrsaliyeTurleri + ")");
+            Icerir(q.IrsaliyeBasliklari, "LG_007_03_STFICHE");
+            Icerir(q.IrsaliyeSatirlari, "LG_007_03_STLINE");
             Icerir(q.Proje, "FROM LG_007_PROJECT WHERE CODE = @kod");
             Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
