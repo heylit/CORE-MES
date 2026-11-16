@@ -120,6 +120,17 @@ test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir;
   await page.getByRole('tab', { name: '2 Kalemler' }).click();
   await expect(page.getByLabel(/^Kalem 1 tanım/)).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  // 3301-5: malzemesiz kalemde ileti görünür; malzeme seçilince tanım isteğe bağlıdır ve kartın adı yazılır.
+  await expect(page.getByText(/Katalogda yoksa aşağıya tanımı yazın/)).toBeVisible();
+  await page.getByRole('button', { name: 'Malzemeden seç' }).click();
+  const secici = page.getByRole('dialog', { name: 'Malzeme kartı seç' });
+  const ilk = secici.getByRole('table', { name: 'Malzeme kartları' }).locator('tbody tr.tc-tablo-secilir').first();
+  test.skip(!(await ilk.waitFor({ timeout: 10_000 }).then(() => true, () => false)), 'örnek veride satılan kart yok');
+  await ilk.click();
+  await expect(secici).toBeHidden();
+  await expect(page.getByLabel(/^Kalem 1 tanım \(isteğe bağlı\)/)).not.toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Malzemeyi değiştir' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'malzemeli kalemde yatay taşma').toBeLessThanOrEqual(0);
   await page.getByRole('tab', { name: '3 Termin ve fiyat' }).click();
   await expect(page.getByText(/Önce kalemleri kaydedin/)).toBeVisible();
   expect(ag.hatalar).toEqual([]);

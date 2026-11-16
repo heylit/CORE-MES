@@ -1161,6 +1161,27 @@ describe('Teklifler', () => {
     expect((tanim as HTMLInputElement).value).toBe('Deneme özel ölçü');
   });
 
+  it('malzemeden seçilen kalemde tanım istenmez: boş tanımla talep açılır, kartın adı gider; malzemesiz kalemde tanım zorunlu', async () => {
+    const istekler = sunucuKur(YAZAR, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/teklifler/ekle' ? json(200, TEKLIF_YENI) : undefined));
+    ac('/siparisler/teklifler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
+    expect((await screen.findAllByText('Malzeme seçin ya da tanımı yazın.')).length).toBeGreaterThan(0);
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Malzemeden seç' }));
+    fireEvent.click(await within(await screen.findByRole('dialog', { name: 'Malzeme kartı seç' })).findByText('Deneme Braket'));
+    const tanim = screen.getByLabelText(/^Kalem 1 tanım \(isteğe bağlı\)/) as HTMLInputElement;
+    expect(tanim.required).toBe(false);
+    fireEvent.change(tanim, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, tanim: 'Deneme Braket', miktar: '40' }] });
+  });
+
   it('ilk sürümden sonra talep düzenlenmez', async () => {
     sunucuKur(YAZAR);
     ac('/siparisler/teklifler/21/duzenle');
