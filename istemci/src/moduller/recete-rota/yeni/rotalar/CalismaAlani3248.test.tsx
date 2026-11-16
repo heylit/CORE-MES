@@ -61,6 +61,7 @@ describe('3248-2 çalışma alanı', () => {
     const bolge = await bolumAc();
     fireEvent.click(kart(hatAl(bolge), 40));
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
+    fireEvent.click(within(panel).getByRole('button', { name: /^Akış ve dal/ }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Buraya katılan dal ekle' }));
     expect(within(bolge).getByText('Bu parça stoğa girecek ya da başka üründe de kullanılacaksa yarı mamul olarak açın.')).toBeTruthy();
     const palet = within(bolge).getByRole('dialog', { name: 'Adım ekle' });

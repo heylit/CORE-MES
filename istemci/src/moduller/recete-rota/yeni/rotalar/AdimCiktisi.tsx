@@ -48,10 +48,10 @@ export function AdimCiktisi({ liste, sahip, adimlar, a, duzen, statuluBaslik, ro
       ) : (
         <p className="tc-rr1-ipucu">Çıktı seçilmedi: parça <b>{statuluBaslik}</b> statüsüyle sonraki adıma geçer. Yarı mamul ya da mamul kartı seçebilirsin.</p>
       )}
-      {duzen && adaylar.length > 0 && (
+      {duzen && a.ciktiId == null && adaylar.length > 0 && (
         <div className="tc-rr1-qadd">
           <span className="tc-rr1-qadd-ara">
-            <input className="tc-rr1-metin" value={q} placeholder="Çıktı kartının kodu ya da adı…" aria-label="Çıktı malzemesi" autoComplete="off"
+            <input id={`tc-rr1-cikti-${a.id}`} className="tc-rr1-metin" value={q} placeholder="Çıktı kartının kodu ya da adı…" aria-label="Çıktı malzemesi" autoComplete="off"
               onFocus={() => { setAcik(true); }} onBlur={() => { setTimeout(() => { setAcik(false); }, 150); }}
               onChange={(e) => { setQ(e.target.value); setAcik(true); setUyari(null); }} />
             {bulunan.length > 0 && (

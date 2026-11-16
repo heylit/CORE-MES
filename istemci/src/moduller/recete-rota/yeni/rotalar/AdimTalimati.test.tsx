@@ -58,6 +58,7 @@ describe('Rota adımının talimatı: taslak ve yayın (1193 a, 1194 b)', () => 
   it('yayındaki sürüm özetlenir; şablondan eklenen adım yayınlanınca önce taslağa yazılır, sonra yayınlanır', async () => {
     const yazilan = kur(YAZAN);
     const panel = await adimAc();
+    fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
     await within(panel).findByText('Talimat · yayında sürüm 2');
     expect(within(panel).getByText('Programı doğrula')).toBeTruthy();
     fireEvent.click(within(panel).getByRole('button', { name: 'Talimatı düzenle' }));
@@ -79,6 +80,7 @@ describe('Rota adımının talimatı: taslak ve yayın (1193 a, 1194 b)', () => 
   it('taslak kaydedilince panelde yayınlanmamış taslak görünür; yalnız okuyan kullanıcı düzenleyemez', async () => {
     const yazilan = kur(YAZAN);
     const panel = await adimAc();
+    fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
     fireEvent.click(await within(panel).findByRole('button', { name: 'Talimatı düzenle' }));
     const pencere = await screen.findByRole('dialog');
     expect((within(pencere).getByRole('button', { name: 'Taslağı kaydet' }) as HTMLButtonElement).disabled).toBe(false);

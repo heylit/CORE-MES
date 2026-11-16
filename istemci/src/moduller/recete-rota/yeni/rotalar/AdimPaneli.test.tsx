@@ -54,7 +54,7 @@ describe('R1 operasyon paleti (1110 a, 1111 b, 1112 a, 1113 a)', () => {
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
     expect(within(palet).getByText('MM-0001: OP 10 Tornalama ardına (sona)')).toBeTruthy();
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
-    expect(within(panel).getByLabelText('Hazırlık (dk / parti)')).toBeTruthy();
+    expect(within(panel).getByLabelText('Hazırlık / parti')).toBeTruthy();
 
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);

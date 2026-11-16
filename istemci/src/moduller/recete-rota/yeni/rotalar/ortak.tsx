@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { SekmeAnahtari } from '../sekmeler.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import { sayi } from '../bicim.ts';
+import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayiGirisi, type Adim, type Bagimlilik } from './kurallar.ts';
 import type { RotaDuzeni } from './useRotaDuzeni.ts';
 
@@ -137,6 +138,34 @@ export function Bolme({ baslik, children, ek }: { baslik: ReactNode; children: R
     <section className={`tc-rr1-isec${ek ? ` ${ek}` : ''}`}>
       <h4>{baslik}</h4>
       {children}
+    </section>
+  );
+}
+
+// Adım panelinin katlanır bölümü (3320-2 a): kapalıyken başlıkta tek satır özet görünür; içerik DOM'da kalır (yerel girişler kaybolmaz)
+// ama gizlidir. Açık ya da kapalı olması kullanıcının tarayıcısında bölüm başına saklanır.
+export type KatAnahtari = 'op' | 'mz' | 'ak' | 'ay' | 'bg';
+const KAT_VARSAYILAN: Record<KatAnahtari, boolean> = { op: true, mz: true, ak: false, ay: false, bg: false };
+export function useKatlar() {
+  const [acik, setAcik] = useState<Record<KatAnahtari, boolean>>(() => {
+    const k = Object.keys(KAT_VARSAYILAN) as KatAnahtari[];
+    return Object.fromEntries(k.map((x) => [x, tercihOku(`kat-${x}`, KAT_VARSAYILAN[x] ? '1' : '0') === '1'])) as Record<KatAnahtari, boolean>;
+  });
+  const ayarla = (k: KatAnahtari, v: boolean) => { setAcik((o) => ({ ...o, [k]: v })); tercihYaz(`kat-${k}`, v ? '1' : '0'); };
+  return { acik, ayarla };
+}
+export function KatBolme({ k, baslik, ozet, rozet, acik, ayarla, children }: {
+  k: KatAnahtari; baslik: string; ozet: string; rozet?: string | null; acik: boolean; ayarla: (k: KatAnahtari, v: boolean) => void; children: ReactNode;
+}) {
+  const icId = `tc-rr1-kat-${k}`;
+  return (
+    <section className={`tc-rr1-kat${acik ? ' tc-rr1-kat-acik' : ''}`} data-kat={k}>
+      <button type="button" className="tc-rr1-kat-bas" aria-expanded={acik} aria-controls={icId} onClick={() => { ayarla(k, !acik); }}>
+        <span className="tc-rr1-kat-ad"><h3>{baslik}</h3>{rozet && <span className="tc-rr1-kat-rozet">{rozet}</span>}</span>
+        {!acik && <span className="tc-rr1-kat-oz">{ozet}</span>}
+        <Simge ad="chev-right" boyut="k" />
+      </button>
+      <div id={icId} className="tc-rr1-kat-ic" hidden={!acik}>{children}</div>
     </section>
   );
 }

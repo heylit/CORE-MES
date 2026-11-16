@@ -51,6 +51,7 @@ describe('Rota adımının aparat ve ölçü aleti listesi (2893-4 a)', () => {
   it('ölçü aleti türü ve aparat eklenir, liste OP numarası ve revizyon sürümüyle bütün yazılır; çıkarılır', async () => {
     const yazilan = kur();
     const panel = await adimAc();
+    fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
     await within(panel).findByText('Bu adımda aparat ya da ölçü aleti istenmiyor.');
     const secim = within(panel).getByLabelText('Ölçü aleti türü');
     await within(secim).findByRole('option', { name: 'Mikrometre' });

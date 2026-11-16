@@ -10,11 +10,12 @@ import {
   type Adim, type Malzeme,
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
-import { AdimEkipmani } from './AdimEkipmani.tsx';
+import { AdimEkipmani, useAdimEkipmanSayisi } from './AdimEkipmani.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
 import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
-import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
+import { BAG_ADI, Bolme, KatBolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK, useKatlar } from './ortak.tsx';
+import { useRevizyonSartnameleri, useTalimatlar } from '../sartnameler/veri.ts';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { AdimCiktisi } from './AdimCiktisi.tsx';
 import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
@@ -116,13 +117,13 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
   return (
     <Bolme baslik="Nerede yapılır" ek="tc-rr1-depbox">
       <div className="tc-rr1-depsel tc-rr1-depsel-2">
-        <button type="button" className={`tc-rr1-depb${fason ? '' : ' tc-rr1-on'}`} aria-pressed={!fason} disabled={!duzen}
+        <button type="button" className={`tc-rr1-depb${fason ? '' : ' tc-rr1-on'}`} aria-pressed={!fason} disabled={!duzen} title="Atölyede, istasyonda yapılır."
           onClick={() => { if (fason) yaz((x) => fasonaCevir(x, null, op), 'İç üretime alındı'); }}>
-          <b>İç üretim</b><small>Atölyede, istasyonda yapılır.</small>
+          <b>İç üretim</b>
         </button>
-        <button type="button" className={`tc-rr1-depb${fason ? ' tc-rr1-on' : ''}`} aria-pressed={fason} disabled={!duzen}
+        <button type="button" className={`tc-rr1-depb${fason ? ' tc-rr1-on' : ''}`} aria-pressed={fason} disabled={!duzen} title="Fason firmada yapılır; termin gün olarak girilir."
           onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), 'Dış üretime alındı'); }}>
-          <b>Dış üretim (fason)</b><small>Fason firmada yapılır; termin gün olarak girilir.</small>
+          <b>Dış üretim (fason)</b>
         </button>
       </div>
       {fason && (
@@ -157,6 +158,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const a = liste.find((x) => x.id === s.adimId) ?? liste.find((x) => x.seq === s.seq && x.id.startsWith('o'));
   const sahip = h.malzeme.get(s.urunId);
   const { data: numaralar } = useOpNumaralari(s.urunId, liste, a?.opNo === null);
+  const katlar = useKatlar();
+  const gorulen = dz.gorulen(s.urunId);
+  const sartnameler = useRevizyonSartnameleri(gorulen ? Number(gorulen.id) : null);
+  const ekipmanSay = useAdimEkipmanSayisi(gorulen, a?.opNo ?? null);
+  const talimat = useTalimatlar(Number(s.urunId), a?.opNo ?? null);
   if (!a || !sahip) return <BosPanel r={r} />;
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
@@ -191,293 +197,327 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
     yaz((x) => ({ ...x, ins: [...x.ins, { itemId: m.id, qty: n, scrap: 0 }] }), `${m.code} giren eklendi`);
   };
   const yanEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, outs: [...x.outs, { itemId: m.id, qty: n, kind: 'yan' as const }] }), `${m.code} yan ürün eklendi`); };
+  const hb = hazirlikBolumu(a);
+  const ciktiKarti = !son && a.ciktiId != null ? h.malzeme.get(a.ciktiId) : undefined;
+  const ciktiyaGit = () => {
+    katlar.ayarla('mz', true);
+    requestAnimationFrame(() => {
+      const g = document.getElementById(`tc-rr1-cikti-${a.id}`) ?? document.querySelector<HTMLElement>('.tc-rr1-ciktibox button');
+      g?.focus();
+      g?.scrollIntoView({ block: 'center' });
+    });
+  };
+  const sureParcalari = [
+    ...(hb.hazirlik ? [`hazırlık ${sayi(hb.hazirlik)} dk`] : []),
+    ...(hb.ayarli ? [`ayar ${hb.ayarDk === null ? YOK : sayi(hb.ayarDk)} dk`] : []),
+    ...(a.proc !== null ? [`işlem ${sayi(a.proc)} dk/${birim || 'adet'}`] : []),
+  ];
+  const fasonFirma = fason && a.fasonId ? (dz.durum.fasonFirms ?? []).find((f) => f.id === a.fasonId) : undefined;
+  const yer = fason ? `Fason${fasonFirma ? ` · ${fasonFirma.code ?? fasonFirma.name}` : ' · firma seçilmedi'}${a.terminGun ? ` · termin ${String(a.terminGun)} gün` : ''}`
+    : `İç üretim · ${ist ? ist.code : 'istasyon seçilmedi'}`;
+  const ozetOp = [op?.name ?? 'Operasyon seçilmedi', yer, ...(fason ? [] : sureParcalari)].join(' · ');
+  const ozetMz = [`${String(a.ins.length)} giren`, ...(son ? [] : [`çıktı ${ciktiKarti?.code ?? 'statülü'}`]),
+    a.outs.length ? `${String(a.outs.length)} yan ürün` : 'yan ürün yok'].join(' · ');
+  const ozetAk = [idx === 0 ? 'İlk adım' : onculler?.length === 0 ? 'Dalın ilk adımı' : `${BAG_ADI[a.dep]}${a.dep === 'ortulu' ? ` (${sayi(a.depQty ?? 1)} ${birim})` : ''}`,
+    adimDali(a) ? `Dal ${adimDali(a) ?? ''}` : 'ana hat', ...(adimBirlesen(a).length ? [`birleşen: ${adimBirlesen(a).map((d) => `Dal ${d}`).join(', ')}`] : [])].join(' · ');
+  const ozetAy = [`Fire %${sayi(a.rejectPct)}`, ...(fason ? [] : [
+    a.split === 'bol' ? 'paralel böl' : dz.insanli(a.stationId) ? 'tek kişi' : 'tek makine',
+    a.alts.length ? `${String(a.alts.length)} alternatif` : 'alternatif yok',
+    a.ilkParca !== 'yok' ? 'ilk parça onayı açık' : 'ilk parça onayı yok',
+  ])].join(' · ');
+  const sartSay = sartnameler.data ? (sartnameler.data.adimlar.find((x) => x.opNo === a.opNo)?.sartnameler.length ?? 0) : null;
+  const talimatSurum = talimat.data?.surumler[0]?.surum ?? null;
+  const ozetBg = [`Şartname ${sartSay === null ? YOK : String(sartSay)}`, `aparat ${ekipmanSay === null ? YOK : String(ekipmanSay)}`,
+    talimatSurum === null ? 'talimat yok' : `talimat sürüm ${String(talimatSurum)}`].join(' · ');
+  const rozetBg = [...(sartSay ? [`${String(sartSay)} şartname`] : []), ...(talimatSurum !== null ? ['talimat'] : [])].join(' · ') || null;
+  const kartlar = h.malzeme;
+  const girdiMetni = idx === 0
+    ? (a.ins.length ? a.ins.map((x) => kartlar.get(x.itemId)?.code ?? '?').join(', ') : 'Girenler')
+    : a.dep === 'bagimsiz' ? 'Önceki adımı beklemez'
+      : onceki.map((p) => { const k = akisKarti(sahip.id, liste, liste.indexOf(p), dz.malzemeVar); return kartBasligi(kartlar.get(k.itemId), k.adim, dz.opAdi); }).join(', ') || 'Girenler';
+  const ciktiMetni = son || !kart ? `${sahip.code} (ürün)` : kartBasligi(kartlar.get(kart.itemId), kart.adim, dz.opAdi);
   return (
     <>
       <Baslik baslik={`${op?.abbr ?? op?.code ?? 'Adım'} ${a.opNo === null ? '· yeni adım' : String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
       {a.opNo === null && <YeniNumara siradaki={numaralar ? yeniAdimNumaralari(liste, numaralar.siradaki).get(a.id) : undefined} />}
-      {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
-      {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
-      <UretimYeri r={r} s={s} a={a} duzen={duzen} />
-      <Bolme baslik={idx === 0 || onculler?.length === 0 ? 'Önceki adımla ilişki'
-        : onculler ? `Beklediği adımlarla ilişki (${onculler.map((o) => `OP ${String(o.seq)}`).join(', ')} → OP ${String(a.seq)})`
-          : `Önceki adımla ilişki (OP ${String(liste[idx - 1]?.seq ?? '')} → OP ${String(a.seq)})`} ek="tc-rr1-depbox">
-        {idx === 0 ? <p className="tc-rr1-ipucu">Bu rotanın ilk adımı; emir başlayınca ve girenleri hazır olunca başlar.</p>
-          : onculler?.length === 0 ? <p className="tc-rr1-ipucu">Dalın ilk adımı; hiçbir adımı beklemez, girenleri hazır olunca başlar.</p> : (
-          <>
-            <div className="tc-rr1-depsel">
-              {BAGIMLILIK_SIRASI.map((k) => (
-                <button key={k} type="button" className={`tc-rr1-depb${a.dep === k ? ' tc-rr1-on' : ''}`} aria-pressed={a.dep === k} disabled={!duzen}
-                  onClick={() => { yaz((x) => bagimlilikYaz(x, k), 'Bağlılık değişti'); }}>
-                  <b>{BAG_ADI[k]}</b><small>{BAG_ACIKLAMA[k]}</small>
-                </button>
-              ))}
-            </div>
-            {a.dep === 'ortulu' && (
-              <SayiAlani etiket={`Kaç ${birim} çıkınca başlasın`} deger={a.depQty ?? 1} kapali={!duzen} ipucu="Bu adım öncekinden önce bitemez."
-                yaz={(v) => { yaz((x) => ({ ...x, depQty: v !== null && v > 0 ? v : 1 }), 'Örtüşme değişti'); }} />
-            )}
-          </>
-        )}
-      </Bolme>
-      <Bolme baslik="Dal" ek="tc-rr1-dalbox">
-        <SecimAlani etiket="Bu adımın dalı" deger={adimDali(a) ?? ''} kapali={!duzen} bos="Ana hat"
-          secenekler={[...new Set([...DAL_HARFLERI, ...(adimDali(a) ? [adimDali(a) ?? ''] : [])])].map((d) => ({ deger: d, baslik: `Dal ${d}` }))}
-          yaz={(v) => { yaz((x) => dalYaz(x, v || null), 'Dal değişti'); }} />
-        {kendiDali && <p className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(kendiDali)}</p>}
-        {kendiDali && (
-          <SayiAlani etiket={`Dal ${kendiDali.dal}: 1 mamul için adet`} deger={kendiDali.carpan ?? adimCarpani(a)} kapali={!duzen} birim="adet"
-            ipucu={kendiDali.carpan === null ? 'Dalın adımlarında farklı adet var; yazılan değer dalın bütün adımlarına geçer.'
-              : 'Bu dalda bir mamul için kaç parça işlenir; dalın bütün adımlarına yazılır, adım adedi emir adedi ile çarpılır.'}
-            yaz={(v) => { dz.degistir(s.urunId, (l) => dalCarpaniYaz(l, kendiDali.dal, v), `Dal ${kendiDali.dal} çarpanı değişti`); }} />
-        )}
-        {buradanCatallanan.map((b) => <p key={b.dal} className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(b)}</p>)}
-        {duzen && adimDali(a) === null && !son && (
-          <Dugme tur="ikincil" simge="route" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : undefined}
-            onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: a.id, dal: yeniDal }); r.paletAc(); } }}>
-            Buradan kol aç
-          </Dugme>
-        )}
-        {duzen && adimDali(a) === null && (
-          <Dugme tur="ikincil" simge="up" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : 'Rotanın başından başlayıp bu adımda ana hatta katılan bağımsız dal'}
-            onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: liste[idx - 1]?.id ?? null, dal: yeniDal, katilir: a.id }); r.paletAc(); } }}>
-            Buraya katılan dal ekle
-          </Dugme>
-        )}
-        {duzen && birlesmemis.length > 0 && (
-          <Dugme tur="ikincil" simge="layers" onClick={() => { dz.degistir(s.urunId, (l) => kollariBirlestir(l, a.id), `Dal ${birlesmemis.join(', ')} bu adımda birleşti`); }}>
-            Kolları burada birleştir ({birlesmemis.map((d) => `Dal ${d}`).join(', ')})
-          </Dugme>
-        )}
-        {birlesebilen.length > 0 ? (
-          <div className="tc-rr1-dalsec" role="group" aria-label="Bu adımda birleşen dallar">
-            <span>Bu adımda birleşen dallar</span>
-            {birlesebilen.map((d) => (
-              <IsaretKutusu key={d} etiket={`Dal ${d}`} checked={adimBirlesen(a).includes(d)} disabled={!duzen}
-                onChange={(e) => { yaz((x) => birlesenYaz(x, d, e.target.checked), e.target.checked ? `Dal ${d} birleşti` : `Dal ${d} birleşmesi kaldırıldı`); }} />
-            ))}
-          </div>
-        ) : <p className="tc-rr1-ipucu">Dallar paralel yürür; birleşeceği adımda burada seçilir. Aynı daldaki önceki adım kendiliğinden beklenir.</p>}
-      </Bolme>
-      <Bolme baslik={`Girenler (${String(a.ins.length)})`}>
-        {a.ins.length > 0 ? (
-          <div className="tc-rr1-qt">
-            {a.ins.map((x, sira) => {
-              const gm = h.malzeme.get(x.itemId);
-              return (
-                <div key={`${x.itemId}-${String(sira)}`} className="tc-rr1-qtr">
-                  <button type="button" className="tc-rr1-qtn" onClick={() => { r.sec({ tur: 'giren', urunId: s.urunId, adimId: a.id, sira, nid: '', miktar: s.miktar * x.qty }); }}>
-                    <span className={`tc-rr1-slot tc-rr1-slot-${gm?.type ?? 'yok'}`}>{gm ? turKisa(gm.type) : '?'}</span>
-                    <b>{gm?.code ?? 'Silinmiş kart'}</b> <small>{gm?.name ?? ''}</small>
-                  </button>
-                  <SayiAlani etiket={`${gm?.code ?? ''} miktarı`} deger={x.qty} birim={gm?.unit ?? ''} kapali={!duzen}
-                    yaz={(v) => { yaz((y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira ? { ...g, qty: v ?? 0 } : g)) }), 'Giren miktarı değişti'); }} />
-                  <SayiAlani etiket={`${gm?.code ?? ''} fire yüzdesi`} deger={x.scrap} birim="% fire" kapali={!duzen}
-                    yaz={(v) => { yaz((y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira ? { ...g, scrap: v ?? 0 } : g)) }), 'Giren firesi değişti'); }} />
-                  {duzen && (
-                    <button type="button" className="tc-rr1-ib" aria-label={`${gm?.code ?? ''} girenini kaldır`}
-                      onClick={() => { yaz((y) => ({ ...y, ins: y.ins.filter((_, i) => i !== sira) }), 'Giren kaldırıldı'); }}>
-                      <Simge ad="x" boyut="k" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            <p className="tc-rr1-ipucu">Miktarlar 1 {birim} {sahip.code} başınadır.</p>
-          </div>
-        ) : <p className="tc-rr1-ipucu">Bu adıma ek malzeme girmiyor; önceki adımın çıktısıyla devam eder.</p>}
-        {duzen && idx === 0 && <HamOnerisi urunId={s.urunId} adimlar={liste} malzeme={h.malzeme} ekle={girenEkle} />}
-        {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi haricId={sahip.id} ekle={girenEkle} etiket="Giren malzeme" />}
-      </Bolme>
-      {!son && (
-        <AdimCiktisi liste={[...h.malzeme.values()]} sahip={sahip} adimlar={liste} a={a} duzen={duzen} yaz={yaz}
-          statuluBaslik={kartBasligi(h.malzeme.get(tasinanMalzeme(sahip.id, liste, idx, dz.malzemeVar)), a, dz.opAdi)}
-          rotali={(id) => (dz.durum.routeRevs ?? []).some((x) => x.itemId === id)} />
-      )}
-      <Bolme baslik={`Yan ürünler (${String(a.outs.length)})`}>
-        {a.outs.length > 0 ? (
-          <div className="tc-rr1-qt">
-            {a.outs.map((x, sira) => {
-              const ym = h.malzeme.get(x.itemId);
-              return (
-                <div key={`${x.itemId}-${String(sira)}`} className="tc-rr1-qtr">
-                  <button type="button" className="tc-rr1-qtn" onClick={() => { r.sec({ tur: 'yan', urunId: s.urunId, adimId: a.id, sira, nid: '', miktar: s.miktar * x.qty }); }}>
-                    <span className={`tc-rr1-slot tc-rr1-slot-${ym?.type ?? 'yok'}`}>{ym ? turKisa(ym.type) : '?'}</span>
-                    <b>{ym?.code ?? 'Silinmiş kart'}</b> <small>{ym?.name ?? ''}</small>
-                  </button>
-                  <SayiAlani etiket={`${ym?.code ?? ''} yan ürün miktarı`} deger={x.qty} birim={ym?.unit ?? ''} kapali={!duzen}
-                    yaz={(v) => { yaz((y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira ? { ...g, qty: v ?? 0 } : g)) }), 'Yan ürün miktarı değişti'); }} />
-                  {duzen && (
-                    <button type="button" className="tc-rr1-ib" aria-label={`${ym?.code ?? ''} yan ürününü kaldır`}
-                      onClick={() => { yaz((y) => ({ ...y, outs: y.outs.filter((_, i) => i !== sira) }), 'Yan ürün kaldırıldı'); }}>
-                      <Simge ad="x" boyut="k" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : <p className="tc-rr1-ipucu">Yan ürün: ana ürünle birlikte bu adımdan çıkan, başka yerde kullanılan ya da satılan ürün. Çoğu adımda yoktur.</p>}
-        {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi={false} haricId={null} ekle={yanEkle} etiket="Yan ürün" />}
-      </Bolme>
-      <Bolme baslik={fason ? 'Operasyon' : 'Operasyon ve istasyon'}>
-        <div className="tc-rr1-ig">
-          <span className="tc-rr1-genis">
-            <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
-              yaz={(v) => { yaz((x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
-          </span>
-          {!fason && (
-            <>
-              <span className="tc-rr1-genis">
-                <SecimAlani etiket="İstasyon" deger={a.stationId ?? ''} kapali={!duzen} bos="Seç…"
-                  secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-                  yaz={(v) => { yaz((x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
-              </span>
-              {dz.insanli(a.stationId) ? (
-                // 2685: insanlı istasyonda adayları istasyonda yetkin kişilerdir; makineleri olsa da aday olmaz (kapasite-insan.md madde 2).
-                <span className="tc-rr1-genis tc-rr1-alan">
-                  {/* 2698 c: başlık istasyonun türüne göre; insanlı istasyonda kaynak istasyondur (yetkin kişiler), makine değil. */}
-                  <span className="tc-rr1-lbl">İstasyon</span>
-                  <small className="tc-rr1-ipucu">
-                    İnsanlı istasyon: iş, istasyonda yetkin ve vardiyası olan kişilere açılır; makine seçilmez.
-                    {a.machineId && ' Bu adımda eskiden seçilmiş bir makine var; plan onu kullanmaz.'}
-                  </small>
-                  {a.machineId && duzen && (
-                    <Dugme simge="x" onClick={() => { yaz((x) => ({ ...x, machineId: null }), 'Makine seçimi kaldırıldı'); }}>Makine seçimini kaldır</Dugme>
-                  )}
-                </span>
-              ) : (
-                <span className="tc-rr1-genis">
-                  <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
-                    secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-                    yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
-                  <small className="tc-rr1-ipucu">
-                    {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
-                    {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
-                  </small>
-                </span>
-              )}
-              {(() => {
-                // Hazırlık bölümü (1310 a): toplam hazırlık = hazırlık + ayar; ayar süresi yalnız ayar işaretliyken girilir.
-                const h = hazirlikBolumu(a);
-                return (
-                  <>
-                    <SayiAlani etiket="Hazırlık (dk / parti)" enCok={SURE_EN_COK} deger={h.hazirlik} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { hazirlik: v }), 'Hazırlık süresi değişti'); }} />
-                    <span className="tc-rr1-alan tc-rr1-ayarbox">
-                      <IsaretKutusu etiket="Ayar" checked={h.ayarli} disabled={!duzen}
-                        onChange={(e) => { const v = e.target.checked; yaz((x) => hazirlikYaz(x, { ayarli: v }), v ? 'Ayar eklendi' : 'Ayar kaldırıldı'); }} />
-                    </span>
-                    {h.ayarli && (
-                      <SayiAlani etiket="Ayar (dk / parti)" enCok={SURE_EN_COK} deger={h.ayarDk} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { ayarDk: v }), 'Ayar süresi değişti'); }} />
-                    )}
-                    <div className="tc-rr1-alan"><span>Toplam hazırlık</span><b>{a.setup === null ? YOK : `${sayi(a.setup)} dk`}</b></div>
-                  </>
-                );
-              })()}
-              <SayiAlani etiket={`İşlem (dk / 1 ${birim})`} enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
-              <SayiAlani etiket={`Değişim (dk / 1 ${birim})`} enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
-              <div className="tc-rr1-alan"><span>Değişim %</span><b>{(() => { const o = degisimOrani(a.proc, a.chg); return o === null ? YOK : `%${sayi(Math.round(o * 10) / 10)}`; })()}</b></div>
-              <p className="tc-rr1-ipucu tc-rr1-genis">
-                Çevrim = işlem + değişim ({sayi(cevrimToplami(a.proc, a.chg))} dk).{' '}
-                <button type="button" className="tc-rr1-linkbtn" onClick={() => { r.git('sureler'); }}>Süreler bölümü</button>
-              </p>
-            </>
-          )}
-          <div className="tc-rr1-genis tc-rr1-flowbox">
-            <div>
-              <span className="tc-rr1-lbl">Bu adımın girdisi</span>
-              {idx === 0 ? <span className="tc-rr1-ipucu">İlk adım: girenler (hammadde) ile başlar</span>
-                : a.dep === 'bagimsiz' ? <span className="tc-rr1-ipucu">Bağımsız adım: önceki adımın çıktısını beklemez ve tüketmez</span>
-                  : onceki.map((p) => {
-                    const k = akisKarti(sahip.id, liste, liste.indexOf(p), dz.malzemeVar);
-                    return <span key={p.id} className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(k.itemId), k.adim, dz.opAdi)}</b> <small>önceki adımdan gelir ve tüketilir</small></span>;
-                  })}
-            </div>
-            <div>
-              <span className="tc-rr1-lbl">Bu adımın çıktısı</span>
-              {son || !kart ? <span className="tc-rr1-flowc"><b>{sahip.code}</b> <small>son adım: ürün stoğa girer</small></span>
-                : kart.adim === null ? <span className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(kart.itemId), null, dz.opAdi)}</b> <small>seçilen çıktı kartı; adım bitince stoğa girer, sonraki adım onu tüketir</small></span>
-                  : <span className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(kart.itemId), kart.adim, dz.opAdi)}</b> <small>{sahip.code} stoğunun bu adımdan sonraki hâli; sonraki adım onu tüketir</small></span>}
-            </div>
-          </div>
-          <SayiAlani etiket="Fire / ret payı %" deger={a.rejectPct} kapali={!duzen}
-            ipucu="Yalnızca planı büyütür: bu adımda kaybedilecek pay kadar önceki adımlar ve girenler fazla planlanır. Hurda rotada tanımlanmaz."
-            yaz={(v) => { yaz((x) => ({ ...x, rejectPct: Math.min(95, Math.max(0, v ?? 0)) }), 'Fire payı değişti'); }} />
-          {!fason && (
-            <>
-              <SecimAlani etiket={dz.insanli(a.stationId) ? 'Kişi kullanımı' : 'Makine kullanımı'} deger={a.split} kapali={!duzen}
-                secenekler={[{ deger: 'tek', baslik: dz.insanli(a.stationId) ? 'Tek kişide' : 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
-                yaz={(v) => { yaz((x) => ({ ...x, split: v === 'bol' ? 'bol' : 'tek' }), 'Makine kullanımı değişti'); }} />
-              {a.split === 'bol' && (
-                <SayiAlani etiket="En küçük parça" deger={a.minLot} kapali={!duzen} yerTutucu="boş"
-                  yaz={(v) => { yaz((x) => ({ ...x, minLot: v !== null && v > 0 ? Math.round(v) : null }), 'En küçük parça değişti'); }} />
-              )}
-              <div className="tc-rr1-genis tc-rr1-altbox">
-                <span className="tc-rr1-lbl">Alternatif istasyonlar</span>
-                {a.alts.map((id) => {
-                  const x = h.istasyon.get(id);
-                  const t = a.altTimes[id];
-                  return (
-                    <div key={id} className="tc-rr1-altrow">
-                      <span className="tc-rr1-chip">{x ? `${x.code} ${x.name}` : `İstasyon #${id}`}</span>
-                      <SayiAlani etiket={`${x?.name ?? id} çevrim toplamı (dk)`} enCok={SURE_EN_COK} deger={t && (t.cycle ?? 0) > 0 ? t.cycle : null} yerTutucu={sayi(a.cycle)} kapali={!duzen}
-                        yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { setup: y.altTimes[id]?.setup ?? null, cycle: v } } }), 'Alternatif süresi değişti'); }} />
-                      <SayiAlani etiket={`${x?.name ?? id} hazırlık (dk)`} enCok={SURE_EN_COK} deger={t?.setup ?? null} yerTutucu={sayi(a.setup)} kapali={!duzen}
-                        yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { cycle: y.altTimes[id]?.cycle ?? null, setup: v } } }), 'Alternatif süresi değişti'); }} />
-                      {duzen && (
-                        <button type="button" className="tc-rr1-ib" aria-label={`${x?.name ?? id} alternatifini kaldır`}
-                          onClick={() => {
-                            yaz((y) => {
-                              const { [id]: _silinen, ...kalan } = y.altTimes;
-                              return { ...y, alts: y.alts.filter((z) => z !== id), altTimes: kalan };
-                            }, 'Alternatif kaldırıldı');
-                          }}>
-                          <Simge ad="x" boyut="k" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {duzen && (
-                  <select className="tc-rr1-secim" value="" aria-label="Alternatif istasyon ekle"
-                    onChange={(e) => { const v = e.target.value; if (v) yaz((y) => (y.alts.includes(v) ? y : { ...y, alts: [...y.alts, v] }), 'Alternatif eklendi'); }}>
-                    <option value="">Alternatif ekle</option>
-                    {istasyonlar.filter((x) => x.id !== a.stationId && !a.alts.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
-                  </select>
-                )}
-                <p className="tc-rr1-ipucu">Alternatifte süreyi boş bırakırsan ana istasyonun süresi kullanılır. Süre ayrıca istasyonun verimiyle düzeltilir.</p>
-              </div>
-              <span className="tc-rr1-genis">
-                <IsaretKutusu etiket="Yarıda kalıp dönülünce hazırlık yeniden eklensin" checked={a.resetup} disabled={!duzen}
-                  onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, resetup: v }), 'Yeniden hazırlık değişti'); }} />
-              </span>
-              <span className="tc-rr1-genis">
-                <IsaretKutusu etiket="Her kurulumda ilk parça onayı istensin" checked={a.ilkParca !== 'yok'} disabled={!duzen}
-                  onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, ilkParca: v ? 'her_kurulum' : 'yok' }), 'İlk parça onayı değişti'); }} />
-              </span>
-            </>
+      <div className="tc-rr1-adimoz">
+        <p className="tc-rr1-adimoz-satir">{ozetOp}</p>
+        <div className="tc-rr1-adimoz-akis">
+          <span className="tc-rr1-adimoz-k"><small>Girdi</small><b title={girdiMetni}>{girdiMetni}</b></span>
+          <Simge ad="chev-right" boyut="k" />
+          {son ? (
+            <span className="tc-rr1-adimoz-k"><small>Çıktı · son adım, ürün stoğa girer</small><b title={ciktiMetni}>{ciktiMetni}</b></span>
+          ) : (
+            <button type="button" className={`tc-rr1-adimoz-k tc-rr1-adimoz-cikti${ciktiKarti ? ' tc-rr1-adimoz-kart' : ''}`} onClick={ciktiyaGit}
+              aria-label={`Adımın çıktısı: ${ciktiMetni}. ${duzen ? 'Değiştirmek için' : 'Görmek için'} Malzeme bölümündeki çıktı alanına git`}>
+              <small>{ciktiKarti ? `Çıktı · ${(TUR_ADI[ciktiKarti.type] ?? '').toLocaleLowerCase('tr-TR')}` : 'Çıktı · statülü ara hâl'}{duzen ? (ciktiKarti ? ' · değiştir' : ' · kart seç') : ''}</small>
+              <b title={ciktiMetni}>{ciktiKarti ? <><span className={`tc-rr1-slot tc-rr1-slot-${ciktiKarti.type}`}>{turKisa(ciktiKarti.type)}</span>{' '}</> : null}{ciktiMetni}</b>
+            </button>
           )}
         </div>
-        {!fason && duzen && op && katalogdanFarkli(a, op) && (
-          <Dugme tur="ikincil" onClick={() => { yaz((x) => katalogaDon(x, op), 'Katalog değerlerine dönüldü'); }}>Katalog değerlerine dön ({op.abbr ?? op.code})</Dugme>
+      </div>
+      {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
+      {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
+      <KatBolme k="op" baslik={fason ? 'Operasyon ve firma' : 'Operasyon ve yer'} ozet={ozetOp} acik={katlar.acik.op} ayarla={katlar.ayarla}>
+        <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
+          yaz={(v) => { yaz((x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
+        <UretimYeri r={r} s={s} a={a} duzen={duzen} />
+        {!fason && (
+          <>
+            <SecimAlani etiket="İstasyon" deger={a.stationId ?? ''} kapali={!duzen} bos="Seç…"
+              secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
+              yaz={(v) => { yaz((x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
+            {ist && (
+              <p className="tc-rr1-ipucu tc-rr1-satirnot">
+                {[im ? `${im.code} ${im.name}` : null, `verim %${sayi(ist.eff)}`, `paralel ${sayi(ist.count)}`].filter(Boolean).join(' · ')}{' '}
+                <button type="button" className="tc-rr1-linkbtn" onClick={() => { r.git('res'); }}>Kaynaklar&apos;da aç</button>
+              </p>
+            )}
+            {dz.insanli(a.stationId) ? (
+              // 2685: insanlı istasyonda adayları istasyonda yetkin kişilerdir; makineleri olsa da aday olmaz (kapasite-insan.md madde 2).
+              <div className="tc-rr1-alan">
+                {/* 2698 c: insanlı istasyonda kaynak istasyondur (yetkin kişiler), makine değil. */}
+                <span className="tc-rr1-lbl">İstasyon</span>
+                <small className="tc-rr1-ipucu">
+                  İnsanlı istasyon: iş, istasyonda yetkin ve vardiyası olan kişilere açılır; makine seçilmez.
+                  {a.machineId && ' Bu adımda eskiden seçilmiş bir makine var; plan onu kullanmaz.'}
+                </small>
+                {a.machineId && duzen && (
+                  <Dugme simge="x" onClick={() => { yaz((x) => ({ ...x, machineId: null }), 'Makine seçimi kaldırıldı'); }}>Makine seçimini kaldır</Dugme>
+                )}
+              </div>
+            ) : (
+              <div className="tc-rr1-alan">
+                <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
+                  secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
+                  yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
+                <small className="tc-rr1-ipucu">
+                  {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
+                  {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
+                </small>
+              </div>
+            )}
+            <span className="tc-rr1-lbl">Süreler (dk)</span>
+            {/* Hazırlık bölümü (1310 a): toplam hazırlık = hazırlık + ayar; ayar süresi yalnız "Ayarcı gerekir" işaretliyken girilir. */}
+            <div className="tc-rr1-sure4">
+              <SayiAlani etiket="Hazırlık / parti" enCok={SURE_EN_COK} deger={hb.hazirlik} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { hazirlik: v }), 'Hazırlık süresi değişti'); }} />
+              <SayiAlani etiket="Ayar / parti" enCok={SURE_EN_COK} deger={hb.ayarli ? hb.ayarDk : null} kapali={!duzen || !hb.ayarli} yerTutucu={hb.ayarli ? undefined : 'yok'}
+                yaz={(v) => { yaz((x) => hazirlikYaz(x, { ayarDk: v }), 'Ayar süresi değişti'); }} />
+              <SayiAlani etiket={`İşlem / ${birim || 'adet'}`} enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
+              <SayiAlani etiket={`Değişim / ${birim || 'adet'}`} enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
+            </div>
+            <IsaretKutusu etiket="Ayarcı gerekir (ayar süresi ayarcıyla planlanır)" checked={hb.ayarli} disabled={!duzen}
+              onChange={(e) => { const v = e.target.checked; yaz((x) => hazirlikYaz(x, { ayarli: v }), v ? 'Ayar eklendi' : 'Ayar kaldırıldı'); }} />
+            <p className="tc-rr1-ipucu tc-rr1-satirnot">
+              {`Toplam hazırlık ${a.setup === null ? YOK : `${sayi(a.setup)} dk`} · çevrim ${sayi(cevrimToplami(a.proc, a.chg))} dk`}
+              {(() => { const o = degisimOrani(a.proc, a.chg); return o === null ? '' : ` · değişim %${sayi(Math.round(o * 10) / 10)}`; })()}{' '}
+              <button type="button" className="tc-rr1-linkbtn" onClick={() => { r.git('sureler'); }}>Süreler bölümü</button>
+              {duzen && op && katalogdanFarkli(a, op) && (
+                <>{' '}<button type="button" className="tc-rr1-linkbtn" onClick={() => { yaz((x) => katalogaDon(x, op), 'Katalog değerlerine dönüldü'); }}>Katalog değerlerine dön ({op.abbr ?? op.code})</button></>
+              )}
+            </p>
+          </>
         )}
-      </Bolme>
-      <AdimSartnameleri rev={dz.gorulen(s.urunId)} opNo={a.opNo} fason={fason} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul}
-        taslakAc={() => { const g = dz.gorulen(s.urunId); if (g) void dz.yeniTaslak(s.urunId, g); }} />
-      <AdimEkipmani rev={dz.gorulen(s.urunId)} opNo={a.opNo} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul} />
-      <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} />
-      {ist && (
-        <Bolme baslik={<><span className={`tc-rr1-nokta ${ist.id ? `tc-rr1-renk-${String(Number(ist.id) % 6)}` : ''}`} /> İstasyon {ist.code}{im ? `, ${im.name}` : ''}</>}>
-          <dl className="tc-rr1-ig">
-            <div><dt>Verim %</dt><dd>{sayi(ist.eff)}</dd></div>
-            <div><dt>Paralel adet</dt><dd>{sayi(ist.count)}</dd></div>
-            {im && <div><dt>İş merkezi</dt><dd>{im.code} {im.name}</dd></div>}
-          </dl>
-          <p className="tc-rr1-ipucu">İstasyonun maliyeti, verimi ve vardiya düzeni Kaynaklar bölümündedir.</p>
-          <Dugme tur="ikincil" simge="building" onClick={() => { r.git('res'); }}>Kaynaklar&apos;da aç</Dugme>
+      </KatBolme>
+      <KatBolme k="mz" baslik="Malzeme" ozet={ozetMz} acik={katlar.acik.mz} ayarla={katlar.ayarla}>
+        <Bolme baslik={`Girenler (${String(a.ins.length)})`}>
+          {a.ins.length > 0 ? (
+            <div className={`tc-rr1-qt tc-rr1-girenler${duzen ? '' : ' tc-rr1-girenler-salt'}`}>
+              <div className="tc-rr1-qtr tc-rr1-qtbas" aria-hidden="true">
+                <span>Malzeme</span><span>Miktar / 1 {birim || 'adet'}</span><span>Fire %</span>{duzen && <span />}
+              </div>
+              {a.ins.map((x, sira) => {
+                const gm = h.malzeme.get(x.itemId);
+                return (
+                  <div key={`${x.itemId}-${String(sira)}`} className="tc-rr1-qtr">
+                    <button type="button" className="tc-rr1-qtn" onClick={() => { r.sec({ tur: 'giren', urunId: s.urunId, adimId: a.id, sira, nid: '', miktar: s.miktar * x.qty }); }}>
+                      <span className={`tc-rr1-slot tc-rr1-slot-${gm?.type ?? 'yok'}`}>{gm ? turKisa(gm.type) : '?'}</span>{' '}
+                      <b>{gm?.code ?? 'Silinmiş kart'}</b> <small>{gm?.name ?? ''}</small>
+                    </button>
+                    <SayiAlani etiket={`${gm?.code ?? ''} miktarı`} deger={x.qty} birim={gm?.unit ?? ''} kapali={!duzen}
+                      yaz={(v) => { yaz((y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira ? { ...g, qty: v ?? 0 } : g)) }), 'Giren miktarı değişti'); }} />
+                    <SayiAlani etiket={`${gm?.code ?? ''} fire yüzdesi`} deger={x.scrap} birim="% fire" kapali={!duzen}
+                      yaz={(v) => { yaz((y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira ? { ...g, scrap: v ?? 0 } : g)) }), 'Giren firesi değişti'); }} />
+                    {duzen && (
+                      <button type="button" className="tc-rr1-ib" aria-label={`${gm?.code ?? ''} girenini kaldır`}
+                        onClick={() => { yaz((y) => ({ ...y, ins: y.ins.filter((_, i) => i !== sira) }), 'Giren kaldırıldı'); }}>
+                        <Simge ad="x" boyut="k" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="tc-rr1-ipucu">Bu adıma ek malzeme girmiyor; önceki adımın çıktısıyla devam eder.</p>}
+          {duzen && idx === 0 && <HamOnerisi urunId={s.urunId} adimlar={liste} malzeme={h.malzeme} ekle={girenEkle} />}
+          {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi haricId={sahip.id} ekle={girenEkle} etiket="Giren malzeme" />}
         </Bolme>
-      )}
+        {!son && (
+          <AdimCiktisi liste={[...h.malzeme.values()]} sahip={sahip} adimlar={liste} a={a} duzen={duzen} yaz={yaz}
+            statuluBaslik={kartBasligi(h.malzeme.get(tasinanMalzeme(sahip.id, liste, idx, dz.malzemeVar)), a, dz.opAdi)}
+            rotali={(id) => (dz.durum.routeRevs ?? []).some((x) => x.itemId === id)} />
+        )}
+        <Bolme baslik={`Yan ürünler (${String(a.outs.length)})`}>
+          {a.outs.length > 0 ? (
+            <div className="tc-rr1-qt">
+              {a.outs.map((x, sira) => {
+                const ym = h.malzeme.get(x.itemId);
+                return (
+                  <div key={`${x.itemId}-${String(sira)}`} className="tc-rr1-qtr">
+                    <button type="button" className="tc-rr1-qtn" onClick={() => { r.sec({ tur: 'yan', urunId: s.urunId, adimId: a.id, sira, nid: '', miktar: s.miktar * x.qty }); }}>
+                      <span className={`tc-rr1-slot tc-rr1-slot-${ym?.type ?? 'yok'}`}>{ym ? turKisa(ym.type) : '?'}</span>{' '}
+                      <b>{ym?.code ?? 'Silinmiş kart'}</b> <small>{ym?.name ?? ''}</small>
+                    </button>
+                    <SayiAlani etiket={`${ym?.code ?? ''} yan ürün miktarı`} deger={x.qty} birim={ym?.unit ?? ''} kapali={!duzen}
+                      yaz={(v) => { yaz((y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira ? { ...g, qty: v ?? 0 } : g)) }), 'Yan ürün miktarı değişti'); }} />
+                    {duzen && (
+                      <button type="button" className="tc-rr1-ib" aria-label={`${ym?.code ?? ''} yan ürününü kaldır`}
+                        onClick={() => { yaz((y) => ({ ...y, outs: y.outs.filter((_, i) => i !== sira) }), 'Yan ürün kaldırıldı'); }}>
+                        <Simge ad="x" boyut="k" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="tc-rr1-ipucu">Yan ürün: bu adımdan ana ürünle birlikte çıkan, başka yerde kullanılan ya da satılan ürün. Çoğu adımda yoktur.</p>}
+          {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi={false} haricId={null} ekle={yanEkle} etiket="Yan ürün" />}
+        </Bolme>
+        <p className="tc-rr1-ipucu">Miktarlar 1 {birim} {sahip.code} başınadır.</p>
+      </KatBolme>
+      <KatBolme k="ak" baslik="Akış ve dal" ozet={ozetAk} acik={katlar.acik.ak} ayarla={katlar.ayarla}>
+        <Bolme baslik={idx === 0 || onculler?.length === 0 ? 'Önceki adımla ilişki'
+          : onculler ? `Beklediği adımlarla ilişki (${onculler.map((o) => `OP ${String(o.seq)}`).join(', ')} → OP ${String(a.seq)})`
+            : `Önceki adımla ilişki (OP ${String(liste[idx - 1]?.seq ?? '')} → OP ${String(a.seq)})`} ek="tc-rr1-depbox">
+          {idx === 0 ? <p className="tc-rr1-ipucu">Bu rotanın ilk adımı; emir başlayınca ve girenleri hazır olunca başlar.</p>
+            : onculler?.length === 0 ? <p className="tc-rr1-ipucu">Dalın ilk adımı; hiçbir adımı beklemez, girenleri hazır olunca başlar.</p> : (
+            <>
+              <div className="tc-rr1-depsel">
+                {BAGIMLILIK_SIRASI.map((k) => (
+                  <button key={k} type="button" className={`tc-rr1-depb${a.dep === k ? ' tc-rr1-on' : ''}`} aria-pressed={a.dep === k} disabled={!duzen}
+                    onClick={() => { yaz((x) => bagimlilikYaz(x, k), 'Bağlılık değişti'); }}>
+                    <b>{BAG_ADI[k]}</b><small>{BAG_ACIKLAMA[k]}</small>
+                  </button>
+                ))}
+              </div>
+              {a.dep === 'ortulu' && (
+                <SayiAlani etiket={`Kaç ${birim} çıkınca başlasın`} deger={a.depQty ?? 1} kapali={!duzen} ipucu="Bu adım öncekinden önce bitemez."
+                  yaz={(v) => { yaz((x) => ({ ...x, depQty: v !== null && v > 0 ? v : 1 }), 'Örtüşme değişti'); }} />
+              )}
+            </>
+          )}
+        </Bolme>
+        <Bolme baslik="Dal" ek="tc-rr1-dalbox">
+          <SecimAlani etiket="Bu adımın dalı" deger={adimDali(a) ?? ''} kapali={!duzen} bos="Ana hat"
+            secenekler={[...new Set([...DAL_HARFLERI, ...(adimDali(a) ? [adimDali(a) ?? ''] : [])])].map((d) => ({ deger: d, baslik: `Dal ${d}` }))}
+            yaz={(v) => { yaz((x) => dalYaz(x, v || null), 'Dal değişti'); }} />
+          {kendiDali && <p className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(kendiDali)}</p>}
+          {kendiDali && (
+            <SayiAlani etiket={`Dal ${kendiDali.dal}: 1 mamul için adet`} deger={kendiDali.carpan ?? adimCarpani(a)} kapali={!duzen} birim="adet"
+              ipucu={kendiDali.carpan === null ? 'Dalın adımlarında farklı adet var; yazılan değer dalın bütün adımlarına geçer.'
+                : 'Bu dalda bir mamul için kaç parça işlenir; dalın bütün adımlarına yazılır, adım adedi emir adedi ile çarpılır.'}
+              yaz={(v) => { dz.degistir(s.urunId, (l) => dalCarpaniYaz(l, kendiDali.dal, v), `Dal ${kendiDali.dal} çarpanı değişti`); }} />
+          )}
+          {buradanCatallanan.map((b) => <p key={b.dal} className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(b)}</p>)}
+          {birlesebilen.length > 0 ? (
+            <div className="tc-rr1-dalsec" role="group" aria-label="Bu adımda birleşen dallar">
+              <span>Bu adımda birleşen dallar</span>
+              {birlesebilen.map((d) => (
+                <IsaretKutusu key={d} etiket={`Dal ${d}`} checked={adimBirlesen(a).includes(d)} disabled={!duzen}
+                  onChange={(e) => { yaz((x) => birlesenYaz(x, d, e.target.checked), e.target.checked ? `Dal ${d} birleşti` : `Dal ${d} birleşmesi kaldırıldı`); }} />
+              ))}
+            </div>
+          ) : <p className="tc-rr1-ipucu">Dallar paralel yürür; birleşeceği adımda burada seçilir. Aynı daldaki önceki adım kendiliğinden beklenir.</p>}
+          {duzen && (
+            <p className="tc-rr1-satirnot tc-rr1-baglar">
+              {adimDali(a) === null && !son && (
+                <button type="button" className="tc-rr1-linkbtn" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : undefined}
+                  onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: a.id, dal: yeniDal }); r.paletAc(); } }}>
+                  Buradan kol aç
+                </button>
+              )}
+              {adimDali(a) === null && (
+                <button type="button" className="tc-rr1-linkbtn" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : 'Rotanın başından başlayıp bu adımda ana hatta katılan bağımsız dal'}
+                  onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: liste[idx - 1]?.id ?? null, dal: yeniDal, katilir: a.id }); r.paletAc(); } }}>
+                  Buraya katılan dal ekle
+                </button>
+              )}
+              {birlesmemis.length > 0 && (
+                <button type="button" className="tc-rr1-linkbtn" onClick={() => { dz.degistir(s.urunId, (l) => kollariBirlestir(l, a.id), `Dal ${birlesmemis.join(', ')} bu adımda birleşti`); }}>
+                  Kolları burada birleştir ({birlesmemis.map((d) => `Dal ${d}`).join(', ')})
+                </button>
+              )}
+            </p>
+          )}
+        </Bolme>
+      </KatBolme>
+      <KatBolme k="ay" baslik="Planlama ayarları" ozet={ozetAy} acik={katlar.acik.ay} ayarla={katlar.ayarla}>
+        <div className="tc-rr1-ig">
+          <SayiAlani etiket="Fire / ret payı %" deger={a.rejectPct} kapali={!duzen}
+            yaz={(v) => { yaz((x) => ({ ...x, rejectPct: Math.min(95, Math.max(0, v ?? 0)) }), 'Fire payı değişti'); }} />
+          {!fason && (
+            <SecimAlani etiket={dz.insanli(a.stationId) ? 'Kişi kullanımı' : 'Makine kullanımı'} deger={a.split} kapali={!duzen}
+              secenekler={[{ deger: 'tek', baslik: dz.insanli(a.stationId) ? 'Tek kişide' : 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
+              yaz={(v) => { yaz((x) => ({ ...x, split: v === 'bol' ? 'bol' : 'tek' }), 'Makine kullanımı değişti'); }} />
+          )}
+          {!fason && a.split === 'bol' && (
+            <SayiAlani etiket="En küçük parça" deger={a.minLot} kapali={!duzen} yerTutucu="boş"
+              yaz={(v) => { yaz((x) => ({ ...x, minLot: v !== null && v > 0 ? Math.round(v) : null }), 'En küçük parça değişti'); }} />
+          )}
+        </div>
+        <p className="tc-rr1-ipucu">Fire yalnızca planı büyütür: bu adımda kaybedilecek pay kadar önceki adımlar ve girenler fazla planlanır. Hurda rotada tanımlanmaz.</p>
+        {!fason && (
+          <>
+            <div className="tc-rr1-altbox">
+              <span className="tc-rr1-lbl">Alternatif istasyonlar</span>
+              {a.alts.map((id) => {
+                const x = h.istasyon.get(id);
+                const t = a.altTimes[id];
+                return (
+                  <div key={id} className="tc-rr1-altrow">
+                    <span className="tc-rr1-chip">{x ? `${x.code} ${x.name}` : `İstasyon #${id}`}</span>
+                    <SayiAlani etiket={`${x?.name ?? id} çevrim toplamı (dk)`} enCok={SURE_EN_COK} deger={t && (t.cycle ?? 0) > 0 ? t.cycle : null} yerTutucu={sayi(a.cycle)} kapali={!duzen}
+                      yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { setup: y.altTimes[id]?.setup ?? null, cycle: v } } }), 'Alternatif süresi değişti'); }} />
+                    <SayiAlani etiket={`${x?.name ?? id} hazırlık (dk)`} enCok={SURE_EN_COK} deger={t?.setup ?? null} yerTutucu={sayi(a.setup)} kapali={!duzen}
+                      yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { cycle: y.altTimes[id]?.cycle ?? null, setup: v } } }), 'Alternatif süresi değişti'); }} />
+                    {duzen && (
+                      <button type="button" className="tc-rr1-ib" aria-label={`${x?.name ?? id} alternatifini kaldır`}
+                        onClick={() => {
+                          yaz((y) => {
+                            const { [id]: _silinen, ...kalan } = y.altTimes;
+                            return { ...y, alts: y.alts.filter((z) => z !== id), altTimes: kalan };
+                          }, 'Alternatif kaldırıldı');
+                        }}>
+                        <Simge ad="x" boyut="k" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {duzen && (
+                <select className="tc-rr1-secim" value="" aria-label="Alternatif istasyon ekle"
+                  onChange={(e) => { const v = e.target.value; if (v) yaz((y) => (y.alts.includes(v) ? y : { ...y, alts: [...y.alts, v] }), 'Alternatif eklendi'); }}>
+                  <option value="">Alternatif ekle</option>
+                  {istasyonlar.filter((x) => x.id !== a.stationId && !a.alts.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
+                </select>
+              )}
+              <p className="tc-rr1-ipucu">Alternatifte süreyi boş bırakırsan ana istasyonun süresi kullanılır. Süre ayrıca istasyonun verimiyle düzeltilir.</p>
+            </div>
+            <IsaretKutusu etiket="Yarıda kalıp dönülünce hazırlık yeniden eklensin" checked={a.resetup} disabled={!duzen}
+              onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, resetup: v }), 'Yeniden hazırlık değişti'); }} />
+            <IsaretKutusu etiket="Her kurulumda ilk parça onayı istensin" checked={a.ilkParca !== 'yok'} disabled={!duzen}
+              onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, ilkParca: v ? 'her_kurulum' : 'yok' }), 'İlk parça onayı değişti'); }} />
+          </>
+        )}
+      </KatBolme>
+      <KatBolme k="bg" baslik="Belgeler" ozet={ozetBg} rozet={rozetBg} acik={katlar.acik.bg} ayarla={katlar.ayarla}>
+        <AdimSartnameleri rev={dz.gorulen(s.urunId)} opNo={a.opNo} fason={fason} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul}
+          taslakAc={() => { const g = dz.gorulen(s.urunId); if (g) void dz.yeniTaslak(s.urunId, g); }} />
+        <AdimEkipmani rev={dz.gorulen(s.urunId)} opNo={a.opNo} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul} />
+        <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} />
+      </KatBolme>
       {duzen && (
-        <div className="tc-rr1-isec tc-rr1-btnrow">
+        <div className="tc-rr1-altcubuk">
           {/* 3248-2: yatay hatta taşıma yalnız kendi şeridindedir (ana hat ya da aynı dal); dalın hattaki yeri kalır. */}
           {r.hatli ? ([[-1, 'chev-left', 'Öne'], [1, 'chev-right', 'Geriye']] as const).map(([yon, simge, ad]) => (
             <Dugme key={ad} tur="ikincil" simge={simge} disabled={seritKomsusu(liste, a.id, yon) === null}
@@ -491,6 +531,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             </>
           )}
           <Dugme tur="ikincil" simge="plus" onClick={() => { r.paletAc(); }}>Sonrasına adım</Dugme>
+          <span className="tc-rr1-altcubuk-bosluk" />
           <Dugme tur="tehlike" simge="trash" onClick={() => { if (dz.degistir(s.urunId, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`)) r.sec(null); }}>Adımı sil</Dugme>
         </div>
       )}

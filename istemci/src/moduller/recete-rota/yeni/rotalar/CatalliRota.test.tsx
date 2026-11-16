@@ -41,6 +41,8 @@ describe('2542 çatallı rota: izinli', () => {
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     const panel = await adimSec(bolge, 20);
+    const akis = within(panel).getByRole('button', { name: /^Akış ve dal/ });
+    if (akis.getAttribute('aria-expanded') === 'false') fireEvent.click(akis);
     fireEvent.click(within(panel).getByRole('button', { name: 'Buradan kol aç' }));
     expect(within(bolge).getByText('Yeni Dal A: OP 20 ardından çatallanır. Listeden ilk adımını seç; ardına eklenen adımlar da bu dala düşer.')).toBeTruthy();
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
@@ -69,6 +71,8 @@ describe('2542 çatallı rota: izinli', () => {
     expect(within(panel).getByText('Dal A: OP 10 ardından başlar, birleşmiyor.')).toBeTruthy();
     expect(within(panel).getByText('Dal B: OP 10 ardından başlar, birleşmiyor.')).toBeTruthy();
     panel = await adimSec(bolge, 50);
+    const akis = within(panel).getByRole('button', { name: /^Akış ve dal/ });
+    if (akis.getAttribute('aria-expanded') === 'false') fireEvent.click(akis);
     fireEvent.click(within(panel).getByRole('button', { name: 'Kolları burada birleştir (Dal A, Dal B)' }));
     expect(within(panel).queryByRole('button', { name: /Kolları burada birleştir/ })).toBeNull();
     panel = await adimSec(bolge, 20);
