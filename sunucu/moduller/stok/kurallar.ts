@@ -1808,3 +1808,27 @@ export function emirFisKartlari(
     };
   });
 }
+
+// 3332: mal kabulde sipariş kaleminin birimi ile kartın stok birimi arasındaki dönüşüm. Sipariş katsayısı 1 sipariş biriminin kaç stok
+// birimi olduğudur: aynı birimde 1; kalem kg ise stok biriminin kg'ı (satın almanın 2891-1 kuralı) ile; kalem kartın alış birimindeyse
+// (323 b) alış katsayısıyla; bilinmiyorsa null (uydurulmaz). kgBasina stok biriminin bir birimi kaç kg; parcaKg kg stoklu kartta bir
+// parçanın (boy, levha) ağırlığıdır (3100). Ekran bu üçüyle girilen miktarın öbür birim karşılığını hesaplar.
+export interface MalKabulDonusumu { siparisKatsayisi: string | null; kgBasina: string | null; parcaKg: string | null }
+const birimAdi = (b: string | null | undefined): string => (b ?? '').trim().toLocaleLowerCase('tr-TR');
+const katsayiMetni = (n: number): string | null => (Number.isFinite(n) && n > 0 ? String(Number(n.toFixed(6))) : null);
+export function malKabulDonusumu(
+  siparisBirimi: string,
+  kart: { stokBirimi: string | null; kgBasina: number | null; birimKg: number | null; alisBirimi: string | null; alisKatsayisi: string | null } | undefined,
+): MalKabulDonusumu | null {
+  if (kart === undefined) return null;
+  const stok = birimAdi(kart.stokBirimi);
+  if (stok === '') return null;
+  const siparis = birimAdi(siparisBirimi);
+  const kgBasina = kart.kgBasina !== null && kart.kgBasina > 0 ? kart.kgBasina : null;
+  const siparisKatsayisi = siparis === stok ? '1'
+    : siparis === 'kg' && kgBasina !== null ? katsayiMetni(1 / kgBasina)
+      : kart.alisBirimi !== null && kart.alisKatsayisi !== null && birimAdi(kart.alisBirimi) === siparis ? katsayiMetni(Number(kart.alisKatsayisi))
+        : null;
+  const parcaKg = stok === 'kg' && kart.birimKg !== null && kart.birimKg > 0 ? katsayiMetni(kart.birimKg) : null;
+  return { siparisKatsayisi, kgBasina: kgBasina === null ? null : katsayiMetni(kgBasina), parcaKg };
+}

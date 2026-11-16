@@ -56,15 +56,16 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
   }
   // Açık sipariş satırı: talebin emri, birleşmiş talepte kalemin kaynak talebinin emri ve sipariş satırının iş emri (fason) ayrı verilir.
   let kartSira = 0;
-  async function kart(tur: 'hammadde' | 'yarimamul' | 'hizmet'): Promise<number> {
+  async function kart(tur: 'hammadde' | 'yarimamul' | 'hizmet', ek: { birim?: string; birimKg?: number; alisBirimi?: string; katsayi?: string } = {}): Promise<number> {
     kartSira += 1;
     await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('ASA-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     return (await o().sahip.tek<{ no: number }>(
-      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, hizmet_yonu)
-       VALUES ($1, $2, 'ASA-DNM-', $3, 'aktif', $4, $5, $5, $6) RETURNING no`,
-      [`asa-dnm-${kartSira}`, tur, kartSira, JSON.stringify({ id: `asa-dnm-${kartSira}`, com: { ad: `Deneme ${tur} ${kartSira}` } }), kisi, tur === 'hizmet' ? 'alinan' : null]))!.no;
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, hizmet_yonu, birim_agirlik_kg, alis_birimi, alis_katsayisi)
+       VALUES ($1, $2, 'ASA-DNM-', $3, 'aktif', $4, $5, $5, $6, $7, $8, $9) RETURNING no`,
+      [`asa-dnm-${kartSira}`, tur, kartSira, JSON.stringify({ id: `asa-dnm-${kartSira}`, com: { ad: `Deneme ${tur} ${kartSira}`, ...(ek.birim ? { birim: ek.birim } : {}) } }), kisi,
+        tur === 'hizmet' ? 'alinan' : null, ek.birimKg ?? null, ek.alisBirimi ?? null, ek.katsayi ?? null]))!.no;
   }
-  async function siparisSatiri(x: { kalem: string; tedarikci: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number; malzemeNo?: number; revizyon?: string; uygulanan?: number }): Promise<number> {
+  async function siparisSatiri(x: { kalem: string; tedarikci: string; miktar?: string; birim?: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number; malzemeNo?: number; revizyon?: string; uygulanan?: number }): Promise<number> {
     const [t, kl, tk] = [await talep(x.talepEmri ?? null), randomUUID(), randomUUID()];
     const kaynak = x.kaynakEmri === undefined ? null : await talep(x.kaynakEmri);
     const s = o().sahip;
@@ -78,8 +79,8 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
     await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, $3)", [t, tk, x.tedarikci]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
-    return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim, is_emri_id, parca_revizyonu) VALUES ($1, $2, $3, 4, 'adet', $4, $5) RETURNING id",
-      [t, tk, kl, x.isEmri ?? null, x.revizyon ?? null]))!.id;
+    return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim, is_emri_id, parca_revizyonu) VALUES ($1, $2, $3, $6, $7, $4, $5) RETURNING id",
+      [t, tk, kl, x.isEmri ?? null, x.revizyon ?? null, x.miktar ?? '4', x.birim ?? 'adet']))!.id;
   }
 
   before(async () => {
@@ -209,5 +210,32 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
     assert.equal(revizyonUyusmuyor('i', 'İ'), false, 'Türkçe büyük harf');
     assert.equal(revizyonUyusmuyor(null, 'A'), null);
     assert.equal(revizyonUyusmuyor('A', '  '), null);
+  });
+
+  // 3332: satır kartın stok birimini ve sipariş birimiyle dönüşümünü taşır. Katsayı 1 sipariş biriminin kaç stok birimi olduğudur:
+  // kg kalemde birim ağırlığından, kartın alış birimindeki kalemde alış katsayısından; bilinmeyen null, uydurulmaz.
+  test('3332: stok birimi ve sipariş birimiyle dönüşüm (kg, alış birimi, aynı birim, bilinmeyen)', async () => {
+    const [adetKg, kgParca, kutu, agirliksiz, olculu] = [
+      await kart('hammadde', { birim: 'adet', birimKg: 24 }), await kart('hammadde', { birim: 'kg', birimKg: 12.5 }),
+      await kart('yarimamul', { birim: 'adet', alisBirimi: 'kutu', katsayi: '50' }), await kart('yarimamul', { birim: 'adet' }), await kart('hammadde', { birim: 'm', birimKg: 3 }),
+    ];
+    const id = {
+      kgKalem: await siparisSatiri({ kalem: 'Deneme ORN-cubuk', tedarikci: 'Deneme Celik', malzemeNo: adetKg, miktar: '480', birim: 'kg' }),
+      adetKalem: await siparisSatiri({ kalem: 'Deneme ORN-cubuk', tedarikci: 'Deneme Celik', malzemeNo: adetKg, miktar: '20', birim: 'Adet' }),
+      kgStok: await siparisSatiri({ kalem: 'Deneme ORN-levha', tedarikci: 'Deneme Celik', malzemeNo: kgParca, miktar: '250', birim: 'kg' }),
+      kutu: await siparisSatiri({ kalem: 'Deneme ORN-pul', tedarikci: 'Deneme Baglanti', malzemeNo: kutu, miktar: '3', birim: 'kutu' }),
+      agirliksiz: await siparisSatiri({ kalem: 'Deneme ORN-burc', tedarikci: 'Deneme Celik', malzemeNo: agirliksiz, miktar: '10', birim: 'kg' }),
+      olculu: await siparisSatiri({ kalem: 'Deneme ORN-profil', tedarikci: 'Deneme Celik', malzemeNo: olculu, miktar: '30', birim: 'kg' }),
+      kartsiz: await siparisSatiri({ kalem: 'Deneme ORN-eldiven', tedarikci: 'Deneme Sarf', miktar: '5', birim: 'kg' }),
+    };
+    const l = await satirlar();
+    const al = (x: number) => { const r = l.find((y) => y.id === x)!; return [r.stokBirimi, r.donusum]; };
+    assert.deepEqual(al(id.kgKalem), ['adet', { siparisKatsayisi: '0.041667', kgBasina: '24', parcaKg: null }], '1 kg = 1/24 adet');
+    assert.deepEqual(al(id.adetKalem), ['adet', { siparisKatsayisi: '1', kgBasina: '24', parcaKg: null }], 'büyük-küçük harf aynı birim');
+    assert.deepEqual(al(id.kgStok), ['kg', { siparisKatsayisi: '1', kgBasina: '1', parcaKg: '12.5' }], 'kg stokta parça ağırlığı');
+    assert.deepEqual(al(id.kutu), ['adet', { siparisKatsayisi: '50', kgBasina: null, parcaKg: null }], 'alış birimi katsayısı');
+    assert.deepEqual(al(id.agirliksiz), ['adet', { siparisKatsayisi: null, kgBasina: null, parcaKg: null }], 'ağırlık yoksa uydurulmaz');
+    assert.deepEqual(al(id.olculu), ['m', { siparisKatsayisi: null, kgBasina: null, parcaKg: null }], 'metre stokta kg karşılığı yok (2891-1)');
+    assert.deepEqual(al(id.kartsiz), [null, null], 'kartsız satırda dönüşüm yok');
   });
 });

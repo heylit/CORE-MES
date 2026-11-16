@@ -9,8 +9,8 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import { belgeAcVeBagla, kaydaBagla } from '../../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { gkkGerekenKartlar, malzemeKullanilabilirMi, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
-import { siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
+import { gkkGerekenKartlar, malzemeBirimDonusumleri, malzemeKullanilabilirMi, malzemeMaliyetBilgileri, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
+import { siparisSatirlari, siparisSatirlarininEmri, stokBirimiBasinaKg, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
 import { depoKabulunuGeriAl } from '../../sevkiyat/disari.ts';
 import { projeAdlari } from '../../projeler/disari.ts';
 import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
@@ -19,7 +19,7 @@ import {
   karantinaYokIletisi, gkkGirisKonumuEngeli, malKabulKonumuEngeli, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
   uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli, revizyonUyusmuyor,
 } from '../kurallar.ts';
-import type { MalzemeTuru } from '../kurallar.ts';
+import { malKabulDonusumu, type MalzemeTuru } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { fasonIsindenDonus, sevkKalemiKabulu } from './dis-akis.ts';
 import { kaynakPartisi, dusumDenetle, kaliteDegistir, partiKaliteDurumuYap, karantinadanBirak, tersCevir } from './hareket.ts';
@@ -231,7 +231,17 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
 // satırında iş emrinin emri. Satır sayısından bağımsız sabit sayıda toplu okuma (N+1 yok).
 export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlariCevabi> {
   const l = await siparisSatirlari(db);
-  const kartlar = await malzemeOzetleri(db, [...new Set(l.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))]);
+  const malzemeNolari = [...new Set(l.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))];
+  const kartlar = await malzemeOzetleri(db, malzemeNolari);
+  // 3332: kalemin birimi ile stok birimi arasındaki dönüşüm (birim ağırlığı ve alış katsayısı karttan, iki toplu okuma).
+  const agirliklar = await malzemeMaliyetBilgileri(db, malzemeNolari);
+  const alislar = await malzemeBirimDonusumleri(db, malzemeNolari);
+  const donusumu = (x: (typeof l)[number]) => {
+    const b = x.malzemeNo === null ? undefined : agirliklar.get(x.malzemeNo);
+    if (b === undefined) return null;
+    const a = alislar.get(x.malzemeNo!);
+    return malKabulDonusumu(x.birim, { stokBirimi: b.stokBirimi, kgBasina: stokBirimiBasinaKg(b.stokBirimi, b.birimKg), birimKg: b.birimKg, alisBirimi: a?.alisBirimi ?? null, alisKatsayisi: a?.katsayi ?? null });
+  };
   const kalemEmri = await siparisSatirlarininEmri(db, l.map((x) => x.id));
   const isEmirleri = await isEmriOzetleri(db, l.flatMap((x) => (x.isEmriId === null || kalemEmri.has(x.id) ? [] : [x.isEmriId])));
   const emri = (x: (typeof l)[number]): number | null => kalemEmri.get(x.id) ?? (x.isEmriId === null ? null : isEmirleri.get(x.isEmriId)?.uretimEmriId ?? null);
@@ -250,6 +260,7 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
       id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
       malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,
       miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, beklenenTeslim: x.beklenenTeslim,
+      stokBirimi: x.malzemeNo === null ? null : agirliklar.get(x.malzemeNo)?.stokBirimi ?? null, donusum: donusumu(x),
       uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
       isEmriId: x.isEmriId, parcaRevizyonu: x.parcaRevizyonu, yururlukRevizyonu: yur,
       revizyonUyusmuyor: revizyonUyusmuyor(x.parcaRevizyonu, yur),
