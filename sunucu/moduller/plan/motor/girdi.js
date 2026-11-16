@@ -284,6 +284,7 @@ function rrCevir(st) {
     const ustAdim = d.ustOpNo == null || ustUrun == null ? null : kOf(ustUrun, rotaAdimlari(st, ustUrun), d.ustOpNo);
     const ana = siparisler.find(x => String(x.id) === String(o.id)) || {};
     const biten = (d.adimlar || []).filter(x => x.durum === 'tamam').map(x => kOf(d.itemId, steps, x.kaynakOpNo)).filter(k => k != null);
+    const firma = Object.fromEntries((d.adimlar || []).filter(x => x.fasonSiparis && x.fasonSiparis.tarih).map(x => [kOf(d.itemId, steps, x.kaynakOpNo), x.fasonSiparis.tarih]).filter(x => x[0] != null));
     const mal = steps.flatMap(t => (t.ins || []).filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty, adim: ak[t.seq] ?? String(t.seq) })));
     const bagli = ustAdim != null && +d.birim > 0;
     /* sayfanın eklediği alanlar (ağırlık, elle öncelik) önceki kopyada (d.plan) kalır; sunucunun alanları her okumada yeniden yazılır */
@@ -293,6 +294,7 @@ function rrCevir(st) {
       gelir: null, cezaGun: null, malzeme: mal, dugum: d.dugum,
       ust: bagli ? (d.ust === '0' ? String(o.id) : dugumSipId(o, d.ust)) : undefined, ustAdim: bagli ? String(ustAdim) : undefined, birim: bagli ? +d.birim : undefined,
       dugumBiten: biten.length ? biten : undefined,
+      dugumFirma: Object.keys(firma).length ? firma : undefined,
     }));
   }
   siparisler.push(...dugumSiparisleri);
@@ -457,14 +459,17 @@ function tmiAdimAdetleri(durum, st, D) {
   for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
   return y;
 }
+/* 3257 a: siparişteki teslim günü o günün sabahı dönüş sayılır (uretim-emirleri FASON_DONUS_SAATI_MS ile aynı saat) */
+const FASON_DONUS_SAATI = '08:00';
 /* Biten iş (inceleme 1): biten ve iptal emir plana girmez; biten adım motorda st.bitti ile düşer (ardılı onu beklemez). Kaynak sunucunun iş
    emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
    rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
 function tmiBitenler(emirler, D) {
-  const y = { siparis: {}, adim: {} };
+  const y = { siparis: {}, adim: {}, firma: {} };
   if (!emirler || typeof emirler !== 'object') return y;
   for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
   const durum = emirler.opStatus || {};
+  const yer = emirler.opYer || {};
   const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
   for (const s of (D && D.siparisler) || []) {
     const rota = (urun[s.urun] || {}).rota || [];
@@ -473,13 +478,23 @@ function tmiBitenler(emirler, D) {
     const biten = s.dugum ? rota.filter(a => (s.dugumBiten || []).includes(a.k)) : rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
     if (biten.length === rota.length) y.siparis[s.id] = 1;
     else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
+    /* 3330 a: bitmemiş fason adımın açık satın alma siparişindeki firma tarihi (kök: opYer, düğüm: dugumFirma); o gün FASON_DONUS_SAATI'nde döner */
+    rota.forEach((a, i) => { const t = s.dugum ? (s.dugumFirma || {})[a.k] : ((yer[`${s.id}|root|${i + 1}`] || {}).fasonSiparis || {}).tarih; if (t && !y.adim[`${s.id}.${a.k}`]) y.firma[`${s.id}.${a.k}`] = t + ' ' + FASON_DONUS_SAATI; });
   }
   return y;
 }
 /* Planın girdisinden biten işi düşürür (st yerinde değişir); biten yoksa st olduğu gibi kalır. Biten siparişin malzemesi tahmini eksik
    satırından da düşer (tmEksikYaz). */
+/* 3330 a: firma tarihi çalışmanın verisine (D, kayda giden) yazılmaz; her kurulumda sunucunun okumasından st'ye gelir (kanca tFason okur).
+   Tarihi olan adım için "dönüş termini girilmedi" uyarısı düşer. */
+function firmaTarihiYaz(st, firma) {
+  if (!firma || !Object.keys(firma).length) return;
+  st.fasonSiparis = Object.assign({}, st.fasonSiparis, firma);
+  st.tmUyari = (st.tmUyari || []).filter(u => !(u.fason && firma[u.fason]));
+}
 function bitenUygula(st, b) {
   if (!b || !st || !st.D) return st;
+  firmaTarihiYaz(st, b.firma);
   if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
   /* 1473 a: biten adımın malzemesi tüketilmiştir; siparişi verilmemiş eksik onsuz yeniden yazılır */
   if (Object.keys(b.adim).length) { st.bitti = Object.assign({}, st.bitti || {}, b.adim); tmEksikYaz(st); }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ILK_PARCA_SECIMLERI } from './rota.ts';
 import { TALEP_DURUMLARI } from './satin-alma.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // Reçete ve Rota Motoru prototipi TMI içinde değiştirilmeden çalışır. Prototip durumunu tarayıcının yerel deposunda tutar (ana
 // durum, plan stüdyosu senaryoları, operatör ve menü tercihleri); çerçevedeki köprü bu depoyu TMI'ye bağlar: anahtar başına bir
@@ -277,7 +277,7 @@ export const durumEmirSemasi = z.object({
     ustOpNo: z.number().int().nullable(),
     adimlar: z.array(z.object({
       opNo: z.number().int(), kaynakOpNo: z.number().int(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']),
-      fasonId: kimlikMetni.optional(), terminGun: z.number().int().nullable().optional(),
+      fasonId: kimlikMetni.optional(), terminGun: z.number().int().nullable().optional(), fasonSiparis: z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable() }).optional(),
     })),
   })).optional(),
 });
@@ -287,9 +287,12 @@ export const durumEmirSemasi = z.object({
 // opYer (aynı anahtar): rotalı emirde adımın emirdeki iç ya da dış üretimi (UE-URY). Emirde fasona alınan ya da içeri alınan adım rotadan
 // ayrılabilir; plan rotanın değil emrin seçimini kullanır. fasonId doluysa adım fasondadır (istasyon ve süre yok, terminGun firma süresi).
 // tahminGun (B-2483-11): termini girilmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini, takvim günü; tahmin yoksa alan yok.
+// fasonSiparis (3330 a): bitmemiş fason adımın açık siparişindeki firma tarihi (birden çok siparişte en geç olan) ve o siparişin numarası
+// (Satın Alma'yı göremeyene null); siparişi ya da tarihi olmayan adımda alan yok. Plan dönüşü o günün sabahına sabitler.
+export const durumFasonSiparisSemasi = z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable() });
 export const durumEmirYeriSemasi = z.object({
   fasonId: kimlikMetni.nullable(), terminGun: z.number().int().nullable(), stationId: kimlikMetni.nullable(), setup: z.number().nullable(), cycle: z.number().nullable(),
-  tahminGun: z.number().positive().optional(),
+  tahminGun: z.number().positive().optional(), fasonSiparis: durumFasonSiparisSemasi.optional(),
 });
 export const durumEmirlerSemasi = z.object({
   orders: z.array(durumEmirSemasi),

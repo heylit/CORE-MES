@@ -600,7 +600,7 @@ export interface EmirDilimiSatiri {
   // Sayaç emrin değil adımındır: iki adım birlikte çalışabilir (paralel adım, çok katmanlı emirde alt düğüm ile kök).
   // ad'dan bilesenler'e kadar alanlar rotasız emrin adımlarını Reçete ve Rota'da göstermek içindir (B13); süreler numeric metindir.
   isEmirleri: {
-    sira: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; saglamAdet: number | null; canliAdet: number | null;
+    id: number; sira: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; saglamAdet: number | null; canliAdet: number | null;
     ad: string; operasyonTipiId: number; kaynak: { tur: IsEmriKaynakTuru; id: number } | null; istasyonId: number | null;
     ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null; bilesenler: { malzemeId: number; miktar: string; fireYuzde: string }[];
     // 697: ek adım (rework, tamir, ek) rotada yer tutmaz; Reçete ve Rota durum anahtarını rotadaki yerle kurar.
@@ -653,7 +653,7 @@ export async function emirDilimi(db: Db, secim?: EmirDilimiSecimi): Promise<Emir
     bolunmeSira: e.bolunmeSira, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo, surum: e.surum,
     bekletme: bekletmeler.get(e.id) ?? null,
     isEmirleri: (emreGore.get(e.id) ?? []).map((i) => ({
-      sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(i.id) ?? 0 : null,
+      id: i.id, sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(i.id) ?? 0 : null,
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({ malzemeId: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde })),
       tur: i.tur,
