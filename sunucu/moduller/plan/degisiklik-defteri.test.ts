@@ -9,7 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
+import { defterSatirlari, onayDefterSatiri } from './degisiklik-defteri-kurallar.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -39,6 +39,17 @@ describe('değişiklik defteri kuralı', () => {
     const once = calisma(2, 1, [b('a'), { id: 3 }, null]);
     assert.deepEqual(defterSatirlari(once, calisma(2, 1, [b('a')]), [{ id: 'a', karar: 'uygulandi' }]), []);
     assert.deepEqual(defterSatirlari(null, null), []);
+  });
+});
+
+describe('onay ve canlıya alma satırı (3308-9 a)', () => {
+  test('DD-04: plan satırı bütün işleri etkiler; neden yalnız geri göndermede gerekçeye girer, uzun metin kesilir', () => {
+    assert.deepEqual(onayDefterSatiri('onaya-gonderildi', { id: 7, ad: 'Onay Pzt' }, { ayrinti: 'not', neden: 'yok sayılır' }),
+      { olay: 'onaya-gonderildi', bekleyenId: 'plan:7', ne: 'Onay Pzt', ayrinti: 'not', isler: ['*'], gerekce: null });
+    assert.equal(onayDefterSatiri('geri-gonderildi', { id: 7, ad: 'x' }, { neden: ' Termin ' }).gerekce, 'Termin');
+    assert.equal(onayDefterSatiri('geri-gonderildi', { id: 7, ad: 'x' }, { neden: '  ' }).gerekce, null);
+    const uzun = onayDefterSatiri('canliya-alindi', { id: 7, ad: 'a'.repeat(600) }, { ayrinti: 'b'.repeat(2500) });
+    assert.deepEqual([uzun.ne.length, uzun.ayrinti.length, uzun.ayrinti.endsWith('b…')], [500, 2000, true]);
   });
 });
 
@@ -108,6 +119,15 @@ describe('değişiklik defteri (gerçek PostgreSQL)', () => {
     assert.equal(c.dahaVar, false);
     const once = await oku(okuyan, c.satirlar[1]!.id);
     assert.deepEqual((once.json() as DegisiklikDefteriCevabi).satirlar.map((x) => x.bekleyenId), ['r', 'a']);
+  });
+
+  test('DD-14: kısıt yeni olayları kabul eder; tanımsız olayı ve gerekçeli canlıya almayı reddeder (3308-9 a)', async () => {
+    const ekle = (olay: string, gerekce: string | null) => vt().sorgu(
+      "INSERT INTO plan_degisiklik_defteri (olay, bekleyen_id, ne, gerekce, kisi_id) VALUES ($1, 'plan:1', 'Deneme plan', $2, $3)", [olay, gerekce, yoneticiId]);
+    for (const olay of ['onaya-gonderildi', 'onaydan-cekildi', 'canliya-alindi']) await ekle(olay, null);
+    await ekle('geri-gonderildi', 'Termin sıkışık');
+    await assert.rejects(ekle('silindi', null), /plan_degisiklik_defteri_olay/);
+    await assert.rejects(ekle('canliya-alindi', 'gerekçe'), /plan_degisiklik_defteri_gerekce/);
   });
 
   test('DD-11: gerekçesiz ret ve tanımsız karar 400; çalışma ve defter değişmez', async () => {

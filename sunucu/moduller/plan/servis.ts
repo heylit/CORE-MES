@@ -48,6 +48,7 @@ import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
+import { onayDefterSatiri } from './degisiklik-defteri-kurallar.ts';
 import { degisimler, emirBitisleri } from './olcum-kurallar.ts';
 import type { BolmeParcasi, DegisiklikSatiri, Hedef, ParcaSatiri, YerlesimSatiri } from './sorgular.ts';
 import type { PlanBenzetimi } from './plan-girdisi.ts';
@@ -2933,7 +2934,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }
   await s.ayariCanliyaYaz(db, id, k.id);
   await s.ekMesaiCanliyaYaz(db, id);
-  await s.planSurumuArtir(db);
+  const yeniSurum = await s.planSurumuArtir(db);
   // 33 a: taban, yeni canlı sürümle yazılır; tabanı olan adım atlanır.
   await s.tabanYaz(db, id, idler.flatMap((i) => {
     const u = b.isler.get(i)?.uretimEmriId;
@@ -2941,6 +2942,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }), k.id);
   await olcumYaz(db, b, id, k.id, canli, gecen, vardiyasiz.size);
   await s.onayKaydiEkle(db, id, 'canliya_al', k.id, asmaKaydi, dortGozsuz);
+  await s.defterYaz(db, k.id, [onayDefterSatiri('canliya-alindi', x, { ayrinti: [`Sürüm ${String(yeniSurum)}`, asmaKaydi].filter(Boolean).join('. ') })]);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
   await kardesleriKapat(db, k, id, x.tabanPlanSurumu);
   await planIhtiyaclariniBildir(db);
@@ -3106,22 +3108,25 @@ export async function onayaGonder(db: Db, k: Kullanici, id: number, g: OnayaGond
   await yeniIslerDenetle(db, id, x.acilma, 'önce Planı kur ile yerleştirin.');
   await s.senaryoDurumYaz(db, id, 'acik', 'onayda');
   await s.onayKaydiEkle(db, id, 'onaya_gonder', k.id, g.not || null);
+  await s.defterYaz(db, k.id, [onayDefterSatiri('onaya-gonderildi', x, { ayrinti: g.not })]);
   return senaryolar(db, k);
 }
 
 // Sahip onaydaki taslağını geri çeker; taslak yeniden açık olur.
 export async function onaydanCek(db: Db, k: Kullanici, id: number, surum: number) {
-  await onayGecisi(db, k, id, surum, 'onaydan-cek');
+  const { x } = await onayGecisi(db, k, id, surum, 'onaydan-cek');
   await s.senaryoDurumYaz(db, id, 'onayda', 'acik');
   await s.onayKaydiEkle(db, id, 'onaydan_cek', k.id, null);
+  await s.defterYaz(db, k.id, [onayDefterSatiri('onaydan-cekildi', x)]);
   return senaryolar(db, k);
 }
 
 // Onaylayan onaydaki taslağı nedeniyle sahibine geri gönderir; taslak açık olur, neden sahibine görünür.
 export async function geriGonder(db: Db, k: Kullanici, id: number, g: GeriGonderGovdesi) {
-  await onayGecisi(db, k, id, g.surum, 'geri-gonder');
+  const { x } = await onayGecisi(db, k, id, g.surum, 'geri-gonder');
   await s.senaryoDurumYaz(db, id, 'onayda', 'acik');
   await s.onayKaydiEkle(db, id, 'geri_gonder', k.id, g.neden);
+  await s.defterYaz(db, k.id, [onayDefterSatiri('geri-gonderildi', x, { neden: g.neden })]);
   return senaryolar(db, k);
 }
 

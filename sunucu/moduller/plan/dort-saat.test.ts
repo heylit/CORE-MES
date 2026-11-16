@@ -161,5 +161,10 @@ describe('plan (gerçek PostgreSQL): 4 saat kuralı (248 a)', () => {
       "SELECT o.metin, k.kullanici_adi AS kullanici FROM plan_senaryo_onay_kaydi o JOIN kisi k ON k.id = o.kisi_id WHERE o.senaryo_id = $1 AND o.islem = 'canliya_al'", [s.id]));
     assert.equal(kayit?.kullanici, 'mudur');
     assert.match(kayit?.metin ?? '', /^4 saat kuralı aşıldı \(.+ OP 10\): takım tezgâhta yok$/);
+    // 3308-9 a: aynı aşım değişiklik defterinin canlıya alma satırında da okunur.
+    const defter = await vt().tx((db) => db.tek<{ ayrinti: string; gerekce: string | null }>(
+      "SELECT ayrinti, gerekce FROM plan_degisiklik_defteri WHERE bekleyen_id = $1 AND olay = 'canliya-alindi'", [`plan:${String(s.id)}`]));
+    assert.match(defter?.ayrinti ?? '', /^Sürüm \d+\. 4 saat kuralı aşıldı \(.+ OP 10\): takım tezgâhta yok$/);
+    assert.equal(defter?.gerekce, null);
   });
 });

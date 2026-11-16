@@ -59,14 +59,18 @@ describe('Geçmiş ekranı', () => {
       ({ id, olay, bekleyenId: `b${String(id)}`, ne: `Değişiklik ${String(id)}`, ayrinti: '', isler: ['S1'], gerekce, kisi: 'Deneme planci', zaman: '2026-11-05T08:00:00.000Z' });
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('?once=8')
       ? { satirlar: [satir(7, 'degisiklik')], dahaVar: false }
-      : { satirlar: [satir(9, 'reddedildi', 'Termin değişmedi'), satir(8, 'uygulandi')], dahaVar: true })) as never);
+      : { satirlar: [satir(9, 'reddedildi', 'Termin değişmedi'), { ...satir(8, 'canliya-alindi'), bekleyenId: 'plan:4', ne: 'Onay Pzt', ayrinti: 'Sürüm 5', isler: ['*'] }], dahaVar: true })) as never);
     ac(izli(), OKUYAN, 'defter');
     const tablo = await screen.findByRole('table', { name: 'Değişiklik defteri' });
     const satirlar = () => within(tablo).getAllByRole('row').slice(1);
     expect(satirlar()[0]?.textContent).toContain('Reddedildi');
     expect(satirlar()[0]?.textContent).toContain('Termin değişmedi');
     expect(satirlar()[0]?.textContent).toContain('Deneme planci');
-    expect(satirlar()[1]?.textContent).toContain('Uygulandı');
+    // 3308-9 a: canlıya alma satırı planın adını "Plan:" ile ve yeni sürümle gösterir.
+    expect(satirlar()[1]?.textContent).toContain('Canlıya alındı');
+    expect(satirlar()[1]?.textContent).toContain('Plan: Onay Pzt Sürüm 5');
+    expect(satirlar()[1]?.textContent).toContain('Bütün işler');
+    expect(satirlar()[0]?.textContent).not.toContain('Plan:');
     fireEvent.click(screen.getByRole('button', { name: 'Daha eski kayıtlar' }));
     await waitFor(() => { expect(satirlar()).toHaveLength(3); });
     expect(get).toHaveBeenLastCalledWith('/plan/degisiklik-defteri?once=8');
