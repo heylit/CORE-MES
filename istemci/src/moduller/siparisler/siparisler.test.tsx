@@ -859,7 +859,9 @@ describe('Teklifler', () => {
     const birim = await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/);
     expect((birim as HTMLInputElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
-    expect(await screen.findByText('Birim fiyat zorunlu.')).toBeTruthy();
+    // Alanın altında ve düğmenin üstündeki özette (3301): uzun formda hata ekran dışında kalmaz.
+    expect(await screen.findAllByText('Birim fiyat zorunlu.')).toHaveLength(2);
+    expect(screen.getByText(/Kaydedilmedi: \d+ alanda eksik/)).toBeTruthy();
     expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(birim, { target: { value: '10,5' } });
     fireEvent.change(screen.getByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
@@ -1142,7 +1144,7 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.queryByRole('table', { name: 'Maliyet dökümü' })).toBeNull();
     expect(screen.queryByLabelText('Teslim süresi (gün)')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
-    expect(await screen.findByText(/geçerlilik tarihi zorunlu/)).toBeTruthy();
+    expect(await screen.findAllByText(/geçerlilik tarihi zorunlu/)).toHaveLength(2);
     expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(screen.getByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?gecerlilik=2099-06-30')).toBe(true));

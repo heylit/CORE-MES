@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { TeklifAyrintiCevabi, TeklifEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
+import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, paraBirimiSecenekleri, sayiGirdisi } from './gorunum.ts';
 import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
+import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { eskiyseYenile, useKorumaliGonderim } from './yazma.ts';
 import './siparisler.css';
 
@@ -103,6 +104,8 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
     hatada: (hata) => { if (teklif !== null) eskiyseYenile(istemci, anahtarlar.teklif(teklif.id), hata); },
   });
   const d = form.degerler;
+  const kok = useRef<HTMLFormElement>(null);
+  useHataOdagi(form.hataNo, kok);
 
   const satirDegistir = (i: number, yama: Partial<SatirDegeri>) =>
     form.degistir({ satirlar: d.satirlar.map((s, j) => (j === i ? { ...s, ...yama } : s)) });
@@ -116,8 +119,7 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
         geriYol={geri}
         geriMetni={teklif === null ? 'Tekliflere dön' : 'Teklife dön'}
       />
-      <form className="tc-sp-form" onSubmit={form.gonder} noValidate>
-        {form.genelHata !== null && <p className="tc-sp-hata" role="alert">{form.eskiSurum ? 'Kayıt başkası tarafından değişti, yeniden yükleyin.' : form.genelHata}</p>}
+      <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate>
         <Kart baslik="Talep bilgileri">
           <div className="tc-sp-izgara">
             <FirmaSecici etiket="Müşteri" zorunlu deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
@@ -170,6 +172,7 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
           </ol>
         </Kart>
 
+        <GonderimHatasi form={form} />
         <div className="tc-sp-alt-cubuk">
           <Dugme onClick={() => { void gezin(geri); }} disabled={form.gonderiliyor}>Vazgeç</Dugme>
           <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{teklif === null ? 'Talebi aç' : 'Kaydet'}</Dugme>
