@@ -7,8 +7,12 @@ import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAn
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
 export type FisTuru = LogoFisTuru;
-export type BelgeTuru = 'malzeme' | 'hizmet' | 'malzeme-guncelleme' | 'siparis' | 'siparis-guncelleme' | 'siparis-kapatma' | 'siparis-bekletme' | 'siparis-iptal' | 'talep' | 'karsilama' | 'satis-teklifi' | 'satis-siparisi'
-  | 'siparisler-teklifi' | 'siparisler-siparisi' | FisTuru;
+export const GIDEN_BELGELERI = [
+  'malzeme', 'hizmet', 'malzeme-guncelleme', 'siparis', 'siparis-guncelleme', 'siparis-kapatma', 'siparis-bekletme', 'siparis-iptal', 'talep', 'karsilama',
+  'satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi',
+] as const;
+export type BelgeTuru = (typeof GIDEN_BELGELERI)[number] | FisTuru;
+export const belgeTuruMu = (b: string): b is BelgeTuru => (GIDEN_BELGELERI as readonly string[]).includes(b) || (LOGO_FIS_TURLERI as readonly string[]).includes(b);
 export type { GidenSonucu } from './kurallar.ts';
 import type { GidenSonucu } from './kurallar.ts';
 

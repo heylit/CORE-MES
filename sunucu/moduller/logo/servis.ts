@@ -1078,6 +1078,17 @@ const GECIS_KAYNAGI = { modul: 'logo', yetki: 'ayarlar.yaz' } as const;
 export async function gidenYenidenGonder(db: Db, g: { belge: BelgeTuru; no: number; islem?: GidenIslemi }, simdi: Date): Promise<boolean> {
   return s.duraniYenidenAc(db, g.belge, g.no, simdi, g.islem);
 }
+export async function duranlariYenidenGonder(
+  db: Db, belgeler: readonly { belge: string; no: number; islem: GidenIslemi }[], simdi: Date,
+): Promise<{ sirada: number; durmayan: number }> {
+  let sirada = 0;
+  for (const b of belgeler) {
+    if (!s.belgeTuruMu(b.belge)) throw gecersiz(`Bilinmeyen belge türü: ${b.belge}`);
+    if (b.islem === 'pasif' && b.belge !== 'malzeme' && b.belge !== 'hizmet') throw gecersiz('Pasife alma yalnız malzeme ve hizmet kartındadır.');
+    if (await gidenYenidenGonder(db, { belge: b.belge, no: b.no, islem: b.islem }, simdi)) sirada += 1;
+  }
+  return { sirada, durmayan: belgeler.length - sirada };
+}
 
 export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {
   for (const a of [...GECIS_AYARLARI, 'logo.kullanim-okumasi'] as const) {

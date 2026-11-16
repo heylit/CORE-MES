@@ -170,6 +170,20 @@ export type DisDuzeltmeKaydi = z.output<typeof disDuzeltmeKaydi>;
 // 3077 a: "Logo geçişi" sayfasındaki "Şimdi oku" ve "Geçişi bitir" komutlarının cevabı.
 export const logoGecisKomutuCevabi = z.object({ tamam: z.literal(true) });
 
+// 3313: duran (Logo'nun kalıcı reddiyle bekleyen) belgeleri yeniden gönderme; tek belge ya da seçilenler. Belge, giden kutusundaki türdür.
+export const LOGO_YENIDEN_GONDER_AZAMI = 200;
+export const logoYenidenGonderGovdesi = z.object({
+  belgeler: z.array(z.object({
+    belge: z.string().trim().min(1).max(40),
+    no: z.number().int().positive(),
+    islem: z.enum(['gonder', 'pasif']).default('gonder'),
+  }).strict()).min(1).max(LOGO_YENIDEN_GONDER_AZAMI),
+}).strict();
+export type LogoYenidenGonderGovdesi = z.input<typeof logoYenidenGonderGovdesi>;
+// sirada: yeniden sıraya giren; durmayan: durmadığı için (gönderilmiş, kendiliğinden yinelenecek ya da arada değişmiş) dokunulmayan.
+export const logoYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int() });
+export type LogoYenidenGonderCevabi = z.output<typeof logoYenidenGonderCevabi>;
+
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız okur ve sonucu kişinin süreç belleğinde tutar; "ekle" bulunan kartı
 // okunmuş kopyaya yazar (köprüye gitmez). Kapalıysa ya da köprü yoksa durum ve ileti döner, kart dönmez.
 export const LOGO_MALZEME_ARAMA_EN_AZ = 3;
