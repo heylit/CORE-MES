@@ -9,7 +9,7 @@ import { planTestOrtami } from '../plan-ortak.test.ts';
 // uretim-emirleri'nin gerçek komutu verir, işaret yalnız bağ kuruluysa yazılır (sunucu testleri kablolamayla yüklenir). Bağ kopukken
 // iki test de kırmızıdır. Veriler uydurmadır.
 describe('plan (gerçek PostgreSQL): S7 bağları kablolamadan', () => {
-  const { c, vt, tamam, yeniAdim, isEmirleriAc, taslaktaOner, durum } = planTestOrtami();
+  const { c, vt, tamam, yeniAdim, isEmirleriAc, taslaktaOner, girdiyiIstasyonaKoy, durum } = planTestOrtami();
   const emriOf = async (isEmriId: number) =>
     (await vt().tx((db) => db.tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId])))!.id;
   const ileri = (ids: number[]) => vt().tx((db) => db.sorgu(
@@ -28,6 +28,7 @@ describe('plan (gerçek PostgreSQL): S7 bağları kablolamadan', () => {
     await canliyaAl();
     await ileri([i1!]);
     const e1 = await emriOf(i1!);
+    await girdiyiIstasyonaKoy(i1!);
     await vt().tx(async (db) => {
       const k = (await kullaniciYukle(db, durum().yoneticiId))!;
       await emirBaslat(db, k, e1);

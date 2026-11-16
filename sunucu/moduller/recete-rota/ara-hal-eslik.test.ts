@@ -105,7 +105,14 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     return { e: uretimEmriId, ie, istasyon: m.istasyon };
   }
   // Stok sayımının yolu: adımın bir sağlam sayımı; statülü adımda artı bakiyesi o statüde açılan malzeme taşınandır.
-  async function stoktakiKart(em: Awaited<ReturnType<typeof emirAc>>, urun: number, op: number): Promise<{ kart: number | null; statu: number | null }> {
+  // Kart 3340: sayım girdiyi yalnız istasyondan düşer; adımın depodan gelen girdisi önce istasyona konur (hareketsiz bakiye yalnız tablo sahibiyle).
+  async function girdiyiIstasyonaKoy(istasyon: number, malzeme: number): Promise<void> {
+    await o().sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, ad, istasyon_id) SELECT id, 'IST-' || $1::int::text, 'istasyon', 'Deneme istasyon', $1::int FROM stok_depo WHERE kod = 'ANA'
+      ON CONFLICT ON CONSTRAINT stok_konum_istasyon_tek DO NOTHING`, [istasyon]);
+    await o().sahip.sorgu(`INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) SELECT $1, id, '1', now() FROM stok_konum WHERE istasyon_id = $2`, [malzeme, istasyon]);
+  }
+  async function stoktakiKart(em: Awaited<ReturnType<typeof emirAc>>, urun: number, op: number, girdi?: number): Promise<{ kart: number | null; statu: number | null }> {
+    if (girdi !== undefined) await girdiyiIstasyonaKoy(em.istasyon, girdi);
     await o().vt.tx((db) => uretimSayimiYansitUyarili(db, { uretimEmriId: em.e, isEmriId: em.ie.get(op)!, istasyonId: em.istasyon, kisiId: operatorId, fark: '1' }));
     const s = await o().vt.tx((db) => adimStatusu(db, { malzemeNo: urun, opNo: op, uretimEmriId: em.e }));
     assert.notEqual(s, 'acilmamis', 'yazma işleminde satır açılır');
@@ -123,7 +130,7 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     const rev = await kur(urun, adimlar, kartlarOf(adimlar));
     const em = await emirAc(urun, rev, adimlar);
     for (const a of adimlar.slice(0, -1)) {
-      const stok = await stoktakiKart(em, urun, a.op);
+      const stok = await stoktakiKart(em, urun, a.op, a.girdi);
       if (a.cikti !== undefined) continue;
       const onizleme = await onizlemedekiKart(urun, rev, a.op);
       assert.deepEqual(onizleme, stok, `OP ${String(a.op)}: önizleme ve stok sayımı aynı kartı ve statüyü verir`);
@@ -181,7 +188,7 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     const em = await emirAc(urun, revA, eski);
     const yeni = [{ op: 10, girdi: hm2 }, { op: 20 }] as const;
     const revB = await kur(urun, yeni, kartlarOf(yeni));
-    const stok = await stoktakiKart(em, urun, 10);
+    const stok = await stoktakiKart(em, urun, 10, hm1);
     const onizleme = await onizlemedekiKart(urun, revB, 10);
     assert.equal(stok.kart, hm1, 'açık emir donmuş revizyonunun girdisini taşır');
     assert.equal(onizleme.kart, hm2, 'önizleme yürürlükteki revizyonu gösterir');
@@ -197,7 +204,7 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     const fai = [{ op: 10, girdi: hm2 }, { op: 15 }, { op: 20 }] as const;
     const revFai = await revizyon(urun, 'A', fai, rota);
     const em = await emirAc(urun, revFai, fai);
-    assert.equal((await stoktakiKart(em, urun, 10)).kart, hm2, 'emir kendi rotasının girdisini taşır');
+    assert.equal((await stoktakiKart(em, urun, 10, hm2)).kart, hm2, 'emir kendi rotasının girdisini taşır');
     const stok = await stoktakiKart(em, urun, 15);
     assert.notEqual(stok.statu, null, 'yalnız FAI rotasındaki adımın statüsü emrin rotasından açılır');
     assert.equal(stok.kart, hm2);

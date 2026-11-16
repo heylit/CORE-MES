@@ -10,7 +10,7 @@ import * as s from './sorgular.ts';
 
 // 2319 (2311 S7): canlı plan bayat işareti, gerçek PostgreSQL. Veriler uydurmadır.
 describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
-  const { c, vt, tamam, yeniAdim, isEmirleriAc, taslaktaOner, isEmriMakinesi, durum } = planTestOrtami();
+  const { c, vt, tamam, yeniAdim, isEmirleriAc, taslaktaOner, isEmriMakinesi, girdiyiIstasyonaKoy, durum } = planTestOrtami();
   const emriOf = async (isEmriId: number) =>
     (await vt().tx((db) => db.tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId])))!.id;
   const ileri = (ids: number[], aralik: string) => vt().tx((db) => db.sorgu(
@@ -125,6 +125,7 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true });
     await ileri([i5!, i6!], '1 day');
     const e5 = await emriOf(i5!), e6 = await emriOf(i6!);
+    await girdiyiIstasyonaKoy(i5!); await girdiyiIstasyonaKoy(i6!);
     const bitir = (emirId: number, sinir: boolean) => vt().tx(async (db) => {
       const k = (await kullaniciYukle(db, durum().yoneticiId))!;
       await emirBaslat(db, k, emirId);
@@ -245,6 +246,7 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true, dortSaatGerekcesi: 'Deneme gerekcesi: test sirasi' });
     await ileri([b1!], '1 day');
     const e = await emriOf(b1!);
+    await girdiyiIstasyonaKoy(b1!);
     await vt().tx(async (db) => {
       const k = (await kullaniciYukle(db, durum().yoneticiId))!;
       await emirBaslat(db, k, e);

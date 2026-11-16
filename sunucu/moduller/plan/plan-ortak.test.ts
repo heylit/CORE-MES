@@ -236,6 +236,17 @@ export function planTestOrtami() {
   }
   const isEmriDurumu = (id: number, durum: 'bekliyor' | 'calisiyor') => vt().tx((db) => db.sorgu(
     'UPDATE uretim_emirleri_is_emri SET durum = $2, baslama = CASE WHEN $2 = \'calisiyor\' THEN now() END WHERE id = $1', [id, durum]));
+  // Kart 3340: sayım girdiyi yalnız istasyondan düşer; bitirilen ilk adımın ortak hammaddesi önce adımın istasyonuna konur.
+  const girdiyiIstasyonaKoy = async (isEmriId: number, miktar = '1'): Promise<void> => {
+    const sahip = ortam!.sahip;
+    const ist = (await sahip.tek<{ istasyon_id: number }>('SELECT istasyon_id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.istasyon_id;
+    await sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, ad, istasyon_id) SELECT id, 'IST-' || $1::int::text, 'istasyon', 'Deneme istasyon', $1::int FROM stok_depo WHERE kod = 'ANA'
+      ON CONFLICT ON CONSTRAINT stok_konum_istasyon_tek DO NOTHING`, [ist]);
+    const hedefKonumId = (await sahip.tek<{ id: number }>('SELECT id FROM stok_konum WHERE istasyon_id = $1', [ist]))!.id;
+    const kaynakKonumId = (await sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    await tamam(c.yonetici, 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: ortakHammadde, miktar }] });
+    await tamam(c.yonetici, 'POST', '/stok/tasima', { malzemeId: ortakHammadde, kaynakKonumId, hedefKonumId, miktar });
+  };
   const isEmriMakinesi = async (id: number) =>
     (await vt().tx((db) => db.tek<{ makine_id: number | null }>('SELECT makine_id FROM uretim_emirleri_is_emri WHERE id = $1', [id])))?.makine_id;
   const planOku = (taslak?: number, cerez = c.planlama) => tamam<PlanCevabi>(cerez, 'GET', `/plan${taslak ? `?taslak=${taslak}` : ''}`);
@@ -289,5 +300,5 @@ export function planTestOrtami() {
 
   // İlkel değerler before'dan sonra dolar: test dosyası kendi before'unda okur.
   const durum = () => ({ ortam, app, yoneticiId, denemeProjeId, istasyonA, istasyonB, makineA, makineB, operatorId, merkezId, tamGun });
-  return { c, vt, girisCerezi, istek, tamam, motorAyariYaz, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
+  return { c, vt, girisCerezi, istek, tamam, motorAyariYaz, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, girdiyiIstasyonaKoy, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
 }

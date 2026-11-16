@@ -787,15 +787,34 @@ describe('Kokpit odaklı tezgâh paneli (3318 a, 3. dilim)', () => {
     expect(bolum().querySelector('[data-yakin-bos]')).toBeNull();
   });
 
-  it('geniş ekranda panel tablonun yanındadır, satırın altında değil', async () => {
+  // İleri tarihe yerleşmiş operasyonun kendi işi pencerenin içinde kalır (iki hafta sonrası); gün yazıları seyrelir, üst üste binmez.
+  it('ileri tarihe yerleşmiş operasyonun işi panelde görünür; gün yazıları en çok sekiz, dar ekranda dörttür', () => {
+    const uzak: KokpitModeli = { ...M, isler: { '1.10': is('1.10', 'T1', 8 + 16 * 24, 12 + 16 * 24) } };
+    render(<OdakPaneli m={uzak} ad="Torna" isId="1.10" tezgahlar={['T1', 'T2']} yerler={[]} secilen={null} zaman={zaman} fiil="Taşı" sec={null} />);
+    const panel = screen.getByRole('complementary', { name: 'Torna için tezgâhlar' });
+    expect(panel.querySelector('[data-odak-satir="T1"] .tc-pyq-odak-is[data-kendi]')).toBeTruthy();
+    const yazilar = panel.querySelectorAll('.tc-pyq-odak-eksen i').length;
+    expect(yazilar).toBeGreaterThan(0);
+    expect(yazilar).toBeLessThanOrEqual(8);
+    expect(panel.querySelectorAll('[data-odak-satir="T1"] .tc-pyq-odak-gun').length).toBeGreaterThan(8);
+    cleanup();
+    // Dar ekranda (panel satırın altında) yazı daha seyrektir: en çok dört.
+    render(<OdakPaneli m={uzak} ad="Torna" isId="1.10" tezgahlar={['T1', 'T2']} yerler={[]} secilen={null} zaman={zaman} fiil="Taşı" sec={null} dar />);
+    const dar = screen.getByRole('complementary', { name: 'Torna için tezgâhlar' }).querySelectorAll('.tc-pyq-odak-eksen i').length;
+    expect(dar).toBeGreaterThan(0);
+    expect(dar).toBeLessThanOrEqual(4);
+    expect(dar).toBeLessThan(yazilar);
+  });
+
+  it('geniş ekranda panel tablonun altında boydan boyadır, seçili satırın içinde değil', async () => {
     onizlemeKur();
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(min-width: 1100px)', media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
     try {
       render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
       const panel = await screen.findByRole('complementary', { name: 'Torna için tezgâhlar' });
       expect(bolum().querySelector('[data-satir-odagi]')).toBeNull();
-      expect(panel.parentElement?.hasAttribute('data-yanda')).toBe(true);
-      expect(panel.parentElement?.querySelector('table')).toBeTruthy();
+      expect(panel.parentElement?.hasAttribute('data-altta')).toBe(true);
+      expect(panel.previousElementSibling?.tagName).toBe('TABLE');
     } finally { vi.unstubAllGlobals(); }
   });
 });

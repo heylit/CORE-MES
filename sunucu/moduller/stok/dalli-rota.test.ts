@@ -225,19 +225,18 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.equal(await eksiSatir(k), 0);
   });
 
-  test('D-A: teslim edilmemiş B dalı hammaddesi "Hammadde" uyarısıyla eksiden çevrilir; birleştirmede hurda iki dalın parçasını fire düşer', async () => {
+  test('D-A ve 3340: teslim edilmemiş B dalı hammaddesiyle sayım yazılmaz; birleştirmede B dalının parçası yoksa hurda yazılmaz, A dalınınki de düşülmez', async () => {
     const k = await kur();
-    const b = await sayim(k, 20, k.ist.b, '2');
-    assert.match(b.uyari ?? '', /^Hammadde bu istasyonda yok; 2 eksiden çevrildi/);
+    await assert.rejects(sayim(k, 20, k.ist.b, '2'), /^UygulamaHatasi: Hammadde \(SDR-DNM-\d+\) bu istasyonda yetmiyor; 2 eksik\./);
+    assert.equal(await eksiSatir(k), 0, 'reddedilen sayım eksi yazmaz');
     await malKabul(k.hm1, '6');
     await teslimEt({ malzemeId: k.hm1, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
     await sayim(k, 10, k.ist.a, '10');
     await teslimEt({ malzemeId: k.hm1, miktar: '6', statuId: k.s[10], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
-    const h = await o().vt.tx((db) => hurdaSayimiYansit(db, {
+    await assert.rejects(o().vt.tx((db) => hurdaSayimiYansit(db, {
       uretimEmriId: k.e, isEmriId: k.ie[30]!, istasyonId: k.ist.c, kisiId: kisiler.get('operator')!, hurdaNedeniId: 1, fark: '1',
-    }));
-    assert.match(h.uyari ?? '', /eksi/i, 'B dalının parçası birleştirme istasyonunda yok: eksiye fire');
-    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [5.4, -1]);
+    })), /^UygulamaHatasi: Önceki adımın parçası \(SDR-DNM-\d+\) bu istasyonda yetmiyor; 1 eksik\./);
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!), await eksiSatir(k)], [6, 0, 0], 'hurda bütün işlemiyle geri alındı');
   });
 
   test('2528 (2522 a): dallı emirde elle sarf edilen A dalı hammaddesi zincir dışında kalır: OP 10 elle verilmeyeni çevirir, birleştirme statüden onu düşer; hammadde bir kez düşer', async () => {
