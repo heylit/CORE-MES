@@ -178,3 +178,51 @@ test.describe('bekletme (3050 a)', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+// 3329: eksik uyarısındaki "Satın alma talebi aç" talebi açanın Taleplerim sayfasına gider (satın alma merkezine değil) ve yeni talep
+// formu eksik kalemle dolu gelir. İhtiyaç cevabı yolda bir eksik kalemle işaretlenir (ortak veritabanı değişmez).
+const eksikliIhtiyac = (page: Page) => page.route(/\/api\/recete-rota\/malzeme-ihtiyaci\?/, async (r) => {
+  const c = await r.fetch();
+  const g = await c.json() as { emirler: { emirId: number; hammadde: Record<string, unknown>[]; eksikler: Record<string, unknown>[] }[] };
+  for (const e of g.emirler) {
+    const k = e.hammadde[0] ?? { malzemeNo: 1, kod: 'ORN-HM-01', ad: 'Örnek çubuk', birim: 'adet', brut: '10', verilen: '0', stoktan: '0', rezerve: null, satinAlma: null };
+    const satir = { ...k, alinacak: '7', satinAlma: null };
+    e.hammadde = [satir, ...e.hammadde.slice(1)];
+    e.eksikler = [satir];
+  }
+  await r.fulfill({ response: c, json: g });
+});
+
+test('Malzeme sekmesi: "Satın alma talebi aç" Taleplerim yeni talebe eksikle dolu gider (talep açan)', async ({ page, ag, ac }) => {
+  await eksikliIhtiyac(page);
+  await ac('/uretim-emirleri/2?sekme=malzeme');
+  const panel = page.getByRole('tabpanel', { name: 'Malzeme' });
+  await expect(panel.getByText(/1 kalem eksik/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Satın alma talebi aç' }).click();
+  await expect(page).toHaveURL(/\/taleplerim(\?|$)/);
+  await expect(page.getByRole('tab', { name: 'Yeni talep' })).toHaveAttribute('aria-selected', 'true');
+  // Kalemin miktarı eksik miktardır (yoldaki işaret 7).
+  await expect(page.locator('.sa-talep input[value="7"]:visible').first()).toBeVisible();
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar, 'yalnız taslak doldurur, talep göndermez').toEqual([]);
+});
+
+// Örnek hesaplardan emir malzemesini görüp talep açamayan yok: planlama hesabının oturum cevabından yalnız talep açma işlemi yolda düşer.
+// Gösterim yalnız gizler; asıl denetim satın almanın ucundadır.
+test('Malzeme sekmesi: talep açma işlemi yoksa eksik uyarısı görünür, "Satın alma talebi aç" düğmesi yok', async ({ page, ag, ac }) => {
+  await page.route(/\/api\/oturum$/, async (r) => {
+    const c = await r.fetch();
+    const g = await c.json() as { kullanici: { islemler: string[] } | null };
+    if (g.kullanici) g.kullanici.islemler = g.kullanici.islemler.filter((i) => i !== 'satin-alma.talep-ac');
+    await r.fulfill({ response: c, json: g });
+  });
+  await eksikliIhtiyac(page);
+  await ac('/uretim-emirleri/2?sekme=malzeme');
+  const panel = page.getByRole('tabpanel', { name: 'Malzeme' });
+  await expect(panel.getByText(/1 kalem eksik/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Satın alma talebi aç' })).toHaveCount(0);
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});

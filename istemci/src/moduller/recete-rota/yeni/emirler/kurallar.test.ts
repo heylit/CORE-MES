@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  emirRotasi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
+  emirRotasi, emirTalepTaslagi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, talepGunu, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -432,5 +432,30 @@ describe('3247 a: emir formunda rota', () => {
     const n = emirRotasi(c, 'numune', 'Numune', '')!;
     expect(n.secenekler.map((s) => s.baslik)).toEqual(['Standart · Rev C', 'FAI · Rev A', 'Numune · yürürlükte değil']);
     expect([n.revizyonId, n.uyari]).toEqual([null, 'Numune rotasının yürürlükte revizyonu yok; emri açmak için Standart rotasını seçin.']);
+  });
+});
+
+// 3329: emrin eksiklerinden Taleplerim taslağı. Talebi ya da siparişi olan kalem yeniden istenmez; gün plan > teslim > bugün.
+describe('emirTalepTaslagi ve talepGunu', () => {
+  const eksik = (malzemeNo: number, kod: string, asama: 'talep' | 'siparis' | 'on_talep' | null) => ({
+    malzemeNo, kod, ad: `Örnek ${kod}`, birim: 'adet', brut: '10', verilen: '0', stoktan: '0', alinacak: '4', rezerve: null,
+    satinAlma: asama === null ? null : { asama, no: asama === 'on_talep' ? null : 'ORN-1', talepDurumu: null, termin: null },
+  });
+
+  it('istenmemiş ve ön talepteki kalem gelir; talebi ya da siparişi olan atlanır', () => {
+    const t = emirTalepTaslagi('MM-ORN-1', [eksik(1, 'HM-A', null), eksik(2, 'HM-B', 'talep'), eksik(3, 'HM-C', 'siparis'), eksik(4, 'HM-D', 'on_talep')], '2030-01-05');
+    expect(t.map((x) => x.malzeme.kod)).toEqual(['HM-A', 'HM-D']);
+    expect(t[0]).toMatchObject({ kaynak: 'plan', miktar: 4, birim: 'adet', gerekenTarih: '2030-01-05', emirler: ['MM-ORN-1'] });
+  });
+
+  it('alınacağı sıfır olan kalem gelmez', () => {
+    expect(emirTalepTaslagi('MM-ORN-1', [{ ...eksik(1, 'HM-A', null), alinacak: '0' }], '2030-01-05')).toEqual([]);
+  });
+
+  it('gün planın ilk başlangıcının yerel günüdür; yoksa teslim, yoksa bugün', () => {
+    const simdi = new Date(2030, 0, 2, 12);
+    expect(talepGunu(new Date(2030, 0, 3, 7, 30).toISOString(), '2030-01-20', simdi)).toBe('2030-01-03');
+    expect(talepGunu(null, '2030-01-20', simdi)).toBe('2030-01-20');
+    expect(talepGunu(null, null, simdi)).toBe('2030-01-02');
   });
 });

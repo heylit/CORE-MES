@@ -15,7 +15,7 @@ import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
-  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, bolmeTurRotasi, type AdimPlani, type EmirAdimi, type Emir,
+  ONCELIK_ADI, emirTalepTaslagi, talepGunu, yeniOpNo, yururluktekiRevizyon, bolmeTurRotasi, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -25,7 +25,8 @@ import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts
 const KANBAN_YOLU = '/recete-rota/kanban';
 // Kapanış onayları emrin ana yerindedir (3003 a).
 const KAPANIS_EVI = '/uretim-emirleri/kapanis';
-const TALEP_YOLU = '/satin-alma/talepler';
+// Talep satın alma merkezinde değil, talep açanın Taleplerim sayfasında açılır (2405 a).
+const TALEP_YOLU = '/taleplerim?bolum=yeni';
 const TALEP_DURUMU: Record<NonNullable<IhtiyacSatinAlma['talepDurumu']>, string> = {
   taslak: 'taslak', teklif_isteniyor: 'teklif toplanıyor', degerlendirme: 'değerlendirmede', onayda: 'onay bekliyor', siparis_verildi: 'sipariş verildi',
   teslim_alindi: 'teslim alındı', iptal: 'iptal',
@@ -613,7 +614,9 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
             {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kod(e)} ${miktar(Number(e.alinacak), e.birim)}`).join(', ')}.
             Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
           </span>
-          <Dugme simge="cart" onClick={() => { void yonlen(TALEP_YOLU); }}>Satın alma talebi aç</Dugme>
+          {yetki.talepAc && <Dugme simge="cart" onClick={() => {
+            void yonlen(TALEP_YOLU, { state: { taslak: emirTalepTaslagi(o.no, R.eksikler, talepGunu(plan.tur === 'plan' ? plan.ilk : null, o.due)) } });
+          }}>Satın alma talebi aç</Dugme>}
         </div>
       )}
       {adimGoster && (<>
