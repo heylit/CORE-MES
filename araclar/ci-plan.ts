@@ -2,7 +2,7 @@ import { existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from 'no
 import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KAPALI_MODULLER } from '#paylasilan/kapali-moduller.ts';
-import { etkiHesapla, kablolamaOku, kaynaklariOku } from './etki.ts';
+import { etkiHesapla, KABLOLAMA, kablolamaOku, kaynaklariOku, tersIthaller } from './etki.ts';
 import type { Etki } from './etki.ts';
 import { SUNUCU_TEST_DESENLERI } from './test-sunucu.ts';
 
@@ -66,22 +66,44 @@ export interface SecimGirdisi {
   istemciModulleri: ReadonlySet<string>;
   // Sunucu test dosyalarının metni: ithal grafiğinde olmayan dosyayı (göç, kural metni) okuyan testi bulmak için.
   sunucuIcerikleri: ReadonlyMap<string, string>;
+  // Değişen dosya her sunucu testine --import ile giren ön yüklemeye (ortam, kablolama) ulaşıyor mu.
+  onYuklemeDegisti: boolean;
+}
+
+// Her sunucu testine `--import` ile giren dosyalar; hiçbir test onları ithal etmez, ithal grafiğinde yalnız geriye yürünerek bulunur.
+export const ON_YUKLEMELER = ['araclar/ortam-yukle-goc.ts', 'araclar/kablolama-yukle.ts'];
+
+export function onYuklemeyeUlasir(degisenler: readonly string[], ters: ReadonlyMap<string, ReadonlySet<string>>): boolean {
+  const hedef = new Set(ON_YUKLEMELER);
+  const gorulen = new Set<string>();
+  const kuyruk = [...degisenler];
+  for (let d = kuyruk.pop(); d !== undefined; d = kuyruk.pop()) {
+    if (hedef.has(d)) return true;
+    // Kablolama bütün modülleri ithal eder; ondan geçen yol her dosyayı ön yüklemeye bağlardı. Onun etkisini kablolama bağları taşır.
+    if (gorulen.has(d) || d === KABLOLAMA) continue;
+    gorulen.add(d);
+    kuyruk.push(...(ters.get(d) ?? []));
+  }
+  return false;
 }
 
 const kodMu = (yol: string): boolean => /\.tsx?$/.test(yol) && ['sunucu/', 'istemci/', 'paylasilan/', 'araclar/', 'arkon/'].some((k) => yol.startsWith(k));
 
-// İthal grafiğinde olmayan değişen dosyayı (göç, kural metni, yapılandırma olmayan veri) adıyla anan sunucu testi. Göç klasörünü
-// okuyan testler dosya adını değil klasörü anar: göç değişince klasör adı da aranır.
+// İthal grafiğinde olmayan değişen dosyayı (kural metni, yapılandırma olmayan veri) adıyla anan sunucu testi; ayrıca klasörü
+// tarayan test (`new URL('./<klasör>/', import.meta.url)` ile readdir): o klasöre eklenen dosyayı kimse ithal etmeden okur.
 export function anilanTestler(degisenler: readonly string[], icerikler: ReadonlyMap<string, string>): string[] {
+  const tarayanlar = [...icerikler].filter(([t, metin]) => degisenler.some((d) => {
+    const klasor = posix.dirname(d);
+    return posix.dirname(klasor) === posix.dirname(t) && (metin.includes(`'./${posix.basename(klasor)}/'`) || metin.includes(`"./${posix.basename(klasor)}/"`));
+  })).map(([t]) => t);
   const izler = new Set<string>();
   for (const d of degisenler) {
     if (kodMu(d) || EKRAN_TESTI.test(d)) continue;
     izler.add(d);
     izler.add(posix.basename(d));
-    if (d.startsWith('sunucu/gocler/')) izler.add('gocler');
   }
-  if (izler.size === 0) return [];
-  return sirala([...icerikler].filter(([, metin]) => [...izler].some((iz) => metin.includes(iz))).map(([d]) => d));
+  if (izler.size === 0) return sirala(tarayanlar);
+  return sirala([...tarayanlar, ...[...icerikler].filter(([, metin]) => [...izler].some((iz) => metin.includes(iz))).map(([d]) => d)]);
 }
 
 // Etki grafiğin bilmediği bir değişiklik bulursa (paket, yapılandırma, arkon) her şey koşar. Ekran: değişen ekran testi,
@@ -90,7 +112,9 @@ export function anilanTestler(degisenler: readonly string[], icerikler: Readonly
 export function secimHesapla(g: SecimGirdisi): Secim {
   if (g.etki.bilinmeyenler.length > 0) return g.tum;
   const tumu = new Set(g.tum.sunucu);
-  const sunucu = sirala([...g.etki.nodeTestleri, ...anilanTestler(g.degisenler, g.sunucuIcerikleri)].filter((d) => tumu.has(d)));
+  // Göç bütün şemayı değiştirir; şema çapında denetleyen testler (kısıt listesi gibi) göçü adıyla anmaz.
+  const gocVar = g.degisenler.some((d) => d.startsWith('sunucu/gocler/'));
+  const sunucu = gocVar || g.onYuklemeDegisti ? g.tum.sunucu : sirala([...g.etki.nodeTestleri, ...anilanTestler(g.degisenler, g.sunucuIcerikleri)].filter((d) => tumu.has(d)));
   const istemciTumu = new Set(g.tum.istemci);
   const istemci = g.etki.vitestTestleri.filter((d) => istemciTumu.has(d));
   const windowsTumu = new Set(g.tum.windows);
@@ -184,10 +208,11 @@ async function planKomutu(argv: string[], kok: string): Promise<void> {
     const degisenler = readFileSync(0, 'utf8').split(/\r?\n/).map((s) => posix.normalize(s.trim())).filter((s) => s !== '' && s !== '.');
     if (degisenler.length > 0) {
       const istemciModulleri = new Set(globSync('istemci/src/moduller/*/', { cwd: kok }).map((d) => posix.basename(d.replaceAll('\\', '/'))));
+      const kaynaklar = await kaynaklariOku(kok);
       secim = secimHesapla({
-        degisenler, tum, istemciModulleri,
+        degisenler, tum, istemciModulleri, onYuklemeDegisti: onYuklemeyeUlasir(degisenler, tersIthaller(kaynaklar)),
         // Ekran testi ithal grafiğinde değildir; etkiye verilirse "bilinmeyen" sayılır ve her şeyi koşturur. Seçimi aşağıdadır.
-        etki: etkiHesapla(await kaynaklariOku(kok), await kablolamaOku(kok), degisenler.filter((d) => !EKRAN_TESTI.test(d))),
+        etki: etkiHesapla(kaynaklar, await kablolamaOku(kok), degisenler.filter((d) => !EKRAN_TESTI.test(d))),
         ekranIcerikleri: new Map(tum.ekran.map((d) => [d, readFileSync(join(kok, d), 'utf8')])),
         sunucuIcerikleri: new Map(tum.sunucu.map((d) => [d, readFileSync(join(kok, d), 'utf8')])),
       });
