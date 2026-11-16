@@ -320,6 +320,29 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(await coz(k(null), i), 'E-1|30')!.baslangic, '2026-10-26T06:00:00.000Z', 'termin yoksa yedi gün');
   });
 
+  // 3330 a: açık siparişteki firma tarihi mutlak dönüştür (o gün 08:00, tesis saati); termin günü sayılmaz. Rotada fason olan adımda da
+  // emirde sonradan fasona alınan adımda da (hemen çıkan fasoncu) aynıdır. Tarihi geçmiş sipariş adımı şimdiden önce döndürmez: bir saat sonra.
+  test('3330: fason adımın siparişindeki firma tarihi dönüşü o günün sabahına sabitler; tarih yoksa termin günü; geçmiş tarih ardılı bekletmez', async () => {
+    const fason = { ...adim(20, 0), stationId: null, fasonId: '9', terminGun: 2, setup: 0, proc: 0, cycle: 0 };
+    const yeri = (tarih: string | null) => ({ fasonId: '9', terminGun: 2, stationId: null, setup: null, cycle: null, ...(tarih === null ? {} : { fasonSiparis: { tarih, siparisNo: null } }) });
+    const k = (rotadaFason: boolean, tarih: string | null) => ({ ...KAYNAK, kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum,
+      routes: { 50: { base: null, steps: [adim(10, 30), rotadaFason ? fason : adim(20, 15), adim(30, 15)] } },
+      emirler: { orders: [emir('1', 'E-1')], opStatus: {}, opProg: {}, opYer: { '1|root|2': yeri(tarih) } } } } });
+    const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|30'] }] });
+    for (const rotadaFason of [true, false]) {
+      const ardil = async (tarih: string | null) => yer(await coz(k(rotadaFason, tarih), i), 'E-1|30')!.baslangic;
+      assert.equal(await ardil(null), '2026-10-21T06:00:00.000Z', `tarih yok, termin günü (rotada fason: ${String(rotadaFason)})`);
+      assert.equal(await ardil('2026-10-23'), '2026-10-23T05:00:00.000Z', `firma tarihinin sabahı (rotada fason: ${String(rotadaFason)})`);
+      assert.equal(await ardil('2026-10-20'), '2026-10-20T05:00:00.000Z', `termin gününden erken tarih de esastır (rotada fason: ${String(rotadaFason)})`);
+      assert.equal(await ardil('2026-10-16'), '2026-10-19T07:00:00.000Z', `geçmiş tarih: çıkıştan bir saat sonra (rotada fason: ${String(rotadaFason)})`);
+    }
+    // Tarih motorun kendi kopyasındadır: çözümden sonra çağıranın çalışmasında (kaydedilen veri) iz kalmaz, elle termin alanı da yazılmaz.
+    const kaynak = k(false, '2026-10-23');
+    await coz(kaynak, i);
+    const D = kaynak.calisma.D as Record<string, unknown>;
+    assert.deepEqual(['fasonSiparis' in D, 'fasonTermin' in D], [false, false]);
+  });
+
   test('yeri sabit iş tezgâhın boş anını ilerletmez: önüne sığan kuyruk işi önce yapılır, ardılı sabit işin saniyeli bitişini bekler', async () => {
     const r = await coz(KAYNAK, istek({
       kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }, { makineId: 101, anahtarlar: ['E-2|20'] }],

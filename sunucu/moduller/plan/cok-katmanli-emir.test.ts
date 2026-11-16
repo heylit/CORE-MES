@@ -15,7 +15,7 @@ const calisma = (D: Record<string, unknown>): Record<string, unknown> => ({
 });
 const adim = (urun: string, op: number, ins: { itemId: string; qty: number }[] = []) =>
   ({ id: `${urun}-o${String(op)}`, seq: op, opNo: op, opId: '13', stationId: '10', setup: 10, cycle: 2, alts: [], altTimes: {}, ins });
-type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string; fasonId?: string; terminGun?: number | null }[] };
+type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string; fasonId?: string; terminGun?: number | null; fasonSiparis?: { tarih: string; siparisNo: string | null } }[] };
 const DUGUMLER: Dugum[] = [
   { dugum: '0.1.1', itemId: '70', carpan: 6, birim: 3, ust: '0.1', ustOpNo: 10,
     adimlar: [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }, { opNo: 1040, kaynakOpNo: 20, durum: 'bekliyor' }] },
@@ -43,7 +43,7 @@ const durum = (dugumler: Dugum[] | undefined, status = 'serbest') => ({
   },
 });
 type Siparis = { id: string; urun: string; adet: number; termin: string | null; ust?: string; ustAdim?: string; birim?: number; gelir?: number | null };
-type Sonuc = { S: { D: Record<string, unknown> & { siparisler: Siparis[] } }; st: { D: { siparisler: Siparis[] }; bitti?: Record<string, number>; montaj?: Record<string, unknown> } };
+type Sonuc = { S: { D: Record<string, unknown> & { siparisler: Siparis[] } }; st: { D: { siparisler: Siparis[] }; bitti?: Record<string, number>; montaj?: Record<string, unknown>; fasonSiparis?: Record<string, string> } };
 const kur = (dugumler: Dugum[] | undefined, D: Record<string, unknown> = D0, status?: string): Sonuc =>
   planGirdisi({ calisma: calisma(D), kayit: KAYIT, kaynak: { durum: durum(dugumler, status), ek: null }, bugun: '2026-10-19' }) as unknown as Sonuc;
 
@@ -57,6 +57,15 @@ describe('plan girdisi: çok katmanlı emrin düğümleri montaj bağıyla (1476
     assert.equal(s['7-Y1']!.gelir, null, 'gelir yalnız kök emrindir');
     assert.deepEqual(Object.keys(r.st.montaj ?? {}).sort(), ['7-Y1', '7-Y1-Y1']);
     assert.deepEqual(r.st.bitti, { '7-Y1-Y1.10': 1 }, 'düğümün biten adımı düşer');
+  });
+
+  // 3330 a: düğüm adımının açık siparişindeki firma tarihi düğüm siparişinin rotadaki adımına eşlenir; bitmiş düğüm adımı tarih almaz.
+  test('düğüm adımının firma tarihi st\'ye gelir (o gün 08:00); bitmiş düğüm adımında gelmez', () => {
+    const firma = { tarih: '2026-10-27', siparisNo: null };
+    const dugumler = DUGUMLER.map((d) => ({ ...d, adimlar: d.adimlar.map((a) => (a.opNo === 1020 || a.opNo === 1030 ? { ...a, fasonId: '9', terminGun: 2, fasonSiparis: firma } : a)) }));
+    const r = kur(dugumler);
+    assert.deepEqual(r.st.fasonSiparis, { '7-Y1.20': '2026-10-27 08:00' });
+    assert.equal(kur(DUGUMLER).st.fasonSiparis, undefined);
   });
 
   test('motor tüketen üst adımı alt düğümün son adımından sonra başlatır', () => {

@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { tesisGunBasi } from '#paylasilan/zaman.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
+import { durumVeEmirler } from '../recete-rota/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { gelisleriBirlestir } from './planlama-kurallar.ts';
@@ -68,5 +70,16 @@ describe('plan fason siparişi teslim tarihi uçtan uca (3257 a, gerçek Postgre
     assert.equal(bekleme(siparissiz.isEmriIdleri[1]), 4, 'siparişsiz adım termin gününü bekler');
     const tahminsiz = await ortam.vt.okumaTx((db) => planlanacakIsler(db, { taslakDahil: true }));
     assert.equal(tahminsiz.find((i) => i.id === siparisli.isEmriIdleri[1])?.fasonBekleGun, 4, 'yalnız planın kendi okuması sipariş tarihini sorar');
+    // 3330 a: aynı tarih Reçete ve Rota'nın emir okumasında adımın yerindedir (Kokpit'in çalışma planını kuran motor oradan alır); sipariş
+    // numarası Satın Alma'yı görebilene gider.
+    const { durum } = await ortam.vt.okumaTx((db) => durumVeEmirler(db, yonetici));
+    const yeri = (emirId: number) => durum.emirler?.opYer?.[`${String(emirId)}|root|1`];
+    assert.deepEqual(yeri(siparisli.uretimEmriId)?.fasonSiparis, { tarih: '2099-03-01', siparisNo: 'SP-2099-FS1' });
+    assert.equal(yeri(siparissiz.uretimEmriId)?.fasonId, String(firma));
+    assert.equal(yeri(siparissiz.uretimEmriId)?.fasonSiparis, undefined, 'siparişsiz adımda alan yok');
+    // Satın Alma'yı göremeyen (yalnız emir okuyan) kişi tarihi alır, sipariş numarasını almaz.
+    const emirOkuyan = { id: yoneticiId, ad: 'Deneme', islemler: ['sayfa.uretim-emirleri'] } as const satisfies Kullanici;
+    const dar = (await ortam.vt.okumaTx((db) => durumVeEmirler(db, emirOkuyan))).durum;
+    assert.deepEqual(dar.emirler?.opYer?.[`${String(siparisli.uretimEmriId)}|root|1`]?.fasonSiparis, { tarih: '2099-03-01', siparisNo: null });
   });
 });

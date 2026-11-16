@@ -314,6 +314,8 @@ export interface EmirKaydi {
     kaynak?: { tur: string; id: number } | null; terminGun?: number | null;
     // B-2483-11: termini girilmemiş bitmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini (takvim günü; veri yoksa null ya da yok).
     tahminGun?: number | null;
+    // 3330 a: iş emrinin kimliği ve bitmemiş fason adımın açık siparişindeki firma tarihi (Satın Alma; sipariş no yalnız görme yetkisi olana).
+    id?: number; fasonSiparis?: { tarih: string; siparisNo: string | null } | null;
     // Rotadan gelen adım 'rota'dır; kola konan rework, tamir ya da ek adım türünü taşır. Verilmezse rota adımı sayılır.
     tur?: 'rota' | 'rework' | 'tamir' | 'ek';
     // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"), düğüm ürününün rotasındaki op numarası ve kök başına adedi; emir içindeki
@@ -369,7 +371,7 @@ export function dugumleriCevir(e: EmirKaydi): NonNullable<DurumEmirleri['orders'
       adimlar: adimlar.map((a) => ({
         opNo: a.opNo, kaynakOpNo: a.dugum!.kaynakOpNo, durum: a.durum,
         // 2694: firmasız fason emre gitmez (rota reddeder); gitse de "null" firma kimliği yazılmasın.
-        ...(a.durum !== 'tamam' && a.kaynak?.tur === 'fason' && a.kaynak.id != null ? { fasonId: String(a.kaynak.id), terminGun: a.terminGun ?? null } : {}),
+        ...(a.durum !== 'tamam' && a.kaynak?.tur === 'fason' && a.kaynak.id != null ? { fasonId: String(a.kaynak.id), terminGun: a.terminGun ?? null, ...(a.fasonSiparis != null ? { fasonSiparis: a.fasonSiparis } : {}) } : {}),
       })),
     };
   });
@@ -426,6 +428,23 @@ function ekAdimlariCevir(isEmirleri: EmirKaydi['isEmirleri']): NonNullable<Durum
   }));
 }
 
+// 3330 a: firma tarihi sorulacak iş emirleri (rotalı emrin bitmemiş fason adımları) ve cevabın adıma yazılması. Tarih emri okuyan herkese
+// gider (plan zaten kullanır, 3257 a); sipariş numarası yalnız Satın Alma'yı görebilene, ötekine null. Siparişi olmayan adım değişmez.
+const fasonSiparisiSorulur = (e: EmirKaydi, i: EmirKaydi['isEmirleri'][number]): boolean =>
+  e.kaynakRotaRevizyonId !== null && i.durum !== 'tamam' && i.kaynak?.tur === 'fason' && i.id !== undefined;
+export function fasonSiparisiSorulacaklar(emirler: readonly EmirKaydi[]): number[] {
+  return emirler.flatMap((e) => e.isEmirleri.flatMap((i) => (fasonSiparisiSorulur(e, i) ? [i.id!] : [])));
+}
+export function fasonSiparisleriniYaz(
+  emirler: EmirKaydi[], tarihler: ReadonlyMap<number, { tarih: string; siparisNo: string | null }>, noGorunur: boolean,
+): EmirKaydi[] {
+  if (tarihler.size === 0) return emirler;
+  return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => {
+    const x = fasonSiparisiSorulur(e, i) ? tarihler.get(i.id!) : undefined;
+    return x === undefined ? i : { ...i, fasonSiparis: { tarih: x.tarih, siparisNo: noGorunur ? x.siparisNo : null } };
+  }) }));
+}
+
 // kapanislar: sahibinin (uretim-emirleri) onaylı kapanış sonucu; haritada olmayan bitmiş emir onay bekliyordur (null).
 export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: ReadonlyMap<number, 'tamamlandi' | 'saglamsiz' | null> = new Map()): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
@@ -451,6 +470,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
           fasonId: fason, terminGun: fason === null ? null : i.terminGun ?? null, stationId: i.istasyonId === null ? null : String(i.istasyonId),
           setup: metindenSayi(i.ayarSuresiDk), cycle: metindenSayi(i.birimSureDk),
           ...(fason !== null && i.terminGun == null && i.tahminGun != null ? { tahminGun: i.tahminGun } : {}),
+          ...(fason !== null && i.fasonSiparis != null ? { fasonSiparis: i.fasonSiparis } : {}),
         };
       }
     }

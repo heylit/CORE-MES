@@ -18,7 +18,7 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { emrinSatinAlmaDurumlari, fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { emrinSatinAlmaDurumlari, fasonSiparisTarihleri, fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import type { AraHalCozumu } from '../rota/disari.ts';
 import type { malzemeAra } from '../malzemeler/disari.ts';
@@ -28,7 +28,7 @@ import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
   istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru,
-  bagliDilimleriAyikla, eskiCiktilariYerlestir, kayitMaliyetiniKoru, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
+  bagliDilimleriAyikla, eskiCiktilariYerlestir, kayitMaliyetiniKoru, kayitMaliyetiniSuz, fasonSiparisiSorulacaklar, fasonSiparisleriniYaz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -145,6 +145,12 @@ async function fasonTahminiEkle(db: Db, emirler: EmirKaydi[]): Promise<EmirKaydi
   return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => (tahmin.has(i) ? { ...i, tahminGun: tahmin.get(i)! } : i)) }));
 }
 
+// 3330 a: bitmemiş fason adımın açık siparişindeki firma tarihi (tek okuma; bitmemiş fason adım yoksa sorgu yok).
+async function fasonSiparisEkle(db: Db, emirler: EmirKaydi[], noGorunur: boolean): Promise<EmirKaydi[]> {
+  const idler = fasonSiparisiSorulacaklar(emirler);
+  return idler.length === 0 ? emirler : fasonSiparisleriniYaz(emirler, await fasonSiparisTarihleri(db, idler), noGorunur);
+}
+
 export async function fasonTahminleri(
   db: Db, sorgu: readonly { malzemeNo: number; operasyonTipiId: number; firmaId: number; adet: number }[],
 ): Promise<FasonTahminCevabi> {
@@ -257,7 +263,7 @@ export async function durumVeEmirler(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await rotaRevizyonlariEskiCiktiyla(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
-  const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
+  const emirDilimleri = emirOkur ? await fasonSiparisEkle(db, await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)), yetkiliMi(kullanici, SATIN_ALMA_OKUMA)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 

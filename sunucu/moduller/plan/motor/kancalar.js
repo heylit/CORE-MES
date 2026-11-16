@@ -109,8 +109,11 @@ function terminUygula() {
   const f0 = tFason;
   // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tFason = function (o, c, cx, ctx, b) {
-    const r = f0(o, c, cx, ctx, b); const A = cx.st.tmP; if (!r || !A || cx.FS[c.m.slice(1)].hemen) return r;
-    const k = cx.st.D.fasonTermin && cx.st.D.fasonTermin[o.id]; const T = k ? parseT(cx.st.D, k) : null;
+    const r = f0(o, c, cx, ctx, b); const A = cx.st.tmP; if (!r || !A) return r;
+    /* 3330 a: açık siparişin firma tarihi her fasoncuda (hemen çıkan dahil) mutlak dönüştür ve elle girilen dönüş termininin önündedir */
+    const D = cx.st.D, fs = cx.st.fasonSiparis, Ts = fs && fs[o.id] ? parseT(D, fs[o.id]) : null;
+    if (cx.FS[c.m.slice(1)].hemen && Ts == null) return r;
+    const k = D.fasonTermin && D.fasonTermin[o.id]; const T = Ts != null ? Ts : k ? parseT(D, k) : null;
     const C = T != null ? Math.max(r.S + 1, T) : r.S + tmSureFas(cx.FS[c.m.slice(1)], o.adet, A);
     r.C = r.lot1 = C; r.run = C - r.S; return r;
   };

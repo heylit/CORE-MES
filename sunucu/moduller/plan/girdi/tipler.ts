@@ -113,6 +113,7 @@ export interface MotorSiparisi {
   ustAdim?: string;
   birim?: number;
   dugumBiten?: string[];
+  dugumFirma?: Record<string, string>;
   // Sayfanın öncelik ağırlığı (durum.betik agHazirla): elle çarpan, gerekçesi, giren ve geçişte saklanan eski sınıf.
   elle?: number;
   elleGerekce?: string;
@@ -173,7 +174,7 @@ export interface AlanKaynagi {
   // Verinin sahibi modül (klasör adı); sayfa alanında 'plan'. elle alanda önerilen sahiptir: kesin sahip 1719'un sahiplik sorusuyla belli olur.
   sahip: string;
   // Yeni yolu kuran kart (1683 b planı).
-  kart: 1716 | 1717 | 1718 | 1719 | 1720 | 1786 | 3199;
+  kart: 1716 | 1717 | 1718 | 1719 | 1720 | 1786 | 3199 | 3330;
 }
 
 // Üst düzey alanların kaynak tablosu; satisfies her MotorVerisi alanının yazılmasını zorlar (TASARIM.md 3).
@@ -294,6 +295,7 @@ export const SIPARIS_ALANLARI = {
   ustAdim: { kaynak: 'sunucu', sahip: 'uretim-emirleri', kart: 1717 },
   birim: { kaynak: 'sunucu', sahip: 'uretim-emirleri', kart: 1717 },
   dugumBiten: { kaynak: 'sunucu', sahip: 'uretim-emirleri', kart: 1717 },
+  dugumFirma: { kaynak: 'sunucu', sahip: 'satin-alma', kart: 3330 },
   elle: { kaynak: 'sayfa', sahip: 'plan', kart: 1720 },
   elleGerekce: { kaynak: 'sayfa', sahip: 'plan', kart: 1720 },
   elleKim: { kaynak: 'sayfa', sahip: 'plan', kart: 1720 },
