@@ -9,10 +9,10 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
@@ -333,6 +333,17 @@ const adimliUclar = [
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => hazirlikOnayla(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  // 3322: elle "hazır değil" (iki yönlü elle durum); onay ve kaldırma ile aynı yetki ve aynı kilit.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/hazirlik-elle-eksik',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: hazirlikElleEksikGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikElleEksik(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
   uc({
     yontem: 'POST',

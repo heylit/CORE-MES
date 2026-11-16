@@ -2216,6 +2216,34 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await emirOku(r.emirId)).durum, 'basladi');
   });
 
+  // 3322 (Risk K1): Adım Durumu'nda elle "hazır değil" yazılan durduran madde (CNC) terminalden ilk başlatmayı da kapatır; neden kişiyle yazar.
+  // Otomatiğe dönünce (kaldir) aynı iş başlar. Uyaran madde ve yayın bu kapıya girmez (yayının kapısı burada ayrıca, 2189-1 a).
+  test('3322: elle durdurulan CNC maddesi terminal başlatmasını reddeder; otomatiğe dönünce başlar', async () => {
+    const r = await rotaliEmirKur({ plansiz: true });
+    const [ie1] = await isEmriIdleri(r.emirId);
+    await yayinla(ieKimligi(ie1!));
+    const elle = (olay: 'eksik' | 'kaldir') => ortam!.sahip.sorgu(
+      'INSERT INTO uretim_emirleri_hazirlik_onayi (is_emri_id, madde, olay, sistem_hali, kisi_id) VALUES ($1, $2, $3, $4, $5)',
+      [ie1, 'cnc', olay, olay === 'eksik' ? 'tamam' : null, yoneticiId]);
+    await elle('eksik');
+    const durdu = ieOlay(ie1!, 'running', { machine: r.ilk });
+    const ret = await ekle(operator, 'events', durdu);
+    assert.equal(ret.durum, 409, JSON.stringify(ret.govde));
+    assert.match(JSON.stringify(ret.govde), /elle durduruldu/);
+    assert.equal(await kayitSayisi(durdu.cid), 0);
+    assert.equal((await emirOku(r.emirId)).durum, 'planli');
+    await elle('kaldir');
+    const satir = ieOlay(ie1!, 'running', { machine: r.ilk });
+    assert.equal((await ekle(operator, 'events', satir)).durum, 200);
+    assert.equal((await emirOku(r.emirId)).durum, 'basladi');
+    // Risk K2: başlamış iş durmaz; elle "hazır değil" duraklatmayı ve devamı kapatmaz.
+    await elle('eksik');
+    for (const state of ['paused', 'running']) {
+      const c = await ekle(operator, 'events', ieOlay(ie1!, state, { machine: r.ilk }));
+      assert.equal(c.durum, 200, `${state}: ${JSON.stringify(c.govde)}`);
+    }
+  });
+
   // Kart #1257: rotasız emrin adımı Hazırlık'a iş emri paketi olarak gelir; plan durumu yoktur, ayar açıkken de başlar. Kaynaksız adım istasyonsuz
   // pakettir: Hazırlık'ta görünür, yayını reddedilir.
   test('rotasız emrin adımları Hazırlık\'ta paket olur, ayar açıkken de başlar; kaynaksız adım istasyonsuz paket olur ve yayınlanamaz', async (t) => {

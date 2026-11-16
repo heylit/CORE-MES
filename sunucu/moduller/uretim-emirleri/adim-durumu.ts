@@ -5,14 +5,15 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimDurumuCevabi, AdimStatusu, BeklemeNedeni, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
+  AdimDurumuCevabi, AdimStatusu, BeklemeNedeni, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikElleEksikGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi,
+  HazirlikOnayiKaldirGovdesi,
   EkMaddeIsaretleGovdesi, ListeEkleGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
 import {
-  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
+  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, acikElleEksikler, elleEksikNedeni, elleEksikReddi, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
   ONAY_YOK, STATU_ESKIDI, acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, kanitMetni, listeEkleReddi, listeIsaretReddi, oncekiBekleniyor,
   listeKanitiReddi, listeKontrolu, sinirDisiMi,
 } from './kurallar.ts';
@@ -129,20 +130,25 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
       const statuSatirlari = statuDefteri.filter((x) => x.isEmriId === i.id);
       const onaySatirlari = onayDefteri.filter((x) => x.isEmriId === i.id);
       const elle = acikElleStatu(statuSatirlari, sistem.statu);
+      const eksikler = [...acikElleEksikler(onaySatirlari).values()];
       const adim = ilerleme?.adimlar[sira];
       return {
         isEmriId: i.id, opNo: i.opNo, ad: i.ad, durum: i.durum, calisma: calisma.get(i.id) ?? null, bagimlilik: i.bagimlilik,
         fason: i.fasonFirmaId !== null, hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0,
-        sistemStatusu: sistem.statu, nedenler: sistem.nedenler,
+        sistemStatusu: sistem.statu,
+        nedenler: [...eksikler.map((x) => elleEksikNedeni(x.madde as HazirlikMaddesi, ad(x.kisiId))), ...sistem.nedenler],
         maddeler: [...(haller.get(i.id) ?? [])].map(([madde, h]) => ({ madde, hal: h.hal, ham: h.ham })),
         tedarik: i.durum === 'tamam' ? [] : tedarik.get(i.id) ?? [],
         elle: elle === null || elle.statu === null ? null : { statu: statuOku(elle.statu), not: elle.aciklama, kisiAdi: ad(elle.kisiId), zaman: elle.zaman },
         onaylar: [...acikOnaylar(onaySatirlari).values()].map((o) => ({
           madde: o.madde as HazirlikMaddesi, gerekce: o.gerekce, sistemHali: (o.sistemHali ?? 'bilinmiyor') as HazirlikHali, kisiAdi: ad(o.kisiId), zaman: o.zaman,
         })),
+        elleEksikler: eksikler.map((o) => ({
+          madde: o.madde as HazirlikMaddesi, gerekce: o.gerekce, sistemHali: (o.sistemHali ?? 'bilinmiyor') as HazirlikHali, kisiAdi: ad(o.kisiId), zaman: o.zaman,
+        })),
         gecmis: [
           ...statuSatirlari.map((x) => ({ olay: x.olay === 'yaz' ? 'statu' as const : 'statu-kaldir' as const, deger: x.statu ?? '', not: x.aciklama, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
-          ...onaySatirlari.map((x) => ({ olay: x.olay === 'onay' ? 'onay' as const : 'onay-kaldir' as const, deger: x.madde, not: x.gerekce, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
+          ...onaySatirlari.map((x) => ({ olay: x.olay === 'kaldir' ? 'onay-kaldir' as const : x.olay, deger: x.madde, not: x.gerekce, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
         ].sort((a, b) => Date.parse(b.zaman) - Date.parse(a.zaman)),
         liste: liste.filter((x) => x.isEmriId === i.id).map((x) => {
           const tamam = x.sonOlay === 'tamamla';
@@ -222,9 +228,24 @@ export async function hazirlikOnayla(db: Db, kullanici: Kullanici, emirId: numbe
   return adimDurumu(db, emirId, kullanici);
 }
 
+// 3322 (Risk K4): elle "hazır değil". Hâl denetimi onaydaki gibidir; gerekmeyen madde ve zaten elle eksik olan reddedilir. Kişi ve zaman
+// sunucudan; kaynak sürümü bilgi için saklanır, düşürmez (K3).
+export async function hazirlikElleEksik(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikElleEksikGovdesi): Promise<AdimDurumuCevabi> {
+  const adim = await yazmaHazirla(db, emirId, isEmriId);
+  const madde = (await isEmriHazirliklari(db, emirId, [isEmriId])).get(isEmriId)?.get(g.madde);
+  const hal = madde?.hal ?? 'bilinmiyor';
+  if (hal !== g.sistemHali) throw cakisma(HAL_ESKIDI);
+  const ret = elleEksikReddi(madde?.ham ?? 'bilinmiyor', adim.elleEksikler.some((x) => x.madde === g.madde));
+  if (ret !== null) throw cakisma(ret);
+  const gerekce = g.gerekce === null || g.gerekce === '' ? null : g.gerekce;
+  await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'eksik', sistemHali: hal, gerekce, onaylananSurum: madde?.surum ?? null, kisiId: kullanici.id });
+  return adimDurumu(db, emirId, kullanici);
+}
+
+// Elle değeri (onay ya da hazır değil) kaldırır; madde otomatik hâline döner.
 export async function hazirlikOnayKaldir(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikOnayiKaldirGovdesi): Promise<AdimDurumuCevabi> {
   const adim = await yazmaHazirla(db, emirId, isEmriId);
-  if (!adim.onaylar.some((o) => o.madde === g.madde)) throw cakisma(ONAY_YOK);
+  if (!adim.onaylar.some((o) => o.madde === g.madde) && !adim.elleEksikler.some((o) => o.madde === g.madde)) throw cakisma(ONAY_YOK);
   await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'kaldir', sistemHali: null, gerekce: null, onaylananSurum: null, kisiId: kullanici.id });
   return adimDurumu(db, emirId, kullanici);
 }

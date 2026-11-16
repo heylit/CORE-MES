@@ -1,5 +1,5 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { ListeKanitiGirdisi, ListeKontrolu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
@@ -1822,11 +1822,28 @@ export function acikElleStatu<T extends { olay: 'yaz' | 'kaldir'; sistemStatusu:
 }
 
 // Açık onay: (iş emri, madde) başına son satır 'onay' ise. Onaylanan sürüm biliniyorsa ve madde başka sürüme geçtiyse geçmez (Atölye, 2893).
-export function acikOnaylar<T extends { madde: string; olay: 'onay' | 'kaldir' }>(defter: readonly T[]): Map<string, T> {
+type ElleOlay = 'onay' | 'eksik' | 'kaldir';
+const acikOlaylar = <T extends { madde: string; olay: ElleOlay }>(defter: readonly T[], olay: 'onay' | 'eksik'): Map<string, T> => {
   const son = new Map<string, T>();
   for (const s of defter) son.set(s.madde, s);
-  return new Map([...son].filter(([, s]) => s.olay === 'onay'));
+  return new Map([...son].filter(([, s]) => s.olay === olay));
+};
+export const acikOnaylar = <T extends { madde: string; olay: ElleOlay }>(defter: readonly T[]): Map<string, T> => acikOlaylar(defter, 'onay');
+// 3322: elle "hazır değil" (madde başına son satır 'eksik'). Onaydan farklı olarak kaynak sürümü değişince düşmez, yalnız elle kaldırılır
+// (Risk K3): sessizce kalkan bir durdurma operatörü yanıltır.
+export const acikElleEksikler = <T extends { madde: string; olay: ElleOlay }>(defter: readonly T[]): Map<string, T> => acikOlaylar(defter, 'eksik');
+export const ELLE_EKSIK_GEREKSIZ = 'Bu adımda gerekmeyen madde elle değiştirilmez.';
+export const ELLE_EKSIK_ZATEN = 'Bu madde zaten elle "hazır değil".';
+export function elleEksikReddi(hal: HazirlikHali, zatenEksik: boolean): string | null {
+  if (hal === 'gerekmez') return ELLE_EKSIK_GEREKSIZ;
+  return zatenEksik ? ELLE_EKSIK_ZATEN : null;
 }
+// Risk K5: operatör engeli kimin koyduğunu ve nereden kalkacağını tek satırda görür.
+// Uyaran ve yalnız görünüm maddesinde (yayın, 3322 V3) elle değer işi durdurmaz, yalnız bildirir.
+export const elleEksikNedeni = (madde: HazirlikMaddesi, kisiAdi: string | null): string =>
+  hazirlikUyarirMi(madde) || (YALNIZ_GORUNUM_MADDELERI as readonly string[]).includes(madde)
+  ? `${HAZIRLIK_ADI[madde]} elle "hazır değil" yazıldı (${kisiAdi ?? 'kişi'}); Adım Durumu'ndan kaldırılır.`
+  : `${HAZIRLIK_ADI[madde]} elle durduruldu (${kisiAdi ?? 'kişi'}); Adım Durumu'ndan kaldırılır.`;
 // Sürümle yazılan onay yalnız aynı sürümde geçer: güncel sürüm okunamıyorsa (revizyon yayından kalktı, çizim çıkarıldı) madde değişmiş sayılır.
 export const onayGecerliMi = (onaylananSurum: string | null, guncelSurum: string | null | undefined): boolean =>
   onaylananSurum === null || onaylananSurum === guncelSurum;
@@ -1836,7 +1853,7 @@ export const HAL_ESKIDI = 'Maddenin hâli bu arada değişti. Güncel hâli gör
 export const GEREKCE_EN_AZ = 5;
 export const GEREKCE_GEREK = 'Bu madde eksikken iş emrini durdurur; elle onay için en az 5 karakterlik gerekçe yazın.';
 export const ONAY_GEREKSIZ = 'Madde tamam, muaf ya da gerekmiyor; onaya gerek yok.';
-export const ONAY_YOK = 'Bu maddede açık elle onay yok.';
+export const ONAY_YOK = 'Bu maddede elle verilmiş değer yok.';
 export const ELLE_STATU_YOK = 'Bu adımda elle yazılmış statü yok.';
 export const ADIM_KAPALI_EMIR = 'Biten ya da iptal edilen emirde adım durumu yazılmaz.';
 export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';

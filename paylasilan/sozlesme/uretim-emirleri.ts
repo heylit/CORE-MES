@@ -1084,7 +1084,8 @@ export const adimStatusu = z.enum(ADIM_STATULERI);
 export const ELLE_YAZILAN_STATULER = [
   'program', 'cizim', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger',
 ] as const satisfies readonly (typeof ADIM_STATULERI)[number][];
-export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir'] as const;
+// 3322: 'eksik' elle "hazır değil"; 'onay-kaldir' elle değerin (hazır ya da hazır değil) kaldırılmasıdır.
+export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir', 'eksik'] as const;
 // Durduran maddede gerekçe zorunlu; uyaran maddede boş olabilir (sunucu kuralı, kurallar.ts).
 const kisaNot = z.string().trim().max(500).nullable();
 export const elleStatuGovdesi = z.object({
@@ -1101,6 +1102,8 @@ export const hazirlikOnayiGovdesi = z.object({
   sistemHali: hazirlikHaliSemasi,
 }).strict();
 export const hazirlikOnayiKaldirGovdesi = z.object({ madde: hazirlikMaddesi }).strict();
+// 3322: elle "hazır değil". Gerekçe isteğe bağlıdır; istemcinin gördüğü hâl sunucudakiyle aynı değilse yazılmaz (409).
+export const hazirlikElleEksikGovdesi = hazirlikOnayiGovdesi;
 // 3249 b: Adım Durumu'ndan hazırlık listesi. Yalnız ön hazırlık ve hazırlık aşaması yazılır; üretim aşamasının kontrolleri operatörün
 // parça başında yaptığıdır ve matristen yazılmaz (Risk K5). İşaret kaynağıyla saklanır (K4): 'terminal' operatör, 'adim-durumu' ofis.
 export const LISTE_ASAMALARI = ['on_hazirlik', 'hazirlik'] as const satisfies readonly (typeof TALIMAT_ASAMALARI)[number][];
@@ -1197,6 +1200,10 @@ export const adimDurumuCevabi = z.object({
     onaylar: z.array(z.object({
       madde: hazirlikMaddesi, gerekce: z.string().nullable(), sistemHali: hazirlikHaliSemasi, kisiAdi: z.string().nullable(), zaman: zamanSemasi,
     })),
+    // 3322: açık elle "hazır değil" maddeler; yalnız elle kaldırılır. Onaylarla aynı maddede birlikte olmaz (son kayıt geçerlidir).
+    elleEksikler: z.array(z.object({
+      madde: hazirlikMaddesi, gerekce: z.string().nullable(), sistemHali: hazirlikHaliSemasi, kisiAdi: z.string().nullable(), zaman: zamanSemasi,
+    })),
     gecmis: z.array(z.object({
       olay: z.enum(ADIM_DURUMU_OLAYLARI), deger: z.string(), not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi,
     })),
@@ -1213,6 +1220,7 @@ export const adimDurumuCevabi = z.object({
   yetki: z.object({ ekMadde: z.boolean(), sablon: z.boolean() }),
 });
 // Terminal okuması (2893-3 b): operatör yalnız statüyü, nedeni ve elle yazılmış statünün kendisini görür; kişi adı, gerekçe ve geçmiş yok.
+// 3322 (Risk K5): elle "hazır değil" maddenin nedeni koyanın adıyla gelir (engeli kim kaldırır); gerekçe ve geçmiş yine yok.
 export const adimDurumuTerminalCevabi = z.object({
   emirId: KIMLIK,
   adimlar: z.array(z.object({
@@ -1234,5 +1242,6 @@ export type ListeKontrolu = z.output<typeof listeKontrolSemasi>;
 export type ListeKanitiGirdisi = z.output<typeof listeKanitiGirdisi>;
 export type EkMaddeIsaretleGovdesi = z.output<typeof ekMaddeIsaretleGovdesi>;
 export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
+export type HazirlikElleEksikGovdesi = z.output<typeof hazirlikElleEksikGovdesi>;
 export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
 export type AdimDurumuTerminalCevabi = z.output<typeof adimDurumuTerminalCevabi>;

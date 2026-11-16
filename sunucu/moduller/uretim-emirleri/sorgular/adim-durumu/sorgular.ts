@@ -6,8 +6,10 @@ export interface ElleStatuSatiri {
   id: number; isEmriId: number; olay: 'yaz' | 'kaldir'; statu: string | null; sistemStatusu: string | null; aciklama: string | null;
   kisiId: number; zaman: string;
 }
+// 3322: olay 'onay' elle hazır, 'eksik' elle hazır değil, 'kaldir' elle değeri kaldırır (otomatiğe döner).
+export type HazirlikOnayOlayi = 'onay' | 'eksik' | 'kaldir';
 export interface HazirlikOnaySatiri {
-  id: number; isEmriId: number; madde: string; olay: 'onay' | 'kaldir'; sistemHali: string | null; gerekce: string | null;
+  id: number; isEmriId: number; madde: string; olay: HazirlikOnayOlayi; sistemHali: string | null; gerekce: string | null;
   onaylananSurum: string | null; kisiId: number; zaman: string;
 }
 
@@ -38,7 +40,7 @@ export function hazirlikOnayDefteri(db: Db, isEmriIdleri: readonly number[]): Pr
 }
 
 export function hazirlikOnayiEkle(
-  db: Db, o: { isEmriId: number; madde: string; olay: 'onay' | 'kaldir'; sistemHali: string | null; gerekce: string | null; onaylananSurum: string | null; kisiId: number },
+  db: Db, o: { isEmriId: number; madde: string; olay: HazirlikOnayOlayi; sistemHali: string | null; gerekce: string | null; onaylananSurum: string | null; kisiId: number },
 ): Promise<unknown> {
   return db.sorgu(
     `INSERT INTO uretim_emirleri_hazirlik_onayi (is_emri_id, madde, olay, sistem_hali, gerekce, onaylanan_surum, kisi_id)
