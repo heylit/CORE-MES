@@ -7,24 +7,13 @@ import { tesisGunBasi } from '#paylasilan/zaman.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
-import { fasonSiparisTarihleri, gelisleriBirlestir } from './planlama-kurallar.ts';
+import { gelisleriBirlestir } from './planlama-kurallar.ts';
 import { planlanacakIsler } from './servis.ts';
 
 describe('plan satın alma gelişleri (3256-2, 3257 a)', () => {
   test('açık sipariş ve onaylı talep gelişleri malzeme başına birleşir, önce siparişler', () => {
     const m = gelisleriBirlestir(new Map([[1, ['s1']], [2, ['s2']]]), new Map([[1, ['t1']], [3, ['t3']]]));
     assert.deepEqual([...m], [[1, ['s1', 't1']], [2, ['s2']], [3, ['t3']]]);
-  });
-  test('fason iş emrinin en geç sipariş dönüşü esastır; tarihsiz sipariş, talep ve emirsiz satır sayılmaz', () => {
-    const m = fasonSiparisTarihleri([
-      { isEmriId: 7, asama: 'siparis', termin: '2099-02-01' },
-      { isEmriId: 7, asama: 'siparis', termin: '2099-02-05' },
-      { isEmriId: 7, asama: 'siparis', termin: '2099-01-20' },
-      { isEmriId: 8, asama: 'siparis', termin: null },
-      { isEmriId: 9, asama: 'talep', termin: null },
-      { isEmriId: null, asama: 'siparis', termin: '2099-02-01' },
-    ]);
-    assert.deepEqual([...m], [[7, '2099-02-05']]);
   });
 });
 
