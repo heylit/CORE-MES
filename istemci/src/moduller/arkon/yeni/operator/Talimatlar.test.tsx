@@ -45,7 +45,7 @@ describe('operatör talimatları (3338-4 a)', () => {
     expect(screen.getByRole('button', { name: 'ORN aparatı bağla · zorunlu' })).toHaveProperty('disabled', true);
   });
 
-  it('ölçüm maddesi değer ister: sınır yazılır, sayı olmadan Tamam kapalı, virgüllü değer sayı olarak gider', () => {
+  it('ölçüm maddesi değer ister: sınır yazılır, sayı olmadan Tamam kapalı, sınır dışı değer uyarılır, virgüllü değer sayı olarak gider', () => {
     const isaretle = vi.fn<Talimatlar['isaretle']>();
     render(<TalimatListesi t={t(isaretle)} durum="setup" kapali={false} adimlar={undefined} isEmriId={null} />);
     const satir = screen.getByRole('button', { name: 'Sıfırı probla · zorunlu' }).closest('li')!;
@@ -54,7 +54,11 @@ describe('operatör talimatları (3338-4 a)', () => {
     expect(isaretle).not.toHaveBeenCalled();
     const tamam = within(satir).getByRole('button', { name: 'Tamam' });
     expect(tamam).toHaveProperty('disabled', true);
-    fireEvent.change(within(satir).getByRole('textbox', { name: 'Sıfırı probla · Z' }), { target: { value: '0,015' } });
+    const kutu = within(satir).getByRole('textbox', { name: 'Sıfırı probla · Z' });
+    fireEvent.change(kutu, { target: { value: '0,05' } });
+    expect(within(satir).getByRole('status').textContent).toBe('Sınır dışı · -0,02–0,02 mm');
+    fireEvent.change(kutu, { target: { value: '0,015' } });
+    expect(within(satir).queryByRole('status')).toBeNull();
     fireEvent.click(tamam);
     expect(isaretle.mock.calls).toEqual([[2, true, { olcum: 0.015 }]]);
   });

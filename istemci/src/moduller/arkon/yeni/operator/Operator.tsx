@@ -1330,7 +1330,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     : <TalimatListesi key={siraAnahtari(o)} t={tl} durum={o.state} kapali={!uretir} adimlar={o.pkg && o.pkg.steps} isEmriId={tmiIsEmriId(o.pkg)} />;
   const tlSayisi = zorunluEksikler(tlListe, acikGrup(o.state)).length;
   const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D, telefon, isler.filter((x) => !x.empty && x.state !== 'done').length);
-  sekmeler.splice(Math.max(0, sekmeler.findIndex((x) => x.id === 'steps')), 0, { id: 'tl', l: 'Talimatlar', simge: 'flag', n: tlSayisi || null });
+  sekmeler.splice(Math.max(0, sekmeler.findIndex((x) => x.id === 'steps')), 0, { id: 'tl', l: tlSayisi ? `Talimatlar · ${String(tlSayisi)} eksik` : 'Talimatlar', simge: 'flag' });
   // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
   const kaliteIstasyonu = ist.t === 'kalite';
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;

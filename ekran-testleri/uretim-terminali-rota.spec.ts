@@ -113,8 +113,20 @@ test.describe('rota şeridi elle kayar', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     const kutu = await page.getByRole('button', { name: 'Bağlama aparatını ORN-APR-12 ile değiştir · zorunlu' }).boundingBox();
     expect(kutu!.width).toBeGreaterThanOrEqual(44);
+    // Dar düzende alt gezinmenin yazıları kesilmez.
+    const gezinme = page.getByRole('navigation', { name: 'Terminal görünümleri' });
+    if (await gezinme.isVisible()) {
+      const tasan = await gezinme.getByRole('button').evaluateAll((l) => l.filter((x) => x.scrollWidth > x.clientWidth + 1).map((x) => x.textContent));
+      expect(tasan).toEqual([]);
+    }
     const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
     if (klasor) await page.screenshot({ path: `${klasor}/talimat-${bilgi.project.name}.png` });
+    // Ölçüm maddesi açılınca değer alanı ve Tamam; sınır dışı değer uyarılır, yazma gitmez.
+    await page.getByRole('button', { name: 'Sıfır noktasını probla · zorunlu' }).click();
+    await page.getByRole('textbox', { name: 'Sıfır noktasını probla · Z' }).fill('0,05');
+    await expect(page.getByText('Sınır dışı · -0,02–0,02 mm')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tamam', exact: true })).toBeEnabled();
+    if (klasor) await page.screenshot({ path: `${klasor}/olcum-${bilgi.project.name}.png` });
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);
   });
