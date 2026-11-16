@@ -87,7 +87,7 @@ describe('TaslakCubugu', () => {
     fireEvent.click(onunki);
     expect(onunki.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(yaz);
-    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. 1 değişiklik başkasınınki seçildiği için düştü. Canlıya almak için Onay ve canlı bölümünü tamamlayın.'); });
+    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. 1 değişiklik başkasınınki seçildiği için düştü. Canlıya almak için onay sayfasını tamamlayın.'); });
     expect(u.mock.calls).toEqual([[undefined], [{ 'emir:ORN-e1': 'benim', '*': 'onun' }]]);
     // Çatışma seçilene kadar Onay ve canlı açılmaz; yazılınca aynı adımda açılır.
     expect(onayiAc).toHaveBeenCalledTimes(1);
@@ -103,6 +103,6 @@ describe('TaslakCubugu', () => {
     expect([yazildi.mock.calls.length, onayiAc.mock.calls.length]).toEqual([0, 0]);
     fireEvent.click(dugme('Onaya gönder'));
     await waitFor(() => { expect(onayiAc).toHaveBeenCalledTimes(1); });
-    expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. Onaya göndermek için Onay ve canlı bölümünü tamamlayın.');
+    expect(yazildi).toHaveBeenCalledWith('Taslak plana yazıldı. Onaya göndermek için onay sayfasını tamamlayın.');
   });
 });

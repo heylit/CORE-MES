@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Suspense, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Dugme, DurumKutusu, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
@@ -39,7 +40,7 @@ import './kokpit.css';
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
 // ve operasyonları (seç-yerleştir), 3 tam genişlik tahta. Ayarlar tahtanın üstüne açılır; yanında yer tutmaz. Planlayanın kararları kişinin taslağına yazılır (3282 1d): taşıma, plana alma, ayar ve emrin
 // yönü taslak komutudur, plan taslağın görünümünde yeniden dizilir, ortak çalışma "Plana yaz"a kadar değişmez. Geri son değişikliği taslaktan
-// alır. Planı etkileyen değişiklikler plan şeridindeki listededir (3317 a); Canlıya al (yetkisi olmayanda Onaya gönder) Onay ve canlı bölümünü açar: onaya gönderme, müdür
+// alır. Planı etkileyen değişiklikler plan şeridindeki listededir (3317 a); Canlıya al (yetkisi olmayanda Onaya gönder) onay sayfasını açar: onaya gönderme, müdür
 // onayı ve canlıya alma yalnız buradadır (3282-4 a) ve ortak çalışmadandır; taslak varken kapalıdır.
 
 type Goz = 'T' | 'S' | 'M' | 'B';
@@ -138,7 +139,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [onay, setOnay] = useState<Onay | null>(null);
   const [oneri, setOneri] = useState<TurAdayi | null>(null);
   // Stüdyo'dan "Kokpit'te aç" ile gelindiyse Onay ve canlı açık başlar.
-  const [onayAcik, setOnayAcik] = useState(onayIstegiVar);
+  // Onay sayfası Kokpit'in yerine açılır ve adrestedir (`?sayfa=onay`, 3335 a): tarayıcının geri düğmesi Kokpit'e döner.
+  const [sorgu, sorguYaz] = useSearchParams();
+  const onayAcik = sorgu.get('sayfa') === 'onay';
+  const setOnayAcik = useCallback((acik: boolean): void => {
+    sorguYaz((q) => { const y = new URLSearchParams(q); if (acik) y.set('sayfa', 'onay'); else y.delete('sayfa'); return y; });
+  }, [sorguYaz]);
+  const onayIstendi = useRef(onayIstegiVar());
   // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
   const [onayTaslaktan, setOnayTaslaktan] = useState(false);
   const [ayarAcik, setAyarAcik] = useState(false);
@@ -160,7 +167,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Seç-yerleştir: seçili adımın uygun tezgâhları ve boş yerleri (tahta işaretler).
   const [yerHedefi, setYerHedefi] = useState<YerlestirmeHedefi | null>(null);
   const [tasinacak, setTasinacak] = useState<string | null>(null);
-  useEffect(() => { onayIstegiAl(); }, []);
+  useEffect(() => { onayIstegiAl(); if (onayIstendi.current) setOnayAcik(true); }, [setOnayAcik]);
   const kok = useRef<HTMLDivElement | null>(null);
 
   const yazabilir = yetki.planYaz && komut !== null && taslak !== null;
@@ -448,7 +455,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
 
   return (
-    <div className="tc-pyq" data-goz={goz} ref={kok}>
+    <div className="tc-pyq" data-goz={goz} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
+      {!onayAcik && (
       <div className="tc-pyq-ust">
         <span className="tc-pyq-suzgec" role="group" aria-label="Durum süzgeci">
           {DURUMLAR.map((d) => (
@@ -499,7 +507,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           </Dugme>
         )}
       </div>
-      {taslak && (
+      )}
+      {taslak && !onayAcik && (
         <TaslakCubugu
           taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarın etkisini uygulayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
           onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayTaslaktan(true); setOnayAcik(true); }}

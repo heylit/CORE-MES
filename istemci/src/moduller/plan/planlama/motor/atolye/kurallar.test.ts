@@ -122,8 +122,8 @@ describe('atölye kuralları', () => {
     const { c, p, cx, h } = kur();
     expect(siparisler({ ...c, tpSira: ['3', '2', 'yok'] } as PlanlamaCalismasi, p, cx, h).map((s) => s.id)).toEqual(['3', '2']);
     const r = { planSurumu: 4, ayni: false, guncel: true, tasinan: 3, tezgah: 1, sira: 2, yeni: 1, eksik: 1, isler: [], yazilamaz: ['x'] };
-    expect(canliFarkOzeti(r)).toEqual({ var: true, say: 5, farkli: true });
-    expect(canliFarkOzeti({ ...r, ayni: true, tasinan: 0, tezgah: 0, sira: 0, yeni: 0, eksik: 0 })).toEqual({ var: true, say: 0, farkli: false });
+    expect(canliFarkOzeti(r)).toEqual({ var: true, say: 5, farkli: true, tasinan: 3, yeni: 1 });
+    expect(canliFarkOzeti({ ...r, ayni: true, tasinan: 0, tezgah: 0, sira: 0, yeni: 0, eksik: 0 })).toEqual({ var: true, say: 0, farkli: false, tasinan: 0, yeni: 0 });
     expect(canliFarkOzeti({ ...r, planSurumu: 0 })).toEqual({ var: false, say: 0, farkli: true });
     expect(canliFarkOzeti(null)).toEqual({ var: false, say: 0, farkli: true });
   });
@@ -191,7 +191,7 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     expect(uyarilar({ adet: 2, isler: ['ORN-1 OP 10', 'ORN-1 OP 20'] })).toEqual([
       ['uyari', "Bu plan hazırlandıktan sonra açılan 2 iş planda yok (ORN-1 OP 10, ORN-1 OP 20); canlıya alınınca plansız kalır, Kokpit'te Plansız görünür"],
     ]);
-    expect(uyarilar({ adet: 7, isler: ['ORN-1 OP 10'] })[0]![1]).toContain('7 iş planda yok (ORN-1 OP 10, …)');
+    expect(uyarilar({ adet: 7, isler: ['ORN-1 OP 10'] })[0]![1]).toContain('7 iş planda yok (ORN-1 OP 10 ve 6 iş daha)');
   });
   it('fark ve planlar arası emir farkı', () => {
     expect(farkKur(3, 1)).toEqual({ metin: '+2,0', iyi: false });

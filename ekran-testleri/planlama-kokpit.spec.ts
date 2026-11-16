@@ -302,15 +302,15 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
   }
   await expect(suzgec.getByRole('button', { name: /Plansız/ })).toContainText('0');
 
-  // Taslak çubuğundaki Canlıya al taslağı ortak çalışmaya yazar ve aynı adımda Onay ve canlı bölümünü açar (3282-5 a); canlıya alma oradadır.
+  // Taslak çubuğundaki Canlıya al taslağı ortak çalışmaya yazar ve aynı adımda onay sayfasını açar (3282-5 a); canlıya alma oradadır.
   const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
   await expect(cubuk.getByText('Taslak · 2 değişiklik')).toBeVisible();
   await tasma();
   await cubuk.getByRole('button', { name: 'Canlıya al' }).click();
   await expect(cubuk).toHaveCount(0);
   expect(t.s.uygulandi).toBe(1);
-  await expect(page.getByText('Taslak plana yazıldı. Canlıya almak için Onay ve canlı bölümünü tamamlayın.')).toBeVisible();
-  await expect(page.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Taslak plana yazıldı. Canlıya almak için onay sayfasını tamamlayın.')).toBeVisible();
+  await expect(page.getByText(/O zamana kadar atölye eski planı görür/)).toBeVisible({ timeout: 10_000 });
   // Bildirim kaybolsa da bölüm, kişi oradayken taslağın ortak plana yazıldığını ve canlının değişmediğini söyler (Risk 3282 1d-3 N1).
   await expect(kokpit.locator('[data-sek="onay"]').getByRole('status').filter({ hasText: 'Taslak ortak plana yazıldı; canlı plan değişmedi.' })).toBeVisible();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-1d4-onay-${bilgi.project.name}.png` });
@@ -345,8 +345,8 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
 });
 
 // Kart 3282 (dilim 1a), 3317 a: Planlama Kokpit'le açılır; saha olayı şeritteki listede görünür, plansız emrin kartını seçer ve boş yerleri
-// açar. Canlıya al Onay ve canlı bölümünü Kokpit'te açar; Planı düzenle tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
-test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plansız emir kartı seçili gelir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+// açar. Canlıya al onay sayfasını Kokpit'in yerine açar; Kokpit'e dön tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
+test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plansız emir kartı seçili gelir; Canlıya al onay sayfasını açar (üç sekme, geri düğmesi Kokpit\'e döner); yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum: 1 }));
   await page.route('**/api/plan/surum', (r) => json(r, {
     planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
@@ -379,13 +379,92 @@ test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plans�
   await expect(s4.locator('[data-adim="S4.a1"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(s4.getByRole('group', { name: 'Torna için boş yerler' }).getByRole('listitem').first()).toBeVisible();
   await kokpit.getByRole('button', { name: /^Canlıya al/ }).click();
-  await expect(page.getByText(/Canlı plan yalnız burada onaylanınca değişir/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/O zamana kadar atölye eski planı görür/)).toBeVisible({ timeout: 10_000 });
   await expect(kokpit.locator('.tc-pyq-tahta')).toHaveCount(0);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-onay-${bilgi.project.name}.png` });
-  await page.getByRole('button', { name: 'Planı düzenle' }).click();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-planim-${bilgi.project.name}.png`, fullPage: true });
+  // Onay sayfası (3335 a): Kokpit'in yerine açılır, adrestedir; üç adım, üç sekme; "Planım" tek sütun: dört sayı, kontrol, tek karar.
+  await expect(page).toHaveURL(/[?&]sayfa=onay/);
+  await expect(kokpit.locator('.tc-pyq-ust')).toHaveCount(0);
+  await expect(kokpit.getByRole('tab')).toHaveText([/^Planım$/, /^Onay bekleyenler/, /^Geçmiş$/]);
+  await expect(kokpit.getByRole('tab', { name: 'Planım' })).toHaveAttribute('aria-selected', 'true');
+  await expect(kokpit.locator('.tc-pyq-onay-adimlar li[aria-current]')).toHaveText(['2 Kontrol et', '3 Canlıya al']);
+  await expect(kokpit.locator('.tc-pym-pa-ozet dt')).toHaveText(['işin yeri değişti', 'yeni yerleşen iş', 'geciken sipariş', 'plansız kalan sipariş']);
+  await expect(kokpit.getByRole('heading', { name: 'Kontrol' })).toBeVisible();
+  // Karar: tek not alanı, solda Kokpit'e dön, sağda karar düğmeleri; hepsi görünür ve taşmaz.
+  await kokpit.getByRole('button', { name: 'Kokpit\'e dön' }).scrollIntoViewIfNeeded();
+  await expect(kokpit.getByRole('textbox', { name: 'Not (isteğe bağlı)' })).toBeVisible();
+  await expect(kokpit.getByRole('button', { name: 'Canlıya al', exact: true })).toBeVisible();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-karar-${bilgi.project.name}.png` });
+  await expect(kokpit.getByRole('heading', { name: 'İncelenecek planlar' })).toHaveCount(0);
+  await expect(kokpit.getByRole('heading', { name: 'Planlama sayfaları' })).toHaveCount(0);
+  await kokpit.getByRole('tab', { name: 'Geçmiş' }).click();
+  await expect(kokpit.getByRole('heading', { name: 'Geçmiş planlar' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-gecmis-${bilgi.project.name}.png`, fullPage: true });
+  await kokpit.getByRole('tab', { name: /^Onay bekleyenler/ }).click();
+  await expect(kokpit.getByRole('heading', { name: 'Onay bekleyen ve kayıtlı planlar' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  // Tarayıcının geri düğmesi Kokpit'e, ileri düğmesi sayfaya döner.
+  await page.goBack();
+  await expect(kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' })).toBeVisible();
+  await page.goForward();
+  await expect(kokpit.getByRole('tab', { name: 'Planım' })).toBeVisible();
+  await kokpit.getByRole('tab', { name: 'Planım' }).click();
+  await page.getByRole('button', { name: 'Kokpit\'e dön' }).click();
+  await expect(page).not.toHaveURL(/sayfa=onay/);
   await expect(kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' })).toBeVisible();
   expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3335 a: 4 saat kuralı canlıya almayı gerekçe isteyerek geri çevirince pencere açılmaz; neden kontrol listesine yazılır, not alanı zorunlu
+// gerekçe olur ve boşken karar düğmeleri kapalıdır. Onayda bekleyen plan kendi sekmesindedir. Veriler uydurmadır.
+test('Kokpit 3335: 4 saat kuralı reddedince karar alanı zorunlu gerekçe olur, yazılınca komut gerekçeyle gider; onay bekleyen plan kendi sekmesinde; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const c = calisma({ ...ILK }, {});
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: { ...c, plan: { ...c.plan, kim: 'ORN-Planlamaci', zaman: Date.parse('2026-10-19T06:30:00+03:00') } }, surum: 1 }));
+  const bekleyen = {
+    id: 7, ad: 'ORN-Onay plani', aciklama: null, durum: 'onayda', acan: 'ORN-Planlamaci', benim: false, acilma: '2026-10-19T03:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
+    gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true },
+  };
+  await page.route('**/api/plan/senaryolar', (r) => json(r, { canli: null, canliSurum: 3, senaryolar: [bekleyen] }));
+  await page.route('**/api/plan/planlama-calismasi/canli-farki', (r) => json(r, { planSurumu: 3, ayni: false, guncel: true, tasinan: 2, tezgah: 1, sira: 1, yeni: 1, eksik: 0, isler: [], yazilamaz: [] }));
+  const govdeler: Record<string, unknown>[] = [];
+  await page.route('**/api/plan/planlama-calismasi/canliya-al', (r) => {
+    govdeler.push(r.request().postDataJSON() as Record<string, unknown>);
+    return r.fulfill({ status: 409, json: { kod: 'CAKISMA', mesaj: 'S1 Torna 4 saatten kısa sürede başlayacak; gerekçe yazın.', ayrinti: { neden: 'dort-saat', gerekceIle: true } } });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan?sayfa=onay');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit.getByRole('tab', { name: 'Planım' })).toHaveAttribute('aria-selected', 'true', { timeout: 20_000 });
+  await expect(kokpit.getByRole('tab', { name: 'Onay bekleyenler (1)' })).toBeVisible();
+  await expect(kokpit.locator('[data-imza]')).toContainText('Taslak: ORN-Planlamaci');
+  await expect(kokpit.locator('.tc-pym-pa-ozet dd').first()).toHaveText('2');
+  await kokpit.getByRole('button', { name: 'Canlıya al', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /canlıya al/i }).click();
+  const alan = kokpit.getByRole('textbox', { name: /^Gerekçe \(zorunlu: 4 saat kuralı/ });
+  await expect(alan).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(kokpit.locator('.tc-pym-pa-kontrol li[data-d="uyari"]').filter({ hasText: '4 saatten kısa sürede başlayacak' })).toBeVisible();
+  await expect(kokpit.getByText('Gerekçe yazınca açılır.')).toBeVisible();
+  await expect(kokpit.getByRole('button', { name: 'Canlıya al', exact: true })).toBeDisabled();
+  await expect(kokpit.getByRole('button', { name: 'Onaya gönder' })).toBeDisabled();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await kokpit.getByText('Gerekçe yazınca açılır.').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-gerekce-${bilgi.project.name}.png` });
+  await alan.fill('Deneme: acil sevkiyat');
+  await expect(kokpit.getByText('Gerekçe yazınca açılır.')).toHaveCount(0);
+  await kokpit.getByRole('button', { name: 'Canlıya al', exact: true }).click();
+  await expect.poll(() => govdeler.length).toBe(2);
+  expect(govdeler[1]).toMatchObject({ dortSaatGerekcesi: 'Deneme: acil sevkiyat' });
+  // Onayda bekleyen plan kendi sekmesindedir; kişinin planı o listede yoktur.
+  await kokpit.getByRole('tab', { name: 'Onay bekleyenler (1)' }).click();
+  await expect(kokpit.getByRole('heading', { name: 'Onay bekleyen ve kayıtlı planlar' })).toBeVisible();
+  await expect(kokpit.getByText('ORN-Onay plani').first()).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-bekleyen-${bilgi.project.name}.png`, fullPage: true });
+  // Beklenen: 4 saat reddi (409) ve uydurma onay planının sunucuda olmayan ayrıntısı (404).
+  expect(ag.hatalar.filter((h) => !/409|404 GET \/api\/plan(\/motor-ayarlari)?\?taslak=7$|404 \(Not Found\)/.test(h))).toEqual([]);
 });
 
 // Kart 3297 a (A2): gövde yukarıdan aşağı akar: 1 emir kartları sırasıyla, 2 seçilen kartın operasyonları, 3 tam genişlik tahta. Plansız emirde
@@ -619,6 +698,8 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
   await expect(panel.locator('[data-odak-satir]')).toHaveCount(2);
   await expect(panel.locator('[data-odak-yer]')).toHaveCount(2);
   await expect(panel.locator('[data-odak-yer="M2"]')).toHaveAttribute('data-ilk', '');
+  // Panel yerleşimi bir kare sonra oturur; ölçüm hizalanma bitince alınır.
+  if (genis) await expect.poll(async () => Math.abs((await kutu(panel)).y - (await kutu(bolum.locator('.tc-pyq-optablo'))).y)).toBeLessThanOrEqual(2);
   const tablo = await kutu(bolum.locator('.tc-pyq-optablo')), pk = await kutu(panel), bk = await kutu(bolum);
   if (genis) {
     // Geniş ekranda panel tablonun sağında, aynı hizada.

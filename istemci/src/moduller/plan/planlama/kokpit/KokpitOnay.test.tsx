@@ -40,7 +40,7 @@ function sunucu(retler: ApiHatasi[]) {
 }
 const govdeler = (post: { mock: { calls: unknown[][] } }) => post.mock.calls.filter((x) => x[0] === CANLI).map((x) => x[1] as Record<string, unknown>);
 
-async function canliyaAlBas() {
+function sayfayiAc() {
   const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar: { canli: null, canliSurum: 3, senaryolar: [] }, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
   render(
     <MemoryRouter><BildirimSaglayici>
@@ -51,19 +51,33 @@ async function canliyaAlBas() {
     </BildirimSaglayici></MemoryRouter>,
   );
   fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Onayla ve canlıya al' }, { timeout: 5000 }));
+}
+async function canliyaAlBas() {
+  sayfayiAc();
+  fireEvent.click(await sayfaDugmesi());
   fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /canlıya al/i }));
 }
+// Onay sayfasının "Planım" sekmesindeki birincil düğme (üst çubuk sayfa açılınca kalkar).
+const sayfaDugmesi = () => screen.findByRole('button', { name: 'Canlıya al' }, { timeout: 5000 });
 const pencere = (baslik: string) => screen.findByRole('dialog', { name: baslik });
 
 describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır', () => {
-  it('4 saat kuralı reddederse gerekçe sorulur; gerekçe yazılınca komut gerekçeyle yeniden gider', async () => {
+  // 3335 a: gerekçe pencereyle sorulmaz; karar alanı zorunlu gerekçeye döner, boşken iki düğme kapalıdır ve nedeni yazar.
+  it('4 saat kuralı reddederse karar alanı zorunlu gerekçe olur, düğmeler gerekçe yazılana kadar kapalıdır; yazılınca komut gerekçeyle yeniden gider', async () => {
     const post = sunucu([DORT_SAAT]);
     await canliyaAlBas();
-    const p = await pencere('4 saat kuralı');
-    expect(p.textContent).toContain('Plan henüz canlıya alınmadı; gerekçe yazarsanız alınır.');
-    fireEvent.change(within(p).getByRole('textbox'), { target: { value: 'Acil sevkiyat' } });
-    fireEvent.click(within(p).getByRole('button', { name: 'Gerekçeyle canlıya al' }));
+    const alan = await screen.findByRole('textbox', { name: /^Gerekçe \(zorunlu: 4 saat kuralı/ });
+    expect(screen.queryByRole('dialog', { name: '4 saat kuralı' })).toBeNull();
+    // Neden kontrol listesinde uyarı satırıdır.
+    expect([...document.querySelectorAll('.tc-pym-pa-kontrol li[data-d="uyari"]')].some((e) => e.textContent.includes('4 saatten kısa sürede başlayacak'))).toBe(true);
+    expect(screen.getByText('Gerekçe yazınca açılır.')).toBeTruthy();
+    expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(alan, { target: { value: '  ' } });
+    expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(alan, { target: { value: 'Acil sevkiyat' } });
+    expect(screen.queryByText('Gerekçe yazınca açılır.')).toBeNull();
+    fireEvent.click(await sayfaDugmesi());
     await waitFor(() => expect(govdeler(post)).toHaveLength(2));
     expect(govdeler(post)[0]).toMatchObject({ planSurumu: 3, dortSaatGerekcesi: null });
     expect(govdeler(post)[1]).toMatchObject({ planSurumu: 3, dortSaatGerekcesi: 'Acil sevkiyat' });
@@ -82,12 +96,29 @@ describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır
     const post = sunucu([CANLI_DEGISTI, DORT_SAAT]);
     await canliyaAlBas();
     fireEvent.click(within(await pencere('Canlı plan değişti')).getByRole('button', { name: 'Yine de canlıya al' }));
-    const p = await pencere('4 saat kuralı');
-    fireEvent.change(within(p).getByRole('textbox'), { target: { value: 'Acil sevkiyat' } });
-    fireEvent.click(within(p).getByRole('button', { name: 'Gerekçeyle canlıya al' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: /^Gerekçe \(zorunlu/ }), { target: { value: 'Acil sevkiyat' } });
+    fireEvent.click(await sayfaDugmesi());
     await waitFor(() => expect(govdeler(post)).toHaveLength(3));
     expect(govdeler(post)[2]).toMatchObject({ dortSaatGerekcesi: 'Acil sevkiyat' });
     expect(govdeler(post)[2]).not.toHaveProperty('planSurumu');
     expect(await screen.findByText(/^Plan canlıda:/)).toBeTruthy();
+  });
+
+  // Gönderilen plan artık onay bekleyenler listesindedir; sayfa o sekmeye geçer ve plan seçili gelir.
+  it('onaya gönderince sayfa "Onay bekleyenler" sekmesine geçer; gönderilen plan seçilidir', async () => {
+    const gonderilen = {
+      id: 12, ad: 'ORN-Onay plani', aciklama: null, durum: 'onayda', acan: 'ORN-Planlamaci', benim: true, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
+      gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: true, geriGonder: false, canliyaAl: false },
+    };
+    vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/surum' ? Promise.resolve({ planSurumu: 3, sonCanliyaAlma: null }) : Promise.reject(new Error('yok')))) as never);
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === '/plan/planlama-calismasi/onaya-gonder'
+      ? Promise.resolve({ ...TAMAM, senaryolar: { canli: null, canliSurum: 3, senaryolar: [gonderilen] } }) : Promise.reject(new Error(`beklenmeyen istek ${yol}`)))) as never);
+    sayfayiAc();
+    await sayfaDugmesi();
+    expect(screen.getByRole('tab', { name: 'Planım' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Onaya gönder' }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Onay bekleyenler (1)' }).getAttribute('aria-selected')).toBe('true'));
+    expect((await screen.findAllByText('ORN-Onay plani')).length).toBeGreaterThan(0);
   });
 });

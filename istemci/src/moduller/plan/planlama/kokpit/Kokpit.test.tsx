@@ -195,8 +195,8 @@ describe('Kokpit', () => {
     ]);
   });
 
-  // Risk 3282 1d-3 N1: tek düğme ortak plana yazar; Onay ve canlı bunu kalıcı söyler, canlı değişince ya da bölüm kapanınca söylemez.
-  it('taslak çubuğundan yazılınca Onay ve canlıda taslağın yazıldığı satırı durur; canlı değişince ve üst düğmeyle açılınca yoktur', async () => {
+  // Risk 3282 1d-3 N1: tek düğme ortak plana yazar; onay sayfası bunu kalıcı söyler, canlı değişince ya da sayfa kapanınca söylemez.
+  it('taslak çubuğundan yazılınca onay sayfasında taslağın yazıldığı satırı durur; canlı değişince ve üst düğmeyle açılınca yoktur', async () => {
     taslakSunucusu([satir(TASI, '3.10 → T2')]);
     const sen = (canliSurum: number) => ({ canli: null, canliSurum, senaryolar: [] });
     const sayfa = (canliSurum: number) => (
@@ -211,19 +211,19 @@ describe('Kokpit', () => {
     const SATIR = 'Taslak ortak plana yazıldı; canlı plan değişmedi.';
     const satirVar = () => screen.queryAllByRole('status').some((e) => e.textContent === SATIR);
     fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
-    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(satirVar()).toBe(true);
     rerender(sayfa(4));
     await waitFor(() => { expect(satirVar()).toBe(false); });
-    fireEvent.click(screen.getByRole('button', { name: 'Planı düzenle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kokpit\'e dön' }));
     fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
-    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(satirVar()).toBe(false);
   });
 
-  // Onayda bekleyen eski bir plan varken: taslağını yazan kişi çalışma planıyla açar (eski planı kendi planı sanıp canlıya almaya çalışmasın);
-  // üst düğmeyle açan (müdür) onaydaki planı görür.
-  it.each([[true, 'Çalışma planı'], [false, 'ORN-Eski plan']])('onayda plan varken taslaktan gelindi mi %s: seçili plan "%s"', async (taslaktan, secili) => {
+  // Onayda bekleyen eski bir plan varken (3333, 3335 a): sayfa nereden açılırsa açılsın kişinin kendi planıyla ("Planım") açılır; eski plan
+  // ayrı sekmededir, kendi planı sanılıp canlıya alınmaz.
+  it.each([[true], [false]])('onayda plan varken taslaktan gelindi mi %s: sayfa "Planım" ile açılır, onaydaki plan "Onay bekleyenler (1)" sekmesindedir', async (taslaktan) => {
     taslakSunucusu(taslaktan ? [satir(TASI, '3.10 → T2')] : []);
     // Onaydaki planın motor ayarı bu testte okunmaz.
     const temel = vi.mocked(api.get).getMockImplementation()!;
@@ -242,11 +242,16 @@ describe('Kokpit', () => {
     );
     if (taslaktan) fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
     else fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
-    await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 });
+    await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 });
+    expect(screen.getByRole('tab', { name: 'Planım' }).getAttribute('aria-selected')).toBe('true');
     const karar = (await screen.findByRole('heading', { name: 'Karar' })).closest('.tc-kart') as HTMLElement;
-    expect(within(karar).getByRole('heading', { name: secili })).toBeTruthy();
-    // Öteki plan listede kalır; seçilebilir.
-    expect(screen.getAllByText('ORN-Eski plan').length).toBeGreaterThan(0);
+    expect(within(karar).getByRole('heading', { name: 'Planı canlıya al' })).toBeTruthy();
+    expect(screen.queryByText('ORN-Eski plan')).toBeNull();
+    // Öteki plan kendi sekmesindedir; orada seçili gelir ve kararı kendi düğmeleriyle verilir.
+    fireEvent.click(screen.getByRole('tab', { name: 'Onay bekleyenler (1)' }));
+    expect((await screen.findAllByText('ORN-Eski plan')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Onayla ve canlıya al' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Planı canlıya al' })).toBeNull();
   });
 
   // Komut başka sayfada çalışmayı değiştirdiyse ortak plan kendiliğinden yeniden dizilir; taslak varken dizilmez (örnek çalışmanın planı bayattır).
@@ -329,8 +334,8 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-mat-kap')).not.toBeNull();
   });
 
-  // 3282-4 a: canlıya alma yetkisi olana düğme Canlıya al'dır; Onay ve canlı bölümü Kokpit'te açılır, tahtaya düğmeyle dönülür.
-  it('Canlıya al Onay ve canlı bölümünü Kokpit\'te açar; onay bekleyen sayısı düğmededir; Planı düzenle tahtaya döner', async () => {
+  // 3282-4 a, 3335 a: canlıya alma yetkisi olana düğme Canlıya al'dır; onay sayfası Kokpit'in yerine açılır (üst çubuk ve tahta yok), düğmeyle dönülür.
+  it('Canlıya al onay sayfasını Kokpit\'in yerine açar; onay bekleyen sayısı düğmede ve sekmededir; Kokpit\'e dön tahtaya döner', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     const senaryo = (id: number, ad: string, durum: string) => ({
       id, ad, aciklama: null, durum, acan: 'ORN-Planlamaci', benim: false, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
@@ -349,17 +354,66 @@ describe('Kokpit', () => {
     const d = screen.getByRole('button', { name: /^Canlıya al/ });
     expect(d.textContent).toBe('Canlıya al1');
     fireEvent.click(d);
-    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(document.querySelector('.tc-pyq-tahta')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Planı düzenle' }));
+    expect(document.querySelector('.tc-pyq-ust')).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Planım', 'Onay bekleyenler (1)', 'Geçmiş']);
+    expect([...document.querySelectorAll('.tc-pyq-onay-adimlar li[aria-current]')].map((e) => e.textContent)).toEqual(['2 Kontrol et', '3 Canlıya al']);
+    // Canlı planla fark okunamadı: yeri değişen ve yeni yerleşen sayı bilinmez, sıfır yazılmaz.
+    expect([...document.querySelectorAll('.tc-pym-pa-ozet dd')].slice(0, 2).map((e) => e.textContent)).toEqual(['—', '—']);
+    // Geçmiş: eski sürümler ve canlıdan sonra yapılanlar; Planım'da bu kutular yoktur.
+    expect(screen.queryByRole('heading', { name: 'Geçmiş planlar' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Geçmiş' }));
+    expect(screen.getByRole('heading', { name: 'Geçmiş planlar' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Canlıdan sonra yapılanlar' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Planım' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kokpit\'e dön' }));
     expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
+    expect(document.querySelector('.tc-pyq-ust')).not.toBeNull();
+    // İlk adım Kokpit'e dönen düğmedir; öteki iki adım düz yazıdır.
+    fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '1 Planla Kokpit' }));
+    expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
+    expect(document.querySelectorAll('.tc-pyq-onay-adimlar button')).toHaveLength(0);
   });
 
-  it('Stüdyo\'dan "Kokpit\'te aç" ile gelinince Onay ve canlı açık başlar; istek bir kez alınır', async () => {
+  // Müdürün işi: çalışma planı kurulmamışken onayda plan varsa sayfa "Onay bekleyenler" ile açılır; plan varken "Planım" ile (yukarıdaki test).
+  it('çalışma planı yokken ve onayda plan varken onay sayfası "Onay bekleyenler" sekmesiyle açılır', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const bekleyen = {
+      id: 1, ad: 'ORN-Onay plani', aciklama: null, durum: 'onayda', acan: 'ORN-Planlamaci', benim: false, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
+      gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true },
+    };
+    render(
+      <MemoryRouter initialEntries={['/plan?sayfa=onay']}><BildirimSaglayici>
+        <Kokpit
+          depo={{ ...DEPO, senaryolar: { canli: null, canliSurum: 3, senaryolar: [bekleyen] } } as unknown as PlanlamaDeposu} calisma={{ ...ornekCalisma(), plan: null }} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
+          yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
+        />
+      </BildirimSaglayici></MemoryRouter>,
+    );
+    expect((await screen.findByRole('tab', { name: 'Onay bekleyenler (1)' }, { timeout: 5000 })).getAttribute('aria-selected')).toBe('true');
+    expect((await screen.findAllByText('ORN-Onay plani')).length).toBeGreaterThan(0);
+  });
+
+  // 3335 a: canlıya alma yetkisi olmayan kişide sayfanın birincil düğmesi Onaya gönder'dir; Canlıya al yoktur.
+  it('canlıya alma yetkisi olmayan kişide onay sayfasının birincil düğmesi Onaya gönder\'dir', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const c = ornekCalisma();
+    ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer } });
+    fireEvent.click(screen.getByRole('button', { name: /^Onaya gönder/ }));
+    expect(await screen.findByRole('heading', { name: 'Planı onaya gönder' }, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).toContain('tc-dugme-birincil');
+    expect(screen.queryByRole('button', { name: 'Canlıya al' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Not (isteğe bağlı)' })).toBeTruthy();
+    expect([...document.querySelectorAll('.tc-pym-pa-ozet dt')].map((e) => e.textContent)).toEqual(['işin yeri değişti', 'yeni yerleşen iş', 'geciken sipariş', 'plansız kalan sipariş']);
+  });
+
+  it('Stüdyo\'dan "Kokpit\'te aç" ile gelinince onay sayfası açık başlar; istek bir kez alınır', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     onayAcIste();
     ac();
-    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     cleanup();
     ac();
     expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
@@ -527,8 +581,8 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 
-  // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.
-  it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; Onay ve canlı açıkken üst düğme ikincildir ve Ayarlar kapalıdır', async () => {
+  // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel açıkken sayfanın birincili üst düğme değildir. Onay sayfası açılınca üst çubuk yoktur.
+  it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; onay sayfası açılınca üst çubuk ve Ayarlar yoktur', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     const c = ornekCalisma();
     const { sec } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
@@ -543,9 +597,8 @@ describe('Kokpit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ayarları kapat' }));
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
     fireEvent.click(ust());
-    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
-    expect(ust().className).not.toContain('tc-dugme-birincil');
-    expect(arac('Ayarlar').hasAttribute('disabled')).toBe(true);
+    expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(document.querySelector('.tc-pyq-ust')).toBeNull();
   });
 
   // 3330: vurgu ve okun çizilmediği durumlar. Hiç adımı planda olmayan kart tahtayı soldurmaz (yer aranırken dolu yerler olduğu gibi görünür);
