@@ -122,7 +122,7 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
   });
   after(async () => { adimStatusuCozucusuKaydet(async () => null); await ortam?.kaldir(); });
 
-  test('O-5 kapanış: OP 20 parçası teslim edilmeden sayılırsa stok maddesi istasyondaki eksiyi ve parçanın yerini söyler; teslimden sonra söylemez', async () => {
+  test('O-5 ve 3340: OP 20 parçası teslim edilmeden sayılmaz, stok eksiye inmez; teslimden sonra sayılır, madde istasyonda kalanı söyler', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
     const [a, b] = [await istasyon(), await istasyon()];
     const { e, op10, op20, s10 } = await emir(ym, hm, a.makine, b.makine);
@@ -130,49 +130,48 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
     await malKabul(hm, '6');
     await teslimEt({ malzemeId: hm, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
     await sayim(e, op10, a.id, '10');
-    await sayim(e, op20, b.id, '10');
-    const [ka, kb] = [await konumu(a.id), await konumu(b.id)];
-    assert.deepEqual([await bakiye(hm, ka, s10, 'serbest'), await bakiye(hm, kb, s10, 'serbest')], [6, -6], 'S1: OP 10 istasyonunda +6, OP 20 istasyonunda -6 statülü');
-    const [kodA, kodB] = await Promise.all([a, b].map(async (x) => (await o().vt.tek<{ kod: string }>('SELECT kod FROM stok_konum WHERE istasyon_id = $1', [x.id]))!.kod));
-    const once = await o().vt.tx((db) => kapanisStokDurumu(db, e));
-    assert.equal(once?.durum, 'eksik');
-    assert.match(once?.ayrinti ?? '', new RegExp(`istasyonda eksi: ${kodB!} UUD-DNM-\\d+ -6 \\(statülü; aynı statüde ${kodA!}: 6\\)`));
+    await assert.rejects(sayim(e, op20, b.id, '10'), /^UygulamaHatasi: Önceki adımın parçası \(UUD-DNM-\d+\) bu istasyonda yetmiyor; 6 eksik\. Parçayı bu istasyona teslim ettirin\.$/);
+    const ka = await konumu(a.id);
+    assert.deepEqual([await bakiye(hm, ka, s10, 'serbest'), await konumu(b.id).catch(() => null)], [6, null], 'OP 20 sayımı yazılmadı: istasyonda eksi yok');
+    const kodB = async () => (await o().vt.tek<{ kod: string }>('SELECT kod FROM stok_konum WHERE istasyon_id = $1', [b.id]))!.kod;
 
-    // Parça OP 20 istasyonuna teslim edilince eksi kapanır; madde eksiden söz etmez. Emrin ürünü OP 20 istasyonunda durduğu sürece
-    // madde istasyonda kalan artıyı söyler (K-2 a, 1386); depoya taşınınca kapanır.
+    // Parça OP 20 istasyonuna teslim edilince sayım yazılır. Emrin ürünü OP 20 istasyonunda durduğu sürece madde istasyonda kalan artıyı
+    // söyler (K-2 a, 1386); depoya taşınınca kapanır.
     await teslimEt({ malzemeId: hm, miktar: '6', statuId: s10, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id } });
+    await sayim(e, op20, b.id, '10');
     const sonra = await o().vt.tx((db) => kapanisStokDurumu(db, e));
     assert.doesNotMatch(sonra?.ayrinti ?? '', /istasyonda eksi/);
-    assert.match(sonra?.ayrinti ?? '', new RegExp(`istasyonda kalan: ${kodB!} UUD-DNM-\\d+ 10 `));
+    assert.match(sonra?.ayrinti ?? '', new RegExp(`istasyonda kalan: ${await kodB()} UUD-DNM-\\d+ 10 `));
   });
 
-  test('O-1 sayım düzeltmesi: karar bekleyen sayımla çevrilen parça geri çevrilince eski kalitesine döner; eksiden çevrilen lotsuz eksi kapanır', async () => {
+  test('O-1 sayım düzeltmesi: karar bekleyen sayımla çevrilen parça geri çevrilince eski kalitesine döner; lotsuz satır kalmaz', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
     const [a, b] = [await istasyon(), await istasyon()];
     const { e, op10, s10 } = await emir(ym, hm, a.makine, b.makine);
     adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
-    await malKabul(hm, '3');
-    await teslimEt({ malzemeId: hm, miktar: '3', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
+    await malKabul(hm, '6');
+    await teslimEt({ malzemeId: hm, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
     const ka = await konumu(a.id);
-    // 10 adet x 0,6: 3 kg lottan, 3 kg eksiden karar bekleyen statüye çevrilir.
+    // 10 adet x 0,6: 6 kg karar bekleyen statüye çevrilir.
     await sayim(e, op10, a.id, '10', 'karar_bekliyor');
-    assert.deepEqual([await bakiye(hm, ka, null, 'serbest'), await bakiye(hm, ka, s10, 'karar_bekliyor')], [-3, 6]);
-    // Düzeltme bütün sayımı geri alır: parça serbest hammaddeye döner, karar bekleyen statüsüz parça kalmaz, eksi kapanır.
+    assert.deepEqual([await bakiye(hm, ka, null, 'serbest'), await bakiye(hm, ka, s10, 'karar_bekliyor')], [0, 6]);
+    // Düzeltme bütün sayımı geri alır: parça serbest hammaddeye döner, karar bekleyen statüsüz parça kalmaz.
     await sayim(e, op10, a.id, '-10', 'karar_bekliyor');
     assert.deepEqual(
       [await bakiye(hm, ka, null, 'serbest'), await bakiye(hm, ka, null, 'karar_bekliyor'), await bakiye(hm, ka, s10, 'karar_bekliyor')],
-      [3, 0, 0], 'geri çevrilen parça ileri hareketin kaynak kalitesine (serbest) döner');
+      [6, 0, 0], 'geri çevrilen parça ileri hareketin kaynak kalitesine (serbest) döner');
     const lotsuz = await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND parti_id IS NULL', [hm, ka]);
-    assert.equal(lotsuz?.n, 0, 'lotsuz eksi ve lotsuz statülü satır kalmaz');
+    assert.equal(lotsuz?.n, 0, 'lotsuz statülü satır kalmaz');
   });
 
-  test('D-5 (1229 a): parti seçilmeden gönderilen miktar lotlu ve eksiden çevrilmiş lotsuz parçaya bölünür; aynı istek aynı kayıtları döner; yetmezse mevcut söylenir', async () => {
+  test('D-5 (1229 a): parti seçilmeden gönderilen miktar statüdeki lotlara en eskiden bölünür; aynı istek aynı kayıtları döner; yetmezse mevcut söylenir', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
     const [a, b] = [await istasyon(), await istasyon()];
     const { e, op10, s10 } = await emir(ym, hm, a.makine, b.makine);
     adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
     await malKabul(hm, '3');
-    await teslimEt({ malzemeId: hm, miktar: '3', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
+    await malKabul(hm, '3');
+    for (let i = 0; i < 2; i += 1) await teslimEt({ malzemeId: hm, miktar: '3', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
     await sayim(e, op10, a.id, '10');
     const govde = { malzemeId: hm, miktar: '6', statuId: s10, uretimEmriId: e, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id }, not: null, kartOnayi: true };
     const fazla = await istek<{ mesaj: string }>('operator', 'POST', '/stok/teslimler/gonder', { ...govde, miktar: '7', kaynakKimligi: randomUUID() });
@@ -182,7 +181,8 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
     const t = await istek<TeslimCevabi>('operator', 'POST', '/stok/teslimler/gonder', { ...govde, kaynakKimligi: kimlik });
     assert.equal(t.durum, 200, JSON.stringify(t.govde));
     const hepsi = [t.govde.teslim, ...(t.govde.ekTeslimler ?? [])];
-    assert.deepEqual(hepsi.map((x) => [x.partiId === null, Number(x.miktar)]), [[false, 3], [true, 3]], 'önce lotlu (en eski), sonra lotsuz');
+    assert.deepEqual(hepsi.map((x) => [x.partiId !== null, Number(x.miktar)]), [[true, 3], [true, 3]], 'iki lota bölünür (en eski önce)');
+    assert.notEqual(hepsi[0]!.partiId, hepsi[1]!.partiId);
     const yine = await istek<TeslimCevabi>('operator', 'POST', '/stok/teslimler/gonder', { ...govde, kaynakKimligi: kimlik });
     assert.deepEqual([yine.govde.teslim, ...(yine.govde.ekTeslimler ?? [])].map((x) => x.id), hepsi.map((x) => x.id));
     for (const x of hepsi) {
@@ -219,7 +219,7 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
     assert.deepEqual([son?.durum, Number(son?.karsilanan)], ['teslim', 8]);
   });
 
-  test('D-1 ve D-7 uyarı: ilk adımda eksik olan hammaddedir; istasyondaki hammadde başka emre ayrılıysa uyarı bunu söyler', async () => {
+  test('D-1, D-7 ve 3340: ilk adımda eksik olan hammaddedir; başka emre ayrılı hammadde söylenir; sayım yazılmaz, stok eksiye inmez', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
     const [a, b] = [await istasyon(), await istasyon()];
     await malKabul(hm, '6');
@@ -228,14 +228,15 @@ describe('stok: uçtan uca deneme düzeltmeleri (gerçek PostgreSQL)', () => {
     const ikinci = await emir(ym, hm, a.makine, b.makine);
     adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? (g.uretimEmriId === ilk.e ? ilk.s10 : ikinci.s10) : null));
     await teslimEt({ malzemeId: hm, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id } });
-    const c = await sayim(ikinci.e, ikinci.op10, a.id, '10');
-    assert.match(c.uyari ?? '', /Hammadde bu istasyonda başka emre ayrılı \(6\); 6 eksiden çevrildi/);
-    assert.doesNotMatch(c.uyari ?? '', /Önceki adımın parçası/);
+    await assert.rejects(sayim(ikinci.e, ikinci.op10, a.id, '10'),
+      /^UygulamaHatasi: Hammadde \(UUD-DNM-\d+\) bu istasyonda başka emre ayrılı \(6\); 6 eksik\. Ayırmayı yetkili kaldırır ya da bu emre hammadde teslim edilmeli\.$/);
+    const ka = await konumu(a.id);
+    assert.deepEqual([await bakiye(hm, ka, null, 'serbest'), await bakiye(hm, ka, ikinci.s10, 'serbest')], [6, 0], 'reddedilen sayım stoğa dokunmaz');
     // İstasyonda hiç hammadde yoksa metin teslimi ister.
     const [ym2, hm2] = [await kart('yarimamul'), await kart('hammadde')];
     const ucuncu = await emir(ym2, hm2, a.makine, b.makine);
     adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym2 && g.opNo === 10 ? ucuncu.s10 : null));
-    const d = await sayim(ucuncu.e, ucuncu.op10, a.id, '5');
-    assert.match(d.uyari ?? '', /Hammadde bu istasyonda yok; 3 eksiden çevrildi\. Hammaddeyi bu istasyona teslim ettirin\./);
+    await assert.rejects(sayim(ucuncu.e, ucuncu.op10, a.id, '5'), /^UygulamaHatasi: Hammadde \(UUD-DNM-\d+\) bu istasyonda yetmiyor; 3 eksik\. Hammaddeyi bu istasyona teslim ettirin\.$/);
+    assert.equal(await bakiye(hm2, ka, null, 'serbest'), 0, 'eksiye inmedi');
   });
 });

@@ -7,6 +7,7 @@ import type { OrnekMalzemeAnahtari } from '../malzemeler/disari.ts';
 import { isEmriKaynagi, yururluktekiRevizyon } from '../rota/disari.ts';
 import { uretimEmriAc } from './is-emri-servis.ts';
 import type { IsEmriGirdisi } from './is-emri-servis.ts';
+import { adimliAyrinti } from './is-emri-servis.ts';
 import { emirBaslat, emirBitir } from './servis.ts';
 import { malzemeninEmirSayisi } from './sorgular.ts';
 
@@ -21,6 +22,17 @@ const EMIRLER: readonly OrnekEmir[] = [
   { urun: 'flans', adet: 50, biten: 1, sonrakiniBaslat: true },
   { urun: 'burc', adet: 30, biten: 0, sonrakiniBaslat: false },
 ];
+
+// 3340: sayım girdiyi istasyonda bulamazsa yazılmaz. Örnek adım bitmeden girdisi istasyona getirilir; getiren stoktur ve kendini kaydeder
+// (stok bu modülü okur; bu modül stoku ithal etseydi modüller döngüye girerdi). Kayıt yoksa adım girdisiz bitemez, yükleme durur.
+export type OrnekGirdiGetirici = (db: Db, g: { uretimEmriId: number; istasyonId: number; kisiId: number }) => Promise<void>;
+let girdiGetirici: OrnekGirdiGetirici | null = null;
+export function ornekGirdiGetiriciKaydet(getirici: OrnekGirdiGetirici | null): void { girdiGetirici = getirici; }
+
+async function calisanAdimaGirdiGetir(db: Db, uretimEmriId: number, kisiId: number): Promise<void> {
+  const istasyonId = (await adimliAyrinti(db, uretimEmriId)).isEmirleri.find((i) => i.durum === 'calisiyor')?.istasyon?.id ?? null;
+  if (istasyonId !== null && girdiGetirici !== null) await girdiGetirici(db, { uretimEmriId, istasyonId, kisiId });
+}
 
 async function kisiAl(db: Db, kullaniciAdi: string): Promise<number> {
   const id = await kisiNoKullaniciAdindan(db, kullaniciAdi);
@@ -52,7 +64,7 @@ async function rotadanIsEmirleri(db: Db, urunId: number, anahtar: OrnekMalzemeAn
 
 export const ornekVeri = ornekVeriTanimi({
   modul: 'uretim-emirleri',
-  gerekir: ['rota', 'kisiler', 'istasyonlar'],
+  gerekir: ['rota', 'kisiler', 'istasyonlar', 'stok'],
   // Örnek mamullerden birinin emri varsa yüklüdür.
   yukluMu: async (db) => {
     for (const e of EMIRLER) {
@@ -74,6 +86,7 @@ export const ornekVeri = ornekVeriTanimi({
       const biten = Math.min(e.biten, isEmirleri.length);
       for (let i = 0; i < biten; i += 1) {
         await emirBaslat(db, operator, uretimEmriId);
+        await calisanAdimaGirdiGetir(db, uretimEmriId, operator);
         await emirBitir(db, operator, uretimEmriId, e.adet);
       }
       if (e.sonrakiniBaslat && biten < isEmirleri.length) await emirBaslat(db, operator, uretimEmriId);

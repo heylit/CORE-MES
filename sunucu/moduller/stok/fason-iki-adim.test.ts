@@ -398,10 +398,12 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       assert.equal(tamam.durum, 200, JSON.stringify(tamam.govde));
       const b3 = await terminal(id, 'baslat');
       assert.equal(b3.durum, 200, JSON.stringify(b3.govde));
-      assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 3 })).durum, 200);
-      // 562 1 b: karantinadaki parça teslimsiz düşülmez; GKK kararına kadar karantinada durur, son adım istasyonunda eksiye düşer.
+      // 562 1 b, 3340: karantinadaki parça teslimsiz düşülmez; GKK kararına kadar karantinada durur, son adım istasyonunda sayım yazılmaz.
+      const red = await terminal(id, 'sayim', { tur: 'saglam', adet: 3 });
+      assert.equal(red.durum, 400, JSON.stringify(red.govde));
+      assert.match((red.govde as { mesaj?: string }).mesaj ?? '', /^Önceki adımın parçası \(.+\) bu istasyonda yetmiyor; 7\.5 eksik\./);
       const k3 = await konum(m3);
-      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(k3, s20)], [10, -7.5], 'son adım karantinaya dokunmaz, istasyonda eksi düşer');
+      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(k3, s20)], [10, 0], 'son adım karantinaya dokunmaz, istasyonda eksi yazılmaz');
     } finally {
       adimStatusuCozucusuKaydet(async () => null);
       adimCiktisiCozucusuKaydet(async () => null);

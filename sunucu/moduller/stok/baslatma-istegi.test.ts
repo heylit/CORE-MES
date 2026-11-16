@@ -14,7 +14,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimKalanIhtiyaci, baslatmaEksikleri, tasinanMahsubu } from './kurallar.ts';
-import { adimStatusuCozucusuKaydet, uretimSayimiYansit } from './servis.ts';
+import { adimStatusuCozucusuKaydet, istasyonKonumuBul, uretimSayimiYansit } from './servis.ts';
 
 // 2522 a: elle sarf edilen taşınan statü zincirinin dışında kalır.
 // B-2501-3 (2493-10): adım başlarken açılan depo isteği emrin kalan ihtiyacıdır: kopyanın fire payı eklenir, emre verilmiş sarf düşülür.
@@ -119,6 +119,12 @@ describe('stok: adım başı depo isteğinin miktarı (gerçek PostgreSQL)', () 
     const c = await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId, miktar }] });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
   };
+  // 3340: sayım girdiyi yalnız istasyondan düşer, eksiye yazmaz; hammadde önce istasyona taşınır.
+  const istasyonaTasi = async (malzemeId: number, istasyonId: number, miktar: string): Promise<void> => {
+    const hedefKonumId = await o().vt.tx((db) => istasyonKonumuBul(db, istasyonId, 'istasyonId'));
+    const t = await istek('depo', 'POST', '/stok/tasima', { malzemeId, kaynakKonumId: await kabulKonumu(), hedefKonumId, miktar });
+    assert.equal(t.durum, 200, JSON.stringify(t.govde));
+  };
   const istekMiktari = async (e: number, malzemeId: number): Promise<number | null> => {
     const r = await o().vt.tek<{ m: string }>('SELECT miktar::text AS m FROM stok_malzeme_istegi WHERE uretim_emri_id = $1 AND malzeme_id = $2 ORDER BY id DESC LIMIT 1', [e, malzemeId]);
     return r === null ? null : Number(r.m);
@@ -179,6 +185,7 @@ describe('stok: adım başı depo isteğinin miktarı (gerçek PostgreSQL)', () 
     await malKabul(hm, '10');
     const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: hm, konumId: await kabulKonumu(), miktar: '4', cikisNedeni: 'uretime_sarf', uretimEmriId: e });
     assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+    await istasyonaTasi(hm, a.id, '6');
     // 10 adet x 1 kg: 4 kg elle verildi; zincire 6 kg girer. Parça parça sayımın birikimi saf testtedir (sayım satırı uretim-emirlerinindir).
     await sayim(e, op10!, a.id, '10');
     assert.equal(await statuBakiyesi(hm, s10), 6, 'OP 10 statüsüne elle verilmeyen 6 kg çevrildi');

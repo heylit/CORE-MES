@@ -174,7 +174,6 @@ export async function kilitliOlan(db: Db, a: BakiyeAnahtari, okunan: string, sec
   const alinan = azalan > 0n ? secilen - azalan : secilen;
   return alinan > 0n ? alinan : 0n;
 }
-export const eksiUyarisi = (eksik: bigint): string => `Stok bu sırada başka kayıtla düştü; ${bindenMetin(eksik)} eksiye yazıldı, sonraki giriş tamamlar.`;
 export const hareket = (h: Partial<HareketYeni> & Pick<HareketYeni, 'tur' | 'malzemeId' | 'miktar' | 'kisiId'>): HareketYeni => ({
   partiId: null, partiSecimi: null, kaynakKonumId: null, hedefKonumId: null, onayliEksi: false, girisKaynagi: null, cikisNedeni: null,
   uretimEmriId: null, geriAlinanId: null, aciklama: null, kaynakStatuId: null, hedefStatuId: null, kaynakKaliteDurumu: null, hedefKaliteDurumu: null, isEmriId: null, ...h,

@@ -534,6 +534,7 @@ export { hurdaSayimDinle, kaliteKarariDinle, saglamSayimDinle } from './sayim-ol
 // Başlatma denetimi (kart #1289, karar 110 b): stok, adımın girdisi istasyonda yoksa eksiği istek olarak açar ve uyarı döner; denetçisini
 // kendisi kaydeder.
 export { baslatmaDenetle } from './baslatma-denetimi.ts';
+export { ornekGirdiGetiriciKaydet } from './ornek-veri.ts';
 export type { BaslatmaDenetimi, BaslatmaKarti, BaslatmaOlayi } from './baslatma-denetimi.ts';
 export type {
   HurdaSayimDinleyicisi, HurdaSayimOlayi, KaliteKarariDinleyicisi, KaliteKarariOlayi, SaglamSayimDinleyicisi, SaglamSayimOlayi,

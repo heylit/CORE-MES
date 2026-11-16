@@ -5,7 +5,7 @@ import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM, baslatmaKartiEngeli, kartAdediOnerisi, kartAdediEngeli, KART_ADEDI_FAZLA, KARTSIZ_BASLATMA, BASLATMA_KARTI_YOK, BASLATMA_KARTI_KAPALI, BASLATMA_KARTI_BASKA,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
-  baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
+  baslatmaEksikleri, buradakiIstasyon, eksikGirdiEngeli, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
@@ -965,13 +965,13 @@ test('1214 geri çevirme kalitesi: en yeni ileri çevirmeden, önceden geri çev
   assert.deepEqual(geriCevirmeKaliteleri([], 0n, 1000n, 'serbest'), [{ kalite: 'serbest', miktar: 1000n }]);
 });
 
-test('1214 eksiden çevirme uyarısı: ilk adımda hammadde, sonra önceki adımın parçası; başka emre ayrılı girdi söylenir', () => {
-  assert.equal(eksidenUyari({ ilkAdim: true, eksik: 3000n, baskaEmreAyrili: 0n, fiil: 'çevrildi' }),
-    'Hammadde bu istasyonda yok; 3 eksiden çevrildi. Hammaddeyi bu istasyona teslim ettirin.');
-  assert.equal(eksidenUyari({ ilkAdim: false, eksik: 5400n, baskaEmreAyrili: 0n, fiil: 'düşüldü' }),
-    'Önceki adımın parçası bu istasyonda yok; 5.4 eksiye düşüldü. Parçayı bu istasyona teslim ettirin.');
-  assert.equal(eksidenUyari({ ilkAdim: true, eksik: 6000n, baskaEmreAyrili: 6000n, fiil: 'çevrildi' }),
-    'Hammadde bu istasyonda başka emre ayrılı (6); 6 eksiden çevrildi. Rezerveyi müdür kaldırır ya da bu emir için hammadde teslim ettirin.');
+test('3340 eksik girdi engeli: ilk adımda hammadde, sonra önceki adımın parçası; başka emre ayrılı girdi söylenir; sayım yazılmaz', () => {
+  assert.equal(eksikGirdiEngeli({ ilkAdim: true, kod: 'ORN-HM-01', eksik: 3000n, baskaEmreAyrili: 0n }),
+    'Hammadde (ORN-HM-01) bu istasyonda yetmiyor; 3 eksik. Hammaddeyi bu istasyona teslim ettirin.');
+  assert.equal(eksikGirdiEngeli({ ilkAdim: false, kod: 'ORN-P-01', eksik: 5400n, baskaEmreAyrili: 0n }),
+    'Önceki adımın parçası (ORN-P-01) bu istasyonda yetmiyor; 5.4 eksik. Parçayı bu istasyona teslim ettirin.');
+  assert.equal(eksikGirdiEngeli({ ilkAdim: true, kod: 'ORN-HM-01', eksik: 6000n, baskaEmreAyrili: 6000n }),
+    'Hammadde (ORN-HM-01) bu istasyonda başka emre ayrılı (6); 6 eksik. Ayırmayı yetkili kaldırır ya da bu emre hammadde teslim edilmeli.');
   test('1246 gkkGirisKonumuEngeli ve girisKontroluDuzeltmeEngeli: GKK lotu yalnız karantinaya girer; kararı verilmiş satırın belgesi düzeltilmez', () => {
     assert.equal(gkkGirisKonumuEngeli('karantina'), null);
     assert.equal(gkkGirisKonumuEngeli('kabul'), GKK_GIRIS_KARANTINA);

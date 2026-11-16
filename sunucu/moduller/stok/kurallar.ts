@@ -1657,16 +1657,16 @@ export function geriCevirmeKaliteleri(
   return sonuc;
 }
 
-// Eksiden çevirme ve düşüm uyarısı (1214 D-1, D-7): ilk adımda eksik olan hammaddedir, sonraki adımda önceki adımın parçası. İstasyondaki
-// girdi başka emre ayrılı olduğu için kullanılamadıysa (rezerve konumdan bağımsızdır) bu söylenir; yoksa teslim istenir. Miktarlar binde.
-export function eksidenUyari(g: { ilkAdim: boolean; eksik: bigint; baskaEmreAyrili: bigint; fiil: 'çevrildi' | 'düşüldü' }): string {
+// Üretim eksiye yazmaz (kart 3340): adımın girdisi istasyonda yetmiyorsa sayım yazılmaz. İlk adımda eksik olan hammaddedir, sonraki
+// adımda önceki adımın parçası (1214 D-1). İstasyondaki girdi başka emre ayrılı olduğu için kullanılamadıysa (rezerve konumdan bağımsızdır)
+// bu söylenir (1214 D-7); yoksa teslim istenir. Miktarlar binde.
+export function eksikGirdiEngeli(g: { ilkAdim: boolean; kod: string; eksik: bigint; baskaEmreAyrili: bigint }): string {
   const ne = g.ilkAdim ? 'Hammadde' : 'Önceki adımın parçası';
   const neyi = g.ilkAdim ? 'Hammaddeyi' : 'Parçayı';
-  const eksiden = g.fiil === 'çevrildi' ? 'eksiden çevrildi' : 'eksiye düşüldü';
   if (g.baskaEmreAyrili > 0n) {
-    return `${ne} bu istasyonda başka emre ayrılı (${bindenMetin(g.baskaEmreAyrili)}); ${bindenMetin(g.eksik)} ${eksiden}. Rezerveyi müdür kaldırır ya da bu emir için ${ne.toLocaleLowerCase('tr')} teslim ettirin.`;
+    return `${ne} (${g.kod}) bu istasyonda başka emre ayrılı (${bindenMetin(g.baskaEmreAyrili)}); ${bindenMetin(g.eksik)} eksik. Ayırmayı yetkili kaldırır ya da bu emre ${ne.toLocaleLowerCase('tr')} teslim edilmeli.`;
   }
-  return `${ne} bu istasyonda yok; ${bindenMetin(g.eksik)} ${eksiden}. ${neyi} bu istasyona teslim ettirin.`;
+  return `${ne} (${g.kod}) bu istasyonda yetmiyor; ${bindenMetin(g.eksik)} eksik. ${neyi} bu istasyona teslim ettirin.`;
 }
 
 // ---- Seri liste (1915) ------------------------------------------------------------------------------------------

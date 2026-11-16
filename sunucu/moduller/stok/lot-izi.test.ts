@@ -13,6 +13,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import * as sorgular from './sorgular.ts';
 import { uretimSayimiYansit } from './servis.ts';
 import { refakatKartiKapsami, urunSevkiYansit } from './disari.ts';
 import type { UrunSevkSatiri } from '../sevkiyat/disari.ts';
@@ -104,7 +105,7 @@ describe('stok: lot izi (gerçek PostgreSQL)', () => {
     assert.deepEqual([bos.kartlar, bos.ciktilar, bos.sevkCikislari], [[], [], []], 'kartsız lotta kart, çıktı ve sevk yok');
   });
 
-  test('lotun kartları, kartla üretilen partiler, eldeki ve sevk çıkışı; lota birleşerek bağlanan istisna kartı da lotun kartıdır', async () => {
+  test('lotun kartları, kartla üretilen partiler, eldeki ve sevk çıkışı; lota birleşerek bağlanan istisna kartı da lotun kartıdır; malzemesiz sayım kart açmaz', async () => {
     const [mm, hm] = [await kart('mamul'), await kart('hammadde')];
     const [a, b] = [await istasyon(), await istasyon()];
     const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`LT-${sira}`]))!.id;
@@ -136,8 +137,11 @@ describe('stok: lot izi (gerçek PostgreSQL)', () => {
     await saglam(e, a.id, '3', r.id);
     const urun = (await o().vt.tek<{ id: number; lot_no: string }>('SELECT id, lot_no FROM stok_parti WHERE malzeme_id = $1 AND refakat_partisi_id = $2', [mm, r.id]))!;
 
-    // B'de malzeme yok: kartsız sayım istisna kartına lotsuz düşer; emrin aynı lotlu kartıyla bağlanınca ona birleşir (lotu almaz).
-    await saglam(e2, b.id, '1', null);
+    // 3340: B'de malzeme yok: kartsız sayım yazılmaz, istisna kartı açılmaz. Canlıda önceden açılmış istisna kartı emrin aynı lotlu
+    // kartıyla bağlanınca ona birleşir (lotu almaz).
+    await assert.rejects(saglam(e2, b.id, '1', null), /^UygulamaHatasi: Hammadde \(LIZ-DNM-\d+\) bu istasyonda yetmiyor; 1 eksik\./);
+    assert.equal((await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_refakat_partisi WHERE uretim_emri_id = $1', [e2]))?.n, 0, 'istisna kartı açılmadı');
+    await o().vt.tx((db) => sorgular.istisnaKartiAc(db, { uretimEmriId: e2, malzemeId: hm, kisiId: operator }));
     const istisna = (await o().vt.tek<{ id: number; surum: number }>('SELECT id, surum FROM stok_refakat_partisi WHERE uretim_emri_id = $1 AND parti_id IS NULL', [e2]))!;
     const r2 = (await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e2, lotKodu: `LOT:${lot.lot_no}` })).govde.refakat;
     const bag = await istek('depo', 'POST', `/stok/refakat-partileri/${istisna.id}/lota-bagla`, { kod: r2.qr, surum: istisna.surum });
@@ -152,9 +156,7 @@ describe('stok: lot izi (gerçek PostgreSQL)', () => {
 
     const l = await iz(lot.id);
     assert.deepEqual(l.kartlar.map((k) => k.id), [r.id, istisna.id, r2.id].sort((x, y) => x - y), 'lotu taşıyan kartlar ve onlara birleşen istisna kartı');
-    const istisnaCiktisi = (await o().vt.tek<{ id: number }>('SELECT id FROM stok_parti WHERE refakat_partisi_id = $1', [istisna.id]))!.id;
-    assert.deepEqual(l.ciktilar.map((c) => [c.partiId, c.refakatPartisiId, c.eldeki]), [[urun.id, r.id, '1'], [istisnaCiktisi, istisna.id, '1']],
-      'istisna kartıyla sayılan parça da lotun çıktısıdır');
+    assert.deepEqual(l.ciktilar.map((c) => [c.partiId, c.refakatPartisiId, c.eldeki]), [[urun.id, r.id, '1']], 'kartla sayılan parça lotun çıktısıdır');
     assert.deepEqual(l.sevkCikislari.map((x) => [x.partiId, x.lotNo, x.miktar, x.malzemeId]), [[urun.id, urun.lot_no, '2', mm]]);
     assert.ok([e, e2].every((x) => l.emirler.includes(x)), 'kartların emirleri lotun emirlerindedir');
 

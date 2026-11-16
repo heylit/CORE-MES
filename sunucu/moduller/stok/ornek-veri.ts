@@ -2,6 +2,7 @@
 // Kartlar malzemeler örnek verisinindir, istasyonlar istasyonlar örnek verisinindir; burada yalnız stok kayıtları açılır
 // ve hepsi servis komutlarıyla yazılır (parti, bakiye ve istek kuralları gerçek yazımdaki gibi işler).
 import type { Db } from '#cekirdek/db.ts';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { MalzemeIstegi } from '#paylasilan/sozlesme/stok.ts';
@@ -9,6 +10,8 @@ import { aktifIstasyonlar } from '../istasyonlar/disari.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import type { OrnekMalzemeAnahtari } from '../malzemeler/disari.ts';
+import { ornekGirdiGetiriciKaydet } from '../uretim-emirleri/disari.ts';
+import { binde, bindenMetin } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -33,6 +36,39 @@ async function kart(db: Db, anahtar: OrnekMalzemeAnahtari): Promise<number> {
   if (no === null) throw new Error(`Stok örnek verisi "${anahtar}" örnek kartını bulamadı (malzemeler örnek verisi önce yüklenir).`);
   return no;
 }
+
+// 3340: sayım girdiyi istasyonda bulamazsa yazılmaz. Üretim emirleri örneği adımı bitirmeden önce girdiyi buradan ister: hammadde
+// depodaki yerinden teslimle gelir (depocu gönderir, operatör alır), önceki adımın parçası bulunduğu istasyondan alınır.
+ornekGirdiGetiriciKaydet(async (db, g) => {
+  const depocu = await kullanici(db, DEPOCU);
+  const alan = await kullaniciYukle(db, g.kisiId);
+  if (!alan) throw new Error('Stok örnek verisi sayan operatörü bulamadı.');
+  const is = (await servis.isMalzemeleri(db, alan, g.istasyonId)).isler.find((x) => x.uretimEmriId === g.uretimEmriId && x.calisiyor);
+  for (const m of is?.malzemeler ?? []) {
+    const eksik = binde(m.gereken) - binde(m.istasyonda);
+    if (eksik <= 0n) continue;
+    const kimlik = `ornek-girdi-${String(g.uretimEmriId)}-${String(is!.opNo)}-${String(m.malzemeId)}`;
+    if (m.tasinan) {
+      const yer = m.yerler.find((y) => y.istasyonId !== null && y.istasyonId !== g.istasyonId && binde(y.miktar) > 0n);
+      if (yer) await servis.isMalzemesiIste(db, alan, { istasyonId: g.istasyonId, uretimEmriId: g.uretimEmriId, opNo: is!.opNo, malzemeId: m.malzemeId, kaynakKonumId: yer.konumId, kaynakKimligi: kimlik, kartOnayi: true });
+      continue;
+    }
+    const yer = m.yerler.find((y) => y.istasyonId === null && binde(y.miktar) >= eksik);
+    if (!yer) continue;
+    const gonder = (refakatPartisiId: number | null) => servis.teslimGonder(db, depocu, {
+      malzemeId: m.malzemeId, miktar: bindenMetin(eksik), statuId: null, kaynak: { konumId: yer.konumId }, hedef: { istasyonId: g.istasyonId }, uretimEmriId: g.uretimEmriId,
+      istekId: m.istek?.id ?? null, not: 'Örnek: iş malzemesi', kaynakKimligi: refakatPartisiId === null ? kimlik : `${kimlik}-kart`, kartOnayi: true, refakatPartisiId,
+    });
+    // 3337: emre giden lotlu hammadde kartla gider; depocu ekrandaki gibi lotu refakat kartına dönüştürüp kartla yeniden gönderir.
+    const c = await gonder(null).catch(async (h: unknown) => {
+      const kartsiz = h instanceof UygulamaHatasi ? (h.ayrinti as { kartsiz?: { uretimEmriId: number; partiId: number } } | undefined)?.kartsiz : undefined;
+      if (!kartsiz) throw h;
+      const { refakat } = await servis.refakatPartisiAc(db, depocu.id, { uretimEmriId: kartsiz.uretimEmriId, partiId: kartsiz.partiId });
+      return gonder(refakat.id);
+    });
+    for (const t of [c.teslim, ...(c.ekTeslimler ?? [])]) await servis.teslimAl(db, alan, t.id, { surum: t.surum, alinan: t.miktar });
+  }
+});
 
 export const ornekVeri = ornekVeriTanimi({
   modul: 'stok',
