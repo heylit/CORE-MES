@@ -18,10 +18,10 @@ function teklifCalismaGunu(D, gun) {
 }
 /* adimAdetleri (1527): adımın işleyeceği adet, ürün rotasının sırasıyla (dal adımı çarpanla, 1257 a; sunucu uretim-emirleri'nin kuralıyla
    verir). Gerçek emirdeki gibi yalnız sipariş adedinden farklı olan D.opAdet'e yazılır; dizi rotayla aynı uzunlukta değilse yok sayılır. */
-function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri) {
+function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri, yon) {
   s.D.siparisler = s.D.siparisler.filter(x => x.id !== id);
   applyEvent(s, { tip: 'acil', urun, adet, termin, oncelik, gelir: null });
-  s.D.siparisler[s.D.siparisler.length - 1].id = id;
+  const yeni = s.D.siparisler[s.D.siparisler.length - 1]; yeni.id = id; if (yon) yeni.yon = yon;
   const y = Object.assign({}, s.D.opAdet || {});
   for (const k of Object.keys(y)) if (k.startsWith(id + '.')) delete y[k];
   const u = (s.D.urunler || []).find(x => x.id === urun), rota = (u && u.rota) || [];
@@ -50,7 +50,8 @@ function teklifDene(st0, taban0, istek) {
   const tabanE = taban ? evaluate(taban, s, null, false) : null;
   const farkli = istek.termin != null;
   const sonGun = HDAYS * 24 - 1;
-  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri);
+  /* Arkaya eklemede termin ufkun sonudur, gerçek termin değil: planın yönü geriyse (3282 1c) kalem ufkun sonuna itilirdi; yönü ileridir. */
+  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri, farkli ? null : 'ileri');
   const satinalma = {}; const eksik = {};
   for (const k of istek.kalemler) { satinalma[k.id] = []; eksik[k.id] = []; }
   { const cx0 = compile(s);
