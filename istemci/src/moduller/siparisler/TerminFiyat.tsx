@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type { MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
+import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { AdetTablosu } from './AdetTablosu.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import {
@@ -11,6 +11,7 @@ import {
 } from './gorunum.ts';
 import { PlanSeridi } from './PlanSeridi.tsx';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
+import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
 type TerminTuru = 'plan' | 'farkli';
@@ -123,6 +124,8 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
     hatada: (hata) => eskiyseYenile(istemci, anahtarlar.teklif(teklif.id), hata),
   });
   const d = form.degerler;
+  const kok = useRef<HTMLFormElement>(null);
+  useHataOdagi(form.hataNo, kok);
   const istenen = d.terminTuru === 'farkli' && d.istenenTermin !== '' ? d.istenenTermin : null;
   const sorgu = { gecerlilik: d.gecerlilik, istenenTermin: istenen };
 
@@ -180,6 +183,9 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   // 2661 a, 2669 b: gizli oranlı ayda maliyet "Gizli"; fiyat önerilmez, genel gider hariç maliyet de gösterilmez.
   const gizli = c?.genelGiderGizli === true;
   const tumMaliyet = c !== undefined && c.kalemler.every((k) => k.plansiz || k.toplamMaliyet !== null) && !c.kalemler.some((k) => k.plansiz);
+  // Kâr yalnız maliyeti bilinen kaleme eklenir; bilinmeyen kalem sessiz kalmasın diye adıyla yazılır (gizli ayda öneri hiç yoktur).
+  const karsiz = c === undefined || gizli ? [] : c.kalemler.filter((k) => !k.plansiz && k.birimMaliyet === null);
+  const karsizEksik = [...new Set(karsiz.flatMap((k) => k.eksikVeri))];
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
 
@@ -190,6 +196,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           <strong>{s.tanim}</strong>
           <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
           {k?.plansiz && <Rozet ton="uyari">Plansız: elle fiyat</Rozet>}
+          {k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <Rozet ton="uyari">Maliyet yok: kâr eklenmez, elle fiyat</Rozet>}
         </span>
       ),
     },
@@ -217,8 +224,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           ? 'Teklif planın arkasına denendi; termin ve maliyet aynı yerleşimden. Kârı seçin, fiyat önerilir.'
           : ilk ? 'Her kaleme birim fiyat girin; toplamlar kayıttan sonra sunucudan gelir.' : 'Önceki sürümün değerleri dolduruldu; değiştirip yeni sürüm olarak verin.'}
       </p>
-      <form className="tc-sp-form" onSubmit={form.gonder} noValidate aria-label="Sürüm formu">
-        {form.genelHata !== null && <p className="tc-sp-hata" role="alert">{form.eskiSurum ? 'Kayıt başkası tarafından değişti, yeniden yükleyin.' : form.genelHata}</p>}
+      <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate aria-label="Sürüm formu">
 
         {terminDener && kartli && (
           <section className="tc-sp-tf" aria-label="Termin">
@@ -260,6 +266,12 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               </div>
               <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
             </div>
+            {karsiz.length > 0 && (
+              <p className="tc-sp-bildirim" role="status">
+                <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
+                {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
+              </p>
+            )}
             <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
               <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
               <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
@@ -300,6 +312,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           {!(terminDener && kartli) && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
         </div>
         <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />
+        <GonderimHatasi form={form} etiket={(yol) => { const i = /^fiyatlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : (teklif.satirlar[Number(i)]?.tanim ?? null); }} />
         <div className="tc-sp-alt-cubuk">
           {planli && <Dugme simge="file" disabled={deneniyor} onClick={() => { void taslakAc(); }}>Deneme taslağı kaydet</Dugme>}
           <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor} disabled={deneniyor}>{ilk ? 'Teklifi ver' : `Sürüm ${(teklif.sonSurumNo ?? 0) + 1} olarak ver`}</Dugme>
