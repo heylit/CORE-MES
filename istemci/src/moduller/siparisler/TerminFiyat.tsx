@@ -183,6 +183,9 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   // 2661 a, 2669 b: gizli oranlı ayda maliyet "Gizli"; fiyat önerilmez, genel gider hariç maliyet de gösterilmez.
   const gizli = c?.genelGiderGizli === true;
   const tumMaliyet = c !== undefined && c.kalemler.every((k) => k.plansiz || k.toplamMaliyet !== null) && !c.kalemler.some((k) => k.plansiz);
+  // Kâr yalnız maliyeti bilinen kaleme eklenir; bilinmeyen kalem sessiz kalmasın diye adıyla yazılır (gizli ayda öneri hiç yoktur).
+  const karsiz = c === undefined || gizli ? [] : c.kalemler.filter((k) => !k.plansiz && k.birimMaliyet === null);
+  const karsizEksik = [...new Set(karsiz.flatMap((k) => k.eksikVeri))];
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
 
@@ -193,6 +196,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           <strong>{s.tanim}</strong>
           <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
           {k?.plansiz && <Rozet ton="uyari">Plansız: elle fiyat</Rozet>}
+          {k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <Rozet ton="uyari">Maliyet yok: kâr eklenmez, elle fiyat</Rozet>}
         </span>
       ),
     },
@@ -262,6 +266,12 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               </div>
               <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
             </div>
+            {karsiz.length > 0 && (
+              <p className="tc-sp-bildirim" role="status">
+                <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
+                {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
+              </p>
+            )}
             <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
               <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
               <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>

@@ -1207,6 +1207,20 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(within(adetTablosu).getAllByText('Gizli').length).toBeGreaterThan(0);
   });
 
+  it('3301: maliyeti hesaplanamayan kalemde kâr fiyata eklenmez ve bu, kalemde ve kâr seçiminin altında eksiğiyle yazılır', async () => {
+    const eksik = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, eksikVeri: ['T1 saat ücreti'] }],
+    } satisfies TerminDenemesiCevabi;
+    kur(SATISCI, () => eksik);
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('Kâr 1 kalemin fiyatına eklenmedi')).toBeTruthy();
+    expect(screen.getByText(/eksik: T1 saat ücreti/)).toBeTruthy();
+    expect(screen.getByText('Maliyet yok: kâr eklenmez, elle fiyat')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '%40' }));
+    expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+  });
+
   it('motor bağlı değilse elle: termin tarihi ve fiyat elle girilir, plan taslağı gitmez', async () => {
     const istekler = kur(SATISCI, () => ({ ...DENEME, durum: 'cozucu-yok', planSurumu: null, planTermini: null, termin: null, terminGun: null, maliyetToplami: null, kalemler: [] }));
     ac('/siparisler/teklifler/21');
