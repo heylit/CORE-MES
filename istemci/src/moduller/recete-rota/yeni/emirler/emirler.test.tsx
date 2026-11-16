@@ -703,6 +703,25 @@ describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', (
     expect(within(b).queryByText(/kalem eksik/)).toBeNull();
   });
 
+  // Eksik uyarısındaki düğme talebi açanın Taleplerim sayfasına gider, satın alma merkezine değil; eksik miktarla dolu taslak taşır.
+  it('"Satın alma talebi aç" Taleplerim yeni talebe eksikle dolu taslakla gider (izinli)', async () => {
+    const talepAcan = { ...YONETICI, islemler: [...YONETICI.islemler, 'satin-alma.talep-ac' as const] };
+    sunucuKur(talepAcan, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(true, '100') } });
+    rrAc();
+    const b = await emirAc();
+    fireEvent.click(await within(b).findByRole('button', { name: 'Satın alma talebi aç' }));
+    expect(await screen.findByText('Gidilen adres: /taleplerim?bolum=yeni')).toBeTruthy();
+    expect(screen.getByText(new RegExp(`^Taslak HM-0001 100 \\d{4}-\\d{2}-\\d{2} ${ornekDurum().emirler!.orders[0]!.no}$`))).toBeTruthy();
+  });
+
+  it('talep açma yetkisi olmayan düğmeyi görmez (reddedilen)', async () => {
+    sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(true, '100') } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/1 kalem eksik/);
+    expect(within(b).queryByRole('button', { name: 'Satın alma talebi aç' })).toBeNull();
+  });
+
   it('okuma reddedilirse ileti çıkar, tablo uydurulmaz', async () => {
     sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Emir okuma yetkiniz yok.' }) } });
     rrAc();

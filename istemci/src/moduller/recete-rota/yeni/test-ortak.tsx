@@ -116,6 +116,7 @@ export function rrAc(adres = '/recete-rota') {
             <Route path="/recete-rota/bilinmeyen" element={<ReceteRotaYeni />} />
             {/* Emrin ana yeri Üretim Emirleri'dir (3039): oraya giden yönlendirme adresiyle görünür. */}
             <Route path="/uretim-emirleri/*" element={<GidilenAdres />} />
+            <Route path="/taleplerim" element={<GidilenAdres />} />
             <Route path="*" element={<p>Başka sayfa</p>} />
           </Routes>
         </MemoryRouter>
@@ -146,7 +147,13 @@ function ueSar(adres: string, icerik: ReactNode) {
 
 function GidilenAdres() {
   const yer = useLocation();
-  return <p>Gidilen adres: {yer.pathname}{yer.search}</p>;
+  const taslak = (yer.state as { taslak?: readonly { malzeme: { kod: string }; miktar: number; gerekenTarih: string; emirler: string[] }[] } | null)?.taslak;
+  return (
+    <>
+      <p>Gidilen adres: {yer.pathname}{yer.search}</p>
+      {taslak?.map((t) => <p key={t.malzeme.kod}>Taslak {t.malzeme.kod} {String(t.miktar)} {t.gerekenTarih} {t.emirler.join(',')}</p>)}
+    </>
+  );
 }
 
 export function yeniEmirAc(ilkUrun: string | null = null) {

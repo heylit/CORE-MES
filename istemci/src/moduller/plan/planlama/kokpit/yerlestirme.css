@@ -97,7 +97,8 @@
 
 /* 3318: 2. bölüm tablo. Satır bir operasyondur; tezgâh ve başlangıç satırda girilir. Dar ekranda satır karta döner. */
 .tc-pyq-bolum-sag { margin-left: auto; text-transform: none; letter-spacing: 0; }
-.tc-pyq-optablo { grid-column: 1 / -1; width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-pyq-optablo-kap { grid-column: 1 / -1; min-width: 0; }
+.tc-pyq-optablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
 .tc-pyq-optablo th { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-align: left; text-transform: uppercase; white-space: nowrap; }
 .tc-pyq-optablo td { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); vertical-align: middle; }
 .tc-pyq-optablo tr[data-secili] > td { background: color-mix(in oklab, var(--hazard) 14%, transparent); }
@@ -117,7 +118,7 @@
 /* Tabloda emrin adı, yönü ve tablo alt alta tam genişliktedir (akışta ad solda, kutular sağda). */
 .tc-pyq-emir[data-gorunum="tablo"] { grid-template-columns: minmax(0, 1fr); }
 .tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-emir-ad small { display: inline; margin-left: var(--b-2); }
-.tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-optablo { order: 1; }
+.tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-optablo-kap { order: 1; }
 .tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-yerler { order: 2; }
 .tc-pyq-optablo td[data-ad="Tezgâh"] { min-width: calc(var(--dokunma) * 3); }
 @media (max-width: 899px) {
@@ -139,3 +140,45 @@
 @media (max-width: 599px) {
   .tc-pyq-optablo td[data-ad="Başlangıç"] { grid-column: 1 / -1; }
 }
+
+/* Odaklı tezgâh paneli (3318 a): geniş ekranda tablonun yanında, dar ekranda seçili satırın altında. Yanda dururken tablo daralır:
+   sıra ve süre sütunları gizlenir. */
+.tc-pyq-optablo-kap[data-yanda] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--b-6) * 9)); gap: var(--b-3); align-items: start; }
+.tc-pyq-optablo-kap[data-yanda] .tc-pyq-optablo tr:not(.tc-pyq-optablo-alt) > :is(th, td):is(:nth-child(1), :nth-child(3)) { display: none; }
+.tc-pyq-odak { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); font-size: var(--yazi-s); }
+.tc-pyq-optablo-odak .tc-pyq-odak { width: 100%; }
+.tc-pyq-odak-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-pyq-odak-eksen { position: relative; display: flex; justify-content: space-between; margin-left: calc(var(--b-6) * 1.5); color: var(--muted); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-pyq-odak-eksen i { position: absolute; left: var(--x); font-style: normal; transform: translateX(-50%); }
+.tc-pyq-odak-eksen span { visibility: hidden; }
+.tc-pyq-odak-satirlar { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-odak-satirlar li { display: grid; grid-template-columns: calc(var(--b-6) * 1.5) minmax(0, 1fr); align-items: center; }
+.tc-pyq-odak-satirlar li[data-uygun="hayir"] { opacity: var(--saydam-45); }
+.tc-pyq-odak-satirlar .tc-pyq-mono { font-family: var(--font-mono); font-size: var(--yazi-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyq-odak-serit { position: relative; box-sizing: content-box; height: var(--dokunma); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel); overflow: hidden; }
+.tc-pyq-odak-gun { position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--cizgi-ince); background: var(--edge2); }
+.tc-pyq-odak-kapali { position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); background: repeating-linear-gradient(135deg, var(--panel2) 0 var(--b-1), transparent var(--b-1) var(--b-2)); }
+.tc-pyq-odak-kapali[data-durus] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--d-gec) 22%, transparent) 0 var(--b-1), transparent var(--b-1) var(--b-2)); }
+.tc-pyq-odak-is { position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--w); display: flex; align-items: center; padding: 0 var(--pay-ince); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); overflow: hidden; }
+.tc-pyq-odak-is[data-kendi] { border-color: var(--ink); box-shadow: inset var(--kayma) 0 0 var(--ink); }
+.tc-pyq-odak-is small, .tc-pyq-odak-yer small { font-family: var(--font-mono); font-size: var(--yazi-xs); white-space: nowrap; }
+.tc-pyq-odak-yer {
+  position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); min-width: var(--b-5); z-index: 1; display: flex; align-items: center; justify-content: center; padding: 0;
+  border: var(--cizgi) dashed var(--d-iyi); border-radius: var(--yari-1); background: color-mix(in oklab, var(--d-iyi) 18%, var(--panel-solid)); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-pyq-odak-yer:disabled { cursor: default; }
+.tc-pyq-odak-yer[aria-pressed="true"], .tc-pyq-odak-yer[data-secili] { border: var(--cizgi-kalin) solid var(--ink); background: color-mix(in oklab, var(--hazard) 70%, var(--panel-solid)); }
+.tc-pyq-odak-yer:hover:not(:disabled), .tc-pyq-odak-yer:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
+.tc-pyq-odak .tc-pyq-not { margin: 0; }
+.tc-pyq-odak-aciklama { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-odak-aciklama li { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pyq-odak-aciklama i { position: static; display: inline-block; width: var(--b-4); height: var(--b-3); min-width: 0; }
+/* Telefonda blokların içinde yazı yoktur; bilgi alttaki boş yer listesindedir. */
+@media (max-width: 599px) {
+  .tc-pyq-odak-is small, .tc-pyq-odak-yer small { display: none; }
+}
+/* Toplu yerleştirmenin yazılmama nedeni: uyarı simgesi yazının başında, aynı satırda. */
+.tc-pyq [data-geri-sonucu] { display: flex; align-items: flex-start; gap: var(--b-1); }
+.tc-pyq [data-geri-sonucu] > .tc-simge { flex: none; }
+/* Yandaki panel dardır: boş yerin saati satırda ve alttaki listede yazar, blokta yazılmaz. */
+.tc-pyq-optablo-kap[data-yanda] .tc-pyq-odak-yer small { display: none; }
