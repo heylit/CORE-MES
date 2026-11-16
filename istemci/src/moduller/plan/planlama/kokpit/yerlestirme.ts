@@ -1,17 +1,32 @@
 import { fasonMu, ilkBosluk, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitAdimi, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
 // Kokpit'in yukarıdan aşağı düzeninin saf kuralları (3297): üstte sıra kartları, altında seçilen kartın emirleri ve adımları, en altta
-// tezgâhlar. Kart kök emirdir: çok katmanlı emrin düğümleri ("<emir>-Y<n>") ve parçaları ("<emir>/<n>") kökünün kartında toplanır.
+// tezgâhlar. Kart müşteri siparişidir (3297-5 a): aynı siparişin bütün emirleri tek kartta toplanır. Siparişe bağlı olmayan emrin kartı kök
+// emirdir: çok katmanlı emrin düğümleri ("<emir>-Y<n>") ve parçaları ("<emir>/<n>") kökünün kartında toplanır.
 
 export const kokKimligi = (id: string): string => (/^(.*?)(?:-Y\d+)*(?:\/\d+)?$/.exec(id)?.[1] ?? id) || id;
+
+// Emrin sipariş bağı (sunucudan, kök emir kimliğiyle): `siparis` gruplama anahtarıdır; no ve müşteri siparişi okuyamayan kişide null gelir.
+export interface SiparisBagi { siparis: string; no: string | null; musteri: string | null; kalem: number | null }
+export type SiparisBaglari = Readonly<Record<string, SiparisBagi>>;
+// Kartın anahtarı: emir siparişe bağlıysa sipariş, değilse kök emir. Sipariş anahtarı emir kimliğiyle çakışmasın diye ön eklidir.
+export const kartAnahtari = (id: string, bag?: SiparisBaglari | null): string => {
+  const kok = kokKimligi(id), b = bag?.[kok];
+  return b ? `sp:${b.siparis}` : kok;
+};
 
 const AGIRLIK: Record<EmirDurumu, number> = { gec: 0, risk: 1, plansiz: 2, iyi: 3 };
 
 export interface SiraKarti {
+  // Kartın anahtarı (kartAnahtari): sipariş kartında "sp:<sipariş>", emir kartında kök emir kimliği.
   kok: string;
-  // Kartın emirleri: kök başta, düğümler ve parçalar modeldeki sırasıyla.
+  // Sipariş kartında siparişin no ve müşterisi (okuyamayan kişide null); emir kartında null.
+  siparis: { no: string | null; musteri: string | null } | null;
+  // Kartın emirleri. Emir kartında kök başta, düğümler ve parçalar modeldeki sırasıyla. Sipariş kartında her kök kendi düğümleriyle;
+  // yerleşmesi eksik kökler önce, sonra termine göre (sipariş çok emirliyse iş bekleyen emir aranmasın).
   emirler: KokpitEmri[];
-  // Kartın termini kökün terminidir; kök modelde yoksa (yalnız düğümü kaldıysa) emirlerin en erkeni. Hiçbirinde yoksa null.
+  // Emir kartında kökün terminidir; kök modelde yoksa (yalnız düğümü kaldıysa) emirlerin en erkeni. Sipariş kartında emirlerin en erkeni.
+  // Hiçbirinde yoksa null.
   termin: number | null;
   // Tezgâhta yapılan (fason olmayan) adım sayısı ve planda yeri olanlar.
   adim: number; yerlesen: number;
@@ -21,27 +36,45 @@ export interface SiraKarti {
 
 const tezgahAdimi = (a: KokpitAdimi): boolean => !a.adaylar.every(fasonMu);
 
-export function siraKartlari(m: Pick<KokpitModeli, 'emirler' | 'isler'>): SiraKarti[] {
+const SONSUZ = Number.POSITIVE_INFINITY;
+const enErken = (l: readonly KokpitEmri[]): number | null => {
+  const t = l.flatMap((e) => (e.termin === null ? [] : [e.termin]));
+  return t.length > 0 ? Math.min(...t) : null;
+};
+
+export function siraKartlari(m: Pick<KokpitModeli, 'emirler' | 'isler'>, bag: SiparisBaglari | null = null): SiraKarti[] {
   const grup = new Map<string, KokpitEmri[]>();
   for (const e of m.emirler) {
-    const k = kokKimligi(e.id);
+    const k = kartAnahtari(e.id, bag);
     const l = grup.get(k);
     if (l) l.push(e); else grup.set(k, [e]);
   }
+  const eksik = (l: readonly KokpitEmri[]): boolean => l.some((e) => e.adimlar.some((a) => tezgahAdimi(a) && m.isler[a.id] === undefined));
   const kartlar = [...grup].map(([kok, l]): SiraKarti => {
-    const emirler = [...l].sort((a, b) => Number(b.id === kok) - Number(a.id === kok));
-    const kokEmri = emirler.find((e) => e.id === kok);
-    const terminler = emirler.flatMap((e) => (e.termin === null ? [] : [e.termin]));
+    const b = bag?.[kokKimligi(l[0]?.id ?? '')] ?? null;
+    // Emirler köklerine göre öbeklenir: kök başta, düğümleri ardında.
+    const kokler = new Map<string, KokpitEmri[]>();
+    for (const e of l) { const k = kokKimligi(e.id), o = kokler.get(k); if (o) o.push(e); else kokler.set(k, [e]); }
+    const obekler = [...kokler].map(([k, o]) => [...o].sort((x, y) => Number(y.id === k) - Number(x.id === k)));
+    if (b) obekler.sort((x, y) => Number(eksik(y)) - Number(eksik(x)) || (enErken(x) ?? SONSUZ) - (enErken(y) ?? SONSUZ));
+    const emirler = obekler.flat();
+    const kokEmri = b ? undefined : emirler.find((e) => e.id === kok);
     const adimlar = emirler.flatMap((e) => e.adimlar.filter(tezgahAdimi));
     return {
-      kok, emirler,
-      termin: kokEmri ? kokEmri.termin : terminler.length > 0 ? Math.min(...terminler) : null,
+      kok, emirler, siparis: b ? { no: b.no, musteri: b.musteri } : null,
+      termin: kokEmri ? kokEmri.termin : enErken(emirler),
       adim: adimlar.length, yerlesen: adimlar.filter((a) => m.isler[a.id] !== undefined).length,
       durum: emirler.reduce<EmirDurumu>((d, e) => (AGIRLIK[e.durum] < AGIRLIK[d] ? e.durum : d), 'iyi'),
     };
   });
   // Sıra termine göredir, terminsiz sonda; aynı terminde sorunlu olan önce. Sıralama kararlıdır: eşitlikte modeldeki sıra kalır.
-  return kartlar.sort((a, b) => (a.termin ?? Number.POSITIVE_INFINITY) - (b.termin ?? Number.POSITIVE_INFINITY) || AGIRLIK[a.durum] - AGIRLIK[b.durum]);
+  return kartlar.sort((a, b) => (a.termin ?? SONSUZ) - (b.termin ?? SONSUZ) || AGIRLIK[a.durum] - AGIRLIK[b.durum]);
+}
+
+// Arama sipariş no ve müşteri adıyla da bulur: emrin siparişi aranan metni taşıyorsa emir görünür kalır.
+export function siparisAramasi(id: string, bag: SiparisBaglari | null, ara: string): boolean {
+  const q = ara.trim().toLocaleLowerCase('tr-TR'), b = bag?.[kokKimligi(id)];
+  return q !== '' && b !== undefined && `${b.no ?? ''} ${b.musteri ?? ''}`.toLocaleLowerCase('tr-TR').includes(q);
 }
 
 // Açılışta seçilen kart: yerleşmemiş adımı olan ilk kart (yeni gelen iş), yoksa ilk kart.

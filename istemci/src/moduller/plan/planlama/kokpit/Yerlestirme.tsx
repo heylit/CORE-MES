@@ -24,9 +24,11 @@ export interface SiraSeridiOzellikleri {
   olay?: ReadonlyMap<string, number>;
   // Başlığın sağındaki yer (bütün gelenleri açan düğme).
   sag?: ReactNode;
+  // Sipariş bağı okunabildiyse true: siparişe bağlı olmayan emrin kartında "Siparişsiz" yazar. Okunamadıysa hiçbir kart öyle işaretlenmez.
+  bagVar?: boolean;
 }
 
-export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag }: SiraSeridiOzellikleri) {
+export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag, bagVar = false }: SiraSeridiOzellikleri) {
   // Seçili kart şeritte görünür kalır (dar ekranda şerit yatay kayar; seçim tahtadan da gelebilir).
   const liste = useRef<HTMLUListElement | null>(null);
   useEffect(() => {
@@ -35,21 +37,23 @@ export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag }: SiraSerid
     if (k && el && typeof k.scrollTo === 'function') k.scrollTo({ left: Math.max(0, (el.parentElement?.offsetLeft ?? el.offsetLeft) - (k.firstElementChild as HTMLElement | null ?? el).offsetLeft) });
   }, [secili, kartlar.length]);
   return (
-    <section className="tc-pyq-bolum" aria-label="Emirler, sırasıyla">
-      <h2><b className="tc-pyq-bolum-no">1</b>Emirler, sırasıyla<small>Sıra: termin</small>{sag}</h2>
-      {kartlar.length === 0 ? <p className="tc-pyq-not">Planda ve sırada emir yok.</p> : (
+    <section className="tc-pyq-bolum" aria-label="Siparişler, sırasıyla">
+      <h2><b className="tc-pyq-bolum-no">1</b>Siparişler, sırasıyla<small>Sıra: termin</small>{sag}</h2>
+      {kartlar.length === 0 ? <p className="tc-pyq-not">Planda ve sırada sipariş ya da emir yok.</p> : (
         <ul className="tc-pyq-sira" ref={liste}>
           {kartlar.map((k, i) => {
             const bas = k.emirler[0];
             const kismi = k.yerlesen > 0 && k.yerlesen < k.adim;
+            const termin = k.termin === null ? 'termin yok' : `termin ${zaman(k.termin).slice(0, 9)}`;
+            const siparissiz = k.siparis === null && bagVar;
             return (
               <li key={k.kok}>
-                <button type="button" data-kart={k.kok} aria-pressed={secili === k.kok} onClick={() => { sec(k.kok); }}>
+                <button type="button" data-kart={k.kok} data-siparis={k.siparis ? '' : undefined} aria-pressed={secili === k.kok} title={siparissiz ? 'Siparişe bağlı değil (stok ya da elle açılan emir)' : undefined} onClick={() => { sec(k.kok); }}>
                   <span className="tc-pyq-sira-bas">
-                    <b className="tc-pyq-sira-no">{i + 1}</b><b className="tc-pyq-mono">{bas?.no ?? k.kok}</b>
+                    <b className="tc-pyq-sira-no">{i + 1}</b><b className="tc-pyq-mono">{k.siparis?.no ?? bas?.no ?? k.kok}</b>
                     <Rozet ton={kismi ? 'bilgi' : TON[k.durum]} gorunum="cizgi">{kismi ? `${String(k.yerlesen)} / ${String(k.adim)}` : KART_ADI[k.durum]}</Rozet>
                   </span>
-                  <small>{bas?.urun}{k.termin === null ? ' · termin yok' : ` · termin ${zaman(k.termin).slice(0, 9)}`}</small>
+                  <small>{k.siparis ? `${k.siparis.musteri !== null ? `${k.siparis.musteri} · ` : ''}${String(k.emirler.length)} emir` : `${siparissiz ? 'Siparişsiz · ' : ''}${bas?.urun ?? ''}`} · {termin}</small>
                   <progress max={Math.max(1, k.adim)} value={k.yerlesen} aria-hidden="true" />
                   <small>{`${String(k.yerlesen)} / ${String(k.adim)} operasyon yerleşti`}{(olay?.get(k.kok) ?? 0) > 0 ? <b data-olay=""> · {String(olay?.get(k.kok))} olay</b> : null}</small>
                 </button>
@@ -232,7 +236,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
   const bas = kart.emirler[0];
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler ve operasyonlar">
-      <h2><b className="tc-pyq-bolum-no">2</b>{bas?.no ?? kart.kok} · operasyonlar</h2>
+      <h2><b className="tc-pyq-bolum-no">2</b>{kart.siparis ? `${kart.siparis.no ?? bas?.no ?? ''} · ${String(kart.emirler.length)} emir ve operasyonları` : `${bas?.no ?? kart.kok} · operasyonlar`}</h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
           <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />

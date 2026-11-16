@@ -29,11 +29,11 @@ import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
 import { EmirAdimlari, SiraSeridi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
-import { ilkKart, kokKimligi, siraKartlari } from './yerlestirme.ts';
+import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
 
-// Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 emir kartları sırasıyla, 2 seçilen kartın emirleri
+// Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
 // ve operasyonları (seç-yerleştir), 3 tam genişlik tahta. Ayarlar ve gelenler tahtanın üstüne açılır; yanında yer tutmaz. Planlayanın kararları kişinin taslağına yazılır (3282 1d): taşıma, plana alma, ayar ve emrin
 // yönü taslak komutudur, plan taslağın görünümünde yeniden dizilir, ortak çalışma "Plana yaz"a kadar değişmez. Geri son değişikliği taslaktan
 // alır. Gelenler yeni ve değişen işleri toplar; Canlıya al (yetkisi olmayanda Onaya gönder) Onay ve canlı bölümünü açar: onaya gönderme, müdür
@@ -173,7 +173,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const say = useMemo(() => sayim(m.emirler), [m]);
   // Değişiklik çubuğu sayfanın açıldığı andaki sayılarla karşılaştırır.
   const ilk = useRef(say);
-  const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && aramaUyar(e, m, ara)), [m, suz, ara]);
+  // Sipariş bağı (3297-5 a): kartlar siparişe göre toplanır; arama sipariş no ve müşteriyle de bulur. Dilim okunamadıysa kart kök emirdir.
+  const bag = o.depo.durum?.siparisBaglari ?? null;
+  const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ara, bag]);
   const gorunenKume = useMemo(() => new Set(gorunen.map((e) => e.id)), [gorunen]);
   const uyar = useCallback((job: string) => gorunenKume.has(job), [gorunenKume]);
 
@@ -372,20 +374,20 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const gelenListesi = useMemo(() => gelenler(m.emirler, o.depo.planSurumu?.bayat?.olaylar ?? [], zaman), [m, o.depo.planSurumu, zaman]);
   const gelenSec = useCallback((id: string) => {
     // Plansız emir kartında yerleştirilir (2. bölüm); planlı emirde kartı seçilir ve iş tahtada gösterilir.
-    if (emir.get(id)?.durum === 'plansiz') { sec(null, null); setKart(kokKimligi(id)); setGelenAcik(false); return; }
+    if (emir.get(id)?.durum === 'plansiz') { sec(null, null); setKart(kartAnahtari(id, bag)); setGelenAcik(false); return; }
     sec(id, null); setGoster(emir.get(id)?.adimlar.find((a) => m.isler[a.id])?.id ?? null);
-  }, [sec, emir, m]);
+  }, [sec, emir, m, bag]);
 
   const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
-  const kartlar = useMemo(() => siraKartlari(m), [m]);
+  const kartlar = useMemo(() => siraKartlari(m, bag), [m, bag]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
-  useEffect(() => { if (secEmir !== null) setKart(kokKimligi(secEmir)); }, [secEmir]);
+  useEffect(() => { if (secEmir !== null) setKart(kartAnahtari(secEmir, bag)); }, [secEmir]);
   // Karta bağlı saha olayları kartta sayıyla görünür; plansız emir zaten kartın kendisidir.
   const kartOlayi = useMemo(() => {
     const k = new Map<string, number>();
-    for (const g of gelenListesi) if (g.emirId !== null && g.tur !== 'yeni') k.set(kokKimligi(g.emirId), (k.get(kokKimligi(g.emirId)) ?? 0) + 1);
+    for (const g of gelenListesi) if (g.emirId !== null && g.tur !== 'yeni') k.set(kartAnahtari(g.emirId, bag), (k.get(kartAnahtari(g.emirId, bag)) ?? 0) + 1);
     return k;
-  }, [gelenListesi]);
+  }, [gelenListesi, bag]);
   // Seç-yerleştir ile taşıma operasyon bölümünden başlar: tahtadan ya da Matristen seçilen iş bölümü büyütmez (bakılan yer kaymasın).
   // Başka iş ya da kart seçilince düşer.
   useEffect(() => { if (secIs !== null && secIs !== tasinacak) setTasinacak(null); }, [secIs]);
@@ -415,7 +417,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <Simge ad="wrench" boyut="k" /><b>{arizali}</b><span>Arıza</span>
           </button>
         )}
-        <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Emir, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
+        <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Emir, sipariş, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
         <span className="tc-pyq-seg" role="group" aria-label="Görünüm">
           {GOZLER.map(([k, ad]) => <button type="button" key={k} data-goz={k} aria-pressed={goz === k} onClick={() => { setGoz(k); }}>{ad}</button>)}
         </span>
@@ -425,7 +427,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-gi" role="group" aria-label="Geri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
         </span>
-        <Acilir ad={`Yön: ${YON_ADI[planYonu(c)]}`} etiket="Planın yönü" simge="route" sinif="tc-pyq-yon" disabled={!yazabilir || tur !== null || onayAcik}>
+        <Acilir ad={`Tüm plan: ${YON_ADI[planYonu(c)]}`} etiket="Tüm planın yönü" simge="route" sinif="tc-pyq-yon" disabled={!yazabilir || tur !== null || onayAcik}>
           {(kapat) => (['ileri', 'geri'] as const).map((y) => (
             <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y}
               onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(y); setAyarAcik(true); }}>
@@ -468,7 +470,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       <div className="tc-pyq-govde">
         <div className="tc-pyq-ana">
           <SiraSeridi
-            kartlar={kartlar} secili={seciliKart?.kok ?? null} sec={setKart} zaman={zaman} olay={kartOlayi}
+            kartlar={kartlar} secili={seciliKart?.kok ?? null} sec={setKart} zaman={zaman} olay={kartOlayi} bagVar={bag !== null}
             sag={(
               <button type="button" className="tc-pyq-kucuk" aria-pressed={gelenAcik} disabled={tur !== null} title="Yeni emirler ve saha olayları, tümü"
                 onClick={() => { if (!gelenAcik) { sec(null, null); setAyarAcik(false); setKapasiteAcik(false); } setGelenAcik(!gelenAcik); }}>

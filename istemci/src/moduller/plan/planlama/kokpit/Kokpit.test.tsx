@@ -327,7 +327,7 @@ describe('Kokpit', () => {
     vi.stubGlobal('CSS', { escape: (x: string) => x });
     const { sec } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
     expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
-    const serit = screen.getByRole('region', { name: 'Emirler, sırasıyla' });
+    const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
     expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 olay');
     fireEvent.click(within(serit).getByRole('button', { name: /Tümü \(2\)/ }));
     const kutu = screen.getByRole('complementary', { name: 'Gelenler' });
@@ -344,10 +344,37 @@ describe('Kokpit', () => {
     vi.unstubAllGlobals();
   });
 
+  // 3297-5 (Test T2): emir siparişe bağlıysa olay sayısı emrin kök kartında değil sipariş kartında durur.
+  it('siparişe bağlı emrin olayı sipariş kartında sayılır', () => {
+    const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
+      { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
+    ] };
+    const durum = { siparisBaglari: { '3': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 1 } } };
+    ac({ depo: { ...DEPO, durum, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
+    const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
+    expect(serit.querySelector('[data-kart="3"]')).toBeNull();
+    expect(serit.querySelector('[data-kart="sp:50"] [data-olay]')?.textContent).toContain('1 olay');
+  });
+
+  // 3297-5 (Test T1): Gelenler'de plansız emrin Yerleştir'i emrin kök kartını değil siparişinin kartını seçer. Seçilen kart ilk eksik kart
+  // olmamalı, yoksa bulunamayan anahtarın düştüğü varsayılan kartla ayırt edilemez.
+  it('Gelenler: siparişe bağlı plansız emrin Yerleştir düğmesi sipariş kartını seçer', () => {
+    const c = { ...ornekCalisma(), plan: null } as unknown as ReturnType<typeof ornekCalisma>;
+    const durum = { siparisBaglari: { '3': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 1 } } };
+    ac({ calisma: c, depo: { ...DEPO, durum } as unknown as PlanlamaDeposu });
+    const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
+    const hedef = serit.querySelector('[data-kart="sp:50"]');
+    expect(hedef?.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(within(serit).getByRole('button', { name: /Tümü/ }));
+    const satir = within(screen.getByRole('complementary', { name: 'Gelenler' })).getAllByRole('listitem').find((x) => x.querySelector('b')?.textContent === '3');
+    fireEvent.click(within(satir!).getByRole('button', { name: 'Yerleştir' }));
+    expect(hedef?.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('gövde yukarıdan aşağıdır: sıra kartları, seçilen kartın operasyonları, plan bölümü; yan sütun yoktur', () => {
     ac();
     const ana = document.querySelector('.tc-pyq-ana');
-    expect([...(ana?.children ?? [])].map((x) => x.getAttribute('aria-label'))).toEqual(['Emirler, sırasıyla', 'Emirler ve operasyonlar', 'Tezgâhlar']);
+    expect([...(ana?.children ?? [])].map((x) => x.getAttribute('aria-label'))).toEqual(['Siparişler, sırasıyla', 'Emirler ve operasyonlar', 'Tezgâhlar']);
     expect(document.querySelector('.tc-pyq-govde')?.children).toHaveLength(1);
     expect(ana?.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
@@ -394,19 +421,19 @@ describe('Kokpit', () => {
 
   it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
-    const yon = screen.getByRole('button', { name: /Yön: İleriye/ });
+    const yon = screen.getByRole('button', { name: /Tüm plan: İleriye/ });
     fireEvent.click(yon);
-    const menu = screen.getByRole('menu', { name: 'Planın yönü' });
+    const menu = screen.getByRole('menu', { name: 'Tüm planın yönü' });
     const l = within(menu).getAllByRole('menuitemradio');
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
     fireEvent.click(l[0]!);
-    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
+    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     fireEvent.click(yon);
-    fireEvent.click(within(screen.getByRole('menu', { name: 'Planın yönü' })).getAllByRole('menuitemradio')[1]!);
-    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Planın yönü' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Tüm planın yönü' })).getAllByRole('menuitemradio')[1]!);
+    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 

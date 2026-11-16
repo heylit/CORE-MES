@@ -91,7 +91,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     const bekliyor = vi.fn();
     const { t, yazilan, kapat } = kur(ornekCalisma(), true, 'geri', bekliyor);
     // 3304 a: Yön seçiminden açılan panel yalnız yönün etkisini taşır; öteki ayarlar çizilmez.
-    const panel = screen.getByRole('complementary', { name: 'Planın yönü' });
+    const panel = screen.getByRole('complementary', { name: 'Tüm planın yönü' });
     expect(panel.textContent).toContain('İleriye → Teslimden geriye');
     expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Zaman ve tampon' })).toBeNull();
@@ -113,7 +113,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     const ciz = (x: PlanlamaCalismasi) => <MemoryRouter><Ayarlar c={x} taslak={t} yazabilir kim="ORN-Planlamaci" kapat={() => {}} yon="geri" /></MemoryRouter>;
     const { rerender } = render(ciz(c));
     rerender(ciz({ ...c, w: { ...c.w, yon: 'geri' } }));
-    expect(screen.getByRole('complementary', { name: 'Planın yönü' }).textContent).toContain('İleriye → Teslimden geriye');
+    expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' }).textContent).toContain('İleriye → Teslimden geriye');
   });
 
   it('Araçlar > Ayarlar ile açılan panelde yön seçimi yoktur; teslim tamponu durur (3304 a)', () => {
