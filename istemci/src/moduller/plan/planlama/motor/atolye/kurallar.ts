@@ -497,6 +497,8 @@ export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSu
   }
   for (const u of s.etki?.yeniUyarilar ?? []) K.push(['uyari', u]);
   for (const b of s.bekleyenler) K.push(['uyari', `Canlıya alınamaz, bekliyor: ${b}`]);
+  const yeni = s.plansizYeniIsler;
+  if (yeni) K.push(['uyari', `Bu plan hazırlandıktan sonra açılan ${yeni.adet} iş planda yok (${yeni.isler.join(', ')}${yeni.adet > yeni.isler.length ? ', …' : ''}); canlıya alınınca plansız kalır, Kokpit'te Plansız görünür`]);
   if (!s.degisiklikler.length) K.push(['uyari', 'Canlı plandan farkı yok']);
   return K;
 }

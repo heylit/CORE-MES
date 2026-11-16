@@ -2666,11 +2666,16 @@ export async function senaryolar(db: Db, k: Kullanici): Promise<SenaryolarCevabi
     const kendi = defter.filter((d) => d.senaryoId === x.id);
     let gostergeler: SenaryolarCevabi['senaryolar'][number]['gostergeler'] = null;
     let etki: SenaryolarCevabi['senaryolar'][number]['etki'] = null;
+    let plansizYeniIsler: SenaryolarCevabi['senaryolar'][number]['plansizYeniIsler'];
     const acikMi = x.durum === 'acik' || x.durum === 'onayda';
     if (acikMi) {
       const b = await baglamKur(db, k, x.id, ortak);
-      const c = cevapKur(b, await s.yerlesimler(db, x.id));
+      const satirlar = await s.yerlesimler(db, x.id);
+      const c = cevapKur(b, satirlar);
       gostergeler = gosterge(b, c.yerler);
+      const canlidaYerli = new Set(canliSatir.map((y) => y.isEmriId));
+      const yeni = sonradanAcilanlar(b, x.acilma, satirlar).filter((i) => !canlidaYerli.has(i));
+      if (yeni.length > 0) plansizYeniIsler = { adet: yeni.length, isler: yeni.slice(0, 5).map((i) => isMetni(b, i)) };
       const canliEmir = new Map(canli.emirler.map((e) => [e.uretimEmriId, e]));
       const canliYuk = new Map(canli.istasyonYuku.map((i) => [i.istasyonId, i]));
       const yuzde = (i: { dolu: number[]; kapasite: number[] }) => yukYuzdesi(i.dolu, i.kapasite);
@@ -2694,6 +2699,7 @@ export async function senaryolar(db: Db, k: Kullanici): Promise<SenaryolarCevabi
       } : null,
       yapabilir: onayGecisleri(onayBaglami(k, x, o?.gonderenKisiId ?? null, dortGozAcik)),
       bekleyenler: kendi.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur)).map((d) => `${d.ozet} (${BENZETIM_SAHIBI[d.tur]} bağlanınca canlıya alınır)`),
+      ...(plansizYeniIsler ? { plansizYeniIsler } : {}),
     });
   }
   return { canli: gosterge(canliB, canli.yerler), canliSurum: surum, senaryolar: sonuc };
@@ -2820,7 +2826,6 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     throw cakisma('Bu taslak, aynı canlı plandan açılmış başka bir taslak canlıya alındığı için kapandı; canlı planla yeni taslak açın.');
   }
   const { x, dortGozsuz } = await onayGecisi(db, k, id, g.surum, 'canliya-al');
-  await yeniIslerDenetle(db, id, x.acilma, 'bu plan o işlerden önce hazırlandı. Planı geri gönderin; güncel çalışma planını canlıya alın.');
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
   const kapanan = defter.filter((d) => d.tur === 'gun_kapat');
@@ -2891,7 +2896,8 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }));
   // Yersiz bölme de canlıya geçer (taslakta ya da canlıda yalnız bölmesi olan iş).
   const yersizler = [...b.yersiz.keys(), ...(await s.yersizBolmeler(db, null)).keys()];
-  const idler = [...new Set([...canli.map((y) => y.isEmriId), ...taslak.map((y) => y.isEmriId), ...yersizler])].filter((x) => degisebilir(x) && !vardiyasiz.has(x));
+  const sonradan = new Set(sonradanAcilanlar(b, x.acilma, taslak));
+  const idler = [...new Set([...canli.map((y) => y.isEmriId), ...taslak.map((y) => y.isEmriId), ...yersizler])].filter((x) => degisebilir(x) && !vardiyasiz.has(x) && !sonradan.has(x));
   // 248 a: canlıya geçecek plan, taslağın getirdiği bütün ihlallerle denetlenir (taslak önceden açılmış olsa da).
   const gecen = new Set(idler);
   // 990 a: zorunlu durumda canlıya alan gerekçeyle aşar; aşılan işler ve gerekçe canlıya alma onay kaydına yazılır.
@@ -3087,25 +3093,18 @@ async function onayGecisi(db: Db, k: Kullanici, id: number, surum: number, komut
   return { x, dortGozsuz: tanim.kim === 'onaylayan' && !b.dortGozAcik && b.gonderenMi };
 }
 
-// B-2499 (on deneme): taslak açıldıktan sonra açılan emrin işini taslak bilmez; Planı kur'a basılmadan gönderilirse iş canlıya yersiz
-// gider. Taslakta yeri olmayan ve defterde de geçmeyen (taslağın hiç ele almadığı) böyle iş varsa gönderme ve canlıya alma durur.
-// Motorun yerleştiremediği iş defterdedir (yerlesmez), durdurmaz; canlıda yeri olan iş (canlıya başka yoldan girmiş) canlıda kalır, durdurmaz.
-async function yeniIslerDenetle(db: Db, id: number, acilma: string, ne: string): Promise<void> {
-  const ayar = await s.ayarOku(db, id);
-  const yerli = new Set([...(await s.yerlesimler(db, id)), ...(await s.yerlesimler(db, null))].map((y) => y.isEmriId));
-  const defterde = new Set((await s.degisiklikler(db, [id])).flatMap((d) => d.isEmriIdleri));
+// 3334 a (B-2499'u değiştirir): taslak açıldıktan sonra açılan ve taslağın hiç ele almadığı (yeri, bölmesi ve defter kaydı olmayan) iş
+// onaya göndermeyi ve canlıya almayı durdurmaz. Kokpit'te plan emir emir kurulur; yeri olmayan emir Plansız kart olarak görünür.
+// Bu işler canlıya yazılan kümeye girmez: canlıdaki yeri ve bölmesi olduğu gibi kalır.
+function sonradanAcilanlar(b: Baglam, acilma: string, taslak: readonly YerlesimSatiri[]): number[] {
   const an = Date.parse(acilma);
-  const yeni = (await planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler }))
-    .filter((i) => Date.parse(i.acilma) > an && !yerli.has(i.id) && !defterde.has(i.id));
-  if (yeni.length === 0) return;
-  const l = yeni.slice(0, 5).map((i) => `${i.emirNo} OP ${String(i.opNo)}`).join(', ');
-  throw cakisma(`Taslak açıldıktan sonra açılan ${String(yeni.length)} iş taslakta yok (${l}${yeni.length > 5 ? ', …' : ''}); ${ne}`);
+  const bilinen = new Set([...taslak.map((y) => y.isEmriId), ...b.yersiz.keys(), ...b.defter.flatMap((d) => d.isEmriIdleri)]);
+  return [...b.isler.values()].filter((i) => i.id > 0 && Date.parse(i.acilma) > an && !bilinen.has(i.id)).map((i) => i.id);
 }
 
 // Sahip açık taslağını onaya gönderir; taslak donar (plan yazmaları ona yazılmaz). Not isteğe bağlı.
 export async function onayaGonder(db: Db, k: Kullanici, id: number, g: OnayaGonderGovdesi) {
   const { x } = await onayGecisi(db, k, id, g.surum, 'onaya-gonder');
-  await yeniIslerDenetle(db, id, x.acilma, 'önce Planı kur ile yerleştirin.');
   await s.senaryoDurumYaz(db, id, 'acik', 'onayda');
   await s.onayKaydiEkle(db, id, 'onaya_gonder', k.id, g.not || null);
   await s.defterYaz(db, k.id, [onayDefterSatiri('onaya-gonderildi', x, { ayrinti: g.not })]);

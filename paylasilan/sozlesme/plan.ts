@@ -329,6 +329,9 @@ export const senaryolarCevabi = z.object({
     }).nullable(),
     // Canlıya alınamayan (sahibi modülün komutu bağlanınca yazılacak) değişiklikler.
     bekleyenler: z.array(z.string()),
+    // 3334 a: plan hazırlandıktan sonra açılan, planda da canlıda da yeri olmayan işler (adet ve ilk beşi "emir OP n"); canlıya alınınca
+    // plansız kalırlar. Yoksa alan gelmez.
+    plansizYeniIsler: z.object({ adet: z.number().int().positive(), isler: z.array(z.string()) }).optional(),
     // Onay akışı alanları sunucu onay adımını kurana dek gelmez; gelmeyen `yapabilir` hiçbir geçişe izin vermez.
     onay: senaryoOnayi.nullable().optional(),
     yapabilir: senaryoYapabilir.optional(),
