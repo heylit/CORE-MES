@@ -1785,6 +1785,15 @@ export const ROZET_BELGELERI: Readonly<Record<LogoRozetTuru, readonly string[]>>
 });
 // Logo'da olan önce gelir (gönderilmiş ya da Logo'da bulunup bağlanmış); sonra süreç belleğindeki bekleme (kart ya da proje), sonra giden kutusu.
 // Gidecek izi olmayan belge için rozet yoktur (null): Logo'ya gitmeyen tür ya da ayarı kapalı.
+// Rozet nedeni belgeyi gören herkese gider: ham hata iletisinin yalnız ilk satırı ve en çok 160 karakteri.
+export const ROZET_NEDEN_SINIRI = 160;
+export function rozetNedeni(m: string | null): string | null {
+  if (m === null) return null;
+  const ilk = (m.split(/\r?\n/).find((s) => s.trim() !== '') ?? '').trim();
+  if (ilk === '') return null;
+  return ilk.length > ROZET_NEDEN_SINIRI ? `${ilk.slice(0, ROZET_NEDEN_SINIRI - 1)}…` : ilk;
+}
+
 export function belgeRozetDurumu(
   g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null; sonHata: string | null; logoKayitNo: string | null } | null,
   bekleyen: { durum: 'kart-bekliyor' | 'proje-bekliyor'; ileti: string } | null,
@@ -1792,8 +1801,8 @@ export function belgeRozetDurumu(
 ): { durum: LogoRozetDurumu; kayitNo: string | null; neden: string | null } | null {
   const kayitNo = g?.logoKayitNo ?? bagliKayitNo;
   if (kayitNo !== null) return { durum: 'logoda', kayitNo, neden: null };
-  if (bekleyen !== null) return { durum: bekleyen.durum, kayitNo: null, neden: bekleyen.ileti };
+  if (bekleyen !== null) return { durum: bekleyen.durum, kayitNo: null, neden: rozetNedeni(bekleyen.ileti) };
   if (g === null) return null;
   const durum = gidenIzlemeDurumu(g);
-  return { durum, kayitNo: null, neden: durum === 'sirada' ? null : g.sonHata };
+  return { durum, kayitNo: null, neden: durum === 'sirada' ? null : rozetNedeni(g.sonHata) };
 }

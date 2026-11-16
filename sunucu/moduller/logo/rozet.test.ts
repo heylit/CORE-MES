@@ -29,6 +29,10 @@ describe('belge rozeti kuralı (3344)', () => {
     assert.deepEqual(belgeRozetDurumu(g({ sonSonuc: 'ulasilamadi', sonHata: 'Ulaşılamadı.', sonrakiDeneme: new Date() }), null, null),
       { durum: 'yeniden-denenecek', kayitNo: null, neden: 'Ulaşılamadı.' });
     assert.equal(belgeRozetDurumu(null, null, null), null);
+    // Ham hata iletisi kısaltılır: ilk dolu satır, en çok 160 karakter.
+    const uzun = belgeRozetDurumu(g({ sonSonuc: 'reddedildi', sonHata: `\n  Satır hatası ${'x'.repeat(300)}\nyığın izi` }), null, null);
+    assert.equal(uzun?.neden?.length, 160);
+    assert.ok(uzun?.neden?.startsWith('Satır hatası') && uzun.neden.endsWith('…') && !uzun.neden.includes('yığın'));
   });
 });
 
