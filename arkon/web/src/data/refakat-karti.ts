@@ -24,6 +24,13 @@ export const kartDoldu = (k: Pick<RefakatKarti, 'sayilan' | 'sinir'>): boolean =
 export const sayimKartAlani = (kart: unknown): { refakatPartisiId: number } | null =>
   typeof kart === 'number' && Number.isInteger(kart) && kart > 0 ? { refakatPartisiId: kart } : null;
 
+// 3337-2 a: çalışmaya geçiş kaydı işin kartını ya da yetkilinin kartsız gerekçesini taşır; sunucu adımın ilk başlatmasında denetler.
+export function baslatmaKartAlani(is: { kart?: unknown; kartsizGerekce?: unknown }): { refakatPartisiId: number } | { kartsizGerekce: string } | Record<string, never> {
+  const kart = sayimKartAlani(is.kart);
+  if (kart) return kart;
+  return typeof is.kartsizGerekce === 'string' && is.kartsizGerekce.trim() !== '' ? { kartsizGerekce: is.kartsizGerekce } : {};
+}
+
 // Sorulacak emirler: bitmemiş işlerin emirleri, tekrarsız ve sıralı (sorgu anahtarı değişmeden yeniden okunmaz); sunucu en çok 50 alır.
 export const AZAMI_KART_EMRI = 50;
 // Sayılan ve sınır sayımla değişir; liste dakikada bir yenilenir (yumuşak kilit, anlık olması gerekmez).

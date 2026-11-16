@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { irsaliyeBelgeAdi } from './kurallar.ts';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM, baslatmaKartiEngeli, KARTSIZ_BASLATMA, BASLATMA_KARTI_YOK, BASLATMA_KARTI_KAPALI, BASLATMA_KARTI_BASKA,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -1081,4 +1081,16 @@ describe('3094 a istek kapsamı', () => {
     assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: null }), null);
     assert.equal(kartsizLotTeslimEngeli({ ...g, emreGider: false }), null, 'emirsiz taşıma');
   });
+});
+
+test('3337-2 a: başlatma kartı bu emrin ya da yakın emrin açık kartı olmalı; girdisiz emirde ve gerekçede kart aranmaz', () => {
+  const g = { refakatPartisiId: 7 as number | null, gerekce: null as string | null, girdiVar: true, kart: { durum: 'acik' as const, uretimEmriId: 1 } as { durum: 'acik' | 'iptal'; uretimEmriId: number } | null, uretimEmriId: 1, yakinEmirler: [] as number[] };
+  assert.equal(baslatmaKartiEngeli(g), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null }), KARTSIZ_BASLATMA);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null, girdiVar: false }), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, refakatPartisiId: null, kart: null, gerekce: 'Kart basılamadı' }), null);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: null }), BASLATMA_KARTI_YOK);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'iptal', uretimEmriId: 1 } }), BASLATMA_KARTI_KAPALI);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'acik', uretimEmriId: 2 } }), BASLATMA_KARTI_BASKA);
+  assert.equal(baslatmaKartiEngeli({ ...g, kart: { durum: 'acik', uretimEmriId: 2 }, yakinEmirler: [2] }), null, 'montaj girdisi ya da bölünmüş emrin üstü');
 });

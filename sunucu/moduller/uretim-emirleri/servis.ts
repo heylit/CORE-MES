@@ -26,10 +26,14 @@ import {
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
   bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali,
 } from './kurallar.ts';
+import { KARTSIZ_BASLATMA_ISLEMI, kartsizBaslatmaIhlali } from './kurallar.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { IstasyonDurumu, MakineAyrimi, OnculTuru, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
+import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import { siraDisiBaslatmaEkle, siraDisiBaslatmalarGetir } from './sorgular/sira-disi/sorgular.ts';
@@ -670,12 +674,21 @@ async function istasyonYetkinliginiDenetle(db: Db, kisiId: number, istasyonId: n
   return muaf;
 }
 
+// 3337-2 a: kartsız gerekçe `uretim-emirleri.kartsiz-baslat` ister; kart ile gerekçe birlikte gelmez. Kartın kendisini stok denetler.
+export function baslatmaKartiniDenetle(kullanici: Kullanici, kart: BaslatmaKarti | undefined): BaslatmaKarti | undefined {
+  if (kart === undefined) return undefined;
+  const ihlal = kartsizBaslatmaIhlali(kart, islemVarMi(kullanici, KARTSIZ_BASLATMA_ISLEMI));
+  if (ihlal === null) return kart;
+  if (ihlal.tur === 'yetki') throw yetkiYok(ihlal.ileti);
+  throw dogrulama(ihlal.ileti, 'gerekce');
+}
+
 // İş emirli emirde başlatma sıradaki iş emrini başlatır; fason iş emri operatörle başlamaz (UE3).
 // Uyarı (karar 110 b): stok girdi istasyonda yokken başlatmayı durdurmaz, eksiği iz olarak açar ve metnini döner; yoksa null.
 // Paralel adım (639): adım verilirse o adım başlar; emir başlamışken de bekleyen adım başlatılır. Sıra dışı başlatma reddedilmez,
 // uyarı döner (626 a); iz, adımın başlatma kaydıdır.
 export async function emirBaslat(
-  db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number,
+  db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number, kart?: BaslatmaKarti,
 ): Promise<{ emir: Emir; uyari: string | null }> {
   const kilitli = await kilitliEmir(db, id);
   await bekletmeyiDenetle(db, id);
@@ -699,7 +712,7 @@ export async function emirBaslat(
   }
   const istasyonIhlali = baslatmaIstasyonIhlali(await istasyonDurumu(db, istasyonId));
   if (istasyonIhlali !== null) throw cakisma(istasyonIhlali);
-  const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId });
+  const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId, ...(kart === undefined ? {} : { kart, an: await komutAni(db, id) }) });
   if (denetim.engel !== null) throw cakisma(denetim.engel);
   const secim = (makineIdleri !== undefined && makineIdleri.length > 0) || isEmri?.makineId != null ? makineIdleri : await baslatmaMakinesi(db, istasyonId);
   await secimiDenetle(db, istasyonId, secim);
@@ -1038,7 +1051,7 @@ export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeni
 // Kapatılan kullanımın kimliği dolu cevabında gösterilenle aynı olmalı: arada orada başka iş açıldıysa kişi neyi durdurduğunu
 // bilmeden devralmaz. Öteki işin (adımın) başka açık kullanımı kalmazsa iş duraklatılır (duraklatma neden istemez); kalırsa orada sürer.
 // Paralel adım (639): yer aynı emrin öteki adımındaysa da devralınır; duraklayan o adımdır.
-export async function makineDevral(db: Db, kisiId: number, id: number, kullanimId: number, isEmriId?: number): Promise<{ emir: Emir }> {
+export async function makineDevral(db: Db, kisiId: number, id: number, kullanimId: number, isEmriId?: number, kart?: BaslatmaKarti): Promise<{ emir: Emir }> {
   const emir = await kilitliEmir(db, id);
   // Devralma bu işi başlatır ya da devam ettirir: beklemedeki emirde öteki işi durdurmadan önce reddedilir.
   await bekletmeyiDenetle(db, id);
@@ -1070,7 +1083,7 @@ export async function makineDevral(db: Db, kisiId: number, id: number, kullanimI
     }
   }
   const makineler = acik.makineId === null ? [] : [acik.makineId];
-  return baslatilacak ? emirBaslat(db, kisiId, id, makineler, isEmriId) : emirDevam(db, kisiId, id, makineler, isEmriId);
+  return baslatilacak ? emirBaslat(db, kisiId, id, makineler, isEmriId, kart) : emirDevam(db, kisiId, id, makineler, isEmriId);
 }
 
 // ARK-5 b: makineli istasyonda aynı iş başkasının açık çalışmasıyla sürerken kişi işi devralır. İş durmaz, adım ve sayaçlar aynen

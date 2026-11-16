@@ -14,6 +14,7 @@ import {
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
+import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
 
@@ -359,4 +360,14 @@ test('3249 b: biten adımın listesi işaretlenmez ve madde almaz; liste en çok
   assert.equal(kanitMetni({ olcum: null, secim: 'Geçti', foto: null }), 'Geçti');
   assert.equal(kanitMetni({ olcum: null, secim: null, foto: 'ORN-ozet-ab12' }), 'Fotoğraf', 'fotoğraf özeti gösterilmez');
   assert.equal(kanitMetni({ olcum: null, secim: null, foto: null }), null);
+});
+
+test('3337-2 a: kartsız başlatma gerekçesi yetki ister; kartla birlikte, boş ya da uzun gerekçe geçersizdir', () => {
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: 4, gerekce: null }, false), null, 'kartla başlatma yetki aramaz');
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: null }, false), null, 'kartsızı stok denetler');
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'Kart basılamadı' }, false), { tur: 'yetki', ileti: KARTSIZ_YETKI_YOK });
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'Kart basılamadı' }, true), null);
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: 4, gerekce: 'x' }, true), { tur: 'gecersiz', ileti: KARTLA_GEREKCE_BIRDEN });
+  assert.equal(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: '  ' }, true)?.tur, 'gecersiz');
+  assert.deepEqual(kartsizBaslatmaIhlali({ refakatPartisiId: null, gerekce: 'x'.repeat(KARTSIZ_GEREKCE_AZAMI + 1) }, true), { tur: 'gecersiz', ileti: KARTSIZ_GEREKCE_UZUN });
 });

@@ -15,14 +15,14 @@ import { istasyonGetir, istasyondakiKisiler, kisininIzinliIsMerkezleri } from '.
 import { bildirimGonder } from '../../bildirim/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import {
-  adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirOzeti, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirNolari, kapanisSonuclari,
+  adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirOzeti, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirNolari, kapanisSonuclari, emirMalzemeleri,
   aralikAdetleri, adimKararSayaclari, adimUretimBilgileri, emirlerinDugumleri, emirlerinIsEmriIdleri,
 } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
   kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, tasinanMahsubu, adetMiktari, type BaslatmaEksigi,
-  rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, kartsizLotTeslimEngeli,
+  rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, kartsizLotTeslimEngeli, baslatmaKartiEngeli,
   sahipsizStatuluHesapla, refakatEtiketi,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -470,6 +470,25 @@ baslatmaDenetle(async (db, o) => {
   if (eksikler.length === 0) return null;
   const adlar = eksikler.map((e) => `${e.kod ?? e.ad ?? `#${e.malzemeId}`}${e.istek === null ? '' : ` (istek ${e.istek.no})`}`);
   return { uyari: `Malzeme eksik: ${adlar.join(', ')}. İş başladı; depo isteği karşılayınca stok düzelir.` };
+});
+
+// 3337-2 a: kartla ya da gerekçeyle ilk başlatma iz bırakır (kart listesinde "Sahada" ve "Gerekçeli"). Kart birleştiyse etkin kartı sayılır.
+// Yakın emir: bu emrin üstü (bölünmüş kol) ve kartın emrinin üstü bu emirse (montaja giren alt parça).
+baslatmaDenetle(async (db, o) => {
+  if (o.kart === undefined) return null;
+  const { refakatPartisiId, gerekce } = o.kart;
+  const kart = refakatPartisiId === null ? null : await sorgular.etkinRefakatPartisiBul(db, refakatPartisiId);
+  const ustler = await emirMalzemeleri(db, kart === null ? [o.uretimEmriId] : [o.uretimEmriId, kart.uretimEmriId]);
+  const yakinEmirler = [ustler.get(o.uretimEmriId)?.ustEmirId ?? null].filter((x): x is number => x !== null);
+  if (kart !== null && ustler.get(kart.uretimEmriId)?.ustEmirId === o.uretimEmriId) yakinEmirler.push(kart.uretimEmriId);
+  const girdiVar = refakatPartisiId === null && gerekce === null ? ((await emirMalzemeIhtiyaci(db, o.uretimEmriId)) ?? []).length > 0 : true;
+  const engel = baslatmaKartiEngeli({ refakatPartisiId, gerekce, girdiVar, kart, uretimEmriId: o.uretimEmriId, yakinEmirler });
+  if (engel !== null) return { engel };
+  if (kart === null && gerekce === null) return null;
+  await sorgular.refakatBaslatmaYaz(db, {
+    uretimEmriId: o.uretimEmriId, isEmriId: o.isEmriId, refakatPartisiId: kart?.id ?? null, gerekce, kisiId: o.kisiId, istasyonId: o.istasyonId, an: o.an ?? null,
+  });
+  return null;
 });
 
 // Kutunun rozet sayısı: bana gelen yoldaki teslimler.

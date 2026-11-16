@@ -196,3 +196,13 @@ export const kartSatirlari = (db: Db, kartId: number): Promise<KartSatiriHam[]> 
              OR (b.parti_id = (SELECT r.parti_id FROM stok_refakat_partisi r WHERE r.id = $1) AND k.tur IN ('istasyon', 'uretim_cikisi', 'ara_alan', 'fason', 'yolda')))
       GROUP BY b.konum_id, k.kod, k.ad, k.tur, k.istasyon_id, b.malzeme_id, b.parti_id, p.lot_no, p.refakat_partisi_id, b.statu_id, b.kalite_durumu
       ORDER BY (p.refakat_partisi_id IS NULL) DESC, b.statu_id NULLS FIRST, k.kod`, [kartId]);
+
+// 3337-2 a: iş adımının kartla ya da gerekçeyle ilk başlatması; yalnız eklenir.
+export const refakatBaslatmaYaz = (db: Db, g: {
+  uretimEmriId: number; isEmriId: number; refakatPartisiId: number | null; gerekce: string | null; kisiId: number; istasyonId: number; an: string | null;
+}): Promise<unknown> =>
+  db.sorgu(
+    `INSERT INTO stok_refakat_baslatma (uretim_emri_id, is_emri_id, refakat_partisi_id, gerekce, kisi_id, istasyon_id, zaman)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now()))`,
+    [g.uretimEmriId, g.isEmriId, g.refakatPartisiId, g.gerekce, g.kisiId, g.istasyonId, g.an],
+  );

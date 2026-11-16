@@ -1648,7 +1648,8 @@ export function kodlarAyir(tesis: TesisHaritasi, kapsamdaMi: (merkezId: number) 
 // none, nedensiz duruş ve nedensiz hurda, hurda azaltma (TMI'de hurda azalmaz), sıfır sayım. Kuyruğa dönüş (queued) ve duraklatma (paused) TMI'de
 // duraklatmadır: Arkon başka emre geçerken çalışan eskisini duraklatır (paused); duraklamış emir istasyonu kilitlemez (#241). Çalışmayan emirde TMI değişmez ve kayıt "eslenemedi" olur.
 export type YansimaKomutu =
-  | { komut: 'basla-ya-da-devam'; makineKodlari: readonly string[] }
+  // kart (3337-2 a): terminalin okuttuğu refakat kartı ya da yetkilinin kartsız gerekçesi; yalnız adımın ilk başlatmasında denetlenir.
+  | { komut: 'basla-ya-da-devam'; makineKodlari: readonly string[]; kart: { refakatPartisiId: number | null; gerekce: string | null } }
   | { komut: 'duraklat' }
   // Hazırlık (Arkon `setup`) TMI'de "ayar" olayıdır: başlamamış işte yazılır, Başlat kapatır ve hazırlık süresi ondan ölçülür.
   | { komut: 'ayar' }
@@ -1690,7 +1691,7 @@ function olayKomutu(satir: Readonly<Record<string, unknown>>): { komut: YansimaK
   switch (durum) {
     case 'running': {
       const secim = makineSecimi(satir['mcs']);
-      return secim === null ? { neden: MAKINE_SECIMI_GECERSIZ } : { komut: { komut: 'basla-ya-da-devam', makineKodlari: secim } };
+      return secim === null ? { neden: MAKINE_SECIMI_GECERSIZ } : { komut: { komut: 'basla-ya-da-devam', makineKodlari: secim, kart: baslatmaKaydiKarti(satir) } };
     }
     case 'paused': return { komut: { komut: 'duraklat' } };
     case 'setup': return { komut: { komut: 'ayar' } };
@@ -1712,6 +1713,14 @@ export function uyariBirlestir(var_: string | null | undefined, yeni: string | n
   if (var_ == null || var_ === '') return yeni;
   return var_.includes(yeni) ? var_ : `${var_} ${yeni}`;
 }
+export const KARTSIZ_GEREKCE_ALANI = 'kartsizGerekce';
+// Biçim dışı ya da boş gerekçe yok sayılır; uzunluk ve yetkiyi üretim emirleri denetler.
+const kartsizGerekce = (satir: Readonly<Record<string, unknown>>): string | null => {
+  const g = satir[KARTSIZ_GEREKCE_ALANI];
+  return typeof g === 'string' && g.trim() !== '' ? g : null;
+};
+export const baslatmaKaydiKarti = (satir: Readonly<Record<string, unknown>>): { refakatPartisiId: number | null; gerekce: string | null } =>
+  ({ refakatPartisiId: sayimKarti(satir), gerekce: kartsizGerekce(satir) });
 function sayimKarti(satir: Readonly<Record<string, unknown>>): number | null {
   const k = satir[REFAKAT_KARTI_ALANI];
   return typeof k === 'number' && Number.isInteger(k) && k > 0 && k <= 2147483647 ? k : null;

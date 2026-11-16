@@ -615,7 +615,7 @@ test('kayıtlı iş emri paketi: CORE alanları yazılır, gerisi kalır; deği�
 test('iş emri paketi kimliği kanoniktir; yansıma kararı iş emrini taşır, emir servis katmanında çözülür; stok isteği iş emrini taşır', () => {
   assert.equal(paketIsEmri('tmi-ie-41'), 41);
   for (const k of ['tmi-ie-041', 'tmi-ie-', 'tmi-ie-1x', 'tmi-ue-41', 41]) assert.equal(paketIsEmri(k), null, String(k));
-  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ie-41', state: 'running' }), { emirId: null, isEmriId: 41, komut: { komut: 'basla-ya-da-devam', makineKodlari: [] }, neden: null });
+  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ie-41', state: 'running' }), { emirId: null, isEmriId: 41, komut: { komut: 'basla-ya-da-devam', makineKodlari: [], kart: { refakatPartisiId: null, gerekce: null } }, neden: null });
   assert.equal(yansimaKarari('events', { pkgId: 'tmi-ue-7', state: 'running' }).emirId, 7);
   assert.match(yansimaKarari('events', { pkgId: 'baska', state: 'running' }).neden ?? '', /tmi-ie-<iş emri>/);
   assert.equal(paketinEmri('tmi-ie-41', { tmi: { emirId: 7 } }), 7);
@@ -801,7 +801,7 @@ test('parça sayım sınırı: sağlam parça adedini aşamaz; düzeltme, hurda 
 
 test('parça olayı: öteki parça çalışırken iş emri değişmez; biten parça ötekiler bitmeden iş emrini bitirmez', () => {
   const k = (komut: Parameters<typeof parcaOlayKarari>[0]['komut']) => ({ emirId: null, isEmriId: 41, komut, neden: null });
-  const basla = k({ komut: 'basla-ya-da-devam', makineKodlari: [] });
+  const basla = k({ komut: 'basla-ya-da-devam', makineKodlari: [], kart: { refakatPartisiId: null, gerekce: null } });
   const bitir = k({ komut: 'bitir' });
   assert.deepEqual(parcaOlayKarari(basla, 2, [null]), basla);
   assert.deepEqual(parcaOlayKarari(basla, 2, ['running']), { ...basla, komut: null, neden: PARCA_OTEKI_CALISIYOR });
@@ -937,11 +937,22 @@ test('makine seçimi: yok ya da boş seçim varsayılan makinedir; kod listesi t
 });
 
 test('yansıma kararı: çalışmaya geçiş seçilen makineleri taşır; yalnız mc (ekran varsayılanı) seçim değildir; biçimsiz seçim eşlenemez', () => {
-  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', mcs: ['M2'] }).komut, { komut: 'basla-ya-da-devam', makineKodlari: ['M2'] });
-  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', mc: 'M1' }).komut, { komut: 'basla-ya-da-devam', makineKodlari: [] });
+  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', mcs: ['M2'] }).komut, { komut: 'basla-ya-da-devam', makineKodlari: ['M2'], kart: { refakatPartisiId: null, gerekce: null } });
+  assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', mc: 'M1' }).komut, { komut: 'basla-ya-da-devam', makineKodlari: [], kart: { refakatPartisiId: null, gerekce: null } });
   const kotu = yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', mcs: 'M2' });
   assert.deepEqual([kotu.komut, kotu.neden], [null, MAKINE_SECIMI_GECERSIZ]);
   assert.deepEqual(yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'paused', mcs: ['M2'] }).komut, { komut: 'duraklat' }, 'seçim yalnız başlatmada anlamlıdır');
+});
+
+test('3337-2 a: başlatma kaydı okutulan kartı ya da kartsız gerekçeyi taşır; biçimsiz kart ve boş gerekçe yok sayılır', () => {
+  const kart = (satir: Record<string, unknown>) => {
+    const k = yansimaKarari('events', { pkgId: 'tmi-ue-5', state: 'running', ...satir }).komut;
+    return k?.komut === 'basla-ya-da-devam' ? k.kart : null;
+  };
+  assert.deepEqual(kart({ refakatPartisiId: 12 }), { refakatPartisiId: 12, gerekce: null });
+  assert.deepEqual(kart({ kartsizGerekce: 'Kart basılamadı' }), { refakatPartisiId: null, gerekce: 'Kart basılamadı' });
+  assert.deepEqual(kart({ refakatPartisiId: '12', kartsizGerekce: '  ' }), { refakatPartisiId: null, gerekce: null });
+  assert.deepEqual(kart({ refakatPartisiId: -1 }), { refakatPartisiId: null, gerekce: null });
 });
 
 test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdır, makinelide emre gider; duraklatma ve bitirme başkası çalışırken yalnız kendi katılımıdır', () => {

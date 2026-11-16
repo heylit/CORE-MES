@@ -32,6 +32,22 @@ export const makineYetkinlikIhlali = (
 };
 // Soru 185 a: sayımı yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; düzeltme işlemi olan (yönetici, vardiya sorumlusu) da yazar.
 export const SAYIM_DUZELTME_ISLEMI = 'uretim-emirleri.sayim-duzelt' satisfies Islem;
+
+// 3337-2 a: iş adımı refakat kartı okutularak başlar; kartsız başlatmayı yalnız bu işlemi olan kişi gerekçeyle yapar.
+export const KARTSIZ_BASLATMA_ISLEMI = 'uretim-emirleri.kartsiz-baslat' satisfies Islem;
+export const KARTSIZ_GEREKCE_AZAMI = 500;
+export const KARTSIZ_YETKI_YOK = 'Refakat kartı okutulmadan iş başlatmak yetkili kişinin işidir. Kartı okutun ya da yetkiliye başlattırın.';
+export const KARTLA_GEREKCE_BIRDEN = 'Kart okutulduysa gerekçe yazılmaz.';
+export const KARTSIZ_GEREKCE_UZUN = `Gerekçe en çok ${KARTSIZ_GEREKCE_AZAMI} karakter olur.`;
+export function kartsizBaslatmaIhlali(
+  kart: { refakatPartisiId: number | null; gerekce: string | null }, yetkili: boolean,
+): { tur: 'yetki' | 'gecersiz'; ileti: string } | null {
+  if (kart.gerekce === null) return null;
+  if (kart.refakatPartisiId !== null) return { tur: 'gecersiz', ileti: KARTLA_GEREKCE_BIRDEN };
+  if (kart.gerekce.trim() === '') return { tur: 'gecersiz', ileti: 'Kartsız başlatmanın gerekçesi yazılmalı.' };
+  if (kart.gerekce.length > KARTSIZ_GEREKCE_AZAMI) return { tur: 'gecersiz', ileti: KARTSIZ_GEREKCE_UZUN };
+  return yetkili ? null : { tur: 'yetki', ileti: KARTSIZ_YETKI_YOK };
+}
 export const SAYIM_KATILIMSIZ = 'Bu işe başlamadınız ya da katılmadınız; sayımı işteki kişi, yönetici ya da vardiya sorumlusu girer.';
 export const sayimYetkiIhlali = (katilmis: boolean, duzeltebilir: boolean): string | null => (katilmis || duzeltebilir ? null : SAYIM_KATILIMSIZ);
 export const KATILIM_CALISMIYOR = 'Yalnız çalışan işe katılınır; iş duraklatılmış ya da durdurulmuşsa önce devam ettirin.';

@@ -30,7 +30,7 @@ import {
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
 import {
-  KART_YENILEME_MS, girdiAdaylari, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, type KartSecimNedeni, type RefakatKarti,
+  KART_YENILEME_MS, girdiAdaylari, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, baslatmaKartAlani, type KartSecimNedeni, type RefakatKarti,
 } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { AdimPaylariCevabi, HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
@@ -96,6 +96,7 @@ import { EmrinAdimlari, RotaSeridi, adimCizgisiKimligi, rotaAkisiAdimlari, useEm
 import { lotEslesmesi } from './lot-eslesmesi.ts';
 import { okutulanKoduCoz, useIsGirdileri, useTerminalKartOkutmasi } from '../../../stok/disari.ts';
 import { KartSecimi } from './KartSecimi.tsx';
+import { KARTSIZ_BASLATMA_ISLEMI, KartlaBaslat } from './KartlaBaslat.tsx';
 import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, hazirPdfGoruntusu, useCozulmus } from '../veri/dosyalar.ts';
@@ -117,7 +118,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'cark';
+type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'cark' | 'kartbaslat';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -862,6 +863,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       void depo.Log.add('events', {
         machine: MACHINE, wc: ist.wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), ist.mcs, o.state),
         orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? planliMi(why) : null,
+        ...(o.state === 'running' ? baslatmaKartAlani(o) : {}),
       });
     }
     autoRef.current.state = false;
@@ -1055,6 +1057,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return true;
   };
   const hazirlikta = useRef(false);
+  // 3337-2 a: kart sorusundan dönen başlatma (iş durumu henüz kartı göstermeden) yeniden sorulmasın.
+  const kartGecti = useRef<string | null>(null);
+  const kartBekleyen = useRef<{ t: Gorev | undefined; warned: boolean } | null>(null);
   const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
     if (URETIM_EYLEMLERI.includes(a) && (o.empty || !ok('prod.run'))) return;
     if (bekletme && BEKLEMEDE_KAPALI.has(a)) { say(`Emir beklemede · ${bekletme}`, 'pause', 'hold'); return; }
@@ -1094,6 +1099,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     // Üretim Terminali gibi: TMI emrinde başlatmadan önce girdiler istasyonda mı sorulur; eksikse istek açılır ve iş uyarıyla başlar
     // (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü TMI'nin başlat denetimi söyler.
     const tmiEmir = tmiEmirId(o.pkg);
+    // 3337-2 a: CORE emrinin işi refakat kartıyla başlar; kartsız işte önce kart sorulur (kartsız başlatma yalnız yetkilide).
+    if (a === 'start' && !hazir && !pv && tmiEmir !== null && o.kart == null && !o.kartsizGerekce && kartGecti.current !== siraAnahtari(o)) {
+      kartBekleyen.current = { t, warned: true };
+      ovYaz('kartbaslat');
+      return;
+    }
     if (a === 'start' && !hazir && !pv && tmiEmir !== null && depo.status().mode === 'server') {
       if (hazirlikta.current) return;
       hazirlikta.current = true;
@@ -1109,6 +1120,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   const actRef = useRef(act);
   actRef.current = act;
+  const kartBaslatYetkili = (useOturum().data?.islemler ?? []).includes(KARTSIZ_BASLATMA_ISLEMI);
+  const kartlaBaslat = (alan: { kart: number } | { kartsizGerekce: string }) => {
+    const bekleyen = kartBekleyen.current;
+    kartBekleyen.current = null;
+    ovYaz(null);
+    kartGecti.current = siraAnahtari(o);
+    islerYaz((l) => l.map((x, j) => (j === aiRef.current ? { ...x, ...('kart' in alan ? { kart: alan.kart, kartsizGerekce: null } : { kartsizGerekce: alan.kartsizGerekce }) } : x)));
+    actRef.current('start', bekleyen?.t, bekleyen?.warned ?? true);
+  };
   const sendSample = async () => {
     if (!o.pkg) { say('Bu iş için kontrol planı yok', 'alert', 'hold'); return; }
     let items = D.due.filter((b) => D.who[b.id] !== 'op');
@@ -1550,6 +1570,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         buyukDegisim={(v) => (Math.abs(v - o.good) > Math.max(20, o.good * 0.1) ? `Büyük değişiklik: ${sayi(o.good)} → ${sayi(v)} · doğruysa yeniden onayla` : null)}
         kapat={() => ovYaz(null)}
         onayla={(v) => { if (v > o.good && !sayimOk('prod.fix', iyiArtiNedeni(v - o.good))) return; ovYaz(null); undoable(`Sayaç güncellendi · ${sayi(v)}`, 'check', 'run', () => patch({ good: v })); }} />
+      {ov === 'kartbaslat' ? (
+        <KartlaBaslat is={o.no} kartlar={kartlar.filter((k) => k.uretimEmriId === tmiEmirId(o.pkg))} yetkili={kartBaslatYetkili}
+          kartla={(kart) => kartlaBaslat({ kart })} kartsiz={(kartsizGerekce) => kartlaBaslat({ kartsizGerekce })}
+          kamera={() => scanYaz({ baslik: 'Refakat kartını okut', ipucu: 'Kartın karekodunu çerçeveye tutun', okundu: (k) => {
+            const t = terminalOkutmasi(k);
+            if (t.tur === 'kart') kartlaBaslat({ kart: t.kartId }); else { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); }
+          } })}
+          kapat={() => { kartBekleyen.current = null; ovYaz(null); }} />
+      ) : null}
       {ov === 'kartsec' && kartSecim ? (
         <KartSecimi kart={kartSecim.kart.etiket} alinan={kartSecim.alinan} neden={kartSecim.neden} adaylar={kartSecim.adaylar.map((k) => isler.findIndex((x) => x.state !== 'done' && siraAnahtari(x) === k)).filter((i) => i >= 0)} isler={isler}
           sec={kartSecildi} kapat={() => { ovYaz(null); kartSecimYaz(null); }} />

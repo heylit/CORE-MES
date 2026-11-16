@@ -110,7 +110,9 @@ export const makineDoluAyrintisi = z.object({
   kisi: z.object({ id: KIMLIK, ad: z.string() }),
   baslama: z.string(),
 });
-export const makineDevralGovdesi = z.object({ kullanimId: KIMLIK }).strict();
+// 3337-2 a: devralma işi başlatıyorsa okutulan refakat kartı ya da yetkilinin kartsız gerekçesi (en çok 500 karakter).
+export const baslatmaKartiAlanlari = { refakatPartisiId: KIMLIK.optional(), kartsizGerekce: z.string().max(500).optional() };
+export const makineDevralGovdesi = z.object({ kullanimId: KIMLIK, ...baslatmaKartiAlanlari }).strict();
 // 1979 (2003 c): çalışan adıma planda payı olan makine eklenir.
 export const makineEkleGovdesi = z.object({ makineId: KIMLIK }).strict();
 // Adımın plandaki payları: kaynak makine ya da kişi; sayilan kişinin bu adımda saydığı (sağlam ve karar bekleyen),

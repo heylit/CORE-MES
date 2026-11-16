@@ -6,6 +6,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { AsimlarCevabi, Emir, EmirDurumu, KaliteKarari, KatilimCevabi, RefakatKartiCevabi, SayimKaydi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
+import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
 import * as sorgularBekletme from './sorgular/bekletme/sorgular.ts';
@@ -60,12 +61,15 @@ export const emirAyar = (db: Db, kullanici: Kullanici, id: number, an?: string, 
   servis.kayitAniyla(db, an, () => servis.emirAyar(db, uretenKisi(kullanici), id, isEmriId));
 // Makine seçimi isteğe bağlı: verilmezse iş emrinin makinesi kullanılır. Makine doluysa CAKISMA, ayrıntısı `MakineDoluAyrintisi`.
 // Sıra dışı başlatma (önceki adım bitmeden, devir adedi gelmeden) reddedilmez, uyarı döner (626 a).
+// kart (3337-2 a): terminal yolu okutulan kartı ya da kartsız gerekçeyi verir; gerekçe `uretim-emirleri.kartsiz-baslat` ister.
 export const emirBaslat = (
-  db: Db, kullanici: Kullanici, id: number, makineIdleri?: readonly number[], an?: string, isEmriId?: number,
+  db: Db, kullanici: Kullanici, id: number, makineIdleri?: readonly number[], an?: string, isEmriId?: number, kart?: BaslatmaKarti,
 ): Promise<{ emir: Emir; uyari: string | null }> =>
-  servis.kayitAniyla(db, an, () => servis.emirBaslat(db, uretenKisi(kullanici), id, makineIdleri, isEmriId));
-export const makineDevral = (db: Db, kullanici: Kullanici, id: number, kullanimId: number, an?: string, isEmriId?: number): Promise<{ emir: Emir }> =>
-  servis.kayitAniyla(db, an, () => servis.makineDevral(db, uretenKisi(kullanici), id, kullanimId, isEmriId));
+  servis.kayitAniyla(db, an, () => servis.emirBaslat(db, uretenKisi(kullanici), id, makineIdleri, isEmriId, servis.baslatmaKartiniDenetle(kullanici, kart)));
+export const makineDevral = (
+  db: Db, kullanici: Kullanici, id: number, kullanimId: number, an?: string, isEmriId?: number, kart?: BaslatmaKarti,
+): Promise<{ emir: Emir }> =>
+  servis.kayitAniyla(db, an, () => servis.makineDevral(db, uretenKisi(kullanici), id, kullanimId, isEmriId, servis.baslatmaKartiniDenetle(kullanici, kart)));
 // Adet verilirse sayım ona eşitlenir: başkasının sayımını düşürmesin diye kişi işe katılmış ya da düzeltme işlemli olmalı (185 a).
 // Akışlı ya da bekleyen adım önceki adım bitmeden bitmez (CAKISMA, 649 a); eksi bakiyeyle bitiş uyarı döner (654 a).
 // İlk parça kararı bekleyen parça varken adım bitmez (CAKISMA, 2521 b).
@@ -530,7 +534,7 @@ export { hurdaSayimDinle, kaliteKarariDinle, saglamSayimDinle } from './sayim-ol
 // Başlatma denetimi (kart #1289, karar 110 b): stok, adımın girdisi istasyonda yoksa eksiği istek olarak açar ve uyarı döner; denetçisini
 // kendisi kaydeder.
 export { baslatmaDenetle } from './baslatma-denetimi.ts';
-export type { BaslatmaDenetimi, BaslatmaOlayi } from './baslatma-denetimi.ts';
+export type { BaslatmaDenetimi, BaslatmaKarti, BaslatmaOlayi } from './baslatma-denetimi.ts';
 export type {
   HurdaSayimDinleyicisi, HurdaSayimOlayi, KaliteKarariDinleyicisi, KaliteKarariOlayi, SaglamSayimDinleyicisi, SaglamSayimOlayi,
 } from './sayim-olayi.ts';

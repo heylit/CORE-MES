@@ -105,6 +105,8 @@ export const kayitEkleCevabi = z.object({
 export const makineDevralGovdesi = z.object({
   emirId: z.number().int().positive(), kullanimId: z.number().int().positive(), cid: z.string().min(1).max(200).optional(),
   durdurulanEmirId: z.number().int().positive().optional(),
+  // 3337-2 a: devralma işi başlatıyorsa işin refakat kartı ya da yetkilinin kartsız gerekçesi.
+  refakatPartisiId: z.number().int().positive().max(2147483647).optional(), kartsizGerekce: z.string().max(500).optional(),
 }).strict();
 // cid: devralmayı doğuran reddedilmiş başlatma kaydı; devralma yazılınca o yansıma satırı çözülmüş sayılır.
 export const calismaDevralGovdesi = z.object({

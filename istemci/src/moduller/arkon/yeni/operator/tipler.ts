@@ -21,6 +21,8 @@ export interface Is extends Order {
   toolEvt?: number;
   acks?: Record<string, UyariOnayi>;
   kart?: number | null;
+  // 3337-2 a: kart yokken yetkilinin yazdığı kartsız başlatma gerekçesi; başlatma kaydıyla sunucuya gider.
+  kartsizGerekce?: string | null;
 }
 
 export interface UyariOnayi { at: number; by: string; cnt: number; k: number; v?: number | undefined }

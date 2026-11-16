@@ -14,7 +14,7 @@ import type { EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts'
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { kararSayaclari, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { baslatmaDenetle, kararSayaclari, kararliSayimiSonuclandir, uretimEmriAc, type BaslatmaKarti } from '../uretim-emirleri/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { PLANLAMA_ANAHTARI } from '../plan/disari.ts';
 import { isler } from './isler.ts';
@@ -3609,5 +3609,52 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(red.durum, 200, JSON.stringify(red.govde));
     const redSonucu = await vt().tek<{ govde: { lotKarari: { kayit: Record<string, unknown> } } }>("SELECT govde FROM arkon_belge WHERE depo = 'results' AND kimlik = $1", [k2]);
     assert.deepEqual([redSonucu?.govde.lotKarari.kayit['karar'], redSonucu?.govde.lotKarari.kayit['redde']], ['Ret', '0']);
+  });
+
+  // 3337-2 a: terminal yolları başlatmaya kartı taşır (ic cagri tasimaz). Kayıt denetçisi başlatma olayının kartını yazar.
+  test('3337-2 a: Arkon "running" kaydının kartı başlatmaya gider; makine devralma reddedilen kaydın kartını kullanır', async () => {
+    const gelen: (BaslatmaKarti | undefined)[] = [];
+    const birak = baslatmaDenetle(async (_db, o) => { gelen.push(o.kart); return null; });
+    try {
+      const r = await rotaliEmirKur({ plansiz: true });
+      await paketiKaydet(r.emirId, r.ilk);
+      const sahip = ortam!.sahip;
+      await sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['YNS-RK-']);
+      const kimlik = `yns-rk-${(sayac += 1)}`;
+      const hm = (await sahip.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, 'hammadde', 'YNS-RK-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+        [kimlik, sayac, JSON.stringify({ id: kimlik, com: { ad: 'Deneme çubuk' } }), yoneticiId]))!.no;
+      const lot = (await sahip.tek<{ id: number }>('INSERT INTO stok_parti (malzeme_id, acan_kisi_id, lot_no) VALUES ($1, $2, $3) RETURNING id', [hm, yoneticiId, `LT-${kimlik}`]))!.id;
+      const kart = (await sahip.tek<{ id: number }>(
+        'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id', [r.emirId, hm, lot, yoneticiId]))!.id;
+      // Makineyi başka bir iş tutar: kartla gelen başlatma "makine dolu" reddi alır, devralma o kaydın kartıyla başlatır.
+      istasyonId = r.ilkId;
+      const tutan = await emirAc();
+      const makine = r.makineKodlari[0]!;
+      const tutanOlay = olay(tutan, 'running', { mcs: [makine] });
+      await olayEkle(operator, tutanOlay);
+      assert.equal((await yansima(tutanOlay.cid))?.sonuc, 'yazildi');
+      const op2 = await operatorKur(`rk${sayac}`);
+      const basla = olay(r.emirId, 'running', { machine: r.ilk, mcs: [makine], refakatPartisiId: kart });
+      const red = (await olayEkle(op2, basla)).govde.reddedilen[0];
+      assert.ok(red?.makineDolu, JSON.stringify(red));
+      gelen.length = 0;
+      const devral = await istek(op2, 'POST', '/arkon/makine-devral', { emirId: r.emirId, kullanimId: red.makineDolu.doluOlan.kullanimId, cid: basla.cid });
+      assert.equal(devral.durum, 200, JSON.stringify(devral.govde));
+      assert.deepEqual(gelen.at(-1), { refakatPartisiId: kart, gerekce: null }, 'devralma reddedilen kaydın kartıyla başlattı');
+      const iz = await vt().sorgu<{ refakat_partisi_id: number | null }>('SELECT refakat_partisi_id FROM stok_refakat_baslatma WHERE uretim_emri_id = $1', [r.emirId]);
+      assert.deepEqual(iz.map((x) => x.refakat_partisi_id), [kart]);
+      // Kartsız "running" de kart alanını taşır (ikisi de null); iç çağrı taşımaz.
+      const r2 = await rotaliEmirKur();
+      await paketiKaydet(r2.emirId, r2.ilk);
+      gelen.length = 0;
+      const kartsiz = olay(r2.emirId, 'running', { machine: r2.ilk });
+      assert.equal((await ekle(operator, 'events', kartsiz)).durum, 200);
+      assert.equal((await yansima(kartsiz.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(kartsiz.cid)));
+      assert.deepEqual(gelen, [{ refakatPartisiId: null, gerekce: null }]);
+    } finally {
+      birak();
+    }
   });
 });

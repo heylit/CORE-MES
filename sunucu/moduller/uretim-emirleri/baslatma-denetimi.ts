@@ -5,7 +5,10 @@ import { hazirlikDenetimi } from './hazirlik.ts';
 // modüller döngüye girerdi, bu yüzden denetçi kendini kaydeder. Engel bütün işlemi geri alır; uyarı başlatmayı durdurmaz, başlatma
 // cevabında kullanıcıya gösterilir (karar 110 b: girdi istasyonda yoksa iş uyarıyla başlar). Uyarı veren denetçinin yazdığı
 // başlatmayla aynı işlemdedir.
-export interface BaslatmaOlayi { uretimEmriId: number; isEmriId: number; istasyonId: number; kisiId: number }
+// 3337-2 a: terminalden gelen başlatma okutulan refakat kartını ya da yetkilinin kartsız gerekçesini taşır (ikisi birden olmaz; yetki
+// disari.ts'de denetlenir; an, kartla gelen başlatmanın kayıt anıdır). Verilmezse (iç çağrı: örnek veri) kart aranmaz; terminal yolları her zaman verir, kartsızda ikisi de null.
+export interface BaslatmaKarti { refakatPartisiId: number | null; gerekce: string | null }
+export interface BaslatmaOlayi { uretimEmriId: number; isEmriId: number; istasyonId: number; kisiId: number; kart?: BaslatmaKarti; an?: string }
 export type BaslatmaDenetimi = { engel: string } | { uyari: string } | null;
 export type BaslatmaDenetcisi = (db: Db, olay: BaslatmaOlayi) => Promise<BaslatmaDenetimi>;
 

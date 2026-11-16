@@ -16,6 +16,7 @@ import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleS
 import { aramaUclari } from './arama/uclar.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
 import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
@@ -24,11 +25,14 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
-  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
+  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, baslatmaKartiniDenetle, sonOlaylar, adimPaylari, makineEkle,
   izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
 const ADIMLI_OKUMA = { biri: ADIMLI_OKUMA_ISLEMLERI } as const;
+// 3337-2 a: devralma işi başlatırsa terminal yolu sayılır: kart ya da yetkili gerekçesi aranır.
+const devralKarti = (kullanici: Kullanici, g: { refakatPartisiId?: number; kartsizGerekce?: string }) =>
+  baslatmaKartiniDenetle(kullanici, { refakatPartisiId: g.refakatPartisiId ?? null, gerekce: g.kartsizGerekce ?? null });
 // 288 a: ana sayfa sayılarını planı gören de okur; emir listesi ve ayrıntısı ADIMLI_OKUMA'da kalır.
 const ADIMLI_OZET_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'plan.oku'] } as const;
 // Katılımları ve emrin ayrıntısını terminaldeki kişi de listeyi okuyan da görür.
@@ -101,7 +105,7 @@ const emirUclari = [
     parametre: emirParametresi,
     govde: makineDevralGovdesi,
     cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId),
+    isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId, undefined, devralKarti(kullanici, govde)),
   }),
   uc({
     yontem: 'POST',
@@ -710,7 +714,7 @@ const adimKomutUclari = [
     parametre: isEmriParametresi,
     govde: makineDevralGovdesi,
     cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId, parametre.isEmriId),
+    isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId, parametre.isEmriId, devralKarti(kullanici, govde)),
   }),
   uc({
     yontem: 'POST',

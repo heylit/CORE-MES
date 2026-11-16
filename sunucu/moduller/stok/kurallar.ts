@@ -1496,6 +1496,23 @@ export function refakatTeslimEngeli(
 
 // 3337 (3337-2 a): malzeme kartı (lot etiketi) depoda kalır. Lotlu hammadde emre ya da istasyona refakat kartıyla gider; kart yoksa
 // depo malzemeyi sepete alıp karta dönüştürür. Statülü parça, lotsuz (istisna) ve başka türler bu kuralın dışındadır.
+// 3337-2 a: iş adımı refakat kartı okutularak başlar. Kart bu emrin, emrin girdisi olan alt emrin ya da bölünmüş emrin üstünün açık
+// kartı olmalı. Girdisi olmayan emirde (malzeme ihtiyacı yok) kart aranmaz. Gerekçe yolu üretim emirlerinde yetkiyle denetlenmiştir.
+export const KARTSIZ_BASLATMA = 'Refakat kartı okutulmadan iş başlamaz. Kartı okutun ya da kart numarasını girin; kart yoksa yetkili kişi gerekçeyle başlatır.';
+export const BASLATMA_KARTI_YOK = 'Okutulan refakat kartı bulunamadı.';
+export const BASLATMA_KARTI_KAPALI = 'Okutulan refakat kartı iptal edilmiş; geçerli kartı okutun.';
+export const BASLATMA_KARTI_BASKA = 'Okutulan refakat kartı bu iş emrinin değil.';
+export function baslatmaKartiEngeli(g: {
+  refakatPartisiId: number | null; gerekce: string | null; girdiVar: boolean;
+  kart: { durum: 'acik' | 'iptal'; uretimEmriId: number } | null; uretimEmriId: number; yakinEmirler: readonly number[];
+}): string | null {
+  if (g.gerekce !== null) return null;
+  if (g.refakatPartisiId === null) return g.girdiVar ? KARTSIZ_BASLATMA : null;
+  if (g.kart === null) return BASLATMA_KARTI_YOK;
+  if (g.kart.durum !== 'acik') return BASLATMA_KARTI_KAPALI;
+  return g.kart.uretimEmriId === g.uretimEmriId || g.yakinEmirler.includes(g.kart.uretimEmriId) ? null : BASLATMA_KARTI_BASKA;
+}
+
 export const KARTSIZ_TESLIM = 'Lot etiketiyle emre teslim edilmez. Malzemeyi sepete alın, "Refakat kartına dönüştür" deyin ve kartla teslim edin.';
 export function kartsizLotTeslimEngeli(g: { kartVar: boolean; partiId: number | null; statuId: number | null; malzemeTuru: string | null; emreGider: boolean }): string | null {
   if (g.kartVar || g.partiId === null || g.statuId !== null || g.malzemeTuru !== 'hammadde' || !g.emreGider) return null;

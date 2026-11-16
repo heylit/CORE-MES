@@ -17,7 +17,7 @@ import { ILETI_GITMEDI } from '../data/gonderim-hatasi';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/numune';
 import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, kaliteMerkeziNumuneYamasi, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
-import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
+import { KART_YENILEME_MS, baslatmaKartAlani, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
 import { AYRIM_YENILEME_MS, baslatmaMakineReddi, calisabildigiMakineler, kayittakiMakineler, varsayilanSecim, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
 import { CALLS, Fragment, I, ORDERS, REASONS, ST, dur, fmt, html, isPlannedReason, pl, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
 import { Dial, EtkinKart, Orbs, Queue, Top } from './bilesenler';
@@ -327,7 +327,7 @@ export function App({ preview }) {
     if (l && l.no === o.no && l.state === o.state) return;
     LS.set(k, { no: o.no, state: o.state, at: Date.now() });
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
-    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(varsayilanSecim(machineOf(MACHINE).mcs, secilebilir(), kilitsizSecim(mcSel, ayrim)), secilebilir(), o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
+    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(varsayilanSecim(machineOf(MACHINE).mcs, secilebilir(), kilitsizSecim(mcSel, ayrim)), secilebilir(), o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null, ...(o.state === 'running' ? baslatmaKartAlani(o) : {}) });
     autoRef.current.state = false; lastNoteRef.current = null;
     schedAutoCall(why);
   }, [o.state, o.no]);
