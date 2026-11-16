@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { SIMGELER } from '../../../../ortak/tasarim/simgeler.ts';
 import { bosIs } from './kurallar.ts';
 import { DurumDugmeleri, GorevKarti, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 import { YerelAdimlar } from './Adimlar.tsx';
@@ -191,6 +192,9 @@ describe('Aynı emrin iki adımı kuyrukta (639f)', () => {
       siradaki={undefined} onde={null} kartlar={[]} kartla={null} yer={(i) => yerler[i]!} />);
     const yer = [...container.querySelectorAll('.tc-ay1-is-yer')].map((x) => x.textContent);
     expect(yer).toEqual(['ORN-IST-1ORN-CNC-01 · ORN 5 eksen', 'ORN-IST-1Makine seçilmedi']);
+    const makine = [...container.querySelectorAll('.tc-ay1-is-yer > span:last-child')];
+    expect(makine.map((m) => m.hasAttribute('data-yok'))).toEqual([false, true]);
+    expect(makine.map((m) => m.querySelector('path')?.getAttribute('d'))).toEqual([SIMGELER.cpu, SIMGELER.alert]);
   });
 
   it('639h: fazla sayan adımın kartında eksi bakiye; öteki adımda ve biten işte yok', () => {

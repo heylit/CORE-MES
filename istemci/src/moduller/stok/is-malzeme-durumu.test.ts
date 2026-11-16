@@ -52,6 +52,13 @@ describe('isin malzeme durumu (618)', () => {
     expect(malzemeYetmesi([])).toBeNull();
   });
 
+  it('yetme: bir adetligi sifir olan girdi en basta olsa da sayilmaz; kesirli adet asagi yuvarlanir (2.6 -> 2)', () => {
+    const m = (id: number, birAdet: string, istasyonda: string): Malzeme => ({ ...malzeme(id, '1.000', istasyonda), birAdet });
+    const y = malzemeYetmesi([{ ...is(82, [m(5, '0.000', '0.000'), m(6, '1.000', '2.600'), m(7, '1.000', '5.000')]), calisiyor: true }]);
+    expect(y).toEqual({ adetlik: 2, kalanAdet: 10, miktar: '2.600', birim: null, kod: 'HM-6', ad: null });
+    expect(malzemeYetmesi([is(83, [m(8, '0.000', '4.000')])])).toBeNull();
+  });
+
   it('metin once yapilacak isi soyler: gelen, sonra eksik, sonra istendi', () => {
     expect(durumMetni({ girdi: 3, eksik: 1, istendi: 1, gelen: 2 })).toEqual({ metin: 'Gelen 2', ton: 'bilgi' });
     expect(durumMetni({ girdi: 3, eksik: 1, istendi: 1, gelen: 0 })).toEqual({ metin: '1 eksik', ton: 'hata' });
