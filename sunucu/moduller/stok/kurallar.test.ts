@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { irsaliyeBelgeAdi } from './kurallar.ts';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -1070,5 +1070,15 @@ describe('3094 a istek kapsamı', () => {
     assert.equal(istekKapsamindanMuafMi(['stok.toplama', 'sayfa.stok']), false);
     assert.equal(istekKapsamindanMuafMi(['stok.istek']), false);
     assert.equal(istekKapsamindanMuafMi([]), false);
+  });
+  test('3337 (3337-2 a): emre giden lotlu hammadde kartsız gitmez; kartlı, lotsuz, statülü, başka tür ve emirsiz teslim serbest', () => {
+    const g = { kartVar: false, partiId: 5, statuId: null, malzemeTuru: 'hammadde', emreGider: true };
+    assert.equal(kartsizLotTeslimEngeli(g), KARTSIZ_TESLIM);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, kartVar: true }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, partiId: null }), null, 'lotsuz: istisna kartı yolu');
+    assert.equal(kartsizLotTeslimEngeli({ ...g, statuId: 3 }), null, 'adım statüsündeki parça');
+    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: 'sarf' }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: null }), null);
+    assert.equal(kartsizLotTeslimEngeli({ ...g, emreGider: false }), null, 'emirsiz taşıma');
   });
 });

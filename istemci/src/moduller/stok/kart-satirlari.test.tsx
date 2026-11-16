@@ -9,9 +9,10 @@ import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';
 import { DepoSepeti } from './Sepet.tsx';
 import { OkutmaSonucu } from './OkutmaSonucu.tsx';
 import { teslimGovdesi } from './okut-akisi.ts';
+import { cihazYazicisiKaydet } from '../etiket-merkezi/disari.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
 const OPERATOR: Kullanici = { id: 9, ad: 'Deneme Operatör', islemler: ['stok.istek'] };
 const KART: RefakatPartisi = {
@@ -99,9 +100,44 @@ describe('Sepetim (Soru 133)', () => {
     const liste = await screen.findByRole('list', { name: 'Sepetim' });
     expect(within(liste).getAllByRole('listitem')[0]!.textContent).toMatch(/kart UE-000001-P1.*Hedef: Freze 2/);
     expect(screen.queryByRole('button', { name: 'Hepsini taşı' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Refakat kartına geç' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refakat kartına dönüştür' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Teslim et' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ satirlar: [{ satirId: 3 }] }));
+  });
+
+  it('3337-2 a: depoda kartsız lotlu satır "Kartsız" görünür ve "Refakat kartına dönüştür" düğmesi taşır; kartlı satırda düğme yok', async () => {
+    sunucuKur({ ...OPERATOR, islemler: ['stok.istek', 'stok.transfer'] }, {
+      'GET /stok/sepet': () => json(200, { satirlar: [SATIR, { ...SATIR, id: 4, refakat: null }] }),
+    });
+    ciz(<DepoSepeti />);
+    const [kartli, kartsiz] = within(await screen.findByRole('list', { name: 'Sepetim' })).getAllByRole('listitem');
+    expect(within(kartli!).queryByRole('button', { name: 'Refakat kartına dönüştür' })).toBeNull();
+    expect(within(kartli!).queryByText('Kartsız')).toBeNull();
+    expect(within(kartsiz!).getByText('Kartsız')).toBeTruthy();
+    expect(within(kartsiz!).getByText(/Kartsız satır emre teslim edilemez. Önce karta dönüştürün./)).toBeTruthy();
+    fireEvent.click(within(kartsiz!).getByRole('button', { name: 'Refakat kartına dönüştür' }));
+    expect(await screen.findByRole('button', { name: 'Dönüştür ve bas' })).toBeTruthy();
+  });
+
+  it('3337-2 a: "Dönüştür ve bas" emir ve sepet satırıyla kartı açar, varsayılan yazıcıya bir kez basar ve pencereyi kapatır', async () => {
+    cihazYazicisiKaydet('refakat', { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+    const istekler = sunucuKur({ ...OPERATOR, islemler: ['stok.istek', 'stok.transfer', 'etiket-merkezi.bas'] }, {
+      'GET /stok/sepet': () => json(200, { satirlar: [{ ...SATIR, id: 4, refakat: null }] }),
+      'GET /uretim-emirleri': () => json(200, { emirler: [{ id: 7, emirNo: 'UE-7', parcaNo: 'P-1', parcaAd: 'Deneme', durum: 'planli', adet: 10 }] }),
+      'POST /stok/refakat-partileri/ac': () => json(200, { refakat: { ...KART, id: 21 } }),
+      'POST /etiket-merkezi/sablonlar/refakat-100x150/bas': () => json(200, { baskiId: 1, sonuc: 'gonderildi', ileti: null }),
+    });
+    ciz(<DepoSepeti />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Refakat kartına dönüştür' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartına dönüştür' });
+    await within(pencere).findByRole('option', { name: /UE-7/ });
+    fireEvent.change(within(pencere).getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Dönüştür ve bas' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/refakat-partileri/ac')?.govde).toEqual({ uretimEmriId: 7, sepetSatirId: 4 }));
+    await waitFor(() => expect(istekler.filter((i) => i.yol.startsWith('/etiket-merkezi/'))).toHaveLength(1));
+    expect(istekler.find((i) => i.yol.startsWith('/etiket-merkezi/'))?.govde).toMatchObject({ kayit: { tur: 'refakat-partisi', idler: [21] } });
+    // Pencere kapanır ve kart görünümü de açılmaz: depocu sepete döner, kart yazıcıdadır.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('Lot izi okutulan kartın lotunun izini açar; stok okuması olmayan görmez', async () => {

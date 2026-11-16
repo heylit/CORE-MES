@@ -86,7 +86,7 @@ export function DepoSepeti() {
         <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{sonuc.kalanlar.length} satır gönderilemedi: {sonuc.kalanlar.map((k) => k.neden).join(' · ')}</p>
       )}
       {satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Depo sepeti boş. Okutulan kartın satırını ya da malzemeyi sonuçtan sepete ekleyin." /> : (
-        <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Sepetim">
+        <ul className="tc-stok-isler tc-stok-teslim-liste tc-stok-depo-sepeti" aria-label="Sepetim">
           {satirlar.map((x) => (
             <li key={x.id} className="tc-stok-is tc-stok-teslim-satir">
               <div>
@@ -94,16 +94,18 @@ export function DepoSepeti() {
                 <span className="tc-stok-mono">{x.kaynakKonumKod ?? 'En eski giriş'}{x.partiEtiketi ? ` · ${x.partiEtiketi}` : ''}{x.refakat ? ` · kart ${x.refakat.etiket}` : ''}</span>
                 <span>{x.hedef ? `Hedef: ${x.hedef.ad ?? x.hedef.kod}` : 'Hedef yok; Teslim et bu satırı göndermez'}</span>
                 {Number(x.miktar) > Number(x.mevcut) && <Rozet ton="hata">Yetersiz stok</Rozet>}
+                {x.partiId !== null && !x.refakat && <Rozet ton="uyari">Kartsız</Rozet>}
+                {x.partiId !== null && !x.refakat && <span>{depocu ? 'Kartsız satır emre teslim edilemez. Önce karta dönüştürün.' : 'Kartsız satır emre teslim edilemez; depocu karta dönüştürür.'}</span>}
               </div>
               <div className="tc-stok-eylem">
-                {depocu && x.partiId !== null && !x.refakat && <Dugme tur="ikincil" simge="tag" onClick={() => setKarta(x)}>Refakat kartına geç</Dugme>}
+                {depocu && x.partiId !== null && !x.refakat && <Dugme tur="ikincil" simge="printer" onClick={() => setKarta(x)}>Refakat kartına dönüştür</Dugme>}
                 <Dugme tur="ikincil" simge="trash" onClick={() => sil.komut.mutate({ id: x.id })}>Kaldır</Dugme>
               </div>
             </li>
           ))}
         </ul>
       )}
-      {/* Emre ayırma (kart #123, kullanıcı akışı 14:16): lot okutularak eklenen satır karta geçer, sepetten çıkar; malzeme kartla teslim edilir. */}
+      {/* Emre ayırma (kart #123; 3337-2 a): lot okutularak eklenen satır karta dönüşür, sepette kalır; malzeme kartla teslim edilir. */}
       {karta && <RefakatAcPenceresi kaynak={{ sepetSatirId: karta.id }} ad={`${karta.malzemeAd ?? `Kart ${karta.malzemeId}`} · ${karta.partiEtiketi ?? ''}`} kapat={() => setKarta(null)} />}
       {satirlar.length > 0 && (
         <div className="tc-stok-eylem">

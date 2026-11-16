@@ -22,7 +22,7 @@ import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
   kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, tasinanMahsubu, adetMiktari, type BaslatmaEksigi,
-  rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
+  rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, kartsizLotTeslimEngeli,
   sahipsizStatuluHesapla, refakatEtiketi,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -556,6 +556,14 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi,
     if (fazla) aciklama = (aciklama === null ? fazla : `${aciklama} · ${fazla}`).slice(0, 200);
     uretimEmriId ??= istek.uretimEmriId;
   }
+  // 3337: emre giden lotlu hammadde kartsız gitmez; kart sepette "Refakat kartına dönüştür" ile açılır ve okutulur. Emirsiz istasyon
+  // stoğu serbest kalır; iş o stokla da kart okutmadan başlamaz (başlatma denetimi).
+  const kartsiz = kartsizLotTeslimEngeli({
+    kartVar: refakat !== null, partiId, statuId, malzemeTuru: (await malzemeOzeti(db, malzemeId))?.tur ?? null,
+    emreGider: uretimEmriId !== null && kalite === 'serbest',
+  });
+  // Ayrıntı istemcinin "Refakat kartına dönüştür" penceresini doldurur: kart bu emir ve lotla açılır, gönderim kartla yinelenir.
+  if (kartsiz) throw dogrulama(kartsiz, 'refakatPartisiId', { kartsiz: { uretimEmriId, partiId, malzemeId } });
   let acilan = null as AcilanKart | null;
   const id = await korumali(async () => {
     await serbestDenetle(db, malzemeId, kaynak, partiId, statuId, bindenMetin(binde(g.miktar)), 'gönderilemez', kalite);

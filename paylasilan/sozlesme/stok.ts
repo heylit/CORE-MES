@@ -1069,9 +1069,13 @@ export const partiIziCevabi = z.object({
 export type PartiIziCevabi = z.output<typeof partiIziCevabi>;
 // Lot iki yoldan gelir (Soru 116 b): okutulan lot etiketi (`LOT:<lot no>`) ya da lot okutularak eklenmiş depo sepeti satırı. Kart
 // etiketi lot yerine geçmez. Sepet satırından açılınca satır sepetten çıkar; malzeme bundan sonra kartla ilerler.
+// 3337: `partiId` teslim penceresinin "Refakat kartına dönüştür" yoludur (kartsız gönderimin ayrıntısındaki lot); üçünden yalnız biri verilir.
 export const refakatPartisiAcGovdesi = z.object({
-  uretimEmriId: kimlik, lotKodu: z.string().trim().min(1).max(120).optional(), sepetSatirId: buyukKimlik.optional(),
-}).refine((g) => (g.lotKodu === undefined) !== (g.sepetSatirId === undefined), { message: 'Lotu okutun ya da sepetteki lot satırını seçin.', path: ['lotKodu'] });
+  uretimEmriId: kimlik, lotKodu: z.string().trim().min(1).max(120).optional(), sepetSatirId: buyukKimlik.optional(), partiId: kimlik.optional(),
+}).refine((g) => [g.lotKodu, g.sepetSatirId, g.partiId].filter((x) => x !== undefined).length === 1, { message: 'Lotu okutun ya da sepetteki lot satırını seçin.', path: ['lotKodu'] });
+// 3337: kartsız emre gönderimin hata ayrıntısı (DOGRULAMA, alan refakatPartisiId).
+export const kartsizTeslimAyrintisi = z.object({ kartsiz: z.object({ uretimEmriId: z.number().int(), partiId: z.number().int(), malzemeId: z.number().int() }) });
+export type KartsizTeslimAyrintisi = z.output<typeof kartsizTeslimAyrintisi>;
 export type RefakatPartisiAcGovdesi = z.input<typeof refakatPartisiAcGovdesi>;
 export const refakatPartisiCevabi = z.object({ refakat: refakatPartisi });
 export type RefakatPartisiCevabi = z.output<typeof refakatPartisiCevabi>;

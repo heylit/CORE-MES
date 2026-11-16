@@ -64,16 +64,18 @@ export async function emrinRefakatPartileri(db: Db, uretimEmriId: number): Promi
   return { partiler: await refakatPartileriCevir(db, await sorgular.emrinRefakatPartileri(db, uretimEmriId)) };
 }
 // Soru 116 b: emre ayırmada lot etiketi okutulur (ya da lot okutularak eklenmiş sepet satırı seçilir); kart etiketi kartı açmaz. Aynı emir ve lotun açık partisi
-// varsa o döner (aynı lotun kalanı aynı kartla gider); başka lot yeni parti açar.
-export async function refakatPartisiAc(db: Db, kisiId: number, g: { uretimEmriId: number; lotKodu?: string | undefined; sepetSatirId?: number | undefined }): Promise<RefakatPartisiCevabi> {
+// varsa o döner (aynı lotun kalanı aynı kartla gider); başka lot yeni parti açar. Sepet satırı sepette kalır; karta bağlanması
+// (3337) `sepetSatiriniKartaDonustur` işidir.
+export async function refakatPartisiAc(db: Db, kisiId: number, g: { uretimEmriId: number; lotKodu?: string | undefined; sepetSatirId?: number | undefined; partiId?: number | undefined }): Promise<RefakatPartisiCevabi> {
   let lot: Awaited<ReturnType<typeof sorgular.partiBul>>;
-  let sepetSatiri: number | null = null;
   if (g.sepetSatirId !== undefined) {
     const satir = (await sorgular.sepetSatirlari(db, kisiId, true)).find((x) => x.id === g.sepetSatirId);
     if (!satir) throw bulunamadi('Sepet satırı bulunamadı.');
     if (satir.partiId === null) throw dogrulama('Bu satırın lotu yok; lot etiketini okutup sepete ekleyin.', 'sepetSatirId');
     lot = await sorgular.partiBul(db, satir.partiId);
-    sepetSatiri = satir.id;
+  } else if (g.partiId !== undefined) {
+    lot = await sorgular.partiBul(db, g.partiId);
+    if (!lot) throw dogrulama('Lot bulunamadı.', 'partiId');
   } else {
     const t = kodTuru(g.lotKodu ?? '');
     lot = t.tur === 'lot' ? await sorgular.lotNoylaParti(db, t.deger) : null;
@@ -85,7 +87,6 @@ export async function refakatPartisiAc(db: Db, kisiId: number, g: { uretimEmriId
   const e = await uretimEmriOzeti(db, g.uretimEmriId);
   if (e === null) throw dogrulama('Üretim emri bulunamadı.', 'uretimEmriId');
   if (e.durum === 'bitti' || e.durum === 'iptal') throw dogrulama(`Emir ${e.emirNo} ${e.durum === 'bitti' ? 'bitti' : 'iptal edildi'}; refakat kartı açılmaz.`, 'uretimEmriId');
-  if (sepetSatiri !== null) await sorgular.sepettenSil(db, sepetSatiri, kisiId);
   const varOlan = await sorgular.acikRefakatPartisi(db, g.uretimEmriId, lot.id);
   if (varOlan) return { refakat: (await refakatPartileriCevir(db, [varOlan]))[0]! };
   const id = await sorgular.refakatPartisiAc(db, { uretimEmriId: g.uretimEmriId, malzemeId: lot.malzemeId, partiId: lot.id, kisiId })

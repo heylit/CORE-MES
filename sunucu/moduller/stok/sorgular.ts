@@ -34,7 +34,7 @@ export {
   type EmirHareketiHam, emrinHareketleri, type EmirRezerveKaydi, emrinRezerveKayitlari, emrinRezerveToplamlari,
 } from './sorgular/emir/sorgular.ts';
 export {
-  type SepetHam, sepetSatirlari, sepeteEkle, lotunGozdekiSerbesti, sepetMiktari, sepettenSil, sepetiBosalt, fisAc, fisSatiriYaz, type FisHam, fisBul, FIS_SIRALAMASI, fisSay,
+  type SepetHam, sepetSatirlari, sepeteEkle, lotunGozdekiSerbesti, sepetMiktari, sepettenSil, sepetSatirinaKartBagla, sepetiBosalt, fisAc, fisSatiriYaz, type FisHam, fisBul, FIS_SIRALAMASI, fisSay,
   fisler, fisinHareketleri, toplamaAc, toplamaKalemiYaz, toplamaAdimiYaz, konumRotaBilgisi, type ToplamaHam, toplamaBul, TOPLAMA_SIRALAMASI, toplamaSay,
   toplamalar, toplamaKalemleri, type AdimHam, toplamaAdimlari, adimBul, adimToplandi, toplamaSurumu, toplamaKapat, toplamaVarMi, toplamaHedefiYaz,
   konumIstasyonu, toplamaHedefi, toplamaIstegiBagla, toplamaIstekBaglariniSil, toplamaIstekBaginiSil, type IstekHam, toplamaIstekleri, yoldaTeslimleri,

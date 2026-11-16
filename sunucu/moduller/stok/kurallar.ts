@@ -1494,6 +1494,14 @@ export function refakatTeslimEngeli(
   return null;
 }
 
+// 3337 (3337-2 a): malzeme kartı (lot etiketi) depoda kalır. Lotlu hammadde emre ya da istasyona refakat kartıyla gider; kart yoksa
+// depo malzemeyi sepete alıp karta dönüştürür. Statülü parça, lotsuz (istisna) ve başka türler bu kuralın dışındadır.
+export const KARTSIZ_TESLIM = 'Lot etiketiyle emre teslim edilmez. Malzemeyi sepete alın, "Refakat kartına dönüştür" deyin ve kartla teslim edin.';
+export function kartsizLotTeslimEngeli(g: { kartVar: boolean; partiId: number | null; statuId: number | null; malzemeTuru: string | null; emreGider: boolean }): string | null {
+  if (g.kartVar || g.partiId === null || g.statuId !== null || g.malzemeTuru !== 'hammadde' || !g.emreGider) return null;
+  return KARTSIZ_TESLIM;
+}
+
 // İstisna kartı (Soru 129, 131 a): yalnız açık, birleşmemiş, lotsuz kart bağlanır; lot mal kabulle girmiş ve kartın malzemesinden olmalı.
 // Sürüm, kartı başka biri bu arada bağladıysa ikinci bağlamayı durdurur.
 export function refakatBaglamaEngeli(
