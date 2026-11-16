@@ -18,7 +18,7 @@ const ANALIZ = {
     hacimMm3: 9000, alanMm2: 3100, govdeSayisi: 1, kapali: true, ucgenSayisi: 12, hesapSuresiMs: 20, hesapZamani: '2026-11-01T20:00:02+03:00',
   },
 };
-const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok' };
+const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok', kesmeMm: 3, donel: null, formlar: [] };
 const YUZEY = {
   revizyonId: 8, oneri: true, neden: null,
   yuzler: [{ sira: 1, tur: 'duzlem', ters: false, alanMm2: 450 }, { sira: 2, tur: 'duzlem', ters: false, alanMm2: 450 }],

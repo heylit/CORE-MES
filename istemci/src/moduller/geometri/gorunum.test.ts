@@ -3,7 +3,7 @@ import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
 import {
   agYuzAlanlari, agYuzNormalleri, aralikMetni, cubukYeri, olcekUstu, islemAnahtari, m2Metni, PATLATMA_KATI, patlatmaKaymasi, pozitifSayi, sartnameSayisi, taslakAlanlari, tozKg,
   ucgeninYuzu, yuzGruplari, yuzSirasiUyar, type TaslakIsaret, type Yon3,
-  analizKatilari, BIRIM_EKSENLER, eksenAraliklari, hamKatisi, kapsayanDaire,
+  analizKatilari, BIRIM_EKSENLER, eksenAraliklari, hamKatisi, kapsayanDaire, donelMetni, formNedeni, stokOlcuMetni, talasYuzdesi,
 } from './gorunum.ts';
 import type { HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
 
@@ -129,7 +129,7 @@ describe('önizleme katıları (2396)', () => {
   const kesit: [number, number][] = [[0, 0], [40, 0], [40, 10], [10, 10], [10, 40], [0, 40]];
   const L = new Float32Array(kesit.flatMap(([y, z]) => [0, y, z, 100, y, z]));
   const oneri = (form: HamStokOnerisi['form'], olcu: Record<string, number>, kesimBoyuMm: number | null): HamStokOnerisi => ({
-    malzemeNo: 1, kod: 'H', ad: null, kalite: null, form, olcu, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm, hamHacimMm3: 1,
+    malzemeNo: 1, kod: 'H', ad: null, kalite: null, form, olcu, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm, hamHacimMm3: 1, kesimEnMm: null, eksen: 'a' as const,
   });
 
   it('kapsayan daire kutu merkezinde değildir (L kesit)', () => {
@@ -159,6 +159,33 @@ describe('önizleme katıları (2396)', () => {
     expect(blok.boyut).toEqual([110, 50, 45]);
     expect(blok.merkez).toEqual([50, 20, 20]);
     expect(hamKatisi(oneri('blok', { a: 1, b: 1, h: 1 }, null), BIRIM_EKSENLER, new Float32Array())).toBeNull();
+  });
+
+  it('3321-1: dönel formda katı hamın eksenine çizilir (flanşta kısa kenar); disk kalınlık boyunda silindir, levha kesim eniyle', () => {
+    // Disk: z boyunca 0-10 kalın, x-y'de Ø100 çevresindeki noktalar.
+    const disk = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7].flatMap((i) => {
+      const t = (i * Math.PI) / 4;
+      return [50 * Math.cos(t), 50 * Math.sin(t), 0, 50 * Math.cos(t), 50 * Math.sin(t), 10];
+    }));
+    const k = hamKatisi({ ...oneri('cubuk', { d: 105, l: 3000 }, 17), eksen: 'c' }, BIRIM_EKSENLER, disk)!;
+    expect(k.sekil).toBe('silindir');
+    expect(k.eksenler[0]).toEqual([0, 0, 1]);
+    expect(k.boyut).toEqual([17, 105, 105]);
+    expect(k.merkez[2]).toBeCloseTo(5, 6);
+    const d = hamKatisi({ ...oneri('disk', { d: 105, t: 15 }, null), eksen: 'c' }, BIRIM_EKSENLER, disk)!;
+    expect([d.sekil, d.boyut]).toEqual(['silindir', [15, 105, 105]]);
+    const b = hamKatisi({ ...oneri('boru', { D: 105, t: 30, l: 6000 }, 17), eksen: 'c' }, BIRIM_EKSENLER, disk)!;
+    expect(b.boyut).toEqual([17, 105, 105]);
+    expect(hamKatisi({ ...oneri('levha', { t: 12, w: 1000, l: 2000 }, 110), kesimEnMm: 55 }, BIRIM_EKSENLER, L)!.boyut).toEqual([110, 55, 12]);
+  });
+
+  it('3321-1: neden metinleri; boru ve disk ölçü yazımı; talaş yüzdesi', () => {
+    expect(donelMetni({ kenar: 'c', capMm: 100, boyMm: 10, icCapMm: 30 })).toBe('dönme ekseni kısa kenar (10 mm), dış çap Ø100, eksenel delik Ø30');
+    expect([formNedeni('cubuk', true), formNedeni('blok', true), formNedeni('lama', false), formNedeni('cubuk', false)])
+      .toEqual(['dönel parça, çubuktan', null, 'prizmatik, lamadan', null]);
+    expect(stokOlcuMetni({ form: 'boru', olcu: { D: 104, t: 39, l: 6000 } })).toBe('Ø 104 x 39 et x 6.000 mm');
+    expect(stokOlcuMetni({ form: 'disk', olcu: { d: 104, t: 14 } })).toBe('Ø 104 x 14 mm');
+    expect([talasYuzdesi(46000, 100000), talasYuzdesi(null, 1), talasYuzdesi(1, 0)]).toEqual([54, null, null]);
   });
 
   it('analiz: dış kutu ve döndürülmüş kutu ağın aralığının ortasında', () => {

@@ -142,7 +142,13 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     // Örnek veride hammadde kartları çubuk ve levha; 10 mm levha 14 mm kalınlığa sığmaz, çubuk çapı kesit köşegeni + 2 pay'ı kapsar.
     assert.ok(ham.oneriler.length > 0 && ham.oneriler.every((x) => x.form === 'cubuk'), JSON.stringify(ham.oneriler));
     assert.ok(ham.oneriler[0]!.olcu['d']! >= Math.hypot(20, 10) + 4 - 1e-6);
-    assert.equal(ham.oneriler[0]!.kesimBoyuMm, 44);
+    // 3321-1: kesim boyu = boy + iki pay + kesme payı (varsayılan 3 mm); kesmeMm istekle değişir.
+    assert.equal(ham.oneriler[0]!.kesimBoyuMm, 47);
+    assert.equal(ham.kesmeMm, 3);
+    assert.deepEqual(ham.donel, null, 'kutu dönel değil');
+    assert.deepEqual(ham.formlar.filter((f) => f.neden !== null).map((f) => [f.form, f.neden]), [['levha', 'plaka-degil'], ['boru', 'donel-degil'], ['disk', 'donel-degil']]);
+    const kesmesiz = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kesmeMm=0`)));
+    assert.equal(kesmesiz.oneriler[0]!.kesimBoyuMm, 44);
     assert.ok(ham.kaliteler.includes('C45') && ham.kaliteler.includes('S235'));
     const c45 = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2&kalite=C45`)));
     assert.deepEqual(c45.oneriler.map((x) => [x.kalite, x.form, x.olcu]), [['C45', 'cubuk', { d: 50, l: 3000 }]]);

@@ -24,7 +24,7 @@ const ANALIZ = {
     hacimMm3: 9000, alanMm2: 3100, govdeSayisi: 1, kapali: true, ucgenSayisi: 12, hesapSuresiMs: 20, hesapZamani: '2026-11-01T20:00:02+03:00',
   },
 };
-const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok' };
+const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok', kesmeMm: 3, donel: null, formlar: [] };
 // Özellikler kartının okuduğu cevap (2044-2): yayındaki rev 8 için gerçek uç 200 döner; sentetik tek geçiş deliği.
 const OZELLIK = {
   revizyonId: 8, motor: 'ornek-motor',
@@ -68,13 +68,37 @@ const SURE = {
 };
 const BULUNAMADI = { kod: 'BULUNAMADI', mesaj: 'Bu revizyon bir malzeme kartına bağlı, yayındaki STEP ya da IGES modeli değil.' };
 
-async function sunucu(page: Page): Promise<void> {
+// 3321-1: Ø100 x 10 örnek flanş için ham cevabı (hesabın kendisi sunucu testinde, kurallar.test.ts G-K9c): dönel kısa eksen, bir çubuk
+// kartı, kartı olmayan disk ve en yakın disk kartı, plaka işi olmayan levha.
+const olmayan = { kesimEnMm: null, enYakinKart: null };
+const HAM_FLANS = {
+  revizyonId: 8, payMm: 2, payKaynagi: 'ayar', kesmeMm: 3, enAz: { a: 104, b: 104, c: 14 }, kaliteler: ['C45'], neden: null,
+  donel: { kenar: 'c', capMm: 100, boyMm: 10, icCapMm: null },
+  oneriler: [
+    { malzemeNo: 12, kod: 'ORN-HM-0012', ad: 'Örnek çubuk Ø105', kalite: 'C45', form: 'cubuk', olcu: { d: 105, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85,
+      kesimBoyuMm: 17, kesimEnMm: null, hamHacimMm3: 147200, eksen: 'c' },
+    { malzemeNo: 31, kod: 'ORN-HM-0031', ad: 'Örnek blok', kalite: 'C45', form: 'blok', olcu: { a: 105, b: 105, h: 15 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85,
+      kesimBoyuMm: null, kesimEnMm: null, hamHacimMm3: 165375, eksen: 'a' },
+  ],
+  formlar: [
+    { form: 'cubuk', neden: null, olcu: { d: 104 }, kesimBoyuMm: 17, hamHacimMm3: 144400, ...olmayan },
+    { form: 'altigen', neden: null, olcu: { s: 104 }, kesimBoyuMm: 17, hamHacimMm3: 159200, ...olmayan },
+    { form: 'lama', neden: null, olcu: { a: 104, b: 104 }, kesimBoyuMm: 17, hamHacimMm3: 183900, ...olmayan },
+    { form: 'levha', neden: 'plaka-degil', olcu: null, kesimBoyuMm: null, hamHacimMm3: null, ...olmayan },
+    { form: 'blok', neden: null, olcu: { a: 104, b: 104, h: 14 }, kesimBoyuMm: null, hamHacimMm3: 151400, ...olmayan },
+    { form: 'boru', neden: 'delik-yok', olcu: null, kesimBoyuMm: null, hamHacimMm3: null, ...olmayan },
+    { form: 'disk', neden: null, olcu: { d: 104, t: 14 }, kesimBoyuMm: null, hamHacimMm3: 118900, kesimEnMm: null,
+      enYakinKart: { malzemeNo: 40, kod: 'ORN-DSK-80', olcu: { d: 80, t: 20 }, eksik: ['d'] } },
+  ],
+};
+
+async function sunucu(page: Page, ham: unknown = HAM, analiz: unknown = ANALIZ): Promise<void> {
   await page.route('**/api/geometri/**', async (r: Route) => {
     const yol = new URL(r.request().url()).pathname.replace('/api', '');
     const json = (status: number, govde: unknown) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(govde) });
     if (yol === '/geometri/modeller') return json(200, LISTE);
-    if (yol === '/geometri/analizler/8') return json(200, ANALIZ);
-    if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, HAM);
+    if (yol === '/geometri/analizler/8') return json(200, analiz);
+    if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, ham);
     if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
     if (yol === '/geometri/montaj/8') return json(200, MONTAJ);
     if (yol === '/geometri/sure-tahmini/8') return json(200, SURE);
@@ -177,6 +201,27 @@ test.describe('3D Atölyesi', () => {
     await kart.getByText('ornek-pim', { exact: true }).first().click();
     await expect(kart.getByText('ornek-pim (2 adet)')).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBe(0);
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
+  });
+
+  test('ham kartı (3321-1): dönel flanşta dönme ekseni, rozetler, kartınız yok ve Neden bu sıra her genişlikte taşmadan görünür', async ({ page, ac, ag }, bilgi) => {
+    await sunucu(page, HAM_FLANS, { ...ANALIZ, analiz: { ...ANALIZ.analiz, kutu: { x: 100, y: 100, z: 10 }, obb: { a: 100, b: 100, c: 10, cap: 100.5, yon: ANALIZ.analiz.obb.yon }, hacimMm3: 67700 } });
+    await ac('/geometri/ham?rev=8');
+    await expect(page.getByText('Dönel parça', { exact: true })).toBeVisible();
+    await expect(page.getByText('kartlarınızda en az talaş')).toBeVisible();
+    await expect(page.getByText('dönel parça, çubuktan')).toBeVisible();
+    const yok = page.getByRole('list', { name: 'Kartınız olmayan formlar' });
+    await expect(yok.getByRole('link', { name: "Malzemeler'de kart aç" })).toHaveCount(1);
+    const sira = page.getByRole('region', { name: 'Neden bu sıra' });
+    await expect(sira.getByRole('row')).toHaveCount(8);
+    await expect(page.getByText('Levha önerilmedi: dönel parça; plaka işi değil.')).toBeVisible();
+    await expect(yok.getByText('SW 104 x 17 mm · kartınız yok', { exact: false })).toBeVisible();
+    const tablo = await sira.locator('table').evaluate((t) => t.scrollWidth - t.clientWidth);
+    expect(tablo, 'tablo yatay taşmaz').toBeLessThanOrEqual(0);
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    const genislik = page.viewportSize()?.width ?? 0;
+    await page.setViewportSize({ width: genislik, height: 2600 });
+    await page.locator('.tc-kart', { has: page.getByRole('heading', { name: 'Ham önerisi' }) }).screenshot({ path: bilgi.outputPath(`3321-1-ham-${String(genislik)}.png`) });
     expect(beklenmeyen(ag.hatalar)).toEqual([]);
   });
 

@@ -247,3 +247,7 @@ span.tc-g3b-mo-ac { cursor: default; }
   border: var(--cizgi-ince) solid var(--hold); color: var(--ink); font-size: var(--yazi-s);
 }
 .tc-g3b-su-uyari > .tc-simge { color: var(--hold); flex: none; }
+.tc-g3b-donel { display: flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; margin: 0; }
+.tc-g3b-oneri-yok { border-block-start-style: dashed; }
+@media (max-width: 519px) { .tc-g3b-sira th:nth-child(4), .tc-g3b-sira td:nth-child(4) { display: none; } }
+@media (min-width: 520px) { .tc-g3b-sira-kesme { display: none; } }

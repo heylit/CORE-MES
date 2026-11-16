@@ -11,7 +11,7 @@ const NEDEN: Partial<Record<NonNullable<HamOnerisiCevabi['neden']>, string>> = {
   'stok-listesi-yok': '3B analizi var ama ölçülü aktif hammadde kartı yok.',
   'sigan-yok': '3B analizine göre parçaya sığan hammadde kartı yok.',
 };
-const FORM_ADI = { cubuk: 'Çubuk', altigen: 'Altıgen', lama: 'Lama', levha: 'Levha', blok: 'Blok' } as const;
+const FORM_ADI = { cubuk: 'Çubuk', altigen: 'Altıgen', lama: 'Lama', levha: 'Levha', blok: 'Blok', boru: 'Boru', disk: 'Disk' } as const;
 const olcuMetni = (o: Record<string, number>): string => Object.entries(o).map(([k, v]) => `${k} ${sayi(v)}`).join(' · ');
 
 interface Ozellikler {

@@ -94,8 +94,8 @@ const ANALIZ: GeometriAnalizCevabi = {
   },
 };
 const HAM: GeometriHamCevabi = {
-  revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null,
-  oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 21598.4 }],
+  revizyonId: 41, payMm: 2, payKaynagi: 'istek', enAz: { a: 44, b: 24, c: 14 }, kaliteler: ['C45', 'S235'], neden: null, kesmeMm: 3, donel: null, formlar: [],
+  oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 21598.4, kesimEnMm: null, eksen: 'a' as const }],
 };
 const HAM_AYAR: GeometriHamCevabi = { ...HAM, payMm: 3, payKaynagi: 'ayar', enAz: { a: 46, b: 26, c: 16 } };
 const oz = (o: Partial<GeometriOzellik> & Pick<GeometriOzellik, 'sira' | 'tur'>): GeometriOzellik => ({
@@ -157,7 +157,7 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('Boş bırakılırsa sistem ayarı: 3 mm')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/İşleme payı/), { target: { value: '2' } });
     expect(await screen.findByText('44 x 24 x 14 mm')).toBeTruthy();
-    expect(screen.getByText('Ø 25 x 3.000 mm')).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'Stok önerileri' })).getByText('Ø 25 x 3.000 mm')).toBeTruthy();
     expect(screen.getByText('Kesim boyu 44 mm')).toBeTruthy();
     // Önizleme ilk öneridir; başka satır seçilince o önizlenir.
     expect(await screen.findByText(/^önizleme: Yuvarlak çubuk Ø 25 x 3.000 mm/)).toBeTruthy();
@@ -174,6 +174,45 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('Ham ağırlık ≈ 0,058 kg')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Yoğunluk/), { target: { value: '-1' } });
     expect(await screen.findByText('Pozitif bir sayı yazın.')).toBeTruthy();
+  });
+
+  it('3321-1: dönel parçada dönme ekseni satırı, rozetler, kartı olmayan form "Malzemeler\'de kart aç" ile; levha neden yazılı; kesme payı isteğe girer', async () => {
+    const olmayan = { kesimEnMm: null, enYakinKart: null };
+    const flans: GeometriHamCevabi = {
+      ...HAM, donel: { kenar: 'c', capMm: 100, boyMm: 10, icCapMm: null },
+      oneriler: [{ ...HAM.oneriler[0]!, kod: 'ORN-HM-0012', ad: null, olcu: { d: 105, l: 3000 }, kesimBoyuMm: 17, hamHacimMm3: 147000, eksen: 'c' }],
+      formlar: [
+        { form: 'cubuk', neden: null, olcu: { d: 104 }, kesimBoyuMm: 17, hamHacimMm3: 144000, ...olmayan },
+        { form: 'disk', neden: null, olcu: { d: 104, t: 14 }, kesimBoyuMm: null, hamHacimMm3: 119000, kesimEnMm: null,
+          enYakinKart: { malzemeNo: 5, kod: 'ORN-DSK-80', olcu: { d: 80, t: 20 }, eksik: ['d'] } },
+        { form: 'levha', neden: 'plaka-degil', olcu: null, kesimBoyuMm: null, hamHacimMm3: null, ...olmayan },
+        { form: 'boru', neden: 'delik-yok', olcu: null, kesimBoyuMm: null, hamHacimMm3: null, ...olmayan },
+      ],
+    };
+    const istekler = sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ham-onerisi/41': () => json(200, flans),
+    });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /MLZ-0007/ }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Ham önerisi' }));
+    expect((await screen.findByText('Dönel parça')).parentElement?.textContent).toBe('Dönel parça · dönme ekseni kısa kenar (10 mm), dış çap Ø100');
+    expect(screen.getByText('kartlarınızda en az talaş')).toBeTruthy();
+    expect(screen.getByText('dönel parça, çubuktan')).toBeTruthy();
+    expect(screen.getByText('Kesim boyu 17 mm')).toBeTruthy();
+    const yok = screen.getByRole('list', { name: 'Kartınız olmayan formlar' });
+    expect(within(yok).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(yok).getAllByRole('link')).toHaveLength(1);
+    expect(within(yok).getByText(/ORN-DSK-80/).textContent).toContain('d ölçüsü yetmiyor');
+    expect(within(yok).getByRole('link', { name: "Malzemeler'de kart aç" }).getAttribute('href')).toBe('/malzemeler/yeni');
+    expect(screen.getByText('Levha önerilmedi: dönel parça; plaka işi değil.')).toBeTruthy();
+    // Neden bu sıra: listeyle aynı; kartlı form sıra numarasıyla, kartsız uygun form sonra, uygun olmayan nedeniyle.
+    const sira = within(screen.getByRole('region', { name: 'Neden bu sıra' })).getAllByRole('row').slice(1).map((r) => r as HTMLTableRowElement).map((r) => [r.cells[0]?.textContent, r.cells[3]?.textContent, r.cells[4]?.textContent]);
+    expect(sira).toEqual([['Yuvarlak çubuk', '3 mm', '1'], ['Disk', 'yok', 'kartınız yok'], ['Levha / sac', '-', 'plaka işi değil'], ['Boru', '-', 'eksenel delik yok']]);
+    fireEvent.change(screen.getByLabelText(/Kesme payı/), { target: { value: '5' } });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?kesmeMm=5')).toBe(true));
   });
 
   it('2138-2: seçili model başlığı revizyon kodunu yazar; kodsuz modelde harf değil "Kodsuz revizyon"', async () => {

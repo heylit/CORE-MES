@@ -167,11 +167,16 @@ export type GeometriOzellikCevabi = z.output<typeof geometriOzellikCevabi>;
 // Pay her yüzeye eklenen işleme payıdır (mm). Sorguda yoksa sistem ayarı (geometri.ham-payi-mm) geçerlidir; ayar da boşsa pay 0 ve
 // kaynağı 'yok' döner, ekran bunu söyler. Stok listesi aktif hammadde kartlarıdır (1469 a); kalite verilirse yalnız o kalite.
 export const PAY_EN_COK_MM = 100;
+export const KESME_EN_COK_MM = 50;
 export const geometriHamSorgusu = z.object({
   payMm: z.coerce.number<number>().min(0).max(PAY_EN_COK_MM).optional(),
   kalite: z.string().trim().min(1).max(100).optional(),
+  // 3321-1: kesilen formlarda (çubuk, altıgen, lama, boru, levha) testere payı; yoksa 3 mm.
+  kesmeMm: z.coerce.number<number>().min(0).max(KESME_EN_COK_MM).optional(),
 });
-export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok'] as const;
+export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok', 'boru', 'disk'] as const;
+// Form önerilmezse nedeni: dönel olmayan parçaya disk ve boru, boydan boya deliği olmayana boru, kalın parçaya levha önerilmez.
+export const HAM_FORM_NEDENLERI = ['donel-degil', 'delik-yok', 'plaka-degil'] as const;
 export const HAM_PAY_KAYNAKLARI = ['istek', 'ayar', 'yok'] as const;
 export const HAM_STOK_NEDENLERI = ['analiz-yok', 'stok-listesi-yok', 'sigan-yok'] as const;
 export const hamStokOnerisi = z.object({
@@ -187,9 +192,13 @@ export const hamStokOnerisi = z.object({
   aile: z.string().nullable(),
   kaliteKodu: z.string().nullable(),
   yogunluk: z.number().positive().nullable(),
-  // Çubuk, altıgen, lama ve levhada kesilecek boy; blokta null.
+  // Çubuk, altıgen, lama, boru ve levhada kesilecek boy (boy + kesme payı); blok ve diskte null.
   kesimBoyuMm: mm.nullable(),
+  // Yalnız levhada: plakadan kesilen parçanın eni; öbür formlarda null.
+  kesimEnMm: mm.nullable(),
   hamHacimMm3: mm,
+  // 3321-1: hamın boy ekseni döndürülmüş kutunun hangi kenarında (çubuk, altıgen, boru ve disk dönme ekseninde; öbürleri a).
+  eksen: z.enum(['a', 'b', 'c']),
 });
 export type HamStokOnerisi = z.output<typeof hamStokOnerisi>;
 export const geometriHamCevabi = z.object({
@@ -204,6 +213,22 @@ export const geometriHamCevabi = z.object({
   kaliteler: z.array(z.string()),
   // Öneri yoksa nedeni; varsa null.
   neden: z.enum(HAM_STOK_NEDENLERI).nullable(),
+  // 3321-1: kesme payı ve kaynağı.
+  kesmeMm: z.number(),
+  // Dönme ekseni B-rep yüzlerinden (dışbükey silindirler); bulunamazsa null ve çap uzun eksen çevresindedir. kenar döndürülmüş kutunun
+  // kenarı (a uzun, c kısa); capMm eksen çevresindeki çap, boyMm eksen boyunca boy; icCapMm boydan boya eş eksenli deliğin en dar çapı.
+  donel: z.object({ kenar: z.enum(['a', 'b', 'c']), capMm: mm, boyMm: mm, icCapMm: mm.nullable() }).nullable(),
+  // Form başına en az ölçü (kart olmasa da): sihirbaz standart ölçüye yuvarlar, ekran kartı olmayan daha iyi formu söyler. Uygun olmayan
+  // formda olcu null ve neden dolu. enYakinKart: o formda sığan kart yoksa en az eksikli kart (eksik ölçü adlarıyla), yoksa null.
+  formlar: z.array(z.object({
+    form: z.enum(HAM_STOK_FORMLARI),
+    neden: z.enum(HAM_FORM_NEDENLERI).nullable(),
+    olcu: z.record(z.string(), z.number()).nullable(),
+    kesimBoyuMm: mm.nullable(),
+    kesimEnMm: mm.nullable(),
+    hamHacimMm3: mm.nullable(),
+    enYakinKart: z.object({ malzemeNo: z.number().int(), kod: z.string(), olcu: z.record(z.string(), z.number()), eksik: z.array(z.string()) }).nullable(),
+  })),
 });
 export type GeometriHamCevabi = z.output<typeof geometriHamCevabi>;
 

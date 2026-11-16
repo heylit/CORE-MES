@@ -413,7 +413,7 @@ describe('hazırlık bölümü (1310 a)', () => {
 });
 
 describe('1709 hammadde önerisi (1726 a, 1727 a)', () => {
-  const o = { hamHacimMm3: 100_000, yogunluk: 7.85, kesimBoyuMm: 44 };
+  const o = { hamHacimMm3: 100_000, kesimEnMm: null, eksen: 'a' as const, yogunluk: 7.85, kesimBoyuMm: 44 };
   it('miktar kartın biriminden: kg hacim x yoğunluk, m ve mm kesim boyu, adet 1; bilinmeyende null', () => {
     expect(hamOneriMiktari(o, 'kg')).toBe(0.785);
     expect(hamOneriMiktari(o, ' KG ')).toBe(0.785);
@@ -435,7 +435,7 @@ describe('1709 hammadde önerisi (1726 a, 1727 a)', () => {
     expect(hamGirdisiVar([adimOrnegi({ ins: [{ itemId: '4', qty: 1, scrap: 0 }] })], harita)).toBe(false);
     expect(hamGirdisiVar([adimOrnegi({ ins: [] }), adimOrnegi({ id: 'o20', ins: [{ itemId: '1', qty: 1, scrap: 0 }] })], harita)).toBe(true);
     const oneri = (malzemeNo: number) => ({
-      malzemeNo, kod: '', ad: null, kalite: null, form: 'cubuk' as const, olcu: { d: 30, l: 3000 }, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 1,
+      malzemeNo, kod: '', ad: null, kalite: null, form: 'cubuk' as const, olcu: { d: 30, l: 3000 }, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 1, kesimEnMm: null, eksen: 'a' as const,
     });
     expect(onerilebilirKartlar([1, 2, 3, 9].map(oneri), harita).map((x) => x.kart.id)).toEqual(['1']);
   });

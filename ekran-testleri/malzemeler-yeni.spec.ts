@@ -367,3 +367,40 @@ test.describe('1937 hiza', () => {
     expect(ag.yazmalar).toEqual([]);
   });
 });
+
+// 3321-1: "3B modelden öner" ham hesabını geometri sunucusundan okur; uçlar sabit cevapla (hesabın kendisi geometri testlerinde).
+test.describe('M-3321 3B modelden öner', () => {
+  test('dönel milde öneriler "dönel parça" rozetiyle, şerit taşmadan görünür', async ({ page, ac, ag }, bilgi) => {
+    const json = (govde: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(govde) });
+    const formu = (form: string, olcu: Record<string, number> | null, kesimBoyuMm: number | null, neden: string | null = null) =>
+      ({ form, neden, olcu, kesimBoyuMm, kesimEnMm: null, hamHacimMm3: olcu === null ? null : 1, enYakinKart: null });
+    await page.route('**/api/geometri/**', async (r) => {
+      const yol = new URL(r.request().url()).pathname.replace('/api', '');
+      if (yol === '/geometri/modeller') {
+        return r.fulfill(json({ satirlar: [{ malzemeNo: 1, malzemeKodu: 'MM-ORN-00001', malzemeAdi: 'Örnek mil', belgeId: 1, belgeAdi: 'orn-mil.step', revizyonId: 7, harf: 'A', revKodu: 'B', dosyaTuru: 'step', durum: 'bitti', hataMetni: null }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
+      }
+      if (yol === '/geometri/analizler/7') return r.fulfill(json({ revizyonId: 7, analiz: { obb: { a: 118, b: 46, c: 46, cap: 46, yon: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }, hacimMm3: 142000 } }));
+      if (yol === '/geometri/ham-onerisi/7') {
+        return r.fulfill(json({
+          revizyonId: 7, payMm: 2, payKaynagi: 'istek', kesmeMm: 3, enAz: { a: 122, b: 50, c: 50 }, kaliteler: [], neden: 'stok-listesi-yok', oneriler: [],
+          donel: { kenar: 'a', capMm: 46, boyMm: 118, icCapMm: null },
+          formlar: [formu('cubuk', { d: 50 }, 125), formu('altigen', { s: 50 }, 125), formu('lama', { a: 50, b: 50 }, 125), formu('levha', null, null, 'plaka-degil'),
+            formu('blok', { a: 122, b: 50, h: 50 }, null), formu('boru', null, null, 'delik-yok'), formu('disk', null, null, 'donel-degil')],
+        }));
+      }
+      return r.fulfill({ status: 404, contentType: 'application/json', body: '{"kod":"BULUNAMADI","mesaj":"Yok."}' });
+    });
+    await ac('/malzemeler/yeni?kopya=ornek-cubuk');
+    const serit = page.getByRole('region', { name: '3B modelden öner' });
+    await expect(serit).toBeVisible();
+    await serit.getByRole('combobox', { name: 'Parçanın 3B modeli' }).selectOption('7');
+    const oneriler = serit.getByRole('group', { name: 'Ham önerileri' });
+    await expect(oneriler.getByRole('button').first()).toBeVisible();
+    await expect(oneriler.getByText('dönel parça').first()).toBeVisible();
+    await expect(serit.getByText(/dönel parça.*dış çap Ø46/)).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await serit.screenshot({ path: bilgi.outputPath(`3321-1-sihirbaz-${String(page.viewportSize()?.width ?? 0)}.png`) });
+    expect(ag.hatalar.filter((h) => !h.includes('404'))).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});

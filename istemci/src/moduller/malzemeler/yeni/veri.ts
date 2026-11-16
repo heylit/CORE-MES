@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ArsivKartiCevabi, ArsivKartlariCevabi,
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
   KatalogKartiIptalCevabi, KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { AgirlikOzetiCevabi, GeometriAnalizCevabi, GeometriModelListeCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { AgirlikOzetiCevabi, GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -30,6 +30,7 @@ export const anahtar = {
   analizAgirligi: (no: number) => [...MALZEMELER_YENI, 'analiz-agirligi', no] as const,
   modelListesi: (ara: string) => [...MALZEMELER_YENI, 'model-listesi', ara] as const,
   modelAnalizi: (rev: number) => [...MALZEMELER_YENI, 'model-analizi', rev] as const,
+  modelHam: (rev: number, payMm: number, kesmeMm: number) => [...MALZEMELER_YENI, 'model-ham', rev, payMm, kesmeMm] as const,
   arsiv: [...MALZEMELER_YENI, 'arsiv'] as const,
 };
 
@@ -271,6 +272,19 @@ export function useModelAnalizi(rev: number | null) {
     enabled: rev !== null,
     staleTime: 60_000,
     queryFn: () => api.get<GeometriAnalizCevabi>(`/geometri/analizler/${String(rev)}`),
+  });
+}
+
+// 3321-1: ham önerisi 3D Atölyesi ile aynı sunucu hesabından (dönel eksen, uygun formlar, kesme payı); sihirbaz yalnız yuvarlar.
+// Kalite süzgeci yok: sihirbazda form ölçüsü önerilir, kart eşlemesi sihirbazın kendi kuralıyla yapılır.
+export function useModelHamOnerisi(rev: number | null, payMm: number, kesmeMm: number) {
+  return useQuery({
+    queryKey: anahtar.modelHam(rev ?? 0, payMm, kesmeMm),
+    enabled: rev !== null,
+    staleTime: 60_000,
+    // Pay yazılırken liste boşalıp dolmasın; yeni cevap gelince yerine geçer.
+    placeholderData: keepPreviousData,
+    queryFn: () => api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(rev)}?payMm=${String(payMm)}&kesmeMm=${String(kesmeMm)}`),
   });
 }
 
