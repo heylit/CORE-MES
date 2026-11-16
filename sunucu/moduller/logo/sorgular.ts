@@ -107,6 +107,24 @@ export async function duraniYenidenAc(db: Db, belgeTuru: BelgeTuru, no: number, 
   return r.length > 0;
 }
 
+// 3313: bağlantı izleme. Başarıyla gitmemiş (ya da hiç denenmemiş) giden satırları; en eski son deneme önce. Tutar, fiyat ve firma taşımaz.
+export interface GidenIzlemeSatiri {
+  belgeTuru: string; belgeNo: number; islem: GidenIslemi; denemeSayisi: number; sonDeneme: Date | null; sonSonuc: GidenSonucu | null;
+  sonHata: string | null; sonrakiDeneme: Date | null;
+}
+const IZLEME_ALANLARI = `belge_turu AS "belgeTuru", belge_no AS "belgeNo", deneme_sayisi AS "denemeSayisi", son_deneme AS "sonDeneme",
+  son_sonuc AS "sonSonuc", son_hata AS "sonHata", sonraki_deneme AS "sonrakiDeneme"`;
+const IZLEME_KOSULU = `(son_sonuc IS NULL OR son_sonuc NOT IN ('gonderildi', 'zaten-vardi'))`;
+export function gidenIzlemeSatirlari(db: Db, sinir: number): Promise<GidenIzlemeSatiri[]> {
+  return db.sorgu<GidenIzlemeSatiri>(
+    `SELECT * FROM (
+       SELECT ${IZLEME_ALANLARI}, islem FROM logo_giden WHERE ${IZLEME_KOSULU}
+       UNION ALL SELECT ${IZLEME_ALANLARI}, 'gonder' AS islem FROM logo_malzeme_fisi_giden WHERE ${IZLEME_KOSULU}
+     ) g ORDER BY "sonDeneme" NULLS FIRST, "belgeTuru", "belgeNo" LIMIT $1`,
+    [sinir],
+  );
+}
+
 // 3070: kartı Logo'da TMI mi açtı. Yalnız açma isteğinin kesin sonucu ("gonderildi") sayılır; "zaten-vardi" Logo'da bulunan karttır, "Al" ve
 // "Bağla" ile gelen kartın gönderim izi hiç yoktur. Belge no malzeme kartının numarasıdır (malzeme ya da hizmet).
 export async function logodaTmiActi(db: Db, kartNo: number): Promise<boolean> {

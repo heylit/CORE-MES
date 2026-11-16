@@ -1,7 +1,7 @@
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoGidenIzlemeCevabi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
@@ -11,7 +11,7 @@ import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
-import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
+import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
 
 // 3201 a: bölümü kartı görebilen ister; stok ve hareket parçası yalnız stoğu okuyabilene (stok uçlarının okuma yetkisi; malzeme
 // sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
@@ -43,6 +43,14 @@ export const uclar = [
     parametre: birimSetiParametresi,
     cevap: birimSetiCevabi,
     isle: ({ db, parametre }) => birimSetiKaldir(db, parametre.kod),
+  }),
+  // 3313: bağlantı izleme, Logo'ya gitmeyen belgeler; Sistem durumu ayrıntısıyla aynı yetki.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/giden',
+    yetki: 'saglik.ayrinti-oku',
+    cevap: logoGidenIzlemeCevabi,
+    isle: ({ db }) => gidenIzleme(db, new Date()),
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({

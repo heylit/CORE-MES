@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, GIDEN_SONUCLARI, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, GIDEN_NE_YAPMALI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -302,5 +302,16 @@ describe('3313 kalıcı ret durur', () => {
     assert.equal(denemeZamaniMi({ sonSonuc: 'reddedildi', sonrakiDeneme: simdi }, simdi), true, 'yeniden açılan belge sırada');
     assert.equal(denemeZamaniMi({ sonSonuc: 'ulasilamadi', sonrakiDeneme: new Date(simdi.getTime() + 1) }, simdi), false, 'bekleme dolmadan girmez');
     assert.equal(denemeZamaniMi({ sonSonuc: null, sonrakiDeneme: null }, simdi), true, 'niyeti yazılmış, sonucu yok');
+  });
+  test('T9 izleme durumu: duran belge "Durdu" ve yalnız o elle gönderilir; yinelenen "Yeniden denenecek"; yeniden açılan ve sonucu olmayan sırada', () => {
+    const z = new Date('2026-11-16T08:00:00Z');
+    for (const t of GIDEN_SONUCLARI.filter((x) => BEKLENEN[x] !== 'basari')) {
+      const d = gidenIzlemeDurumu({ sonSonuc: t, sonrakiDeneme: sonrakiDenemeYazilir(t, z) });
+      assert.equal(d, BEKLENEN[t] === 'durdu' ? 'durdu' : 'yeniden-denenecek', t);
+    }
+    assert.equal(gidenIzlemeDurumu({ sonSonuc: 'reddedildi', sonrakiDeneme: z }), 'sirada');
+    assert.equal(gidenIzlemeDurumu({ sonSonuc: null, sonrakiDeneme: null }), 'sirada');
+    assert.match(GIDEN_NE_YAPMALI.durdu, /Yeniden gönder/);
+    assert.doesNotMatch(GIDEN_NE_YAPMALI['yeniden-denenecek'], /Yeniden gönder/);
   });
 });

@@ -18,6 +18,7 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
   let app: FastifyInstance;
   let yonetici = '';
   let malzemeci = '';
+  let gormeyen = '';
   let yoneticiId = 0;
 
   const vt = (): TestVeritabani['vt'] => {
@@ -45,7 +46,12 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
       "INSERT INTO rol_islemi (rol_id, islem) SELECT id, i FROM rol, unnest(ARRAY['saglik.ayrinti-oku', 'malzemeler.yaz']) AS i WHERE kod = 'ly_malzemeci' ON CONFLICT DO NOTHING",
     );
     await vt().sorgu("UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = 'ly_malzemeci') WHERE kisi_id = $1", [kisiId]);
+    const gormeyenId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Gormeyen', kullaniciAdi: 'ly-gormeyen', parola: PAROLA }));
+    await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('ly_gormeyen', 'Gormeyen') ON CONFLICT DO NOTHING");
+    await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) SELECT id, 'malzemeler.yaz' FROM rol WHERE kod = 'ly_gormeyen' ON CONFLICT DO NOTHING");
+    await vt().sorgu("UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = 'ly_gormeyen') WHERE kisi_id = $1", [gormeyenId]);
     yonetici = await giris('ly-yonetici');
+    gormeyen = await giris('ly-gormeyen');
     malzemeci = await giris('ly-malzemeci');
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
@@ -94,6 +100,31 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
     const tekrar = await gonder(yonetici, [{ belge: 'siparis', no: 1 }], kimlik);
     assert.deepEqual(tekrar.json(), { sirada: 1, durmayan: 0 }, 'aynı cevap döner');
     assert.equal((await satir('logo_giden', 'siparis', 1))?.sonraki, null, 'yineleme yeniden işlenmedi');
+  });
+
+  test('T9 izleme: Sistem durumu ayrıntısı olmayan 403; gitmeyen belge durum, neden ve ne yapmalı ile; gönderilmiş belge yok; tutar, fiyat ve firma yok', async () => {
+    const oku = (cerez: string, url: string) => app.inject({ method: 'GET', url, headers: { cookie: cerez } });
+    assert.equal((await oku(gormeyen, '/api/logo/giden')).statusCode, 403);
+    assert.equal((await oku(malzemeci, '/api/logo/giden')).statusCode, 200, 'görme yetkisi olan görür; yeniden göndermesi yine 403');
+    assert.equal((await oku(gormeyen, '/api/smartes/giden/sorunlar')).statusCode, 403);
+    const r = await oku(yonetici, '/api/logo/giden');
+    assert.equal(r.statusCode, 200, r.body);
+    const c = r.json() as { sayac: Record<string, number>; belgeler: Record<string, unknown>[]; kesildi: boolean };
+    const ozet = c.belgeler.map((b) => `${String(b.belge)}:${String(b.no)}:${String(b.islem)}:${String(b.durum)}:${String(b.yenidenGonderilebilir)}`).sort();
+    assert.deepEqual(ozet, ['malzeme:4:pasif:durdu:true', 'sarf-fisi:5:gonder:durdu:true', 'siparis:1:gonder:durdu:true', 'siparis:2:gonder:yeniden-denenecek:false']);
+    assert.deepEqual(c.sayac, { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 0, sirada: 0 });
+    assert.equal(c.kesildi, false);
+    const bir = c.belgeler.find((b) => b.belge === 'siparis' && b.no === 1)!;
+    assert.equal(bir.neden, 'Logo reddetti: Deneme');
+    assert.equal(bir.sonrakiDeneme, null);
+    assert.match(String(bir.neYapmali), /Yeniden gönder/);
+    for (const b of c.belgeler) for (const k of Object.keys(b)) assert.doesNotMatch(k, /tutar|fiyat|firma|cari/i, `izleme alanı ${k}`);
+    await gonder(yonetici, [{ belge: 'siparis', no: 1 }]);
+    const sonra = (await oku(yonetici, '/api/logo/giden')).json() as typeof c;
+    assert.equal(sonra.belgeler.find((b) => b.belge === 'siparis' && b.no === 1)?.durum, 'sirada', 'yeniden gönderilen sıradadır');
+    const sm = await oku(yonetici, '/api/smartes/giden/sorunlar');
+    assert.equal(sm.statusCode, 200, sm.body);
+    assert.deepEqual(sm.json(), { belgeler: [], kesildi: false }, 'hata yoksa boş; sıfır uydurulmaz');
   });
 
   test('(ret) ayar yazma yetkisi olmayan 403; bilinmeyen belge türü ve malzeme dışı pasif 422; boş liste reddedilir', async () => {

@@ -75,6 +75,29 @@ export const logoKontrolCevabi = z.object({
   })),
 });
 
+// 3313: bağlantı izleme, Logo'ya gitmeyen belgeler. Tutar, fiyat ve firma adı yoktur (K8); deneme kaydı olmayan belgede deneme alanları null.
+export const LOGO_GIDEN_IZLEME_DURUMLARI = ['durdu', 'yeniden-denenecek', 'kart-bekliyor', 'sirada'] as const;
+export const logoGidenIzlemeCevabi = z.object({
+  sayac: z.object({ durdu: z.number().int(), yenidenDenenecek: z.number().int(), kartBekliyor: z.number().int(), sirada: z.number().int() }),
+  belgeler: z.array(z.object({
+    belge: z.string(),
+    belgeAdi: z.string(),
+    no: z.number().int(),
+    islem: z.enum(['gonder', 'pasif']),
+    durum: z.enum(LOGO_GIDEN_IZLEME_DURUMLARI),
+    neden: z.string().nullable(),
+    neYapmali: z.string(),
+    yenidenGonderilebilir: z.boolean(),
+    denemeSayisi: z.number().int().nullable(),
+    sonDeneme: zamanSemasi.nullable(),
+    sonrakiDeneme: zamanSemasi.nullable(),
+  }).strict()),
+  // Liste sınırı aşıldıysa true; sayaçlar listedeki belgeleri sayar.
+  kesildi: z.boolean(),
+});
+export type LogoGidenIzlemeCevabi = z.output<typeof logoGidenIzlemeCevabi>;
+export type LogoGidenIzlemeDurumu = (typeof LOGO_GIDEN_IZLEME_DURUMLARI)[number];
+
 export type LogoHazirlikCevabi = z.output<typeof logoHazirlikCevabi>;
 export type LogoKontrolCevabi = z.output<typeof logoKontrolCevabi>;
 export type BaglantiAkisDurumu = (typeof BAGLANTI_AKIS_DURUMLARI)[number];

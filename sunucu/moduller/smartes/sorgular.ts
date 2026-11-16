@@ -279,6 +279,16 @@ export function gidenSay(db: Db): Promise<number> {
   return db.tek<{ n: number }>('SELECT count(*)::int AS n FROM smartes_giden').then((r) => r?.n ?? 0);
 }
 
+// 3313: bağlantı izleme. SmartES'e gidemeyen iş emirleri (hata), en eski önce; hata her zaman kendiliğinden yeniden denenir.
+export function gidenHataSatirlari<T>(db: Db, sinir: number): Promise<T[]> {
+  return db.sorgu<T>(
+    `SELECT is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", deneme_sayisi AS "denemeSayisi",
+       ${zamanMetni('son_deneme')} AS "sonDeneme", son_hata AS "neden", ${zamanMetni('sonraki_deneme')} AS "sonrakiDeneme"
+     FROM smartes_giden WHERE durum = 'hata' ORDER BY son_deneme, is_emri_id LIMIT $1`,
+    [sinir],
+  );
+}
+
 export function gidenListeSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
   return db.sorgu<T>(
     `SELECT is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", durum, deneme_sayisi AS "denemeSayisi",

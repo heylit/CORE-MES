@@ -2,7 +2,7 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
@@ -11,11 +11,11 @@ import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoyaGidecekMalzemeler
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
-import type { LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
+import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
@@ -512,8 +512,15 @@ async function satirKartlari(db: Db, b: Parameters<typeof belgeStokKodlari>[0]):
   return { eksik: logodaOlmayanKartlar(kodlar, durumlar, logoKodu, aynada), hizmet: kodlar.filter((k) => durumlar.get(k)?.hizmet === true) };
 }
 // Eksik kartta belge gitmez, deneme sayılmaz; neden sahibine bir kez yazılır (sahibinin ekranında görünür).
-async function kartBekliyor(db: Db, o: TurOrtami, anahtar: number, eksik: readonly string[], bildir: Bildir<SiparisLogoSonucu>): Promise<void> {
+// İzleme ekranı için süreç belleği: sunucu yeniden açılınca ilk turlarda yeniden dolar; bir saattir görülmeyen kayıt eskimiş sayılır.
+const kartBekleyenBelgeler = new Map<string, { belge: BelgeTuru; no: number; ileti: string; goruldu: Date }>();
+const KART_BEKLEYEN_ESKIME_MS = 60 * 60 * 1000;
+const kartKaydiAnahtari = (belge: BelgeTuru, no: number): string => `${belge}:${no}`;
+async function kartBekliyor(
+  db: Db, o: TurOrtami, belge: BelgeTuru, no: number, anahtar: number, eksik: readonly string[], bildir: Bildir<SiparisLogoSonucu>,
+): Promise<void> {
   const ileti = kartBekliyorMetni(eksik);
+  kartBekleyenBelgeler.set(kartKaydiAnahtari(belge, no), { belge, no, ileti, goruldu: o.saat() });
   if (o.bellek.kartBekleyenler.get(anahtar) === ileti) return;
   await bildir(db, { hata: ileti });
   o.bellek.kartBekleyenler.set(anahtar, ileti);
@@ -583,7 +590,8 @@ async function siparisAcmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemc
     const bildir: Bildir<SiparisLogoSonucu> = (yazDb, x) => o.kaynak.sonuc(yazDb, sip.id, x);
     if (eylem === 'niyet-yaz') {
       const { eksik } = await satirKartlari(db, sip);
-      if (eksik.length > 0) { await kartBekliyor(db, o, anahtar, eksik, bildir); continue; }
+      if (eksik.length > 0) { await kartBekliyor(db, o, 'siparis', sip.id, anahtar, eksik, bildir); continue; }
+      kartBekleyenBelgeler.delete(kartKaydiAnahtari('siparis', sip.id));
     }
     const cariKodu = (await firmaOzeti(db, sip.firmaId))?.logoCariKodu ?? null;
     const r = siparisGovdesi(await logoKoduyla(db, sip), { cariKodu, kdv, hizmetKdv });
@@ -672,7 +680,8 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
     if (eylem === 'niyet-yaz') {
       const k = await satirKartlari(db, t as Parameters<typeof belgeStokKodlari>[0]);
       if (a.belge === 'talep' && k.hizmet.length > 0) return basarisiz('reddedildi', TALEP_HIZMET_ILETISI, undefined)(db);
-      if (k.eksik.length > 0) { await kartBekliyor(db, o, anahtar, k.eksik, bildir); continue; }
+      if (k.eksik.length > 0) { await kartBekliyor(db, o, a.belge, t.id, anahtar, k.eksik, bildir); continue; }
+      kartBekleyenBelgeler.delete(kartKaydiAnahtari(a.belge, t.id));
     }
     const r = await a.govde(t);
     if ('hata' in r) return basarisiz('reddedildi', r.hata, undefined)(db);
@@ -1117,6 +1126,38 @@ export async function duranlariYenidenGonder(
     if (await gidenYenidenGonder(db, { belge: b.belge, no: b.no, islem: b.islem }, simdi)) sirada += 1;
   }
   return { sirada, durmayan: belgeler.length - sirada };
+}
+
+// 3313: bağlantı izleme ekranının Logo giden bölümü. Yalnız okur; tutar, fiyat ve firma adı taşımaz (belge türü ve CORE numarası yeter).
+const IZLEME_SINIRI = 500;
+export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeCevabi> {
+  const satirlar = await s.gidenIzlemeSatirlari(db, IZLEME_SINIRI + 1);
+  const kesildi = satirlar.length > IZLEME_SINIRI;
+  const zaman = (d: Date | null): string | null => (d === null ? null : d.toISOString());
+  const belgeler: LogoGidenIzlemeCevabi['belgeler'] = satirlar.slice(0, IZLEME_SINIRI).map((g) => {
+    const durum = gidenIzlemeDurumu(g);
+    return {
+      belge: g.belgeTuru, belgeAdi: gidenBelgeAdi(g.belgeTuru, g.islem), no: g.belgeNo, islem: g.islem, durum, neden: g.sonHata,
+      neYapmali: GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu', denemeSayisi: g.denemeSayisi,
+      sonDeneme: zaman(g.sonDeneme), sonrakiDeneme: durum === 'durdu' ? null : zaman(g.sonrakiDeneme),
+    };
+  });
+  for (const [k, v] of kartBekleyenBelgeler) {
+    if (simdi.getTime() - v.goruldu.getTime() > KART_BEKLEYEN_ESKIME_MS) { kartBekleyenBelgeler.delete(k); continue; }
+    const i = belgeler.findIndex((b) => b.belge === v.belge && b.no === v.no && b.islem === 'gonder');
+    const satir = {
+      belge: v.belge, belgeAdi: gidenBelgeAdi(v.belge, 'gonder'), no: v.no, islem: 'gonder' as const, durum: 'kart-bekliyor' as const, neden: v.ileti,
+      neYapmali: GIDEN_NE_YAPMALI['kart-bekliyor'], yenidenGonderilebilir: false,
+      denemeSayisi: i >= 0 ? belgeler[i]!.denemeSayisi : null, sonDeneme: i >= 0 ? belgeler[i]!.sonDeneme : null, sonrakiDeneme: null,
+    };
+    if (i >= 0) belgeler[i] = satir;
+    else belgeler.push(satir);
+  }
+  const say = (d: GidenIzlemeDurumu): number => belgeler.filter((b) => b.durum === d).length;
+  return {
+    sayac: { durdu: say('durdu'), yenidenDenenecek: say('yeniden-denenecek'), kartBekliyor: say('kart-bekliyor'), sirada: say('sirada') },
+    belgeler, kesildi,
+  };
 }
 
 export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {

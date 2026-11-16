@@ -17,7 +17,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { gidenYenidenGonder, malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
+import { gidenIzleme, gidenYenidenGonder, malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
 import type {
   LogoyaBekletmeGidecekSiparis, LogoyaGidecekKarsilama, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaGuncellemeGidecekMalzeme, SatinAlmaKaynagi, SatirBaglari,
   SatinAlmaTurOrtami, SiparisLogoSonucu, Tamam, TurOrtami, TurSonucu, TxAcan,
@@ -428,10 +428,15 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.match(kaynak.siparisler.get(sip.id)?.hata ?? '', /^Kart bekliyor: HM-YOK-00002\./);
     assert.equal(await giden('talep', t.id), null, 'deneme izi yok');
     assert.equal(await giden('siparis', sip.id), null);
+    const bekleyenler = async (): Promise<string[]> => (await vt().tx((db) => gidenIzleme(db, new Date(simdi)))).belgeler
+      .filter((b) => b.durum === 'kart-bekliyor' && [`talep:${t.id}`, `siparis:${sip.id}`].includes(`${b.belge}:${b.no}`))
+      .map((b) => `${b.belge}:${b.no}:${b.yenidenGonderilebilir}:${b.denemeSayisi}`).sort();
+    assert.deepEqual(await bekleyenler(), [`siparis:${sip.id}:false:null`, `talep:${t.id}:false:null`].sort(), 'izleme ekranında kart bekliyor; elle gönderilmez');
     await vt().sorgu(`INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma) VALUES (889101, 'HM-YOK-00001', true, now()), (889102, 'HM-YOK-00002', true, now())`);
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep-niyet', no: t.id }, 'kart gelince kendiliğinden');
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: sip.id });
+    assert.deepEqual(await bekleyenler(), [], 'kart gidince izlemeden düşer');
   });
 
   test('LGS-27 (3313 T8) talepte hizmet satırı: istek gitmeden durur, neden kaynağa yazılır; yalnız malzeme satırlı talep gider', async () => {

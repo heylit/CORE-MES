@@ -3,7 +3,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
-  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
+  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesGidenIzlemeCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
@@ -209,6 +209,14 @@ export const uclar = [
     sorgu: sayfaSorgusu,
     cevap: gidenCevabi,
     isle: ({ db, sorgu }) => servis.giden(db, sorgu),
+  }),
+  // 3313: bağlantı izleme; Sistem durumu ayrıntısıyla aynı yetki.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/giden/sorunlar',
+    yetki: 'saglik.ayrinti-oku',
+    cevap: smartesGidenIzlemeCevabi,
+    isle: ({ db }) => servis.gidenIzleme(db),
   }),
   // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
   // 3192: makine verisiyle çalışanın girdiği karşılaştırılır; yalnız okur, bir şey düzeltmez.

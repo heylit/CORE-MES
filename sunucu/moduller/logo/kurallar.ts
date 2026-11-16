@@ -280,6 +280,30 @@ export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme
   return g.sonrakiDeneme === null || g.sonrakiDeneme.getTime() <= simdi.getTime();
 }
 
+// 3313: bağlantı izleme. Başarıyla gitmemiş giden kutusu satırının ekrandaki durumu ve ne yapılacağı tek yerde; "Yeniden gönder" yalnız
+// duran belgede (belirsiz sonuç elle öne alınmaz; kart bekleyen belge kart gidince kendiliğinden gider). Başarılı satır izlemeye girmez (sorgu dışlar).
+export type GidenIzlemeDurumu = 'durdu' | 'yeniden-denenecek' | 'kart-bekliyor' | 'sirada';
+export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null }): Exclude<GidenIzlemeDurumu, 'kart-bekliyor'> {
+  if (g.sonSonuc === null) return 'sirada';
+  if (durduMu(g)) return 'durdu';
+  return SONUC_SINIFI[g.sonSonuc] === 'durdu' ? 'sirada' : 'yeniden-denenecek';
+}
+export const GIDEN_NE_YAPMALI: Readonly<Record<GidenIzlemeDurumu, string>> = Object.freeze({
+  durdu: 'Logo reddetti. Nedeni düzeltin (kart, cari, eşleme ya da belge), sonra "Yeniden gönder".',
+  'yeniden-denenecek': 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse Logo yardımcısının çalıştığını denetleyin.',
+  'kart-bekliyor': 'Eksik kartı Logo\'ya gönderin ya da Logo geçişinde bağlayın; belge kendiliğinden gider.',
+  sirada: 'Sırada; ilk turda gider.',
+});
+export const GIDEN_BELGE_ADLARI: Readonly<Record<string, string>> = Object.freeze({
+  malzeme: 'Malzeme kartı', hizmet: 'Hizmet kartı', 'malzeme-guncelleme': 'Malzeme adı güncellemesi',
+  siparis: 'Satın alma siparişi', 'siparis-guncelleme': 'Sipariş düzenlemesi', 'siparis-kapatma': 'Sipariş kapatma', 'siparis-bekletme': 'Sipariş bekletme',
+  'siparis-iptal': 'Sipariş iptali', talep: 'Talep fişi', karsilama: 'Talep karşılama', 'satis-teklifi': 'Satış teklifi', 'satis-siparisi': 'Satış siparişi',
+  'siparisler-teklifi': 'Satış teklifi', 'siparisler-siparisi': 'Satış siparişi', 'sarf-fisi': 'Sarf fişi', 'uretim-girisi': 'Üretimden giriş fişi',
+  'fire-fisi': 'Fire fişi', 'ambar-fisi': 'Ambar transferi', 'sayim-fazlasi': 'Sayım fazlası fişi', 'sayim-eksigi': 'Sayım eksiği fişi',
+});
+export const gidenBelgeAdi = (belge: string, islem: 'gonder' | 'pasif'): string =>
+  `${GIDEN_BELGE_ADLARI[belge] ?? belge}${islem === 'pasif' ? ' (pasife alma)' : ''}`;
+
 // 3313: satır kartı denetimi. Kart Logo'da sayılır: CORE kartında Logo kaydı var (gönderildi, bağlandı, Logo'dan alındı) ya da Logo
 // kodu okunmuş kopyada. Eksik kart varsa belge gitmez ve deneme sayılmaz; kart gidince belge kendiliğinden gider.
 export function logodaOlmayanKartlar(
