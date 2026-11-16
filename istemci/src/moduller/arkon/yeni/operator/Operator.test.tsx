@@ -435,10 +435,12 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
     maddeler: [
       { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false },
       { madde: 'rota', durum: 'bilinmiyor', muafTutulur: false, isEmriDuzeyi: false },
+      // Makine yalnız uyarır: eksik olsa da "Başlatılamaz" satırına girmez.
+      { madde: 'makine', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true },
     ],
     muafiyetler,
     isEmirleri: [
-      { isEmriId: 90, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: cnc }] },
+      { isEmriId: 90, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: cnc }, { madde: 'makine', durum: 'eksik' }] },
       { isEmriId: 91, opNo: 20, ad: 'Freze', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }] },
     ],
   });
@@ -456,7 +458,7 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
   };
 
   // 3338-4 a: planlamanın hazırlık tablosu terminalde yok; işi durduran eksik madde sayacın üstünde tek satırdır, Başlat açık kalır.
-  it('durduran eksik madde "Başlatılamaz" satırıdır; Hazırlık sekmesi ve listesi yok; Başlat açık kalır', async () => {
+  it('durduran eksik madde "Başlatılamaz" satırıdır, yalnız uyaran girmez; Hazırlık sekmesi ve listesi yok; Başlat açık kalır', async () => {
     const { okunan } = kur(cevap('eksik'));
     await ekran();
     expect(await screen.findByText('Başlatılamaz · eksik: CNC kurulumu', undefined, { timeout: 10000 })).toBeTruthy();
@@ -467,7 +469,7 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
     expect(screen.getByRole('tab', { name: /^Talimatlar/ })).toBeTruthy();
   }, 40000);
 
-  it('muaf ya da tamam hazırlıkta uyarı satırı yok', async () => {
+  it('muaf ya da tamam hazırlıkta, yalnız uyaran madde eksikken de satır yok', async () => {
     kur(cevap('muaf', [{ madde: 'cnc', isEmriId: 90, kisiId: 3, kisiAdi: 'Deneme Müdür', gerekce: 'Program tezgâhta doğrulandı.', zaman: '2026-11-04T08:40:00.000Z' }]));
     const d = await ekran();
     expect(await within(d).findByRole('heading', { name: /UE-DENEME-9/ }, { timeout: 10000 })).toBeTruthy();
@@ -504,6 +506,60 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     // Sapma kartı a: atlanan madde CORE'da adımın geçmişine yazılır.
     await waitFor(() => { expect(atlama).toEqual([{ eylem: 'baslat', adimIdler: [1] }]); }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: '1 zorunlu madde eksik' })).toBeNull();
+  }, 40000);
+
+  const talimatliIs = (adimlar: unknown[]) => {
+    const tmi = { ...PAKET, id: 'tmi-ie-96', no: 'UE-DENEME-96', tmi: { emirId: 96, isEmriId: 96 } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    const atlama: unknown[] = [];
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).endsWith('/uretim-emirleri/96/talimat-atlama')) { atlama.push(JSON.parse(String(istek?.body))); return new Response(JSON.stringify({ kayitId: 1 }), { status: 200 }); }
+      if (/\/uretim-emirleri\/96$/.test(String(adres))) return new Response(JSON.stringify({ adimlar }), { status: 200 });
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    return { istekler, atlama };
+  };
+
+  it('"Bitince" zorunlu madde eksikken Başlat sormaz, Bitir sorar; "Yine de bitir" bitiş eylemiyle CORE\'a yazar', async () => {
+    const { istekler, atlama } = talimatliIs([adim(1, 'ORN aparatı bağla', 'on_hazirlik', true, true), adim(2, 'Talaşı temizle', 'bitis', true)]);
+    await ekran();
+    const grup = () => within(screen.getByRole('group', { name: 'İş durumu' }));
+    await waitFor(() => { expect(screen.getByRole('tab', { name: /^Talimatlar/ })).toBeTruthy(); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(grup().getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    expect(screen.queryByRole('dialog', { name: /zorunlu madde eksik/ })).toBeNull();
+    // Bitir basılı tutulur; yardımcı teknolojinin iki tıklaması aynı yoldan tetikler.
+    const bitir = await waitFor(() => grup().getByRole('button', { name: /Bitir/ }), { timeout: 10000 });
+    fireEvent.click(bitir);
+    fireEvent.click(bitir);
+    const p = await screen.findByRole('dialog', { name: '1 zorunlu madde eksik' });
+    expect(within(p).getByRole('listitem').textContent).toBe('Talaşı temizle');
+    fireEvent.click(within(p).getByRole('button', { name: 'Yine de bitir' }));
+    await waitFor(() => { expect(atlama).toEqual([{ eylem: 'bitir', adimIdler: [2] }]); }, { timeout: 10000 });
+  }, 40000);
+
+  it('işaret CORE reddedince geri alınır ve neden yazar; yanıt gelmeden ikinci dokunuş gitmez', async () => {
+    let birak: (r: Response) => void = () => undefined;
+    const isaretler: unknown[] = [];
+    talimatliIs([adim(1, 'ORN aparatı bağla', 'on_hazirlik', true)]);
+    // Yanıtı test bırakır: istek askıdayken madde işaretli görünür.
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => (String(adres).endsWith('/uretim-emirleri/96/adimlar/1/tamamla')
+      ? (isaretler.push(JSON.parse(String(istek?.body))), new Promise<Response>((r) => { birak = r; }))
+      : asil(adres, istek)));
+    await ekran();
+    fireEvent.click(await screen.findByRole('tab', { name: /^Talimatlar/ }, { timeout: 10000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'ORN aparatı bağla · zorunlu' }, { timeout: 10000 }));
+    const isaretli = await screen.findByRole('button', { name: 'ORN aparatı bağla · zorunlu · işareti kaldır' });
+    fireEvent.click(isaretli);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(isaretler).toEqual([{ tamam: true }]);
+    birak(new Response(JSON.stringify({ mesaj: 'Reddedildi' }), { status: 409 }));
+    expect(await screen.findByRole('button', { name: 'ORN aparatı bağla · zorunlu' }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByText(/^Kaydedilmedi · /)).toBeTruthy();
   }, 40000);
 });
 

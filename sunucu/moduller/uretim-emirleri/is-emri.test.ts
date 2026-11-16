@@ -1256,7 +1256,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ist = await istasyonKur();
     const [m1, m2] = [await makineKur(ist), await makineKur(ist)];
     const mk = (id: number) => ({ tur: 'makine' as const, id });
-    const { uretimEmriId: id } = await ac([adim(1, mk(m1)), adim(2, mk(m1)), adim(3, mk(m2)), adim(4, mk(m2))], { adet: 10 });
+    const olcum = { tur: 'olcum', ad: 'Ç', alt: 1, ust: 2, birim: 'mm' };
+    const liste = { kontrolListesi: [{ ad: 'Çapı ölç', aciklama: null, asama: 'bitis' as const, zorunlu: true, kontrol: olcum }] };
+    const { uretimEmriId: id } = await ac([adim(1, mk(m1)), adim(2, mk(m1), liste), adim(3, mk(m2)), adim(4, mk(m2))], { adet: 10 });
     const yaz = <T = { emir: AdimliEmirAyrintisi } & Hata>(yol: string, govde: unknown) => istek<T>('planlama_proje', 'POST', `/adimli-emirler/${yol}`, govde, randomUUID());
     const rework = { oncekiOpNo: null, opNo: 15, tur: 'rework', ad: 'Rework', operasyonTipiId: tipId, kaynak: mk(m1), ayarSuresiDk: '5', birimSureDk: '2', terminGun: null, aciklama: 'Çapak' };
 
@@ -1266,6 +1268,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     let k = await ayrinti(kol);
     assert.deepEqual(k.parti?.birlesmeOpNo, 30);
     assert.deepEqual(k.isEmirleri.map((i) => [i.sira, i.opNo, i.tur, i.ekAciklama]), [[1, 15, 'rework', 'Çapak'], [2, 20, 'rota', null]], 'kol birleşme adımına kadar taşır, rework önde');
+    // 3338-4 a: kola kopyalanan talimat zorunluluğunu ve kontrolünü taşır.
+    // Terminal yalnız çalışan adımın listesini okur; kopya satırdan ölçülür.
+    const kolAdimlari = await o().vt.tx((db) => db.sorgu<{ ad: string; asama: string; zorunlu: boolean; kontrol: unknown }>('SELECT ad, asama, zorunlu, kontrol FROM emir_adimi WHERE emir_id = $1 ORDER BY sira', [kol]));
+    assert.deepEqual(kolAdimlari.map((a) => [a.ad, a.asama, a.zorunlu, a.kontrol]), [['Çapı ölç', 'bitis', true, olcum]]);
     // 697: Reçete ve Rota durum anahtarını rotadaki yerle kurar; ek adımı dilimdeki türden tanır.
     const dilim = (await o().vt.tx((db) => emirDilimi(db))).find((e) => e.id === kol);
     assert.deepEqual(dilim?.isEmirleri.map((i) => [i.sira, i.opNo, i.tur]), [[1, 15, 'rework'], [2, 20, 'rota']]);

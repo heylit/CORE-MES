@@ -1148,7 +1148,7 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
     const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && !fasonMu(i), ilkSira + n));
     for (const a of adaylar.filter((x) => x.isEmriId === i.id)) await s.adayEkle(db, yeni, a);
     for (const b of bilesenler.filter((x) => x.isEmriId === i.id)) await s.bilesenEkle(db, yeni, b);
-    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama, null, m.zorunlu);
+    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama, m.kontrol, m.zorunlu);
     kopyalar.push({ kaynak: i, yeniId: yeni });
   }
   // Kola gelmeyen öncül düşer: kolun o adımı dal başı olur, üstü bekleme kuralı kolBaslamaIhlali'ndedir.
