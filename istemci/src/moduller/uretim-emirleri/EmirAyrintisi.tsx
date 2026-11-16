@@ -17,6 +17,7 @@ import { EmirFisleri } from './EmirFisleri.tsx';
 import { stokOkur } from './refakat.ts';
 import { UretimYerleri } from './UretimYerleri.tsx';
 import { useAdimSatirEki, type AdimSatirEki } from './AdimSatiri.tsx';
+import { SmartesEmirBasligi } from './SmartesRozeti.tsx';
 import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
@@ -259,7 +260,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     </nav>
     <Kart
       baslik={emir ? emir.emirNo : 'Üretim emri'}
-      baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{emir.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}</>}
+      baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{emir.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}{satirEki.smartes.gorunur && <> <SmartesEmirBasligi bilgi={satirEki.smartes.bilgi} hata={satirEki.smartes.hata} /></>}</>}
       sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id, bekletOgesi)}</div> : undefined}
     >
       {ayrinti.isPending && <DurumKutusu durum="yukleniyor" />}

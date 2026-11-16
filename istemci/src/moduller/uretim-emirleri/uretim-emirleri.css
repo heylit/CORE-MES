@@ -209,3 +209,17 @@
 @media (min-width: 1024px) { .tc-emir-fisler { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .tc-emir-kod.tc-emir-fis-kod { white-space: nowrap; overflow-wrap: normal; }
 .tc-emir-teslim-bagi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); color: var(--muted); font-size: var(--yazi-s); }
+
+/* 3346: SmartES gönderim rozeti. Neden rozetin altında, dar hücrede sarılır; OP ve adım adı kırılmaz. */
+.tc-smartes-rozet { display: inline-flex; min-width: 0; }
+.tc-smartes-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
+.tc-smartes-alt { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; text-align: left; }
+.tc-smartes-op { white-space: nowrap; }
+/* Listede uzun neden sütunu genişletmez; alt satırlara sarılır. */
+.tc-smartes-liste { max-width: var(--menu-genis); white-space: normal; }
+.tc-smartes-rozet-yok { color: var(--muted); }
+.tc-smartes-izleme { font-size: var(--yazi-s); }
+.tc-emir-adim-statu .tc-smartes-adim { align-items: flex-end; }
+@media (max-width: 767px) { .tc-emir-adim-statu .tc-smartes-adim { align-items: flex-start; } }
+/* Satırın sağı (statü, SmartES rozeti, menü) orta genişlikte ad sütununu daraltmasın: sağ taraf kendi içinde alt satıra sarılır. */
+@media (min-width: 768px) and (max-width: 1279px) { .tc-emir-adim-statu { max-width: var(--acilir-encok); } }

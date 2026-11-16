@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import type { SmartesEmirDurumlariCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import type { AdimDurumuCevabi, AdimliEmirAyrintisi, Emir, EmirAyrintiCevabi, IsEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi, type EmirParcalari } from './EmirAyrintisi.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
@@ -110,5 +111,51 @@ describe('Emir sayfasında adım satırı (3039)', () => {
     expect(screen.getByRole('menuitem', { name: 'Fasona al' })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: "Adım Durumu'nda aç" }));
     expect(await screen.findByText('Adım Durumu sayfası')).toBeTruthy();
+  });
+});
+
+describe('Emir sayfasında SmartES rozeti (3346)', () => {
+  const SMARTES = {
+    emirler: [{
+      emirId: 5,
+      toplam: { durum: 'durdu', gonderilmez: null, gonderilen: 1, toplam: 2, opNo: 20, neden: 'SmartES reddetti: Kilitli' },
+      adimlar: [
+        { isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'gonderildi', gonderilmez: null, smartesNo: 'UE-0005-10', neden: null },
+        { isEmriId: 52, opNo: 20, ad: 'CNC freze', durum: 'durdu', gonderilmez: null, smartesNo: 'UE-0005-20', neden: 'SmartES reddetti: Kilitli' },
+        { isEmriId: 53, opNo: 30, ad: 'Taşlama', durum: null, gonderilmez: 'esleme-yok', smartesNo: null, neden: null },
+      ],
+    }],
+  } satisfies SmartesEmirDurumlariCevabi;
+  it('başlıkta "SmartES: Durdu" ve nereye gidileceği; adımda rozet, neden ve gitmeyen adımın nedeni', async () => {
+    const istekler = sunucuKur(OKUYUCU, { ...yollar, 'GET /smartes/emir-durumlari': () => json(200, SMARTES) });
+    ac(ekran, '/uretim-emirleri/5');
+    const liste = await screen.findByRole('list', { name: 'Adımlar' });
+    await within(liste).findAllByText('SmartES: Durdu');
+    // Başlıkta (adım listesinin dışında) toplam rozet ve yetkisize "Yöneticiye bildirin".
+    expect(screen.getAllByText('SmartES: Durdu').filter((e) => !liste.contains(e))).toHaveLength(1);
+    expect(screen.getByText('Yöneticiye bildirin')).toBeTruthy();
+    const satir = (op: number) => within(liste).getByText(`OP ${String(op)}`, { exact: false }).closest('li')!;
+    expect(within(satir(10)).getByText("SmartES'te").closest('[title]')?.getAttribute('title')).toBe('SmartES iş emri UE-0005-10');
+    expect(within(satir(20)).getByText('SmartES: Durdu')).toBeTruthy();
+    expect(within(satir(20)).getByText('SmartES reddetti: Kilitli')).toBeTruthy();
+    expect(within(satir(30)).getByText("SmartES'e gitmez").getAttribute('title')).toMatch(/eşlemesi yok/);
+    // Başlık ve satırlar tek istekle okunur.
+    expect(istekler.filter((i) => i.yol.startsWith('/smartes/emir-durumlari')).map((i) => i.yol)).toEqual(['/smartes/emir-durumlari?emir=5']);
+  });
+  it('okunamazsa "Okunamadı" yazar, gönderilmez ile karışmaz', async () => {
+    sunucuKur(OKUYUCU, { ...yollar, 'GET /smartes/emir-durumlari': () => json(500, { kod: 'SUNUCU', mesaj: 'x' }) });
+    ac(ekran, '/uretim-emirleri/5');
+    const liste = await screen.findByRole('list', { name: 'Adımlar' });
+    await screen.findAllByText('SmartES: okunamadı');
+    expect(screen.getAllByText('SmartES: okunamadı').filter((e) => !liste.contains(e))).toHaveLength(1);
+    expect(within(liste).queryByText('SmartES: okunamadı')).toBeNull();
+    expect(screen.queryByText("SmartES'e gitmez")).toBeNull();
+  });
+  it('emri okuma yetkisi olmayan (yalnız Adım Durumu) için istek atılmaz, rozet yok', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: ['sayfa.adim-durumu'] }, yollar);
+    ac(ekran, '/uretim-emirleri/5');
+    await screen.findByText('UE-0005');
+    expect(istekler.some((i) => i.yol.startsWith('/smartes/'))).toBe(false);
+    expect(screen.queryByText(/SmartES/)).toBeNull();
   });
 });

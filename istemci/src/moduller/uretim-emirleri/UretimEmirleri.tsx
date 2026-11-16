@@ -7,7 +7,9 @@ import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, type Sutun } from '..
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { SmartesEmirHucresi, useSmartesRozetleri } from './SmartesRozeti.tsx';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { beklemeNedeni } from './Bekletme.tsx';
 import './uretim-emirleri.css';
 
@@ -31,7 +33,9 @@ function suAnMetni(e: IzlemeEmri): ReactNode {
 }
 
 // Parça adının yanında malzeme kartının küçük resmi (kart #688); resim çizim merkezinden tek istekte gelir.
-const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[] => [
+// 3346: açık emirlerde "SmartES" sütunu (emrin SmartES'e giden adımlarının toplamı); `smartes` yoksa sütun yoktur.
+type SmartesSutunu = { emir: (id: number) => Parameters<typeof SmartesEmirHucresi>[0]['bilgi']; hata: boolean };
+const sutunlar = (resimler: ReadonlyMap<number, KucukResim>, smartes: SmartesSutunu | null): Sutun<IzlemeEmri>[] => [
   { anahtar: 'emirNo', baslik: 'Emir no', sabit: 'sol', kirilmaz: true, hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="tc-emir-kod tc-emir-no">{e.emirNo}</Link> },
   { anahtar: 'parca', baslik: 'Parça', hucre: (e) => (
     <span className="tc-emir-parca">
@@ -49,6 +53,7 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[
       const d = durumGosterimi(e);
       return <><Rozet ton={d.ton}>{d.etiket}</Rozet>{e.bekletme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{e.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}</>;
     } },
+  ...(smartes ? [{ anahtar: 'smartes', baslik: 'SmartES', hucre: (e: IzlemeEmri) => <SmartesEmirHucresi bilgi={smartes.emir(e.id)} hata={smartes.hata} /> }] : []),
   { anahtar: 'acilma', baslik: 'Açılma', kirilmaz: true, hucre: (e) => zamanMetni(e.acilma) },
 ];
 
@@ -139,7 +144,10 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
   const sorgu = gorunum === 'acik' ? liste : bitenler;
   const gorunen = gorunum === 'acik' ? emirler : bitenler.data?.satirlar ?? [];
   const resimler = useKucukResimler('malzemeler', gorunen.flatMap((e) => (e.malzemeNo == null ? [] : [e.malzemeNo])));
-  const SUTUNLAR = sutunlar(resimler);
+  const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
+  const smartesGorur = gorunum === 'acik' && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
+  const smartes = useSmartesRozetleri(smartesGorur ? emirler.map((e) => e.id) : [], smartesGorur);
+  const SUTUNLAR = sutunlar(resimler, smartesGorur ? smartes : null);
 
   return (
     <Kart
