@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react';
 import type { AdimDurumuTerminalCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
-import { tarihMetni } from '../../../../ortak/veri/zaman-metni.ts';
 import { ADIM_STATUSU, type RotaAkisiAdimi } from '../../../uretim-emirleri/disari.ts';
 
-// Emrin adımları (2893-3 b): operatör emrin bütün adımlarının son durumunu okur; ilk adım üstte, kendi adımı işaretli. Elle yazılan
-// statü "Elle" işaretiyle görünür; kişi, gerekçe ve geçmiş terminale gelmez. Operatör statü yazmaz. Okunamazsa bunu söyleyen tek satır
+// Emrin adımları (2893-3 b): operatör emrin bütün adımlarının son durumunu okur; ilk adım üstte, kendi adımı işaretli. Kişi, gerekçe
+// ve geçmiş terminale gelmez; operatör statü yazmaz. 3338-2 a: satır yalnız OP, ad, statü ve yüzdedir (elle işareti ve tedarik notu yok). Okunamazsa bunu söyleyen tek satır
 // çizilir (3126); son okunan liste varken yenileme hatası onu silmez.
 export function useEmrinAdimlari(emirId: number | null, yenidenSor: unknown): { v: AdimDurumuTerminalCevabi | null; hata: boolean } {
   const [v, vYaz] = useState<AdimDurumuTerminalCevabi | null>(null);
@@ -61,17 +60,6 @@ export function RotaSeridi({ v, hata, isEmriId, ac }: { v: AdimDurumuTerminalCev
   );
 }
 
-// Termin bir gündür ('GGGG-AA-GG'); bugünden önceyse gecikmiştir (Atölye N2). Bugün tarayıcının yerel günüdür.
-const bugun = (): string => {
-  const d = new Date();
-  return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-const terminMetni = (termin: string | null): string => (termin === null ? '' : ` · termin ${tarihMetni(termin)}${termin < bugun() ? ' · gecikti' : ''}`);
-// 2893-3 b: adımı bekleten talep ve sipariş numarası ile beklenen teslim; fiyat ve tedarikçi gelmez.
-const tedarikMetni = (t: AdimDurumuTerminalCevabi['adimlar'][number]['tedarik'][number]): string => t.asama === 'talep'
-  ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo}`
-  : `Sipariş ${t.siparisNo ?? t.talepNo}${terminMetni(t.termin)}`;
-
 export function EmrinAdimlari({ v, hata = false, isEmriId }: { v: AdimDurumuTerminalCevabi | null; hata?: boolean; isEmriId: number | null }) {
   if (hata) return <p className="tc-ay1-adim-durumu tc-ay1-soluk" role="status"><Simge ad="alert" boyut="k" />{OKUNAMADI}</p>;
   if (v === null || v.adimlar.length === 0) return null;
@@ -87,8 +75,7 @@ export function EmrinAdimlari({ v, hata = false, isEmriId }: { v: AdimDurumuTerm
             <li key={a.isEmriId} id={adimCizgisiKimligi(a.isEmriId)} aria-current={a.isEmriId === isEmriId ? 'step' : undefined}>
               <span className="tc-ay1-adim-op">OP {a.opNo}</span>
               <span className="tc-ay1-adim-ad">
-                {a.ad}{a.isEmriId === isEmriId ? ' · bu adım' : ''}{a.elle ? <em>Elle</em> : null}
-                {a.tedarik.length > 0 ? <small>{a.tedarik.map(tedarikMetni).join(' · ')}</small> : null}
+                {a.ad}{a.isEmriId === isEmriId ? ' · bu adım' : ''}
               </span>
               <span className="tc-ay1-hz-cip" data-ton={g.ton === 'bilgi' ? 'tamam' : g.ton} data-sakin="" title={a.nedenler.join(', ') || undefined}>
                 <Simge ad={g.simge} boyut="k" /><span>{g.ad}</span>

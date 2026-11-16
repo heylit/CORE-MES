@@ -8,6 +8,8 @@ export interface AdimSatiri {
   ad: string;
   aciklama: string | null;
   asama: TalimatAsamasi;
+  zorunlu: boolean;
+  kontrol: unknown;
   tamam: boolean;
   tamamlayanId: number | null;
   tamamlanma: string | null;
@@ -19,18 +21,18 @@ export interface AdimSatiri {
 
 export async function adimEkle(
   db: Db, emirId: number, sira: number, ad: string, aciklama: string | null, isEmriId: number | null = null, asama: TalimatAsamasi = 'uretim',
-  kontrol: object | null = null,
+  kontrol: object | null = null, zorunlu = false,
 ): Promise<void> {
   await db.sorgu(
-    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama, kontrol) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
-    [emirId, sira, ad, aciklama, isEmriId, asama, kontrol === null ? null : JSON.stringify(kontrol)],
+    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama, kontrol, zorunlu) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)',
+    [emirId, sira, ad, aciklama, isEmriId, asama, kontrol === null ? null : JSON.stringify(kontrol), zorunlu],
   );
 }
 
 // Güncel durum son olaydan türer; geri alınmış adımda tamamlayan ve zaman yoktur.
 export function adimlariGetir(db: Db, emirId: number): Promise<AdimSatiri[]> {
   return db.sorgu<AdimSatiri>(
-    `SELECT a.id, a.sira, a.ad, a.aciklama, a.asama, COALESCE(o.olay = 'tamamla', false) AS tamam,
+    `SELECT a.id, a.sira, a.ad, a.aciklama, a.asama, a.zorunlu, a.kontrol, COALESCE(o.olay = 'tamamla', false) AS tamam,
             CASE WHEN o.olay = 'tamamla' THEN o.kisi_id END AS "tamamlayanId",
             CASE WHEN o.olay = 'tamamla' THEN ${ISO('o.zaman')} END AS tamamlanma,
             a.is_emri_id AS "isEmriId", k.olcum::float8 AS "kanitOlcum", k.secim AS "kanitSecim", k.foto_ozet AS "kanitFoto"

@@ -18,10 +18,11 @@ export const MEDYA_SINIRI = { resimBayt: 10 * 1024 ** 2, videoBayt: 200 * 1024 *
 
 export type KontrolTuru = KontrolNoktasi['tur'];
 export const KONTROL_ADLARI: Readonly<Record<KontrolTuru, string>> = { yok: 'Yok', onay: 'Onay', olcum: 'Ölçüm', foto: 'Fotoğraf', secim: 'Seçim' };
-// Aşama terminalde hangi listede açılacağını söyler (2098-1 a): ön hazırlık başka iş sürerken, hazırlık ayarda, üretim işin kendisi.
-export const ASAMA_ADLARI: Readonly<Record<TalimatAsamasi, string>> = { on_hazirlik: 'Üretim öncesi hazırlık', hazirlik: 'Üretim hazırlığı', uretim: 'Üretim' };
+// Aşama terminalde hangi listede açılacağını söyler (2098-1 a): ön hazırlık başka iş sürerken, hazırlık ayarda, üretim işin kendisi; bitiş iş bitince (3338-4 a).
+export const ASAMA_ADLARI: Readonly<Record<TalimatAsamasi, string>> = { on_hazirlik: 'Üretim öncesi hazırlık', hazirlik: 'Üretim hazırlığı', uretim: 'Üretim', bitis: 'Bitince' };
 export const ASAMA_IPUCLARI: Readonly<Record<TalimatAsamasi, string>> = {
   on_hazirlik: 'Makine başka işi işlerken yapılır: malzeme, takım, aparat.', hazirlik: 'Ayar başlayınca açılır: bağlama, sıfır, kuru çalıştırma.', uretim: 'İş sürerken.',
+  bitis: 'İş bitince sorulur: söküm, temizlik, son kayıt.',
 };
 export const KAPSAM_ADLARI: Readonly<Record<SartnameKapsami, string>> = { ic: 'iç', fason: 'fason', ikisi: 'iç ve fason' };
 export const SURUM_DURUMU_ADLARI: Readonly<Record<SartnameSurumu['durum'], string>> = { taslak: 'taslak', yururlukte: 'yürürlükte', eski: 'eski' };

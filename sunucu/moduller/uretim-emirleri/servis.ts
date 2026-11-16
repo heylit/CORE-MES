@@ -24,7 +24,7 @@ import {
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, onculdenGelen, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
-  bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali,
+  bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali, listeKontrolu,
 } from './kurallar.ts';
 import { KARTSIZ_BASLATMA_ISLEMI, kartsizBaslatmaIhlali } from './kurallar.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -311,8 +311,9 @@ async function adimlariCevir(db: Db, emirId: number): Promise<EmirAdimi[]> {
     const n = notlar.find((x) => x.sira === sira && x.buEmir === buEmir);
     return n === undefined ? null : { metin: n.metin, yazan: adli(adlar.kisi, n.kisiId, 'Kişi'), zaman: n.zaman, emirId: n.emirId };
   };
-  return satirlar.map(({ tamamlayanId, isEmriId: _ie, kanitOlcum, kanitSecim, kanitFoto, ...kalan }) => ({
+  return satirlar.map(({ tamamlayanId, isEmriId: _ie, kanitOlcum, kanitSecim, kanitFoto, kontrol, ...kalan }) => ({
     ...kalan,
+    kontrol: listeKontrolu(kontrol),
     tamamlayan: tamamlayanId === null ? null : adli(adlar.kisi, tamamlayanId, 'Kişi'),
     kanit: kanitOlcum === null && kanitSecim === null && kanitFoto === null ? null : { olcum: kanitOlcum, secim: kanitSecim, foto: kanitFoto },
     gecenNot: not(kalan.sira, false),

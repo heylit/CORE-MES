@@ -1,4 +1,5 @@
 import { expect, test } from './ortak.ts';
+import type { Page } from '@playwright/test';
 
 // Rota şeridi elle kayar: çok adımlı rotada kartlar sabit genişlikte, yazı kesilmez, bu adım ortada açılır; sayfa yatay taşmaz.
 // İş kartlarında işin yeri (istasyon ve makine) yazar. Paket ve adım durumu tarayıcıda uydurulur (ORN- sentetik); yazma gitmez.
@@ -15,20 +16,40 @@ const adimlar = ADLAR.map((ad, i) => ({
   elle: false, yuzde: i < 4 ? 100 : 0, nedenler: [], tedarik: [],
 }));
 
+// Talimatlar (3338-4 a): üç aşama, zorunlu ve ölçüm maddesi; emir ayrıntısının yalnız adımları okunur.
+const talimat = (id: number, ad: string, asama: string, ek: Record<string, unknown> = {}) => ({
+  id, sira: id, ad, aciklama: null, asama, zorunlu: false, kontrol: null, tamam: false, tamamlayan: null, tamamlanma: null, kanit: null,
+  gecenNot: null, buNot: null, talimat: null, ...ek,
+});
+const TALIMATLAR = [
+  talimat(1, 'Bağlama aparatını ORN-APR-12 ile değiştir', 'on_hazirlik', { zorunlu: true }),
+  talimat(2, 'Sıfır noktasını probla', 'hazirlik', { zorunlu: true, kontrol: { tur: 'olcum', ad: 'Z', alt: -0.02, ust: 0.02, birim: 'mm' } }),
+  talimat(3, 'T05 takım boyunu kontrol et', 'hazirlik', { tamam: true }),
+  talimat(4, 'İlk parçayı kaliteye bildir', 'uretim', { zorunlu: true }),
+  talimat(5, 'Her 5 parçada deliği tampon mastarla kontrol et', 'uretim'),
+  talimat(6, 'Aparatı söküp rafa koy', 'bitis', { zorunlu: true }),
+];
+
+async function kur(page: Page): Promise<void> {
+  await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [
+    { kimlik: 'ekran-rota-99104', surum: 1, govde: paket('UE-ORN-50', 99104, 'Op 50 · Freze (CNC) 5 eksen', '') },
+    { kimlik: 'ekran-rota-99105', surum: 1, govde: paket('UE-ORN-60', 99105, 'Op 60 · Delik delme', 'ORN-CNC-02') },
+  ] } }));
+  await page.route('**/api/adimli-emirler/9902/adim-durumu/terminal', (r) => r.fulfill({ json: { emirId: 9902, adimlar } }));
+  await page.route('**/api/adimli-emirler/9902/hazirlik', (r) => r.fulfill({ json: { maddeler: [], muafiyetler: [], isEmirleri: [] } }));
+  // Malzeme göstergesi: istasyonda 3,6 m, bir adet 0,4 m (9 adetlik), kalan 10 adet.
+  await page.route('**/api/stok/teslim-kutusu/is-malzemeleri*', (r) => r.fulfill({ json: { isler: [{
+    uretimEmriId: 9902, emirNo: 'UE-ORN', opNo: 60, adimAd: 'Delik delme', calisiyor: false, kalanAdet: 10,
+    malzemeler: [{ malzemeId: 1, kod: 'ORN-CUBUK-40', ad: null, birim: 'm', birAdet: '0.400', gereken: '4.000', istasyonda: '3.600', eksik: false, yerler: [], istek: null, tasinan: false }],
+  }] } }));
+  await page.route('**/api/uretim-emirleri/9902', (r) => r.fulfill({ json: { adimlar: TALIMATLAR } }));
+  await page.route('**/api/arkon/is-emirleri/*/sahne', (r) => r.fulfill({ json: { sahne: null } }));
+}
+
 test.describe('rota şeridi elle kayar', () => {
   test.use({ hesap: 'ornek.operator1' });
   test('9 adımda bu adım ortada, kart yazısı kesilmez, sayfa taşmaz; iş kartında istasyon ve makine', async ({ page, ag, ac }, bilgi) => {
-    await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [
-      { kimlik: 'ekran-rota-99104', surum: 1, govde: paket('UE-ORN-50', 99104, 'Op 50 · Freze (CNC) 5 eksen', '') },
-      { kimlik: 'ekran-rota-99105', surum: 1, govde: paket('UE-ORN-60', 99105, 'Op 60 · Delik delme', 'ORN-CNC-02') },
-    ] } }));
-    await page.route('**/api/adimli-emirler/9902/adim-durumu/terminal', (r) => r.fulfill({ json: { emirId: 9902, adimlar } }));
-    await page.route('**/api/adimli-emirler/9902/hazirlik', (r) => r.fulfill({ json: { maddeler: [], muafiyetler: [], isEmirleri: [] } }));
-    // Malzeme göstergesi: istasyonda 3,6 m, bir adet 0,4 m (9 adetlik), kalan 10 adet.
-    await page.route('**/api/stok/teslim-kutusu/is-malzemeleri*', (r) => r.fulfill({ json: { isler: [{
-      uretimEmriId: 9902, emirNo: 'UE-ORN', opNo: 60, adimAd: 'Delik delme', calisiyor: false, kalanAdet: 10,
-      malzemeler: [{ malzemeId: 1, kod: 'ORN-CUBUK-40', ad: null, birim: 'm', birAdet: '0.400', gereken: '4.000', istasyonda: '3.600', eksik: false, yerler: [], istek: null, tasinan: false }],
-    }] } }));
+    await kur(page);
     await ac('/uretim-terminali');
     const rota = page.getByRole('region', { name: /^Rota: 4\/9 adım bitti/ });
     await expect(rota).toBeVisible({ timeout: 15_000 });
@@ -65,7 +86,7 @@ test.describe('rota şeridi elle kayar', () => {
     await expect(page.getByRole('meter', { name: /^Üretilen %/ })).toBeVisible();
     const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
     if (klasor) {
-      await ol.evaluate((x) => { const l = x.querySelector('li[aria-current="step"]') as HTMLElement; x.scrollLeft = l.offsetLeft - x.offsetLeft - (x.clientWidth - l.offsetWidth) / 2; });
+      await ol.evaluate((x: HTMLElement) => { const l = x.querySelector('li[aria-current="step"]') as HTMLElement; x.scrollLeft = l.offsetLeft - x.offsetLeft - (x.clientWidth - l.offsetWidth) / 2; });
       await page.screenshot({ path: `${klasor}/rota-${bilgi.project.name}.png` });
     }
     // İş kartında işin yeri: istasyon kodu ve makine; makinesi seçilmemiş işte bu açıkça yazar.
@@ -74,6 +95,26 @@ test.describe('rota şeridi elle kayar', () => {
       await expect(yerler.first()).toBeVisible();
       await expect(page.locator('.tc-ay1-is-yer').filter({ hasText: 'ORN-CNC-02' }).first()).toBeAttached();
     }
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);
+  });
+
+  test('Talimatlar: üç grup, açık olan işin durumundan; zorunlu eksik Başlat altında yazar; sayfa taşmaz', async ({ page, ag, ac }, bilgi) => {
+    await kur(page);
+    await ac('/uretim-terminali');
+    await expect(page.getByRole('region', { name: /^Rota: 4\/9 adım bitti/ })).toBeVisible({ timeout: 15_000 });
+    const sekme = page.getByRole('tab', { name: /^Talimatlar/ }).or(page.getByRole('navigation', { name: 'Terminal görünümleri' }).getByRole('button', { name: /Talimat/ })).first();
+    await sekme.click();
+    const once = page.getByRole('button', { name: /^Başlamadan önce/ });
+    await expect(once).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Üretim sırasında/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Bitince/ })).toBeVisible();
+    await expect(page.getByText('Sıfır noktasını probla')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    const kutu = await page.getByRole('button', { name: 'Bağlama aparatını ORN-APR-12 ile değiştir · zorunlu' }).boundingBox();
+    expect(kutu!.width).toBeGreaterThanOrEqual(44);
+    const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
+    if (klasor) await page.screenshot({ path: `${klasor}/talimat-${bilgi.project.name}.png` });
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);
   });

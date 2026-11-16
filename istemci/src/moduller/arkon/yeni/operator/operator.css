@@ -1179,3 +1179,51 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 }
 .tc-ay1-dar .tc-ay1-gosterge > b { font-size: var(--yazi-s); }
 .tc-ay1-dar .tc-ay1-kadran-kanat { gap: var(--b-2); }
+
+/* 3338-4 a: operatör talimatları üç grup; açık grup işin durumundan gelir. Kutu büyük dokunma hedefi; zorunlu etiket işaretlenince de okunur. */
+.tc-ay1-talimatlar { display: grid; gap: var(--b-2); }
+.tc-ay1-tl-grup { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
+.tc-ay1-tl-grup[data-simdi] { border-color: var(--hazard); }
+.tc-ay1-tl-grup h3 { margin: 0; }
+.tc-ay1-tl-grup h3 button {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--b-2); width: 100%; min-block-size: var(--dokunma); padding: var(--b-1) var(--b-3);
+  border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.tc-ay1-tl-grup h3 small { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-ay1-tl-grup h3 em { font-style: normal; font-size: var(--yazi-xs); font-weight: 800; color: var(--hold); }
+.tc-ay1-tl-grup h3 .tc-ay1-mono { margin-inline-start: auto; color: var(--muted); }
+.tc-ay1-tl-grup ol { list-style: none; margin: 0; padding: 0 var(--b-2) var(--b-2); display: grid; gap: var(--b-1); }
+.tc-ay1-tl-madde { display: flex; align-items: flex-start; gap: var(--b-3); padding: var(--b-2); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-ay1-tl-kutu {
+  flex: none; display: grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma);
+  border: var(--cizgi) solid var(--muted); border-radius: var(--yari-2); background: var(--panel); color: var(--on-sig); cursor: pointer;
+}
+.tc-ay1-tl-madde[data-tamam] .tc-ay1-tl-kutu { background: var(--run); border-color: var(--run); }
+.tc-ay1-tl-kutu:disabled { cursor: default; opacity: .6; }
+.tc-ay1-tl-metin { flex: 1; min-width: 0; display: grid; gap: var(--b-1); align-self: center; }
+.tc-ay1-tl-ad { overflow-wrap: anywhere; font-weight: 600; }
+.tc-ay1-tl-madde[data-tamam] .tc-ay1-tl-ad { color: var(--muted); text-decoration: line-through; }
+.tc-ay1-tl-metin > small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-ay1-tl-etiketler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-ay1-tl-etiketler:empty { display: none; }
+.tc-ay1-tl-etiketler em {
+  display: inline-flex; align-items: center; gap: var(--b-1); font-style: normal; font-size: var(--yazi-xs); font-weight: 700;
+  padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--done); border-radius: var(--yari-1); color: var(--done);
+}
+.tc-ay1-tl-etiketler em[data-zorunlu] { border-color: var(--hold); color: var(--hold); }
+.tc-ay1-tl-deger { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-ay1-tl-deger label { display: flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 700; }
+.tc-ay1-tl-deger input {
+  inline-size: calc(var(--dokunma) * 2); block-size: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-2); background: var(--panel); color: var(--ink); font: inherit; font-family: var(--font-mono);
+}
+.tc-ay1-tl-tamam {
+  min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}
+.tc-ay1-tl-tamam:disabled { opacity: .5; cursor: default; }
+.tc-ay1-tl-not {
+  display: flex; align-items: center; justify-content: center; gap: var(--b-1); inline-size: 100%; min-block-size: var(--dokunma); margin-top: var(--b-1);
+  border: 0; background: none; color: var(--hold); font: inherit; font-size: var(--yazi-s); font-weight: 700; cursor: pointer;
+}
+.tc-ay1-tl-eksik { margin: var(--b-2) 0; padding-inline-start: var(--b-4); }

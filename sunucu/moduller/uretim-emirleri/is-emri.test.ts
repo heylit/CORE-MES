@@ -484,12 +484,19 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       { ad: 'Malzemeyi al', aciklama: null, asama: 'on_hazirlik' as const },
       { ad: 'Hizala', aciklama: null, asama: 'hazirlik' as const },
       { ad: 'Ölç', aciklama: null },
+      { ad: 'Aparatı sök', aciklama: null, asama: 'bitis' as const, zorunlu: true, kontrol: { tur: 'olcum', ad: 'Ömür', alt: null, ust: null, birim: '' } },
     ] };
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
-    type AdimC = { adimlar: { id: number; asama: string; tamam: boolean; kanit: unknown; talimat: unknown; gecenNot: { metin: string } | null; buNot: { metin: string } | null }[] } & Hata;
+    type AdimC = { adimlar: { id: number; asama: string; zorunlu?: boolean; kontrol?: unknown; tamam: boolean; kanit: unknown; talimat: unknown; gecenNot: { metin: string } | null; buNot: { metin: string } | null }[] } & Hata;
     const adimlar = async (emir = id) => (await istek<AdimC>('operator', 'GET', `/uretim-emirleri/${emir}`)).govde.adimlar;
     const isaretle = (emir: number, adimId: number, govde: unknown) => istek<AdimC>('operator', 'POST', `/uretim-emirleri/${emir}/adimlar/${adimId}/tamamla`, govde);
-    const [on, hz, ur] = (await adimlar()).map((a) => a.id) as [number, number, number];
+    const ilk = await adimlar();
+    const [on, hz, ur, bt] = ilk.map((a) => a.id) as [number, number, number, number];
+    // 3338-4 a: zorunluluk ve kontrol talimattan emre kopyalanır; bitiş aşaması üretim gibi yalnız başlamış emirde işaretlenir.
+    assert.deepEqual(ilk.map((a) => [a.asama, a.zorunlu, a.kontrol]), [
+      ['on_hazirlik', false, null], ['hazirlik', false, null], ['uretim', false, null], ['bitis', true, { tur: 'olcum', ad: 'Ömür', alt: null, ust: null, birim: '' }],
+    ]);
+    assert.equal((await isaretle(id, bt, { tamam: true, kanit: { olcum: 3 } })).govde.mesaj, ADIM_BASLAMAMIS);
 
     const c1 = await isaretle(id, on, { tamam: true, kanit: { foto: 'a'.repeat(64) } });
     assert.equal(c1.durum, 200, JSON.stringify(c1.govde));
