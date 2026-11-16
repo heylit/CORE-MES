@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { HataGovdesi } from '#paylasilan/hata.ts';
+import { ESKI_SURUM_NEDENI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -17,6 +17,7 @@ import type {
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
+import { ESKI_SURUM_ILETISI } from './yazma.ts';
 
 const KOK: Islem[] = ['sayfa.siparisler', 'siparisler.oku'];
 const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: KOK };
@@ -1006,6 +1007,41 @@ describe('Teklifler', () => {
     });
     expect(Object.keys(istek.baslik).map((k) => k.toLowerCase())).toContain(ISTEK_KIMLIGI_BASLIGI.toLowerCase());
     await screen.findByText('Teklif müşteride');
+  });
+
+  it('3301-2: sürüm verilirken sunucu reddi düğmenin üstünde yazar; eski sürümde yeniden yükleme iletisi, genel retde sunucunun iletisi', async () => {
+    const dene = async (cevap: Response, beklenen: string) => {
+      sunucuKur(FIYATCI, (yontem, yol) => {
+        if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
+        if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return cevap;
+        return undefined;
+      });
+      ac('/siparisler/teklifler/21');
+      fireEvent.change(await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '10' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+      const uyari = await screen.findByText(beklenen);
+      expect(uyari.closest('[role="alert"]')).toBeTruthy();
+      cleanup();
+    };
+    await dene(hata(409, { kod: 'CAKISMA', mesaj: 'Kayıt değişti.', ayrinti: { neden: ESKI_SURUM_NEDENI } }), ESKI_SURUM_ILETISI);
+    await dene(hata(400, { kod: 'GECERSIZ', mesaj: 'Deneme sunucu reddi.' }), 'Deneme sunucu reddi.');
+  });
+
+  it('3301-2: yeni teklif talebinde eksik alan düğmenin üstündeki listede kalem numarasıyla yazar', async () => {
+    const istekler = sunucuKur(YAZAR);
+    ac('/siparisler/teklifler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kalem ekle' }));
+    fireEvent.change(await screen.findByLabelText(/^Kalem 2 tanım/), { target: { value: 'Deneme Flans' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
+    const ozet = (await screen.findByText(/Kaydedilmedi: 1 alanda eksik/)).closest('[role="alert"]')!;
+    expect(within(ozet as HTMLElement).getByText('Kalem 2: Miktar zorunlu.')).toBeTruthy();
+    expect(within(ozet as HTMLElement).queryByText(/^Kalem 1:/)).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
   });
 
   it('teklif kalemi malzemeden seçilir: tanım kart adıyla dolar, kart değişince güncellenir, elle yazılan tanım korunur', async () => {
