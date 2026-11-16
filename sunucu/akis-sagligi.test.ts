@@ -419,8 +419,10 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const pk = tamam(await oku<{ belgeler: { kimlik: string; govde: { status?: string } }[] }>('operator', '/arkon/belgeler/pkgs'));
     assert.deepEqual(pk.belgeler.map((b) => b.kimlik).sort(), S.ie.map((id) => `tmi-ie-${id}`).sort());
     assert.deepEqual(pk.belgeler.map((b) => b.govde.status), S.ie.map(() => 'published'));
+    // 3337-2 a: iş refakat kartı okutularak başlar; depo emrin kartını emre çıkan lotla açar, terminal başlatma kaydında kartı taşır.
+    const kart = tamam(await yaz<{ refakat: { id: number } }>('depo', '/stok/refakat-partileri/ac', { uretimEmriId: S.emir, partiId: S.hmParti })).refakat.id;
     // Göçten gelen operatör rolü yetkinlik kaydı olmadan iş başlatamaz; kurulum adımı olarak müdür istasyon yetkinliğini verir.
-    tamam(await ekle('events', { cid: 'deneme-0', pkgId: `tmi-ie-${S.ie[0]}`, state: 'running', machine: S.ist[0]?.kod }));
+    tamam(await ekle('events', { cid: 'deneme-0', pkgId: `tmi-ie-${S.ie[0]}`, state: 'running', machine: S.ist[0]?.kod, refakatPartisiId: kart }));
     // Yansıma listesi yalnız yazılamayanları (reddedilen, eşlenemeyen, bekleyen, hatalı) gösterir; gizlenen türler dahil okunur.
     const sorunlular = async (): Promise<Yansima[]> => tamam(await oku<Liste<Yansima>>('mudur', '/arkon/tmi-yansimalari?sayfaBoyu=100&gizlenenler=true')).satirlar;
     const ret = (await sorunlular()).find((y) => y.kayit.cid === 'deneme-0');
@@ -431,7 +433,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     for (const [i, ie] of S.ie.entries()) {
       const machine = S.ist[i]?.kod;
       const satirlar: [string, Record<string, unknown>][] = [
-        ['events', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, state: 'running', machine }],
+        ['events', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, state: 'running', machine, refakatPartisiId: kart }],
         ['counts', { cid: `deneme-${(n += 1)}`, pkgId: `tmi-ie-${ie}`, kind: 'good', delta: MAMUL_ADET, machine }],
       ];
       for (const [tur, s] of satirlar) {

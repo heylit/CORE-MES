@@ -65,8 +65,8 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     };
     const kayitYok = async (cid: string) => assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_kayit WHERE cid = $1', [cid]))?.n, 0);
     let cidNo = 0;
-    const baslat = (isEmriId: number) => {
-      const satir = { cid: `zt-${String((cidNo += 1))}`, pkgId: `tmi-ie-${String(isEmriId)}`, state: 'running', machine: istasyonKodu };
+    const baslat = (isEmriId: number, refakatPartisiId?: number) => {
+      const satir = { cid: `zt-${String((cidNo += 1))}`, pkgId: `tmi-ie-${String(isEmriId)}`, state: 'running', machine: istasyonKodu, ...(refakatPartisiId ? { refakatPartisiId } : {}) };
       return { satir, cevap: istek(operator, 'POST', '/arkon/kayitlar/events/ekle', { satirlar: [satir], kaynak: 'zt' }) };
     };
     const emirDurumu = async (isEmriId: number) => {
@@ -105,7 +105,13 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     // Hazırlık yayınlar; terminal: operatör başlatır, emir başlar.
     await yayinla(ie);
     assert.deepEqual(await paketPlani(ie), plan, 'yayın plan durumunu değiştirmez');
-    const b = baslat(ie);
+    // 3337-2 a: iş refakat kartı okutularak başlar; depo emrin kartını girdinin lotuyla açar (mal kabul ve kart yönetici eliyle).
+    const emirId = (await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [ie]))!.id;
+    const girdi = (await vt().tek<{ m: number }>('SELECT malzeme_no AS m FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = $1', [ie]))!.m;
+    await tamam(c.yonetici, 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: girdi, miktar: '5' }] });
+    const lot = (await vt().tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 ORDER BY id DESC LIMIT 1', [girdi]))!.id;
+    const kart = (await tamam<{ refakat: { id: number } }>(c.yonetici, 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: emirId, partiId: lot })).refakat.id;
+    const b = baslat(ie, kart);
     const cevap = await b.cevap;
     assert.equal(cevap.statusCode, 200, cevap.body);
     const yansima = await vt().tek<{ sonuc: string }>('SELECT y.sonuc FROM arkon_tmi_yansima y JOIN arkon_kayit k ON k.id = y.kayit_id WHERE k.cid = $1', [b.satir.cid]);
