@@ -319,40 +319,89 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
 
-  it('Gelenler: saha olayları emir Kokpit\'teyse Göster ile emri seçer; emri olmayan olayda düğme yok; liste kapanır', () => {
+  // 3297 (Risk K5): Gelenler kutusu kalktı; olaylar kaybolmaz. "Tümü" bütün gelenleri sayar; emre bağlanamayan olay listede en üstte ayrı
+  // bölümdedir, emre bağlı olay kartında sayıyla görünür.
+  it('Gelenler "Tümü" ile açılır: sayı bütün olayları kapsar, emre bağlı olmayan olay üstte ayrı bölümde; Göster emri seçer; kartta olay sayısı', () => {
     const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
       { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
       { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
     ] };
     vi.stubGlobal('CSS', { escape: (x: string) => x });
     const { sec } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
-    const kutu = screen.getByRole('region', { name: 'Gelenler' });
-    const satirlar = within(kutu).getAllByRole('listitem');
-    expect(satirlar.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01'), expect.stringContaining('Satın alma termini')]);
-    expect(within(satirlar[0]!).queryByRole('button')).toBeNull();
-    expect(satirlar[0]!.textContent).toContain('Arıza / bakım');
+    expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
+    const serit = screen.getByRole('region', { name: 'Emirler, sırasıyla' });
+    expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 olay');
+    fireEvent.click(within(serit).getByRole('button', { name: /Tümü \(2\)/ }));
+    const kutu = screen.getByRole('complementary', { name: 'Gelenler' });
+    const kartsiz = within(kutu).getByRole('region', { name: 'Emre bağlı olmayan olaylar' });
+    expect(kutu.querySelector('section')).toBe(kartsiz);
+    const ilk = within(kartsiz).getAllByRole('listitem');
+    expect(ilk.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01')]);
+    expect(within(ilk[0]!).queryByRole('button')).toBeNull();
+    expect(ilk[0]!.textContent).toContain('Arıza / bakım');
     fireEvent.click(within(kutu).getByRole('button', { name: 'Göster' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
-    fireEvent.click(within(kutu).getByRole('button', { name: /Gelenler/ }));
-    expect(within(kutu).queryAllByRole('listitem')).toHaveLength(0);
+    fireEvent.click(within(kutu).getByRole('button', { name: 'Gelenleri kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
     vi.unstubAllGlobals();
   });
 
-  // 3282 2a-1: Kapasite üst şeritten açılır (düğme basılı görünür) ve seçimi kaldırır; Ayarlar açılınca kapanır.
-  it('Kapasite üst şeritteki düğmeyle açılır ve kapanır; Ayarlar onu kapatır', () => {
+  it('gövde yukarıdan aşağıdır: sıra kartları, seçilen kartın operasyonları, plan bölümü; yan sütun yoktur', () => {
     ac();
-    const dugme = screen.getByTitle('Tezgâhın arıza, bakım ve ek mesaisi');
-    expect(dugme.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(dugme);
+    const ana = document.querySelector('.tc-pyq-ana');
+    expect([...(ana?.children ?? [])].map((x) => x.getAttribute('aria-label'))).toEqual(['Emirler, sırasıyla', 'Emirler ve operasyonlar', 'Tezgâhlar']);
+    expect(document.querySelector('.tc-pyq-govde')?.children).toHaveLength(1);
+    expect(ana?.querySelector('.tc-pyq-tahta')).not.toBeNull();
+  });
+
+  // 3297: Önce / sonra, Duruş ve mesai, Ayarlar ve Plan iyileştirme ara tek "Araçlar" menüsündedir; menü seçimle kapanır, açık araç işaretlidir.
+  const arac = (ad: string): HTMLElement => {
+    if (!screen.queryByRole('menu', { name: 'Araçlar' })) fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
+    return within(screen.getByRole('menu', { name: 'Araçlar' })).getByText(ad).closest('button')!;
+  };
+  it('Araçlar menüsü: Duruş ve mesai açılır ve kapanır; Ayarlar onu kapatır; menü seçimle kapanır', () => {
+    ac();
+    expect(within(screen.getByRole('button', { name: 'Araçlar' })).queryByText('Araçlar')).not.toBeNull();
+    expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('false');
+    expect(['Plan iyileştirme ara', 'Önce / sonra', 'Duruş ve mesai', 'Ayarlar'].map((x) => arac(x).textContent)).toEqual(['Plan iyileştirme ara', 'Önce / sonra', 'Duruş ve mesai', 'Ayarlar']);
+    fireEvent.click(arac('Duruş ve mesai'));
+    expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
-    expect(dugme.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByTitle('Plan ayarları'));
+    expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(true);
+    expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(arac('Ayarlar'));
     expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
-    expect(dugme.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(dugme);
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    fireEvent.click(arac('Duruş ve mesai'));
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Duruş ve mesaiyi kapat' }));
     expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
+  });
+
+  it('arızalı tezgâh varken üst şeritte sayılı Arıza işareti durur ve Duruş ve mesaiyi açar; yokken görünmez', () => {
+    ac();
+    expect(screen.queryByRole('button', { name: /Arıza$/ })).toBeNull();
+    cleanup();
+    const c = ornekCalisma();
+    ac({ calisma: { ...c, olaylar: [{ tip: 'ariza', m: c.D.tezgahlar[0]?.id ?? '', saat: 6 }] } as unknown as ReturnType<typeof ornekCalisma> });
+    const isaret = screen.getByRole('button', { name: /Arıza$/ });
+    expect(isaret.textContent).toBe('1Arıza');
+    fireEvent.click(isaret);
+    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
+  });
+
+  it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; seçim Ayarlar panelini o yönle açar', () => {
+    ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
+    const yon = screen.getByRole('button', { name: /Yön: İleriye/ });
+    fireEvent.click(yon);
+    const menu = screen.getByRole('menu', { name: 'Planın yönü' });
+    const l = within(menu).getAllByRole('menuitemradio');
+    expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
+    fireEvent.click(l[1]!);
+    expect(screen.queryByRole('menu', { name: 'Planın yönü' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
   });
 
   // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.
@@ -362,9 +411,9 @@ describe('Kokpit', () => {
     const { sec } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
     const ust = (): HTMLElement => screen.getByRole('button', { name: /^Canlıya al/ });
     expect(ust().className).toContain('tc-dugme-birincil');
-    const ayar = screen.getByRole('button', { name: 'Ayarlar' });
-    fireEvent.click(ayar);
-    expect(ayar.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(arac('Ayarlar'));
+    expect(arac('Ayarlar').getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
     expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
     expect(ust().className).not.toContain('tc-dugme-birincil');
@@ -373,7 +422,7 @@ describe('Kokpit', () => {
     fireEvent.click(ust());
     expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
     expect(ust().className).not.toContain('tc-dugme-birincil');
-    expect(screen.getByTitle('Plan ayarları').hasAttribute('disabled')).toBe(true);
+    expect(arac('Ayarlar').hasAttribute('disabled')).toBe(true);
   });
 
   it('çalışma yokken boş durum gösterir', () => {

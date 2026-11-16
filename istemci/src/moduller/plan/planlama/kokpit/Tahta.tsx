@@ -6,6 +6,7 @@ import {
   SAAT_ENI, aralikYuku, durumYazisi, durusYazisi, ekMesaiYazisi, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
+import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 
 // Kokpit tahtası: tezgâh ya da emir başına bir satır, satırda saat eksenli işler. İş bir düğmedir; yeri CSS değişkeniyle verilir
 // (satır içi stil yok), bu yüzden plan değişince işler yeni yerine akarak gider. Taşıma: iş tutulur (sağ tık menüsü, Space ya da çift tık),
@@ -36,6 +37,8 @@ export interface TahtaOzellikleri {
   odak: number | null;
   // Turun öne çıkan hamlesi: işin gideceği yer kesik çerçeveyle gösterilir ve görünüme getirilir.
   oneri: TurAdayi | null;
+  // Seç-yerleştir (3297): seçili adımı yapabilen tezgâh satırları öne çıkar, boş yerler basılabilir çerçevedir; yalnız Tezgâh gözünde.
+  yerlestirme?: YerlestirmeHedefi | null;
 }
 
 const SAATLER = [4, 8, 12, 16, 20] as const;
@@ -57,6 +60,7 @@ interface Hedef { satir: string; S: number; gecerli: boolean }
 
 export function Tahta(o: TahtaOzellikleri) {
   const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
+  const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
   const px = SAAT_ENI[olcek];
   const en = (m.son - m.bas) * px;
   const kap = useRef<HTMLDivElement | null>(null);
@@ -154,6 +158,12 @@ export function Tahta(o: TahtaOzellikleri) {
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }, [oneriAnahtari, goz, olcek]);
 
+  const bosYerAnahtari = yerlestirme ? JSON.stringify(yerlestirme.yerler) : null;
+  useEffect(() => {
+    const el = bosYerAnahtari ? kap.current?.querySelector<HTMLElement>('[data-bos-yer][data-ilk]') : null;
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [bosYerAnahtari, olcek]);
+
   // Tezgâhın kapalı saatleri (açık pencerelerin tümleyeni) taralı çizilir; penceresi bilinmeyen tezgâh ve fason satırı çizilmez.
   const kapali = useMemo(() => {
     const k = new Map<string, [number, number][]>();
@@ -237,7 +247,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
   const oneriIsi = oneri ? m.isler[oneri.isId] : undefined;
-  const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : null;
+  const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : yerlestirme ? new Set(yerlestirme.tezgahlar) : null;
   const secili = secEmir ? emir.get(secEmir) : undefined;
 
   const tezgahKodu = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
@@ -323,6 +333,15 @@ export function Tahta(o: TahtaOzellikleri) {
               {oneri?.planaAl !== undefined && !tasinan && goz === 'T' && oneri.tezgah === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, FIS_SAATI * px); }}>{zaman(oneri.baslangic).slice(6)} · plana al</span>
               )}
+              {!tasinan && yerlestirme?.yerler.filter((b) => b.tezgah === r.kimlik).map((b) => {
+                const ad = `${r.bas} · ${zaman(b.S).slice(6)} → ${zaman(b.C).slice(-5)} · ${b.enErken ? 'en erken biten yer' : 'boş yer'} · yerleştir`;
+                return (
+                  <button
+                    type="button" key={`bos-${b.adimId}`} className="tc-pyq-hayalet tc-pyq-bosyer" data-bos-yer={b.tezgah} data-ilk={b.enErken ? '' : undefined} title={ad} aria-label={ad}
+                    ref={(el) => { yerYaz(el, (b.S - m.bas) * px, (b.C - b.S) * px); }} onClick={() => { yerlestirme.yerlestir(b.tezgah); }}
+                  >{b.enErken ? 'En erken' : 'Buraya'} · {zaman(b.S).slice(-5)}</button>
+                );
+              })}
               {tasinan?.fis !== undefined && hedef?.satir === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-gecersiz={hedef.gecerli ? undefined : ''} ref={(el) => { yerYaz(el, (hedef.S - m.bas) * px, FIS_SAATI * px); }}>
                   {hedef.gecerli ? `${zaman(hedef.S).slice(6)} · plana al` : 'buraya olmaz'}
