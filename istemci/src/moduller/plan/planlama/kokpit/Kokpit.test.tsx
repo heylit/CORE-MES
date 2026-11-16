@@ -463,3 +463,76 @@ describe('Kokpit', () => {
     expect(screen.getByText(/Henüz plan yok/)).toBeTruthy();
   });
 });
+
+// Kart 3318 a, 2. dilim: teslimden geriye yerleştirme taslağa iki komut yazar (emrin yönü, plana alma). Veri uydurmadır: örnek çalışmanın
+// planı boşaltılır (bütün emirler plansız); önizleme ilk adımı istenen saate koyar, emir başlangıçtan on saat sonra biter.
+describe('Kokpit teslimden geriye yerleştirme (3318 a, 2. dilim)', () => {
+  type Komut = { tur: string } & Record<string, unknown>;
+  function kur(o: { yon?: 'geri'; planaAlHata?: boolean } = {}) {
+    const taban = ornekCalisma();
+    const calisma = { ...taban, plan: null, bekleyen: [], w: { ...taban.w, ...(o.yon ? { yon: o.yon } : {}) } } as unknown as ReturnType<typeof ornekCalisma>;
+    let satirlar: { komut: Komut; ne: string; t: number; hata: null }[] = [];
+    const cevap = () => ({ taslak: satirlar.length === 0 ? null : { surum: 10 + satirlar.length, tabanSurum: 4, satirlar }, calisma, surum: 4 });
+    vi.spyOn(api, 'get').mockImplementation((yol: string) => {
+      if (yol === '/plan/taslagim') return Promise.resolve(cevap() as never);
+      if (!yol.includes('plana-al-onizlemesi')) return Promise.resolve(null as never);
+      const q = new URLSearchParams(yol.slice(yol.indexOf('?'))), S = Number(q.get('baslangic')), emirId = q.get('emirId') ?? '';
+      return Promise.resolve({ calismaSurumu: 4, gecerli: true, ileti: null, bitis: S + 10, isler: [{ isId: `${emirId}.10`, tezgah: q.get('tezgah'), S, C: S + 2 }] } as never);
+    });
+    const komutlar: Komut[] = [];
+    const post = vi.spyOn(api, 'post').mockImplementation((yol: string, govde?: unknown) => {
+      if (yol === '/plan/taslagim/geri-al') { satirlar = satirlar.slice(0, -1); return Promise.resolve(cevap() as never); }
+      if (yol === '/plan/taslagim/komut') {
+        const k = (govde as { komut: Komut }).komut;
+        if (o.planaAlHata && k.tur === 'plana-al') return Promise.reject(new Error('ORN-yazılamadı'));
+        // Yalnız bu akışın komutları sayılır (önceki testten kalan gecikmeli yazma karışmasın).
+        if (k.tur === 'yon' || k.tur === 'plana-al') komutlar.push(k);
+        satirlar = [...satirlar, { komut: k, ne: k.tur, t: 1, hata: null }];
+      }
+      return Promise.resolve(cevap() as never);
+    });
+    ac({ calisma });
+    return { komutlar, geriAlSayisi: () => post.mock.calls.filter((c) => c[0] === '/plan/taslagim/geri-al').length };
+  }
+  const geriyeBas = async (): Promise<HTMLElement> => {
+    const d = await screen.findByRole('button', { name: 'Teslimden geriye yerleştir' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d.disabled).toBe(false); }, { timeout: 4000 });
+    fireEvent.click(d);
+    return screen.findByRole('dialog', { name: 'Teslimden geriye yerleştir' }, { timeout: 4000 });
+  };
+
+  it('önce onay sorulur; Vazgeç hiçbir şey yazmaz; Yerleştir önce emrin yönünü geriye çevirir, sonra plana alır', async () => {
+    const { komutlar, geriAlSayisi } = kur();
+    let pencere = await geriyeBas();
+    expect(pencere.textContent).toContain('Emrin yönü "Teslimden geriye" olur.');
+    expect(komutlar).toEqual([]);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Teslimden geriye yerleştir' })).toBeNull(); });
+    expect(komutlar).toEqual([]);
+    pencere = await geriyeBas();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yerleştir' }));
+    await waitFor(() => { expect(komutlar).toHaveLength(2); });
+    const emirId = String(komutlar[0]?.['emirId']);
+    expect(komutlar[0]).toEqual({ tur: 'yon', emirId, yon: 'geri' });
+    expect(komutlar[1]).toMatchObject({ tur: 'plana-al', emirId });
+    expect(geriAlSayisi()).toBe(0);
+  });
+
+  it('yönü zaten geriye olan emirde yalnız plana alma yazılır', async () => {
+    const { komutlar } = kur({ yon: 'geri' });
+    fireEvent.click(within(await geriyeBas()).getByRole('button', { name: 'Yerleştir' }));
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    expect(komutlar[0]).toMatchObject({ tur: 'plana-al' });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(komutlar).toHaveLength(1);
+  });
+
+  it('plana alma yazılamazsa yön değişikliği bir kez geri alınır', async () => {
+    const { komutlar, geriAlSayisi } = kur({ planaAlHata: true });
+    fireEvent.click(within(await geriyeBas()).getByRole('button', { name: 'Yerleştir' }));
+    await waitFor(() => { expect(geriAlSayisi()).toBe(1); });
+    expect(komutlar.map((k) => k.tur)).toEqual(['yon']);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(geriAlSayisi()).toBe(1);
+  });
+});

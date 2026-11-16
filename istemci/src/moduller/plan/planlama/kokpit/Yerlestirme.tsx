@@ -67,6 +67,13 @@ export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag, bagVar = fa
 }
 
 type Onizleme = { tezgah: string; oz: PlanaAlOnizlemesi };
+// Teslimden geriye aramanın sonucu: yer (yazılacak hamle; S ilk adımın oturacağı saat), sigmaz (en erken yerleşim de termini geçiyor),
+// bilinmez (emrin bitişi hesaplanamıyor), red (seçim emri yerleştirmiyor).
+export type GeriSonucu =
+  | { tur: 'yer'; aday: TurAdayi; tezgah: string; S: number; bitis: number | null }
+  | { tur: 'sigmaz'; bitis: number } | { tur: 'bilinmez' } | { tur: 'red'; ileti: string };
+// Geriye yerleştirmenin onay penceresinde yazılacak özet.
+export interface GeriOzeti { tezgah: string; S: number; bitis: number | null }
 // Bir adım için en çok bu kadar aday tezgâha sorulur (her soru sunucuda bütün çalışmayı okur); rota sırasındaki ilkler alınır.
 export const ADAY_SINIRI = 6;
 // Plansız emrin seç-yerleştir durumu. `etkin` değilken sunucuya sorulmaz (kartta birden çok emir olabilir; yalnız biri çalışır).
@@ -185,13 +192,37 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
     const adimlar = adimSecimleri(e, sec), bitis = guncelOngoru.bitis;
     return { aday: { isId: ilk.id, tezgah: ilkTezgah, baslangic: ilkBas, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
   };
+  // Teslimden geriye (3318 2. dilim): ilk adımın, emri terminine yetiştiren en geç başlangıcı aranır. Sunucunun plana-al önizlemesi ileriye
+  // hesaplar; başlangıç geciktikçe bitiş de gecikir, bu yüzden çeyrek saatlik ızgarada ikiye bölerek aranır (en çok on beş soru). Seçilen
+  // tezgâhlar korunur. Termini olmayan ya da bitişi bilinmeyen (fason kuyruklu) emirde aranmaz.
+  const geriAra = async (): Promise<GeriSonucu | null> => {
+    if (!calisir || !ilk || e.termin === null) return null;
+    const ilkTezgah = sec[ilk.id]?.tezgah ?? sistemIlk;
+    if (ilkTezgah === null) return null;
+    const adimlar = adimSecimleri(e, sec), termin = e.termin;
+    const dene = (S: number): Promise<PlanaAlOnizlemesi | null> => sor({ emirId: e.id, tezgah: ilkTezgah, baslangic: S, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum);
+    const uyar = (x: PlanaAlOnizlemesi | null): boolean => x !== null && x.gecerli && x.bitis !== null && x.bitis <= termin + 0.01;
+    const hamle = (S: number, x: PlanaAlOnizlemesi): GeriSonucu => ({ tur: 'yer', aday: { isId: ilk.id, tezgah: ilkTezgah, baslangic: S, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, tezgah: ilkTezgah, S: x.isler.find((i) => i.isId === ilk.id)?.S ?? S, bitis: x.bitis });
+    const enErken = await dene(ilkBas);
+    if (enErken === null) return null;
+    if (!enErken.gecerli) return { tur: 'red', ileti: enErken.ileti ?? 'Bu seçimle emir yerleşmiyor.' };
+    if (enErken.bitis === null) return { tur: 'bilinmez' };
+    if (!uyar(enErken)) return { tur: 'sigmaz', bitis: enErken.bitis };
+    // a: uyduğu bilinen, b: uymadığı bilinen ızgara adımı (ilkBas'tan çeyrek saat sayısı).
+    let a = 0, b = Math.floor((termin - ilkBas) * 4) + 1, en: PlanaAlOnizlemesi = enErken;
+    while (b - a > 1) {
+      const o = Math.floor((a + b) / 2), x = await dene(ilkBas + o / 4);
+      if (x !== null && uyar(x)) { a = o; en = x; } else b = o;
+    }
+    return hamle(ilkBas + a / 4, en);
+  };
   // Hepsini en erken yere: seçimsiz plana alma; tezgâhı sistem seçer.
   const hepsi = (): { aday: TurAdayi; gecBirakir: boolean } | null => {
     if (!ilk || sistem === null || sistem === 'okunamadi' || !sistem.oz.gecerli) return null;
     const bitis = sistem.oz.bitis;
     return { aday: { isId: ilk.id, tezgah: sistem.tezgah, baslangic: ilkSaat, planaAl: e.id }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
   };
-  return { sec, secili, adimSec: setAdim, sistem, yerler: yerler !== null && yerler.adim === secili ? yerler.l : null, tezgahSec, hepsi, sifirla: () => { setSec({}); setAdim(null); }, alanYaz, ongoru: guncelOngoru, ongoruBekliyor: secimVar && guncelOngoru === null, secimle, sonAlan: adim };
+  return { sec, secili, adimSec: setAdim, sistem, yerler: yerler !== null && yerler.adim === secili ? yerler.l : null, tezgahSec, hepsi, sifirla: () => { setSec({}); setAdim(null); }, alanYaz, ongoru: guncelOngoru, ongoruBekliyor: secimVar && guncelOngoru === null, secimle, sonAlan: adim, geriAra };
 }
 
 // Planlı adımın taşınabileceği yerler (3297-4): aday yerler sırayla sunucu önizlemesine sorulur, geçersiz yer listeye girmez. Sorular
@@ -239,7 +270,8 @@ export interface EmirAdimlariOzellikleri {
   kart: SiraKarti;
   zaman: (t: number) => string;
   // Yazamayan kişide ve komut sürerken null: adımlar görünür, yerleştirilemez.
-  uygula: ((a: TurAdayi, gecBirakir: boolean) => void) | null;
+  // `geri` verilirse hamle teslimden geriye yerleştirmedir: emrin yönü de "Teslimden geriye" olur, çağıran önce onay sorar.
+  uygula: ((a: TurAdayi, gecBirakir: boolean, geri?: GeriOzeti) => void) | null;
   surum: number | null;
   // Planda yeri olan adıma basılınca (tahtada gösterilir, taşınacak yerler listelenir).
   adimAc: (emirId: string, isId: string) => void;
@@ -333,6 +365,24 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   }, [hedefAnahtari, etkin, hedef, uygula === null, tasi === null]);
 
   const yaz = (h: { aday: TurAdayi; gecBirakir: boolean } | null): void => { if (h && uygula) { uygula(h.aday, h.gecBirakir); y.sifirla(); } };
+  // Teslimden geriye yerleştirme: arama sürerken 'ariyor'; yer bulunamadıysa nedeni yazılır. Emir, sürüm ya da seçim değişince düşer.
+  const [geri, setGeri] = useState<'ariyor' | Exclude<GeriSonucu, { tur: 'yer' }> | null>(null);
+  const geriAnahtari = JSON.stringify([e.id, surum, y.sec]);
+  useEffect(() => { setGeri(null); }, [geriAnahtari]);
+  const geriYerlestir = (): void => {
+    if (!uygula || geri === 'ariyor') return;
+    const anahtar = geriAnahtari;
+    setGeri('ariyor');
+    void y.geriAra().then((x) => {
+      if (anahtar !== guncelGeri.current) return;
+      if (x === null) { setGeri({ tur: 'red', ileti: 'Önizleme okunamadı; yeniden deneyin.' }); return; }
+      if (x.tur !== 'yer') { setGeri(x); return; }
+      setGeri(null);
+      uygula(x.aday, false, { tezgah: x.tezgah, S: x.S, bitis: x.bitis });
+    });
+  };
+  const guncelGeri = useRef(geriAnahtari);
+  useEffect(() => { guncelGeri.current = geriAnahtari; });
   // Tahtadaki boş yere basılınca çağrılır; her çizimde güncel seçimleri görür.
   const yerlestir = useRef<(t: string) => void>(() => undefined);
   const tasiYere = (t: string): void => { const b = tasima?.find((x) => x.tezgah === t); if (b && tasinanIs && tasi) tasi(tasinanIs.id, t, b.baslangic); };
@@ -345,6 +395,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   };
   const seciliAd = e.adimlar.find((a) => a.id === seciliAdim)?.ad;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
+  const secimVar = Object.keys(y.sec).length > 0;
   return (
     <div className="tc-pyq-emir" data-emir={e.id} data-etkin={etkin ? '' : undefined} data-gorunum={gorunum}>
       <div className="tc-pyq-emir-ad">
@@ -480,7 +531,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {!uygula ? <p className="tc-pyq-not">Emri yalnız planı yazabilen kişi yerleştirir.</p>
             : seciliAdim === null ? null
               : y.yerler === null ? <p className="tc-pyq-not" role="status">Boş yerler hesaplanıyor</p>
-                : y.yerler.length === 0 ? <p className="tc-pyq-not" role="status">Bu adım için uygun boş yer bulunamadı; "Hepsini en erken yere yerleştir" sistemin seçimini dener.</p>
+                : y.yerler.length === 0 ? <p className="tc-pyq-not" role="status">Bu adım için uygun boş yer bulunamadı; "{gorunum === 'akis' ? 'Hepsini en erken yere yerleştir' : 'İleriye yerleştir'}" sistemin seçimini dener.</p>
                   : (
                     <>
                       <p className="tc-pyq-not"><b>{seciliAd}</b> seçili. Yere basın.</p>
@@ -495,11 +546,26 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                       </ul>
                     </>
                   )}
+          {uygula && geri !== null && geri !== 'ariyor' && (
+            <p className="tc-pyq-ayar-hata" role="alert" data-geri-sonucu={geri.tur}>
+              <Simge ad="alert" boyut="k" />{' '}
+              {geri.tur === 'sigmaz' ? `Teslimden geriye sığmıyor: en erken yerleşimde bile emir ${zaman(geri.bitis)} biter${e.termin !== null ? `, termin ${zaman(e.termin)}` : ''}. "İleriye yerleştir" en erken yere koyar.`
+                : geri.tur === 'bilinmez' ? 'Emrin bitişi hesaplanamıyor (fason adımdan sonrası bilinmez); teslimden geriye yerleştirilemez. "İleriye yerleştir" kullanın.'
+                  : geri.ileti}
+            </p>
+          )}
+          {uygula && geri === 'ariyor' && <p className="tc-pyq-not" role="status">Termine yetişen en geç yer aranıyor</p>}
           {uygula && taslakVar && <p className="tc-pyq-not" data-taslak-notu="">Taslağınızdaki değişiklikler bu boş yerlerde hesaba katılmadı; yerleştirince plan taslağınızla yeniden dizilir ve sonucu tahtada görünür.</p>}
           {uygula && (
             <span className="tc-pyq-yerler-alt">
-              <Dugme tur="ikincil" simge="play" disabled={!sistemHazir} title={y.sistem === 'okunamadi' ? 'Önizleme okunamadı' : undefined} onClick={() => { yaz(y.hepsi()); }}>Hepsini en erken yere yerleştir</Dugme>
-              {gorunum === 'tablo' && Object.keys(y.sec).length > 0 && <Dugme tur="ikincil" simge="check" disabled={y.ongoru === null || !y.ongoru.gecerli} aria-busy={y.ongoruBekliyor || undefined} onClick={() => { yaz(y.secimle()); }}>Seçimlerle yerleştir</Dugme>}
+              {gorunum === 'akis' ? <Dugme tur="ikincil" simge="play" disabled={!sistemHazir} title={y.sistem === 'okunamadi' ? 'Önizleme okunamadı' : undefined} onClick={() => { yaz(y.hepsi()); }}>Hepsini en erken yere yerleştir</Dugme>
+                : (
+                  <>
+                    <span className="tc-pyq-not" data-toplu-emir="">{e.no} için:</span>
+                    <Dugme tur="ikincil" simge="play" disabled={secimVar ? y.ongoru === null || !y.ongoru.gecerli : !sistemHazir} aria-busy={y.ongoruBekliyor || undefined} title={y.sistem === 'okunamadi' ? 'Önizleme okunamadı' : 'İlk boş saate yerleştirir; girdiğiniz tezgâh ve saat korunur, boş bıraktığınızı sistem doldurur.'} onClick={() => { yaz(secimVar ? y.secimle() : y.hepsi()); }}>İleriye yerleştir</Dugme>
+                    <Dugme tur="ikincil" simge="flag" disabled={e.termin === null || geri === 'ariyor' || (!secimVar && !sistemHazir)} aria-busy={geri === 'ariyor' || undefined} title={e.termin === null ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir; emrin yönü "Teslimden geriye" olur.'} onClick={geriYerlestir}>Teslimden geriye yerleştir</Dugme>
+                  </>
+                )}
               {Object.keys(y.sec).length > 0 && <Dugme tur="ikincil" simge="x" onClick={y.sifirla}>Seçimleri sil</Dugme>}
             </span>
           )}
