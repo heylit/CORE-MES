@@ -20,7 +20,7 @@ import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
 import {
-  faturaTuru, fisDegisiklikleriniAl, listeOkumaTuru, malKabulTuru, malzemeFisiLogoDurumlari, malzemeFisiTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi,
+  faturaTuru, fisDegisiklikleriniAl, gidenYenidenGonder, listeOkumaTuru, malKabulTuru, malzemeFisiLogoDurumlari, malzemeFisiTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi,
 } from './servis.ts';
 import type { MalzemeFisiKaynagi, MalzemeFisiTurOrtami, StokFisDegisikligi, StokFisKaynaklari, TurOrtami, TurSonucu } from './servis.ts';
 import type { MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
@@ -483,15 +483,18 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.deepEqual(await kos(), { tur: 'bos' }, 'satırları değişmeyen fiş istek göndermez');
     assert.equal(istekSayisi(), once);
 
-    // Silme reddedilirse fiş Logo'da kalır, kayıt no durur; stoğa hata görünür; geri çekilme dolunca silinir.
+    // Silme reddedilirse fiş Logo'da kalır, kayıt no durur; stoğa hata görünür. Ret kalıcıdır (3313): süre geçse de yinelenmez,
+    // "Yeniden gönder" ile silinir.
     giris(null);
     kopru.senaryo = 'dogrulama';
     assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'reddedildi' });
     assert.ok((await satir())?.kayit !== null, 'fiş Logo\'da duruyor');
     assert.equal((await durum(ID)).durum, 'hata');
-    assert.deepEqual(await kos(), { tur: 'bos' }, 'geri çekilme dolmadan istek yok');
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'duran fiş istek göndermez');
     kopru.senaryo = 'basari';
     simdi += 31 * 60_000;
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'süre geçse de duran fiş yinelenmez (3313)');
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'uretim-girisi', no: ID }, new Date(simdi))), true);
     assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'silindi' });
     assert.deepEqual(await kos(), { tur: 'bos' }, 'boş fiş istek göndermeden eşitlenir');
     assert.deepEqual(await satir(), { bekleyen: 0, ozet: null, kayit: null, sonuc: 'silindi' });
@@ -511,9 +514,9 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.equal((await durum(ID)).durum, 'gonderildi');
   });
 
-  // 2948: emir numarası fiş numarasıyken fiş istek öncesi reddedilir ve kuyrukta kalır; numara düzelince geri çekilme dolunca kendiliğinden
-  // gider (elle istek gerekmez), emir no satır açıklamasındadır.
-  test('LOGO-O21 emir numarasıyla takılan emir fişi istek göndermeden reddedilir; önekli numarayla kendiliğinden gider', async () => {
+  // 2948: emir numarası fiş numarasıyken fiş istek öncesi reddedilir ve durur (3313); numara düzelince "Yeniden gönder" ile gider,
+  // emir no satır açıklamasındadır.
+  test('LOGO-O21 emir numarasıyla takılan emir fişi istek göndermeden reddedilir ve durur; önekli numarayla yeniden gönderilince gider', async () => {
     const ID = 301;
     const emirNo = 'ORN-00001_2026-ORN-AA-00001-26-11-002';
     await ayar('logo.malzeme-fisi-gonderimi', true);
@@ -525,13 +528,14 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.equal(istekSayisi(), once, 'köprüye istek çıkmadı');
     assert.match((await durum(ID)).neden ?? '', /Fiş numarası 1-16/);
     simdi += 31 * 60_000;
-    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'reddedildi' }, 'düzeltmeden önce her turda yine istek öncesi reddedilir');
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'ret kalıcı: süre geçse de yinelenmez (3313)');
     assert.equal(istekSayisi(), once);
 
-    // Düzeltme: stokta değişiklik ya da "Yeniden gönder" olmadan yalnız numara değişir (yeni sürüm).
+    // Düzeltme: stokta değişiklik olmadan yalnız numara değişir (yeni sürüm); "Yeniden gönder" ile gider.
     stokFisleri.set(ID, { ...stokFisleri.get(ID)!, no: 'SR-000301' });
-    assert.deepEqual(await kos(), { tur: 'bos' }, 'geri çekilme dolmadan istek yok');
-    simdi += 31 * 60_000;
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'yeniden gönderilmeden istek yok');
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'sarf-fisi', no: ID }, new Date(simdi))), true);
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'sarf-fisi', no: ID }, new Date(simdi))), false, 'durmayan belge yeniden sıraya alınmaz');
     assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: ID });
     assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'gonderildi' });
     assert.deepEqual(kopru.istekler.slice(once).map((i) => `${i.yontem} ${i.yol}`), ['POST /api/MaterialSlip/AddConsumption']);

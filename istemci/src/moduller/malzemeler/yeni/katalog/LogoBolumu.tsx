@@ -56,7 +56,7 @@ function StokTablosu({ stok, birim }: { stok: Stok; birim: string }) {
       </div>
       <p className="tc-mk-logo-kaynak">
         <span>{stok.sonOkuma === null ? 'Logo stoğu henüz okunmadı' : `Logo'dan okundu: ${tarihSaatMetni(stok.sonOkuma)}`}</span>
-        <span>Saatte bir yenilenir</span>
+        <span>Kendiliğinden yenilenmez</span>
       </p>
     </>
   );
@@ -164,10 +164,12 @@ export function LogoBolumu({ kod, birim }: { kod: string; birim: string }) {
   });
   // Bölümün kendisi ek bilgidir: okunamazsa ya da parçaların hepsi kapalıysa kart bugünkü gibi kalır.
   if (!bolum.data) return null;
-  const { parcalar, stok } = bolum.data;
+  const { parcalar, stok, logoKodu } = bolum.data;
   if (!parcalar.stok && !parcalar.hareket) return null;
   return (
     <Kart baslik="Logo'da" simge="box" baslikEki={<Rozet ton="pasif" gorunum="cizgi">yalnız okunur</Rozet>}>
+      {/* 3316: Logo'daki kod kartın ERP kodudur; CORE'da açılıp gönderilen kartta CORE koduyla aynıdır. */}
+      <p className="tc-mk-logo-kaynak"><span>ERP kodu <span className="tc-mk-kod">{logoKodu}</span></span></p>
       {parcalar.stok && (
         <section className="tc-mk-logo-parca">
           <h3>Stok · ambar ambar</h3>

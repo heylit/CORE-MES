@@ -38,6 +38,18 @@ export type LogoBaglantiDurumu = (typeof LOGO_BAGLANTI_DURUMLARI)[number];
 export const BAGLANTI_AKIS_DURUMLARI = ['hazir', 'kapali', 'ayar-eksik', 'baglanmadi', 'kodda-yok'] as const;
 export const LOGO_AKIS_YONLERI = ['tmi-logo', 'logo-tmi'] as const;
 
+// 3314: çalışan yardımcının kaynak özeti paketteki kaynağınkiyle aynı mı. "eski": sürüm ucu yok; "bilinmiyor": ulaşılamadı ya da karşılaştırılamadı.
+export const LOGO_YARDIMCI_SURUM_DURUMLARI = ['ayni', 'farkli', 'eski', 'bilinmiyor'] as const;
+export const logoYardimciSurumu = z.object({
+  durum: z.enum(LOGO_YARDIMCI_SURUM_DURUMLARI),
+  ileti: z.string(),
+  calisanOzet: z.string().nullable(),
+  derlemeZamani: z.string().nullable(),
+  pakettekiOzet: z.string().nullable(),
+  sonBakis: zamanSemasi,
+});
+export type LogoYardimciSurumu = z.output<typeof logoYardimciSurumu>;
+
 export const logoHazirlikCevabi = z.object({
   baglanti: z.enum(LOGO_BAGLANTI_DURUMLARI),
   ortam: z.object({
@@ -58,6 +70,8 @@ export const logoHazirlikCevabi = z.object({
     sonDeneme: zamanSemasi.nullable(),
   })),
   sonBirimSetiOkuma: zamanSemasi.nullable(),
+  // 3314: son sürüm bakışı (saatte bir ve canlı kontrolde); henüz bakılmadıysa null. Alan sonradan eklendi, eski istemci görmezden gelir.
+  yardimci: logoYardimciSurumu.nullable().optional(),
 });
 
 export const BAGLANTI_KONTROL_SONUCLARI = ['tamam', 'hata', 'atlandi'] as const;
@@ -74,6 +88,29 @@ export const logoKontrolCevabi = z.object({
     ileti: z.string(),
   })),
 });
+
+// 3313: bağlantı izleme, Logo'ya gitmeyen belgeler. Tutar, fiyat ve firma adı yoktur (K8); deneme kaydı olmayan belgede deneme alanları null.
+export const LOGO_GIDEN_IZLEME_DURUMLARI = ['durdu', 'yeniden-denenecek', 'kart-bekliyor', 'sirada'] as const;
+export const logoGidenIzlemeCevabi = z.object({
+  sayac: z.object({ durdu: z.number().int(), yenidenDenenecek: z.number().int(), kartBekliyor: z.number().int(), sirada: z.number().int() }),
+  belgeler: z.array(z.object({
+    belge: z.string(),
+    belgeAdi: z.string(),
+    no: z.number().int(),
+    islem: z.enum(['gonder', 'pasif']),
+    durum: z.enum(LOGO_GIDEN_IZLEME_DURUMLARI),
+    neden: z.string().nullable(),
+    neYapmali: z.string(),
+    yenidenGonderilebilir: z.boolean(),
+    denemeSayisi: z.number().int().nullable(),
+    sonDeneme: zamanSemasi.nullable(),
+    sonrakiDeneme: zamanSemasi.nullable(),
+  }).strict()),
+  // Liste sınırı aşıldıysa true; sayaçlar listedeki belgeleri sayar.
+  kesildi: z.boolean(),
+});
+export type LogoGidenIzlemeCevabi = z.output<typeof logoGidenIzlemeCevabi>;
+export type LogoGidenIzlemeDurumu = (typeof LOGO_GIDEN_IZLEME_DURUMLARI)[number];
 
 export type LogoHazirlikCevabi = z.output<typeof logoHazirlikCevabi>;
 export type LogoKontrolCevabi = z.output<typeof logoKontrolCevabi>;
@@ -170,6 +207,20 @@ export type DisDuzeltmeKaydi = z.output<typeof disDuzeltmeKaydi>;
 // 3077 a: "Logo geçişi" sayfasındaki "Şimdi oku" ve "Geçişi bitir" komutlarının cevabı.
 export const logoGecisKomutuCevabi = z.object({ tamam: z.literal(true) });
 
+// 3313: duran (Logo'nun kalıcı reddiyle bekleyen) belgeleri yeniden gönderme; tek belge ya da seçilenler. Belge, giden kutusundaki türdür.
+export const LOGO_YENIDEN_GONDER_AZAMI = 200;
+export const logoYenidenGonderGovdesi = z.object({
+  belgeler: z.array(z.object({
+    belge: z.string().trim().min(1).max(40),
+    no: z.number().int().positive(),
+    islem: z.enum(['gonder', 'pasif']).default('gonder'),
+  }).strict()).min(1).max(LOGO_YENIDEN_GONDER_AZAMI),
+}).strict();
+export type LogoYenidenGonderGovdesi = z.input<typeof logoYenidenGonderGovdesi>;
+// sirada: yeniden sıraya giren; durmayan: durmadığı için (gönderilmiş, kendiliğinden yinelenecek ya da arada değişmiş) dokunulmayan.
+export const logoYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int() });
+export type LogoYenidenGonderCevabi = z.output<typeof logoYenidenGonderCevabi>;
+
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız okur ve sonucu kişinin süreç belleğinde tutar; "ekle" bulunan kartı
 // okunmuş kopyaya yazar (köprüye gitmez). Kapalıysa ya da köprü yoksa durum ve ileti döner, kart dönmez.
 export const LOGO_MALZEME_ARAMA_EN_AZ = 3;
@@ -184,6 +235,9 @@ export const logoMalzemeAramaCevabi = z.object({
   kartlar: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), ad: z.string().nullable() })).max(LOGO_MALZEME_ARAMA_SONUCU),
 });
 export type LogoMalzemeAramaCevabi = z.output<typeof logoMalzemeAramaCevabi>;
+// 3319: katalogdaki "Logo'da da ara" düğmesi açık mı; kapalıysa neden düğmenin yanında yazar. Logo'ya istek gitmez.
+export const logoMalzemeAramaDurumuCevabi = z.object({ acik: z.boolean(), neden: z.string().nullable() });
+export type LogoMalzemeAramaDurumuCevabi = z.output<typeof logoMalzemeAramaDurumuCevabi>;
 export const logoMalzemeEkleGovdesi = z.object({
   kartlar: z.array(z.number().int().positive()).min(1).max(LOGO_MALZEME_ARAMA_SONUCU),
 }).strict();

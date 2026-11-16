@@ -10,12 +10,12 @@ import { isiBirKezCalistir, isTanimi, modulIsleriniKesfet, zamanlayiciKur } from
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { isler } from './isler.ts';
+import { isler, yardimciSurumIsi } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { logodaKullanilanMalzemeKodlari, malzemeEslemesiYaz, malzemeKoduTuru, malzemeTuru, yeniSurecBellegi } from './servis.ts';
+import { gidenYenidenGonder, logodaKullanilanMalzemeKodlari, malzemeEslemesiYaz, malzemeKoduTuru, malzemeTuru, yeniSurecBellegi } from './servis.ts';
 import { birimSetiOkumasi, kopruListesiniYaz } from './sorgular.ts';
 import type { SurecBellegi, TurOrtami, TurSonucu, TxAcan } from './servis.ts';
 
@@ -263,9 +263,11 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.match(kart?.hata ?? '', /Logo'da bu kod başka kartta \(Logo adı: Logo eski ad\)/);
     assert.equal((await giden(k.no))?.niyet, false, 'niyet boşaldı');
     simdi += 24 * 3600_000;
+    for (let i = 0; i < 3; i += 1) assert.notEqual((await tur(turOrtami(bellek))).tur, 'gonderim', 'ret kalıcı: süre geçse de yinelenmez (3313)');
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'malzeme', no: k.no }, new Date(simdi))), true);
     let son: TurSonucu | undefined;
     for (let i = 0; i < 3 && son?.tur !== 'gonderim'; i += 1) son = await tur(turOrtami(bellek));
-    assert.deepEqual(son, { tur: 'gonderim', no: k.no, sonuc: 'reddedildi' });
+    assert.deepEqual(son, { tur: 'gonderim', no: k.no, sonuc: 'reddedildi' }, 'yeniden gönderilince de eşlenmez');
     assert.equal(kopru.istekler.filter((i) => i.yontem === 'POST').length, 0, 'açma isteği gitmedi');
   });
 
@@ -305,7 +307,7 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.deepEqual(await vt().tx((db) => logodaKullanilanMalzemeKodlari(db, [k.kod])), [k.kod]);
   });
 
-  test('LGB-3 doğrulama hatası: kart "hata" olur, metin saklanır; bekleme dolmadan istek yok, dolunca yeniden denenir', async () => {
+  test('LGB-3 doğrulama hatası: kart "hata" olur, metin saklanır; ret kalıcıdır, süre geçse de istek yok; "Yeniden gönder" ile gider (3313)', async () => {
     const k = await aktifKart();
     const bellek = yeniSurecBellegi();
     kopru.senaryo = 'dogrulama';
@@ -319,8 +321,12 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     simdi += 10_000;
     assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'bos' });
     assert.equal(kopru.istekler.length, istek, 'bekleme dolmadan istek yok');
-    simdi += 30_000;
+    simdi += 5 * 60_000;
     kopru.senaryo = 'basari';
+    assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'bos' }, 'kalıcı ret yinelenmez (eski bekleme 30 sn idi)');
+    assert.equal(kopru.istekler.length, istek);
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'malzeme', no: k.no }, new Date(simdi))), true);
+    assert.equal(await vt().tx((db) => gidenYenidenGonder(db, { belge: 'malzeme', no: k.no }, new Date(simdi))), false, 'ikinci istek etkisiz');
     assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'niyet', no: k.no });
     assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'gonderim', no: k.no, sonuc: 'gonderildi' });
     assert.equal((await kartLogo(k.no))?.durum, 'gonderildi');
@@ -529,10 +535,26 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.equal((await kartLogo(k.no))?.durum, 'bekliyor', 'kuyruk birikir');
   });
 
+  test('3314 T2: bağlantı kapalıyken yardımcı sürümü sorulmaz; açıkken /api/version gider', async () => {
+    const surumIstegi = () => kopru.istekler.filter((i) => i.yol.startsWith('/api/version')).length;
+    const k = kopruIstemcisiKur({ adres: kopru.adres, anahtar: kopru.anahtar }, { sureMs: TEST_ISTEK_SURESI_MS });
+    const once = surumIstegi();
+    await anahtar(false);
+    try {
+      assert.equal((await yardimciSurumIsi(vt(), k))?.durum, 'bekliyor');
+    } finally {
+      await anahtar(true);
+    }
+    assert.equal(surumIstegi(), once, 'kapalıyken yardımcıya istek gitmez');
+    assert.equal(await yardimciSurumIsi(vt(), k), undefined);
+    assert.equal(surumIstegi(), once + 1, 'açıkken sürüm sorulur');
+    assert.equal((await yardimciSurumIsi(vt(), null))?.durum, 'bekliyor', 'köprü değişkeni yoksa istek atılmaz');
+  });
+
   test('LGB-1 anahtar açık + değişken yok: istek çıkmaz, iş "bekliyor" döner; neden sağlık ayrıntısında görünür', async () => {
     const k = await aktifKart();
     assert.equal(process.env['TMIV2_LOGO_KOPRU_ADRESI'], undefined, 'test ortamında köprü değişkeni yok');
-    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi', 'logo-malzeme-karti-okumasi', 'logo-stok-okumasi', 'logo-kullanim-okumasi', 'logo-dis-siparis-duzeltme']);
+    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi', 'logo-malzeme-karti-okumasi', 'logo-stok-okumasi', 'logo-kullanim-okumasi', 'logo-yardimci-surumu', 'logo-dis-siparis-duzeltme']);
     const { cagri } = await agsiz(async () => {
       assert.deepEqual(await tur({ kopru: null, bellek: yeniSurecBellegi(), saat: () => new Date(simdi) }), { tur: 'ortam-degiskeni-yok' });
       assert.equal(await isiBirKezCalistir(vt(), isler[0]!), 'bekliyor');
@@ -732,10 +754,9 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.deepEqual(await tur(hizmetOrtami(b2, acik, false)), { tur: 'gonderim', no: b.no, sonuc: 'belirsiz' });
     kopru.senaryo = 'basari';
     simdi += BELIRSIZ_BEKLEME_MS;
-    for (const bb of [b2, yeniSurecBellegi()]) {
-      assert.deepEqual(await tur(hizmetOrtami(bb, acik, false)), { tur: 'gonderim', no: b.no, sonuc: 'reddedildi' });
-      simdi += 10 * 60_000;
-    }
+    assert.deepEqual(await tur(hizmetOrtami(b2, acik, false)), { tur: 'gonderim', no: b.no, sonuc: 'reddedildi' });
+    simdi += 10 * 60_000;
+    assert.deepEqual(await tur(hizmetOrtami(yeniSurecBellegi(), acik, false)), { tur: 'bos' }, 'durur; yeni süreçte de açılmaz (3313)');
     assert.equal(kopru.hizmetAcilan.get(b.kod), 1, 'Logo\'da tek hizmet kartı');
     assert.match((await kartLogo(b.no))?.hata ?? '', /Logo'da kontrol edin/);
     await kuyruguBosalt();

@@ -68,6 +68,14 @@ export async function malzemeKesiti(db: Db, no: number): Promise<{ form: string;
 }
 
 // Boş dizide sorgu atılmaz; yinelenen kimlik tek kayıt; olmayan kimlik haritada yok.
+// 3313: Logo'ya giden belgenin satır kartları: Logo'da kaydı var mı (gönderildi, bağlandı ya da Logo'dan alındı) ve hizmet mi.
+// Boş dizide sorgu atılmaz; CORE'da olmayan kod haritada yoktur.
+export async function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<Map<string, { logoKayitli: boolean; hizmet: boolean }>> {
+  const benzersiz = [...new Set(kodlar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.logoKartDurumlari(db, benzersiz)).map((k) => [k.stokKodu, { logoKayitli: k.logoKayitli, hizmet: k.hizmet }]));
+}
+
 export async function malzemeOzetleri(db: Db, idler: number[]): Promise<Map<number, KatalogMalzemeOzeti>> {
   const benzersiz = [...new Set(idler)];
   if (benzersiz.length === 0) return new Map();
@@ -498,14 +506,18 @@ export type LogoKodCozucusu = (db: Db, kodlar: readonly string[]) => Promise<str
 let logodaKullanilanKodlar: LogoKodCozucusu | null = null;
 export function logoKodCozucusuKaydet(cozucu: LogoKodCozucusu): void { logodaKullanilanKodlar = cozucu; }
 
-// Logo'da art arda bu kadar dolu numaradan sonra sıradaki verilir; çakışma gönderimde yakalanır (kart "hata").
+// Logo'da art arda bu kadar dolu numaradan sonra durulur (3316 Risk K1): dolu kod verilmez, Logo'daki başka kartla karışmasın.
 export const LOGO_KOD_ATLAMA_EN_COK = 1000;
 
 // Sıradaki numara; Logo'da kullanılıyorsa atlanır, atlanan numara bu önekte bir daha verilmez (2089-2 a).
 async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
   let sira = await s.katalogSiraAl(db, onek);
   if (logodaKullanilanKodlar === null) return sira;
-  for (let i = 0; i < LOGO_KOD_ATLAMA_EN_COK && (await logodaKullanilanKodlar(db, [katalogStokKodu(onek, sira)])).length > 0; i += 1) {
+  const dolu = async (n: number): Promise<boolean> => (await logodaKullanilanKodlar!(db, [katalogStokKodu(onek, n)])).length > 0;
+  for (let atlanan = 0; await dolu(sira); atlanan += 1) {
+    if (atlanan >= LOGO_KOD_ATLAMA_EN_COK) {
+      throw cakisma(`${onek} önekinde Logo'da art arda ${String(LOGO_KOD_ATLAMA_EN_COK)}'den çok dolu kod var; boş kod bulunamadı. Logo'daki kodları kontrol edin.`);
+    }
     sira = await s.katalogSiraAl(db, onek);
   }
   return sira;
@@ -1102,7 +1114,8 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
     else sayilar.bagli += 1;
   }
   const arananlar = q.ara ? new Set((await logoAynaOzeti(db, { ara: q.ara })).kartlar.map((k) => k.logoKayitNo)) : null;
-  const uyanlar = satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
+  const istenenler = q.kayitlar ? new Set(q.kayitlar) : null;
+  const uyanlar = istenenler !== null ? satirlar.filter((r) => istenenler.has(r.k.logoKayitNo)) : satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
     suzgec === 'tumu' ? true
       : suzgec === 'stoklu' ? stokVar(r.k.stok)
         : suzgec === 'kullanilan' ? (nedenler(r.k) ?? []).length > 0 || (!kullanim && stokVar(r.k.stok))
@@ -1142,7 +1155,9 @@ async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {
 }
 
 // 2116-4 a: Logo'daki kart TMI'de taslak açılır; tür ve birim seçilir, öteki zorunlu alanlar onaydan önce sihirbazda tamamlanır.
-// Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez); kodu TMI biçimine uymuyorsa yeni kod alır ve eşlemesi yazılır (2116-3 c).
+// Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez). 3316 a: kart her zaman CORE'un kendi kodunu alır, Logo kodu
+// eşlemede ERP kodu olarak kalır (Logo'ya giden belgeler eşlemeyle Logo koduna çevrilir). Logo kodu CORE biçimine uyuyorsa yeni kod
+// aynı önekten, uymuyorsa seçilen önekten sıradaki boş koddur. Eşleme değişmez: geri alınıp yeniden alınan kart eşlemedeki kodu yeniden alır.
 export async function logodanKartAl(
   db: Db, kullanici: Kullanici, ref: number, g: z.output<typeof logodanAlGovdesi>, secenek: { yalnizKendiKodu?: boolean } = {},
 ): Promise<LogodanAlCevabi> {
@@ -1153,19 +1168,26 @@ export async function logodanKartAl(
   if (durum === 'bagli') throw cakisma(`Bu Logo kartı TMI'de zaten var: ${tmi!.stokKodu}.`);
   if (durum === 'bagsiz') throw cakisma(`TMI'de aynı kodlu kart var: ${tmi!.stokKodu}. Yeni kart açmak yerine bağlayın.`);
   if (!(await s.birimSecilebilirMi(db, g.birim))) throw dogrulama(`"${g.birim}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, 'birim');
+  if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
   const genel = await katalogGenelAyari(db);
   const firmaOneki = katalogFirmaOneki(genel, g.tur);
-  const bicim = logoKodBicimi(k.kod, katalogFirmaKodu(genel));
+  const firmaKodu = katalogFirmaKodu(genel);
+  const eskiKod = esleme.get(k.kod) ?? null;
   let kod: { onek: string; sira: number; stokKodu: string };
-  if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
-    await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
-    kod = { ...bicim, stokKodu: k.kod };
+  if (eskiKod !== null) {
+    const b = logoKodBicimi(eskiKod, firmaKodu);
+    if (!b || !logoKoduTureUyar(b, g.tur, firmaOneki)) throw gecersiz(`Bu Logo kartı daha önce ${eskiKod} koduyla eşlendi; kod korunur, bu koda uyan türü seçin.`);
+    kod = { ...b, stokKodu: eskiKod };
   } else {
-    // Toplu almada kod eşlemesi yazılmaz: geri alma eşlemeyi silemez (eşleme değişmez), kod eşlenecek kart tek tek alınır.
-    if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
-    if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
-    if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
-    kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+    const bicim = logoKodBicimi(k.kod, firmaKodu);
+    if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
+      await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
+      kod = await yeniStokKodu(db, firmaOneki ? null : k.kod, g.tur);
+    } else {
+      if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
+      if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
+      kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+    }
   }
   if (kodla.has(kod.stokKodu)) throw cakisma(`TMI'de ${kod.stokKodu} kodlu kart var.`);
   const ad = k.ad ?? k.kod;
@@ -1180,7 +1202,7 @@ export async function logodanKartAl(
   const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, kod.onek, kod.sira));
   await s.logoKaydiYaz(db, kimlik, { kayitNo: String(ref), kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti }, { surum: null, kisiId: kullanici.id });
   const eslendi = r.stokKodu !== k.kod;
-  if (eslendi) await logoEslemeYazici!(db, { stokKodu: r.stokKodu, logoKodu: k.kod, logoKayitNo: ref });
+  if (eslendi && eskiKod === null) await logoEslemeYazici(db, { stokKodu: r.stokKodu, logoKodu: k.kod, logoKayitNo: ref });
   return { id: kimlik, stok_kodu: r.stokKodu, eslendi };
 }
 

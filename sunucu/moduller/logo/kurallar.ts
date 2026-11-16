@@ -257,10 +257,87 @@ export function geriCekilmeMs(ardisikHata: number): number {
   return Math.min(GERI_CEKILME_ILK_MS * 2 ** us, GERI_CEKILME_EN_COK_MS);
 }
 
+// 3313: giden kutusu sonuçları ve sınıfları. Logo'nun kesin reddi kalıcıdır: belge kendiliğinden yeniden denenmez ("Durdu"), kullanıcı veriyi
+// düzeltip "Yeniden gönder" der ya da sahibi modül belgeyi yeniden sıraya koyar. Bağlantı, anahtar, belirsiz cevap ve CORE'a yazılamama artan
+// beklemeyle kendiliğinden yinelenir. Yeni sonuç eklenince sınıfı burada seçilmeden derlenmez.
+export const GIDEN_SONUCLARI = ['gonderildi', 'zaten-vardi', 'silindi', 'reddedildi', 'yetkisiz', 'ulasilamadi', 'belirsiz', 'yazilamadi'] as const;
+export type GidenSonucu = (typeof GIDEN_SONUCLARI)[number];
+export type SonucSinifi = 'basari' | 'durdu' | 'yinelenir';
+export const SONUC_SINIFI: Readonly<Record<GidenSonucu, SonucSinifi>> = Object.freeze({
+  gonderildi: 'basari', 'zaten-vardi': 'basari', silindi: 'basari',
+  reddedildi: 'durdu',
+  yetkisiz: 'yinelenir', ulasilamadi: 'yinelenir', belirsiz: 'yinelenir', yazilamadi: 'yinelenir',
+});
+// Kalıcı sonuçta sonraki deneme yazılmaz; "Durdu" = son sonuç kalıcı ve sonraki deneme boş. Yeniden gönderme sonraki denemeyi doldurur.
+export const sonrakiDenemeYazilir = (sonuc: GidenSonucu, bekleme: Date | null): Date | null => (SONUC_SINIFI[sonuc] === 'durdu' ? null : bekleme);
+export function durduMu(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null): boolean {
+  return g !== null && g.sonSonuc != null && SONUC_SINIFI[g.sonSonuc] === 'durdu' && g.sonrakiDeneme === null;
+}
+// Tur bu belgeye bakar mı: durmamış ve bekleme dolmuş (ya da hiç beklemesi yok).
+export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null, simdi: Date): boolean {
+  if (g === null) return true;
+  if (durduMu(g)) return false;
+  return g.sonrakiDeneme === null || g.sonrakiDeneme.getTime() <= simdi.getTime();
+}
+
+// 3313: bağlantı izleme. Başarıyla gitmemiş giden kutusu satırının ekrandaki durumu ve ne yapılacağı tek yerde; "Yeniden gönder" yalnız
+// duran belgede (belirsiz sonuç elle öne alınmaz; kart bekleyen belge kart gidince kendiliğinden gider). Başarılı satır izlemeye girmez (sorgu dışlar).
+export type GidenIzlemeDurumu = 'durdu' | 'yeniden-denenecek' | 'kart-bekliyor' | 'sirada';
+export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null }): Exclude<GidenIzlemeDurumu, 'kart-bekliyor'> {
+  if (g.sonSonuc === null) return 'sirada';
+  if (durduMu(g)) return 'durdu';
+  return SONUC_SINIFI[g.sonSonuc] === 'durdu' ? 'sirada' : 'yeniden-denenecek';
+}
+export const GIDEN_NE_YAPMALI: Readonly<Record<GidenIzlemeDurumu, string>> = Object.freeze({
+  durdu: 'Logo reddetti. Nedeni düzeltin (kart, cari, eşleme ya da belge), sonra "Yeniden gönder".',
+  'yeniden-denenecek': 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse Logo yardımcısının çalıştığını denetleyin.',
+  'kart-bekliyor': 'Eksik kartı Logo\'ya gönderin; kart Logo\'da varsa Logo geçişinde kodla canlı arayıp bağlayın. Belge kendiliğinden gider.',
+  sirada: 'Sırada; ilk turda gider.',
+});
+// 3313 (Arayüz kod bakışı 2c): duran belgede "Ne yapmalı" nedene göre kısa adımdır. Neden CORE'un kendi ret iletisi ya da Logo'nun hata
+// metnidir; tanınmayan nedende genel adım kalır. Sıra önemlidir: daha özel kalıp önce.
+const DURDU_ADIMLARI: readonly (readonly [RegExp, string])[] = [
+  [/hizmet satırı/i, 'Talep fişinden hizmet satırını çıkarın (hizmet satın alma siparişiyle gider), sonra "Yeniden gönder".'],
+  [/hizmet kartının yönü/i, 'Hizmet kartında yönü (alış ya da satış) seçin, sonra "Yeniden gönder".'],
+  [/cari/i, 'Firma kartında Logo cari kodunu doldurun ya da cariyi Logo\'da tanımlayın, sonra "Yeniden gönder".'],
+  [/birim/i, 'Malzeme kartının birimini ya da Sistem Ayarları\'ndaki birim karşılığını düzeltin, sonra "Yeniden gönder".'],
+  [/satırlar.*tutmuyor|elle bakın/i, 'Belgeye Logo\'da elle bakın ve farkı giderin, sonra "Yeniden gönder".'],
+  [/kayıt numarası/i, 'Belgenin Logo kaydını Logo\'da denetleyin; kayıt silinmişse belgeyi CORE\'da yeniden onaylayın.'],
+  [/kart|malzeme|stok kodu/i, 'Kartı Logo geçişinde kodla canlı arayıp eşleyin ya da kartı Logo\'ya gönderin, sonra "Yeniden gönder".'],
+];
+export function durduNeYapmali(neden: string | null): string {
+  const bulunan = neden === null ? undefined : DURDU_ADIMLARI.find(([kalip]) => kalip.test(neden));
+  return bulunan?.[1] ?? GIDEN_NE_YAPMALI.durdu;
+}
+export const GIDEN_BELGE_ADLARI: Readonly<Record<string, string>> = Object.freeze({
+  malzeme: 'Malzeme kartı', hizmet: 'Hizmet kartı', 'malzeme-guncelleme': 'Malzeme adı güncellemesi',
+  siparis: 'Satın alma siparişi', 'siparis-guncelleme': 'Sipariş düzenlemesi', 'siparis-kapatma': 'Sipariş kapatma', 'siparis-bekletme': 'Sipariş bekletme',
+  'siparis-iptal': 'Sipariş iptali', talep: 'Talep fişi', karsilama: 'Talep karşılama', 'satis-teklifi': 'Satış teklifi', 'satis-siparisi': 'Satış siparişi',
+  'siparisler-teklifi': 'Satış teklifi', 'siparisler-siparisi': 'Satış siparişi', 'sarf-fisi': 'Sarf fişi', 'uretim-girisi': 'Üretimden giriş fişi',
+  'fire-fisi': 'Fire fişi', 'ambar-fisi': 'Ambar transferi', 'sayim-fazlasi': 'Sayım fazlası fişi', 'sayim-eksigi': 'Sayım eksiği fişi',
+});
+export const gidenBelgeAdi = (belge: string, islem: 'gonder' | 'pasif'): string =>
+  `${GIDEN_BELGE_ADLARI[belge] ?? belge}${islem === 'pasif' ? ' (pasife alma)' : ''}`;
+
+// 3313: satır kartı denetimi. Kart Logo'da sayılır: CORE kartında Logo kaydı var (gönderildi, bağlandı, Logo'dan alındı) ya da Logo
+// kodu okunmuş kopyada. Eksik kart varsa belge gitmez ve deneme sayılmaz; kart gidince belge kendiliğinden gider.
+export function logodaOlmayanKartlar(
+  kodlar: readonly string[], durumlar: ReadonlyMap<string, { logoKayitli: boolean }>, logoKodu: (k: string) => string, aynada: ReadonlySet<string>,
+): string[] {
+  return [...new Set(kodlar)].filter((k) => durumlar.get(k)?.logoKayitli !== true && !aynada.has(logoKodu(k)));
+}
+export function kartBekliyorMetni(eksik: readonly string[]): string {
+  const ilk = eksik.slice(0, 5).join(', ');
+  const kalan = eksik.length > 5 ? ` ve ${eksik.length - 5} kart daha` : '';
+  return kirp(`Kart bekliyor: ${ilk}${kalan}. Kart Logo'ya gidince (ya da Logo geçişinde bağlanınca) belge kendiliğinden gider.`);
+}
+export const TALEP_HIZMET_ILETISI = 'Talep fişine hizmet satırı yazılamaz; hizmet satırını talepten çıkarın ya da satın alma siparişiyle gönderin.';
+
 export interface GidenDurumu {
   // Dolu iken bu kart için Logo'da kart açılmış olabilir (niyet yazılı ve kalıcı; açma isteği ondan sonra gider).
   niyetZamani: Date | null;
   sonrakiDeneme: Date | null;
+  sonSonuc?: GidenSonucu | null;
 }
 
 export type KartEylemi = 'niyet-yaz' | 'gonder' | 'bekle';
@@ -270,7 +347,7 @@ export type KartEylemi = 'niyet-yaz' | 'gonder' | 'bekle';
 // 2. Taze olmayan niyet (başka süreç, yeniden başlayan süreç, sonucu bilinmeyen deneme) BELIRSIZ_BEKLEME_MS dolmadan gönderilmez.
 // 3. Her gönderim "var mı" okumasıyla başlar; varsa yeni kart açılmaz.
 export function kartEylemi(g: GidenDurumu | null, simdi: Date, tazeNiyet: boolean, sonAcmaIstegi: Date | null): KartEylemi {
-  if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > simdi.getTime()) return 'bekle';
+  if (!denemeZamaniMi(g, simdi)) return 'bekle';
   if (sonAcmaIstegi && simdi.getTime() - sonAcmaIstegi.getTime() < BELIRSIZ_BEKLEME_MS) return 'bekle';
   if (!g?.niyetZamani) return 'niyet-yaz';
   if (tazeNiyet) return 'gonder';
@@ -948,8 +1025,8 @@ export function cariListesiniAyikla(govde: unknown): LogoCari[] | null {
 // Cari arama metni: yardımcı en az 3, en çok 100 karakter kabul eder.
 export const CARI_ARAMA_EN_AZ = 3;
 export const CARI_ARAMA_EN_COK = 100;
-// 3077 a: kopya yalnız geçiş içindir; tam tur kendiliğinden yinelenmez. Okuma ilk açılışta bir kez, sonra yalnız "Şimdi oku"
-// isteğiyle baştan başlar; tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
+// 3077 a: kopya yalnız geçiş içindir; tam tur kendiliğinden yinelenmez. Okuma ilk açılışta bir kez; ayar kapatılıp açılınca
+// yeniden tam tur (3316-K2 a); arada kart canlı aramayla aynaya eklenir. Tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
 export function sayfaliOkumaSirasi(
   i: { sonRef: number; sonTamam: Date | null; turIstendi: boolean } | null,
 ): 'devam' | 'bastan' | 'bekle' {

@@ -1225,7 +1225,8 @@ export function tekrarlananOzellik(adlar: readonly string[]): string | null {
 
 /* ---------------- Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a) ---------------- */
 
-// Logo kodu TMI kod biçimine uyuyorsa kart aynı koduyla açılır: tür-grup-sıra (HM-PAS-00012) ya da firma kodlu tür önekiyle sıra.
+// Logo kodu TMI kod biçimine uyuyor mu: tür-grup-sıra (HM-PAS-00012) ya da firma kodlu tür önekiyle sıra. Uyan kodun öneki yeni CORE
+// kodunda kullanılır (3316 a: kart Logo koduyla değil, CORE'un kendi koduyla açılır).
 // Sıra kodun kendisidir; baştaki sıfırlar TMI'nin yazdığı gibi olmalı (kod geri üretilince aynısı çıkmalı).
 const SIRA_DESENI = /^(\d+)$/;
 export function logoKodBicimi(kod: string, firmaKodu: string | null): { onek: string; sira: number } | null {

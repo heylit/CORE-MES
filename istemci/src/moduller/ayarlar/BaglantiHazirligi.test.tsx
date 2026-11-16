@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -8,7 +8,7 @@ import type { LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { akisGorunumu, BaglantiHazirligi, genelDurum } from './BaglantiHazirligi.tsx';
+import { akisGorunumu, BaglantiHazirligi, genelDurum, yardimciSurumMetni } from './BaglantiHazirligi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
 // Sunucunun cevap biçimi (sözleşme tipleri); adresler deneme adresidir.
@@ -95,6 +95,8 @@ describe('Bağlantı hazırlığı', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Bağlantıyı dene' })[0] as HTMLElement);
     expect(await screen.findByText('Köprüye ulaşılamadı (ECONNREFUSED). (12 ms)')).toBeTruthy();
     expect(istekler.filter((y) => y.endsWith('/kontrol'))).toEqual(['/logo/hazirlik/kontrol']);
+    // 3314 T5: deneme yardımcının sürümünü de yeniler; hazırlık ucu ikinci kez okunur.
+    await waitFor(() => expect(istekler.filter((y) => y === '/logo/hazirlik')).toHaveLength(2));
     const tmiLogo = screen.getByRole('region', { name: 'CORE → Logo' });
     expect(within(tmiLogo).getByText('Bağlantı yok')).toBeTruthy();
     expect(within(tmiLogo).queryByText('Hazır')).toBeNull();
@@ -109,6 +111,13 @@ describe('Bağlantı hazırlığı', () => {
     expect(akisGorunumu('hazir', { ...tamam, ulasildi: false })).toBe('baglanti-yok');
     expect(akisGorunumu('kapali', { ...tamam, ulasildi: false })).toBe('kapali');
     expect(akisGorunumu('hazir', undefined)).toBe('hazir');
+  });
+
+  it('3314 yardımcı sürümü: bakılmadıysa söylenir, aynıysa kısa, farklıysa ne yapılacağı yazılır', () => {
+    const s = { durum: 'farkli' as const, pakettekiOzet: 'a', calisanOzet: 'b', derlemeZamani: null, sonBakis: 'x', ileti: 'Yardımcıyı güncelleyin.' };
+    expect(yardimciSurumMetni(null)).toBe('Henüz bakılmadı');
+    expect(yardimciSurumMetni({ ...s, durum: 'ayni' })).toBe('Bu paketle aynı');
+    expect(yardimciSurumMetni(s)).toBe('Yardımcıyı güncelleyin.');
   });
 });
 

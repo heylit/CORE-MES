@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, TALEP_HIZMET_ILETISI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -274,5 +274,52 @@ describe('kod çakışması ve Logo kod listesi (2089)', () => {
     assert.deepEqual(malzemeKodlariniAyikla([' A-1 ', 'A-1', '', 5, null, 'X'.repeat(65), 'B-2']), ['A-1', 'B-2']);
     assert.deepEqual(malzemeKodlariniAyikla([]), []);
     for (const g of [null, {}, { data: ['A'] }, 'A']) assert.equal(malzemeKodlariniAyikla(g), null, JSON.stringify(g));
+  });
+});
+
+describe('3313 kalıcı ret durur', () => {
+  // Her sonuç türünün sınıfı açıkça seçilir; yeni tür eklenince bu tablo da karar ister.
+  const BEKLENEN = {
+    gonderildi: 'basari', 'zaten-vardi': 'basari', silindi: 'basari', reddedildi: 'durdu',
+    yetkisiz: 'yinelenir', ulasilamadi: 'yinelenir', belirsiz: 'yinelenir', yazilamadi: 'yinelenir',
+  } as const;
+  test('T1 sonuç sınıfları: yalnız Logo reddi durur; bağlantı, anahtar, belirsiz ve CORE\'a yazılamadı yinelenir', () => {
+    assert.deepEqual([...GIDEN_SONUCLARI].sort(), Object.keys(BEKLENEN).sort());
+    for (const t of GIDEN_SONUCLARI) assert.equal(SONUC_SINIFI[t], BEKLENEN[t], t);
+  });
+  test('T1 durma: kalıcı sonuçta sonraki deneme yazılmaz; duran belge süre geçse de sıraya girmez, yeniden açılınca girer', () => {
+    const bekleme = new Date('2026-11-16T08:00:00Z');
+    const simdi = new Date('2026-11-17T08:00:00Z');
+    for (const t of GIDEN_SONUCLARI) {
+      const yazilan = sonrakiDenemeYazilir(t, bekleme);
+      assert.equal(yazilan, BEKLENEN[t] === 'durdu' ? null : bekleme, t);
+      const g = { sonSonuc: t, sonrakiDeneme: yazilan };
+      assert.equal(durduMu(g), BEKLENEN[t] === 'durdu', t);
+      assert.equal(denemeZamaniMi(g, simdi), BEKLENEN[t] !== 'durdu', t);
+    }
+    assert.equal(durduMu(null), false, 'hiç denenmemiş belge durmaz');
+    assert.equal(denemeZamaniMi(null, simdi), true);
+    assert.equal(denemeZamaniMi({ sonSonuc: 'reddedildi', sonrakiDeneme: simdi }, simdi), true, 'yeniden açılan belge sırada');
+    assert.equal(denemeZamaniMi({ sonSonuc: 'ulasilamadi', sonrakiDeneme: new Date(simdi.getTime() + 1) }, simdi), false, 'bekleme dolmadan girmez');
+    assert.equal(denemeZamaniMi({ sonSonuc: null, sonrakiDeneme: null }, simdi), true, 'niyeti yazılmış, sonucu yok');
+  });
+  test('T9 izleme durumu: duran belge "Durdu" ve yalnız o elle gönderilir; yinelenen "Yeniden denenecek"; yeniden açılan ve sonucu olmayan sırada', () => {
+    const z = new Date('2026-11-16T08:00:00Z');
+    for (const t of GIDEN_SONUCLARI.filter((x) => BEKLENEN[x] !== 'basari')) {
+      const d = gidenIzlemeDurumu({ sonSonuc: t, sonrakiDeneme: sonrakiDenemeYazilir(t, z) });
+      assert.equal(d, BEKLENEN[t] === 'durdu' ? 'durdu' : 'yeniden-denenecek', t);
+    }
+    assert.equal(gidenIzlemeDurumu({ sonSonuc: 'reddedildi', sonrakiDeneme: z }), 'sirada');
+    assert.equal(gidenIzlemeDurumu({ sonSonuc: null, sonrakiDeneme: null }), 'sirada');
+    assert.match(GIDEN_NE_YAPMALI.durdu, /Yeniden gönder/);
+    assert.doesNotMatch(GIDEN_NE_YAPMALI['yeniden-denenecek'], /Yeniden gönder/);
+    // Arayüz 2c: duran belgede adım nedene göre; tanınmayan nedende genel adım.
+    assert.match(durduNeYapmali('Firmanın Logo cari kodu boş.'), /Firma kartında Logo cari kodunu/);
+    assert.match(durduNeYapmali(TALEP_HIZMET_ILETISI), /hizmet satırını çıkarın/);
+    assert.match(durduNeYapmali('Birim seti 99 Logo\'da yok.'), /birim karşılığını/);
+    assert.match(durduNeYapmali('Malzeme kartı Logo\'da bulunamadı: ORN-HM-1'), /canlı arayıp eşleyin/);
+    assert.equal(durduNeYapmali('Beklenmeyen Logo hatası'), GIDEN_NE_YAPMALI.durdu);
+    assert.equal(durduNeYapmali(null), GIDEN_NE_YAPMALI.durdu);
+    assert.match(GIDEN_NE_YAPMALI['kart-bekliyor'], /canlı arayıp bağlayın/);
   });
 });

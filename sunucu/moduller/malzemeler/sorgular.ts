@@ -945,6 +945,15 @@ export interface LogoIcinTmiKarti {
   kimlik: string; stokKodu: string; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
   onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null; birim: string | null;
 }
+// 3313: belge satırlarındaki kartların Logo kaydı ve türü (talep fişine hizmet satırı yazılmaz). Kodu bulunmayan satır dönmez.
+export function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<{ stokKodu: string; logoKayitli: boolean; hizmet: boolean }[]> {
+  return db.sorgu(
+    `SELECT stok_kodu AS "stokKodu", logo_kayit_no IS NOT NULL AS "logoKayitli", tur = 'hizmet' AS hizmet
+       FROM malzeme_katalog_karti WHERE stok_kodu = ANY($1::text[])`,
+    [kodlar],
+  );
+}
+
 // Logo kayıt numarasıyla bağlı ya da aynı stok kodlu kartlar (iptal dahil: kodu yeniden verilmez).
 export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
   return db.sorgu(
@@ -977,7 +986,8 @@ export async function kartinOneki(db: Db, kimlik: string): Promise<string | null
   return (await db.tek<{ onek: string }>('SELECT onek FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.onek ?? null;
 }
 
-// Logo'daki kodla açılan kartın sırası önekin sayacını geçmişse sayaç ileri alınır: TMI aynı kodu bir daha vermez.
+// 3316 (Risk K1): Logo'daki CORE biçimli kart alınınca önekin sayacı en az o kartın sırasına alınır: sayaç Logo'daki kodların
+// gerisindeyse yeni kod Logo'daki dolu kodlara çarpmasın.
 export async function katalogSirasiniIlerlet(db: Db, onek: string, sira: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, $2)

@@ -6,7 +6,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
-  GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
+  GidenCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
   HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
@@ -867,6 +867,12 @@ export const duruslar = (db: Db, q: Sayfa): Promise<DuruslarCevabi> =>
   sayfaliListe(q, { say: () => s.durusSay(db), satirlar: (d) => s.durusSatirlari<Satir<DuruslarCevabi>>(db, d) });
 export const alarmlar = (db: Db, q: Sayfa): Promise<AlarmlarCevabi> =>
   sayfaliListe(q, { say: () => s.alarmSay(db), satirlar: (d) => s.alarmSatirlari<Satir<AlarmlarCevabi>>(db, d) });
+// 3313: bağlantı izleme ekranının SmartES giden bölümü; yalnız okur.
+const IZLEME_SINIRI = 500;
+export async function gidenIzleme(db: Db): Promise<SmartesGidenIzlemeCevabi> {
+  const satirlar = await s.gidenHataSatirlari<SmartesGidenIzlemeCevabi['belgeler'][number]>(db, IZLEME_SINIRI + 1);
+  return { belgeler: satirlar.slice(0, IZLEME_SINIRI), kesildi: satirlar.length > IZLEME_SINIRI };
+}
 export const giden = (db: Db, q: Sayfa): Promise<GidenCevabi> =>
   sayfaliListe(q, { say: () => s.gidenSay(db), satirlar: (d) => s.gidenListeSatirlari<Satir<GidenCevabi>>(db, d) });
 export const fireHareketleri = (db: Db, q: Sayfa): Promise<FireHareketleriCevabi> =>

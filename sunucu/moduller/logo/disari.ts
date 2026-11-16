@@ -18,3 +18,5 @@ export { logodaTmiActi, malzemeKartiIzleri } from './sorgular.ts';
 export function logoBaglantisiAcikMi(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
   return logoAyariOku(env) !== null;
 }
+// 3314: güncelleyici (araclar/logo-yardimcisi-guncelle.ts) yeni paketteki yardımcı kaynağının özetini aynı kuralla hesaplar.
+export { pakettekiOzet } from './yardimci-surumu.ts';

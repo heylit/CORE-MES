@@ -49,14 +49,14 @@ const LISTE: LogoGecisCevabi = {
 
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 
-function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE) {
+function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE, karsiliklar: LogoKarsiligi[] = KARSILIKLAR) {
   const istekler: { yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const govde = secenek?.body ? JSON.parse(String(secenek.body)) : null;
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/malzeme-logo-gecisi?')) { istekler.push({ yol, govde: null }); return json(200, liste); }
-    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar: KARSILIKLAR, kartTuruSecenekleri: [], karsilikYazabilir: false });
+    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar, kartTuruSecenekleri: [{ kod: '10', ad: 'Hammadde' }, { kod: '13', ad: 'Tüketim malı' }], karsilikYazabilir: false });
     if (yol.startsWith('/logo-gecisi/malzeme-ara?')) {
       istekler.push({ yol, govde: null });
       return json(200, { durum: 'tamam', ileti: null, kartlar: [{ logoKayitNo: 9, kod: 'ORN-CANLI-9', ad: 'Deneme canli' }] });
@@ -90,6 +90,32 @@ const satir = (metin: string) => screen.getByText(metin).closest('tr')!;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
+  it('3316 Test T2: satırda Logo türü yazar; CORE karşılığı farklı adlıysa "(CORE: <tür>)" eki çıkar, aynı adlıysa çıkmaz', async () => {
+    sunucuKur(YAZAN, LISTE, [...KARSILIKLAR, { cesit: 'tur', tmiDegeri: 'sarf', logoDegeri: '13' }]);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(within(satir('150.01')).getByText(/Tüketim malı \(CORE: Sarf\)/)).toBeTruthy();
+    expect(within(satir('HM-DEN-00001')).getByText(/Hammadde/)).toBeTruthy();
+    expect(within(satir('HM-DEN-00001')).queryByText(/CORE:/)).toBeNull();
+  });
+
+  it('3316 Test T3: "Geçişi bitir" yalnız okuma açıkken ve ayar yazabilene görünür', async () => {
+    const acik = { ...LISTE, okuma: { ...LISTE.okuma, acik: true } };
+    sunucuKur(YONETICI);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: /Geçişi bitir/ })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YONETICI, acik);
+    ac();
+    expect(await screen.findByRole('button', { name: /Geçişi bitir/ })).toBeTruthy();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YAZAN, acik);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: /Geçişi bitir/ })).toBeNull();
+  });
+
   it('açılışta süzgeci sunucu seçer (kullanım izi yoksa stoğu olanlar); süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
@@ -126,6 +152,8 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(within(satir('HM-DEN-00001')).getByRole('button', { name: 'HM-DEN-00001 al' })).toBeTruthy();
     expect(within(satir('Deneme bagsiz')).getByRole('button', { name: 'HM-DEN-00003 bağla' })).toBeTruthy();
     expect(within(satir('Logo adi')).getByText("Logo'da Açıklama 1: Logo adi")).toBeTruthy();
+    expect(await within(satir('Deneme yeni')).findByText(/^Hammadde/)).toBeTruthy();
+    expect(within(satir('Deneme eslenecek')).getByText(/^Tüketim malı/)).toBeTruthy();
     expect(within(satir('Logo adi')).getByRole('button', { name: "HM-DEN-00004 Logo'dakini al" })).toBeTruthy();
   });
 
@@ -142,7 +170,7 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     const istekler = sunucuKur(YAZAN);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'HM-DEN-00001 al' }));
-    await screen.findByText("Kart Logo'daki koduyla açılır.");
+    await screen.findByText(/Kart CORE kodunu alır.*Logo kodu kartta ERP kodu olarak kalır/);
     await waitFor(() => expect((screen.getByLabelText(/^Birim/) as HTMLSelectElement).value).toBe('kg'));
     expect((screen.getByLabelText(/CORE türü/) as HTMLSelectElement).value).toBe('hammadde');
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
@@ -214,11 +242,20 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(screen.getByText(/"Logo: malzeme araması" kapalı/)).toBeTruthy();
   });
 
-  it('okuma: "Şimdi oku" ve onaylı "Geçişi bitir" yalnız ayar yazana; okuma sürerken boş arama okumanın sürdüğünü söyler', async () => {
+  it('aranan listede bulunsa da Logo\'da canlı aranabilir (3316)', async () => {
+    sunucuKur(YAZAN, { ...LISTE, canliArama: true });
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: "Logo'da canlı ara" })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'HM-DEN' } });
+    expect((await screen.findByRole('button', { name: "Logo'da canlı ara" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('okuma (3316): "Şimdi oku" yok; açık kalan okuma için onaylı "Geçişi bitir" yalnız ayar yazana; okuma sürerken boş arama okumanın sürdüğünü söyler', async () => {
     const istekler = sunucuKur(YONETICI, { ...LISTE, okuma: { acik: true, suruyor: true, okunan: 120, sonTamam: null }, kartlar: [], uyan: 0 });
     ac();
     expect(await screen.findByText(/Logo okunuyor: 120 kart okundu/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Şimdi oku' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Şimdi oku' })).toBeNull();
     expect(screen.getByText(/Logo henüz okunuyor \(120 kart okundu\)/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Geçişi bitir' }));
     expect(await screen.findByText(/okunmuş liste silinmez/)).toBeTruthy();

@@ -1,8 +1,9 @@
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { logoGidenIzlemeCevabi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { logoMalzemeAramaCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -10,7 +11,10 @@ import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
-import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
+import {
+  BEKLEME_NEDENLERI, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
+  logoAramaSonucunuEkle, logoMalzemeAramasiAcik,
+} from './servis.ts';
 
 // 3201 a: bölümü kartı görebilen ister; stok ve hareket parçası yalnız stoğu okuyabilene (stok uçlarının okuma yetkisi; malzeme
 // sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
@@ -43,14 +47,25 @@ export const uclar = [
     cevap: birimSetiCevabi,
     isle: ({ db, parametre }) => birimSetiKaldir(db, parametre.kod),
   }),
-  // 3077 a: geçiş okuması yalnız istekle. Ayarı değiştirdiği için Sistem Ayarları'nın yazma yetkisini ister (3078 b); Logo'ya yalnız okuma gider.
+  // 3313: bağlantı izleme, Logo'ya gitmeyen belgeler; Sistem durumu ayrıntısıyla aynı yetki.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/giden',
+    yetki: 'saglik.ayrinti-oku',
+    cevap: logoGidenIzlemeCevabi,
+    isle: ({ db }) => gidenIzleme(db, new Date()),
+  }),
+  // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({
     yontem: 'POST',
-    yol: '/logo-gecisi/oku',
+    yol: '/logo/giden/yeniden-gonder',
     yetki: 'ayarlar.yaz',
-    cevap: logoGecisKomutuCevabi,
-    isle: async ({ db, kullanici }) => { await gecisOkumasiIste(db, kullanici.id); return { tamam: true as const }; },
+    tekrarKorumali: true,
+    govde: logoYenidenGonderGovdesi,
+    cevap: logoYenidenGonderCevabi,
+    isle: ({ db, govde }) => duranlariYenidenGonder(db, govde.belgeler, new Date()),
   }),
+  // 3316: toplu okuma ekrandan istenmez; kart Logo'da canlı aranır. "Geçişi bitir" açık kalan okumaları kapatır (3078 b: ayar yazma yetkisi).
   uc({
     yontem: 'POST',
     yol: '/logo-gecisi/bitir',
@@ -126,6 +141,17 @@ export const uclar = [
       return r.tur === 'tamam'
         ? { durum: 'tamam' as const, ileti: r.veri.length === 0 ? 'Logo\'da bu metinle kullanımda kart yok.' : null, kartlar: r.veri.map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, ad: k.ad })) }
         : { durum: r.tur, ileti: r.ileti, kartlar: [] };
+    },
+  }),
+  // 3319: katalogdaki düğmenin durumu; yalnız ayar okunur, köprüye istek yok.
+  uc({
+    yontem: 'GET',
+    yol: '/logo-gecisi/malzeme-arama-durumu',
+    yetki: 'malzemeler.yaz',
+    cevap: logoMalzemeAramaDurumuCevabi,
+    isle: async ({ db }) => {
+      if (!(await logoMalzemeAramasiAcik(db))) return { acik: false, neden: LOGO_ARAMA_KAPALI };
+      return ortamKoprusu === null ? { acik: false, neden: BEKLEME_NEDENLERI['ortam-degiskeni-yok'] } : { acik: true, neden: null };
     },
   }),
   uc({

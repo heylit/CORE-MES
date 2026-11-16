@@ -28,6 +28,8 @@ export type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesm
 export { malzemeKategorileri } from './servis.ts';
 // Logo bağlantısı (kart #232): kuyruğu okur, her kartın sonucunu bildirir. Yetki denetlemez; nasıl kullanılacağı NOTLAR.md "Logo bağlantısı".
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
+// 3313: Logo'ya giden belgenin satır kartları Logo'da var mı, hizmet mi (logo belgeyi kart gitmeden göndermez).
+export { logoKartDurumlari } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).
 export { logoBirimSetiKullaniliyorMu } from './servis.ts';
 export type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from './servis.ts';

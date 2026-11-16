@@ -49,6 +49,8 @@ describe('Malzeme kartı "Logo\'da" bölümü (3201 a, D)', () => {
     expect(screen.getAllByText('+7,5')).toHaveLength(2);
     expect(screen.getByText('CORE deposu eşlenmedi')).toBeTruthy();
     expect(screen.getByText('yalnız okunur')).toBeTruthy();
+    expect(screen.getByText('ERP kodu').querySelector('.tc-mk-kod')?.textContent).toBe(KOD);
+    expect(screen.getByText('Kendiliğinden yenilenmez')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Hareketleri oku/ })).toBeTruthy();
     expect(istekler.some((i) => i.yol.includes('/hareketler'))).toBe(false);
   });

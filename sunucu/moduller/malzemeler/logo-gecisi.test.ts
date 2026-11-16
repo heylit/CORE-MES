@@ -57,6 +57,7 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
   let ikinciCerez = '';
   type AynaSatiri = LogoAynaKarti & { stok: string | null; sonHareket: string | null; acikSiparis: boolean | null };
   const ayna: AynaSatiri[] = [];
+  const eslemeler = new Map<string, string>();
   // 3079 a: kullanım izinin son tam turu; null iken izi okunmamış sayılır.
   let kullanimTamam: string | null = null;
 
@@ -119,8 +120,12 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
       kullanim: { acik: false, sonTamam: kullanimTamam },
       arama: { acik: false },
     }));
-    logoEslemeYaziciCozucusu(async () => { throw new Error('toplu işlem kod eşlemesi yazmaz'); });
-    logoTmiKodCozucusu(async () => new Map());
+    // Eşleme logo modülünde değişmez bir tablodur; burada bellekte tutulur (3316 a: toplu alma da eşleme yazar).
+    logoEslemeYaziciCozucusu(async (_db, e) => {
+      if (eslemeler.has(e.logoKodu)) throw new Error('eşleme değişmez');
+      eslemeler.set(e.logoKodu, e.stokKodu);
+    });
+    logoTmiKodCozucusu(async (_db, kodlar) => new Map([...eslemeler].filter(([l]) => kodlar.includes(l))));
     await vt().sorgu("INSERT INTO logo_birim_seti (kod, elle, ekleyen_kisi_id) SELECT '06', true, (SELECT min(id) FROM kisi) ON CONFLICT (kod) DO NOTHING");
     await tamam('POST', '/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' });
     await tamam('POST', '/malzeme-logo-karsiliklari/kaydet', { cesit: 'tur', tmiDegeri: 'hammadde', logoDegeri: '10' });
@@ -136,6 +141,12 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.deepEqual([l.suzgec, l.kullanim, l.kartlar[0]?.kullanimNedenleri], ['stoklu', false, null], 'kullanım izi okunmadan süzgeç stoğu olanlar');
     const yeni = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni&ara=LGY-00002', undefined, okuyucuCerezi);
     assert.deepEqual(yeni.kartlar.map((k) => k.kod), ['HM-LGY-00002']);
+    // 3319: katalogdaki canlı aramanın bulduğu kayıtlar süzgeçsiz gelir (stoksuz ve kullanım dışı da); bozuk liste reddedilir.
+    const istenen = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=stoklu&kayitlar=202,203,999', undefined, okuyucuCerezi);
+    assert.deepEqual(istenen.kartlar.map((k) => [k.kod, k.durum, k.aktif]), [['HM-LGY-00002', 'yeni', true], ['HM-LGY-00003', 'yeni', false]]);
+    assert.equal(istenen.uyan, 2);
+    assert.equal((await istek('GET', '/malzeme-logo-gecisi?kayitlar=1,x', undefined, okuyucuCerezi)).statusCode, 400);
+    assert.equal((await istek('GET', `/malzeme-logo-gecisi?kayitlar=${Array.from({ length: 21 }, (_, i) => i + 1).join(',')}`, undefined, okuyucuCerezi)).statusCode, 400, 'en çok 20');
     const r = await istek('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 201, surum: a.surum }] }, okuyucuCerezi);
     assert.equal(r.statusCode, 403);
     assert.equal((await kartSatiri(a.kimlik))?.logo, null);
@@ -162,26 +173,32 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.equal((await istek('POST', '/malzeme-logo-gecisi/geri-al', { islem: s.islem })).statusCode, 404, 'ikinci kez geri alınmaz');
   });
 
-  test('LGG-4 toplu al ve geri al: karşılığı olan uyan kod taslak açılır; kod türe uymayan ve karşılıksız atlanır; geri almada taslak silinir', async () => {
+  test('LGG-4 toplu al ve geri al (3316 a): karşılığı olan uyan kod CORE\'un kendi koduyla taslak açılır, Logo kodu eşlenir; kod türe uymayan ve karşılıksız atlanır; geri almada taslak silinir, yeniden alınca eşlemedeki kod gelir', async () => {
     ayna.push(kart(220, 'HM-LGZ-00020'), kart(221, 'SR-LGZ-00021'), kart(222, 'HM-LGZ-00022', { birimSeti: '99' }));
     const s = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-al', {
       kartlar: [{ logoKayitNo: 220, surum: null }, { logoKayitNo: 221, surum: null }, { logoKayitNo: 222, surum: null }], tur: null, birim: null,
     });
-    assert.deepEqual(s.basarili, [{ logoKayitNo: 220, kod: 'HM-LGZ-00020', stokKodu: 'HM-LGZ-00020' }]);
+    assert.deepEqual(s.basarili, [{ logoKayitNo: 220, kod: 'HM-LGZ-00020', stokKodu: 'HM-LGZ-00021' }]);
+    assert.equal(eslemeler.get('HM-LGZ-00020'), 'HM-LGZ-00021');
     assert.deepEqual(s.atlanan.map((x) => [x.kod, x.neden]), [
       ['SR-LGZ-00021', 'Logo kodu seçilen türün koduna uymuyor; tek tek alın.'],
       ['HM-LGZ-00022', 'Birimin Logo karşılığı yok; birimi seçin ya da tek tek alın.'],
     ]);
-    assert.deepEqual({ ...(await kartSatiri('logo-220')), surum: undefined }, { kod: 'HM-LGZ-00020', logo: '220', gonderim: 'gonderildi', set: '06', surum: undefined });
+    assert.deepEqual({ ...(await kartSatiri('logo-220')), surum: undefined }, { kod: 'HM-LGZ-00021', logo: '220', gonderim: 'gonderildi', set: '06', surum: undefined });
     assert.equal(await kartSatiri('logo-221'), null);
 
     const g = await tamam<LogoGeriAlCevabi>('POST', '/malzeme-logo-gecisi/geri-al', { islem: s.islem });
     assert.deepEqual(g, { geriAlinan: 1, atlanan: [] });
     assert.equal(await kartSatiri('logo-220'), null, 'alınan taslak silindi');
     assert.equal(await vt().tek("SELECT 1 FROM malzeme_logo_gecis_izi"), null, 'iz kalmadı');
+    // 3316 Test T1: eşlenmiş kart başka türle yeniden alınamaz; eşlemedeki kod korunur, taslak açılmaz.
+    const baskaTur = await istek('POST', '/malzeme-logo-kartlari/220/al', { tur: 'mamul', birim: 'kg', onek: null });
+    assert.equal(baskaTur.statusCode, 422, baskaTur.body);
+    assert.match(baskaTur.body, /daha önce HM-LGZ-00021 koduyla eşlendi/);
+    assert.equal(await kartSatiri('logo-220'), null, 'taslak açılmadı');
     // Birim seçilirse karşılıksız kart da alınır; yeniden almak mümkün.
     const t = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-al', { kartlar: [{ logoKayitNo: 220, surum: null }, { logoKayitNo: 222, surum: null }], tur: null, birim: 'kg' });
-    assert.deepEqual(t.basarili.map((x) => x.kod), ['HM-LGZ-00020', 'HM-LGZ-00022']);
+    assert.deepEqual(t.basarili.map((x) => [x.kod, x.stokKodu]), [['HM-LGZ-00020', 'HM-LGZ-00021'], ['HM-LGZ-00022', 'HM-LGZ-00023']], 'geri alınan kart eşlemedeki koduyla döner');
   });
 
   test('LGG-5 geri alma sonradan değişen kartı atlar; koruma tetiği geri alma dışında Logo kaydını boşaltmaya ve silmeye izin vermez', async () => {

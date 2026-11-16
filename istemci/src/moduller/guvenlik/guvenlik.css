@@ -113,3 +113,14 @@
 .tc-guvenlik-baglar .tc-simge { flex: none; color: var(--muted); }
 .tc-guvenlik-bag { border: 0; padding: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; cursor: pointer; }
 .tc-guvenlik-katli > summary { cursor: pointer; min-block-size: var(--b-6); display: flex; align-items: center; font-weight: 700; color: var(--muted); }
+
+/* Bağlantı izleme (3313): üstte üç kart, altında liste; dar ekranda kartlar alt alta. */
+.tc-izleme-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-izleme-kartlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--b-3); }
+.tc-izleme-kart {
+  display: flex; align-items: flex-start; gap: var(--b-3); padding: var(--b-3); min-width: 0;
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-izleme-kart > div { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-izleme-belge { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-izleme-gruplar { display: flex; flex-direction: column; gap: var(--b-2); }

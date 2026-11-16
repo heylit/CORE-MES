@@ -34,6 +34,7 @@ namespace LogoYardimcisi
         readonly TcpListener dinleyici;
         readonly byte[] anahtar;
         readonly IstekIsleyici isle;
+        volatile bool kapanacak;
         public int Port { get; private set; }
 
         public HttpSunucu(int port, string anahtar, IstekIsleyici isle)
@@ -67,6 +68,8 @@ namespace LogoYardimcisi
                 catch (InvalidOperationException) { return; }
                 sayac++;
                 using (c) Baglanti(c);
+                // 3314: yetkili "kapat" isteğinin cevabı yazıldıktan sonra dinleme biter; Program Logo oturumunu kapatıp çıkar.
+                if (kapanacak) { Durdur(); return; }
             }
         }
 
@@ -87,7 +90,7 @@ namespace LogoYardimcisi
                     istek = Oku(akis);
                     yontem = istek.Yontem;
                     yol = istek.Yol;
-                    cevap = Denetle(istek) ?? isle(istek.Yontem, istek.Yol, istek.Sorgu, istek.Govde);
+                    cevap = Denetle(istek) ?? Kapat(istek) ?? isle(istek.Yontem, istek.Yol, istek.Sorgu, istek.Govde);
                 }
                 catch (GecersizIstek e)
                 {
@@ -125,6 +128,17 @@ namespace LogoYardimcisi
             if (!i.Basliklar.TryGetValue("X-Api-Key", out verilen) || !SabitSureliEsit(Encoding.UTF8.GetBytes(verilen), anahtar))
                 return Cevap.Hata(401, "Unauthorized");
             return null;
+        }
+
+        // 3314: güncelleyici eski yardımcıyı süreç öldürmeden ve yönetici yetkisi istemeden durdurur. İstekler sırayla işlendiği için
+        // elde iş yoktur; cevap gider, sonra dinleme biter.
+        Cevap Kapat(Istek i)
+        {
+            if (i.Yontem != "POST" || i.Yol != "/api/kapat") return null;
+            kapanacak = true;
+            var g = new Dictionary<string, object>();
+            g["kapaniyor"] = true;
+            return new Cevap(200, g);
         }
 
         static bool SabitSureliEsit(byte[] a, byte[] b)

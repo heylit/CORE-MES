@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { BaglantiAkisDurumu, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BaglantiAkisDurumu, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu } from '#paylasilan/sozlesme/logo.ts';
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -148,6 +148,11 @@ function Satir({ ad, deger }: { ad: string; deger: ReactNode }) {
 // Deneme sorgusu düğmeyle başlar; dış sistem yavaş olabilir, otomatik yenilenmez ve yinelenmez.
 const DENEME = { enabled: false, retry: false, staleTime: Infinity, gcTime: Infinity } as const;
 
+export function yardimciSurumMetni(s: LogoYardimciSurumu | null): string {
+  if (s === null) return 'Henüz bakılmadı';
+  return s.durum === 'ayni' ? 'Bu paketle aynı' : s.ileti;
+}
+
 function LogoBolumu() {
   const h = useQuery({ queryKey: anahtarlar.logoHazirlik, queryFn: () => api.get<LogoHazirlikCevabi>('/logo/hazirlik') });
   const k = useQuery({ queryKey: anahtarlar.logoKontrol, queryFn: () => api.get<LogoKontrolCevabi>('/logo/hazirlik/kontrol'), ...DENEME });
@@ -168,13 +173,14 @@ function LogoBolumu() {
       ortam={[
         ['Köprü adresi', d.ortam.adres ?? 'Tanımlı değil (TMIV2_LOGO_KOPRU_ADRESI)'],
         ['Köprü anahtarı', d.ortam.anahtarTanimli ? 'Tanımlı' : 'Tanımlı değil (TMIV2_LOGO_KOPRU_ANAHTARI)'],
+        ['Yardımcı sürümü', yardimciSurumMetni(d.yardimci ?? null)],
       ]}
       ayarlar={d.ayarlar.map((a) => [a.baslik, a.acik] as const)}
       gruplar={[
         { baslik: 'CORE → Logo', simge: 'upload', akislar: akis('tmi-logo') },
         { baslik: 'Logo → CORE', simge: 'download', akislar: akis('logo-tmi') },
       ]}
-      kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch(); } }}
+      kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch().then(() => h.refetch()); } }}
       not="Deneme yalnız okur: ambar listesi, deneme malzemesinin “var mı” kaydı ve birim seti listesi. Logo’ya yazma isteği gitmez. Firma ve dönem köprünün kendi ayarındadır."
     />
   );

@@ -25,6 +25,7 @@ import {
   karsilastirilabilir, metinListesi, secimiBuda, suzulmus, topluOnaylanabilir, type FiltreSecimi,
 } from './liste.ts';
 import { kimlikOf } from './liste.ts';
+import { useKatalogLogoAramasi } from './LogoAramasi.tsx';
 import { OnayRozeti, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
 import { QrPenceresi, SahaGorunumu } from './Saha.tsx';
 import { AktifSuzgecler, Suzgecler } from './Suzgecler.tsx';
@@ -203,6 +204,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const kgFiyatlari = useKgFiyatlari(kartlar, yetki.kgFiyatiOkur);
   const liste = useMemo(() => tabloSirasi(suzulmus(kartlar, ara, sec, b), b, gruplama, siralama), [kartlar, ara, sec, b, gruplama, siralama]);
   const sayilar = useMemo(() => grupSayilari(liste, b, gruplama), [liste, b, gruplama]);
+  const logo = useKatalogLogoAramasi({ metin: ara, yazabilir: yetki.yaz, kartAc: (kimlik) => git.katalog(kimlik) });
   const sayfaSatirlari = useMemo(() => liste.slice((sayfa - 1) * SAYFA_BOYU, sayfa * SAYFA_BOYU), [liste, sayfa]);
   // Küçük resim yalnız görünen sayfanın yarı mamul ve mamul kartları için tek istekle okunur.
   const resimliNolar = useMemo(() => sayfaSatirlari.filter((k) => resimliTur(k.kayit.tur)).map((k) => k.no), [sayfaSatirlari]);
@@ -327,6 +329,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
           className="tc-alan-kutu tc-mk-ara" type="search" value={ara} onChange={(o) => araYaz(o.target.value)}
           placeholder="Kod, ad, ERP kodu, açıklama veya tedarikçi ara" aria-label="Katalogda ara"
         />
+        {logo.dugme}
         <span className="tc-mk-ara-bosluk" />
         <label className="tc-mk-grupla">
           <span>Grupla</span>
@@ -356,6 +359,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
           <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.json', katalogJsonMetni(gorunenKayitlar, b))}>JSON dışa aktar</Dugme>
         </div>
       </div>
+      {logo.serit}
       {bosKatalog ? (
         <DurumKutusu durum="bos" mesaj="Katalog boş.">
           {yetki.yaz && <Dugme tur="birincil" simge="plus" onClick={() => git.yeniKart()}>Yeni malzeme</Dugme>}

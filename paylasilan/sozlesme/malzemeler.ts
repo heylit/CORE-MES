@@ -378,6 +378,9 @@ export const logoGecisSorgusu = z.object({
   suzgec: z.enum(LOGO_GECIS_SUZGECLERI).optional(),
   ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
   sayfa: z.coerce.number<number>().int().min(0).max(100_000).prefault(0),
+  // 3319: katalogdaki canlı aramanın bulduğu kartlar (virgüllü Logo kayıt no, en çok 20); verilirse süzgeç uygulanmaz.
+  kayitlar: z.string().regex(/^\d{1,10}(,\d{1,10}){0,19}$/, 'Kayıt numaraları virgülle, en çok 20.')
+    .transform((d) => d.split(',').map(Number)).optional(),
 });
 const logoGecisSayilari = z.object({
   toplam: z.number().int(), stoklu: z.number().int(), yeni: z.number().int(), bagsiz: z.number().int(), bagli: z.number().int(),

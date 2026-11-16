@@ -1167,6 +1167,49 @@ namespace LogoYardimcisi
             }
         }
 
+        // Sunucudaki yardimciKaynakOzeti (yardimci-surumu.test.ts) aynı örnekte aynı değeri bekler; iki uygulama kayarsa biri kırmızı olur.
+        static void T_kaynak_ozeti_sunucuyla_ayni_ornekte_ayni()
+        {
+            var ornek = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("b.cs", "x\r\ny"),
+                new KeyValuePair<string, string>("A.cs", "\uFEFFz\u00e7"),
+                new KeyValuePair<string, string>("Testler.cs", "t"),
+                new KeyValuePair<string, string>("not.txt", "n"),
+                new KeyValuePair<string, string>("a.cs", ""),
+            };
+            Esit("0fb1db2fbccd041eca237e4861d17ee2ac4c6c53b82ba24ce485f000fcf3de65", LogoYardimcisiSurum.Program.Ozet(ornek), "ortak örnek özeti");
+        }
+
+        static void T_http_surum_ve_yetkili_kapat()
+        {
+            var s = Logo();
+            var ayar = TestAyari();
+            var sunucu = new HttpSunucu(0, ayar.Anahtar, Isl(s).Isle);
+            sunucu.Baslat();
+            var bitti = false;
+            var is_ = new Thread(() => { sunucu.Calis(0); bitti = true; });
+            is_.Start();
+            try
+            {
+                var p = sunucu.Port;
+                var h = "Host: 127.0.0.1:" + p + "\r\n";
+                var k = "X-Api-Key: " + ayar.Anahtar + "\r\n";
+                var surum = Gonder(p, "GET /api/version HTTP/1.1\r\n" + h + k + "\r\n");
+                Icerir(surum, "HTTP/1.1 200 OK");
+                Icerir(surum, "\"kaynakOzeti\":\"" + Surum.KaynakOzeti + "\"");
+                Icerir(Gonder(p, "POST /api/kapat HTTP/1.1\r\n" + h + "Content-Length: 0\r\n\r\n"), "HTTP/1.1 401");
+                Dogru(!bitti, "anahtarsız kapat dinlemeyi bitirmez");
+                Icerir(Gonder(p, "POST /api/kapat HTTP/1.1\r\n" + h + k + "Content-Length: 0\r\n\r\n"), "\"kapaniyor\":true");
+                Dogru(is_.Join(5000), "kapat sonrası dinleme biter");
+            }
+            finally
+            {
+                sunucu.Durdur();
+                is_.Join(5000);
+            }
+        }
+
         static void T_http_yalniz_dogru_anahtar_ve_yerel_host_ile_cevap_verir()
         {
             var s = Logo();

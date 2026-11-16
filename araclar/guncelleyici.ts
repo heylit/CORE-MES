@@ -10,6 +10,7 @@ import {
   uygulamaIstegiSemasi, uygulamaReddi, yedekAl, yedekDizini as seciliYedekDizini, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz,
   yedekYeriniDenetle, type CalisanSurum, type GecmisKaydi, type UygulamaIstegi, type UygulamaSonucu,
 } from '../sunucu/moduller/ayarlar/disari.ts';
+import { paketSonrasiYardimci } from './logo-yardimcisi-guncelle.ts';
 import { GOC_KIMLIGI, anaAgacKoku, envYolu, ortamiYukle } from './ortam.ts';
 import { binYolu, npmCliBul } from './paket-bin.ts';
 import { NPM_ONBELLEGI, SURUM_DOSYASI } from './paket.ts';
@@ -596,7 +597,16 @@ export class Guncelleyici {
     }
     console.log(`Güncelleme bitti: ${sonuc.sonuc}${sonuc.hata === null ? '' : ` (${sonuc.adim ?? ''}: ${sonuc.hata})`}`);
     // Sunucu kapalı bırakıldıysa (geri yükleme bozuldu) güncelleyici de durur: elle müdahale gerekir.
-    if (this.surecler === null) await this.kapat(1);
+    if (this.surecler === null) {
+      await this.kapat(1);
+      return;
+    }
+    // 3314: yeni sürüm açıldıktan sonra Logo yardımcısı da yenilenir; olmazsa paket geri alınmaz, sürüm uyarısı Bağlantı izlemede kalır.
+    if (sonuc.sonuc === 'kuruldu') {
+      const y = await paketSonrasiYardimci(process.env, this.surumKlasoru(istek.commit), sonuc.surum)
+        .catch((hata: unknown) => ({ sonuc: 'hata' as const, ileti: hataMetni(hata) }));
+      console.log(`Logo yardımcısı: ${y.sonuc}. ${y.ileti}`);
+    }
   }
 
   // Önceki güncelleyici uygulama ortasında öldürüldüyse durum dosyası kalır. Dönen değer açılacak sürümdür; null ise sunucu açılmaz.

@@ -124,7 +124,7 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.equal(await vt().tek("SELECT 1 FROM malzeme_katalog_karti WHERE kimlik LIKE 'logo-%'"), null);
   });
 
-  test('LMA-4 uyan kod aynı koduyla taslak açılır, Logo\'da gönderilmiş sayılır, eşleme yazılmaz; sayaç ilerler, aktif olunca kuyruğa girmez', async () => {
+  test('LMA-4 (3316 a) uyan kod: kart aynı önekten CORE\'un kendi koduyla, Logo kartının sırasından sonra açılır (Risk K1), Logo kodu eşlemede kalır; Logo\'da gönderilmiş sayılır, aktif olunca kuyruğa girmez', async () => {
     baglaCozuculeri();
     ayna.push(kart(101, 'HM-LGA-00007', { ad: 'Logo mil', aciklama2: 'Iki', aciklama3: 'Uc' }));
     const l = await liste();
@@ -132,13 +132,13 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.deepEqual(l.kartlar.map((k) => [k.kod, k.durum, k.koduUyar, k.kartTuru]), [['HM-LGA-00007', 'yeni', true, '10']]);
     const c = await istek('POST', '/malzeme-logo-kartlari/101/al', { tur: 'hammadde', birim: 'kg', onek: null });
     assert.equal(c.statusCode, 200, c.body);
-    assert.deepEqual(c.json(), { id: 'logo-101', stok_kodu: 'HM-LGA-00007', eslendi: false });
+    assert.deepEqual(c.json(), { id: 'logo-101', stok_kodu: 'HM-LGA-00008', eslendi: true });
     const s = await kartSatiri('logo-101');
     assert.deepEqual({ ...s, surum: undefined }, {
-      kod: 'HM-LGA-00007', durum: 'taslak', logo: '101', gonderim: 'gonderildi', tur: '10', set: '06', a1: 'Logo mil', a2: 'Iki', guncelleme: null, surum: undefined,
+      kod: 'HM-LGA-00008', durum: 'taslak', logo: '101', gonderim: 'gonderildi', tur: '10', set: '06', a1: 'Logo mil', a2: 'Iki', guncelleme: null, surum: undefined,
     });
-    assert.deepEqual(yazilanEslemeler, []);
-    assert.equal((await taslakAc('HM-LGA-00001')).kod, 'HM-LGA-00008', 'TMI aynı numarayı bir daha vermez');
+    assert.deepEqual(yazilanEslemeler, [{ stokKodu: 'HM-LGA-00008', logoKodu: 'HM-LGA-00007', logoKayitNo: 101 }]);
+    assert.equal((await taslakAc('HM-LGA-00008')).kod, 'HM-LGA-00009', 'sayaç Logo kartının sırasını geçti, kendi kodundan ilerler');
     // Döngü önlemi: kart aktif olunca gönderim durumu "gonderildi" kalır (tetikleyici "bekliyor" yapmaz).
     await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE kimlik = 'logo-101'");
     assert.equal((await kartSatiri('logo-101'))?.gonderim, 'gonderildi');
@@ -158,7 +158,7 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     const c = await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'kg', onek: 'SF-GEN-' });
     assert.equal(c.statusCode, 200, c.body);
     assert.deepEqual(c.json(), { id: 'logo-102', stok_kodu: 'SF-GEN-00001', eslendi: true });
-    assert.deepEqual(yazilanEslemeler, [{ stokKodu: 'SF-GEN-00001', logoKodu: '150.01.0003', logoKayitNo: 102 }]);
+    assert.deepEqual(yazilanEslemeler.at(-1), { stokKodu: 'SF-GEN-00001', logoKodu: '150.01.0003', logoKayitNo: 102 });
     // Adı olmayan Logo kartı koduyla adlanır; liste eşleme üzerinden bağlı gösterir.
     assert.equal((await vt().tek<{ ad: string }>("SELECT kayit -> 'com' ->> 'ad' AS ad FROM malzeme_katalog_karti WHERE kimlik = 'logo-102'"))?.ad, '150.01.0003');
     assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.durum, 'bagli');

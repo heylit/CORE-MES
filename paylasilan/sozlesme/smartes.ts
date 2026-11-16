@@ -133,6 +133,20 @@ export const gidenCevabi = listeCevapSemasi(z.object({
   sonrakiDeneme: zamanSemasi.nullable(),
 }));
 
+// 3313: bağlantı izleme, SmartES'e gidemeyen iş emirleri. Hatalı gönderim kendiliğinden yeniden denenir; elle gönderme yoktur.
+export const smartesGidenIzlemeCevabi = z.object({
+  belgeler: z.array(z.object({
+    isEmriId: z.number().int(),
+    smartesIsEmriNo: z.string(),
+    denemeSayisi: z.number().int(),
+    sonDeneme: zamanSemasi,
+    neden: z.string().nullable(),
+    sonrakiDeneme: zamanSemasi.nullable(),
+  }).strict()),
+  kesildi: z.boolean(),
+});
+export type SmartesGidenIzlemeCevabi = z.output<typeof smartesGidenIzlemeCevabi>;
+
 export type DurumCevabi = z.output<typeof durumCevabi>;
 export type EslemelerCevabi = z.output<typeof eslemelerCevabi>;
 export type EslemeAtaGovdesi = z.input<typeof eslemeAtaGovdesi>;
