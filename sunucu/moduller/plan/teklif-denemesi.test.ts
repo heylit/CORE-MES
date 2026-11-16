@@ -66,6 +66,26 @@ const istek = (ek: Partial<DenemeIstegi>): DenemeIstegi => ({
 });
 
 describe('satış teklifi denemesi (Y4)', () => {
+  test('3301-4: arkaya ekleme tezgâhtaki ilk boşluğa girer; ileri tarihli iş teklifi ötelemez ve yerinden kaymaz', async () => {
+    // T1'de O1 ve O2 ilk iki günde; O3'ün başlangıç tarihi dört hafta ileride. Arada tezgâh boştur.
+    const kayit = { ...KAYIT, orders: [...KAYIT.orders, { id: 'O3', no: 'E-3', itemId: '50', qty: 4, start: '2026-11-16', due: '2026-11-20', priority: 2, status: 'serbest' }] };
+    const c = calismaKur();
+    const g = planGirdisi({ calisma: c, kayit, kaynak: KAYNAK, bugun: '2026-10-19' });
+    assert.ok(g);
+    const taban = motorYukle().schedule(g.st, 'dagit', null);
+    const o3 = Object.values(taban.ops).find((o) => o['job'] === 'O3')!;
+    const o2 = Object.values(taban.ops).find((o) => o['job'] === 'O2')!;
+    assert.ok(o3.S > 24 * 20, 'O3 ileri tarihte');
+    const r = await teklifDenemesi({ ...istek({}), calisma: { ...c, plan: { ops: taban.ops } }, kayit });
+    assert.ok(r);
+    assert.deepEqual(r.kayan, []);
+    const k = r.kalemler[0]!;
+    assert.equal(k.tamam, true);
+    const is = k.islemler[0]!;
+    assert.ok(is.S >= o2.C - 1e-6 && is.C <= o3.S + 1e-6, `kalem O2 ile O3 arasındaki boşlukta (S ${String(is.S)}, O3 ${String(o3.S)})`);
+    assert.ok(k.planTerminGun !== null && k.planTerminGun < 10, `plan termini ilk haftalarda (${String(k.planTerminGun)})`);
+  });
+
   test('istenen termin yoksa plan dondurulur: başka siparişin bitişi değişmez, kalem arkaya yerleşir ve plan termini çalışma gününe düşer', async () => {
     const r = await teklifDenemesi(istek({}));
     assert.ok(r);

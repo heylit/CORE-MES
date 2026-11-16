@@ -64,7 +64,11 @@ function teklifDene(st0, taban0, istek) {
       } } }
   const dondurma = s.w.dondurma;
   s.w.dondurma = farkli ? dondurma : 1e6;
-  const p = schedule(s, farkli ? 'dagit' : 'sabit', taban);
+  /* 3301-4: arkaya eklemede dondurulmuş işler yer tutar, kalem tezgâhın sığdığı ilk boşluğuna girer (kimse kaymaz). Bir kalem bu yolla
+     yerleşmezse (boşluk araması tükenir) eski yol: tezgâhtaki en geç işin arkası. */
+  const kalemYok = q => (q.fail || []).some(id => istek.kalemler.some(k => String(id).startsWith(k.id + '.')));
+  let p = schedule(s, farkli ? 'dagit' : 'sabit', taban, farkli ? {} : { yerTut: true });
+  if (!farkli && kalemYok(p)) p = schedule(s, 'sabit', taban);
   s.w.dondurma = dondurma;
   const e = evaluate(p, s, taban, false);
   const cx = compile(s); const A = s.D.ayarlar || {};

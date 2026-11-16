@@ -527,7 +527,9 @@ function schedule(st,mode,base,opt={}){
       for(const [p,t] of o.pr){const q=yer[p];
         if(q?!((t==='o'&&!q.fas?q.lot1:q.C)<=r.S+1e-6):dus.has(p)){delete yer[id];dus.add(id);deg=true;break;}}}}
     for(let i=pins.length-1;i>=0;i--)if(dus.has(pins[i].id))pins.splice(i,1);}
-  pins.sort((a,b)=>a.S-b.S).forEach(r=>commit(cx,ctx,r));
+  /* 3301-4: yerTut kipinde (teklif denemesi, plan dondurulmuş) donuk tezgâh işi kilit gibi yer tutar: tezgâhın boş anını ilerletmez, yeni iş
+     aradaki ilk boşluğa sığar. Yoksa yeni iş tezgâhtaki en geç işin arkasına düşer (ileri tarihli tek iş teklifi haftalarca öteler). */
+  pins.sort((a,b)=>a.S-b.S).forEach(r=>{if(opt.yerTut&&r.frz&&!r.fas)kilitKoy(cx,ctx,r);else commit(cx,ctx,r);});
   kilitler.forEach(r=>kilitKoy(cx,ctx,r));
   /* sunucu (669 a): yeri sabit iş tam saatinde durur, tezgâhın boş anını ilerletmez (kilit gibi); ardılı bitişini bekler */
   for(const id in st.sabitYer||{}){const a=st.sabitYer[id];if(ctx.P[id]||!cx.byId[id]||!cx.M[a.m])continue;
