@@ -283,6 +283,12 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     assert.equal((await toplu('yazan', { bagla: [], al: [{ logoKodu: 'LCA9.001' }, { logoKodu: 'lca9.001' }] })).durum, 400);
     const cok = Array.from({ length: 51 }, (_, i) => ({ logoKodu: `LCA9.${String(i).padStart(3, '0')}` }));
     assert.equal((await toplu('yazan', { bagla: [], al: cok })).durum, 400);
+    // Sınır iki dizinin toplamıdır: 30 bağla + 30 al da reddedilir, firma yazılmaz.
+    const onceToplam = await firmaSayisi();
+    const bagla30 = Array.from({ length: 30 }, (_, i) => ({ logoKodu: `LCA9.B${String(i).padStart(2, '0')}`, firmaId: 1, surum: 1 }));
+    const al30 = Array.from({ length: 30 }, (_, i) => ({ logoKodu: `LCA9.A${String(i).padStart(2, '0')}` }));
+    assert.equal((await toplu('yazan', { bagla: bagla30, al: al30 })).durum, 400);
+    assert.equal(await firmaSayisi(), onceToplam);
     const baskasi = await toplu('yazan2', { bagla: [], al: [{ logoKodu: 'LCA9.001' }] });
     assert.equal(baskasi.durum, 200, JSON.stringify(baskasi.govde));
     assert.equal(baskasi.govde.sonuclar[0]?.tamam, false);
