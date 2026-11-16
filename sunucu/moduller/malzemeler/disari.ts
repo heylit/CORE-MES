@@ -30,6 +30,8 @@ export { malzemeKategorileri } from './servis.ts';
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
 // 3313: Logo'ya giden belgenin satır kartları Logo'da var mı, hizmet mi (logo belgeyi kart gitmeden göndermez).
 export { logoKartDurumlari } from './servis.ts';
+// 3344: kartın Logo kayıt numarası (rozet); yalnız kayıtlı kartlar haritadadır.
+export { logoKayitNolari } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).
 export { logoBirimSetiKullaniliyorMu } from './servis.ts';
 export type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from './servis.ts';

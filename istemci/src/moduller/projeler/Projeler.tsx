@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import {
+  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
+} from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -48,6 +50,12 @@ export function Projeler() {
     placeholderData: keepPreviousData,
   });
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
+  // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
+  const logo = useLogoRozetleri('proje', (l.data?.satirlar ?? []).map((p) => p.id));
+  const sutunlar: Sutun<Proje>[] = [...SUTUNLAR, {
+    anahtar: 'logo', baslik: 'Logo', hucre: (p) => <LogoRozetHucresi bilgi={logo.durum(p.id)} hata={logo.hata} />,
+    csv: (p) => { const d = logo.durum(p.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
+  }];
   const suzulu = liste.suzgecler.ara.trim() !== '' || liste.suzgecler.durum !== '' || liste.suzgecler.statuId !== '';
 
   return (
@@ -76,7 +84,7 @@ export function Projeler() {
             <div className="tc-prj-liste-tablo">
               <Tablo
                 etiket="Projeler"
-                sutunlar={SUTUNLAR}
+                sutunlar={sutunlar}
                 satirlar={l.data?.satirlar ?? []}
                 satirAnahtari={(p) => p.id}
                 mesgul={l.isPending}

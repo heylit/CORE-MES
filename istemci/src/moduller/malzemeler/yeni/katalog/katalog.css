@@ -107,6 +107,7 @@
   padding: var(--b-2) var(--b-3); border-left: var(--cizgi-kalin) solid var(--hold); background: var(--panel2);
 }
 .tc-mk-uyari[data-ton="hata"] { border-left-color: var(--stop); }
+.tc-mk-logo-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
 
 .tc-mk-onay, .tc-mk-talep { display: grid; gap: var(--b-2); margin-bottom: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); }
 .tc-mk-onay-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Proje, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.ts';
-import { Dugme, DurumKutusu, Kart, KlasorBaglantisi, Rozet, Sekmeler, type Sekme } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, KlasorBaglantisi, Rozet, Sekmeler, type Sekme, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ProjePlani } from '../plan/disari.ts';
@@ -61,6 +61,8 @@ export function ProjeAyrinti() {
     { anahtar: 'genel', baslik: 'Genel', simge: 'book' },
   ];
   const sekme = sekmeler.some((s) => s.anahtar === secili) ? secili : 'ozet';
+  // 3344: başlıkta Logo'ya gidiş rozeti; ayrıntısı Genel'deki Logo satırında.
+  const logo = useLogoRozetleri('proje', gecerli ? [id] : []);
 
   if (!gecerli) return <DurumKutusu durum="hata" mesaj="Proje bulunamadı" />;
   if (sorgu.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Proje alınamadı')} yenile={() => { void sorgu.refetch(); }} />;
@@ -72,6 +74,7 @@ export function ProjeAyrinti() {
         <Dugme simge="back" onClick={() => { void yonlendir('/projeler'); }}>Projeler</Dugme>
         <h1 className="tc-prj-baslik">{p.kod} · {p.ad}</h1>
         <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet>
+        <LogoRozeti bilgi={logo.durum(p.id)} hata={logo.hata} baslik />
         <StatuCipi statu={y?.statu ?? p.statu} {...(statuYazabilir && y ? { tikla: () => { statuAcikYaz(true); } } : {})} />
         <div className="tc-prj-bas-sag">
           <KlasorBaglantisi tur="proje" id={p.id} />

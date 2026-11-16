@@ -1,6 +1,6 @@
 import type { LogoGidenIzlemeCevabi, LogoGidenIzlemeDurumu } from '#paylasilan/sozlesme/logo.ts';
 import type { SmartesGidenIzlemeCevabi } from '#paylasilan/sozlesme/smartes.ts';
-import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import { LOGO_DURUM_ADI, LOGO_DURUM_TONU, type RozetTonu } from '../../ortak/arayuz/index.ts';
 
 // Bağlantı izleme (3313): Logo ve SmartES'e gitmeyen belgeler tek listede. SmartES'in kesin reddettiği iş emri durur; öteki hatalar yinelenir.
 export type IzlemeDurumu = LogoGidenIzlemeDurumu;
@@ -20,12 +20,9 @@ export interface IzlemeSatiri {
   sonrakiDeneme: string | null;
 }
 
-export const DURUM_ADI: Record<IzlemeDurumu, string> = {
-  durdu: 'Durdu', 'yeniden-denenecek': 'Yeniden denenecek', 'kart-bekliyor': 'Kart bekliyor', 'proje-bekliyor': 'Proje bekliyor', sirada: 'Sırada',
-};
-export const DURUM_TONU: Record<IzlemeDurumu, RozetTonu> = {
-  durdu: 'hata', 'yeniden-denenecek': 'uyari', 'kart-bekliyor': 'bilgi', 'proje-bekliyor': 'bilgi', sirada: 'pasif',
-};
+// Ad ve ton rozetle tek tablodan (3344): belgedeki Logo rozeti ile izlemedeki durum aynı görünür.
+export const DURUM_ADI: Record<IzlemeDurumu, string> = LOGO_DURUM_ADI;
+export const DURUM_TONU: Record<IzlemeDurumu, RozetTonu> = LOGO_DURUM_TONU;
 const SMARTES_NE_YAPMALI = 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse SmartES bağlantısını denetleyin.';
 const SMARTES_DURDU_NE_YAPMALI = 'Nedeni düzeltin (istasyon, operasyon ya da iş emri eşlemesi), sonra "Yeniden gönder". İş emri değişirse kendiliğinden yeniden gider.';
 
