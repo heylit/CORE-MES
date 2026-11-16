@@ -86,9 +86,16 @@ interface Ozellikler {
   varsayilanFason?: boolean;
   kapat: () => void;
   kaydedildi: (firma: Firma) => void;
+  // Yeni firma Logo geçişinden (3343) bir cariyle açılırsa form öneriyle dolu başlar ve kayıt Logo'dan alma komutuyla gider.
+  logodan?: LogoCariSatiri;
 }
 
-export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason = false, kapat, kaydedildi }: Ozellikler) {
+const oneriDegerleri = (o: LogoCariSatiri['oneri']): Partial<Degerler> => ({
+  kod: o.kod, ad: o.ad, tur: o.tur, ulkeKodu: o.ulkeKodu, vergiNo: metin(o.vergiNo), vergiDairesi: metin(o.vergiDairesi), adres: metin(o.adres),
+  ilce: metin(o.ilce), il: metin(o.il), postaKodu: metin(o.postaKodu), telefon: metin(o.telefon), ePosta: metin(o.ePosta),
+});
+
+export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason = false, kapat, kaydedildi, logodan }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const ekle = useKorumaliEkleme();
@@ -96,10 +103,12 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
   const [acilisSurumu] = useState(firma?.surum ?? null);
   // Yeni firma Logo carisinden açılırsa kod ve Logo cari kodu Logo kodudur (2118-1 a); kayıt Logo'dan alma komutuyla gider.
   const [logoAramasi, logoAramasiYaz] = useState(false);
-  const [logoCari, logoCariYaz] = useState<LogoCariSatiri | null>(null);
+  const [logoCari, logoCariYaz] = useState<LogoCariSatiri | null>(firma === null ? logodan ?? null : null);
 
   const form = useForm<Degerler, FirmaCevabi>({
-    ilk: ilkDegerler(firma, varsayilanTur, varsayilanFason),
+    ilk: firma === null && logodan
+      ? { ...ilkDegerler(null, varsayilanTur, varsayilanFason), ...oneriDegerleri(logodan.oneri) }
+      : ilkDegerler(firma, varsayilanTur, varsayilanFason),
     dogrula,
     hataIletisi: 'Firma kaydedilemedi.',
     kaydet: (d) => {
@@ -146,11 +155,7 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
   });
 
   const formaAl = (c: LogoCariSatiri) => {
-    const o = c.oneri;
-    form.degistir({
-      kod: o.kod, ad: o.ad, tur: o.tur, ulkeKodu: o.ulkeKodu, vergiNo: metin(o.vergiNo), vergiDairesi: metin(o.vergiDairesi), adres: metin(o.adres),
-      ilce: metin(o.ilce), il: metin(o.il), postaKodu: metin(o.postaKodu), telefon: metin(o.telefon), ePosta: metin(o.ePosta),
-    });
+    form.degistir(oneriDegerleri(c.oneri));
     logoCariYaz(c);
     logoAramasiYaz(false);
   };

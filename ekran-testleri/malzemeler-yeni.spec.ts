@@ -457,3 +457,63 @@ test.describe('M-3319 katalogda Logo araması', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+// 3343: Logo geçişi cariler sekmesi. Köprü ekran ortamında yoktur; Logo arama ve toplu komut sahte cevapla döner.
+test.describe('M-3343 Logo geçişi cariler', () => {
+  const oneri = (kod: string, tur: 'musteri' | 'tedarikci') => ({
+    kod, ad: `ORN Deneme ${kod}`, tur, ulkeKodu: 'TR', vergiNo: null, vergiDairesi: null, adres: null, ilce: null, il: 'Deneme Il', postaKodu: null,
+    telefon: null, ePosta: null, logoCariKodu: kod,
+  });
+  const satir = (no: number, kod: string, ek: Record<string, unknown> = {}) => ({
+    logoKayitNo: no, kod, ad: `ORN Deneme Cari ${no}`, aktif: true, vergiNo: null, il: 'Deneme Il', telefon: null, eslesme: null, alinamaz: null,
+    oneri: oneri(kod, 'musteri'), ...ek,
+  });
+  const eslesme = (firmaId: number, neden: string, baglanabilir: boolean) =>
+    ({ firmaId, kod: `ORN-F-${firmaId}`, ad: `ORN Deneme Firma ${firmaId}`, neden, baglanabilir, surum: 2 });
+  const cariler = [
+    satir(1, 'ORN-C-1001', { eslesme: eslesme(11, 'kayit-no', false) }),
+    satir(2, 'ORN-C-1002', { eslesme: eslesme(12, 'kod', true) }),
+    satir(3, 'ORN-C-1003', { oneri: oneri('ORN-C-1003', 'tedarikci') }),
+    satir(4, 'ORN-C-1004'),
+    satir(5, 'ORN-C-1005', { eslesme: eslesme(15, 'vergi-no', false) }),
+    satir(6, `ORN-C-1006-${'X'.repeat(36)}`, { alinamaz: 'Logo cari kodu 1-40 karakter olmalı; bu cari TMI\'ye alınamaz.' }),
+    satir(7, 'ORN-C-0990', { aktif: false }),
+  ];
+
+  test('arama, durumlar, toplu işlem penceresi ve sonuç; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    await page.route('**/api/musteri-tedarikci/logo-cari/ara?*', (r) => r.fulfill({ json: { durum: 'tamam', ileti: null, cariler } }));
+    await page.route('**/api/musteri-tedarikci/logo-cari/toplu', (r) => r.fulfill({
+      json: {
+        sonuclar: [
+          { logoKodu: 'ORN-C-1002', islem: 'bagla', tamam: true, firma: { id: 12, kod: 'ORN-F-12', ad: 'ORN Deneme Firma 12' }, ileti: null },
+          { logoKodu: 'ORN-C-1003', islem: 'al', tamam: true, firma: { id: 30, kod: 'ORN-C-1003', ad: 'ORN Deneme ORN-C-1003' }, ileti: null },
+          { logoKodu: 'ORN-C-1004', islem: 'al', tamam: false, firma: null, ileti: 'Bu cari TMI\'de var: ORN-F-40. Yeni kart açılmaz; firmayı Logo\'ya bağlayın.' },
+        ],
+      },
+    }));
+    await ac('/logo-gecisi');
+    await page.getByRole('tab', { name: 'Cariler' }).click();
+    await page.getByRole('textbox', { name: "Logo'da ara" }).fill('ORN');
+    await page.getByRole('button', { name: "Logo'da ara" }).click();
+    const tablo = page.getByRole('table', { name: 'Logo carileri' });
+    await expect(tablo.getByText('ORN-C-1002').first()).toBeVisible();
+    await expect(tablo.getByText('Bağlanabilir').first()).toBeVisible();
+    await expect(tablo.getByText("Logo'da pasif").first()).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('cariler.png'), fullPage: true });
+    // Dar genişlikte tablo kart kipindedir, "Tümünü seç" yoktur: satırlar tek tek seçilir.
+    const kartKipi = (await page.locator('.tc-tablo-kap[data-kip="kart"]').count()) > 0;
+    if (!kartKipi) await page.getByRole('checkbox', { name: 'Tümünü seç' }).check();
+    else for (const k of await tablo.locator('tbody').getByRole('checkbox').all()) await k.check();
+    await page.getByRole('button', { name: 'Seçilenleri işle' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Seçilen carileri işle' });
+    await expect(pencere.getByRole('button', { name: '1 bağla, 2 al' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'pencerede yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('cariler-pencere.png') });
+    await pencere.getByRole('button', { name: '1 bağla, 2 al' }).click();
+    const sonuc = page.getByRole('dialog', { name: 'Sonuç' });
+    await expect(sonuc.getByText('1 bağlandı, 1 firma açıldı, 1 işlenemedi.')).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath('cariler-sonuc.png') });
+    expect(ag.hatalar).toEqual([]);
+  });
+});

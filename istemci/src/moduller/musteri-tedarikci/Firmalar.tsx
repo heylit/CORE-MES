@@ -9,7 +9,8 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaAyrinti } from './FirmaAyrinti.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
-import { LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
+import { LogoAramaPenceresi, LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
+import type { LogoCariSatiri } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { TUR_ETIKETI, menuSuzgeci } from './gorunum.ts';
 import { useYazabilir } from './yazma.ts';
 import './musteri-tedarikci.css';
@@ -88,6 +89,8 @@ export function Firmalar() {
   const [secili, seciliYaz] = useState<number | null>(null);
   const [yeni, yeniYaz] = useState(false);
   const [baglanan, baglananYaz] = useState<number | null>(null);
+  const [logoArama, logoAramaYaz] = useState<string | null>(null);
+  const [logodan, logodanYaz] = useState<LogoCariSatiri | null>(null);
 
   useEffect(() => {
     const sayac = setTimeout(() => { if (arama !== liste.suzgecler.ara) liste.suzgecDegistir({ ara: arama }); }, 300);
@@ -143,6 +146,11 @@ export function Firmalar() {
             onChange={(o) => aramaYaz(o.target.value)}
             autoComplete="off"
           />
+          {yazabilir && (
+            <span className="tc-mt-logo-dugme">
+              <Dugme simge="search" onClick={() => logoAramaYaz(arama)}>Logo'da ara</Dugme>
+            </span>
+          )}
           <Secim
             etiket="Durum"
             bosSecenek="Tümü"
@@ -172,13 +180,22 @@ export function Firmalar() {
       </Kart>
       {secili !== null && <FirmaAyrinti id={secili} kapat={() => seciliYaz(null)} />}
       {yazabilir && baglanan !== null && <LogoBaglaPenceresi id={baglanan} kapat={() => baglananYaz(null)} />}
+      {yazabilir && logoArama !== null && (
+        <LogoAramaPenceresi
+          metin={logoArama}
+          kapat={() => logoAramaYaz(null)}
+          formaAl={(c) => { logoAramaYaz(null); logodanYaz(c); yeniYaz(true); }}
+          baglandi={(f) => { logoAramaYaz(null); seciliYaz(f.id); }}
+        />
+      )}
       {yazabilir && yeni && (
         <FirmaFormu
           firma={null}
+          {...(logodan ? { logodan } : {})}
           varsayilanTur={menu.tur ?? (menu.fason ? 'tedarikci' : 'musteri')}
           varsayilanFason={menu.fason === true}
-          kapat={() => yeniYaz(false)}
-          kaydedildi={(f) => { yeniYaz(false); seciliYaz(f.id); }}
+          kapat={() => { yeniYaz(false); logodanYaz(null); }}
+          kaydedildi={(f) => { yeniYaz(false); logodanYaz(null); seciliYaz(f.id); }}
         />
       )}
     </section>

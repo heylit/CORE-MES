@@ -1,4 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
+import { kayitNoktasi } from '#cekirdek/db.ts';
+import type { KayitNoktasiSonucu } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { KisitEslemesi } from '#cekirdek/kisit.ts';
@@ -18,8 +20,11 @@ import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import { LOGO_CARI_SONUC_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { LogoCariAramaCevabi, LogoCariCevabi, LogoCariSatiri, LogodanFirmaAlGovdesi, LogoyaBaglaGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { LOGO_CARI_SONUC_SINIRI, firmaKimligi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type {
+  LogoCariAramaCevabi, LogoCariCevabi, LogoCariSatiri, LogoCariTopluCevabi, LogoCariTopluSonucu, logoCariTopluGovdesi, LogodanFirmaAlGovdesi,
+  LogoyaBaglaGovdesi,
+} from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
   Adres, AdresKimligi, Firma, FirmaAyrintiCevabi, FirmaDuzeltmesi, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi, firmaListeSorgusu,
   firmaSecimSorgusu,
@@ -578,4 +583,31 @@ export async function firmayiLogoyaBagla(db: Db, kullanici: Kullanici, id: numbe
   const yeni = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.logoBagiYaz(db, id, g.surum, { logoCariKodu: cari.kod, logoKayitNo: cari.logoKayitNo }, kullanici.id));
   if (!yeni) throw eskiSurum();
   return yeni;
+}
+
+// 3343: toplu bağlama ve alma. Her cari kendi ara noktasında işlenir: reddedilen satırın yazıları geri alınır, ötekiler kalır.
+// Kural reddi dışındaki hata (süre aşımı, kilitlenme) bütün komutu durdurur; yarım kalan iş "reddedildi" diye bildirilmez.
+// Toplu almada form yoktur: aramadaki öneri olduğu gibi yazılır; öneri kart kurallarına uymuyorsa satır reddedilir, cari tek tek alınır.
+export async function logoCarileriniTopluIsle(db: Db, kullanici: Kullanici, g: z.output<typeof logoCariTopluGovdesi>): Promise<LogoCariTopluCevabi> {
+  const sonuclar: LogoCariTopluSonucu[] = [];
+  for (const b of g.bagla) {
+    const r = await kayitNoktasi(db, () => firmayiLogoyaBagla(db, kullanici, b.firmaId, { logoKodu: b.logoKodu, surum: b.surum }));
+    sonuclar.push(topluSonucu(b.logoKodu, 'bagla', r));
+  }
+  for (const a of g.al) {
+    const r = await kayitNoktasi(db, () => {
+      const kimlik = firmaKimligi.safeParse(logoCariOnerisi(bellektenOku(kullanici.id, a.logoKodu)));
+      if (!kimlik.success) {
+        throw gecersiz(`Logo bilgisi firma kartına uymuyor (${kimlik.error.issues[0]?.message ?? 'geçersiz alan'}); cariyi tek tek alın.`);
+      }
+      return logodanFirmaAl(db, kullanici, { ...kimlik.data, logoKodu: a.logoKodu });
+    });
+    sonuclar.push(topluSonucu(a.logoKodu, 'al', r));
+  }
+  return { sonuclar };
+}
+function topluSonucu(logoKodu: string, islem: LogoCariTopluSonucu['islem'], r: KayitNoktasiSonucu<Firma>): LogoCariTopluSonucu {
+  return r.tamam
+    ? { logoKodu, islem, tamam: true, firma: { id: r.deger.id, kod: r.deger.kod, ad: r.deger.ad }, ileti: null }
+    : { logoKodu, islem, tamam: false, firma: null, ileti: r.hata.message };
 }

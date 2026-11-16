@@ -1,6 +1,7 @@
 .tc-mt { display: grid; gap: var(--b-5); min-width: 0; }
 .tc-mt-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
 .tc-mt-arac { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: end; gap: var(--b-3); margin-bottom: var(--b-4); }
+.tc-mt-arac:has(.tc-mt-logo-dugme) { grid-template-columns: minmax(0, 2fr) auto minmax(0, 1fr); }
 .tc-mt-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }
 .tc-mt-yok { color: var(--muted); }
 .tc-mt-konum { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--run); }
@@ -30,7 +31,7 @@
 .tc-mt-hata { margin: 0; color: var(--stop); font-weight: 700; }
 
 @media (max-width: 479px) {
-  .tc-mt-arac, .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
+  .tc-mt-arac, .tc-mt-arac:has(.tc-mt-logo-dugme), .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Logo'dan cari arama (2118) */
@@ -70,3 +71,11 @@ tr:has(.tc-mt-ad[data-secili]) > td { background: var(--secili-zemin); color: va
 /* Liste Logo sütunu (3065) */
 .tc-mt-logo-bag { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
 [data-kip="kart"] .tc-mt-logo-bag { justify-content: flex-end; }
+
+/* Logo geçişi, cariler sekmesi (3343): Logo ve CORE tarafı hücrede alt alta; 360'ta kod ve ad sarılır. */
+.tc-mt-gecis-taraf { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-mt-gecis-kod { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.tc-mt-gecis-ek { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-mt-gecis-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-mt-gecis-liste li { display: flex; align-items: flex-start; gap: var(--b-2); overflow-wrap: anywhere; }
+.tc-mt-gecis-liste li > span { flex: 1 1 0; min-width: 0; }

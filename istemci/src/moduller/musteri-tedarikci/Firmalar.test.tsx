@@ -48,6 +48,17 @@ const AYRINTI_B = {
   adresler: [],
 } satisfies FirmaAyrintiCevabi;
 
+// Logo'da arama cevabı (uydurma cari).
+const LOGO_ARAMA = {
+  durum: 'tamam', ileti: null,
+  cariler: [{
+    logoKayitNo: 1, kod: 'LG.001', ad: 'Deneme Logo Cari', aktif: true, vergiNo: '1000000001', il: 'Deneme Il', telefon: null, eslesme: null, alinamaz: null,
+    oneri: {
+      kod: 'LG.001', ad: 'Deneme Logo Cari', tur: 'tedarikci', ulkeKodu: 'TR', vergiNo: '1000000001', vergiDairesi: null, adres: null, ilce: null,
+      il: 'Deneme Il', postaKodu: null, telefon: null, ePosta: null, logoCariKodu: 'LG.001',
+    },
+  }],
+};
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 interface Istek { yontem: string; yol: string; govde: unknown; baslik: Record<string, string> }
@@ -63,6 +74,7 @@ function sunucuKur(kullanici: Kullanici, yazma: (yol: string, govde: unknown) =>
     if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, LISTE);
     if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/10') return json(200, AYRINTI);
     if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/11') return json(200, AYRINTI_B);
+    if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, LOGO_ARAMA);
     if (yontem === 'POST') return yazma(yol, govde);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -222,6 +234,29 @@ describe('Ctrl K ile gelen istek (kart 1235)', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect(istekler.find((i) => i.yontem === 'POST')!.govde).toMatchObject({ tur: 'musteri', fason: false });
+  });
+
+  it('"Logo\'da ara" listedeki aramayı Logo\'da sürdürür; "Forma al" yeni firma formunu Logo bilgisiyle açar', async () => {
+    const istekler = sunucuKur(YAZAR);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'deneme' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Logo\'da ara' }));
+    const pencere = within(await screen.findByRole('dialog', { name: 'Logo\'da cari ara' }));
+    expect(await pencere.findByText('Deneme Logo Cari')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/musteri-tedarikci/logo-cari/ara?q=deneme')).toBe(true);
+    fireEvent.click(pencere.getByRole('button', { name: 'Forma al' }));
+    const form = within(await screen.findByRole('dialog', { name: 'Yeni firma' }));
+    expect((form.getByLabelText(/^Ad( \*)?$/) as HTMLInputElement).value).toBe('Deneme Logo Cari');
+    expect(screen.queryByRole('dialog', { name: 'Logo\'da cari ara' })).toBeNull();
+  });
+
+  it('okuyana "Logo\'da ara" görünmez', async () => {
+    const istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    await oturumCozuldu(istekler);
+    expect(screen.queryByRole('button', { name: 'Logo\'da ara' })).toBeNull();
   });
 
   it('yazamayana form açılmaz, istek gitmez', async () => {
