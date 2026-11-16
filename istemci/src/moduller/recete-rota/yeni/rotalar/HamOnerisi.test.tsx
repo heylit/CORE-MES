@@ -15,7 +15,7 @@ const ONERI_YOLU = '/rota/urunler/11/ham-onerisi';
 const kayitlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol === '/rota/revizyonlar/72/kaydet');
 const ONERI: HamOnerisiCevabi = {
   model: { belgeAdi: 'Model mil.step', harf: 'A', revKodu: '07' }, payMm: 2, neden: null,
-  oneriler: [{ malzemeNo: 12, kod: 'HM-0012', ad: null, kalite: 'C45', form: 'cubuk', olcu: { d: 30, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85, kesimBoyuMm: 44, hamHacimMm3: 100_000 }],
+  oneriler: [{ malzemeNo: 12, kod: 'HM-0012', ad: null, kalite: 'C45', form: 'cubuk', olcu: { d: 30, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85, kesimBoyuMm: 44, hamHacimMm3: 100_000, kesimEnMm: null, eksen: 'a' as const }],
 };
 
 function kur(ins: { itemId: string; qty: number; scrap: number }[], kisi: Kullanici = YONETICI, cevap: HamOnerisiCevabi = ONERI) {

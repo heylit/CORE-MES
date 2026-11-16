@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { modelHamOnerileri, kesitYuvarlak, type HazirGrup, type ModelOlcusu, type OneriFormu } from './model-onerisi.ts';
+import { modelHamOnerileri, type FormGeregi, type HazirGrup, type OneriFormu } from './model-onerisi.ts';
 
-const MIL: ModelOlcusu = { a: 118, b: 46, c: 46, cap: 46, hacimMm3: 142000 };
-const PLAKA: ModelOlcusu = { a: 160, b: 90, c: 18, cap: 91.8, hacimMm3: 196000 };
 const G: Record<OneriFormu, HazirGrup[]> = {
-  cubuk: [{ id: 'd', keys: ['d'], vals: [[40], [45], [50], [55]] }, { id: 'l', keys: ['l'], vals: [[3000], [6000]] }],
+  cubuk: [{ id: 'd', keys: ['d'], vals: [[40], [45], [50], [55], [105], [110]] }, { id: 'l', keys: ['l'], vals: [[3000], [6000]] }],
   altigen: [{ id: 's', keys: ['s'], vals: [[46], [50], [55]] }, { id: 'l', keys: ['l'], vals: [[3000]] }],
   lama: [{ id: 'ab', keys: ['a', 'b'], vals: [[100, 20], [60, 50], [50, 50]] }, { id: 'l', keys: ['l'], vals: [[6000]] }],
   levha: [{ id: 't', keys: ['t'], vals: [[10], [20], [25]] }, { id: 'plaka', keys: ['w', 'l'], vals: [[1500, 3000]] }],
@@ -12,10 +10,18 @@ const G: Record<OneriFormu, HazirGrup[]> = {
 };
 const HEPSI = ['cubuk', 'altigen', 'lama', 'levha', 'blok'];
 const gruplar = (f: OneriFormu) => G[f];
+const fg = (form: string, olcu: Record<string, number> | null, kesimBoyuMm: number | null = null, kesimEnMm: number | null = null): FormGeregi =>
+  ({ form, olcu, kesimBoyuMm, kesimEnMm });
 
-describe('modelden ham önerisi (3243 a)', () => {
-  it('mil: kesit standarda yukarı yuvarlanır, boy uzun eksen + iki pay + kesme payı, en az talaş önce', () => {
-    const l = modelHamOnerileri(MIL, 2, 3, HEPSI, gruplar);
+// Mil Ø46 x 118, pay 2, kesme 3: sunucunun en az ölçüsü (3D Atölyesi ile aynı hesap).
+const MIL: FormGeregi[] = [
+  fg('cubuk', { d: 50 }, 125), fg('altigen', { s: 50 }, 125), fg('lama', { a: 50, b: 50 }, 125), fg('levha', null),
+  fg('blok', { a: 122, b: 50, h: 50 }), fg('boru', null), fg('disk', null),
+];
+
+describe('modelden ham önerisi (3243 a, 3321-1)', () => {
+  it('mil: kesit standarda yukarı yuvarlanır, kesim boyu sunucudan, en az talaş önce', () => {
+    const l = modelHamOnerileri(MIL, 142000, HEPSI, gruplar);
     expect(l.map((o) => o.form)).toEqual(['cubuk', 'altigen', 'lama', 'blok']);
     const [cubuk, altigen, lama, blok] = l;
     expect(cubuk).toMatchObject({ dims: { d: 50, l: 3000 }, kesimBoyuMm: 125, standartDisi: false });
@@ -24,52 +30,37 @@ describe('modelden ham önerisi (3243 a)', () => {
     expect(altigen!.dims).toEqual({ s: 50, l: 3000 });
     // 50 × 50 kesit 60 × 50'den küçük; ikisi de sığar, küçüğü seçilir.
     expect(lama!.dims).toEqual({ a: 50, b: 50, l: 6000 });
+    // Blok 5 mm'ye yukarı yuvarlanır.
     expect(blok).toMatchObject({ dims: { a: 125, b: 50, h: 50 }, kesimBoyuMm: null });
   });
 
-  it('virgüllü pay sayıya çevrilmiş gelir; pay büyüyünce çap bir üst standarda çıkar', () => {
-    expect(modelHamOnerileri(MIL, 2.5, 3, ['cubuk'], gruplar)[0]).toMatchObject({ dims: { d: 55 }, kesimBoyuMm: 126 });
+  it('flanş (dönel kısa eksen): çubuk sunucunun çapı ve kalınlık boyunda kesilir; uygun olmayan form önerilmez', () => {
+    const FLANS = [fg('cubuk', { d: 104 }, 17), fg('levha', null), fg('disk', { d: 104, t: 14 })];
+    const l = modelHamOnerileri(FLANS, 67700, HEPSI, gruplar);
+    expect(l.map((o) => o.form)).toEqual(['cubuk']);
+    expect(l[0]).toMatchObject({ dims: { d: 105, l: 3000 }, kesimBoyuMm: 17 });
   });
 
   it('listede sığan yoksa 1 mm yukarı yuvarlanır ve standart dışı işaretlenir', () => {
-    const o = modelHamOnerileri(MIL, 10, 0, ['cubuk'], gruplar)[0];
-    expect(o).toMatchObject({ dims: { d: 66 }, standartDisi: true });
+    expect(modelHamOnerileri([fg('cubuk', { d: 115.2 }, 140)], null, ['cubuk'], gruplar)[0]).toMatchObject({ dims: { d: 116 }, standartDisi: true });
   });
 
-  it('plaka parça: levhadan kesim önerilir (kalınlık standarda, en ve boy kesim ölçüsü)', () => {
-    const l = modelHamOnerileri(PLAKA, 1, 3, HEPSI, gruplar);
-    const levha = l.find((o) => o.form === 'levha');
-    expect(levha).toMatchObject({ dims: { t: 20, w: 1500, l: 3000 }, kesimEnMm: 92, kesimBoyuMm: 165 });
-    expect(l[0]!.form).toBe('levha');
+  it('levha: kalınlık standarda, forma kesim ölçüsü yazılır (plakanın tamamı değil)', () => {
+    const l = modelHamOnerileri([fg('levha', { t: 20 }, 165, 95)], 196000, HEPSI, gruplar);
+    expect(l[0]).toMatchObject({ form: 'levha', dims: { t: 20, w: 95, l: 165 }, kesimEnMm: 95, kesimBoyuMm: 165 });
   });
 
-  it('ailenin izin vermediği form önerilmez; geçersiz pay ya da ölçüde öneri yok', () => {
-    expect(modelHamOnerileri(MIL, 2, 3, ['cubuk', 'boru'], gruplar).map((o) => o.form)).toEqual(['cubuk']);
-    expect(modelHamOnerileri(MIL, -1, 3, HEPSI, gruplar)).toEqual([]);
-    expect(modelHamOnerileri(MIL, Number.NaN, 3, HEPSI, gruplar)).toEqual([]);
-    expect(modelHamOnerileri({ ...MIL, a: 0 }, 2, 3, HEPSI, gruplar)).toEqual([]);
+  it('levhadan kesim plakaya sığmıyorsa ya da kalınlık standart dışıysa levha önerilmez', () => {
+    expect(modelHamOnerileri([fg('levha', { t: 20 }, 3510, 95)], null, HEPSI, gruplar)).toEqual([]);
+    expect(modelHamOnerileri([fg('levha', { t: 30 }, 165, 95)], null, HEPSI, gruplar)).toEqual([]);
+  });
+
+  it('ailenin izin vermediği ve sihirbazda olmayan form önerilmez', () => {
+    expect(modelHamOnerileri(MIL, null, ['cubuk', 'boru'], gruplar).map((o) => o.form)).toEqual(['cubuk']);
+    expect(modelHamOnerileri([fg('boru', { D: 60, t: 5 }, 125)], null, ['boru'], gruplar)).toEqual([]);
   });
 
   it('parça hacmi yoksa talaş bilinmiyor (null), sıfır uydurulmaz', () => {
-    expect(modelHamOnerileri({ ...MIL, hacimMm3: null }, 2, 3, ['cubuk'], gruplar)[0]!.talas).toBeNull();
-  });
-
-  it('kare kesitte çubuk ve altıgen kesiti kapsayan daireye göre seçilir (kenara göre değil)', () => {
-    // 40 × 40 kare kesit: kapsayan daire köşegen, 56,6; kenar 40 olsaydı d40 önerilirdi.
-    const KARE: ModelOlcusu = { a: 100, b: 40, c: 40, cap: 56.6, hacimMm3: 160000 };
-    const l = modelHamOnerileri(KARE, 0, 0, ['cubuk', 'altigen'], gruplar);
-    expect(l.find((o) => o.form === 'cubuk')).toMatchObject({ dims: { d: 57 }, standartDisi: true });
-    expect(l.find((o) => o.form === 'altigen')).toMatchObject({ dims: { s: 57 }, standartDisi: true });
-  });
-
-  it('levhadan kesim plakaya sığmıyorsa levha önerilmez', () => {
-    // Boy 3500 + paylar, plaka 1500 × 3000: sığmaz.
-    const UZUN: ModelOlcusu = { ...PLAKA, a: 3500 };
-    expect(modelHamOnerileri(UZUN, 1, 3, HEPSI, gruplar).map((o) => o.form)).not.toContain('levha');
-    expect(modelHamOnerileri(PLAKA, 1, 3, HEPSI, gruplar).map((o) => o.form)).toContain('levha');
-  });
-
-  it('kesit yuvarlak mı: mil evet, plaka hayır', () => {
-    expect([kesitYuvarlak(MIL), kesitYuvarlak(PLAKA)]).toEqual([true, false]);
+    expect(modelHamOnerileri(MIL, null, ['cubuk'], gruplar)[0]!.talas).toBeNull();
   });
 });

@@ -12,9 +12,28 @@ const MODELLER = {
 };
 // Mil: 118 uzun, kesit Ø46.
 const ANALIZ = { revizyonId: 7, analiz: { obb: { a: 118, b: 46, c: 46, cap: 46, yon: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }, hacimMm3: 142000 } };
+// Sunucunun ham hesabının bu mil için çıktısı (3321-1; hesabın kendisi sunucu testinde): dönel uzun eksen, çap 46 + iki pay,
+// kesim boyu 118 + iki pay + kesme. Sihirbaz yalnız standart ölçüye yuvarlar.
+function hamCevabi(_g: unknown, yol: string) {
+  const q = new URLSearchParams(yol.split('?')[1] ?? '');
+  const pay = Number(q.get('payMm') ?? 0), kesme = Number(q.get('kesmeMm') ?? 3);
+  const D = 46 + 2 * pay, kesim = 118 + 2 * pay + kesme;
+  return json(200, {
+    revizyonId: 7, payMm: pay, payKaynagi: 'istek', kesmeMm: kesme, enAz: { a: 118 + 2 * pay, b: D, c: D }, kaliteler: [], neden: 'stok-listesi-yok',
+    oneriler: [], donel: { kenar: 'a', capMm: 46, boyMm: 118, icCapMm: null },
+    formlar: [
+      { form: 'cubuk', neden: null, olcu: { d: D }, kesimBoyuMm: kesim, kesimEnMm: null, hamHacimMm3: 1, enYakinKart: null },
+      { form: 'altigen', neden: null, olcu: { s: D }, kesimBoyuMm: kesim, kesimEnMm: null, hamHacimMm3: 1, enYakinKart: null },
+      { form: 'lama', neden: null, olcu: { a: D, b: D }, kesimBoyuMm: kesim, kesimEnMm: null, hamHacimMm3: 1, enYakinKart: null },
+      { form: 'levha', neden: 'plaka-degil', olcu: null, kesimBoyuMm: null, kesimEnMm: null, hamHacimMm3: null, enYakinKart: null },
+      { form: 'blok', neden: null, olcu: { a: 118 + 2 * pay, b: D, h: D }, kesimBoyuMm: null, kesimEnMm: null, hamHacimMm3: 1, enYakinKart: null },
+    ],
+  });
+}
 const YOLLAR = {
   'GET /geometri/modeller': () => json(200, MODELLER),
   'GET /geometri/analizler/7': () => json(200, ANALIZ),
+  'GET /geometri/ham-onerisi/7': hamCevabi,
 };
 
 async function formAdiminiAc() {
@@ -37,7 +56,7 @@ describe('3243 a: hammadde kartında 3B modelden öneri', () => {
     await formAdiminiAc();
     const serit = await modelSec();
     fireEvent.change(within(serit).getByRole('textbox', { name: /İşleme payı/ }), { target: { value: '2,5' } });
-    const oneriler = within(serit).getByRole('group', { name: 'Ham önerileri' });
+    const oneriler = await within(serit).findByRole('group', { name: 'Ham önerileri' });
     const cubuk = await within(oneriler).findByRole('button', { name: /Ø55 × 126/ });
     expect(within(cubuk).getByText('en az talaş')).toBeTruthy();
     expect(within(cubuk).getByText('yeni kart')).toBeTruthy();
@@ -49,6 +68,24 @@ describe('3243 a: hammadde kartında 3B modelden öneri', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Teknik özellikler/ }));
     expect(await screen.findByDisplayValue('MM-ORN-00001 Rev B, pay 2,5 mm')).toBeTruthy();
     expect(screen.getByDisplayValue('Kaynak model')).toBeTruthy();
+  });
+
+  test('3321-1: sunucu cevabı gelene kadar "Ham önerisi hesaplanıyor…" görünür, gelince dönel parça rozetiyle öneriler', async () => {
+    let birak: () => void = () => undefined;
+    const bekle = new Promise<void>((r) => { birak = r; });
+    sunucuKur(YAZAN, { ...YOLLAR, 'GET /geometri/ham-onerisi/7': () => json(200, {}) });
+    const fetchAsil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      if (adres.includes('/geometri/ham-onerisi/7')) { await bekle; return hamCevabi(undefined, adres.replace('/api', '')); }
+      return fetchAsil(adres, secenek);
+    }));
+    await formAdiminiAc();
+    const serit = await modelSec();
+    expect(await within(serit).findByText('Ham önerisi hesaplanıyor…')).toBeTruthy();
+    birak();
+    const cubuk = await within(await within(serit).findByRole('group', { name: 'Ham önerileri' })).findByRole('button', { name: /Ø50 × 125/ });
+    expect(within(cubuk).getByText('dönel parça')).toBeTruthy();
+    expect(within(serit).queryByText('Ham önerisi hesaplanıyor…')).toBeNull();
   });
 
   test('aynı ölçüde kart varsa önce o kart önerilir; yine de yazmak ayrıca seçilir', async () => {

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import type {
   GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, GeometriOzellik,
   GeometriOzellikCevabi, HamStokOnerisi,
@@ -14,7 +14,7 @@ import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CALISMALAR, calismaOku, KOK, type CalismaAdi } from './calismalar.ts';
 import {
-  agirlikKg, analizKatilari, hamKatisi, agirlikMetni, bagliMetni, buyukSayi, delikMetni, delikOzeti, desenMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, grupSatirlari, kutuMetni, LD_UYARI, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
+  agirlikKg, analizKatilari, donelMetni, formNedeni, hamKatisi, agirlikMetni, LEVHA_NOTU, talasYuzdesi, bagliMetni, buyukSayi, delikMetni, delikOzeti, desenMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, FORM_NEDENI_ADI, grupSatirlari, kutuMetni, LD_UYARI, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
   uzunluk, yogunlukBicimi, yogunlukOku, type GrupSatiri, type Yon3,
 } from './gorunum.ts';
 import type { Onizleme, ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
@@ -156,6 +156,64 @@ const HAM_NEDEN: Readonly<Record<NonNullable<GeometriHamCevabi['neden']>, string
   'sigan-yok': 'Bu ölçüye sığan hammadde kartı yok.',
 };
 
+// Kartsız formda stok boyu yoktur; ölçü yazımında boy yerine parça başına kesim boyu yazılır.
+const kesimliOlcu = (f: GeometriHamCevabi['formlar'][number]): Record<string, number> =>
+  (f.kesimBoyuMm === null ? { ...f.olcu } : { ...f.olcu, l: f.kesimBoyuMm });
+
+// 3321-1: kartı olmayan ama uygun formlar. Kartlarınızda o formun sığan ölçüsü yoksa en yakın kart ve eksik ölçüsü söylenir;
+// kart açma Malzemeler'dedir (bu ekran kart açmaz).
+function KartiOlmayanFormlar({ v, hacimMm3 }: { v: GeometriHamCevabi; hacimMm3: number | null }) {
+  const satirlar = v.formlar.filter((f) => f.neden === null && f.olcu !== null && !v.oneriler.some((o) => o.form === f.form));
+  if (satirlar.length === 0 || v.enAz === null) return null;
+  return (
+    <ul className="tc-g3b-oneriler" aria-label="Kartınız olmayan formlar">
+      {satirlar.map((f) => {
+        const talas = talasYuzdesi(hacimMm3, f.hamHacimMm3);
+        return (
+          <li key={f.form} className="tc-g3b-oneri-yok">
+            <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[f.form]}</strong> {stokOlcuMetni({ form: f.form, olcu: kesimliOlcu(f) })} · kartınız yok</span>
+            <span className="tc-g3b-soluk">
+              {f.enYakinKart === null ? `Bu formda kartınız yok${talas === null ? '' : `; talaş %${String(talas)}`}.`
+                : `En yakın kartınız ${f.enYakinKart.kod} (${stokOlcuMetni({ form: f.form, olcu: f.enYakinKart.olcu })}); ${f.enYakinKart.eksik.join(', ')} ölçüsü yetmiyor.`}
+            </span>
+          </li>
+        );
+      })}
+      <li><Link className="tc-g3b-bag" to="/malzemeler/yeni"><Simge ad="plus" />Malzemeler'de kart aç</Link></li>
+    </ul>
+  );
+}
+
+// 3321-1: "Neden bu sıra": listeyle aynı sıra; önce kartlarınız (ham hacmi az olan önce), sonra kartınız olmayan uygun form, en
+// sonda uygun olmayan form nedeniyle. Ağırlık yoğunluk bilinirse yazılır.
+function SiraTablosu({ v, yogunluk }: { v: GeometriHamCevabi; yogunluk: (o: HamStokOnerisi | null) => number | null }) {
+  const kartli = new Set(v.oneriler.map((o) => o.form));
+  const kesme = (kesimli: boolean): string => (kesimli ? `${uzunluk(v.kesmeMm)} mm` : 'yok');
+  const kg = (h: number | null, ro: number | null): string => (h === null || ro === null ? '-' : agirlikMetni(agirlikKg(h, ro)!));
+  const satirlar = [
+    ...v.oneriler.map((o, i) => ({ form: o.form, olcu: stokOlcuMetni(o), agirlik: kg(o.hamHacimMm3, yogunluk(o)), kesme: kesme(o.kesimBoyuMm !== null), sira: String(i + 1) })),
+    ...v.formlar.filter((f) => f.neden === null && f.olcu !== null && !kartli.has(f.form)).map((f) => ({
+      form: f.form, olcu: stokOlcuMetni({ form: f.form, olcu: kesimliOlcu(f) }), agirlik: kg(f.hamHacimMm3, yogunluk(null)), kesme: kesme(f.kesimBoyuMm !== null), sira: 'kartınız yok',
+    })),
+    ...v.formlar.filter((f) => f.neden !== null).map((f) => ({ form: f.form, olcu: '-', agirlik: '-', kesme: '-', sira: FORM_NEDENI_ADI[f.neden!] })),
+  ];
+  return (
+    <section aria-label="Neden bu sıra">
+      <p className="tc-g3b-su-etiket"><Simge ad="list" /> Neden bu sıra</p>
+      <p className="tc-g3b-soluk tc-g3b-sira-kesme">Kesme payı {uzunluk(v.kesmeMm)} mm (kesilen formlarda; disk ve blokta yok)</p>
+      <table className="tc-g3b-su-tablo tc-g3b-sira">
+        <thead><tr><th scope="col">Form</th><th scope="col">Ölçü</th><th scope="col">Ham ağırlık</th><th scope="col">Kesme payı</th><th scope="col">Sıra</th></tr></thead>
+        <tbody>
+          {satirlar.map((r) => (
+            <tr key={r.form}><td>{FORM_ADI[r.form]}</td><td>{r.olcu}</td><td>{r.agirlik}</td><td>{r.kesme}</td><td>{r.sira}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="tc-g3b-soluk">Sıra: önce kartlarınız; aralarında ham ağırlığı ve kesme payı az olan önce. Kartınız olmayan form sonda, nedeniyle. Aynı hesabı Malzemeler sihirbazı ve CNC Kurulum da kullanır.</p>
+    </section>
+  );
+}
+
 // Stok listesi aktif hammadde kartlarıdır (1469 a). Pay boşsa sistem ayarı geçerlidir; ekran hangisinin kullanıldığını söyler.
 function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
   revizyonId: number; analizVar: boolean; hacimMm3: number | null; onizlemeYaz: (o: HamStokOnerisi | null) => void;
@@ -166,14 +224,19 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
   const [yogunlukMetni, yogunlukYaz] = useState('');
   const yazilan = yogunlukOku(yogunlukMetni);
   const [kalite, kaliteYaz] = useState('');
+  const [kesme, kesmeYaz] = useState('');
   const payMm = pay.trim() === '' ? null : Number(pay.replace(',', '.'));
-  // Üst sınırı sunucu denetler (sözleşme PAY_EN_COK_MM); aşan pay sunucunun iletisiyle döner.
-  const gecerli = payMm === null || (Number.isFinite(payMm) && payMm >= 0);
+  const kesmeMm = kesme.trim() === '' ? null : Number(kesme.replace(',', '.'));
+  // Üst sınırı sunucu denetler (sözleşme PAY_EN_COK_MM, KESME_EN_COK_MM); aşan değer sunucunun iletisiyle döner.
+  const payGecerli = payMm === null || (Number.isFinite(payMm) && payMm >= 0);
+  const kesmeGecerli = kesmeMm === null || (Number.isFinite(kesmeMm) && kesmeMm >= 0);
+  const gecerli = payGecerli && kesmeGecerli;
   const sorgu = useQuery({
-    queryKey: anahtarlar.ham(revizyonId, payMm ?? -1, kalite),
+    queryKey: anahtarlar.ham(revizyonId, payMm ?? -1, kalite, kesmeMm ?? -1),
     queryFn: () => {
       const q = new URLSearchParams();
       if (payMm !== null) q.set('payMm', String(payMm));
+      if (kesmeMm !== null) q.set('kesmeMm', String(kesmeMm));
       if (kalite !== '') q.set('kalite', kalite);
       const ek = q.toString();
       return api.get<GeometriHamCevabi>(`/geometri/ham-onerisi/${String(revizyonId)}${ek === '' ? '' : `?${ek}`}`);
@@ -200,7 +263,10 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
   return (
     <Kart baslik="Ham önerisi" simge="box">
       <Girdi etiket="İşleme payı (her yüz, mm)" inputMode="decimal" value={pay} onChange={(o) => payYaz(o.target.value)}
-        ipucu={payIpucu} hata={!gecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+        ipucu={payIpucu} hata={!payGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
+      <Girdi etiket="Kesme payı (testere, mm)" inputMode="decimal" value={kesme} onChange={(o) => kesmeYaz(o.target.value)}
+        ipucu={kesme.trim() === '' && v !== undefined ? `Boş bırakılırsa ${uzunluk(v.kesmeMm)} mm; disk ve blokta yok.` : undefined}
+        hata={!kesmeGecerli ? 'Sıfır ya da pozitif bir sayı yazın.' : undefined} />
       <Girdi etiket="Yoğunluk (g/cm³)" inputMode="decimal" value={yogunlukMetni} onChange={(o) => yogunlukYaz(o.target.value)}
         placeholder={yazilan === null && onDeger !== null ? yogunlukBicimi(onDeger.ro!) : undefined}
         ipucu={yogunlukMetni.trim() === '' && onDeger !== null
@@ -223,22 +289,45 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
                       <div><dt>Net ağırlık</dt><dd>{hacimMm3 === null ? 'Hacim yok, hesaplanamadı' : `≈ ${agirlikMetni(agirlikKg(hacimMm3, yogunluk)!)}`}</dd></div>
                     )}
                   </dl>
-                  {sorgu.data.neden !== null ? <p className="tc-g3b-soluk">{HAM_NEDEN[sorgu.data.neden]}</p> : (
-                    <ul className="tc-g3b-oneriler" aria-label="Stok önerileri">
-                      {sorgu.data.oneriler.map((o) => (
-                        <li key={o.form}>
-                          <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}
-                            <Dugme simge="eye" className="tc-g3b-oneri-onizle" aria-pressed={gosterilen?.form === o.form} onClick={() => onizlenenYaz(o.form)}>Önizle</Dugme>
-                          </span>
-                          <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
-                          {o.kesimBoyuMm !== null && <span>Kesim boyu {uzunluk(o.kesimBoyuMm)} mm</span>}
-                          {onerininYogunlugu(o) !== null && <span>Ham ağırlık ≈ {agirlikMetni(agirlikKg(o.hamHacimMm3, onerininYogunlugu(o))!)}</span>}
-                        </li>
-                      ))}
-                    </ul>
+                  {sorgu.data.donel !== null && (
+                    <p className="tc-g3b-donel"><Simge ad="target" /> <span><strong>Dönel parça</strong> · {donelMetni(sorgu.data.donel)}</span>
+                      <span className="tc-g3b-soluk">silindir yüzlerinden bulundu</span></p>
                   )}
+                  {sorgu.data.neden !== null ? <p className="tc-g3b-soluk">{HAM_NEDEN[sorgu.data.neden]}</p> : (
+                    <>
+                      <p className="tc-g3b-soluk">Kartlarınızdan (aktif hammadde, ölçüsü dolu)</p>
+                      <ul className="tc-g3b-oneriler" aria-label="Stok önerileri">
+                        {sorgu.data.oneriler.map((o, i) => {
+                          const neden = formNedeni(o.form, sorgu.data.donel !== null);
+                          const talas = talasYuzdesi(hacimMm3, o.hamHacimMm3);
+                          return (
+                            <li key={o.form}>
+                              <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}
+                                <Dugme simge="eye" className="tc-g3b-oneri-onizle" aria-pressed={gosterilen?.form === o.form} onClick={() => onizlenenYaz(o.form)}>Önizle</Dugme>
+                              </span>
+                              <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
+                              {(i === 0 || neden !== null) && (
+                                <span className="tc-g3b-oneri-ust">
+                                  {i === 0 && <Rozet ton="tamam">kartlarınızda en az talaş</Rozet>}
+                                  {neden !== null && <Rozet ton="bilgi">{neden}</Rozet>}
+                                </span>
+                              )}
+                              {o.kesimBoyuMm !== null && <span>Kesim {o.kesimEnMm === null ? 'boyu' : `${uzunluk(o.kesimEnMm)} x`} {uzunluk(o.kesimBoyuMm)} mm</span>}
+                              {onerininYogunlugu(o) !== null && <span>Ham ağırlık ≈ {agirlikMetni(agirlikKg(o.hamHacimMm3, onerininYogunlugu(o))!)}</span>}
+                              {talas !== null && <span className="tc-g3b-soluk">Talaş %{talas}</span>}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+                  <KartiOlmayanFormlar v={sorgu.data} hacimMm3={hacimMm3} />
+                  {sorgu.data.formlar.some((f) => f.form === 'levha' && f.neden === 'plaka-degil') && (
+                    <p className="tc-g3b-soluk">{LEVHA_NOTU[sorgu.data.donel === null ? 'kalin' : 'donel']}</p>
+                  )}
+                  {sorgu.data.enAz !== null && <SiraTablosu v={sorgu.data} yogunluk={(o) => yazilan ?? (o === null ? yogunluk : kaliteYogunlugu(o))} />}
                   {sorgu.data.neden === null && (
-                    <p className="tc-g3b-soluk">Önizleme yaklaşıktır: pay her yüzde eşit varsayılır; bağlama, testere ve alın payı çizilmez, kesim planı değildir.</p>
+                    <p className="tc-g3b-soluk">Önizleme yaklaşıktır: pay her yüzde eşit varsayılır; bağlama ve alın payı çizilmez, kesim planı değildir.</p>
                   )}
                 </>
               )}

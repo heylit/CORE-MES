@@ -325,10 +325,141 @@ export function enAzHam(obb: { a: number; b: number; c: number }, payMm: number)
 }
 
 // Stok ölçüsüne yuvarlama (1433 a): ölçü adları Malzemeler'in hammadde formlarındakiyle aynıdır (çubuk d,l; altıgen s,l; lama a,b,l;
-// levha t,w,l; blok a,b,h). Boru, profil ve disk parçanın yönüyle eşlenemediği için önerilmez.
+// levha t,w,l; blok a,b,h; boru D,t,l; disk d,t). Kutu profil, köşebent, tel ve rulo parçanın yönüyle eşlenemediği için önerilmez.
+// 3321-1: Malzemeler sihirbazının "3B modelden öner"i de bu hesabı kullanır (tek hesap); sihirbaz yalnız standart ölçüye yuvarlar.
 export const STOK_FORMLARI = HAM_STOK_FORMLARI;
 export type StokFormu = (typeof HAM_STOK_FORMLARI)[number];
-const FORM_OLCULERI: Record<StokFormu, readonly string[]> = { cubuk: ['d', 'l'], altigen: ['s', 'l'], lama: ['a', 'b', 'l'], levha: ['t', 'w', 'l'], blok: ['a', 'b', 'h'] };
+const FORM_OLCULERI: Record<StokFormu, readonly string[]> = {
+  cubuk: ['d', 'l'], altigen: ['s', 'l'], lama: ['a', 'b', 'l'], levha: ['t', 'w', 'l'], blok: ['a', 'b', 'h'], boru: ['D', 't', 'l'], disk: ['d', 't'],
+};
+
+// ---- Dönme ekseni (3321-1) ----
+// Çap bugüne dek yalnız uzun eksen çevresinde ölçülüyordu; flanş, burç ve diskte dönme ekseni kısa kenardır ve çubuk yanlış yönde
+// (Ø110 x 107 gibi) önerilirdi. Dönme ekseni B-rep yüzlerinden bulunur: dışbükey silindirlerin (ters değil: normal eksenden dışa)
+// alanca baskın ekseni döndürülmüş kutunun bir kenarına DONEL_ACI_DERECE içinde hizalıysa ve en büyük dışbükey silindir öbür iki kenarı
+// kapsıyorsa (DONEL_KAPSAMA) parça o eksende döner. Eşikler VARSAYIM (3321 kartı; geri alma ucuz). Yüz özeti yoksa null: eski kural.
+export const DONEL_ACI_DERECE = 5;
+export const DONEL_ALAN_PAYI = 0.3;
+export const DONEL_KAPSAMA = 0.97;
+// Eş eksenli iç silindirlerin boyları toplamı parça boyunun bu oranını geçerse delik boydan boyadır (boru için).
+export const DONEL_DELIK_BOY_ORANI = 0.9;
+const EKSEN_UZAKLIGI_MM = 0.5;
+
+export type KutuKenari = 'a' | 'b' | 'c';
+const KENARLAR: readonly KutuKenari[] = ['a', 'b', 'c'];
+export interface DonelYuz {
+  tur: YuzTuru; ters: boolean; alanMm2: number; yaricapMm: number | null;
+  eksen: readonly number[] | null; konum: readonly number[] | null;
+}
+// capMm: dönme ekseni çevresinde parçayı kapsayan çap; boyMm: eksen boyunca parça boyu; icCapMm: boydan boya eş eksenli deliğin en dar
+// çapı (yoksa null).
+export interface DonelEksen { kenar: KutuKenari; capMm: number; boyMm: number; icCapMm: number | null }
+
+const v3 = (x: readonly number[]): V3 => [x[0] ?? 0, x[1] ?? 0, x[2] ?? 0];
+function eksenUzakligi(p1: V3, p2: V3, d: V3): number {
+  const f = cikar(p1, p2), t = ic(f, d);
+  return Math.hypot(f[0] - t * d[0], f[1] - t * d[1], f[2] - t * d[2]);
+}
+
+export function donelEksen(
+  obb: { a: number; b: number; c: number; yon: readonly (readonly number[])[] }, yuzler: readonly DonelYuz[],
+): DonelEksen | null {
+  const sil = yuzler.filter((y) => y.tur === 'silindir' && y.yaricapMm !== null && y.yaricapMm > 0 && y.eksen !== null && Math.hypot(...v3(y.eksen)) > 0);
+  const dis = sil.filter((y) => !y.ters);
+  const toplam = dis.reduce((s, y) => s + y.alanMm2, 0);
+  if (toplam <= 0) return null;
+  const esik = Math.cos((DONEL_ACI_DERECE * Math.PI) / 180);
+  const kenar = { a: obb.a, b: obb.b, c: obb.c };
+  let en: { k: KutuKenari; alan: number; dir: V3; enBuyuk: DonelYuz } | null = null;
+  KENARLAR.forEach((k, i) => {
+    const dir = birim(v3(obb.yon[i] ?? [0, 0, 0]));
+    const hizali = (y: DonelYuz) => Math.abs(ic(birim(v3(y.eksen!)), dir)) >= esik;
+    const uyan = dis.filter(hizali);
+    const alan = uyan.reduce((s, y) => s + y.alanMm2, 0);
+    if (uyan.length === 0 || alan < DONEL_ALAN_PAYI * toplam) return;
+    const enBuyuk = uyan.reduce((x, y) => (y.yaricapMm! > x.yaricapMm! ? y : x));
+    const obur = KENARLAR.filter((x) => x !== k).map((x) => kenar[x]);
+    if (2 * enBuyuk.yaricapMm! < DONEL_KAPSAMA * Math.max(...obur)) return;
+    if (en === null || alan > en.alan) en = { k, alan, dir, enBuyuk };
+  });
+  if (en === null) return null;
+  const s: { k: KutuKenari; dir: V3; enBuyuk: DonelYuz } = en;
+  const boy = kenar[s.k];
+  const obur = KENARLAR.filter((x) => x !== s.k).map((x) => kenar[x]);
+  const merkez = s.enBuyuk.konum === null ? null : v3(s.enBuyuk.konum);
+  // İç delik: eş eksenli (aynı doğrultu, eksen çizgileri EKSEN_UZAKLIGI_MM içinde) içbükey silindirler; boyları toplamı boydan boya mı.
+  const icler = merkez === null ? [] : sil.filter((y) => y.ters && y.konum !== null
+    && Math.abs(ic(birim(v3(y.eksen!)), s.dir)) >= esik && eksenUzakligi(v3(y.konum), merkez, s.dir) <= EKSEN_UZAKLIGI_MM);
+  const icBoy = icler.reduce((t, y) => t + y.alanMm2 / (2 * Math.PI * y.yaricapMm!), 0);
+  const icCap = icler.length > 0 && icBoy >= DONEL_DELIK_BOY_ORANI * boy ? 2 * Math.min(...icler.map((y) => y.yaricapMm!)) : null;
+  return { kenar: s.k, capMm: yuvarla(Math.max(2 * s.enBuyuk.yaricapMm!, ...obur)), boyMm: yuvarla(boy), icCapMm: icCap === null ? null : yuvarla(icCap) };
+}
+
+// ---- Form başına gerek (3321-1) ----
+// Ham ölçüleri (pay eklenmiş): L, B, C döndürülmüş kutu kenarları; D dönme ekseni çevresindeki çap; boy eksen boyunca uzunluk (dönel
+// değilse uzun kenar ve çap uzun eksen çevresindedir: eski kural). Kesilen formlarda kesim boyu boy + kesme payıdır.
+export interface HamGeregi {
+  payMm: number; kesmeMm: number; donel: DonelEksen | null;
+  L: number; B: number; C: number; D: number; boy: number; icCap: number | null;
+  // Levhaya uygun ince parça mı: dönel değil, kalınlık kısa kenarın LEVHA_KALINLIK_ORANI'ndan ve LEVHA_EN_KALIN_MM'den az. Dönel parça
+  // tornada çubuk ya da diskten çıkar; plakadan kesmek önerilmez (kullanıcı 16.11: "plaka öneriyor gereksiz").
+  levhaUygun: boolean;
+}
+export const LEVHA_KALINLIK_ORANI = 1 / 3;
+export const LEVHA_EN_KALIN_MM = 30;
+export const LEVHA_KESIM_ADIMI_MM = 5;
+export const HAM_KESME_VARSAYILAN_MM = 3;
+
+export function hamGeregi(obb: { a: number; b: number; c: number; cap: number }, payMm: number, kesmeMm: number, donel: DonelEksen | null): HamGeregi {
+  const p = 2 * payMm;
+  return {
+    payMm, kesmeMm, donel,
+    L: obb.a + p, B: obb.b + p, C: obb.c + p,
+    D: (donel?.capMm ?? obb.cap) + p, boy: (donel?.boyMm ?? obb.a) + p,
+    icCap: donel?.icCapMm == null || donel.icCapMm - p <= 0 ? null : donel.icCapMm - p,
+    levhaUygun: donel === null && obb.c <= obb.b * LEVHA_KALINLIK_ORANI + AYNI && obb.c <= LEVHA_EN_KALIN_MM + AYNI,
+  };
+}
+
+const DONEL_FORMLAR: ReadonlySet<StokFormu> = new Set(['cubuk', 'altigen', 'boru', 'disk']);
+const yukari5 = (x: number): number => Math.ceil(x / LEVHA_KESIM_ADIMI_MM - AYNI) * LEVHA_KESIM_ADIMI_MM;
+const daire = (d: number): number => (Math.PI * d ** 2) / 4;
+const altigenAlani = (s: number): number => (Math.sqrt(3) / 2) * s ** 2;
+
+export type FormNedeni = 'donel-degil' | 'delik-yok' | 'plaka-degil';
+// Formun en az ölçüsü (kart yokken ne gerektiği); uygun değilse olcu null ve neden dolu.
+export interface FormGeregi {
+  form: StokFormu; neden: FormNedeni | null; olcu: Record<string, number> | null;
+  kesimBoyuMm: number | null; kesimEnMm: number | null; hamHacimMm3: number | null;
+}
+
+function formUygunlugu(g: HamGeregi, form: StokFormu): FormNedeni | null {
+  if (form === 'levha') return g.levhaUygun ? null : 'plaka-degil';
+  if (form === 'disk') return g.donel !== null && g.boy <= g.D + AYNI ? null : 'donel-degil';
+  if (form === 'boru') return g.donel === null ? 'donel-degil' : g.icCap === null ? 'delik-yok' : null;
+  return null;
+}
+
+export function formGerekleri(g: HamGeregi): FormGeregi[] {
+  const kesim = g.boy + g.kesmeMm;
+  const levhaEn = yukari5(g.B + g.kesmeMm), levhaBoy = yukari5(g.L + g.kesmeMm);
+  return STOK_FORMLARI.map((form): FormGeregi => {
+    const neden = formUygunlugu(g, form);
+    if (neden !== null) return { form, neden, olcu: null, kesimBoyuMm: null, kesimEnMm: null, hamHacimMm3: null };
+    const t = (olcu: Record<string, number>, kb: number | null, ke: number | null, h: number): FormGeregi => ({
+      form, neden: null, olcu: Object.fromEntries(Object.entries(olcu).map(([k, v]) => [k, yuvarla(v)])),
+      kesimBoyuMm: kb === null ? null : yuvarla(kb), kesimEnMm: ke === null ? null : yuvarla(ke), hamHacimMm3: yuvarla(h),
+    });
+    if (form === 'cubuk') return t({ d: g.D }, kesim, null, daire(g.D) * kesim);
+    if (form === 'altigen') return t({ s: g.D }, kesim, null, altigenAlani(g.D) * kesim);
+    if (form === 'lama') return t({ a: g.B, b: g.C }, g.L + g.kesmeMm, null, g.B * g.C * (g.L + g.kesmeMm));
+    if (form === 'levha') return t({ t: g.C }, levhaBoy, levhaEn, g.C * levhaEn * levhaBoy);
+    if (form === 'blok') return t({ a: g.L, b: g.B, h: g.C }, null, null, g.L * g.B * g.C);
+    if (form === 'disk') return t({ d: g.D, t: g.boy }, null, null, daire(g.D) * g.boy);
+    const et = (g.D - g.icCap!) / 2;
+    return t({ D: g.D, t: et }, kesim, null, (daire(g.D) - daire(g.icCap!)) * kesim);
+  });
+}
 
 export interface StokAdayi {
   malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: string; olcu: Readonly<Record<string, unknown>>;
@@ -338,10 +469,14 @@ export interface StokOnerisi {
   malzemeNo: number; kod: string; ad: string | null; kalite: string | null; form: StokFormu; olcu: Record<string, number>;
   // 1480: kalite yoğunluğu (g/cm³) sunucunun bildiği yerden; null ise ekran aile ve kalite koduyla Malzemeler tablosundan bulur.
   aile: string | null; kaliteKodu: string | null; yogunluk: number | null;
-  // Çubuk, altıgen, lama ve levhada kesilecek parça boyu (uzun eksen + pay); blokta null (blok bütün kullanılır).
+  // Çubuk, altıgen, lama, boru ve levhada kesilecek parça boyu (boy + kesme payı); blok ve diskte null (bütün kullanılır).
   kesimBoyuMm: number | null;
+  // Yalnız levhada: plakadan kesilen parçanın eni.
+  kesimEnMm: number | null;
   // Kullanılan ham parçanın hacmi; formlar arası sıra bununla (en az talaş önce).
   hamHacimMm3: number;
+  // Hamın boy ekseni (döndürülmüş kutu kenarı): dönel formlarda dönme ekseni, öbürlerinde uzun kenar.
+  eksen: KutuKenari;
 }
 
 const AYNI = 1e-9;
@@ -357,45 +492,83 @@ function olcuOku(form: StokFormu, ham: Readonly<Record<string, unknown>>): Recor
   return o;
 }
 
-// Ölçüsü eksik ya da sıfır olan aday önerilmez (uydurulmaz). Sığmayan aday yoksa boş liste.
-export function stokEslestir(
-  obb: { a: number; b: number; c: number; cap: number }, payMm: number, adaylar: readonly StokAdayi[],
-): StokOnerisi[] {
-  const L = obb.a + 2 * payMm, B = obb.b + 2 * payMm, C = obb.c + 2 * payMm, D = obb.cap + 2 * payMm;
+// Kartın formda kullanılan ham hacmi ve kesimi; sığmıyorsa null.
+function kartaSigar(g: HamGeregi, form: StokFormu, o: Record<string, number>): { hacim: number; kesim: number | null; en: number | null } | null {
+  const kesim = g.boy + g.kesmeMm;
+  if (form === 'cubuk') return sigar(o['d']!, g.D) && sigar(o['l']!, kesim) ? { hacim: daire(o['d']!) * kesim, kesim, en: null } : null;
+  // Altıgenin iç teğet dairesi anahtar ağzıdır: kapsayan daire buna sığmalı.
+  if (form === 'altigen') return sigar(o['s']!, g.D) && sigar(o['l']!, kesim) ? { hacim: altigenAlani(o['s']!) * kesim, kesim, en: null } : null;
+  if (form === 'lama') {
+    const gen = Math.max(o['a']!, o['b']!), kal = Math.min(o['a']!, o['b']!), k = g.L + g.kesmeMm;
+    return sigar(gen, g.B) && sigar(kal, g.C) && sigar(o['l']!, k) ? { hacim: gen * kal * k, kesim: k, en: null } : null;
+  }
+  if (form === 'levha') {
+    const en = yukari5(g.B + g.kesmeMm), boy = yukari5(g.L + g.kesmeMm);
+    const u = Math.max(o['w']!, o['l']!), e = Math.min(o['w']!, o['l']!);
+    return sigar(o['t']!, g.C) && sigar(u, boy) && sigar(e, en) ? { hacim: o['t']! * en * boy, kesim: boy, en } : null;
+  }
+  if (form === 'blok') {
+    const s = [o['a']!, o['b']!, o['h']!].sort((x, y) => y - x);
+    return sigar(s[0]!, g.L) && sigar(s[1]!, g.B) && sigar(s[2]!, g.C) ? { hacim: s[0]! * s[1]! * s[2]!, kesim: null, en: null } : null;
+  }
+  if (form === 'disk') return sigar(o['d']!, g.D) && sigar(o['t']!, g.boy) ? { hacim: daire(o['d']!) * o['t']!, kesim: null, en: null } : null;
+  const icCap = o['D']! - 2 * o['t']!;
+  return g.icCap !== null && icCap > 0 && sigar(o['D']!, g.D) && sigar(g.icCap, icCap) && sigar(o['l']!, kesim)
+    ? { hacim: (daire(o['D']!) - daire(icCap)) * kesim, kesim, en: null } : null;
+}
+
+// Ölçüsü eksik ya da sıfır olan aday önerilmez (uydurulmaz). Forma uygun olmayan parçada (levha kalın parçada, disk ve boru dönel
+// olmayanda) o formun kartı önerilmez. Her formda sığan en küçük kart; sığmayan aday yoksa boş liste.
+export function stokEslestir(g: HamGeregi, adaylar: readonly StokAdayi[]): StokOnerisi[] {
   const enIyi = new Map<StokFormu, StokOnerisi>();
   for (const aday of adaylar) {
     if (!(STOK_FORMLARI as readonly string[]).includes(aday.form)) continue;
     const form = aday.form as StokFormu;
+    if (formUygunlugu(g, form) !== null) continue;
     const o = olcuOku(form, aday.olcu);
     if (o === null) continue;
-    let hacim: number | null = null;
-    let kesim: number | null = L;
-    if (form === 'cubuk') {
-      if (sigar(o['d']!, D) && sigar(o['l']!, L)) hacim = (Math.PI * o['d']! ** 2 / 4) * L;
-    } else if (form === 'altigen') {
-      // Altıgenin iç teğet dairesi anahtar ağzıdır: kapsayan daire buna sığmalı.
-      if (sigar(o['s']!, D) && sigar(o['l']!, L)) hacim = (Math.sqrt(3) / 2) * o['s']! ** 2 * L;
-    } else if (form === 'lama') {
-      const g = Math.max(o['a']!, o['b']!), k = Math.min(o['a']!, o['b']!);
-      if (sigar(g, B) && sigar(k, C) && sigar(o['l']!, L)) hacim = g * k * L;
-    } else if (form === 'levha') {
-      const u = Math.max(o['w']!, o['l']!), e = Math.min(o['w']!, o['l']!);
-      if (sigar(o['t']!, C) && sigar(u, L) && sigar(e, B)) hacim = o['t']! * L * B;
-    } else {
-      const s = [o['a']!, o['b']!, o['h']!].sort((x, y) => y - x);
-      kesim = null;
-      if (sigar(s[0]!, L) && sigar(s[1]!, B) && sigar(s[2]!, C)) hacim = s[0]! * s[1]! * s[2]!;
-    }
-    if (hacim === null) continue;
+    const s = kartaSigar(g, form, o);
+    if (s === null) continue;
     const onceki = enIyi.get(form);
-    if (onceki !== undefined && onceki.hamHacimMm3 <= hacim) continue;
+    if (onceki !== undefined && onceki.hamHacimMm3 <= s.hacim) continue;
     enIyi.set(form, {
       malzemeNo: aday.malzemeNo, kod: aday.kod, ad: aday.ad, kalite: aday.kalite, form, olcu: o,
       aile: aday.aile ?? null, kaliteKodu: aday.kaliteKodu ?? null, yogunluk: aday.yogunluk ?? null,
-      kesimBoyuMm: kesim === null ? null : yuvarla(kesim), hamHacimMm3: yuvarla(hacim),
+      kesimBoyuMm: s.kesim === null ? null : yuvarla(s.kesim), kesimEnMm: s.en === null ? null : yuvarla(s.en), hamHacimMm3: yuvarla(s.hacim),
+      eksen: DONEL_FORMLAR.has(form) ? g.donel?.kenar ?? 'a' : 'a',
     });
   }
   return [...enIyi.values()].sort((x, y) => x.hamHacimMm3 - y.hamHacimMm3);
+}
+
+// Sığan kart olmayan formda en yakın kart: kart ölçüsünün gerekene oranının en küçüğü en büyük olan (en az eksik). eksik, yetmeyen
+// ölçü adlarıdır. Uygun olmayan formda ya da kartı hiç olmayan formda null.
+export interface EnYakinKart { malzemeNo: number; kod: string; olcu: Record<string, number>; eksik: string[] }
+export function enYakinKart(g: HamGeregi, gerek: FormGeregi, adaylar: readonly StokAdayi[]): EnYakinKart | null {
+  if (gerek.olcu === null) return null;
+  const istenen: Record<string, number> = { ...gerek.olcu };
+  if (gerek.kesimBoyuMm !== null) istenen['l'] = gerek.kesimBoyuMm;
+  if (gerek.form === 'levha') { istenen['w'] = gerek.kesimEnMm ?? 0; istenen['l'] = gerek.kesimBoyuMm ?? 0; }
+  let en: { k: EnYakinKart; oran: number } | null = null;
+  for (const aday of adaylar) {
+    if (aday.form !== gerek.form) continue;
+    const o = olcuOku(gerek.form, aday.olcu);
+    if (o === null) continue;
+    const eksik: string[] = [];
+    let oran = Infinity;
+    for (const [k, v] of Object.entries(istenen)) {
+      const var_ = o[k];
+      if (var_ === undefined || v <= 0) continue;
+      // Boruda et kalınlığı fazlası iç çapı daraltır: oran yalnız dış çap ve boya bakar, iç çap kartaSigar'da denetlenir.
+      if (gerek.form === 'boru' && k === 't') continue;
+      const r = var_ / v;
+      if (r + AYNI < 1) eksik.push(k);
+      oran = Math.min(oran, r);
+    }
+    if (eksik.length === 0) continue;
+    if (en === null || oran > en.oran) en = { k: { malzemeNo: aday.malzemeNo, kod: aday.kod, olcu: o, eksik }, oran };
+  }
+  return en?.k ?? null;
 }
 
 // ---- Özellik tanıma (kart 2044; 1923 b) ----

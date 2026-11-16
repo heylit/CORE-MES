@@ -54,10 +54,10 @@ const ANALIZ: GeometriAnalizCevabi = {
   },
 };
 const HAM: GeometriHamCevabi = {
-  revizyonId: 41, payMm: 2, payKaynagi: 'ayar', enAz: { a: 84, b: 64, c: 29 }, kaliteler: ['S235'], neden: null,
+  revizyonId: 41, payMm: 2, payKaynagi: 'ayar', enAz: { a: 84, b: 64, c: 29 }, kaliteler: ['S235'], neden: null, kesmeMm: 3, donel: null, formlar: [],
   oneriler: [{
     malzemeNo: 90, kod: 'ORN-LAMA-90x30', ad: 'Örnek lama', kalite: 'S235', form: 'lama', olcu: { a: 90, b: 30, l: 6000 }, aile: null, kaliteKodu: null,
-    yogunluk: null, kesimBoyuMm: 70, hamHacimMm3: 189000,
+    yogunluk: null, kesimBoyuMm: 70, hamHacimMm3: 189000, kesimEnMm: null, eksen: 'a' as const,
   }],
 };
 const SURE: GeometriSureCevabi = {
@@ -133,7 +133,7 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
 
   it('rota bağlı değilse rota bölümü yok; kutu hamında önizleme yok, en az ham yazılır', async () => {
     sunucuKur(temel(() => json(200, {
-      ...SURE, hamKaynagi: 'kutu', hamKodu: null, hamHacimMm3: 155904, talasMm3: 73504, ozellikOkundu: false, kalemler: SURE.kalemler.slice(0, 2),
+      ...SURE, hamKaynagi: 'kutu', hamKodu: null, hamHacimMm3: 155904, kesimEnMm: null, eksen: 'a' as const, talasMm3: 73504, ozellikOkundu: false, kalemler: SURE.kalemler.slice(0, 2),
       rota: { durum: 'rota-bagli-degil', adimlar: [], islemToplamDk: null, olcumToplamDk: null, eksik: false },
     })));
     ac();

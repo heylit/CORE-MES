@@ -1,5 +1,5 @@
 import type {
-  GeometriDesen, GeometriDurumu, GeometriIsoGrubu, GeometriMontajDugumu, GeometriOzellik, GeometriOzellikGrubu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
+  GeometriDesen, GeometriDurumu, GeometriIsoGrubu, GeometriMontajDugumu, GeometriOzellik, GeometriOzellikGrubu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, GeometriHamCevabi, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
@@ -22,10 +22,10 @@ export const buyukSayi = (x: number | null, birim: string): string => (x === nul
 
 // Hammadde formlarının adı Malzemeler'deki gibi.
 export const FORM_ADI: Readonly<Record<HamStokOnerisi['form'], string>> = {
-  cubuk: 'Yuvarlak çubuk', altigen: 'Altıgen çubuk', lama: 'Lama / kare', levha: 'Levha / sac', blok: 'Blok',
+  cubuk: 'Yuvarlak çubuk', altigen: 'Altıgen çubuk', lama: 'Lama / kare', levha: 'Levha / sac', blok: 'Blok', boru: 'Boru', disk: 'Disk',
 };
 // Kartın ölçüsü, formun alışılmış yazımıyla (çubukta çap, altıgende anahtar ağzı önde).
-export function stokOlcuMetni(o: HamStokOnerisi): string {
+export function stokOlcuMetni(o: Pick<HamStokOnerisi, 'form' | 'olcu'>): string {
   const d = (k: string): string => uzunluk(o.olcu[k] ?? 0);
   switch (o.form) {
     case 'cubuk': return `Ø ${d('d')} x ${d('l')} mm`;
@@ -33,8 +33,36 @@ export function stokOlcuMetni(o: HamStokOnerisi): string {
     case 'lama': return `${d('a')} x ${d('b')} x ${d('l')} mm`;
     case 'levha': return `${d('t')} x ${d('w')} x ${d('l')} mm`;
     case 'blok': return `${d('a')} x ${d('b')} x ${d('h')} mm`;
+    case 'boru': return `Ø ${d('D')} x ${d('t')} et x ${d('l')} mm`;
+    case 'disk': return `Ø ${d('d')} x ${d('t')} mm`;
   }
 }
+
+// 3321-1: ham kartının neden satırları. Dönel parçada dönme ekseninin hangi kenar olduğu söylenir (flanşta kısa kenar).
+const KENAR_ADI = { a: 'uzun kenar', b: 'orta kenar', c: 'kısa kenar' } as const;
+export function donelMetni(d: NonNullable<GeometriHamCevabi['donel']>): string {
+  const ic = d.icCapMm === null ? '' : `, eksenel delik Ø${uzunluk(d.icCapMm)}`;
+  return `dönme ekseni ${KENAR_ADI[d.kenar]} (${uzunluk(d.boyMm)} mm), dış çap Ø${uzunluk(d.capMm)}${ic}`;
+}
+const FORMDAN: Readonly<Record<HamStokOnerisi['form'], string>> = {
+  cubuk: 'çubuktan', altigen: 'altıgenden', lama: 'lamadan', levha: 'levhadan', blok: 'bloktan', boru: 'borudan', disk: 'diskten',
+};
+const DONEL_FORMLAR: ReadonlySet<HamStokOnerisi['form']> = new Set(['cubuk', 'altigen', 'boru', 'disk']);
+// Sıralamanın nedeni rozette: dönel parçada dönel form, prizmatik parçada lama, blok ya da levha. Öbür eşleşmede rozet yok.
+export function formNedeni(form: HamStokOnerisi['form'], donel: boolean): string | null {
+  if (donel) return DONEL_FORMLAR.has(form) ? `dönel parça, ${FORMDAN[form]}` : null;
+  return DONEL_FORMLAR.has(form) ? null : `prizmatik, ${FORMDAN[form]}`;
+}
+// Talaş oranı: hamdan çıkan pay; hacim yoksa null.
+export const talasYuzdesi = (parcaMm3: number | null, hamMm3: number | null): number | null =>
+  (parcaMm3 === null || hamMm3 === null || hamMm3 <= 0 ? null : Math.max(0, Math.round((1 - parcaMm3 / hamMm3) * 100)));
+export const LEVHA_NOTU: Readonly<Record<'donel' | 'kalin', string>> = {
+  donel: 'Levha önerilmedi: dönel parça; plaka işi değil.',
+  kalin: "Levha önerilmedi: plaka işi değil (kalınlık kısa kenarın üçte birinden ve 30 mm'den az olmalı).",
+};
+export const FORM_NEDENI_ADI: Readonly<Record<NonNullable<GeometriHamCevabi['formlar'][number]['neden']>, string>> = {
+  'donel-degil': 'dönel parça değil', 'delik-yok': 'eksenel delik yok', 'plaka-degil': 'plaka işi değil',
+};
 
 // Net ağırlık (1446 a): hacim x yoğunluk, yalnız ekranda öneri. Yoğunluk g/cm³ (1 g/cm³ = 1e-6 kg/mm³); hacim ya da yoğunluk yoksa null.
 export const yogunlukOku = (metin: string): number | null => {
@@ -404,25 +432,29 @@ const sirala = (x: readonly number[]): [number, number, number] => {
 // Ham önerisinin katısı: döndürülmüş kutunun eksenlerinde (a uzun eksen). Çubuk ve altıgen a çevresinde, merkezleri dik düzlemde
 // kapsayan dairenin merkezidir; lama, levha ve blok kutudur, merkezi izdüşüm aralıklarının ortasıdır. Pay her yüzde eşit varsayılır.
 export function hamKatisi(o: HamStokOnerisi, yon: readonly Yon3[], noktalar: ArrayLike<number>): OnizlemeKatisi | null {
-  const ar = eksenAraliklari(noktalar, yon);
-  if (ar === null || yon.length !== 3) return null;
+  if (yon.length !== 3) return null;
+  // Dönel formda kesim ekseni sunucunun bulduğu dönel kenardır (flanşta kısa kenar); katı o eksen önde çizilir.
+  const i = o.eksen === 'a' ? 0 : o.eksen === 'b' ? 1 : 2;
+  const y: Yon3[] = [yon[i]!, ...yon.filter((_, k) => k !== i)];
+  const ar = eksenAraliklari(noktalar, y);
+  if (ar === null) return null;
   const orta = ar.en.map((e, k) => (e + ar.ust[k]!) / 2);
   const olcu = (k: string): number => o.olcu[k] ?? 0;
-  if (o.form === 'cubuk' || o.form === 'altigen') {
+  if (o.form === 'cubuk' || o.form === 'altigen' || o.form === 'boru' || o.form === 'disk') {
     const iz: Nokta2[] = [];
     // Büyük ağda her noktayı almak gerekmez: zarf için 20 000 civarı yeter.
     const adim = Math.max(1, Math.floor(noktalar.length / 3 / 20000)) * 3;
-    for (let i = 0; i + 2 < noktalar.length; i += adim) iz.push([ic3(noktalar, i, yon[1]!), ic3(noktalar, i, yon[2]!)]);
+    for (let j = 0; j + 2 < noktalar.length; j += adim) iz.push([ic3(noktalar, j, y[1]!), ic3(noktalar, j, y[2]!)]);
     const d = kapsayanDaire(iz);
     if (d === null) return null;
-    const boy = o.kesimBoyuMm ?? olcu('l');
-    const cap = o.form === 'cubuk' ? olcu('d') : olcu('s');
-    return { sekil: o.form === 'cubuk' ? 'silindir' : 'altigen', merkez: eksendenNokta([orta[0]!, d.x, d.y], yon), eksenler: yon, boyut: [boy, cap, cap] };
+    const boy = o.kesimBoyuMm ?? (o.form === 'disk' ? olcu('t') : olcu('l'));
+    const cap = o.form === 'altigen' ? olcu('s') : o.form === 'boru' ? olcu('D') : olcu('d');
+    return { sekil: o.form === 'altigen' ? 'altigen' : 'silindir', merkez: eksendenNokta([orta[0]!, d.x, d.y], y), eksenler: y, boyut: [boy, cap, cap] };
   }
   const boyut: [number, number, number] = o.form === 'lama' ? [o.kesimBoyuMm ?? olcu('l'), ...sirala([olcu('a'), olcu('b')]).slice(0, 2) as [number, number]]
-    : o.form === 'levha' ? [o.kesimBoyuMm ?? olcu('l'), ...sirala([olcu('w'), olcu('t')]).slice(0, 2) as [number, number]]
+    : o.form === 'levha' ? [o.kesimBoyuMm ?? olcu('l'), ...sirala([o.kesimEnMm ?? olcu('w'), olcu('t')]).slice(0, 2) as [number, number]]
       : sirala([olcu('a'), olcu('b'), olcu('h')]);
-  return { sekil: 'kutu', merkez: eksendenNokta(orta, yon), eksenler: yon, boyut };
+  return { sekil: 'kutu', merkez: eksendenNokta(orta, y), eksenler: y, boyut };
 }
 
 export const BIRIM_EKSENLER: readonly Yon3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];

@@ -3,9 +3,9 @@ import { Dugme, Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { fmt, kgFmt } from '../../bicim.ts';
 import * as K from '../../kurallar/index.ts';
-import { kesitYuvarlak, modelHamOnerileri, type ModelHamOnerisi, type ModelOlcusu, type OneriFormu } from '../../kurallar/model-onerisi.ts';
+import { modelHamOnerileri, type ModelHamOnerisi, type OneriFormu } from '../../kurallar/model-onerisi.ts';
 import type { KatalogKarti } from '../../tipler.ts';
-import { useKartlar, useModelAnalizi, useModelListesi } from '../../veri.ts';
+import { useKartlar, useModelAnalizi, useModelHamOnerisi, useModelListesi } from '../../veri.ts';
 import { useSihirbaz } from '../baglam.ts';
 import type { Taslak } from '../durum.ts';
 import { aileler, formlar, sihirbazTaslagi } from '../turler.ts';
@@ -52,8 +52,10 @@ function olcuMetni(o: ModelHamOnerisi): string {
   return `${fmt(m['a'] ?? 0)} × ${fmt(m['b'] ?? 0)} × ${fmt(m['h'] ?? 0)}`;
 }
 
+// Parçanın kesiti (yalnız çizim için): dönel parçada dış çap dairesi, öbüründe döndürülmüş kutunun kesit kenarları.
+interface ParcaKesiti { yuvarlak: boolean; g: number; y: number }
 // Küçük kesit: dışta ham, içte parça (yuvarlak ya da dikdörtgen), arası taranmış talaş. Ölçek kutuya sığdırılır.
-function KucukKesit({ m, o }: { m: ModelOlcusu; o: ModelHamOnerisi }) {
+function KucukKesit({ m, o }: { m: ParcaKesiti; o: ModelHamOnerisi }) {
   const R = 28, d = o.dims;
   const enBuyuk = o.form === 'cubuk' ? d['d'] ?? 1 : o.form === 'altigen' ? (d['s'] ?? 1) / Math.cos(Math.PI / 6)
     : o.form === 'lama' ? Math.max(d['a'] ?? 1, d['b'] ?? 1) : o.form === 'levha' ? Math.max(o.kesimEnMm ?? 1, d['t'] ?? 1) : Math.max(d['b'] ?? 1, d['h'] ?? 1);
@@ -67,8 +69,7 @@ function KucukKesit({ m, o }: { m: ModelOlcusu; o: ModelHamOnerisi }) {
       }).join(' ')} />
     )
       : o.form === 'lama' ? kutu(d['a'] ?? 0, d['b'] ?? 0) : o.form === 'levha' ? kutu(o.kesimEnMm ?? 0, d['t'] ?? 0) : kutu(d['b'] ?? 0, d['h'] ?? 0);
-  const parca = kesitYuvarlak(m) ? <circle cx={R} cy={R} r={(Math.max(m.b, m.c) / 2) * k} />
-    : kutu(Math.max(m.b, m.c), Math.min(m.b, m.c));
+  const parca = m.yuvarlak ? <circle cx={R} cy={R} r={(m.g / 2) * k} /> : kutu(m.g, m.y);
   return (
     <svg className="tc-my-mo-kesit" viewBox={`0 0 ${String(2 * R)} ${String(2 * R)}`} aria-hidden="true">
       <defs><pattern id="tc-my-mo-tarama" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" className="tc-my-mo-tarama" /></pattern></defs>
@@ -96,18 +97,22 @@ export function ModeldenOner() {
   const satir = satirlar.find((x) => x.revizyonId === rev) ?? null;
   const analiz = useModelAnalizi(uygun ? rev : null);
   const kartlar = useKartlar();
-  if (!uygun) return null;
-  // Yetkisi olmayan (geometri.oku) kullanıcıya şerit hiç görünmez.
-  if (liste.error instanceof ApiHatasi && liste.error.durum === 403) return null;
-  const f = d.fam ? aileler(b)[d.fam] : undefined;
   const payMm = typeof pay === 'number' ? pay : Number.NaN;
   const kesmeMm = typeof kesme === 'number' ? kesme : Number.NaN;
   const payHata = !(payMm >= 0) ? 'Sıfır ya da pozitif bir sayı yazın.' : null;
   const kesmeHata = !(kesmeMm >= 0) ? 'Sıfır ya da pozitif bir sayı yazın.' : null;
+  const ham = useModelHamOnerisi(uygun && payHata === null && kesmeHata === null ? rev : null, payMm, kesmeMm);
+  if (!uygun) return null;
+  // Yetkisi olmayan (geometri.oku) kullanıcıya şerit hiç görünmez.
+  if (liste.error instanceof ApiHatasi && liste.error.durum === 403) return null;
+  const f = d.fam ? aileler(b)[d.fam] : undefined;
   const a = analiz.data?.analiz ?? null;
-  const m: ModelOlcusu | null = a === null ? null : { a: a.obb.a, b: a.obb.b, c: a.obb.c, cap: a.obb.cap, hacimMm3: a.hacimMm3 ?? null };
+  const donel = ham.data?.donel ?? null;
+  const m: ParcaKesiti | null = a === null ? null
+    : donel !== null ? { yuvarlak: true, g: donel.capMm, y: donel.capMm } : { yuvarlak: false, g: a.obb.b, y: a.obb.c };
   const gruplar = (form: OneriFormu) => K.presetGroups({ ...d, form, dims: {}, vmode: false } as Taslak, b);
-  const oneriler = m === null || payHata || kesmeHata ? [] : modelHamOnerileri(m, payMm, kesmeMm, f?.forms ?? [], gruplar);
+  const oneriler = a === null || payHata || kesmeHata || ham.data === undefined ? []
+    : modelHamOnerileri(ham.data.formlar, a.hacimMm3 ?? null, f?.forms ?? [], gruplar);
   const sec = secili === null ? null : oneriler[secili] ?? null;
   const benzer = (o: ModelHamOnerisi) => stoktaKart(d, o, kartlar.data ?? [], b);
   const secBenzer = sec === null ? null : benzer(sec);
@@ -156,13 +161,16 @@ export function ModeldenOner() {
       {rev !== null && analiz.isPending && <p className="tc-my-kucuk">Model ölçüsü okunuyor…</p>}
       {rev !== null && analiz.isError && <p className="tc-my-hata">{hataIletisi(analiz.error, 'Model ölçüsü okunamadı.')}</p>}
       {rev !== null && analiz.data && m === null && <p className="tc-my-kucuk">Bu modelin 3B analizi yok; öneri hesaplanamaz. 3D Atölyesi'nde bakın.</p>}
-      {m !== null && (
+      {a !== null && (
         <p className="tc-my-mo-model">
-          <Simge ad="ruler" /> Model ölçüsü <b>{fmt(m.a)} × {fmt(m.b)} × {fmt(m.c)} mm</b>
-          {m.hacimMm3 !== null && <> · parça hacmi <b>{fmt(m.hacimMm3 / 1000)} cm³</b></>}
+          <Simge ad="ruler" /> Model ölçüsü <b>{fmt(a.obb.a)} × {fmt(a.obb.b)} × {fmt(a.obb.c)} mm</b>
+          {donel !== null && <> · <b>dönel parça</b>, dış çap Ø{fmt(donel.capMm)}, boy {fmt(donel.boyMm)} mm</>}
+          {a.hacimMm3 !== null && <> · parça hacmi <b>{fmt(a.hacimMm3 / 1000)} cm³</b></>}
         </p>
       )}
-      {m !== null && !payHata && !kesmeHata && oneriler.length === 0 && <p className="tc-my-kucuk">Bu ailenin formlarından öneri çıkmadı (çubuk, altıgen, lama, levha, blok).</p>}
+      {a !== null && !payHata && !kesmeHata && ham.isPending && <p className="tc-my-kucuk" aria-live="polite">Ham önerisi hesaplanıyor…</p>}
+      {ham.isError && <p className="tc-my-hata">{hataIletisi(ham.error, 'Ham önerisi okunamadı.')}</p>}
+      {a !== null && !payHata && !kesmeHata && ham.data !== undefined && oneriler.length === 0 && <p className="tc-my-kucuk">Bu ailenin formlarından öneri çıkmadı (çubuk, altıgen, lama, levha, blok).</p>}
       {oneriler.length > 0 && m !== null && (
         <div className="tc-my-mo-liste" role="group" aria-label="Ham önerileri">
           {oneriler.map((o, i) => {
@@ -173,6 +181,7 @@ export function ModeldenOner() {
                 <span className="tc-my-mo-ust"><KucukKesit m={m} o={o} /><span><b>{formlar()[o.form]?.ad ?? o.form}</b><span className="tc-my-mo-olcu">{olcuMetni(o)}</span></span></span>
                 <span className="tc-my-mo-rozetler">
                   {i === 0 && <Rozet ton="uyari">en az talaş</Rozet>}
+                  {donel !== null && (o.form === 'cubuk' || o.form === 'altigen') && <Rozet ton="bilgi" gorunum="cizgi">dönel parça</Rozet>}
                   {bz !== null ? <Rozet ton="tamam" gorunum="cizgi">{bz.seviye === 'ayni' ? 'kartı var' : 'benzer kart var'}</Rozet> : <Rozet ton="bilgi" gorunum="cizgi">yeni kart</Rozet>}
                   {o.standartDisi && <Rozet ton="pasif" gorunum="cizgi">standart dışı</Rozet>}
                 </span>
@@ -198,7 +207,7 @@ export function ModeldenOner() {
         </div>
       )}
       {yazilan !== null && <p className="tc-my-tamam" role="status">{yazilan}</p>}
-      <p className="tc-my-kucuk">Ölçü 3B analizin döndürülmüş kutusundan; kesit sihirbazın standart ölçülerine yukarı yuvarlanır. Bağlama ve alın payı ayrıca eklenmez.</p>
+      <p className="tc-my-kucuk">Ölçü ve sıra 3D Atölyesi'nin ham hesabıyla aynıdır; kesit sihirbazın standart ölçülerine yukarı yuvarlanır. Levhada forma kesim ölçüsü (kalınlık, en, boy) yazılır, plakanın tamamı yazılmaz. Bağlama ve alın payı ayrıca eklenmez.</p>
     </section>
   );
 }

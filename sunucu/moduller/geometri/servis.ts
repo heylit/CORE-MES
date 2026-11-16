@@ -14,7 +14,7 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, bilesenListesi, disTablosuOku, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
+  bicimDenetimi, bilesenListesi, disTablosuOku, donelEksen, DOSYA_EN_BUYUK_BAYT, enAzHam, enYakinKart, formGerekleri, HAM_KESME_VARSAYILAN_MM, hamGeregi, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
   rotaToplamlari, stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { YuzeyIsaretGirdisi } from './kurallar.ts';
@@ -190,19 +190,30 @@ export async function saglikOku(db: Db, revizyonId: number): Promise<GeometriSag
 }
 
 // Pay sorgudan, yoksa sistem ayarından; ikisi de yoksa 0 ve kaynak 'yok' (ekran söyler). Stok listesi aktif hammadde kartları (1469 a).
-export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined }): Promise<GeometriHamCevabi> {
+// 3321-1: dönme ekseni yüzlerden (yüz özeti yoksa eski kural), kesme payı sorgudan ya da 3 mm; form başına en az ölçü ve en yakın kart.
+// Malzemeler sihirbazı ve CNC Kurulum aynı sonucu kullanır (tek hesap).
+export async function hamOnerisi(
+  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined },
+): Promise<GeometriHamCevabi> {
   const ayar = sorgu.payMm === undefined ? await sistemAyariOku(db, 'geometri.ham-payi-mm') : null;
   const payMm = sorgu.payMm ?? ayar ?? 0;
   const payKaynagi = sorgu.payMm !== undefined ? 'istek' : ayar !== null ? 'ayar' : 'yok';
+  const kesmeMm = sorgu.kesmeMm ?? HAM_KESME_VARSAYILAN_MM;
   const c = await analizOku(db, revizyonId);
-  if (c.analiz === null) return { revizyonId, payMm, payKaynagi, enAz: null, oneriler: [], kaliteler: [], neden: 'analiz-yok' };
+  const bos: Omit<GeometriHamCevabi, 'neden'> = { revizyonId, payMm, payKaynagi, kesmeMm, enAz: null, oneriler: [], kaliteler: [], donel: null, formlar: [] };
+  if (c.analiz === null) return { ...bos, neden: 'analiz-yok' };
   const enAz = enAzHam(c.analiz.obb, payMm);
+  const donel = donelEksen(c.analiz.obb, await sorgular.yuzler(db, revizyonId));
+  const g = hamGeregi(c.analiz.obb, payMm, kesmeMm, donel);
   const liste = await hammaddeStokOlculeri(db, STOK_FORMLARI);
   const kaliteler = [...new Set(liste.flatMap((k) => (k.kalite === null ? [] : [k.kalite])))].sort((x, y) => x.localeCompare(y, 'tr'));
   const adaylar = sorgu.kalite === undefined ? liste : liste.filter((k) => k.kalite === sorgu.kalite);
-  const oneriler = stokEslestir(c.analiz.obb, payMm, adaylar);
+  const oneriler = stokEslestir(g, adaylar);
+  const formlar = formGerekleri(g).map((f) => ({
+    ...f, enYakinKart: oneriler.some((o) => o.form === f.form) ? null : enYakinKart(g, f, adaylar),
+  }));
   const neden = oneriler.length > 0 ? null : adaylar.length === 0 ? 'stok-listesi-yok' : 'sigan-yok';
-  return { revizyonId, payMm, payKaynagi, enAz, oneriler, kaliteler, neden };
+  return { ...bos, enAz, oneriler, kaliteler, donel, formlar, neden };
 }
 
 // Talaştan kaba süre (kart 3278; 1195 c): yalnız ekranda gösterilen kalibresiz aralık; rotaya ve plana yazılmaz. Ham, ham önerisinin
@@ -227,7 +238,7 @@ async function sureRotasi(db: Db, malzemeNo: number): Promise<GeometriSureCevabi
 }
 
 export async function sureTahminiOku(
-  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; iso?: GeometriIsoGrubu | undefined },
+  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined; iso?: GeometriIsoGrubu | undefined },
 ): Promise<GeometriSureCevabi> {
   const iso = sorgu.iso ?? 'P';
   const ham = await hamOnerisi(db, revizyonId, sorgu);

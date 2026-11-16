@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  agOlcumu, bicimDenetimi, bilesenListesi, kapsayanDaireCapi, enAzHam, stokEslestir, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER,
+  agOlcumu, bicimDenetimi, bilesenListesi, donelEksen, enYakinKart, formGerekleri, hamGeregi, kapsayanDaireCapi, enAzHam, stokEslestir, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER,
   MONTAJ_AD_EN_UZUN, MONTAJ_DUGUM_EN_COK, montajAdi, montajAgaci, birimAdi, igesBirimi, islemAnahtari, saglikDegerlendir, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { AdliAg, EslesenYuz, OcctDugumu, SaglikOlcumu, StokAdayi, UcgenAgi } from './kurallar.ts';
@@ -89,22 +89,93 @@ describe('geometri kuralları', () => {
     assert.deepEqual(enAzHam({ a: 100, b: 20, c: 10 }, 0), { a: 100, b: 20, c: 10 });
   });
 
-  test('G-K9 stok ölçüsü: her formda sığan en küçük, sığmayan ve ölçüsü eksik aday önerilmez', () => {
+  test('G-K9 stok ölçüsü: her formda sığan en küçük, sığmayan ve ölçüsü eksik aday önerilmez; kalın parçaya levha önerilmez', () => {
     const aday = (malzemeNo: number, form: string, olcu: Record<string, unknown>): StokAdayi => ({ malzemeNo, kod: `K${malzemeNo}`, ad: null, kalite: 'C45', form, olcu });
     const obb = { a: 40, b: 20, c: 10, cap: Math.hypot(20, 10) };
-    const o = stokEslestir(obb, 1, [
+    const g = hamGeregi(obb, 1, 0, null);
+    const o = stokEslestir(g, [
       aday(1, 'cubuk', { d: 24, l: 3000 }), aday(2, 'cubuk', { d: 25, l: 3000 }), aday(3, 'cubuk', { d: 30, l: 3000 }),
       aday(4, 'lama', { a: 12, b: 25, l: 6000 }), aday(5, 'lama', { a: 22, b: 12, l: 6000 }), aday(6, 'lama', { a: 22, b: 11, l: 6000 }),
       aday(7, 'levha', { t: 12, w: 1000, l: 2000 }), aday(8, 'levha', { t: 12, w: 21, l: 2000 }),
       aday(9, 'blok', { a: 50, b: 30, h: 15 }), aday(10, 'cubuk', { d: 40, l: 0 }), aday(11, 'cubuk', { d: '40', l: 3000 }),
-      aday(12, 'boru', { D: 60, t: 5, l: 6000 }), aday(13, 'cubuk', { d: 25, l: 41 }),
+      aday(12, 'boru', { D: 60, t: 5, l: 6000 }), aday(13, 'cubuk', { d: 25, l: 41 }), aday(14, 'disk', { d: 60, t: 50 }),
     ]);
-    assert.deepEqual(o.map((x) => [x.form, x.malzemeNo]), [['lama', 5], ['levha', 7], ['cubuk', 2], ['blok', 9]]);
+    // Levha: kalınlık 10, kısa kenar 20'nin üçte birinden büyük; boru ve disk: dönel değil.
+    assert.deepEqual(o.map((x) => [x.form, x.malzemeNo]), [['lama', 5], ['cubuk', 2], ['blok', 9]]);
     const cubuk = o.find((x) => x.form === 'cubuk')!;
     assert.equal(cubuk.kesimBoyuMm, 42);
+    assert.equal(cubuk.kesimEnMm, null);
     assert.ok(Math.abs(cubuk.hamHacimMm3 - (Math.PI * 25 ** 2 / 4) * 42) < 1e-3);
     assert.equal(o.find((x) => x.form === 'blok')!.kesimBoyuMm, null);
-    assert.deepEqual(stokEslestir(obb, 50, [aday(1, 'cubuk', { d: 30, l: 3000 })]), []);
+    assert.deepEqual(stokEslestir(hamGeregi(obb, 50, 0, null), [aday(1, 'cubuk', { d: 30, l: 3000 })]), []);
+    // Kesme payı kesim boyuna eklenir ve hacmi büyütür.
+    assert.equal(stokEslestir(hamGeregi(obb, 1, 3, null), [aday(2, 'cubuk', { d: 25, l: 3000 })])[0]!.kesimBoyuMm, 45);
+  });
+
+  test('G-K9b 3321-1 dönme ekseni: flanşta kısa eksen, milde uzun eksen; yalnız delikli plakada dönel değil', () => {
+    const Z: [number, number, number][] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const sil = (r: number, boy: number, ters: boolean, eksen: number[], konum: number[] = [0, 0, 0]) =>
+      ({ tur: 'silindir' as const, ters, alanMm2: 2 * Math.PI * r * boy, yaricapMm: r, eksen, konum });
+    const duz = (alan: number) => ({ tur: 'duzlem' as const, ters: false, alanMm2: alan, yaricapMm: null, eksen: null, konum: null });
+    // Ø100 x 10 flanş, ortada Ø30 boydan boya delik, 6 x Ø9 çevre deliği (eş eksenli değil).
+    const flans = [sil(50, 10, false, [0, 0, 1]), sil(15, 10, true, [0, 0, -1]), duz(7000), duz(7000),
+      ...[0, 1, 2, 3, 4, 5].map((i) => sil(4.5, 10, true, [0, 0, 1], [35 * Math.cos(i), 35 * Math.sin(i), 0]))];
+    assert.deepEqual(donelEksen({ a: 100, b: 100, c: 10, yon: Z }, flans), { kenar: 'c', capMm: 100, boyMm: 10, icCapMm: 30 });
+    // Kör delik boru için sayılmaz.
+    const kor = [sil(50, 10, false, [0, 0, 1]), sil(15, 4, true, [0, 0, 1])];
+    assert.equal(donelEksen({ a: 100, b: 100, c: 10, yon: Z }, kor)!.icCapMm, null);
+    // Ø40 x 120 mil: eksen uzun kenar.
+    assert.deepEqual(donelEksen({ a: 120, b: 40, c: 40, yon: Z }, [sil(20, 120, false, [1, 0, 0]), duz(1257), duz(1257)]),
+      { kenar: 'a', capMm: 40, boyMm: 120, icCapMm: null });
+    // Yalnız delikli plaka ve küçük köşe radyüslü prizma dönel değil.
+    assert.equal(donelEksen({ a: 100, b: 60, c: 10, yon: Z }, [duz(6000), sil(5, 10, true, [0, 0, 1])]), null);
+    assert.equal(donelEksen({ a: 100, b: 60, c: 10, yon: Z }, [duz(6000), sil(3, 10, false, [0, 0, 1])]), null);
+    // Yüz yoksa null (eski kural).
+    assert.equal(donelEksen({ a: 100, b: 100, c: 10, yon: Z }, []), null);
+  });
+
+  test('G-K9c 3321-1 flanş: çubuk kısa eksende kesilir (Ø110 x 107 değil), disk ve boru önerilir, levha önerilmez', () => {
+    const aday = (malzemeNo: number, form: string, olcu: Record<string, unknown>): StokAdayi => ({ malzemeNo, kod: `K${malzemeNo}`, ad: null, kalite: 'C45', form, olcu });
+    const obb = { a: 100, b: 100, c: 10, cap: Math.hypot(100, 10) };
+    const donel = { kenar: 'c' as const, capMm: 100, boyMm: 10, icCapMm: 30 };
+    const g = hamGeregi(obb, 2, 3, donel);
+    const o = stokEslestir(g, [
+      aday(1, 'cubuk', { d: 105, l: 3000 }), aday(2, 'cubuk', { d: 110, l: 3000 }), aday(3, 'levha', { t: 15, w: 1000, l: 2000 }),
+      aday(4, 'blok', { a: 105, b: 105, h: 15 }), aday(5, 'disk', { d: 105, t: 15 }), aday(6, 'boru', { D: 108, t: 41, l: 3000 }),
+      aday(7, 'boru', { D: 108, t: 30, l: 3000 }),
+    ]);
+    assert.deepEqual(o.map((x) => [x.form, x.malzemeNo]), [['disk', 5], ['boru', 6], ['cubuk', 1], ['blok', 4]]);
+    const cubuk = o.find((x) => x.form === 'cubuk')!;
+    assert.equal(cubuk.kesimBoyuMm, 17);
+    const f = formGerekleri(g);
+    assert.equal(f.find((x) => x.form === 'levha')!.neden, 'plaka-degil');
+    assert.deepEqual(f.find((x) => x.form === 'cubuk')!.olcu, { d: 104 });
+    assert.deepEqual(f.find((x) => x.form === 'boru')!.olcu, { D: 104, t: 39 });
+    // Dönel olmayan prizmada boru ve disk önerilmez.
+    const p = formGerekleri(hamGeregi({ a: 70, b: 45, c: 8, cap: 46 }, 1, 3, null));
+    assert.deepEqual(p.filter((x) => x.neden !== null).map((x) => [x.form, x.neden]), [['boru', 'donel-degil'], ['disk', 'donel-degil']]);
+    // İnce prizmada levha: kesim eni ve boyu kesme paylı, 5 mm'ye yukarı.
+    const lv = p.find((x) => x.form === 'levha')!;
+    assert.deepEqual([lv.olcu, lv.kesimEnMm, lv.kesimBoyuMm], [{ t: 10 }, 50, 75]);
+  });
+
+  test('G-K9e 3321-1 dolu mil: kartsız form satırının kesim boyu kesme paylı; uzun milde disk, deliksiz milde boru yok', () => {
+    const mil = { kenar: 'a' as const, capMm: 40, boyMm: 120, icCapMm: null };
+    const obb = { a: 120, b: 40, c: 40, cap: 40 };
+    const f = formGerekleri(hamGeregi(obb, 2, 3, mil));
+    const cubuk = f.find((x) => x.form === 'cubuk')!;
+    assert.deepEqual([cubuk.neden, cubuk.olcu, cubuk.kesimBoyuMm], [null, { d: 44 }, 127]);
+    assert.equal(formGerekleri(hamGeregi(obb, 2, 0, mil)).find((x) => x.form === 'cubuk')!.kesimBoyuMm, 124);
+    assert.deepEqual(f.filter((x) => x.neden !== null).map((x) => [x.form, x.neden, x.olcu]),
+      [['levha', 'plaka-degil', null], ['boru', 'delik-yok', null], ['disk', 'donel-degil', null]]);
+  });
+
+  test('G-K9d 3321-1 en yakın kart: sığan kart yoksa en az eksikli kart ve eksik ölçü', () => {
+    const aday = (malzemeNo: number, form: string, olcu: Record<string, unknown>): StokAdayi => ({ malzemeNo, kod: `K${malzemeNo}`, ad: null, kalite: '6082', form, olcu });
+    const g = hamGeregi({ a: 180, b: 95, c: 40, cap: 103 }, 2, 3, null);
+    const lama = formGerekleri(g).find((x) => x.form === 'lama')!;
+    const y = enYakinKart(g, lama, [aday(1, 'lama', { a: 100, b: 40, l: 3000 }), aday(2, 'lama', { a: 60, b: 30, l: 3000 }), aday(3, 'cubuk', { d: 120, l: 3000 })]);
+    assert.deepEqual(y, { malzemeNo: 1, kod: 'K1', olcu: { a: 100, b: 40, l: 3000 }, eksik: ['b'] });
   });
 
   test('G-K6 biçim denetimi: STEP başlığı ve IGES başlangıç bölümü', () => {
