@@ -9,6 +9,7 @@ import { useBekleyenUygula } from '../motor/coz.ts';
 import { useCanliPlan } from '../motor/fark.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz } from '../motor/kurallar.ts';
 import { useAn } from '../motor/saat.ts';
+import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayarlar } from './Ayarlar.tsx';
@@ -118,6 +119,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
+  const saatGirdisi = useMemo(() => ({ yaz: (t: number) => girdiSaati(c.D, t), oku: (v: string) => girdidenSaat(c.D, v) }), [c]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
 
   const [goz, setGoz] = useState<Goz>('T');
@@ -482,6 +484,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}
+              saatGirdisi={saatGirdisi}
             />
           )}
           <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label={BOLUM_ADI[goz]}>
