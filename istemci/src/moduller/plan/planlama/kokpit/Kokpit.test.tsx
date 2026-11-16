@@ -959,3 +959,40 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(komutlar[0]).toMatchObject({ tur: 'plana-al', tezgah: secenek.value });
   });
 });
+
+// 3330-3c: fason adımın satırında firma tarihi. Örnekte ürün 2'nin üçüncü adımı (k 30) fasondur; sipariş numarası ve tarih uydurmadır.
+describe('Kokpit fason adımında firma tarihi (3330-3c)', () => {
+  const sip = ornekCalisma().D.siparisler.find((x) => x.urun === '2')!;
+  const emirler = (fasonSiparis?: unknown): unknown => ({ orders: [], opStatus: {}, opYer: { [`${sip.id}|root|3`]: { fasonId: '5', terminGun: 2, stationId: null, setup: null, cycle: null, ...(fasonSiparis ? { fasonSiparis } : {}) } } });
+  const satirNotu = async (): Promise<HTMLElement | null> => {
+    fireEvent.click(await waitFor(() => document.querySelector(`[data-kart="${sip.id}"]`) as HTMLElement));
+    const satir = await waitFor(() => { const x = document.querySelector(`[data-adim-satir="${sip.id}.30"]`); expect(x).toBeTruthy(); return x as HTMLElement; });
+    return satir.querySelector<HTMLElement>('small[data-firma]');
+  };
+
+  it('açık siparişin firma tarihi ve numarası satırda yazar; tarihi geçmiş sipariş uyarıyla yazar', async () => {
+    ac({ depo: { ...DEPO, durum: { emirler: emirler({ tarih: '2020-01-05', siparisNo: 'ORN-SA-7' }) } } as unknown as PlanlamaDeposu });
+    const not = await satirNotu();
+    expect(not?.textContent).toBe('Firma tarihi 05.01 · sipariş ORN-SA-7 · firma tarihi geçti');
+    expect(not?.hasAttribute('data-gecti')).toBe(true);
+  });
+
+  // Plan firma tarihi girilmeden önce dizilmişse dönüş günü tarihten farklıdır: satır farkı açıklar; geçmiş tarihte bu yazı çıkmaz.
+  it('planın dönüş günü firma tarihinden farklıysa satır planın güncellenince kayacağını yazar', async () => {
+    ac({ depo: { ...DEPO, durum: { emirler: emirler({ tarih: '2099-01-05', siparisNo: null }) } } as unknown as PlanlamaDeposu });
+    const not = await satirNotu();
+    expect(not?.textContent).toBe('Firma tarihi 05.01 · plan güncellenince dönüş bu güne kayar');
+    expect(not?.hasAttribute('data-eski')).toBe(true);
+    expect(not?.hasAttribute('data-gecti')).toBe(false);
+  });
+
+  it('siparişi olmayan fason adımda dönüşün tahmin olduğu yazar; emir okunamadıysa satır yazmaz', async () => {
+    ac({ depo: { ...DEPO, durum: { emirler: emirler() } } as unknown as PlanlamaDeposu });
+    const not = await satirNotu();
+    expect(not?.getAttribute('data-firma')).toBe('yok');
+    expect(not?.textContent).toBe('Firma tarihi yok · dönüş tahmini');
+    cleanup();
+    ac({ depo: { ...DEPO, durum: null } as unknown as PlanlamaDeposu });
+    expect(await satirNotu()).toBeNull();
+  });
+});

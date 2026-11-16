@@ -6,6 +6,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { gonderEngeli, isTasiOnizle, useOtomatikUygula } from '../motor/atolye/gonder.ts';
 import { useBekleyenUygula } from '../motor/coz.ts';
 import { useCanliPlan } from '../motor/fark.ts';
@@ -23,7 +24,7 @@ import { DegisiklikOzeti, Degisiklikler } from './Degisiklikler.tsx';
 import { degisiklikler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
@@ -120,6 +121,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const emirNo = useEmirNo(o.depo.receteRotaKaydi, emirKaynagi);
   const p = useMemo(() => planOku(c), [c]);
   const an = useAn();
+  const bugun = tesisGunu(an);
+  const firma = useMemo(() => (emirKaynagi ? firmaYazilari(c, emirKaynagi, bugun) : null), [c, emirKaynagi, bugun]);
   const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
@@ -586,6 +589,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           />
           {seciliKart && (
             <EmirAdimlari
+              firma={firma}
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}

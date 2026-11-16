@@ -182,3 +182,6 @@
 /* Toplu yerleştirmenin yazılmama nedeni: uyarı simgesi yazının başında, aynı satırda. */
 .tc-pyq [data-geri-sonucu] { display: flex; align-items: flex-start; gap: var(--b-1); }
 .tc-pyq [data-geri-sonucu] > .tc-simge { flex: none; }
+/* Fason adımın firma tarihi (3330 a): adın altında ayrı satır; tarihi geçmiş sipariş uyarı rengindedir. */
+.tc-pyq-emir small[data-firma] { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-emir small[data-firma][data-gecti] { color: var(--d-gec); font-weight: 600; }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
-  adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
+  firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
   acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
@@ -401,5 +401,36 @@ describe('Kokpit bağ okları (3330)', () => {
     expect(okYolu(a, kutu(210, 260, 20), 'b')).toBe('M200,20 L210,20');
     expect(yataylar(okYolu(a, kutu(400, 460, 20), 'b'))).toEqual([40]);
     expect(okUcu(kutu(260, 320, 70))).toBe('M260,70 l-6,-3.5 v7 z');
+  });
+});
+
+// 3330 a: fason adımın firma tarihi satır yazısı. Örnekte ürün 2'nin üçüncü adımı (k 30) fasondur; veriler uydurmadır.
+describe('Kokpit firma tarihi yazısı (3330-3c)', () => {
+  const c = ornekCalisma();
+  const s = c.D.siparisler.find((x) => x.urun === '2')!;
+  const id = `${s.id}.30`;
+  const yer = (fasonSiparis?: unknown): unknown => ({ orders: [], opStatus: {}, opYer: { [`${s.id}|root|3`]: { fasonId: '5', terminGun: 2, stationId: null, setup: null, cycle: null, ...(fasonSiparis ? { fasonSiparis } : {}) } } });
+
+  it('tarih ve sipariş numarası yazar; numara gelmediyse yalnız tarih; sipariş yoksa adım haritada yoktur', () => {
+    expect(firmaYazilari(c, yer({ tarih: '2026-11-24', siparisNo: 'ORN-SA-7' }), '2026-11-20')).toEqual({ [id]: { yazi: 'Firma tarihi 24.11 · sipariş ORN-SA-7', gecti: false, gun: '24.11' } });
+    expect(firmaYazilari(c, yer({ tarih: '2026-11-24', siparisNo: null }), '2026-11-20')[id]).toEqual({ yazi: 'Firma tarihi 24.11', gecti: false, gun: '24.11' });
+    expect(firmaYazilari(c, yer(), '2026-11-20')).toEqual({});
+    expect(firmaYazilari(c, null, '2026-11-20')).toEqual({});
+  });
+
+  it('tarih tesisin gününden önceyse geçmiştir; aynı gün geçmiş değildir', () => {
+    expect(firmaYazilari(c, yer({ tarih: '2026-11-24', siparisNo: null }), '2026-11-25')[id]?.gecti).toBe(true);
+    expect(firmaYazilari(c, yer({ tarih: '2026-11-24', siparisNo: null }), '2026-11-24')[id]?.gecti).toBe(false);
+  });
+
+  it('elle girilmiş dönüş termini firma tarihinden farklıysa ikisi de yazar; aynı günse yalnız firma tarihi', () => {
+    const elle = (gun: string) => ({ ...c, D: { ...c.D, fasonTermin: { [id]: `${gun} 16:00` } } }) as typeof c;
+    expect(firmaYazilari(elle('2026-11-26'), yer({ tarih: '2026-11-24', siparisNo: 'ORN-SA-7' }), '2026-11-20')[id]?.yazi).toBe('Firma 24.11 · elle 26.11, plan firma tarihine göre');
+    expect(firmaYazilari(elle('2026-11-24'), yer({ tarih: '2026-11-24', siparisNo: 'ORN-SA-7' }), '2026-11-20')[id]?.yazi).toBe('Firma tarihi 24.11 · sipariş ORN-SA-7');
+  });
+
+  it('çok katmanlı emrin alt düğümünde tarih siparişin dugumFirma alanından okunur, kökün yerinden değil', () => {
+    const dugumlu = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((x) => (x.id === s.id ? { ...x, dugum: 'Y1', dugumFirma: { 30: '2026-12-01' } } : x)) } } as typeof c;
+    expect(firmaYazilari(dugumlu, yer({ tarih: '2026-11-24', siparisNo: 'ORN-SA-7' }), '2026-11-20')).toEqual({ [id]: { yazi: 'Firma tarihi 01.12', gecti: false, gun: '01.12' } });
   });
 });
