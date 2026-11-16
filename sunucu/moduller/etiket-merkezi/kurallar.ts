@@ -699,3 +699,13 @@ export function hataliBekleyenleri(
 }
 
 export const bekleyenSirasi = (a: Bekleyen, b: Bekleyen): number => Date.parse(b.zaman) - Date.parse(a.zaman) || a.tur.localeCompare(b.tur) || b.id - a.id;
+
+// 3306 a: şablon adı ölçüyü taşır ("Lot 100x50"); varsayılan ölçü değişince ad etkin ölçüyü yazar, anahtar değişmez.
+export function olculuAd(ad: string, tasarim: { genislik: number; yukseklik: number }, etkin: { genislik: number; yukseklik: number }): string {
+  const yaz = (o: { genislik: number; yukseklik: number }) => `${String(o.genislik).replace('.', ',')}x${String(o.yukseklik).replace('.', ',')}`;
+  const eski = yaz(tasarim);
+  return ad.includes(eski) ? ad.replace(eski, yaz(etkin)) : `${ad} ${yaz(etkin)}`;
+}
+
+// 3306 a: yazıcı denemesi yazıcının kendisini sınar; varsayılan ölçüsü değişmez.
+export const olcusuDegisirMi = (tur: string): boolean => tur !== 'deneme';

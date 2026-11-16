@@ -7,7 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { KAYIT_TURLERI, SABLON_TURLERI } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonListesiOgesi, SablonlarCevabi, YazdirCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -1107,5 +1107,57 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(etiketler.filter((e) => e.durum === 'ilk-tur').map((e) => e.kod), []);
     assert.deepEqual(etiketler.filter((e) => e.disaridakiYol !== null).map((e) => e.kod).sort(), ['seri-no']);
     assert.equal((await al(yetkisiz, '/etiket-merkezi/etiketler')).statusCode, 403);
+  });
+  test('EM-U40 (3306 a): şablonun varsayılan ölçüsü bütün basma yollarında geçerlidir; açık ölçü önce gelir, okunmayan ölçü kaydedilmez, defter yalnız eklenir', async () => {
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const basan = await tekIslemliKisi('olcubasan', ['etiket-merkezi.bas', 'etiket-merkezi.oku']);
+    const sablonYazan = await tekIslemliKisi('olcuyazan', ['etiket-merkezi.sablon-yaz']);
+    const olcuYaz = (cerez: string, anahtar: string, olcu: { genislik: number; yukseklik: number } | null) => yaz(cerez, `/etiket-merkezi/sablonlar/${anahtar}/olcu`, { olcu });
+    const liste = async () => ((await al(yonetici, '/etiket-merkezi/sablonlar')).json() as SablonlarCevabi).sablonlar.find((s) => s.anahtar === 'konum-50x25');
+
+    assert.equal((await olcuYaz(basan, 'konum-50x25', { genislik: 60, yukseklik: 30 })).statusCode, 403, 'basan ölçü değiştiremez');
+    assert.equal((await olcuYaz(sablonYazan, 'deneme-50x25', { genislik: 60, yukseklik: 30 })).statusCode, 400, 'yazıcı denemesi değişmez');
+    const kucuk = await olcuYaz(sablonYazan, 'konum-50x25', { genislik: 12, yukseklik: 10 });
+    assert.equal(kucuk.statusCode, 400);
+    assert.match(kucuk.body, /en küçük ölçü/);
+    assert.equal((await olcuYaz(sablonYazan, 'konum-50x25', { genislik: 120, yukseklik: 30 })).statusCode, 400);
+    assert.equal((await liste())?.degisiklik, null, 'reddedilen ölçü yazılmaz');
+
+    const r = await olcuYaz(sablonYazan, 'konum-50x25', { genislik: 60, yukseklik: 30 });
+    assert.equal(r.statusCode, 200, r.body);
+    const o = r.json() as SablonListesiOgesi;
+    assert.deepEqual({ g: o.genislik, y: o.yukseklik, t: o.tasarim, ad: o.ad }, { g: 60, y: 30, t: { genislik: 50, yukseklik: 25 }, ad: 'Yer 60x30' });
+    assert.equal(o.degisiklik?.kisi, 'Deneme Kişi');
+    assert.equal((await liste())?.genislik, 60);
+    assert.ok(((await al(yonetici, '/etiket-merkezi/etiketler')).json() as EtiketlerCevabi).etiketler.some((e) => e.sablonlar.some((s) => s.ad === 'Yer 60x30')));
+
+    // Ölçü verilmeyen önizleme varsayılanla, açık tasarım ölçüsü tasarımla basılır.
+    const on = (await al(yonetici, '/etiket-merkezi/sablonlar/konum-50x25/cikti?dil=zpl&dpi=203')).json() as CiktiCevabi;
+    assert.deepEqual({ g: on.sablon.genislik, y: on.sablon.yukseklik, t: on.ozelOlcu?.tasarim }, { g: 60, y: 30, t: { genislik: 50, yukseklik: 25 } });
+    assert.equal(((await al(yonetici, '/etiket-merkezi/sablonlar/konum-50x25/cikti?dil=zpl&dpi=203&en=50&boy=25')).json() as CiktiCevabi).ozelOlcu, null);
+
+    // Basılacaklar ve tek dokunuş ölçü göndermez: bekleyen kayıt da baskı anındaki varsayılanla basılır.
+    const kayit = { tur: 'konum', idler: [await konumAc('ETK-OLC1')] };
+    const i = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/indir', { yaziciId: dosya.id, adet: 1, kayit });
+    assert.equal(i.statusCode, 200, i.body);
+    assert.match((i.json() as IndirCevabi).komut, /\nq480\nQ240,/);
+    assert.match((i.json() as IndirCevabi).dosyaAdi, /-60x30-/);
+    const y = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/yazdir', { adet: 1, kayit });
+    assert.deepEqual({ g: (y.json() as YazdirCevabi).sablon.genislik, y: (y.json() as YazdirCevabi).sablon.yukseklik }, { g: 60, y: 30 });
+
+    // Tasarıma dönüş de satırdır: kim döndürdü görünür, ölçü tasarımdır.
+    const d = await olcuYaz(sablonYazan, 'konum-50x25', null);
+    assert.equal(d.statusCode, 200, d.body);
+    const g = d.json() as SablonListesiOgesi;
+    assert.deepEqual({ g: g.genislik, y: g.yukseklik, ad: g.ad, dolu: g.degisiklik !== null }, { g: 50, y: 25, ad: 'Yer 50x25', dolu: true });
+    assert.equal(((await al(yonetici, '/etiket-merkezi/sablonlar/konum-50x25/cikti?dil=zpl&dpi=203')).json() as CiktiCevabi).ozelOlcu, null);
+
+    // Kısıtlar ve yalnız ekleme veritabanında da durur.
+    const vt = ortam!.vt;
+    await assert.rejects(vt.sorgu(`INSERT INTO etiket_merkezi_sablon_olcusu (sablon_anahtar, genislik, yukseklik, kisi_id) VALUES ('konum-50x25', 5, 30, $1)`, [yoneticiId]), /etiket_merkezi_sablon_olcusu_en/);
+    await assert.rejects(vt.sorgu(`INSERT INTO etiket_merkezi_sablon_olcusu (sablon_anahtar, genislik, yukseklik, kisi_id) VALUES ('konum-50x25', 60, NULL, $1)`, [yoneticiId]), /etiket_merkezi_sablon_olcusu_ikisi/);
+    await assert.rejects(vt.sorgu('UPDATE etiket_merkezi_sablon_olcusu SET genislik = 70'));
+    await assert.rejects(vt.sorgu('DELETE FROM etiket_merkezi_sablon_olcusu'));
   });
 });

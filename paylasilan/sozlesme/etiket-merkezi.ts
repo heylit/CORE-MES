@@ -71,8 +71,16 @@ export const sablonSemasi = z.object({
 });
 export type Sablon = z.infer<typeof sablonSemasi>;
 
+// 3306 a: listede genislik ve yukseklik etkin (varsayılan) ölçüdür, ad da o ölçüyü yazar; tasarım kodun ölçüsüdür. Değişmemiş
+// şablonda ikisi aynıdır ve degisiklik null'dır.
+export const sablonListesiOgesi = sablonSemasi.extend({
+  tasarim: z.object({ genislik: mm, yukseklik: mm }),
+  degisiklik: z.object({ kisi: z.string().nullable(), zaman: z.string() }).nullable(),
+});
+export type SablonListesiOgesi = z.infer<typeof sablonListesiOgesi>;
+
 export const sablonlarCevabi = z.object({
-  sablonlar: z.array(sablonSemasi),
+  sablonlar: z.array(sablonListesiOgesi),
   // Tür başına etikete basılabilen alanlar ve adları (tasarım ve önizleme aynı listeyi kullanır).
   alanlar: z.partialRecord(z.enum(SABLON_TURLERI), z.array(z.object({ anahtar: z.string(), ad: z.string() }))),
   // Seçim listeleri sunucudan gelir: istemci sözleşmeden yalnız tip alır.
@@ -96,12 +104,16 @@ const olcuSayisi = (ad: string, enCok: number) => z.number()
 export const olcuSemasi = z.object({ genislik: olcuSayisi('En', OZEL_OLCU_SINIRI.enCokEn), yukseklik: olcuSayisi('Boy', OZEL_OLCU_SINIRI.enCokBoy) });
 export type OzelOlcu = z.infer<typeof olcuSemasi>;
 
+// Varsayılan ölçü komutu: null tasarım ölçüsüne döndürür.
+export const sablonOlcusuGovdesi = z.object({ olcu: olcuSemasi.nullable() });
+export type SablonOlcusuGovdesi = z.output<typeof sablonOlcusuGovdesi>;
+
 const ciktiSorgusuTemeli = z.object({
   dil: z.enum(YAZICI_DILLERI),
   dpi: z.coerce.number<number>().pipe(z.union([z.literal(203), z.literal(300)])),
   adet: z.coerce.number<number>().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`).prefault(1),
   sade: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
-  // En ve boy birlikte gelir; ikisi de yoksa şablonun kendi ölçüsü.
+  // En ve boy birlikte gelir; ikisi de yoksa şablonun varsayılan ölçüsü (3306 a).
   en: z.coerce.number<number>().optional(),
   boy: z.coerce.number<number>().optional(),
 });
@@ -223,7 +235,7 @@ export const basGovdesi = z.object({
   adet: z.number().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`),
   // Verilmezse örnek değerli deneme etiketi basılır.
   kayit: kayitSecimiSemasi.optional(),
-  // Verilmezse şablonun kendi ölçüsü.
+  // Verilmezse şablonun varsayılan ölçüsü (3306 a), o da yoksa tasarım ölçüsü.
   olcu: olcuSemasi.optional(),
 });
 export type BasGovdesi = z.output<typeof basGovdesi>;

@@ -113,3 +113,23 @@ export async function sonAtlamalar(db: Db, tur: string, idler: readonly number[]
   );
   return new Map(satirlar.map((s) => [s.id, s.zaman]));
 }
+
+export interface SablonOlcusuSatiri { sablonAnahtar: string; genislik: number | null; yukseklik: number | null; kisiId: number; zaman: string }
+
+// Şablon başına en son satır etkindir (3306 a); boş ölçülü son satır tasarım ölçüsüne dönüldüğünü söyler.
+export const sablonOlculeriOku = (db: Db, anahtar?: string): Promise<SablonOlcusuSatiri[]> =>
+  db.sorgu<SablonOlcusuSatiri>(
+    `SELECT DISTINCT ON (sablon_anahtar) sablon_anahtar AS "sablonAnahtar", genislik::float8 AS genislik, yukseklik::float8 AS yukseklik,
+            kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman
+       FROM etiket_merkezi_sablon_olcusu
+      WHERE $1::text IS NULL OR sablon_anahtar = $1
+      ORDER BY sablon_anahtar, id DESC`,
+    [anahtar ?? null],
+  );
+
+export async function sablonOlcusuEkle(db: Db, anahtar: string, olcu: { genislik: number; yukseklik: number } | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO etiket_merkezi_sablon_olcusu (sablon_anahtar, genislik, yukseklik, kisi_id) VALUES ($1, $2, $3, $4)',
+    [anahtar, olcu?.genislik ?? null, olcu?.yukseklik ?? null, kisiId],
+  );
+}

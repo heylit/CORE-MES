@@ -21,11 +21,11 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 const SABLONLAR: SablonlarCevabi = {
   sablonlar: [
-    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [] },
-    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [] },
-    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [] },
-    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [] },
-    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [] },
+    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null },
+    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
+    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
+    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [], tasarim: { genislik: 100, yukseklik: 150 }, degisiklik: null },
+    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [], tasarim: { genislik: 100, yukseklik: 75 }, degisiklik: null },
   ],
   alanlar: {},
   secenekler: {

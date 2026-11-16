@@ -6,7 +6,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi, type YazdirCevabi, type YazdirGovdesi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
-  type OnizlemeOgesi, type OzelOlcu, type OzelOlcuBilgisi, type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
+  type OnizlemeOgesi, type OzelOlcu, type OzelOlcuBilgisi, type Sablon, type SablonListesiOgesi, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -20,16 +20,45 @@ import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
+  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, olculuAd, olcusuDegisirMi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  atlamaEkle, baskiEkle, etiketTurleriOku, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  atlamaEkle, baskiEkle, etiketTurleriOku, sablonOlculeriOku, sablonOlcusuEkle, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI, pplbDenemesi, zplDenemesi } from './yazici-dili.ts';
 
-export const sablonlar = (): SablonlarCevabi => ({
-  sablonlar: [...HAZIR_SABLONLAR],
+// 3306 a: en son ölçü satırı etkindir; boş ölçülü satır tasarım ölçüsüne dönüştür ama değişikliği (kim, ne zaman) yine gösterir.
+async function etkinOlculer(db: Db, anahtar?: string): Promise<Map<string, { olcu: OzelOlcu | null; kisiId: number; zaman: string }>> {
+  const satirlar = await sablonOlculeriOku(db, anahtar);
+  return new Map(satirlar.map((x) => [x.sablonAnahtar, {
+    olcu: x.genislik === null || x.yukseklik === null ? null : { genislik: x.genislik, yukseklik: x.yukseklik }, kisiId: x.kisiId, zaman: x.zaman,
+  }]));
+}
+
+// Basarken ölçü verilmemişse şablonun varsayılanı kullanılır; yoksa tasarım ölçüsü (olcekliSablon null döner).
+async function etkinSecenek<T extends { olcu?: OzelOlcu }>(db: Db, sablon: Sablon, secenek: T): Promise<T> {
+  if (secenek.olcu !== undefined || !olcusuDegisirMi(sablon.tur)) return secenek;
+  const olcu = (await etkinOlculer(db, sablon.anahtar)).get(sablon.anahtar)?.olcu ?? null;
+  return olcu === null ? secenek : { ...secenek, olcu };
+}
+
+async function sablonListesi(db: Db, anahtar?: string): Promise<SablonListesiOgesi[]> {
+  const olculer = await etkinOlculer(db, anahtar);
+  const adlar = await kisiAdlari(db, [...olculer.values()].map((o) => o.kisiId));
+  return HAZIR_SABLONLAR.filter((s) => anahtar === undefined || s.anahtar === anahtar).map((s) => {
+    const kayit = olculer.get(s.anahtar);
+    const tasarim = { genislik: s.genislik, yukseklik: s.yukseklik };
+    const etkin = kayit?.olcu ?? tasarim;
+    return {
+      ...s, ...etkin, ad: kayit?.olcu ? olculuAd(s.ad, tasarim, etkin) : s.ad, tasarim,
+      degisiklik: kayit ? { kisi: adlar.get(kayit.kisiId) ?? null, zaman: kayit.zaman } : null,
+    };
+  });
+}
+
+export const sablonlar = async (db: Db): Promise<SablonlarCevabi> => ({
+  sablonlar: await sablonListesi(db),
   alanlar: ALANLAR,
   secenekler: {
     diller: YAZICI_DILLERI.map((deger) => ({ deger, ad: YAZICI_DILI_ADLARI[deger] })),
@@ -38,6 +67,23 @@ export const sablonlar = (): SablonlarCevabi => ({
     turAdlari: SABLON_TURU_ADLARI,
   },
 });
+
+// 3306 a: varsayılan ölçü bütün cihazlar içindir; okunmayacak ölçü örnek değerle denetlenir ve kaydedilmez (sessiz dönüş yok).
+// Tasarım ölçüsüne eşit ölçü "tasarıma dön" satırı olarak yazılır.
+export async function sablonOlcusuYaz(db: Db, kullanici: Kullanici, anahtar: string, olcu: OzelOlcu | null): Promise<SablonListesiOgesi> {
+  const sablon = sablonBul(anahtar);
+  if (!olcusuDegisirMi(sablon.tur)) throw dogrulama('Yazıcı denemesinin ölçüsü değişmez.');
+  const yeni = olcu === null || (olcu.genislik === sablon.genislik && olcu.yukseklik === sablon.yukseklik) ? null : olcu;
+  if (yeni !== null) {
+    const olcekli = olcekliSablon(sablon, yeni);
+    const degerler = ORNEK_DEGERLER[sablon.tur];
+    if (olcekli !== null) ozelOlcuBilgisiUret(sablon, olcekli, [yerlesim(olcekli.sablon, degerler, false)], degerler);
+  }
+  await sablonOlcusuEkle(db, anahtar, yeni, kullanici.id);
+  const [oge] = await sablonListesi(db, anahtar);
+  if (!oge) throw new Error('Şablon ölçüsü okunamadı.');
+  return oge;
+}
 
 function sablonBul(anahtar: string): Sablon {
   const sablon = HAZIR_SABLONLAR.find((s) => s.anahtar === anahtar);
@@ -88,8 +134,9 @@ function cikti(tasarim: Sablon, degerlerListesi: readonly AlanDegerleri[], secen
 }
 
 // Örnek değerli çıktı yazıcı ve şablon denemesi içindir; gerçek kayıt `kayitCiktisi` ile basılır.
-export function ornekCikti(anahtar: string, secenek: CiktiSecenekleri): CiktiCevabi {
+export async function ornekCikti(db: Db, anahtar: string, istenen: CiktiSecenekleri): Promise<CiktiCevabi> {
   const sablon = sablonBul(anahtar);
+  const secenek = await etkinSecenek(db, sablon, istenen);
   const degerler = sablon.tur === 'deneme'
     ? { ...ORNEK_DEGERLER.deneme, yazici: `${YAZICI_DILI_ADLARI[secenek.dil]} · ${secenek.dpi} dpi${secenek.sade ? ' · sade' : ''}` }
     : ORNEK_DEGERLER[sablon.tur];
@@ -249,8 +296,9 @@ async function rafKayitlari(db: Db, idler: readonly number[]): Promise<Map<numbe
   }));
 }
 
-export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, secenek: CiktiSecenekleri): Promise<KayitCiktiCevabi> {
+export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, istenen: CiktiSecenekleri): Promise<KayitCiktiCevabi> {
   const sablon = sablonBul(anahtar);
+  const secenek = await etkinSecenek(db, sablon, istenen);
   const uyum = kayitUyumHatasi(sablon.tur, k.tur);
   if (uyum !== null) throw dogrulama(uyum);
   const koli = koliHatasi(k.tur, k.koli);
@@ -347,8 +395,9 @@ export async function indir(db: Db, kullanici: Kullanici, anahtar: string, g: Ba
 // Kart 2904: tarayıcıdan vektörel yazdırma. Sunucu yazıcıya bağlanmaz; her etiketin yerleşimini (önizlemeyle aynı öğeler) verir, istemci
 // gerçek mm ölçüsünde sayfa olarak basar. Kurallar indirmeyle aynıdır (EM-11, EM-12); tarayıcı Türkçe harfi bastığından sadeleştirilmez.
 // Yazdırmanın yapıldığı bilinmez; defter kimin hangi etiketi yazdırmaya açtığını tutar.
-export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: YazdirGovdesi): Promise<YazdirCevabi> {
+export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, istenen: YazdirGovdesi): Promise<YazdirCevabi> {
   const sablon = sablonBul(anahtar);
+  const g = await etkinSecenek(db, sablon, istenen);
   const uyum = kayitUyumHatasi(sablon.tur, g.kayit?.tur ?? null);
   if (uyum !== null) throw dogrulama(uyum);
   let degerler: AlanDegerleri[];
@@ -391,7 +440,7 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
 // Yazıcı kendi dili, çözünürlüğü ve harf ayarıyla basar.
 function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): Promise<CiktiCevabi & { kayitlar: KayitCiktiCevabi['kayitlar'] | null }> {
   const secenek = { dil: yazici.dil, dpi: yazici.dpi === 300 ? 300 : 203, adet: g.adet, sade: yazici.sade, ...(g.olcu ? { olcu: g.olcu } : {}) } as const;
-  return g.kayit ? kayitCiktisi(db, anahtar, g.kayit, secenek) : Promise.resolve({ ...ornekCikti(anahtar, secenek), kayitlar: null });
+  return g.kayit ? kayitCiktisi(db, anahtar, g.kayit, secenek) : ornekCikti(db, anahtar, secenek).then((c) => ({ ...c, kayitlar: null }));
 }
 
 // Defterde yalnız gerçekten komuta giren (bulunan) kayıtlar yer alır; koliler gibi bir kaydın birden çok etiketi tek satırdır.
@@ -408,10 +457,11 @@ export async function baskilar(db: Db): Promise<BaskilarCevabi> {
 // Tür adları tablodan metin gelir; uç cevabı şemayla denetler, koddaki listelerle eşleşmeyi modül testi bekler.
 export async function etiketler(db: Db): Promise<EtiketlerCevabi> {
   const satirlar = await etiketTurleriOku(db);
+  const liste = await sablonListesi(db);
   return {
     etiketler: satirlar.map((s) => ({
       ...s,
-      sablonlar: HAZIR_SABLONLAR.filter((h) => s.sablonTuru !== null && h.tur === s.sablonTuru).map((h) => ({ anahtar: h.anahtar, ad: h.ad })),
+      sablonlar: liste.filter((h) => s.sablonTuru !== null && h.tur === s.sablonTuru).map((h) => ({ anahtar: h.anahtar, ad: h.ad })),
     })) as EtiketlerCevabi['etiketler'],
   };
 }
