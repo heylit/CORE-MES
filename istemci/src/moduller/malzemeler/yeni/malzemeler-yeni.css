@@ -51,7 +51,7 @@
 [data-tur="mamul"] { --tur-renk: var(--hazard-ink); }
 [data-tur="sarf"] { --tur-renk: var(--grafik-2); }
 [data-tur="demirbas"] { --tur-renk: var(--idle); }
-[data-tur="hizmet"] { --tur-renk: var(--grafik); }
+[data-tur="hizmet"] { --tur-renk: var(--cmm); }
 [data-tur="ticari_mal"] { --tur-renk: var(--hold); }
 [data-aile] { --aile-renk: var(--bp); }
 [data-aile="metal"] { --aile-renk: var(--done); }
