@@ -4,6 +4,9 @@ import '../../../../../ortak/arayuz/tablo.css';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler } from '../../motor/kurallar.ts';
 import { AyarMatrisi } from './Ayar.tsx';
+import { DegisiklikDefteri } from '../gecmis/Defter.tsx';
+import { DegisiklikIzi } from '../gecmis/index.tsx';
+import { GECMIS_BOLUMLERI, type GecmisBolumu } from '../gecmis/kurallar.ts';
 import { Denetim, denetimBulgulari, hataMetni } from './Denetim.tsx';
 import { Kisitlar } from './Kisitlar.tsx';
 import { FasonListesi, MalzemeListesi, PersonelListesi, SiparisListesi, TezgahListesi, type ListeOzellikleri } from './Listeler.tsx';
@@ -19,9 +22,13 @@ export { VERI_BOLUMLERI, bolumOku, type VeriBolumu } from './kurallar.ts';
 // seridi bugünkü sayfanın ikinci menüsünün yerindedir; bölüm denetimli verilirse (`bolum`, `bolumSec`, adres) onu izler, verilmezse kendi
 // durumunu tutar. Veri çalışmanın verisinden okunur; yazma yalnız planlama çalışmasının alanlarına ve çalışma komutuyla (221 c, 222 a).
 
+
 export interface VeriEkraniOzellikleri extends PlanlamaEkranOzellikleri {
   bolum?: VeriBolumu;
   bolumSec?: (b: VeriBolumu) => void;
+  // 3308: verilirse geçmişin iki bölümü (değişiklik defteri, değişiklik izi) aynı şeritte durur; seçiliyse `gecmis` doludur.
+  gecmis?: GecmisBolumu | null;
+  gecmisSec?: (b: GecmisBolumu) => void;
 }
 
 export function VeriVeKisitlar(o: VeriEkraniOzellikleri) {
@@ -45,12 +52,21 @@ export function VeriVeKisitlar(o: VeriEkraniOzellikleri) {
     <div className="tc-pyi" data-parca="veri" data-bolum={bolum}>
       <nav className="tc-pyi-serit-menu" aria-label="Veri ve kısıtlar">
         {VERI_BOLUMLERI.map(([k, ad, s]) => (
-          <button key={k} type="button" aria-current={k === bolum ? 'page' : undefined} onClick={() => { sec(k); }}>
+          <button key={k} type="button" aria-current={k === bolum && !o.gecmis ? 'page' : undefined} onClick={() => { sec(k); }}>
             <Simge ad={s} boyut="k" /><span>{ad}</span>{k === 'denetim' && bulgular.length > 0 && <span className="tc-pyi-sayi">{bulgular.length}</span>}
           </button>
         ))}
+        {o.gecmisSec && GECMIS_BOLUMLERI.map(([k, ad, sm]) => (
+          <button key={k} type="button" aria-current={o.gecmis === k ? 'page' : undefined} onClick={() => { o.gecmisSec?.(k); }}>
+            <Simge ad={sm} boyut="k" /><span>{ad}</span>
+          </button>
+        ))}
       </nav>
-      {!c ? (
+      {o.gecmis ? (
+        <section className="tc-pyi-icerik" aria-label={GECMIS_BOLUMLERI.find((x) => x[0] === o.gecmis)?.[1]}>
+          {o.gecmis === 'defter' ? <DegisiklikDefteri siparisler={c?.D.siparisler} /> : c ? <DegisiklikIzi c={c} /> : null}
+        </section>
+      ) : !c ? (
         <div className="tc-pyi-bos"><Simge ad="layers" /><strong>Planlama çalışması yok</strong><span>Çalışma kaydı açılınca veri ve kısıtlar burada görünür.</span></div>
       ) : (
         <section className="tc-pyi-icerik" aria-label={VERI_BOLUMLERI.find((x) => x[0] === bolum)?.[1]}>

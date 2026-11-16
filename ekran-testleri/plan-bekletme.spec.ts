@@ -55,45 +55,10 @@ const kur = async (page: Page) => {
 };
 
 test.describe('3050 Bekleyen emir planda', () => {
-  test('Bugün kartı ve durum cümlesi; plan çubuğunda geciken yanında beklemede; yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
-    await kur(page);
-    await ac('/plan?ekran=bugun');
-    const kok = page.locator('[data-parca="bugun"]');
-    await expect(kok).toBeVisible({ timeout: 15_000 });
-    await expect(kok.getByText('ORN-S2 beklemede')).toBeVisible();
-    await expect(kok.getByText('Malzeme bekleniyor. Planda yerinde kalıyor, t1 tezgâhını tutuyor. Taşımak sizin kararınız.')).toBeVisible();
-    await expect(kok.getByText(/terminin gerisinde \(1'i beklemede\)/).first()).toBeVisible();
-    await expect(kok.getByText('ORN-S1 beklemede')).toHaveCount(0);
-    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-    await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByText(/geciken, 1'i beklemede/)).toBeVisible();
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
-    expect(ag.hatalar).toEqual([]);
-  });
-
-  test('Çizelge gününde ve haftasında bekleyen işin bloğu desenli, ipucu "Beklemede" ile başlar, lejantta yazar; öteki iş desensiz', async ({ page, ag, ac }) => {
+  test('Plan şeridinde geciken yanında beklemede yazar; yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
     await kur(page);
     await ac('/plan/plan');
-    await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
-    await page.getByRole('toolbar', { name: 'Plan araçları' }).getByRole('button', { name: 'Gün', exact: true }).click();
-    const gun = page.getByRole('region', { name: /^Gün katmanı: / });
-    await expect(gun).toBeVisible({ timeout: 15_000 });
-    await gun.getByRole('button', { name: 'Sonraki gün' }).click();
-    const bekleyen = gun.locator('.tc-pym-gy-blok[data-bekle]');
-    await expect(bekleyen).toHaveCount(1);
-    await expect(bekleyen).toHaveAttribute('title', /^Beklemede: Malzeme bekleniyor\. /);
-    expect(await bekleyen.evaluate((e) => getComputedStyle(e).backgroundImage)).toContain('repeating-linear-gradient');
-    await expect(gun.locator('.tc-pym-gy-blok:not([data-bekle])')).toHaveCount(1);
-    await expect(gun.locator('.tc-pym-gy-lejant')).toContainText('beklemede');
-    const lejant = gun.locator('.tc-pym-gy-lejant');
-    if (await lejant.isVisible()) {
-      const ogeler = await lejant.locator(':scope > span').evaluateAll((l) => l.map((e) => e.getClientRects().length));
-      expect(ogeler.length).toBe(5);
-      expect(ogeler.every((n) => n === 1)).toBe(true);
-    }
-    await page.getByRole('toolbar', { name: 'Plan araçları' }).getByRole('button', { name: 'Hafta', exact: true }).click();
-    const hafta = page.getByRole('region', { name: 'Çizelge, hafta' });
-    await expect(hafta.locator('.tc-pym-ol-is[data-bekle]')).toHaveCount(1);
-    await expect(hafta.locator('.tc-pym-ol-is[data-bekle]')).toHaveAttribute('title', /^Beklemede: Malzeme bekleniyor\. /);
+    await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByText(/geciken, 1'i beklemede/)).toBeVisible({ timeout: 15_000 });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
     expect(ag.hatalar).toEqual([]);

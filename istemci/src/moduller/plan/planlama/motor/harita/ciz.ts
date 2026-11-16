@@ -29,6 +29,26 @@ export interface Cizim {
 }
 
 const kolay = (u: number) => 1 - Math.pow(1 - u, 3);
+// Kutuya sığmayan yazı sondan kırpılır; uzun tezgâh ve grup adı komşu kutunun ya da durum etiketinin üstüne taşmaz.
+export function kirp(g: Pick<CanvasRenderingContext2D, 'measureText'>, yazi: string, en: number): string {
+  if (en <= 0) return '';
+  if (g.measureText(yazi).width <= en) return yazi;
+  let n = yazi.length;
+  while (n > 1 && g.measureText(`${yazi.slice(0, n).trimEnd()}…`).width > en) n -= 1;
+  return `${yazi.slice(0, n).trimEnd()}…`;
+}
+// Tezgâh kodunun ayırt eden kısmı sondadır (ORN-CNC-T1, ORN-CNC-F1): sığmayan ad ortadan kırpılır, son parça kalır.
+export function ortaKirp(g: Pick<CanvasRenderingContext2D, 'measureText'>, yazi: string, en: number): string {
+  if (en <= 0) return '';
+  if (g.measureText(yazi).width <= en) return yazi;
+  const ayrac = Math.max(yazi.lastIndexOf('-'), yazi.lastIndexOf(' '));
+  const son = ayrac > 0 && yazi.length - ayrac <= 7 ? yazi.slice(ayrac).trimStart() : yazi.slice(-3);
+  for (let n = yazi.length - son.length - 1; n >= 1; n -= 1) {
+    const aday = `${yazi.slice(0, n).trimEnd()}…${son}`;
+    if (g.measureText(aday).width <= en) return aday;
+  }
+  return kirp(g, son.replace(/^-/, ''), en);
+}
 export function yuvarlak(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   r = Math.max(0, Math.min(r, w / 2, h / 2)); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
@@ -55,10 +75,14 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     g.fillStyle = rgba(R.bp, 0.04); yuvarlak(g, x, y, w, h, 14 * k); g.fill(); g.strokeStyle = rgba(R.bp, 0.3); g.lineWidth = 1; g.setLineDash([5, 5]); g.stroke(); g.setLineDash([]);
     const v = b.ms.map((m) => s.dol[m]?.[gT]).filter((z): z is number => z != null); const ort = v.length ? v.reduce((a, c) => a + c, 0) / v.length : null;
     g.textBaseline = 'alphabetic'; const fs = Math.max(10, Math.min(15, 14 * k));
-    g.font = `800 ${fs}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; const ad2 = (b.g === 'fason' ? b.g : grupKodlari(o.D)[b.g] ?? b.g).toLocaleUpperCase('tr-TR'); g.fillText(ad2, x + 12 * k, y + 14 + 14 * k);
+    g.font = `800 ${fs}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; const ad2 = kirp(g, (b.g === 'fason' ? b.g : grupKodlari(o.D)[b.g] ?? b.g).toLocaleUpperCase('tr-TR'), w - 24 * k); g.fillText(ad2, x + 12 * k, y + 14 + 14 * k);
     if (w > 120) {
       const aw = g.measureText(ad2).width; g.font = `500 ${fs * 0.78}px ${R.mono}`; g.fillStyle = rgba(ort != null && ort > 0.97 ? R.stop : R.muted);
-      g.fillText(`${b.n} tezgâh${ort != null ? ` · ${dilimAdi(o.D, o.olcek, o.r, gT)} %${Math.round(ort * 100)}` : ''}`, x + 12 * k + aw + 8, y + 14 + 14 * k);
+      const kalan = w - 24 * k - aw - 8; const uzun = `${b.n} tezgâh${ort != null ? ` · ${dilimAdi(o.D, o.olcek, o.r, gT)} %${Math.round(ort * 100)}` : ''}`;
+      // Dar kutuda önce gün adı, sonra tezgâh sayısı düşer; doluluk yüzdesi kalır.
+      const kisa = ort != null ? `%${Math.round(ort * 100)}` : `${b.n} tezgâh`;
+      const meta = g.measureText(uzun).width <= kalan ? uzun : g.measureText(kisa).width <= kalan ? kisa : '';
+      if (meta) g.fillText(meta, x + 12 * k + aw + 8, y + 14 + 14 * k);
     }
   }
   // akış yayları
@@ -127,13 +151,13 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     if (k * 168 < 50) {
       // uzak görünüm: yalnız ad ve durum rengi
       g.fillStyle = rgba(dr, 0.25); yuvarlak(g, ox(x0), oy(y0), w, h, 10 * k); g.fill(); g.font = `800 ${Math.max(9, 26 * k)}px ${R.mono}`; g.fillStyle = rgba(R.ink);
-      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(adi, sx, sy); g.textAlign = 'start';
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ortaKirp(g, adi, w - 6 * k), sx, sy); g.textAlign = 'start';
     } else {
       const orta = k < 0.72;
       // orta uzaklıkta ad büyür, küçük satırlar düşer; genel bakışta da tezgâh adı okunur
-      if (orta) { g.font = `800 ${Math.min(26 * k, Math.max(11, 20 * k))}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; g.fillText(adi, ox(x0 + 9), oy(y0 + 30)); }
-      else yazi(adi, ox(x0 + 10), oy(y0 + 23), 15, R.ink, true);
+      if (orta) { g.font = `800 ${Math.min(26 * k, Math.max(11, 20 * k))}px ${R.mono}`; g.fillStyle = rgba(R.ink); g.textAlign = 'start'; g.fillText(ortaKirp(g, adi, w - 18 * k), ox(x0 + 9), oy(y0 + 30)); }
       const et = fas ? 'FASON' : DURUM_ETIKETI[st.dur]; g.font = `700 ${8.5 * k}px ${R.mono}`; const ew = g.measureText(et).width + 10 * k;
+      if (!orta) { g.font = `700 ${15 * k}px ${R.mono}`; yazi(ortaKirp(g, adi, w - 26 * k - (8.5 * k >= 6.5 ? ew : 0)), ox(x0 + 10), oy(y0 + 23), 15, R.ink, true); g.font = `700 ${8.5 * k}px ${R.mono}`; }
       if (!orta && 8.5 * k >= 6.5) {
         g.fillStyle = rgba(dr, 0.16); yuvarlak(g, ox(x0 + KW - 10) - ew, oy(y0 + 12), ew, 15 * k, 7 * k); g.fill(); g.fillStyle = rgba(dr); g.textAlign = 'center';
         g.fillText(et, ox(x0 + KW - 10) - ew / 2, oy(y0 + 23)); g.textAlign = 'start';

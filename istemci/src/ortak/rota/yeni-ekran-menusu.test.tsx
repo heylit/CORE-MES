@@ -66,7 +66,7 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(yeniEkranAdresiMi('/ik/pdks')).toBe(false);
     expect(yeniEkranAdresiMi('/iklim')).toBe(false);
     expect(yeniEkranAdresiMi('/recete-rota/plan')).toBe(false);
-    expect(yeniEkranAdresiMi('/plan/studio')).toBe(false);
+    expect(yeniEkranAdresiMi('/plan/veri')).toBe(false);
     expect(yeniEkranAdresiMi('/malzemeler/yeni')).toBe(false);
     // Eski ekranı kalkan CNC Kurulum'un deneme satırı yoktur, şeridi yine çizilmez (1272 a).
     expect(YENI_EKRAN_YOLLARI).not.toContain('/cnc-kurulum/yeni');
@@ -89,11 +89,13 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
   });
 
   it('Planlama ayrı sayfadır (658 b): şeridi kendi menüsüdür, Reçete ve Rota şeridi çizilmez', () => {
-    adreste('/plan/studio');
+    adreste('/plan/veri');
     expect(serit('Reçete ve Rota')).toBeNull();
     const menu = serit('Planlama');
     expect(menu).not.toBeNull();
-    expect(within(menu as HTMLElement).getByRole('link', { name: /^Stüdyo/ }).getAttribute('aria-current')).toBe('page');
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Veri$/ }).getAttribute('aria-current')).toBe('page');
+    // Adı ve adresi benzeyen komşu sayfa seçili sayılmaz.
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Veri sağlığı/ }).getAttribute('aria-current')).toBeNull();
   });
 
   it('kökün altındaki başka modül ekranında (PDKS aktar) şerit durur', () => {

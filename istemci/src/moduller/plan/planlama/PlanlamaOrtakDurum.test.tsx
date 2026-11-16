@@ -13,10 +13,11 @@ const Sinama = ({ olcek, olcekSec, kaydir, secim, sec, git }: PlanlamaEkranOzell
     <button type="button" onClick={() => { kaydir(0); }}>Bugün</button>
     <button type="button" onClick={() => { sec({ siparis: 'S1', zaman: 12 }); }}>Seç</button>
     <button type="button" onClick={() => { sec({ tezgah: 'T1' }); }}>Tezgâh</button>
-    <button type="button" onClick={() => { git('studio'); }}>Atölyeye</button>
+    <button type="button" onClick={() => { git('veri'); }}>Veriye</button>
   </div>
 );
-vi.mock('./motor/index.tsx', () => ({ PlanlamaMotoru: Sinama, PlanlamaAtolyesi: Sinama }));
+vi.mock('./motor/index.tsx', () => ({ PlanlamaMotoru: Sinama }));
+vi.mock('./ic/veri/Sayfa.tsx', () => ({ VeriSayfasi: Sinama }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -36,8 +37,8 @@ describe('Görünümler arası ölçek ve seçim', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Seç' }));
     fireEvent.click(screen.getByRole('button', { name: 'Tezgâh' }));
     expect(screen.getByTestId('secim').textContent).toBe('S1 - T1 12');
-    fireEvent.click(screen.getByRole('button', { name: 'Atölyeye' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/studio'); });
+    fireEvent.click(screen.getByRole('button', { name: 'Veriye' }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/veri'); });
     expect(screen.getByTestId('olcek').textContent).toBe('ay 1');
     expect(screen.getByTestId('secim').textContent).toBe('S1 - T1 12');
     fireEvent.click(screen.getByRole('button', { name: 'Bugün' }));

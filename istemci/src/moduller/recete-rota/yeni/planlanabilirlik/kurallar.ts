@@ -149,7 +149,7 @@ const GECISLER: Readonly<Record<DuzeltmeYeri, Gecis>> = {
   'vardiya-personel': { tur: 'adres', yol: '/vardiya/personel', islem: 'sayfa.vardiya', baslik: 'Vardiya başına personel' },
   vardiyalar: { tur: 'adres', yol: '/vardiya', islem: 'sayfa.vardiya', baslik: 'Vardiyalar ve tatiller' },
   'plan-ayarlari': { tur: 'adres', yol: '/plan/motor-ayarlari', islem: 'plan.planlama-oku', baslik: 'Motor ayarları' },
-  plan: { tur: 'adres', yol: '/plan/studio', islem: 'plan.planlama-oku', baslik: 'Planlama atölyesi' },
+  plan: { tur: 'adres', yol: '/plan', islem: 'plan.planlama-oku', baslik: 'Planlama Kokpiti' },
 };
 export function gecis(kod: PlanlanamamaNedeni): Gecis | null {
   const yer: DuzeltmeYeri | null = NEDEN_DUZELTME_YERI[kod];

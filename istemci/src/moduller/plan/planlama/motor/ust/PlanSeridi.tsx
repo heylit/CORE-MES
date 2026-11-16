@@ -42,12 +42,10 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const hata = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, hata);
   const bekleyenUygula = useBekleyenUygula(o, hata);
-  const ekran = o.gorunum === 'plan' ? o.alt?.ekran ?? 'tahta' : null;
   return (
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
-        etkin={ekran === 'veri' ? 'veri' : ekran === 'gecmis' ? 'gecmis' : ekran !== null ? 'plan' : o.gorunum === 'studio' ? 'studyo' : null} planaGit={() => o.git('plan')} studyo={() => o.git('studio')} ozeteGit={() => o.git('plan')}
-        veri={o.altSec ? () => o.altSec?.({ ekran: 'veri', bolum: null }) : null} gecmis={o.altSec ? () => o.altSec?.({ ekran: 'gecmis', bolum: null }) : null} planKur={planKur} bekleyenUygula={bekleyenUygula} studyoda={o.gorunum === 'studio'} iyilestirGizli={o.gorunum === 'kokpit'} {...y} />
+        ozeteGit={() => o.git('plan')} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c?.olaylar ?? []} {...y} />
     </div>
   );
 }

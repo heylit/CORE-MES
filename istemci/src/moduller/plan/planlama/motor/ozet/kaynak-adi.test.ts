@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanVerisi } from '../../tipler.ts';
-import { odakAdi } from '../../ic/odak/kurallar.ts';
 import { tezEtiketi } from '../cizelge/kurallar.ts';
 import { tezgahKodlari, tezgahKodu } from './veri.ts';
 
@@ -15,8 +14,6 @@ describe('kaynağın ekrandaki adı', () => {
     const k = tezgahKodlari(D);
     expect(['T1', 'kisi-4', '@5', 'T9', '@6'].map((m) => tezgahKodu(m, k))).toEqual(['ORN-CNC-T1', 'Ornek Kisi', 'Ornek Fason', 'T9', '6']);
     expect(tezEtiketi('@5', k)).toBe('fason Ornek Fason');
-    expect(odakAdi('@5', k)).toBe('Ornek Fason (fason)');
-    expect(odakAdi('kisi-4', k)).toBe('Ornek Kisi');
   });
 });
 

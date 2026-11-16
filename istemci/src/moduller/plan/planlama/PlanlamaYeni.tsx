@@ -9,9 +9,8 @@ import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
-  ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, kapasiteBolumuMu, kapasiteBolumuOku, menuGorunumu, PlanSeridi, studyoAdresi,
-  OlayAcBaglami, studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
-  type StudyoOlayTuru,
+  ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, eskiEkranAdresi, gorunumAdresi, gorunumOku, kapasiteBolumuMu, kapasiteBolumuOku, menuGorunumu, PlanSeridi,
+  OlayAcBaglami, OlayPenceresi, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type PlanOlayTuru,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
 import { KaynakAdlariBaglami, kaynakAdlariKur } from './kaynak-kodu.tsx';
@@ -46,7 +45,7 @@ function PlanlamaEkrani() {
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler) : null),
     [durum, kullanici],
   );
-  // Kök adres Kokpit'tir (3282); Motor'un ekranlı eski adresi (`/plan?ekran=veri`) Motor'u açmaya devam eder.
+  // Kök adres Kokpit'tir (3282); ekranlı eski adres (`/plan?ekran=veri`) Motor sayılır, aşağıda yeni yerine yönlenir.
   const gorunum = parca === undefined ? (sorgu.has('ekran') ? 'plan' : ACILIS) : gorunumOku(parca);
   const { bildir } = useBildirim();
   // 657 a, 1395 a: çalışma kaydı yoksa sayfa açılışta yazmaz; yazabilen kişi boş çalışmayı düğmeyle sunucuya kurdurur (Reçete ve Rota
@@ -124,11 +123,12 @@ function PlanlamaEkrani() {
   const kaydir = useCallback((n: number): void => { olcekKur((x) => ({ ...x, kayma: n === 0 ? 0 : x.kayma + n })); }, []);
   const sec = useCallback((s: Partial<PlanlamaSecimi>): void => { secimKur((x) => ({ ...x, ...s })); }, []);
   const altSec = useCallback((a: PlanlamaAltEkrani): void => { void git(altEkranAdresi(a)); }, [git]);
-  const studyoAc = useCallback((i: StudyoIstegi | null): void => { void git(studyoAdresi(i), { replace: i === null }); }, [git]);
 
   const planYazar = yetki?.planYaz === true;
-  // Üst şeritteki "Olay ekle" her sayfada atölyenin olay formunu açar (tahta dışında da); yazamayana null, düğme pasif kalır.
-  const olayAc = useMemo(() => (planYazar ? (t: StudyoOlayTuru) => { studyoAc({ tur: 'olay', v: t }); } : null), [planYazar, studyoAc]);
+  // Üst şeritteki "Olay ekle" her sayfada olay formunu açar; yazamayana null, düğme pasif kalır.
+  const [olayTuru, olayTuruKur] = useState<PlanOlayTuru | null>(null);
+  const olayAc = useMemo(() => (planYazar && calisma !== null ? (t: PlanOlayTuru) => { olayTuruKur(t); } : null), [planYazar, calisma]);
+  const olayKapat = useCallback((): void => { olayTuruKur(null); }, []);
   const rrKaydi = durum.tur === 'hazir' ? durum.depo.receteRotaKaydi : null;
   const canliEmirler = durum.tur === 'hazir' ? durum.depo.durum?.emirler : null;
   const emirNo = useEmirNo(rrKaydi, canliEmirler);
@@ -147,13 +147,15 @@ function PlanlamaEkrani() {
   // Kapta görünümün kendi adı durur; Kapasite'de açık bölümün adı (eski sayfa testleri ve stilleri bölüm adını okur).
   const kapAdi = gorunum === 'kapasite' ? kapasiteBolumuOku(sorgu) : gorunum;
   const gec = (g: PlanlamaGorunumu): void => { void git(gorunumAdresi(g)); };
-  const alt = gorunum === 'plan' ? altEkranOku(sorgu) : TAHTA;
-  const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
+  // Motor'un eski iç ekranları (3308-2 a): Veri ve Geçmiş, Veri sayfasına gider; Bugünün kararları ve Nasıl hesaplandı kalktı, Motor açılır.
+  const eski = gorunum === 'plan' ? eskiEkranAdresi(sorgu) : null;
+  if (eski !== null) return <Navigate to={eski} replace />;
+  const alt = TAHTA;
 
   const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
   const canliBayat = ((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat);
   // Değişiklik satırı yalnız bekleyen değişiklik ya da eskiyen canlı plan varken yer kaplar (3042).
-  const motorEkrani = gorunum === 'plan' || gorunum === 'studio';
+  const motorEkrani = gorunum === 'plan';
   const serit = calisma !== null && calisma.plan !== null
     && (!motorEkrani || seritListesi(calisma, disSatir).length > 0 || (canliBayat !== null && canliBayatMetni(canliBayat) !== null));
   // Üst alan tek satırdır (2320 S1 d): düzenleyen, değişiklik ve çalışma açma şeritleri aynı kapta alt alta.
@@ -184,19 +186,24 @@ function PlanlamaEkrani() {
                 <Suspense fallback={null}>
                   <PlanSeridi
                     depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
-                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc} gorunum={gorunum}
+                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
                   depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
-                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc}
+                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec}
                 />
               </Suspense>
             </>
           )}
       </div>
+      {calisma !== null && planYazar && (
+        <Suspense fallback={null}>
+          <OlayPenceresi o={{ komut: yazici, yetki, yenile: yazTazele, calisma, depo: durum.depo }} c={calisma} ad={adlar} on={olayTuru} kapat={olayKapat} />
+        </Suspense>
+      )}
       </OlayAcBaglami.Provider>
       </KaynakAdlariBaglami.Provider>
     </div>

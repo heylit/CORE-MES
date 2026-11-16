@@ -2,56 +2,53 @@ import { useEffect, useRef } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, sayiEki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
-import { CALISMA_ACILINCA, PLANDA_IYILESTIR, YOK_NOTU } from '../ortak.tsx';
-import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
+import { CALISMA_ACILINCA, YOK_NOTU } from '../ortak.tsx';
 import { OLAY_YOK, useOlayAc } from '../../gorunumler.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 
-// Plan çubuğu (zk-kabuk.betik sdCubuk, zr-agirlik sdNabiz): ekranlar, üç nabız sayısı, durum ve iki eylem. Arama (Ctrl K paleti) ve
-// kullanıcı menüsü eski çerçevenindir (208 a). Nabız sayısı plan nabzını açar.
+// Plan şeridi (3308-2 a): durum ışığı, üç nabız sayısı, olay sayısı, plan durumu ve tek eylem; tek satırdır, dokununca plan nabzı ve olaylar açılır.
 interface Ozellikler {
   plan: boolean; guncel: boolean; planYaz: boolean;
   nabiz: NabizDurumu | null; nabizAcik: boolean; nabizAc: (ac: boolean) => void;
-  // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", Veri ve kısıtlar "veri", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi
-  // motorun tahtasına gider; `veri` ve `gecmis` verilmezse o düğme pasiftir (iskeletsiz çizim).
-  etkin: 'plan' | 'studyo' | 'veri' | 'gecmis' | null; planaGit: (() => void) | null;
-  // Kokpit'te true (3304 a): "Plan iyileştirme ara" çubukta durmaz; arama Motor sayfasındadır.
-  iyilestirGizli?: boolean; veri?: (() => void) | null; gecmis?: (() => void) | null;
-  studyo: () => void; ozeteGit: () => void;
+  // Nabızdaki gecikme sayısı Motor sayfasının özetine götürür.
+  ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
   // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
   planKur?: PlanKurucu | null;
   // Plan veriden eskiyse bekleyen değişiklikleri uygular (1786 PLN-2); verilmezse düğme eskisi gibi pasif.
   bekleyenUygula?: BekleyenUygulayici | null;
-  // Plan güncelken kayıtlı planı iyileştirme araması, önizlemeli (2129-1 b); verilmezse düğme pasif.
-  hamle?: Hamleci | null;
-  // Stüdyo'da Olay ekle ve iyileştirme tahtanın kendi araç çubuğunda var; bantta tekrarlanmaz. Plan nabzı her ekranda kalır.
-  studyoda?: boolean;
+  // Çalışmanın olayları (arıza, acil sipariş, malzeme, eksik kişi, fason); açık şeritte listelenir.
+  olaylar?: readonly Record<string, unknown>[];
 }
 
+// Durum ışığı: geciken yoksa yeşil; bir iki geciken ya da darboğaz %95 üstündeyse sarı; daha çok gecikende kırmızı.
+type Isik = 'yok' | 'iyi' | 'dikkat' | 'sorun';
+const ISIK_ADI: Record<Isik, string> = { yok: 'plan yok', iyi: 'yolunda', dikkat: 'dikkat', sorun: 'sorun var' };
+function isikOf(n: NabizDurumu | null): Isik {
+  if (!n) return 'yok';
+  const gec = n.cur.late ?? 0, dar = n.cur.dar ?? 0;
+  return gec >= 3 ? 'sorun' : gec > 0 || dar >= 95 ? 'dikkat' : 'iyi';
+}
+const OLAY_ADI: Record<string, string> = { ariza: 'Arıza', acil: 'Acil sipariş', malzeme: 'Malzeme gecikmesi', eksik: 'Eksik kişi', fason: 'Fason gecikmesi' };
+const olayOzeti = (x: Record<string, unknown>): string => {
+  const y = (k: string) => (typeof x[k] === 'string' || typeof x[k] === 'number' ? String(x[k]) : '');
+  return [y('m') || y('urun') || y('kod') || y('f') || y('grup'), y('saat') && `${y('saat')} sa`, y('gun') && `${y('gun')} gün`, y('adet') && `${y('adet')} adet`, y('neden')].filter(Boolean).join(' · ');
+};
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'toplam gecikme', true], ['dar', 'darboğaz', true]];
 
 export function Cubuk(o: Ozellikler) {
-  const olayAc = useOlayAc();
-  const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
-  // Düğme pasifse nedeni: plan yokken çalışma açılmamıştır (Planı kur çalışmayla açılır); plan varken iyileştirme Plan sayfasındadır.
-  const pasif = o.planYaz && !uyg && !kur && !(o.plan && (o.hamle || o.planaGit));
-  const pasifNeden = o.plan ? PLANDA_IYILESTIR : CALISMA_ACILINCA;
-  const pasifNot = pasif ? (o.plan ? 'Plan sayfasında' : 'Çalışma açılınca') : null;
+  const n = o.nabiz;
+  const olaylar = o.olaylar ?? [];
+  const isik = isikOf(n); const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
+  // Düğme pasifse nedeni: plan yokken çalışma açılmamıştır (Planı kur çalışmayla açılır).
+  const pasifNot = o.planYaz && !uyg && !kur && !o.plan ? 'Çalışma açılınca' : null;
   return (
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
-        <nav className="tc-pym-sb-ekran" aria-label="Ekranlar">
-          {/* Plan ekranının sayfalarında (Bugünün kararları, Nasıl hesaplandı) Plan seçilidir ve tahtaya döner; tahtada planaGit verilmez. */}
-          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.planaGit ?? undefined} title={o.planaGit ? 'Motor: planı anla' : undefined}><Simge ad="gantt" boyut="k" /><span>Motor</span></button>
-          <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Stüdyo: planı düzenle ve yayınla"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
-          {o.etkin === 'veri' || o.veri
-            ? <button type="button" aria-current={o.etkin === 'veri' ? 'page' : undefined} onClick={o.etkin === 'veri' ? undefined : o.veri ?? undefined} title="Veri ve kısıtlar"><Simge ad="layers" boyut="k" /><span>Veri</span></button>
-            : <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>}
-          {o.etkin === 'gecmis' || o.gecmis
-            ? <button type="button" aria-current={o.etkin === 'gecmis' ? 'page' : undefined} onClick={o.etkin === 'gecmis' ? undefined : o.gecmis ?? undefined} title="Geçmiş"><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>
-            : <button type="button" aria-disabled="true" title={`Geçmiş: ${YOK_NOTU}`}><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>}
-        </nav>
+        <button type="button" className="tc-pym-sb-isik" data-isik={isik} aria-expanded={o.nabizAcik} disabled={!n}
+          title={`Plan durumu: ${ISIK_ADI[isik]}.${n ? ' Plan nabzını ve olayları aç ya da kapat.' : ''}`} onClick={() => o.nabizAc(!o.nabizAcik)}>
+          <i aria-hidden="true" /><b>Plan nabzı</b><span className="tc-pym-sb-isik-ad">{ISIK_ADI[isik]}</span>
+        </button>
         {n && (
           <div className="tc-pym-sb-nb" role="group" aria-label={`Plan nabzı, ${n.donemYazi}`}>
             {KISA.map(([id, ad, ikincil]) => {
@@ -67,18 +64,15 @@ export function Cubuk(o: Ozellikler) {
                 </button>
               );
             })}
+            <button type="button" className="tc-pym-sb-nb-k" data-ikincil="" data-olaylar="" aria-expanded={o.nabizAcik} title="Olaylar: arıza, acil sipariş, malzeme, eksik kişi, fason. Aç ya da kapat." onClick={() => o.nabizAc(!o.nabizAcik)}>
+              <Simge ad="alert" boyut="k" /><b className="tc-pym-mono">{olaylar.length}</b><span>olay</span>
+            </button>
           </div>
         )}
         <span className="tc-pym-sb-sag">
           {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
-          {o.planYaz && o.plan && !o.studyoda && (
-            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-sb-iyi" data-olay="" aria-disabled={olayAc ? undefined : 'true'}
-              title={`Olay ekle: acil sipariş, arıza, malzeme gecikmesi.${olayAc ? '' : ` ${OLAY_YOK}`}`} aria-label="Olay ekle" onClick={olayAc ? () => { olayAc('ariza'); } : undefined}>
-              <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
-            </button>
-          )}
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
-          {pasifNot !== null && !o.studyoda && <small className="tc-pym-sb-not">{pasifNot}</small>}
+          {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
@@ -90,17 +84,9 @@ export function Cubuk(o: Ozellikler) {
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
               <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
             </button>
-          ) : o.studyoda || (o.plan && o.iyilestirGizli) ? null : o.plan && o.hamle ? (
-            <IyilestirDugmesi h={o.hamle} />
-          ) : o.plan && o.planaGit ? (
-            <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.guncel ? '' : ' tc-dugme-birincil'}`}
-              title="Plan iyileştirme ara: Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." aria-label="Plan iyileştirme ara" onClick={o.planaGit}>
-              <Simge ad="play" boyut="k" /><IyiAdi />
-            </button>
-          ) : (
-            <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
-              title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}: ${pasifNeden}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
-              <Simge ad="play" boyut="k" />{o.plan ? <IyiAdi /> : <span>Planı kur</span>}
+          ) : o.plan ? null : (
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" aria-disabled="true" title={`Planı kur: ${CALISMA_ACILINCA}`} aria-label="Planı kur">
+              <Simge ad="play" boyut="k" /><span>Planı kur</span>
             </button>
           ))}
         </span>
@@ -110,26 +96,12 @@ export function Cubuk(o: Ozellikler) {
   );
 }
 
-// Çubuk dar kaldığında (dört ekran adı yazılıyken) uzun ad sağ kenardan taşar; orada kısa ad görünür, düğmenin adı (aria-label) aynı kalır.
-function IyiAdi() {
-  return <span><span className="tc-pym-sb-uzun">Plan iyileştirme ara</span><span className="tc-pym-sb-kisa">İyileştir</span></span>;
-}
-
-function IyilestirDugmesi({ h }: { h: Hamleci }) {
-  const y = hamleYapisi(h, (x) => { x.iyilestir(); });
-  return (
-    <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi" aria-disabled={y.yap ? undefined : 'true'} aria-busy={h.suruyor || undefined}
-      title={y.yap ? 'Plan iyileştirme ara: motor daha iyi bir plan arar; bulursa önizlersiniz, siz uygularsınız.' : `Plan iyileştirme ara: ${y.not}`}
-      aria-label="Plan iyileştirme ara" onClick={y.yap ?? undefined}>
-      <Simge ad="play" boyut="k" />{h.suruyor ? <span>Aranıyor</span> : <IyiAdi />}
-    </button>
-  );
-}
 function NabizPaneli(o: Ozellikler & { n: NabizDurumu }) {
+  const olayAc = useOlayAc(); const olaylar = o.olaylar ?? [];
   const { n } = o; const kok = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') o.nabizAc(false); };
-    const dokun = (e: PointerEvent) => { const h = e.target as Element | null; if (!kok.current?.contains(h) && !h?.closest?.('.tc-pym-sb-nb-k')) o.nabizAc(false); };
+    const dokun = (e: PointerEvent) => { const h = e.target as Element | null; if (!kok.current?.contains(h) && !h?.closest?.('.tc-pym-sb-nb-k, .tc-pym-sb-isik')) o.nabizAc(false); };
     document.addEventListener('keydown', tus); document.addEventListener('pointerdown', dokun, true);
     return () => { document.removeEventListener('keydown', tus); document.removeEventListener('pointerdown', dokun, true); };
   }, [o]);
@@ -170,6 +142,20 @@ function NabizPaneli(o: Ozellikler & { n: NabizDurumu }) {
               ? <button key={g.id} type="button" className="tc-pym-nb-k" data-ton={f.ton || undefined} title={`${g.ad}: ${g.ipucu} Dokununca ilgili sayfa açılır.`} onClick={() => { o.nabizAc(false); o.ozeteGit(); }}>{ici}</button>
               : <button key={g.id} type="button" className="tc-pym-nb-k" aria-disabled="true" data-ton={f.ton || undefined} title={`${g.ad}: ${g.ipucu} ${YOK_NOTU}`}>{ici}</button>;
           })}
+        </div>
+        <div className="tc-pym-nb-olay">
+          <b><Simge ad="alert" boyut="k" />Olaylar ({olaylar.length})</b>
+          {olaylar.length === 0 ? <span className="tc-pym-nb-olay-bos">Kayıtlı olay yok.</span> : (
+            <ul>
+              {olaylar.slice(-5).reverse().map((x, i) => (
+                <li key={i}><b>{OLAY_ADI[String(x.tip)] ?? 'Olay'}</b><span>{olayOzeti(x)}</span></li>
+              ))}
+            </ul>
+          )}
+          {o.planYaz && o.plan && (
+            <button type="button" className="tc-dugme tc-pym-kucuk" aria-disabled={olayAc ? undefined : 'true'} title={`Olay ekle: acil sipariş, arıza, malzeme gecikmesi.${olayAc ? '' : ` ${OLAY_YOK}`}`}
+              onClick={olayAc ? () => { olayAc('ariza'); } : undefined}><Simge ad="plus" boyut="k" />Olay ekle</button>
+          )}
         </div>
       </section>
     </div>

@@ -294,7 +294,7 @@ describe('Kabuk', () => {
     const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
     const secili = (ad: string) => within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('link', { name: ad }).getAttribute('aria-current');
     // Planlama Reçete ve Rota'dan ayrı sayfadır (658 b).
-    for (const yol of ['/plan/studio']) {
+    for (const yol of ['/plan/veri']) {
       const { unmount } = yeniCiz(yol);
       expect(baslik()).toBe('Planlama');
       expect(secili('Planlama')).toBe('page');

@@ -7,11 +7,11 @@ import type { Aralik } from '../harita/kurallar.ts';
 import { HaritaOkuma } from '../harita/Okuma.tsx';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
-import { Bekleme, Canli, DarYorum, Gostergeler, Pano, Sure, Yaris, Yorumlar, Yuk } from './bolumler.tsx';
-import { cevap, gostergeler, konum, secim, yorumlar, type BolgeKimligi, type OzetVerisi, type Yorum } from './veri.ts';
+import { Canli, Gostergeler, Pano, Yaris, Yuk } from './bolumler.tsx';
+import { cevap, gostergeler, konum, secim, yorumlar, type BolgeKimligi, type OzetVerisi } from './veri.ts';
 
-// Özet görünümü (zm-ozet.betik, zo-kontrol): altı bölüm ve tezgâh haritası bir ızgarada. Bölüm sırası ve ızgara yerleri eski sayfanınkidir;
-// harita hücresinde tekerlek sayfayı kaydırır, harita Ctrl ile yakınlaşır.
+// Özet görünümü (3308-2 a): plan nasıl gidiyor, tezgâh haritası, siparişlerin teslime yarışı ve tezgâh yükü. Öteki ölçüler plan nabzı
+// şeridindedir. Harita hücresinde tekerlek sayfayı kaydırır, harita Ctrl ile yakınlaşır.
 
 export interface OzetDurumu {
   nasil: BolgeKimligi | null; acikGrup: string | null; secJob: string | null; secTez: string | null; zaman: number;
@@ -31,37 +31,22 @@ export function Ozet(o: Ozellikler) {
   const yor = useMemo(() => yorumlar(c, v, o.tezGrup), [c, v, o.tezGrup]);
   const sec = useMemo(() => secim(v, d.secJob, d.secTez, o.tezGrup), [v, d.secJob, d.secTez, o.tezGrup]);
   const kpi = useMemo(() => gostergeler(c, v, o.tezGrup), [c, v, o.tezGrup]);
-  const [yorumDar, setYorumDar] = useState(yorumDarOku);
-  const yorumDarYap = (v: boolean) => { setYorumDar(v); yorumDarYaz(v); };
   const t = d.zaman; const gun = Math.min(v.gun - 1, Math.floor((t - v.T0) / 24 / v.kova));
   // "Yakından bak": bölüm görünür alana gelir ve odağı alır (eski sayfada tahtanın kamerası bölgeye uçardı).
   const yakindan = (el: HTMLElement | null) => { el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); el?.querySelector<HTMLElement>('.tc-pym-br-soru')?.focus(); };
   const pano = (id: BolgeKimligi) => ({ id, cevap: cevap(c, v, id, yor), nasil: d.nasil === id, nasilAc: () => o.nasilAc(id), yakindan });
-  // Yorumun bağlantısı: sipariş ve tezgâh seçilir; Reçete ve Rota kartı kartlarla gelir.
-  const eylem = (e: NonNullable<Yorum['eylem']>) => {
-    const hedef = e.v;
-    if (e.tur === 'br-git-sip' && hedef) return () => o.sipSec(hedef, false);
-    if (e.tur === 'br-git-tez' && hedef) return () => o.tezSec(hedef, false);
-    return null;
-  };
   return (
-    <div className="tc-pym-oz" data-vurgu={sec ? '' : undefined} data-yorum-dar={yorumDar ? '' : undefined} ref={degisken({ '--f': konum(v, t).toFixed(4) })}>
-      <Pano {...pano('ozet')} ek={<Canli c={c} v={v} t={t} />}><Gostergeler l={kpi} /></Pano>
-      <Pano {...pano('bekle')}><Bekleme c={c} v={v} sec={sec} acikGrup={d.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} kartAc={o.kartAc} /></Pano>
-      {yorumDar
-        ? <DarYorum l={yor} ac={() => yorumDarYap(false)} />
-        : <Pano {...pano('yorum')} daralt={() => yorumDarYap(true)}><Yorumlar l={yor} eylem={eylem} /></Pano>}
-      <Pano {...pano('yuk')}><Yuk c={c} v={v} sec={sec} gun={gun} gunSec={o.gunSec} tezSec={o.tezSec} tezGrup={o.tezGrup} /></Pano>
-      <Pano {...pano('yaris')}><Yaris c={c} v={v} sec={sec} sipSec={o.sipSec} /></Pano>
-      <Pano {...pano('sure')}><Sure v={v} sipSec={o.sipSec} /></Pano>
+    <div className="tc-pym-oz" data-sade="" data-vurgu={sec ? '' : undefined} ref={degisken({ '--f': konum(v, t).toFixed(4) })}>
+      <Pano {...pano('ozet')} ek={<Canli c={c} v={v} t={t} />}><Gostergeler l={kpi.filter((g) => SADE_GOSTERGELER.has(g.ad))} /></Pano>
       <HaritaHucresi {...o} />
+      <Pano {...pano('yaris')}><Yaris c={c} v={v} sec={sec} sipSec={o.sipSec} /></Pano>
+      <Pano {...pano('yuk')}><Yuk c={c} v={v} sec={sec} gun={gun} gunSec={o.gunSec} tezSec={o.tezSec} tezGrup={o.tezGrup} /></Pano>
     </div>
   );
 }
 
-const YORUM_ANAHTARI = 'tmi:planlama:yorum-dar';
-function yorumDarOku(): boolean { try { return localStorage.getItem(YORUM_ANAHTARI) === '1'; } catch { return false; } }
-function yorumDarYaz(v: boolean): void { try { if (v) localStorage.setItem(YORUM_ANAHTARI, '1'); else localStorage.removeItem(YORUM_ANAHTARI); } catch { /* depo kapalıysa tercih bu açılışta kalır */ } }
+// Yalnız kararı etkileyen ölçüler; öteki ölçüler plan nabzı şeridindedir.
+const SADE_GOSTERGELER: ReadonlySet<string> = new Set(['Yerleşmedi', 'Zamanında', 'Geç', 'En yoğun tezgâh', 'Son iş biter']);
 
 // Tezgâh haritası hücresi (zm-ozet brKatman, zo-kontrol): başlık, yakınlık, Büyüt, okuma açıklaması ve tuval; oynatıcı yok, zaman imleci Özet'inki.
 function HaritaHucresi(o: Ozellikler) {

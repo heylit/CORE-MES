@@ -804,7 +804,7 @@ function Yonlendir({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi
   return (
     <Kart baslik="Planlama sayfaları" simge="grid">
       <div className="tc-pym-pa-yol">
-        {grup('Planla', 'gantt', plan.maddeler.filter((m) => m.anahtar !== 'studio' && gorunumAcik(m.anahtar as PlanlamaGorunumu, o.yetki))
+        {grup('Planla', 'gantt', plan.maddeler.filter((m) => gorunumAcik(m.anahtar as PlanlamaGorunumu, o.yetki))
           .map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge, f: () => o.git(m.anahtar as PlanlamaGorunumu) })))}
         {grup('Veri ve kısıtlar', 'layers', VERI_MENUSU.map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge, f: () => { void git(m.yol); } })))}
       </div>

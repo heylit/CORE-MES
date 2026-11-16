@@ -94,8 +94,6 @@
 .tc-pym-at-termin { position: absolute; top: 0; left: var(--x); width: 0; height: var(--b-5); border-left: var(--pay-ince) solid var(--sig); pointer-events: none; }
 .tc-pym-at-serit input[type="range"] { width: 100%; min-height: var(--b-5); margin: 0; accent-color: var(--sig); }
 /* Harita'da Yapılacaklar oynatıcının üstünde durur. */
-.tc-pym[data-gorunum="atolye"] > .tc-pym-yp-sira { position: absolute; right: 0; bottom: calc(var(--b-5) + var(--b-6) * 4 + var(--b-1)); margin: 0 var(--b-4) 0 0; }
-
 @container (max-width: 599px) {
   .tc-pym-at-alt { padding: var(--b-1); gap: var(--b-1); }
   .tc-pym-at-oynat { gap: var(--b-1); }
@@ -108,8 +106,7 @@
   .tc-pym-hl > button span { display: none; }
   .tc-pym-hl[data-acik] > button span { display: inline; }
   .tc-pym-at-kart { align-self: end; justify-self: stretch; width: auto; max-height: 46%; margin-top: 0; }
-  .tc-pym[data-gorunum="atolye"] > .tc-pym-yp-sira { bottom: calc(var(--b-6) * 6 + var(--b-1)); }
-}
+  }
 
 /* İpucu imlecin yanında (atIpucu). */
 .tc-pym-ipucu {
@@ -121,21 +118,3 @@
 .tc-pym-ipucu [data-ton="hata"] { color: var(--stop); }
 .tc-pym-ipucu [data-ton="tamam"] { color: var(--run); }
 
-/* Klavye kısayolları (zp-klavye pm-kb-kl). */
-.tc-pym-kb-grup { display: grid; gap: var(--b-1); }
-.tc-pym-kb-grup > small { margin-top: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.tc-pym-kb-grup dl { display: grid; gap: var(--pay-ince); margin: 0; }
-.tc-pym-kb-grup dl > div { display: grid; grid-template-columns: calc(var(--b-6) * 3) minmax(0, 1fr); gap: var(--b-2); align-items: center; font-size: var(--yazi-s); }
-.tc-pym-kb-grup dd { margin: 0; color: var(--muted); }
-.tc-pym-kb-grup kbd {
-  display: inline-block; min-width: var(--b-5); margin-right: var(--pay-ince); padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
-  background: var(--panel2); font-family: var(--font-mono); font-size: var(--yazi-xs); text-align: center;
-}
-
-/* Özet'te kılavuz sayfanın sağ üstünde asılı durur, Özet altından kayar (eski sayfada kart Özet katmanının üstündeydi); dar ekranda altta. */
-.tc-pym-oz-kilavuz { position: sticky; top: var(--b-2); z-index: 9; display: flex; justify-content: flex-end; height: 0; }
-.tc-pym-oz-kilavuz > .tc-pym-at-kart { position: absolute; top: 0; right: 0; margin: 0 var(--b-2); max-height: 70vh; }
-@container (max-width: 599px) {
-  .tc-pym-oz-kilavuz { order: 1; top: auto; bottom: 0; }
-  .tc-pym-oz-kilavuz > .tc-pym-at-kart { top: auto; bottom: var(--b-2); left: 0; width: auto; max-height: 55vh; }
-}

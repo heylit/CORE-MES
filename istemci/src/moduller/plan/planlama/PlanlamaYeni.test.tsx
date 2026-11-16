@@ -48,14 +48,16 @@ describe('PlanlamaYeni', () => {
     expect(okuyan.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('plan çubuğu motor dışındaki her sayfanın üstündedir; Plan düğmesi motora götürür, motorda tek çubuk vardır (497/10 a)', async () => {
+  it('plan şeridi motor dışındaki her sayfanın üstündedir; ekran sekmesi taşımaz, motorda tek şerit vardır (497/10 a, 3308-2 a)', async () => {
     sunucuKur(YONETICI);
     ac('/plan/ysiparis');
     const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
-    expect(cubuk.querySelector('[aria-current]')).toBeNull();
-    fireEvent.click(within(cubuk).getByRole('button', { name: 'Motor' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); });
-    await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
+    for (const ad of ['Motor', 'Stüdyo', 'Veri', 'Geçmiş']) expect(within(cubuk).queryByRole('button', { name: ad })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YONETICI);
+    ac('/plan/plan');
+    await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
+    expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1);
   }, 20000);
 
   it('3038: Kapasite tek menü maddesidir; eski Ek mesai, Fason, Ufuk ve Yıllık plan adresleri onun bölümünü açar, bölüm sekmeyle değişir', async () => {

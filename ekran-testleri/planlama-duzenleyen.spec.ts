@@ -4,7 +4,7 @@ import { expect, test } from './ortak.ts';
 // görünüm alanı şeridin altında kalır. Başkasının son yazması ağ katmanında verilir (page.route): yazma gönderilmez, veri uydurmadır.
 test.use({ hesap: 'ornek.yonetici' });
 
-for (const yol of ['/plan', '/plan/studio']) {
+for (const yol of ['/plan', '/plan/plan']) {
   test(`düzenleyen şeridi üst alanda (${yol}); sayfa taşmaz, yazma gitmez`, async ({ page, ac, ag }) => {
     await page.route('**/api/plan/planlama-calismasi/duzenleyen', (r) => r.fulfill({
       json: { kisiId: 2_000_000_000, kisi: 'Deneme planlayici', zaman: new Date().toISOString(), surum: 2_000_000_000 },
