@@ -11,7 +11,7 @@ import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoyaGidecekMalzemeler
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -930,6 +930,7 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
   const siparis = await niyetliAcmaTuru(db, o, {
     belge: 'siparisler-siparisi', kuyruk: await o.kaynak.siparisGidecekler(db, KUYRUK_SINIRI),
     govde: async (t) => satisSiparisiGovdesi(t),
+    // Satırlar Logo'daki teklif satırına bağlıdır, stok kodu taşımaz: kart denetimi (3313) teklif giderken yapıldı, burada boş geçer.
     // Gövde kuralı teklif kaydının geçerli olduğunu denetledi.
     ekle: (t, govde) => kopru.satisSiparisiAc(Number(t.teklifKayitNo), govde),
     bildir: (yazDb, t, x) => o.kaynak.siparisSonucu(yazDb, t.id, x),
@@ -1138,7 +1139,7 @@ export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeC
     const durum = gidenIzlemeDurumu(g);
     return {
       belge: g.belgeTuru, belgeAdi: gidenBelgeAdi(g.belgeTuru, g.islem), no: g.belgeNo, islem: g.islem, durum, neden: g.sonHata,
-      neYapmali: GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu', denemeSayisi: g.denemeSayisi,
+      neYapmali: durum === 'durdu' ? durduNeYapmali(g.sonHata) : GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu', denemeSayisi: g.denemeSayisi,
       sonDeneme: zaman(g.sonDeneme), sonrakiDeneme: durum === 'durdu' ? null : zaman(g.sonrakiDeneme),
     };
   });

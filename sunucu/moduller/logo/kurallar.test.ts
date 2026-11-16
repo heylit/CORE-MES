@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, GIDEN_NE_YAPMALI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, TALEP_HIZMET_ILETISI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -313,5 +313,13 @@ describe('3313 kalıcı ret durur', () => {
     assert.equal(gidenIzlemeDurumu({ sonSonuc: null, sonrakiDeneme: null }), 'sirada');
     assert.match(GIDEN_NE_YAPMALI.durdu, /Yeniden gönder/);
     assert.doesNotMatch(GIDEN_NE_YAPMALI['yeniden-denenecek'], /Yeniden gönder/);
+    // Arayüz 2c: duran belgede adım nedene göre; tanınmayan nedende genel adım.
+    assert.match(durduNeYapmali('Firmanın Logo cari kodu boş.'), /Firma kartında Logo cari kodunu/);
+    assert.match(durduNeYapmali(TALEP_HIZMET_ILETISI), /hizmet satırını çıkarın/);
+    assert.match(durduNeYapmali('Birim seti 99 Logo\'da yok.'), /birim karşılığını/);
+    assert.match(durduNeYapmali('Malzeme kartı Logo\'da bulunamadı: ORN-HM-1'), /canlı arayıp eşleyin/);
+    assert.equal(durduNeYapmali('Beklenmeyen Logo hatası'), GIDEN_NE_YAPMALI.durdu);
+    assert.equal(durduNeYapmali(null), GIDEN_NE_YAPMALI.durdu);
+    assert.match(GIDEN_NE_YAPMALI['kart-bekliyor'], /canlı arayıp bağlayın/);
   });
 });

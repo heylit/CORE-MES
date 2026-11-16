@@ -112,6 +112,10 @@ describe('Bağlantı izleme (3313)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Düzelttiklerimi yeniden gönder/ }));
     const pencere = await screen.findByRole('dialog');
     expect(within(pencere).getByLabelText('Firmanın Logo cari kodu boş. (2 belge)')).toBeTruthy();
+    const bos = within(pencere).getByRole('button', { name: 'Grup seçin' }) as HTMLButtonElement;
+    expect(bos.disabled).toBe(true);
+    fireEvent.click(bos);
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
     fireEvent.click(within(pencere).getByLabelText('Talep fişine hizmet satırı yazılamaz. (1 belge)'));
     fireEvent.click(within(pencere).getByRole('button', { name: '1 belgeyi gönder' }));
     await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));

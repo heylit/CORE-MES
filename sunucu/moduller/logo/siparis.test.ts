@@ -421,9 +421,15 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     const sip = siparisEkle({ satirlar: [{ satirId: 99901, stokKodu: 'HM-YOK-00002', hizmet: false, miktar: '1', birim: 'kg', birimFiyat: '1' }] });
     const bellek = yeniSurecBellegi();
     const once = kopru.istekler.length;
+    // 3313 Test T5: neden kaynağa iki turda bir kez yazılır.
+    let talepHataYazimi = 0;
+    const talepSonucu = kaynak.talepSonucu.bind(kaynak);
+    kaynak.talepSonucu = async (db, id, sonuc) => { if ('hata' in sonuc && id === t.id) talepHataYazimi += 1; return talepSonucu(db, id, sonuc); };
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
     assert.equal(kopru.istekler.length, once, 'köprüye istek yok');
+    assert.equal(talepHataYazimi, 1, 'neden kaynağa bir kez yazılır');
+    kaynak.talepSonucu = talepSonucu;
     assert.match(kaynak.talepler.get(t.id)?.hata ?? '', /^Kart bekliyor: HM-YOK-00001\./);
     assert.match(kaynak.siparisler.get(sip.id)?.hata ?? '', /^Kart bekliyor: HM-YOK-00002\./);
     assert.equal(await giden('talep', t.id), null, 'deneme izi yok');
@@ -437,6 +443,26 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: sip.id });
     assert.deepEqual(await bekleyenler(), [], 'kart gidince izlemeden düşer');
+  });
+
+  test('LGS-28 (3313 Test T2) Logo reddedip duran satın alma siparişi, satın alma onu yeniden "bekliyor" verince sonraki turda gider; deneme geçmişi kalır', async () => {
+    const s = siparisEkle();
+    kopru.senaryo = 'dogrulama';
+    const bellek = yeniSurecBellegi();
+    await tur(ortami(bellek));
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'reddedildi' });
+    kopru.senaryo = 'basari';
+    simdi += 24 * 3600_000;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' }, 'durur');
+    const x = kaynak.siparisler.get(s.id)!;
+    x.durum = 'bekliyor';
+    x.hata = null;
+    await tur(ortami(bellek));
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' }, 'yeniden verilen sipariş gider');
+    const g = await giden('siparis', s.id);
+    assert.equal(g?.son_sonuc, 'gonderildi');
+    assert.ok((g?.deneme_sayisi ?? 0) >= 2, 'deneme sayısı sıfırlanmaz');
+    kaynak.siparisler.delete(s.id);
   });
 
   test('LGS-27 (3313 T8) talepte hizmet satırı: istek gitmeden durur, neden kaynağa yazılır; yalnız malzeme satırlı talep gider', async () => {

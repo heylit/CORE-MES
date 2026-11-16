@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { fisIsaretle, malzemeFisiKuyrugu } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -134,5 +135,22 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
     assert.equal((await gonder(yonetici, [{ belge: 'siparis', no: 1, islem: 'pasif' }])).statusCode, 422);
     assert.notEqual((await gonder(yonetici, [])).statusCode, 200);
     assert.equal((await satir('logo_giden', 'siparis', 1))?.sonraki, null, 'reddedilen istek hiçbir satırı değiştirmez');
+  });
+
+  test('3313 Test T1: fiş kuyruğunda duran fiş sırayı tutmaz; sınır 1 iken arkadaki bekleyen fiş seçilir', async () => {
+    await vt().sorgu(`INSERT INTO logo_malzeme_fisi_giden (belge_turu, belge_no, bekleyen_degisiklik) VALUES ('sarf-fisi', 6, 1)`);
+    const kuyruk = await vt().tx((db) => malzemeFisiKuyrugu(db, { otomatik: ['sarf-fisi'], elle: [], sinir: 1 }));
+    assert.deepEqual(kuyruk, [{ tur: 'sarf-fisi', id: 6 }], 'duran 5 numara değil, bekleyen 6 numara');
+  });
+
+  test('3313 Test T3: duran fiş değişince (fisIsaretle) yeniden sıraya girer ve kuyruğa gelir; deneme geçmişi kalır', async () => {
+    const once = await vt().tx((db) => malzemeFisiKuyrugu(db, { otomatik: ['sarf-fisi'], elle: [], sinir: 10 }));
+    assert.deepEqual(once, [], 'duran fiş kuyrukta değil');
+    await vt().tx((db) => fisIsaretle(db, 'sarf-fisi', 5));
+    const sonra = await satir('logo_malzeme_fisi_giden', 'sarf-fisi', 5);
+    assert.notEqual(sonra?.sonraki, null, 'sıraya girdi');
+    assert.equal(sonra?.sonuc, 'reddedildi', 'son sonuç geçmiş olarak kalır');
+    assert.equal(sonra?.deneme, 1);
+    assert.deepEqual(await vt().tx((db) => malzemeFisiKuyrugu(db, { otomatik: ['sarf-fisi'], elle: [], sinir: 10 })), [{ tur: 'sarf-fisi', id: 5 }]);
   });
 });

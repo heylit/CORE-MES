@@ -291,9 +291,24 @@ export function gidenIzlemeDurumu(g: { sonSonuc: GidenSonucu | null; sonrakiDene
 export const GIDEN_NE_YAPMALI: Readonly<Record<GidenIzlemeDurumu, string>> = Object.freeze({
   durdu: 'Logo reddetti. Nedeni düzeltin (kart, cari, eşleme ya da belge), sonra "Yeniden gönder".',
   'yeniden-denenecek': 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse Logo yardımcısının çalıştığını denetleyin.',
-  'kart-bekliyor': 'Eksik kartı Logo\'ya gönderin ya da Logo geçişinde bağlayın; belge kendiliğinden gider.',
+  'kart-bekliyor': 'Eksik kartı Logo\'ya gönderin; kart Logo\'da varsa Logo geçişinde kodla canlı arayıp bağlayın. Belge kendiliğinden gider.',
   sirada: 'Sırada; ilk turda gider.',
 });
+// 3313 (Arayüz kod bakışı 2c): duran belgede "Ne yapmalı" nedene göre kısa adımdır. Neden CORE'un kendi ret iletisi ya da Logo'nun hata
+// metnidir; tanınmayan nedende genel adım kalır. Sıra önemlidir: daha özel kalıp önce.
+const DURDU_ADIMLARI: readonly (readonly [RegExp, string])[] = [
+  [/hizmet satırı/i, 'Talep fişinden hizmet satırını çıkarın (hizmet satın alma siparişiyle gider), sonra "Yeniden gönder".'],
+  [/hizmet kartının yönü/i, 'Hizmet kartında yönü (alış ya da satış) seçin, sonra "Yeniden gönder".'],
+  [/cari/i, 'Firma kartında Logo cari kodunu doldurun ya da cariyi Logo\'da tanımlayın, sonra "Yeniden gönder".'],
+  [/birim/i, 'Malzeme kartının birimini ya da Sistem Ayarları\'ndaki birim karşılığını düzeltin, sonra "Yeniden gönder".'],
+  [/satırlar.*tutmuyor|elle bakın/i, 'Belgeye Logo\'da elle bakın ve farkı giderin, sonra "Yeniden gönder".'],
+  [/kayıt numarası/i, 'Belgenin Logo kaydını Logo\'da denetleyin; kayıt silinmişse belgeyi CORE\'da yeniden onaylayın.'],
+  [/kart|malzeme|stok kodu/i, 'Kartı Logo geçişinde kodla canlı arayıp eşleyin ya da kartı Logo\'ya gönderin, sonra "Yeniden gönder".'],
+];
+export function durduNeYapmali(neden: string | null): string {
+  const bulunan = neden === null ? undefined : DURDU_ADIMLARI.find(([kalip]) => kalip.test(neden));
+  return bulunan?.[1] ?? GIDEN_NE_YAPMALI.durdu;
+}
 export const GIDEN_BELGE_ADLARI: Readonly<Record<string, string>> = Object.freeze({
   malzeme: 'Malzeme kartı', hizmet: 'Hizmet kartı', 'malzeme-guncelleme': 'Malzeme adı güncellemesi',
   siparis: 'Satın alma siparişi', 'siparis-guncelleme': 'Sipariş düzenlemesi', 'siparis-kapatma': 'Sipariş kapatma', 'siparis-bekletme': 'Sipariş bekletme',

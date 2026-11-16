@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, IsaretKutusu, OnayPenceresi, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -201,8 +201,15 @@ function TopluGonderim({ gruplar, kapat }: { gruplar: ReturnType<typeof duranGru
   const gonder = useYenidenGonder(kapat);
   const belgeler = gruplar.filter((g) => secilen.has(g.neden)).flatMap((g) => g.belgeler);
   return (
-    <OnayPenceresi acik baslik="Düzelttiklerimi yeniden gönder" onayMetni={`${belgeler.length} belgeyi gönder`} yukleniyor={gonder.isPending}
-      onayla={() => { if (belgeler.length > 0) gonder.mutate(belgeler); }} vazgec={kapat}>
+    // Seçim yokken gönder düğmesi kapalıdır ve ne yapılacağını söyler (Arayüz kod bakışı 1).
+    <Pencere acik kapat={kapat} baslik="Düzelttiklerimi yeniden gönder" alt={(
+      <>
+        <Dugme onClick={kapat} disabled={gonder.isPending} data-ilk-odak>Vazgeç</Dugme>
+        <Dugme tur="birincil" disabled={belgeler.length === 0} yukleniyor={gonder.isPending} onClick={() => gonder.mutate(belgeler)}>
+          {belgeler.length === 0 ? 'Grup seçin' : `${belgeler.length} belgeyi gönder`}
+        </Dugme>
+      </>
+    )}>
       <p className="tc-guvenlik-not">Durdurulan belgeler nedenine göre gruplu. Yalnız düzelttiğiniz nedenleri işaretleyin; yalnız onlar gider.</p>
       <div className="tc-izleme-gruplar">
         {gruplar.map((g) => (
@@ -210,6 +217,6 @@ function TopluGonderim({ gruplar, kapat }: { gruplar: ReturnType<typeof duranGru
             onChange={(o) => secilenYaz((s) => { const y = new Set(s); if (o.target.checked) y.add(g.neden); else y.delete(g.neden); return y; })} />
         ))}
       </div>
-    </OnayPenceresi>
+    </Pencere>
   );
 }
