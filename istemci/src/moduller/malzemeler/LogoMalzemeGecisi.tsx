@@ -139,6 +139,14 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
     }
     return null;
   };
+  // 3316: Logo kart türü ve CORE'daki karşılığı (Sistem Ayarları'ndaki tür karşılığından) satırda görünür.
+  const turMetni = (kt: string | null): string | null => {
+    if (kt === null) return null;
+    const logoAd = durum.data?.kartTuruSecenekleri.find((t) => t.kod === kt)?.ad ?? `Logo türü ${kt}`;
+    const core = tekKarsilik(durum.data?.karsiliklar ?? [], 'tur', kt);
+    const coreAd = core ? (turAdlari[core] ?? core) : null;
+    return coreAd && coreAd !== logoAd ? `${logoAd} (CORE: ${coreAd})` : logoAd;
+  };
   const sutunlar: readonly Sutun<Satir>[] = [
     {
       anahtar: 'logo', baslik: 'Logo',
@@ -146,7 +154,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         <span className="tc-lg-taraf">
           <span className="tc-lg-kod">{k.kod}</span>
           <span>{k.ad ?? '—'}</span>
-          <span className="tc-lg-ek">{[k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`, ...kullanimMetni(k)].filter(Boolean).join(' · ') || null}</span>
+          <span className="tc-lg-ek">{[turMetni(k.kartTuru), k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`, ...kullanimMetni(k)].filter(Boolean).join(' · ') || null}</span>
         </span>
       ),
       csv: (k) => `${k.kod} ${k.ad ?? ''}`.trim(),

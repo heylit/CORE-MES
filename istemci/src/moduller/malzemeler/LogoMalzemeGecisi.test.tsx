@@ -56,7 +56,7 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE) {
     const govde = secenek?.body ? JSON.parse(String(secenek.body)) : null;
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/malzeme-logo-gecisi?')) { istekler.push({ yol, govde: null }); return json(200, liste); }
-    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar: KARSILIKLAR, kartTuruSecenekleri: [], karsilikYazabilir: false });
+    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar: KARSILIKLAR, kartTuruSecenekleri: [{ kod: '10', ad: 'Hammadde' }, { kod: '13', ad: 'Tüketim malı' }], karsilikYazabilir: false });
     if (yol.startsWith('/logo-gecisi/malzeme-ara?')) {
       istekler.push({ yol, govde: null });
       return json(200, { durum: 'tamam', ileti: null, kartlar: [{ logoKayitNo: 9, kod: 'ORN-CANLI-9', ad: 'Deneme canli' }] });
@@ -126,6 +126,8 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(within(satir('HM-DEN-00001')).getByRole('button', { name: 'HM-DEN-00001 al' })).toBeTruthy();
     expect(within(satir('Deneme bagsiz')).getByRole('button', { name: 'HM-DEN-00003 bağla' })).toBeTruthy();
     expect(within(satir('Logo adi')).getByText("Logo'da Açıklama 1: Logo adi")).toBeTruthy();
+    expect(await within(satir('Deneme yeni')).findByText(/^Hammadde/)).toBeTruthy();
+    expect(within(satir('Deneme eslenecek')).getByText(/^Tüketim malı/)).toBeTruthy();
     expect(within(satir('Logo adi')).getByRole('button', { name: "HM-DEN-00004 Logo'dakini al" })).toBeTruthy();
   });
 
