@@ -19,6 +19,7 @@ import {
 } from '../satin-alma/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kurlar } from '../finans/disari.ts';
+import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
@@ -175,7 +176,28 @@ async function planlamaKaynagiKur(db: Db, kullanici: Kullanici): Promise<DurumCe
     calisanAdimlar: emirKayitlari === null ? null : calisanAdimlariCevir(await calisanAdimlar(db), emirKayitlari, durum.adimAdetleri ?? {}),
     settings: ayarCevir(await sorgular.ayarOku(db, null)),
     planCanli: await canliOzeti(db),
+    siparisBaglari: await siparisBaglari(db, kullanici),
   };
+}
+
+// 3297-5 a: Kokpit kartları müşteri siparişine göre toplanır. Bağ yalnız gruplama içindir: motorun okuduğu `ek`e girmez (kişiye göre değişen
+// ad plan girdisini değiştirmesin), veri sürümünü artırmaz. Sipariş no, müşteri adı ve kalem sırası yalnız siparişi okuyabilene gelir;
+// okuyamayan kişi yalnız hangi emirlerin aynı siparişte olduğunu görür. Siparişe bağlı olmayan emir listede yoktur.
+const SIPARIS_OKUMA: readonly Islem[] = ['siparisler.oku'];
+export async function siparisBaglari(db: Db, kullanici: Kullanici): Promise<DurumCevabi['siparisBaglari']> {
+  if (!yetkiliMi(kullanici, KAYNAK_OKUMA.emir)) return null;
+  const emirler = new Map<number, number>();
+  for (const i of await planlanacakIsler(db, { taslakDahil: true })) {
+    if (i.siparisSatiriId != null && !emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, i.siparisSatiriId);
+  }
+  const satirlar = await siparisSatiriOzetleri(db, [...emirler.values()]);
+  const okur = yetkiliMi(kullanici, SIPARIS_OKUMA);
+  const adlar = okur ? await firmaAdlari(db, [...satirlar.values()].map((x) => x.firmaId)) : new Map<number, string>();
+  return Object.fromEntries([...emirler].flatMap(([id, satirId]) => {
+    const satir = satirlar.get(satirId);
+    if (!satir) return [];
+    return [[String(id), { siparis: String(satir.siparisId), no: okur ? satir.siparisNo : null, musteri: okur ? adlar.get(satir.firmaId) ?? null : null, kalem: okur ? satir.sira : null }]];
+  }));
 }
 
 const ISTASYON_OKUMA = KAYNAK_OKUMA.istasyon;

@@ -158,6 +158,11 @@ export const durumCevabi = receteRotaDurumCevabi.extend({
   settings: durumAyarSemasi,
   // Canlı planın özeti: üst şerit "canlı / canlıya alınmadı" der. Plan okuması oturumla açıktır; alan eski sürümde yoktu.
   planCanli: planCanliOzeti.optional(),
+  // Kokpit kartlarının sipariş bağı (3297-5 a). Anahtar emir kimliği; siparişe bağlı olmayan emir listede yoktur. `siparis` yalnız gruplama
+  // anahtarıdır; no, musteri ve kalem yalnız siparişi okuyabilene gelir (yoksa null). Fiyat taşımaz. Emir yetkisi yoksa null.
+  siparisBaglari: z.record(z.string(), z.object({
+    siparis: z.string(), no: z.string().nullable(), musteri: z.string().nullable(), kalem: z.number().int().nullable(),
+  })).nullable().optional(),
 });
 
 // Plan kapasitesi (kart #1324): Vardiya takviminden prototipin kendi vardiya hesabına eklediği farklar; bugünden KAPASITE_GUNU gün.

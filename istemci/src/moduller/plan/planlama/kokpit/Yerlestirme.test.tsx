@@ -32,7 +32,7 @@ describe('Kokpit sıra şeridi (3297)', () => {
   it('kartlar termin sırasıyla; yeni emir "Yeni", planlı "Planlı"; karta basınca seçilir', () => {
     const sec = vi.fn();
     render(<SiraSeridi kartlar={siraKartlari(M)} secili="2" sec={sec} zaman={zaman} />);
-    const kartlar = within(screen.getByRole('region', { name: 'Emirler, sırasıyla' })).getAllByRole('button');
+    const kartlar = within(screen.getByRole('region', { name: 'Siparişler, sırasıyla' })).getAllByRole('button');
     expect(kartlar.map((b) => b.getAttribute('data-kart'))).toEqual(['2', '1']);
     expect(kartlar[0]?.textContent).toContain('ORN-UE-2');
     expect(kartlar[0]?.textContent).toContain('Yeni');
@@ -43,13 +43,48 @@ describe('Kokpit sıra şeridi (3297)', () => {
     expect(sec).toHaveBeenCalledWith('1');
   });
 
+  it('sipariş kartı (3297-5 a): sipariş no, müşteri, emir sayısı ve termin; bağsız emir "Siparişsiz"; okuyamayan kişide emir no ve emir sayısı', () => {
+    const bag = { '1': { siparis: '50', no: 'ORN-SP-50', musteri: 'ORN-Müşteri A', kalem: 1 } };
+    const { unmount } = render(<SiraSeridi kartlar={siraKartlari(M, bag)} secili="sp:50" sec={vi.fn()} zaman={zaman} bagVar />);
+    const kartlar = within(screen.getByRole('region', { name: 'Siparişler, sırasıyla' })).getAllByRole('button');
+    expect(kartlar.map((b) => b.getAttribute('data-kart'))).toEqual(['2', 'sp:50']);
+    expect(kartlar[1]?.textContent).toContain('ORN-SP-50');
+    expect(kartlar[1]?.textContent).toContain('ORN-Müşteri A · 1 emir · termin');
+    expect(kartlar[1]?.textContent).not.toContain('ORN-UE-1');
+    expect(kartlar[0]?.textContent).toContain('Siparişsiz · ORN-Burç · termin');
+    expect(kartlar[0]?.getAttribute('title')).toBe('Siparişe bağlı değil (stok ya da elle açılan emir)');
+    unmount();
+    // Siparişi okuyamayan kişi: kart yine siparişe göre toplanır, sipariş no ve müşteri yerine ilk emrin numarası yazar.
+    render(<SiraSeridi kartlar={siraKartlari(M, { '1': { siparis: '50', no: null, musteri: null, kalem: null } })} secili={null} sec={vi.fn()} zaman={zaman} bagVar />);
+    const kapali = screen.getAllByRole('button').find((b) => b.getAttribute('data-kart') === 'sp:50');
+    expect(kapali?.textContent).toContain('ORN-UE-1');
+    expect(kapali?.textContent).toContain('1 emir · termin');
+    expect(kapali?.textContent).not.toContain('Müşteri');
+  });
+
+  it('bağ okunamadıysa hiçbir kart "Siparişsiz" diye işaretlenmez', () => {
+    render(<SiraSeridi kartlar={siraKartlari(M)} secili={null} sec={vi.fn()} zaman={zaman} />);
+    expect(screen.queryByText(/Siparişsiz/)).toBeNull();
+  });
+
   it('emir yoksa boş durum yazılır', () => {
     render(<SiraSeridi kartlar={[]} secili={null} sec={vi.fn()} zaman={zaman} />);
-    expect(screen.getByText('Planda ve sırada emir yok.')).toBeTruthy();
+    expect(screen.getByText('Planda ve sırada sipariş ya da emir yok.')).toBeTruthy();
   });
 });
 
 describe('Kokpit emirler ve operasyonlar (3297)', () => {
+  it('sipariş kartında (3297-5 a) başlık sipariş no ve emir sayısıdır; siparişin bütün emirleri alt alta, yerleşmesi eksik olan önce', () => {
+    const bag = { '1': { siparis: '50', no: 'ORN-SP-50', musteri: 'ORN-Müşteri A', kalem: 1 }, '2': { siparis: '50', no: 'ORN-SP-50', musteri: 'ORN-Müşteri A', kalem: 2 } };
+    const k = siraKartlari(M, bag).find((x) => x.kok === 'sp:50');
+    if (!k) throw new Error('kart');
+    onizlemeKur();
+    render(<EmirAdimlari m={M} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(within(bolum).getByRole('heading', { level: 2 }).textContent).toBe('2ORN-SP-50 · 2 emir ve operasyonları');
+    expect([...bolum.querySelectorAll('[data-emir]')].map((e) => e.getAttribute('data-emir'))).toEqual(['2', '1']);
+  });
+
   it('plansız emirde ilk adım seçili gelir, boş yerler en erken biten başta; yere basınca sıradaki adım seçilir, son adımda emir tek komutla yazılır', async () => {
     const oz = onizlemeKur();
     const uygula = vi.fn(), hedef = vi.fn();

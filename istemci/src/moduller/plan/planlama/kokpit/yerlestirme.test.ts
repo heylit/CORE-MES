@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
-import { adimYeri, bosYerler, ilkKart, kokKimligi, siraKartlari, siradakiAdim, tasimaAdaylari, uygunTezgahlar } from './yerlestirme.ts';
+import { adimYeri, bosYerler, ilkKart, kartAnahtari, kokKimligi, siparisAramasi, siraKartlari, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type SiparisBaglari } from './yerlestirme.ts';
 
 // Veri uydurmadır (ORN-).
 const emir = (id: string, durum: KokpitEmri['durum'], termin: number | null, adimlar: [string, string[]][] = [['10', ['M1']]]): KokpitEmri => ({
@@ -40,6 +40,50 @@ describe('Kokpit sıra kartları (3297)', () => {
     expect(ilkKart(siraKartlari(m))).toBe('2');
     expect(ilkKart(siraKartlari({ emirler: [emir('1', 'iyi', 10)], isler: isler('1.10') }))).toBe('1');
     expect(ilkKart([])).toBeNull();
+  });
+});
+
+describe('Kokpit sipariş kartları (3297-5 a)', () => {
+  // Emir 1 ve 2 aynı siparişte (iki kalem), 3 başka siparişte ve okunamıyor (no ve müşteri null), 4 siparişsiz.
+  const bag: SiparisBaglari = {
+    '1': { siparis: '50', no: 'ORN-SP-50', musteri: 'ORN-Müşteri A', kalem: 1 }, '2': { siparis: '50', no: 'ORN-SP-50', musteri: 'ORN-Müşteri A', kalem: 2 },
+    '3': { siparis: '51', no: null, musteri: null, kalem: null },
+  };
+
+  it('kart anahtarı: siparişe bağlı emir ve düğümü siparişte, bağsız emir kökünde; bağ yoksa kök', () => {
+    expect(['1', '1-Y1', '2/2', '3', '4', '4-Y1'].map((id) => kartAnahtari(id, bag))).toEqual(['sp:50', 'sp:50', 'sp:50', 'sp:51', '4', '4']);
+    expect(kartAnahtari('1-Y1', null)).toBe('1');
+    expect(kartAnahtari('1')).toBe('1');
+  });
+
+  it('aynı siparişin emirleri tek kartta; termin en erken emrinki; durum en ağırı; adım ve yerleşen toplanır; siparişsiz emir kendi kartında', () => {
+    const m = { emirler: [emir('1', 'iyi', 40), emir('1-Y1', 'iyi', null), emir('2', 'gec', 25), emir('3', 'iyi', 30), emir('4', 'iyi', 10)], isler: isler('1.10', '1-Y1.10', '2.10', '3.10', '4.10') };
+    const l = siraKartlari(m, bag);
+    expect(l.map((k) => [k.kok, k.siparis, k.emirler.map((e) => e.id), k.termin, k.adim, k.yerlesen, k.durum])).toEqual([
+      ['4', null, ['4'], 10, 1, 1, 'iyi'],
+      ['sp:50', { no: 'ORN-SP-50', musteri: 'ORN-Müşteri A' }, ['2', '1', '1-Y1'], 25, 3, 3, 'gec'],
+      ['sp:51', { no: null, musteri: null }, ['3'], 30, 1, 1, 'iyi'],
+    ]);
+  });
+
+  it('sipariş kartında yerleşmesi eksik emir önce, sonra termine göre; kök düğümlerinin başında kalır', () => {
+    const m = { emirler: [emir('2', 'iyi', 5), emir('1-Y1', 'plansiz', null), emir('1', 'iyi', 40)], isler: isler('2.10', '1.10') };
+    expect(siraKartlari(m, bag)[0]?.emirler.map((e) => e.id)).toEqual(['1', '1-Y1', '2']);
+  });
+
+  it('bağ verilmezse kartlar bugünkü gibi kök emirdir', () => {
+    const m = { emirler: [emir('1', 'iyi', 40), emir('2', 'iyi', 25)], isler: {} };
+    expect(siraKartlari(m).map((k) => [k.kok, k.siparis])).toEqual([['2', null], ['1', null]]);
+    expect(siraKartlari(m, null).map((k) => k.kok)).toEqual(['2', '1']);
+  });
+
+  it('arama sipariş no ve müşteri adıyla bulur; boş arama, bağsız emir ve okunamayan sipariş bulmaz', () => {
+    expect(siparisAramasi('1', bag, 'sp-50')).toBe(true);
+    expect(siparisAramasi('2/2', bag, 'müşteri a')).toBe(true);
+    expect(siparisAramasi('1', bag, '  ')).toBe(false);
+    expect(siparisAramasi('4', bag, 'sp-50')).toBe(false);
+    expect(siparisAramasi('3', bag, 'sp')).toBe(false);
+    expect(siparisAramasi('1', null, 'sp-50')).toBe(false);
   });
 });
 
