@@ -269,9 +269,12 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     if (!Number.isSafeInteger(emirId) || emirId <= 0) return ret(400, 'Geçersiz emir');
     if (g.yontem === 'GET' && ucuncu === undefined) return tamam((await istemci.get<EmirAyrintiCevabi>(`/uretim-emirleri/${emirId}`)).adimlar ?? []);
     if (g.yontem === 'POST' && ucuncu !== undefined) {
-      const isaret = (govdeyiOku(g.govde) as { tamam?: unknown } | undefined)?.tamam;
+      const govde = govdeyiOku(g.govde) as { tamam?: unknown; kanit?: unknown } | undefined;
+      const isaret = govde?.tamam;
       if (typeof isaret !== 'boolean') return ret(400, 'İşaret yok');
-      return tamam((await istemci.post<AdimCevabi>(`/uretim-emirleri/${emirId}/adimlar/${yolParcasi(ucuncu)}/tamamla`, { tamam: isaret })).adimlar);
+      // Kanıtın biçimini TMI ucu denetler; burada yalnız nesne olduğu bakılır.
+      const kanit = govde?.kanit !== null && typeof govde?.kanit === 'object' ? { kanit: govde.kanit } : {};
+      return tamam((await istemci.post<AdimCevabi>(`/uretim-emirleri/${emirId}/adimlar/${yolParcasi(ucuncu)}/tamamla`, { tamam: isaret, ...kanit })).adimlar);
     }
   }
   // Başlatmadan önce girdiler istasyonda mı (kart #1289): eksikse istek açılır, Malzeme · Teslim paneli o malzemeyle açılır, iş uyarıyla başlar (110 b).

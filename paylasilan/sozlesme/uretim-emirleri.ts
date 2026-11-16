@@ -244,6 +244,10 @@ export const adimSemasi = z.object({
   aciklama: z.string().nullable(),
   // Rotadaki talimat adımının aşaması (2098-1 a); talimatsız ya da eski emirde üretimdir.
   asama: z.enum(TALIMAT_ASAMALARI),
+  // 3338-4 a: rota talimatındaki zorunluluk ve kontrol (ölçüm, seçim, fotoğraf) emir açılırken kopyalanır; eski adımda false ve null.
+  // İsteğe bağlı: bu alanlardan önce yazılmış istemci verisi geçerli kalır.
+  zorunlu: z.boolean().optional(),
+  kontrol: z.lazy(() => listeKontrolSemasi).nullable().optional(),
   tamam: z.boolean(),
   // İkisi birlikte dolu ya da birlikte null: işaret geri alınınca kim ve ne zaman da silinir.
   tamamlayan: adliKayit.nullable(),

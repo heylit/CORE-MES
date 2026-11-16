@@ -31,7 +31,14 @@ export interface KayitSorgusu {
 
 // store.ts'deki tanımlarla aynı (orada dışa verilmiş ama istemci derlemesi o dosyayı tip için izlemez).
 export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; revKodu?: string | null; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
-export interface TmiAdim { id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean }
+// 3338-4 a: aşama, zorunluluk ve kontrol (ölçüm, seçim, fotoğraf) CORE'dan gelir; eski cevapta yoktur (üretim, zorunsuz, onay sayılır).
+export interface TmiKontrol { tur: 'onay' | 'olcum' | 'foto' | 'secim'; ad?: string; alt?: number | null; ust?: number | null; birim?: string; secenekler?: string[] }
+export interface TmiAdim {
+  id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean;
+  asama?: 'on_hazirlik' | 'hazirlik' | 'uretim' | 'bitis'; zorunlu?: boolean; kontrol?: TmiKontrol | null;
+  kanit?: { olcum: number | null; secim: string | null; foto: string | null } | null;
+}
+export interface TmiKanit { olcum?: number; secim?: string }
 
 export interface ArkonDeposu {
   DB: {
@@ -67,7 +74,7 @@ export interface ArkonDeposu {
     refakatKartlari(istasyon: string, emirler: readonly number[]): Promise<RefakatKarti[]>;
     cagriEkiplerim(): Promise<CagriEkiplerim>;
     tmiAdimlari(emirId: number): Promise<TmiAdim[]>;
-    tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean): Promise<TmiAdim[]>;
+    tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean, kanit?: TmiKanit): Promise<TmiAdim[]>;
     uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }>;
   };
   Plan: { sirala(g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }): Promise<unknown>; surum(): Promise<{ planSurumu: number }> };
