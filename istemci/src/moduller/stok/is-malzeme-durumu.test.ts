@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IsMalzemeleriCevabi, Teslim } from '#paylasilan/sozlesme/stok.ts';
-import { durumMetni, isMalzemeDurumu } from './is-malzeme-durumu.ts';
+import { durumMetni, isMalzemeDurumu, malzemeYetmesi } from './is-malzeme-durumu.ts';
 
 type Malzeme = IsMalzemeleriCevabi['isler'][number]['malzemeler'][number];
 const malzeme = (malzemeId: number, gereken: string, istasyonda: string, istek: Malzeme['istek'] = null): Malzeme => ({
@@ -29,7 +29,7 @@ describe('isin malzeme durumu (618)', () => {
   ] };
 
   it('yalniz o emrin girdisini sayar; acik istekli eksik "istendi", istegi kapali eksik "eksik"', () => {
-    expect(isMalzemeDurumu(c, [], 2, 70)).toEqual({ girdi: 4, eksik: 2, istendi: 1, gelen: 0 });
+    expect(isMalzemeDurumu(c, [], 2, 70)).toEqual({ girdi: 4, eksik: 2, istendi: 1, gelen: 0, yetme: { adetlik: 0, kalanAdet: 10, miktar: '0.000', birim: null, kod: 'HM-1', ad: null } });
   });
 
   it('gelen: yalniz bu emir icin bu istasyona yolda olan teslimler', () => {
@@ -38,7 +38,25 @@ describe('isin malzeme durumu (618)', () => {
   });
 
   it('girdisi olmayan emir bos doner', () => {
-    expect(isMalzemeDurumu(c, [], 2, 99)).toEqual({ girdi: 0, eksik: 0, istendi: 0, gelen: 0 });
+    expect(isMalzemeDurumu(c, [], 2, 99)).toEqual({ girdi: 0, eksik: 0, istendi: 0, gelen: 0, yetme: null });
+  });
+
+  it('yetme: calisan adimin en kisitli girdisi kac adete yeter; bir adetligi bilinmeyen girdi sayilmaz, girdisiz adimda null', () => {
+    const m = (id: number, birAdet: string, istasyonda: string): Malzeme => ({ ...malzeme(id, '1.000', istasyonda), birAdet });
+    const y = malzemeYetmesi([
+      { ...is(80, [m(1, '0.400', '9.000')]), opNo: 10 },
+      { ...is(80, [m(2, '0.400', '3.600'), m(3, '2.000', '30.000'), m(4, '0.000', '1.000')]), opNo: 20, calisiyor: true, kalanAdet: 15 },
+    ]);
+    expect(y).toEqual({ adetlik: 9, kalanAdet: 15, miktar: '3.600', birim: null, kod: 'HM-2', ad: null });
+    expect(malzemeYetmesi([is(81, [])])).toBeNull();
+    expect(malzemeYetmesi([])).toBeNull();
+  });
+
+  it('yetme: bir adetligi sifir olan girdi en basta olsa da sayilmaz; kesirli adet asagi yuvarlanir (2.6 -> 2)', () => {
+    const m = (id: number, birAdet: string, istasyonda: string): Malzeme => ({ ...malzeme(id, '1.000', istasyonda), birAdet });
+    const y = malzemeYetmesi([{ ...is(82, [m(5, '0.000', '0.000'), m(6, '1.000', '2.600'), m(7, '1.000', '5.000')]), calisiyor: true }]);
+    expect(y).toEqual({ adetlik: 2, kalanAdet: 10, miktar: '2.600', birim: null, kod: 'HM-6', ad: null });
+    expect(malzemeYetmesi([is(83, [m(8, '0.000', '4.000')])])).toBeNull();
   });
 
   it('metin once yapilacak isi soyler: gelen, sonra eksik, sonra istendi', () => {

@@ -13,7 +13,7 @@ export {
 } from './sorgular/bekletme/sorgular.ts';
 export {
   type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, adimNotuEkle, type AdimNotuSatiri,
-  adimNotlari,
+  adimNotlari, atlananAdimlar, talimatAtlamaEkle, type TalimatAtlamaSatiri, talimatAtlamalari,
 } from './sorgular/adim/sorgular.ts';
 export {
   type UstEmirSatiri, ustEmirler, adimliOzetGruplari, bitenUstEmirSay, bitenUstEmirler, ustEmirBul, ustEmirlerBul, type UstEmirYazisi, ustEmirEkle,

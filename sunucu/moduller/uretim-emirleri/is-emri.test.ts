@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { adimCevabi, adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirAyrintiCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimDurumuCevabi, AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -26,7 +26,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIM_BASLAMAMIS, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
+  ADIM_BASLAMAMIS, ADIM_YOK, KAPSAM_DISI, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -477,6 +477,35 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await o().vt.tx((db) => adimKararSayaclari(db, []))).size, 0);
   });
 
+  test('3338-4 a: eksik talimat kaydı iş emrinin adımında görünür, eylemi ve yazanı taşır; kapsam dışı kişi yazamaz', async () => {
+    const ist = await istasyonKur();
+    const m = await makineKur(ist);
+    const zorunlu = (ad: string, asama: 'on_hazirlik' | 'bitis') => ({ kontrolListesi: [{ ad, aciklama: null, asama, zorunlu: true }] });
+    const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: m }, zorunlu('Bağla', 'on_hazirlik')), adim(2, { tur: 'makine', id: m }, zorunlu('Sök', 'bitis'))]);
+    // Terminal çalışan iş emrinin listesini okur: burada yalnız ilk adımın maddesi.
+    const liste = (await istek<{ adimlar: { id: number; ad: string }[] } & Hata>('operator', 'GET', `/uretim-emirleri/${id}`)).govde.adimlar;
+    assert.deepEqual(liste.map((a) => a.ad), ['Bağla']);
+    const atla = (govde: unknown) => istek<{ kayitId: number } & Hata>('operator', 'POST', `/uretim-emirleri/${id}/talimat-atlama`, govde, randomUUID());
+    assert.equal((await atla({ eylem: 'baslat', adimIdler: [liste[0]!.id] })).durum, 200);
+    assert.equal((await atla({ eylem: 'bitir', adimIdler: [liste[0]!.id] })).durum, 200);
+    const durum = (await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`)).govde.adimlar;
+    assert.deepEqual(durum.map((a) => a.gecmis.filter((g) => g.olay === 'talimat-atlama').map((g) => [g.deger, g.not, g.kisiAdi])), [
+      [['bitir', 'Bağla', 'Deneme operator'], ['baslat', 'Bağla', 'Deneme operator']], [],
+    ], 'kayıt yalnız kendi iş emrinin adımında, yenisi önde');
+    // İş merkezi kısıtı başka merkezdeyse ve kişi bu istasyonda yetkin değilse bu emre yazamaz.
+    const op = kim('operator').id;
+    const baska = await o().sahip.tek<{ id: number }>('SELECT is_merkezi_id AS id FROM istasyon WHERE id = $1', [await istasyonKur()]);
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [op, baska!.id]);
+    await o().sahip.sorgu('DELETE FROM istasyonlar_yetkinlik WHERE kisi_id = $1 AND istasyon_id = $2', [op, ist]);
+    try {
+      const red = await atla({ eylem: 'baslat', adimIdler: [liste[0]!.id] });
+      assert.equal(red.govde.mesaj, KAPSAM_DISI);
+    } finally {
+      await o().sahip.sorgu('DELETE FROM kisi_is_merkezi WHERE kisi_id = $1', [op]);
+      await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2)', [op, ist]);
+    }
+  });
+
   test('2098d: ön hazırlık planlı emirde, üretim hazırlığı ayardan sonra işaretlenir, üretim adımı başlamadan işaretlenmez; kanıt ve geçen sefer notu', async () => {
     const ist = await istasyonKur();
     const m = await makineKur(ist);
@@ -484,12 +513,27 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       { ad: 'Malzemeyi al', aciklama: null, asama: 'on_hazirlik' as const },
       { ad: 'Hizala', aciklama: null, asama: 'hazirlik' as const },
       { ad: 'Ölç', aciklama: null },
+      { ad: 'Aparatı sök', aciklama: null, asama: 'bitis' as const, zorunlu: true, kontrol: { tur: 'olcum', ad: 'Ömür', alt: null, ust: null, birim: '' } },
     ] };
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
-    type AdimC = { adimlar: { id: number; asama: string; tamam: boolean; kanit: unknown; talimat: unknown; gecenNot: { metin: string } | null; buNot: { metin: string } | null }[] } & Hata;
+    type AdimC = { adimlar: { id: number; asama: string; zorunlu?: boolean; kontrol?: unknown; tamam: boolean; kanit: unknown; talimat: unknown; gecenNot: { metin: string } | null; buNot: { metin: string } | null }[] } & Hata;
     const adimlar = async (emir = id) => (await istek<AdimC>('operator', 'GET', `/uretim-emirleri/${emir}`)).govde.adimlar;
     const isaretle = (emir: number, adimId: number, govde: unknown) => istek<AdimC>('operator', 'POST', `/uretim-emirleri/${emir}/adimlar/${adimId}/tamamla`, govde);
-    const [on, hz, ur] = (await adimlar()).map((a) => a.id) as [number, number, number];
+    const ilk = await adimlar();
+    const [on, hz, ur, bt] = ilk.map((a) => a.id) as [number, number, number, number];
+    // 3338-4 a: zorunluluk ve kontrol talimattan emre kopyalanır; bitiş aşaması üretim gibi yalnız başlamış emirde işaretlenir.
+    assert.deepEqual(ilk.map((a) => [a.asama, a.zorunlu, a.kontrol]), [
+      ['on_hazirlik', false, null], ['hazirlik', false, null], ['uretim', false, null], ['bitis', true, { tur: 'olcum', ad: 'Ömür', alt: null, ust: null, birim: '' }],
+    ]);
+    assert.equal((await isaretle(id, bt, { tamam: true, kanit: { olcum: 3 } })).govde.mesaj, ADIM_BASLAMAMIS);
+    // 3338-4 sapma a: "Yine de başlat" atlanan maddelerle adımın geçmişine yazılır; bilinmeyen eylem ve başka emrin adımı reddedilir.
+    const atla = (govde: unknown, kimlik: string | undefined = randomUUID()) => istek<{ kayitId: number } & Hata>('operator', 'POST', `/uretim-emirleri/${id}/talimat-atlama`, govde, kimlik);
+    const at = await atla({ eylem: 'baslat', adimIdler: [bt, on, bt] });
+    assert.equal(at.durum, 200, JSON.stringify(at.govde));
+    assert.equal((await atla({ eylem: 'durdur', adimIdler: [bt] })).durum, 400);
+    assert.equal((await atla({ eylem: 'bitir', adimIdler: [999999] })).govde.mesaj, ADIM_YOK);
+    const gecmis = (await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`)).govde.adimlar.flatMap((a) => a.gecmis);
+    assert.deepEqual(gecmis.filter((g) => g.olay === 'talimat-atlama').map((g) => [g.deger, g.not]), [['baslat', 'Malzemeyi al, Aparatı sök']], 'adlar adım sırasıyla, tekrar bir kez');
 
     const c1 = await isaretle(id, on, { tamam: true, kanit: { foto: 'a'.repeat(64) } });
     assert.equal(c1.durum, 200, JSON.stringify(c1.govde));
@@ -1241,7 +1285,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ist = await istasyonKur();
     const [m1, m2] = [await makineKur(ist), await makineKur(ist)];
     const mk = (id: number) => ({ tur: 'makine' as const, id });
-    const { uretimEmriId: id } = await ac([adim(1, mk(m1)), adim(2, mk(m1)), adim(3, mk(m2)), adim(4, mk(m2))], { adet: 10 });
+    const olcum = { tur: 'olcum', ad: 'Ç', alt: 1, ust: 2, birim: 'mm' };
+    const liste = { kontrolListesi: [{ ad: 'Çapı ölç', aciklama: null, asama: 'bitis' as const, zorunlu: true, kontrol: olcum }] };
+    const { uretimEmriId: id } = await ac([adim(1, mk(m1)), adim(2, mk(m1), liste), adim(3, mk(m2)), adim(4, mk(m2))], { adet: 10 });
     const yaz = <T = { emir: AdimliEmirAyrintisi } & Hata>(yol: string, govde: unknown) => istek<T>('planlama_proje', 'POST', `/adimli-emirler/${yol}`, govde, randomUUID());
     const rework = { oncekiOpNo: null, opNo: 15, tur: 'rework', ad: 'Rework', operasyonTipiId: tipId, kaynak: mk(m1), ayarSuresiDk: '5', birimSureDk: '2', terminGun: null, aciklama: 'Çapak' };
 
@@ -1251,6 +1297,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     let k = await ayrinti(kol);
     assert.deepEqual(k.parti?.birlesmeOpNo, 30);
     assert.deepEqual(k.isEmirleri.map((i) => [i.sira, i.opNo, i.tur, i.ekAciklama]), [[1, 15, 'rework', 'Çapak'], [2, 20, 'rota', null]], 'kol birleşme adımına kadar taşır, rework önde');
+    // 3338-4 a: kola kopyalanan talimat zorunluluğunu ve kontrolünü taşır.
+    // Terminal yalnız çalışan adımın listesini okur; kopya satırdan ölçülür.
+    const kolAdimlari = await o().vt.tx((db) => db.sorgu<{ ad: string; asama: string; zorunlu: boolean; kontrol: unknown }>('SELECT ad, asama, zorunlu, kontrol FROM emir_adimi WHERE emir_id = $1 ORDER BY sira', [kol]));
+    assert.deepEqual(kolAdimlari.map((a) => [a.ad, a.asama, a.zorunlu, a.kontrol]), [['Çapı ölç', 'bitis', true, olcum]]);
     // 697: Reçete ve Rota durum anahtarını rotadaki yerle kurar; ek adımı dilimdeki türden tanır.
     const dilim = (await o().vt.tx((db) => emirDilimi(db))).find((e) => e.id === kol);
     assert.deepEqual(dilim?.isEmirleri.map((i) => [i.sira, i.opNo, i.tur]), [[1, 15, 'rework'], [2, 20, 'rota']]);

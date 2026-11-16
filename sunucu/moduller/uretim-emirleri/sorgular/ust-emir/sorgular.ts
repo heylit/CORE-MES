@@ -206,9 +206,9 @@ export function altPartilerGetir(db: Db, idler: readonly number[]): Promise<AltP
 
 export function kontrolListesiGetir(
   db: Db, isEmriIdleri: readonly number[],
-): Promise<{ isEmriId: number; sira: number; ad: string; aciklama: string | null; asama: TalimatAsamasi }[]> {
+): Promise<{ isEmriId: number; sira: number; ad: string; aciklama: string | null; asama: TalimatAsamasi; zorunlu: boolean; kontrol: object | null }[]> {
   return db.sorgu(
-    `SELECT is_emri_id AS "isEmriId", sira, ad, aciklama, asama FROM emir_adimi WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
+    `SELECT is_emri_id AS "isEmriId", sira, ad, aciklama, asama, zorunlu, kontrol FROM emir_adimi WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
     [[...isEmriIdleri]],
   );
 }

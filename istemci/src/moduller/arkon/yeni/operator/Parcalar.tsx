@@ -202,9 +202,22 @@ function MiniHalka({ oran }: { oran: number }) {
 }
 export { MiniHalka };
 
-export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }: {
+// İşin yeri: istasyon kodu ve makine (kod ve ad). Makinesi seçilmemiş işte bu açıkça yazar; operatör işin hangi tezgâhın olduğunu kartta görür.
+export interface IsYeriBilgisi { istasyon: string; makine: string | null; makineAd: string | null }
+export const isYeriMetni = (y: IsYeriBilgisi): string =>
+  [y.istasyon || null, y.makine ? [y.makine, y.makineAd].filter(Boolean).join(' ') : 'Makine seçilmedi'].filter(Boolean).join(' · ');
+export function IsYeri({ yer }: { yer: IsYeriBilgisi }) {
+  return (
+    <span className="tc-ay1-is-yer" title={isYeriMetni(yer)}>
+      {yer.istasyon ? <span><Simge ad="layers" boyut="k" />{yer.istasyon}</span> : null}
+      <span data-yok={yer.makine ? undefined : ''}><Simge ad={yer.makine ? 'cpu' : 'alert'} boyut="k" />{yer.makine ? <>{yer.makine}{yer.makineAd ? <small> · {yer.makineAd}</small> : null}</> : 'Makine seçilmedi'}</span>
+    </span>
+  );
+}
+
+export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla, yer }: {
   isler: readonly Is[]; aktif: number; sec: (i: number) => void; siradaki: string | undefined; onde: string | null;
-  kartlar: readonly RefakatKarti[]; kartla: ((i: number, k: RefakatKarti) => void) | null;
+  kartlar: readonly RefakatKarti[]; kartla: ((i: number, k: RefakatKarti) => void) | null; yer?: (i: number) => IsYeriBilgisi;
 }) {
   const { acik, biten } = bitenleriAyir(isler);
   const kart = ([o, i]: [Is, number]) => {
@@ -218,6 +231,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
         <span className="tc-ay1-is-govde">
           <span className="tc-ay1-is-no">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}{o.fresh ? <span className="tc-ay1-etiket" data-durum="ayar">Yeni</span> : null}</span>
           <span className="tc-ay1-is-parca">{o.part}{o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
+          {yer ? <IsYeri yer={yer(i)} /> : null}
           {/* 3126: satırda malzeme kodu, proje ve iyi / hedef adet de yazar; boş alan yazılmaz. */}
           <span className="tc-ay1-is-ayrinti">
             {[o.op, o.pkg?.partNo, o.pkg?.proje, o.empty ? null : `${sayi(o.good)} / ${sayi(o.target)} adet`, o.due ? `Termin ${o.due}` : null]
@@ -512,7 +526,7 @@ export function BilgiCipi({ n, ac }: { n: number; ac: () => void }) {
 // Telefonda çarkın yerine tek satır: ekrandaki iş ve sırası; dokununca çark ve işin bütün alanları pencerede açılır.
 export function IsSatiri({ is, sira, ac }: { is: Is; sira: string | null; ac: () => void }) {
   return (
-    <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · işleri ve makineleri aç`}>
+    <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · bilgileri aç`}>
       <span>
         <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>
         <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ')}</b>

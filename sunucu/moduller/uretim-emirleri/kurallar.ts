@@ -198,6 +198,12 @@ export const toplamAsimiIhlali = (mevcut: number, fark: number): string | null =
   mevcut + fark > AZAMI_TOPLAM ? TOPLAM_ASIMI : null;
 
 export const ADIM_YOK = 'Adım bu emirde bulunamadı.';
+// 3338-4 a: atlama kaydı tek iş emrinin talimatıdır; iş emrine bağlı olmayan eski adım atlanamaz.
+export const ATLAMA_TEK_IS_EMRI = 'Atlanan maddeler aynı iş emrinin talimatı olmalı.';
+export const atlamaIhlali = (adimlar: readonly { isEmriId: number | null }[]): string | null => {
+  const isEmirleri = new Set(adimlar.map((a) => a.isEmriId));
+  return isEmirleri.size === 1 && !isEmirleri.has(null) ? null : ATLAMA_TEK_IS_EMRI;
+};
 export const ADIM_BASLAMAMIS = 'Adımlar yalnız başlamış emirde işaretlenir.';
 export const ON_HAZIRLIK_KAPALI = 'Ön hazırlık adımları yalnız planlı ya da başlamış emirde işaretlenir.';
 export const HAZIRLIK_AYARSIZ = 'Üretim hazırlığı adımları ayar başlayınca işaretlenir.';

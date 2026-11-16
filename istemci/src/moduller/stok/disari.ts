@@ -13,7 +13,7 @@ export interface MalzemeTeslimOdagi { istasyonId: number; uretimEmriId: number; 
 export function isMalzemesiniAc(odak: MalzemeTeslimOdagi): void {
   window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: odak }));
 }
-export { durumMetni, useIsMalzemeDurumu, type IsMalzemeDurumu } from './is-malzeme-durumu.ts';
+export { durumMetni, useIsMalzemeDurumu, type IsMalzemeDurumu, type MalzemeYetmesi } from './is-malzeme-durumu.ts';
 export { CikanSepet, IstasyonSepetleri, useIstasyonSepetiSayilari } from './IstasyonSepetleri.tsx';
 
 // 1908 a: terminal okutulan lot ya da malzeme etiketini çalışan işin rota girdisiyle karşılaştırır. Girdiler malzeme çipinin okuduğu

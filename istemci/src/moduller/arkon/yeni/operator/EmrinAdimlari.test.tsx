@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type { AdimDurumuTerminalCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmrinAdimlari, RotaSeridi, rotaAkisiAdimlari } from './EmrinAdimlari.tsx';
 
-// 2893-3 b: operatör emrin adımlarını statüyle okur; kendi adımı işaretli, elle yazılan statü "Elle" ile; bekleten talep/sipariş no ve termin. Veriler uydurmadır.
+// 2893-3 b: operatör emrin adımlarını statüyle okur; kendi adımı işaretli. 3338-2 a: elle işareti ve tedarik notu satırda yok. Veriler uydurmadır.
 const V: AdimDurumuTerminalCevabi = {
   emirId: 5,
   adimlar: [
@@ -19,10 +19,10 @@ const V: AdimDurumuTerminalCevabi = {
 afterEach(cleanup);
 
 describe('Üretim Terminali emrin adımları (2893-3 b)', () => {
-  it('ilk adım üstte; kendi adımı işaretli; elle statü işaretli; yazma düğmesi yok', () => {
+  it('ilk adım üstte; kendi adımı işaretli; satır yalnız OP, ad, statü ve yüzde (elle ve tedarik yok); yazma düğmesi yok', () => {
     render(<EmrinAdimlari v={V} isEmriId={52} />);
     const l = within(screen.getByRole('region', { name: 'Emrin adımları' })).getAllByRole('listitem');
-    expect(l.map((x) => x.textContent)).toEqual(['OP 10Testere kesimBitti%100', 'OP 20CNC torna · bu adımÜretimde%45', 'OP 30KaplamaElleFason talebi ST-2099-004 · Sipariş SP-2099-001 · termin 01.03.2099 · Sipariş SP-2099-002 · termin 02.01.2020 · geciktiSipariş bekliyor%0']);
+    expect(l.map((x) => x.textContent)).toEqual(['OP 10Testere kesimBitti%100', 'OP 20CNC torna · bu adımÜretimde%45', 'OP 30KaplamaSipariş bekliyor%0']);
     expect(l[1]?.getAttribute('aria-current')).toBe('step');
     expect(screen.queryByRole('button')).toBeNull();
   });

@@ -79,7 +79,7 @@ export interface IsEmriGirdisi {
   devirAdedi: number | null;
   talimatSurumu: number | null;
   // Aşaması olmayan madde (düz talimat, rotasız emir) üretimdir. Kontrol (3249-2 a) talimat adımının kontrol noktasıdır; yoksa onay.
-  kontrolListesi: { ad: string; aciklama: string | null; asama?: TalimatAsamasi; kontrol?: { tur: string } | null }[];
+  kontrolListesi: { ad: string; aciklama: string | null; asama?: TalimatAsamasi; kontrol?: { tur: string } | null; zorunlu?: boolean }[];
   adaylar?: { kaynak: AtanabilirKaynak; ayarSuresiDk: string | null; birimSureDk: string | null }[];
   bilesenler?: { malzemeNo: number; miktar: string; fireYuzde?: string }[];
   firePayiYuzde?: string;
@@ -246,7 +246,7 @@ async function eklerYaz(db: Db, emirId: number, isEmriId: number, g: IsEmriGirdi
   }
   for (const b of g.bilesenler ?? []) await s.bilesenEkle(db, isEmriId, { malzemeNo: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde ?? '0' });
   for (const [i, m] of g.kontrolListesi.entries()) {
-    await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId, m.asama ?? 'uretim', talimatKontrolu(m.kontrol));
+    await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId, m.asama ?? 'uretim', talimatKontrolu(m.kontrol), m.zorunlu === true);
   }
 }
 
@@ -1148,7 +1148,7 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
     const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && !fasonMu(i), ilkSira + n));
     for (const a of adaylar.filter((x) => x.isEmriId === i.id)) await s.adayEkle(db, yeni, a);
     for (const b of bilesenler.filter((x) => x.isEmriId === i.id)) await s.bilesenEkle(db, yeni, b);
-    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama);
+    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama, m.kontrol, m.zorunlu);
     kopyalar.push({ kaynak: i, yeniId: yeni });
   }
   // Kola gelmeyen öncül düşer: kolun o adımı dal başı olur, üstü bekleme kuralı kolBaslamaIhlali'ndedir.

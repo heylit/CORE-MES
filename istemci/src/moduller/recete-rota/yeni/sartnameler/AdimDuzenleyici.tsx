@@ -22,7 +22,7 @@ interface Ozellikler {
 // Yüklenip henüz kaydedilmemiş medya sunucuda bağsızdır; önizlemesi tarayıcıdaki dosyadan çizilir.
 // Sürüklenen adımın sırası bu türle taşınır; başka sürükleme (dosya, rota şeması) bırakılmaz.
 const SURUKLE_TURU = 'application/x-tc-talimat-adimi';
-const ASAMA_SIRASI = ['on_hazirlik', 'hazirlik', 'uretim'] as const;
+const ASAMA_SIRASI = ['on_hazirlik', 'hazirlik', 'uretim', 'bitis'] as const;
 
 const yerelAdresler = new Map<string, string>();
 const onizlemeAdresi = (ozet: string): string => yerelAdresler.get(ozet) ?? medyaAdresi(ozet);

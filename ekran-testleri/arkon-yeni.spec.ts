@@ -99,8 +99,9 @@ test.describe('A1 Operatör', () => {
   test('Operatör: terminal açılır, açılışta yazma yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
     await ac('/uretim-terminali');
     await expect(page.getByRole('region', { name: 'Aktif iş emri' }).or(page.getByRole('navigation', { name: 'Terminal görünümleri' })).first()).toBeVisible();
-    // 793 b: üst çubuk yalnız istasyon adını gösterir; istasyon çarkın İstasyonlar şeridinden değişir.
-    await expect(page.getByTitle('İstasyon · çarkın İstasyonlar şeridinden değişir').first()).toBeVisible();
+    // 793 b: üst çubuk yalnız istasyon adını gösterir. 3338-6 a: çark yoktur; istasyon ve makine üst çubuktaki kutudan seçilir.
+    await expect(page.getByTitle(/^İstasyon( · dokununca değişir| ve makine · dokununca seçilir)?$/).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: 'İş ve makine çarkı' })).toHaveCount(0);
     expect(await tasma(page)).toBeLessThanOrEqual(0);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
     expect(ag.hatalar).toEqual([]);
@@ -139,9 +140,9 @@ test.describe('A1 Operatör', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  // 888: iş çarkı tek işte dönmez gibi görünmez, kısa pencerede (900 px) üretim bölümü iş kartının üstüne binmez, fareyle sürükleme
-  // çark alanının dışında bırakılsa da sayılır. Paketler tarayıcıda uydurulur (sentetik); hiçbir yazma gitmez.
-  test.describe('888 iş çarkı', () => {
+  // 888 ve 3338-6 a: üstte "Sıradaki işler" şeridi (çark kalktı); tek işte de ekrandaki iş belli, kısa pencerede (900 px) şerit, iş satırı,
+  // Şimdi şeridi ve sayaç üst üste binmez; şeritte başka karta dokunmak yalnız önizler. Paketler tarayıcıda uydurulur (sentetik); hiçbir yazma gitmez.
+  test.describe('888 sıradaki işler', () => {
     test.use({ hesap: 'ornek.operator1' });
     const paket = (i: number) => ({
       id: `ekran-cark-${String(i)}`, no: `IE-CARK-${String(i)}`, opType: 'cnc', st: {}, partNo: `EK-${String(i)}`, part: `Çark deneme ${String(i)}`, rev: 'A', op: 'Op 10',
@@ -154,21 +155,15 @@ test.describe('A1 Operatör', () => {
       await page.setViewportSize(boy);
       await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: Array.from({ length: n }, (_, i) => ({ kimlik: paket(i).id, surum: 1, govde: paket(i) })) } }));
       await ac('/uretim-terminali');
-      const cark = page.getByRole('region', { name: 'İş ve makine çarkı' });
-      // 3136: telefonda çark sayfada durmaz, istasyon kutusundan açılan "Aktif iş" penceresindedir (tek görünüş, sayfa kaymaz).
-      const kutu = page.getByRole('button', { name: /ORN-TORNA-1/ }).and(page.getByTitle('İstasyon · çarkın İstasyonlar şeridinden değişir'));
-      await expect(cark.or(kutu).first()).toBeVisible();
-      if (!(await cark.isVisible())) await kutu.click();
-      await expect(cark).toBeVisible();
-      return cark;
+      await expect(page.locator('.tc-ay1-istasyon, .tc-ay1-yer').first()).toBeVisible();
+      await expect(page.getByRole('region', { name: 'İş ve makine çarkı' })).toHaveCount(0);
+      return page.getByRole('region', { name: 'Sıradaki işler' });
     };
+    const darMi = (page: Page) => page.evaluate(() => !!document.querySelector('.tc-ay1-dar'));
 
-    // Görünen bölümler birbirinin üstüne çıkmaz. 3136: genişte çark sol sütunda, iş kimliği sağ sütunun başındadır (yan yana);
-    // telefonda çark penceredir ve açıkken sayfanın üstünde durur, o yüzden pencere kapatılıp sayfadaki bölümler ölçülür.
+    // Görünen bölümler birbirinin üstüne çıkmaz: şerit, iş kimliği, Şimdi şeridi ve sayaç.
     const altAlta = async (page: Page) => {
-      const pencere = page.getByRole('dialog', { name: 'Aktif iş' });
-      if (await pencere.isVisible()) { await page.keyboard.press('Escape'); await expect(pencere).toBeHidden(); }
-      const kutular = await page.evaluate(() => ['.tc-ay1-tcark', ':is(.tc-ay1-aktif, .tc-ay1-is-baslik)', ':is(.tc-ay1-sahne > :first-child, .tc-ay1-simdi)', '.tc-ay1-sayac']
+      const kutular = await page.evaluate(() => ['.tc-ay1-sira', ':is(.tc-ay1-aktif, .tc-ay1-is-baslik)', ':is(.tc-ay1-sahne > :first-child, .tc-ay1-simdi)', '.tc-ay1-sayac']
         .map((s) => document.querySelector(s)?.getBoundingClientRect())
         .filter((b): b is DOMRect => !!b && b.height > 0)
         .map((b) => [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] as const));
@@ -184,9 +179,10 @@ test.describe('A1 Operatör', () => {
 
     // Kullanıcının bildirdiği geniş pencereler: binme 900 px'ten yüksek pencerede de oluyordu (1600x1000'de 14 px).
     for (const boy of [{ width: 1440, height: 960 }, { width: 1600, height: 1000 }]) {
-      test(`${String(boy.width)}x${String(boy.height)} pencerede çark, iş kartı, Şimdi şeridi ve sayaç üst üste binmez`, async ({ page, ag, ac }, bilgi) => {
+      test(`${String(boy.width)}x${String(boy.height)} pencerede şerit, iş kartı, Şimdi şeridi ve sayaç üst üste binmez`, async ({ page, ag, ac }, bilgi) => {
         test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
-        await ac900(page, ac, 3, boy);
+        const serit = await ac900(page, ac, 3, boy);
+        await expect(serit).toBeVisible();
         await altAlta(page);
         expect(await tasma(page)).toBeLessThanOrEqual(0);
         expect(yazmalar(ag.yazmalar)).toEqual([]);
@@ -194,55 +190,74 @@ test.describe('A1 Operatör', () => {
       });
     }
 
-    test('tek işte ok, sıra ve ipucu yok; 900 px yükseklikte çark, iş kartı, Şimdi şeridi ve sayaç üst üste binmez', async ({ page, ag, ac }) => {
-      const cark = await ac900(page, ac, 1);
-      await expect(cark.getByRole('button', { name: /İşler · 1/ })).toBeVisible();
-      await expect(cark.getByRole('button', { name: 'Sonraki: işler' })).toHaveCount(0);
-      await expect(cark.getByText('1 / 1')).toHaveCount(0);
+    test('tek işte şerit tek kart ve ekrandaki iştir (telefonda şerit yok); 900 px yükseklikte bölümler üst üste binmez', async ({ page, ag, ac }) => {
+      const serit = await ac900(page, ac, 1);
+      if (await darMi(page)) {
+        await expect(serit).toHaveCount(0);
+      } else {
+        await expect(serit.getByText('1 iş · 1/1')).toBeVisible();
+        await expect(serit.getByRole('listitem')).toHaveCount(1);
+        await expect(serit.getByRole('button', { name: 'IE-CARK-0 · ekranda' })).toHaveAttribute('aria-pressed', 'true');
+        await expect(serit.getByRole('button', { name: 'Bu işe geç' })).toHaveCount(0);
+      }
       await altAlta(page);
       expect(await tasma(page)).toBeLessThanOrEqual(0);
       expect(yazmalar(ag.yazmalar)).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
 
-    test('fareyle sürükleme çark alanının dışında bırakılsa da bir adım çevirir; ekrandaki iş değişmez', async ({ page, ag, ac }) => {
-      const cark = await ac900(page, ac, 4);
-      await expect(cark.getByText('1 / 4')).toBeVisible();
-      const sahne = cark.getByRole('group', { name: 'İşler' });
-      const b = (await sahne.boundingBox())!;
-      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(b.x + b.width / 2 - 30, b.y + b.height / 2, { steps: 3 });
-      await page.mouse.move(Math.max(1, b.x - 10), b.y + b.height + 120, { steps: 5 });
-      await page.mouse.up();
-      await expect(cark.getByText('2 / 4')).toBeVisible();
-      await expect(cark.getByText(/Önizleme · ekrandaki iş değişmez/)).toBeVisible();
+    test('şeritte başka karta dokunmak yalnız önizler, ekrandaki iş değişmez; "Ekrandakine dön" geri getirir', async ({ page, ag, ac }) => {
+      const serit = await ac900(page, ac, 4);
+      await expect(serit.getByText('4 iş · 1/4')).toBeVisible();
+      const ekranda = serit.getByRole('button', { name: / · ekranda$/ });
+      await expect(ekranda).toHaveAttribute('aria-pressed', 'true');
+      const ekrandakiAd = await ekranda.getAttribute('aria-label');
+      const baska = serit.locator('li > button:not([aria-label$=" · ekranda"])').first();
+      await baska.click();
+      await expect(baska).toHaveAttribute('aria-pressed', 'true');
+      await expect(ekranda).toHaveAttribute('aria-pressed', 'false');
+      await expect(serit.getByText(/Önizleme · ekrandaki iş değişmez/)).toBeVisible();
+      await expect(serit.getByRole('button', { name: 'Bu işe geç' })).toBeVisible();
+      await expect(serit.getByText('4 iş · 1/4')).toBeVisible();
+      expect(await ekranda.getAttribute('aria-label')).toBe(ekrandakiAd);
+      expect(await tasma(page)).toBeLessThanOrEqual(0);
+      await serit.getByRole('button', { name: 'Ekrandakine dön' }).click();
+      await expect(ekranda).toHaveAttribute('aria-pressed', 'true');
+      await expect(serit.getByText(/Önizleme · ekrandaki iş değişmez/)).toHaveCount(0);
       expect(yazmalar(ag.yazmalar)).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
 
-    // Düzeltme yetkisi olan kişide sayaçta beş tuş durur: üstte İyi +1 ve Hurda +1, altında düzeltme (−1) tuşları tek kısa sırada
-    // (1046 a), en altta Toplu giriş. Tuşlar sayacın içinde, Şimdi şeridinin altında kalır, kadran küçülüp yazıları üst üste gelmez.
-    // Kullanıcının bildirdiği kayma: istasyon şeridinde oklar, not ve "Bu istasyona geç" üst satırı sıkıştırıyor, "3 / 11" kırılıp
-    // şerit düğmesine biniyordu. Sıra tek satırdır ve şeritle, eylem satırıyla kesişmez.
+    // Kullanıcının bildirdiği kayma (eski istasyon şeridi): not ve "Bu istasyona geç" satırı sıkıştırıp karta biniyordu.
+    // 3338-6 a: istasyon ve makine üst çubuktaki kutudan açılan pencerede seçilir; her satırda kart ile eylem kesişmez, pencere yana taşmaz.
     for (const boy of [{ width: 1280, height: 1000 }, { width: 2000, height: 1146 }]) {
-      test(`${String(boy.width)}x${String(boy.height)} istasyon şeridinde sıra yazısı şerit düğmelerine binmez`, async ({ page, ag, ac }, bilgi) => {
+      test(`${String(boy.width)}x${String(boy.height)} istasyon ve makine penceresinde kart ile eylem birbirine binmez`, async ({ page, ag, ac }, bilgi) => {
         test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
-        const cark = await ac900(page, ac, 0, boy);
-        await cark.getByRole('button', { name: /İstasyonlar ·/ }).click();
-        await cark.getByRole('button', { name: 'Önceki: istasyonlar' }).click();
-        await expect(cark.getByRole('button', { name: 'Bu istasyona geç' })).toBeVisible();
-        const k = await page.evaluate(() => Object.fromEntries(['.tc-ay1-tcark-serit > :last-child', '.tc-ay1-tcark-konum', '.tc-ay1-tcark-alt']
-          .map((s) => { const b = document.querySelector(s)!.getBoundingClientRect(); return [s, { sol: b.left, sag: b.right, ust: b.top, alt: b.bottom }]; })));
-        const [dugme, konum, alt] = [k['.tc-ay1-tcark-serit > :last-child']!, k['.tc-ay1-tcark-konum']!, k['.tc-ay1-tcark-alt']!];
-        const bilgiYazisi = JSON.stringify(k);
-        expect(konum.sol, bilgiYazisi).toBeGreaterThanOrEqual(dugme.sag);
-        expect(konum.alt - konum.ust, bilgiYazisi).toBeLessThan(2 * (dugme.alt - dugme.ust));
-        expect(alt.ust, bilgiYazisi).toBeGreaterThanOrEqual(Math.max(dugme.alt, konum.alt) - 1);
+        await ac900(page, ac, 0, boy);
+        await page.getByTitle(/^(İstasyon · dokununca değişir|Makine · dokununca seçilir)$/).first().click();
+        const pencere = page.getByRole('dialog', { name: 'İstasyon ve makine' });
+        await expect(pencere).toBeVisible();
+        await expect(pencere.getByRole('button', { name: 'Bu istasyona geç' }).first()).toBeVisible();
+        const satirlar = await pencere.locator('.tc-ay1-yer-satiri').evaluateAll((ss) => ss.map((s) => {
+          const [kart, ...eylem] = [...s.children].map((c) => c.getBoundingClientRect());
+          return { kart: kart ? [kart.left, kart.top, kart.right, kart.bottom] : null, eylem: eylem.map((b) => [b.left, b.top, b.right, b.bottom]) };
+        }));
+        const m = JSON.stringify(satirlar);
+        expect(satirlar.length, m).toBeGreaterThanOrEqual(2);
+        for (const s of satirlar) {
+          expect(s.kart, m).not.toBeNull();
+          for (const b of s.eylem) {
+            const [a, c] = [s.kart!, b];
+            expect(a[0]! < c[2]! && c[0]! < a[2]! && a[1]! < c[3]! && c[1]! < a[3]!, m).toBe(false);
+          }
+        }
+        expect(await pencere.evaluate((p) => p.scrollWidth - p.clientWidth)).toBeLessThanOrEqual(0);
         expect(ag.hatalar).toEqual([]);
       });
     }
 
+    // Düzeltme yetkisi olan kişide sayaçta beş tuş durur: üstte İyi +1 ve Hurda +1, altında düzeltme (−1) tuşları tek kısa sırada
+    // (1046 a), en altta Toplu giriş. Tuşlar sayacın içinde, Şimdi şeridinin altında kalır, kadran küçülüp yazıları üst üste gelmez.
     test.describe('düzeltme tuşlarıyla', () => {
       test.use({ hesap: 'ornek.yonetici' });
       for (const boy of [{ width: 1280, height: 900 }, { width: 1600, height: 1000 }, { width: 1920, height: 1080 }]) {
@@ -282,7 +297,7 @@ test.describe('A1 Operatör', () => {
       }
     });
 
-    // 1070: kabuk menüleri açıkken 900-1200 px pencerede sol sütun kaymaz; çark, iş kartı, Şimdi şeridi, sayaç ve Durdur, Duraklat,
+    // 1070: kabuk menüleri açıkken 900-1200 px pencerede sol sütun kaymaz; şerit, iş kartı, Şimdi şeridi, sayaç ve Durdur, Duraklat,
     // Bitir tek ekrandadır. 1063: daha kısa pencerede (800) sütun kayar, düğmeler sütunun altında görünür kalır; sütun sonuna
     // kayınca sayacın altındaki yerine döner, sayaç tuşlarının üstüne binmez.
     for (const hesap of ['ornek.yonetici', 'ornek.operator1'] as const) {

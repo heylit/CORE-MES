@@ -105,12 +105,13 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
   const tedarik = await adimTedarikleri(db, emirId, idler);
   const statuDefteri = await s.elleStatuDefteri(db, idler);
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
+  const atlamalar = await s.talimatAtlamalari(db, idler);
   const bekletme = await emrinBekletmesi(db, emirId, e.durum);
   const liste = await s.listeSatirlari(db, idler);
   const ekler = kaynak.ekListe === null ? new Map<number, readonly EkMaddeSatiri[]>() : await kaynak.ekListe(db, idler);
   const sablonlar = kaynak.sablonOzet === null ? new Map<number, { id: number; kod: string; ad: string }>() : await kaynak.sablonOzet(db, isEmirleri.map((i) => i.operasyonTipiId));
   const adlar = await kisiAdlari(db, [...new Set([
-    ...[...statuDefteri, ...onayDefteri].map((x) => x.kisiId),
+    ...[...statuDefteri, ...onayDefteri, ...atlamalar].map((x) => x.kisiId),
     ...liste.flatMap((x) => [x.olayKisiId, x.ekleyenId].filter((k): k is number => k !== null)),
     ...[...ekler.values()].flat().flatMap((x) => (x.tamamlayanId === null ? [x.ekleyenId] : [x.ekleyenId, x.tamamlayanId])),
   ])]);
@@ -149,6 +150,7 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
         gecmis: [
           ...statuSatirlari.map((x) => ({ olay: x.olay === 'yaz' ? 'statu' as const : 'statu-kaldir' as const, deger: x.statu ?? '', not: x.aciklama, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
           ...onaySatirlari.map((x) => ({ olay: x.olay === 'kaldir' ? 'onay-kaldir' as const : x.olay, deger: x.madde, not: x.gerekce, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
+          ...atlamalar.filter((x) => x.isEmriId === i.id).map((x) => ({ olay: 'talimat-atlama' as const, deger: x.eylem, not: x.maddeler.join(', '), kisiAdi: ad(x.kisiId), zaman: x.zaman })),
         ].sort((a, b) => Date.parse(b.zaman) - Date.parse(a.zaman)),
         liste: liste.filter((x) => x.isEmriId === i.id).map((x) => {
           const tamam = x.sonOlay === 'tamamla';

@@ -635,11 +635,13 @@ describe('adım adım talimat (989 a, 993 a)', () => {
   });
   test('sürüm metni başlıklardır; kontrol listesi açıklaması 300 karaktere kısalır; eski düz metin tek adımdır', () => {
     assert.equal(adimliTalimatMetni([{ baslik: 'A' }, { baslik: 'B' }]), 'A\nB');
-    const l = adimliKontrolListesi([{ baslik: 'A', metin: 'x'.repeat(301), asama: 'on_hazirlik' }, { baslik: 'B', metin: null, asama: 'uretim' }]);
+    const l = adimliKontrolListesi([{ baslik: 'A', metin: 'x'.repeat(301), asama: 'on_hazirlik' }, { baslik: 'B', metin: null, asama: 'bitis', zorunlu: true }]);
     assert.equal(l[0]?.aciklama?.length, 300);
     assert.equal(l[1]?.aciklama, null);
     // 2098-1 a: aşama maddeyle emre gider.
-    assert.deepEqual(l.map((x) => x.asama), ['on_hazirlik', 'uretim']);
+    assert.deepEqual(l.map((x) => x.asama), ['on_hazirlik', 'bitis']);
+    // 3338-4 a: zorunluluk da emre gider; verilmeyen zorunlu değildir.
+    assert.deepEqual(l.map((x) => x.zorunlu), [false, true]);
     assert.deepEqual(eskiTalimatAdimi('\n  İlk satır \nİkinci'), { sira: 1, baslik: 'İlk satır', metin: '\n  İlk satır \nİkinci', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null });
   });
 });

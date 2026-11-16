@@ -10,9 +10,24 @@
 .tc-ra progress::-webkit-progress-value { background: var(--c, var(--run)); }
 .tc-ra progress::-moz-progress-bar { background: var(--c, var(--run)); }
 .tc-ra-toplam progress { block-size: var(--b-3); }
-.tc-ra ol { cursor: pointer; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--b-2); margin: 0; padding: 0; list-style: none; min-width: 0; }
+/* Kartlar sabit genişlikte (--tc-ra-kart; kullanan ekran ölçüye göre değiştirir) ve yatay kayar; bırakınca en yakın kart ortaya oturur.
+   İç boşluk ilk ve son kartın da ortaya gelebilmesi içindir; kenarlar solar, devamı olduğu görünür. */
+.tc-ra { --tc-ra-kart: calc(var(--dokunma-ana) * 4); }
+.tc-ra-govde { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
+.tc-ra ol {
+  cursor: pointer; display: flex; gap: var(--b-2); flex: 1 1 auto; margin: 0; padding: var(--b-1) calc(50% - var(--tc-ra-kart) / 2); list-style: none; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, var(--ink) var(--b-6), var(--ink) calc(100% - var(--b-6)), transparent);
+}
+.tc-ra ol::-webkit-scrollbar { display: none; }
+.tc-ra ol[data-surukleniyor] { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+.tc-ra-kaydir {
+  flex: none; display: inline-grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); padding: 0; border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-3); background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.tc-ra-kaydir:disabled { opacity: .35; cursor: default; }
 .tc-ra li {
-  --c: var(--idle); display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); row-gap: 0; align-items: center; min-width: 0;
+  --c: var(--idle); display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); row-gap: 0; align-content: start; align-items: center; flex: none; inline-size: var(--tc-ra-kart); scroll-snap-align: center;
   padding: var(--b-2); border-radius: var(--yari-3); border-block-start: var(--b-1) solid var(--c); background: var(--panel2);
 }
 .tc-ra li[data-ton='tamam'] { --c: var(--run); }
@@ -25,7 +40,7 @@
 .tc-ra .tc-ra-dugum { grid-row: 1 / 3; }
 .tc-ra-op { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tc-ra-op em { margin-inline-start: var(--b-1); padding: 0 var(--b-1); border-radius: var(--yari-2); background: var(--c); color: var(--panel-solid); font-size: var(--yazi-xs); font-style: normal; font-weight: 800; }
-.tc-ra-ad { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ra-ad { font-weight: 700; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .tc-ra-yuzde { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
 .tc-ra .tc-ra-yuzde { grid-column: 1 / -1; }
 .tc-ra-yuzde small { flex: none; font-size: var(--yazi-s); font-weight: 700; }

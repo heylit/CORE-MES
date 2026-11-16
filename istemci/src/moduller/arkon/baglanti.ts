@@ -8,7 +8,7 @@ import type {
 import type { CagriEkiplerimCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
-import type { AdimCevabi, EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimCevabi, EmirAyrintiCevabi, TalimatAtlamaCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import { AgHatasi, ApiHatasi, OTURUM_BITTI, api, istekKimligiMi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -269,10 +269,20 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     if (!Number.isSafeInteger(emirId) || emirId <= 0) return ret(400, 'Geçersiz emir');
     if (g.yontem === 'GET' && ucuncu === undefined) return tamam((await istemci.get<EmirAyrintiCevabi>(`/uretim-emirleri/${emirId}`)).adimlar ?? []);
     if (g.yontem === 'POST' && ucuncu !== undefined) {
-      const isaret = (govdeyiOku(g.govde) as { tamam?: unknown } | undefined)?.tamam;
+      const govde = govdeyiOku(g.govde) as { tamam?: unknown; kanit?: unknown } | undefined;
+      const isaret = govde?.tamam;
       if (typeof isaret !== 'boolean') return ret(400, 'İşaret yok');
-      return tamam((await istemci.post<AdimCevabi>(`/uretim-emirleri/${emirId}/adimlar/${yolParcasi(ucuncu)}/tamamla`, { tamam: isaret })).adimlar);
+      // Kanıtın biçimini TMI ucu denetler; burada yalnız nesne olduğu bakılır.
+      const kanit = govde?.kanit !== null && typeof govde?.kanit === 'object' ? { kanit: govde.kanit } : {};
+      return tamam((await istemci.post<AdimCevabi>(`/uretim-emirleri/${emirId}/adimlar/${yolParcasi(ucuncu)}/tamamla`, { tamam: isaret, ...kanit })).adimlar);
     }
+  }
+  // 3338-4 a: zorunlu talimat eksikken "Yine de" kaydı; eylem ve adım kimliklerini TMI ucu denetler.
+  if (ilk === 'tmi-talimat-atlama' && ikinci !== undefined && g.yontem === 'POST') {
+    const emirId = Number(ikinci);
+    if (!Number.isSafeInteger(emirId) || emirId <= 0) return ret(400, 'Geçersiz emir');
+    const govde = govdeyiOku(g.govde) as { eylem?: unknown; adimIdler?: unknown } | undefined;
+    return tamam(await istemci.post<TalimatAtlamaCevabi>(`/uretim-emirleri/${emirId}/talimat-atlama`, { eylem: govde?.eylem, adimIdler: govde?.adimIdler }, { istekKimligi: yeniIstekKimligi() }));
   }
   // Başlatmadan önce girdiler istasyonda mı (kart #1289): eksikse istek açılır, Malzeme · Teslim paneli o malzemeyle açılır, iş uyarıyla başlar (110 b).
   // İstasyon kişinin seçebildikleri arasında yoksa denetlenmez; son sözü sunucunun başlat denetimi söyler.

@@ -155,7 +155,8 @@ test('canlı: çalışma üç durumdan biridir, biten emirde null; duruş nedeni
 test('adım cevabı: işaretlenmemiş adımda kim ve ne zaman null kalır; eksik alan reddedilir, fazlası dışarı çıkmaz', () => {
   const adim = { id: 1, sira: 1, ad: 'Ölç', aciklama: null, asama: 'uretim', tamam: false, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null };
   const isaretli = { ...adim, id: 2, sira: 2, tamam: true, tamamlayan: { id: 2, ad: 'Deneme Kişi' }, tamamlanma: KAYIT.zaman };
-  assert.deepEqual(adimCevabi.parse({ emir: EMIR, adimlar: [{ ...adim, zorunlu: true }, isaretli] }), { emir: EMIR, adimlar: [adim, isaretli] });
+  assert.deepEqual(adimCevabi.parse({ emir: EMIR, adimlar: [{ ...adim, fazla: true }, isaretli] }), { emir: EMIR, adimlar: [adim, isaretli] });
+  assert.deepEqual(adimCevabi.parse({ emir: EMIR, adimlar: [{ ...adim, zorunlu: true, kontrol: null }] }).adimlar, [{ ...adim, zorunlu: true, kontrol: null }], 'zorunluluk ve kontrol taşınır (3338-4 a)');
   for (const alan of ['aciklama', 'asama', 'tamam', 'tamamlayan', 'tamamlanma', 'kanit', 'gecenNot', 'buNot', 'talimat']) {
     assert.equal(gecer(adimCevabi, { emir: EMIR, adimlar: [{ ...adim, [alan]: undefined }] }), false, alan);
   }

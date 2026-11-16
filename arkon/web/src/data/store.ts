@@ -37,7 +37,14 @@ type OutboxItem = { at?: number; uid?: string; red?: KuyrukReddi; yeniden?: bool
 interface LocalUser { id: string; name: string; role: Role; wcs?: string[]; active?: boolean; pin: string }
 export interface UserSave { id: string; name: string; role: Role; wcs?: string[]; active?: boolean; pin?: string }
 /** sunucu / bağlantı hatası: offline = sunucuya ulaşılamadı (kuyruğa alınır), status = HTTP kodu, body = sunucunun yanıtı */
-export interface TmiAdim { id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean }
+// 3338-4 a: aşama, zorunluluk ve kontrol (ölçüm, seçim, fotoğraf) CORE'dan gelir; eski cevapta yoktur (üretim, zorunsuz, onay sayılır).
+export interface TmiKontrol { tur: 'onay' | 'olcum' | 'foto' | 'secim'; ad?: string; alt?: number | null; ust?: number | null; birim?: string; secenekler?: string[] }
+export interface TmiAdim {
+  id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean;
+  asama?: 'on_hazirlik' | 'hazirlik' | 'uretim' | 'bitis'; zorunlu?: boolean; kontrol?: TmiKontrol | null;
+  kanit?: { olcum: number | null; secim: string | null; foto: string | null } | null;
+}
+export interface TmiKanit { olcum?: number; secim?: string }
 export class ApiError extends Error { offline?: boolean; status?: number; body?: any }
 export interface Status { mode: 'server' | 'local'; base: string | null; online: boolean; pending: number; baskasi: number; user: User | null; err: string; memory: boolean; kip: CihazKipi | null }
 /* Arkon — veri katmanı
@@ -647,7 +654,9 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     },
     /** CORE emrinin talimat adımları; işaret CORE'a yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
-    async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, { tamam }); },
+    async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean, kanit?: TmiKanit): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, kanit ? { tamam, kanit } : { tamam }); },
+    /** 3338-4 a: zorunlu talimat eksikken "Yine de başlat / bitir" CORE'da adımın geçmişine yazılır */
+    async tmiTalimatAtlama(emirId: number, eylem: 'baslat' | 'bitir', adimIdler: number[]): Promise<{ kayitId: number }> { return api('POST', '/tmi-talimat-atlama/' + emirId, { eylem, adimIdler }); },
     /** başlatmadan önce girdi istasyonda mı (kart #1289); eksikse CORE istek açar ve Malzeme · Teslim panelini açar */
     async uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }> { return api('POST', '/uretim-hazirligi', { emirId, istasyon }); }
   };

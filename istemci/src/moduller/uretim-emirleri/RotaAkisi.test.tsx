@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { RotaAkisi, type RotaAkisiAdimi } from './RotaAkisi.tsx';
+import { BU_ADIMA_DONUS_MS, RotaAkisi, type RotaAkisiAdimi } from './RotaAkisi.tsx';
 
 // 3136 a: emrin bütün adımları yan yana; bu adım işaretli, başlıkta biten adım sayısı ve toplam gidişat. Veriler uydurmadır.
 const ADIMLAR: RotaAkisiAdimi[] = [
@@ -14,7 +14,7 @@ describe('Rota akışı (3136 a)', () => {
   it('başlıkta biten adım ve ortalama gidişat; her adım statüsüyle, bu adım işaretli', () => {
     render(<RotaAkisi adimlar={ADIMLAR} ac={() => undefined} />);
     const bolum = screen.getByRole('region', { name: 'Rota: 1/3 adım bitti, toplam yüzde 48' });
-    expect(within(bolum).getByRole('button').textContent).toBe('Rota1/3 adım bitti%48');
+    expect(within(bolum).getByRole('button', { name: /adım bitti/ }).textContent).toBe('Rota1/3 adım bitti%48');
     const l = within(bolum).getAllByRole('listitem');
     expect(l.map((x) => x.getAttribute('title'))).toEqual(['OP 10 · Testere kesim · Bitti · %100', 'OP 20 · CNC torna · Üretimde · %45', 'OP 30 · Kaplama · Sipariş bekliyor · %0']);
     expect(l.map((x) => x.getAttribute('aria-current'))).toEqual([null, 'step', null]);
@@ -27,11 +27,50 @@ describe('Rota akışı (3136 a)', () => {
     const l = screen.getAllByRole('listitem');
     expect(l.map((x) => x.hasAttribute('data-canli'))).toEqual([false, true, false]);
     expect(screen.getAllByText('Çalışıyor')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { name: /adım bitti/ }));
     expect(acildi).toBe(1);
     // Büyük karta dokunmak da açar (başlık dar ekranda 20 px yüksek kalır).
     fireEvent.click(l[2]!);
     expect(acildi).toBe(2);
+  });
+
+  it('kartlar elle kayar: iki uçta ok düğmeleri; fareyle sürükleme kaydırır ve kartı açmaz, dokunma açar', () => {
+    // jsdom'da PointerEvent yok; fare olayı clientX'i taşır, pointerType elle eklenir.
+    if (typeof window.PointerEvent === 'undefined') {
+      vi.stubGlobal('PointerEvent', class extends MouseEvent { pointerId: number; pointerType: string; constructor(t: string, i: PointerEventInit = {}) { super(t, i); this.pointerId = i.pointerId ?? 0; this.pointerType = i.pointerType ?? ''; } });
+    }
+    let acildi = 0;
+    render(<RotaAkisi adimlar={ADIMLAR} ac={() => { acildi += 1; }} />);
+    expect(screen.getByRole('button', { name: 'Önceki adımlar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sonraki adımlar' })).toBeTruthy();
+    const ol = screen.getByRole('list');
+    const kart = screen.getAllByRole('listitem')[0]!;
+    fireEvent.pointerDown(ol, { pointerType: 'mouse', button: 0, clientX: 200 });
+    fireEvent.pointerMove(ol, { pointerType: 'mouse', clientX: 120 });
+    fireEvent.pointerUp(ol, { pointerType: 'mouse', clientX: 120 });
+    fireEvent.click(kart);
+    expect(acildi).toBe(0);
+    fireEvent.pointerDown(ol, { pointerType: 'mouse', button: 0, clientX: 200 });
+    fireEvent.pointerUp(ol, { pointerType: 'mouse', clientX: 202 });
+    fireEvent.click(kart);
+    expect(acildi).toBe(1);
+  });
+
+  it('dokunulmadan 8 sn sonra bu adıma döner; parmak şeritteyken dönmez', () => {
+    vi.useFakeTimers();
+    try {
+      render(<RotaAkisi adimlar={ADIMLAR} ac={() => undefined} />);
+      const ol = screen.getByRole('list') as HTMLOListElement & { scrollTo?: unknown };
+      const cagri: unknown[] = [];
+      ol.scrollTo = (o: unknown) => { cagri.push(o); };
+      fireEvent.touchStart(ol);
+      fireEvent.scroll(ol);
+      vi.advanceTimersByTime(BU_ADIMA_DONUS_MS * 2);
+      expect(cagri).toHaveLength(0);
+      fireEvent.touchEnd(ol);
+      vi.advanceTimersByTime(BU_ADIMA_DONUS_MS);
+      expect(cagri).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
   });
 
   it('adım yoksa çizilmez', () => {

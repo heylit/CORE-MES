@@ -95,6 +95,7 @@
   .tc-ay1-genis .tc-ay1-tcark-kart > small:not(.tc-ay1-mono) { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .tc-ay1-genis .tc-ay1-tcark-ilerleme { flex: 1 1 var(--dokunma); align-self: center; }
   .tc-ay1-genis .tc-ay1-tcark-makine { display: none; }
+  .tc-ay1-genis .tc-ay1-tcark-kart > .tc-ay1-is-yer { flex: 1 0 100%; order: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tc-ay1-tcark-oge { transition: none; }

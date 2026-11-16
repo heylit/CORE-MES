@@ -8,6 +8,8 @@ export interface AdimSatiri {
   ad: string;
   aciklama: string | null;
   asama: TalimatAsamasi;
+  zorunlu: boolean;
+  kontrol: unknown;
   tamam: boolean;
   tamamlayanId: number | null;
   tamamlanma: string | null;
@@ -19,18 +21,18 @@ export interface AdimSatiri {
 
 export async function adimEkle(
   db: Db, emirId: number, sira: number, ad: string, aciklama: string | null, isEmriId: number | null = null, asama: TalimatAsamasi = 'uretim',
-  kontrol: object | null = null,
+  kontrol: object | null = null, zorunlu = false,
 ): Promise<void> {
   await db.sorgu(
-    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama, kontrol) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
-    [emirId, sira, ad, aciklama, isEmriId, asama, kontrol === null ? null : JSON.stringify(kontrol)],
+    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama, kontrol, zorunlu) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)',
+    [emirId, sira, ad, aciklama, isEmriId, asama, kontrol === null ? null : JSON.stringify(kontrol), zorunlu],
   );
 }
 
 // Güncel durum son olaydan türer; geri alınmış adımda tamamlayan ve zaman yoktur.
 export function adimlariGetir(db: Db, emirId: number): Promise<AdimSatiri[]> {
   return db.sorgu<AdimSatiri>(
-    `SELECT a.id, a.sira, a.ad, a.aciklama, a.asama, COALESCE(o.olay = 'tamamla', false) AS tamam,
+    `SELECT a.id, a.sira, a.ad, a.aciklama, a.asama, a.zorunlu, a.kontrol, COALESCE(o.olay = 'tamamla', false) AS tamam,
             CASE WHEN o.olay = 'tamamla' THEN o.kisi_id END AS "tamamlayanId",
             CASE WHEN o.olay = 'tamamla' THEN ${ISO('o.zaman')} END AS tamamlanma,
             a.is_emri_id AS "isEmriId", k.olcum::float8 AS "kanitOlcum", k.secim AS "kanitSecim", k.foto_ozet AS "kanitFoto"
@@ -100,5 +102,28 @@ export function adimNotlari(db: Db, emirId: number, a: NotAnahtari, siralar: rea
       WHERE (CASE WHEN $5::int IS NULL THEN n.malzeme_no = $2 AND n.op_no = $3 ELSE n.operasyon_id = $5 END) AND n.adim_sira = ANY($4::int[])
       ORDER BY n.adim_sira, n.emir_id = $1, n.id DESC`,
     [emirId, a.malzemeNo, a.opNo, [...siralar], a.operasyonId],
+  );
+}
+
+// 3338-4 a: atlanan zorunlu talimatlar. Adımlar bu emrin ve aynı iş emrinin değilse boş döner (çağıran reddeder).
+export function atlananAdimlar(db: Db, emirId: number, adimIdler: readonly number[]): Promise<{ id: number; ad: string; isEmriId: number | null }[]> {
+  return db.sorgu(
+    'SELECT id, ad, is_emri_id AS "isEmriId" FROM emir_adimi WHERE emir_id = $1 AND id = ANY($2::int[]) ORDER BY sira',
+    [emirId, [...adimIdler]],
+  );
+}
+export async function talimatAtlamaEkle(db: Db, isEmriId: number, kisiId: number, eylem: 'baslat' | 'bitir', maddeler: readonly string[]): Promise<number> {
+  const r = await db.tek<{ id: number }>(
+    'INSERT INTO emir_adimi_talimat_atlama (is_emri_id, kisi_id, eylem, maddeler) VALUES ($1, $2, $3, $4::text[]) RETURNING id',
+    [isEmriId, kisiId, eylem, [...maddeler]],
+  );
+  return r!.id;
+}
+export interface TalimatAtlamaSatiri { isEmriId: number; kisiId: number; eylem: 'baslat' | 'bitir'; maddeler: string[]; zaman: string }
+export function talimatAtlamalari(db: Db, isEmriIdleri: readonly number[]): Promise<TalimatAtlamaSatiri[]> {
+  return db.sorgu<TalimatAtlamaSatiri>(
+    `SELECT is_emri_id AS "isEmriId", kisi_id AS "kisiId", eylem, maddeler, ${ISO('zaman')} AS zaman
+       FROM emir_adimi_talimat_atlama WHERE is_emri_id = ANY($1::int[]) ORDER BY id`,
+    [[...isEmriIdleri]],
   );
 }
