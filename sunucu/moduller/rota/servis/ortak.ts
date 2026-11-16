@@ -188,6 +188,7 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
         aletTuru: x.aletTuruId === null ? null : { id: x.aletTuruId, ad: b.aletTurleri.get(x.aletTuruId) ?? 'Kullanım dışı alet türü' },
       })),
       akis: { tuketir: akisi.tuketir, cikti: akisi.cikti },
+      ciktiMalzeme: akisi.cikti.tur === 'kart' ? urun(akisi.cikti.malzemeId) : null,
       adimMiktari: ondalikMetin(miktar),
       teorikSureDk: sure === null ? null : ondalikMetin(sure),
       talimat: b.talimatlar.get(a.operasyonId) ?? null,
@@ -207,6 +208,7 @@ export async function gorunumBaglami(db: Db, malzemeId: number, icerik: Icerik):
     kaynaklar,
     urunler: await urunOzetleri(db, [
       ...icerik.bilesenler.map((x) => x.malzemeId), ...icerik.yanUrunler.map((x) => x.malzemeId), ...(icerik.ekipman ?? []).flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId])),
+      ...icerik.adimlar.flatMap((a) => (a.ciktiMalzemeId === null ? [] : [a.ciktiMalzemeId])),
     ]),
     talimatlar: new Map((await s.gecerliTalimatlar(db, malzemeId)).map((t) => [t.operasyonId, { surum: t.surum, metin: t.metin }])),
     aletTurleri: (icerik.ekipman ?? []).some((x) => x.aletTuruId !== null) ? new Map((await aletTurleri(db)).map((t) => [t.id, t.ad])) : new Map(),
@@ -335,6 +337,7 @@ export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[]
     yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
     ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })),
     hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani,
+    ciktiMalzemeId: a.ciktiMalzemeId,
   }));
 }
 
@@ -363,9 +366,11 @@ export type TaslakKaynagi =
   | { tur: 'urun'; urunId: number };
 
 // Başka ürünün revizyonu hedefe taşınırken hedefte kullanılmış numara boşaltılır (yeni numara alır); hedef kendi reçetesinde bileşen olamaz.
+// Ara adım çıktısı (3320 a) kaynak ürünün akışına aittir, taşınmaz: adımlar statülü başlar.
 export async function baskaUruneAdimlar(db: Db, kaynakRevizyonId: number, hedefUrunId: number): Promise<YeniAdim[]> {
   const kullanilmis = new Set(await s.kullanilmisOpNolari(db, hedefUrunId));
-  const adimlar = icerikYazimlari(await s.icerikOku(db, kaynakRevizyonId)).map((a) => (a.opNo !== null && kullanilmis.has(a.opNo) ? { ...a, opNo: null } : a));
+  const adimlar = icerikYazimlari(await s.icerikOku(db, kaynakRevizyonId))
+    .map((a) => ({ ...a, ciktiMalzemeId: null, ...(a.opNo !== null && kullanilmis.has(a.opNo) ? { opNo: null } : {}) }));
   if (adimlar.some((a) => a.bilesenler.some((b) => b.malzemeId === hedefUrunId))) {
     throw gecersiz('Hedef ürün bu reçetede bileşen; kendisini bileşen olarak alamaz.');
   }
@@ -389,7 +394,7 @@ export async function sablonAdimlariniKur(db: Db, sablonId: number): Promise<Yen
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
       enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum',
       ...(ayar !== null && ayar > 0 ? { hazirlikDk: 0, ayar: true, ayarDk: ayar } : { hazirlikDk: ayar, ayar: false, ayarDk: null }),
-      adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
+      adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null, ciktiMalzemeId: null,
     };
   });
 }
@@ -434,6 +439,7 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
       enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
+      ciktiMalzemeId: null,
     }));
   } else if (kaynak.tur === 'urun') {
     if ((await s.harfler(db, urunId)).length > 0) throw cakisma(ROTA_VAR);

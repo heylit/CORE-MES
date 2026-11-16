@@ -1384,11 +1384,15 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
       hedefKaliteDurumu: kalite, girisKaynagi: 'uretim', uretimEmriId: y.uretimEmriId, aciklama: hedef.not === null ? y.aciklama : `${y.aciklama} · ${hedef.not}`.slice(0, 200),
     }));
     await bakiyeDegistir(db, { malzemeId, konumId: y.konumId, partiId, statuId, kaliteDurumu: kalite, fark: plan.giris.miktar });
-    // Statüye giren ürün, statüye çevrilen parça gibi emre ayrılır (sonraki adım onu kendi rezervesinden alır).
-    if (statuId !== null) await rezerveDegistir(db, { malzemeId, statuId, uretimEmriId: y.uretimEmriId, fark: plan.giris.miktar });
+    // Statüye giren ürün ve ara adımın çıktı kartı (3320 a), statüye çevrilen parça gibi emre ayrılır: sonraki adım onu kendi rezervesinden
+    // alır, ara parça başka emre ya da sevke gitmez.
+    if (araGiris(plan.giris)) await rezerveDegistir(db, { malzemeId, statuId, uretimEmriId: y.uretimEmriId, fark: plan.giris.miktar });
   }
   return giren;
 }
+
+// Ara adımın girişi: statüye giren parça ya da ara adımın çıktı kartı. Son adımda giriş emrin ürünüdür (malzemeId null), ayrılmaz.
+const araGiris = (g: NonNullable<UretimAdimPlani['giris']>): boolean => (g.statuId ?? null) !== null || g.malzemeId !== null;
 
 // Azalış artışın tersidir: önce ürün girişi geri alınır (teslim edilen kilitlidir), sonra statü geri çevrilir (istasyonda kalan kadar),
 // en son sarflar en yenisinden geri alınır.
@@ -1402,7 +1406,7 @@ async function uretimAdiminiGeriAl(db: Db, y: UretimYazimi, plan: UretimAdimPlan
       throw dogrulama(`${bindenMetin(binde(edilen))} adet teslim edildi; sayı bunun altına düşürülemez.`, 'saglamAdet');
     }
     for (const x of p.geriAlinacaklar) await uretimGirisiniDus(db, y.kisiId, { malzemeId, konumId: y.konumId, uretimEmriId: y.uretimEmriId, ...x, aciklama: y.aciklama });
-    if (statuId !== null) await rezerveDegistir(db, { malzemeId, statuId, uretimEmriId: y.uretimEmriId, fark: -plan.giris.miktar });
+    if (araGiris(plan.giris)) await rezerveDegistir(db, { malzemeId, statuId, uretimEmriId: y.uretimEmriId, fark: -plan.giris.miktar });
   }
   const c = plan.cevirme;
   if (c !== null) {

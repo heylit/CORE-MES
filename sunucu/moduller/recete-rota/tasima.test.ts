@@ -106,6 +106,14 @@ describe('JSON\'dan tablo satırları (kural)', () => {
     assert.deepEqual(bagFarklari(jsondanSatirlar(belge), [{ revizyonId: 100, malzemeId: 7, opNo: 10, ciktiMalzemeId: 55, ciktiStatu: null }]),
       ['7 revizyon 100 OP 20: belgede çıktı -, statü YOK, tabloda bağ yok']);
   });
+
+  test('3320 a (K2, T7): rota adımı çıktısını taşıyorsa (ciktiId) eski bağ okunmaz; null statülüdür; alan yoksa bağ okunur', () => {
+    const bag = [{ revizyonId: 100, malzemeId: 7, opNo: 10, ciktiMalzemeId: 8, ciktiStatu: 'KKB' }, { revizyonId: 100, malzemeId: 7, opNo: 20, ciktiMalzemeId: 9, ciktiStatu: null }];
+    const oku = (steps: Record<string, unknown>[]) => (sayimBelgesiTablodan({ routes: {} }, 7, { steps: steps as { id: string; opNo: number }[] }, bag) as
+      { routes: Record<string, { steps: Record<string, unknown>[] }> }).routes['7']?.steps.map((x) => [x['outItem'], x['outStatus']]);
+    assert.deepEqual(oku([{ id: '7-o10', opNo: 10, ciktiId: '5' }, { id: '7-o20', opNo: 20, ciktiId: null }]), [['5', undefined], [undefined, undefined]]);
+    assert.deepEqual(oku([{ id: '7-o10', opNo: 10 }, { id: '7-o20', opNo: 20 }]), [['8', 'KKB'], ['9', undefined]], 'çıktısı yazılmamış revizyon: bugünkü kural');
+  });
 });
 
 describe('taşıma tabloları ve bugünkü sayım davranışı (gerçek PostgreSQL)', () => {

@@ -6,7 +6,7 @@ import {
   seritKomsusu, seritteKaydir, adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
-  sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
+  sirali, statuNo, sureYaz, tasinanMalzeme, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
@@ -16,6 +16,7 @@ import { HamOnerisi } from './HamOnerisi.tsx';
 import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
 import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
+import { AdimCiktisi } from './AdimCiktisi.tsx';
 import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
 
 const BAG_ACIKLAMA = { bagimli: 'Önceki adım tamamen bitince başlar.', ortulu: 'Önceki adımdan belirli adet çıkınca başlar, akarak devam eder.', bagimsiz: 'Önceki adımı beklemez, paralel yapılır.' } as const;
@@ -287,6 +288,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
         {duzen && idx === 0 && <HamOnerisi urunId={s.urunId} adimlar={liste} malzeme={h.malzeme} ekle={girenEkle} />}
         {duzen && <HizliEkle liste={[...h.malzeme.values()]} girdi haricId={sahip.id} ekle={girenEkle} etiket="Giren malzeme" />}
       </Bolme>
+      {!son && (
+        <AdimCiktisi liste={[...h.malzeme.values()]} sahip={sahip} adimlar={liste} a={a} duzen={duzen} yaz={yaz}
+          statuluBaslik={kartBasligi(h.malzeme.get(tasinanMalzeme(sahip.id, liste, idx, dz.malzemeVar)), a, dz.opAdi)}
+          rotali={(id) => (dz.durum.routeRevs ?? []).some((x) => x.itemId === id)} />
+      )}
       <Bolme baslik={`Yan ürünler (${String(a.outs.length)})`}>
         {a.outs.length > 0 ? (
           <div className="tc-rr1-qt">
@@ -389,7 +395,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             <div>
               <span className="tc-rr1-lbl">Bu adımın çıktısı</span>
               {son || !kart ? <span className="tc-rr1-flowc"><b>{sahip.code}</b> <small>son adım: ürün stoğa girer</small></span>
-                : <span className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(kart.itemId), kart.adim, dz.opAdi)}</b> <small>{sahip.code} stoğunun bu adımdan sonraki hâli; sonraki adım onu tüketir</small></span>}
+                : kart.adim === null ? <span className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(kart.itemId), null, dz.opAdi)}</b> <small>seçilen çıktı kartı; adım bitince stoğa girer, sonraki adım onu tüketir</small></span>
+                  : <span className="tc-rr1-flowc"><b>{kartBasligi(h.malzeme.get(kart.itemId), kart.adim, dz.opAdi)}</b> <small>{sahip.code} stoğunun bu adımdan sonraki hâli; sonraki adım onu tüketir</small></span>}
             </div>
           </div>
           <SayiAlani etiket="Fire / ret payı %" deger={a.rejectPct} kapali={!duzen}

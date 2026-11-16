@@ -28,7 +28,7 @@ import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
   istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru,
-  bagliDilimleriAyikla, kayitMaliyetiniKoru, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
+  bagliDilimleriAyikla, eskiCiktilariYerlestir, kayitMaliyetiniKoru, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -255,7 +255,7 @@ export async function durumVeEmirler(
   const gunler = await takvimGunleri(db);
   const hareketler = stokOkur ? await sonHareketler(db, HAREKET_SAYISI) : null;
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
-  const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db, null, true) : [];
+  const rotaRevizyonlari = rotaOkur ? await rotaRevizyonlariEskiCiktiyla(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
   const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
@@ -354,6 +354,13 @@ export async function malzemeIhtiyaci(db: Db, kullanici: Kullanici, emirId?: num
       };
     }),
   };
+}
+
+// Ekranın rota revizyonları; çıktısı hiç yazılmamış revizyonda eski adım bağının çıktı kartıyla (eskiCiktilariYerlestir).
+async function rotaRevizyonlariEskiCiktiyla(db: Db) {
+  const revizyonlar = await durumRevizyonlari(db, null, true);
+  const yazilmamis = revizyonlar.filter((r) => r.adimlar.length > 1 && !r.adimlar.some((a) => a.ciktiYazili)).map((r) => r.id);
+  return eskiCiktilariYerlestir(revizyonlar, await sorgular.revizyonlarinAdimBaglari(db, yazilmamis));
 }
 
 // Durumun dilimlerini açan okuma işlemleri; plan modülünün sunucu okuyucusu ve kapasite okuması aynı kapsamı kullanır.

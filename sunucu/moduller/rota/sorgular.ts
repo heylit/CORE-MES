@@ -419,6 +419,9 @@ export interface AdimSatiri {
   birlesen: string[];
   // Dal çarpanı (1257 a): bir mamul için bu adımda işlenen adet; boş 1'dir.
   adetCarpani: number | null;
+  // 3320 a: ara adımın çıktı kartı; null statülü ara hâldir. ciktiYazili false: satır yok, revizyon bu alandan önce yazılmıştır.
+  ciktiMalzemeId: number | null;
+  ciktiYazili: boolean;
 }
 
 export interface AdaySatiri {
@@ -455,8 +458,9 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
             bagimlilik, devir_adedi AS "devirAdedi",
             fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
             yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca", hazirlik_dk AS "hazirlikDk", ayar, ayar_dk AS "ayarDk",
-            d.dal, coalesce(d.birlesen, '{}') AS birlesen, d.adet_carpani AS "adetCarpani"
-       FROM rota_adimi LEFT JOIN rota_adim_dali d ON d.adim_id = rota_adimi.id
+            d.dal, coalesce(d.birlesen, '{}') AS birlesen, d.adet_carpani AS "adetCarpani",
+            c.cikti_malzeme_id AS "ciktiMalzemeId", c.adim_id IS NOT NULL AS "ciktiYazili"
+       FROM rota_adimi LEFT JOIN rota_adim_dali d ON d.adim_id = rota_adimi.id LEFT JOIN rota_adim_ciktisi c ON c.adim_id = rota_adimi.id
       WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
     [revizyonIdleri],
   );
@@ -523,6 +527,7 @@ export async function icerikSil(db: Db, revizyonId: number): Promise<void> {
   await db.sorgu(`DELETE FROM rota_bileseni WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu(`DELETE FROM rota_yan_urunu WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu(`DELETE FROM rota_adim_dali WHERE adim_id IN (${adim})`, [revizyonId]);
+  await db.sorgu(`DELETE FROM rota_adim_ciktisi WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu(`DELETE FROM rota_adim_ekipmani WHERE adim_id IN (${adim})`, [revizyonId]);
   await db.sorgu('DELETE FROM rota_adimi WHERE revizyon_id = $1', [revizyonId]);
 }
@@ -558,6 +563,7 @@ export interface AdimYazimi {
   birlesen: readonly string[];
   adetCarpani: number | null;
   ekipman?: readonly EkipmanYazimi[];
+  ciktiMalzemeId: number | null;
 }
 
 export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: AdimYazimi): Promise<void> {
@@ -596,6 +602,7 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
   if (a.dal !== null || a.birlesen.length > 0) {
     await db.sorgu('INSERT INTO rota_adim_dali (adim_id, dal, birlesen, adet_carpani) VALUES ($1, $2, $3::text[], $4)', [adimId, a.dal, [...a.birlesen], a.adetCarpani]);
   }
+  await db.sorgu('INSERT INTO rota_adim_ciktisi (adim_id, cikti_malzeme_id) VALUES ($1, $2)', [adimId, a.ciktiMalzemeId]);
   await ekipmanEkle(db, adimId, a.ekipman ?? []);
 }
 
@@ -1178,6 +1185,25 @@ export function adimGirenSayilari(db: Db, revizyonIdleri: readonly number[]): Pr
       WHERE a.revizyon_id = ANY($1::int[]) ORDER BY a.revizyon_id, a.sira`,
     [revizyonIdleri],
   );
+}
+
+// 3320 a: kartı ara adım çıktısı olarak kullanan iptal olmayan revizyonların ürünleri (kartın kendi rotası açılırken denetlenir).
+export async function ciktiOlarakKullananlar(db: Db, malzemeId: number): Promise<{ urunId: number; harf: string; opNo: number }[]> {
+  return db.sorgu(
+    `SELECT a.malzeme_id AS "urunId", r.harf, a.op_no AS "opNo"
+       FROM rota_adim_ciktisi c JOIN rota_adimi a ON a.id = c.adim_id JOIN rota_revizyonu r ON r.id = a.revizyon_id
+      WHERE c.cikti_malzeme_id = $1 AND r.durum <> 'iptal' ORDER BY a.malzeme_id, r.id, a.op_no`,
+    [malzemeId],
+  );
+}
+
+// 3320 a: verilen kartlardan iptal olmayan rota revizyonu olanlar (kendi rotası olan kart başka rotanın ara çıktısı olmaz).
+export async function iptalsizRotasiOlanlar(db: Db, malzemeIdleri: readonly number[]): Promise<Set<number>> {
+  if (malzemeIdleri.length === 0) return new Set();
+  const satirlar = await db.sorgu<{ id: number }>(
+    "SELECT DISTINCT malzeme_id AS id FROM rota_revizyonu WHERE durum <> 'iptal' AND malzeme_id = ANY($1::int[])", [[...malzemeIdleri]],
+  );
+  return new Set(satirlar.map((x) => x.id));
 }
 
 /* ---------------- işlem şartnamesi (971 a) ---------------- */

@@ -154,6 +154,8 @@ export const adimGirdisi = z.object({
   yanUrunler: z.array(yanUrunGirdisi).max(AZAMI_YAN_URUN),
   // Gelmeyen liste (alanı bilmeyen eski görünüm) adımın kayıtlı ekipmanını korur; boş liste kaldırır.
   ekipman: z.array(ekipmanGirdisi).max(AZAMI_EKIPMAN).optional(),
+  // 3320 a: ara adımın çıktı kartı (yarı mamul ya da mamul); null statülü ara hâldir. Gelmeyen alan kayıtlı seçimi korur.
+  ciktiMalzemeId: KIMLIK.nullable().optional(),
 });
 
 export const kaydetGovdesi = z.object({
@@ -233,6 +235,8 @@ const akisSemasi = z.object({
   tuketir: z.array(z.number().int()),
   cikti: z.discriminatedUnion('tur', [
     z.object({ tur: z.literal('ara-hal'), opNo: z.number().int() }),
+    // 3320 a: ara adımın çıktısı seçilen yarı mamul ya da mamul kartıdır.
+    z.object({ tur: z.literal('kart'), malzemeId: z.number().int() }),
     z.object({ tur: z.literal('urun') }),
   ]),
 });
@@ -281,6 +285,8 @@ export const adimSemasi = z.object({
     adet: z.number().int(), asama: z.enum(EKIPMAN_ASAMALARI),
   })),
   akis: akisSemasi,
+  // 3320 a: ara adımın çıktı kartı; null statülü ara hâl ya da son adım.
+  ciktiMalzeme: urunOzeti.nullable(),
   // İstenen ürün miktarı için: fire payıyla büyümüş adım miktarı ve teorik süre (dk); süre eksikse ya da adım fasonsa null.
   adimMiktari: ondalikMetinSemasi,
   teorikSureDk: ondalikMetinSemasi.nullable(),

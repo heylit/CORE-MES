@@ -275,15 +275,24 @@ export function tuketilenAdimlar(liste: readonly Adim[], i: number): Adim[] {
 // Adımın taşıdığı malzeme: önceki adımın çıktısını tüketiyorsa onunki; ilk ve bağımsız adımda ilk girdisi; girdisi yoksa rota sahibi.
 export function tasinanMalzeme(sahipId: string, liste: readonly Adim[], i: number, malzemeVar: (id: string) => boolean): string {
   const ana = tuketilenAdimlar(liste, i)[0];
+  const donusen = ana ? adimCiktisi(ana, malzemeVar) : null;
+  if (donusen !== null) return donusen;
   if (ana) return tasinanMalzeme(sahipId, liste, liste.indexOf(ana), malzemeVar);
   const g = (liste[i]?.ins ?? []).find((x) => malzemeVar(x.itemId));
   return g ? g.itemId : sahipId;
 }
 
-// Adımın akış kartı: son adımda ürünün kendisi, öteki adımlarda taşınan malzemenin statülü kartı (adımın OP numarasıyla).
+// Ara adımın çıktı kartı (3320 a, sunucunun akisiCikar kuralı): seçilmemişse ya da kart listede yoksa null, adım statülü ara hâl çıkarır.
+export const adimCiktisi = (a: Pick<Adim, 'ciktiId'>, malzemeVar: (id: string) => boolean): string | null =>
+  (a.ciktiId != null && malzemeVar(a.ciktiId) ? a.ciktiId : null);
+
+// Adımın akış kartı: son adımda ürünün kendisi, çıktısı seçilmiş ara adımda o kart, öteki adımlarda taşınan malzemenin statülü kartı
+// (adımın OP numarasıyla). Kartın kendisinde adım null'dır (statülü değil).
 export interface AkisKarti { itemId: string; adim: Adim | null }
 export function akisKarti(sahipId: string, liste: readonly Adim[], i: number, malzemeVar: (id: string) => boolean): AkisKarti {
   if (i === liste.length - 1) return { itemId: sahipId, adim: null };
+  const cikti = liste[i] ? adimCiktisi(liste[i], malzemeVar) : null;
+  if (cikti !== null) return { itemId: cikti, adim: null };
   return { itemId: tasinanMalzeme(sahipId, liste, i, malzemeVar), adim: liste[i] ?? null };
 }
 
@@ -678,11 +687,26 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     if (fasonMu(o) !== fasonMu(s)) ch.push(`üretim yeri ${fasonMu(o) ? 'dış üretim' : 'iç üretim'} → ${fasonMu(s) ? 'dış üretim' : 'iç üretim'}`);
     else if (fasonMu(s) && o.fasonId !== s.fasonId) ch.push(!s.fasonId ? 'fason firma kaldırıldı' : o.fasonId ? 'fason firma değişti' : 'fason firma seçildi');
     if (adimDali(o) !== adimDali(s)) ch.push(`dal ${adimDali(o) ?? 'ana hat'} → ${adimDali(s) ?? 'ana hat'}`);
+    if ((o.ciktiId ?? null) !== (s.ciktiId ?? null)) ch.push(`çıktı ${o.ciktiId ? ad.malzeme(o.ciktiId) : 'statülü'} → ${s.ciktiId ? ad.malzeme(s.ciktiId) : 'statülü'}`);
     if (J(adimBirlesen(o)) !== J(adimBirlesen(s))) ch.push(`birleşen ${adimBirlesen(o).join(', ') || 'yok'} → ${adimBirlesen(s).join(', ') || 'yok'}`);
     if (ch.length) out.push(`${nm(s)}: ${ch.join('; ')}`);
   }
   return out;
 }
+
+/* ---------------- ara adımın çıktısı (3320 a) ---------------- */
+
+// Çıktı, girenler gibi malzeme listesinden seçilir; yalnız aktif yarı mamul ve mamul kartı. Rotanın ürünü, rotada giren olan kart ve başka
+// adımın çıktısı listelenmez (sunucunun ciktiDenetle kuralı). Kendi rotası olan kart listelenir ama seçilemez (uyarı ile; ciktiEngeli).
+export const ciktiOlur = (m: Malzeme | undefined): boolean => !!m && m.aktif !== false && (yerelTur(m.type) === 'yari' || yerelTur(m.type) === 'mamul');
+export function ciktiAdaylari(liste: readonly Malzeme[], q: string, sahipId: string, adimlar: readonly Adim[], adimId: string): Malzeme[] {
+  const giren = new Set(adimlar.flatMap((a) => a.ins.map((g) => g.itemId)));
+  const baskaCikti = new Set(adimlar.flatMap((a) => (a.id !== adimId && a.ciktiId != null ? [a.ciktiId] : [])));
+  return malzemeAra(liste, q, 'all', false, sahipId).filter((m) => ciktiOlur(m) && !giren.has(m.id) && !baskaCikti.has(m.id));
+}
+export const ciktiEngeli = (m: Malzeme, rotali: (id: string) => boolean): string | null =>
+  (rotali(m.id) ? `${m.code} kartının kendi rotası var; çıktı olamaz. Bu kartı girenlere ekleyebilirsin.` : null);
+export const ciktiYaz = (a: Adim, id: string | null): Adim => ({ ...a, ciktiId: id });
 
 /* ---------------- kaydet gövdesi ---------------- */
 
@@ -696,9 +720,11 @@ const BAGIMLILIK_SUNUCU: Readonly<Record<Bagimlilik, string>> = { bagimli: 'bekl
 // numarasını sunucudan alır. Sunucuya gidemeyecek adım (katalogda olmayan operasyon, eski kimlik) açıklamayla durur.
 export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly number[], operasyon: (id: string) => Operasyon | undefined): Record<string, unknown>[] {
   const izinli = new Set(izinliOpNolar);
-  return sirali(adimlar).map((s) => {
+  const siralilar = sirali(adimlar);
+  return siralilar.map((s, i) => {
     const op = operasyon(s.opId);
     if (!op) throw new Error(`OP ${String(statuNo(s))}: operasyon tanımı Operasyonlar bölümündeki karta bağlı değil; rota rota modülüne kaydedilmedi.`);
+    const son = i === siralilar.length - 1;
     const mk = s.machineId ? kimlik(s.machineId, s, 'Makine') : null;
     const ist = s.stationId ? kimlik(s.stationId, s, 'İstasyon') : null;
     const kaynak = mk ? { tur: 'makine', id: mk } : ist ? { tur: 'istasyon', id: ist } : s.fasonId ? { tur: 'fason', id: Number(s.fasonId) }
@@ -733,6 +759,9 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       birlesen: [...adimBirlesen(s)],
       // Çarpanı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çarpanı korur.
       ...(s.adetCarpani === undefined ? {} : { adetCarpani: adimDali(s) === null ? null : s.adetCarpani }),
+      // Çıktıyı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çıktıyı korur (3320 a).
+      // Son adımın çıktısı ürünün kendisidir: sona taşınan adımın seçimi gönderilmez (sunucu son adımda çıktıyı reddeder).
+      ...(s.ciktiId === undefined ? {} : { ciktiMalzemeId: s.ciktiId === null || son ? null : kimlik(s.ciktiId, s, 'Çıktı kalemi') }),
       adaylar: [
         ...s.alts.map((id) => {
           const t = s.altTimes[id];

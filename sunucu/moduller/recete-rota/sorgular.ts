@@ -189,6 +189,16 @@ export async function adimBaglari(db: Db, revizyonId: number | null): Promise<Ad
   );
 }
 
+// Verilen revizyonların adım bağları (3320 a: çıktısı rota modülünde hiç yazılmamış revizyonun eski çıktısı ekrana bununla gelir).
+export async function revizyonlarinAdimBaglari(db: Db, revizyonIdleri: readonly number[]): Promise<AdimBagiSatiri[]> {
+  if (revizyonIdleri.length === 0) return [];
+  return db.sorgu<AdimBagiSatiri>(
+    `SELECT rota_revizyonu_id AS "revizyonId", malzeme_id AS "malzemeId", op_no AS "opNo", cikti_malzeme_id AS "ciktiMalzemeId", cikti_statu AS "ciktiStatu"
+       FROM recete_rota_adim_bagi WHERE rota_revizyonu_id = ANY($1::int[]) ORDER BY rota_revizyonu_id, op_no`,
+    [[...revizyonIdleri]],
+  );
+}
+
 // Verilen ürünlerin adım bağları (gölge karşılaştırma yalnız belgede değişen ürüne bakar).
 export async function urunlerinAdimBaglari(db: Db, malzemeIdleri: readonly number[]): Promise<AdimBagiSatiri[]> {
   return db.sorgu<AdimBagiSatiri>(

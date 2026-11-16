@@ -406,6 +406,15 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
                       <i className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</i><span>{m.code}</span><em>{sayi(kok.miktar)} {m.unit ?? ''}</em>
                     </span>
                   )}
+                  {a.id !== sonId && (() => {
+                    // Ara adımın seçilen çıktı kartı (3320 a); statülü ara hâlde çip yok (bugünkü görünüm).
+                    const cm = a.ciktiId != null && r.duzen.malzemeVar(a.ciktiId) ? h.malzeme.get(a.ciktiId) : undefined;
+                    return cm ? (
+                      <span className="tc-rr1-hat-kalem tc-rr1-hat-cikti" title={`${cm.code} ${cm.name}: adımın çıktısı, sonraki adım tüketir`}>
+                        <i className={`tc-rr1-slot tc-rr1-slot-${cm.type}`}>{turKisa(cm.type)}</i><span>{cm.code}</span>
+                      </span>
+                    ) : null;
+                  })()}
                   {dugum?.yanlar.map(({ y: yan, sira, miktar }) => {
                     const ym = h.malzeme.get(yan.itemId);
                     return ym ? (
