@@ -504,6 +504,14 @@ export function orderDue(o: { q: Quote; expectedDate: string; orderDate: string 
   const ld = parseNum(o.q.leadDays);
   return o.expectedDate || (o.orderDate && ld !== null ? addDays(o.orderDate, ld) : "");
 }
+/**
+ * Teklifte termin gün olarak saklanır (siparişten teslime takvim günü). Tarih yalnız girişte kolaylıktır:
+ * teklif tarihinden sayılır, tedarikçinin teklifine yazdığı tarih yeniden açılınca kaymaz. Tarih tabandan önceyse
+ * gün eksi çıkar; eksi değer kayıtta reddedilir (TMI A5).
+ */
+export const terminTarihi = (baz: string, gun: number | null): string => (gun === null || !baz ? "" : addDays(baz, gun));
+export const terminGunu = (baz: string, tarih: string): number | null => (!baz || !tarih ? null : dayDiff(baz, tarih));
+export const terminTabani = (teklifTarihi: string | undefined): string => teklifTarihi || todayStr();
 
 /**
  * Termin puanı:
