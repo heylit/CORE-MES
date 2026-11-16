@@ -59,6 +59,44 @@ oturum açılınca kendiliğinden başlaması için kullanıcının Görev Zaman
 - Yazma sırasında oturum koparsa cevap 500'dür; TMI bunu "sonucu bilinmiyor" sayar ve önce "var mı" ile okur.
 - Tarayıcıdan gelen istek (`Origin` başlığı) ve yabancı `Host` reddedilir. Günlüğe istek gövdesi, parola ve anahtar yazılmaz.
 
+## Sürüm ve güncelleme (kart 3314)
+
+Yardımcı derlenirken kaynağının özetini taşır (`derle.cmd` önce `SurumUret.cs` ile `Surum.g.cs` üretir) ve `GET /api/version` ile bildirir:
+`{ kaynakOzeti, derlemeZamani }`. TMI açılışta, saatte bir ve "Bağlantıyı dene"de bu özeti paketteki kaynağın özetiyle karşılaştırır;
+farklıysa ya da uç yoksa (404, eski exe) Bağlantı izleme ve Hazırlık ekranında "Eski sürüm" uyarısı çıkar. Gönderim durdurulmaz.
+
+Güncelleyici (`araclar/guncelleyici.ts`) paketi kurup yeni sürümü açtıktan sonra yardımcıyı da yeniler; iki değişken tanımlı değilse
+yardımcıya dokunmaz ve uyarı kalır:
+
+| Değişken | İçerik |
+|---|---|
+| `TMIV2_LOGO_YARDIMCI_KURULUM` | Sürüm klasörlerinin ve gösterge dosyasının bulunduğu klasör (mutlak yol), ör. `<kurulum>`. |
+| `TMIV2_LOGO_YARDIMCI_BASLAT` | Yardımcıyı açan betiğin mutlak yolu (aşağıdaki örnek). |
+
+Sıra: kaynak `<kurulum>\logo-yardimcisi-<sürüm>-<özet>` klasörüne kopyalanır, orada `derle.cmd test` koşar (geçmezse eskisi çalışır,
+iş biter). Geçerse yeni exe yolu `<kurulum>\logo-yardimcisi-guncel.txt` dosyasına yazılır, eski yardımcıya `POST /api/kapat` gider
+(aynı `X-Api-Key`; elindeki isteği bitirir, Logo oturumunu kapatıp çıkar, yönetici yetkisi gerekmez), kapı en çok 30 sn içinde
+boşalmazsa yenisi açılmaz (tek Logo oturumu, tek lisans: aynı anda iki yardımcı olmaz). Boşalınca başlatma betiği çalıştırılır ve
+yeni yardımcının özeti doğrulanır. Sonuç güncelleyici günlüğüne "Logo yardımcısı: ..." satırıyla yazılır; paket geri alınmaz.
+
+Başlatma betiği bir kez elle değişir: exe yolunu sabit yazmak yerine gösterge dosyasından okur. Böylece bilgisayar yeniden açılınca da
+yeni exe gelir. Örnek (`<kurulum>` yer tutucudur; mevcut gizli pencere sarmalayıcısı ve günlük yönlendirmesi olduğu gibi kalır):
+
+```
+@echo off
+setlocal
+set KURULUM=<kurulum>
+set /p EXE=<"%KURULUM%\logo-yardimcisi-guncel.txt"
+if not exist "%EXE%" (echo Gosterge dosyasindaki exe yok: %EXE% & exit /b 1)
+rem Kapi doluysa (yardimci calisiyor) ikincisi acilmaz.
+netstat -ano | findstr /r /c:"127.0.0.1:4195 .*LISTENING" >nul && exit /b 0
+start "" /b "%EXE%" --ayar "%KURULUM%\gizli\logo-yardimcisi.ayar" >> "%KURULUM%\gunluk\logo-yardimcisi.log" 2>&1
+```
+
+DOĞRULANMADI: güncelleyicinin açtığı ayrık sürecin oturum 0'da güncelleyici ve sunucu yeniden başlarken yaşamaya devam etmesi; ilk
+güncellemede Görev Zamanlayıcı geçmişinden ve yardımcı günlüğünden bakılmalı. Olmazsa yardımcı bir sonraki açılışta gösterge dosyasındaki
+yeni exe ile gelir.
+
 ## Yardımcının kuralları
 
 - Logo tablolarına SQL ile yazılmaz. Sorgular tek yerde (`SqlOkuma.cs` `Sorgular`) ve yalnız `SELECT`'tir; başka her metni reddeden denetim
