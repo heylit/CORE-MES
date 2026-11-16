@@ -25,12 +25,20 @@ export const STATU: Readonly<Record<AdimStatusu, StatuGorunumu>> = {
   diger: { ad: 'Diğer', ton: 'pasif', simge: 'help' },
 };
 
+// 3322: statünün nereden geldiği (sahip modül ya da kayıt). Elle yazılmış statüde ekran "Elle" ve kişiyi yazar.
+export const STATU_KAYNAGI: Readonly<Record<AdimStatusu, string>> = {
+  bitti: 'Terminal kaydı', uretimde: 'Terminal kaydı', duraklatildi: 'Terminal kaydı', durdu: 'Terminal kaydı', fasonda: 'Fason hareketi',
+  beklemede: 'Emir bekletmesi', program: 'CNC Kurulum', cizim: 'Kalite Merkezi', yayin: 'Üretim Hazırlık', makine: 'İstasyonlar',
+  talep: 'Satın alma', siparis: 'Satın alma', malzeme: 'Stok Merkezi', firma: 'Satın alma', baslayabilir: 'Hazırlık tamam',
+  onceki: 'Rota sırası', diger: 'Diğer',
+};
+
 // Elle yazılabilen statüler; sunucu aynı listeyi sözleşmede zorlar (ElleYazilanStatu), burada yalnız seçenek sırasıdır.
 export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger'];
 
 export const ADIM_DURUMU_YAZ = 'uretim-emirleri.adim-durumu-yaz';
 export const adimDurumuUcu = (emirId: number): string => `/adimli-emirler/${String(emirId)}/adim-durumu`;
-export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-onay-kaldir' | 'liste-isaretle' | 'liste-ekle' | 'ek-madde-isaretle'): string =>
+export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-elle-eksik' | 'hazirlik-onay-kaldir' | 'liste-isaretle' | 'liste-ekle' | 'ek-madde-isaretle'): string =>
   `/adimli-emirler/${String(emirId)}/is-emirleri/${String(isEmriId)}/${komut}`;
 // 3249-2 a: liste maddesinin fotoğrafı; aynı kökenden, oturum çereziyle okunur.
 export const listeFotografiUcu = (emirId: number, adimId: number, ozet: string): string =>

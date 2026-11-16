@@ -14,12 +14,12 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimTedarikCozucusu, elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
+import { adimTedarikCozucusu, elleDurdurmaNedeni, elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
 import type { EmirTedarikSatiri } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
-import { ADIM_KAPALI_EMIR, EMIR_BEKLEMEDE, EMIR_BEKLEMEDE_STATU } from './kurallar.ts';
+import { ADIM_KAPALI_EMIR, ELLE_EKSIK_GEREKSIZ, ELLE_EKSIK_ZATEN, EMIR_BEKLEMEDE, EMIR_BEKLEMEDE_STATU } from './kurallar.ts';
 import type { HazirlikBilgisi } from './kurallar.ts';
 import { isEmriKilitle } from './sorgular.ts';
 
@@ -235,6 +235,83 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.equal(basladi.durum, 200, JSON.stringify(basladi.govde));
       assert.equal((await oku(id)).adimlar[0]?.sistemStatusu, 'uretimde');
       await assert.rejects(o().sahip.sorgu("UPDATE uretim_emirleri_hazirlik_onayi SET gerekce = 'x'"), /yalnız ekleme/);
+    } finally {
+      for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c);
+    }
+  });
+
+  test('3322: elle "hazır değil" iki yönlüdür; durduranda başlatmayı ve Arkon kapısını kapatır, uyaranda yalnız uyarır; otomatiğe dönünce açılır', async () => {
+    const { id, ie } = await ac();
+    const [ie1 = 0, ie2 = 0] = ie;
+    let cncSurum = 'P1';
+    const cnc: HazirlikCozucusu = async (_db, idler) => new Map(idler.flatMap((x): [number, HazirlikBilgisi][] =>
+      x === ie1 ? [[x, { durum: 'tamam', secildi: true, surum: cncSurum }]] : x === ie2 ? [[x, { durum: 'tamam', secildi: false }]] : []));
+    const malzeme: HazirlikCozucusu = async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'tamam' as const, secildi: true }]));
+    const yayin: HazirlikCozucusu = async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'tamam' as const, secildi: true }]));
+    const onceki = [['cnc', hazirlikCozucusuKaydet('cnc', cnc)], ['malzeme', hazirlikCozucusuKaydet('malzeme', malzeme)], ['yayin', hazirlikCozucusuKaydet('yayin', yayin)]] as const;
+    const eksik = (govde: unknown, kisi = 'planlama_proje', isEmriId = ie1) =>
+      istek<AdimDurumuCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${isEmriId}/hazirlik-elle-eksik`, govde);
+    const kaldir = (madde: HazirlikMaddesi) => istek<AdimDurumuCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onay-kaldir`, { madde });
+    try {
+      assert.equal((await oku(id)).adimlar[0]?.sistemStatusu, 'baslayabilir');
+      for (const kisi of ['operator', 'kalite']) assert.equal((await eksik({ madde: 'cnc', gerekce: null, sistemHali: 'tamam' }, kisi)).durum, 403, `${kisi} elle değiştirmez`);
+      assert.equal((await eksik({ madde: 'cnc', gerekce: null, sistemHali: 'eksik' })).durum, 409, 'eski hâl');
+      const gerekmez = await eksik({ madde: 'cnc', gerekce: null, sistemHali: 'gerekmez' }, 'planlama_proje', ie2);
+      assert.deepEqual([gerekmez.durum, gerekmez.govde.mesaj], [409, ELLE_EKSIK_GEREKSIZ]);
+
+      const yazildi = await eksik({ madde: 'cnc', gerekce: null, sistemHali: 'tamam' }, 'mudur');
+      assert.equal(yazildi.durum, 200, JSON.stringify(yazildi.govde));
+      const a = yazildi.govde.adimlar[0];
+      assert.deepEqual(a?.maddeler.find((m) => m.madde === 'cnc'), { madde: 'cnc', hal: 'eksik', ham: 'tamam' }, 'kaynağın dediği ham olarak kalır');
+      assert.deepEqual(a?.elleEksikler.map((x) => [x.madde, x.gerekce, x.sistemHali, x.kisiAdi]), [['cnc', null, 'tamam', 'Deneme mudur']]);
+      assert.equal(a?.sistemStatusu, 'program');
+      assert.equal(a?.nedenler[0], 'CNC kurulumu (NC) elle durduruldu (Deneme mudur); Adım Durumu\'ndan kaldırılır.');
+      assert.equal(a?.gecmis[0]?.olay, 'eksik');
+      const zaten = await eksik({ madde: 'cnc', gerekce: null, sistemHali: 'eksik' });
+      assert.deepEqual([zaten.durum, zaten.govde.mesaj], [409, ELLE_EKSIK_ZATEN]);
+
+      const red = await baslat(id, ie1);
+      assert.equal(red.durum, 409, 'elle durdurulan madde başlatmayı kapatır');
+      assert.match(red.govde.mesaj, /elle durduruldu \(Deneme mudur\)/);
+      assert.match(await o().vt.okumaTx((db) => elleDurdurmaNedeni(db, ie1)) ?? '', /elle durduruldu/, 'Arkon kayıt kapısı aynı nedeni okur');
+      const t = adimDurumuTerminalCevabi.parse((await istek('operator', 'GET', `/adimli-emirler/${id}/adim-durumu/terminal`)).govde);
+      assert.match(t.adimlar[0]?.nedenler[0] ?? '', /elle durduruldu \(Deneme mudur\)/, 'operatör engeli kimin koyduğunu görür (K5)');
+
+      cncSurum = 'P2';
+      assert.equal((await oku(id)).adimlar[0]?.maddeler.find((m) => m.madde === 'cnc')?.hal, 'eksik', 'kaynak yeni sürüme geçse de elle hazır değil düşmez');
+
+      // Ters yön: elle hazır değil üstüne elle hazır yazılır (son kayıt geçerli), sonra otomatiğe dönülür.
+      const ters = await istek<AdimDurumuCevabi>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onayla`,
+        { madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' });
+      assert.equal(ters.durum, 200, JSON.stringify(ters.govde));
+      assert.deepEqual([ters.govde.adimlar[0]?.elleEksikler.length, ters.govde.adimlar[0]?.onaylar.map((x) => x.madde)], [0, ['cnc']]);
+      const geri = await kaldir('cnc');
+      assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
+      assert.deepEqual([geri.govde.adimlar[0]?.onaylar.length, geri.govde.adimlar[0]?.elleEksikler.length], [0, 0]);
+      assert.equal(geri.govde.adimlar[0]?.maddeler.find((m) => m.madde === 'cnc')?.hal, 'tamam', 'otomatiğe döner');
+      assert.equal(await o().vt.okumaTx((db) => elleDurdurmaNedeni(db, ie1)), null);
+
+      // Yayın (V3): elle hazır değil yalnız görünümdür; neden yazılır, başlatmayı ve Arkon kapısını durdurmaz.
+      const yayinda = await eksik({ madde: 'yayin', gerekce: null, sistemHali: 'tamam' });
+      assert.equal(yayinda.durum, 200, JSON.stringify(yayinda.govde));
+      assert.equal(yayinda.govde.adimlar[0]?.nedenler[0], 'Terminale gönderildi elle "hazır değil" yazıldı (Deneme planlama_proje); Adım Durumu\'ndan kaldırılır.');
+      assert.equal(await o().vt.okumaTx((db) => elleDurdurmaNedeni(db, ie1)), null, 'yayın başlatmada sorulmaz');
+
+      // Uyaran madde: elle hazır değil yalnız uyarır, başlatma geçer (yayın da elle hazır değilken).
+      const uyar = await eksik({ madde: 'malzeme', gerekce: 'Depo sayımı bekleniyor', sistemHali: 'tamam' });
+      assert.equal(uyar.durum, 200, JSON.stringify(uyar.govde));
+      assert.equal(uyar.govde.adimlar[0]?.maddeler.find((m) => m.madde === 'malzeme')?.hal, 'eksik');
+      assert.match(uyar.govde.adimlar[0]?.nedenler.join(' | ') ?? '', /Malzeme elle "hazır değil" yazıldı/);
+      const basladi = await baslat(id, ie1);
+      assert.equal(basladi.durum, 200, JSON.stringify(basladi.govde));
+      assert.equal((await kaldir('malzeme')).durum, 200);
+      assert.equal((await kaldir('malzeme')).durum, 409, 'açık elle değer yok');
+
+      // Göç (yalnız ekleme): 'eksik' sistem hâli ister; bilinmeyen olay reddedilir.
+      await assert.rejects(o().sahip.sorgu("INSERT INTO uretim_emirleri_hazirlik_onayi (is_emri_id, madde, olay, kisi_id) VALUES ($1, 'cnc', 'eksik', $2)", [ie1, yoneticiId]),
+        /uretim_emirleri_hazirlik_onayi_dolu/);
+      await assert.rejects(o().sahip.sorgu("INSERT INTO uretim_emirleri_hazirlik_onayi (is_emri_id, madde, olay, kisi_id) VALUES ($1, 'cnc', 'sil', $2)", [ie1, yoneticiId]),
+        /uretim_emirleri_hazirlik_onayi_olay/);
     } finally {
       for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c);
     }

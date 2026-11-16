@@ -22,7 +22,7 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı yan pence
   await adimlar.getByRole('button').first().click();
   const pencere = page.getByRole('dialog');
   await expect(pencere.getByText('Neden bekliyor')).toBeVisible();
-  await expect(pencere.getByRole('heading', { name: 'Hazırlık', exact: true })).toBeVisible();
+  await expect(pencere.getByRole('heading', { name: 'Elle değiştirilenler', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(pencere).toBeHidden();
 
@@ -63,22 +63,26 @@ test('uzun emir no listede tam okunur, kart dışına taşmaz, etiketle çakış
   expect(ag.hatalar).toEqual([]);
 });
 
-// Matris hücresi (müdür): eksik hücre düğmedir, pencerede gerekçe ister; Vazgeç yazmadan kapatır. Yazma bu testte yapılmaz.
+// 3322 (müdür): hücreye tık kaynak çubuğunu açar; durduran maddeyi elle çevirmek onay alanı açar, Vazgeç yazmaz. Yazma bu testte yapılmaz.
 test.describe('müdür', () => {
   test.use({ hesap: 'ornek.mudur' });
-  test('matriste eksik hücreye tıklanır, elle onay penceresi açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
+  test('matriste durduran hücreye tıklanır, kaynak çubuğu ve elle değiştirme onayı açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
     await ac('/adim-durumu');
     await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
     await page.getByRole('button', { name: 'Matris' }).click();
     const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
-    const hucre = tablo.getByRole('button', { name: /Elle onayla$/ }).first();
+    const hucre = tablo.getByRole('button', { name: /^OP \d+ (CNC kurulumu|Çizim revizyonu|Terminale gönderildi): (?!Gerekmez).*, otomatik/ }).first();
     await hucre.scrollIntoViewIfNeeded();
     await hucre.click();
-    const pencere = page.getByRole('dialog');
-    await expect(pencere.getByText('Sistemin dediği', { exact: true })).toBeVisible();
-    await expect(pencere.getByRole('button', { name: 'Elle onayla' })).toBeDisabled();
-    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
-    await expect(pencere).toBeHidden();
+    const cubuk = page.getByRole('region', { name: /kaynak ve elle değiştirme$/ });
+    await expect(cubuk.getByText(/^Kaynak: /)).toBeVisible();
+    await expect(cubuk.getByText('Hazır değilse iş başlamaz')).toBeVisible();
+    await cubuk.getByRole('button', { name: /^Elle hazır (değil )?yap$/ }).click();
+    await expect(cubuk.getByRole('textbox', { name: 'Gerekçe' })).toBeVisible();
+    await cubuk.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(cubuk.getByRole('textbox', { name: 'Gerekçe' })).toBeHidden();
+    const sayfa = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(sayfa, 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'Vazgeç yazmaz').toEqual([]);
   });

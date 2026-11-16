@@ -9,7 +9,7 @@ import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
 import * as sorgularBekletme from './sorgular/bekletme/sorgular.ts';
-import { elleOnaylar, hazirlikCozucusuKaydet } from './hazirlik.ts';
+import { elleDurdurmaNedeni as elleDurdurma, elleOnaylar, hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
@@ -673,6 +673,10 @@ export async function elleOnayliMaddeler(db: Db, isEmriIdleri: readonly number[]
   const onay = await elleOnaylar(db, isEmriIdleri);
   return new Map([...onay].map(([i, m]) => [i, new Map([...m].map(([madde, x]) => [madde, x.onaylananSurum]))]));
 }
+
+// 3322 (Risk K1): Arkon kayıt kapısı da ilk başlatmada elle "hazır değil" durduran maddeyi (CNC, çizim) sorar; neden metni koyanı ve
+// kaldırılacağı yeri söyler. Yetki çağıranın işidir.
+export const elleDurdurmaNedeni = (db: Db, isEmriId: number): Promise<string | null> => elleDurdurma(db, isEmriId);
 
 // SmartES canlı makine panosu (3176): makinede şu an açık kullanımın emri ve adımı; açık işi olmayan makine haritada yoktur.
 // Yetki denetlemez, çağıran korur.

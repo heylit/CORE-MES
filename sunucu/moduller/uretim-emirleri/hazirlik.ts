@@ -6,7 +6,10 @@ import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BaslatmaOlayi } from './baslatma-denetimi.ts';
-import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, acikOnaylar, makineHazirligi, onayGecerliMi, talimatHazirligi } from './kurallar.ts';
+import {
+  EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, acikElleEksikler, acikOnaylar, elleEksikNedeni,
+  makineHazirligi, onayGecerliMi, talimatHazirligi,
+} from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
@@ -37,6 +40,17 @@ export async function elleOnaylar(db: Db, isEmriIdleri: readonly number[]): Prom
   const defter = await s.hazirlikOnayDefteri(db, idler);
   return new Map(idler.map((i) => [i, acikOnaylar(defter.filter((x) => x.isEmriId === i))]));
 }
+// 3322: elle "hazır değil" iş emri başınadır, sürümle düşmez. Emir düzeyindeki madde (çizim, rota) açık iş emirlerinden biri elle eksikse
+// emirde eksik görünür; başlatmada yalnız başlayan iş emrininki sorulur.
+export async function elleEksikler(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, Map<string, s.HazirlikOnaySatiri>>> {
+  const idler = [...new Set(isEmriIdleri)];
+  if (idler.length === 0) return new Map();
+  const defter = await s.hazirlikOnayDefteri(db, idler);
+  return new Map(idler.map((i) => [i, acikElleEksikler(defter.filter((x) => x.isEmriId === i))]));
+}
+const elleEksikMi = (e: Onaylar, madde: HazirlikMaddesi, isEmriId: number) => e.get(isEmriId)?.has(madde) ?? false;
+// Gerekmeyen madde elle eksik olmaz (yazma da reddeder); öteki her hâl elle eksikle 'eksik' olur, muafiyet dahil.
+const elleUygula = (hal: HazirlikHali, eksik: boolean): HazirlikHali => (eksik && hal !== 'gerekmez' ? 'eksik' : hal);
 const onayliMi = (o: Onaylar, madde: HazirlikMaddesi, isEmriId: number, surum: string | null | undefined) => {
   const x = o.get(isEmriId)?.get(madde);
   return x !== undefined && onayGecerliMi(x.onaylananSurum, surum);
@@ -55,25 +69,40 @@ async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, m
     ? (await s.isEmirleriGetir(db, [uretimEmriId])).filter((i) => i.durum !== 'tamam').map((i) => i.id)
     : [isEmriId];
   const onay = await elleOnaylar(db, isEmirleri);
+  const eksik = await elleEksikler(db, isEmirleri);
   for (const m of HAZIRLIK_MADDELERI) {
     if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m))) continue;
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {
       const bilgi = c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined;
-      sonuc.set(m, hazirlikHali(bilgi, muafMi(muaf, m, isEmriId) || hepsiOnayli(onay, m, isEmirleri, bilgi?.surum)));
+      const hal = hazirlikHali(bilgi, muafMi(muaf, m, isEmriId) || hepsiOnayli(onay, m, isEmirleri, bilgi?.surum));
+      sonuc.set(m, elleUygula(hal, isEmirleri.some((i) => elleEksikMi(eksik, m, i))));
       continue;
     }
     const durum = c ? await c(db, isEmirleri) : null;
-    sonuc.set(m, enKotu(isEmirleri.map((i) => hazirlikHali(durum?.get(i), muafMi(muaf, m, i) || onayliMi(onay, m, i, durum?.get(i)?.surum)))));
+    sonuc.set(m, enKotu(isEmirleri.map((i) => elleUygula(hazirlikHali(durum?.get(i), muafMi(muaf, m, i) || onayliMi(onay, m, i, durum?.get(i)?.surum)), elleEksikMi(eksik, m, i)))));
   }
   return sonuc;
 }
 
 // Başlatma kancası (baslatmaDenetimi) iş emri başlamadan önce sorar.
+// 3322 (Risk K1, K5): elle "hazır değil" durduran madde önce sorulur; engel kimin koyduğunu ve nereden kalkacağını söyler. Çözücü kayıtlı
+// olmasa da geçerlidir (elle durdurma çözücüden bağımsızdır).
 export async function hazirlikDenetimi(db: Db, olay: BaslatmaOlayi): Promise<string | null> {
+  const elle = await elleDurdurmaNedeni(db, olay.isEmriId);
+  if (elle !== null) return elle;
   if (cozuculer.size === 0) return null;
   const durum = await maddeler(db, olay.uretimEmriId, olay.isEmriId, await s.muafiyetler(db, olay.uretimEmriId));
   return hazirlikEngeli([...durum].filter(([, h]) => h === 'eksik').map(([m]) => m));
+}
+
+// Başlatmada sorulan durduran maddeler (çizim, CNC): yayın kapısı Arkon'dadır ve elle değeri yalnız görünümdür (3322 V3).
+export async function elleDurdurmaNedeni(db: Db, isEmriId: number): Promise<string | null> {
+  const satirlar = [...((await elleEksikler(db, [isEmriId])).get(isEmriId)?.values() ?? [])]
+    .filter((x) => (HAZIRLIK_MADDELERI as readonly string[]).includes(x.madde) && !hazirlikUyarirMi(x.madde) && !BASLATMADA_SORULMAZ.has(x.madde));
+  const ilk = satirlar[0];
+  if (ilk === undefined) return null;
+  return elleEksikNedeni(ilk.madde as HazirlikMaddesi, (await kisiAdlari(db, [ilk.kisiId])).get(ilk.kisiId) ?? null);
 }
 
 export async function hazirlik(db: Db, uretimEmriId: number): Promise<HazirlikCevabi> {
@@ -103,6 +132,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
     durumlar.set(m, c && idler.length > 0 ? await c(db, idler) : null);
   }
   const onay = await elleOnaylar(db, isEmriIdleri);
+  const eksik = await elleEksikler(db, isEmriIdleri);
   const adlar = await kisiAdlari(db, [...new Set(emirler.flatMap((e) => e.muaf.map((x) => x.kisiId)))]);
   for (const { id, muaf } of emirler) {
     const kendi = isEmirleri.filter((i) => i.uretimEmriId === id);
@@ -111,8 +141,8 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
       maddeler: HAZIRLIK_MADDELERI.map((madde) => {
         const d = durumlar.get(madde) ?? null;
         const durum = IS_EMRI_DUZEYI.has(madde)
-          ? enKotu(acik.map((i) => hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum))))
-          : hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum));
+          ? enKotu(acik.map((i) => elleUygula(hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum)), elleEksikMi(eksik, madde, i))))
+          : elleUygula(hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum)), acik.some((i) => elleEksikMi(eksik, madde, i)));
         return { madde, durum, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) };
       }),
       muafiyetler: muaf.map((x) => ({ ...x, kisiAdi: adlar.get(x.kisiId) ?? null })),
@@ -121,7 +151,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
         maddeler: HAZIRLIK_MADDELERI.filter((m) => IS_EMRI_DUZEYI.has(m))
           .map((madde) => {
             const b = durumlar.get(madde)?.get(i.id);
-            return { madde, durum: hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)) };
+            return { madde, durum: elleUygula(hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)), elleEksikMi(eksik, madde, i.id)) };
           }),
       })),
     });
@@ -173,11 +203,12 @@ export async function talimatHazirlikDurumlari(db: Db, isEmriIdleri: readonly nu
 hazirlikCozucusuKaydet('talimat', talimatHazirlikDurumlari);
 
 // Adım Durumu (2893): her iş emri için madde hâli. Emir düzeyindeki madde (çizim, rota) emrin bilgisini, onayı iş emrinin kaydını
-// alır. "ham" onaysız hâldir: elle onayın neyi açtığını göstermek ve yazmada eskime denetimi için.
+// alır. "ham" elle değersiz hâldir (onay da elle eksik de yok): elle değerin neyi değiştirdiğini ve kaynağın şimdi ne dediğini göstermek için.
 export interface IsEmriMaddeHali { hal: HazirlikHali; ham: HazirlikHali; surum: string | null }
 export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdleri: readonly number[]): Promise<Map<number, Map<HazirlikMaddesi, IsEmriMaddeHali>>> {
   const muaf = await s.muafiyetler(db, uretimEmriId);
   const onay = await elleOnaylar(db, isEmriIdleri);
+  const eksik = await elleEksikler(db, isEmriIdleri);
   const sonuc = new Map(isEmriIdleri.map((i) => [i, new Map<HazirlikMaddesi, IsEmriMaddeHali>()]));
   for (const m of HAZIRLIK_MADDELERI) {
     const c = cozuculer.get(m);
@@ -187,7 +218,7 @@ export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdl
       const b = durum?.get(emirde ? uretimEmriId : i);
       const muafMu = muafMi(muaf, m, emirde ? null : i) || (emirde && muafMi(muaf, m, i));
       sonuc.get(i)?.set(m, {
-        hal: hazirlikHali(b, muafMu || onayliMi(onay, m, i, b?.surum)),
+        hal: elleUygula(hazirlikHali(b, muafMu || onayliMi(onay, m, i, b?.surum)), elleEksikMi(eksik, m, i)),
         ham: hazirlikHali(b, muafMu),
         surum: b?.surum ?? null,
       });

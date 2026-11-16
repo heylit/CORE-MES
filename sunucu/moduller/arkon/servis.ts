@@ -47,6 +47,7 @@ import {
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
+  elleDurdurmaNedeni,
   elleOnayliMaddeler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
@@ -2039,6 +2040,11 @@ export async function kayitEkle(
     if (isEmriId !== null && planBaslatmaReddi(tur, satir, bag?.durum ?? null, plan, planZorunlu)) throw dogrulama(ILETILER.planCanliDegil, `satirlar.${sira}.state`);
     // 2893-2 b: iş emrinin elle onaylı maddeleri (madde -> onaylanan sürüm) yayın ve çizim kapısını açar; iş emri başına bir okuma.
     const elleOnay = isEmriId === null ? undefined : await onbellek.oku(`elle-onay:${isEmriId}`, async () => (await elleOnayliMaddeler(db, [isEmriId])).get(isEmriId));
+    // 3322 (Risk K1, K2): elle "hazır değil" yalnız ilk başlatmayı durdurur; çalışan ya da duraklamış iş etkilenmez.
+    if (isEmriId !== null && yayinDenetlenir(tur, satir, bag?.durum ?? null)) {
+      const elle = await onbellek.oku(`elle-eksik:${isEmriId}`, () => elleDurdurmaNedeni(db, isEmriId));
+      if (elle !== null) throw cakisma(elle);
+    }
     if (isEmriId !== null && yayinDenetlenir(tur, satir, bag?.durum ?? null, elleOnay?.has('yayin')) && yayinlanmamis(await parcalar.durum(String(satir['pkgId'])))) {
       throw dogrulama(ILETILER.paketYayinlanmadi, `satirlar.${sira}.state`);
     }
