@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import * as gonder from '../motor/atolye/gonder.ts';
 import * as planaAl from './plana-al.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import { EmirAdimlari, SiraSeridi } from './Yerlestirme.tsx';
@@ -177,5 +178,115 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
     expect(await screen.findByText(/uygun boş yer bulunamadı/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Hepsini en erken yere yerleştir' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('Kokpit planlı operasyonu seç-yerleştir ile taşıma (3297-4)', () => {
+  // Uydurma örnek: planlı emrin tornası T1'de 20-24; aday T1 ve T2. Önizleme T2'yi 8'de, T1'i 12'de verir; T3 geçersizdir.
+  const E: KokpitEmri = { ...PLANLI, bitis: 24, adimlar: [{ id: '1.10', ad: 'Torna', adaylar: ['T1', 'T2', 'T3'] }] };
+  const MT: KokpitModeli = { ...M, tezgahlar: ['T1', 'T2', 'T3'].map((id) => ({ id, kod: `ORN-${id}`, ad: '', fason: false })), isler: { '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna' }, '9.10': is('9.10', 'T1', 8, 12) }, emirler: [E] };
+  const tasiOnizle = () => vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => Promise.resolve(g.tezgah === 'T3'
+    ? { calismaSurumu: 4, gecerli: false, ileti: 'ORN-neden', isler: [] }
+    : { calismaSurumu: 4, gecerli: true, ileti: null, isler: [{ isId: g.isId, tezgah: g.tezgah, S: g.baslangic, C: g.baslangic + 4, eskiTezgah: 'T1', eskiS: 20, tur: 'tasinan' as const }] }));
+  const k1 = () => { const k = siraKartlari(MT).find((x) => x.kok === '1'); if (!k) throw new Error('kart'); return k; };
+
+  it('seçili planlı adımın yerleri listelenir (geçersiz yer yok, en erken başta), tahtaya hedef verilir; Taşı sayfanın taşımasını çağırır', async () => {
+    const oz = tasiOnizle();
+    const tasi = vi.fn(), hedef = vi.fn();
+    render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} hedef={hedef} secIs="1.10" tasi={tasi} taslakVar />);
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-adim="1.10"]')?.getAttribute('aria-pressed')).toBe('true');
+    const yerler = await within(bolum).findByRole('group', { name: 'Torna için taşınacak yerler' });
+    await waitFor(() => { expect(yerler.querySelectorAll('li')).toHaveLength(2); });
+    expect([...yerler.querySelectorAll('[data-tasi-tezgah]')].map((b) => b.getAttribute('data-tasi-tezgah'))).toEqual(['T2', 'T1']);
+    // Emre etkisi listede yazar: yeni bitiş, kazanç ve termin durumu.
+    expect(yerler.querySelector('li')?.textContent).toMatch(/Başka tezgâh · en erken biten yer · emir Pzt 12:00 biter · .* erken · termine yetişir/);
+    expect(yerler.querySelectorAll('li')[1]?.textContent).toContain('Aynı tezgâh · emir Pzt 16:00 biter');
+    expect(yerler.querySelector('[data-adim-ayrinti]')).toBeNull();
+    expect(yerler.querySelector('[data-taslak-notu]')).toBeTruthy();
+    expect(oz.mock.calls.map((x) => [x[0].tezgah, x[0].baslangic])).toEqual([['T1', 12], ['T2', 8], ['T3', 8]]);
+    await waitFor(() => { expect(hedef.mock.calls.at(-1)?.[0]).toMatchObject({ emirId: '1', adimId: '1.10', tezgahlar: ['T1', 'T2', 'T3'], fiil: 'tasi', yerler: [{ tezgah: 'T2', S: 8 }, { tezgah: 'T1', S: 12 }] }); });
+    fireEvent.click(yerler.querySelector('[data-tasi-tezgah="T2"]') as HTMLElement);
+    expect(tasi).toHaveBeenCalledWith('1.10', 'T2', 8);
+    // Tahtadaki boş yere basmak aynı taşımayı çağırır.
+    (hedef.mock.calls.at(-1)?.[0] as { yerlestir: (t: string) => void }).yerlestir('T1');
+    expect(tasi).toHaveBeenLastCalledWith('1.10', 'T1', 12);
+  });
+
+  it('başlamış iş taşınmaz: neden yazılır, sunucuya sorulmaz, tahtaya hedef verilmez', () => {
+    const oz = tasiOnizle();
+    const hedef = vi.fn();
+    const m = { ...MT, isler: { ...MT.isler, '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna', basladi: true } } };
+    render(<EmirAdimlari m={m} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} hedef={hedef} secIs="1.10" tasi={vi.fn()} />);
+    expect(screen.getByText('Başlamış iş taşınmaz.')).toBeTruthy();
+    expect(oz).not.toHaveBeenCalled();
+    expect(hedef.mock.calls.every((x) => x[0] === null)).toBe(true);
+  });
+
+  it('ayrıntı düğmesi verildiyse (telefon) listede durur ve seçili operasyonun ayrıntısını açar', async () => {
+    tasiOnizle();
+    const adimAyrinti = vi.fn();
+    render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={vi.fn()} adimAyrinti={adimAyrinti} />);
+    const yerler = await screen.findByRole('group', { name: 'Torna için taşınacak yerler' });
+    fireEvent.click(within(yerler).getByRole('button', { name: 'Torna ayrıntısı' }));
+    expect(adimAyrinti).toHaveBeenCalledWith('1', '1.10');
+  });
+
+  it('başka operasyon seçilince önceki operasyonun önizlemesi kullanılmaz', async () => {
+    const oz = tasiOnizle();
+    const iki: KokpitEmri = { ...E, adimlar: [...E.adimlar, { id: '1.20', ad: 'Freze', adaylar: ['T1', 'T2'] }] };
+    const m = { ...MT, isler: { ...MT.isler, '1.20': { ...is('1.20', 'T3', 30, 34), ad: 'Freze' } }, emirler: [iki] };
+    const k = siraKartlari(m).find((x) => x.kok === '1');
+    if (!k) throw new Error('kart');
+    const { rerender } = render(<EmirAdimlari m={m} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={vi.fn()} />);
+    await screen.findByRole('group', { name: 'Torna için taşınacak yerler' });
+    await waitFor(() => { expect(oz.mock.calls.length).toBeGreaterThanOrEqual(3); });
+    rerender(<EmirAdimlari m={m} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.20" tasi={vi.fn()} />);
+    const freze = await screen.findByRole('group', { name: 'Freze için taşınacak yerler' });
+    await waitFor(() => { expect(freze.querySelectorAll('li').length).toBeGreaterThan(0); });
+    expect(oz.mock.calls.filter((x) => x[0].isId === '1.20').length).toBeGreaterThan(0);
+  });
+
+  it('okunamayan taşıma önizlemesi bellekte tutulmaz: operasyon yeniden seçilince yeniden sorulur', async () => {
+    const gecerli = tasiOnizle();
+    gecerli.mockRestore();
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue(null);
+    const o = { m: MT, kart: k1(), zaman, uygula: vi.fn(), surum: 4, adimAc: vi.fn(), tasi: vi.fn() };
+    const { rerender } = render(<EmirAdimlari {...o} secIs="1.10" />);
+    expect(await screen.findByText('Bu operasyon için başka uygun boş yer bulunamadı.')).toBeTruthy();
+    const ilk = oz.mock.calls.length;
+    expect(ilk).toBe(3);
+    oz.mockRestore();
+    const yeni = tasiOnizle();
+    rerender(<EmirAdimlari {...o} secIs={null} />);
+    rerender(<EmirAdimlari {...o} secIs="1.10" />);
+    const yerler = await screen.findByRole('group', { name: 'Torna için taşınacak yerler' });
+    await waitFor(() => { expect(yerler.querySelectorAll('li')).toHaveLength(2); });
+    expect(yeni.mock.calls.length).toBe(3);
+  });
+
+  it('yazamayan kişide yerler sorulmaz; seçim yokken bölüm çizilmez', () => {
+    const oz = tasiOnizle();
+    const { rerender } = render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={null} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={null} />);
+    expect(screen.getByText('Operasyonu yalnız planı yazabilen kişi taşır.')).toBeTruthy();
+    rerender(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={null} surum={4} adimAc={vi.fn()} secIs={null} tasi={null} />);
+    expect(screen.queryByRole('group', { name: /taşınacak yerler/ })).toBeNull();
+    expect(oz).not.toHaveBeenCalled();
+  });
+
+  it('planlı adım seçiliyken aynı karttaki plansız emrin yerleştirmesi bekler; yerleşmemiş adıma basınca seçim bırakılır', async () => {
+    tasiOnizle();
+    const pl = onizlemeKur();
+    const dugum: KokpitEmri = { ...YENI, id: '1-Y1', no: 'ORN-UE-1-Y1', adimlar: YENI.adimlar.map((a) => ({ ...a, id: a.id.replace('2.', '1-Y1.') })) };
+    const m = { ...MT, tezgahlar: [...MT.tezgahlar, { id: 'F1', kod: 'ORN-F1', ad: '', fason: false }, { id: 'F2', kod: 'ORN-F2', ad: '', fason: false }], emirler: [E, dugum] };
+    const k = siraKartlari(m).find((x) => x.kok === '1');
+    if (!k) throw new Error('kart');
+    const birak = vi.fn();
+    render(<EmirAdimlari m={m} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={vi.fn()} birak={birak} />);
+    await screen.findByRole('group', { name: 'Torna için taşınacak yerler' });
+    expect(screen.queryByRole('group', { name: /için boş yerler|^Boş yerler$/ })).toBeNull();
+    expect(pl).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('region', { name: 'Emirler ve operasyonlar' }).querySelector('[data-adim="1-Y1.10"]') as HTMLElement);
+    expect(birak).toHaveBeenCalled();
   });
 });

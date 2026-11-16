@@ -150,6 +150,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [gelenAcik, setGelenAcik] = useState(false);
   // Seç-yerleştir: seçili adımın uygun tezgâhları ve boş yerleri (tahta işaretler).
   const [yerHedefi, setYerHedefi] = useState<YerlestirmeHedefi | null>(null);
+  const [tasinacak, setTasinacak] = useState<string | null>(null);
   useEffect(() => { onayIstegiAl(); }, []);
   const kok = useRef<HTMLDivElement | null>(null);
 
@@ -355,10 +356,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       else if (k === 'arrowright' && tur) turTusu.current.sonraki();
       else if (k.startsWith('arrow') && !tur && !tutuluyor() && okla(k, ev.shiftKey)) ev.preventDefault();
       else if (k === 'escape' && !tur && secEmir) sec(null, null);
+      else if (k === 'escape' && !tur && tasinacak !== null) setTasinacak(null);
     };
     document.addEventListener('keydown', tus);
     return () => { document.removeEventListener('keydown', tus); };
-  }, [geri, sorunSec, tur, secEmir, sec, okla]);
+  }, [geri, sorunSec, tur, secEmir, sec, okla, tasinacak]);
 
   // --- canlıya al ---
   // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
@@ -384,8 +386,20 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     for (const g of gelenListesi) if (g.emirId !== null && g.tur !== 'yeni') k.set(kokKimligi(g.emirId), (k.get(kokKimligi(g.emirId)) ?? 0) + 1);
     return k;
   }, [gelenListesi]);
-  const adimAc = useCallback((emirId: string, isId: string) => { sec(emirId, isId); setGoster(isId); }, [sec]);
+  // Seç-yerleştir ile taşıma operasyon bölümünden başlar: tahtadan ya da Matristen seçilen iş bölümü büyütmez (bakılan yer kaymasın).
+  // Ayrıntı kapatılınca taşınacak operasyon seçili kalır (telefonda ayrıntı listeyi örter); başka iş ya da kart seçilince düşer.
+  useEffect(() => { if (secIs !== null && secIs !== tasinacak) setTasinacak(null); }, [secIs]);
+  useEffect(() => { setTasinacak(null); }, [seciliKart?.kok]);
+  const adimAc = useCallback((emirId: string, isId: string) => {
+    // Ayrıntısı kapalıyken seçili operasyona yeniden basmak seçimi bırakır.
+    if (tasinacak === isId && secIs !== isId) { setTasinacak(null); return; }
+    setTasinacak(isId); setGoster(isId);
+    // Telefonda ayrıntı listeyi örter: operasyona basmak yalnız seçer, ayrıntı listedeki düğmeyle açılır. Yazamayan kişide liste yoktur.
+    if (yazabilir && darEkran()) sec(null, null); else sec(emirId, isId);
+  }, [sec, tasinacak, secIs, yazabilir]);
+  const adimAyrinti = useCallback((emirId: string, isId: string) => { sec(emirId, isId); }, [sec]);
   const emirAc = useCallback((emirId: string) => { sec(emirId, null); }, [sec]);
+  const birak = useCallback(() => { setTasinacak(null); sec(null, null); }, [sec]);
 
   const secili = secEmir ? emir.get(secEmir) ?? null : null;
   // Sonuç satırı uygulandığı emrin ayrıntısında kalır; başka emir seçilince silinir.
@@ -472,6 +486,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <EmirAdimlari
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc} emirAc={emirAc}
               hedef={setYerHedefi} taslakVar={taslakVar}
+              secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak} {...(yazabilir && darEkran() ? { adimAyrinti } : {})}
             />
           )}
           <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label={BOLUM_ADI[goz]}>
@@ -509,7 +524,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : ayarAcik ? (
           <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} etkiBekliyor={setAyarEtkisi} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : secili ? (
-          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, taslak, yazabilir }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
+          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, taslak, yazabilir }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} tasimaListede={tasinacak !== null && tasinacak === secIs && yazabilir && !tur} />
         ) : kapasiteAcik ? (
           <Kapasite c={c} m={m} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setKapasiteAcik(false); }} />
         ) : gelenAcik ? (

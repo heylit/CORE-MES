@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
-import { adimYeri, bosYerler, ilkKart, kokKimligi, siraKartlari, siradakiAdim, uygunTezgahlar } from './yerlestirme.ts';
+import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
+import { adimYeri, bosYerler, ilkKart, kokKimligi, siraKartlari, siradakiAdim, tasimaAdaylari, uygunTezgahlar } from './yerlestirme.ts';
 
 // Veri uydurmadır (ORN-).
 const emir = (id: string, durum: KokpitEmri['durum'], termin: number | null, adimlar: [string, string[]][] = [['10', ['M1']]]): KokpitEmri => ({
@@ -80,5 +80,30 @@ describe('Kokpit seç-yerleştir (3297)', () => {
       { adimId: '5.10', tezgah: 'M1', S: 20, C: 26, enErken: false },
     ]);
     expect(bosYerler('5.10', [])).toEqual([]);
+  });
+});
+
+describe('Kokpit planlı adımı taşıma adayları (3297-4)', () => {
+  // İki adımlı emir: OP10 M1'de 10-12, OP20 M2'de 20-24 (aday M2, M3, fason). M2'de 12-16 dolu; M3 boş.
+  const e = emir('5', 'iyi', 60, [['10', ['M1']], ['20', ['M2', 'M3', '@F1']]]);
+  const yer = (id: string, m: string, S: number, C: number, basladi = false): KokpitIsi => ({ ...is(id, m), S, C, basladi });
+  const model = (ek: Partial<KokpitIsi> = {}): KokpitModeli => ({
+    simdi: 8, bas: 0, son: 336, acik: {}, durus: {}, emirler: [e], tezgahlar: ['M1', 'M2', 'M3'].map((id) => ({ id, kod: id, ad: '', fason: false })),
+    isler: { '5.10': yer('5.10', 'M1', 10, 12), '5.20': { ...yer('5.20', 'M2', 20, 24), ...ek }, '8.10': yer('8.10', 'M2', 12, 16) },
+  });
+
+  it('her aday tezgâhta önceki adım bittikten sonraki ilk boşluk; fason aday değildir', () => {
+    expect(tasimaAdaylari(model(), e, '5.20', 6)).toEqual([{ tezgah: 'M2', baslangic: 16 }, { tezgah: 'M3', baslangic: 12 }]);
+  });
+
+  it('adımın bugünkü yeri aday değildir; sınır aday sayısını keser', () => {
+    expect(tasimaAdaylari(model({ S: 16, C: 20 }), e, '5.20', 6)).toEqual([{ tezgah: 'M3', baslangic: 12 }]);
+    expect(tasimaAdaylari(model(), e, '5.20', 1)).toEqual([{ tezgah: 'M2', baslangic: 16 }]);
+  });
+
+  it('başlamış iş, planda olmayan ve emrin olmayan adım aday vermez', () => {
+    expect(tasimaAdaylari(model({ basladi: true }), e, '5.20', 6)).toEqual([]);
+    expect(tasimaAdaylari({ ...model(), isler: {} }, e, '5.20', 6)).toEqual([]);
+    expect(tasimaAdaylari(model(), e, '8.10', 6)).toEqual([]);
   });
 });

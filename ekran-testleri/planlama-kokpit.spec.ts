@@ -580,6 +580,73 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3297-4: planlı operasyon seç-yerleştir ile taşınır. Operasyona basılınca taşınabileceği yerler listelenir ve tahtada çerçevelenir;
+// yere basınca taşıma taslağa tek değişiklik olarak yazılır. Önizleme uydurmadır: istenen yer geçerlidir.
+test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun tezgâhlar öne çıkar; telefonda yer listesi; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const telefon = bilgi.project.name === 'g360';
+
+  await kokpit.getByRole('region', { name: 'Emirler, sırasıyla' }).locator('[data-kart="S1"]').click();
+  const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
+  const freze = bolum.locator('[data-adim="S1.a2"]');
+  await expect(freze).toContainText('F-01');
+  await freze.click();
+  await expect(freze).toHaveAttribute('aria-pressed', 'true');
+  // Freze F-01'de 57'de; Torna 16'da biter: iki aday tezgâhta da 16'da boş yer var.
+  const yerler = bolum.getByRole('group', { name: 'Freze için taşınacak yerler' });
+  await expect(yerler.getByRole('listitem')).toHaveCount(2);
+  // Emre etkisi listede yazar (yeni bitiş, kazanç, termin); aynı seçenekler ayrıntı panelinde ikinci kez durmaz.
+  await expect(yerler.getByRole('listitem').first()).toContainText(/F-01.*Aynı tezgâh · en erken biten yer · emir .* biter · .* erken · termine yetişir/s);
+  await expect(yerler.getByRole('listitem').nth(1)).toContainText(/F-02.*Başka tezgâh/s);
+  const ayrinti = kokpit.getByRole('complementary', { name: /S1 ayrıntısı/ });
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3297-4-tasima-${bilgi.project.name}.png`, fullPage: true });
+  if (!telefon) {
+    const tahta = kokpit.locator('.tc-pyq-tahta');
+    await expect(tahta.locator('[data-satir="M2"]')).toHaveAttribute('data-aday', 'evet');
+    await expect(tahta.locator('[data-satir="M3"]')).toHaveAttribute('data-aday', 'evet');
+    await expect(tahta.locator('[data-satir="M1"]')).toHaveAttribute('data-aday', 'hayir');
+    await expect(tahta.locator('[data-bos-yer]')).toHaveCount(2);
+    await expect(tahta.locator('[data-bos-yer="M3"]')).toHaveText('Taşı · 16:00');
+    await expect(ayrinti.locator('[data-tasima-listede]')).toBeVisible();
+    await expect(ayrinti.getByRole('button', { name: 'Uygula' })).toHaveCount(0);
+    await tahta.locator('[data-bos-yer="M3"]').click();
+  } else {
+    await expect(kokpit.locator('.tc-pyq-tahta')).toBeHidden();
+    // Telefonda operasyona basmak yalnız seçer (ayrıntı listeyi örtmesin); ayrıntı listedeki düğmeyle açılır, kapanınca seçim kalır.
+    await expect(ayrinti).toHaveCount(0);
+    await yerler.getByRole('button', { name: 'Freze ayrıntısı' }).click();
+    await expect(ayrinti).toBeVisible();
+    await kokpit.getByRole('button', { name: 'Ayrıntıyı kapat' }).click();
+    await expect(freze).toHaveAttribute('aria-pressed', 'true');
+    await expect(yerler.getByRole('listitem')).toHaveCount(2);
+    const tasi = yerler.locator('[data-tasi-tezgah="M3"]');
+    expect((await tasi.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await tasi.click();
+  }
+  // Taşıma taslağa tek değişiklik olarak yazılır; operasyon yeni yerinde görünür, Geri al geri alır.
+  await expect.poll(() => t.tasinan().length).toBe(1);
+  expect(t.tasinan()[0]).toMatchObject({ tur: 'tasi', isId: 'S1.a2', tezgah: 'M3', baslangic: 16 });
+  await expect(freze).toContainText('F-02');
+  // Seçili operasyona yeniden basmak (ayrıntı kapalıyken) seçimi bırakır; liste kalkar.
+  if (!telefon) await kokpit.getByRole('button', { name: 'Ayrıntıyı kapat' }).click();
+  await expect(yerler).toBeVisible();
+  await freze.click();
+  await expect(yerler).toBeHidden();
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3208 a: 3B görünümü. Sahne başsız tarayıcının yazılım çizicisinde de çizilsin diye 'zorla' konur (uygulama bunu koymaz). Onaylı plan
 // uydurmadır: S1'in ikinci adımı onaylı planda başka tezgâhta, S3 dört saat sonra; taslak bunları değiştirmiş sayılır.
 test('Kokpit 3B: Matris düz açılır, 3B\'ye kalkar; hücre emirleri süzer; Yük ve gecikme, Önce / sonra; yatay taşma yok', async ({ page, ac, ag }) => {
