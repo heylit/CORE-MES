@@ -550,8 +550,9 @@ export interface TeklifDenemeGirdisi {
   gecerlilik: string;
   istenenTermin: string | null;
   // 3301: 'arkaya' plan dondurulur, istenen termin yalnız yetişme ölçüsü; 'geriye' terminden geriye yeniden dağıtılır. Verilmezse
-  // istenen terminden çıkar (boş: arkaya, dolu: geriye).
-  yerlesim?: 'arkaya' | 'geriye';
+  // istenen terminden çıkar (boş: arkaya, dolu: geriye). 3326: 'baslat' arkaya gibidir, kalem başlangıç gününden önce başlamaz.
+  yerlesim?: 'arkaya' | 'geriye' | 'baslat';
+  baslangic?: string | null;
   taslakId: string | null;
   taslaklar: SatisTaslagiGirdisi[];
   // Plan termini için bitişe eklenen gün; verilmezse canlı plan ayarının tamponu (plan modülü).
@@ -642,7 +643,7 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
     calisma, kayit, kaynak, bugun, kaynakDilimi: await tipliKaynakOkumasi(db, kullanici, kaynak),
     kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, ...adimlar(String(k.malzemeNo), k.adet) })),
     termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
-    yerlesim: g.yerlesim ?? (g.istenenTermin === null ? 'arkaya' : 'geriye'),
+    yerlesim: g.yerlesim ?? (g.istenenTermin === null ? 'arkaya' : 'geriye'), baslangic: g.baslangic ?? null,
     taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await sorgular.ayarOku(db, null)).tamponGun, gecerlilik: g.gecerlilik,
   });
   if (r === null) return null;

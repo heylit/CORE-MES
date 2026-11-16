@@ -8,7 +8,7 @@ import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const DENEME = {
-  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
+  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', baslangic: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
   yetisir: null, onayGerekli: false, satinalmaGerekli: true, maliyetToplami: '400.00', genelGiderSaatBasi: '10.00',
   kayanlar: [{ siparis: 'ORN-SS-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }],
   plan: {
@@ -51,6 +51,7 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
       ...DENEME,
       istenenTermin: new URL(r.request().url()).searchParams.get('istenenTermin'),
       yerlesim: new URL(r.request().url()).searchParams.get('yerlesim') ?? 'arkaya',
+      baslangic: new URL(r.request().url()).searchParams.get('baslangic'),
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00', planTermini: '2099-07-14',
         malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'ORN-HM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
@@ -72,6 +73,16 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
   await expect(form.getByRole('group', { name: 'Kâr oranı' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Maliyet dökümü' })).toBeVisible();
   await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toHaveValue('12,50');
+  // 3326: seçilen günde başlatmada plandan tıklanan gün başlangıç günü olur.
+  await form.getByLabel('Seçilen günde başlat').check();
+  const gun = form.getByRole('group', { name: 'Başlangıç' }).getByRole('button', { name: /^08\.07\.2099/ });
+  await gun.click();
+  await expect(gun).toHaveAttribute('aria-pressed', 'true');
+  await expect(form.getByRole('definition').filter({ hasText: '08.07.2099' }).first()).toBeVisible();
+  // Seçilen günde başlatmada kimse kaymaz: kayan listesi ve onay kutusu çizilmez (yönlendirilen cevapta kayan olsa da).
+  await expect(form.getByText(/terminini kaçırır/)).toHaveCount(0);
+  await expect(form.locator('.tc-sp-blok-yazi', { hasText: 'Bu teklif' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await form.getByLabel('Terminden geriye').check();
   await form.getByLabel(/^İstenen termin/).fill('2099-07-05');
   await expect(form.getByRole('table', { name: 'Bitişi değişen siparişler' })).toBeVisible();
@@ -87,7 +98,7 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   await page.route(`**/api/siparisler/teklifler/${String(t.id)}/termin-denemesi**`, (r) => r.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({
-      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: null, termin: null, terminGun: null, yetisir: null,
+      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', baslangic: null, planTermini: null, termin: null, terminGun: null, yetisir: null,
       onayGerekli: false, satinalmaGerekli: false, maliyetToplami: null, genelGiderSaatBasi: null, kayanlar: [], plan: null,
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: false, bitis: null, planTermini: null,

@@ -286,6 +286,10 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.deepEqual([arkaya.yerlesim, arkaya.termin, arkaya.yetisir, arkaya.onayGerekli], ['arkaya', '2099-07-08', false, false]);
     const yetisen = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-10', yerlesim: 'arkaya' });
     assert.deepEqual([yetisen.termin, yetisen.yetisir], ['2099-07-10', true]);
+    // 3326: seçilen günde başlatmada termin planınkidir, istenen termin yalnız ölçülür; başlangıç günü yalnız baslat'ta yazılır, onay doğmaz.
+    const bas = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-10', yerlesim: 'baslat', baslangic: '2099-07-01' });
+    assert.deepEqual([bas.yerlesim, bas.baslangic, bas.termin, bas.yetisir, bas.onayGerekli], ['baslat', '2099-07-01', '2099-07-08', true, false]);
+    assert.equal(denemeCevabi([satir(1, 11)], sonuc, { ...g, yerlesim: 'arkaya', baslangic: '2099-07-01' }).baslangic, null);
     assert.equal(gunFarki('2099-02-27', '2099-03-01'), 2);
   });
 
@@ -324,6 +328,10 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(yenidenYerlesirMi(y('2099-07-05'), '2099-07-05', 'arkaya'), true);
     assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'arkaya'), false);
     assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'geriye'), true);
+    // 3326: başlangıç günü değişince yeniden dizilir.
+    const b = (baslangic: string | null) => ({ istenenTermin: null, yerlesim: 'baslat' as const, baslangic, gecerli: true });
+    assert.equal(yenidenYerlesirMi(b('2099-07-01'), null, 'baslat', '2099-07-01'), false);
+    assert.equal(yenidenYerlesirMi(b('2099-07-01'), null, 'baslat', '2099-07-02'), true);
     assert.deepEqual(kilitler({ planSurumu: null, kalemler: [kalem(1)], kayanlar: [], plan: null }).map((k) => [k.satirId, k.opId, k.tezgah]), [[1, '1.10', 'T1']]);
   });
 

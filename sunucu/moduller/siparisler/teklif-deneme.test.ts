@@ -292,6 +292,30 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.deepEqual([deneme.yerlesim, deneme.onayGerekli, deneme.yetisir, deneme.termin], ['arkaya', false, false, '2099-07-14']);
   });
 
+  test('3326 seçilen günde başlat: başlangıç günü motora gider ve saklanır; termin planınkidir, onay doğmaz; yalnız gün değişince yeniden denenir', async () => {
+    let t = await teklifAc();
+    geciktirir = true;
+    assert.equal((await oku(yonetici, `/siparisler/teklifler/${t.id}/termin-denemesi?yerlesim=baslat`)).statusCode, 400);
+    const d = (await oku(yonetici, `/siparisler/teklifler/${t.id}/termin-denemesi?yerlesim=baslat&baslangic=2099-07-02`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([d.yerlesim, d.baslangic, d.termin, d.onayGerekli], ['baslat', '2099-07-02', '2099-07-14', false]);
+    assert.deepEqual(istekler.map((i) => [i.yerlesim, i.baslangic]), [['baslat', '2099-07-02']]);
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '25', istenenTermin: null, yerlesim: 'baslat', baslangic: '2099-07-02' } }));
+    assert.deepEqual([t.durum, t.surumler[0]?.terminTarihi], ['verildi', '2099-07-14']);
+    let l = await taslaklar(t);
+    assert.deepEqual(l.map((x) => [x.gorunum, x.yerlesim, x.baslangic]), [['satis', 'baslat', '2099-07-02']]);
+    t = await komut(t, 'revizyon-iste', { not: 'Fiyat yüksek' });
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '20', istenenTermin: null, yerlesim: 'baslat', baslangic: '2099-07-02' } }));
+    assert.equal(istekler.length, 2);
+    t = await komut(t, 'revizyon-iste', { not: 'Bir gün sonra başlasın' });
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '20', istenenTermin: null, yerlesim: 'baslat', baslangic: '2099-07-03' } }));
+    assert.equal(istekler.length, 3);
+    l = await taslaklar(t);
+    assert.deepEqual(l.map((x) => [x.gorunum, x.baslangic]), [['satis', '2099-07-03'], ['kalkti', '2099-07-02']]);
+    // Öteki yerleşimde başlangıç günü yok sayılır.
+    const arka = (await oku(yonetici, `/siparisler/teklifler/${t.id}/termin-denemesi?yerlesim=arkaya&baslangic=2099-07-02`)).json<TerminDenemesiCevabi>();
+    assert.equal(arka.baslangic, null);
+  });
+
   test('TKL-15 iskonto ve termin onayı birlikte: ikisi de verilmeden teklif müşteriye gitmez', async () => {
     let t = await teklifAc();
     geciktirir = true;
@@ -368,6 +392,17 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     await assert.rejects(ekle('deneme', 'kalkti', 'NULL'), (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_deneme');
     await assert.rejects(ekle('satis', 'aktif', surum), (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_tek_yer');
     await assert.rejects(ekle('satis', 'onay-bekliyor', surum), (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_bekleyen');
+    // 3326: başlangıç günü yalnız ve her zaman "seçilen günde başlat"ta.
+    const yerlesim = (y: string, bas: string) => o().sahip.sorgu(
+      `INSERT INTO siparisler_teklif_plan_taslagi (teklif_id, tur, durum, gecerlilik, kar_orani, kalemler, kayanlar, kilitler, olusturan_id, yerlesim, baslangic)
+       VALUES ($1, 'deneme', 'aktif', '2099-06-30', 10, '[]', '[]', '[]', $2, $3, ${bas})`, [t.id, yoneticiId, y]);
+    const kisit = (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_yerlesim';
+    await assert.rejects(yerlesim('baslat', 'NULL'), kisit);
+    await assert.rejects(yerlesim('arkaya', "'2099-07-01'"), kisit);
+    await assert.rejects(o().sahip.sorgu(
+      `INSERT INTO siparisler_teklif_plan_taslagi (teklif_id, tur, durum, gecerlilik, kar_orani, kalemler, kayanlar, kilitler, olusturan_id, baslangic)
+       VALUES ($1, 'deneme', 'aktif', '2099-06-30', 10, '[]', '[]', '[]', $2, '2099-07-01')`, [t.id, yoneticiId]), kisit);
+    await yerlesim('baslat', "'2099-07-01'");
   });
   test('65 a satış rolü: teklifi dener, termin ve maliyet toplamını görür, dökümü görmez; plan taslaklı sürüm verir; müdür dökümü görür', async () => {
     const satis = await girisYap('satis');

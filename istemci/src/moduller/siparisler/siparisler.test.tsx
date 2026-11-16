@@ -1245,7 +1245,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1'], birim: 'adet' };
   const TEKLIF_KARTLI = { ...TEKLIF_YENI, satirlar: [KARTLI_SATIR] } satisfies TeklifAyrintisi;
   const DENEME = {
-    durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, yerlesim: 'arkaya', planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
+    durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, yerlesim: 'arkaya', baslangic: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
     yetisir: null, onayGerekli: false, satinalmaGerekli: true,
     kalemler: [{
       satirId: 11, sira: 1, tanim: 'Deneme Mil 20mm', malzemeNo: 31, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00',
@@ -1407,6 +1407,103 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ planTaslagi: { karOrani: '25', istenenTermin: '2099-07-05', yerlesim: 'geriye' } });
   });
 
+  it('3326 plandan gün seçilir: arkaya eklemede istenen termin, seçilen günde başlatmada başlangıç günü olur; sürüm başlangıçla gider', async () => {
+    const istekler = kur(SATISCI, (yol) => (yol.includes('yerlesim=baslat')
+      ? { ...SERITLI, yerlesim: 'baslat', baslangic: '2099-07-06', termin: '2099-07-16', planTermini: '2099-07-16', kayanlar: KAYAN.kayanlar } satisfies TerminDenemesiCevabi
+      : SERITLI));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.change(await screen.findByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
+    const girdi = (ad: RegExp) => screen.getAllByLabelText(ad).find((e): e is HTMLInputElement => e instanceof HTMLInputElement)!;
+    const gun = async (etiket: string, tarih: RegExp) => within(await screen.findByRole('group', { name: etiket })).getByRole('button', { name: tarih });
+    fireEvent.click(await gun('İstenen termin seç', /^03\.07\.2099/));
+    expect(girdi(/^İstenen termin/).value).toBe('2099-07-03');
+    await waitFor(() => expect(istekler.some((i) => i.yol.endsWith('istenenTermin=2099-07-03&yerlesim=arkaya'))).toBe(true));
+    // Aynı güne yeniden tıklama arkaya eklemede seçimi kaldırır.
+    fireEvent.click(await gun('İstenen termin seç', /^03\.07\.2099/));
+    expect(girdi(/^İstenen termin/).value).toBe('');
+    fireEvent.click(screen.getByLabelText('Seçilen günde başlat'));
+    expect(girdi(/^Başlangıç günü/).value).toBe('');
+    expect(istekler.some((i) => i.yol.includes('yerlesim=baslat'))).toBe(false);
+    fireEvent.click(await gun('Başlangıç', /^06\.07\.2099/));
+    expect(girdi(/^Başlangıç günü/).value).toBe('2099-07-06');
+    await waitFor(() => expect(istekler.some((i) => i.yol.endsWith('gecerlilik=2099-06-30&yerlesim=baslat&baslangic=2099-07-06'))).toBe(true));
+    await waitFor(() => expect(within(screen.getByLabelText('Termin sonucu')).getByText('Başlangıç')).toBeTruthy());
+    // Kapalı gün adıyla söylenir; seçilen günde başlatmada kayan listesi ve onay kutusu yoktur.
+    expect(within(screen.getByRole('group', { name: 'Başlangıç' })).getByRole('button', { name: /^05\.07\.2099 .*kapalı gün$/ })).toBeTruthy();
+    expect(screen.queryByText(/terminini kaçırır/)).toBeNull();
+    expect(screen.queryByRole('table', { name: 'Bitişi değişen siparişler' })).toBeNull();
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    // Teslim süresi yazılamıyorsa nedeni yazılır (uydurma termin 2099, bir yıldan uzak).
+    expect(within(await screen.findByLabelText('Termin ve teslim süresi')).getByText('Termin bir yıldan uzak; gün yazılmaz')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Teklifi ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ planTaslagi: { istenenTermin: null, yerlesim: 'baslat', baslangic: '2099-07-06' } });
+  });
+
+  it('3326 seçilen günde başlatmada istenen termine yetişmeyince teklife plan termini yazılır; "Plan bu termine yetişmiyor" yazılmaz', async () => {
+    kur(SATISCI, () => ({ ...DENEME, istenenTermin: '2099-07-05', yerlesim: 'baslat', baslangic: '2099-07-06', yetisir: false } satisfies TerminDenemesiCevabi));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('İstenen termine yetişmiyor; teklife plan termini yazılır')).toBeTruthy();
+    expect(screen.queryByText('Plan bu termine yetişmiyor')).toBeNull();
+  });
+
+  // Teslim süresi bugünden termine takvim günüdür; bugün sabitlenir (2099-06-20, İstanbul).
+  const bugunSabit = () => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2099-06-20T09:00:00Z')); };
+  const TALEPLI = { ...TEKLIF_KARTLI, istenenTarih: '2099-07-20' } satisfies TeklifAyrintisi;
+
+  it('3326 koşullar ve gönder, planlı: termin ve teslim süresi plandan, talepte istenen ayrıca; sürüm teslim süresiyle gider', async () => {
+    bugunSabit();
+    try {
+      const istekler = kur(SATISCI, () => DENEME, TALEPLI);
+      ac('/siparisler/teklifler/21/teklif-ver');
+      fireEvent.change(await screen.findByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
+      await waitFor(() => expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+      const kutu = await screen.findByLabelText('Termin ve teslim süresi');
+      expect(within(kutu).getByText('14.07.2099')).toBeTruthy();
+      expect(within(kutu).getByText('Plandan')).toBeTruthy();
+      expect(within(kutu).getByText('24 gün')).toBeTruthy();
+      expect(within(kutu).getByText('Talepte istenen')).toBeTruthy();
+      expect(within(kutu).getByText('20.07.2099')).toBeTruthy();
+      expect(screen.queryByLabelText('Teslim süresi (gün)')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+      await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+      expect(yazmalar(istekler)[0]?.govde).toMatchObject({ teslimGun: 24, planTaslagi: { yerlesim: 'arkaya' } });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('3326 koşullar ve gönder, plansız: ilk sürümde termin talepteki tarihten başlar; süre termini, termin süreyi doldurur', async () => {
+    bugunSabit();
+    try {
+      const istekler = kur(SATISCI, () => ({ ...DENEME, durum: 'cozucu-yok', planSurumu: null, planTermini: null, termin: null, terminGun: null, maliyetToplami: null, kalemler: [] }), TALEPLI);
+      ac('/siparisler/teklifler/21/teklif-ver');
+      expect(await screen.findByText('Termin denemesi kullanılamıyor')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '11' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+      const termin = await screen.findByLabelText<HTMLInputElement>('Termin tarihi');
+      const sure = screen.getByLabelText<HTMLInputElement>('Teslim süresi (gün)');
+      expect(termin.value).toBe('2099-07-20');
+      expect(sure.value).toBe('30');
+      fireEvent.change(sure, { target: { value: '10' } });
+      expect(termin.value).toBe('2099-06-30');
+      fireEvent.change(termin, { target: { value: '2099-07-05' } });
+      expect(sure.value).toBe('15');
+      fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+      await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+      expect(yazmalar(istekler)[0]?.govde).toMatchObject({ teslimGun: 15, terminTarihi: '2099-07-05', planTaslagi: null });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('seçilen günde başlatmada başlangıç günü zorunlu', async () => {
+    kur(SATISCI, () => DENEME);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.change(await screen.findByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
+    fireEvent.click(screen.getByLabelText('Seçilen günde başlat'));
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    expect(await screen.findAllByText('Seçilen günde başlatmada başlangıç günü zorunlu.')).toHaveLength(2);
+  });
+
   it('maliyet dökümü yalnız maliyet okuyana görünür; deneme taslağı kârla kaydedilir', async () => {
     const istekler = kur(MUDUR, () => DOKUMLU);
     ac('/siparisler/teklifler/21/teklif-ver');
@@ -1469,7 +1566,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   it('63 b: termin onayı bekleyen teklifte plancı termini onaylar; plan taslakları görünür', async () => {
     const bekleyen = { ...TEKLIF_VERILDI, durum: 'onay-bekliyor', surumler: [{ ...SURUM_1, iskontoOrani: '5.00', terminTarihi: '2099-07-05' }] } satisfies TeklifAyrintisi;
     const TASLAK = {
-      id: 3, teklifId: 21, surumNo: 1, tur: 'satis', gorunum: 'onay-bekliyor', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: '2099-07-05', yerlesim: 'geriye', planTermini: '2099-07-14',
+      id: 3, teklifId: 21, surumNo: 1, tur: 'satis', gorunum: 'onay-bekliyor', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: '2099-07-05', yerlesim: 'geriye', baslangic: null, planTermini: '2099-07-14',
       termin: '2099-07-05', karOrani: null, maliyetToplami: null, kayanSayisi: 1, gecikenSayisi: 1, onayGerekli: true, onaylayan: null, onayAni: null,
       olusturan: 'Deneme Satisci', olusturma: '2026-10-21T09:00:00+03:00',
     } satisfies PlanTaslaklariCevabi['taslaklar'][number];

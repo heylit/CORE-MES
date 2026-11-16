@@ -21,13 +21,18 @@ import type { YerTutanTaslak } from './sorgular.ts';
 export type TeklifDenemeCozucusu = (db: Db, kullanici: Kullanici, girdi: MotorGirdisi) => Promise<MotorSonucu | null>;
 
 let cozucu: TeklifDenemeCozucusu | null = null;
+
+// Başlangıç günü yalnız 'baslat'ta anlamlıdır; öteki yerleşimde gelse de yok sayılır (yer tutan taslak boşuna yeniden denenmez).
+const baslangicGunu = (yerlesim: TerminYerlesimi, baslangic: string | null | undefined): string | null => (yerlesim === 'baslat' ? baslangic ?? null : null);
 export function teklifDenemeCozucusuKaydet(c: TeklifDenemeCozucusu | null): void { cozucu = c; }
 
 async function dene(
-  db: Db, kullanici: Kullanici, teklifId: number, g0: { gecerlilik: string | null; istenenTermin: string | null; yerlesim: TerminYerlesimi | null }, haric: number | null,
+  db: Db, kullanici: Kullanici, teklifId: number,
+  g0: { gecerlilik: string | null; istenenTermin: string | null; yerlesim: TerminYerlesimi | null; baslangic?: string | null }, haric: number | null,
   carpan: AdetCarpani = '1',
 ): Promise<{ cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | null }> {
-  const g = { gecerlilik: g0.gecerlilik, istenenTermin: g0.istenenTermin, yerlesim: terminYerlesimi(g0.istenenTermin, g0.yerlesim) };
+  const yerlesim = terminYerlesimi(g0.istenenTermin, g0.yerlesim);
+  const g = { gecerlilik: g0.gecerlilik, istenenTermin: g0.istenenTermin, yerlesim, baslangic: baslangicGunu(yerlesim, g0.baslangic) };
   const satirlar = (await sorgular.talepSatirlari(db, teklifId)).map((s) => ({ ...s, miktar: carpilmisAdet(s.miktar, carpan) }));
   // 64 a: teklifin bütün kartlı kalemleri tek denemede birlikte yerleşir.
   const kalemler = satirlar.flatMap((s) => (s.malzeme_no === null ? [] : [{ satirId: s.id, malzemeNo: s.malzeme_no, adet: Number(s.miktar) }]));
@@ -42,6 +47,7 @@ async function dene(
       // 3301: arkaya plan dondurulur, istenen termin yalnız yetişme ölçüsüdür; geriye atölye terminden geriye yeniden dağıtır (48 b).
       istenenTermin: g.istenenTermin,
       yerlesim: g.yerlesim,
+      baslangic: g.baslangic,
       // Bu teklifin yer tutan satış taslağı denemede yok sayılır: yeniden denenen teklif kendi yerine takılmaz.
       taslakId: haric === null ? null : String(haric),
       taslaklar: motorTaslaklari(yerTutanlar),
@@ -93,8 +99,8 @@ function yerlesmisSonuc(d: { cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | 
 }
 
 const yazim = (teklifId: number, c: TerminDenemesiCevabi, sonuc: DenemeSonucu, karOrani: string) => ({
-  teklifId, planSurumu: c.planSurumu, gecerlilik: c.gecerlilik, istenenTermin: c.istenenTermin, yerlesim: c.yerlesim, planTermini: c.planTermini, termin: c.termin,
-  karOrani, maliyetToplami: c.maliyetToplami, kalemler: c.kalemler, kayanlar: c.kayanlar, kilitler: kilitler(sonuc),
+  teklifId, planSurumu: c.planSurumu, gecerlilik: c.gecerlilik, istenenTermin: c.istenenTermin, yerlesim: c.yerlesim, baslangic: c.baslangic, planTermini: c.planTermini,
+  termin: c.termin, karOrani, maliyetToplami: c.maliyetToplami, kalemler: c.kalemler, kayanlar: c.kayanlar, kilitler: kilitler(sonuc),
 });
 
 export type SatisTaslagiHazirligi =
@@ -108,10 +114,13 @@ export async function satisTaslagiHazirla(db: Db, kullanici: Kullanici, teklifId
 }> {
   const mevcut = await sorgular.yerTutanTaslak(db, teklifId);
   const yerlesim = terminYerlesimi(p.istenenTermin, p.yerlesim);
-  if (mevcut !== null && !yenidenYerlesirMi({ istenenTermin: mevcut.istenen_termin, yerlesim: mevcut.yerlesim, gecerli: mevcut.gecerli }, p.istenenTermin, yerlesim)) {
+  const baslangic = baslangicGunu(yerlesim, p.baslangic);
+  if (mevcut !== null && !yenidenYerlesirMi(
+    { istenenTermin: mevcut.istenen_termin, yerlesim: mevcut.yerlesim, baslangic: mevcut.baslangic, gecerli: mevcut.gecerli }, p.istenenTermin, yerlesim, baslangic,
+  )) {
     return { hazirlik: { tur: 'tasi', mevcut }, termin: mevcut.termin, onayBekler: mevcut.durum === 'onay-bekliyor' };
   }
-  const d = await dene(db, kullanici, teklifId, { gecerlilik, istenenTermin: p.istenenTermin, yerlesim }, mevcut?.id ?? null);
+  const d = await dene(db, kullanici, teklifId, { gecerlilik, istenenTermin: p.istenenTermin, yerlesim, baslangic }, mevcut?.id ?? null);
   const sonuc = yerlesmisSonuc(d);
   return { hazirlik: { tur: 'yeni', cevap: d.cevap, sonuc }, termin: d.cevap.termin, onayBekler: d.cevap.onayGerekli };
 }
@@ -151,7 +160,8 @@ export async function planTaslaklari(db: Db, id: number): Promise<PlanTaslagi[]>
   const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.onaylayan_id === null ? [t.olusturan_id] : [t.olusturan_id, t.onaylayan_id])));
   return satirlar.map((t) => ({
     id: t.id, teklifId: t.teklif_id, surumNo: t.surum_no, tur: t.tur, gorunum: t.gorunum, planSurumu: t.plan_surumu, gecerlilik: t.gecerlilik,
-    istenenTermin: t.istenen_termin, yerlesim: terminYerlesimi(t.istenen_termin, t.yerlesim), planTermini: t.plan_termini, termin: t.termin, karOrani: t.kar_orani, maliyetToplami: t.maliyet_toplami,
+    istenenTermin: t.istenen_termin, yerlesim: terminYerlesimi(t.istenen_termin, t.yerlesim), baslangic: t.baslangic,
+    planTermini: t.plan_termini, termin: t.termin, karOrani: t.kar_orani, maliyetToplami: t.maliyet_toplami,
     kayanSayisi: t.kayan_sayisi, gecikenSayisi: t.geciken_sayisi, onayGerekli: t.onay_gerekli,
     onaylayan: t.onaylayan_id === null ? null : (adlar.get(t.onaylayan_id) ?? null), onayAni: t.onay_ani,
     olusturan: adlar.get(t.olusturan_id) ?? null, olusturma: t.olusturma,

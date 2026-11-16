@@ -211,12 +211,16 @@ export const karOraniSemasi = z.string().trim().regex(ORAN, 'Kâr oranı en çok
 // 3301: termin yerleşimi. 'arkaya': plan dondurulur, teklif mevcut yükün ardına eklenir, hiçbir sipariş kaymaz; istenen termin verilirse
 // yalnız yetişip yetişmediği söylenir. 'geriye': istenen terminden geriye en geç başlamayla, atölye yeniden dağıtır; geciken sipariş
 // plancı onayı ister (63 b). Verilmezse istenen terminin varlığından çıkar (boş: arkaya, dolu: geriye); bu, 3301'den önceki davranıştır.
-export const TERMIN_YERLESIMLERI = ['arkaya', 'geriye'] as const;
+// 3326 'baslat': plan dondurulur, teklif başlangıç gününden önce başlamaz (malzeme, müşteri onayı); kimse kaymaz, onay doğmaz.
+export const TERMIN_YERLESIMLERI = ['arkaya', 'geriye', 'baslat'] as const;
 export const GERIYE_TERMIN_ZORUNLU = 'Terminden geriye yerleşimde istenen termin zorunlu.';
+export const BASLAT_TARIHI_ZORUNLU = 'Seçilen günde başlatmada başlangıç günü zorunlu.';
 const yerlesimAlani = z.enum(TERMIN_YERLESIMLERI).nullish().transform((y) => y ?? null);
-const yerlesimDenetimi = (d: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null }, ctx: z.RefinementCtx): void => {
+const yerlesimDenetimi = (d: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null; baslangic: string | null }, ctx: z.RefinementCtx): void => {
   if (d.yerlesim === 'geriye' && d.istenenTermin === null) ctx.addIssue({ code: 'custom', path: ['istenenTermin'], message: GERIYE_TERMIN_ZORUNLU });
+  if (d.yerlesim === 'baslat' && d.baslangic === null) ctx.addIssue({ code: 'custom', path: ['baslangic'], message: BASLAT_TARIHI_ZORUNLU });
 };
+const baslangicAlani = tarihSemasi.nullish().transform((t) => t ?? null);
 export const terminYerlesimi = (istenenTermin: string | null, yerlesim: TerminYerlesimi | null): TerminYerlesimi =>
   yerlesim ?? (istenenTermin === null ? 'arkaya' : 'geriye');
 
@@ -225,6 +229,7 @@ export const planTaslagiGovdesi = z.object({
   karOrani: karOraniSemasi,
   istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
   yerlesim: yerlesimAlani,
+  baslangic: baslangicAlani,
 }).superRefine(yerlesimDenetimi);
 export const PLAN_TASLAGI_GECERLILIK = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
 export const PLAN_TASLAGI_TERMINI = 'Plan taslağıyla verilen sürümün termini denemeden gelir; termin elle girilmez.';
@@ -382,11 +387,13 @@ export const terminDenemesiSorgusu = z.object({
   gecerlilik: tarihSemasi.optional().transform((t) => t ?? null),
   istenenTermin: tarihSemasi.optional().transform((t) => t ?? null),
   yerlesim: yerlesimAlani,
+  baslangic: baslangicAlani,
 }).superRefine(yerlesimDenetimi);
 export const denemeTaslagiGovdesi = z.object({
   gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
   istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
   yerlesim: yerlesimAlani,
+  baslangic: baslangicAlani,
   karOrani: karOraniSemasi,
 }).superRefine(yerlesimDenetimi);
 export const terminOnayGovdesi = z.object(beklenenSurum);
@@ -454,6 +461,7 @@ export const terminDenemesiCevabi = z.object({
   gecerlilik: tarihSemasi.nullable(),
   istenenTermin: tarihSemasi.nullable(),
   yerlesim: z.enum(TERMIN_YERLESIMLERI),
+  baslangic: tarihSemasi.nullable(),
   planTermini: tarihSemasi.nullable(),
   // İstenen termin varsa odur, yoksa plan termini; 59 a: geçerlilik tarihinden itibaren gün olarak da yazılır.
   termin: tarihSemasi.nullable(),
@@ -519,6 +527,7 @@ export const planTaslagiSemasi = z.object({
   gecerlilik: tarihSemasi.nullable(),
   istenenTermin: tarihSemasi.nullable(),
   yerlesim: z.enum(TERMIN_YERLESIMLERI),
+  baslangic: tarihSemasi.nullable(),
   planTermini: tarihSemasi.nullable(),
   termin: tarihSemasi.nullable(),
   karOrani: tutar,

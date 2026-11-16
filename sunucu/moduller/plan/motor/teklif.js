@@ -18,10 +18,10 @@ function teklifCalismaGunu(D, gun) {
 }
 /* adimAdetleri (1527): adımın işleyeceği adet, ürün rotasının sırasıyla (dal adımı çarpanla, 1257 a; sunucu uretim-emirleri'nin kuralıyla
    verir). Gerçek emirdeki gibi yalnız sipariş adedinden farklı olan D.opAdet'e yazılır; dizi rotayla aynı uzunlukta değilse yok sayılır. */
-function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri, yon) {
+function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri, yon, serbest) {
   s.D.siparisler = s.D.siparisler.filter(x => x.id !== id);
   applyEvent(s, { tip: 'acil', urun, adet, termin, oncelik, gelir: null });
-  const yeni = s.D.siparisler[s.D.siparisler.length - 1]; yeni.id = id; if (yon) yeni.yon = yon;
+  const yeni = s.D.siparisler[s.D.siparisler.length - 1]; yeni.id = id; if (yon) yeni.yon = yon; if (serbest) yeni.serbest = serbest;
   const y = Object.assign({}, s.D.opAdet || {});
   for (const k of Object.keys(y)) if (k.startsWith(id + '.')) delete y[k];
   const u = (s.D.urunler || []).find(x => x.id === urun), rota = (u && u.rota) || [];
@@ -31,8 +31,10 @@ function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri, yon) {
 /* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet, adimAdetleri? }], termin: 'GGGG-AA-GG SS:DD' | null,
    taslaklar: [{ id, kalemler: [{ id, urun, adet, termin }], yerlesim: { islemId: { m, S } } }], haric: düzenlenen taslak kimliği | null,
    tamponGun: plan termini için bitişe eklenen gün, gecerlilik: 'GGGG-AA-GG' | null (plan şeridinin penceresi için),
-   yerlesim: 'arkaya' | 'geriye' | yok (3301; yoksa terminden çıkar: termin yoksa arkaya, varsa geriye) }.
+   yerlesim: 'arkaya' | 'geriye' | 'baslat' | yok (3301; yoksa terminden çıkar: termin yoksa arkaya, varsa geriye),
+   baslangic: 'GGGG-AA-GG' | null (yalnız baslat'ta) }.
    arkaya: plan dondurulur ('sabit'), kalem ileri planlanır; termin verildiyse yalnız yetişip yetişmediği ölçülür, kimse kaymaz.
+   baslat (3326): arkaya gibi, ama kalem başlangıç gününden önce başlamaz (siparişin serbest bırakılma anı).
    geriye: atölye yeniden dağıtır ('dagit'), kalem terminden geriye en geç başlamayla planlanır (3282 1c yönü, planın yönünden bağımsız). */
 function teklifDene(st0, taban0, istek) {
   const s = clone(st0); const taban = taban0 && taban0.ops ? clone({ ops: taban0.ops }) : null;
@@ -52,11 +54,12 @@ function teklifDene(st0, taban0, istek) {
   }
   const tabanE = taban ? evaluate(taban, s, null, false) : null;
   const istenenVar = istek.termin != null;
-  const farkli = istenenVar && istek.yerlesim !== 'arkaya';
+  const farkli = istenenVar && istek.yerlesim !== 'arkaya' && istek.yerlesim !== 'baslat';
+  const serbest = istek.yerlesim === 'baslat' && istek.baslangic ? `${istek.baslangic} 00:00` : null;
   const sonGun = HDAYS * 24 - 1;
   /* Arkaya eklemede yön ileridir: planın yönü geriyse (3282 1c) termin olarak verilen ufkun sonu kalemi oraya iterdi. İstenen termin
      arkaya eklemede kaleme termin olarak verilmez: dondurulmamış (tabanda olmayan) siparişlerin önüne geçip onları kaydırırdı; yalnız ölçülür. */
-  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri, farkli ? 'geri' : 'ileri');
+  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri, farkli ? 'geri' : 'ileri', serbest);
   const satinalma = {}; const eksik = {};
   for (const k of istek.kalemler) { satinalma[k.id] = []; eksik[k.id] = []; }
   { const cx0 = compile(s);

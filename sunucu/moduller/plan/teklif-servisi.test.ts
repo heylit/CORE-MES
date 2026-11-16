@@ -139,6 +139,17 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     assert.match(geriye.kalemler[0]?.bitis ?? '', /^2026-10-20T/);
   });
 
+  // 3326: başlangıç günü servisten motora geçer; geçmezse 'baslat' sessizce arkaya ekleme olur.
+  test('3326: seçilen günde başlatmada kalemin ilk işlemi başlangıç gününden önce değildir', async () => {
+    const termsiz = await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI));
+    const bas = await vt().tx((db) => teklifDene(db, kullanici, girdi({ yerlesim: 'baslat', baslangic: '2026-10-27' }), SIMDI));
+    assert.ok(termsiz && bas);
+    const gun8 = planAni('2026-10-19', 8 * 24);
+    assert.ok((termsiz.kalemler[0]?.islemler[0]?.baslangic ?? '') < gun8, 'başlangıç günü olmadan daha önce başlar');
+    assert.ok(bas.kalemler[0]?.islemler.every((o) => o.baslangic >= gun8), JSON.stringify(bas.kalemler[0]?.islemler));
+    assert.deepEqual(bas.kayan, []);
+  });
+
   test('geçerli satış taslağı yerinde kalır, süresi dolan taslak denemeye girmez', async () => {
     const yer = { makineId: String(makineId), baslangic: '2026-10-28T05:00:00.000Z' };
     const taslak = (id: string, gecerlilik: string) => ({ id, gecerlilik, kalemler: [{ malzemeNo: 50, adet: 2, termin: '2026-11-06', yerlesim: { 10: yer } }] });

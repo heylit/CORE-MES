@@ -113,6 +113,35 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.equal(geriye?.kalemler[0]?.ulasir, true);
   });
 
+  test('3326: seçilen günde başlatmada plan dondurulur, kimse kaymaz; kalem başlangıç gününden önce başlamaz', async () => {
+    const arkasiz = await teklifDenemesi(istek({}));
+    const bas = await teklifDenemesi(istek({ yerlesim: 'baslat', baslangic: '2026-10-28' }));
+    assert.ok(arkasiz && bas);
+    assert.deepEqual(bas.kayan, []);
+    const ilk = Math.min(...(bas.kalemler[0]?.islemler ?? []).map((o) => o.S));
+    // planın günü 0 = 2026-10-19; 28 Ekim dokuzuncu gündür
+    assert.ok(ilk >= 9 * 24, `ilk işlem ${String(ilk)}`);
+    assert.ok((bas.kalemler[0]?.bitis ?? 0) > (arkasiz.kalemler[0]?.bitis ?? 0), 'arkaya eklemeden sonra biter');
+    // başlangıç günü yalnız baslat'ta okunur
+    const yok = await teklifDenemesi(istek({ yerlesim: 'arkaya', baslangic: '2026-10-28' }));
+    assert.equal(yok?.kalemler[0]?.bitis, arkasiz.kalemler[0]?.bitis);
+  });
+
+  test('3326: seçilen günde başlatmada istenen termin yalnız ölçülür: kalem ileri yerleşir, kimse kaymaz, taban işlemleri yerinde kalır', async () => {
+    const bas = await teklifDenemesi(istek({ yerlesim: 'baslat', baslangic: '2026-10-21' }));
+    const terminli = await teklifDenemesi(istek({ yerlesim: 'baslat', baslangic: '2026-10-21', termin: '2026-11-13 23:00' }));
+    assert.ok(bas && terminli);
+    assert.deepEqual(terminli.kayan, []);
+    // ileri yerleşim: termin verilse de kalem başlangıç gününden ileri dizilir, termine geriye yaslanmaz
+    assert.equal(terminli.kalemler[0]?.bitis, bas.kalemler[0]?.bitis);
+    assert.equal(terminli.kalemler[0]?.ulasir, true);
+    // şerit penceresi termine göre uzar; tabanın kısa penceredeki sipariş blokları uzun pencerede aynı yerdedir
+    const siparis = (r: NonNullable<typeof bas>) => (r.plan?.bloklar ?? []).filter((b) => b.tur === 'siparis').map((b) => JSON.stringify(b));
+    const uzun = new Set(siparis(terminli));
+    assert.ok(siparis(bas).length > 0);
+    assert.ok(siparis(bas).every((b) => uzun.has(b)), 'taban işlemleri yerinde');
+  });
+
   test('istenen termin yoksa plan dondurulur: başka siparişin bitişi değişmez, kalem arkaya yerleşir ve plan termini çalışma gününe düşer', async () => {
     const r = await teklifDenemesi(istek({}));
     assert.ok(r);
