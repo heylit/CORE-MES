@@ -23,7 +23,7 @@ namespace LogoYardimcisi
             "LG_<f>_PURCHOFFER.CLIENTREF, NETTOTAL, TRCURR, TRRATE", "LG_<f>_PURCHOFFERLN.STOCKREF, LINETYPE, AMOUNT, PRICE, UOMREF",
             "LG_<f>_ITEMS.ACTIVE (0 kullanımda)", "LG_<f>_<d>_GNTOTST.STOCKREF, INVENNO (-1 bütün ambarların toplamı), ONHAND",
             "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
-            "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects ACTIVE alanı (malzeme ve hizmet kartı) kart pasife almada",
+            "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects RECORD_STATUS alanı (malzeme ve hizmet kartı) kart pasife almada",
             "LG_<f>_<d>_STLINE.DATE_, TRCODE (1 alış), IOCODE (1, 2 giriş; 3, 4 çıkış), CANCELLED, SOURCEINDEX, PRICE, PRCURR, PRPRICE, CLIENTREF (2961-D4 okumaları)",
             "LG_<f>_<d>_ORFICHE.DATE_; LG_<f>_<d>_ORFLINE.PRICE, PRPRICE, VAT, UOMREF, DUEDATE, LINEEXP; LG_<f>_SRVCARD.DEFINITION_ satır adı (2987 sipariş içeriği; ölçüm bekliyor, kart 2980 b)",
             "LG_<f>_<d>_ORFLINE.UOMREF -> LG_<f>_UNITSETL.CODE satır birimi (3007: düzenleme birimi yalnız değiştiyse yazar; ölçüm bekliyor, kart 2980 b)",

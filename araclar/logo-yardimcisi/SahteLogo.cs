@@ -56,9 +56,9 @@ namespace LogoYardimcisi
             { Nesne.TalepKarsilama, K("DEMAND_REFERENCE", "CHILD_TYPE", "CHILD_REFERENCE", "LINE_TYPE", "FICHE_TYPE", "MEET_AMNT", "MAIN_MEET_AMNT", "ORD_PERIOD",
                 "ITEM_CODE", "MAIN_ITEM_CODE", "U_EDIT", "MAIN_U_EDIT", "ARP_CODE", "PARENTTYPE", "DET_LINE") },
             { Nesne.SatinAlmaSiparisi, K("DATE", "DOC_NUMBER", "PROJECT_CODE", "OHP_CODE", "PAYMENT_CODE", "SOURCE_WH", "ORDER_STATUS", "CANCELLED") },
-            { Nesne.Malzeme, K("NAME", "NAME3", "NAME4", "ACTIVE") },
-            { Nesne.AlinanHizmet, K("DESCRIPTION", "ACTIVE") },
-            { Nesne.VerilenHizmet, K("DESCRIPTION", "ACTIVE") },
+            { Nesne.Malzeme, K("NAME", "NAME3", "NAME4", Islemler.KayitDurumuAlani) },
+            { Nesne.AlinanHizmet, K("DESCRIPTION", Islemler.KayitDurumuAlani) },
+            { Nesne.VerilenHizmet, K("DESCRIPTION", Islemler.KayitDurumuAlani) },
             { Nesne.TalepFisi, K("STATUS") },
         };
 
@@ -428,7 +428,7 @@ namespace LogoYardimcisi
                 var k = Kartlar.FirstOrDefault(x => x.Ref == kayit);
                 if (k == null) return new LogoHatasi(-1, "Read false");
                 if (baslik.Var("NAME")) k.Ad = (string)baslik.Deger("NAME");
-                if (baslik.Var("ACTIVE")) k.Pasif = I(baslik.Deger("ACTIVE")) == 1;
+                if (baslik.Var(Islemler.KayitDurumuAlani)) k.Pasif = I(baslik.Deger(Islemler.KayitDurumuAlani)) == 1;
                 return null;
             }
             if (nesne == Nesne.AlinanHizmet || nesne == Nesne.VerilenHizmet)
@@ -437,7 +437,7 @@ namespace LogoYardimcisi
                 var k = Hizmetler.FirstOrDefault(x => x.Item1.Ref == kayit && x.Item2 == tur);
                 if (k == null) return new LogoHatasi(-1, "Read false");
                 if (baslik.Var("DESCRIPTION")) k.Item1.Ad = (string)baslik.Deger("DESCRIPTION");
-                if (baslik.Var("ACTIVE")) k.Item1.Pasif = I(baslik.Deger("ACTIVE")) == 1;
+                if (baslik.Var(Islemler.KayitDurumuAlani)) k.Item1.Pasif = I(baslik.Deger(Islemler.KayitDurumuAlani)) == 1;
                 return null;
             }
             if (nesne == Nesne.TalepKarsilama)
