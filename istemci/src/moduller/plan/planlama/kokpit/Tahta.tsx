@@ -43,6 +43,8 @@ export interface TahtaOzellikleri {
   yanan?: ReadonlySet<string> | null;
   // Boş tahta alanına tıklanınca seçim kalkar.
   secimiKaldir?: () => void;
+  // Tezgâhta sorun bildir (3335 a): tezgâh adına basınca o tezgâhın arıza ve bakım formu açılır; yalnız Tezgâh gözünde, fason satırında yok.
+  sorunBildir?: ((tezgah: string) => void) | null;
 }
 interface Ok extends AdimBagi { yol: string; uc: string }
 
@@ -67,6 +69,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
   const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
   const yanan = o.yanan ?? null, secimiKaldir = o.secimiKaldir;
+  const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
+  const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
   const px = SAAT_ENI[olcek];
   const en = (m.son - m.bas) * px;
   const kap = useRef<HTMLDivElement | null>(null);
@@ -350,7 +354,9 @@ export function Tahta(o: TahtaOzellikleri) {
             data-aday={adaySatirlari ? (adaySatirlari.has(r.kimlik) ? 'evet' : 'hayir') : undefined}
           >
             <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={`${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
-              <b>{r.bas}</b><small>{r.durus ?? r.alt}</small>
+              {sorunBildir && !fasonlar.has(r.kimlik)
+                ? <button type="button" className="tc-pyq-sorun" data-sorun-bildir={r.kimlik} aria-label={`${r.bas} için sorun bildir`} title={`${r.bas} · sorun bildir: arıza ya da bakım`} onClick={() => { sorunBildir(r.kimlik); }}><b>{r.bas}<Simge ad="wrench" boyut="k" /></b><small>{r.durus ?? r.alt}</small></button>
+                : <><b>{r.bas}</b><small>{r.durus ?? r.alt}</small></>}
               {goz === 'T' && m.mesai?.[r.kimlik]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[r.kimlik]!, zaman)}>+ ek mesai</i> : null}
               {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
             </div>

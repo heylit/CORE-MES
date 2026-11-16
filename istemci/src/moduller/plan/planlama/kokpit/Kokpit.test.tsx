@@ -553,6 +553,48 @@ describe('Kokpit', () => {
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
   });
 
+  // 3335 a: tahtada tezgâh adına basınca o tezgâhın arıza ve bakım formu açılır (Duruş ve mesai bölümü, aynı taslak komutu ve etki akışı).
+  it('tezgâh adından sorun bildir: Duruş ve mesai o tezgâhla açılır, tür alanı odaktadır; başka tezgâha basınca tezgâh değişir; fason satırında düğme yok', () => {
+    ac();
+    const dugmeler = [...document.querySelectorAll<HTMLElement>('.tc-pyq-satir [data-sorun-bildir]')];
+    expect(dugmeler.length).toBeGreaterThan(1);
+    const satirlar = [...document.querySelectorAll<HTMLElement>('.tc-pyq-satir[data-satir]')].map((x) => x.dataset.satir ?? '');
+    expect(satirlar.filter((x) => x.startsWith('@')).length).toBeGreaterThan(0);
+    expect(dugmeler.map((x) => x.dataset.sorunBildir)).toEqual(satirlar.filter((x) => !x.startsWith('@')));
+    const ikinci = dugmeler[1]!, kimlik = ikinci.dataset.sorunBildir!;
+    expect(ikinci.getAttribute('aria-label')).toMatch(/ için sorun bildir$/);
+    fireEvent.click(ikinci);
+    const panel = screen.getByRole('complementary', { name: 'Duruş ve mesai' });
+    expect((within(panel).getByLabelText('Tezgâh') as HTMLSelectElement).value).toBe(kimlik);
+    expect(document.activeElement).toBe(within(panel).getByLabelText('Tür'));
+    fireEvent.click(dugmeler[0]!);
+    expect((within(panel).getByLabelText('Tezgâh') as HTMLSelectElement).value).toBe(dugmeler[0]!.dataset.sorunBildir);
+    // Telefondaki listede aynı düğme tezgâh başlığındadır.
+    const listede = [...document.querySelectorAll<HTMLElement>('.tc-pyq-liste [data-sorun-bildir]')].map((x) => x.dataset.sorunBildir ?? '');
+    expect(listede).toContain(kimlik);
+    expect(listede.some((x) => x.startsWith('@'))).toBe(false);
+    fireEvent.click(document.querySelector<HTMLElement>(`.tc-pyq-liste [data-sorun-bildir="${kimlik}"]`)!);
+    expect((within(panel).getByLabelText('Tezgâh') as HTMLSelectElement).value).toBe(kimlik);
+    // Menüden açılınca istek taşınmaz: bölüm ilk tezgâhla gelir.
+    fireEvent.click(screen.getByRole('button', { name: 'Duruş ve mesaiyi kapat' }));
+    fireEvent.click(ikinci);
+    fireEvent.click(arac('Duruş ve mesai'));
+    fireEvent.click(arac('Duruş ve mesai'));
+    expect((within(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).getByLabelText('Tezgâh') as HTMLSelectElement).value).toBe(dugmeler[0]!.dataset.sorunBildir);
+  });
+
+  it('sorun bildir düğmesi yazamayan kişide ve Sipariş gözünde yoktur', () => {
+    ac({}, false);
+    expect(document.querySelectorAll('.tc-pyq-satir[data-satir]').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-sorun-bildir]')).toBeNull();
+    cleanup();
+    ac();
+    expect(document.querySelector('.tc-pyq-satir [data-sorun-bildir]')).not.toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Sipariş' }));
+    expect(document.querySelectorAll('.tc-pyq-satir[data-satir]').length).toBeGreaterThan(0);
+    expect(document.querySelector('.tc-pyq-satir [data-sorun-bildir]')).toBeNull();
+  });
+
   it('arızalı tezgâh varken üst şeritte sayılı Arıza işareti durur ve Duruş ve mesaiyi açar; yokken görünmez', () => {
     ac();
     expect(screen.queryByRole('button', { name: /Arıza$/ })).toBeNull();
@@ -563,6 +605,17 @@ describe('Kokpit', () => {
     expect(isaret.textContent).toBe('1Arıza');
     fireEvent.click(isaret);
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
+    // Tezgâh adından gelen istek bu düğmeyle taşınmaz: bölüm kapanıp yeniden açılınca ilk tezgâhla gelir.
+    const dugmeler = [...document.querySelectorAll<HTMLElement>('.tc-pyq-satir [data-sorun-bildir]')];
+    const tezgah = (): string => (within(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).getByLabelText('Tezgâh') as HTMLSelectElement).value;
+    const ilkTezgah = tezgah();
+    const baska = dugmeler.find((x) => x.dataset.sorunBildir !== ilkTezgah)!;
+    fireEvent.click(baska);
+    expect(tezgah()).toBe(baska.dataset.sorunBildir);
+    fireEvent.click(isaret);
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
+    fireEvent.click(isaret);
+    expect(tezgah()).toBe(ilkTezgah);
   });
 
   it('Tüm planın yönü Araçlar menüsündedir (3335-2): iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {

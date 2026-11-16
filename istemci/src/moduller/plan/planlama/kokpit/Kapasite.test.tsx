@@ -57,6 +57,29 @@ describe('Kokpit kapasite bölümü (3282 2a-1)', () => {
     await vi.waitFor(() => { expect(document.activeElement?.textContent).toBe('Bakım 20.10 Sal 08:15 → 20.10 Sal 12:00'); });
   });
 
+  // 3335 a: tezgâh adından gelinen istek. Etki gösterilirken bekleyen deneme o tezgâhındır; yeni istek tezgâhı değiştirmez.
+  it('istenen tezgâhla açılır; yeni istek tezgâhı değiştirir, etki gösterilirken değiştirmez', async () => {
+    const c = { ...ornekCalisma(), down: [] } as unknown as PlanlamaCalismasi;
+    const { t } = sahteTaslak(c.dataVer);
+    const ciz = (istenen: { tezgah: string; n: number } | null) => <Kapasite c={c} m={{ tezgahlar: TEZGAHLAR, simdi: 10 }} taslak={t} yazabilir zaman={(x) => saatYaz(c.D, x)} kapat={vi.fn()} istenen={istenen} />;
+    const { rerender } = render(ciz({ tezgah: 'ORN-T2', n: 1 }));
+    const panel = screen.getByRole('complementary', { name: 'Duruş ve mesai' });
+    const tezgah = () => (within(panel).getByLabelText('Tezgâh') as HTMLSelectElement).value;
+    expect(tezgah()).toBe('ORN-T2');
+    expect(document.activeElement).toBe(within(panel).getByLabelText('Tür'));
+    rerender(ciz({ tezgah: 'ORN-T1', n: 2 }));
+    expect(tezgah()).toBe('ORN-T1');
+    // Fason ya da bilinmeyen tezgâh isteği yok sayılır.
+    rerender(ciz({ tezgah: '~fason', n: 3 }));
+    expect(tezgah()).toBe('ORN-T1');
+    fireEvent.change(within(panel).getByLabelText('Başlangıç'), { target: { value: '2026-10-20T08:00' } });
+    fireEvent.change(within(panel).getByLabelText('Bitiş'), { target: { value: '2026-10-20T12:00' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Duruş ekle, etkisini gör' }));
+    await screen.findByRole('region', { name: 'Duruşun etkisi' });
+    rerender(ciz({ tezgah: 'ORN-T2', n: 4 }));
+    expect(tezgah()).toBe('ORN-T1');
+  });
+
   it('silme taslağa duruş-sil yazar; Vazgeç geri alır', async () => {
     const { t, yazilan, panel } = kur();
     fireEvent.click(within(panel).getByRole('button', { name: /duruşunu sil$/ }));
