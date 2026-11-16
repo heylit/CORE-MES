@@ -1,9 +1,10 @@
 import { Suspense, lazy, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { Bag, BelgeAyrintisi, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
-import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import type { Bag, BelgeAyrintisi, BelgeSilmeCevabi, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { revKoduMetni, revizyonAdi } from './revizyon-kodu.ts';
 import { ikiliOku, kaydet } from './dosya-aktarimi.ts';
@@ -21,7 +22,7 @@ const Goruntuleyici = lazy(() => import('./goruntu/Goruntuleyici.tsx'));
 // Bağlı kayıt okunur adıyla görünür; adı gelmeyen kayıtta (sahibi ad vermiyor ya da kayıt silinmiş) kimlik yazılır.
 const bagHedefi = (b: Pick<Bag, 'hedefAdi' | 'hedefId'>): string => b.hedefAdi ?? `#${String(b.hedefId)}`;
 
-type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | { sil: Revizyon } | { yayinla: Revizyon } | { bagKaldir: Bag } | null;
+type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | 'belgeSil' | { sil: Revizyon } | { yayinla: Revizyon } | { bagKaldir: Bag } | null;
 
 const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
   pdf: 'application/pdf', png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp', step: 'model/step', stl: 'model/stl', iges: 'model/iges',
@@ -33,7 +34,7 @@ const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
 
 interface OnayOzellikleri {
   belge: BelgeAyrintisi;
-  acik: Exclude<Acik, 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | null>;
+  acik: Exclude<Acik, 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'belgeSil' | null>;
   kapat: () => void;
   // Yayınlama başarılı olunca, yayınlanan revizyonun güncel hâliyle.
   yayinlandi: (belge: BelgeAyrintisi, revizyonId: number) => void;
@@ -58,7 +59,66 @@ function Onay({ belge, acik, kapat, yayinlandi }: OnayOzellikleri) {
   return (
     <OnayPenceresi acik baslik={baslik} onayMetni={onayMetni} tehlikeli={tehlikeli} yukleniyor={komut.yukleniyor} onayla={() => { komut.gonder(govde); }} vazgec={kapat}>
       <p>{metin}</p>
+      {acik === 'arsiv' && belge.aktif && <ArsivEtkisi baglar={belge.baglar} />}
       {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+    </OnayPenceresi>
+  );
+}
+
+// 3324 a: arşivlenen çizim bağlı kayıtlarda görünmez; Arkon paketine alınmışsa o paketle iş başlatılamaz (Denetim #34).
+function ArsivEtkisi({ baglar }: { baglar: readonly Bag[] }) {
+  return (
+    <>
+      {baglar.length > 0 && (
+        <>
+          <p>Kullanıldığı yerler:</p>
+          <ul className="tc-cz-silinecek">{baglar.map((b) => <li key={`${b.hedefModul}-${String(b.hedefId)}`}>{BAG_ADI[b.hedefModul]} {bagHedefi(b)}</li>)}</ul>
+        </>
+      )}
+      <p className="tc-cz-uyari tc-cz-simgeli">
+        <Simge ad="alert" /><span>Arşivlenen çizim bağlı kayıtlarda görünmez. Üretim Hazırlık paketine alınmışsa o paketle iş başlatılamaz; paket yenilenmelidir.</span>
+      </p>
+    </>
+  );
+}
+
+// 3324 a: yalnız hiç yayına girmemiş belge silinir; onay silinecekleri sayar. Başarıda belgenin türünün listesine dönülür.
+function BelgeSil({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }) {
+  const istemci = useQueryClient();
+  const yonlendir = useNavigate();
+  const { bildir } = useBildirim();
+  const listeyeDon = async (ileti: string) => {
+    istemci.removeQueries({ queryKey: anahtarlar.ayrinti(belge.id) });
+    await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+    bildir('tamam', ileti);
+    void yonlendir(belge.aktif ? `/cizimler/${belge.tur}` : '/cizimler/arsiv', { replace: true });
+  };
+  const komut = useTekGonderim({
+    mutationFn: () => api.post<BelgeSilmeCevabi>(`/cizimler/${belge.id}/sil`, { surum: belge.surum }),
+    onSuccess: (cevap) => listeyeDon(`${cevap.ad} silindi`),
+    // Komut tekrar korumalı değil: yanıtı kaybolan ilk istek belgeyi silmişse yinelenen istek 404 alır.
+    // Öbür retlerde (bu arada yayınlandı ya da değişti) pencere kapanır, ileti bildirimde kalır ve belge yeniden okunur.
+    onError: (e) => {
+      if (e instanceof ApiHatasi && e.durum === 404) { void listeyeDon(`${belge.ad} zaten silinmiş`); return; }
+      kapat();
+      bildir('hata', hataIletisi(e, 'Belge silinemedi'));
+      void istemci.invalidateQueries({ queryKey: anahtarlar.ayrinti(belge.id) });
+    },
+  });
+  return (
+    <OnayPenceresi
+      acik baslik={`${belge.ad} silinsin mi?`} onayMetni="Sil" tehlikeli yukleniyor={komut.isPending}
+      onayla={() => { komut.mutate(undefined); }} vazgec={kapat}
+    >
+      <p>Silinecekler:</p>
+      <ul className="tc-cz-silinecek">
+        {belge.revizyonlar.map((r) => <li key={r.id}>{revizyonAdi(r)} (taslak) ve dosyası <span className="mono">{r.dosyaAdi}</span></li>)}
+        {belge.baglar.map((b) => <li key={`${b.hedefModul}-${String(b.hedefId)}`}>Bağ: {BAG_ADI[b.hedefModul]} {bagHedefi(b)}</li>)}
+      </ul>
+      <p className="tc-cz-hata tc-cz-simgeli"><Simge ad="alert" /><span>Bu işlem geri alınamaz.</span></p>
+      <p className="tc-cz-ipucu">
+        Belge hiç yayınlanmadığı için üretimde, Üretim Hazırlık'ta ve terminalde kullanılmamıştır. Kimin, ne zaman, hangi dosyayı sildiği denetim kaydında kalır.
+      </p>
     </OnayPenceresi>
   );
 }
@@ -111,6 +171,7 @@ export function BelgeSayfasi() {
   const gosterilen = belge.revizyonlar.find((r) => r.id === seciliId)
     ?? belge.revizyonlar.find((r) => r.durum === 'yayinda') ?? belge.revizyonlar[0];
   const degisir = yazar && belge.aktif;
+  const yalnizTaslak = belge.revizyonlar.every((r) => r.durum === 'taslak');
 
   return (
     <section className="tc-cz">
@@ -119,12 +180,15 @@ export function BelgeSayfasi() {
         <h1 className="tc-cz-baslik"><Simge ad={TUR_SIMGESI[belge.tur]} />{belge.ad}</h1>
         <Rozet ton="bilgi">{TUR_ADI[belge.tur]}</Rozet>
         {!belge.aktif && <Rozet ton="pasif">Arşivde</Rozet>}
+        {yalnizTaslak && <Rozet ton="uyari">Yalnız taslak</Rozet>}
         <div className="tc-cz-bas-sag">
           {degisir && <Dugme simge="edit" onClick={() => { acikYaz('duzenle'); }}>Düzenle</Dugme>}
           {yazar && <Dugme simge="box" onClick={() => { acikYaz('arsiv'); }}>{belge.aktif ? 'Arşivle' : 'Arşivden çıkar'}</Dugme>}
+          {yazar && yalnizTaslak && <Dugme tur="tehlike" simge="trash" onClick={() => { acikYaz('belgeSil'); }}>Belgeyi sil</Dugme>}
           {degisir && <Dugme tur="birincil" simge="upload" onClick={() => { acikYaz('revizyon'); }}>Yeni revizyon</Dugme>}
         </div>
       </header>
+      {yazar && !yalnizTaslak && <p className="tc-cz-ipucu tc-cz-simgeli"><Simge ad="help" /><span>Yayınlanmış belge silinmez; izlenebilirlik kaydıdır. Kullanımdan kaldırmak için arşivleyin.</span></p>}
 
       <div className="tc-cz-duzen">
         <Kart baslik={gosterilen ? `${revizyonAdi(gosterilen)} · ${gosterilen.dosyaAdi}` : 'Görüntü'}>
@@ -212,10 +276,11 @@ export function BelgeSayfasi() {
       </div>
 
       {acik === 'duzenle' && <BelgeDuzenle belge={belge} kapat={kapat} />}
+      {acik === 'belgeSil' && <BelgeSil belge={belge} kapat={kapat} />}
       {acik === 'revizyon' && <RevizyonEkle belge={belge} kapat={kapat} />}
       {acik === 'bag' && <MalzemeBagla belge={belge} kapat={kapat} />}
       {acik === 'istasyon' && <IstasyonaBagla belge={belge} kapat={kapat} />}
-      {acik !== null && acik !== 'duzenle' && acik !== 'revizyon' && acik !== 'bag' && acik !== 'istasyon' && <Onay belge={belge} acik={acik} kapat={kapat} yayinlandi={yayinlandi} />}
+      {acik !== null && acik !== 'duzenle' && acik !== 'revizyon' && acik !== 'bag' && acik !== 'istasyon' && acik !== 'belgeSil' && <Onay belge={belge} acik={acik} kapat={kapat} yayinlandi={yayinlandi} />}
     </section>
   );
 }

@@ -155,6 +155,15 @@ export async function revizyonSil(db: Db, belgeId: number, revizyonId: number): 
   await db.sorgu('DELETE FROM belge_merkezi_revizyon WHERE belge_id = $1 AND id = $2', [belgeId, revizyonId]);
 }
 
+// 3324 a: belge ve bütün satırları; sıra yabancı anahtarlara göre (önizleme, revizyon, bağ, belge). Yayına girmiş revizyonu
+// tetikleyici reddeder; dışarıdan belgeye bağlı satır (Kalite resmi) yabancı anahtarla durdurur.
+export async function belgeSil(db: Db, id: number): Promise<void> {
+  await db.sorgu('DELETE FROM belge_merkezi_onizleme o USING belge_merkezi_revizyon r WHERE r.id = o.revizyon_id AND r.belge_id = $1', [id]);
+  await db.sorgu('DELETE FROM belge_merkezi_revizyon WHERE belge_id = $1', [id]);
+  await db.sorgu('DELETE FROM belge_merkezi_bag WHERE belge_id = $1', [id]);
+  await db.sorgu('DELETE FROM belge_merkezi_belge WHERE id = $1', [id]);
+}
+
 export interface BagKaydi {
   hedefModul: BagModulu;
   hedefId: number;

@@ -10,7 +10,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { KayitAramaIstegi } from '#paylasilan/kayit-aramasi.ts';
 import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import type {
-  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, MalzemeBelgeEkleGovdesi,
+  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeSilmeCevabi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, MalzemeBelgeEkleGovdesi,
   MalzemeBelgeleriCevabi, MalzemeRevizyonEkleGovdesi, MalzemeSecimiCevabi, OnizlemeGovdesi, RevizyonEkleGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { BELGE_TURLERI, ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/belge-merkezi.ts';
@@ -21,7 +21,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
   AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
-  kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
+  belgeSilmeReddi, kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -138,6 +138,34 @@ export async function revizyonSil(db: Db, id: number, revizyonId: number, surum:
     denetimEki([{ ...denetimSatiri('kaldir', kalkan), revizyon: revizyonHarfi(r.sira) }]);
   }
   return belgeAyrintisi(db, id);
+}
+
+// 3324 a: yalnız hiç yayına girmemiş belge silinir; bağları birlikte kalkar. Denetim kaydı (belge, revizyonlar, bağlar, dosyalar)
+// komutla aynı transaction'da yazılır. Belge satırı kilitli denetlenir: yayınlama da aynı satırı kilitler, arada yayın giremez.
+// Dosyaların bağı kalkar; bağı kalmayan dosyayı dosya modülü süresi dolunca siler (revizyon silmedeki yol).
+const SILME_ISLETILERI = {
+  belge_merkezi_revizyon_silinmez: ILETILER.yayinlanmisBelge,
+  kalite_merkezi_resim_belge: ILETILER.kaliteResmi,
+} as const;
+
+export async function belgeSil(db: Db, id: number, surum: number, denetimEki: DenetimEki): Promise<BelgeSilmeCevabi> {
+  const b = await kilitliBelge(db, id);
+  await surumuIlerlet(db, id, surum);
+  const revizyonlar = await sorgular.revizyonlar(db, id);
+  const ret = belgeSilmeReddi(revizyonlar.map((r) => r.durum));
+  if (ret !== null) throw cakisma(ILETILER[ret]);
+  const baglar = await sorgular.baglar(db, id);
+  await kisitKorumali(SILME_ISLETILERI, () => sorgular.belgeSil(db, id));
+  const kalkanlar = await dosyaTutamak.bagKaldir(db, kayitAnahtari(id), null);
+  for (const r of revizyonlar) kalkanlar.push(...(await dosyaTutamak.bagKaldir(db, onizlemeKaydi(id, r.id), null)));
+  denetimEki([
+    {
+      islem: 'belge-sil', belge: id, ad: b.ad, tur: b.tur, resimNo: b.resimNo, revizyon: revizyonlar.length,
+      baglar: baglar.length === 0 ? null : baglar.map((g) => `${g.hedefModul}:${g.hedefId}`).join(','),
+    },
+    ...kalkanlar.map((d) => denetimSatiri('kaldir', d)),
+  ]);
+  return { id, ad: b.ad, tur: b.tur };
 }
 
 // Önizleme belgeyi değiştirmez: sürüm ilerlemez, eşzamanlı düzenleme çatışması çıkmaz. Yeniden üretim eski karelerin yerini alır.

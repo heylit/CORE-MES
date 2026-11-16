@@ -9,6 +9,8 @@ export const ILETILER = {
   yayindaDegilIndirme: 'Yayında olmayan revizyonun dosyasını yalnız belge yazma ya da yayınlama yetkisi olan indirir.',
   taslakDegil: 'Yalnız taslak revizyon silinir.',
   sonRevizyon: 'Belgenin tek revizyonu silinemez; belgeyi arşivleyin.',
+  yayinlanmisBelge: 'Yayına girmiş belge silinmez; izlenebilirlik kaydıdır. Belgeyi arşivleyin.',
+  kaliteResmi: 'Belge Kalite Merkezi\'nde resim olarak alınmış; silinemez. Belgeyi arşivleyin.',
   ayniDosya: 'Bu dosya bu belgede zaten bir revizyon.',
   bagVar: 'Bu kayıt zaten bağlı.',
   hedefYok: 'Bağlanacak kayıt bulunamadı.',
@@ -91,6 +93,12 @@ export function silmeReddi(durum: RevizyonDurumu, revizyonSayisi: number): keyof
   if (durum !== 'taslak') return 'taslakDegil';
   if (revizyonSayisi <= 1) return 'sonRevizyon';
   return null;
+}
+
+// 3324 a: belge yalnız hiç yayına girmemişse (bütün revizyonları taslak) silinir; yayına girmiş revizyon üretimde, Arkon'da ya da
+// Kalite'de kullanılmış olabilir ve izlenebilirlik kaydıdır.
+export function belgeSilmeReddi(durumlar: readonly RevizyonDurumu[]): keyof typeof ILETILER | null {
+  return durumlar.some((d) => d !== 'taslak') ? 'yayinlanmisBelge' : null;
 }
 
 // CZ-15: önizleme yayındaki revizyona yazılır; 3B modelde taslağa da (1990 a): malzemenin resmi yüklenince oluşur, yayın yine

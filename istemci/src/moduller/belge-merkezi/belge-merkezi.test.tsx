@@ -490,6 +490,98 @@ describe('cizimler ekranları', () => {
       expect(screen.queryByRole('button', { name: ad })).toBeNull();
     }
     expect(screen.getAllByRole('button', { name: /dosyasını indir/ })).toHaveLength(2);
+    expect(screen.queryByText(/Yayınlanmış belge silinmez/)).toBeNull();
+  });
+
+  describe('3324 a belge silme', () => {
+    const TASLAK: BelgeAyrintisi = { ...AYRINTI, revizyonlar: AYRINTI.revizyonlar.filter((r) => r.durum === 'taslak') };
+    function taslakSunucusu(kullanici: Kullanici, silme: Response | null = null, belge: BelgeAyrintisi = TASLAK) {
+      const cagrilar: Cagri[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+        const yol = adres.replace('/api', '');
+        const yontem = ayar?.method ?? 'GET';
+        cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
+        if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
+        if (yontem === 'GET' && yol.startsWith('/cizimler?')) return json(200, { ...LISTE, satirlar: [] });
+        if (yontem === 'GET' && yol === '/cizimler/7') return json(200, belge);
+        if (yontem === 'POST' && yol === '/cizimler/7/sil') return silme ?? json(200, { id: 7, ad: 'Deneme flanş', tur: 'teknik-resim' });
+        return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+      }));
+      return cagrilar;
+    }
+
+    it('hiç yayına girmemiş belgede yazar "Belgeyi sil" görür; onay silinecekleri sayar, sürümle gider, türün listesine döner ve bildirir', async () => {
+      const cagrilar = taslakSunucusu(YAZAR);
+      ac('/cizimler/belge/7');
+      expect(await screen.findByText('Yalnız taslak')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Belgeyi sil' }));
+      const pencere = await screen.findByRole('dialog');
+      expect(pencere.textContent).toContain('Deneme flanş silinsin mi?');
+      expect(pencere.textContent).toContain('flans-b.pdf');
+      expect(pencere.textContent).toContain('Bağ: Malzeme kartı MM-DNM-00001 Deneme mil');
+      expect(pencere.textContent).toContain('Bağ: Malzeme kartı #42');
+      expect(pencere.textContent).toContain('Bu işlem geri alınamaz.');
+      fireEvent.click(Array.from(pencere.querySelectorAll('button')).find((d) => d.textContent === 'Sil')!);
+      await waitFor(() => {
+        expect(cagrilar.find((c) => c.yontem === 'POST')).toEqual({ yontem: 'POST', yol: '/cizimler/7/sil', govde: { surum: 3 } });
+      });
+      expect(await screen.findByText('Deneme flanş silindi')).toBeTruthy();
+      await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+      expect(cagrilar.some((c) => c.yontem === 'GET' && c.yol.startsWith('/cizimler?') && c.yol.includes('tur=teknik-resim'))).toBe(true);
+    });
+
+    it('arşivdeki taslak belge silinince Arşiv listesine dönülür', async () => {
+      const cagrilar = taslakSunucusu(YAZAR, null, { ...TASLAK, aktif: false });
+      ac('/cizimler/belge/7');
+      fireEvent.click(await screen.findByRole('button', { name: 'Belgeyi sil' }));
+      const pencere = await screen.findByRole('dialog');
+      fireEvent.click(Array.from(pencere.querySelectorAll('button')).find((d) => d.textContent === 'Sil')!);
+      expect(await screen.findByText('Deneme flanş silindi')).toBeTruthy();
+      await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'GET' && c.yol.startsWith('/cizimler?') && c.yol.includes('arsiv=evet'))).toBe(true); });
+      expect(cagrilar.some((c) => c.yol.includes('tur=teknik-resim'))).toBe(false);
+    });
+
+    it('sunucu reddederse pencere kapanır, ileti bildirimde kalır, belge yeniden okunur; 404 zaten silinmiş sayılır', async () => {
+      const cagrilar = taslakSunucusu(YAZAR, json(409, { kod: 'CAKISMA', mesaj: 'Yayına girmiş belge silinmez; izlenebilirlik kaydıdır. Belgeyi arşivleyin.' }));
+      ac('/cizimler/belge/7');
+      fireEvent.click(await screen.findByRole('button', { name: 'Belgeyi sil' }));
+      const pencere = await screen.findByRole('dialog');
+      fireEvent.click(Array.from(pencere.querySelectorAll('button')).find((d) => d.textContent === 'Sil')!);
+      expect(await screen.findByText(/Yayına girmiş belge silinmez; izlenebilirlik/)).toBeTruthy();
+      await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+      await waitFor(() => { expect(cagrilar.filter((c) => c.yontem === 'GET' && c.yol === '/cizimler/7').length).toBeGreaterThan(1); });
+      cleanup();
+      taslakSunucusu(YAZAR, json(404, { kod: 'BULUNAMADI', mesaj: 'Belge bulunamadı.' }));
+      ac('/cizimler/belge/7');
+      fireEvent.click(await screen.findByRole('button', { name: 'Belgeyi sil' }));
+      const ikinci = await screen.findByRole('dialog');
+      fireEvent.click(Array.from(ikinci.querySelectorAll('button')).find((d) => d.textContent === 'Sil')!);
+      expect(await screen.findByText('Deneme flanş zaten silinmiş')).toBeTruthy();
+    });
+
+    it('yayına girmiş belgede "Belgeyi sil" yok, yazar nedenini görür; okur taslakta da silme görmez', async () => {
+      sunucuKur(YAZAR);
+      ac('/cizimler/belge/7');
+      await screen.findByText('Görüntü 11');
+      expect(screen.queryByRole('button', { name: 'Belgeyi sil' })).toBeNull();
+      expect(screen.queryByText('Yalnız taslak')).toBeNull();
+      expect(screen.getByText(/Yayınlanmış belge silinmez/)).toBeTruthy();
+      cleanup();
+      taslakSunucusu(OKUR);
+      ac('/cizimler/belge/7');
+      await screen.findByText('Görüntü 12');
+      expect(screen.queryByRole('button', { name: 'Belgeyi sil' })).toBeNull();
+    });
+
+    it('arşivle onayı kullanıldığı yerleri ve Üretim Hazırlık uyarısını gösterir', async () => {
+      sunucuKur(YAZAR);
+      ac('/cizimler/belge/7');
+      fireEvent.click(await screen.findByRole('button', { name: 'Arşivle' }));
+      const pencere = await screen.findByRole('dialog');
+      expect(pencere.textContent).toContain('Kullanıldığı yerler:');
+      expect(pencere.textContent).toContain('Malzeme kartı MM-DNM-00001 Deneme mil');
+      expect(pencere.textContent).toContain('o paketle iş başlatılamaz');
+    });
   });
 });
 

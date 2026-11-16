@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi, kucukResimKareParametresi,
+  bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeSilmeCevabi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi, kucukResimKareParametresi,
   kucukResimlerCevabi, kucukResimSorgusu, malzemeBelgeEkleGovdesi, malzemeBelgeleriCevabi, malzemeBelgeParametresi, malzemeBelgeSurumGovdesi,
   malzemeParametresi, malzemeRevizyonEkleGovdesi, malzemeRevizyonParametresi, malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi,
   onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
@@ -101,6 +101,16 @@ export const uclar = [
     govde: surumGovdesi,
     cevap: belgeAyrintisi,
     isle: ({ db, parametre, govde }) => servis.belgeArsivi(db, parametre.id, govde.surum, true),
+  }),
+  // 3324 a: yalnız hiç yayına girmemiş belge; yetki arşivlemeyle aynı.
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/:id/sil',
+    yetki: 'belge-merkezi.yaz',
+    parametre: idParametresi,
+    govde: surumGovdesi,
+    cevap: belgeSilmeCevabi,
+    isle: ({ db, parametre, govde, denetimEki }) => servis.belgeSil(db, parametre.id, govde.surum, denetimEki),
   }),
   uc({
     yontem: 'POST',
