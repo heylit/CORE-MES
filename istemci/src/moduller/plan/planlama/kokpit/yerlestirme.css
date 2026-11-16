@@ -94,3 +94,47 @@
   .tc-pyq-rota li { display: block; }
   .tc-pyq-yerler li { flex-basis: 100%; }
 }
+
+/* 3318: 2. bölüm tablo. Satır bir operasyondur; tezgâh ve başlangıç satırda girilir. Dar ekranda satır karta döner. */
+.tc-pyq-bolum-sag { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.tc-pyq-optablo { grid-column: 1 / -1; width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-pyq-optablo th { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.tc-pyq-optablo td { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); vertical-align: middle; }
+.tc-pyq-optablo tr[data-secili] > td { background: color-mix(in oklab, var(--hazard) 14%, transparent); }
+.tc-pyq-optablo tr[data-secili] > td:first-child { box-shadow: inset var(--cizgi-kalin) 0 0 var(--ink); }
+.tc-pyq-optablo td[data-ad="Operasyon"] button { min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid transparent; border-radius: var(--yari-1); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tc-pyq-optablo td[data-ad="Operasyon"] button[aria-pressed="true"] { border-color: var(--ink); }
+.tc-pyq-optablo td[data-ad="Operasyon"] button[aria-current="true"] { border-color: var(--ink); }
+.tc-pyq-optablo td[data-ad="Operasyon"] button:disabled { cursor: default; }
+.tc-pyq-optablo .tc-alan-kutu { width: 100%; min-width: 0; min-height: var(--dokunma); }
+.tc-pyq-optablo small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-optablo [data-ongoru] { color: var(--muted); }
+.tc-pyq-optablo .tc-pyq-mono { font-family: var(--font-mono); white-space: nowrap; }
+.tc-pyq-optablo-not { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pyq-optablo-not > .tc-simge, .tc-pyq-optablo .tc-pyq-ayar-hata, .tc-pyq-yerler .tc-pyq-ayar-hata { color: var(--d-gec); }
+.tc-pyq-optablo .tc-alan-kutu[aria-invalid="true"] { border-color: var(--d-gec); box-shadow: inset 0 0 0 var(--cizgi-ince) var(--d-gec); }
+.tc-pyq-optablo [data-ongoru] { font-style: italic; }
+/* Tabloda emrin adı, yönü ve tablo alt alta tam genişliktedir (akışta ad solda, kutular sağda). */
+.tc-pyq-emir[data-gorunum="tablo"] { grid-template-columns: minmax(0, 1fr); }
+.tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-emir-ad small { display: inline; margin-left: var(--b-2); }
+.tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-optablo { order: 1; }
+.tc-pyq-emir[data-gorunum="tablo"] .tc-pyq-yerler { order: 2; }
+.tc-pyq-optablo td[data-ad="Tezgâh"] { min-width: calc(var(--dokunma) * 3); }
+@media (max-width: 899px) {
+  .tc-pyq-optablo thead { display: none; }
+  .tc-pyq-optablo, .tc-pyq-optablo tbody { display: block; }
+  .tc-pyq-optablo tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-1) var(--b-2); padding: var(--b-2) 0; border-bottom: var(--cizgi-ince) solid var(--edge); }
+  .tc-pyq-optablo td { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; }
+  .tc-pyq-optablo td::before { content: attr(data-ad); color: var(--muted); font-size: var(--yazi-xs); }
+  .tc-pyq-optablo td[data-ad="#"] { display: none; }
+  .tc-pyq-optablo td[data-ad="Operasyon"], .tc-pyq-optablo-alt > td { grid-column: 1 / -1; }
+  .tc-pyq-optablo td[data-ad="Operasyon"]::before, .tc-pyq-optablo-alt > td::before { content: none; }
+  .tc-pyq-optablo tr[data-secili] { box-shadow: inset var(--cizgi-kalin) 0 0 var(--ink); padding-left: var(--b-2); }
+  .tc-pyq-optablo tr[data-secili] > td:first-child { box-shadow: none; }
+  .tc-pyq-optablo td[data-ad="Tezgâh"] { min-width: 0; }
+  .tc-pyq-optablo td[data-ad="Durum"] { align-items: flex-start; }
+}
+/* Telefonda tarih ve saat alanı yarım sütuna sığmaz (saat kesilir): başlangıç tam satırdır. */
+@media (max-width: 599px) {
+  .tc-pyq-optablo td[data-ad="Başlangıç"] { grid-column: 1 / -1; }
+}

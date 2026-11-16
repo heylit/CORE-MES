@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
@@ -79,11 +79,14 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
   const ilk = e.adimlar[0];
   const plansiz = e.durum === 'plansiz';
   const ilkSaat = tasimaSaati(m.simdi, m.simdi);
+  // Tabloda ilk adımın saati elle girilebilir (3318); girilmediyse şimdi.
+  const ilkBas = (ilk ? sec[ilk.id]?.baslangic : undefined) ?? ilkSaat;
+  const [ongoru, setOngoru] = useState<{ anahtar: string; oz: PlanaAlOnizlemesi | null } | null>(null);
   const secili = adim !== null && e.adimlar.some((a) => a.id === adim && adimYeri(m, a, {}) !== 'fason' && adimYeri(m, a, {}) !== 'yerli') ? adim : siradakiAdim(m, e, sec);
   // Emir ya da ortak çalışmanın sürümü değişince birikmiş seçimler düşer: eski plana göre seçilmiş yer yazılmaz. Önizlemeler sürüm
   // başına bellekte tutulur; aynı soru ikinci kez sunucuya gitmez.
   const bellek = useRef(new Map<string, Promise<PlanaAlOnizlemesi | null>>());
-  useEffect(() => { setSec({}); setAdim(null); setSistem(null); setYerler(null); bellek.current.clear(); }, [e.id, surum]);
+  useEffect(() => { setSec({}); setAdim(null); setSistem(null); setYerler(null); setOngoru(null); bellek.current.clear(); }, [e.id, surum]);
   // Süren soru da paylaşılır: iki etki aynı anda aynı tezgâhı sorarsa tek istek gider.
   const sor = (g: Parameters<typeof planaAlOnizle>[0], v: number): Promise<PlanaAlOnizlemesi | null> => {
     const k = JSON.stringify(g);
@@ -130,7 +133,7 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
       for (const t of uygunTezgahlar(e, secili).slice(0, ADAY_SINIRI)) {
         const deneme = { ...sec, [secili]: { ...sec[secili], tezgah: t } };
         const adimlar = adimSecimleri(e, deneme);
-        const x = await sor({ emirId: e.id, tezgah: ilkMi ? t : ilkTezgah ?? t, baslangic: ilkSaat, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum);
+        const x = await sor({ emirId: e.id, tezgah: ilkMi ? t : ilkTezgah ?? t, baslangic: ilkBas, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum);
         if (!gecerli) return;
         if (x !== null) oz.push({ tezgah: t, oz: x });
       }
@@ -150,7 +153,37 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
     if (ilkTezgah === null) return null;
     const adimlar = adimSecimleri(e, yeni);
     const bitis = yerler?.oz.find((o) => o.tezgah === tezgah)?.oz.bitis ?? null;
-    return { aday: { isId: ilk.id, tezgah: ilkTezgah, baslangic: ilkSaat, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
+    return { aday: { isId: ilk.id, tezgah: ilkTezgah, baslangic: ilkBas, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
+  };
+  // Tablodan giriş (3318): tezgâh ve saat satırda yazılır, seçim birikir ama kendiliğinden yazılmaz; birikenin sonucu sunucuya sorulur
+  // (öngörü), kişi "Seçimlerle yerleştir" ile yazar. Boş bırakılan alanı sistem doldurur.
+  const alanYaz = (adimId: string, alan: AdimSecimi): void => {
+    setSec((o) => {
+      const yeni = { ...o[adimId], ...alan }, hepsi = { ...o };
+      if (yeni.tezgah === undefined && yeni.baslangic === undefined) delete hepsi[adimId]; else hepsi[adimId] = yeni;
+      return hepsi;
+    });
+    setAdim(adimId);
+  };
+  const secimVar = Object.keys(sec).length > 0;
+  const ongoruAnahtari = JSON.stringify([e.id, sec, sistemIlk, ilkSaat]);
+  useEffect(() => {
+    if (!calisir || !secimVar || !ilk) { setOngoru(null); return undefined; }
+    const ilkTezgah = sec[ilk.id]?.tezgah ?? sistemIlk;
+    if (ilkTezgah === null) return undefined;
+    let gecerli = true;
+    const adimlar = adimSecimleri(e, sec);
+    void sor({ emirId: e.id, tezgah: ilkTezgah, baslangic: ilkBas, ...(adimlar.length > 0 ? { adimlar } : {}) }, surum).then((oz) => { if (gecerli) setOngoru({ anahtar: ongoruAnahtari, oz }); });
+    return () => { gecerli = false; };
+    // Seçimler anahtarda toplanır.
+  }, [ongoruAnahtari, calisir, surum]);
+  const guncelOngoru = ongoru !== null && ongoru.anahtar === ongoruAnahtari ? ongoru.oz : null;
+  const secimle = (): { aday: TurAdayi; gecBirakir: boolean } | null => {
+    if (!ilk || !secimVar || guncelOngoru === null || !guncelOngoru.gecerli) return null;
+    const ilkTezgah = sec[ilk.id]?.tezgah ?? sistemIlk;
+    if (ilkTezgah === null) return null;
+    const adimlar = adimSecimleri(e, sec), bitis = guncelOngoru.bitis;
+    return { aday: { isId: ilk.id, tezgah: ilkTezgah, baslangic: ilkBas, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
   };
   // Hepsini en erken yere: seçimsiz plana alma; tezgâhı sistem seçer.
   const hepsi = (): { aday: TurAdayi; gecBirakir: boolean } | null => {
@@ -158,7 +191,7 @@ export function useYerlestirme(m: KokpitModeli, e: KokpitEmri, surum: number | n
     const bitis = sistem.oz.bitis;
     return { aday: { isId: ilk.id, tezgah: sistem.tezgah, baslangic: ilkSaat, planaAl: e.id }, gecBirakir: bitis !== null && e.termin !== null && bitis - e.termin > 0.01 };
   };
-  return { sec, secili, adimSec: setAdim, sistem, yerler: yerler !== null && yerler.adim === secili ? yerler.l : null, tezgahSec, hepsi, sifirla: () => { setSec({}); setAdim(null); } };
+  return { sec, secili, adimSec: setAdim, sistem, yerler: yerler !== null && yerler.adim === secili ? yerler.l : null, tezgahSec, hepsi, sifirla: () => { setSec({}); setAdim(null); }, alanYaz, ongoru: guncelOngoru, ongoruBekliyor: secimVar && guncelOngoru === null, secimle, sonAlan: adim };
 }
 
 // Planlı adımın taşınabileceği yerler (3297-4): aday yerler sırayla sunucu önizlemesine sorulur, geçersiz yer listeye girmez. Sorular
@@ -225,9 +258,17 @@ export interface EmirAdimlariOzellikleri {
   tasi?: ((isId: string, tezgah: string, baslangic: number) => void) | null;
   // Planlı adım seçiliyken yerleşmemiş adıma basılınca seçimi bırakır (yerleştirme öne geçer).
   birak?: () => void;
+  // Tablodaki başlangıç alanı (3318): planın eksenindeki saat ile gün-saat girdisi arasındaki çeviri. Verilmezse saat girilemez, yalnız okunur.
+  saatGirdisi?: SaatGirdisi;
+  // Bölümün açılış görünümü; verilmezse tablo.
+  ilkGorunum?: OperasyonGorunumu;
 }
+export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => number | null }
+export type OperasyonGorunumu = 'tablo' | 'akis';
+const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo' }: EmirAdimlariOzellikleri) {
+  const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
   // Planlı adım seçiliyken tahtadaki işaretler onundur; plansız emrin yerleştirmesi bekler (tahtada tek hedef olur).
@@ -236,10 +277,15 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
   const bas = kart.emirler[0];
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler ve operasyonlar">
-      <h2><b className="tc-pyq-bolum-no">2</b>{kart.siparis ? `${kart.siparis.no ?? bas?.no ?? ''} · ${String(kart.emirler.length)} emir ve operasyonları` : `${bas?.no ?? kart.kok} · operasyonlar`}</h2>
+      <h2>
+        <b className="tc-pyq-bolum-no">2</b>{kart.siparis ? `${kart.siparis.no ?? bas?.no ?? ''} · ${String(kart.emirler.length)} emir ve operasyonları` : `${bas?.no ?? kart.kok} · operasyonlar`}
+        <span className="tc-pyq-seg tc-pyq-bolum-sag" role="group" aria-label="Operasyon görünümü">
+          {GORUNUMLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={gorunum === k} onClick={() => { setGorunum(k); }}>{ad}</button>)}
+        </span>
+      </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
         ))}
       </div>
     </section>
@@ -249,10 +295,23 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
 // Seçili adımın uygun tezgâhları ve boş yerleri; tahta bunları işaretler, boş yere basınca `yerlestir` çağrılır.
 // fiil: yer planlı operasyonun taşınacağı yerse 'tasi' (tahtadaki yazı ona göre).
 export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void; fiil?: 'tasi' }
-interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void }
+interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart' | 'ilkGorunum'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void; gorunum: OperasyonGorunumu }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
+  // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
+  const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
+  const [duzenOz, setDuzenOz] = useState<{ gecerli: boolean; ileti: string | null; bitis: number | null } | 'hesap' | 'okunamadi' | null>(null);
+  useEffect(() => { setDuzen(null); }, [e.id, surum]);
+  const duzenAnahtari = duzen ? `${duzen.isId}|${duzen.tezgah}|${String(duzen.baslangic)}` : null;
+  useEffect(() => {
+    if (!duzen) { setDuzenOz(null); return undefined; }
+    let gecerli = true;
+    setDuzenOz('hesap');
+    void isTasiOnizle(duzen).then((x) => { if (gecerli) setDuzenOz(x === null ? 'okunamadi' : { gecerli: x.gecerli, ileti: x.ileti, bitis: onizlemeBitisi(m, e, x.isler) }); });
+    return () => { gecerli = false; };
+    // Düzenleme anahtarda toplanır.
+  }, [duzenAnahtari, surum]);
   const tasinanIs = secIs !== null ? m.isler[secIs] : undefined;
   const engel = tasinanIs ? tasinabilir(tasinanIs) : null;
   const tasima = useTasima(m, e, tasinanIs && engel === null && tasi ? tasinanIs.id : null, surum);
@@ -287,7 +346,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   const seciliAd = e.adimlar.find((a) => a.id === seciliAdim)?.ad;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   return (
-    <div className="tc-pyq-emir" data-emir={e.id} data-etkin={etkin ? '' : undefined}>
+    <div className="tc-pyq-emir" data-emir={e.id} data-etkin={etkin ? '' : undefined} data-gorunum={gorunum}>
       <div className="tc-pyq-emir-ad">
         <b className="tc-pyq-mono">{e.no}</b> {e.urun}
         <small data-emir-ozet="">
@@ -296,23 +355,102 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
         </small>
         {bekleyen && <small data-emir-neden="">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {bekleyen.k + 1}. adım ({e.adimlar[bekleyen.k]?.ad}) {tz(bekleyen.tezgah)} tezgâhında {sureYaz(bekleyen.bekleme.sure)} sıra bekliyor.</small>}
       </div>
-      <ol className="tc-pyq-rota">
-        {e.adimlar.map((a) => {
-          const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id]?.tezgah;
-          const secildi = seciliAdim === a.id || (tasinanIs?.id === a.id);
-          return (
-            <li key={a.id}>
-              <button
-                type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} aria-current={vurgu === a.id && !secildi ? 'true' : undefined} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
-                onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
-              >
-                <b>{a.ad}</b>
-                <small>{x ? `${x.fason ? 'Fason' : tz(x.m)} · ${an(x.S, x.C)}` : yer === 'fason' ? 'Fason · sistem yerleştirir' : s !== undefined ? `${tz(s)} seçildi` : 'yerleşmedi'}</small>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+      {gorunum === 'akis' ? (
+        <ol className="tc-pyq-rota">
+          {e.adimlar.map((a) => {
+            const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id]?.tezgah;
+            const secildi = seciliAdim === a.id || (tasinanIs?.id === a.id);
+            return (
+              <li key={a.id}>
+                <button
+                  type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} aria-current={vurgu === a.id && !secildi ? 'true' : undefined} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
+                  onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
+                >
+                  <b>{a.ad}</b>
+                  <small>{x ? `${x.fason ? 'Fason' : tz(x.m)} · ${an(x.S, x.C)}` : yer === 'fason' ? 'Fason · sistem yerleştirir' : s !== undefined ? `${tz(s)} seçildi` : 'yerleşmedi'}</small>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <table className="tc-pyq-optablo">
+          <thead><tr><th scope="col">#</th><th scope="col">Operasyon</th><th scope="col">Süre</th><th scope="col">Tezgâh</th><th scope="col">Başlangıç</th><th scope="col">Bitiş</th><th scope="col">Durum</th></tr></thead>
+          <tbody>
+            {e.adimlar.map((a, sira) => {
+              const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id];
+              const secildi = seciliAdim === a.id || (tasinanIs?.id === a.id);
+              const duzenli = x !== undefined && duzen?.isId === a.id ? duzen : null;
+              const kilit = x ? tasinabilir(x) : null;
+              // Yerleşmemiş adımda sistemin ya da birikmiş seçimin öngördüğü yer (yazılmamış; motor dizerken değiştirebilir).
+              const og = y.ongoru ?? (y.sistem !== null && y.sistem !== 'okunamadi' && Object.keys(y.sec).length === 0 ? y.sistem.oz : null);
+              const tahmin = !x && og?.gecerli ? og.isler.find((i) => i.isId === a.id) : undefined;
+              const adaylar = uygunTezgahlar(e, a.id);
+              const girilir = yer !== 'fason' && (x ? tasi !== null && kilit === null : plansiz && uygula !== null);
+              const hata = duzenli && duzenOz !== null && duzenOz !== 'hesap' ? (duzenOz === 'okunamadi' ? 'Önizleme okunamadı; yeniden deneyin.' : duzenOz.gecerli ? null : duzenOz.ileti ?? 'Bu yer uygun değil.')
+                : !x && y.sonAlan === a.id && y.ongoru !== null && !y.ongoru.gecerli ? y.ongoru.ileti ?? 'Bu seçimle emir yerleşmiyor.' : null;
+              const saatDegisti = (v: string): void => {
+                const h = saatGirdisi?.oku(v) ?? null, c = h === null ? null : Math.round(h * 4) / 4;
+                if (x) { if (c !== null) setDuzen(c === x.S && (duzenli?.tezgah ?? x.m) === x.m ? null : { isId: a.id, tezgah: duzenli?.tezgah ?? x.m, baslangic: c }); } else { etkinlestir(); y.alanYaz(a.id, { baslangic: c ?? undefined }); }
+              };
+              const notKimligi = `tc-pyq-not-${a.id}`;
+              const tezgahDegisti = (v: string): void => {
+                if (x) { const b0 = duzenli?.baslangic ?? x.S; setDuzen(v === x.m && b0 === x.S ? null : { isId: a.id, tezgah: v, baslangic: b0 }); } else { etkinlestir(); y.alanYaz(a.id, { tezgah: v === '' ? undefined : v }); }
+              };
+              return (
+                <Fragment key={a.id}>
+                <tr data-adim-satir={a.id} data-secili={secildi ? '' : undefined} data-degisti={duzenli || s ? '' : undefined}>
+                  <td data-ad="#">{sira + 1}</td>
+                  <td data-ad="Operasyon">
+                    <button
+                      type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} aria-current={vurgu === a.id && !secildi ? 'true' : undefined} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
+                      onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
+                    ><b>{a.ad}</b></button>
+                  </td>
+                  <td data-ad="Süre" title="Yerleşimin başından sonuna geçen süre; vardiya dışı saatler içindedir.">{x ? sureYaz(x.C - x.S) : tahmin ? sureYaz(tahmin.C - tahmin.S) : '—'}</td>
+                  <td data-ad="Tezgâh">
+                    {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">Fason</span> : (
+                      <select className="tc-alan-kutu" aria-label={`${a.ad} tezgâhı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? duzenli?.tezgah ?? x.m : s?.tezgah ?? ''} onChange={(ev) => { tezgahDegisti(ev.target.value); }}>
+                        {!x && <option value="">Sistem seçsin</option>}
+                        {(x && !adaylar.includes(x.m) ? [x.m, ...adaylar] : adaylar).map((t) => <option key={t} value={t}>{tz(t)}</option>)}
+                      </select>
+                    )}
+                  </td>
+                  <td data-ad="Başlangıç">
+                    {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">{x ? zaman(x.S) : 'sistem yerleştirir'}</span>
+                      : saatGirdisi ? <input className="tc-alan-kutu" type="datetime-local" step={900} aria-label={`${a.ad} başlangıcı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? saatGirdisi.yaz(duzenli?.baslangic ?? x.S) : s?.baslangic !== undefined ? saatGirdisi.yaz(s.baslangic) : ''} onChange={(ev) => { saatDegisti(ev.target.value); }} />
+                        : <span>{x ? zaman(x.S) : '—'}</span>}
+                    {!x && tahmin && s?.baslangic === undefined && <small data-ongoru="">öngörü {tz(tahmin.tezgah)} · {zaman(tahmin.S)}</small>}
+                  </td>
+                  <td data-ad="Bitiş" className="tc-pyq-mono">{x ? zaman(x.C) : tahmin ? <span data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}</td>
+                  <td data-ad="Durum">
+                    <Rozet ton={yer === 'yerli' ? 'tamam' : yer === 'fason' ? 'bilgi' : 'hata'} gorunum="cizgi">{yer === 'yerli' ? 'Yerleşti' : yer === 'fason' ? 'Fason' : 'Yerleşmedi'}</Rozet>
+                    {!x && s && <small data-yazilmadi="">seçim yazılmadı</small>}
+                  </td>
+                </tr>
+                {(hata !== null || duzenli) && (
+                  <tr className="tc-pyq-optablo-alt" data-satir-notu={a.id}>
+                    <td colSpan={7}>
+                      <div className="tc-pyq-optablo-not">
+                      {hata !== null ? <><Simge ad="alert" boyut="k" /><span className="tc-pyq-ayar-hata" role="alert" id={notKimligi}>{hata}</span></>
+                        : duzenOz === 'hesap' || duzenOz === null ? <span className="tc-pyq-not" role="status">Hesaplanıyor</span>
+                          : (
+                            <>
+                              <span className="tc-pyq-not">{tz(duzenli?.tezgah ?? '')} · {zaman(duzenli?.baslangic ?? 0)}{duzenOz !== 'okunamadi' ? etki(duzenOz.bitis) : ''}</span>
+                              <Dugme tur="ikincil" simge="check" data-satir-tasi={a.id} onClick={() => { if (duzenli && tasi) { tasi(duzenli.isId, duzenli.tezgah, duzenli.baslangic); setDuzen(null); } }}>Taşı</Dugme>
+                            </>
+                          )}
+                      {duzenli && <Dugme tur="ikincil" simge="x" onClick={() => { setDuzen(null); }}>Vazgeç</Dugme>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
       {yon && e.termin !== null && <EmirYonu key={e.id} {...yon} emirId={e.id} no={e.no} />}
       {tasinanIs && (
         <div className="tc-pyq-yerler" role="group" aria-label={`${tasinanIs.ad} için taşınacak yerler`}>
@@ -361,6 +499,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {uygula && (
             <span className="tc-pyq-yerler-alt">
               <Dugme tur="ikincil" simge="play" disabled={!sistemHazir} title={y.sistem === 'okunamadi' ? 'Önizleme okunamadı' : undefined} onClick={() => { yaz(y.hepsi()); }}>Hepsini en erken yere yerleştir</Dugme>
+              {gorunum === 'tablo' && Object.keys(y.sec).length > 0 && <Dugme tur="ikincil" simge="check" disabled={y.ongoru === null || !y.ongoru.gecerli} aria-busy={y.ongoruBekliyor || undefined} onClick={() => { yaz(y.secimle()); }}>Seçimlerle yerleştir</Dugme>}
               {Object.keys(y.sec).length > 0 && <Dugme tur="ikincil" simge="x" onClick={y.sifirla}>Seçimleri sil</Dugme>}
             </span>
           )}

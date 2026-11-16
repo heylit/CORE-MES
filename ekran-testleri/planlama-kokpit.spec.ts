@@ -419,7 +419,7 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
   const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
   const torna = bolum.locator('[data-adim="S4.a1"]'), freze = bolum.locator('[data-adim="S4.a2"]');
   await expect(torna).toHaveAttribute('aria-pressed', 'true');
-  await expect(torna).toContainText('yerleşmedi');
+  await expect(bolum.locator('[data-adim-satir="S4.a1"]')).toContainText('Yerleşmedi');
   const yerler = bolum.getByRole('group', { name: 'Torna için boş yerler' });
   await expect(yerler.getByRole('listitem')).toHaveCount(2);
   await expect(yerler.getByRole('listitem').first()).toContainText(/T-01.*En erken biten yer/s);
@@ -441,7 +441,7 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
     await yerler.getByRole('button', { name: 'Yerleştir' }).first().click();
   }
   // İlk seçim ekranda birikir, taslağa yazılmaz; sıradaki adım kendiliğinden seçilir.
-  await expect(torna).toContainText('T-01 seçildi');
+  await expect(bolum.getByRole('combobox', { name: 'Torna tezgâhı' })).toHaveValue('M1');
   await expect(freze).toHaveAttribute('aria-pressed', 'true');
   expect(t.alinan()).toEqual([]);
   const yerler2 = bolum.getByRole('group', { name: 'Freze için boş yerler' });
@@ -453,6 +453,78 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
   // Son adımla emir tek değişiklik olarak taslağa yazılır: ilk adım T-01'de, ikinci adım F-02'de.
   await expect.poll(() => t.alinan().length).toBe(1);
   expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4', tezgah: 'M1', adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3318 a (1. dilim): operasyonlar tablodadır; yerleşecek tezgâh ve saat satırda girilir. Seçim ekranda birikir, sonucu sunucuya sorulup
+// satırda öngörü olarak görünür; "Seçimlerle yerleştir" emri tek değişiklik olarak taslağa yazar. Uymayan seçimin nedeni satırda yazar.
+// Önizleme uydurmadır: ilk adım istenen tezgâh ve saatte, ikinci adım ondan 6 saat sonra; F-02'de (M3) ilk adım reddedilir.
+test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngörü, uymayan seçimin nedeni, "Seçimlerle yerleştir"; Akış görünümü; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const c = calisma({ ...ILK }, {});
+  c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }] }];
+  c.D.siparisler = c.D.siparisler.map((x) => (x.id === 'S4' ? { ...x, urun: 'U3' } : x));
+  const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(d.ops) }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, tezgah = q.get('tezgah') ?? '', S = Number(q.get('baslangic'));
+    const sec = (JSON.parse(q.get('adimlar') ?? '[]') as { isId: string; tezgah?: string }[])[0];
+    if (tezgah === 'M3') return json(r, { calismaSurumu: t.s.surum, gecerli: false, ileti: 'Deneme: bu tezgâh o saatte dolu.', isler: [], bitis: null });
+    const iki = sec?.tezgah ?? 'M2';
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }, { isId: 'S4.a2', tezgah: iki, S: S + 10, C: S + 14 }], bitis: S + 14 });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const telefon = bilgi.project.name === 'g360';
+  const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
+  const satir = (id: string) => bolum.locator(`[data-adim-satir="${id}"]`);
+  await expect(bolum.getByRole('group', { name: 'Operasyon görünümü' }).getByRole('button', { name: 'Tablo' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(satir('S4.a1')).toContainText('Yerleşmedi');
+  // Sistemin öngörüsü yazılmadan satırda görünür.
+  await expect(satir('S4.a1').locator('[data-ongoru]').first()).toContainText('öngörü');
+  const tezgah = bolum.getByRole('combobox', { name: 'Torna tezgâhı' }), saat = bolum.getByLabel('Torna başlangıcı');
+  await expect(tezgah).toHaveValue('');
+  if (telefon) for (const a of [tezgah, saat]) expect((await a.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  // Telefonda tarih ve saat alanı tam satırdır (yarım sütunda saat kesiliyordu).
+  if (telefon) expect((await saat.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(250);
+  await tasma();
+
+  // Uymayan seçim: neden satırda, yazma düğmesi kapalı.
+  await tezgah.selectOption('M3');
+  await expect(bolum.locator('[data-satir-notu="S4.a1"]').getByRole('alert')).toHaveText('Deneme: bu tezgâh o saatte dolu.');
+  await expect(bolum.getByRole('button', { name: 'Seçimlerle yerleştir' })).toBeDisabled();
+  // Not satırı tablonun sütunlarını kaydırmaz: hata varken de operasyon sütunu yerinde, not bölümün genişliğine yayılır.
+  if (!telefon && bilgi.project.name === 'g1280') {
+    const not = await bolum.locator('[data-satir-notu="S4.a1"] td').boundingBox(), govde = await bolum.locator('table').first().boundingBox();
+    expect(not && govde && not.width >= govde.width - 2).toBe(true);
+  }
+  await expect(tezgah).toHaveAttribute('aria-invalid', 'true');
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-hata-${bilgi.project.name}.png`, fullPage: true });
+
+  // Tezgâh ve saat satırda girilir; ikinci adımın tezgâhı da seçilir. Hiçbiri kendiliğinden taslağa yazılmaz.
+  await tezgah.selectOption('M2');
+  await saat.fill('2026-10-20T08:00');
+  await bolum.getByRole('combobox', { name: 'Freze tezgâhı' }).selectOption('M3');
+  await expect(bolum.locator('[data-satir-notu]')).toHaveCount(0);
+  // Satırın bütün hücreleri bölümün içindedir (dar ekranda sütun kırpılmaz).
+  const kutu = await bolum.boundingBox();
+  for (const h of await satir('S4.a1').locator('td:visible').all()) { const k = await h.boundingBox(); expect(k && kutu && k.x + k.width <= kutu.x + kutu.width + 1).toBe(true); }
+  expect((await tezgah.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(96);
+  await expect(satir('S4.a2').locator('[data-ongoru]').first()).toContainText('öngörü F-02 · 20.10');
+  expect(t.alinan()).toEqual([]);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-tablo-${bilgi.project.name}.png`, fullPage: true });
+  await bolum.getByRole('button', { name: 'Seçimlerle yerleştir' }).click();
+  await expect.poll(() => t.alinan().length).toBe(1);
+  expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4', tezgah: 'M2', baslangic: 32, adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
+
+  // Akış görünümü eski kutuları verir; tablo kalkar.
+  await bolum.getByRole('group', { name: 'Operasyon görünümü' }).getByRole('button', { name: 'Akış' }).click();
+  await expect(bolum.locator('table')).toHaveCount(0);
+  await expect(bolum.locator('.tc-pyq-rota').first()).toBeVisible();
   await tasma();
   expect(ag.hatalar).toEqual([]);
 });
@@ -476,7 +548,7 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
   await kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' }).locator('[data-kart="S1"]').click();
   const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
   const freze = bolum.locator('[data-adim="S1.a2"]');
-  await expect(freze).toContainText('F-01');
+  await expect(bolum.locator('[data-adim-satir="S1.a2"]').getByRole('combobox', { name: 'Freze tezgâhı' })).toHaveValue('M2');
   await freze.click();
   await expect(freze).toHaveAttribute('aria-pressed', 'true');
   // Freze F-01'de 57'de; Torna 16'da biter: iki aday tezgâhta da 16'da boş yer var.
@@ -504,7 +576,7 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
   // Taşıma taslağa tek değişiklik olarak yazılır; operasyon yeni yerinde görünür, Geri al geri alır.
   await expect.poll(() => t.tasinan().length).toBe(1);
   expect(t.tasinan()[0]).toMatchObject({ tur: 'tasi', isId: 'S1.a2', tezgah: 'M3', baslangic: 16 });
-  await expect(freze).toContainText('F-02');
+  await expect(bolum.locator('[data-adim-satir="S1.a2"]').getByRole('combobox', { name: 'Freze tezgâhı' })).toHaveValue('M3');
   // Liste taşımadan sonra yeni yerle kalır; seçili operasyona yeniden basmak seçimi bırakır ve liste kalkar. Ayrıntı paneli yoktur (3304 a).
   await expect(kokpit.getByRole('complementary')).toHaveCount(0);
   await expect(yerler).toBeVisible();
@@ -615,7 +687,7 @@ test('Kokpit 3B: Matris düz açılır, 3B\'ye kalkar; hücre emirleri süzer; Y
   const panel = kokpit.getByRole('complementary', { name: 'Açıklama' });
   await expect(panel.getByRole('heading')).toContainText('T-01 ·');
   await expect(panel.getByRole('list', { name: 'Hücrenin emirleri' }).getByRole('button')).toHaveCount(1);
-  const satir = kokpit.getByRole('region', { name: 'Emirler' }).locator('tbody tr');
+  const satir = kokpit.getByRole('region', { name: 'Emirler', exact: true }).locator('tbody tr');
   await expect(satir).toHaveCount(1);
   await expect(satir.first()).toContainText('S1');
   await kokpit.getByRole('button', { name: 'Süzgeci kaldır' }).click();
