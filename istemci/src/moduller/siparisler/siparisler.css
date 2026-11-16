@@ -48,6 +48,7 @@
 
 .tc-sp-form { display: grid; gap: var(--b-5); min-width: 0; }
 .tc-sp-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 7)), 1fr)); gap: var(--b-3) var(--b-4); margin-bottom: var(--b-4); }
+.tc-sp-vade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-2); min-width: 0; }
 .tc-sp-kalemler { display: grid; gap: var(--b-4); margin: 0; padding: 0; list-style: none; }
 .tc-sp-kalem { display: grid; gap: var(--b-3); min-width: 0; padding: var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
 .tc-sp-kalem-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }

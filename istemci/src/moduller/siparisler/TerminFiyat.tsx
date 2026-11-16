@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type {
   MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi, TerminYerlesimi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { AdetTablosu } from './AdetTablosu.tsx';
@@ -11,6 +11,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import {
   BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
+import { ODEME_TURLERI, VADE_BIRIMLERI, odemeHatasi, odemeMetni, odemeSecimi, vadeli, type OdemeSecimi, type OdemeTuru } from './odeme-kosulu.ts';
 import { PlanSeridi } from './PlanSeridi.tsx';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
@@ -25,6 +26,10 @@ interface Degerler {
   iskontoOrani: string;
   teslimGun: string;
   terminTarihi: string;
+  // Ödeme koşulu seçimle kurulur (odeme-kosulu.ts); düz metin alanlar form.alan'a bağlanır, gönderimde metne çevrilir.
+  odemeTuru: string;
+  odemeSure: string;
+  odemeBirim: string;
   odemeKosulu: string;
   gecerlilik: string;
   aciklama: string;
@@ -39,6 +44,14 @@ const GERIYE_TERMIN_ZORUNLU = 'Terminden geriye yerleşimde istenen termin zorun
 const KARLAR = ['10', '15', '20', '25', '30', '40'] as const;
 const VARSAYILAN_KAR = '25';
 
+const odemeDegerleri = (metin: string | null) => {
+  const o = odemeSecimi(metin);
+  return { odemeTuru: o.tur, odemeSure: o.sure, odemeBirim: o.birim, odemeKosulu: o.metin };
+};
+const odemeSecimiOku = (d: Degerler): OdemeSecimi => ({
+  tur: d.odemeTuru as OdemeTuru, sure: d.odemeSure, birim: d.odemeBirim === 'ay' ? 'ay' : 'gun', metin: d.odemeKosulu,
+});
+
 const MALIYET_TURU: Record<MaliyetKalemi['tur'], string> = {
   malzeme: 'Malzeme', isleme: 'İşlem (ayar dahil)', fason: 'Fason', 'genel-gider': 'Genel gider',
 };
@@ -52,7 +65,7 @@ function ilkDegerler(t: TeklifAyrintiCevabi): Degerler {
     iskontoOrani: son?.iskontoOrani ? miktarMetni(son.iskontoOrani) : '0',
     teslimGun: son?.teslimGun == null ? '' : String(son.teslimGun),
     terminTarihi: son?.terminTarihi ?? '',
-    odemeKosulu: son?.odemeKosulu ?? '',
+    ...odemeDegerleri(son?.odemeKosulu ?? null),
     gecerlilik: son?.gecerlilik ?? '',
     aciklama: son?.aciklama ?? '',
     // V6: varsayılan planın arkasına ekle; kimseyi kaydırmaz.
@@ -90,6 +103,8 @@ function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
     if (belirsizSayi(d.iskontoOrani)) hata['iskontoOrani'] = BELIRSIZ_SAYI;
     const gun = d.teslimGun.trim();
     if (gun !== '' && !/^\d+$/.test(gun)) hata['teslimGun'] = 'Teslim süresi gün olarak tam sayı yazılır.';
+    const odeme = odemeHatasi(odemeSecimiOku(d));
+    if (odeme !== null) hata['odemeSure'] = odeme;
     return hata;
   };
 }
@@ -134,7 +149,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
         fiyatlar: teklif.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: sayiGirdisi(d.fiyatlar[i] ?? '') })),
         iskontoOrani: sayiGirdisi(d.iskontoOrani) || '0',
         teslimGun: planli || d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
-        odemeKosulu: bosYap(d.odemeKosulu),
+        odemeKosulu: odemeMetni(odemeSecimiOku(d)),
         gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik,
         aciklama: bosYap(d.aciklama),
         terminTarihi: planli || d.terminTarihi === '' ? null : d.terminTarihi,
@@ -361,7 +376,14 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
             <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
             {!planli && <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" {...form.alan('teslimGun')} />}
             {!planli && <Girdi etiket="Termin tarihi" type="date" {...form.alan('terminTarihi')} />}
-            <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
+            <Secim etiket="Ödeme koşulu" bosSecenek="Belirtilmedi" secenekler={ODEME_TURLERI} {...form.alan('odemeTuru')} />
+            {vadeli(d.odemeTuru as OdemeTuru) && (
+              <div className="tc-sp-vade" role="group" aria-label="Vade seçimi">
+                <Girdi etiket="Vade" inputMode="numeric" autoComplete="off" {...form.alan('odemeSure')} />
+                <Secim etiket="Vade birimi" secenekler={VADE_BIRIMLERI} {...form.alan('odemeBirim')} />
+              </div>
+            )}
+            {d.odemeTuru === 'diger' && <Girdi etiket="Ödeme koşulu metni" autoComplete="off" placeholder="Örnek: %50 avans, kalan teslimde" {...form.alan('odemeKosulu')} />}
             {!denenir && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
           </div>
           <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />

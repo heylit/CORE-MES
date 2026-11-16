@@ -889,6 +889,55 @@ describe('Teklifler', () => {
     await screen.findByText('Teklif müşteride');
   });
 
+  it('ödeme koşulu seçilir: vadede süre ve gün ya da ay; süre hatalıysa gitmez, metin olarak gider', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, TEKLIF_VERILDI);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.change(await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
+    const odeme = screen.getByLabelText('Ödeme koşulu') as HTMLSelectElement;
+    expect([...odeme.options].map((o) => o.text)).toEqual(['Belirtilmedi', 'Şimdi peşin', 'Terminde peşin', 'Terminde vade', 'Şimdiden vade', 'Diğer (elle yazılır)']);
+    expect(screen.queryByLabelText('Vade')).toBeNull();
+    fireEvent.change(odeme, { target: { value: 'termin-vade' } });
+    fireEvent.change(screen.getByLabelText('Vade'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    expect((await screen.findAllByText('Vade süresi 1 ile 999 arasında tam sayı olmalı.')).length).toBeGreaterThan(0);
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('Vade'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Vade birimi'), { target: { value: 'ay' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ odemeKosulu: 'Terminden itibaren 2 ay vadeli' });
+  });
+
+  it('3327 önceki sürümün ödeme koşulu seçime geri dolar; düz metin "Diğer" olur ve elle yazılan metin gider', async () => {
+    const vadeli = { ...TEKLIF_VERILDI, surumler: [{ ...SURUM_1, odemeKosulu: 'Terminden itibaren 45 gün vadeli' }] } satisfies TeklifAyrintisi;
+    sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, vadeli) : undefined));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/);
+    fireEvent.click(screen.getByRole('tab', { name: '4 Koşullar ve gönder' }));
+    expect((await screen.findByLabelText<HTMLSelectElement>('Ödeme koşulu')).value).toBe('termin-vade');
+    expect(screen.getByLabelText<HTMLInputElement>('Vade').value).toBe('45');
+    expect(screen.getByLabelText<HTMLSelectElement>('Vade birimi').value).toBe('gun');
+    cleanup();
+    // SURUM_1'in koşulu bu biçimde değil ("30 gün"): Diğer ve metniyle gelir; metin değişince gönderimde o gider.
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver' ? json(200, TEKLIF_VERILDI) : undefined));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/);
+    fireEvent.click(screen.getByRole('tab', { name: '4 Koşullar ve gönder' }));
+    expect((await screen.findByLabelText<HTMLSelectElement>('Ödeme koşulu')).value).toBe('diger');
+    const metin = screen.getByLabelText<HTMLInputElement>('Ödeme koşulu metni');
+    expect(metin.value).toBe('30 gün');
+    fireEvent.change(metin, { target: { value: '%50 avans, kalan teslimde' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sürüm 2 olarak ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ odemeKosulu: '%50 avans, kalan teslimde' });
+  });
+
   it('verilmiş teklifte yeni sürüm formu önceki değerlerle dolu açılır', async () => {
     sunucuKur(FIYATCI);
     ac('/siparisler/teklifler/21/teklif-ver');
