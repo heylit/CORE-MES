@@ -2,7 +2,6 @@
 // Kartlar malzemeler örnek verisinindir, istasyonlar istasyonlar örnek verisinindir; burada yalnız stok kayıtları açılır
 // ve hepsi servis komutlarıyla yazılır (parti, bakiye ve istek kuralları gerçek yazımdaki gibi işler).
 import type { Db } from '#cekirdek/db.ts';
-import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { MalzemeIstegi } from '#paylasilan/sozlesme/stok.ts';
@@ -55,16 +54,11 @@ ornekGirdiGetiriciKaydet(async (db, g) => {
     }
     const yer = m.yerler.find((y) => y.istasyonId === null && binde(y.miktar) >= eksik);
     if (!yer) continue;
-    const gonder = (refakatPartisiId: number | null) => servis.teslimGonder(db, depocu, {
-      malzemeId: m.malzemeId, miktar: bindenMetin(eksik), statuId: null, kaynak: { konumId: yer.konumId }, hedef: { istasyonId: g.istasyonId }, uretimEmriId: g.uretimEmriId,
-      istekId: m.istek?.id ?? null, not: 'Örnek: iş malzemesi', kaynakKimligi: refakatPartisiId === null ? kimlik : `${kimlik}-kart`, kartOnayi: true, refakatPartisiId,
-    });
-    // 3337: emre giden lotlu hammadde kartla gider; depocu ekrandaki gibi lotu refakat kartına dönüştürüp kartla yeniden gönderir.
-    const c = await gonder(null).catch(async (h: unknown) => {
-      const kartsiz = h instanceof UygulamaHatasi ? (h.ayrinti as { kartsiz?: { uretimEmriId: number; partiId: number } } | undefined)?.kartsiz : undefined;
-      if (!kartsiz) throw h;
-      const { refakat } = await servis.refakatPartisiAc(db, depocu.id, { uretimEmriId: kartsiz.uretimEmriId, partiId: kartsiz.partiId });
-      return gonder(refakat.id);
+    // Emirsiz istasyon stoğu olarak gider (3337: emre giden lot kartla gider). Örnek emirlerde refakat kartı açılmaz; kart depoda
+    // lotla açılır ve emir sayfası "kart yok" hâlini gösterir (ekran testi).
+    const c = await servis.teslimGonder(db, depocu, {
+      malzemeId: m.malzemeId, miktar: bindenMetin(eksik), statuId: null, kaynak: { konumId: yer.konumId }, hedef: { istasyonId: g.istasyonId }, uretimEmriId: null,
+      istekId: null, not: 'Örnek: iş malzemesi', kaynakKimligi: kimlik, kartOnayi: true,
     });
     for (const t of [c.teslim, ...(c.ekTeslimler ?? [])]) await servis.teslimAl(db, alan, t.id, { surum: t.surum, alinan: t.miktar });
   }
