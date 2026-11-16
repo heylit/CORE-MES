@@ -7,7 +7,7 @@ import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { terminDinle } from './disari.ts';
 import { siparisKapat, tedarikTerminiKaydet } from './servis.ts';
 import { talepGelisleriOku } from './sorgular.ts';
-import { degisenMalzemeler } from './termin-olayi.ts';
+import { degisenFasonIsEmirleri, degisenMalzemeler, terminBildir } from './termin-olayi.ts';
 
 // 3256-1: satın almanın plana giden gelişi değişince olay yayılır; plan canlı planı "eskidi" işaretler. Veriler uydurmadır.
 describe('satin-alma termin olayı kuralı (3256-1)', () => {
@@ -19,6 +19,24 @@ describe('satin-alma termin olayı kuralı (3256-1)', () => {
     assert.deepEqual(degisenMalzemeler([g(2, 8, null), g(3, 9, '2099-01-01')], [g(3, 9, '2099-01-01')]), [8]);
     assert.deepEqual(degisenMalzemeler([g(1, 7, '2099-03-01', '10.0000')], [g(1, 7, '2099-03-01', '10')]), []);
     assert.deepEqual(degisenMalzemeler([], []), []);
+  });
+  // 3349: planın kullandığı firma tarihi (iş emri başına en geç sipariş günü) önce ve sonra karşılaştırılır.
+  test('firma tarihi girilen, değişen ve kalkan fason iş emri; aynı kalan sayılmaz', () => {
+    const m = (...l: [number, string][]) => new Map(l.map(([id, tarih]) => [id, { tarih }]));
+    assert.deepEqual(degisenFasonIsEmirleri(m(), m([7, '2099-03-01'])), [7], 'girildi');
+    assert.deepEqual(degisenFasonIsEmirleri(m([7, '2099-03-01']), m([7, '2099-03-05'])), [7], 'değişti');
+    assert.deepEqual(degisenFasonIsEmirleri(m([7, '2099-03-01'], [8, '2099-03-02']), m([8, '2099-03-02'])), [7], 'kalktı');
+    assert.deepEqual(degisenFasonIsEmirleri(m([9, '2099-03-01'], [7, '2099-03-01']), m([7, '2099-03-09'], [9, '2099-03-02'])), [7, 9]);
+    assert.deepEqual(degisenFasonIsEmirleri(m([7, '2099-03-01']), m([7, '2099-03-01'])), []);
+  });
+  test('olay yalnız fason iş emri taşıyınca da yayılır; ikisi de boşsa yayılmaz', async () => {
+    const gelen: { malzemeNolar: number[]; isEmriIdler: number[] }[] = [];
+    const birak = terminDinle(async (_db, o) => { gelen.push(o); });
+    try {
+      await terminBildir(null as never, { malzemeNolar: [], isEmriIdler: [] });
+      await terminBildir(null as never, { malzemeNolar: [], isEmriIdler: [7] });
+      assert.deepEqual(gelen, [{ malzemeNolar: [], isEmriIdler: [7] }]);
+    } finally { birak(); }
   });
 });
 
