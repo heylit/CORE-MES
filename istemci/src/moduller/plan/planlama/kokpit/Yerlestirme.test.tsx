@@ -115,14 +115,14 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T1', baslangic: 8, planaAl: '2', adimlar: [{ isId: '2.30', tezgah: 'F2' }] }, false);
   });
 
-  it('Hepsini en erken yere yerleştir: seçimsiz plana alır, tezgâhı sistem seçer; termini geçen yerleşim geç bırakır diye bildirilir', async () => {
+  it('İleriye yerleştir (seçimsiz): seçimsiz plana alır, tezgâhı sistem seçer; termini geçen yerleşim geç bırakır diye bildirilir', async () => {
     onizlemeKur();
     const uygula = vi.fn();
     const gec = { ...M, emirler: [PLANLI, { ...YENI, termin: 20 }] };
     const k = siraKartlari(gec).find((x) => x.kok === '2');
     if (!k) throw new Error('kart');
     render(<EmirAdimlari m={gec} kart={k} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
-    const dugme = screen.getByRole('button', { name: 'Hepsini en erken yere yerleştir' });
+    const dugme = screen.getByRole('button', { name: 'İleriye yerleştir' });
     await waitFor(() => { expect((dugme as HTMLButtonElement).disabled).toBe(false); });
     fireEvent.click(dugme);
     expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T2', baslangic: 8, planaAl: '2' }, true);
@@ -139,7 +139,7 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     fireEvent.click(adim);
     expect(adimAc).toHaveBeenCalledWith('1', '1.10');
     expect(oz).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Hepsini en erken yere yerleştir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
   });
 
   it('yazamayan kişi adımları görür, yerleştiremez', () => {
@@ -148,7 +148,7 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     expect(screen.getByText('Emri yalnız planı yazabilen kişi yerleştirir.')).toBeTruthy();
     expect((screen.getByRole('button', { name: /Torna/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Yerleştir' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Hepsini en erken yere yerleştir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
   });
 
   it('aynı soru ikinci kez sunucuya gitmez; ortak sürüm değişince birikmiş seçim düşer ve yeniden sorulur', async () => {
@@ -215,7 +215,7 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     vi.spyOn(planaAl, 'planaAlOnizle').mockResolvedValue(null);
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
     expect(await screen.findByText(/uygun boş yer bulunamadı/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Hepsini en erken yere yerleştir' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -354,7 +354,12 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     expect(satir('2.10').textContent).toContain('Yerleşmedi');
     // Sistem tornayı T2'de 8'de başlatır (en erken biten); yazılmamış öngörü satırda görünür.
     await waitFor(() => { expect(satir('2.10').querySelector('[data-ongoru]')?.textContent).toBe('öngörü ORN-T2 · 01.01 Pzt 08:00'); });
-    expect(screen.queryByRole('button', { name: 'Seçimlerle yerleştir' })).toBeNull();
+    // Tabloda toplu düğmeler: İleriye ve Teslimden geriye; akıştaki "Hepsini en erken yere yerleştir" tabloda yok.
+    expect(screen.getByRole('button', { name: 'İleriye yerleştir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Teslimden geriye yerleştir' })).toBeTruthy();
+    // Düğmeler hangi emre çalıştığını söyler (sipariş kartında birden çok emir olabilir).
+    expect(bolum().querySelector('[data-toplu-emir]')?.textContent).toBe('ORN-UE-2 için:');
+    expect(screen.queryByRole('button', { name: 'Hepsini en erken yere yerleştir' })).toBeNull();
     fireEvent.click(within(screen.getByRole('group', { name: 'Operasyon görünümü' })).getByRole('button', { name: 'Akış' }));
     expect(bolum().querySelector('table')).toBeNull();
     expect(bolum().querySelector('[data-adim="2.10"]')?.textContent).toContain('yerleşmedi');
@@ -367,10 +372,12 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     await waitFor(() => { expect(torna.querySelectorAll('li')).toHaveLength(2); });
     fireEvent.click(within(torna.querySelectorAll('li')[1] as HTMLElement).getByRole('button', { name: 'Yerleştir' }));
     expect(bolum().querySelector('[data-adim="2.10"]')?.textContent).toContain('ORN-T1 seçildi');
-    expect(screen.queryByRole('button', { name: 'Seçimlerle yerleştir' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Hepsini en erken yere yerleştir' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Teslimden geriye yerleştir' })).toBeNull();
   });
 
-  it('satırda tezgâh ve saat girilir; seçim birikir, kendiliğinden yazılmaz; "Seçimlerle yerleştir" emri tek komutla yazar', async () => {
+  it('satırda tezgâh ve saat girilir; seçim birikir, kendiliğinden yazılmaz; "İleriye yerleştir" emri tek komutla yazar', async () => {
     const oz = onizlemeKur();
     const uygula = vi.fn();
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
@@ -381,7 +388,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     // Girilen ama yazılmamış satır "Yerleşmedi" kalır ve bunu söyler.
     expect(satir('2.10').querySelector('td[data-ad="Durum"]')?.textContent).toBe('Yerleşmediseçim yazılmadı');
     expect(satir('2.20').querySelector('[data-yazilmadi]')).toBeNull();
-    const dugme = screen.getByRole('button', { name: 'Seçimlerle yerleştir' });
+    const dugme = screen.getByRole('button', { name: 'İleriye yerleştir' });
     await waitFor(() => { expect((dugme as HTMLButtonElement).disabled).toBe(false); });
     expect(oz).toHaveBeenCalledWith({ emirId: '2', tezgah: 'T1', baslangic: 10, adimlar: [{ isId: '2.30', tezgah: 'F2' }] }, 4);
     // Seçimin sonucu yazılmadan satırda görünür: freze F2'de 30'da başlar.
@@ -391,7 +398,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T1', baslangic: 10, planaAl: '2', adimlar: [{ isId: '2.30', tezgah: 'F2' }] }, false);
   });
 
-  it('seçim emri yerleştirmiyorsa neden satırda yazar, "Seçimlerle yerleştir" kapalı kalır', async () => {
+  it('seçim emri yerleştirmiyorsa neden satırda yazar, "İleriye yerleştir" kapalı kalır', async () => {
     vi.spyOn(planaAl, 'planaAlOnizle').mockImplementation((g) => Promise.resolve(g.tezgah === 'T1'
       ? { calismaSurumu: 4, gecerli: false, ileti: 'ORN-uymuyor', bitis: null, isler: [] }
       : { calismaSurumu: 4, gecerli: true, ileti: null, bitis: 18, isler: [{ isId: '2.10', tezgah: g.tezgah, S: 8, C: 14 }] }));
@@ -401,7 +408,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     const not = await waitFor(() => { const n = bolum().querySelector('[data-satir-notu="2.10"] [role="alert"]'); if (!n) throw new Error('not'); return n; });
     expect(not.textContent).toBe('ORN-uymuyor');
     expect(within(satir('2.10')).getByLabelText('Torna başlangıcı').getAttribute('aria-invalid')).toBe('true');
-    const dugme = screen.getByRole('button', { name: 'Seçimlerle yerleştir' }) as HTMLButtonElement;
+    const dugme = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
     expect(dugme.disabled).toBe(true);
     fireEvent.click(dugme);
     expect(uygula).not.toHaveBeenCalled();
@@ -454,7 +461,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     if (!k) throw new Error('kart');
     render(<EmirAdimlari m={gec} kart={k} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
     fireEvent.change(within(satir('2.10')).getByRole('combobox', { name: 'Torna tezgâhı' }), { target: { value: 'T1' } });
-    const dugme = screen.getByRole('button', { name: 'Seçimlerle yerleştir' }) as HTMLButtonElement;
+    const dugme = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
     await waitFor(() => { expect(dugme.disabled).toBe(false); });
     fireEvent.click(dugme);
     // Torna T1'de 12'de başlar, emir 32'de biter; termin 20.
@@ -490,7 +497,7 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} saatGirdisi={girdi} />);
     await waitFor(() => { expect(satir('2.10').querySelector('[data-ongoru]')).toBeTruthy(); });
     fireEvent.change(within(satir('2.10')).getByLabelText('Torna başlangıcı'), { target: { value: '2026-01-01T10:00' } });
-    const dugme = screen.getByRole('button', { name: 'Seçimlerle yerleştir' }) as HTMLButtonElement;
+    const dugme = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
     await waitFor(() => { expect(dugme.disabled).toBe(false); });
     // Sistem tornayı T2'ye koymuştu (en erken biten); saat seçimi o tezgâhla sorulur.
     expect(oz).toHaveBeenCalledWith({ emirId: '2', tezgah: 'T2', baslangic: 10 }, 4);
@@ -509,5 +516,123 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     const tezgah = within(satir('1.10')).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement;
     expect(tezgah.disabled).toBe(true);
     expect(tezgah.getAttribute('title')).toBe('Başlamış iş taşınmaz');
+  });
+});
+
+describe('Kokpit toplu yerleştirme (3318 a, 2. dilim)', () => {
+  // Önizleme uydurmadır: torna istenen saatte (en erken 8) başlar, emir başlangıçtan 20 saat sonra biter.
+  const surukle = () => vi.spyOn(planaAl, 'planaAlOnizle').mockImplementation((g) => {
+    const S = Math.max(g.baslangic, 8), freze = g.adimlar?.find((a) => a.isId === '2.30')?.tezgah ?? 'F1';
+    return Promise.resolve({ calismaSurumu: 4, gecerli: true, ileti: null, bitis: S + 20, isler: [{ isId: '2.10', tezgah: g.tezgah, S, C: S + 6 }, { isId: '2.30', tezgah: freze, S: S + 16, C: S + 20 }] });
+  });
+  const hazir = async (): Promise<HTMLButtonElement> => {
+    const d = screen.getByRole('button', { name: 'Teslimden geriye yerleştir' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d.disabled).toBe(false); });
+    return d;
+  };
+
+  it('Teslimden geriye yerleştir: termine yetişen en geç başlangıç bulunur; hamle geriye özetiyle verilir (çağıran onay sorar), seçilen tezgâh korunur', async () => {
+    const oz = surukle();
+    const uygula = vi.fn();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    // Sistem tornayı T1'e koyar (iki tezgâh eşit, ilki); kişi T2'yi ve frezede F2'yi seçer.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Torna tezgâhı' }), { target: { value: 'T2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Freze tezgâhı' }), { target: { value: 'F2' } });
+    const d = await hazir();
+    const once = oz.mock.calls.length;
+    fireEvent.click(d);
+    // Termin 40, emir başlangıçtan 20 saat sonra biter: en geç başlangıç 20.
+    await waitFor(() => { expect(uygula).toHaveBeenCalledTimes(1); });
+    expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T2', baslangic: 20, planaAl: '2', adimlar: [{ isId: '2.30', tezgah: 'F2' }] }, false, { tezgah: 'T2', S: 20, bitis: 40 });
+    // Aramanın bütün soruları seçilen tezgâhla ve sonraki adımın seçimiyle gider.
+    const sorular = oz.mock.calls.slice(once).map((x) => x[0]);
+    expect(sorular.length).toBeGreaterThan(0);
+    expect(sorular.every((g) => g.tezgah === 'T2' && JSON.stringify(g.adimlar) === JSON.stringify([{ isId: '2.30', tezgah: 'F2' }]))).toBe(true);
+    // Arama ikiye bölerek yapılır: çeyrek saatlik 128 adım en çok sekiz soruyla taranır (ilk deneme ve sistem seçimi ayrı).
+    expect(oz.mock.calls.filter((x) => x[0].adimlar !== undefined).length).toBeLessThanOrEqual(10);
+  });
+
+  it('teslimden geriye sığmayan emir yazılmaz; neden ve en erken bitiş yazılır', async () => {
+    surukle();
+    const uygula = vi.fn();
+    const gec = { ...M, emirler: [PLANLI, { ...YENI, termin: 20 }] };
+    const k = siraKartlari(gec).find((x) => x.kok === '2');
+    if (!k) throw new Error('kart');
+    render(<EmirAdimlari m={gec} kart={k} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    fireEvent.click(await hazir());
+    const not = await screen.findByRole('alert');
+    expect(not.textContent?.trim()).toBe('Teslimden geriye sığmıyor: en erken yerleşimde bile emir 01.01 Pzt 28:00 biter, termin 01.01 Pzt 20:00. "İleriye yerleştir" en erken yere koyar.');
+    expect(uygula).not.toHaveBeenCalled();
+  });
+
+  it('termini olmayan emirde ve bitişi bilinmeyen emirde geriye yerleştirilmez', async () => {
+    vi.spyOn(planaAl, 'planaAlOnizle').mockImplementation((g) => Promise.resolve({ calismaSurumu: 4, gecerli: true, ileti: null, bitis: null, isler: [{ isId: '2.10', tezgah: g.tezgah, S: 8, C: 14 }] }));
+    const uygula = vi.fn();
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    fireEvent.click(await hazir());
+    expect((await screen.findByRole('alert')).getAttribute('data-geri-sonucu')).toBe('bilinmez');
+    expect(uygula).not.toHaveBeenCalled();
+    unmount();
+    const terminsiz = { ...M, emirler: [PLANLI, { ...YENI, termin: null }] };
+    const k = siraKartlari(terminsiz).find((x) => x.kok === '2');
+    if (!k) throw new Error('kart');
+    render(<EmirAdimlari m={terminsiz} kart={k} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    // Sistem hazır olunca "İleriye" açılır; geriye, termin olmadığı için kapalı kalır.
+    await waitFor(() => { expect((screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement).disabled).toBe(false); });
+    const d = screen.getByRole('button', { name: 'Teslimden geriye yerleştir' }) as HTMLButtonElement;
+    expect(d.disabled).toBe(true);
+    expect(d.getAttribute('title')).toBe('Emrin termini yok; geriye yerleştirilemez.');
+  });
+
+  it('arama sürerken seçim değişirse eski sonuç atılır: hamle verilmez', async () => {
+    const oz = surukle();
+    const uygula = vi.fn();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    const d = await hazir();
+    // Aramanın soruları bekletilir; bu sırada tezgâh değişir, sonra cevaplar gelir.
+    let birak: () => void = () => undefined;
+    const kapi = new Promise<void>((r) => { birak = r; });
+    oz.mockImplementation(async (g) => { await kapi; const S = Math.max(g.baslangic, 8); return { calismaSurumu: 4, gecerli: true, ileti: null, bitis: S + 20, isler: [{ isId: '2.10', tezgah: g.tezgah, S, C: S + 6 }] }; });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Freze tezgâhı' }), { target: { value: 'F2' } });
+    fireEvent.click(d);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Freze tezgâhı' }), { target: { value: 'F1' } });
+    birak();
+    await new Promise((r) => { setTimeout(r, 100); });
+    expect(uygula).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('arama okunamazsa ya da seçim emri yerleştirmiyorsa nedeni yazılır, hamle verilmez', async () => {
+    const oz = surukle();
+    const uygula = vi.fn();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    const d = await hazir();
+    // Seçimli sorular okunamaz (null): bellekte tutulmaz.
+    oz.mockImplementation((g) => Promise.resolve(g.adimlar ? null : { calismaSurumu: 4, gecerli: true, ileti: null, bitis: 28, isler: [{ isId: '2.10', tezgah: g.tezgah, S: 8, C: 14 }] }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Freze tezgâhı' }), { target: { value: 'F2' } });
+    fireEvent.click(d);
+    await waitFor(() => { expect(screen.getAllByRole('alert').some((x) => x.textContent?.trim() === 'Önizleme okunamadı; yeniden deneyin.')).toBe(true); });
+    // Aynı seçim bu kez geçersiz döner: sunucunun iletisi yazılır.
+    oz.mockImplementation((g) => Promise.resolve(g.adimlar ? { calismaSurumu: 4, gecerli: false, ileti: 'ORN-uymuyor', bitis: null, isler: [] } : { calismaSurumu: 4, gecerli: true, ileti: null, bitis: 28, isler: [{ isId: '2.10', tezgah: g.tezgah, S: 8, C: 14 }] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Teslimden geriye yerleştir' }));
+    await waitFor(() => { expect(document.querySelector('[data-geri-sonucu="red"]')?.textContent?.trim()).toBe('ORN-uymuyor'); });
+    expect(uygula).not.toHaveBeenCalled();
+  });
+
+  it('İleriye yerleştir: seçim yokken sistemin en erken yerini, seçim varken seçimleri yazar', async () => {
+    onizlemeKur();
+    const uygula = vi.fn();
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    const d = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d.disabled).toBe(false); });
+    fireEvent.click(d);
+    expect(uygula).toHaveBeenLastCalledWith({ isId: '2.10', tezgah: 'T2', baslangic: 8, planaAl: '2' }, false);
+    unmount();
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Torna tezgâhı' }), { target: { value: 'T1' } });
+    const d2 = screen.getByRole('button', { name: 'İleriye yerleştir' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d2.disabled).toBe(false); });
+    fireEvent.click(d2);
+    expect(uygula).toHaveBeenLastCalledWith({ isId: '2.10', tezgah: 'T1', baslangic: 8, planaAl: '2' }, false);
   });
 });

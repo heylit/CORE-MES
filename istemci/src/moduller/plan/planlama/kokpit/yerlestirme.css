@@ -81,7 +81,7 @@
 .tc-pyq-yerler li small { grid-column: 1; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-yerler li > :last-child { grid-row: 1 / span 2; grid-column: 2; }
 .tc-pyq-yerler > .tc-pyq-not { display: block; }
-.tc-pyq-yerler-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pyq-yerler-alt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-pyq-yerler .tc-dugme { min-height: var(--dokunma); }
 
 @media (max-width: 1099px) {
@@ -129,7 +129,8 @@
   .tc-pyq-optablo td[data-ad="#"] { display: none; }
   .tc-pyq-optablo td[data-ad="Operasyon"], .tc-pyq-optablo-alt > td { grid-column: 1 / -1; }
   .tc-pyq-optablo td[data-ad="Operasyon"]::before, .tc-pyq-optablo-alt > td::before { content: none; }
-  .tc-pyq-optablo tr[data-secili] { box-shadow: inset var(--cizgi-kalin) 0 0 var(--ink); padding-left: var(--b-2); }
+  .tc-pyq-optablo tr[data-secili] { box-shadow: inset var(--cizgi-kalin) 0 0 var(--ink); padding-left: var(--b-2); background: color-mix(in oklab, var(--hazard) 14%, transparent); }
+  .tc-pyq-optablo tr[data-secili] > td { background: none; }
   .tc-pyq-optablo tr[data-secili] > td:first-child { box-shadow: none; }
   .tc-pyq-optablo td[data-ad="Tezgâh"] { min-width: 0; }
   .tc-pyq-optablo td[data-ad="Durum"] { align-items: flex-start; }

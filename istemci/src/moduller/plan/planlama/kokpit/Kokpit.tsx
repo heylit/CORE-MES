@@ -13,7 +13,7 @@ import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayarlar } from './Ayarlar.tsx';
-import { planYonu } from './ayarlar.ts';
+import { emirYonu, planYonu } from './ayarlar.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Gelenler } from './Gelenler.tsx';
 import { gelenler } from './gelenler.ts';
@@ -28,7 +28,7 @@ import { Liste } from './Liste.tsx';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
-import { EmirAdimlari, SiraSeridi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
+import { EmirAdimlari, SiraSeridi, type GeriOzeti, type YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
@@ -107,7 +107,7 @@ function Taslakli(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   return <Sayfa {...o} c={gorunum} taslak={yazabilir ? tk : null} />;
 }
 
-interface Onay { aday: TurAdayi; ileti: string; turda: boolean; baslik: string; dugme: string }
+interface Onay { aday: TurAdayi; ileti: string; turda: boolean; baslik: string; dugme: string; yonGeri?: boolean }
 
 function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: TaslakYazici | null }) {
   const { c, komut, yetki, sec: ortakSec, taslak } = o;
@@ -184,14 +184,19 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Önizlemeler ortak çalışmanın sürümüyle sunucuda hesaplanır; komut taslağa yazılır, plan taslağın görünümünde yeniden dizilir.
   const surum = o.depo.calismaSurumu;
   const { yenile } = o;
-  const yaz = useCallback(async (a: TurAdayi): Promise<boolean> => {
+  // yonGeri: teslimden geriye yerleştirme (3318). Emrin yönü zaten geriye değilse önce yön komutu yazılır; plana alma yazılamazsa yön geri alınır.
+  const yaz = useCallback(async (a: TurAdayi, yonGeri = false): Promise<boolean> => {
     if (!taslak || !yazabilir) return false;
+    const yonYaz = yonGeri && a.planaAl !== undefined && (emirYonu(c, a.planaAl) === 'plan' ? planYonu(c) : emirYonu(c, a.planaAl)) !== 'geri';
+    if (yonYaz && a.planaAl !== undefined && !(await taslak.yaz({ tur: 'yon', emirId: a.planaAl, yon: 'geri' }, false))) return false;
     const k: TaslakKomutu = a.planaAl === undefined ? { tur: 'tasi', isId: a.isId, tezgah: a.tezgah, baslangic: a.baslangic }
       : { tur: 'plana-al', emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) };
     const tamam = await taslak.yaz(k);
-    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
+    // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
+    if (!tamam && yonYaz && !(await taslak.geriAl())) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
+    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : yonYaz ? 'Emir teslimden geriye plana alındı (iki değişiklik: yön ve yerleşim); Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
     return tamam;
-  }, [taslak, yazabilir, bildir]);
+  }, [taslak, yazabilir, bildir, c]);
 
   // Tahtadan bırakılan iş: önce sunucu önizlemesi. Geçersiz yer yazılmaz; emri terminden sonraya atan taşıma onay ister.
   const tasiDene = useCallback((isId: string, tezgah: string, hedefS: number): void => {
@@ -227,9 +232,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const turKarar = useCallback((uygulandi: boolean) => {
     setTur((t) => (t && t.i < t.idler.length ? { ...t, i: t.i + 1, gecmis: [...t.gecmis, { i: t.i, uygulandi }], ileri: [] } : t));
   }, []);
-  const hamleUygula = useMemo(() => (yazabilir && !mesgul ? (a: TurAdayi, gecBirakir: boolean): void => {
+  const hamleUygula = useMemo(() => (yazabilir && !mesgul ? (a: TurAdayi, gecBirakir: boolean, geriOzeti?: GeriOzeti): void => {
     const al = a.planaAl !== undefined;
     const e = emir.get(a.planaAl ?? m.isler[a.isId]?.job ?? '');
+    // Teslimden geriye yerleştirme emrin yönünü de değiştirir: her zaman onay sorulur (3318, Arayüz ön bakışı).
+    if (geriOzeti && e) {
+      const tz = m.tezgahlar.find((t) => t.id === geriOzeti.tezgah)?.kod ?? geriOzeti.tezgah;
+      setOnay({
+        aday: a, turda: false, yonGeri: true, baslik: 'Teslimden geriye yerleştir', dugme: 'Yerleştir',
+        ileti: `${e.no} termine yetişecek en geç yere alınır: ilk operasyon ${tz} tezgâhında ${zaman(geriOzeti.S)} başlar${geriOzeti.bitis !== null ? `, öngörüye göre emir ${zaman(geriOzeti.bitis)} biter` : ''}${e.termin !== null ? ` (termin ${zaman(e.termin)})` : ''}. Emrin yönü "Teslimden geriye" olur.`,
+      });
+      return;
+    }
     if (gecBirakir && e) {
       setOnay({
         aday: a, turda: tur !== null, baslik: al ? 'Emir terminine yetişmiyor' : 'Bu taşıma emri geç bırakır', dugme: al ? 'Yine de plana al' : 'Yine de uygula',
@@ -238,7 +252,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       return;
     }
     void yaz(a).then((tamam) => { if (tamam && tur) turKarar(true); });
-  } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar]);
+  } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar, zaman]);
 
   // --- geri ---
   // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri yoktur: alınan değişiklik yeniden yapılır.
@@ -531,7 +545,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       <OnayPenceresi
         acik={onay !== null} baslik={onay?.baslik ?? ''} onayMetni={onay?.dugme ?? ''}
         vazgec={() => { setOnay(null); }}
-        onayla={() => { const x = onay; setOnay(null); if (x) void yaz(x.aday).then((tamam) => { if (tamam && x.turda) turKarar(true); }); }}
+        onayla={() => { const x = onay; setOnay(null); if (x) void yaz(x.aday, x.yonGeri === true).then((tamam) => { if (tamam && x.turda) turKarar(true); }); }}
       >{onay?.ileti}</OnayPenceresi>
     </div>
   );

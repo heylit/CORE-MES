@@ -458,9 +458,9 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
 });
 
 // Kart 3318 a (1. dilim): operasyonlar tablodadır; yerleşecek tezgâh ve saat satırda girilir. Seçim ekranda birikir, sonucu sunucuya sorulup
-// satırda öngörü olarak görünür; "Seçimlerle yerleştir" emri tek değişiklik olarak taslağa yazar. Uymayan seçimin nedeni satırda yazar.
+// satırda öngörü olarak görünür; "İleriye yerleştir" emri tek değişiklik olarak taslağa yazar. Uymayan seçimin nedeni satırda yazar.
 // Önizleme uydurmadır: ilk adım istenen tezgâh ve saatte, ikinci adım ondan 6 saat sonra; F-02'de (M3) ilk adım reddedilir.
-test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngörü, uymayan seçimin nedeni, "Seçimlerle yerleştir"; Akış görünümü; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngörü, uymayan seçimin nedeni, "İleriye yerleştir"; Akış görünümü; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const c = calisma({ ...ILK }, {});
   c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }] }];
   c.D.siparisler = c.D.siparisler.map((x) => (x.id === 'S4' ? { ...x, urun: 'U3' } : x));
@@ -494,7 +494,7 @@ test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngör�
   // Uymayan seçim: neden satırda, yazma düğmesi kapalı.
   await tezgah.selectOption('M3');
   await expect(bolum.locator('[data-satir-notu="S4.a1"]').getByRole('alert')).toHaveText('Deneme: bu tezgâh o saatte dolu.');
-  await expect(bolum.getByRole('button', { name: 'Seçimlerle yerleştir' })).toBeDisabled();
+  await expect(bolum.getByRole('button', { name: 'İleriye yerleştir' })).toBeDisabled();
   // Not satırı tablonun sütunlarını kaydırmaz: hata varken de operasyon sütunu yerinde, not bölümün genişliğine yayılır.
   if (!telefon && bilgi.project.name === 'g1280') {
     const not = await bolum.locator('[data-satir-notu="S4.a1"] td').boundingBox(), govde = await bolum.locator('table').first().boundingBox();
@@ -517,7 +517,7 @@ test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngör�
   expect(t.alinan()).toEqual([]);
   await tasma();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-tablo-${bilgi.project.name}.png`, fullPage: true });
-  await bolum.getByRole('button', { name: 'Seçimlerle yerleştir' }).click();
+  await bolum.getByRole('button', { name: 'İleriye yerleştir' }).click();
   await expect.poll(() => t.alinan().length).toBe(1);
   expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4', tezgah: 'M2', baslangic: 32, adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
 
@@ -525,6 +525,57 @@ test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngör�
   await bolum.getByRole('group', { name: 'Operasyon görünümü' }).getByRole('button', { name: 'Akış' }).click();
   await expect(bolum.locator('table')).toHaveCount(0);
   await expect(bolum.locator('.tc-pyq-rota').first()).toBeVisible();
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3318 a (2. dilim): toplu yerleştirme. "Teslimden geriye yerleştir" emri termine yetişen en geç yere alır: önce onay penceresi, sonra
+// taslağa iki değişiklik (emrin yönü ve plana alma). Önizleme uydurmadır: ilk adım istenen saatte; emir T-01'de başlarsa 14, F-01'de başlarsa 400
+// saat sonra biter (F-01'de termine sığmaz).
+test('Kokpit 3318-2: "Teslimden geriye yerleştir" onay sorar, emrin yönünü geriye çevirip termine yetişen en geç yere alır; sığmayan emir yazılmaz; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const c = calisma({ ...ILK }, {});
+  c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M3', cevrim: 60 }] }] }];
+  c.D.siparisler = c.D.siparisler.map((x) => (x.id === 'S4' ? { ...x, urun: 'U3' } : x));
+  const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(d.ops) }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, tezgah = q.get('tezgah') ?? '', S = Number(q.get('baslangic')), sure = tezgah === 'M2' ? 400 : 14;
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }, { isId: 'S4.a2', tezgah: 'M3', S: S + sure - 4, C: S + sure }], bitis: S + sure });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const bolum = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
+  const geri = bolum.getByRole('button', { name: 'Teslimden geriye yerleştir' });
+  await expect(bolum.getByRole('button', { name: 'İleriye yerleştir' })).toBeEnabled();
+  await expect(geri).toBeEnabled();
+  await expect(bolum.locator('[data-toplu-emir]')).toHaveText('S4 için:');
+  if (bilgi.project.name === 'g360') expect((await geri.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await tasma();
+
+  // Sığmayan emir: F-01'de en erken yerleşim de termini (28.10 17:00) geçer; yazılmaz, neden yazılır.
+  await bolum.getByRole('combobox', { name: 'Torna tezgâhı' }).selectOption('M2');
+  await geri.click();
+  await expect(bolum.getByRole('alert')).toContainText('Teslimden geriye sığmıyor');
+  expect(t.s.komutlar).toEqual([]);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-2-sigmaz-${bilgi.project.name}.png`, fullPage: true });
+
+  // Sığan emir (sistemin seçtiği T-01): termin planın 233. saati, emir 14 saat sürer; en geç başlangıç 219 (28.10 03:00).
+  await bolum.getByRole('button', { name: 'Seçimleri sil' }).click();
+  await expect(geri).toBeEnabled();
+  await geri.click();
+  const pencere = page.getByRole('dialog', { name: 'Teslimden geriye yerleştir' });
+  await expect(pencere).toContainText('ilk operasyon T-01 tezgâhında 28.10');
+  await expect(pencere).toContainText('öngörüye göre emir 28.10');
+  await expect(pencere).toContainText('Emrin yönü "Teslimden geriye" olur.');
+  expect(t.s.komutlar).toEqual([]);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3318-2-onay-${bilgi.project.name}.png`, fullPage: true });
+  await pencere.getByRole('button', { name: 'Yerleştir' }).click();
+  await expect.poll(() => t.alinan().length).toBe(1);
+  expect(t.s.komutlar).toMatchObject([{ tur: 'yon', emirId: 'S4', yon: 'geri' }, { tur: 'plana-al', emirId: 'S4', tezgah: 'M1', baslangic: 219 }]);
   await tasma();
   expect(ag.hatalar).toEqual([]);
 });
