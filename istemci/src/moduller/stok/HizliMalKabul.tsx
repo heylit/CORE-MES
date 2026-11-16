@@ -10,7 +10,7 @@ import { AMBALAJ_KATALOGU } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { AMBALAJ_TURLERI, lotluMu, LOT_IPUCU, miktarGirdisi } from './gorunum.ts';
 import { hataMetni, korumaliPost, useStokKomutu } from './ortak.tsx';
-import { BirimKarsiligi, IkinciBirimGirdisi, kalanMetni } from './birim-donusumu.tsx';
+import { BirimKarsiligi, IkinciBirimGirdisi, ikinciBirim, kalanMetni, SiparisMiktariGirdisi } from './birim-donusumu.tsx';
 
 // Okutarak mal kabul (soru 91 a): satın alma teslimi yalnız açık sipariş satırıyla yazılır, sipariş teslimi de işlensin; siparişi
 // olmayan mal "diğer" girişidir. Ambalaj seçimi (Otomatik ya da tip), miktar; aktif konum varsa oraya, yoksa "rafı okut" bekleyen
@@ -21,6 +21,8 @@ export interface BekleyenGiris {
   malzemeId: number; ad: string; miktar: string; parti: string; ambalaj: AmbalajSecimi; ambalajSayisi: string;
   // null: siparişsiz, "diğer" girişi.
   siparisSatirId: number | null;
+  // 3332-2: siparişe sipariş biriminde yazılacak miktar (tartılan kg ya da dönüşümsüz kartta elle).
+  siparisMiktari?: string;
 }
 type OkunanMalzeme = Extract<KodCozCevabi, { tur: 'malzeme' }>['ozet'];
 
@@ -32,6 +34,7 @@ export function kabulGovdesi(b: BekleyenGiris, konumId: number | null): MalKabul
     satirlar: [{
       malzemeId: b.malzemeId, miktar: miktarGirdisi(b.miktar), ...(konumId ? { konumId } : {}), parti: b.parti ? { tedarikciPartiNo: b.parti } : null,
       ...(b.siparisSatirId === null ? {} : { siparisSatirId: b.siparisSatirId }),
+      ...(b.siparisSatirId !== null && b.siparisMiktari ? { siparisMiktari: miktarGirdisi(b.siparisMiktari) } : {}),
       ...(b.ambalaj === 'oto' ? {} : { ambalaj: { tur: b.ambalaj, olcu: AMBALAJ_KATALOGU[b.ambalaj].varsayilan, adet: b.ambalajSayisi ? Number(b.ambalajSayisi) : null } }),
     }],
   };
@@ -61,6 +64,7 @@ function SiparisSecimi({ malzemeId, secim, sec }: { malzemeId: number; secim: st
 
 export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme: OkunanMalzeme; konumId: number | null; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, ambalajSayisi: number) => void }) {
   const [miktar, setMiktar] = useState('');
+  const [siparisMiktari, setSiparisMiktari] = useState('');
   const [parti, setParti] = useState('');
   const [ambalaj, setAmbalaj] = useState<AmbalajSecimi>('oto');
   const [sayi, setSayi] = useState('');
@@ -69,22 +73,25 @@ export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => { bitti(c.belge.id, kopyaSayisi(sayi)); return c; }), `Mal kabul edildi: ${ad}`);
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
-  const giris = (): BekleyenGiris => ({ malzemeId: malzeme.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi, siparisSatirId: siparis === SIPARISSIZ ? null : Number(siparis) });
+  const giris = (): BekleyenGiris => ({ malzemeId: malzeme.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi, siparisSatirId: siparis === SIPARISSIZ ? null : Number(siparis), ...(siparisMiktari ? { siparisMiktari } : {}) });
   const secildi = siparis !== '';
   // 3332: seçili sipariş satırının dönüşümü (SiparisSecimi ile aynı sorgu, ikinci istek gitmez).
   const acik = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
   const secilen = acik.data?.satirlar.find((x) => String(x.id) === siparis);
+  const d = secilen ? { ...secilen, stokBirimi: secilen.stokBirimi ?? null, donusum: secilen.donusum ?? null } : null;
+  const sec = (v: string) => { setSiparis(v); setSiparisMiktari(''); };
   return (
     <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (secildi) { const g = kabulGovdesi(giris(), konumId); kilitli(() => komut.mutateAsync(g)); } }}>
-      <SiparisSecimi malzemeId={malzeme.id} secim={siparis} sec={setSiparis} />
+      <SiparisSecimi malzemeId={malzeme.id} secim={siparis} sec={sec} />
       <div className="tc-stok-ambalajlar" role="group" aria-label="Ambalaj">
         <button type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === 'oto'} onClick={() => setAmbalaj('oto')}><AmbalajIkonu tur="oto" /><strong>Otomatik</strong><span>Malzemenin kayıtlı ambalajı</span></button>
         {AMBALAJ_TURLERI.map((t) => <button key={t} type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === t} onClick={() => setAmbalaj(t)}><AmbalajIkonu tur={t} /><strong>{AMBALAJ_KATALOGU[t].ad}</strong><span>{AMBALAJ_KATALOGU[t].olculer.find((o) => o.kod === AMBALAJ_KATALOGU[t].varsayilan)?.ad}</span></button>)}
       </div>
       <div className="tc-stok-iki">
-        <Girdi etiket={`Sayılan miktar${malzeme.birim ? ` (${malzeme.birim})` : ''}`} inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} required autoFocus />
-        {secilen && <IkinciBirimGirdisi d={{ ...secilen, stokBirimi: secilen.stokBirimi ?? null, donusum: secilen.donusum ?? null }} stokMiktar={miktar} degistir={setMiktar} />}
-        {secilen && <BirimKarsiligi d={{ ...secilen, stokBirimi: secilen.stokBirimi ?? null, donusum: secilen.donusum ?? null }} girilen={miktar} />}
+        <Girdi etiket={`Sayılan miktar${malzeme.birim ? ` (${malzeme.birim})` : ''}`} inputMode="decimal" value={miktar} onChange={(e) => { setMiktar(e.target.value); if (d && ikinciBirim(d) !== null) setSiparisMiktari(''); }} required autoFocus />
+        {d && <IkinciBirimGirdisi d={d} stokMiktar={miktar} degistir={(m, sm) => { setMiktar(m); setSiparisMiktari(sm); }} />}
+        {d && <SiparisMiktariGirdisi d={d} deger={siparisMiktari} degistir={setSiparisMiktari} />}
+        {d && <BirimKarsiligi d={d} girilen={miktar} />}
         {ambalaj !== 'oto' && <Girdi etiket="Ambalaj sayısı" inputMode="numeric" value={sayi} onChange={(e) => setSayi(e.target.value)} />}
         {malzeme.tur !== 'demirbas' && <Girdi etiket="Tedarikçi parti no" value={parti} onChange={(e) => setParti(e.target.value)} {...(lotluMu(malzeme.tur) ? { ipucu: LOT_IPUCU } : {})} />}
       </div>

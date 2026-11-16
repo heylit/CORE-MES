@@ -1586,15 +1586,17 @@ export async function ayarlarKaydet(db: Db, k: Kullanici, g: AyarlarKaydetYazimi
 // SH1 a: stok mal kabul işleminin içinde çağırır (çağıranın işlemi; yetki stok ucundadır). Kişi oturumdan, zaman sunucudan.
 // Kalanı aşan miktar reddedilmez, sipariş satırında fazla teslim görünür. Aynı mal kabul satırı ikinci kez yazılmaz.
 // Kalanı kapatılmış siparişe yalnız aynı işlemde geri alınmış teslimin düzeltmesi yazılır.
-export async function teslimIsle(db: Db, k: Kullanici, g: { siparisSatirId: number; miktar: string; malKabulSatirId: number }): Promise<void> {
+// 3332-2 a: miktar sipariş satırının birimindedir; stokMiktar mal kabulün stok birimindeki miktarıdır (birimler aynıysa verilmez).
+export async function teslimIsle(db: Db, k: Kullanici, g: { siparisSatirId: number; miktar: string; malKabulSatirId: number; stokMiktar?: string }): Promise<void> {
   if (!ondalikMetinSemasi.safeParse(g.miktar).success || ondalikKiyas(g.miktar, '0') <= 0) throw gecersiz(ILETILER.teslimMiktari);
+  if (g.stokMiktar !== undefined && (!ondalikMetinSemasi.safeParse(g.stokMiktar).success || ondalikKiyas(g.stokMiktar, '0') <= 0)) throw gecersiz(ILETILER.teslimMiktari);
   const hedef = await s.teslimHedefiKilitle(db, g.siparisSatirId);
   if (hedef === null) throw gecersiz(ILETILER.teslimSiparisYok);
   if (hedef.talepDurumu !== 'siparis_verildi') throw gecersiz(ILETILER.teslimDurumu);
   // Kapalı siparişte yalnız mal kabul düzeltmesi yazar: stok aynı işlemde önce eski teslimi geri alır (B-5).
   if (hedef.kapali && !(await s.buIslemdeGeriAlindiMi(db, g.siparisSatirId))) throw gecersiz(ILETILER.kapaliSipariseTeslim);
   if ((await s.malKabulNetleri(db, g.malKabulSatirId)).length > 0) throw cakisma(ILETILER.teslimTekrar);
-  await s.teslimEkle(db, g.siparisSatirId, g.malKabulSatirId, g.miktar, k.id);
+  await s.teslimEkle(db, g.siparisSatirId, g.malKabulSatirId, g.miktar, k.id, g.stokMiktar === undefined || ondalikKiyas(g.stokMiktar, g.miktar) === 0 ? null : g.stokMiktar);
   await karneTesliminiYenile(db, g.siparisSatirId);
   await otomatikPlanlariYenile(db, k, hedef.talepId);
   await kapaliAlacaklariYenile(db, k, hedef.talepId);
@@ -1607,7 +1609,8 @@ export async function teslimGeriAl(db: Db, k: Kullanici, g: { malKabulSatirId: n
   const talepler = new Set<string>();
   for (const n of netler) {
     const hedef = await s.teslimHedefiKilitle(db, n.siparisSatiriId);
-    await s.teslimEkle(db, n.siparisSatiriId, g.malKabulSatirId, n.net.startsWith('-') ? n.net.slice(1) : `-${n.net}`, k.id);
+    const ters = (x: string): string => (x.startsWith('-') ? x.slice(1) : `-${x}`);
+    await s.teslimEkle(db, n.siparisSatiriId, g.malKabulSatirId, ters(n.net), k.id, ondalikKiyas(n.stokNet, n.net) === 0 ? null : ters(n.stokNet));
     await karneTesliminiYenile(db, n.siparisSatiriId);
     if (hedef !== null) talepler.add(hedef.talepId);
   }

@@ -1398,6 +1398,43 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [7901])), new Map([[7901, '7.2']]), 'geri alınan satırın fiyatı stokun geri almasında kullanılır');
   });
 
+  // 3332-2 a: teslim sipariş biriminde (ör. 240 kg), stok karşılığı ayrı (10 adet). Kalan sipariş birimindedir; alış fiyatı stok birimi
+  // başınadır (8 TL/kg x 240 kg / 10 adet = 192 TL/adet). Geri alma ikisini birlikte ters çevirir. Stok karşılığı teslimle aynı işaretlidir.
+  test('3332-2: teslim sipariş biriminde, stok karşılığı ayrı; fiyat stok birimi başına; geri alma ikisini de ters çevirir', async () => {
+    const { s, a, k2 } = await bolunmusSiparis('8');
+    const satir = siparisi(s, a).satirlar[0]!.id;
+    // Ortalama ve emir fiyatı için kendi kartı: önceki testlerin teslimleri karışmasın.
+    const yeni = await kaliteKarti('ORN-3332', 'cubuk', 'adet');
+    const e = await emirAc();
+    await ortam!.sahip.tx(async (db) => {
+      // Katalog kalemi paylaşılır; bu kalem kendi katalog satırına bağlanır.
+      const katalog = randomUUID();
+      await db.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, yeni]);
+      await db.sorgu('UPDATE satin_alma_talep_kalemi SET katalog_id = $3 WHERE talep_id = $1 AND id = $2', [s.id, k2, katalog]);
+      await db.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = $2 WHERE id = $1', [s.id, e]);
+    });
+    await vt().tx((db) => teslimIsle(db, depocu(), { siparisSatirId: satir, miktar: '240', stokMiktar: '10', malKabulSatirId: 79801 }));
+    assert.equal((await vt().tx((db) => ortalamaAlisFiyatlari(db, [yeni]))).get(yeni)?.tryBirimFiyat, '192', 'ortalama stok birimi başına');
+    assert.deepEqual((await vt().tx((db) => siparisBirimFiyatlari(db, { emirIdleri: [e], projeIdleri: [], malzemeNolar: [yeni] }))).map((x) => [x.tryBirimFiyati, x.teslimMiktari]),
+      [['192', '10']], 'emir fiyatı stok birimi başına, miktar stok biriminde');
+    const kayit = () => vt().tx((db) => db.sorgu<{ miktar: string; stok: string | null }>(
+      'SELECT miktar::text, stok_miktar::text AS stok FROM satin_alma_teslim WHERE mal_kabul_satiri_id = 79801 ORDER BY id'));
+    assert.deepEqual((await kayit()).map((x) => [Number(x.miktar), Number(x.stok)]), [[240, 10]]);
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [79801])), new Map([[79801, '192']]));
+    const son = (await vt().tx((db) => sonAlisFiyatlari(db, [yeni]))).get(yeni)!;
+    assert.deepEqual([Number(son.birimFiyat), Number(son.tryBirimFiyat)], [192, 192]);
+    // Aynı birimde stok karşılığı yazılmaz (boş = miktarın kendisi).
+    await vt().tx((db) => teslimIsle(db, depocu(), { siparisSatirId: satir, miktar: '2', stokMiktar: '2', malKabulSatirId: 79802 }));
+    assert.equal((await vt().tx((db) => db.tek<{ stok: string | null }>('SELECT stok_miktar::text AS stok FROM satin_alma_teslim WHERE mal_kabul_satiri_id = 79802')))!.stok, null);
+    await assert.rejects(vt().tx((db) => teslimIsle(db, depocu(), { siparisSatirId: satir, miktar: '1', stokMiktar: '0', malKabulSatirId: 79803 })), hataKodu('GECERSIZ'));
+    await geriAl(79801);
+    assert.deepEqual((await kayit()).map((x) => [Number(x.miktar), Number(x.stok)]), [[240, 10], [-240, -10]]);
+    await geriAl(79802);
+    await assert.rejects(vt().tx((db) => db.sorgu(
+      'INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id, stok_miktar) VALUES ($1, 79804, 5, $2, -1)', [satir, kisi.depo])),
+    /satin_alma_teslim_stok_miktar/);
+  });
+
   test('kart 1474: teslim tedarikçi karnesine satır başına tek olay yazar; termin beklenen teslim, tam net miktarla; geri alma olayı yeniler ya da kaldırır; terminsiz satır olay yazmaz', async () => {
     const { s, a, b } = await bolunmusSiparis();
     const g = tamam<Talep>(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: s.karar!.siparisler.map((x) =>

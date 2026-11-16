@@ -3,6 +3,8 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import type { AcikSiparisSatiri, AcikSiparisSatirlariCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { digerBirimler, donusumKurali, kalanMetni, onerilenMiktar, type SiparisDonusumu } from './birim-donusumu.tsx';
 import { DEPOCU, ac, json, sunucuKur } from './test-ortak.tsx';
+import { bosSatir, satirGovdesi } from './MalKabul.tsx';
+import { kabulGovdesi } from './HizliMalKabul.tsx';
 
 // 3332: mal kabulde satın alma kaleminin adet ve kg karşılığı. Sipariş kg, stok adet ise kalan stok birimine çevrilerek önerilir;
 // girilen miktarın öbür birimi canlı görünür; dönüşüm bilinmiyorsa öneri boş ve uyarı çıkar. Veriler uydurmadır (ORN-).
@@ -107,5 +109,39 @@ describe('mal kabul ekranında adet ve kg (3332)', () => {
     expect((kutu as HTMLInputElement).value).toBe('');
     expect(within(alan).queryByLabelText(/Ağırlık|Karşılığı|Parça sayısı/)).toBeNull();
     expect(within(alan).getByText(/dönüşüm hesaplanamaz/).textContent).toContain('kartta birim ağırlığı yok');
+  });
+  it('3332-2 a: dönüşüm yoksa siparişe teslim kutusu sipariş biriminde istenir', async () => {
+    kur();
+    ac('/stok/mal-kabul');
+    const alan = await sec('ORN-burc');
+    const kutu = within(alan).getByLabelText(/Siparişe teslim \(kg\)/) as HTMLInputElement;
+    expect(kutu.required).toBe(true);
+    fireEvent.change(kutu, { target: { value: '9,5' } });
+    expect(kutu.value).toBe('9,5');
+  });
+  it('3332-2 a: dönüşümlü satırda siparişe teslim kutusu çıkmaz; kg kutusu yazılınca, adet değişince silinir', async () => {
+    kur();
+    ac('/stok/mal-kabul');
+    const alan = await sec('ORN-cubuk');
+    expect(within(alan).queryByLabelText(/Siparişe teslim/)).toBeNull();
+    const adet = await within(alan).findByLabelText(/Sayılan miktar/) as HTMLInputElement;
+    const kg = within(alan).getByLabelText('Ağırlık (kg)') as HTMLInputElement;
+    fireEvent.change(kg, { target: { value: '238,5' } });
+    await waitFor(() => expect(adet.value).toBe('10'));
+    fireEvent.change(adet, { target: { value: '9' } });
+    await waitFor(() => expect(kg.value).toBe('216'));
+  });
+});
+
+describe('gövdede siparişe teslim miktarı (3332-2 a)', () => {
+  it('ayrıntılı mal kabul: yazılan sipariş miktarı gider, yoksa alan yoktur', () => {
+    const s = { ...bosSatir(), kart: '51', miktar: '10', siparisSatirId: '7' };
+    expect(satirGovdesi({ ...s, siparisMiktari: '238,5' })).toMatchObject({ siparisSatirId: 7, miktar: '10', siparisMiktari: '238.5' });
+    expect(satirGovdesi(s)).not.toHaveProperty('siparisMiktari');
+  });
+  it('hızlı mal kabul: siparişli girişte gider, siparişsizde gitmez', () => {
+    const b = { malzemeId: 51, ad: 'ORN-cubuk', miktar: '10', parti: '', ambalaj: 'oto' as const, ambalajSayisi: '', siparisSatirId: 7, siparisMiktari: '240' };
+    expect(kabulGovdesi(b, null).satirlar[0]).toMatchObject({ siparisSatirId: 7, siparisMiktari: '240' });
+    expect(kabulGovdesi({ ...b, siparisSatirId: null }, null).satirlar[0]).not.toHaveProperty('siparisMiktari');
   });
 });

@@ -616,6 +616,9 @@ const malKabulSatirGirdisi = z.object({
   parti: partiGirdisi.nullable().optional(),
   ambalaj: ambalajGirdisi.nullable().optional(),
   siparisSatirId: kimlik.optional(),
+  // 3332-2 a: siparişe yazılan teslimin sipariş satırının birimindeki miktarı (tartılan kg gibi). Verilmezse sunucu karttan çevirir;
+  // birimler aynıysa miktarın kendisidir.
+  siparisMiktari: miktarSemasi.optional(),
   // Fasondan dönüş (K-080 c): sipariş satırı hizmet kartınınsa satırın kartı dönen yarı mamuldür; giden fason konumundan düşer.
   // Miktar verilmezse dönen miktar kadardır.
   fason: z.object({ malzemeId: kimlik, konumId: kimlik, partiId: buyukKimlik.nullable().optional(), miktar: miktarSemasi.optional() }).optional(),
