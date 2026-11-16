@@ -490,6 +490,7 @@ export interface PlanTaslagiYazimi {
   planSurumu: string | null;
   gecerlilik: string | null;
   istenenTermin: string | null;
+  yerlesim: 'arkaya' | 'geriye';
   planTermini: string | null;
   termin: string | null;
   karOrani: string;
@@ -503,21 +504,23 @@ export interface PlanTaslagiYazimi {
 export async function planTaslagiEkle(db: Db, t: PlanTaslagiYazimi, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO siparisler_teklif_plan_taslagi (teklif_id, surum_id, tur, durum, plan_surumu, gecerlilik, istenen_termin, plan_termini, termin,
-            kar_orani, maliyet_toplami, kalemler, kayanlar, kilitler, onay_gerekli, olusturan_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16) RETURNING id`,
+            kar_orani, maliyet_toplami, kalemler, kayanlar, kilitler, onay_gerekli, olusturan_id, yerlesim)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16, $17) RETURNING id`,
     [t.teklifId, t.surumId, t.tur, t.durum, t.planSurumu, t.gecerlilik, t.istenenTermin, t.planTermini, t.termin, t.karOrani, t.maliyetToplami,
-      JSON.stringify(t.kalemler), JSON.stringify(t.kayanlar), JSON.stringify(t.kilitler), t.onayGerekli, kisiId],
+      JSON.stringify(t.kalemler), JSON.stringify(t.kayanlar), JSON.stringify(t.kilitler), t.onayGerekli, kisiId, t.yerlesim],
   );
   if (satir === null) throw new Error('Plan taslağı eklenemedi');
   return satir.id;
 }
 
-export interface YerTutanTaslak { id: number; durum: 'aktif' | 'onay-bekliyor'; istenen_termin: string | null; termin: string | null; gecerli: boolean }
+export interface YerTutanTaslak {
+  id: number; durum: 'aktif' | 'onay-bekliyor'; istenen_termin: string | null; yerlesim: 'arkaya' | 'geriye' | null; termin: string | null; gecerli: boolean;
+}
 
 // Teklifin planda yer tutan satış taslağı; çağıran teklifi kilitlemiştir. Geçerliliği geçmişse gecerli false (yeri kalkmıştır).
 export function yerTutanTaslak(db: Db, teklifId: number): Promise<YerTutanTaslak | null> {
   return db.tek<YerTutanTaslak>(
-    `SELECT id, durum, istenen_termin, termin, gecerlilik >= current_date AS gecerli
+    `SELECT id, durum, istenen_termin, yerlesim, termin, gecerlilik >= current_date AS gecerli
        FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1 AND ${YER_TUTAR}`, [teklifId],
   );
 }
@@ -551,6 +554,7 @@ export interface PlanTaslagiSatiri {
   plan_surumu: string | null;
   gecerlilik: string | null;
   istenen_termin: string | null;
+  yerlesim: 'arkaya' | 'geriye' | null;
   plan_termini: string | null;
   termin: string | null;
   kar_orani: string;
@@ -573,7 +577,7 @@ const GORUNUM = `CASE WHEN t.tur = 'deneme' THEN 'deneme'
 
 export function planTaslaklari(db: Db, teklifId: number): Promise<PlanTaslagiSatiri[]> {
   return db.sorgu<PlanTaslagiSatiri>(
-    `SELECT t.id, t.teklif_id, v.surum_no, t.tur, ${GORUNUM} AS gorunum, t.plan_surumu, t.gecerlilik, t.istenen_termin, t.plan_termini, t.termin,
+    `SELECT t.id, t.teklif_id, v.surum_no, t.tur, ${GORUNUM} AS gorunum, t.plan_surumu, t.gecerlilik, t.istenen_termin, t.yerlesim, t.plan_termini, t.termin,
             t.kar_orani, t.maliyet_toplami, jsonb_array_length(t.kayanlar) AS kayan_sayisi,
             (SELECT count(*) FROM jsonb_array_elements(t.kayanlar) k WHERE (k->>'gecikir')::boolean)::int AS geciken_sayisi,
             t.onay_gerekli, t.onaylayan_id, ${zamanMetni('t.onay_ani')} AS onay_ani, t.olusturan_id, ${zamanMetni('t.olusturma')} AS olusturma

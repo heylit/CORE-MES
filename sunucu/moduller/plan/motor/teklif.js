@@ -30,7 +30,10 @@ function teklifSiparis(s, id, urun, adet, termin, oncelik, adimAdetleri, yon) {
 }
 /* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet, adimAdetleri? }], termin: 'GGGG-AA-GG SS:DD' | null,
    taslaklar: [{ id, kalemler: [{ id, urun, adet, termin }], yerlesim: { islemId: { m, S } } }], haric: düzenlenen taslak kimliği | null,
-   tamponGun: plan termini için bitişe eklenen gün, gecerlilik: 'GGGG-AA-GG' | null (plan şeridinin penceresi için) }. */
+   tamponGun: plan termini için bitişe eklenen gün, gecerlilik: 'GGGG-AA-GG' | null (plan şeridinin penceresi için),
+   yerlesim: 'arkaya' | 'geriye' | yok (3301; yoksa terminden çıkar: termin yoksa arkaya, varsa geriye) }.
+   arkaya: plan dondurulur ('sabit'), kalem ileri planlanır; termin verildiyse yalnız yetişip yetişmediği ölçülür, kimse kaymaz.
+   geriye: atölye yeniden dağıtır ('dagit'), kalem terminden geriye en geç başlamayla planlanır (3282 1c yönü, planın yönünden bağımsız). */
 function teklifDene(st0, taban0, istek) {
   const s = clone(st0); const taban = taban0 && taban0.ops ? clone({ ops: taban0.ops }) : null;
   s.D.satinalma = Array.isArray(s.D.satinalma) ? s.D.satinalma : [];
@@ -48,10 +51,12 @@ function teklifDene(st0, taban0, istek) {
     for (const [op, y] of Object.entries(t.yerlesim || {})) s.locks[op] = { m: y.m, S: +y.S };
   }
   const tabanE = taban ? evaluate(taban, s, null, false) : null;
-  const farkli = istek.termin != null;
+  const istenenVar = istek.termin != null;
+  const farkli = istenenVar && istek.yerlesim !== 'arkaya';
   const sonGun = HDAYS * 24 - 1;
-  /* Arkaya eklemede termin ufkun sonudur, gerçek termin değil: planın yönü geriyse (3282 1c) kalem ufkun sonuna itilirdi; yönü ileridir. */
-  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri, farkli ? null : 'ileri');
+  /* Arkaya eklemede yön ileridir: planın yönü geriyse (3282 1c) termin olarak verilen ufkun sonu kalemi oraya iterdi. İstenen termin
+     arkaya eklemede kaleme termin olarak verilmez: dondurulmamış (tabanda olmayan) siparişlerin önüne geçip onları kaydırırdı; yalnız ölçülür. */
+  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3, k.adimAdetleri, farkli ? 'geri' : 'ileri');
   const satinalma = {}; const eksik = {};
   for (const k of istek.kalemler) { satinalma[k.id] = []; eksik[k.id] = []; }
   { const cx0 = compile(s);
@@ -78,7 +83,7 @@ function teklifDene(st0, taban0, istek) {
     const j = e.J[k.id]; const tamam = !!(j && j.comp && isFinite(j.C));
     const malzeme = cx.mat.res[k.id] ? cx.mat.res[k.id].det.map(d => ({ kod: d.kod, birim: d.birim, miktar: d.need, kaynak: d.kaynak, gelis: d.t })) : [];
     const ek = eksik[k.id].slice();
-    if (!tamam) return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: farkli ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: ek, kilit: {} };
+    if (!tamam) return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: ek, kilit: {} };
     const islemler = Object.values(p.ops).filter(r => r.job === k.id).sort((a, b) => a.S - b.S).map(r => {
       const y = { id: r.id, adim: r.id.slice(r.id.lastIndexOf('.') + 1), m: r.m, fason: !!r.fas, S: r.S, C: r.C, ayarSaat: +r.su || 0, islemeSaat: +r.run || 0, tl: null };
       if (r.fas) { if (r.cost != null) y.tl = +r.cost; else ek.push(`${r.id} fason fiyatı`); return y; }
@@ -92,7 +97,7 @@ function teklifDene(st0, taban0, istek) {
     for (const m of j.miss) if (m !== 'gelir' && !/saat ücreti|fason fiyatı/.test(m)) ek.push(m);
     const planTerminGun = teklifCalismaGunu(s.D, Math.floor((j.C + (+istek.tamponGun || 0) * 24) / 24));
     const kilit = {}; for (const r of islemler) kilit[r.id] = { m: r.m, S: r.S };
-    const istenen = farkli ? parseT(s.D, istek.termin) : null;
+    const istenen = istenenVar ? parseT(s.D, istek.termin) : null;
     return { id: k.id, tamam, bitis: j.C, planTerminGun, ulasir: istenen == null ? null : j.C <= istenen, malzeme, satinalma: satinalma[k.id], islemler, malzemeTl: malzeme.length && j.mf != null ? j.mf : null, eksik: [...new Set(ek)], kilit };
   });
   const kayan = [];

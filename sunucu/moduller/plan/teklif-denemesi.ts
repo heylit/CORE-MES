@@ -33,6 +33,9 @@ export interface DenemeIstegi {
   kalemler: TeklifKalemi[];
   // İstenen termin planın duvar saatiyle ('GGGG-AA-GG SS:DD'); null: plan dondurulur, kalemler arkaya eklenir.
   termin: string | null;
+  // 3301: 'arkaya' termin olsa da plan dondurulur (termin yalnız yetişme ölçüsü); 'geriye' terminden geriye yeniden dağıtılır.
+  // Verilmezse terminden çıkar (null: arkaya, dolu: geriye).
+  yerlesim?: 'arkaya' | 'geriye';
   // Geçerliliği süren satış taslakları (süresi dolanı çağıran vermez) ve düzenlenen taslak.
   taslaklar: TeklifTaslagi[];
   haric: string | null;

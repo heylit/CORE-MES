@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi } from '#paylasilan/sozlesme/siparisler.ts';
+import type {
+  MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi, TerminYerlesimi,
+} from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
@@ -14,7 +16,8 @@ import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
-type TerminTuru = 'plan' | 'farkli';
+// 3301 (D): kademe 3 termin ve fiyat, kademe 4 koşullar ve gönder; ikisi tek formdur, sürüm kademe 4'ten verilir.
+export type FiyatKademesi = 3 | 4;
 
 interface Degerler {
   // Talep satırlarıyla aynı sırada; her satıra bir birim fiyat.
@@ -25,12 +28,14 @@ interface Degerler {
   odemeKosulu: string;
   gecerlilik: string;
   aciklama: string;
-  terminTuru: TerminTuru;
+  yerlesim: TerminYerlesimi;
   istenenTermin: string;
   kar: string;
 }
 
 // Önizlemedeki hazır kâr oranları (maliyet üstü yüzde); başka oran elle girilir.
+// Sunucudaki GERIYE_TERMIN_ZORUNLU ile aynı ileti (istemci sözleşmeden değer ithal etmez).
+const GERIYE_TERMIN_ZORUNLU = 'Terminden geriye yerleşimde istenen termin zorunlu.';
 const KARLAR = ['10', '15', '20', '25', '30', '40'] as const;
 const VARSAYILAN_KAR = '25';
 
@@ -50,7 +55,8 @@ function ilkDegerler(t: TeklifAyrintiCevabi): Degerler {
     odemeKosulu: son?.odemeKosulu ?? '',
     gecerlilik: son?.gecerlilik ?? '',
     aciklama: son?.aciklama ?? '',
-    terminTuru: 'plan',
+    // V6: varsayılan planın arkasına ekle; kimseyi kaydırmaz.
+    yerlesim: 'arkaya',
     istenenTermin: '',
     kar: VARSAYILAN_KAR,
   };
@@ -65,28 +71,42 @@ const sayi = (m: string | null): number | null => (m === null ? null : Number(m)
 const fiyatGirdisi = (n: number): string => n.toFixed(2).replace('.', ',');
 const tutarMetni = (n: number | null, pb: string): string => (n === null || !Number.isFinite(n) ? '—' : paraMetni(n.toFixed(2), pb));
 
-function dogrula(planli: boolean) {
+// Kademe 3'ün alanları (geçerlilik yalnız termin denenirken); kademe 4'ten gönderimde bunlardan biri hatalıysa kademe 3 açılır.
+const KADEME3_ALANI = /^(fiyatlar\.|kar$|istenenTermin$|gecerlilik$)/;
+
+function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
   return (d: Degerler): AlanHatalari => {
     const hata: AlanHatalari = {};
     d.fiyatlar.forEach((f, i) => {
       if (f.trim() === '') hata[`fiyatlar.${i}.birimFiyat`] = 'Birim fiyat zorunlu.';
       else if (belirsizSayi(f)) hata[`fiyatlar.${i}.birimFiyat`] = BELIRSIZ_SAYI;
     });
+    if (planli) {
+      if (d.gecerlilik === '') hata['gecerlilik'] = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
+      if (karSayisi(d.kar) === null) hata['kar'] = 'Kâr en çok iki ondalıklı bir yüzde olmalı.';
+    }
+    if (denenir && d.yerlesim === 'geriye' && d.istenenTermin === '') hata['istenenTermin'] = GERIYE_TERMIN_ZORUNLU;
+    if (kademe === 3) return hata;
     if (belirsizSayi(d.iskontoOrani)) hata['iskontoOrani'] = BELIRSIZ_SAYI;
     const gun = d.teslimGun.trim();
     if (gun !== '' && !/^\d+$/.test(gun)) hata['teslimGun'] = 'Teslim süresi gün olarak tam sayı yazılır.';
-    if (planli) {
-      if (d.gecerlilik === '') hata['gecerlilik'] = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
-      if (d.terminTuru === 'farkli' && d.istenenTermin === '') hata['istenenTermin'] = 'Başka termin için tarih seçin.';
-      if (karSayisi(d.kar) === null) hata['kar'] = 'Kâr en çok iki ondalıklı bir yüzde olmalı.';
-    }
     return hata;
   };
 }
 
+interface Ozellikler {
+  teklif: TeklifAyrintiCevabi;
+  kademe: FiyatKademesi;
+  kademeYaz: (k: FiyatKademesi) => void;
+  // Kademe 3'ün Geri düğmesi: kalemlere döner (kayıt yapmaz).
+  geri: () => void;
+  // Sürüm verildi: sayfa sonucu (onay bekliyor ya da teklif formu) gösterir.
+  verildi: (cevap: TeklifAyrintiCevabi) => void;
+}
+
 // 44: teklif sürümü planlama tezgâhının denemesiyle verilir. Termin ve maliyet aynı yerleşimden gelir; satışçı kârı seçer, fiyat
 // önerilir ve değiştirilebilir. Motor yoksa, kalemlerin kartı yoksa ya da termin deneme yetkisi yoksa fiyat ve termin elle girilir.
-export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
+export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const terminDener = useTerminDener();
@@ -95,39 +115,52 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   const ilk = teklif.surumler.length === 0;
   const pb = teklif.paraBirimi;
   const kartli = teklif.satirlar.some((s) => s.malzemeNo !== null);
+  const denenir = terminDener && kartli;
 
   // Plan denemesi yapılacaksa doğrulama ve gövde plan taslaklıdır; karar deneme cevabından sonra, her çizimde verilir.
   const planliRef = useRef(false);
-  const form = useForm<Degerler, TeklifAyrintiCevabi>({
+  const kademeRef = useRef(kademe);
+  kademeRef.current = kademe;
+  const form = useForm<Degerler, TeklifAyrintiCevabi | null>({
     ilk: ilkDegerler(teklif),
-    dogrula: (d) => dogrula(planliRef.current)(d),
+    dogrula: (d) => dogrula(planliRef.current, kademeRef.current, denenir)(d),
     hataIletisi: 'Sürüm verilemedi.',
-    kaydet: (d) => { const planli = planliRef.current; return api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${teklif.id}/surum-ver`, {
-      surum: teklif.surum,
-      fiyatlar: teklif.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: sayiGirdisi(d.fiyatlar[i] ?? '') })),
-      iskontoOrani: sayiGirdisi(d.iskontoOrani) || '0',
-      teslimGun: planli || d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
-      odemeKosulu: bosYap(d.odemeKosulu),
-      gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik,
-      aciklama: bosYap(d.aciklama),
-      terminTarihi: planli || d.terminTarihi === '' ? null : d.terminTarihi,
-      planTaslagi: planli ? { karOrani: sayiGirdisi(d.kar), istenenTermin: d.terminTuru === 'farkli' ? d.istenenTermin : null } : null,
-    }); },
+    // Kademe 3'te kayıt yoktur: denetim geçince koşullara geçilir.
+    kaydet: (d) => {
+      if (kademeRef.current === 3) return Promise.resolve(null);
+      const planli = planliRef.current;
+      return api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${teklif.id}/surum-ver`, {
+        surum: teklif.surum,
+        fiyatlar: teklif.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: sayiGirdisi(d.fiyatlar[i] ?? '') })),
+        iskontoOrani: sayiGirdisi(d.iskontoOrani) || '0',
+        teslimGun: planli || d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
+        odemeKosulu: bosYap(d.odemeKosulu),
+        gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik,
+        aciklama: bosYap(d.aciklama),
+        terminTarihi: planli || d.terminTarihi === '' ? null : d.terminTarihi,
+        planTaslagi: planli ? { karOrani: sayiGirdisi(d.kar), istenenTermin: d.istenenTermin === '' ? null : d.istenenTermin, yerlesim: d.yerlesim } : null,
+      });
+    },
     basarili: (cevap) => {
+      if (cevap === null) { kademeYaz(4); return; }
       istemci.setQueryData(anahtarlar.teklif(cevap.id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.teklifListeleri });
       void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(cevap.id) });
       void istemci.invalidateQueries({ queryKey: anahtarlar.atolyeTaslaklari });
       const no = cevap.sonSurumNo === null ? 'Sürüm verildi' : `Sürüm ${cevap.sonSurumNo} verildi`;
       bildir('tamam', cevap.durum === 'onay-bekliyor' ? `${no}; onay bekliyor.` : planliRef.current ? `${no}; satış taslağı planda yer tutuyor.` : `${no}.`);
+      verildi(cevap);
     },
     hatada: (hata) => eskiyseYenile(istemci, anahtarlar.teklif(teklif.id), hata),
   });
   const d = form.degerler;
   const kok = useRef<HTMLFormElement>(null);
+  // Kademe 4'ten gönderimde fiyat ya da termin hatası çıkarsa (sunucunun bağladığı dahil) kademe 3 açılır; odak sonra alana gider.
+  const kademe3Hatasi = Object.keys(form.hatalar).some((y) => KADEME3_ALANI.test(y) && (denenir || y !== 'gecerlilik'));
+  useEffect(() => { if (kademe === 4 && kademe3Hatasi) kademeYaz(3); }, [form.hataNo]);
   useHataOdagi(form.hataNo, kok);
-  const istenen = d.terminTuru === 'farkli' && d.istenenTermin !== '' ? d.istenenTermin : null;
-  const sorgu = { gecerlilik: d.gecerlilik, istenenTermin: istenen };
+  const istenen = d.istenenTermin !== '' ? d.istenenTermin : null;
+  const sorgu = { gecerlilik: d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim };
 
   const deneme = useQuery({
     queryKey: anahtarlar.teklifDenemesi(teklif.id, sorgu),
@@ -135,14 +168,14 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
       const p = new URLSearchParams();
       if (d.gecerlilik !== '') p.set('gecerlilik', d.gecerlilik);
       if (istenen !== null) p.set('istenenTermin', istenen);
-      const q = p.toString();
-      return api.get<TerminDenemesiCevabi>(`/siparisler/teklifler/${teklif.id}/termin-denemesi${q ? `?${q}` : ''}`);
+      p.set('yerlesim', d.yerlesim);
+      return api.get<TerminDenemesiCevabi>(`/siparisler/teklifler/${teklif.id}/termin-denemesi?${p.toString()}`);
     },
-    enabled: terminDener && kartli && (d.terminTuru === 'plan' || istenen !== null),
+    enabled: denenir && (d.yerlesim === 'arkaya' || istenen !== null),
     // Geçerlilik ya da termin değişirken önceki sonuç kalır: form o arada elle yola düşmez. Sürüm sunucuda yeniden denenir.
     placeholderData: keepPreviousData,
   });
-  const deneniyor = terminDener && kartli && deneme.isFetching;
+  const deneniyor = denenir && deneme.isFetching;
   const c = deneme.data;
   const planli = terminDener && c !== undefined && c.durum === 'hazir' && c.planTermini !== null;
   planliRef.current = planli;
@@ -164,7 +197,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
     if (!planli || kar === null) return;
     try {
       await korumali(`/siparisler/teklifler/${teklif.id}/deneme-taslagi`, {
-        gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik, istenenTermin: istenen, karOrani: sayiGirdisi(d.kar),
+        gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim, karOrani: sayiGirdisi(d.kar),
       });
       void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(teklif.id) });
       bildir('tamam', 'Deneme taslağı kaydedildi; planda yer tutmaz.');
@@ -178,7 +211,8 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
     const f = sayiGirdisi(d.fiyatlar[i] ?? '');
     return f === '' || Number.isNaN(Number(f)) ? null : Number(f) * Number(s.miktar);
   });
-  const satis = fiyatlar.some((f) => f === null) ? null : fiyatlar.reduce<number>((a, f) => a + (f ?? 0), 0);
+  const fiyatsiz = fiyatlar.filter((f) => f === null).length;
+  const satis = fiyatsiz > 0 ? null : fiyatlar.reduce<number>((a, f) => a + (f ?? 0), 0);
   const maliyet = c === undefined ? null : sayi(c.maliyetToplami);
   // 2661 a, 2669 b: gizli oranlı ayda maliyet "Gizli"; fiyat önerilmez, genel gider hariç maliyet de gösterilmez.
   const gizli = c?.genelGiderGizli === true;
@@ -188,6 +222,10 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   const karsizEksik = [...new Set(karsiz.flatMap((k) => k.eksikVeri))];
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
+  // Fiyatsız kalem varken kademe 3'ten geçilmez; neden alt çubukta yazar (Ne değişti 8).
+  const gecilmez = kademe === 3 && fiyatsiz > 0 ? `${String(fiyatsiz)} kalemin birim fiyatı yok; fiyat girilince devam edilir.` : null;
+  const yerlesimSec = (y: TerminYerlesimi) =>
+    form.degistir({ yerlesim: y, ...(y === 'geriye' && d.istenenTermin === '' && teklif.istenenTarih !== null ? { istenenTermin: teklif.istenenTarih } : {}) });
 
   const kalemSutunlari: Sutun<{ s: TeklifAyrintiCevabi['satirlar'][number]; k: TerminDenemesiKalemi | undefined; i: number }>[] = [
     {
@@ -218,108 +256,136 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   ];
 
   return (
-    <Kart baslik={ilk ? 'Teklif hazırla' : 'Yeni sürüm hazırla'}>
-      <p className="tc-sp-ipucu">
-        {planli
-          ? 'Teklif planın arkasına denendi; termin ve maliyet aynı yerleşimden. Kârı seçin, fiyat önerilir.'
-          : ilk ? 'Her kaleme birim fiyat girin; toplamlar kayıttan sonra sunucudan gelir.' : 'Önceki sürümün değerleri dolduruldu; değiştirip yeni sürüm olarak verin.'}
-      </p>
-      <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate aria-label="Sürüm formu">
-
-        {terminDener && kartli && (
-          <section className="tc-sp-tf" aria-label="Termin">
-            <div className="tc-sp-izgara">
-              <Girdi etiket="Geçerlilik tarihi" type="date" ipucu="Satış taslağı bu tarihe kadar planda yer tutar; geçince plandan kalkar." {...form.alan('gecerlilik')} />
-              <fieldset className="tc-sp-secim">
-                <legend>Termin</legend>
-                <label><input type="radio" name="terminTuru" checked={d.terminTuru === 'plan'} onChange={() => form.degistir({ terminTuru: 'plan' })} /> Plana göre (arkaya ekle)</label>
-                <label><input type="radio" name="terminTuru" checked={d.terminTuru === 'farkli'} onChange={() => form.degistir({ terminTuru: 'farkli' })} /> Başka termin</label>
-              </fieldset>
-              {d.terminTuru === 'farkli' && <Girdi etiket="İstenen termin" type="date" {...form.alan('istenenTermin')} />}
-            </div>
-            <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
-            {planli && c !== undefined && (c.plan === null
-              ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
-              : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} />)}
-          </section>
-        )}
-
-        {planli && c !== undefined ? (
-          <>
-            <Tablo
-              etiket="Kalemler, maliyet ve fiyat"
-              sutunlar={kalemSutunlari}
-              satirlar={teklif.satirlar.map((s, i) => ({ s, k: c.kalemler.find((k) => k.satirId === s.id), i }))}
-              satirAnahtari={(r) => r.s.id}
-              bosMesaj="Kalem yok."
-            />
-            {maliyetOkur && <MaliyetDokumu deneme={c} paraBirimi={pb} />}
-            {gizli && (
-              <p className="tc-sp-bildirim" role="note"><Rozet ton="bilgi"><Simge ad="lock" boyut="k" /> {GIZLI}</Rozet> {FIYAT_ONERISI_YOK}</p>
-            )}
-            <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
-              <span className="tc-sp-etiket">Kâr (maliyet üstü)</span>
-              <div className="tc-sp-kar-dugmeler">
-                {KARLAR.map((k) => (
-                  <Dugme key={k} tur={karSayisi(d.kar) === Number(k) ? 'birincil' : 'ikincil'} aria-pressed={karSayisi(d.kar) === Number(k)} onClick={() => form.degistir({ kar: k })}>{`%${k}`}</Dugme>
-                ))}
-              </div>
-              <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
-            </div>
-            {karsiz.length > 0 && (
-              <p className="tc-sp-bildirim" role="status">
-                <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
-                {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
-              </p>
-            )}
-            <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
-              <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
-              <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
-              <div><dt>{`İskontolu tutar (%${miktarMetni(sayiGirdisi(d.iskontoOrani) || '0')})`}</dt><dd>{tutarMetni(net, pb)}</dd></div>
-              <div className="tc-sp-genel"><dt>İskontolu net kâr</dt><dd>{gizli ? GIZLI : tumMaliyet && net !== null && maliyet !== null ? tutarMetni(net - maliyet, pb) : '—'}</dd></div>
-            </dl>
-            {!tumMaliyet && !gizli && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
-            <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} />
-          </>
-        ) : (
-          <ol className="tc-sp-kalemler">
-            {teklif.satirlar.map((s, i) => (
-              <li key={s.id} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
-                <div className="tc-sp-kalem-ust">
-                  <strong>{s.tanim}</strong>
-                  <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
-                </div>
+    <form ref={kok} className="tc-sp-form" onSubmit={form.gonder} noValidate aria-label={kademe === 3 ? 'Termin ve fiyat' : 'Koşullar ve gönder'}>
+      {kademe === 3 && (
+        <Kart baslik="Termin ve fiyat">
+          <p className="tc-sp-ipucu">
+            {planli
+              ? 'Termin ve maliyet aynı plan denemesinden gelir. Kârı seçin, fiyat önerilir; isterseniz değiştirin.'
+              : ilk ? 'Her kaleme birim fiyat girin.' : 'Önceki sürümün değerleri dolduruldu; değiştirip yeni sürüm olarak verin.'}
+          </p>
+          {denenir && (
+            <section className="tc-sp-tf" aria-label="Termin">
+              <div className="tc-sp-izgara">
+                <Girdi etiket="Geçerlilik tarihi" type="date" ipucu="Satış taslağı bu tarihe kadar planda yer tutar; geçince plandan kalkar." {...form.alan('gecerlilik')} />
+                <fieldset className="tc-sp-secim">
+                  <legend>Termin yerleşimi</legend>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'arkaya'} onChange={() => yerlesimSec('arkaya')} /> Planın arkasına ekle</label>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'geriye'} onChange={() => yerlesimSec('geriye')} /> Terminden geriye</label>
+                </fieldset>
                 <Girdi
-                  etiket={`${s.tanim} birim fiyat (${pb})`}
-                  required
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={d.fiyatlar[i] ?? ''}
-                  ipucu={ilk ? undefined : `Önceki: ${fiyatMetni(teklif.surumler.at(-1)?.fiyatlar.find((f) => f.satirId === s.id)?.birimFiyat, pb)}`}
-                  onChange={(o) => form.degistir({ fiyatlar: d.fiyatlar.map((f, j) => (j === i ? o.target.value : f)) })}
-                  {...(form.hata(`fiyatlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`fiyatlar.${i}.birimFiyat`) })}
+                  etiket="İstenen termin"
+                  type="date"
+                  {...(d.yerlesim === 'geriye' ? { required: true } : {})}
+                  ipucu={d.yerlesim === 'arkaya'
+                    ? 'İsteğe bağlı: girilirse planın yetişip yetişmediği yazılır. Plan dondurulur, hiçbir sipariş kaymaz.'
+                    : 'İş terminden geriye en geç başlamayla yerleşir; başka sipariş gecikirse plancı onayı gerekir.'}
+                  {...form.alan('istenenTermin')}
                 />
-              </li>
-            ))}
-          </ol>
-        )}
+              </div>
+              <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
+              {planli && c !== undefined && (c.plan === null
+                ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
+                : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} />)}
+            </section>
+          )}
 
-        <div className="tc-sp-izgara">
-          <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
-          {!planli && <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" {...form.alan('teslimGun')} />}
-          {!planli && <Girdi etiket="Termin tarihi" type="date" {...form.alan('terminTarihi')} />}
-          <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
-          {!(terminDener && kartli) && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
-        </div>
-        <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />
+          {planli && c !== undefined ? (
+            <>
+              <Tablo
+                etiket="Kalemler, maliyet ve fiyat"
+                sutunlar={kalemSutunlari}
+                satirlar={teklif.satirlar.map((s, i) => ({ s, k: c.kalemler.find((k) => k.satirId === s.id), i }))}
+                satirAnahtari={(r) => r.s.id}
+                bosMesaj="Kalem yok."
+              />
+              {maliyetOkur && <MaliyetDokumu deneme={c} paraBirimi={pb} />}
+              {gizli && (
+                <p className="tc-sp-bildirim" role="note"><Rozet ton="bilgi"><Simge ad="lock" boyut="k" /> {GIZLI}</Rozet> {FIYAT_ONERISI_YOK}</p>
+              )}
+              <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
+                <span className="tc-sp-etiket">Kâr (maliyet üstü)</span>
+                <div className="tc-sp-kar-dugmeler">
+                  {KARLAR.map((k) => (
+                    <Dugme key={k} tur={karSayisi(d.kar) === Number(k) ? 'birincil' : 'ikincil'} aria-pressed={karSayisi(d.kar) === Number(k)} onClick={() => form.degistir({ kar: k })}>{`%${k}`}</Dugme>
+                  ))}
+                </div>
+                <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
+              </div>
+              {karsiz.length > 0 && (
+                <p className="tc-sp-bildirim" role="status">
+                  <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
+                  {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
+                </p>
+              )}
+              <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
+                <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
+                <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
+                <div className="tc-sp-genel"><dt>Net kâr (iskontosuz)</dt><dd>{gizli ? GIZLI : tumMaliyet && satis !== null && maliyet !== null ? tutarMetni(satis - maliyet, pb) : '—'}</dd></div>
+              </dl>
+              {!tumMaliyet && !gizli && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
+              <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} />
+              <div className="tc-sp-satir-sag">
+                <Dugme simge="file" disabled={deneniyor} onClick={() => { void taslakAc(); }}>Deneme taslağı kaydet</Dugme>
+                <span className="tc-sp-ipucu">Deneme taslağı planda yer tutmaz; verilen teklif satış taslağı olarak yer tutar.</span>
+              </div>
+            </>
+          ) : (
+            <ol className="tc-sp-kalemler">
+              {teklif.satirlar.map((s, i) => (
+                <li key={s.id} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
+                  <div className="tc-sp-kalem-ust">
+                    <strong>{s.tanim}</strong>
+                    <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
+                  </div>
+                  <Girdi
+                    etiket={`${s.tanim} birim fiyat (${pb})`}
+                    required
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={d.fiyatlar[i] ?? ''}
+                    ipucu={ilk ? undefined : `Önceki: ${fiyatMetni(teklif.surumler.at(-1)?.fiyatlar.find((f) => f.satirId === s.id)?.birimFiyat, pb)}`}
+                    onChange={(o) => form.degistir({ fiyatlar: d.fiyatlar.map((f, j) => (j === i ? o.target.value : f)) })}
+                    {...(form.hata(`fiyatlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`fiyatlar.${i}.birimFiyat`) })}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+        </Kart>
+      )}
+
+      {kademe === 4 && (
+        <Kart baslik="Koşullar ve gönder">
+          <div className="tc-sp-izgara">
+            <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
+            {!planli && <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" {...form.alan('teslimGun')} />}
+            {!planli && <Girdi etiket="Termin tarihi" type="date" {...form.alan('terminTarihi')} />}
+            <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
+            {!denenir && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
+          </div>
+          <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />
+          {planli && c !== undefined && (
+            <p className="tc-sp-ipucu">{`Termin ${tarihMetni(c.termin)} (${d.yerlesim === 'arkaya' ? 'planın arkasına' : 'terminden geriye'}). Verilen teklif planda satış taslağı olarak yer tutar; yalnız termin ya da yerleşim değişirse yeniden yerleşir.`}</p>
+          )}
+        </Kart>
+      )}
+
+      <div className="tc-sp-kademe-cubuk">
         <GonderimHatasi form={form} etiket={(yol) => { const i = /^fiyatlar\.(\d+)\./.exec(yol)?.[1]; return i === undefined ? null : (teklif.satirlar[Number(i)]?.tanim ?? null); }} />
+        {gecilmez !== null && <p className="tc-sp-ipucu" role="status">{gecilmez}</p>}
         <div className="tc-sp-alt-cubuk">
-          {planli && <Dugme simge="file" disabled={deneniyor} onClick={() => { void taslakAc(); }}>Deneme taslağı kaydet</Dugme>}
-          <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor} disabled={deneniyor}>{ilk ? 'Teklifi ver' : `Sürüm ${(teklif.sonSurumNo ?? 0) + 1} olarak ver`}</Dugme>
+          <dl className="tc-sp-cubuk-tutar" aria-label="Tutar">
+            <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
+            <div><dt>{`İskontolu (%${miktarMetni(sayiGirdisi(d.iskontoOrani) || '0')})`}</dt><dd>{tutarMetni(net, pb)}</dd></div>
+          </dl>
+          <Dugme simge="back" onClick={() => (kademe === 4 ? kademeYaz(3) : geri())} disabled={form.gonderiliyor}>Geri</Dugme>
+          {kademe === 3
+            ? <Dugme tur="birincil" type="submit" simge="next" disabled={deneniyor || gecilmez !== null}>Devam</Dugme>
+            : <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor} disabled={deneniyor}>{ilk ? 'Teklifi ver' : `Sürüm ${(teklif.sonSurumNo ?? 0) + 1} olarak ver`}</Dugme>}
         </div>
-        {planli && <p className="tc-sp-ipucu">Verilen teklif planda satış taslağı olarak yer tutar; yeri sabittir, yalnız termin değişirse yeniden yerleşir. Deneme taslağı yer tutmaz.</p>}
-      </form>
-    </Kart>
+      </div>
+    </form>
   );
 }
 
@@ -345,16 +411,19 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
     <div className="tc-sp-yigin">
       <dl className="tc-sp-termin" aria-label="Termin sonucu">
         <div className="tc-sp-termin-ana">
-          <dt>{deneme.istenenTermin === null ? 'Termin (plandan)' : 'Girilen termin'}</dt>
+          <dt>{deneme.istenenTermin === null || deneme.termin !== deneme.istenenTermin ? 'Termin (plandan)' : 'Girilen termin'}</dt>
           <dd>{tarihMetni(deneme.termin)}</dd>
           {deneme.terminGun !== null && <dd className="tc-sp-soluk">{`Geçerlilik tarihinden itibaren ${deneme.terminGun} gün`}</dd>}
         </div>
-        {deneme.istenenTermin !== null && <div><dt>Plandan</dt><dd>{tarihMetni(deneme.planTermini)}</dd></div>}
+        {deneme.istenenTermin !== null && deneme.termin !== deneme.planTermini && <div><dt>Plandan</dt><dd>{tarihMetni(deneme.planTermini)}</dd></div>}
+        {deneme.istenenTermin !== null && deneme.termin !== deneme.istenenTermin && <div><dt>İstenen</dt><dd>{tarihMetni(deneme.istenenTermin)}</dd></div>}
         {gelis !== null && <div><dt>Malzeme gelişi</dt><dd>{zamanMetni(gelis)}</dd></div>}
       </dl>
       <div className="tc-sp-rozetler">
         {deneme.yetisir === true && <Rozet ton="tamam">Atölye bu termine yetiştirir</Rozet>}
-        {deneme.yetisir === false && <Rozet ton="hata">Plan bu termine yetişmiyor</Rozet>}
+        {deneme.yetisir === false && (deneme.yerlesim === 'arkaya'
+          ? <Rozet ton="hata">İstenen termine yetişmiyor; teklife plan termini yazılır</Rozet>
+          : <Rozet ton="hata">Plan bu termine yetişmiyor</Rozet>)}
         {deneme.satinalmaGerekli && <Rozet ton="uyari">Malzeme satın alma ister</Rozet>}
         {deneme.onayGerekli && <Rozet ton="uyari">Plancı onayı gerekir</Rozet>}
       </div>

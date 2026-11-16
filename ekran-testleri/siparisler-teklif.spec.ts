@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 
-// Teklif termin ve fiyat ekranı (44): 360, 768 ve 1280 genişlikte yatay taşma yok, termin, kâr ve sürüm düğmesi görünür.
+// Teklif ver, termin ve fiyat kademesi (44, 3301): 360, 768 ve 1280 genişlikte yatay taşma yok; termin yerleşimi, kâr ve alt çubuk görünür.
 // İki yol da deneme cevabı yönlendirilerek çizilir: Planlama sayfası açılınca boş çalışmayı kurduğundan (657 a) motorun bağlı olup olmadığı
 // aynı veritabanında koşan öteki testlere bağlıdır. "cozucu-yok" cevabını sunucu birim testleri sınar (siparisler/teklif-deneme.test.ts).
 test.use({ hesap: 'ornek.yonetici' });
 
 const DENEME = {
-  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
+  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
   yetisir: null, onayGerekli: false, satinalmaGerekli: true, maliyetToplami: '400.00', genelGiderSaatBasi: '10.00',
   kayanlar: [{ siparis: 'ORN-SS-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }],
   plan: {
@@ -50,6 +50,7 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
     body: JSON.stringify({
       ...DENEME,
       istenenTermin: new URL(r.request().url()).searchParams.get('istenenTermin'),
+      yerlesim: new URL(r.request().url()).searchParams.get('yerlesim') ?? 'arkaya',
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00', planTermini: '2099-07-14',
         malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'ORN-HM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
@@ -62,19 +63,20 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ ...ADET, satirlar: ADET.satirlar.map((s) => ({ ...s, kalemler: s.kalemler.map((k) => ({ ...k, satirId: t.satirId })) })) }),
   }));
-  await ac(`/siparisler/teklifler/${String(t.id)}`);
-  const form = page.getByRole('form', { name: 'Sürüm formu' });
+  await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
+  const form = page.getByRole('form', { name: 'Termin ve fiyat' });
   await expect(form.getByText('14.07.2099').first()).toBeVisible();
   await expect(form.getByRole('region', { name: 'Plan denemesi' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Adet değişirse' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Atölyedeki satış taslakları' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '3 Termin ve fiyat', selected: true })).toBeVisible();
   await expect(form.getByRole('group', { name: 'Kâr oranı' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Maliyet dökümü' })).toBeVisible();
   await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toHaveValue('12,50');
-  await form.getByLabel(/Başka termin/).check();
-  await form.getByLabel('İstenen termin').fill('2099-07-05');
+  await form.getByLabel('Terminden geriye').check();
+  await form.getByLabel(/^İstenen termin/).fill('2099-07-05');
   await expect(form.getByRole('table', { name: 'Bitişi değişen siparişler' })).toBeVisible();
-  await expect(form.getByRole('button', { name: 'Teklifi ver' })).toBeVisible();
+  await expect(form.getByLabel('Tutar')).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Devam' })).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
@@ -85,7 +87,7 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   await page.route(`**/api/siparisler/teklifler/${String(t.id)}/termin-denemesi**`, (r) => r.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({
-      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, planTermini: null, termin: null, terminGun: null, yetisir: null,
+      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: null, termin: null, terminGun: null, yetisir: null,
       onayGerekli: false, satinalmaGerekli: false, maliyetToplami: null, genelGiderSaatBasi: null, kayanlar: [], plan: null,
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: false, bitis: null, planTermini: null,
@@ -96,12 +98,30 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   await page.route(`**/api/siparisler/teklifler/${String(t.id)}/adet-denemesi**`, (r) => r.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ durum: 'cozucu-yok', satirlar: [] }),
   }));
-  await ac(`/siparisler/teklifler/${String(t.id)}`);
-  const form = page.getByRole('form', { name: 'Sürüm formu' });
+  await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
+  const form = page.getByRole('form', { name: 'Termin ve fiyat' });
   await expect(form.getByText('Termin denemesi kullanılamıyor')).toBeVisible();
-  await expect(form.getByLabel('Termin tarihi')).toBeVisible();
-  await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toBeVisible();
+  await form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`)).fill('11');
+  await form.getByRole('button', { name: 'Devam' }).click();
+  // Kademe 4 kayıt yapmadan açılır: elle termin ve koşullar.
+  await expect(page.getByRole('form', { name: 'Koşullar ve gönder' }).getByLabel('Termin tarihi')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Teklifi ver' })).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});
+
+test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir; kayıtsız talepte termin ve fiyat nedenini yazar', async ({ page, ag, ac }) => {
+  await ac('/siparisler/teklifler/yeni');
+  await expect(page.getByRole('tablist', { name: 'Teklif kademeleri' })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Müşteri ve konu' }).getByLabel(/^Konu/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Devam' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  await page.getByRole('tab', { name: '2 Kalemler' }).click();
+  await expect(page.getByLabel(/^Kalem 1 tanım/)).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  await page.getByRole('tab', { name: '3 Termin ve fiyat' }).click();
+  await expect(page.getByText(/Önce kalemleri kaydedin/)).toBeVisible();
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
 });

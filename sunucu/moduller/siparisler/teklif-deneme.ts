@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { ADET_CARPANLARI } from '#paylasilan/sozlesme/siparisler.ts';
+import { ADET_CARPANLARI, terminYerlesimi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   AdetCarpani, AdetDenemesiCevabi, AtolyeTaslagi, AdetDenemesiSatiri, AdetDenemesiSuzgeci, DenemeTaslagiVerisi, PlanTaslagi, PlanTaslagiVerisi, TerminDenemesiCevabi, TerminDenemesiSuzgeci,
 } from '#paylasilan/sozlesme/siparisler.ts';
@@ -24,8 +24,10 @@ let cozucu: TeklifDenemeCozucusu | null = null;
 export function teklifDenemeCozucusuKaydet(c: TeklifDenemeCozucusu | null): void { cozucu = c; }
 
 async function dene(
-  db: Db, kullanici: Kullanici, teklifId: number, g: { gecerlilik: string | null; istenenTermin: string | null }, haric: number | null, carpan: AdetCarpani = '1',
+  db: Db, kullanici: Kullanici, teklifId: number, g0: { gecerlilik: string | null; istenenTermin: string | null; yerlesim: TerminYerlesimi | null }, haric: number | null,
+  carpan: AdetCarpani = '1',
 ): Promise<{ cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | null }> {
+  const g = { gecerlilik: g0.gecerlilik, istenenTermin: g0.istenenTermin, yerlesim: terminYerlesimi(g0.istenenTermin, g0.yerlesim) };
   const satirlar = (await sorgular.talepSatirlari(db, teklifId)).map((s) => ({ ...s, miktar: carpilmisAdet(s.miktar, carpan) }));
   // 64 a: teklifin bütün kartlı kalemleri tek denemede birlikte yerleşir.
   const kalemler = satirlar.flatMap((s) => (s.malzeme_no === null ? [] : [{ satirId: s.id, malzemeNo: s.malzeme_no, adet: Number(s.miktar) }]));
@@ -37,8 +39,9 @@ async function dene(
       kalemler: kalemler.map((k) => ({ malzemeNo: k.malzemeNo, adet: k.adet })),
       // Geçerlilik henüz seçilmediyse deneme bugünün planına göredir.
       gecerlilik: g.gecerlilik ?? bugun,
-      // Boşsa plan dondurulur, teklif arkaya eklenir; doluysa atölye yeniden dağıtır (48 b).
+      // 3301: arkaya plan dondurulur, istenen termin yalnız yetişme ölçüsüdür; geriye atölye terminden geriye yeniden dağıtır (48 b).
       istenenTermin: g.istenenTermin,
+      yerlesim: g.yerlesim,
       // Bu teklifin yer tutan satış taslağı denemede yok sayılır: yeniden denenen teklif kendi yerine takılmaz.
       taslakId: haric === null ? null : String(haric),
       taslaklar: motorTaslaklari(yerTutanlar),
@@ -64,7 +67,7 @@ export async function adetDenemesi(db: Db, kullanici: Kullanici, id: number, g: 
   const satirlar: AdetDenemesiSatiri[] = [];
   let gizli = false;
   for (const carpan of ADET_CARPANLARI) {
-    const { cevap } = await dene(db, kullanici, id, { gecerlilik: g.gecerlilik, istenenTermin: null }, yer?.id ?? null, carpan);
+    const { cevap } = await dene(db, kullanici, id, { gecerlilik: g.gecerlilik, istenenTermin: null, yerlesim: 'arkaya' }, yer?.id ?? null, carpan);
     if (cevap.durum === 'cozucu-yok') return { durum: 'cozucu-yok', satirlar: [], genelGiderGizli: cevap.genelGiderGizli };
     gizli ||= cevap.genelGiderGizli;
     satirlar.push({
@@ -90,7 +93,7 @@ function yerlesmisSonuc(d: { cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | 
 }
 
 const yazim = (teklifId: number, c: TerminDenemesiCevabi, sonuc: DenemeSonucu, karOrani: string) => ({
-  teklifId, planSurumu: c.planSurumu, gecerlilik: c.gecerlilik, istenenTermin: c.istenenTermin, planTermini: c.planTermini, termin: c.termin,
+  teklifId, planSurumu: c.planSurumu, gecerlilik: c.gecerlilik, istenenTermin: c.istenenTermin, yerlesim: c.yerlesim, planTermini: c.planTermini, termin: c.termin,
   karOrani, maliyetToplami: c.maliyetToplami, kalemler: c.kalemler, kayanlar: c.kayanlar, kilitler: kilitler(sonuc),
 });
 
@@ -104,10 +107,11 @@ export async function satisTaslagiHazirla(db: Db, kullanici: Kullanici, teklifId
   hazirlik: SatisTaslagiHazirligi; termin: string | null; onayBekler: boolean;
 }> {
   const mevcut = await sorgular.yerTutanTaslak(db, teklifId);
-  if (mevcut !== null && !yenidenYerlesirMi({ istenenTermin: mevcut.istenen_termin, gecerli: mevcut.gecerli }, p.istenenTermin)) {
+  const yerlesim = terminYerlesimi(p.istenenTermin, p.yerlesim);
+  if (mevcut !== null && !yenidenYerlesirMi({ istenenTermin: mevcut.istenen_termin, yerlesim: mevcut.yerlesim, gecerli: mevcut.gecerli }, p.istenenTermin, yerlesim)) {
     return { hazirlik: { tur: 'tasi', mevcut }, termin: mevcut.termin, onayBekler: mevcut.durum === 'onay-bekliyor' };
   }
-  const d = await dene(db, kullanici, teklifId, { gecerlilik, istenenTermin: p.istenenTermin }, mevcut?.id ?? null);
+  const d = await dene(db, kullanici, teklifId, { gecerlilik, istenenTermin: p.istenenTermin, yerlesim }, mevcut?.id ?? null);
   const sonuc = yerlesmisSonuc(d);
   return { hazirlik: { tur: 'yeni', cevap: d.cevap, sonuc }, termin: d.cevap.termin, onayBekler: d.cevap.onayGerekli };
 }
@@ -147,7 +151,7 @@ export async function planTaslaklari(db: Db, id: number): Promise<PlanTaslagi[]>
   const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.onaylayan_id === null ? [t.olusturan_id] : [t.olusturan_id, t.onaylayan_id])));
   return satirlar.map((t) => ({
     id: t.id, teklifId: t.teklif_id, surumNo: t.surum_no, tur: t.tur, gorunum: t.gorunum, planSurumu: t.plan_surumu, gecerlilik: t.gecerlilik,
-    istenenTermin: t.istenen_termin, planTermini: t.plan_termini, termin: t.termin, karOrani: t.kar_orani, maliyetToplami: t.maliyet_toplami,
+    istenenTermin: t.istenen_termin, yerlesim: terminYerlesimi(t.istenen_termin, t.yerlesim), planTermini: t.plan_termini, termin: t.termin, karOrani: t.kar_orani, maliyetToplami: t.maliyet_toplami,
     kayanSayisi: t.kayan_sayisi, gecikenSayisi: t.geciken_sayisi, onayGerekli: t.onay_gerekli,
     onaylayan: t.onaylayan_id === null ? null : (adlar.get(t.onaylayan_id) ?? null), onayAni: t.onay_ani,
     olusturan: adlar.get(t.olusturan_id) ?? null, olusturma: t.olusturma,

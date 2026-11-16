@@ -830,6 +830,7 @@ describe('Teklifler', () => {
     expect(screen.queryByText('Toplam (KDV hariç)')).toBeNull();
     expect(screen.queryByLabelText(/^Deneme Mil 20mm birim fiyat/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Müşteri kabulünü kaydet' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeni sürüm ver' })).toBeNull();
     // 3245 d: teklif formu fiyat basar; fiyat yetkisi olmayana düğme yoktur.
     expect(screen.queryByRole('button', { name: 'Teklif formu' })).toBeNull();
   });
@@ -846,8 +847,7 @@ describe('Teklifler', () => {
     ac('/siparisler/teklifler/21');
     await screen.findAllByText('Deneme Mil 20mm');
     await oturumCozuldu(istekler);
-    for (const ad of ['Müşteri kabulünü kaydet', 'Revizyon iste', 'Reddet', 'Teklif formu']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
-    expect(screen.queryByRole('form', { name: 'Sürüm formu' })).toBeNull();
+    for (const ad of ['Müşteri kabulünü kaydet', 'Revizyon iste', 'Reddet', 'Teklif formu', 'Teklif ver', 'Yeni sürüm ver']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
   });
 
   it('yeni teklifte ilk sürüm: virgüllü fiyat noktalı gider, önceki sürüm yokken form boş açılır', async () => {
@@ -857,31 +857,49 @@ describe('Teklifler', () => {
       return undefined;
     });
     ac('/siparisler/teklifler/21');
+    // 3301: ayrıntıda "Teklif hazırla" kartı yok; "Teklif ver" kademeli sayfayı termin ve fiyatta açar.
+    fireEvent.click(await screen.findByRole('button', { name: 'Teklif ver' }));
     const birim = await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/);
+    expect(screen.getByRole('tab', { name: '3 Termin ve fiyat', selected: true })).toBeTruthy();
     expect((birim as HTMLInputElement).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    // Fiyatsız kalem varken kademeden geçilmez; nedeni alt çubukta yazar.
+    expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('1 kalemin birim fiyatı yok; fiyat girilince devam edilir.')).toBeTruthy();
+    fireEvent.change(birim, { target: { value: '1.250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
     // Alanın altında ve düğmenin üstündeki özette (3301): uzun formda hata ekran dışında kalmaz.
-    expect(await screen.findByText('Birim fiyat zorunlu.')).toBeTruthy();
-    expect(screen.getByText('Deneme Mil 20mm: Birim fiyat zorunlu.')).toBeTruthy();
+    expect(await screen.findByText(/^Deneme Mil 20mm: Noktanın binlik/)).toBeTruthy();
     expect(screen.getByText(/Kaydedilmedi: \d+ alanda eksik/)).toBeTruthy();
-    expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(birim, { target: { value: '10,5' } });
-    fireEvent.change(screen.getByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
+    // Alt çubuk: teklif tutarı ve iskontolu tutar (iskonto yokken ikisi aynı).
+    expect(within(screen.getByLabelText('Tutar')).getAllByText('420,00 TRY')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({
       yol: '/siparisler/teklifler/21/surum-ver',
       govde: { surum: 4, fiyatlar: [{ satirId: 11, birimFiyat: '10.5' }], iskontoOrani: '0', teslimGun: 14, odemeKosulu: null, gecerlilik: null, aciklama: null },
     });
+    // Sürüm verilince teklif formu aynı sayfada açılır; "Teklife git" ayrıntıya döner.
+    expect(await screen.findByRole('dialog', { name: /Teklif formu · TK-2026-0021 · Sürüm 1/ })).toBeTruthy();
+    expect(screen.getByText('Sürüm 1 verildi')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Kapat' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Teklife git' }));
     await screen.findByText('Teklif müşteride');
   });
 
   it('verilmiş teklifte yeni sürüm formu önceki değerlerle dolu açılır', async () => {
     sunucuKur(FIYATCI);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     const birim = await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/);
     expect((birim as HTMLInputElement).value).toBe('10');
-    expect((screen.getByLabelText('Teslim süresi (gün)') as HTMLInputElement).value).toBe('14');
+    // Verilmiş teklifte talep kilitlidir: kademe 1-2 nedenini ve kalemleri gösterir.
+    fireEvent.click(screen.getByRole('tab', { name: '2 Kalemler' }));
+    expect(screen.getByText(/Talep ilk sürüm verildikten sonra değişmez/)).toBeTruthy();
+    expect(screen.queryByLabelText(/^Kalem 1 tanım/)).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '4 Koşullar ve gönder' }));
+    expect((await screen.findByLabelText('Teslim süresi (gün)') as HTMLInputElement).value).toBe('14');
     expect((screen.getByLabelText('İskonto (%)') as HTMLInputElement).value).toBe('10');
     expect(screen.getByRole('button', { name: 'Sürüm 2 olarak ver' })).toBeTruthy();
   });
@@ -995,7 +1013,10 @@ describe('Teklifler', () => {
     await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
     fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
+    // Kademe 1 kayıt yapmaz: yalnız talep bilgileri denetlenir, kalemlere geçilir.
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
+    expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
@@ -1016,9 +1037,10 @@ describe('Teklifler', () => {
         if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return cevap;
         return undefined;
       });
-      ac('/siparisler/teklifler/21');
+      ac('/siparisler/teklifler/21/teklif-ver');
       fireEvent.change(await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '10' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Teklifi ver' }));
       const uyari = await screen.findByText(beklenen);
       expect(uyari.closest('[role="alert"]')).toBeTruthy();
       cleanup();
@@ -1033,7 +1055,8 @@ describe('Teklifler', () => {
     await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
     fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kalem ekle' }));
     fireEvent.change(await screen.findByLabelText(/^Kalem 2 tanım/), { target: { value: 'Deneme Flans' } });
@@ -1044,9 +1067,85 @@ describe('Teklifler', () => {
     expect(yazmalar(istekler)).toHaveLength(0);
   });
 
+  it('3301: fiyat yetkisi olan kalemlerde "Kaydet ve devam" ile talebi açar; sayfa termin ve fiyat kademesinde sürer', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/ekle') return json(200, TEKLIF_YENI);
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    // Kaydedilmemiş talepte termin ve fiyat açılmaz; nedeni yazar.
+    fireEvent.click(screen.getByRole('tab', { name: '3 Termin ve fiyat' }));
+    expect(screen.getByText(/Önce kalemleri kaydedin/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '1 Müşteri ve konu' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam' }));
+    expect(await screen.findAllByText('Firma seçin.')).toHaveLength(2);
+    expect(screen.getByRole('tab', { name: '1 Müşteri ve konu', selected: true })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText(/^Kalem 1 tanım/), { target: { value: 'Deneme Mil 20mm' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet ve devam' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.yol).toBe('/siparisler/teklifler/ekle');
+    expect(await screen.findByRole('heading', { name: 'Teklif ver: TK-2026-0021' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '3 Termin ve fiyat', selected: true })).toBeTruthy();
+    expect(screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/)).toBeTruthy();
+    // Biten kademeler tik taşır; henüz başlamayan kademe 4 taşımaz (ön izleme D).
+    const tik = (ad: string) => screen.getByRole('tab', { name: ad }).querySelector('svg') !== null;
+    expect([tik('1 Müşteri ve konu'), tik('2 Kalemler'), tik('3 Termin ve fiyat'), tik('4 Koşullar ve gönder')]).toEqual([true, true, false, false]);
+    // Kademe 3'te Geri kalemlere döner; kayıtlı talep düzenlenebilir.
+    fireEvent.click(screen.getByRole('button', { name: 'Geri' }));
+    expect(await screen.findByRole('tab', { name: '2 Kalemler', selected: true })).toBeTruthy();
+    expect((await screen.findByLabelText(/^Kalem 1 tanım/) as HTMLInputElement).value).toBe('Deneme Mil 20mm');
+  });
+
+  it('3301: kademe 4 iskontolu tutarı çubukta yazar; Geri kademe 3\'e döner; sunucu termin ya da fiyat alanını reddedince kademe 3 açılır', async () => {
+    sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return hata(400, { kod: 'GECERSIZ', mesaj: 'Deneme termin reddi.', alan: 'istenenTermin' });
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.change(await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('İskonto (%)'), { target: { value: '10' } });
+    const tutar = screen.getByLabelText('Tutar');
+    expect(within(tutar).getByText('İskontolu (%10)')).toBeTruthy();
+    expect(within(tutar).getByText('400,00 TRY')).toBeTruthy();
+    expect(within(tutar).getByText('360,00 TRY')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Geri' }));
+    expect(await screen.findByRole('tab', { name: '3 Termin ve fiyat', selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    expect(await screen.findByRole('tab', { name: '3 Termin ve fiyat', selected: true })).toBeTruthy();
+    expect(screen.getAllByText(/Deneme termin reddi\./).length).toBeGreaterThan(0);
+  });
+
+  it('3301: onay bekleyen sürümde sonuç nedenini yazar; teklif formu açılmaz', async () => {
+    sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, { ...TEKLIF_VERILDI, durum: 'onay-bekliyor' } satisfies TeklifAyrintisi);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.change(await screen.findByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('Teslim süresi (gün)'), { target: { value: '14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    expect(await screen.findByText('Sürüm 1 onay bekliyor')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Teklif formu' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yazdır / PDF' })).toBeNull();
+  });
+
   it('teklif kalemi malzemeden seçilir: tanım kart adıyla dolar, kart değişince güncellenir, elle yazılan tanım korunur', async () => {
     sunucuKur(YAZAR);
     ac('/siparisler/teklifler/yeni');
+    fireEvent.click(await screen.findByRole('tab', { name: '2 Kalemler' }));
     const tanim = await screen.findByLabelText(/^Kalem 1 tanım/);
     const sec = async (ad: string) => {
       fireEvent.click(screen.getByRole('button', { name: /^Malzeme(den seç|yi değiştir)$/ }));
@@ -1076,7 +1175,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1'], birim: 'adet' };
   const TEKLIF_KARTLI = { ...TEKLIF_YENI, satirlar: [KARTLI_SATIR] } satisfies TeklifAyrintisi;
   const DENEME = {
-    durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
+    durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, yerlesim: 'arkaya', planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
     yetisir: null, onayGerekli: false, satinalmaGerekli: true,
     kalemler: [{
       satirId: 11, sira: 1, tanim: 'Deneme Mil 20mm', malzemeNo: 31, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00',
@@ -1115,7 +1214,7 @@ describe('Teklif termin ve fiyat (44)', () => {
     ...DENEME, genelGiderSaatBasi: '10.00',
     kalemler: [{ ...DENEME.kalemler[0]!, dokum: [{ tur: 'malzeme', ad: 'Malzeme', tezgah: null, saat: null, tutar: '100.00' }, { tur: 'isleme', ad: '10', tezgah: 'T1', saat: '2.00', tutar: '300.00' }] }],
   } satisfies TerminDenemesiCevabi;
-  const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', termin: '2099-07-05', yetisir: false, onayGerekli: true,
+  const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', yerlesim: 'geriye', termin: '2099-07-05', yetisir: false, onayGerekli: true,
     kayanlar: [{ siparis: 'SS-DNM-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }] } satisfies TerminDenemesiCevabi;
 
   const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI, adet: AdetDenemesiCevabi = ADET) => sunucuKur(kullanici, (yontem, yol) => {
@@ -1131,21 +1230,21 @@ describe('Teklif termin ve fiyat (44)', () => {
 
   it('plan denemesi şeridi: tezgâh başına sipariş, satış taslağı ve bu teklif çizilir; fason yalnız işi varsa; plan verisi yoksa not', async () => {
     kur(SATISCI, () => SERITLI);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     const serit = await screen.findByRole('region', { name: 'Plan denemesi' });
     expect(within(serit).getByRole('img', { name: 'Deneme Torna: S-DNM-1, TK-2099-007, Bu teklif' })).toBeTruthy();
     expect(within(serit).queryByText('Deneme Fasoncu')).toBeNull();
     expect(within(serit).getByText('Gecikiyor')).toBeTruthy();
     cleanup();
     kur(SATISCI);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     expect(await screen.findByText('Planlama motoru plan verisi vermedi; şerit çizilmez.')).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Plan denemesi' })).toBeNull();
   });
 
   it('adet değişirse: yarım, aynı, iki, dört kat; birim fiyat maliyet artı seçili kâr; kâr değişince tablo da değişir', async () => {
     const istekler = kur(SATISCI);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     const tablo = await screen.findByRole('table', { name: 'Adet değişirse' });
     expect(within(tablo).getByText('160')).toBeTruthy();
     expect(within(tablo).getByText('25.07.2099')).toBeTruthy();
@@ -1168,9 +1267,21 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(within(tablo).getByText('1.500,00 TRY')).toBeTruthy();
   });
 
+  it('3301 (Risk K-ek): arkaya eklemede istenen termine yetişmeyince termin plandandır ve uyarı yazar; istenen tarih ayrıca görünür', async () => {
+    kur(SATISCI, () => ({ ...DENEME, istenenTermin: '2099-07-05', yerlesim: 'arkaya', yetisir: false } satisfies TerminDenemesiCevabi));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('İstenen termine yetişmiyor; teklife plan termini yazılır')).toBeTruthy();
+    const dl = screen.getByLabelText('Termin sonucu');
+    expect(within(dl).getByText('Termin (plandan)')).toBeTruthy();
+    expect(within(dl).getByText('14.07.2099')).toBeTruthy();
+    expect(within(dl).getByText('İstenen')).toBeTruthy();
+    expect(within(dl).getByText('05.07.2099')).toBeTruthy();
+    expect(screen.queryByText('Plancı onayı gerekir')).toBeNull();
+  });
+
   it('arkaya ekleme: termin plandan ve geçerlilikten gün olarak yazılır; fiyat maliyet artı kârla önerilir; sürüm plan taslağıyla gider', async () => {
     const istekler = kur(SATISCI);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     expect(await screen.findByText('14.07.2099')).toBeTruthy();
     expect(screen.getByText('Geçerlilik tarihinden itibaren 14 gün')).toBeTruthy();
     expect(screen.getByText('Malzeme satın alma ister')).toBeTruthy();
@@ -1179,46 +1290,61 @@ describe('Teklif termin ve fiyat (44)', () => {
     fireEvent.click(screen.getByRole('button', { name: '%40' }));
     await waitFor(() => expect(birim.value).toBe('14,00'));
     expect(screen.queryByRole('table', { name: 'Maliyet dökümü' })).toBeNull();
-    expect(screen.queryByLabelText('Teslim süresi (gün)')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    // Alt çubukta teklif ve iskontolu tutar sürekli görünür.
+    expect(within(screen.getByLabelText('Tutar')).getAllByText('560,00 TRY')).toHaveLength(2);
+    // Varsayılan yerleşim planın arkasına ekle; istenen termin isteğe bağlıdır.
+    expect((screen.getByLabelText('Planın arkasına ekle') as HTMLInputElement).checked).toBe(true);
+    expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?yerlesim=arkaya')).toBe(true);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
     expect(await screen.findAllByText(/geçerlilik tarihi zorunlu/)).toHaveLength(2);
-    expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(screen.getByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?gecerlilik=2099-06-30')).toBe(true));
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Teklifi ver' }) as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?gecerlilik=2099-06-30&yerlesim=arkaya')).toBe(true));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    expect(await screen.findByRole('tab', { name: '4 Koşullar ve gönder', selected: true })).toBeTruthy();
+    expect(screen.queryByLabelText('Teslim süresi (gün)')).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({
       yol: '/siparisler/teklifler/21/surum-ver',
-      govde: { surum: 4, fiyatlar: [{ satirId: 11, birimFiyat: '14.00' }], gecerlilik: '2099-06-30', teslimGun: null, terminTarihi: null, planTaslagi: { karOrani: '40', istenenTermin: null } },
+      govde: { surum: 4, fiyatlar: [{ satirId: 11, birimFiyat: '14.00' }], gecerlilik: '2099-06-30', teslimGun: null, terminTarihi: null, planTaslagi: { karOrani: '40', istenenTermin: null, yerlesim: 'arkaya' } },
     });
   });
 
-  it('başka termin: istenen termin sorguya gider; geciken sipariş ve plancı onayı yazılır; sürüm istenen terminle gider', async () => {
+  it('terminden geriye: istenen termin ve yerleşim sorguya gider; geciken sipariş ve plancı onayı yazılır; sürüm yerleşimle gider', async () => {
     const istekler = kur(SATISCI, (yol) => (yol.includes('istenenTermin=2099-07-05') ? KAYAN : DENEME));
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     await screen.findByText('14.07.2099');
     fireEvent.change(screen.getByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
-    fireEvent.click(screen.getByLabelText(/Başka termin/));
-    fireEvent.change(screen.getByLabelText('İstenen termin'), { target: { value: '2099-07-05' } });
+    fireEvent.click(screen.getByLabelText('Terminden geriye'));
+    // Talepteki istenen teslim tarihi başlangıç önerisidir.
+    expect((screen.getByLabelText(/^İstenen termin/) as HTMLInputElement).value).toBe('2026-11-15');
+    fireEvent.change(screen.getByLabelText(/^İstenen termin/), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    expect(await screen.findAllByText('Terminden geriye yerleşimde istenen termin zorunlu.')).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText(/^İstenen termin/), { target: { value: '2099-07-05' } });
     expect(await screen.findByText('1 sipariş terminini kaçırır')).toBeTruthy();
     expect(screen.getByText('Plancı onayı gerekir')).toBeTruthy();
     expect(screen.getByText('Plan bu termine yetişmiyor')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Bitişi değişen siparişler' })).getByText('Gecikir')).toBeTruthy();
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Teklifi ver' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?gecerlilik=2099-06-30&istenenTermin=2099-07-05&yerlesim=geriye')).toBe(true);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Devam' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Teklifi ver' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ planTaslagi: { karOrani: '25', istenenTermin: '2099-07-05' } });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ planTaslagi: { karOrani: '25', istenenTermin: '2099-07-05', yerlesim: 'geriye' } });
   });
 
   it('maliyet dökümü yalnız maliyet okuyana görünür; deneme taslağı kârla kaydedilir', async () => {
     const istekler = kur(MUDUR, () => DOKUMLU);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     const dokum = await screen.findByRole('table', { name: 'Maliyet dökümü' });
     expect(within(dokum).getByText('300,00 TRY')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Deneme taslağı kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/deneme-taslagi', govde: { karOrani: '25', istenenTermin: null } });
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/deneme-taslagi', govde: { karOrani: '25', istenenTermin: null, yerlesim: 'arkaya' } });
   });
 
   it('2661 a, 2669 b: gizli oranlı ayda maliyet ve genel gider "Gizli", fiyat önerilmez ve neden yazılır', async () => {
@@ -1231,7 +1357,7 @@ describe('Teklif termin ve fiyat (44)', () => {
     } satisfies TerminDenemesiCevabi;
     const adet = { ...ADET, genelGiderGizli: true, satirlar: ADET.satirlar.map((r) => ({ ...r, maliyetToplami: null, kalemler: r.kalemler.map((k) => ({ ...k, birimMaliyet: null })) })) };
     kur(MUDUR, () => gizli, TEKLIF_KARTLI, adet);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     expect(await screen.findByText(/Fiyat önerisi yok: genel gider oranı gizli/)).toBeTruthy();
     const dokum = screen.getByRole('table', { name: 'Maliyet dökümü' });
     expect(within(within(dokum).getByText(/Genel gider/).closest('tr')!).getByText('Gizli')).toBeTruthy();
@@ -1250,7 +1376,7 @@ describe('Teklif termin ve fiyat (44)', () => {
       kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, eksikVeri: ['T1 saat ücreti'] }],
     } satisfies TerminDenemesiCevabi;
     kur(SATISCI, () => eksik);
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     expect(await screen.findByText('Kâr 1 kalemin fiyatına eklenmedi')).toBeTruthy();
     expect(screen.getByText(/eksik: T1 saat ücreti/)).toBeTruthy();
     expect(screen.getByText('Maliyet yok: kâr eklenmez, elle fiyat')).toBeTruthy();
@@ -1260,10 +1386,11 @@ describe('Teklif termin ve fiyat (44)', () => {
 
   it('motor bağlı değilse elle: termin tarihi ve fiyat elle girilir, plan taslağı gitmez', async () => {
     const istekler = kur(SATISCI, () => ({ ...DENEME, durum: 'cozucu-yok', planSurumu: null, planTermini: null, termin: null, terminGun: null, maliyetToplami: null, kalemler: [] }));
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21/teklif-ver');
     expect(await screen.findByText('Termin denemesi kullanılamıyor')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '11' } });
-    fireEvent.change(screen.getByLabelText('Termin tarihi'), { target: { value: '2099-08-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
+    fireEvent.change(await screen.findByLabelText('Termin tarihi'), { target: { value: '2099-08-01' } });
     fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ fiyatlar: [{ satirId: 11, birimFiyat: '11' }], terminTarihi: '2099-08-01', planTaslagi: null });
@@ -1272,7 +1399,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   it('63 b: termin onayı bekleyen teklifte plancı termini onaylar; plan taslakları görünür', async () => {
     const bekleyen = { ...TEKLIF_VERILDI, durum: 'onay-bekliyor', surumler: [{ ...SURUM_1, iskontoOrani: '5.00', terminTarihi: '2099-07-05' }] } satisfies TeklifAyrintisi;
     const TASLAK = {
-      id: 3, teklifId: 21, surumNo: 1, tur: 'satis', gorunum: 'onay-bekliyor', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: '2099-07-05', planTermini: '2099-07-14',
+      id: 3, teklifId: 21, surumNo: 1, tur: 'satis', gorunum: 'onay-bekliyor', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: '2099-07-05', yerlesim: 'geriye', planTermini: '2099-07-14',
       termin: '2099-07-05', karOrani: null, maliyetToplami: null, kayanSayisi: 1, gecikenSayisi: 1, onayGerekli: true, onaylayan: null, onayAni: null,
       olusturan: 'Deneme Satisci', olusturma: '2026-10-21T09:00:00+03:00',
     } satisfies PlanTaslaklariCevabi['taslaklar'][number];

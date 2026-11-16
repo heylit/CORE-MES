@@ -96,6 +96,23 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.ok(k.planTerminGun !== null && k.planTerminGun < 10, `plan termini ilk haftalarda (${String(k.planTerminGun)})`);
   });
 
+  test('3301: istenen terminle arkaya eklemede plan dondurulur, kimse kaymaz, yalnız yetişme ölçülür; terminden geriye kalemi termine yaslar', async () => {
+    const arkasiz = await teklifDenemesi(istek({}));
+    const yakinArka = await teklifDenemesi(istek({ termin: '2026-10-19 23:00', yerlesim: 'arkaya' }));
+    assert.ok(arkasiz && yakinArka);
+    assert.deepEqual(yakinArka.kayan, []);
+    assert.equal(yakinArka.kalemler[0]?.bitis, arkasiz.kalemler[0]?.bitis);
+    assert.equal(yakinArka.kalemler[0]?.ulasir, false);
+    const uzakArka = await teklifDenemesi(istek({ termin: '2026-11-13 23:00', yerlesim: 'arkaya' }));
+    assert.equal(uzakArka?.kalemler[0]?.ulasir, true);
+    assert.equal(uzakArka?.kalemler[0]?.bitis, arkasiz.kalemler[0]?.bitis);
+    // terminden geriye: kalem en geç başlamayla terminin önüne yaslanır, arkaya eklemeden çok sonra biter ama termini geçmez
+    const geriye = await teklifDenemesi(istek({ termin: '2026-11-13 23:00', yerlesim: 'geriye' }));
+    const bitis = geriye?.kalemler[0]?.bitis ?? null;
+    assert.ok(bitis !== null && bitis > (arkasiz.kalemler[0]?.bitis ?? 0) + 24 * 7, `geriye bitiş ${String(bitis)}`);
+    assert.equal(geriye?.kalemler[0]?.ulasir, true);
+  });
+
   test('istenen termin yoksa plan dondurulur: başka siparişin bitişi değişmez, kalem arkaya yerleşir ve plan termini çalışma gününe düşer', async () => {
     const r = await teklifDenemesi(istek({}));
     assert.ok(r);
