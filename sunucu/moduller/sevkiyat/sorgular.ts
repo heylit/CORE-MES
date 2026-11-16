@@ -220,6 +220,11 @@ export function isGuncelle(db: Db, id: number, surum: number, i: IsYazisi): Prom
     [id, ...isDegerleri(i), surum],
   );
 }
+export function isBelgeNoYaz(db: Db, id: number, surum: number, belgeNo: string | null): Promise<IsSatiri | null> {
+  return db.tek<IsSatiri>(
+    `UPDATE sevkiyat_isi SET belge_no = $3, surum = surum + 1 WHERE id = $1 AND iptal_edildi IS NULL AND surum = $2 RETURNING ${IS_ALANLARI}`, [id, surum, belgeNo],
+  );
+}
 export function isIptalEt(db: Db, id: number): Promise<IsSatiri | null> {
   return db.tek<IsSatiri>(`UPDATE sevkiyat_isi SET iptal_edildi = now(), surum = surum + 1 WHERE id = $1 AND iptal_edildi IS NULL RETURNING ${IS_ALANLARI}`, [id]);
 }

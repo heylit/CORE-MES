@@ -31,7 +31,7 @@ import {
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
 import * as sorgu from './sorgular.ts';
-import { tasimaDegistir } from './tum-isler.ts';
+import { onayKalkincaTetikGeriAl, onaydaTetikle, tasimaDegistir } from './tum-isler.ts';
 import type { AracSatiri, IsSatiri, NoktaSatiri, PlanSatiri } from './sorgular.ts';
 import {
   ayakCizgisi, cikisTaramasi, googleBaglantisi, tekRotaPlani, trafikSeviyeleri, yandexBaglantisi, yolAgiKur, yolOzeti,
@@ -407,6 +407,14 @@ export async function isGuncelle(db: Db, id: number, girdi: IsYazmaGirdisi & { s
     await sorgu.planSurumunuArtir(db, plan.id, plan.amac);
   }
   return isCevabi(cikar ? (await sorgu.isGetir(db, id))! : yeni);
+}
+// İrsaliye no (3348 a): yükleme anında kesilir; yoldaki işe de yazılır, tamamlanmış işte değişmez.
+export async function isBelgeNoYaz(db: Db, id: number, govde: { belgeNo: string | null; surum: number }): Promise<Is> {
+  const onceki = await sorgu.isGetir(db, id);
+  if (!onceki || onceki.iptalEdildi) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+  surumDenetle(onceki.surum, govde.surum);
+  if (onceki.durum === 'tamamlandi') throw gecersiz('Tamamlanmış işin irsaliye numarası değişmez; önce sonucu geri alın.');
+  return isCevabi(surumluYazildi(await sorgu.isBelgeNoYaz(db, id, govde.surum, govde.belgeNo)));
 }
 export async function isIptalEt(db: Db, id: number): Promise<Is> {
   const ilk = await sorgu.isGetir(db, id);
@@ -829,6 +837,7 @@ export async function onayla(db: Db, tarih: string, surum: number, kaynak: Harit
   await sorgu.onayYaz(db, plan.id);
   const yola = await sorgu.plandakiIslerinDurumu(db, plan.id, 'yolda', kisiId);
   await sorgu.urunFirmalariniYaz(db, yola);
+  if (kisiId !== null) await onaydaTetikle(db, kisiId, yola);
   const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, yola), onceki: 'planlandi', yeni: 'yolda', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
@@ -842,7 +851,10 @@ export async function onayiKaldir(db: Db, tarih: string, surum: number, kaynak: 
   await sorgu.onayKaldir(db, plan.id);
   // Sonuçlu plan onaydan çıkamadığı için bu işlerin hepsi yoldaydı.
   const donen = await sorgu.plandakiIslerinDurumu(db, plan.id, 'planlandi', null);
-  const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, donen), onceki: 'yolda', yeni: 'planlandi', kisiId });
+  // Satırlar tetik kalkmadan okunur: onayda tetiklenen iş yola çıkış bildirmedi, dönüşü de bildirmez.
+  const satirlar = await sorgu.islerinUrunSatirlari(db, donen);
+  await onayKalkincaTetikGeriAl(db, donen);
+  const uyarilar = await urunSevkiBildir(db, { satirlar, onceki: 'yolda', yeni: 'planlandi', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
 

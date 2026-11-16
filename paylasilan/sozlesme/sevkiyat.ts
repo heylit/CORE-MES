@@ -115,6 +115,9 @@ export const isGovdesi = z.object({
   belgeNo: bosOlabilir(60), aciklama: bosOlabilir(400), sabitAracId: z.number().int().positive().nullable(),
 });
 export const isGuncelleGovdesi = isGovdesi.extend({ surum: surumAlani });
+// 3348 a: irsaliye no yükleme anında, yola çıkmış işe de yazılır; işin başka alanı değişmez.
+export const isBelgeNoGovdesi = z.object({ belgeNo: bosOlabilir(60), surum: surumAlani });
+export type IsBelgeNoGovdesi = z.infer<typeof isBelgeNoGovdesi>;
 // Sevk komutunun stok uyarıları (147 b: kalite durumu red parça uyarıyla sevke çıkar); yalnız durum komutu doldurur.
 const sevkUyarilari = z.array(z.string()).optional();
 export const isCevabi = z.object({ is: isSemasi, uyarilar: sevkUyarilari });
@@ -153,10 +156,10 @@ export const urunSevkleriCevabi = z.object({ sevkler: z.array(urunSevkiSemasi) }
 export const isDurumuGovdesi = z.object({ durum: z.enum(['tamamlandi', 'yapilamadi', 'havuzda', 'yolda']), tarih, not: bosOlabilir(400) });
 
 // ---------- tüm işler (960) ----------
-// Tablo kalemi yalnız serbest bırakır; sevkiyat "Sevk et" ya da "Al" ile tetikler; depo son çıkışı ya da kabulü yapar ve stok orada oynar.
+// Tablo kalemi yalnız serbest bırakır; plan onayı yola çıkan işin kalemini tetikler (3348 a); depo son çıkışı ya da kabulü yapar ve stok orada oynar.
 // Kalem: serbest bırakılmış ya da bırakılmayı bekleyen kayıt. Aday: başka modülde duran, henüz kalemi olmayan şey (bitmemiş emir,
 // sırası gelmemiş fason adımı, gelmemiş sipariş); yalnız okunur.
-// biz: sevkiyat aracı götürür ya da alır (Sevk et / Al). firma: firma kendisi alır ya da getirir; iş açılmaz, depo hareketi yine yapılır.
+// biz: sevkiyat aracı götürür ya da alır. firma: firma kendisi alır ya da getirir; iş açılmaz, depo hareketi yine yapılır.
 export const TASIMA = z.enum(['biz', 'firma']);
 // Taşımayı son yazanın yeri (959 b): Tüm işler, satın alma siparişinin teslim yöntemi, sevkiyat ekranı; göç öncesi kayıtlar otomatik.
 export const SON_YAZAN_YERI = z.enum(['tum-isler', 'satin-alma', 'sevkiyat', 'otomatik']);

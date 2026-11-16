@@ -43,20 +43,34 @@ function sunucuKur(kullanici: Kullanici) {
 }
 function ac() {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}&adim=hazirla`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('Bekleme listesi', () => {
+describe('Hazırla adımı: sevke hazır liste', () => {
+  it('3348 a: noktası belli kayıt seçilip formsuz güne eklenir; noktasız kayıt seçilemez', async () => {
+    const istekler = sunucuKur(PLANCI);
+    ac();
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
+    const kutular = within(liste).getAllByRole('checkbox') as HTMLInputElement[];
+    expect(kutular.map((k) => k.disabled)).toEqual([true, false]);
+    fireEvent.click(kutular[1]!);
+    fireEvent.click(screen.getByRole('button', { name: /1 seçileni .* ekle/ }));
+    await waitFor(() => expect(yazmalar(istekler).length).toBe(1));
+    const yazma = yazmalar(istekler)[0]!;
+    expect(yazma.yol).toBe('/sevkiyat/bekleyenler/8/ise-cevir');
+    expect(yazma.govde).toMatchObject({ tarih: TARIH, tur: 'teslimat', birakisNoktasiId: 3, alisNoktasiId: null, paletSayisi: 1, agirlikKilogram: 0 });
+  });
+
   it('fason kaydı firmanın noktasıyla işe çevrilir; gün, yük ve belge no formdan gider', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
-    expect(within(liste).getByText('Sevke hazır')).toBeTruthy();
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(liste).getByText('Fasona gidecek')).toBeTruthy();
-    fireEvent.click(within(liste).getAllByRole('button', { name: 'İşe çevir' })[1]!);
+    expect(within(liste).getByRole('button', { name: 'Nokta seç' })).toBeTruthy();
+    fireEvent.click(within(liste).getByRole('button', { name: 'İşe çevir' }));
     const form = await screen.findByRole('form', { name: 'İşe çevir' });
     expect((within(form).getByLabelText(/Teslim noktası/) as HTMLSelectElement).value).toBe('3');
     fireEvent.change(within(form).getByLabelText(/Palet/), { target: { value: '2' } });
@@ -70,7 +84,7 @@ describe('Bekleme listesi', () => {
   it('261 a: yalnız ürün kaydı bölünür; ayrılacak adet pencereden gider', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(liste).getAllByRole('button', { name: 'Böl' })).toHaveLength(1);
     fireEvent.click(within(liste).getByRole('button', { name: 'Böl' }));
     const pencere = screen.getByRole('dialog', { name: 'Kısmi sevk' });
@@ -84,14 +98,14 @@ describe('Bekleme listesi', () => {
   it('kaldırma onaydan geçer; yetkisiz kişi düğmeleri görmez', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     fireEvent.click(within(liste).getAllByRole('button', { name: 'Kaldır' })[0]!);
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Listeden kaldırılsın mı?' })).getByRole('button', { name: 'Kaldır' }));
     await waitFor(() => expect(yazmalar(istekler)).toEqual([{ yontem: 'POST', yol: '/sevkiyat/bekleyenler/7/kaldir', govde: undefined }]));
     cleanup();
     sunucuKur(OKUYUCU);
     ac();
-    const okunan = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const okunan = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(okunan).queryByRole('button', { name: 'İşe çevir' })).toBeNull();
   });
 });

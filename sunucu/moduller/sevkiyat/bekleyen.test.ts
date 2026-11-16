@@ -18,6 +18,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKabulunuGeriAl, emirlerinSevkDurumu, emirlerinSevkleri, kapanisSevkiyatDurumu, sevkIsiOzeti, siparisinSevkleri, urunSevkiDinle } from './disari.ts';
 import type { UrunSevkiOlayi } from './disari.ts';
 import * as servis from './servis.ts';
+import { onayKalkincaTetikGeriAl, onaydaTetikle } from './tum-isler.ts';
 import { izgaraKaynagi } from './test-agi.ts';
 import { emirBaslat, emirBitir, emirSayim, fasonDonusuKaydet, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
@@ -302,7 +303,14 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
         { satirlar: [satir], onceki: 'tamamlandi', yeni: 'havuzda', kisiId: depoId },
       ]);
 
-      // Plan onayı işi yola çıkarır, onayın kaldırılması planlanmışa döndürür.
+      // Dinleyici reddederse durum komutu da geri alınır.
+      const reddet = urunSevkiDinle(async () => { throw new Error('stok reddetti'); });
+      try {
+        await assert.rejects(o().vt.tx((db) => servis.isDurumuDegistir(db, is.id, { durum: 'tamamlandi', tarih, not: null }, depoId)), /stok reddetti/);
+      } finally { reddet(); }
+      assert.equal((await o().sahip.tek<{ durum: string }>('SELECT durum FROM sevkiyat_isi WHERE id = $1', [is.id]))?.durum, 'havuzda');
+
+      // 3348 a: kişili plan onayı ürün kalemini depoya düşürür; stok onayda değil depo çıkışında oynar, onay da kaldırılması da bildirilmez.
       olaylar.length = 0;
       const kaynak = izgaraKaynagi();
       // Önceki testlerin ızgara dışındaki açık işleri bu günün havuzuna düşmesin.
@@ -310,22 +318,13 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
       const p = await o().vt.tx((db) => servis.kaydet(db, tarih, { amac: 'sure', surum: null, rotalar: [{ aracId, kilitli: false, ogeler: [{ isId: is.id, alis: false }] }] }, kaynak));
       assert.deepEqual(olaylar, [], 'taslak plana almak bildirilmez');
       const onayli = await o().vt.tx((db) => servis.onayla(db, tarih, p.surum!, kaynak, depoId));
-      assert.deepEqual(onayli.uyarilar, ['Yola çıkan uyarısı'], 'stok uyarısı onay cevabında döner (147 b)');
+      assert.equal('uyarilar' in onayli, false, 'depoya düşen ürün onayda stok uyarısı üretmez');
+      assert.equal((await o().sahip.tek<{ d: boolean }>('SELECT tetiklendi IS NOT NULL AS d FROM sevkiyat_isi WHERE id = $1', [is.id]))?.d, true);
       const kaldirilan = await o().vt.tx((db) => servis.onayiKaldir(db, tarih, onayli.surum!, kaynak, depoId));
       assert.equal('uyarilar' in kaldirilan, false, 'uyarı yoksa alan gönderilmez');
-      assert.deepEqual(olaylar, [
-        { satirlar: [satir], onceki: 'planlandi', yeni: 'yolda', kisiId: depoId },
-        { satirlar: [satir], onceki: 'yolda', yeni: 'planlandi', kisiId: depoId },
-      ]);
+      assert.deepEqual(olaylar, [], 'yola çıkışı bildirilmeyen iş dönüşü de bildirmez');
+      assert.equal((await o().sahip.tek<{ d: boolean }>('SELECT tetiklendi IS NOT NULL AS d FROM sevkiyat_isi WHERE id = $1', [is.id]))?.d, false, 'depo çıkışı yoksa tetik kalkar');
 
-      // Dinleyici reddederse durum komutu da geri alınır.
-      const reddet = urunSevkiDinle(async () => { throw new Error('stok reddetti'); });
-      try {
-        const son = await o().vt.tx((db) => servis.gunPlani(db, tarih, kaynak));
-        await assert.rejects(o().vt.tx((db) => servis.onayla(db, tarih, son.surum!, kaynak, depoId)), /stok reddetti/);
-      } finally { reddet(); }
-      const durum = await o().sahip.tek<{ durum: string }>('SELECT durum FROM sevkiyat_isi WHERE id = $1', [is.id]);
-      assert.equal(durum?.durum, 'planlandi');
     } finally { birak(); }
 
     // İleri izlenebilirlik: emirden işe ve müşteriye; sevke çıkmamış emir ve boş dizi dönmez, iptal edilen iş görünmez.
@@ -682,6 +681,50 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.deepEqual([bos?.asama, bos?.depo], ['depoda', null], 'bütün kabul geri alınınca adet boş');
     const kayit = await o().vt.sorgu<{ geri: boolean }>('SELECT geri_alindi IS NOT NULL AS geri FROM sevkiyat_kabul WHERE bekleyen_id = $1 ORDER BY mal_kabul_satiri_id', [donusId]);
     assert.deepEqual(kayit.map((x) => x.geri), [true, true, true]);
+  });
+
+  test('3348 a: plan onayı yola çıkan işin kalemlerini depoya düşürür; kalemsiz ve tetiklenmiş iş atlanır; onay kalkınca depo yapmadıysa tetik kalkar', async () => {
+    const f = await fasonFirmaKur(true);
+    const g = await bugun();
+    const ac = await istek<{ kalemIdleri: number[] }>('planlama_proje', 'POST', '/sevkiyat/tum-isler/elle', {
+      tur: 'tamir', yon: 'gidis', firmaId: f.firmaId, malzemeNo: null, adet: '2', istenenTarih: g, aciklama: 'Onay tetiği', tasima: 'biz', donusTarihi: null,
+    });
+    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
+    const [kalemId] = ac.govde.kalemIdleri as [number];
+    const is = await istek<{ is: Is }>('planlama_proje', 'POST', `/sevkiyat/bekleyenler/${kalemId}/ise-cevir`, isGovdesi(g, f.noktaId!));
+    assert.equal(is.durum, 200, JSON.stringify(is.govde));
+    const isId = isCevabi.parse(is.govde).is.id;
+    const kalemsiz = isCevabi.parse((await istek('planlama_proje', 'POST', '/sevkiyat/isler/ekle', isGovdesi(g, f.noktaId!))).govde).is.id;
+
+    assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId, kalemsiz])), [isId], 'kalemsiz iş tetiklenmez');
+    assert.equal((await satir(`kalem:${kalemId}`))?.asama, 'depoda');
+    assert.deepEqual(await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId])), [], 'tetiklenmiş iş ikinci kez tetiklenmez');
+
+    await o().vt.tx((db) => onayKalkincaTetikGeriAl(db, [isId, kalemsiz]));
+    assert.equal((await satir(`kalem:${kalemId}`))?.asama, 'havuzda', 'depo yapmadıysa tetik kalkar');
+
+    await o().vt.tx((db) => onaydaTetikle(db, yoneticiId, [isId]));
+    await o().vt.tx((db) => depoCikisiYaz(db, yoneticiId, kalemId));
+    await o().vt.tx((db) => onayKalkincaTetikGeriAl(db, [isId]));
+    assert.equal((await satir(`kalem:${kalemId}`))?.asama, 'tamamlandi', 'depo yaptıysa kalem depoda kalır');
+  });
+
+  test('3348 a: irsaliye no durak başına yazılır, sürümü artırır; eski sürüm ve iptal edilmiş iş reddedilir', async () => {
+    const f = await fasonFirmaKur(true);
+    const g = await bugun();
+    const is = isCevabi.parse((await istek('planlama_proje', 'POST', '/sevkiyat/isler/ekle', isGovdesi(g, f.noktaId!))).govde).is;
+    const yaz = (surum: number, belgeNo: string | null) => istek<{ is: Is }>('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/belge-no`, { belgeNo, surum });
+    const c = await yaz(is.surum, 'IRS-0001');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const yazilan = isCevabi.parse(c.govde).is;
+    assert.equal(yazilan.belgeNo, 'IRS-0001');
+    assert.equal(yazilan.surum, is.surum + 1);
+    assert.equal((await yaz(is.surum, 'IRS-0002')).durum, 409, 'eski sürüm reddedilir');
+    const bos = await yaz(yazilan.surum, '  ');
+    assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
+    assert.equal(isCevabi.parse(bos.govde).is.belgeNo, null, 'boş metin numarayı siler');
+    assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 200);
+    assert.equal((await yaz(yazilan.surum + 1, 'IRS-0003')).durum, 404);
   });
 
   test('1075 a: kapanışın sevkiyat maddesi sağlam adet kadar depo çıkışında tamam; kısmi çıkış ve geri alınan çıkış eksik; bitmemiş ve tanınmayan emir null', async () => {
