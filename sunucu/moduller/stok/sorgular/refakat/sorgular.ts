@@ -9,12 +9,14 @@ import type { TeslimHam } from '../teslim/sorgular.ts';
 export interface RefakatPartisiHam {
   id: number; uretimEmriId: number; sira: number; malzemeId: number; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
   durum: 'acik' | 'iptal'; surum: number; kayitZamani: string; verilen: string;
+  // 3337-3 a: kartın açılışta yazılan parça adedi; eski kartta null.
+  adet: number | null;
   ustRefakatPartisiId: number | null; birlestigiRefakatPartisiId: number | null; birlesmeZamani: string | null; lotaBaglanmaZamani: string | null;
 }
 // Verilen (Soru 137 a): partinin emrine o lottan depo konumlarından üretim tarafına yapılan teslimler eksi depoya dönenler; istasyonlar
 // arası teslim yeniden sayılmaz. Alınan teslimde alınan, yoldakinde gönderilen miktar.
 const REFAKAT_SECIMI = `SELECT r.id, r.uretim_emri_id AS "uretimEmriId", r.sira, r.malzeme_id AS "malzemeId", r.parti_id AS "partiId", p.lot_no AS "lotNo",
-  p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", r.durum, r.surum, ${zamanMetni('r.kayit_zamani')} AS "kayitZamani",
+  p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", r.durum, r.surum, r.adet, ${zamanMetni('r.kayit_zamani')} AS "kayitZamani",
   r.ust_refakat_partisi_id AS "ustRefakatPartisiId", r.birlestigi_refakat_partisi_id AS "birlestigiRefakatPartisiId", ${zamanMetni('r.birlesme_zamani')} AS "birlesmeZamani",
   ${zamanMetni('r.lota_baglanma_zamani')} AS "lotaBaglanmaZamani",
   (SELECT COALESCE(sum((CASE WHEN tk.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END - CASE WHEN th.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END)
@@ -41,14 +43,27 @@ export const istasyondaSatiriOlanKartlar = async (db: Db, kartIdler: readonly nu
        JOIN stok_konum k ON k.id = b.konum_id AND k.istasyon_id = $2
       WHERE r.id = ANY($1::int[])`, [kartIdler, istasyonId])).map((x) => x.id));
 // Sıra emir başına artar; aynı emre eşzamanlı iki açılış sırayla girer (kilit işlem sonunda bırakılır).
-export const refakatPartisiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; partiId: number; kisiId: number; ustRefakatPartisiId?: number | null }): Promise<number | null> => {
+export const refakatPartisiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; partiId: number; kisiId: number; ustRefakatPartisiId?: number | null; adet?: number | null }): Promise<number | null> => {
   await islemKilidiAl(db, 'stok_refakat_partisi', r.uretimEmriId);
   return (await db.tek<{ id: number }>(
-    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, ust_refakat_partisi_id)
-     SELECT $1, COALESCE(max(sira), 0) + 1, $2, $3, $4, $5 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
+    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, ust_refakat_partisi_id, adet)
+     SELECT $1, COALESCE(max(sira), 0) + 1, $2, $3, $4, $5, $6 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
      ON CONFLICT (uretim_emri_id, parti_id) WHERE durum = 'acik' DO NOTHING RETURNING id`,
-    [r.uretimEmriId, r.malzemeId, r.partiId, r.kisiId, r.ustRefakatPartisiId ?? null]))?.id ?? null;
+    [r.uretimEmriId, r.malzemeId, r.partiId, r.kisiId, r.ustRefakatPartisiId ?? null, r.adet ?? null]))?.id ?? null;
 };
+// 3337-3 a: emrin bir malzemedeki açık, birleşmemiş kartlarına yazılmış adetlerin toplamı (adetsiz eski kartlar sayılmaz).
+export const emrinKartAdetleri = async (db: Db, uretimEmriId: number, malzemeId: number): Promise<number> =>
+  (await db.tek<{ n: number }>(
+    `SELECT COALESCE(sum(adet), 0)::int AS n FROM stok_refakat_partisi
+      WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND durum = 'acik' AND birlestigi_refakat_partisi_id IS NULL`,
+    [uretimEmriId, malzemeId]))!.n;
+// 3337-3 a: kartların bölünmüş kollara giden parçası: alttaki açık, birleşmemiş kartların adetleri (adetsiz kart sayılmaz).
+export const kollardakiAdetler = async (db: Db, kartIdleri: readonly number[]): Promise<Map<number, number>> =>
+  new Map((await db.sorgu<{ ust: number; n: number }>(
+    `SELECT ust_refakat_partisi_id AS ust, sum(adet)::int AS n FROM stok_refakat_partisi
+      WHERE ust_refakat_partisi_id = ANY($1::int[]) AND durum = 'acik' AND birlestigi_refakat_partisi_id IS NULL AND adet IS NOT NULL
+      GROUP BY ust_refakat_partisi_id`,
+    [[...kartIdleri]])).map((r) => [r.ust, r.n]));
 // Birleşen kartın okutulması birleştiği karta yönlenir (kart #126); zincir derinliği sınırlıdır, döngü sonsuz yürümez.
 export const etkinRefakatPartisiBul = async (db: Db, id: number): Promise<RefakatPartisiHam | null> => {
   const son = await db.tek<{ id: number }>(
@@ -115,13 +130,13 @@ export const refakatPartisiVarMi = async (db: Db, id: number): Promise<boolean> 
 export const acikIstisnaKarti = (db: Db, uretimEmriId: number, malzemeId: number): Promise<RefakatPartisiHam | null> =>
   db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.malzeme_id = $2 AND r.parti_id IS NULL AND r.durum = 'acik' AND r.birlestigi_refakat_partisi_id IS NULL`,
     [uretimEmriId, malzemeId]);
-export const istisnaKartiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; kisiId: number }): Promise<number | null> => {
+export const istisnaKartiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; kisiId: number; adet?: number | null }): Promise<number | null> => {
   await islemKilidiAl(db, 'stok_refakat_partisi', r.uretimEmriId);
   return (await db.tek<{ id: number }>(
-    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id)
-     SELECT $1, COALESCE(max(sira), 0) + 1, $2, NULL, $3 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
+    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, adet)
+     SELECT $1, COALESCE(max(sira), 0) + 1, $2, NULL, $3, $4 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
      ON CONFLICT (uretim_emri_id, malzeme_id) WHERE parti_id IS NULL AND durum = 'acik' AND birlestigi_refakat_partisi_id IS NULL DO NOTHING RETURNING id`,
-    [r.uretimEmriId, r.malzemeId, r.kisiId]))?.id ?? null;
+    [r.uretimEmriId, r.malzemeId, r.kisiId, r.adet ?? null]))?.id ?? null;
 };
 export const istisnaDusumuYaz = async (db: Db, refakatPartisiId: number, hareketId: number): Promise<void> => {
   await db.sorgu('INSERT INTO stok_refakat_istisna_dusumu (refakat_partisi_id, hareket_id) VALUES ($1, $2)', [refakatPartisiId, hareketId]);

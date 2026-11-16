@@ -63,7 +63,7 @@ export {
   lotunRefakatPartileri, refakatSoyu, lotunKartlari, type RefakatCiktisiHam, refakatCiktilari, type RefakatSevkiHam, refakatSevkleri, refakatPartisiIptal,
   refakatPartisiVarMi, acikIstisnaKarti, istisnaKartiAc, istisnaDusumuYaz, istisnaDusumuMu, istisnaDusumuTasi, type IstisnaDusumuHam, istisnaDusumleri,
   istisnaDusumuBagla, type LotBekleyenKartHam, lotBekleyenKartlar, refakatLotaBagla, lotunBaglamaBakiyeleri, refakatYoldakiTeslimleri,
-  kartliYoldakiTeslimler, type KartSatiriHam, kartSatirlari, refakatBaslatmaYaz,
+  kartliYoldakiTeslimler, type KartSatiriHam, kartSatirlari, refakatBaslatmaYaz, emrinKartAdetleri, kollardakiAdetler,
 } from './sorgular/refakat/sorgular.ts';
 export {
   emirFisleriniAc, emirFisiDegisti, type MalzemeFisiHam, MALZEME_FISI_SIRALAMASI, type MalzemeFisiSuzgeci, malzemeFisiSay, malzemeFisleri,

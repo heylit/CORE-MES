@@ -9,6 +9,8 @@ export interface RefakatKarti {
   id: number; uretimEmriId: number; etiket: string; lotNo: string | null;
   malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string;
   istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
+  // 3337-3 a: kartın sabit adedi ve bu adımdaki dağılımı; eski sunucu ve adetsiz kartta yok ya da null.
+  adet?: number | null; dagilim?: { adet: number; saglam: number; hurda: number; kolda?: number; islemde: number } | null;
 }
 
 // Terminal işin altında yalnız bu istasyonda satırı olan kartları gösterir.
@@ -18,6 +20,12 @@ export const istasyondakiKartlar = (kartlar: readonly RefakatKarti[], emirId: nu
 // Sınır yumuşak kilittir (Soru 132): dolunca söylenir, sayım durmaz. Sınırı bilinmeyen kart için sınır gösterilmez.
 export const sinirMetni = (k: Pick<RefakatKarti, 'sayilan' | 'sinir'>): string | null =>
   k.sayilan === null || k.sinir === null ? null : `${k.sayilan} / ${k.sinir}`;
+// Toplam sabit (3337-3 a): "Kart 30 · sağlam 12 · hurda 1 · işlemde 17"; kola parça gittiyse "· kolda 4" de yazılır. Dağılımı olmayan kartta null.
+export const dagilimMetni = (k: Pick<RefakatKarti, 'dagilim'>): string | null => {
+  const d = k.dagilim;
+  if (!d) return null;
+  return `Kart ${d.adet} · sağlam ${d.saglam} · hurda ${d.hurda}${d.kolda ? ` · kolda ${d.kolda}` : ''} · işlemde ${d.islemde}`;
+};
 export const kartDoldu = (k: Pick<RefakatKarti, 'sayilan' | 'sinir'>): boolean => k.sayilan !== null && k.sinir !== null && k.sayilan >= k.sinir;
 
 // Sayım satırının kart alanı; kartsız işte alan yazılmaz (sunucu kartsız sayımı stokta kartla eşler).

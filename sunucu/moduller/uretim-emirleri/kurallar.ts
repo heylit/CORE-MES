@@ -1244,6 +1244,21 @@ export function kartSiniri(
   return adim === undefined || onculler.length === 0 ? null : Math.min(...onculler.map((o) => onculdenGelen(oncekiSaglam(o.id), o, adim)));
 }
 
+// 3337-3 a: adetli kartta toplam sabittir. Sınır, adetten önceki adımlarda düşen (hurda, red) ve kollara giden; dağılım bu adımda:
+// sağlam (adımı geçen), hurda (bu adıma kadar düşen), kolda (bölünmüş kolların açık kartlarının adedi), işlemde (geri kalan).
+// Sonraki adımların sayımı katılmaz (o parçalar bu adımın sağlamındadır).
+export interface KartDagilimi { adet: number; saglam: number; hurda: number; kolda: number; islemde: number }
+export function kartDagilimi(
+  adet: number, adimlar: readonly { id: number; sira: number }[], adimId: number, sayim: (isEmriId: number) => { saglam: number; kayip: number } | undefined,
+  kolda = 0,
+): { sinir: number; dagilim: KartDagilimi } {
+  const sira = adimlar.find((a) => a.id === adimId)?.sira ?? Number.POSITIVE_INFINITY;
+  const kayip = (onceki: boolean) => adimlar.filter((a) => (onceki ? a.sira < sira : a.sira <= sira)).reduce((t, a) => t + (sayim(a.id)?.kayip ?? 0), 0);
+  const hurda = kayip(false);
+  const saglam = sayim(adimId)?.saglam ?? 0;
+  return { sinir: Math.max(0, adet - kayip(true) - kolda), dagilim: { adet, saglam, hurda, kolda, islemde: Math.max(0, adet - saglam - hurda - kolda) } };
+}
+
 // Kartın sayıldığı adım: istasyondaki çalışan iş emri, yoksa istasyonun sıradaki iş emri; istasyon verilmezse ya da istasyonda
 // bekleyen iş yoksa emrin terminaldeki adımı.
 export function kartAdimi<T extends { sira: number; durum: IsEmriDurumu; istasyonId: number | null }>(isEmirleri: readonly T[], istasyonId: number | null): T | null {

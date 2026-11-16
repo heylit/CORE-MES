@@ -139,7 +139,7 @@ export async function sepetGonder(db: Db, k: Kullanici, g: SepetTeslimEtKomutu):
 }
 // 3337 (3337-2 a): "Refakat kartına dönüştür". Lotlu sepet satırı seçilen emrin kartına dönüşür ve sepette kalır; Teslim et satırı kartla
 // gönderir. Hedefi olmayan satıra kartın emrinden hedef önerilir. Kart zaten açıksa aynı kart bağlanır.
-export async function sepetSatiriniKartaDonustur(db: Db, kisiId: number, g: { uretimEmriId: number; sepetSatirId: number }): Promise<RefakatPartisiCevabi> {
+export async function sepetSatiriniKartaDonustur(db: Db, kisiId: number, g: { uretimEmriId: number; sepetSatirId: number; adet?: number | undefined }): Promise<RefakatPartisiCevabi> {
   const satir = (await sorgular.sepetSatirlari(db, kisiId, true)).find((x) => x.id === g.sepetSatirId);
   if (!satir) throw bulunamadi('Sepet satırı bulunamadı.');
   if (satir.refakatPartisiId !== null) throw cakisma('Bu satır zaten refakat kartına dönüştü.');

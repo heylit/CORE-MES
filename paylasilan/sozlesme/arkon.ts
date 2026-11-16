@@ -576,6 +576,9 @@ export const refakatKartiSemasi = z.object({
   id: z.number().int(), uretimEmriId: z.number().int(), etiket: z.string(), lotNo: z.string().nullable(),
   malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), verilen: z.string(),
   istasyondaSatirVar: z.boolean(), sayilan: z.number().nullable(), sinir: z.number().nullable(),
+  // 3337-3 a: kartın sabit adedi ve bu adımdaki dağılımı (toplam = adet); eski kartta null.
+  adet: z.number().int().nullable(),
+  dagilim: z.object({ adet: z.number().int(), saglam: z.number().int(), hurda: z.number().int(), kolda: z.number().int(), islemde: z.number().int() }).nullable(),
 });
 export const refakatKartlariCevabi = z.object({ kartlar: z.array(refakatKartiSemasi) });
 export type ArkonRefakatKarti = z.infer<typeof refakatKartiSemasi>;

@@ -1871,3 +1871,15 @@ export function siparisBirimineCevir(stokMiktari: string, siparisBirimi: string,
   if (kart.alisBirimi !== null && kart.alisKatsayisi !== null && birimAdi(kart.alisBirimi) === siparis && Number(kart.alisKatsayisi) > 0) return dortHane(m / Number(kart.alisKatsayisi));
   return null;
 }
+
+// 3337-3 a: kart adedi açılışta bir kez yazılır. Öneri, lot miktarının karşıladığı parça (miktar ÷ parça başı girdi), emrin bu
+// malzemede karta yazılmamış kalanıyla sınırlı; miktar ya da girdi bilinmezse kalan. Pozitif değilse null: kart adetsiz açılır.
+export function kartAdediOnerisi(g: { emirAdet: number; ayrilmis: number; brut: number | null; miktar: string | null }): number | null {
+  const kalan = g.emirAdet - g.ayrilmis;
+  const lotunKarsiladigi = g.miktar === null || g.brut === null || g.brut <= 0 || g.emirAdet <= 0 ? null
+    : Math.floor((Number(g.miktar) * g.emirAdet) / g.brut + 1e-9);
+  const adet = lotunKarsiladigi === null ? kalan : Math.min(kalan, lotunKarsiladigi);
+  return adet > 0 ? adet : null;
+}
+export const KART_ADEDI_FAZLA = 'Kart adedi emrin adedini geçemez.';
+export const kartAdediEngeli = (adet: number, emirAdet: number): string | null => (adet > emirAdet ? KART_ADEDI_FAZLA : null);

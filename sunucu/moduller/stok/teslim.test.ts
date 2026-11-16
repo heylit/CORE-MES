@@ -852,6 +852,9 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const ilkKartlar = await kartlar();
     assert.equal((await istek('operator', 'GET', `/stok/uretim-emirleri/${e}/refakat-partileri`)).durum, 403, 'operatör kartları okuyamaz');
     assert.equal(ilkKartlar.length, 1);
+    // 3337-3 a: kendiliğinden açılan kartın adedi de yazılır (emrin bu malzemede kartsız kalanı).
+    const emirAdedi = (await o().vt.tek<{ adet: number }>('SELECT adet FROM uretim_emri WHERE id = $1', [e]))!.adet;
+    assert.equal((await o().vt.tek<{ adet: number | null }>('SELECT adet FROM stok_refakat_partisi WHERE id = $1', [ilkKartlar[0]!.id]))!.adet, emirAdedi);
     assert.deepEqual(al.govde.acilanKartlar?.map((k) => [Object.keys(k).sort(), k.id, k.etiket.endsWith(`-P${String(ilkKartlar[0]!.sira)}`)]),
       [[['etiket', 'id'], ilkKartlar[0]!.id, true]], 'yalnız bu almayla açılan kart, yalnız kimlik ve etiket');
     assert.deepEqual([await sayi(hm2, ka2), await sayi(hm2, kc ?? await istasyonKonumu(c.id))], [0, 2], 'önceki istasyondaki girdi teslim kaydıyla geldi');
@@ -2559,6 +2562,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const r1 = refakatPartisiCevabi.parse(p1.govde).refakat;
     assert.deepEqual([r1.qr, r1.sira, r1.partiId, r1.lotNo, r1.uretimEmriId, r1.verilen, r1.durum], [`RP:${r1.id}`, 1, l1!.id, l1!.lot_no, e, '0', 'acik']);
     assert.match(r1.etiket, /-P1$/);
+    // 3337-3 a: miktarsız (lot okutularak) açılan kart emrin karta yazılmamış kalanını taşır (10 adet).
+    assert.equal(r1.adet, 10);
     assert.equal((await ac('depo', ` lot:${l1!.lot_no} `)).govde.refakat.id, r1.id, 'aynı emir ve lot: aynı kart');
     const r2 = (await ac('depo', `LOT:${l2!.lot_no}`)).govde.refakat;
     assert.deepEqual([r2.sira, r2.partiId], [2, l2!.id], 'başka lot: yeni kart');
@@ -2630,14 +2635,27 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const satir = await sepeteEkle('depo', l2!.id);
     assert.equal((await istek('depo_kisitli', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir })).durum, 404);
     assert.equal((await istek('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir, lotKodu: `LOT:${l2!.lot_no}` })).durum, 400);
-    const sepettenKart = await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir });
+    // 3337-3 a: depocunun yazdığı adet emrin adedini geçemez; geçerli adet karta yazılır (emrin kalanı dolsa da depocu düzeltebilir).
+    const fazla = await istek<Hata>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir, adet: 11 });
+    assert.deepEqual([fazla.durum, fazla.govde.alan], [400, 'adet']);
+    const sepettenKart = await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir, adet: 4 });
     assert.equal(sepettenKart.durum, 200, JSON.stringify(sepettenKart.govde));
     const r3 = sepettenKart.govde.refakat;
-    assert.deepEqual([r3.sira, r3.partiId, r3.id !== r2.id], [3, l2!.id, true]);
+    assert.deepEqual([r3.sira, r3.partiId, r3.id !== r2.id, r3.adet, r2.adet], [3, l2!.id, true, 4, null]);
+    // 3337-3 a: yazılmış adet veritabanında da değişmez; aynı değer ve eski (boş) kart serbesttir.
+    await assert.rejects(o().sahip.sorgu('UPDATE stok_refakat_partisi SET adet = 5 WHERE id = $1', [r3.id]), /adedi değişmez/);
+    await o().sahip.sorgu('UPDATE stok_refakat_partisi SET adet = 4 WHERE id = $1', [r3.id]);
+    await assert.rejects(o().sahip.sorgu('UPDATE stok_refakat_partisi SET adet = NULL WHERE id = $1', [r3.id]), /adedi değişmez/);
     // 3337 (3337-2 a): satır sepette kalır ve kartın izini taşır; kartla teslim edilir. İkinci dönüştürme reddedilir.
     const donusen = (await istek<{ satirlar: { id: number; refakat: { id: number } | null }[] }>('depo', 'GET', '/stok/sepet')).govde.satirlar.find((x) => x.id === satir);
     assert.equal(donusen?.refakat?.id, r3.id, 'satır karta dönüştü, sepette kaldı');
     assert.equal((await istek('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: satir })).durum, 409);
+    // 3337-3 a (Risk N1): yanlış yazılan adet teslimden önce kart iptal edilip aynı lota doğru adetle yeni kart açılarak düzelir.
+    const r3Iptal = await istek<RefakatPartisiCevabi>('depo', 'POST', `/stok/refakat-partileri/${r3.id}/iptal-et`, { surum: r3.surum });
+    assert.deepEqual([r3Iptal.durum, r3Iptal.govde.refakat.durum, r3Iptal.govde.refakat.adet], [200, 'iptal', 4]);
+    const duzeltilmis = await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, lotKodu: `LOT:${l2!.lot_no}`, adet: 5 });
+    assert.equal(duzeltilmis.durum, 200, JSON.stringify(duzeltilmis.govde));
+    assert.deepEqual([duzeltilmis.govde.refakat.id !== r3.id, duzeltilmis.govde.refakat.adet], [true, 5]);
     await istek('depo', 'POST', `/stok/sepet/satirlar/${satir}/sil`, {});
     const lotsuz = await o().vt.tek<{ id: number }>('INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, parti_id, miktar) VALUES ($1, $2, $3, NULL, 1) RETURNING id', [kisiler.get('depo'), hm, kabul]);
     const lotsuzC = await istek<Hata>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, sepetSatirId: lotsuz!.id });
@@ -2925,9 +2943,20 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(kk.durum, 200, JSON.stringify(kk.govde));
     assert.deepEqual([kk.govde.refakat.uretimEmriId, kk.govde.refakat.partiId, kk.govde.refakat.ust?.id], [kol, lot.id, r.id]);
     assert.equal((await kolAc(r.id, kol)).govde.refakat.id, kk.govde.refakat.id, 'aynı kolun açık kartı döner');
+    // 3337-3 a (Risk K1): her adımda toplam sabit; kola giden parça üst kartta "kolda" görünür, işlemde ve sınır o kadar düşer.
+    const kartGorunumu = async (emir: number, kartId: number) => {
+      const k = (await o().vt.tx((db) => emrinRefakatKartlari(db, emir, a.id))).find((x) => x.id === kartId)!;
+      const d = k.dagilim!;
+      assert.equal(d.saglam + d.hurda + d.kolda + d.islemde, d.adet, `kart ${kartId} toplamı adet`);
+      return { sinir: k.sinir, ...d };
+    };
+    assert.deepEqual([r.adet, kk.govde.refakat.adet], [10, 4]);
+    assert.deepEqual(await kartGorunumu(e, r.id), { adet: 10, sinir: 6, saglam: 0, hurda: 0, kolda: 4, islemde: 6 });
 
     // Birleşme: kolun kartı birleştiği emrin kartına (üst kart) bağlanır; eski kart okutulunca üst kart gelir, sayımda yönlenir.
     const kk2 = (await kolAc(r.id, kol2)).govde.refakat;
+    assert.equal(kk2.adet, 2);
+    assert.deepEqual(await kartGorunumu(e, r.id), { adet: 10, sinir: 4, saglam: 0, hurda: 0, kolda: 6, islemde: 4 });
     const b = await istek('planlama_proje', 'POST', `/adimli-emirler/${e}/birlestir`, { kaynakEmirId: kol2, surum: await surum(e), kaynakSurum: await surum(kol2) });
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     const eski = refakatPartisiCevabi.parse((await istek('depo', 'GET', `/stok/refakat-partileri/${kk2.id}`)).govde).refakat;
@@ -2935,11 +2964,16 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const coz = kodCozCevabi.parse((await istek('depo', 'GET', `/stok/kod-coz?kod=${encodeURIComponent(kk2.qr)}`)).govde);
     assert.equal(coz.tur === 'lot' ? coz.refakat?.id : null, r.id);
     const [e10] = await adimlari(e);
+    // Birleşen kolun parçası üst karta döner: kolda yalnız açık kol kalır, toplam yine adet. Birleşen kartın adedi değişmez.
+    assert.deepEqual(await kartGorunumu(e, r.id), { adet: 10, sinir: 6, saglam: 0, hurda: 0, kolda: 4, islemde: 6 });
     await saglam(e, e10!, '1', kk2.id);
+    assert.equal((await o().vt.tek<{ adet: number }>('SELECT adet FROM stok_refakat_partisi WHERE id = $1', [kk2.id]))!.adet, 2, 'birleşen kartın adedi değişmez');
 
     // Kol kendi kartıyla sayar; parça kol kartının partisine girer.
     await saglam(kol, k10!, '2', kk.govde.refakat.id);
     await saglam(kol, k20!, '2', kk.govde.refakat.id);
+    const kolKarti = await kartGorunumu(kol, kk.govde.refakat.id);
+    assert.deepEqual([kolKarti.adet, kolKarti.kolda], [4, 0]);
     const kolCiktisi = (await o().vt.tek<{ id: number; uretimEmriId: number }>(
       'SELECT id, uretim_emri_id AS "uretimEmriId" FROM stok_parti WHERE malzeme_id = $1 AND refakat_partisi_id = $2', [ym, kk.govde.refakat.id]))!;
     assert.equal(kolCiktisi.uretimEmriId, kol);
@@ -2955,6 +2989,63 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual(kolIzi.sevkler, []);
     // Birleşmiş kartın altına kart açılmaz.
     assert.equal((await kolAc(kk2.id, kol)).govde.refakat.id, kk.govde.refakat.id, 'birleşmiş kart birleştiği karta yönlenir');
+  });
+
+  test('3337-3 a: kart adedinin önerisi ve adetli kartın sınırı ve dağılımı sayımdan kurulur (red hurdaya sayılır; iptal ve birleşen kart kalandan düşmez)', async () => {
+    const [ym, hm, hm2] = [await kart('yarimamul'), await kart('hammadde'), await kart('hammadde')];
+    const [a, b] = [await istasyon(), await istasyon()];
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TA-${sira}`]))!.id;
+    const makine = async (ist: number) => (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`TAM-${ist}`, 'Tezgah', ist]))!.id;
+    const [ma, mb] = [await makine(a.id), await makine(b.id)];
+    const adim = (n: number, m: number, bilesenler: { malzemeNo: number; miktar: string }[]): IsEmriGirdisi => ({
+      sira: n, opNo: n * 10, ad: `Adım ${n}`, operasyonTipiId: tip, kaynak: { tur: 'makine', id: m }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler,
+    });
+    if (!kisiler.has('planlama_proje')) await kisiEkle('planlama_proje', 'planlama_proje');
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    // Parça başına 2 hm ve 5 hm2: hm'nin brütü 20, iki girdinin toplamı 70 (öneri yalnız kartın malzemesinin brütüyle).
+    const e = (await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, {
+      projeId: denemeProjeId, malzemeNo: ym, adet: 10, teslim: null, kaynakRotaRevizyonId: await revizyon(ym),
+      isEmirleri: [adim(1, ma, [{ malzemeNo: hm, miktar: '2' }, { malzemeNo: hm2, miktar: '5' }]), adim(2, mb, [])],
+    }))).uretimEmriId;
+    const kabul = await kabulKonumu();
+    for (const m of ['30', '30', '30']) await malKabul(hm, m);
+    const lotlar = await o().vt.sorgu<{ id: number; lot_no: string }>('SELECT id, lot_no FROM stok_parti WHERE malzeme_id = $1 ORDER BY id', [hm]);
+    const ac = async (g: Record<string, unknown>) => {
+      const c = await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, ...g });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.refakat;
+    };
+    // Sepetten dönüştürmede öneri satırdaki miktarla sınırlı: 8 / 20 x 10 = 4 parça (emrin kalanı 10).
+    const satir = await istek<{ satirlar: { id: number; partiId: number | null }[] }>('depo', 'POST', '/stok/sepet/satir-ekle', { malzemeId: hm, miktar: '8', kaynakKonumId: kabul, partiId: lotlar[0]!.id });
+    assert.equal(satir.durum, 200, JSON.stringify(satir.govde));
+    const sepetten = await ac({ sepetSatirId: satir.govde.satirlar.find((x) => x.partiId === lotlar[0]!.id)!.id });
+    assert.equal(sepetten.adet, 4, 'satır miktarı ve yalnız hm brütü');
+    // İptal edilen kartın adedi kalandan düşmez: lotla açılan kartın önerisi yine emrin tamamı.
+    assert.equal((await istek('depo', 'POST', `/stok/refakat-partileri/${sepetten.id}/iptal-et`, { surum: sepetten.surum })).durum, 200);
+    const tam = await ac({ lotKodu: `LOT:${lotlar[0]!.lot_no}`, adet: 6 });
+    const ikinci = await ac({ lotKodu: `LOT:${lotlar[1]!.lot_no}`, adet: 3 });
+    assert.equal(tam.adet, 6);
+    // Birleşen kartın adedi iki kez sayılmaz: kalan 10 - 6 = 4 (birleşmeden önce 10 - 6 - 3 = 1).
+    await o().sahip.sorgu('UPDATE stok_refakat_partisi SET birlestigi_refakat_partisi_id = $1, birlesme_zamani = now() WHERE id = $2', [tam.id, ikinci.id]);
+    assert.equal((await ac({ lotKodu: `LOT:${lotlar[2]!.lot_no}` })).adet, 4);
+
+    // Sayım: OP10'da 3 sağlam, 1 hurda, 1 red. OP10'da dağılım; OP20'nin sınırı adet eksi OP10'un kaybı (hurda + red).
+    const [op10, op20] = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [e])).map((x) => x.id);
+    const neden = (await o().sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ($1, 'Deneme hurdası', 931) RETURNING id", [`TA-H${sira}`]))!.id;
+    const yaz = (tur: string, adet: number, hurdaNedeniId: number | null = null) => o().sahip.sorgu(
+      'INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, is_emri_id, refakat_partisi_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [e, kisiler.get('operator'), a.id, tur, adet, hurdaNedeniId, op10, tam.id]);
+    await yaz('saglam', 3);
+    await yaz('hurda', 1, neden);
+    await yaz('red', 1);
+    const gorunum = async (istasyonId: number) => {
+      const k = (await o().vt.tx((db) => emrinRefakatKartlari(db, e, istasyonId))).find((x) => x.id === tam.id)!;
+      return { sayilan: k.sayilan, sinir: k.sinir, dagilim: k.dagilim };
+    };
+    assert.deepEqual(await gorunum(a.id), { sayilan: 5, sinir: 6, dagilim: { adet: 6, saglam: 3, hurda: 2, kolda: 0, islemde: 1 } });
+    assert.deepEqual(await gorunum(b.id), { sayilan: 0, sinir: 4, dagilim: { adet: 6, saglam: 0, hurda: 2, kolda: 0, islemde: 4 } });
+    assert.ok(op20 !== undefined);
   });
 
   test('kart #154 istisna kartı (Soru 129): malzeme yokken sayım lotsuz eksi düşer; düzeltme bağı taşır; lota bağlama kısmi, kartla ve aynı lotlu karta birleşerek', async () => {

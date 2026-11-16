@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const KART: RefakatPartisi = {
   id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
-  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
+  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', adet: null, durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
   ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const KOL: RefakatPartisi = { ...KART, id: 13, qr: 'RP:13', etiket: 'UE-000001/1-P1', uretimEmriId: 2, emirNo: 'UE-000001/1', verilen: '0', ust: { id: 12, etiket: 'UE-000001-P1' } };

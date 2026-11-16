@@ -15,7 +15,7 @@ const OPERATOR: Kullanici = { id: 9, ad: 'Deneme Operatör', islemler: ['stok.is
 const PLANCI: Kullanici = { id: 10, ad: 'Deneme Planlamacı', islemler: ['stok.istek'] };
 const KART: RefakatPartisi = {
   id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme mil', birim: 'adet',
-  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
+  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', adet: null, durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
   ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const T1 = { id: 3, kod: 'T1', ad: 'Torna 1' };

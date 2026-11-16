@@ -8,7 +8,7 @@ import type { Istemci } from './baglanti.ts';
 const cevap = {
   kartlar: [{
     id: 4, uretimEmriId: 7, etiket: 'UE-000007-P4', lotNo: 'LT-1', malzemeKod: null, malzemeAd: null, birim: null, verilen: '10',
-    istasyondaSatirVar: true, sayilan: null, sinir: null,
+    istasyondaSatirVar: true, sayilan: null, sinir: null, adet: null, dagilim: null,
   }],
 } satisfies RefakatKartlariCevabi;
 

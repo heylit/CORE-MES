@@ -13,7 +13,7 @@ const KART: RefakatPartisi = {
   id: 31, qr: 'RP:31', etiket: 'UE-000120-P1', uretimEmriId: 120, emirNo: 'UE-000120', sira: 1,
   malzemeId: 901, malzemeKod: 'HM-001', malzemeAd: 'Deneme sac', birim: 'kg',
   partiId: 12, lotNo: 'LT-000012', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null,
-  verilen: '10', durum: 'acik', surum: 1, kayitZamani: '2026-10-20T08:00:00+03:00', ust: null, birlestigi: null, birlesmeZamani: null,
+  verilen: '10', adet: null, durum: 'acik', surum: 1, kayitZamani: '2026-10-20T08:00:00+03:00', ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const IZ = {
   parti: { id: 12, malzemeId: 901, malzemeAd: 'Deneme sac', lotNo: 'LT-000012', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, uretimEmriId: null, kayitZamani: '2026-10-20T08:00:00+03:00', eldeki: '0' },

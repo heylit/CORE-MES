@@ -30,7 +30,7 @@ import type { BakiyeHam, IstekHam, TeslimHam } from '../sorgular.ts';
 import { adimParcasi } from './dis-akis.ts';
 import { uretimGirisi } from './giris.ts';
 import { belgeNo, uretimPartisi, korumali, bakiyeDegistir, siraliKilitle, kilitliEksik, eksiUyarisi, hareket, teslimYaz, sktBugun } from './ortak.ts';
-import { refakatPartileriCevir, refakatKartlariniBirlestir } from './refakat.ts';
+import { kartAdedi, refakatPartileriCevir, refakatKartlariniBirlestir } from './refakat.ts';
 import {
   kalaniAc, depodakiMiktar, kapsamOku, kapsamdakiIstasyonlar, istasyonKonumuBul, yerCoz, istasyonKodlari, teslimOku, istenebilirKart, banaGelen, serbestDenetle, kisiKoduCoz, birakmaItirazSuresi,
 } from './teslim.ts';
@@ -510,8 +510,9 @@ export async function emreKartiSagla(db: Db, kisiId: number, t: { uretimEmriId: 
   if (tur === null) return null;
   const acik = tur === 'lot' ? await sorgular.acikRefakatPartisi(db, t.uretimEmriId, t.partiId!) : await sorgular.acikIstisnaKarti(db, t.uretimEmriId, t.malzemeId);
   if (acik) return null;
-  const id = tur === 'lot' ? await sorgular.refakatPartisiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: lot!.malzemeId, partiId: t.partiId!, kisiId })
-    : await sorgular.istisnaKartiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: t.malzemeId, kisiId });
+  const adet = await kartAdedi(db, t.uretimEmriId, t.malzemeId, null);
+  const id = tur === 'lot' ? await sorgular.refakatPartisiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: lot!.malzemeId, partiId: t.partiId!, kisiId, adet })
+    : await sorgular.istisnaKartiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: t.malzemeId, kisiId, adet });
   const kart = id === null ? null : await sorgular.refakatPartisiBul(db, id);
   return kart === null ? null : { id: kart.id, etiket: refakatEtiketi(emir?.emirNo ?? null, kart.uretimEmriId, kart.sira) };
 }
@@ -782,7 +783,7 @@ async function girisKarti(db: Db, y: UretimYazimi, paylar: ReadonlyMap<number | 
   if (tur === 'l') {
     const lot = (await sorgular.partiBul(db, id))!;
     id = (await sorgular.acikRefakatPartisi(db, y.uretimEmriId, lot.id))?.id
-      ?? await sorgular.refakatPartisiAc(db, { uretimEmriId: y.uretimEmriId, malzemeId: lot.malzemeId, partiId: lot.id, kisiId: y.kisiId })
+      ?? await sorgular.refakatPartisiAc(db, { uretimEmriId: y.uretimEmriId, malzemeId: lot.malzemeId, partiId: lot.id, kisiId: y.kisiId, adet: await kartAdedi(db, y.uretimEmriId, lot.malzemeId, null) })
       ?? (await sorgular.acikRefakatPartisi(db, y.uretimEmriId, lot.id))!.id;
   }
   if (kendi === null) return { id, not: null };
@@ -1264,7 +1265,7 @@ async function istasyondaEksiDus(db: Db, y: UretimYazimi, malzemeId: number, sta
 // (yoksa açılır). Eksi kişinin sayımıyla yazıldığı için onaylı eksidir. Döner: istisna kartı.
 async function lotsuzDus(db: Db, y: UretimYazimi, malzemeId: number, miktar: bigint): Promise<number> {
   const kartId = (await sorgular.acikIstisnaKarti(db, y.uretimEmriId, malzemeId))?.id
-    ?? await sorgular.istisnaKartiAc(db, { uretimEmriId: y.uretimEmriId, malzemeId, kisiId: y.kisiId })
+    ?? await sorgular.istisnaKartiAc(db, { uretimEmriId: y.uretimEmriId, malzemeId, kisiId: y.kisiId, adet: await kartAdedi(db, y.uretimEmriId, malzemeId, null) })
     ?? (await sorgular.acikIstisnaKarti(db, y.uretimEmriId, malzemeId))!.id;
   const etiket = (await refakatPartileriCevir(db, [(await sorgular.refakatPartisiBul(db, kartId))!]))[0]!.etiket;
   await siraliKilitle(db, { malzemeId, konumId: y.konumId, partiId: null });

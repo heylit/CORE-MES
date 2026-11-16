@@ -1399,7 +1399,7 @@ export async function refakatKartlari(db: Db, kullanici: Kullanici, istasyonKodu
     for (const k of await emrinRefakatKartlari(db, emirId, istasyon.id)) {
       kartlar.push({
         id: k.id, uretimEmriId: emirId, etiket: k.etiket, lotNo: k.lotNo, malzemeKod: k.malzemeKod, malzemeAd: k.malzemeAd, birim: k.birim,
-        verilen: k.verilen, istasyondaSatirVar: k.istasyondaSatirVar, sayilan: k.sayilan, sinir: k.sinir,
+        verilen: k.verilen, istasyondaSatirVar: k.istasyondaSatirVar, sayilan: k.sayilan, sinir: k.sinir, adet: k.adet, dagilim: k.dagilim,
       });
     }
   }

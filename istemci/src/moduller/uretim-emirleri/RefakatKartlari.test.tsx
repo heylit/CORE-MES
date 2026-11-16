@@ -15,7 +15,7 @@ const kart = (id: number, sira: number, ek: Partial<RefakatPartisi> = {}): Refak
   id, qr: `RP:${id}`, etiket: `UE-000012-P${sira}`, uretimEmriId: 12, emirNo: 'UE-000012', sira,
   malzemeId: 501, malzemeKod: 'DNM-HM', malzemeAd: 'Deneme çubuk', birim: 'kg',
   partiId: 40 + id, lotNo: `LT-0000${id}`, tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null,
-  verilen: '2.5', durum: 'acik', surum: 1, kayitZamani: '2026-10-25T08:00:00+00:00', ust: null, birlestigi: null, birlesmeZamani: null, ...ek,
+  verilen: '2.5', adet: null, durum: 'acik', surum: 1, kayitZamani: '2026-10-25T08:00:00+00:00', ust: null, birlestigi: null, birlesmeZamani: null, ...ek,
 });
 const KARTLAR = [
   kart(1, 1),

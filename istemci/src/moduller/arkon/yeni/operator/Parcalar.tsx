@@ -7,7 +7,7 @@ import { eksiBakiye, eksiBakiyeMetni } from '../../../../../../arkon/web/src/dat
 import { siraAnahtari } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
 import { numuneSeridi, type SeritDurumu, type SeritGirdisi, type SeritIlerlemesi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
-import { istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
+import { dagilimMetni, istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import { sayacGosterimi } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { topluGirisHatasi, topluGirisSayilari } from '../../../../../../arkon/web/src/data/toplu-giris.ts';
@@ -170,13 +170,16 @@ export function PlanBandi({ simdiki, siradaki, simdi, nedenAdi, durduruldu, gec 
 export function EtkinKart({ is, kartlar }: { is: Is; kartlar: readonly RefakatKarti[] }) {
   if (!is.kart) return null;
   const k = kartlar.find((x) => x.id === is.kart);
-  const sinir = k ? sinirMetni(k) : null;
+  // Adetli kartta dağılım satırı yeter; "sayılan / sınır" ayrıca yazılırsa sınır (adetten düşülmüş) sayaçla karışır.
+  const dagilim = k ? dagilimMetni(k) : null;
+  const sinir = k && dagilim === null ? sinirMetni(k) : null;
   const dolu = !!k && kartDoldu(k);
   return (
     <div className="tc-ay1-etkin-kart" data-durum={dolu ? 'durdu' : undefined} role="status">
       <Simge ad="tag" /><span className="tc-ay1-ust-yazi">Refakat kartı</span><b>{k ? k.etiket : `#${is.kart}`}</b>
       {k && k.lotNo === null ? <small>Lot bekliyor</small> : null}
       {sinir ? <span className="tc-ay1-sinir">{sinir}</span> : null}
+      {dagilim ? <small>{dagilim}</small> : null}
       {dolu ? <small>Kart doldu; sıradaki kartı açın</small> : null}
     </div>
   );

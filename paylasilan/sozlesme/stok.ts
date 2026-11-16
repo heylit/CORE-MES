@@ -1032,6 +1032,8 @@ export const refakatPartisi = z.object({
   lotaBaglanmaZamani: zamanSemasi.nullable(),
   // Bu kartla emre verilen: alınan teslimde alınan, yoldakinde gönderilen miktar.
   verilen: ondalikMetinSemasi,
+  // 3337-3 a: kartın taşıdığı parça adedi; açılışta bir kez yazılır, değişmez. Eski kartta null.
+  adet: z.number().int().positive().nullable(),
   durum: z.enum(REFAKAT_PARTISI_DURUMLARI), surum: surumSemasi, kayitZamani: zamanSemasi,
   // Kart #126: alt parti (kol) kartı üst emrin kartından açılır; birleşen kolun kartı birleştiği karta yönlenir (okutma, teslim, sayım).
   ust: refakatBagi.nullable(), birlestigi: refakatBagi.nullable(), birlesmeZamani: zamanSemasi.nullable(),
@@ -1072,6 +1074,8 @@ export type PartiIziCevabi = z.output<typeof partiIziCevabi>;
 // 3337: `partiId` teslim penceresinin "Refakat kartına dönüştür" yoludur (kartsız gönderimin ayrıntısındaki lot); üçünden yalnız biri verilir.
 export const refakatPartisiAcGovdesi = z.object({
   uretimEmriId: kimlik, lotKodu: z.string().trim().min(1).max(120).optional(), sepetSatirId: buyukKimlik.optional(), partiId: kimlik.optional(),
+  // 3337-3 a: depocunun düzelttiği kart adedi; verilmezse sunucu önerir (lot miktarı ve emrin kalanı).
+  adet: z.number().int().positive().max(1_000_000).optional(),
 }).refine((g) => [g.lotKodu, g.sepetSatirId, g.partiId].filter((x) => x !== undefined).length === 1, { message: 'Lotu okutun ya da sepetteki lot satırını seçin.', path: ['lotKodu'] });
 // 3337: kartsız emre gönderimin hata ayrıntısı (DOGRULAMA, alan refakatPartisiId).
 export const kartsizTeslimAyrintisi = z.object({ kartsiz: z.object({ uretimEmriId: z.number().int(), partiId: z.number().int(), malzemeId: z.number().int() }) });
