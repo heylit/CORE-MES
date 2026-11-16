@@ -1660,7 +1660,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             const baslik = yerSecilir ? 'İstasyon ve makine · dokununca seçilir' : 'İstasyon';
             const icerik = (
               <>
-                <b>{MACHINE || 'İstasyon seçilmedi'}{yerdekiMakine ? ` · ${yerdekiMakine}` : null}</b>
+                <b>{MACHINE || 'İstasyon seçilmedi'}</b>
+                {/* Dar kutuda istasyon ve makine alt alta: makine kodu kesilmesin. */}
+                {yerdekiMakine ? <b className="tc-ay1-istasyon-makine"><Simge ad="cpu" boyut="k" />{yerdekiMakine}</b> : null}
                 {!yerdekiMakine && makineler.length ? <small data-uyari="" title="Makine seçilmedi · dokununca seçilir"><Simge ad="alert" boyut="k" />Makine yok</small> : null}
                 <DurumSuresi durum={o.state} since={since} />
               </>
