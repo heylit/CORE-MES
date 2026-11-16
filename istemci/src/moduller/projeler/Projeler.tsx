@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
+  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozeti, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -52,10 +52,22 @@ export function Projeler() {
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
   const logo = useLogoRozetleri('proje', (l.data?.satirlar ?? []).map((p) => p.id));
-  const sutunlar: Sutun<Proje>[] = [...SUTUNLAR, {
-    anahtar: 'logo', baslik: 'Logo', hucre: (p) => <LogoRozetHucresi bilgi={logo.durum(p.id)} hata={logo.hata} />,
-    csv: (p) => { const d = logo.durum(p.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
-  }];
+  // Proje listesi dokuz sütunla 1280'de sığmıyor: Logo durumu Durum hücresinde, "Logo: …" önekiyle proje durumunun altında.
+  const sutunlar: Sutun<Proje>[] = SUTUNLAR.map((s) => (s.anahtar !== 'durum' ? s : {
+    ...s,
+    baslik: 'Durum · Logo',
+    hucre: (p: Proje) => {
+      const d = logo.durum(p.id);
+      return (
+        <span className="tc-logo-rozet-hucre">
+          <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet>
+          <LogoRozeti bilgi={d} hata={logo.hata} baslik />
+          {!logo.hata && d?.neden && <small className="tc-logo-rozet-neden" title={d.neden}>{d.neden}</small>}
+        </span>
+      );
+    },
+    csv: (p: Proje) => { const d = logo.durum(p.id); return d === null ? DURUM_METNI[p.durum] : `${DURUM_METNI[p.durum]}; Logo: ${LOGO_DURUM_ADI[d.durum]}`; },
+  }));
   const suzulu = liste.suzgecler.ara.trim() !== '' || liste.suzgecler.durum !== '' || liste.suzgecler.statuId !== '';
 
   return (

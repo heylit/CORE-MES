@@ -52,7 +52,7 @@ export function LogoRozetHucresi({ bilgi, hata }: { bilgi: LogoRozetBilgisi | nu
   return (
     <span className="tc-logo-rozet-hucre">
       <LogoRozeti bilgi={bilgi} hata={hata} />
-      {!hata && bilgi?.neden && <small className="tc-logo-rozet-neden">{bilgi.neden}</small>}
+      {!hata && bilgi?.neden && <small className="tc-logo-rozet-neden" title={bilgi.neden}>{bilgi.neden}</small>}
     </span>
   );
 }

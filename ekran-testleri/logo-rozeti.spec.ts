@@ -6,18 +6,32 @@ import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 // durum bir satıra düşer. 360, 768 ve 1280 genişlikte sayfa yatay taşmaz. Veriler uydurmadır (ORN-).
 test.use({ hesap: 'ornek.yonetici' });
 
-const SIRA = [
+// Durum belge kimliğinden seçilir (liste ve başlık aynı belgeye aynı durumu gösterir). Malzeme ve proje başka belgeyi beklemez;
+// "Kart bekliyor" ve "Proje bekliyor" yalnız satış siparişinde.
+type Durum = { durum: string; kayitNo: string | null; neden: string | null };
+const TEMEL: Durum[] = [
   { durum: 'durdu', kayitNo: null, neden: 'Birim Logo\'da yok' },
   { durum: 'logoda', kayitNo: '4211', neden: null },
   { durum: 'sirada', kayitNo: null, neden: null },
+  { durum: 'yeniden-denenecek', kayitNo: null, neden: 'Logo yardımcısına ulaşılamadı; 5 dakika sonra yeniden denenecek' },
+];
+const SIPARIS: Durum[] = [
+  ...TEMEL,
   { durum: 'proje-bekliyor', kayitNo: null, neden: 'Proje kartı Logo\'ya gidince gönderilir' },
-  { durum: 'yeniden-denenecek', kayitNo: null, neden: 'Logo yardımcısına ulaşılamadı' },
-] as const;
+  { durum: 'kart-bekliyor', kayitNo: null, neden: 'Malzeme kartı Logo\'ya gidince gönderilir' },
+];
+const durumOf = (tur: string, id: number): Durum => { const k = tur === 'satis-siparisi' ? SIPARIS : TEMEL; return k[id % k.length]!; };
+const BASLIK: Record<string, string> = {
+  durdu: 'Logo: Durdu', logoda: 'Logo\'da', sirada: 'Logo: Sırada', 'yeniden-denenecek': 'Logo: Yeniden denenecek',
+  'proje-bekliyor': 'Logo: Proje bekliyor', 'kart-bekliyor': 'Logo: Kart bekliyor',
+};
 
 async function rozetleriYonlendir(page: Page) {
   await page.route('**/api/logo/belge-durumlari?*', (r) => {
-    const idler = (new URL(r.request().url()).searchParams.get('id') ?? '').split(',').filter(Boolean).map(Number);
-    return r.fulfill({ json: { durumlar: idler.map((id, i) => ({ id, ...SIRA[i % SIRA.length] })) } });
+    const q = new URL(r.request().url()).searchParams;
+    const tur = q.get('tur') ?? '';
+    const idler = (q.get('id') ?? '').split(',').filter(Boolean).map(Number);
+    return r.fulfill({ json: { durumlar: idler.map((id) => ({ id, ...durumOf(tur, id) })) } });
   });
 }
 
@@ -62,11 +76,11 @@ test('proje listesinde Logo sütunu', async ({ page, ag, ac }) => {
   expect(ag.hatalar).toEqual([]);
 });
 
-test('sipariş başlığında "Logo: Durdu" ve listede Logo sütunu', async ({ page, ag, ac }) => {
+test('sipariş başlığında listedekiyle aynı Logo durumu ve listede Logo sütunu', async ({ page, ag, ac }) => {
   const id = await siparisAc(page);
   await rozetleriYonlendir(page);
   await ac(`/siparisler/${String(id)}`);
-  await expect(page.getByText('Logo: Durdu').first()).toBeVisible();
+  await expect(page.getByText(BASLIK[durumOf('satis-siparisi', id).durum]!, { exact: true }).first()).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('siparis-baslik.png') });
   await ac('/siparisler');
