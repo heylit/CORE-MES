@@ -40,7 +40,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
     setCatisma(null); setSecim({});
     // Onay ve canlı bölümünde vazgeçilirse taslak ortak planda kalır; bildirim bunu söyler.
     const dusen = r.dusen > 0 ? ` ${String(r.dusen)} değişiklik başkasınınki seçildiği için düştü.` : '';
-    yazildi(`Taslak plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için Onay ve canlı bölümünü tamamlayın.`);
+    yazildi(`Taslak plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için onay sayfasını tamamlayın.`);
     onayiAc();
   };
   const tamam = catisma !== null && catisma.every((c) => secim[c.anahtar] !== undefined);
@@ -62,7 +62,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
       <span className="tc-pyq-taslak-dugmeler">
         <Dugme simge="chev-left" disabled={bekle || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
         <Dugme simge="x" disabled={bekle} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
-        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Taslağı plana yazar, Onay ve canlı bölümünü açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
+        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Taslağı plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
       </span>
       <OnayPenceresi
         acik={vazgecAcik} baslik="Taslaktan vazgeçilsin mi?" onayMetni="Taslağı sil" tehlikeli

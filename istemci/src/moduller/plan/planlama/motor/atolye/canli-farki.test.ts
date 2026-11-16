@@ -16,7 +16,7 @@ describe('useCanliFarki', () => {
     const { result, rerender } = renderHook(({ c }) => useCanliFarki(c, 3), { initialProps: { c: c1 } });
     expect(result.current).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    expect(result.current).toEqual({ var: true, say: 1, farkli: true });
+    expect(result.current).toMatchObject({ var: true, say: 1, farkli: true });
     expect(get).toHaveBeenCalledTimes(1);
     get.mockResolvedValue({ ...CEVAP, ayni: true, tasinan: 0, tezgah: 0 } as never);
     rerender({ c: {} as PlanlamaCalismasi });
@@ -25,10 +25,10 @@ describe('useCanliFarki', () => {
     expect(get).toHaveBeenCalledTimes(1);
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(get).toHaveBeenCalledTimes(2);
-    expect(result.current).toEqual({ var: true, say: 0, farkli: false });
+    expect(result.current).toMatchObject({ var: true, say: 0, farkli: false });
     get.mockRejectedValue(new Error('yok'));
     rerender({ c: {} as PlanlamaCalismasi });
     await act(async () => { await vi.advanceTimersByTimeAsync(FARK_BEKLEME_MS); });
-    expect(result.current).toEqual({ var: true, say: 0, farkli: false });
+    expect(result.current).toMatchObject({ var: true, say: 0, farkli: false });
   });
 });

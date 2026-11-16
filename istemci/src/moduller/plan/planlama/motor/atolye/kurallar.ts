@@ -388,10 +388,11 @@ export function bitisFarklari(once: Record<string, { C: number | null; T: number
 
 // --- canlı planla fark (eski farkSay; 499 a, 506 a): sunucunun çalışma ile canlı plan kıyasından (tezgâh ve sıra; saat kıyaslanmaz). Canlı plan
 // yoksa (sürüm 0) var false; sayı yeri değişen, yeni ve canlıda olup çalışmada olmayan iş; çalışma ya da planı yoksa (null) canlı yok sayılır.
-export interface CanliFark { var: boolean; say: number; farkli: boolean }
+// tasinan ve yeni yalnız canlı plan varken doludur (onay sayfasının sayıları).
+export interface CanliFark { var: boolean; say: number; farkli: boolean; tasinan?: number; yeni?: number }
 export function canliFarkOzeti(r: CanliFarkiCevabi): CanliFark {
   if (r === null || r.planSurumu <= 0) return { var: false, say: 0, farkli: true };
-  return { var: true, say: r.tasinan + r.yeni + r.eksik, farkli: !r.ayni };
+  return { var: true, say: r.tasinan + r.yeni + r.eksik, farkli: !r.ayni, tasinan: r.tasinan, yeni: r.yeni };
 }
 
 // --- malzeme ayrıntısı (eski cx.mat.res det): malzemeHazir'ın aynı dağıtımı, malzeme başına hazır olma, eksik miktar ve kaynak (stok ya da satın alma) ---
@@ -498,7 +499,7 @@ export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSu
   for (const u of s.etki?.yeniUyarilar ?? []) K.push(['uyari', u]);
   for (const b of s.bekleyenler) K.push(['uyari', `Canlıya alınamaz, bekliyor: ${b}`]);
   const yeni = s.plansizYeniIsler;
-  if (yeni) K.push(['uyari', `Bu plan hazırlandıktan sonra açılan ${yeni.adet} iş planda yok (${yeni.isler.join(', ')}${yeni.adet > yeni.isler.length ? ', …' : ''}); canlıya alınınca plansız kalır, Kokpit'te Plansız görünür`]);
+  if (yeni) K.push(['uyari', `Bu plan hazırlandıktan sonra açılan ${yeni.adet} iş planda yok (${yeni.isler.join(', ')}${yeni.adet > yeni.isler.length ? ` ve ${String(yeni.adet - yeni.isler.length)} iş daha` : ''}); canlıya alınınca plansız kalır, Kokpit'te Plansız görünür`]);
   if (!s.degisiklikler.length) K.push(['uyari', 'Canlı plandan farkı yok']);
   return K;
 }
@@ -640,7 +641,7 @@ export function yerlesmeyenAyrintisi(cx: Pick<Derleme, 'byId'>, fail: readonly s
 export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0, planDisi = 0, ayrinti = '', kisiTezgah = 0): KontrolMaddesi[] {
   const eksik = [...(yerlesmeyen ? [`${yerlesmeyen} iş`] : []), ...(planDisi ? [`${planDisi} sipariş`] : [])];
   const L: (KontrolMaddesi | null)[] = [
-    guncel ? ['ok', 'Plan güncel veriyle çözülmüş']
+    guncel ? ['ok', 'Plan güncel veriyle kuruldu']
       : ['red', bekleyen > 0 ? `${String(bekleyen)} bekleyen değişiklik var; aşağıda uygulayın ya da reddedin` : 'Veri plandan sonra değişti; önce planı yeniden çözün'],
     eksik.length ? ['uyari', `${eksik.join(', ')} yerleşmedi${ayrinti ? `: ${ayrinti}` : ''}`] : kisiTezgah ? null : ['ok', 'Bütün işler yerleşti'],
     kisiTezgah ? ['uyari', `${String(kisiTezgah)} iş kişi tezgâhında; canlı planın makine kuyruğuna yazılmaz`] : null,
