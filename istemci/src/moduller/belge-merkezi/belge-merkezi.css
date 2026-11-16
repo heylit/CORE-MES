@@ -3,6 +3,9 @@
 .tc-cz-form { display: flex; flex-direction: column; gap: var(--b-4); }
 .tc-cz-hata { color: var(--stop); font-weight: 700; margin: 0; }
 .tc-cz-ipucu { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-cz-silinecek { margin: 0; padding-left: var(--b-4); display: grid; gap: var(--b-1); overflow-wrap: anywhere; }
+.tc-cz-simgeli { display: flex; gap: var(--b-2); align-items: flex-start; }
+.tc-cz-simgeli svg { flex: none; }
 .tc-cz-uyari { margin: 0; font-size: var(--yazi-xs); color: var(--hold); }
 .tc-cz-ad { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-cz-rev { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }

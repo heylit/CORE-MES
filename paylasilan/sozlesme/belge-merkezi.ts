@@ -121,6 +121,9 @@ export const bagSemasi = z.object({
   kapak: z.boolean(),
 });
 
+// 3324 a: silinen belge; istemci listeye bu türün sekmesiyle döner.
+export const belgeSilmeCevabi = z.object({ id: z.number().int(), ad: z.string(), tur: z.enum(BELGE_TURLERI) });
+
 export const belgeAyrintisi = z.object({
   id: z.number().int(),
   ad: z.string(),
@@ -243,5 +246,6 @@ export type BelgeSatiri = z.output<typeof belgeSatiri>;
 export type Revizyon = z.output<typeof revizyonSemasi>;
 export type Bag = z.output<typeof bagSemasi>;
 export type BelgeAyrintisi = z.output<typeof belgeAyrintisi>;
+export type BelgeSilmeCevabi = z.output<typeof belgeSilmeCevabi>;
 export type BelgeListesiCevabi = z.output<typeof belgeListesiCevabi>;
 export type MalzemeSecimiCevabi = z.output<typeof malzemeSecimiCevabi>;

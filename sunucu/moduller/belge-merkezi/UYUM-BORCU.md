@@ -39,3 +39,6 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
    `20261012110000_cizimler_eski_dosyalar.sql`); kaynak tablolar değişmedi, kaynak modüller hâlâ kendi kopyasını okur. Atölye 3B
    modelleri (`atolye_model`) taşınmadı: GLB tutar, `dosya` GLB almaz (çekirdek isteği C1). Arkon belgesine bağ yok (kimliği metin,
    `belge_merkezi_bag.hedef_id` sayı). Uyum: bağlamada kaynak modüller merkezden okur, kendi dosya tabloları kalkar; C1 gelince modeller ayrı göçle.
+- ETKİLEYEN. Taslak belge silinince (3324 a, `POST /cizimler/:id/sil`) anahtarsız dış başvurular kalır: geometri analiz satırları
+   (`revizyon_id`, `belge_id`) yetim kalır; markalama tanımının `model_belge_id`'si boş modele düşer (tanımda model yeniden seçilir).
+   Taslak revizyon silmede de böyledir. Uyum: bağlamada bu sütunlar yabancı anahtar ya da silme olayıyla temizlenir.

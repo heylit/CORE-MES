@@ -301,6 +301,83 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     );
   });
 
+  describe('3324 a belge silme', () => {
+    test('hiç yayına girmemiş belge silinir: revizyonlar, bağlar ve dosya bağları kalkar; denetim kaydı aynı komutla yazılır', async () => {
+      let b = await belgeAc(yonetici, '3b-model', step(), 'Silinecek taslak');
+      b = (await revizyonEkle(yonetici, b, step())).json<BelgeAyrintisi>();
+      const no = await denemeKarti('Silme kartı');
+      b = (await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: no, surum: b.surum })).json<BelgeAyrintisi>();
+      assert.equal(b.baglar.length, 1);
+      // Taslak 3B modelin önizleme kareleri (1990 a): satırı ve dosya bağı da kalkmalı.
+      const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), randomBytes(1492)]);
+      const kare = await gonder(yonetici, `/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/onizleme`, { kareler: [{ kare: 0, ozet: await yukle(yonetici, png) }] });
+      assert.equal(kare.statusCode, 200, kare.body);
+      const onizlemeBagi = (): Promise<{ n: number } | null> =>
+        vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM dosya_bagi WHERE modul = 'belge-merkezi' AND kayit LIKE $1", [`${b.id}/onizleme/%`]);
+      assert.equal((await onizlemeBagi())?.n, 1);
+      const c = await gonder(yonetici, `/cizimler/${b.id}/sil`, { surum: b.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      assert.deepEqual(c.json(), { id: b.id, ad: 'Silinecek taslak', tur: '3b-model' });
+      assert.equal((await oku(yonetici, `/cizimler/${b.id}`)).statusCode, 404);
+      const kalan = await vt().tek<{ r: number; g: number; d: number }>(
+        `SELECT (SELECT count(*)::int FROM belge_merkezi_revizyon WHERE belge_id = $1) AS r,
+                (SELECT count(*)::int FROM belge_merkezi_bag WHERE belge_id = $1) AS g,
+                (SELECT count(*)::int FROM dosya_bagi WHERE modul = 'belge-merkezi' AND (kayit = $2 OR kayit LIKE $2 || '/%')) AS d`,
+        [b.id, String(b.id)],
+      );
+      assert.deepEqual(kalan, { r: 0, g: 0, d: 0 });
+      assert.equal((await onizlemeBagi())?.n, 0);
+      const denetim = await vt().tek<{ n: number }>(
+        "SELECT count(*)::int AS n FROM denetim_kaydi WHERE yol = '/cizimler/:id/sil' AND parametre->>'id' = $1 AND govde::text LIKE '%belge-sil%'", [String(b.id)],
+      );
+      assert.equal(denetim?.n, 1);
+    });
+
+    test('yayına girmiş belge silinmez (eskisi de); eski sürüm 409; okuyup yazamayan 403 alır', async () => {
+      let b = await belgeAc(yonetici, 'teknik-resim', pdf());
+      const rol = await vt().tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_cizim_okur', 'Çizim okur') RETURNING id");
+      await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'sayfa.cizimler'), ($1, 'belge-merkezi.oku')", [rol?.id]);
+      const okur = await girisYap('gecici_cizim_okur', yonetici.id);
+      assert.equal((await oku(okur, `/cizimler/${b.id}`)).statusCode, 200);
+      let c = await gonder(okur, `/cizimler/${b.id}/sil`, { surum: b.surum });
+      assert.equal(c.statusCode, 403, c.body);
+      assert.equal((await oku(yonetici, `/cizimler/${b.id}`)).statusCode, 200);
+      c = await gonder(yonetici, `/cizimler/${b.id}/sil`, { surum: b.surum + 5 });
+      assert.equal(c.statusCode, 409, c.body);
+      b = (await gonder(yonetici, `/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/yayinla`, { surum: b.surum })).json<BelgeAyrintisi>();
+      b = (await revizyonEkle(yonetici, b, pdf())).json<BelgeAyrintisi>();
+      c = await gonder(yonetici, `/cizimler/${b.id}/sil`, { surum: b.surum });
+      assert.equal(c.statusCode, 409, c.body);
+      assert.equal(c.json().mesaj, ILETILER.yayinlanmisBelge);
+      assert.equal((await oku(yonetici, `/cizimler/${b.id}`)).statusCode, 200);
+    });
+
+    test('Kalite Merkezi resmi olarak alınmış belge silinmez; ileti okunur, hiçbir şey silinmez', async () => {
+      const b = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Kalitedeki taslak');
+      const no = await denemeKarti('Kalite kartı');
+      await vt().sorgu(
+        "INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, ekleyen_id, guncelleyen_id) VALUES ($1, 'resim', $2, $3, 'ORN', $4, $4)",
+        [no, b.id, b.revizyonlar[0]?.ozet, yonetici.id],
+      );
+      const c = await gonder(yonetici, `/cizimler/${b.id}/sil`, { surum: b.surum });
+      assert.equal(c.statusCode, 409, c.body);
+      assert.equal(c.json().mesaj, ILETILER.kaliteResmi);
+      assert.equal((await oku(yonetici, `/cizimler/${b.id}`)).json<BelgeAyrintisi>().revizyonlar.length, 1);
+    });
+
+    test('aynı anda yayınlama ve silme: biri geçer, belge ya silinmiş ya yayında kalır', async () => {
+      const b = await belgeAc(yonetici, 'teknik-resim', pdf());
+      const [y, s] = await Promise.all([
+        gonder(yonetici, `/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/yayinla`, { surum: b.surum }),
+        gonder(ikinciYonetici, `/cizimler/${b.id}/sil`, { surum: b.surum }),
+      ]);
+      assert.equal([y.statusCode, s.statusCode].filter((k) => k === 200).length, 1, `${y.body} ${s.body}`);
+      const d = await oku(yonetici, `/cizimler/${b.id}`);
+      if (s.statusCode === 200) assert.equal(d.statusCode, 404);
+      else assert.equal(d.json<BelgeAyrintisi>().revizyonlar[0]?.durum, 'yayinda');
+    });
+  });
+
   test('CZ-08 arşivdeki belgeye revizyon eklenmez; arşivden çıkınca eklenir; arşiv ayrı listelenir', async () => {
     let b = await belgeAc(yonetici, 'sertifika', pdf(), 'Arşiv sertifikası');
     let c = await gonder(yonetici, `/cizimler/${b.id}/arsivle`, { surum: b.surum });
