@@ -2,6 +2,8 @@ import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi } from '#paylasilan/sozlesme/logo.ts';
+import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
@@ -25,6 +27,23 @@ const KART_FIYAT = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
+  // 3345 a: Logo irsaliyeleri, yalnız okuma (aynadan; Logo'ya istek atmaz). Fiyat ve tutar yalnız tek irsaliyede ve fiyat yetkisiyle.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/irsaliyeler',
+    yetki: 'logo.irsaliye-oku',
+    sorgu: irsaliyeListesiSorgusu,
+    cevap: irsaliyeListesiCevabi,
+    isle: ({ db, sorgu }) => irsaliyeListesi(db, new Date(), sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/irsaliyeler/:firma/:donem/:kayitNo',
+    yetki: 'logo.irsaliye-oku',
+    parametre: irsaliyeParametresi,
+    cevap: irsaliyeCevabi,
+    isle: ({ db, kullanici, parametre }) => irsaliyeGetir(db, kullanici, parametre),
+  }),
   uc({
     yontem: 'GET',
     yol: '/logo/birim-setleri',

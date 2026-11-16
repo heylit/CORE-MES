@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { LOGO_IRSALIYE_TURLERI, type IRSALIYE_ESLESME_DURUMLARI } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, LogoFisDurumu, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 
 // Logo bağlantısı kuralları (kart #207). Saf: saat ve ağ dışarıdan gelir.
@@ -1338,6 +1339,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Saatte bir Lookup/unitsets okunur; malzeme gönderiminde birim karşılığı buna göre denetlenir.' },
   { anahtar: 'mal-kabul', yon: 'logo-tmi', baslik: 'Mal kabul (irsaliye satırları)', kaynak: 'bagli', ayarlar: ['logo.mal-kabul-okumasi'], belgeTurleri: [], okuma: 'mal-kabul',
     aciklama: 'Dakikada bir PurchaseOrder/receipts okunur (since imleciyle); satırlar yalnız saklanır, stoka ya da satın almaya işlenmez. Sayı okunan satır sayısıdır.' },
+  { anahtar: 'irsaliye-okuma', yon: 'logo-tmi', baslik: 'Alış ve satış irsaliyeleri', kaynak: 'bagli', ayarlar: ['logo.irsaliye-okumasi'], belgeTurleri: [],
+    aciklama: 'Dakikada bir Dispatch/list ile son 90 günün alış ve satış irsaliyeleri (sekiz tür) okunur, değişenler yeniden okunur, saatte bir silinenler işaretlenir; Logo İrsaliyeleri sayfası CORE karşılığıyla gösterir. Logo\'ya, stoka ya da başka modüle hiçbir şey yazılmaz.' },
   { anahtar: 'cari-depo', yon: 'logo-tmi', baslik: 'Cari ve ambar listeleri', kaynak: 'bagli', ayarlar: ['logo.liste-okumasi'], belgeTurleri: [], okuma: 'cari-ambar',
     aciklama: 'Saatte bir Arp/list ve Lookup/warehouses okunup önbelleğe (kod, ad) yazılır. Sayı okunan kayıt sayısıdır.' },
   { anahtar: 'fatura', yon: 'logo-tmi', baslik: 'Fatura ve irsaliye', kaynak: 'bagli', ayarlar: ['logo.fatura-okumasi'], belgeTurleri: [], okuma: 'fatura',
@@ -1773,3 +1776,276 @@ export function hareketFisAdi(trCode: number): string {
 // Kart bölümünde bir seferde gösterilen hareket sayısı; yardımcı geriye okumayı bilmiyorsa okunan en çok sayfa (500'lük).
 export const KART_HAREKET_SAYFASI = 20;
 export const KART_HAREKET_ESKI_YOL_SAYFA_SINIRI = 10;
+
+/* ---------------- Logo irsaliyeleri (3345 a): yalnız okunur, CORE karşılığıyla gösterilir ---------------- */
+
+// Logo STFICHE.TRCODE (yardımcının beyaz listesi araclar/logo-yardimcisi SqlOkuma.IrsaliyeTurleri ile aynı). 4 ve 5'in anlamı canlı dışı
+// Logo'da ölçülmedi (yardımcının rehber tablosu ters yazar): ölçülene kadar konsinye türleri listede ve sayaçta görünmez (Risk N3).
+export const IRSALIYE_TURLERI = LOGO_IRSALIYE_TURLERI;
+export type IrsaliyeTuru = (typeof IRSALIYE_TURLERI)[number];
+export const KONSINYE_TURLERI: readonly IrsaliyeTuru[] = [4, 5, 9, 10];
+export const KONSINYE_TURLERI_DOGRULANDI = false;
+export const ALIS_TURLERI: readonly IrsaliyeTuru[] = [1, 5, 6, 10];
+export const SATIS_TURLERI: readonly IrsaliyeTuru[] = [8, 9, 3, 4];
+export const IRSALIYE_TUR_ADLARI: Readonly<Record<IrsaliyeTuru, string>> = {
+  1: 'Satın alma', 5: 'Konsinye giriş', 6: 'Satın alma iade', 10: 'Konsinye giriş iade',
+  8: 'Toptan satış', 9: 'Konsinye çıkış', 3: 'Satış iade', 4: 'Konsinye çıkış iade',
+};
+export const gorunenIrsaliyeTurleri = (yon: 'alis' | 'satis', konsinyeDogrulandi = KONSINYE_TURLERI_DOGRULANDI): IrsaliyeTuru[] =>
+  (yon === 'alis' ? ALIS_TURLERI : SATIS_TURLERI).filter((t) => konsinyeDogrulandi || !KONSINYE_TURLERI.includes(t));
+
+// Yardımcı sayfası başlık sayısıdır; tam sayfa gelirse aynı okuma sonraki turda sürer.
+export const IRSALIYE_SAYFASI = 100;
+// İlk okuma ve değişen okuması bu kadar gün geriye bakar (Risk N2, K1).
+export const IRSALIYE_GERI_GUN = 90;
+// Silinen başlık denetimi (yalnız kayıt numaraları) en erken bu aralıkla.
+export const IRSALIYE_REF_DENETIMI_MS = 60 * 60_000;
+const IRSALIYE_EN_COK_BEKLEME_MS = 60 * 60_000;
+// Başarısız okumadan sonra bekleme her ardışık hatada iki katına çıkar (5, 10, 20 dakika ...), en çok bir saat.
+export const irsaliyeBeklemesiMs = (ardisikHata: number): number =>
+  ardisikHata <= 0 ? 0 : Math.min(OKUMA_HATA_BEKLEME_MS * 2 ** Math.min(ardisikHata - 1, 20), IRSALIYE_EN_COK_BEKLEME_MS);
+
+const LOGO_DEGISME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
+const GUN = /^\d{4}-\d{2}-\d{2}$/;
+
+export const irsaliyeBaslangicGunu = (simdi: Date): string => new Date(simdi.getTime() - IRSALIYE_GERI_GUN * 86_400_000).toISOString().slice(0, 10);
+
+export interface IrsaliyeSatiriOkuma {
+  kayitNo: number;
+  malzemeKodu: string | null;
+  malzemeAdi: string | null;
+  miktar: string | null;
+  birim: string | null;
+  fiyat: string | null;
+  dovizTuru: number | null;
+  dovizFiyati: string | null;
+  siparisRef: number | null;
+  siparisSatirRef: number | null;
+  siparisNo: string | null;
+}
+
+export interface IrsaliyeBasligiOkuma {
+  kayitNo: number;
+  tur: IrsaliyeTuru;
+  fisNo: string | null;
+  belgeNo: string | null;
+  tarih: string;
+  iptal: boolean;
+  ambarNo: number | null;
+  cariKodu: string | null;
+  cariAdi: string | null;
+  faturaNo: string | null;
+  eIrsaliye: boolean;
+  degisme: string | null;
+  satirlar: IrsaliyeSatiriOkuma[];
+}
+
+export interface IrsaliyeSayfasi {
+  firma: number;
+  donem: number;
+  basliklar: IrsaliyeBasligiOkuma[];
+  // Yardımcının döndürdüğü başlık sayısı (atlananlar dahil): sayfa doluysa okuma sürer.
+  gelen: number;
+  atlanan: number;
+}
+
+const donemNo = (g: Record<string, unknown>, ad: string): number | null => {
+  const d = g[ad];
+  return typeof d === 'number' && Number.isSafeInteger(d) && d >= 0 ? d : null;
+};
+const alanSayiMetni = (k: Record<string, unknown>, ad: string): string | null => sayiMetni(ilkSayi(k, [ad]));
+const tamSayiYaDaNull = (k: Record<string, unknown>, ad: string): number | null => {
+  const n = ilkSayi(k, [ad]);
+  return n !== null && Number.isSafeInteger(n) ? n : null;
+};
+
+// Firma ve dönem yoksa ya da dizi yoksa null (imleç ilerlemez). Kaydı, türü beyaz listede ya da tarihi olmayan başlık atlanır ve sayılır;
+// kaydı olmayan satır atlanır. Sevk adresi, taşıyıcı, plaka, şoför yardımcıdan gelmez; gelse de okunmaz.
+export function irsaliyeSayfasiniAyikla(govde: unknown): IrsaliyeSayfasi | null {
+  if (!kayitMi(govde)) return null;
+  const firma = donemNo(govde, 'firm');
+  const donem = donemNo(govde, 'period');
+  const dizi = govde['dispatches'];
+  if (firma === null || donem === null || !Array.isArray(dizi)) return null;
+  const basliklar = new Map<number, IrsaliyeBasligiOkuma>();
+  let atlanan = 0;
+  for (const o of dizi) {
+    const kayitNo = kayitMi(o) ? kayitNumarasi(o, ['logicalRef']) : null;
+    const tur = kayitMi(o) ? ilkSayi(o, ['trCode']) : null;
+    const tarih = kayitMi(o) ? ilkMetin(o, ['date'], 10) : null;
+    if (!kayitMi(o) || kayitNo === null || !IRSALIYE_TURLERI.includes(tur as IrsaliyeTuru) || tarih === null || !GUN.test(tarih)) { atlanan += 1; continue; }
+    const degisme = ilkMetin(o, ['modifiedAt'], 23);
+    const satirlar = new Map<number, IrsaliyeSatiriOkuma>();
+    for (const s of Array.isArray(o['lines']) ? o['lines'] : []) {
+      const ref = kayitMi(s) ? kayitNumarasi(s, ['logicalRef']) : null;
+      if (!kayitMi(s) || ref === null) continue;
+      satirlar.set(ref, {
+        kayitNo: ref,
+        malzemeKodu: ilkMetin(s, ['itemCode'], 64),
+        malzemeAdi: ilkMetin(s, ['itemName'], 200),
+        miktar: alanSayiMetni(s, 'quantity'),
+        birim: ilkMetin(s, ['unitCode'], 40),
+        fiyat: alanSayiMetni(s, 'price'),
+        dovizTuru: tamSayiYaDaNull(s, 'currency'),
+        dovizFiyati: alanSayiMetni(s, 'currencyPrice'),
+        siparisRef: kayitNumarasi(s, ['orderRef']),
+        siparisSatirRef: kayitNumarasi(s, ['orderLineRef']),
+        siparisNo: ilkMetin(s, ['orderNo'], 64),
+      });
+    }
+    basliklar.set(kayitNo, {
+      kayitNo,
+      tur: tur as IrsaliyeTuru,
+      fisNo: ilkMetin(o, ['ficheNo'], 64),
+      belgeNo: ilkMetin(o, ['docNumber'], 64),
+      tarih,
+      iptal: o['cancelled'] === true,
+      ambarNo: tamSayiYaDaNull(o, 'warehouseNr'),
+      cariKodu: ilkMetin(o, ['arpCode'], 64),
+      cariAdi: ilkMetin(o, ['arpName'], 200),
+      faturaNo: ilkMetin(o, ['invoiceNo'], 64),
+      eIrsaliye: o['eDespatch'] === true,
+      degisme: degisme !== null && LOGO_DEGISME.test(degisme) ? degisme : null,
+      satirlar: [...satirlar.values()],
+    });
+  }
+  return { firma, donem, basliklar: [...basliklar.values()], gelen: dizi.length, atlanan };
+}
+
+export function irsaliyeRefleriniAyikla(govde: unknown): { firma: number; donem: number; refler: number[] } | null {
+  if (!kayitMi(govde)) return null;
+  const firma = donemNo(govde, 'firm');
+  const donem = donemNo(govde, 'period');
+  const dizi = govde['refs'];
+  if (firma === null || donem === null || !Array.isArray(dizi)) return null;
+  return { firma, donem, refler: dizi.filter((r): r is number => typeof r === 'number' && Number.isSafeInteger(r) && r > 0) };
+}
+
+// Değişen okumasının imleci (Logo değişme zamanı, başlık kaydı) sözlük sırasıyla ilerler; hiç geri gitmez. Değişme zamanı olmayan başlık imleci oynatmaz.
+export function degismeImleci(
+  simdiki: { degisme: string | null; ref: number }, basliklar: readonly Pick<IrsaliyeBasligiOkuma, 'degisme' | 'kayitNo'>[],
+): { degisme: string | null; ref: number } {
+  let en = simdiki;
+  for (const b of basliklar) {
+    if (b.degisme === null) continue;
+    if (en.degisme === null || b.degisme > en.degisme || (b.degisme === en.degisme && b.kayitNo > en.ref)) en = { degisme: b.degisme, ref: b.kayitNo };
+  }
+  return en;
+}
+
+// Tur sırası: yeni başlıklar bitince değişenler, onlar bitince (saatte bir) silinme denetimi, sonra yine yeniler.
+export type IrsaliyeOkumaSirasi = 'yeni' | 'degisen' | 'refler';
+export function sonrakiIrsaliyeSirasi(
+  simdiki: IrsaliyeOkumaSirasi, sayfaDolu: boolean, sonRefDenetimi: Date | null, simdi: Date,
+): IrsaliyeOkumaSirasi {
+  if (simdiki === 'yeni') return sayfaDolu ? 'yeni' : 'degisen';
+  if (simdiki === 'degisen') {
+    if (sayfaDolu) return 'degisen';
+    return sonRefDenetimi === null || simdi.getTime() - sonRefDenetimi.getTime() >= IRSALIYE_REF_DENETIMI_MS ? 'refler' : 'yeni';
+  }
+  return 'yeni';
+}
+
+/* Eşleşme: istek anında hesaplanır, hiçbir kayda yazılmaz. */
+
+export type IrsaliyeEslesmeDurumu = (typeof IRSALIYE_ESLESME_DURUMLARI)[number];
+
+export interface CoreSiparisSatiri {
+  siparisSatiriId: number;
+  siparisNo: string | null;
+  birim: string;
+  // Net teslim (düzeltme kayıtları düşülmüş).
+  teslim: string;
+}
+export interface CoreKarsiligi { tur: 'siparis' | 'sevk' | 'mal-kabul'; id: number; no: string }
+
+export interface EslesmeGirdisi {
+  tur: IrsaliyeTuru;
+  iptal: boolean;
+  logodaYok: boolean;
+  fisNo: string | null;
+  belgeNo: string | null;
+  satirlar: readonly { kayitNo: number; miktar: string | null; birim: string | null; siparisSatirRef: number | null }[];
+}
+export interface EslesmeKaynaklari {
+  // Logo sipariş satır kaydı (metin, CORE'da logo_satir_ref) -> CORE sipariş satırı.
+  siparisSatirlari: ReadonlyMap<string, CoreSiparisSatiri>;
+  // Logo sipariş satırı kaydı -> aynadaki net irsaliye miktarı (satın alma eksi satın alma iade; iptal ve Logo'da olmayan sayılmaz).
+  logoNetleri: ReadonlyMap<number, string>;
+  // Belge numarası (fiş no ya da e-irsaliye no) -> CORE kaydı.
+  sevkler: ReadonlyMap<string, CoreKarsiligi>;
+  iadeMalKabulleri: ReadonlyMap<string, CoreKarsiligi>;
+}
+export interface SatirEslesmesi {
+  kayitNo: number;
+  durum: IrsaliyeEslesmeDurumu;
+  neden: string | null;
+  core: CoreKarsiligi | null;
+  coreMiktari: string | null;
+  coreBirimi: string | null;
+}
+export interface IrsaliyeEslesmesi {
+  durum: IrsaliyeEslesmeDurumu;
+  ozet: string;
+  satirlar: SatirEslesmesi[];
+}
+
+// İşaretli ondalık metin (numeric::text) dört basamakla karşılaştırılır; okunamayan metin hiçbir şeye eşit değildir.
+const IRSALIYE_ONDALIK = /^-?\d+(\.\d+)?$/;
+const ondalikEsit = (a: string | null, b: string | null): boolean => {
+  if (a === null || b === null || !IRSALIYE_ONDALIK.test(a) || !IRSALIYE_ONDALIK.test(b)) return false;
+  const deger = (d: string): bigint => (d.startsWith('-') ? -olcekli(d.slice(1)) : olcekli(d));
+  return deger(a) === deger(b);
+};
+const birimAnahtari = (b: string): string => b.trim().toLocaleLowerCase('tr-TR');
+const sadeMiktar = (d: string): string => (d.includes('.') ? d.replace(/0+$/, '').replace(/\.$/, '') : d);
+
+const DURUM_AGIRLIGI: Readonly<Record<IrsaliyeEslesmeDurumu, number>> = { eslesti: 0, 'karsiligi-yok': 1, fark: 2, eslesmedi: 3, iptal: 4, 'logoda-yok': 5 };
+
+// Fark tanımı (ONIZLEME.md): aynı sipariş satırına bağlı Logo net miktarı ile CORE net teslimi farklıysa "fark"; kısmi kabulde toplamlar
+// karşılaştırılır. Birim farklıysa çevrim yapılmaz, "fark" gösterilir (VARSAYIM; çevrim 3332 ile). Siparişsiz satır "eşleşmedi"dir.
+// Satış (8) sevk işine, satış iadesi (3) iade mal kabulüne belge numarasıyla bağlanır; bu kayıtlar satır miktarı taşımadığı için yalnız başlık eşleşir.
+export function irsaliyeEslesmesi(b: EslesmeGirdisi, k: EslesmeKaynaklari): IrsaliyeEslesmesi {
+  const hepsi = (durum: IrsaliyeEslesmeDurumu, neden: string | null, core: CoreKarsiligi | null = null): SatirEslesmesi[] =>
+    b.satirlar.map((s) => ({ kayitNo: s.kayitNo, durum, neden, core, coreMiktari: null, coreBirimi: null }));
+  if (b.logodaYok) return { durum: 'logoda-yok', ozet: 'Logo\'da artık yok (silinmiş)', satirlar: hepsi('logoda-yok', null) };
+  if (b.iptal) return { durum: 'iptal', ozet: 'Logo\'da iptal edilmiş', satirlar: hepsi('iptal', null) };
+  if (KONSINYE_TURLERI.includes(b.tur)) {
+    return { durum: 'karsiligi-yok', ozet: 'CORE\'da konsinye kaydı tutulmuyor', satirlar: hepsi('karsiligi-yok', 'CORE\'da konsinye kaydı tutulmuyor') };
+  }
+  if (b.tur === 8 || b.tur === 3) {
+    const kaynak = b.tur === 8 ? k.sevkler : k.iadeMalKabulleri;
+    const core = [b.fisNo, b.belgeNo].map((n) => (n === null ? undefined : kaynak.get(n))).find((x) => x !== undefined) ?? null;
+    if (core === null) {
+      const yok = b.tur === 8 ? 'CORE\'da sevk yok' : 'CORE\'da iade mal kabulü yok';
+      return { durum: 'eslesmedi', ozet: yok, satirlar: hepsi('eslesmedi', yok) };
+    }
+    return { durum: 'eslesti', ozet: karsilikAdi(core), satirlar: hepsi('eslesti', null, core) };
+  }
+  const satirlar = b.satirlar.map((s): SatirEslesmesi => {
+    const bos = { kayitNo: s.kayitNo, core: null, coreMiktari: null, coreBirimi: null };
+    if (s.siparisSatirRef === null) return { ...bos, durum: 'eslesmedi', neden: 'Siparişsiz satır' };
+    const c = k.siparisSatirlari.get(String(s.siparisSatirRef));
+    if (c === undefined) return { ...bos, durum: 'eslesmedi', neden: 'Sipariş satırı CORE\'da yok' };
+    const core: CoreKarsiligi = { tur: 'siparis', id: c.siparisSatiriId, no: c.siparisNo ?? `Sipariş satırı ${c.siparisSatiriId}` };
+    const ortak = { kayitNo: s.kayitNo, core, coreMiktari: sadeMiktar(c.teslim), coreBirimi: c.birim };
+    if (s.birim === null || birimAnahtari(s.birim) !== birimAnahtari(c.birim)) {
+      return { ...ortak, durum: 'fark', neden: `Birim farklı: Logo ${s.birim ?? 'yok'}, CORE ${c.birim}` };
+    }
+    const logo = k.logoNetleri.get(s.siparisSatirRef) ?? null;
+    if (ondalikEsit(logo, c.teslim)) return { ...ortak, durum: 'eslesti', neden: null };
+    return { ...ortak, durum: 'fark', neden: `Logo net ${logo === null ? 'yok' : sadeMiktar(logo)}, CORE teslim ${sadeMiktar(c.teslim)}` };
+  });
+  if (satirlar.length === 0) return { durum: 'eslesmedi', ozet: 'Satırı yok', satirlar };
+  const durum = satirlar.reduce<IrsaliyeEslesmeDurumu>((en, s) => (DURUM_AGIRLIGI[s.durum] > DURUM_AGIRLIGI[en] ? s.durum : en), 'eslesti');
+  const say = (d: IrsaliyeEslesmeDurumu): number => satirlar.filter((s) => s.durum === d).length;
+  const siparisler = [...new Set(satirlar.flatMap((s) => (s.core === null ? [] : [s.core.no])))];
+  const parcalar = [
+    siparisler.length > 0 ? `Sipariş ${siparisler.slice(0, 2).join(', ')}${siparisler.length > 2 ? ` ve ${siparisler.length - 2} sipariş daha` : ''}` : null,
+    say('fark') > 0 ? `${say('fark')} satırda fark` : null,
+    say('eslesmedi') > 0 ? `${say('eslesmedi')} satır eşleşmedi` : null,
+  ].filter((x): x is string => x !== null);
+  return { durum, ozet: parcalar.join(' · '), satirlar };
+}
+
+const karsilikAdi = (c: CoreKarsiligi): string => (c.tur === 'sevk' ? `Sevk ${c.no}` : c.tur === 'mal-kabul' ? `İade mal kabulü ${c.no}` : `Sipariş ${c.no}`);

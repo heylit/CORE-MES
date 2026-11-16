@@ -92,6 +92,14 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: mal kabul okuması',
     aciklama: 'Açıkken dakikada bir Logo\'dan satın alma irsaliyesi satırları okunur ve yalnız saklanır; stoka ya da satın almaya işlenmez. "Logo bağlantısı" da açık olmalı.',
   },
+  // 3345 a: alış ve satış irsaliyeleri yalnız okunur ve CORE karşılığıyla gösterilir; Logo'ya yazılmaz, stok değişmez.
+  'logo.irsaliye-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: irsaliye okuması',
+    aciklama: 'Açıkken dakikada bir Logo\'dan alış ve satış irsaliyeleri (son 90 gün) okunur ve Logo İrsaliyeleri sayfasında gösterilir; hiçbir kayıt değişmez. "Logo bağlantısı" da açık olmalı.',
+  },
   'logo.liste-okumasi': {
     modul: 'logo',
     tur: 'boolean',

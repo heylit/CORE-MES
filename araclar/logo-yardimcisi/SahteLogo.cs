@@ -714,6 +714,25 @@ namespace LogoYardimcisi
             return b;
         }
 
+        // 3345 a: Logo'daki irsaliyeler (başlık ve satırları); testler doğrudan doldurur.
+        public List<IrsaliyeBasligi> IrsaliyeKayitlari = new List<IrsaliyeBasligi>();
+
+        public List<IrsaliyeBasligi> Irsaliyeler(int sonGorulen, DateTime baslangic, int enCok)
+        {
+            return IrsaliyeKayitlari.Where(x => x.Ref > sonGorulen && x.Tarih >= baslangic).OrderBy(x => x.Ref).Take(enCok).ToList();
+        }
+
+        public List<IrsaliyeBasligi> DegisenIrsaliyeler(DateTime sonra, int sonRef, DateTime baslangic, int enCok)
+        {
+            return IrsaliyeKayitlari.Where(x => x.Tarih >= baslangic && x.Degisme.HasValue && (x.Degisme.Value > sonra || (x.Degisme.Value == sonra && x.Ref > sonRef)))
+                .OrderBy(x => x.Degisme.Value).ThenBy(x => x.Ref).Take(enCok).ToList();
+        }
+
+        public List<int> IrsaliyeRefleri(DateTime baslangic)
+        {
+            return IrsaliyeKayitlari.Where(x => x.Tarih >= baslangic).Select(x => x.Ref).ToList();
+        }
+
         public List<MalKabulSatiri> MalKabul(int sonGorulen, int enCok)
         {
             return MalKabulSatirlari.Where(x => x.Ref > sonGorulen).OrderBy(x => x.Ref).Take(enCok).ToList();

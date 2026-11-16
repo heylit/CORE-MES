@@ -34,11 +34,13 @@ export interface SurecBellegi {
   sonListeDenemesi: Date | null;
   // Okuma akışlarının son denemesi (akış anahtarı -> zaman): başarısız okuma OKUMA_HATA_BEKLEME_MS dolmadan yinelenmez.
   okumaDenemeleri: Map<string, Date>;
+  // 3345 a: irsaliye okumasının ardışık hata sayısı ve son hatası (bekleme her hatada artar).
+  irsaliyeHatasi: { sayi: number; son: Date } | null;
   // 3313: "Kart bekliyor" iletisi sahibine bir kez yazılır (belge anahtarı -> ileti); ileti değişince yeniden.
   kartBekleyenler: Map<number, string>;
 }
 
-export const yeniSurecBellegi = (): SurecBellegi => ({ niyetler: new Map(), acmaIstekleri: new Map(), sonListeDenemesi: null, okumaDenemeleri: new Map(), kartBekleyenler: new Map() });
+export const yeniSurecBellegi = (): SurecBellegi => ({ niyetler: new Map(), acmaIstekleri: new Map(), sonListeDenemesi: null, okumaDenemeleri: new Map(), irsaliyeHatasi: null, kartBekleyenler: new Map() });
 
 // İş "bekliyor" dönerken sağlık ayrıntısında görünen nedenler: sabit metin, değer taşımaz.
 export const BEKLEME_NEDENLERI = {
@@ -53,6 +55,7 @@ export const BEKLEME_NEDENLERI = {
   'malzeme-karti-kapali': 'Logo malzeme kartı okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'stok-kapali': 'Logo stok okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'kullanim-kapali': 'Logo malzeme kullanım okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'irsaliye-kapali': 'Logo irsaliye okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'proje-kapali': 'Logo proje kartı gönderimi Sistem Ayarları\'nda kapalı; projeler gönderilmiyor, belgeler proje kodu olmadan gidiyor.',
   'dis-duzeltme-kapali': 'Logo\'da açılmış siparişi düzeltme kapalı (TMIV2_LOGO_SIPARIS_DUZELTME); istek atılmıyor.',
   'ortam-degiskeni-yok': 'Logo bağlantısı açık ama TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmıyor.',
@@ -125,8 +128,8 @@ export type TurSonucu =
   | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'bekletme' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
   | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
-  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' }
-  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
+  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' }
+  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
@@ -145,10 +148,10 @@ type NiyetliBelge = 'talep' | 'siparisler-teklifi' | 'siparisler-siparisi';
 // transaction izi kaybettirmesin (UYUM-BORCU 2). İlk transaction okur, niyet ya da red yazar; köprü adımı istekleri atar ve sonucu
 // yazacak işi döndürür. Arada kopan tur yinelenince niyet ve "var mı" aynı kaydı bulur, ikinci kayıt açılmaz.
 export type TxAcan = Pick<Veritabani, 'tx'>;
-type Yazici<T> = (db: Db) => Promise<T>;
-type KopruAdimi<T = TurSonucu> = () => Promise<Yazici<T>>;
+export type Yazici<T> = (db: Db) => Promise<T>;
+export type KopruAdimi<T = TurSonucu> = () => Promise<Yazici<T>>;
 
-async function turuKos(vt: TxAcan, hazirla: (db: Db) => Promise<TurSonucu | KopruAdimi>): Promise<TurSonucu> {
+export async function turuKos(vt: TxAcan, hazirla: (db: Db) => Promise<TurSonucu | KopruAdimi>): Promise<TurSonucu> {
   const adim = await vt.tx(hazirla);
   if (typeof adim !== 'function') return adim;
   const yaz = await adim();
@@ -988,9 +991,9 @@ async function logoKoduyla<T extends Parameters<typeof logoKodlarinaCevir>[0]>(d
 
 // Okunan satır stoka, satın almaya ya da başka modüle işlenmez (UYUM-BORCU "bağlamada kapanacak"). İstek ancak "Logo bağlantısı" ve akışın
 // kendi anahtarı açık VE köprü değişkenleri varken çıkar. Turda en çok bir okuma isteği (fatura turu hariç: sınırlı sayıda sipariş, sıralı).
-async function okumaKapisi(
+export async function okumaKapisi(
   db: Db, o: TurOrtami, ayar: LogoAyarAnahtari,
-  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali',
+  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali',
 ): Promise<TurSonucu | KopruIstemcisi> {
   if (!(await sistemAyariOku(db, 'logo.baglanti'))) return { tur: 'kapali' };
   if (!(await sistemAyariOku(db, ayar))) return { tur: kapali };
@@ -1607,7 +1610,7 @@ export async function birimSetiKaldir(db: Db, kod: string): Promise<{ kod: strin
 
 /* ---------------- Bağlantı hazırlığı ve canlı kontrol ---------------- */
 
-type LogoAyarAnahtari = keyof typeof LOGO_AYARLARI;
+export type LogoAyarAnahtari = keyof typeof LOGO_AYARLARI;
 const ACIK_KAPALI_AYARLARI = (Object.keys(LOGO_AYARLARI) as LogoAyarAnahtari[]).filter((a) => LOGO_AYARLARI[a].tur === 'boolean');
 
 // Sayfalı okumada sayı son tam turun (ya da süren turun) okunan kaydıdır.

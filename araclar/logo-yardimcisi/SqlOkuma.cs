@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Proje, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
+            MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -29,7 +29,12 @@ namespace LogoYardimcisi
             "LG_<f>_<d>_ORFLINE.UOMREF -> LG_<f>_UNITSETL.CODE satır birimi (3007: düzenleme birimi yalnız değiştiyse yazar; ölçüm bekliyor, kart 2980 b)",
             "LG_<f>_<d>_STLINE.DATE_ son hareket yalnız çalışılan dönemde; LG_<f>_<d>_ORFLINE.CLOSED (0 açık), LINETYPE, STOCKREF ve ORFICHE.CANCELLED açık sipariş (3079 kullanım okuması)",
             "LG_<f>_PROJECT.LOGICALREF, CODE, NAME ve Logo Objects proje kartı veri nesnesi (3315; proje_nesnesi ayarı ölçülünce)",
+            "LG_<f>_<d>_STFICHE.DOCODE, CANCELLED, SOURCEINDEX, CLIENTREF, INVOICEREF, EDESPATCH, CAPIBLOCK_MODIFIEDDATE; LG_<f>_<d>_STLINE.PRCURR, PRPRICE, ORDFICHEREF, ORDTRANSREF; konsinye TRCODE 4 ve 5 (3345 irsaliye okuması)",
         };
+
+        // Kart 3345 a: okunan irsaliye türleri, sabit beyaz liste (parametre değil). 1 satın alma, 3 toptan satış iade, 4 konsinye çıkış iade,
+        // 5 konsinye giriş, 6 satın alma iade, 8 toptan satış, 9 konsinye çıkış, 10 konsinye giriş iade (EkoTigerAPI LogoDocController; 4 ve 5 ölçülmedi).
+        public const string IrsaliyeTurleri = "1, 3, 4, 5, 6, 8, 9, 10";
 
         public Sorgular(int firma, int donem)
         {
@@ -116,6 +121,17 @@ namespace LogoYardimcisi
             // 3007: satır birimi; birimi okunamayan satır listede yoktur (Logo'da açılmış siparişte düzenleme reddeder, CORE siparişinde birim yazılır).
             SiparisSatirBirimleri = "SELECT L.LOGICALREF, U.CODE FROM " + d("ORFLINE") + " L JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref";
+            // 3345 a: yalnız eşleşme ve gösterim alanları; sevk adresi, taşıyıcı, plaka ve şoför okunmaz (Risk K3).
+            var irsaliyeBasligi = "SELECT TOP (@enCok) F.LOGICALREF, F.TRCODE, F.FICHENO, F.DOCODE, F.DATE_, F.CANCELLED, F.SOURCEINDEX, C.CODE, C.DEFINITION_, V.FICHENO,"
+                + " F.EDESPATCH, F.CAPIBLOCK_MODIFIEDDATE FROM " + d("STFICHE") + " F LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = F.CLIENTREF LEFT JOIN "
+                + d("INVOICE") + " V ON V.LOGICALREF = F.INVOICEREF WHERE F.TRCODE IN (" + IrsaliyeTurleri + ") AND F.DATE_ >= @baslangic AND ";
+            IrsaliyeBasliklari = irsaliyeBasligi + "F.LOGICALREF > @son ORDER BY F.LOGICALREF";
+            DegisenIrsaliyeler = irsaliyeBasligi + "(F.CAPIBLOCK_MODIFIEDDATE > @sonra OR (F.CAPIBLOCK_MODIFIEDDATE = @sonra AND F.LOGICALREF > @son))"
+                + " ORDER BY F.CAPIBLOCK_MODIFIEDDATE, F.LOGICALREF";
+            IrsaliyeRefleriSorgusu = "SELECT LOGICALREF FROM " + d("STFICHE") + " WHERE TRCODE IN (" + IrsaliyeTurleri + ") AND DATE_ >= @baslangic";
+            IrsaliyeSatirlari = "SELECT L.LOGICALREF, L.STFICHEREF, I.CODE, I.NAME, L.AMOUNT, U.CODE, L.PRICE, L.PRCURR, L.PRPRICE, L.ORDFICHEREF, L.ORDTRANSREF, O.FICHENO FROM "
+                + d("STLINE") + " L LEFT JOIN " + f("ITEMS") + " I ON I.LOGICALREF = L.STOCKREF LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF LEFT JOIN "
+                + d("ORFICHE") + " O ON O.LOGICALREF = L.ORDFICHEREF WHERE L.LINETYPE = 0 AND L.STFICHEREF IN ({0}) ORDER BY L.LOGICALREF";
             MalzemeFisiSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, I.CODE, L.AMOUNT FROM " + d("STLINE") + " L LEFT JOIN " + f("ITEMS")
                 + " I ON I.LOGICALREF = L.STOCKREF WHERE L.STFICHEREF = @ref ORDER BY L.LOGICALREF";
         }
@@ -554,6 +570,74 @@ namespace LogoYardimcisi
                 x.Miktar = Ondalik(s[5]);
                 x.Birim = Metin(s[6]);
                 l.Add(x);
+            }
+            return l;
+        }
+
+        public List<IrsaliyeBasligi> Irsaliyeler(int sonGorulen, DateTime baslangic, int enCok)
+        {
+            return IrsaliyeSatirlariyla(Sorgula(q.IrsaliyeBasliklari, P("@son", sonGorulen), P("@baslangic", baslangic), P("@enCok", enCok)));
+        }
+
+        public List<IrsaliyeBasligi> DegisenIrsaliyeler(DateTime sonra, int sonRef, DateTime baslangic, int enCok)
+        {
+            return IrsaliyeSatirlariyla(Sorgula(q.DegisenIrsaliyeler, P("@sonra", sonra), P("@son", sonRef), P("@baslangic", baslangic), P("@enCok", enCok)));
+        }
+
+        public List<int> IrsaliyeRefleri(DateTime baslangic)
+        {
+            var l = new List<int>();
+            foreach (var s in Sorgula(q.IrsaliyeRefleriSorgusu, P("@baslangic", baslangic))) l.Add(Tam(s[0]));
+            return l;
+        }
+
+        List<IrsaliyeBasligi> IrsaliyeSatirlariyla(List<object[]> basliklar)
+        {
+            var l = new List<IrsaliyeBasligi>();
+            var bul = new Dictionary<int, IrsaliyeBasligi>();
+            foreach (var s in basliklar)
+            {
+                var b = new IrsaliyeBasligi();
+                b.Ref = Tam(s[0]);
+                b.Tur = Tam(s[1]);
+                b.FisNo = Metin(s[2]);
+                b.BelgeNo = Metin(s[3]);
+                b.Tarih = Tarih(s[4]);
+                b.Iptal = Tam(s[5]) != 0;
+                b.AmbarNo = Tam(s[6]);
+                b.CariKodu = Metin(s[7]);
+                b.CariAdi = Metin(s[8]);
+                b.FaturaNo = Metin(s[9]);
+                b.EIrsaliye = Tam(s[10]) != 0;
+                b.Degisme = TarihYa(s[11]);
+                l.Add(b);
+                bul[b.Ref] = b;
+            }
+            if (l.Count == 0) return l;
+            var adlar = new List<string>();
+            var p = new List<SqlParameter>();
+            for (var i = 0; i < l.Count; i++)
+            {
+                adlar.Add("@r" + i);
+                p.Add(P("@r" + i, l[i].Ref));
+            }
+            foreach (var s in Sorgula(string.Format(q.IrsaliyeSatirlari, string.Join(", ", adlar.ToArray())), p.ToArray()))
+            {
+                IrsaliyeBasligi b;
+                if (!bul.TryGetValue(Tam(s[1]), out b)) continue;
+                var x = new IrsaliyeSatiri();
+                x.Ref = Tam(s[0]);
+                x.MalzemeKodu = Metin(s[2]);
+                x.MalzemeAdi = Metin(s[3]);
+                x.Miktar = Ondalik(s[4]);
+                x.Birim = Metin(s[5]);
+                x.Fiyat = Ondalik(s[6]);
+                x.DovizTuru = Tam(s[7]);
+                x.DovizFiyati = Ondalik(s[8]);
+                x.SiparisRef = Tam(s[9]);
+                x.SiparisSatirRef = Tam(s[10]);
+                x.SiparisNo = Metin(s[11]);
+                b.Satirlar.Add(x);
             }
             return l;
         }

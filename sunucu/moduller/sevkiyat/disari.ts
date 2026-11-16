@@ -85,3 +85,9 @@ export { takvimKayitlari } from './servis.ts';
 // Ctrl K tek arama ucunun sevkiyat kaynağı (1233 sözleşmesi, 1239): emir no ile sevk kalemleri, irsaliye no ile sevk işi.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [sevkAramaKaynagi];
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// 3345 a: Logo satış irsaliyesinin CORE karşılığı; belge numarası -> sevk işi. Boş dizide sorgu atılmaz.
+export async function belgeNoluSevkIsleri(db: Db, belgeNolar: readonly string[]): Promise<Map<string, { id: number; tarih: string }>> {
+  if (belgeNolar.length === 0) return new Map();
+  return new Map((await sorgu.belgeNoluIsler(db, belgeNolar)).map(({ belgeNo, ...x }) => [belgeNo, x]));
+}

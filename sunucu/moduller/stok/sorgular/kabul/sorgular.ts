@@ -83,3 +83,12 @@ export async function malKabulTaslagiSil(db: Db, kisiId: number, surum: number |
   );
   return r.length;
 }
+
+// 3345 a: irsaliye numarasıyla müşteri iadesi mal kabulleri (düzeltme kaydı değil); Logo satış iade irsaliyesinin karşılığı. Aynı numarada en yenisi.
+export function iadeMalKabulleri(db: Db, irsaliyeNolar: readonly string[]): Promise<{ irsaliyeNo: string; id: number; no: string }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT ON (irsaliye_no) irsaliye_no AS "irsaliyeNo", id, no FROM stok_mal_kabul
+      WHERE tur = 'iade' AND duzeltilen_id IS NULL AND irsaliye_no = ANY($1::text[]) ORDER BY irsaliye_no, zaman DESC, id DESC`,
+    [[...new Set(irsaliyeNolar)]],
+  );
+}

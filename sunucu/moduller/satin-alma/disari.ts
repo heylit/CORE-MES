@@ -163,3 +163,9 @@ export type { FasonSiparisTarihi } from './kurallar.ts';
 export async function fasonSiparisTarihleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, FasonSiparisTarihi>> {
   return fasonSiparisTarihiSec(await emirTedarikDurumlari(db, [], isEmriIdleri));
 }
+
+// 3345 a: Logo irsaliyeleri sayfasının eşleşmesi (Logo sipariş satır kaydı -> CORE sipariş satırı ve net teslim). Boş dizide sorgu atılmaz.
+export async function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly string[]): Promise<Map<string, { siparisSatiriId: number; siparisNo: string | null; birim: string; teslim: string }>> {
+  if (logoSatirRefleri.length === 0) return new Map();
+  return new Map((await sorgu.logoSatirliSiparisSatirlari(db, logoSatirRefleri)).map(({ logoSatirRef, ...x }) => [logoSatirRef, x]));
+}

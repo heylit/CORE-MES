@@ -1,6 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
-import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
+import { agHatasiniYorumla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, IrsaliyeSayfasi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
@@ -42,6 +42,9 @@ export interface KopruIstemcisi {
   satisSiparisiAc(teklifRef: number, govde: Record<string, unknown>): Promise<SatirliSonuc>;
   // Okuma uçları (logo -> TMI): yalnız GET. Cevabın biçimi doğrulanmadı (VARSAYIM); okunamayan cevap "belirsiz" döner, kayıt yazılmaz.
   malKabulOku(since: number): Promise<OkumaSonucu<{ satirlar: MalKabulSatiri[]; atlanan: number }>>;
+  // 3345 a: irsaliye başlıkları satırlarıyla, since'tan büyük kayıtlar (değişenlerde değişme zamanı ve eşitte kayıt); from ilk gündür.
+  irsaliyeOku(since: number, from: string, changedAfter: string | null): Promise<OkumaSonucu<IrsaliyeSayfasi>>;
+  irsaliyeRefleriOku(from: string): Promise<OkumaSonucu<{ firma: number; donem: number; refler: number[] }>>;
   cariListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
   ambarListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
   // Siparişin faturaları; 404 "fatura yok" sayılır (VARSAYIM).
@@ -221,6 +224,9 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
 
   return {
     malKabulOku: (since) => oku(`/api/PurchaseOrder/receipts?since=${since}`, malKabulSatirlariniAyikla),
+    irsaliyeOku: (since, from, changedAfter) =>
+      oku(`/api/Dispatch/list?since=${since}&from=${encodeURIComponent(from)}${changedAfter === null ? '' : `&changedAfter=${encodeURIComponent(changedAfter)}`}`, irsaliyeSayfasiniAyikla),
+    irsaliyeRefleriOku: (from) => oku(`/api/Dispatch/refs?from=${encodeURIComponent(from)}`, irsaliyeRefleriniAyikla),
     cariListesiOku: () => oku('/api/Arp/list', (g) => listeKayitlariniAyikla(g, 'cari')),
     ambarListesiOku: () => oku('/api/Lookup/warehouses', (g) => listeKayitlariniAyikla(g, 'ambar')),
     faturaOku: (no) => oku(`/api/PurchaseOrder/${encodeURIComponent(no)}/invoices`, faturalariAyikla, []),
