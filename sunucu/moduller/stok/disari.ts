@@ -246,7 +246,7 @@ export async function sonHareketler(db: Db, sinir = 100): Promise<Hareket[]> {
 // Üretim sayımının stoğa yansıması (kart #1289). Sağlam sayım yazılınca aynı transaction'da çağrılır: artış parçayı istasyonun
 // konumuna sokar (önceki adımdan gelen parça adımın statüsüne geçer), azalış teslim edilen sayının altına inemez (UygulamaHatasi,
 // alan saglamAdet). Yetki denetlemez.
-export type { AdimStatusuCozucusu, UretimSayimiYansimasi } from './servis.ts';
+export type { AdimStatusuCozucusu, AdimStatusuOkuyucusu, UretimSayimiYansimasi } from './servis.ts';
 export const uretimGirdiUyarisi = (db: Db, g: Parameters<typeof servis.uretimGirdiUyarisi>[1]): Promise<string | null> => servis.uretimGirdiUyarisi(db, g);
 export const uretimSayimiYansit = async (db: Db, g: servis.UretimSayimiYansimasi): Promise<void> => { await akistan(db, 'terminal', () => servis.uretimSayimiYansit(db, g)); };
 // Aynısı, sayım cevabına giden uyarıyla (kart #157): dinleyici dönüş alınca kablolama buna geçer; o zamana kadar uyarı yalnız harekette.
@@ -272,7 +272,7 @@ export type { IstasyonLotKarari } from './servis.ts';
 export const istasyonLotKarari = (db: Db, g: servis.IstasyonLotKarari): Promise<string> => akistan(db, 'kalite', () => servis.istasyonLotKarari(db, g));
 export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istasyonId: number }): Promise<string | null> => servis.istasyondanTeslimEdilen(db, g);
 // Reçete ve Rota başlangıçta adımın statüsünü çözen işlevi kaydeder (stok onu ithal edemez). Son ve statüsüz adımda null döner.
-export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
+export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuOkuyucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
 // Reçete ve Rota adımın çıktı kartını (ara adımda parçanın dönüştüğü kart) çözen işlevi kaydeder; çıktısız adımda null döner.
 export const adimCiktisiCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimCiktisiCozucusuKaydet(cozucu);
 // Kartların statülü stoğu, kart ve statü başına (malzeme ayrıntısının statü kırılımıyla aynı toplam; statüsüz satır dönmez). Reçete ve

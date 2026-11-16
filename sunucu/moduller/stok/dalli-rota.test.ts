@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { IsMalzemeleriCevabi, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -164,6 +164,22 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.match(kapanis?.ayrinti ?? '', /istasyonda kalan: \S+ \S+ 10 /);
   });
 
+  test('3309-1: statü satırı açılmamış dal parçası is malzemeleri okumasında aranmaz; okuma 200 döner, öteki dalın parçası kalır', async () => {
+    const k = await kur();
+    const tasinanlar = async () => {
+      const r = await istek<IsMalzemeleriCevabi>('operator', 'GET', `/stok/teslim-kutusu/is-malzemeleri?istasyonId=${String(k.ist.c)}`);
+      assert.equal(r.durum, 200, JSON.stringify(r.govde));
+      return r.govde.isler.filter((x) => x.uretimEmriId === k.e && x.opNo === 30).flatMap((x) => x.malzemeler.filter((m) => m.tasinan).map((m) => m.malzemeId)).sort();
+    };
+    assert.deepEqual(await tasinanlar(), [k.hm1, k.hm2].sort(), 'ön koşul: birleştirme iki dalın parçasını taşınan gösterir');
+    // OP 10'un statü satırı yok: gerçek çözücü salt okunur işlemde 'acilmamis' der (recete-rota statu.test "okuma yazmaz").
+    adimStatusuCozucusuKaydet(async (db, g) => {
+      if (g.uretimEmriId !== k.e) return null;
+      const salt = (await db.tek<{ v: string }>("SELECT current_setting('transaction_read_only') AS v"))?.v === 'on';
+      return salt && g.opNo === 10 ? 'acilmamis' : k.s[g.opNo as 10 | 20 | 30] ?? null;
+    });
+    assert.deepEqual(await tasinanlar(), [k.hm2], 'A dalının parçası statüsüz stokta aranmaz');
+  });
   test('1360 (1257 a), 1532 a: B dalı ürün başına 2 parça verir; hammadde mamul başınadır: 10 ürün için 10 HM2, hurda 1 ürün için 1 HM2 düşer', async () => {
     const k = await kur(2);
     await malKabul(k.hm1, '6');

@@ -70,6 +70,11 @@ export async function statuler(db: Db): Promise<(Omit<Statu, 'urunKodu' | 'reviz
   );
 }
 
+// Okuma ucu salt okunur işlemde koşar (çekirdek); orada statü satırı açılamaz.
+export async function saltOkunurMu(db: Db): Promise<boolean> {
+  return (await db.tek<{ v: string }>("SELECT current_setting('transaction_read_only') AS v"))?.v === 'on';
+}
+
 export async function statuKimligi(db: Db, kaynakAdim: string, rotaRevizyonuId: number | null): Promise<number | null> {
   return (await db.tek<{ id: number }>('SELECT id FROM recete_rota_statu WHERE kaynak_adim = $1 AND rota_revizyonu_id IS NOT DISTINCT FROM $2::int', [kaynakAdim, rotaRevizyonuId]))?.id ?? null;
 }

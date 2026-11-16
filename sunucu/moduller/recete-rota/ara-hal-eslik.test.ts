@@ -107,7 +107,9 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
   // Stok sayımının yolu: adımın bir sağlam sayımı; statülü adımda artı bakiyesi o statüde açılan malzeme taşınandır.
   async function stoktakiKart(em: Awaited<ReturnType<typeof emirAc>>, urun: number, op: number): Promise<{ kart: number | null; statu: number | null }> {
     await o().vt.tx((db) => uretimSayimiYansitUyarili(db, { uretimEmriId: em.e, isEmriId: em.ie.get(op)!, istasyonId: em.istasyon, kisiId: operatorId, fark: '1' }));
-    const statu = await o().vt.tx((db) => adimStatusu(db, { malzemeNo: urun, opNo: op, uretimEmriId: em.e }));
+    const s = await o().vt.tx((db) => adimStatusu(db, { malzemeNo: urun, opNo: op, uretimEmriId: em.e }));
+    assert.notEqual(s, 'acilmamis', 'yazma işleminde satır açılır');
+    const statu = s === 'acilmamis' ? null : s;
     if (statu === null) return { kart: null, statu: null };
     const satir = await o().vt.tek<{ malzeme_id: number }>('SELECT malzeme_id FROM stok_bakiye WHERE statu_id = $1 AND miktar > 0', [statu]);
     return { kart: satir?.malzeme_id ?? null, statu };
