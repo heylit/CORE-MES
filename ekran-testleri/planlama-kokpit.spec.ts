@@ -66,6 +66,13 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
       ekMesai = [...ekMesai, { m, gun: k['gun'], vardiya: k['vardiya'], ...(k['personel'] === null ? {} : { personel: k['personel'] }) }];
     } else if (k.tur === 'ek-mesai-sil') {
       ekMesai = ekMesai.filter((x) => !(x['m'] === m && x['gun'] === k['gun'] && x['vardiya'] === k['vardiya']));
+    } else if (k.tur === 'adim-uzadi' || k.tur === 'adim-uzadi-sil') {
+      const e = { ...(w['adimEk'] as Record<string, unknown> | undefined) }, id = String(k['isId']);
+      // Uzama adımın bitişini kaydırır (bitis0: ilk bildirimdeki bitiş); silinince bitiş geri gelir.
+      const x = ops[id], once = e[id] as { bitis0: number } | undefined, b0 = once?.bitis0 ?? x?.C ?? 0;
+      if (k.tur === 'adim-uzadi') e[id] = { ekSaat: k['ekSaat'], bitis0: b0 }; else delete e[id];
+      if (x) ops = { ...ops, [id]: { ...x, C: b0 + (k.tur === 'adim-uzadi' ? Number(k['ekSaat']) : 0) } };
+      w = { ...w, adimEk: e };
     }
   }
   return { ops, locks, w, down, ekMesai };
@@ -76,6 +83,11 @@ const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.
 async function arac(kokpit: Locator, ad: string) {
   await kokpit.getByRole('button', { name: 'Araçlar' }).click();
   await kokpit.getByRole('menu', { name: 'Araçlar' }).locator('button', { hasText: ad }).click();
+}
+// Değerlendirmenin özeti: adıma uzama bildirildiyse gecikme o kadar artar (uzama planı iyileştirmez); öteki komutlarda sabit iyileşme.
+function degerlendirmeOzeti(d: Durum) {
+  const ek = Object.values((d.w['adimEk'] as Record<string, { ekSaat: number }> | undefined) ?? {}).reduce((t, e) => t + Number(e.ekSaat), 0);
+  return ek > 0 ? { wT: 20 + ek, T: 20 + ek, late: 1 } : { wT: 8, T: 8, late: 0 };
 }
 async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
   const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
@@ -98,7 +110,7 @@ async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unkn
   await page.route('**/api/plan/taslagim/vazgec', (r) => { s.satirlar = []; return json(r, cevap()); });
   await page.route('**/api/plan/taslagim/degerlendirme', (r) => { s.degerlendirme.push(r.request().postDataJSON()); return json(r, { is: IS }); });
   await page.route(`**/api/plan/planlama-degerlendirmesi/${IS}`, (r) => json(r, {
-    durum: 'bitti', cevap: { calismaSurumu: s.surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan(gorunum().ops), ozet: { wT: 8, T: 8, late: 0 } } } },
+    durum: 'bitti', cevap: { calismaSurumu: s.surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: { ...plan(gorunum().ops), ozet: degerlendirmeOzeti(gorunum()) } } },
   }));
   await page.route('**/api/plan/taslagim/diz', (r) => { ekle({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi'); return json(r, cevap()); });
   await page.route('**/api/plan/taslagim/uygula', (r) => {
@@ -1504,6 +1516,67 @@ test('Kokpit 3335-3a: tezgâh adından sorun bildir; Duruş ve mesai o tezgâhla
   expect(t.s.komutlar).toEqual([{ tur: 'durus', tezgah: 'M2', bas: 32, bit: 40, neden: 'arıza' }]);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3a-etki-${bilgi.project.name}.png` });
+  expect(ag.hatalar).toEqual([]);
+});
+
+// 3335 a, adıma sorun bildir (3b): operasyon satırındaki düğme paneli o adımla açar; uzama taslağa "adim-uzadi" komutuyla yazılır, etkisi
+// görünür, Uygula'dan sonra satırın bitişinde yazar; "Uzamayı kaldır" silme komutunu yazar.
+test('Kokpit 3335-3b: operasyon satırından adıma sorun bildir; uzama taslağa yazılır, etkisi görünür, Uygula; satırda yazar; kaldırılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible().catch(() => false)) await karsilama.click();
+  await kokpit.locator('[data-kart="S1"]').click();
+  const satir = kokpit.locator('[data-adim-satir="S1.a1"]');
+  const dugme = satir.locator('[data-adim-sorun="S1.a1"]');
+  await expect(dugme).toHaveAccessibleName('Torna için sorun bildir');
+  const kutu = await dugme.boundingBox();
+  expect(kutu?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(kutu?.width ?? 0).toBeGreaterThanOrEqual(44);
+  // Kart düzeninde (360, 768) düğme yazısıyla durur; geniş tabloda yalnız simge.
+  await expect(dugme.locator("span")).toBeVisible({ visible: bilgi.project.name !== "g1280" });
+  await dugme.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3b-dugme-${bilgi.project.name}.png` });
+  await dugme.click();
+  const panel = kokpit.getByRole('complementary', { name: 'Adıma sorun bildir' });
+  await expect(panel).toBeVisible();
+  const alan = panel.getByLabel('Kaç saat uzadı');
+  await expect(alan).toBeFocused();
+  await expect(alan).toBeInViewport({ ratio: 1 });
+  await expect(panel.locator('dl')).toContainText('Torna');
+  await expect(panel.locator('dl')).toContainText('T-01');
+  await alan.fill('0,1');
+  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
+  await expect(panel.getByRole('alert')).toHaveText('Uzamayı 0,25 ile 240 saat arasında, çeyrek saat adımıyla girin.');
+  expect(t.s.komutlar).toEqual([]);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3b-form-${bilgi.project.name}.png` });
+  await alan.fill('2,5');
+  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
+  const etki = panel.getByRole('region', { name: 'Uzamanın etkisi' });
+  await expect(etki).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar).toEqual([{ tur: 'adim-uzadi', isId: 'S1.a1', ekSaat: 2.5 }]);
+  // Uzama gecikmeyi azaltmaz: etki kötüleşme tonundadır.
+  await expect(etki.locator('dd[data-yon="kotu"]').first()).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3b-etki-${bilgi.project.name}.png` });
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(etki).toHaveCount(0);
+  await expect(satir.locator('[data-adim-ek]')).toHaveText('uzadı +2,5 sa');
+  await expect(panel.locator('[data-adim-ek]')).toHaveText('+2,5 sa');
+  // Plandaki bitiş uzamayı içerir: 16:00 + 2,5 saat.
+  await expect(panel.locator('dl')).toContainText('19.10 Pzt 18:30');
+  await expect(satir.locator('td[data-ad="Bitiş"]')).toContainText('19.10 Pzt 18:30');
+  await expect(panel.getByLabel('Toplam kaç saat uzadı')).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3b-sonra-${bilgi.project.name}.png` });
+  await panel.getByRole('button', { name: 'Uzamayı kaldır' }).click();
+  await expect(panel.getByRole('region', { name: 'Uzamanın etkisi' })).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar.at(-1)).toEqual({ tur: 'adim-uzadi-sil', isId: 'S1.a1' });
   expect(ag.hatalar).toEqual([]);
 });
 

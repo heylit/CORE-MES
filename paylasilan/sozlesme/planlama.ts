@@ -465,6 +465,10 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   // 3282 2a-2: ek mesai tezgâha gün ve vardiya açar; personel o vardiyada tezgâhı çalıştıracak kişidir (3282-7 b), boşsa operatörsüz.
   z.object({ tur: z.literal('ek-mesai'), tezgah: taslakKimlik, gun: ekMesaiGunu, vardiya: taslakKimlik, personel: taslakKimlik.nullable() }).strict(),
   z.object({ tur: z.literal('ek-mesai-sil'), tezgah: taslakKimlik, gun: ekMesaiGunu, vardiya: taslakKimlik }).strict(),
+  // 3335-3b: adımda sorun bildir, "adım uzadı". isId motorun işlem kimliğidir (emir.adım); ekSaat adımın süresine eklenen saattir (çeyrek
+  // saat adımlı). Aynı adıma yeni bildirim öncekinin yerine geçer. Oran ya da bitiş istemciden alınmaz; sunucu çalışmadan okur.
+  z.object({ tur: z.literal('adim-uzadi'), isId: taslakKimlik, ekSaat: z.number().min(0.25).max(240).multipleOf(0.25) }).strict(),
+  z.object({ tur: z.literal('adim-uzadi-sil'), isId: taslakKimlik }).strict(),
 ]);
 // taslakSurumu: sayfanın gördüğü taslak sürümü (taslak yoksa null); iki sekmede aynı kişinin yazması birbirini ezmez.
 export const taslakKomutGovdesi = z.object({ taslakSurumu: z.number().int().nullable(), komut: taslakKomutu }).strict();

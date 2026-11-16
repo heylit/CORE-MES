@@ -4,7 +4,7 @@ import { isTasiOnizle } from '../motor/atolye/gonder.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -302,6 +302,10 @@ export interface EmirAdimlariOzellikleri {
   planla?: PlanlaIstegi | null;
   // Sıradaki plansız emrin durumu menüye bildirilir (işaretli adım sayısı; önizleme hazır mı). Plansız emir yoksa null.
   planlaDurumu?: (d: PlanlaDurumu | null) => void;
+  // Adıma sorun bildirme (3335-3b): planda yeri olan, fason olmayan adımın satırındaki düğme. Yazamayan kişide ve turda null.
+  adimSorunu?: ((isId: string) => void) | null;
+  // Adıma bildirilmiş uzamalar (iş kimliği → ek saat); satırın bitişinde yazar.
+  adimEk?: Readonly<Record<string, number>>;
 }
 export interface PlanlaIstegi { n: number; tur: 'ileri' | 'geri' | 'isaretli' }
 export interface PlanlaDurumu { emirNo: string; adim: number; isaretli: number; ileriHazir: boolean; isaretliHazir: boolean; terminVar: boolean }
@@ -309,7 +313,7 @@ export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => n
 export type OperasyonGorunumu = 'tablo' | 'akis';
 const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk }: EmirAdimlariOzellikleri) {
   const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
@@ -329,7 +333,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} adimSorunu={adimSorunu} {...(adimEk ? { adimEk } : {})} />
         ))}
       </div>
     </section>
@@ -354,7 +358,7 @@ function useGenis(): boolean {
   return v;
 }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
   const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
@@ -550,10 +554,18 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                         : <span>{x ? zaman(x.S) : '—'}</span>}
                     {!x && tahmin && s?.baslangic === undefined && <small data-ongoru="">öngörü {tz(tahmin.tezgah)} · {zaman(tahmin.S)}</small>}
                   </td>
-                  <td data-ad="Bitiş" className="tc-pyq-mono">{x ? zaman(x.C) : tahmin ? <span data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}</td>
+                  <td data-ad="Bitiş" className="tc-pyq-mono">
+                    {x ? zaman(x.C) : tahmin ? <span data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}
+                    {x && adimEk?.[a.id] !== undefined && <small data-adim-ek={a.id}>uzadı {adimEkYazisi(adimEk[a.id]!)}</small>}
+                  </td>
                   <td data-ad="Durum">
                     <Rozet ton={yer === 'yerli' ? 'tamam' : yer === 'fason' ? 'bilgi' : 'hata'} gorunum="cizgi">{yer === 'yerli' ? 'Yerleşti' : yer === 'fason' ? 'Fason' : 'Yerleşmedi'}</Rozet>
                     {!x && s && <small data-yazilmadi="">seçim yazılmadı</small>}
+                    {adimSorunu && x && !x.fason && (
+                      <button type="button" className="tc-pyq-adim-sorun" data-adim-sorun={a.id} aria-label={`${a.ad} için sorun bildir`} title="Sorun bildir: adım uzadı" onClick={() => { adimSorunu(a.id); }}>
+                        <Simge ad="flag" boyut="k" /><span aria-hidden="true">Sorun bildir</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
                 {(hata !== null || duzenli) && (

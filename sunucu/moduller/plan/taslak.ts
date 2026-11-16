@@ -10,7 +10,7 @@ import { planaAlmaHesabi } from './plana-al.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 import {
-  dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
+  adimEkBitisi, dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
 } from './taslak-kurallar.ts';
 import { tasimaHesabi } from './tasima.ts';
 
@@ -40,7 +40,7 @@ function satirlar(x: unknown): Satir[] {
     const k = s.komut;
     const komut: SatirKomutu | null = nesneMi(k) && k.tur === 'diz' ? dizKomutu(k) : ((r) => (r.success ? r.data : null))(taslakKomutu.safeParse(k));
     if (komut === null || typeof s.ne !== 'string' || typeof s.t !== 'number') continue;
-    l.push({ komut, ne: s.ne, t: s.t, ...(typeof s.eksen === 'string' || s.eksen === null ? { eksen: s.eksen } : {}) });
+    l.push({ komut, ne: s.ne, t: s.t, ...(typeof s.eksen === 'string' || s.eksen === null ? { eksen: s.eksen } : {}), ...(typeof s.bitis0 === 'number' ? { bitis0: s.bitis0 } : {}) });
   }
   return l;
 }
@@ -53,7 +53,7 @@ async function gorunum(db: Db, kullanici: Kullanici, t: sorgular.TaslakSatiri | 
   const l = satirlar(t.komutlar);
   const o = oynat(c.calisma, l, kisiOf(kullanici, simdi), HESAPLAR);
   return {
-    taslak: { surum: t.surum, tabanSurum: t.tabanSurum, satirlar: l.map(({ eksen: _, ...s }, i) => ({ ...s, komut: disKomut(s.komut), hata: o.hatalar[i] ?? null })) },
+    taslak: { surum: t.surum, tabanSurum: t.tabanSurum, satirlar: l.map(({ eksen: _, bitis0: _b, ...s }, i) => ({ ...s, komut: disKomut(s.komut), hata: o.hatalar[i] ?? null })) },
     calisma: o.deger as Record<string, unknown>, surum: c.surum,
   };
 }
@@ -80,7 +80,9 @@ export async function taslakKomutuEkle(db: Db, kullanici: Kullanici, g: { taslak
   const r = komutUygula(o.deger, g.komut, kisiOf(kullanici, simdi), HESAPLAR);
   if ('hata' in r) throw r.hata.tur === 'dogrulama' ? dogrulama(r.hata.ileti, r.hata.alan) : cakisma(r.hata.ileti);
   if (!r.degisti) return gorunum(db, kullanici, t, simdi);
-  const komutlar = [...eski, { komut: g.komut, ne: komutAdi(g.komut), t: simdi, ...(kapasiteKomutuMu(g.komut) ? { eksen: eksenOf(c.calisma) } : {}) }];
+  // Adım uzadı: bildirildiği andaki planlı bitiş satırda saklanır; taslak sonradan oynatılırken o günkü bitişten yeniden hesaplanmaz.
+  const bitis0 = g.komut.tur === 'adim-uzadi' ? adimEkBitisi(r.deger, g.komut.isId) : undefined;
+  const komutlar = [...eski, { komut: g.komut, ne: komutAdi(g.komut), t: simdi, ...(kapasiteKomutuMu(g.komut) ? { eksen: eksenOf(c.calisma) } : {}), ...(bitis0 === undefined ? {} : { bitis0 }) }];
   if (degerCokBuyukMu(komutlar)) throw cokBuyuk(BUYUK);
   if (t === null) {
     const tabanImzasi: TaslakImzasi = imza(c.calisma);

@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -425,5 +425,91 @@ describe('3282 2a-2: ek mesai komutu', () => {
     const l: TaslakSatiri[] = [{ komut: mesai('T1', 5, 'V1'), ne: 'mesai', t: 1, eksen: '2026-11-16' }];
     assert.deepEqual(oynat(c(), l, kisi, {} as TaslakHesaplari).hatalar, [null]);
     assert.deepEqual(oynat(c([], { D: { ...D, meta: { baslangic: '2026-11-23' } } }), l, kisi, {} as TaslakHesaplari).hatalar, [EKSEN_DEGISTI]);
+  });
+});
+
+// 3335-3b: adımda sorun bildir, "adım uzadı". Veriler uydurmadır.
+describe('3335-3b: adım uzadı komutu', () => {
+  const kisi = { kim: 'ORN-Planlamaci', sayfa: 'Kokpit', t: 1 };
+  const c = (ek: Record<string, unknown> = {}, w: Record<string, unknown> = {}) => ({
+    dataVer: 3, w: { dondurma: 4, ...w }, param: {}, locks: {},
+    plan: { ops: { 'S1.10': { m: 'T1', S: 8, C: 12, job: 'S1' }, 'S1.20': { m: 'T2', S: 12, C: 20, job: 'S1', done: 1 }, 'S2.10': { m: 'T2', S: 30, C: 34, job: 'S2' } } },
+    D: { meta: { baslangic: '2026-11-16' }, siparisler: [{ id: 'S1' }, { id: 'S2' }] },
+    ...ek,
+  });
+  const uzadi = (isId: string, ekSaat: number): TaslakKomutu => ({ tur: 'adim-uzadi', isId, ekSaat });
+  const eki = (d: unknown) => (d as { w: { adimEk?: Record<string, unknown> } }).w.adimEk;
+  const h = {} as TaslakHesaplari;
+
+  test('ek saat ve bildirildiği andaki planlı bitiş yazılır; aynı değer değişiklik sayılmaz; geri yaması önceki hâli taşır', () => {
+    const r = adimUzadiUygula(c(), { isId: 'S1.10', ekSaat: 3 }, undefined, kisi);
+    assert.ok('deger' in r && r.degisti);
+    assert.deepEqual(eki(r.deger), { 'S1.10': { ekSaat: 3, bitis0: 12 } });
+    const ayni = adimUzadiUygula(r.deger, { isId: 'S1.10', ekSaat: 3 }, undefined, kisi);
+    assert.ok('deger' in ayni && !ayni.degisti);
+    assert.equal(komutAdi(uzadi('S1.10', 2.5)), 'S1.10 uzadı: +2,5 sa');
+    assert.deepEqual(komutAnahtarlari(uzadi('S1.10', 3), imza(c())), ['emir:S1']);
+    assert.deepEqual(komutAnahtarlari({ tur: 'adim-uzadi-sil', isId: 'S2.10' }, imza(c())), ['emir:S2']);
+  });
+
+  test('yeni bildirim ek saati değiştirir, ilk bitiş kalır: plan uzamış bitişi gösterse de üstüne eklenmez', () => {
+    const ilk = adimUzadiUygula(c(), { isId: 'S1.10', ekSaat: 3 }, undefined, kisi);
+    assert.ok('deger' in ilk);
+    // Plan yeniden dizildi: adımın bitişi artık 15.
+    const dizili = { ...(ilk.deger as object), plan: { ops: { 'S1.10': { m: 'T1', S: 8, C: 15, job: 'S1' } } } };
+    const iki = adimUzadiUygula(dizili, { isId: 'S1.10', ekSaat: 5 }, undefined, kisi);
+    assert.ok('deger' in iki && iki.degisti);
+    assert.deepEqual(eki(iki.deger), { 'S1.10': { ekSaat: 5, bitis0: 12 } });
+  });
+
+  test('satırda saklanan bitiş oynatmada kullanılır: çalışmadaki bitiş sonradan değişse de hedef kaymaz', () => {
+    const l: TaslakSatiri[] = [{ komut: uzadi('S1.10', 3), ne: 'uzadı', t: 1, eksen: '2026-11-16', bitis0: 12 }];
+    // Ortak çalışmada adım ilerledi: bitiş 10 görünüyor.
+    const ilerledi = c({ plan: { ops: { 'S1.10': { m: 'T1', S: 8, C: 10, job: 'S1' } } } });
+    const o = oynat(ilerledi, l, kisi, h);
+    assert.deepEqual(o.hatalar, [null]);
+    assert.deepEqual(eki(o.deger), { 'S1.10': { ekSaat: 3, bitis0: 12 } });
+    // Saklanan bitiş yoksa (eski satır) o anki bitiş alınır.
+    const eski: TaslakSatiri[] = [{ komut: uzadi('S1.10', 3), ne: 'uzadı', t: 1 }];
+    assert.deepEqual(eki(oynat(ilerledi, eski, kisi, h).deger), { 'S1.10': { ekSaat: 3, bitis0: 10 } });
+  });
+
+  test('planda yerleşmemiş, fason ya da bitmiş adım reddedilir; eksen kayınca satır oynatılmaz', () => {
+    const yok = adimUzadiUygula(c(), { isId: 'S9.10', ekSaat: 1 }, undefined, kisi);
+    assert.ok('hata' in yok && yok.hata.tur === 'dogrulama');
+    assert.ok('hata' in yok && yok.hata.ileti === 'Adım planda yerleşmemiş; önce plana alın.');
+    // Planda satırı olan ama bitişi olmayan (yerleşmemiş) adım da aynı nedenle reddedilir.
+    const bitissiz = adimUzadiUygula(c({ plan: { ops: { 'S1.10': { m: 'T1', job: 'S1' } } } }), { isId: 'S1.10', ekSaat: 1 }, undefined, kisi);
+    assert.ok('hata' in bitissiz && bitissiz.hata.tur === 'dogrulama' && bitissiz.hata.ileti === 'Adım planda yerleşmemiş; önce plana alın.');
+    for (const fason of [{ m: '@F1', S: 8, C: 30, job: 'S1' }, { m: 'T1', fas: 1, S: 8, C: 30, job: 'S1' }]) {
+      const r = adimUzadiUygula(c({ plan: { ops: { 'S1.10': fason } } }), { isId: 'S1.10', ekSaat: 1 }, undefined, kisi);
+      assert.ok('hata' in r && r.hata.ileti === 'Fason adım buradan uzatılamaz; firma tarihini satın alma siparişinde güncelleyin.');
+    }
+    const bitmis = adimUzadiUygula(c(), { isId: 'S1.20', ekSaat: 1 }, undefined, kisi);
+    assert.ok('hata' in bitmis && bitmis.hata.ileti === 'Adım bitmiş; süresi uzatılamaz.');
+    const l: TaslakSatiri[] = [{ komut: uzadi('S1.10', 3), ne: 'uzadı', t: 1, eksen: '2026-11-16', bitis0: 12 }];
+    assert.deepEqual(oynat(c({ D: { meta: { baslangic: '2026-11-23' }, siparisler: [{ id: 'S1' }] } }), l, kisi, h).hatalar, [EKSEN_DEGISTI]);
+  });
+
+  test('sil yalnız o adımı kaldırır; olmayan adımda değişiklik yok', () => {
+    const iki = c({}, { adimEk: { 'S1.10': { ekSaat: 3, bitis0: 12 }, 'S2.10': { ekSaat: 1, bitis0: 34 } } });
+    const r = adimUzadiSilUygula(iki, { isId: 'S1.10' }, kisi);
+    assert.ok('deger' in r && r.degisti);
+    assert.deepEqual(eki(r.deger), { 'S2.10': { ekSaat: 1, bitis0: 34 } });
+    const yok = adimUzadiSilUygula(c(), { isId: 'S1.10' }, kisi);
+    assert.ok('deger' in yok && !yok.degisti);
+  });
+
+  test('imza: başkasının aynı emre bildirdiği uzama emir düzeyinde çatışır; dizme imzası uzamayla değişir, uzama yokken eskisiyle aynıdır', () => {
+    const taban = imza(c());
+    const baskasi = imza(c({}, { adimEk: { 'S1.10': { ekSaat: 2, bitis0: 12 } } }));
+    assert.deepEqual(baskasi.adimEk, { 'S1.10': '2|12' });
+    assert.deepEqual(catismalar(taban, baskasi, [{ komut: uzadi('S1.10', 3), ne: 'uzadı' }]).map((x) => x.anahtar), ['emir:S1']);
+    assert.deepEqual(catismalar(taban, baskasi, [{ komut: uzadi('S2.10', 3), ne: 'uzadı' }]), []);
+    // adimEk alanı olmayan eski imza boş sayılır.
+    const { adimEk: _, ...eskiTaban } = taban;
+    assert.deepEqual(catismalar(eskiTaban, taban, [{ komut: uzadi('S1.10', 3), ne: 'uzadı' }]), []);
+    assert.notEqual(dizImzasi(c({}, { adimEk: { 'S1.10': { ekSaat: 2, bitis0: 12 } } }), c()), dizImzasi(c(), c()));
+    assert.equal(JSON.parse(dizImzasi(c(), c())).length, 6);
   });
 });

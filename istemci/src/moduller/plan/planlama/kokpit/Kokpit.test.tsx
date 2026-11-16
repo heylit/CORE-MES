@@ -595,6 +595,50 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-satir [data-sorun-bildir]')).toBeNull();
   });
 
+  // 3335-3b: operasyon satırından adıma sorun bildirilir; panel Duruş ve mesai ile aynı yerdedir.
+  it('adıma sorun bildir: yerleşmiş, fason olmayan adımın satırında düğme vardır; panel o adımla açılır, seçim durur; Duruş ve mesai onu kapatır; bildirilen uzama satırda yazar', () => {
+    const c = ornekCalisma();
+    (c.w as Record<string, unknown>)['adimEk'] = { '2.20': { ekSaat: 1.5, bitis0: 40 } };
+    ac({ calisma: c, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-adim-sorun="2.30"]')).toBeNull();
+    expect(bolum.querySelector('[data-adim-satir="2.20"] [data-adim-ek]')?.textContent).toBe('uzadı +1,5 sa');
+    expect(bolum.querySelector('[data-adim-satir="2.30"] [data-adim-ek]')).toBeNull();
+    const dugme = bolum.querySelector<HTMLElement>('[data-adim-sorun="2.20"]')!;
+    expect(dugme.getAttribute('aria-label')).toMatch(/ için sorun bildir$/);
+    fireEvent.click(arac('Duruş ve mesai'));
+    fireEvent.click(dugme);
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
+    const panel = screen.getByRole('complementary', { name: 'Adıma sorun bildir' });
+    expect(document.activeElement).toBe(within(panel).getByLabelText('Toplam kaç saat uzadı'));
+    expect((within(panel).getByLabelText('Toplam kaç saat uzadı') as HTMLInputElement).value).toBe('1,5');
+    expect(bolum.querySelector('[data-adim="2.20"]')?.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(arac('Duruş ve mesai'));
+    expect(screen.queryByRole('complementary', { name: 'Adıma sorun bildir' })).toBeNull();
+    fireEvent.click(dugme);
+    // Duruş ve mesai açıkken adım paneli açılınca Duruş kapanır: adım paneli kapatılınca geri gelmez, menüde işaretli değildir.
+    fireEvent.click(arac('Duruş ve mesai'));
+    fireEvent.click(dugme);
+    fireEvent.click(screen.getByRole('button', { name: 'Adıma sorun bildirmeyi kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Adıma sorun bildir' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
+  });
+
+  it('adıma sorun bildir düğmesi planda yeri olmayan adımın satırında yoktur', () => {
+    const c = ornekCalisma();
+    const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
+    ac({ calisma: plansiz, depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu, secim: { ...BOS_SECIM, siparis: '2' } });
+    expect(document.querySelector('[data-adim-satir="2.20"]')).not.toBeNull();
+    expect(document.querySelector('[data-adim-satir="2.20"] [data-adim-sorun]')).toBeNull();
+  });
+
+  it('adıma sorun bildir düğmesi yazamayan kişide yoktur', () => {
+    ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } }, false);
+    expect(document.querySelector('[data-adim-satir="2.20"]')).not.toBeNull();
+    expect(document.querySelector('[data-adim-sorun]')).toBeNull();
+  });
+
   it('arızalı tezgâh varken üst şeritte sayılı Arıza işareti durur ve Duruş ve mesaiyi açar; yokken görünmez', () => {
     ac();
     expect(screen.queryByRole('button', { name: /Arıza$/ })).toBeNull();

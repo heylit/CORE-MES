@@ -447,6 +447,18 @@ export const kokpitEkMesaileri = (c: PlanlamaCalismasi): KokpitEkMesaisi[] => c.
   typeof e['m'] === 'string' && typeof e['gun'] === 'number' && Number.isInteger(e['gun']) && e['vardiya'] !== undefined && e['vardiya'] !== null
     ? [{ m: e['m'], gun: e['gun'], vardiya: String(e['vardiya']), personel: e['personel'] === undefined || e['personel'] === null ? null : String(e['personel']) }] : []);
 
+// Adıma bildirilen uzama (3335-3b): çalışmanın w.adimEk'inde iş kimliğiyle durur (motor girdi.js stKur); iş kimliği → ek saat.
+export function adimEkleri(c: PlanlamaCalismasi): Record<string, number> {
+  const v = (c.w as Record<string, unknown>)['adimEk'], s: Record<string, number> = {};
+  if (typeof v !== 'object' || v === null) return s;
+  for (const [id, e] of Object.entries(v as Record<string, unknown>)) {
+    const n = typeof e === 'object' && e !== null ? (e as Record<string, unknown>)['ekSaat'] : null;
+    if (typeof n === 'number' && Number.isFinite(n) && n > 0) s[id] = n;
+  }
+  return s;
+}
+export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
+
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.
 export function vardiyaAdi(c: PlanlamaCalismasi, id: string): string {
   const v = (c.D.vardiyalar ?? []).find((x) => String(x['id']) === id);

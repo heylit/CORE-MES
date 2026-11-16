@@ -789,6 +789,10 @@ function stKur(S, ek = [], gevset = true) {
   /* 3282 1c: emir başına yön çalışmanın ağırlığında durur (w.yonEmir); sipariş listesi sunucudan yeniden kurulsa da kaybolmaz */
   const yonEmir = S.w && S.w.yonEmir && typeof S.w.yonEmir === 'object' ? S.w.yonEmir : {};
   for (const s of D.siparisler) if (yonEmir[s.id] === 'geri' || yonEmir[s.id] === 'ileri') s.yon = yonEmir[s.id];
+  /* 3335-3b: adıma bildirilen ek süre de çalışmanın ağırlığında durur (w.adimEk: işlem -> { ekSaat, bitis0 }). Başlamamış adımda koşu
+     süresine eklenir (derleme), çalışan adımda hedef bitiştir (kalanBitis). */
+  const adimEk = S.w && S.w.adimEk && typeof S.w.adimEk === 'object' ? S.w.adimEk : {};
+  if (Object.keys(adimEk).length) { st.adimEk = clone(adimEk); for (const id in adimEk) if (st.gercek[id]) st.gercek[id].ek = clone(adimEk[id]); }
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
@@ -835,6 +839,7 @@ function durumKaydir(x, yeni) {
   if (Array.isArray(x.down)) { for (const d of x.down) kaydirAlan(d, ['from', 'to'], h); x.down = x.down.filter(d => !(typeof d.to === 'number' && d.to <= 0)); }
   if (Array.isArray(x.ekMesai)) { for (const e of x.ekMesai) kaydirSayi(e, 'gun', g); x.ekMesai = x.ekMesai.filter(e => !(typeof e.gun === 'number' && e.gun < -1)); }
   for (const l of Object.values(x.locks || {})) kaydirSayi(l, 'S', h);
+  for (const e of Object.values((x.w && x.w.adimEk) || {})) kaydirSayi(e, 'bitis0', h);
   for (const a of Object.values(x.gercek || {})) kaydirAlan(a, ['S', 'C', 'sayim'], h);
   for (const ev of x.olaylar || []) { if (OLAY_SAATI[ev.tip]) kaydirSayi(ev, OLAY_SAATI[ev.tip], h); if (OLAY_GUNU[ev.tip]) kaydirSayi(ev, OLAY_GUNU[ev.tip], g); }
   planKaydir(x.plan, h);

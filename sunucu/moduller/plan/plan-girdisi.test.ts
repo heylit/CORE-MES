@@ -43,6 +43,22 @@ describe('plan girdisi (sunucu)', () => {
     assert.doesNotThrow(() => motorYukle().compile(r.st));
   });
 
+  // 3335-3b: adıma bildirilen ek süre çalışmanın ağırlığında durur (w.adimEk). Çalışan adımda hedef bitiş olur: sunucunun kalanı 34'te
+  // bitirir (33 + 1 saat), bildirilen 3 saat tezgâhın çalışma saatiyle 34'ün üstüne eklenir.
+  test('adım uzadı: çalışmanın w.adimEk satırı motorun durumuna ve çalışan adımın gerçekleşenine taşınır; bitiş hedefe uzar', () => {
+    const c = calisma(D0);
+    const r = planGirdisi({ calisma: { ...c, w: { ...(c['w'] as object), adimEk: { 'O1.10': { ekSaat: 3, bitis0: 34 } } } }, kayit: KAYIT, kaynak: KAYNAK });
+    assert.ok(r);
+    const st = r.st as { adimEk?: Record<string, unknown>; gercek: Record<string, { ek?: unknown }> };
+    assert.deepEqual(st.adimEk, { 'O1.10': { ekSaat: 3, bitis0: 34 } });
+    assert.deepEqual(st.gercek['O1.10']?.ek, { ekSaat: 3, bitis0: 34 });
+    const m = motorYukle();
+    assert.equal(m.schedule(r.st, 'dagit', null).ops['O1.10']?.C, 37);
+    const eksiz = planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak: KAYNAK })!;
+    assert.equal((eksiz.st as { adimEk?: unknown }).adimEk, undefined);
+    assert.equal(m.schedule(eksiz.st, 'dagit', null).ops['O1.10']?.C, 34);
+  });
+
   test('başlangıçsız çalışma verilen günden, verilmezse tesisin bugününden başlar; girdi değişmez', () => {
     const bas = { ...D0, meta: undefined };
     const g = { calisma: calisma(bas), kayit: KAYIT, kaynak: null };
