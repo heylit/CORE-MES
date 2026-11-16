@@ -1142,7 +1142,9 @@ async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {
 }
 
 // 2116-4 a: Logo'daki kart TMI'de taslak açılır; tür ve birim seçilir, öteki zorunlu alanlar onaydan önce sihirbazda tamamlanır.
-// Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez); kodu TMI biçimine uymuyorsa yeni kod alır ve eşlemesi yazılır (2116-3 c).
+// Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez). 3316 a: kart her zaman CORE'un kendi kodunu alır, Logo kodu
+// eşlemede ERP kodu olarak kalır (Logo'ya giden belgeler eşlemeyle Logo koduna çevrilir). Logo kodu CORE biçimine uyuyorsa yeni kod
+// aynı önekten, uymuyorsa seçilen önekten sıradaki boş koddur. Eşleme değişmez: geri alınıp yeniden alınan kart eşlemedeki kodu yeniden alır.
 export async function logodanKartAl(
   db: Db, kullanici: Kullanici, ref: number, g: z.output<typeof logodanAlGovdesi>, secenek: { yalnizKendiKodu?: boolean } = {},
 ): Promise<LogodanAlCevabi> {
@@ -1153,19 +1155,25 @@ export async function logodanKartAl(
   if (durum === 'bagli') throw cakisma(`Bu Logo kartı TMI'de zaten var: ${tmi!.stokKodu}.`);
   if (durum === 'bagsiz') throw cakisma(`TMI'de aynı kodlu kart var: ${tmi!.stokKodu}. Yeni kart açmak yerine bağlayın.`);
   if (!(await s.birimSecilebilirMi(db, g.birim))) throw dogrulama(`"${g.birim}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, 'birim');
+  if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
   const genel = await katalogGenelAyari(db);
   const firmaOneki = katalogFirmaOneki(genel, g.tur);
-  const bicim = logoKodBicimi(k.kod, katalogFirmaKodu(genel));
+  const firmaKodu = katalogFirmaKodu(genel);
+  const eskiKod = esleme.get(k.kod) ?? null;
   let kod: { onek: string; sira: number; stokKodu: string };
-  if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
-    await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
-    kod = { ...bicim, stokKodu: k.kod };
+  if (eskiKod !== null) {
+    const b = logoKodBicimi(eskiKod, firmaKodu);
+    if (!b || !logoKoduTureUyar(b, g.tur, firmaOneki)) throw gecersiz(`Bu Logo kartı daha önce ${eskiKod} koduyla eşlendi; kod korunur, bu koda uyan türü seçin.`);
+    kod = { ...b, stokKodu: eskiKod };
   } else {
-    // Toplu almada kod eşlemesi yazılmaz: geri alma eşlemeyi silemez (eşleme değişmez), kod eşlenecek kart tek tek alınır.
-    if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
-    if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
-    if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
-    kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+    const bicim = logoKodBicimi(k.kod, firmaKodu);
+    if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
+      kod = await yeniStokKodu(db, firmaOneki ? null : k.kod, g.tur);
+    } else {
+      if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
+      if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
+      kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+    }
   }
   if (kodla.has(kod.stokKodu)) throw cakisma(`TMI'de ${kod.stokKodu} kodlu kart var.`);
   const ad = k.ad ?? k.kod;
@@ -1180,7 +1188,7 @@ export async function logodanKartAl(
   const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, kod.onek, kod.sira));
   await s.logoKaydiYaz(db, kimlik, { kayitNo: String(ref), kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti }, { surum: null, kisiId: kullanici.id });
   const eslendi = r.stokKodu !== k.kod;
-  if (eslendi) await logoEslemeYazici!(db, { stokKodu: r.stokKodu, logoKodu: k.kod, logoKayitNo: ref });
+  if (eslendi && eskiKod === null) await logoEslemeYazici(db, { stokKodu: r.stokKodu, logoKodu: k.kod, logoKayitNo: ref });
   return { id: kimlik, stok_kodu: r.stokKodu, eslendi };
 }
 

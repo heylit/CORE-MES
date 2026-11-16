@@ -77,12 +77,12 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const [bitirSoruluyor, bitirSor] = useState(false);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  // Geçiş okuması (3068): kopya yalnız istekle okunur; "Geçişi bitir" okumayı kapatır, okunmuş liste kalır. Bağlı kartlar bugünkü gönderimle eşitlenir.
+  // 3316: toplu okuma ekrandan istenmez; kart Logo'da canlı aranır. "Geçişi bitir" Sistem Ayarları'nda açık kalan okumayı kapatır, okunmuş liste kalır.
   const okumaIstegi = useTekGonderim({
-    mutationFn: (islem: 'oku' | 'bitir') => api.post(`/logo-gecisi/${islem}`, {}),
-    onSuccess: async (_c, islem) => {
+    mutationFn: () => api.post('/logo-gecisi/bitir', {}),
+    onSuccess: async () => {
       bitirSor(false);
-      bildir('tamam', islem === 'oku' ? 'Logo okuması başladı; liste dolarken sayılar artar.' : "Geçiş bitti: Logo okuması kapandı. Bağlı kartlar CORE'dan Logo'ya eşitlenmeye devam eder.");
+      bildir('tamam', "Geçiş bitti: Logo okuması kapandı. Bağlı kartlar CORE'dan Logo'ya eşitlenmeye devam eder.");
       await istemci.invalidateQueries({ queryKey: LOGO_GECIS_ANAHTARI });
     },
     onError: (e) => { bitirSor(false); bildir('hata', hataIletisi(e, 'Yapılamadı')); },
@@ -189,19 +189,19 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
     <>
       <div className="tc-lg-okuma">
         <span className="tc-lg-okuma-metin" role="status">
-          <Simge ad={okumaSuruyor ? 'rotate' : okuma.sonTamam ? 'check' : 'alert'} boyut="k" />
+          <Simge ad={okumaSuruyor ? 'rotate' : 'search'} boyut="k" />
           {okumaSuruyor
             ? <span>Logo okunuyor: {sayi(okuma.okunan ?? 0)} kart okundu. Sayılar artabilir.</span>
-            : okuma.sonTamam
-              ? <span>Son okuma {zamanMetni(okuma.sonTamam)}: Logo'daki {sayi(sayilar.toplam)} kart. Liste kendiliğinden tazelenmez; gerekirse yeniden okuyun.</span>
-              : <span>Logo henüz okunmadı.</span>}
+            : <span>Listede Logo'da aranıp eklenen kartlar var{okuma.sonTamam ? ` (önceki okuma ${zamanMetni(okuma.sonTamam)})` : ''}. Aradığınız kart yoksa kod ya da adla Logo'da canlı arayın.</span>}
         </span>
-        {ayarYazabilir && (
-          <span className="tc-lg-eylemler">
-            <Dugme simge="rotate" disabled={okumaSuruyor} yukleniyor={okumaIstegi.isPending && okumaIstegi.variables === 'oku'} onClick={() => okumaIstegi.mutate('oku')}>Şimdi oku</Dugme>
-            <Dugme simge="flag" yukleniyor={okumaIstegi.isPending && okumaIstegi.variables === 'bitir'} onClick={() => bitirSor(true)}>Geçişi bitir</Dugme>
-          </span>
-        )}
+        <span className="tc-lg-eylemler">
+          {aranan && !okumaSuruyor && veri.kartlar.length > 0 && (
+            <CanliAramaDugmesi metin={aranan} acik={veri.canliArama} yazabilir={yazabilir} bulundu={() => { suzgecYaz('tumu'); sayfaYaz(1); }} />
+          )}
+          {ayarYazabilir && okuma.acik && (
+            <Dugme simge="flag" yukleniyor={okumaIstegi.isPending} onClick={() => bitirSor(true)}>Geçişi bitir</Dugme>
+          )}
+        </span>
       </div>
       <Kart>
         <p className="tc-lg-not">
@@ -255,10 +255,10 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         baslik="Logo geçişi bitsin mi?"
         onayMetni="Geçişi bitir"
         yukleniyor={okumaIstegi.isPending}
-        onayla={() => okumaIstegi.mutate('bitir')}
+        onayla={() => okumaIstegi.mutate()}
         vazgec={() => bitirSor(false)}
       >
-        Logo okuması kapanır; okunmuş liste silinmez, alınan ve bağlanan kartlar değişmez. Bağlı kartlar CORE'dan Logo'ya eşitlenmeye devam eder. Gerekirse "Şimdi oku" ile yeniden okunur.
+        Logo okuması kapanır; okunmuş liste silinmez, alınan ve bağlanan kartlar değişmez. Bağlı kartlar CORE'dan Logo'ya eşitlenmeye devam eder. Kart gerektiğinde Logo'da canlı aranır.
       </OnayPenceresi>
       <OnayPenceresi
         acik={tek !== null}
@@ -278,7 +278,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   );
 }
 
-// 3080 a: okunmuş listede olmayan kart Logo'da o an aranır (kod ya da ad, en çok 20); bulunan kart listeye eklenir ve "Tümü"nde görünür,
+// 3080 a, 3316: listede olmayan kart Logo'da o an aranır (kod ya da ad, en çok 20); bulunan kart listeye eklenir ve "Tümü"nde görünür,
 // oradan alınır ya da bağlanır. Logo'ya yazılmaz.
 function CanliAramaDugmesi({ metin, acik, yazabilir, bulundu }: { metin: string; acik: boolean; yazabilir: boolean; bulundu: () => void }) {
   const istemci = useQueryClient();
@@ -309,7 +309,7 @@ function CanliAramaDugmesi({ metin, acik, yazabilir, bulundu }: { metin: string;
       <Dugme simge="search" disabled={neden !== null} {...(neden ? { title: neden } : {})} yukleniyor={ara.isPending || ekle.isPending} onClick={() => ara.mutate()}>
         Logo'da canlı ara
       </Dugme>
-      <span className="tc-lg-not">{neden === null ? 'Okunan listede yok.' : `Okunan listede yok. ${neden}.`}</span>
+      {neden !== null && <span className="tc-lg-not">{neden}.</span>}
     </span>
   );
 }
@@ -468,8 +468,8 @@ function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi }: {
           ? <DurumKutusu durum="hata" yenile={() => { void birimler.refetch(); }} />
           : <Secim etiket="Birim" required secenekler={(birimler.data?.birimler ?? []).filter((b) => b.aktif).map((b) => ({ deger: b.kod, baslik: b.kod }))} bosSecenek="Seçiniz" value={birim} onChange={(o) => birimYaz(o.target.value)} />}
         {satir.koduUyar
-          ? <p className="tc-lg-not">Kart Logo'daki koduyla açılır.</p>
-          : <Girdi etiket="Yeni kodun öneki" ipucu="Logo kodu CORE kod biçimine uymuyor; kart yeni kod alır, Logo koduyla eşlenir (ör. HM-GEN-)." value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
+          ? <p className="tc-lg-not">Kart CORE kodunu alır (aynı önekte sıradaki boş kod); Logo kodu kartta ERP kodu olarak kalır.</p>
+          : <Girdi etiket="Yeni kodun öneki" ipucu="Logo kodu CORE kod biçimine uymuyor; kart bu önekle CORE kodu alır, Logo kodu ERP kodu olarak kalır (ör. HM-GEN-)." value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
         {al.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(al.error, 'Alınamadı')}</p>}
       </form>
     </Pencere>

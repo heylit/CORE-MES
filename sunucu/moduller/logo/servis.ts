@@ -1050,18 +1050,10 @@ export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise
   };
 }
 
-// 3077 a: geçiş okuması yalnız istekle. "Şimdi oku" malzeme kartı ve stok okumasını açar ve ikisini baştan okutur; "Geçişi bitir"
-// ikisini kapatır, okunmuş kopya silinmez. Ayar Sistem Ayarları'ndaki aynı anahtardır; değişiklik ayar geçmişine yazılır.
+// 3316: toplu okuma ekrandan istenmez (kart canlı aranır). "Geçişi bitir" Sistem Ayarları'nda açık kalmış okumaları kapatır, okunmuş kopya
+// silinmez. Değişiklik ayar geçmişine yazılır.
 const GECIS_AYARLARI = ['logo.malzeme-okumasi', 'logo.stok-okumasi'] as const;
 const GECIS_KAYNAGI = { modul: 'logo', yetki: 'ayarlar.yaz' } as const;
-export async function gecisOkumasiIste(db: Db, kisiId: number): Promise<void> {
-  if ((await sistemAyariOku(db, 'logo.baglanti')) !== true) throw gecersiz('Logo bağlantısı kapalı; önce Sistem Ayarları\'nda "Logo bağlantısı"nı açın.');
-  for (const a of GECIS_AYARLARI) {
-    const simdi = (await sistemAyariOku(db, a)) === true;
-    if (!simdi) await modulAyariDegistir(db, kisiId, a, true, false, { ...GECIS_KAYNAGI, yol: '/logo-gecisi/oku' });
-  }
-  await s.turIste(db);
-}
 export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {
   for (const a of [...GECIS_AYARLARI, 'logo.kullanim-okumasi'] as const) {
     const simdi = (await sistemAyariOku(db, a)) === true;

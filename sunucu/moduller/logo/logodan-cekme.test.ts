@@ -153,9 +153,12 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
   const yazmaIstegiYok = (): void => {
     assert.deepEqual(kopru.istekler.filter((i) => i.yontem !== 'GET'), [], 'Logo\'ya yazma isteği yok');
   };
-  // 3077 a: yeniden okuma yalnız "Şimdi oku" ile; sayfadaki düğmenin ucu.
-  const simdiOku = async (c = cerez): Promise<number> =>
-    (await app.inject({ method: 'POST', url: '/api/logo-gecisi/oku', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: {} })).statusCode;
+  // 3316: ekrandan toplu okuma kalktı; okuma motorunun yeniden tur isteğini doğrudan imleçte işaretler.
+  const turuYenidenIste = async (): Promise<void> => {
+    await ayar('logo.malzeme-okumasi', true);
+    await ayar('logo.stok-okumasi', true);
+    await vt().sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok', 'kullanim')");
+  };
   const gecisiBitir = async (c = cerez): Promise<number> =>
     (await app.inject({ method: 'POST', url: '/api/logo-gecisi/bitir', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: {} })).statusCode;
   const kart = (ref: number, kod: string, ek: Record<string, unknown> = {}): Record<string, unknown> => ({ logicalRef: ref, code: kod, name: `Ad ${kod}`, ...ek });
@@ -221,9 +224,9 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     simdi += 7 * 24 * 3600_000;
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'bos' });
     assert.equal(kopru.istekler.length, 2);
-    // "Şimdi oku": LG-2 Logo'da silindi, LG-1'in adı değişti; yeni tur bitince aynada yalnız görülenler kalır.
+    // Yeniden tur: LG-2 Logo'da silindi, LG-1'in adı değişti; yeni tur bitince aynada yalnız görülenler kalır.
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
+    await turuYenidenIste();
     kopru.logoKartlari.splice(1, 1);
     kopru.logoKartlari[0] = kart(1, 'LG-1', { name: 'Yeni ad' });
     assert.equal((await malzemeKartiOkumaTuru(vt(), ortami(bellek))).tur, 'okuma');
@@ -240,12 +243,12 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     const bellek = yeniSurecBellegi();
     assert.equal((await malzemeKartiOkumaTuru(vt(), ortami(bellek))).tur, 'okuma');
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
+    await turuYenidenIste();
     kopru.logoKartlari.length = 0;
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'malzeme-karti', sonuc: 'okundu', sayi: 0 });
     assert.deepEqual(await kodlar(), ['LG-1'], 'okuma kazası olabilecek boş tur aynayı silmez');
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
+    await turuYenidenIste();
     kopru.senaryo = 'yetkisiz';
     const once = kopru.istekler.length;
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'malzeme-karti', sonuc: 'yetkisiz', sayi: 0 });
@@ -272,7 +275,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     const oku = () => vt().tx((db) => logodakiStokToplamlari(db, ['LG-5', 'LG-6']));
     assert.deepEqual((await oku()).map((x) => [x.malzemeKodu, x.ambarNo, x.miktar]), [['LG-5', 0, '10.25'], ['LG-5', 1, '3'], ['LG-6', 0, '7']]);
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
+    await turuYenidenIste();
     kopru.sayfaBoyu = 500;
     kopru.logoStoklari.splice(1, 1);
     assert.equal((await stokOkumaTuru(vt(), ortami(bellek))).tur, 'okuma');
@@ -337,7 +340,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.deepEqual(await ara('yok-boyle'), []);
     assert.equal((await ara('  ')).length >= 3, true, 'boş arama süzmez');
   });
-  test('LGC-13 geçiş okuması (3077 a, 3078 b): "Şimdi oku" iki okumayı açar ve baştan okutur; "Geçişi bitir" kapatır, kopya kalır; ayar yazma yetkisi ister', async () => {
+  test('LGC-13 geçiş (3316, 3078 b): toplu okuma ucu yok; "Geçişi bitir" okumaları kapatır, kopya kalır; ayar yazma yetkisi ister', async () => {
     kopru.logoKartlari.push(kart(1, 'LG-1'));
     const kisiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Malzemeci', kullaniciAdi: 'lc-malzemeci', parola: PAROLA }));
     await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('lc_malzemeci', 'Malzemeci') ON CONFLICT DO NOTHING");
@@ -347,21 +350,13 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     await vt().sorgu("UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = 'lc_malzemeci') WHERE kisi_id = $1", [kisiId]);
     const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'lc-malzemeci', parola: PAROLA } });
     const malzemeci = String(g.headers['set-cookie']).split(';')[0] ?? '';
-    assert.equal(await simdiOku(malzemeci), 403, 'sayfayı gören ama ayar yazamayan okutamaz');
+    const okuUcu = await app.inject({ method: 'POST', url: '/api/logo-gecisi/oku', headers: { cookie: cerez, 'istek-kimligi': randomUUID() }, payload: {} });
+    assert.equal(okuUcu.statusCode, 404, 'toplu okuma ekrandan istenemez (3316)');
     assert.equal(await gecisiBitir(malzemeci), 403);
     const acik = (a: 'logo.malzeme-okumasi' | 'logo.stok-okumasi'): Promise<unknown> => vt().tx((db) => sistemAyariOku(db, a));
 
-    await ayar('logo.baglanti', false);
-    try {
-      assert.equal(await simdiOku(), 422, 'bağlantı kapalıyken açılmaz');
-      assert.notEqual(await acik('logo.malzeme-okumasi'), true);
-    } finally {
-      await ayar('logo.baglanti', true);
-    }
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
-    assert.equal(await acik('logo.malzeme-okumasi'), true);
-    assert.equal(await acik('logo.stok-okumasi'), true);
+    await turuYenidenIste();
     const bellek = yeniSurecBellegi();
     assert.equal((await malzemeKartiOkumaTuru(vt(), ortami(bellek))).tur, 'okuma');
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'bos' }, 'tam tur bitti, istek yok');
@@ -374,7 +369,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     yazmaIstegiYok();
   });
 
-  test('LGC-15 kullanım okuması (3079 a): kendi ayarıyla kapalı gelir; açıkken sayfa sayfa yazılır ve özete girer; "Şimdi oku" açmaz ama açıksa yeniden okutur; "Geçişi bitir" kapatır', async () => {
+  test('LGC-15 kullanım okuması (3079 a): kendi ayarıyla kapalı gelir; açıkken sayfa sayfa yazılır ve özete girer; yeniden tur isteği açmaz ama açıksa yeniden okutur; "Geçişi bitir" kapatır', async () => {
     kopru.sayfaBoyu = 1;
     kopru.logoKartlari.push(kart(1, 'LG-1'), kart(2, 'LG-2'), kart(3, 'LG-3'));
     kopru.logoKullanimlari.push(
@@ -387,8 +382,8 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.ok(is);
     assert.equal(await isiBirKezCalistir(vt(), is), 'bekliyor');
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
-    assert.notEqual(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), true, '"Şimdi oku" kullanım okumasını açmaz');
+    await turuYenidenIste();
+    assert.notEqual(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), true, 'yeniden tur isteği kullanım okumasını açmaz');
     assert.deepEqual(await kullanimOkumaTuru(vt(), ortami()), { tur: 'kullanim-kapali' });
     assert.equal(kopru.istekler.filter((i) => i.yol === '/api/Material/usage').length, 0);
 
@@ -406,9 +401,9 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.notEqual(ozet.kullanim.sonTamam, null);
 
     simdi += 60_000;
-    assert.equal(await simdiOku(), 200);
+    await turuYenidenIste();
     kopru.logoKullanimlari.splice(0, 1);
-    assert.equal((await kullanimOkumaTuru(vt(), ortami(bellek))).tur, 'okuma', 'açıkken "Şimdi oku" yeniden okutur');
+    assert.equal((await kullanimOkumaTuru(vt(), ortami(bellek))).tur, 'okuma', 'açıkken yeniden tur isteği okutur');
     const sonra = await vt().tx((db) => logodakiMalzemeOzeti(db, {}));
     assert.deepEqual(sonra.kartlar.map((k) => k.sonHareket), [null, null, null], 'Logo\'da izi kalmayan kart son tam turda düşer');
     assert.equal(await gecisiBitir(), 200);

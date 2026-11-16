@@ -466,11 +466,6 @@ export function okumaImleci(db: Db, akis: SayfaliAkis): Promise<OkumaImleci | nu
   );
 }
 
-// 3077 a: "Şimdi oku" sayfalı akışları baştan okutur. İmleç satırı yoksa yazılmaz: hiç okunmamış akış zaten baştan başlar.
-export async function turIste(db: Db): Promise<void> {
-  await db.sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok', 'kullanim')");
-}
-
 // Sayfa yazılır; son sayfada turda görülmeyen satırlar silinir ve imleç başa döner. Boş tam tur (okuma kazası olabilir) aynayı boşaltmaz.
 export async function sayfaYaz(
   db: Db, akis: SayfaliAkis, turBasi: Date, zaman: Date, sonraki: number | null, sayfaSayisi: number,

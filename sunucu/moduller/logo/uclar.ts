@@ -10,7 +10,7 @@ import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
-import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
+import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
 
 // 3201 a: bölümü kartı görebilen ister; stok ve hareket parçası yalnız stoğu okuyabilene (stok uçlarının okuma yetkisi; malzeme
 // sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
@@ -43,14 +43,7 @@ export const uclar = [
     cevap: birimSetiCevabi,
     isle: ({ db, parametre }) => birimSetiKaldir(db, parametre.kod),
   }),
-  // 3077 a: geçiş okuması yalnız istekle. Ayarı değiştirdiği için Sistem Ayarları'nın yazma yetkisini ister (3078 b); Logo'ya yalnız okuma gider.
-  uc({
-    yontem: 'POST',
-    yol: '/logo-gecisi/oku',
-    yetki: 'ayarlar.yaz',
-    cevap: logoGecisKomutuCevabi,
-    isle: async ({ db, kullanici }) => { await gecisOkumasiIste(db, kullanici.id); return { tamam: true as const }; },
-  }),
+  // 3316: toplu okuma ekrandan istenmez; kart Logo'da canlı aranır. "Geçişi bitir" açık kalan okumaları kapatır (3078 b: ayar yazma yetkisi).
   uc({
     yontem: 'POST',
     yol: '/logo-gecisi/bitir',

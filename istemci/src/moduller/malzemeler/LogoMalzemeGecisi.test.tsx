@@ -142,7 +142,7 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     const istekler = sunucuKur(YAZAN);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'HM-DEN-00001 al' }));
-    await screen.findByText("Kart Logo'daki koduyla açılır.");
+    await screen.findByText(/Kart CORE kodunu alır.*Logo kodu kartta ERP kodu olarak kalır/);
     await waitFor(() => expect((screen.getByLabelText(/^Birim/) as HTMLSelectElement).value).toBe('kg'));
     expect((screen.getByLabelText(/CORE türü/) as HTMLSelectElement).value).toBe('hammadde');
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
@@ -214,11 +214,20 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(screen.getByText(/"Logo: malzeme araması" kapalı/)).toBeTruthy();
   });
 
-  it('okuma: "Şimdi oku" ve onaylı "Geçişi bitir" yalnız ayar yazana; okuma sürerken boş arama okumanın sürdüğünü söyler', async () => {
+  it('aranan listede bulunsa da Logo\'da canlı aranabilir (3316)', async () => {
+    sunucuKur(YAZAN, { ...LISTE, canliArama: true });
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: "Logo'da canlı ara" })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'HM-DEN' } });
+    expect((await screen.findByRole('button', { name: "Logo'da canlı ara" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('okuma (3316): "Şimdi oku" yok; açık kalan okuma için onaylı "Geçişi bitir" yalnız ayar yazana; okuma sürerken boş arama okumanın sürdüğünü söyler', async () => {
     const istekler = sunucuKur(YONETICI, { ...LISTE, okuma: { acik: true, suruyor: true, okunan: 120, sonTamam: null }, kartlar: [], uyan: 0 });
     ac();
     expect(await screen.findByText(/Logo okunuyor: 120 kart okundu/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Şimdi oku' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Şimdi oku' })).toBeNull();
     expect(screen.getByText(/Logo henüz okunuyor \(120 kart okundu\)/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Geçişi bitir' }));
     expect(await screen.findByText(/okunmuş liste silinmez/)).toBeTruthy();
