@@ -104,3 +104,26 @@ export function adimNotlari(db: Db, emirId: number, a: NotAnahtari, siralar: rea
     [emirId, a.malzemeNo, a.opNo, [...siralar], a.operasyonId],
   );
 }
+
+// 3338-4 a: atlanan zorunlu talimatlar. Adımlar bu emrin ve aynı iş emrinin değilse boş döner (çağıran reddeder).
+export function atlananAdimlar(db: Db, emirId: number, adimIdler: readonly number[]): Promise<{ id: number; ad: string; isEmriId: number | null }[]> {
+  return db.sorgu(
+    'SELECT id, ad, is_emri_id AS "isEmriId" FROM emir_adimi WHERE emir_id = $1 AND id = ANY($2::int[]) ORDER BY sira',
+    [emirId, [...adimIdler]],
+  );
+}
+export async function talimatAtlamaEkle(db: Db, isEmriId: number, kisiId: number, eylem: 'baslat' | 'bitir', maddeler: readonly string[]): Promise<number> {
+  const r = await db.tek<{ id: number }>(
+    'INSERT INTO emir_adimi_talimat_atlama (is_emri_id, kisi_id, eylem, maddeler) VALUES ($1, $2, $3, $4::text[]) RETURNING id',
+    [isEmriId, kisiId, eylem, [...maddeler]],
+  );
+  return r!.id;
+}
+export interface TalimatAtlamaSatiri { isEmriId: number; kisiId: number; eylem: 'baslat' | 'bitir'; maddeler: string[]; zaman: string }
+export function talimatAtlamalari(db: Db, isEmriIdleri: readonly number[]): Promise<TalimatAtlamaSatiri[]> {
+  return db.sorgu<TalimatAtlamaSatiri>(
+    `SELECT is_emri_id AS "isEmriId", kisi_id AS "kisiId", eylem, maddeler, ${ISO('zaman')} AS zaman
+       FROM emir_adimi_talimat_atlama WHERE is_emri_id = ANY($1::int[]) ORDER BY id`,
+    [[...isEmriIdleri]],
+  );
+}

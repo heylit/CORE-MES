@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, bekletGovdesi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
+  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, bekletGovdesi, adimNotuGovdesi, talimatAtlamaGovdesi, talimatAtlamaCevabi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
@@ -25,7 +25,7 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
-  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, baslatmaKartiniDenetle, sonOlaylar, adimPaylari, makineEkle,
+  adimNotuYaz, adimTamamla, talimatAtlamaYaz, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, baslatmaKartiniDenetle, sonOlaylar, adimPaylari, makineEkle,
   izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
@@ -134,6 +134,16 @@ const emirUclari = [
     govde: adimNotuGovdesi,
     cevap: adimCevabi,
     isle: ({ db, kullanici, parametre, govde }) => adimNotuYaz(db, kullanici.id, parametre.id, parametre.adimId, govde.metin),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/talimat-atlama',
+    yetki: 'terminal.uret',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: talimatAtlamaGovdesi,
+    cevap: talimatAtlamaCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => talimatAtlamaYaz(db, kullanici.id, parametre.id, govde.eylem, govde.adimIdler),
   }),
 ];
 
