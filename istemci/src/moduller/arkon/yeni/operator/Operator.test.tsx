@@ -456,6 +456,12 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
 });
 
 describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
+  // 3337-2 a: CORE işi refakat kartıyla başlar; talimat sorusundan sonra kart sorulur.
+  const kartlaBaslat = () => {
+    const k = screen.getByRole('dialog', { name: 'Refakat kartını okut' });
+    fireEvent.change(within(k).getByLabelText(/^Kart/), { target: { value: 'RP:5' } });
+    fireEvent.click(within(k).getByRole('button', { name: /Kartla başlat/ }));
+  };
   const adim = (id: number, ad: string, asama: string, zorunlu: boolean, tamam = false) => ({
     id, sira: id, ad, aciklama: null, asama, zorunlu, kontrol: null, tamam, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null,
   });
@@ -479,6 +485,7 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     expect(within(p).getByRole('listitem').textContent).toBe('ORN aparatı bağla');
     expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
     fireEvent.click(within(p).getByRole('button', { name: 'Yine de başlat' }));
+    kartlaBaslat();
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
     // Sapma kartı a: atlanan madde CORE'da adımın geçmişine yazılır.
     await waitFor(() => { expect(atlama).toEqual([{ eylem: 'baslat', adimIdler: [1] }]); }, { timeout: 10000 });
@@ -506,6 +513,8 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     await waitFor(() => { expect(screen.getByRole('tab', { name: /^Talimatlar/ })).toBeTruthy(); }, { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 300));
     fireEvent.click(grup().getByRole('button', { name: /Başlat/ }));
+    expect(screen.queryByRole('dialog', { name: /zorunlu madde eksik/ })).toBeNull();
+    kartlaBaslat();
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
     expect(screen.queryByRole('dialog', { name: /zorunlu madde eksik/ })).toBeNull();
     // Bitir basılı tutulur; yardımcı teknolojinin iki tıklaması aynı yoldan tetikler.
