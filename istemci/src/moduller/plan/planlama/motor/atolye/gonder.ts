@@ -16,12 +16,12 @@ import { simdiSaati } from '../kurallar.ts';
 
 // Çalışma planını gönderme: çalışma önce kaydedilir (sunucu yalnız kayıtlı çalışmayı yazar). Onaya gönderme ve "Onayla ve canlıya al" tek
 // komuttur (3308-5 a): sunucu plan taslağını, onayı ve canlıya almayı aynı işlemde yapar; reddederse hiçbir şey yazılmaz, geride taslak
-// kalmaz. "Deneme olarak kaydet" taslağı açık bırakır. Kimin neyi yapabileceğine uçlar karar verir; ekran sunucunun cevabını gösterir.
+// kalmaz. Ayrı deneme kaydı yoktur (3308-5 a): çalışma planı ya onaya gider ya canlıya alınır. Kimin neyi yapabileceğine uçlar karar verir; ekran sunucunun cevabını gösterir.
 export interface GonderSonucu {
   taslak: number; ad: string; yazilan: number; atlanan: number; yazilamaz: string[]; ekMesaiAtlanan: number; senaryolar: SenaryolarCevabi | null;
 }
 
-export type GonderHedefi = 'deneme' | 'onay' | 'canli';
+export type GonderHedefi = 'onay' | 'canli';
 // 990 a: canlıya alma 4 saat kuralına takıldıysa (gerekceIster) ekran gerekçe sorup komutu gerekçeyle yeniden yollar.
 // 2311 S1: canlı plan ekran açıldıktan sonra değiştiyse (canliDegisti) kişiye sorulur; onaylarsa komut okunan canlı sürüm olmadan yeniden gider.
 export class GonderHatasi extends Error {
@@ -61,13 +61,13 @@ export async function calismayiGonder(a: {
   // 4 saat kuralını aşma gerekçesi (yalnız canlıya almada).
   dortSaatGerekcesi?: string | null;
 }): Promise<GonderSonucu> {
-  const bas = a.hedef === 'deneme' ? 'Deneme kaydedilemedi' : a.hedef === 'canli' ? 'Plan canlıya alınamadı, onaya da gönderilmedi' : 'Plan onaya gönderilemedi';
+  const bas = a.hedef === 'canli' ? 'Plan canlıya alınamadı, onaya da gönderilmedi' : 'Plan onaya gönderilemedi';
   const calismaSurumu = await a.komut.kaydet();
   if (calismaSurumu === null) throw new GonderHatasi(`${bas}: çalışma kaydedilemedi; sayfayı yenileyip yeniden deneyin.`);
   const surumlu = a.planSurumu !== null && a.canliKabul !== true;
   const govde = { ad: a.ad, calismaSurumu, ...(surumlu ? { planSurumu: a.planSurumu } : {}) };
-  const yol = a.hedef === 'deneme' ? '/plan/planlama-calismasi/taslak-yaz' : a.hedef === 'canli' ? '/plan/planlama-calismasi/canliya-al' : '/plan/planlama-calismasi/onaya-gonder';
-  const ek = a.hedef === 'deneme' ? {} : { not: a.not, ...(a.hedef === 'canli' ? { dortSaatGerekcesi: a.dortSaatGerekcesi ?? null } : {}) };
+  const yol = a.hedef === 'canli' ? '/plan/planlama-calismasi/canliya-al' : '/plan/planlama-calismasi/onaya-gonder';
+  const ek = { not: a.not, ...(a.hedef === 'canli' ? { dortSaatGerekcesi: a.dortSaatGerekcesi ?? null } : {}) };
   let g: CalismaTaslagiCevabi & { senaryolar?: SenaryolarCevabi };
   try {
     g = await tekrarKorumaliGonder((d) => api.post<CalismaTaslagiCevabi & { senaryolar?: SenaryolarCevabi }>(yol, { ...govde, ...ek }, d));
@@ -81,8 +81,7 @@ export async function calismayiGonder(a: {
     }
     throw new GonderHatasi(`${bas}: ${sebep(h)}`);
   }
-  // Deneme yazıldı; liste okunamazsa (null) ekran eski listeyle kalır, yazılan taslak plan modülünde açıktır.
-  const senaryolar = a.hedef === 'deneme' ? await api.get<SenaryolarCevabi>('/plan/senaryolar').catch(() => null) : g.senaryolar ?? null;
+  const senaryolar = g.senaryolar ?? null;
   return { taslak: g.taslak.id, ad: a.ad, yazilan: g.yazilan, atlanan: g.atlanan, yazilamaz: g.yazilamaz, ekMesaiAtlanan: g.ekMesai?.atlanan ?? 0, senaryolar };
 }
 
@@ -93,24 +92,21 @@ export const gonderOzeti = (g: Pick<GonderSonucu, 'yazilan' | 'atlanan' | 'yazil
   + `${g.yazilamaz.length ? `; ${g.yazilamaz.length} iş sunucuda karşılığı olmadığı için yazılmadı (${ilkUc(g.yazilamaz)})` : ''}`
   + `${g.ekMesaiAtlanan ? `; ${g.ekMesaiAtlanan} ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi` : ''}.`;
 
-// Eski taslak adları (fmtDT(...).slice(0, 9), gün adıyla): "Onay <gün> · <kişi>", "Deneme <n> · <gün>".
-export const taslakAdi = (hedef: GonderHedefi, gun: string, kisi: string, acik: number): string =>
-  hedef === 'deneme' ? `Deneme ${acik + 1} · ${gun.trim()}` : `Onay ${gun.trim()} · ${kisi}`;
+// Onaya giden planın adı (gün adıyla): "Onay <gün> · <kişi>".
+export const taslakAdi = (gun: string, kisi: string): string => `Onay ${gun.trim()} · ${kisi}`;
 
 // Ekranın çağrısı: taslak adı, not ve canlı sürüm (arada canlıya alınırsa sunucu reddeder) ekranın verisinden kurulur.
 export function calismayiYolla(a: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; sen: SenaryolarCevabi | null; hedef: GonderHedefi; not: string | null; canliKabul?: boolean; dortSaatGerekcesi?: string | null }): Promise<GonderSonucu> {
   const komut = a.o.komut;
   if (!komut) return Promise.reject(new GonderHatasi('Çalışma bu oturumda yazılamıyor; sayfayı yenileyin.'));
-  const acik = (a.sen?.senaryolar ?? []).filter((x) => x.durum === 'acik').length;
   return calismayiGonder({
     komut, not: a.not, hedef: a.hedef, planSurumu: a.sen?.canliSurum ?? a.o.depo.planSurumu?.planSurumu ?? null, canliKabul: a.canliKabul === true, dortSaatGerekcesi: a.dortSaatGerekcesi ?? null,
-    ad: taslakAdi(a.hedef, gunAdi(a.c.D, simdiSaati(a.c, Date.now())), a.o.depo.ben.kisi.ad, acik),
+    ad: taslakAdi(gunAdi(a.c.D, simdiSaati(a.c, Date.now())), a.o.depo.ben.kisi.ad),
   });
 }
 
 export const gonderIletisi = (hedef: GonderHedefi, g: GonderSonucu): string =>
-  hedef === 'deneme' ? `"${g.ad}" kaydedildi; karşılaştırmaya eklenebilir. ${gonderOzeti(g)}`
-    : hedef === 'onay' ? `Plan onaya gönderildi: ${gonderOzeti(g)} Canlıya onaylayan alır.`
+  hedef === 'onay' ? `Plan onaya gönderildi: ${gonderOzeti(g)} Canlıya onaylayan alır.`
       : `Plan canlıda: ${gonderOzeti(g)} Tezgâh kuyrukları ve operatör ekranı bu planı gösterir.`;
 
 // Senaryo komutunun 409'u iki türlüdür: sürüm eskidi (liste yenilenince yeniden denenir) ya da sunucunun kendi engeli (taslak kapandı,
