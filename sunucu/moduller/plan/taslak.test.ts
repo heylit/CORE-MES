@@ -341,4 +341,43 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     assert.deepEqual((await ortak())['ekMesai'], [{ m: T1, gun: 2, vardiya: V }]);
   });
 
+  test('TS-14 (3335-3b): adım uzadı taslağa yazılır, bildirildiği andaki bitiş satırda saklanır ve dışarı verilmez; bitiş sonradan değişse de hedef kaymaz; Uygula ortak çalışmaya yazar, sil kaldırır', async () => {
+    const bugun = new Date().toISOString().slice(0, 10);
+    const planla = async (C: number): Promise<void> => {
+      const kaydi = (await ortak()) as Record<string, unknown> & { D: Record<string, unknown> };
+      await vt().sorgu('UPDATE plan_planlama_kaydi SET deger = $2::jsonb WHERE anahtar = $1', [PLANLAMA_ANAHTARI,
+        JSON.stringify({ ...kaydi, D: { ...kaydi.D, meta: { ad: 'Ornek', baslangic: bugun } }, plan: { dataVer: kaydi['dataVer'], ops: { 'ORN-E.10': { id: 'ORN-E.10', job: 'ORN-E', m: 'ORN-T', S: 40, Su: 40, C, lot1: 41 } } } })]);
+    };
+    await vt().sorgu('DELETE FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]);
+    await planla(50);
+    const uzadi = (isId: string, ekSaat: number) => ({ tur: 'adim-uzadi', isId, ekSaat });
+    const ek = (c: Record<string, unknown> | null | undefined) => (c?.['w'] as Record<string, unknown> | undefined)?.['adimEk'];
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 0.1) }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 241) }, 400);
+    // Çeyrek saatin katı olmayan ve üst sınırı çeyrek aşan değer sözleşmede reddedilir.
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 0.3) }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 240.25) }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-yok.10', 3) }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { ...uzadi('ORN-E.10', 3), bitis0: 99 } }, 400);
+    await istek(okur, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 3) }, 403);
+    const ta = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 3) });
+    assert.deepEqual(ta.taslak?.satirlar.map((x) => [x.ne, x.hata, Object.keys(x).sort()]), [['ORN-E.10 uzadı: +3 sa', null, ['hata', 'komut', 'ne', 't']]]);
+    assert.deepEqual(ek(ta.calisma), { 'ORN-E.10': { ekSaat: 3, bitis0: 50 } });
+    assert.equal(ek(await ortak()), undefined, 'ortak çalışma değişmez');
+    const satir = (await vt().tek<{ k: { bitis0?: number; eksen?: string }[] }>('SELECT komutlar AS k FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]))!.k[0];
+    assert.deepEqual([satir?.bitis0, satir?.eksen], [50, bugun]);
+    // Ortak çalışmada adımın bitişi değişti (sayım ilerledi): taslağın hedefi bildirildiği andaki bitişte kalır.
+    await planla(45);
+    assert.deepEqual(ek((await istek<TaslakCevabi>(a, 'GET', '/plan/taslagim')).calisma), { 'ORN-E.10': { ekSaat: 3, bitis0: 50 } });
+    assert.equal((await istek<TaslakUygulaCevabi>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: ta.taslak!.surum })).durum, 'uygulandi');
+    assert.deepEqual(ek(await ortak()), { 'ORN-E.10': { ekSaat: 3, bitis0: 50 } });
+    // Yeni bildirim ek saati değiştirir, ilk bitiş kalır; sil satırı kaldırır.
+    const tb = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: uzadi('ORN-E.10', 5) });
+    assert.deepEqual(ek(tb.calisma), { 'ORN-E.10': { ekSaat: 5, bitis0: 50 } });
+    const tc = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: tb.taslak!.surum, komut: { tur: 'adim-uzadi-sil', isId: 'ORN-E.10' } });
+    assert.deepEqual(ek(tc.calisma), {});
+    assert.equal((await istek<TaslakUygulaCevabi>(a, 'POST', '/plan/taslagim/uygula', { taslakSurumu: tc.taslak!.surum })).durum, 'uygulandi');
+    assert.deepEqual(ek(await ortak()), {});
+  });
+
 });

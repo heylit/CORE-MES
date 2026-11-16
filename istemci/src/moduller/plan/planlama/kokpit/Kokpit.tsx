@@ -17,6 +17,7 @@ import { bekleyenListesi } from '../kayit.ts';
 import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
+import { AdimSorunu } from './AdimSorunu.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { Kapasite } from './Kapasite.tsx';
@@ -24,7 +25,7 @@ import { DegisiklikOzeti, Degisiklikler } from './Degisiklikler.tsx';
 import { degisiklikler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
@@ -156,6 +157,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // kalkar, ayar paneli kapanır.
   const [kapasiteAcik, setKapasiteAcik] = useState(false);
   const [sorunTezgahi, setSorunTezgahi] = useState<{ tezgah: string; n: number } | null>(null);
+  // Sorun bildirilen adım (3335-3b); paneli Ayarlar ve Duruş ve mesai ile aynı yerdedir, biri açılınca öteki kapanır.
+  const [sorunAdimi, setSorunAdimi] = useState<string | null>(null);
   // Üst şeritteki yön düğmesi paneli o yönle açar ve etkisini hesaplatır; geçerli yönün düğmesi paneli yön bölümüyle açar (ölü tıklama olmasın).
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
@@ -470,8 +473,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
 
   // Tezgâhta sorun bildir (3335 a): tezgâh adından Duruş ve mesai o tezgâhla açılır; aynı taslak komutu ve etki akışı.
   const sorunBildir = yazabilir && !tur
-    ? (tezgah: string): void => { sec(null, null); setAyarAcik(false); setSorunTezgahi((x) => ({ tezgah, n: (x?.n ?? 0) + 1 })); setKapasiteAcik(true); }
+    ? (tezgah: string): void => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setSorunTezgahi((x) => ({ tezgah, n: (x?.n ?? 0) + 1 })); setKapasiteAcik(true); }
     : null;
+  // Adıma sorun bildir (3335-3b): operasyon satırından açılır; seçim durur, satır görünür kalır.
+  const adimSorunu = yazabilir && !tur
+    ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setSorunAdimi(isId); }
+    : null;
+  const adimEk = useMemo(() => adimEkleri(c), [c]);
   return (
     <div className="tc-pyq" data-goz={goz} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
       {!onayAcik && (
@@ -519,7 +527,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </span>
         {arizali > 0 && (
           <button type="button" className="tc-pyq-ok tc-pyq-ariza" aria-pressed={kapasiteAcik} title="Şu anda arızada ya da bakımda olan tezgâhlar; Duruş ve mesai açılır" disabled={tur !== null || onayAcik}
-            onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setKapasiteAcik(!kapasiteAcik); }}>
+            onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setKapasiteAcik(!kapasiteAcik); }}>
             <Simge ad="wrench" boyut="k" /><b>{arizali}</b><span>Arıza</span>
           </button>
         )}
@@ -539,15 +547,15 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <>
               <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { kapat(); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
-                onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+                onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
               {(['ileri', 'geri'] as const).map((y) => (
                 <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={!yazabilir || tur !== null || onayAcik}
-                  onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setAyarYon(y); setAyarAcik(true); }}>
+                  onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(y); setAyarAcik(true); }}>
                   <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>Tüm plan: {YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
                 </button>
               ))}
               <button type="button" role="menuitemcheckbox" aria-checked={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik}
-                onClick={() => { kapat(); if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+                onClick={() => { kapat(); if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
             </>
           )}
         </Acilir>
@@ -573,7 +581,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {taslak && !onayAcik && (
         <TaslakCubugu
           taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarın etkisini uygulayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
-          onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayTaslaktan(true); setOnayAcik(true); }}
+          onayiAc={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
       )}
@@ -593,7 +601,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}
-              saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu}
+              saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu} adimSorunu={adimSorunu} adimEk={adimEk}
             />
           )}
           <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label={BOLUM_ADI[goz]}>
@@ -630,6 +638,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             oynat={oynuyor ? oynatKarar : null} oynatAc={yazabilir ? () => { setOynuyor(true); } : null} oynatDur={() => { setOynuyor(false); }}
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
+        ) : sorunAdimi !== null ? (
+          <AdimSorunu key={sorunAdimi} c={c} m={m} isId={sorunAdimi} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setSorunAdimi(null); }} />
         ) : ayarAcik ? (
           <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} etkiBekliyor={setAyarEtkisi} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : kapasiteAcik ? (

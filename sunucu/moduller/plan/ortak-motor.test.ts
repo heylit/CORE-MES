@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { motorYukle, planCoz, type Motor, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
+import vm from 'node:vm';
+import { motorKodu, motorYukle, planCoz, type Motor, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
 
 // Tek tezgâh ve tek operatör, gün boyu açık; ürünün tek adımı adet başına 1 saat.
 const veri = (siparisler: { id: string; adet: number; termin: string }[] = [{ id: 'S1', adet: 10, termin: '2026-01-20' }]) => ({
@@ -42,6 +43,62 @@ describe('ortak plan motoru, başlamış adımın kalanı (391 a)', () => {
   test('sayıya çevrilemeyen kalan yok sayılır', () => {
     const m = motorYukle();
     assert.equal(m.schedule(durum(m, { 'S1.10': { m: 'T1', S: 0, kalan: 'x' } }), 'yeni', taban(m)).ops['S1.10']?.C, 10);
+  });
+});
+
+// 3335-3b: adıma bildirilen ek süre. Başlamamış adımda koşu süresine eklenir; çalışan adımda hedef bitiştir (bildirildiği andaki
+// planlı bitiş + ek saat) ve sunucunun adetten hesapladığı kalanla yarışır: hangisi geçse o.
+describe('ortak plan motoru, adıma bildirilen ek süre (3335-3b)', () => {
+  const ekli = (m: Motor, gercek: Record<string, Record<string, unknown>>, now: number, ek: { ekSaat: number; bitis0: number }): MotorDurumu => ({
+    ...durum(m, Object.fromEntries(Object.entries(gercek).map(([id, a]) => [id, { ...a, ek }])), now), adimEk: { 'S1.10': ek },
+  });
+  test('başlamamış adım ek saat kadar uzar; çarpan değildir', () => {
+    const m = motorYukle();
+    assert.equal(m.schedule(ekli(m, {}, 0, { ekSaat: 3, bitis0: 10 }), 'yeni', null).ops['S1.10']?.C, 13);
+    assert.equal(m.schedule(ekli(m, {}, 0, { ekSaat: 0.5, bitis0: 10 }), 'yeni', null).ops['S1.10']?.C, 10.5);
+  });
+  test('çalışan adım: sunucunun kalanı hedeften erken bitiriyorsa bitiş hedeftir; sayım ilerleyince ek yeniden eklenmez', () => {
+    const m = motorYukle();
+    const ek = { ekSaat: 3, bitis0: 10 };
+    // Kalan 2, sayım 6: sunucuya göre bitiş 8; hedef 10 + 3 = 13.
+    const st = ekli(m, { 'S1.10': { m: 'T1', S: 0, kalan: 2, sayim: 6 } }, 7, ek);
+    assert.equal(m.schedule(st, 'yeni', taban(m)).ops['S1.10']?.C, 13);
+    assert.equal(m.lowerBound(st).C['S1'], 13);
+    assert.equal(m.lbHeadsTails(st, m.compile(st)).fin['S1.10'], 13);
+    // Sonraki sayım (kalan 1, sayım 9: sunucuya göre 10): bitiş yine 13, 16 değil.
+    assert.equal(m.schedule(ekli(m, { 'S1.10': { m: 'T1', S: 0, kalan: 1, sayim: 9 } }, 9.5, ek), 'yeni', taban(m)).ops['S1.10']?.C, 13);
+  });
+  test('çalışan adım: sunucunun kalanı hedefi geçiyorsa sunucununki geçerlidir', () => {
+    const m = motorYukle();
+    assert.equal(m.schedule(ekli(m, { 'S1.10': { m: 'T1', S: 0, kalan: 9, sayim: 6 } }, 7, { ekSaat: 3, bitis0: 10 }), 'yeni', taban(m)).ops['S1.10']?.C, 15);
+  });
+  test('bölünen adımda ek saat yalnız ilk payın koşu süresine eklenir', () => {
+    const m = motorYukle();
+    const D = { ...veri(), tezgahlar: [{ id: 'T1', grup: 'G' }, { id: 'T2', grup: 'G' }], personel: [{ id: 'P1', vardiya: 'V', gruplar: ['G'] }, { id: 'P2', vardiya: 'V', gruplar: ['G'] }],
+      urunler: [{ id: 'U', rota: [{ k: 10, ad: 'Torna', bol: true, tezgahlar: [{ id: 'T1', cevrim: 60, ayar: 0 }, { id: 'T2', cevrim: 60, ayar: 0 }] }] }] };
+    const st = (ek: boolean): MotorDurumu => ({ ...durum(m, {}, 0, D), w: { ...m.W0, tampon: false, bol: true, bolMaks: 2 }, ...(ek ? { adimEk: { 'S1.10': { ekSaat: 3, bitis0: 5 } } } : {}) });
+    const kosu = (x: MotorDurumu) => Object.fromEntries(Object.entries((m.compile(x) as { byId: Record<string, { c: { run: number }[] }> }).byId).map(([id, o]) => [id, Array.from(o.c, (c) => c.run)]));
+    assert.deepEqual(kosu(st(false)), { 'S1.10': [5, 5], 'S1.10~2': [5, 5] });
+    assert.deepEqual(kosu(st(true)), { 'S1.10': [8, 8], 'S1.10~2': [5, 5] });
+  });
+
+  test('plan ekseni kayınca hedefin dayandığı bitiş de kayar: hedef aynı gerçek ana düşer', () => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: 'Europe/Istanbul' }); b['self'] = b;
+    const kaydir = vm.runInContext(`${motorKodu()}\n;baslangicKaydir;`, b) as (S: Record<string, unknown>, yeni: string) => number;
+    const S = { D: veri(), w: { adimEk: { 'S1.10': { ekSaat: 3, bitis0: 34 }, 'S2.10': { ekSaat: 1 } } }, gercek: { 'S1.10': { m: 'T1', S: 24, sayim: 30, kalan: 2 } } };
+    assert.equal(kaydir(S, '2026-01-06'), 1);
+    assert.deepEqual(S.w.adimEk, { 'S1.10': { ekSaat: 3, bitis0: 10 }, 'S2.10': { ekSaat: 1 } });
+    assert.deepEqual(S.gercek['S1.10'], { m: 'T1', S: 0, sayim: 6, kalan: 2 });
+    // Kayan değerlerle çalışan adımın bitişi hedeftir: 10 + 3.
+    const m = motorYukle();
+    const ek = S.w.adimEk['S1.10'] as { ekSaat: number; bitis0: number };
+    assert.equal(m.schedule(ekli(m, { 'S1.10': S.gercek['S1.10'] }, 7, ek), 'yeni', taban(m)).ops['S1.10']?.C, 13);
+  });
+
+  test('ek süre yoksa ya da sayı değilse davranış aynıdır', () => {
+    const m = motorYukle();
+    const st = durum(m, { 'S1.10': { m: 'T1', S: 0, kalan: 2, sayim: 6, ek: { ekSaat: 'x', bitis0: 10 } } });
+    assert.equal(m.schedule(st, 'yeni', taban(m)).ops['S1.10']?.C, 8);
   });
 });
 

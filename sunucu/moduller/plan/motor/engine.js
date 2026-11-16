@@ -67,6 +67,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [cal]
     @property {any} [pref]
     @property {any} [sapma]
+    @property {any} [adimEk]
     @property {any} [bitti]
     @property {any} [wipP]
     @property {any} [sabitYer]
@@ -200,6 +201,8 @@ function compile(st){olcekKur(st.w);
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,gelisSira:sira,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
+      /* 3335-3b: adıma bildirilen ek süre (saat); çarpan değil, koşu süresine eklenir: hangi tezgâha yerleşirse yerleşsin aynı saat */
+      const ekS=st.adimEk&&st.adimEk[id]&&isFinite(+st.adimEk[id].ekSaat)?Math.max(0,+st.adimEk[id].ekSaat):0;
       /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
       if(bitti[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
@@ -218,7 +221,7 @@ function compile(st){olcekKur(st.w);
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
       else for(const t of adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
-        c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
+        c.push({m:t.id,run:ad*cyc/mm.verim+(p===0?ekS:0),cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
@@ -310,7 +313,10 @@ function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries
 function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{},pl:(cx.PK||[]).map(()=>new Float32Array(NS)),pn:(cx.PK||[]).map(()=>new Uint8Array(NS)),pa:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);u.ik={};for(const k in cx.IK||{})u.ik[k]=new Float32Array(NS);return u;}
 /* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
    Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
-function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
+/* 3335-3b: çalışan adıma bildirilen ek süre hedef bitiştir (bildirildiği andaki planlı bitiş + ek saat, tezgâhın çalışma saatiyle).
+   Sunucunun kalanı adetten hesaplanır ve her sayımda yenilenir; ek süre kalana eklenseydi her sayımda yeniden sayılırdı. */
+function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;const b=adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));
+  const e=a.ek;return e&&isFinite(+e.bitis0)&&isFinite(+e.ekSaat)?Math.max(b,adv(M.rw,+e.bitis0,Math.max(0,+e.ekSaat))):b;}
 /* Kilitli iş (kilit a): saati şimdiden ileriyse tezgâhında tam kilit saatinde sabittir; öncülünü beklemez (dondurulmuş gibi), öteki işler
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
 /** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
