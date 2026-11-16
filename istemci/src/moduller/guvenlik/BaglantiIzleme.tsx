@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
-import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi } from '#paylasilan/sozlesme/smartes.ts';
+import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -155,20 +155,33 @@ function useYenidenGonder(kapat: () => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   return useMutation({
+    // Logo ve SmartES ayrı uçlara gider; biri düşerse öteki yine gönderilir ve sonuç kaynak başına yazılır.
     mutationFn: async (belgeler: readonly IzlemeSatiri[]) => {
       let sirada = 0;
       let durmayan = 0;
-      for (const p of parcalara(belgeler)) {
-        const govde = { belgeler: p.map((b) => ({ belge: b.belge, no: b.no, islem: b.islem })) };
-        const c = await api.post<LogoYenidenGonderCevabi>('/logo/giden/yeniden-gonder', govde, { istekKimligi: yeniIstekKimligi() });
-        sirada += c.sirada;
-        durmayan += c.durmayan;
-      }
-      return { sirada, durmayan };
+      const hatalar: string[] = [];
+      const gonder = async (kaynak: IzlemeSatiri['kaynak'], istek: (p: IzlemeSatiri[]) => Promise<{ sirada: number; durmayan: number }>) => {
+        try {
+          for (const p of parcalara(belgeler.filter((b) => b.kaynak === kaynak))) {
+            const c = await istek(p);
+            sirada += c.sirada;
+            durmayan += c.durmayan;
+          }
+        } catch (h) {
+          hatalar.push(`${kaynak}: ${hataIletisi(h, 'gönderilemedi.')}`);
+        }
+      };
+      await gonder('Logo', (p) => api.post<LogoYenidenGonderCevabi>('/logo/giden/yeniden-gonder',
+        { belgeler: p.map((b) => ({ belge: b.belge, no: b.no, islem: b.islem })) }, { istekKimligi: yeniIstekKimligi() }));
+      await gonder('SmartES', (p) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder',
+        { isEmirleri: p.map((b) => b.no) }, { istekKimligi: yeniIstekKimligi() }));
+      return { sirada, durmayan, hatalar };
     },
-    onSuccess: async ({ sirada, durmayan }) => {
-      bildir('tamam', durmayan === 0 ? `${sirada} belge sıraya girdi; ilk turda gider.` : `${sirada} belge sıraya girdi; ${durmayan} belge artık durmuyordu, değişmedi.`);
+    onSuccess: async ({ sirada, durmayan, hatalar }) => {
+      const ozet = durmayan === 0 ? `${sirada} belge sıraya girdi; ilk turda gider.` : `${sirada} belge sıraya girdi; ${durmayan} belge artık durmuyordu, değişmedi.`;
       await istemci.invalidateQueries({ queryKey: anahtarlar.izleme });
+      if (hatalar.length > 0) { bildir('hata', sirada + durmayan === 0 ? hatalar.join(' ') : `${ozet} ${hatalar.join(' ')}`); return; }
+      bildir('tamam', ozet);
       kapat();
     },
     onError: (h) => bildir('hata', hataIletisi(h, 'Yeniden gönderilemedi.')),

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
@@ -7,6 +8,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, emirBitir, emirIptalEt, emirSayim, uretimEmriAc } from '../uretim-emirleri/disari.ts';
@@ -41,6 +43,9 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
   };
   const istek = (yontem: 'GET' | 'POST', yol: string, govde?: unknown, c = yonetici) =>
     app.inject({ method: yontem, url: `/api${yol}`, headers: { cookie: c }, ...(govde === undefined ? {} : { payload: govde as object }) });
+  const yenidenGonder = (isEmirleri: number[], c = yonetici) => app.inject({
+    method: 'POST', url: '/api/smartes/giden/yeniden-gonder', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: { isEmirleri },
+  });
   const turOrtami = (): TurOrtami => ({
     istemci: smartesIstemcisiKur({ adres: sahte.adres, adAlani: VARSAYILAN_AD_ALANI }, { bekle: async () => {}, istekSuresiMs: 5000, listeSuresiMs: 5000 }),
     saat: () => new Date(simdi),
@@ -84,7 +89,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
 
   before(async () => {
     ortam = await testVeritabaniKur('smartes');
-    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
+    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme SmartES', kullaniciAdi: 'sm-yonetici', parola: PAROLA }));
     denemeProjeId = (await ortam!.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('SMARTES.1', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
@@ -417,13 +422,18 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     const degisen = sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler;
     assert.deepEqual([degisen['Quantity'], degisen['QuantityUpdate']], ['25', 'true']);
 
-    // Adet yine değişir, SmartES reddeder: son başarılı özet korunur, bekleme dolunca yeniden deneme de QuantityUpdate true taşır.
+    // Adet yine değişir, SmartES reddeder: iş emri durur, son başarılı özet korunur; "Yeniden gönder" sonrası deneme de QuantityUpdate true taşır.
     await ortam!.sahip.sorgu('UPDATE uretim_emri SET adet = 24 WHERE id = $1', [uretimEmriId]);
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'Kilitli' }));
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
     simdi += 2 * 60_000;
     sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
     sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 }, 'duran iş emri kendiliğinden yinelenmez');
+    assert.equal(sahte.cagrilar.length, 0);
+    const yg = await yenidenGonder([ilk]);
+    assert.equal(yg.statusCode, 200, yg.body);
+    assert.deepEqual(yg.json(), { sirada: 1, durmayan: 0 });
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
     const yeniden = sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler;
     assert.deepEqual([yeniden['Quantity'], yeniden['QuantityUpdate']], ['24', 'true']);
@@ -433,8 +443,19 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 });
     assert.equal(sahte.cagrilar.length, 0);
 
-    // İptal edilen emrin gönderilmiş iş emri pasif olarak kapatılır; silme çağrılmaz.
+    // İptal edilen emrin gönderilmiş iş emri pasif olarak kapatılır; silme çağrılmaz. Kapanış reddedilirse durur, izlemede Durdu görünür,
+    // kendiliğinden yinelenmez; "Yeniden gönder" sonrası kapanış gider.
     await iptalEt(uretimEmriId);
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'Kilitli' }));
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
+    const izlenen = ((await istek('GET', '/smartes/giden/sorunlar')).json() as { belgeler: { isEmriId: number; durdu: boolean }[] }).belgeler;
+    assert.deepEqual(izlenen.filter((b) => b.isEmriId === ilk).map((b) => b.durdu), [true]);
+    simdi += 3 * 3_600_000;
+    sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 }, 'duran kapanış yinelenmez');
+    assert.equal(sahte.cagrilar.length, 0);
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0 });
     const k = await gonderimTuru(vt(), turOrtami());
     assert.deepEqual(k, { tur: 'islendi', gonderilen: 0, kapanan: 1, hatali: 0 });
     const kapanis = sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler;
@@ -452,26 +473,81 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal(sahte.cagrilar.length, 0);
   });
 
-  test('SME-14 (ret): SmartES reddederse hata ve bekleme yazılır, süre dolmadan yinelenmez; ağ hatası turu durdurur', async () => {
+  test('SME-14 (ret): SmartES reddederse iş emri durur ve kendiliğinden yinelenmez; ağ hatası bekleme yazar ve turu durdurur', async () => {
     const { uretimEmriId, ilk, ikinci } = await emirKur(true);
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'İstasyon tanımsız' }));
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 2 });
-    const g = await vt().tek<{ durum: string; son_hata: string; sonraki_deneme: Date }>('SELECT durum, son_hata, sonraki_deneme FROM smartes_giden WHERE is_emri_id = $1', [ilk]);
+    const g = await vt().tek<{ durum: string; son_hata: string; sonraki_deneme: Date | null }>('SELECT durum, son_hata, sonraki_deneme FROM smartes_giden WHERE is_emri_id = $1', [ilk]);
     assert.equal(g?.durum, 'hata');
     assert.equal(g?.son_hata, 'SmartES reddetti: İstasyon tanımsız');
-    assert.equal(g?.sonraki_deneme.getTime(), simdi + 60_000);
+    assert.equal(g?.sonraki_deneme, null, 'kesin ret: sonraki deneme yok');
+    simdi += 3 * 3_600_000;
     sahte.cagrilar.length = 0;
     await gonderimTuru(vt(), turOrtami());
-    assert.equal(sahte.cagrilar.length, 0, 'bekleme dolmadan yinelenmez');
+    assert.equal(sahte.cagrilar.length, 0, 'duran iş emri saatler sonra da yinelenmez');
+    const izleme = await istek('GET', '/smartes/giden/sorunlar');
+    assert.equal(izleme.statusCode, 200, izleme.body);
+    const satirlar = (izleme.json() as { belgeler: { isEmriId: number; durdu: boolean; sonrakiDeneme: string | null }[] }).belgeler;
+    assert.deepEqual(satirlar.filter((b) => b.isEmriId === ilk || b.isEmriId === ikinci).map((b) => [b.durdu, b.sonrakiDeneme]), [[true, null], [true, null]]);
 
-    // Bekleme dolar, bağlantı kopar: ilk iş emrinde tur durur, ikinciye istek gitmez.
-    simdi += 2 * 60_000;
+    // İkisi yeniden gönderilir, bağlantı kopar: ilk iş emrinde tur durur, ikinciye istek gitmez; ağ hatası bekleme yazar (durmaz).
+    const yg = await yenidenGonder([ilk, ikinci]);
+    assert.deepEqual(yg.json(), { sirada: 2, durmayan: 0 });
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'kopar' }));
     const r = await gonderimTuru(vt(), turOrtami());
     assert.deepEqual(r, { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
     const erpIdleri = new Set(sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').map((c) => c.parametreler['ErpID']));
     assert.equal(erpIdleri.size, 1);
     assert.equal(erpIdleri.has(String(ikinci)) && erpIdleri.has(String(ilk)), false);
+    const kopan = await vt().tek<{ id: number; sonraki_deneme: Date | null }>(
+      'SELECT is_emri_id AS id, sonraki_deneme FROM smartes_giden WHERE is_emri_id = ANY($1::int[]) ORDER BY son_deneme DESC LIMIT 1', [[ilk, ikinci]]);
+    assert.equal(kopan?.sonraki_deneme?.getTime(), simdi + 60_000, 'ağ hatası kesin değil: artan bekleme');
+    await iptalEt(uretimEmriId);
+  });
+
+  test('SmartES durdu: Fault art arda üç kez gelince durur; HTTP 4xx hemen durur, 5xx yinelenir; değişen iş emri ve yeniden gönderme', async () => {
+    const { uretimEmriId, ilk } = await emirKur();
+    const durum = () => vt().tek<{ durum: string; sonraki_deneme: Date | null; ardisik_hata: number }>(
+      'SELECT durum, sonraki_deneme, ardisik_hata FROM smartes_giden WHERE is_emri_id = $1', [ilk]);
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'fault', ileti: 'Sunucu istisnası' }));
+    for (let i = 1; i <= 2; i++) {
+      assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
+      assert.notEqual((await durum())?.sonraki_deneme, null, `${i}. Fault yinelenir`);
+      simdi += 2 * 3_600_000;
+    }
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
+    assert.equal((await durum())?.sonraki_deneme, null, 'üçüncü Fault: durdu');
+
+    // Yetki: yeniden gönderme Sistem Ayarları yazma yetkisi ister; duran olmayan iş emri dokunulmaz sayılır.
+    assert.equal((await yenidenGonder([ilk], okuyucu)).statusCode, 403);
+    assert.equal((await durum())?.sonraki_deneme, null);
+    assert.deepEqual((await yenidenGonder([ilk, 999_999])).json(), { sirada: 1, durmayan: 1 });
+    assert.equal((await durum())?.ardisik_hata, 0, 'yeniden gönderme Fault sayacını sıfırlar');
+
+    // HTTP 5xx kesin değildir; 4xx hemen durur.
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'http', durum: 503, govde: 'kapali' }));
+    await gonderimTuru(vt(), turOrtami());
+    assert.notEqual((await durum())?.sonraki_deneme, null, '5xx yinelenir');
+    // Yinelenecek satır durmaz: yeniden gönderme dokunmaz.
+    const yinelenecek = await durum();
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1 });
+    assert.deepEqual(await durum(), yinelenecek);
+    simdi += 2 * 3_600_000;
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'http', durum: 400, govde: 'bozuk istek' }));
+    await gonderimTuru(vt(), turOrtami());
+    assert.equal((await durum())?.sonraki_deneme, null, '4xx durur');
+
+    // Duran iş emri değişince kendiliğinden yeniden gider; değişmeyen tur istek atmaz.
+    sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
+    sahte.cagrilar.length = 0;
+    await gonderimTuru(vt(), turOrtami());
+    assert.equal(sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').length, 0);
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET adet = adet + 1 WHERE id = $1', [uretimEmriId]);
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
+    // Gönderilmiş satır durmaz: yeniden gönderme dokunmaz.
+    const gonderilmis = await durum();
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1 });
+    assert.deepEqual(await durum(), gonderilmis);
     await iptalEt(uretimEmriId);
   });
 

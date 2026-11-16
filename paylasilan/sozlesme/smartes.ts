@@ -133,7 +133,7 @@ export const gidenCevabi = listeCevapSemasi(z.object({
   sonrakiDeneme: zamanSemasi.nullable(),
 }));
 
-// 3313: bağlantı izleme, SmartES'e gidemeyen iş emirleri. Hatalı gönderim kendiliğinden yeniden denenir; elle gönderme yoktur.
+// 3313: bağlantı izleme, SmartES'e gidemeyen iş emirleri. Kesin retten sonra iş emri durur (durdu); öteki hatalar kendiliğinden yinelenir.
 export const smartesGidenIzlemeCevabi = z.object({
   belgeler: z.array(z.object({
     isEmriId: z.number().int(),
@@ -142,10 +142,21 @@ export const smartesGidenIzlemeCevabi = z.object({
     sonDeneme: zamanSemasi,
     neden: z.string().nullable(),
     sonrakiDeneme: zamanSemasi.nullable(),
+    durdu: z.boolean(),
   }).strict()),
   kesildi: z.boolean(),
 });
 export type SmartesGidenIzlemeCevabi = z.output<typeof smartesGidenIzlemeCevabi>;
+
+// Duran iş emrini yeniden sıraya koyma; Logo'daki gibi bir istekte en çok 200 iş emri.
+export const SMARTES_YENIDEN_GONDER_AZAMI = 200;
+export const smartesYenidenGonderGovdesi = z.object({
+  isEmirleri: z.array(z.number().int().positive()).min(1).max(SMARTES_YENIDEN_GONDER_AZAMI),
+}).strict();
+export type SmartesYenidenGonderGovdesi = z.input<typeof smartesYenidenGonderGovdesi>;
+// sirada: yeniden sıraya giren; durmayan: durmadığı için (gönderilmiş ya da kendiliğinden yinelenecek) dokunulmayan.
+export const smartesYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int() });
+export type SmartesYenidenGonderCevabi = z.output<typeof smartesYenidenGonderCevabi>;
 
 export type DurumCevabi = z.output<typeof durumCevabi>;
 export type EslemelerCevabi = z.output<typeof eslemelerCevabi>;

@@ -7,7 +7,7 @@ import {
   DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu, turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
   adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
-  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi,
+  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi, FAULT_SINIRI, gonderimEylemi, kesinRetMi,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -419,5 +419,30 @@ describe('Adet onayı kuralları (3173 b, 3193 a)', () => {
     assert.equal(onayaGirerMi(new Date('2026-11-13T09:59:59Z'), gecis), false);
     assert.equal(onayaGirerMi(new Date('2026-11-13T10:00:00Z'), gecis), true);
     assert.equal(onayaGirerMi(null, gecis), false);
+  });
+});
+
+describe('SmartES gönderiminde kesin ret ve durma', () => {
+  test('ret ve 4xx hemen kesin; Fault sınırda kesin; ağ, zaman aşımı, 5xx ve bozuk cevap hiçbir zaman', () => {
+    assert.equal(kesinRetMi('ret', 1), true);
+    assert.equal(kesinRetMi('http', 1, 400), true);
+    assert.equal(kesinRetMi('http', 1, 404), true);
+    assert.equal(kesinRetMi('http', 50, 500), false);
+    assert.equal(kesinRetMi('http', 50, 408), false);
+    assert.equal(kesinRetMi('http', 50, 429), false);
+    assert.equal(kesinRetMi('http', 50, 503), false);
+    assert.equal(kesinRetMi('fault', FAULT_SINIRI - 1), false);
+    assert.equal(kesinRetMi('fault', FAULT_SINIRI), true);
+    for (const tur of ['ag', 'zaman-asimi', 'bozuk'] as const) assert.equal(kesinRetMi(tur, 100), false, tur);
+  });
+  test('duran iş emri aynı özetle bekler, değişince gider; bekleyen hata süre dolunca gider', () => {
+    const simdi = new Date('2026-11-16T10:00:00Z');
+    const durdu = { ozet: null, denenenOzet: 'A', durum: 'hata' as const, sonrakiDeneme: null };
+    assert.equal(gonderimEylemi(durdu, 'A', simdi), 'bekle');
+    assert.equal(gonderimEylemi(durdu, 'B', simdi), 'gonder');
+    assert.equal(gonderimEylemi({ ...durdu, denenenOzet: null }, 'B', simdi), 'bekle');
+    const bekleyen = { ozet: null, denenenOzet: 'A', durum: 'hata' as const, sonrakiDeneme: new Date('2026-11-16T10:05:00Z') };
+    assert.equal(gonderimEylemi(bekleyen, 'A', simdi), 'bekle');
+    assert.equal(gonderimEylemi(bekleyen, 'A', new Date('2026-11-16T10:05:00Z')), 'gonder');
   });
 });
