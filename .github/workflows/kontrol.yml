@@ -54,10 +54,16 @@ jobs:
   kapsam:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Hangi işin koşacağını ve parça sayısını plan verir (3310 a): ci-kapsam.sh'in açtığı işte seçilen dosya kalmadıysa iş atlanır.
     outputs:
-      sunucu: ${{ steps.sec.outputs.sunucu }}
-      istemci: ${{ steps.sec.outputs.istemci }}
-      ekran: ${{ steps.sec.outputs.ekran }}
+      sunucu: ${{ steps.plan.outputs.sunucu }}
+      istemci: ${{ steps.plan.outputs.istemci }}
+      ekran: ${{ steps.plan.outputs.ekran }}
+      windows: ${{ steps.plan.outputs.windows }}
+      sunucu_matris: ${{ steps.plan.outputs.sunucu_matris }}
+      istemci_matris: ${{ steps.plan.outputs.istemci_matris }}
+      ekran_matris: ${{ steps.plan.outputs.ekran_matris }}
+      windows_matris: ${{ steps.plan.outputs.windows_matris }}
       eski: ${{ steps.uc.outputs.eski }}
     steps:
       - uses: actions/checkout@v4
@@ -95,9 +101,42 @@ jobs:
           # Süreç ikamesindeki hata yutulur ve testler sessizce atlanırdı: liste önce alınır, alınamazsa iş düşer. Yeniden
           # adlandırmada git yalnız yeni yolu verir; eski yol da listeye girsin diye --no-renames.
           degisenler=$(git diff --name-only --no-renames "$taban" HEAD)
+          printf '%s\n' "$degisenler" > "$RUNNER_TEMP/degisenler.txt"
           sonuc=$(printf '%s\n' "$degisenler" | OLAY="$OLAY" bash araclar/ci-kapsam.sh)
           echo "$sonuc"
           tail -n 3 <<< "$sonuc" >> "$GITHUB_OUTPUT"
+      # Plan aracı paket istemez: Node'un kendisiyle koşar, npm ci yoktur.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Dosya süreleri ana dal koşularında ölçülür ve önbelleğe yazılır (`sureler` işi); en yenisi alınır. Önbellek yoksa ya da
+      # dosyanın ölçüsü yoksa bölme sayıyla yapılır, hiçbir dosya atlanmaz.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci-sureler
+          key: ci-sureler-${{ github.run_id }}
+          restore-keys: ci-sureler-
+      # Çekme isteğinde değişen dosyaların ithal grafiğinde etkilediği testler ve etkilenen modüllerin ekran testleri seçilir
+      # (araclar/ci-plan.ts); ana dalda ve elle koşuda her dosya. Ana dal koşusu kırılmayı yakalar, canlı paket yalnız Windows
+      # yeşili etiketli commit'ten çıkar (3310 a).
+      - id: plan
+        shell: bash
+        env:
+          OLAY: ${{ github.event_name }}
+          SUNUCU: ${{ steps.sec.outputs.sunucu }}
+          ISTEMCI: ${{ steps.sec.outputs.istemci }}
+          EKRAN: ${{ steps.sec.outputs.ekran }}
+        run: |
+          # Ana dalda fark alınmaz (her şey koşar): araca boş girdi gider.
+          [ -f "$RUNNER_TEMP/degisenler.txt" ] || : > "$RUNNER_TEMP/degisenler.txt"
+          node araclar/ci-plan.ts plan --olay "$OLAY" --cikti ci-plan --sureler .ci-sureler/sureler.json \
+            < "$RUNNER_TEMP/degisenler.txt" | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-plan
+          path: ci-plan
+          if-no-files-found: ignore
+          retention-days: 7
 
   tip:
     runs-on: ubuntu-latest
@@ -242,7 +281,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3]
+        parca: ${{ fromJSON(needs.kapsam.outputs.istemci_matris) }}
     steps:
       - uses: actions/checkout@v4
       - id: node
@@ -262,10 +301,19 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
       - if: steps.paketler.outputs.cache-hit != 'true'
         run: npm ci
-      - run: npm run test:istemci -- --shard=${{ matrix.parca }}/3
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: ci-plan
+      # Dosyalar plandan (araclar/ci-plan.ts). vitest süzgeci yolun parçasıyla eşleşir: aynı adın .ts ve .tsx'i ikisi de koşar, eksik kalmaz.
+      - name: İstemci testleri, parça ${{ matrix.parca }}
+        run: |
+          mapfile -t dosyalar < <(sed 's#^istemci/##' "ci-plan/istemci-${{ matrix.parca }}.txt")
+          [ "${#dosyalar[@]}" -gt 0 ] || { echo 'Parça boş'; exit 1; }
+          npm run test:istemci -- "${dosyalar[@]}"
 
-  # node --test-shard dosyaları sırayla dağıtır, süreye bakmaz; birkaç uzun dosya ilk parçada toplanıyordu (altı parçada en
-  # uzunu ötekilerin ~1,25 katı). Sekiz parçada en uzun parçanın payı ~%30 azalır (1913 ölçümü). Parça sayısı değişirse süreler yeniden ölçülür.
+  # Parçalar ölçülmüş dosya süresiyle bölünür (araclar/ci-plan.ts, 3310 a): node --test-shard sırayla dağıtıyordu, aynı koşuda en
+  # kısa parça 6:09, en uzunu 9:39 sürdü (16.11 ölçümü). Parça sayısı üst sınırı araçtadır (PARCA).
   sunucu-test:
     needs: kapsam
     if: needs.kapsam.outputs.sunucu == 'true' && needs.kapsam.outputs.eski != 'true'
@@ -274,7 +322,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4, 5, 6, 7, 8]
+        parca: ${{ fromJSON(needs.kapsam.outputs.sunucu_matris) }}
     services:
       postgres:
         image: postgres:18
@@ -290,8 +338,10 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # Parçanın dosyaları plandan; dosya süreleri bir sonraki planın bölmesi için yazılır (3310 a).
     env:
-      TMIV2_TEST_PARCA: ${{ matrix.parca }}/8
+      TMIV2_TEST_DOSYALARI: ci-plan/sunucu-${{ matrix.parca }}.txt
+      TMIV2_TEST_SURE_DOSYASI: sure-sunucu-${{ matrix.parca }}.json
     steps:
       - uses: actions/checkout@v4
       - id: node
@@ -351,15 +401,25 @@ jobs:
           npm run goc
           # Testler CI'da asıl veritabanı yokken koşar; olsaydı ona dayanan test burada yeşil kalırdı (2306).
           psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres -c "DROP DATABASE $TMIV2_PG_DATABASE WITH (FORCE)"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: ci-plan
       - run: npm run test:sunucu
+      - name: Dosya süreleri
+        if: github.event_name == 'push' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sure-sunucu-${{ matrix.parca }}
+          path: sure-sunucu-${{ matrix.parca }}.json
+          if-no-files-found: ignore
+          retention-days: 3
 
   # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
   # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
   # Parçalara bölünür ki ekran işi CI süresini belirleyen iş olmasın; her parça kendi veritabanında koşar, oturum kurulumu her
-  # parçada yeniden koşar. Playwright testleri süreye göre değil, sırayla ve sayıya göre böler; sıra g360, g768, g1280'dir.
-  # 1280 testleri öteki iki genişliğin toplamı kadar sürer ve 360'ta atlanan testler de sayıya girer; dört parçada son
-  # iki parça ilk ikinin bir buçuk katıydı. Altı parçada en uzun parçanın test süresi ~5:25'ten ~4:00'e iner (1911 ölçümü).
-  # Parça sayısı değişirse süreler yeniden ölçülür.
+  # parçada yeniden koşar. Playwright'ın kendi bölmesi sayıya göreydi (en kısa parça 4:28, en uzunu 9:20; 16.11): parçalar artık
+  # dosya olarak ve ölçülmüş süreyle bölünür, her parça kendi dosyalarını üç genişlikte koşar (araclar/ci-plan.ts, 3310 a).
   ekran:
     needs: kapsam
     if: needs.kapsam.outputs.ekran == 'true' && needs.kapsam.outputs.eski != 'true'
@@ -368,7 +428,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4, 5, 6]
+        parca: ${{ fromJSON(needs.kapsam.outputs.ekran_matris) }}
     services:
       postgres:
         image: postgres:18
@@ -416,7 +476,31 @@ jobs:
       - run: npm run goc
       - run: npm run ekran:hazirla
       - run: npm run derle:istemci
-      - run: npm run ekran -- --shard=${{ matrix.parca }}/6
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: ci-plan
+      # Dosyalar plandan; her parça kendi dosyalarını üç genişlikte koşar, oturum kurulumu bağımlılık olarak her parçada koşar.
+      # Süzgeç playwright'ta düzenli ifadedir: dosya adı tam eşleşsin diye nokta kaçırılır ve başına yol ayırıcı konur.
+      - name: Ekran testleri, parça ${{ matrix.parca }}
+        env:
+          TMIV2_EKRAN_SURE_DOSYASI: ${{ runner.temp }}/ekran-rapor.json
+        run: |
+          mapfile -t dosyalar < "ci-plan/ekran-${{ matrix.parca }}.txt"
+          suzgec=()
+          for d in "${dosyalar[@]}"; do [ -n "$d" ] || continue; b=${d#ekran-testleri/}; suzgec+=("[\\/]${b//./\\.}\$"); done
+          [ "${#suzgec[@]}" -gt 0 ] || { echo 'Parça boş'; exit 1; }
+          npm run ekran -- "${suzgec[@]}"
+      - name: Dosya süreleri
+        if: github.event_name == 'push' && success()
+        run: node araclar/ci-plan.ts ekran-sure "$RUNNER_TEMP/ekran-rapor.json" "sure-ekran-${{ matrix.parca }}.json"
+      - if: github.event_name == 'push' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sure-ekran-${{ matrix.parca }}
+          path: sure-ekran-${{ matrix.parca }}.json
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Düşen testlerin görüntü ve izleri
         if: failure()
         uses: actions/upload-artifact@v4
@@ -430,18 +514,19 @@ jobs:
   # denensin diye sunucu testlerinden bir parça (çekirdek ve en riskli üç modül) koşar. Bütün sunucu testleri koşmaz: süre
   # Linux işlerinin toplamını aşar. Atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce
   # atlanırsa iş yine yeşil görünür. PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
-  # Tek makinede sunucu testleri 20-31 dk sürüyordu; dosyalar dört makineye bölünür (3018 a). Bölme ad sırasıyla dönüşümlüdür:
-  # her dosya tek parçaya düşer, dört parçanın toplamı desenlerin bulduğu kümenin tamamıdır ve parça 1 bunu sayarak denetler.
+  # Tek makinede sunucu testleri 20-31 dk sürüyordu; dosyalar en çok dört makineye bölünür (3018 a). Bölme plandan gelir
+  # (araclar/ci-plan.ts, Windows'ta ölçülen süreyle): her dosya tek parçaya düşer, birleşimi `windows-butunluk` denetler.
   windows:
     needs: kapsam
     # Çekme isteğinde de koşar (3216 b): bozan iş ana dala girmeden Windows'ta yakalanır. Etiket yine yalnız ana dal koşusundadır.
-    if: needs.kapsam.outputs.sunucu == 'true'
+    # Çekme isteğinde yalnız seçilen sunucu testlerinin Windows kümesindeki kesişimi koşar; kesişim boşsa iş atlanır (3310 a).
+    if: needs.kapsam.outputs.windows == 'true'
     # İptal yok (3018 a): yeni birleşme eski Windows koşusunu kesmez, her ana dal commit'inin kendi Windows sonucu olur;
     # kırmızıda bozan birleşme, kırmızı koşunun commit'idir (son yeşilden sonraki ilk kırmızı).
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4]
+        parca: ${{ fromJSON(needs.kapsam.outputs.windows_matris) }}
     runs-on: windows-latest
     timeout-minutes: 25
     # Windows çalıştırıcısında sekiz paralel test dosyasının yükü altında yeni bağlantının kurulması 5 sn'yi aşabiliyor.
@@ -519,46 +604,37 @@ jobs:
           test "${PIPESTATUS[0]}" -eq 0
           grep -qx '# skipped 0' test-cikti.txt && grep -qx '# todo 0' test-cikti.txt \
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
-      # Node hiçbir dosyayla eşleşmeyen deseni hata saymaz: her desenin dosya bulduğu önceden denetlenir ki yol farkı sessiz
-      # yeşil vermesin. Desenler node'a tırnaklı gider, node'un kendi glob'u açar.
-      - name: Sunucu testleri (çekirdek, stok, üretim emirleri, plan), parça ${{ matrix.parca }}/4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: ci-plan
+      # Dosyalar plandan (araclar/ci-plan.ts; desenler WINDOWS_DESENLERI, ölçülmüş Windows süresiyle bölünür). Bu parçanın node'a
+      # verdiği dosyalar günlüğe ve dosyaya yazılır; parçaların birleşimini `windows-butunluk` planla, ana dalda tam kümeyle de
+      # karşılaştırır. Süre raporcusu ayrı dosyaya yazar: tap çıktısı karışmaz.
+      - name: Sunucu testleri (çekirdek, stok, üretim emirleri, plan), parça ${{ matrix.parca }}
         env:
           PARCA: ${{ matrix.parca }}
+          TMIV2_TEST_SURE_DOSYASI: sure-windows-${{ matrix.parca }}.json
         run: |
-          desenler=('sunucu/cekirdek/**/*.test.ts' 'sunucu/moduller/stok/**/*.test.ts'
-            'sunucu/moduller/uretim-emirleri/**/*.test.ts' 'sunucu/moduller/plan/**/*.test.ts')
-          shopt -s globstar nullglob
-          tumu=()
-          for desen in "${desenler[@]}"; do
-            dosyalar=($desen)
-            [ "${#dosyalar[@]}" -gt 0 ] || { echo "Desen hiçbir test dosyası bulmadı: $desen"; exit 1; }
-            echo "$desen: ${#dosyalar[@]} dosya"
-            tumu+=("${dosyalar[@]}")
-          done
-          shopt -u globstar nullglob
-          # Ad sırası (LC_ALL=C) her makinede aynıdır; dönüşümlü dağıtım plan dosyalarını dört parçaya yayar.
-          mapfile -t sirali < <(printf '%s\n' "${tumu[@]}" | LC_ALL=C sort -u)
-          toplam=${#sirali[@]}
-          parcalar=(0 0 0 0)
-          benim=()
-          for k in "${!sirali[@]}"; do
-            p=$(( k % 4 + 1 ))
-            parcalar[$((p - 1))]=$(( parcalar[p - 1] + 1 ))
-            [ "$p" -eq "$PARCA" ] && benim+=("${sirali[$k]}")
-          done
-          echo "Parça dosya sayıları: ${parcalar[*]}; toplam $toplam; bu parça $PARCA: ${#benim[@]}"
-          [ $(( parcalar[0] + parcalar[1] + parcalar[2] + parcalar[3] )) -eq "$toplam" ] \
-            || { echo 'Parçaların toplamı test kümesine eşit değil'; exit 1; }
+          mapfile -t benim < <(tr -d '\r' < "ci-plan/windows-$PARCA.txt" | grep -v '^$')
           [ "${#benim[@]}" -gt 0 ] || { echo "Parça $PARCA boş"; exit 1; }
-          # Bu parçanın node'a verdiği dosyalar günlüğe ve dosyaya yazılır; dört parçanın birleşimini `windows-butunluk`
-          # tam kümeyle karşılaştırır (seçim satırı bozulursa parçalar aynı dosyaları koşar, oradaki karşılaştırma yakalar).
           printf '%s\n' "${benim[@]}" > "windows-parca-$PARCA.txt"
-          echo "Parça $PARCA dosyaları:"; cat "windows-parca-$PARCA.txt"
+          echo "Parça $PARCA dosyaları (${#benim[@]}):"; cat "windows-parca-$PARCA.txt"
           node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test \
-            --test-concurrency="$TMIV2_TEST_ESZAMANLI" --test-reporter=tap "${benim[@]}" 2>&1 | tee sunucu-test-cikti.txt
+            --test-concurrency="$TMIV2_TEST_ESZAMANLI" --test-reporter=tap --test-reporter-destination=stdout \
+            --test-reporter=./araclar/test-rapor-github.ts --test-reporter-destination=sure-rapor.txt \
+            "${benim[@]}" 2>&1 | tee sunucu-test-cikti.txt
           test "${PIPESTATUS[0]}" -eq 0
           grep -qx '# skipped 0' sunucu-test-cikti.txt && grep -qx '# todo 0' sunucu-test-cikti.txt \
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
+      - name: Dosya süreleri
+        if: github.event_name == 'push' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sure-windows-${{ matrix.parca }}
+          path: sure-windows-${{ matrix.parca }}.json
+          if-no-files-found: ignore
+          retention-days: 3
       # Liste yalnız testler yeşil bittiyse yüklenir: `windows-butunluk` dört listeyi de bulursa dört parça da yeşildir.
       - name: Parçanın koştuğu dosya listesi
         uses: actions/upload-artifact@v4
@@ -568,10 +644,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Dört Windows parçasının koştuğu dosyaların birleşimi, aynı desenlerin bulduğu tam kümeye eşit mi (3018 a). Eksik, fazla ya
-  # da iki parçada koşan dosya varsa ya da bir parçanın listesi yoksa (parça kırmızı ya da iptal) kırmızıdır; etiket buna bağlıdır.
+  # Windows parçalarının koştuğu dosyaların birleşimi plana eşit mi (3018 a, 3310 a). Eksik, fazla ya da iki parçada koşan dosya
+  # varsa ya da bir parçanın listesi yoksa (parça kırmızı ya da iptal) kırmızıdır. Plan araçtan geldiği için ana dalda plan ayrıca
+  # aynı desenlerin bulduğu tam kümeyle karşılaştırılır; çekme isteğinde plan tam kümenin alt kümesi olmalıdır. Etiket buna bağlıdır.
   windows-butunluk:
-    needs: windows
+    needs: [kapsam, windows]
     if: needs.windows.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -579,16 +656,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          name: ci-plan
+          path: ci-plan
+      - uses: actions/download-artifact@v4
+        with:
           pattern: windows-parca-*
           merge-multiple: true
           path: parcalar
-      - name: Dört parçanın birleşimi tam küme
+      - name: Parçaların birleşimi plan, plan tam küme
         shell: bash
+        env:
+          OLAY: ${{ github.event_name }}
+          MATRIS: ${{ needs.kapsam.outputs.windows_matris }}
         run: |
           set -euo pipefail
-          for p in 1 2 3 4; do
+          mapfile -t parcalar < <(jq -r '.[]' <<< "$MATRIS")
+          : > plan.txt; : > kosan.txt
+          for p in "${parcalar[@]}"; do
             [ -s "parcalar/windows-parca-$p.txt" ] || { echo "Parça $p listesi yok: parça yeşil bitmemiş"; exit 1; }
+            tr -d '\r' < "ci-plan/windows-$p.txt" | grep -v '^$' >> plan.txt
+            tr -d '\r' < "parcalar/windows-parca-$p.txt" | grep -v '^$' >> kosan.txt
           done
+          LC_ALL=C sort -o plan.txt plan.txt; LC_ALL=C sort -o kosan.txt kosan.txt
+          tekrar=$(uniq -d kosan.txt)
+          [ -z "$tekrar" ] || { echo "İki parçada koşan dosya:"; echo "$tekrar"; exit 1; }
+          diff plan.txt kosan.txt || { echo 'Koşan dosyalar plana eşit değil (< koşmayan, > fazla)'; exit 1; }
           desenler=('sunucu/cekirdek/**/*.test.ts' 'sunucu/moduller/stok/**/*.test.ts'
             'sunucu/moduller/uretim-emirleri/**/*.test.ts' 'sunucu/moduller/plan/**/*.test.ts')
           shopt -s globstar nullglob
@@ -596,11 +688,57 @@ jobs:
           for desen in "${desenler[@]}"; do tumu+=($desen); done
           shopt -u globstar nullglob
           printf '%s\n' "${tumu[@]}" | LC_ALL=C sort -u > tam.txt
-          cat parcalar/windows-parca-[1-4].txt | tr -d '\r' | LC_ALL=C sort > kosan.txt
-          tekrar=$(uniq -d kosan.txt)
-          [ -z "$tekrar" ] || { echo "İki parçada koşan dosya:"; echo "$tekrar"; exit 1; }
-          diff tam.txt kosan.txt || { echo 'Koşan dosyalar tam kümeye eşit değil (< koşmayan, > fazla)'; exit 1; }
-          echo "Dört parça: $(wc -l < kosan.txt) dosya, tam küme: $(wc -l < tam.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$OLAY" = pull_request ]; then
+            disarida=$(LC_ALL=C comm -23 plan.txt tam.txt)
+            [ -z "$disarida" ] || { echo "Planda Windows kümesi dışında dosya:"; echo "$disarida"; exit 1; }
+          else
+            diff tam.txt plan.txt || { echo 'Plan tam kümeye eşit değil (< plana girmeyen, > fazla)'; exit 1; }
+          fi
+          echo "${#parcalar[@]} parça: $(wc -l < kosan.txt) dosya, tam küme: $(wc -l < tam.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Ana dal koşusunun ölçtüğü dosya süreleri önbelleğe yazılır; sonraki koşuların planı en yenisini alır (3310 a). Önceki ölçüyle
+  # birleşir: bu koşuda ölçülmeyen dosyanın eski ölçüsü kalır. Yalnız ana dalda yazılır; çekme isteği okur, yazmaz.
+  # Kırmızı ya da atlanan parçanın süresi yoktur; o dosyalar eski ölçüyle kalır. Sonuç kapıya girmez.
+  sureler:
+    needs: [sunucu-test, ekran, windows]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci-sureler
+          key: ci-sureler-${{ github.run_id }}
+          restore-keys: ci-sureler-
+      # Hiç ölçü yüklenmediyse (bütün ağır işler atlandı) indirme boş döner; iş yine de geçer.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: sure-*
+          path: sure
+      - name: Süreleri birleştir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-sureler
+          argumanlar=()
+          for d in sure/*/*.json; do
+            [ -e "$d" ] || continue
+            is=$(basename "$d" | sed -E 's/^sure-([a-z]+)-[0-9]+\.json$/\1/')
+            argumanlar+=("$is=$d")
+          done
+          [ "${#argumanlar[@]}" -gt 0 ] || { echo 'Bu koşuda ölçü yok; önbellek değişmez.'; exit 0; }
+          node araclar/ci-plan.ts birlestir .ci-sureler/sureler.json .ci-sureler/sureler.json "${argumanlar[@]}"
+          echo "Ölçü dosyası: ${#argumanlar[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: hashFiles('.ci-sureler/sureler.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .ci-sureler
+          key: ci-sureler-${{ github.run_id }}
 
   kontrol:
     if: always()

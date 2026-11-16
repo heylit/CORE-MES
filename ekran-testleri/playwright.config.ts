@@ -11,6 +11,7 @@ const tarayici = process.env['TMIV2_EKRAN_TARAYICI']?.trim() || undefined;
 // Görüntü karşılaştırmasının temel görüntüleri depoya girmez (depoya yalnız kod girer); klasör verilmezse o testler atlanır.
 const temel = process.env['TMIV2_EKRAN_TEMEL']?.trim() || undefined;
 const ci = process.env['CI'] !== undefined;
+const sureDosyasi = process.env['TMIV2_EKRAN_SURE_DOSYASI']?.trim() || undefined;
 // Kapalı modülün sayfası uygulamada yoktur; kendi ekran testleri (`<modül>.spec.ts`, `<modül>-*.spec.ts`) modül açılınca yeniden koşar.
 const kapaliModulTestleri = KAPALI_MODULLER.map((ad) => new RegExp(`(^|[\\/])${ad}(-[^\\/]*)?\\.spec\\.ts$`));
 
@@ -32,7 +33,8 @@ export default defineConfig({
   workers: ci ? 4 : '50%',
   timeout: 45_000,
   expect: { timeout: 10_000, toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled', caret: 'hide' } },
-  reporter: ci ? [['list'], ['github']] : [['list']],
+  // Süre dosyası CI'da parçaları süreye göre bölmek içindir (araclar/ci-plan.ts); playwright'ın kendi json raporcusu.
+  reporter: [['list'], ...(ci ? [['github'] as const] : []), ...(sureDosyasi === undefined ? [] : [['json', { outputFile: sureDosyasi }] as const])],
   use: {
     baseURL: 'http://127.0.0.1:4101',
     locale: 'tr-TR',
