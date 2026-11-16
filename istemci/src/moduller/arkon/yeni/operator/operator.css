@@ -1170,6 +1170,7 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 .tc-ay1-gosterge-cubuk rect { fill: var(--c); }
 .tc-ay1-gosterge > b { font-size: var(--yazi-m); white-space: nowrap; }
 .tc-ay1-gosterge > small { font-size: var(--yazi-s); color: var(--muted); }
+.tc-ay1-gosterge > small[data-eksik] { color: var(--hold); font-weight: 700; }
 .tc-ay1-dar .tc-ay1-gosterge { inline-size: calc(var(--dokunma) * 1.5); }
 .tc-ay1-dar .tc-ay1-gosterge-cubuk { inline-size: var(--b-5); }
 /* Telefonda kadranın solu malzeme göstergesinindir: Hatalı yazısı kadran kutusunun sol alt köşesine (dairenin dışı) geçer. */

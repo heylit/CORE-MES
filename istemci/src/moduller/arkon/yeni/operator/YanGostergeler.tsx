@@ -30,7 +30,8 @@ export function MalzemeGostergesi({ istasyon, emirId }: { istasyon: string; emir
       <span className="tc-ay1-gosterge-ad">Malzeme</span>
       <Cubuk oran={oran} ad="Malzeme" />
       <b>{sayi(y.adetlik)} adetlik</b>
-      <small>{miktarYazi(y.miktar)}{birim}</small>
+      {/* Kalan işe yetmiyorsa eksik adet yazar (oran yeşil olsa da operatör ne kadar isteyeceğini görür); yetiyorsa miktar. */}
+      {y.adetlik < y.kalanAdet ? <small data-eksik="">{sayi(y.kalanAdet - y.adetlik)} adet eksik</small> : <small>{miktarYazi(y.miktar)}{birim}</small>}
     </button>
   );
 }

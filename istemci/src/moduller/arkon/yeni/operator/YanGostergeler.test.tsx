@@ -20,7 +20,7 @@ describe('sayacın yan göstergeleri', () => {
     const m = screen.getByRole('meter', { name: 'Malzeme %60' });
     expect(m.getAttribute('aria-valuenow')).toBe('60');
     expect(screen.getByText('9 adetlik')).toBeTruthy();
-    expect(screen.getByText('3,6 m')).toBeTruthy();
+    expect(screen.getByText('6 adet eksik')).toBeTruthy();
     expect(screen.getByRole('button').getAttribute('data-ton')).toBe('tamam');
     fireEvent.click(screen.getByRole('button'));
     expect(durum.acilan).toEqual([{ istasyonId: 7, uretimEmriId: 42, malzemeId: null }]);
