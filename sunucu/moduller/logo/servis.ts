@@ -2,12 +2,12 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
+import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoKayitNolari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
@@ -19,7 +19,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { PROJE_AYARI, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
@@ -1678,4 +1678,22 @@ export async function kontrol(kopru: KopruIstemcisi | null, saat: () => Date = (
   // 3314: canlı kontrol sürümü de sorar; sonuç hazırlık ve bağlantı izleme ekranında görünür.
   if (adimlar.some((a) => a.sonuc === 'tamam')) await yardimciSurumunuSor(kopru, saat);
   return { zaman, ulasildi: adimlar.some((a) => a.sonuc === 'tamam'), adimlar };
+}
+
+// 3344: liste ve ayrıntıdaki Logo rozeti. Logo'ya istek atılmaz; giden kutusu, süreç belleğindeki bekleme ve (malzemede) kartın kayıt
+// numarası okunur. Eskimiş bekleme sayılmaz (izlemeyle aynı süre).
+export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly number[], simdi: Date): Promise<LogoRozetCevabi> {
+  const tekil = [...new Set(idler)];
+  const belgeler = ROZET_BELGELERI[tur] as readonly BelgeTuru[];
+  const giden = new Map<number, GidenSatiri>();
+  for (const b of belgeler) for (const g of await s.gidenSatirlari(db, b, tekil)) if (!giden.has(g.belgeNo) || g.logoKayitNo !== null) giden.set(g.belgeNo, g);
+  const bagli = tur === 'malzeme' ? await logoKayitNolari(db, tekil) : new Map<number, string>();
+  const durumlar: LogoRozetCevabi['durumlar'] = [];
+  for (const id of tekil) {
+    const v = belgeler.map((b) => kartBekleyenBelgeler.get(kartKaydiAnahtari(b, id))).find((x) => x !== undefined) ?? null;
+    const bekleyen = v !== null && simdi.getTime() - v.goruldu.getTime() <= KART_BEKLEYEN_ESKIME_MS ? v : null;
+    const d = belgeRozetDurumu(giden.get(id) ?? null, bekleyen, bagli.get(id) ?? null);
+    if (d !== null) durumlar.push({ id, ...d });
+  }
+  return { durumlar };
 }

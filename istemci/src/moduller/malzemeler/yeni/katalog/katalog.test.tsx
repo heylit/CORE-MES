@@ -506,3 +506,35 @@ describe('3275 a: katalog gruplu tablo', () => {
     expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: 'Onay' })).toBeNull();
   });
 });
+
+describe('3344 Katalog: Logo rozeti', () => {
+  const rozet = (): Record<string, Yanit> => ({
+    'GET /logo/belge-durumlari': () => json(200, { durumlar: [
+      { id: 1, durum: 'logoda', kayitNo: '4211', neden: null },
+      { id: 2, durum: 'durdu', kayitNo: null, neden: 'Birim Logo\'da yok' },
+    ] }),
+  });
+
+  test('görünen sayfanın kartları tek istekle sorulur; sütun durumu ve nedeni yazar', async () => {
+    const istekler = kur(YONETICI, rozet());
+    yeniEkranAc(KOK);
+    const tablo = within(await screen.findByRole('table', { name: 'Malzeme kataloğu' }));
+    expect(await tablo.findByText('Logo\'da')).toBeTruthy();
+    expect(tablo.getByText('Durdu')).toBeTruthy();
+    expect(tablo.getByText('Birim Logo\'da yok')).toBeTruthy();
+    const sorular = istekler.filter((i) => i.yol.startsWith('/logo/belge-durumlari'));
+    expect(sorular.map((i) => i.yol)).toEqual(['/logo/belge-durumlari?tur=malzeme&id=1,2']);
+  });
+
+  test('kart penceresinin başında "Logo: Durdu" ve neden görünür; okunamazsa "Okunamadı"', async () => {
+    kur(YONETICI, rozet());
+    yeniEkranAc(KOK);
+    const p = within(await kartiAc('SF-GEN-00001'));
+    expect(await p.findByText('Logo: Durdu')).toBeTruthy();
+    expect(p.getByText('Birim Logo\'da yok')).toBeTruthy();
+    cleanup();
+    kur(YONETICI, { 'GET /logo/belge-durumlari': () => json(500, { kod: 'HATA', mesaj: 'x' }) });
+    yeniEkranAc(KOK);
+    expect((await screen.findAllByText('Okunamadı')).length).toBeGreaterThan(0);
+  });
+});

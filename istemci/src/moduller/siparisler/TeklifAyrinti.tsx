@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { PlanTaslaklariCevabi, SiparisDonusumCevabi, TeklifAyrintiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
@@ -81,6 +81,8 @@ export function TeklifAyrinti() {
     onError: (h) => { kartSatiriYaz(null); bildir('hata', yazmaIletisi(h, 'Malzeme seçilemedi.')); if (surumCakismasiMi(h)) void istemci.invalidateQueries({ queryKey: anahtarlar.teklif(id) }); },
   });
 
+  // 3344: Logo'ya gidiş rozeti başlıkta; nedeni rozetin ipucunda ve listede.
+  const logo = useLogoRozetleri('teklif', Number.isSafeInteger(id) && id > 0 ? [id] : []);
   if (teklif.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (teklif.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(teklif.error, 'Teklif alınamadı')} yenile={() => { void teklif.refetch(); }} />;
   const t = teklif.data;
@@ -160,7 +162,7 @@ export function TeklifAyrinti() {
       <SayfaBasligi
         baslik={t.baslik}
         alt={`${t.firmaAd ?? `Firma ${t.firmaId}`}, ${zamanMetni(t.olusturma)} tarihinde açıldı. İstenen teslim: ${tarihMetni(t.istenenTarih)}.`}
-        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet></>)}
+        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /></>)}
         geriYol="/siparisler/teklifler"
         geriMetni="Tekliflere dön"
         islemler={islemler || undefined}

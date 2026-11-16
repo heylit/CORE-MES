@@ -294,3 +294,29 @@ export const LOGO_PROJE_DURUMLARI = ['logoda', 'sirada', 'yeniden-denenecek', 'd
 export const logoProjeParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const logoProjeDurumuCevabi = z.object({ durum: z.enum(LOGO_PROJE_DURUMLARI), logoKodu: z.string().nullable(), metin: z.string().nullable() });
 export type LogoProjeDurumuCevabi = z.output<typeof logoProjeDurumuCevabi>;
+
+// 3344: belgenin Logo'ya gidiş rozeti (liste ve ayrıntı). Logo'ya istek atılmaz; giden kutusu ve bekleme izinden okunur.
+// Logo'ya hiç gitmeyecek belge listede yoktur (rozet çizilmez).
+export const LOGO_ROZET_TURLERI = ['malzeme', 'proje', 'satis-siparisi', 'teklif', 'satin-alma-siparisi'] as const;
+export const LOGO_ROZET_DURUMLARI = ['logoda', 'sirada', 'yeniden-denenecek', 'kart-bekliyor', 'proje-bekliyor', 'durdu'] as const;
+export const LOGO_ROZET_SINIRI = 200;
+export const logoRozetSorgusu = z.object({
+  tur: z.enum(LOGO_ROZET_TURLERI),
+  id: z.string().trim().min(1, 'En az bir kimlik verin.')
+    .transform((v) => v.split(',').map((p) => Number(p.trim())))
+    .pipe(z.array(z.number().int().positive()).max(LOGO_ROZET_SINIRI, `En çok ${LOGO_ROZET_SINIRI} kimlik.`)),
+});
+export type LogoRozetSorgusu = z.input<typeof logoRozetSorgusu>;
+export type LogoRozetTuru = (typeof LOGO_ROZET_TURLERI)[number];
+export type LogoRozetDurumu = (typeof LOGO_ROZET_DURUMLARI)[number];
+export const logoRozetCevabi = z.object({
+  durumlar: z.array(z.object({
+    id: z.number().int().positive(),
+    durum: z.enum(LOGO_ROZET_DURUMLARI),
+    // Logo'daki belgenin kayıt numarası; yalnız "logoda" durumunda ve biliniyorsa.
+    kayitNo: z.string().nullable(),
+    // Gitmeyen belgenin nedeni (Logo'nun ya da CORE'un iletisi); "logoda" ve "sirada"da null.
+    neden: z.string().nullable(),
+  })),
+});
+export type LogoRozetCevabi = z.output<typeof logoRozetCevabi>;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dugme, OnayPenceresi, Pencere } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, LogoRozeti, OnayPenceresi, Pencere, useLogoRozetleri } from '../../../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { Foy } from '../ortak/Foy.tsx';
 import { KartKesiti } from '../olcu-modeli/OlcuModeli.tsx';
@@ -47,6 +47,8 @@ export function KartPenceresi({
   const hizmet = x.tur === 'hizmet';
   const kilitli = K.pasifKilitli(x, b);
   const baslik = `${x.com.kod} ${x.com.ad}`.trim();
+  const logo = useLogoRozetleri('malzeme', [kart.no]);
+  const logoDurumu = logo.durum(kart.no);
   return (
     <Pencere
       acik
@@ -71,6 +73,12 @@ export function KartPenceresi({
         </div>
       )}
     >
+      {(logoDurumu !== null || logo.hata) && (
+        <div className="tc-mk-logo-durum">
+          <LogoRozeti bilgi={logoDurumu} hata={logo.hata} baslik />
+          {logoDurumu?.neden && <small className="tc-mk-soluk">{logoDurumu.neden}</small>}
+        </div>
+      )}
       {yerine && (
         <p className="tc-mk-uyari" data-ton="hata">
           <b>Bu kart birleştirildi.</b> Yerine{' '}

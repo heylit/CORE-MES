@@ -972,6 +972,14 @@ export function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<{ 
   );
 }
 
+// 3344: kartın Logo kayıt numarası (gönderilmiş ya da Logo'da bulunup bağlanmış); rozet için.
+export function logoKayitNolari(db: Db, nolar: readonly number[]): Promise<{ no: number; logoKayitNo: string }[]> {
+  return db.sorgu(
+    `SELECT no, logo_kayit_no::text AS "logoKayitNo" FROM malzeme_katalog_karti WHERE no = ANY($1::int[]) AND logo_kayit_no IS NOT NULL`,
+    [nolar],
+  );
+}
+
 // Logo kayıt numarasıyla bağlı ya da aynı stok kodlu kartlar (iptal dahil: kodu yeniden verilmez).
 export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
   return db.sorgu(

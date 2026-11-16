@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
 import { go } from '../merkez/ui.ts';
@@ -27,9 +27,10 @@ function logoDurumu(s: SiparisSatiri): [RozetTonu, string, string] | null {
   if (l.kapatmaDurumu === 'gonderildi') return ['pasif', 'Kalanı kapatıldı', l.kayitNo ?? ''];
   if (l.bekletmeDurumu === 'hata') return ['hata', l.bekletmeIstegi === 'beklet' ? 'Bekletme hatası' : 'Serbest bırakma hatası', l.bekletmeHata ?? ''];
   if (l.bekletmeIstegi === 'beklet' && l.bekletmeDurumu === 'gonderildi') return ['uyari', "Logo'da bekletiliyor", l.kayitNo ?? ''];
-  if (l.durum === 'gonderildi') return ['tamam', "Logo'da", l.kayitNo ?? ''];
-  if (l.durum === 'hata') return ['hata', 'Hata', l.hata ?? ''];
-  return ['uyari', 'Sırada', ''];
+  // 3344: temel üç durum ortak Logo rozetinin ad ve tonuyla (öteki belgelerle aynı görünür).
+  if (l.durum === 'gonderildi') return [LOGO_DURUM_TONU.logoda, LOGO_DURUM_ADI.logoda, l.kayitNo ?? ''];
+  if (l.durum === 'hata') return [LOGO_DURUM_TONU.durdu, LOGO_DURUM_ADI.durdu, l.hata ?? ''];
+  return [LOGO_DURUM_TONU.sirada, LOGO_DURUM_ADI.sirada, ''];
 }
 // 2449 kalıbı: üstte gelen / sipariş, altta kalan; tek kalemde miktarla, çok kalemde kalem sayısıyla.
 const gelenUst = (s: SiparisSatiri) => (s.tek ? `${nfm.format(s.tek.gelen)} / ${nfm.format(s.tek.miktar)} ${s.tek.birim}` : `${s.gelenKalem} / ${s.kalem} kalem`);

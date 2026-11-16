@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FisGonderimSekli, LogoFisBilgisi, LogoFisDurumu, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
+import type { LogoRozetDurumu, LogoRozetTuru } from '#paylasilan/sozlesme/logo.ts';
 
 // Logo bağlantısı kuralları (kart #207). Saf: saat ve ağ dışarıdan gelir.
 // Köprü sözleşmesinin bilinen kısmı yalnız burada ve kopru.ts'tedir; kılavuzun kendisi depoya girmez.
@@ -1773,3 +1774,26 @@ export function hareketFisAdi(trCode: number): string {
 // Kart bölümünde bir seferde gösterilen hareket sayısı; yardımcı geriye okumayı bilmiyorsa okunan en çok sayfa (500'lük).
 export const KART_HAREKET_SAYFASI = 20;
 export const KART_HAREKET_ESKI_YOL_SAYFA_SINIRI = 10;
+
+// 3344: ekrandaki belge türünün giden kutusundaki karşılığı. Malzeme kartı malzeme ya da hizmet olarak gider (belge no kartın numarası).
+export const ROZET_BELGELERI: Readonly<Record<LogoRozetTuru, readonly string[]>> = Object.freeze({
+  malzeme: ['malzeme', 'hizmet'],
+  proje: ['proje'],
+  'satis-siparisi': ['siparisler-siparisi'],
+  teklif: ['siparisler-teklifi'],
+  'satin-alma-siparisi': ['siparis'],
+});
+// Logo'da olan önce gelir (gönderilmiş ya da Logo'da bulunup bağlanmış); sonra süreç belleğindeki bekleme (kart ya da proje), sonra giden kutusu.
+// Gidecek izi olmayan belge için rozet yoktur (null): Logo'ya gitmeyen tür ya da ayarı kapalı.
+export function belgeRozetDurumu(
+  g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null; sonHata: string | null; logoKayitNo: string | null } | null,
+  bekleyen: { durum: 'kart-bekliyor' | 'proje-bekliyor'; ileti: string } | null,
+  bagliKayitNo: string | null,
+): { durum: LogoRozetDurumu; kayitNo: string | null; neden: string | null } | null {
+  const kayitNo = g?.logoKayitNo ?? bagliKayitNo;
+  if (kayitNo !== null) return { durum: 'logoda', kayitNo, neden: null };
+  if (bekleyen !== null) return { durum: bekleyen.durum, kayitNo: null, neden: bekleyen.ileti };
+  if (g === null) return null;
+  const durum = gidenIzlemeDurumu(g);
+  return { durum, kayitNo: null, neden: durum === 'sirada' ? null : g.sonHata };
+}
