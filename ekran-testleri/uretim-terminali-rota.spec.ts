@@ -81,6 +81,17 @@ test.describe('rota şeridi elle kayar', () => {
       await ok.click();
       await expect.poll(() => ol.evaluate((x) => x.scrollLeft)).toBeGreaterThan(once);
     }
+    // 3338-6 a: üstte istasyonun işleri; ekrandaki iş şeridin ortasında. Çark yok; malzeme ve üretilen göstergeleri üst üste binmez.
+    const sira = page.getByRole('region', { name: 'Sıradaki işler' });
+    await expect(sira).toBeVisible();
+    await expect(page.getByRole('region', { name: 'İş ve makine çarkı' })).toHaveCount(0);
+    const ekranda = sira.getByRole('button', { name: /· ekranda$/ });
+    await expect.poll(async () => {
+      const [k, s] = await Promise.all([ekranda.boundingBox(), sira.getByRole('list').boundingBox()]);
+      return k && s ? Math.abs(k.x + k.width / 2 - (s.x + s.width / 2)) : 999;
+    }).toBeLessThan(3);
+    const [malzeme, kadran] = await Promise.all([page.getByRole('meter', { name: 'Malzeme %90' }).boundingBox(), page.locator('.tc-ay1-kadran').first().boundingBox()]);
+    expect(malzeme && kadran ? malzeme.x + malzeme.width <= kadran.x + 1 : false).toBe(true);
     // Sayacın iki yanında malzeme (9 / 10 adetlik) ve üretilen göstergesi.
     await expect(page.getByRole('meter', { name: 'Malzeme %90' })).toBeVisible();
     await expect(page.getByRole('meter', { name: /^Üretilen %/ })).toBeVisible();

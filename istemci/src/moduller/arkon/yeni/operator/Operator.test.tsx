@@ -121,23 +121,23 @@ describe('A1 Üretim Terminali', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
-  it('790: çark başka işe yalnız bakar; resim ve adımlar önizlenir; geçiş "Bu işe geç" ile, yazma yok', async () => {
+  it('3338-6 a: Sıradaki işler şeridi başka işe yalnız bakar; resim ve adımlar önizlenir; geçiş "Bu işe geç" ile, yazma yok', async () => {
     const ikinci = { ...PAKET, id: 'pk-deneme-cark', no: 'IE-DENEME-3', part: 'Deneme ikinci parça' };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     arkonAc('/uretim-terminali');
-    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
-    expect(within(cark).getByText(/Ekranda · sayaç/)).toBeTruthy();
-    expect(within(cark).getByText('Ekranda')).toBeTruthy();
-    // 828 a: ekrandaki işin tam kartı çarkın altındadır; çevirmek onu değiştirmez.
+    const serit = await screen.findByRole('region', { name: 'Sıradaki işler' }, { timeout: 10000 });
+    expect(screen.queryByRole('region', { name: 'İş ve makine çarkı' })).toBeNull();
+    expect(within(serit).getByRole('button', { name: /· ekranda$/ }).getAttribute('aria-pressed')).toBe('true');
     const ilk = within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent;
-    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
-    expect(within(cark).getByText(/Önizleme · ekrandaki iş değişmez/)).toBeTruthy();
+    const oteki = () => within(serit).getAllByRole('button', { pressed: false }).find((x) => /^IE-DENEME-(1|3)$/.test(x.getAttribute('aria-label') ?? ''))!;
+    fireEvent.click(oteki());
+    expect(within(serit).getByText(/Önizleme · ekrandaki iş değişmez/)).toBeTruthy();
     expect(screen.getByText(/Önizleme · IE-DENEME-(1|3) · teknik resim ve adımlar salt okunur/)).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent).toBe(ilk);
-    fireEvent.click(within(cark).getByRole('button', { name: 'Ekrandakine dön' }));
+    fireEvent.click(within(serit).getByRole('button', { name: 'Ekrandakine dön' }));
     expect(screen.queryByText(/teknik resim ve adımlar salt okunur/)).toBeNull();
-    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
-    fireEvent.click(within(cark).getByRole('button', { name: 'Bu işe geç' }));
+    fireEvent.click(oteki());
+    fireEvent.click(within(serit).getByRole('button', { name: 'Bu işe geç' }));
     const yeni = await screen.findByRole('region', { name: 'Aktif iş emri' });
     expect(within(yeni).getByRole('heading').textContent).not.toBe(ilk);
     await new Promise((r) => setTimeout(r, 700));
@@ -149,20 +149,20 @@ describe('A1 Üretim Terminali', () => {
     const tesis = { ...TESIS, mcs: [{ id: 'MK-1', name: 'Deneme makine 1', st: 'IST-1' }, { id: 'MK-2', name: 'Deneme makine 2', st: 'IST-1' }] };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 2, govde: { v: tesis } }] } });
     arkonAc('/uretim-terminali');
-    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
-    const makineler = () => fireEvent.click(within(within(cark).getByRole('group', { name: 'Çark şeridi' })).getByRole('button', { name: /Makineler/ }));
-    const isler = () => fireEvent.click(within(within(cark).getByRole('group', { name: 'Çark şeridi' })).getByRole('button', { name: /İşler/ }));
-    // Önceki testlerin yerel kopyası kalabilir: tesis yeni sürümle gelir, listede en az iki iş yeter.
-    await within(cark).findByRole('button', { name: /^İşler · ([2-9]|\d{2,})$/ }, { timeout: 10000 });
-    makineler();
-    fireEvent.click(within(cark).getByRole('button', { name: 'Bu makinede çalış' }));
-    expect(within(cark).getByText('1 makine seçili')).toBeTruthy();
-    isler();
-    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
-    fireEvent.click(within(cark).getByRole('button', { name: 'Bu işe geç' }));
-    makineler();
-    await waitFor(() => { expect(within(cark).queryByText('1 makine seçili')).toBeNull(); });
-    expect(within(cark).getByRole('button', { name: 'Bu makinede çalış' })).toBeTruthy();
+    // 3338-6 a: makine üst çubuktaki kutudan seçilir; kural makine seçicininkidir.
+    const makineler = async () => { fireEvent.click(await screen.findByTitle('Makine · dokununca seçilir', undefined, { timeout: 10000 })); return screen.findByRole('dialog', { name: 'İstasyon ve makine' }); };
+    const serit = await screen.findByRole('region', { name: 'Sıradaki işler' }, { timeout: 10000 });
+    await waitFor(() => { expect(within(serit).getAllByRole('listitem').length).toBeGreaterThanOrEqual(2); }, { timeout: 10000 });
+    let p = await makineler();
+    fireEvent.click(within(p).getAllByRole('button', { name: 'Bu makinede çalış' })[0]!);
+    expect(within(p).getAllByText('1 makine seçili').length).toBeGreaterThan(0);
+    fireEvent.click(within(p).getByRole('button', { name: /Kapat/ }));
+    fireEvent.click(within(serit).getAllByRole('button', { pressed: false })[0]!);
+    fireEvent.click(within(serit).getByRole('button', { name: 'Bu işe geç' }));
+    p = await makineler();
+    await waitFor(() => { expect(within(p).queryByText('1 makine seçili')).toBeNull(); });
+    expect(within(p).getAllByRole('button', { name: 'Bu makinede çalış' }).length).toBe(2);
+    fireEvent.click(within(p).getByRole('button', { name: /Kapat/ }));
     fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
     const baslatma = olaylar(istekler).find((e) => e.state === 'running') as { mcs?: unknown } | undefined;
@@ -171,30 +171,6 @@ describe('A1 Üretim Terminali', () => {
     await waitFor(() => { expect(sonuclar(istekler).some((r) => r.state === 'running')).toBe(true); }, { timeout: 10000 });
   }, 40000);
 
-  it('2125-1 b: İşlerim şeridi başka istasyondaki makinede çalışan işi gösterir; "İstasyona geç" cihazın istasyonunu değiştirir, yazma yok', async () => {
-    const tesis = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
-    const istekler = sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 3, govde: { v: tesis } }] } });
-    const asil = globalThis.fetch;
-    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
-      if (new URL(adres, 'http://tmi.yerel').pathname === '/api/arkon/islerim') {
-        istekler.push({ yontem: 'GET', yol: '/arkon/islerim', govde: null });
-        return new Response(JSON.stringify({ isler: [{
-          emirId: 55, emirNo: 'UE-DENEME-55', isEmriId: 550, opNo: 30, istasyon: 'IST-2', istasyonAd: 'Deneme ikinci tezgah', mc: 'MK-9', makineAd: 'Deneme makine 9',
-          giris: new Date(Date.now() - 25 * 60_000).toISOString(),
-        }] }), { status: 200, headers: { 'content-type': 'application/json' } });
-      }
-      return asil(adres, ayar);
-    }));
-    arkonAc('/uretim-terminali');
-    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
-    fireEvent.click(await within(cark).findByRole('button', { name: /İşlerim · 1/ }, { timeout: 10000 }));
-    expect(within(cark).getByText('MK-9')).toBeTruthy();
-    expect(within(cark).getByText(/UE-DENEME-55 · Op 30/)).toBeTruthy();
-    expect(within(cark).getByText(/Çalışıyor · 2\d dk/)).toBeTruthy();
-    fireEvent.click(within(cark).getByRole('button', { name: 'İstasyona geç' }));
-    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('IST-2'); });
-    expect(yazmalar(istekler)).toEqual([]);
-  }, 40000);
 
   // 3298: üst şerit sade; tema kabuğun Hesap menüsünde, öteki Arkon sayfaları ana menüde, Vardiya özeti Hesap menüsündedir.
   it.each([['geniş ekranda', false], ['telefonda', true]] as const)('3298: %s üst şeritte Tema, Menü ve vardiya kişi düğmesi yok', async (_ad, dar) => {
@@ -282,22 +258,21 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     expect(within(screen.getByRole('dialog', { name: 'Neden durdu?' })).queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
   }, 40000);
 
-  it('793 b: istasyon çarkın İstasyonlar şeridinden değişir; geçiş cihazın istasyonunu yazar, üst çubuk yalnız adı gösterir', async () => {
+  it('3338-6 a: istasyon üst çubuktaki kutudan değişir; geçiş cihazın istasyonunu yazar; çark yok', async () => {
     const ikiIstasyon = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
     sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 7, govde: { v: ikiIstasyon } }] } });
     window.localStorage.setItem('arkon:station', JSON.stringify('IST-1'));
     arkonAc('/uretim-terminali');
-    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
-    expect(screen.queryByRole('button', { name: /İstasyonu değiştir/ })).toBeNull();
-    fireEvent.click(within(cark).getByRole('button', { name: /İstasyonlar · 2/ }));
-    expect(within(cark).getByText(/Bu cihazın istasyonu/)).toBeTruthy();
-    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: istasyonlar' }));
-    fireEvent.click(within(cark).getByRole('button', { name: 'Bu istasyona geç' }));
+    fireEvent.click(await screen.findByTitle('İstasyon · dokununca değişir', undefined, { timeout: 10000 }));
+    expect(screen.queryByRole('region', { name: 'İş ve makine çarkı' })).toBeNull();
+    const p = await screen.findByRole('dialog', { name: 'İstasyon ve makine' });
+    expect(within(p).getByText(/Bu cihazın istasyonu/)).toBeTruthy();
+    fireEvent.click(within(p).getByRole('button', { name: 'Bu istasyona geç' }));
     expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('IST-2');
     await waitFor(() => { expect(screen.getAllByText('IST-2').length).toBeGreaterThan(0); }, { timeout: 10000 });
   }, 40000);
 
-  it('793 b: yalnız kendi istasyonu olan operatörde İstasyonlar şeridi yok (reddedilen)', async () => {
+  it('793 b: yalnız kendi istasyonu olan operatörde istasyon seçilmez (reddedilen)', async () => {
     telefon();
     const ikiIstasyon = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
     sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 7, govde: { v: ikiIstasyon } }] } });
@@ -305,6 +280,8 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: /İstasyonlar ·/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bu istasyona geç' })).toBeNull();
+    // 3338-6 a: seçecek istasyon ya da makine yoksa istasyon kutusu düz yazıdır.
+    expect(screen.queryByTitle('İstasyon ve makine · dokununca seçilir')).toBeNull();
   }, 40000);
 
   it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {

@@ -1228,3 +1228,56 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 }
 .tc-ay1-tl-eksik { margin: var(--b-2) 0; padding-inline-start: var(--b-4); }
 .tc-ay1-tl-disarida { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--stop); font-size: var(--yazi-xs); font-weight: 800; }
+
+/* 3338-6 a: üstte istasyonun işleri (kayan şerit), altında işin satırı, altında rota. Kart genişliği sabit, şerit yatay kayar; ekrandaki
+   kart sarı çerçeveli, bakılan kart vurgulu, biten işler soluk. Genişte başlık solda (rota şeridiyle aynı düzen), telefonda üstte. */
+.tc-ay1-sira {
+  --tc-sira-kart: calc(var(--dokunma-ana) * 5.5);
+  display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-4); background: var(--panel);
+}
+.tc-ay1-sira-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; font-size: var(--yazi-m); }
+.tc-ay1-sira-ust small { color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-ay1-sira-govde { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
+.tc-ay1-sira ol {
+  display: flex; gap: var(--b-2); flex: 1 1 auto; margin: 0; padding: var(--b-1) calc(50% - var(--tc-sira-kart) / 2); list-style: none; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, var(--ink) var(--b-6), var(--ink) calc(100% - var(--b-6)), transparent);
+}
+.tc-ay1-sira ol::-webkit-scrollbar { display: none; }
+.tc-ay1-sira li { flex: none; inline-size: var(--tc-sira-kart); scroll-snap-align: center; }
+.tc-ay1-sira li[data-bitti] { opacity: var(--saydam-70); }
+.tc-ay1-sira li > button { display: block; inline-size: 100%; block-size: 100%; padding: 0; border: 0; border-radius: var(--yari-3); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.tc-ay1-sira li > button > .tc-ay1-tcark-kart { block-size: 100%; }
+.tc-ay1-sira .tc-ay1-tcark-kart[data-ekranda] { outline: var(--cizgi) solid var(--hazard); }
+.tc-ay1-sira li > button[aria-pressed='true'] > .tc-ay1-tcark-kart:not([data-ekranda]) { outline: var(--cizgi) solid var(--done); }
+.tc-ay1-sira-eylem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-ay1-genis .tc-ay1-sira { grid-template-columns: calc(var(--dokunma-ana) * 2.6) minmax(0, 1fr); align-items: center; column-gap: var(--b-3); }
+.tc-ay1-genis .tc-ay1-sira-eylem { grid-column: 1 / -1; }
+.tc-ay1-genis .tc-ay1-sira-ust { display: grid; gap: 0; }
+.tc-ay1-genis .tc-ay1-sira-ust > .tc-simge { display: none; }
+.tc-ay1-genis > .tc-ay1-aktif { flex: none; padding: var(--b-2) var(--b-3); align-items: center; }
+.tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik:not([data-bos]) .tc-ay1-is-alanlari { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-5); }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alan { min-width: 0; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-baslik { font-size: var(--yazi-m); }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alan-emir { grid-column: auto; }
+.tc-ay1-genis > .tc-ay1-aktif > .tc-ay1-kimlik-alt { flex: none; }
+/* Telefonda ve tablette sayaç boyu için şerit tek sıradır: solda sayaç, sağda kartlar; kart emir no ve adettir, durum kenar rengindedir,
+   ekrandaki kart çerçevelidir. Ayrıntı alttaki iş satırında ve Bilgiler'de. */
+.tc-ay1-dar .tc-ay1-sira { --tc-sira-kart: calc(var(--dokunma) * 3.6); flex: none; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--b-1) var(--b-2); padding: var(--b-1) var(--b-2); }
+.tc-ay1-dar .tc-ay1-sira-eylem { grid-column: 1 / -1; }
+.tc-ay1-dar .tc-ay1-sira-ust { display: grid; justify-items: center; gap: 0; font-size: var(--yazi-xs); }
+.tc-ay1-dar .tc-ay1-sira-ust > b { display: none; }
+.tc-ay1-dar .tc-ay1-sira .tc-ra-kaydir { display: none; }
+.tc-ay1-dar .tc-ay1-sira ol { padding-block: var(--b-1); }
+.tc-ay1-dar .tc-ay1-sira .tc-ay1-tcark-kart { display: grid; gap: 0; padding: var(--b-1) var(--b-2); border-inline-start: var(--b-1) solid var(--sig, var(--edge)); }
+.tc-ay1-dar .tc-ay1-sira .tc-ay1-tcark-kart > :not(b, small.tc-ay1-mono) { display: none; }
+.tc-ay1-dar .tc-ay1-sira .tc-ay1-tcark-kart > b { font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-sira .tc-ay1-tcark-kart > small.tc-ay1-mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--yazi-xs); }
+.tc-ay1-yer-secimi { display: grid; gap: var(--b-4); }
+.tc-ay1-yer-secimi > section { display: grid; gap: var(--b-2); }
+.tc-ay1-yer-secimi h3 { margin: 0; font-size: var(--yazi-m); }
+.tc-ay1-yer-satiri { display: grid; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); }
+button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: pointer; }
+/* Şerit, iş satırı ve rota üstte yer kaplar: sayaç (göstergeler ve kadran) bu boydan kısa olmaz, sığmazsa görünüm kayar, üst üste binmez. */
+.tc-ay1-dar .tc-ay1-uretim:has(> .tc-ay1-sira) > .tc-ay1-sayac { min-block-size: calc(var(--dokunma) * 3.5); }
