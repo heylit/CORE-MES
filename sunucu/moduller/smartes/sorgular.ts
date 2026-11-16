@@ -170,10 +170,11 @@ export interface GidenSatiri {
   durum: 'gonderildi' | 'hata' | 'kapandi';
   ardisikHata: number;
   sonrakiDeneme: Date | null;
+  sonHata: string | null;
 }
 
 const GIDEN_ALANLARI = `is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", ozet, denenen_ozet AS "denenenOzet", durum,
-  ardisik_hata AS "ardisikHata", sonraki_deneme AS "sonrakiDeneme"`;
+  ardisik_hata AS "ardisikHata", sonraki_deneme AS "sonrakiDeneme", son_hata AS "sonHata"`;
 
 export function gidenSatirlari(db: Db, idler: readonly number[]): Promise<GidenSatiri[]> {
   if (idler.length === 0) return Promise.resolve([]);

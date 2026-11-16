@@ -1914,6 +1914,28 @@ export async function isEmriOzetleri(db: Db, idler: readonly number[]): Promise<
   }));
 }
 
+// 3346: SmartES gönderim rozeti için emirlerin adımları ve emrin durumu; iki sorgu, yetki denetlemez. Fason adım SmartES'e gitmez.
+export interface EmirAdimi {
+  isEmriId: number;
+  uretimEmriId: number;
+  opNo: number;
+  ad: string;
+  durum: IsEmriSatiri['durum'];
+  istasyonId: number | null;
+  fason: boolean;
+  emirDurumu: UstEmirSatiri['durum'];
+}
+export async function emirAdimlari(db: Db, emirIdleri: readonly number[]): Promise<EmirAdimi[]> {
+  const tekil = [...new Set(emirIdleri)];
+  if (tekil.length === 0) return [];
+  const emirler = new Map((await s.ustEmirlerBul(db, tekil)).map((e) => [e.id, e.durum]));
+  if (emirler.size === 0) return [];
+  return (await s.isEmirleriGetir(db, [...emirler.keys()])).map((i) => ({
+    isEmriId: i.id, uretimEmriId: i.uretimEmriId, opNo: i.opNo, ad: i.ad, durum: i.durum, istasyonId: i.istasyonId,
+    fason: i.fasonFirmaId !== null || i.fasonFirmasiz, emirDurumu: emirler.get(i.uretimEmriId)!,
+  }));
+}
+
 export interface MalzemeIhtiyaci {
   malzemeNo: number;
   opNo: number;

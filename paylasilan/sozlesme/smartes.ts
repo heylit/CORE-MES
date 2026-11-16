@@ -472,3 +472,28 @@ export const adetKarariCevabi = z.object({
 });
 export type AdetOnaylariCevabi = z.output<typeof adetOnaylariCevabi>;
 export type AdetKarariCevabi = z.output<typeof adetKarariCevabi>;
+
+// 3346: üretim emrinde SmartES gönderim rozeti. Yalnız CORE'daki iz okunur; emir başına adımların toplamı ve adım başına rozet.
+export const SMARTES_ROZET_DURUMLARI = ['gonderildi', 'sirada', 'yeniden-denenecek', 'durdu'] as const;
+export type SmartesRozetDurumu = (typeof SMARTES_ROZET_DURUMLARI)[number];
+export const SMARTES_GONDERILMEZ_NEDENLERI = ['esleme-yok', 'adim-disi', 'baglanti-kapali'] as const;
+export const SMARTES_EMIR_DURUMU_AZAMI = 200;
+export const smartesEmirDurumlariSorgusu = z.object({
+  emir: z.string().regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9})*$/, 'Emir kimlikleri virgülle ayrılmış sayılar olmalı.')
+    .transform((m) => m.split(',').map(Number))
+    .refine((l) => l.length <= SMARTES_EMIR_DURUMU_AZAMI, `En çok ${SMARTES_EMIR_DURUMU_AZAMI} emir.`),
+}).strict();
+const rozetDurumu = z.enum(SMARTES_ROZET_DURUMLARI).nullable();
+const gonderilmez = z.enum(SMARTES_GONDERILMEZ_NEDENLERI).nullable();
+export const smartesEmirDurumlariCevabi = z.object({
+  emirler: z.array(z.object({
+    emirId: z.number().int(),
+    toplam: z.object({
+      durum: rozetDurumu, gonderilmez, gonderilen: z.number().int(), toplam: z.number().int(), opNo: z.number().int().nullable(), neden: z.string().nullable(),
+    }).strict(),
+    adimlar: z.array(z.object({
+      isEmriId: z.number().int(), opNo: z.number().int(), ad: z.string(), durum: rozetDurumu, gonderilmez, smartesNo: z.string().nullable(), neden: z.string().nullable(),
+    }).strict()),
+  }).strict()),
+}).strict();
+export type SmartesEmirDurumlariCevabi = z.output<typeof smartesEmirDurumlariCevabi>;

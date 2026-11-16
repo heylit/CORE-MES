@@ -395,6 +395,44 @@ export function gonderimEylemi(
   return g.ozet === ozet ? 'atla' : 'gonder';
 }
 
+// 3346: üretim emrinde SmartES gönderim rozeti. Adım SmartES'e gidiyorsa izi (smartes_giden) durumunu verir; izi yoksa gidecek mi bakılır.
+// "—" (durum null) nedenini taşır: istasyonun SmartES eşlemesi yok, adım gönderilecek durumda değil (taslak, bitmiş, fason) ya da bağlantı kapalı.
+export type SmartesRozetDurumu = 'gonderildi' | 'sirada' | 'yeniden-denenecek' | 'durdu';
+export type GonderilmezNedeni = 'esleme-yok' | 'adim-disi' | 'baglanti-kapali';
+export interface AdimRozeti { durum: SmartesRozetDurumu | null; gonderilmez: GonderilmezNedeni | null; smartesNo: string | null; neden: string | null }
+export function adimRozeti(a: {
+  eslemeli: boolean; gidecek: boolean; baglantiAcik: boolean;
+  giden: { durum: 'gonderildi' | 'hata' | 'kapandi'; sonrakiDeneme: Date | null; sonHata: string | null; smartesIsEmriNo: string } | null;
+}): AdimRozeti {
+  const g = a.giden;
+  if (g !== null) {
+    if (g.durum !== 'hata') return { durum: 'gonderildi', gonderilmez: null, smartesNo: g.smartesIsEmriNo, neden: null };
+    return { durum: gonderimDurduMu(g) ? 'durdu' : 'yeniden-denenecek', gonderilmez: null, smartesNo: g.smartesIsEmriNo, neden: g.sonHata };
+  }
+  const gonderilmez: GonderilmezNedeni | null = !a.eslemeli ? 'esleme-yok' : !a.gidecek ? 'adim-disi' : !a.baglantiAcik ? 'baglanti-kapali' : null;
+  return { durum: gonderilmez === null ? 'sirada' : null, gonderilmez, smartesNo: null, neden: null };
+}
+
+// Emrin rozeti adımlarının toplamıdır; öncelik Durdu > Yeniden denenecek > Sırada > Gönderildi. Neden ve OP ilk öne çıkan adımdandır.
+// Hiç adımı SmartES'e gitmeyen emirde durum null; neden bağlantı kapalı > eşleme yok (hepsi eşlemesiz) > adım dışı.
+const ROZET_ONCELIGI: readonly SmartesRozetDurumu[] = ['durdu', 'yeniden-denenecek', 'sirada', 'gonderildi'];
+export function emirRozeti(adimlar: readonly (AdimRozeti & { opNo: number })[]): {
+  durum: SmartesRozetDurumu | null; gonderilmez: GonderilmezNedeni | null; gonderilen: number; toplam: number; opNo: number | null; neden: string | null;
+} {
+  const gidenler = adimlar.filter((a) => a.durum !== null);
+  const gonderilen = gidenler.filter((a) => a.durum === 'gonderildi').length;
+  for (const d of ROZET_ONCELIGI) {
+    const ilk = gidenler.find((a) => a.durum === d);
+    if (ilk !== undefined) {
+      const one = d !== 'gonderildi';
+      return { durum: d, gonderilmez: null, gonderilen, toplam: gidenler.length, opNo: one ? ilk.opNo : null, neden: one ? ilk.neden : null };
+    }
+  }
+  const gonderilmez: GonderilmezNedeni = adimlar.some((a) => a.gonderilmez === 'baglanti-kapali') ? 'baglanti-kapali'
+    : adimlar.length > 0 && adimlar.every((a) => a.gonderilmez === 'esleme-yok') ? 'esleme-yok' : 'adim-disi';
+  return { durum: null, gonderilmez, gonderilen: 0, toplam: 0, opNo: null, neden: null };
+}
+
 const ISO_ZAMAN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 // Kapanış (SME-15): listeden çıkan iş emri son gönderilen alanlarıyla IsDone (bitti) ya da IsPassive (iptal, bulunamadı) olarak

@@ -8,6 +8,7 @@ import {
   adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
   hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi, FAULT_SINIRI, gonderimEylemi, kesinRetMi,
+  adimRozeti, emirRozeti,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -444,5 +445,34 @@ describe('SmartES gönderiminde kesin ret ve durma', () => {
     const bekleyen = { ozet: null, denenenOzet: 'A', durum: 'hata' as const, sonrakiDeneme: new Date('2026-11-16T10:05:00Z') };
     assert.equal(gonderimEylemi(bekleyen, 'A', simdi), 'bekle');
     assert.equal(gonderimEylemi(bekleyen, 'A', new Date('2026-11-16T10:05:00Z')), 'gonder');
+  });
+});
+
+describe('Üretim emrinde SmartES rozeti (3346)', () => {
+  const giden = (durum: 'gonderildi' | 'hata' | 'kapandi', sonrakiDeneme: Date | null = null) =>
+    ({ durum, sonrakiDeneme, sonHata: durum === 'hata' ? 'SmartES reddetti: X' : null, smartesIsEmriNo: 'ORN-1' });
+  const acik = { eslemeli: true, gidecek: true, baglantiAcik: true };
+  test('adımın izi durumunu verir; izi yoksa nedeni sırayla: eşleme, adım dışı, bağlantı', () => {
+    assert.equal(adimRozeti({ ...acik, giden: giden('gonderildi') }).durum, 'gonderildi');
+    assert.equal(adimRozeti({ ...acik, giden: giden('kapandi') }).durum, 'gonderildi');
+    assert.deepEqual(adimRozeti({ ...acik, giden: giden('hata') }), { durum: 'durdu', gonderilmez: null, smartesNo: 'ORN-1', neden: 'SmartES reddetti: X' });
+    assert.equal(adimRozeti({ ...acik, giden: giden('hata', new Date('2026-11-16T10:00:00Z')) }).durum, 'yeniden-denenecek');
+    assert.deepEqual(adimRozeti({ ...acik, giden: null }), { durum: 'sirada', gonderilmez: null, smartesNo: null, neden: null });
+    assert.equal(adimRozeti({ eslemeli: false, gidecek: false, baglantiAcik: false, giden: null }).gonderilmez, 'esleme-yok');
+    assert.equal(adimRozeti({ ...acik, gidecek: false, baglantiAcik: false, giden: null }).gonderilmez, 'adim-disi');
+    assert.equal(adimRozeti({ ...acik, baglantiAcik: false, giden: null }).gonderilmez, 'baglanti-kapali');
+  });
+  test('emir rozeti: Durdu > Yeniden denenecek > Sırada > Gönderildi; OP ve neden öne çıkan adımdan; gitmeyen adım sayılmaz', () => {
+    const a = (opNo: number, durum: 'gonderildi' | 'sirada' | 'yeniden-denenecek' | 'durdu' | null, gonderilmez: 'esleme-yok' | 'adim-disi' | 'baglanti-kapali' | null = null) =>
+      ({ opNo, durum, gonderilmez, smartesNo: null, neden: durum === null ? null : `n${opNo}` });
+    assert.deepEqual(emirRozeti([a(10, 'gonderildi'), a(20, 'yeniden-denenecek'), a(30, 'durdu'), a(40, 'durdu'), a(50, null, 'esleme-yok')]),
+      { durum: 'durdu', gonderilmez: null, gonderilen: 1, toplam: 4, opNo: 30, neden: 'n30' });
+    assert.equal(emirRozeti([a(10, 'sirada'), a(20, 'yeniden-denenecek')]).durum, 'yeniden-denenecek');
+    assert.equal(emirRozeti([a(10, 'gonderildi'), a(20, 'sirada')]).opNo, 20);
+    assert.deepEqual(emirRozeti([a(10, 'gonderildi'), a(20, 'gonderildi')]), { durum: 'gonderildi', gonderilmez: null, gonderilen: 2, toplam: 2, opNo: null, neden: null });
+    assert.equal(emirRozeti([a(10, null, 'esleme-yok'), a(20, null, 'esleme-yok')]).gonderilmez, 'esleme-yok');
+    assert.equal(emirRozeti([a(10, null, 'esleme-yok'), a(20, null, 'adim-disi')]).gonderilmez, 'adim-disi');
+    assert.equal(emirRozeti([a(10, null, 'esleme-yok'), a(20, null, 'baglanti-kapali')]).gonderilmez, 'baglanti-kapali');
+    assert.equal(emirRozeti([]).gonderilmez, 'adim-disi');
   });
 });

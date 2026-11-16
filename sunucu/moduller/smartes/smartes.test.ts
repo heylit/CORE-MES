@@ -13,13 +13,14 @@ import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, emirBitir, emirIptalEt, emirSayim, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { VARSAYILAN_AD_ALANI } from './ayar.ts';
+import { smartesEmirDurumlariCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { KALITE_AMBAR_KAYNAKLARI, ONAY_ILETILERI, yasakMetotMu } from './kurallar.ts';
 import type { IsEmriDurumuKaydi } from './kurallar.ts';
 import { isler } from './isler.ts';
 import { smartesIstemcisiKur } from './istemci.ts';
 import { sahteSmartesAc, tabloCevapMetni } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { adetOnayinaAl, gonderimTuru, kaliteAmbarTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
+import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -549,6 +550,62 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1 });
     assert.deepEqual(await durum(), gonderilmis);
     await iptalEt(uretimEmriId);
+  });
+
+  test('3346: üretim emrinde SmartES rozeti; sırada, gönderildi, durdu, yeniden denenecek; eşlemesiz, kapalı bağlantı, iptal; yetki', async () => {
+    const { uretimEmriId, ilk, ikinci } = await emirKur();
+    type Cevap = { emirler: { emirId: number; toplam: Record<string, unknown>; adimlar: { isEmriId: number; durum: string | null; gonderilmez: string | null; smartesNo: string | null; neden: string | null }[] }[] };
+    // Durumlar servisle, turun istemcisiyle okunur (testte TMIV2_SMARTES_ADRESI yok); uç yetki, sorgu ve adressiz durum için ayrıca çağrılır.
+    const oku = async () => {
+      const c = smartesEmirDurumlariCevabi.parse(await vt().tx((db) => emirDurumlari(db, [uretimEmriId, 999_999, uretimEmriId], turOrtami().istemci)));
+      assert.deepEqual(c.emirler.map((x) => x.emirId), [uretimEmriId], 'olmayan emir cevapta yok, yinelenen bir kez');
+      return c.emirler[0]!;
+    };
+    const uctan = (c = yonetici) => istek('GET', `/smartes/emir-durumlari?emir=${uretimEmriId}`, undefined, c);
+    const adim = (e: Cevap['emirler'][number], id: number) => e.adimlar.find((a) => a.isEmriId === id)!;
+
+    let e = await oku();
+    assert.deepEqual(e.toplam, { durum: 'sirada', gonderilmez: null, gonderilen: 0, toplam: 1, opNo: 10, neden: null });
+    assert.deepEqual([adim(e, ikinci).durum, adim(e, ikinci).gonderilmez], [null, 'esleme-yok']);
+
+    // Yetki: emri okuyan görür; yalnız SmartES sayfası ya da ilgisiz yetki yetmez. Adres tanımsızken uç bağlantıyı kapalı sayar (bir şey gitmez).
+    assert.equal((await uctan(okuyucu)).statusCode, 403);
+    assert.equal((await uctan(yetkisiz)).statusCode, 403);
+    const emirOkuyan = await uctan(await rolluKisi('sm-emir-okuyan', ['sayfa.uretim-emirleri']));
+    assert.equal(emirOkuyan.statusCode, 200, emirOkuyan.body);
+    assert.equal((emirOkuyan.json() as Cevap).emirler[0]?.toplam['gonderilmez'], 'baglanti-kapali');
+    assert.equal((await istek('GET', '/smartes/emir-durumlari?emir=abc')).statusCode, 400);
+
+    await baglanti(false);
+    e = await oku();
+    assert.deepEqual([e.toplam['durum'], e.toplam['gonderilmez']], [null, 'baglanti-kapali']);
+    assert.equal(adim(e, ilk).gonderilmez, 'baglanti-kapali');
+    await baglanti(true);
+
+    await gonderimTuru(vt(), turOrtami());
+    e = await oku();
+    assert.deepEqual(e.toplam, { durum: 'gonderildi', gonderilmez: null, gonderilen: 1, toplam: 1, opNo: null, neden: null });
+    assert.notEqual(adim(e, ilk).smartesNo, null);
+
+    // SmartES reddeder: Durdu, neden ve OP emrin rozetinde.
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET adet = adet + 1 WHERE id = $1', [uretimEmriId]);
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'Kilitli' }));
+    await gonderimTuru(vt(), turOrtami());
+    e = await oku();
+    assert.deepEqual(e.toplam, { durum: 'durdu', gonderilmez: null, gonderilen: 0, toplam: 1, opNo: 10, neden: 'SmartES reddetti: Kilitli' });
+
+    // Geçici hata (Fault): Yeniden denenecek.
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET adet = adet + 1 WHERE id = $1', [uretimEmriId]);
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'fault', ileti: 'Sunucu istisnası' }));
+    await gonderimTuru(vt(), turOrtami());
+    assert.equal((await oku()).toplam['durum'], 'yeniden-denenecek');
+    sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
+
+    // İptal edilen emrin rozeti yok; adımların izi ayrıntıda kalır.
+    await iptalEt(uretimEmriId);
+    e = await oku();
+    assert.deepEqual([e.toplam['durum'], e.toplam['gonderilmez'], e.toplam['toplam']], [null, 'adim-disi', 0]);
+    assert.equal(adim(e, ilk).durum, 'yeniden-denenecek');
   });
 
   // Testin verdiği tx ile aynı veritabanı: işin transaction'ları izlenir ya da kesilir.
