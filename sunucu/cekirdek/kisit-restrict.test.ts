@@ -16,6 +16,8 @@ const RESTRICT_ANAHTARLARI = [
   'finans_tedarikci_alacagi.satin_alma_talep_id -> satin_alma_siparis',
   'finans_tedarikci_alacagi.satin_alma_teklif_id -> satin_alma_siparis',
   'kalibrasyon_kaydi.alet_id -> olcu_aleti',
+  // 3320 a: ara adımın çıktısı olan malzeme kartı silinmez; silinse rota adımı çıktısını sessizce yitirirdi.
+  'rota_adim_ciktisi.cikti_malzeme_id -> malzeme_katalog_karti',
   // 2642 b (Veri 2): faturaya eşlenmiş sipariş satırı (kaldırılmış eşleme dahil) silinmez; silinse eşlemenin oranı sessizce kaybolurdu.
   'satin_alma_fatura_eslemesi.siparis_satiri_id -> satin_alma_siparis_satiri',
   // 2397 b: onay basamağında kullanılan rol silinmez; silinse basamak rolsüz kalır ve denetim sessizce gevşerdi.
@@ -182,5 +184,38 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     }
     await sil(bos);
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_siparis WHERE talep_id = $1', [talep]))?.n, 2);
+  });
+
+  test('3320 a: ara adımın çıktısı olan malzeme kartını silmek 409 BAGIMLI_KAYIT; çıktısız kart silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = (await s.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id"))!.id;
+    await s.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek) VALUES ('RRR-') ON CONFLICT (onek) DO NOTHING");
+    let sira = 0;
+    const kart = async (tur: string): Promise<number> => {
+      const kimlik = `rrr-${String(++sira)}`;
+      return (await s.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, $2, 'RRR-', $3, 'aktif', $4, $5, $5) RETURNING no`,
+        [kimlik, tur, sira, JSON.stringify({ id: kimlik, com: { ad: `Deneme ${String(sira)}`, birim: 'adet' } }), kisi]))!.no;
+    };
+    const mamul = await kart('mamul');
+    const ym = await kart('yarimamul');
+    const bos = await kart('yarimamul');
+    const rev = (await s.tek<{ id: number }>(
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) RETURNING id", [mamul, kisi]))!.id;
+    await s.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 10, $2)', [mamul, rev]);
+    const adim = (await s.tek<{ id: number }>(
+      "INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, 10, 1, 1, 'Deneme') RETURNING id", [rev, mamul]))!.id;
+    await s.sorgu('INSERT INTO rota_adim_ciktisi (adim_id, cikti_malzeme_id) VALUES ($1, $2)', [adim, ym]);
+
+    const sil = (no: number) => uygulama.tx((db) => db.sorgu('DELETE FROM malzeme_katalog_karti WHERE no = $1', [no])).catch((h: unknown) => h);
+    const ihlal = kisitIhlali(await sil(ym));
+    assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+    assert.equal(ihlal?.hata.durum, 409);
+    assert.equal(ihlal?.iz.kisit, 'rota_adim_ciktisi_cikti_malzeme_id_fkey');
+    assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    await sil(bos);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM malzeme_katalog_karti WHERE no = ANY($1)', [[ym, bos]]))?.n, 1);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_adim_ciktisi WHERE adim_id = $1 AND cikti_malzeme_id = $2', [adim, ym]))?.n, 1);
   });
 });
