@@ -449,7 +449,7 @@ describe('Kokpit', () => {
     expect(satirlar[1]?.textContent).toContain('Satın alma');
     // Veri değişikliği emre bağlı değildir; toplu düğmenin ne uygulayacağı notta yazar.
     expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).queryByRole('button')).toBeNull();
-    expect(liste.textContent).toContain('"Veri değişikliklerini uygula (1)" yalnız "Veri değişti" satırlarının');
+    expect(liste.textContent).toContain('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
     fireEvent.click(within(satirlar[1] as HTMLElement).getByRole('button', { name: 'Göster' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
     expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
@@ -467,7 +467,7 @@ describe('Kokpit', () => {
     ac({}, false);
     fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
-    expect(liste.textContent).not.toContain('Veri değişikliklerini uygula');
+    expect(liste.textContent).not.toContain('Planı güncelle');
     expect(liste.textContent).toContain('"Sahada oldu" ve "Plan geride" satırları bilgi içindir');
   });
 
@@ -533,7 +533,9 @@ describe('Kokpit', () => {
     expect(within(screen.getByRole('button', { name: 'Araçlar' })).queryByText('Araçlar')).not.toBeNull();
     expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('false');
     arac('Ayarlar');
-    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map((x) => x.textContent)).toEqual(['Önce / sonra', 'Duruş ve mesai', 'Ayarlar']);
+    // Tüm planın yönü de bu menüdedir (3335-2); açıklaması küçük yazıdadır.
+    const adi = (x: Element): string => (x.textContent ?? '').slice(0, (x.textContent ?? '').length - (x.querySelector('small')?.textContent?.length ?? 0));
+    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Duruş ve mesai', 'Tüm plan: İleriye', 'Tüm plan: Teslimden geriye', 'Ayarlar']);
     // Sorun turu şimdilik kapalıdır: üst şeritte düğmesi yoktur.
     expect(screen.queryByRole('button', { name: 'Sorunları sırayla çöz' })).toBeNull();
     fireEvent.click(arac('Duruş ve mesai'));
@@ -563,20 +565,21 @@ describe('Kokpit', () => {
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
   });
 
-  it('Yön tek seçimdir: geçerli yönü yazar; menüde iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
+  it('Tüm planın yönü Araçlar menüsündedir (3335-2): iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
-    const yon = screen.getByRole('button', { name: /Tüm plan: İleriye/ });
+    expect(screen.queryByRole('button', { name: /Tüm plan:/ })).toBeNull();
+    const yon = screen.getByRole('button', { name: 'Araçlar' });
     fireEvent.click(yon);
-    const menu = screen.getByRole('menu', { name: 'Tüm planın yönü' });
+    const menu = screen.getByRole('menu', { name: 'Araçlar' });
     const l = within(menu).getAllByRole('menuitemradio');
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
     fireEvent.click(l[0]!);
-    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
+    expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     fireEvent.click(yon);
-    fireEvent.click(within(screen.getByRole('menu', { name: 'Tüm planın yönü' })).getAllByRole('menuitemradio')[1]!);
-    expect(screen.queryByRole('menu', { name: 'Tüm planın yönü' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Araçlar' })).getAllByRole('menuitemradio')[1]!);
+    expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
@@ -749,5 +752,157 @@ describe('Kokpit teslimden geriye yerleştirme (3318 a, 2. dilim)', () => {
     expect(komutlar.map((k) => k.tur)).toEqual(['yon']);
     await new Promise((r) => { setTimeout(r, 50); });
     expect(geriAlSayisi()).toBe(1);
+  });
+});
+
+// Kart 3335 a, 2. dilim: "Planla" menüsü. Yer verme var olan plana alma yolunu kullanır; toplu ve yeniden planlama taslağa
+// "yeniden-planla" komutu yazar (dizme onu izler, Geri ikisini birlikte alır). Veriler uydurmadır.
+describe('Kokpit Planla menüsü (3335-2)', () => {
+  type Komut = { tur: string } & Record<string, unknown>;
+  function kur(calisma: ReturnType<typeof ornekCalisma>, oz: Partial<PlanlamaEkranOzellikleri> = {}) {
+    let satirlar: { komut: Komut; ne: string; t: number; hata: null }[] = [];
+    const cevap = () => ({ taslak: satirlar.length === 0 ? null : { surum: 10 + satirlar.length, tabanSurum: 4, satirlar }, calisma, surum: 4 });
+    vi.spyOn(api, 'get').mockImplementation((yol: string) => {
+      if (yol === '/plan/taslagim') return Promise.resolve(cevap() as never);
+      if (!yol.includes('plana-al-onizlemesi')) return Promise.resolve(null as never);
+      const q = new URLSearchParams(yol.slice(yol.indexOf('?'))), S = Number(q.get('baslangic')), emirId = q.get('emirId') ?? '';
+      return Promise.resolve({ calismaSurumu: 4, gecerli: true, ileti: null, bitis: S + 10, isler: [{ isId: `${emirId}.10`, tezgah: q.get('tezgah'), S, C: S + 2 }] } as never);
+    });
+    const komutlar: Komut[] = [];
+    vi.spyOn(api, 'post').mockImplementation((yol: string, govde?: unknown) => {
+      if (yol === '/plan/taslagim/komut') {
+        const k = (govde as { komut: Komut }).komut;
+        if (k.tur === 'yeniden-planla' || k.tur === 'plana-al') komutlar.push(k);
+        satirlar = [...satirlar, { komut: k, ne: k.tur, t: 1, hata: null }];
+      }
+      return Promise.resolve(cevap() as never);
+    });
+    ac({ calisma, ...oz });
+    return komutlar;
+  }
+  const menu = async (): Promise<HTMLElement> => {
+    const d = await screen.findByRole('button', { name: 'Planla' }) as HTMLButtonElement;
+    await waitFor(() => { expect(d.disabled).toBe(false); }, { timeout: 4000 });
+    if (d.getAttribute('aria-expanded') !== 'true') fireEvent.click(d);
+    return screen.getByRole('menu', { name: 'Planla' });
+  };
+  const satir = (m: HTMLElement, ad: RegExp): HTMLButtonElement => within(m).getByRole('menuitem', { name: ad }) as HTMLButtonElement;
+  const birPlansiz = (): ReturnType<typeof ornekCalisma> => {
+    const c = ornekCalisma();
+    return { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
+  };
+  const SAHA = { depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu };
+
+  it('toplu ve yeniden planlama taslağa yeniden-planla komutu yazar: plansızların hepsi, seçili sipariş, bütün plan', async () => {
+    const komutlar = kur(birPlansiz(), SAHA);
+    let m = await menu();
+    const hepsi = satir(m, /Plansızların hepsini planla \(\d+\)/);
+    expect(hepsi.disabled).toBe(false);
+    fireEvent.click(hepsi);
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    // İstek yalnız plansız emirleri taşır; sayı düğmedeki sayıdır.
+    const isler = komutlar[0]?.['isler'] as string[];
+    expect(komutlar[0]?.tur).toBe('yeniden-planla');
+    expect(isler).toContain('2');
+    expect(isler).not.toContain('3');
+    expect(hepsi.textContent).toContain(`(${String(isler.length)})`);
+    expect(screen.queryByRole('menu', { name: 'Planla' })).toBeNull();
+    // Planlı kart seçilince yer verme pasiftir ve nedenini yazar; yeniden planlama o kartın emirlerini verir.
+    fireEvent.click(document.querySelector('[data-kart="3"]') as HTMLElement);
+    m = await menu();
+    const secili = within(m).getByRole('group', { name: 'Seçili siparişi planla' });
+    await waitFor(() => { expect(secili.textContent).toContain('Zaten planlı; yeniden planlayın'); });
+    expect((within(secili).getByRole('menuitem', { name: 'İleriye' }) as HTMLButtonElement).disabled).toBe(true);
+    // Risk K1: dizme plansız emirlere de yer bulur; satır bunu açıkça yazar.
+    expect(satir(m, /Seçili siparişi yeniden planla/).textContent).toMatch(/Plansız \d+ emre de yer verilir\./);
+    fireEvent.click(satir(m, /Seçili siparişi yeniden planla/));
+    await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['3'] }); });
+    fireEvent.click(satir(await menu(), /Bütün planı baştan kur/));
+    await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['*'] }); });
+    expect(komutlar).toHaveLength(3);
+  });
+
+  it('seçili plansız siparişte yön satırın içinde seçilir: İleriye plana alır, Teslimden geriye onay sorar; plan yokken yeniden dizme pasiftir', async () => {
+    const taban = ornekCalisma();
+    const komutlar = kur({ ...taban, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);
+    let m = await menu();
+    const secili = (): HTMLElement => within(m).getByRole('group', { name: 'Seçili siparişi planla' });
+    await waitFor(() => { expect(secili().textContent).toContain('yönü seçin'); }, { timeout: 4000 });
+    expect(satir(m, /Bütün planı baştan kur/).disabled).toBe(true);
+    expect(satir(m, /Bütün planı baştan kur/).textContent).toContain('Henüz plan yok');
+    // Üç adım ve taslak cümlesi şeridin altında bir kez yazar.
+    const akis = document.querySelector('[data-akis]') as HTMLElement;
+    expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Planla2 Kontrol et3 Canlıya al');
+    expect(akis.textContent).toContain('atölyenin gördüğü plan yalnız Canlıya al ile değişir');
+    expect(satir(m, /Plansızların hepsini planla/).disabled).toBe(true);
+    expect(satir(m, /İşaretli adımları planla \(0\)/).disabled).toBe(true);
+    const ileri = within(secili()).getByRole('menuitem', { name: 'İleriye' }) as HTMLButtonElement;
+    await waitFor(() => { expect(ileri.disabled).toBe(false); }, { timeout: 4000 });
+    fireEvent.click(ileri);
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    expect(komutlar[0]).toMatchObject({ tur: 'plana-al' });
+    m = await menu();
+    fireEvent.click(within(secili()).getByRole('menuitem', { name: 'Teslimden geriye' }));
+    expect(await screen.findByRole('dialog', { name: 'Teslimden geriye yerleştir' }, { timeout: 4000 })).toBeTruthy();
+  });
+
+  // Test T1: kartta plansız emir de varsa yeniden planlama isteği yalnız planda yeri olan emirleri taşır.
+  it('seçili siparişi yeniden planla yalnız kartın planlı emirlerini gönderir', async () => {
+    const durum = { emirler: [], siparisBaglari: { '2': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 1 }, '3': { siparis: '50', no: 'ORN-SP-50', musteri: 'Deneme Müşteri A', kalem: 2 } } };
+    const komutlar = kur(birPlansiz(), { depo: { ...DEPO, durum } as unknown as PlanlamaDeposu });
+    fireEvent.click(await waitFor(() => document.querySelector('[data-kart="sp:50"]') as HTMLElement));
+    const m = await menu();
+    await waitFor(() => { expect(satir(m, /Seçili siparişi yeniden planla/).disabled).toBe(false); });
+    fireEvent.click(satir(m, /Seçili siparişi yeniden planla/));
+    await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['3'] }); });
+  });
+
+  // Test T2: istek numarasıyla bir kez işlenir; başka karta gidip dönünce aynı istek yeniden yazılmaz.
+  it('menü isteği bir kez işlenir: kart değişip geri gelince plana alma ikinci kez gitmez', async () => {
+    const taban = ornekCalisma();
+    const komutlar = kur({ ...taban, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);
+    const m = await menu();
+    const ileri = within(within(m).getByRole('group', { name: 'Seçili siparişi planla' })).getByRole('menuitem', { name: 'İleriye' }) as HTMLButtonElement;
+    await waitFor(() => { expect(ileri.disabled).toBe(false); }, { timeout: 4000 });
+    fireEvent.click(ileri);
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    const kartlar = [...document.querySelectorAll<HTMLElement>('[data-kart]')];
+    const secili = kartlar.find((k) => k.getAttribute('aria-pressed') === 'true' || k.getAttribute('aria-current') === 'true') ?? kartlar[0]!;
+    const oteki = kartlar.find((k) => k !== secili)!;
+    fireEvent.click(oteki);
+    await waitFor(() => { expect(document.querySelector('[data-emir]')?.getAttribute('data-emir')).not.toBe(komutlar[0]?.['emirId']); });
+    fireEvent.click(secili);
+    await waitFor(() => { expect(document.querySelector(`[data-emir="${String(komutlar[0]?.['emirId'])}"]`)).toBeTruthy(); });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(komutlar).toHaveLength(1);
+  });
+
+  // Test T4: termini olmayan emir teslimden geriye yerleştirilemez; düğme pasiftir ve nedenini yazar.
+  it('termini olmayan plansız emirde Teslimden geriye pasiftir ve nedenini yazar', async () => {
+    const taban = ornekCalisma();
+    const D = { ...taban.D, siparisler: (taban.D as unknown as { siparisler: Record<string, unknown>[] }).siparisler.map((x) => ({ ...x, termin: null })) };
+    kur({ ...taban, D, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);
+    const m = await menu();
+    const grup = within(m).getByRole('group', { name: 'Seçili siparişi planla' });
+    await waitFor(() => { expect(grup.textContent).toContain('yönü seçin'); }, { timeout: 4000 });
+    const geri = within(grup).getByRole('menuitem', { name: 'Teslimden geriye' }) as HTMLButtonElement;
+    expect(geri.disabled).toBe(true);
+    expect(geri.title).toBe('Emrin termini yok; geriye yerleştirilemez.');
+  });
+
+  // Test T5: tabloda tezgâhı seçilen adım menüde sayılır; satır açılır ve seçimle plana alır.
+  it('tabloda tezgâh seçilince "İşaretli adımları planla (1)" açılır ve plana alma komutunu yazar', async () => {
+    const taban = ornekCalisma();
+    const komutlar = kur({ ...taban, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);
+    let m = await menu();
+    expect(satir(m, /İşaretli adımları planla \(0\)/).textContent).toContain('İşaretli adım yok');
+    const kutu = (await screen.findAllByRole('combobox', { name: /tezgâhı$/ }))[0] as HTMLSelectElement;
+    const secenek = [...kutu.options].find((o2) => o2.value !== '' && o2.value !== kutu.value)!;
+    fireEvent.change(kutu, { target: { value: secenek.value } });
+    m = await menu();
+    await waitFor(() => { expect(satir(m, /İşaretli adımları planla \(1\)/).disabled).toBe(false); }, { timeout: 4000 });
+    fireEvent.click(satir(m, /İşaretli adımları planla \(1\)/));
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    expect(komutlar[0]).toMatchObject({ tur: 'plana-al', tezgah: secenek.value });
   });
 });

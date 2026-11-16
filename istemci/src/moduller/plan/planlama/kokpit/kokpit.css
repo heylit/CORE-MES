@@ -540,6 +540,9 @@
   .tc-pyq-gonder { order: -2; }
   .tc-pyq-tur-dugme { order: 1; }
   .tc-pyq-ust > .tc-pyq-ok, .tc-pyq-acilir { order: 2; }
+  /* Planla akışın ilk adımıdır: telefonda Canlıya al'dan önce, aynı satırda durur. */
+  .tc-pyq-acilir.tc-pyq-planla { order: -2; }
+  .tc-pyq-menu-secili > span:first-child { flex: 1 1 100%; }
   /* Yön ve Araçlar uzun yön adıyla da tek satıra sığsın. */
   .tc-pyq-acilir > .tc-pyq-ok { padding: 0 var(--b-2); }
   .tc-pyq-seg button { padding: 0 calc(var(--b-1) + var(--pay-ince)); }
@@ -643,3 +646,14 @@
   .tc-pyq-3b-kaydir { bottom: var(--b-2); }
   .tc-pyq-3b-kamera button, .tc-pyq-3b-kaydir button, .tc-pyq-3b-kaydir input, .tc-pyq-3b-tablo td button { min-height: var(--dokunma); }
 }
+/* Planla menüsü (3335-2): iki başlıklı grup; seçili siparişin yönü satırın içinde iki düğmeyle seçilir. */
+.tc-pyq-planla .tc-pyq-acilir-menu { left: 0; right: auto; }
+.tc-pyq-acilir-menu .tc-pyq-menu-baslik { padding: var(--b-2) var(--b-2) 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-pyq-acilir-menu .tc-pyq-menu-baslik:not(:first-child) { margin-top: var(--b-1); border-top: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-menu-secili { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-2); font-size: var(--yazi-s); }
+.tc-pyq-menu-secili[data-pasif] > span:first-child { opacity: var(--saydam-45); }
+.tc-pyq-acilir-menu .tc-pyq-menu-yon { flex: 0 0 auto; flex-direction: row; gap: var(--b-1); }
+.tc-pyq-acilir-menu .tc-pyq-menu-yon button { border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); padding: 0 var(--b-3); font-weight: 700; }
+.tc-pyq-planla .tc-pyq-acilir-menu button > span, .tc-pyq-menu-secili > span:first-child { font-weight: 700; }
+.tc-pyq-akis { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.tc-pyq-akis > small { color: var(--muted); font-size: var(--yazi-xs); }

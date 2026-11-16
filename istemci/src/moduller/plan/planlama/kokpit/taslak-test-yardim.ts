@@ -9,6 +9,7 @@ export function sahteTaslak(dataVer: number, ozet: Record<string, unknown> = { w
     cevap: null, mesgul: false, diziliyor: false, hata: null,
     yaz: vi.fn((k: TaslakKomutu) => { yazilan.push(k); return Promise.resolve(true); }),
     diz: vi.fn(() => Promise.resolve(true)),
+    dizIsler: vi.fn(() => Promise.resolve(true)),
     degerlendir: vi.fn(() => Promise.resolve({
       is: 'ORN-is', cevap: { calismaSurumu: 9, dataVer, baslangic: null, simdi: 0, maliyetGorunur: false, sonuc: { tur: 'plan-uygula' as const, plan: { ozet } } },
     })),

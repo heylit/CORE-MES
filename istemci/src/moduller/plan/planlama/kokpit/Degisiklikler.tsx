@@ -58,7 +58,7 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu }: Deg
         );
       })}
       <p className="tc-pyq-not">
-        {toplu !== null ? `"Veri değişikliklerini uygula (${String(toplu)})" yalnız "Veri değişti" satırlarının etkilediği işleri yeniden dizer. ` : ''}
+        {toplu !== null ? `"Planı güncelle (${String(toplu)})" yalnız "Veri değişti" satırlarının etkilediği işleri yeniden dizer. ` : ''}
         "Sahada oldu" ve "Plan geride" satırları bilgi içindir: "Göster" ile emre gidilir, düzeltme aşağıda elle yapılır.
       </p>
     </section>

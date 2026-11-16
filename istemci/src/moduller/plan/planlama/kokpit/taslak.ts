@@ -66,6 +66,7 @@ export interface TaslakYazici {
   hata: string | null;
   yaz: (k: TaslakKomutu, dizme?: boolean) => Promise<boolean>;
   diz: () => Promise<boolean>;
+  dizIsler: (isler: readonly string[]) => Promise<boolean>;
   degerlendir: (istek: DegerlendirmeIstegi) => Promise<{ is: string; cevap: DegerlendirmeCevabi }>;
   dizmeyiYaz: (is: string) => Promise<boolean>;
   geriAl: (dizme?: boolean) => Promise<boolean>;
@@ -112,17 +113,18 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
     return r !== null;
   }, [calis, u, koy]);
 
-  const diz = useCallback(async (): Promise<boolean> => {
-    const isler = dizmeIsleri(calismaOku(son.current?.calisma ?? null));
+  // Verilen işler (sipariş kimlikleri; '*': hepsi) taslağın görünümünde yeniden dizilir. Plansız emirler her dizmede yer bulur.
+  const dizIsler = useCallback(async (isler: readonly string[]): Promise<boolean> => {
     if (isler.length === 0 || surum() === null) return true;
     setDiziliyor(true);
     try {
-      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler }), 'Plan dizilemedi');
+      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler: [...isler] }), 'Plan dizilemedi');
       if (d === null) return false;
       if (d.cevap.sonuc.tur !== 'plan-uygula') { bildir('Plan dizilemedi: veri bu arada değişti; Yeniden diz ile tekrar deneyin.'); return false; }
       return dizmeyiYaz(d.is);
     } finally { setDiziliyor(false); }
   }, [calis, degerlendir, dizmeyiYaz, bildir]);
+  const diz = useCallback((): Promise<boolean> => dizIsler(dizmeIsleri(calismaOku(son.current?.calisma ?? null))), [dizIsler]);
 
   const yaz = useCallback(async (k: TaslakKomutu, dizme = true): Promise<boolean> => {
     const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/komut`, { taslakSurumu: surum(), komut: k }), 'Değişiklik yazılamadı');
@@ -162,7 +164,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
     return r;
   }, [calis, u, oku]);
 
-  return { cevap, mesgul, diziliyor, hata, yaz, diz, degerlendir, dizmeyiYaz, geriAl, vazgec, uygula, yenile: oku };
+  return { cevap, mesgul, diziliyor, hata, yaz, diz, dizIsler, degerlendir, dizmeyiYaz, geriAl, vazgec, uygula, yenile: oku };
 }
 
 // Son n değişikliği sırayla geri alır; plan yalnız sonuncudan sonra yeniden dizilir. Biri geri alınamazsa durur.

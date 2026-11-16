@@ -83,12 +83,12 @@ export function Cubuk(o: Ozellikler) {
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
-              title={uyg.suruyor ? KURULUYOR : `${o.yuva ? 'Veri değişikliklerini' : 'Değişiklikleri'} uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
-              aria-label={o.yuva ? 'Veri değişikliklerini uygula' : 'Değişiklikleri uygula'} onClick={() => { uyg.uygula(); }}>
+              title={uyg.suruyor ? KURULUYOR : `Planı güncelle: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
+              aria-label="Planı güncelle" onClick={() => { uyg.uygula(); }}>
               <Simge ad="play" boyut="k" />
               {o.yuva && !uyg.suruyor
-                ? <><span data-uzun="">{`Veri değişikliklerini uygula (${String(uyg.say)})`}</span><span data-kisa="" aria-hidden="true">{`Uygula (${String(uyg.say)})`}</span></>
-                : <span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>}
+                ? <><span data-uzun="">{`Planı güncelle (${String(uyg.say)})`}</span><span data-kisa="" aria-hidden="true">{`Güncelle (${String(uyg.say)})`}</span></>
+                : <span>{uyg.suruyor ? 'Güncelleniyor' : `Planı güncelle (${String(uyg.say)})`}</span>}
             </button>
           ) : o.planYaz && (kur ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}

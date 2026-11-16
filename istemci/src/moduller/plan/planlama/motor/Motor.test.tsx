@@ -89,19 +89,19 @@ describe('PlanlamaMotoru', () => {
     const kaydet = vi.fn(async () => null);
     ac({ c, komut: { kaydet, degistir: vi.fn(() => true) } as unknown as CalismaKomutu });
     const cubuk = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
-    const d = within(cubuk).getByRole('button', { name: 'Değişiklikleri uygula' });
-    expect(d.textContent).toBe('Değişiklikleri uygula (1)');
+    const d = within(cubuk).getByRole('button', { name: 'Planı güncelle' });
+    expect(d.textContent).toBe('Planı güncelle (1)');
     expect(within(cubuk).queryByText('Motor kapalı')).toBeNull();
     await act(async () => { fireEvent.click(d); });
     expect(kaydet).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(KAYDEDILEMEDI)).toBeTruthy();
     cleanup();
     ac({ c, yaz: false, komut: { kaydet, degistir: vi.fn() } as unknown as CalismaKomutu });
-    expect(screen.queryByRole('button', { name: 'Değişiklikleri uygula' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
     cleanup();
     const g = ornekCalisma(); g.dataVer = g.plan?.dataVer ?? 0;
     ac({ c: g, komut: { kaydet, degistir: vi.fn() } as unknown as CalismaKomutu });
-    expect(screen.queryByRole('button', { name: 'Değişiklikleri uygula' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
   });
 
   it('plan yazma yetkisi yoksa Planı kur görünmez ya da pasif kalır', () => {
