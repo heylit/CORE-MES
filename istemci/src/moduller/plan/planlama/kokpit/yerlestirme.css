@@ -40,6 +40,8 @@
 /* Emrin yönü: emrin adının altında tek satır; seçenekler ve etkisi Değiştir'le satırın tam genişliğinde açılır (adımlar yerinden oynamaz). */
 .tc-pyq-emir-yon { display: contents; }
 .tc-pyq-emir-yon-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); grid-column: 1; min-width: 0; color: var(--muted); font-size: var(--yazi-xs); }
+/* Fareyle kullanılan ekranda Değiştir küçük düğmedir: emrin sol sütunu uzamasın. Dokunmatikte dokunma ölçüsü kalır. */
+@media (pointer: fine) { .tc-pyq-emir-yon-ozet .tc-pyq-kucuk { min-height: var(--b-5); min-width: 0; padding: 0 var(--b-2); font-size: var(--yazi-xs); } }
 .tc-pyq-emir-yon-acik { display: flex; flex-direction: column; gap: var(--b-2); grid-column: 1 / -1; min-width: 0; padding-top: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge); }
 .tc-pyq-emir-yon-acik .tc-pyq-seg { flex-wrap: wrap; align-self: flex-start; }
 .tc-pyq-emir-yon-acik .tc-pyq-not { margin: 0; }
