@@ -6,7 +6,10 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { Firma, FirmaCevabi, FirmaListesiCevabi, LogoCariAramaCevabi, LogoCariCevabi, LogodanFirmaAlGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type {
+  Firma, FirmaCevabi, FirmaListesiCevabi, LogoCariAramaCevabi, LogoCariCevabi, LogoCariTopluCevabi, LogoCariTopluGovdesi,
+  LogodanFirmaAlGovdesi,
+} from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -51,6 +54,7 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
   const al = (kim: string, govde: LogodanFirmaAlGovdesi) => istek<FirmaCevabi>(kim, 'POST', '/musteri-tedarikci/logo-cari/al', govde);
   const bagla = (kim: string, id: number, logoKodu: string, surum: number) =>
     istek<FirmaCevabi>(kim, 'POST', `/musteri-tedarikci/firmalar/${id}/logo-bagla`, { logoKodu, surum });
+  const toplu = (kim: string, govde: LogoCariTopluGovdesi) => istek<LogoCariTopluCevabi>(kim, 'POST', '/musteri-tedarikci/logo-cari/toplu', govde);
   async function firmaKur(ek: Record<string, unknown>): Promise<Firma> {
     const c = await istek<FirmaCevabi>('yazan', 'POST', '/musteri-tedarikci/firmalar/ekle', { tur: 'musteri', ...ek });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
@@ -222,6 +226,67 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     assert.match(a.govde.cariler[0]?.alinamaz ?? '', /1-40/);
     const once = await firmaSayisi();
     assert.equal((await al('yazan', { logoKodu: uzun.slice(0, 40), ad: 'x', tur: 'musteri' })).durum, 409);
+    assert.equal(await firmaSayisi(), once);
+  });
+
+  // 3343: Logo geçişi cariler sekmesi.
+  test('LCA-8 toplu: her cari ayrı işlenir; reddedilen satır geri alınır, ötekiler kalır; komut köprüye gitmez', async () => {
+    const baglanacak = await firmaKur({ kod: 'LCA8.001', ad: 'LCA8 Firma' });
+    const eskiyen = await firmaKur({ kod: 'LCA8.002', ad: 'LCA8 Eski' });
+    const uzun = `LCA8.${'X'.repeat(40)}`;
+    logodakiler = [
+      cari('LCA8.001', { logoKayitNo: 801 }),
+      cari('LCA8.002', { logoKayitNo: 802 }),
+      cari('LCA8.003', { logoKayitNo: 803, kartTuru: 2, il: 'Deneme İli', ad: 'LCA8 Yeni' }),
+      cari('LCA8.004', { logoKayitNo: 804, kartTuru: 3 }),
+      cari(uzun, { logoKayitNo: 805 }),
+    ];
+    await ara('yazan', 'LCA8');
+    cagrilar.length = 0;
+    const once = await firmaSayisi();
+    const c = await toplu('yazan', {
+      bagla: [
+        { logoKodu: 'LCA8.001', firmaId: baglanacak.id, surum: baglanacak.surum },
+        { logoKodu: 'LCA8.002', firmaId: eskiyen.id, surum: eskiyen.surum + 3 },
+      ],
+      al: [{ logoKodu: 'LCA8.003' }, { logoKodu: 'LCA8.004' }, { logoKodu: uzun.slice(0, 40) }],
+    });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const s = c.govde.sonuclar;
+    assert.deepEqual(s.map((r) => [r.logoKodu, r.islem, r.tamam]), [
+      ['LCA8.001', 'bagla', true], ['LCA8.002', 'bagla', false], ['LCA8.003', 'al', true], ['LCA8.004', 'al', true], [uzun.slice(0, 40), 'al', false],
+    ]);
+    assert.deepEqual(s.map((r) => r.ileti === null), [true, false, true, true, false]);
+    assert.equal(s[0]?.firma?.id, baglanacak.id);
+    assert.equal(await firmaSayisi(), once + 2);
+    assert.deepEqual(cagrilar, []);
+    const yeni = await vt().tek<{ kod: string; tur: string; il: string | null; logo_kayit_no: number; logo_cari_kodu: string }>(
+      'SELECT kod, tur, il, logo_kayit_no, logo_cari_kodu FROM musteri_tedarikci_firma WHERE id = $1', [s[2]?.firma?.id],
+    );
+    assert.deepEqual(yeni, { kod: 'LCA8.003', tur: 'tedarikci', il: 'Deneme İli', logo_kayit_no: 803, logo_cari_kodu: 'LCA8.003' });
+    const bagli = await vt().tek<{ logo_kayit_no: number | null }>('SELECT logo_kayit_no FROM musteri_tedarikci_firma WHERE id = $1', [eskiyen.id]);
+    assert.equal(bagli?.logo_kayit_no, null);
+    // Aynı seçim yeniden gönderilirse alınmış cari ikinci kez alınmaz (2118-2 a): satır reddedilir, firma sayısı değişmez.
+    const ikinci = await toplu('yazan', { bagla: [], al: [{ logoKodu: 'LCA8.003' }] });
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    assert.equal(ikinci.govde.sonuclar[0]?.tamam, false);
+    assert.match(ikinci.govde.sonuclar[0]?.ileti ?? '', /TMI'de var/);
+    assert.equal(await firmaSayisi(), once + 2);
+  });
+
+  test('LCA-9 toplu: yetki, boş, yinelenen ve sınırı aşan seçim reddedilir; başkasının aramasıyla alınmaz', async () => {
+    logodakiler = [cari('LCA9.001', { logoKayitNo: 901 })];
+    await ara('yazan', 'LCA9');
+    const once = await firmaSayisi();
+    assert.equal((await toplu('okuyan', { bagla: [], al: [{ logoKodu: 'LCA9.001' }] })).durum, 403);
+    assert.equal((await toplu('yazan', { bagla: [], al: [] })).durum, 400);
+    assert.equal((await toplu('yazan', { bagla: [], al: [{ logoKodu: 'LCA9.001' }, { logoKodu: 'lca9.001' }] })).durum, 400);
+    const cok = Array.from({ length: 51 }, (_, i) => ({ logoKodu: `LCA9.${String(i).padStart(3, '0')}` }));
+    assert.equal((await toplu('yazan', { bagla: [], al: cok })).durum, 400);
+    const baskasi = await toplu('yazan2', { bagla: [], al: [{ logoKodu: 'LCA9.001' }] });
+    assert.equal(baskasi.durum, 200, JSON.stringify(baskasi.govde));
+    assert.equal(baskasi.govde.sonuclar[0]?.tamam, false);
+    assert.match(baskasi.govde.sonuclar[0]?.ileti ?? '', /yeniden arayın/);
     assert.equal(await firmaSayisi(), once);
   });
 });

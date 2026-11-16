@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI } from './logo-gecisi-sabitleri.ts';
+
+export { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI };
 
 export const FIRMA_TURLERI = ['musteri', 'tedarikci', 'ikisi'] as const;
 export const LOGO_GONDERIM_DURUMLARI = ['bekliyor', 'gonderildi', 'hata'] as const;
@@ -375,9 +378,7 @@ export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
 
 // Logo'dan cari arama ve alma (2118; kararlar 2118-1 a, 2118-2 a, 2118-3 a). Arama ve tek cari okuması köprüyü transaction dışında
 // çağırır; alma ve bağlama komutu köprüye gitmez, aynı kişinin son aramasında görülen cariyi kullanır (süresi dolduysa yeniden aranır).
-export const LOGO_CARI_ARAMA_EN_AZ = 3;
 export const LOGO_CARI_ARAMA_EN_COK = 100;
-export const LOGO_CARI_SONUC_SINIRI = 50;
 export const LOGO_CARI_DURUMLARI = ['tamam', 'kapali', 'ortam-degiskeni-yok', 'hata'] as const;
 // Eşleşme sırası: Logo kayıt numarası, Logo cari kodu, firma kodu, vergi numarası (2118-2 a: eşleşen varsa yeni kart açılmaz).
 export const LOGO_CARI_ESLESME_NEDENLERI = ['kayit-no', 'cari-kodu', 'kod', 'vergi-no'] as const;
@@ -431,3 +432,29 @@ export const logodanFirmaAlGovdesi = firmaKimligi.extend({ logoKodu });
 export type LogodanFirmaAlGovdesi = z.input<typeof logodanFirmaAlGovdesi>;
 export const logoyaBaglaGovdesi = z.object({ logoKodu, ...beklenenSurum });
 export type LogoyaBaglaGovdesi = z.input<typeof logoyaBaglaGovdesi>;
+
+// 3343: Logo geçişi cariler sekmesi. Seçilen cariler tek komutla işlenir: her biri ayrı ara noktadadır, biri reddedilirse ötekiler sürer
+// ve her satırın sonucu ayrı döner. Alma, yeni firma formu açmadan aramadaki öneriyle yapılır; bağlama ve almanın kuralları tek cariyle aynıdır.
+export const LOGO_CARI_TOPLU_ISLEMLERI = ['bagla', 'al'] as const;
+export const logoCariTopluGovdesi = z.object({
+  bagla: z.array(z.object({ logoKodu, firmaId: z.number().int().positive(), ...beklenenSurum })).max(LOGO_CARI_TOPLU_SINIRI),
+  al: z.array(z.object({ logoKodu })).max(LOGO_CARI_TOPLU_SINIRI),
+}).superRefine((g, b) => {
+  const toplam = g.bagla.length + g.al.length;
+  if (toplam === 0) b.addIssue({ code: 'custom', message: 'İşlenecek cari seçin.' });
+  if (toplam > LOGO_CARI_TOPLU_SINIRI) b.addIssue({ code: 'custom', message: `Bir seferde en çok ${LOGO_CARI_TOPLU_SINIRI} cari işlenir.` });
+  const kodlar = [...g.bagla, ...g.al].map((s) => s.logoKodu.toUpperCase());
+  if (new Set(kodlar).size !== kodlar.length) b.addIssue({ code: 'custom', message: 'Aynı cari bir kez seçilir.' });
+});
+export type LogoCariTopluGovdesi = z.input<typeof logoCariTopluGovdesi>;
+export const logoCariTopluSonucu = z.object({
+  logoKodu: z.string(),
+  islem: z.enum(LOGO_CARI_TOPLU_ISLEMLERI),
+  tamam: z.boolean(),
+  firma: z.object({ id: z.number().int().positive(), kod: z.string().nullable(), ad: z.string() }).nullable(),
+  // Reddedilen satırın nedeni; başarılı satırda null.
+  ileti: z.string().nullable(),
+});
+export type LogoCariTopluSonucu = z.output<typeof logoCariTopluSonucu>;
+export const logoCariTopluCevabi = z.object({ sonuclar: z.array(logoCariTopluSonucu).max(LOGO_CARI_TOPLU_SINIRI) });
+export type LogoCariTopluCevabi = z.output<typeof logoCariTopluCevabi>;

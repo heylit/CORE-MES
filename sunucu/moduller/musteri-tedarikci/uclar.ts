@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
   firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi, degerlendirmeCevabi, karneAgirlikCevabi, karneAgirlikGovdesi,
-  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logodanFirmaAlGovdesi, logoyaBaglaGovdesi,
+  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logoCariTopluCevabi, logoCariTopluGovdesi, logodanFirmaAlGovdesi, logoyaBaglaGovdesi,
   yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import * as servis from './servis.ts';
@@ -182,5 +182,14 @@ export const uclar = [
     govde: logoyaBaglaGovdesi,
     cevap: firmaCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ firma: await servis.firmayiLogoyaBagla(db, kullanici, parametre.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/logo-cari/toplu',
+    yetki: 'musteri-tedarikci.yaz',
+    tekrarKorumali: true,
+    govde: logoCariTopluGovdesi,
+    cevap: logoCariTopluCevabi,
+    isle: ({ db, kullanici, govde }) => servis.logoCarileriniTopluIsle(db, kullanici, govde),
   }),
 ];
