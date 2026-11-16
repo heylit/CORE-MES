@@ -22,13 +22,15 @@ interface Ozellikler {
   hedef: Firma | null;
   formaAl?: (cari: LogoCariSatiri) => void;
   baglandi: (firma: Firma) => void;
+  // Listedeki aramadan gelir: pencere açılınca bu metinle bir kez aranır.
+  ilkMetin?: string;
 }
 
-export function LogoCariArama({ hedef, formaAl, baglandi }: Ozellikler) {
+export function LogoCariArama({ hedef, formaAl, baglandi, ilkMetin = '' }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [metin, metinYaz] = useState('');
-  const [aranan, arananYaz] = useState('');
+  const [metin, metinYaz] = useState(ilkMetin.trim());
+  const [aranan, arananYaz] = useState(ilkMetin.trim().length >= EN_AZ ? ilkMetin.trim() : '');
   const sonuc = useQuery({
     queryKey: anahtarlar.logoCari(aranan),
     queryFn: () => api.get<LogoCariAramaCevabi>(`/musteri-tedarikci/logo-cari/ara?q=${encodeURIComponent(aranan)}`),
