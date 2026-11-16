@@ -9,10 +9,16 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI, receteRotaStatuleri } from './disari.ts';
 import { adimCiktisiBul, statuleriTuret } from './kurallar.ts';
-import { adimCiktisi, adimStatusu, yaz } from './servis.ts';
+import { adimCiktisi, adimStatusu as adimStatusuHam, yaz } from './servis.ts';
 import { anaKayitYaz } from './test-ortak.ts';
 
 const PAROLA = 'dogru-parola-1';
+// Bu dosyadaki çağrılar yazabilen bağlantıdadır: satır açılır, 'acilmamis' gelmez.
+const adimStatusu = async (...a: Parameters<typeof adimStatusuHam>): Promise<number | null> => {
+  const s = await adimStatusuHam(...a);
+  assert.notEqual(s, 'acilmamis');
+  return s === 'acilmamis' ? null : s;
+};
 
 const adim = (id: string, seq: number, ek: Record<string, unknown> = {}) => ({ id, seq, opId: 'op1', outItem: '', outStatus: '', ...ek });
 const belge = (tur: string, adimlar: unknown[]) => ({
@@ -393,6 +399,32 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     const satirlar = new Map((await receteRotaStatuleri(vt())).map((x) => [x.id, x]));
     assert.deepEqual([satirlar.get(yururlukte)?.revizyon, satirlar.get(eski10!)?.revizyon, satirlar.get(eski20!)?.revizyon], ['B', 'A', 'A']);
     assert.equal(await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM recete_rota_statu WHERE rota_revizyonu_id = $1', [b]).then((x) => x?.n), 1, 'B\'de yalnız OP 10 ara adımdır');
+  });
+  test('okuma yazmaz: satırı olmayan statü salt okunur işlemde açılmaz, acilmamis döner; yazma işleminde açılır', async () => {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('RSO-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kart = (await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('rso-1', 'mamul', 'RSO-', 1, 'aktif', $1, $2, $2) RETURNING no`, [JSON.stringify({ id: 'rso-1', com: { ad: 'Salt okunur deneme' } }), yoneticiId]))!.no;
+    const tip = (await vt().tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('RSO', 'Torna', 'TAL') RETURNING id"))!.id;
+    const rev = (await vt().tek<{ id: number }>("INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) RETURNING id", [kart, yoneticiId]))!.id;
+    for (const [i, op] of [10, 20].entries()) {
+      await vt().sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [kart, op, rev]);
+      await vt().sorgu('INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, $3, $4, $5, $6)', [rev, kart, op, i + 1, tip, `Adım ${String(op)}`]);
+    }
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [rev, yoneticiId]);
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [rev, yoneticiId]);
+    // Belge, revizyon yürürlüğe girmeden kaydedilir: yürürlükteki revizyonun statü satırı yoktur (yeni yürürlüğe giren revizyon gibi).
+    await kaydet({ items: [{ id: String(kart), code: 'ORN-RSO', type: 'mamul' }], opdefs: [{ id: 'op1', name: 'Torna' }], routes: {} });
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [rev, yoneticiId]);
+    const sayi = async () => (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM recete_rota_statu WHERE rota_revizyonu_id = $1', [rev]))!.n;
+    assert.equal(await sayi(), 0, 'ön koşul: revizyonun statü satırı yok');
+    assert.equal(await vt().okumaTx((db) => adimStatusuHam(db, { malzemeNo: kart, opNo: 10 })), 'acilmamis');
+    assert.equal(await vt().okumaTx((db) => adimStatusuHam(db, { malzemeNo: kart, opNo: 20 })), null, 'son adım statü açmaz');
+    assert.equal(await sayi(), 0, 'okuma satır yazmadı');
+    const acilan = await vt().tx((db) => adimStatusuHam(db, { malzemeNo: kart, opNo: 10 }));
+    assert.equal(typeof acilan, 'number', 'yazma işlemi satırı açar');
+    assert.equal(await sayi(), 1);
+    assert.equal(await vt().okumaTx((db) => adimStatusuHam(db, { malzemeNo: kart, opNo: 10 })), acilan, 'açıldıktan sonra okuma kimliği okur');
   });
   test('çıktı statüyle aynı revizyondandır (kart #1214): emir kendi revizyonunun çıkan kalemini alır (yeni revizyonda kalkmış adım dahil); emirsiz, rotasız ya da bilinmeyen emir yürürlükteki', async () => {
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('RVC-', 0) ON CONFLICT (onek) DO NOTHING");

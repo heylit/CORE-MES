@@ -232,7 +232,8 @@ async function tasinanGirdileri(
   const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
   if (oncekiOpNo === null || tasinan === null || bilgi.girdiler.some((g) => g.malzemeNo === tasinan.malzemeNo)) return [];
   if (!(await stoklanir(tasinan.malzemeNo))) return [];
-  const statuId = adimStatusu === null || (await cikti(oncekiOpNo)) !== null ? null : await adimStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId });
+  const statuId = tasinanStatusu === null || (await cikti(oncekiOpNo)) !== null ? null : await tasinanStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId });
+  if (statuId === 'acilmamis') return [];
   return [{ malzemeId: tasinan.malzemeNo, statuId, birAdet: adetMiktari(1000n, tasinan.miktar, tasinan.bolen) }];
 }
 async function adimTasinanGirdileri(db: Db, uretimEmriId: number, malzemeNo: number, opNo: number): Promise<TasinanGirdi[]> {
@@ -780,18 +781,30 @@ export const kartOnce = <T extends { partiId: number | null; konumId?: number }>
   return [...l].sort((a, b) => sira(a) - sira(b));
 };
 export type AdimStatusuCozucusu = (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }) => Promise<number | null>;
+// Statü çözücüsü 'acilmamis' da döner: adım statü açar ama satırı henüz yoktur ve okuma (salt okunur işlem) satırı açamaz. O statüde
+// stok olamaz; null (statüsüz) sayılırsa taşınan parça statüsüz stokla, örneğin depodaki mamulle eşlenir.
+export type StatuCozumu = number | null | 'acilmamis';
+export type AdimStatusuOkuyucusu = (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }) => Promise<StatuCozumu>;
 // 1476-C: çok katmanlı emirde alt düğümün adımı emrin ürününün rotasında değil, düğümün malzemesinin rotasında kaynak op numarasıyladır.
 // Çözücüye düğümün malzemesi, rotadaki numarası ve emir gider; Reçete ve Rota alt parçanın revizyonunu emrin patlatmasında donmuş olandan
 // okur (1558 a). Düğümün son adımının çıktısı düğümün malzemesidir: alt parça stoğa girmeden tüketen adıma akar (1482 a). Kök düğümde ve
 // tek katmanlı emirde çağrı olduğu gibi geçer.
-const dugumlu = (cozucu: AdimStatusuCozucusu, cikti: boolean): AdimStatusuCozucusu => async (db, g) => {
+const dugumlu = <T,>(cozucu: (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }) => Promise<T>, cikti: boolean) =>
+  async (db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null }): Promise<T | number> => {
   const d = g.uretimEmriId == null ? undefined : (await emirDugumleri(db, g.uretimEmriId)).get(g.opNo);
   if (d === undefined || d.dugum === '0') return cozucu(db, g);
   if (cikti && d.dugumSonu) return d.malzemeNo;
   return cozucu(db, { malzemeNo: d.malzemeNo, opNo: d.kaynakOpNo, uretimEmriId: g.uretimEmriId });
 };
+// tasinanStatusu taşınan parçanın stoğunu arayan yollar içindir ('acilmamis'ta parça aranmaz). adimStatusu öteki yollar içindir: yazma
+// komutunda satır açıldığından 'acilmamis' gelmez; okumada statülü adımla eşleşme aranırken null zararsızdır (sepette statülü parça eşleşmez).
+export let tasinanStatusu: AdimStatusuOkuyucusu | null = null;
 export let adimStatusu: AdimStatusuCozucusu | null = null;
-export function adimStatusuCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimStatusu = dugumlu(cozucu, false); }
+export function adimStatusuCozucusuKaydet(cozucu: AdimStatusuOkuyucusu): void {
+  const okuyucu = dugumlu(cozucu, false) as AdimStatusuOkuyucusu;
+  tasinanStatusu = okuyucu;
+  adimStatusu = async (db, g) => { const s = await okuyucu(db, g); return s === 'acilmamis' ? null : s; };
+}
 // Adımın çıktı kartı da Reçete ve Rota'dadır (rotanın "çıkan" kalemi); kayıt yokken her adım çıktısız sayılır.
 export let adimCiktisi: AdimStatusuCozucusu | null = null;
 export function adimCiktisiCozucusuKaydet(cozucu: AdimStatusuCozucusu): void { adimCiktisi = dugumlu(cozucu, true); }
@@ -859,7 +872,14 @@ export async function dalliTasima(
   const dugumler = await emirDugumleri(db, uretimEmriId);
   const zincir = bilgi.emirAdimlari.map((a) => ({ ...a, dugum: dugumler.get(a.opNo)?.dugum ?? null }));
   const cikti = async (opNo: number) => (adimCiktisi === null ? null : adimCiktisi(db, { malzemeNo, opNo, uretimEmriId }));
-  const statu = async (opNo: number) => (adimStatusu === null ? null : adimStatusu(db, { malzemeNo, opNo, uretimEmriId }));
+  // Statü satırı açılmamış öncülün parçası (yalnız okumada) zincirde malzemesiyle kalır, gelenlerde aranmaz: o statüde stok yoktur.
+  const acilmamis = new Set<number>();
+  const statu = async (opNo: number) => {
+    const s = tasinanStatusu === null ? null : await tasinanStatusu(db, { malzemeNo, opNo, uretimEmriId });
+    if (s !== 'acilmamis') return s;
+    acilmamis.add(opNo);
+    return null;
+  };
   const tasinanlar = new Map<number, ReceteGirdisi | null>();
   const parca = async (opNo: number): Promise<GelenParca | null> => {
     const c = await cikti(opNo);
@@ -881,7 +901,7 @@ export async function dalliTasima(
   if (kaynak === null) return null;
   const oncul = kaynak.tur === 'oncul' ? [kaynak.opNo] : kaynak.tur === 'birlesme' ? kaynak.opNolari : [];
   const adim = zincir.find((a) => a.opNo === bilgi.opNo) ?? {};
-  const gelenler = (await Promise.all(oncul.map(parca))).filter((p): p is GelenParca => p !== null)
+  const gelenler = (await Promise.all(oncul.map(parca))).filter((p): p is GelenParca => p !== null && !acilmamis.has(p.opNo))
     .map((p) => ({ ...p, oran: gelenOrani(zincir.find((a) => a.opNo === p.opNo) ?? {}, adim) }));
   const ilkGirdi = kaynak.tur === 'ilk' ? kaynak.girdi : null;
   const kardesler = ilkGirdi === null ? [] : zincir.flatMap((a) => {
@@ -1165,7 +1185,8 @@ async function tasinanTeslimUyarisi(
   if (dalli === null) {
     const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
     if (oncekiOpNo === null || tasinan === null) return [];
-    const statuId = adimStatusu === null || (await cikti(oncekiOpNo)) !== null ? null : await adimStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId });
+    const statuId = tasinanStatusu === null || (await cikti(oncekiOpNo)) !== null ? null : await tasinanStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId });
+    if (statuId === 'acilmamis') return [];
     gelenler = [{ opNo: oncekiOpNo, malzemeId: tasinan.malzemeNo, statuId, miktar: tasinan.miktar }];
   }
   const uyarilar: string[] = [];

@@ -798,6 +798,18 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
       [false, [[hm, '2.5', '0', null, [[ka2, a.id, '10']]]]], 'OP 10 parçası önceki istasyonda: istek açılmaz, yeri gösterilir');
     assert.deepEqual((await isMalzemesi(b.id))[0]?.malzemeler.map((x) => [x.malzemeId, x.birAdet, x.gereken, x.istasyonda, x.eksik, x.istek, x.tasinan]),
       [[hm, '2.5', '25', '0', true, null, true]], 'Teslim al önceki adımın parçasını işin malzemesi olarak gösterir; taşınan diye işaretli (3059)');
+    // Önceki adımın statü satırı bu revizyonda henüz açılmamışsa okuma yazamaz (salt okunur): çözücü 'acilmamis' der, okuma 200 döner ve
+    // taşınan parçayı statüsüz stokta aramaz (o statüde stok yoktur). Gerçek çözücü yazma işleminde satırı açar (recete-rota statu.test).
+    const asilCozucu = async (_db: Db, g: { malzemeNo: number; opNo: number }) => (g.malzemeNo !== ym ? null : g.opNo === 10 ? s10 : g.opNo === 20 ? s20 : null);
+    adimStatusuCozucusuKaydet(async (db, g) => {
+      const salt = (await db.tek<{ v: string }>("SELECT current_setting('transaction_read_only') AS v"))?.v === 'on';
+      return salt && g.malzemeNo === ym && g.opNo === 10 ? 'acilmamis' : asilCozucu(db, g);
+    });
+    const acilmamisOkuma = await istek<{ isler: unknown[] }>('operator', 'GET', `/stok/teslim-kutusu/is-malzemeleri?istasyonId=${b.id}`);
+    assert.equal(acilmamisOkuma.durum, 200, JSON.stringify(acilmamisOkuma.govde));
+    assert.deepEqual(isMalzemeleriCevabi.parse(acilmamisOkuma.govde).isler.filter((x) => x.uretimEmriId === e).flatMap((x) => x.malzemeler.filter((m) => m.tasinan)), [],
+      'statü satırı açılmamış parça statüsüz stokla eşlenmez');
+    adimStatusuCozucusuKaydet(asilCozucu);
     const isteB = (kaynakKonumId: number | null, kaynakKimligi: string, kartOnayi?: boolean) =>
       istek<IsMalzemeleriCevabi & Hata>('operator', 'POST', '/stok/teslim-kutusu/is-malzemeleri/iste', { istasyonId: b.id, uretimEmriId: e, opNo: 20, malzemeId: hm, kaynakKonumId, buEmrin: null, kaynakKimligi, ...(kartOnayi === undefined ? {} : { kartOnayi }) });
     assert.equal((await isteB(null, 'ym-0')).durum, 400, 'önceki adımın parçası depodan istenmez');
