@@ -205,11 +205,11 @@ export { MiniHalka };
 // İşin yeri: istasyon kodu ve makine (kod ve ad). Makinesi seçilmemiş işte bu açıkça yazar; operatör işin hangi tezgâhın olduğunu kartta görür.
 export interface IsYeriBilgisi { istasyon: string; makine: string | null; makineAd: string | null }
 export const isYeriMetni = (y: IsYeriBilgisi): string =>
-  `${y.istasyon} · ${y.makine ? [y.makine, y.makineAd].filter(Boolean).join(' ') : 'Makine seçilmedi'}`;
+  [y.istasyon || null, y.makine ? [y.makine, y.makineAd].filter(Boolean).join(' ') : 'Makine seçilmedi'].filter(Boolean).join(' · ');
 export function IsYeri({ yer }: { yer: IsYeriBilgisi }) {
   return (
     <span className="tc-ay1-is-yer" title={isYeriMetni(yer)}>
-      <span><Simge ad="layers" boyut="k" />{yer.istasyon}</span>
+      {yer.istasyon ? <span><Simge ad="layers" boyut="k" />{yer.istasyon}</span> : null}
       <span data-yok={yer.makine ? undefined : ''}><Simge ad={yer.makine ? 'cpu' : 'alert'} boyut="k" />{yer.makine ? <>{yer.makine}{yer.makineAd ? <small> · {yer.makineAd}</small> : null}</> : 'Makine seçilmedi'}</span>
     </span>
   );
@@ -526,7 +526,7 @@ export function BilgiCipi({ n, ac }: { n: number; ac: () => void }) {
 // Telefonda çarkın yerine tek satır: ekrandaki iş ve sırası; dokununca çark ve işin bütün alanları pencerede açılır.
 export function IsSatiri({ is, sira, ac }: { is: Is; sira: string | null; ac: () => void }) {
   return (
-    <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · işleri ve makineleri aç`}>
+    <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · bilgileri aç`}>
       <span>
         <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>
         <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ')}</b>
