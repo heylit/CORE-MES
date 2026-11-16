@@ -573,7 +573,7 @@ export async function bekleyenleriListele(db: Db): Promise<Bekleyen[]> {
     talepId: b.talepId, talepNo: b.talepId === null ? null : talepler.get(b.talepId) ?? null, malzemeNo: b.malzemeNo, malzemeAd: b.malzemeNo === null ? null : malzemeler.get(b.malzemeNo) ?? null,
     firmaId: b.firmaId, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
     noktaId: b.firmaId === null ? null : noktalar.get(b.firmaId) ?? null,
-    adet: b.adet, istenenTarih: b.istenenTarih, hazirZamani: b.hazirZamani,
+    adet: b.adet, istenenTarih: b.istenenTarih, hazirZamani: b.hazirZamani, aciklama: b.aciklama,
   }));
 }
 

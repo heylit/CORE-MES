@@ -16,9 +16,9 @@ const OKUYUCU: Kullanici = { id: 4, ad: 'Deneme Okuyucu', islemler: ['sayfa.sevk
 const BEKLEYENLER = {
   bekleyenler: [
     { id: 7, kaynak: 'urun', yon: 'gidis', uretimEmriId: 11, emirNo: 'DENEME-UE-11', talepId: null, talepNo: null, malzemeNo: 5, malzemeAd: 'Deneme mamul', firmaId: null, firmaAd: null, noktaId: null,
-      adet: '7.0000', istenenTarih: null, hazirZamani: '2026-10-08T09:00:00+03:00' },
+      adet: '7.0000', istenenTarih: null, hazirZamani: '2026-10-08T09:00:00+03:00', aciklama: null },
     { id: 8, kaynak: 'fason', yon: 'gidis', uretimEmriId: 12, emirNo: 'DENEME-UE-12', talepId: null, talepNo: null, malzemeNo: 5, malzemeAd: 'Deneme mamul', firmaId: 9, firmaAd: 'Örnek Fason B', noktaId: 3,
-      adet: '3.0000', istenenTarih: null, hazirZamani: '2026-10-08T10:00:00+03:00' },
+      adet: '3.0000', istenenTarih: null, hazirZamani: '2026-10-08T10:00:00+03:00', aciklama: null },
   ],
 } satisfies BekleyenlerCevabi;
 

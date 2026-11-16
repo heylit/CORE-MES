@@ -11,7 +11,7 @@ const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', faso
 const YON_TURU = { gidis: 'teslimat', gelis: 'alim' } as const;
 const OK = { gidis: '↓', gelis: '↑' } as const;
 
-export const bekleyenBasligi = (b: Bekleyen): string => b.malzemeAd ?? (b.malzemeNo === null ? 'Malzeme' : `Malzeme ${String(b.malzemeNo)}`);
+export const bekleyenBasligi = (b: Bekleyen): string => b.malzemeAd ?? b.aciklama ?? (b.malzemeNo === null ? 'Malzeme' : `Malzeme ${String(b.malzemeNo)}`);
 
 // Seçim (3348 a, Hazırla adımı): noktası belli kayıt işaretlenip topluca güne eklenir; satırın tamamı dokunma alanıdır.
 export interface BekleyenSecimi { secili: ReadonlySet<number>; degistir: (id: number) => void }

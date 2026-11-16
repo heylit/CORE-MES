@@ -71,9 +71,7 @@ export function HazirlaAdimi({ tarih, isYazabilir, iseCevir }: { tarih: string; 
           </Dugme>
         </div>
       )}
-      {liste.length > 0
-        ? <BeklemeListesi baslik="Sevke hazır" bekleyenler={liste} isYazabilir={isYazabilir} iseCevir={iseCevir} secim={{ secili, degistir }} />
-        : <p className="tc-sevkiyat-bos">Sevke hazır kayıt yok. Tüm işler'de serbest bırakılan ve hazır olan kalem buraya düşer.</p>}
+      {liste.length > 0 && <BeklemeListesi baslik="Sevke hazır" bekleyenler={liste} isYazabilir={isYazabilir} iseCevir={iseCevir} secim={{ secili, degistir }} />}
 
       {birakilmamis.length > 0 && (
         <section className="tc-sevkiyat-bekleyen" aria-label="Sevkiyata bırakılmamış">

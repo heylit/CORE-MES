@@ -198,7 +198,7 @@ export function SevkiyatPlani() {
   const acikAdim: AkisAdimi = secilenAdim ?? varsayilanAdim({ veri, onayli, yerlesen, sevkeHazir, yuk });
   const adimSec = (a: AkisAdimi) => setAdres((o) => { const y = new URLSearchParams(o); y.set('adim', a); return y; });
   const adim = acikAdim === 'hazirla'
-    ? { ton: sevkeHazir ? 'bilgi' as const : 'tamam' as const, metin: sevkeHazir ? `${sevkeHazir} kayıt sevke hazır. Noktası belli olanları seçip güne ekleyin; sonra “Araca ver” adımına geçin.` : 'Sevke hazır kayıt yok. Günün işleri “Araca ver” adımında.' }
+    ? { ton: sevkeHazir ? 'bilgi' as const : 'tamam' as const, metin: sevkeHazir ? `${sevkeHazir} kayıt sevke hazır. Noktası belli olanları seçip güne ekleyin; sonra “Araca ver” adımına geçin.` : 'Sevke hazır kayıt yok; Tüm işler’de serbest bırakılan ve hazır olan kalem buraya düşer. Günün işleri “Araca ver” adımında.' }
     : acikAdim === 'yukle' && onayli
       ? (yuk.cikis || yuk.irsaliye
         ? { ton: 'uyari' as const, metin: [yuk.cikis ? `${yuk.cikis} durakta çıkış bekliyor` : '', yuk.irsaliye ? `${yuk.irsaliye} durağın irsaliye no'su eksik` : ''].filter(Boolean).join(', ') + `. Satırdan ${[yuk.cikis ? 'çıkışı yapın' : '', yuk.irsaliye ? 'irsaliye no girin' : ''].filter(Boolean).join(' ve ')}.` }
@@ -316,10 +316,10 @@ export function SevkiyatPlani() {
               </div>
             )}
           </header>
-          <div className="tc-sevkiyat-oncelik-satiri">
+          {acikAdim !== 'teslim' && <div className="tc-sevkiyat-oncelik-satiri">
             <span className="tc-sevkiyat-ince">Otomatik dağıtmada öncelik</span>
             <OncelikSecimi secili={amac} farklar={farklar} kapali={yetki.planYaz && !duzenlenebilir} sec={(a) => { if (!yetki.planYaz || duzenlenebilir) amacDegistir(a); }} />
-          </div>
+          </div>}
           {bosGun && (
             <div className="tc-sevkiyat-bos">
               <p>Bu gün için sevkiyat yok.</p>

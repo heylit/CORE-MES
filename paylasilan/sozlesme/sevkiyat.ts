@@ -136,6 +136,8 @@ export const bekleyenSemasi = z.object({
   // Firmanın aktif sevkiyat noktası; yoksa null (işe çevirirken seçilir).
   noktaId: z.number().int().nullable(),
   adet: ondalikMetinSemasi.nullable(), istenenTarih: tarih.nullable(), hazirZamani: zamanSemasi,
+  // Elle kalemin açıklaması: malzemesi olmayan kaydın tek tanımı.
+  aciklama: z.string().nullable(),
 });
 export const bekleyenlerCevabi = z.object({ bekleyenler: z.array(bekleyenSemasi) });
 export const bekleyenKaldirCevabi = z.object({ id: z.number().int() });
