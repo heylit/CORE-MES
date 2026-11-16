@@ -441,7 +441,8 @@ export const planCanliOzeti = z.object({
 // plan değişmez. İsteğe bağlı: alanı göndermeyen sunucuyla ekran eskisi gibi çalışır.
 // adim-bitti (B-2499-12): emir bitmeden adımı canlıdaki yerinden erken bitti.
 // satin-alma-termini (3256-1): açık siparişin gelişi ya da elle tedarik termini değişti, malzemeyi kullanan adım canlıda bitmedi.
-const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'adim-bitti', 'emir-iptal', 'satin-alma-termini']);
+// fason-termini (3349): fason hizmet siparişindeki firma tarihi girildi ya da değişti, fason adımı canlıda bitmedi.
+const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'adim-bitti', 'emir-iptal', 'satin-alma-termini', 'fason-termini']);
 export const planBayatligi = z.object({
   bayat: z.boolean(),
   sonCanliyaAlma: zaman.nullable(),

@@ -41,12 +41,12 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemOzelligi } from './kurallar.ts';
-import { emirSatinAlmaDurumlari, kopyaOzelligi } from './kurallar.ts';
-import type { EmirSatinAlmaDurumu } from './kurallar.ts';
+import { emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
+import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
-import { degisenMalzemeler, terminBildir } from './termin-olayi.ts';
+import { degisenFasonIsEmirleri, degisenMalzemeler, terminBildir } from './termin-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { KARNE_EN_AZ_TESLIM } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
@@ -987,7 +987,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const kalanlar = new Set((yazilacak.karar?.siparisler ?? []).map((x) => x.teklifId));
   const silinen = (eski.karar?.siparisler ?? []).map((x) => x.teklifId).filter((x) => !kalanlar.has(x));
   if ((await alacakliSiparisler(db, id, silinen)).length > 0) throw cakisma(ALACAKLI_SIPARIS_SILINMEZ);
-  const gelislerOnce = await s.talepGelisleriOku(db, id);
+  const gelislerOnce = await gelisOncesi(db, id);
   await surumluGuncelle({
     guncelle: () => s.talepGuncelle(db, yazilacak, talepEden, surum),
     varMi: () => s.talepVarMi(db, id),
@@ -1076,7 +1076,7 @@ export async function siparisKalemiDegistir(db: Db, k: Kullanici, id: string, g:
   if (red !== null) throw gecersiz(red);
   const kalem = eski.kalemler.find((x) => x.id === g.kalemId)!;
   await kalemKartlariniDenetle(db, [{ ...kalem, birim: g.birim }], [kalem]);
-  const gelislerOnce = await s.talepGelisleriOku(db, id);
+  const gelislerOnce = await gelisOncesi(db, id);
   await s.siparisKalemiYaz(db, id, g.kalemId, g.miktar, g.birim);
   await gelisFarkiniBildir(db, id, gelislerOnce);
   await s.siparisGuncellemesiniIsaretle(db, id, (eski.karar?.siparisler ?? []).filter((x) => x.satirlar.some((r) => r.kalemId === g.kalemId)).map((x) => x.teklifId));
@@ -1094,8 +1094,27 @@ export async function teslimYontemiDegistir(db: Db, k: Kullanici, id: string, g:
   return gorunen(k, (await talepOku(db, id))!);
 }
 // 3256-1: kayıt talebin plana giden gelişini (açık siparişin günü ya da kalanı) değiştirdiyse plan canlı planı "eskidi" işaretler.
-async function gelisFarkiniBildir(db: Db, id: string, once: s.TalepGelisiOkuma[]): Promise<void> {
-  await terminBildir(db, { malzemeNolar: degisenMalzemeler(once, await s.talepGelisleriOku(db, id)) });
+// 3349: talebin fason iş emirlerinin firma tarihi (planın dönüş günü) de karşılaştırılır; kalem silinmiş olabileceği için iş emirleri önce
+// ve sonra okunanların birleşimidir.
+interface GelisOncesi { gelisler: s.TalepGelisiOkuma[]; isEmirleri: number[]; fason: Map<number, FasonSiparisTarihi> }
+async function fasonTarihleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, FasonSiparisTarihi>> {
+  if (isEmriIdleri.length === 0) return new Map();
+  return fasonSiparisTarihiSec((await s.emirTedarikDurumlariOku(db, [], isEmriIdleri)).flatMap((x) => {
+    const asama = tedarikAsamasi(x);
+    return asama === null ? [] : [{ isEmriId: x.isEmriId, asama, termin: asama === 'siparis' ? x.beklenenTeslim : null, siparisNo: null }];
+  }));
+}
+async function gelisOncesi(db: Db, id: string): Promise<GelisOncesi> {
+  const isEmirleri = await s.talepIsEmirleriOku(db, id);
+  return { gelisler: await s.talepGelisleriOku(db, id), isEmirleri, fason: await fasonTarihleri(db, isEmirleri) };
+}
+async function gelisFarkiniBildir(db: Db, id: string, once: GelisOncesi): Promise<void> {
+  const isEmirleri = [...new Set([...once.isEmirleri, ...(await s.talepIsEmirleriOku(db, id))])];
+  const onceki = new Map([...once.fason].filter(([k]) => isEmirleri.includes(k)));
+  await terminBildir(db, {
+    malzemeNolar: degisenMalzemeler(once.gelisler, await s.talepGelisleriOku(db, id)),
+    isEmriIdler: degisenFasonIsEmirleri(onceki, await fasonTarihleri(db, isEmirleri)),
+  });
 }
 async function alimlariBildir(db: Db, k: Kullanici, id: string): Promise<void> {
   const t = (await talepOku(db, id))!;
@@ -1108,7 +1127,7 @@ export async function siparisKapat(db: Db, k: Kullanici, id: string, g: SiparisK
   const eski = (await talepOku(db, id))!;
   const red = siparisKapatmaReddi(eski, g.teklifId);
   if (red !== null) throw gecersiz(red);
-  const gelislerOnce = await s.talepGelisleriOku(db, id);
+  const gelislerOnce = await gelisOncesi(db, id);
   if (!(await s.siparisiKapatmayaIsaretle(db, id, g.teklifId))) throw gecersiz(ILETILER.kapatmaVar);
   await gelisFarkiniBildir(db, id, gelislerOnce);
   const sip = eski.karar!.siparisler.find((x) => x.teklifId === g.teklifId)!;
@@ -2154,7 +2173,7 @@ export async function tedarikTerminiKaydet(db: Db, k: Kullanici, g: TedarikTermi
     if (!(await malzemeOzetleri(db, [g.malzemeNo])).has(g.malzemeNo)) throw dogrulama(ILETILER.terminMalzemesiYok, 'malzemeNo');
     const yeni = await s.tedarikTerminiEkle(db, yazim, k.id);
     if (yeni === null) throw cakisma(ILETILER.terminVar);
-    if (yeni.termin !== null) await terminBildir(db, { malzemeNolar: [g.malzemeNo] });
+    if (yeni.termin !== null) await terminBildir(db, { malzemeNolar: [g.malzemeNo], isEmriIdler: [] });
     return { termin: terminCikisi(yeni) };
   }
   const surum = g.surum;
@@ -2163,7 +2182,7 @@ export async function tedarikTerminiKaydet(db: Db, k: Kullanici, g: TedarikTermi
     guncelle: () => s.tedarikTerminiGuncelle(db, yazim, surum, k.id), varMi: () => s.tedarikTerminiVarMi(db, g.malzemeNo), bulunamadiIletisi: ILETILER.terminMalzemesiYok,
   });
   // 3256-1: açıklamanın değişmesi planı eskitmez; yalnız termin günü.
-  if (onceki?.termin !== satir.termin) await terminBildir(db, { malzemeNolar: [g.malzemeNo] });
+  if (onceki?.termin !== satir.termin) await terminBildir(db, { malzemeNolar: [g.malzemeNo], isEmriIdler: [] });
   return { termin: terminCikisi(satir) };
 }
 export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminleriCevabi> {

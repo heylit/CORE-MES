@@ -4175,6 +4175,50 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       assert.equal((await vt().tx((db) => onayliTalepGelisleri(db, [no], bugun))).get(no)?.some((x) => x.siparisNo === onayda.no) ?? false, false);
     } finally { birak(); }
   });
+
+  // 3349: fason iş emrine bağlı siparişin firma tarihi planın dönüş günüdür. Bağ sipariş satırındadır (kalemde yok): olay iş emrini satırdan bulur.
+  test('3349: fason iş emrine bağlı siparişin firma tarihi kayıtla girilince ve değişince, kalem miktarı siparişi yeniden açınca, sipariş silinince olay iş emrini taşır; tarihi değiştirmeyen kayıt taşımaz', async () => {
+    const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+    const fasonIsEmri = async (satir: number): Promise<number> => {
+      const ie = (await ortam!.sahip.tek<{ id: number }>(
+        "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme fason') RETURNING id", [await emirAc(), tip]))!.id;
+      await ortam!.sahip.tx((db) => db.sorgu('UPDATE satin_alma_siparis_satiri SET is_emri_id = $2 WHERE id = $1', [satir, ie]));
+      return ie;
+    };
+    const tarihle = async (id: string, teklifId: string, gun: string, ek: Record<string, unknown> = {}) => {
+      const t = await acilistaki(id);
+      return tamam<Talep>(await kaydet(c.sa, { ...govde(t), ...ek, karar: { ...t.karar!, siparisler: t.karar!.siparisler.map((x) => (x.teklifId === teklifId ? { ...x, beklenenTeslim: gun } : x)) } }));
+    };
+    const { s, a, k2 } = await bolunmusSiparis();
+    const satir = siparisi(s, a).satirlar[0]!.id;
+    const ie = await fasonIsEmri(satir);
+    const olaylar: number[][] = [];
+    const birak = terminDinle(async (_db, o) => { olaylar.push(o.isEmriIdler); });
+    const yayilan = () => olaylar.splice(0).filter((x) => x.length > 0);
+    try {
+      await tarihle(s.id, a, '2099-03-01');
+      assert.deepEqual(yayilan(), [[ie]], 'tarih girildi');
+      await tarihle(s.id, a, '2099-03-05');
+      assert.deepEqual(yayilan(), [[ie]], 'tarih değişti');
+      await tarihle(s.id, a, '2099-03-05', { notlar: 'Deneme notu' });
+      assert.deepEqual(yayilan(), [], 'tarih aynı: yalnız not değişti');
+      // Tamamı gelen satır beklenmez (teslim yolu bu olayı vermez); miktar artınca sipariş yeniden açıktır, tarih geri gelir.
+      await teslimEt(satir, '4', 893491);
+      assert.deepEqual(yayilan(), [], 'teslim bu olayı vermez');
+      tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${s.id}/siparis-kalemi-degistir`,
+        { kalemId: k2, miktar: '6', birim: 'adet', gerekce: 'Deneme', surum: (await acilistaki(s.id)).surum }));
+      assert.deepEqual(yayilan(), [[ie]], 'kalem miktarı siparişi yeniden açtı');
+
+      // Sipariş silinince satırı da gider: iş emri yalnız önce okunanlarda vardır.
+      const iki = await bolunmusSiparis();
+      const ie2 = await fasonIsEmri(siparisi(iki.s, iki.a).satirlar[0]!.id);
+      await tarihle(iki.s.id, iki.a, '2099-04-01');
+      assert.deepEqual(yayilan(), [[ie2]], 'ikinci talep: tarih girildi');
+      const t = await acilistaki(iki.s.id);
+      tamam<Talep>(await kaydet(c.sa, { ...govde(t), karar: { ...t.karar!, siparisler: t.karar!.siparisler.filter((x) => x.teklifId !== iki.a) } }));
+      assert.deepEqual(yayilan(), [[ie2]], 'sipariş silindi: tarih kalktı');
+    } finally { birak(); }
+  });
 });
 
 describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek PostgreSQL)', () => {

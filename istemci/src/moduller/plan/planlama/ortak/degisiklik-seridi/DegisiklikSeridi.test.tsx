@@ -139,6 +139,9 @@ describe('canlı plan bayat işareti (2319)', () => {
     expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'satin-alma-termini': 1 } })).toContain('1 satın alma termini değişti');
     expect(canliBayatSatiri({ neden: 'satin-alma-termini', zaman: '', emirNo: 'E-3', makineKod: null })).toBe('satın alma termini değişti: E-3');
     expect(canliBayatKaynagi('satin-alma-termini')).toBe('Satın alma');
+    expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'fason-termini': 2 } })).toContain('2 fason firma tarihi değişti');
+    expect(canliBayatSatiri({ neden: 'fason-termini', zaman: '', emirNo: 'E-4', makineKod: null })).toBe('fason firma tarihi değişti: E-4');
+    expect(canliBayatKaynagi('fason-termini')).toBe('Satın alma');
     expect(canliBayatKaynagi('durus')).toBe('Saha');
     expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'adim-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
   });

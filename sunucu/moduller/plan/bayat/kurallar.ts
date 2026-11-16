@@ -8,7 +8,9 @@
 // satin-alma-termini (3256-1): açık siparişin gelişi (günü, kalanı) ya da elle tedarik termini değişti ve o malzemeyi kullanan adım canlıda
 // henüz bitmedi; plan malzemenin geliş gününe göre bekletir (VARSAYIM: stok yetse de işaretlenir, stok okunmaz).
 
-export const BAYAT_NEDENLERI = ['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'adim-bitti', 'emir-iptal', 'satin-alma-termini'] as const;
+// fason-termini (3349): fason hizmet siparişindeki firma tarihi girildi, değişti ya da kalktı ve o fason adımı canlıda henüz bitmedi; plan
+// adımın dönüşünü firma tarihine göre kurar (3330), yeni tarih plan yeniden kurulunca kullanılır.
+export const BAYAT_NEDENLERI = ['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'adim-bitti', 'emir-iptal', 'satin-alma-termini', 'fason-termini'] as const;
 export type BayatNedeni = (typeof BAYAT_NEDENLERI)[number];
 export const BAYAT_OLAY_EN_COK = 20;
 

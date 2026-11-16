@@ -53,6 +53,14 @@ describe('degisiklikler (3317 a)', () => {
     expect(degisiklikDokumu(l)).toBe('1 veri · 3 saha · 2 geride');
   });
 
+  // 3349: fason hizmet siparişinin firma tarihi girilince ya da değişince; kaynak satın almadır, emre bağlanır.
+  it('fason firma tarihi olayı satın alma kaynağıyla ve ne olacağıyla yazılır', () => {
+    const olaylar = [{ neden: 'fason-termini' as const, zaman: '2026-10-20T08:00:00Z', uretimEmriId: 2, emirNo: 'ORN-UE-2', makineId: null, makineKod: null }];
+    const saha = degisiklikler({ m: M, bekleyen: [], olaylar, zaman, an }).filter((d) => d.baslik === 'saha');
+    expect(saha.map((d) => [d.ne, d.emirId])).toEqual([['Fason firma tarihi değişti: ORN-UE-2', '2']]);
+    expect(saha[0]?.alt).toBe(`Satın alma · A${String(Date.parse('2026-10-20T08:00:00Z'))} · fason dönüşü yeni firma tarihine göre kayabilir`);
+  });
+
   it('dökümde sıfır olan tür yazılmaz; boş listede döküm boştur', () => {
     expect(degisiklikDokumu(degisiklikler({ m: M, bekleyen: [], olaylar: [], zaman, an }))).toBe('2 geride');
     expect(degisiklikDokumu([])).toBe('');

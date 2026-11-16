@@ -1874,6 +1874,18 @@ export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly numbe
   );
 }
 
+// 3349: talebin kalemlerinin (ya da sipariş satırlarının) bağlı olduğu fason iş emirleri.
+export async function talepIsEmirleriOku(db: Db, talepId: string): Promise<number[]> {
+  return (await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT coalesce(s.is_emri_id, k.is_emri_id) AS id
+       FROM satin_alma_talep_kalemi k
+       LEFT JOIN satin_alma_siparis_satiri s ON s.talep_id = k.talep_id AND s.kalem_id = k.id
+      WHERE k.talep_id = $1 AND coalesce(s.is_emri_id, k.is_emri_id) IS NOT NULL
+      ORDER BY 1`,
+    [talepId],
+  )).map((x) => x.id);
+}
+
 // D7: numarası ya da Logo kayıt numarası CORE MES siparişine ait mi (Logo'daki sipariş düzeltmesi bunu düzeltmez, G3).
 export async function coreSiparisiMi(db: Db, no: string, logoKayitNo: string): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_siparis WHERE no = $1 OR logo_kayit_no = $2 LIMIT 1', [no, logoKayitNo])) !== null;

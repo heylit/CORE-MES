@@ -61,16 +61,21 @@ export async function adimBittiYansit(db: Db, olay: { isEmriId: number; uretimEm
 
 // 3256-1: satın almada gelişi ya da termini değişen malzemeyi canlıda bitmemiş adımında kullanan emir işaretlenir. kaynak_id canlı plan
 // sürümüdür (rota-degisti gibi): aynı planda emir başına bir satır, yeni canlıya almadan sonraki değişiklik yeniden yazılır.
-export async function satinAlmaTerminiYansit(db: Db, olay: { malzemeNolar: readonly number[] }): Promise<void> {
+export async function satinAlmaTerminiYansit(db: Db, olay: { malzemeNolar: readonly number[]; isEmriIdler: readonly number[] }): Promise<void> {
   await isaretYaz(db, async () => {
-    if (olay.malzemeNolar.length === 0 || (await sonCanliyaAlma(db)) === null) return;
-    const bilgi = await isEmriPlanBilgileri(db, await s.bitmemisIsEmirleri(db, new Date().toISOString()));
+    if ((olay.malzemeNolar.length === 0 && olay.isEmriIdler.length === 0) || (await sonCanliyaAlma(db)) === null) return;
+    const an = new Date().toISOString();
+    const surum = await planSurumu(db);
+    // 3349: firma tarihi değişen fason iş emrinin emri, canlıda bitmemiş satırı varsa işaretlenir (aynı planda emir başına bir satır). Fason
+    // adımın kendi yerleşim satırı aranmaz: tarih emrin sonraki adımlarını da kaydırır.
+    const fasonEmirleri = [...new Set([...(await isEmriPlanBilgileri(db, olay.isEmriIdler)).values()].map((b) => b.uretimEmriId))];
+    for (const e of fasonEmirleri) if (await s.bitmemisSatirVar(db, await isEmirleri(db, e), an)) await s.olayYaz(db, 'fason-termini', e, surum);
+    if (olay.malzemeNolar.length === 0) return;
+    const bilgi = await isEmriPlanBilgileri(db, await s.bitmemisIsEmirleri(db, an));
     if (bilgi.size === 0) return;
     const adimlar = [...bilgi.values()].map((b) => ({ uretimEmriId: b.uretimEmriId, opNo: b.opNo }));
     const ihtiyaclar = await emirlerinMalzemeIhtiyaci(db, [...new Set(adimlar.map((a) => a.uretimEmriId))]);
     const emirler = terminEtkiledigiEmirler(adimlar, ihtiyaclar, olay.malzemeNolar);
-    if (emirler.length === 0) return;
-    const surum = await planSurumu(db);
     for (const e of emirler) await s.olayYaz(db, 'satin-alma-termini', e, surum);
   });
 }

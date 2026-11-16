@@ -33,6 +33,7 @@ const OLAY_NE: Record<Olay['neden'], string> = {
   'rota-degisti': 'Emrin rotası değişti',
   'emir-iptal': 'Emir iptal edildi',
   'satin-alma-termini': 'Malzemenin geliş tarihi değişti',
+  'fason-termini': 'Fason firma tarihi değişti',
 };
 const OLAY_SONUCU: Record<Olay['neden'], string> = {
   'emir-bitti': 'tezgâhta yer açıldı',
@@ -42,6 +43,7 @@ const OLAY_SONUCU: Record<Olay['neden'], string> = {
   'rota-degisti': 'plan eski adımlara göre',
   'emir-iptal': 'tezgâhta boşluk kaldı',
   'satin-alma-termini': 'emrin başlangıcı etkilenebilir',
+  'fason-termini': 'fason dönüşü yeni firma tarihine göre kayabilir',
 };
 // Planlanan başlangıçtan sonra bu kadar (saat) beklenir; daha kısa gecikme satır olmaz (ekran her dakika titremesin).
 export const GERIDE_PAYI = 0.25;
@@ -72,7 +74,7 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
     return {
       anahtar: `saha:${String(i)}:${o.neden}:${o.zaman}`, baslik: 'saha' as const, emirId: (o.emirNo === null ? undefined : noIle.get(o.emirNo))?.id ?? null, isId: null,
       ne: ne === null ? OLAY_NE[o.neden] : `${OLAY_NE[o.neden]}: ${ne}`,
-      alt: [o.neden === 'satin-alma-termini' ? 'Satın alma' : 'Saha', an(Date.parse(o.zaman)), OLAY_SONUCU[o.neden]].join(' · '),
+      alt: [o.neden === 'satin-alma-termini' || o.neden === 'fason-termini' ? 'Satın alma' : 'Saha', an(Date.parse(o.zaman)), OLAY_SONUCU[o.neden]].join(' · '),
     };
   });
   const emirNo = new Map(m.emirler.map((e) => [e.id, e]));
