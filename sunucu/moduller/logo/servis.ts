@@ -7,11 +7,11 @@ import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
+import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -31,9 +31,11 @@ export interface SurecBellegi {
   sonListeDenemesi: Date | null;
   // Okuma akışlarının son denemesi (akış anahtarı -> zaman): başarısız okuma OKUMA_HATA_BEKLEME_MS dolmadan yinelenmez.
   okumaDenemeleri: Map<string, Date>;
+  // 3313: "Kart bekliyor" iletisi sahibine bir kez yazılır (belge anahtarı -> ileti); ileti değişince yeniden.
+  kartBekleyenler: Map<number, string>;
 }
 
-export const yeniSurecBellegi = (): SurecBellegi => ({ niyetler: new Map(), acmaIstekleri: new Map(), sonListeDenemesi: null, okumaDenemeleri: new Map() });
+export const yeniSurecBellegi = (): SurecBellegi => ({ niyetler: new Map(), acmaIstekleri: new Map(), sonListeDenemesi: null, okumaDenemeleri: new Map(), kartBekleyenler: new Map() });
 
 // İş "bekliyor" dönerken sağlık ayrıntısında görünen nedenler: sabit metin, değer taşımaz.
 export const BEKLEME_NEDENLERI = {
@@ -499,6 +501,24 @@ async function yenidenVerilenleriAc(
   }
 }
 
+// 3313: satır kartları Logo'da mı (yerel kayıt ve okunmuş kopya; Logo'ya sorulmaz) ve hizmet satırı var mı.
+async function satirKartlari(db: Db, b: Parameters<typeof belgeStokKodlari>[0]): Promise<{ eksik: string[]; hizmet: string[] }> {
+  const kodlar = belgeStokKodlari(b);
+  if (kodlar.length === 0) return { eksik: [], hizmet: [] };
+  const durumlar = await logoKartDurumlari(db, kodlar);
+  const harita = await s.logoKodHaritasi(db, kodlar);
+  const logoKodu = (k: string): string => harita.get(k) ?? k;
+  const aynada = await s.aynadakiKodlar(db, kodlar.map(logoKodu));
+  return { eksik: logodaOlmayanKartlar(kodlar, durumlar, logoKodu, aynada), hizmet: kodlar.filter((k) => durumlar.get(k)?.hizmet === true) };
+}
+// Eksik kartta belge gitmez, deneme sayılmaz; neden sahibine bir kez yazılır (sahibinin ekranında görünür).
+async function kartBekliyor(db: Db, o: TurOrtami, anahtar: number, eksik: readonly string[], bildir: Bildir<SiparisLogoSonucu>): Promise<void> {
+  const ileti = kartBekliyorMetni(eksik);
+  if (o.bellek.kartBekleyenler.get(anahtar) === ileti) return;
+  await bildir(db, { hata: ileti });
+  o.bellek.kartBekleyenler.set(anahtar, ileti);
+}
+
 async function kalkanEylemi(o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null) {
   const anahtar = bellekAnahtari(belge, id);
   const taze = g?.niyetZamani != null && o.bellek.niyetler.get(anahtar) === g.niyetZamani.getTime();
@@ -561,6 +581,10 @@ async function siparisAcmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemc
     const { anahtar, eylem } = await kalkanEylemi(o, 'siparis', sip.id, g);
     if (eylem === 'bekle') continue;
     const bildir: Bildir<SiparisLogoSonucu> = (yazDb, x) => o.kaynak.sonuc(yazDb, sip.id, x);
+    if (eylem === 'niyet-yaz') {
+      const { eksik } = await satirKartlari(db, sip);
+      if (eksik.length > 0) { await kartBekliyor(db, o, anahtar, eksik, bildir); continue; }
+    }
     const cariKodu = (await firmaOzeti(db, sip.firmaId))?.logoCariKodu ?? null;
     const r = siparisGovdesi(await logoKoduyla(db, sip), { cariKodu, kdv, hizmetKdv });
     if ('hata' in r) return { tur: 'gonderim', no: sip.id, sonuc: await basarisizAcma(db, o, 'siparis', sip.id, g, bildir, 'reddedildi', r.hata, undefined) };
@@ -645,6 +669,11 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
     const sonucla = (sonuc: GidenSonucu): TurSonucu => ({ tur: a.belge, no: t.id, sonuc });
     const basarisiz = (sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number): Yazici<TurSonucu> =>
       async (yazDb) => sonucla(await basarisizAcma(yazDb, o, a.belge, t.id, g, bildir, sonuc, hata, niyet, bekleme));
+    if (eylem === 'niyet-yaz') {
+      const k = await satirKartlari(db, t as Parameters<typeof belgeStokKodlari>[0]);
+      if (a.belge === 'talep' && k.hizmet.length > 0) return basarisiz('reddedildi', TALEP_HIZMET_ILETISI, undefined)(db);
+      if (k.eksik.length > 0) { await kartBekliyor(db, o, anahtar, k.eksik, bildir); continue; }
+    }
     const r = await a.govde(t);
     if ('hata' in r) return basarisiz('reddedildi', r.hata, undefined)(db);
     if (eylem === 'gonder' && !taze) return basarisiz('reddedildi', SONUCU_BILINMIYOR, undefined)(db);

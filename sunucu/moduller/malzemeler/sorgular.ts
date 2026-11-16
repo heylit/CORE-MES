@@ -945,6 +945,15 @@ export interface LogoIcinTmiKarti {
   kimlik: string; stokKodu: string; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
   onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null; birim: string | null;
 }
+// 3313: belge satırlarındaki kartların Logo kaydı ve türü (talep fişine hizmet satırı yazılmaz). Kodu bulunmayan satır dönmez.
+export function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<{ stokKodu: string; logoKayitli: boolean; hizmet: boolean }[]> {
+  return db.sorgu(
+    `SELECT stok_kodu AS "stokKodu", logo_kayit_no IS NOT NULL AS "logoKayitli", tur = 'hizmet' AS hizmet
+       FROM malzeme_katalog_karti WHERE stok_kodu = ANY($1::text[])`,
+    [kodlar],
+  );
+}
+
 // Logo kayıt numarasıyla bağlı ya da aynı stok kodlu kartlar (iptal dahil: kodu yeniden verilmez).
 export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
   return db.sorgu(

@@ -100,6 +100,10 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     ortam = await testVeritabaniKur('logosat');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Logo', kullaniciAdi: 'lt-yonetici', parola: PAROLA }));
+    // 3313: satır kartları Logo'da bilinir (okunmuş kopya); kart bekleyen belge ayrı testte.
+    await vt().sorgu(`INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma)
+      SELECT 880000 + n, k, true, now() FROM unnest($1::text[]) WITH ORDINALITY AS t (k, n)`,
+      [['HM-DEN-00001', 'HM-DEN-00002', 'HM-DEN-00003', 'HM-DEN-00009', 'HZ-FSN-00001', 'MM-DEN-00001', 'MM-DEN-00002', 'LG.DEN.2']]);
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'lt-yonetici', parola: PAROLA } });
     assert.equal(c.statusCode, 200, c.body);
     cerez = String(c.headers['set-cookie']).split(';')[0] ?? '';
@@ -223,6 +227,17 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     const sira = (await sahip.tek<{ id: number }>("SELECT id FROM siparisler_logo_gonderim WHERE tur = 'teklif' AND teklif_id = $1", [t.id]))!.id;
 
     const o = { ...ortami(), kaynak: siparislerKaynagi };
+    // 3313 T6: satırdaki kart Logo'da bilinmiyorken teklif gitmez, deneme sayılmaz; neden Siparişler sırasına bir kez yazılır.
+    const istekOnce = kopru.istekler.length;
+    assert.deepEqual(await satisTuru(vt(), o), { tur: 'bos' });
+    assert.deepEqual(await satisTuru(vt(), o), { tur: 'bos' });
+    assert.equal(kopru.istekler.length, istekOnce, 'köprüye istek yok');
+    const bekleyen = await sahip.tek<{ durum: string; hata: string }>('SELECT durum, hata FROM siparisler_logo_gonderim WHERE id = $1', [sira]);
+    assert.equal(bekleyen?.durum, 'hata');
+    assert.match(bekleyen?.hata ?? '', /^Kart bekliyor: LGT-DNM-00001\./);
+    assert.equal(await sahip.tek("SELECT 1 FROM logo_giden WHERE belge_turu = 'siparisler-teklifi' AND belge_no = $1", [sira]), null, 'deneme izi yok');
+    // Kart Logo'ya gidince (burada okunmuş kopyada görünür) teklif kendiliğinden gider.
+    await sahip.sorgu("INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma) VALUES (889001, 'LGT-DNM-00001', true, now())");
     assert.deepEqual(await satisTuru(vt(), o), { tur: 'siparisler-teklifi-niyet', no: sira });
     const sonuc = await satisTuru(vt(), o);
     assert.deepEqual(sonuc, { tur: 'siparisler-teklifi', no: sira, sonuc: 'gonderildi' });

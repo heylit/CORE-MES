@@ -280,6 +280,20 @@ export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme
   return g.sonrakiDeneme === null || g.sonrakiDeneme.getTime() <= simdi.getTime();
 }
 
+// 3313: satır kartı denetimi. Kart Logo'da sayılır: CORE kartında Logo kaydı var (gönderildi, bağlandı, Logo'dan alındı) ya da Logo
+// kodu okunmuş kopyada. Eksik kart varsa belge gitmez ve deneme sayılmaz; kart gidince belge kendiliğinden gider.
+export function logodaOlmayanKartlar(
+  kodlar: readonly string[], durumlar: ReadonlyMap<string, { logoKayitli: boolean }>, logoKodu: (k: string) => string, aynada: ReadonlySet<string>,
+): string[] {
+  return [...new Set(kodlar)].filter((k) => durumlar.get(k)?.logoKayitli !== true && !aynada.has(logoKodu(k)));
+}
+export function kartBekliyorMetni(eksik: readonly string[]): string {
+  const ilk = eksik.slice(0, 5).join(', ');
+  const kalan = eksik.length > 5 ? ` ve ${eksik.length - 5} kart daha` : '';
+  return kirp(`Kart bekliyor: ${ilk}${kalan}. Kart Logo'ya gidince (ya da Logo geçişinde bağlanınca) belge kendiliğinden gider.`);
+}
+export const TALEP_HIZMET_ILETISI = 'Talep fişine hizmet satırı yazılamaz; hizmet satırını talepten çıkarın ya da satın alma siparişiyle gönderin.';
+
 export interface GidenDurumu {
   // Dolu iken bu kart için Logo'da kart açılmış olabilir (niyet yazılı ve kalıcı; açma isteği ondan sonra gider).
   niyetZamani: Date | null;

@@ -68,6 +68,14 @@ export async function malzemeKesiti(db: Db, no: number): Promise<{ form: string;
 }
 
 // Boş dizide sorgu atılmaz; yinelenen kimlik tek kayıt; olmayan kimlik haritada yok.
+// 3313: Logo'ya giden belgenin satır kartları: Logo'da kaydı var mı (gönderildi, bağlandı ya da Logo'dan alındı) ve hizmet mi.
+// Boş dizide sorgu atılmaz; CORE'da olmayan kod haritada yoktur.
+export async function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<Map<string, { logoKayitli: boolean; hizmet: boolean }>> {
+  const benzersiz = [...new Set(kodlar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.logoKartDurumlari(db, benzersiz)).map((k) => [k.stokKodu, { logoKayitli: k.logoKayitli, hizmet: k.hizmet }]));
+}
+
 export async function malzemeOzetleri(db: Db, idler: number[]): Promise<Map<number, KatalogMalzemeOzeti>> {
   const benzersiz = [...new Set(idler)];
   if (benzersiz.length === 0) return new Map();

@@ -171,6 +171,10 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     ortam = await testVeritabaniKur('logosip');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Logo', kullaniciAdi: 'ls-yonetici', parola: PAROLA }));
+    // 3313: satır kartları Logo'da bilinir (okunmuş kopya); kart bekleyen belge ayrı testte.
+    await vt().sorgu(`INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma)
+      SELECT 880000 + n, k, true, now() FROM unnest($1::text[]) WITH ORDINALITY AS t (k, n)`,
+      [['HM-DEN-00001', 'HM-DEN-00002', 'HM-DEN-00003', 'HM-DEN-00009', 'HZ-FSN-00001', 'MM-DEN-00001', 'MM-DEN-00002', 'LG.DEN.2']]);
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'ls-yonetici', parola: PAROLA } });
     assert.equal(c.statusCode, 200, c.body);
     cerez = String(c.headers['set-cookie']).split(';')[0] ?? '';
@@ -409,6 +413,45 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(kodlar('/api/PurchaseOrder/AddRich', 'masterCode'), ['HM-DEN-00001', 'LG.DEN.2']);
     // Kaynağın satırları değişmez: TMI kodu TMI'de kalır.
     assert.deepEqual(t.satirlar.map((x) => x.stokKodu), ['HM-DEN-00001', 'HM-DEN-00002']);
+  });
+
+  test('LGS-26 (3313 T6) satır kartı Logo\'da bilinmiyorsa talep ve sipariş gitmez, deneme sayılmaz; neden kaynağa bir kez yazılır; kart gelince gider', async () => {
+    const t = talepEkle();
+    kaynak.talepler.set(t.id, { ...kaynak.talepler.get(t.id)!, satirlar: [...t.satirlar, { satirId: t.id * 10 + 9, stokKodu: 'HM-YOK-00001', miktar: '1', birim: 'adet' }] });
+    const sip = siparisEkle({ satirlar: [{ satirId: 99901, stokKodu: 'HM-YOK-00002', hizmet: false, miktar: '1', birim: 'kg', birimFiyat: '1' }] });
+    const bellek = yeniSurecBellegi();
+    const once = kopru.istekler.length;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
+    assert.equal(kopru.istekler.length, once, 'köprüye istek yok');
+    assert.match(kaynak.talepler.get(t.id)?.hata ?? '', /^Kart bekliyor: HM-YOK-00001\./);
+    assert.match(kaynak.siparisler.get(sip.id)?.hata ?? '', /^Kart bekliyor: HM-YOK-00002\./);
+    assert.equal(await giden('talep', t.id), null, 'deneme izi yok');
+    assert.equal(await giden('siparis', sip.id), null);
+    await vt().sorgu(`INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma) VALUES (889101, 'HM-YOK-00001', true, now()), (889102, 'HM-YOK-00002', true, now())`);
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep-niyet', no: t.id }, 'kart gelince kendiliğinden');
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: sip.id });
+  });
+
+  test('LGS-27 (3313 T8) talepte hizmet satırı: istek gitmeden durur, neden kaynağa yazılır; yalnız malzeme satırlı talep gider', async () => {
+    const sahip = ortam!.sahip;
+    await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HZ-LGS-', 0) ON CONFLICT (onek) DO NOTHING");
+    await sahip.sorgu(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, hizmet_yonu, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       SELECT 'hz-lgs-1', 'hizmet', 'alinan', 'HZ-LGS-', 1, 'aktif', $1, id, id FROM kisi ORDER BY id LIMIT 1`,
+      [JSON.stringify({ id: 'hz-lgs-1', com: { ad: 'Deneme hizmet', birim: 'adet' } })],
+    );
+    const kod = (await sahip.tek<{ kod: string }>("SELECT stok_kodu AS kod FROM malzeme_katalog_karti WHERE kimlik = 'hz-lgs-1'"))!.kod;
+    await vt().sorgu('INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma) VALUES (889201, $1, true, now())', [kod]);
+    const karma = talepEkle(1);
+    kaynak.talepler.set(karma.id, { ...kaynak.talepler.get(karma.id)!, satirlar: [...karma.satirlar, { satirId: karma.id * 10 + 9, stokKodu: kod, miktar: '1', birim: 'adet' }] });
+    const once = kopru.istekler.length;
+    assert.deepEqual(await tur(ortami()), { tur: 'talep', no: karma.id, sonuc: 'reddedildi' });
+    assert.equal(kopru.istekler.length, once, 'köprüye istek yok');
+    assert.match(kaynak.talepler.get(karma.id)?.hata ?? '', /Talep fişine hizmet satırı yazılamaz/);
+    simdi += 24 * 3600_000;
+    assert.deepEqual(await tur(ortami()), { tur: 'bos' }, 'durur');
   });
 
   test('LGS-16 talep kalkanı (ret): cevap kaybolursa talep yeniden açılmaz; 5 dk sonra "Logo\'da kontrol edin" hatası, yeni süreçte de', async () => {

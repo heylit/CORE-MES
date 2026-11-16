@@ -603,6 +603,13 @@ export async function logoKodHaritasi(db: Db, stokKodlari: readonly string[]): P
   return new Map(satirlar.map((x) => [x.stokKodu, x.logoKodu]));
 }
 
+// 3313: okunmuş Logo kopyasında (canlı aramada eklenen dahil) bu kodlu kart var mı; kart denetimi Logo'ya her turda sormaz.
+export async function aynadakiKodlar(db: Db, logoKodlari: readonly string[]): Promise<Set<string>> {
+  if (logoKodlari.length === 0) return new Set();
+  const satirlar = await db.sorgu<{ kod: string }>('SELECT kod FROM logo_malzeme_karti WHERE kod = ANY($1::text[])', [logoKodlari]);
+  return new Set(satirlar.map((x) => x.kod));
+}
+
 // Logo kodu -> TMI stok kodu (okunan mal kabul ve fatura satırları için).
 export async function tmiKodHaritasi(db: Db, logoKodlari: readonly string[]): Promise<Map<string, string>> {
   if (logoKodlari.length === 0) return new Map();
