@@ -948,8 +948,8 @@ export function cariListesiniAyikla(govde: unknown): LogoCari[] | null {
 // Cari arama metni: yardımcı en az 3, en çok 100 karakter kabul eder.
 export const CARI_ARAMA_EN_AZ = 3;
 export const CARI_ARAMA_EN_COK = 100;
-// 3077 a: kopya yalnız geçiş içindir; tam tur kendiliğinden yinelenmez. Okuma ilk açılışta bir kez, sonra yalnız "Şimdi oku"
-// isteğiyle baştan başlar; tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
+// 3077 a: kopya yalnız geçiş içindir; tam tur kendiliğinden yinelenmez. Okuma ilk açılışta bir kez; 3316'dan sonra yeniden tur
+// isteyen ekran yoktur, kart canlı aramayla aynaya eklenir. Tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
 export function sayfaliOkumaSirasi(
   i: { sonRef: number; sonTamam: Date | null; turIstendi: boolean } | null,
 ): 'devam' | 'bastan' | 'bekle' {

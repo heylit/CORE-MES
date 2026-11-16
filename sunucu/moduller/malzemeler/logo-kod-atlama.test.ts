@@ -8,6 +8,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { logoKodCozucusu } from './disari.ts';
+import { LOGO_KOD_ATLAMA_EN_COK } from './servis.ts';
 import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
@@ -68,5 +69,21 @@ describe('Yeni stok kodu Logo\'daki kodları atlar (2089-2 a, gerçek PostgreSQL
     logodakiler.add('HM-ATL-00001');
     assert.equal(await taslakAc('HM-ATL-00001'), 'HM-ATL-00002');
     assert.equal(await taslakAc('HM-YOK-00001'), 'HM-YOK-00001');
+  });
+
+  test('(ret) 3316 Risk K1: art arda sınırdan çok dolu kodda dolu kod verilmez, kart açılmaz ve ileti öneki söyler', async () => {
+    const kimlik = `lk${String(sayac + 1)}`;
+    for (let i = 1; i <= LOGO_KOD_ATLAMA_EN_COK + 1; i += 1) logodakiler.add(`HM-DOL-${String(i).padStart(5, '0')}`);
+    const url = `/malzeme-katalogu-kartlari/${kimlik}/kaydet`;
+    const govde = {
+      kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod: 'HM-DOL-00001', ad: 'Dolu önek', birim: 'kg' }, onay: { durum: 'taslak' } },
+      ozet: { benzersiz_anahtar: `hammadde|metal|${kimlik}`, mukerrer_gerekcesi: null },
+      surum: null,
+    };
+    const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
+    assert.equal(c.statusCode, 409, c.body);
+    assert.match(c.body, /HM-DOL- önekinde Logo'da art arda/);
+    assert.equal(await vt().tek('SELECT 1 FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]), null);
+    logodakiler.clear();
   });
 });

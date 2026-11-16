@@ -977,6 +977,16 @@ export async function kartinOneki(db: Db, kimlik: string): Promise<string | null
   return (await db.tek<{ onek: string }>('SELECT onek FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.onek ?? null;
 }
 
+// 3316 (Risk K1): Logo'daki CORE biçimli kart alınınca önekin sayacı en az o kartın sırasına alınır: sayaç Logo'daki kodların
+// gerisindeyse yeni kod Logo'daki dolu kodlara çarpmasın.
+export async function katalogSirasiniIlerlet(db: Db, onek: string, sira: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, $2)
+     ON CONFLICT (onek) DO UPDATE SET son_sira = GREATEST(malzeme_katalog_kod_sirasi.son_sira, EXCLUDED.son_sira)`,
+    [onek, sira],
+  );
+}
+
 // Kart Logo'da var: gönderilmiş sayılır, gönderim kuyruğu onu almaz (döngü önlemi). Bağlamada kartın sürümü tutmalı ve Logo kaydı boş olmalı.
 export async function logoKaydiYaz(
   db: Db, kimlik: string, l: { kayitNo: string; kartTuru: string | null; birimSeti: string | null }, o: { surum: number | null; kisiId: number },

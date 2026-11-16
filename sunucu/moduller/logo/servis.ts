@@ -977,7 +977,7 @@ export function logodaKullanilanMalzemeKodlari(db: Db, kodlar: readonly string[]
   return s.logodaOlanMalzemeKodlari(db, kodlar);
 }
 
-// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur yalnız ilk açılışta ve istekle başlar (3077 a). Okunan yalnız logo
+// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur yalnız ilk açılışta başlar (3077 a; 3316'dan sonra istek yolu yok). Okunan yalnız logo
 // modülünün aynasına yazılır, TMI kartına ya da stoğuna işlenmez (2116-1 a, 2116-2 a); Logo'ya hiçbir şey gitmez.
 function sayfaliOkumaTuru<T>(
   akis: s.SayfaliAkis, ayar: LogoAyarAnahtari, kapali: 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali',
@@ -1015,7 +1015,7 @@ export const malzemeKartiOkumaTuru = sayfaliOkumaTuru<LogoMalzemeKarti>(
 export const stokOkumaTuru = sayfaliOkumaTuru<LogoStokSatiri>(
   'stok', 'logo.stok-okumasi', 'stok-kapali', (k, since) => k.stokToplamlariOku(since), s.stokToplamlariniYaz,
 );
-// 3079 a: kendi ayarıyla; "Şimdi oku" ayarı açmaz, açıksa turu birlikte ister. "Geçişi bitir" kapatır.
+// 3079 a: kendi ayarıyla; "Geçişi bitir" kapatır.
 export const kullanimOkumaTuru = sayfaliOkumaTuru<LogoKullanimSatiri>(
   'kullanim', 'logo.kullanim-okumasi', 'kullanim-kapali', (k, since) => k.kullanimlariOku(since), s.kullanimlariYaz,
 );

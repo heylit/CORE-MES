@@ -498,14 +498,18 @@ export type LogoKodCozucusu = (db: Db, kodlar: readonly string[]) => Promise<str
 let logodaKullanilanKodlar: LogoKodCozucusu | null = null;
 export function logoKodCozucusuKaydet(cozucu: LogoKodCozucusu): void { logodaKullanilanKodlar = cozucu; }
 
-// Logo'da art arda bu kadar dolu numaradan sonra sıradaki verilir; çakışma gönderimde yakalanır (kart "hata").
+// Logo'da art arda bu kadar dolu numaradan sonra durulur (3316 Risk K1): dolu kod verilmez, Logo'daki başka kartla karışmasın.
 export const LOGO_KOD_ATLAMA_EN_COK = 1000;
 
 // Sıradaki numara; Logo'da kullanılıyorsa atlanır, atlanan numara bu önekte bir daha verilmez (2089-2 a).
 async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
   let sira = await s.katalogSiraAl(db, onek);
   if (logodaKullanilanKodlar === null) return sira;
-  for (let i = 0; i < LOGO_KOD_ATLAMA_EN_COK && (await logodaKullanilanKodlar(db, [katalogStokKodu(onek, sira)])).length > 0; i += 1) {
+  const dolu = async (n: number): Promise<boolean> => (await logodaKullanilanKodlar!(db, [katalogStokKodu(onek, n)])).length > 0;
+  for (let atlanan = 0; await dolu(sira); atlanan += 1) {
+    if (atlanan >= LOGO_KOD_ATLAMA_EN_COK) {
+      throw cakisma(`${onek} önekinde Logo'da art arda ${String(LOGO_KOD_ATLAMA_EN_COK)}'den çok dolu kod var; boş kod bulunamadı. Logo'daki kodları kontrol edin.`);
+    }
     sira = await s.katalogSiraAl(db, onek);
   }
   return sira;
@@ -1168,6 +1172,7 @@ export async function logodanKartAl(
   } else {
     const bicim = logoKodBicimi(k.kod, firmaKodu);
     if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
+      await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
       kod = await yeniStokKodu(db, firmaOneki ? null : k.kod, g.tur);
     } else {
       if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');

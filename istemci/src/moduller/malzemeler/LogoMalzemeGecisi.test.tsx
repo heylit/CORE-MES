@@ -49,14 +49,14 @@ const LISTE: LogoGecisCevabi = {
 
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 
-function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE) {
+function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE, karsiliklar: LogoKarsiligi[] = KARSILIKLAR) {
   const istekler: { yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const govde = secenek?.body ? JSON.parse(String(secenek.body)) : null;
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/malzeme-logo-gecisi?')) { istekler.push({ yol, govde: null }); return json(200, liste); }
-    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar: KARSILIKLAR, kartTuruSecenekleri: [{ kod: '10', ad: 'Hammadde' }, { kod: '13', ad: 'Tüketim malı' }], karsilikYazabilir: false });
+    if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar, kartTuruSecenekleri: [{ kod: '10', ad: 'Hammadde' }, { kod: '13', ad: 'Tüketim malı' }], karsilikYazabilir: false });
     if (yol.startsWith('/logo-gecisi/malzeme-ara?')) {
       istekler.push({ yol, govde: null });
       return json(200, { durum: 'tamam', ileti: null, kartlar: [{ logoKayitNo: 9, kod: 'ORN-CANLI-9', ad: 'Deneme canli' }] });
@@ -90,6 +90,32 @@ const satir = (metin: string) => screen.getByText(metin).closest('tr')!;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
+  it('3316 Test T2: satırda Logo türü yazar; CORE karşılığı farklı adlıysa "(CORE: <tür>)" eki çıkar, aynı adlıysa çıkmaz', async () => {
+    sunucuKur(YAZAN, LISTE, [...KARSILIKLAR, { cesit: 'tur', tmiDegeri: 'sarf', logoDegeri: '13' }]);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(within(satir('150.01')).getByText(/Tüketim malı \(CORE: Sarf\)/)).toBeTruthy();
+    expect(within(satir('HM-DEN-00001')).getByText(/Hammadde/)).toBeTruthy();
+    expect(within(satir('HM-DEN-00001')).queryByText(/CORE:/)).toBeNull();
+  });
+
+  it('3316 Test T3: "Geçişi bitir" yalnız okuma açıkken ve ayar yazabilene görünür', async () => {
+    const acik = { ...LISTE, okuma: { ...LISTE.okuma, acik: true } };
+    sunucuKur(YONETICI);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: /Geçişi bitir/ })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YONETICI, acik);
+    ac();
+    expect(await screen.findByRole('button', { name: /Geçişi bitir/ })).toBeTruthy();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YAZAN, acik);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: /Geçişi bitir/ })).toBeNull();
+  });
+
   it('açılışta süzgeci sunucu seçer (kullanım izi yoksa stoğu olanlar); süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
