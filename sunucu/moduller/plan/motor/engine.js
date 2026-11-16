@@ -527,7 +527,7 @@ function schedule(st,mode,base,opt={}){
   const now=st.now,frz=now+(st.w.dondurma||0);
   const g=st.gercek||{};
   // sabitler: gerçekleşen, başlamış, dondurulmuş
-  const pins=[],kilitler=[];
+  const pins=[],kilitler=[],gecmis=new Set();
   for(const o of cx.ops){const b=base&&base.ops[o.id],a=g[o.id];
     if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
       let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
@@ -536,7 +536,9 @@ function schedule(st,mode,base,opt={}){
       pins.push(r);continue;}
     const kr=kilitYeri(o,st.locks&&st.locks[o.id],cx);if(kr){kilitler.push(kr);continue;}
     if(!b)continue;
-    if(b.C<=now+1e-9){pins.push({...b,pin:1,done:1});continue;}
+    // Saati geçmiş ama gerçekleşme kaydı olmayan tezgâh işi yapılmamıştır: bitti sayılmaz, şimdiden sonraya yeniden yerleşir. Bitmiş
+    // sayılanlar: dönüş saati geçen fason (gerçekleşme kaydı yoktur), tabana bitmiş diye konan adım (bitti) ve gerçekleşeni olan iş (act).
+    if(b.C<=now+1e-9){if(b.fas||b.bitti||b.act)pins.push({...b,pin:1,done:1});else gecmis.add(o.id);continue;}
     const hit=!b.fas&&(st.down||[]).some(d=>d.m===b.m&&d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
     if(b.S<now-1e-9){
       if(hit&&!b.fas){const M=cx.M[b.m];const Su=adv(M.sw,b.S,b.su);const C=adv(M.rw,Su,b.run);pins.push({...b,Su,C,lot1:Math.min(C,b.lot1),pin:1,kesik:1});}
@@ -546,8 +548,9 @@ function schedule(st,mode,base,opt={}){
   /* B-2499-7: başvuru planından sabitlenen (geçmişte kalmış ya da donuk) iş öncülü o saatte hazır değilse olmuş sayılamaz: öncülü başlamış
      ve hâlâ sürüyorsa ya da öncülü bu yüzden yeniden diziliyorsa sabit bırakılmaz, yeniden dizilir. Öncülü hiç sabitlenmemişse (sunucu
      kuyruğunda olmayan adım "şimdi bitti" diye tabana girer, plan-girdisi) dokunulmaz. Yoksa başlamış emrin sonraki adımları eski
-     saatlerinde "bitti" sayılır, plandan düşer ve tezgâhta başlamış işle çakışır. Gerçekleşen (act) iş sunucunun bilgisidir, dokunulmaz. */
-  {const yer={},dus=new Set();for(const r of pins)yer[r.id]=r;for(const r of kilitler)yer[r.id]=r;
+     saatlerinde "bitti" sayılır, plandan düşer ve tezgâhta başlamış işle çakışır. Gerçekleşen (act) iş sunucunun bilgisidir, dokunulmaz.
+     Saati geçtiği için yeniden dizilen işin ardılı da aynı nedenle sabit kalmaz. */
+  {const yer={},dus=new Set(gecmis);for(const r of pins)yer[r.id]=r;for(const r of kilitler)yer[r.id]=r;
     for(let deg=true;deg;){deg=false;for(const id in yer){const r=yer[id];if(r.act||r.kilit)continue;const o=cx.byId[id];if(!o)continue;
       for(const [p,t] of o.pr){const q=yer[p];
         if(q?!((t==='o'&&!q.fas?q.lot1:q.C)<=r.S+1e-6):dus.has(p)){delete yer[id];dus.add(id);deg=true;break;}}}}

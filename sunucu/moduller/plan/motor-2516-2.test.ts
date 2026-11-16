@@ -51,12 +51,41 @@ describe('2516-2: uygula başlamış emrin işini düşürmez (B-2499-7)', () =>
     assert.ok(p.ops['S1.30']!.S >= p.ops['S1.10']!.C - 1e-6, 'üçüncü adım T1 üzerinde başlamış işle çakışmaz');
   });
 
-  test('öncülü zamanında biten iş eski yerinde kalır (gereksiz yeniden dizme yok)', () => {
+  test('öncülü zamanında biten, planda süren iş eski yerinde kalır (gereksiz yeniden dizme yok)', () => {
     const m = motor();
     const ilk = m.schedule(durum(m), 'yeni', null);
-    const st = durum(m, { now: 13, gercek: { 'S1.10': { m: 'T1', S: 8, C: 10 } } });
+    const st = durum(m, { now: 11, gercek: { 'S1.10': { m: 'T1', S: 8, C: 10 } } });
     const p = m.lnsDecode(st, { ops: ilk.ops, fail: [] }, [], m.compile(st), false);
-    assert.deepEqual([p.ops['S1.20']!.S, p.ops['S1.20']!.C, p.ops['S1.20']!.done], [10, 12, 1]);
+    assert.deepEqual([p.ops['S1.20']!.S, p.ops['S1.20']!.C, p.ops['S1.20']!.pin, p.ops['S1.20']!.done], [10, 12, 1, undefined]);
+  });
+
+  test('3308-11: saati geçmiş, gerçekleşme kaydı olmayan iş bitti sayılmaz; şimdiden sonraya yeniden dizilir, ardılı arkasına gelir', () => {
+    const m = motor();
+    const ilk = m.schedule(durum(m), 'yeni', null);
+    // saat 13: ilk adım kayıtla bitti; ikinci adımın planı (10-12) geçti ama başlamadı; üçüncü planda sürüyor görünüyor (12-14)
+    const st = durum(m, { now: 13, gercek: { 'S1.10': { m: 'T1', S: 8, C: 10 } } });
+    for (const p of [m.lnsDecode(st, { ops: ilk.ops, fail: [] }, [], m.compile(st), false), m.schedule(st, 'sabit', ilk)]) {
+      assert.equal(p.fail.length, 0);
+      assert.deepEqual([p.ops['S1.10']!.S, p.ops['S1.10']!.C, p.ops['S1.10']!.done], [8, 10, 1]);
+      assert.deepEqual([p.ops['S1.20']!.S, p.ops['S1.20']!.C, p.ops['S1.20']!.done], [13, 15, undefined]);
+      // üçüncü adım ikincinin bitişinde (15) başlar, vardiya 16'da biter, ertesi gün 33'te tamamlanır
+      assert.deepEqual([p.ops['S1.30']!.S, p.ops['S1.30']!.C, p.ops['S1.30']!.done], [15, 33, undefined]);
+    }
+    // hiç kaydı olmayan emir ertesi gün: üç adım da baştan dizilir
+    const sali = durum(m, { now: 32 });
+    assert.deepEqual(yerler(m.schedule(sali, 'sabit', ilk)), { 'S1.10': ['T1', 32, 34], 'S1.20': ['T2', 34, 36], 'S1.30': ['T1', 36, 38] });
+  });
+
+  test('3308-11: tabana bitmiş diye konan adım (bitti) ve dönüş saati geçen fason bitmiş kalır', () => {
+    const m = motor();
+    const ilk = m.schedule(durum(m), 'yeni', null);
+    const bitti = { ...ilk, ops: { ...ilk.ops, 'S1.10': { ...ilk.ops['S1.10']!, S: 32, Su: 32, C: 32, lot1: 32, su: 0, run: 0, bitti: 1 } } };
+    const p = m.schedule(durum(m, { now: 32 }), 'sabit', bitti);
+    assert.deepEqual([p.ops['S1.10']!.S, p.ops['S1.10']!.C, p.ops['S1.10']!.done], [32, 32, 1]);
+    assert.deepEqual([p.ops['S1.20']!.S, p.ops['S1.20']!.done], [32, undefined]);
+    const fason = { ...ilk, ops: { ...ilk.ops, 'S1.20': { ...ilk.ops['S1.20']!, fas: 1 } } };
+    const q = m.schedule(durum(m, { now: 13, gercek: { 'S1.10': { m: 'T1', S: 8, C: 10 } } }), 'sabit', fason);
+    assert.deepEqual([q.ops['S1.20']!.S, q.ops['S1.20']!.C, q.ops['S1.20']!.done], [10, 12, 1]);
   });
 });
 

@@ -105,6 +105,7 @@ describe('atölye komutlarının kuralı', () => {
     assert.match(hata(isTasi(planli(), { isId: 'J1.40', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Fason/);
     assert.deepEqual(hata(isTasi(planli(), { isId: 'J1.10', tezgah: 'T9', baslangic: 16 }, KISI, yalniz)), { tur: 'dogrulama', ileti: 'Tezgâh çalışmada yok.', alan: 'tezgah' });
     assert.equal(hata(isTasi(planli(), { isId: 'J1.10', tezgah: 'T2', baslangic: 9 }, KISI, yalniz)).tur, 'dogrulama');
+    assert.match(hata(isTasi(planli({ plan: { dataVer: 3, ops: { 'J1.60': { id: 'J1.60', job: 'J1', m: 'T1', S: 5, C: 5, done: 1, bitti: 1 } } } }), { isId: 'J1.60', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Biten/);
     // Saati geçmiş ama gerçekleşme kaydı olmayan iş (motor done sayar, act yok) bitmemiştir; taşınır.
     assert.deepEqual((deger(isTasi(planli(), { isId: 'J1.50', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).locks as Record<string, unknown>)['J1.50'], { m: 'T2', S: 16 });
     // Saat çalışmanın şimdisinde izinlidir.

@@ -73,6 +73,7 @@ export function tasimaDenetimi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSu
   if (ops === null) return h(cakisma('Çalışmada plan yok; önce planı kurun.'));
   const r = ops[g.isId];
   if (!nesne(r)) return h(cakisma('İş planda bulunamadı; plan değişmiş olabilir, sayfayı yenileyin.'));
+  if (r.bitti) return h(cakisma('Biten iş taşınamaz.'));
   if (r.act) return h(cakisma(r.done ? 'Biten iş taşınamaz.' : 'Başlamış iş taşınamaz.'));
   if (r.fas) return h(cakisma('Fason iş tezgâha taşınamaz.'));
   if (!kimligiVar(veriOf(deger).tezgahlar, 'id', g.tezgah)) return h(dogrulama('Tezgâh çalışmada yok.', 'tezgah'));

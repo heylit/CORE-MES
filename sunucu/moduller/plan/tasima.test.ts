@@ -83,4 +83,15 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.equal(basladi.gecerli, false);
     assert.match(basladi.ileti!, /OP 20 başlamış ya da donuk bölgede/);
   });
+
+  test('TH-09: tabana bitmiş diye konan adım (bitti, act yok) biten gibidir: öncül olarak beklenmez, ardıl olarak kımıldamaz', () => {
+    const bitti = { done: 1, bitti: 1 };
+    // Öncül bitti işaretli ve saati ileride görünse de beklenmez.
+    const r = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8, bitti), 'S1.20': op('S1', 'T2', 10) }), 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 8 });
+    assert.deepEqual(ozet(r), { 'S1.20': ['T2', 8, 10, 'tasinan'] });
+    // Ardıl bitti işaretli ve donuk bölgenin dışında (şimdide): yine itilmez, sırayı bozacak taşıma yapılmaz.
+    const s = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8, { done: 1 }), 'S1.20': op('S1', 'T2', 32, bitti) }), 32, { isId: 'S1.10', tezgah: 'T1', baslangic: 33 });
+    assert.equal(s.gecerli, false);
+    assert.match(s.ileti!, /OP 20 başlamış ya da donuk bölgede/);
+  });
 });

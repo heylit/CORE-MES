@@ -144,7 +144,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
       continue;
     }
     const c = o.c.find(x => !x.fas) || o.c[0];
-    ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, fas: c.fas ? 1 : undefined };
+    ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, bitti: 1, fas: c.fas ? 1 : undefined };
   }
   /* 981 a-1: yerleşmeyen işin nedeni öncülünden okunur (öncül yerleşmediyse ardılı da yerleşmez) */
   const oncul = {};
