@@ -942,6 +942,10 @@ const TESLIM_FIYATI_BAGI = `
            JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
            JOIN satin_alma_teklif_satiri f ON f.talep_id = s.talep_id AND f.teklif_id = s.teklif_id AND f.kalem_id = s.kalem_id
            LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = s.talep_id AND sk.para_birimi = q.para_birimi`;
+// 3332-2 a: teslimin miktarı sipariş biriminde, stok_miktar mal kabulün stok birimindedir (boşsa ikisi aynı). Fiyat sipariş birimi
+// başınadır; stok birimi başına fiyat ondan sipariş/stok miktar oranıyla çıkar (240 kg = 10 adet ise adet fiyatı 24 kg'ın fiyatı).
+const STOK_MIKTARI = 'coalesce(m.stok_miktar, m.miktar)';
+const STOK_BIRIMINE = `(sum(m.miktar) / nullif(sum(${STOK_MIKTARI}), 0))`;
 // Ağırlıklı ortalama: neti artı kalan teslimler, net miktarla; karşılığı olmayan teslim ortalamaya girmez.
 export interface OrtalamaAlisFiyatiSatiri { malzemeNo: number; tryBirimFiyat: string | null; teslimSayisi: number }
 export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Promise<OrtalamaAlisFiyatiSatiri[]> {
@@ -949,7 +953,7 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
     `SELECT n.no AS "malzemeNo", (round(sum(x.tl * x.net) / nullif(sum(x.net), 0), 4))::text AS "tryBirimFiyat", count(x.net)::int AS "teslimSayisi"
        FROM unnest($1::int[]) AS n(no)
        LEFT JOIN (
-         SELECT c.malzeme_no, sum(m.miktar) AS net, ${ALIS_BIRIM_FIYATI} * ${TRY_KURU} AS tl
+         SELECT c.malzeme_no, sum(${STOK_MIKTARI}) AS net, ${ALIS_BIRIM_FIYATI} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
           GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
@@ -962,7 +966,7 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
 // net TRY birim fiyatı, stok değeriyle aynı yoldan; net teslimi olan satırlar, net teslimle ağırlıklı. Fason satırı (iş emri bağı) ve
 // kartsız kalem gelmez; iptal talep sayılmaz. Bir satırın TL karşılığı yoksa o çiftin fiyatı boş: kısmi ortalama gerçek alıştan sapardı.
 // 2733 a: teslim miktarı fiyatın ağırlığı olan aynı net teslimdir (teslimler eksi iadeler); mal kabul onu stok giriş hareketiyle aynı
-// miktardan yazar, birimi stok birimidir. Fiyatı boş çiftin miktarı da bilinir.
+// miktardan yazar; stok birimindeki karşılığı (stok_miktar, 3332-2 a) kullanılır, fiyat da stok birimi başınadır. Fiyatı boş çiftin miktarı da bilinir.
 export interface SiparisBirimFiyatiSatiri { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null; teslimMiktari: string }
 export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], projeIdler: readonly number[], malzemeNolar: readonly number[]): Promise<SiparisBirimFiyatiSatiri[]> {
   return db.sorgu<SiparisBirimFiyatiSatiri>(
@@ -970,7 +974,7 @@ export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], p
             CASE WHEN bool_or(x.tl IS NULL) THEN NULL ELSE (round(sum(x.tl * x.net) / sum(x.net), 4))::text END AS "tryBirimFiyati",
             sum(x.net)::text AS "teslimMiktari"
        FROM (
-         SELECT h.hedef, h.hedef_id, c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
+         SELECT h.hedef, h.hedef_id, c.malzeme_no, sum(${STOK_MIKTARI}) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
            JOIN satin_alma_talep t ON t.id = s.talep_id
            LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
@@ -990,7 +994,7 @@ export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Pr
     `SELECT DISTINCT ON (x.malzeme_no) x.malzeme_no AS "malzemeNo", (round(x.net_fiyat, 4))::text AS "birimFiyat", x.para_birimi AS "paraBirimi",
         (round(x.net_fiyat * x.kur, 4))::text AS "tryBirimFiyat", ${ISO('x.zaman')} AS zaman
        FROM (
-         SELECT c.malzeme_no, ${ALIS_BIRIM_FIYATI} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
+         SELECT c.malzeme_no, ${ALIS_BIRIM_FIYATI} * ${STOK_BIRIMINE} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
                 max(m.zaman) FILTER (WHERE m.miktar > 0) AS zaman, max(m.id) FILTER (WHERE m.miktar > 0) AS id
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
@@ -1006,7 +1010,7 @@ export interface MalKabulFiyatiSatiri { malKabulSatirId: number; tryBirimFiyat: 
 export function malKabulFiyatlariOku(db: Db, malKabulSatirIdler: readonly number[]): Promise<MalKabulFiyatiSatiri[]> {
   return db.sorgu<MalKabulFiyatiSatiri>(
     `SELECT DISTINCT ON (m.mal_kabul_satiri_id) m.mal_kabul_satiri_id::int AS "malKabulSatirId",
-        (round(${ALIS_BIRIM_FIYATI} * ${TRY_KURU}, 4))::text AS "tryBirimFiyat"
+        (round(${ALIS_BIRIM_FIYATI} * ${TRY_KURU} * m.miktar / ${STOK_MIKTARI}, 4))::text AS "tryBirimFiyat"
        FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
       WHERE m.mal_kabul_satiri_id = ANY($1::bigint[])
       ORDER BY m.mal_kabul_satiri_id, m.id`,
@@ -1051,10 +1055,10 @@ export function teslimHedefiKilitle(db: Db, siparisSatirId: number): Promise<{ t
     [siparisSatirId],
   );
 }
-// Mal kabul satırı başına, sipariş satırına göre net teslim (sıfır olanlar düşer).
-export function malKabulNetleri(db: Db, malKabulSatirId: number): Promise<{ siparisSatiriId: number; net: string }[]> {
-  return db.sorgu<{ siparisSatiriId: number; net: string }>(
-    `SELECT siparis_satiri_id AS "siparisSatiriId", sum(miktar)::text AS net FROM satin_alma_teslim
+// Mal kabul satırı başına, sipariş satırına göre net teslim (sıfır olanlar düşer); stokNet stok birimindedir (3332-2).
+export function malKabulNetleri(db: Db, malKabulSatirId: number): Promise<{ siparisSatiriId: number; net: string; stokNet: string }[]> {
+  return db.sorgu<{ siparisSatiriId: number; net: string; stokNet: string }>(
+    `SELECT siparis_satiri_id AS "siparisSatiriId", sum(miktar)::text AS net, sum(coalesce(stok_miktar, miktar))::text AS "stokNet" FROM satin_alma_teslim
       WHERE mal_kabul_satiri_id = $1 GROUP BY siparis_satiri_id HAVING sum(miktar) <> 0 ORDER BY siparis_satiri_id`,
     [malKabulSatirId],
   );
@@ -1066,9 +1070,9 @@ export async function buIslemdeGeriAlindiMi(db: Db, siparisSatirId: number): Pro
     [siparisSatirId],
   ))!.var;
 }
-export async function teslimEkle(db: Db, siparisSatirId: number, malKabulSatirId: number, miktar: string, kisiId: number): Promise<void> {
-  await db.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, $3, $4)',
-    [siparisSatirId, malKabulSatirId, miktar, kisiId]);
+export async function teslimEkle(db: Db, siparisSatirId: number, malKabulSatirId: number, miktar: string, kisiId: number, stokMiktar: string | null = null): Promise<void> {
+  await db.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id, stok_miktar) VALUES ($1, $2, $3, $4, $5)',
+    [siparisSatirId, malKabulSatirId, miktar, kisiId, stokMiktar]);
 }
 
 // Kart 1474: tedarikçi karnesine giden teslim olayının kaynağı. Firma siparişin teklifinden (kayıtsız tedarikçide null), termin

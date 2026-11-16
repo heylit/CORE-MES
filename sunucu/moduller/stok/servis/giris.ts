@@ -19,7 +19,7 @@ import {
   karantinaYokIletisi, gkkGirisKonumuEngeli, malKabulKonumuEngeli, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
   uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli, revizyonUyusmuyor,
 } from '../kurallar.ts';
-import { malKabulDonusumu, type MalzemeTuru } from '../kurallar.ts';
+import { malKabulDonusumu, siparisBirimineCevir, type KartDonusumBilgisi, type MalzemeTuru } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { fasonIsindenDonus, sevkKalemiKabulu } from './dis-akis.ts';
 import { kaynakPartisi, dusumDenetle, kaliteDegistir, partiKaliteDurumuYap, karantinadanBirak, tersCevir } from './hareket.ts';
@@ -65,7 +65,8 @@ async function malKabulSatirlariniYaz(
     if (satirTuru.tur === 'hizmet') {
       if (s.sertifika) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar, partiId: null, konumId: null, hareketId: null, siparisSatirId, fasonCikisHareketId: null }));
-      await teslimIsle(db, k, { siparisSatirId: siparisSatirId!, miktar, malKabulSatirId: satirId });
+      const t = ss ? await teslimMiktari(db, ss, malzemeId, miktar, s.siparisMiktari, alan, o.ad ?? o.kod ?? '') : { miktar };
+      await teslimIsle(db, k, { siparisSatirId: siparisSatirId!, ...t, malKabulSatirId: satirId });
       await sevkKalemiKabulu(db, kisiId, s, alan, satirId);
       continue;
     }
@@ -119,6 +120,7 @@ async function malKabulSatirlariniYaz(
     }
     // Kalite kararı partiye verilir; GKK kartı lotsuz türde olamaz (malzemeler kuralı), bu yalnız savunmadır.
     if (gkk && parti === null) throw dogrulama('Giriş kalite kontrolü isteyen satır lotla girer.', `${alan}.parti`);
+    const teslim = siparisSatirId === null ? null : ss ? await teslimMiktari(db, ss, malzemeId, miktar, s.siparisMiktari, alan, o.ad ?? o.kod ?? '') : { miktar };
     const a = s.ambalaj ?? null;
     const yazilan = await korumali(async () => {
       const id = await sorgular.hareketYaz(db, hareket({
@@ -140,7 +142,7 @@ async function malKabulSatirlariniYaz(
       if (siparisSatirId !== null) await kaydaBagla(db, k, belgeId, 'satin-alma', siparisSatirId);
     }
     // SH1 a: teslim satın almaya aynı işlemde yazılır; kalanı aşan miktar reddedilmez, satın almada fazla teslim görünür.
-    if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar, malKabulSatirId: yazilan.satirId });
+    if (siparisSatirId !== null && teslim !== null) await teslimIsle(db, k, { siparisSatirId, ...teslim, malKabulSatirId: yazilan.satirId });
     await sevkKalemiKabulu(db, kisiId, s, alan, yazilan.satirId);
     idler.push(yazilan.id, ...(yazilan.fasonCikisHareketId === null ? [] : [yazilan.fasonCikisHareketId]));
   }
@@ -229,19 +231,34 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
 }
 // Depocu tek kutudan malzeme, tedarikçi, emir ve projeyle arar. Emir talebin ya da kalemin kaynak talebinin emridir, fason
 // satırında iş emrinin emri. Satır sayısından bağımsız sabit sayıda toplu okuma (N+1 yok).
+// 3332: kartın stok birimi, stok biriminin kg'ı, parça ağırlığı ve alış birimi; olmayan kart haritada yok. İki toplu okuma.
+async function kartDonusumBilgileri(db: Db, nolar: number[]): Promise<Map<number, KartDonusumBilgisi>> {
+  const agirliklar = await malzemeMaliyetBilgileri(db, nolar);
+  const alislar = await malzemeBirimDonusumleri(db, nolar);
+  return new Map([...agirliklar].map(([no, b]) => {
+    const a = alislar.get(no);
+    return [no, { stokBirimi: b.stokBirimi, kgBasina: stokBirimiBasinaKg(b.stokBirimi, b.birimKg), birimKg: b.birimKg, alisBirimi: a?.alisBirimi ?? null, alisKatsayisi: a?.katsayi ?? null }];
+  }));
+}
+// 3332-2 a: teslimin sipariş birimindeki miktarı. Depocunun yazdığı (tartılan kg gibi) önce gelir; yoksa karttan çevrilir; birimler
+// farklı ve dönüşüm yoksa satır reddedilir (stok birimindeki sayı sipariş birimine yazılmaz).
+async function teslimMiktari(db: Db, ss: { birim: string; malzemeNo: number | null }, malzemeId: number, miktar: string, verilen: string | undefined, alan: string, ad: string): Promise<{ miktar: string; stokMiktar: string }> {
+  if (verilen !== undefined) {
+    if (binde(verilen) <= 0n) throw dogrulama(`${ad}: sipariş birimindeki miktar sıfırdan büyük olmalı.`, `${alan}.siparisMiktari`);
+    return { miktar: bindenMetin(binde(verilen)), stokMiktar: miktar };
+  }
+  const kart = (await kartDonusumBilgileri(db, [malzemeId])).get(malzemeId);
+  const m = siparisBirimineCevir(miktar, ss.birim, kart);
+  if (m === null) throw dogrulama(`${ad}: sipariş ${ss.birim}, stok ${kart?.stokBirimi ?? '?'}; kartta dönüşüm yok. Sipariş birimindeki miktarı (${ss.birim}) yazın ya da malzeme kartına birim ağırlığı girin.`, `${alan}.siparisMiktari`);
+  return { miktar: m, stokMiktar: miktar };
+}
 export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlariCevabi> {
   const l = await siparisSatirlari(db);
   const malzemeNolari = [...new Set(l.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))];
   const kartlar = await malzemeOzetleri(db, malzemeNolari);
   // 3332: kalemin birimi ile stok birimi arasındaki dönüşüm (birim ağırlığı ve alış katsayısı karttan, iki toplu okuma).
-  const agirliklar = await malzemeMaliyetBilgileri(db, malzemeNolari);
-  const alislar = await malzemeBirimDonusumleri(db, malzemeNolari);
-  const donusumu = (x: (typeof l)[number]) => {
-    const b = x.malzemeNo === null ? undefined : agirliklar.get(x.malzemeNo);
-    if (b === undefined) return null;
-    const a = alislar.get(x.malzemeNo!);
-    return malKabulDonusumu(x.birim, { stokBirimi: b.stokBirimi, kgBasina: stokBirimiBasinaKg(b.stokBirimi, b.birimKg), birimKg: b.birimKg, alisBirimi: a?.alisBirimi ?? null, alisKatsayisi: a?.katsayi ?? null });
-  };
+  const bilgiler = await kartDonusumBilgileri(db, malzemeNolari);
+  const donusumu = (x: (typeof l)[number]) => (x.malzemeNo === null || !bilgiler.has(x.malzemeNo) ? null : malKabulDonusumu(x.birim, bilgiler.get(x.malzemeNo)));
   const kalemEmri = await siparisSatirlarininEmri(db, l.map((x) => x.id));
   const isEmirleri = await isEmriOzetleri(db, l.flatMap((x) => (x.isEmriId === null || kalemEmri.has(x.id) ? [] : [x.isEmriId])));
   const emri = (x: (typeof l)[number]): number | null => kalemEmri.get(x.id) ?? (x.isEmriId === null ? null : isEmirleri.get(x.isEmriId)?.uretimEmriId ?? null);
@@ -260,7 +277,7 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
       id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
       malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,
       miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, beklenenTeslim: x.beklenenTeslim,
-      stokBirimi: x.malzemeNo === null ? null : agirliklar.get(x.malzemeNo)?.stokBirimi ?? null, donusum: donusumu(x),
+      stokBirimi: x.malzemeNo === null ? null : bilgiler.get(x.malzemeNo)?.stokBirimi ?? null, donusum: donusumu(x),
       uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
       isEmriId: x.isEmriId, parcaRevizyonu: x.parcaRevizyonu, yururlukRevizyonu: yur,
       revizyonUyusmuyor: revizyonUyusmuyor(x.parcaRevizyonu, yur),

@@ -1832,3 +1832,17 @@ export function malKabulDonusumu(
   const parcaKg = stok === 'kg' && kart.birimKg !== null && kart.birimKg > 0 ? katsayiMetni(kart.birimKg) : null;
   return { siparisKatsayisi, kgBasina: kgBasina === null ? null : katsayiMetni(kgBasina), parcaKg };
 }
+
+// 3332-2 a: siparişe teslim sipariş satırının biriminde yazılır. Stok birimindeki mal kabul miktarı aynı birimde kendisi, kg siparişte
+// stok biriminin kg'ıyla çarpılır, kartın alış biriminde katsayıya bölünür; dönüşüm bilinmiyorsa null (uydurulmaz, satır reddedilir).
+export interface KartDonusumBilgisi { stokBirimi: string | null; kgBasina: number | null; birimKg: number | null; alisBirimi: string | null; alisKatsayisi: string | null }
+const dortHane = (n: number): string | null => (Number.isFinite(n) && n > 0 ? String(Number(n.toFixed(4))) : null);
+export function siparisBirimineCevir(stokMiktari: string, siparisBirimi: string, kart: KartDonusumBilgisi | undefined): string | null {
+  const stok = birimAdi(kart?.stokBirimi);
+  const siparis = birimAdi(siparisBirimi);
+  if (kart === undefined || stok === '' || siparis === stok) return stokMiktari;
+  const m = Number(stokMiktari);
+  if (siparis === 'kg' && kart.kgBasina !== null && kart.kgBasina > 0) return dortHane(m * kart.kgBasina);
+  if (kart.alisBirimi !== null && kart.alisKatsayisi !== null && birimAdi(kart.alisBirimi) === siparis && Number(kart.alisKatsayisi) > 0) return dortHane(m / Number(kart.alisKatsayisi));
+  return null;
+}

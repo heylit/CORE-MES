@@ -86,7 +86,7 @@ export function BirimKarsiligi({ d, girilen }: { d: SiparisDonusumu; girilen: st
   if (birimFarkli(d) && !d.donusum?.siparisKatsayisi) {
     return (
       <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="status">
-        Sipariş {birimliMiktar(d.miktar, d.birim)}, kalan {birimliMiktar(d.kalanMiktar, d.birim)}. Stok birimi {stok}; kartta {ad(d.birim) === 'kg' ? 'birim ağırlığı' : `${d.birim} katsayısı`} yok, dönüşüm hesaplanamaz. Saydığınızı {stok} olarak yazın.
+        Sipariş {birimliMiktar(d.miktar, d.birim)}, kalan {birimliMiktar(d.kalanMiktar, d.birim)}. Stok birimi {stok}; kartta {ad(d.birim) === 'kg' ? 'birim ağırlığı' : `${d.birim} katsayısı`} yok, dönüşüm hesaplanamaz. Saydığınızı {stok}, siparişe teslimi {d.birim} olarak yazın.
       </p>
     );
   }
@@ -114,8 +114,10 @@ export function ikinciBirim(d: SiparisDonusumu): { birim: string; carpan: number
 const virgullu = (m: string | null): string => (m === null ? '' : m.replace('.', ','));
 // Yazılan kutu kendi metnini korur (yuvarlama yazarken geri dönmesin); öbür kutu ondan hesaplanır. Stok kutusu çağıranın alanıdır.
 // Adet stokta kg'dan çıkan adet tam sayıya yuvarlanır (kesirli adet stoka gitmez); kesir ipucunda yazılır, depocu sayıyı denetler.
-export function IkinciBirimGirdisi({ d, stokMiktar, degistir }: { d: SiparisDonusumu; stokMiktar: string; degistir: (stok: string) => void }) {
+// 3332-2 a: ikinci kutu siparişin birimindeyse (kg siparişte tartılan kg) yazılan, siparişe teslim olarak da gider (ikinci argüman).
+export function IkinciBirimGirdisi({ d, stokMiktar, degistir }: { d: SiparisDonusumu; stokMiktar: string; degistir: (stok: string, siparisMiktari: string) => void }) {
   const ikinci = ikinciBirim(d);
+  const siparisBiriminde = ikinci !== null && birimFarkli(d) && ad(ikinci.birim) === ad(d.birim);
   const [yazilan, setYazilan] = useState<{ metin: string; stok: string; ham: string | null } | null>(null);
   if (ikinci === null) return null;
   const stokAdi = d.stokBirimi ?? 'stok';
@@ -135,7 +137,16 @@ export function IkinciBirimGirdisi({ d, stokMiktar, degistir }: { d: SiparisDonu
         const tam = ham !== null && ad(d.stokBirimi) === 'adet' ? String(Math.round(Number(ham))) : ham;
         const stok = tam === null || tam === '0' ? '' : virgullu(tam);
         setYazilan({ metin: v, stok, ham: ham !== null && tam !== ham ? ham : null });
-        degistir(stok);
+        degistir(stok, siparisBiriminde && m !== null ? v : '');
       }} />
   );
 }
+
+// 3332-2 a: sipariş birimi stok biriminden farklı ve kartta dönüşüm yoksa teslim sipariş biriminde ayrıca yazılır (ör. tartılan kg);
+// sunucu bu miktar olmadan satırı reddeder.
+export function SiparisMiktariGirdisi({ d, deger, degistir }: { d: SiparisDonusumu; deger: string; degistir: (v: string) => void }) {
+  if (!birimFarkli(d) || ikinciBirim(d) !== null) return null;
+  return <Girdi etiket={`Siparişe teslim (${d.birim})`} inputMode="decimal" value={deger} required onChange={(e) => degistir(e.target.value)}
+    ipucu={`Kartta dönüşüm yok; siparişe yazılacak ${d.birim} miktarını girin (ör. tartılan).`} />;
+}
+

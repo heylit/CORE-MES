@@ -1460,7 +1460,11 @@ describe('stok (gerçek PostgreSQL)', () => {
     await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
-    return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, 'adet') RETURNING id", [t, tk, kl, miktar]))!.id;
+    // 3332-2 a: teslim sipariş biriminde yazılır; fikstür kalemi kartın stok biriminde açar ki miktar dönüşümsüz aynı kalsın.
+    return (await s.tek<{ id: number }>(
+      `INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim)
+       VALUES ($1, $2, $3, $4, coalesce((SELECT NULLIF(btrim(kayit -> 'com' ->> 'birim'), '') FROM malzeme_katalog_karti WHERE no = $5), 'adet')) RETURNING id`,
+      [t, tk, kl, miktar, malzemeNo]))!.id;
   }
   const teslimler = async (siparisSatirId: number) =>
     (await o().vt.sorgu<{ malKabulSatirId: number; miktar: string }>(
