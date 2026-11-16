@@ -6,7 +6,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
-  GidenCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
+  GidenCevabi, SmartesEmirDurumlariCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
   HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
@@ -18,12 +18,12 @@ import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-neden
 import { istasyonlar, makineler, operasyonTipleri, smartesSayimIstasyonlari } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, smartesSayimi,
+  emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, smartesSayimi,
 } from '../uretim-emirleri/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
-  adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
+  adetDegistiMi, adimRozeti, emirRozeti, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
   eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
   KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti, IS_EMRI_METODU, isEmriDurumuOku,
   isEmriParametreleri, kapanisParametreleri, kesinRetMi, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi,
@@ -411,6 +411,37 @@ export async function gonderimTuru(vt: Veritabani, o: TurOrtami): Promise<Gonder
     }
   }
   return { tur: 'islendi', gonderilen, kapanan, hatali };
+}
+
+/* ---------------- 3346: üretim emrinde SmartES gönderim rozeti ---------------- */
+
+// Yalnız CORE'daki izi okur; SmartES'e istek atmaz. Emir sırası istekteki gibi, olmayan emir cevapta yok.
+export async function emirDurumlari(db: Db, emirIdleri: readonly number[], istemci: SmartesIstemcisi | null): Promise<SmartesEmirDurumlariCevabi> {
+  const adimlar = await emirAdimlari(db, emirIdleri);
+  const eslemeli = await eslemeHaritasi(db, 'istasyon');
+  const baglantiAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik';
+  const gidenler = new Map((await s.gidenSatirlari(db, adimlar.map((a) => a.isEmriId))).map((g) => [g.isEmriId, g]));
+  const emreGore = new Map<number, SmartesEmirDurumlariCevabi['emirler'][number]['adimlar']>();
+  const emirDurumu = new Map<number, string>();
+  for (const a of adimlar) {
+    emirDurumu.set(a.uretimEmriId, a.emirDurumu);
+    const gidecek = (a.emirDurumu === 'planli' || a.emirDurumu === 'basladi') && a.durum !== 'tamam' && !a.fason;
+    const r = adimRozeti({ eslemeli: a.istasyonId !== null && eslemeli.has(a.istasyonId), gidecek, baglantiAcik, giden: gidenler.get(a.isEmriId) ?? null });
+    emreGore.set(a.uretimEmriId, [...(emreGore.get(a.uretimEmriId) ?? []), { isEmriId: a.isEmriId, opNo: a.opNo, ad: a.ad, ...r }]);
+  }
+  const acik = new Set(['taslak', 'planli', 'basladi']);
+  return {
+    emirler: [...new Set(emirIdleri)].flatMap((id) => {
+      const liste = emreGore.get(id);
+      if (liste === undefined) return [];
+      // Bitmiş ve iptal emrin rozeti yalnız kapanış bildirimi takıldıysa vardır (durdu ya da yeniden denenecek): SmartES'te iş emri
+      // açık kalır (3346 Risk N1). Gerisi rozetsiz; adımlar ayrıntıda izi gösterir.
+      const takilan = liste.filter((a) => a.durum === 'durdu' || a.durum === 'yeniden-denenecek');
+      const toplam = acik.has(emirDurumu.get(id) ?? '') ? emirRozeti(liste)
+        : takilan.length > 0 ? emirRozeti(takilan) : { ...emirRozeti([]), gonderilmez: 'adim-disi' as const };
+      return [{ emirId: id, toplam, adimlar: liste }];
+    }),
+  };
 }
 
 /* ---------------- tanım gönderimi (SME-21) ---------------- */

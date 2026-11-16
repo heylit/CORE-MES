@@ -8,6 +8,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { STATU, adimDurumuUcu } from './adim-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, zamanMetni } from './gorunum.ts';
+import { SmartesAdimRozeti, useSmartesRozetleri, type SmartesEmirBilgisi } from './SmartesRozeti.tsx';
 import { YerPenceresi, degisimEngeli, fasonMu, yerMetni } from './UretimYerleri.tsx';
 
 // Emir sayfasının adım listesinde her satırın sağı (3039): Adım Durumu'ndaki statü (terminalle aynı ad), elle yazıldıysa kim ve ne
@@ -20,6 +21,8 @@ export interface AdimSatirEki {
   // Özet kutusundaki "Şu an" için: adımın statüsü ve elle yazdıysa kişi; okunamazsa null.
   statu: (opNo: number) => { ad: string; ton: RozetTonu; kisi: string | null } | null;
   pencere: ReactNode;
+  // 3346: emrin SmartES gönderim durumu (başlık rozeti); okuma yetkisi yoksa `gorunur` false.
+  smartes: { gorunur: boolean; bilgi: SmartesEmirBilgisi | null; hata: boolean };
 }
 
 export function useAdimSatirEki(emirId: number, malzemeNo: number | null): AdimSatirEki {
@@ -30,6 +33,8 @@ export function useAdimSatirEki(emirId: number, malzemeNo: number | null): AdimS
   const matrisGorur = islemler.includes('sayfa.adim-durumu');
   const yerYazar = islemler.includes('uretim-emirleri.duzenle');
   const [secili, seciliYaz] = useState<IsEmri | null>(null);
+  const smartes = useSmartesRozetleri(emirId > 0 ? [emirId] : [], adimliOkur && emirId > 0);
+  const smartesEmri = smartes.emir(emirId);
   const durum = useQuery({
     queryKey: anahtarlar.adimDurumu(emirId),
     queryFn: () => api.get<AdimDurumuCevabi>(adimDurumuUcu(emirId)),
@@ -67,6 +72,7 @@ export function useAdimSatirEki(emirId: number, malzemeNo: number | null): AdimS
           <Rozet key={p.ad} ton="uyari">{`Alt parça bekleniyor: ${p.ad} ${p.malzeme.kod ?? p.malzeme.ad}`}</Rozet>
         ))}
         {alt && <small title={a?.elle?.not ?? undefined}>{alt}</small>}
+        {adimliOkur && <SmartesAdimRozeti adim={smartesEmri?.adimlar.find((x) => x.opNo === opNo) ?? null} hata={smartes.hata} />}
         {ogeler.length > 0 && <Menu etiket={`OP ${String(opNo)} için`} ogeler={ogeler} />}
       </span>
     );
@@ -80,5 +86,5 @@ export function useAdimSatirEki(emirId: number, malzemeNo: number | null): AdimS
   const pencere = secili && adimli.data
     ? <YerPenceresi emirId={emirId} surum={adimli.data.emir.surum} adim={secili} kapat={() => { seciliYaz(null); }} />
     : null;
-  return { ek, statu, pencere };
+  return { ek, statu, pencere, smartes: { gorunur: adimliOkur, bilgi: smartesEmri, hata: smartes.hata } };
 }

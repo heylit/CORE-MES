@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { useLocation } from 'react-router-dom';
 import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { SmartesEmirDurumlariCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { UretimEmirleri } from './UretimEmirleri.tsx';
 import { OKUYUCU, YAZAR, ac, json, sunucuKur } from './test-ortak.tsx';
@@ -260,5 +261,47 @@ describe('malzeme resmi (kart #688)', () => {
     expect(await screen.findByRole('heading', { name: 'EM-2' })).toBeTruthy();
     expect(screen.queryByRole('img', { name: 'Deneme mil' })).toBeNull();
     expect(istekler.some((i) => i.yol.startsWith('/cizimler/'))).toBe(false);
+  });
+});
+
+describe('UretimEmirleri SmartES sütunu (3346)', () => {
+  const smartes = {
+    emirler: [
+      { emirId: 1, toplam: { durum: 'gonderildi', gonderilmez: null, gonderilen: 2, toplam: 2, opNo: null, neden: null }, adimlar: [] },
+      {
+        emirId: 2, toplam: { durum: 'yeniden-denenecek', gonderilmez: null, gonderilen: 0, toplam: 1, opNo: 20, neden: 'SmartES yanıt vermedi' },
+        adimlar: [{ isEmriId: 22, opNo: 20, ad: 'Freze', durum: 'yeniden-denenecek', gonderilmez: null, smartesNo: null, neden: 'SmartES yanıt vermedi' }],
+      },
+    ],
+  } satisfies SmartesEmirDurumlariCevabi;
+  it('emir başına toplam rozet; öne çıkan adım ve neden altta; gitmeyen emirde "—" nedeniyle; görünen emirler tek istekle', async () => {
+    const UCUNCU = { ...PLANLI, id: 4, emirNo: 'EM-4' };
+    const istekler = sunucuKur(OKUYUCU, {
+      'GET /uretim-emirleri': () => json(200, liste([PLANLI, BASLAMIS, UCUNCU])),
+      'GET /smartes/emir-durumlari': () => json(200, {
+        emirler: [...smartes.emirler, { emirId: 4, toplam: { durum: null, gonderilmez: 'esleme-yok', gonderilen: 0, toplam: 0, opNo: null, neden: null }, adimlar: [] }],
+      } satisfies SmartesEmirDurumlariCevabi),
+    });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    const hucre = (no: string) => screen.getAllByRole('row').find((r) => within(r).queryByText(no))!.querySelector('td[data-baslik="SmartES"]')!;
+    await waitFor(() => { expect(hucre('EM-1').textContent).toBe("SmartES'te2/2 adım"); });
+    expect(hucre('EM-2').textContent).toBe('Yeniden denenecekOP 20 Freze · SmartES yanıt vermedi');
+    expect(hucre('EM-4').textContent).toBe('—');
+    expect(within(hucre('EM-4') as HTMLElement).getByLabelText(/eşlemesi yok/)).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/smartes/')).map((i) => i.yol)).toEqual(['/smartes/emir-durumlari?emir=1,2,4']);
+  });
+  it('okunamazsa "Okunamadı"; Bitenler görünümünde sütun yok', async () => {
+    sunucuKur(OKUYUCU, {
+      'GET /uretim-emirleri': () => json(200, liste([PLANLI])),
+      'GET /smartes/emir-durumlari': () => json(500, { kod: 'SUNUCU', mesaj: 'x' }),
+      'GET /uretim-emirleri/bitenler': () => json(200, { satirlar: [], sayfa: 1, sayfaBoyu: 50, toplam: 0 }),
+    });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    expect(await screen.findByText('Okunamadı')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Bitenler' }));
+    await screen.findByText('Biten emir yok');
+    expect(screen.queryByRole('columnheader', { name: 'SmartES' })).toBeNull();
   });
 });

@@ -3,12 +3,13 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
-  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
+  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesEmirDurumlariCevabi, smartesEmirDurumlariSorgusu, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
+import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import * as servis from './servis.ts';
 
 // Okuma uçları SmartES sayfasını görene açıktır; eşleme yazmak `smartes.esleme-yaz` ister (Aşama 1: yalnız yönetici).
@@ -227,6 +228,15 @@ export const uclar = [
     govde: smartesYenidenGonderGovdesi,
     cevap: smartesYenidenGonderCevabi,
     isle: ({ db, govde }) => servis.duranlariYenidenGonder(db, govde.isEmirleri),
+  }),
+  // 3346: üretim emrinde SmartES gönderim rozeti; emri okuyan görür (emir listesi ve ayrıntısıyla aynı yetki). SmartES'e istek atmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/emir-durumlari',
+    yetki: { biri: ADIMLI_OKUMA_ISLEMLERI },
+    sorgu: smartesEmirDurumlariSorgusu,
+    cevap: smartesEmirDurumlariCevabi,
+    isle: ({ db, sorgu }) => servis.emirDurumlari(db, sorgu.emir, ortamIstemcisi),
   }),
   // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
   // 3192: makine verisiyle çalışanın girdiği karşılaştırılır; yalnız okur, bir şey düzeltmez.
