@@ -1114,7 +1114,8 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
     else sayilar.bagli += 1;
   }
   const arananlar = q.ara ? new Set((await logoAynaOzeti(db, { ara: q.ara })).kartlar.map((k) => k.logoKayitNo)) : null;
-  const uyanlar = satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
+  const istenenler = q.kayitlar ? new Set(q.kayitlar) : null;
+  const uyanlar = istenenler !== null ? satirlar.filter((r) => istenenler.has(r.k.logoKayitNo)) : satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
     suzgec === 'tumu' ? true
       : suzgec === 'stoklu' ? stokVar(r.k.stok)
         : suzgec === 'kullanilan' ? (nedenler(r.k) ?? []).length > 0 || (!kullanim && stokVar(r.k.stok))

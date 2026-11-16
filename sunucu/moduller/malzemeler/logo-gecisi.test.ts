@@ -141,6 +141,12 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.deepEqual([l.suzgec, l.kullanim, l.kartlar[0]?.kullanimNedenleri], ['stoklu', false, null], 'kullanım izi okunmadan süzgeç stoğu olanlar');
     const yeni = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni&ara=LGY-00002', undefined, okuyucuCerezi);
     assert.deepEqual(yeni.kartlar.map((k) => k.kod), ['HM-LGY-00002']);
+    // 3319: katalogdaki canlı aramanın bulduğu kayıtlar süzgeçsiz gelir (stoksuz ve kullanım dışı da); bozuk liste reddedilir.
+    const istenen = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=stoklu&kayitlar=202,203,999', undefined, okuyucuCerezi);
+    assert.deepEqual(istenen.kartlar.map((k) => [k.kod, k.durum, k.aktif]), [['HM-LGY-00002', 'yeni', true], ['HM-LGY-00003', 'yeni', false]]);
+    assert.equal(istenen.uyan, 2);
+    assert.equal((await istek('GET', '/malzeme-logo-gecisi?kayitlar=1,x', undefined, okuyucuCerezi)).statusCode, 400);
+    assert.equal((await istek('GET', `/malzeme-logo-gecisi?kayitlar=${Array.from({ length: 21 }, (_, i) => i + 1).join(',')}`, undefined, okuyucuCerezi)).statusCode, 400, 'en çok 20');
     const r = await istek('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 201, surum: a.surum }] }, okuyucuCerezi);
     assert.equal(r.statusCode, 403);
     assert.equal((await kartSatiri(a.kimlik))?.logo, null);

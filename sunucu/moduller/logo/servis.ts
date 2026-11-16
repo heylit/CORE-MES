@@ -1103,7 +1103,7 @@ export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise
   return {
     kartlar: await s.aynaOzeti(db, o),
     kullanim: { acik: acik && (await sistemAyariOku(db, 'logo.kullanim-okumasi')) === true, sonTamam: u?.sonTamamMetni ?? null },
-    arama: { acik: (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true },
+    arama: { acik: await logoMalzemeAramasiAcik(db) },
     // İmleç başta değilse tur yarıdadır; hiç tam tur bitmemişse ya da istenen tur başlamadıysa da okuma sürüyor sayılır.
     okuma: { acik, suruyor: acik && sayfaliOkumaSirasi(i) !== 'bekle', okunan: i?.sayi ?? null, sonTamam: i?.sonTamamMetni ?? null },
   };
@@ -1213,6 +1213,11 @@ export async function logoCariOku(vt: TxAcan, kopru: KopruIstemcisi | null, kod:
 // tutulur (tek sunucu). "Ekle" köprüye gitmez: kişinin son aramasında gördüğü kartı okunmuş kopyaya yazar, başka kart yazılamaz.
 const ARAMA_BELLEGI_MS = 30 * 60_000;
 const aramaBellegi = new Map<number, { kartlar: Map<number, LogoMalzemeKarti>; zaman: number }>();
+// 3080 a, 3319: canlı arama "Logo bağlantısı" ve "Logo: malzeme araması" açıkken yapılır; katalog düğmesi de bu durumu okur.
+export async function logoMalzemeAramasiAcik(db: Db): Promise<boolean> {
+  return (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true;
+}
+export const LOGO_ARAMA_KAPALI = 'Logo\'da malzeme araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: malzeme araması").';
 export async function logoMalzemeAra(
   vt: TxAcan, kopru: KopruIstemcisi | null, kisiId: number, metin: string, saat: () => number = Date.now,
 ): Promise<CariOkumasi<LogoMalzemeKarti[]>> {
@@ -1220,8 +1225,8 @@ export async function logoMalzemeAra(
   if (q.length < LOGO_MALZEME_ARAMA_EN_AZ || q.length > LOGO_MALZEME_ARAMA_EN_COK) {
     throw gecersiz(`Arama metni ${LOGO_MALZEME_ARAMA_EN_AZ}-${LOGO_MALZEME_ARAMA_EN_COK} karakter olmalı.`);
   }
-  const acik = await vt.tx(async (db) => (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true);
-  if (!acik) return { tur: 'kapali', ileti: 'Logo\'da malzeme araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: malzeme araması").' };
+  const acik = await vt.tx(logoMalzemeAramasiAcik);
+  if (!acik) return { tur: 'kapali', ileti: LOGO_ARAMA_KAPALI };
   if (kopru === null) return { tur: 'ortam-degiskeni-yok', ileti: BEKLEME_NEDENLERI['ortam-degiskeni-yok'] };
   const r = await kopru.malzemeAra(q);
   if (r.tur !== 'basarili') return { tur: 'hata', ileti: r.ileti };

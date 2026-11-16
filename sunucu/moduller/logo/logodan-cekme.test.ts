@@ -429,7 +429,10 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     const ekle = async (kartlar: number[], c = cerez) => app.inject({
       method: 'POST', url: '/api/logo-gecisi/malzeme-ekle', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: { kartlar },
     });
+    const durumu = async (c = cerez) => app.inject({ method: 'GET', url: '/api/logo-gecisi/malzeme-arama-durumu', headers: { cookie: c } });
     assert.equal(await vt().tx((db) => sistemAyariOku(db, 'logo.malzeme-aramasi')), false, 'varsayılan kapalı');
+    // 3319: katalog düğmesinin durumu yalnız ayarı okur; kapalıyken neden ayarı adıyla söyler.
+    assert.deepEqual((await durumu()).json(), { acik: false, neden: 'Logo\'da malzeme araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: malzeme araması").' });
     assert.equal((await ara('ORN-ARA')).tur, 'kapali');
     assert.equal((await ucla('ORN-ARA')).json().durum, 'kapali');
     assert.equal(kopru.istekler.length, 0, 'kapalıyken istek yok');
@@ -442,8 +445,16 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.equal(ad.tur === 'tamam' ? ad.veri.length : -1, 1, 'adda');
     assert.deepEqual(kopru.istekler.map((i) => [i.yontem, i.yol]), [['GET', '/api/Material/search'], ['GET', '/api/Material/search']]);
     assert.deepEqual(await kodlar(), [], 'arama kopyaya yazmaz');
+    // Arama ayarı açık olsa da "Logo bağlantısı" kapalıysa aranmaz.
+    await ayar('logo.baglanti', false);
+    assert.equal((await ara('orn-ara')).tur, 'kapali');
+    assert.equal(kopru.istekler.length, 2, 'bağlantı kapalıyken istek yok');
+    await ayar('logo.baglanti', true);
     // Uç ortamdaki köprüyü kullanır; testte tanımlı değil, neden döner.
     assert.equal((await ucla('orn-ara')).json().durum, 'ortam-degiskeni-yok');
+    const acikDurum = (await durumu()).json() as { acik: boolean; neden: string | null };
+    assert.equal(acikDurum.acik, false, 'ayar açık ama köprü değişkeni yok: düğme kapalı');
+    assert.match(acikDurum.neden ?? '', /TMIV2_LOGO_KOPRU/);
 
     const kisiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Arayan', kullaniciAdi: 'lc-arayan', parola: PAROLA }));
     await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('lc_okuyan', 'Okuyan') ON CONFLICT DO NOTHING");
@@ -453,6 +464,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     const okuyan = String(g.headers['set-cookie']).split(';')[0] ?? '';
     assert.equal((await ucla('orn-ara', okuyan)).statusCode, 403, 'malzeme kartı açamayan aramaz');
     assert.equal((await ekle([31], okuyan)).statusCode, 403);
+    assert.equal((await durumu(okuyan)).statusCode, 403, 'düğme durumu da malzeme kartı açabilene');
 
     assert.equal((await ara('orn-ara')).tur, 'tamam');
     const e = await ekle([31, 33]);

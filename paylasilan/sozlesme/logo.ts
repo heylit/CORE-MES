@@ -235,6 +235,9 @@ export const logoMalzemeAramaCevabi = z.object({
   kartlar: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), ad: z.string().nullable() })).max(LOGO_MALZEME_ARAMA_SONUCU),
 });
 export type LogoMalzemeAramaCevabi = z.output<typeof logoMalzemeAramaCevabi>;
+// 3319: katalogdaki "Logo'da da ara" düğmesi açık mı; kapalıysa neden düğmenin yanında yazar. Logo'ya istek gitmez.
+export const logoMalzemeAramaDurumuCevabi = z.object({ acik: z.boolean(), neden: z.string().nullable() });
+export type LogoMalzemeAramaDurumuCevabi = z.output<typeof logoMalzemeAramaDurumuCevabi>;
 export const logoMalzemeEkleGovdesi = z.object({
   kartlar: z.array(z.number().int().positive()).min(1).max(LOGO_MALZEME_ARAMA_SONUCU),
 }).strict();

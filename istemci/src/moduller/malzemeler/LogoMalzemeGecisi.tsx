@@ -19,7 +19,7 @@ import { LOGO_GELEN_ANAHTARI } from './LogodanGelenler.tsx';
 // karar isteyen satır tek tek işlenir (2116 satır işlemleri aynen). Toplu işlemden önce ne olacağı gösterilir, sonra rapor.
 export const LOGO_GECIS_ANAHTARI = ['malzemeler', 'logo-gecisi'] as const;
 
-type Satir = LogoGecisCevabi['kartlar'][number];
+export type Satir = LogoGecisCevabi['kartlar'][number];
 type TekIslem = 'bagla' | 'farki-al' | 'yeni-koda-gec';
 
 const SUZGEC_ADLARI: Record<LogoGecisSuzgeci, string> = {
@@ -139,14 +139,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
     }
     return null;
   };
-  // 3316: Logo kart türü ve CORE'daki karşılığı (Sistem Ayarları'ndaki tür karşılığından) satırda görünür.
-  const turMetni = (kt: string | null): string | null => {
-    if (kt === null) return null;
-    const logoAd = durum.data?.kartTuruSecenekleri.find((t) => t.kod === kt)?.ad ?? `Logo türü ${kt}`;
-    const core = tekKarsilik(durum.data?.karsiliklar ?? [], 'tur', kt);
-    const coreAd = core ? (turAdlari[core] ?? core) : null;
-    return coreAd && coreAd !== logoAd ? `${logoAd} (CORE: ${coreAd})` : logoAd;
-  };
+  const turMetni = (kt: string | null): string | null => logoTurMetni(kt, durum.data, turAdlari);
   const sutunlar: readonly Sutun<Satir>[] = [
     {
       anahtar: 'logo', baslik: 'Logo',
@@ -322,6 +315,15 @@ function CanliAramaDugmesi({ metin, acik, yazabilir, bulundu }: { metin: string;
   );
 }
 
+// 3316: Logo kart türü ve CORE'daki karşılığı (Sistem Ayarları'ndaki tür karşılığından) satırda görünür; katalogdaki Logo araması da kullanır (3319).
+export function logoTurMetni(kt: string | null, durum: LogoDurumuCevabi | undefined, turAdlari: Readonly<Record<string, string>>): string | null {
+  if (kt === null) return null;
+  const logoAd = durum?.kartTuruSecenekleri.find((t) => t.kod === kt)?.ad ?? `Logo türü ${kt}`;
+  const core = tekKarsilik(durum?.karsiliklar ?? [], 'tur', kt);
+  const coreAd = core ? (turAdlari[core] ?? core) : null;
+  return coreAd && coreAd !== logoAd ? `${logoAd} (CORE: ${coreAd})` : logoAd;
+}
+
 const tekKarsilik = (karsiliklar: readonly LogoKarsiligi[], cesit: 'tur' | 'birim', logo: string | null): string => {
   const uyan = karsiliklar.filter((k) => k.cesit === cesit && logo !== null && k.logoDegeri === logo);
   return uyan.length === 1 ? uyan[0]!.tmiDegeri : '';
@@ -435,7 +437,7 @@ function SonucPenceresi({ sonuc, kapat, geriAlindi }: { sonuc: TopluSonuc; kapat
 }
 
 // Tek kart alma (2116-4 a, 2116-3 c): bugünkü "Al" penceresi aynen.
-function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi }: {
+export function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi }: {
   satir: Satir; turAdlari: Readonly<Record<string, string>>; karsiliklar: readonly LogoKarsiligi[]; kapat: () => void; alindi: () => Promise<void>;
 }) {
   const [tur, turYaz] = useState(() => tekKarsilik(karsiliklar, 'tur', satir.kartTuru));

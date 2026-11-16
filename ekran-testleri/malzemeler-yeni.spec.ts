@@ -405,3 +405,55 @@ test.describe('M-3321 3B modelden öner', () => {
     expect(ag.yazmalar).toEqual([]);
   });
 });
+
+// 3319 a: katalogda "Logo'da da ara". Köprü ekran ortamında yoktur; Logo uçları sahte cevapla döner, ekranın düzeni ve akışı sınanır.
+test.describe('M-3319 katalogda Logo araması', () => {
+  const satir = (no: number, kod: string, ad: string, durum: 'yeni' | 'bagli' | 'bagsiz', aktif: boolean, kartTuru: string, tmi: unknown = null) => ({
+    logoKayitNo: no, kod, ad, birimSeti: 'ADET', kartTuru, aktif, stok: null, sonHareket: null, kullanimNedenleri: null, durum, koduUyar: true,
+    topluBaglanir: false, topluAlinir: false, kararNedeni: null, tmi, farklar: [],
+  });
+  const kartlar = [
+    satir(40, 'ORN-LG-1040', 'Deneme mil celigi 40', 'yeni', true, '10'),
+    satir(41, 'ORN-LG-1041', 'Deneme mil celigi 41', 'bagli', true, '10',
+      { kimlik: 'orn-41', stokKodu: 'HM-ORN-00412', ad: 'Deneme', birim: 'adet', onayDurumu: 'aktif', surum: 1, logoKayitli: true }),
+    satir(42, 'ORN-LG-2210', 'Deneme flans on islenmis', 'yeni', false, '11'),
+    satir(43, 'ORN-LG-3001', 'Deneme kaplama', 'yeni', true, '13'),
+  ];
+  async function sahteLogo(page: Page) {
+    await page.route('**/api/logo-gecisi/malzeme-arama-durumu', (r) => r.fulfill({ json: { acik: true, neden: null } }));
+    await page.route('**/api/logo-gecisi/malzeme-ara?*', (r) => r.fulfill({ json: { durum: 'tamam', ileti: null, kartlar: kartlar.map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, ad: k.ad })) } }));
+    await page.route('**/api/logo-gecisi/malzeme-ekle', (r) => r.fulfill({ json: { eklenen: kartlar.length } }));
+    await page.route('**/api/malzeme-logo-gecisi?kayitlar=*', (r) => r.fulfill({
+      json: {
+        baglanti: true, okuma: { acik: false, suruyor: false, okunan: 4, sonTamam: null },
+        sayilar: { toplam: 4, stoklu: 0, yeni: 3, bagsiz: 0, bagli: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 0 },
+        suzgec: 'tumu', kullanim: false, canliArama: true, uyan: 4, kartlar, sayfa: 0, sonrakiSayfa: null,
+      },
+    }));
+  }
+
+  test('düğme aramanın yanında; sonuç listenin üstünde şeritte, satır eylemleriyle; sayfa taşmaz', async ({ page, ag, ac }) => {
+    await sahteLogo(page);
+    await ac('/malzemeler');
+    const ara = page.getByRole('searchbox', { name: 'Katalogda ara' });
+    await ara.fill('mi');
+    const dugme = page.getByRole('button', { name: "Logo'da da ara" });
+    await expect(dugme).toBeDisabled();
+    await expect(page.getByText('En az 3 karakter yazın.')).toBeVisible();
+    await ara.fill('mil');
+    await expect(dugme).toBeEnabled();
+    await dugme.click();
+    const serit = page.getByRole('region', { name: "Logo'da bulunanlar" });
+    await expect(serit.getByText('ORN-LG-1040')).toBeVisible();
+    await expect(serit.getByRole('button', { name: "ORN-LG-1040 CORE'a al" })).toBeVisible();
+    await expect(serit.getByText("CORE'da: HM-ORN-00412")).toBeVisible();
+    await expect(serit.getByText("Logo'da pasif")).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    expect(await serit.evaluate((e) => e.scrollWidth - e.clientWidth), 'şerit kendi içinde taşmaz').toBeLessThanOrEqual(0);
+    for (const d of await serit.getByRole('button').all()) {
+      expect(await d.evaluate((e) => e.scrollWidth - e.clientWidth), 'düğme metni kesilmez').toBeLessThanOrEqual(0);
+    }
+    await page.screenshot({ path: test.info().outputPath('serit.png'), fullPage: true });
+    expect(ag.hatalar).toEqual([]);
+  });
+});
