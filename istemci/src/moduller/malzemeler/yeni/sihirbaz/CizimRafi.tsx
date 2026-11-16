@@ -4,7 +4,7 @@ import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/in
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { DosyaHatasi, malzemeBelgesiYukle, useMalzemeResimYetkisi } from '../../../cizimler/disari.ts';
 import { useSihirbaz } from './baglam.ts';
-import { CIZIM_KABULU, cizimEkle, cizimHedefi, ortadanKisalt, rafVar, type BekleyenCizim, type CizimDurumu } from './cizim-rafi.ts';
+import { CIZIM_GRUPLARI, cizimEkle, cizimHedefi, ortadanKisalt, rafVar, tasimaIletisi, type BekleyenCizim, type CizimDurumu, type CizimGrubu } from './cizim-rafi.ts';
 import type { Sihirbaz } from './baglam.ts';
 
 const DURUM: Readonly<Record<CizimDurumu, { ad: string; ton: RozetTonu }>> = {
@@ -31,28 +31,54 @@ function Resimcik({ tur }: { tur: BekleyenCizim['tur'] }) {
 }
 
 // Föyde (masaüstü) ve telefonda adımın üstünde şerit olarak aynı raf; yükleme `useCizimYukleme`dedir, raf yalnız gösterir.
+// İki grup alt alta (3305 a): 3B model, teknik resim. Kayıtlı kartta yalnız dosyası olan grup kalır, bırakma alanı çıkmaz.
 export function CizimRafi({ serit = false }: { serit?: boolean }) {
   const { taslak: d, b, cizimler, cizimlerYaz, bildir } = useSihirbaz();
   const { merkezGorur } = useMalzemeResimYetkisi();
-  const [uzerinde, uzerindeYaz] = useState(false);
   if (!rafVar(d, b) || (d.id && cizimler.length === 0)) return null;
   const { resimNo, rev } = cizimHedefi(d);
   const hedef = `${resimNo ?? 'resim no yok'} · Rev ${rev ?? '—'}`;
   const kayitli = !!d.id;
-  const ekle = (dosyalar: readonly File[]) => {
+  const ekle = (dosyalar: readonly File[], tur: CizimGrubu['tur']) => {
     cizimlerYaz((l) => {
-      const s = cizimEkle(l, dosyalar);
+      const s = cizimEkle(l, dosyalar, tur);
       if (s.reddedilen.length) bildir(`Yalnız PDF ve STEP eklenir: ${s.reddedilen.join(', ')}.`, 'hata');
+      const tasima = tasimaIletisi(s.tasinan, s.liste);
+      if (tasima !== null) bildir(tasima, 'bilgi');
       return s.liste;
     });
   };
-  const birak = (e: DragEvent) => { e.preventDefault(); uzerindeYaz(false); ekle([...e.dataTransfer.files]); };
+  const gruplar = CIZIM_GRUPLARI.filter((g) => !kayitli || cizimler.some((c) => c.tur === g.tur));
   return (
     <section className={serit ? 'tc-my-cz tc-my-cz-serit' : 'tc-my-cz'} aria-label="Çizimler">
       <div className="tc-my-cz-bas"><Simge ad="layers" /><span>Çizimler</span><Rozet ton="pasif" gorunum="cizgi">{cizimler.length}</Rozet></div>
+      {gruplar.map((g) => (
+        <CizimGrubuBolumu
+          key={g.tur} grup={g} cizimler={cizimler.filter((c) => c.tur === g.tur)} hedef={hedef} kayitli={kayitli} merkezGorur={merkezGorur}
+          ekle={(f) => { ekle(f, g.tur); }} kaldir={(a) => { cizimlerYaz((l) => l.filter((x) => x.anahtar !== a)); }}
+          yenidenDene={(a) => { cizimlerYaz((l) => l.map((x) => (x.anahtar === a ? { ...x, durum: 'bekler', hata: null } : x))); }}
+        />
+      ))}
+      {!kayitli && <p className="tc-my-cz-not">Kayıtta {hedef} ile Çizim Merkezi'ne gider. Teknik resim hemen yayında olur, 3B model taslak girer. Sayfa yenilenirse dosyalar yeniden seçilir.</p>}
+    </section>
+  );
+}
+
+function CizimGrubuBolumu({ grup, cizimler, hedef, kayitli, merkezGorur, ekle, kaldir, yenidenDene }: {
+  grup: CizimGrubu; cizimler: readonly BekleyenCizim[]; hedef: string; kayitli: boolean; merkezGorur: boolean;
+  ekle: (dosyalar: readonly File[]) => void; kaldir: (anahtar: string) => void; yenidenDene: (anahtar: string) => void;
+}) {
+  const [uzerinde, uzerindeYaz] = useState(false);
+  const birak = (e: DragEvent) => { e.preventDefault(); uzerindeYaz(false); ekle([...e.dataTransfer.files]); };
+  return (
+    <section className="tc-my-cz-grup" aria-label={grup.ad}>
+      <div className="tc-my-cz-grup-bas">
+        <Simge ad={grup.simge} /><span>{grup.ad}</span><small>{grup.bicim}</small>
+        <Rozet ton="pasif" gorunum="cizgi">{cizimler.length}</Rozet>
+      </div>
       <ul className="tc-my-cz-kareler">
         {cizimler.map((c) => (
-          <li key={c.anahtar} className="tc-my-cz-kare">
+          <li key={c.anahtar} className={c.tasindi ? 'tc-my-cz-kare tc-my-cz-tasindi' : 'tc-my-cz-kare'} aria-label={c.dosya.name}>
             <Resimcik tur={c.tur} />
             <b title={c.dosya.name}>{ortadanKisalt(c.dosya.name)}</b>
             <span className="tc-my-cz-hedef mono">{hedef}</span>
@@ -60,11 +86,9 @@ export function CizimRafi({ serit = false }: { serit?: boolean }) {
             {c.durum === 'gidiyor' && <progress max={1} value={c.oran} aria-label={`${c.dosya.name} yükleniyor`} />}
             {c.hata !== null && <small className="tc-my-cz-hata" role="alert">{c.hata}</small>}
             {c.durum === 'bekler' && !kayitli && (
-              <Dugme simge="x" aria-label={`${c.dosya.name} kaldır`} onClick={() => { cizimlerYaz((l) => l.filter((x) => x.anahtar !== c.anahtar)); }}>Kaldır</Dugme>
+              <Dugme simge="x" aria-label={`${c.dosya.name} kaldır`} onClick={() => { kaldir(c.anahtar); }}>Kaldır</Dugme>
             )}
-            {c.durum === 'hata' && (
-              <Dugme simge="rotate" onClick={() => { cizimlerYaz((l) => l.map((x) => (x.anahtar === c.anahtar ? { ...x, durum: 'bekler', hata: null } : x))); }}>Yeniden dene</Dugme>
-            )}
+            {c.durum === 'hata' && <Dugme simge="rotate" onClick={() => { yenidenDene(c.anahtar); }}>Yeniden dene</Dugme>}
             {c.belgeId !== null && merkezGorur && <Link className="tc-my-cz-ac" to={`/cizimler/belge/${String(c.belgeId)}`}><Simge ad="expand" />Çizim Merkezi'nde aç</Link>}
           </li>
         ))}
@@ -74,16 +98,15 @@ export function CizimRafi({ serit = false }: { serit?: boolean }) {
               className={uzerinde ? 'tc-my-cz-kare tc-my-cz-ekle tc-my-cz-uzerinde' : 'tc-my-cz-kare tc-my-cz-ekle'}
               onDragOver={(e) => { e.preventDefault(); uzerindeYaz(true); }} onDragLeave={() => { uzerindeYaz(false); }} onDrop={birak}
             >
-              <Simge ad="upload" /><span>STEP ya da PDF bırak</span><small>ya da dokunup seç</small>
+              <Simge ad="upload" /><span>{grup.birak}</span><small>ya da seç</small>
               <input
-                className="tc-my-cz-girdi" type="file" accept={CIZIM_KABULU} multiple aria-label="STEP ya da PDF seç"
+                className="tc-my-cz-girdi" type="file" accept={grup.kabul} multiple aria-label={`${grup.ad} seç (${grup.bicim})`}
                 onChange={(e) => { ekle([...(e.target.files ?? [])]); e.target.value = ''; }}
               />
             </label>
           </li>
         )}
       </ul>
-      {!kayitli && <p className="tc-my-cz-not">Kayıtta {hedef} ile Çizim Merkezi'ne gider. PDF hemen yayında olur, STEP taslak girer. Sayfa yenilenirse dosyalar yeniden seçilir.</p>}
     </section>
   );
 }

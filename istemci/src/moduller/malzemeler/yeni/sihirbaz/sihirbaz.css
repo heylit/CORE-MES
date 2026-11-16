@@ -274,6 +274,11 @@
 .tc-my-cz-serit { display: none; margin-top: 0; padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-my-cz-bas { display: flex; align-items: center; gap: var(--b-2); font-weight: 600; font-size: var(--yazi-s); }
 .tc-my-cz-bas .tc-rozet { margin-left: auto; }
+.tc-my-cz-grup { display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-inline-start: var(--cizgi-kalin) solid var(--muted); border-radius: var(--yari-1); background: var(--panel); }
+.tc-my-cz-grup-bas { display: flex; align-items: center; gap: var(--b-2); font-weight: 600; font-size: var(--yazi-s); }
+.tc-my-cz-grup-bas small { font-weight: 400; color: var(--muted); }
+.tc-my-cz-grup-bas .tc-rozet { margin-left: auto; }
+.tc-my-cz-tasindi { outline: var(--cizgi-kalin) solid var(--done); outline-offset: var(--cizgi-ince); }
 .tc-my-cz-kareler { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr)); }
 .tc-my-cz-kareler > li { display: grid; min-width: 0; }
 .tc-my-cz-kare { display: grid; gap: var(--b-1); align-content: start; min-width: 0; padding: var(--b-2); font-size: var(--yazi-xs); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }

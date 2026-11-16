@@ -492,8 +492,10 @@
   .tc-pyq-ust > .tc-pyq-ok, .tc-pyq-acilir { order: 2; }
   .tc-pyq-seg button { padding: 0 calc(var(--b-1) + var(--pay-ince)); }
   .tc-pyq-taslak .tc-pyq-taslak-dugmeler { flex: 1 1 100%; margin-left: 0; }
-  /* Telefonda planın yönü Ayarlar panelinde değişir (ön izleme); üst şeritte yalnız simge kalırdı. */
-  .tc-pyq-ust .tc-pyq-yon { display: none; }
+  /* Telefonda açılır menü düğmenin değil şeridin altına, tam genişlikte açılır: dar ekranda yana taşmaz. */
+  .tc-pyq-ust { position: relative; }
+  .tc-pyq-acilir { position: static; }
+  .tc-pyq-acilir-menu { left: 0; right: 0; width: auto; max-width: none; }
   .tc-pyq-liste { display: flex; }
   /* Telefon: dar sol sütun, parmağa göre gün ve yük hücresi; yalnız dolu günü olan tezgâhlar (düğmeyle hepsi). Yük şeridi yapışmaz: alttan açılan ayrıntıyla tablo arasında emir satırına yer kalır. */
   .tc-pyq-mat-kap { --sol-en: calc(var(--b-6) * 4); --gun-en: var(--dokunma); --yuk-boy: var(--b-6); }

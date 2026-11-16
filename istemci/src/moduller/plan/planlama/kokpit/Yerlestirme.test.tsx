@@ -202,7 +202,6 @@ describe('Kokpit planlı operasyonu seç-yerleştir ile taşıma (3297-4)', () =
     // Emre etkisi listede yazar: yeni bitiş, kazanç ve termin durumu.
     expect(yerler.querySelector('li')?.textContent).toMatch(/Başka tezgâh · en erken biten yer · emir Pzt 12:00 biter · .* erken · termine yetişir/);
     expect(yerler.querySelectorAll('li')[1]?.textContent).toContain('Aynı tezgâh · emir Pzt 16:00 biter');
-    expect(yerler.querySelector('[data-adim-ayrinti]')).toBeNull();
     expect(yerler.querySelector('[data-taslak-notu]')).toBeTruthy();
     expect(oz.mock.calls.map((x) => [x[0].tezgah, x[0].baslangic])).toEqual([['T1', 12], ['T2', 8], ['T3', 8]]);
     await waitFor(() => { expect(hedef.mock.calls.at(-1)?.[0]).toMatchObject({ emirId: '1', adimId: '1.10', tezgahlar: ['T1', 'T2', 'T3'], fiil: 'tasi', yerler: [{ tezgah: 'T2', S: 8 }, { tezgah: 'T1', S: 12 }] }); });
@@ -223,13 +222,16 @@ describe('Kokpit planlı operasyonu seç-yerleştir ile taşıma (3297-4)', () =
     expect(hedef.mock.calls.every((x) => x[0] === null)).toBe(true);
   });
 
-  it('ayrıntı düğmesi verildiyse (telefon) listede durur ve seçili operasyonun ayrıntısını açar', async () => {
-    tasiOnizle();
-    const adimAyrinti = vi.fn();
-    render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} secIs="1.10" tasi={vi.fn()} adimAyrinti={adimAyrinti} />);
-    const yerler = await screen.findByRole('group', { name: 'Torna için taşınacak yerler' });
-    fireEvent.click(within(yerler).getByRole('button', { name: 'Torna ayrıntısı' }));
-    expect(adimAyrinti).toHaveBeenCalledWith('1', '1.10');
+  it('emrin satırında durum, termin ve bitiş yazar; tahtadan seçilen iş işaretlenir, liste açılmaz (3304 a)', () => {
+    const oz = tasiOnizle();
+    render(<EmirAdimlari m={MT} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} vurgu="1.10" tasi={vi.fn()} />);
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-emir-ozet]')?.textContent).toBe('8 adet · zamanında · termin 01.01 Pzt 60:00 · biter 01.01 Pzt 24:00');
+    expect(bolum.querySelector('[data-adim="1.10"]')?.getAttribute('aria-current')).toBe('true');
+    expect(bolum.querySelector('[data-adim="1.10"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByRole('group', { name: /taşınacak yerler/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /ayrıntısını aç/ })).toBeNull();
+    expect(oz).not.toHaveBeenCalled();
   });
 
   it('başka operasyon seçilince önceki operasyonun önizlemesi kullanılmaz', async () => {

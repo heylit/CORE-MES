@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { cizimEkle, cizimTuru, ortadanKisalt } from './cizim-rafi.ts';
+import { CIZIM_GRUPLARI, cizimEkle, cizimTuru, ortadanKisalt, tasimaIletisi } from './cizim-rafi.ts';
 
 describe('3242 d çizim rafı kuralları', () => {
   test('PDF teknik resim, STEP ve STP 3B model; öteki biçim alınmaz', () => {
@@ -21,5 +21,23 @@ describe('3242 d çizim rafı kuralları', () => {
     expect(k.endsWith('_Rev-B.step')).toBe(true);
     expect(k.length).toBeLessThanOrEqual(28);
     expect(k).toContain('…');
+  });
+
+  test('3305 a: raf iki grup, sıra 3B model sonra teknik resim; her grup kendi biçimini kabul eder', () => {
+    expect(CIZIM_GRUPLARI.map((g) => [g.tur, g.ad, g.kabul])).toEqual([['3b-model', '3B model', '.step,.stp'], ['teknik-resim', 'Teknik resim', '.pdf']]);
+  });
+
+  test('3305 a: başka grubun alanına bırakılan dosya kendi türüyle girer, taşınan sayılır ve bir sonraki eklemede vurgu kalkar', () => {
+    const ilk = cizimEkle([], [new File(['x'], 'ORN-1.pdf'), new File(['y'], 'ORN-1.step')], '3b-model');
+    expect(ilk.liste.map((c) => [c.dosya.name, c.tur, c.tasindi])).toEqual([['ORN-1.pdf', 'teknik-resim', true], ['ORN-1.step', '3b-model', false]]);
+    expect(ilk.tasinan).toEqual(['ORN-1.pdf']);
+    expect(tasimaIletisi(ilk.tasinan, ilk.liste)).toBe('ORN-1.pdf teknik resim olarak alındı.');
+    const ikinci = cizimEkle(ilk.liste, [new File(['z'], 'ORN-2.pdf')], 'teknik-resim');
+    expect(ikinci.tasinan).toEqual([]);
+    expect(ikinci.liste.every((c) => !c.tasindi)).toBe(true);
+    expect(tasimaIletisi(ikinci.tasinan, ikinci.liste)).toBeNull();
+    const cok = cizimEkle([], [new File(['a'], 'A.step'), new File(['b'], 'B.stp')], 'teknik-resim');
+    expect(tasimaIletisi(cok.tasinan, cok.liste)).toBe('2 dosya kendi grubuna alındı.');
+    expect(tasimaIletisi(['A.step'], cok.liste)).toBe('A.step 3B model olarak alındı.');
   });
 });

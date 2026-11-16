@@ -14,7 +14,9 @@ interface Ozellikler {
   nabiz: NabizDurumu | null; nabizAcik: boolean; nabizAc: (ac: boolean) => void;
   // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", Veri ve kısıtlar "veri", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi
   // motorun tahtasına gider; `veri` ve `gecmis` verilmezse o düğme pasiftir (iskeletsiz çizim).
-  etkin: 'plan' | 'studyo' | 'veri' | 'gecmis' | null; planaGit: (() => void) | null; veri?: (() => void) | null; gecmis?: (() => void) | null;
+  etkin: 'plan' | 'studyo' | 'veri' | 'gecmis' | null; planaGit: (() => void) | null;
+  // Kokpit'te true (3304 a): "Plan iyileştirme ara" çubukta durmaz; arama Motor sayfasındadır.
+  iyilestirGizli?: boolean; veri?: (() => void) | null; gecmis?: (() => void) | null;
   studyo: () => void; ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
   // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
@@ -88,7 +90,7 @@ export function Cubuk(o: Ozellikler) {
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
               <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
             </button>
-          ) : o.studyoda ? null : o.plan && o.hamle ? (
+          ) : o.studyoda || (o.plan && o.iyilestirGizli) ? null : o.plan && o.hamle ? (
             <IyilestirDugmesi h={o.hamle} />
           ) : o.plan && o.planaGit ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.guncel ? '' : ' tc-dugme-birincil'}`}

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { isTasiOnizle } from '../motor/atolye/gonder.ts';
+import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, durumYazisi, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimSecimleri, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -203,12 +204,16 @@ export interface EmirAdimlariOzellikleri {
   // Yazamayan kişide ve komut sürerken null: adımlar görünür, yerleştirilemez.
   uygula: ((a: TurAdayi, gecBirakir: boolean) => void) | null;
   surum: number | null;
-  // Planda yeri olan adıma basılınca (tahtada gösterilir, ayrıntısı açılır).
+  // Planda yeri olan adıma basılınca (tahtada gösterilir, taşınacak yerler listelenir).
   adimAc: (emirId: string, isId: string) => void;
   // Seçili adımın uygun tezgâhları ve boş yerleri (tahta işaretler); seçim yoksa null.
   hedef?: (h: YerlestirmeHedefi | null) => void;
-  // Emrin ayrıntısını açar (yön, plana alma seçenekleri, hamleler).
-  emirAc?: (emirId: string) => void;
+  // Emrin planlama yönü (3282 1c, 3304 a): emrin satırında tek satır; verilmezse gösterilmez.
+  yon?: Omit<EmirYonuOzellikleri, 'emirId' | 'no'>;
+  // Tahtadan ya da Matristen seçilen iş: operasyonu bölümde işaretlenir (liste açılmaz).
+  vurgu?: string | null;
+  // Geç ya da riskli emrin en çok beklediği adım satırda yazılsın mı (Matris ve 3B: çözüm aranan görünümler).
+  neden?: boolean;
   // Kişinin taslağında değişiklik varsa true: önizleme ortak plandan hesaplanır, taslaktaki değişiklikleri görmez; kişiye söylenir.
   taslakVar?: boolean;
   // Seçili planlı adım (3297-4): taşınabileceği yerler listelenir ve tahtada işaretlenir. `tasi` yazamayan kişide ve turda null.
@@ -216,11 +221,9 @@ export interface EmirAdimlariOzellikleri {
   tasi?: ((isId: string, tezgah: string, baslangic: number) => void) | null;
   // Planlı adım seçiliyken yerleşmemiş adıma basılınca seçimi bırakır (yerleştirme öne geçer).
   birak?: () => void;
-  // Seçili operasyonun ayrıntısını açar; yalnız operasyona basmanın ayrıntı açmadığı yerde (telefon) verilir.
-  adimAyrinti?: (emirId: string, isId: string) => void;
 }
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emirAc, taslakVar = false, secIs = null, tasi = null, birak, adimAyrinti }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false }: EmirAdimlariOzellikleri) {
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
   // Planlı adım seçiliyken tahtadaki işaretler onundur; plansız emrin yerleştirmesi bekler (tahtada tek hedef olur).
@@ -232,7 +235,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emi
       <h2><b className="tc-pyq-bolum-no">2</b>{bas?.no ?? kart.kok} · operasyonlar</h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} {...(adimAyrinti ? { adimAyrinti } : {})} {...(hedef ? { hedef } : {})} {...(emirAc ? { emirAc } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
         ))}
       </div>
     </section>
@@ -244,7 +247,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emi
 export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void; fiil?: 'tasi' }
 interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, adimAyrinti }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   const tasinanIs = secIs !== null ? m.isler[secIs] : undefined;
   const engel = tasinanIs ? tasinabilir(tasinanIs) : null;
@@ -253,6 +256,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
   const tz = (id: string): string => kod.get(id) ?? id;
   const an = (a: number, b: number): string => `${zaman(a).slice(6)} → ${zaman(b).slice(-5)}`;
   const plansiz = e.durum === 'plansiz';
+  const bekleyen = neden && (e.durum === 'gec' || e.durum === 'risk') ? enCokBekleyen(m, e) : null;
   const seciliAdim = etkin && plansiz ? y.secili : null;
   const tezgahlar = useMemo(() => uygunTezgahlar(e, seciliAdim), [e, seciliAdim]);
   const tasimaTezgahlari = useMemo(() => uygunTezgahlar(e, tasinanIs && engel === null ? tasinanIs.id : null), [e, tasinanIs?.id, engel]);
@@ -282,8 +286,11 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
     <div className="tc-pyq-emir" data-emir={e.id} data-etkin={etkin ? '' : undefined}>
       <div className="tc-pyq-emir-ad">
         <b className="tc-pyq-mono">{e.no}</b> {e.urun}
-        <small>{`${String(e.adet)} adet · ${durumYazisi(e)}`}</small>
-        {emirAc && <button type="button" className="tc-pyq-kucuk" aria-label={`${e.no} ayrıntısını aç`} onClick={() => { emirAc(e.id); }}><Simge ad="list" boyut="k" /> Ayrıntı</button>}
+        <small data-emir-ozet="">
+          {`${String(e.adet)} adet · `}<b data-d={e.durum}>{durumYazisi(e)}</b>
+          {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
+        </small>
+        {bekleyen && <small data-emir-neden="">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {bekleyen.k + 1}. adım ({e.adimlar[bekleyen.k]?.ad}) {tz(bekleyen.tezgah)} tezgâhında {sureYaz(bekleyen.bekleme.sure)} sıra bekliyor.</small>}
       </div>
       <ol className="tc-pyq-rota">
         {e.adimlar.map((a) => {
@@ -292,7 +299,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
           return (
             <li key={a.id}>
               <button
-                type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
+                type="button" data-adim={a.id} data-yer={yer} aria-pressed={secildi} aria-current={vurgu === a.id && !secildi ? 'true' : undefined} disabled={yer === 'fason' || (yer !== 'yerli' && !uygula)}
                 onClick={() => { if (x) adimAc(e.id, a.id); else { etkinlestir(); y.adimSec(a.id); } }}
               >
                 <b>{a.ad}</b>
@@ -302,6 +309,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
           );
         })}
       </ol>
+      {yon && e.termin !== null && <EmirYonu key={e.id} {...yon} emirId={e.id} no={e.no} />}
       {tasinanIs && (
         <div className="tc-pyq-yerler" role="group" aria-label={`${tasinanIs.ad} için taşınacak yerler`}>
           {!tasi ? <p className="tc-pyq-not">Operasyonu yalnız planı yazabilen kişi taşır.</p>
@@ -322,7 +330,6 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, 
                       </ul>
                     </>
                   )}
-          {adimAyrinti && <button type="button" className="tc-pyq-kucuk" data-adim-ayrinti="" onClick={() => { adimAyrinti(e.id, tasinanIs.id); }}><Simge ad="list" boyut="k" /> {tasinanIs.ad} ayrıntısı</button>}
           {tasi && engel === null && taslakVar && <p className="tc-pyq-not" data-taslak-notu="">Taslağınızdaki değişiklikler bu yerlerde hesaba katılmadı; taşıyınca plan taslağınızla yeniden dizilir ve sonucu tahtada görünür.</p>}
         </div>
       )}

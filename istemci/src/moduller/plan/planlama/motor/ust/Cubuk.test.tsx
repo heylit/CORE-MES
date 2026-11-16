@@ -7,8 +7,8 @@ import { Cubuk } from './Cubuk.tsx';
 // B-2483-36/-37: motor sunucuda açıkken (576) çubuğun pasif düğmesi motoru neden göstermez; neden görünür kısa nottadır.
 afterEach(() => { cleanup(); });
 
-const ciz = (o: { plan: boolean; guncel?: boolean; planaGit?: (() => void) | null }) => render(
-  <Cubuk plan={o.plan} guncel={o.guncel ?? true} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} etkin={null} planaGit={o.planaGit ?? null}
+const ciz = (o: { plan: boolean; guncel?: boolean; planaGit?: (() => void) | null; iyilestirGizli?: boolean }) => render(
+  <Cubuk plan={o.plan} guncel={o.guncel ?? true} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} etkin={null} planaGit={o.planaGit ?? null} iyilestirGizli={o.iyilestirGizli ?? false}
     studyo={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} />,
 );
 const cubuk = () => within(screen.getByRole('toolbar', { name: 'Plan çubuğu' }));
@@ -23,6 +23,14 @@ describe('plan çubuğunun pasif düğmeleri', () => {
     fireEvent.click(d);
     expect(git).toHaveBeenCalledTimes(1);
     expect(cubuk().queryByText('Plan sayfasında')).toBeNull();
+  });
+
+  it('Kokpit\'te (3304 a) plan varken "Plan iyileştirme ara" çubukta durmaz; plan yokken Planı kur durur', () => {
+    ciz({ plan: true, planaGit: () => {}, iyilestirGizli: true });
+    expect(cubuk().queryByRole('button', { name: 'Plan iyileştirme ara' })).toBeNull();
+    cleanup();
+    ciz({ plan: false, planaGit: () => {}, iyilestirGizli: true });
+    expect(cubuk().getByRole('button', { name: 'Planı kur' })).toBeTruthy();
   });
 
   it('çalışma yokken Planı kur pasif; nedeni çalışmadır, görünür notta yazar', () => {

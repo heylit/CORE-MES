@@ -91,7 +91,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     expect(document.querySelector('[data-kfs="faiz-kredi"]')?.textContent).toBe('Kredi%42arttı, önceki 40');
     expect(document.querySelector('[data-kfs="faiz-mevduat"]')?.textContent).toBe('Mevduat%3501.08');
     expect(document.querySelector('[data-kfs="faiz-politika"]')?.textContent).toBe('Politikayok');
-    expect(screen.queryByText('Bugün girilmedi')).toBeNull();
+    expect(document.querySelector('[data-kfs="son-giris"]')?.textContent).toBe('Son giriş bugün 09:44');
     expect(screen.queryByText('Güncelle')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^USD/ }));
     expect(screen.getByText('Kur ve faiz girişi finans ve satın almadadır.')).toBeTruthy();
@@ -111,7 +111,9 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
   it('finans.kur-yaz bugünün alış ve satışını birlikte yazar: bugün girilmiş olan sürümüyle düzeltilir, girilmemiş olana satır açılır, değişmeyen gitmez', async () => {
     const istekler = sunucuKur(['finans.kur-yaz']);
     ac();
-    expect(await screen.findByText('Bugün girilmedi')).toBeTruthy();
+    // EUR eski, GBP hiç girilmemişken bile şerit "girilmedi" demez; son girişin günü ve saati yazar.
+    expect(await screen.findByText('Son giriş bugün 09:44')).toBeTruthy();
+    expect(screen.queryByText(/girilmedi/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^USD/ }));
     expect((screen.getByLabelText('USD alış') as HTMLInputElement).value).toBe('41,5');
     expect((screen.getByLabelText('USD satış') as HTMLInputElement).value).toBe('41,6');
