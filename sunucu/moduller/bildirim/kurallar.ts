@@ -1,6 +1,6 @@
 import type { Islem } from '#paylasilan/islemler.ts';
 import {
-  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type YayinTuru,
+  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
 } from '#paylasilan/sozlesme/bildirim.ts';
 
 // BIL-1: mesaj ve e-posta kanalları bu aşamada kapalıdır (223 a e-postayı üçüncü, Mesaj kanalını dördüncü aşamaya koydu);
@@ -125,10 +125,11 @@ export const ONAY_ILETILERI = {
 export const otomatikOrtadaMi = (onem: BildirimOnemi): boolean => onem === 'acil';
 
 export interface Gosterim { ortada: boolean; onayIstenir: boolean }
-// BIL-17 (2147 Y4): türün Bildirim yönetimi'ndeki gösterimi varsayılanın yerine geçer.
-export const varsayilanGosterim = (onem: BildirimOnemi): Gosterim => ({ ortada: otomatikOrtadaMi(onem), onayIstenir: false });
-export const otomatikGosterim = (onem: BildirimOnemi, ayar: Gosterim | null): Gosterim => ayar ?? varsayilanGosterim(onem);
-export const varsayilanMi = (onem: BildirimOnemi, g: Gosterim): boolean => {
-  const v = varsayilanGosterim(onem);
+type GosterimTanimi = Pick<BildirimTuruTanimi, 'onem' | 'onayIstenir'>;
+// BIL-17 (2147 Y4): türün Bildirim yönetimi'ndeki gösterimi varsayılanın yerine geçer; onay varsayılanını tür tanımı verir (3303-2 a).
+export const varsayilanGosterim = (t: GosterimTanimi): Gosterim => ({ ortada: otomatikOrtadaMi(t.onem), onayIstenir: t.onayIstenir === true });
+export const otomatikGosterim = (t: GosterimTanimi, ayar: Gosterim | null): Gosterim => ayar ?? varsayilanGosterim(t);
+export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
+  const v = varsayilanGosterim(t);
   return v.ortada === g.ortada && v.onayIstenir === g.onayIstenir;
 };

@@ -96,6 +96,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
         <GorevPaneli
           gorevId={panel} kapat={() => { panelYaz(null); }}
           duzenle={yazabilir && paneldeki !== undefined ? () => { formYaz(paneldeki); } : undefined}
+          iptalEdebilir={yazabilir}
         />
       )}
       {form !== null && (

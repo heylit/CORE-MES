@@ -6,7 +6,9 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { Gorev, GorevAyrintisiCevabi, GorevlerimCevabi, GorevlerimSatiri, SablonListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { GorevPaneli } from './GorevPaneli.tsx';
 import { GorevSablonlari } from './GorevSablonlari.tsx';
+import { uretimIlerlemesi } from './ProjeEmirleri.tsx';
 import { ProjeGorevlerim } from './ProjeGorevlerim.tsx';
 
 const KONTROLCU: Kullanici = { id: 5, ad: 'Deneme Kontrolcü', islemler: ['sayfa.proje-gorevlerim', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] };
@@ -49,6 +51,7 @@ function sunucuKur(kullanici: Kullanici) {
     if (yontem === 'GET' && yol === '/projeler/gorevlerim/liste') return json(200, LISTE);
     if (yontem === 'GET' && yol === '/projeler/gorevler/7/ayrinti') return json(200, ayrinti(gorev({})));
     if (yontem === 'POST' && yol === '/projeler/gorevler/7/onayla') return json(200, ayrinti(gorev({ durum: 'bitti', onaylandi: true, surum: 5 })));
+    if (yontem === 'POST' && yol === '/projeler/gorevler/7/iptal') return json(200, ayrinti(gorev({ durum: 'iptal', surum: 5 })));
     if (yontem === 'POST' && yol === '/projeler/gorevler/7/geri-gonder') return json(200, ayrinti(gorev({ durum: 'suruyor', surum: 5 })));
     if (yontem === 'GET' && yol === '/projeler/sablonlar/liste') return json(200, { sablonlar: [] } satisfies SablonListesiCevabi);
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Yapan' }] });
@@ -68,6 +71,8 @@ function ac(adres: string) {
           <Routes>
             <Route path="/proje-gorevlerim" element={<ProjeGorevlerim />} />
             <Route path="/projeler/sablonlar" element={<GorevSablonlari />} />
+            <Route path="/panel" element={<GorevPaneli gorevId={7} kapat={() => undefined} iptalEdebilir />} />
+            <Route path="/panel-salt" element={<GorevPaneli gorevId={7} kapat={() => undefined} />} />
           </Routes>
         </BildirimSaglayici>
       </QueryClientProvider>
@@ -76,6 +81,37 @@ function ac(adres: string) {
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+describe('3303 görev iptali ve üretim ilerlemesi', () => {
+  it('İptal et onay sorar; Vazgeç yazmaz; onaylanınca sürümle iptal gider ve düğme kalkar', async () => {
+    const cagrilar = sunucuKur(KONTROLCU);
+    ac('/panel');
+    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    const soru = screen.getByRole('group', { name: 'Görevi iptal et' });
+    expect(within(soru).getByText(/silinmez/)).toBeDefined();
+    fireEvent.click(within(soru).getByRole('button', { name: 'Vazgeç' }));
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Görevi iptal et' }));
+    await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/projeler/gorevler/7/iptal')?.govde).toEqual({ surum: 4 }); });
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull(); });
+  });
+
+  it('görev yazmayan panelde İptal görmez', async () => {
+    sunucuKur(KONTROLCU);
+    ac('/panel-salt');
+    await screen.findByRole('button', { name: 'Onayla' });
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
+  });
+
+  it('üretim ilerlemesi iptal dışı emirlerin biten adım oranıdır; adım yoksa boştur', () => {
+    expect(uretimIlerlemesi([
+      { durum: 'basladi', tamamAdim: 1, adimSayisi: 4 }, { durum: 'bitti', tamamAdim: 4, adimSayisi: 4 }, { durum: 'iptal', tamamAdim: 0, adimSayisi: 10 },
+    ])).toBe(63);
+    expect(uretimIlerlemesi([])).toBeNull();
+    expect(uretimIlerlemesi([{ durum: 'iptal', tamamAdim: 0, adimSayisi: 3 }])).toBeNull();
+  });
+});
 
 describe('3269 proje görevlerim ve şablon', () => {
   it('görevlerim türe göre süzülür; kontrolümdeki görev panelden sürümle onaylanır', async () => {

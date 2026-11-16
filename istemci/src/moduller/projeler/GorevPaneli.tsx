@@ -47,13 +47,16 @@ const OLAY_METNI: Record<GorevOlayi['olay'], string> = {
 };
 const anMetni = (an: string): string => `${tarihMetni(an.slice(0, 10))} ${an.slice(11, 16)}`;
 
-type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder';
+type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder' | 'iptal';
 
 // Görevin yan paneli: bilgiler, kişinin yapabileceği adımlar ve geçmiş. Düğmeleri sunucunun verdiği izinler açar; yazma aynı
-// kuralla sunucuda yeniden denetlenir.
-export function GorevPaneli({ gorevId, kapat, duzenle }: { gorevId: number; kapat: () => void; duzenle?: (() => void) | undefined }) {
+// kuralla sunucuda yeniden denetlenir. İptal (3303-1 c) yalnız görev yazana verilir; görev silinmez, listede İptal olarak kalır.
+export function GorevPaneli({ gorevId, kapat, duzenle, iptalEdebilir = false }: {
+  gorevId: number; kapat: () => void; duzenle?: (() => void) | undefined; iptalEdebilir?: boolean;
+}) {
   const istemci = useQueryClient();
   const [geri, geriYaz] = useState<string | null>(null);
+  const [iptalSor, iptalSorYaz] = useState(false);
   const [geriHatasi, geriHatasiYaz] = useState<string | undefined>(undefined);
   const a = useQuery({
     queryKey: anahtarlar.gorevAyrinti(gorevId),
@@ -65,6 +68,7 @@ export function GorevPaneli({ gorevId, kapat, duzenle }: { gorevId: number; kapa
     onSuccess: async (cevap) => {
       istemci.setQueryData(anahtarlar.gorevAyrinti(gorevId), cevap);
       geriYaz(null);
+      iptalSorYaz(false);
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok, predicate: (q) => q.queryKey[1] !== 'gorev' });
     },
   });
@@ -77,6 +81,8 @@ export function GorevPaneli({ gorevId, kapat, duzenle }: { gorevId: number; kapa
     komut.mutate({ ad: 'geri-gonder', govde: { gerekce: geri.trim(), surum: g.surum } });
   };
 
+  const iptalAcik = iptalEdebilir && g !== undefined && g.durum !== 'bitti' && g.durum !== 'iptal';
+
   return (
     <Pencere
       acik
@@ -85,6 +91,7 @@ export function GorevPaneli({ gorevId, kapat, duzenle }: { gorevId: number; kapa
       baslik={g === undefined ? 'Görev' : g.ad}
       alt={(
         <>
+          {iptalAcik && !iptalSor && <Dugme simge="x" onClick={() => { iptalSorYaz(true); }}>İptal et</Dugme>}
           {duzenle !== undefined && <Dugme simge="edit" onClick={duzenle}>Düzenle</Dugme>}
           <Dugme onClick={kapat}>Kapat</Dugme>
         </>
@@ -130,6 +137,15 @@ export function GorevPaneli({ gorevId, kapat, duzenle }: { gorevId: number; kapa
               <div className="tc-prj-gorunum">
                 <Dugme onClick={() => { geriYaz(null); }} disabled={komut.isPending}>Vazgeç</Dugme>
                 <Dugme tur="birincil" simge="back" yukleniyor={komut.isPending} onClick={geriGonder}>Geri gönder</Dugme>
+              </div>
+            </div>
+          )}
+          {iptalAcik && iptalSor && (
+            <div className="tc-prj-icerik" role="group" aria-label="Görevi iptal et">
+              <p>Görev iptal edilsin mi? Görev silinmez; listede İptal olarak kalır ve proje ilerlemesine sayılmaz.</p>
+              <div className="tc-prj-gorunum">
+                <Dugme onClick={() => { iptalSorYaz(false); }} disabled={komut.isPending}>Vazgeç</Dugme>
+                <Dugme tur="tehlike" simge="x" yukleniyor={komut.isPending} onClick={() => { gonder('iptal'); }}>Görevi iptal et</Dugme>
               </div>
             </div>
           )}

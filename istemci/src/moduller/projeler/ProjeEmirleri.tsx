@@ -22,13 +22,28 @@ const SUTUNLAR: Sutun<AdimliEmirOzeti>[] = [
   { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={EMIR_DURUMU[e.durum].ton}>{EMIR_DURUMU[e.durum].etiket}</Rozet> },
 ];
 
-export function ProjeEmirleri({ projeId }: { projeId: number }) {
-  const sorgu = useQuery({
+// 3303-3 a: üretim ilerlemesi, projenin iptal dışındaki emirlerinde biten adımın bütün adımlara oranıdır; görev ilerlemesiyle
+// birleştirilmez. Adımı olan emir yoksa null.
+export function uretimIlerlemesi(emirler: readonly Pick<AdimliEmirOzeti, 'durum' | 'tamamAdim' | 'adimSayisi'>[]): number | null {
+  const sayilan = emirler.filter((e) => e.durum !== 'iptal');
+  const toplam = sayilan.reduce((t, e) => t + e.adimSayisi, 0);
+  if (toplam === 0) return null;
+  return Math.round((100 * sayilan.reduce((t, e) => t + e.tamamAdim, 0)) / toplam);
+}
+
+export function useProjeEmirleri(projeId: number, etkin = true) {
+  return useQuery({
     queryKey: anahtarlar.emirler(projeId),
     queryFn: () => api.get<AdimliListeCevabi>(`/adimli-emirler?projeId=${projeId}`),
+    enabled: etkin,
+    select: (c) => c.emirler.filter((e) => e.projeId === projeId),
   });
+}
+
+export function ProjeEmirleri({ projeId }: { projeId: number }) {
+  const sorgu = useProjeEmirleri(projeId);
   // Süzgeç sunucudadır; projeId'si tutmayan satır (süzgeci bilmeyen sunucu) gösterilmez, başka projenin emri karışmaz.
-  const emirler = (sorgu.data?.emirler ?? []).filter((e) => e.projeId === projeId);
+  const emirler = sorgu.data ?? [];
   return (
     <Kart baslik="Üretim emirleri">
       {sorgu.isError

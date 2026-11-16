@@ -412,6 +412,14 @@ export function gorevOnayla(db: Db, id: number, kisiId: number, surum: number): 
   );
 }
 
+export function gorevIptal(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'iptal', guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 RETURNING id`,
+    [id, kisiId, surum],
+  );
+}
+
 export function gorevGeriGonder(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE projeler_gorev SET durum = 'suruyor', guncelleyen_id = $2, guncelleme = now(), surum = surum + 1

@@ -54,7 +54,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
     kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur), yalnizKisiler: olay.yalnizKisiler,
   });
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
-  const gosterim = otomatikGosterim(tanim.onem, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
+  const gosterim = otomatikGosterim(tanim, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
   for (const kisiId of alicilar) {
     await s.bildirimYaz(db, {
       kisiId, tur: olay.tur, onem: tanim.onem, baslik, metin, yol: olay.yol ?? null, kaynakModul: kaynakModulu(olay.tur), tekilAnahtar: anahtar,
@@ -219,7 +219,7 @@ export async function bildirimGosterimleri(db: Db): Promise<BildirimGosterimleri
     satirlar: BILDIRIM_TUR_ANAHTARLARI.map((tur) => {
       const t = BILDIRIM_TURLERI[tur];
       const a = ayarlar.get(tur);
-      const g = a ?? varsayilanGosterim(t.onem);
+      const g = a ?? varsayilanGosterim(t);
       return {
         tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur), ortada: g.ortada, onayIstenir: g.onayIstenir, surum: a?.surum ?? null,
         degistiren: a === undefined || a.degistirenKisiId === null ? null : { id: a.degistirenKisiId, ad: adlar.get(a.degistirenKisiId) ?? null },
@@ -232,7 +232,7 @@ export async function bildirimGosterimleri(db: Db): Promise<BildirimGosterimleri
 export async function bildirimGosterimiYaz(
   db: Db, kullanici: Kullanici, tur: BildirimTuru, govde: BildirimGosterimDegistirGovdesi,
 ): Promise<BildirimGosterimleriCevabi> {
-  const varsayilan = varsayilanMi(BILDIRIM_TURLERI[tur].onem, govde);
+  const varsayilan = varsayilanMi(BILDIRIM_TURLERI[tur], govde);
   if (!(await s.turGosterimiYaz(db, tur, { ...govde, surum: govde.surum ?? null, varsayilan }, kullanici.id))) throw eskiSurum();
   return bildirimGosterimleri(db);
 }

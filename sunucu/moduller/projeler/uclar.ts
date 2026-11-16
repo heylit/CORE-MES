@@ -14,7 +14,7 @@ import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
-  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
 } from './servis.ts';
 
@@ -146,6 +146,16 @@ export const uclar = [
     govde: geriGonderGovdesi,
     cevap: gorevAyrintisiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gorevGeriGonder(db, kullanici, parametre.gorevId, govde),
+  }),
+  // 3303-1 c: görev silinmez; görev yazan iptal eder.
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/:gorevId/iptal',
+    yetki: 'projeler.gorev-yaz',
+    parametre: gorevParametresi,
+    govde: gorevKomutuGovdesi,
+    cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => gorevIptal(db, kullanici, parametre.gorevId, govde),
   }),
   // 3269: görev şablonları; yazan şablon ekranını da okur. Proje açan ve görev yazan seçici için etkin şablonları görür.
   uc({

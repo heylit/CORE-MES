@@ -62,6 +62,11 @@ test.describe('yönetici', () => {
     await page.getByText(ad).first().click();
     const panel = page.getByRole('dialog');
     await expect(panel.getByText('Örnek Kaliteci')).toBeVisible();
+    // 3303-1 c: görev silinmez; İptal et onay sorar, Vazgeç yazmaz.
+    await panel.getByRole('button', { name: 'İptal et' }).click();
+    await expect(panel.getByRole('group', { name: 'Görevi iptal et' })).toBeVisible();
+    expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
+    await panel.getByRole('group', { name: 'Görevi iptal et' }).getByRole('button', { name: 'Vazgeç' }).click();
     await panel.getByRole('button', { name: 'Düzenle' }).click();
     const form = page.getByRole('dialog');
     await expect(form.getByLabel(/^Kontrol eden/)).toBeEnabled();

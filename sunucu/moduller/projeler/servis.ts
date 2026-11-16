@@ -24,7 +24,7 @@ import {
   YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
-  gorevIzinleri, gorevlerimTuru, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
+  gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
 import { projeAcildiBildir, projeDegistiBildir } from './proje-olaylari.ts';
@@ -489,6 +489,16 @@ export async function gorevGeriGonder(db: Db, kullanici: Kullanici, gorevId: num
   await sorgular.gorevOlayiEkle(db, gorevId, 'geri', k.kisiId, g.gerekce);
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
   await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: mevcut.sorumlu_kisi_id, yapanRolId: null }], k.kisiId);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+// 3303-1 c: görevi görev yazan iptal eder; veri silinmez. Kontrol bildirimi kapanır, atama bildirimi projeye bağlı olduğu için kalır.
+export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, g: GorevKomutuGovdesi): Promise<GorevAyrintisiCevabi> {
+  const { g: mevcut } = await akisaHazirla(db, kullanici, gorevId);
+  const ret = iptalReddi(mevcut.durum);
+  if (ret !== null) throw dogrulama(ret);
+  await akisYaz(db, gorevId, () => sorgular.gorevIptal(db, gorevId, kullanici.id, g.surum));
+  await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 

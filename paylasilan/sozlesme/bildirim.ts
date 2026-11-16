@@ -32,6 +32,8 @@ export interface BildirimTuruTanimi {
   yol: `/${string}`;
   // Kişi seçmediyse geçen kanallar; uygulama kanalı hep açıktır.
   varsayilan: Record<BildirimKanali, boolean>;
+  // Verilirse bildirim, Bildirim yönetimi ayarlanmadıkça "Okudum, anladım" denene dek kalır (3303-2 a).
+  onayIstenir?: true;
 }
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
@@ -174,6 +176,7 @@ export const BILDIRIM_TURLERI = {
   // Bildirim yönetimi'ndeki alıcı seçimi yalnız daraltır, başka projelerin görevini yaymaz.
   'projeler.gorev-atandi': {
     baslik: 'Sana proje görevi var', onem: 'bilgi', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+    onayIstenir: true,
   },
   // 3269 a: görev kontrole düşünce kontrol edene (kişi ya da roldeki kişiler); onay ya da geri gönderilince projeler kapatır.
   'projeler.gorev-kontrol-bekliyor': {
