@@ -8,7 +8,7 @@ import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const DENEME = {
-  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
+  durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', baslangic: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
   yetisir: null, onayGerekli: false, satinalmaGerekli: true, maliyetToplami: '400.00', genelGiderSaatBasi: '10.00',
   kayanlar: [{ siparis: 'ORN-SS-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }],
   plan: {
@@ -51,6 +51,7 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
       ...DENEME,
       istenenTermin: new URL(r.request().url()).searchParams.get('istenenTermin'),
       yerlesim: new URL(r.request().url()).searchParams.get('yerlesim') ?? 'arkaya',
+      baslangic: new URL(r.request().url()).searchParams.get('baslangic'),
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00', planTermini: '2099-07-14',
         malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'ORN-HM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
@@ -72,6 +73,16 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
   await expect(form.getByRole('group', { name: 'Kâr oranı' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Maliyet dökümü' })).toBeVisible();
   await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toHaveValue('12,50');
+  // 3326: seçilen günde başlatmada plandan tıklanan gün başlangıç günü olur.
+  await form.getByLabel('Seçilen günde başlat').check();
+  const gun = form.getByRole('group', { name: 'Başlangıç' }).getByRole('button', { name: /^08\.07\.2099/ });
+  await gun.click();
+  await expect(gun).toHaveAttribute('aria-pressed', 'true');
+  await expect(form.getByRole('definition').filter({ hasText: '08.07.2099' }).first()).toBeVisible();
+  // Seçilen günde başlatmada kimse kaymaz: kayan listesi ve onay kutusu çizilmez (yönlendirilen cevapta kayan olsa da).
+  await expect(form.getByText(/terminini kaçırır/)).toHaveCount(0);
+  await expect(form.locator('.tc-sp-blok-yazi', { hasText: 'Bu teklif' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await form.getByLabel('Terminden geriye').check();
   await form.getByLabel(/^İstenen termin/).fill('2099-07-05');
   await expect(form.getByRole('table', { name: 'Bitişi değişen siparişler' })).toBeVisible();
@@ -87,7 +98,7 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   await page.route(`**/api/siparisler/teklifler/${String(t.id)}/termin-denemesi**`, (r) => r.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({
-      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', planTermini: null, termin: null, terminGun: null, yetisir: null,
+      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, yerlesim: 'arkaya', baslangic: null, planTermini: null, termin: null, terminGun: null, yetisir: null,
       onayGerekli: false, satinalmaGerekli: false, maliyetToplami: null, genelGiderSaatBasi: null, kayanlar: [], plan: null,
       kalemler: [{
         satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: false, bitis: null, planTermini: null,
@@ -120,8 +131,42 @@ test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir;
   await page.getByRole('tab', { name: '2 Kalemler' }).click();
   await expect(page.getByLabel(/^Kalem 1 tanım/)).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  // 3301-5: malzemesiz kalemde ileti görünür; malzeme seçilince tanım isteğe bağlıdır ve kartın adı yazılır.
+  await expect(page.getByText(/Katalogda yoksa aşağıya tanımı yazın/)).toBeVisible();
+  await page.getByRole('button', { name: 'Malzemeden seç' }).click();
+  const secici = page.getByRole('dialog', { name: 'Malzeme kartı seç' });
+  const ilk = secici.getByRole('table', { name: 'Malzeme kartları' }).locator('tbody tr.tc-tablo-secilir').first();
+  test.skip(!(await ilk.waitFor({ timeout: 10_000 }).then(() => true, () => false)), 'örnek veride satılan kart yok');
+  await ilk.click();
+  await expect(secici).toBeHidden();
+  await expect(page.getByLabel(/^Kalem 1 tanım \(isteğe bağlı\)/)).not.toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Malzemeyi değiştir' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'malzemeli kalemde yatay taşma').toBeLessThanOrEqual(0);
   await page.getByRole('tab', { name: '3 Termin ve fiyat' }).click();
   await expect(page.getByText(/Önce kalemleri kaydedin/)).toBeVisible();
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
+});
+
+// Teklif formu basımda boş çıkmasın: başka modülün basım kuralı (body * gizli) basım kopyasını görünmez yapıyordu.
+test('Teklif formu basımda görünür: Yazdır / PDF kopyası kâğıda çıkar', async ({ page, ac }) => {
+  const firma = (await (await page.request.get(`${ADRES}/api/musteri-tedarikci/firmalar/secim`)).json() as { firmalar: { id: number; tur: string }[] })
+    .firmalar.find((f) => f.tur !== 'tedarikci');
+  test.skip(firma === undefined, 'örnek veride müşteri firması yok');
+  const tanim = `Ekran testi ${randomUUID().slice(0, 8)}`;
+  const c = await page.request.post(`${ADRES}/api/siparisler/teklifler/ekle`, {
+    headers: { 'istek-kimligi': randomUUID() }, data: { firmaId: firma?.id, baslik: 'Ekran testi teklifi', satirlar: [{ malzemeNo: null, tanim, miktar: '40' }] },
+  });
+  expect(c.status(), await c.text()).toBe(200);
+  const t = await c.json() as { id: number };
+  await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
+  await page.getByLabel(new RegExp(`^${tanim} birim fiyat`)).fill('11');
+  await page.getByRole('button', { name: 'Devam' }).click();
+  await page.getByLabel('Teslim süresi (gün)').fill('14');
+  await page.getByRole('button', { name: 'Teklifi ver' }).click();
+  await expect(page.getByRole('button', { name: 'Yazdır / PDF' })).toBeEnabled();
+  await page.emulateMedia({ media: 'print' });
+  const baski = page.locator('.tc-tf-baski .tc-tf-kagit');
+  await expect(baski).toBeVisible();
+  await expect(baski.getByText(tanim)).toBeVisible();
 });

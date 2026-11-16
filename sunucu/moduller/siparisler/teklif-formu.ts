@@ -8,7 +8,7 @@ import type {
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  KURUM_SATIRI_YOK, SABLON_ADI_KULLANILIYOR, SABLON_YOK, SURUM_YOK, TEKLIF_YOK, firmaAdresi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
+  KURUM_SATIRI_YOK, SABLON_ADI_KULLANILIYOR, SABLON_YOK, SURUM_YOK, TEKLIF_YOK, firmaAdresi, formMetni, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -72,5 +72,6 @@ export async function teklifFormuVerisi(db: Db, teklifId: number, s: TeklifFormu
   return {
     musteri: firma === null ? { ad: null, adres: null, vergiNo: null } : { ad: firma.ad, adres: firmaAdresi(firma), vergiNo: firma.vergiNo },
     ...formToplamlari(toplam.ara_toplam, toplam.kdv_haric, toplam.kdv_tutari, s.kdvOrani),
+    metin: formMetni(await sorgular.teklifFormMetni(db, teklifId)),
   };
 }

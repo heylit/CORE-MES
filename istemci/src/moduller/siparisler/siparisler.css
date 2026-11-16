@@ -48,6 +48,7 @@
 
 .tc-sp-form { display: grid; gap: var(--b-5); min-width: 0; }
 .tc-sp-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 7)), 1fr)); gap: var(--b-3) var(--b-4); margin-bottom: var(--b-4); }
+.tc-sp-vade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-2); min-width: 0; }
 .tc-sp-kalemler { display: grid; gap: var(--b-4); margin: 0; padding: 0; list-style: none; }
 .tc-sp-kalem { display: grid; gap: var(--b-3); min-width: 0; padding: var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
 .tc-sp-kalem-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
@@ -77,18 +78,31 @@
 .tc-sp-serit-lejant { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-sp-serit-lejant span { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-sp-serit-lejant svg { width: var(--b-3); height: var(--b-2); }
-.tc-sp-serit-izler { display: flex; flex-direction: column; gap: var(--b-1); overflow-x: auto; min-width: 0; }
-.tc-sp-serit-satir { display: grid; grid-template-columns: minmax(calc(var(--b-6) * 2), 1fr) minmax(calc(var(--b-6) * 7), 5fr); gap: var(--b-2); align-items: center; }
-.tc-sp-serit-ad { display: flex; flex-direction: column; min-width: 0; }
+/* Satırlar tek ızgaranın sütunlarını paylaşır: gün başlıkları uzunsa izler de aynı genişlikte kayar. */
+.tc-sp-serit-izler { display: grid; grid-template-columns: minmax(calc(var(--b-6) * 2), 1fr) minmax(min-content, 5fr); gap: var(--b-1) var(--b-2); align-items: center; overflow-x: auto; min-width: 0; }
+.tc-sp-serit-satir { display: contents; }
+.tc-sp-serit-gunler { display: flex; min-width: 0; }
+.tc-sp-serit-gun {
+  flex: 1 1 0; min-width: var(--b-5); min-height: var(--dokunma); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid var(--edge); border-inline-start-width: 0; background: var(--panel-solid); color: var(--ink); font: inherit; font-size: var(--yazi-xs); cursor: pointer;
+}
+.tc-sp-serit-gun:first-child { border-inline-start-width: 1px; }
+.tc-sp-serit-gun small { color: var(--muted); }
+.tc-sp-serit-gun[data-kapali] { background: var(--bg); }
+.tc-sp-serit-gun:hover { background: var(--panel); }
+.tc-sp-serit-gun[aria-pressed="true"] { background: var(--ink); color: var(--panel-solid); }
+.tc-sp-serit-gun[aria-pressed="true"] small { color: inherit; }
+.tc-sp-serit-ad { display: flex; flex-direction: column; min-width: 0; position: sticky; inset-inline-start: 0; z-index: 1; align-self: stretch; justify-content: center; background: var(--panel-solid); }
 .tc-sp-serit-ad b, .tc-sp-serit-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-sp-serit-ad small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-sp-serit-iz { width: 100%; height: var(--b-5); border: 1px solid var(--edge); border-radius: var(--b-1); }
+.tc-sp-serit-iz { width: 100%; min-width: calc(var(--b-6) * 7); height: var(--b-5); border: 1px solid var(--edge); border-radius: var(--b-1); }
 .tc-sp-serit-eksen { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--yazi-xs); font-family: var(--font-mono); }
 .tc-sp-kapali { fill: var(--edge); opacity: .35; }
 .tc-sp-blok-siparis { fill: var(--idle); }
 .tc-sp-blok-satis-taslagi { fill: var(--hold); }
 .tc-sp-blok-teklif { fill: var(--run); }
 .tc-sp-blok-gec { fill: var(--stop); }
+.tc-sp-blok-yazi { fill: var(--on-sig); font-size: var(--yazi-xs); font-weight: 600; dominant-baseline: central; pointer-events: none; }
 .tc-sp-cizgi-termin, .tc-sp-cizgi-gecerlilik { stroke-width: 2; vector-effect: non-scaling-stroke; }
 .tc-sp-cizgi-termin { stroke: var(--run); }
 .tc-sp-cizgi-gecerlilik { stroke: var(--hazard); stroke-dasharray: 3 2; }

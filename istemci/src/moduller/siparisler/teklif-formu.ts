@@ -7,13 +7,15 @@ export const FORM_SOZLERI = {
     musteri: 'Müşteri', teklif: 'Teklif', no: 'Teklif no', surum: 'Sürüm', tarih: 'Tarih', gecerlilik: 'Geçerlilik', kalem: 'Kalem', miktar: 'Miktar',
     birimFiyat: 'Birim fiyat', iskontolu: 'İskontolu', tutar: 'Tutar', ara: 'Ara toplam', iskonto: 'İskonto', kdvHaric: 'Toplam (KDV hariç)', kdv: 'KDV',
     genel: 'Genel toplam', teslim: 'Teslim süresi', gun: 'gün', odeme: 'Ödeme', para: 'Para birimi', kosullar: 'Teslim ve ödeme', sartlar: 'Şartlar',
-    tel: 'Tel', ilgili: 'İlgili', vergi: 'Vergi no', termin: 'Termin',
+    tel: 'Tel', ilgili: 'İlgili', vergi: 'Vergi no', termin: 'Termin', unvan: 'Ünvan', adres: 'Adres', konu: 'Konu', kod: 'Kod', aciklama: 'Açıklama',
+    birim: 'Birim', dokumanNo: 'Doküman no', yayin: 'Yayın tarihi', revTarihi: 'Rev. tarihi', revNo: 'Rev. no',
   },
   en: {
     musteri: 'Customer', teklif: 'Quotation', no: 'Quotation no', surum: 'Revision', tarih: 'Date', gecerlilik: 'Valid until', kalem: 'Item', miktar: 'Qty',
     birimFiyat: 'Unit price', iskontolu: 'Net price', tutar: 'Amount', ara: 'Subtotal', iskonto: 'Discount', kdvHaric: 'Total (excl. VAT)', kdv: 'VAT',
     genel: 'Grand total', teslim: 'Lead time', gun: 'days', odeme: 'Payment', para: 'Currency', kosullar: 'Delivery and payment', sartlar: 'Terms',
-    tel: 'Tel', ilgili: 'Attn.', vergi: 'Tax no', termin: 'Due date',
+    tel: 'Tel', ilgili: 'Attn.', vergi: 'Tax no', termin: 'Due date', unvan: 'Name', adres: 'Address', konu: 'Subject', kod: 'Code', aciklama: 'Description',
+    birim: 'Unit', dokumanNo: 'Document no', yayin: 'Issue date', revTarihi: 'Rev. date', revNo: 'Rev. no',
   },
 } as const satisfies Record<TeklifFormuDili, Record<string, string>>;
 

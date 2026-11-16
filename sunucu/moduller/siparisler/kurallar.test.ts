@@ -7,7 +7,7 @@ import {
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
-  firmaAdresi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
+  FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -286,6 +286,10 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.deepEqual([arkaya.yerlesim, arkaya.termin, arkaya.yetisir, arkaya.onayGerekli], ['arkaya', '2099-07-08', false, false]);
     const yetisen = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-10', yerlesim: 'arkaya' });
     assert.deepEqual([yetisen.termin, yetisen.yetisir], ['2099-07-10', true]);
+    // 3326: seçilen günde başlatmada termin planınkidir, istenen termin yalnız ölçülür; başlangıç günü yalnız baslat'ta yazılır, onay doğmaz.
+    const bas = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-10', yerlesim: 'baslat', baslangic: '2099-07-01' });
+    assert.deepEqual([bas.yerlesim, bas.baslangic, bas.termin, bas.yetisir, bas.onayGerekli], ['baslat', '2099-07-01', '2099-07-08', true, false]);
+    assert.equal(denemeCevabi([satir(1, 11)], sonuc, { ...g, yerlesim: 'arkaya', baslangic: '2099-07-01' }).baslangic, null);
     assert.equal(gunFarki('2099-02-27', '2099-03-01'), 2);
   });
 
@@ -324,6 +328,10 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(yenidenYerlesirMi(y('2099-07-05'), '2099-07-05', 'arkaya'), true);
     assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'arkaya'), false);
     assert.equal(yenidenYerlesirMi(y('2099-07-05', 'arkaya'), '2099-07-05', 'geriye'), true);
+    // 3326: başlangıç günü değişince yeniden dizilir.
+    const b = (baslangic: string | null) => ({ istenenTermin: null, yerlesim: 'baslat' as const, baslangic, gecerli: true });
+    assert.equal(yenidenYerlesirMi(b('2099-07-01'), null, 'baslat', '2099-07-01'), false);
+    assert.equal(yenidenYerlesirMi(b('2099-07-01'), null, 'baslat', '2099-07-02'), true);
     assert.deepEqual(kilitler({ planSurumu: null, kalemler: [kalem(1)], kayanlar: [], plan: null }).map((k) => [k.satirId, k.opId, k.tezgah]), [[1, '1.10', 'T1']]);
   });
 
@@ -375,6 +383,16 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
 
 // 3245 d: teklif formu
 describe('teklif formu kuralları', () => {
+  test('3328 saklanan teklif metni şemaya uymazsa yok sayılır; kabul, red ve siparişte metin değişmez', () => {
+    const icerik = { baslik: 'ORN', giris: '', sartlar: [], imza1: '', imza2: '', alt: '' };
+    assert.deepEqual(formMetni({ dil: 'tr', icerik }), { dil: 'tr', icerik });
+    assert.equal(formMetni({ dil: 'tr', icerik: { ...icerik, baslik: ' ' } }), null);
+    assert.equal(formMetni({ dil: 'de', icerik }), null);
+    assert.equal(formMetni({ icerik: 'bozuk' }), null);
+    assert.equal(formMetni(null), null);
+    for (const d of ['kabul', 'red', 'siparis'] as const) assert.equal(formMetniReddi(d), FORM_METNI_KAPALI);
+    for (const d of ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'] as const) assert.equal(formMetniReddi(d), null);
+  });
   test('firma adresi: boş parça atlanır, hiçbiri yoksa null', () => {
     assert.equal(firmaAdresi({ adres: 'ORN Sokak 0', postaKodu: '00000', ilce: 'Örnekilçe', il: 'Örnekil' }), 'ORN Sokak 0\n00000 Örnekilçe / Örnekil');
     assert.equal(firmaAdresi({ adres: null, postaKodu: null, ilce: null, il: 'Örnekil' }), 'Örnekil');

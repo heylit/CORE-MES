@@ -1,7 +1,7 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
-import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, teklifFormuMetniSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu, TeklifFormuMetni } from '#paylasilan/sozlesme/siparisler.ts';
 import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
@@ -408,7 +408,10 @@ const enGec = (tarihler: readonly string[]): string | null => (tarihler.length =
 // yerleşmeyen kalem varsa plan termini yoktur. Kartsız kalem plansızdır. İstenen termin bir siparişi geciktiriyorsa plancı onayı gerekir.
 export function denemeCevabi(
   satirlar: readonly Pick<TeklifSatiri, 'id' | 'sira' | 'malzemeNo' | 'tanim' | 'miktar'>[], sonuc: DenemeSonucu | null,
-  g: { gecerlilik: string | null; istenenTermin: string | null; yerlesim?: TerminYerlesimi; genelGiderSaatBasi: number | null; genelGiderGizli?: boolean },
+  g: {
+    gecerlilik: string | null; istenenTermin: string | null; yerlesim?: TerminYerlesimi; baslangic?: string | null; genelGiderSaatBasi: number | null;
+    genelGiderGizli?: boolean;
+  },
 ): TerminDenemesiCevabi {
   // 2661 a, 2669 b: gizli oranlı ayda oran, genel gider payı ve onu içeren her maliyet null; genel gider hariç maliyet de verilmez.
   const gizli = g.genelGiderGizli === true;
@@ -440,13 +443,15 @@ export function denemeCevabi(
   // Arkaya eklemede plan değişmez: istenen termine yetişmeyen teklifte müşteriye planın verdiği tarih gider (Risk 3301 K-ek). Terminden
   // geriye yerleşimde istenen termin kalır; başka sipariş gecikirse plancı onayı ister.
   const yetismez = g.istenenTermin !== null && planTermini !== null && planTermini > g.istenenTermin;
-  const termin = yerlesim === 'arkaya' && yetismez ? planTermini : g.istenenTermin ?? planTermini;
+  // 3326: seçilen günde başlatmada müşteriye planın verdiği tarih gider; istenen termin yalnız yetişme ölçüsüdür.
+  const termin = yerlesim === 'baslat' || (yerlesim === 'arkaya' && yetismez) ? planTermini : g.istenenTermin ?? planTermini;
   return {
     durum: sonuc === null && planli.length > 0 ? 'cozucu-yok' : 'hazir',
     planSurumu: sonuc?.planSurumu ?? null,
     gecerlilik: g.gecerlilik,
     istenenTermin: g.istenenTermin,
     yerlesim,
+    baslangic: yerlesim === 'baslat' ? g.baslangic ?? null : null,
     planTermini,
     termin,
     terminGun: termin !== null && g.gecerlilik !== null ? gunFarki(g.gecerlilik, termin) : null,
@@ -510,6 +515,8 @@ export interface MotorGirdisi {
   gecerlilik: string;
   istenenTermin: string | null;
   yerlesim: TerminYerlesimi;
+  // 3326: yalnız 'baslat'ta; kalem bu günden önce başlamaz.
+  baslangic: string | null;
   taslakId: string | null;
   taslaklar: { id: string; gecerlilik: string; kalemler: { malzemeNo: number; adet: number; termin: string; yerlesim: Record<string, MotorYerlesimi> }[] }[];
 }
@@ -600,12 +607,14 @@ export function motorTaslaklari(t: readonly {
   });
 }
 
-// TKL-17 (49): yer tutan satış taslağı yalnız istenen termin ya da yerleşim (3301) değişince yeniden yerleşir; geçerliliği geçmişse yeri
+// TKL-17 (49): yer tutan satış taslağı yalnız istenen termin, yerleşim (3301) ya da başlangıç günü (3326) değişince yeniden yerleşir; geçerliliği geçmişse yeri
 // kalkmıştır. Yerleşimi yazılmamış eski taslak istenen terminden çıkar (boş: arkaya, dolu: geriye); böylece yeniden dizilmez.
 export function yenidenYerlesirMi(
-  mevcut: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null; gecerli: boolean } | null, istenenTermin: string | null, yerlesim: TerminYerlesimi,
+  mevcut: { istenenTermin: string | null; yerlesim: TerminYerlesimi | null; baslangic?: string | null; gecerli: boolean } | null, istenenTermin: string | null,
+  yerlesim: TerminYerlesimi, baslangic: string | null = null,
 ): boolean {
-  return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin || terminYerlesimi(mevcut.istenenTermin, mevcut.yerlesim) !== yerlesim;
+  return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin || terminYerlesimi(mevcut.istenenTermin, mevcut.yerlesim) !== yerlesim
+    || (mevcut.baslangic ?? null) !== baslangic;
 }
 
 // Takvimde siparişin durum adı ve kapanmışlığı (891); iptal takvime gelmez.
@@ -627,6 +636,16 @@ export function kurumIcerigi(ham: unknown): TeklifFormuKurumu {
   return s.success ? s.data : BOS_KURUM;
 }
 const BOS_ICERIK: TeklifFormuIcerigi = { baslik: 'TEKLİF FORMU', giris: '', sartlar: [], imza1: '', imza2: '', alt: '' };
+// Kabul edilen, reddedilen ya da siparişe dönen teklifin basılı metni müşterinin gördüğüdür; sonradan değişmez (değişiklik yeni teklifle).
+export const FORM_METNI_KAPALI = 'Kabul edilmiş, reddedilmiş ya da siparişe dönmüş teklifin form metni değişmez.';
+export function formMetniReddi(durum: TeklifDurumu): string | null {
+  return durum === 'kabul' || durum === 'red' || durum === 'siparis' ? FORM_METNI_KAPALI : null;
+}
+// Saklanan teklif form metni şemaya uymazsa yok sayılır, şablon basılır.
+export function formMetni(ham: unknown): TeklifFormuMetni | null {
+  const s = teklifFormuMetniSemasi.safeParse(ham);
+  return s.success ? s.data : null;
+}
 export function sablonIcerigi(ham: unknown): TeklifFormuIcerigi {
   const s = teklifFormuIcerikSemasi.safeParse(ham);
   return s.success ? s.data : BOS_ICERIK;

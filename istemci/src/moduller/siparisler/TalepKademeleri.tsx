@@ -59,7 +59,8 @@ function dogrula(kademe: TalepKademesi) {
     if (d.paraBirimi.trim() === '') hata['paraBirimi'] = 'Para birimi zorunlu.';
     if (kademe === 1) return hata;
     d.satirlar.forEach((s, i) => {
-      if (s.tanim.trim() === '') hata[`satirlar.${i}.tanim`] = 'Satır tanımı zorunlu.';
+      // Malzemeden seçilen kalemde tanım isteğe bağlıdır: boşsa kartın adı gider.
+      if (s.kart === null && s.tanim.trim() === '') hata[`satirlar.${i}.tanim`] = 'Malzeme seçin ya da tanımı yazın.';
       if (s.miktar.trim() === '') hata[`satirlar.${i}.miktar`] = 'Miktar zorunlu.';
       else if (belirsizSayi(s.miktar)) hata[`satirlar.${i}.miktar`] = BELIRSIZ_SAYI;
     });
@@ -77,7 +78,7 @@ function govdeKur(d: Degerler) {
     paraBirimi: d.paraBirimi.trim().toUpperCase(),
     istenenTarih: d.istenenTarih === '' ? null : d.istenenTarih,
     aciklama: bosYap(d.aciklama),
-    satirlar: d.satirlar.map((s) => ({ malzemeNo: s.kart?.no ?? null, tanim: s.tanim.trim(), miktar: sayiGirdisi(s.miktar) })),
+    satirlar: d.satirlar.map((s) => ({ malzemeNo: s.kart?.no ?? null, tanim: s.tanim.trim() || (s.kart?.ad ?? ''), miktar: sayiGirdisi(s.miktar) })),
   } satisfies TeklifEkleGovdesi;
 }
 
@@ -155,12 +156,19 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}
                 </div>
+                <div className="tc-sp-kart-sec">
+                  <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzemeden seç' : 'Malzemeyi değiştir'}</Dugme>
+                  {s.kart !== null && <Dugme aria-label={`Kalem ${i + 1} kartını kaldır`} simge="x" onClick={() => satirDegistir(i, { kart: null })} />}
+                  <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
+                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Katalogda yoksa aşağıya tanımı yazın; siparişe dönüşmeden malzeme seçilir.' : secilenKartMetni(s.kart))}
+                  </span>
+                </div>
                 <div className="tc-sp-izgara">
                   <Girdi
-                    etiket={`Kalem ${i + 1} tanım`}
-                    required
+                    etiket={s.kart === null ? `Kalem ${i + 1} tanım` : `Kalem ${i + 1} tanım (isteğe bağlı)`}
+                    required={s.kart === null}
                     autoComplete="off"
-                    placeholder="Ürün ya da hizmet; ölçü, kalite, standart"
+                    placeholder={s.kart === null ? 'Ürün ya da hizmet; ölçü, kalite, standart' : 'Boşsa malzeme adı yazılır'}
                     value={s.tanim}
                     onChange={(o) => satirDegistir(i, { tanim: o.target.value })}
                     {...(form.hata(`satirlar.${i}.tanim`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.tanim`) })}
@@ -174,13 +182,6 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
                     onChange={(o) => satirDegistir(i, { miktar: o.target.value })}
                     {...(form.hata(`satirlar.${i}.miktar`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.miktar`) })}
                   />
-                </div>
-                <div className="tc-sp-kart-sec">
-                  <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzemeden seç' : 'Malzemeyi değiştir'}</Dugme>
-                  {s.kart !== null && <Dugme aria-label={`Kalem ${i + 1} kartını kaldır`} simge="x" onClick={() => satirDegistir(i, { kart: null })} />}
-                  <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
-                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Katalogda yoksa tanımı yazın; siparişe dönüşmeden malzeme seçilir.' : secilenKartMetni(s.kart))}
-                  </span>
                 </div>
               </li>
             ))}

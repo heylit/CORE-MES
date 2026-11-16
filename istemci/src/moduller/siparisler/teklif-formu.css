@@ -10,7 +10,24 @@
 }
 .tc-tf-kagit h1, .tc-tf-kagit h2, .tc-tf-kagit p, .tc-tf-kagit dl, .tc-tf-kagit dd, .tc-tf-kagit ol { margin: 0; }
 .tc-tf-ust { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--b-5); }
-.tc-tf-ust-alt { align-items: flex-end; }
+/* 3328: antet bandı; logo solda, başlık ortada, doküman kutusu ya da firma sağda. */
+.tc-tf-bant {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center;
+  padding-block-end: var(--b-3); border-block-end: var(--cizgi) solid var(--ink);
+}
+.tc-tf-bant > :first-child { justify-self: start; }
+.tc-tf-bant > :last-child { justify-self: end; }
+.tc-tf-bant .tc-tf-baslik { text-align: center; }
+.tc-tf-belge { display: grid; grid-template-columns: auto auto; border: var(--cizgi-ince) solid var(--ink); }
+.tc-tf-belge > div { display: contents; }
+.tc-tf-belge dt, .tc-tf-belge dd { padding: var(--b-1) var(--b-2); border-block-end: var(--cizgi-ince) solid var(--edge2); }
+.tc-tf-belge dt { color: var(--muted); border-inline-end: var(--cizgi-ince) solid var(--edge2); }
+.tc-tf-belge dd { font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
+.tc-tf-belge > div:last-child > * { border-block-end: 0; }
+.tc-tf-kurum-satir { color: var(--muted); }
+.tc-tf-bilgi { display: grid; grid-template-columns: 1fr 1fr; gap: var(--b-5); }
+.tc-tf-bilgi h2 { font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: var(--harf-aralik-10); color: var(--bp); font-weight: 600; margin-block-end: var(--b-1); }
+.tc-tf-bilgi .tc-tf-meta { grid-template-columns: auto minmax(0, 1fr); }
 .tc-tf-logo { max-block-size: 16mm; max-inline-size: 60mm; object-fit: contain; }
 .tc-tf-logo-yok { font-size: var(--yazi-l); font-weight: 700; }
 .tc-tf-kurum { display: flex; flex-direction: column; align-items: flex-end; text-align: end; color: var(--muted); white-space: pre-line; }
@@ -20,9 +37,7 @@
 .tc-tf-meta > div { display: contents; }
 .tc-tf-meta dt { color: var(--muted); }
 .tc-tf-meta dd { font-weight: 600; font-variant-numeric: tabular-nums; }
-.tc-tf-kutular { display: grid; grid-template-columns: 1fr 1fr; gap: var(--b-4); }
-.tc-tf-kutu { display: flex; flex-direction: column; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--b-1); padding: var(--b-2) var(--b-3); }
-.tc-tf-kutu h2, .tc-tf-bolum h2 { font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: var(--harf-aralik-10); color: var(--muted); font-weight: 600; }
+.tc-tf-bolum h2 { font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: var(--harf-aralik-10); color: var(--muted); font-weight: 600; }
 .tc-tf-bolum h2 { color: var(--bp); margin-block-end: var(--b-1); }
 .tc-tf-satirli, .tc-tf-giris { white-space: pre-line; }
 .tc-tf-tablo { inline-size: 100%; border-collapse: collapse; }
@@ -31,7 +46,7 @@
 .tc-tf-tablo tr { break-inside: avoid; }
 .tc-tf-sag { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tc-tf-tablo th.tc-tf-sag { text-align: end; }
-.tc-tf-kod { display: block; font-family: var(--font-mono); color: var(--muted); }
+.tc-tf-kod { font-family: var(--font-mono); color: var(--muted); white-space: nowrap; }
 .tc-tf-toplam { margin-inline-start: auto; min-inline-size: 75mm; display: grid; grid-template-columns: 1fr auto; column-gap: var(--b-4); row-gap: var(--b-1); }
 .tc-tf-toplam > div { display: contents; }
 .tc-tf-toplam dd { text-align: end; font-variant-numeric: tabular-nums; }
@@ -88,5 +103,17 @@
 @media print {
   body:has(> .tc-tf-baski) > :not(.tc-tf-baski) { display: none; }
   .tc-tf-baski { display: block; page: tc-tf-a4; }
+  .tc-tf-baski, .tc-tf-baski * { visibility: visible; }
   .tc-tf-baski .tc-tf-kagit { box-shadow: none; min-block-size: 297mm; }
+}
+/* Teklif formu penceresinde metin düzenleme (3328). */
+/* 3328: teklif formu penceresinde metin düzenleme; dar ekranda düzenleme ve ön izleme sekmeyle değişir. */
+.tc-tf-pencere-govde { padding: var(--b-5); }
+.tc-tf-pencere-sekme { display: none; grid-column: 1 / -1; }
+@media (max-width: 599px) { .tc-tf-pencere-govde { padding: var(--b-4); } }
+/* Alt alta dizilen genişlikte kâğıt alanların altında kalmasın: düzenleme ve ön izleme sekmeyle değişir. */
+@media (max-width: 1099px) {
+  .tc-tf-pencere-sekme { display: block; }
+  .tc-tf-pencere-duzen[data-gorunum="duzen"] > .tc-tf-onizleme { display: none; }
+  .tc-tf-pencere-duzen[data-gorunum="kagit"] > .tc-tf-pencere-alanlar { display: none; }
 }

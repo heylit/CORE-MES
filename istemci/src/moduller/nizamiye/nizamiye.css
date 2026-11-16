@@ -118,7 +118,7 @@ button.tc-nz-sayac { cursor: pointer; }
 }
 
 @media print {
-  body * { visibility: hidden; }
+  body:has(.tc-nz-acil-sayfa) * { visibility: hidden; }
   .tc-nz-acil-sayfa, .tc-nz-acil-sayfa * { visibility: visible; }
   .tc-nz-acil-sayfa { position: absolute; inset: 0; overflow: visible; }
   .tc-nz-acil-sayfa button { display: none; }

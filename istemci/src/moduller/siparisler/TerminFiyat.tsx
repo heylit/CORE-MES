@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type {
   MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi, TerminYerlesimi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { AdetTablosu } from './AdetTablosu.tsx';
@@ -11,7 +11,9 @@ import { anahtarlar } from './anahtarlar.ts';
 import {
   BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
+import { ODEME_TURLERI, VADE_BIRIMLERI, odemeHatasi, odemeMetni, odemeSecimi, vadeli, type OdemeSecimi, type OdemeTuru } from './odeme-kosulu.ts';
 import { PlanSeridi } from './PlanSeridi.tsx';
+import { bugun, teslimGunu, terminGunu } from './teslim-suresi.ts';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
@@ -25,19 +27,45 @@ interface Degerler {
   iskontoOrani: string;
   teslimGun: string;
   terminTarihi: string;
+  // Ödeme koşulu seçimle kurulur (odeme-kosulu.ts); düz metin alanlar form.alan'a bağlanır, gönderimde metne çevrilir.
+  odemeTuru: string;
+  odemeSure: string;
+  odemeBirim: string;
   odemeKosulu: string;
   gecerlilik: string;
   aciklama: string;
   yerlesim: TerminYerlesimi;
   istenenTermin: string;
+  // 3326: yalnız "seçilen günde başlat"ta; plandan tıklanan ya da yazılan gün.
+  baslangic: string;
   kar: string;
 }
 
 // Önizlemedeki hazır kâr oranları (maliyet üstü yüzde); başka oran elle girilir.
 // Sunucudaki GERIYE_TERMIN_ZORUNLU ile aynı ileti (istemci sözleşmeden değer ithal etmez).
 const GERIYE_TERMIN_ZORUNLU = 'Terminden geriye yerleşimde istenen termin zorunlu.';
+const BASLAT_TARIHI_ZORUNLU = 'Seçilen günde başlatmada başlangıç günü zorunlu.';
 const KARLAR = ['10', '15', '20', '25', '30', '40'] as const;
 const VARSAYILAN_KAR = '25';
+
+function teslimVeTermin(gun: number | null, termin: string | null): { teslimGun: string; terminTarihi: string } {
+  const n = gun ?? teslimGunu(termin, bugun());
+  return { teslimGun: n === null ? '' : String(n), terminTarihi: termin ?? '' };
+}
+
+const odemeDegerleri = (metin: string | null) => {
+  const o = odemeSecimi(metin);
+  return { odemeTuru: o.tur, odemeSure: o.sure, odemeBirim: o.birim, odemeKosulu: o.metin };
+};
+const odemeSecimiOku = (d: Degerler): OdemeSecimi => ({
+  tur: d.odemeTuru as OdemeTuru, sure: d.odemeSure, birim: d.odemeBirim === 'ay' ? 'ay' : 'gun', metin: d.odemeKosulu,
+});
+
+const GUN_ETIKETI: Record<TerminYerlesimi, string> = { arkaya: 'İstenen termin seç', geriye: 'Termin günü seç', baslat: 'Başlangıç' };
+// Başlangıç günü yalnız "seçilen günde başlat"ta gider; öteki yerleşimlerin gövdesi değişmez.
+const baslangicAlani = (d: Degerler): { baslangic?: string } => (d.yerlesim === 'baslat' ? { baslangic: d.baslangic } : {});
+const yerlesimMetni = (d: Degerler): string =>
+  d.yerlesim === 'arkaya' ? 'planın arkasına' : d.yerlesim === 'geriye' ? 'terminden geriye' : `${tarihMetni(d.baslangic)} gününde başlar`;
 
 const MALIYET_TURU: Record<MaliyetKalemi['tur'], string> = {
   malzeme: 'Malzeme', isleme: 'İşlem (ayar dahil)', fason: 'Fason', 'genel-gider': 'Genel gider',
@@ -50,14 +78,15 @@ function ilkDegerler(t: TeklifAyrintiCevabi): Degerler {
   return {
     fiyatlar: t.satirlar.map((s) => { const f = fiyat.get(s.id); return f === undefined || f === null ? '' : miktarMetni(f).replace(/\./g, ''); }),
     iskontoOrani: son?.iskontoOrani ? miktarMetni(son.iskontoOrani) : '0',
-    teslimGun: son?.teslimGun == null ? '' : String(son.teslimGun),
-    terminTarihi: son?.terminTarihi ?? '',
-    odemeKosulu: son?.odemeKosulu ?? '',
+    // 3326: önceki sürüm yoksa termin talepteki istenen tarihtir; süre ondan hesaplanır.
+    ...teslimVeTermin(son?.teslimGun ?? null, son?.terminTarihi ?? t.istenenTarih),
+    ...odemeDegerleri(son?.odemeKosulu ?? null),
     gecerlilik: son?.gecerlilik ?? '',
     aciklama: son?.aciklama ?? '',
     // V6: varsayılan planın arkasına ekle; kimseyi kaydırmaz.
     yerlesim: 'arkaya',
     istenenTermin: '',
+    baslangic: '',
     kar: VARSAYILAN_KAR,
   };
 }
@@ -72,7 +101,7 @@ const fiyatGirdisi = (n: number): string => n.toFixed(2).replace('.', ',');
 const tutarMetni = (n: number | null, pb: string): string => (n === null || !Number.isFinite(n) ? '—' : paraMetni(n.toFixed(2), pb));
 
 // Kademe 3'ün alanları (geçerlilik yalnız termin denenirken); kademe 4'ten gönderimde bunlardan biri hatalıysa kademe 3 açılır.
-const KADEME3_ALANI = /^(fiyatlar\.|kar$|istenenTermin$|gecerlilik$)/;
+const KADEME3_ALANI = /^(fiyatlar\.|kar$|istenenTermin$|baslangic$|gecerlilik$)/;
 
 function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
   return (d: Degerler): AlanHatalari => {
@@ -86,10 +115,13 @@ function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
       if (karSayisi(d.kar) === null) hata['kar'] = 'Kâr en çok iki ondalıklı bir yüzde olmalı.';
     }
     if (denenir && d.yerlesim === 'geriye' && d.istenenTermin === '') hata['istenenTermin'] = GERIYE_TERMIN_ZORUNLU;
+    if (denenir && d.yerlesim === 'baslat' && d.baslangic === '') hata['baslangic'] = BASLAT_TARIHI_ZORUNLU;
     if (kademe === 3) return hata;
     if (belirsizSayi(d.iskontoOrani)) hata['iskontoOrani'] = BELIRSIZ_SAYI;
     const gun = d.teslimGun.trim();
     if (gun !== '' && !/^\d+$/.test(gun)) hata['teslimGun'] = 'Teslim süresi gün olarak tam sayı yazılır.';
+    const odeme = odemeHatasi(odemeSecimiOku(d));
+    if (odeme !== null) hata['odemeSure'] = odeme;
     return hata;
   };
 }
@@ -119,6 +151,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
 
   // Plan denemesi yapılacaksa doğrulama ve gövde plan taslaklıdır; karar deneme cevabından sonra, her çizimde verilir.
   const planliRef = useRef(false);
+  const planTerminRef = useRef<string | null>(null);
   const kademeRef = useRef(kademe);
   kademeRef.current = kademe;
   const form = useForm<Degerler, TeklifAyrintiCevabi | null>({
@@ -133,12 +166,15 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
         surum: teklif.surum,
         fiyatlar: teklif.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: sayiGirdisi(d.fiyatlar[i] ?? '') })),
         iskontoOrani: sayiGirdisi(d.iskontoOrani) || '0',
-        teslimGun: planli || d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
-        odemeKosulu: bosYap(d.odemeKosulu),
+        // Planlı teklifte süre plan termininden hesaplanır (3326); sunucu termini plandan yazar.
+        teslimGun: planli ? teslimGunu(planTerminRef.current, bugun()) : d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
+        odemeKosulu: odemeMetni(odemeSecimiOku(d)),
         gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik,
         aciklama: bosYap(d.aciklama),
         terminTarihi: planli || d.terminTarihi === '' ? null : d.terminTarihi,
-        planTaslagi: planli ? { karOrani: sayiGirdisi(d.kar), istenenTermin: d.istenenTermin === '' ? null : d.istenenTermin, yerlesim: d.yerlesim } : null,
+        planTaslagi: planli
+          ? { karOrani: sayiGirdisi(d.kar), istenenTermin: d.istenenTermin === '' ? null : d.istenenTermin, yerlesim: d.yerlesim, ...baslangicAlani(d) }
+          : null,
       });
     },
     basarili: (cevap) => {
@@ -160,7 +196,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   useEffect(() => { if (kademe === 4 && kademe3Hatasi) kademeYaz(3); }, [form.hataNo]);
   useHataOdagi(form.hataNo, kok);
   const istenen = d.istenenTermin !== '' ? d.istenenTermin : null;
-  const sorgu = { gecerlilik: d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim };
+  const sorgu = { gecerlilik: d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim, ...baslangicAlani(d) };
 
   const deneme = useQuery({
     queryKey: anahtarlar.teklifDenemesi(teklif.id, sorgu),
@@ -169,14 +205,17 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
       if (d.gecerlilik !== '') p.set('gecerlilik', d.gecerlilik);
       if (istenen !== null) p.set('istenenTermin', istenen);
       p.set('yerlesim', d.yerlesim);
+      if (d.yerlesim === 'baslat') p.set('baslangic', d.baslangic);
       return api.get<TerminDenemesiCevabi>(`/siparisler/teklifler/${teklif.id}/termin-denemesi?${p.toString()}`);
     },
-    enabled: denenir && (d.yerlesim === 'arkaya' || istenen !== null),
+    enabled: denenir && (d.yerlesim === 'arkaya' || (d.yerlesim === 'geriye' && istenen !== null) || (d.yerlesim === 'baslat' && d.baslangic !== '')),
     // Geçerlilik ya da termin değişirken önceki sonuç kalır: form o arada elle yola düşmez. Sürüm sunucuda yeniden denenir.
     placeholderData: keepPreviousData,
   });
   const deneniyor = denenir && deneme.isFetching;
   const c = deneme.data;
+  planTerminRef.current = c?.termin ?? null;
+  const planGun = c === undefined ? null : teslimGunu(c.termin, bugun());
   const planli = terminDener && c !== undefined && c.durum === 'hazir' && c.planTermini !== null;
   planliRef.current = planli;
   const kar = karSayisi(d.kar);
@@ -197,7 +236,8 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
     if (!planli || kar === null) return;
     try {
       await korumali(`/siparisler/teklifler/${teklif.id}/deneme-taslagi`, {
-        gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim, karOrani: sayiGirdisi(d.kar),
+        gecerlilik: d.gecerlilik === '' ? null : d.gecerlilik, istenenTermin: istenen, yerlesim: d.yerlesim, ...baslangicAlani(d),
+        karOrani: sayiGirdisi(d.kar),
       });
       void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(teklif.id) });
       bildir('tamam', 'Deneme taslağı kaydedildi; planda yer tutmaz.');
@@ -226,6 +266,13 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   const gecilmez = kademe === 3 && fiyatsiz > 0 ? `${String(fiyatsiz)} kalemin birim fiyatı yok; fiyat girilince devam edilir.` : null;
   const yerlesimSec = (y: TerminYerlesimi) =>
     form.degistir({ yerlesim: y, ...(y === 'geriye' && d.istenenTermin === '' && teklif.istenenTarih !== null ? { istenenTermin: teklif.istenenTarih } : {}) });
+  // 3326: plandaki güne tıklama yerleşime göre istenen termini (arkaya: yalnız ölçülür, aynı güne yeniden tıklama siler), termini (geriye)
+  // ya da başlangıç gününü (baslat) seçer.
+  const seciliGun = d.yerlesim === 'baslat' ? d.baslangic : d.istenenTermin;
+  const gunSec = (gun: string) => {
+    if (d.yerlesim === 'baslat') form.degistir({ baslangic: gun });
+    else form.degistir({ istenenTermin: gun === d.istenenTermin && d.yerlesim === 'arkaya' ? '' : gun });
+  };
 
   const kalemSutunlari: Sutun<{ s: TeklifAyrintiCevabi['satirlar'][number]; k: TerminDenemesiKalemi | undefined; i: number }>[] = [
     {
@@ -272,13 +319,17 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
                   <legend>Termin yerleşimi</legend>
                   <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'arkaya'} onChange={() => yerlesimSec('arkaya')} /> Planın arkasına ekle</label>
                   <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'geriye'} onChange={() => yerlesimSec('geriye')} /> Terminden geriye</label>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'baslat'} onChange={() => yerlesimSec('baslat')} /> Seçilen günde başlat</label>
                 </fieldset>
+                {d.yerlesim === 'baslat' && (
+                  <Girdi etiket="Başlangıç günü" type="date" required ipucu="İş bu günden önce başlamaz; plandan bir güne tıklayarak da seçilir. Plan dondurulur, hiçbir sipariş kaymaz." {...form.alan('baslangic')} />
+                )}
                 <Girdi
                   etiket="İstenen termin"
                   type="date"
                   {...(d.yerlesim === 'geriye' ? { required: true } : {})}
-                  ipucu={d.yerlesim === 'arkaya'
-                    ? 'İsteğe bağlı: girilirse planın yetişip yetişmediği yazılır. Plan dondurulur, hiçbir sipariş kaymaz.'
+                  ipucu={d.yerlesim !== 'geriye'
+                    ? `İsteğe bağlı: girilirse planın yetişip yetişmediği yazılır.${d.yerlesim === 'arkaya' ? ' Plan dondurulur, hiçbir sipariş kaymaz.' : ''}`
                     : 'İş terminden geriye en geç başlamayla yerleşir; başka sipariş gecikirse plancı onayı gerekir.'}
                   {...form.alan('istenenTermin')}
                 />
@@ -286,7 +337,8 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
               {planli && c !== undefined && (c.plan === null
                 ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
-                : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} />)}
+                : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} secili={seciliGun === '' ? null : seciliGun}
+                  gunEtiketi={GUN_ETIKETI[d.yerlesim]} gunSec={gunSec} />)}
             </section>
           )}
 
@@ -359,14 +411,45 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
         <Kart baslik="Koşullar ve gönder">
           <div className="tc-sp-izgara">
             <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
-            {!planli && <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" {...form.alan('teslimGun')} />}
-            {!planli && <Girdi etiket="Termin tarihi" type="date" {...form.alan('terminTarihi')} />}
-            <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
+            {!planli && (
+              <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" ipucu="Bugünden itibaren takvim günü; termin tarihi kendiliğinden dolar."
+                {...form.alan('teslimGun')}
+                onChange={(o) => {
+                  const v = o.target.value;
+                  const n = /^\d{1,3}$/.test(v.trim()) ? Number(v.trim()) : null;
+                  form.degistir({ teslimGun: v, ...(n !== null && n >= 1 ? { terminTarihi: terminGunu(n, bugun()) } : {}) });
+                }} />
+            )}
+            {!planli && (
+              <Girdi etiket="Termin tarihi" type="date" {...form.alan('terminTarihi')}
+                {...(teklif.istenenTarih === null ? {} : { ipucu: `Talepte istenen: ${tarihMetni(teklif.istenenTarih)}` })}
+                onChange={(o) => {
+                  const g = teslimGunu(o.target.value, bugun());
+                  form.degistir({ terminTarihi: o.target.value, ...(g === null ? {} : { teslimGun: String(g) }) });
+                }} />
+            )}
+            {planli && c !== undefined && (
+              <dl className="tc-sp-termin" aria-label="Termin ve teslim süresi">
+                <div><dt>Termin</dt><dd>{tarihMetni(c.termin)}</dd><dd className="tc-sp-soluk">Plandan</dd></div>
+                <div><dt>Teslim süresi</dt>{planGun === null
+                  ? <><dd>—</dd><dd className="tc-sp-soluk">{c.termin === null ? 'Termin yok' : c.termin <= bugun() ? 'Termin bugün ya da geçmişte' : 'Termin bir yıldan uzak; gün yazılmaz'}</dd></>
+                  : <dd>{`${String(planGun)} gün`}</dd>}</div>
+                {teklif.istenenTarih !== null && <div><dt>Talepte istenen</dt><dd>{tarihMetni(teklif.istenenTarih)}</dd></div>}
+              </dl>
+            )}
+            <Secim etiket="Ödeme koşulu" bosSecenek="Belirtilmedi" secenekler={ODEME_TURLERI} {...form.alan('odemeTuru')} />
+            {vadeli(d.odemeTuru as OdemeTuru) && (
+              <div className="tc-sp-vade" role="group" aria-label="Vade seçimi">
+                <Girdi etiket="Vade" inputMode="numeric" autoComplete="off" {...form.alan('odemeSure')} />
+                <Secim etiket="Vade birimi" secenekler={VADE_BIRIMLERI} {...form.alan('odemeBirim')} />
+              </div>
+            )}
+            {d.odemeTuru === 'diger' && <Girdi etiket="Ödeme koşulu metni" autoComplete="off" placeholder="Örnek: %50 avans, kalan teslimde" {...form.alan('odemeKosulu')} />}
             {!denenir && <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />}
           </div>
           <CokSatir etiket="Müşteriye not" placeholder="Fiyata kaplama dahildir, nakliye alıcıya aittir vb." {...form.alan('aciklama')} />
           {planli && c !== undefined && (
-            <p className="tc-sp-ipucu">{`Termin ${tarihMetni(c.termin)} (${d.yerlesim === 'arkaya' ? 'planın arkasına' : 'terminden geriye'}). Verilen teklif planda satış taslağı olarak yer tutar; yalnız termin ya da yerleşim değişirse yeniden yerleşir.`}</p>
+            <p className="tc-sp-ipucu">{`Termin ${tarihMetni(c.termin)} (${yerlesimMetni(d)}). Verilen teklif planda satış taslağı olarak yer tutar; yalnız termin, yerleşim ya da başlangıç günü değişirse yeniden yerleşir.`}</p>
           )}
         </Kart>
       )}
@@ -417,17 +500,19 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
         </div>
         {deneme.istenenTermin !== null && deneme.termin !== deneme.planTermini && <div><dt>Plandan</dt><dd>{tarihMetni(deneme.planTermini)}</dd></div>}
         {deneme.istenenTermin !== null && deneme.termin !== deneme.istenenTermin && <div><dt>İstenen</dt><dd>{tarihMetni(deneme.istenenTermin)}</dd></div>}
+        {deneme.baslangic !== null && <div><dt>Başlangıç</dt><dd>{tarihMetni(deneme.baslangic)}</dd></div>}
         {gelis !== null && <div><dt>Malzeme gelişi</dt><dd>{zamanMetni(gelis)}</dd></div>}
       </dl>
       <div className="tc-sp-rozetler">
         {deneme.yetisir === true && <Rozet ton="tamam">Atölye bu termine yetiştirir</Rozet>}
-        {deneme.yetisir === false && (deneme.yerlesim === 'arkaya'
+        {deneme.yetisir === false && (deneme.yerlesim !== 'geriye'
           ? <Rozet ton="hata">İstenen termine yetişmiyor; teklife plan termini yazılır</Rozet>
           : <Rozet ton="hata">Plan bu termine yetişmiyor</Rozet>)}
         {deneme.satinalmaGerekli && <Rozet ton="uyari">Malzeme satın alma ister</Rozet>}
         {deneme.onayGerekli && <Rozet ton="uyari">Plancı onayı gerekir</Rozet>}
       </div>
-      {deneme.istenenTermin !== null && (
+      {/* Seçilen günde başlatmada plan dondurulur, kimse kaymaz: kayan listesi ve onay kutusu yoktur. */}
+      {deneme.istenenTermin !== null && deneme.yerlesim !== 'baslat' && (
         <Tablo
           etiket="Bitişi değişen siparişler"
           sutunlar={[
@@ -442,7 +527,7 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
           bosMesaj="Bitişi değişen sipariş yok."
         />
       )}
-      {gec.length > 0 && (
+      {gec.length > 0 && deneme.yerlesim !== 'baslat' && (
         <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status">
           <Simge ad="alert" />
           <strong>{`${gec.length} sipariş terminini kaçırır`}</strong> Teklif verilirse satış taslağı plancı onayına kadar yer tutar; teklif onaydan sonra müşteriye gider.

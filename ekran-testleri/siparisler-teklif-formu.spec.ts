@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 
 // Teklif formu (3245 d): fiyatı gören satış hesabı sürümü verilmiş teklifte formu açar; kâğıt pencereye sığacak kadar küçülür,
-// 360, 768 ve 1280 genişlikte yatay taşma yoktur. Form yalnız okur; basım tarayıcının işidir, burada açılmaz.
+// 360, 768 ve 1280 genişlikte yatay taşma yoktur. Metin düzenlenir ama kaydedilmez; basım tarayıcının işidir, burada açılmaz.
 test.use({ hesap: 'ornek.satis' });
 
 test('Teklif formu: satış hesabı şablonla formu açar, toplamlar ve kâğıt taşmadan çizilir', async ({ page, ag, ac }) => {
@@ -30,6 +30,16 @@ test('Teklif formu: satış hesabı şablonla formu açar, toplamlar ve kâğıt
   await expect(pencere.getByText('480,00 TRY')).toBeVisible();
   await expect(pencere.getByRole('button', { name: 'Yazdır / PDF' })).toBeEnabled();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+
+  // Teklifi yazan metni pencerede düzenler; 1100 pikselden dar ekranda Düzenle ve Ön izleme sekmedir. Kaydetmeden yazma yoktur.
+  const dar = (page.viewportSize()?.width ?? 1280) < 1100;
+  if (dar) await pencere.getByRole('tab', { name: 'Düzenle' }).click();
+  await pencere.getByLabel(/^Form başlığı/).fill('ORN FİYAT TEKLİFİ');
+  await expect(pencere.getByText('Kaydedilmedi')).toBeVisible();
+  await expect(pencere.getByRole('button', { name: 'Bu teklif için kaydet' })).toBeEnabled();
+  expect((await tasmaOlc(page)).belge, 'düzenlemede yatay taşma').toBeLessThanOrEqual(0);
+  if (dar) await pencere.getByRole('tab', { name: 'Ön izleme' }).click();
+  await expect(pencere.getByRole('heading', { level: 1, name: 'ORN FİYAT TEKLİFİ' })).toBeVisible();
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
 });
