@@ -184,6 +184,15 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     ]);
     expect(paRedVar(K)).toBe(false);
   });
+  it('plan hazırlandıktan sonra açılan plansız iş uyarıdır, engel değil', () => {
+    const uyarilar = (plansizYeniIsler?: { adet: number; isler: string[] }) =>
+      paKontrol(s(1, 'onayda', { degisiklikler: [{ id: 1, tur: 'tasi', ozet: 'x', yazma: null }], ...(plansizYeniIsler ? { plansizYeniIsler } : {}) } as never), g, 2).filter((k) => k[1].includes('planda yok'));
+    expect(uyarilar()).toEqual([]);
+    expect(uyarilar({ adet: 2, isler: ['ORN-1 OP 10', 'ORN-1 OP 20'] })).toEqual([
+      ['uyari', "Bu plan hazırlandıktan sonra açılan 2 iş planda yok (ORN-1 OP 10, ORN-1 OP 20); canlıya alınınca plansız kalır, Kokpit'te Plansız görünür"],
+    ]);
+    expect(uyarilar({ adet: 7, isler: ['ORN-1 OP 10'] })[0]![1]).toContain('7 iş planda yok (ORN-1 OP 10, …)');
+  });
   it('fark ve planlar arası emir farkı', () => {
     expect(farkKur(3, 1)).toEqual({ metin: '+2,0', iyi: false });
     expect(farkKur(1, 1.01)).toBeNull();
