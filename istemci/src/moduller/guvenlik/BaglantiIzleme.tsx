@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -86,7 +86,8 @@ export function BaglantiIzleme() {
         </div>
       </div>
       <div className="tc-izleme-kartlar">
-        <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol" />
+        <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol"
+          surum={logoHazirlik.data?.yardimci ?? null} kontrolSonrasi={() => void logoHazirlik.refetch()} />
         <BaglantiKarti ad="SmartES" simge="cpu" baglanti={smartesHazirlik.data?.baglanti} kontrolUcu="/smartes/hazirlik/kontrol" />
         <section className="tc-izleme-kart" aria-label="Gitmeyen belgeler">
           <Simge ad="alert" />
@@ -125,16 +126,20 @@ export function BaglantiIzleme() {
   );
 }
 
-function BaglantiKarti({ ad, simge, baglanti, kontrolUcu }: {
+function BaglantiKarti({ ad, simge, baglanti, kontrolUcu, surum = null, kontrolSonrasi }: {
   ad: string; simge: 'laptop' | 'cpu'; baglanti: LogoHazirlikCevabi['baglanti'] | undefined; kontrolUcu: string;
+  surum?: LogoYardimciSurumu | null; kontrolSonrasi?: () => void;
 }) {
-  const kontrol = useMutation({ mutationFn: () => api.get<LogoKontrolCevabi>(kontrolUcu) });
+  const kontrol = useMutation({ mutationFn: () => api.get<LogoKontrolCevabi>(kontrolUcu), onSettled: kontrolSonrasi });
   const durum = baglanti === undefined ? null : BAGLANTI[baglanti];
+  const eskiSurum = surum !== null && (surum.durum === 'farkli' || surum.durum === 'eski');
   return (
     <section className="tc-izleme-kart" aria-label={ad}>
       <Simge ad={simge} />
       <div>
         <strong>{ad}</strong> {durum !== null && <Rozet ton={durum.ton}>{durum.metin}</Rozet>}
+        {eskiSurum && <Rozet ton="uyari">Eski sürüm</Rozet>}
+        {eskiSurum && <p className="tc-guvenlik-not" role="status">{surum.ileti}</p>}
         <p className="tc-guvenlik-not">
           {kontrol.isSuccess ? (kontrol.data.ulasildi ? `Ulaşıldı · ${zamanMetni(kontrol.data.zaman)}` : `Ulaşılamadı: ${kontrol.data.adimlar[0]?.ileti ?? BOS}`)
             : kontrol.isError ? hataIletisi(kontrol.error, 'Denenemedi.') : 'Çalıştığını görmek için deneyin.'}

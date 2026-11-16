@@ -8,7 +8,7 @@ import type { LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { akisGorunumu, BaglantiHazirligi, genelDurum } from './BaglantiHazirligi.tsx';
+import { akisGorunumu, BaglantiHazirligi, genelDurum, yardimciSurumMetni } from './BaglantiHazirligi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
 // Sunucunun cevap biçimi (sözleşme tipleri); adresler deneme adresidir.
@@ -109,6 +109,13 @@ describe('Bağlantı hazırlığı', () => {
     expect(akisGorunumu('hazir', { ...tamam, ulasildi: false })).toBe('baglanti-yok');
     expect(akisGorunumu('kapali', { ...tamam, ulasildi: false })).toBe('kapali');
     expect(akisGorunumu('hazir', undefined)).toBe('hazir');
+  });
+
+  it('3314 yardımcı sürümü: bakılmadıysa söylenir, aynıysa kısa, farklıysa ne yapılacağı yazılır', () => {
+    const s = { durum: 'farkli' as const, pakettekiOzet: 'a', calisanOzet: 'b', derlemeZamani: null, sonBakis: 'x', ileti: 'Yardımcıyı güncelleyin.' };
+    expect(yardimciSurumMetni(null)).toBe('Henüz bakılmadı');
+    expect(yardimciSurumMetni({ ...s, durum: 'ayni' })).toBe('Bu paketle aynı');
+    expect(yardimciSurumMetni(s)).toBe('Yardımcıyı güncelleyin.');
   });
 });
 

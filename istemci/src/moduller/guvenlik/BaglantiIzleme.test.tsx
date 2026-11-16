@@ -122,6 +122,26 @@ describe('Bağlantı izleme (3313)', () => {
     expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => c.govde)).toEqual([{ belgeler: [{ belge: 'talep', no: 3, islem: 'gonder' }] }]);
   });
 
+  it('3314 yardımcı eski sürümdeyse Logo kartı uyarır ve ne yapılacağını yazar; aynıysa uyarı yok', async () => {
+    const ileti = 'Logo yardımcısı eski sürümde; paketteki kaynak farklı. Yardımcıyı güncelleyin (kurulum/logo-yardimcisi.md).';
+    logoHazirlik.yardimci = { durum: 'farkli', pakettekiOzet: 'a'.repeat(64), calisanOzet: 'b'.repeat(64), derlemeZamani: T, sonBakis: T, ileti };
+    try {
+      sunucuKur();
+      cizdir(yalnizGoren);
+      const kart = await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      await waitFor(() => expect(within(kart).getByText('Eski sürüm')).toBeTruthy());
+      expect(within(kart).getByText(ileti)).toBeTruthy();
+      cleanup();
+      logoHazirlik.yardimci = { ...logoHazirlik.yardimci, durum: 'ayni', calisanOzet: 'a'.repeat(64), ileti: 'Yardımcı bu paketin kaynağından derlenmiş.' };
+      cizdir(yalnizGoren);
+      const kart2 = await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      await waitFor(() => expect(within(kart2).getByText('Açık')).toBeTruthy());
+      expect(within(kart2).queryByText('Eski sürüm')).toBeNull();
+    } finally {
+      delete logoHazirlik.yardimci;
+    }
+  });
+
   it('akışlar: okunmamış gelen akış "Henüz okunmadı", sıfır uydurulmaz', async () => {
     sunucuKur();
     cizdir(yalnizGoren);
