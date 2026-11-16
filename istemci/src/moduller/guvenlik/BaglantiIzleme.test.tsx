@@ -32,7 +32,7 @@ const logo: LogoGidenIzlemeCevabi = {
   kesildi: false,
 };
 const smartes: SmartesGidenIzlemeCevabi = {
-  belgeler: [{ isEmriId: 7, smartesIsEmriNo: 'ORN-IE-7', denemeSayisi: 2, sonDeneme: T, neden: 'Servise ulaşılamadı', sonrakiDeneme: T }], kesildi: false,
+  belgeler: [{ isEmriId: 7, smartesIsEmriNo: 'ORN-IE-7', denemeSayisi: 2, sonDeneme: T, neden: 'Servise ulaşılamadı', sonrakiDeneme: T, durdu: false }], kesildi: false,
 };
 const logoHazirlik: LogoHazirlikCevabi = {
   baglanti: 'acik', ortam: { adres: null, anahtarTanimli: true }, ayarlar: [], sonBirimSetiOkuma: null,
@@ -45,7 +45,7 @@ const smartesHazirlik: SmartesHazirlikCevabi = { baglanti: 'kapali', ortam: { ad
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Cagri { yontem: string; yol: string; govde: unknown }
-function sunucuKur(logoCevabi: LogoGidenIzlemeCevabi = logo) {
+function sunucuKur(logoCevabi: LogoGidenIzlemeCevabi = logo, smartesCevabi: SmartesGidenIzlemeCevabi = smartes) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -53,8 +53,9 @@ function sunucuKur(logoCevabi: LogoGidenIzlemeCevabi = logo) {
     const govde: unknown = typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined;
     cagrilar.push({ yontem, yol, govde });
     const yanitlar: Record<string, unknown> = {
-      'GET /logo/giden': logoCevabi, 'GET /smartes/giden/sorunlar': smartes, 'GET /logo/hazirlik': logoHazirlik, 'GET /smartes/hazirlik': smartesHazirlik,
+      'GET /logo/giden': logoCevabi, 'GET /smartes/giden/sorunlar': smartesCevabi, 'GET /logo/hazirlik': logoHazirlik, 'GET /smartes/hazirlik': smartesHazirlik,
     };
+    if (yontem === 'POST' && yol === '/smartes/giden/yeniden-gonder') return json(200, { sirada: (govde as { isEmirleri: unknown[] }).isEmirleri.length, durmayan: 0 });
     if (yontem === 'POST' && yol === '/logo/giden/yeniden-gonder') return json(200, { sirada: (govde as { belgeler: unknown[] }).belgeler.length, durmayan: 0 });
     const y = yanitlar[`${yontem} ${yol}`];
     return y === undefined ? json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' }) : json(200, y);
@@ -109,6 +110,51 @@ describe('Bağlantı izleme (3313)', () => {
     fireEvent.click(screen.getByText('Talep fişi'));
     await screen.findByText(/Bir şey yapmanız gerekmez/);
     expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
+  });
+
+  it('SmartES kesin reddi Durdu sayılır; Yeniden gönder SmartES ucuna gider, toplu pencerede Logo ile ayrı istek', async () => {
+    const duran = { isEmriId: 8, smartesIsEmriNo: 'ORN-IE-8', denemeSayisi: 1, sonDeneme: T, neden: 'SmartES reddetti: İstasyon tanımsız', sonrakiDeneme: null, durdu: true };
+    const cagrilar = sunucuKur(logo, { belgeler: [...smartes.belgeler, duran], kesildi: false });
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByText('İş emri ORN-IE-8'));
+    expect(await screen.findByText(/^Nedeni düzeltin \(istasyon/)).toBeTruthy();
+    expect(screen.getByText('Yok; yeniden gönderilmeyi bekliyor')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeniden gönder' }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toEqual([{ yontem: 'POST', yol: '/smartes/giden/yeniden-gonder', govde: { isEmirleri: [8] } }]);
+    // Yinelenecek SmartES satırı durmaz: Yeniden gönder yok.
+    fireEvent.click(screen.getByText('İş emri ORN-IE-7'));
+    expect(await screen.findByText(/kendiliğinden yeniden denenir/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Kapat/ }));
+    cagrilar.length = 0;
+    fireEvent.click(screen.getByRole('button', { name: /Düzelttiklerimi yeniden gönder/ }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByLabelText('SmartES reddetti: İstasyon tanımsız (1 belge)'));
+    fireEvent.click(within(pencere).getByLabelText('Talep fişine hizmet satırı yazılamaz. (1 belge)'));
+    fireEvent.click(within(pencere).getByRole('button', { name: '2 belgeyi gönder' }));
+    await waitFor(() => expect(cagrilar.filter((c) => c.yontem === 'POST').length).toBe(2));
+    expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => [c.yol, c.govde])).toEqual([
+      ['/logo/giden/yeniden-gonder', { belgeler: [{ belge: 'talep', no: 3, islem: 'gonder' }] }],
+      ['/smartes/giden/yeniden-gonder', { isEmirleri: [8] }],
+    ]);
+  });
+
+  it('toplu gönderimde SmartES ucu düşerse Logo yine gider; sonuç kaynak başına yazılır, pencere açık kalır', async () => {
+    const duran = { isEmriId: 8, smartesIsEmriNo: 'ORN-IE-8', denemeSayisi: 1, sonDeneme: T, neden: 'SmartES reddetti: İstasyon tanımsız', sonrakiDeneme: null, durdu: true };
+    const cagrilar = sunucuKur(logo, { belgeler: [duran], kesildi: false });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => (adres.includes('/smartes/giden/yeniden-gonder')
+      ? json(500, { kod: 'SUNUCU', mesaj: 'Beklenmeyen bir hata oluştu.' }) : asil(adres, secenek))));
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByRole('button', { name: /Düzelttiklerimi yeniden gönder/ }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByLabelText('SmartES reddetti: İstasyon tanımsız (1 belge)'));
+    fireEvent.click(within(pencere).getByLabelText('Talep fişine hizmet satırı yazılamaz. (1 belge)'));
+    fireEvent.click(within(pencere).getByRole('button', { name: '2 belgeyi gönder' }));
+    expect(await screen.findByText('1 belge sıraya girdi; ilk turda gider. SmartES: Beklenmeyen bir hata oluştu.')).toBeTruthy();
+    expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => c.yol)).toEqual(['/logo/giden/yeniden-gonder']);
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('T11 yazma yetkisi olmayan görür, gönderemez; toplu düğme yok', async () => {

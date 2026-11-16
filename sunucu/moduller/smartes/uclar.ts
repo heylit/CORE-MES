@@ -3,7 +3,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
-  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesGidenIzlemeCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
+  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
@@ -217,6 +217,16 @@ export const uclar = [
     yetki: 'saglik.ayrinti-oku',
     cevap: smartesGidenIzlemeCevabi,
     isle: ({ db }) => servis.gidenIzleme(db),
+  }),
+  // Duran iş emrini yeniden gönderme; Logo'daki gibi Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok), denetim kaydında.
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/giden/yeniden-gonder',
+    yetki: 'ayarlar.yaz',
+    tekrarKorumali: true,
+    govde: smartesYenidenGonderGovdesi,
+    cevap: smartesYenidenGonderCevabi,
+    isle: ({ db, govde }) => servis.duranlariYenidenGonder(db, govde.isEmirleri),
   }),
   // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
   // 3192: makine verisiyle çalışanın girdiği karşılaştırılır; yalnız okur, bir şey düzeltmez.

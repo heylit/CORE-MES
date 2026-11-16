@@ -166,13 +166,14 @@ export interface GidenSatiri {
   isEmriId: number;
   smartesIsEmriNo: string;
   ozet: string | null;
+  denenenOzet: string | null;
   durum: 'gonderildi' | 'hata' | 'kapandi';
   ardisikHata: number;
   sonrakiDeneme: Date | null;
 }
 
-const GIDEN_ALANLARI = `is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", ozet, durum, ardisik_hata AS "ardisikHata",
-  sonraki_deneme AS "sonrakiDeneme"`;
+const GIDEN_ALANLARI = `is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", ozet, denenen_ozet AS "denenenOzet", durum,
+  ardisik_hata AS "ardisikHata", sonraki_deneme AS "sonrakiDeneme"`;
 
 export function gidenSatirlari(db: Db, idler: readonly number[]): Promise<GidenSatiri[]> {
   if (idler.length === 0) return Promise.resolve([]);
@@ -193,22 +194,24 @@ export interface GidenDenemesi {
   isEmriId: number;
   smartesIsEmriNo: string;
   zaman: Date;
-  sonuc: { tur: 'gonderildi'; ozet: string } | { tur: 'kapandi' } | { tur: 'hata'; hata: string; sonraki: Date };
+  // Hatada `sonraki` boşsa iş emri durur (kesin ret); `denenen` reddedilen alanların özetidir.
+  sonuc: { tur: 'gonderildi'; ozet: string } | { tur: 'kapandi' } | { tur: 'hata'; hata: string; sonraki: Date | null; denenen: string };
 }
 
 // Hatada son başarılı özet korunur: kapanış bildirimi gönderilmiş iş emrini tanır.
 export async function gidenDenemesiYaz(db: Db, d: GidenDenemesi): Promise<void> {
   const s = d.sonuc;
   await db.sorgu(
-    `INSERT INTO smartes_giden AS g (is_emri_id, smartes_is_emri_no, ozet, durum, deneme_sayisi, ardisik_hata, son_deneme, son_hata, sonraki_deneme)
-     VALUES ($1, $2, $3, $4, 1, CASE WHEN $4 = 'hata' THEN 1 ELSE 0 END, $5, $6, $7)
+    `INSERT INTO smartes_giden AS g (is_emri_id, smartes_is_emri_no, ozet, durum, deneme_sayisi, ardisik_hata, son_deneme, son_hata, sonraki_deneme,
+       denenen_ozet)
+     VALUES ($1, $2, $3, $4, 1, CASE WHEN $4 = 'hata' THEN 1 ELSE 0 END, $5, $6, $7, $8)
      ON CONFLICT (is_emri_id) DO UPDATE SET smartes_is_emri_no = EXCLUDED.smartes_is_emri_no,
        ozet = CASE WHEN EXCLUDED.durum = 'gonderildi' THEN EXCLUDED.ozet ELSE g.ozet END,
        durum = EXCLUDED.durum, deneme_sayisi = g.deneme_sayisi + 1,
        ardisik_hata = CASE WHEN EXCLUDED.durum = 'hata' THEN g.ardisik_hata + 1 ELSE 0 END,
-       son_deneme = EXCLUDED.son_deneme, son_hata = EXCLUDED.son_hata, sonraki_deneme = EXCLUDED.sonraki_deneme`,
+       son_deneme = EXCLUDED.son_deneme, son_hata = EXCLUDED.son_hata, sonraki_deneme = EXCLUDED.sonraki_deneme, denenen_ozet = EXCLUDED.denenen_ozet`,
     [d.isEmriId, d.smartesIsEmriNo, s.tur === 'gonderildi' ? s.ozet : null, s.tur, d.zaman, s.tur === 'hata' ? s.hata : null,
-      s.tur === 'hata' ? s.sonraki : null],
+      s.tur === 'hata' ? s.sonraki : null, s.tur === 'hata' ? s.denenen : null],
   );
 }
 
@@ -283,10 +286,22 @@ export function gidenSay(db: Db): Promise<number> {
 export function gidenHataSatirlari<T>(db: Db, sinir: number): Promise<T[]> {
   return db.sorgu<T>(
     `SELECT is_emri_id AS "isEmriId", smartes_is_emri_no AS "smartesIsEmriNo", deneme_sayisi AS "denemeSayisi",
-       ${zamanMetni('son_deneme')} AS "sonDeneme", son_hata AS "neden", ${zamanMetni('sonraki_deneme')} AS "sonrakiDeneme"
+       ${zamanMetni('son_deneme')} AS "sonDeneme", son_hata AS "neden", ${zamanMetni('sonraki_deneme')} AS "sonrakiDeneme",
+       sonraki_deneme IS NULL AS durdu
      FROM smartes_giden WHERE durum = 'hata' ORDER BY son_deneme, is_emri_id LIMIT $1`,
     [sinir],
   );
+}
+
+// Yalnız duran iş emri sıraya girer (koşullu yazma); deneme geçmişi kalır. Sonraki deneme son denemedir: ilk turda vakti gelmiştir.
+// Ardışık hata sıfırlanır: Fault sınırı ve bekleme yeniden sayılır.
+export async function gidenYenidenGonder(db: Db, isEmriId: number): Promise<boolean> {
+  const r = await db.sorgu<{ isEmriId: number }>(
+    `UPDATE smartes_giden SET sonraki_deneme = son_deneme, ardisik_hata = 0
+     WHERE is_emri_id = $1 AND durum = 'hata' AND sonraki_deneme IS NULL RETURNING is_emri_id AS "isEmriId"`,
+    [isEmriId],
+  );
+  return r.length > 0;
 }
 
 export function gidenListeSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
