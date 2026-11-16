@@ -655,6 +655,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     /** CORE emrinin talimat adımları; işaret CORE'a yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
     async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean, kanit?: TmiKanit): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, kanit ? { tamam, kanit } : { tamam }); },
+    /** 3338-4 a: zorunlu talimat eksikken "Yine de başlat / bitir" CORE'da adımın geçmişine yazılır */
+    async tmiTalimatAtlama(emirId: number, eylem: 'baslat' | 'bitir', adimIdler: number[]): Promise<{ kayitId: number }> { return api('POST', '/tmi-talimat-atlama/' + emirId, { eylem, adimIdler }); },
     /** başlatmadan önce girdi istasyonda mı (kart #1289); eksikse CORE istek açar ve Malzeme · Teslim panelini açar */
     async uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }> { return api('POST', '/uretim-hazirligi', { emirId, istasyon }); }
   };

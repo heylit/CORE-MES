@@ -809,7 +809,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const tl = useTalimatlar(pv ? null : tmiEmirId(o.pkg), pv);
   const tlListe = tl.liste ?? [];
   const tlEksik = { once: zorunluEksikler(tlListe, 'once'), son: zorunluEksikler(tlListe, 'son') };
-  const [talimatSoru, talimatSoruYaz] = useState<{ eylem: 'start' | 'finish'; eksik: string[] } | null>(null);
+  const [talimatSoru, talimatSoruYaz] = useState<{ eylem: 'start' | 'finish'; eksik: { id: number; ad: string }[] } | null>(null);
   // "Yine de" seçilen iş ve eylem bir kez daha sorulmaz.
   const talimatGecildi = useRef<string | null>(null);
   const task0 = bekletmeGorevi(siradakiGorev(o, D, nextOrder, ilk, simdi), bekletme);
@@ -1084,7 +1084,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
     if ((a === 'start' || a === 'finish') && !pv && talimatGecildi.current !== `${siraAnahtari(o)}:${a}`) {
       const eksik = a === 'start' ? tlEksik.once : tlEksik.son;
-      if (eksik.length) { talimatSoruYaz({ eylem: a, eksik: eksik.map((x) => x.ad) }); return; }
+      if (eksik.length) { talimatSoruYaz({ eylem: a, eksik: eksik.map((x) => ({ id: x.id, ad: x.ad })) }); return; }
     }
     if (a === 'finish' && !warned && bitirmeEksigi(o, hataliSayisi) > 0) { ovYaz('bitir'); return; }
     if (a === 'finish') { sonBildirim.current++; bitenEmirYaz(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
@@ -1631,14 +1631,18 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             const s = talimatSoru;
             talimatSoruYaz(null);
             talimatGecildi.current = `${siraAnahtari(o)}:${s.eylem}`;
-            // Değişiklik günlüğü tablette kalır (sunucu tabletten geleni almaz); sunucu kaydı ayrı iştir.
-            void depo.Log.add('audit', { area: 'terminal', action: s.eylem === 'start' ? 'talimat-eksik-baslat' : 'talimat-eksik-bitir', target: o.no, detail: s.eksik.join(', '), machine: MACHINE });
+            // Sapma kartı a: atlanan maddeler CORE'da adımın geçmişine yazılır. Yazılamazsa iş yine yapılır, operatöre söylenir.
+            const emir = tmiEmirId(o.pkg);
+            if (emir !== null) {
+              depo.Server.tmiTalimatAtlama(emir, s.eylem === 'start' ? 'baslat' : 'bitir', s.eksik.map((x) => x.id))
+                .catch(() => say('Eksik talimat kaydı CORE\'a yazılamadı · sorumluya bildirin', 'alert', 'hold'));
+            }
             act(s.eylem);
           }}>{talimatSoru.eylem === 'start' ? 'Yine de başlat' : 'Yine de bitir'}</Dugme>
         </>}>
           <p>{talimatSoru.eylem === 'start' ? 'Başlamadan önce' : 'Bitince'} yapılacak zorunlu maddeler işaretlenmedi:</p>
-          <ul className="tc-ay1-tl-eksik">{talimatSoru.eksik.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          <p>{talimatSoru.eylem === 'start' ? 'Yine de başlatırsanız' : 'Yine de bitirirseniz'} eksik maddeler bu tabletin günlüğüne yazılır.</p>
+          <ul className="tc-ay1-tl-eksik">{talimatSoru.eksik.map((x) => <li key={x.id}>{x.ad}</li>)}</ul>
+          <p>{talimatSoru.eylem === 'start' ? 'Yine de başlatırsanız' : 'Yine de bitirirseniz'} eksik maddeler adımın geçmişine yazılır.</p>
         </Pencere>
       ) : null}
       {ov === 'bitir' ? (

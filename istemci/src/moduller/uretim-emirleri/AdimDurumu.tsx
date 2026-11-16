@@ -897,6 +897,8 @@ function MaddeCubugu({ emirId, adim, madde, yazar, yon, yonYaz, kapat }: {
 const gecmisMetni = (g: Adim['gecmis'][number]): string => {
   if (g.olay === 'statu') return `Statü elle yazıldı: ${g.deger in STATU ? STATU[g.deger as AdimStatusu].ad : g.deger}`;
   if (g.olay === 'statu-kaldir') return 'Elle statü kaldırıldı';
+  // 3338-4 a: atlanan madde adları notta yazar.
+  if (g.olay === 'talimat-atlama') return g.deger === 'bitir' ? 'Zorunlu talimat eksikken bitirildi' : 'Zorunlu talimat eksikken başlatıldı';
   const ad = g.deger in MADDE ? MADDE[g.deger as HazirlikMaddesi].ad : g.deger;
   if (g.olay === 'eksik') return `${ad} elle "hazır değil" yazıldı`;
   return g.olay === 'onay' ? `${ad} elle hazır yazıldı` : `${ad}: elle değer kaldırıldı`;

@@ -24,7 +24,7 @@ import {
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, onculdenGelen, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
-  bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali, listeKontrolu,
+  bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali, listeKontrolu, atlamaIhlali,
 } from './kurallar.ts';
 import { KARTSIZ_BASLATMA_ISLEMI, kartsizBaslatmaIhlali } from './kurallar.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -1132,6 +1132,21 @@ export async function adimTamamla(
     }
   }
   return { emir: (await emirdenCevap(db, emirId)).emir, adimlar: await adimlariCevir(db, emirId) };
+}
+
+// 3338-4 a: zorunlu talimat eksikken "Yine de başlat / bitir" kaydı. Başlatma ya da bitirme ayrı komuttur; bu yalnız defter satırıdır.
+export async function talimatAtlamaYaz(
+  db: Db, kisiId: number, emirId: number, eylem: 'baslat' | 'bitir', adimIdler: readonly number[],
+): Promise<{ kayitId: number }> {
+  const emir = await kilitliEmir(db, emirId);
+  await kapsaminda(db, kisiId, istasyonu(emir));
+  const istenen = [...new Set(adimIdler)];
+  const adimlar = await sorgular.atlananAdimlar(db, emirId, istenen);
+  if (adimlar.length !== istenen.length) throw bulunamadi(ADIM_YOK);
+  const ihlal = atlamaIhlali(adimlar);
+  if (ihlal !== null) throw cakisma(ihlal);
+  const kayitId = await sorgular.talimatAtlamaEkle(db, adimlar[0]!.isEmriId!, kisiId, eylem, adimlar.map((a) => a.ad));
+  return { kayitId };
 }
 
 // 2098-9 a: "sonraki sefere not". Not ürün + OP + adım sırasına yazılır; aynı adımda sonraki emirde "geçen sefer" olarak okunur.

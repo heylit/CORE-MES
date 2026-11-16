@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { adimCevabi, adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirAyrintiCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimDurumuCevabi, AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -26,7 +26,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIM_BASLAMAMIS, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
+  ADIM_BASLAMAMIS, ADIM_YOK, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -497,6 +497,14 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       ['on_hazirlik', false, null], ['hazirlik', false, null], ['uretim', false, null], ['bitis', true, { tur: 'olcum', ad: 'Ömür', alt: null, ust: null, birim: '' }],
     ]);
     assert.equal((await isaretle(id, bt, { tamam: true, kanit: { olcum: 3 } })).govde.mesaj, ADIM_BASLAMAMIS);
+    // 3338-4 sapma a: "Yine de başlat" atlanan maddelerle adımın geçmişine yazılır; bilinmeyen eylem ve başka emrin adımı reddedilir.
+    const atla = (govde: unknown, kimlik: string | undefined = randomUUID()) => istek<{ kayitId: number } & Hata>('operator', 'POST', `/uretim-emirleri/${id}/talimat-atlama`, govde, kimlik);
+    const at = await atla({ eylem: 'baslat', adimIdler: [bt, on, bt] });
+    assert.equal(at.durum, 200, JSON.stringify(at.govde));
+    assert.equal((await atla({ eylem: 'durdur', adimIdler: [bt] })).durum, 400);
+    assert.equal((await atla({ eylem: 'bitir', adimIdler: [999999] })).govde.mesaj, ADIM_YOK);
+    const gecmis = (await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`)).govde.adimlar.flatMap((a) => a.gecmis);
+    assert.deepEqual(gecmis.filter((g) => g.olay === 'talimat-atlama').map((g) => [g.deger, g.not]), [['baslat', 'Malzemeyi al, Aparatı sök']], 'adlar adım sırasıyla, tekrar bir kez');
 
     const c1 = await isaretle(id, on, { tamam: true, kanit: { foto: 'a'.repeat(64) } });
     assert.equal(c1.durum, 200, JSON.stringify(c1.govde));

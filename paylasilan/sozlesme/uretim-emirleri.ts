@@ -148,6 +148,13 @@ export const adimKanitiGirdisi = z.object({
 }).strict().refine((k) => k.olcum !== undefined || k.secim !== undefined || k.foto !== undefined, { message: 'Kanıt boş olamaz.' });
 export const adimTamamlaGovdesi = z.object({ tamam: z.boolean(), kanit: adimKanitiGirdisi.optional() }).strict();
 export const adimNotuGovdesi = z.object({ metin: z.string().trim().min(1).max(AZAMI_ADIM_NOTU) }).strict();
+// 3338-4 a: zorunlu talimat eksikken "Yine de başlat / bitir" (sapma kartı a). Atlanan maddeler bu emrin adım kimlikleridir; adları sunucu okur.
+export const TALIMAT_ATLAMA_EYLEMLERI = ['baslat', 'bitir'] as const;
+export const talimatAtlamaGovdesi = z.object({
+  eylem: z.enum(TALIMAT_ATLAMA_EYLEMLERI),
+  adimIdler: z.array(KIMLIK).min(1).max(50),
+}).strict();
+export const talimatAtlamaCevabi = z.object({ kayitId: KIMLIK });
 
 const adliKayit = z.object({ id: KIMLIK, ad: z.string() });
 const adimNotuSemasi = z.object({ metin: z.string(), yazan: adliKayit, zaman, emirId: KIMLIK });
@@ -1091,7 +1098,8 @@ export const ELLE_YAZILAN_STATULER = [
   'program', 'cizim', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger',
 ] as const satisfies readonly (typeof ADIM_STATULERI)[number][];
 // 3322: 'eksik' elle "hazır değil"; 'onay-kaldir' elle değerin (hazır ya da hazır değil) kaldırılmasıdır.
-export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir', 'eksik'] as const;
+// talimat-atlama: değer eylem (baslat, bitir), not atlanan madde adları (3338-4 a).
+export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir', 'eksik', 'talimat-atlama'] as const;
 // Durduran maddede gerekçe zorunlu; uyaran maddede boş olabilir (sunucu kuralı, kurallar.ts).
 const kisaNot = z.string().trim().max(500).nullable();
 export const elleStatuGovdesi = z.object({
@@ -1243,6 +1251,8 @@ export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];
 export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;
 export type HazirlikOnayiGovdesi = z.output<typeof hazirlikOnayiGovdesi>;
 export type ListeIsaretleGovdesi = z.output<typeof listeIsaretleGovdesi>;
+export type TalimatAtlamaGovdesi = z.output<typeof talimatAtlamaGovdesi>;
+export type TalimatAtlamaCevabi = z.output<typeof talimatAtlamaCevabi>;
 export type ListeEkleGovdesi = z.output<typeof listeEkleGovdesi>;
 export type ListeKontrolu = z.output<typeof listeKontrolSemasi>;
 export type ListeKanitiGirdisi = z.output<typeof listeKanitiGirdisi>;

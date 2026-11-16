@@ -75,6 +75,7 @@ export interface ArkonDeposu {
     cagriEkiplerim(): Promise<CagriEkiplerim>;
     tmiAdimlari(emirId: number): Promise<TmiAdim[]>;
     tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean, kanit?: TmiKanit): Promise<TmiAdim[]>;
+    tmiTalimatAtlama(emirId: number, eylem: 'baslat' | 'bitir', adimIdler: number[]): Promise<{ kayitId: number }>;
     uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }>;
   };
   Plan: { sirala(g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }): Promise<unknown>; surum(): Promise<{ planSurumu: number }> };

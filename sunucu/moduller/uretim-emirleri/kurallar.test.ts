@@ -12,7 +12,7 @@ import {
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
-import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi } from './kurallar.ts';
+import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi, ATLAMA_TEK_IS_EMRI, atlamaIhlali } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali } from './kurallar.ts';
 
@@ -393,4 +393,10 @@ describe('3337-3 a: kartın sabit adedi ve dağılımı', () => {
   test('kayıp adedi aşsa da sınır ve işlemde eksiye düşmez', () => {
     assert.deepEqual(kartDagilimi(3, adimlar, 3, (i) => sayimlar.get(i)), { sinir: 0, dagilim: { adet: 3, saglam: 4, hurda: 8, kolda: 0, islemde: 0 } });
   });
+});
+
+test('3338-4: talimat atlama tek iş emrinin adımlarıdır; iş emrisiz eski adım atlanamaz', () => {
+  assert.equal(atlamaIhlali([{ isEmriId: 5 }, { isEmriId: 5 }]), null);
+  assert.equal(atlamaIhlali([{ isEmriId: 5 }, { isEmriId: 6 }]), ATLAMA_TEK_IS_EMRI);
+  assert.equal(atlamaIhlali([{ isEmriId: null }]), ATLAMA_TEK_IS_EMRI);
 });

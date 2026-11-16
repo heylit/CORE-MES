@@ -480,13 +480,17 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
   const adim = (id: number, ad: string, asama: string, zorunlu: boolean, tamam = false) => ({
     id, sira: id, ad, aciklama: null, asama, zorunlu, kontrol: null, tamam, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null,
   });
-  it('zorunlu "Başlamadan önce" eksikken düğmelerin altında yazar; Başlat sorar; "Yine de başlat" başlatır', async () => {
+  it('zorunlu "Başlamadan önce" eksikken düğmelerin altında yazar; Başlat sorar; "Yine de başlat" başlatır ve CORE\'a yazar', async () => {
     const tmi = { ...PAKET, id: 'tmi-ie-95', no: 'UE-DENEME-95', tmi: { emirId: 95, isEmriId: 95 } };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     const asil = globalThis.fetch;
-    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => (/\/uretim-emirleri\/95$/.test(String(adres))
-      ? new Response(JSON.stringify({ adimlar: [adim(1, 'ORN aparatı bağla', 'on_hazirlik', true), adim(2, 'Talaşı temizle', 'bitis', true), adim(3, 'Takım boyu', 'hazirlik', true, true)] }), { status: 200 })
-      : asil(adres, istek)));
+    const atlama: unknown[] = [];
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).endsWith('/uretim-emirleri/95/talimat-atlama')) { atlama.push(JSON.parse(String(istek?.body))); return new Response(JSON.stringify({ kayitId: 1 }), { status: 200 }); }
+      return /\/uretim-emirleri\/95$/.test(String(adres))
+        ? new Response(JSON.stringify({ adimlar: [adim(1, 'ORN aparatı bağla', 'on_hazirlik', true), adim(2, 'Talaşı temizle', 'bitis', true), adim(3, 'Takım boyu', 'hazirlik', true, true)] }), { status: 200 })
+        : asil(adres, istek);
+    });
     arkonAc('/uretim-terminali');
     await ekran();
     const not = await screen.findByRole('button', { name: '1 zorunlu madde eksik' }, { timeout: 10000 });
@@ -497,6 +501,8 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
     fireEvent.click(within(p).getByRole('button', { name: 'Yine de başlat' }));
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    // Sapma kartı a: atlanan madde CORE'da adımın geçmişine yazılır.
+    await waitFor(() => { expect(atlama).toEqual([{ eylem: 'baslat', adimIdler: [1] }]); }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: '1 zorunlu madde eksik' })).toBeNull();
   }, 40000);
 });
