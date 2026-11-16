@@ -1,5 +1,6 @@
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { GuvenlikAlarmlar } from './Alarmlar.tsx';
+import { BaglantiIzleme } from './BaglantiIzleme.tsx';
 import { GuvenlikDurum } from './Durum.tsx';
 import { GuvenlikKoruma, GuvenlikKurallar, GuvenlikYoneticiIslemleri } from './Koruma.tsx';
 import { GuvenlikGirisler, GuvenlikOturumlar, GuvenlikReddedilenler } from './Takip.tsx';
@@ -8,6 +9,7 @@ import { GuvenlikGirisler, GuvenlikOturumlar, GuvenlikReddedilenler } from './Ta
 export const rotalar: ModulRotasi[] = [
   { yol: '/guvenlik', ekran: GuvenlikDurum },
   { yol: '/guvenlik/alarmlar', ekran: GuvenlikAlarmlar },
+  { yol: '/guvenlik/baglantilar', ekran: BaglantiIzleme },
   { yol: '/guvenlik/girisler', ekran: GuvenlikGirisler },
   { yol: '/guvenlik/oturumlar', ekran: GuvenlikOturumlar },
   { yol: '/guvenlik/reddedilen', ekran: GuvenlikReddedilenler },

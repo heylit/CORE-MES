@@ -18,6 +18,8 @@ export const GUVENLIK_IKINCI_MENU = {
     { baslik: 'İzleme', maddeler: [
       { anahtar: 'durum', baslik: 'Pano', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
       { anahtar: 'alarmlar', baslik: 'Alarmlar', yol: '/guvenlik/alarmlar', simge: 'bell', islem: 'guvenlik.oku' },
+      // 3313: Logo ve SmartES giden ve gelen akışları; Sistem durumu ayrıntısıyla aynı yetki.
+      { anahtar: 'baglantilar', baslik: 'Bağlantı izleme', yol: '/guvenlik/baglantilar', simge: 'route', islem: 'saglik.ayrinti-oku' },
     ] },
     { baslik: 'Takip', maddeler: [
       { anahtar: 'girisler', baslik: 'Girişler', yol: '/guvenlik/girisler', simge: 'user', islem: 'guvenlik.oku' },

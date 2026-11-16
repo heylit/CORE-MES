@@ -11,4 +11,9 @@ export const anahtarlar = {
   kurallar: ['guvenlik', 'kurallar'] as const,
   sunucuDurumu: ['guvenlik', 'sunucu-durumu'] as const,
   ayarDenetimi: ['guvenlik', 'ayar-denetimi'] as const,
+  izleme: ['guvenlik', 'izleme'] as const,
+  izlemeLogo: ['guvenlik', 'izleme', 'logo'] as const,
+  izlemeSmartes: ['guvenlik', 'izleme', 'smartes'] as const,
+  izlemeLogoHazirlik: ['guvenlik', 'izleme', 'logo-hazirlik'] as const,
+  izlemeSmartesHazirlik: ['guvenlik', 'izleme', 'smartes-hazirlik'] as const,
 };
