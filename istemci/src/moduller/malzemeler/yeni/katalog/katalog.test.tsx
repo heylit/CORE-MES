@@ -493,10 +493,11 @@ describe('3275 a: katalog gruplu tablo', () => {
     expect(localStorage.getItem('tmi-malzemeler-katalog-gruplama')).toBe('"yok"');
   });
 
-  test('Sütunlar seçimi sütunu gizler; Güncelleme varsayılan gizlidir', async () => {
+  test('Sütunlar seçimi sütunu gizler; Güncelleme varsayılan gizli, Logo varsayılan açıktır (3344 b)', async () => {
     kur(OKUYAN, dort());
     yeniEkranAc(KOK);
     await screen.findByText('HM-DNM-00001');
+    expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).getByRole('columnheader', { name: 'Logo' })).toBeTruthy();
     expect(screen.queryByRole('checkbox', { name: 'Onay' })).toBeNull();
     expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: /Güncelleme/ })).toBeNull();
     const pencere = screen.getByText('Sütunlar').closest('details') as HTMLDetailsElement;
@@ -508,6 +509,8 @@ describe('3275 a: katalog gruplu tablo', () => {
 });
 
 describe('3344 Katalog: Logo rozeti', () => {
+  beforeEach(() => { localStorage.clear(); });
+  afterEach(() => { localStorage.clear(); });
   const rozet = (): Record<string, Yanit> => ({
     'GET /logo/belge-durumlari': () => json(200, { durumlar: [
       { id: 1, durum: 'logoda', kayitNo: '4211', neden: null },

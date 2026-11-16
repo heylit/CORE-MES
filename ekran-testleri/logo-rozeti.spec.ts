@@ -10,7 +10,8 @@ test.use({ hesap: 'ornek.yonetici' });
 // "Kart bekliyor" ve "Proje bekliyor" yalnız satış siparişinde.
 type Durum = { durum: string; kayitNo: string | null; neden: string | null };
 const TEMEL: Durum[] = [
-  { durum: 'durdu', kayitNo: null, neden: 'Birim Logo\'da yok' },
+  // Uzun neden: dar hücrede kesildiği görüntüde görünsün.
+  { durum: 'durdu', kayitNo: null, neden: 'Birim Logo\'da yok: kartın stok birimi Logo birim setinde tanımlı değil; birimi Logo\'da birim setine ekleyip yeniden gönderin' },
   { durum: 'logoda', kayitNo: '4211', neden: null },
   { durum: 'sirada', kayitNo: null, neden: null },
   { durum: 'yeniden-denenecek', kayitNo: null, neden: 'Logo yardımcısına ulaşılamadı; 5 dakika sonra yeniden denenecek' },
@@ -26,13 +27,17 @@ const BASLIK: Record<string, string> = {
   'proje-bekliyor': 'Logo: Proje bekliyor', 'kart-bekliyor': 'Logo: Kart bekliyor',
 };
 
-async function rozetleriYonlendir(page: Page) {
+// Örnek verideki kimlikler ortama göre değişir: listede belirli bir durum değil, rozetin kendisi ve istenen tür ölçülür.
+async function rozetleriYonlendir(page: Page): Promise<Set<string>> {
+  const turler = new Set<string>();
   await page.route('**/api/logo/belge-durumlari?*', (r) => {
     const q = new URL(r.request().url()).searchParams;
     const tur = q.get('tur') ?? '';
+    turler.add(tur);
     const idler = (q.get('id') ?? '').split(',').filter(Boolean).map(Number);
     return r.fulfill({ json: { durumlar: idler.map((id) => ({ id, ...durumOf(tur, id) })) } });
   });
+  return turler;
 }
 
 const gun = (n: number): string => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -54,13 +59,13 @@ async function siparisAc(page: Page): Promise<number> {
 }
 
 test('malzeme kataloğunda Logo sütunu durum ve nedeni yazar', async ({ page, ag, ac }) => {
-  await rozetleriYonlendir(page);
+  const turler = await rozetleriYonlendir(page);
   await ac('/malzemeler');
   const tablo = page.getByRole('table', { name: 'Malzeme kataloğu' });
-  await expect(tablo.getByText('Durdu').first()).toBeVisible();
-  await expect(tablo.getByText('Logo\'da').first()).toBeVisible();
+  await expect(tablo.locator('.tc-logo-rozet').first()).toBeVisible();
+  expect([...turler]).toEqual(['malzeme']);
   // Geniş ekranda tablo yatay kayar; Logo sütunu görüntüde görünsün.
-  await tablo.getByText('Durdu').first().scrollIntoViewIfNeeded();
+  await tablo.locator('.tc-logo-rozet').first().scrollIntoViewIfNeeded();
   await page.locator('.tc-tablo-kap').first().evaluate((k) => { k.scrollLeft = k.scrollWidth; });
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('katalog.png') });
@@ -68,9 +73,10 @@ test('malzeme kataloğunda Logo sütunu durum ve nedeni yazar', async ({ page, a
 });
 
 test('proje listesinde Logo sütunu', async ({ page, ag, ac }) => {
-  await rozetleriYonlendir(page);
+  const turler = await rozetleriYonlendir(page);
   await ac('/projeler');
-  await expect(page.getByText('Durdu').first()).toBeVisible();
+  await expect(page.locator('.tc-logo-rozet').first()).toBeVisible();
+  expect([...turler]).toEqual(['proje']);
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('projeler.png') });
   expect(ag.hatalar).toEqual([]);
@@ -84,7 +90,7 @@ test('sipariş başlığında listedekiyle aynı Logo durumu ve listede Logo sü
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('siparis-baslik.png') });
   await ac('/siparisler');
-  await expect(page.getByText('Durdu').first()).toBeVisible();
+  await expect(page.locator('.tc-logo-rozet').first()).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('siparisler.png') });
   expect(ag.hatalar).toEqual([]);
