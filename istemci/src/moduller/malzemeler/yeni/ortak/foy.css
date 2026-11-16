@@ -3,6 +3,7 @@
 .tc-foy > * { grid-column: 1 / -1; }
 .tc-foy-kisa { gap: var(--b-3); }
 .tc-foy-bas { border-inline-start: var(--b-1) solid var(--aile-renk, var(--tur-renk)); padding-inline-start: var(--b-3); min-width: 0; }
+.tc-foy-kunye { margin-bottom: var(--b-1); }
 .tc-foy-kod { font-family: var(--font-mono); font-weight: 700; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-foy-ad { margin: 0; font-size: var(--yazi-l); overflow-wrap: anywhere; }
 .tc-foy-kisa .tc-foy-ad { font-size: var(--yazi-m); }

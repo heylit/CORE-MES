@@ -175,8 +175,8 @@ test.describe('M2 katalog', () => {
       const tr = document.querySelector('.tc-mk-ana .tc-tablo tbody tr[data-satir]');
       const isaret = document.querySelector('.tc-mk-yan .tc-isaret');
       const ad = document.querySelector('.tc-mk-ad');
-      const kod = document.querySelector('.tc-mk-kod');
-      const rozet = document.querySelector('.tc-mk-ana .tc-tablo .tc-rozet');
+      const kod = document.querySelector('.tc-mk-ana .tc-tablo .tc-tk-metin');
+      const rozet = document.querySelector('.tc-mk-ana .tc-tablo .tc-tk-kat');
       return {
         satir: tr?.getBoundingClientRect().height ?? 0,
         isaret: isaret?.getBoundingClientRect().height ?? 0,
@@ -190,6 +190,7 @@ test.describe('M2 katalog', () => {
     expect(olcu.isaret).toBeGreaterThan(0);
     expect(olcu.isaret).toBeLessThanOrEqual(30);
     expect(olcu.adKalinlik).toBeGreaterThanOrEqual(600);
+    expect(olcu.kodBoyut).toBeGreaterThan(0);
     expect(olcu.kodBoyut).toBeLessThanOrEqual(12);
     expect(olcu.rozetBuyukHarf).toBe('none');
   });

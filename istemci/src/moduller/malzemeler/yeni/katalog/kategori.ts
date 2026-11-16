@@ -40,6 +40,11 @@ export function turAdi(tur: string, b: KuralBaglami): string {
   return b.t.TURLER[tur]?.ad ?? tur;
 }
 
+// Kod önekindeki tür kısaltması (HM, YM, MM ...); ayarda yoksa boş, künye tam adı yazar.
+export function turKisa(tur: string, b: KuralBaglami): string {
+  return b.t.KOD_TUR[tur] ?? '';
+}
+
 const yolAnahtari = (yol: readonly string[]) => yol.join('\u001f');
 
 // Grup başlığındaki sayı süzülmüş listenin tamamıdır, yalnız görünen sayfanın değil.

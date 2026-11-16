@@ -28,7 +28,10 @@ import { kimlikOf } from './liste.ts';
 import { OnayRozeti, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
 import { QrPenceresi, SahaGorunumu } from './Saha.tsx';
 import { AktifSuzgecler, Suzgecler } from './Suzgecler.tsx';
-import { formMetni, GRUPLAMALAR, grupSayilari, grupYolu, gruplamaMi, kaliteMetni, KATEGORISIZ, tabloSirasi, turAdi } from './kategori.ts';
+import {
+  formMetni, GRUPLAMALAR, grupSayilari, grupYolu, gruplamaMi, kaliteMetni, kategoriAdi, KATEGORISIZ, tabloSirasi, turAdi, turKisa, turOf,
+} from './kategori.ts';
+import { TurKunyesi, TurluKod } from '../ortak/TurKunyesi.tsx';
 import './katalog.css';
 
 type AcikPencere =
@@ -70,15 +73,17 @@ export const GIZLENEBILIR_SUTUNLAR: readonly { anahtar: string; baslik: string }
 
 function sutunlar(
   b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void, resimler: KucukResimler,
-  turRozeti: boolean, gizli: ReadonlySet<string>,
+  gizli: ReadonlySet<string>,
 ): Sutun<KatalogKarti>[] {
   const hepsi: Sutun<KatalogKarti>[] = [
     {
       anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', sirala: true, kartTamSatir: true, csv: (k) => `${k.kayit.com.kod} ${k.kayit.com.ad}`,
       hucre: (k) => {
         const x = k.kayit;
+        const tur = turOf(x);
+        const kategori = kategoriAdi(x, b);
         return (
-          <div className="tc-mk-malzeme" data-tur={x.tur ?? 'hammadde'} data-aile={x.fam}>
+          <div className="tc-mk-malzeme" data-tur={tur} data-aile={x.fam}>
             <span onClick={(o) => o.stopPropagation()}>
               <label className="tc-isaret">
                 <input type="checkbox" checked={secili.has(k.kimlik)} onChange={(o) => sec(k.kimlik, o.target.checked)} />
@@ -88,10 +93,10 @@ function sutunlar(
             <span className="tc-mk-serit" aria-hidden="true" />
             <SatirResmi tur={x.tur} no={k.no} ad={`${x.com.kod} ${x.com.ad}`.trim()} simge={K.kartIkon(x, b)} resimler={resimler} />
             <div>
-              <div className="tc-mk-rozetler">
-                {turRozeti && <Rozet ton="bilgi" gorunum="cizgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>}
+              <div className="tc-mk-kod-satir">
+                <TurluKod kod={x.com.kod} tur={tur} kisa={turKisa(tur, b)} ad={turAdi(tur, b)} />
+                {kategori && <span className="tc-tk-kat" title={kategori}>{kategori}</span>}
                 {K.talepVar(x, b) && <Rozet ton="uyari">Değişiklik talebi</Rozet>}
-                <span className="tc-mk-kod">{x.com.kod}</span>
               </div>
               <div className="tc-mk-ad" title={x.com.ad}>{x.com.ad}</div>
             </div>
@@ -378,15 +383,15 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
             )}
             <Tablo
               etiket="Malzeme kataloğu"
-              sutunlar={sutunlar(b, secili, (k, acik) => secimDegistir([k], acik), resimler, gruplama === 'yok', gizli)}
+              sutunlar={sutunlar(b, secili, (k, acik) => secimDegistir([k], acik), resimler, gizli)}
               kip={genis ? 'kaydir' : 'uyarlanir'}
               siralama={siralama}
               siralamaDegistir={siralamaYaz}
               grup={gruplama === 'yok' ? undefined : {
                 yol: (k) => grupYolu(k.kayit, b, gruplama),
                 baslik: (yol) => (yol.length === 1
-                  ? <span className="tc-mk-grup-tur" data-tur={yol[0]}><Rozet ton="bilgi" gorunum="cizgi">{turAdi(yol[0]!, b)}</Rozet></span>
-                  : <span data-kategorisiz={yol[1] === KATEGORISIZ ? '' : undefined}>{yol[1]}</span>),
+                  ? <TurKunyesi tur={yol[0]!} kisa={turKisa(yol[0]!, b)} ad={turAdi(yol[0]!, b)} tamAd />
+                  : <span className="tc-mk-grup-kat" data-tur={yol[0]} data-kategorisiz={yol[1] === KATEGORISIZ ? '' : undefined}>{yol[1]}</span>),
                 sayi: sayilar,
                 on: (yol) => {
                   const grupKartlari = liste.filter((k) => grupYolu(k.kayit, b, gruplama).slice(0, yol.length).join('\u001f') === yol.join('\u001f'));

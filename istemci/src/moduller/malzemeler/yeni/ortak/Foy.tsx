@@ -1,16 +1,19 @@
+import type { ReactNode } from 'react';
 import { Rozet } from '../../../../ortak/arayuz/Rozet.tsx';
 import type { FoyKgFiyati, FoyVerisi } from '../kurallar/index.ts';
 import { kgFiyatiEkle, kgFiyatiSatirlari } from '../kurallar/index.ts';
 import './foy.css';
 
 // kgFiyati: undefined, fiyatı okuyamayan rol (satır çizilmez); null, okuyabilen rolde fiyatı bilinmeyen kart ("—").
-export function Foy({ veri, kgFiyati }: { veri: FoyVerisi; kgFiyati?: FoyKgFiyati | null }) {
+// kunye: başlıkta koddan önce (kart penceresinde tür ve kategori).
+export function Foy({ veri, kgFiyati, kunye }: { veri: FoyVerisi; kgFiyati?: FoyKgFiyati | null; kunye?: ReactNode }) {
   if (veri.bos) return <p className="tc-foy-bos">Föy, seçimlerini yaptıkça burada oluşur.</p>;
   const v = kgFiyati === undefined ? veri : kgFiyatiEkle(veri, kgFiyatiSatirlari(veri, kgFiyati));
   const kisa = v.bolumler.length === 1 && v.bolumler[0]?.baslik === '';
   return (
     <article className={kisa ? 'tc-foy tc-foy-kisa' : 'tc-foy'} aria-label={`Föy: ${v.kod}`}>
       <header className="tc-foy-bas" data-tur={v.tur} {...(v.tur === 'hammadde' && v.aile ? { 'data-aile': v.aile } : {})}>
+        {kunye && <div className="tc-foy-kunye">{kunye}</div>}
         <div className="tc-foy-kod">{v.kod}</div>
         <h3 className="tc-foy-ad">{v.ad}</h3>
       </header>
