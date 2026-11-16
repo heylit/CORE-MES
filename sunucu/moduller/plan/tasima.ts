@@ -3,6 +3,7 @@ import { tasimaItmesi, type BagTuru, type TasimaIsi, type TasimaSonucu } from '.
 
 // Elle taşımanın girdisi (2790): işler çalışmanın planından, takvim ve aynı emrin öncülleri motorun derlemesinden. Biten adım beklenmez
 // (motor da beklemez); başlamış, biten ve donuk bölgedeki iş yerinde kalır. Taşınan iş donuk bölgede olsa da elle taşınır (önceki davranış).
+// Saati geçmiş ama gerçekleşme kaydı olmayan iş (done var, act yok) bitmemiştir: taşınır, ardılı olarak itilir, öncül olarak beklenir.
 // Önizleme ve taşıma komutu aynı hesabı kullanır.
 type Nesne = Record<string, unknown>;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -16,11 +17,12 @@ export function tasimaHesabi(calisma: Nesne, simdi: number, g: { isId: string; t
   const biten = new Set<string>();
   for (const [id, r] of Object.entries(ops)) {
     if (!nesne(r) || typeof r.S !== 'number' || typeof r.C !== 'number' || !Number.isFinite(r.S) || !Number.isFinite(r.C)) continue;
-    if (r.done) biten.add(id);
+    const gecmis = Boolean(r.done) && !r.act;
+    if (r.done && r.act) biten.add(id);
     const lot1 = typeof r.lot1 === 'number' && Number.isFinite(r.lot1) ? r.lot1 : r.C;
     isler.set(id, {
       id, job: String(r.job), opNo: t.opNo[id] ?? id, m: String(r.m), S: r.S, C: r.C, lot1,
-      sabit: Boolean(r.act) || Boolean(r.done) || (id !== g.isId && r.S < t.donuk - E), fas: Boolean(r.fas),
+      sabit: Boolean(r.act) || (!gecmis && id !== g.isId && r.S < t.donuk - E), fas: Boolean(r.fas),
     });
   }
   const onculler = new Map<string, (readonly [string, BagTuru])[]>();

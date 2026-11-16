@@ -33,7 +33,8 @@ const planli = (o: Record<string, unknown> = {}) => ({
   plan: { dataVer: 3, ops: {
     'J1.10': { id: 'J1.10', job: 'J1', m: 'T1', S: 12, C: 14, act: 0, done: 0, fas: 0 },
     'J1.20': { id: 'J1.20', job: 'J1', m: 'T1', S: 8, C: 11, act: 1, done: 0, fas: 0 },
-    'J1.30': { id: 'J1.30', job: 'J1', m: 'T1', S: 2, C: 4, act: 0, done: 1, fas: 0 },
+    'J1.30': { id: 'J1.30', job: 'J1', m: 'T1', S: 2, C: 4, act: 1, done: 1, fas: 0 },
+    'J1.50': { id: 'J1.50', job: 'J1', m: 'T1', S: 5, C: 7, act: 0, done: 1, fas: 0 },
     'J1.40': { id: 'J1.40', job: 'J1', m: '@F1', S: 20, C: 40, act: 0, done: 0, fas: 1 },
   } },
   ...o,
@@ -104,6 +105,8 @@ describe('atölye komutlarının kuralı', () => {
     assert.match(hata(isTasi(planli(), { isId: 'J1.40', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Fason/);
     assert.deepEqual(hata(isTasi(planli(), { isId: 'J1.10', tezgah: 'T9', baslangic: 16 }, KISI, yalniz)), { tur: 'dogrulama', ileti: 'Tezgâh çalışmada yok.', alan: 'tezgah' });
     assert.equal(hata(isTasi(planli(), { isId: 'J1.10', tezgah: 'T2', baslangic: 9 }, KISI, yalniz)).tur, 'dogrulama');
+    // Saati geçmiş ama gerçekleşme kaydı olmayan iş (motor done sayar, act yok) bitmemiştir; taşınır.
+    assert.deepEqual((deger(isTasi(planli(), { isId: 'J1.50', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).locks as Record<string, unknown>)['J1.50'], { m: 'T2', S: 16 });
     // Saat çalışmanın şimdisinde izinlidir.
     assert.ok('deger' in isTasi(planli(), { isId: 'J1.10', tezgah: 'T2', baslangic: 10 }, KISI, yalniz));
   });
