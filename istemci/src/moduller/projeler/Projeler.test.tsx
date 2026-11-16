@@ -232,3 +232,61 @@ describe('Projeler', () => {
     expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).toMatchObject({ butceTutari: '250000.50', butceParaBirimi: 'USD' });
   });
 });
+
+describe('Projeyi iptal et (3302 c)', () => {
+  it('okuyan düğmeyi görmez', async () => {
+    sunucuKur(OKUR);
+    ac('/projeler/1');
+    await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
+    expect(screen.queryByRole('button', { name: /Projeyi iptal et/ })).toBeNull();
+  });
+
+  it('yazan onayla iptal eder: düzenleme komutu durum iptal ve sürümle gider, bütçe gitmez; Vazgeç komut göndermez', async () => {
+    const cagrilar = sunucuKur(YAZAR, () => json(200, { ...P1, durum: 'iptal', surum: 4 }));
+    // PRJ-16: null açıklamayı siler; iptal var olan açıklamayı aynen göndermelidir.
+    const aciklamali = { ...P1, aciklama: 'ORN deneme açıklaması' };
+    const temel = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation(async (adres, ayar) =>
+      (String(adres).replace('/api', '') === '/projeler/1' && (ayar?.method ?? 'GET') === 'GET' ? json(200, aciklamali) : temel!(adres, ayar)));
+    ac('/projeler/1');
+    fireEvent.click(await screen.findByRole('button', { name: /Projeyi iptal et/ }));
+    let pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /Projeyi iptal et/ }));
+    pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText(/Proje silinmez/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    const yazma = cagrilar.find((c) => c.yontem === 'POST');
+    expect(yazma?.yol).toBe('/projeler/1/guncelle');
+    expect(yazma?.govde).toEqual({
+      ad: 'Deneme projesi', firmaId: 7, baslangic: '2026-10-01', bitis: '2026-12-31', aciklama: 'ORN deneme açıklaması', durum: 'iptal', surum: 3,
+    });
+  });
+
+  it('sunucu reddi pencerede görünür, pencere açık kalır', async () => {
+    sunucuKur(YAZAR, () => json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' }));
+    ac('/projeler/1');
+    fireEvent.click(await screen.findByRole('button', { name: /Projeyi iptal et/ }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
+    expect((await within(pencere).findByRole('alert')).textContent).toContain('değiştirildi');
+  });
+
+  it('kapanmış projede düğme yoktur', async () => {
+    sunucuKur(YAZAR);
+    vi.mocked(fetch).mockImplementation(async (adres) => {
+      const yol = String(adres).replace('/api', '');
+      if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
+      if (yol === '/projeler/1') return json(200, { ...P1, durum: 'iptal' });
+      if (yol === '/projeler/1/yonetim') return json(200, YONETIM);
+      return json(200, LISTE);
+    });
+    ac('/projeler/1');
+    await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
+    await screen.findByRole('button', { name: /Düzenle/ });
+    expect(screen.queryByRole('button', { name: /Projeyi iptal et/ })).toBeNull();
+  });
+});
