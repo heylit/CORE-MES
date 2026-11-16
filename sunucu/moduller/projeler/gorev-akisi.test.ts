@@ -388,6 +388,8 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const p = await projeAc();
     const a = await gorevAc(p, { sorumluKisiId: kalite1.id });
     assert.equal((await komut(kalite1, a.id, 'iptal')).statusCode, 403, 'görev işleyen iptal edemez');
+    const eski = await gonder(planlama, `/projeler/gorevler/${a.id}/iptal`, { surum: a.surum + 1 });
+    assert.equal(eski.statusCode, 409, `eski sürümle iptal: ${eski.body}`);
     const iptal = await basarili(planlama, a.id, 'iptal');
     assert.equal(iptal.gorev.durum, 'iptal');
     assert.equal((await komut(planlama, a.id, 'iptal')).statusCode, 400, 'iptal görev yeniden iptal edilmez');
@@ -395,11 +397,13 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const y = (await oku(planlama, `/projeler/${p}/yonetim`)).json<ProjeYonetimiCevabi>();
     assert.ok(y.gorevler.some((g) => g.id === a.id && g.durum === 'iptal'), 'görev listede kalır');
     // Kontrolde bekleyen görev iptal edilince kontrol bildirimi kapanır.
+    const baskaKontrolcu = await islemliKisi(['projeler.gorev-kontrol']);
     const k = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolKisiId: kalite2.id });
     await basarili(kalite1, k.id, 'basla');
     await basarili(kalite1, k.id, 'bitir');
     const bekleyen = await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor');
     assert.ok(bekleyen >= 1);
+    assert.equal(await okunmamis(baskaKontrolcu.id, 'projeler.gorev-kontrol-bekliyor'), 0, 'kontrol bildirimi yalnız kayıttaki kontrol edene');
     await basarili(planlama, k.id, 'iptal');
     assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor'), bekleyen - 1, 'kontrol bildirimi kapandı');
     assert.equal((await komut(kalite2, k.id, 'onayla')).statusCode, 400, 'iptal görev onaylanmaz');
