@@ -185,6 +185,14 @@ describe('Aynı emrin iki adımı kuyrukta (639f)', () => {
     expect(kartlar[1]!.textContent).toContain('Sıradaki');
   });
 
+  it('her kartta işin yeri: istasyon ve makine; makinesiz işte "Makine seçilmedi"', () => {
+    const yerler = [{ istasyon: 'ORN-IST-1', makine: 'ORN-CNC-01', makineAd: 'ORN 5 eksen' }, { istasyon: 'ORN-IST-1', makine: null, makineAd: null }];
+    const { container } = render(<IsKuyrugu isler={[adim('tmi-ie-10', 'Op 10', 'running'), adim('tmi-ie-20', 'Op 20', 'queued')]} aktif={0} sec={() => {}}
+      siradaki={undefined} onde={null} kartlar={[]} kartla={null} yer={(i) => yerler[i]!} />);
+    const yer = [...container.querySelectorAll('.tc-ay1-is-yer')].map((x) => x.textContent);
+    expect(yer).toEqual(['ORN-IST-1ORN-CNC-01 · ORN 5 eksen', 'ORN-IST-1Makine seçilmedi']);
+  });
+
   it('639h: fazla sayan adımın kartında eksi bakiye; öteki adımda ve biten işte yok', () => {
     const eksili = (id: string, op: string, state: string, eksi: number) => ({ ...adim(id, op, state), pkg: { id, rev: 'A', tmi: { eksi } } as never });
     const { container } = render(<IsKuyrugu isler={[adim('tmi-ie-10', 'Op 10', 'running'), eksili('tmi-ie-20', 'Op 20', 'running', 2), eksili('tmi-ie-30', 'Op 30', 'done', 1)]}
