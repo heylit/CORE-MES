@@ -1,6 +1,7 @@
 .tc-mt { display: grid; gap: var(--b-5); min-width: 0; }
 .tc-mt-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
 .tc-mt-arac { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: end; gap: var(--b-3); margin-bottom: var(--b-4); }
+.tc-mt-arac:has(.tc-mt-logo-dugme) { grid-template-columns: minmax(0, 2fr) auto minmax(0, 1fr); }
 .tc-mt-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }
 .tc-mt-yok { color: var(--muted); }
 .tc-mt-konum { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--run); }
@@ -30,7 +31,7 @@
 .tc-mt-hata { margin: 0; color: var(--stop); font-weight: 700; }
 
 @media (max-width: 479px) {
-  .tc-mt-arac, .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
+  .tc-mt-arac, .tc-mt-arac:has(.tc-mt-logo-dugme), .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Logo'dan cari arama (2118) */

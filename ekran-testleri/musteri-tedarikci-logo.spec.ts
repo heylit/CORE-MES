@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
-import { ADRES, expect, test } from './ortak.ts';
+import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 
 // Firma listesinde Logo bağı ve yan kutunun sığması (3065). Örnek veride Logo'ya bağlı firma yoktur (bağ yalnız Logo
 // köprüsüyle kurulur); "Bağlı" rozeti istemci ve sunucu testlerinde ölçülür, burada bağlı olmayan satır ölçülür.
@@ -28,6 +28,30 @@ test.describe('Liste satırında Logo bağı', () => {
     await expect(page.getByRole('dialog', { name: f.ad, exact: true })).toHaveCount(0);
     await pencere.getByRole('button', { name: 'Kapat' }).last().click();
     await expect(pencere).toHaveCount(0);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('Listeden Logo\'da arama (3343)', () => {
+  test('"Logo\'da ara" aramayı Logo\'da sürdürür; sonuç penceresi taşmaz', async ({ page, ag, ac }) => {
+    const oneri = { kod: 'ORN-C-2001', ad: 'ORN Deneme Logo Cari', tur: 'musteri', ulkeKodu: 'TR', vergiNo: null, vergiDairesi: null, adres: null,
+      ilce: null, il: 'Deneme Il', postaKodu: null, telefon: null, ePosta: null, logoCariKodu: 'ORN-C-2001' };
+    await page.route('**/api/musteri-tedarikci/logo-cari/ara?*', (r) => r.fulfill({ json: { durum: 'tamam', ileti: null, cariler: [
+      { logoKayitNo: 1, kod: 'ORN-C-2001', ad: 'ORN Deneme Logo Cari', aktif: true, vergiNo: null, il: 'Deneme Il', telefon: null, eslesme: null, alinamaz: null, oneri },
+    ] } }));
+    await ac('/musteri-tedarikci/musteriler');
+    await page.getByRole('searchbox', { name: 'Ara' }).fill('ORN Deneme');
+    await expect(page.getByRole('button', { name: "Logo'da ara" })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('liste-logo-ara.png') });
+    await page.getByRole('button', { name: "Logo'da ara" }).click();
+    const pencere = page.getByRole('dialog', { name: "Logo'da cari ara" });
+    await expect(pencere.getByText('ORN Deneme Logo Cari').first()).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'pencerede yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('liste-logo-pencere.png') });
+    await pencere.getByRole('button', { name: 'Forma al' }).first().click();
+    await expect(page.getByRole('dialog', { name: 'Yeni firma' })).toBeVisible();
     expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
