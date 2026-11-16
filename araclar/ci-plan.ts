@@ -87,6 +87,7 @@ export function onYuklemeyeUlasir(degisenler: readonly string[], ters: ReadonlyM
   return false;
 }
 
+const betikMi = (yol: string): boolean => /\.(c|m)?js$/.test(yol) && ['sunucu/', 'istemci/', 'paylasilan/', 'arkon/'].some((k) => yol.startsWith(k));
 const kodMu = (yol: string): boolean => /\.tsx?$/.test(yol) && ['sunucu/', 'istemci/', 'paylasilan/', 'araclar/', 'arkon/'].some((k) => yol.startsWith(k));
 
 // İthal grafiğinde olmayan değişen dosyayı (kural metni, yapılandırma olmayan veri) adıyla anan sunucu testi; ayrıca klasörü
@@ -110,7 +111,9 @@ export function anilanTestler(degisenler: readonly string[], icerikler: Readonly
 // etkilenen modülün sayfasını açan test ve modüle bağlanamayan test koşar; istemcide modül dışındaki üretim dosyası
 // etkilendiyse (kabuk, giriş) bütün ekran testleri koşar.
 export function secimHesapla(g: SecimGirdisi): Secim {
-  if (g.etki.bilinmeyenler.length > 0) return g.tum;
+  // .js betikleri ithal grafiğinde değildir ve dosya okunarak birleştirilir (plan motoru: sunucu ve istemci testleri okur); okuyanı bulunamaz.
+  // Arkon testleri arkon/web/src dosyalarını değişkenle kurulan yoldan dinamik ithal eder; grafik onları da göremez.
+  if (g.etki.bilinmeyenler.length > 0 || g.degisenler.some((d) => betikMi(d) || d.startsWith('arkon/'))) return g.tum;
   const tumu = new Set(g.tum.sunucu);
   // Göç bütün şemayı değiştirir; şema çapında denetleyen testler (kısıt listesi gibi) göçü adıyla anmaz.
   const gocVar = g.degisenler.some((d) => d.startsWith('sunucu/gocler/'));

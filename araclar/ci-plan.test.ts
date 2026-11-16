@@ -63,6 +63,14 @@ test('ci-plan: ekran testinin modülleri açtığı yoldan okunur; değişkenle 
 
 test('ci-plan: grafiğin bilmediği değişiklik her dosyayı koşturur', () => {
   assert.deepEqual(sec(['eslint.config.js'], { bilinmeyenler: ['eslint.config.js'] }), TUM);
+  // Plan motoru .js betikleri dosya okunarak birleştirilir; ithal grafiği okuyanı göremez (#2017: istemci testi kaçtı).
+  assert.deepEqual(sec(['sunucu/moduller/plan/motor/engine.js'], { digerDosyalar: ['sunucu/moduller/plan/motor/engine.js'] }), TUM);
+  assert.deepEqual(sec(['istemci/src/moduller/cnc-kurulum/yeni/hesap/a.mjs'], {}), TUM);
+  assert.deepEqual(sec(['paylasilan/b.cjs'], {}), TUM);
+  assert.deepEqual(sec(['arkon/web/calisan/c.js'], {}), TUM);
+  // Arkon testleri arkon/web/src dosyalarını değişkenle kurulan yoldan ithal eder (esitlik.test.ts, cizim/kurallar.test.ts).
+  assert.deepEqual(sec(['arkon/web/src/app/istasyonlar.ts'], {}), TUM);
+  assert.deepEqual(sec(['eslint.config.mjs'], {}).sunucu, [], 'kök yapılandırma betiği bu kuralla değil kapsamla yönetilir');
 });
 
 test('ci-plan: modül değişikliği etkilenen testleri, o modülün ve modülsüz ekran testlerini, Windows kümesindeki kesişimi seçer', () => {

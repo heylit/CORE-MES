@@ -41,6 +41,9 @@ her parça kendi listesini (`ci-plan/<iş>-<parça>.txt`) indirir. Matris planda
   modülün sayfasını açan test (`ac('/<modül>/...')`) ve modüle bağlanamayan test (sayfayı değişkenle açan, modül klasörü olmayan
   yolu açan) koşar. Grafiğin bilmediği değişiklik (paket, yapılandırma, `arkon/`), ekranın ortak dosyası ya da modül dışı istemci
   dosyası etkilenirse ilgili işte bütün dosyalar koşar.
+- `.js` betiği (`sunucu/`, `istemci/`, `paylasilan/`, `arkon/` altında; plan motoru gibi dosya okunarak birleştirilen): her iş bütün
+  dosyalarını koşar, çünkü okuyanı ithal grafiğinde görünmez. `arkon/` değişikliği de öyle: Arkon testleri `arkon/web/src`
+  dosyalarını değişkenle kurulan yoldan ithal eder.
 - Göç (`sunucu/gocler/`) bütün şemayı değiştirir: bütün sunucu ve Windows testleri koşar (kısıt listesi gibi şema çapındaki
   denetimler göçü adıyla anmaz). Her sunucu testine `--import` ile giren ön yüklemeye (`araclar/ortam-yukle-goc.ts`,
   `araclar/kablolama-yukle.ts` ve ithal ettikleri; `sunucu/kablolama.ts` üzerinden geçen yol sayılmaz, onu kablolama bağları taşır)
