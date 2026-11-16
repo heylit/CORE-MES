@@ -26,7 +26,7 @@ import {
   adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
   eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
   KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti, IS_EMRI_METODU, isEmriDurumuOku,
-  isEmriParametreleri, kapanisParametreleri, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi,
+  isEmriParametreleri, kapanisParametreleri, kesinRetMi, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi,
   operasyonParametreleri, redOku, skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI,
   TANIM_METOTLARI, TANIM_NIYET_SINIRI, TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu, alarmTekrarTonu,
   birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku,
@@ -369,8 +369,10 @@ export async function gonderimTuru(vt: Veritabani, o: TurOrtami): Promise<Gonder
       return true;
     }
     const hata = r.tur === 'basarili' ? kirp(`SmartES reddetti: ${r.deger.hata ?? ''}`) : hataMetni(r);
-    const sonraki = new Date(zaman.getTime() + geriCekilmeMs(ardisik + 1));
-    await sonucYaz(vt, o, 'gonderim', { yaz: (db) => s.gidenDenemesiYaz(db, { isEmriId, smartesIsEmriNo: no, zaman, sonuc: { tur: 'hata', hata, sonraki } }) });
+    const kesin = kesinRetMi(r.tur === 'basarili' ? 'ret' : r.tur, ardisik + 1, r.tur === 'http' ? r.durum : undefined);
+    const sonraki = kesin ? null : new Date(zaman.getTime() + geriCekilmeMs(ardisik + 1));
+    const denenen = gonderimOzeti(p);
+    await sonucYaz(vt, o, 'gonderim', { yaz: (db) => s.gidenDenemesiYaz(db, { isEmriId, smartesIsEmriNo: no, zaman, sonuc: { tur: 'hata', hata, sonraki, denenen } }) });
     hatali++;
     return r.tur !== 'ag' && r.tur !== 'zaman-asimi';
   };
@@ -385,7 +387,7 @@ export async function gonderimTuru(vt: Veritabani, o: TurOrtami): Promise<Gonder
     const no = smartesIsEmriNo(i.emirNo, i.opNo);
     if (opHata) {
       const zaman = o.saat();
-      const sonuc = { tur: 'hata' as const, hata: hataMetni(opHata), sonraki: new Date(zaman.getTime() + geriCekilmeMs((g?.ardisikHata ?? 0) + 1)) };
+      const sonuc = { tur: 'hata' as const, hata: hataMetni(opHata), sonraki: new Date(zaman.getTime() + geriCekilmeMs((g?.ardisikHata ?? 0) + 1)), denenen: ozet };
       await sonucYaz(vt, o, 'gonderim', { yaz: (db) => s.gidenDenemesiYaz(db, { isEmriId: i.isEmriId, smartesIsEmriNo: no, zaman, sonuc }) });
       hatali++;
       return { tur: 'islendi', gonderilen, kapanan, hatali };
@@ -872,6 +874,13 @@ const IZLEME_SINIRI = 500;
 export async function gidenIzleme(db: Db): Promise<SmartesGidenIzlemeCevabi> {
   const satirlar = await s.gidenHataSatirlari<SmartesGidenIzlemeCevabi['belgeler'][number]>(db, IZLEME_SINIRI + 1);
   return { belgeler: satirlar.slice(0, IZLEME_SINIRI), kesildi: satirlar.length > IZLEME_SINIRI };
+}
+
+// Duran iş emrini yeniden gönderme: yalnız sıraya koyar, SmartES'e istek atmaz; gönderim işi ilk turda gönderir.
+export async function duranlariYenidenGonder(db: Db, isEmirleri: readonly number[]): Promise<{ sirada: number; durmayan: number }> {
+  let sirada = 0;
+  for (const id of new Set(isEmirleri)) if (await s.gidenYenidenGonder(db, id)) sirada++;
+  return { sirada, durmayan: new Set(isEmirleri).size - sirada };
 }
 export const giden = (db: Db, q: Sayfa): Promise<GidenCevabi> =>
   sayfaliListe(q, { say: () => s.gidenSay(db), satirlar: (d) => s.gidenListeSatirlari<Satir<GidenCevabi>>(db, d) });

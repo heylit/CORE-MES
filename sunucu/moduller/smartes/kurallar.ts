@@ -363,13 +363,32 @@ export const adetDegistiMi = (oncekiOzet: string | null, adet: number): boolean 
 
 export type GonderimEylemi = 'gonder' | 'bekle' | 'atla';
 
-// Gönderilmiş ve özeti aynı iş emri atlanır; hatalı olan bekleme süresi dolunca yeniden denenir.
+// Kesin ret: SmartES isteği aldı ve kabul etmedi (cevapta hata iletisi ya da HTTP 4xx, 408 ve 429 hariç); yinelemek aynı cevabı getirir.
+// SOAP Fault bir sunucu istisnası da olabilir (SmartES'in veritabanı kısa süre kapalı): art arda FAULT_SINIRI kez gelince durur.
+// Bağlantı, zaman aşımı, HTTP 5xx ve okunamayan cevap kesin değildir; artan beklemeyle yinelenir.
+export const FAULT_SINIRI = 3;
+export type GonderimHatasi = 'ret' | 'zaman-asimi' | 'ag' | 'http' | 'fault' | 'bozuk';
+export function kesinRetMi(tur: GonderimHatasi, ardisikHata: number, durum?: number): boolean {
+  if (tur === 'ret') return true;
+  // 408 (istek zaman aşımı) ve 429 (çok istek) geçici cevaptır.
+  if (tur === 'http') return durum !== undefined && durum >= 400 && durum < 500 && durum !== 408 && durum !== 429;
+  if (tur === 'fault') return ardisikHata >= FAULT_SINIRI;
+  return false;
+}
+
+// Durdu: hatalı ve sonraki denemesi yok. Yeniden gönderme ya da iş emrinin değişmesi durmayı kaldırır.
+export const gonderimDurduMu = (g: { durum: 'gonderildi' | 'hata' | 'kapandi'; sonrakiDeneme: Date | null }): boolean =>
+  g.durum === 'hata' && g.sonrakiDeneme === null;
+
+// Gönderilmiş ve özeti aynı iş emri atlanır; hatalı olan bekleme süresi dolunca yeniden denenir. Duran iş emri, reddedilen
+// alanlarından biri değişince (denenen özet farklı) yeniden gider; aynıysa bekler.
 export function gonderimEylemi(
-  g: { ozet: string | null; durum: 'gonderildi' | 'hata' | 'kapandi'; sonrakiDeneme: Date | null } | null,
+  g: { ozet: string | null; denenenOzet?: string | null; durum: 'gonderildi' | 'hata' | 'kapandi'; sonrakiDeneme: Date | null } | null,
   ozet: string,
   simdi: Date,
 ): GonderimEylemi {
   if (g === null) return 'gonder';
+  if (gonderimDurduMu(g)) return g.denenenOzet != null && g.denenenOzet !== ozet ? 'gonder' : 'bekle';
   if (g.durum === 'hata') return g.sonrakiDeneme !== null && g.sonrakiDeneme > simdi ? 'bekle' : 'gonder';
   // Kapatılmış iş emri listeye geri döndüyse (iptal geri alındı) SmartES'te yeniden açılır.
   if (g.durum === 'kapandi') return 'gonder';

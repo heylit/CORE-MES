@@ -2,7 +2,7 @@ import type { LogoGidenIzlemeCevabi, LogoGidenIzlemeDurumu } from '#paylasilan/s
 import type { SmartesGidenIzlemeCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
-// Bağlantı izleme (3313): Logo ve SmartES'e gitmeyen belgeler tek listede. SmartES'e gidemeyen iş emri her zaman kendiliğinden yeniden denenir.
+// Bağlantı izleme (3313): Logo ve SmartES'e gitmeyen belgeler tek listede. SmartES'in kesin reddettiği iş emri durur; öteki hatalar yinelenir.
 export type IzlemeDurumu = LogoGidenIzlemeDurumu;
 export interface IzlemeSatiri {
   anahtar: string;
@@ -27,13 +27,14 @@ export const DURUM_TONU: Record<IzlemeDurumu, RozetTonu> = {
   durdu: 'hata', 'yeniden-denenecek': 'uyari', 'kart-bekliyor': 'bilgi', 'proje-bekliyor': 'bilgi', sirada: 'pasif',
 };
 const SMARTES_NE_YAPMALI = 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse SmartES bağlantısını denetleyin.';
+const SMARTES_DURDU_NE_YAPMALI = 'Nedeni düzeltin (istasyon, operasyon ya da iş emri eşlemesi), sonra "Yeniden gönder". İş emri değişirse kendiliğinden yeniden gider.';
 
 export function izlemeSatirlari(logo: LogoGidenIzlemeCevabi | undefined, smartes: SmartesGidenIzlemeCevabi | undefined): IzlemeSatiri[] {
   const l = (logo?.belgeler ?? []).map((b): IzlemeSatiri => ({ ...b, anahtar: `logo:${b.belge}:${b.no}:${b.islem}`, kaynak: 'Logo' }));
   const s = (smartes?.belgeler ?? []).map((b): IzlemeSatiri => ({
     anahtar: `smartes:${b.isEmriId}`, kaynak: 'SmartES', belge: 'is-emri', belgeAdi: `İş emri ${b.smartesIsEmriNo}`, no: b.isEmriId, islem: 'gonder',
-    durum: 'yeniden-denenecek', neden: b.neden, neYapmali: SMARTES_NE_YAPMALI, yenidenGonderilebilir: false,
-    denemeSayisi: b.denemeSayisi, sonDeneme: b.sonDeneme, sonrakiDeneme: b.sonrakiDeneme,
+    durum: b.durdu ? 'durdu' : 'yeniden-denenecek', neden: b.neden, neYapmali: b.durdu ? SMARTES_DURDU_NE_YAPMALI : SMARTES_NE_YAPMALI,
+    yenidenGonderilebilir: b.durdu, denemeSayisi: b.denemeSayisi, sonDeneme: b.sonDeneme, sonrakiDeneme: b.durdu ? null : b.sonrakiDeneme,
   }));
   return [...l, ...s];
 }

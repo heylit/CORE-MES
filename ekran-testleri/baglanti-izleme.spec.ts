@@ -55,3 +55,46 @@ test('bağlantı izleme: Proje bekliyor rozeti ve çipi taşmaz; çip listeyi s�
   await page.screenshot({ path: test.info().outputPath('proje-cip-secili.png'), fullPage: true });
   expect(ag.hatalar).toEqual([]);
 });
+
+// SmartES'in kesin reddettiği iş emri "Durdu": ayrıntıda ne yapılacağı ve "Yeniden gönder"; yinelenecek satırda düğme yok. SmartES listesi sahte cevapla.
+test('bağlantı izleme: SmartES Durdu satırı ve Yeniden gönder taşmaz', async ({ page, ag, ac }) => {
+  const zaman = '2026-11-16T09:30:00.000Z';
+  await page.route('**/api/smartes/giden/sorunlar', (r) => r.fulfill({ json: {
+    belgeler: [
+      { isEmriId: 9101, smartesIsEmriNo: 'ORN-IE-9101-10', denemeSayisi: 1, sonDeneme: zaman, neden: 'SmartES reddetti: İstasyon tanımsız', sonrakiDeneme: null, durdu: true },
+      { isEmriId: 9102, smartesIsEmriNo: 'ORN-IE-9102-20', denemeSayisi: 3, sonDeneme: zaman, neden: 'SmartES servisine bağlanılamadı.', sonrakiDeneme: zaman, durdu: false },
+    ],
+    kesildi: false,
+  } }));
+  await page.route('**/api/logo/giden', (r) => r.fulfill({ json: {
+    sayac: { durdu: 1, yenidenDenenecek: 0, kartBekliyor: 0, projeBekliyor: 0, sirada: 0 },
+    belgeler: [{ belge: 'satin-alma-talebi', belgeAdi: 'Satın alma talebi ST-ORN-911', no: 911, islem: 'gonder', durum: 'durdu', neden: 'Firmanın Logo cari kodu boş.',
+      neYapmali: 'Firma kartına Logo cari kodunu yazın, sonra "Yeniden gönder".', yenidenGonderilebilir: true, denemeSayisi: 1, sonDeneme: zaman, sonrakiDeneme: null }],
+    kesildi: false,
+  } }));
+  await ac('/guvenlik/baglantilar');
+  const tablo = page.getByRole('table', { name: 'Gitmeyen belgeler' });
+  await expect(tablo.getByText('İş emri ORN-IE-9101-10')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath('smartes-durdu-liste.png'), fullPage: true });
+  await tablo.getByText('İş emri ORN-IE-9101-10').click();
+  await expect(page.getByText(/^Nedeni düzeltin \(istasyon/)).toBeVisible();
+  const dugme = page.getByRole('button', { name: 'Yeniden gönder', exact: true });
+  await expect(dugme).toBeVisible();
+  expect(await dugme.evaluate((e) => e.scrollWidth - e.clientWidth), 'düğme metni kesilmez').toBeLessThanOrEqual(0);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath('smartes-durdu-ayrinti.png'), fullPage: true });
+  await page.keyboard.press('Escape');
+  await tablo.getByText('İş emri ORN-IE-9102-20').click();
+  await expect(page.getByText(/kendiliğinden yeniden denenir/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Yeniden gönder', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // Toplu pencerede Logo ve SmartES nedenleri ayrı gruplar.
+  await page.getByRole('button', { name: /Düzelttiklerimi yeniden gönder/ }).click();
+  const pencere = page.getByRole('dialog');
+  await expect(pencere.getByLabel('SmartES reddetti: İstasyon tanımsız (1 belge)')).toBeVisible();
+  await expect(pencere.getByLabel('Firmanın Logo cari kodu boş. (1 belge)')).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath('smartes-durdu-toplu.png'), fullPage: true });
+  expect(ag.hatalar).toEqual([]);
+});
