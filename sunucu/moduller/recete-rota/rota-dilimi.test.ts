@@ -138,7 +138,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [s1, s2, s3] = rev.data.steps;
     assert.deepEqual(s1, {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, fason: false, terminGun: null,
-      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], adetCarpani: null, onculler: null,
+      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', dal: null, birlesen: [], adetCarpani: null, ciktiId: null, onculler: null,
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
       digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: 0, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
@@ -247,6 +247,8 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const urun = await kart('mamul', 'RRR mamul sayım');
     const ym = await kart('yarimamul', 'RRR yarı mamul sayım');
     const k = await taslakKur(urun, [adim({ ad: 'Kesim' }), adim({ ad: 'Tornalama', bilesenler: [] }), adim({ ad: 'Paketleme', bilesenler: [] })]);
+    // Revizyon rota_adim_ciktisi'nden önce yazılmış gibi (3320 a, K2): çıktı satırı yoksa eski adım bağı okunur.
+    await vt().sorgu('DELETE FROM rota_adim_ciktisi WHERE adim_id IN (SELECT id FROM rota_adimi WHERE revizyon_id = $1)', [k.id]);
     // Çerçevenin son yazımı: rota henüz taslakken (routes boş); OP 20'nin çıkanı yalnız taslak revizyonda.
     const taslakAdimi = (op: number, ek: Record<string, unknown> = {}) => ({ id: `${String(urun)}-o${String(op)}`, opNo: op, seq: op, opId: String(tipId), outItem: '', outStatus: '', ...ek });
     await anaKayitYaz(vt(), {
@@ -282,6 +284,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
       opNo, operasyonTipiId: 1, ad: 'Kaplama', kaynak, terminGun: 5, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null,
       bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: '0', makineKullanimi: 'tek', enKucukParca: null, yenidenAyar: true, hazirlikDk: null,
       ayar: false, ayarDk: null, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [], dal: null, adetCarpani: null, birlesen: [], onculler: null,
+      ciktiMalzemeId: null, ciktiYazili: false,
     });
     const r = rotaDilimiCevir([{
       id: 1, malzemeId: 2, harf: 'A', durum: 'yururlukte', surum: 1, aciklama: null, acilma: '2030-01-01T00:00:00.000Z', onaylama: null, yururlugeAlma: null,
@@ -290,6 +293,116 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [a, b] = r.routes['2']!.steps;
     assert.deepEqual([a?.fason, a?.fasonId, a?.stationId, a?.machineId, a?.terminGun], [true, null, null, null, 5]);
     assert.deepEqual([b?.fason, b?.fasonId], [true, '7']);
+  });
+
+  test('3320 a (T2-T4, T6, T7, K6): ara adımın çıktı kartı kaydedilir, ekrana ciktiId ile gelir, yeni taslağa kopyalanır; kural ihlali reddedilir', async () => {
+    const urun = await kart('mamul', 'ORN-MM çıktılı');
+    const ym = await kart('yarimamul', 'ORN-YM ara');
+    const uc = [adim({ ad: 'Kesim' }), adim({ ad: 'Tornalama', bilesenler: [] }), adim({ ad: 'Paketleme', bilesenler: [] })];
+    const k = await taslakKur(urun, uc);
+    const adimlari = async (id: number) => (await tamamIstek<RevizyonAyrintisi>(tam, 'GET', `/rota/revizyonlar/${String(id)}`)).adimlar;
+    const kaydet = (id: number, surum: number, adimlar: AdimGirdisi[]) => istek(tam, 'POST', `/rota/revizyonlar/${String(id)}/kaydet`, { surum, aciklama: 'Deneme notu', adimlar });
+    const opNolu = async (id: number, cikti: (number | null | undefined)[]) =>
+      (await adimlari(id)).map((a, i) => ({ ...uc[i]!, opNo: a.opNo, ...(cikti[i] === undefined ? {} : { ciktiMalzemeId: cikti[i] }) }));
+
+    // T2 (V1): son adımda çıktı reddedilir; alan adımı gösterir.
+    const son = await kaydet(k.id, k.surum, await opNolu(k.id, [null, null, ym]));
+    assert.equal(son.statusCode, 400, son.body);
+    assert.deepEqual([son.json().alan, /Son adım/.test(son.body)], ['adimlar.2.ciktiMalzemeId', true]);
+    const ok = await kaydet(k.id, k.surum, await opNolu(k.id, [null, ym, null]));
+    assert.equal(ok.statusCode, 200, ok.body);
+    let surum = (ok.json() as KomutCevabi).surum;
+    assert.deepEqual((await adimlari(k.id)).map((a) => a.ciktiMalzeme?.id ?? null), [null, ym, null]);
+    // Alanı göndermeyen kayıt (eski görünüm) kayıtlı çıktıyı korur.
+    const koru = await kaydet(k.id, surum, await opNolu(k.id, [undefined, undefined, undefined]));
+    assert.equal(koru.statusCode, 200, koru.body);
+    surum = (koru.json() as KomutCevabi).surum;
+    assert.deepEqual((await adimlari(k.id)).map((a) => a.ciktiMalzeme?.id ?? null), [null, ym, null]);
+    // Ekrana: çıktısı yazılmış revizyonda her adım ciktiId taşır (statülü null).
+    const ekran = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
+    assert.deepEqual(ekran.map((x) => x.ciktiId), [null, String(ym), null]);
+    // T7: rota satırı varken eski adım bağı okunmaz.
+    await vt().sorgu('INSERT INTO recete_rota_adim_bagi (rota_revizyonu_id, malzeme_id, op_no, cikti_malzeme_id, guncelleyen_kisi_id) VALUES ($1, $2, $3, $4, $5)', [k.id, urun, ekran[0]!.opNo, ym, yoneticiId]);
+    assert.deepEqual(((await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? []).map((x) => x.ciktiId), [null, String(ym), null]);
+
+    // T4 ve K6: onaylanıp yürürlüğe girer; YM'nin kendi rotası, başka rotanın çıktısıyken onaylanmaz.
+    await tamamIstek(tam, 'POST', '/ayarlar/rota.dort-goz/degistir', { deger: false });
+    try {
+      const g = await komut(k.id, 'onaya-gonder', { surum });
+      const y = await komut(k.id, 'onayla', { surum: g.surum, yururlugeAl: true });
+      const kilitli = await kaydet(k.id, y.surum, await opNolu(k.id, [null, null, null]));
+      assert.notEqual(kilitli.statusCode, 200, 'yürürlükteki revizyonun çıktısı değişmez');
+      const ymRota = await taslakKur(ym, [adim({ ad: 'YM kesim' })]);
+      const red = await istek(tam, 'POST', `/rota/revizyonlar/${String(ymRota.id)}/onaya-gonder`, { surum: ymRota.surum });
+      assert.notEqual(red.statusCode, 200, red.body);
+      assert.match(red.body, /ara adımın çıktısı/);
+
+      // T6: yürürlükteki revizyondan açılan taslak çıktıyı taşır; T3: statülüye dönüş boş satır yazar.
+      const yeni = await tamamIstek<KomutCevabi>(tam, 'POST', `/rota/urunler/${String(urun)}/taslak-ac`, { kaynak: { tur: 'revizyon', revizyonId: k.id } });
+      assert.deepEqual((await adimlari(yeni.id)).map((a) => a.ciktiMalzeme?.id ?? null), [null, ym, null]);
+      const geri = await kaydet(yeni.id, yeni.surum, await opNolu(yeni.id, [null, null, null]));
+      assert.equal(geri.statusCode, 200, geri.body);
+      const satirlar = await vt().sorgu<{ c: number | null }>(
+        'SELECT c.cikti_malzeme_id AS c FROM rota_adim_ciktisi c JOIN rota_adimi a ON a.id = c.adim_id WHERE a.revizyon_id = $1 ORDER BY a.op_no', [yeni.id]);
+      assert.deepEqual(satirlar.map((x) => x.c), [null, null, null]);
+      assert.deepEqual((await adimlari(k.id)).map((a) => a.ciktiMalzeme?.id ?? null), [null, ym, null], 'yürürlükteki revizyon değişmedi');
+    } finally {
+      await tamamIstek(tam, 'POST', '/ayarlar/rota.dort-goz/degistir', { deger: true });
+    }
+  });
+
+  test('3320 a (Test kod T1-T3): pasife alınan ya da rotası açılan çıktı kartı onayda reddedilir; kayıtta yalnız yeni seçim denetlenir; başka ürüne kopyada çıktı düşer', async () => {
+    const urun = await kart('mamul', 'ORN-MM onay');
+    const ym = await kart('yarimamul', 'ORN-YM pasif');
+    const ym2 = await kart('yarimamul', 'ORN-YM rotalı');
+    const uc = [adim({ ad: 'Kesim' }), adim({ ad: 'Tornalama', bilesenler: [] }), adim({ ad: 'Paketleme', bilesenler: [] })];
+    const k = await taslakKur(urun, uc);
+    const adimlari = async (id: number) => (await tamamIstek<RevizyonAyrintisi>(tam, 'GET', `/rota/revizyonlar/${String(id)}`)).adimlar;
+    const kaydet = (id: number, surum: number, adimlar: AdimGirdisi[]) => istek(tam, 'POST', `/rota/revizyonlar/${String(id)}/kaydet`, { surum, aciklama: 'Deneme notu', adimlar });
+    const govde = async (id: number, cikti: (number | null | undefined)[], ad = 'Tornalama') =>
+      (await adimlari(id)).map((a, i) => ({ ...uc[i]!, ...(i === 1 ? { ad } : {}), opNo: a.opNo, ...(cikti[i] === undefined ? {} : { ciktiMalzemeId: cikti[i] }) }));
+    const ilk = await kaydet(k.id, k.surum, await govde(k.id, [ym, null, null]));
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    let surum = (ilk.json() as KomutCevabi).surum;
+
+    // T2: seçili kart pasife alınınca taslağın başka alanı kaydedilir; aynı kartı başka adıma yeni seçmek reddedilir.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'pasif' WHERE no = $1", [ym]);
+    const baska = await kaydet(k.id, surum, await govde(k.id, [ym, null, null], 'Tornalama 2'));
+    assert.equal(baska.statusCode, 200, baska.body);
+    surum = (baska.json() as KomutCevabi).surum;
+    const yeniSecim = await kaydet(k.id, surum, await govde(k.id, [null, ym, null]));
+    assert.equal(yeniSecim.statusCode, 400, yeniSecim.body);
+    assert.deepEqual([yeniSecim.json().alan, /kullanımda değil/.test(yeniSecim.body)], ['adimlar.1.ciktiMalzemeId', true]);
+
+    // T1: onaya gönderme pasif çıktıyı reddeder; kart başka çıktıya çevrilip o kartın rotası açılınca yine reddedilir.
+    const pasifRet = await istek(tam, 'POST', `/rota/revizyonlar/${String(k.id)}/onaya-gonder`, { surum });
+    assert.notEqual(pasifRet.statusCode, 200, pasifRet.body);
+    assert.match(pasifRet.body, /kullanımda değil/);
+    const cevir = await kaydet(k.id, surum, await govde(k.id, [ym2, null, null]));
+    assert.equal(cevir.statusCode, 200, cevir.body);
+    surum = (cevir.json() as KomutCevabi).surum;
+    await taslakKur(ym2, [adim({ ad: 'YM kesim' })]);
+    const rotaliRet = await istek(tam, 'POST', `/rota/revizyonlar/${String(k.id)}/onaya-gonder`, { surum });
+    assert.notEqual(rotaliRet.statusCode, 200, rotaliRet.body);
+    assert.match(rotaliRet.body, /kendi rotası/);
+
+    // T3: başka ürüne kopyada ara adım çıktısı taşınmaz; hedefin adımları statülü başlar.
+    const hedef = await kart('mamul', 'ORN-MM kopya hedefi');
+    const kopya = await tamamIstek<KomutCevabi>(tam, 'POST', `/rota/revizyonlar/${String(k.id)}/kopyala`, { hedefUrunId: hedef });
+    assert.deepEqual((await adimlari(kopya.id)).map((a) => a.ciktiMalzeme?.id ?? null), [null, null, null]);
+    assert.deepEqual((await adimlari(k.id)).map((a) => a.ciktiMalzeme?.id ?? null), [ym2, null, null], 'kaynak revizyon değişmedi');
+  });
+
+  test('3320 a (K2): çıktısı hiç yazılmamış revizyonda eski adım bağının kartı ekrana ciktiId olarak gelir', async () => {
+    const urun = await kart('mamul', 'ORN-MM eski bağ');
+    const ym = await kart('yarimamul', 'ORN-YM eski bağ');
+    const k = await taslakKur(urun, [adim({ ad: 'Kesim' }), adim({ ad: 'Paketleme', bilesenler: [] })]);
+    await vt().sorgu('DELETE FROM rota_adim_ciktisi WHERE adim_id IN (SELECT id FROM rota_adimi WHERE revizyon_id = $1)', [k.id]);
+    const once = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
+    assert.deepEqual(once.map((x) => x.ciktiId), [undefined, undefined], 'bağ yokken alan gelmez; ekran göndermez, sunucu korur');
+    await vt().sorgu('INSERT INTO recete_rota_adim_bagi (rota_revizyonu_id, malzeme_id, op_no, cikti_malzeme_id, guncelleyen_kisi_id) VALUES ($1, $2, $3, $4, $5)', [k.id, urun, once[0]!.opNo, ym, yoneticiId]);
+    const sonra = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
+    assert.deepEqual(sonra.map((x) => x.ciktiId), [String(ym), undefined]);
   });
 
   test('RRR-5: iptal revizyon çevrilmez; dilim boşken boş sözlük ve dizidir', () => {

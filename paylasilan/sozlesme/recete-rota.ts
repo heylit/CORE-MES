@@ -200,6 +200,8 @@ export const durumRotaAdimiSemasi = z.object({
   // Kayıtlı rotanın türetilmiş öncülleri, sıra (seq) ile: null tek hatlı rota (dep kuralı), boş dizi hiçbir adımı beklemez.
   // Ekran kaydetmeden önce aynı kuralı paylasilan/sozlesme/rota-dal-kurali.ts ile kendisi hesaplar.
   onculler: z.array(z.object({ seq: z.number().int(), tur: z.enum(['bekleyen', 'akisli']) })).nullable().optional(),
+  // Ara adımın çıktı kartı (3320 a): null statülü ara hâl; alan yoksa revizyon çıktı saklanmadan önce yazılmıştır, eski adım bağı okunur.
+  ciktiId: kimlikMetni.nullable().optional(),
   alts: z.array(kimlikMetni),
   altTimes: z.record(z.string(), z.object({ setup: sayiAlani, cycle: sayiAlani })),
   digerAdaylar: z.array(sureAlani.extend({ tur: z.enum(['makine', 'kisi']), id: kimlikMetni })),

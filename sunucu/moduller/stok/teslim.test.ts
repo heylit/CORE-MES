@@ -1179,9 +1179,15 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     await terminal('/sayim', { tur: 'saglam', adet: 3 });
     const kb = (await istasyonKonumu(b.id))!;
     assert.deepEqual([await sayi(hm, kb, s10), await sayi(hm, kb), await sayi(ara, kb)], [2, 0, 3], 'çıktılı adım: 3 x 2 kg HM düşülür, 3 adet YM girer');
+    // 3320 a (K3, N5): ara çıktı kartının girişi emre ayrılır; düşüş ayrılanı geri alır.
+    const ayrilan = async () => Number((await o().vt.tek<{ m: string }>(
+      'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_rezerve WHERE malzeme_id = $1 AND statu_id IS NULL AND uretim_emri_id = $2', [ara, e]))!.m);
+    assert.equal(await ayrilan(), 3, 'çıktı kartının girişi emre ayrıldı');
     await terminal('/sayim', { tur: 'saglam', adet: -1 });
     assert.deepEqual([await sayi(hm, kb, s10), await sayi(ara, kb)], [4, 2], 'çıktılı adımda düşüş: YM girişi ve HM sarfı geri alınır');
+    assert.equal(await ayrilan(), 2, 'düşüşte ayrılan da azalır');
     await terminal('/sayim', { tur: 'saglam', adet: 1 });
+    assert.equal(await ayrilan(), 3);
     await terminal('/bitir', { saglamAdet: 3 });
 
     await ilet(ara, b.id, c.id, null, '3');
@@ -1191,6 +1197,13 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual([await sayi(ara, kc), await sayi(mm, kc), await sayi(hm, kb, s10)], [1, 2, 2], 'son adım: teslim edilen çıktı YM düşülür, ürün girer; HM\'ye dokunulmaz');
     await terminal('/sayim', { tur: 'saglam', adet: -1 });
     assert.deepEqual([await sayi(ara, kc), await sayi(mm, kc)], [2, 1], 'son adımda düşüş: ürün girişi ve YM sarfı geri alınır');
+    // 3320 a (madde 5, Risk E2 ve E4): ara çıktı emrin malzeme fişlerine girer: YM üretimden giriş fişinde giriş, sarf fişinde sarf satırıdır;
+    // geri alınan sayım fişte net satırdan düşer. Hammadde ve ürün satırları eskisi gibi.
+    const fisler = await o().vt.sorgu<{ id: number; tur: string }>('SELECT id, tur FROM stok_malzeme_fisi WHERE uretim_emri_id = $1', [e]);
+    const satirlar = await o().vt.tx((db) => sorgular.malzemeFisiSatirlari(db, fisler.map((f) => f.id)));
+    const net = (tur: string, m: number) => satirlar.filter((x) => x.malzemeId === m && fisler.find((f) => f.id === x.fisId)?.tur === tur).reduce((t, x) => t + Number(x.miktar), 0);
+    assert.deepEqual([net('uretim_girisi', ara), net('sarf', ara), net('uretim_girisi', mm), net('sarf', hm)], [3, 1, 1, 6],
+      'UG: 3 YM giriş, 1 ürün; SR: 1 YM sarf (2 sayıldı, 1 geri alındı), 6 kg HM');
     adimStatusuCozucusuKaydet(async () => null);
     adimCiktisiCozucusuKaydet(async () => null);
   });

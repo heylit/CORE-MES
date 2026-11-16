@@ -392,7 +392,7 @@ export function rotasizMamuller(bilesenMamulleri: readonly number[], rotasiOlanl
 
 /* ---------------- akış (RT-22, RT-45, RT-46) ---------------- */
 
-export type Cikti = { tur: 'ara-hal'; opNo: number } | { tur: 'urun' };
+export type Cikti = { tur: 'ara-hal'; opNo: number } | { tur: 'kart'; malzemeId: number } | { tur: 'urun' };
 
 export interface AkisAdimi {
   opNo: number;
@@ -402,11 +402,14 @@ export interface AkisAdimi {
 
 // Adımlar sıralı gelir. Bağımsız adım önceki adımı beklemez ve tüketmez; bekleyen ve akışlı adım zincirdeki önceki
 // adımın çıktısını ve aradaki bağımsız adımların çıktısını tüketir. Son adımın çıktısı ürünün kendisidir.
-// Dallı rotada (1248 a) adım öncüllerinin çıktısını tüketir.
-export function akisiCikar(adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; dal?: string | null; birlesen?: readonly string[] }[]): AkisAdimi[] {
+// Dallı rotada (1248 a) adım öncüllerinin çıktısını tüketir. Ara adımın çıktı kartı (3320 a) varsa çıktı o karttır.
+export function akisiCikar(
+  adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; dal?: string | null; birlesen?: readonly string[]; ciktiMalzemeId?: number | null }[],
+): AkisAdimi[] {
   const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik, devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
   return adimlar.map((a, i) => {
-    const cikti: Cikti = i === adimlar.length - 1 ? { tur: 'urun' } : { tur: 'ara-hal', opNo: a.opNo };
+    const kart = a.ciktiMalzemeId ?? null;
+    const cikti: Cikti = i === adimlar.length - 1 ? { tur: 'urun' } : kart !== null ? { tur: 'kart', malzemeId: kart } : { tur: 'ara-hal', opNo: a.opNo };
     const o = onculler[i];
     if (o) return { opNo: a.opNo, tuketir: o.map((x) => x.opNo), cikti };
     if (i === 0 || a.bagimlilik === 'bagimsiz') return { opNo: a.opNo, tuketir: [], cikti };
@@ -419,6 +422,38 @@ export function akisiCikar(adimlar: readonly { opNo: number; bagimlilik: Bagimli
     }
     return { opNo: a.opNo, tuketir, cikti };
   });
+}
+
+/* ---------------- ara adım çıktısı (3320 a) ---------------- */
+
+export const CIKTI_TURLERI: readonly string[] = ['yarimamul', 'mamul'];
+export interface CiktiKarti { tur: string; aktif: boolean; ad: string; rotali: boolean }
+export interface CiktiHatasi { ileti: string; alan: string }
+// Ara adımın çıktı kartı: son adımda olmaz (son adımın çıktısı ürünün kendisidir); yalnız yarı mamul ya da mamul; ürünün kendisi, rotada
+// giren olan ya da kendi rotası olan kart olmaz; bir kart rotada tek adımın çıktısıdır. Yeni seçilen kart kullanımda olmalı; var olan
+// seçimde pasif kart taslakta kalır (onayda yeniden denetlenir, yeniSecim tümü sayılır). Sıra kayıttaki sıradır.
+export function ciktiDenetle(
+  adimlar: readonly { ciktiMalzemeId: number | null; bilesenler: readonly { malzemeId: number }[] }[],
+  g: { urunId: number; kartlar: ReadonlyMap<number, CiktiKarti>; yeniSecim: (i: number) => boolean },
+): CiktiHatasi | null {
+  const girenler = new Set(adimlar.flatMap((a) => a.bilesenler.map((b) => b.malzemeId)));
+  const gorulen = new Set<number>();
+  for (const [i, a] of adimlar.entries()) {
+    const m = a.ciktiMalzemeId;
+    if (m === null) continue;
+    const alan = `adimlar.${i}.ciktiMalzemeId`;
+    if (i === adimlar.length - 1) return { ileti: 'Son adımın çıktısı ürünün kendisidir; çıktı kartı yalnız ara adımda seçilir.', alan };
+    if (m === g.urunId) return { ileti: 'Rotanın kendi ürünü ara adımın çıktısı olamaz.', alan };
+    const k = g.kartlar.get(m);
+    if (!k) return { ileti: 'Çıktı kartı bulunamadı.', alan };
+    if (!CIKTI_TURLERI.includes(k.tur)) return { ileti: `${k.ad}: ara adımın çıktısı yalnız yarı mamul ya da mamul kartı olur.`, alan };
+    if (g.yeniSecim(i) && !k.aktif) return { ileti: `${k.ad} kartı kullanımda değil.`, alan };
+    if (k.rotali) return { ileti: `${k.ad} kartının kendi rotası var; iki yerde üretilmesin diye çıktı seçilemez. Kartı adıma giren olarak ekleyin.`, alan };
+    if (girenler.has(m)) return { ileti: `${k.ad} bu rotada giren; aynı kart hem giren hem çıktı olamaz.`, alan };
+    if (gorulen.has(m)) return { ileti: `${k.ad} bu rotada başka bir adımın da çıktısı; bir kart tek adımın çıktısı olur.`, alan };
+    gorulen.add(m);
+  }
+  return null;
 }
 
 /* ---------------- miktar ve süre (RT-26, RT-27, RT-35, RT-36, RT-41, RT-42) ---------------- */

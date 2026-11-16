@@ -69,6 +69,20 @@ describe('emir malzeme ihtiyacı (2486-8, 461 b)', () => {
     assert.equal(satir(fazla, 101, 2)?.brut, 6, 'artan 4 sonraki emre');
   });
 
+  test('3320 a (T10, K4): çıktısı YM kartı olan adımda kartın serbest stoğu ara stok gibi düşülür; stok yoksa, azsa, çoksa', () => {
+    const g = (ymStok: number | null) => girdi(
+      { items: [kart(1, 'mamul'), kart(2, 'ham'), kart(3, 'yari', ymStok)], routes: { 1: [adim(1, 10, { ins: [{ itemId: '2', qty: 1, scrap: 0 }], ciktiId: '3' }), adim(1, 20, { ciktiId: null })] },
+        orders: [emir(100, 1, 10, { priority: 1 }), emir(101, 1, 10)] },
+      { kopyalar: new Map([[100, [{ malzemeNo: 2, opNo: 10, brut: '10' }]], [101, [{ malzemeNo: 2, opNo: 10, brut: '10' }]]]) },
+    );
+    const yok = emirMalzemeIhtiyaclari(g(null));
+    assert.deepEqual([satir(yok, 100, 2)?.brut, satir(yok, 101, 2)?.brut], [10, 10], 'stok yok: ihtiyaç değişmez');
+    const az = emirMalzemeIhtiyaclari(g(4));
+    assert.deepEqual([satir(az, 100, 2)?.brut, satir(az, 101, 2)?.brut], [6, 10], 'iki emir, 4 adet YM ilk emirde biter');
+    const cok = emirMalzemeIhtiyaclari(g(14));
+    assert.deepEqual([satir(cok, 100, 2), satir(cok, 101, 2)?.brut], [undefined, 6], 'artan YM sonraki emre');
+  });
+
   test('kol emri ve kolu olan emir ara stok kullanmaz; çok katmanlı emrin düğüm ürünü yeniden açılmaz', () => {
     const r = emirMalzemeIhtiyaclari(girdi(
       {

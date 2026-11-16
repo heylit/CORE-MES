@@ -6,7 +6,7 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { AdimEkipmaniGovdesi, FarkCevabi, KaydetGovdesiCikti, KomutCevabi, RevizyonAyrintisi, KopyaIstegiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { operasyonluAktifKartlar } from '../../malzemeler/disari.ts';
 import { aletTurleri } from '../../kalibrasyon/disari.ts';
-import { TASLAK_AC, kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
+import { TASLAK_AC, ciktiDenetle, type CiktiHatasi, type CiktiKarti, kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
 import type { FarkAdimi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import { bekleyenEmirlereUygula } from './bekleyen-emir.ts';
@@ -101,6 +101,18 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
     hatalar.push(`Bileşen mamul ya da yarımamulün yürürlükte rotası yok: ${eksik.map((e) => kartlar.get(e)?.stokKodu ?? kartlar.get(e)?.ad ?? String(e)).join(', ')}`);
   }
   await topla(() => donguDenetle(db, r.malzemeId, bilesenler));
+  // 3320 a: çıktı kuralları onayda yeniden denetlenir (kart bu arada pasife alınmış ya da rotası açılmış olabilir).
+  const ciktiHatasi = await ciktilariDenetle(db, r.malzemeId, icerik.adimlar.map((a) => ({
+    ciktiMalzemeId: a.ciktiMalzemeId, bilesenler: icerik.bilesenler.filter((b) => b.adimId === a.id),
+  })), () => true);
+  if (ciktiHatasi) hatalar.push(ciktiHatasi.ileti);
+  // 3320 a (K6): başka rotada ara adım çıktısı olan kartın kendi rotası onaylanmaz; parçanın iki üretim kaynağı olmaz.
+  const kullananlar = await s.ciktiOlarakKullananlar(db, r.malzemeId);
+  if (kullananlar.length > 0) {
+    const urunler = await urunOzetleri(db, [...new Set(kullananlar.map((x) => x.urunId))]);
+    const yer = kullananlar.map((x) => `${urunler.get(x.urunId)?.stokKodu ?? String(x.urunId)} Rev ${x.harf} OP ${String(x.opNo)}`).join(', ');
+    hatalar.push(`Bu kart başka rotada ara adımın çıktısı (${yer}). Önce orada çıktıyı kaldırın, kartı giren olarak ekleyin.`);
+  }
   const ileti = topluHataIletisi(hatalar);
   if (ileti !== null) throw gecersiz(ileti);
 }
@@ -133,11 +145,25 @@ export async function karttanTaslaklar(db: Db, gunluk: Gunluk): Promise<{ acilan
   }
   for (const k of await operasyonluAktifKartlar(db)) {
     if (rotali.has(k.no)) continue;
+    // 3320 a (K6): ara adım çıktısı olan karta kendiliğinden rota açılmaz.
+    if ((await s.ciktiOlarakKullananlar(db, k.no)).length > 0) continue;
     const sonuc = await kayitNoktasi(db, () => taslagiAc(db, k.kisiId, k.no, { tur: 'kart' }));
     if (sonuc.tamam) acilan += 1;
     else gunluk.uyar(`Rota: kart ${k.no} için taslak açılamadı: ${sonuc.hata.message}`);
   }
   return { acilan };
+}
+
+// Ara adım çıktısı (3320 a): kartlar ve kendi rotası olanlar okunur, kural kurallar.ts ciktiDenetle'dedir.
+async function ciktilariDenetle(
+  db: Db, urunId: number, adimlar: readonly { ciktiMalzemeId: number | null; bilesenler: readonly { malzemeId: number }[] }[], yeniSecim: (i: number) => boolean,
+): Promise<CiktiHatasi | null> {
+  const idler = [...new Set(adimlar.flatMap((a) => (a.ciktiMalzemeId === null ? [] : [a.ciktiMalzemeId])))];
+  if (idler.length === 0) return null;
+  const ozetler = await urunOzetleri(db, idler);
+  const rotali = await s.iptalsizRotasiOlanlar(db, idler);
+  const kartlar = new Map<number, CiktiKarti>([...ozetler].map(([k, o]) => [k, { tur: o.tur, aktif: o.onayDurumu === 'aktif', ad: o.stokKodu ?? o.ad, rotali: rotali.has(k) }]));
+  return ciktiDenetle(adimlar, { urunId, kartlar, yeniSecim });
 }
 
 export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: KaydetGovdesiCikti): Promise<KomutCevabi> {
@@ -229,12 +255,20 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
       ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama, adet: x.adet, asama: x.asama }
       : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama, adet: 1, asama: 'ayar_isleme' as const }))
       ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })));
-    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman };
+    // Çıktıyı göndermeyen (alanı bilmeyen) ekran adımın kayıtlı çıktı kartını silmesin (3320 a).
+    const ciktiMalzemeId = a.ciktiMalzemeId === undefined ? eski?.ciktiMalzemeId ?? null : a.ciktiMalzemeId;
+    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman, ciktiMalzemeId };
   });
   const carpanHatasi = dalli.findIndex((a) => a.dal === null && a.adetCarpani !== null);
   if (carpanHatasi >= 0) throw dogrulama('Adet çarpanı yalnız dal adımında girilir; ana hat bir mamul içindir.', `adimlar.${carpanHatasi}.adetCarpani`);
   const dalHatasi = dalDenetle(dalli);
   if (dalHatasi) throw dogrulama(dalHatasi.ileti, dalHatasi.alan);
+  const eskiCikti = new Map(mevcut.adimlar.map((m) => [m.opNo, m.ciktiMalzemeId]));
+  const ciktiHatasi = await ciktilariDenetle(db, r.malzemeId, dalli, (i) => {
+    const a = dalli[i];
+    return a === undefined || a.opNo === null || eskiCikti.get(a.opNo) !== a.ciktiMalzemeId;
+  });
+  if (ciktiHatasi) throw dogrulama(ciktiHatasi.ileti, ciktiHatasi.alan);
   await s.icerikSil(db, id);
   await adimlariYaz(db, id, r.malzemeId, dalli);
   return cevap(id, 'taslak', await s.kaydetYaz(db, id, govde.aciklama === '' ? null : govde.aciklama, kullanici.id));

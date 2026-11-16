@@ -694,10 +694,13 @@ export function sayimBelgesiTablodan(
     const { outItem: _cikti, outStatus: _statu, ...geri } = adim;
     const op = adimOpNo(adim);
     const b = op === null ? undefined : bag.get(op);
+    // 3320 a: rota adımında çıktı yazılıysa (ciktiId alanı var) çıktı kartı oradan; eski bağ yalnız çıktısı hiç yazılmamış revizyonda okunur.
+    const rotadan = 'ciktiId' in adim;
+    const kart = rotadan ? (metinMi(adim['ciktiId']) ? adim['ciktiId'] : null) : b?.ciktiMalzemeId != null ? String(b.ciktiMalzemeId) : null;
     return {
       ...geri,
-      ...(b?.ciktiMalzemeId != null ? { outItem: String(b.ciktiMalzemeId) } : {}),
-      ...(b?.ciktiStatu != null ? { outStatus: b.ciktiStatu } : {}),
+      ...(kart !== null ? { outItem: kart } : {}),
+      ...((!rotadan || kart === null) && b?.ciktiStatu != null ? { outStatus: b.ciktiStatu } : {}),
     };
   });
   rotalar[anahtar] = { ...(kayitli ?? {}), steps };
@@ -944,6 +947,7 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     dal: a.dal,
     birlesen: a.birlesen,
     adetCarpani: a.adetCarpani,
+    ...(a.ciktiYazili ? { ciktiId: kimlik(a.ciktiMalzemeId) } : {}),
     onculler: a.onculler === null ? null : a.onculler.flatMap((o) => {
       const seq = seqOf.get(o.opNo);
       return seq === undefined ? [] : [{ seq, tur: o.tur }];
@@ -962,6 +966,21 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     ins: a.bilesenler.map((b) => ({ itemId: String(b.malzemeId), qty: Number(b.miktar), scrap: Number(b.fireYuzde) })),
     outs: a.yanUrunler.map((y) => ({ itemId: String(y.malzemeId), qty: Number(y.miktar), kind: 'yan' as const })),
   };
+}
+
+// 3320 a (Risk K2): çıktısı rota modülünde hiç yazılmamış revizyonun eski çıktı kartı (recete_rota_adim_bagi) ekrana adımın çıktısı olarak
+// konur; ekran kaydedince seçim rota modülüne açıkça yazılır, eski bağ kaybolmaz. Çıktısı yazılmış revizyon ve son adım değişmez.
+export function eskiCiktilariYerlestir<R extends DurumRotaRevizyonuGirdisi>(revizyonlar: readonly R[], baglar: readonly AdimBagiSatiri[]): R[] {
+  const bag = new Map(baglar.flatMap((b) => (b.ciktiMalzemeId === null ? [] : [[`${String(b.revizyonId)}:${String(b.opNo)}`, b.ciktiMalzemeId] as const])));
+  if (bag.size === 0) return [...revizyonlar];
+  return revizyonlar.map((r) => {
+    if (r.adimlar.some((a) => a.ciktiYazili)) return r;
+    const son = r.adimlar.length - 1;
+    return { ...r, adimlar: r.adimlar.map((a, i) => {
+      const k = i === son ? undefined : bag.get(`${String(r.id)}:${String(a.opNo)}`);
+      return k === undefined ? a : { ...a, ciktiMalzemeId: k, ciktiYazili: true };
+    }) };
+  });
 }
 
 // Prototip adım sırasını `seq` ile tutar ve sürükleyince 10, 20, 30... diye yeniden numaralar: `seq` adımın sırasıdır, adımın kimliği
@@ -1130,14 +1149,17 @@ export function emirMalzemeIhtiyaclari(g: IhtiyacGirdisi): EmirIhtiyacSonucu[] {
         for (const c of s.outs) yan.set(c.itemId, (yan.get(c.itemId) ?? 0) + carpan * c.qty);
       });
     };
-    // Ara stok son adımdan geriye: adımın çıktısı olarak bekleyen sonraki adımın girdisini karşılar.
+    // Ara stok son adımdan geriye: adımın çıktısı olarak bekleyen sonraki adımın girdisini karşılar. Çıktısı kart olan adımda (3320 a)
+    // bekleyen, kartın serbest stoğudur; aynı havuzdan düşülür ki kart başka yerde de girense iki kez sayılmasın.
     // Dallı rotada ara stok düşülmez: geri yürüyüş tek hattır (VARSAYIM, ekranla aynı kapsam).
     const araStokDus = (urunId: string, sirali: readonly IhtiyacAdimi[], yapilacak: number[]): void => {
-      if (araHavuz.size === 0 || dalliMi(sirali)) return;
+      if (dalliMi(sirali) || (araHavuz.size === 0 && !sirali.some((x) => (x.ciktiId ?? null) !== null))) return;
       for (let k = sirali.length - 2; k >= 0; k--) {
-        const a = `${urunId}|${sirali[k]?.id ?? ''}`;
-        const kullan = Math.min(araHavuz.get(a) ?? 0, yapilacak[k + 1] ?? 0);
-        if (kullan > IHTIYAC_EPS) araHavuz.set(a, (araHavuz.get(a) ?? 0) - kullan);
+        const kart = sirali[k]?.ciktiId ?? null;
+        const kaynak = kart === null ? araHavuz : havuz;
+        const a = kart ?? `${urunId}|${sirali[k]?.id ?? ''}`;
+        const kullan = Math.min(kaynak.get(a) ?? 0, yapilacak[k + 1] ?? 0);
+        if (kullan > IHTIYAC_EPS) kaynak.set(a, (kaynak.get(a) ?? 0) - kullan);
         const ret = Math.min(0.95, Math.max(0, (sirali[k]?.rejectPct ?? 0) / 100));
         yapilacak[k] = Math.max(0, (yapilacak[k + 1] ?? 0) - Math.max(0, kullan)) / (1 - ret);
       }

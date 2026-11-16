@@ -149,6 +149,9 @@ export interface DurumRotaAdimi {
   adetCarpani: number | null;
   birlesen: string[];
   onculler: Oncul[] | null;
+  // Ara adımın çıktı kartı (3320 a); null statülü ara hâl. ciktiYazili false ise revizyon bu bilgi saklanmadan önce yazılmıştır.
+  ciktiMalzemeId: number | null;
+  ciktiYazili: boolean;
 }
 
 export interface DurumRotaRevizyonu {
@@ -189,6 +192,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null,
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
         yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
         hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani, onculler: onculler[i] ?? null,
+        ciktiMalzemeId: a.ciktiMalzemeId, ciktiYazili: a.ciktiYazili,
       })),
     });
   }
