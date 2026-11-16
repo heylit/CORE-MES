@@ -39,7 +39,9 @@ export type BildirimOlayi =
 
 // Çağıranın transaction'ında yazar (ADR 0006): olayı doğuran yazma geri alınırsa bildirim de kalmaz. Yazılan alıcı sayısını döner.
 // BIL-10: türde alıcı seçimi varsa seçilen rollerdeki etkin girişli kişiler ve seçilen kişiler; seçim yoksa null (işlem kuralı).
+// Kayda bağlı türde (alıcı listesi dışı) eski bir kayıtlı seçim okunmaz: alıcıyı çağıran verir, ekrandan düzeltilemeyen kayıt onu susturmaz.
 async function ayarliAlicilar(db: Db, tur: BildirimTuru): Promise<number[] | null> {
+  if (!(ALICI_AYARLI_TURLER as readonly string[]).includes(tur)) return null;
   const ayar = await s.turAyari(db, tur);
   if (ayar === null) return null;
   return [...await rollerdekiKisiler(db, ayar.rolIdleri), ...ayar.kisiIdleri];

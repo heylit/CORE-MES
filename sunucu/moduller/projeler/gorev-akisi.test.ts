@@ -367,6 +367,14 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     await gorevAc(p, { sorumluKisiId: kalite1.id });
     assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'yalnız atanana gider');
     assert.ok(await okunmamis(kalite1.id, 'projeler.gorev-atandi') >= 1, 'atanan kişiye gider');
+    // Tür eskiden alıcı ayarlıydı: kalmış bir kayıtlı seçim (yalnız kalite2) atananı susturmaz.
+    await vt().sorgu("INSERT INTO bildirim_tur_ayari (tur) VALUES ('projeler.gorev-atandi')");
+    await vt().sorgu("INSERT INTO bildirim_tur_kisisi (tur, kisi_id) VALUES ('projeler.gorev-atandi', $1)", [kalite2.id]);
+    const p2 = await projeAc();
+    const kalite1Once = await okunmamis(kalite1.id, 'projeler.gorev-atandi');
+    await gorevAc(p2, { sorumluKisiId: kalite1.id });
+    assert.equal(await okunmamis(kalite1.id, 'projeler.gorev-atandi'), kalite1Once + 1, 'eski alıcı kaydı okunmaz');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'kayıttaki kişiye gitmez');
     // 3303-2 a: atama bildirimi "Okudum, anladım" denene kadar kalır; onaysız arşive kaldırılamaz.
     const satir = await vt().tek<{ id: number; onay: boolean }>(
       "SELECT id, onay_istenir AS onay FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi' ORDER BY id DESC LIMIT 1", [kalite1.id],
