@@ -7,7 +7,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
-  SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
+  SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
@@ -16,7 +16,7 @@ import { malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disa
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
-  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
+  formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -227,6 +227,14 @@ export async function notluGecis(
     hedef: teklifHedefi(komut), surum: g.surum, kisiId: kullanici.id, not: g.not, kabulSurumu: null, siparisId: null,
   }));
   if (komut === 'red') await yerTutaniKaldir(db, id);
+  return teklifAyrintisi(db, id);
+}
+
+// 3328: teklife özel form metni; fiyat ve kalem değişmez, yalnız basılan metin. Kabul, red ve siparişte kapalı; null şablona döner.
+export async function formMetniKaydet(db: Db, kullanici: Kullanici, id: number, g: { surum: number; metin: TeklifFormuMetni | null }): Promise<TeklifAyrintisi> {
+  const ret = formMetniReddi((await kilitle(db, id)).durum);
+  if (ret !== null) throw gecersiz(ret);
+  await surumluYaz(db, id, () => sorgular.teklifFormMetniYaz(db, id, g.metin, g.surum, kullanici.id));
   return teklifAyrintisi(db, id);
 }
 

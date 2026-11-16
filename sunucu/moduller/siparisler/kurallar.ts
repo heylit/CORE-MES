@@ -1,7 +1,7 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
-import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, teklifFormuMetniSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu, TeklifFormuMetni } from '#paylasilan/sozlesme/siparisler.ts';
 import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
@@ -636,6 +636,16 @@ export function kurumIcerigi(ham: unknown): TeklifFormuKurumu {
   return s.success ? s.data : BOS_KURUM;
 }
 const BOS_ICERIK: TeklifFormuIcerigi = { baslik: 'TEKLİF FORMU', giris: '', sartlar: [], imza1: '', imza2: '', alt: '' };
+// Kabul edilen, reddedilen ya da siparişe dönen teklifin basılı metni müşterinin gördüğüdür; sonradan değişmez (değişiklik yeni teklifle).
+export const FORM_METNI_KAPALI = 'Kabul edilmiş, reddedilmiş ya da siparişe dönmüş teklifin form metni değişmez.';
+export function formMetniReddi(durum: TeklifDurumu): string | null {
+  return durum === 'kabul' || durum === 'red' || durum === 'siparis' ? FORM_METNI_KAPALI : null;
+}
+// Saklanan teklif form metni şemaya uymazsa yok sayılır, şablon basılır.
+export function formMetni(ham: unknown): TeklifFormuMetni | null {
+  const s = teklifFormuMetniSemasi.safeParse(ham);
+  return s.success ? s.data : null;
+}
 export function sablonIcerigi(ham: unknown): TeklifFormuIcerigi {
   const s = teklifFormuIcerikSemasi.safeParse(ham);
   return s.success ? s.data : BOS_ICERIK;

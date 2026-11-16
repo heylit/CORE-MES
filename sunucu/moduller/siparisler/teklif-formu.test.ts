@@ -96,11 +96,15 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
   test('şablon kaydedilir ve sürüm ilerler; eski sürümle kayıt 409, boş başlık 400', async () => {
     const s = (await form()).sablonlar.find((x) => x.ad === 'Kısa form');
     assert.ok(s);
-    const icerik = { ...s.icerik, baslik: 'FİYAT TEKLİFİ', sartlar: [...s.icerik.sartlar, 'ORN deneme şartı'] };
+    const icerik = {
+      ...s.icerik, baslik: 'FİYAT TEKLİFİ', sartlar: [...s.icerik.sartlar, 'ORN deneme şartı'],
+      belge: { no: 'ORN-F-01', yayin: '01.01.2026', revTarihi: '', revNo: '0' },
+    };
     const c = await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, { surum: s.surum, ad: s.ad, dil: s.dil, icerik });
     assert.equal(c.statusCode, 200, c.body);
     const yeni = c.json<TeklifFormuCevabi>().sablonlar.find((x) => x.id === s.id);
     assert.equal(yeni?.icerik.baslik, 'FİYAT TEKLİFİ');
+    assert.deepEqual(yeni?.icerik.belge, icerik.belge);
     assert.equal(yeni?.surum, s.surum + 1);
     assert.equal((await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, { surum: s.surum, ad: s.ad, dil: s.dil, icerik })).statusCode, 409);
     assert.equal((await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, { surum: s.surum + 1, ad: s.ad, dil: s.dil, icerik: { ...icerik, baslik: ' ' } })).statusCode, 400);
@@ -167,5 +171,44 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(yonetici, `${yol}?surumNo=7&kdvOrani=20`)).statusCode, 404);
     assert.equal((await oku(yonetici, `${yol}?surumNo=1&kdvOrani=abc`)).statusCode, 400);
     assert.equal((await oku(yonetici, '/siparisler/teklifler/999999/form?surumNo=1&kdvOrani=20')).statusCode, 404);
+  });
+
+  test('3328 teklife özel form metni: teklifi yazan kaydeder, form verisiyle gelir, sürüm ilerler; null şablona döner; eski sürüm 409, boş başlık 400, yalnız gören 403, kabulden sonra 422', async () => {
+    const firma = await gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'ORN Müşteri Metin', tur: 'musteri' });
+    const firmaId = firma.json<{ firma: { id: number } }>().firma.id;
+    const t = (await gonder(yonetici, '/siparisler/teklifler/ekle', { firmaId, baslik: 'Metin denemesi', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: null, tanim: 'ORN parça', miktar: '2' }] })).json<TeklifAyrintisi>();
+    const v = (await gonder(yonetici, `/siparisler/teklifler/${t.id}/surum-ver`, { surum: t.surum, fiyatlar: [{ satirId: t.satirlar[0]?.id, birimFiyat: '10' }], iskontoOrani: '0' })).json<TeklifAyrintisi>();
+    const yol = `/siparisler/teklifler/${t.id}/form?surumNo=1&kdvOrani=20`;
+    assert.equal((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, null);
+    const sablon = (await form()).sablonlar.find((s) => s.varsayilan)!;
+    const metin = { dil: sablon.dil, icerik: { ...sablon.icerik, baslik: 'ORN ÖZEL TEKLİF', sartlar: ['ORN şart'] } };
+    const kayit = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: v.surum, metin });
+    assert.equal(kayit.statusCode, 200, kayit.body);
+    const k = kayit.json<TeklifAyrintisi>();
+    assert.equal(k.surum, v.surum + 1);
+    assert.deepEqual((await oku(satis, yol)).json<TeklifFormuVerisiCevabi>().metin, metin);
+    // Şablon sonradan değişse de kayıtlı metin değişmez; fiyat ve sürümler değişmez.
+    assert.deepEqual(k.surumler, v.surumler);
+    assert.equal((await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: v.surum, metin })).statusCode, 409);
+    assert.equal((await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: k.surum, metin: { ...metin, icerik: { ...metin.icerik, baslik: ' ' } } })).statusCode, 400);
+    assert.equal((await gonder(operator, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: k.surum, metin })).statusCode, 403);
+    // Teklifi görüp yazamayan (depo) metni değiştiremez.
+    assert.equal((await oku(depo, `/siparisler/teklifler/${t.id}`)).statusCode, 200);
+    assert.equal((await gonder(depo, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: k.surum, metin: { ...metin, icerik: { ...metin.icerik, baslik: 'İZİNSİZ' } } })).statusCode, 403);
+    assert.deepEqual((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, metin);
+    const geri = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: k.surum, metin: null });
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.equal((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, null);
+    assert.equal((await gonder(yonetici, '/siparisler/teklifler/999999/form-metni-kaydet', { surum: 1, metin: null })).statusCode, 404);
+    // Kabul edilen teklifin basılı metni değişmez.
+    const g = geri.json<TeklifAyrintisi>();
+    const kabul = await gonder(yonetici, `/siparisler/teklifler/${t.id}/kabul`, { surum: g.surum, surumNo: 1 });
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    const kapali = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: kabul.json<TeklifAyrintisi>().surum, metin });
+    assert.equal(kapali.statusCode, 422, kapali.body);
+    assert.equal((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, null);
+    // Kısıt: metin nesne olmalı.
+    await assert.rejects(o().vt.tx((db) => db.sorgu("UPDATE siparisler_teklif SET form_metni = '[]'::jsonb WHERE id = $1", [t.id])),
+      (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_form_metni');
   });
 });

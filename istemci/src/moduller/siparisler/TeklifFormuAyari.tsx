@@ -6,7 +6,8 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { TeklifFormuKagidi, type FormVerisi } from './TeklifFormuKagidi.tsx';
-import { FORM_ALANLARI, SART_EN_COK, useKagitOlcegi } from './teklif-formu.ts';
+import { FormMetniAlanlari, SartAlanlari } from './FormMetniAlanlari.tsx';
+import { useKagitOlcegi } from './teklif-formu.ts';
 import { surumCakismasiMi, yazmaIletisi } from './yazma.ts';
 import './teklif-formu.css';
 
@@ -28,6 +29,8 @@ const ORNEK: FormVerisi = {
   toplam: { araToplam: '51660.00', iskontoTutari: '2583.00', kdvHaric: '49077.00', kdvOrani: '20', kdvTutari: '9815.40', genelToplam: '58892.40' },
 };
 
+const BOS_BELGE = { no: '', yayin: '', revTarihi: '', revNo: '' };
+
 const taslakOf = (s: TeklifFormuSablonu): Taslak => ({ ad: s.ad, dil: s.dil, icerik: { ...s.icerik, sartlar: [...s.icerik.sartlar] } });
 const ayni = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -41,8 +44,6 @@ export function TeklifFormuAyari() {
   const [seciliId, seciliIdYaz] = useState<number | null>(null);
   const [taslaklar, taslaklarYaz] = useState<Record<number, Taslak>>({});
   const [kurumTaslak, kurumTaslakYaz] = useState<TeklifFormuKurumu | null>(null);
-  const [yeniSart, yeniSartYaz] = useState('');
-  const [imlec, imlecYaz] = useState<{ alan: 'giris' | 'alt'; konum: number } | null>(null);
   const [kopyaAdi, kopyaAdiYaz] = useState<string | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
 
@@ -97,34 +98,14 @@ export function TeklifFormuAyari() {
   const degisti = !ayni(taslak, kayitli);
   const taslakYaz = (f: (t: Taslak) => Taslak) => taslaklarYaz((h) => ({ ...h, [sablon.id]: f(h[sablon.id] ?? kayitli) }));
   const icerikYaz = (parca: Partial<TeklifFormuIcerigi>) => taslakYaz((t) => ({ ...t, icerik: { ...t.icerik, ...parca } }));
+  const belge = taslak.icerik.belge ?? BOS_BELGE;
+  const belgeYaz = (alan: keyof typeof BOS_BELGE, deger: string) => icerikYaz({ belge: { ...belge, [alan]: deger } });
   const adHatasi = taslak.ad.trim() === '' ? 'Şablon adı boş olamaz.' : undefined;
   const baslikHatasi = taslak.icerik.baslik.trim() === '' ? 'Form başlığı boş olamaz.' : undefined;
 
   const kurum = kurumTaslak ?? ayar.data.kurum;
   const kurumDegisti = kurumTaslak !== null && !ayni(kurumTaslak, ayar.data.kurum);
   const kurumAlanYaz = (alan: keyof TeklifFormuKurumu, deger: string) => kurumTaslakYaz({ ...kurum, [alan]: deger });
-
-  const alanEkle = (alan: string) => {
-    const hedef = imlec?.alan ?? 'giris';
-    const metin = taslak.icerik[hedef];
-    const konum = Math.min(imlec?.konum ?? metin.length, metin.length);
-    icerikYaz({ [hedef]: `${metin.slice(0, konum)}${alan}${metin.slice(konum)}` });
-    imlecYaz({ alan: hedef, konum: konum + alan.length });
-  };
-  const sartTasi = (i: number, yon: -1 | 1) => {
-    const s = [...taslak.icerik.sartlar];
-    const j = i + yon;
-    if (j < 0 || j >= s.length) return;
-    [s[i], s[j]] = [s[j] ?? '', s[i] ?? ''];
-    icerikYaz({ sartlar: s });
-  };
-  const sartEkle = () => {
-    const metin = yeniSart.trim();
-    if (metin === '' || taslak.icerik.sartlar.length >= SART_EN_COK) return;
-    icerikYaz({ sartlar: [...taslak.icerik.sartlar, metin] });
-    yeniSartYaz('');
-  };
-  const imlecTut = (alan: 'giris' | 'alt') => (o: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => imlecYaz({ alan, konum: o.currentTarget.selectionStart ?? o.currentTarget.value.length });
 
   return (
     <div className="tc-tf-duzen">
@@ -180,58 +161,23 @@ export function TeklifFormuAyari() {
             <Girdi etiket="Şablon adı" required autoComplete="off" maxLength={80} value={taslak.ad} hata={adHatasi} onChange={(o) => taslakYaz((t) => ({ ...t, ad: o.target.value }))} />
             <Secim etiket="Dil" secenekler={DILLER} value={taslak.dil} onChange={(o) => taslakYaz((t) => ({ ...t, dil: o.target.value === 'en' ? 'en' : 'tr' }))} />
           </div>
-          <Girdi etiket="Form başlığı" required autoComplete="off" maxLength={80} value={taslak.icerik.baslik} hata={baslikHatasi} onChange={(o) => icerikYaz({ baslik: o.target.value })} />
-          <CokSatir
-            etiket="Giriş metni"
-            ipucu="Boş bırakılırsa basılmaz."
-            rows={4}
-            maxLength={1000}
-            value={taslak.icerik.giris}
-            onChange={(o) => { icerikYaz({ giris: o.target.value }); imlecTut('giris')(o); }}
-            onSelect={imlecTut('giris')}
-          />
-          <div className="tc-tf-cipler" role="group" aria-label="Alan ekle">
-            {FORM_ALANLARI.map((a) => <button key={a} type="button" className="tc-tf-cip" onClick={() => alanEkle(a)}>{a}</button>)}
-          </div>
-          <p className="tc-tf-ipucu">Alan, imlecin durduğu yere eklenir; basarken teklifin bilgisiyle dolar.</p>
+          <FormMetniAlanlari icerik={taslak.icerik} degistir={icerikYaz} />
+        </Kart>
+
+        <Kart baslik="Doküman kutusu" simge="file">
+          <p className="tc-tf-ipucu">Kalite sisteminin doküman bilgisi; antetin sağında basılır. Hepsi boşsa kutu basılmaz.</p>
           <div className="tc-tf-iki">
-            <Girdi etiket="İmza 1 (firma)" autoComplete="off" maxLength={60} value={taslak.icerik.imza1} onChange={(o) => icerikYaz({ imza1: o.target.value })} />
-            <Girdi etiket="İmza 2 (müşteri)" autoComplete="off" maxLength={60} value={taslak.icerik.imza2} onChange={(o) => icerikYaz({ imza2: o.target.value })} />
+            <Girdi etiket="Doküman no" autoComplete="off" maxLength={40} value={belge.no} onChange={(o) => belgeYaz('no', o.target.value)} />
+            <Girdi etiket="Yayın tarihi" autoComplete="off" maxLength={40} value={belge.yayin} onChange={(o) => belgeYaz('yayin', o.target.value)} />
           </div>
-          <Girdi
-            etiket="Alt bilgi"
-            autoComplete="off"
-            maxLength={200}
-            value={taslak.icerik.alt}
-            onChange={(o) => { icerikYaz({ alt: o.target.value }); imlecTut('alt')(o); }}
-            onSelect={imlecTut('alt')}
-          />
+          <div className="tc-tf-iki">
+            <Girdi etiket="Revizyon tarihi" autoComplete="off" maxLength={40} value={belge.revTarihi} onChange={(o) => belgeYaz('revTarihi', o.target.value)} />
+            <Girdi etiket="Revizyon no" autoComplete="off" maxLength={20} value={belge.revNo} onChange={(o) => belgeYaz('revNo', o.target.value)} />
+          </div>
         </Kart>
 
         <Kart baslik={`Şartlar (${String(taslak.icerik.sartlar.length)})`} simge="list">
-          {taslak.icerik.sartlar.length > 0 && (
-            <ol className="tc-tf-sartlar-liste">
-              {taslak.icerik.sartlar.map((s, i) => (
-                <li key={`${String(i)}-${s}`}>
-                  <span>{s}</span>
-                  <Dugme simge="up" aria-label={`${String(i + 1)}. şartı yukarı al`} disabled={i === 0} onClick={() => sartTasi(i, -1)} />
-                  <Dugme simge="down" aria-label={`${String(i + 1)}. şartı aşağı al`} disabled={i === taslak.icerik.sartlar.length - 1} onClick={() => sartTasi(i, 1)} />
-                  <Dugme simge="trash" aria-label={`${String(i + 1)}. şartı sil`} onClick={() => icerikYaz({ sartlar: taslak.icerik.sartlar.filter((_, j) => j !== i) })} />
-                </li>
-              ))}
-            </ol>
-          )}
-          <div className="tc-tf-ekle">
-            <Girdi
-              etiket="Yeni şart"
-              autoComplete="off"
-              maxLength={300}
-              value={yeniSart}
-              onChange={(o) => yeniSartYaz(o.target.value)}
-              onKeyDown={(o) => { if (o.key === 'Enter') { o.preventDefault(); sartEkle(); } }}
-            />
-            <Dugme simge="plus" onClick={sartEkle} disabled={yeniSart.trim() === '' || taslak.icerik.sartlar.length >= SART_EN_COK}>Ekle</Dugme>
-          </div>
+          <SartAlanlari icerik={taslak.icerik} degistir={icerikYaz} />
         </Kart>
 
         {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}

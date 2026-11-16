@@ -600,6 +600,10 @@ export const teklifFormuIcerikSemasi = z.object({
   imza1: formMetni(60, 'İmza başlığı'),
   imza2: formMetni(60, 'İmza başlığı'),
   alt: formMetni(200, 'Alt bilgi'),
+  // Kalite sisteminin doküman kontrol kutusu (antetin sağı); hepsi boşsa basılmaz. Eski şablonlarda yoktur.
+  belge: z.object({
+    no: formMetni(40, 'Doküman no'), yayin: formMetni(40, 'Yayın tarihi'), revTarihi: formMetni(40, 'Revizyon tarihi'), revNo: formMetni(20, 'Revizyon no'),
+  }).optional(),
 });
 export const teklifFormuKurumSemasi = z.object({
   unvan: formMetni(200, 'Ünvan'),
@@ -631,6 +635,9 @@ export const teklifFormuSablonKaydetGovdesi = z.object({
 export const teklifFormuKurumKaydetGovdesi = z.object({ ...beklenenSurum, kurum: teklifFormuKurumSemasi });
 export const teklifFormuSablonKopyalaGovdesi = z.object({ ad: sablonAdiSemasi });
 export const teklifFormuVarsayilanGovdesi = z.object({ ...beklenenSurum });
+// 3328: teklife özel form metni; şablonla aynı biçim, dili seçilen şablonun dilidir. null: şablon basılır.
+export const teklifFormuMetniSemasi = z.object({ dil: z.enum(TEKLIF_FORMU_DILLERI), icerik: teklifFormuIcerikSemasi });
+export const teklifFormuMetniGovdesi = z.object({ ...beklenenSurum, metin: teklifFormuMetniSemasi.nullable() });
 // Formun verisi: müşteri kutusu firma kartından, toplamlar seçilen sürümden sunucuda hesaplanır. Teklifte KDV oranı tutulmaz;
 // pencerede girilir (varsayılan 20) ve saklanmaz. İlgili kişi firma kartında yoktur; pencerede elle yazılır, saklanmaz.
 export const teklifFormuSorgusu = z.object({
@@ -645,7 +652,9 @@ export const teklifFormuVerisiCevabi = z.object({
   kdvOrani: ondalikMetinSemasi,
   kdvTutari: ondalikMetinSemasi,
   genelToplam: ondalikMetinSemasi,
+  metin: teklifFormuMetniSemasi.nullable(),
 });
+export type TeklifFormuMetni = z.output<typeof teklifFormuMetniSemasi>;
 export type TeklifFormuIcerigi = z.output<typeof teklifFormuIcerikSemasi>;
 export type TeklifFormuKurumu = z.output<typeof teklifFormuKurumSemasi>;
 export type TeklifFormuSablonu = z.output<typeof teklifFormuSablonuSemasi>;

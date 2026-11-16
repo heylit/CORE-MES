@@ -7,7 +7,7 @@ import {
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
-  firmaAdresi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
+  FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -383,6 +383,16 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
 
 // 3245 d: teklif formu
 describe('teklif formu kuralları', () => {
+  test('3328 saklanan teklif metni şemaya uymazsa yok sayılır; kabul, red ve siparişte metin değişmez', () => {
+    const icerik = { baslik: 'ORN', giris: '', sartlar: [], imza1: '', imza2: '', alt: '' };
+    assert.deepEqual(formMetni({ dil: 'tr', icerik }), { dil: 'tr', icerik });
+    assert.equal(formMetni({ dil: 'tr', icerik: { ...icerik, baslik: ' ' } }), null);
+    assert.equal(formMetni({ dil: 'de', icerik }), null);
+    assert.equal(formMetni({ icerik: 'bozuk' }), null);
+    assert.equal(formMetni(null), null);
+    for (const d of ['kabul', 'red', 'siparis'] as const) assert.equal(formMetniReddi(d), FORM_METNI_KAPALI);
+    for (const d of ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'] as const) assert.equal(formMetniReddi(d), null);
+  });
   test('firma adresi: boş parça atlanır, hiçbiri yoksa null', () => {
     assert.equal(firmaAdresi({ adres: 'ORN Sokak 0', postaKodu: '00000', ilce: 'Örnekilçe', il: 'Örnekil' }), 'ORN Sokak 0\n00000 Örnekilçe / Örnekil');
     assert.equal(firmaAdresi({ adres: null, postaKodu: null, ilce: null, il: 'Örnekil' }), 'Örnekil');

@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { SiparisDurumu, TeklifDurumu, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisDurumu, TeklifDurumu, TeklifFormuMetni, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
@@ -468,6 +468,18 @@ export function teklifSurumuArtir(db: Db, id: number, surum: number, kisiId: num
   return db.tek<{ id: number }>(
     'UPDATE siparisler_teklif SET guncelleyen_id = $2, guncelleme = now(), surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING id',
     [id, kisiId, surum],
+  );
+}
+
+// 3328: teklife özel form metni; yazma başlığın sürümünü artırır.
+export async function teklifFormMetni(db: Db, id: number): Promise<unknown> {
+  return (await db.tek<{ form_metni: unknown }>('SELECT form_metni FROM siparisler_teklif WHERE id = $1', [id]))?.form_metni ?? null;
+}
+export function teklifFormMetniYaz(db: Db, id: number, metin: TeklifFormuMetni | null, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif SET form_metni = $2::jsonb, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $4 RETURNING id`,
+    [id, metin === null ? null : JSON.stringify(metin), kisiId, surum],
   );
 }
 

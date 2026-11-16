@@ -5,7 +5,7 @@ import {
   adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
-  teklifSurumuGovdesi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
+  teklifSurumuGovdesi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
   teklifFormuSablonKopyalaGovdesi, teklifFormuVarsayilanGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import type { AdetDenemesiCevabi, AtolyeTaslagi, PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
@@ -346,6 +346,16 @@ export const uclar = [
     govde: teklifFormuKurumKaydetGovdesi,
     cevap: teklifFormuCevabi,
     isle: ({ db, kullanici, govde }) => form.kurumKaydet(db, kullanici, govde.kurum, govde.surum),
+  }),
+  // 3328: teklife özel form metni; teklifi yazan kaydeder (fiyat değişmez; kabul, red ve siparişte 422). metin null: şablona döner.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/form-metni-kaydet',
+    yetki: 'siparisler.yaz',
+    parametre: idParametresi,
+    govde: teklifFormuMetniGovdesi,
+    cevap: teklifAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.formMetniKaydet(db, kullanici, parametre.id, govde)),
   }),
   // Formun müşteri kutusu ve toplamları; form fiyat taşıdığından yalnız fiyat gören basar.
   uc({

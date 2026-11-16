@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -10,6 +10,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { TeklifFormuAyari } from './TeklifFormuAyari.tsx';
 import { TeklifFormuKagidi, type FormVerisi } from './TeklifFormuKagidi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
+import { anahtarlar } from './anahtarlar.ts';
 import { alanlariDoldur, formSayisi, formTarihi, hitap, kdvOraniOku } from './teklif-formu.ts';
 
 const KURUM = { unvan: 'Deneme Kurum A.Ş.', adres: 'Deneme adres', telefon: '0000', eposta: 'deneme@ornek.invalid', vergi: 'Deneme VD 1' };
@@ -26,7 +27,7 @@ const AYAR = {
 } satisfies TeklifFormuCevabi;
 const FORM_VERISI = {
   musteri: { ad: 'Deneme Musteri A', adres: 'Deneme Mah.\nDeneme İl', vergiNo: 'Deneme VD 2' },
-  araToplam: '400.00', iskontoTutari: '40.00', kdvHaric: '360.00', kdvOrani: '20', kdvTutari: '72.00', genelToplam: '432.00',
+  araToplam: '400.00', iskontoTutari: '40.00', kdvHaric: '360.00', kdvOrani: '20', kdvTutari: '72.00', genelToplam: '432.00', metin: null,
 } satisfies TeklifFormuVerisiCevabi;
 const SURUM = {
   surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2026-11-01', aciklama: null, olusturma: '2026-10-02T09:00:00+03:00',
@@ -117,6 +118,27 @@ describe('Teklif formu kâğıdı', () => {
     expect(within(kagit).queryByText('İskontolu')).toBeNull();
     expect(within(kagit).getByText('12,00 TRY')).toBeTruthy();
     expect(kagit.querySelector('.tc-tf-imzalar')).toBeNull();
+    // Ödeme koşulu yoksa satır basılmaz.
+    expect(within(kagit).queryByText('Ödeme')).toBeNull();
+  });
+  it('doküman kutusu yalnız doluyken antete basılır, kurum satırı alta iner; kod sütunu yalnız kodlu kalemde, birim ayrı sütundadır', () => {
+    render(<TeklifFormuKagidi dil="tr" icerik={ICERIK} kurum={KURUM} logo={null} veri={veri} />);
+    const bos = screen.getByRole('article', { name: 'Teklif TK-1' });
+    expect(bos.querySelector('.tc-tf-belge')).toBeNull();
+    expect(within(bos).queryByRole('columnheader', { name: 'Kod' })).toBeNull();
+    expect(within(bos).getByRole('columnheader', { name: 'Birim' })).toBeTruthy();
+    cleanup();
+    const belge = { no: 'ORN-F-01', yayin: '01.01.2026', revTarihi: '', revNo: '0' };
+    const kodlu = { ...veri, satirlar: [{ ...veri.satirlar[0]!, kod: 'ORN-001', birim: 'adet' }] };
+    render(<TeklifFormuKagidi dil="tr" icerik={{ ...ICERIK, belge }} kurum={KURUM} logo={null} veri={kodlu} />);
+    const kagit = screen.getByRole('article', { name: 'Teklif TK-1' });
+    const kutu = kagit.querySelector('.tc-tf-belge');
+    expect(kutu?.textContent).toContain('ORN-F-01');
+    expect(kutu?.textContent).not.toContain('Rev. tarihi');
+    expect(kagit.querySelector('.tc-tf-kurum-satir')?.textContent).toBe('Deneme adres · Tel 0000 · deneme@ornek.invalid · Deneme VD 1');
+    expect(within(kagit).getByRole('columnheader', { name: 'Kod' })).toBeTruthy();
+    expect(within(kagit).getByRole('cell', { name: 'ORN-001' })).toBeTruthy();
+    expect(within(kagit).getByRole('cell', { name: 'adet' })).toBeTruthy();
   });
   it('İngilizce şablon etiketleri ve sayı biçimi İngilizcedir; giriş alanları teklifle dolar', () => {
     render(<TeklifFormuKagidi dil="en" icerik={{ ...ICERIK, giris: 'Dear {YETKILI}, {TEKLIF_NO}' }} kurum={KURUM} logo={null} veri={{ ...veri, ilgili: 'Deneme Kisi' }} />);
@@ -161,6 +183,94 @@ describe('Teklif formu penceresi', () => {
     fireEvent.change(within(pencere).getByLabelText('Şablon'), { target: { value: '2' } });
     expect(within(pencere).getByText('Grand total')).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+    // Teklifi yazamayan metni düzenleyemez.
+    expect(within(pencere).queryByLabelText(/^Form başlığı/)).toBeNull();
+  });
+
+  it('3328 teklifi yazan metni düzenler: kâğıt hemen yansır, kaydetmeden basılır; "Bu teklif için kaydet" metni sürümle yazar', async () => {
+    const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] }, (yontem, yol) =>
+      (yontem === 'POST' && yol === '/siparisler/teklifler/21/form-metni-kaydet' ? json(200, { ...TEKLIF, surum: 5 }) : undefined));
+    sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={TEKLIF} surum={SURUM} />);
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu/ });
+    const kaydet = await within(pencere).findByRole('button', { name: 'Bu teklif için kaydet' });
+    expect((kaydet as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(await within(pencere).findByLabelText(/^Form başlığı/), { target: { value: 'ÖZEL TEKLİF' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: '1. şartı sil' }));
+    expect(within(pencere).getByText('Kaydedilmedi')).toBeTruthy();
+    const kagit = within(pencere).getByRole('article', { name: 'Teklif TK-2026-0021' });
+    expect(within(kagit).getByText('ÖZEL TEKLİF')).toBeTruthy();
+    expect(within(kagit).queryByText('Deneme şart 1')).toBeNull();
+    // Basım kopyası da düzenlenen metindir.
+    expect(document.body.querySelector(':scope > .tc-tf-baski .tc-tf-baslik')?.textContent).toBe('ÖZEL TEKLİF');
+    fireEvent.click(kaydet);
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({
+      yol: '/siparisler/teklifler/21/form-metni-kaydet',
+      govde: { surum: 4, metin: { dil: 'tr', icerik: { ...ICERIK, baslik: 'ÖZEL TEKLİF', sartlar: ['Deneme şart 2'] } } },
+    });
+  });
+
+  // Pencere teklifi sayfadaki gibi sorgudan alır: kayıt cevabı sorguya yazılınca sonraki kayıt yeni sürümle gider.
+  function SorguluPencere() {
+    const t = useQuery({ queryKey: anahtarlar.teklif(21), queryFn: () => TEKLIF, staleTime: Infinity });
+    return t.data ? <TeklifFormuPenceresi acik kapat={() => undefined} teklif={t.data} surum={SURUM} /> : null;
+  }
+
+  it('3328 art arda iki kayıtta ikincisi ilk kaydın döndürdüğü sürümle gider', async () => {
+    let surum = 4;
+    let kayitli: unknown = null;
+    const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] }, (yontem, yol, govde) => {
+      if (yol.startsWith('/siparisler/teklifler/21/form?')) return json(200, { ...FORM_VERISI, metin: kayitli });
+      if (yontem !== 'POST' || yol !== '/siparisler/teklifler/21/form-metni-kaydet') return undefined;
+      kayitli = (govde as { metin: unknown }).metin;
+      surum += 1;
+      return json(200, { ...TEKLIF, surum });
+    });
+    sar(<SorguluPencere />);
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu/ });
+    const baslik = await within(pencere).findByLabelText(/^Form başlığı/);
+    fireEvent.change(baslik, { target: { value: 'BİRİNCİ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Bu teklif için kaydet' }));
+    await waitFor(() => expect(within(pencere).getByText('Bu teklife özel metin kayıtlı')).toBeTruthy());
+    fireEvent.change(within(pencere).getByLabelText(/^Form başlığı/), { target: { value: 'İKİNCİ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Bu teklif için kaydet' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => (i.govde as { surum: number }).surum)).toEqual([4, 5]);
+  });
+
+  it('3328 kayıtlı metin yokken "Şablona dön" sunucuya gitmez, taslağı atar; kabul edilmiş teklifte metin düzenlenmez', async () => {
+    const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] });
+    sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={TEKLIF} surum={SURUM} />);
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu/ });
+    fireEvent.change(await within(pencere).findByLabelText(/^Form başlığı/), { target: { value: 'GEÇİCİ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona dön' }));
+    expect((within(pencere).getByLabelText(/^Form başlığı/) as HTMLInputElement).value).toBe('TEKLİF FORMU');
+    expect(within(pencere).queryByText('Kaydedilmedi')).toBeNull();
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+    cleanup();
+    sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] });
+    sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={{ ...TEKLIF, durum: 'kabul', kabulSurumu: 1 }} surum={SURUM} />);
+    const kabul = await screen.findByRole('dialog', { name: /Teklif formu/ });
+    await within(kabul).findByRole('article', { name: 'Teklif TK-2026-0021' });
+    expect(within(kabul).queryByLabelText(/^Form başlığı/)).toBeNull();
+    expect(within(kabul).queryByRole('button', { name: 'Bu teklif için kaydet' })).toBeNull();
+  });
+
+  it('3328 kayıtlı metinle açılır; "Şablona dön" kaydı kaldırır; başlık boşken kaydedilmez', async () => {
+    const ozel = { dil: 'tr' as const, icerik: { ...ICERIK, baslik: 'KAYITLI BAŞLIK' } };
+    const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] }, (yontem, yol) => {
+      if (yol.startsWith('/siparisler/teklifler/21/form?')) return json(200, { ...FORM_VERISI, metin: ozel });
+      return yontem === 'POST' ? json(200, TEKLIF) : undefined;
+    });
+    sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={TEKLIF} surum={SURUM} />);
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu/ });
+    expect(await within(pencere).findByText('Bu teklife özel metin kayıtlı')).toBeTruthy();
+    expect(within(within(pencere).getByRole('article', { name: 'Teklif TK-2026-0021' })).getByText('KAYITLI BAŞLIK')).toBeTruthy();
+    fireEvent.change(within(pencere).getByLabelText(/^Form başlığı/), { target: { value: ' ' } });
+    expect((within(pencere).getByRole('button', { name: 'Bu teklif için kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona dön' }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({ yol: '/siparisler/teklifler/21/form-metni-kaydet', govde: { surum: 4, metin: null } }));
   });
 });
 
@@ -180,16 +290,21 @@ describe('Sistem Ayarları › Formlar › Teklif formu', () => {
     fireEvent.change(baslik, { target: { value: 'FİYAT TEKLİFİ' } });
     expect(screen.getByRole('heading', { level: 1, name: 'FİYAT TEKLİFİ' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Giriş metni'), { target: { value: 'Merhaba ' } });
-    fireEvent.click(screen.getByRole('button', { name: '{MUSTERI}' }));
+    fireEvent.click(screen.getByRole('button', { name: '{MUSTERI} alanını ekle' }));
     expect((screen.getByLabelText('Giriş metni') as HTMLTextAreaElement).value).toBe('Merhaba {MUSTERI}');
     fireEvent.change(screen.getByLabelText('Yeni şart'), { target: { value: 'Deneme şart 3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ekle' }));
     fireEvent.click(screen.getByRole('button', { name: '1. şartı sil' }));
+    fireEvent.change(screen.getByLabelText('Doküman no'), { target: { value: 'ORN-F-01' } });
+    expect(document.querySelector('.tc-tf-belge')?.textContent).toContain('ORN-F-01');
     expect(screen.getByText('Kaydedilmedi')).toBeTruthy();
     fireEvent.click(kaydet);
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({
-      surum: 1, ad: 'Standart teklif', dil: 'tr', icerik: { ...ICERIK, baslik: 'FİYAT TEKLİFİ', giris: 'Merhaba {MUSTERI}', sartlar: ['Deneme şart 2', 'Deneme şart 3'] },
+      surum: 1, ad: 'Standart teklif', dil: 'tr', icerik: {
+        ...ICERIK, baslik: 'FİYAT TEKLİFİ', giris: 'Merhaba {MUSTERI}', sartlar: ['Deneme şart 2', 'Deneme şart 3'],
+        belge: { no: 'ORN-F-01', yayin: '', revTarihi: '', revNo: '' },
+      },
     });
     await waitFor(() => expect(screen.queryByText('Kaydedilmedi')).toBeNull());
   });
