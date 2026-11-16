@@ -90,9 +90,9 @@ export const logoKontrolCevabi = z.object({
 });
 
 // 3313: bağlantı izleme, Logo'ya gitmeyen belgeler. Tutar, fiyat ve firma adı yoktur (K8); deneme kaydı olmayan belgede deneme alanları null.
-export const LOGO_GIDEN_IZLEME_DURUMLARI = ['durdu', 'yeniden-denenecek', 'kart-bekliyor', 'sirada'] as const;
+export const LOGO_GIDEN_IZLEME_DURUMLARI = ['durdu', 'yeniden-denenecek', 'kart-bekliyor', 'proje-bekliyor', 'sirada'] as const;
 export const logoGidenIzlemeCevabi = z.object({
-  sayac: z.object({ durdu: z.number().int(), yenidenDenenecek: z.number().int(), kartBekliyor: z.number().int(), sirada: z.number().int() }),
+  sayac: z.object({ durdu: z.number().int(), yenidenDenenecek: z.number().int(), kartBekliyor: z.number().int(), projeBekliyor: z.number().int(), sirada: z.number().int() }),
   belgeler: z.array(z.object({
     belge: z.string(),
     belgeAdi: z.string(),
@@ -288,3 +288,9 @@ export const logoKartAlislariCevabi = z.object({
   })),
 });
 export type LogoKartAlislariCevabi = z.output<typeof logoKartAlislariCevabi>;
+
+// 3315: proje kartının Logo durumu (proje kartı "Genel" bölümü). Logo kodu CORE kodudur (aynen gider); yalnız "logoda"da dolu.
+export const LOGO_PROJE_DURUMLARI = ['logoda', 'sirada', 'yeniden-denenecek', 'durdu', 'gonderilmez'] as const;
+export const logoProjeParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+export const logoProjeDurumuCevabi = z.object({ durum: z.enum(LOGO_PROJE_DURUMLARI), logoKodu: z.string().nullable(), metin: z.string().nullable() });
+export type LogoProjeDurumuCevabi = z.output<typeof logoProjeDurumuCevabi>;

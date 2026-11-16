@@ -21,10 +21,10 @@ export interface IzlemeSatiri {
 }
 
 export const DURUM_ADI: Record<IzlemeDurumu, string> = {
-  durdu: 'Durdu', 'yeniden-denenecek': 'Yeniden denenecek', 'kart-bekliyor': 'Kart bekliyor', sirada: 'Sırada',
+  durdu: 'Durdu', 'yeniden-denenecek': 'Yeniden denenecek', 'kart-bekliyor': 'Kart bekliyor', 'proje-bekliyor': 'Proje bekliyor', sirada: 'Sırada',
 };
 export const DURUM_TONU: Record<IzlemeDurumu, RozetTonu> = {
-  durdu: 'hata', 'yeniden-denenecek': 'uyari', 'kart-bekliyor': 'bilgi', sirada: 'pasif',
+  durdu: 'hata', 'yeniden-denenecek': 'uyari', 'kart-bekliyor': 'bilgi', 'proje-bekliyor': 'bilgi', sirada: 'pasif',
 };
 const SMARTES_NE_YAPMALI = 'Bir şey yapmanız gerekmez: kendiliğinden yeniden denenir. Uzun sürerse SmartES bağlantısını denetleyin.';
 
@@ -42,6 +42,7 @@ export const sayac = (satirlar: readonly IzlemeSatiri[]): Record<IzlemeDurumu, n
   durdu: satirlar.filter((s) => s.durum === 'durdu').length,
   'yeniden-denenecek': satirlar.filter((s) => s.durum === 'yeniden-denenecek').length,
   'kart-bekliyor': satirlar.filter((s) => s.durum === 'kart-bekliyor').length,
+  'proje-bekliyor': satirlar.filter((s) => s.durum === 'proje-bekliyor').length,
   sirada: satirlar.filter((s) => s.durum === 'sirada').length,
 });
 

@@ -11,6 +11,8 @@ export interface SiparislerLogoTeklifi {
 }
 export interface SiparislerLogoSiparisi {
   id: number; no: string; tarih: string; teklifKayitNo: string | null;
+  // 3315: Siparişler'deki sipariş kimliği; Logo projesini projelerden bununla bulur.
+  siparisId: number;
   satirlar: { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null }[];
 }
 export type SiparislerLogoSonucu = { kayitNo: string; satirlar: { satirId: number; logoSatirRef: string }[] } | { hata: string };
@@ -44,7 +46,7 @@ export async function logoyaGidecekSatisSiparisleri(db: Db, sinir: number): Prom
   for (const s of await sorgular.logoyaGidecekSiparisSiralari(db, sinir)) {
     const satirlar = await sorgular.logoSiparisSatirlari(db, s.siparis_id, s.teklif_id);
     sonuc.push({
-      id: s.id, no: s.no, tarih: s.tarih, teklifKayitNo: s.teklif_kayit_no,
+      id: s.id, no: s.no, tarih: s.tarih, teklifKayitNo: s.teklif_kayit_no, siparisId: s.siparis_id,
       satirlar: satirlar.map((r) => {
         const ref = r.teklif_satir_id === null ? undefined : s.teklif_refleri[String(r.teklif_satir_id)];
         return { satirId: r.satir_id, teklifSatirRef: typeof ref === 'string' ? ref : null, miktar: r.miktar, termin: r.termin };

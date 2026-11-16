@@ -19,8 +19,9 @@ import type { GonderilecekMalzemeFisi } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
+import { emirlerinProjeleri } from '../uretim-emirleri/disari.ts';
 import {
-  faturaTuru, fisDegisiklikleriniAl, gidenYenidenGonder, listeOkumaTuru, malKabulTuru, malzemeFisiLogoDurumlari, malzemeFisiTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi,
+  faturaTuru, fisDegisiklikleriniAl, gidenIzleme, gidenYenidenGonder, listeOkumaTuru, malKabulTuru, malzemeFisiLogoDurumlari, malzemeFisiTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi,
 } from './servis.ts';
 import type { MalzemeFisiKaynagi, MalzemeFisiTurOrtami, StokFisDegisikligi, StokFisKaynaklari, TurOrtami, TurSonucu } from './servis.ts';
 import type { MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
@@ -84,6 +85,8 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
   // Stoğun sahte fişleri: değişiklik sayacı, zamanı ve elle istek stoktaki gibi; satır değişince sayaç artar.
   interface SahteStokFisi { id: number; tur: MalzemeFisiTuru; no: string; emirNo?: string | null; uretimEmriId: number | null; degisiklik: number; zaman: string; istek: string | null; satirlar: { stokKodu: string | null; birim: string | null; miktar: string }[] }
   const stokFisleri = new Map<number, SahteStokFisi>();
+  // Emir -> proje (üretimde uretim-emirleri disari.ts'i).
+  const emirProjesi = new Map<number, number>();
   let stokSaati = Date.parse('2026-10-24T08:00:00Z');
   const stokDegistir = (id: number, ek: Partial<SahteStokFisi> = {}): SahteStokFisi => {
     stokSaati += 1000;
@@ -112,6 +115,9 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     async emirFisleri(_db, emirIdler) {
       return [...stokFisleri.values()].filter((f) => f.uretimEmriId !== null && emirIdler.includes(f.uretimEmriId))
         .map((f) => ({ id: f.id, tur: f.tur, uretimEmriId: f.uretimEmriId! }));
+    },
+    async emirProjeleri(_db, emirIdler) {
+      return new Map([...emirProjesi].filter(([e]) => emirIdler.includes(e)));
     },
   };
   const stokKaynagi = stokMalzemeFisiKaynagi(stokKaynaklari);
@@ -144,6 +150,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     }
     await vt().sorgu("UPDATE logo_malzeme_fisi_imleci SET zaman = '2026-01-01T00:00:00Z', fis_id = 0, en_buyuk_fis_id = 0");
     stokFisleri.clear();
+    emirProjesi.clear();
   });
   afterEach(async () => { await kopru.kapat(); });
 
@@ -409,6 +416,37 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.deepEqual(await malzemeFisiTuru(vt(), o), { tur: 'malzeme-fisi', no: ikinci.id, sonuc: 'ulasilamadi' });
   });
 
+  test('LOGO-O23 (3315 Test T5) emir fişi emrin projesiyle gider; proje Logo\'da değilse fiş istek atmadan bekler ve izlemede "Proje bekliyor"', async () => {
+    await ayar('logo.malzeme-fisi-gonderimi', true);
+    const projeId = (await vt().tek<{ id: number }>(
+      `INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('ORN.LGO23', 'Deneme proje', (SELECT id FROM kisi WHERE kullanici_adi = 'lo-yonetici')) RETURNING id`))!.id;
+    emirProjesi.set(77, projeId);
+    await ayar('logo.proje-gonderimi', true);
+    try {
+      const bellek = yeniSurecBellegi();
+      const kos = (): Promise<TurSonucu> => malzemeFisiTuru(vt(), { ...ortami(bellek), kaynak: stokKaynagi });
+      stokDegistir(231, { uretimEmriId: 77, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '2' }] });
+      assert.deepEqual(await kos(), { tur: 'bos' });
+      assert.equal(kopru.istekler.length, 0, 'köprüye istek yok');
+      const iz = (await vt().tx((db) => gidenIzleme(db, new Date(simdi)))).belgeler.find((b) => b.no === 231);
+      assert.equal(iz?.durum, 'proje-bekliyor');
+      assert.equal(iz?.neden, 'ORN.LGO23 Logo\'ya gidince belge kendiliğinden gider.');
+      await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, son_deneme, son_sonuc, logo_kayit_no) VALUES ('proje', $1, 1, now(), 'gonderildi', '7023')`, [projeId]);
+      assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: 231 });
+      assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: 231, sonuc: 'gonderildi' });
+      assert.equal((kopru.malzemeFisleri.at(-1)?.govde as { PROJECT_CODE?: string }).PROJECT_CODE, 'ORN.LGO23', 'başlıkta proje kodu');
+      assert.equal((await vt().tx((db) => gidenIzleme(db, new Date(simdi)))).belgeler.some((b) => b.no === 231), false, 'izlemeden düşer');
+      // Projesiz emrin fişi proje kodu taşımaz.
+      stokDegistir(232, { uretimEmriId: 78, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '1' }] });
+      await kos();
+      assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: 232, sonuc: 'gonderildi' });
+      assert.equal('PROJECT_CODE' in (kopru.malzemeFisleri.at(-1)?.govde as object), false);
+    } finally {
+      await ayar('logo.proje-gonderimi', false);
+      await vt().sorgu("DELETE FROM logo_giden WHERE belge_turu = 'proje'");
+    }
+  });
+
   test('LOGO-O17 stok akışı (294 c, 298 a): değişen fiş sıraya girer, aynı değişiklik iki kez sayılmaz; otomatik gider, kapalı gitmez, elle yalnız istekle; fire kapalıyken sarfa eklenir', async () => {
     await ayar('logo.malzeme-fisi-gonderimi', true);
     const bellek = yeniSurecBellegi();
@@ -604,7 +642,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     await vt().sorgu("UPDATE stok_malzeme_fisi SET degisiklik_zamani = $2::timestamptz - interval '1 hour' WHERE id = $1", [eski, IMLEC]);
     const yeni = await ac(9002, 'uretim_girisi');
     await vt().sorgu('UPDATE stok_malzeme_fisi SET degisiklik_zamani = $2 WHERE id = $1', [yeni, YENI]);
-    const kaynaklar: StokFisKaynaklari = { degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri };
+    const kaynaklar: StokFisKaynaklari = { degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri, emirProjeleri: emirlerinProjeleri };
     assert.equal(await vt().tx((db) => fisDegisiklikleriniAl(db, kaynaklar)), 1);
     assert.equal(await vt().tx((db) => fisDegisiklikleriniAl(db, kaynaklar)), 1, 'örtüşme penceresi yeniden okur');
     const satirlar = await vt().sorgu<{ k: string; bekleyen: number }>(

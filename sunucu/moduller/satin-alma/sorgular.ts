@@ -479,6 +479,8 @@ export async function siparisIptaliniLogoyaIsaretle(db: Db, talepId: string): Pr
 export interface LogoSiparisSatiri {
   id: number; no: string; tarih: string; firmaId: number; paraBirimi: string; kur: string | null; iskontoYuzdesi: string; termin: string | null;
   durum: 'bekliyor' | 'hata'; logoKayitNo: string | null; kaldirilanSatirRefleri: string[]; bekletmeIstegi: 'beklet' | 'serbest' | null;
+  // 3315: siparişin projesi talebinin projesidir.
+  projeId: number | null;
 }
 // Tarih sipariş tarihidir; girilmemişse Logo'ya gönderildiği gün (İstanbul). Kur siparişte sabitlenen, yoksa teklifin kuru; TRY'de boş.
 // Gönderim kuyruğu ilk kaydı, düzenleme kuyruğu Logo'da kaydı olanın değişikliğini taşır (iptali kuyrukta olan düzenlenmez).
@@ -499,9 +501,10 @@ export function logoyaGidecekSiparislerOku(db: Db, sinir: number, kuyruk: keyof 
         q.firma_id AS "firmaId", q.para_birimi AS "paraBirimi",
         CASE WHEN q.para_birimi = 'TRY' THEN NULL ELSE coalesce(sk.kur, q.kur)::text END AS kur, q.iskonto_yuzdesi::text AS "iskontoYuzdesi",
         p.beklenen_teslim::text AS termin, ${durum} AS durum, p.logo_kayit_no AS "logoKayitNo",
-        p.logo_kaldirilan_satir_refleri AS "kaldirilanSatirRefleri", p.logo_bekletme_istegi AS "bekletmeIstegi"
+        p.logo_kaldirilan_satir_refleri AS "kaldirilanSatirRefleri", p.logo_bekletme_istegi AS "bekletmeIstegi", tl.proje_id AS "projeId"
        FROM satin_alma_siparis p
        JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
+       JOIN satin_alma_talep tl ON tl.id = p.talep_id
        LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = p.talep_id AND sk.para_birimi = q.para_birimi
       WHERE ${kosul} AND q.firma_id IS NOT NULL
       ORDER BY p.id LIMIT $1`,
@@ -600,12 +603,12 @@ export async function talebiLogoyaIsaretle(db: Db, talepId: string): Promise<voi
 export async function talepIptaliniLogoyaIsaretle(db: Db, talepId: string): Promise<void> {
   await db.sorgu('UPDATE satin_alma_talep SET logo_gonderim_durumu = NULL, logo_hata = NULL WHERE id = $1 AND logo_kayit_no IS NULL', [talepId]);
 }
-export interface LogoTalepSatiri { id: number; no: string; tarih: string; ihtiyacTarihi: string | null; durum: 'bekliyor' | 'hata' }
+export interface LogoTalepSatiri { id: number; no: string; tarih: string; ihtiyacTarihi: string | null; durum: 'bekliyor' | 'hata'; projeId: number | null }
 // Tarih talebin açıldığı gündür (İstanbul).
 export function logoyaGidecekTaleplerOku(db: Db, sinir: number): Promise<LogoTalepSatiri[]> {
   return db.sorgu<LogoTalepSatiri>(
     `SELECT sayi_id AS id, no, (olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih, ihtiyac_tarihi::text AS "ihtiyacTarihi",
-        logo_gonderim_durumu AS durum
+        logo_gonderim_durumu AS durum, proje_id AS "projeId"
        FROM satin_alma_talep WHERE logo_gonderim_durumu IN ('bekliyor', 'hata') ORDER BY sayi_id LIMIT $1`,
     [sinir],
   );

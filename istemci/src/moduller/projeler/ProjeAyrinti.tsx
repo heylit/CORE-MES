@@ -18,6 +18,7 @@ import { StatuCipi, StatuPenceresi } from './StatuPenceresi.tsx';
 import { EMIR_OKUMA_ISLEMLERI, ProjeEmirleri } from './ProjeEmirleri.tsx';
 import { ProjeFormu } from './ProjeFormu.tsx';
 import { ProjeIptal } from './ProjeIptal.tsx';
+import { ProjeLogoSatiri } from './ProjeLogoSatiri.tsx';
 import { BitisBagi, ProjeKalemleri } from './ProjeKalemleri.tsx';
 import './projeler.css';
 
@@ -92,6 +93,7 @@ export function ProjeAyrinti() {
           <dt>Müşteri</dt><dd>{p.firmaAd ?? '—'}</dd>
           <dt>Başlangıç</dt><dd>{tarihMetni(p.baslangic)}</dd>
           <dt>Bitiş</dt><dd className="tc-prj-bag">{tarihMetni(p.bitis)} <BitisBagi proje={p} yazabilir={yazabilir} /></dd>
+          <dt>Logo</dt><dd><ProjeLogoSatiri projeId={p.id} /></dd>
           {maliyetGorur && <><dt>Bütçe</dt><dd>{butceMetni(p.butceTutari, p.butceParaBirimi)}</dd></>}
           <dt>Açıklama</dt><dd>{p.aciklama ?? '—'}</dd>
         </dl>

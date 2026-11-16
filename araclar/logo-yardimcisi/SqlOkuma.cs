@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Proje, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
@@ -28,6 +28,7 @@ namespace LogoYardimcisi
             "LG_<f>_<d>_ORFICHE.DATE_; LG_<f>_<d>_ORFLINE.PRICE, PRPRICE, VAT, UOMREF, DUEDATE, LINEEXP; LG_<f>_SRVCARD.DEFINITION_ satır adı (2987 sipariş içeriği; ölçüm bekliyor, kart 2980 b)",
             "LG_<f>_<d>_ORFLINE.UOMREF -> LG_<f>_UNITSETL.CODE satır birimi (3007: düzenleme birimi yalnız değiştiyse yazar; ölçüm bekliyor, kart 2980 b)",
             "LG_<f>_<d>_STLINE.DATE_ son hareket yalnız çalışılan dönemde; LG_<f>_<d>_ORFLINE.CLOSED (0 açık), LINETYPE, STOCKREF ve ORFICHE.CANCELLED açık sipariş (3079 kullanım okuması)",
+            "LG_<f>_PROJECT.LOGICALREF, CODE, NAME ve Logo Objects proje kartı veri nesnesi (3315; proje_nesnesi ayarı ölçülünce)",
         };
 
         public Sorgular(int firma, int donem)
@@ -65,6 +66,8 @@ namespace LogoYardimcisi
             Ambarlar = "SELECT NR, NAME FROM L_CAPIWHOUSE WHERE FIRMNR = @firma ORDER BY NR";
             Cariler = "SELECT CODE, DEFINITION_ FROM " + f("CLCARD") + " WHERE ACTIVE = 0 ORDER BY CODE";
             CariRef = "SELECT LOGICALREF FROM " + f("CLCARD") + " WHERE CODE = @kod";
+            // 3315: DOĞRULANMADI, tablo ve sütun adları gerçek Logo'da ölçülecek; proje uçları proje_nesnesi yazılmadan çalışmaz.
+            Proje = "SELECT LOGICALREF, CODE, NAME FROM " + f("PROJECT") + " WHERE CODE = @kod";
             Hizmet = "SELECT LOGICALREF, CODE, DEFINITION_, ACTIVE FROM " + f("SRVCARD") + " WHERE CODE = @kod AND CARDTYPE = @tur";
             HizmetRefIle = "SELECT LOGICALREF, CODE, DEFINITION_, ACTIVE FROM " + f("SRVCARD") + " WHERE LOGICALREF = @ref AND CARDTYPE = @tur";
             var siparisBasligi = "SELECT O.LOGICALREF, O.FICHENO, O.STATUS, O.CANCELLED, C.CODE, O.NETTOTAL, O.TRCURR, O.TRRATE FROM " + d("ORFICHE")
@@ -464,6 +467,17 @@ namespace LogoYardimcisi
         public List<KodAd> Ambarlar() { return KodAdlar(q.Ambarlar, P("@firma", firma)); }
         public List<KodAd> Cariler() { return KodAdlar(q.Cariler); }
         public int CariRef(string kod) { return Ilk(q.CariRef, P("@kod", kod)); }
+
+        public ProjeKaydi Proje(string kod)
+        {
+            var l = Sorgula(q.Proje, P("@kod", kod));
+            if (l.Count == 0) return null;
+            var p = new ProjeKaydi();
+            p.Ref = Tam(l[0][0]);
+            p.Kod = Metin(l[0][1]);
+            p.Ad = Metin(l[0][2]);
+            return p;
+        }
 
         public HizmetKaydi Hizmet(string kod, int kartTuru) { return HizmetOku(Sorgula(q.Hizmet, P("@kod", kod), P("@tur", kartTuru))); }
         public HizmetKaydi HizmetRefIle(int kayit, int kartTuru) { return HizmetOku(Sorgula(q.HizmetRefIle, P("@ref", kayit), P("@tur", kartTuru))); }

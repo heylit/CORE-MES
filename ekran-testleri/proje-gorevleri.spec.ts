@@ -87,6 +87,30 @@ test.describe('yönetici', () => {
     expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
+  // 3315: proje ayrıntısında "Logo" satırı. Köprü ekran ortamında yoktur; durum ucu sahte cevapla döner, satırın düzeni sınanır.
+  test('proje ayrıntısında Logo satırı: Logo kodu ve durdu metni taşmaz', async ({ page, ac, ag }) => {
+    const { projeId } = await projeVeGorev(page, `ORN görev ${randomUUID().slice(0, 6)}`, false);
+    let cevap: unknown = { durum: 'logoda', logoKodu: 'ORN_EK.LOGO0001', metin: null };
+    await page.route('**/api/logo/projeler/*', (r) => r.fulfill({ json: cevap }));
+    await ac(`/projeler/${String(projeId)}`);
+    await page.getByRole('tab', { name: /Genel/ }).click();
+    const satir = page.locator('dd').filter({ has: page.getByText('ORN_EK.LOGO0001') });
+    await expect(satir.getByText("Logo'da")).toBeVisible();
+    expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
+    expect(await satir.evaluate((e) => e.scrollWidth - e.clientWidth), 'Logo satırı taşmaz').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('logo-logoda.png'), fullPage: true });
+    cevap = { durum: 'durdu', logoKodu: null, metin: "Logo reddetti: Deneme proje adı Logo'da en çok 50 karakter. Proje kartını düzeltip kaydedin; yeniden gider." };
+    await page.reload();
+    await page.getByRole('tab', { name: /Genel/ }).click();
+    const durdu = page.locator('dd').filter({ hasText: 'düzeltip kaydedin' });
+    await expect(durdu.getByText('Durdu')).toBeVisible();
+    expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
+    expect(await durdu.evaluate((e) => e.scrollWidth - e.clientWidth), 'durdu metni taşmaz').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('logo-durdu.png') });
+    // Sayfa iç kapta kayar ve 360'ta alt menü satırın üstüne biner; satırın tamamı ayrıca çekilir.
+    await durdu.screenshot({ path: test.info().outputPath('logo-durdu-satir.png') });
+    expect(ag.hatalar).toEqual([]);
+  });
 });
 
 test.describe('kalite', () => {

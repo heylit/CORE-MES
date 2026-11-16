@@ -285,6 +285,62 @@ namespace LogoYardimcisi
             Esit("Yeni", s.Hizmet("HZM-1", 1).Ad, "hizmet adı");
         }
 
+        /* ---------------- Proje kartı (3315) ---------------- */
+
+        static Islemler ProjeliIsl(SahteLogo s)
+        {
+            var a = Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=deneme\nlogo_parola=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x\nproje_nesnesi="
+                + SahteLogo.ProjeNesnesi + "\n");
+            return new Islemler(s, s, a, () => new DateTime(2026, 10, 21, 9, 5, 7));
+        }
+
+        static void T_proje_uclari_nesne_numarasi_olculmeden_501_doner_ve_logoya_gitmez()
+        {
+            var s = Logo();
+            var c = C(s, "GET", "/api/Project/exists/ORN-PRJ-1", null);
+            Esit(501, c.Durum, "okuma kapalı");
+            Esit(Islemler.ProjeKapali, Hata(c), "sunucunun tanıdığı metin");
+            Esit(501, C(s, "POST", "/api/Project/AddRich", N("code", "ORN-PRJ-1", "name", "Deneme proje")).Durum, "yazma kapalı");
+            Esit(0, s.Cagrilar.Count, "Logo'ya gidilmemeli");
+            Dogru(Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x").ProjeNesnesi == null, "varsayılan yok");
+        }
+
+        static void T_proje_karti_kod_ve_adla_acilir_ikinci_kez_acilmaz()
+        {
+            var s = Logo();
+            var isl = ProjeliIsl(s);
+            Esit(0, Ref(C(isl, "GET", "/api/Project/exists/ORN-PRJ-1", null, new Dictionary<string, string>())), "önce yok");
+            var c = C(isl, "POST", "/api/Project/AddRich", N("code", "ORN-PRJ-1", "name", "Deneme proje"), new Dictionary<string, string>());
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit("AlanlaEkle " + SahteLogo.ProjeNesnesi, s.Cagrilar.Last(), "ayardaki nesne numarası");
+            Esit(s.Proje("ORN-PRJ-1").Ref, Ref(c), "logicalRef SQL'den");
+            Esit(Ref(c), Ref(C(isl, "GET", "/api/Project/exists/ORN-PRJ-1", null, new Dictionary<string, string>())), "artık var");
+            var iki = C(isl, "POST", "/api/Project/AddRich", N("code", "ORN-PRJ-1", "name", "Deneme proje"), new Dictionary<string, string>());
+            Dogru(!Basari(iki), "ikinci kez açılmaz");
+            Icerir(Hata(iki), "zaten var");
+            Esit(400, C(isl, "POST", "/api/Project/AddRich", N("code", "ORN-PRJ-2"), new Dictionary<string, string>()).Durum, "ad yok");
+            Esit(400, C(isl, "POST", "/api/Project/AddRich", N("code", new string('P', Islemler.ProjeKoduEnCok + 1), "name", "x"),
+                new Dictionary<string, string>()).Durum, "kod uzun");
+        }
+
+        static void T_belge_proje_kodu_verilince_basliga_yazilir_verilmezse_yazilmaz()
+        {
+            var s = Logo();
+            var sip = Siparis("SP-2026-090", SiparisSatiri(Malzeme, 1));
+            sip["projectCode"] = "ORN.PRJ1";
+            Dogru(Basari(C(s, "POST", "/api/PurchaseOrder/AddRich", sip)), "sipariş");
+            Icerir(s.SonXml, "<PROJECT_CODE>ORN.PRJ1</PROJECT_CODE>");
+            Dogru(Basari(C(s, "POST", "/api/PurchaseOrder/AddRich", Siparis("SP-2026-091", SiparisSatiri(Malzeme, 1)))), "projesiz sipariş");
+            Dogru(!s.SonXml.Contains("PROJECT_CODE"), "projesizde alan yok");
+            var talep = N("number", "TLP-90", "date", "06.10.2026", "logoStatus", 1, "projectCode", "ORN.PRJ1",
+                "lines", new[] { N("itemCode", Malzeme, "amount", 1, "unitCode", "ADET") });
+            Dogru(Basari(C(s, "POST", "/api/DemandFiche/AddRich", talep)), "talep");
+            Icerir(s.SonXml, "<PROJECT_CODE>ORN.PRJ1</PROJECT_CODE>");
+            sip = Siparis("SP-2026-092", SiparisSatiri(Malzeme, 1));
+            sip["projectCode"] = new string('P', Islemler.ProjeKoduEnCok + 1);
+            Esit(400, C(s, "POST", "/api/PurchaseOrder/AddRich", sip).Durum, "uzun proje kodu");
+        }
+
         /* ---------------- Satın alma siparişi ---------------- */
 
         static void T_siparis_tuzaklara_uygun_xml_ile_acilir_ve_satir_kayitlari_doner()
@@ -987,8 +1043,9 @@ namespace LogoYardimcisi
             Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-1", "date", "26.09.2026", "orderStatus", 4,
                 "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 3) }))), "kalan miktarı aşıyor");
             var c = C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-1", "date", "26.09.2026", "orderStatus", 4,
-                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 2, "dueDate", "30.10.2026") }));
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 2, "dueDate", "30.10.2026") }, "projectCode", "ORN.PRJ1"));
             Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit("ORN.PRJ1", s.SonBaslik.Deger("PROJECT_CODE"), "proje başlıkta (3315)");
             Dogru(!s.SonBaslik.Var("OFFER_REFERENCE"), "başlıkta OFFER_REFERENCE yok");
             Esit(Ref(t), s.SonSatirlar[0].Deger("OFFERREF"), "OFFERREF satırda");
             Esit(teklifSatiri, s.SonSatirlar[0].Deger("OFFTRANSREF"), "OFFTRANSREF satırda");
@@ -1124,7 +1181,8 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(37, hepsi.Count, "sorgu sayısı");
+            Esit(38, hepsi.Count, "sorgu sayısı");
+            Icerir(q.Proje, "FROM LG_007_PROJECT WHERE CODE = @kod");
             Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
             Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");

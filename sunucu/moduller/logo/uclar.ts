@@ -1,7 +1,8 @@
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoGidenIzlemeCevabi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
@@ -54,6 +55,19 @@ export const uclar = [
     yetki: 'saglik.ayrinti-oku',
     cevap: logoGidenIzlemeCevabi,
     isle: ({ db }) => gidenIzleme(db, new Date()),
+  }),
+  // 3315: proje kartının Logo satırı; projeyi görebilen görür (yalnız durum ve CORE kodu, tutar yok).
+  uc({
+    yontem: 'GET',
+    yol: '/logo/projeler/:id',
+    yetki: { biri: ['sayfa.projeler', 'projeler.oku'] },
+    parametre: logoProjeParametresi,
+    cevap: logoProjeDurumuCevabi,
+    isle: async ({ db, parametre }) => {
+      const d = await projeLogoDurumu(db, parametre.id);
+      if (d === null) throw bulunamadi('Proje bulunamadı.');
+      return d;
+    },
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({

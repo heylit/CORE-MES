@@ -1828,6 +1828,8 @@ export async function menuSayaclari(db: Db, k: Kullanici): Promise<Record<string
 export interface LogoyaGidecekSiparis {
   id: number; no: string; tarih: string; firmaId: number; paraBirimi: string; kur: string | null; iskontoYuzdesi: string; termin: string | null;
   durum: 'bekliyor' | 'hata';
+  // 3315: talebin projesi; Logo'ya proje koduyla açılır.
+  projeId: number | null;
   satirlar: { satirId: number; stokKodu: string | null; hizmet: boolean; miktar: string; birim: string; birimFiyat: string }[];
 }
 // Düzenlemede Logo'daki kayıt ve satır numaraları da gelir; numarası boş satır Logo'ya yeni eklenir. Kaldırılan satırlar açık listededir.
@@ -1888,6 +1890,8 @@ export async function siparisLogoGuncellemeSonucu(db: Db, id: number, sonuc: { s
 // ---- Logo talep fişi ve karşılama (#205 S3 b, kart #790): yalnız logo modülü çağırır; yetki denetlemez, çağıranın işlemini kullanır.
 export interface LogoyaGidecekTalep {
   id: number; no: string; tarih: string; ihtiyacTarihi: string | null; durum: 'bekliyor' | 'hata';
+  // 3315: talebin projesi; Logo'ya proje koduyla gider.
+  projeId: number | null;
   satirlar: { satirId: number; stokKodu: string | null; miktar: string; birim: string }[];
 }
 export async function logoyaGidecekTalepler(db: Db, sinir: number): Promise<LogoyaGidecekTalep[]> {

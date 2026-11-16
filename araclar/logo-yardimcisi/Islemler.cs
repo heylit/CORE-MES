@@ -42,6 +42,7 @@ namespace LogoYardimcisi
         static readonly Regex MalzemeVarMi = new Regex("^/api/Material/exists/([^/]+)$");
         static readonly Regex MalzemeOkumasi = new Regex("^/api/Material/([^/]+)/(movements|lastPurchases)$");
         static readonly Regex CariBul = new Regex("^/api/Arp/find/([^/]+)$");
+        static readonly Regex ProjeVarMi = new Regex("^/api/Project/exists/([^/]+)$");
         static readonly Regex CariKarti = new Regex("^/api/Arp/card/([^/]+)$");
         static readonly Regex HizmetVarMi = new Regex("^/api/(Purchase|Sales)Service/exists/([^/]+)$");
         static readonly Regex HizmetYaz = new Regex("^/api/(Purchase|Sales)Service/(AddRich|UpdateRich)$");
@@ -116,6 +117,7 @@ namespace LogoYardimcisi
                 if (yol == "/api/Lookup/warehouses") return Ambarlar();
                 if (yol == "/api/Arp/list") return Cariler();
                 if ((m = CariBul.Match(yol)).Success) return Bul(oku.CariRef(Coz(m, 1)), "Arp not found");
+                if ((m = ProjeVarMi.Match(yol)).Success) return ProjeVarMiOku(Coz(m, 1));
                 if ((m = HizmetVarMi.Match(yol)).Success) return HizmetVarMiOku(m.Groups[1].Value == "Purchase", Coz(m, 2));
                 if (yol == "/api/PurchaseOrder/receipts") return MalKabul(sorgu);
                 if ((m = SiparisBul.Match(yol)).Success)
@@ -144,6 +146,7 @@ namespace LogoYardimcisi
                     var alinan = m.Groups[1].Value == "Purchase";
                     return m.Groups[2].Value == "AddRich" ? HizmetEkle(alinan, Json.Nesne(govde)) : HizmetGuncelle(alinan, Json.Nesne(govde));
                 }
+                if (yol == "/api/Project/AddRich") return ProjeEkle(Json.Nesne(govde));
                 if (yol == "/api/PurchaseOrder/AddRich") return SiparisEkle(Json.Nesne(govde));
                 if (yol == "/api/PurchaseOrder/UpdateRich") return SiparisGuncelle(Json.Nesne(govde));
                 if ((m = SiparisAlt.Match(yol)).Success && m.Groups[2].Value == "cancel") return SiparisIptal(Coz(m, 1));
@@ -205,6 +208,14 @@ namespace LogoYardimcisi
             var k = Json.Metin(d, ad, true);
             if (k.Length > enCok) throw new GecersizIstek(ad + " en çok " + enCok + " karakter olmalı.");
             return k;
+        }
+
+        // 3315: belge başlığının proje kodu (isteğe bağlı). CORE yalnız Logo'da açılmış projenin kodunu gönderir; varlığını Logo denetler.
+        static string ProjeKoduOku(Dictionary<string, object> g)
+        {
+            var p = Json.Metin(g, "projectCode", false);
+            if (p != null && (p.Trim() == "" || p.Length > ProjeKoduEnCok)) throw new GecersizIstek("projectCode 1-" + ProjeKoduEnCok + " karakter olmalı.");
+            return p;
         }
 
         static decimal Pozitif(Dictionary<string, object> d, string ad)
@@ -582,6 +593,34 @@ namespace LogoYardimcisi
             return Cevap.Basari(k == null ? 0 : k.Ref);
         }
 
+        // 3315: proje kartı nesne numarası ölçülmeden proje uçları kapalıdır; sunucu 501'i "kurulum bekliyor" sayar.
+        public const string ProjeKapali = "Proje kartı Logo'da ölçülmedi; ayar dosyasına proje_nesnesi yazılınca açılır (kurulum/logo-yardimcisi.md).";
+        public const int ProjeKoduEnCok = 24;
+
+        Cevap ProjeVarMiOku(string kod)
+        {
+            if (ayar.ProjeNesnesi == null) return Cevap.Hata(501, ProjeKapali);
+            var p = oku.Proje(kod);
+            return Cevap.Basari(p == null ? 0 : p.Ref);
+        }
+
+        Cevap ProjeEkle(Dictionary<string, object> g)
+        {
+            if (ayar.ProjeNesnesi == null) return Cevap.Hata(501, ProjeKapali);
+            var kod = Kod(g, "code", ProjeKoduEnCok);
+            var ad = Json.Metin(g, "name", true);
+            var varolan = oku.Proje(kod);
+            if (varolan != null) return Cevap.Ret("Bu kodla proje kartı zaten var (logicalRef " + varolan.Ref + ").");
+            int yeniRef;
+            var h = yaz.AlanlaEkle(ayar.ProjeNesnesi.Value, new AlanListesi().Ekle("CODE", kod).Ekle("NAME", ad), new List<AlanListesi>(), new AlanListesi(), out yeniRef);
+            if (h != null) return Cevap.Ret(h);
+            var k = oku.Proje(kod);
+            if (k == null) return Cevap.Hata(500, "Logo kaydı onayladı ama proje kartı SQL'de bulunamadı; işlendiği bilinmiyor.");
+            var f = new List<string>();
+            Esit(f, "NAME", ad, k.Ad);
+            return f.Count > 0 ? DogrulamaTutmadi("Proje kartı", k.Ref, f) : Cevap.Basari(k.Ref);
+        }
+
         Cevap HizmetEkle(bool alinan, Dictionary<string, object> g)
         {
             var kod = Kod(g, "CODE", StokKoduEnCok);
@@ -733,6 +772,7 @@ namespace LogoYardimcisi
             var cari = Json.Metin(g, "arpCode", true);
             var durum = Secenek(g, "orderStatus", new[] { 1, 4 });
             var d = DovizCoz(g);
+            var proje = ProjeKoduOku(g);
             var satirlar = new List<SiparisSatiri>();
             foreach (var s in Satirlar(g, "lines")) satirlar.Add(SiparisSatiriCoz(s));
 
@@ -750,6 +790,7 @@ namespace LogoYardimcisi
             // Ambar SOURCE_WH, işyeri DIVISION (SOURCEINDEX ve BRANCH etiket değil; tuzak 4).
             // Kart 3066: GL_CODE cari koduyla; dövizli fişte döviz kullanımı (CURRSEL_TOTAL 2) eski programın çalışan gönderimindeki gibi.
             x.Alan("GL_CODE", cari);
+            if (proje != null) x.Alan("PROJECT_CODE", proje);
             x.Alan("SOURCE_WH", ayar.AmbarNo).Alan("DIVISION", ayar.IsyeriNo).Alan("ORDER_STATUS", durum).Alan("CURRSEL_TOTAL", d == null ? 1 : 2);
             if (d != null) x.Alan("CURRSEL_DETAILS", 2).Alan("CURR_TRANSACTIN", d.Tur).Alan("TC_RATE", d.Kur).Alan("RC_RATE", d.Kur);
             x.Ac("TRANSACTIONS");
@@ -1047,6 +1088,7 @@ namespace LogoYardimcisi
             var no = Kod(g, "number", FisNoEnCok);
             var tarih = Bicim.TarihDenetle(Json.Metin(g, "date", true), "date");
             var durum = Secenek(g, "logoStatus", new[] { 0, 1 });
+            var proje = ProjeKoduOku(g);
             var satirlar = Satirlar(g, "lines");
             var kalemler = new List<SiparisSatiri>();
             foreach (var s in satirlar)
@@ -1070,6 +1112,7 @@ namespace LogoYardimcisi
             var x = new LogoXml("DEMAND_FICHES", "DEMAND_VOUCHER");
             // Belge no etiketi talep fişinde DO_CODE'dur, DOC_NUMBER yok (tuzak 7); TMI belge no göndermez.
             x.Alan("NUMBER", no).Alan("DATE", tarih).Alan("TIME", Bicim.LogoSaati(simdi.Hour, simdi.Minute, simdi.Second)).Alan("STATUS", durum);
+            if (proje != null) x.Alan("PROJECT_CODE", proje);
             x.Alan("LINE_CNT", kalemler.Count).Ac("TRANSACTIONS");
             for (var i = 0; i < kalemler.Count; i++)
             {
@@ -1290,6 +1333,8 @@ namespace LogoYardimcisi
 
             var h0 = new AlanListesi();
             h0.Ekle("TYPE", 1).Ekle("NUMBER", no).Ekle("DATE", tarih).Ekle("ARP_CODE", t.CariKod).Ekle("SOURCE_WH", ayar.AmbarNo).Ekle("ORDER_STATUS", durum);
+            var proje = ProjeKoduOku(g);
+            if (proje != null) h0.Ekle("PROJECT_CODE", proje);
             var doviz = t.DovizTuru != 0;
             if (doviz) h0.Ekle("CURRSEL_TOTAL", 2).Ekle("CURRSEL_DETAILS", 2).Ekle("CURR_TRANSACTIN", t.DovizTuru).Ekle("TC_RATE", t.Kur).Ekle("RC_RATE", t.Kur);
             var la = new List<AlanListesi>();

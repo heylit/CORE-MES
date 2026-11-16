@@ -19,7 +19,7 @@ const belge = (o: Partial<LogoBelgesi>): LogoBelgesi => ({
   neYapmali: 'Nedeni düzeltin, sonra "Yeniden gönder".', yenidenGonderilebilir: true, denemeSayisi: 1, sonDeneme: T, sonrakiDeneme: null, ...o,
 });
 const logo: LogoGidenIzlemeCevabi = {
-  sayac: { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 1, sirada: 0 },
+  sayac: { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 1, projeBekliyor: 0, sirada: 0 },
   belgeler: [
     belge({ no: 1 }),
     belge({ no: 2 }),
@@ -45,7 +45,7 @@ const smartesHazirlik: SmartesHazirlikCevabi = { baglanti: 'kapali', ortam: { ad
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Cagri { yontem: string; yol: string; govde: unknown }
-function sunucuKur() {
+function sunucuKur(logoCevabi: LogoGidenIzlemeCevabi = logo) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -53,7 +53,7 @@ function sunucuKur() {
     const govde: unknown = typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined;
     cagrilar.push({ yontem, yol, govde });
     const yanitlar: Record<string, unknown> = {
-      'GET /logo/giden': logo, 'GET /smartes/giden/sorunlar': smartes, 'GET /logo/hazirlik': logoHazirlik, 'GET /smartes/hazirlik': smartesHazirlik,
+      'GET /logo/giden': logoCevabi, 'GET /smartes/giden/sorunlar': smartes, 'GET /logo/hazirlik': logoHazirlik, 'GET /smartes/hazirlik': smartesHazirlik,
     };
     if (yontem === 'POST' && yol === '/logo/giden/yeniden-gonder') return json(200, { sirada: (govde as { belgeler: unknown[] }).belgeler.length, durmayan: 0 });
     const y = yanitlar[`${yontem} ${yol}`];
@@ -95,6 +95,20 @@ describe('Bağlantı izleme (3313)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Kapat/ }));
     fireEvent.click(screen.getByText('Talep fişi'));
     expect(await screen.findByRole('button', { name: 'Yeniden gönder' })).toBeTruthy();
+  });
+
+  it('3315 proje bekleyen belge ayrı sayılır; çip yalnız onu süzer, Yeniden gönder yok', async () => {
+    sunucuKur({ ...logo, belgeler: [...logo.belgeler, belge({ belge: 'talep', belgeAdi: 'Talep fişi', no: 9, durum: 'proje-bekliyor', yenidenGonderilebilir: false,
+      neden: 'ORN.PRJ1 Logo\'ya gidince belge kendiliğinden gider.', denemeSayisi: null, sonDeneme: null, neYapmali: 'Bir şey yapmanız gerekmez.' })] });
+    cizdir(yazmali);
+    const kart = await screen.findByRole('region', { name: 'Gitmeyen belgeler' });
+    await waitFor(() => expect(within(kart).getByText('1 proje bekliyor')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Proje bekliyor 1' }));
+    expect(await screen.findByText('ORN.PRJ1 Logo\'ya gidince belge kendiliğinden gider.')).toBeTruthy();
+    expect(screen.queryByText('Malzeme kartı')).toBeNull();
+    fireEvent.click(screen.getByText('Talep fişi'));
+    await screen.findByText(/Bir şey yapmanız gerekmez/);
+    expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
   });
 
   it('T11 yazma yetkisi olmayan görür, gönderemez; toplu düğme yok', async () => {
