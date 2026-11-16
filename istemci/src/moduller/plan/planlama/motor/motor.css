@@ -455,6 +455,17 @@
   .tc-pym-sb-sag .tc-rozet { display: inline-flex; }
   }
 @container (max-width: 599px) { .tc-pym-sb-nb-k[data-ikincil], .tc-pym-sb-isik-ad { display: none; } }
+/* Sayfa yuvası (3317): sayfanın özeti şerit satırında durur. Dar şeritte özet kendi satırına iner ve toplu düğme kısa adını alır; telefonda
+   düğmede yalnız simge kalır. */
+.tc-pym-sb-yuva { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; }
+.tc-pym-sb-iyi > span[data-kisa] { display: none; }
+@container (max-width: 899px) {
+  .tc-pym-sb-iyi > span[data-uzun] { display: none; }
+  .tc-pym-sb-iyi > span[data-kisa] { display: inline; }
+  .tc-pym-sb:has(> .tc-pym-sb-yuva) { flex-wrap: wrap; }
+  .tc-pym-sb-yuva { order: 9; flex: 1 1 100%; }
+}
+@container (max-width: 599px) { .tc-pym-sb-iyi > span[data-kisa] { display: none; } }
 .tc-pym-sk-nb { position: static; max-height: none; margin: 0 var(--b-2) var(--b-2); box-shadow: none; }
 
 .tc-pym-of { display: grid; gap: var(--b-1); font-size: var(--yazi-s); }

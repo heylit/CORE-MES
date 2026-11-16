@@ -344,9 +344,9 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
   expect(ag.hatalar).toEqual([]);
 });
 
-// Kart 3282 (dilim 1a): Planlama Kokpit'le açılır; Gelenler plansız emri ve saha olayını gösterir, Yerleştir emrin kartını seçer ve boş yerleri
+// Kart 3282 (dilim 1a), 3317 a: Planlama Kokpit'le açılır; saha olayı şeritteki listede görünür, plansız emrin kartını seçer ve boş yerleri
 // açar. Canlıya al Onay ve canlı bölümünü Kokpit'te açar; Planı düzenle tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
-test('Kokpit 3282: /plan Kokpit\'i açar; Gelenler ve Yerleştir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plansız emir kartı seçili gelir; Canlıya al Onay ve canlı bölümünü açar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum: 1 }));
   await page.route('**/api/plan/surum', (r) => json(r, {
     planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
@@ -360,18 +360,20 @@ test('Kokpit 3282: /plan Kokpit\'i açar; Gelenler ve Yerleştir; Canlıya al On
   await ac('/plan');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
-  // 3297: Gelenler kutusu yer tutmaz; sıra kartlarının başlığındaki "Tümü" bütün gelenleri sayar ve tahtanın üstüne açar. Emre bağlanamayan
-  // olay (tezgâh arızası) en üstte ayrı bölümdedir; plansız emirde Yerleştir kartı seçer.
+  // 3317 a: Gelenler ve "Tümü" yoktur; saha olayı plan şeridindeki özet ve listede durur. Emre bağlanamayan olayda (tezgâh arızası) "Göster"
+  // yoktur. Plansız emir kartın kendisidir: yerleşmesi eksik ilk kart seçili gelir.
   const serit = kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' });
-  await serit.getByRole('button', { name: /Tümü \(2\)/ }).click();
-  const gelen = kokpit.getByRole('complementary', { name: 'Gelenler' });
-  await expect(gelen.getByRole('listitem')).toHaveCount(2);
-  await expect(gelen.getByRole('region', { name: 'Emre bağlı olmayan olaylar' }).getByRole('listitem')).toContainText('Arıza / bakım');
-  await expect(gelen.getByRole('region', { name: 'Emirler' }).getByRole('listitem')).toContainText('S4');
+  await expect(serit.getByRole('button', { name: /Tümü/ })).toHaveCount(0);
+  const ozet = page.locator('[data-degisiklik-ozeti]');
+  await expect(ozet).toContainText('1 değişiklik');
+  await ozet.getByRole('button', { name: 'Gör ve uygula' }).click();
+  const liste = page.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+  await expect(liste.getByRole('region', { name: 'Sahada oldu' }).getByRole('listitem')).toContainText('Duruş: F-01');
+  await expect(liste.getByRole('button', { name: 'Göster' })).toHaveCount(0);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-kokpit-${bilgi.project.name}.png` });
-  await gelen.getByRole('button', { name: 'Yerleştir' }).click();
-  await expect(gelen).toHaveCount(0);
+  await ozet.getByRole('button', { name: 'Değişiklikleri kapat' }).click();
+  await expect(liste).toHaveCount(0);
   await expect(serit.locator('[data-kart="S4"]')).toHaveAttribute('aria-pressed', 'true');
   const s4 = kokpit.getByRole('region', { name: 'Emirler ve operasyonlar' });
   await expect(s4.locator('[data-adim="S4.a1"]')).toHaveAttribute('aria-pressed', 'true');
@@ -688,6 +690,79 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3317 a, 1. adım: planı etkileyen değişiklikler plan şeridinde özetlenir ve altında üç başlıkta listelenir (veri değişti, sahada
+// oldu, plan geride). "Göster" emrin kartını seçer ve listeyi kapatır; liste seçili karta süzülür. Veri değişiklikleri şeritteki ikincil
+// toplu düğmeyle uygulanır. Veri uydurmadır: çalışma planından bir sürüm ileridedir, bir duruş ve bir satın alma olayı vardır, saat 10:00'da
+// S1'in tornası (08:00) başlamamıştır.
+test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster kartı seçer; karta süzme; toplu düğme ikincil ve adıyla; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: { ...calisma({ ...ILK }, {}), dataVer: 4 }, surum: 1 }));
+  await page.route('**/api/plan/surum', (r) => json(r, {
+    planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
+    bayat: { bayat: true, sonCanliyaAlma: '2026-10-19T05:00:00Z', olaylar: [
+      { neden: 'durus', zaman: '2026-10-19T06:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'F-01' },
+      { neden: 'satin-alma-termini', zaman: '2026-10-19T06:30:00Z', uretimEmriId: 3, emirNo: 'S3', makineId: null, makineKod: null },
+    ] },
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T10:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const telefon = bilgi.project.name === 'g360';
+  const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
+  const ozet = cubuk.locator('[data-degisiklik-ozeti]');
+  await expect(ozet.locator('b')).toHaveText('4 değişiklik');
+  // Döküm telefonda yazmaz; sayı ve düğme kalır.
+  if (!telefon) await expect(ozet.getByText('1 veri · 2 saha · 1 geride')).toBeVisible();
+  // Nabzın ayrı olay göstergesi Kokpit'te çizilmez (şeritte tek sayı: değişiklikler; çalışmanın olayları açık nabızda listelenir).
+  await expect(cubuk.locator('[data-olaylar]')).toHaveCount(0);
+  await expect(cubuk.getByText('Veri değişti')).toHaveCount(0);
+  // Ayrı değişiklik satırı (sayfanın üstündeki) Kokpit'te çizilmez.
+  await expect(page.getByRole('region', { name: 'Değişiklik akışı' })).toHaveCount(0);
+  const toplu = cubuk.getByRole('button', { name: 'Veri değişikliklerini uygula' });
+  await expect(toplu).toBeVisible();
+  await expect(toplu).not.toHaveClass(/tc-dugme-birincil/);
+  const serit = kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' });
+  await expect(serit.locator('[data-kart="S3"] [data-olay]')).toContainText('1 değişiklik');
+  await expect(serit.locator('[data-kart="S1"] [data-olay]')).toContainText('1 değişiklik');
+  await tasma();
+
+  const ac2 = ozet.getByRole('button', { name: 'Gör ve uygula' });
+  if (telefon) expect((await ac2.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await ac2.click();
+  const liste = page.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+  await expect(liste.getByRole('region', { name: 'Veri değişti' }).getByRole('listitem')).toHaveCount(1);
+  await expect(liste.getByRole('region', { name: 'Sahada oldu' }).getByRole('listitem')).toHaveCount(2);
+  const geride = liste.getByRole('region', { name: 'Plan geride' });
+  await expect(geride.getByRole('listitem')).toHaveCount(1);
+  await expect(geride.getByRole('listitem')).toContainText('S1 · Torna · T-01');
+  await expect(geride.getByRole('listitem')).toContainText('2 sa geride');
+  await expect(liste).toContainText('"Veri değişikliklerini uygula (1)" yalnız "Veri değişti" satırlarının');
+  // Liste şeridin altında, Kokpit'in üstünde durur; sayfayı yana taşırmaz.
+  const lk = await liste.boundingBox(), kk = await kokpit.boundingBox(), ck = await cubuk.boundingBox();
+  expect(lk && ck ? lk.y >= ck.y + ck.height - 1 : false).toBe(true);
+  expect(lk && kk ? lk.y + lk.height <= kk.y + 1 : false).toBe(true);
+  if (telefon) expect((await liste.getByRole('button', { name: 'Göster' }).first().boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await tasma();
+
+  // Seçili karta süzme: S4 seçili gelir (değişikliği yok, süzgeç çıkmaz); S3 seçilince yalnız onun satırı kalır.
+  await expect(liste.getByRole('button', { name: /^Yalnız / })).toHaveCount(0);
+  await serit.locator('[data-kart="S3"]').click();
+  await liste.getByRole('button', { name: 'Yalnız S3' }).click();
+  await expect(liste.getByRole('listitem')).toHaveCount(1);
+  await expect(liste).toContainText('S3 için · 1 değişiklik');
+  await tasma();
+  await liste.getByRole('button', { name: 'Tümünü göster' }).click();
+  await expect(liste.getByRole('listitem')).toHaveCount(4);
+
+  // Göster: geride kalan işin emri seçilir, liste kapanır.
+  await geride.getByRole('button', { name: 'Göster' }).click();
+  await expect(liste).toHaveCount(0);
+  await expect(serit.locator('[data-kart="S1"]')).toHaveAttribute('aria-pressed', 'true');
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3297-4: planlı operasyon seç-yerleştir ile taşınır. Operasyona basılınca taşınabileceği yerler listelenir ve tahtada çerçevelenir;
 // yere basınca taşıma taslağa tek değişiklik olarak yazılır. Önizleme uydurmadır: istenen yer geçerlidir.
 test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun tezgâhlar öne çıkar; telefonda yer listesi; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
@@ -795,11 +870,10 @@ test('Kokpit 3297-5: kartlar müşteri siparişine göre toplanır; siparişin e
   await expect(kokpit.locator('tr[data-emir]')).toHaveCount(1);
   await expect(kokpit.locator('tr[data-emir="S4"]')).toBeVisible();
   await tasma();
-  // Gelenler'de plansız emrin Yerleştir'i emrin siparişinin kartını seçer.
+  // Plansız emrin siparişi kendi kartındadır; karta basınca seçilir.
   await ara.fill('');
   await expect(a).toHaveAttribute('aria-pressed', 'true');
-  await serit.getByRole('button', { name: /Tümü/ }).click();
-  await kokpit.getByRole('complementary', { name: 'Gelenler' }).getByRole('button', { name: 'Yerleştir' }).click();
+  await serit.locator('[data-kart="sp:902"]').click();
   await expect(serit.locator('[data-kart="sp:902"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(bolum.getByRole('heading', { level: 2 })).toContainText('ORN-SP-102 · 1 emir ve operasyonları');
   expect(ag.hatalar).toEqual([]);

@@ -9,6 +9,7 @@ import { useBekleyenUygula, usePlanKur } from '../coz.ts';
 import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { Cubuk } from './Cubuk.tsx';
 import { nabizDurumu, sabitReferans, type NabizDurumu } from './nabiz.ts';
+import type { SeritYuvaBaglari } from './yuva.ts';
 import '../motor.css';
 import { useAn } from '../saat.ts';
 
@@ -28,7 +29,7 @@ export function nabizYazmalari(c: PlanlamaCalismasi, komut: CalismaKomutu | null
 // Her planlama sayfasının üstündeki plan çubuğu (eski b-kabuk/zk-kabuk pm-sb; Soru 497/10 a). Motor sayfası kendi çubuğunu çizer;
 // iskelet bunu öteki sayfaların üstüne koyar; motor çalışma yokken de bunu çizer. Çalışma ya da plan yoksa çubuk nabızsız ve "Plan yok"la çizilir;
 // "Planı kur" çalışma varsa ve kişi yazabiliyorsa sunucudaki motorla açıktır (576), yoksa pasif.
-export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGorunumu }) {
+export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGorunumu; yuva?: SeritYuvaBaglari | null }) {
   const c = o.calisma; const emirler = o.depo.durum?.emirler ?? null;
   const { olcek: donem, kayma } = o.olcek;
   const [acik, setAcik] = useState(false);
@@ -45,7 +46,7 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   return (
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
-        ozeteGit={() => o.git('plan')} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c?.olaylar ?? []} {...y} />
+        ozeteGit={() => o.git('plan')} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c?.olaylar ?? []} yuva={o.yuva ?? null} {...y} />
     </div>
   );
 }

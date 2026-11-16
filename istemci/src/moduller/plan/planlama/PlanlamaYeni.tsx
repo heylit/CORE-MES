@@ -17,6 +17,7 @@ import { KaynakAdlariBaglami, kaynakAdlariKur } from './kaynak-kodu.tsx';
 import { DegisiklikSeridi } from './ortak/degisiklik-seridi/DegisiklikSeridi.tsx';
 import { canliBayatMetni, kaynakSatiri, seritListesi } from './ortak/degisiklik-seridi/kurallar.ts';
 import { DuzenleyenSeridi, useDuzenleyen } from './ortak/duzenleyen-seridi/DuzenleyenSeridi.tsx';
+import { SeritYuvasi, type SeritYuvaBaglari, type SeritYuvalari } from './motor/ust/yuva.ts';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
 import { useEmirNo } from './ortak/emir-no.ts';
@@ -51,6 +52,12 @@ function PlanlamaEkrani() {
   // 657 a, 1395 a: çalışma kaydı yoksa sayfa açılışta yazmaz; yazabilen kişi boş çalışmayı düğmeyle sunucuya kurdurur (Reçete ve Rota
   // kaydından) ve sayfa düzenlenebilir açılır. Yazamayan salt okunur boş görür.
   const [kuruluyor, setKuruluyor] = useState(false);
+  // Plan şeridindeki yuvalar (3317): şerit öğeleri bağlayınca sayfa içeriğini oraya taşır.
+  const [yuvalar, yuvalarKur] = useState<SeritYuvalari>({ satir: null, alt: null });
+  const yuvaBaglari = useMemo<SeritYuvaBaglari>(() => ({
+    satir: (el) => { yuvalarKur((y) => (y.satir === el ? y : { ...y, satir: el })); },
+    alt: (el) => { yuvalarKur((y) => (y.alt === el ? y : { ...y, alt: el })); },
+  }), []);
   const calismaAc = useCallback((): void => {
     setKuruluyor(true);
     tekrarKorumaliGonder((d) => api.post<PlanlamaCalismasiCevabi>('/plan/planlama-calismasi/olustur', undefined, d)).then(
@@ -89,6 +96,7 @@ function PlanlamaEkrani() {
     if (durum.tur !== 'hazir' || durum.depo.calisma === null || durum.depo.kaynakDegisikligi === null) return null;
     return kaynakSatiri(durum.depo.kaynakDegisikligi, Date.now(), durum.depo.calisma.dataVer);
   }, [durum]);
+  const yuvaDegeri = useMemo(() => ({ ...yuvalar, dis: disSatir }), [yuvalar, disSatir]);
   const benimSurum = useCallback(() => yazici?.surum ?? (durum.tur === 'hazir' ? durum.depo.calismaSurumu : null), [yazici, durum]);
   const duzenleyen = useDuzenleyen(durum.tur === 'hazir' && kullanici ? kullanici.id : null, benimSurum);
   useEffect(() => {
@@ -156,7 +164,8 @@ function PlanlamaEkrani() {
   const canliBayat = ((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat);
   // Değişiklik satırı yalnız bekleyen değişiklik ya da eskiyen canlı plan varken yer kaplar (3042).
   const motorEkrani = gorunum === 'plan';
-  const serit = calisma !== null && calisma.plan !== null
+  // Kokpit'te bekleyen değişiklikler ve eskiten olaylar plan şeridindeki tek listededir (3317 a); ayrı satır çizilmez.
+  const serit = calisma !== null && calisma.plan !== null && gorunum !== 'kokpit'
     && (!motorEkrani || seritListesi(calisma, disSatir).length > 0 || (canliBayat !== null && canliBayatMetni(canliBayat) !== null));
   // Üst alan tek satırdır (2320 S1 d): düzenleyen, değişiklik ve çalışma açma şeritleri aynı kapta alt alta.
   const ust = serit || calismaYok || duzenleyen !== null;
@@ -187,15 +196,18 @@ function PlanlamaEkrani() {
                   <PlanSeridi
                     depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                     olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} gorunum={gorunum}
+                    yuva={gorunum === 'kokpit' ? yuvaBaglari : null}
                   />
                 </Suspense>
               )}
+              <SeritYuvasi.Provider value={yuvaDegeri}>
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
                   depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                   olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec}
                 />
               </Suspense>
+              </SeritYuvasi.Provider>
             </>
           )}
       </div>

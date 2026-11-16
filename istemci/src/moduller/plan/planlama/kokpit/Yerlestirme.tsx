@@ -21,7 +21,7 @@ export interface SiraSeridiOzellikleri {
   sec: (kok: string) => void;
   // "28.10 Çar 17:00" biçiminde yazar (Kokpit'in zaman yazıcısı).
   zaman: (t: number) => string;
-  // Karta bağlı saha olaylarının sayısı (kök kimliğiyle); kartta rozet olur.
+  // Karta bağlı değişikliklerin (saha olayı, geride kalan iş) sayısı (kök kimliğiyle); kartta yazar.
   olay?: ReadonlyMap<string, number>;
   // Başlığın sağındaki yer (bütün gelenleri açan düğme).
   sag?: ReactNode;
@@ -56,7 +56,7 @@ export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag, bagVar = fa
                   </span>
                   <small>{k.siparis ? `${k.siparis.musteri !== null ? `${k.siparis.musteri} · ` : ''}${String(k.emirler.length)} emir` : `${siparissiz ? 'Siparişsiz · ' : ''}${bas?.urun ?? ''}`} · {termin}</small>
                   <progress max={Math.max(1, k.adim)} value={k.yerlesen} aria-hidden="true" />
-                  <small>{`${String(k.yerlesen)} / ${String(k.adim)} operasyon yerleşti`}{(olay?.get(k.kok) ?? 0) > 0 ? <b data-olay=""> · {String(olay?.get(k.kok))} olay</b> : null}</small>
+                  <small>{`${String(k.yerlesen)} / ${String(k.adim)} operasyon yerleşti`}{(olay?.get(k.kok) ?? 0) > 0 ? <b data-olay=""> · {String(olay?.get(k.kok))} değişiklik</b> : null}</small>
                 </button>
               </li>
             );

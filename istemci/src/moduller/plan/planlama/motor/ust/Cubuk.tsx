@@ -5,6 +5,7 @@ import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
 import { CALISMA_ACILINCA, YOK_NOTU } from '../ortak.tsx';
 import { OLAY_YOK, useOlayAc } from '../../gorunumler.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
+import type { SeritYuvaBaglari } from './yuva.ts';
 
 // Plan şeridi (3308-2 a): durum ışığı, üç nabız sayısı, olay sayısı, plan durumu ve tek eylem; tek satırdır, dokununca plan nabzı ve olaylar açılır.
 interface Ozellikler {
@@ -19,6 +20,10 @@ interface Ozellikler {
   bekleyenUygula?: BekleyenUygulayici | null;
   // Çalışmanın olayları (arıza, acil sipariş, malzeme, eksik kişi, fason); açık şeritte listelenir.
   olaylar?: readonly Record<string, unknown>[];
+  // Sayfanın şeride kendi içeriğini çizdiği yerler (3317, Kokpit): satırdaki yuva plan durumu rozetinin yerini alır (durumu sayfa söyler),
+  // toplu düğme veri değişikliklerini adıyla söyler ve ikincildir (sayfanın tek birincili taslak çubuğundadır), nabzın olay sayısı satırda
+  // çizilmez (şeritte tek sayı sayfanınkidir; olaylar açık nabızda listelenir).
+  yuva?: SeritYuvaBaglari | null;
 }
 
 // Durum ışığı: geciken yoksa yeşil; bir iki geciken ya da darboğaz %95 üstündeyse sarı; daha çok gecikende kırmızı.
@@ -64,20 +69,26 @@ export function Cubuk(o: Ozellikler) {
                 </button>
               );
             })}
-            <button type="button" className="tc-pym-sb-nb-k" data-ikincil="" data-olaylar="" aria-expanded={o.nabizAcik} title="Olaylar: arıza, acil sipariş, malzeme, eksik kişi, fason. Aç ya da kapat." onClick={() => o.nabizAc(!o.nabizAcik)}>
+{!o.yuva && (
+                        <button type="button" className="tc-pym-sb-nb-k" data-ikincil="" data-olaylar="" aria-expanded={o.nabizAcik} title="Olaylar: arıza, acil sipariş, malzeme, eksik kişi, fason. Aç ya da kapat." onClick={() => o.nabizAc(!o.nabizAcik)}>
               <Simge ad="alert" boyut="k" /><b className="tc-pym-mono">{olaylar.length}</b><span>olay</span>
             </button>
+            )}
           </div>
         )}
+        {o.yuva && <span className="tc-pym-sb-yuva" ref={o.yuva.satir} />}
         <span className="tc-pym-sb-sag">
-          {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
+          {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.yuva ? null : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
-            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
-              title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
-              aria-label="Değişiklikleri uygula" onClick={() => { uyg.uygula(); }}>
-              <Simge ad="play" boyut="k" /><span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>
+            <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
+              title={uyg.suruyor ? KURULUYOR : `${o.yuva ? 'Veri değişikliklerini' : 'Değişiklikleri'} uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
+              aria-label={o.yuva ? 'Veri değişikliklerini uygula' : 'Değişiklikleri uygula'} onClick={() => { uyg.uygula(); }}>
+              <Simge ad="play" boyut="k" />
+              {o.yuva && !uyg.suruyor
+                ? <><span data-uzun="">{`Veri değişikliklerini uygula (${String(uyg.say)})`}</span><span data-kisa="" aria-hidden="true">{`Uygula (${String(uyg.say)})`}</span></>
+                : <span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>}
             </button>
           ) : o.planYaz && (kur ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}
@@ -92,6 +103,7 @@ export function Cubuk(o: Ozellikler) {
         </span>
       </div>
       {n && o.nabizAcik && <NabizPaneli {...o} n={n} />}
+      {o.yuva && <div className="tc-pym-sb-alt-yuva" ref={o.yuva.alt} />}
     </div>
   );
 }
