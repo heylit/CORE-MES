@@ -837,11 +837,22 @@ export async function onayla(db: Db, tarih: string, surum: number, kaynak: Harit
   await sorgu.onayYaz(db, plan.id);
   const yola = await sorgu.plandakiIslerinDurumu(db, plan.id, 'yolda', kisiId);
   await sorgu.urunFirmalariniYaz(db, yola);
-  if (kisiId !== null) await onaydaTetikle(db, kisiId, yola);
-  const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, yola), onceki: 'planlandi', yeni: 'yolda', kisiId });
+  const satirlar = kisiId === null ? await sorgu.islerinUrunSatirlari(db, yola) : await onaydaTetikleVeDenetle(db, kisiId, yola);
+  const uyarilar = await urunSevkiBildir(db, { satirlar, onceki: 'planlandi', yeni: 'yolda', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
 
+// Kişili onayda ürün stoğu yalnız depo çıkışında oynar (3348-2 a): tetiklenemeyen (hazır olmayan) ürünlü iş eski yoldan onayda
+// stoktan düşmesin diye onay reddedilir. Kişisiz onay (iç çağrı) eski yolda kalır.
+async function onaydaTetikleVeDenetle(db: Db, kisiId: number, yola: readonly number[]): Promise<Awaited<ReturnType<typeof sorgu.islerinUrunSatirlari>>> {
+  await onaydaTetikle(db, kisiId, yola);
+  const kalan = await sorgu.islerinUrunSatirlari(db, yola);
+  if (kalan.length) {
+    const isler = new Set(kalan.map((k) => k.isId)).size;
+    throw gecersiz(`${String(isler)} işte depoya düşemeyen ürün var (hazır değil); işi plandan çıkarın ya da Tüm işler'den erken çıkış verin.`);
+  }
+  return [];
+}
 export async function onayiKaldir(db: Db, tarih: string, surum: number, kaynak: HaritaKaynagi, kisiId: number | null = null): Promise<GunPlaniCevabi> {
   const plan = await sorgu.planKilitle(db, tarih);
   if (!plan) throw bulunamadi('Bu gün için plan yok.');

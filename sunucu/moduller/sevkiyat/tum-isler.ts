@@ -282,6 +282,8 @@ export async function isTetikle(db: Db, kisiId: number, isId: number): Promise<T
 export async function isTetiginiGeriAl(db: Db, isId: number): Promise<TumIsSatiri[]> {
   const is = await sorgu.isTetigi(db, isId);
   if (is === null || is.iptal) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+  // Onaylı plandaki işin tetiği onayla kalkar; burada kalkarsa onay kaldırma hiç yazılmamış yola hareketini geri alırdı.
+  if (is.durum === 'yolda') throw gecersiz('Onaylı plandaki işin tetiği plan onayıyla yönetilir; önce planın onayını kaldırın.');
   const kalemler = await sorgu.isinKalemleri(db, isId);
   const ihlal = tetikGeriAlIhlali({ tetiklendi: is.tetiklendi !== null }, kalemler.some((k) => k.depoZamani !== null || k.kabulAdet !== null));
   if (ihlal) throw gecersiz(ihlal);

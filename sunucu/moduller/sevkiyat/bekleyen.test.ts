@@ -317,9 +317,16 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
       await o().sahip.sorgu("UPDATE sevkiyat_isi SET iptal_edildi = now() WHERE id <> $1 AND iptal_edildi IS NULL AND durum IN ('havuzda', 'planlandi')", [is.id]);
       const p = await o().vt.tx((db) => servis.kaydet(db, tarih, { amac: 'sure', surum: null, rotalar: [{ aracId, kilitli: false, ogeler: [{ isId: is.id, alis: false }] }] }, kaynak));
       assert.deepEqual(olaylar, [], 'taslak plana almak bildirilmez');
+      // Risk K1: depoya düşemeyen (hazır olmayan) ürünlü iş onaylanmaz; stok onayda oynamaz.
+      await o().sahip.sorgu('UPDATE sevkiyat_bekleyen SET adet = NULL WHERE id = $1', [b.id]);
+      await assert.rejects(o().vt.tx((db) => servis.onayla(db, tarih, p.surum!, kaynak, depoId)), /depoya düşemeyen ürün/);
+      assert.deepEqual(olaylar, [], 'reddedilen onay stok bildirmez');
+      await o().sahip.sorgu("UPDATE sevkiyat_bekleyen SET adet = '6' WHERE id = $1", [b.id]);
       const onayli = await o().vt.tx((db) => servis.onayla(db, tarih, p.surum!, kaynak, depoId));
       assert.equal('uyarilar' in onayli, false, 'depoya düşen ürün onayda stok uyarısı üretmez');
       assert.equal((await o().sahip.tek<{ d: boolean }>('SELECT tetiklendi IS NOT NULL AS d FROM sevkiyat_isi WHERE id = $1', [is.id]))?.d, true);
+      // Risk K2: onaylı plandaki işin tetiği elle geri alınmaz (onay kaldırma yazılmamış yola hareketini geri almasın).
+      assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/tetigi-geri-al`)).durum, 422);
       const kaldirilan = await o().vt.tx((db) => servis.onayiKaldir(db, tarih, onayli.surum!, kaynak, depoId));
       assert.equal('uyarilar' in kaldirilan, false, 'uyarı yoksa alan gönderilmez');
       assert.deepEqual(olaylar, [], 'yola çıkışı bildirilmeyen iş dönüşü de bildirmez');
@@ -723,6 +730,11 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const bos = await yaz(yazilan.surum, '  ');
     assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
     assert.equal(isCevabi.parse(bos.govde).is.belgeNo, null, 'boş metin numarayı siler');
+    // Risk N1: yoldaki işte (3348-1 göçü yokken) veritabanı reddi 500 değil, kullanıcıya okunur ret olarak döner.
+    await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'yolda' WHERE id = $1", [is.id]);
+    const yolda = await yaz(yazilan.surum + 1, 'IRS-0004');
+    assert.equal(yolda.durum, 422, JSON.stringify(yolda.govde));
+    await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'havuzda' WHERE id = $1", [is.id]);
     assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 200);
     assert.equal((await yaz(yazilan.surum + 1, 'IRS-0003')).durum, 404);
   });
