@@ -147,3 +147,26 @@ test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir;
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
 });
+
+// Teklif formu basımda boş çıkmasın: başka modülün basım kuralı (body * gizli) basım kopyasını görünmez yapıyordu.
+test('Teklif formu basımda görünür: Yazdır / PDF kopyası kâğıda çıkar', async ({ page, ac }) => {
+  const firma = (await (await page.request.get(`${ADRES}/api/musteri-tedarikci/firmalar/secim`)).json() as { firmalar: { id: number; tur: string }[] })
+    .firmalar.find((f) => f.tur !== 'tedarikci');
+  test.skip(firma === undefined, 'örnek veride müşteri firması yok');
+  const tanim = `Ekran testi ${randomUUID().slice(0, 8)}`;
+  const c = await page.request.post(`${ADRES}/api/siparisler/teklifler/ekle`, {
+    headers: { 'istek-kimligi': randomUUID() }, data: { firmaId: firma?.id, baslik: 'Ekran testi teklifi', satirlar: [{ malzemeNo: null, tanim, miktar: '40' }] },
+  });
+  expect(c.status(), await c.text()).toBe(200);
+  const t = await c.json() as { id: number };
+  await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
+  await page.getByLabel(new RegExp(`^${tanim} birim fiyat`)).fill('11');
+  await page.getByRole('button', { name: 'Devam' }).click();
+  await page.getByLabel('Teslim süresi (gün)').fill('14');
+  await page.getByRole('button', { name: 'Teklifi ver' }).click();
+  await expect(page.getByRole('button', { name: 'Yazdır / PDF' })).toBeEnabled();
+  await page.emulateMedia({ media: 'print' });
+  const baski = page.locator('.tc-tf-baski .tc-tf-kagit');
+  await expect(baski).toBeVisible();
+  await expect(baski.getByText(tanim)).toBeVisible();
+});

@@ -103,6 +103,7 @@
 @media print {
   body:has(> .tc-tf-baski) > :not(.tc-tf-baski) { display: none; }
   .tc-tf-baski { display: block; page: tc-tf-a4; }
+  .tc-tf-baski, .tc-tf-baski * { visibility: visible; }
   .tc-tf-baski .tc-tf-kagit { box-shadow: none; min-block-size: 297mm; }
 }
 /* Teklif formu penceresinde metin düzenleme (3328). */

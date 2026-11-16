@@ -151,7 +151,7 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-qr-kare { fill: var(--ink); }
 @media (max-width: 767px) { .tc-stok-sepet { grid-template-columns: 1fr; } }
 @media print {
-  body * { visibility: hidden; }
+  body:has(.tc-stok-yazdir) * { visibility: hidden; }
   .tc-stok-yazdir, .tc-stok-yazdir * { visibility: visible; }
   .tc-stok-yazdir { position: absolute; inset: 0; }
   .tc-stok-yazdir button { display: none; }
