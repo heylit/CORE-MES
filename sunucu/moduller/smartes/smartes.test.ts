@@ -601,11 +601,41 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal((await oku()).toplam['durum'], 'yeniden-denenecek');
     sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
 
-    // İptal edilen emrin rozeti yok; adımların izi ayrıntıda kalır.
+    // İptal edilen emir: kapanış bildirimi takılınca rozet kalır (SmartES'te iş emri açık); kapanış gidince rozet yok, iz ayrıntıda.
     await iptalEt(uretimEmriId);
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'Kilitli' }));
+    simdi += 3 * 3_600_000;
+    await gonderimTuru(vt(), turOrtami());
+    e = await oku();
+    assert.deepEqual([e.toplam['durum'], e.toplam['opNo']], ['durdu', 10], 'kapanışı duran iptal emri');
+    sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
+    assert.equal((await yenidenGonder([ilk])).statusCode, 200);
+    await gonderimTuru(vt(), turOrtami());
     e = await oku();
     assert.deepEqual([e.toplam['durum'], e.toplam['gonderilmez'], e.toplam['toplam']], [null, 'adim-disi', 0]);
-    assert.equal(adim(e, ilk).durum, 'yeniden-denenecek');
+    assert.equal(adim(e, ilk).durum, 'gonderildi');
+  });
+
+  test('3346 (Test T1): gönderilmeyecek adım eşlemeli istasyonda da "—" ve adım dışı: bitmiş adım, fason adım, taslak emir', async () => {
+    const sahip = ortam!.sahip;
+    const { uretimEmriId, ilk, ikinci } = await emirKur(true);
+    await sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 20 WHERE id = $1", [ilk]);
+    await sahip.sorgu(`UPDATE uretim_emirleri_is_emri SET fason_firmasiz = true, makine_id = NULL, kisi_id = NULL, istasyon_id = NULL,
+      ayar_suresi_dk = NULL, birim_sure_dk = NULL WHERE id = $1`, [ikinci]);
+    const taslak = await emirKur(true);
+    await sahip.sorgu("UPDATE uretim_emri SET durum = 'taslak' WHERE id = $1", [taslak.uretimEmriId]);
+    const c = await vt().tx((db) => emirDurumlari(db, [uretimEmriId, taslak.uretimEmriId], turOrtami().istemci));
+    const adimlar = c.emirler.flatMap((x) => x.adimlar.map((a) => [a.isEmriId, a.durum, a.gonderilmez]));
+    assert.deepEqual(adimlar, [[ilk, null, 'adim-disi'], [ikinci, null, 'adim-disi'], [taslak.ilk, null, 'adim-disi'], [taslak.ikinci, null, 'adim-disi']]);
+    assert.deepEqual(c.emirler.map((x) => [x.toplam.durum, x.toplam.gonderilmez]), [[null, 'adim-disi'], [null, 'adim-disi']]);
+    // Gönderim de aynı kuralla gitmez: bu adımlardan SmartES'e istek yok.
+    sahte.cagrilar.length = 0;
+    await gonderimTuru(vt(), turOrtami());
+    const giden = new Set(sahte.cagrilar.filter((x) => x.metot === 'WorkOrdersCreateUpdate').map((x) => x.parametreler['ErpID']));
+    for (const id of [ilk, ikinci, taslak.ilk, taslak.ikinci]) assert.equal(giden.has(String(id)), false, String(id));
+    // Bitmiş adımı olan emir iptal edilemez; sonraki testlerin gönderim sayısına girmesin diye kapanır.
+    await sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 0 WHERE uretim_emri_id = $1 AND durum <> 'tamam'", [uretimEmriId]);
+    await iptalEt(taslak.uretimEmriId);
   });
 
   // Testin verdiği tx ile aynı veritabanı: işin transaction'ları izlenir ya da kesilir.

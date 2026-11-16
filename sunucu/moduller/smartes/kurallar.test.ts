@@ -8,7 +8,7 @@ import {
   adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
   hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi, FAULT_SINIRI, gonderimEylemi, kesinRetMi,
-  adimRozeti, emirRozeti,
+  adimRozeti, emirRozeti, rozetNedeni, ROZET_NEDENI_AZAMI,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -452,13 +452,14 @@ describe('Üretim emrinde SmartES rozeti (3346)', () => {
   const giden = (durum: 'gonderildi' | 'hata' | 'kapandi', sonrakiDeneme: Date | null = null) =>
     ({ durum, sonrakiDeneme, sonHata: durum === 'hata' ? 'SmartES reddetti: X' : null, smartesIsEmriNo: 'ORN-1' });
   const acik = { eslemeli: true, gidecek: true, baglantiAcik: true };
-  test('adımın izi durumunu verir; izi yoksa nedeni sırayla: eşleme, adım dışı, bağlantı', () => {
+  test('adımın izi durumunu verir; izi yoksa nedeni sırayla: adım dışı, eşleme, bağlantı', () => {
     assert.equal(adimRozeti({ ...acik, giden: giden('gonderildi') }).durum, 'gonderildi');
     assert.equal(adimRozeti({ ...acik, giden: giden('kapandi') }).durum, 'gonderildi');
     assert.deepEqual(adimRozeti({ ...acik, giden: giden('hata') }), { durum: 'durdu', gonderilmez: null, smartesNo: 'ORN-1', neden: 'SmartES reddetti: X' });
     assert.equal(adimRozeti({ ...acik, giden: giden('hata', new Date('2026-11-16T10:00:00Z')) }).durum, 'yeniden-denenecek');
     assert.deepEqual(adimRozeti({ ...acik, giden: null }), { durum: 'sirada', gonderilmez: null, smartesNo: null, neden: null });
-    assert.equal(adimRozeti({ eslemeli: false, gidecek: false, baglantiAcik: false, giden: null }).gonderilmez, 'esleme-yok');
+    assert.equal(adimRozeti({ eslemeli: false, gidecek: false, baglantiAcik: false, giden: null }).gonderilmez, 'adim-disi', 'fason adımın istasyonu yok');
+    assert.equal(adimRozeti({ eslemeli: false, gidecek: true, baglantiAcik: false, giden: null }).gonderilmez, 'esleme-yok');
     assert.equal(adimRozeti({ ...acik, gidecek: false, baglantiAcik: false, giden: null }).gonderilmez, 'adim-disi');
     assert.equal(adimRozeti({ ...acik, baglantiAcik: false, giden: null }).gonderilmez, 'baglanti-kapali');
   });
@@ -474,5 +475,14 @@ describe('Üretim emrinde SmartES rozeti (3346)', () => {
     assert.equal(emirRozeti([a(10, null, 'esleme-yok'), a(20, null, 'adim-disi')]).gonderilmez, 'adim-disi');
     assert.equal(emirRozeti([a(10, null, 'esleme-yok'), a(20, null, 'baglanti-kapali')]).gonderilmez, 'baglanti-kapali');
     assert.equal(emirRozeti([]).gonderilmez, 'adim-disi');
+  });
+  test('neden tek satır ve en çok 200 karakter (ham SmartES metni emri okuyan herkese gider)', () => {
+    assert.equal(rozetNedeni('SmartES reddetti:\n  satir 1\r\n\tsatir 2 '), 'SmartES reddetti: satir 1 satir 2');
+    const uzun = rozetNedeni('x'.repeat(500))!;
+    assert.equal(uzun.length, ROZET_NEDENI_AZAMI);
+    assert.equal(uzun.endsWith('…'), true);
+    assert.equal(rozetNedeni(null), null);
+    const g = { durum: 'hata' as const, sonrakiDeneme: null, sonHata: `a\nb${'y'.repeat(300)}`, smartesIsEmriNo: 'ORN-1' };
+    assert.equal(adimRozeti({ eslemeli: true, gidecek: true, baglantiAcik: true, giden: g }).neden?.length, ROZET_NEDENI_AZAMI);
   });
 });

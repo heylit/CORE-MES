@@ -434,8 +434,11 @@ export async function emirDurumlari(db: Db, emirIdleri: readonly number[], istem
     emirler: [...new Set(emirIdleri)].flatMap((id) => {
       const liste = emreGore.get(id);
       if (liste === undefined) return [];
-      // Bitmiş ve iptal emrin rozeti yoktur (3346 varsayımı); adımlar ayrıntıda izi gösterir.
-      const toplam = acik.has(emirDurumu.get(id) ?? '') ? emirRozeti(liste) : { ...emirRozeti([]), gonderilmez: 'adim-disi' as const };
+      // Bitmiş ve iptal emrin rozeti yalnız kapanış bildirimi takıldıysa vardır (durdu ya da yeniden denenecek): SmartES'te iş emri
+      // açık kalır (3346 Risk N1). Gerisi rozetsiz; adımlar ayrıntıda izi gösterir.
+      const takilan = liste.filter((a) => a.durum === 'durdu' || a.durum === 'yeniden-denenecek');
+      const toplam = acik.has(emirDurumu.get(id) ?? '') ? emirRozeti(liste)
+        : takilan.length > 0 ? emirRozeti(takilan) : { ...emirRozeti([]), gonderilmez: 'adim-disi' as const };
       return [{ emirId: id, toplam, adimlar: liste }];
     }),
   };

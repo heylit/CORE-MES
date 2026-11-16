@@ -142,6 +142,26 @@ describe('Emir sayfasında SmartES rozeti (3346)', () => {
     // Başlık ve satırlar tek istekle okunur.
     expect(istekler.filter((i) => i.yol.startsWith('/smartes/emir-durumlari')).map((i) => i.yol)).toEqual(['/smartes/emir-durumlari?emir=5']);
   });
+  it('Test T2: başlıkta gönderilmiş emrin ipucu "N/M adım SmartES\'te"; gönderilmeyen emirde başlık rozeti yok', async () => {
+    const gitti = { ...SMARTES.emirler[0]!, toplam: { durum: 'gonderildi', gonderilmez: null, gonderilen: 2, toplam: 3, opNo: null, neden: null } } as const;
+    sunucuKur(OKUYUCU, { ...yollar, 'GET /smartes/emir-durumlari': () => json(200, { emirler: [gitti] } satisfies SmartesEmirDurumlariCevabi) });
+    ac(ekran, '/uretim-emirleri/5');
+    const liste = await screen.findByRole('list', { name: 'Adımlar' });
+    await within(liste).findAllByText('SmartES: Durdu');
+    const baslik = screen.getAllByText("SmartES'te").filter((e) => !liste.contains(e));
+    expect(baslik).toHaveLength(1);
+    expect(baslik[0]!.closest('[title]')?.getAttribute('title')).toBe("2/3 adım SmartES'te");
+    cleanup();
+    vi.unstubAllGlobals();
+    const gitmez = { ...SMARTES.emirler[0]!, toplam: { durum: null, gonderilmez: 'esleme-yok', gonderilen: 0, toplam: 0, opNo: null, neden: null } } as const;
+    sunucuKur(OKUYUCU, { ...yollar, 'GET /smartes/emir-durumlari': () => json(200, { emirler: [gitmez] } satisfies SmartesEmirDurumlariCevabi) });
+    ac(ekran, '/uretim-emirleri/5');
+    const liste2 = await screen.findByRole('list', { name: 'Adımlar' });
+    await within(liste2).findAllByText('SmartES: Durdu');
+    const disarida = [...document.querySelectorAll('.tc-smartes-rozet, .tc-smartes-rozet-yok')].filter((e) => !liste2.contains(e));
+    expect(disarida).toHaveLength(0);
+    expect(screen.queryByText('—', { selector: '.tc-smartes-rozet-yok' })).toBeNull();
+  });
   it('okunamazsa "Okunamadı" yazar, gönderilmez ile karışmaz', async () => {
     sunucuKur(OKUYUCU, { ...yollar, 'GET /smartes/emir-durumlari': () => json(500, { kod: 'SUNUCU', mesaj: 'x' }) });
     ac(ekran, '/uretim-emirleri/5');

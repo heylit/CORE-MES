@@ -407,10 +407,19 @@ export function adimRozeti(a: {
   const g = a.giden;
   if (g !== null) {
     if (g.durum !== 'hata') return { durum: 'gonderildi', gonderilmez: null, smartesNo: g.smartesIsEmriNo, neden: null };
-    return { durum: gonderimDurduMu(g) ? 'durdu' : 'yeniden-denenecek', gonderilmez: null, smartesNo: g.smartesIsEmriNo, neden: g.sonHata };
+    return { durum: gonderimDurduMu(g) ? 'durdu' : 'yeniden-denenecek', gonderilmez: null, smartesNo: g.smartesIsEmriNo, neden: rozetNedeni(g.sonHata) };
   }
-  const gonderilmez: GonderilmezNedeni | null = !a.eslemeli ? 'esleme-yok' : !a.gidecek ? 'adim-disi' : !a.baglantiAcik ? 'baglanti-kapali' : null;
+  // Gönderilecek durumda olmayan adım (taslak, bitmiş, fason) eşlemesinden bağımsız gitmez; fason adımın istasyonu da yoktur.
+  const gonderilmez: GonderilmezNedeni | null = !a.gidecek ? 'adim-disi' : !a.eslemeli ? 'esleme-yok' : !a.baglantiAcik ? 'baglanti-kapali' : null;
   return { durum: gonderilmez === null ? 'sirada' : null, gonderilmez, smartesNo: null, neden: null };
+}
+
+// SmartES'in ham hata metni emri okuyan herkese gider (Bağlantı izlemeden geniş kitle): tek satır ve en çok 200 karakter.
+export const ROZET_NEDENI_AZAMI = 200;
+export function rozetNedeni(m: string | null): string | null {
+  if (m === null) return null;
+  const tek = m.replace(/\s+/g, ' ').trim();
+  return tek.length > ROZET_NEDENI_AZAMI ? `${tek.slice(0, ROZET_NEDENI_AZAMI - 1)}…` : tek;
 }
 
 // Emrin rozeti adımlarının toplamıdır; öncelik Durdu > Yeniden denenecek > Sırada > Gönderildi. Neden ve OP ilk öne çıkan adımdandır.
