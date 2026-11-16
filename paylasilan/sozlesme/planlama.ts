@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { HATA_KODLARI } from '../hata.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { PLAN_KURALLARI, planCanliOzeti } from './plan.ts';
+import { PLAN_KURALLARI, planCanliOzeti, senaryolarCevabi } from './plan.ts';
 import { PLANLAMA_ANAHTARI_BICIMI, receteRotaDurumCevabi, yazGovdesi } from './recete-rota.ts';
 import { isTasiGovdesi, planaAlGovdesi } from './planlama-atolye.ts';
 
@@ -133,6 +133,16 @@ export const taslaktanCalismayaCevabi = z.object({
 });
 // 508 2 a: çalışma kaydı geçmişteki bir önceki sürümüne döner. calismaSurumu okunan sürümdür: arada başka yazma olduysa reddedilir (409).
 export const calismaGeriAlGovdesi = z.object({ calismaSurumu: z.number().int() });
+// 3308-5 a: çalışma planı tek komutla onaya gider ya da canlıya alınır. Plan taslağı, onay ve canlıya alma aynı işlemdedir: biri reddedilirse
+// hiçbiri yazılmaz, yarım kalmış taslak olmaz. Canlıya alma alanları plan modülünün canlıya alma gövdesindekilerle aynıdır.
+export const calismaGonderGovdesi = calismaTaslagiGovdesi.extend({ not: z.string().trim().max(500).nullish() });
+// "Canlı değişti" onayı (cakismalariKabul) yoktur: taslak komutla aynı işlemde açılır, tabanı o anki canlıdır. Araya başka canlıya alma
+// girerse komut reddedilir ve kişi yeniden yollar.
+export const calismaCanliyaAlGovdesi = calismaGonderGovdesi.extend({
+  baslayanlar: z.enum(['sabitle']).optional(),
+  dortSaatGerekcesi: z.string().max(500).nullable().prefault(null),
+});
+export const calismaGonderCevabi = calismaTaslagiCevabi.extend({ senaryolar: senaryolarCevabi });
 export const calismaGeriAlCevabi = z.object({ calismaSurumu: z.number().int(), donulenSurum: z.number().int() });
 
 // Plan ayarı (kart #1186): prototipin `settings` alan adlarıyla canlı plan ayarı; planın sahibi plan modülüdür.
@@ -400,6 +410,9 @@ export type CanliFarkiCevabi = z.output<typeof canliFarkiCevabi>;
 export type TabanVeCanliCevabi = z.output<typeof tabanVeCanliCevabi>;
 export type CalismaTaslagiGovdesi = z.output<typeof calismaTaslagiGovdesi>;
 export type CalismaTaslagiCevabi = z.output<typeof calismaTaslagiCevabi>;
+export type CalismaGonderGovdesi = z.output<typeof calismaGonderGovdesi>;
+export type CalismaCanliyaAlGovdesi = z.output<typeof calismaCanliyaAlGovdesi>;
+export type CalismaGonderCevabi = z.output<typeof calismaGonderCevabi>;
 export type TaslaktanCalismayaGovdesi = z.output<typeof taslaktanCalismayaGovdesi>;
 export type TaslaktanCalismayaCevabi = z.output<typeof taslaktanCalismayaCevabi>;
 export type CalismaGeriAlCevabi = z.output<typeof calismaGeriAlCevabi>;

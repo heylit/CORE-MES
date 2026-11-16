@@ -8,7 +8,7 @@ import {
   yerlestirGovdesi, planlanabilirlikCevabi, rotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
-  calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
+  calismaCanliyaAlGovdesi, calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaGonderCevabi, calismaGonderGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslakCevabi, taslakDegerlendirmeGovdesi, taslakDizGovdesi, taslakKomutGovdesi, taslakSurumGovdesi, taslakUygulaCevabi, taslakUygulaGovdesi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
@@ -23,7 +23,7 @@ import {
 } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
-import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
+import { calismaGeriAl, calismaTaslagi, calismayiCanliyaAl, calismayiOnayaGonder, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { taslagim, taslagiUygula, taslakDegerlendirmesi, taslakDiz, taslakGeriAl, taslakKomutuEkle, taslaktanVazgec } from './taslak.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
@@ -232,6 +232,20 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/taslak-yaz', yetki: 'plan.yaz', tekrarKorumali: true, govde: calismaTaslagiGovdesi, cevap: calismaTaslagiCevabi,
     isle: async ({ db, kullanici, govde, denetimEki }) => {
       const r = await calismaTaslagi(db, kullanici, govde);
+      denetimEki([{ taslak: r.taslak.id, yazilan: r.yazilan, atlanan: r.atlanan, yazilamaz: r.yazilamaz.length }]);
+      return r;
+    } }),
+  // 3308-5 a: çalışma planı tek komutla onaya gider ya da canlıya alınır; plan taslağı, onay ve canlıya alma aynı işlemdedir.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/onaya-gonder', yetki: 'plan.yaz', tekrarKorumali: true, govde: calismaGonderGovdesi, cevap: calismaGonderCevabi,
+    isle: async ({ db, kullanici, govde, denetimEki }) => {
+      const r = await calismayiOnayaGonder(db, kullanici, govde);
+      denetimEki([{ taslak: r.taslak.id, yazilan: r.yazilan, atlanan: r.atlanan, yazilamaz: r.yazilamaz.length }]);
+      return r;
+    } }),
+  // Canlıya alma plan sürümünü ve kardeş taslakları kilitler (502 a); kilitlenirse baştan yeniden koşar.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/canliya-al', yetki: 'plan.canliya-al', tekrarKorumali: true, kilitlenmedeYinele: true, govde: calismaCanliyaAlGovdesi, cevap: calismaGonderCevabi,
+    isle: async ({ db, kullanici, govde, denetimEki }) => {
+      const r = await calismayiCanliyaAl(db, kullanici, govde);
       denetimEki([{ taslak: r.taslak.id, yazilan: r.yazilan, atlanan: r.atlanan, yazilamaz: r.yazilamaz.length }]);
       return r;
     } }),

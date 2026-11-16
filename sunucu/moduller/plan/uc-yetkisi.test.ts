@@ -101,6 +101,9 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/projeler/:projeId/plan-gerceklesen': { biri: ['sayfa.projeler', 'projeler.oku'] } as const,
   'GET /plan/planlama-calismasi/taban-ve-canli': PLAN_OKUR,
   'POST /plan/planlama-calismasi/taslak-yaz': 'plan.yaz',
+  // 3308-5 a: tek komut; plan stüdyosu (ve onay kuralları) işleyicide, taslak-yaz ve onay adımlarının kendisinde aranır.
+  'POST /plan/planlama-calismasi/onaya-gonder': 'plan.yaz',
+  'POST /plan/planlama-calismasi/canliya-al': 'plan.canliya-al',
   // Uç recete-rota.yaz ister; taslağı okuma yetkisi (plan okuma) işleyicide ayrıca aranır.
   'POST /plan/planlama-calismasi/taslaktan-yaz': 'recete-rota.yaz',
   'POST /plan/planlama-calismasi/geri-al': 'recete-rota.yaz',

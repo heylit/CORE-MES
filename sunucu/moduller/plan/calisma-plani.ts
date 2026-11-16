@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
-import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi } from '#paylasilan/sozlesme/planlama.ts';
+import type { CalismaCanliyaAlGovdesi, CalismaGeriAlCevabi, CalismaGonderCevabi, CalismaGonderGovdesi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
@@ -9,7 +9,7 @@ import { calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, ca
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
-import { planlanacakIsler } from './servis.ts';
+import { canliyaAl, onayaGonder, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
 
@@ -111,6 +111,29 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
     ...(uyarilar.length > 0 ? { uyarilar } : {}),
   };
 }
+
+// 3308-5 a: çalışma planı tek komutla onaya gider ya da canlıya alınır. Plan taslağı yalnız taşıyıcıdır; yazma, onaya gönderme ve canlıya
+// alma çağıranın tek işlemindedir, yetki ve kurallar o adımların kendisindedir. Biri reddederse işlem geri alınır: onaya gitmemiş ya da
+// canlıya alınamamış taslak geride kalmaz.
+export async function calismayiOnayaGonder(db: Db, kullanici: Kullanici, g: CalismaGonderGovdesi, simdi: number = Date.now()): Promise<CalismaGonderCevabi> {
+  const y = await calismaTaslagi(db, kullanici, g, simdi);
+  const senaryolar = await onayaGonder(db, kullanici, y.taslak.id, { surum: y.taslak.surum, not: g.not ?? null });
+  return { ...y, taslak: { id: y.taslak.id, surum: taslakSurumu(senaryolar, y.taslak) }, senaryolar };
+}
+
+export async function calismayiCanliyaAl(db: Db, kullanici: Kullanici, g: CalismaCanliyaAlGovdesi, simdi: number = Date.now()): Promise<CalismaGonderCevabi> {
+  const y = await calismayiOnayaGonder(db, kullanici, g, simdi);
+  const senaryolar = await canliyaAl(db, kullanici, y.taslak.id, canliyaAlSecenekleri(y.taslak.surum, g));
+  return { ...y, taslak: { id: y.taslak.id, surum: taslakSurumu(senaryolar, y.taslak) }, senaryolar };
+}
+
+// Canlıya alma adımına giden seçenekler: 4 saat gerekçesi ve başlayan işi sabitleme komuttan aynen geçer; "canlı değişti" hiç kabul edilmez.
+export const canliyaAlSecenekleri = (surum: number, g: Pick<CalismaCanliyaAlGovdesi, 'dortSaatGerekcesi' | 'baslayanlar'>): Parameters<typeof canliyaAl>[3] => ({
+  surum, cakismalariKabul: false, dortSaatGerekcesi: g.dortSaatGerekcesi, ...(g.baslayanlar ? { baslayanlar: g.baslayanlar } : {}),
+});
+
+const taslakSurumu = (l: { senaryolar: readonly { id: number; surum: number }[] }, t: { id: number; surum: number }): number =>
+  l.senaryolar.find((x) => x.id === t.id)?.surum ?? t.surum;
 
 // 507 3 a: plan taslağının yerleşimleri ve kilitleri kayıtlı çalışmaya yazılır (503'ün tersi). Yazma kaydın kendi yazma yolundan geçer
 // (sürüm, boyut, plan.yaz denetimi, geçmiş); taslağı okumak plan okuma yetkisi ister. Sürümler okunanla aynı olmalı.
