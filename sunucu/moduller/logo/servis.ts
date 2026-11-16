@@ -19,7 +19,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
@@ -522,7 +522,6 @@ async function satirKartlari(db: Db, b: Parameters<typeof belgeStokKodlari>[0]):
 // Eksik kartta belge gitmez, deneme sayılmaz; neden sahibine bir kez yazılır (sahibinin ekranında görünür).
 // İzleme ekranı için süreç belleği: sunucu yeniden açılınca ilk turlarda yeniden dolar; bir saattir görülmeyen kayıt eskimiş sayılır.
 const kartBekleyenBelgeler = new Map<string, { belge: BelgeTuru; no: number; ileti: string; goruldu: Date; durum: 'kart-bekliyor' | 'proje-bekliyor' }>();
-const KART_BEKLEYEN_ESKIME_MS = 60 * 60 * 1000;
 const kartKaydiAnahtari = (belge: BelgeTuru, no: number): string => `${belge}:${no}`;
 async function kartBekliyor(
   db: Db, o: TurOrtami, belge: BelgeTuru, no: number, anahtar: number, eksik: readonly string[], bildir: Bildir<SiparisLogoSonucu>,
@@ -1186,7 +1185,7 @@ export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeC
     };
   });
   for (const [k, v] of kartBekleyenBelgeler) {
-    if (simdi.getTime() - v.goruldu.getTime() > KART_BEKLEYEN_ESKIME_MS) { kartBekleyenBelgeler.delete(k); continue; }
+    if (!bekleyenTaze(v.goruldu, simdi)) { kartBekleyenBelgeler.delete(k); continue; }
     const i = belgeler.findIndex((b) => b.belge === v.belge && b.no === v.no && b.islem === 'gonder');
     const satir = {
       belge: v.belge, belgeAdi: gidenBelgeAdi(v.belge, 'gonder'), no: v.no, islem: 'gonder' as const, durum: v.durum, neden: v.ileti,
@@ -1691,7 +1690,7 @@ export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly
   const durumlar: LogoRozetCevabi['durumlar'] = [];
   for (const id of tekil) {
     const v = belgeler.map((b) => kartBekleyenBelgeler.get(kartKaydiAnahtari(b, id))).find((x) => x !== undefined) ?? null;
-    const bekleyen = v !== null && simdi.getTime() - v.goruldu.getTime() <= KART_BEKLEYEN_ESKIME_MS ? v : null;
+    const bekleyen = v !== null && bekleyenTaze(v.goruldu, simdi) ? v : null;
     const d = belgeRozetDurumu(giden.get(id) ?? null, bekleyen, bagli.get(id) ?? null);
     if (d !== null) durumlar.push({ id, ...d });
   }
