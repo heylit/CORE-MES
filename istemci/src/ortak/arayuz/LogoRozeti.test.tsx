@@ -23,6 +23,11 @@ describe('LogoRozeti (3344)', () => {
     expect(screen.getByText('Okunamadı')).toBeTruthy();
   });
 
+  it('Logo\'da olmayan rozetin ipucu nedendir', () => {
+    render(<LogoRozeti bilgi={{ id: 4, durum: 'yeniden-denenecek', kayitNo: null, neden: 'Yardımcıya ulaşılamadı' }} />);
+    expect(screen.getByTitle('Yardımcıya ulaşılamadı').textContent).toBe('Yeniden denenecek');
+  });
+
   it('hücre nedeni rozetin altında yazar, hata varken yazmaz', () => {
     render(<LogoRozetHucresi bilgi={{ id: 1, durum: 'kart-bekliyor', kayitNo: null, neden: 'Malzeme kartı Logo\'da yok' }} hata={false} />);
     expect(screen.getByText('Kart bekliyor')).toBeTruthy();

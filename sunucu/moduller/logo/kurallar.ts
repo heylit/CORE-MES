@@ -1794,6 +1794,10 @@ export function rozetNedeni(m: string | null): string | null {
   return ilk.length > ROZET_NEDEN_SINIRI ? `${ilk.slice(0, ROZET_NEDEN_SINIRI - 1)}…` : ilk;
 }
 
+// Bekleme belleğinde bir saattir görülmeyen kayıt eskimiştir (izleme ekranıyla aynı süre): rozette bekleyen sayılmaz.
+export const BEKLEYEN_ESKIME_MS = 60 * 60 * 1000;
+export const bekleyenTaze = (goruldu: Date, simdi: Date): boolean => simdi.getTime() - goruldu.getTime() <= BEKLEYEN_ESKIME_MS;
+
 export function belgeRozetDurumu(
   g: { sonSonuc: GidenSonucu | null; sonrakiDeneme: Date | null; sonHata: string | null; logoKayitNo: string | null } | null,
   bekleyen: { durum: 'kart-bekliyor' | 'proje-bekliyor'; ileti: string } | null,

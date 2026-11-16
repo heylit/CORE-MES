@@ -9,7 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { belgeRozetDurumu } from './kurallar.ts';
+import { BEKLEYEN_ESKIME_MS, belgeRozetDurumu, bekleyenTaze, rozetNedeni } from './kurallar.ts';
 
 // 3344: Logo'ya gidiş rozeti. Giden kutusu satırları testte doğrudan yazılır; Logo'ya istek yoktur. Veri uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -34,6 +34,17 @@ describe('belge rozeti kuralı (3344)', () => {
     assert.equal(uzun?.neden?.length, 160);
     assert.ok(uzun?.neden?.startsWith('Satır hatası') && uzun.neden.endsWith('…') && !uzun.neden.includes('yığın'));
   });
+
+  test('RZ-4 neden: sırada boş; kısa ikinci satır ve uzun bekleme iletisi kesilir; eskimiş bekleme taze değildir', () => {
+    assert.equal(belgeRozetDurumu(g({ sonHata: 'eski deneme hatası' }), null, null)?.neden, null);
+    assert.equal(rozetNedeni('a\nyığın'), 'a');
+    assert.equal(rozetNedeni('   \n  '), null);
+    const bekleme = belgeRozetDurumu(null, { durum: 'kart-bekliyor', ileti: `Kart ${'y'.repeat(400)}` }, null);
+    assert.equal(bekleme?.neden?.length, 160);
+    const simdi = new Date('2026-11-16T12:00:00Z');
+    assert.equal(bekleyenTaze(new Date(simdi.getTime() - BEKLEYEN_ESKIME_MS), simdi), true);
+    assert.equal(bekleyenTaze(new Date(simdi.getTime() - BEKLEYEN_ESKIME_MS - 1), simdi), false);
+  });
 });
 
 describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
@@ -41,6 +52,7 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
   let app: FastifyInstance;
   const cerez = new Map<string, string>();
   let yoneticiId = 0;
+  let malzemeNo = 0;
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam.vt;
@@ -71,12 +83,22 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
     yoneticiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'rz-yonetici', parola: PAROLA }));
     await girisliKisi('rz-satis', ['siparisler.oku']);
     await girisliKisi('rz-satinalma', ['satin-alma.oku']);
+    await girisliKisi('rz-malzeme', ['sayfa.malzemeler']);
     const ekle = (tur: string, no: number, kolon: string, deger: string) =>
       vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no${kolon}) VALUES ($1, $2${deger})`, [tur, no]);
     await ekle('siparisler-teklifi', 1, ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '9001'");
     await ekle('siparisler-teklifi', 2, ', niyet_zamani', ', now()');
     await ekle('siparisler-teklifi', 3, ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Deneme ret'");
     await ekle('siparisler-siparisi', 4, ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '9004'");
+    // Malzeme: aynı karta malzeme (reddedildi) ve hizmet (gönderildi) satırı; yalnız hizmet satırı olan kart; giden satırı olmayan bağlı kart.
+    await ekle('malzeme', 10, ", son_deneme, son_sonuc, son_hata", ", now(), 'reddedildi', 'Deneme birim'");
+    await ekle('hizmet', 10, ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '7010'");
+    await ekle('hizmet', 11, ', niyet_zamani', ', now()');
+    const { sahip } = ortam;
+    await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('RZ-', 0) ON CONFLICT DO NOTHING");
+    malzemeNo = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, logo_kayit_no, logo_gonderim_durumu, logo_gonderim_zamani)
+       VALUES ('rz-1', 'hammadde', 'RZ-', 1, 'aktif', $1, $2, $2, 8123, 'gonderildi', now()) RETURNING no`, [JSON.stringify({ id: 'rz-1', com: { ad: 'ORN deneme' } }), yoneticiId]))!.no;
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
@@ -90,6 +112,16 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
     ]);
     const s = await oku('rz-satis', 'tur=satis-siparisi&id=1,4');
     assert.deepEqual(s.govde.durumlar, [{ id: 4, durum: 'logoda', kayitNo: '9004', neden: null }]);
+  });
+
+  test('RZ-5 malzeme: hizmet satırı da sayılır, kayıt no\'lu satır seçilir; giden satırı olmayan bağlı kart Logo\'da', async () => {
+    const m = await oku('rz-malzeme', `tur=malzeme&id=10,11,${String(malzemeNo)}`);
+    assert.equal(m.durum, 200, JSON.stringify(m.govde));
+    assert.deepEqual(m.govde.durumlar, [
+      { id: 10, durum: 'logoda', kayitNo: '7010', neden: null },
+      { id: 11, durum: 'sirada', kayitNo: null, neden: null },
+      { id: malzemeNo, durum: 'logoda', kayitNo: '8123', neden: null },
+    ]);
   });
 
   test('RZ-3 yetki türe göre; oturumsuz 401; sınırı aşan ve bozuk kimlik 400', async () => {
