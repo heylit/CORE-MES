@@ -1181,6 +1181,14 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 .tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-kanat:has(> button.tc-ay1-gosterge) .tc-ay1-kadran { margin-block-end: var(--b-5); }
 .tc-ay1-dar .tc-ay1-gosterge > b { font-size: var(--yazi-s); }
 .tc-ay1-dar .tc-ay1-kadran-kanat { gap: var(--b-2); }
+/* Geniş düzende sayaç dar kalınca (kabuk menüleri açık, 1280 px) iki gösterge kadranı 150 px'in altına eziyordu: gösterge yalnız
+   çubuk kalır; ad ve değer çubuğun ipucunda ve okunan adında (meter) durur, Malzeme yine dokununca açılır. */
+@container (max-width: 528px) {
+  .tc-ay1-genis .tc-ay1-kadran-kanat { gap: var(--b-2); }
+  .tc-ay1-genis .tc-ay1-gosterge { grid-template-rows: minmax(0, 1fr); inline-size: var(--b-6); }
+  .tc-ay1-genis .tc-ay1-gosterge > :not(.tc-ay1-gosterge-cubuk) { display: none; }
+  .tc-ay1-genis .tc-ay1-gosterge-cubuk { inline-size: var(--b-5); }
+}
 
 /* 3338-4 a: operatör talimatları üç grup; açık grup işin durumundan gelir. Kutu büyük dokunma hedefi; zorunlu etiket işaretlenince de okunur. */
 .tc-ay1-talimatlar { display: grid; gap: var(--b-2); }
@@ -1260,6 +1268,8 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 .tc-ay1-genis .tc-ay1-sira-ust > .tc-simge { display: none; }
 .tc-ay1-genis > .tc-ay1-aktif { flex: none; padding: var(--b-2) var(--b-3); align-items: center; }
 .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik:not([data-bos]) .tc-ay1-is-alanlari { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-5); }
+/* Acil etiketi iş satırının başında kendi boyundadır; satır boyunca uzayıp şerit gibi görünmez. */
+.tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik > div > .tc-ay1-etiket { align-self: flex-start; justify-self: start; inline-size: fit-content; }
 .tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alan { min-width: 0; }
 .tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-baslik { font-size: var(--yazi-m); }
 .tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alan-emir { grid-column: auto; }
