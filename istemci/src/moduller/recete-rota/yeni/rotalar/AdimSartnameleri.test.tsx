@@ -67,6 +67,7 @@ describe('Rota adımının şartnamesi ve talimatı (971 a, 989 a, 1193 a)', () 
   it('şartname eklenir, eksik zorunlu alan gösterilir ve değeri kaydedilir', async () => {
     const yazilan = kur({ adimlar: [] });
     const panel = await adimAc();
+    fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
     await within(panel).findByText(/Bu adıma bağlı şartname yok/);
     const secim = within(panel).getByLabelText('Şartname ekle');
     await within(secim).findByRole('option', { name: /TLS-DNM/ });

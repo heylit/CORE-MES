@@ -136,7 +136,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
 
     fireEvent.click(kutu);
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
-    const hazirlik = within(panel).getByLabelText('Hazırlık (dk / parti)');
+    const hazirlik = within(panel).getByLabelText('Hazırlık / parti');
     fireEvent.change(hazirlik, { target: { value: '45' } });
     fireEvent.blur(hazirlik);
 
@@ -222,7 +222,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
-    const islem = within(bolge).getByLabelText('İşlem (dk / 1 adet)');
+    const islem = within(bolge).getByLabelText('İşlem / adet');
     fireEvent.change(islem, { target: { value: '7' } });
     fireEvent.blur(islem);
     await screen.findByText(new RegExp(ESKI_SURUM_EKI), {}, BEKLE);
@@ -287,7 +287,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     expect(within(bolge).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: /Giren$/ })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'Onaya gönder…' })).toBeNull();
-    expect((within(bolge).getByLabelText('Hazırlık (dk / parti)') as HTMLInputElement).disabled).toBe(true);
+    expect((within(bolge).getByLabelText('Hazırlık / parti') as HTMLInputElement).disabled).toBe(true);
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
   }, 30000);
 
@@ -298,7 +298,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
       fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
       const duzenle = within(bolge).queryByRole('button', { name: 'Düzenle' });
       if (duzenle && duzenle.getAttribute('aria-pressed') !== 'true') fireEvent.click(duzenle);
-      return (within(bolge).getByLabelText('Hazırlık (dk / parti)') as HTMLInputElement).disabled;
+      return (within(bolge).getByLabelText('Hazırlık / parti') as HTMLInputElement).disabled;
     };
     // Yalnız düzenleyen: açık taslağı düzenler, onaya gönderemez, yeni rota açamaz.
     sunucuKur(ile('rota.revizyon-yaz'), { durum: acikTaslak });

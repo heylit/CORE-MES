@@ -25,13 +25,21 @@ interface Ozellikler {
   kayitBekliyor: boolean;
 }
 
+const useRevizyonEkipmani = (revId: number | null) => useQuery({
+  queryKey: [...KOK, 'revizyon', revId ?? 0],
+  enabled: revId !== null,
+  queryFn: () => api.get<RevizyonAyrintisi>(`/rota/revizyonlar/${String(revId)}`),
+});
+
+// Panel başlığındaki özet için: aynı okuma (önbellekten), yalnız sayı. Okunmadıysa null.
+export function useAdimEkipmanSayisi(rev: Revizyon | null, opNo: number | null): number | null {
+  const okuma = useRevizyonEkipmani(rev ? Number(rev.id) : null);
+  return okuma.data ? (okuma.data.adimlar.find((a) => a.opNo === opNo)?.ekipman.length ?? 0) : null;
+}
+
 export function AdimEkipmani({ rev, opNo, yazabilir, kayitBekliyor }: Ozellikler) {
   const revId = rev ? Number(rev.id) : null;
-  const okuma = useQuery({
-    queryKey: [...KOK, 'revizyon', revId ?? 0],
-    enabled: revId !== null,
-    queryFn: () => api.get<RevizyonAyrintisi>(`/rota/revizyonlar/${String(revId)}`),
-  });
+  const okuma = useRevizyonEkipmani(revId);
   const satirlar = okuma.data?.adimlar.find((a) => a.opNo === opNo)?.ekipman ?? [];
   const kilit = rev?.status !== 'taslak' ? 'Liste taslakta değişir.' : opNo === null || kayitBekliyor ? 'Önce adımı kaydedin.' : null;
   return (

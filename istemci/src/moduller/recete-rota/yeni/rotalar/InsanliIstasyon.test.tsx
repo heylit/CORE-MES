@@ -32,6 +32,7 @@ describe('2685 insanlı istasyonda makine seçimi', () => {
     const panel = await panelAc('insan');
     await waitFor(() => expect(within(panel).getByText(/İnsanlı istasyon: iş, istasyonda yetkin/)).toBeTruthy());
     expect(within(panel).queryByRole('combobox', { name: 'Makine' })).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: /^Planlama ayarları/ }));
     expect(within(panel).getByRole('combobox', { name: 'Kişi kullanımı' })).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: 'Makine seçimini kaldır' })).toBeNull();
   });

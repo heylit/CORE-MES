@@ -59,6 +59,7 @@ const studyoAc = async (dugme: string) => {
   const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
   fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
   const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
+  fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
   fireEvent.click(await within(panel).findByRole('button', { name: dugme }));
   return screen.findByRole('dialog');
 };
