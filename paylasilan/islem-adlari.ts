@@ -24,6 +24,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'belge-merkezi.yaz': 'Çizim belgesi ve taslak revizyon',
   'belge-merkezi.yayinla': 'Çizim revizyonunu yayınlama',
   'geometri.oku': '3B model analizini ve ham ölçü önerisini görme',
+  'geometri.kalibrasyon': 'Süre kalibrasyonundan parçayı dışarıda bırakma',
   'geometri.hesapla': '3B model analizini yeniden hesaplatma',
   'geometri.yuzey-yaz': '3B modelde boya, kaplama ve maske yüzeyi işaretleme',
   'cnc-kurulum.oku': 'CNC kurulum kayıtlarını görme',

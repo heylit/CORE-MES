@@ -6,7 +6,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi, GeometriSaglikCevabi,
-  GeometriIsoGrubu, GeometriSureCevabi, GeometriTalasliAdim, HamStokFormu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
+  GeometriIsoGrubu, GeometriKalibrasyonCevabi, GeometriSureCevabi, GeometriTalasliAdim, HamStokFormu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliTaslakBelgeler, kayitlaraBagliYayindakiBelgeler, taslagiGorur } from '../belge-merkezi/disari.ts';
@@ -15,9 +15,9 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeKaliteleri, hammaddeStokOlculeri, kesmeKatsayisi, makineIsMiliGucu, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   bicimDenetimi, bilesenListesi, disTablosuOku, donelEksen, DOSYA_EN_BUYUK_BAYT, enAzHam, enYakinKart, formGerekleri, HAM_KESME_VARSAYILAN_MM, hamGeregi, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
-  kienzleKc, rotaToplamlari, stokEslestir, SURE_HM_MM, SURE_ISO, SURE_TEZGAH_GUCU_KW, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
+  kalibrasyonHesapla, kalibreAralik, kalibreOrta, KALIBRASYON_ESIGI, malzemeBasinaModel, KALIBRASYON_ILETILERI, kienzleKc, rotaToplamlari, stokEslestir, SURE_HM_MM, SURE_ISO, SURE_TEZGAH_GUCU_KW, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
-import type { YuzeyIsaretGirdisi } from './kurallar.ts';
+import type { KalibrasyonCifti, KalibrasyonSonucu, YuzeyIsaretGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
 
@@ -149,7 +149,11 @@ export async function analizOku(db: Db, revizyonId: number): Promise<GeometriAna
 // Tanınan özellikler (kart 2044). Analiz yoksa ya da başka içeriğe aitse, ya da yüzler okunamadıysa ozellikler null; yüzler var ama
 // özellik yoksa boş liste. Yalnız öneridir.
 export async function ozellikOku(db: Db, revizyonId: number): Promise<GeometriOzellikCevabi> {
-  const m = await model(db, revizyonId);
+  return ozellikCevabi(db, await model(db, revizyonId));
+}
+
+async function ozellikCevabi(db: Db, m: Model): Promise<GeometriOzellikCevabi> {
+  const revizyonId = m.revizyonId;
   const a = await sorgular.analiz(db, revizyonId);
   if (a === null || a.ozet !== m.ozet || (await sorgular.yuzOzeti(db, revizyonId)).length === 0) return { revizyonId, motor: null, ozellikler: null, gruplar: null };
   const ozellikler = (await sorgular.ozellikler(db, revizyonId)).map(({ motor: _m, ...o }) => o);
@@ -195,17 +199,26 @@ export async function saglikOku(db: Db, revizyonId: number): Promise<GeometriSag
 export async function hamOnerisi(
   db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined },
 ): Promise<GeometriHamCevabi> {
+  return hamCevabi(db, await model(db, revizyonId), sorgu);
+}
+
+// Kalibrasyon bütün parçalarda döner: stok listesi bir kez okunur (onYuk).
+async function hamCevabi(
+  db: Db, m: Model, sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined },
+  onYuk?: { stokListesi: Awaited<ReturnType<typeof hammaddeStokOlculeri>> },
+): Promise<GeometriHamCevabi> {
+  const revizyonId = m.revizyonId;
   const ayar = sorgu.payMm === undefined ? await sistemAyariOku(db, 'geometri.ham-payi-mm') : null;
   const payMm = sorgu.payMm ?? ayar ?? 0;
   const payKaynagi = sorgu.payMm !== undefined ? 'istek' : ayar !== null ? 'ayar' : 'yok';
   const kesmeMm = sorgu.kesmeMm ?? HAM_KESME_VARSAYILAN_MM;
-  const c = await analizOku(db, revizyonId);
+  const c = await analizCevabi(db, m);
   const bos: Omit<GeometriHamCevabi, 'neden'> = { revizyonId, payMm, payKaynagi, kesmeMm, enAz: null, oneriler: [], kaliteler: [], donel: null, formlar: [], rotaMalzemesi: null };
   if (c.analiz === null) return { ...bos, neden: 'analiz-yok' };
   const enAz = enAzHam(c.analiz.obb, payMm);
   const donel = donelEksen(c.analiz.obb, await sorgular.yuzler(db, revizyonId));
   const g = hamGeregi(c.analiz.obb, payMm, kesmeMm, donel);
-  const liste = await hammaddeStokOlculeri(db, STOK_FORMLARI);
+  const liste = onYuk?.stokListesi ?? await hammaddeStokOlculeri(db, STOK_FORMLARI);
   const kaliteler = [...new Set(liste.flatMap((k) => (k.kalite === null ? [] : [k.kalite])))].sort((x, y) => x.localeCompare(y, 'tr'));
   const adaylar = sorgu.kalite === undefined ? liste : liste.filter((k) => k.kalite === sorgu.kalite);
   const oneriler = stokEslestir(g, adaylar);
@@ -222,7 +235,7 @@ export async function hamOnerisi(
 // 3278 D: süre kartının rota karşılaştırması. Talaşlı adımları rota verir (yalnız okuma, rotaya yazılmaz); bağı kablolama.ts kurar
 // (ADR 0006 madde 6). Çözücü malzemenin yürürlükteki rotasındaki talaşlı adımları verir; rota yoksa null. Yetki denetlemez.
 // 3321-2: adımın makinesi (kaynak makineyse) ve bileşen kartları; süre kartı tezgâh gücünü ve varsayılan malzemeyi bunlardan bulur.
-export type TalasliRotaAdimi = GeometriTalasliAdim & { makineId: number | null; makineKod: string | null; hammaddeNolari: number[] };
+export type TalasliRotaAdimi = GeometriTalasliAdim & { makineId: number | null; makineKod: string | null; islemTuru: string | null; hammaddeNolari: number[] };
 export type TalasliAdimCozucusu = (db: Db, malzemeNo: number) => Promise<TalasliRotaAdimi[] | null>;
 let talasliAdimlar: TalasliAdimCozucusu | null = null;
 // Önceki çözücüyü döner (test kurup geri koyar).
@@ -275,10 +288,14 @@ export async function hamOnerisiRotayla(
   return { ...ham, rotaMalzemesi: await rotaMalzemesi(db, await talasliRotaOku(db, (await model(db, revizyonId)).malzemeNo)) };
 }
 
-export async function sureTahminiOku(
-  db: Db, revizyonId: number,
-  sorgu: { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined; iso?: GeometriIsoGrubu | undefined; sinif?: string | undefined; form?: HamStokFormu | undefined },
-): Promise<GeometriSureCevabi> {
+type SureSorgusu = { payMm?: number | undefined; kalite?: string | undefined; kesmeMm?: number | undefined; iso?: GeometriIsoGrubu | undefined; sinif?: string | undefined; form?: HamStokFormu | undefined };
+type KalibresizSure = Omit<GeometriSureCevabi, 'kalibre' | 'kalibrasyon'> & { ozellikSayisi: number };
+
+async function sureHesapla(
+  db: Db, m: Model, sorgu: SureSorgusu,
+  onYuk: { adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'; stokListesi?: Awaited<ReturnType<typeof hammaddeStokOlculeri>> },
+): Promise<KalibresizSure> {
+  const revizyonId = m.revizyonId;
   const katsayi = kesmeKatsayisi(sorgu.sinif ?? null);
   const iso = sorgu.iso ?? katsayi?.iso ?? 'P';
   const isoKaynagi = sorgu.iso !== undefined ? 'istek' as const : katsayi !== null ? 'sinif' as const : 'varsayilan' as const;
@@ -287,28 +304,139 @@ export async function sureTahminiOku(
   const kc = kienzle === null
     ? { degerNmm2: SURE_ISO[iso].kc, kc1: null, mc: null, hmMm: null, kaynak: 'iso' as const }
     : { degerNmm2: kienzleKc(kienzle.kc1, kienzle.mc), kc1: kienzle.kc1, mc: kienzle.mc, hmMm: SURE_HM_MM, kaynak: 'kienzle' as const };
-  const ham = await hamOnerisi(db, revizyonId, sorgu);
-  const adimlar = await talasliRotaOku(db, (await model(db, revizyonId)).malzemeNo);
+  const ham = await hamCevabi(db, m, sorgu, onYuk.stokListesi === undefined ? undefined : { stokListesi: onYuk.stokListesi });
+  const adimlar = onYuk.adimlar;
   const tezgah = await tezgahGucu(db, adimlar);
   const bos = {
-    revizyonId, oneri: true as const, kalibre: false as const, iso, isoKaynagi, sinif: katsayi === null ? null : sorgu.sinif ?? null,
+    revizyonId, oneri: true as const, iso, isoKaynagi, sinif: katsayi === null ? null : sorgu.sinif ?? null,
     sinifIso: katsayi?.iso ?? null, kc, tezgah, hamFormu: null,
     payMm: ham.payMm, payKaynagi: ham.payKaynagi, hamKaynagi: null, hamKodu: null, hamHacimMm3: null, parcaHacimMm3: null, talasMm3: null,
-    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: sureRotasi(adimlar),
+    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: sureRotasi(adimlar), ozellikSayisi: 0,
   };
-  const a = (await analizOku(db, revizyonId)).analiz;
+  const a = (await analizCevabi(db, m)).analiz;
   if (a === null || ham.enAz === null) return { ...bos, neden: 'analiz-yok' };
   const stok = ham.oneriler.find((o) => o.form === sorgu.form) ?? ham.oneriler[0];
   const hamHacimMm3 = stok?.hamHacimMm3 ?? ham.enAz.a * ham.enAz.b * ham.enAz.c;
   const hamBilgisi = { hamKaynagi: stok === undefined ? 'kutu' as const : 'stok' as const, hamKodu: stok?.kod ?? null, hamFormu: stok?.form ?? null, hamHacimMm3 };
   if (a.hacimMm3 === null) return { ...bos, ...hamBilgisi, neden: 'hacim-yok' };
-  const oz = (await ozellikOku(db, revizyonId)).ozellikler;
+  const oz = (await ozellikCevabi(db, m)).ozellikler;
   const delikler = oz === null ? null : oz.flatMap((o) =>
     o.tur === 'delik' && o.capMm !== null && o.derinlikMm !== null ? [{ capMm: o.capMm, derinlikMm: o.derinlikMm }] : []);
   const t = sureTahmini({ iso, hamHacimMm3, parcaHacimMm3: a.hacimMm3, alanMm2: a.alanMm2, delikler, kc: kc.degerNmm2, gucKw: tezgah.gucKw });
-  const parca = { ...hamBilgisi, parcaHacimMm3: a.hacimMm3, ozellikOkundu: oz !== null };
+  const parca = { ...hamBilgisi, parcaHacimMm3: a.hacimMm3, ozellikOkundu: oz !== null, ozellikSayisi: oz?.length ?? 0 };
   if (t === null) return { ...bos, ...parca, neden: 'talas-yok' };
   return { ...bos, ...parca, talasMm3: t.talasMm3, kalemler: t.kalemler, altDk: t.altDk, ortaDk: t.ortaDk, ustDk: t.ustDk, neden: null };
+}
+
+export async function sureTahminiOku(db: Db, revizyonId: number, sorgu: SureSorgusu): Promise<GeometriSureCevabi> {
+  const m = await model(db, revizyonId);
+  const adimlar = await talasliRotaOku(db, m.malzemeNo);
+  const { ozellikSayisi, ...h } = await sureHesapla(db, m, sorgu, { adimlar });
+  if (h.ortaDk === null || h.altDk === null || h.ustDk === null) return { ...h, kalibre: false, kalibrasyon: null };
+  const s = (await kalibrasyonVerisi(db)).sonuc;
+  const c = { ...bilesenleri(h.kalemler, ozellikSayisi), tahminDk: h.ortaDk, gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar) };
+  const kalibrasyon = kalibreAralik(s, c);
+  return { ...h, kalibre: kalibrasyon !== null, kalibrasyon };
+}
+
+// ---------------- Süre kalibrasyonu (3321-3; S1 a: okumada hesaplanır, tablo yok) ----------------
+
+const dk4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+const olasi = (k: { altDk: number; ustDk: number } | undefined): number => (k === undefined ? 0 : Math.sqrt(k.altDk * k.ustDk));
+function bilesenleri(kalemler: GeometriSureCevabi['kalemler'], ozellikSayisi: number): Pick<KalibrasyonCifti, 'kabaDk' | 'finisDk' | 'delikDk' | 'ozellikSayisi'> {
+  const k = (ad: string) => kalemler.find((x) => x.kalem === ad);
+  return { kabaDk: olasi(k('kaba')), finisDk: olasi(k('finis')), delikDk: olasi(k('delik')), ozellikSayisi };
+}
+// Malzeme grubu ISO grubudur (sınıftan ya da elle seçilen); varsayılan P bilinmeyen sayılır. Tezgâh ve işlem ilk talaşlı adımdan.
+function kalibrasyonGrubu(iso: GeometriIsoGrubu, isoBilinir: boolean, adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'): KalibrasyonCifti['gruplar'] {
+  const ilk = Array.isArray(adimlar) ? adimlar[0] : undefined;
+  return { malzeme: isoBilinir ? iso : null, tezgah: ilk?.makineKod ?? null, islem: ilk?.islemTuru ?? null };
+}
+
+type KalibrasyonParcasi = KalibrasyonCifti & { kod: string; ad: string | null; revizyonId: number; disaridaNedeni: string | null };
+interface KalibrasyonVerisi { parcalar: KalibrasyonParcasi[]; olcumuEksik: number; sonuc: KalibrasyonSonucu }
+
+// Her malzemenin tek modeli (kapak, yoksa en son yayına giren; malzemeGeometrisi kuralı). Tahmin parçanın varsayılan malzemesi (rotadaki
+// hammadde) ve ilk ham önerisiyle kalibresiz olası süredir; ölçüm bütün talaşlı adımların son 5 ölçüm ortancası toplamıdır.
+async function kalibrasyonHesabi(db: Db): Promise<KalibrasyonVerisi> {
+  const secili = malzemeBasinaModel(await modeller(db));
+  const disarida = new Map((await sorgular.kalibrasyonDisaridalar(db)).map((d) => [d.malzemeNo, d.neden]));
+  const ozetler = await malzemeOzetleri(db, [...secili.keys()]);
+  let stokListesi: Awaited<ReturnType<typeof hammaddeStokOlculeri>> | undefined;
+  const parcalar: KalibrasyonParcasi[] = [];
+  let olcumuEksik = 0;
+  for (const m of secili.values()) {
+    const mz = ozetler.get(m.malzemeNo);
+    const adimlar = await talasliRotaOku(db, m.malzemeNo);
+    if (mz === undefined || !Array.isArray(adimlar) || adimlar.length === 0) continue;
+    if (adimlar.some((a) => a.olcumOrtancaDk === null)) { olcumuEksik += 1; continue; }
+    const olcumDk = adimlar.reduce((t, a) => t + (a.olcumOrtancaDk ?? 0), 0);
+    const rm = await rotaMalzemesi(db, adimlar);
+    stokListesi ??= await hammaddeStokOlculeri(db, STOK_FORMLARI);
+    const h = await sureHesapla(db, m, { kalite: rm?.kalite ?? undefined, sinif: rm?.sinif ?? undefined }, { adimlar, stokListesi });
+    if (h.ortaDk === null || !(olcumDk > 0)) continue;
+    parcalar.push({
+      malzemeNo: m.malzemeNo, kod: mz.kod, ad: mz.ad, revizyonId: m.revizyonId, tahminDk: h.ortaDk, olcumDk: dk4(olcumDk),
+      disarida: disarida.has(m.malzemeNo), disaridaNedeni: disarida.get(m.malzemeNo) ?? null,
+      gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar), ...bilesenleri(h.kalemler, h.ozellikSayisi),
+    });
+  }
+  parcalar.sort((a, b) => a.kod.localeCompare(b.kod, 'tr') || a.malzemeNo - b.malzemeNo);
+  return { parcalar, olcumuEksik, sonuc: kalibrasyonHesapla(parcalar) };
+}
+
+// Bütün parçaları dolaşmak her süre okumasında pahalıdır: sonuç 60 saniye bellekte tutulur (tek sunucu). "Dışarıda bırak" ve "geri al"
+// işareti transaction içinde yazar; önbellek commit'ten önce temizlenir. Commit'e kadar başlayan bir okuma eski sonucu önbelleğe koymasın
+// diye yazmadan sonraki 5 saniye içinde başlamış hesap önbellekte güvenilmez (commit bu sürede biter, VARSAYIM). Ölçüm ya da model
+// değişince en çok 60 saniye eski kalır.
+const KALIBRASYON_ONBELLEK_MS = 60_000;
+const KALIBRASYON_YAZMA_PAYI_MS = 5_000;
+let onbellek: { zaman: number; veri: Promise<KalibrasyonVerisi> } | null = null;
+let sonYazma = Number.NEGATIVE_INFINITY;
+export function kalibrasyonOnbellegiTemizle(): void { onbellek = null; sonYazma = Date.now(); }
+// Yalnız test: önbelleği yazma payı olmadan boşaltır (bırakma sonrası temizliğin ölçülebilmesi için).
+export function kalibrasyonOnbellegiSifirla(): void { onbellek = null; sonYazma = Number.NEGATIVE_INFINITY; }
+function kalibrasyonVerisi(db: Db): Promise<KalibrasyonVerisi> {
+  const simdi = Date.now();
+  if (onbellek !== null && simdi - onbellek.zaman < KALIBRASYON_ONBELLEK_MS && onbellek.zaman > sonYazma + KALIBRASYON_YAZMA_PAYI_MS) return onbellek.veri;
+  const veri = kalibrasyonHesabi(db);
+  onbellek = { zaman: simdi, veri };
+  veri.catch(() => { if (onbellek?.veri === veri) onbellek = null; });
+  return veri;
+}
+
+export async function kalibrasyonOku(db: Db): Promise<GeometriKalibrasyonCevabi> {
+  return kalibrasyonCevabi(await kalibrasyonVerisi(db));
+}
+
+function kalibrasyonCevabi({ parcalar, olcumuEksik, sonuc: s }: KalibrasyonVerisi): GeometriKalibrasyonCevabi {
+  return {
+    asama: s.asama, esikler: { ...KALIBRASYON_ESIGI }, n: s.n, disarida: s.disarida, olcumuEksik, carpan: s.carpan, hataYuzde: s.hataYuzde,
+    kalibresizHataYuzde: s.kalibresizHataYuzde, aralik: s.aralik, regresyon: s.regresyon, gruplar: s.gruplar,
+    parcalar: parcalar.map((p) => {
+      const k = kalibreOrta(s, p);
+      return {
+        malzemeNo: p.malzemeNo, kod: p.kod, ad: p.ad, revizyonId: p.revizyonId, tahminDk: p.tahminDk, olcumDk: p.olcumDk,
+        kalibreDk: k === null ? null : dk4(k), gruplar: { ...p.gruplar }, disarida: p.disarida, disaridaNedeni: p.disaridaNedeni,
+      };
+    }),
+  };
+}
+
+// Yalnız işaret yazılır; ölçüm ve model değişmez. Malzeme kartı yoksa yabancı anahtar reddeder (kartın varlığı denetlenir).
+export async function kalibrasyondanCikar(db: Db, kullanici: Kullanici, malzemeNo: number, neden: string | null): Promise<GeometriKalibrasyonCevabi> {
+  if (!(await malzemeOzetleri(db, [malzemeNo])).has(malzemeNo)) throw bulunamadi(KALIBRASYON_ILETILERI.malzemeYok);
+  await sorgular.kalibrasyonDisaridaYaz(db, malzemeNo, neden, kullanici.id);
+  kalibrasyonOnbellegiTemizle();
+  // Yazan transaction kendi yazısını görür; sonuç önbelleğe konmaz (geri dönerse başkasına sızmasın).
+  return kalibrasyonCevabi(await kalibrasyonHesabi(db));
+}
+
+export async function kalibrasyonaGeriAl(db: Db, malzemeNo: number): Promise<GeometriKalibrasyonCevabi> {
+  await sorgular.kalibrasyonDisaridaSil(db, malzemeNo);
+  kalibrasyonOnbellegiTemizle();
+  // Yazan transaction kendi yazısını görür; sonuç önbelleğe konmaz (geri dönerse başkasına sızmasın).
+  return kalibrasyonCevabi(await kalibrasyonHesabi(db));
 }
 
 // Malzemenin yayındaki 3B modeli, analizi ve ham önerisi: başka modül (CNC Kurulum ham ekranı) `disari.ts` ile okur (1703 a).
@@ -335,7 +463,7 @@ export async function malzemeGeometrisi(
   if (m === undefined) return null;
   return {
     malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, revKodu: m.revKodu, kapak: m.kapak, modelSayisi: liste.length,
-    analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu),
+    analiz: await analizCevabi(db, m), ham: await hamCevabi(db, m, sorgu),
   };
 }
 

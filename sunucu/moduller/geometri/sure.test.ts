@@ -199,7 +199,7 @@ describe('geometri süre tahmini ucu (3278; gerçek PostgreSQL, gerçek giriş)'
         { opNo: 10, ad: 'Tornalama', islemDk: 4.5, olcumOrtancaDk: 5, olcumAdedi: 5 },
         { opNo: 20, ad: 'Frezeleme', islemDk: null, olcumOrtancaDk: null, olcumAdedi: 0 },
       ];
-      const ek = { makineId: null, makineKod: null, hammaddeNolari: [] };
+      const ek = { makineId: null, makineKod: null, islemTuru: null, hammaddeNolari: [] };
       talasliAdimCozucusu(async () => adimlar.map((a) => ({ ...a, ...ek })));
       const r = await sure('?payMm=2&kalite=YOK');
       assert.deepEqual(r.rota, { durum: 'bagli', adimlar, islemToplamDk: 4.5, olcumToplamDk: 5, eksik: true });
@@ -239,7 +239,7 @@ describe('geometri süre tahmini ucu (3278; gerçek PostgreSQL, gerçek giriş)'
       const yok = await sure('?payMm=2&kalite=YOK');
       assert.deepEqual(yok.tezgah, { gucKw: 7.5, kaynak: 'varsayilan', makineKod: null });
       const makineId = (await o().sahip.tek<{ id: number }>(`INSERT INTO makine (kod, ad) VALUES ('ORN-CNC-02', 'Örnek tezgâh') RETURNING id`))!.id;
-      const adim = { opNo: 10, ad: 'Frezeleme', islemDk: 4, olcumOrtancaDk: null, olcumAdedi: 0, makineId, makineKod: 'ORN-CNC-02', hammaddeNolari: [] };
+      const adim = { opNo: 10, ad: 'Frezeleme', islemDk: 4, olcumOrtancaDk: null, olcumAdedi: 0, makineId, makineKod: 'ORN-CNC-02', islemTuru: null, hammaddeNolari: [] };
       talasliAdimCozucusu(async () => [adim]);
       const gucsuz = await sure('?payMm=2&kalite=YOK');
       assert.deepEqual(gucsuz.tezgah, { gucKw: 7.5, kaynak: 'varsayilan', makineKod: 'ORN-CNC-02' }, 'demirbaş kartı yoksa varsayılan, makine yazılır');
@@ -282,7 +282,7 @@ describe('geometri süre tahmini ucu (3278; gerçek PostgreSQL, gerçek giriş)'
     try {
       assert.equal((await ham()).rotaMalzemesi, null, 'rota bağı yoksa null');
       const [mil, cubuk] = await o().vt.tx(async (db) => [(await ornekMalzemeNo(db, 'mil'))!, (await ornekMalzemeNo(db, 'cubuk'))!]);
-      const adim = (opNo: number, hammaddeNolari: number[]) => ({ opNo, ad: `OP ${String(opNo)}`, islemDk: 1, olcumOrtancaDk: null, olcumAdedi: 0, makineId: null, makineKod: null, hammaddeNolari });
+      const adim = (opNo: number, hammaddeNolari: number[]) => ({ opNo, ad: `OP ${String(opNo)}`, islemDk: 1, olcumOrtancaDk: null, olcumAdedi: 0, makineId: null, makineKod: null, islemTuru: null, hammaddeNolari });
       talasliAdimCozucusu(async () => [adim(10, [mil]), adim(20, [mil, cubuk])]);
       const r = (await ham()).rotaMalzemesi;
       assert.deepEqual(r && [r.malzemeNo, r.kalite, r.aile, r.kaliteKodu, r.sinif, r.opNo], [cubuk, 'C45', 'metal', 'C45', null, 20],

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriSureCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriKalibrasyonCevabi, GeometriModelListeCevabi, GeometriSureCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 
@@ -61,7 +61,7 @@ const HAM: GeometriHamCevabi = {
   }],
 };
 const SURE: GeometriSureCevabi = {
-  revizyonId: 41, oneri: true, kalibre: false, iso: 'P', isoKaynagi: 'varsayilan', payMm: 2, payKaynagi: 'ayar', hamKaynagi: 'stok', hamKodu: 'ORN-LAMA-90x30',
+  revizyonId: 41, oneri: true, kalibre: false, kalibrasyon: null, iso: 'P', isoKaynagi: 'varsayilan', payMm: 2, payKaynagi: 'ayar', hamKaynagi: 'stok', hamKodu: 'ORN-LAMA-90x30',
   sinif: null, sinifIso: null, kc: { degerNmm2: 1950, kc1: null, mc: null, hmMm: null, kaynak: 'iso' }, tezgah: { gucKw: 7.5, kaynak: 'varsayilan', makineKod: null }, hamFormu: 'lama',
   hamHacimMm3: 189000, parcaHacimMm3: 82400, talasMm3: 106600,
   kalemler: [
@@ -78,7 +78,12 @@ const SURE: GeometriSureCevabi = {
     ],
   },
 };
-const temel = (sure: (iso: string) => Response) => ({
+const KAL: GeometriKalibrasyonCevabi = {
+  asama: 'kalibresiz', esikler: { tek: 5, grup: 20, regresyon: 40 }, n: 3, disarida: 0, olcumuEksik: 2, carpan: null, hataYuzde: null,
+  kalibresizHataYuzde: 31, aralik: null, regresyon: null, gruplar: [], parcalar: [],
+};
+const temel = (sure: (iso: string) => Response, kal: GeometriKalibrasyonCevabi = KAL) => ({
+  'GET /geometri/kalibrasyon': () => json(200, kal),
   'GET /geometri/modeller?sayfa=1': () => json(200, LISTE),
   'GET /geometri/analizler/41': () => json(200, ANALIZ),
   'GET /geometri/modeller/41/dosya': () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
@@ -176,5 +181,34 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     expect(within(k).getByText('Özellikler henüz okunmadı; delik süresi yok.')).toBeTruthy();
     expect(within(k).queryByRole('region', { name: 'Rotadaki talaşlı adımlar' })).toBeNull();
     await waitFor(() => expect(screen.queryByText(/^önizleme:/)).toBeNull());
+  });
+
+  it('3321-3 kalibre süre: rozet parça sayısıyla, ana aralık düzeltilmiş, kalibresiz aralık cümlede; kalemler kalibresiz; aşama tablosu', async () => {
+    const kalibre: GeometriSureCevabi = {
+      ...SURE, kalibre: true,
+      kalibrasyon: { asama: 'tek', n: 12, carpan: 1.32, altDk: 7, ortaDk: 9.2, ustDk: 12.4, genis: false, hataYuzde: 18.6, regresyon: false },
+    };
+    sunucuKur(temel(() => json(200, kalibre), { ...KAL, asama: 'tek', n: 12, olcumuEksik: 0, carpan: 1.32 }));
+    ac();
+    const k = await kart();
+    expect(await within(k).findByText('Kalibre')).toBeTruthy();
+    expect(within(k).queryByText('Kalibresiz')).toBeNull();
+    expect(within(k).getByText('7 – 12 dk')).toBeTruthy();
+    expect(within(k).getByText('olası ≈ 9,2 dk / parça')).toBeTruthy();
+    expect(within(k).getByText(/^Kalibre aralık: ölçülmüş 12 parçanın %80'i bu aralıkta kaldı\. Kalibresiz hesap 4 – 14 dk idi; düzeltme ×1,32, ölçülmüş parçalarda ortanca hata %19\.$/)).toBeTruthy();
+    expect(within(k).getByText('Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)')).toBeTruthy();
+    expect(within(k).getByText('Bağlama, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.')).toBeTruthy();
+    const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
+    const satirlar = (await within(d).findAllByRole('row')).slice(1).map((r) => r.textContent);
+    expect(satirlar).toEqual(['Kalibresiz5 parçadan azgeçti', 'Tek çarpan5 parça ve üstüşimdi', 'Grup ve tezgâh çarpanı20 parça8 parça daha', 'Kalem kalem uyum40 parça28 parça daha']);
+    expect(within(d).queryByRole('link', { name: 'Süre kalibrasyonu' })).toBeNull();
+  });
+
+  it('3321-3 kalibresizde aşama tablosu ölçümü eksik parçayı söyler', async () => {
+    sunucuKur(temel(() => json(200, SURE)));
+    ac();
+    const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
+    expect(await within(d).findByText(/Şimdi 3 parça; ölçümü eksik 2 parça\./)).toBeTruthy();
+    expect(within(d).getByText('2 parça daha')).toBeTruthy();
   });
 });

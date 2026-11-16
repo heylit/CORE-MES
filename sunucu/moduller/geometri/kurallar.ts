@@ -1405,3 +1405,158 @@ export function rotaToplamlari(adimlar: readonly GeometriTalasliAdim[]): {
   const topla = (x: number[]) => (x.length === 0 ? null : dk4(x.reduce((s, v) => s + v, 0)));
   return { adimlar: [...adimlar], islemToplamDk: topla(islem), olcumToplamDk: topla(olcum), eksik: islem.length < adimlar.length };
 }
+
+// ---- Süre kalibrasyonu (3321-3; KURGU 3321 bölüm 2 ve 6, S1 a: okumada hesaplanır, tabloya yazılmaz) ----
+// Eşleme parça düzeyindedir: tahmin parçanın kalibresiz olası süresi, ölçüm rotadaki bütün talaşlı adımların ölçüm ortancalarının
+// toplamı (yalnız bütün adımları ölçülmüş parça). Hata oransaldır: r = ln(ölçüm / tahmin). Aşama veriyle kendiliğinden ilerler:
+// 5 parçadan az kalibresiz; 5'ten sonra tek çarpan exp(ortanca r); 20'den sonra malzeme grubu (ISO), tezgâh ve işlem türü çarpanı
+// kısmi havuzlamayla exp((n x grup ort + tau x genel ort) / (n + tau)), tau 5; 40'tan sonra bileşen regresyonu (negatif olmayan en
+// küçük kareler: kaba, finiş, delik, özellik sayısı). Aralık bölünmüş konformal: düzeltilmiş artıkların P10-P90'ı; 9 çiftten azsa en
+// küçük ve en büyük artık, "geniş" işaretli. Eşikler ve tau VARSAYIM (geri alma ucuz).
+export const KALIBRASYON_ESIGI = { tek: 5, grup: 20, regresyon: 40 } as const;
+export const KALIBRASYON_TAU = 5;
+export const KALIBRASYON_ARALIK_EN_AZ = 9;
+export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem'] as const;
+export type KalibrasyonGrupTuru = (typeof KALIBRASYON_GRUP_TURLERI)[number];
+export type KalibrasyonAsamasi = 'kalibresiz' | 'tek' | 'grup' | 'regresyon';
+
+export interface KalibrasyonCifti {
+  malzemeNo: number; tahminDk: number; olcumDk: number; disarida: boolean;
+  gruplar: Readonly<Record<KalibrasyonGrupTuru, string | null>>;
+  // Bileşenler (regresyon): kalemlerin olası süresi (alt ve üstün geometrik ortası) ve tanınan özellik sayısı.
+  kabaDk: number; finisDk: number; delikDk: number; ozellikSayisi: number;
+}
+export interface KalibrasyonGrubu { tur: KalibrasyonGrupTuru; anahtar: string; n: number; carpan: number; hataYuzde: number | null; azVeri: boolean }
+export interface KalibrasyonSonucu {
+  asama: KalibrasyonAsamasi; n: number; disarida: number;
+  carpan: number | null; hataYuzde: number | null; kalibresizHataYuzde: number | null;
+  gruplar: KalibrasyonGrubu[];
+  // Düzeltilmiş tahminin log artık bandı (ln); n 5'ten azsa null.
+  aralik: { altLn: number; ustLn: number; genis: boolean } | null;
+  regresyon: { kaba: number; finis: number; delik: number; ozellik: number } | null;
+}
+
+const ortanca = (x: readonly number[]): number => {
+  const s = [...x].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 === 1 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+};
+const ortalama = (x: readonly number[]): number => x.reduce((t, v) => t + v, 0) / x.length;
+const yuzde4 = (x: number): number => Math.round(x * 1e4) / 1e2;
+const carpan4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+
+// Negatif olmayan en küçük kareler (az sütunlu; izdüşümlü koordinat inişi, dışbükey problemde en küçüğe yakınsar).
+export function negatifOlmayanEnKucukKareler(x: readonly (readonly number[])[], y: readonly number[], tur = 500): number[] {
+  const p = x[0]?.length ?? 0;
+  const b = new Array<number>(p).fill(0);
+  const kare = Array.from({ length: p }, (_, j) => x.reduce((t, s) => t + s[j]! ** 2, 0));
+  for (let k = 0; k < tur; k += 1) {
+    let degisim = 0;
+    for (let j = 0; j < p; j += 1) {
+      if (kare[j]! === 0) continue;
+      const artikCarpim = x.reduce((t, s, i) => t + s[j]! * (y[i]! - s.reduce((u, v, l) => u + v * b[l]!, 0)), 0);
+      const yeni = Math.max(0, b[j]! + artikCarpim / kare[j]!);
+      degisim = Math.max(degisim, Math.abs(yeni - b[j]!));
+      b[j] = yeni;
+    }
+    if (degisim < 1e-9) break;
+  }
+  return b;
+}
+
+const bilesenler = (c: KalibrasyonCifti): number[] => [c.kabaDk, c.finisDk, c.delikDk, c.ozellikSayisi];
+
+// Bir parçanın düzeltilmiş olası süresi (dk). Regresyon aşamasında bileşenlerden; öteki aşamalarda tahmin x çarpan. Grup aşamasında
+// çarpan genel x her grubun genele oranı (log uzayında toplanır: üç grup genel sapmayı üç kez saymaz). Bilinmeyen grup genel kalır.
+export function kalibreOrta(s: KalibrasyonSonucu, c: Pick<KalibrasyonCifti, 'tahminDk' | 'gruplar' | 'kabaDk' | 'finisDk' | 'delikDk' | 'ozellikSayisi'>): number | null {
+  if (s.carpan === null) return null;
+  if (s.regresyon !== null) {
+    const r = s.regresyon;
+    const t = r.kaba * c.kabaDk + r.finis * c.finisDk + r.delik * c.delikDk + r.ozellik * c.ozellikSayisi;
+    if (t > 0) return t;
+  }
+  return c.tahminDk * parcaCarpani(s, c.gruplar);
+}
+
+export function parcaCarpani(s: KalibrasyonSonucu, gruplar: Readonly<Record<KalibrasyonGrupTuru, string | null>>): number {
+  if (s.carpan === null) return 1;
+  const g = Math.log(s.carpan);
+  let ln = g;
+  for (const tur of KALIBRASYON_GRUP_TURLERI) {
+    const k = s.gruplar.find((x) => x.tur === tur && x.anahtar === gruplar[tur]);
+    if (k !== undefined) ln += Math.log(k.carpan) - g;
+  }
+  return Math.exp(ln);
+}
+
+const hataYuzde = (ciftler: readonly KalibrasyonCifti[], tahmin: (c: KalibrasyonCifti) => number | null): number | null => {
+  const h = ciftler.flatMap((c) => { const t = tahmin(c); return t === null || !(t > 0) ? [] : [Math.abs(c.olcumDk / t - 1)]; });
+  return h.length === 0 ? null : yuzde4(ortanca(h));
+};
+
+export function kalibrasyonHesapla(tum: readonly KalibrasyonCifti[]): KalibrasyonSonucu {
+  const ciftler = tum.filter((c) => !c.disarida && c.tahminDk > 0 && c.olcumDk > 0);
+  const n = ciftler.length;
+  const disarida = tum.filter((c) => c.disarida).length;
+  const bos: KalibrasyonSonucu = { asama: 'kalibresiz', n, disarida, carpan: null, hataYuzde: null, kalibresizHataYuzde: hataYuzde(ciftler, (c) => c.tahminDk), gruplar: [], aralik: null, regresyon: null };
+  if (n < KALIBRASYON_ESIGI.tek) return bos;
+  const r = ciftler.map((c) => Math.log(c.olcumDk / c.tahminDk));
+  const genelOrt = ortalama(r);
+  const asama: KalibrasyonAsamasi = n >= KALIBRASYON_ESIGI.regresyon ? 'regresyon' : n >= KALIBRASYON_ESIGI.grup ? 'grup' : 'tek';
+  const carpan = carpan4(Math.exp(ortanca(r)));
+  const gruplar: KalibrasyonGrubu[] = [];
+  if (asama !== 'tek') {
+    for (const tur of KALIBRASYON_GRUP_TURLERI) {
+      const anahtarlar = [...new Set(ciftler.flatMap((c) => (c.gruplar[tur] === null ? [] : [c.gruplar[tur]!])))].sort((a, b) => a.localeCompare(b, 'tr'));
+      for (const anahtar of anahtarlar) {
+        const ic = ciftler.filter((c) => c.gruplar[tur] === anahtar);
+        const ort = ortalama(ic.map((c) => Math.log(c.olcumDk / c.tahminDk)));
+        const k = carpan4(Math.exp((ic.length * ort + KALIBRASYON_TAU * genelOrt) / (ic.length + KALIBRASYON_TAU)));
+        gruplar.push({ tur, anahtar, n: ic.length, carpan: k, hataYuzde: hataYuzde(ic, (c) => c.tahminDk * k), azVeri: ic.length < KALIBRASYON_ESIGI.grup });
+      }
+    }
+  }
+  let regresyon: KalibrasyonSonucu['regresyon'] = null;
+  if (asama === 'regresyon') {
+    const [kaba = 0, finis = 0, delik = 0, ozellik = 0] = negatifOlmayanEnKucukKareler(ciftler.map(bilesenler), ciftler.map((c) => c.olcumDk));
+    regresyon = { kaba: carpan4(kaba), finis: carpan4(finis), delik: carpan4(delik), ozellik: carpan4(ozellik) };
+  }
+  const s: KalibrasyonSonucu = { ...bos, asama, carpan, gruplar, regresyon };
+  // Regresyon gruptan kötüyse kullanılmaz (az bileşenli parçalarda tek çarpan daha iyi olabilir); karşılaştırma aynı çiftlerde.
+  if (regresyon !== null) {
+    const regHata = hataYuzde(ciftler, (c) => kalibreOrta(s, c));
+    const grupHata = hataYuzde(ciftler, (c) => c.tahminDk * parcaCarpani(s, c.gruplar));
+    if (regHata === null || (grupHata !== null && regHata >= grupHata)) s.regresyon = null;
+  }
+  const artik = ciftler.map((c) => Math.log(c.olcumDk / (kalibreOrta(s, c) ?? c.tahminDk))).sort((a, b) => a - b);
+  const genis = n < KALIBRASYON_ARALIK_EN_AZ;
+  const alt = genis ? artik[0]! : artik[Math.max(0, Math.floor((n + 1) * 0.1) - 1)]!;
+  const ust = genis ? artik[n - 1]! : artik[Math.min(n - 1, Math.ceil((n + 1) * 0.9) - 1)]!;
+  return { ...s, hataYuzde: hataYuzde(ciftler, (c) => kalibreOrta(s, c)), aralik: { altLn: alt, ustLn: ust, genis } };
+}
+
+export const KALIBRASYON_ILETILERI = { malzemeYok: 'Malzeme kartı bulunamadı.' } as const;
+
+// Süre kartının kalibre aralığı: parçanın düzeltilmiş olası süresi ve log artık bandı. Çarpan parçanın kendi çarpanıdır (grup aşamasında
+// genelden farklı; regresyonda düzeltilmiş / kalibresiz). Kalibresizse null.
+export function kalibreAralik(s: KalibrasyonSonucu, c: Pick<KalibrasyonCifti, 'tahminDk' | 'gruplar' | 'kabaDk' | 'finisDk' | 'delikDk' | 'ozellikSayisi'>): {
+  asama: KalibrasyonAsamasi; n: number; carpan: number; altDk: number; ortaDk: number; ustDk: number; genis: boolean; hataYuzde: number | null; regresyon: boolean;
+} | null {
+  const orta = kalibreOrta(s, c);
+  if (orta === null || s.aralik === null || !(c.tahminDk > 0)) return null;
+  const d4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+  return {
+    asama: s.asama, n: s.n, carpan: d4(orta / c.tahminDk), altDk: d4(orta * Math.exp(s.aralik.altLn)), ortaDk: d4(orta),
+    ustDk: d4(orta * Math.exp(s.aralik.ustLn)), genis: s.aralik.genis, hataYuzde: s.hataYuzde, regresyon: s.regresyon !== null,
+  };
+}
+
+// Kalibrasyonda her malzemenin tek modeli: kapak seçili olan, yoksa en son yayına giren (en büyük revizyon; malzemeGeometrisi kuralı).
+export function malzemeBasinaModel<T extends { malzemeNo: number; kapak: boolean; revizyonId: number }>(liste: readonly T[]): Map<number, T> {
+  const secili = new Map<number, T>();
+  for (const m of liste) {
+    const o = secili.get(m.malzemeNo);
+    if (o === undefined || Number(m.kapak) > Number(o.kapak) || (m.kapak === o.kapak && m.revizyonId > o.revizyonId)) secili.set(m.malzemeNo, m);
+  }
+  return secili;
+}

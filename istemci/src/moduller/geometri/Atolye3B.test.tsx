@@ -514,8 +514,10 @@ describe('3D Atölyesi', () => {
     expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler') || i.yol.startsWith('/geometri/montaj'))).toBe(false);
   });
 
-  it('2396: ikinci menü maddeleri çalışma listesiyle aynı sırada, hepsi sayfa.geometri', () => {
-    const maddeler = GEOMETRI_IKINCI_MENU.gruplar.flatMap((g) => g.maddeler);
+  it('2396: ikinci menü maddeleri çalışma listesiyle aynı sırada, hepsi sayfa.geometri; Süre kalibrasyonu ayrı grupta geometri.kalibrasyon', () => {
+    const [calismalar, ayarlar] = GEOMETRI_IKINCI_MENU.gruplar;
+    expect(ayarlar?.maddeler.map((m) => [m.yol, m.islem])).toEqual([['/geometri/kalibrasyon', 'geometri.kalibrasyon']]);
+    const maddeler = calismalar!.maddeler;
     expect(maddeler.map((m) => m.yol)).toEqual(CALISMA_ADLARI.map(calismaYolu));
     expect(maddeler.map((m) => m.baslik)).toEqual(CALISMA_ADLARI.map((a) => CALISMALAR[a].baslik));
     expect(new Set(maddeler.map((m) => m.islem))).toEqual(new Set(['sayfa.geometri']));

@@ -300,7 +300,7 @@ export const ROL_MATRISI = {
     ad: 'Proses Mühendisi',
     islemler: [
       'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.yaz', 'degisiklik-yonetimi.revizyon-hazirla',
-      'degisiklik-yonetimi.talep-ac', 'geometri.hesapla', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac',
+      'degisiklik-yonetimi.talep-ac', 'geometri.hesapla', 'geometri.kalibrasyon', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac',
       'ik.bordro-gordum', 'ik.izin-talep', 'kalite-merkezi.oku', 'mesaj.oku', 'mesaj.yaz', 'plan.oku', 'proses.oku',
       'recete-rota.oku', 'rota.onaya-gonder', 'rota.revizyon-yaz', 'rota.sablon-yaz', 'rota.sartname-yaz', 'rota.sure-kabul',
       'rota.talimat-yaz', 'rota.taslak-ac', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.cizimler', 'sayfa.cnc-kurulum',

@@ -250,6 +250,7 @@ export const GEOMETRI_SURE_NEDENLERI = ['analiz-yok', 'hacim-yok', 'talas-yok'] 
 // 3321-2: sinif Malzemeler sınıfı ("aile/sinif"); ISO grubu ve Kienzle katsayısı ondan. iso elle seçimdir, sınıfın grubunu ezer.
 // form Ham önerisinde seçilen formdur; yoksa (ya da o formda öneri yoksa) ilk öneri.
 export const SINIF_ANAHTARI = /^[a-z_]{1,30}\/[a-z_]{1,30}$/;
+export const KALIBRASYON_ASAMALARI = ['kalibresiz', 'tek', 'grup', 'regresyon'] as const;
 export const geometriSureSorgusu = geometriHamSorgusu.extend({
   iso: z.enum(GEOMETRI_ISO_GRUPLARI).optional(),
   sinif: z.string().regex(SINIF_ANAHTARI).optional(),
@@ -288,7 +289,13 @@ export const geometriSureRotasi = z.object({
 export const geometriSureCevabi = z.object({
   revizyonId: z.number().int(),
   oneri: z.literal(true),
-  kalibre: z.literal(false),
+  // 3321-3: kalibrasyon aşaması ölçülmüş parçalardan (5 parçadan az kalibresiz); kalibre true ise kalibrasyon dolu ve ekranın ana
+  // aralığı odur. Kalemler kalibresizdir (çarpan yalnız toplama uygulanır).
+  kalibre: z.boolean(),
+  kalibrasyon: z.object({
+    asama: z.enum(KALIBRASYON_ASAMALARI), n: z.number().int().min(0), carpan: z.number().positive(),
+    altDk: dk, ortaDk: dk, ustDk: dk, genis: z.boolean(), hataYuzde: z.number().min(0).nullable(), regresyon: z.boolean(),
+  }).nullable(),
   iso: z.enum(GEOMETRI_ISO_GRUPLARI),
   isoKaynagi: z.enum(GEOMETRI_ISO_KAYNAKLARI),
   // 3321-2: istenen sınıf (tabloda varsa); sınıfın ISO grubu (elle seçim varsa karşılaştırma için); kc kaba hızın özgül kesme kuvveti:
@@ -318,6 +325,36 @@ export const geometriSureCevabi = z.object({
 export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;
 
 // İş henüz yoksa null gönderilir (ekran 'yok' gördü); iş varsa okunan sürüm.
+// Süre kalibrasyonu (3321-3; S1 a, S2 a, S3 b): okumada hesaplanır. Parça, yayındaki modeli ve rotadaki bütün talaşlı adımları ölçülmüş
+// malzemedir; tahmin parçanın varsayılan malzeme ve hamla kalibresiz olası süresi, ölçüm adımların son 5 ölçüm ortancalarının toplamı.
+// Grup: malzeme (ISO grubu, rotadaki hammaddenin sınıfından), tezgâh (ilk talaşlı adımın makinesi), işlem (ilk talaşlı adımın operasyon
+// tipi). olcumuEksik: modeli ve rotası olup bir talaşlı adımı ölçülmemiş parça sayısı.
+export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem'] as const;
+const kalibrasyonGruplari = z.object({ malzeme: z.string().nullable(), tezgah: z.string().nullable(), islem: z.string().nullable() });
+export const geometriKalibrasyonCevabi = z.object({
+  asama: z.enum(KALIBRASYON_ASAMALARI),
+  esikler: z.object({ tek: z.number().int(), grup: z.number().int(), regresyon: z.number().int() }),
+  n: z.number().int().min(0),
+  disarida: z.number().int().min(0),
+  olcumuEksik: z.number().int().min(0),
+  carpan: z.number().positive().nullable(),
+  hataYuzde: z.number().min(0).nullable(),
+  kalibresizHataYuzde: z.number().min(0).nullable(),
+  aralik: z.object({ altLn: z.number(), ustLn: z.number(), genis: z.boolean() }).nullable(),
+  regresyon: z.object({ kaba: z.number().min(0), finis: z.number().min(0), delik: z.number().min(0), ozellik: z.number().min(0) }).nullable(),
+  gruplar: z.array(z.object({
+    tur: z.enum(KALIBRASYON_GRUP_TURLERI), anahtar: z.string(), n: z.number().int().min(1), carpan: z.number().positive(),
+    hataYuzde: z.number().min(0).nullable(), azVeri: z.boolean(),
+  })),
+  parcalar: z.array(z.object({
+    malzemeNo: z.number().int(), kod: z.string(), ad: z.string().nullable(), revizyonId: z.number().int(),
+    tahminDk: z.number().positive(), olcumDk: z.number().positive(), kalibreDk: z.number().positive().nullable(),
+    gruplar: kalibrasyonGruplari, disarida: z.boolean(), disaridaNedeni: z.string().nullable(),
+  })),
+});
+export type GeometriKalibrasyonCevabi = z.output<typeof geometriKalibrasyonCevabi>;
+export const disaridaBirakGovdesi = z.object({ neden: z.string().trim().max(200).nullable().transform((x) => (x === '' ? null : x)) }).strict();
+
 export const yenidenHesaplaGovdesi = z.object({ surum: surumSemasi.nullable() }).strict();
 export const yenidenHesaplaCevabi = geometriAnalizCevabi;
 
