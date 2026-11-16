@@ -176,6 +176,10 @@ export interface Isleyen { kisiId: number; rolIdleri: readonly number[] }
 
 export const kontrolluMu = (g: Pick<GorevAtamasi, 'kontrolKisiId' | 'kontrolRolId'>): boolean => g.kontrolKisiId !== null || g.kontrolRolId !== null;
 const kapaliMi = (durum: string): boolean => durum === 'bitti' || durum === 'iptal';
+// 3303-1 c: görev silinmez, iptal edilir; iptal görev listede kalır, proje ilerlemesine sayılmaz (PRJ-14). Kontrolde bekleyen de
+// iptal edilebilir: iptal onay değildir, görevi bitmiş saymaz.
+export const IPTAL_EDILEMEZ = 'Bitmiş ya da zaten iptal edilmiş görev iptal edilemez.';
+export const iptalReddi = (durum: string): string | null => (kapaliMi(durum) ? IPTAL_EDILEMEZ : null);
 const rolde = (rolId: number | null, k: Isleyen): boolean => rolId !== null && k.rolIdleri.includes(rolId);
 
 // Üstlenme: kişiye atanmamış, kişinin rolüne açık, kapanmamış ve kontrolde olmayan görev. Zaten kendisindeyse red yoktur (servis yazmaz).

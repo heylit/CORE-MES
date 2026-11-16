@@ -20,7 +20,7 @@ const SUTUNLAR: Sutun<Proje>[] = [
   { anahtar: 'baslangic', baslik: 'Başlangıç', sirala: true, mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.baslangic) },
   { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.bitis) },
   { anahtar: 'statu', baslik: 'Statü', hucre: (p) => <StatuCipi statu={p.statu} />, csv: (p) => p.statu?.ad ?? '' },
-  { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (p) => <Ilerleme deger={p.ilerleme} />, csv: (p) => p.ilerleme },
+  { anahtar: 'ilerleme', baslik: 'Görev ilerlemesi', hucre: (p) => <Ilerleme deger={p.ilerleme} />, csv: (p) => p.ilerleme },
   { anahtar: 'durum', baslik: 'Durum', hucre: (p) => <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet> },
 ];
 

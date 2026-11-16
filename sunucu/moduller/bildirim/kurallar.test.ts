@@ -158,11 +158,13 @@ test('BIL-16: otomatikte yalnız acil önem ortada çıkar', () => {
 });
 
 test('BIL-17: türün gösterim ayarı varsayılanın yerine geçer; varsayılana eşit değer ayar sayılmaz', () => {
-  assert.deepEqual(otomatikGosterim('acil', null), { ortada: true, onayIstenir: false });
-  assert.deepEqual(otomatikGosterim('uyari', null), { ortada: false, onayIstenir: false });
-  assert.deepEqual(otomatikGosterim('uyari', { ortada: true, onayIstenir: true }), { ortada: true, onayIstenir: true });
-  assert.deepEqual(otomatikGosterim('acil', { ortada: false, onayIstenir: false }), { ortada: false, onayIstenir: false });
-  assert.equal(varsayilanMi('acil', { ortada: true, onayIstenir: false }), true);
-  assert.equal(varsayilanMi('bilgi', { ortada: false, onayIstenir: false }), true);
-  assert.equal(varsayilanMi('bilgi', { ortada: false, onayIstenir: true }), false);
+  assert.deepEqual(otomatikGosterim({ onem: 'acil' }, null), { ortada: true, onayIstenir: false });
+  assert.deepEqual(otomatikGosterim({ onem: 'uyari' }, null), { ortada: false, onayIstenir: false });
+  assert.deepEqual(otomatikGosterim({ onem: 'uyari' }, { ortada: true, onayIstenir: true }), { ortada: true, onayIstenir: true });
+  assert.deepEqual(otomatikGosterim({ onem: 'acil' }, { ortada: false, onayIstenir: false }), { ortada: false, onayIstenir: false });
+  assert.equal(varsayilanMi({ onem: 'acil' }, { ortada: true, onayIstenir: false }), true);
+  assert.equal(varsayilanMi({ onem: 'bilgi' }, { ortada: false, onayIstenir: false }), true);
+  assert.equal(varsayilanMi({ onem: 'bilgi' }, { ortada: false, onayIstenir: true }), false);
+  assert.deepEqual(otomatikGosterim({ onem: 'bilgi', onayIstenir: true }, null), { ortada: false, onayIstenir: true });
+  assert.equal(varsayilanMi({ onem: 'bilgi', onayIstenir: true }, { ortada: false, onayIstenir: true }), true);
 });

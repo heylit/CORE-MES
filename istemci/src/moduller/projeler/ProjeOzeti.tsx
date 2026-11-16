@@ -5,13 +5,16 @@ import { bugun, sapmaMetni, tarihMetni } from './gosterim.ts';
 import { Ilerleme, gorevGecikiyor } from './ProjeGorevleri.tsx';
 import { StatuCipi } from './StatuPenceresi.tsx';
 import { tasSapmasi } from './KilometreTaslari.tsx';
+import { uretimIlerlemesi, useProjeEmirleri } from './ProjeEmirleri.tsx';
 
 const SIRADAKI_TAS = 3;
 const SON_NOT = 3;
 
-// Özet yalnız yönetim verisinden kurulur; plan ve gerçekleşen planlamadadır (908), maliyet kendi sekmesindedir.
-export function ProjeOzeti({ yonetim }: { yonetim: ProjeYonetimiCevabi }) {
+// Özet yönetim verisinden kurulur; plan ve gerçekleşen planlamadadır (908), maliyet kendi sekmesindedir. Üretim ilerlemesi
+// (3303-3 a) emirleri okuyabilene, projenin emir listesinden gösterilir.
+export function ProjeOzeti({ projeId, yonetim, emirleriGorur }: { projeId: number; yonetim: ProjeYonetimiCevabi; emirleriGorur: boolean }) {
   const gun = bugun();
+  const emirler = useProjeEmirleri(projeId, emirleriGorur);
   const acikGorevler = yonetim.gorevler.filter((g) => g.durum !== 'bitti' && g.durum !== 'iptal');
   const gecikenler = acikGorevler.filter((g) => gorevGecikiyor(g, gun));
   const siradaki = yonetim.kilometreTaslari.filter((t) => t.etkin && t.gercekTarih === null).slice(0, SIRADAKI_TAS);
@@ -22,7 +25,13 @@ export function ProjeOzeti({ yonetim }: { yonetim: ProjeYonetimiCevabi }) {
       <Kart baslik="Durum" simge="chart">
         <dl className="tc-prj-bilgi">
           <dt>Statü</dt><dd><StatuCipi statu={yonetim.statu} /></dd>
-          <dt>İlerleme</dt><dd><Ilerleme deger={yonetim.ilerleme} /></dd>
+          <dt>Görev ilerlemesi</dt><dd><Ilerleme deger={yonetim.ilerleme} /></dd>
+          {emirleriGorur && (
+            <>
+              <dt>Üretim ilerlemesi</dt>
+              <dd>{emirler.isError ? <span className="tc-prj-soluk">Alınamadı</span> : <Ilerleme deger={emirler.data === undefined ? null : uretimIlerlemesi(emirler.data)} />}</dd>
+            </>
+          )}
           <dt>Açık görev</dt><dd>{acikGorevler.length}</dd>
           <dt>Geciken görev</dt><dd className={gecikenler.length > 0 ? 'tc-prj-gec' : undefined}>{gecikenler.length}</dd>
         </dl>

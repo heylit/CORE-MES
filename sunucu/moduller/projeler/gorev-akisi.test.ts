@@ -350,4 +350,67 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await komut(kalite1, g.id, 'onayla')).statusCode, 403, 'bitiren artık yapan değil ama yine onaylayamaz');
     assert.equal((await komut(kalite2, g.id, 'onayla')).statusCode, 403, 'yeni yapan da onaylayamaz');
   });
+
+  test('bildirim (3303): türler alanın tercihlerinde görünür; alıcısı kayda bağlıdır, Bildirim yönetimi alıcı seçmez, gösterimi ayarlar', async () => {
+    const tercih = (await oku(operator1, '/bildirimler/tercihler')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
+    assert.ok(tercih.includes('projeler.gorev-atandi') && tercih.includes('projeler.gorev-kontrol-bekliyor'), tercih.join(','));
+    assert.ok(!(await oku(guvenlik, '/bildirimler/tercihler')).json<{ satirlar: { tur: string }[] }>().satirlar
+      .some((t) => t.tur.startsWith('projeler.gorev')), 'görev işlemi olmayan türü görmez');
+    const ayar = await gonder(yonetici, '/bildirimler/alicilar/projeler.gorev-atandi/degistir', { rolIdleri: [rolId('kalite')], kisiIdleri: [], surum: null });
+    assert.equal(ayar.statusCode, 400, 'kayda bağlı türün alıcısı seçilmez');
+    const alicilar = (await oku(yonetici, '/bildirimler/alicilar')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
+    assert.ok(!alicilar.some((t) => t.startsWith('projeler.gorev')), 'alıcı listesinde yok');
+    const gosterim = (await oku(yonetici, '/bildirimler/gosterim')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
+    assert.ok(gosterim.includes('projeler.gorev-atandi'), 'gösterimi (onay istenir) ayarlanır');
+    const p = await projeAc();
+    const once = await okunmamis(kalite2.id, 'projeler.gorev-atandi');
+    await gorevAc(p, { sorumluKisiId: kalite1.id });
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'yalnız atanana gider');
+    assert.ok(await okunmamis(kalite1.id, 'projeler.gorev-atandi') >= 1, 'atanan kişiye gider');
+    // Tür eskiden alıcı ayarlıydı: kalmış bir kayıtlı seçim (yalnız kalite2) atananı susturmaz.
+    await vt().sorgu("INSERT INTO bildirim_tur_ayari (tur) VALUES ('projeler.gorev-atandi')");
+    await vt().sorgu("INSERT INTO bildirim_tur_kisisi (tur, kisi_id) VALUES ('projeler.gorev-atandi', $1)", [kalite2.id]);
+    const p2 = await projeAc();
+    const kalite1Once = await okunmamis(kalite1.id, 'projeler.gorev-atandi');
+    await gorevAc(p2, { sorumluKisiId: kalite1.id });
+    assert.equal(await okunmamis(kalite1.id, 'projeler.gorev-atandi'), kalite1Once + 1, 'eski alıcı kaydı okunmaz');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'kayıttaki kişiye gitmez');
+    // 3303-2 a: atama bildirimi "Okudum, anladım" denene kadar kalır; onaysız arşive kaldırılamaz.
+    const satir = await vt().tek<{ id: number; onay: boolean }>(
+      "SELECT id, onay_istenir AS onay FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi' ORDER BY id DESC LIMIT 1", [kalite1.id],
+    );
+    assert.equal(satir?.onay, true, 'onay ister');
+    const arsiv = await app.inject({ method: 'POST', url: `/api/bildirimler/${satir?.id ?? 0}/arsivle`, payload: {}, headers: { cookie: kalite1.cerez, 'istek-kimligi': randomUUID() } });
+    assert.equal(arsiv.statusCode, 400, arsiv.body);
+  });
+
+  test('iptal (3303-1 c): görev silinmez, görev yazan iptal eder; bitmiş ve iptal görev iptal edilmez; kontrol bildirimi kapanır', async () => {
+    const p = await projeAc();
+    const a = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    assert.equal((await komut(kalite1, a.id, 'iptal')).statusCode, 403, 'görev işleyen iptal edemez');
+    const eski = await gonder(planlama, `/projeler/gorevler/${a.id}/iptal`, { surum: a.surum + 1 });
+    assert.equal(eski.statusCode, 409, `eski sürümle iptal: ${eski.body}`);
+    const iptal = await basarili(planlama, a.id, 'iptal');
+    assert.equal(iptal.gorev.durum, 'iptal');
+    assert.equal((await komut(planlama, a.id, 'iptal')).statusCode, 400, 'iptal görev yeniden iptal edilmez');
+    assert.equal((await komut(kalite1, a.id, 'basla')).statusCode, 400, 'iptal görev işlenmez');
+    const y = (await oku(planlama, `/projeler/${p}/yonetim`)).json<ProjeYonetimiCevabi>();
+    assert.ok(y.gorevler.some((g) => g.id === a.id && g.durum === 'iptal'), 'görev listede kalır');
+    // Kontrolde bekleyen görev iptal edilince kontrol bildirimi kapanır.
+    const baskaKontrolcu = await islemliKisi(['projeler.gorev-kontrol']);
+    const k = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolKisiId: kalite2.id });
+    await basarili(kalite1, k.id, 'basla');
+    await basarili(kalite1, k.id, 'bitir');
+    const bekleyen = await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor');
+    assert.ok(bekleyen >= 1);
+    assert.equal(await okunmamis(baskaKontrolcu.id, 'projeler.gorev-kontrol-bekliyor'), 0, 'kontrol bildirimi yalnız kayıttaki kontrol edene');
+    await basarili(planlama, k.id, 'iptal');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor'), bekleyen - 1, 'kontrol bildirimi kapandı');
+    assert.equal((await komut(kalite2, k.id, 'onayla')).statusCode, 400, 'iptal görev onaylanmaz');
+    // Bitmiş görev iptal edilmez.
+    const b = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    await basarili(kalite1, b.id, 'basla');
+    await basarili(kalite1, b.id, 'bitir');
+    assert.equal((await komut(planlama, b.id, 'iptal')).statusCode, 400);
+  });
 });

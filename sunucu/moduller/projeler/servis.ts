@@ -24,7 +24,7 @@ import {
   YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
-  gorevIzinleri, gorevlerimTuru, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
+  gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
 import { projeAcildiBildir, projeDegistiBildir } from './proje-olaylari.ts';
@@ -492,6 +492,16 @@ export async function gorevGeriGonder(db: Db, kullanici: Kullanici, gorevId: num
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 
+// 3303-1 c: görevi görev yazan iptal eder; veri silinmez. Kontrol bildirimi kapanır, atama bildirimi projeye bağlı olduğu için kalır.
+export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, g: GorevKomutuGovdesi): Promise<GorevAyrintisiCevabi> {
+  const { g: mevcut } = await akisaHazirla(db, kullanici, gorevId);
+  const ret = iptalReddi(mevcut.durum);
+  if (ret !== null) throw dogrulama(ret);
+  await akisYaz(db, gorevId, () => sorgular.gorevIptal(db, gorevId, kullanici.id, g.surum));
+  await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
 // Projeyi okuyamayan kişi yalnız kendisine, rolüne ya da kontrolüne düşen ya da işlediği görevi açar; ötekisi yok sayılır.
 export async function gorevAyrintisi(db: Db, kullanici: Kullanici, gorevId: number): Promise<GorevAyrintisiCevabi> {
   const g = await sorgular.gorevGetir(db, gorevId);
@@ -547,7 +557,7 @@ async function atamaBildir(
   const proje = await sorgular.projeGetir(db, projeId);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-atandi', baslik: 'Sana proje görevi var', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: String(projeId), kisiler: alicilar, haric,
+    kaynakKimlik: String(projeId), kisiler: alicilar, yalnizKisiler: true, haric,
   });
 }
 
@@ -561,7 +571,7 @@ async function kontrolBildir(db: Db, g: GorevSatiri, bitiren: number): Promise<v
   const proje = await sorgular.projeGetir(db, g.proje_id);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-kontrol-bekliyor', baslik: 'Proje görevi kontrolünü bekliyor', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: String(g.id), kisiler: alicilar, haric: bitiren,
+    kaynakKimlik: String(g.id), kisiler: alicilar, yalnizKisiler: true, haric: bitiren,
   });
 }
 

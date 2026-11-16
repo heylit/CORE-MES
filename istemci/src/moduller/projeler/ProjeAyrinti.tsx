@@ -82,7 +82,7 @@ export function ProjeAyrinti() {
       {YONETIM_SEKMELERI.has(sekme) && (yonetim.isError
         ? <DurumKutusu durum="hata" mesaj={hataIletisi(yonetim.error, 'Proje yönetimi alınamadı')} yenile={() => { void yonetim.refetch(); }} />
         : !y && <DurumKutusu durum="yukleniyor" />)}
-      {y && sekme === 'ozet' && <ProjeOzeti yonetim={y} />}
+      {y && sekme === 'ozet' && <ProjeOzeti projeId={p.id} yonetim={y} emirleriGorur={emirleriGorur} />}
       {y && sekme === 'gorevler' && <ProjeGorevleri projeId={p.id} yonetim={y} acik={p.durum === 'aktif'} />}
       {y && sekme === 'taslar' && <KilometreTaslari projeId={p.id} yonetim={y} acik={p.durum === 'aktif'} />}
       {y && sekme === 'gecmis' && <StatuGecmisi gecmis={y.statuGecmisi} />}
