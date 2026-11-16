@@ -54,7 +54,7 @@ const CALISMA = {
   param: { tampon: false, tamponZ: 0, acilPay: 0 }, kapali: [], olaylar: [], plan: null,
 };
 
-// Pazartesi başlayan çalışma: taban plan kurulur, sonra gün 8'de (Salı) bir işlem başlamış, biri kilitli, Torna 1'de arıza ve fazla mesai var.
+// Pazartesi başlayan çalışma: taban plan kurulur, sonra gün 9'da (Çarşamba) bir işlem başlamış, biri kilitli, Torna 1'de arıza ve fazla mesai var.
 function calisma(): Nesne {
   const g = motor.girdiKur(kopya(CALISMA), kopya(KAYIT), kopya(KAYNAK), '2026-10-19');
   if (!g) throw new Error('çalışma kurulamadı');
@@ -68,7 +68,9 @@ function calisma(): Nesne {
   S['locks'] = { 'O3.10': { m: '100', S: 15 * 24 + 8 } };
   S['down'] = [{ m: '100', from: 9 * 24 + 8, to: 9 * 24 + 12 }, { m: '101', from: 1 * 24 + 8, to: 1 * 24 + 10 }];
   S['ekMesai'] = [{ m: '100', gun: 12, vardiya: '3' }, { m: '101', gun: 2, vardiya: '3' }];
-  S['simdi'] = 8 * 24 + 10;
+  // Şimdi yeni başlangıç gününün içindedir: kaydırma bugüne yapılır; kayan çalışmada şimdi eksi olursa motor iki planı ayrı anlarda kurar
+  // ve saati geçmiş, kaydı olmayan işi (yeniden dizilir) farklı yere koyar.
+  S['simdi'] = 9 * 24 + 10;
   return S;
 }
 const planla = (S: Nesne): Record<string, Op> => {
