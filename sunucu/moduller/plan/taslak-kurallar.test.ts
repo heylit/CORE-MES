@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -82,6 +82,26 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.ok('hata' in y && y.hata.tur === 'dogrulama');
     const ayni = yonUygula(calisma(), 'S1', 'plan', k);
     assert.ok(!('hata' in ayni) && !ayni.degisti);
+  });
+
+  test('3335-2: yeniden planlama isteği veriyi değiştirmez, bekleyen satırı yazar; plan yokken ve bilinmeyen emirde reddedilir', () => {
+    const c = calisma();
+    const r = yenidenPlanlaUygula(c, ['S1', 'S3', 'S1'], k);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as ReturnType<typeof calisma> & { bekleyen: { ne: string; ayrinti: string; isler: string[]; geri: unknown[] }[] };
+    assert.deepEqual(d.bekleyen.map((b) => [b.ne, b.ayrinti, b.isler, b.geri]), [['Yeniden planlama istendi', '2 emir yeniden planlanacak', ['S1', 'S3'], []]]);
+    assert.equal(d.dataVer, 4);
+    assert.deepEqual([d.D, d.plan, d.locks, d.w, d.param], [c.D, c.plan, c.locks, c.w, c.param]);
+    const hepsi = yenidenPlanlaUygula(c, ['*'], k);
+    assert.ok(!('hata' in hepsi));
+    assert.deepEqual((hepsi.deger as { bekleyen: { isler: string[]; ayrinti: string }[] }).bekleyen.map((b) => [b.isler, b.ayrinti]), [[['*'], 'Bütün plan baştan kurulacak']]);
+    const yok = yenidenPlanlaUygula(c, ['S1', 'S9'], k);
+    assert.ok('hata' in yok && yok.hata.tur === 'dogrulama');
+    const plansiz = yenidenPlanlaUygula(calisma({ plan: null }), ['S1'], k);
+    assert.ok('hata' in plansiz && plansiz.hata.tur === 'cakisma');
+    assert.deepEqual(komutAnahtarlari({ tur: 'yeniden-planla', isler: ['S1', 'S2'] }, imza(c)), ['emir:S1', 'emir:S2']);
+    assert.deepEqual(komutAnahtarlari({ tur: 'yeniden-planla', isler: ['*'] }, imza(c)), ['*']);
+    assert.equal(komutAdi({ tur: 'yeniden-planla', isler: ['S1'] }), 'S1 yeniden planlanacak');
   });
 });
 

@@ -296,12 +296,18 @@ export interface EmirAdimlariOzellikleri {
   saatGirdisi?: SaatGirdisi;
   // Bölümün açılış görünümü; verilmezse tablo.
   ilkGorunum?: OperasyonGorunumu;
+  // "Planla" menüsünden gelen istek (3335-2): sıradaki plansız emre uygulanır. n her istekte artar; aynı istek bir kez işlenir.
+  planla?: PlanlaIstegi | null;
+  // Sıradaki plansız emrin durumu menüye bildirilir (işaretli adım sayısı; önizleme hazır mı). Plansız emir yoksa null.
+  planlaDurumu?: (d: PlanlaDurumu | null) => void;
 }
+export interface PlanlaIstegi { n: number; tur: 'ileri' | 'geri' | 'isaretli' }
+export interface PlanlaDurumu { emirNo: string; adim: number; isaretli: number; ileriHazir: boolean; isaretliHazir: boolean; terminVar: boolean }
 export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => number | null }
 export type OperasyonGorunumu = 'tablo' | 'akis';
 const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo' }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu }: EmirAdimlariOzellikleri) {
   const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
@@ -309,6 +315,8 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
   const tasinan = secIs !== null && m.isler[secIs] ? kart.emirler.find((e) => e.adimlar.some((a) => a.id === secIs))?.id ?? null : null;
   const etkin = tasinan !== null ? null : kart.emirler.find((e) => e.id === dokunulan && e.durum === 'plansiz')?.id ?? kart.emirler.find((e) => e.durum === 'plansiz')?.id ?? null;
   const bas = kart.emirler[0];
+  useEffect(() => { if (etkin === null) planlaDurumu?.(null); }, [etkin, planlaDurumu]);
+  useEffect(() => () => { planlaDurumu?.(null); }, [planlaDurumu]);
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler ve operasyonlar">
       <h2>
@@ -319,7 +327,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} />
         ))}
       </div>
     </section>
@@ -344,7 +352,7 @@ function useYanda(): boolean {
   return v;
 }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
   const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
@@ -429,6 +437,22 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   const odakPaneli = odak && <OdakPaneli m={m} ad={odak.ad} isId={odak.isId} tezgahlar={odak.tezgahlar} yerler={odak.yerler} secilen={odak.secilen} zaman={zaman} fiil={odak.fiil} sec={uygula || tasimaAcik ? odakSec : null} />;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   const secimVar = Object.keys(y.sec).length > 0;
+  // "Planla" menüsü (3335-2): menü bu emrin durumunu okur, isteği buradaki düğmelerle aynı yoldan uygular.
+  const isaretli = Object.keys(y.sec).length, isaretliHazir = secimVar && y.ongoru !== null && y.ongoru.gecerli;
+  // Etkin emir her zaman plansızdır (EmirAdimlari); planlı emir menüye durum bildirmez.
+  const menuyeAcik = etkin && uygula !== null;
+  useEffect(() => {
+    if (menuyeAcik) planlaDurumu?.({ emirNo: e.no, adim: e.adimlar.length, isaretli, ileriHazir: secimVar ? isaretliHazir : sistemHazir, isaretliHazir, terminVar: e.termin !== null });
+  }, [menuyeAcik, planlaDurumu, e.no, e.adimlar.length, isaretli, secimVar, isaretliHazir, sistemHazir, e.termin]);
+  const islenen = useRef(planla?.n ?? 0);
+  useEffect(() => {
+    if (!planla || planla.n === islenen.current || !menuyeAcik) return;
+    islenen.current = planla.n;
+    if (planla.tur === 'geri') geriYerlestir();
+    else if (planla.tur === 'isaretli') yaz(y.secimle());
+    else yaz(secimVar ? y.secimle() : y.hepsi());
+    // İstek numarasıyla bir kez işlenir; işleyiciler her çizimde günceldir.
+  }, [planla?.n, menuyeAcik]);
   return (
     <div className="tc-pyq-emir" data-emir={e.id} data-etkin={etkin ? '' : undefined} data-gorunum={gorunum}>
       <div className="tc-pyq-emir-ad">

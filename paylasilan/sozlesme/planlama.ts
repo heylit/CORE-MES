@@ -456,6 +456,8 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   planaAlGovdesi.omit({ calismaSurumu: true }).extend({ tur: z.literal('plana-al') }).strict(),
   z.object({ tur: z.literal('ayar'), ayar: taslakAyarlari, ayrinti: z.string().trim().max(500) }).strict(),
   z.object({ tur: z.literal('yon'), emirId: taslakKimlik, yon: z.enum(['plan', 'ileri', 'geri']) }).strict(),
+  // 3335-2: kişinin yeniden planlama isteği. isler emir kimlikleridir; tek başına '*' bütün plandır. Veri değişmez, dizme işleri yeniden dizer.
+  z.object({ tur: z.literal('yeniden-planla'), isler: z.array(taslakKimlik).min(1).max(5000).refine((l) => !l.includes('*') || l.length === 1, { message: "'*' tek başına verilir." }) }).strict(),
   // 3282 2a-1: tezgâhın elle girilen arıza ya da bakım duruşu (çalışmanın down satırı). bas ve bit planın ekseninde saattir (başlangıç
   // gününün 00:00'ı 0), çeyrek saat adımlı. Silme satırı değeriyle bulur; otomatik (arızadan ya da bakım planından gelen) satır silinmez.
   z.object({ tur: z.literal('durus'), tezgah: taslakKimlik, bas: durusSaati, bit: durusSaati, neden: z.enum(['arıza', 'bakım']) }).strict(),

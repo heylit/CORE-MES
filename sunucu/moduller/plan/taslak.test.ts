@@ -220,6 +220,22 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     assert.deepEqual([(o['plan'] as Record<string, unknown>)['ORN'], o['bekleyen'], w(o)['dondurma']], ['dizilen', [], 11]);
   });
 
+  test('TS-13 (3335-2): yeniden planlama isteği taslağa satır yazar, görünümde bekleyen olur; çalışmada olmayan emir 400; Geri al satırı çıkarır', async () => {
+    await vt().sorgu('DELETE FROM plan_taslagi WHERE kisi_id = $1', [yoneticiId]);
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = jsonb_set(deger, '{plan}', $2::jsonb) WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, JSON.stringify({ dataVer: 0, ops: {} })]);
+    const once = JSON.stringify(await ortak());
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'yeniden-planla', isler: ['ORN-YOK'] } }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'yeniden-planla', isler: [] } }, 400);
+    await istek(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'yeniden-planla', isler: ['*', 'ORN-1'] } }, 400);
+    const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'yeniden-planla', isler: ['*'] } });
+    assert.deepEqual(t.taslak?.satirlar.map((x) => [x.komut, x.ne, x.hata]), [[{ tur: 'yeniden-planla', isler: ['*'] }, 'Bütün plan baştan kurulacak', null]]);
+    const bekleyen = t.calisma?.['bekleyen'] as { ne: string; isler: string[] }[];
+    assert.deepEqual([bekleyen.at(-1)?.ne, bekleyen.at(-1)?.isler], ['Yeniden planlama istendi', ['*']]);
+    assert.equal(JSON.stringify(await ortak()), once, 'ortak çalışma değişmedi');
+    const g = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/geri-al', { taslakSurumu: t.taslak!.surum });
+    assert.equal(g.taslak, null);
+  });
+
   test('TS-10: dizme sürerken taslak değiştiyse yazılmaz (409); başkası plan ayarını değiştirince dizme bayatlar, Uygula durur', async () => {
     const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: ayar({ dondurma: 13 }) });
     // Hesap bitmeden yazılmaz.

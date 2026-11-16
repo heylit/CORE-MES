@@ -461,8 +461,20 @@ test('Kokpit 3335: 4 saat kuralı reddedince karar alanı zorunlu gerekçe olur,
   await kokpit.getByRole('tab', { name: 'Onay bekleyenler (1)' }).click();
   await expect(kokpit.getByRole('heading', { name: 'Onay bekleyen ve kayıtlı planlar' })).toBeVisible();
   await expect(kokpit.getByText('ORN-Onay plani').first()).toBeVisible();
+  // 3335-1b: sekme sadedir; dört sayı ve karar görünür, karşılaştırma kutusu yoktur, ayrıntı kapalı gelir ve açılınca taşmaz.
+  await expect(kokpit.locator('[data-sekme="bekleyen"] .tc-pym-pa-ozet dt')).toHaveCount(4);
+  await expect(kokpit.getByRole('checkbox', { name: /karşılaştır/ })).toHaveCount(0);
+  await expect(kokpit.getByRole('heading', { name: 'Karar', exact: true })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-bekleyen-${bilgi.project.name}.png`, fullPage: true });
+  // Onaylayanın eylemi kartın altındadır: not alanı ve karar düğmeleri.
+  await kokpit.getByRole('heading', { name: 'Karar', exact: true }).scrollIntoViewIfNeeded();
+  await expect(kokpit.locator('[data-sekme="bekleyen"] .tc-pym-pa-karar .tc-pym-pa-dugmeler button').first()).toBeVisible();
+  await kokpit.locator('details.tc-pym-pa-ayrinti > summary').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/kart-3335-bekleyen-karar-${bilgi.project.name}.png` });
+  await kokpit.locator('details.tc-pym-pa-ayrinti > summary').click();
+  await expect(kokpit.getByRole('heading', { name: 'Tezgâh başına değişen iş' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   // Beklenen: 4 saat reddi (409) ve uydurma onay planının sunucuda olmayan ayrıntısı (404).
   expect(ag.hatalar.filter((h) => !/409|404 GET \/api\/plan(\/motor-ayarlari)?\?taslak=7$|404 \(Not Found\)/.test(h))).toEqual([]);
 });
@@ -661,6 +673,75 @@ test('Kokpit 3318-2: "Teslimden geriye yerleştir" onay sorar, emrin yönünü g
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3335 a, 2. dilim: "Planla" menüsü üst şeridin başındadır. Toplu ve yeniden planlama taslağa "yeniden-planla" komutu yazar, plan
+// taslağın görünümünde yeniden dizilir, Geri ikisini birlikte alır; seçili plansız siparişin yönü satırın içinde seçilir (var olan plana alma).
+test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yazar ve Geri alır; seçili siparişi ileriye planla; tüm planın yönü Araçlar\'da; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const c = calisma({ ...ILK }, {});
+  const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(d.ops) }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, tezgah = q.get('tezgah') ?? '', S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }], bitis: S + 4 });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const dugme = kokpit.getByRole('button', { name: 'Planla', exact: true });
+  const menu = kokpit.getByRole('menu', { name: 'Planla' });
+  await expect(dugme).toBeEnabled();
+  // Üç adım ve taslak cümlesi üst şeridin altında, taşmadan durur.
+  await expect(kokpit.locator('.tc-pyq-akis')).toBeVisible();
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  await expect(karsilama).toHaveCount(0);
+  await dugme.scrollIntoViewIfNeeded();
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-2-kapali-${bilgi.project.name}.png` });
+  await dugme.click();
+  await expect(menu).toBeVisible();
+  const hepsi = menu.getByRole('menuitem', { name: /Plansızların hepsini planla \(1\)/ });
+  const secili = menu.getByRole('group', { name: 'Seçili siparişi planla' });
+  await expect(hepsi).toBeEnabled();
+  await expect(secili).toContainText('S4');
+  await expect(secili).toContainText('yönü seçin');
+  await expect(secili.getByRole('menuitem', { name: 'İleriye' })).toBeEnabled();
+  await expect(menu.getByRole('menuitem', { name: /İşaretli adımları planla \(0\)/ })).toBeDisabled();
+  await expect(menu.getByRole('menuitem', { name: /Seçili siparişi yeniden planla/ })).toBeDisabled();
+  await expect(menu.getByRole('menuitem', { name: /Bütün planı baştan kur/ })).toBeEnabled();
+  // Menü ekrana sığar; telefonda satırlar parmağa göredir.
+  const kutu = await menu.boundingBox(), gen = page.viewportSize()!.width;
+  expect(kutu!.x).toBeGreaterThanOrEqual(0);
+  expect(kutu!.x + kutu!.width).toBeLessThanOrEqual(gen + 1);
+  if (bilgi.project.name === 'g360') for (const b of await menu.getByRole('menuitem').all()) expect((await b.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-2-menu-${bilgi.project.name}.png` });
+
+  // Toplu: istek taslağa kendi satırıyla yazılır, plan yeniden dizilir; Geri ikisini birlikte alır.
+  await hepsi.click();
+  await expect(menu).toHaveCount(0);
+  await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
+  expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S4'] }]);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await kokpit.getByRole('group', { name: 'Geri' }).getByRole('button').click();
+  await expect.poll(() => t.s.satirlar.length).toBe(0);
+
+  // Seçerek: yön satırın içinde; İleriye var olan plana alma komutunu yazar.
+  await expect(dugme).toBeEnabled();
+  await dugme.click();
+  await expect(secili.getByRole('menuitem', { name: 'İleriye' })).toBeEnabled();
+  await secili.getByRole('menuitem', { name: 'İleriye' }).click();
+  await expect.poll(() => t.alinan().length).toBe(1);
+  expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4' });
+
+  // Tüm planın yönü üst şeritte ayrı düğme değildir; Araçlar menüsündedir.
+  await expect(kokpit.getByRole('button', { name: /^Tüm plan:/ })).toHaveCount(0);
+  await kokpit.getByRole('button', { name: 'Araçlar' }).click();
+  await expect(kokpit.getByRole('menu', { name: 'Araçlar' }).getByRole('menuitemradio', { name: /Tüm plan: İleriye/ })).toHaveAttribute('aria-checked', 'true');
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3318 a, 3. dilim: tabloda seçili operasyonun uygun tezgâhları odaklı panelde durur (geniş ekranda tablonun yanında, dar ekranda
 // seçili satırın altında). Boş yere basınca tezgâh ve başlangıç satıra yazılır; yerleşmiş operasyonda yeni yer "Taşı" ile yazılır.
 // Önizleme uydurmadır: T-01 altı saat sonra boşalır, F-01 hemen boştur.
@@ -802,7 +883,7 @@ test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster 
   await expect(cubuk.getByText('Veri değişti')).toHaveCount(0);
   // Ayrı değişiklik satırı (sayfanın üstündeki) Kokpit'te çizilmez.
   await expect(page.getByRole('region', { name: 'Değişiklik akışı' })).toHaveCount(0);
-  const toplu = cubuk.getByRole('button', { name: 'Veri değişikliklerini uygula' });
+  const toplu = cubuk.getByRole('button', { name: 'Planı güncelle' });
   await expect(toplu).toBeVisible();
   await expect(toplu).not.toHaveClass(/tc-dugme-birincil/);
   const serit = kokpit.getByRole('region', { name: 'Siparişler, sırasıyla' });
@@ -820,7 +901,7 @@ test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster 
   await expect(geride.getByRole('listitem')).toHaveCount(1);
   await expect(geride.getByRole('listitem')).toContainText('S1 · Torna · T-01');
   await expect(geride.getByRole('listitem')).toContainText('2 sa geride');
-  await expect(liste).toContainText('"Veri değişikliklerini uygula (1)" yalnız "Veri değişti" satırlarının');
+  await expect(liste).toContainText('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
   // Liste şeridin altında, Kokpit'in üstünde durur; sayfayı yana taşırmaz.
   const lk = await liste.boundingBox(), kk = await kokpit.boundingBox(), ck = await cubuk.boundingBox();
   expect(lk && ck ? lk.y >= ck.y + ck.height - 1 : false).toBe(true);
@@ -1217,14 +1298,14 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   // Düğme geçerli yönü yazar, menüde iki yön açıklamasıyla durur; öteki yön seçilince yalnız yönün etkisini taşıyan küçük panel açılır.
-  const ustYon = kokpit.getByRole('button', { name: /^Tüm plan:/ });
-  const yonMenusu = kokpit.getByRole('menu', { name: 'Tüm planın yönü' });
+  const ustYon = kokpit.getByRole('button', { name: 'Araçlar' });
+  const yonMenusu = kokpit.getByRole('menu', { name: 'Araçlar' });
   const panel = kokpit.getByRole('complementary', { name: 'Tüm planın yönü' });
   const yonEtkisi = panel.getByRole('region', { name: 'Ayarın etkisi' });
   const taslakCubugu = kokpit.getByRole('region', { name: 'Taslak' });
-  await expect(ustYon).toContainText('Tüm plan: İleriye');
+  await expect(kokpit.getByRole('button', { name: /^Tüm plan:/ })).toHaveCount(0);
   await ustYon.click();
-  await expect(yonMenusu.getByRole('menuitemradio', { name: /İleriye planla/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(yonMenusu.getByRole('menuitemradio', { name: /Tüm plan: İleriye/ })).toHaveAttribute('aria-checked', 'true');
   await expect(yonMenusu.getByRole('menuitemradio', { name: /Teslimden geriye/ })).toContainText('iş termine yetişecek en geç saatte başlar');
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await yonMenusu.getByRole('menuitemradio', { name: /Teslimden geriye/ }).click();
@@ -1244,7 +1325,7 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   t.s.komutlar.length = 0;
   // Geçerli yön seçilirse menü kapanır; panel açılmaz, plana dokunulmaz.
   await ustYon.click();
-  await yonMenusu.getByRole('menuitemradio', { name: /İleriye planla/ }).click();
+  await yonMenusu.getByRole('menuitemradio', { name: /Tüm plan: İleriye/ }).click();
   await expect(yonMenusu).toHaveCount(0);
   await expect(panel).toHaveCount(0);
   expect(t.s.komutlar).toEqual([]);

@@ -88,6 +88,7 @@ export function komutAnahtarlari(k: SatirKomutu, taban: TaslakImzasi): string[] 
     }
     case 'plana-al': return [`emir:${k.emirId}`, `tezgah:${k.tezgah}`, ...(k.adimlar ?? []).map((a) => `tezgah:${a.tezgah}`)];
     case 'yon': return [`emir:${k.emirId}`];
+    case 'yeniden-planla': return k.isler.includes('*') ? ['*'] : [...new Set(k.isler)].map((id) => `emir:${id}`);
     case 'ayar': return ['*'];
     case 'durus': case 'durus-sil': case 'ek-mesai-sil': return [`tezgah:${k.tezgah}`];
     // Risk 2a S10: operatörün başka bir ek mesaisi de çatışır (aynı kişi aynı pencerede iki tezgâhta olamaz).
@@ -202,6 +203,20 @@ export function yonUygula(deger: unknown, emirId: string, yon: 'plan' | 'ileri' 
   const geri: GeriYama[] = [w.yonEmir === undefined ? { yol: ['w'], id: 'yonEmir' } : { yol: ['w'], id: 'yonEmir', once: w.yonEmir }];
   const ad = (y: string) => (y === 'plan' ? 'planınki' : y === 'geri' ? 'teslimden geriye' : 'ileriye');
   return { deger: isle(deger, yeni, { ne: 'Emrin yönü değişti', ayrinti: `${emirId}: ${ad(simdi)} → ${ad(yon)}`, isler: [emirId], geri }, k), degisti: true };
+}
+
+// Yeniden planlama isteği (3335-2): veri değişmez; istek bekleyen değişiklik olarak yazılır, dizme o emirlerin işlerini yeniden dizer
+// ('*': bütün plan). Planda yeri olmayan emirlere her dizmede yer bulunur. Emirler çalışmada olmalı; plan kurulmuş olmalı.
+const yenidenPlanlaAdi = (isler: readonly string[]): string => (isler.includes('*') ? 'Bütün plan baştan kurulacak' : isler.length === 1 ? `${isler[0]!} yeniden planlanacak` : `${String(isler.length)} emir yeniden planlanacak`);
+export function yenidenPlanlaUygula(deger: unknown, isler: readonly string[], k: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  if (!nesne(deger.plan)) return { hata: { tur: 'cakisma', ileti: 'Henüz plan yok; önce planı kurun.' } };
+  const hepsi = isler.includes('*');
+  const D = nesne(deger.D) ? deger.D : {};
+  const var_ = new Set(Array.isArray(D.siparisler) ? D.siparisler.flatMap((s) => (nesne(s) ? [String(s.id)] : [])) : []);
+  const tekil = hepsi ? ['*'] : [...new Set(isler)];
+  if (!hepsi && tekil.some((id) => !var_.has(id))) return { hata: { tur: 'dogrulama', ileti: 'Emir çalışmada yok.', alan: 'isler' } };
+  return { deger: isle(deger, kopya(deger), { ne: 'Yeniden planlama istendi', ayrinti: yenidenPlanlaAdi(tekil), isler: tekil, geri: [] }, k), degisti: true };
 }
 
 // Duruş (3282 2a-1): elle girilen arıza ya da bakım. Aynı tezgâh ve aralık ikinci kez eklenmez; tezgâh çalışmada olmalı; aralık ufukta ve
@@ -367,6 +382,7 @@ export function komutAdi(k: SatirKomutu): string {
     case 'tasi': return `${k.isId} → ${k.tezgah}`;
     case 'plana-al': return `${k.emirId} plana alındı (${k.tezgah})`;
     case 'yon': return `${k.emirId} yönü: ${k.yon === 'plan' ? 'planınki' : k.yon === 'geri' ? 'teslimden geriye' : 'ileriye'}`;
+    case 'yeniden-planla': return yenidenPlanlaAdi([...new Set(k.isler)]);
     case 'ayar': return k.ayrinti === '' ? 'Plan ayarı' : `Plan ayarı: ${k.ayrinti}`;
     case 'durus': return `${k.tezgah} ${k.neden === 'bakım' ? 'bakım' : 'arıza'}: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
     case 'durus-sil': return `${k.tezgah} duruşu silindi: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
@@ -389,6 +405,7 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
     case 'plana-al': { const { tur: _, ...g } = k; return planaAl(deger, g, kisi, h.planaAlma); }
     case 'ayar': return ayarUygula(deger, k.ayar, k.ayrinti, kisi);
     case 'yon': return yonUygula(deger, k.emirId, k.yon, kisi);
+    case 'yeniden-planla': return yenidenPlanlaUygula(deger, k.isler, kisi);
     case 'durus': return durusUygula(deger, k, kisi);
     case 'durus-sil': return durusSilUygula(deger, k, kisi);
     case 'ek-mesai': return ekMesaiUygula(deger, k, kisi);

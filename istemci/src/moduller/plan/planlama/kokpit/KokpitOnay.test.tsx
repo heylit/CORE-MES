@@ -40,8 +40,8 @@ function sunucu(retler: ApiHatasi[]) {
 }
 const govdeler = (post: { mock: { calls: unknown[][] } }) => post.mock.calls.filter((x) => x[0] === CANLI).map((x) => x[1] as Record<string, unknown>);
 
-function sayfayiAc() {
-  const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar: { canli: null, canliSurum: 3, senaryolar: [] }, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
+function sayfayiAc(senaryolar: unknown = { canli: null, canliSurum: 3, senaryolar: [] }) {
+  const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
   render(
     <MemoryRouter><BildirimSaglayici>
       <Kokpit
@@ -120,5 +120,64 @@ describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır
     await waitFor(() => expect(post).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Onay bekleyenler (1)' }).getAttribute('aria-selected')).toBe('true'));
     expect((await screen.findAllByText('ORN-Onay plani')).length).toBeGreaterThan(0);
+    // 3335-1b: sekme sadedir. Dört sayı, kontrol ve karar görünür; karşılaştırma kutusu yoktur, ayrıntı kapalı gelir.
+    const ozet = document.querySelector('[data-sekme="bekleyen"] .tc-pym-pa-ozet');
+    expect([...(ozet?.querySelectorAll('dt') ?? [])].map((x) => x.textContent)).toEqual(['işin yeri değişti', 'yeni yerleşen iş', 'geciken sipariş', 'ağırlıklı gecikme']);
+    expect(screen.queryByRole('checkbox', { name: /karşılaştır/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Onaydan çek' })).toBeTruthy();
+    const ayrinti = document.querySelector<HTMLDetailsElement>('details.tc-pym-pa-ayrinti');
+    expect(ayrinti?.open).toBe(false);
+    expect(ayrinti?.textContent).toContain('Tezgâh başına değişen iş');
+  });
+});
+
+// 3335-1b: onay bekleyen planın sade kartı. Sayılar iki planın yerleşiminden (GET /plan, GET /plan?taslak=) ve göstergelerden gelir;
+// fikstürde yeri değişen (2) ve yeni yerleşen (3) iş sayısı bilerek farklıdır.
+describe('Kokpit onay sayfası: onay bekleyen planın sade kartı (3335-1b)', () => {
+  const y = (isEmriId: number, kaynak: number, baslangic: string) => ({ isEmriId, kaynak: { tur: 'makine', id: kaynak }, baslangic, bitis: baslangic, kilitli: false, dondurulmus: false, durum: 'planli' });
+  const plan = (yerlesimler: unknown[], agirlikliGecikmeSaat: number) => ({
+    kaynaklar: [{ tur: 'makine', id: 1, kod: 'M1', ad: 'M1' }, { tur: 'makine', id: 2, kod: 'M2', ad: 'M2' }], yerlesimler, emirler: [], gostergeler: { agirlikliGecikmeSaat },
+  });
+  const CANLI_PLANI = plan([y(1, 1, '2026-10-21T08:00:00Z'), y(2, 1, '2026-10-21T10:00:00Z'), y(3, 2, '2026-10-21T12:00:00Z')], 4);
+  const TASLAK_PLANI = plan([y(1, 2, '2026-10-21T08:00:00Z'), y(2, 1, '2026-10-21T11:00:00Z'), y(3, 2, '2026-10-21T12:00:00Z'), y(4, 2, '2026-10-22T08:00:00Z'), y(5, 2, '2026-10-22T09:00:00Z'), y(6, 2, '2026-10-22T10:00:00Z')], 1.5);
+  const gosterge = (geciken: number, agirlikliGecikmeSaat: number) => ({ geciken, zamanindaYuzde: 90, agirlikliGecikmeSaat, yerlesmeyen: 0 });
+  const bekleyen = {
+    id: 12, ad: 'ORN-Onay plani', aciklama: null, durum: 'onayda', acan: 'ORN-Planlamaci', benim: false, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 3, canliDegisti: false,
+    gostergeler: gosterge(1, 1.5), degisiklikler: [{}], etki: null, bekleyenler: [],
+    onay: { gonderen: 'ORN-Planlamaci', gonderme: '2026-10-20T09:00:00Z', not: 'ORN gönderme notu' }, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true },
+  };
+  async function bekleyeniAc(canli: unknown) {
+    vi.spyOn(api, 'get').mockImplementation(((yol: string) => (
+      yol === '/plan/surum' ? Promise.resolve({ planSurumu: 3, sonCanliyaAlma: null })
+        : yol === '/plan' && canli ? Promise.resolve(CANLI_PLANI)
+          : yol === '/plan?taslak=12' ? Promise.resolve(TASLAK_PLANI) : Promise.reject(new Error('yok')))) as never);
+    sayfayiAc({ canli, canliSurum: 3, senaryolar: [bekleyen] });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Onay bekleyenler (1)' }, { timeout: 5000 }));
+    return waitFor(() => { const k = document.querySelector<HTMLElement>('[data-sekme="bekleyen"] .tc-pym-pa-planim'); if (!k) throw new Error('kart yok'); return k; });
+  }
+  const sayilar = (kart: HTMLElement) => [...kart.querySelectorAll('.tc-pym-pa-ozet > div')].map((x) => `${x.querySelector('dt')?.textContent ?? ''}: ${x.querySelector('dd')?.textContent ?? ''}`);
+
+  it('dört sayı iki plandan gelir: yeri değişen ve yeni yerleşen iş ayrı sayılır; Kontrol, Karar ve karar geçmişi görünür', async () => {
+    const kart = await bekleyeniAc(gosterge(3, 4));
+    await waitFor(() => expect(sayilar(kart)).toEqual(['işin yeri değişti: 2', 'yeni yerleşen iş: 3', 'geciken sipariş: 3 → 1', 'ağırlıklı gecikme: 4,0 → 1,5 sa']));
+    expect(kart.querySelector('[data-cizgi-notu]')).toBeNull();
+    expect(within(kart).getByRole('heading', { name: 'Kontrol' })).toBeTruthy();
+    expect(within(kart).getByText('Geciken sipariş canlıya göre 2 azalıyor')).toBeTruthy();
+    expect(within(kart).getByRole('button', { name: 'Onayla ve canlıya al' })).toBeTruthy();
+    expect(within(kart).getByRole('button', { name: 'Geri gönder' })).toBeTruthy();
+    const gecmis = within(kart).getByRole('heading', { name: 'Karar geçmişi' }).parentElement;
+    expect(gecmis?.textContent).toContain('ORN-Planlamaci onaya gönderdi');
+    expect(gecmis?.textContent).toContain('ORN gönderme notu');
+    // Sıra: sayılar, kontrol, karar, geçmiş; ayrıntı en altta kapalı.
+    const basliklar = [...kart.querySelectorAll('h3, details > summary')].map((x) => (x.textContent ?? '').trim().split(':')[0]);
+    expect(basliklar.slice(0, 3)).toEqual(['Kontrol', 'Karar', 'Karar geçmişi']);
+    expect(basliklar[3]).toBe('Ayrıntı');
+  });
+
+  it('canlı plan yokken yeri değişen ve yeni yerleşen iş sayılmaz; çizginin nedeni yazar', async () => {
+    const kart = await bekleyeniAc(null);
+    await waitFor(() => expect(sayilar(kart)[3]).toBe('ağırlıklı gecikme: 1,5 sa'));
+    expect(sayilar(kart).slice(0, 3)).toEqual(['işin yeri değişti: —', 'yeni yerleşen iş: —', 'geciken sipariş: 1']);
+    expect(kart.querySelector('[data-cizgi-notu]')?.textContent).toBe('Canlı plan yok; yeri değişen ve yeni yerleşen iş sayılamaz (—).');
   });
 });
