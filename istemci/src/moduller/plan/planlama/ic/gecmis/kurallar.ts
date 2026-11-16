@@ -11,7 +11,11 @@ export const gecmisBolumuOku = (v: unknown): GecmisBolumu | null => GECMIS_BOLUM
 // Değişiklik defterinin olay adı ve rozet tonu (2129-2 b).
 export const DEFTER_OLAY_ADI: Record<DefterOlayi, [string, RozetTonu]> = {
   degisiklik: ['Değişiklik', 'bilgi'], kaynak: ['Başka sayfa', 'bilgi'], uygulandi: ['Uygulandı', 'tamam'], reddedildi: ['Reddedildi', 'uyari'], 'geri-alindi': ['Geri alındı', 'pasif'],
+  'onaya-gonderildi': ['Onaya gönderildi', 'bilgi'], 'onaydan-cekildi': ['Onaydan çekildi', 'pasif'], 'geri-gonderildi': ['Geri gönderildi', 'uyari'], 'canliya-alindi': ['Canlıya alındı', 'tamam'],
 };
+
+// Onay ve canlıya alma satırı planın kendisini anlatır (3308-9 a); adın önüne ne olduğu yazılır.
+export const defterNe = (x: { bekleyenId: string; ne: string }): string => (x.bekleyenId.startsWith('plan:') ? `Plan: ${x.ne}` : x.ne);
 
 // Ekranda en çok 200 satır; kişi süzgeci izdeki kişilerden, ilk görünme sırasıyla.
 export const IZ_GOSTERIM = 200;

@@ -3,7 +3,7 @@ import type { DefterSatiri, DegisiklikDefteriCevabi } from '#paylasilan/sozlesme
 import { Dugme, Rozet } from '../../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { VeriKarti, VeriTablosu, type Sutun } from '../veri/ortak.tsx';
-import { DEFTER_OLAY_ADI, izZamani } from './kurallar.ts';
+import { DEFTER_OLAY_ADI, defterNe, izZamani } from './kurallar.ts';
 
 // Değişiklik defteri (2129-2 b): planı etkileyen her değişiklik, uygulanması ya da reddi (gerekçesiyle), kişi ve zamanıyla. Satırı sunucu
 // çalışma yazmasında yazar; ekran yalnız okur, en yeni önde, sayfa sayfa.
@@ -12,7 +12,7 @@ const sutunlar = (ad: (id: string) => string): readonly Sutun<DefterSatiri>[] =>
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (x) => <span className="mono">{izZamani(Date.parse(x.zaman))}</span>, kirilmaz: true },
   { anahtar: 'kisi', baslik: 'Kişi', hucre: (x) => x.kisi ?? '—' },
   { anahtar: 'olay', baslik: 'Olay', hucre: (x) => <Rozet ton={DEFTER_OLAY_ADI[x.olay][1]}>{DEFTER_OLAY_ADI[x.olay][0]}</Rozet>, kirilmaz: true },
-  { anahtar: 'ne', baslik: 'Değişiklik', hucre: (x) => <span><b>{x.ne}</b>{x.ayrinti ? <span className="tc-pyi-k"> {x.ayrinti}</span> : null}</span> },
+  { anahtar: 'ne', baslik: 'Değişiklik', hucre: (x) => <span><b>{defterNe(x)}</b>{x.ayrinti ? <span className="tc-pyi-k"> {x.ayrinti}</span> : null}</span> },
   { anahtar: 'isler', baslik: 'Etkilenen', hucre: (x) => (x.isler.includes('*') ? 'Bütün işler' : x.isler.map(ad).join(', ') || '—') },
   { anahtar: 'gerekce', baslik: 'Gerekçe', hucre: (x) => x.gerekce ?? '—' },
 ];

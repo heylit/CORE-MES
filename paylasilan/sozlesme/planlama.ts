@@ -22,8 +22,10 @@ export const bekleyenKarari = z.discriminatedUnion('karar', [
 ]);
 export const planlamaYazGovdesi = yazGovdesi.extend({ anahtar: planlamaAnahtari, kararlar: z.array(bekleyenKarari).max(400).optional() });
 
-// Değişiklik defteri (2129-2 b): en yeni önde, sayfa sayfa. `once` verilirse ondan küçük kimlikliler gelir.
-export const DEFTER_OLAYLARI = ['degisiklik', 'kaynak', 'uygulandi', 'reddedildi', 'geri-alindi'] as const;
+// Değişiklik defteri (2129-2 b): en yeni önde, sayfa sayfa. `once` verilirse ondan küçük kimlikliler gelir. Son dört olay planın onay ve
+// canlıya alma adımlarıdır (3308-9 a); o satırlarda bekleyenId `plan:<kimlik>` biçimindedir.
+export const DEFTER_ONAY_OLAYLARI = ['onaya-gonderildi', 'onaydan-cekildi', 'geri-gonderildi', 'canliya-alindi'] as const;
+export const DEFTER_OLAYLARI = ['degisiklik', 'kaynak', 'uygulandi', 'reddedildi', 'geri-alindi', ...DEFTER_ONAY_OLAYLARI] as const;
 export const DEFTER_SAYFASI = 100;
 export const degisiklikDefteriSorgusu = z.object({ once: z.coerce.number<number>().int().positive().optional() }).strict();
 export const defterSatiri = z.object({

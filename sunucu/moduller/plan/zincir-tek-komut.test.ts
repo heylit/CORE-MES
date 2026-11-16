@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { CalismaGonderCevabi, DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { CalismaGonderCevabi, DegerlendirmeDurumuCevabi, DegisiklikDefteriCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { randomUUID } from 'node:crypto';
 import { canliyaAlSecenekleri } from './calisma-plani.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
@@ -46,6 +46,10 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
   };
   const senaryolar = () => tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar');
   const dortGoz = (deger: boolean) => tamam(c.yonetici, 'POST', '/ayarlar/plan.dort-goz/degistir', { deger });
+  // Planın defterdeki satırları, eskiden yeniye (3308-9 a).
+  const defter = async (taslak: number) => (await tamam<DegisiklikDefteriCevabi>(c.planlama, 'GET', '/plan/degisiklik-defteri')).satirlar
+    .filter((x) => x.bekleyenId === `plan:${String(taslak)}`).reverse();
+  const defterSayisi = async () => (await tamam<DegisiklikDefteriCevabi>(c.planlama, 'GET', '/plan/degisiklik-defteri')).satirlar.filter((x) => x.bekleyenId.startsWith('plan:')).length;
   const yerli = async (id: number) => (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.some((x) => x.isEmriId === id);
 
   test('TK-01: tek komut çalışma planını canlıya alır; taslak canlıya alınmış kapanır (izinli)', async () => {
@@ -58,6 +62,10 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     assert.ok(kapanan === undefined || kapanan.durum === 'canliya_alindi', `taslak canlıya alınmış kapandı: ${String(kapanan?.durum)}`);
     for (const i of isler) assert.equal(await yerli(i), true, 'iş canlıda yerleşti');
     assert.equal((await senaryolar()).senaryolar.filter((x) => x.durum === 'onayda').length, once.senaryolar.filter((x) => x.durum === 'onayda').length);
+    const d = await defter(r.taslak.id);
+    assert.deepEqual(d.map((x) => [x.olay, x.ne, x.isler, x.gerekce]), [['onaya-gonderildi', 'Tek komut canlı', ['*'], null], ['canliya-alindi', 'Tek komut canlı', ['*'], null]]);
+    assert.equal(d[1]!.ayrinti, `Sürüm ${String(r.senaryolar.canliSurum)}`, 'canlıya alma satırı yeni canlı sürümü söyler');
+    assert.ok(d[1]!.kisi, 'kişi sunucudan yazılır');
   });
 
   test('TK-02: canlıya alma reddedilirse hiçbir şey yazılmaz; tek komutla onaya gönderme planı onayda bırakır (reddedilen ve izinli)', async () => {
@@ -65,12 +73,14 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     await dortGoz(true);
     try {
       const once = await senaryolar();
+      const defterOnce = await defterSayisi();
       const red = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Tek komut ret', calismaSurumu: surum, dortSaatGerekcesi: null });
       assert.ok(red.statusCode === 403 || red.statusCode === 409, `dört göz açıkken gönderen canlıya alamaz: ${String(red.statusCode)} ${red.body}`);
       const sonra = await senaryolar();
       assert.equal(sonra.canliSurum, once.canliSurum, 'canlı değişmedi');
       assert.deepEqual(sonra.senaryolar.map((x) => x.id), once.senaryolar.map((x) => x.id), 'reddedilen komut taslak bırakmadı');
       for (const i of isler) assert.equal(await yerli(i), false, 'iş canlıya geçmedi');
+      assert.equal(await defterSayisi(), defterOnce, 'reddedilen komut deftere satır bırakmadı');
 
       const r = await tamam<CalismaGonderCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/onaya-gonder', { ad: 'Tek komut onay', calismaSurumu: surum, not: 'Bakar mısınız' });
       const t = r.senaryolar.senaryolar.find((x) => x.id === r.taslak.id);
@@ -78,6 +88,14 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
       assert.equal(t?.surum, r.taslak.surum, 'dönen sürüm onaydaki taslağın sürümüdür');
       assert.equal(t?.onay?.not, 'Bakar mısınız', 'gönderenin notu onaydaki taslakta okunur');
       assert.equal(r.senaryolar.canliSurum, once.canliSurum, 'onaya gönderme canlıyı değiştirmez');
+      assert.deepEqual((await defter(r.taslak.id)).map((x) => [x.olay, x.ayrinti]), [['onaya-gonderildi', 'Bakar mısınız']]);
+      // Onaylayan geri gönderir: neden defterin gerekçe sütununda durur. Sahip yeniden gönderip çeker.
+      const geri = await tamam<SenaryolarCevabi>(c.yonetici, 'POST', `/plan/senaryolar/${String(r.taslak.id)}/geri-gonder`, { surum: r.taslak.surum, neden: 'Termin sıkışık' });
+      let v = geri.senaryolar.find((x) => x.id === r.taslak.id)!.surum;
+      v = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${String(r.taslak.id)}/onaya-gonder`, { surum: v, not: null })).senaryolar.find((x) => x.id === r.taslak.id)!.surum;
+      await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${String(r.taslak.id)}/onaydan-cek`, { surum: v });
+      assert.deepEqual((await defter(r.taslak.id)).map((x) => [x.olay, x.gerekce]),
+        [['onaya-gonderildi', null], ['geri-gonderildi', 'Termin sıkışık'], ['onaya-gonderildi', null], ['onaydan-cekildi', null]]);
     } finally {
       await dortGoz(false);
     }

@@ -1,4 +1,4 @@
-import type { BekleyenKarari, DefterOlayi } from '#paylasilan/sozlesme/planlama.ts';
+import type { BekleyenKarari, DEFTER_ONAY_OLAYLARI, DefterOlayi } from '#paylasilan/sozlesme/planlama.ts';
 
 // 2129-2 b: çalışma yazmasında defter satırları önceki ve yeni çalışmanın bekleyen listesinden çıkar. Yeni satır: değişiklik (başka sayfanın
 // farkıysa kaynak). Düşen satır: istemcinin bildirdiği karar; karar yoksa plan bu yazmada güncellendiyse uygulandı (yeniden çözme bütün
@@ -46,4 +46,14 @@ export function defterSatirlari(once: unknown, sonra: unknown, kararlar: readonl
     l.push({ olay: x.dis ? 'kaynak' : 'degisiklik', bekleyenId: x.id, ne: x.ne, ayrinti: x.ayrinti, isler: x.isler, gerekce: null });
   }
   return l;
+}
+
+// Kesilen metnin sonu üç noktayla işaretlenir; okuyan eksik olduğunu görür.
+const kisalt = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+// 3308-9 a: planın onay ve canlıya alma adımı defterde tek satırdır; bütün işleri etkiler. Not ve 4 saat aşımı ayrıntıda, geri gönderme
+// nedeni gerekçede durur (gerekçe sütunu yalnız ret ve geri göndermede dolar).
+export function onayDefterSatiri(olay: (typeof DEFTER_ONAY_OLAYLARI)[number], plan: { id: number; ad: string }, ek: { ayrinti?: string | null; neden?: string | null } = {}): DefterYazimi {
+  const neden = olay === 'geri-gonderildi' ? (ek.neden ?? '').trim() : '';
+  return { olay, bekleyenId: `plan:${String(plan.id)}`, ne: kes(plan.ad, NE_EN_COK), ayrinti: kisalt(ek.ayrinti ?? '', AYRINTI_EN_COK), isler: ['*'], gerekce: neden ? kes(neden, 500) : null };
 }
