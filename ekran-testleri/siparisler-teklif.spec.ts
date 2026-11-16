@@ -122,6 +122,43 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   expect(ag.yazmalar).toEqual([]);
 });
 
+test('Teklif termin ve fiyat (3347): kalem yerleşmezse sebebi kalem kalem yazılır, plan şeridi yine çizilir, taşma yok', async ({ page, ag, ac }) => {
+  const t = await teklifAc(page);
+  const neden = ['OP 10 Örnek freze: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)', 'OP 20 Örnek taşlama: önceki adım (OP 10 Örnek freze) yerleşmedi'];
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/termin-denemesi**`, (r) => r.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      ...DENEME, planTermini: null, termin: null, maliyetToplami: null, genelGiderSaatBasi: null, kayanlar: [],
+      plan: { ...DENEME.plan, bloklar: DENEME.plan.bloklar.filter((b) => b.tur !== 'teklif') },
+      kalemler: [{
+        satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: false, bitis: null, planTermini: null,
+        malzemeGelisi: null, satinalma: [], birimMaliyet: null, toplamMaliyet: null, dokum: null, eksikVeri: neden,
+      }],
+    }),
+  }));
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/adet-denemesi**`, (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ durum: 'cozucu-yok', satirlar: [] }),
+  }));
+  await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
+  const form = page.getByRole('form', { name: 'Termin ve fiyat' });
+  const liste = form.getByRole('list', { name: 'Yerleşmeyen kalemler' });
+  await expect(liste.getByText(`1. ${t.tanim}`)).toBeVisible();
+  for (const n of neden) await expect(liste.getByRole('list', { name: `${t.tanim} sebepleri` }).getByText(n)).toBeVisible();
+  await expect(form.getByText(/Genel gider oranı tanımlı değil/)).toHaveCount(0);
+  await expect(form.getByRole('region', { name: 'Plan denemesi' })).toBeVisible();
+  await expect(form.getByText('Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.')).toBeVisible();
+  await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
+  if (klasor) {
+    const w = page.viewportSize()?.width ?? 0;
+    await page.setViewportSize({ width: w, height: 2600 });
+    await form.getByRole('region', { name: 'Termin' }).screenshot({ path: `${klasor}/3347-g${String(w)}.png` });
+  }
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});
+
 test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir; kayıtsız talepte termin ve fiyat nedenini yazar', async ({ page, ag, ac }) => {
   await ac('/siparisler/teklifler/yeni');
   await expect(page.getByRole('tablist', { name: 'Teklif kademeleri' })).toBeVisible();

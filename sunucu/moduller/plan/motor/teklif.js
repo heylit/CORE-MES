@@ -86,7 +86,20 @@ function teklifDene(st0, taban0, istek) {
     const j = e.J[k.id]; const tamam = !!(j && j.comp && isFinite(j.C));
     const malzeme = cx.mat.res[k.id] ? cx.mat.res[k.id].det.map(d => ({ kod: d.kod, birim: d.birim, miktar: d.need, kaynak: d.kaynak, gelis: d.t })) : [];
     const ek = eksik[k.id].slice();
-    if (!tamam) return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: ek, kilit: {} };
+    if (!tamam) {
+      /* 3347: yerleşmeyen kalemin sebebi (adım ve motorun nedeni) eksik listesine yazılır; yoksa teklif yalnız "yerleşmedi" derdi */
+      const fail = new Set(p.fail || []); const adimlar = (cx.jobs[k.id] && cx.jobs[k.id].ops) || [];
+      const adimAdi = id => { const o = adimlar.find(x => x.id === id); const no = String(id).slice(String(id).lastIndexOf('.') + 1); return o && o.ad ? `OP ${no} ${o.ad}` : `OP ${no}`; };
+      /* adaysız adım (tezgâhı ya da fasoncusu yok) motorda hiç sıraya girmez, fail listesinde de yoktur: neden burada konur */
+      const neden = adimlar.filter(o => !p.ops[o.id] && (fail.has(o.id) || !o.c.length)).map(o => {
+        const n = o.c.length ? (p.failNeden || {})[o.id] : { kod: 'aday' };
+        const metin = n && n.kod === 'oncul' ? `önceki adım (${adimAdi(n.oncul)}) yerleşmedi`
+          : n && n.kod === 'aday' ? `${failNedenMetni(n)} (İstasyonlar > Makineler)` : failNedenMetni(n);
+        return `${adimAdi(o.id)}: ${metin}`;
+      });
+      ek.push(...(neden.length ? neden : [adimlar.length ? 'plan ufku içinde yerleşmedi' : 'ürünün planda rotası yok (Reçete ve Rota)']));
+      return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: [...new Set(ek)], kilit: {} };
+    }
     const islemler = Object.values(p.ops).filter(r => r.job === k.id).sort((a, b) => a.S - b.S).map(r => {
       const y = { id: r.id, adim: r.id.slice(r.id.lastIndexOf('.') + 1), m: r.m, fason: !!r.fas, S: r.S, C: r.C, ayarSaat: +r.su || 0, islemeSaat: +r.run || 0, tl: null };
       if (r.fas) { if (r.cost != null) y.tl = +r.cost; else ek.push(`${r.id} fason fiyatı`); return y; }

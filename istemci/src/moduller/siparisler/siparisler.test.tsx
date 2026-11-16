@@ -1312,6 +1312,26 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.queryByRole('region', { name: 'Plan denemesi' })).toBeNull();
   });
 
+  it('3347: kalem yerleşmezse termin yok ama şerit çizilir; sebep kalem adıyla yazılır, genel gider notu termin sebebi gibi görünmez', async () => {
+    const neden = 'OP 10 Deneme Freze: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)';
+    kur(SATISCI, () => ({
+      ...SERITLI, planTermini: null, termin: null, terminGun: null, maliyetToplami: null, plan: { ...SERITLI.plan, bloklar: SERITLI.plan.bloklar.filter((b) => b.tur !== 'teklif') },
+      kalemler: [
+        { ...DENEME.kalemler[0]!, yerlesti: false, bitis: null, planTermini: null, birimMaliyet: null, toplamMaliyet: null, eksikVeri: [neden] },
+        { ...DENEME.kalemler[0]!, satirId: 12, sira: 2, tanim: 'Deneme kartsiz hizmet', malzemeNo: null, plansiz: true, yerlesti: false, bitis: null, planTermini: null, birimMaliyet: null, toplamMaliyet: null, eksikVeri: [] },
+      ],
+    }));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    const not = await screen.findByText('Termin hesaplanamadı');
+    const liste = within(not.parentElement!).getByRole('list', { name: 'Yerleşmeyen kalemler' });
+    expect(within(liste).getByText('1. Deneme Mil 20mm')).toBeTruthy();
+    expect(within(liste).queryByText(/Deneme kartsiz hizmet/)).toBeNull();
+    expect(within(within(liste).getByRole('list', { name: 'Deneme Mil 20mm sebepleri' })).getByText(neden)).toBeTruthy();
+    expect(screen.queryByText(/Genel gider oranı tanımlı değil/)).toBeNull();
+    expect(await screen.findByRole('region', { name: 'Plan denemesi' })).toBeTruthy();
+    expect(screen.getByText('Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.')).toBeTruthy();
+  });
+
   it('adet değişirse: yarım, aynı, iki, dört kat; birim fiyat maliyet artı seçili kâr; kâr değişince tablo da değişir', async () => {
     const istekler = kur(SATISCI);
     ac('/siparisler/teklifler/21/teklif-ver');

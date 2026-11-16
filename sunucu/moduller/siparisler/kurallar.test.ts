@@ -264,6 +264,10 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(kartsiz.planTermini, null);
     assert.equal(kartsiz.maliyetToplami, null);
     assert.deepEqual(denemeCevabi([satir(1, 11)], sonuc, { ...g, genelGiderSaatBasi: null }).kalemler[0]?.eksikVeri, [GENEL_GIDER_YOK]);
+    // 3347: genel gider yalnız maliyet notudur; yerleşmeyen kalemde yazılmaz, sebep motorun notu olarak kalır
+    const yerlesmeyen = { ...sonuc, kalemler: [kalem(1, { yerlesti: false, planTermini: null, eksikVeri: ['OP 10 Ornek: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)'] })] };
+    assert.deepEqual(denemeCevabi([satir(1, 11)], yerlesmeyen, { ...g, genelGiderSaatBasi: null }).kalemler[0]?.eksikVeri,
+      ['OP 10 Ornek: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)']);
   });
 
   test('TKL-13 (48 b, 63 b) istenen termin: termin odur, yetişip yetişmediği plandan; başka siparişi geciktiriyorsa plancı onayı', () => {

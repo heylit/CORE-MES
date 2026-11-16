@@ -188,6 +188,36 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.ok((k.islemler[0]?.S ?? 0) >= r!.simdi + 5 * 24);
   });
 
+  test('3347: yerleşmeyen kalem adımı ve motorun nedeniyle döner; rotası planda olmayan ürün ayrıca yazılır; plan şeridi yine kurulur', async () => {
+    // 70'in tek adımı tezgâhı olmayan istasyonda (12): motor 'aday' nedeniyle yerleştiremez; 80'in rotası yok
+    const adimli = (istasyon: string) => ({ base: null, steps: [{ id: `o-${istasyon}`, seq: 10, opNo: 10, opId: '13', stationId: istasyon, setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [] }] });
+    // 90: önce tezgâhsız 12, sonra torna 10; ikinci adım öncülü yerleşmediği için düşer
+    const iki = { base: null, steps: [adimli('12').steps[0]!, { ...adimli('10').steps[0]!, id: 'o-90-20', seq: 20, opNo: 20, opId: '14' }] };
+    const kayit = {
+      ...KAYIT,
+      items: [...KAYIT.items, { id: '70', code: 'MM-3', name: 'Ornek pim', type: 'mamul' }, { id: '80', code: 'MM-4', name: 'Ornek kapak', type: 'mamul' }, { id: '90', code: 'MM-5', name: 'Ornek flans', type: 'mamul' }],
+      routes: { ...KAYIT.routes, 70: adimli('12'), 90: iki },
+    };
+    const kaynak = { ...KAYNAK, durum: { ...KAYNAK.durum, stations: [...KAYNAK.durum.stations, { id: '12', code: 'FRZ', name: 'Freze', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }] } };
+    const r = await teklifDenemesi(istek({ kayit, kaynak, kalemler: [{ id: 'TK-1', urun: '70', adet: 2 }, { id: 'TK-2', urun: '80', adet: 2 }, { id: 'TK-3', urun: '90', adet: 2 }], gecerlilik: '2026-10-30' }));
+    const [a, b, c] = r?.kalemler ?? [];
+    assert.equal(a?.tamam, false);
+    assert.equal(a.planTerminGun, null);
+    assert.deepEqual(a.eksik, ['OP 10 Tornalama: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)']);
+    assert.equal(b?.tamam, false);
+    assert.deepEqual(b.eksik, ['ürünün planda rotası yok (Reçete ve Rota)']);
+    assert.equal(c?.tamam, false);
+    assert.deepEqual(c.eksik, ['OP 10 Tornalama: işi yapabilecek tezgâh ya da fasoncu yok (İstasyonlar > Makineler)', 'OP 20 Taslama: önceki adım (OP 10 Tornalama) yerleşmedi']);
+    assert.ok(r?.plan);
+  });
+
+  test('3347: adayı olan ama ufukta yer bulamayan adımda motorun zaman nedeni yazılır', async () => {
+    const r = await teklifDenemesi(istek({ kalemler: [{ id: 'TK-1', urun: '60', adet: 1_000_000 }] }));
+    const k = r?.kalemler[0];
+    assert.equal(k?.tamam, false);
+    assert.deepEqual(k.eksik, ['OP 10 Taslama: ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri yok']);
+  });
+
   test('ücreti girilmemiş tezgâhta işlemin TL si null, eksik listesinde yazar; sıfır sayılmaz', async () => {
     const r = await teklifDenemesi(istek({ kalemler: [{ id: 'TK-1', urun: '60', adet: 2 }] }));
     const k = r?.kalemler[0];

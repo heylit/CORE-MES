@@ -25,6 +25,8 @@
   border-radius: var(--yari-1); background: var(--panel); overflow-wrap: anywhere;
 }
 .tc-sp-bildirim strong { display: block; }
+.tc-sp-bildirim-liste { margin: var(--b-2) 0 0; padding: 0; list-style: none; }
+.tc-sp-bildirim-liste ul { margin: 0; padding-left: var(--b-4); }
 .tc-sp-bildirim-tamam { border-left-color: var(--run); }
 .tc-sp-bildirim-hata { border-left-color: var(--stop); }
 .tc-sp-bildirim-uyari { border-left-color: var(--hold); }

@@ -335,10 +335,14 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
                 />
               </div>
               <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
-              {planli && c !== undefined && (c.plan === null
+              {/* 3347: şerit termin bulunamasa da çizilir; yerleşmeyen kalemin sebebi plandaki doluluktan okunur. */}
+              {terminDener && c !== undefined && c.durum === 'hazir' && (c.plan === null
                 ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
                 : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} secili={seciliGun === '' ? null : seciliGun}
                   gunEtiketi={GUN_ETIKETI[d.yerlesim]} gunSec={gunSec} />)}
+              {terminDener && c?.durum === 'hazir' && c.plan !== null && !c.plan.bloklar.some((b) => b.tur === 'teklif') && (
+                <p className="tc-sp-ipucu">Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.</p>
+              )}
             </section>
           )}
 
@@ -480,12 +484,22 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
     return <p className="tc-sp-bildirim" role="status"><strong>Termin denemesi kullanılamıyor</strong> Planlama motoru bağlı değil; fiyat ve termini elle girin.</p>;
   }
   if (deneme.planTermini === null) {
-    const eksik = [...new Set(deneme.kalemler.flatMap((k) => k.eksikVeri))];
+    // 3347: sebep kalem kalem yazılır; maliyet notları (genel gider gibi) yerleşen kalemdedir ve termini engellemez, burada yazılmaz.
+    const yerlesmeyen = deneme.kalemler.filter((k) => !k.plansiz && !k.yerlesti);
     return (
-      <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status">
-        <strong>Termin hesaplanamadı</strong> Motor kalemlerin hepsini yerleştiremedi; termin ve maliyet boş kalır, fiyat ve termini elle girin.
-        {eksik.length > 0 && ` Eksik: ${eksik.join('; ')}.`}
-      </p>
+      <div className="tc-sp-bildirim tc-sp-bildirim-hata" role="status">
+        <strong>Termin hesaplanamadı</strong> Planlama motoru bu kalemleri tezgâha yerleştiremedi; termini elle girin ya da sebebi giderin.
+        {yerlesmeyen.length > 0 && (
+          <ul className="tc-sp-bildirim-liste" aria-label="Yerleşmeyen kalemler">
+            {yerlesmeyen.map((k) => (
+              <li key={k.satirId}>
+                {`${k.sira}. ${k.tanim}`}
+                {k.eksikVeri.length > 0 && <ul aria-label={`${k.tanim} sebepleri`}>{k.eksikVeri.map((e) => <li key={e}>{e}</li>)}</ul>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     );
   }
   const gec = deneme.kayanlar.filter((k) => k.gecikir);
