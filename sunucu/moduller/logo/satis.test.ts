@@ -20,7 +20,7 @@ import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import type { GonderilecekSatisSiparisi } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { satisTuru, yeniSurecBellegi } from './servis.ts';
+import { belgeRozetleri, satisTuru, yeniSurecBellegi } from './servis.ts';
 import type { LogoyaGidecekSatisTeklifi, SatisKaynagi, SatisTurOrtami, SiparisLogoSonucu, TurSonucu } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -236,6 +236,8 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     assert.equal(bekleyen?.durum, 'hata');
     assert.match(bekleyen?.hata ?? '', /^Kart bekliyor: LGT-DNM-00001\./);
     assert.equal(await sahip.tek("SELECT 1 FROM logo_giden WHERE belge_turu = 'siparisler-teklifi' AND belge_no = $1", [sira]), null, 'deneme izi yok');
+    // 3374 T2: giden satırı olmayan, yalnız kart bekleyen teklifin rozeti "Kart bekliyor" der (iz sırada kart beklemesinden de aranır).
+    assert.deepEqual((await belgeRozetleri(vt(), 'teklif', [t.id], new Date(simdi))).durumlar.map((d) => d.durum), ['kart-bekliyor']);
     // Kart Logo'ya gidince (burada okunmuş kopyada görünür) teklif kendiliğinden gider.
     await sahip.sorgu("INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma) VALUES (889001, 'LGT-DNM-00001', true, now())");
     assert.deepEqual(await satisTuru(vt(), o), { tur: 'siparisler-teklifi-niyet', no: sira });

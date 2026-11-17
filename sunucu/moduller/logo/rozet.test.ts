@@ -130,10 +130,15 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
     const a = await teklif();
     const b = await teklif();
     const bos = await teklif();
+    // C'nin ikinci sürümünün sırasında henüz iz yok (giden satırı ve kart beklemesi yok): rozet ilk sürümün "Logo'da" izini gösterir.
+    const c = await teklif();
     // A'nın ikinci sürümü: ilk sürüm Logo'da, ikinci sırada; rozet "Sırada" der.
     await sahip.sorgu(`INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, olusturan_id) SELECT teklif_id, 2, olusturan_id FROM siparisler_teklif_surumu
       WHERE teklif_id = $1 AND surum_no = 1`, [a]);
     await sahip.sorgu("INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no) VALUES ('teklif', $1, 2)", [a]);
+    await sahip.sorgu(`INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, olusturan_id) SELECT teklif_id, 2, olusturan_id FROM siparisler_teklif_surumu
+      WHERE teklif_id = $1 AND surum_no = 1`, [c]);
+    await sahip.sorgu("INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no) VALUES ('teklif', $1, 2)", [c]);
     const sip = (await yaz<{ id: number }>('/siparisler/ekle', {
       firmaId, musteriSiparisNo: null, siparisTarihi: '2026-11-17', termin: '2026-12-17', kdvOrani: '20', odemeKosulu: null, aciklama: null,
       satirlar: [{ malzemeNo: mamulNo, miktar: '3', birimFiyat: '50', termin: null, aciklama: null }],
@@ -143,17 +148,19 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
       vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no${kolon}) VALUES ($1, $2${deger})`, [tur, no]);
     await ekle('siparisler-teklifi', await sira('teklif', a), ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '9001'");
     await ekle('siparisler-teklifi', await sira('teklif', a, 2), ', niyet_zamani', ', now()');
+    await ekle('siparisler-teklifi', await sira('teklif', c), ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '9003'");
     await ekle('siparisler-teklifi', await sira('teklif', b), ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Deneme ret'");
     await ekle('siparisler-siparisi', await sira('siparis', b), ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '9004'");
     // Belge kimliğiyle yazılmış satır (eski okuma bunu bulurdu): rozet bunu görmez.
     await ekle('siparisler-teklifi', bos, ", son_deneme, son_sonuc, logo_kayit_no", ", now(), 'gonderildi', '7777'");
     await ekle('siparisler-siparisi', sip, ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Eski biçim'");
 
-    const t = await oku('rz-satis', `tur=teklif&id=${String(a)},${String(b)},${String(bos)}`);
+    const t = await oku('rz-satis', `tur=teklif&id=${String(a)},${String(b)},${String(bos)},${String(c)}`);
     assert.equal(t.durum, 200, JSON.stringify(t.govde));
     assert.deepEqual(t.govde.durumlar, [
       { id: a, durum: 'sirada', kayitNo: null, neden: null },
       { id: b, durum: 'durdu', kayitNo: null, neden: 'Deneme ret' },
+      { id: c, durum: 'logoda', kayitNo: '9003', neden: null },
     ]);
     const s = await oku('rz-satis', `tur=satis-siparisi&id=${String(sip)},${String(b)}`);
     assert.deepEqual(s.govde.durumlar, [{ id: sip, durum: 'logoda', kayitNo: '9004', neden: null }]);
