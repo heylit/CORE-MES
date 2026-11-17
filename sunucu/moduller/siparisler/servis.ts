@@ -308,9 +308,10 @@ export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise
   return satirOzetleri(db, await sorgular.kalemler(db, siparisId));
 }
 
-export const siparisOzeti = (db: Db): Promise<SiparisOzetiCevabi> => sorgular.siparisOzetiSay(db, YAKLASAN_TERMIN_GUN, SIPARIS_OZETI_AY);
+export const siparisOzeti = async (db: Db): Promise<SiparisOzetiCevabi> =>
+  sorgular.siparisOzetiSay(db, YAKLASAN_TERMIN_GUN, SIPARIS_OZETI_AY, await denemeIsaretliKimlikler(db, 'siparis'));
 
-export const terminDagilimi = async (db: Db): Promise<TerminDagilimiCevabi> => ({ araliklar: terminAraliklari(await sorgular.terminKalanlari(db)) });
+export const terminDagilimi = async (db: Db): Promise<TerminDagilimiCevabi> => ({ araliklar: terminAraliklari(await sorgular.terminKalanlari(db, await denemeIsaretliKimlikler(db, 'siparis'))) });
 
 // Takvim (891): termini [baslangic, bitis] içindeki siparişler, firma adıyla. Yetki denetlemez; çağıran siparisler.oku'yu denetler.
 export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {

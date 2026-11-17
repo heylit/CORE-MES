@@ -462,7 +462,7 @@ export async function logoKarsiligiKaydet(db: Db, kullanici: Kullanici, k: LogoK
 /* ---------------- Malzeme Kataloğu (prototip) kartları ---------------- */
 
 export async function malzemelerOzeti(db: Db, islemler: readonly string[]): Promise<MalzemelerOzetiCevabi> {
-  return { onayBekleyen: islemler.includes('malzemeler.onayla') ? await s.onayBekleyenKartSayisi(db) : null };
+  return { onayBekleyen: islemler.includes('malzemeler.onayla') ? await s.onayBekleyenKartSayisi(db, await denemeIsaretliKimlikler(db, 'malzeme')) : null };
 }
 
 // Kartın tam kaydı büyüktür: sayfa boyu cevabı birkaç yüz KB'ta tutar (bir kart birkaç KB, VARSAYIM: ölçülmedi).

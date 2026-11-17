@@ -61,16 +61,16 @@ export function ustEmirler(db: Db, arsiv: boolean, projeId: number | null = null
 }
 
 // Listeyle (ustEmirler, arşiv dışı) aynı emirler, durum, başlamış iş emri ve gecikmeye göre gruplu; kapsam süzgeci yok, biten de sayılır.
-export function adimliOzetGruplari(db: Db, bugun: string): Promise<{ durum: EmirDurumu; baslamis: boolean; gecikmis: boolean; sayi: number }[]> {
+export function adimliOzetGruplari(db: Db, bugun: string, gizli: readonly number[]): Promise<{ durum: EmirDurumu; baslamis: boolean; gecikmis: boolean; sayi: number }[]> {
   return db.sorgu(
     `SELECT e.durum,
             EXISTS (SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.durum <> 'bekliyor') AS baslamis,
             COALESCE(e.teslim < $1::date, false) AS gecikmis,
             count(*)::int AS sayi
        FROM uretim_emri e
-      WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL
+      WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND NOT (e.id = ANY($2::int[]))
       GROUP BY 1, 2, 3`,
-    [bugun],
+    [bugun, [...gizli]],
   );
 }
 

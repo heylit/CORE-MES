@@ -669,16 +669,17 @@ export function atolyeTaslaklari(db: Db): Promise<AtolyeTaslagiSatiri[]> {
 }
 
 // Ana sayfa özeti tek okumada: gün tesis saatine göre (Europe/Istanbul), istemciden alınmaz.
-export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): Promise<{
+// Deneme işaretli sipariş (gizli) sayılmaz (3395 madde 2); teklif işaretlenmez.
+export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number, gizli: readonly number[]): Promise<{
   acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number; aylik: { ay: string; sayi: number }[];
 }> {
   const sayilar = await db.tek<{ acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number }>(
     `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
      SELECT (SELECT count(*) FROM siparisler_teklif WHERE durum NOT IN ('red', 'siparis'))::int AS "acikTeklif",
             (SELECT count(*) FROM siparisler_siparis, bugun
-              WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int)::int AS "yaklasanTermin",
-            (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun)::int AS "gecikenSiparis"`,
-    [yaklasanGun],
+              WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int AND NOT (id = ANY($2::int[])))::int AS "yaklasanTermin",
+            (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun AND NOT (id = ANY($2::int[])))::int AS "gecikenSiparis"`,
+    [yaklasanGun, [...gizli]],
   );
   const aylik = await db.sorgu<{ ay: string; sayi: number }>(
     `WITH aylar AS (
@@ -688,20 +689,22 @@ export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): 
      SELECT to_char(a.bas, 'YYYY-MM') AS ay, count(s.id)::int AS sayi
        FROM aylar a
        LEFT JOIN siparisler_siparis s ON s.durum IN ('onayli', 'kapandi') AND date_trunc('month', s.siparis_tarihi)::date = a.bas
+                                     AND NOT (s.id = ANY($2::int[]))
       GROUP BY a.bas ORDER BY a.bas`,
-    [ay],
+    [ay, [...gizli]],
   );
   return { ...sayilar!, aylik };
 }
 
 // Yönetim panosu (kart 1773): onaylı siparişler termine kalan güne göre; aralığa bölmek kuraldadır.
-export async function terminKalanlari(db: Db): Promise<{ kalan: number; sayi: number }[]> {
+export async function terminKalanlari(db: Db, gizli: readonly number[]): Promise<{ kalan: number; sayi: number }[]> {
   return db.sorgu<{ kalan: number; sayi: number }>(
     `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
      SELECT (s.termin - bugun.gun)::int AS kalan, count(*)::int AS sayi
        FROM siparisler_siparis s, bugun
-      WHERE s.durum = 'onayli'
+      WHERE s.durum = 'onayli' AND NOT (s.id = ANY($1::int[]))
       GROUP BY 1`,
+    [[...gizli]],
   );
 }
 
