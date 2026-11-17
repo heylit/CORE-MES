@@ -398,7 +398,7 @@ export interface AsamaGirdisi {
   hazir: boolean; serbest: boolean; erken: boolean; tasima: Tasima | null; depoTamam: boolean;
   is: { durum: IsDurumu; tetiklendi: boolean } | null;
 }
-// Hazır olmadan gerekçesiz bırakılan kalem bekler (945 a, önceden bırakma); kaynağı bitince sevkiyata düşer.
+// Hazır olmadan gerekçesiz bırakılmış eski kalem bekler (945 a); kaynağı bitince sevkiyata düşer. Yenisi bırakılmaz (3361).
 export function tumIsAsamasi(k: AsamaGirdisi): TumIsAsamasi {
   if (k.depoTamam) return 'tamamlandi';
   if (!k.serbest) return k.hazir ? 'hazir' : 'hazir-degil';
@@ -419,10 +419,15 @@ export function serbestBirakmaIhlali(
     return yetkili(ERKEN_CIKIS_ISLEMI) ? null : { tur: 'yetki', ileti: ERKEN_YETKISIZ };
   }
   if (k.asama !== 'hazir' && k.asama !== 'hazir-degil') return { tur: 'durum', ileti: 'Bu kalem zaten serbest bırakılmış.' };
-  if (k.asama === 'hazir-degil' && erkenGerekce !== null && !yetkili(ERKEN_CIKIS_ISLEMI)) return { tur: 'yetki', ileti: ERKEN_YETKISIZ };
+  if (k.asama === 'hazir-degil') {
+    if (erkenGerekce === null) return { tur: 'durum', ileti: HAZIR_DEGIL };
+    if (!yetkili(ERKEN_CIKIS_ISLEMI)) return { tur: 'yetki', ileti: ERKEN_YETKISIZ };
+  }
   return null;
 }
-const ERKEN_YETKISIZ = 'Hazır olmayan kalemi erken çıkışa yalnız sevkiyat sorumlusu ya da yönetici verir; gerekçesiz bırakırsanız hazır olunca düşer.';
+// Hazır olmayan kalem gerekçesiz bırakılmaz (3361): fason önceki adım, ürün bütün adımlar bitince serbest bırakılır.
+const HAZIR_DEGIL = 'Kalem hazır değil: fason önceki adım, ürün bütün adımlar bitince serbest bırakılır. Beklemeden çıkarmak için sevkiyat sorumlusu gerekçeyle erken çıkış verir.';
+const ERKEN_YETKISIZ = 'Hazır olmayan kalemi erken çıkışa yalnız sevkiyat sorumlusu ya da yönetici verir.';
 
 // Tetik (Sevk et / Al): işin bütün kalemleri çıkabilir olmalı; dönüş, gidişi depodan çıkmadan alınmaz.
 export interface TetikKalemi { hazir: boolean; erken: boolean; gidisCikti: boolean | null }

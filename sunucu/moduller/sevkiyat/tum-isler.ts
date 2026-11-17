@@ -133,7 +133,7 @@ async function adaylar(db: Db, bitis: string, fasonlar: readonly FasonIsEmri[]):
       anahtar: `fason:${String(f.isEmriId)}`, kaynak: 'fason', yon: 'gidis', asama: hazir ? 'hazir' : 'hazir-degil', istenenTarih: f.termin ?? null,
       uretimEmriId: f.uretimEmriId, emirNo: f.emirNo, isEmriId: f.isEmriId, opNo: f.opNo, adim: f.adim, malzemeNo: f.malzemeNo,
       adet: String(hazir ? g.gonderilebilir - g.gonderilen : f.adet - g.gonderilen), firmaId: f.firmaId,
-      ilerleme: hazir ? `OP ${String(f.opNo)} sırada` : `OP ${String(f.opNo)} sırası gelmedi`,
+      ilerleme: hazir ? `OP ${String(f.opNo)} gönderilebilir` : `OP ${String(f.opNo)} sırası gelmedi`,
     }));
   }
 

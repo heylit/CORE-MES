@@ -86,6 +86,51 @@ describe('Tüm işler', () => {
     expect(yazmalar(istekler)[1]!.govde).toEqual({ anahtarlar: ['fason:70'], tasima: 'biz', erkenGerekce: 'Son kontrol bitti, emir kapatılmadı' });
   });
 
+  it('hazır olmayan kalem serbest bırakılamaz (3361): düğme nedeniyle kapalı, toplu seçim yalnız hazırı bırakır, rozet "Sevkiyata hazır"', async () => {
+    const istekler = sunucuKur(SEVKIYATCI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    expect(within(satirOf(tablo, 'DENEME-UE-11')).getByText('Sevkiyata hazır')).toBeTruthy();
+    const kapali = within(satirOf(tablo, 'DENEME-UE-12')).getByRole('button', { name: 'Serbest bırak' }) as HTMLButtonElement;
+    expect(kapali.disabled).toBe(true);
+    expect(kapali.title).toBe('Önceki adım bitince açılır (OP 30 bitti)');
+    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-12')).getByRole('button', { name: 'Diğer seçenekler' }));
+    const pencere = await screen.findByRole('dialog');
+    expect((within(pencere).getByRole('button', { name: /Sevk yok/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+
+    fireEvent.click(within(tablo).getByRole('checkbox', { name: 'Hepsini seç' }));
+    const toplu = screen.getByRole('region', { name: 'Toplu karar' });
+    fireEvent.click(within(toplu).getByRole('button', { name: 'Serbest bırak (1)' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]!.govde).toMatchObject({ anahtarlar: ['urun:11'], tasima: 'biz' });
+  });
+
+  it('3361: toplu "Sevk yok" yalnız hazırı gönderir; yalnız hazır olmayan seçiliyken iki düğme de pasif; ayrıntıdaki düğme pasif', async () => {
+    const istekler = sunucuKur(SEVKIYATCI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    fireEvent.click(within(tablo).getByRole('checkbox', { name: 'Hepsini seç' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Toplu karar' })).getByRole('button', { name: 'Sevk yok (1)' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]!.govde).toMatchObject({ anahtarlar: ['urun:11'], tasima: 'firma' });
+
+    const tablo2 = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    const kutu = within(satirOf(tablo2, 'DENEME-UE-11')).queryByRole('checkbox');
+    if (kutu && (kutu as HTMLInputElement).checked) fireEvent.click(kutu);
+    const hazirDegilKutu = within(satirOf(tablo2, 'DENEME-UE-12')).getByRole('checkbox');
+    if (!(hazirDegilKutu as HTMLInputElement).checked) fireEvent.click(hazirDegilKutu);
+    const toplu = screen.getByRole('region', { name: 'Toplu karar' });
+    expect((within(toplu).getByRole('button', { name: 'Serbest bırak (0)' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(toplu).getByRole('button', { name: 'Sevk yok (0)' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(within(satirOf(tablo2, 'DENEME-UE-12')).getByText('DENEME-UE-12'));
+    const yan = await screen.findByRole('dialog');
+    const birak = within(yan).getByRole('button', { name: 'Serbest bırak' }) as HTMLButtonElement;
+    expect([birak.disabled, birak.title]).toEqual([true, 'Önceki adım bitince açılır (OP 30 bitti)']);
+    expect(yazmalar(istekler)).toHaveLength(1);
+  });
+
   it('genel aramadan gelen emir no: görünüm, arama kutusu ve bütün tarihler ayarlı açılır (932 a)', async () => {
     const istekler = sunucuKur(OKUYUCU);
     ac('/sevkiyat/tum-isler?ara=DENEME-UE-13&gorunum=sevkiyat');

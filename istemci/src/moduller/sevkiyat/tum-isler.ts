@@ -85,7 +85,7 @@ export const tetiklenebilir = (r: TumIsSatiri): boolean =>
 // Sayaçlar bu sayfanın kalemlerini sayar; Günlük sevkiyatta "Yeni iş" ile açılan iş kalem değildir. Kullanıcı iki ekranın sayısını karşılaştırırken bunu görsün.
 export const KAPSAM = 'Günlük sevkiyatta "Yeni iş" ile açılan işler burada sayılmaz.';
 export const OZETLER = [
-  { kod: 'hazir', gorunum: 'karar', ad: 'Hazır, bırakılmadı', ton: 'uyari', baslik: 'Bitmiş, sevkiyata henüz serbest bırakılmamış kalemler', suz: (r: TumIsSatiri) => r.asama === 'hazir' },
+  { kod: 'hazir', gorunum: 'karar', ad: 'Sevkiyata hazır', ton: 'uyari', baslik: 'Bitmiş, sevkiyata henüz serbest bırakılmamış kalemler', suz: (r: TumIsSatiri) => r.asama === 'hazir' },
   { kod: 'gelecek', gorunum: 'karar', ad: '14 günde hazır', ton: null, baslik: 'Tahmini hazır günü 14 gün içinde olan kalemler',
     suz: (r: TumIsSatiri, b: string) => r.asama === 'hazir-degil' && gunu(r) !== null && fark(gunu(r)!, b) <= 14 },
   { kod: 'gecikmis', gorunum: 'sevkiyat', ad: 'Geciken iş', ton: 'hata', baslik: `İstenen günü geçmiş kalemler. ${KAPSAM}`, suz: (r: TumIsSatiri, b: string) => !adayMi(r) && geciktiMi(r, b) },
@@ -142,12 +142,21 @@ export function depoDurumu(r: TumIsSatiri): { metin: string; alt: string | null;
 // Satırın durum rozeti; gecikme her aşamada öne geçer.
 export function rozetOf(r: TumIsSatiri, bugun: string): { ad: string; ton: RozetTonu; cizgi?: boolean } {
   if (geciktiMi(r, bugun)) return { ad: 'Gecikti', ton: 'hata' };
-  if (r.asama === 'hazir') return { ad: 'Hazır', ton: 'uyari' };
+  if (r.asama === 'hazir') return { ad: 'Sevkiyata hazır', ton: 'tamam' };
   if (r.asama === 'hazir-degil') return gecKalacakMi(r) ? { ad: 'Geç kalacak', ton: 'uyari' } : { ad: 'Hazır değil', ton: 'pasif', cizgi: true };
   if (r.asama === 'depoda') return { ad: 'Depoda', ton: 'tamam' };
   if (r.asama === 'tamamlandi') return { ad: r.tasima === 'firma' ? 'Sevk yok' : r.yon === 'gelis' ? 'Kabul edildi' : 'Çıktı', ton: 'tamam' };
   const a = ASAMALAR.find((x) => x.kod === r.asama)!;
   return { ad: a.ad, ton: a.ton, ...(a.cizgi ? { cizgi: true } : {}) };
+}
+
+// Hazır olmayan kalem serbest bırakılamaz (3361): fason önceki adım, ürün bütün adımlar bitince açılır.
+export function serbestKapaliNedeni(r: TumIsSatiri): string | null {
+  if (r.asama !== 'hazir-degil') return null;
+  const ek = r.ilerleme ? ` (${r.ilerleme})` : '';
+  if (r.kaynak === 'fason') return `Önceki adım bitince açılır${ek}`;
+  if (r.kaynak === 'urun') return `Bütün adımlar bitince açılır${ek}`;
+  return `Kalem hazır olunca açılır${ek}`;
 }
 
 // Kalemi kimin serbest bıraktığı (941 c): sahibi modülün yazma işlemi ya da sevkiyat.is-yaz.
