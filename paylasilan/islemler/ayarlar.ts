@@ -5,4 +5,6 @@ export const AYARLAR_ISLEMLERI = [
   'ayarlar.guncelleme-yukle',
   // Yedek veritabanının tamamıdır (ücret, finans, parola özetleri): hiçbir role verilmez, yalnız bayraklı yönetici (kart #1205).
   'ayarlar.yedek-indir',
+  // Deneme verisini kalıcı siler (3395 a): hiçbir role verilmez, yalnız bayraklı yönetici.
+  'ayarlar.veri-temizle',
 ] as const;

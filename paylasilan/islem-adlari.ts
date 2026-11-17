@@ -37,6 +37,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'ayarlar.yaz': 'Sistem ayarlarını değiştirme',
   'ayarlar.guncelleme-yukle': 'Güncelleme paketi yükleme',
   'ayarlar.yedek-indir': 'Veritabanı yedeği alma ve indirme',
+  'ayarlar.veri-temizle': 'Deneme verisini temizleme',
   'bildirim.yayinla': 'Uyarı, duyuru ve bilgi bildirimi yayınlama',
   'bildirim.yayin-oku': 'Bütün bildirim yayınlarını ve okunma raporlarını görme',
   'degisiklik-yonetimi.talep-ac': 'Değişiklik talebi açma',
