@@ -47,7 +47,7 @@ export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
     else setDurum({ tur: 'hata', ileti: 'Taslak bu arada değişti; değişiklik taslakta kaldı, plan yeniden dizilince görünür.' });
   };
   const vazgec = async () => {
-    if (taslak !== null && (await taslak.geriAl(false))) { sonuc('tazele'); setDurum({ tur: 'duzen' }); }
+    if (taslak !== null && (await taslak.geriAl(false, false))) { sonuc('tazele'); setDurum({ tur: 'duzen' }); }
     else setDurum({ tur: 'hata', ileti: 'Değişiklik geri alınamadı; taslak çubuğundaki Geri al ile alın.' });
   };
   return { durum, setDurum, dene, uygula, vazgec };

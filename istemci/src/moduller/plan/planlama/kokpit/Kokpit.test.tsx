@@ -209,7 +209,7 @@ describe('Kokpit', () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
     const cubuk = await screen.findByRole('region', { name: 'Taslak' });
     expect(within(cubuk).getByText('Taslak · 2 değişiklik')).toBeTruthy();
-    const geri = within(screen.getByRole('group', { name: 'Geri' })).getByRole('button', { name: /Geri/ });
+    const geri = within(screen.getByRole('group', { name: 'Geri ve İleri' })).getByRole('button', { name: /Geri/ });
     expect(geri.querySelector('.tc-pyq-rozet')?.textContent).toBe('2');
     // Taslak varken canlıya alma taslak çubuğundaki tek düğmededir; üst şeritte ikincisi yoktur.
     expect(screen.getAllByRole('button', { name: /Canlıya al/ }).map((b) => cubuk.contains(b))).toEqual([true]);
@@ -221,6 +221,14 @@ describe('Kokpit', () => {
       ['/plan/taslagim/geri-al', { taslakSurumu: 13 }], ['/plan/taslagim/geri-al', { taslakSurumu: 12 }],
       ['/plan/taslagim/degerlendirme', { taslakSurumu: 11, istek: { tur: 'plan-uygula', isler: ['*'] } }],
     ]);
+    // İleri (3365): geri alınan taşıma görünür olur; Ctrl+Y onu taslağa yeniden yazar, sonra İleri kalkar.
+    const ileri = await within(screen.getByRole('group', { name: 'Geri ve İleri' })).findByRole('button', { name: /İleri/ });
+    expect(ileri.querySelector('.tc-pyq-rozet')?.textContent).toBe('1');
+    await waitFor(() => { expect(ileri.hasAttribute('disabled')).toBe(false); });
+    post.mockClear();
+    fireEvent.keyDown(document, { key: 'y', ctrlKey: true });
+    await waitFor(() => { expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/plan/taslagim/komut', { taslakSurumu: 11, komut: TASI }]); });
+    await waitFor(() => { expect(within(screen.getByRole('group', { name: 'Geri ve İleri' })).queryByRole('button', { name: /İleri/ })).toBeNull(); });
   });
 
   // Risk 3282 1d-3 N1: tek düğme ortak plana yazar; onay sayfası bunu kalıcı söyler, canlı değişince ya da sayfa kapanınca söylemez.
@@ -297,7 +305,7 @@ describe('Kokpit', () => {
     taslakSunucusu([]);
     ac();
     await waitFor(() => { expect(api.get).toHaveBeenCalledWith('/plan/taslagim'); });
-    expect(within(screen.getByRole('group', { name: 'Geri' })).getByRole('button', { name: /Geri/ }).hasAttribute('disabled')).toBe(true);
+    expect(within(screen.getByRole('group', { name: 'Geri ve İleri' })).getByRole('button', { name: /Geri/ }).hasAttribute('disabled')).toBe(true);
     expect(screen.queryByRole('region', { name: 'Taslak' })).toBeNull();
   });
 

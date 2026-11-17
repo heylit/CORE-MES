@@ -107,6 +107,40 @@ describe('useTaslak', () => {
     expect(satirlar().map((s) => s.ne)).toEqual(['a']);
   });
 
+  it('İleri geri alınan değişikliği sırayla yeniden yazar ve dizer; yeni değişiklik ve Vazgeç ileri listesini boşaltır (3365)', async () => {
+    const A = { ...TASI, emirId: 'ORN-a' } as TaslakSatiri['komut'], B = { ...TASI, emirId: 'ORN-b' } as TaslakSatiri['komut'];
+    const { u, post, satirlar } = sahteUc([satir(A, 'a'), satir(DIZ, 'd'), satir(B, 'b'), satir(DIZ, 'd')], ornekCalisma() as unknown as Record<string, unknown>);
+    const { result } = kur(u);
+    await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
+    expect(result.current.ileriAdim).toBe(0);
+    await act(async () => { expect(await result.current.ileriAl()).toBe(false); });
+    await act(async () => { await result.current.geriAl(); });
+    await act(async () => { await result.current.geriAl(); });
+    expect(result.current.ileriAdim).toBe(2);
+    expect(satirlar().filter((x) => x.komut.tur !== 'diz')).toEqual([]);
+    post.mockClear();
+    // En son geri alınan (A) önce gelir.
+    await act(async () => { expect(await result.current.ileriAl()).toBe(true); });
+    expect(yollar(post)).toEqual(['/komut', '/degerlendirme', '/diz']);
+    expect((post.mock.calls[0]![1] as { komut: unknown }).komut).toEqual(A);
+    expect(result.current.ileriAdim).toBe(1);
+    await act(async () => { await result.current.ileriAl(); });
+    expect(satirlar().filter((x) => x.komut.tur !== 'diz').map((x) => x.komut)).toEqual([A, B]);
+    expect(result.current.ileriAdim).toBe(0);
+    // Yeni değişiklik ileriyi boşaltır.
+    await act(async () => { await result.current.geriAl(); });
+    expect(result.current.ileriAdim).toBe(1);
+    await act(async () => { await result.current.yaz(TASI as TaslakKomutu); });
+    expect(result.current.ileriAdim).toBe(0);
+    // Vazgeç de boşaltır; ileriye false olan geri alma (etki önizlemesi, tur) saklanmaz.
+    await act(async () => { await result.current.geriAl(); });
+    await act(async () => { await result.current.vazgec(); });
+    expect(result.current.ileriAdim).toBe(0);
+    await act(async () => { await result.current.yaz(TASI as TaslakKomutu, false); });
+    await act(async () => { await result.current.geriAl(false, false); });
+    expect(result.current.ileriAdim).toBe(0);
+  });
+
   it('hata bildirilir, taslak yeniden okunur ve düğme false döner', async () => {
     const { u, post } = sahteUc([satir(TASI, 'a')]);
     post.mockImplementationOnce(() => Promise.reject(new Error('kapalı')));
@@ -136,9 +170,9 @@ describe('useTaslak', () => {
 
 describe('sonDegisiklikleriGeriAl', () => {
   it('turdan vazgeçmek n değişikliği sırayla geri alır, yalnız sonuncudan sonra dizer; biri alınamazsa durur', async () => {
-    const geriAl = vi.fn((_dizme?: boolean) => Promise.resolve(true));
+    const geriAl = vi.fn((_dizme?: boolean, _ileriye?: boolean) => Promise.resolve(true));
     expect(await sonDegisiklikleriGeriAl({ geriAl }, 3)).toBe(true);
-    expect(geriAl.mock.calls).toEqual([[false], [false], [true]]);
+    expect(geriAl.mock.calls).toEqual([[false, false], [false, false], [true, false]]);
     const kirik = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     expect(await sonDegisiklikleriGeriAl({ geriAl: kirik }, 3)).toBe(false);
     expect(kirik).toHaveBeenCalledTimes(2);

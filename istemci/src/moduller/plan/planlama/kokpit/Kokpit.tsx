@@ -220,7 +220,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       : { tur: 'plana-al', emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) };
     const tamam = await taslak.yaz(k);
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
-    if (!tamam && yonYaz && !(await taslak.geriAl())) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
+    if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
     if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : yonYaz ? 'Emir teslimden geriye plana alındı (iki değişiklik: yön ve yerleşim); Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
     return tamam;
   }, [taslak, yazabilir, bildir, c]);
@@ -309,13 +309,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar, zaman]);
 
   // --- geri ---
-  // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri yoktur: alınan değişiklik yeniden yapılır.
-  const adim = tOzet.n;
+  // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri (3365) geri alınanı taslağa yeniden yazar.
+  const adim = tOzet.n, ileriAdim = taslak?.ileriAdim ?? 0;
   const geri = useCallback((): boolean => {
     if (!taslak || mesgul || adim === 0) return false;
     void taslak.geriAl();
     return true;
   }, [taslak, mesgul, adim]);
+  const ileri = useCallback((): boolean => {
+    if (!taslak || mesgul || ileriAdim === 0) return false;
+    void taslak.ileriAl();
+    return true;
+  }, [taslak, mesgul, ileriAdim]);
 
   // --- önce / sonra ---
   // 3B'nin Yük ve gecikme ile Önce / sonra bakışları da onaylı planı okur (kart 3208 a).
@@ -418,6 +423,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         // Turda geri ve ileri turun kendi adımlarıdır (← →).
         if (tur) return;
         if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); geri(); }
+        else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); ileri(); }
         return;
       }
       if (k === '+' || k === '=') { setOdak(null); setOlcek((x) => olcekKomsusu(x, -1)); }
@@ -434,7 +440,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     };
     document.addEventListener('keydown', tus);
     return () => { document.removeEventListener('keydown', tus); };
-  }, [geri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
+  }, [geri, ileri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
 
   // --- canlıya al ---
   // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
@@ -576,8 +582,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-seg tc-pyq-olcek" role="group" aria-label="Ölçek">
           {OLCEKLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={olcek === k} onClick={() => { olcekSec(k); }}>{ad}</button>)}
         </span>
-        <span className="tc-pyq-gi" role="group" aria-label="Geri">
+        <span className="tc-pyq-gi" role="group" aria-label="Geri ve İleri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
+          {/* İleri yalnız geri alınmış değişiklik varken görünür: araç satırı dar ekranda kalabalıklaşmasın. */}
+          {ileriAdim > 0 && <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y): geri alınan değişikliği yeniden yapar" disabled={!yazabilir || mesgul || tur !== null} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriAdim} /></button>}
         </span>
         {sirada > 0 && <span className="tc-pyq-sirada" role="status">{sirada} taşıma sırada</span>}
         {TUR_ACIK && <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>}

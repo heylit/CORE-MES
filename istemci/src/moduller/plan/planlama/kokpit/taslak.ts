@@ -69,7 +69,11 @@ export interface TaslakYazici {
   dizIsler: (isler: readonly string[]) => Promise<boolean>;
   degerlendir: (istek: DegerlendirmeIstegi) => Promise<{ is: string; cevap: DegerlendirmeCevabi }>;
   dizmeyiYaz: (is: string) => Promise<boolean>;
-  geriAl: (dizme?: boolean) => Promise<boolean>;
+  // ileriye: geri alınan değişiklik İleri ile yeniden yapılabilsin (kişinin Geri'si); etki önizlemesinin ve turun geri alması saklanmaz.
+  geriAl: (dizme?: boolean, ileriye?: boolean) => Promise<boolean>;
+  // İleri (3365): son geri alınan değişikliği taslağa yeniden yazar. Yeni değişiklik, Vazgeç ve plana yazma ileri listesini boşaltır.
+  ileriAl: () => Promise<boolean>;
+  ileriAdim: number;
   vazgec: () => Promise<boolean>;
   uygula: (secimler?: Record<string, 'benim' | 'onun'>) => Promise<TaslakUygulaCevabi | null>;
   yenile: () => void;
@@ -82,6 +86,10 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   const [diziliyor, setDiziliyor] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
   const son = useRef<TaslakCevabi | null>(null);
+  // Geri alınan değişiklikler, en son alınan sonda. Komut satırdaki haliyle yeniden gönderilir; sunucu yeniden denetler.
+  const ileri = useRef<TaslakKomutu[]>([]);
+  const [ileriAdim, setIleriAdim] = useState(0);
+  const ileriKur = useCallback((l: TaslakKomutu[]) => { ileri.current = l; setIleriAdim(l.length); }, []);
   const koy = useCallback((c: TaslakCevabi) => { son.current = c; setCevap(c); }, []);
   const surum = (): number | null => son.current?.taslak?.surum ?? null;
 
@@ -126,16 +134,29 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   }, [calis, degerlendir, dizmeyiYaz, bildir]);
   const diz = useCallback((): Promise<boolean> => dizIsler(dizmeIsleri(calismaOku(son.current?.calisma ?? null))), [dizIsler]);
 
-  const yaz = useCallback(async (k: TaslakKomutu, dizme = true): Promise<boolean> => {
+  const komutYaz = useCallback(async (k: TaslakKomutu, dizme: boolean): Promise<boolean> => {
     const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/komut`, { taslakSurumu: surum(), komut: k }), 'Değişiklik yazılamadı');
     if (r === null) return false;
     koy(r);
     if (dizme) await diz();
     return true;
   }, [calis, u, koy, diz]);
+  const yaz = useCallback(async (k: TaslakKomutu, dizme = true): Promise<boolean> => {
+    const tamam = await komutYaz(k, dizme);
+    if (tamam) ileriKur([]);
+    return tamam;
+  }, [komutYaz, ileriKur]);
+  const ileriAl = useCallback(async (): Promise<boolean> => {
+    const k = ileri.current.at(-1);
+    if (k === undefined) return false;
+    const tamam = await komutYaz(k, true);
+    if (tamam) ileriKur(ileri.current.slice(0, -1));
+    return tamam;
+  }, [komutYaz, ileriKur]);
 
   // Son değişiklik ve ardından gelen dizmeler birlikte geri alınır; plan sonra yeniden dizilir.
-  const geriAl = useCallback(async (dizme = true): Promise<boolean> => {
+  const geriAl = useCallback(async (dizme = true, ileriye = true): Promise<boolean> => {
+    let alinan = null as TaslakKomutu | null;
     const r = await calis(async () => {
       let c = son.current;
       for (;;) {
@@ -144,31 +165,32 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
         const sonSatir = l.at(-1)!;
         c = await u.post<TaslakCevabi>(`${YOL}/geri-al`, { taslakSurumu: c!.taslak!.surum });
         koy(c);
-        if (!dizmeMi(sonSatir)) return c;
+        if (sonSatir.komut.tur !== 'diz') { alinan = sonSatir.komut; return c; }
       }
     }, 'Geri alınamadı');
     if (r === null) return false;
+    if (alinan !== null) ileriKur(ileriye ? [...ileri.current, alinan] : []);
     if (dizme) await diz();
     return true;
-  }, [calis, u, koy, diz]);
+  }, [calis, u, koy, diz, ileriKur]);
 
   const vazgec = useCallback(async (): Promise<boolean> => {
     const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/vazgec`, { taslakSurumu: surum() }), 'Taslaktan vazgeçilemedi');
-    if (r !== null) koy(r);
+    if (r !== null) { koy(r); ileriKur([]); }
     return r !== null;
-  }, [calis, u, koy]);
+  }, [calis, u, koy, ileriKur]);
 
   const uygula = useCallback(async (secimler?: Record<string, 'benim' | 'onun'>): Promise<TaslakUygulaCevabi | null> => {
     const r = await calis(() => u.post<TaslakUygulaCevabi>(`${YOL}/uygula`, { taslakSurumu: surum(), ...(secimler ? { secimler } : {}) }), 'Plana yazılamadı');
-    if (r?.durum === 'uygulandi') oku();
+    if (r?.durum === 'uygulandi') { oku(); ileriKur([]); }
     return r;
-  }, [calis, u, oku]);
+  }, [calis, u, oku, ileriKur]);
 
-  return { cevap, mesgul, diziliyor, hata, yaz, diz, dizIsler, degerlendir, dizmeyiYaz, geriAl, vazgec, uygula, yenile: oku };
+  return { cevap, mesgul, diziliyor, hata, yaz, diz, dizIsler, degerlendir, dizmeyiYaz, geriAl, ileriAl, ileriAdim, vazgec, uygula, yenile: oku };
 }
 
 // Son n değişikliği sırayla geri alır; plan yalnız sonuncudan sonra yeniden dizilir. Biri geri alınamazsa durur.
 export async function sonDegisiklikleriGeriAl(t: Pick<TaslakYazici, 'geriAl'>, n: number): Promise<boolean> {
-  for (let i = 0; i < n; i++) if (!(await t.geriAl(i === n - 1))) return false;
+  for (let i = 0; i < n; i++) if (!(await t.geriAl(i === n - 1, false))) return false;
   return true;
 }

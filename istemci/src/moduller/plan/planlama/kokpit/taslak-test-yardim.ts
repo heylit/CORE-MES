@@ -13,7 +13,7 @@ export function sahteTaslak(dataVer: number, ozet: Record<string, unknown> = { w
     degerlendir: vi.fn(() => Promise.resolve({
       is: 'ORN-is', cevap: { calismaSurumu: 9, dataVer, baslangic: null, simdi: 0, maliyetGorunur: false, sonuc: { tur: 'plan-uygula' as const, plan: { ozet } } },
     })),
-    dizmeyiYaz: vi.fn(() => Promise.resolve(true)), geriAl: vi.fn(() => Promise.resolve(true)), vazgec: vi.fn(() => Promise.resolve(true)),
+    dizmeyiYaz: vi.fn(() => Promise.resolve(true)), geriAl: vi.fn(() => Promise.resolve(true)), ileriAl: vi.fn(() => Promise.resolve(true)), ileriAdim: 0, vazgec: vi.fn(() => Promise.resolve(true)),
     uygula: vi.fn(() => Promise.resolve(null)), yenile: vi.fn(),
   };
   return { t, yazilan };
