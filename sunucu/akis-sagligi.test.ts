@@ -394,7 +394,9 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     // Maliyet göstergesi planın gecikme bedelidir: fiyat yetkisi olmayan planlamacıda gizli (null), müdürde emir zamanında bittiği için 0.
     assert.deepEqual({ planlama: pl.gostergeler.maliyetTl, mudur: pm.gostergeler.maliyetTl }, { planlama: null, mudur: 0 });
     tamam(await oku('planlama', '/plan'));
-    const car = tamam(await oku<{ siparisId: number }>('planlama', `/plan/siparisler/${S.sip}/carpan`));
+    // 3401-1 a: sipariş çarpanı maliyet ya da bedel ayarı ister; planlamacı okuyamaz.
+    yasak(await oku('planlama', `/plan/siparisler/${S.sip}/carpan`));
+    const car = tamam(await oku<{ siparisId: number }>('mudur', `/plan/siparisler/${S.sip}/carpan`));
     assert.equal(car.siparisId, S.sip);
     tamam(await oku('mudur', '/plan/bedel-ayari'));
     // Canlıya yalnız onaydaki taslak alınır; dört göz varsayılan kapalı, gönderen kendisi onaylar.
