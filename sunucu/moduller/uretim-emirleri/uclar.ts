@@ -12,6 +12,7 @@ import {
   adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
@@ -38,8 +39,7 @@ const ADIMLI_OZET_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'plan.oku'] } as c
 // Katılımları ve emrin ayrıntısını terminaldeki kişi de listeyi okuyan da görür.
 const KATILIM_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'terminal.uret'] } as const;
 // Açık emir listesini Stok'un emir seçicisi ve Fabrika Haritası da okur; terminal listeyi kullanmaz, emirle işi olmayan rol okumaz.
-// Adım Durumu (2893-5 a): kendi sayfası olan okuma; emri gören de okur.
-const ADIM_DURUMU_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.adim-durumu'] } as const;
+const ADIM_DURUMU_OKUMA = { biri: ADIM_DURUMU_OKUMA_ISLEMLERI } as const;
 const LISTE_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.stok', 'sayfa.atolye'] } as const;
 
 const emirUclari = [

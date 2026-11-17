@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimTedarikCozucusu, elleDurdurmaNedeni, elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
+import { adimTedarikCozucusu, elleDurdurmaNedeni, elleOnayliMaddeler, emirBaslat, emirListeFotograflari, uretimEmriAc } from './disari.ts';
 import type { EmirTedarikSatiri } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
@@ -582,5 +582,34 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 409);
     await assert.rejects(o().sahip.sorgu(`INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama, kontrol) VALUES ($1, $2, 99, 'X', 'hazirlik', '{"tur":"yok"}')`, [id, ie1]),
       /emir_adimi_kontrol_turu/);
+  });
+
+  // 3390-2: Ortak Dosyalar fotoğraf grubunun kaynağı. Yalnız son olayı fotoğraflı "tamamla" olan liste maddesi gelir; başka emrinki gelmez.
+  test('emrin liste fotoğrafları: fotoğrafsız, geri alınmış ve başka emrin maddesi gelmez', async () => {
+    const { id, ie } = await ac();
+    const baska = await ac();
+    const [ie1 = 0, ie2 = 0] = ie;
+    const madde = async (emirId: number, isEmriId: number, sira: number, ad: string) => (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama) VALUES ($1, $2, $3, $4, 'hazirlik') RETURNING id", [emirId, isEmriId, sira, ad]))!.id;
+    const olay = async (adimId: number, tur: 'tamamla' | 'geri-al') => (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay, kaynak) VALUES ($1, $2, $3, 'adim-durumu') RETURNING id", [adimId, yoneticiId, tur]))!.id;
+    const kanit = async (olayId: number, alan: 'foto_ozet' | 'olcum', deger: string | number) => {
+      await o().sahip.sorgu(`INSERT INTO emir_adimi_kaniti (olay_id, ${alan}) VALUES ($1, $2)`, [olayId, deger]);
+    };
+    const fotolu = await madde(id, ie1, 901, 'Bağlama');
+    await kanit(await olay(fotolu, 'tamamla'), 'foto_ozet', 'c'.repeat(64));
+    await kanit(await olay(await madde(id, ie1, 902, 'Dış çap'), 'tamamla'), 'olcum', 42);
+    const geriAlinan = await madde(id, ie2, 903, 'Ayna');
+    await kanit(await olay(geriAlinan, 'tamamla'), 'foto_ozet', 'd'.repeat(64));
+    await olay(geriAlinan, 'geri-al');
+    const ikinci = await madde(id, ie2, 904, 'İlk parça');
+    await kanit(await olay(ikinci, 'tamamla'), 'foto_ozet', 'e'.repeat(64));
+    await madde(id, ie2, 905, 'İşaretsiz');
+    await kanit(await olay(await madde(baska.id, baska.ie[0] ?? 0, 901, 'Başka emir'), 'tamamla'), 'foto_ozet', 'f'.repeat(64));
+
+    const r = await o().vt.tx((db) => emirListeFotograflari(db, id));
+    assert.deepEqual(r.map((x) => [x.adimId, x.ad, x.ozet]), [[fotolu, 'Bağlama', 'c'.repeat(64)], [ikinci, 'İlk parça', 'e'.repeat(64)]]);
+    assert.ok(r.every((x) => x.zaman !== null), 'olay zamanı gelir');
+    assert.deepEqual(await o().vt.tx((db) => emirListeFotograflari(db, 2_000_000_000)), [], 'olmayan emir');
   });
 });

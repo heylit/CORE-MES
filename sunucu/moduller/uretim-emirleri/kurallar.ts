@@ -1,11 +1,14 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ADIMLI_OKUMA_ISLEMLERI, AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { ListeKanitiGirdisi, ListeKontrolu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
+
+// Adım Durumu okuması (2893-5 a): kendi sayfası olan okuma; emri gören de okur. Ortak Dosyalar fotoğraf grubu da bununla süzer.
+export const ADIM_DURUMU_OKUMA_ISLEMLERI = [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.adim-durumu'] as const;
 
 export type IstasyonDurumu = 'yok' | 'pasif' | 'aktif';
 

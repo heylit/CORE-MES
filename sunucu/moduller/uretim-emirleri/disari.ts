@@ -709,3 +709,25 @@ export {
 } from './siparis-acilisi.ts';
 export type { SiparisAcilisiCozuculeri, SiparisAcilisiRotasi } from './siparis-acilisi.ts';
 export type { RotaBekleyenEmir } from './sorgular.ts';
+
+// 3390-2: Ortak Dosyalar'ın fotoğraf grubu Adım Durumu ucuyla aynı işlem listesiyle süzülür (Test T3, Risk notu).
+export { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
+// 3390-2: Ortak Dosyalar hazır listesi. Emrin hazırlık listesi maddelerinde çekilmiş kanıt fotoğrafları (son "tamamla" olayının özeti);
+// indirme `/adimli-emirler/:id/liste-fotografi/:adimId/:ozet` ucundandır. Yetki denetlemez; çağıran ADIM_DURUMU_OKUMA ile süzer.
+import { listeSatirlari as listeSatirlariOku } from './sorgular.ts';
+export async function emirListeFotograflari(db: Db, emirId: number): Promise<{ adimId: number; ad: string; ozet: string; zaman: string | null }[]> {
+  const isEmirleri = (await emirlerinIsEmriIdleri(db, [emirId])).get(emirId) ?? [];
+  if (isEmirleri.length === 0) return [];
+  return (await listeSatirlariOku(db, isEmirleri)).flatMap((x) => (x.kanitFoto === null ? [] : [{ adimId: x.id, ad: x.ad, ozet: x.kanitFoto, zaman: x.olayZamani }]));
+}
+// 3390-2: emrin iş emirlerinin sabitlenmiş talimat künyeleri (iş emri sırasıyla); sürümü sabitlenmemiş iş emri atlanır. Yetki denetlemez.
+export async function emrinTalimatKunyeleri(db: Db, emirId: number): Promise<{ isEmriId: number; malzemeNo: number; opNo: number; surum: number }[]> {
+  const sonuc: { isEmriId: number; malzemeNo: number; opNo: number; surum: number }[] = [];
+  for (const isEmriId of (await emirlerinIsEmriIdleri(db, [emirId])).get(emirId) ?? []) {
+    const k = await isEmriTalimatKunyesi(db, isEmriId);
+    if (k !== null) sonuc.push({ isEmriId, ...k });
+  }
+  return sonuc;
+}
+// 3390-2: biten ve iptal emirler, en yeni önce, sayfalı (Bitenler ekranının listesi). Yetki denetlemez.
+export const adimliBitenEmirler = isEmri.adimliBitenler;
