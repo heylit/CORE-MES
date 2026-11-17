@@ -1,7 +1,7 @@
 import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmDenetimiCevabi, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { projeLogoDurumu } from './proje.ts';
@@ -15,7 +15,7 @@ import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
-  BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariHazirligi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
+  BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
   logoAramaSonucunuEkle, logoMalzemeAramasiAcik,
 } from './servis.ts';
 
@@ -134,6 +134,15 @@ export const uclar = [
     sorgu: logoCrmSorgusu,
     cevap: logoCrmCevabi,
     isle: ({ db, sorgu }) => cariCrmDurumlari({ tx: (f) => f(db) }, ortamKoprusu, sorgu.id),
+  }),
+  // 3391-2 a: Logo geçişinde CRM bağı denetimi; firma yazabilen çalıştırır (düzeltmesi firma kartındadır). Logo'ya yazmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/crm-denetimi',
+    yetki: 'musteri-tedarikci.yaz',
+    txDisi: true,
+    cevap: logoCrmDenetimiCevabi,
+    isle: ({ db }) => crmDenetimi({ tx: (f) => f(db) }, ortamKoprusu),
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({

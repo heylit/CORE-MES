@@ -265,13 +265,13 @@ export const firmaKayitKaynagi: KayitAramaKaynagi<Db> = {
 
 export interface FirmaOzeti {
   id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; vergiNo: string | null; vergiDairesi: string | null;
-  paraBirimi: string; vadeGunu: number | null; aktif: boolean; logoCariKodu: string | null;
+  paraBirimi: string; vadeGunu: number | null; aktif: boolean; logoCariKodu: string | null; logoCrmKodu: string | null;
   telefon: string | null; ePosta: string | null; adres: string | null; ilce: string | null; il: string | null;
   postaKodu: string | null; enlem: number | null; boylam: number | null; surum: number;
 }
 const ozetle = (f: Firma): FirmaOzeti => ({
   id: f.id, kod: f.kod, ad: f.ad, tur: f.tur, fason: f.fason, vergiNo: f.vergiNo, vergiDairesi: f.vergiDairesi, paraBirimi: f.paraBirimi,
-  vadeGunu: f.vadeGunu, aktif: f.aktif, logoCariKodu: f.logoCariKodu, telefon: f.telefon, ePosta: f.ePosta,
+  vadeGunu: f.vadeGunu, aktif: f.aktif, logoCariKodu: f.logoCariKodu, logoCrmKodu: f.logoCrmKodu ?? null, telefon: f.telefon, ePosta: f.ePosta,
   adres: f.adres, ilce: f.ilce, il: f.il, postaKodu: f.postaKodu, enlem: f.enlem, boylam: f.boylam, surum: f.surum,
 });
 export async function firmaOzeti(db: Db, id: number): Promise<FirmaOzeti | null> {
@@ -491,6 +491,11 @@ export function logoCariCozuculeriKaydet(c: { ara: LogoCariAramaCozucusu; oku: L
   logoCariAramasi = c?.ara ?? null;
   logoCariOkumasi = c?.oku ?? null;
 }
+// 3391-2 a: CRM kodu seçimi Logo'daki bağları okur (logo modülü kaydeder). Bağ yoksa veri null.
+export type LogoCrmKodCozucusu = (db: Db, cariKodu: string) => Promise<LogoCariSonucu<{ kodlar: string[]; secilebilir: boolean } | null>>;
+let logoCrmKodlari: LogoCrmKodCozucusu | null = null;
+export function logoCrmCozucusuKaydet(c: LogoCrmKodCozucusu | null): void { logoCrmKodlari = c; }
+
 const BAGLI_DEGIL: LogoCariSonucu<never> = { tur: 'kapali', ileti: 'Logo cari okuması bu sunucuda bağlı değil.' };
 
 // Alma ve bağlama komutu köprüye gitmez: kişinin aramada ya da tek okumada gördüğü cari süreç belleğinde tutulur (tek sunucu).
@@ -581,6 +586,28 @@ export async function firmayiLogoyaBagla(db: Db, kullanici: Kullanici, id: numbe
       : logoCariKoduHatasi(cari.kod) ?? 'Firmanın Logo cari kodu bu cariyle aynı değil; bağlanamaz.');
   }
   const yeni = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.logoBagiYaz(db, id, g.surum, { logoCariKodu: cari.kod, logoKayitNo: cari.logoKayitNo }, kullanici.id));
+  if (!yeni) throw eskiSurum();
+  return yeni;
+}
+
+// 3391-2 a: tekliflerde kullanılacak CRM satış müşterisi. Seçilen kod Logo'da bu cariye bağlı olmalı ve yardımcı seçimi desteklemeli;
+// seçimi kaldırmak Logo'ya sormaz. Logo'ya yazılmaz. Okuma transaction içindedir (yardımcı GET; kısa).
+export async function firmaLogoCrmSec(db: Db, kullanici: Kullanici, id: number, g: { kod: string | null; surum: number }): Promise<Firma> {
+  const eski = await kilitliGetir(db, id, g.surum);
+  const cari = eski.logoCariKodu?.trim() ?? '';
+  if (cari === '') throw gecersiz('Firmanın Logo cari kodu yok; CRM satış müşterisi seçilemez.');
+  let kod: string | null = null;
+  if (g.kod !== null) {
+    if (logoCrmKodlari === null) throw gecersiz('Logo CRM okuması bu sunucuda bağlı değil.');
+    const r = await logoCrmKodlari(db, cari);
+    if (r.tur !== 'tamam') throw gecersiz(r.ileti);
+    if (r.veri === null) throw gecersiz(`Cari ${cari} Logo'da hiçbir CRM satış müşterisine bağlı değil; bağ Logo'da kurulur.`);
+    if (!r.veri.secilebilir) throw gecersiz('Logo yardımcısı CRM satış müşterisi seçimini desteklemiyor; yardımcı güncellenince seçilebilir.');
+    const bulunan = r.veri.kodlar.find((k) => k.toUpperCase() === g.kod?.toUpperCase());
+    if (bulunan === undefined) throw gecersiz(`CRM satış müşterisi ${g.kod} Logo'da cari ${cari} ile bağlı değil.`);
+    kod = bulunan;
+  }
+  const yeni = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaLogoCrmYaz(db, id, g.surum, { cariKodu: cari, kod }, kullanici.id));
   if (!yeni) throw eskiSurum();
   return yeni;
 }

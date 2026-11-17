@@ -12,7 +12,7 @@ import type {
 const FIRMA = `id, kod, ad, tur, fason, ulke_kodu AS "ulkeKodu", vergi_no AS "vergiNo", vergi_dairesi AS "vergiDairesi",
   para_birimi AS "paraBirimi", vade_gunu AS "vadeGunu", adres, ilce, il, posta_kodu AS "postaKodu", enlem::float8 AS enlem, boylam::float8 AS boylam,
   telefon, e_posta AS "ePosta", aktif, logo_cari_kodu AS "logoCariKodu", logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu",
-  musteri_sinifi AS "musteriSinifi", ${zamanMetni('olusturma')} AS olusturma, ${zamanMetni('guncelleme')} AS guncelleme, surum`;
+  logo_crm_kodu AS "logoCrmKodu", musteri_sinifi AS "musteriSinifi", ${zamanMetni('olusturma')} AS olusturma, ${zamanMetni('guncelleme')} AS guncelleme, surum`;
 const SATIR = `f.id, f.kod, f.ad, f.tur, f.fason, f.vergi_no AS "vergiNo", f.il, f.aktif, f.logo_cari_kodu AS "logoCariKodu", f.logo_kayit_no AS "logoKayitNo",
   (SELECT count(*)::int FROM musteri_tedarikci_adres a WHERE a.firma_id = f.id) AS "adresSayisi",
   (f.enlem IS NOT NULL OR EXISTS (SELECT 1 FROM musteri_tedarikci_adres a WHERE a.firma_id = f.id AND a.enlem IS NOT NULL)) AS koordinatli`;
@@ -74,11 +74,21 @@ export function firmaGuncelle(db: Db, id: number, surum: number, k: FirmaKimligi
   return db.tek<Firma>(
     `UPDATE musteri_tedarikci_firma SET kod = $3, ad = $4, tur = $5, fason = $6, ulke_kodu = $7, vergi_no = $8, vergi_dairesi = $9,
        para_birimi = $10, vade_gunu = $11, adres = $12, ilce = $13, il = $14, posta_kodu = $15, enlem = $16, boylam = $17, telefon = $18,
-       e_posta = $19, logo_cari_kodu = $20, guncelleyen_id = $21, musteri_sinifi = $22, guncelleme = now(), surum = surum + 1
+       e_posta = $19, logo_cari_kodu = $20, guncelleyen_id = $21, musteri_sinifi = $22, guncelleme = now(), surum = surum + 1,
+       logo_crm_kodu = CASE WHEN upper(logo_cari_kodu) IS NOT DISTINCT FROM upper($20) THEN logo_crm_kodu END
      WHERE id = $1 AND surum = $2
      RETURNING ${FIRMA}`,
     [id, surum, k.kod, k.ad, k.tur, k.fason, k.ulkeKodu, k.vergiNo, k.vergiDairesi, k.paraBirimi, k.vadeGunu, k.adres, k.ilce, k.il,
       k.postaKodu, k.enlem, k.boylam, k.telefon, k.ePosta, k.logoCariKodu, kisiId, k.musteriSinifi],
+  );
+}
+
+// 3391-2 a: seçimin Logo'da o cariye bağlı olduğu çağıranda denetlenir; cari kodu aynı kalmadıysa yazılmaz.
+export function firmaLogoCrmYaz(db: Db, id: number, surum: number, b: { cariKodu: string; kod: string | null }, kisiId: number): Promise<Firma | null> {
+  return db.tek<Firma>(
+    `UPDATE musteri_tedarikci_firma SET logo_crm_kodu = $4, guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
+     WHERE id = $1 AND surum = $2 AND upper(logo_cari_kodu) = upper($3) RETURNING ${FIRMA}`,
+    [id, surum, b.cariKodu, b.kod, kisiId],
   );
 }
 

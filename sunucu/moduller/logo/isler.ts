@@ -15,7 +15,7 @@ import type { KopruIstemcisi } from './kopru.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
 import { irsaliyeTuru } from './irsaliye.ts';
 import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeKartiOkumaTuru, malzemeKoduTuru, malzemeTuru, stokOkumaTuru, kullanimOkumaTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
-import { logoCariAra, logoCariOku, logoMalzemeAra } from './servis.ts';
+import { cariCrmKodlariOku, logoCariAra, logoCariOku, logoMalzemeAra } from './servis.ts';
 import type { CariOkumasi, MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 import type { LogoCari, LogoMalzemeKarti } from './kurallar.ts';
 import type { DisSiparisCevabi, LogoKartAlislariCevabi, LogoKartHareketleriCevabi } from '#paylasilan/sozlesme/logo.ts';
@@ -164,6 +164,9 @@ export const logodaCariAra = (vt: TxAcan, metin: string): Promise<CariOkumasi<Lo
 export const logodaMalzemeAra = (vt: TxAcan, kisiId: number, metin: string): Promise<CariOkumasi<LogoMalzemeKarti[]>> =>
   sirali(() => logoMalzemeAra(vt, ortamKoprusu, kisiId, metin));
 export const logodanCariOku = (vt: TxAcan, kod: string): Promise<CariOkumasi<LogoCari | null>> => sirali(() => logoCariOku(vt, ortamKoprusu, kod));
+// 3391-2 a: firma kartında CRM kodu seçimi; kullanıcı isteğiyle, sırayla.
+export const logodanCrmKodlari = (vt: TxAcan, kod: string): Promise<CariOkumasi<{ kodlar: string[]; secilebilir: boolean } | null>> =>
+  sirali(() => cariCrmKodlariOku(vt, ortamKoprusu, kod));
 // D7: Logo'daki siparişi okuma kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
 export const logodanDisSiparisOku = (vt: TxAcan, kisiId: number, no: string): Promise<DisSiparisCevabi> =>
   sirali(() => disSiparisOku(vt, ortamKoprusu, kisiId, no));

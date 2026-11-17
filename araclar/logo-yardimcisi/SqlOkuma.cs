@@ -91,9 +91,10 @@ namespace LogoYardimcisi
             var karsilama = "SELECT P.LOGICALREF, P.CHILDREF, P.DEMANDLINEREF, P.MEETAMNT FROM " + d("DEMANDPEGGING") + " P ";
             Karsilamalar = karsilama + "JOIN " + d("ORFLINE") + " L ON L.LOGICALREF = P.CHILDREF WHERE P.LINETYPE = 4 AND L.ORDFICHEREF = @ref ORDER BY P.LOGICALREF";
             KarsilamaBul = karsilama + "WHERE P.LINETYPE = 4 AND P.DEMANDLINEREF = @talep AND P.CHILDREF = @siparis";
-            // 3391: bir cari birden fazla CRM müşterisine bağlı olabilir; sıra bağ kaydının oluşma sırasıdır, teklif ilkini kullanır.
+            // 3391: bir cari birden fazla CRM müşterisine bağlı olabilir; teklif ilkini kullanır. 3391-2: Logo'da "varsayılan" işaretli bağ
+            // (DEFAULTFLG) önce gelir, sonra bağ kaydının oluşma sırası; pasif CRM müşterisi (ACTIVE <> 0) listelenmez (EkoTigerAPI ile aynı).
             var crmBagi = "FROM LG_CVARPASG A JOIN LG_CSTVND S ON S.LOGICALREF = A.CSTVNDREF JOIN " + f("CLCARD")
-                + " C ON C.LOGICALREF = A.ARPREF WHERE C.CODE = @kod AND A.FIRMNO = @firma ORDER BY A.LOGICALREF";
+                + " C ON C.LOGICALREF = A.ARPREF WHERE C.CODE = @kod AND A.FIRMNO = @firma AND S.ACTIVE = 0 ORDER BY A.DEFAULTFLG DESC, A.LOGICALREF";
             SatisMusterisi = "SELECT TOP 1 S.CODE " + crmBagi;
             SatisMusterileri = "SELECT TOP " + LogoYardimcisi.SatisMusterileri.Sinir + " S.CODE, COUNT(*) OVER () " + crmBagi;
             var teklifBasligi = "SELECT T.LOGICALREF, T.FICHENO, T.STATUS, C.CODE, T.NETTOTAL, T.TRCURR, T.TRRATE FROM " + f("PURCHOFFER") + " T LEFT JOIN "

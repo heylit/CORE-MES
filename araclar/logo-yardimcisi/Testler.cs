@@ -1101,6 +1101,39 @@ namespace LogoYardimcisi
             Esit(404, C(s, "GET", "/api/SalesOffer/customer/" + Satici, null).Durum, "CRM yok 404");
         }
 
+        // 3391-2: Logo'daki varsayılan bağ önce gelir ve seçim yokken teklif onu kullanır; CORE'un seçtiği kod yalnız bu cariye bağlıysa
+        // (Logo'daki yazımıyla) kullanılır, değilse teklif Logo'ya gitmez; cevap seçimi desteklediğini söyler.
+        static void T_crm_varsayilan_bag_ve_secilen_kod()
+        {
+            var s = Logo();
+            s.EkCrmMusterileri[Alici] = new List<string> { "ORN-CRM-200", "ORN-CRM-201" };
+            s.VarsayilanCrm[Alici] = "ORN-CRM-201";
+            var c = Z(C(s, "GET", "/api/SalesOffer/customer/" + Alici, null));
+            Esit(true, c["salesCustomerCodeAccepted"], "secim destekleniyor");
+            var kodlar = (object[])c["customers"];
+            Esit("ORN-CRM-201", (string)kodlar[0], "varsayilan bag ilk");
+            Esit("CRM-" + Alici, (string)kodlar[1], "sonra bag sirasi");
+            var t = Teklif(s, "TKL-V", Alici);
+            Dogru(Basari(t), Json.Yaz(t.Govde));
+            Esit("ORN-CRM-201", s.SonBaslik[0].Value, "secim yokken varsayilan gider");
+            var sec = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-S", "date", "25.09.2026", "arpCode", Alici, "status", 1, "salesCustomerCode", " orn-crm-200 ",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 10, "unitCode", "ADET") }));
+            Dogru(Basari(sec), Json.Yaz(sec.Govde));
+            Esit("ORN-CRM-200", s.SonBaslik[0].Value, "secilen kod Logo yazimiyla gider");
+            var once = s.Cagrilar.Count;
+            var ret = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-R", "date", "25.09.2026", "arpCode", Alici, "status", 1, "salesCustomerCode", "ORN-CRM-999",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 10, "unitCode", "ADET") }));
+            Icerir(Hata(ret), "ORN-CRM-999 Logo'da cari " + Alici + " ile bağlı değil");
+            Esit(once, s.Cagrilar.Count, "bagli olmayan kodla Logo'ya gidilmez");
+            Esit(null, s.Teklif("TKL-R"), "teklif yazilmadi");
+            var bos = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-B", "date", "25.09.2026", "arpCode", Alici, "status", 1, "salesCustomerCode", " ",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 10, "unitCode", "ADET") }));
+            Dogru(Basari(bos), Json.Yaz(bos.Govde));
+            Esit("ORN-CRM-201", s.SonBaslik[0].Value, "bos secim varsayilani kullanir");
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-Y", "date", "25.09.2026", "arpCode", Satici, "status", 1, "salesCustomerCode", "ORN-CRM-200",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 10, "unitCode", "ADET") }))), "ile bağlı değil");
+        }
+
         static void T_tekliften_siparis_bagi_satirda_kurulur_ve_tamami_donunce_teklif_onaylanir()
         {
             var s = Logo();
@@ -1260,9 +1293,9 @@ namespace LogoYardimcisi
             Icermez(q.SiparisIcerikBasligi, "@tr");
             // 3391: teklifte giden CRM kodu ile ekrandaki listenin ilki aynı sıradan gelir.
             Icerir(q.SatisMusterisi, "SELECT TOP 1 S.CODE FROM LG_CVARPASG");
-            Icerir(q.SatisMusterisi, "ORDER BY A.LOGICALREF");
+            Icerir(q.SatisMusterisi, "AND S.ACTIVE = 0 ORDER BY A.DEFAULTFLG DESC, A.LOGICALREF");
             Icerir(q.SatisMusterileri, "SELECT TOP 20 S.CODE, COUNT(*) OVER () FROM LG_CVARPASG");
-            Icerir(q.SatisMusterileri, "ORDER BY A.LOGICALREF");
+            Icerir(q.SatisMusterileri, "AND S.ACTIVE = 0 ORDER BY A.DEFAULTFLG DESC, A.LOGICALREF");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");

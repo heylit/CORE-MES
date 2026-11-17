@@ -82,6 +82,8 @@ export interface SahteKopru {
   satisMusterileri: Set<string>;
   // 3391 a: cari kodu -> bağlı CRM müşteri kodları (yoksa cevapta liste yok: eski yardımcı gibi).
   crmKodlari: Map<string, string[]>;
+  // 3391-2 a: yardımcı teklifte verilen CRM kodunu kullanır (yeni yardımcı); false: 3391 yardımcısı gibi bildirmez.
+  crmSecimi: boolean;
   satisTeklifleri: Map<string, { ref: number; satirlar: number[] }>;
   satisTeklifAcilan: Map<string, number>;
   satisSiparisleri: Map<string, { ref: number; teklifRef: number; satirlar: number[]; govde: unknown }>;
@@ -181,6 +183,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     adGuncellemeleri: new Map(),
     satisMusterileri: new Set(),
     crmKodlari: new Map(),
+    crmSecimi: true,
     satisTeklifleri: new Map(),
     satisTeklifAcilan: new Map(),
     satisSiparisleri: new Map(),
@@ -530,7 +533,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       if (istek.method === 'GET' && satisMusterisi) {
         const kod = decodeURIComponent(satisMusterisi[1] ?? '');
         const kodlar = kopru.crmKodlari.get(kod);
-        if (kopru.satisMusterileri.has(satisMusterisi[1] ?? '')) json(cevap, 200, { success: true, logicalRef: 88, error: null, validate: null, ...(kodlar ? { customers: kodlar.slice(0, 20), customerCount: kodlar.length } : {}) });
+        if (kopru.satisMusterileri.has(satisMusterisi[1] ?? '')) json(cevap, 200, { success: true, logicalRef: 88, error: null, validate: null, ...(kodlar ? { customers: kodlar.slice(0, 20), customerCount: kodlar.length, ...(kopru.crmSecimi ? { salesCustomerCodeAccepted: true } : {}) } : {}) });
         else json(cevap, 404, { success: false, logicalRef: 0, error: 'Customer not found', validate: null });
         return;
       }

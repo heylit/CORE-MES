@@ -14,6 +14,7 @@ import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komu
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaFormu } from './FirmaFormu.tsx';
+import { CrmDenetimi } from './CrmDenetimi.tsx';
 import { CrmRozeti, crmSorulur, useLogoCrm } from './logo-crm.tsx';
 import { cariDurumu, topluPlan, type CariDurumu, type TopluPlan } from './logo-cari-gecisi.ts';
 import { cevabiYaz } from './yazma.ts';
@@ -202,6 +203,7 @@ export function LogoCariGecisi() {
           />
         </Kart>
       )}
+      <CrmDenetimi />
       {plan && (
         <TopluPencere
           plan={plan}

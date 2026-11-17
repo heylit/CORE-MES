@@ -19,6 +19,13 @@
   display: flex; align-items: flex-start; gap: var(--b-2); margin: var(--b-2) 0 0; padding: var(--b-2) var(--b-3);
   border: 1px solid var(--hold); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s);
 }
+.tc-mt-crm-secim { display: grid; gap: var(--b-2); margin-top: var(--b-3); }
+.tc-mt-crm-secenek {
+  display: flex; align-items: center; gap: var(--b-3); min-height: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
+}
+.tc-mt-crm-kod { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--b-3); min-width: 0; overflow-wrap: anywhere; }
+.tc-mt-crm-secenek:has(input:checked) { border-color: var(--done); background: var(--panel2); }
 .tc-mt-crm-uyari > span { min-width: 0; overflow-wrap: anywhere; }
 .tc-mt-ozellik dd { margin: var(--b-1) 0 0; overflow-wrap: anywhere; }
 .tc-mt-bolum-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); margin-bottom: var(--b-3); }

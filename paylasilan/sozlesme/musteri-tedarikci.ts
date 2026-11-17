@@ -118,6 +118,9 @@ export const firmaSemasi = z.object({
   logoCariKodu: z.string().nullable(),
   logoKayitNo: z.number().int().nullable(),
   logoGonderimDurumu: z.enum(LOGO_GONDERIM_DURUMLARI).nullable(),
+  // 3391-2 a: firma kartında seçilmiş Logo CRM satış müşterisi kodu (tekliflerde kullanılır); yoksa Logo'daki bağ sırasının ilki.
+  // Sunucu her zaman yazar; isteğe bağlı olması alandan önce yazılmış istemci örneklerini kırmamak içindir.
+  logoCrmKodu: z.string().nullable().optional(),
   // Sunucu her zaman yazar; isteğe bağlı olması alandan önce yazılmış istemci örneklerini (Finans çerçevesi testi) kırmamak içindir.
   musteriSinifi: musteriSinifi.nullable().optional(),
   olusturma: zamanSemasi,
@@ -432,6 +435,12 @@ export const logodanFirmaAlGovdesi = firmaKimligi.extend({ logoKodu });
 export type LogodanFirmaAlGovdesi = z.input<typeof logodanFirmaAlGovdesi>;
 export const logoyaBaglaGovdesi = z.object({ logoKodu, ...beklenenSurum });
 export type LogoyaBaglaGovdesi = z.input<typeof logoyaBaglaGovdesi>;
+// 3391-2 a: cari birden fazla CRM satış müşterisine bağlıysa tekliflerde kullanılacak kod; null seçimi kaldırır. Logo'ya yazılmaz.
+export const firmaLogoCrmSecGovdesi = z.object({
+  kod: z.string().trim().min(1, 'CRM kodu boş olamaz.').max(40, 'En çok 40 karakter.').nullable(),
+  ...beklenenSurum,
+});
+export type FirmaLogoCrmSecGovdesi = z.input<typeof firmaLogoCrmSecGovdesi>;
 
 // 3343: Logo geçişi cariler sekmesi. Seçilen cariler tek komutla işlenir: her biri ayrı ara noktadadır, biri reddedilirse ötekiler sürer
 // ve her satırın sonucu ayrı döner. Alma, yeni firma formu açmadan aramadaki öneriyle yapılır; bağlama ve almanın kuralları tek cariyle aynıdır.

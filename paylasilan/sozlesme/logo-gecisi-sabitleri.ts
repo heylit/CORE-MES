@@ -8,3 +8,5 @@ export const LOGO_CARI_SONUC_SINIRI = 50;
 export const LOGO_CARI_TOPLU_SINIRI = LOGO_CARI_SONUC_SINIRI;
 // CRM satış müşterisi durumu (3359): tek istekte en çok bu kadar firma (cari sonucu ve liste sayfası kadar).
 export const LOGO_CRM_SINIRI = LOGO_CARI_SONUC_SINIRI;
+// 3391-2 a: Logo geçişinde CRM bağı denetiminde sorulan en çok müşteri carisi (her biri yardımcıya bir GET).
+export const LOGO_CRM_DENETIM_SINIRI = 500;

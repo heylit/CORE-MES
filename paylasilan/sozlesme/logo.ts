@@ -340,10 +340,30 @@ export const logoCrmCevabi = z.object({
     neden: z.string().nullable(),
     // 3391 a: cariye bağlı CRM satış müşterisi kodları (ilki tekliflerde kullanılır, en çok 20) ve bütün bağların sayısı; yalnız "var"
     // iken, eski yardımcıda null.
-    kodlar: z.object({ kodlar: z.array(z.string()), sayi: z.number().int().nonnegative() }).nullable(),
+    // secilebilir (3391-2 a): yardımcı firma kartında seçilen kodla teklif açabilir; değilse seçim düğmesi çıkmaz.
+    kodlar: z.object({ kodlar: z.array(z.string()), sayi: z.number().int().nonnegative(), secilebilir: z.boolean() }).nullable(),
   })),
 });
 export type LogoCrmCevabi = z.output<typeof logoCrmCevabi>;
+// 3391-2 a: Logo geçişinde CRM bağı denetimi. Aktif müşteri firmalarının Logo carileri tek tek sorulur (en çok LOGO_CRM_DENETIM_SINIRI);
+// yalnız düzeltilecekler döner: CRM'siz cari, birden fazla bağı olup seçimi olmayan cari, seçili kodu Logo'da artık bağlı olmayan cari.
+export const LOGO_CRM_SORUNLARI = ['crm-yok', 'cok-bag', 'secim-kalkti'] as const;
+export const logoCrmDenetimiCevabi = z.object({
+  durum: z.enum(['tamam', 'okunamadi']),
+  neden: z.string().nullable(),
+  taranan: z.number().int().nonnegative(),
+  eksik: z.boolean(),
+  satirlar: z.array(z.object({
+    firmaId: z.number().int().positive(),
+    kod: z.string().nullable(),
+    ad: z.string(),
+    cariKodu: z.string(),
+    sorun: z.enum(LOGO_CRM_SORUNLARI),
+    sayi: z.number().int().nonnegative().nullable(),
+    secili: z.string().nullable(),
+  })),
+});
+export type LogoCrmDenetimiCevabi = z.output<typeof logoCrmDenetimiCevabi>;
 // 3359 ek (17.11 06:08Z): teklif ve satış siparişi ayrıntısında carinin Logo'ya hazırlığı; belgeyi görebilen sorar. "cari-yok": firma kartında
 // Logo cari kodu yok (teklif de sipariş de Logo'ya gitmez).
 export const LOGO_CARI_HAZIRLIKLARI = ['cari-yok', ...LOGO_CRM_DURUMLARI] as const;

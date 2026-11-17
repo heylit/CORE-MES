@@ -509,7 +509,8 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     expect(crmIstekleri(istekler).some((y) => y.split('=')[1]?.split(',').includes('11'))).toBe(false);
   });
 
-  const kodlu = (kodlar: string[], sayi = kodlar.length) => () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null, kodlar: { kodlar, sayi } }] });
+  const kodlu = (kodlar: string[], sayi = kodlar.length, secilebilir = false) => () =>
+    json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null, kodlar: { kodlar, sayi, secilebilir } }] });
 
   it('3391 tek kod: ayrıntıda kod yazar, uyarı yok; listede "CRM"', async () => {
     crmCevabi = kodlu(['ORN-CRM-3001']);
@@ -557,5 +558,56 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
     const uyari = await within(pencere).findByRole('status');
     expect(uyari.textContent).toMatch(/^Bu cari Logo'da 23 CRM müşterisine bağlı\. Teklif ilkiyle gider; .* ORN-CRM-4000, .*ORN-CRM-4019, \+3 kod daha$/);
+  });
+
+  it('3391-2 yazan çok bağlı caride Logo\'daki kodlardan birini seçer; teklif o kodla gider yazar, uyarı kalkar', async () => {
+    crmCevabi = kodlu(['ORN-CRM-3002', 'ORN-CRM-3017'], 2, true);
+    const istekler = sunucuKur(YAZAR, (yol, govde) => (yol === '/musteri-tedarikci/firmalar/10/logo-crm-sec'
+      ? json(200, { firma: { ...FIRMA_A, logoCrmKodu: (govde as { kod: string }).kod, surum: 4 } })
+      : json(404, { kod: 'BULUNAMADI', mesaj: 'Yok' })));
+    ac('/musteri-tedarikci?firma=10');
+    const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    expect(await within(pencere).findByText(/Teklif Logo'nun seçtiği bağla gider \(varsayılan işaretli, yoksa en eski\); doğrusu başkaysa seçin/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'CRM müşterisini seç' }));
+    const secim = await screen.findByRole('dialog', { name: 'Tekliflerde kullanılacak CRM müşterisi' });
+    const grup = within(secim).getByRole('radiogroup', { name: 'CRM satış müşterisi' });
+    expect(within(grup).getAllByRole('radio')).toHaveLength(3);
+    fireEvent.click(within(grup).getByRole('radio', { name: 'ORN-CRM-3017' }));
+    fireEvent.click(within(secim).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tekliflerde kullanılacak CRM müşterisi' })).toBeNull());
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/musteri-tedarikci/firmalar/10/logo-crm-sec', { kod: 'ORN-CRM-3017', surum: 3 }]]);
+    expect(await within(pencere).findByText('(seçildi, tekliflerde kullanılır)')).toBeTruthy();
+    expect(within(pencere).getByText('ORN-CRM-3017')).toBeTruthy();
+    expect(within(pencere).queryByText(/doğrusu başkaysa seçin/)).toBeNull();
+    expect(within(pencere).getByRole('button', { name: 'Değiştir' })).toBeTruthy();
+  });
+
+  it('3391-2 seçim düğmesi okuyana ve seçimi desteklemeyen yardımcıda yok; seçili kod Logo\'da bağlı değilse uyarı', async () => {
+    crmCevabi = kodlu(['ORN-CRM-3002', 'ORN-CRM-3017'], 2, true);
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    let pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    await within(pencere).findByText('Logo CRM satış müşterisi');
+    expect(within(pencere).queryByRole('button', { name: 'CRM müşterisini seç' })).toBeNull();
+    cleanup();
+    crmCevabi = kodlu(['ORN-CRM-3002', 'ORN-CRM-3017'], 2, false);
+    sunucuKur(YAZAR);
+    ac('/musteri-tedarikci?firma=10');
+    pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    expect(await within(pencere).findByText(/yanlışsa Logo'da fazla bağı kaldırın/)).toBeTruthy();
+    expect(within(pencere).queryByRole('button', { name: 'CRM müşterisini seç' })).toBeNull();
+    cleanup();
+    crmCevabi = kodlu(['ORN-CRM-3002', 'ORN-CRM-3017'], 2, true);
+    const ayrinti = { ...AYRINTI, firma: { ...FIRMA_A, logoCrmKodu: 'ORN-CRM-9999' } };
+    vi.unstubAllGlobals();
+    sunucuKur(YAZAR);
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => (adres === '/api/musteri-tedarikci/firmalar/10'
+      ? json(200, ayrinti) : asil(adres, secenek))));
+    ac('/musteri-tedarikci?firma=10');
+    pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    const uyari = await within(pencere).findByRole('alert');
+    expect(uyari.textContent).toBe("Seçili ORN-CRM-9999 Logo'da artık bu cariye bağlı değil; teklif gitmez. Yeniden seçin ya da seçimi kaldırın.");
+    expect(within(pencere).getByRole('button', { name: 'Değiştir' })).toBeTruthy();
   });
 });

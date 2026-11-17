@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
   firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi, degerlendirmeCevabi, karneAgirlikCevabi, karneAgirlikGovdesi,
-  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logoCariTopluCevabi, logoCariTopluGovdesi, logodanFirmaAlGovdesi, logoyaBaglaGovdesi,
+  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logoCariTopluCevabi, logoCariTopluGovdesi, logodanFirmaAlGovdesi, logoyaBaglaGovdesi, firmaLogoCrmSecGovdesi,
   yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import * as servis from './servis.ts';
@@ -182,6 +182,15 @@ export const uclar = [
     govde: logoyaBaglaGovdesi,
     cevap: firmaCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ firma: await servis.firmayiLogoyaBagla(db, kullanici, parametre.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/firmalar/:id/logo-crm-sec',
+    yetki: 'musteri-tedarikci.yaz',
+    parametre: kimlikParametresi,
+    govde: firmaLogoCrmSecGovdesi,
+    cevap: firmaCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ firma: await servis.firmaLogoCrmSec(db, kullanici, parametre.id, govde) }),
   }),
   uc({
     yontem: 'POST',
