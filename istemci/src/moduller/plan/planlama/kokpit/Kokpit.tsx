@@ -68,6 +68,13 @@ const TUR_ACIK = false as boolean;
 const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000;
 const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
 
+// Menü düğmenin sağ kenarına yaslı açılır; düğme şeridin solundaysa menü sola taşıp kesilir. O zaman düğmenin sol kenarına yaslanır.
+const solaYasla = (el: HTMLDivElement | null): void => {
+  if (!el || el.hasAttribute('data-hiza')) return;
+  const sinir = Math.max(0, el.closest('.tc-pyq')?.getBoundingClientRect().left ?? 0);
+  if (el.getBoundingClientRect().left < sinir) el.setAttribute('data-hiza', 'sol');
+};
+
 // Üst şeritte açılır menü (3297): az kullanılan araçlar ve planın yönü tek düğmenin altında durur. Dışarı tıklamak, Esc ve seçim kapatır.
 function Acilir({ ad, etiket, simge, sinif, etkin, disabled, children }: {
   ad: string; etiket: string; simge: SimgeAdi; sinif?: string; etkin?: boolean; disabled?: boolean; children: (kapat: () => void) => ReactNode;
@@ -95,7 +102,7 @@ function Acilir({ ad, etiket, simge, sinif, etkin, disabled, children }: {
       <button type="button" className="tc-pyq-ok" aria-haspopup="menu" aria-expanded={acik} data-etkin={etkin ? '' : undefined} disabled={disabled} title={etiket} onClick={() => { setAcik(!acik); }}>
         <Simge ad={simge} boyut="k" /><span>{ad}</span><Simge ad="down" boyut="k" />
       </button>
-      {acik && <div className="tc-pyq-acilir-menu" role="menu" aria-label={etiket}>{children(() => { setAcik(false); })}</div>}
+      {acik && <div className="tc-pyq-acilir-menu" role="menu" aria-label={etiket} ref={solaYasla}>{children(() => { setAcik(false); })}</div>}
     </span>
   );
 }

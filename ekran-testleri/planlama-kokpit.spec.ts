@@ -2101,3 +2101,31 @@ test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görün�
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a2-mesai-sonra-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
 });
+
+// Araçlar menüsü düğmenin altında tam görünür: düğme şeridin solunda olsa da (şerit ikinci satıra indiğinde) menü sola taşıp kesilmez.
+test('Kokpit Araçlar menüsü: bütün maddeler ekranın içinde görünür, sola ve sağa taşmaz', async ({ page, ac }, bilgi) => {
+  await taslakSunucusu(page, (d) => ({ ...calisma(ILK, {}), w: d.w, locks: d.locks, plan: plan(ILK) }));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const menu = kokpit.getByRole('menu', { name: 'Araçlar' });
+  const icinde = async (): Promise<void> => {
+    await kokpit.getByRole('button', { name: 'Araçlar' }).click();
+    await expect(menu).toBeVisible();
+    const kok = (await kokpit.boundingBox())!, genislik = page.viewportSize()!.width;
+    for (const b of [menu, ...await menu.getByRole('menuitem').all(), ...await menu.getByRole('menuitemradio').all()]) {
+      const k = (await b.boundingBox())!;
+      expect(k.x).toBeGreaterThanOrEqual(Math.max(0, kok.x) - 1);
+      expect(k.x + k.width).toBeLessThanOrEqual(genislik + 1);
+    }
+  };
+  await icinde();
+  if (bilgi.project.name !== 'g1280') return;
+  // 1100 genişlikte Araçlar ikinci satırın başına iner (düğme şeridin sol kenarında).
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await icinde();
+  const dugme = (await kokpit.getByRole('button', { name: 'Araçlar' }).boundingBox())!, m = (await menu.boundingBox())!;
+  expect(Math.abs(m.x - dugme.x)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: '/tmp/tmiv2-ekran/araclar-menu-g1100.png' });
+});
