@@ -6,8 +6,9 @@ import type { KmVerisi } from '../veri.ts';
 
 export const dofTonu = (c: Dof): KmTon => (c.durum === KAPALI ? 'iyi' : dofGecikti(c) ? 'kotu' : 'uyari');
 
-// Parça kartının kimliği parça numarasından türer (uygulamadaki gibi): aynı numara aynı kartı günceller.
-export const parcaKimligi = (parcaNo: string): string => `p-${parcaAnahtari(parcaNo).replace(/[^A-Za-z0-9_\-.]/g, '_').slice(0, 120)}`;
+// Parça kartının kimliği parça numarasından türer (uygulamadaki gibi): aynı numara aynı kartı günceller. Kimlik saklandığı için
+// eşleme anahtarındaki harf katlamasını almaz: Türkçe büyük harf kalır, yoksa var olan kartın ve eklerinin kimliği değişirdi.
+export const parcaKimligi = (parcaNo: string): string => `p-${parcaNo.trim().toLocaleUpperCase('tr').replace(/[^A-Za-z0-9_\-.]/g, '_').slice(0, 120)}`;
 
 export const parcaAra = (liste: readonly ParcaOzeti[], sorgu: string): ParcaOzeti[] => {
   const q = sorgu.toLocaleLowerCase('tr');
@@ -43,8 +44,8 @@ export const bagParcaNo = (b: BelgeKaydi): string => b.bagli?.parcaNo ?? '';
 
 // Belgeler sekmesi: parçanın kendi belgeleri ve parça numarasıyla kayıtlara eklenmiş belgeler.
 export function parcaBelgeleri(veri: KmVerisi, p: ParcaOzeti): { kendi: BelgeKaydi[]; kayitlarda: BelgeKaydi[] } {
-  const kimlik = parcaKimligi(p.no);
-  const kendiMi = (b: BelgeKaydi) => b.bagli?.col === 'parca' && b.bagli.id === kimlik;
+  const kimlikler = new Set([parcaKimligi(p.no), ...p.kartlar]);
+  const kendiMi = (b: BelgeKaydi) => b.bagli?.col === 'parca' && kimlikler.has(b.bagli.id);
   const ilgili = veri.belge.filter((b) => b.bagli && (parcaAnahtari(bagParcaNo(b)) === p.k || kendiMi(b)));
   return { kendi: ilgili.filter(kendiMi), kayitlarda: ilgili.filter((b) => !kendiMi(b)) };
 }

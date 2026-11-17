@@ -160,10 +160,13 @@ export function lottanNcr(l: Lot): Partial<Ncr> {
   };
 }
 
-export const parcaAnahtari = (pn: unknown): string => String(pn ?? '').trim().toLocaleUpperCase('tr');
+// i, ı, I ve İ tek harfe (I) katlanır: Türkçe büyük harfte 'mil' MİL, 'MIL' MIL olur ve aynı parça iki satıra bölünürdü.
+export const parcaAnahtari = (pn: unknown): string => String(pn ?? '').trim().toLocaleUpperCase('tr').replaceAll('İ', 'I');
 
 export interface ParcaOzeti {
   k: string; no: string; ad: string; son: string; meta: ParcaKarti | null;
+  // Aynı anahtara düşen bütün kartların kimliği: eski kuralla iki yazım iki kart açmış olabilir, ekleri ikisinden de gelir.
+  kartlar: string[];
   cizim: Resim[]; insp: Muayene[]; ncr: Ncr[]; lot: Lot[]; spc: OlcumSerisi[]; capa: Dof[];
   acikNcr: Ncr[]; sonMuayene: { t?: string; s?: string; no?: string } | null; yarim: Muayene[]; balonlu: Resim[]; rev: string; tedarikci: string;
 }
@@ -185,7 +188,7 @@ export function parcaDizini(v: DizinGirdisi, uretilenler: readonly UretilenParca
     const k = parcaAnahtari(pn);
     let p = m.get(k);
     if (!p) {
-      p = { k, no: String(pn).trim(), ad: '', son: '', meta: null, cizim: [], insp: [], ncr: [], lot: [], spc: [], capa: [], acikNcr: [], sonMuayene: null, yarim: [], balonlu: [], rev: '', tedarikci: '' };
+      p = { k, no: String(pn).trim(), ad: '', son: '', meta: null, kartlar: [], cizim: [], insp: [], ncr: [], lot: [], spc: [], capa: [], acikNcr: [], sonMuayene: null, yarim: [], balonlu: [], rev: '', tedarikci: '' };
       m.set(k, p);
     }
     if (ad && !p.ad) p.ad = String(ad);
@@ -203,10 +206,13 @@ export function parcaDizini(v: DizinGirdisi, uretilenler: readonly UretilenParca
   });
   v.parca.forEach((x) => {
     const p = dokun(x.parcaNo, x.ad, x.guncelleme ? x.guncelleme.slice(0, 10) : '');
-    if (p) {
-      p.meta = x;
-      if (x.ad) p.ad = x.ad;
-    }
+    if (!p) return;
+    if (x._id) p.kartlar.push(x._id);
+    // İlk kart kalır (veri sırası): ikincisi satırın bilgisini ezmez; numara etiketi kartın yazımıdır.
+    if (p.meta) return;
+    p.meta = x;
+    p.no = String(x.parcaNo).trim();
+    if (x.ad) p.ad = x.ad;
   });
   const bagliKartlar = new Set([...m.values()].flatMap((p) => (p.meta?.malzemeNo === undefined ? [] : [p.meta.malzemeNo])));
   for (const u of uretilenler) {

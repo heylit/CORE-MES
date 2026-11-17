@@ -267,7 +267,7 @@ function Belgeler({ parca: p, kayitlarda, veri, yetki }: { parca: ParcaOzeti; ka
       <p className="tc-km1-soluk">
         Parçaya ait malzeme, özel proses ve test belgeleri. Lot, muayene ve NCR kayıtlarına eklenen belgeler ve fotoğraflar da burada listelenir.
       </p>
-      <Ekler veri={veri} yetki={yetki} kol="parca" kimlik={parcaKimligi(p.no)} no={p.no} parcaNo={p.no} tur="Malzeme sertifikası" />
+      <Ekler veri={veri} yetki={yetki} kol="parca" kimlik={p.meta?._id || parcaKimligi(p.no)} no={p.no} parcaNo={p.no} tur="Malzeme sertifikası" />
       {kayitlarda.length > 0 && (
         <>
           <h3 className="tc-km1-ara-baslik">Kayıtlara eklenmiş belgeler</h3>
