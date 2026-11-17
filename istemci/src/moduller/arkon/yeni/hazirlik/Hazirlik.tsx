@@ -41,6 +41,8 @@ import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } fr
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import { GeriCekPenceresi, TakipTablosu } from './TakipTablosu.tsx';
+import { BenzerPaketPenceresi, TopluBenzerPenceresi, TopluGonderPenceresi, topluDoldurmaPlani, type GonderimIlerlemesi, type TopluDoldurmaSatiri } from './TopluPencereler.tsx';
+import { benzerKopya, enIyiAday, gelecekler, gidecekMi, gonderimHali, icerikDolu, topluGonderilebilir, varsayilanKopya, type KopyaAlani } from './toplu.ts';
 import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
 import './hazirlik.css';
 
@@ -109,6 +111,7 @@ async function hazirVeri(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unkn
   }
   return hazir;
 }
+const paketAdiKisa = (p: Pkg) => `${p.no} · ${p.op || 'Operasyon girilmedi'}`;
 // Adımın "zorunlu" alanı kayıtta eskisi gibi true/false yazılır (modelde sayı tiplidir, okuyan ekranlar doğruluğuna bakar).
 const zorunlu = (v: boolean): Step['r'] => v as unknown as Step['r'];
 
@@ -173,6 +176,13 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [yayinda, yayindaYaz] = useState(false);
   const [geriSor, geriSorYaz] = useState<{ l: readonly Pkg[]; toplu: boolean } | null>(null);
   const [geriMesgul, geriMesgulYaz] = useState(false);
+  const [gonderSor, gonderSorYaz] = useState<readonly Pkg[] | null>(null);
+  const [gonderIlerleme, gonderIlerlemeYaz] = useState<GonderimIlerlemesi | null>(null);
+  const gonderDur = useRef(false);
+  const [benzerAcik, benzerAcikYaz] = useState(false);
+  const [benzerPlan, benzerPlanYaz] = useState<readonly TopluDoldurmaSatiri[] | null>(null);
+  const [benzerMesgul, benzerMesgulYaz] = useState(false);
+  const [seritGizli, seritGizliYaz] = useState<ReadonlySet<string>>(() => new Set());
   const dosyaRef = useRef<HTMLInputElement | null>(null);
   const kayitZamani = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seciliRef = useRef<Pkg | null>(null);
@@ -342,39 +352,44 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     const planYok = planYokUyarisiGerekir(p);
     if (planYok && !planYokOnayli) { planYokSorYaz(true); return; }
     if (kayitZamani.current) { clearTimeout(kayitZamani.current); kayitZamani.current = null; }
-    const kisi = depo.Auth.current();
-    const ben = (kisi && kisi.name) || '';
     if (onayGerekir(p, ayarlar.kurallar)) {
       if (onayBekliyor(p)) { soyle('Kalite onayı bekleniyor', 'hold'); return; }
-      const n: Pkg = { ...p, apReq: { at: Date.now(), by: ben, version: (p.version || 0) + 1 } };
-      await depo.DB.put('pkgs', n); seciliYaz(n); await yenile();
-      depo.Bus.send({ type: 'pkg-approval', id: n.id, no: n.no });
-      soyle('Kaliteye onaya gönderildi · onaylanınca terminale gönderebilirsin', 'done'); return;
+      await kaliteyeYolla(p);
+      soyle('Kaliteye onaya gönderildi · onaylanınca terminale gönderilebilir', 'done'); return;
     }
     // Kart #1257: canlı planda olmayan iş onaysız gönderilmez; pencere nedeni ve plan bağlantısını gösterir.
     const uyari = planOnayli ? null : gonderimUyarisi(p);
     if (uyari) { gonderOnayYaz({ ...uyari, planYokOnayli }); return; }
     yayindaYaz(true);
-    try {
-      const n: Pkg = { ...p, status: p.status === 'draft' ? 'published' : p.status, version: (p.version || 0) + 1, dirty: false, publishedAt: Date.now(), updatedAt: Date.now(), apReq: null };
-      // Okuma ayarı pakete sabitlenir (eskisi gibi): terminal aynı ayarla açar, hazır verinin anahtarı tutar.
-      n.readCfg = (await import('../../../../ortak/cizim/kurallar.ts')).ayarDuzelt(p.readCfg);
-      if (n.files.some((f) => f.kind === 'model' || f.kind === 'pdf')) { soyle('Resim ve 3B model operatör için hazırlanıyor…', 'done'); n.derived = await hazirVeri(depo, n); }
-      // Ara onay (Terminal kural 1/5): sonraki değişiklik bu yayına göre bulunur.
-      n.yayinImza = paketImzasi(n);
-      // Kişi (`by`) ve onayın anı (`planYokAt`) yeni geçmiş satırında sunucuda damgalanır; `planYok` uyarının onaylandığını kayda geçirir (1307 b).
-      const gecmis: NonNullable<Pkg['history']>[number] = Object.assign(
-        { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: p.approval && p.approval.ok ? p.approval.by : null, st: n.machine }, planYok ? { planYok: true } : {},
-      );
-      n.history = [...(p.history || []), gecmis].slice(-60);
-      await depo.DB.put('pkgs', n); seciliYaz(n); await yenile();
-      depo.Bus.send({ type: 'pkg', id: n.id, no: n.no, rev: n.rev, version: n.version, machine: n.machine });
-      let msg = n.no + ' · Rev ' + n.rev + ' operatöre gönderildi';
-      if (klasor && Folder) {
-        try { if (await Folder.ready(klasor, true)) { await Folder.write(klasor, await depo.coz(n)); msg += ' · klasöre yazıldı'; } } catch { msg += ' · klasöre yazılamadı'; }
-      }
-      soyle(msg, 'run');
-    } finally { yayindaYaz(false); }
+    try { soyle(await yayinYaz(p, planYok, () => soyle('Resim ve 3B model operatör için hazırlanıyor…', 'done')), 'run'); } finally { yayindaYaz(false); }
+  };
+  const benAdi = () => { const kisi = depo.Auth.current(); return (kisi && kisi.name) || ''; };
+  const kaliteyeYolla = async (x: Pkg) => {
+    const n: Pkg = { ...x, apReq: { at: Date.now(), by: benAdi(), version: (x.version || 0) + 1 } };
+    await depo.DB.put('pkgs', n); seciliYaz((c) => (c && c.id === n.id ? n : c)); await yenile();
+    depo.Bus.send({ type: 'pkg-approval', id: n.id, no: n.no });
+  };
+  // Tek paket ve toplu gönderim (3362-1) aynı yazmayı yapar; kapıları çağıran geçirir. Dönen metin sonuç bildirimidir.
+  const yayinYaz = async (x: Pkg, planYok: boolean, hazirlaniyor: () => void): Promise<string> => {
+    const ben = benAdi();
+    const n: Pkg = { ...x, status: x.status === 'draft' ? 'published' : x.status, version: (x.version || 0) + 1, dirty: false, publishedAt: Date.now(), updatedAt: Date.now(), apReq: null };
+    // Okuma ayarı pakete sabitlenir (eskisi gibi): terminal aynı ayarla açar, hazır verinin anahtarı tutar.
+    n.readCfg = (await import('../../../../ortak/cizim/kurallar.ts')).ayarDuzelt(x.readCfg);
+    if (n.files.some((f) => f.kind === 'model' || f.kind === 'pdf')) { hazirlaniyor(); n.derived = await hazirVeri(depo, n); }
+    // Ara onay (Terminal kural 1/5): sonraki değişiklik bu yayına göre bulunur.
+    n.yayinImza = paketImzasi(n);
+    // Kişi (`by`) ve onayın anı (`planYokAt`) yeni geçmiş satırında sunucuda damgalanır; `planYok` uyarının onaylandığını kayda geçirir (1307 b).
+    const gecmis: NonNullable<Pkg['history']>[number] = Object.assign(
+      { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: x.approval && x.approval.ok ? x.approval.by : null, st: n.machine }, planYok ? { planYok: true } : {},
+    );
+    n.history = [...(x.history || []), gecmis].slice(-60);
+    await depo.DB.put('pkgs', n); seciliYaz((c) => (c && c.id === n.id ? n : c)); await yenile();
+    depo.Bus.send({ type: 'pkg', id: n.id, no: n.no, rev: n.rev, version: n.version, machine: n.machine });
+    let msg = n.no + ' · Rev ' + n.rev + ' operatöre gönderildi';
+    if (klasor && Folder) {
+      try { if (await Folder.ready(klasor, true)) { await Folder.write(klasor, await depo.coz(n)); msg += ' · klasöre yazıldı'; } } catch { msg += ' · klasöre yazılamadı'; }
+    }
+    return msg;
   };
   // Ara onay kararı içeriği değiştirmez: `updatedAt` ilerlemez (kalite onayı geçerli kalır). Kişi, an ve o ana kadarki numuneler sunucuda damgalanır.
   const yenidenKarar = async (on: boolean) => {
@@ -405,6 +420,60 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     const metin = l.length === 1 && n === 1 ? 'Operatörden geri çekildi' : `${String(n)} iş geri çekildi`;
     const ek = (atlanan ? ` · ${String(atlanan)} iş bu arada başladığı için atlandı` : '') + (hata ? ` · ${String(hata)} iş çekilemedi, sayfayı yenileyip tekrar dene` : '');
     soyle(metin + ek, hata ? 'stop' : 'hold');
+  };
+  // 3362-1: seçilenler sırayla tek paketteki yazmayla gider. Her paket yazmadan hemen önce yeniden okunur; bu arada değişen, başlayan
+  // ya da hâli değişen (yeni uyarı, kalite onayı) paket atlanır. Uyarı onayı paket ve uyarı başınadır (Risk K1).
+  const topluGonder = async (l: readonly Pkg[], onaylar: ReadonlySet<string>) => {
+    if (!yayinlar) { yetkisiz(); return; }
+    await bekleyeniYaz();
+    gonderDur.current = false;
+    let terminal = 0, kalite = 0, atlanan = 0, hata = 0;
+    for (const [i, x] of l.entries()) {
+      if (gonderDur.current) { atlanan += l.length - i; break; }
+      const metin = paketAdiKisa(x);
+      gonderIlerlemeYaz({ n: i, toplam: l.length, metin });
+      const taze = (await depo.DB.get('pkgs', x.id).catch(() => undefined)) as Pkg | undefined;
+      const r = (await depo.DB.get('results', x.id).catch(() => undefined)) as Result | undefined;
+      const h = taze ? gonderimHali(taze, tesis, ayarlar.kurallar) : null;
+      if (!taze || !h || taze.updatedAt !== x.updatedAt || !topluGonderilebilir(taze, r) || !gidecekMi(taze.id, h, onaylar)) { atlanan++; continue; }
+      try {
+        if (h.tur === 'kalite') { await kaliteyeYolla(taze); kalite++; }
+        else {
+          await yayinYaz(taze, h.tur === 'terminal' && h.uyarilar.some((u) => u.tur === 'planYok'), () => gonderIlerlemeYaz({ n: i, toplam: l.length, metin: metin + ' · resim ve 3B model operatör için hazırlanıyor…' }));
+          terminal++;
+        }
+      } catch { hata++; }
+    }
+    gonderIlerlemeYaz(null); gonderSorYaz(null);
+    const parca = [terminal ? `${String(terminal)} iş terminale gönderildi` : '', kalite ? `${String(kalite)} iş kaliteye onaya gitti` : '',
+      atlanan ? `${String(atlanan)} iş atlandı` : '', hata ? `${String(hata)} iş gönderilemedi, sayfayı yenileyip tekrar deneyin` : ''].filter(Boolean);
+    soyle(parca.join(' · ') || 'Gönderilen iş yok', hata ? 'stop' : terminal || kalite ? 'run' : 'hold');
+  };
+  // 3362-2: seçili pakete benzer paketin alanları; kaynak tam hâliyle (dosyalarıyla) okunur. Geri al yalnız taslakta anlamlıdır: paket gönderilmez.
+  const benzerUygula = async (kaynakOzet: Pkg, alanlar: ReadonlySet<KopyaAlani>) => {
+    if (!p || !duzenler) { yetkisiz(); return; }
+    const kaynak = ((await depo.DB.get('pkgs', kaynakOzet.id).catch(() => undefined)) as Pkg | undefined) ?? kaynakOzet;
+    const kopya = benzerKopya(p, kaynak, alanlar);
+    const geri = Object.fromEntries(Object.keys(kopya).map((k) => [k, p[k]])) as Partial<Pkg>;
+    yama(kopya);
+    bildir('bilgi', `${gelecekler(kopya).join(', ')} ${kaynak.no} paketinden alındı`, { eylem: { etiket: 'Geri al', yap: () => yama(geri) } });
+  };
+  const topluDoldur = async (l: readonly TopluDoldurmaSatiri[]) => {
+    if (!duzenler) { yetkisiz(); return; }
+    await bekleyeniYaz();
+    benzerMesgulYaz(true);
+    let n = 0, atlanan = 0;
+    try {
+      for (const { hedef, kaynak: k } of l) {
+        const taze = (await depo.DB.get('pkgs', hedef.id).catch(() => undefined)) as Pkg | undefined;
+        const kaynak = k && ((await depo.DB.get('pkgs', k.id).catch(() => undefined)) as Pkg | undefined);
+        if (!taze || !kaynak || taze.status !== 'draft' || icerikDolu(taze)) { atlanan++; continue; }
+        const g: Pkg = { ...taze, ...benzerKopya(taze, kaynak, varsayilanKopya(taze, kaynak)), dirty: true, updatedAt: Date.now() };
+        try { await depo.DB.put('pkgs', g); n++; seciliYaz((c) => (c && c.id === g.id ? g : c)); } catch { atlanan++; }
+      }
+      await yenile();
+    } finally { benzerMesgulYaz(false); benzerPlanYaz(null); }
+    soyle(`${String(n)} taslak benzer paketten dolduruldu${atlanan ? ` · ${String(atlanan)} atlandı` : ''}`, n ? 'run' : 'hold');
   };
   const geriCekOnayla = async (l: readonly Pkg[]) => {
     geriMesgulYaz(true);
@@ -499,6 +568,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const pdfF = p ? p.files.find((f) => f.kind === 'pdf') : undefined;
   const mdlF = p ? p.files.find((f) => f.kind === 'model') : undefined;
   const tmiKilit = !!p && tmiIsEmri(p);
+  // 3362-2: boş taslakta öneri şeridi (aday varsa); "Gizle" yalnız bu oturumda.
+  const seritAday = p && duzenler && p.status === 'draft' && !icerikDolu(p) && !seritGizli.has(p.id) ? enIyiAday(p, paketler)?.p ?? null : null;
   const kilitIpucu = tmiKilit ? TMI_KILIT : undefined;
   const istasyon = p ? istasyonBul(tesis, p.machine) : null;
   const sunucuda = durum.mode === 'server';
@@ -592,6 +663,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             <TakipTablosu
               paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
               seciliId={duzenAcik && p ? p.id : null} ac={(x) => { void sec(x); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
+              duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))}
             />
           ) : (
           <div className="tc-ay2-paketler">
@@ -623,6 +695,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                 <p>{p.part || 'Parça adı girilmedi'} · {p.op} · {p.machine}</p>
               </div>
               <div className="tc-ay2-emir-sayilar">
+                {duzenler && p.status === 'draft' ? <Dugme tur="ikincil" simge="layers" onClick={() => benzerAcikYaz(true)}>Benzer paketten al</Dugme> : null}
                 <Dugme tur="ikincil" simge="eye" onClick={() => { void onizle(); }}>Operatör gözüyle</Dugme>
                 <div><span className="tc-ay2-ust-yazi">Hedef</span><b>{sayi(p.target || 0)}</b></div>
                 <div><span className="tc-ay2-ust-yazi">Kontrol</span><b>{p.plan.length}</b></div>
@@ -643,6 +716,17 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             </ol>
             <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub'}>
               {!duzenler && sekme !== 'pub' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
+              {sekme === 'info' && seritAday ? (
+                <div className="tc-ay2-benzer-serit" role="note">
+                  <Simge ad="layers" />
+                  <div>
+                    <b>Bu paket boş. Benzer paket var:</b> {seritAday.partNo || seritAday.part} · Rev {seritAday.rev} · {seritAday.op}
+                    <small>{gelecekler(benzerKopya(p, seritAday, varsayilanKopya(p, seritAday))).join(', ')}{seritAday.rev !== p.rev ? ' · revizyon farklı olduğu için resim ve kontrol planı alınmaz' : ''}</small>
+                  </div>
+                  <Dugme tur="birincil" simge="layers" onClick={() => benzerAcikYaz(true)}>Benzer paketten al</Dugme>
+                  <Dugme tur="ikincil" onClick={() => seritGizliYaz((o) => new Set(o).add(p.id))}>Gizle</Dugme>
+                </div>
+              ) : null}
               {sekme === 'info' ? (
                 <div className="tc-ay2-form">
                   <Alan etiket="Operasyon tipi · operatör ekranı buna göre şekillenir" genis={3}><TurSecici deger={tur} degistir={turDegistir} /></Alan>
@@ -994,6 +1078,14 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
           </section>
         ) : null}
       </div>
+      {gonderSor ? (
+        <TopluGonderPenceresi
+          paketler={gonderSor} tesis={tesis} kurallar={ayarlar.kurallar} ilerleme={gonderIlerleme} kapat={() => gonderSorYaz(null)}
+          gonder={(l, o) => { void topluGonder(l, o); }} durdur={() => { gonderDur.current = true; }}
+        />
+      ) : null}
+      <BenzerPaketPenceresi hedef={benzerAcik ? p : null} paketler={paketler} kapat={() => benzerAcikYaz(false)} uygula={(k, a) => { void benzerUygula(k, a); }} />
+      <TopluBenzerPenceresi plan={benzerPlan} mesgul={benzerMesgul} kapat={() => benzerPlanYaz(null)} uygula={(l) => { void topluDoldur(l); }} />
       <GeriCekPenceresi paketler={geriSor ? geriSor.l : null} sonuclar={sonuclar} mesgul={geriMesgul} kapat={() => geriSorYaz(null)} onayla={(l) => { void geriCekOnayla(l); }} />
       {gonderOnay && p ? (
         <PlanOnayPenceresi uyari={gonderOnay} kapat={() => gonderOnayYaz(null)} gonder={() => { gonderOnayYaz(null); void yayinla(true, gonderOnay.planYokOnayli); }} plana={() => { tmiyeGit('plan'); gonderOnayYaz(null); }} />
