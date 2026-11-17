@@ -81,6 +81,13 @@ describe('karantina ve parça dizini', () => {
     expect(d.map((p) => [p.no, p.meta?.malzemeNo])).toEqual([['dnm-2', 8], ['DNM-3', 9], ['ESKI-NO', 7]]);
   });
 
+  it('parça dizini i, ı, I ve İ yazımlarını tek satırda toplar', () => {
+    const d = parcaDizini({ cizim: [], ncr: [], lot: [], spc: [], capa: [], parca: [], insp: [
+      { _id: 'a', parcaNo: 'orn-mil-01', tarih: '2026-10-01' }, { _id: 'b', parcaNo: 'ORN-MIL-01', tarih: '2026-10-02' }, { _id: 'c', parcaNo: 'Orn-Mıl-01', tarih: '2026-10-03' },
+    ] });
+    expect(d.map((p) => [p.k, p.insp.length])).toEqual([['ORN-MIL-01', 3]]);
+  });
+
   it('parça dizini kayıtlardan türer, durum en ağırdan', () => {
     const d = parcaDizini({ cizim: [], insp, ncr, lot, spc: [], capa: [{ _id: 'c1', ncrRef: 'n1' }], parca: [{ _id: 'p', parcaNo: 'p1', ad: 'Mil' }] });
     const p1 = d.find((p) => p.k === 'P1')!;

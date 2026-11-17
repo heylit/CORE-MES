@@ -160,7 +160,8 @@ export function lottanNcr(l: Lot): Partial<Ncr> {
   };
 }
 
-export const parcaAnahtari = (pn: unknown): string => String(pn ?? '').trim().toLocaleUpperCase('tr');
+// i, ı, I ve İ tek harfe (I) katlanır: Türkçe büyük harfte 'mil' MİL, 'MIL' MIL olur ve aynı parça iki satıra bölünürdü.
+export const parcaAnahtari = (pn: unknown): string => String(pn ?? '').trim().toLocaleUpperCase('tr').replaceAll('İ', 'I');
 
 export interface ParcaOzeti {
   k: string; no: string; ad: string; son: string; meta: ParcaKarti | null;
