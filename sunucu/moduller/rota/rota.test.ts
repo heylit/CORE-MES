@@ -1,3 +1,4 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
@@ -2065,7 +2066,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
 
       // Rotadaki adımla aynı OP numarasında makine iş emri açılır; terminal ayar, başlat ve sayım geçmiş anlarla yazılır, ilk parça
       // onayı ve bitirme şimdidir (hazırlık 20 dk, 10 sağlam 30 dk'da: net birim 3 dk). Girdi verilmez: stok başlatmayı durdurmasın.
-      async function olculmusEmir(urun: number, rev: number, opNo: number, makineId: number): Promise<{ emirId: number; isEmriId: number }> {
+      async function olculmusEmir(
+        urun: number, rev: number, opNo: number, makineId: number, acilinca?: (db: Db, isEmriId: number) => Promise<unknown>,
+      ): Promise<{ emirId: number; isEmriId: number }> {
         const simdi = Date.now();
         const an = (dk: number) => new Date(simdi + dk * 60_000).toISOString();
         return vt().tx(async (db) => {
@@ -2078,6 +2081,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
               terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
             }],
           });
+          if (acilinca) await acilinca(db, isEmriIdleri[0]!);
           await emirAyar(db, operator!, emirId, an(-50));
           await emirBaslat(db, operator!, emirId, undefined, an(-30));
           await emirSayim(db, operator!, emirId, { tur: 'saglam', adet: 10 }, { an: an(-1) });
@@ -2109,6 +2113,22 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         await vt().tx((db) => emirBittiYansit(db, { uretimEmriId: emirId, saglamAdet: 10, kisiId: operatorId }));
         const adet = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_gerceklesen_sure WHERE malzeme_id = $1', [urun]));
         assert.equal(adet?.n, 2);
+      });
+
+      // 3250-2 Test T1: iş emrinin operasyonu numara defterindeki aynı numaradan ayrışınca (rota yeniden dizildi) ölçüm iş emrinin
+      // operasyonuna yazılır; defterden çözen eski davranış OP 10'un defterdeki operasyonuna yazardı.
+      test('3250-2 T1: ölçüm iş emrinin operasyon kimliğine yazılır, aynı numaranın defterdeki operasyonuna değil', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim(), ayrikAdim()]);
+        const defter = new Map((await vt().tx((db) => db.sorgu<{ opNo: number; id: number }>(
+          'SELECT op_no AS "opNo", id FROM rota_op_numarasi WHERE malzeme_id = $1', [urun]))).map((x) => [x.opNo, x.id]));
+        const oteki = defter.get(20)!;
+        const { isEmriId } = await olculmusEmir(urun, rev, 10, makineA, (db, ie) =>
+          db.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [ie, oteki]));
+        const satirlar = await vt().tx((db) => db.sorgu<{ operasyonId: number; opNo: number }>(
+          'SELECT operasyon_id AS "operasyonId", op_no AS "opNo" FROM rota_gerceklesen_sure WHERE is_emri_id = $1 ORDER BY id', [isEmriId]));
+        assert.equal(satirlar.length, 2);
+        assert.ok(satirlar.every((x) => x.operasyonId === oteki && x.opNo === 20), JSON.stringify(satirlar));
       });
 
       test('RT-77, RT-78, RT-79: kabul yürürlükteki revizyondan taslak açar, teorik süreye yazar; plan yürürlüğe kadar eskiyle çalışır, yürürlükte ölçüm boşalır', async () => {
