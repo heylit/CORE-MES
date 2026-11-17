@@ -92,4 +92,5 @@ export {
 
 export {
   type KullanilabilirStokHam, kullanilabilirStoklar, type ArtikParcaHam, acikArtiklar, artikParcalar, artikParcaEkle, artikParcaKapat, artikParcaVarMi,
+  type AyirmaKaynagiHam, acikAyirmaKaynaklari, ayirmaKilidi, ayirmaIstegiEkle, type AyirmaIstegiHam, ayirmaIstekleri, ayirmaIstegiKilitle, ayirmaIstegiIlerlet, ayirmaIstegiIptal,
 } from './sorgular/kontrol/sorgular.ts';

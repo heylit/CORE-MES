@@ -246,3 +246,35 @@ export function artikPayi(form: OlculuForm, olcu: Readonly<Record<string, number
   }
   return null;
 }
+
+// 3398-2: n parça için stok biriminde ayrılacak miktar (parcaSayisi'nın tersi). Adet ve levhada bütün çubuk ya da levha sayılır; m ve kg'da
+// bütün çubuklar ve son çubuktan kesilen boy (parça + kesme). Bilinmeyen birim ya da ölçüde null.
+export function parcaIcinStok(form: OlculuForm, o: Readonly<Record<string, number>>, n: number,
+  p: { parcaBoyu: number | null; parcaEni: number | null; kesmeMm: number }, birim: string | null, yogunluk: number | null): number | null {
+  const f = FORM_OLCULERI[form];
+  if (f.boy === null) return birim === 'adet' ? n : null;
+  if (p.parcaBoyu === null) return null;
+  const L = o[f.boy];
+  if (f.en !== null) {
+    const W = o[f.en];
+    if (L === undefined || W === undefined || p.parcaEni === null || (birim !== 'adet' && birim !== 'levha')) return null;
+    const plakaBasi = levhadanParca(W, L, p.parcaEni, p.parcaBoyu, p.kesmeMm);
+    return plakaBasi > 0 ? Math.ceil(n / plakaBasi) : null;
+  }
+  const cubukBasi = L === undefined ? 0 : boydanParca(L, p.parcaBoyu, p.kesmeMm);
+  if (birim === 'adet') return cubukBasi > 0 ? Math.ceil(n / cubukBasi) : null;
+  let boyMm: number;
+  if (L === undefined || cubukBasi === 0) boyMm = n * (p.parcaBoyu + p.kesmeMm);
+  else {
+    const tam = Math.floor(n / cubukBasi);
+    const kalan = n - tam * cubukBasi;
+    boyMm = tam * L + (kalan > 0 ? Math.min(L, kalan * (p.parcaBoyu + p.kesmeMm)) : 0);
+  }
+  if (birim === 'm') return boyMm / 1000;
+  if (birim === 'kg') {
+    const alan = kesitAlani(form, o);
+    if (alan === null || yogunluk === null || yogunluk <= 0) return null;
+    return alan * boyMm * yogunluk * 1e-6;
+  }
+  return null;
+}

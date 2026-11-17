@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { bulunamadi, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
@@ -173,3 +174,20 @@ export async function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: read
 }
 // 3398-2: Stok kontrol sayfası teklif istenmeden önceki (taslak) talep kalemlerini buradan okur; yetki denetlemez, fiyat yok.
 export { stokKontroluKalemleriOku as stokKontroluKalemleri, type StokKontroluKalemiOkuma as StokKontroluKalemi } from './sorgular.ts';
+// 3398-2 a: stok modülü "stoktan karşıla" ve iptalinde kendi işleminin içinde çağırır; yetkiyi stok ucu denetler. Yalnız taslak talepte,
+// yalın (Logo'ya gitmemiş, iş emrine ya da kalıba bağlı olmayan, teklif almamış) kalemde.
+export async function kalemiStoktanKarsila(db: Db, talepId: string, kalemId: string, miktar: string): Promise<{ satir: unknown; birim: string; malzemeNo: number; uretimEmriId: number | null }> {
+  const k = await sorgu.stoktanKalemKilitle(db, talepId, kalemId);
+  if (k === null) throw bulunamadi('Talep kalemi bulunamadı.');
+  if (k.durum !== 'taslak') throw gecersiz('Teklif istenmiş talepte stoktan karşılanamaz.');
+  if (!k.karsilanabilir) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
+  if (k.malzemeNo === null || k.miktar === null) throw gecersiz('Kalemin malzeme kartı ya da miktarı yok.');
+  if (Number(miktar) > Number(k.miktar) + 1e-9) throw dogrulama(`Kalemde ${servis.sade(k.miktar)} ${k.birim} var; daha fazlası karşılanamaz.`, 'miktar');
+  return { satir: await sorgu.stoktanKalemAzalt(db, talepId, kalemId, miktar), birim: k.birim, malzemeNo: k.malzemeNo, uretimEmriId: k.uretimEmriId };
+}
+// Geri ekleyemezse (talep yok, teklif aşamasına geçti ya da kalem çıkarıldı) false döner; istek yine iptal edilir.
+export async function kalemiStoktanGeriAl(db: Db, talepId: string, kalemId: string, miktar: string, satir: unknown): Promise<boolean> {
+  const t = await sorgu.stoktanTalepKilitle(db, talepId);
+  if (t === null || t.durum !== 'taslak') return false;
+  return sorgu.stoktanKalemGeriAl(db, talepId, kalemId, miktar, satir);
+}

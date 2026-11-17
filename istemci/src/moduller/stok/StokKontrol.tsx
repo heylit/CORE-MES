@@ -1,11 +1,14 @@
 // Stok kontrol (3398, surum 4 a): satın alma ve planlamanın ortak sayfası. Ölçüyle arama aynı form ve kalitede, istenenden küçük
 // olmayan ve seçilen fazla pay içindeki stoğu ve artık parçaları en az fireden sıralar; kesimden kalan parça burada kaydedilir.
-// İhtiyaç kuyruğu (satın alma kalemleri, planlanan emirler, satış teklifleri) sonraki dilimlerde bu sayfaya eklenir.
+// Talepler sekmesi teklif öncesi satın alma kalemlerini stokla karşılaştırır; "Stoktan karşıla" depoya ayırma isteği açar (3398-2 a).
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ARTIK_HURDA_ESIGI_MM, FORM_ADLARI, FORM_OLCULERI, OLCU_ETIKETLERI, OLCULU_FORMLAR, VARSAYILAN_KESME_MM, type OlculuForm } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
-import type { ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, IhtiyacDurumu, IhtiyaclarCevabi, IhtiyacSatiri, OlcuAdayi, OlcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import type {
+  ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, AyirmaCevabi, AyirmaDurumu, AyirmaIstegiSatiri, AyirmaIstekleriCevabi, IhtiyacDurumu,
+  IhtiyaclarCevabi, IhtiyacSatiri, OlcuAdayi, OlcuAramaCevabi, StoktanKarsilaGovdesi,
+} from '#paylasilan/sozlesme/stok-kontrol.ts';
 import {
   Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, MalzemeSecici, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type SeciliKayit, type Sutun,
 } from '../../ortak/arayuz/index.ts';
@@ -16,7 +19,7 @@ import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem } from './ortak.tsx';
 import './stok.css';
 
-type Sekme = 'ihtiyac' | 'ara' | 'artik';
+type Sekme = 'ihtiyac' | 'ayirma' | 'ara' | 'artik';
 
 // Fazla pay seçenekleri (surum 4 madde 11); değer sorgu parametresidir.
 const PAYLAR = [
@@ -228,8 +231,43 @@ const IHTIYAC_ROZETI: Record<IhtiyacDurumu, { ton: 'tamam' | 'uyari' | 'hata' | 
   bilinmiyor: { ton: 'pasif', metin: 'Hesaplanamadı' },
 };
 
-// 3398-2: teklif istenmeden önceki satın alma kalemleri; karar ve ayırma sonraki adımda.
+// 3398-2 a: miktar karşılanabilenden fazla olamaz; talep kalemi bu kadar azalır, depo ayırır.
+function KarsilaPenceresi({ satir, kapat }: { satir: IhtiyacSatiri | null; kapat: () => void }) {
+  const qc = useQueryClient();
+  const { bildir } = useBildirim();
+  const [miktar, miktarYaz] = useState('');
+  const [acilan, acilanYaz] = useState<IhtiyacSatiri | null>(null);
+  if (satir !== acilan) {
+    acilanYaz(satir);
+    miktarYaz(satir === null || satir.karsilanan === null ? '' : String(Math.min(satir.karsilanan, Number(satir.miktar))).replace('.', ','));
+  }
+  const gonder = useMutation({
+    mutationFn: (g: StoktanKarsilaGovdesi) => korumaliPost<AyirmaCevabi>('/stok/kontrol-ihtiyaclari/karsila', g),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', 'Depoya ayırma isteği gitti; talep miktarı azaldı.'); kapat(); },
+  });
+  const sayi = Number(miktar.replace(',', '.'));
+  const ust = satir?.karsilanan ?? 0;
+  const hazir = satir !== null && Number.isFinite(sayi) && sayi > 0 && sayi <= ust + 1e-9;
+  return (
+    <Pencere acik={satir !== null} kapat={kapat} baslik="Stoktan karşıla"
+      alt={<><Dugme onClick={kapat}>Vazgeç</Dugme><Dugme tur="birincil" simge="cart" disabled={!hazir} yukleniyor={gonder.isPending}
+        onClick={() => { if (hazir) gonder.mutate({ talepId: satir.talepId, kalemId: satir.kalemId, miktar: String(sayi) }); }}>Depodan iste</Dugme></>}>
+      {satir !== null && (
+        <div className="tc-stok-form">
+          <p>{`${satir.talepNo} · ${satir.kod} · istenen ${miktarMetni(satir.miktar)} ${satir.birim}, stoktan en çok ${miktarMetni(String(ust))} ${satir.birim}.`}</p>
+          {satir.enIyi !== null && <p>{`En uygun: ${satir.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${satir.enIyi.kod} · ${olcuMetni(satir.enIyi.form, satir.enIyi.olcu)} · ${satir.enIyi.konumlar.join(', ')}`}</p>}
+          <Girdi etiket={`Stoktan karşılanacak (${satir.birim})`} inputMode="decimal" value={miktar} onChange={(e) => miktarYaz(e.target.value)} required
+            ipucu="Talep kalemi bu kadar azalır; tamamı karşılanırsa kalem teklife gitmez. İptalde miktar geri gelir." />
+          {gonder.isError && <p role="alert">{hataMetni(gonder.error)}</p>}
+        </div>
+      )}
+    </Pencere>
+  );
+}
+
 function Ihtiyaclar() {
+  const karsilayabilir = useIslem('satin-alma.yaz');
+  const [secili, seciliYaz] = useState<IhtiyacSatiri | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.liste('kontrol-ihtiyaclari', {}), queryFn: () => api.get<IhtiyaclarCevabi>('/stok/kontrol-ihtiyaclari') });
   const sutunlar: Sutun<IhtiyacSatiri>[] = [
     { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (x) => x.talepNo },
@@ -241,6 +279,10 @@ function Ihtiyaclar() {
     { anahtar: 'aday', baslik: 'En uygun', kes: true, hucre: (x) => (x.enIyi === null ? '—'
       : `${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod} · ${olcuMetni(x.enIyi.form, x.enIyi.olcu)} · ${x.enIyi.konumlar.join(', ')}`) },
     { anahtar: 'tarih', baslik: 'İhtiyaç', hucre: (x) => x.ihtiyacTarihi ?? '—' },
+    ...(karsilayabilir ? [{
+      anahtar: 'eylem', baslik: 'İşlem', hucre: (x: IhtiyacSatiri) => (x.karsilanabilir && x.karsilanan !== null && x.karsilanan > 0
+        ? <Dugme simge="cart" onClick={() => seciliYaz(x)}>Stoktan karşıla</Dugme> : '—'), csv: () => '',
+    } satisfies Sutun<IhtiyacSatiri>] : []),
   ];
   return (
     <Kart baslik="Teklif öncesi talepler" simge="list">
@@ -248,6 +290,70 @@ function Ihtiyaclar() {
         : liste.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />
           : <Tablo etiket="Teklif öncesi talepler" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(x) => `${x.talepId}-${x.kalemId}`}
               bosMesaj="Teklif istenmemiş talep kalemi yok." />}
+      {karsilayabilir && <KarsilaPenceresi satir={secili} kapat={() => seciliYaz(null)} />}
+    </Kart>
+  );
+}
+
+const AYIRMA_ROZETI: Record<AyirmaDurumu, { ton: 'bilgi' | 'tamam' | 'uyari' | 'pasif'; metin: string }> = {
+  bekliyor: { ton: 'uyari', metin: 'Depoda bekliyor' }, ayrildi: { ton: 'bilgi', metin: 'Ayrıldı' }, teslim: { ton: 'tamam', metin: 'Teslim edildi' },
+  iptal: { ton: 'pasif', metin: 'İptal' },
+};
+const kaynakMetni = (s: AyirmaIstegiSatiri) => s.kaynaklar.map((k) => `${k.artikId === null ? '' : 'Artık · '}${k.kod} · ${k.konumlar.join(', ')}`).join('; ');
+
+// Depo bekleyeni ayırır, ayrılanı teslim eder; satın alma ve depo iptal eder (miktar talebe geri eklenir).
+function AyirmaIstekleri() {
+  const qc = useQueryClient();
+  const { bildir } = useBildirim();
+  const depo = useIslem('stok.cikis');
+  const iptalEdebilir = useIslem('satin-alma.yaz') || depo;
+  const [kapali, kapaliYaz] = useState(false);
+  const [iptalEdilen, iptalEdilenYaz] = useState<AyirmaIstegiSatiri | null>(null);
+  const [neden, nedenYaz] = useState('');
+  const liste = useQuery({ queryKey: anahtarlar.liste('ayirma-istekleri', { kapali }),
+    queryFn: () => api.get<AyirmaIstekleriCevabi>(`/stok/ayirma-istekleri?durum=${kapali ? 'kapali' : 'acik'}`) });
+  const yenile = () => void qc.invalidateQueries({ queryKey: anahtarlar.hepsi });
+  const ilerlet = useMutation({
+    mutationFn: ({ s, durum }: { s: AyirmaIstegiSatiri; durum: 'ayrildi' | 'teslim' }) => korumaliPost<AyirmaCevabi>(`/stok/ayirma-istekleri/${s.id}/ilerlet`, { durum, surum: s.surum }),
+    onSuccess: (_c, d) => { yenile(); bildir('tamam', d.durum === 'ayrildi' ? 'Stok ayrıldı.' : 'Teslim edildi.'); },
+    onError: (h) => bildir('hata', hataMetni(h)),
+  });
+  const iptal = useMutation({
+    mutationFn: (s: AyirmaIstegiSatiri) => korumaliPost<AyirmaCevabi>(`/stok/ayirma-istekleri/${s.id}/iptal`, { neden: neden.trim(), surum: s.surum }),
+    onSuccess: (c) => {
+      iptalEdilenYaz(null); nedenYaz(''); yenile();
+      bildir(c.geriEklendi === true ? 'tamam' : 'bilgi', c.geriEklendi === true ? 'İstek iptal edildi; miktar talebe geri eklendi.' : 'İstek iptal edildi; talep teklif aşamasında olduğundan miktar geri eklenmedi.');
+    },
+    onError: (h) => bildir('hata', hataMetni(h)),
+  });
+  const sutunlar: Sutun<AyirmaIstegiSatiri>[] = [
+    { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (s) => s.talepNo },
+    { anahtar: 'kalem', baslik: 'Kalem', kes: true, hucre: (s) => s.kalemAd },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => `${miktarMetni(s.miktar)} ${s.birim}` },
+    { anahtar: 'kaynak', baslik: 'Stoktan', kes: true, hucre: kaynakMetni },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={AYIRMA_ROZETI[s.durum].ton}>{AYIRMA_ROZETI[s.durum].metin}</Rozet>, csv: (s) => s.durum },
+    { anahtar: 'isteyen', baslik: 'İsteyen', kes: true, hucre: (s) => s.isteyen ?? '—' },
+    ...(!kapali && (depo || iptalEdebilir) ? [{
+      anahtar: 'eylem', baslik: 'İşlem', hucre: (s: AyirmaIstegiSatiri) => (
+        <span className="tc-stok-kontrol-eylem">
+          {depo && s.durum === 'bekliyor' && <Dugme simge="check" disabled={ilerlet.isPending} onClick={() => ilerlet.mutate({ s, durum: 'ayrildi' })}>Ayrıldı</Dugme>}
+          {depo && s.durum === 'ayrildi' && <Dugme simge="truck" disabled={ilerlet.isPending} onClick={() => ilerlet.mutate({ s, durum: 'teslim' })}>Teslim edildi</Dugme>}
+          {iptalEdebilir && <Dugme simge="x" disabled={iptal.isPending} onClick={() => iptalEdilenYaz(s)}>İptal</Dugme>}
+        </span>
+      ), csv: () => '',
+    } satisfies Sutun<AyirmaIstegiSatiri>] : []),
+  ];
+  return (
+    <Kart baslik="Ayırma istekleri" simge="pallet" sag={<IsaretKutusu etiket="Kapananları göster" checked={kapali} onChange={(e) => kapaliYaz(e.target.checked)} />}>
+      {liste.isPending ? <DurumKutusu durum="yukleniyor" />
+        : liste.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />
+          : <Tablo etiket="Ayırma istekleri" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(s) => s.id}
+              bosMesaj={kapali ? 'Kapanmış ayırma isteği yok.' : 'Açık ayırma isteği yok. Talepler sekmesinde "Stoktan karşıla" ile açılır.'} />}
+      <OnayPenceresi acik={iptalEdilen !== null} baslik="Ayırma isteğini iptal et" onayMetni="İptal et" tehlikeli yukleniyor={iptal.isPending}
+        onayla={() => { if (iptalEdilen !== null && neden.trim() !== '') iptal.mutate(iptalEdilen); }} vazgec={() => { iptalEdilenYaz(null); nedenYaz(''); }}>
+        <p>{iptalEdilen === null ? '' : `${iptalEdilen.talepNo} · ${miktarMetni(iptalEdilen.miktar)} ${iptalEdilen.birim}. Ayrılan stok serbest kalır; talep henüz teklif aşamasında değilse miktar talebe geri eklenir.`}</p>
+        <Girdi etiket="İptal nedeni" value={neden} maxLength={200} onChange={(e) => nedenYaz(e.target.value)} required />
+      </OnayPenceresi>
     </Kart>
   );
 }
@@ -258,8 +364,8 @@ export function StokKontrol() {
     <section className="tc-stok">
       <SayfaBasi baslik="Stok kontrol" aciklama="İstenen ölçüye en yakın stoğu bulur: aynı form ve kalite, istenenden küçük olmayan ve seçtiğiniz fazla pay içindeki çubuk, levha ve artık parçalar, en az fireden başlayarak." />
       <Sekmeler etiket="Stok kontrol" secili={sekme} sec={sekmeYaz}
-        sekmeler={[{ anahtar: 'ihtiyac', baslik: 'Talepler', simge: 'list' }, { anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
-      {sekme === 'ihtiyac' ? <Ihtiyaclar /> : sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}
+        sekmeler={[{ anahtar: 'ihtiyac', baslik: 'Talepler', simge: 'list' }, { anahtar: 'ayirma', baslik: 'Ayırma istekleri', simge: 'pallet' }, { anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
+      {sekme === 'ihtiyac' ? <Ihtiyaclar /> : sekme === 'ayirma' ? <AyirmaIstekleri /> : sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}
     </section>
   );
 }

@@ -40,3 +40,38 @@ export const artikParcaKapat = (db: Db, id: number, surum: number, durum: 'kulla
            WHERE id = $1 AND surum = $2 AND durum = 'acik' RETURNING id, surum`, [id, surum, durum, kisiId]);
 export const artikParcaVarMi = async (db: Db, id: number): Promise<{ durum: ArtikDurumu } | null> =>
   db.tek('SELECT durum FROM stok_artik_parca WHERE id = $1', [id]);
+
+// ---- 3398-2 a: ayırma isteği ----
+export interface AyirmaKaynagiHam { malzemeNo: number; artikId: number | null; stokMiktari: number | null; karsilanan: number; konumlar: string[] }
+// Açık (bekleyen ya da ayrılmış) isteklerin stok kaynakları: ölçüyle aramada ve ihtiyaç kuyruğunda düşülür.
+export const acikAyirmaKaynaklari = async (db: Db): Promise<AyirmaKaynagiHam[]> =>
+  (await db.sorgu<{ k: AyirmaKaynagiHam }>(
+    `SELECT k FROM stok_ayirma_istegi i, jsonb_array_elements(i.kaynaklar) k WHERE i.durum IN ('bekliyor', 'ayrildi')`)).map((r) => r.k);
+// Aynı stok iki isteğe ayrılmasın: istek açma sırayla yürür (kısa, seyrek komut).
+export const ayirmaKilidi = (db: Db): Promise<unknown> => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_ayirma_istegi'))");
+export const ayirmaIstegiEkle = (db: Db, a: {
+  talepId: string; kalemId: string; talepNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string; uretimEmriId: number | null;
+  kaynaklar: AyirmaKaynagiHam[]; kalemSatiri: unknown; kisiId: number;
+}): Promise<{ id: number; surum: number } | null> =>
+  db.tek(`INSERT INTO stok_ayirma_istegi (talep_id, kalem_id, talep_no, kalem_ad, malzeme_id, miktar, birim, uretim_emri_id, kaynaklar, kalem_satiri, isteyen_kisi_id)
+          VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9::jsonb, $10::jsonb, $11) RETURNING id, surum`,
+    [a.talepId, a.kalemId, a.talepNo, a.kalemAd, a.malzemeId, a.miktar, a.birim, a.uretimEmriId, JSON.stringify(a.kaynaklar),
+      a.kalemSatiri === null ? null : JSON.stringify(a.kalemSatiri), a.kisiId]);
+
+export interface AyirmaIstegiHam {
+  id: number; talepId: string; kalemId: string; talepNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string; uretimEmriId: number | null;
+  kaynaklar: AyirmaKaynagiHam[]; kalemSatiri: unknown; durum: 'bekliyor' | 'ayrildi' | 'teslim' | 'iptal'; iptalNedeni: string | null; geriEklendi: boolean | null;
+  isteyenKisiId: number; istekZamani: string; kararKisiId: number | null; kararZamani: string | null; surum: number;
+}
+const AYIRMA_SECIMI = `SELECT id, talep_id::text AS "talepId", kalem_id::text AS "kalemId", talep_no AS "talepNo", kalem_ad AS "kalemAd", malzeme_id AS "malzemeId",
+  miktar::text AS miktar, birim, uretim_emri_id AS "uretimEmriId", kaynaklar, kalem_satiri AS "kalemSatiri", durum, iptal_nedeni AS "iptalNedeni",
+  geri_eklendi AS "geriEklendi", isteyen_kisi_id AS "isteyenKisiId", ${zamanMetni('istek_zamani')} AS "istekZamani", karar_kisi_id AS "kararKisiId",
+  ${zamanMetni('karar_zamani')} AS "kararZamani", surum FROM stok_ayirma_istegi`;
+export const ayirmaIstekleri = (db: Db, acik: boolean, sinir: number): Promise<AyirmaIstegiHam[]> =>
+  db.sorgu(`${AYIRMA_SECIMI} WHERE (durum IN ('bekliyor', 'ayrildi')) = $1 ORDER BY istek_zamani ${acik ? 'ASC' : 'DESC'}, id LIMIT $2`, [acik, sinir]);
+export const ayirmaIstegiKilitle = (db: Db, id: number): Promise<AyirmaIstegiHam | null> => db.tek(`${AYIRMA_SECIMI} WHERE id = $1 FOR UPDATE`, [id]);
+export const ayirmaIstegiIlerlet = (db: Db, id: number, durum: 'ayrildi' | 'teslim', kisiId: number): Promise<{ id: number; surum: number } | null> =>
+  db.tek('UPDATE stok_ayirma_istegi SET durum = $2, karar_kisi_id = $3, karar_zamani = now(), surum = surum + 1 WHERE id = $1 RETURNING id, surum', [id, durum, kisiId]);
+export const ayirmaIstegiIptal = (db: Db, id: number, neden: string, geriEklendi: boolean, kisiId: number): Promise<{ id: number; surum: number } | null> =>
+  db.tek(`UPDATE stok_ayirma_istegi SET durum = 'iptal', iptal_nedeni = $2, geri_eklendi = $3, karar_kisi_id = $4, karar_zamani = now(), surum = surum + 1
+           WHERE id = $1 RETURNING id, surum`, [id, neden, geriEklendi, kisiId]);

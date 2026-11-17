@@ -7,7 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { artikParcaCevabi, artikParcalarCevabi, ihtiyaclarCevabi, olcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import { artikParcaCevabi, artikParcalarCevabi, ayirmaCevabi, ayirmaIstekleriCevabi, ihtiyaclarCevabi, olcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -203,6 +203,80 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     assert.deepEqual(g.satirlar.map((x) => [x.talepId, x.durum, x.karsilanan, x.enIyi?.malzemeNo ?? null]),
       [[taslak, 'kismen', 2, m], [olcusuzTalep, 'karsilanir', 1, null]]);
     assert.equal((await al('planlama_muduru', '/stok/kontrol-ihtiyaclari')).durum, 200);
+  });
+
+  test('stoktan karşıla (3398-2 a): ayırma isteği açılır, kalem azalır, ayrılan stok yeniden önerilmez; tamamı karşılanınca kalem çıkar, iptalde geri gelir', async () => {
+    const m = await kart('ORN-K5', 'cubuk', { d: 20, l: 3000 });
+    const olcusuz = await kart('ORN-K5', 'cubuk', { l: 3000 });
+    await giris(m, '5');
+    await giris(olcusuz, '2');
+    let s2 = 0;
+    const talep = async (malzemeNo: number, miktar: string) => {
+      s2 += 1;
+      const kat = randomUUID();
+      await o().sahip.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [kat, malzemeNo]);
+      const t = randomUUID();
+      const k = randomUUID();
+      await o().sahip.sorgu(
+        `INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2026, $2, 'ORN talep', $3, $3, 'taslak')`,
+        [t, 950 + s2, kisi]);
+      await o().sahip.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, katalog_id, ad, miktar, birim) VALUES ($1, $2, 1, $3, 'ORN kalem', $4, 'adet')",
+        [t, k, kat, miktar]);
+      return { talepId: t, kalemId: k };
+    };
+    const kalemMiktari = async (kalemId: string) => (await o().sahip.tek<{ miktar: string }>('SELECT miktar::text AS miktar FROM satin_alma_talep_kalemi WHERE id = $1', [kalemId]))?.miktar ?? null;
+    const satir = async (kalemId: string) => ihtiyaclarCevabi.parse((await al('satin_alma', '/stok/kontrol-ihtiyaclari')).govde).satirlar.find((x) => x.kalemId === kalemId);
+    const a = await talep(m, '8');
+    assert.equal((await satir(a.kalemId))?.karsilanan, 5);
+    // Yetki: depo ve operatör stoktan karşılayamaz; fazlası ve kesirli parça reddedilir.
+    assert.equal((await gonder('depo', '/stok/kontrol-ihtiyaclari/karsila', { ...a, miktar: '3' })).durum, 403);
+    assert.equal((await gonder('operator', '/stok/kontrol-ihtiyaclari/karsila', { ...a, miktar: '3' })).durum, 403);
+    assert.equal((await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...a, miktar: '6' })).durum, 400);
+    assert.equal((await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...a, miktar: '1.5' })).durum, 400);
+    const y = await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...a, miktar: '3' });
+    assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    const istek = ayirmaCevabi.parse(y.govde);
+    assert.equal(await kalemMiktari(a.kalemId), '5.0000');
+    // Ayrılan 3 çubuk ne ihtiyaç kuyruğunda ne ölçüyle aramada yeniden sayılır.
+    assert.equal((await satir(a.kalemId))?.karsilanan, 2);
+    const ara = olcuAramaCevabi.parse((await al('satin_alma', '/stok/olcu-arama?form=cubuk&kalite=ORN-K5&d=20')).govde);
+    assert.deepEqual(ara.adaylar.map((x) => [x.malzemeNo, x.miktar]), [[m, '2']]);
+    // İkinci kalem aynı stoğa: iki istek aynı anda en çok kalan kadar alır.
+    const b = await talep(m, '2');
+    const c = await talep(m, '2');
+    const ikisi = await Promise.all([b, c].map((x) => gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...x, miktar: '2' })));
+    assert.deepEqual(ikisi.map((x) => x.durum).sort(), [200, 400], JSON.stringify(ikisi.map((x) => x.govde)));
+    // Tamamı karşılanan kalem talepten çıkar (teklife gitmez); depo listesinde görünür.
+    const tamam = ikisi[0]!.durum === 200 ? b : c;
+    assert.equal(await kalemMiktari(tamam.kalemId), null);
+    const l = ayirmaIstekleriCevabi.parse((await al('depo', '/stok/ayirma-istekleri')).govde);
+    const ilk = l.satirlar.find((x) => x.id === istek.id)!;
+    assert.deepEqual([ilk.durum, ilk.miktar, ilk.kaynaklar.map((x) => [x.malzemeNo, x.stokMiktari, x.karsilanan])], ['bekliyor', '3.0000', [[m, 3, 3]]]);
+    // Depo ayırır, sonra teslim eder; eski sürüm 409; satın alma ilerletemez; teslim edilen iptal edilemez.
+    assert.equal((await gonder('satin_alma', `/stok/ayirma-istekleri/${istek.id}/ilerlet`, { durum: 'ayrildi', surum: 1 })).durum, 403);
+    assert.equal((await gonder('depo', `/stok/ayirma-istekleri/${istek.id}/ilerlet`, { durum: 'teslim', surum: 1 })).durum, 422);
+    const ay = ayirmaCevabi.parse((await gonder('depo', `/stok/ayirma-istekleri/${istek.id}/ilerlet`, { durum: 'ayrildi', surum: 1 })).govde);
+    assert.equal((await gonder('depo', `/stok/ayirma-istekleri/${istek.id}/ilerlet`, { durum: 'teslim', surum: 1 })).durum, 409);
+    assert.equal((await gonder('depo', `/stok/ayirma-istekleri/${istek.id}/ilerlet`, { durum: 'teslim', surum: ay.surum })).durum, 200);
+    assert.equal((await gonder('satin_alma', `/stok/ayirma-istekleri/${istek.id}/iptal`, { neden: 'ORN', surum: ay.surum + 1 })).durum, 422);
+    // Teslimle istek kapanır: stok çıkışı ayrıca yazılır, istek artık stok tutmaz.
+    assert.equal((await satir(a.kalemId))?.karsilanan, 3);
+    // İptal: silinen kalem aynı kimlikle geri gelir; ayrılan stok serbest kalır.
+    const acik = ayirmaIstekleriCevabi.parse((await al('satin_alma', '/stok/ayirma-istekleri')).govde).satirlar.find((x) => x.kalemId === tamam.kalemId)!;
+    const ip = await gonder('satin_alma', `/stok/ayirma-istekleri/${acik.id}/iptal`, { neden: 'ORN vazgeçildi', surum: acik.surum });
+    assert.equal(ip.durum, 200, JSON.stringify(ip.govde));
+    assert.equal(ayirmaCevabi.parse(ip.govde).geriEklendi, true);
+    assert.equal(await kalemMiktari(tamam.kalemId), '2.0000');
+    // Ölçüsüz kart: aynı kartın stoğu, kalem birimiyle; talep teklif aşamasına geçince iptal miktarı geri eklemez.
+    const d = await talep(olcusuz, '2');
+    const yd = ayirmaCevabi.parse((await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...d, miktar: '1' })).govde);
+    assert.equal(await kalemMiktari(d.kalemId), '1.0000');
+    await o().sahip.sorgu("UPDATE satin_alma_talep SET durum = 'teklif_isteniyor' WHERE id = $1", [d.talepId]);
+    const ipd = ayirmaCevabi.parse((await gonder('depo', `/stok/ayirma-istekleri/${yd.id}/iptal`, { neden: 'ORN', surum: yd.surum })).govde);
+    assert.deepEqual([ipd.durum, ipd.geriEklendi, await kalemMiktari(d.kalemId)], ['iptal', false, '1.0000']);
+    const kapali = ayirmaIstekleriCevabi.parse((await al('depo', '/stok/ayirma-istekleri?durum=kapali')).govde);
+    assert.deepEqual(kapali.satirlar.filter((x) => x.id === yd.id).map((x) => [x.iptalNedeni, x.geriEklendi]), [['ORN', false]]);
+    assert.equal((await al('operator', '/stok/ayirma-istekleri')).durum, 403);
   });
 });
 

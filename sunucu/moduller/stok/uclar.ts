@@ -30,7 +30,10 @@ import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdes
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi, irsaliyeParametresi } from '#paylasilan/sozlesme/stok-irsaliye.ts';
 import { malKabulTaslagiCevabi, malKabulTaslagiKaydetCevabi, malKabulTaslagiKaydetGovdesi, malKabulTaslagiSilGovdesi } from '#paylasilan/sozlesme/stok-mal-kabul-taslagi.ts';
-import { artikParcaCevabi, artikParcaGovdesi, artikParcaKapatGovdesi, artikParcaParametresi, artikParcalarCevabi, artikParcalarSorgusu, ihtiyaclarCevabi, olcuAramaCevabi, olcuAramaSorgusu } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import {
+  artikParcaCevabi, artikParcaGovdesi, artikParcaKapatGovdesi, artikParcaParametresi, artikParcalarCevabi, artikParcalarSorgusu, ayirmaCevabi, ayirmaIlerletGovdesi,
+  ayirmaIptalGovdesi, ayirmaIstekleriCevabi, ayirmaIstekleriSorgusu, ayirmaParametresi, ihtiyaclarCevabi, olcuAramaCevabi, olcuAramaSorgusu, stoktanKarsilaGovdesi,
+} from '#paylasilan/sozlesme/stok-kontrol.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 import { emrinFisleri } from './emir-fisleri.ts';
@@ -286,5 +289,10 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/olcu-arama', yetki: KONTROL_OKUMA, sorgu: olcuAramaSorgusu, cevap: olcuAramaCevabi, isle: ({ db, sorgu }) => s.olcuyleAra(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/artik-parcalar', yetki: KONTROL_OKUMA, sorgu: artikParcalarSorgusu, cevap: artikParcalarCevabi, isle: ({ db, sorgu }) => s.artikParcaListesi(db, sorgu) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar', yetki: 'stok.cikis', govde: artikParcaGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, govde }) => s.artikParcaKaydet(db, kullanici, govde) }),
+  // 3398-2 a: satın alma stoktan karşılar (depoya ayırma isteği, kalem azalır); depo ayırır ve teslim eder; iki taraf da iptal eder.
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/kontrol-ihtiyaclari/karsila', yetki: 'satin-alma.yaz', govde: stoktanKarsilaGovdesi, cevap: ayirmaCevabi, isle: ({ db, kullanici, govde }) => s.stoktanKarsila(db, kullanici, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/ayirma-istekleri', yetki: { biri: [...KONTROL_OKUMA.biri, 'satin-alma.oku'] }, sorgu: ayirmaIstekleriSorgusu, cevap: ayirmaIstekleriCevabi, isle: ({ db, sorgu }) => s.ayirmaIstekleriListesi(db, sorgu) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/ayirma-istekleri/:id/ilerlet', yetki: 'stok.cikis', parametre: ayirmaParametresi, govde: ayirmaIlerletGovdesi, cevap: ayirmaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.ayirmaIlerlet(db, kullanici, parametre.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/ayirma-istekleri/:id/iptal', yetki: { biri: ['satin-alma.yaz', 'stok.cikis'] }, parametre: ayirmaParametresi, govde: ayirmaIptalGovdesi, cevap: ayirmaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.ayirmaIptal(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar/:id/kapat', yetki: 'stok.cikis', parametre: artikParcaParametresi, govde: artikParcaKapatGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.artikParcaKapat(db, kullanici, parametre.id, govde) }),
 ];
