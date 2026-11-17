@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { cocuk, SOAP_ZARF_AD_ALANI, xmlAyristir, xmlKacir } from './soap.ts';
 import type { TabloSatiri } from './soap.ts';
+import { kodParametreleri } from './kurallar.ts';
 
 // Sahte SmartES (SOAP/ASMX): YALNIZ test içindir (kart #778). Üretim kodu bunu ithal etmez; sunucu adresi yalnız
 // TMIV2_SMARTES_ADRESI'nden alır. Yalnız 127.0.0.1'de dinler. Cevap biçimi brief 3.3'teki iki türü taklit eder
@@ -35,6 +36,8 @@ export interface SahteSmartes {
   isleyiciler: Map<string, SahteIsleyici>;
   // GET ?WSDL cevabındaki metot adları; null ise WSDL isteği 404 alır.
   wsdlMetotlari: string[] | null;
+  // Metot başına parametre adları (WSDL şeması); varsayılan, kodun gönderdiği adlardır (fark yok).
+  wsdlParametreleri: Record<string, readonly string[]>;
   // GET istekleri (WSDL); SOAP çağrıları `cagrilar`dadır.
   getIstekleri: number;
   // SOAP çağrısının cevabından önce beklenir: istemci o sırada cevabı bekliyordur (testte çağrı anındaki veritabanı durumu okunur).
@@ -69,9 +72,14 @@ export function tabloCevapMetni(metot: string, satirlar: readonly TabloSatiri[])
     `<NewDataSet xmlns="">${govde}</NewDataSet></diffgr:diffgram></${metot}Result></${metot}Response>`);
 }
 
-// En küçük WSDL: yalnız portType/operation adları (kontrol bunları okur). Gerçek servisin WSDL'i çok daha geniştir.
-export function wsdlMetni(metotlar: readonly string[]): string {
-  return '<?xml version="1.0" encoding="utf-8"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" targetNamespace="http://tempuri.org/">' +
+// En küçük WSDL: portType/operation adları ve verilirse metot başına parametre şeması (kontrol bunları okur). Gerçek servisin WSDL'i
+// çok daha geniştir. Parametre adının sonundaki "!" zorunlu (minOccurs 1) demektir.
+export function wsdlMetni(metotlar: readonly string[], parametreler: Readonly<Record<string, readonly string[]>> = {}): string {
+  const sema = Object.entries(parametreler).map(([metot, adlar]) =>
+    `<s:element name="${xmlKacir(metot)}"><s:complexType><s:sequence>${adlar.map((a) =>
+      `<s:element minOccurs="${a.endsWith('!') ? 1 : 0}" maxOccurs="1" name="${xmlKacir(a.replace(/!$/, ''))}" type="s:string"/>`).join('')}</s:sequence></s:complexType></s:element>`).join('');
+  return '<?xml version="1.0" encoding="utf-8"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:s="http://www.w3.org/2001/XMLSchema" targetNamespace="http://tempuri.org/">' +
+    `<wsdl:types><s:schema elementFormDefault="qualified" targetNamespace="http://tempuri.org/">${sema}</s:schema></wsdl:types>` +
     `<wsdl:portType name="SmartFactoryWebServiceSoap">${metotlar.map((m) => `<wsdl:operation name="${xmlKacir(m)}"/>`).join('')}</wsdl:portType>` +
     '</wsdl:definitions>';
 }
@@ -84,6 +92,7 @@ export async function sahteSmartesAc(): Promise<SahteSmartes> {
   const bekleyenler = new Set<ServerResponse>();
   const sahte: SahteSmartes = {
     adres: '', cagrilar: [], isleyiciler: new Map(), kapat: async () => {}, getIstekleri: 0, cagriOncesi: null,
+    wsdlParametreleri: Object.fromEntries(kodParametreleri()),
     wsdlMetotlari: [
       'ActiveMachinesList', 'AlarmsList', 'DownTimeStatusListWithoutWorkOrder', 'OperationCreateUpdate', 'SetErpOkRed', 'WorkOrdersCreateUpdate',
       'WorkOrdersStatusList',
@@ -99,7 +108,7 @@ export async function sahteSmartesAc(): Promise<SahteSmartes> {
         sahte.getIstekleri++;
         const wsdlMi = /\?wsdl$/i.test(istek.url ?? '');
         cevap.writeHead(wsdlMi && sahte.wsdlMetotlari !== null ? 200 : 404, { 'Content-Type': 'text/xml; charset=utf-8' });
-        cevap.end(wsdlMi && sahte.wsdlMetotlari !== null ? wsdlMetni(sahte.wsdlMetotlari) : '');
+        cevap.end(wsdlMi && sahte.wsdlMetotlari !== null ? wsdlMetni(sahte.wsdlMetotlari, sahte.wsdlParametreleri) : '');
         return;
       }
       const metin = await govdeOku(istek);

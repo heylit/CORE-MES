@@ -1380,3 +1380,92 @@ export const ONAY_ILETILERI = {
   isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
   kaynakDegisti: 'Bu istasyonda sayım artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
 } as const;
+
+/* ---------------- Parametre adı denetimi (kart 3368) ---------------- */
+// ASMX tanımadığı parametreyi hata vermeden yok sayabilir (VARSAYIM): yanlış harfli ad "başarılı" cevapla gizlenir. Bağlantı denemesi
+// kodun gönderdiği adları WSDL'dekilerle harfi harfine karşılaştırır. Adlar kurucuların kendisinden okunur; ikinci bir ad listesi tutulmaz.
+
+const ORNEK_PENCERE = { bas: new Date(0), son: new Date(0) };
+const ORNEK_IS_EMRI: GidecekIsEmri = {
+  isEmriId: 1, emirNo: 'ORN', opNo: 10, ad: 'ORN', durum: 'planli', adet: 1, oncelik: 0, teslim: null, baslangic: null, ayarSuresiDk: null,
+  birimSureDk: null, istasyonKodu: 'ORN', makineKodu: null, stokNo: 'ORN', stokAdi: null,
+};
+
+export function kodParametreleri(): Map<string, string[]> {
+  const sonuc = new Map<string, string[]>();
+  const ekle = (metot: string, p: Parametreler): void => {
+    const adlar = sonuc.get(metot) ?? [];
+    for (const [ad] of p) if (!adlar.includes(ad)) adlar.push(ad);
+    sonuc.set(metot, adlar);
+  };
+  ekle(OKUMA_METOTLARI['is-emri-durumu'], okumaParametreleri('is-emri-durumu', ORNEK_PENCERE));
+  ekle(OKUMA_METOTLARI.durus, okumaParametreleri('durus', ORNEK_PENCERE));
+  ekle(OKUMA_METOTLARI.alarm, alarmParametreleri(1, ORNEK_PENCERE));
+  ekle(MAKINE_LISTESI_METODU, []);
+  ekle(IS_EMRI_METODU, isEmriParametreleri(ORNEK_IS_EMRI, 'yok', '2026-01-01'));
+  ekle(OPERASYON_METODU, operasyonParametreleri(ORNEK_IS_EMRI));
+  for (const k of KALITE_AMBAR_KAYNAKLARI) ekle(KALITE_AMBAR_METOTLARI[k], kaliteAmbarParametreleri(k, ORNEK_PENCERE));
+  for (const tur of TANIM_TURLERI) {
+    ekle(TANIM_METOTLARI[tur], tanimParametreleri({ tur, tmiId: 1, kod: 'ORN', ad: 'ORN' }));
+    ekle(TANIM_LISTE_METOTLARI[tur], []);
+  }
+  ekle(MAKINE_BILGI_METODU, makineBilgiParametreleri(1));
+  ekle(ILERLEME_METODU, ilerlemeParametreleri(ORNEK_PENCERE.son));
+  for (const tur of LISTE_TURLERI) ekle(LISTE_METOTLARI[tur], listeParametreleri(tur));
+  for (const tur of HESAP_TURLERI) ekle(HESAP_METOTLARI[tur], hesapParametreleri(tur, ORNEK_PENCERE.son));
+  return sonuc;
+}
+
+export interface ParametreFarki {
+  metot: string;
+  istegeBagli: boolean;
+  metin: string;
+}
+
+type WsdlParametreleri = ReadonlyMap<string, readonly { ad: string; zorunlu: boolean }[]>;
+
+// Yalnız WSDL'de parametre şeması bulunan metotlar karşılaştırılır. Üç fark türü: harfi farklı ad, serviste hiç olmayan ad, servisin
+// beklediği (zorunlu) ama kodun göndermediği ad.
+export function parametreFarklari(wsdl: WsdlParametreleri): { karsilastirilan: number; farklar: ParametreFarki[] } {
+  const farklar: ParametreFarki[] = [];
+  let karsilastirilan = 0;
+  for (const [metot, kodAdlari] of kodParametreleri()) {
+    const servis = wsdl.get(metot);
+    if (servis === undefined) continue;
+    karsilastirilan++;
+    const istegeBagli = !GEREKLI_METOTLAR.includes(metot);
+    const servisAdlari = servis.map((x) => x.ad);
+    const harfiFarkli = new Set<string>();
+    for (const ad of kodAdlari) {
+      if (servisAdlari.includes(ad)) continue;
+      const benzer = servisAdlari.find((x) => x.toLowerCase() === ad.toLowerCase());
+      if (benzer !== undefined) harfiFarkli.add(benzer);
+      farklar.push({ metot, istegeBagli, metin: `${metot}: kodda ${ad} → serviste ${benzer ?? 'yok'}` });
+    }
+    for (const x of servis) {
+      if (x.zorunlu && !kodAdlari.includes(x.ad) && !harfiFarkli.has(x.ad)) {
+        farklar.push({ metot, istegeBagli, metin: `${metot}: servis ${x.ad} bekliyor → kod göndermiyor` });
+      }
+    }
+  }
+  return { karsilastirilan, farklar };
+}
+
+export const PARAMETRE_ADIMI_ADI = 'Parametre adları (WSDL)';
+
+// İlk satır özet, sonra fark başına bir satır (gerekli metotlar önce). İsteğe bağlı akışların farkı adımı kırmızı yapmaz.
+export function parametreAdimi(wsdl: WsdlParametreleri): { sonuc: 'tamam' | 'hata' | 'atlandi'; ileti: string } {
+  const { karsilastirilan, farklar } = parametreFarklari(wsdl);
+  if (karsilastirilan === 0) return { sonuc: 'atlandi', ileti: 'Servis tanımında parametre şeması bulunamadı; adlar karşılaştırılamadı.' };
+  if (farklar.length === 0) return { sonuc: 'tamam', ileti: `${karsilastirilan} metodun parametre adları servisle aynı.` };
+  const gerekli = farklar.filter((f) => !f.istegeBagli);
+  const istegeBagli = farklar.filter((f) => f.istegeBagli);
+  const ek = istegeBagli.length === 0 ? '' : `isteğe bağlı akışlarda ${istegeBagli.length} fark`;
+  const ozet = gerekli.length === 0
+    ? `Gerekli metotların parametre adları servisle aynı; ${ek}.`
+    : `${new Set(gerekli.map((f) => f.metot)).size} metotta ${gerekli.length} fark var${ek === '' ? '' : `; ${ek}`}.`;
+  return {
+    sonuc: gerekli.length === 0 ? 'tamam' : 'hata',
+    ileti: [ozet, ...gerekli.map((f) => f.metin), ...istegeBagli.map((f) => `İsteğe bağlı · ${f.metin}`)].join('\n'),
+  };
+}

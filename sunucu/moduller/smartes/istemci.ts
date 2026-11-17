@@ -1,6 +1,6 @@
 import type { SmartesAyari } from './ayar.ts';
-import { AZAMI_CEVAP_UZUNLUGU, skalerSonucuOku, soapIstegiKur, tabloSatirlariniOku, VARSAYILAN_SAAT_DILIMI, wsdlMetotlari } from './soap.ts';
-import type { CevapYorumu, Parametreler, SkalerSonuc, TabloSatiri } from './soap.ts';
+import { AZAMI_CEVAP_UZUNLUGU, skalerSonucuOku, soapIstegiKur, tabloSatirlariniOku, VARSAYILAN_SAAT_DILIMI, wsdlOku } from './soap.ts';
+import type { CevapYorumu, Parametreler, SkalerSonuc, TabloSatiri, WsdlTanimi } from './soap.ts';
 
 // SmartES ile yalnız bu dosya konuşur (kart #778). Adres ayardan gelir; hata metnine ve günlüğe girmez.
 // İstemci `baglanti.ts`'te ortam değişkeninden bir kez kurulur; adres yoksa kurulmaz ve hiçbir iş istek atmaz.
@@ -41,8 +41,8 @@ export interface SmartesIstemcisi {
   liste(metot: string, parametreler: Parametreler): Promise<IstemciSonucu<TabloSatiri[]>>;
   // Sık yinelenen anlık okuma: kısa zaman aşımı, yineleme yok.
   anlik(metot: string, parametreler: Parametreler): Promise<IstemciSonucu<TabloSatiri[]>>;
-  // Bağlantı kontrolü: `?WSDL` okunur, metot adları döner. Yalnız GET, yinelenmez.
-  wsdl(): Promise<IstemciSonucu<string[]>>;
+  // Bağlantı kontrolü: `?WSDL` okunur, metot adları ve parametreleri döner. Yalnız GET, yinelenmez.
+  wsdl(): Promise<IstemciSonucu<WsdlTanimi>>;
 }
 
 export interface IstemciSecenegi {
@@ -159,7 +159,7 @@ export function smartesIstemcisiKur(ayar: SmartesAyari, secenek: IstemciSecenegi
       const metin = await cevap.text();
       if (cevap.status < 200 || cevap.status >= 300) return { tur: 'http', durum: cevap.status, ileti: `SmartES HTTP ${cevap.status} döndü.` };
       try {
-        return { tur: 'basarili', deger: wsdlMetotlari(metin) };
+        return { tur: 'basarili', deger: wsdlOku(metin) };
       } catch {
         return { tur: 'bozuk', ileti: 'Servis tanımı (WSDL) okunamadı.' };
       }
