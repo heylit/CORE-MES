@@ -182,7 +182,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
                 <Satir etiket="E-posta">{firma.ePosta}</Satir>
                 <Satir etiket="Logo cari kodu">{firma.logoCariKodu}</Satir>
                 <Satir etiket="Logo durumu">{logo && <Rozet ton={logo.ton}>{logo.etiket}</Rozet>}</Satir>
-                <CrmSatiri bilgi={crmBilgisi} />
+                <CrmSatiri bilgi={crmBilgisi} firma={firma} yazabilir={yazabilir} />
               </dl>
             </section>
             <section aria-label="Merkez adresi">

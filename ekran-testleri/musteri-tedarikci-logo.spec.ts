@@ -59,7 +59,7 @@ test.describe('Listeden Logo\'da arama (3343)', () => {
 
 // 3359 a ve 3391 a: CRM satış müşterisi durumu. Örnek veride bağlı firma yok: liste ve ayrıntı cevabında bir müşteri bağlı gösterilir,
 // CRM cevabı yönlendirilir (Logo'ya istek yok). Uydurma kodlar ORN-C-3001, ORN-CRM-.
-async function bagliGoster(page: Page, f: FirmaSatiri, kodlar: { kodlar: string[]; sayi: number } | null): Promise<string[]> {
+async function bagliGoster(page: Page, f: FirmaSatiri, kodlar: { kodlar: string[]; sayi: number; secilebilir?: boolean } | null): Promise<string[]> {
   const bagli = { logoKayitNo: 3001, logoCariKodu: 'ORN-C-3001' };
   await page.route('**/api/musteri-tedarikci/firmalar?*', async (r) => {
     const c = await r.fetch();
@@ -74,7 +74,7 @@ async function bagliGoster(page: Page, f: FirmaSatiri, kodlar: { kodlar: string[
   const crm: string[] = [];
   await page.route('**/api/logo/cari-crm?*', (r) => {
     crm.push(new URL(r.request().url()).searchParams.get('id') ?? '');
-    return r.fulfill({ json: { durumlar: [{ firmaId: f.id, durum: 'var', neden: null, kodlar }] } });
+    return r.fulfill({ json: { durumlar: [{ firmaId: f.id, durum: 'var', neden: null, kodlar: kodlar && { secilebilir: false, ...kodlar } }] } });
   });
   return crm;
 }
@@ -126,6 +126,37 @@ test.describe('Logo CRM durumu (3359, 3391)', () => {
     expect((await tasmaOlc(page)).belge, 'ayrıntıda yatay taşma').toBeLessThanOrEqual(0);
     await page.screenshot({ path: test.info().outputPath('crm-cok-ayrinti.png') });
     expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('Logo CRM seçimi (3391-2)', () => {
+  test('çok bağlı caride seçim penceresi Logo\'daki kodları listeler; kaydedince seçilen kod yazar; taşma yok', async ({ page, ag, ac }) => {
+    const f = await firmaBul(page, 'ORN-MUS-02');
+    await bagliGoster(page, f, { kodlar: ['ORN-CRM-UZUN-KOD-3002', 'ORN-CRM-UZUN-KOD-3017'], sayi: 2, secilebilir: true });
+    let govde: unknown = null;
+    await page.route(`**/api/musteri-tedarikci/firmalar/${String(f.id)}/logo-crm-sec`, async (r) => {
+      govde = r.request().postDataJSON();
+      const c = await page.request.get(`${ADRES}/api/musteri-tedarikci/firmalar/${String(f.id)}`);
+      const g = await c.json() as { firma: object };
+      await r.fulfill({ json: { firma: { ...g.firma, logoCariKodu: 'ORN-C-3001', logoKayitNo: 3001, logoCrmKodu: 'ORN-CRM-UZUN-KOD-3017' } } });
+    });
+    await ac(`/musteri-tedarikci/musteriler?firma=${String(f.id)}`);
+    const pencere = page.getByRole('dialog', { name: f.ad, exact: true });
+    await pencere.getByRole('button', { name: 'CRM müşterisini seç' }).click();
+    const secim = page.getByRole('dialog', { name: 'Tekliflerde kullanılacak CRM müşterisi' });
+    await expect(secim.getByRole('radio')).toHaveCount(3);
+    await secim.getByRole('radio', { name: 'ORN-CRM-UZUN-KOD-3017' }).check();
+    expect((await tasmaOlc(page)).belge, 'pencerede yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('crm-secim.png') });
+    await secim.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(secim).toBeHidden();
+    expect(govde).toMatchObject({ kod: 'ORN-CRM-UZUN-KOD-3017' });
+    await expect(pencere.getByText('(seçildi, tekliflerde kullanılır)')).toBeVisible();
+    await pencere.getByText('Logo CRM satış müşterisi').scrollIntoViewIfNeeded();
+    expect((await tasmaOlc(page)).belge, 'ayrıntıda yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('crm-secildi.png') });
+    expect(ag.yazmalar).toEqual([`POST /api/musteri-tedarikci/firmalar/${String(f.id)}/logo-crm-sec`]);
     expect(ag.hatalar).toEqual([]);
   });
 });
