@@ -83,6 +83,7 @@ export {
 export {
   type MalKabulSatirSuzgeci, MAL_KABUL_SATIRI_SIRALAMASI, malKabulSatiriSay, type MalKabulListeSatiriHam, malKabulListeSatirlari, type LotYeriHam, lotYerleri,
   type MalKabulTaslakHam, malKabulTaslagiOku, malKabulTaslagiAc, malKabulTaslagiGuncelle, malKabulTaslagiSil, iadeMalKabulleri,
+  type SiparisSatirKabuluHam, siparisSatirKabulleri,
 } from './sorgular/kabul/sorgular.ts';
 export {
   type BaslangicKonumu, konumlarKodlarla, konumlarIdlerle, type BaslangicLotu, lotlarNoyla, gozBakiyeleri, tekrarBelgesi, baslangicKilidi, baslangicBelgesiAc,

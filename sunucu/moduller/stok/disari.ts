@@ -429,3 +429,22 @@ export async function iadeMalKabulleri(db: Db, irsaliyeNolar: readonly string[])
   if (irsaliyeNolar.length === 0) return new Map();
   return new Map((await sorgular.iadeMalKabulleri(db, irsaliyeNolar)).map(({ irsaliyeNo, ...x }) => [irsaliyeNo, x]));
 }
+
+// 3390: satın alma sipariş satırlarının irsaliye ve parti belgeleri (Ortak Dosyalar hazır listesi). Yetki denetlemez: çağıran,
+// irsaliyeyi mal kabul irsaliye ucunun, parti belgesini parti belge ucunun okuma işlemiyle süzer (indirme o uçlardandır).
+export interface SiparisIrsaliyesi { malKabulId: number; malKabulNo: string; belgeId: number; ad: string }
+export interface SiparisPartiBelgesi { partiId: number; lotNo: string | null; belgeId: number; ad: string; revKodu: string | null }
+export async function siparisSatirlarininBelgeleri(
+  db: Db, satirIdler: readonly number[],
+): Promise<{ irsaliyeler: SiparisIrsaliyesi[]; partiBelgeleri: SiparisPartiBelgesi[] }> {
+  if (satirIdler.length === 0) return { irsaliyeler: [], partiBelgeleri: [] };
+  const satirlar = await sorgular.siparisSatirKabulleri(db, satirIdler);
+  const kabuller = new Map(satirlar.map((x) => [x.malKabulId, x.malKabulNo]));
+  const partiler = new Map(satirlar.flatMap((x) => (x.partiId === null ? [] : [[x.partiId, x.lotNo] as const])));
+  const irsaliye = await servis.malKabullerinIrsaliyeleri(db, [...kabuller.keys()]);
+  const parti = await servis.partiBelgeleri(db, [...partiler.keys()]);
+  return {
+    irsaliyeler: [...kabuller].flatMap(([malKabulId, malKabulNo]) => (irsaliye.get(malKabulId) ?? []).map((b) => ({ malKabulId, malKabulNo, belgeId: b.id, ad: b.ad }))),
+    partiBelgeleri: [...partiler].flatMap(([partiId, lotNo]) => (parti.get(partiId) ?? []).map((b) => ({ partiId, lotNo, belgeId: b.id, ad: b.ad, revKodu: b.revKodu ?? null }))),
+  };
+}
