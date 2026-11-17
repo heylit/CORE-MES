@@ -21,6 +21,7 @@ import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import * as ortakDosyalar from './moduller/ortak-dosyalar/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
+import * as plan from './moduller/plan/disari.ts';
 import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
@@ -30,6 +31,7 @@ import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, logoCrmCozucusuKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
+import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlari } from './moduller/rota/disari.ts';
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
@@ -39,6 +41,7 @@ import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import * as stok from './moduller/stok/disari.ts';
 import * as uretimEmirleri from './moduller/uretim-emirleri/disari.ts';
@@ -137,6 +140,7 @@ const CIZIM_OKUMA: readonly Islem[] = ['sayfa.cizimler', 'belge-merkezi.oku'];
 const SATIN_ALMA_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz'];
 const PARTI_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const IRSALIYE_OKUMA: readonly Islem[] = [...PARTI_OKUMA, ...SATIN_ALMA_OKUMA];
+// 3390-2: adım fotoğrafı, plan ve talimat medyası listeleri kaynak modülün disari.ts'inden gelir (uçlarıyla tek liste).
 const okur = (k: Kullanici, islemler: readonly Islem[]): boolean => islemler.some((i) => k.islemler.includes(i));
 const yol = (...p: (string | number)[]): string => `/${p.map(String).join('/')}`;
 
@@ -152,43 +156,126 @@ async function emirAyrintisiOku(db: Db, id: number) {
 // Sağlayıcıların okuduğu kaynak işlevleri; test, süzmeyi gerçek sağlayıcıyla sahte kaynak üstünde ölçer.
 export const URETIM_EMRI_KAYNAKLARI = {
   liste: (db: Db) => uretimEmirleri.adimliEmirListesi(db, false, null, true),
+  bitenler: (db: Db, ara: string | null, sinir: number) => uretimEmirleri.adimliBitenEmirler(db, { durum: 'bitti', ara }, { sayfa: 1, sayfaBoyu: sinir }),
+  planAraligi: plan.canliPlanAraligi,
+  isEmriBilgileri: uretimEmirleri.isEmriPlanBilgileri,
   emir: emirAyrintisiOku,
   cizimler: (db: Db, malzemeId: number) => kaydaBagliBelgeler(db, 'malzemeler', malzemeId),
+  talimatKunyeleri: uretimEmirleri.emrinTalimatKunyeleri,
+  talimatAdimlari: rotaTalimatSurumuAdimlari,
+  listeFotograflari: uretimEmirleri.emirListeFotograflari,
+  partiBelgeleri: stok.emrinPartiBelgeleri,
   siparisSatirlari: siparisSatiriOzetleri,
 };
 export const SATIN_ALMA_KAYNAKLARI = { satirlar: siparisSatirlari, belgeler: siparisSatiriBelgeleri, stokBelgeleri: stok.siparisSatirlarininBelgeleri };
+type EmirKaynaklari = typeof URETIM_EMRI_KAYNAKLARI;
+type Emir = NonNullable<Awaited<ReturnType<EmirKaynaklari['emir']>>>;
+type Grup = ortakDosyalar.HazirKayitSonucu['gruplar'][number];
 
-export const uretimEmriSaglayicisi = (kaynak: typeof URETIM_EMRI_KAYNAKLARI = URETIM_EMRI_KAYNAKLARI): ortakDosyalar.HazirSaglayici => ({
-  okuma: ADIMLI_OKUMA_ISLEMLERI,
-  async kayitlar(db, ara, sinir) {
-    const { emirler } = await kaynak.liste(db);
-    return emirler.filter((e) => ortakDosyalar.aramaUyar(ara, e.emirNo, e.urun.kod, e.urun.ad)).slice(0, sinir)
-      .map((e) => ({ anahtar: String(e.id), no: e.emirNo, baslik: `${e.urun.kod} ${e.urun.ad}`.trim(), alt: `${String(e.adet)} adet` }));
-  },
-  async kayit(db, k, anahtar) {
-    const id = Number(anahtar);
-    if (!Number.isSafeInteger(id) || id <= 0) return null;
-    const e = await kaynak.emir(db, id);
-    if (e === null) return null;
-    const gruplar: ortakDosyalar.HazirKayitSonucu['gruplar'] = [];
-    if (e.urun.id !== null && okur(k, CIZIM_OKUMA)) {
-      const belgeler = (await kaynak.cizimler(db, e.urun.id)).flatMap((b) => (b.revizyonId === null ? [] : [{ ...b, revizyonId: b.revizyonId }]));
-      gruplar.push({ kaynak: 'cizim', dosyalar: belgeler.map((b) => ({
-        ad: b.ad, dosyaTuru: b.dosyaTuru, bilgi: b.revKodu === null ? null : `Rev ${b.revKodu}`, zaman: null,
-        indir: yol('cizimler', b.id, 'revizyonlar', b.revizyonId, 'dosya'), ac: yol('cizimler', 'belge', b.id),
-      })) });
+// Plan listesinin penceresi: bugünün başından 7 gün (K2: plan yalnız çizim ve talimatı açar).
+const PLAN_GUN = 7;
+const planPenceresi = (simdi: Date): [Date, Date] => {
+  const bas = tesisGunBasi(tesisGunu(simdi));
+  return [new Date(bas), new Date(bas + PLAN_GUN * 86_400_000)];
+};
+const emirSatiri = (e: { id: number; emirNo: string; urun: { kod: string; ad: string }; adet: number }, alt?: string) =>
+  ({ anahtar: String(e.id), no: e.emirNo, baslik: `${e.urun.kod} ${e.urun.ad}`.trim(), alt: alt ?? `${String(e.adet)} adet` });
+
+// Emrin kaynak grupları; her grup kendi kaynak ucunun okuma işlemiyle süzülür (Risk K1). `tam` değilse yalnız çizim ve talimat (K2).
+async function emirGruplari(db: Db, kaynak: EmirKaynaklari, k: Kullanici, e: Emir, tam: boolean): Promise<Grup[]> {
+  const gruplar: Grup[] = [];
+  if (e.urun.id !== null && okur(k, CIZIM_OKUMA)) {
+    const belgeler = (await kaynak.cizimler(db, e.urun.id)).flatMap((b) => (b.revizyonId === null ? [] : [{ ...b, revizyonId: b.revizyonId }]));
+    gruplar.push({ kaynak: 'cizim', dosyalar: belgeler.map((b) => ({
+      ad: b.ad, dosyaTuru: b.dosyaTuru, bilgi: b.revKodu === null ? null : `Rev ${b.revKodu}`, zaman: null,
+      indir: yol('cizimler', b.id, 'revizyonlar', b.revizyonId, 'dosya'), ac: yol('cizimler', 'belge', b.id),
+    })) });
+  }
+  if (okur(k, ROTA_OKUMA_ISLEMLERI)) {
+    const dosyalar: Grup['dosyalar'] = [];
+    const gorulen = new Set<string>();
+    for (const t of await kaynak.talimatKunyeleri(db, e.id)) {
+      for (const a of (await kaynak.talimatAdimlari(db, t.malzemeNo, t.opNo, t.surum)) ?? []) {
+        for (const m of a.medya) {
+          if (gorulen.has(m.ozet)) continue;
+          gorulen.add(m.ozet);
+          dosyalar.push({ ad: m.ad, dosyaTuru: null, bilgi: `OP${String(t.opNo)} · talimat ${String(t.surum)}`, zaman: null, ac: null, indir: yol('rota', 'talimat-medyasi', m.ozet) });
+        }
+      }
     }
-    const satir = e.siparisSatiriId == null ? null : (await kaynak.siparisSatirlari(db, [e.siparisSatiriId])).get(e.siparisSatiriId) ?? null;
-    const klasorler: ortakDosyalar.HazirKayitSonucu['klasorler'] = [
-      ...(satir === null ? [] : [{ tur: 'siparis' as const, id: satir.siparisId }]),
-      ...(e.projeId == null ? [] : [{ tur: 'proje' as const, id: e.projeId }]),
-    ];
-    return {
-      kayit: { anahtar: String(e.id), no: e.emirNo, baslik: `${e.urun.kod} ${e.urun.ad}`.trim(), alt: `${String(e.adet)} adet${satir === null ? '' : ` · ${satir.siparisNo}`}` },
-      kayitYolu: yol('uretim-emirleri', e.id), gruplar, klasorler,
-    };
-  },
-});
+    gruplar.push({ kaynak: 'talimat', dosyalar });
+  }
+  if (!tam) return gruplar;
+  if (okur(k, uretimEmirleri.ADIM_DURUMU_OKUMA_ISLEMLERI)) {
+    gruplar.push({ kaynak: 'adim-foto', dosyalar: (await kaynak.listeFotograflari(db, e.id)).map((f) => ({
+      ad: `${f.ad}.jpg`, dosyaTuru: 'jpg', bilgi: f.ad, zaman: f.zaman, ac: null, indir: yol('adimli-emirler', e.id, 'liste-fotografi', f.adimId, f.ozet),
+    })) });
+  }
+  if (okur(k, PARTI_OKUMA)) {
+    gruplar.push({ kaynak: 'parti', dosyalar: (await kaynak.partiBelgeleri(db, e.id)).map((b) => ({
+      ad: b.ad, dosyaTuru: null, bilgi: b.lotNo === null ? null : `Parti ${b.lotNo}`, zaman: null, ac: null, indir: yol('stok', 'partiler', b.partiId, 'belgeler', b.belgeId),
+    })) });
+  }
+  return gruplar;
+}
+
+type EmirListesi = 'uretim-emri' | 'uretim-kaydi' | 'plan';
+const EMIR_LISTE_OKUMA: Record<EmirListesi, readonly Islem[]> = {
+  'uretim-emri': ADIMLI_OKUMA_ISLEMLERI, 'uretim-kaydi': ADIMLI_OKUMA_ISLEMLERI, plan: plan.PLAN_OKUMA_ISLEMLERI,
+};
+
+// Üç liste aynı emir kaydını okur: açık ve kapalı bütün emirler, yalnız bitenler (üretim kayıtları) ve bu haftanın canlı planı.
+export const uretimEmriSaglayicisi = (
+  kaynak: EmirKaynaklari = URETIM_EMRI_KAYNAKLARI, liste: EmirListesi = 'uretim-emri', simdi: () => Date = () => new Date(),
+): ortakDosyalar.HazirSaglayici => {
+  async function plandakiler(db: Db): Promise<Map<number, string>> {
+    const [bas, bit] = planPenceresi(simdi());
+    const isler = await kaynak.planAraligi(db, bas, bit);
+    const bilgi = await kaynak.isEmriBilgileri(db, isler.map((x) => x.isEmriId));
+    const ilk = new Map<number, string>();
+    for (const x of isler) {
+      const emirId = bilgi.get(x.isEmriId)?.uretimEmriId;
+      if (emirId !== undefined && !ilk.has(emirId)) ilk.set(emirId, x.baslangic);
+    }
+    return ilk;
+  }
+  return {
+    okuma: EMIR_LISTE_OKUMA[liste],
+    async kayitlar(db, ara, sinir) {
+      if (liste === 'uretim-kaydi') {
+        return (await kaynak.bitenler(db, ara, sinir)).satirlar.map((e) => emirSatiri(e));
+      }
+      const { emirler } = await kaynak.liste(db);
+      if (liste === 'plan') {
+        const ilk = await plandakiler(db);
+        const bul = new Map(emirler.map((e) => [e.id, e]));
+        return [...ilk].flatMap(([id, bas]) => {
+          const e = bul.get(id);
+          return e === undefined || !ortakDosyalar.aramaUyar(ara, e.emirNo, e.urun.kod, e.urun.ad) ? [] : [emirSatiri(e, `${String(e.adet)} adet · plan ${ortakDosyalar.planSaati(new Date(bas))}`)];
+        }).slice(0, sinir);
+      }
+      return emirler.filter((e) => ortakDosyalar.aramaUyar(ara, e.emirNo, e.urun.kod, e.urun.ad)).slice(0, sinir).map((e) => emirSatiri(e));
+    },
+    async kayit(db, k, anahtar) {
+      const id = Number(anahtar);
+      if (!Number.isSafeInteger(id) || id <= 0) return null;
+      const e = await kaynak.emir(db, id);
+      if (e === null) return null;
+      if (liste === 'uretim-kaydi' && e.durum !== 'bitti') return null;
+      if (liste === 'plan' && !(await plandakiler(db)).has(e.id)) return null;
+      const gruplar = await emirGruplari(db, kaynak, k, e, liste !== 'plan');
+      const satir = e.siparisSatiriId == null ? null : (await kaynak.siparisSatirlari(db, [e.siparisSatiriId])).get(e.siparisSatiriId) ?? null;
+      const klasorler: ortakDosyalar.HazirKayitSonucu['klasorler'] = liste === 'plan' ? [] : [
+        ...(satir === null ? [] : [{ tur: 'siparis' as const, id: satir.siparisId }]),
+        ...(e.projeId == null ? [] : [{ tur: 'proje' as const, id: e.projeId }]),
+      ];
+      return {
+        kayit: emirSatiri(e, `${String(e.adet)} adet${satir === null ? '' : ` · ${satir.siparisNo}`}`),
+        kayitYolu: yol('uretim-emirleri', e.id), gruplar, klasorler,
+      };
+    },
+  };
+};
 
 // Satın alma siparişi satırların sipariş numarasıyla toplanır (VARSAYIM: sipariş no tekil; satin_alma_siparis talep ve teklifle anahtarlanır).
 export const satinAlmaSaglayicisi = (kaynak: typeof SATIN_ALMA_KAYNAKLARI = SATIN_ALMA_KAYNAKLARI): ortakDosyalar.HazirSaglayici => ({
@@ -434,6 +521,8 @@ export function sunucununBaglari(): Bag[] {
     bag('proje değişti -> Logo proje kartı', projeler.projeDegistiDinle, (db: Db, o: { projeId: number }) => logo.logoProjesiDegisti(db, o.projeId, new Date())),
     bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
     bag('üretim emri dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('uretim-emri', f()); }, () => uretimEmriSaglayicisi()),
+    bag('üretim kaydı dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('uretim-kaydi', f()); }, () => uretimEmriSaglayicisi(URETIM_EMRI_KAYNAKLARI, 'uretim-kaydi')),
+    bag('plan dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('plan', f()); }, () => uretimEmriSaglayicisi(URETIM_EMRI_KAYNAKLARI, 'plan')),
     bag('satın alma siparişi dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('satin-alma-siparisi', f()); }, () => satinAlmaSaglayicisi()),
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),
