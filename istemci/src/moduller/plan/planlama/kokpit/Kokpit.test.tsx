@@ -969,6 +969,52 @@ describe('Kokpit', () => {
     geriKur();
   });
 
+  it('yakınlaştırma sürekli: sürgü ve Ctrl+tekerlek saat enini değiştirir, en yakın ölçek basılı görünür, en uzakta Ay\'a geçer; F seçili işi sığdırır (3365)', () => {
+    ac({ secim: { ...BOS_SECIM, siparis: '3', adim: '3.10' } });
+    const tahta = () => document.querySelector('.tc-pyq-tahta') as HTMLElement;
+    const en = (id = '2.20') => parseFloat(tahta().querySelector<HTMLElement>(`[data-is="${id}"]`)!.style.getPropertyValue('--w'));
+    const surgu = screen.getByRole('slider', { name: 'Yakınlaştırma' }) as HTMLInputElement;
+    const basili = () => within(screen.getByRole('group', { name: 'Ölçek' })).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent);
+    expect(basili()).toEqual(['3 gün']);
+    const ilk = en(), ilkDeger = Number(surgu.value);
+    fireEvent.wheel(tahta(), { ctrlKey: true, deltaY: -100 });
+    expect(en()).toBeCloseTo(ilk * 1.25, 1);
+    expect(Number(surgu.value)).toBeGreaterThan(ilkDeger);
+    expect(basili()).toEqual(['3 gün']);
+    fireEvent.change(surgu, { target: { value: '100' } });
+    expect(basili()).toEqual(['Gün']);
+    fireEvent.change(surgu, { target: { value: '0' } });
+    expect(basili()).toEqual(['Hafta']);
+    // Ctrl'siz tekerlek yakınlaştırmaz; en uzaktan bir adım daha Ay'dır (sürgü kapanır).
+    fireEvent.wheel(tahta(), { deltaY: 100 });
+    expect(basili()).toEqual(['Hafta']);
+    fireEvent.wheel(tahta(), { ctrlKey: true, deltaY: 100 });
+    expect(basili()).toEqual(['Ay']);
+    expect(surgu.disabled).toBe(true);
+    // F: seçili iş görünür genişliğe sığar (en yakın ölçek sınırında).
+    fireEvent.click(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: '3 gün' }));
+    const once = en(), kisa = en('3.10');
+    fireEvent.keyDown(document, { key: 'f' });
+    expect(en('3.10')).toBeGreaterThan(kisa * 2);
+    expect(basili()).toEqual(['Gün']);
+    // Ölçek düğmesi sabit ene döner.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: '3 gün' }));
+    expect(en()).toBeCloseTo(once, 1);
+  });
+
+  it('seçim yokken sığdır söyler; seçili sipariş varsa onun işleri sığar (3365)', async () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Seçileni sığdır' }));
+    expect(await screen.findByText('Sığdırmak için bir iş ya da sipariş seçin.')).toBeTruthy();
+    cleanup();
+    ac({ secim: { ...BOS_SECIM, siparis: '2' } });
+    const surgu = screen.getByRole('slider', { name: 'Yakınlaştırma' }) as HTMLInputElement;
+    const once = Number(surgu.value);
+    fireEvent.click(screen.getByRole('button', { name: 'Seçileni sığdır' }));
+    // Emir 2'nin işleri üç günden uzun sürer: 3 günden biraz uzaklaşılır.
+    expect(Number(surgu.value)).toBeLessThan(once);
+  });
+
   // 3330: vurgu ve okun çizilmediği durumlar. Hiç adımı planda olmayan kart tahtayı soldurmaz (yer aranırken dolu yerler olduğu gibi görünür);
   // Ay ve Yıl ölçeğinde (yük hücreleri) ok yoktur; seçim başka yerden (arama, liste) gelince de sipariş yanar.
   it('plansız kart tahtayı soldurmaz ve ok çizmez; uzak ölçekte ok yoktur; dışarıdan seçilen sipariş yanar (3330)', () => {

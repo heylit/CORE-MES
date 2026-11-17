@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -111,6 +111,24 @@ describe('Kokpit yükü ve ölçeği', () => {
     expect(olcekKomsusu('G', -1)).toBe('G');
     expect(olcekKomsusu('G', 1)).toBe('3');
     expect(olcekKomsusu('Y', 1)).toBe('Y');
+  });
+
+  it('sürekli yakınlaştırma: sürgü logaritmik ve uçlarda sınırlı, en yakın ölçek düğmesi, sığdırma kenarlarda pay bırakır (3365)', () => {
+    expect([YAKIN_EN_AZ, YAKIN_EN_COK, YAKIN_EN_AZ / 2, YAKIN_EN_COK * 2].map(surguDegeri)).toEqual([0, 100, 0, 100]);
+    expect(surgudenEn(0)).toBeCloseTo(YAKIN_EN_AZ);
+    expect(surgudenEn(100)).toBeCloseTo(YAKIN_EN_COK);
+    expect(surgudenEn(150)).toBeCloseTo(YAKIN_EN_COK);
+    // Orta değer iki ucun geometrik ortasıdır; gidiş dönüş aynı yere döner.
+    expect(surgudenEn(50)).toBeCloseTo(Math.sqrt(YAKIN_EN_AZ * YAKIN_EN_COK));
+    expect(surguDegeri(surgudenEn(37))).toBe(37);
+    expect([SAAT_ENI.G, SAAT_ENI['3'], SAAT_ENI.H, 30, 20, 9, YAKIN_EN_AZ, YAKIN_EN_COK].map(yakinOlcegi)).toEqual(['G', '3', 'H', 'G', '3', 'H', 'H', 'G']);
+    expect(yakinSinirla(1000)).toBe(YAKIN_EN_COK);
+    // 10 saatlik aralık 1000 px'e: iki yanda %7,5 pay; sığmayan uzun aralık en uzak yakın ölçekte kalır, sıfır süre yarım saat sayılır.
+    const s = sigdirma(100, 110, 1000);
+    expect(s.odak).toBeCloseTo(99.25);
+    expect(s.px).toBeCloseTo(1000 / 11.5);
+    expect(sigdirma(0, 2000, 1000).px).toBe(YAKIN_EN_AZ);
+    expect(sigdirma(5, 5, 1000).px).toBe(YAKIN_EN_COK);
   });
 });
 
