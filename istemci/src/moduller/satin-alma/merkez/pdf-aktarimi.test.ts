@@ -50,13 +50,15 @@ describe('3404: PDF tekliften toplu teklif tablosuna', () => {
     expect(acilan).toHaveLength(1);
     const k1 = talep.kalemler[0]!.id;
     acilan[0]!.aktar({
-      supplierId: '41', currency: 'EUR', date: '2026-11-17', validUntil: '2026-12-01', payDays: 60, discountPct: 0, shipping: 45, leadDays: 28,
+      supplierId: '41', currency: 'EUR', date: '2026-11-17', validUntil: '2026-12-01', payDays: 60, discountPct: 0, shipping: 45, deliveryIncluded: false, leadDays: 28,
       prices: { [k1]: 4.85 }, note: 'PDF teklif ORN-TK-1', pdf: { ozet: 'a'.repeat(64), ad: 'ORN-teklif.pdf' },
     });
     const once = istekler.length;
     expect(kok.querySelector<HTMLSelectElement>('#bulk select[data-bf="supplierId"][data-col="0"]')!.value).toBe('41');
     expect(kok.querySelector<HTMLInputElement>(`#bulk [data-bi="${k1}"][data-col="0"]`)!.value).toMatch(/^4,85/);
     expect(kok.querySelector<HTMLElement>('#bulk-bar')!.hidden).toBe(false);
+    expect(kok.querySelector<HTMLInputElement>('#bulk [data-bf="deliveryIncluded"][data-col="0"]')!.checked).toBe(false);
+    expect(kok.querySelector<HTMLInputElement>('#bulk [data-bf="shipping"][data-col="0"]')!.value).toMatch(/^45/);
     expect(istekler.slice(once).filter((y) => !y.startsWith('GET'))).toEqual([]);
     kok.querySelector<HTMLElement>('[data-act="bulk-save"]')!.click();
     await vi.waitFor(() => expect(istekler.some((y) => /^POST .*\/teklifler\/[^/]+\/ek-bagla$/.test(y))).toBe(true));

@@ -40,7 +40,8 @@ async function png(img: ImageData): Promise<Uint8Array> {
   return new Uint8Array(await b.arrayBuffer());
 }
 
-const bekle = () => new Promise<void>((coz) => { setTimeout(coz, 0); });
+// Tanıma ana iş parçacığını birkaç saniye tutar; önce ilerleme ekrana çizilsin.
+const bekle = () => new Promise<void>((coz) => { requestAnimationFrame(() => { setTimeout(coz, 50); }); });
 
 /** Sayfa görüntüsündeki kelimeler; konumlar `olcek` ile ekran sayfasının birimine çevrilir. Sayfa tek seferde okunur: bu çekirdekte
  * SetRectangle ile bölge okumak blok kipinde metni bozuyor (ORN taranmış teklifte denendi); bir A4 sayfa birkaç saniye sürer. */

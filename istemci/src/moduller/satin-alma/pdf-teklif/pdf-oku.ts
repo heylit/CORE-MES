@@ -46,6 +46,7 @@ export async function pdfTeklifOku(
       let ogeler: Oge[] = metin, tanima = false;
       if (metin.length < EN_AZ_OGE) {
         tanima = true;
+        ilerle({ asama: 'tanima', sayfa: n, sayfaSayisi: pdf.numPages, oran: 0 });
         const buyuk = await pdfCiz(pdf, n, { res: TANIMA_COZUNURLUGU });
         ogeler = await belgeTani(buyuk.img, s.w / buyuk.img.width, (oran) => ilerle({ asama: 'tanima', sayfa: n, sayfaSayisi: pdf.numPages, oran }));
       }

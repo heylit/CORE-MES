@@ -572,7 +572,7 @@ export function bulkPdfAktar(a: PdfAktarimi): void {
   let c = BULK.cols.find(x => x.supplierId === a.supplierId) ?? BULK.cols.find(bos);
   if (!c) { c = bulkBlank(""); BULK.cols.push(c); }
   Object.assign(c, {
-    supplierId: a.supplierId, currency: a.currency, discountPct: a.discountPct, payDays: a.payDays, shipping: a.shipping, deliveryIncluded: a.shipping <= 0,
+    supplierId: a.supplierId, currency: a.currency, discountPct: a.discountPct, payDays: a.payDays, shipping: a.shipping, deliveryIncluded: a.deliveryIncluded,
     leadDays: a.leadDays, prices: { ...a.prices }, note: a.note, pdf: a.pdf,
     ...(a.date ? { date: a.date } : {}), ...(a.validUntil ? { validUntil: a.validUntil } : {}),
   });

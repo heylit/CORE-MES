@@ -13,7 +13,7 @@ import './ekran.css';
 
 /** Toplu teklif tablosuna giden taslak. */
 export interface PdfAktarimi {
-  supplierId: string; currency: Currency; date: string; validUntil: string; payDays: number; discountPct: number; shipping: number;
+  supplierId: string; currency: Currency; date: string; validUntil: string; payDays: number; discountPct: number; shipping: number; deliveryIncluded: boolean;
   leadDays: number | null; prices: Record<string, number>; note: string; pdf: { ozet: string; ad: string };
 }
 export interface PdfEkraniBaglami {
@@ -53,6 +53,7 @@ interface Durum {
   gecerlilik: string;
   vade: number | null;
   nakliye: number | null;
+  nakliyeDahil: boolean;
   teklifNo: string;
   secili: string | null;
   aktariliyor: boolean;
@@ -79,7 +80,7 @@ const sayi = (n: number | null | undefined): string => (n === null || n === unde
 export function pdfOkuAc(b: PdfEkraniBaglami): void {
   D = {
     b, asama: { tur: 'sec', hata: null }, dosyaAdi: '', bytes: null, sayfalar: [], sayfa: 1, satirlar: [], baslik: null, okunan: [], eslesmeler: [], artan: [],
-    tedarikciId: null, tedarikciNedeni: '', tedarikciOnay: false, paraBirimi: null, iskonto: null, tarih: '', gecerlilik: '', vade: null, nakliye: null, teklifNo: '',
+    tedarikciId: null, tedarikciNedeni: '', tedarikciOnay: false, paraBirimi: null, iskonto: null, tarih: '', gecerlilik: '', vade: null, nakliye: null, nakliyeDahil: false, teklifNo: '',
     secili: null, aktariliyor: false,
   };
   b.openModal(`<div class="mh"><h2>PDF tekliften oku</h2><span class="spacer"></span><span class="muted small">${esc(b.r.no)}, ${esc(b.r.title)}</span></div>
@@ -119,7 +120,7 @@ async function dosyaOku(f: File): Promise<void> {
     d.paraBirimi = pb !== null && (CURRENCIES as readonly string[]).includes(pb) ? pb as Currency : null;
     d.tarih = d.baslik.tarih.deger ?? ''; d.gecerlilik = d.baslik.gecerlilik.deger ?? ''; d.vade = d.baslik.vadeGun.deger; d.teklifNo = d.baslik.teklifNo.deger ?? '';
     const nak = d.artan.find((o) => o.ek === 'nakliye');
-    d.nakliye = nak ? (nak.tutar?.deger ?? nak.fiyat?.deger ?? null) : null;
+    d.nakliye = nak ? (nak.tutar?.deger ?? nak.fiyat?.deger ?? null) : null; d.nakliyeDahil = false;
     d.iskonto = d.baslik.iskontoYuzde.deger === null ? 'uygulanmis' : null;
     d.secili = d.eslesmeler.find((x) => x.durum !== 'emin')?.kalem.id ?? null;
     d.asama = { tur: 'kontrol' };
@@ -158,7 +159,7 @@ function secimHTML(hata: string | null): string {
   return `${hata ? `<div class="pt-kutu pt-kotu-kutu">${simge('yok')}<div><b>Okunamadı</b><p>${esc(hata)}</p></div></div>` : ''}
     <label class="pt-birak">${simge('yukle', 'b')}<b>Tedarikçinin PDF teklifini buraya bırakın</b>
       <span class="muted small">ya da dosya seçin. En çok 20 sayfa, 25 MB. PDF bu bilgisayarda okunur, dışarı gönderilmez.</span>
-      <input type="file" id="pt-dosya" accept="application/pdf,.pdf"></label>`;
+      <span class="btn sm">Dosya seç</span><input type="file" id="pt-dosya" class="tc-gizli-etiket" accept="application/pdf,.pdf"></label>`;
 }
 
 function okunuyorHTML(i: Ilerleme): string {
@@ -202,8 +203,8 @@ function baslikAlanlari(d: Durum): string {
     <div class="pt-alan"><label for="pt-tarih">Teklif tarihi</label><input type="date" id="pt-tarih" data-pf="tarih" value="${esc(d.tarih)}" class="${alanCls(b.tarih.durum)}">${b.tarih.not ? `<span class="pt-not">${esc(b.tarih.not)}</span>` : ''}</div>
     <div class="pt-alan"><label for="pt-gec">Geçerlilik</label><input type="date" id="pt-gec" data-pf="gecerlilik" value="${esc(d.gecerlilik)}"></div>
     <div class="pt-alan"><label for="pt-pb">Para birimi</label><select id="pt-pb" data-pf="pb" class="${alanCls(d.paraBirimi ? b.paraBirimi.durum : 'yok')}"><option value="">Seçin</option>${CURRENCIES.map((c) => `<option ${c === d.paraBirimi ? 'selected' : ''}>${c}</option>`).join('')}</select>${!d.paraBirimi ? '<span class="pt-not">Para birimi bulunamadı; seçin.</span>' : b.paraBirimi.not ? `<span class="pt-not">${esc(b.paraBirimi.not)}</span>` : ''}</div>
-    <div class="pt-alan"><label for="pt-vade">Vade (gün)</label><input type="text" inputmode="numeric" id="pt-vade" data-pf="vade" value="${sayi(d.vade)}"></div>
-    <div class="pt-alan"><label for="pt-nak">Nakliye</label><input type="text" inputmode="decimal" id="pt-nak" data-pf="nakliye" value="${sayi(d.nakliye)}">${d.artan.some((o) => o.ek === 'nakliye') ? `<span class="pt-not">PDF satırı ${String(d.artan.find((o) => o.ek === 'nakliye')!.no)}</span>` : ''}</div>
+    <div class="pt-alan"><label for="pt-vade">Vade (gün)</label><input type="text" inputmode="numeric" id="pt-vade" data-pf="vade" value="${sayi(d.vade)}" class="${d.vade === null ? 'pt-k-uyari' : ''}">${d.vade === null ? '<span class="pt-not">Vade bulunamadı; boş kalırsa peşin (0) yazılır.</span>' : ''}</div>
+    <div class="pt-alan"><label for="pt-nak">Nakliye</label><input type="text" inputmode="decimal" id="pt-nak" data-pf="nakliye" value="${sayi(d.nakliye)}" class="${d.nakliye === null && !d.nakliyeDahil ? 'pt-k-uyari' : ''}" placeholder="${d.nakliyeDahil ? 'fiyata dahil' : 'tutar'}">${d.artan.some((o) => o.ek === 'nakliye') ? `<span class="pt-not">PDF satırı ${String(d.artan.find((o) => o.ek === 'nakliye')!.no)}</span>` : d.nakliye === null ? `<span class="pt-not">${d.nakliyeDahil ? 'Fiyata dahil.' : 'PDF\'te bulunamadı; tutarı yazın ya da:'}</span>${d.nakliyeDahil ? '' : `<button class="btn sm" data-pa="nakliye-dahil">${simge('tamam')}Fiyata dahil</button>`}` : ''}</div>
     <div class="pt-alan"><label for="pt-no">Teklif no</label><input type="text" id="pt-no" data-pf="no" maxlength="60" value="${esc(d.teklifNo)}"></div>
     <div class="pt-alan pt-genis"><span class="pt-etiket">İskonto</span>${isk === null ? '<span class="pt-not">Belgede iskonto bulunamadı.</span>' : `
       <span class="pt-not">${esc(b.iskontoYuzde.not ?? '')}</span>
@@ -222,12 +223,14 @@ const KARAR_DUGMESI: Record<KararTuru, (e: Eslesme) => string> = {
 
 function kalemSatiri(d: Durum, e: Eslesme): string {
   const o = e.okunan, dur = e.durum;
+  // Birim çevrildiyse miktar kalem biriminde de gösterilir: fiyat sütunu kalem birimindedir.
+  const cevrildi = e.cevirmeCarpani !== null && e.cevirmeCarpani > 0 && !e.bekleyen.includes('birim') && o?.birim !== e.kalem.birim;
   const secenekler = d.okunan.filter((x) => !x.ek).map((x) => `<option value="${String(x.no)}" ${x === o ? 'selected' : ''}>${String(x.no)}. ${esc(x.ad.slice(0, 50))}</option>`).join('');
   const duzeltilmis = o?.fiyat && (o.fiyat.duzeltildi || o.fiyat.supheli) ? `<span class="pt-not">okunan ${esc(o.fiyat.ham)}</span>` : '';
   return `<div class="pt-kalem pt-d-${dur}${d.secili === e.kalem.id ? ' pt-secili' : ''}" data-k="${esc(e.kalem.id)}">
     <button class="pt-kalem-ad" data-pa="sec" aria-label="${esc(e.kalem.ad)}: PDF'te göster"><b>${esc(e.kalem.ad)}</b><span class="pt-not">Talep: ${esc(sayi(e.kalem.miktar))} ${esc(e.kalem.birim)}</span>
       ${o ? `<span class="pt-not"><span class="pt-no" aria-label="PDF satırı ${String(o.no)}">${String(o.no)}</span>${esc(o.ad)}</span>` : ''}</button>
-    <div class="pt-deger"><span class="pt-etiket">Miktar</span><span class="pt-salt${e.bekleyen.includes('birim') ? ' pt-k-uyari' : ''}">${o?.miktar ? `${esc(sayi(o.miktar.deger))} ${esc(o.birim ?? o.birimHam ?? '')}` : '–'}</span></div>
+    <div class="pt-deger"><span class="pt-etiket">Miktar</span><span class="pt-salt${e.bekleyen.includes('birim') ? ' pt-k-uyari' : ''}">${o?.miktar ? `${esc(sayi(o.miktar.deger))} ${esc(o.birim ?? o.birimHam ?? '')}${cevrildi ? ` ≈ ${esc(sayi(Math.round(o.miktar.deger / e.cevirmeCarpani! * 100) / 100))} ${esc(e.kalem.birim)}` : ''}` : '–'}</span></div>
     <div class="pt-deger"><label class="pt-etiket" for="pt-f-${esc(e.kalem.id)}">Birim fiyat / ${esc(e.kalem.birim)}</label>${duzeltilmis}<input type="text" inputmode="decimal" id="pt-f-${esc(e.kalem.id)}" data-pf="fiyat" value="${sayi(e.fiyat)}" class="${e.bekleyen.some((t) => t !== 'satir') ? 'pt-k-uyari' : e.fiyat === null ? 'pt-k-bos' : ''}" placeholder="boş"></div>
     <div class="pt-deger"><label class="pt-etiket" for="pt-t-${esc(e.kalem.id)}">Termin (gün)</label><input type="text" inputmode="numeric" id="pt-t-${esc(e.kalem.id)}" data-pf="termin" value="${sayi(e.terminGun)}"></div>
     <div class="pt-durum">${rozet(dur)}</div>
@@ -254,7 +257,7 @@ function okunanPaneli(d: Durum): string {
 }
 
 function kararlar(d: Durum): string[] {
-  return bekleyenKararlar(d.eslesmeler, d.baslik!, { tedarikciId: d.tedarikciId, tedarikciOnay: d.tedarikciOnay, paraBirimi: d.paraBirimi, iskonto: d.iskonto });
+  return bekleyenKararlar(d.eslesmeler, d.baslik!, { tedarikciId: d.tedarikciId, tedarikciOnay: d.tedarikciOnay, paraBirimi: d.paraBirimi, iskonto: d.iskonto, nakliye: d.nakliye, nakliyeDahil: d.nakliyeDahil });
 }
 
 function altCubuk(d: Durum): string {
@@ -280,6 +283,7 @@ function tikla(ev: Event): void {
   if (pa === 'parola-vazgec' && a.tur === 'parola') { a.coz(null); return; }
   if (pa === 'sayfa') { d.sayfa = Number(el.dataset.n) || 1; ciz(); return; }
   if (pa === 'ted-onay') d.tedarikciOnay = true;
+  if (pa === 'nakliye-dahil') d.nakliyeDahil = true;
   if (pa === 'iskonto') d.iskonto = el.dataset.v === 'ayrica' ? 'ayrica' : 'uygulanmis';
   if (pa === 'sec' && id) {
     d.secili = id;
@@ -303,7 +307,7 @@ function degisti(ev: Event): void {
   else if (pf === 'tarih') d.tarih = v;
   else if (pf === 'gecerlilik') d.gecerlilik = v;
   else if (pf === 'vade') d.vade = n === null ? null : Math.round(n);
-  else if (pf === 'nakliye') d.nakliye = n;
+  else if (pf === 'nakliye') { d.nakliye = n; if (n !== null) d.nakliyeDahil = false; }
   else if (pf === 'no') d.teklifNo = v;
   else if (pf === 'fiyat' && id) {
     // Elle yazılan fiyat fiyat, birim ve tutar kararlarını kapatır: kullanıcı değeri PDF'e bakarak kendisi verdi.
@@ -337,7 +341,7 @@ async function aktar(d: Durum): Promise<void> {
     const isk = d.baslik!.iskontoYuzde.deger;
     d.b.aktar({
       supplierId: d.tedarikciId, currency: d.paraBirimi, date: d.tarih, validUntil: d.gecerlilik, payDays: d.vade ?? 0,
-      discountPct: d.iskonto === 'ayrica' && isk !== null ? isk : 0, shipping: d.nakliye ?? 0,
+      discountPct: d.iskonto === 'ayrica' && isk !== null ? isk : 0, shipping: d.nakliye ?? 0, deliveryIncluded: d.nakliye === null ? d.nakliyeDahil : d.nakliye <= 0,
       // Satır terminleri farklıysa teklifin termini en uzunudur (teklifte tek termin tutulur).
       leadDays: terminler.length ? Math.max(...terminler) : null, prices,
       note: d.teklifNo ? `PDF teklif ${d.teklifNo}` : 'PDF teklif', pdf: { ozet, ad: d.dosyaAdi },

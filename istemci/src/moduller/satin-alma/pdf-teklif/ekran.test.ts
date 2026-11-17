@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PurchaseRequest } from '../merkez/tipler.ts';
+import { pdfTeklifOku } from './pdf-oku.ts';
 import { pdfEkraniDurumu, pdfOkuAc, type PdfAktarimi, type PdfEkraniBaglami } from './ekran.ts';
 import { KALEMLER, SAYFA } from './ornek-teklif.ts';
 
@@ -87,7 +88,7 @@ describe('3404: PDF tekliften oku ekranı', () => {
     // Kalem metre, PDF kg: çevrilen fiyat kalem birimindedir.
     expect(a.prices.k3).toBeCloseTo(17.5133, 3);
     expect('k5' in a.prices).toBe(false);
-    expect(a.shipping).toBe(45);
+    expect([a.shipping, a.deliveryIncluded]).toEqual([45, false]);
     expect(a.leadDays).toBe(28);
     expect(document.getElementById('modal-root')!.innerHTML).toBe('');
   });
@@ -99,5 +100,19 @@ describe('3404: PDF tekliften oku ekranı', () => {
     expect(pdfEkraniDurumu()?.paraBirimi).toBeNull();
     expect(document.querySelector('#pt-alt')!.textContent).toMatch(/karar bekliyor/);
     expect(aktarDugmesi().disabled).toBe(true);
+  });
+
+  it('PDF\'te nakliye yoksa sıfır yazılmaz: tutar ya da "fiyata dahil" kararı beklenir', async () => {
+    vi.mocked(pdfTeklifOku).mockResolvedValueOnce({ sayfalar: [{ no: 1, w: 600, h: 260, resim: 'data:image/jpeg;base64,', ogeler: SAYFA.filter((o) => o.y !== 190), tanima: false }], parolali: false });
+    await pdfSec();
+    expect(document.querySelector('#pt-alt')!.getAttribute('title') ?? document.querySelector('#pt-alt [title]')!.getAttribute('title')).toMatch(/Nakliye/);
+    tikla(document.querySelector('[data-pa="iskonto"][data-v="uygulanmis"]')!);
+    for (let i = 0; i < 30; i++) { const d = document.querySelector('[data-pa="ted-onay"], [data-pa="karar"], [data-pa="cevir"]'); if (!d) break; tikla(d); }
+    expect(aktarDugmesi().disabled).toBe(true);
+    tikla(document.querySelector('[data-pa="nakliye-dahil"]')!);
+    expect(aktarDugmesi().disabled).toBe(false);
+    tikla(aktarDugmesi());
+    await vi.waitFor(() => { expect(aktarilan).not.toBeNull(); });
+    expect([aktarilan!.shipping, aktarilan!.deliveryIncluded]).toEqual([0, true]);
   });
 });

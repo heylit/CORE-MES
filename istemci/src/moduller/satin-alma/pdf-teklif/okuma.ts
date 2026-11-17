@@ -425,6 +425,8 @@ export function kararVer(e: Eslesme, tur: KararTuru, secim: { cevir?: boolean; f
 export type IskontoSecimi = 'uygulanmis' | 'ayrica' | null;
 export interface OkumaKarari {
   tedarikciId: string | null; tedarikciOnay: boolean; paraBirimi: ParaBirimi | null; iskonto: IskontoSecimi;
+  /** Nakliye tutarı; null ise PDF'te bulunamadı. nakliyeDahil: kullanıcı "fiyata dahil" dedi. Bulunamayan nakliye sıfır sayılmaz. */
+  nakliye?: number | null; nakliyeDahil?: boolean;
 }
 
 /** PDF satırlarından hesaplanan toplam (PDF'in genel toplamıyla karşılaştırmak için): her satırda miktar × fiyat (kullanıcının
@@ -450,6 +452,7 @@ export function bekleyenKararlar(l: readonly Eslesme[], b: BaslikBilgileri, k: O
   else if (!k.tedarikciOnay) liste.push('Tedarikçi onaylanmadı');
   if (!k.paraBirimi) liste.push('Para birimi seçilmedi');
   if (b.iskontoYuzde.deger !== null && k.iskonto === null) liste.push('İskonto: uygulanmış mı, ayrıca mı?');
+  if (k.nakliye === null && !k.nakliyeDahil) liste.push('Nakliye: fiyata dahil mi, tutarı ne?');
   for (const e of l) for (const t of e.bekleyen) liste.push(`${e.kalem.ad}: ${KARAR_ADI[t]}`);
   return liste;
 }

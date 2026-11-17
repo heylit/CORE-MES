@@ -92,6 +92,11 @@ describe('PDF sayfası', () => {
     const bitti = eslesmeler.map((e) => (e.kalem.id === 'k3' ? kararVer(e, 'birim', { cevir: true }) : e.kalem.id === 'k4' ? kararVer(e, 'fiyat') : e));
     expect(bekleyenKararlar(bitti, b, { tedarikciId: 'f1', tedarikciOnay: true, paraBirimi: 'EUR', iskonto: 'uygulanmis' })).toEqual([]);
     expect(bekleyenKararlar(bitti, b, { tedarikciId: null, tedarikciOnay: false, paraBirimi: null, iskonto: 'uygulanmis' })).toEqual(['Tedarikçi seçilmedi', 'Para birimi seçilmedi']);
+    // PDF'te nakliye yoksa sıfır sayılmaz: tutar ya da "fiyata dahil" kararı beklenir.
+    const tamam = { tedarikciId: 'f1', tedarikciOnay: true, paraBirimi: 'EUR' as const, iskonto: 'uygulanmis' as const };
+    expect(bekleyenKararlar(bitti, b, { ...tamam, nakliye: null })).toEqual(['Nakliye: fiyata dahil mi, tutarı ne?']);
+    expect(bekleyenKararlar(bitti, b, { ...tamam, nakliye: null, nakliyeDahil: true })).toEqual([]);
+    expect(bekleyenKararlar(bitti, b, { ...tamam, nakliye: 0 })).toEqual([]);
   });
 
   it('tedarikçi vergi numarasından ya da addan bulunur ama kullanıcı onayı ister; tanınmazsa boş kalır', () => {
