@@ -297,9 +297,8 @@ test.describe('A1 Operatör', () => {
       }
     });
 
-    // 1070: kabuk menüleri açıkken 900-1200 px pencerede sol sütun kaymaz; şerit, iş kartı, Şimdi şeridi, sayaç ve Durdur, Duraklat,
-    // Bitir tek ekrandadır. 1063: daha kısa pencerede (800) sütun kayar, düğmeler sütunun altında görünür kalır; sütun sonuna
-    // kayınca sayacın altındaki yerine döner, sayaç tuşlarının üstüne binmez.
+    // 1070 ve 3353: kabuk menüleri açıkken sol sütun kaymaz; şerit, iş kartı, Şimdi şeridi, sayaç ve Durdur, Duraklat, Bitir tek
+    // ekrandadır. 1063: sütun yine de kayarsa düğmeler sütunun altında görünür kalır, sayaç tuşlarının üstüne binmez.
     for (const hesap of ['ornek.yonetici', 'ornek.operator1'] as const) {
       test.describe(`durum düğmeleri · ${hesap}`, () => {
         test.use({ hesap });
@@ -317,7 +316,7 @@ test.describe('A1 Operatör', () => {
             const o = await olc();
             expect(o.grup.alt, JSON.stringify(o)).toBeLessThanOrEqual(o.orta.alt);
             const kayma = await page.locator('.tc-ay1-orta').evaluate((e) => e.scrollHeight - e.clientHeight);
-            if (boy.height >= 900) expect(kayma, JSON.stringify(o)).toBeLessThanOrEqual(0);
+            expect(kayma, JSON.stringify(o)).toBeLessThanOrEqual(0);
             await page.locator('.tc-ay1-orta').evaluate((e) => { e.scrollTop = e.scrollHeight; });
             const s = await olc();
             expect(s.grup.ust, JSON.stringify(s)).toBeGreaterThanOrEqual(s.tuslar.alt);
@@ -325,6 +324,54 @@ test.describe('A1 Operatör', () => {
             expect(await tasma(page)).toBeLessThanOrEqual(0);
             expect(yazmalar(ag.yazmalar)).toEqual([]);
             expect(ag.hatalar).toEqual([]);
+          });
+        }
+      });
+    }
+
+    // 3353: geniş düzende sol sütun (Şimdi şeridi, sayaç, durum düğmeleri) ve sağda teknik resim (araç çubuğu dahil) kaymadan sığar;
+    // dizüstü tarayıcısı boyundan (657) tam ekrana, iş beklerken, sürerken ve bitince. Her koşu kendi paketini uydurur (durum sunucuda kalır).
+    const kayanlar = (page: Page) => page.evaluate(() => [...document.querySelectorAll('.tc-ay1, .tc-ay1 *')]
+      .filter((e) => /auto|scroll/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1)
+      .map((e) => `${String(e.className).split(' ')[0] ?? ''} ${String(e.scrollHeight)}/${String(e.clientHeight)}`));
+    const boylar = {
+      'ornek.yonetici': [{ width: 1366, height: 657 }, { width: 1280, height: 800 }, { width: 1366, height: 768 }, { width: 1600, height: 900 }, { width: 1920, height: 1080 }],
+      'ornek.operator1': [{ width: 1366, height: 657 }, { width: 1280, height: 800 }],
+    } as const;
+    for (const hesap of ['ornek.yonetici', 'ornek.operator1'] as const) {
+      test.describe(`kaydırmasız · ${hesap}`, () => {
+        test.use({ hesap });
+        for (const boy of boylar[hesap]) {
+          test(`${String(boy.width)}x${String(boy.height)}: iki sütun beklerken, sürerken ve bitince kaymaz`, async ({ page, ac }, bilgi) => {
+            test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+            const tur = `${hesap}-${String(boy.width)}x${String(boy.height)}-${String(Date.now())}`;
+            await page.setViewportSize(boy);
+            await page.addInitScript(() => { localStorage.setItem('arkon:station', JSON.stringify('ORN-TORNA-1')); });
+            await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [0, 1, 2].map((i) => {
+              const p = { ...paket(i), id: `ekran-3353-${tur}-${String(i)}`, target: 100 };
+              return { kimlik: p.id, surum: 1, govde: p };
+            }) } }));
+            await ac('/uretim-terminali');
+            const grup = page.getByRole('group', { name: 'İş durumu' });
+            await expect(grup).toBeVisible();
+            await expect(page.getByRole('tab', { name: /Teknik Resim/ })).toHaveAttribute('aria-selected', 'true');
+            await expect.poll(() => kayanlar(page), 'beklerken').toEqual([]);
+            await grup.getByRole('button', { name: /İşi Başlat/ }).click();
+            await expect(grup.getByRole('button', { name: /Bitir/ })).toBeVisible();
+            await expect.poll(() => kayanlar(page), 'sürerken').toEqual([]);
+            const b = (await grup.getByRole('button', { name: /Bitir/ }).boundingBox())!;
+            await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+            await page.mouse.down();
+            await page.waitForTimeout(1600);
+            await page.mouse.up();
+            await page.getByRole('button', { name: 'Yine de bitir' }).click();
+            await expect(page.getByText('İş emri tamamlandı')).toBeVisible();
+            await page.keyboard.press('Escape');
+            await expect(grup.getByRole('button', { name: /Sıradaki İş/ })).toBeVisible();
+            await expect.poll(() => kayanlar(page), 'bitince').toEqual([]);
+            await expect(grup).toBeInViewport({ ratio: 1 });
+            await expect(page.locator('.tc-ay1-resim .tc-ay5-araclar')).toBeInViewport({ ratio: 1 });
+            expect(await tasma(page)).toBeLessThanOrEqual(0);
           });
         }
       });
