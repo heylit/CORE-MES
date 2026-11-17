@@ -75,6 +75,20 @@ export function canliMakineAyrimlari(db: Db, makineIdleri: readonly number[], uf
   );
 }
 
+// 3390-2: aralıkla kesişen canlı yerleşimler (bölünmüş işte parçalar), başlangıç sırasıyla; Ortak Dosyalar'ın Plan listesi.
+export function canliAraliktakiIsler(db: Db, baslangic: Date, bitis: Date): Promise<{ isEmriId: number; makineId: number | null; baslangic: Date }[]> {
+  return db.sorgu(
+    `SELECT is_emri_id AS "isEmriId", makine_id AS "makineId", baslangic FROM (
+       SELECT y.makine_id, y.is_emri_id, y.baslangic, y.bitis FROM plan_yerlesimi y
+        WHERE NOT EXISTS (SELECT 1 FROM plan_yerlesim_parcasi p WHERE p.is_emri_id = y.is_emri_id)
+       UNION ALL
+       SELECT makine_id, is_emri_id, baslangic, bitis FROM plan_yerlesim_parcasi) a
+      WHERE baslangic < $2 AND bitis > $1
+      ORDER BY baslangic, is_emri_id`,
+    [baslangic, bitis],
+  );
+}
+
 // Canlı plandaki verilen iş emirlerinin yerleşimi, başlangıç sırasıyla.
 export async function canliYerlesimleri(db: Db, isEmriIdleri: readonly number[]): Promise<YerlesimSatiri[]> {
   const r = await db.sorgu<Ham>(`SELECT ${YERLESIM} FROM plan_yerlesimi WHERE is_emri_id = ANY($1::int[]) ORDER BY baslangic, is_emri_id`, [isEmriIdleri]);

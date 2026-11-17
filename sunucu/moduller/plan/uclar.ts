@@ -22,6 +22,7 @@ import {
   planaAlOnizlemesiCevabi,
 } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { PLAN_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, calismayiCanliyaAl, calismayiOnayaGonder, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
@@ -45,7 +46,7 @@ const PLAN_BEDELI_OKUR = { biri: ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fi
 // Her yazma adından belli ayrı bir uçtur (genel kaydet yok). Planlama işlemleri taslağa yazar (P6); taslak verilmezse açılır.
 // 280 a: planı, karşılaştırmayı, canlı yerleşimi ve senaryoları planı gören ya da yazan okur. Sürüm ve menü sayaçları oturumludur
 // (kabuk her rolde çağırır); sayaçlar planı göremeyene boş gelir.
-const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
+const PLAN_OKUR = { biri: PLAN_OKUMA_ISLEMLERI } as const;
 // Planlama sayfasının kaynak okumaları (658 b): taşımadan önce Reçete ve Rota'nın okuma uçlarıydı; yetki aynı kalır (genişlemez, daralmaz).
 // Reçete ve Rota ekranı da birleşik durumu buradan okur.
 const KAYNAK_OKUR = { biri: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'] } as const;

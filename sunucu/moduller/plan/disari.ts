@@ -5,7 +5,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { kuyrukYazGovdesi, senaryoGovdesi, type PlanAyari } from '#paylasilan/sozlesme/plan.ts';
-import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, canliYerlesimleri, senaryo, senaryoAc as taslakAc, tabanOku, type TabanSatiri } from './sorgular.ts';
+import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, canliAraliktakiIsler, canliYerlesimleri, senaryo, senaryoAc as taslakAc, tabanOku, type TabanSatiri } from './sorgular.ts';
 import {
   malzemeMaliyetiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
@@ -25,6 +25,7 @@ export async function canliPaylar(db: Db, isEmriId: number): Promise<{ no: numbe
 export const planMotoruCozucusu = (cozucu: PlanMotoruCozucusu | null): void => planMotoruCozucusuKaydet(cozucu);
 export type { PlanMotoruCozucusu, PlanMotoruIstegi };
 export type { Kaynak } from './kurallar.ts';
+export { PLAN_OKUMA_ISLEMLERI } from './kurallar.ts';
 export type { YerlesimSatiri } from './sorgular.ts';
 
 // Canlı plan ayarı (kural, yön, tampon, dondurma, personel kısıtı, taslak emirler); Reçete ve Rota bağlı durumuna okunur (kart #1186).
@@ -117,3 +118,7 @@ export type { BakimAraligi, BakimPlani } from './bakim/kurallar.ts';
 export type { BakimCozucusu } from './bakim/servis.ts';
 // 3199 (D): hazırlığın "Takım hazırla" maddesi; bağı kablolama.ts kurar.
 export { isEmriTakimHazirlaDurumlari } from './takim-hazirla.ts';
+
+// 3390-2: aralıkla kesişen canlı plan işleri (iş emri, makine, ilk başlangıç ISO). Yetki denetlemez; çağıran plan okumasıyla süzer.
+export const canliPlanAraligi = async (db: Db, baslangic: Date, bitis: Date): Promise<{ isEmriId: number; makineId: number | null; baslangic: string }[]> =>
+  (await canliAraliktakiIsler(db, baslangic, bitis)).map((x) => ({ isEmriId: x.isEmriId, makineId: x.makineId, baslangic: x.baslangic.toISOString() }));
