@@ -54,11 +54,13 @@
   .sa-ekran-sayilar { display: flex; overflow-x: auto; gap: var(--b-2); scroll-snap-type: x mandatory; }
   .sa-ekran-sayilar > * { flex: 0 0 auto; min-width: 150px; scroll-snap-align: start; }
 }
-/* 2430: telefon kartında Logo durumu yalnız hatada görünür, nedeniyle birlikte; öteki durumlar talebin sipariş adımında. */
-.sa-ekran-siparisler [data-kip="kart"] td[data-baslik="Logo"]:not(:has(.sa-sp-logo-hata)) { display: none; }
-/* 1280'de tablo kipinde kalsın diye Gecikme ve Logo rozetleri dar yerde iki satıra iner; uzun Logo durumu sütunu genişletmez. */
-.sa-ekran-siparisler .tc-tablo td[data-baslik="Gecikme"] .tc-rozet,
+/* 2430: telefon kartında Logo durumu yalnız hatada görünür, nedeniyle birlikte; öteki durumlar talebin sipariş adımında. 3384 a: Logo
+   irsaliye ve fatura özeti olan satırda da görünür (onaylı ön izleme). */
+.sa-ekran-siparisler [data-kip="kart"] td[data-baslik="Logo"]:not(:has(.sa-sp-logo-hata, .sa-sp-logo-ozet)) { display: none; }
+/* 1280'de tablo kipinde kalsın diye Logo rozeti dar yerde iki satıra iner; uzun Logo durumu sütunu genişletmez. Gecikme rozeti
+   ("2 gün") bölünmez: Logo özeti eklenince sütun daralıyor ve sayı ile birim ayrı satıra düşüyordu (3384 Arayüz bakışı). */
 .sa-ekran-siparisler .tc-tablo td[data-baslik="Logo"] .tc-rozet { white-space: normal; }
+.sa-ekran-siparisler .tc-tablo td[data-baslik="Gecikme"] .tc-rozet { white-space: nowrap; }
 /* Kodlar (sipariş ve talep no, miktar) tireden bölünmez; ad kırılabilir. */
 .sa-sp-kod > *, .sa-sp-nowrap { white-space: nowrap; }
 .sa-sp-logo-hata { align-items: flex-start; }
@@ -67,3 +69,11 @@
 @media (max-width: 767px) {
   .sa-ekran-siparisler .tc-sbaslik-alt { white-space: normal; }
 }
+
+/* 3384 a: Logo rozetinin altında Logo irsaliye ve fatura özeti. "Logo'da fark" sayı kartı sekmeyi seçer. */
+.sa-sp-logo { align-items: flex-start; }
+.sa-sp-logo-ozet { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--sa-muted); }
+.sa-sp-logo-ozet > span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.sa-sp-logo-ozet > span[data-fark] { color: var(--sa-warn); font-weight: 600; }
+.sa-sp-kart-dugme { display: grid; cursor: pointer; border-radius: var(--sa-radius); }
+.sa-sp-kart-dugme:focus-visible { outline: var(--cizgi-kalin) solid var(--sa-signal); outline-offset: var(--cizgi-kalin); }

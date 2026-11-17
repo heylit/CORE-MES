@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { LOGO_IRSALIYE_TURLERI, type IRSALIYE_ESLESME_DURUMLARI } from '#paylasilan/sozlesme/logo.ts';
+import { LOGO_IRSALIYE_TURLERI, type IRSALIYE_ESLESME_DURUMLARI, type SiparisLogoKalemDurumu } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, LogoFisDurumu, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import type { LogoRozetDurumu, LogoRozetTuru } from '#paylasilan/sozlesme/logo.ts';
 
@@ -2092,6 +2092,73 @@ export function irsaliyeEslesmesi(b: EslesmeGirdisi, k: EslesmeKaynaklari): Irsa
 }
 
 const karsilikAdi = (c: CoreKarsiligi): string => (c.tur === 'sevk' ? `Sevk ${c.no}` : c.tur === 'mal-kabul' ? `İade mal kabulü ${c.no}` : `Sipariş ${c.no}`);
+
+// 3384 a: satın alma siparişinin Logo özeti. Kalem başına Logo'daki net irsaliye miktarı (alış iade düşülür) CORE mal kabul toplamıyla
+// karşılaştırılır. CORE'da kabul yoksa CORE miktarı gerçek sıfırdır ve fark sayılır; Logo'da irsaliye yoksa da Logo sıfırdır, yeter ki sipariş
+// irsaliye okumasının penceresinde (IRSALIYE_GERI_GUN) açılmış olsun. Pencereden eski siparişte irsaliyesiz kalem "okunmadi"dır, sıfır uydurulmaz.
+// Birimi tutmayan kalemde fark hesaplanmaz.
+export interface OzetKalemi {
+  siparisNo: string; siparisTarihi: string | null; siparisSatiriId: number; kalemAdi: string; miktar: string; birim: string; teslim: string; logoSatirRef: string | null;
+}
+export interface OzetIrsaliyeSatiri {
+  firma: number; donem: number; irsaliyeRef: number; fisNo: string | null; belgeNo: string | null; tarih: string; tur: number; faturaNo: string | null;
+  siparisNo: string; siparisSatirRef: string; miktar: string | null; birim: string | null;
+}
+export interface SiparisOzetiKalemi {
+  siparisSatiriId: number; kalemAdi: string; siparisMiktari: string; birim: string; coreMiktari: string; logoMiktari: string | null; logoBirimi: string | null;
+  durum: SiparisLogoKalemDurumu; fark: string | null;
+}
+export interface SiparisOzeti {
+  siparisNo: string; logoda: boolean;
+  irsaliyeler: { firma: number; donem: number; kayitNo: number; fisNo: string | null; belgeNo: string | null; tarih: string; iade: boolean }[];
+  kalemler: SiparisOzetiKalemi[]; irsaliyeliKalem: number; farkliKalem: number; faturalar: string[] | null;
+}
+const ALIS_IADE = 6;
+const isaretliOlcekli = (d: string): bigint => (d.startsWith('-') ? -olcekli(d.slice(1)) : olcekli(d));
+const isaretliMetin = (o: bigint): string => (o < 0n ? `-${metne(-o)}` : metne(o));
+
+export function siparisLogoOzetleri(
+  nolar: readonly string[], kalemler: readonly OzetKalemi[], irsaliyeSatirlari: readonly OzetIrsaliyeSatiri[],
+  faturalar: ReadonlyMap<string, readonly string[]> | null, pencereBasi: string,
+): SiparisOzeti[] {
+  return nolar.map((no) => {
+    const benim = kalemler.filter((k) => k.siparisNo === no);
+    const satirlar = irsaliyeSatirlari.filter((x) => x.siparisNo === no && benim.some((k) => k.logoSatirRef === x.siparisSatirRef));
+    const pencerede = benim.some((k) => k.siparisTarihi !== null && k.siparisTarihi >= pencereBasi);
+    const ozetKalemler = benim.map((k): SiparisOzetiKalemi => {
+      const temel = { siparisSatiriId: k.siparisSatiriId, kalemAdi: k.kalemAdi, siparisMiktari: sadeMiktar(k.miktar), birim: k.birim, coreMiktari: sadeMiktar(k.teslim) };
+      if (k.logoSatirRef === null) return { ...temel, logoMiktari: null, logoBirimi: null, durum: 'logo-bagi-yok', fark: null };
+      const ls = satirlar.filter((x) => x.siparisSatirRef === k.logoSatirRef);
+      const okunamayan = ls.some((x) => x.miktar === null || !IRSALIYE_ONDALIK.test(x.miktar));
+      if (ls.length === 0 && !pencerede) return { ...temel, logoMiktari: null, logoBirimi: null, durum: 'okunmadi', fark: null };
+      if (okunamayan || !IRSALIYE_ONDALIK.test(k.teslim)) return { ...temel, logoMiktari: null, logoBirimi: null, durum: 'okunmadi', fark: null };
+      const logoBirimi = ls.find((x) => x.birim !== null)?.birim ?? null;
+      const net = ls.reduce((t, x) => t + (x.tur === ALIS_IADE ? -1n : 1n) * isaretliOlcekli(x.miktar!), 0n);
+      const logoMiktari = isaretliMetin(net);
+      if (ls.some((x) => x.birim === null || birimAnahtari(x.birim) !== birimAnahtari(k.birim))) {
+        return { ...temel, logoMiktari, logoBirimi, durum: 'birim', fark: null };
+      }
+      const fark = net - isaretliOlcekli(k.teslim);
+      if (fark !== 0n) return { ...temel, logoMiktari, logoBirimi, durum: 'fark', fark: isaretliMetin(fark) };
+      return { ...temel, logoMiktari, logoBirimi, durum: net === 0n ? 'bekliyor' : 'ayni', fark: null };
+    });
+    const irsaliyeler = [...new Map(satirlar.map((x) => [`${x.firma}-${x.donem}-${x.irsaliyeRef}`, {
+      firma: x.firma, donem: x.donem, kayitNo: x.irsaliyeRef, fisNo: x.fisNo, belgeNo: x.belgeNo, tarih: x.tarih, iade: x.tur === ALIS_IADE,
+    }])).values()];
+    const fatura = faturalar?.get(no) ?? null;
+    const irsaliyeFaturalari = satirlar.flatMap((x) => (x.faturaNo === null ? [] : [x.faturaNo]));
+    return {
+      siparisNo: no,
+      logoda: benim.some((k) => k.logoSatirRef !== null),
+      irsaliyeler,
+      kalemler: ozetKalemler,
+      irsaliyeliKalem: benim.filter((k) => k.logoSatirRef !== null && satirlar.some((x) => x.siparisSatirRef === k.logoSatirRef)).length,
+      farkliKalem: ozetKalemler.filter((k) => k.durum === 'fark').length,
+      // Fatura okuması kapalıysa ya da sipariş henüz okunmadıysa yalnız irsaliyenin faturası bilinir; o da yoksa "bilinmiyor" (null).
+      faturalar: fatura === null && irsaliyeFaturalari.length === 0 ? null : [...new Set([...(fatura ?? []), ...irsaliyeFaturalari])].sort(),
+    };
+  });
+}
 
 // 3359 a: CRM satış müşterisi okumasının sonucu. Yardımcı 404 ile "yok" der (bulma ucu). Ulaşılamayan yardımcıya aynı istekte yeniden
 // sorulmaz: kalan cariler aynı nedenle "okunamadı" olur (her biri zaman aşımı beklemesin).

@@ -461,3 +461,55 @@ export const irsaliyeCevabi = z.object({
   })),
 });
 export type IrsaliyeCevabi = z.output<typeof irsaliyeCevabi>;
+
+// 3384 a: satın alma siparişinin Logo'daki irsaliye ve fatura özeti, yalnız okuma (aynadan; Logo'ya istek atmaz). Fiyat yok: Logo faturasından
+// yalnız numara okunur. Sipariş CORE numarasıyla (SP-...) sorulur; Logo'ya gitmemiş siparişin kalemleri "logo-bagi-yok" döner.
+export const SIPARIS_LOGO_OZETI_SINIRI = 200;
+export const SIPARIS_LOGO_KALEM_DURUMLARI = ['ayni', 'fark', 'birim', 'bekliyor', 'okunmadi', 'logo-bagi-yok'] as const;
+export type SiparisLogoKalemDurumu = (typeof SIPARIS_LOGO_KALEM_DURUMLARI)[number];
+
+export const siparisLogoOzetiSorgusu = z.object({
+  nolar: z.string().trim().min(1).max(SIPARIS_LOGO_OZETI_SINIRI * 20)
+    .transform((m) => [...new Set(m.split(',').map((x) => x.trim()).filter((x) => x !== ''))])
+    .refine((l) => l.length > 0 && l.length <= SIPARIS_LOGO_OZETI_SINIRI, `En çok ${SIPARIS_LOGO_OZETI_SINIRI} sipariş sorulur.`),
+});
+
+export const siparisLogoOzeti = z.object({
+  siparisNo: z.string(),
+  // Siparişin en az bir kalemi Logo'ya gitmiş mi.
+  logoda: z.boolean(),
+  irsaliyeler: z.array(z.object({
+    firma: z.number().int(), donem: z.number().int(), kayitNo: z.number().int(),
+    fisNo: z.string().nullable(), belgeNo: z.string().nullable(), tarih: tarihSemasi, iade: z.boolean(),
+  })),
+  kalemler: z.array(z.object({
+    siparisSatiriId: z.number().int(),
+    kalemAdi: z.string(),
+    siparisMiktari: imzaliMiktar,
+    birim: z.string(),
+    coreMiktari: imzaliMiktar,
+    // Logo'daki net irsaliye miktarı (iade düşülmüş); okunmamış ya da Logo'ya bağlı olmayan kalemde null.
+    logoMiktari: imzaliMiktar.nullable(),
+    logoBirimi: z.string().nullable(),
+    durum: z.enum(SIPARIS_LOGO_KALEM_DURUMLARI),
+    // Logo eksi CORE; yalnız "fark" durumunda dolu.
+    fark: imzaliMiktar.nullable(),
+  })),
+  // Kalem sayıları: irsaliyesi olan ve farklı olan (birim tutmayan fark sayılmaz).
+  irsaliyeliKalem: z.number().int().min(0),
+  farkliKalem: z.number().int().min(0),
+  // Logo'daki fatura numaraları (sipariş faturası ve irsaliyenin faturası); fatura okuması kapalıysa ya da sipariş hiç okunmadıysa null.
+  faturalar: z.array(z.string()).nullable(),
+});
+export type SiparisLogoOzeti = z.output<typeof siparisLogoOzeti>;
+
+export const siparisLogoOzetiCevabi = z.object({
+  okuma: z.object({
+    // "Logo bağlantısı" ve ilgili okuma ayarı birlikte açık mı.
+    irsaliye: z.boolean(),
+    fatura: z.boolean(),
+    sonOkuma: zamanSemasi.nullable(),
+  }),
+  siparisler: z.array(siparisLogoOzeti),
+});
+export type SiparisLogoOzetiCevabi = z.output<typeof siparisLogoOzetiCevabi>;

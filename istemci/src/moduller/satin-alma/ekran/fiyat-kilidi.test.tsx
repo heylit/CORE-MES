@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { anahtarlar } from '../../../ortak/veri/anahtarlar.ts';
 import '../../../ortak/arayuz/index.ts';
 import type { PurchaseRequest, Supplier } from '../merkez/tipler.ts';
 import { DEFAULT_SETTINGS } from '../merkez/constants.ts';
@@ -28,6 +30,12 @@ beforeEach(() => {
   bump();
 });
 afterEach(() => { cleanup(); setFiyatKilidi(false); });
+// Siparişler Logo özeti için oturumdan yetki okur (3384 a); oturum önceden yazılır ki ağa gidilmesin.
+function sorguIle(ic: React.ReactNode) {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  istemci.setQueryData(anahtarlar.oturum, null);
+  return <QueryClientProvider client={istemci}>{ic}</QueryClientProvider>;
+}
 
 describe('satın alma merkezi: fiyat kilidi (3401-1 a)', () => {
   it('kilitliyken tutar ve kısa tutar "Yetkiniz yok" yazar, sıfır ya da tire yazmaz; kilitli değilken biçimlenir', () => {
@@ -52,7 +60,7 @@ describe('satın alma merkezi: fiyat kilidi (3401-1 a)', () => {
 
   it('Siparişler: kilitliyken tutar sütunu çizilmez ve kilit notu durur', () => {
     setFiyatKilidi(true);
-    render(<MemoryRouter><Siparisler /></MemoryRouter>);
+    render(sorguIle(<MemoryRouter><Siparisler /></MemoryRouter>));
     expect(screen.queryByRole('columnheader', { name: /Tutar/ })).toBeNull();
     expect(screen.getByText(/Fiyat sütunları yetkinizde değil/)).toBeTruthy();
   });

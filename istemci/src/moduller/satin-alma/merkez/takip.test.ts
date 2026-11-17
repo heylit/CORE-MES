@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, SiparisTakibiCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { SiparisIrsaliyeleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { SiparisLogoOzetiCevabi } from '#paylasilan/sozlesme/logo.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
 import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
+import { takibiUnut } from './takip.ts';
 
 const K1 = '00000000-0000-4000-8000-000000000011';
 const QA = '00000000-0000-4000-8000-0000000000a1';
@@ -141,5 +143,69 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     expect(fat!.textContent).toContain('Fatura DN-F7, 09.10.2026, vade 09.11.2026');
     expect(kok.querySelector('[data-act="odeme-plani"]')).toBeNull();
     kapat();
+  });
+
+  it("3384 a: Logo'ya gitmiş siparişte Logo irsaliye ve fatura satırları ile kalem karşılaştırması; okuma kapalıysa tek satır", async () => {
+    const LOGO = { durum: 'gonderildi', kayitNo: '501', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null,
+      kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null };
+    const karar = TALEP.karar!;
+    // Öteki testler aynı talebi sürüm 3 ile açar; ayrı sürüm takibin yeniden okunmasını sağlar.
+    const talep: Talep = { ...TALEP, surum: 4, karar: { ...karar, siparisler: karar.siparisler.map((x) => ({ ...x, logo: LOGO as never })) } };
+    const acik: SiparisLogoOzetiCevabi = {
+      okuma: { irsaliye: true, fatura: true, sonOkuma: null },
+      siparisler: [{
+        siparisNo: 'SP-2026-001', logoda: true, irsaliyeliKalem: 1, farkliKalem: 1, faturalar: ['ORN-F-1'],
+        irsaliyeler: [{ firma: 1, donem: 1, kayitNo: 77, fisNo: 'ORN-IRS-1', belgeNo: 'ORN-B-1', tarih: '2026-10-10', iade: false }],
+        kalemler: [{ siparisSatiriId: 41, kalemAdi: 'Deneme çubuk', siparisMiktari: '10', birim: 'kg', coreMiktari: '10', logoMiktari: '8', logoBirimi: 'kg', durum: 'fark', fark: '-2' }],
+      }],
+    };
+    let logo: SiparisLogoOzetiCevabi = acik;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = String(adres).replace('/api', '');
+      if (yol === `/satin-alma-talepleri/${TALEP.id}/siparis-takibi`) {
+        return json({ siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', faturalar: [], kdvOrani: '20', kdvElle: false, kdvSecenekleri: ['20'], odemePlani: [] }] } satisfies SiparisTakibiCevabi);
+      }
+      if (yol.startsWith('/stok/siparis-irsaliyeleri')) return json({ irsaliyeler: [] } satisfies SiparisIrsaliyeleriCevabi);
+      if (yol === '/logo/satin-alma-siparisleri/ozet?nolar=SP-2026-001') return json(logo);
+      return json({ ...ACILIS, talepler: [talep] });
+    }));
+    // Takip talep ve sürüm başına önbellekte durur (öteki testler aynı talebi açar); her açılış yeniden okusun.
+    const ac = async () => {
+      takibiUnut();
+      const kok = document.createElement('div');
+      document.body.append(kok);
+      const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+      await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+      sekme(kok, 'ordered')!.click();
+      await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+      talepSatiri(kok, TALEP.id)!.click();
+      await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+      sekme(kok, 'order')!.click();
+      await vi.waitFor(() => expect(kok.querySelectorAll('[data-sa-logo-takip]').length).toBeGreaterThan(0));
+      return { kok, kapat };
+    };
+
+    const { kok, kapat } = await ac();
+    const [irs, fat] = [...kok.querySelectorAll<HTMLElement>('[data-sa-logo-takip]')];
+    expect(irs!.dataset.saTakip).toBe('fark');
+    expect(irs!.textContent).toContain('Logo: irsaliye girildi, 1 kalemde fark');
+    expect(irs!.querySelector('a')?.getAttribute('href')).toBe('/logo-irsaliyeleri');
+    expect(fat!.textContent).toContain('Logo: fatura var');
+    expect(fat!.textContent).toContain('ORN-F-1');
+    const tablo = kok.querySelector<HTMLDetailsElement>('[data-sa-logo-kalemleri]')!;
+    expect(tablo.open).toBe(true);
+    expect(tablo.querySelector('tr[data-sa-logo-kalem="fark"]')!.textContent).toContain("Logo'da 2 kg az");
+    // Fiyat ve tutar Logo'dan okunmaz; karşılaştırma yalnız miktardır.
+    expect(tablo.textContent).not.toContain('₺');
+    kapat();
+    document.body.innerHTML = '';
+
+    logo = { okuma: { irsaliye: false, fatura: false, sonOkuma: null }, siparisler: [] };
+    const ikinci = await ac();
+    const satirlar = [...ikinci.kok.querySelectorAll<HTMLElement>('[data-sa-logo-takip]')];
+    expect(satirlar).toHaveLength(1);
+    expect(satirlar[0]!.textContent).toContain('Logo okuması kapalı');
+    expect(ikinci.kok.querySelector('[data-sa-logo-kalemleri]')).toBeNull();
+    ikinci.kapat();
   });
 });

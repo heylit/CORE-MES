@@ -1,18 +1,24 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import type { SiparisLogoOzeti } from '#paylasilan/sozlesme/logo.ts';
+import { KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
+import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
+import { faturaOzeti, irsaliyeOzeti, logoOzetleriniOku, type LogoOzetiOkumasi } from '../merkez/logo-ozeti.ts';
 import { go } from '../merkez/ui.ts';
 import { fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 
 // Siparişler (2430): tedarikçiye verilen her sipariş bir satır; satıra basınca talebin Sipariş adımı açılır, geri tuşu buraya döner.
 // Veri merkezin açılış verisidir (ayrı uç yok); tanımlar iş kutusuyla aynı (2425).
-type Bolum = 'acik' | 'geciken' | 'hafta' | 'tamam' | 'hepsi';
+type Bolum = 'acik' | 'geciken' | 'logo-fark' | 'hafta' | 'tamam' | 'hepsi';
 // Kırmızı sayı rozeti yalnız sorun olan Geciken'de; "Bu hafta" sorun değil, sayısı başlığa düz yazılır (2433 Talepte gibi).
 type Sayim = 'rozet' | 'duz' | null;
 const BOLUMLER: readonly [Bolum, string, (s: SiparisSatiri) => boolean, Sayim][] = [
   ['acik', 'Açık', (s) => !s.teslim, null],
   ['geciken', 'Geciken', (s) => s.gecikme !== null, 'rozet'],
+  // 3384 a: süzgeci Logo özetiyle aşağıda kurulur; sekme yalnız irsaliye okuması açık ve özeti görebilene çıkar. Telefonda görünsün diye öne yakın.
+  ['logo-fark', "Logo'da fark", () => false, null],
   ['hafta', 'Bu hafta gelecek', (s) => s.buHafta, 'duz'],
   ['tamam', 'Tamamlanan', (s) => !!s.teslim, null],
   ['hepsi', 'Tümü', () => true, null],
@@ -36,6 +42,21 @@ function logoDurumu(s: SiparisSatiri): [RozetTonu, string, string] | null {
 const gelenUst = (s: SiparisSatiri) => (s.tek ? `${nfm.format(s.tek.gelen)} / ${nfm.format(s.tek.miktar)} ${s.tek.birim}` : `${s.gelenKalem} / ${s.kalem} kalem`);
 const kalanSayi = (s: SiparisSatiri) => (s.tek ? Math.max(0, s.tek.miktar - s.tek.gelen) : s.kalem - s.gelenKalem);
 const gelenMetni = (s: SiparisSatiri) => `${gelenUst(s)}, ${nfm.format(kalanSayi(s))} kalan`;
+// 3384 a: Logo rozetinin altında Logo'daki irsaliye ve fatura özeti; okunmayan taraf yazılmaz.
+function LogoOzeti({ o, okuma }: { o: SiparisLogoOzeti | undefined; okuma: LogoOzetiOkumasi | undefined }) {
+  if (!o || !okuma) return null;
+  const irs = irsaliyeOzeti(o, okuma);
+  const fat = faturaOzeti(o);
+  if (!irs && !fat) return null;
+  return (
+    <span className="sa-sp-logo-ozet">
+      {irs && <span data-fark={irs.fark ? '' : undefined}><Simge ad={irs.fark ? 'alert' : 'truck'} boyut="k" />{irs.metin}</span>}
+      {fat && <span><Simge ad="file" boyut="k" />{fat}</span>}
+    </span>
+  );
+}
+const logoOzetiMetni = (o: SiparisLogoOzeti | undefined, okuma: LogoOzetiOkumasi | undefined): string =>
+  (o && okuma ? [irsaliyeOzeti(o, okuma)?.metin, faturaOzeti(o)].filter(Boolean).join(' · ') : '');
 const gecikmeMetni = (s: SiparisSatiri) => (s.teslim ? 'Geldi' : s.gecikme !== null ? `${s.gecikme} gün` : s.buHafta ? 'Bu hafta' : '');
 
 // Varsayılan sıra: geciken önce (çok geciken üstte), sonra beklenen teslimi yakın olan; termini olmayan sonda.
@@ -53,7 +74,21 @@ export function Siparisler() {
   const [siralama, siralamaYaz] = useState<Siralama | null>(null);
   const bugun = todayStr();
   const hepsi = siparisListesi(bugun);
-  const uyar = BOLUMLER.find(([k]) => k === bolum)![2];
+  const yetki = useYetki();
+  const nolar = [...new Set(hepsi.filter((s) => s.logo !== null && s.orderNo !== '').map((s) => s.orderNo))].sort();
+  const ozetler = useQuery({
+    queryKey: ['satin-alma', 'logo-ozeti', nolar],
+    queryFn: () => logoOzetleriniOku(nolar),
+    enabled: yetki.var('logo.irsaliye-oku') && nolar.length > 0,
+    staleTime: 60_000,
+  });
+  const okuma = ozetler.data?.okuma;
+  const ozet = (s: SiparisSatiri): SiparisLogoOzeti | undefined => ozetler.data?.siparisler.get(s.orderNo);
+  const logoFarkli = (s: SiparisSatiri) => (ozet(s)?.farkliKalem ?? 0) > 0 && okuma?.irsaliye === true;
+  const farkSekmesi = okuma?.irsaliye === true;
+  const bolumler = BOLUMLER.filter(([k]) => k !== 'logo-fark' || farkSekmesi)
+    .map(([k, l, f, sayim]): (typeof BOLUMLER)[number] => (k === 'logo-fark' ? [k, l, logoFarkli, sayim] : [k, l, f, sayim]));
+  const uyar = (bolumler.find(([k]) => k === bolum) ?? bolumler[0]!)[2];
   const aranan = norm(ara.trim());
   const liste = hepsi
     .filter(uyar)
@@ -71,13 +106,14 @@ export function Siparisler() {
   const geciken = acik.filter((s) => s.gecikme !== null);
   const hafta = acik.filter((s) => s.buHafta);
   const acikTutar = acik.reduce((t, s) => t + (s.tutar ?? 0), 0);
+  const farkli = hepsi.filter(logoFarkli);
   const tedarikciler = [...new Map(hepsi.map((s) => [s.supplierId, s.tedarikci])).entries()].sort((a, b) => a[1].localeCompare(b[1], 'tr'));
 
   const kilit = fiyatKilitli();
   const tumSutunlar: Sutun<SiparisSatiri>[] = [
     {
       anahtar: 'no', baslik: 'Sipariş', mono: true, sirala: true, csv: (s) => siparisEtiketi(s),
-      hucre: (s) => (s.poNo ? <span className="sa-ekran-govde sa-sp-kod"><span>{s.orderNo || '–'}</span><small>{s.poNo}</small></span> : s.orderNo || '–'),
+      hucre: (s) => (s.poNo ? <span className="sa-ekran-govde sa-sp-kod"><span>{s.orderNo || '–'}</span><small>{s.poNo}</small></span> : <span className="sa-sp-nowrap">{s.orderNo || '–'}</span>),
     },
     { anahtar: 'ted', baslik: 'Tedarikçi', sirala: true, hucre: (s) => <b>{s.tedarikci}</b>, csv: (s) => s.tedarikci },
     {
@@ -100,14 +136,16 @@ export function Siparisler() {
         : s.buHafta ? <Rozet ton="uyari">Bu hafta</Rozet> : '–'),
     },
     {
-      anahtar: 'logo', baslik: 'Logo', csv: (s) => { const l = logoDurumu(s); return l ? [l[1], l[0] === 'hata' ? l[2] : ''].filter(Boolean).join(': ') : ''; },
+      anahtar: 'logo', baslik: 'Logo',
+      csv: (s) => { const l = logoDurumu(s); return [l ? [l[1], l[0] === 'hata' ? l[2] : ''].filter(Boolean).join(': ') : '', logoOzetiMetni(ozet(s), okuma)].filter(Boolean).join(' · '); },
       // Hata nedeni yalnız title'da kalmaz (dokunmatikte okunmaz); hatalı satırda Logo alanı kart kipinde de görünür.
       hucre: (s) => {
         const l = logoDurumu(s);
         if (!l) return '–';
+        const alt = <LogoOzeti o={ozet(s)} okuma={okuma} />;
         return l[0] === 'hata'
-          ? <span className="sa-ekran-govde sa-sp-logo-hata"><Rozet ton="hata">{l[1]}</Rozet>{l[2] && <small>{l[2]}</small>}</span>
-          : <span title={l[2] || undefined}><Rozet ton={l[0]}>{l[1]}</Rozet></span>;
+          ? <span className="sa-ekran-govde sa-sp-logo-hata"><Rozet ton="hata">{l[1]}</Rozet>{l[2] && <small>{l[2]}</small>}{alt}</span>
+          : <span className="sa-ekran-govde sa-sp-logo" title={l[2] || undefined}><Rozet ton={l[0]}>{l[1]}</Rozet>{alt}</span>;
       },
     },
   ];
@@ -124,11 +162,19 @@ export function Siparisler() {
           )}
           {hafta.length > 0 && <SayiKarti baslik="Bu hafta gelecek" simge="calendar" sayi={hafta.length} altMetin="bugün dahil 7 gün" />}
           {acik.length > 0 && <SayiKarti baslik="Açık sipariş" simge="cart" sayi={acik.length} {...(kilit ? {} : { altMetin: `${money(acikTutar, 'TRY', 0)}, KDV hariç` })} />}
+          {farkli.length > 0 && (
+            // Kart sekmeyi seçer (telefonda sekme satırı kayar, kart her zaman görünür).
+            <div className="sa-sp-kart-dugme" role="button" tabIndex={0} aria-label="Logo'da fark olan siparişleri göster"
+              onClick={() => { bolumYaz('logo-fark'); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bolumYaz('logo-fark'); } }}>
+              <SayiKarti baslik="Logo'da fark" simge="alert" sayi={farkli.length} ton="uyari" altMetin="mal kabul ile Logo irsaliyesi tutmuyor" />
+            </div>
+          )}
         </div>
       )}
       {kilit && <KilitliSutunNotu ne="Fiyat sütunları" yetki={YETKI_ADI.satinAlmaFiyati} />}
       <Sekmeler etiket="Sipariş durumu" secili={bolum} sec={bolumYaz}
-        sekmeler={BOLUMLER.map(([k, l, f, sayim]) => {
+        sekmeler={bolumler.map(([k, l, f, sayim]) => {
+          if (k === 'logo-fark') return { anahtar: k, baslik: farkli.length > 0 ? `${l} · ${farkli.length}` : l };
           const n = acik.filter(f).length;
           return sayim === 'rozet' ? { anahtar: k, baslik: l, sayi: n } : { anahtar: k, baslik: sayim === 'duz' && n > 0 ? `${l} · ${n}` : l };
         })} />
@@ -144,7 +190,9 @@ export function Siparisler() {
               secenekler={tedarikciler.map(([deger, baslik]) => ({ deger, baslik }))} />
           ),
         }} />
-      <p className="sa-ekran-not">{`${kilit ? '' : 'Tutarlar ₺, KDV hariç; '}bugün ${fmtDate(bugun)}. Geciken: teslimi bitmemiş ve beklenen teslimi geçmiş sipariş.`}</p>
+      <p className="sa-ekran-not">{`${kilit ? '' : 'Tutarlar ₺, KDV hariç; '}bugün ${fmtDate(bugun)}. Geciken: teslimi bitmemiş ve beklenen teslimi geçmiş sipariş.`}{farkSekmesi
+        ? ` Logo'da fark: aynı sipariş satırında CORE mal kabul miktarı ile Logo irsaliye miktarı tutmuyor.${okuma?.sonOkuma ? ` Logo son okuma ${new Date(okuma.sonOkuma).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Istanbul' })}.` : ''}`
+        : ''}</p>
     </div>
   );
 }

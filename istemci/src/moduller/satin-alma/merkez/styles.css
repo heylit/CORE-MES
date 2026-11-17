@@ -827,3 +827,8 @@
 .sa-kok .sa-kilit b{ font-size:var(--yazi-xs); font-weight:600; color:var(--ink); }
 .sa-kok .sa-kilit small{ font-size:var(--yazi-xs); color:var(--muted); }
 .sa-kok .sa-kilit-not{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-2); margin:0; padding:var(--b-3) var(--b-4); color:var(--muted); }
+/* 3384 a: sipariş takibinde Logo irsaliye farkı ve kalem kalem karşılaştırma. */
+.sa-kok .todo[data-sa-takip-listesi] li[data-sa-takip="fark"] > span:first-child{ color:var(--sa-warn); }
+.sa-kok .todo[data-sa-takip-listesi] li[data-sa-takip="fark"] b{ color:var(--sa-ink); }
+.sa-kok .sa-logo-kalemler summary{ cursor:pointer; font-weight:600; }
+.sa-kok .sa-logo-kalemler .sa-logo-fark{ color:var(--sa-warn); }
