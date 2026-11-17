@@ -30,13 +30,14 @@ export const SATIN_ALMA_IKINCI_MENU = {
     },
     {
       baslik: 'Kurumsal hafıza',
+      // 3401-1 a: içeriği bütünüyle fiyat olan sayfalar fiyat yetkisi ister; yalnız okuyan (planlama) menüde görmez.
       maddeler: [
         { anahtar: 'malzemeler', baslik: 'Malzemeler', yol: '/satin-alma/malzemeler', simge: 'box', islem: 'satin-alma.oku' },
-        { anahtar: 'kg-fiyatlari', baslik: 'Kg fiyatları', yol: '/satin-alma/kg-fiyatlari', simge: 'lira', islem: 'satin-alma.oku' },
+        { anahtar: 'kg-fiyatlari', baslik: 'Kg fiyatları', yol: '/satin-alma/kg-fiyatlari', simge: 'lira', islem: 'satin-alma.fiyat-oku' },
         { anahtar: 'tedarikciler', baslik: 'Tedarikçiler', yol: '/satin-alma/tedarikciler', simge: 'truck', islem: 'satin-alma.oku' },
-        { anahtar: 'raporlar', baslik: 'Raporlar', yol: '/satin-alma/raporlar', simge: 'chart', islem: 'satin-alma.oku' },
+        { anahtar: 'raporlar', baslik: 'Raporlar', yol: '/satin-alma/raporlar', simge: 'chart', islem: 'satin-alma.fiyat-oku' },
         // 2151-1 b: tedarikçi başarımı, harcama, fiyat ve tüketim tahmini (sunucuda hesaplanır).
-        { anahtar: 'analiz', baslik: 'Analiz', yol: '/satin-alma/analiz', simge: 'chart', islem: 'satin-alma.oku' },
+        { anahtar: 'analiz', baslik: 'Analiz', yol: '/satin-alma/analiz', simge: 'chart', islem: 'satin-alma.fiyat-oku' },
       ],
     },
   ],

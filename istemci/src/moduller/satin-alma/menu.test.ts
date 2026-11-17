@@ -6,10 +6,10 @@ import { rotalar } from './rotalar.tsx';
 // Rol x işlem satırları kisiler göçlerindedir; sunucuda aynı dağılımı `kisiler/rol-dagilimi.test.ts` sınar. Burada yalnız menünün
 // o işlem setlerinden hangi maddeleri gösterdiği denetlenir; rol satırı değişince iki test birlikte güncellenir.
 const ROL_ISLEMLERI: Record<string, readonly string[]> = {
-  satin_alma: ['sayfa.satin-alma', 'sayfa.taleplerim', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.talep-ac', 'satin-alma.yaz'],
-  mudur: ['sayfa.satin-alma', 'sayfa.taleplerim', 'satin-alma.oku', 'satin-alma.onayla', 'satin-alma.talep-ac'],
+  satin_alma: ['sayfa.satin-alma', 'sayfa.taleplerim', 'satin-alma.ayar', 'satin-alma.fiyat-oku', 'satin-alma.oku', 'satin-alma.talep-ac', 'satin-alma.yaz'],
+  mudur: ['sayfa.satin-alma', 'sayfa.taleplerim', 'satin-alma.fiyat-oku', 'satin-alma.oku', 'satin-alma.onayla', 'satin-alma.talep-ac'],
   planlama_proje: ['sayfa.satin-alma', 'sayfa.taleplerim', 'satin-alma.oku', 'satin-alma.talep-ac'],
-  muhasebe_finans: ['sayfa.satin-alma', 'satin-alma.oku'],
+  muhasebe_finans: ['sayfa.satin-alma', 'satin-alma.fiyat-oku', 'satin-alma.oku'],
   kalite: ['sayfa.taleplerim', 'satin-alma.talep-ac'],
 };
 
@@ -26,10 +26,11 @@ describe('Satın Alma ikinci menüsü', () => {
     expect(SAYFALAR.find((s) => s.yol === '/taleplerim')?.islem).toBe('sayfa.taleplerim');
   });
 
-  it('rol setleri: satın almacı iş kutusunu, müdür onayları görür; finans yalnız okur; talep eden menüyü görmez', () => {
+  it('rol setleri: satın almacı iş kutusunu, müdür onayları görür; finans yalnız okur, planlama fiyat sayfalarını görmez; talep eden menüyü görmez', () => {
     expect(gorunen(ROL_ISLEMLERI['satin_alma']!)).toEqual(['is-kutusu', 'talepler', 'siparisler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar', 'analiz']);
     expect(gorunen(ROL_ISLEMLERI['mudur']!)).toEqual(['talepler', 'siparisler', 'onaylar', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar', 'analiz']);
-    expect(gorunen(ROL_ISLEMLERI['planlama_proje']!)).toEqual(['talepler', 'siparisler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar', 'analiz']);
+    // 3401-1 a: yalnız okuyan planlama içeriği bütünüyle fiyat olan Kg fiyatları, Raporlar ve Analiz'i menüde görmez.
+    expect(gorunen(ROL_ISLEMLERI['planlama_proje']!)).toEqual(['talepler', 'siparisler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'tedarikciler']);
     expect(gorunen(ROL_ISLEMLERI['muhasebe_finans']!)).toEqual(['talepler', 'siparisler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar', 'analiz']);
     expect(gorunen(ROL_ISLEMLERI['kalite']!)).toEqual([]);
   });
