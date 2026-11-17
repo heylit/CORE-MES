@@ -116,6 +116,20 @@ CREATE OR REPLACE FUNCTION geometri_yuzey_islem_operasyonu(p_revizyon int, p_op 
      AND (SELECT count(*) FROM belge_merkezi_bag x WHERE x.belge_id = r.belge_id AND x.hedef_modul = 'malzemeler') = 1
 $$;
 
+-- İş emrinin operasyon kimliği yazanın verdiği kimliktir (rota adımı emre kopyalanırken, rota emre yeniden uygulanırken): açık emir eski
+-- numarasını korurken emrin kaynak revizyonu yeniden dizilmiş olabilir, (revizyon, op_no) ile çözmek başka adımı bulurdu. Kimliksiz ekleme
+-- ve kimliği vermeden numarasını, emrini ya da düğümünü değiştiren güncelleme eskisi gibi adımdan çözülür.
+CREATE OR REPLACE FUNCTION uretim_emirleri_is_emri_operasyon_doldur() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.operasyon_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.operasyon_id IS DISTINCT FROM OLD.operasyon_id
+     OR (NEW.uretim_emri_id, NEW.tur, NEW.op_no, NEW.dugum_malzeme_id, NEW.kaynak_op_no)
+        IS NOT DISTINCT FROM (OLD.uretim_emri_id, OLD.tur, OLD.op_no, OLD.dugum_malzeme_id, OLD.kaynak_op_no)) THEN
+    RETURN NEW;
+  END IF;
+  NEW.operasyon_id := uretim_emirleri_is_emri_operasyonu(NEW.uretim_emri_id, NEW.tur, NEW.op_no, NEW.dugum_malzeme_id, NEW.kaynak_op_no);
+  RETURN NEW;
+END $$;
+
 -- Veri: yeniden dizilecek adımlar (eski -> yeni = sıra * 10).
 CREATE TABLE gecici_3250_op_esle AS
   SELECT a.revizyon_id, a.malzeme_id, a.op_no AS eski, a.sira * 10 AS yeni, a.operasyon_id, r.durum
