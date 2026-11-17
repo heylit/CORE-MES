@@ -156,4 +156,23 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     const kapali = artikParcalarCevabi.parse((await al('depo', `/stok/artik-parcalar?malzemeNo=${m}&durum=kullanildi`)).govde);
     assert.equal(kapali.satirlar.length, 1);
   });
+
+  test('yalnız kullanılabilir stok: başka tür konumdaki miktar aday olmaz; pasif konuma artık yazılmaz', async () => {
+    const m = await kart('ORN-K3', 'cubuk', { d: 30, l: 3000 });
+    const araAlan = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_konum (depo_id, kod, tur, ad) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), 'ORN-A1', 'ara_alan', 'Deneme ara alan') RETURNING id"))!.id;
+    await giris(m, '5', araAlan);
+    const ara = async () => olcuAramaCevabi.parse((await al('depo', '/stok/olcu-arama?form=cubuk&kalite=ORN-K3&d=30&parcaBoyu=100')).govde).adaylar;
+    assert.deepEqual(await ara(), []);
+    const zemin = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_konum (depo_id, kod, tur, ad) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), 'ORN-Z2', 'depo_zemini', 'Deneme zemini 2') RETURNING id"))!.id;
+    await giris(m, '2', zemin);
+    assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: m, konumId: zemin, boy: 800 })).durum, 200);
+    assert.deepEqual((await ara()).map((a) => [a.kaynak, a.miktar]), [['artik', '1'], ['stok', '1']]);
+    // Bakiyeli konum pasifleşemez (stok_bakiye_aktif_konumda); pasif konuma artık yazılmaz.
+    const pasif = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_konum (depo_id, kod, tur, ad, aktif) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), 'ORN-Z3', 'depo_zemini', 'Deneme pasif', false) RETURNING id"))!.id;
+    assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: m, konumId: pasif, boy: 700 })).durum, 400);
+  });
 });
+

@@ -137,13 +137,18 @@ function parcaSayisi(istek: OlcuIstegi, aday: EslesmeAdayi, o: Record<string, nu
     if (L === undefined) return null;
     return boydanParca(L, istek.parcaBoyu, istek.kesmeMm) * Math.floor(aday.miktar + AYNI);
   }
-  if (birim === 'm') return boydanParca(aday.miktar * 1000, istek.parcaBoyu, istek.kesmeMm);
+  // m ve kg toplam boydur; kartın boy ölçüsü varsa bu boyda çubuklara bölünür (her çubuğun ucundaki fire sayılır).
+  const toplamdan = (toplamBoy: number) => {
+    if (L === undefined || L <= 0) return boydanParca(toplamBoy, istek.parcaBoyu!, istek.kesmeMm);
+    const tam = Math.floor((toplamBoy + AYNI) / L);
+    return tam * boydanParca(L, istek.parcaBoyu!, istek.kesmeMm) + boydanParca(Math.max(0, toplamBoy - tam * L), istek.parcaBoyu!, istek.kesmeMm);
+  };
+  if (birim === 'm') return toplamdan(aday.miktar * 1000);
   if (birim === 'kg') {
     const alan = kesitAlani(istek.form, o);
     if (alan === null || aday.yogunluk === null || aday.yogunluk <= 0) return null;
     // g/cm³ = 1e-6 kg/mm³
-    const toplamBoy = aday.miktar / (aday.yogunluk * 1e-6 * alan);
-    return boydanParca(toplamBoy, istek.parcaBoyu, istek.kesmeMm);
+    return toplamdan(aday.miktar / (aday.yogunluk * 1e-6 * alan));
   }
   return null;
 }

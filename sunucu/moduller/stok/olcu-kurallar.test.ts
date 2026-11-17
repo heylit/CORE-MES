@@ -90,4 +90,15 @@ describe('stok kontrol: ölçüyle eşleştirme (3398)', () => {
     assert.equal(artikPayi('levha', { t: 20, w: 600, l: 800 }, 1, 'm', null), null);
     assert.equal(artikPayi('cubuk', { d: 50, l: 1000 }, 1, 'torba', null), null);
   });
+
+  test('yakınlarda en az fire önce; levha döndürülünce sığar; kalın etli boru yakın sayılır; m toplamı çubuk boyunda bölünür', () => {
+    const a = (d: number) => ({ ad: `d${d}`, kaynak: 'stok' as const, ilkGiris: '2026-01-01', ...olcuEslestir(cubuk(), stok({ d, l: 3000 }, 1))! });
+    assert.deepEqual(adaySirala([a(55), a(52)]).map((x) => x.ad), ['d52', 'd55']);
+    const levha: OlcuIstegi = { form: 'levha', olcu: { t: 20 }, parcaBoyu: 1500, parcaEni: 500, adet: 1, pay, kesmeMm: 0 };
+    assert.equal(olcuEslestir(levha, stok({ t: 20, w: 1600, l: 600 }, 1))?.parcaSayisi, 1);
+    const boru: OlcuIstegi = { form: 'boru', olcu: { D: 60, t: 5 }, parcaBoyu: 250, parcaEni: null, adet: 12, pay, kesmeMm: 3 };
+    assert.equal(olcuEslestir(boru, stok({ D: 60, t: 10, l: 6000 }, 1))?.durum, 'yakin');
+    // 5 m, 3000 mm çubuk, 1000 mm parça: 3000'den 2, kalan 2000'den 1 (tek sürekli boy sayılsa 4 çıkardı).
+    assert.equal(olcuEslestir(cubuk({ parcaBoyu: 1000 }), stok({ d: 50, l: 3000 }, 5, 'm'))?.parcaSayisi, 3);
+  });
 });
