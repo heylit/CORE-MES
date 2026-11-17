@@ -131,6 +131,16 @@ describe('uretim-emirleri hazırlık maddeleri (3396, gerçek PostgreSQL)', () =
     assert.equal((await liste('ayarci')).yazabilir, true);
   });
 
+  test('liste okuma işleme bağlı: yalnız şablon yazan ya da yalnız dağıtan okur, hiçbirini taşımayan 403 (ADR 0007 md 4)', async () => {
+    for (const [kod, islem] of [['hz_sablon', 'projeler.sablon-yaz'], ['hz_dagit', 'projeler.hazirlik-dagit'], ['hz_bos', null]] as const) {
+      await o().sahip.sorgu('INSERT INTO rol (kod, ad, yerlesik, yonetici) VALUES ($1, $1, false, false)', [kod]);
+      await kisiEkle(kod, kod, islem);
+    }
+    assert.equal((await istek('hz_sablon', 'GET', '/hazirlik-maddeleri')).durum, 200);
+    assert.equal((await istek('hz_dagit', 'GET', '/hazirlik-maddeleri')).durum, 200);
+    assert.equal((await istek('hz_bos', 'GET', '/hazirlik-maddeleri')).durum, 403);
+  });
+
   test('yazma yalnız hazirlik-ayar işlemiyle: planlama 403, ayarcı adı ve sırayı değiştirir, sürüm tutmazsa 409', async () => {
     const m = await madde('aparat');
     const govde = { ad: 'Aparat ve fikstür', kisa: 'Aparat', sira: 15, acik: true, surum: m.surum };

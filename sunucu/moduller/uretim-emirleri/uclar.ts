@@ -303,7 +303,7 @@ const adimliUclar = [
     cevap: hazirlikCevabi,
     isle: ({ db, kullanici, parametre, govde }) => muafiyetVer(db, kullanici, parametre.id, govde),
   }),
-  // 3396 a: hazırlık maddesi listesi. Okuma oturumla (ad ve sıra bütün hazırlık ekranlarında kullanılır, kayıt bilgisi yok); yazma
+  // 3396 a: hazırlık maddesi listesi. Okuma hazırlık ekranı olan işlemlerle (ad ve sıra, kayıt bilgisi yok); yazma
   // yalnız hazirlik-ayar. Durduran maddenin kapatılmasını hem kural hem kısıt reddeder.
   uc({
     yontem: 'GET',
