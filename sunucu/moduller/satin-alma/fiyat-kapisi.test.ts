@@ -146,10 +146,11 @@ describe('satın alma fiyat kapısı (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('tüm fiyat uçları: planlama 403, fiyat gören 200 (karşılaştırma, bütçe, analiz, kg fiyatı ailesi)', async () => {
+  test('tüm fiyat uçları: planlama 403, fiyat gören 200 (karşılaştırma, bütçe, analiz, kg fiyatı ailesi, teklif PDF ekleri)', async () => {
     const yollar = [
       `/satin-alma-talepleri/${siparisli.id}/degerlendirme`, '/satin-alma-butce-kullanimi?yil=2026', '/satin-alma-analiz',
       '/satin-alma-kg-fiyatlari', '/satin-alma-kg-fiyatlari/gecmis?kalite=DENEME', '/satin-alma-kg-fiyatlari/malzemeler?nolar=1',
+      `/satin-alma-talepleri/${siparisli.id}/teklifler/${siparisli.teklifler[0]!.id}/ekler`,
     ];
     for (const yol of yollar) {
       for (const cerez of [c.plan, c.planp]) assert.equal((await istek(cerez, 'GET', yol)).statusCode, 403, `${yol} planlama`);
