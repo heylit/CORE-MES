@@ -1,5 +1,5 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
-import { ROTA_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
+import { ROTA_OKUMA_ISLEMLERI } from './kurallar.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaOnizlemeSorgusu, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, emreKopyalaTopluCevabi, emreKopyalaTopluGovdesi, rotaAdimTopluCevabi, rotaAdimTopluGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
@@ -20,9 +20,6 @@ import {
 // Rota verisi yalnız rotayla çalışan rollere açıktır (2490 b): Reçete ve Rota sayfası ya da bir rota işlemi. Üç uç başka sayfaların
 // bugünkü okumasını da taşır: yeni kart sihirbazı şablon ve rotalı ürün listesini, operasyon tipleri seçenekleri, markalama
 // tanımları malzeme aramasını okur. Operatör ekranları rota verisini sunucuda disari.ts ile alır, bu uçlara gelmez.
-const ROTA_OKUMA_ISLEMLERI = [
-  'sayfa.recete-rota', 'recete-rota.oku', ...ROTA_YAZMA_ISLEMLERI, 'rota.onayla', 'rota.talimat-yaz', 'rota.emre-kopyala', 'rota.sartname-yaz', 'rota.sartname-yayinla',
-] as const;
 const ROTA_OKUR = { biri: ROTA_OKUMA_ISLEMLERI } as const;
 const ROTA_VE_KART_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'malzemeler.yaz'] } as const;
 const ROTA_VE_ISTASYON_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'sayfa.istasyonlar'] } as const;
