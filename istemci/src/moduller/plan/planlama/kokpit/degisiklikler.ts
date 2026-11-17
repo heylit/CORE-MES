@@ -27,6 +27,9 @@ export interface Degisiklik {
   // "Veri değişti" satırında çalışmaya yazılmış bekleyenin kimliği (tek başına uygulanabilir); yazılmamış başka sayfa satırında ve öteki
   // başlıklarda null.
   bekleyenId: string | null;
+  // "Plan geride" satırında: emri yeniden dizilince iş şimdiden sonraya taşınır (tek başına uygulanabilir). Elle kilitli iş yeniden
+  // dizmede yerinde kalır, emre bağlanamayan iş dizilemez: onlarda yoktur.
+  yenidenDiz?: true;
 }
 
 const OLAY_NE: Record<Olay['neden'], string> = {
@@ -113,7 +116,8 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
       return {
         anahtar: `geride:${x.id}`, baslik: 'geride' as const, emirId: e?.id ?? null, isId: x.id, bekleyenId: null,
         ne: `${e?.no ?? x.job} · ${x.ad} · ${kod.get(x.m) ?? x.m} · ${zaman(x.S)} başlayacaktı`,
-        alt: [`${sure(m.simdi - x.S)} geride`, e && e.termin !== null ? `termin ${zaman(e.termin)}` : null].filter((y) => y !== null).join(' · '),
+        alt: [`${sure(m.simdi - x.S)} geride`, e && e.termin !== null ? `termin ${zaman(e.termin)}` : null, x.kilitli ? 'elle kilitli, kilidi kalkmadan taşınmaz' : null].filter((y) => y !== null).join(' · '),
+        ...(e !== undefined && !x.kilitli ? { yenidenDiz: true as const } : {}),
       };
     });
   return [...veri, ...saha, ...geride];

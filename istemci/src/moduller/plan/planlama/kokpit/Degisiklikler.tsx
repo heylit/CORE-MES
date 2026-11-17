@@ -6,7 +6,7 @@ import type { SatirEtkisiYuzu } from './satir-etkisi.ts';
 
 // Planı etkileyen değişiklikler (3317 a, 1. adım). İki parça: plan şeridinin satırındaki özet ("N değişiklik", döküm, "Gör ve uygula") ve
 // şeridin altında açılan liste (üç başlık, satırda "Göster"). Veri değişiklikleri şeritteki toplu düğmeyle ya da satırdaki "Etkisini gör"
-// ile tek tek kişinin taslağına uygulanır (2. adım); öteki iki başlık yalnız gösterir.
+// ile tek tek kişinin taslağına uygulanır (2. adım); "Plan geride" satırında aynı düğme o emri yeniden dizer (3. adım); "Sahada oldu" yalnız gösterir.
 // salt: sayfa listeyi yalnız gösterir (Motor, 3317-1b); düğme "Gör"dür, uygulama Kokpit'tedir.
 export function DegisiklikOzeti({ l, acik, ac, salt = false }: { l: readonly Degisiklik[]; acik: boolean; ac: (a: boolean) => void; salt?: boolean }) {
   const ad = salt ? 'Gör' : 'Gör ve uygula';
@@ -89,16 +89,20 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpi
           <section key={b} aria-label={BASLIK_ADI[b]} data-baslik={b}>
             <h3><b>{BASLIK_ADI[b]}</b> <span>{satirlar.length} · {BASLIK_NOTU[b]}</span></h3>
             <ul>
-              {satirlar.map((d) => (
+              {satirlar.map((d) => {
+                // Tek başına uygulanabilen satırın etki anahtarı: veri satırında bekleyen kimliği, yeniden dizilebilen geride satırında anahtarı.
+                const ek = d.bekleyenId ?? (d.yenidenDiz === true ? d.anahtar : null);
+                return (
                 <li key={d.anahtar}>
                   <div className="tc-pyq-dg-ne"><b>{d.ne}</b><small>{d.alt}</small></div>
                   {goster !== null && d.emirId !== null && <Dugme className="tc-pyq-dg-dugme" tur="ikincil" simge="eye" onClick={() => { goster(d); }}>Göster</Dugme>}
-                  {etki !== null && d.bekleyenId !== null && etki.id !== d.bekleyenId && (
-                    <Dugme className="tc-pyq-dg-dugme" tur="ikincil" simge="clock" disabled={etki.mesgul || etki.id !== null} onClick={() => { etki.gor(d.bekleyenId!); }}>Etkisini gör</Dugme>
+                  {etki !== null && ek !== null && etki.id !== ek && (
+                    <Dugme className="tc-pyq-dg-dugme" tur="ikincil" simge="clock" disabled={etki.mesgul || etki.id !== null} onClick={() => { if (d.bekleyenId !== null) etki.gor(d.bekleyenId); else etki.gorGeride(d, l); }}>Etkisini gör</Dugme>
                   )}
-                  {etki !== null && etki.id !== null && etki.id === d.bekleyenId && <SatirEtkisiBolumu e={etki} />}
+                  {etki !== null && etki.id !== null && etki.id === ek && <SatirEtkisiBolumu e={etki} />}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         );
@@ -106,7 +110,9 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpi
       <p className="tc-pyq-not">
         {toplu !== null ? `"Planı güncelle (${String(toplu)})" yalnız "Veri değişti" satırlarının etkilediği işleri yeniden dizer${etki !== null ? '; "Etkisini gör" tek satırın planı nasıl değiştireceğini gösterir, "Uygula" taslağınıza yazar' : ''}. ` : ''}
         {taslakta > 0 ? `${String(taslakta)} veri değişikliği taslağınızda uygulandı, listede durmaz; ortak plana taslak yazılınca girer, "Planı güncelle" o zamana kadar onu da sayar. ` : ''}
-        {goster !== null
+        {etki !== null
+          ? `"Plan geride" satırında "Etkisini gör" o emir yeniden dizilince ne olacağını gösterir (geride kalan iş şimdiden sonraya gider)${toplu === null ? '; "Uygula" taslağınıza yazar' : ''}. "Sahada oldu" satırları bilgi içindir: "Göster" ile emre gidilir.`
+          : goster !== null
           ? '"Sahada oldu" ve "Plan geride" satırları bilgi içindir: "Göster" ile emre gidilir, düzeltme aşağıda elle yapılır.'
           : '"Sahada oldu" ve "Plan geride" satırları bilgi içindir; bu sayfa planı okur, emre gitmek ve düzeltmek Kokpit\'tedir.'}
       </p>

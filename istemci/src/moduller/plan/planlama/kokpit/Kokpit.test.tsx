@@ -994,6 +994,22 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(hepsi.textContent).toMatch(/Geride kalan \d+ iş elle kilitli; kilidi kaldırmadan taşınmaz/);
   });
 
+  // 3317 a (3. adım): "Plan geride" satırı tek başına uygulanır; istek yalnız o satırın emri içindir.
+  it('plan geride satırında Etkisini gör yalnız o emri yeniden dizdirir', async () => {
+    const c = ornekCalisma();
+    const ops = Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string; S: number; C: number; act?: number }> }).ops).map(([id, r]) => [id, { ...r, act: 0, S: r.S - 5000, C: r.C - 5000 }]));
+    const komutlar = kur({ ...c, plan: { ...c.plan, ops } } as typeof c, SAHA);
+    fireEvent.click(await screen.findByRole('button', { name: 'Gör ve uygula' }));
+    const geride = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Plan geride' });
+    const satir = within(geride).getAllByRole('listitem')[0] as HTMLElement;
+    fireEvent.click(within(satir).getByRole('button', { name: 'Etkisini gör' }));
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    const isler = komutlar[0]?.['isler'] as string[];
+    expect(komutlar[0]?.tur).toBe('yeniden-planla');
+    expect(isler).toHaveLength(1);
+    expect(Object.values(ops).some((r) => r.job === isler[0])).toBe(true);
+  });
+
   it('seçili plansız siparişte yön satırın içinde seçilir: İleriye plana alır, Teslimden geriye onay sorar; plan yokken yeniden dizme pasiftir', async () => {
     const taban = ornekCalisma();
     const komutlar = kur({ ...taban, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);

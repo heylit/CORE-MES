@@ -24,6 +24,10 @@ describe('degisiklikler (3317 a)', () => {
     // Modelde emri olmayan iş: emir numarası yerine iş kimliğinin emri yazılır, termin yazılmaz.
     expect(l[0]?.ne).toBe('9 · Adım 9.10 · ORN-T1 · S7 başlayacaktı');
     expect(l[0]?.alt).toBe('3 sa geride');
+    // 3. adım: emre bağlı, kilitsiz geride iş emri yeniden dizilerek taşınır; emri modelde olmayan ve elle kilitli iş taşınamaz, kilit satırda yazar.
+    expect(l.map((d) => d.yenidenDiz)).toEqual([undefined, true]);
+    const k = degisiklikler({ m: { ...M, isler: { '1.10': is('1.10', 8, { kilitli: true }) } }, bekleyen: [], olaylar: [], zaman, an });
+    expect(k.map((d) => [d.alt, d.yenidenDiz])).toEqual([['2 sa geride · termin S40 · elle kilitli, kilidi kalkmadan taşınmaz', undefined]]);
   });
 
   // 3335-2b: "Geride kalanları yeniden planla" geride işi olan emirleri verir; elle kilitli geride iş yeniden planlamada yerinde kalır.
