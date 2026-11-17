@@ -15,6 +15,7 @@ import type {
 } from '#paylasilan/sozlesme/projeler.ts';
 import { PROJE_KODU_BICIMI } from '#paylasilan/sozlesme/projeler.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
+import { firmaKoduSecimi } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiSecenekleri as kisiListesi, kisininRolleri, rolSecenekleri as rolListesi, rollerdekiKisiler } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
@@ -52,7 +53,7 @@ async function cevir(db: Db, satirlar: ProjeSatiri[], maliyetGorur: boolean): Pr
     gorevleri.set(g.proje_id, l);
   }
   return satirlar.map((s) => ({
-    id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id,
+    id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id, firmaKodu: s.firma_kodu,
     firmaAd: s.firma_id === null ? null : adlar.get(s.firma_id) ?? null, siparisId: s.siparis_id,
     ...(maliyetGorur ? { butceTutari: s.butce_tutari, butceParaBirimi: s.butce_para_birimi } : {}),
     baslangic: s.baslangic, bitis: s.bitis, bitisBagli: s.bitis_bagli, aciklama: s.aciklama, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
@@ -96,8 +97,11 @@ export async function projeDuzenle(db: Db, kisiId: number, id: number, g: ProjeG
   const acma = yenidenAcmaReddi(mevcut.durum, g.durum, g.yenidenAcmaGerekcesi);
   if (acma !== null) throw dogrulama(acma, 'yenidenAcmaGerekcesi');
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
+  // 3399 a: gönderilmeyen firma kodu kayıtlı haliyle kalır; pasife alınmış kayıtlı kod projede kalabilir.
+  const firmaKodu = g.firmaKodu === undefined ? mevcut.firma_kodu
+    : g.firmaKodu === null ? null : await firmaKoduSecimi(db, g.firmaKodu, 'firmaKodu', mevcut.firma_kodu);
   const alan = {
-    ad: g.ad, firmaId: g.firmaId, baslangic: g.baslangic, bitis: g.bitis, aciklama: g.aciklama, durum: g.durum,
+    ad: g.ad, firmaId: g.firmaId, firmaKodu, baslangic: g.baslangic, bitis: g.bitis, aciklama: g.aciklama, durum: g.durum,
     ...butce(maliyetGorur, g.butceTutari, g.butceParaBirimi, { butceTutari: mevcut.butce_tutari, butceParaBirimi: mevcut.butce_para_birimi }),
   };
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
@@ -123,8 +127,10 @@ export async function siparistenProjeAc(
   if (ret !== null) throw dogrulama(ret, 'siparisId');
   await firmayiDenetle(db, siparis.firmaId, null);
   const bitis = acilisBitisi(g.bitis, g.baslangic, siparis.termin);
+  // 3399 a: seçilmediyse siparişin firma kodu, o da yoksa varsayılan kod.
+  const firmaKodu = await firmaKoduSecimi(db, g.firmaKodu ?? siparis.firmaKodu, 'firmaKodu', siparis.firmaKodu);
   const alan = {
-    ad: g.ad, firmaId: siparis.firmaId, baslangic: g.baslangic, bitis: bitis.bitis, aciklama: g.aciklama,
+    ad: g.ad, firmaId: siparis.firmaId, firmaKodu, baslangic: g.baslangic, bitis: bitis.bitis, aciklama: g.aciklama,
     ...butce(maliyetGorur, g.butceTutari, g.butceParaBirimi, null),
   };
   const id = await kisitKorumali(KISITLAR, () => sorgular.projeEkle(db, g.kod, alan, kisiId, siparis.id, bitis.bagli));
@@ -709,8 +715,10 @@ export async function sablondanEkle(db: Db, kisiId: number, projeId: number, sab
 
 // --- Başka modüllere (disari.ts) ---
 
-export interface ProjeOzeti { id: number; kod: string; ad: string; durum: ProjeDurumu; firmaId: number | null; siparisId: number | null }
-const ozetle = (s: ProjeSatiri): ProjeOzeti => ({ id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id, siparisId: s.siparis_id });
+export interface ProjeOzeti { id: number; kod: string; ad: string; durum: ProjeDurumu; firmaId: number | null; firmaKodu: string | null; siparisId: number | null }
+const ozetle = (s: ProjeSatiri): ProjeOzeti => ({
+  id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id, firmaKodu: s.firma_kodu, siparisId: s.siparis_id,
+});
 
 // Bütçe (198 a) yalnız tek proje okumasında gelir; yetki çağıran uçtadır ve tutarı gösteren uç `finans.maliyet-oku` ister (180).
 // Bütçe girilmediyse tutar ve para birimi null: hedef plan maliyetidir.

@@ -97,6 +97,7 @@ export function ProjeAyrinti() {
         <dl className="tc-prj-bilgi">
           <dt>Proje no</dt><dd>{p.kod}</dd>
           <dt>Müşteri</dt><dd>{p.firmaAd ?? '—'}</dd>
+          {p.firmaKodu !== null && <><dt>Firma kodu</dt><dd>{p.firmaKodu}</dd></>}
           <dt>Başlangıç</dt><dd>{tarihMetni(p.baslangic)}</dd>
           <dt>Bitiş</dt><dd className="tc-prj-bag">{tarihMetni(p.bitis)} <BitisBagi proje={p} yazabilir={yazabilir} /></dd>
           <dt>Logo</dt><dd><ProjeLogoSatiri projeId={p.id} /></dd>

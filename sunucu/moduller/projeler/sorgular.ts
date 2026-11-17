@@ -10,6 +10,7 @@ export interface ProjeSatiri {
   ad: string;
   durum: ProjeDurumu;
   firma_id: number | null;
+  firma_kodu: string | null;
   siparis_id: number | null;
   butce_tutari: string | null;
   butce_para_birimi: string | null;
@@ -22,7 +23,7 @@ export interface ProjeSatiri {
   surum: number;
 }
 
-const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.bitis_bagli,
+const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.firma_kodu, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.bitis_bagli,
                       p.aciklama, ${zamanMetni('p.olusturma')} AS olusturma, ${zamanMetni('p.guncelleme')} AS guncelleme, p.surum
                  FROM projeler_proje p`;
 
@@ -80,17 +81,18 @@ export function siparisProjeleri(db: Db, siparisId: number): Promise<ProjeSatiri
 }
 
 export interface KilitliProje {
-  firma_id: number | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null; durum: string;
+  firma_id: number | null; firma_kodu: string | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null; durum: string;
 }
 export async function projeFirmasi(db: Db, id: number): Promise<KilitliProje | null> {
   return db.tek<KilitliProje>(
-    'SELECT firma_id, siparis_id, butce_tutari, butce_para_birimi, durum FROM projeler_proje WHERE id = $1 FOR UPDATE', [id],
+    'SELECT firma_id, firma_kodu, siparis_id, butce_tutari, butce_para_birimi, durum FROM projeler_proje WHERE id = $1 FOR UPDATE', [id],
   );
 }
 
 export interface ProjeAlanlari {
   ad: string;
   firmaId: number | null;
+  firmaKodu: string | null;
   baslangic: string | null;
   bitis: string | null;
   aciklama: string | null;
@@ -102,9 +104,9 @@ export async function projeEkle(
   db: Db, kod: string, a: ProjeAlanlari, kisiId: number, siparisId: number | null = null, bitisBagli = false,
 ): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi, bitis_bagli)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi, bitisBagli],
+    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi, bitis_bagli, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi, bitisBagli, a.firmaKodu],
   );
   if (satir === null) throw new Error('Proje eklenemedi');
   return satir.id;
@@ -118,9 +120,9 @@ export function projeGuncelle(
     `UPDATE projeler_proje
         SET ad = $2, firma_id = $3, baslangic = $4, bitis = $5, aciklama = $6, durum = $7,
             bitis_bagli = bitis_bagli AND bitis IS NOT DISTINCT FROM $5::date,
-            butce_tutari = $10, butce_para_birimi = $11, guncelleyen_id = $8, guncelleme = now(), surum = surum + 1
+            butce_tutari = $10, butce_para_birimi = $11, firma_kodu = $12, guncelleyen_id = $8, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $9 RETURNING id`,
-    [id, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, a.durum, kisiId, surum, a.butceTutari, a.butceParaBirimi],
+    [id, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, a.durum, kisiId, surum, a.butceTutari, a.butceParaBirimi, a.firmaKodu],
   );
 }
 

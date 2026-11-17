@@ -268,7 +268,7 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal(await projeNo(db, a.id), 'DIS.A');
       assert.equal(await projeNo(db, 999999), null);
       assert.deepEqual(await projeGetir(db, b.id), {
-        id: b.id, kod: 'DIS.B', ad: 'Dış B', durum: 'iptal', firmaId: null, siparisId: null, butceTutari: null, butceParaBirimi: null,
+        id: b.id, kod: 'DIS.B', ad: 'Dış B', durum: 'iptal', firmaId: null, siparisId: null, butceTutari: null, butceParaBirimi: null, firmaKodu: null,
       });
       assert.equal(await projeGetir(db, 999999), null);
       assert.equal((await projeKoduIleBul(db, ' dis.a '))?.id, a.id);
@@ -502,5 +502,42 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
       ad: 'Varsayılan açılış şablonu', varsayilan: false, etkin: true, kalemler: [kalem], surum: v?.surum,
     });
     assert.equal(kapat.statusCode, 200, kapat.body);
+  });
+  test('3399 a: firma kodu siparişten projeye akar; projede değişir, boşaltılır; listede olmayan ya da pasif kod 400', async () => {
+    for (const [kod, varsayilan] of [['ORNA', true], ['ORNB', false], ['ORNP', false]] as const) {
+      const c = await gonder(yonetici, '/firma-kodlari/ekle', { kod, ad: `Deneme ${kod}`, varsayilan });
+      assert.equal(c.statusCode, 200, c.body);
+    }
+    const firma = await firmaAc('Deneme Müşteri FK');
+    const varsayilanli = await siparisAc(firma, false);
+    assert.equal(varsayilanli.firmaKodu, 'ORNA', 'seçilmeyen sipariş varsayılan kodu alır');
+    const c = await gonder(yonetici, '/siparisler/ekle', {
+      firmaId: firma, musteriSiparisNo: null, siparisTarihi: '2026-10-19', termin: '2026-11-15', kdvOrani: '20', odemeKosulu: null, aciklama: null, firmaKodu: 'ORNB',
+      satirlar: [{ malzemeNo: await mamulAc(), miktar: '10', birimFiyat: '1', termin: null, aciklama: null }],
+    });
+    assert.equal(c.statusCode, 200, c.body);
+    const s0 = c.json<SiparisAyrintisi>();
+    assert.equal(s0.firmaKodu, 'ORNB');
+    const s = (await gonder(yonetici, `/siparisler/${s0.id}/onayla`, { surum: s0.surum })).json<SiparisAyrintisi>();
+    const p = (await siparistenAc(yonetici, s.id, { kod: 'FKD.1', ad: 'Firma kodlu' })).json<Proje>();
+    assert.equal(p.firmaKodu, 'ORNB', 'proje siparişin kodunu alır');
+    const secilen = (await siparistenAc(yonetici, s.id, { kod: 'FKD.2', ad: 'Seçilen', firmaKodu: 'ORNA' })).json<Proje>();
+    assert.equal(secilen.firmaKodu, 'ORNA');
+    const degisti = await guncelle(p, { firmaKodu: 'ORNA' });
+    assert.equal(degisti.statusCode, 200, degisti.body);
+    assert.equal(degisti.json<Proje>().firmaKodu, 'ORNA');
+    const adi = await guncelle(degisti.json<Proje>(), { ad: 'Firma kodlu 2' });
+    assert.equal(adi.statusCode, 200, adi.body);
+    assert.equal(adi.json<Proje>().firmaKodu, 'ORNA', 'gönderilmeyen firma kodu yerinde kalır');
+    assert.equal((await guncelle(adi.json<Proje>(), { firmaKodu: 'YOK' })).statusCode, 400);
+    const bos = await guncelle(adi.json<Proje>(), { firmaKodu: null });
+    assert.equal(bos.statusCode, 200, bos.body);
+    assert.equal(bos.json<Proje>().firmaKodu, null);
+    const kodlar = (await oku(yonetici, '/firma-kodlari')).json<{ firmaKodlari: { id: number; kod: string; surum: number }[] }>().firmaKodlari;
+    const pasif = kodlar.find((k) => k.kod === 'ORNP');
+    assert.ok(pasif);
+    assert.equal((await gonder(yonetici, `/firma-kodlari/${pasif.id}/duzenle`, { ad: 'Deneme ORNP', varsayilan: false, aktif: false, surum: pasif.surum })).statusCode, 200);
+    assert.equal((await guncelle(bos.json<Proje>(), { firmaKodu: 'ORNP' })).statusCode, 400, 'pasif kod seçilemez');
+    assert.equal((await siparistenAc(yonetici, s.id, { kod: 'FKD.3', ad: 'Pasif', firmaKodu: 'ORNP' })).statusCode, 400);
   });
 });

@@ -19,6 +19,7 @@ const SUTUNLAR: Sutun<Proje>[] = [
   { anahtar: 'kod', baslik: 'Proje no', sirala: true, mono: true, kirilmaz: true, hucre: (p) => p.kod },
   { anahtar: 'ad', baslik: 'Ad', sirala: true, hucre: (p) => p.ad },
   { anahtar: 'firma', baslik: 'Müşteri', hucre: (p) => p.firmaAd ?? '—' },
+  { anahtar: 'firmaKodu', baslik: 'Firma kodu', hucre: (p) => p.firmaKodu ?? '—' },
   { anahtar: 'baslangic', baslik: 'Başlangıç', sirala: true, mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.baslangic) },
   { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.bitis) },
   { anahtar: 'statu', baslik: 'Statü', hucre: (p) => <StatuCipi statu={p.statu} />, csv: (p) => p.statu?.ad ?? '' },
