@@ -472,16 +472,16 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(iptaller.satirlar.every((s) => s.durum === 'iptal'));
   });
 
-  test('numara kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşan numara kayıt açmaz (422), var olan numara değişmez', async () => {
+  test('numara kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşabilecek kalıp kaydedilmez, var olan numara değişmez', async () => {
     const once = await siparisAc();
-    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.siparis-no/degistir', { deger })).statusCode, 200);
+    const kalip = async (deger: string, durum = 200) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.siparis-no/degistir', { deger })).statusCode, durum);
     await kalip('SAT{YY}{AA}{SAYAC:4}');
     const yeni = await siparisAc();
     assert.match(yeni.no, /^SAT\d{4}0001$/);
-    await kalip('SATISSIPARIS-{YYYY}-{SAYAC:3}');
-    const uzun = await gonder(yonetici, '/siparisler/ekle', govde());
-    assert.equal(uzun.statusCode, 422, uzun.body);
-    assert.match(uzun.body, /16 karakter/);
+    // 3399 a: sınır kalıp kaydında denetlenir ({FIRMA} en uzun kodla sayılır).
+    await kalip('SATISSIPARIS-{YYYY}-{SAYAC:3}', 400);
+    await kalip('{FIRMA}-SS-{YYYY}-{SAYAC:3}', 400);
+    assert.match((await siparisAc()).no, /^SAT\d{4}0002$/);
     await kalip('SS-{YYYY}-{SAYAC:3}');
     assert.equal((await oku(yonetici, `/siparisler/${once.id}`)).json<SiparisAyrintisi>().no, once.no);
   });

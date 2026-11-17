@@ -11,6 +11,7 @@ export interface SiparisSatiri {
   no: string;
   durum: SiparisDurumu;
   firma_id: number;
+  firma_kodu: string | null;
   musteri_siparis_no: string | null;
   siparis_tarihi: string;
   termin: string;
@@ -32,7 +33,7 @@ export interface SiparisSatiri {
 }
 
 // Satır tutarı iki ondalığa yuvarlanır; toplam yuvarlanmış satırların toplamıdır, KDV toplamdan hesaplanır.
-const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.musteri_siparis_no, s.siparis_tarihi, s.termin, s.para_birimi, s.kdv_orani,
+const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.firma_kodu, s.musteri_siparis_no, s.siparis_tarihi, s.termin, s.para_birimi, s.kdv_orani,
                       s.odeme_kosulu, s.aciklama, t.ara_toplam, round(t.ara_toplam * s.kdv_orani / 100, 2) AS kdv_tutari,
                       t.ara_toplam + round(t.ara_toplam * s.kdv_orani / 100, 2) AS genel_toplam, s.gecikme_ceza_orani,
                       s.ceza_tavani_orani, s.odeme_vadesi_gun, s.iptal_nedeni,
@@ -129,6 +130,8 @@ export async function siparisNoVarMi(db: Db, no: string): Promise<boolean> {
 
 export interface BaslikAlanlari {
   firmaId: number;
+  // 3399 a: yalnız eklenirken yazılır; numara bu kodla verildiği için sonra değişmez.
+  firmaKodu?: string | null;
   musteriSiparisNo: string | null;
   siparisTarihi: string;
   termin: string;
@@ -144,10 +147,10 @@ export interface BaslikAlanlari {
 export async function siparisEkle(db: Db, no: string, a: BaslikAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO siparisler_siparis (no, firma_id, musteri_siparis_no, siparis_tarihi, termin, para_birimi, kdv_orani, odeme_kosulu, aciklama, olusturan_id,
-                                     gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+                                     gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [no, a.firmaId, a.musteriSiparisNo, a.siparisTarihi, a.termin, a.paraBirimi, a.kdvOrani, a.odemeKosulu, a.aciklama, kisiId, a.cezaOraniGun, a.cezaTavaniOrani,
-     a.odemeVadesiGun],
+     a.odemeVadesiGun, a.firmaKodu ?? null],
   );
   if (satir === null) throw new Error('Sipariş eklenemedi');
   return satir.id;
@@ -252,6 +255,7 @@ export interface TeklifBaslikSatiri {
   no: string;
   durum: TeklifDurumu;
   firma_id: number;
+  firma_kodu: string | null;
   baslik: string;
   para_birimi: string;
   istenen_tarih: string | null;
@@ -265,7 +269,7 @@ export interface TeklifBaslikSatiri {
   surum: number;
 }
 
-const TEKLIF_SECIMI = `SELECT t.id, t.no, t.durum, t.firma_id, t.baslik, t.para_birimi, t.istenen_tarih, t.aciklama, t.not_metni, t.kabul_surumu,
+const TEKLIF_SECIMI = `SELECT t.id, t.no, t.durum, t.firma_id, t.firma_kodu, t.baslik, t.para_birimi, t.istenen_tarih, t.aciklama, t.not_metni, t.kabul_surumu,
                               t.siparis_id, (SELECT max(v.surum_no) FROM siparisler_teklif_surumu v WHERE v.teklif_id = t.id)::int AS son_surum_no,
                               ${zamanMetni('t.olusturma')} AS olusturma, ${zamanMetni('t.guncelleme')} AS guncelleme, t.surum
                          FROM siparisler_teklif t`;
@@ -302,9 +306,9 @@ export function teklifGetir(db: Db, id: number): Promise<TeklifBaslikSatiri | nu
   return db.tek<TeklifBaslikSatiri>(`${TEKLIF_SECIMI} WHERE t.id = $1`, [id]);
 }
 
-export function teklifKilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; para_birimi: string } | null> {
-  return db.tek<{ durum: TeklifDurumu; firma_id: number; para_birimi: string }>(
-    'SELECT durum, firma_id, para_birimi FROM siparisler_teklif WHERE id = $1 FOR UPDATE', [id],
+export function teklifKilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string } | null> {
+  return db.tek<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string }>(
+    'SELECT durum, firma_id, firma_kodu, para_birimi FROM siparisler_teklif WHERE id = $1 FOR UPDATE', [id],
   );
 }
 
@@ -318,6 +322,8 @@ export async function teklifNoVarMi(db: Db, no: string): Promise<boolean> {
 
 export interface TeklifAlanlari {
   firmaId: number;
+  // 3399 a: yalnız eklenirken yazılır; numara bu kodla verildiği için sonra değişmez.
+  firmaKodu?: string | null;
   baslik: string;
   paraBirimi: string;
   istenenTarih: string | null;
@@ -326,9 +332,9 @@ export interface TeklifAlanlari {
 
 export async function teklifEkle(db: Db, no: string, a: TeklifAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO siparisler_teklif (no, firma_id, baslik, para_birimi, istenen_tarih, aciklama, olusturan_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [no, a.firmaId, a.baslik, a.paraBirimi, a.istenenTarih, a.aciklama, kisiId],
+    `INSERT INTO siparisler_teklif (no, firma_id, baslik, para_birimi, istenen_tarih, aciklama, olusturan_id, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [no, a.firmaId, a.baslik, a.paraBirimi, a.istenenTarih, a.aciklama, kisiId, a.firmaKodu ?? null],
   );
   if (satir === null) throw new Error('Teklif eklenemedi');
   return satir.id;

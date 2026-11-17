@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BirimSecenekleriCevabi, TeklifAyrintiCevabi, TeklifEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import type { SecilenFirma } from './FirmaSecici.tsx';
@@ -139,6 +140,10 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
     queryFn: () => api.get<BirimSecenekleriCevabi>('/siparisler/birim-secenekleri'),
     staleTime: 5 * 60_000,
   });
+  // 3399 a: firma kodu numarayı belirler; yalnız açılışta seçilir, kayıtlı talepte değişmez.
+  const { varsayilan: varsayilanFirmaKodu } = useFirmaKodlari();
+  const [secilenFirmaKodu, firmaKoduYaz] = useState<string | null>(null);
+  const firmaKodu = teklif === null ? (secilenFirmaKodu ?? varsayilanFirmaKodu) : teklif.firmaKodu;
   const kademeRef = useRef(kademe);
   kademeRef.current = kademe;
 
@@ -151,7 +156,7 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
     kaydet: (d) => {
       if (kademeRef.current === 1) return Promise.resolve(null);
       const govde = govdeKur(d);
-      if (teklif === null || acilisSurumu === null) return ekle<TeklifAyrintiCevabi>('/siparisler/teklifler/ekle', govde);
+      if (teklif === null || acilisSurumu === null) return ekle<TeklifAyrintiCevabi>('/siparisler/teklifler/ekle', firmaKodu === null ? govde : { ...govde, firmaKodu });
       return api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${String(teklif.id)}/guncelle`, { ...govde, surum: acilisSurumu });
     },
     basarili: (cevap) => {
@@ -187,6 +192,7 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
             <Girdi etiket="Konu" required autoComplete="off" placeholder="Örnek: 2027 yılı braket ihtiyacı" {...form.alan('baslik')} />
             <Girdi etiket="İstenen teslim tarihi" type="date" {...form.alan('istenenTarih')} />
             <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
+            <FirmaKoduSecimi deger={firmaKodu} degistir={firmaKoduYaz} kilitli={teklif !== null} {...(teklif === null ? {} : { ipucu: kayitliKodIpucu('Teklif', teklif.no, teklif.firmaKodu) })} />
           </div>
           <CokSatir etiket="Açıklama" placeholder="Teknik resim revizyonu, malzeme, kaplama, teslim yeri" {...form.alan('aciklama')} />
         </Kart>

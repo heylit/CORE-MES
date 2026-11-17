@@ -12,7 +12,7 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { denemeIsaretliKimlikler, numaraAl } from '../ayarlar/disari.ts';
+import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
@@ -43,7 +43,7 @@ async function kalemPartileri(db: Db, satirIdleri: number[]): Promise<Map<number
 async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
   return satirlar.map((s) => ({
-    id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null,
+    id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null, firmaKodu: s.firma_kodu,
     musteriSiparisNo: s.musteri_siparis_no, siparisTarihi: s.siparis_tarihi, termin: s.termin, paraBirimi: s.para_birimi,
     kdvOrani: s.kdv_orani, odemeKosulu: s.odeme_kosulu, aciklama: s.aciklama, araToplam: s.ara_toplam, kdvTutari: s.kdv_tutari,
     genelToplam: s.genel_toplam, cezaOraniGun: s.gecikme_ceza_orani, cezaTavaniOrani: s.ceza_tavani_orani, odemeVadesiGun: s.odeme_vadesi_gun, iptalNedeni: s.iptal_nedeni, olusturma: s.olusturma, guncelleme: s.guncelleme,
@@ -118,13 +118,18 @@ const baslik = (g: SiparisEkleVerisi): BaslikAlanlari => ({
 const kayitliTicariSart = (m: SiparisKilidi) => ({ cezaOraniGun: m.gecikme_ceza_orani, cezaTavaniOrani: m.ceza_tavani_orani, odemeVadesiGun: m.odeme_vadesi_gun });
 
 // `fiyatYazar` uçta `siparisler.fiyat-oku`dan gelir (201 a); disari çağıranlar (Portal) fiyatı kendi yetkisiyle yazar.
-export async function siparisEkle(db: Db, kullanici: Kullanici, g: SiparisEkleVerisi, fiyatYazar = true): Promise<SiparisAyrintisi> {
+// `devralinanFirmaKodu`: tekliften dönüşümde teklifin kodu; sonradan pasife alınmış olsa da sipariş onu taşır (3399 a).
+export async function siparisEkle(
+  db: Db, kullanici: Kullanici, g: SiparisEkleVerisi, fiyatYazar = true, devralinanFirmaKodu: string | null = null,
+): Promise<SiparisAyrintisi> {
   const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
   await firmayiDenetle(db, g.firmaId, null);
   await kalemleriDenetle(db, g);
-  const no = await numaraAl(db, 'siparisler.siparis-no', { varMi: (n) => sorgular.siparisNoVarMi(db, n) });
-  const id = await kisitKorumali(KISITLAR, () => sorgular.siparisEkle(db, no, baslik(g), kullanici.id));
+  // 3399 a: seçilmediyse varsayılan kod; numara bu kodla verilir.
+  const firmaKodu = await firmaKoduSecimi(db, g.firmaKodu, 'firmaKodu', devralinanFirmaKodu);
+  const no = await numaraAl(db, 'siparisler.siparis-no', { alanlar: { FIRMA: firmaKodu }, varMi: (n) => sorgular.siparisNoVarMi(db, n) });
+  const id = await kisitKorumali(KISITLAR, () => sorgular.siparisEkle(db, no, { ...baslik(g), firmaKodu }, kullanici.id));
   await sorgular.kalemleriYaz(db, id, g.satirlar);
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.

@@ -29,6 +29,7 @@ const SUTUNLAR: Sutun<Siparis>[] = [
     ),
   },
   { anahtar: 'firma', baslik: 'Firma', hucre: (s) => s.firmaAd ?? `Firma ${s.firmaId}` },
+  { anahtar: 'firmaKodu', baslik: 'Firma kodu', kirilmaz: true, hucre: (s) => s.firmaKodu ?? '—' },
   { anahtar: 'siparisTarihi', baslik: 'Tarih', sirala: true, kirilmaz: true, hucre: (s) => tarihMetni(s.siparisTarihi) },
   {
     anahtar: 'termin',

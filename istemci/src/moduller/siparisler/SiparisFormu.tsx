@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
@@ -146,6 +147,10 @@ function Form({ siparis }: FormOzellikleri) {
   const fiyatGorur = useFiyatGorur();
   const [acilisSurumu] = useState(siparis?.surum ?? null);
   const [secilecek, secilecekYaz] = useState<number | null>(null);
+  // 3399 a: firma kodu sipariş numarasını belirler; yalnız açılışta seçilir.
+  const { varsayilan: varsayilanFirmaKodu } = useFirmaKodlari();
+  const [secilenFirmaKodu, firmaKoduYaz] = useState<string | null>(null);
+  const firmaKodu = siparis === null ? (secilenFirmaKodu ?? varsayilanFirmaKodu) : siparis.firmaKodu;
 
   const form = useForm<Degerler, SiparisAyrintisi>({
     ilk: ilkDegerler(siparis),
@@ -154,7 +159,7 @@ function Form({ siparis }: FormOzellikleri) {
     hataIletisi: 'Sipariş kaydedilemedi.',
     kaydet: (d) => {
       const govde = govdeKur(d, fiyatGorur);
-      if (siparis === null || acilisSurumu === null) return ekle<SiparisAyrintisi>('/siparisler/ekle', govde);
+      if (siparis === null || acilisSurumu === null) return ekle<SiparisAyrintisi>('/siparisler/ekle', firmaKodu === null ? govde : { ...govde, firmaKodu });
       return api.post<SiparisAyrintisi>(`/siparisler/${siparis.id}/guncelle`, { ...govde, surum: acilisSurumu } satisfies SiparisGuncelleGovdesi);
     },
     basarili: (cevap) => {
@@ -198,6 +203,7 @@ function Form({ siparis }: FormOzellikleri) {
               <Girdi etiket="Termin" type="date" required {...form.alan('termin')} onChange={(o) => tarihYaz(o.target.value)} />
             </div>
             <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
+            <FirmaKoduSecimi deger={firmaKodu} degistir={firmaKoduYaz} kilitli={siparis !== null} {...(siparis === null ? {} : { ipucu: kayitliKodIpucu('Sipariş', siparis.no, siparis.firmaKodu) })} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
             {fiyatGorur ? (
               <>

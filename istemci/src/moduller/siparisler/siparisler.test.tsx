@@ -28,7 +28,7 @@ const FIYAT_OKUYUCU: Kullanici = { ...OKUYUCU, islemler: [...KOK, 'siparisler.fi
 const FIYATCI: Kullanici = { ...YAZAR, islemler: [...YAZAR.islemler, 'siparisler.fiyat-oku'] };
 
 const SIPARIS_TASLAK = {
-  id: 5, no: 'SS-2026-0005', durum: 'taslak', firmaId: 7, firmaAd: 'Deneme Musteri A', musteriSiparisNo: 'DM-100',
+  id: 5, no: 'SS-2026-0005', durum: 'taslak', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, musteriSiparisNo: 'DM-100',
   siparisTarihi: '2026-10-01', termin: '2026-10-30', paraBirimi: 'TRY', kdvOrani: '20.00', odemeKosulu: '30 gün vadeli', aciklama: null, cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null,
   araToplam: '1250.00', kdvTutari: '250.00', genelToplam: '1500.00', iptalNedeni: null,
   olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, onayZamani: null, surum: 2,
@@ -44,7 +44,7 @@ const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-1
 
 const TEKLIF_SATIR = { id: 11, sira: 1, malzemeNo: null, malzemeKodu: null, malzemeAdi: null, aciklamalar: [] as string[], tanim: 'Deneme Mil 20mm', birim: null, miktar: '40', yerlilikOrani: null };
 const TEKLIF = {
-  id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
+  id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
   istenenTarih: '2026-11-15', aciklama: 'Deneme açıklaması', not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1,
   olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
 } satisfies Teklif;
@@ -519,7 +519,7 @@ describe('Satış siparişi ayrıntısı', () => {
 describe('Sipariş ayrıntısında projeler (176 a)', () => {
   const PROJECI: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'sayfa.projeler', 'projeler.yaz'] };
   const PROJE = {
-    id: 90, kod: 'PRJ.90', ad: 'Deneme proje', durum: 'aktif', firmaId: 7, firmaAd: 'Deneme Musteri A', siparisId: 5,
+    id: 90, kod: 'PRJ.90', ad: 'Deneme proje', durum: 'aktif', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, siparisId: 5,
     baslangic: null, bitis: '2026-10-30', bitisBagli: true, aciklama: null, olusturma: '2026-10-03T09:00:00+03:00', guncelleme: null, surum: 1,
     statu: null, ilerleme: null,
   } satisfies Proje;
