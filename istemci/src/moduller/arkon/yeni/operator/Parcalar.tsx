@@ -348,10 +348,11 @@ export function Konfeti() {
 }
 
 // 1188: TMI işinde yan sayı "Hatalı"dır (sunucunun adım toplamı; bilinmiyorsa null, "—"); hatalı parça üretimdir, iyi sayısına girmez.
-export function SayacKadrani({ is, etiket, birim, duzelt, cevrim, hatali }: {
-  is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer; hatali?: number | null;
+// Depo işinde yan sayı "Eksik"tir (yanEtiket); null ise yan sayı yoktur (mal kabul). Verilmezse üretimdeki gibi Hurda ya da Hatalı.
+export function SayacKadrani({ is, etiket, birim, duzelt, cevrim, hatali, yanEtiket }: {
+  is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer; hatali?: number | null; yanEtiket?: string | null;
 }) {
-  const yan = hatali === undefined ? { etiket: 'Hurda', adet: is.scrap as number | null } : { etiket: 'Hatalı', adet: hatali };
+  const yan = hatali === undefined ? { etiket: yanEtiket ?? 'Hurda', adet: is.scrap as number | null } : { etiket: yanEtiket ?? 'Hatalı', adet: hatali };
   const { iyi, hurda, hedef, kalan } = sayacGosterimi({ ...is, scrap: yan.adet ?? 0 });
   const yanan = Math.round(120 * iyi);
   const R = 180;
@@ -379,9 +380,11 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim, hatali }: {
       {duzelt
         ? <button type="button" className="tc-ay1-kadran-cekirdek" onClick={duzelt} title="Dokun: sayıyı düzelt" aria-label={`${etiket} ${sayi(is.good)}, sayıyı düzelt`}>{ic}</button>
         : <div className="tc-ay1-kadran-cekirdek">{ic}</div>}
-      <div className="tc-ay1-kadran-yan tc-ay1-kadran-sol">
-        <span className="tc-ay1-kadran-etiket" data-durum="durdu">{yan.etiket}<b>{yan.adet === null ? '—' : yan.adet}</b></span>
-      </div>
+      {yanEtiket === null ? null : (
+        <div className="tc-ay1-kadran-yan tc-ay1-kadran-sol">
+          <span className="tc-ay1-kadran-etiket" data-durum="durdu">{yan.etiket}<b>{yan.adet === null ? '—' : yan.adet}</b></span>
+        </div>
+      )}
     </div>
   );
 }

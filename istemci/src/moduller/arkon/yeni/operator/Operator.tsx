@@ -88,6 +88,7 @@ import {
   type HataliGirdisi,
 } from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
+import { DepoIsi, DepoSekmeleri, type DepoSekmesi } from './DepoIsleri.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { BenimIslerim, BenimIslerimDugmesi, useIslerim } from './BenimIslerim.tsx';
@@ -197,6 +198,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return l && typeof l.at === 'number' && (l.anahtar ?? l.no) === siraAnahtari(o) && l.state === o.state ? l.at : null;
   });
   const [tab, tabYaz] = useState<Gorunum>('draw');
+  const [depoSekme, depoSekmeYaz] = useState<DepoSekmesi>('toplama');
   const [odak, odakYaz] = useState<{ id: number; n: number } | null>(null);
   const [odakKipi, odakKipiYaz] = useState(false);
   const [ov, ovYaz] = useState<Pencereler | null>(null);
@@ -1350,6 +1352,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   sekmeler.splice(Math.max(0, sekmeler.findIndex((x) => x.id === 'steps')), 0, { id: 'tl', l: tlSayisi ? `Talimatlar · ${String(tlSayisi)} eksik` : 'Talimatlar', simge: 'flag' });
   // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
   const kaliteIstasyonu = ist.t === 'kalite';
+  // 3388 a: depo istasyonunda stok işleri sekmesi; seçilen iş üretim görünümünün yerine bütün alanı alır.
+  const depoSekmeleri = ist.t === 'depo' && !pv ? <DepoSekmeleri secili={depoSekme} sec={depoSekmeYaz} /> : null;
+  const depoIsi = depoSekmeleri && depoSekme !== 'toplama' ? <DepoIsi sekme={depoSekme} dar={dar} /> : null;
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
   const resim = !telefon
@@ -1739,7 +1744,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       ? <EylemCubugu durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers' && !(smartesSayimi(o) && t.ton === 'iyi'))} bilgi={smartesSayimi(o) ? 'Sayım SmartES’ten' : undefined} />
       : null;
     return (
-      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>
+      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk || depoIsi ? '' : undefined}>
         <header className="tc-ay1-mobil-ust">
           {(() => {
             const baslik = yerSecilir ? 'İstasyon ve makine · dokununca seçilir' : 'İstasyon';
@@ -1766,7 +1771,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {!pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={kartiKameraylaOkut} title={KART_OKUT_IPUCU} aria-label="İş kartı okut"><Simge ad="file" /></button> : null}
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
         </header>
-        <div className="tc-ay1-gorunum">
+        {depoSekmeleri}
+        {depoIsi ?? <div className="tc-ay1-gorunum">
           {gor === 'ozet' ? <Ozetim /> : null}
           {gor === 'prod' ? (
             <div className="tc-ay1-uretim">
@@ -1791,8 +1797,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {gor === 'tl' ? <>{onizBandi}{talimatlar}</> : null}
           {gor === 'steps' ? <>{onizBandi}{adimlar}</> : null}
           {gor === 'ana' ? <div className="tc-ay1-bolme">{takimKarti}{analiz}</div> : null}
-        </div>
-        <div className="tc-ay1-alt">
+        </div>}
+        {/* 3388 a: depo işi kendi eylem çubuğunu ve görünümlerini çizer (DepoTerminali). */}
+        {depoIsi ? null : <div className="tc-ay1-alt">
           {cubuk}
           <nav className="tc-ay1-alt-gezinme" aria-label="Terminal görünümleri">
             {MV.map((t) => (
@@ -1801,7 +1808,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               </button>
             ))}
           </nav>
-        </div>
+        </div>}
         {pencereler}
         {bkPencere}
       </div>
@@ -1841,6 +1848,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><span className="tc-ay1-saat-alt"><BaglantiDurumu /><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span></span>
       </header>,
       )}
+      {depoSekmeleri}
+      {depoIsi ?? <>
       {/* 3338-6 a: üstte istasyonun işleri, altında ekrandaki işin satırı (sağda Bilgiler), altında rota. */}
       {siraSeridi}
       <section className="tc-ay1-aktif tc-ay1-kimlik" aria-label="Aktif iş emri" data-bos={o.empty || undefined}>
@@ -1878,6 +1887,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           </div>
         </div>
       </div>
+      </>}
       {pencereler}
       {bkPencere}
     </div>
