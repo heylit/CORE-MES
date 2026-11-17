@@ -514,6 +514,24 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     assert.ok(sonra[3]!.includes(acikNo) && sonra[4]!.includes(kapaliNo));
   });
 
+  test('liste gizleme: işaretli sipariş sipariş listesinde görünmez ve sayılmaz, işaret kalkınca döner', async () => {
+    const sp = await siparis();
+    const no = `ORN-SP-${String(siparisSira)}`;
+    const liste = async () => {
+      const c = await istek(yonetici, 'GET', `/siparisler?ara=${no}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c;
+    };
+    assert.ok((await liste()).body.includes(no));
+    await isaretle([{ tur: 'siparis', kimlik: sp }]);
+    const gizli = await liste();
+    assert.ok(!gizli.body.includes(no), gizli.body);
+    assert.equal(gizli.json<{ toplam: number }>().toplam, 0);
+    assert.equal((await istek(yonetici, 'GET', `/siparisler/${sp}`)).statusCode, 200, 'ayrıntı açılır');
+    await isaretle([{ tur: 'siparis', kimlik: sp }], false);
+    assert.ok((await liste()).body.includes(no));
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(

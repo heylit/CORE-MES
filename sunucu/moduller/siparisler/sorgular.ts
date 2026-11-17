@@ -56,11 +56,13 @@ export interface SiparisSuzgeci {
   kalip: string | null;
   durum: SiparisDurumu | null;
   firmaId: number | null;
+  // Deneme işaretli sipariş listede sayılmaz ve görünmez (3395 madde 2).
+  gizli: readonly number[];
 }
 
 const KOSUL = `WHERE ($1::text IS NULL OR s.no ILIKE $1 OR s.musteri_siparis_no ILIKE $1)
-                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3)`;
-const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId];
+                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3) AND NOT (s.id = ANY($4::int[]))`;
+const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId, [...s.gizli]];
 
 export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM siparisler_siparis s ${KOSUL}`, kosulParametreleri(s));
@@ -69,7 +71,7 @@ export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
 
 export function siparisSatirlari(db: Db, s: SiparisSuzgeci, siralama: SiralamaIstegi<SiparisSiralamasi>, dilim: Dilim): Promise<SiparisSatiri[]> {
   return db.sorgu<SiparisSatiri>(
-    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $4 OFFSET $5`,
+    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $5 OFFSET $6`,
     [...kosulParametreleri(s), dilim.sinir, dilim.atla],
   );
 }

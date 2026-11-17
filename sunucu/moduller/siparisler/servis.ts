@@ -12,7 +12,7 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { numaraAl } from '../ayarlar/disari.ts';
+import { denemeIsaretliKimlikler, numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
@@ -70,7 +70,9 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
 }
 
 export async function siparisListesi(db: Db, sorgu: SiparisListesiSuzgeci): Promise<SayfaliListe<Siparis>> {
-  const suzgec = { kalip: aramaKalibi(sorgu.ara), durum: sorgu.durum ?? null, firmaId: sorgu.firmaId ?? null };
+  const suzgec = {
+    kalip: aramaKalibi(sorgu.ara), durum: sorgu.durum ?? null, firmaId: sorgu.firmaId ?? null, gizli: await denemeIsaretliKimlikler(db, 'siparis'),
+  };
   return sayfaliListe(sorgu, {
     say: () => sorgular.siparisSay(db, suzgec),
     satirlar: async (dilim) => cevir(db, await sorgular.siparisSatirlari(db, suzgec, sorgu, dilim)),
