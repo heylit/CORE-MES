@@ -3,7 +3,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { LOGO_CRM_DENETIM_SINIRI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
-import type { BirimSetleriCevabi, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoBelgeAramaCevabi, LogoBelgeAramaTuru, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
@@ -20,9 +20,9 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { BELGE_ARAMA_GIDEN_TURU, BELGE_ARAMA_TURU, crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
-import { logoSiralari } from '../siparisler/disari.ts';
+import { logoSiraBelgeleri, logoSiralari } from '../siparisler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
 // Sürecin belleği: veritabanı geri alınsa da süreç içinde çift açmayı önler. Süreç yeniden başlayınca boştur;
@@ -1351,6 +1351,43 @@ export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null,
     durumlar.push({ firmaId: f.id, ...d, kodlar: crmKodlari(r) });
   }
   return { durumlar };
+}
+
+// 3360 a: beş listede "Logo'da ara". Ayar kısa transaction'da, köprü transaction dışında; CORE karşılığı giden kutusundan okunur.
+export const BELGE_ARAMA_GUN = 365;
+export async function logoBelgeAramasiAcik(db: Db): Promise<boolean> {
+  return (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.belge-aramasi')) === true;
+}
+export const LOGO_BELGE_ARAMA_KAPALI = 'Logo\'da belge araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: belge araması").';
+export async function logoBelgeAra(
+  vt: TxAcan, kopru: KopruIstemcisi | null, tur: LogoBelgeAramaTuru, metin: string, fiyatGorunur: boolean,
+): Promise<LogoBelgeAramaCevabi> {
+  const q = metin.trim();
+  const bos = (durum: 'kapali' | 'ortam-degiskeni-yok' | 'hata', ileti: string): LogoBelgeAramaCevabi => ({ durum, ileti, fiyatGorunur, belgeler: [] });
+  if (!(await vt.tx(logoBelgeAramasiAcik))) return bos('kapali', LOGO_BELGE_ARAMA_KAPALI);
+  if (kopru === null) return bos('ortam-degiskeni-yok', BEKLEME_NEDENLERI['ortam-degiskeni-yok']);
+  const r = await kopru.belgeAra(BELGE_ARAMA_TURU[tur], q, BELGE_ARAMA_GUN);
+  if (r.tur !== 'basarili') return bos('hata', r.ileti);
+  const core = await vt.tx(async (db) => {
+    const giden = await s.logoKaydinaGidenler(db, BELGE_ARAMA_GIDEN_TURU[tur], r.veri.map((b) => String(b.logoKayitNo)));
+    // 3374: satış teklifi ve siparişinin giden satırı Siparişler'in Logo sırasıdır; CORE kimliği sıradan okunur.
+    const siraTuru = tur === 'teklif' ? 'teklif' : tur === 'satis-siparisi' ? 'siparis' : null;
+    const belgesi = siraTuru === null ? null : new Map((await logoSiraBelgeleri(db, siraTuru, giden.map((g) => g.belgeNo))).map((e) => [e.siraId, e.belgeId]));
+    const m = new Map<string, number>();
+    for (const g of giden) {
+      const id = belgesi === null ? g.belgeNo : belgesi.get(g.belgeNo);
+      if (id !== undefined && !m.has(g.logoKayitNo)) m.set(g.logoKayitNo, id);
+    }
+    return m;
+  });
+  const belgeler = r.veri.map((b) => {
+    const id = core.get(String(b.logoKayitNo));
+    return { ...b, tutar: fiyatGorunur ? b.tutar : null, dovizTuru: fiyatGorunur ? b.dovizTuru : null, core: id === undefined ? null : { id } };
+  });
+  return {
+    durum: 'tamam', fiyatGorunur, belgeler,
+    ileti: belgeler.length === 0 ? `Logo'da son ${String(BELGE_ARAMA_GUN)} günde bu metinle belge yok.` : null,
+  };
 }
 
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız GET'tir ve transaction dışında beklenir; bulunanlar kişinin süreç belleğinde

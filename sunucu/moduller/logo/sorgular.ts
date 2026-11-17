@@ -963,3 +963,14 @@ export async function logoSiparisNetleri(db: Db, firma: number, donem: number, s
   );
   return new Map(r.map((x) => [Number(x.ref), x.net]));
 }
+
+// 3360 a: Logo kayıt numarasından o kayda gitmiş CORE belgesi (giden kutusu; gönderildi ya da Logo'da vardı).
+export async function logoKaydinaGidenler(db: Db, belgeTuru: string, kayitNolari: readonly string[]): Promise<{ belgeNo: number; logoKayitNo: string }[]> {
+  if (kayitNolari.length === 0) return [];
+  return db.sorgu(
+    `SELECT belge_no AS "belgeNo", logo_kayit_no AS "logoKayitNo" FROM logo_giden
+      WHERE belge_turu = $1 AND islem = 'gonder' AND son_sonuc IN ('gonderildi', 'zaten-vardi') AND logo_kayit_no = ANY($2::text[])
+      ORDER BY belge_no`,
+    [belgeTuru, kayitNolari],
+  );
+}

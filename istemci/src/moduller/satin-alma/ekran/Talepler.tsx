@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
@@ -85,6 +85,7 @@ export function Talepler() {
       <SayfaBasligi
         baslik="Talepler" simge="list"
         alt="Talepler Taleplerim'den açılır; burada teklif, karar ve sipariş yürür."
+        ek={<LogoBelgeAramasi tur="talep" />}
         eylemler={[pano
           ? { anahtar: 'liste', baslik: 'Liste görünümü', simge: 'list', sec: () => degistir(() => { V.view = 'list'; }) }
           : { anahtar: 'pano', baslik: 'Akış panosu', simge: 'kanban', sec: () => degistir(() => { V.view = 'board'; }) }]}

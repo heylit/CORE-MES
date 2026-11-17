@@ -7,3 +7,9 @@
 .tc-tablo-kap:not([data-kip="kart"]) .tc-logo-rozet-hucre .tc-rozet { white-space: normal; }
 .tc-tablo-kap:not([data-kip="kart"]) .tc-logo-rozet-neden { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .tc-logo-rozet-yok { color: var(--muted); }
+/* 3360: "Logo'da ara" penceresi. */
+.tc-logo-ara-form { display: flex; align-items: flex-end; gap: var(--b-2); flex-wrap: wrap; }
+.tc-logo-ara-ipucu { margin-block: var(--b-1) var(--b-3); }
+.tc-logo-ara-form > :first-child { flex: 1 1 16rem; min-width: 0; }
+.tc-logo-ara-no { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
+.tc-logo-ara-ileti { margin: 0; color: var(--stop); font-weight: 700; }

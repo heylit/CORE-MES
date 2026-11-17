@@ -513,3 +513,50 @@ export const siparisLogoOzetiCevabi = z.object({
   siparisler: z.array(siparisLogoOzeti),
 });
 export type SiparisLogoOzetiCevabi = z.output<typeof siparisLogoOzetiCevabi>;
+
+// 3360 a: beş listede "Logo'da ara". Genel arama: başlık (belge no, cari, proje, açıklama) ve satır (malzeme ya da hizmet kodu ve adı,
+// satır açıklaması); son 1 yıl, en çok 50 belge, belge başına en çok 5 eşleşen satır. Yalnız okur; Logo'ya yazılmaz.
+// Tutar yalnız fiyat yetkisi olana dolu gelir (satışta siparisler.fiyat-oku, alışta satin-alma.oku); yetkisizde null.
+export const LOGO_BELGE_ARAMA_TURLERI = ['proje', 'satis-siparisi', 'teklif', 'talep', 'satin-alma-siparisi'] as const;
+export type LogoBelgeAramaTuru = (typeof LOGO_BELGE_ARAMA_TURLERI)[number];
+export const LOGO_BELGE_ARAMA_EN_AZ = 3;
+export const LOGO_BELGE_ARAMA_EN_COK = 100;
+export const LOGO_BELGE_ARAMA_SONUCU = 50;
+export const logoBelgeAramaSorgusu = z.object({
+  tur: z.enum(LOGO_BELGE_ARAMA_TURLERI),
+  q: z.string().trim().min(LOGO_BELGE_ARAMA_EN_AZ, `En az ${LOGO_BELGE_ARAMA_EN_AZ} karakter yazın.`).max(LOGO_BELGE_ARAMA_EN_COK),
+});
+export type LogoBelgeAramaSorgusu = z.input<typeof logoBelgeAramaSorgusu>;
+const logoBelgeSatiri = z.object({
+  kod: z.string().nullable(),
+  ad: z.string().nullable(),
+  miktar: imzaliMiktar.nullable(),
+  birim: z.string().nullable(),
+  aciklama: z.string().nullable(),
+});
+export const logoBelgeBulgusu = z.object({
+  logoKayitNo: z.number().int().positive(),
+  no: z.string().nullable(),
+  belgeNo: z.string().nullable(),
+  tarih: tarihSemasi.nullable(),
+  cariKodu: z.string().nullable(),
+  cariAdi: z.string().nullable(),
+  projeKodu: z.string().nullable(),
+  projeAdi: z.string().nullable(),
+  aciklama: z.string().nullable(),
+  tutar: imzaliMiktar.nullable(),
+  dovizTuru: z.number().int().nullable(),
+  iptal: z.boolean(),
+  satirlar: z.array(logoBelgeSatiri),
+  satirSayisi: z.number().int().nonnegative(),
+  // CORE'dan bu Logo kaydına gitmiş belge (giden kutusundan); yoksa null.
+  core: z.object({ id: z.number().int().positive() }).nullable(),
+});
+export type LogoBelgeBulgusu = z.output<typeof logoBelgeBulgusu>;
+export const logoBelgeAramaCevabi = z.object({
+  durum: z.enum(['tamam', 'kapali', 'ortam-degiskeni-yok', 'hata']),
+  ileti: z.string().nullable(),
+  fiyatGorunur: z.boolean(),
+  belgeler: z.array(logoBelgeBulgusu).max(LOGO_BELGE_ARAMA_SONUCU),
+});
+export type LogoBelgeAramaCevabi = z.output<typeof logoBelgeAramaCevabi>;

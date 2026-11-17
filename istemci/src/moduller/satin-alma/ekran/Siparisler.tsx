@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { SiparisLogoOzeti } from '#paylasilan/sozlesme/logo.ts';
-import { KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { LogoBelgeAramasi, KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
@@ -154,7 +154,7 @@ export function Siparisler() {
 
   return (
     <div className="sa-ekran sa-ekran-siparisler">
-      <SayfaBasligi baslik="Siparişler" simge="cart" alt="Tedarikçiye verilen her sipariş bir satır. Satıra basınca talebin Sipariş adımı açılır." />
+      <SayfaBasligi baslik="Siparişler" simge="cart" alt="Tedarikçiye verilen her sipariş bir satır. Satıra basınca talebin Sipariş adımı açılır." ek={<LogoBelgeAramasi tur="satin-alma-siparisi" />} />
       {(geciken.length > 0 || hafta.length > 0 || acik.length > 0) && (
         <div className="sa-ekran-sayilar">
           {geciken.length > 0 && (

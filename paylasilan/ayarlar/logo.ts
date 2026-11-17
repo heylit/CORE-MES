@@ -152,6 +152,14 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: cari arama',
     aciklama: 'Açıkken Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi aranıp forma doldurulabilir. Yalnız okur, Logo\'ya yazmaz. "Logo bağlantısı" da açık olmalı.',
   },
+  // 3360 a: beş listede "Logo'da ara"; yalnız GET, varsayılan kapalı.
+  'logo.belge-aramasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: belge araması',
+    aciklama: 'Açıkken Projeler, Satış siparişleri, Teklifler, Satın alma talepleri ve Satın alma siparişleri listelerinde "Logo\'da ara" belgeyi no, cari, proje, açıklama ya da satırdaki malzemeyle Logo\'da arar (son 1 yıl, en çok 50). Yalnız okur, Logo\'ya yazmaz. "Logo bağlantısı" da açık olmalı.',
+  },
   // Malzeme fişlerinin ana anahtarı; tür başına gönderim şekli aşağıda (298 a).
   'logo.malzeme-fisi-gonderimi': {
     modul: 'logo',

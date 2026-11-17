@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Teklif, TeklifListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, useLogoRozetleri, type Sutun,
+  LogoBelgeAramasi, Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -74,6 +74,7 @@ export function TeklifListesi() {
         baslik="Teklifler"
         sag={(
           <span className="tc-sp-islemler">
+            <LogoBelgeAramasi tur="teklif" />
             {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { void gezin('/siparisler/teklifler/yeni'); }}>Yeni teklif</Dugme>}
             <Dugme simge="rotate" aria-label="Yenile" onClick={() => { void teklifler.refetch(); }} yukleniyor={teklifler.isFetching} />
           </span>

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { LOGO_IRSALIYE_TURLERI, type IRSALIYE_ESLESME_DURUMLARI, type SiparisLogoKalemDurumu } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, LogoFisDurumu, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
-import type { LogoRozetDurumu, LogoRozetTuru } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoBelgeAramaTuru, LogoRozetDurumu, LogoRozetTuru } from '#paylasilan/sozlesme/logo.ts';
 
 // Logo bağlantısı kuralları (kart #207). Saf: saat ve ağ dışarıdan gelir.
 // Köprü sözleşmesinin bilinen kısmı yalnız burada ve kopru.ts'tedir; kılavuzun kendisi depoya girmez.
@@ -1070,6 +1070,50 @@ export function cariListesiniAyikla(govde: unknown): LogoCari[] | null {
   return govde.map(cariKaydiniAyikla).filter((c): c is LogoCari => c !== null);
 }
 
+// 3360 a: yardımcının belge araması (araclar/logo-yardimcisi Islemler.cs BelgeAra): dizi; tür adları yardımcıdakiyle aynı.
+export const BELGE_ARAMA_TURU: Readonly<Record<LogoBelgeAramaTuru, string>> = Object.freeze({
+  proje: 'project', 'satis-siparisi': 'salesOrder', teklif: 'salesOffer', talep: 'demand', 'satin-alma-siparisi': 'purchaseOrder',
+});
+// Giden kutusunda aynı Logo kaydına gitmiş CORE belgesinin türü (CORE karşılığı için).
+export const BELGE_ARAMA_GIDEN_TURU: Readonly<Record<LogoBelgeAramaTuru, string>> = Object.freeze({
+  proje: 'proje', 'satis-siparisi': 'siparisler-siparisi', teklif: 'siparisler-teklifi', talep: 'talep', 'satin-alma-siparisi': 'siparis',
+});
+export interface LogoBelgeBulgusuHam {
+  logoKayitNo: number; no: string | null; belgeNo: string | null; tarih: string | null; cariKodu: string | null; cariAdi: string | null;
+  projeKodu: string | null; projeAdi: string | null; aciklama: string | null; tutar: string | null; dovizTuru: number | null; iptal: boolean;
+  satirlar: { kod: string | null; ad: string | null; miktar: string | null; birim: string | null; aciklama: string | null }[];
+  satirSayisi: number;
+}
+const miktarMetni = (d: number | null): string | null => (d === null || !Number.isFinite(d) ? null : String(Math.round(d * 1e6) / 1e6));
+export function belgeBulgulariniAyikla(govde: unknown): LogoBelgeBulgusuHam[] | null {
+  if (!Array.isArray(govde)) return null;
+  const sonuc: LogoBelgeBulgusuHam[] = [];
+  for (const o of govde) {
+    if (!kayitMi(o)) continue;
+    const ref = ilkSayi(o, ['logicalRef']);
+    if (ref === null || !Number.isSafeInteger(ref) || ref <= 0) continue;
+    const tarih = ilkMetin(o, ['date'], 10);
+    const doviz = ilkSayi(o, ['currency']);
+    const satirlar = (Array.isArray(o['matchedLines']) ? o['matchedLines'] : []).filter(kayitMi).slice(0, 5).map((x) => ({
+      kod: ilkMetin(x, ['code'], 64), ad: ilkMetin(x, ['name'], 200), miktar: miktarMetni(ilkSayi(x, ['amount'])),
+      birim: ilkMetin(x, ['unit'], 20), aciklama: ilkMetin(x, ['description'], 250),
+    }));
+    const sayi = ilkSayi(o, ['matchedLineCount']);
+    sonuc.push({
+      logoKayitNo: ref, no: ilkMetin(o, ['number'], 40), belgeNo: ilkMetin(o, ['docNumber'], 40),
+      tarih: tarih !== null && GUN_METNI.test(tarih) && !Number.isNaN(Date.parse(tarih)) ? tarih : null,
+      cariKodu: ilkMetin(o, ['arpCode'], 64), cariAdi: ilkMetin(o, ['arpName'], 200),
+      projeKodu: ilkMetin(o, ['projectCode'], 64), projeAdi: ilkMetin(o, ['projectName'], 200),
+      aciklama: ilkMetin(o, ['description'], 250), tutar: miktarMetni(ilkSayi(o, ['netTotal'])),
+      dovizTuru: doviz !== null && Number.isSafeInteger(doviz) && doviz > 0 ? doviz : null,
+      iptal: o['cancelled'] === true,
+      satirlar, satirSayisi: sayi !== null && Number.isSafeInteger(sayi) && sayi >= satirlar.length ? sayi : satirlar.length,
+    });
+    if (sonuc.length >= 50) break;
+  }
+  return sonuc;
+}
+
 // Cari arama metni: yardımcı en az 3, en çok 100 karakter kabul eder.
 export const CARI_ARAMA_EN_AZ = 3;
 export const CARI_ARAMA_EN_COK = 100;
@@ -1362,6 +1406,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Logo geçişinde okunan listede olmayan kart Logo\'da kod ya da adla aranır (Material/search, en çok 20) ve bulunan kart listeye eklenir; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
   { anahtar: 'cari-arama', yon: 'logo-tmi', baslik: 'Cari arama (müşteri ve tedarikçi)', kaynak: 'bagli', ayarlar: ['logo.cari-aramasi'], belgeTurleri: [], okuma: 'cari',
     aciklama: 'Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi kod, ünvan ya da vergi numarasıyla aranır (Arp/search) ve seçilen cari forma doldurulur; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
+  { anahtar: 'belge-arama', yon: 'logo-tmi', baslik: 'Belge araması (proje, sipariş, teklif, talep)', kaynak: 'bagli', ayarlar: ['logo.belge-aramasi'], belgeTurleri: [],
+    aciklama: 'Beş listedeki "Logo\'da ara" Logo belgesini başlıkta ve satırda arar (Document/search, son 1 yıl, en çok 50); zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
 ];
 
 export type LogoAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi' | 'kodda-yok';
