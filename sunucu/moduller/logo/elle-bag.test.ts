@@ -137,6 +137,8 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
       { type: 'salesOffer', logicalRef: 61, number: 'ORN-TK-61', date: '2026-11-15', arpCode: 'orn-c-2001', arpName: 'ORN bag firma', description: 'ORN-BAG elle', netTotal: 150, cancelled: false, lines: [] },
       { type: 'salesOffer', logicalRef: 62, number: 'ORN-TK-62', arpCode: 'ORN-C-9999', description: 'ORN-BAG baska cari', lines: [] },
       { type: 'salesOffer', logicalRef: 63, number: 'ORN-TK-63', arpCode: 'ORN-C-2001', description: 'ORN-BAG iptal', cancelled: true, lines: [] },
+      // Aynı kayıt numarası satış siparişi aramasında da çıkar: başka türdeki arama teklife bağlatmaz.
+      { type: 'salesOrder', logicalRef: 61, number: 'ORN-SS-61', arpCode: 'ORN-C-2001', description: 'ORN-TUR elle', lines: [] },
       { type: 'salesOrder', logicalRef: 71, number: 'ORN-SS-71', arpCode: 'ORN-C-2001', description: 'ORN-BAG siparis', lines: [] },
       { type: 'project', logicalRef: 81, number: 'ORN.EB1', projectCode: 'ORN.EB1', projectName: 'Deneme proje', lines: [] },
       { type: 'project', logicalRef: 82, number: 'ORN.EB2', projectCode: 'ORN.EB2', projectName: 'ORN.EB1 benzeri', lines: [] },
@@ -160,8 +162,19 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
     await assert.rejects(ara('talep', 'ORN-BAG', teklifId), /bağlama yok/);
     await assert.rejects(bagla('teklif', teklifId, 62, 'ORN-BAG'), /Cari farklı/);
     await assert.rejects(bagla('teklif', teklifId, 61, 'ORN-TK-62'), /son aramanızda yok/, 'kişinin son aramasında olmayan kayıt bağlanmaz');
-    await ara('satis-siparisi', 'ORN-BAG');
+    assert.deepEqual((await ara('satis-siparisi', 'ORN-TUR')).belgeler.map((b) => b.logoKayitNo), [61]);
     await assert.rejects(bagliyaz('teklif', teklifId, 61), /son aramanızda yok/, 'başka türdeki arama sayılmaz');
+    await ara('teklif', 'ORN-BAG', teklifId);
+    await assert.rejects(
+      vt().tx((db) => belgeBagla(db, yoneticiId, { tur: 'teklif', belgeId: teklifId, logoKayitNo: 61 }, new Date(Date.now() + 31 * 60_000))),
+      /son aramanızda yok/, '30 dakikadan eski arama sayılmaz',
+    );
+    // Elle bağ yalnız "zaten vardı" sonucuyla yazılabilir (göç kısıtı).
+    await assert.rejects(
+      vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, son_deneme, son_sonuc, logo_kayit_no, elle_baglandi, elle_baglayan)
+        VALUES ('siparisler-teklifi', 99999, now(), 'gonderildi', '99', now(), $1)`, [yoneticiId]),
+      /logo_giden_elle_bag/,
+    );
     assert.equal((await sira('teklif')).durum, 'bekliyor', 'reddedilen bağlama yazmaz');
 
     assert.deepEqual(await bagla('teklif', teklifId, 61, 'ORN-BAG'), { kayitNo: '61' });

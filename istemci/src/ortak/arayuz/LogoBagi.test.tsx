@@ -17,14 +17,14 @@ const CEVAP: LogoBelgeAramaCevabi = {
   belgeler: [BELGE, { ...BELGE, logoKayitNo: 42, no: 'ORN-SS-142', cariKodu: 'ORN-C-9', bagla: { uygun: false, neden: 'Cari farklı; bağlanamaz.' } }],
 };
 const json = (govde: unknown) => new Response(JSON.stringify(govde), { status: 200 });
-function sunucuKur() {
+function sunucuKur(cevap: LogoBelgeAramaCevabi = CEVAP) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = secenek?.method ?? 'GET';
     istekler.push({ yontem, yol, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : null });
     if (yol === '/logo/belge-arama-durumu') return json({ acik: true, neden: null });
-    if (yol.startsWith('/logo/belge-ara?')) return json(CEVAP);
+    if (yol.startsWith('/logo/belge-ara?')) return json(cevap);
     return json({ kayitNo: yontem === 'POST' && yol === '/logo/belge-bagla' ? '41' : null });
   }));
   return istekler;
@@ -79,13 +79,29 @@ describe('Logo bağı (3360-2 a)', () => {
     ]);
   });
 
-  it('yazma yetkisi yoksa ve rozet yoksa (Logo\'ya gitmeyen belge) düğme çizilmez', () => {
-    sunucuKur();
+  it('yazma yetkisi yoksa ve rozet yoksa (Logo\'ya gitmeyen belge) düğme çizilmez', async () => {
+    const istekler = sunucuKur();
     const { container } = ciz(['siparisler.oku'], SIRADA);
+    // Arama açık ve rozet var: düğmeyi yalnız yazma yetkisi gizler (arama durumu sorulsa da düğme gelmez).
+    await new Promise((r) => { setTimeout(r, 30); });
     expect(container.textContent).toBe('');
+    expect(istekler.some((i) => i.yol === '/logo/belge-arama-durumu')).toBe(false);
     cleanup();
     const ikinci = ciz(['siparisler.yaz'], null);
     expect(ikinci.container.textContent).toBe('');
+  });
+
+  it('bağlanamayan belgede (zaten Logo\'da) engel yazılır, hiçbir kayıtta "Bağla" yok', async () => {
+    sunucuKur({ ...CEVAP, baglanacak: { no: 'SS-2026-001', tarih: '2026-11-14', engel: "Belge zaten Logo'da (kayıt 9).", tutar: null } });
+    ciz(['siparisler.yaz'], SIRADA);
+    fireEvent.click(await screen.findByRole('button', { name: "Logo'da ara ve bağla" }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByLabelText(/Aranan/), { target: { value: 'ORN-SS' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ara' }));
+    expect(await within(pencere).findByText("Belge zaten Logo'da (kayıt 9).")).toBeTruthy();
+    expect(within(pencere).getByText('ORN-SS-141')).toBeTruthy();
+    expect(within(pencere).queryByRole('button', { name: 'Bağla' })).toBeNull();
+    expect(within(pencere).queryByText('Cari farklı; bağlanamaz.')).toBeNull();
   });
 
   it('elle bağlanmışta "elle bağlandı"; bağı yalnız Sistem Ayarları yazan kaldırır, onayla gider', async () => {
