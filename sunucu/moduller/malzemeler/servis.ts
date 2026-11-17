@@ -207,8 +207,10 @@ export async function malzemeAra(
   const sayfa = Math.max(1, Math.trunc(g.sayfa));
   const sayfaBoyu = Math.min(200, Math.max(1, Math.trunc(g.sayfaBoyu ?? ARAMA_SAYFA_BOYU)));
   const metin = g.metin?.trim() || null;
+  // Deneme işaretli kart seçicide ve aramada çıkmaz: gerçek kayıt deneme kartına bağlanmasın (3395 madde 2).
   const r = await s.katalogMalzemeAra(db, {
-    metin, turler: g.turler ?? [], yalnizAktif: g.yalnizAktif ?? false, hizmetYonu: g.hizmetYonu ?? null, sinir: sayfaBoyu, atla: (sayfa - 1) * sayfaBoyu,
+    metin, turler: g.turler ?? [], yalnizAktif: g.yalnizAktif ?? false, hizmetYonu: g.hizmetYonu ?? null,
+    gizli: await denemeIsaretliKimlikler(db, 'malzeme'), sinir: sayfaBoyu, atla: (sayfa - 1) * sayfaBoyu,
   });
   return { satirlar: r.satirlar, toplam: r.toplam, sayfa, sayfaBoyu };
 }
@@ -1373,6 +1375,7 @@ export async function logoGecisiGeriAl(db: Db, kullanici: Kullanici, islem: stri
 // Aktif kartların sayfasız, sınırlı okuması (Reçete-Rota ve planlama bağlı durumu): stok kodu ve no sırasıyla en çok `sinir` kart;
 // sınırdan fazlası varsa `kesildi`. Sayfa sayfa okumak her sayfada kataloğu baştan sayardı; burada tek okuma ve tek sayım vardır.
 export async function aktifMalzemelerSinirli(db: Db, sinir: number): Promise<{ kartlar: KatalogMalzemeOzeti[]; kesildi: boolean }> {
-  const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, sinir: sinir + 1, atla: 0 });
+  // Seçici değil (bağlı durum okuması): tek okuma sözü (iki sorgu) korunur, işaretli kart süzülmez.
+  const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, gizli: [], sinir: sinir + 1, atla: 0 });
   return { kartlar: r.satirlar.slice(0, sinir), kesildi: r.satirlar.length > sinir };
 }

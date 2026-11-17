@@ -280,7 +280,7 @@ const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
              OR ${SADE('malzeme_onceki_kodlar_metni(k.onceki_kodlar)')} LIKE $1)
         AND (cardinality($3::text[]) = 0 OR k.tur = ANY($3::text[]))
         AND (NOT $4::boolean OR k.onay_durumu = 'aktif')
-        AND ($5::text IS NULL OR k.hizmet_yonu = $5)`;
+        AND ($5::text IS NULL OR k.hizmet_yonu = $5) AND NOT (k.no = ANY($6::int[]))`;
 
 export function katalogMalzemeOzeti(db: Db, no: number): Promise<KatalogMalzemeOzeti | null> {
   return db.tek<KatalogMalzemeOzeti>(`SELECT ${OZET_SECIMI} WHERE k.no = $1`, [no]);
@@ -347,13 +347,13 @@ export async function cncKimligiYaz(db: Db, no: number, kimlik: string | null): 
 
 // Metin stok kodunda ya da adda (büyük-küçük ve Türkçe harf duyarsız) geçer; yalnız rakamsa kart no'su da eşleşir. Sıra: stok kodu, no.
 export async function katalogMalzemeAra(
-  db: Db, g: { metin: string | null; turler: readonly string[]; yalnizAktif: boolean; hizmetYonu: string | null; sinir: number; atla: number },
+  db: Db, g: { metin: string | null; turler: readonly string[]; yalnizAktif: boolean; hizmetYonu: string | null; gizli: readonly number[]; sinir: number; atla: number },
 ): Promise<{ satirlar: KatalogMalzemeOzeti[]; toplam: number }> {
   const desen = g.metin === null ? null : icindeDeseni(g.metin);
   const no = g.metin !== null && /^\d{1,9}$/.test(g.metin) ? Number(g.metin) : null;
-  const p = [desen, no, g.turler, g.yalnizAktif, g.hizmetYonu];
+  const p = [desen, no, g.turler, g.yalnizAktif, g.hizmetYonu, [...g.gizli]];
   const satirlar = await db.sorgu<KatalogMalzemeOzeti>(
-    `SELECT ${OZET_SECIMI} WHERE ${ARAMA_KOSULU} ORDER BY k.stok_kodu, k.no LIMIT $6 OFFSET $7`, [...p, g.sinir, g.atla]);
+    `SELECT ${OZET_SECIMI} WHERE ${ARAMA_KOSULU} ORDER BY k.stok_kodu, k.no LIMIT $7 OFFSET $8`, [...p, g.sinir, g.atla]);
   const sayim = await db.tek<{ toplam: string }>(`SELECT count(*) AS toplam FROM malzeme_katalog_karti k WHERE ${ARAMA_KOSULU}`, p);
   return { satirlar, toplam: Number(sayim?.toplam ?? 0) };
 }
@@ -361,15 +361,15 @@ export async function katalogMalzemeAra(
 // Genel arama (1233 sözleşmesi): seçicilerle aynı koşul (trigram indeksi), sıra tam kod, kart no, koddan başlayan, yeniden eskiye.
 // Desenler çağırandan kaçırılmış gelir. Taslak ve onaydaki kart da döner; iptal dönmez.
 export function katalogKayitAra(
-  db: Db, g: { q: string; sade: string; icindeDeseni: string; basDeseni: string; sinir: number },
+  db: Db, g: { q: string; sade: string; icindeDeseni: string; basDeseni: string; sinir: number }, gizli: readonly number[],
 ): Promise<KatalogMalzemeOzeti[]> {
   const no = /^\d{1,9}$/.test(g.q) ? Number(g.q) : null;
   return db.sorgu<KatalogMalzemeOzeti>(
     `SELECT ${OZET_SECIMI} WHERE ${ARAMA_KOSULU}
-      ORDER BY (${SADE('k.stok_kodu')} = $6) DESC, (k.no IS NOT DISTINCT FROM $2::int) DESC, (${SADE('k.stok_kodu')} LIKE $7) DESC,
+      ORDER BY (${SADE('k.stok_kodu')} = $7) DESC, (k.no IS NOT DISTINCT FROM $2::int) DESC, (${SADE('k.stok_kodu')} LIKE $8) DESC,
                k.guncelleme DESC, k.no DESC
-      LIMIT $8`,
-    [g.icindeDeseni, no, [], false, null, g.sade, g.basDeseni, g.sinir]);
+      LIMIT $9`,
+    [g.icindeDeseni, no, [], false, null, [...gizli], g.sade, g.basDeseni, g.sinir]);
 }
 
 // Kg fiyatı (satın alma) için kartın kalitesi ve formu `kayit`'tadır: hazır kalitede `grade`, özel kalitede `custom.kod` (yoksa `custom.ad`).

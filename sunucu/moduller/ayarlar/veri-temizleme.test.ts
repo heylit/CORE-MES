@@ -577,6 +577,60 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     assert.notEqual((await kart(an))?.kayit ?? null, null, 'sonradan kalkan işaret kartı geri getirir');
   });
 
+  test('operatör istasyon aramasında işaretli emir çıkmaz, işaret kalkınca döner', async () => {
+    const s = o().sahip;
+    const rol = (await s.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('orn_arayan', 'ORN Arayan') RETURNING id"))!.id;
+    await s.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'uretim-emirleri.ara-istasyon')", [rol]);
+    const yoneticiRolu = (await s.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'"))!.id;
+    const kisi = await o().vt.tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: 'ORN Operatör', kullaniciAdi: 'orn-operator', parola: PAROLA });
+      await rolAta(db, yoneticiId, id, rol);
+      await rolAl(db, yoneticiId, id, yoneticiRolu);
+      return id;
+    });
+    await s.sorgu("INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, '2000-01-01', 100)", [ist, kisi]);
+    const operator = await girisCerezi('orn-operator');
+    const e = await emir();
+    await s.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e]);
+    const emirNo = (await s.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [e]))!.n;
+    const bulur = async () => {
+      const c = await istek(operator, 'GET', `/uretim-emirleri/ara?q=${encodeURIComponent(emirNo)}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ sonuclar: { anahtar: string; yol: string }[] }>().sonuclar.some((x) => x.yol === `/uretim-terminali?emir=${String(e)}`);
+    };
+    assert.equal(await bulur(), true, 'istasyon araması kullanılır');
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }]);
+    assert.equal(await bulur(), false);
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }], false);
+    assert.equal(await bulur(), true);
+  });
+
+  test('seçici ve genel arama: işaretli emir, sipariş ve malzeme kartı aramada çıkmaz, işaret kalkınca döner', async () => {
+    const [e, sp, mlz] = [await emir(), await siparis(), await malzeme()];
+    const emirNo = (await o().sahip.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [e]))!.n;
+    const spNo = `ORN-SP-${String(siparisSira)}`;
+    const kod = (await o().sahip.tek<{ k: string }>('SELECT stok_kodu AS k FROM malzeme_katalog_karti WHERE no = $1', [mlz]))!.k;
+    const bul = async () => {
+      const emirAra = await istek(yonetici, 'GET', `/uretim-emirleri/ara?q=${encodeURIComponent(emirNo)}`);
+      const secim = await istek(yonetici, 'GET', `/malzemeler/secim-ara?q=${String(mlz)}&pasifler=true`);
+      const genelSp = await istek(yonetici, 'GET', `/arama?q=${encodeURIComponent(spNo)}`);
+      const genelMlz = await istek(yonetici, 'GET', `/arama?q=${encodeURIComponent(kod)}`);
+      for (const c of [emirAra, secim, genelSp, genelMlz]) assert.equal(c.statusCode, 200, c.body);
+      return {
+        emir: emirAra.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === String(e)),
+        secim: secim.json<{ sonuclar: { id: number }[] }>().sonuclar.some((x) => x.id === mlz),
+        siparis: genelSp.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === `siparis#${String(sp)}`),
+        malzeme: genelMlz.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === `malzeme#${String(mlz)}`),
+      };
+    };
+    assert.deepEqual(await bul(), { emir: true, secim: true, siparis: true, malzeme: true });
+    const secim: TemizlikKoku[] = [{ tur: 'uretim_emri', kimlik: e }, { tur: 'siparis', kimlik: sp }, { tur: 'malzeme', kimlik: mlz }];
+    await isaretle(secim);
+    assert.deepEqual(await bul(), { emir: false, secim: false, siparis: false, malzeme: false });
+    await isaretle(secim, false);
+    assert.deepEqual(await bul(), { emir: true, secim: true, siparis: true, malzeme: true });
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(
