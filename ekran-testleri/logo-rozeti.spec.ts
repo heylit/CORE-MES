@@ -72,7 +72,21 @@ test('malzeme kataloğunda Logo sütunu durum ve nedeni yazar', async ({ page, a
   expect(ag.hatalar).toEqual([]);
 });
 
+// Örnek veride proje yoktur; liste boş kalmasın diye onaylı siparişe bağlı bir proje açılır (öteki testlerin sırasına dayanmaz).
+async function projeAc(page: Page): Promise<void> {
+  const id = await siparisAc(page);
+  const s = await (await page.request.get(`${ADRES}/api/siparisler/${String(id)}`)).json() as { surum: number };
+  const o = await page.request.post(`${ADRES}/api/siparisler/${String(id)}/onayla`, { headers: { 'istek-kimligi': randomUUID() }, data: { surum: s.surum } });
+  expect(o.status(), await o.text()).toBe(200);
+  const p = await page.request.post(`${ADRES}/api/projeler`, {
+    headers: { 'istek-kimligi': randomUUID() },
+    data: { kod: `ORN_LR.${randomUUID().slice(0, 8).toUpperCase()}`, ad: 'ORN Logo rozeti projesi', siparisId: id, baslangic: gun(-10), bitis: gun(30), sablonId: null },
+  });
+  expect(p.status(), await p.text()).toBe(200);
+}
+
 test('proje listesinde Logo sütunu', async ({ page, ag, ac }) => {
+  await projeAc(page);
   const turler = await rozetleriYonlendir(page);
   await ac('/projeler');
   await expect(page.locator('.tc-logo-rozet').first()).toBeVisible();
