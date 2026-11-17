@@ -221,8 +221,9 @@ test('serbest bırakma: sahibin işlemi ya da sevkiyat.is-yaz; erken çıkış y
   assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('sevkiyat.is-yaz')), null);
   assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('uretim-emirleri.duzenle'))?.tur, 'yetki');
   assert.equal(serbestBirakmaIhlali({ kaynak: 'fason', asama: 'hazir' }, null, yetki('uretim-emirleri.fason')), null);
-  // Önceden bırakma gerekçesizdir ve onay istemez; erken çıkış ister.
-  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, null, yetki('sevkiyat.is-yaz')), null);
+  // 3361: hazır olmayan gerekçesiz bırakılmaz; erken çıkış yetkisi olsa da gerekçe ister.
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, null, yetki('sevkiyat.is-yaz'))?.tur, 'durum');
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'fason', asama: 'hazir-degil' }, null, yetki('uretim-emirleri.fason', 'sevkiyat.onayla'))?.tur, 'durum');
   assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, 'Müşteri hattı duruyor', yetki('sevkiyat.is-yaz'))?.tur, 'yetki');
   assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, 'Müşteri hattı duruyor', yetki('sevkiyat.is-yaz', 'sevkiyat.onayla')), null);
   // Bekleyen kalem sonradan erkene çevrilir; başka aşamada ikinci bırakma yoktur.

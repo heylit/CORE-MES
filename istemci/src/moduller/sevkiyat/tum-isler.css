@@ -263,3 +263,6 @@
 .tc-ti-yon-etiket[data-yon="al"] { color: var(--done); background: var(--panel2); box-shadow: inset 0 0 0 var(--cizgi-ince) var(--done); }
 .tc-ti-cip-yon[data-yon="birak"] .tc-simge { color: var(--run); }
 .tc-ti-cip-yon[data-yon="al"] .tc-simge { color: var(--done); }
+
+/* "Sevkiyata hazır" dar durum sütununda iki satıra iner, komşu sütuna taşmaz. */
+.tc-ti-tablo .tc-rozet { white-space: normal; max-width: 100%; }

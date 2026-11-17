@@ -580,18 +580,25 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
   const birak = (kim: string, anahtarlar: string[], erkenGerekce: string | null = null, tasima: 'biz' | 'firma' = 'biz') =>
     istek<{ kalemIdleri: number[] }>(kim, 'POST', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar, tasima, erkenGerekce });
 
-  test('960: bitmemiş emir aday; önceden bırakılan bekler, emir bitince sevkiyata düşer; erken çıkış gerekçe ve sevkiyat.onayla ister', async () => {
+  test('960: bitmemiş emir aday; gerekçesiz bırakılmaz (3361), eski bekleyen kalem emir bitince düşer; erken çıkış gerekçe ve sevkiyat.onayla ister', async () => {
     const id = await tekAdimliEmir();
     assert.equal((await satir(`urun:${id}`))?.asama, 'hazir-degil');
     assert.equal((await birak('operator', [`urun:${id}`])).durum, 403, 'serbest bırakma işlemi olmayan bırakamaz');
     assert.equal((await birak('planlama_proje', [`urun:${id}`], 'erken gerekçesi yeterli')).durum, 403, 'erken çıkış sevkiyat.onayla ister');
     assert.equal((await birak('depo', [`urun:${id}`], 'kısa')).durum, 400, 'gerekçe en az 10 karakter');
+    const red = await birak('planlama_proje', [`urun:${id}`]);
+    assert.equal(red.durum, 409, 'hazır olmayan gerekçesiz bırakılmaz');
+    assert.match(JSON.stringify(red.govde), /bütün adımlar bitince/);
+    assert.equal((await birak('depo', [`urun:${id}`])).durum, 409, 'erken çıkış yetkisi olan da gerekçesiz bırakamaz');
+    assert.equal((await satir(`urun:${id}`))?.asama, 'hazir-degil', 'reddedilen bırakma kalem açmaz');
 
-    const c = await birak('planlama_proje', [`urun:${id}`]);
+    // 3361 öncesi gerekçesiz bırakılmış kalem: erken çıkışla açılıp erken izi silinerek kurulur.
+    const c = await birak('depo', [`urun:${id}`], 'Eski kayıt kurulumu için');
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     const [kalemId] = serbestBirakCevabi.parse(c.govde).kalemIdleri;
+    await o().sahip.sorgu('UPDATE sevkiyat_bekleyen SET erken_zamani = NULL, erken_kisi_id = NULL, erken_gerekce = NULL WHERE id = $1', [kalemId]);
     const k = await satir(`kalem:${kalemId}`);
-    assert.deepEqual([k?.asama, k?.tasima, k?.sonYazan?.yer, k?.adet], ['bekliyor', 'biz', 'tum-isler', null]);
+    assert.deepEqual([k?.asama, k?.tasima, k?.adet], ['bekliyor', 'biz', null]);
     assert.equal(await satir(`urun:${id}`), undefined, 'kalemi açılan aday listeden çıkar');
     assert.equal((await birak('planlama_proje', [`kalem:${kalemId}`])).durum, 409, 'ikinci kez bırakılmaz');
     assert.equal((await bekleyenler()).some((b) => b.id === kalemId), false, 'hazır olmayan sevkiyata düşmez');

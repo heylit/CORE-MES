@@ -11,7 +11,7 @@ import { hataIletisi } from '../../ortak/veri/api.ts';
 import { bugun as bugunGetir, sayiMetni, tarihMetni } from './bicim.ts';
 import {
   ASAMALAR, ASAMA_SIRASI, DONEMLER, GIDIS_CIKMADI, KALEM_SAHIBI, KAYNAK, KAYNAKLAR, OZETLER, adayMi, depoDurumu, donemAraligi, fark, farkYaz,
-  geciktiMi, gecKalacakMi, gidisCiktiMi, gorunumde, gunu, kapali, kisaTarih, rozetOf, suz, uzunTarih,
+  geciktiMi, gecKalacakMi, gidisCiktiMi, gorunumde, gunu, kapali, kisaTarih, rozetOf, serbestKapaliNedeni, suz, uzunTarih,
   type Donem, type Gorunum, type Gruplama, type Hazirlik, type Ozet, type Suzgec, type Yon,
 } from './tum-isler.ts';
 import { ElleIsFormu } from './ElleIsFormu.tsx';
@@ -243,9 +243,10 @@ export function TumIsler() {
     return (
       <span className="tc-ti-karar">
         <Dugme simge="route" className="tc-ti-serbest" data-karar={r.yon === 'gelis' ? 'al' : 'birak'} yukleniyor={komut.isPending && komut.variables?.tur === 'serbest-birak' && komut.variables.govde.anahtarlar.includes(r.anahtar)}
-          title={`${r.yon === 'gelis' ? 'Almaya' : 'Sevke'} serbest bırak; sevk mi alım mı olacağını sevkiyat seçer${r.asama === 'hazir' ? '' : ' (kalem bitince düşer)'}`}
+          disabled={serbestKapaliNedeni(r) !== null}
+          title={serbestKapaliNedeni(r) ?? `${r.yon === 'gelis' ? 'Almaya' : 'Sevke'} serbest bırak; sevk mi alım mı olacağını sevkiyat seçer`}
           onClick={durdur(() => serbestBirak([r.anahtar], 'biz'))}>Serbest bırak</Dugme>
-        <Dugme simge="more" className="tc-ti-diger" aria-label="Diğer seçenekler" title={`Sevk yok${r.asama === 'hazir' ? '' : ', hazır olmadan sevke çıkar'}`}
+        <Dugme simge="more" className="tc-ti-diger" aria-label="Diğer seçenekler" title={r.asama === 'hazir' ? 'Sevk yok' : 'Hazır olmadan sevke çıkar'}
           onClick={durdur(() => setDiger(r.anahtar))} />
       </span>
     );
@@ -304,6 +305,7 @@ export function TumIsler() {
   );
   const satirAc = (r: TumIsSatiri) => setAyrinti(r.anahtar);
   const satirTusu = (r: TumIsSatiri) => (e: KeyboardEvent) => { if (e.key === 'Enter' && e.target === e.currentTarget) satirAc(r); };
+  const seciliHazir = liste.filter((r) => secili.has(r.anahtar) && serbestKapaliNedeni(r) === null).map((r) => r.anahtar);
   const secimDegistir = (r: TumIsSatiri, acik: boolean) => setSecili((s) => { const k = new Set(s); if (acik) k.add(r.anahtar); else k.delete(r.anahtar); return k; });
   const satirCiz = (r: TumIsSatiri) => (
     <tr key={r.anahtar} className="tc-tablo-secilir" tabIndex={0} data-is={r.anahtar}
@@ -408,7 +410,7 @@ export function TumIsler() {
             <div className="tc-ti-cip-grup" role="group" aria-label="Durum">
               {aday ? (['hazir', 'gelecek'] as const).map((h) => {
                 const { basili, degistir } = acKapa({ kume: hazirlik, deger: h, sec: setHazirlik });
-                return cip(h, { basili, degistir, ad: h === 'hazir' ? 'Hazır' : 'Hazır değil', baslik: h === 'hazir' ? 'Bitti; sevke çıkabilir' : 'Henüz bitmedi; gün tahmindir',
+                return cip(h, { basili, degistir, ad: h === 'hazir' ? 'Sevkiyata hazır' : 'Hazır değil', baslik: h === 'hazir' ? 'Bitti; sevke çıkabilir' : 'Henüz bitmedi; gün tahmindir',
                   sayi: durumTemeli.filter((r) => (r.asama === 'hazir') === (h === 'hazir')).length });
               }) : ASAMALAR.map((a) => {
                 const { basili, degistir } = acKapa({ kume: asamalar, deger: a.kod, sec: setAsamalar });
@@ -451,8 +453,10 @@ export function TumIsler() {
                 {secimli && secili.size > 0 && (
                   <div className="tc-ti-toplu" role="region" aria-label="Toplu karar">
                     <b>{secili.size} kalem seçili</b>
-                    <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} onClick={() => serbestBirak([...secili], 'biz')}>Serbest bırak</Dugme>
-                    <Dugme simge="minus" disabled={komut.isPending} onClick={() => serbestBirak([...secili], 'firma')}>Sevk yok</Dugme>
+                    <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} disabled={seciliHazir.length === 0}
+                      title={seciliHazir.length < secili.size ? `${secili.size - seciliHazir.length} kalem hazır değil; atlanır` : undefined}
+                      onClick={() => serbestBirak(seciliHazir, 'biz')}>{seciliHazir.length < secili.size ? `Serbest bırak (${seciliHazir.length})` : 'Serbest bırak'}</Dugme>
+                    <Dugme simge="minus" disabled={komut.isPending || seciliHazir.length === 0} onClick={() => serbestBirak(seciliHazir, 'firma')}>Sevk yok</Dugme>
                     <Dugme className="tc-ti-toplu-birak" onClick={() => setSecili(new Set())}>Seçimi bırak</Dugme>
                   </div>
                 )}
@@ -482,7 +486,7 @@ export function TumIsler() {
                   <span>{liste.length} {aday ? 'kalem' : 'iş'}</span>
                   {aday ? <>
                     <span className="tc-ti-lejant"><i />hazır değil: gün tahmindir</span>
-                    <span>Serbest bırakılan iş sevkiyata düşer; sevk mi alım mı olacağını sevkiyat seçer. Hazır olmayan kalem bitince düşer; beklemeden çıkarmak için ⋯.</span>
+                    <span>Serbest bırakılan iş sevkiyata düşer; sevk mi alım mı olacağını sevkiyat seçer. Fason önceki adım, ürün bütün adımlar bitince serbest bırakılır; beklemeden çıkarmak için ⋯.</span>
                   </> : <>
                     <span className="tc-ti-lejant"><i data-gecikti />geciken</span>
                     <span>Sevkiyat "Sevk et" / "Al" der; depo son çıkışı ya da kabulü yapar.</span>
@@ -515,7 +519,8 @@ export function TumIsler() {
     if (r.asama === 'depoda' && r.yon === 'gelis' && kabulYapar) return <Dugme tur="birincil" simge="download" onClick={() => kabulEt(r)}>Kabul et</Dugme>;
     if (adayMi(r) && birakir(r)) return <>
       <Dugme simge="more" onClick={() => { setAyrinti(null); setDiger(r.anahtar); }}>Diğer</Dugme>
-      <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} onClick={() => serbestBirak([r.anahtar], 'biz', null, () => setAyrinti(null))}>Serbest bırak</Dugme>
+      <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} disabled={serbestKapaliNedeni(r) !== null} title={serbestKapaliNedeni(r) ?? undefined}
+        onClick={() => serbestBirak([r.anahtar], 'biz', null, () => setAyrinti(null))}>Serbest bırak</Dugme>
     </>;
     if (!adayMi(r) && r.is) return <Dugme tur="birincil" simge="expand" onClick={() => { void yonlendir(`/sevkiyat?tarih=${r.is!.tarih}`); }}>Gününde aç</Dugme>;
     return null;
@@ -612,7 +617,7 @@ export function TumIsler() {
 
 const ELLE_ADI = { numune: 'Numune', tamir: 'Tamir', kalibrasyon: 'Kalibrasyon', iade: 'İade', diger: 'Diğer' } as const;
 
-// "Diğer": adayda sevk yok ve hazır olmadan sevke çıkar (945); sevkiyattakinde sevk/al ile sevk yok arası (taşıma). Erken çıkış gerekçe
+// "Diğer": adayda sevk yok (yalnız hazırsa, 3361) ve hazır olmadan sevke çıkar (945); sevkiyattakinde sevk/al ile sevk yok arası (taşıma). Erken çıkış gerekçe
 // ister; kim, ne zaman, neden kaleme yazılır.
 function DigerPenceresi({ r, erkenZorlar, calisiyor, kapat, serbestBirak, tasimaDegistir }: {
   r: TumIsSatiri; erkenZorlar: boolean; calisiyor: boolean; kapat: () => void;
@@ -632,8 +637,8 @@ function DigerPenceresi({ r, erkenZorlar, calisiyor, kapat, serbestBirak, tasima
       alt={<Dugme onClick={kapat}>Vazgeç</Dugme>}>
       <div className="tc-ti-diger-govde">
         {aday ? (
-          <button type="button" className="tc-ti-secenek" disabled={calisiyor} onClick={() => serbestBirak('firma', null)}>
-            <Simge ad="minus" /><span><b>Sevk yok</b><span className="tc-ti-ince">Firma kendisi alır ya da getirir. İş açılmaz; depo hareketi yine yapılır.</span></span>
+          <button type="button" className="tc-ti-secenek" disabled={calisiyor || serbestKapaliNedeni(r) !== null} onClick={() => serbestBirak('firma', null)}>
+            <Simge ad="minus" /><span><b>Sevk yok</b><span className="tc-ti-ince">{serbestKapaliNedeni(r) ?? 'Firma kendisi alır ya da getirir. İş açılmaz; depo hareketi yine yapılır.'}</span></span>
           </button>
         ) : (
           (['biz', 'firma'] as const).map((t) => (
