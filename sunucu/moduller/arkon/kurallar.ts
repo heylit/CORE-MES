@@ -2263,12 +2263,13 @@ export function ikinciKontrolEksik(istek: unknown, onceki: unknown, paket: unkno
 }
 
 // İleti budaması (15 dk) cihazın imlecinden sonraki satırları silmişse cihaz depo değişikliklerini kaçırmıştır; yeniden yüklenmesi gerekir.
-// Boş tabloda imleç sayaçtır: yeni cihaz da kendini yenileyen cihaz da sayaçtan başlar, döngüye girmez.
-export interface IletiAraligi { taban: number | null; tavan: number | null; sayac: number }
+// Ölçü budanan en büyük kimliktir (budanan, hiç budanmadıysa 0): sayaç ya da kalan en küçük kimlik ölçü olamaz, yarım kalan ya da geri
+// alınan ekleme sayacı satır yazmadan ilerletir ve boşluk bırakır. Yeni cihaz budanandan geride başlamaz: yeniden yüklenen döngüye girmez.
+export interface IletiAraligi { taban: number | null; tavan: number | null; sayac: number; budanan: number }
 export const ILETI_YENIDEN_YUKLE = { type: '$reload' } as const;
-export const iletiBasi = (a: IletiAraligi): number => a.tavan ?? a.sayac;
+export const iletiBasi = (a: IletiAraligi): number => Math.max(a.tavan ?? a.sayac, a.budanan);
 export function iletiKacirildi(son: number, a: IletiAraligi): boolean {
-  return a.taban === null ? son < a.sayac : son < a.taban - 1;
+  return son < a.budanan;
 }
 
 // Sunuculu Arkon'da malzeme isteği (`logi` deposunda `kind: 'req'`) stokta istek kaydı açar (tekrar eden sayfalar temizliği, madde 10).

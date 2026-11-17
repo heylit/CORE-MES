@@ -327,17 +327,22 @@ export async function iletiEkle(db: Db, kaynak: string, govde: unknown): Promise
 
 // Budama ileti eklerken yapılmaz: kayıt işleminin ortasındaki DELETE eşzamanlı kayıtları aynı satırlarda birbirine bekletiyordu (yük testi).
 export async function eskiIletileriSil(db: Db): Promise<void> {
-  await db.sorgu("DELETE FROM arkon_ileti WHERE zaman < now() - interval '15 minutes'");
+  await db.sorgu(
+    `WITH silinen AS (DELETE FROM arkon_ileti WHERE zaman < now() - interval '15 minutes' RETURNING id)
+     INSERT INTO arkon_ileti_budama (tavan) SELECT max(id) FROM silinen HAVING count(*) > 0
+     ON CONFLICT (tek) DO UPDATE SET tavan = GREATEST(arkon_ileti_budama.tavan, excluded.tavan)`,
+  );
 }
 
-// İleti aralığı: kalan en küçük ve en büyük kimlik (boşsa null) ve sayacın son değeri (hiç ileti yoksa 0). Budama eski satırları siler.
+// İleti aralığı: kalan en küçük ve en büyük kimlik (boşsa null), sayacın son değeri (hiç ileti yoksa 0) ve budanan en büyük kimlik (yoksa 0).
 export async function iletiAraligi(db: Db): Promise<IletiAraligi> {
   const satir = await db.tek<IletiAraligi>(
     `SELECT min(id)::float8 AS taban, max(id)::float8 AS tavan,
-            coalesce(pg_sequence_last_value(pg_get_serial_sequence('arkon_ileti', 'id')::regclass), 0)::float8 AS sayac
+            coalesce(pg_sequence_last_value(pg_get_serial_sequence('arkon_ileti', 'id')::regclass), 0)::float8 AS sayac,
+            coalesce((SELECT tavan FROM arkon_ileti_budama), 0)::float8 AS budanan
        FROM arkon_ileti`,
   );
-  return satir ?? { taban: null, tavan: null, sayac: 0 };
+  return satir ?? { taban: null, tavan: null, sayac: 0, budanan: 0 };
 }
 
 export const AZAMI_ILETI = 500;
