@@ -94,6 +94,7 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
     await girisliKisi('ba-satis', ['siparisler.oku']);
     await girisliKisi('ba-satis-fiyat', ['siparisler.oku', 'siparisler.fiyat-oku']);
     await girisliKisi('ba-malzeme', ['sayfa.malzemeler']);
+    await girisliKisi('ba-alis', ['satin-alma.oku']);
     // 3374: satış belgelerinin giden satırı Siparişler'in Logo sırasıdır; sıra kimlikleri belge kimliklerinden uzaklaştırılır.
     const { sahip } = ortam;
     await sahip.sorgu("SELECT setval(pg_get_serial_sequence('siparisler_logo_gonderim', 'id'), 500)");
@@ -134,6 +135,7 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
       },
       { type: 'salesOrder', logicalRef: 43, number: 'ORN-SS-139', arpCode: 'ORN-C-1002', description: 'ORN-MLZ-0042 numune', netTotal: 7250, lines: [] },
       { type: 'salesOffer', logicalRef: 44, number: 'ORN-TK-1', arpCode: 'ORN-C-1001', lines: [{ logicalRef: 4, code: 'ORN-MLZ-0042' }] },
+      { type: 'salesOrder', logicalRef: 45, number: 'ORN-SS-150', arpCode: 'ORN-C-1001', netTotal: 900, currency: 20, lines: [] },
     );
   });
   after(async () => { await kopru?.kapat(); await app?.close(); await ortam?.kaldir(); });
@@ -166,6 +168,20 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
     const gizli = await logoBelgeAra(vt(), k(), 'satis-siparisi', 'ORN-SS-141', false);
     assert.deepEqual(gizli.belgeler.map((b) => [b.tutar, b.dovizTuru]), [[null, null]], 'fiyat yetkisi yoksa tutar gelmez');
     assert.equal(gizli.fiyatGorunur, false);
+    // Dövizli kayıtta da para birimi fiyat yetkisiyle gelir.
+    assert.deepEqual((await logoBelgeAra(vt(), k(), 'satis-siparisi', 'ORN-SS-150', true)).belgeler.map((b) => [b.tutar, b.dovizTuru]), [['900', 20]]);
+    assert.deepEqual((await logoBelgeAra(vt(), k(), 'satis-siparisi', 'ORN-SS-150', false)).belgeler.map((b) => [b.tutar, b.dovizTuru]), [[null, null]]);
+    // "Logo bağlantısı" kapalıyken belge araması açık olsa da istek atılmaz.
+    await ayar('logo.baglanti', false);
+    const istekOnce = kopru.istekler.length;
+    assert.equal((await logoBelgeAra(vt(), k(), 'satis-siparisi', 'ORN-MLZ-0042', true)).durum, 'kapali');
+    assert.equal(kopru.istekler.length, istekOnce, 'bağlantı kapalıyken köprüye istek yok');
+    await ayar('logo.baglanti', true);
+    // CORE karşılığı yalnız Logo kayıt numarası olan giden satırından gelir: kısıt numarayı yalnız "gönderildi" ve "zaten vardı" sonucuna verir.
+    await assert.rejects(
+      vt().sorgu("INSERT INTO logo_giden (belge_turu, belge_no, son_deneme, son_sonuc, logo_kayit_no) VALUES ('siparisler-teklifi', 9999, now(), 'reddedildi', '45')"),
+      /logo_giden_butun/,
+    );
     kopru.senaryo = 'yetkisiz';
     assert.equal((await logoBelgeAra(vt(), k(), 'satis-siparisi', 'ORN-MLZ-0042', true)).durum, 'hata');
     kopru.senaryo = 'basari';
@@ -181,6 +197,10 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
     assert.deepEqual([s.govde.durum, s.govde.fiyatGorunur, s.govde.belgeler], ['ortam-degiskeni-yok', false, []]);
     const f = await ara('ba-satis-fiyat', 'tur=teklif&q=ORN-MLZ');
     assert.deepEqual([f.durum, f.govde.fiyatGorunur], [200, true]);
+    // Satın alma siparişinde tutar satın alma okumasıyla görünür; satış fiyatını gören satın almada arayamaz.
+    const a = await ara('ba-alis', 'tur=satin-alma-siparisi&q=ORN-MLZ');
+    assert.deepEqual([a.durum, a.govde.fiyatGorunur], [200, true]);
+    assert.equal((await ara('ba-satis-fiyat', 'tur=satin-alma-siparisi&q=ORN-MLZ')).durum, 403);
     // Düğme durumu: ayar açık ama ortam köprüsü yok, düğme çizilmez; listeyi görmeyen soramaz.
     const d = await app.inject({ method: 'GET', url: '/api/logo/belge-arama-durumu', headers: { cookie: cerez.get('ba-satis') ?? '' } });
     assert.deepEqual([d.statusCode, d.json()], [200, { acik: false, neden: null }]);
