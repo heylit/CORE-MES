@@ -89,7 +89,7 @@ function Acilir({ ad, etiket, simge, sinif, etkin, disabled, children }: {
       if (ev.key === 'Escape') { ev.stopPropagation(); setAcik(false); kok.current?.querySelector('button')?.focus(); return; }
       if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
       // Menüde ok tuşları açık seçenekler arasında dolaşır.
-      const l = [...(kok.current?.querySelectorAll<HTMLButtonElement>('[role="menu"] button:not(:disabled)') ?? [])];
+      const l = [...(kok.current?.querySelectorAll<HTMLButtonElement>('[role="menu"] button:not(:disabled)') ?? [])].filter((b) => !b.closest('[data-kapali]'));
       if (!l.length) return;
       ev.preventDefault(); ev.stopPropagation();
       const i = l.indexOf(document.activeElement as HTMLButtonElement);
@@ -191,6 +191,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // "Planla" menüsü (3335-2): seçili kartın sıradaki plansız emrine giden istek ve o emrin menüye bildirdiği durum.
   const [planla, setPlanla] = useState<PlanlaIstegi | null>(null);
   const [planlaDurumu, setPlanlaDurumu] = useState<PlanlaDurumu | null>(null);
+  const [digerAcik, setDigerAcik] = useState(false);
+  // Görünüm ve ölçek seçenekleri bir düğmenin ardındadır (3414); tahta dışı bir görünüm seçiliyken açık durur.
+  const [gorunumAcik, setGorunumAcik] = useState(false);
   useEffect(() => { onayIstegiAl(); if (onayIstendi.current) setOnayAcik(true); }, [setOnayAcik]);
   const kok = useRef<HTMLDivElement | null>(null);
 
@@ -619,10 +622,6 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               const planYok = c.plan === null, PLAN_YOK = 'Henüz plan yok; önce planı kurun';
               return (
                 <>
-                  <b className="tc-pyq-menu-baslik" role="presentation">Yer ver</b>
-                  <button type="button" role="menuitem" disabled={planYok || plansizlar.length === 0} onClick={() => { kapat(); void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}>
-                    <span>Plansızların hepsini planla ({plansizlar.length})<small>{plansizlar.length === 0 ? 'Yeri olmayan emir yok' : planYok ? PLAN_YOK : 'Yeri olmayan bütün emirlere sistem yer bulur; öteki işler yerinde kalır'}</small></span>
-                  </button>
                   <div className="tc-pyq-menu-secili" role="group" aria-label="Seçili siparişi planla" data-pasif={pd ? undefined : ''}>
                     <span>Seçili siparişi planla<small>{pd ? `${pd.emirNo} · ${String(pd.adim)} adım · yönü seçin` : seciliKart ? 'Zaten planlı; yeniden planlayın' : 'Önce sıradan bir sipariş seçin'}</small></span>
                     <span className="tc-pyq-menu-yon">
@@ -630,27 +629,35 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                       <button type="button" role="menuitem" disabled={!pd || !pd.terminVar} title={pd && !pd.terminVar ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir'} onClick={() => { kapat(); planlaIste('geri'); }}>Teslimden geriye</button>
                     </span>
                   </div>
-                  <button type="button" role="menuitem" disabled={!pd || !pd.isaretliHazir} onClick={() => { kapat(); planlaIste('isaretli'); }}>
-                    <span>İşaretli adımları planla ({pd?.isaretli ?? 0})<small>{pd && pd.isaretli > 0 ? 'Tabloda tezgâh ya da saat seçtiğiniz adımlar; boş bıraktığınızı sistem doldurur' : 'İşaretli adım yok; tabloda tezgâh ya da saat seçin'}</small></span>
-                  </button>
-                  <b className="tc-pyq-menu-baslik" role="presentation">Yeniden diz</b>
-                  <button type="button" role="menuitem" disabled={planYok || planli.length === 0} onClick={() => { kapat(); void yenidenPlanla(planli, `${kartAdi} yeniden planlandı${plansizlar.length > 0 ? `; plansız ${String(plansizlar.length)} emre de yer verildi` : ''}.`); }}>
-                    <span>Seçili siparişi yeniden planla<small>{planYok ? PLAN_YOK : planli.length === 0 ? (seciliKart ? 'Seçili siparişin planda yeri yok; önce planlayın' : 'Önce sıradan bir sipariş seçin') : `Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır.${plansizlar.length > 0 ? ` Plansız ${String(plansizlar.length)} emre de yer verilir.` : ''}`}</small></span>
-                  </button>
-                  <button type="button" role="menuitem" data-geride="" disabled={planYok || geride.emirler.length === 0} onClick={() => { kapat(); void yenidenPlanla(geride.emirler, `Geride kalan ${String(geride.emirler.length)} emir yeniden planlandı.`); }}>
-                    <span>Geride kalanları yeniden planla ({geride.emirler.length})<small>{planYok ? PLAN_YOK : geride.emirler.length === 0 ? (geride.kilitli > 0 ? `Geride kalan ${String(geride.kilitli)} iş elle kilitli; kilidi kaldırmadan taşınmaz` : 'Geride kalan iş yok') : `Başlaması gereken saati geçmiş, başlamamış işleri sistem şimdiden sonraya dizer; sonraki adımları da kayar.${geride.kilitli > 0 ? ` Elle kilitli ${String(geride.kilitli)} iş yerinde kalır.` : ''}`}</small></span>
+                  <button type="button" role="menuitem" disabled={planYok || plansizlar.length === 0} onClick={() => { kapat(); void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}>
+                    <span>Plansızların hepsini planla ({plansizlar.length})<small>{plansizlar.length === 0 ? 'Yeri olmayan emir yok' : planYok ? PLAN_YOK : 'Yeri olmayan bütün emirlere sistem yer bulur; öteki işler yerinde kalır'}</small></span>
                   </button>
                   <button type="button" role="menuitem" disabled={planYok} onClick={() => { kapat(); void yenidenPlanla(['*'], 'Bütün plan baştan kuruldu.'); }}>
                     <span>Bütün planı baştan kur<small>{planYok ? PLAN_YOK : 'Sistem hepsini yeniden dizer, plansız emirlere de yer verir; elle kilitlediğiniz yerler ve başlamış işler kalır'}</small></span>
                   </button>
-                  {/* Planı değiştiren her seçim bu menüdedir; Araçlar yalnız görünüm ve ayar taşır (iki menüde "planla" durmasın). */}
-                  <b className="tc-pyq-menu-baslik" role="presentation">Tüm planın yönü</b>
-                  {(['ileri', 'geri'] as const).map((y) => (
-                    <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={tur !== null || onayAcik}
-                      onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(y); setAyarAcik(true); }}>
-                      <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>Tüm plan: {YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
+                  {/* Seyrek kullanılanlar bir basışla açılır (3414): menü ilk bakışta üç iş gösterir. */}
+                  <button type="button" className="tc-pyq-menu-diger-dugme" aria-expanded={digerAcik} onClick={() => { setDigerAcik(!digerAcik); }}>
+                    <Simge ad={digerAcik ? 'down' : 'chev-right'} boyut="k" /><span>Diğer seçenekler</span>
+                  </button>
+                  <div className="tc-pyq-menu-diger" data-kapali={digerAcik ? undefined : ''}>
+                    <button type="button" role="menuitem" disabled={!pd || !pd.isaretliHazir} onClick={() => { kapat(); planlaIste('isaretli'); }}>
+                      <span>İşaretli adımları planla ({pd?.isaretli ?? 0})<small>{pd && pd.isaretli > 0 ? 'Tabloda tezgâh ya da saat seçtiğiniz adımlar; boş bıraktığınızı sistem doldurur' : 'İşaretli adım yok; tabloda tezgâh ya da saat seçin'}</small></span>
                     </button>
-                  ))}
+                    <button type="button" role="menuitem" disabled={planYok || planli.length === 0} onClick={() => { kapat(); void yenidenPlanla(planli, `${kartAdi} yeniden planlandı${plansizlar.length > 0 ? `; plansız ${String(plansizlar.length)} emre de yer verildi` : ''}.`); }}>
+                      <span>Seçili siparişi yeniden planla<small>{planYok ? PLAN_YOK : planli.length === 0 ? (seciliKart ? 'Seçili siparişin planda yeri yok; önce planlayın' : 'Önce sıradan bir sipariş seçin') : `Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır.${plansizlar.length > 0 ? ` Plansız ${String(plansizlar.length)} emre de yer verilir.` : ''}`}</small></span>
+                    </button>
+                    <button type="button" role="menuitem" data-geride="" disabled={planYok || geride.emirler.length === 0} onClick={() => { kapat(); void yenidenPlanla(geride.emirler, `Geride kalan ${String(geride.emirler.length)} emir yeniden planlandı.`); }}>
+                      <span>Geride kalanları yeniden planla ({geride.emirler.length})<small>{planYok ? PLAN_YOK : geride.emirler.length === 0 ? (geride.kilitli > 0 ? `Geride kalan ${String(geride.kilitli)} iş elle kilitli; kilidi kaldırmadan taşınmaz` : 'Geride kalan iş yok') : `Başlaması gereken saati geçmiş, başlamamış işleri sistem şimdiden sonraya dizer; sonraki adımları da kayar.${geride.kilitli > 0 ? ` Elle kilitli ${String(geride.kilitli)} iş yerinde kalır.` : ''}`}</small></span>
+                    </button>
+                    {/* Planı değiştiren her seçim bu menüdedir; Araçlar yalnız görünüm ve ayar taşır (iki menüde "planla" durmasın). */}
+                    <b className="tc-pyq-menu-baslik" role="presentation">Tüm planın yönü</b>
+                    {(['ileri', 'geri'] as const).map((y) => (
+                      <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={tur !== null || onayAcik}
+                        onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(y); setAyarAcik(true); }}>
+                        <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>Tüm plan: {YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
+                      </button>
+                    ))}
+                  </div>
                 </>
               );
             }}
@@ -668,16 +675,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           </button>
         )}
         <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Emir, sipariş, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
-        <span className="tc-pyq-seg" role="group" aria-label="Görünüm">
-          {GOZLER.map(([k, ad]) => <button type="button" key={k} data-goz={k} aria-pressed={goz === k} onClick={() => { setGoz(k); }}>{ad}</button>)}
-        </span>
-        <span className="tc-pyq-seg tc-pyq-olcek" role="group" aria-label="Ölçek">
-          {OLCEKLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={olcek === k} onClick={() => { olcekSec(k); }}>{ad}</button>)}
-          <input
-            type="range" className="tc-pyq-yakin" min={0} max={100} step={1} aria-label="Yakınlaştırma" title="Yakınlaştırma (Ctrl + tekerlek)"
-            value={surguDegeri(simdikiEn)} disabled={uzakMi(olcek)} onChange={(ev) => { yakinlas(surgudenEn(Number(ev.target.value))); }}
-          />
-          <button type="button" aria-label="Seçileni sığdır" title="Seçileni sığdır (F)" onClick={sigdir}><Simge ad="fit" boyut="k" /></button>
+        <span className="tc-pyq-gorunum-satiri" id="tc-pyq-gorunum" data-kapali={gorunumAcik || goz !== 'T' ? undefined : ''}>
+          <span className="tc-pyq-seg" role="group" aria-label="Görünüm">
+            {GOZLER.map(([k, ad]) => <button type="button" key={k} data-goz={k} aria-pressed={goz === k} onClick={() => { setGoz(k); }}>{ad}</button>)}
+          </span>
+          <span className="tc-pyq-seg tc-pyq-olcek" role="group" aria-label="Ölçek">
+            {OLCEKLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={olcek === k} onClick={() => { olcekSec(k); }}>{ad}</button>)}
+            <input
+              type="range" className="tc-pyq-yakin" min={0} max={100} step={1} aria-label="Yakınlaştırma" title="Yakınlaştırma (Ctrl + tekerlek)"
+              value={surguDegeri(simdikiEn)} disabled={uzakMi(olcek)} onChange={(ev) => { yakinlas(surgudenEn(Number(ev.target.value))); }}
+            />
+            <button type="button" aria-label="Seçileni sığdır" title="Seçileni sığdır (F)" onClick={sigdir}><Simge ad="fit" boyut="k" /></button>
+          </span>
         </span>
         <span className="tc-pyq-gi" role="group" aria-label="Geri ve İleri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
@@ -687,6 +696,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         {sirada > 0 && <span className="tc-pyq-sirada" role="status">{sirada} taşıma sırada</span>}
         {coklu.size > 1 && <span className="tc-pyq-sirada" role="status">{coklu.size} iş seçili · birlikte kayar</span>}
         {TUR_ACIK && <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>}
+        <button type="button" className="tc-pyq-ok tc-pyq-gorunum-dugme" aria-expanded={gorunumAcik || goz !== 'T'} aria-controls="tc-pyq-gorunum" title="Görünüm ve ölçek seçenekleri" disabled={goz !== 'T'} onClick={() => { setGorunumAcik(!gorunumAcik); }}>
+          <Simge ad="layers" boyut="k" /><span>Görünüm</span>
+        </button>
         <Acilir ad="Araçlar" etiket="Araçlar" simge="wrench" etkin={onceAcik || ayarAcik || kapasiteAcik}>
           {(kapat) => (
             <>
