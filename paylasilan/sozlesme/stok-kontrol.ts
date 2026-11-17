@@ -108,3 +108,89 @@ export const artikParcaKapatGovdesi = z.object({ durum: z.enum(['kullanildi', 'h
 export type ArtikParcaKapatGovdesi = z.input<typeof artikParcaKapatGovdesi>;
 export const artikParcaCevabi = z.object({ id: z.number().int(), surum: surumSemasi });
 export type ArtikParcaCevabi = z.output<typeof artikParcaCevabi>;
+
+// ---- İhtiyaç kuyruğu (3398-2): teklif istenmeden önceki satın alma kalemleri stokla karşılaştırılır. Yalnız okur. ----
+// karsilanir: istenen miktar stoktan çıkar; kismen: bir kısmı; yok: aday yok; bilinmiyor: kart ölçüsüz ya da birim çevrilemiyor.
+export const IHTIYAC_DURUMLARI = ['karsilanir', 'kismen', 'yok', 'bilinmiyor'] as const;
+export type IhtiyacDurumu = (typeof IHTIYAC_DURUMLARI)[number];
+export const ihtiyacSatiri = z.object({
+  kaynak: z.literal('satin-alma'),
+  talepId: z.string(),
+  talepNo: z.string(),
+  baslik: z.string(),
+  kalemId: z.string(),
+  ad: z.string(),
+  malzemeNo: z.number().int(),
+  kod: z.string(),
+  form: z.string().nullable(),
+  kalite: z.string().nullable(),
+  olcu: olcuNesnesi,
+  miktar: ondalikMetinSemasi,
+  birim: z.string(),
+  uretimEmriId: z.number().int().nullable(),
+  ihtiyacTarihi: z.string().nullable(),
+  durum: z.enum(IHTIYAC_DURUMLARI),
+  // Kalemin biriminde stoktan karşılanan; bilinmiyorsa null.
+  karsilanan: z.number().nullable(),
+  // Pay içindeki en iyi aday (sıranın ilki) ve pay içindeki aday sayısı.
+  enIyi: olcuAdayi.nullable(),
+  adaySayisi: z.number().int(),
+  // Kalem Logo'ya, iş emrine, kalıba ya da teklife bağlıysa stoktan karşılanamaz (3398-2 a); bağlı değilse null.
+  engel: z.enum(['logo', 'is-emri', 'kalip', 'teklif']).nullable(),
+});
+export type IhtiyacSatiri = z.output<typeof ihtiyacSatiri>;
+export const ihtiyaclarCevabi = z.object({ satirlar: z.array(ihtiyacSatiri), sinirli: z.boolean() });
+export type IhtiyaclarCevabi = z.output<typeof ihtiyaclarCevabi>;
+
+// ---- Ayırma isteği (3398-2 a): "Stoktan karşıla" depoya istek açar, talep kalemi karşılanan kadar azalır; iptalde geri gelir. ----
+export const AYIRMA_DURUMLARI = ['bekliyor', 'ayrildi', 'teslim', 'iptal'] as const;
+export type AyirmaDurumu = (typeof AYIRMA_DURUMLARI)[number];
+export const stoktanKarsilaGovdesi = z.object({
+  talepId: z.uuid(),
+  kalemId: z.uuid(),
+  miktar: ondalikMetinSemasi.refine((m) => Number(m) > 0, 'Miktar sıfırdan büyük olmalı.'),
+}).strict();
+export type StoktanKarsilaGovdesi = z.input<typeof stoktanKarsilaGovdesi>;
+export const ayirmaKaynagi = z.object({
+  malzemeNo: z.number().int(),
+  kod: z.string(),
+  artikId: z.number().int().nullable(),
+  // Stok biriminde ayrılan miktar; artıkta null (artığın kendisi ayrılır).
+  stokMiktari: z.number().nullable(),
+  // Bu kaynaktan karşılanan, kalemin biriminde.
+  karsilanan: z.number(),
+  konumlar: z.array(z.string()),
+});
+export const ayirmaIstegiSatiri = z.object({
+  id: z.number().int(),
+  talepId: z.string(),
+  kalemId: z.string(),
+  talepNo: z.string(),
+  kalemAd: z.string(),
+  malzemeNo: z.number().int(),
+  kod: z.string(),
+  miktar: ondalikMetinSemasi,
+  birim: z.string(),
+  uretimEmriId: z.number().int().nullable(),
+  kaynaklar: z.array(ayirmaKaynagi),
+  durum: z.enum(AYIRMA_DURUMLARI),
+  iptalNedeni: z.string().nullable(),
+  geriEklendi: z.boolean().nullable(),
+  isteyen: z.string().nullable(),
+  istekZamani: zamanSemasi,
+  karar: z.string().nullable(),
+  kararZamani: zamanSemasi.nullable(),
+  surum: surumSemasi,
+});
+export type AyirmaIstegiSatiri = z.output<typeof ayirmaIstegiSatiri>;
+export const ayirmaIstekleriSorgusu = z.object({ durum: z.enum(['acik', 'kapali']).default('acik') }).strict();
+export const ayirmaIstekleriCevabi = z.object({ satirlar: z.array(ayirmaIstegiSatiri), sinirli: z.boolean() });
+export type AyirmaIstekleriCevabi = z.output<typeof ayirmaIstekleriCevabi>;
+export const ayirmaParametresi = z.object({ id: kimlik });
+// Depo: bekleyen isteği "ayrıldı", ayrılanı "teslim" eder.
+export const ayirmaIlerletGovdesi = z.object({ durum: z.enum(['ayrildi', 'teslim']), ...beklenenSurum }).strict();
+export type AyirmaIlerletGovdesi = z.input<typeof ayirmaIlerletGovdesi>;
+export const ayirmaIptalGovdesi = z.object({ neden: z.string().trim().min(1).max(200), ...beklenenSurum }).strict();
+export type AyirmaIptalGovdesi = z.input<typeof ayirmaIptalGovdesi>;
+export const ayirmaCevabi = z.object({ id: z.number().int(), surum: surumSemasi, durum: z.enum(AYIRMA_DURUMLARI), geriEklendi: z.boolean().nullable() });
+export type AyirmaCevabi = z.output<typeof ayirmaCevabi>;

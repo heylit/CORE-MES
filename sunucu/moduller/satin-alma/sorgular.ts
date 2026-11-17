@@ -1926,3 +1926,73 @@ export function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly s
     [[...new Set(logoSatirRefleri)]],
   );
 }
+
+// 3398-2: teklif istenmeden önce stokla karşılaştırılacak kalemler: taslak talebin kartlı, miktarlı kalemleri. Fiyat yok.
+// Stoktan karşılamanın engeli (yoksa null): Logo'ya gitmiş, iş emrine ya da kalıba bağlı, teklif, karar, senaryo ya da siparişe girmiş kalem.
+const STOKTAN_ENGEL = `CASE WHEN k.logo_satir_ref IS NOT NULL THEN 'logo' WHEN k.is_emri_id IS NOT NULL THEN 'is-emri' WHEN k.die_id IS NOT NULL THEN 'kalip'
+          WHEN EXISTS (SELECT 1 FROM satin_alma_teklif_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_karar_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_senaryo_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_senaryo_payi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id) THEN 'teklif' END`;
+export type StoktanEngel = 'logo' | 'is-emri' | 'kalip' | 'teklif';
+export interface StokKontroluKalemiOkuma {
+  talepId: string; talepNo: string; baslik: string; kalemId: string; ad: string; malzemeNo: number; miktar: string; birim: string;
+  uretimEmriId: number | null; ihtiyacTarihi: string | null; engel: StoktanEngel | null;
+}
+// tek verilirse yalnız o kalem (kilitsiz okuma; yazmadan önce stoktanKalemKilitle kilitler).
+export function stokKontroluKalemleriOku(db: Db, sinir: number, tek?: { talepId: string; kalemId: string }): Promise<StokKontroluKalemiOkuma[]> {
+  return db.sorgu<StokKontroluKalemiOkuma>(
+    `SELECT t.id AS "talepId", t.no AS "talepNo", t.baslik, k.id AS "kalemId", k.ad, c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim,
+        t.uretim_emri_id AS "uretimEmriId", t.ihtiyac_tarihi AS "ihtiyacTarihi", ${STOKTAN_ENGEL} AS engel
+       FROM satin_alma_talep t
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE t.durum = 'taslak' AND k.miktar IS NOT NULL AND ($2::uuid IS NULL OR (t.id = $2 AND k.id = $3::uuid))
+      ORDER BY t.ihtiyac_tarihi NULLS LAST, t.yil, t.sira, k.sira
+      LIMIT $1`,
+    [sinir, tek?.talepId ?? null, tek?.kalemId ?? null],
+  );
+}
+
+// 3398-2 a: stoktan karşılanan miktar talep kaleminden düşer; kalem tamamen karşılanırsa silinir ve satırı (jsonb) geri yükleme için döner.
+export interface StoktanKalemOkuma { durum: string; ad: string; miktar: string | null; birim: string; malzemeNo: number | null; uretimEmriId: number | null; engel: StoktanEngel | null }
+export function stoktanKalemKilitle(db: Db, talepId: string, kalemId: string): Promise<StoktanKalemOkuma | null> {
+  return db.tek<StoktanKalemOkuma>(
+    `SELECT t.durum, k.ad, k.miktar::text AS miktar, k.birim, c.malzeme_no AS "malzemeNo", t.uretim_emri_id AS "uretimEmriId",
+        ${STOKTAN_ENGEL} AS engel
+       FROM satin_alma_talep t JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE t.id = $1 AND k.id = $2 FOR UPDATE OF t, k`, [talepId, kalemId]);
+}
+export async function stoktanKalemAzalt(db: Db, talepId: string, kalemId: string, miktar: string): Promise<unknown> {
+  const sil = await db.tek<{ satir: unknown }>(
+    `DELETE FROM satin_alma_talep_kalemi WHERE talep_id = $1 AND id = $2 AND miktar <= $3::numeric RETURNING to_jsonb(satin_alma_talep_kalemi.*) AS satir`,
+    [talepId, kalemId, miktar]);
+  if (sil === null) await db.sorgu('UPDATE satin_alma_talep_kalemi SET miktar = miktar - $3::numeric WHERE talep_id = $1 AND id = $2', [talepId, kalemId, miktar]);
+  await db.sorgu('UPDATE satin_alma_talep SET surum = surum + 1, guncelleme = now() WHERE id = $1', [talepId]);
+  return sil?.satir ?? null;
+}
+export function stoktanTalepKilitle(db: Db, talepId: string): Promise<{ durum: string } | null> {
+  return db.tek('SELECT durum FROM satin_alma_talep WHERE id = $1 FOR UPDATE', [talepId]);
+}
+// Geri alma: kalem duruyorsa miktar eklenir; silinmişse saklanan satır aynı kimlikle geri yüklenir (sıra doluysa sona).
+export async function stoktanKalemGeriAl(db: Db, talepId: string, kalemId: string, miktar: string, satir: unknown): Promise<boolean> {
+  const g = await db.tek<{ id: string }>('UPDATE satin_alma_talep_kalemi SET miktar = miktar + $3::numeric WHERE talep_id = $1 AND id = $2 RETURNING id',
+    [talepId, kalemId, miktar]);
+  if (g === null) {
+    if (satir === null) return false;
+    const eklenen = await db.sorgu(
+      `INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, katalog_id, ad, ozellik, miktar, birim, kategori, logo_satir_ref, uygulanan_malzeme_no,
+              is_emri_id, kaynak_talep_id, kaynak_sira, kaynak_ihtiyac_tarihi, kaynak_birim, die_id)
+       SELECT (r).talep_id, (r).id,
+              CASE WHEN EXISTS (SELECT 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id AND x.sira = (r).sira)
+                   THEN (SELECT coalesce(max(sira), 0) + 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id) ELSE (r).sira END,
+              (r).katalog_id, (r).ad, (r).ozellik, $3::numeric, (r).birim, (r).kategori, (r).logo_satir_ref, (r).uygulanan_malzeme_no,
+              (r).is_emri_id, (r).kaynak_talep_id, (r).kaynak_sira, (r).kaynak_ihtiyac_tarihi, (r).kaynak_birim, (r).die_id
+         FROM (SELECT jsonb_populate_record(NULL::satin_alma_talep_kalemi, $1::jsonb) AS r) q
+        WHERE (r).talep_id = $2 RETURNING id`, [JSON.stringify(satir), talepId, miktar]);
+    if (eklenen.length === 0) return false;
+  }
+  await db.sorgu('UPDATE satin_alma_talep SET surum = surum + 1, guncelleme = now() WHERE id = $1', [talepId]);
+  return true;
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { adaySirala, artikOlcusu, artikPayi, karsilanan, olcuEslestir, payMm, type EslesmeAdayi, type OlcuIstegi } from './olcu-kurallar.ts';
+import { adaySirala, artikOlcusu, artikPayi, karsilanan, olcuEslestir, parcaIcinStok, payMm, type EslesmeAdayi, type OlcuIstegi } from './olcu-kurallar.ts';
 
 const pay = { tur: 'yuzde', deger: 15, enAzMm: 3 } as const;
 const cubuk = (o: Partial<OlcuIstegi> = {}): OlcuIstegi => ({ form: 'cubuk', olcu: { d: 50 }, parcaBoyu: 180, parcaEni: null, adet: 40, pay, kesmeMm: 3, ...o });
@@ -100,5 +100,27 @@ describe('stok kontrol: ölçüyle eşleştirme (3398)', () => {
     assert.equal(olcuEslestir(boru, stok({ D: 60, t: 10, l: 6000 }, 1))?.durum, 'yakin');
     // 5 m, 3000 mm çubuk, 1000 mm parça: 3000'den 2, kalan 2000'den 1 (tek sürekli boy sayılsa 4 çıkardı).
     assert.equal(olcuEslestir(cubuk({ parcaBoyu: 1000 }), stok({ d: 50, l: 3000 }, 5, 'm'))?.parcaSayisi, 3);
+  });
+
+  test('ayırma (3398-2): n parça için stok biriminde miktar parça sayısının tersidir', () => {
+    const p = { parcaBoyu: 180, parcaEni: null, kesmeMm: 3 };
+    const o = { d: 50, l: 1000 };
+    // 1000 mm çubuktan 5 parça: 12 parça 3 çubuk; m'de 2 tam çubuk ve 2 parça boyu.
+    assert.equal(parcaIcinStok('cubuk', o, 12, p, 'adet', null), 3);
+    assert.equal(parcaIcinStok('cubuk', o, 12, p, 'm', null), 2.366);
+    assert.equal(parcaIcinStok('cubuk', o, 10, p, 'm', null), 2);
+    // Çapraz denetim: ayrılan miktardan çıkan parça istenen kadardır.
+    const e = olcuEslestir(cubuk({ olcu: { d: 50 }, kesmeMm: 3 }), stok(o, 2.366, 'm'));
+    assert.equal(e?.parcaSayisi, 12);
+    const kg = parcaIcinStok('cubuk', o, 5, p, 'kg', 7.85);
+    assert.ok(kg !== null && Math.abs(kg - Math.PI * 625 * 1000 * 7.85e-6) < 1e-9);
+    assert.equal(parcaIcinStok('cubuk', o, 5, p, 'kg', null), null);
+    assert.equal(parcaIcinStok('cubuk', o, 5, { ...p, parcaBoyu: null }, 'adet', null), null);
+    assert.equal(parcaIcinStok('cubuk', o, 5, { ...p, parcaBoyu: 2000 }, 'adet', null), null);
+    assert.equal(parcaIcinStok('levha', { t: 10, w: 1000, l: 2000 }, 9, { parcaBoyu: 400, parcaEni: 300, kesmeMm: 0 }, 'adet', null), 1);
+    assert.equal(parcaIcinStok('levha', { t: 10, w: 1000, l: 2000 }, 9, { parcaBoyu: 400, parcaEni: 300, kesmeMm: 0 }, 'm', null), null);
+    // Boyu olmayan formda bütün parça kullanılır: adette parça sayısı kadar, başka birimde hesaplanamaz.
+    assert.equal(parcaIcinStok('disk', { d: 100, t: 20 }, 4, p, 'adet', null), 4);
+    assert.equal(parcaIcinStok('disk', { d: 100, t: 20 }, 4, p, 'kg', 7.85), null);
   });
 });

@@ -23,3 +23,5 @@
 - Toplama: adım toplanınca o gözden çıkış (sevk) yazılır ve liste sürümü artar; iki kişi aynı listeyi yürütürse eski sürüm 409 alır.
 - Yerleşim önizlemedeki eksende: raf (x, z) ilk bölmenin kenar ortası, bölmeler -z, derinlik x, açı saat yönünün tersine. Düzenleyici ve 3B aynı saf modülü kullanır (`yerlesim.ts`).
 - Raf düzenlenince göz kimliği korunur: kod değişirse kod yenilenir, numaralama değişirse bölme no bölme sırasıyla geçer (iki adım, geçici +100000); göz kodu tekilliği bu sırada ertelenir ve hemen geri açılır.
+- Ayırma isteği (3398-2 a) emre otomatik rezerve yapmaz: rezerv rota adımının statüsüne bağlı, statüsüz hammadde emre ayrılamaz; depo "Ayrıldı" işaretler, teslim stok çıkışı değildir.
+- Ayırma isteği talep kalemine yabancı anahtar taşımaz: tamamı karşılanan kalem silinir, satırı `kalem_satiri`'nda iptal için saklanır.
