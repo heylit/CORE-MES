@@ -1956,10 +1956,10 @@ export function stokKontroluKalemleriOku(db: Db, sinir: number, tek?: { talepId:
 }
 
 // 3398-2 a: stoktan karşılanan miktar talep kaleminden düşer; kalem tamamen karşılanırsa silinir ve satırı (jsonb) geri yükleme için döner.
-export interface StoktanKalemOkuma { durum: string; miktar: string | null; birim: string; malzemeNo: number | null; uretimEmriId: number | null; engel: StoktanEngel | null }
+export interface StoktanKalemOkuma { durum: string; ad: string; miktar: string | null; birim: string; malzemeNo: number | null; uretimEmriId: number | null; engel: StoktanEngel | null }
 export function stoktanKalemKilitle(db: Db, talepId: string, kalemId: string): Promise<StoktanKalemOkuma | null> {
   return db.tek<StoktanKalemOkuma>(
-    `SELECT t.durum, k.miktar::text AS miktar, k.birim, c.malzeme_no AS "malzemeNo", t.uretim_emri_id AS "uretimEmriId",
+    `SELECT t.durum, k.ad, k.miktar::text AS miktar, k.birim, c.malzeme_no AS "malzemeNo", t.uretim_emri_id AS "uretimEmriId",
         ${STOKTAN_ENGEL} AS engel
        FROM satin_alma_talep t JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
       WHERE t.id = $1 AND k.id = $2 FOR UPDATE OF t, k`, [talepId, kalemId]);

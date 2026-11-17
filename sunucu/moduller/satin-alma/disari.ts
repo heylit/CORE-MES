@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
@@ -176,18 +177,24 @@ export async function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: read
 export { stokKontroluKalemleriOku as stokKontroluKalemleri, type StokKontroluKalemiOkuma as StokKontroluKalemi } from './sorgular.ts';
 // 3398-2 a: stok modülü "stoktan karşıla" ve iptalinde kendi işleminin içinde çağırır; yetkiyi stok ucu denetler. Yalnız taslak talepte,
 // yalın (Logo'ya gitmemiş, iş emrine ya da kalıba bağlı olmayan, teklif almamış) kalemde.
-export async function kalemiStoktanKarsila(db: Db, talepId: string, kalemId: string, miktar: string): Promise<{ satir: unknown; birim: string; malzemeNo: number; uretimEmriId: number | null }> {
+export async function kalemiStoktanKarsila(db: Db, talepId: string, kalemId: string, miktar: string, kisiId: number): Promise<{ satir: unknown; birim: string; malzemeNo: number; uretimEmriId: number | null }> {
   const k = await sorgu.stoktanKalemKilitle(db, talepId, kalemId);
   if (k === null) throw bulunamadi('Talep kalemi bulunamadı.');
   if (k.durum !== 'taslak') throw gecersiz('Teklif istenmiş talepte stoktan karşılanamaz.');
   if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
   if (k.malzemeNo === null || k.miktar === null) throw gecersiz('Kalemin malzeme kartı ya da miktarı yok.');
   if (Number(miktar) > Number(k.miktar) + 1e-9) throw dogrulama(`Kalemde ${servis.sade(k.miktar)} ${k.birim} var; daha fazlası karşılanamaz.`, 'miktar');
-  return { satir: await sorgu.stoktanKalemAzalt(db, talepId, kalemId, miktar), birim: k.birim, malzemeNo: k.malzemeNo, uretimEmriId: k.uretimEmriId };
+  const satir = await sorgu.stoktanKalemAzalt(db, talepId, kalemId, miktar);
+  await sorgu.hareketEkle(db, talepId, randomUUID(), `Stoktan karşılandı: ${k.ad} ${servis.sade(miktar)} ${k.birim}${satir === null ? '' : ' (kalem talepten çıktı)'}; depoya ayırma isteği açıldı.`, kisiId);
+  return { satir, birim: k.birim, malzemeNo: k.malzemeNo, uretimEmriId: k.uretimEmriId };
 }
 // Geri ekleyemezse (talep yok, teklif aşamasına geçti ya da kalem çıkarıldı) false döner; istek yine iptal edilir.
-export async function kalemiStoktanGeriAl(db: Db, talepId: string, kalemId: string, miktar: string, satir: unknown): Promise<boolean> {
+export async function kalemiStoktanGeriAl(db: Db, talepId: string, kalemId: string, miktar: string, satir: unknown, kisiId: number): Promise<boolean> {
   const t = await sorgu.stoktanTalepKilitle(db, talepId);
-  if (t === null || t.durum !== 'taslak') return false;
-  return sorgu.stoktanKalemGeriAl(db, talepId, kalemId, miktar, satir);
+  if (t === null) return false;
+  const eklendi = t.durum === 'taslak' && await sorgu.stoktanKalemGeriAl(db, talepId, kalemId, miktar, satir);
+  await sorgu.hareketEkle(db, talepId, randomUUID(), eklendi
+    ? `Stoktan karşılama iptal edildi: ${servis.sade(miktar)} talebe geri eklendi.`
+    : `Stoktan karşılama iptal edildi: ${servis.sade(miktar)} geri eklenemedi (talep ilerledi ya da kalem çıkarıldı).`, kisiId);
+  return eklendi;
 }

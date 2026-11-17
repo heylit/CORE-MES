@@ -271,7 +271,7 @@ export async function stoktanKarsila(db: Db, kul: Kullanici, g: z.output<typeof 
     kalan -= al;
   }
   if (kaynaklar.length === 0 || kalan > 1e-9) throw dogrulama('Stokta bu kadar karşılık kalmadı.', 'miktar');
-  const azalan = await kalemiStoktanKarsila(db, g.talepId, g.kalemId, g.miktar);
+  const azalan = await kalemiStoktanKarsila(db, g.talepId, g.kalemId, g.miktar, kul.id);
   const r = await sorgular.ayirmaIstegiEkle(db, {
     talepId: g.talepId, kalemId: g.kalemId, talepNo: k.talepNo, kalemAd: k.ad, malzemeId: k.malzemeNo, miktar: g.miktar, birim: azalan.birim,
     uretimEmriId: azalan.uretimEmriId, kaynaklar, kalemSatiri: azalan.satir, kisiId: kul.id,
@@ -319,7 +319,7 @@ export async function ayirmaIlerlet(db: Db, kul: Kullanici, id: number, g: z.out
 export async function ayirmaIptal(db: Db, kul: Kullanici, id: number, g: z.output<typeof ayirmaIptalGovdesi>): Promise<AyirmaCevabi> {
   const r = await acikIstek(db, id, g.surum);
   if (r.durum !== 'bekliyor' && r.durum !== 'ayrildi') throw gecersiz('Teslim edilmiş ya da iptal edilmiş istek iptal edilemez.');
-  const geriEklendi = await kalemiStoktanGeriAl(db, r.talepId, r.kalemId, r.miktar, r.kalemSatiri);
+  const geriEklendi = await kalemiStoktanGeriAl(db, r.talepId, r.kalemId, r.miktar, r.kalemSatiri, kul.id);
   const y = await sorgular.ayirmaIstegiIptal(db, id, g.neden, geriEklendi, kul.id);
   if (y === null) throw new Error('Ayırma isteği yazılamadı.');
   return { ...y, durum: 'iptal', geriEklendi };
