@@ -76,6 +76,12 @@ export async function logoKartDurumlari(db: Db, kodlar: readonly string[]): Prom
   return new Map((await s.logoKartDurumlari(db, benzersiz)).map((k) => [k.stokKodu, { logoKayitli: k.logoKayitli, hizmet: k.hizmet }]));
 }
 
+export async function logoKayitNolari(db: Db, nolar: readonly number[]): Promise<Map<number, string>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.logoKayitNolari(db, benzersiz)).map((k) => [k.no, k.logoKayitNo]));
+}
+
 export async function malzemeOzetleri(db: Db, idler: number[]): Promise<Map<number, KatalogMalzemeOzeti>> {
   const benzersiz = [...new Set(idler)];
   if (benzersiz.length === 0) return new Map();

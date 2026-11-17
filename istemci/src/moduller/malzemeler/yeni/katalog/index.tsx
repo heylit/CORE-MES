@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, DurumKutusu, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import {
+  Dugme, DurumKutusu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Simge, Tablo, useBildirim, useLogoRozetleri, type LogoRozetBilgisi, type Sutun,
+} from '../../../../ortak/arayuz/index.ts';
 import { kgFmt, perM2Fmt, perMFmt, YOK } from '../bicim.ts';
 import { useKucukResimler } from '../../../cizimler/disari.ts';
 import { resimliTur, SatirResmi, type KucukResimler } from '../ortak/ResimAlani.tsx';
@@ -69,12 +71,13 @@ export const GIZLENEBILIR_SUTUNLAR: readonly { anahtar: string; baslik: string }
   { anahtar: 'agirlik', baslik: 'Birim ağırlık' },
   { anahtar: 'birim', baslik: 'Stok birimi' },
   { anahtar: 'onay', baslik: 'Onay' },
+  { anahtar: 'logo', baslik: 'Logo' },
   { anahtar: 'guncelleme', baslik: 'Güncelleme' },
 ];
 
 function sutunlar(
   b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void, resimler: KucukResimler,
-  gizli: ReadonlySet<string>,
+  gizli: ReadonlySet<string>, logo: { durum: (no: number) => LogoRozetBilgisi | null; hata: boolean },
 ): Sutun<KatalogKarti>[] {
   const hepsi: Sutun<KatalogKarti>[] = [
     {
@@ -132,6 +135,11 @@ function sutunlar(
       hucre: (k) => <span className="tc-mk-deger">{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt" title={k.kayit.com.ted ?? ''}>{k.kayit.com.ted ?? ''}</small></span>,
     },
     { anahtar: 'onay', baslik: 'Onay', sirala: true, hucre: (k) => <OnayRozeti x={k.kayit} b={b} /> },
+    {
+      anahtar: 'logo', baslik: 'Logo', kirilmaz: true,
+      hucre: (k) => <LogoRozetHucresi bilgi={logo.durum(k.no)} hata={logo.hata} />,
+      csv: (k) => { const d = logo.durum(k.no); return d ? LOGO_DURUM_ADI[d.durum] : ''; },
+    },
     {
       anahtar: 'guncelleme', baslik: 'Güncelleme', hizala: 'sag', kirilmaz: true, sirala: true,
       hucre: (k) => {
@@ -209,6 +217,8 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   // Küçük resim yalnız görünen sayfanın yarı mamul ve mamul kartları için tek istekle okunur.
   const resimliNolar = useMemo(() => sayfaSatirlari.filter((k) => resimliTur(k.kayit.tur)).map((k) => k.no), [sayfaSatirlari]);
   const resimler = useKucukResimler('malzemeler', resimliNolar);
+  const sayfaNolari = useMemo(() => sayfaSatirlari.map((k) => k.no), [sayfaSatirlari]);
+  const logoRozet = useLogoRozetleri('malzeme', sayfaNolari);
   const metinTabani = useMemo(() => metinListesi(kartlar, ara, standartAdlari(ortam.malzemeAyari)).map((k) => k.kayit), [kartlar, ara, ortam.malzemeAyari]);
 
   useEffect(() => { seciliYaz((s) => secimiBuda(s, kartlar)); }, [kartlar]);
@@ -387,7 +397,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
             )}
             <Tablo
               etiket="Malzeme kataloğu"
-              sutunlar={sutunlar(b, secili, (k, acik) => secimDegistir([k], acik), resimler, gizli)}
+              sutunlar={sutunlar(b, secili, (k, acik) => secimDegistir([k], acik), resimler, gizli, logoRozet)}
               kip={genis ? 'kaydir' : 'uyarlanir'}
               siralama={siralama}
               siralamaDegistir={siralamaYaz}

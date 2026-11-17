@@ -1,7 +1,7 @@
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
@@ -13,7 +13,7 @@ import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
-  BEKLEME_NEDENLERI, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
+  BEKLEME_NEDENLERI, belgeRozetleri, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
   logoAramaSonucunuEkle, logoMalzemeAramasiAcik,
 } from './servis.ts';
 
@@ -22,6 +22,18 @@ import {
 const KART_OKUMA = { biri: ['sayfa.malzemeler'] } as const;
 const KART_STOK = ['sayfa.stok', ...STOK_ISLEMLERI] as const;
 const KART_FIYAT = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+
+// 3344: rozet, belgeyi görebilen okur; tür başına o belgenin okuma yetkisi (ucun yetkisi bunların birleşimidir).
+const ROZET_YETKISI = {
+  malzeme: ['sayfa.malzemeler'],
+  proje: ['sayfa.projeler', 'projeler.oku'],
+  'satis-siparisi': ['siparisler.oku'],
+  teklif: ['siparisler.oku'],
+  'satin-alma-siparisi': ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
+} as const;
+const ROZET_OKUMA = {
+  biri: ['sayfa.malzemeler', 'sayfa.projeler', 'projeler.oku', 'siparisler.oku', 'satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
+} as const;
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
@@ -67,6 +79,17 @@ export const uclar = [
       const d = await projeLogoDurumu(db, parametre.id);
       if (d === null) throw bulunamadi('Proje bulunamadı.');
       return d;
+    },
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/belge-durumlari',
+    yetki: ROZET_OKUMA,
+    sorgu: logoRozetSorgusu,
+    cevap: logoRozetCevabi,
+    isle: ({ db, kullanici, sorgu }) => {
+      if (kullanici === null || !ROZET_YETKISI[sorgu.tur].some((i) => islemVarMi(kullanici, i))) throw yetkiYok();
+      return belgeRozetleri(db, sorgu.tur, sorgu.id, new Date());
     },
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.

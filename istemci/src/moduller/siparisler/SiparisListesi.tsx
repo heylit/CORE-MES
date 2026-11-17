@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Siparis, SiparisListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import {
+  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, useLogoRozetleri, type Sutun,
+} from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -75,6 +77,13 @@ export function SiparisListesi() {
     queryFn: () => api.get<SiparisListesiCevabi>(`/siparisler${sorguMetni(sorgu)}`),
   });
   useEffect(() => { if (siparisler.data) liste.sayfaEsitle(siparisler.data.sayfa, liste.sorgu.sayfa); }, [siparisler.data]);
+  // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
+  const logo = useLogoRozetleri('satis-siparisi', (siparisler.data?.satirlar ?? []).map((s) => s.id));
+  const logoSutunu: Sutun<Siparis> = {
+    anahtar: 'logo', baslik: 'Logo', hucre: (s) => <LogoRozetHucresi bilgi={logo.durum(s.id)} hata={logo.hata} />,
+    csv: (s) => { const d = logo.durum(s.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
+  };
+  const sutunlar = [...(fiyatGorur ? SUTUNLAR : SUTUNLAR.filter((k) => k.anahtar !== 'tutar')), logoSutunu];
 
   return (
     <section className="tc-sp">
@@ -114,7 +123,7 @@ export function SiparisListesi() {
         ) : (
           <Tablo
             etiket="Satış siparişleri"
-            sutunlar={fiyatGorur ? SUTUNLAR : SUTUNLAR.filter((k) => k.anahtar !== 'tutar')}
+            sutunlar={sutunlar}
             satirlar={siparisler.data?.satirlar ?? []}
             satirAnahtari={(s) => s.id}
             satirSec={(s) => { void gezin(`/siparisler/${s.id}`); }}

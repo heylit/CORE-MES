@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisSatiri } from '#paylasilan/sozlesme/siparisler.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { CokSatir, Dugme, DurumKutusu, Kart, KlasorBaglantisi, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Kart, KlasorBaglantisi, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -73,6 +73,8 @@ export function SiparisAyrinti() {
     },
   });
 
+  // 3344: Logo'ya gidiş rozeti başlıkta; nedeni rozetin ipucunda ve listede.
+  const logo = useLogoRozetleri('satis-siparisi', Number.isSafeInteger(id) && id > 0 ? [id] : []);
   if (siparis.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (siparis.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(siparis.error, 'Sipariş alınamadı')} yenile={() => { void siparis.refetch(); }} />;
   const s = siparis.data;
@@ -128,7 +130,7 @@ export function SiparisAyrinti() {
       <SayfaBasligi
         baslik={s.no}
         alt={`${s.firmaAd ?? `Firma ${s.firmaId}`}, ${tarihMetni(s.siparisTarihi)} tarihli sipariş.`}
-        ek={<Rozet ton={durum.ton}>{durum.etiket}</Rozet>}
+        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /></>}
         geriYol="/siparisler"
         geriMetni="Siparişlere dön"
         islemler={islemler}

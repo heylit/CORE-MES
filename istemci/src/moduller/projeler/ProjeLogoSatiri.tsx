@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import type { LogoProjeDurumuCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { Rozet, type RozetTonu } from '../../ortak/arayuz/index.ts';
+import { LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
 type Durum = LogoProjeDurumuCevabi['durum'];
-const AD: Record<Durum, string> = { logoda: 'Logo\'da', sirada: 'Sırada', 'yeniden-denenecek': 'Yeniden denenecek', durdu: 'Durdu', gonderilmez: 'Gönderilmez' };
-const TON: Record<Durum, RozetTonu> = { logoda: 'tamam', sirada: 'bilgi', 'yeniden-denenecek': 'uyari', durdu: 'hata', gonderilmez: 'pasif' };
+// Ortak Logo rozetiyle aynı ad ve ton (3344); "Gönderilmez" yalnız proje satırındadır.
+const AD: Record<Durum, string> = { ...LOGO_DURUM_ADI, gonderilmez: 'Gönderilmez' };
+const TON: Record<Durum, RozetTonu> = { ...LOGO_DURUM_TONU, gonderilmez: 'pasif' };
 
 // 3315: proje kartının Logo durumu. Logo kodu rozetin dışında düz metindir (seçilip kopyalanır). Okunamazsa "Okunamadı" yazar (veri yok ile karışmasın).
 export function ProjeLogoSatiri({ projeId }: { projeId: number }) {

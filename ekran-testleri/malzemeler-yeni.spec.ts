@@ -155,10 +155,7 @@ test.describe('M2 katalog', () => {
     expect(olcu.seritGenislik).toBeGreaterThan(0);
     expect(olcu.seritRenk).not.toBe('rgba(0, 0, 0, 0)');
     expect(olcu.kutu).toBe(true);
-    // 1280'de tablo yatay kaymadan sığar: kaydırma çubuğu uzun listenin altında kalır, fareyle ulaşılmaz.
-    if ((page.viewportSize()?.width ?? 0) >= 1280) {
-      expect(await page.locator('.tc-mk-ana .tc-tablo-kap').evaluate((el) => el.scrollWidth - el.clientWidth), 'tablo yatay taşma').toBeLessThanOrEqual(0);
-    }
+    // Tablo kendi içinde yatay kayabilir: Logo sütunu varsayılan açıktır (3344 b, 3275 a'nın 1280 sığma şartı bu katalog için kalktı); sayfa taşmaz.
     await tasmaz(page);
   });
 

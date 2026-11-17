@@ -107,6 +107,7 @@
   padding: var(--b-2) var(--b-3); border-left: var(--cizgi-kalin) solid var(--hold); background: var(--panel2);
 }
 .tc-mk-uyari[data-ton="hata"] { border-left-color: var(--stop); }
+.tc-mk-logo-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
 
 .tc-mk-onay, .tc-mk-talep { display: grid; gap: var(--b-2); margin-bottom: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); }
 .tc-mk-onay-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
@@ -211,3 +212,7 @@
 @media (max-width: 720px) {
   .tc-mk-logo-liste { grid-template-columns: minmax(0, 1fr); }
 }
+/* Logo hücresi eski yoğunlukta kalır (satır <= 64 px): neden rozetin yanında tek satırda kesilir, tamamı ipucunda; tablo yatay kayar (3344 b). */
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-hucre { flex-direction: row; align-items: center; gap: var(--b-2); }
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-hucre .tc-rozet { white-space: nowrap; }
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-neden { display: block; max-width: var(--menu-genis); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
