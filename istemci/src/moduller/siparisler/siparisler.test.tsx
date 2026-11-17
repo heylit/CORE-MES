@@ -1311,7 +1311,14 @@ describe('Teklifler', () => {
     await musteriSec();
     const kutu = screen.getByRole('combobox', { name: /^Müşteri/ }) as HTMLInputElement;
     expect(kutu.value).toBe('M-7 · Deneme Musteri A');
+    expect(screen.getByText('Seçili müşteri')).toBeTruthy();
     fireEvent.change(kutu, { target: { value: 'Deneme Musteri' } });
+    expect(screen.getByText('Listeden seçin; yazılan metin kaydedilmez.')).toBeTruthy();
+    // Liste açıkken Escape yalnız listeyi kapatır: tarayıcının arama kutusunu silmesi engellenir.
+    await screen.findByRole('listbox');
+    expect(fireEvent.keyDown(kutu, { key: 'Escape' })).toBe(false);
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(kutu.value).toBe('Deneme Musteri');
     fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
     fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
     expect((await screen.findAllByText('Firma seçin.')).length).toBeGreaterThan(0);

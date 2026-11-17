@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Girdi } from '../../ortak/arayuz/index.ts';
 
 export interface AramaSecenegi {
@@ -31,6 +31,17 @@ export function AramaKutusu({ etiket, metin, yaz, secenekler, sec, not, hata, ip
   const secenekKimligi = (i: number) => `${liste}-${String(i)}`;
   const gorunur = acik && (secenekler.length > 0 || not !== undefined);
   const secildi = (s: AramaSecenegi) => { sec(s); acikYaz(false); };
+  // Kutu sağ sütundaysa liste ekranın sağından taşmasın: sığmazsa kutunun sağ kenarına hizalanır.
+  const listeOgesi = useRef<HTMLUListElement>(null);
+  const [sagdan, sagdanYaz] = useState(false);
+  useLayoutEffect(() => {
+    if (!gorunur) { sagdanYaz(false); return; }
+    const o = listeOgesi.current;
+    const kutu = o?.parentElement?.getBoundingClientRect();
+    if (o === null || kutu === undefined || sagdan) return;
+    const r = o.getBoundingClientRect();
+    if (r.right > document.documentElement.clientWidth && kutu.right - r.width >= 0) sagdanYaz(true);
+  }, [gorunur, sagdan, secenekler.length]);
 
   return (
     <div className="tc-sp-arama">
@@ -52,14 +63,15 @@ export function AramaKutusu({ etiket, metin, yaz, secenekler, sec, not, hata, ip
         onKeyDown={(o) => {
           if (o.key === 'ArrowDown') { o.preventDefault(); acikYaz(true); etkinYaz((e) => Math.min(e + 1, Math.max(secenekler.length - 1, 0))); }
           else if (o.key === 'ArrowUp') { o.preventDefault(); etkinYaz((e) => Math.max(e - 1, 0)); }
-          else if (o.key === 'Escape') acikYaz(false);
+          // Arama kutusunda Escape metni de siler; liste açıkken yalnız listeyi kapatsın.
+          else if (o.key === 'Escape') { if (gorunur) o.preventDefault(); acikYaz(false); }
           else if (o.key === 'Enter' && gorunur && secenekler[etkin]) { o.preventDefault(); secildi(secenekler[etkin]); }
         }}
         {...(hata === undefined ? {} : { hata })}
         {...(ipucu === undefined ? {} : { ipucu })}
       />
       {gorunur && (
-        <ul id={liste} role="listbox" aria-label={`${etiket} sonuçları`} className="tc-sp-arama-liste">
+        <ul ref={listeOgesi} id={liste} role="listbox" aria-label={`${etiket} sonuçları`} className={sagdan ? 'tc-sp-arama-liste tc-sp-arama-sagdan' : 'tc-sp-arama-liste'}>
           {secenekler.map((s, i) => (
             <li
               key={s.anahtar}

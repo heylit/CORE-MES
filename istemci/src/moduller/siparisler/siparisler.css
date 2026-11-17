@@ -162,10 +162,12 @@
 /* 3400-1: yazınca açılan sonuç listesi; dar kutuda da en az okunur genişlikte. */
 .tc-sp-arama { position: relative; min-width: 0; }
 .tc-sp-arama-liste {
-  position: absolute; z-index: 5; inset-inline-start: 0; inset-block-start: 100%; margin: var(--b-1) 0 0; padding: var(--b-1);
+  position: absolute; z-index: var(--z-ust); inset-inline-start: 0; inset-block-start: 100%; margin: var(--b-1) 0 0; padding: var(--b-1);
   inline-size: max(100%, min(calc(var(--b-6) * 11), 90vw)); max-block-size: calc(var(--b-6) * 9); overflow-y: auto; list-style: none;
-  background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
+  background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
 }
+.tc-sp-arama-sagdan { inset-inline-start: auto; inset-inline-end: 0; }
+@media (max-width: 600px) { .tc-sp-arama-liste { inline-size: 100%; } }
 .tc-sp-arama-secenek {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-3); min-block-size: var(--dokunma); padding: var(--b-2) var(--b-3);
   border-radius: var(--b-1); cursor: pointer;

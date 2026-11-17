@@ -32,6 +32,9 @@ export function MusteriArama({ deger, degistir, hata }: Ozellikler) {
   const liste = firmalar.data?.firmalar ?? [];
   const not = firmalar.isError ? 'Müşteriler alınamadı.' : firmalar.isPending ? 'Aranıyor' : liste.length === 0 ? 'Eşleşen müşteri yok.' : undefined;
 
+  // Seçili müşteriyle yazılmış ama seçilmemiş metin ayrı görünsün; kayıt anında değil, yazarken.
+  const ipucu = deger !== null ? 'Seçili müşteri' : metin.trim() !== '' ? 'Listeden seçin; yazılan metin kaydedilmez.' : undefined;
+
   return (
     <AramaKutusu
       etiket="Müşteri"
@@ -49,6 +52,7 @@ export function MusteriArama({ deger, degistir, hata }: Ozellikler) {
       }}
       {...(not === undefined ? {} : { not })}
       {...(hata === undefined ? {} : { hata })}
+      {...(ipucu === undefined ? {} : { ipucu })}
     />
   );
 }
