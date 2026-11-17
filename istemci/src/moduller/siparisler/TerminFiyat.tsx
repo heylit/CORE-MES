@@ -11,7 +11,9 @@ import { anahtarlar } from './anahtarlar.ts';
 import {
   BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
-import { ODEME_TURLERI, VADE_BIRIMLERI, odemeHatasi, odemeMetni, odemeSecimi, vadeli, type OdemeSecimi, type OdemeTuru } from './odeme-kosulu.ts';
+import {
+  ODEME_TURLERI, ODEME_YONTEMLERI, VADE_BIRIMLERI, odemeHatasi, odemeMetni, odemeSecimi, vadeli, type OdemeSecimi, type OdemeTuru, type OdemeYontemi,
+} from './odeme-kosulu.ts';
 import { PlanSeridi } from './PlanSeridi.tsx';
 import { bugun, teslimGunu, terminGunu } from './teslim-suresi.ts';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
@@ -32,6 +34,7 @@ interface Degerler {
   odemeSure: string;
   odemeBirim: string;
   odemeKosulu: string;
+  odemeYontemi: string;
   gecerlilik: string;
   aciklama: string;
   yerlesim: TerminYerlesimi;
@@ -55,10 +58,11 @@ function teslimVeTermin(gun: number | null, termin: string | null): { teslimGun:
 
 const odemeDegerleri = (metin: string | null) => {
   const o = odemeSecimi(metin);
-  return { odemeTuru: o.tur, odemeSure: o.sure, odemeBirim: o.birim, odemeKosulu: o.metin };
+  return { odemeTuru: o.tur, odemeSure: o.sure, odemeBirim: o.birim, odemeKosulu: o.metin, odemeYontemi: o.yontem };
 };
 const odemeSecimiOku = (d: Degerler): OdemeSecimi => ({
   tur: d.odemeTuru as OdemeTuru, sure: d.odemeSure, birim: d.odemeBirim === 'ay' ? 'ay' : 'gun', metin: d.odemeKosulu,
+  yontem: d.odemeYontemi as OdemeYontemi,
 });
 
 const GUN_ETIKETI: Record<TerminYerlesimi, string> = { arkaya: 'İstenen termin seç', geriye: 'Termin günü seç', baslat: 'Başlangıç' };
@@ -442,6 +446,11 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               </dl>
             )}
             <Secim etiket="Ödeme koşulu" bosSecenek="Belirtilmedi" secenekler={ODEME_TURLERI} {...form.alan('odemeTuru')} />
+            <Secim
+              etiket="Ödeme yöntemi" bosSecenek="Belirtilmedi" secenekler={ODEME_YONTEMLERI}
+              {...(odemeMetni(odemeSecimiOku(d)) === null ? {} : { ipucu: `Formda: ${odemeMetni(odemeSecimiOku(d)) ?? ''}` })}
+              {...form.alan('odemeYontemi')}
+            />
             {vadeli(d.odemeTuru as OdemeTuru) && (
               <div className="tc-sp-vade" role="group" aria-label="Vade seçimi">
                 <Girdi etiket="Vade" inputMode="numeric" autoComplete="off" {...form.alan('odemeSure')} />
