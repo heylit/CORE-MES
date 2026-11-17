@@ -178,16 +178,17 @@ describe('Başlangıç katsayıları (3363)', () => {
     expect(istekler.filter((x) => x.startsWith('POST'))).toHaveLength(3);
   });
 
-  it('yalnız okuyan kişi tabloyu görür, düzenleme düğmesi yok', async () => {
+  it('yalnız okuyan kişi tabloyu ve ölçüm farkını görür; düzenleme ve "Bu çarpanla güncelle" düğmesi yok', async () => {
     sunucuKur({
       'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku']),
-      'GET /geometri/kalibrasyon': () => json(200, KAL),
+      'GET /geometri/kalibrasyon': () => json(200, { ...KAL, gruplar: [{ tur: 'malzeme', anahtar: 'S', n: 9, carpan: 0.62, hataYuzde: 20, azVeri: true }] }),
       'GET /geometri/sure-katsayilari': () => json(200, { katsayilar: KATSAYILAR }),
     });
     ac();
     fireEvent.click(await screen.findByRole('tab', { name: /Başlangıç katsayıları/ }));
     const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
     expect(within(malzeme).getAllByText('Elle').length).toBeGreaterThan(0);
+    expect(within(malzeme).getByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\)/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /düzenle$/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Bu çarpanla güncelle/ })).toBeNull();
   });

@@ -71,4 +71,10 @@ describe('geometri: başlangıç katsayıları (3363)', () => {
     assert.deepEqual(kaba, finis);
     assert.equal(kaba.length, 18);
   });
+
+  test('GEO-ON7 bant sınırları tam değerde: L/D 3 kısa, 5 orta; cidar 3 mm orta, 6 mm yok; ağırlık 0,2/5/15/25 kg bir üst bant', () => {
+    assert.deepEqual([delikBandi(3), delikBandi(5), delikBandi(5.0001)], ['kisa', 'orta', 'derin']);
+    assert.deepEqual([cidarBandi(3), cidarBandi(2.9999), cidarBandi(6), cidarBandi(5.9999)], ['orta', 'ince', null, 'orta']);
+    assert.deepEqual([tutmaBandi(0.2), tutmaBandi(0.1999), tutmaBandi(5), tutmaBandi(15), tutmaBandi(25)], [1, 0, 2, 3, 4]);
+  });
 });
