@@ -452,7 +452,7 @@ export const KATEGORI_AD: Record<SureKategorisi, string> = {
 };
 const NEDEN_KAT: Record<string, SureKategorisi> = {
   tezgah: 'tezgah', personel: 'personel', yetkin: 'personel', ayarci: 'ayarci', aparat: 'aparat', ikincil: 'aparat', ariza: 'ariza', 'fason-kap': 'fasonBek',
-  'fason-cikis': 'fasonBek', serbest: 'baslangic', malzeme: 'baslangic', program: 'baslangic', kilit: 'baslangic', oneri: 'baslangic',
+  'fason-cikis': 'fasonBek', serbest: 'baslangic', malzeme: 'baslangic', program: 'baslangic', kilit: 'baslangic', oneri: 'baslangic', bekleme: 'baslangic',
 };
 export interface Ayrisim { seg: Partial<Record<SureKategorisi, number>>; kaynak: [SureKategorisi, string, number][]; C: number; toplam: number }
 
@@ -818,6 +818,7 @@ const NEDEN: Record<string, string> = {
   ariza: 'Tezgâhın arıza ya da bakımının bitmesini bekledi.', ayarci: 'Boş ayarcı bekledi.', personel: 'Boş operatör bekledi.',
   yetkin: 'Bu tezgâh grubunda yetkin boş operatör bekledi.', aparat: 'Aparatın boşalmasını bekledi.', ikincil: 'İkincil kaynağın (aparat, özel takım) boşalmasını bekledi.',
   'fason-kap': 'Fasoncunun kapasitesi doluydu; sonraki çıkışa kaldı.', 'fason-cikis': 'Fasoncunun çıkış gününü bekledi.',
+  bekleme: 'Adıma bildirilen beklemenin (malzeme yok, kişi yok) bitmesini bekledi.',
 };
 export function nedenMetni(r: PlanIslemi): string {
   const w = r.why;

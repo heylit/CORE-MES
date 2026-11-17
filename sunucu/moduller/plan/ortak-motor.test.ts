@@ -102,6 +102,39 @@ describe('ortak plan motoru, adıma bildirilen ek süre (3335-3b)', () => {
   });
 });
 
+// 3335-3c: adıma bildirilen bekleme (malzeme yok, kişi yok). İşlem bekleme anından önce başlayamaz; alt sınır kestirimleri de onu sayar.
+describe('ortak plan motoru, adıma bildirilen bekleme (3335-3c)', () => {
+  const ikiSiparis = () => veri([{ id: 'S1', adet: 4, termin: '2026-01-06' }, { id: 'S2', adet: 2, termin: '2026-01-20' }]);
+  const bekleyen = (m: Motor, kadar: unknown, D: unknown = veri()): MotorDurumu => ({ ...durum(m, {}, 0, D), adimBekle: { 'S1.10': { kadar } } });
+  test('işlem bekleme anından önce başlamaz; nedeni beklemedir; alt sınırlar da bekler', () => {
+    const m = motorYukle();
+    const st = bekleyen(m, 30);
+    const r = m.schedule(st, 'yeni', null).ops['S1.10'] as { S: number; C: number; why?: { t: string } };
+    assert.deepEqual([r.S, r.C, r.why?.t], [30, 40, 'bekleme']);
+    assert.equal(m.lowerBound(st).C['S1'], 40);
+    assert.equal(m.lbHeadsTails(st, m.compile(st)).fin['S1.10'], 40);
+  });
+  test('bekleyen adımın tezgâhı boş durmaz: öteki emir öne geçer', () => {
+    const m = motorYukle();
+    const p = m.schedule(bekleyen(m, 30, ikiSiparis()), 'yeni', null).ops;
+    assert.deepEqual([p['S2.10']?.S, p['S2.10']?.C, p['S1.10']?.S], [0, 2, 30]);
+    // Bekleme yokken termini erken olan S1 öndedir.
+    assert.equal(m.schedule(durum(m, {}, 0, ikiSiparis()), 'yeni', null).ops['S1.10']?.S, 0);
+  });
+  test('geçmişte kalan ya da sayı olmayan bekleme etkisizdir', () => {
+    const m = motorYukle();
+    assert.equal(m.schedule({ ...bekleyen(m, 5), now: 7 }, 'yeni', null).ops['S1.10']?.S, 7);
+    assert.equal(m.schedule(bekleyen(m, 'x'), 'yeni', null).ops['S1.10']?.S, 0);
+  });
+  test('plan ekseni kayınca bekleme anı da kayar: aynı gerçek ana düşer', () => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: 'Europe/Istanbul' }); b['self'] = b;
+    const kaydir = vm.runInContext(`${motorKodu()}\n;baslangicKaydir;`, b) as (S: Record<string, unknown>, yeni: string) => number;
+    const S = { D: veri(), w: { adimBekle: { 'S1.10': { kadar: 54, neden: 'malzeme' } } }, gercek: {} };
+    assert.equal(kaydir(S, '2026-01-06'), 1);
+    assert.deepEqual(S.w.adimBekle, { 'S1.10': { kadar: 30, neden: 'malzeme' } });
+  });
+});
+
 describe('ortak plan motoru, adımın adedi (24 a)', () => {
   test('adımın adedi verilirse süre o adetle hesaplanır; verilmezse sipariş adedi', () => {
     const m = motorYukle();

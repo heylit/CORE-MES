@@ -59,6 +59,48 @@ describe('plan girdisi (sunucu)', () => {
     assert.equal(m.schedule(eksiz.st, 'dagit', null).ops['O1.10']?.C, 34);
   });
 
+  // 3335-3c: adıma bildirilen bekleme çalışmanın ağırlığında durur (w.adimBekle). Sunucunun çözümü ve Kokpit'in değerlendirmesi aynı
+  // st'yi kurar (motor/durum.js stTamKur); bekleme o yoldan motora ulaşır. Başlamış adımın ve geçmişte kalan anın kaydı taşınmaz.
+  describe('adım bekliyor', () => {
+    const BEKLEYEN = { ...KAYNAK, durum: { ...KAYNAK.durum, calisanAdimlar: [] } };
+    const kur = (ek: Record<string, unknown>, kaynak: unknown = BEKLEYEN) => {
+      const c = calisma(D0);
+      const { w, ...gerisi } = ek;
+      return planGirdisi({ calisma: { ...c, ...gerisi, w: { ...(c['w'] as object), ...(w as object) } }, kayit: KAYIT, kaynak: kaynak as typeof KAYNAK })!;
+    };
+    type St = { adimBekle?: Record<string, unknown>; beklemeKilit?: string[]; locks: Record<string, unknown> };
+    test('çalışmanın w.adimBekle satırı motorun durumuna taşınır; adım o andan önce başlamaz', () => {
+      const r = kur({ w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'malzeme' } } } });
+      assert.deepEqual((r.st as St).adimBekle, { 'O1.10': { kadar: 60 } });
+      const m = motorYukle();
+      const op = m.schedule(r.st, 'dagit', null).ops['O1.10'] as { S: number; why?: { t: string } };
+      assert.ok(op.S >= 60, `başlangıç ${String(op.S)}`);
+      assert.equal(op.why?.t, 'bekleme');
+      const eksiz = kur({});
+      assert.equal((eksiz.st as St).adimBekle, undefined);
+      assert.ok(m.schedule(eksiz.st, 'dagit', null).ops['O1.10']!.S < 60);
+    });
+    test('başlamış adımın ve geçmişte kalan anın kaydı etkisizdir', () => {
+      // Kaynakta adım 33. saatte başlamış: bekleme taşınmaz.
+      assert.equal((kur({ w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'kisi' } } } }, KAYNAK).st as St).adimBekle, undefined);
+      // Çalışmanın şimdisi 70. saat: 60'a kadar bekleme geçmiştedir.
+      assert.equal((kur({ simdi: 70, w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'kisi' } } } }).st as St).adimBekle, undefined);
+      assert.deepEqual((kur({ simdi: 50, w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'kisi' } } } }).st as St).adimBekle, { 'O1.10': { kadar: 60 } });
+    });
+    test('bekleme kilitli saatten sonra bitiyorsa kilit bu hesapta uygulanmaz, motor uyarır; kilit beklemeden sonraysa durur', () => {
+      const m = motorYukle();
+      const once = kur({ locks: { 'O1.10': { m: '100', S: 32 } }, w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'malzeme' } } } });
+      assert.deepEqual([(once.st as St).locks['O1.10'], (once.st as St).beklemeKilit], [undefined, ['O1.10']]);
+      const p = m.schedule(once.st, 'dagit', null);
+      assert.ok(p.ops['O1.10']!.S >= 60);
+      const uyari = (m.evaluate(p, once.st, null) as { warn: { t: string; id?: string; txt: string }[] }).warn.filter((x) => x.t === 'bekleme');
+      assert.deepEqual([...uyari].map((x) => `${String(x.id)}|${x.txt}`), ['O1.10|O1.10: bildirilen bekleme kilitli saatten sonra bitiyor; kilit uygulanmadı, iş beklemeden sonraya yerleşti']);
+      const sonra = kur({ locks: { 'O1.10': { m: '100', S: 80 } }, w: { adimBekle: { 'O1.10': { kadar: 60, neden: 'malzeme' } } } });
+      assert.deepEqual([(sonra.st as St).locks['O1.10'], (sonra.st as St).beklemeKilit], [{ m: '100', S: 80 }, undefined]);
+      assert.equal(m.schedule(sonra.st, 'dagit', null).ops['O1.10']?.S, 80);
+    });
+  });
+
   test('başlangıçsız çalışma verilen günden, verilmezse tesisin bugününden başlar; girdi değişmez', () => {
     const bas = { ...D0, meta: undefined };
     const g = { calisma: calisma(bas), kayit: KAYIT, kaynak: null };

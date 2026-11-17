@@ -793,6 +793,19 @@ function stKur(S, ek = [], gevset = true) {
      süresine eklenir (derleme), çalışan adımda hedef bitiştir (kalanBitis). */
   const adimEk = S.w && S.w.adimEk && typeof S.w.adimEk === 'object' ? S.w.adimEk : {};
   if (Object.keys(adimEk).length) { st.adimEk = clone(adimEk); for (const id in adimEk) if (st.gercek[id]) st.gercek[id].ek = clone(adimEk[id]); }
+  /* 3335-3c: adıma bildirilen bekleme (w.adimBekle: işlem -> { kadar, neden }): işlem o andan önce başlayamaz. Başlamış ya da bitmiş
+     adımın kaydı etkisizdir (gerçekleşen yer sabittir). Bekleme kilitli saatten sonra bitiyorsa kilit bu hesapta uygulanmaz (kayıttaki
+     kilit durur; motor uyarı yazar): kilit beklemeyi sessizce ezmesin. */
+  const adimBekle = S.w && S.w.adimBekle && typeof S.w.adimBekle === 'object' ? S.w.adimBekle : {};
+  /* st.now burada henüz başlangıç değeridir (gerçek saat simdiUygula ile sonra konur); geçmişte kalan kayıt çalışmanın saatiyle süzülür */
+  const beklemeSimdi = S.simdi != null && isFinite(+S.simdi) && +S.simdi >= 0 ? +S.simdi : st.now;
+  for (const id in adimBekle) {
+    const k = +(adimBekle[id] && adimBekle[id].kadar);
+    if (!isFinite(k) || k <= beklemeSimdi || (st.gercek[id] && st.gercek[id].S != null)) continue;
+    (st.adimBekle = st.adimBekle || {})[id] = { kadar: k };
+    const lk = st.locks && st.locks[id];
+    if (lk && isFinite(+lk.S) && k > +lk.S + 1e-9) { delete st.locks[id]; (st.beklemeKilit = st.beklemeKilit || []).push(id); }
+  }
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
@@ -840,6 +853,7 @@ function durumKaydir(x, yeni) {
   if (Array.isArray(x.ekMesai)) { for (const e of x.ekMesai) kaydirSayi(e, 'gun', g); x.ekMesai = x.ekMesai.filter(e => !(typeof e.gun === 'number' && e.gun < -1)); }
   for (const l of Object.values(x.locks || {})) kaydirSayi(l, 'S', h);
   for (const e of Object.values((x.w && x.w.adimEk) || {})) kaydirSayi(e, 'bitis0', h);
+  for (const e of Object.values((x.w && x.w.adimBekle) || {})) kaydirSayi(e, 'kadar', h);
   for (const a of Object.values(x.gercek || {})) kaydirAlan(a, ['S', 'C', 'sayim'], h);
   for (const ev of x.olaylar || []) { if (OLAY_SAATI[ev.tip]) kaydirSayi(ev, OLAY_SAATI[ev.tip], h); if (OLAY_GUNU[ev.tip]) kaydirSayi(ev, OLAY_GUNU[ev.tip], g); }
   planKaydir(x.plan, h);

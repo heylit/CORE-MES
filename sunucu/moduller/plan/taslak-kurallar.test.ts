@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -510,6 +510,81 @@ describe('3335-3b: adım uzadı komutu', () => {
     const { adimEk: _, ...eskiTaban } = taban;
     assert.deepEqual(catismalar(eskiTaban, taban, [{ komut: uzadi('S1.10', 3), ne: 'uzadı' }]), []);
     assert.notEqual(dizImzasi(c({}, { adimEk: { 'S1.10': { ekSaat: 2, bitis0: 12 } } }), c()), dizImzasi(c(), c()));
+    assert.equal(JSON.parse(dizImzasi(c(), c())).length, 6);
+  });
+});
+
+// 3335-3c: adımda sorun bildir, "malzeme yok" ve "kişi yok". Veriler uydurmadır. Şimdi planın 10. saatidir.
+describe('3335-3c: adım bekliyor komutu', () => {
+  const kisi = { kim: 'ORN-Planlamaci', sayfa: 'Kokpit', t: Date.parse(planAni('2026-11-16', 10)) };
+  const c = (ek: Record<string, unknown> = {}, w: Record<string, unknown> = {}) => ({
+    dataVer: 3, w: { dondurma: 4, ...w }, param: {}, locks: {}, gercek: { 'S3.10': { m: 'T1', S: 9 } },
+    plan: { ops: { 'S1.10': { m: 'T1', S: 12, C: 16, job: 'S1' }, 'S1.20': { m: 'T2', S: 2, C: 8, job: 'S1', done: 1 }, 'S2.10': { m: 'T2', S: 30, C: 34, job: 'S2' }, 'S3.10': { m: 'T1', S: 9, C: 11, job: 'S3' }, 'S4.10': { m: '@F1', S: 20, C: 60, job: 'S4' } } },
+    D: { meta: { baslangic: '2026-11-16' }, siparisler: [{ id: 'S1' }, { id: 'S2' }, { id: 'S3' }, { id: 'S4' }] },
+    ...ek,
+  });
+  const bekler = (isId: string, kadar: number, neden: 'malzeme' | 'kisi' = 'malzeme'): TaslakKomutu => ({ tur: 'adim-bekler', isId, kadar, neden });
+  const kaydi = (d: unknown) => (d as { w: { adimBekle?: Record<string, unknown> } }).w.adimBekle;
+  const hata = (r: ReturnType<typeof adimBeklerUygula>): string | null => ('hata' in r ? r.hata.ileti : null);
+  const h = {} as TaslakHesaplari;
+
+  test('bekleme anı ve nedeni yazılır; aynı değer değişiklik sayılmaz; yeni bildirim üstüne yazar; geri yaması önceki hâli taşır', () => {
+    const r = adimBeklerUygula(c(), { isId: 'S1.10', kadar: 40, neden: 'malzeme' }, kisi);
+    assert.ok('deger' in r && r.degisti);
+    assert.deepEqual(kaydi(r.deger), { 'S1.10': { kadar: 40, neden: 'malzeme' } });
+    const ayni = adimBeklerUygula(r.deger, { isId: 'S1.10', kadar: 40, neden: 'malzeme' }, kisi);
+    assert.ok('deger' in ayni && !ayni.degisti);
+    const yeni = adimBeklerUygula(r.deger, { isId: 'S1.10', kadar: 52.25, neden: 'kisi' }, kisi);
+    assert.ok('deger' in yeni && yeni.degisti);
+    assert.deepEqual(kaydi(yeni.deger), { 'S1.10': { kadar: 52.25, neden: 'kisi' } });
+    assert.equal(komutAdi(bekler('S1.10', 32.5, 'kisi')), "S1.10 bekliyor: kişi yok, 2. gün 08:30'e kadar");
+    assert.equal(komutAdi({ tur: 'adim-bekler-sil', isId: 'S1.10' }), 'S1.10 beklemesi kaldırıldı');
+    assert.deepEqual(komutAnahtarlari(bekler('S1.10', 40), imza(c())), ['emir:S1']);
+    assert.deepEqual(komutAnahtarlari({ tur: 'adim-bekler-sil', isId: 'S2.10' }, imza(c())), ['emir:S2']);
+  });
+
+  test('yerleşmemiş, bitmiş, başlamış ve fason adım reddedilir; an şimdiden sonra ve ufuk içinde olmalıdır', () => {
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S9.10', kadar: 40, neden: 'malzeme' }, kisi)), 'Adım planda yerleşmemiş; önce plana alın.');
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S1.20', kadar: 40, neden: 'malzeme' }, kisi)), 'Adım bitmiş; bekleme bildirilemez.');
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S3.10', kadar: 40, neden: 'kisi' }, kisi)), "Adım başlamış; süresi uzadıysa 'adım uzadı' bildirin.");
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S4.10', kadar: 40, neden: 'malzeme' }, kisi)), 'Fason adımda bekleme bildirilmez; firma tarihini satın alma siparişinde güncelleyin.');
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S1.10', kadar: 10, neden: 'malzeme' }, kisi)), 'Bekleme anı geçmişte; planı etkilemez.');
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S1.10', kadar: 10.25, neden: 'malzeme' }, kisi)), null);
+    assert.equal(hata(adimBeklerUygula(c(), { isId: 'S1.10', kadar: 120 * 24 + 0.25, neden: 'malzeme' }, kisi)), 'Bekleme planın ufkunun dışında bitiyor.');
+    assert.equal(hata(adimBeklerUygula(c({ D: { siparisler: [] } }), { isId: 'S1.10', kadar: 40, neden: 'malzeme' }, kisi)), 'Çalışmada başlangıç günü yok; sayfada planı kurup kaydedin.');
+  });
+
+  test('oynatmada adım bu arada başlamış, bitmiş ya da an geçmişse satır sessizce etkisizdir; öteki satırlar uygulanır; eksen kayınca oynatılmaz', () => {
+    const l: TaslakSatiri[] = [
+      { komut: bekler('S3.10', 40), ne: 'başladı', t: 1, eksen: '2026-11-16' }, { komut: bekler('S1.20', 40), ne: 'bitti', t: 1, eksen: '2026-11-16' },
+      { komut: bekler('S1.10', 5), ne: 'geçti', t: 1, eksen: '2026-11-16' }, { komut: bekler('S2.10', 44, 'kisi'), ne: 'geçerli', t: 1, eksen: '2026-11-16' },
+    ];
+    const o = oynat(c(), l, kisi, h);
+    assert.deepEqual(o.hatalar, [null, null, null, null]);
+    assert.deepEqual(kaydi(o.deger), { 'S2.10': { kadar: 44, neden: 'kisi' } });
+    // Yerleşmemiş adım oynatmada da hatadır (satır "artık uygulanamıyor" görünür).
+    assert.deepEqual(oynat(c(), [{ komut: bekler('S9.10', 40) }], kisi, h).hatalar, ['Adım planda yerleşmemiş; önce plana alın.']);
+    assert.deepEqual(oynat(c({ D: { meta: { baslangic: '2026-11-23' }, siparisler: [{ id: 'S2' }] } }), l.slice(3), kisi, h).hatalar, [EKSEN_DEGISTI]);
+  });
+
+  test('sil yalnız o adımı kaldırır; olmayan adımda değişiklik yok', () => {
+    const iki = c({}, { adimBekle: { 'S1.10': { kadar: 40, neden: 'malzeme' }, 'S2.10': { kadar: 44, neden: 'kisi' } } });
+    const r = adimBeklerSilUygula(iki, { isId: 'S1.10' }, kisi);
+    assert.ok('deger' in r && r.degisti);
+    assert.deepEqual(kaydi(r.deger), { 'S2.10': { kadar: 44, neden: 'kisi' } });
+    const yok = adimBeklerSilUygula(c(), { isId: 'S1.10' }, kisi);
+    assert.ok('deger' in yok && !yok.degisti);
+  });
+
+  test('imza: başkasının aynı emre bildirdiği bekleme emir düzeyinde çatışır; dizme imzası beklemeyle değişir, bekleme yokken eskisiyle aynıdır', () => {
+    const taban = imza(c());
+    const baskasi = imza(c({}, { adimBekle: { 'S1.10': { kadar: 40, neden: 'malzeme' }, 'S7.10': { kadar: 'x', neden: 'malzeme' }, 'S8.10': { kadar: 3, neden: 'başka' } } }));
+    assert.deepEqual(baskasi.adimBekle, { 'S1.10': '40|malzeme' });
+    assert.deepEqual(catismalar(taban, baskasi, [{ komut: bekler('S1.10', 50), ne: 'bekler' }]).map((x) => x.anahtar), ['emir:S1']);
+    assert.deepEqual(catismalar(taban, baskasi, [{ komut: bekler('S2.10', 50), ne: 'bekler' }]), []);
+    const { adimBekle: _, ...eskiTaban } = taban;
+    assert.deepEqual(catismalar(eskiTaban, taban, [{ komut: bekler('S1.10', 50), ne: 'bekler' }]), []);
+    assert.notEqual(dizImzasi(c({}, { adimBekle: { 'S1.10': { kadar: 40, neden: 'malzeme' } } }), c()), dizImzasi(c(), c()));
     assert.equal(JSON.parse(dizImzasi(c(), c())).length, 6);
   });
 });

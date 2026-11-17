@@ -73,6 +73,19 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
       if (k.tur === 'adim-uzadi') e[id] = { ekSaat: k['ekSaat'], bitis0: b0 }; else delete e[id];
       if (x) ops = { ...ops, [id]: { ...x, C: b0 + (k.tur === 'adim-uzadi' ? Number(k['ekSaat']) : 0) } };
       w = { ...w, adimEk: e };
+    } else if (k.tur === 'adim-bekler' || k.tur === 'adim-bekler-sil') {
+      const e = { ...(w['adimBekle'] as Record<string, unknown> | undefined) }, id = String(k['isId']);
+      // Bekleme adımı bildirilen ana kaydırır (süresi aynı kalır); emrin sonraki adımı öncülü bitmeden başlamaz, o da kayar.
+      const x = ops[id], kadar = Number(k['kadar']);
+      if (k.tur === 'adim-bekler') {
+        e[id] = { kadar, neden: k['neden'] };
+        if (x && x.S < kadar) {
+          const C = kadar + (x.C - x.S);
+          ops = { ...ops, [id]: { ...x, S: kadar, C } };
+          for (const [o, y] of Object.entries(ops)) if (o !== id && y.job === x.job && y.S >= x.S && y.S < C) ops = { ...ops, [o]: { ...y, S: C, C: C + (y.C - y.S) } };
+        }
+      } else delete e[id];
+      w = { ...w, adimBekle: e };
     }
   }
   return { ops, locks, w, down, ekMesai };
@@ -87,7 +100,9 @@ async function arac(kokpit: Locator, ad: string) {
 // Değerlendirmenin özeti: adıma uzama bildirildiyse gecikme o kadar artar (uzama planı iyileştirmez); öteki komutlarda sabit iyileşme.
 function degerlendirmeOzeti(d: Durum) {
   const ek = Object.values((d.w['adimEk'] as Record<string, { ekSaat: number }> | undefined) ?? {}).reduce((t, e) => t + Number(e.ekSaat), 0);
-  return ek > 0 ? { wT: 20 + ek, T: 20 + ek, late: 1 } : { wT: 8, T: 8, late: 0 };
+  // Bekleme emrin son adımını ittiyse gecikme o kadar artar.
+  const itme = Object.keys((d.w['adimBekle'] as Record<string, unknown> | undefined) ?? {}).length > 0 ? Math.max(0, (d.ops['S1.a2']?.C ?? 0) - (ILK['S1.a2']?.C ?? 0)) : 0;
+  return ek + itme > 0 ? { wT: 20 + ek + itme, T: 20 + ek + itme, late: 1 } : { wT: 8, T: 8, late: 0 };
 }
 async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
   const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
@@ -1707,6 +1722,59 @@ test('Kokpit 3335-3b: operasyon satırından adıma sorun bildir; uzama taslağa
   await panel.getByRole('button', { name: 'Uzamayı kaldır' }).click();
   await expect(panel.getByRole('region', { name: 'Uzamanın etkisi' })).toBeVisible({ timeout: 10_000 });
   expect(t.s.komutlar.at(-1)).toEqual({ tur: 'adim-uzadi-sil', isId: 'S1.a1' });
+  expect(ag.hatalar).toEqual([]);
+});
+
+// 3335 a, adıma sorun bildir (3c): aynı panelde "Malzeme yok" seçilir, geliş tarihi ve saati girilir; taslağa "adim-bekler" komutuyla
+// yazılır, etkisi görünür, Uygula'dan sonra satırın başlangıcında yazar; "Bildirimi kaldır" silme komutunu yazar.
+test('Kokpit 3335-3c: adıma malzeme yok bildirilir; bekleme taslağa yazılır, etkisi görünür, Uygula; satırda yazar; kaldırılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible().catch(() => false)) await karsilama.click();
+  await kokpit.locator('[data-kart="S1"]').click();
+  const satir = kokpit.locator('[data-adim-satir="S1.a1"]');
+  await satir.locator('[data-adim-sorun="S1.a1"]').click();
+  const panel = kokpit.getByRole('complementary', { name: 'Adıma sorun bildir' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel('Sorun', { exact: true }).locator('option')).toHaveText(['Adım uzadı', 'Malzeme yok', 'Kişi yok']);
+  await panel.getByLabel('Sorun', { exact: true }).selectOption('kisi');
+  await expect(panel.getByLabel('Ne zamana kadar')).toBeVisible();
+  await panel.getByLabel('Sorun', { exact: true }).selectOption('malzeme');
+  const alan = panel.getByLabel('Malzeme ne zaman gelir');
+  await expect(alan).toBeInViewport({ ratio: 1 });
+  await alan.fill('2026-10-18T10:00');
+  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
+  await expect(panel.getByRole('alert')).toHaveText('Şimdiden sonraki bir tarih ve saat girin.');
+  expect(t.s.komutlar).toEqual([]);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3c-form-${bilgi.project.name}.png` });
+  await alan.fill('2026-10-21T08:00');
+  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
+  const etki = panel.getByRole('region', { name: 'Beklemenin etkisi' });
+  await expect(etki).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar).toEqual([{ tur: 'adim-bekler', isId: 'S1.a1', kadar: 56, neden: 'malzeme' }]);
+  // Bekleme gecikmeyi azaltmaz: etki kötüleşme tonundadır.
+  await expect(etki.locator('dd[data-yon="kotu"]').first()).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3c-etki-${bilgi.project.name}.png` });
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(etki).toHaveCount(0);
+  await expect(satir.locator('[data-adim-bekle]')).toHaveText("bekliyor: malzeme yok, 21.10 Çar 08:00'e kadar");
+  await expect(panel.locator('[data-adim-bekle]')).toHaveText("malzeme yok, 21.10 Çar 08:00'e kadar");
+  await expect(satir.locator('[data-adim-bekle]')).toBeVisible();
+  // Adım beklemeden sonra başlar (21.10 08:00), ardılı o bitince (21.10 16:00).
+  await expect(satir.locator('td[data-ad="Bitiş"]')).toContainText('21.10 Çar 16:00');
+  await expect(kokpit.locator('[data-adim-satir="S1.a2"] td[data-ad="Bitiş"]')).toContainText('22.10 Per 00:00');
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3c-sonra-${bilgi.project.name}.png` });
+  await panel.getByRole('button', { name: 'Bildirimi kaldır' }).click();
+  await expect(panel.getByRole('region', { name: 'Beklemenin etkisi' })).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar.at(-1)).toEqual({ tur: 'adim-bekler-sil', isId: 'S1.a1' });
   expect(ag.hatalar).toEqual([]);
 });
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
+import { nedenKisa } from '../atolye/kurallar.ts';
 import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, ikincilAyrintisi, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, sabitleriKaldir, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 import { ufukKur } from '../../ufuk-olcegi.ts';
 
@@ -109,6 +110,9 @@ describe('çizelge hesapları', () => {
     expect(nedenMetni(r)).toBe('Siparişin serbest bırakılma anını bekledi.');
     expect(nedenMetni({ ...r, why: { t: 'rota', o: 1, r: '2.10' } })).toBe('Önceki adım 2.10 ilk partisini bitirince örtüşmeli başladı.');
     expect(nedenMetni({ ...r, why: null })).toBe('Bilinmiyor.');
+    // 3335-3c: adıma bildirilen bekleme (malzeme yok, kişi yok) motorun nedenidir; iki yazısı da vardır.
+    expect(nedenMetni({ ...r, why: { t: 'bekleme' } })).toBe('Adıma bildirilen beklemenin (malzeme yok, kişi yok) bitmesini bekledi.');
+    expect(nedenKisa({ ...r, why: { t: 'bekleme' } })).toBe('bildirilen bekleme');
   });
 
   it('kapasitesiz en erken: kayıttaki lbC; yoksa ya da sonlu değilse null', () => {
