@@ -1067,6 +1067,7 @@ export async function canliMakineler(db: Db, istemci: SmartesIstemcisi | null, s
     degisimler.set(d.makineKodu, k);
   }
   const gunBasiMetni = gunBasi.toISOString();
+  const tanimlar = new Map((await s.makineTanimlari(db)).map((t) => [t.kod.toLowerCase(), t]));
   return {
     ...bos,
     // Hiç okunamadıysa ve son hata metodun olmadığını söylüyorsa pano "SmartES bu bilgiyi vermiyor" der.
@@ -1078,8 +1079,10 @@ export async function canliMakineler(db: Db, istemci: SmartesIstemcisi | null, s
       const is = coreId === undefined ? undefined : isler.get(coreId);
       const il = is === undefined ? undefined : ilerleme.get(smartesIsEmriNo(is.emirNo, is.opNo));
       const g = degisimler.get(m.makineKodu);
+      const tanim = tanimlar.get(m.makineKodu.toLowerCase());
       return {
-        makineKodu: m.makineKodu, makineAdi: m.makineAdi ?? core?.ad ?? null, istasyonKodu: istasyon?.kod ?? null, istasyonAdi: istasyon?.ad ?? null,
+        makineKodu: m.makineKodu, makineAdi: m.makineAdi ?? core?.ad ?? null,
+        marka: tanim?.marka ?? null, model: tanim?.model ?? null, kontrolUnitesi: tanim?.kontrolUnitesi ?? null, istasyonKodu: istasyon?.kod ?? null, istasyonAdi: istasyon?.ad ?? null,
         durum: m.durum, durumKodu: m.durumKodu, durumBaslangic: m.durumBaslangic, mod: m.mod, alarm: m.alarm, uyari: m.uyari, programNo: m.programNo,
         programAdi: m.programAdi, sayac: m.sayac, spindleYuku: m.spindleYuku, okundu: m.okundu,
         calisanIs: is === undefined ? null : {

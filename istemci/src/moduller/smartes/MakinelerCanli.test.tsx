@@ -10,7 +10,7 @@ import { MakinelerCanli } from './MakinelerCanli.tsx';
 type Makine = CanliMakinelerCevabi['makineler'][number];
 const once = (sn: number) => new Date(Date.now() - sn * 1000).toISOString();
 const makine = (makineKodu: string, ek: Partial<Makine> = {}): Makine => ({
-  makineKodu, makineAdi: `ORN ${makineKodu}`, istasyonKodu: 'ORN-T1', istasyonAdi: 'ORN torna hücresi', durum: 'calisiyor', durumKodu: null,
+  makineKodu, makineAdi: `ORN ${makineKodu}`, marka: null, model: null, kontrolUnitesi: null, istasyonKodu: 'ORN-T1', istasyonAdi: 'ORN torna hücresi', durum: 'calisiyor', durumKodu: null,
   durumBaslangic: once(600), mod: 'AUTO', alarm: null, uyari: null, programNo: 'O1001', programAdi: 'ORN-PROGRAM', sayac: 12, spindleYuku: 45,
   okundu: once(20), calisanIs: null, bugun: [{ durum: 'calisiyor', baslangic: once(600), bitis: null }], ...ek,
 });
@@ -18,7 +18,7 @@ const PANO: CanliMakinelerCevabi = {
   baglanti: 'acik', okumaAcik: true, destekleniyor: true, aralikSaniye: 60, sonOkuma: once(20),
   makineler: [
     makine('ORN-M01', { calisanIs: { emirId: 1, emirNo: 'ORN-UE-1', opNo: 20, opAdi: 'CNC torna', tamamlananYuzde: 38, tahminiBitis: once(-3600) } }),
-    makine('ORN-M02', { durum: 'alarm', alarm: '1012 ORN alarm metni' }),
+    makine('ORN-M02', { durum: 'alarm', alarm: '1012 ORN alarm metni', marka: 'ORN MARKA', kontrolUnitesi: 'ORN SURUCU A' }),
     makine('ORN-M03', { durum: 'bilinmiyor', durumKodu: 'ORN-7', istasyonKodu: null, istasyonAdi: null }),
     makine('ORN-M04', { okundu: once(600) }),
   ],
@@ -58,6 +58,8 @@ describe('SmartES Makineler canlı', () => {
     expect(within(grup).getAllByRole('listitem')).toHaveLength(3);
     expect(screen.getByRole('region', { name: 'İstasyona bağlı olmayan' })).toBeTruthy();
     expect(screen.getByText('kod ORN-7')).toBeTruthy();
+    // Tanım satırı: boş model yazılmaz; hiç tanımı olmayan kartta satır çıkmaz.
+    expect(screen.getAllByText('ORN MARKA · ORN SURUCU A')).toHaveLength(1);
     expect(screen.getByText(/^Veri eski \(10 dk\)$/)).toBeTruthy();
     expect(screen.getByText('1012 ORN alarm metni')).toBeTruthy();
     const dolu = screen.getByRole('button', { name: /^ORN-M01 / });
@@ -90,6 +92,9 @@ describe('SmartES Makineler canlı', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^ORN-M02 / }));
     const pencere = await screen.findByRole('dialog');
     expect(await within(pencere).findByText('Sayaç (toplam)')).toBeTruthy();
+    expect(within(pencere).getByText('Kontrol ünitesi')).toBeTruthy();
+    expect(within(pencere).getByText('ORN SURUCU A')).toBeTruthy();
+    expect(within(pencere).queryByText('Model')).toBeNull();
     expect(yollar).toContain('/smartes/makineler/ORN-M02');
     expect(within(pencere).getByText('3.400')).toBeTruthy();
     expect(within(pencere).getByText(/2\.400 dev\/dk · yük %45 · oran %90/)).toBeTruthy();

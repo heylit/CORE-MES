@@ -228,6 +228,10 @@ export const canliMakinelerCevabi = z.object({
   makineler: z.array(z.object({
     makineKodu: z.string(),
     makineAdi: z.string().nullable(),
+    // SmartES makine listesindeki tanım bilgisi; liste okunmadıysa ya da alan boşsa null.
+    marka: z.string().nullable(),
+    model: z.string().nullable(),
+    kontrolUnitesi: z.string().nullable(),
     istasyonKodu: z.string().nullable(),
     istasyonAdi: z.string().nullable(),
     durum: z.enum(SMARTES_MAKINE_DURUMLARI),

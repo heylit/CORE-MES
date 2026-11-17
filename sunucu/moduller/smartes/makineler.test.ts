@@ -125,6 +125,24 @@ describe('SmartES canlı makine panosu (kart 3176, gerçek PostgreSQL)', () => {
     assert.deepEqual(kapali.makineler, []);
   });
 
+  test('3372: panoda marka, model ve kontrol ünitesi saklanan makine listesinden gelir; boş alan null, adres cevapta yok', async () => {
+    assert.equal((await tur()).tur, 'islendi');
+    await vt().sorgu(
+      `INSERT INTO smartes_liste_kaydi (tur, anahtar, smartes_id, kod, ad, var, ham, ilk_gorulme, son_gorulme)
+       VALUES ('makine', 'kod:orn-m01', 1, 'orn-m01', 'ORN M01', true, $1::jsonb, now(), now()),
+              ('makine', 'kod:orn-m03', 3, 'ORN-M03', 'ORN M03', false, $2::jsonb, now(), now())`,
+      [JSON.stringify({ ID: '1', KOD: 'orn-m01', IP: '10.0.0.9', MARKA: ' ORN MARKA ', MODEL: '', KONTROLUNITE: 'ORN SURUCU A' }),
+        JSON.stringify({ ID: '3', KOD: 'ORN-M03', MARKA: 'ORN ESKI' })],
+    );
+    const p = await pano();
+    const m = (kod: string) => p.makineler.find((x) => x.makineKodu === kod);
+    assert.deepEqual([m('ORN-M01')?.marka, m('ORN-M01')?.model, m('ORN-M01')?.kontrolUnitesi], ['ORN MARKA', null, 'ORN SURUCU A'], 'kod harf ayırmadan eşlenir');
+    assert.deepEqual([m('ORN-M02')?.marka, m('ORN-M02')?.kontrolUnitesi], [null, null], 'listede olmayan makine');
+    assert.equal(m('ORN-M03')?.marka, null, 'listeden çıkmış kayıt kullanılmaz');
+    assert.equal(JSON.stringify(p).includes('10.0.0.9'), false);
+    await vt().sorgu("DELETE FROM smartes_liste_kaydi WHERE tur = 'makine'");
+  });
+
   test('SME-34: makine listesi bir kez, her makine kendi kimliğiyle tek istekle okunur; yalnız okuma metodu çağrılır; son okuma üstüne yazılır', async () => {
     assert.deepEqual(await tur(), { tur: 'islendi', okunan: 3, makineSayisi: 3, kesildi: false, hata: null });
     assert.equal(cagrilar('ActiveMachinesList').length, 1);
