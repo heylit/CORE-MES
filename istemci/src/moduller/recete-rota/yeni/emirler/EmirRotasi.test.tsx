@@ -83,6 +83,20 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'fai', projeId: 5, siparisSatiriId: 51, siparisPartiId: 8 });
   });
 
+  it('3411 a: türün rotası yoksa emir Seri rotasıyla açılır ve formda bu söylenir', async () => {
+    const istekler = sunucu();
+    yeniEmirAc();
+    const form = await formAc();
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Emir türü' }), { target: { value: 'numune' } });
+    const not = await within(form).findByRole('status');
+    expect(not.textContent).toBe('Numune türünün rotası yok. Emir Standart rotası Rev A ile açılır; emir ayrıntısında bu not kalır.');
+    expect((within(form).getByRole('combobox', { name: 'Rota' }) as HTMLSelectElement).value).toBe('1');
+    fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
+    await waitFor(() => expect(kopya(istekler)).toBeDefined());
+    expect(kopya(istekler)?.yol).toBe(STANDART);
+    expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'numune' });
+  });
+
   it('tek rotalı üründe Rota satırı salt okunur görünür', async () => {
     sunucuKur(kisi, {
       durum: rotaDurumu(),

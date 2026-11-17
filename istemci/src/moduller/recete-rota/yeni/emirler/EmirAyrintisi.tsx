@@ -21,6 +21,7 @@ import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
+import { seriRotasiNotu } from './kurallar.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
 // Kapanış onayları emrin ana yerindedir (3003 a).
@@ -176,8 +177,20 @@ function EmirUyarilari({ durum: d, emir: o, yetki, komut, bittiNotu = false }: {
   const yonlen = useNavigate();
   const arsivKapanisi = useArsivKapanisi(o).data ?? null;
   const fark = rotaFarki(d, o);
+  // 3411 a: not, ürünün bu türe bağlı rotası varsa çıkar; rotalar yeni emir formu ve bölmeyle aynı önbellekten okunur.
+  const urunNo = Number(o.itemId);
+  const urunRotalari = useQuery({
+    queryKey: [...RR_ANAHTARI, 'urun-rotalari', urunNo] as const,
+    enabled: o.tur !== 'seri' && !o.rotasiz && o.rev !== null && Number.isInteger(urunNo) && urunNo > 0,
+    queryFn: () => api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunNo)}`),
+    retry: false,
+  });
+  const seri = seriRotasiNotu(d, o, urunRotalari.data?.rotalar);
   return (
     <>
+      {seri && (
+        <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{seri}</span></div>
+      )}
       {fark && (
         <div className="tc-rr3-uyari-kutu" role="status">
           <Simge ad="layers" />

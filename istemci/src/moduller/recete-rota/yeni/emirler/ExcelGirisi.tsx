@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Menu } from '../../../../ortak/arayuz/index.ts';
+import { Menu, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { ExcelPenceresi } from '../../../../ortak/excel/ExcelPenceresi.tsx';
 import { api } from '../../../../ortak/veri/api.ts';
 import { anahtarlar, type RrDurumu } from '../veri.ts';
@@ -22,6 +22,7 @@ export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir, acilis, kapa
   const acik = pencere === 'yeni';
   const acikYaz = (v: boolean) => { pencereYaz(v ? 'yeni' : null); };
   const istemci = useQueryClient();
+  const { bildir } = useBildirim();
   const ilkUrun = (durum.items ?? []).find((i) => i.type === 'mamul' || i.type === 'yari')?.id;
   const secenekler = useQuery({
     queryKey: [...anahtarlar.veri, 'excel-acilis', ilkUrun ?? ''],
@@ -42,6 +43,8 @@ export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir, acilis, kapa
           yaz={async (satirlar, istekKimligi) => {
             const sonuc = await emirYaz(satirlar, istekKimligi, emirKaynagi(durum, hazir));
             await istemci.invalidateQueries({ queryKey: anahtarlar.veri });
+            // 3411 a: türünün yürürlükte rotası olmadığı için Seri rotasıyla açılan emirler sayıyla söylenir.
+            if (sonuc.seriyeDusen > 0) bildir('bilgi', `${String(sonuc.seriyeDusen)} emir, türünün yürürlükte rotası olmadığı için Seri rotasıyla açıldı.`);
             return sonuc;
           }}
         />

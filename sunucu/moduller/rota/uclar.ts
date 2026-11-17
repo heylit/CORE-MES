@@ -164,7 +164,7 @@ export const uclar = [
     isle: ({ db, kullanici, parametre, govde }) => taslakAc(db, kullanici, parametre.urunId, govde.kaynak, govde.rotaId ?? null),
   }),
   // Ürünün rotaları (3247 a): rota açmak ve adını değiştirmek taslak açma yetkisiyle; emir türü eşlemesi hangi revizyonun
-  // emre gireceğini değiştirdiği için onay yetkisiyle.
+  // emre gireceğini değiştirdiği için onay yetkisiyle. 3411 a: rota türüyle açılır; yürürlüğe girene kadar emri etkilemez.
   uc({
     yontem: 'POST',
     yol: '/rota/urunler/:urunId/rotalar',
@@ -173,7 +173,7 @@ export const uclar = [
     parametre: urunParametresi,
     govde: rotaEkleGovdesi,
     cevap: urunRevizyonlariCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => rotaEkle(db, kullanici, parametre.urunId, govde.ad),
+    isle: ({ db, kullanici, parametre, govde }) => rotaEkle(db, kullanici, parametre.urunId, govde.emirTuru),
   }),
   uc({
     yontem: 'POST',
