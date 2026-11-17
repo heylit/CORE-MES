@@ -647,7 +647,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <>
                 {yazabilir && <button type="button" role="menuitem" disabled={c.plan === null || plansizlar.length === 0 || mesgul} onClick={() => { kapat(); void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}><Simge ad="play" boyut="k" /><span>Plansızların hepsini planla ({plansizlar.length})</span></button>}
                 <button type="button" role="menuitemcheckbox" aria-checked={butunTezgahlar} onClick={() => { kapat(); setButunTezgahlar(!butunTezgahlar); }}><Simge ad="layers" boyut="k" /><span>Bütün tezgâhları göster</span></button>
-                <button type="button" role="menuitem" onClick={() => { kapat(); duzenSec(true); }}><Simge ad="gear" boyut="k" /><span>Ayrıntılı Kokpit<small>Matris, 3B, duruş ve mesai, ayarlar, elle yerleştirme</small></span></button>
+                <button type="button" role="menuitem" onClick={() => { kapat(); setGoz('M'); duzenSec(true); }}><Simge ad="layers" boyut="k" /><span>Matris</span></button>
+                <button type="button" role="menuitem" onClick={() => { kapat(); setGoz('B'); duzenSec(true); }}><Simge ad="layers" boyut="k" /><span>3B</span></button>
+                <button type="button" role="menuitem" onClick={() => { kapat(); setGoz('T'); setOnceAcik(true); duzenSec(true); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra<small>Onaylı planla karşılaştır</small></span></button>
+                <button type="button" role="menuitem" onClick={() => { kapat(); sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setKapasiteAcik(true); duzenSec(true); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+                <button type="button" role="menuitem" onClick={() => { kapat(); duzenSec(true); }}><Simge ad="gear" boyut="k" /><span>Ayrıntılı Kokpit<small>Ayarlar, elle yerleştirme, bütün araçlar</small></span></button>
               </>
             )}
           </Acilir>
