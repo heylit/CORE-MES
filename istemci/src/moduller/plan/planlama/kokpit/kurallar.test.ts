@@ -133,11 +133,12 @@ describe('Kokpit yükü ve ölçeği', () => {
 });
 
 describe('Kokpit taşıma ve tur', () => {
-  it('taşıma saati çeyrek saate oturur ve şimdiden önce olamaz; başlamış ve fason iş taşınmaz', () => {
+  it('taşıma saati çeyrek saate oturur ve şimdiden önce olamaz; süren iş taşınır, biten ve fason iş taşınmaz', () => {
     expect(tasimaSaati(10.1, 0)).toBe(10);
     expect(tasimaSaati(3, 8.1)).toBe(8.25);
     expect(tasinabilir(is('a.1', 'T1', 0, 1))).toBeNull();
-    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true }))).toMatch(/Başlamış/);
+    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true }))).toBeNull();
+    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true, bitti: true }))).toMatch(/Biten/);
     expect(tasinabilir(is('a.1', '@F', 0, 1, { fason: true }))).toMatch(/Fason/);
   });
 

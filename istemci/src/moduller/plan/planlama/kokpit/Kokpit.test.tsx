@@ -93,8 +93,9 @@ describe('Kokpit', () => {
     expect(is?.dataset.d).toBe('risk');
     if (is) fireEvent.click(is);
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: '3.10' });
-    // Başlamış iş ve fason adım taşınmaz diye işaretlidir.
-    expect(document.querySelector('[data-is="2.20"]')?.hasAttribute('data-sabit')).toBe(true);
+    // Fason adım taşınmaz diye işaretlidir; süren iş taşınır (durdurulur, kalanı gider) ve bunu adında söyler.
+    expect(document.querySelector('[data-is="2.20"]')?.hasAttribute('data-sabit')).toBe(false);
+    expect(document.querySelector('[data-is="2.20"]')?.getAttribute('title')).toContain('sürüyor, taşınırsa durdurulur');
     expect(document.querySelector('[data-is="2.30"]')?.hasAttribute('data-sabit')).toBe(true);
   });
 
@@ -979,8 +980,8 @@ describe('Kokpit', () => {
     geriKur();
   });
 
-  // Test T3, T4, T6: kümede başlamış iş kaymaz; Shift+ok dört saat kaydırır; küme dışı iş bırakılınca yalnız o taşınır.
-  it('kümede başlamış iş atlanır, Shift+ok kümeyi dört saat kaydırır; küme dışı iş sürüklenince yalnız o taşınır (3365)', async () => {
+  // Test T3, T4, T6: kümede süren iş kaymaz; Shift+ok dört saat kaydırır; küme dışı iş bırakılınca yalnız o taşınır.
+  it('kümede süren iş atlanır, Shift+ok kümeyi dört saat kaydırır; küme dışı iş sürüklenince yalnız o taşınır (3365)', async () => {
     const geriKur = imlecOlayiKur();
     const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
     acSecimli();
@@ -992,7 +993,7 @@ describe('Kokpit', () => {
     expect(screen.getByText('3 iş seçili · birlikte kayar')).toBeTruthy();
     fireEvent.keyDown(document, { key: 'ArrowRight', shiftKey: true });
     await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
-    expect(await screen.findByText('1 iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.')).toBeTruthy();
+    expect(await screen.findByText('1 iş kaymadı (süren, biten ya da fason); ötekiler kaydı. Süren işi tek başına taşıyın.')).toBeTruthy();
     const c = Object.fromEntries(oz.mock.calls.map((x) => [x[0].isId, x[0]]));
     expect(Object.keys(c).sort()).toEqual(['2.40', '3.10']);
     for (const id of ['2.40', '3.10']) expect(Math.abs(c[id]!.baslangic - S(id) - 4)).toBeLessThanOrEqual(0.25);

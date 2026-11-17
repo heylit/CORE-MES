@@ -6,7 +6,7 @@ import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -627,6 +627,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                 : tasima.length === 0 ? <p className="tc-pyq-not" role="status">Bu operasyon için başka uygun boş yer bulunamadı.</p>
                   : (
                     <>
+                      {tasinanIs.basladi && !tasinanIs.bitti && <p className="tc-pyq-not" data-suren-tasima="">{SUREN_TASIMA}</p>}
                       <p className="tc-pyq-not"><b>{tasinanIs.ad}</b> seçili ({tz(tasinanIs.m)} · {an(tasinanIs.S, tasinanIs.C)}). Taşımak için bir yer seçin.</p>
                       <ul>
                         {tasima.map((b) => (

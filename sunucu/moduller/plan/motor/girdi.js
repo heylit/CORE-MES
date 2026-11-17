@@ -740,6 +740,8 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
 /** @param {any} [S] @param {any} [y] @param {Derleme} [cx] */
 function calisanBirlestir(S, y, cx) {
   const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
+  /* 3414-6 a: kalanı taşınan süren adımın sayımı güncellenir ama çubuğu taşındığı yerde kalır (gerçekleşen yerine geri çekilmez) */
+  const durdurulan = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
   for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
   for (const [id, a] of Object.entries(y)) {
     const r = S.plan && S.plan.ops[id]; const m = a.m && cx && cx.M[a.m] ? a.m : r ? r.m : a.m;
@@ -749,6 +751,7 @@ function calisanBirlestir(S, y, cx) {
     const yeni = { ...a, m, sunucu: 1, planC: g[id] && g[id].planC != null ? g[id].planC : r ? r.C : null };
     if (rrEsit(g[id], yeni)) continue;
     g[id] = yeni; degisti = true;
+    if (durdurulan[id]) continue;
     const M = cx && cx.M[m]; if (!r || !M) continue;
     const C = kalanBitis(M, yeni); const o = cx.byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
     const Su = Math.min(adv(M.sw, yeni.S, (c && c.su) || 0), C);
@@ -819,6 +822,17 @@ function stKur(S, ek = [], gevset = true) {
   for (const s of D.siparisler) if (yonEmir[s.id] === 'geri' || yonEmir[s.id] === 'ileri') s.yon = yonEmir[s.id];
   /* 3335-3b: adıma bildirilen ek süre de çalışmanın ağırlığında durur (w.adimEk: işlem -> { ekSaat, bitis0 }). Başlamamış adımda koşu
      süresine eklenir (derleme), çalışan adımda hedef bitiştir (kalanBitis). */
+  /* 3414-6 a: planlamacının durdurup kalanını taşıdığı süren adım (w.durdurulan: işlem -> 1). Gerçekleşen yeri plana sabit girmez; kalan adet
+     (adım adedi eksi sayılan sağlam; sayım bilinmiyorsa adedin tamamı) kilitlendiği yere dizilir, ayarı yeniden sayılır. Yapılan kısım
+     geçmişte kalır. Adım artık sürmüyorsa, bittiyse ya da kalanı yoksa kayıt etkisizdir. */
+  const durdurulan = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
+  for (const id in durdurulan) {
+    const a = st.gercek[id]; if (!a || a.C != null) continue;
+    const kalan = isFinite(+a.A) && isFinite(+a.n) && a.A != null && a.n != null ? Math.max(0, +a.A - +a.n) : null;
+    if (kalan === 0) continue;
+    delete st.gercek[id];
+    if (kalan != null) D.opAdet = Object.assign({}, D.opAdet, { [id]: kalan });
+  }
   const adimEk = S.w && S.w.adimEk && typeof S.w.adimEk === 'object' ? S.w.adimEk : {};
   if (Object.keys(adimEk).length) { st.adimEk = clone(adimEk); for (const id in adimEk) if (st.gercek[id]) st.gercek[id].ek = clone(adimEk[id]); }
   /* 3335-3c: adıma bildirilen bekleme (w.adimBekle: işlem -> { kadar, neden }): işlem o andan önce başlayamaz. Başlamış ya da bitmiş

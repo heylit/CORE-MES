@@ -483,9 +483,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Kümeyi dS saat kaydırır. Sağa kayarken en geç başlayan, sola kayarken en erken başlayan önce taşınır: işler birbirini itmesin.
   const grupKaydir = useCallback((dS: number) => {
     const l = [...coklu].map((id) => m.isler[id]).filter((x) => x !== undefined);
-    const engelli = l.filter((x) => tasinabilir(x) !== null);
-    if (engelli.length > 0) bildir('bilgi', `${String(engelli.length)} iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.`);
-    const tasinan = l.filter((y) => tasinabilir(y) === null);
+    // Süren iş kümeyle kaymaz: taşımak onu durdurur, bu tek başına ve bilerek yapılır (3414-6 a).
+    const kayar = (x: (typeof l)[number]) => tasinabilir(x) === null && !x.basladi;
+    const engelli = l.filter((x) => !kayar(x));
+    if (engelli.length > 0) bildir('bilgi', `${String(engelli.length)} iş kaymadı (süren, biten ya da fason); ötekiler kaydı. Süren işi tek başına taşıyın.`);
+    const tasinan = l.filter(kayar);
     if (tasinan.length > 1) {
       const g = grup.current ?? { bekleyen: new Set<string>(), yazilan: 0 };
       for (const x of tasinan) g.bekleyen.add(x.id);
@@ -505,7 +507,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       bildir('bilgi', 'Çoklu seçimde tezgâh değişmez; tek iş seçin.');
       return true;
     }
-    const engel = tasinabilir(x);
+    const engel = tasinabilir(x) ?? (x.basladi ? 'Süren iş okla kaymaz; sürükleyip yeni yerine bırakın (iş durdurulur, kalanı taşınır)' : null);
     if (engel) { bildir('bilgi', engel); return true; }
     // Sırada bekleyen taşıması varsa yeni basış ondan devam eder.
     const sirali = kuyruk.current.get(x.id) ?? (suren.current?.isId === x.id ? suren.current : undefined), m0 = sirali?.tezgah ?? x.m, S0 = sirali?.S ?? x.S;

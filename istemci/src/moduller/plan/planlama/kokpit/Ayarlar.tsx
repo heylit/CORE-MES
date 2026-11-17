@@ -138,7 +138,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}
         <IsaretKutusu key={k} etiket={panelKisitAdi(k)} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
       ))}
       {AYAR_ALANLARI.filter((a) => a.k === 'mat').map(alan)}
-      <p className="tc-pyq-not">Aç kapa olmayanlar: tezgâhta aynı anda tek iş (tezgâh iki işi birden yapamaz), başlamış iş (başladığı saat sahadan gelen kayıttır) ve vardiya saatleri (Takvim sayfasından değişir). Elle taşıdığınız işin yeri sizin kararınızdır; Geri al ile kalkar. Açıklamalar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
+      <p className="tc-pyq-not">Aç kapa olmayanlar: tezgâhta aynı anda tek iş (tezgâh iki işi birden yapamaz) ve vardiya saatleri (Takvim sayfasından değişir). Süren iş de taşınır: durdurulmuş sayılır, yapılan kısım yerinde kalır, kalan adet yeni yerine planlanır; biten iş taşınmaz. Elle taşıdığınız işin yeri sizin kararınızdır; Geri al ile kalkar. Açıklamalar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
 
       <h3>Motor ve onay</h3>
       <dl>

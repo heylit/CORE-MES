@@ -11,8 +11,8 @@ export const RISK_SAATI = 8;
 
 export interface KokpitIsi {
   id: string; job: string; ad: string; m: string; S: number; C: number;
-  // Başlamış iş ve fason adım tahtadan taşınmaz.
-  basladi: boolean; fason: boolean; kilitli: boolean;
+  // Biten iş ve fason adım tahtadan taşınmaz. Süren iş taşınınca durdurulmuş sayılır: yapılan kısım yerinde kalır, kalan adet taşınır (3414-6 a).
+  basladi: boolean; fason: boolean; kilitli: boolean; bitti?: boolean;
   // Rotadaki yeri (0'dan).
   sira: number;
 }
@@ -125,7 +125,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}) };
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
     });
@@ -318,8 +318,10 @@ export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, 
 // Çeyrek saate yuvarlanır; şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
 export const tasimaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.round(S * 4) / 4);
 export function tasinabilir(x: KokpitIsi): string | null {
-  return x.basladi ? 'Başlamış iş taşınmaz' : x.fason ? 'Fason adım tahtadan taşınmaz' : null;
+  return x.bitti ? 'Biten iş taşınmaz' : x.fason ? 'Fason adım tahtadan taşınmaz' : null;
 }
+// Süren işi taşımadan önce söylenen: taşıma işi durdurur.
+export const SUREN_TASIMA = 'Bu iş sürüyor. Taşırsanız durdurulmuş sayılır: yapılan kısım yerinde kalır, kalan adet yeni yerine planlanır.';
 
 // Verilen andan sonraki ilk açık an; pencere bilinmiyorsa ya da kalmadıysa anın kendisi.
 export function acigaOtur(W: readonly (readonly [number, number])[] | undefined, t: number): number {

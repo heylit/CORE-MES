@@ -2,7 +2,8 @@
 // türüne göre yeniden yaslanır. Bekleyen bağda ardıl öncül bitince, örtülü bağda ilk devir partisi gelince başlar ve öncülden önce bitmez;
 // bağımsız adımın bağı yoktur, kımıldamaz. Başka emrin işi itilmez: itilen adım tezgâhtaki en yakın boş yere oturur (2794 2/3 b). Geri
 // çekilen öncül şimdiye, donuk bölgeye ya da başlamış adıma çarparsa engelden sonraki ilk uygun yere oturur, taşınan iş onun arkasına kayar
-// (3/3 b). Başlamış ve donuk adım kımıldamaz; onu geçersiz kılan ya da ufku aşan taşımanın tamamı yapılmaz (1/3 a). Taşınan işin kendisi elle
+// (3/3 b). Başlamış ve donuk adım kımıldamaz; onu geçersiz kılan ya da ufku aşan taşımanın tamamı yapılmaz (1/3 a). Taşınan işin kendisi
+// sürüyorsa çağıran onu sabit vermez: durdurulmuş sayılır, kalanı taşınır (3414-6 a). Taşınan iş elle
 // konduğu için donuk bölgede olabilir; sabit sayılması çağıranın kararıdır. Saf: takvim dışarıdan.
 
 export type BagTuru = 'b' | 'o';

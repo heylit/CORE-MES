@@ -409,7 +409,7 @@ export function Tahta(o: TahtaOzellikleri) {
     const cizim = yerlesim.is.get(x.id), gercek = (C - S) * px, kisa = cizim !== undefined && cizim.en > gercek + 0.5;
     // Sürüklenen işin etkisiyle itilen ya da çekilen iş (3365): çerçevesi kesik, kayma süresi yazılır.
     const itilen = tasinan?.id !== x.id ? etkiNe?.kayan[x.id] : undefined;
-    const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}`;
+    const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}${x.basladi && !x.bitti && tasi ? ' · sürüyor, taşınırsa durdurulur' : ''}`;
     return (
       <button
         type="button" key={x.id} className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
