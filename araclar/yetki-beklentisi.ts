@@ -266,6 +266,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.durus-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
+      'projeler.hazirlik-dagit',
     ],
   },
   planlama_proje: {
@@ -296,6 +297,7 @@ export const ROL_MATRISI = {
       'vardiya.yaz',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
       'proses.oku', 'sayfa.proses',
+      'projeler.hazirlik-dagit',
     ],
   },
   proses_muhendisi: {
@@ -310,6 +312,7 @@ export const ROL_MATRISI = {
       'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.proses', 'sayfa.recete-rota', 'sayfa.rota',
       'sayfa.taleplerim', 'sayfa.uretim-emirleri', 'stok.istek',
       'projeler.gorev-isle', 'projeler.gorev-kontrol', 'sayfa.proje-gorevlerim',
+      'projeler.hazirlik-dagit', 'projeler.oku', 'sayfa.projeler',
     ],
   },
   satin_alma: {
@@ -386,6 +389,7 @@ export const ROL_MATRISI = {
       'proses.oku', 'sayfa.proses',
       // 3337-2 a: refakat kartı okutulmadan gerekçeyle iş başlatma.
       'uretim-emirleri.kartsiz-baslat',
+      'projeler.hazirlik-dagit', 'uretim-emirleri.hazirlik-ayar', 'projeler.oku', 'sayfa.projeler',
     ],
   },
   vardiya_sorumlusu: {

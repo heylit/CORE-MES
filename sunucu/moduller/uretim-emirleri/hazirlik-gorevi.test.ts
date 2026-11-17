@@ -95,6 +95,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     projeId = await yeniProje('UE.HZG');
     emirProjesi = await yeniProje('UE.HZE');
     await kisiEkle('planlama_proje', 'planlama_proje');
+    // Hazırlık dağıtma işlemi olmayan rol (3396-4 a: planlama artık dağıtır).
+    await kisiEkle('yetkisiz', 'cam');
     await kisiEkle('dagitici', 'kalite', 'projeler.hazirlik-dagit');
     planlamaRolId = (await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'planlama_proje'"))!.id;
     await ortam.sahip.sorgu("INSERT INTO uretim_emirleri_hazirlik_maddesi (kod, ad, kisa, sira, sistem) VALUES ('ozel-a', 'Boya onayı', 'Boya', 130, false)");
@@ -124,7 +126,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
 
   test('yetkisiz kişi hazırlık projesi kuramaz (403)', async () => {
     const { uretimEmriId } = await emirAc(null);
-    assert.equal((await istek('planlama_proje', `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`, { projeId, sablonId })).durum, 403);
+    assert.equal((await istek('yetkisiz', `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`, { projeId, sablonId })).durum, 403);
   });
 
   test('şablonla kurulunca: CNC ve özel madde iş emri başına, çizim emir başına; kapalı malzeme yok; tekrarı çoğalmaz', async () => {
@@ -160,7 +162,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
   test('pencere seçenekleri: şablonla kaç görev doğacağı açık maddeye ve iş emri sayısına göredir; yetkisize 403', async () => {
     const { uretimEmriId } = await emirAc(null);
     const yol = `/api/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`;
-    assert.equal((await app.inject({ method: 'GET', url: yol, headers: { cookie: cerezler.get('planlama_proje') ?? '' } })).statusCode, 403);
+    assert.equal((await app.inject({ method: 'GET', url: yol, headers: { cookie: cerezler.get('yetkisiz') ?? '' } })).statusCode, 403);
     const c = await app.inject({ method: 'GET', url: yol, headers: { cookie: cerezler.get('dagitici') ?? '' } });
     assert.equal(c.statusCode, 200, c.body);
     const v = c.json<{ emirProjeId: number; acikGorev: number; sablonlar: { id: number; dogacak: number; ozet: string }[]; projeler: { id: number }[] }>();
@@ -178,7 +180,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const b = await emirAc(dagitProjesi);
     const dagit = (deneme: boolean) => istek<{ eklenen: number; gorevSayisi: number; toplamKisi: number; alicilar: { tur: string; kisiSayisi: number; gorevler: { madde: string; sayi: number }[] }[] }>(
       'dagitici', '/hazirlik-matrisi/dagit', { projeId: dagitProjesi, sablonId, deneme });
-    assert.equal((await istek('planlama_proje', '/hazirlik-matrisi/dagit', { projeId: dagitProjesi, sablonId, deneme: true })).durum, 403);
+    assert.equal((await istek('yetkisiz', '/hazirlik-matrisi/dagit', { projeId: dagitProjesi, sablonId, deneme: true })).durum, 403);
     const d = await dagit(true);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     assert.deepEqual([d.govde.eklenen, d.govde.gorevSayisi], [0, 10]);
@@ -203,7 +205,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
 
     const hedef = v.gorevler.find((x) => x.madde === 'cizim' && x.emriId === b.uretimEmriId)!;
     const ata = (govde: unknown, ad = 'dagitici') => istek<{ surum: number }>(ad, `/projeler/gorevler/${String(hedef.id)}/hazirlik-ata`, govde);
-    assert.equal((await ata({ sorumluKisiId: kim('planlama_proje').id, yapanRolId: null, surum: hedef.surum }, 'planlama_proje')).durum, 403);
+    assert.equal((await ata({ sorumluKisiId: kim('planlama_proje').id, yapanRolId: null, surum: hedef.surum }, 'yetkisiz')).durum, 403);
     assert.equal((await ata({ sorumluKisiId: kim('planlama_proje').id, yapanRolId: planlamaRolId, surum: hedef.surum })).durum, 400);
     const atandi = await ata({ sorumluKisiId: kim('planlama_proje').id, yapanRolId: null, surum: hedef.surum });
     assert.equal(atandi.durum, 200, JSON.stringify(atandi.govde));
