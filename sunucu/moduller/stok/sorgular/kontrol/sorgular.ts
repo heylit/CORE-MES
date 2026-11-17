@@ -20,9 +20,13 @@ export interface ArtikParcaHam {
 const ARTIK_SECIMI = `SELECT a.id, a.malzeme_id AS "malzemeId", a.konum_id AS "konumId", k.kod AS "konumKod", a.parti_id AS "partiId", a.olcu, a.adet,
   a.durum, a.aciklama, a.kaydeden_kisi_id AS "kaydedenKisiId", ${zamanMetni('a.kayit_zamani')} AS "kayitZamani", a.surum
   FROM stok_artik_parca a JOIN stok_konum k ON k.id = a.konum_id`;
-// Aramaya giren artıklar: açık ve konumu aktif.
+// Aramaya giren artıklar: açık, konumu aktif ve stok konumu (raf, kabul, zemin), o konumda o malzemenin kullanılabilir bakiyesi var.
+// Bakiye sıfıra düşmüşse artık önerilmez (kesilip tükenmiş ama kapatılmamış olabilir).
 export const acikArtiklar = (db: Db, malzemeIdler: readonly number[]): Promise<ArtikParcaHam[]> =>
-  db.sorgu(`${ARTIK_SECIMI} WHERE a.malzeme_id = ANY($1::int[]) AND a.durum = 'acik' AND k.aktif ORDER BY a.kayit_zamani, a.id`, [malzemeIdler]);
+  db.sorgu(`${ARTIK_SECIMI} WHERE a.malzeme_id = ANY($1::int[]) AND a.durum = 'acik' AND k.aktif AND k.tur IN ('raf_gozu', 'kabul', 'depo_zemini')
+     AND EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.malzeme_id = a.malzeme_id AND b.konum_id = a.konum_id AND b.statu_id IS NULL
+                    AND b.${KULLANILABILIR_SQL} AND b.miktar > 0)
+   ORDER BY a.kayit_zamani, a.id`, [malzemeIdler]);
 export const artikParcalar = (db: Db, a: { malzemeId: number | null; durum: ArtikDurumu }, sinir: number): Promise<ArtikParcaHam[]> =>
   db.sorgu(`${ARTIK_SECIMI} WHERE ($1::int IS NULL OR a.malzeme_id = $1) AND a.durum = $2 ORDER BY a.kayit_zamani DESC, a.id DESC LIMIT $3`,
     [a.malzemeId, a.durum, sinir]);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { adaySirala, artikOlcusu, karsilanan, olcuEslestir, payMm, type EslesmeAdayi, type OlcuIstegi } from './olcu-kurallar.ts';
+import { adaySirala, artikOlcusu, artikPayi, karsilanan, olcuEslestir, payMm, type EslesmeAdayi, type OlcuIstegi } from './olcu-kurallar.ts';
 
 const pay = { tur: 'yuzde', deger: 15, enAzMm: 3 } as const;
 const cubuk = (o: Partial<OlcuIstegi> = {}): OlcuIstegi => ({ form: 'cubuk', olcu: { d: 50 }, parcaBoyu: 180, parcaEni: null, adet: 40, pay, kesmeMm: 3, ...o });
@@ -80,5 +80,14 @@ describe('stok kontrol: ölçüyle eşleştirme (3398)', () => {
     assert.ok('hata' in artikOlcusu('levha', { t: 20, w: 1000, l: 2000 }, 800, null));
     assert.deepEqual(artikOlcusu('levha', { t: 20, w: 1000, l: 2000 }, 800, 600), { olcu: { t: 20, w: 600, l: 800 } });
     assert.ok('hata' in artikOlcusu('blok', { a: 1, b: 1, h: 1 }, 10, null));
+  });
+
+  test('artık payı stok biriminde: adet bir boy, m boyu, kg hacim ve yoğunluk; bilinmeyende null', () => {
+    assert.equal(artikPayi('cubuk', { d: 50, l: 1250 }, 2, 'adet', null), 2);
+    assert.equal(artikPayi('cubuk', { d: 50, l: 1250 }, 2, 'm', null), 2.5);
+    assert.equal(Math.round(artikPayi('cubuk', { d: 50, l: 1000 }, 1, 'kg', 7.85)! * 100) / 100, 15.41);
+    assert.equal(artikPayi('cubuk', { d: 50, l: 1000 }, 1, 'kg', null), null);
+    assert.equal(artikPayi('levha', { t: 20, w: 600, l: 800 }, 1, 'm', null), null);
+    assert.equal(artikPayi('cubuk', { d: 50, l: 1000 }, 1, 'torba', null), null);
   });
 });

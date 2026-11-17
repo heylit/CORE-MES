@@ -11,7 +11,7 @@ import {
 import type { z } from 'zod';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri, type HammaddeStokOlcusu } from '../../malzemeler/disari.ts';
-import { adaySirala, artikOlcusu, karsilanan, olcuEslestir, type OlcuIstegi } from '../olcu-kurallar.ts';
+import { adaySirala, artikOlcusu, artikPayi, karsilanan, olcuEslestir, type OlcuIstegi } from '../olcu-kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 
 const olculuMu = (f: string): f is OlculuForm => (OLCULU_FORMLAR as readonly string[]).includes(f);
@@ -46,19 +46,31 @@ export async function olcuyleAra(db: Db, s: z.output<typeof olcuAramaSorgusu>): 
     const e = olcuEslestir(istek, { kaynak: a.kaynak, olcu: a.olcu, miktar: Number(a.miktar), birim: a.birim, yogunluk, ilkGiris: a.ilkGiris });
     return e === null ? null : { ...a, malzemeNo: k.malzemeNo, kod: k.kod, ad: k.ad, kalite: k.kalite, form: s.form, ...e };
   };
+  // Artık bakiyenin parçasıdır: stok adayından artığın payı düşülür; payı hesaplanamayan malzemenin artığı ayrıca sayılmaz (çift sayma olmaz).
+  const paylar = new Map<number, number | null>();
+  for (const ar of artiklar) {
+    const k = kartHaritasi.get(ar.malzemeId);
+    if (k === undefined) continue;
+    const p = artikPayi(s.form, sayiNesnesi(ar.olcu), ar.adet, ozetler.get(ar.malzemeId)?.birim ?? null, k.yogunluk);
+    const once = paylar.get(ar.malzemeId);
+    paylar.set(ar.malzemeId, once === null || p === null ? null : (once ?? 0) + p);
+  }
   const adaylar: OlcuAdayi[] = [];
   for (const st of stoklar) {
     const k = kartHaritasi.get(st.malzemeId);
     if (k === undefined) continue;
+    const pay = paylar.get(st.malzemeId) ?? 0;
+    const kalan = Number(st.miktar) - (pay ?? 0);
+    if (kalan <= 1e-9) continue;
     const a = aday(k, {
-      kaynak: 'stok', olcu: sayiNesnesi(k.olcu), miktar: st.miktar, birim: ozetler.get(st.malzemeId)?.birim ?? null, konumlar: st.konumlar,
+      kaynak: 'stok', olcu: sayiNesnesi(k.olcu), miktar: String(Math.round(kalan * 10000) / 10000), birim: ozetler.get(st.malzemeId)?.birim ?? null, konumlar: st.konumlar,
       artikId: null, ilkGiris: st.ilkGiris,
     }, k.yogunluk);
     if (a !== null) adaylar.push(a);
   }
   for (const ar of artiklar) {
     const k = kartHaritasi.get(ar.malzemeId);
-    if (k === undefined) continue;
+    if (k === undefined || paylar.get(ar.malzemeId) === null) continue;
     const a = aday(k, {
       kaynak: 'artik', olcu: sayiNesnesi(ar.olcu), miktar: String(ar.adet), birim: 'adet', konumlar: [ar.konumKod], artikId: ar.id, ilkGiris: ar.kayitZamani,
     }, k.yogunluk);

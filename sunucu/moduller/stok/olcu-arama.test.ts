@@ -98,15 +98,16 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     const baska = await kart('ORN-S235', 'cubuk', { d: 60, l: 3000 });
     const olcusuz = await kart('ORN-C45', 'cubuk', { l: 3000 });
     const stoksuz = await kart('ORN-C45', 'cubuk', { d: 60, l: 6000 });
-    for (const m of [tam, disi, kucuk, baska, olcusuz]) await giris(m, '1');
+    for (const m of [disi, kucuk, baska, olcusuz]) await giris(m, '1');
     await giris(yakin, '3');
+    await giris(tam, '3');
     const artik = await gonder('depo', '/stok/artik-parcalar', { malzemeNo: tam, konumId: raf, boy: 1250 });
     assert.equal(artik.durum, 200, JSON.stringify(artik.govde));
     const c = await al('satin_alma', '/stok/olcu-arama?form=cubuk&kalite=ORN-C45&d=60&parcaBoyu=180&adet=40');
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     const g = olcuAramaCevabi.parse(c.govde);
     assert.deepEqual(g.adaylar.map((a) => [a.malzemeNo, a.kaynak, a.durum, a.parcaSayisi]), [
-      [tam, 'artik', 'tam', 6], [tam, 'stok', 'tam', 16], [yakin, 'stok', 'yakin', 48], [disi, 'stok', 'pay-disi', 16],
+      [tam, 'artik', 'tam', 6], [tam, 'stok', 'tam', 32], [yakin, 'stok', 'yakin', 48], [disi, 'stok', 'pay-disi', 16],
     ]);
     assert.ok(!g.adaylar.some((a) => a.malzemeNo === kucuk || a.malzemeNo === baska || a.malzemeNo === stoksuz));
     assert.equal(g.karsilanan, 40);
@@ -114,9 +115,11 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     assert.equal(g.olcusuzKart, 1);
     assert.ok(g.kaliteler.includes('ORN-C45') && g.kaliteler.includes('ORN-S235'));
     assert.deepEqual(g.adaylar[2]?.konumlar, ['ORN-R1']);
+    // Artık bakiyenin içindedir: 3 boyun biri artık sayılır, stok adayı 2 boy (çift sayılmaz).
+    assert.equal(g.adaylar[1]?.miktar, '2');
     // Yalnız tam ölçü: yakın da pay dışına düşer.
     const t = olcuAramaCevabi.parse((await al('satin_alma', '/stok/olcu-arama?form=cubuk&kalite=ORN-C45&d=60&parcaBoyu=180&adet=40&pay=tam')).govde);
-    assert.equal(t.karsilanan, 22);
+    assert.equal(t.karsilanan, 38);
     // Artıksız arama
     const a = olcuAramaCevabi.parse((await al('satin_alma', '/stok/olcu-arama?form=cubuk&kalite=ORN-C45&d=60&artik=hayir')).govde);
     assert.ok(!a.adaylar.some((x) => x.kaynak === 'artik'));
@@ -133,17 +136,23 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     const olcusuz = await kart('ORN-K2', 'cubuk', { l: 3000 });
     assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: m, konumId: raf, boy: 3500 })).durum, 400);
     assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: olcusuz, konumId: raf, boy: 500 })).durum, 400);
+    await giris(m, '1');
     const y = await gonder('depo', '/stok/artik-parcalar', { malzemeNo: m, konumId: raf, boy: 900, aciklama: 'ORN kesim' });
     assert.equal(y.durum, 200, JSON.stringify(y.govde));
     const { id, surum } = artikParcaCevabi.parse(y.govde);
     const l = artikParcalarCevabi.parse((await al('satin_alma', `/stok/artik-parcalar?malzemeNo=${m}`)).govde);
     assert.deepEqual(l.satirlar.map((r) => [r.id, r.olcu, r.konumKod, r.form, r.kaydeden]), [[id, { d: 40, l: 900 }, 'ORN-R1', 'cubuk', 'Deneme depo']]);
     const ara = () => al('depo', '/stok/olcu-arama?form=cubuk&kalite=ORN-K2&d=40&parcaBoyu=100');
-    assert.equal(olcuAramaCevabi.parse((await ara()).govde).adaylar.length, 1);
+    // Tek boy bakiyenin artığa dönmüş hâli: yalnız artık önerilir.
+    assert.deepEqual(olcuAramaCevabi.parse((await ara()).govde).adaylar.map((a) => a.kaynak), ['artik']);
     assert.equal((await gonder('depo', `/stok/artik-parcalar/${id}/kapat`, { durum: 'kullanildi', surum: surum + 1 })).durum, 409);
     assert.equal((await gonder('depo', `/stok/artik-parcalar/${id}/kapat`, { durum: 'kullanildi', surum })).durum, 200);
     assert.equal((await gonder('depo', `/stok/artik-parcalar/${id}/kapat`, { durum: 'hurda', surum: surum + 1 })).durum, 422);
-    assert.equal(olcuAramaCevabi.parse((await ara()).govde).adaylar.length, 0);
+    assert.deepEqual(olcuAramaCevabi.parse((await ara()).govde).adaylar.map((a) => a.kaynak), ['stok']);
+    // Konumda bakiyesi kalmamış malzemenin açık artığı önerilmez.
+    const bakiyesiz = await kart('ORN-K2', 'cubuk', { d: 45, l: 3000 });
+    assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: bakiyesiz, konumId: raf, boy: 900 })).durum, 200);
+    assert.equal(olcuAramaCevabi.parse((await al('depo', '/stok/olcu-arama?form=cubuk&kalite=ORN-K2&d=45&parcaBoyu=100')).govde).adaylar.length, 0);
     const kapali = artikParcalarCevabi.parse((await al('depo', `/stok/artik-parcalar?malzemeNo=${m}&durum=kullanildi`)).govde);
     assert.equal(kapali.satirlar.length, 1);
   });

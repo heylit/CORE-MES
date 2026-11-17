@@ -224,3 +224,20 @@ export function artikOlcusu(form: OlculuForm, kart: Readonly<Record<string, unkn
   }
   return { olcu: o };
 }
+
+// Artık bakiyenin içindedir (3398 KURGU): stok adayından düşülecek payı kartın stok biriminde verir; adet ve levhada artık bir
+// boy ya da plaka sayılır, m'de boyu, kg'da hacmi ve yoğunluğu. Hesaplanamıyorsa null (çağıran artığı ayrıca saymaz).
+export function artikPayi(form: OlculuForm, olcu: Readonly<Record<string, number>>, adet: number, birim: string | null, yogunluk: number | null): number | null {
+  const f = FORM_OLCULERI[form];
+  if (birim === 'adet' || birim === 'levha') return adet;
+  if (f.boy === null) return null;
+  const L = olcu[f.boy];
+  if (L === undefined) return null;
+  if (birim === 'm' && f.en === null) return (L * adet) / 1000;
+  if (birim === 'kg') {
+    const alan = f.en === null ? kesitAlani(form, olcu) : (olcu.t !== undefined && olcu[f.en] !== undefined ? olcu.t * olcu[f.en]! : null);
+    if (alan === null || yogunluk === null || yogunluk <= 0) return null;
+    return alan * L * yogunluk * 1e-6 * adet;
+  }
+  return null;
+}
