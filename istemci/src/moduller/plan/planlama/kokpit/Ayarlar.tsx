@@ -138,7 +138,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}
         <IsaretKutusu key={k} etiket={panelKisitAdi(k)} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
       ))}
       {AYAR_ALANLARI.filter((a) => a.k === 'mat').map(alan)}
-      <p className="tc-pyq-not">Öteki kısıtlar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
+      <p className="tc-pyq-not">Vardiya ve çalışma günü, tezgâhta tek iş, rota sırası, başlamış ve kilitli iş kapatılamaz. Açıklamalar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
 
       <h3>Motor ve onay</h3>
       <dl>
