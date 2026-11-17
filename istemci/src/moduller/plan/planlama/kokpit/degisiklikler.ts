@@ -99,7 +99,7 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const veri: Degisiklik[] = bekleyen.map((b) => ({
     anahtar: `veri:${b.id}`, baslik: 'veri', ne: b.ne, emirId: null, isId: null, bekleyenId: b.dis === true ? null : b.id,
-    alt: [b.dis === true ? 'Başka sayfa' : 'Bu sayfa', b.kim === '' ? null : b.kim, b.t > 0 ? an(b.t) : null, b.ayrinti === '' ? null : b.ayrinti].filter((x) => x !== null).join(' · '),
+    alt: [b.dis === true ? 'Başka sayfa' : b.id === ESKI_DEGISIKLIK ? null : 'Bu sayfa', b.kim === '' ? null : b.kim, b.t > 0 ? an(b.t) : null, b.ayrinti === '' ? null : b.ayrinti].filter((x) => x !== null).join(' · '),
   }));
   const saha: Degisiklik[] = [...olaylar].map((o, i) => ({ o, i })).sort((a, b) => Date.parse(b.o.zaman) - Date.parse(a.o.zaman)).map(({ o, i }) => {
     const ne = o.emirNo ?? o.makineKod;

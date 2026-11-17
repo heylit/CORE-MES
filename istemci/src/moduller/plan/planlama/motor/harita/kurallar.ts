@@ -12,6 +12,7 @@ const sayi = (x: unknown): number | null => (typeof x === 'number' && Number.isF
 // --- tezgâh grupları (tbYerlesim): gruplar rotadaki ortalama sıralarıyla, fasoncular plandakilerle ---
 export interface HaritaTezgahi { id: string; ad: string; fason: boolean }
 export interface HaritaGrubu { g: string; l: HaritaTezgahi[] }
+export const GRUPSUZ = 'Grupsuz';
 export function haritaGruplari(D: PlanVerisi, p: OkunanPlan, cx: Derleme): HaritaGrubu[] {
   const ust: Record<string, string> = {};
   for (const s of D.siparisler) if (typeof s.ust === 'string' && s.ust) ust[s.id] = s.ust;
@@ -30,7 +31,8 @@ export function haritaGruplari(D: PlanVerisi, p: OkunanPlan, cx: Derleme): Harit
   }
   // Düz nesne: eşit sıradaki gruplar eski sayfadaki gibi anahtar sırasıyla kalır (sayı biçimli grup adları önce, küçükten büyüğe).
   const gruplar: Record<string, HaritaTezgahi[]> = {};
-  for (const m of D.tezgahlar) (gruplar[String(m.grup)] ??= []).push({ id: m.id, ad: m.ad ?? '', fason: false });
+  // Grubu girilmemiş (yok ya da boş) tezgâh kendi başlığında toplanır; başlık boş değer yerine bunu yazar.
+  for (const m of D.tezgahlar) (gruplar[m.grup || GRUPSUZ] ??= []).push({ id: m.id, ad: m.ad ?? '', fason: false });
   const ops = Object.values(p.ops);
   const fas = (D.fasoncular ?? []).filter((f) => ops.some((r) => r.m === `@${f.id}`));
   if (fas.length) gruplar.fason = fas.map((f) => ({ id: `@${f.id}`, ad: f.ad ?? '', fason: true }));
