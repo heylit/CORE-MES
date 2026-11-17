@@ -474,6 +474,24 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.deepEqual([sv.surumler[0]?.toplam, sv.surumler[0]?.fiyatlar[0]?.birimFiyat], ['75.00', '5.0000']);
   });
 
+  // 3401-1 a (Risk N2): kârı görmeyen satış formdaki varsayılan kârı gönderir; yeni sürümde son satış taslağının kârı ezilmez.
+  test('3401-1 a: kârı görmeyenin verdiği sürüm müdürün kâr oranını ezmez (yer sabit de, yeniden yerleşimde de)', async () => {
+    const satis = await girisYap('satis');
+    const mudur = await girisYap('mudur');
+    const sonKar = async (id: number) => (await ortam!.sahip.tek<{ kar_orani: string }>(
+      "SELECT kar_orani FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1 AND tur = 'satis' ORDER BY id DESC LIMIT 1", [id],
+    ))?.kar_orani;
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '40', istenenTermin: null } }), 200, mudur.cerez);
+    assert.equal(await sonKar(t.id), '40.00');
+    t = await komut(t, 'surum-ver', satisSurumu(t), 200, satis.cerez);
+    assert.equal(await sonKar(t.id), '40.00');
+    t = await komut(t, 'surum-ver', satisSurumu(t, '2099-07-05'), 200, satis.cerez);
+    assert.equal(await sonKar(t.id), '40.00');
+    t = await komut(t, 'surum-ver', satisSurumu(t, null, { planTaslagi: { karOrani: '30', istenenTermin: null } }), 200, mudur.cerez);
+    assert.equal(await sonKar(t.id), '30.00');
+  });
+
   test('TKL-19 plan şeridi: motorun plan verisi geçer; sipariş emir noyla, satış taslağı teklif noyla, bu teklif adıyla; motor vermezse null', async () => {
     let a = await teklifAc(false);
     a = await komut(a, 'surum-ver', satisSurumu(a));

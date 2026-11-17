@@ -552,6 +552,14 @@ export function yerTutanTaslak(db: Db, teklifId: number): Promise<YerTutanTaslak
   );
 }
 
+// Teklifin son satış taslağındaki kâr oranı; kârı görmeyen yeni sürüm verdiğinde bu korunur (3401-1 a).
+export async function sonSatisKarOrani(db: Db, teklifId: number): Promise<string | null> {
+  const r = await db.tek<{ kar_orani: string }>(
+    "SELECT kar_orani FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1 AND tur = 'satis' ORDER BY id DESC LIMIT 1", [teklifId],
+  );
+  return r?.kar_orani ?? null;
+}
+
 // Yerine yenisi gelen ya da teklifi biten satış taslağı kalkar; geçerliliği zaten geçmişse "süresi doldu" olarak kalır.
 export async function yerTutaniKaldir(db: Db, teklifId: number): Promise<void> {
   await db.sorgu(
