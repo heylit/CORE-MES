@@ -20,6 +20,20 @@ function kur(olcek: 'gun' | 'hafta' | 'ay' | 'yil' = 'hafta', kayma = 0) {
 }
 
 describe('tezgâh haritası hesapları', () => {
+  it('grubu girilmemiş tezgâh "Grupsuz" başlığında toplanır', () => {
+    const c = ornekCalisma(); const p = planOku(c); if (!p) throw new Error('plan yok');
+    const cx = derle(girdiKur(c, plandanBitenler(c, p)));
+    const ilk = c.D.tezgahlar[0]; if (!ilk) throw new Error('tezgâh yok');
+    const { grup: _grup, ...grupsuz } = ilk;
+    const g = haritaGruplari({ ...c.D, tezgahlar: [grupsuz, ...c.D.tezgahlar.slice(1)] }, p, cx);
+    expect(g.map((x) => x.g)).not.toContain('undefined');
+    expect(g.find((x) => x.g === 'Grupsuz')?.l.map((t) => t.id)).toEqual([ilk.id]);
+    // Boş yazılmış grup da aynı başlığa girer.
+    const bos = haritaGruplari({ ...c.D, tezgahlar: [{ ...ilk, grup: '' }, ...c.D.tezgahlar.slice(1)] }, p, cx);
+    expect(bos.find((x) => x.g === 'Grupsuz')?.l.map((t) => t.id)).toEqual([ilk.id]);
+    expect(bos.map((x) => x.g)).not.toContain('');
+  });
+
   it('gruplar rota sırasıyla, yerleşim ve bölgeler eski sahneyle aynı', () => {
     const { g, s } = kur();
     expect(g.map((x) => x.g)).toEqual(['1', '3', '2', 'fason', '4', '5']);

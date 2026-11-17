@@ -51,6 +51,9 @@ describe('degisiklikler (3317 a)', () => {
     ]);
     // Tek başına uygulanabilen yalnız çalışmaya yazılmış satırdır; yazılmamış başka sayfa satırının bekleyen kimliği yoktur.
     expect(l.map((d) => d.bekleyenId)).toEqual([null, 'b']);
+    // Kaydı tutulmamış önceki değişikliğin kaynağı bilinmez: "Bu sayfa" yazılmaz, ayrıntısı durur.
+    const eski = degisiklikler({ m: { ...M, isler: {} }, olaylar: [], zaman, an, bekleyen: [bekleyen(ESKI_DEGISIKLIK, { ayrinti: 'ORN-ayrinti' })] });
+    expect(eski.map((d) => d.alt)).toEqual(['ORN-ayrinti']);
   });
 
   it('saha olayları yeniden eskiye; emir numarasıyla emre bağlanır; satın alma olayı kaynağıyla ayrılır; sıra veri, saha, geride', () => {
