@@ -10,7 +10,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 type Satir = LogoCrmDenetimiCevabi['satirlar'][number];
 const SORUN: Record<Satir['sorun'], { ad: (s: Satir) => string; ton: RozetTonu; ne: string }> = {
   'crm-yok': { ad: () => 'CRM yok', ton: 'hata', ne: "Logo'da cariyi bir CRM satış müşterisine bağlayın; yoksa teklif gitmez." },
-  'cok-bag': { ad: (s) => `CRM ×${String(s.sayi ?? 2)}`, ton: 'uyari', ne: 'Firma kartında tekliflerde kullanılacak kodu seçin; seçilmezse ilk bağ gider.' },
+  'cok-bag': { ad: (s) => `CRM ×${String(s.sayi ?? 2)}`, ton: 'uyari', ne: "Firma kartında tekliflerde kullanılacak kodu seçin; seçilmezse Logo'nun seçtiği (varsayılan işaretli) bağ gider." },
   'secim-kalkti': { ad: () => 'Seçim geçersiz', ton: 'hata', ne: "Seçili kod Logo'da artık bağlı değil; firma kartında yeniden seçin." },
 };
 
@@ -36,7 +36,7 @@ export function CrmDenetimi() {
     },
   ];
   return (
-    <Kart baslik="CRM bağı denetimi" simge="check" sag={(
+    <Kart baslik="CRM bağı denetimi" simge="users" sag={(
       <Dugme simge="search" yukleniyor={sorgu.isFetching} onClick={() => { void sorgu.refetch(); }}>Denetle</Dugme>
     )}>
       <p className="tc-mt-yok">

@@ -78,8 +78,10 @@ export function CrmSatiri({ bilgi, firma, yazabilir }: { bilgi: CrmBilgisi | nul
           <p className="tc-mt-crm-uyari" role="status">
             <Simge ad="alert" />
             <span>
-              {`Bu cari Logo'da ${String(liste.sayi)} CRM müşterisine bağlı. Teklif ilkiyle gider; `}
-              {liste.secilebilir ? 'doğrusu başkaysa seçin. ' : "yanlışsa Logo'da fazla bağı kaldırın. "}
+              {`Bu cari Logo'da ${String(liste.sayi)} CRM müşterisine bağlı. `}
+              {liste.secilebilir
+                ? "Teklif Logo'nun seçtiği bağla gider (varsayılan işaretli, yoksa en eski); doğrusu başkaysa seçin. "
+                : "Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın. "}
               {liste.kodlar.map((k, i) => <span key={k}>{i > 0 && ', '}<span className="mono">{k}</span></span>)}
               {fazla > 0 && `, +${String(fazla)} kod daha`}
             </span>
@@ -91,7 +93,7 @@ export function CrmSatiri({ bilgi, firma, yazabilir }: { bilgi: CrmBilgisi | nul
   );
 }
 
-// 3391-2 a: yalnız Logo'da bu cariye bağlı kodlar listelenir; "seçim yok" Logo'daki bağ sırasının ilkine döner.
+// 3391-2 a: yalnız Logo'da bu cariye bağlı kodlar listelenir; "seçim yok" Logo'daki sıranın ilkine döner (varsayılan işaretli bağ, yoksa en eski).
 function CrmSecimPenceresi({ firma, kodlar, kapat }: { firma: Firma; kodlar: readonly string[]; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -101,7 +103,7 @@ function CrmSecimPenceresi({ firma, kodlar, kapat }: { firma: Firma; kodlar: rea
       { kod: secim, surum: firma.surum } satisfies FirmaLogoCrmSecGovdesi),
     onSuccess: (cevap) => {
       cevabiYaz(istemci, cevap);
-      bildir('tamam', secim === null ? 'CRM seçimi kaldırıldı; teklif Logo\'daki ilk bağla gider.' : `Teklifler ${secim} ile gidecek.`);
+      bildir('tamam', secim === null ? 'CRM seçimi kaldırıldı; teklif Logo\'nun seçtiği bağla gider.' : `Teklifler ${secim} ile gidecek.`);
       kapat();
     },
     onError: (hata) => {
@@ -117,13 +119,15 @@ function CrmSecimPenceresi({ firma, kodlar, kapat }: { firma: Firma; kodlar: rea
         {kodlar.map((k, i) => (
           <label key={k} className="tc-mt-crm-secenek">
             <input type="radio" name="crm-secim" checked={secim === k} onChange={() => secimYaz(k)} />
-            <span className="mono">{k}</span>
-            {i === 0 && <span className="tc-mt-yok">ilk bağ</span>}
+            <span className="tc-mt-crm-kod">
+              <span className="mono">{k}</span>
+              {i === 0 && <span className="tc-mt-yok">Logo&apos;nun seçtiği</span>}
+            </span>
           </label>
         ))}
         <label className="tc-mt-crm-secenek">
           <input type="radio" name="crm-secim" checked={secim === null} onChange={() => secimYaz(null)} />
-          <span>Seçim yok (Logo&apos;daki ilk bağ)</span>
+          <span>Seçim yok (Logo&apos;nun seçtiği: varsayılan işaretli, yoksa en eski bağ)</span>
         </label>
       </div>
     </OnayPenceresi>

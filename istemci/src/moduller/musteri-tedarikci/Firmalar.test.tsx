@@ -567,7 +567,7 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
       : json(404, { kod: 'BULUNAMADI', mesaj: 'Yok' })));
     ac('/musteri-tedarikci?firma=10');
     const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
-    expect(await within(pencere).findByText(/doğrusu başkaysa seçin/)).toBeTruthy();
+    expect(await within(pencere).findByText(/Teklif Logo'nun seçtiği bağla gider \(varsayılan işaretli, yoksa en eski\); doğrusu başkaysa seçin/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'CRM müşterisini seç' }));
     const secim = await screen.findByRole('dialog', { name: 'Tekliflerde kullanılacak CRM müşterisi' });
     const grup = within(secim).getByRole('radiogroup', { name: 'CRM satış müşterisi' });
