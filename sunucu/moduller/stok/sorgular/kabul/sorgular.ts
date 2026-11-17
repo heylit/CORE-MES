@@ -92,3 +92,10 @@ export function iadeMalKabulleri(db: Db, irsaliyeNolar: readonly string[]): Prom
     [[...new Set(irsaliyeNolar)]],
   );
 }
+
+// 3390: satın alma sipariş satırlarının mal kabulleri ve partileri (Ortak Dosyalar hazır listesi). Düzeltilen (iptal) mal kabul de gelir:
+// belgesi yerinde durur. Boş dizide sorgu atılmaz (çağıran bakar).
+export interface SiparisSatirKabuluHam { siparisSatirId: number; malKabulId: number; malKabulNo: string; partiId: number | null; lotNo: string | null }
+export const siparisSatirKabulleri = (db: Db, satirIdler: readonly number[]): Promise<SiparisSatirKabuluHam[]> => db.sorgu(
+  `SELECT s.siparis_satir_id AS "siparisSatirId", m.id AS "malKabulId", m.no AS "malKabulNo", s.parti_id AS "partiId", p.lot_no AS "lotNo"
+     ${KAYNAK} WHERE s.siparis_satir_id = ANY($1::int[]) ORDER BY m.zaman, m.id, s.sira`, [[...satirIdler]]);
