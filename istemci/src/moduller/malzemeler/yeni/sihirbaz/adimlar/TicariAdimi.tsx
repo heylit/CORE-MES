@@ -261,6 +261,10 @@ export function GenelTicari() {
             <MetinAlani etiket="Menşei" deger={d.g.mensei ?? 'Türkiye'} yaz={gYaz('mensei')} />
           </>
         )}
+        {/* 3400-3: teklif kalemine bu oran gelir; sunucu 0-100 ve iki ondalık denetler. */}
+        {(t === 'mamul' || t === 'yarimamul') && (
+          <MetinAlani etiket="Yerlilik oranı" sayi birim="%" deger={d.g.yerlilik} ipucu="İsteğe bağlı, 0-100" yaz={gYaz('yerlilik')} kimlik="tc-my-yerlilik" />
+        )}
       </Alanlar>
       {(t === 'yarimamul' || t === 'mamul') && <GenelSecim a={{ k: 'tedarik', ad: 'Tedarik tipi', tip: 'sec', opts: ['Üretim', 'Fason üretim', 'Satın alma'] }} />}
       {t !== 'demirbas' && t !== 'hizmet' && <Sertifikalar />}
