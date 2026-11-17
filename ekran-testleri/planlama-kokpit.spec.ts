@@ -808,6 +808,11 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
   await kokpit.getByRole('button', { name: 'Planla' }).click();
   await expect(kokpit.getByRole('menu', { name: 'Planla' }).getByRole('menuitemradio', { name: /Tüm plan: İleriye/ })).toHaveAttribute('aria-checked', 'true');
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-4-planla-${bilgi.project.name}.png` });
+  // Geniş ekranda uzun menü ekranın altından taşmaz, içinde kaydırılır; 360'ta araç satırı alt alta dizildiği için sayfa kayar.
+  if (page.viewportSize()!.width >= 768) {
+    const menuKutusu = await kokpit.getByRole('menu', { name: 'Planla' }).boundingBox();
+    expect((menuKutusu?.y ?? 0) + (menuKutusu?.height ?? 0)).toBeLessThanOrEqual(page.viewportSize()!.height);
+  }
   await page.keyboard.press('Escape');
   await expect(kokpit.getByRole('menu', { name: 'Planla' })).toHaveCount(0);
   await kokpit.getByRole('button', { name: 'Araçlar' }).click();

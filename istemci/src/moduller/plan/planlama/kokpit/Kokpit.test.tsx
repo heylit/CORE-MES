@@ -1010,6 +1010,20 @@ describe('Kokpit', () => {
     geriKur();
   });
 
+  // Çoklu kaydırmada "taslağa yazıldı" bildirimi iş başına değil, küme için tek satırdır (ayrı ayrı çıksa tahtayı örter).
+  it('çoklu kaydırma bittiğinde tek bildirim çıkar (3365)', async () => {
+    taslakSunucusu([]);
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: true, ileti: null, isler: [] });
+    acSecimli();
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    fireEvent.click(is('3.10'));
+    fireEvent.click(is('2.40'), { ctrlKey: true });
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(await screen.findByText('2 iş birlikte kaydı, taslağa yazıldı; Geri her birini ayrı alır.', undefined, { timeout: 4000 })).toBeTruthy();
+    expect(oz).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Taşıma taslağa yazıldı; Geri ile alınır.')).toBeNull();
+  });
+
   // Test T5: sığdır kümenin bütününü kapsar, yalnız seçili işi değil.
   it('çoklu seçimde F kümedeki bütün işleri sığdırır (3365)', () => {
     acSecimli();
