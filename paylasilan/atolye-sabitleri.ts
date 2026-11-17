@@ -4,7 +4,8 @@ export const MODEL_PARCA_BAYT = 524288;
 export const MODEL_AZAMI_BAYT = 26214400;
 
 // Parça numarası eşleme anahtarı: baştaki ve sondaki boşluk atılır, iç boşluk teke iner, Türkçe büyük harfe çevrilir.
+// i, ı, I ve İ tek harfe (I) katlanır: Türkçe büyük harfte 'mil' MİL, 'MIL' MIL olur ve aynı parça birbirini bulmazdı.
 // Üretim emrindeki parça no serbest metindir; parça modeli bu anahtarla bulunur (sunucu ve istemci aynı işlevi kullanır).
 export function parcaAnahtari(parcaNo: string): string {
-  return parcaNo.trim().replace(/\s+/g, ' ').toLocaleUpperCase('tr-TR');
+  return parcaNo.trim().replace(/\s+/g, ' ').toLocaleUpperCase('tr-TR').replaceAll('İ', 'I');
 }

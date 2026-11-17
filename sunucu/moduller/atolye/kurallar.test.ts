@@ -336,7 +336,9 @@ describe('atolye kuralları (saf)', () => {
   });
   test('ATL-28 parça anahtarı boşluk ve harf büyüklüğü ayırmaz (Türkçe büyük harf)', () => {
     assert.equal(parcaAnahtari('  kapak   ön-1 '), 'KAPAK ÖN-1');
-    assert.equal(parcaAnahtari('mil\tşaft'), 'MİL ŞAFT');
+    assert.equal(parcaAnahtari('mil\tşaft'), 'MIL ŞAFT');
+    // i, ı, I ve İ aynı anahtara düşer.
+    for (const yazim of ['mil-01', 'MIL-01', 'mıl-01', 'MİL-01', 'Mil-01']) assert.equal(parcaAnahtari(yazim), 'MIL-01');
     assert.equal(parcaAnahtari('KAPAK ÖN-1'), parcaAnahtari('kapak ön-1'));
     assert.equal(parcaAnahtari('   '), '');
   });
