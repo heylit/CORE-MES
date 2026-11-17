@@ -205,12 +205,12 @@ export const uclar = [
   // 3404: tedarikçinin PDF teklifi. Ek fiyat taşır: okuma kapısı teklif fiyatını gösteren değerlendirme ucuyla aynıdır; bağlama ve
   // kaldırma satın almayı yazanındır. Yinelenen bağlama ikinci bağ açmaz (aynı özet aynı kayda bir kez bağlanır).
   uc({
-    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', yetki: { biri: FIYAT_GOREN_ISLEMLER },
     parametre: teklifEkiParametresi, cevap: teklifEkleriCevabi,
     isle: ({ db, parametre }) => servis.teklifEkleri(db, parametre.id, parametre.teklifId),
   }),
   uc({
-    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/dosya', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/dosya', yetki: { biri: FIYAT_GOREN_ISLEMLER },
     parametre: teklifEkiDosyaParametresi, cevap: ikiliCevap,
     isle: ({ db, parametre }) => servis.teklifEkiDosyasi(db, parametre.id, parametre.teklifId, parametre.ozet),
   }),
