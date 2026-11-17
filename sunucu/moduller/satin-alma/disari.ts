@@ -15,7 +15,7 @@ export { teslimGeriAl, teslimIsle } from './servis.ts';
 // Stok değeri: malzemenin en son teslim alınan satın alma fiyatı (teklif birim fiyatı, para birimi, TRY karşılığı ve teslim zamanı).
 export { ortalamaAlisFiyatlari, siparisBirimFiyatlari, sonAlisFiyatlari, type SiparisBirimFiyati } from './servis.ts';
 // Plan motoru: açık satın alma siparişinde gelecek malzemenin kalan miktarı ve beklenen gelişi (termin sırasıyla, tarihsiz en sonda).
-// Yetki denetlemez; fiyat yok.
+// Yetki denetlemez; fiyat yok. Tedarikçi adını ve sipariş numarasını gösteren çağıran kendi okuma yetkisini denetler.
 export { malzemeGelisTarihleri } from './servis.ts';
 export type { MalzemeGelisi } from './servis.ts';
 // 3256-2: onaylanmış, siparişi verilmemiş talep kalemleri plana gelecek malzeme olarak girer (malzemeGelisTarihleri ile aynı biçim; numara
@@ -25,7 +25,7 @@ export async function onayliTalepGelisleri(db: Db, malzemeNolar: readonly number
   const tekil = [...new Set(malzemeNolar)];
   if (tekil.length === 0) return m;
   for (const x of await sorgu.onayliTalepKalemleriOku(db, tekil)) {
-    m.set(x.malzemeNo, [...(m.get(x.malzemeNo) ?? []), { tarih: onayliTalepGelisi(bugun, x.terminGun), miktar: servis.sade(x.miktar), birim: x.birim, siparisNo: x.talepNo }]);
+    m.set(x.malzemeNo, [...(m.get(x.malzemeNo) ?? []), { tarih: onayliTalepGelisi(bugun, x.terminGun), miktar: servis.sade(x.miktar), birim: x.birim, siparisNo: x.talepNo, satirId: x.satirId, tedarikciAdi: x.tedarikciAdi }]);
   }
   return m;
 }

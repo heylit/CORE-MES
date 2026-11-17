@@ -84,12 +84,14 @@ describe('satin-alma onaylı talep okuması (3256-2, gerçek PostgreSQL)', () =>
     await talep('onayda', 'tek', ['onay'], [{ malzeme: m3, isEmri }]);
     await talep('onayda', 'tek', ['onay'], [{ malzeme: m3, siparis: true }]);
 
+    await s.sorgu("UPDATE satin_alma_teklif SET tedarikci_adi = 'Deneme Tedarikçi' WHERE talep_id = (SELECT id FROM satin_alma_talep WHERE no = $1)", [tekli]);
     const g = await onayliTalepGelisleri(ortam.vt, [m1, m2, m3, m1], '2099-01-30');
-    assert.deepEqual(g.get(m1), [
-      { tarih: '2099-02-13', miktar: '12.5', birim: 'kg', siparisNo: tekli },
-      { tarih: '2099-02-04', miktar: '12.5', birim: 'kg', siparisNo: bolunmus },
+    const anahtarsiz = (l: Awaited<ReturnType<typeof onayliTalepGelisleri>> extends Map<number, (infer G)[]> ? G[] | undefined : never) => l?.map(({ satirId: _, ...x }) => x);
+    assert.deepEqual(anahtarsiz(g.get(m1)), [
+      { tarih: '2099-02-13', miktar: '12.5', birim: 'kg', siparisNo: tekli, tedarikciAdi: 'Deneme Tedarikçi' },
+      { tarih: '2099-02-04', miktar: '12.5', birim: 'kg', siparisNo: bolunmus, tedarikciAdi: null },
     ]);
-    assert.deepEqual(g.get(m2), [{ tarih: null, miktar: '12.5', birim: 'kg', siparisNo: bolunmus }], 'termin günü olmayan teklif tarihsiz gelir');
+    assert.deepEqual(anahtarsiz(g.get(m2)), [{ tarih: null, miktar: '12.5', birim: 'kg', siparisNo: bolunmus, tedarikciAdi: null }], 'termin günü olmayan teklif tarihsiz gelir');
     assert.equal(g.has(m3), false, 'karara girmemiş, sipariş satırı olan, fason ve sipariş verilmiş kalem gelmez');
     assert.equal((await onayliTalepGelisleri(ortam.vt, [], '2099-01-30')).size, 0);
 
@@ -98,6 +100,9 @@ describe('satin-alma onaylı talep okuması (3256-2, gerçek PostgreSQL)', () =>
     const once = await talepGelisleriOku(ortam.vt, await id(bolunmus));
     assert.deepEqual(once.map((x) => [x.malzemeNo, x.tarih, x.miktar]).sort((a, b) => Number(a[0]) - Number(b[0])), [[m1, null, '12.5000'], [m2, null, '12.5000']]);
     assert.ok(once.every((x) => x.satirId < 0), 'talep kaleminin anahtarı sipariş satırı kimliğiyle karışmaz');
+    const bolunmusAnahtarlari = [...g.values()].flat().filter((x) => x.siparisNo === bolunmus).map((x) => x.satirId).sort((a, b) => a - b);
+    assert.deepEqual(bolunmusAnahtarlari, once.map((x) => x.satirId).sort((a, b) => a - b), 'plana giden gelişin anahtarı talebin geliş anahtarıyla aynıdır');
+    assert.equal(new Set([...g.values()].flat().map((x) => x.satirId)).size, [...g.values()].flat().length, 'anahtar tekildir');
     await s.sorgu("INSERT INTO satin_alma_onay (id, talep_id, kisi_id, sonuc, notlar) VALUES ($1, $2, $3, 'ret', 'Deneme ret')", [randomUUID(), await id(bolunmus), kisiId]);
     const sonra = await talepGelisleriOku(ortam.vt, await id(bolunmus));
     assert.deepEqual(sonra, []);

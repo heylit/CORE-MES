@@ -1497,13 +1497,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       return [...bu(m1, noB), ...bu(m2, noA)];
     };
     const birimi = siparisi(g, a).satirlar[0]!.birim;
-    assert.deepEqual(await oku(), [
-      { tarih: null, miktar: '10', birim: siparisi(g, b).satirlar[0]!.birim, siparisNo: noB },
-      { tarih: '2026-11-05', miktar: '4', birim: birimi, siparisNo: noA },
-    ]);
     const satirA = siparisi(g, a).satirlar[0]!.id;
+    // Anahtar sipariş satırının kimliği, ad siparişin teklifindeki tedarikçi adıdır.
+    assert.deepEqual(await oku(), [
+      { tarih: null, miktar: '10', birim: siparisi(g, b).satirlar[0]!.birim, siparisNo: noB, satirId: siparisi(g, b).satirlar[0]!.id, tedarikciAdi: 'Deneme Tedarik B' },
+      { tarih: '2026-11-05', miktar: '4', birim: birimi, siparisNo: noA, satirId: satirA, tedarikciAdi: 'Deneme Tedarik A' },
+    ]);
     await teslimEt(satirA, '1.5', 7741);
-    assert.deepEqual((await oku())[1], { tarih: '2026-11-05', miktar: '2.5', birim: birimi, siparisNo: noA });
+    assert.deepEqual((await oku())[1], { tarih: '2026-11-05', miktar: '2.5', birim: birimi, siparisNo: noA, satirId: satirA, tedarikciAdi: 'Deneme Tedarik A' });
     await teslimEt(satirA, '2.5', 7742);
     assert.deepEqual((await oku()).map((x) => x.siparisNo), [noB]);
     assert.deepEqual(await vt().tx((db) => malzemeGelisTarihleri(db, [])), new Map());

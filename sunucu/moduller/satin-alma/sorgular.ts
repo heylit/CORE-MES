@@ -857,13 +857,15 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
 }
 
 // ---- Plan için: açık siparişte gelecek malzeme. Kalan = sipariş miktarı - net teslim (> 0); kalanı kapatılmış sipariş gelmez.
-export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string }
+// satirId: sipariş satırının kimliği (talepGelisleriOku ile aynı anahtar); tedarikciAdi: siparişin teklifindeki ad, yazılmadıysa boş.
+export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Promise<MalzemeGelisiOkuma[]> {
   return db.sorgu<MalzemeGelisiOkuma>(
     `SELECT c.malzeme_no AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
-        coalesce(p.no, p.siparis_no) AS "siparisNo"
+        coalesce(p.no, p.siparis_no) AS "siparisNo", s.id AS "satirId", nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
        JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
@@ -911,12 +913,13 @@ export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiO
   );
 }
 
-// 3256-2: onaylı talep kalemleri plana gelecek malzeme olarak (ONAYLI_TALEP_KALEMI); termin günü kalemin karardaki teklifinden. Fiyat ve
-// tedarikçi taşımaz.
-export interface OnayliTalepKalemiOkuma { malzemeNo: number; miktar: string; birim: string; talepNo: string; terminGun: number | null }
+// 3256-2: onaylı talep kalemleri plana gelecek malzeme olarak (ONAYLI_TALEP_KALEMI); termin günü ve tedarikçi adı kalemin karardaki
+// teklifinden. Anahtar kalemin sayı kimliğinin eksisidir (talepGelisleriOku ile aynı). Fiyat taşımaz.
+export interface OnayliTalepKalemiOkuma { malzemeNo: number; miktar: string; birim: string; talepNo: string; terminGun: number | null; satirId: number; tedarikciAdi: string | null }
 export function onayliTalepKalemleriOku(db: Db, malzemeNolar: readonly number[]): Promise<OnayliTalepKalemiOkuma[]> {
   return db.sorgu<OnayliTalepKalemiOkuma>(
-    `SELECT c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim, t.no AS "talepNo", q.termin_gun AS "terminGun"
+    `SELECT c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim, t.no AS "talepNo", q.termin_gun AS "terminGun",
+        -k.sayi_id AS "satirId", nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
        ${ONAYLI_TALEP_KALEMI}
         AND c.malzeme_no = ANY($1::int[])
       ORDER BY c.malzeme_no, t.yil, t.sira, k.sira`,
