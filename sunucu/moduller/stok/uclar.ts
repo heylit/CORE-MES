@@ -284,5 +284,5 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/olcu-arama', yetki: KONTROL_OKUMA, sorgu: olcuAramaSorgusu, cevap: olcuAramaCevabi, isle: ({ db, sorgu }) => s.olcuyleAra(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/artik-parcalar', yetki: KONTROL_OKUMA, sorgu: artikParcalarSorgusu, cevap: artikParcalarCevabi, isle: ({ db, sorgu }) => s.artikParcaListesi(db, sorgu) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar', yetki: 'stok.cikis', govde: artikParcaGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, govde }) => s.artikParcaKaydet(db, kullanici, govde) }),
-  uc({ yontem: 'POST', yol: '/stok/artik-parcalar/:id/kapat', yetki: 'stok.cikis', parametre: artikParcaParametresi, govde: artikParcaKapatGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.artikParcaKapat(db, kullanici, parametre.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar/:id/kapat', yetki: 'stok.cikis', parametre: artikParcaParametresi, govde: artikParcaKapatGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.artikParcaKapat(db, kullanici, parametre.id, govde) }),
 ];

@@ -187,7 +187,7 @@ function ArtikParcalar() {
   const [kapatilan, kapatilanYaz] = useState<{ s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' } | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.liste('artik-parcalar', {}), queryFn: () => api.get<ArtikParcalarCevabi>('/stok/artik-parcalar') });
   const kapat = useMutation({
-    mutationFn: ({ s, durum }: { s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' }) => api.post<ArtikParcaCevabi>(`/stok/artik-parcalar/${s.id}/kapat`, { durum, surum: s.surum }),
+    mutationFn: ({ s, durum }: { s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' }) => korumaliPost<ArtikParcaCevabi>(`/stok/artik-parcalar/${s.id}/kapat`, { durum, surum: s.surum }),
     onSuccess: (_c, d) => { kapatilanYaz(null); void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', d.durum === 'hurda' ? 'Artık hurdaya ayrıldı.' : 'Artık kullanıldı.'); },
     onError: (h) => bildir('hata', hataMetni(h)),
   });
