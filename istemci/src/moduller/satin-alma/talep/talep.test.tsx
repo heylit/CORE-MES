@@ -429,6 +429,75 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     expect(screen.getByRole('tab', { name: /^Taleplerim/ }).getAttribute('aria-selected')).toBe('true');
   });
 
+  // 3329: üretim emrinden "Satın alma talebi aç" taslakla ve emrin kimliğiyle gelir; form o emre bağlı açılır, emir yeniden seçtirilmez.
+  it('3329: emirden gelen plan taslağında üretim emri seçili gelir; gönderimde bağ gövdeye girer', async () => {
+    const cagrilar = sunucuKur();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/taleplerim', search: '?bolum=yeni', state: { taslak: [PLAN_TALEBI], uretimEmriId: 31 } }]}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Yeni talep/ }).getAttribute('aria-selected')).toBe('true'));
+    expect(screen.getByRole('button', { name: 'Malzeme' }).getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect((screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value).toBe('31'));
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    const g = cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as Record<string, unknown>;
+    expect([g.tur, g.uretimEmriId, g.ihtiyacTarihi]).toEqual(['malzeme', 31, '2026-11-10']);
+  });
+
+  it('3364: emirden gelen kimlik açık emirler listesinde yoksa seçim boş kalır, gövdeye bağ girmez', async () => {
+    const cagrilar = sunucuKur();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/taleplerim', search: '?bolum=yeni', state: { taslak: [PLAN_TALEBI], uretimEmriId: 99 } }]}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('option', { name: /UE-000031/ });
+    expect((screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    expect((cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as { uretimEmriId: number | null }).uretimEmriId).toBeNull();
+  });
+
+  const emirdenAc = () => render(
+    <MemoryRouter initialEntries={[{ pathname: '/taleplerim', search: '?bolum=yeni', state: { taslak: [PLAN_TALEBI], uretimEmriId: 31 } }]}>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
+    </MemoryRouter>,
+  );
+  const emirAlani = () => (screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value;
+
+  it('3364: emirden gelen talep gönderilince sonraki yeni talep emirsiz açılır', async () => {
+    sunucuKur();
+    emirdenAc();
+    await waitFor(() => expect(emirAlani()).toBe('31'));
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    fireEvent.click(screen.getByRole('tab', { name: /^Yeni talep/ }));
+    await waitFor(() => expect(emirAlani()).toBe(''));
+  });
+
+  it('3364: emirden gelen form açıkken emirsiz ön talep çevrilince emir alanı boş kalır', async () => {
+    onListe = { onTalepler: [PLAN_TALEBI], yoksayilanlar: [] };
+    sunucuKur();
+    emirdenAc();
+    await waitFor(() => expect(emirAlani()).toBe('31'));
+    fireEvent.click(screen.getByRole('tab', { name: /^Ön talepler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Talebe çevir' }));
+    await waitFor(() => expect(emirAlani()).toBe(''));
+  });
+
+  it('3329: emirsiz gelen plan taslağında üretim emri boş kalır', async () => {
+    sunucuKur();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/taleplerim', search: '?bolum=yeni', state: { taslak: [PLAN_TALEBI] } }]}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('option', { name: /UE-000031/ });
+    expect((screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value).toBe('');
+  });
+
   it('898 a: yoksayma nedenle gider; "Diğer" seçilince not zorunludur', async () => {
     const cagrilar = sunucuKur();
     sar(<TaleplerimSayfasi />);

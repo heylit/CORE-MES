@@ -203,6 +203,8 @@ test('Malzeme sekmesi: "Satın alma talebi aç" Taleplerim yeni talebe eksikle d
   await expect(page.getByRole('tab', { name: 'Yeni talep' })).toHaveAttribute('aria-selected', 'true');
   // Kalemin miktarı eksik miktardır (yoldaki işaret 7).
   await expect(page.locator('.sa-talep input[value="7"]:visible').first()).toBeVisible();
+  // Talep emirden açılır: emir seçili gelir, yeniden seçtirilmez (3329).
+  await expect(page.getByLabel(/Üretim emri/)).toHaveValue('2');
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar, 'yalnız taslak doldurur, talep göndermez').toEqual([]);
