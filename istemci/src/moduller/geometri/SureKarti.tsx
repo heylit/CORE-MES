@@ -147,7 +147,7 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
                       </p>
                     )}
                   {on !== null && <TasarimSecimi revizyonId={revizyonId} tasarim={on.tasarim} />}
-                  {(kb !== null || on !== null) && <p className="tc-g3b-su-etiket">{on === null ? 'Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)' : 'Kalemler · kalibresiz (katsayılar aşağıdaki dökümde)'}</p>}
+                  {(kb !== null || on !== null) && <p className="tc-g3b-su-etiket">{on === null ? 'Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)' : 'Kalemler · fizik hesabı (katsayılar aşağıdaki dökümde)'}</p>}
                   <ul className="tc-g3b-su-kalemler" aria-label="Süre kalemleri">
                     {v.kalemler.map((k) => (
                       <li key={k.kalem}>
@@ -280,7 +280,7 @@ function CarpanDokumu({ on, kb }: { on: Onsel; kb: GeometriSureCevabi['kalibrasy
           const ad = d.tur === 'geometri' ? `Geometri: ${GEOMETRI_TIPI_ADI[on.tip]}${on.cidarMm === null ? '' : `, cidar ${uzunluk(on.cidarMm)} mm`}`
             : d.tur === 'kesme' ? 'Kesme dışı pay'
               : d.tur === 'baglama' ? `Bağlama ${String(d.adet)} × tutma ${dakika(d.tutmaDk)} (${uzunluk(on.agirlikKg)} kg)`
-                : `${KALEM[d.tur]} (kalibresiz ${dakika(d.kalibresizDk)})`;
+                : `${KALEM[d.tur]} (fizik hesabı ${dakika(d.kalibresizDk)})`;
           const c = d.tur === 'kesme' ? `÷${katsayiMetni(d.deger)}` : d.tur === 'baglama' ? `+${dakika(d.adet * d.tutmaDk)}`
             : d.carpanlar.map((x) => `${katsayiAdi(x.anahtar, sinifAdlari)} ${carpan(x.deger)}`).join(' · ') || '×1';
           return <tr key={`${d.tur}-${String(i)}`}><td>{ad}</td><td>{c}</td><td>{dakika(d.araToplamDk)}</td></tr>;

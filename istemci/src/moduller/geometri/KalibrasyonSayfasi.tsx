@@ -153,7 +153,7 @@ export function KalibrasyonSayfasi() {
           : (
             <div className="tc-g3b-ka">
               <Sekmeler etiket="Süre kalibrasyonu" secili={sekme} sec={sekmeYaz}
-                sekmeler={[{ anahtar: 'egri', baslik: 'Kalibrasyon eğrisi', simge: 'chart' }, { anahtar: 'katsayilar', baslik: 'Başlangıç katsayıları', simge: 'layers' }]} />
+                sekmeler={[{ anahtar: 'egri', baslik: 'Eğri', simge: 'chart' }, { anahtar: 'katsayilar', baslik: 'Katsayılar', simge: 'layers' }]} />
               {sekme === 'katsayilar' ? <KatsayilarSekmesi k={k} yazar={yazar} /> : (<>
               <Kart baslik="Kalibrasyon eğrisi" simge="chart" sag={<Rozet ton={k.asama === 'kalibresiz' ? 'uyari' : 'tamam'}>{String(k.n)} parça</Rozet>}>
                 <p className="tc-g3b-su-etiket">Aşama: {ASAMA_ADI[k.asama]}</p>

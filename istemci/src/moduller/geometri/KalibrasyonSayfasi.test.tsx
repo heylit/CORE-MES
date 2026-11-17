@@ -160,7 +160,7 @@ describe('Başlangıç katsayıları (3363)', () => {
       'POST /geometri/sure-katsayilari/yerlesige-don': (g) => { yazilan.push(g); return json(200, { katsayilar: KATSAYILAR }); },
     });
     ac();
-    fireEvent.click(await screen.findByRole('tab', { name: /Başlangıç katsayıları/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Katsayılar/ }));
     const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
     expect(within(malzeme).getByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\)/ })).toBeTruthy();
     fireEvent.click(within(malzeme).getByRole('button', { name: /Bu çarpanla güncelle/ }));
@@ -185,12 +185,40 @@ describe('Başlangıç katsayıları (3363)', () => {
       'GET /geometri/sure-katsayilari': () => json(200, { katsayilar: KATSAYILAR }),
     });
     ac();
-    fireEvent.click(await screen.findByRole('tab', { name: /Başlangıç katsayıları/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Katsayılar/ }));
     const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
     expect(within(malzeme).getAllByText('Elle').length).toBeGreaterThan(0);
     expect(within(malzeme).getByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\)/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /düzenle$/ })).toBeNull();
+    expect(within(malzeme).getAllByText(/^ORN not · ORN-Kişi, 17\.11/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Bu çarpanla güncelle/ })).toBeNull();
   });
-});
 
+  it('aynı ölçüm grubundaki sınıflar tek uyarı alır: grubun son satırının altında, bütün sınıfların yeni değerleriyle tek komut', async () => {
+    const yazilan: unknown[] = [];
+    const nikel = [
+      kat('malzeme.kaba.metal/nikel', 1.79, { iso: 'S' }), kat('malzeme.finis.metal/nikel', 2.44, { iso: 'S' }),
+    ];
+    sunucuKur({
+      'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku', 'geometri.kalibrasyon']),
+      'GET /geometri/kalibrasyon': () => json(200, { ...KAL, gruplar: [{ tur: 'malzeme', anahtar: 'S', n: 9, carpan: 0.62, hataYuzde: 20, azVeri: true }] }),
+      'GET /geometri/sure-katsayilari': () => json(200, { katsayilar: [...KATSAYILAR.slice(0, 2), ...nikel, ...KATSAYILAR.slice(2)] }),
+      'POST /geometri/sure-katsayilari/yaz': (g) => { yazilan.push(g); return json(200, { katsayilar: KATSAYILAR }); },
+    });
+    ac();
+    fireEvent.click(await screen.findByRole('tab', { name: /Katsayılar/ }));
+    const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
+    const uyarilar = within(malzeme).getAllByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\); gruptaki 2 sınıf/ });
+    expect(uyarilar).toHaveLength(1);
+    expect(within(uyarilar[0]!).getByText(/^Yeni değerler: \S*titanyum ×1,1 · ×0,76; [^;]*nikel[^;]* ×1,11 · ×1,51$/i)).toBeTruthy();
+    fireEvent.click(within(malzeme).getByRole('button', { name: '2 sınıfı bu çarpanla güncelle' }));
+    await vi.waitFor(() => { expect(yazilan).toHaveLength(1); });
+    expect(yazilan[0]).toEqual({
+      degerler: [
+        { anahtar: 'malzeme.kaba.metal/titanyum', deger: 1.1 }, { anahtar: 'malzeme.finis.metal/titanyum', deger: 0.76 },
+        { anahtar: 'malzeme.kaba.metal/nikel', deger: 1.11 }, { anahtar: 'malzeme.finis.metal/nikel', deger: 1.51 },
+      ],
+      not: 'Ölçümle güncellendi: S · Süper alaşım ×0,62, 9 parça',
+    });
+  });
+});
