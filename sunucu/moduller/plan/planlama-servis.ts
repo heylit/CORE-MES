@@ -299,7 +299,7 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   const bakimlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && (await sistemAyariOku(db, 'plan.bakim-girdisi')) ? await bakimAraliklariOku(db) : null;
   // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; tanımı İstasyonlar'da, adımın isteği iş emrinin ekipman listesinde.
   const emirOkur = yetkiliMi(kullanici, KAYNAK_OKUMA.emir);
-  const ikincil = await ikincilEkiOku(db, { istasyon: yetkiliMi(kullanici, ISTASYON_OKUMA), emir: emirOkur },
+  const ikincil = await ikincilEkiOku(db, { istasyon: yetkiliMi(kullanici, ISTASYON_OKUMA), emir: emirOkur, alet: true },
     emirOkur ? await planlanacakIsler(db, { taslakDahil: true }) : []);
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {

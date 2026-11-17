@@ -457,6 +457,180 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('dış sistem bağları: kaynak ve hedef sütunun türü aynıdır (3409)', async () => {
+    const satirlar = await o().sahip.sorgu<{ bag: string; kaynak: string | null; hedef: string | null }>(
+      `SELECT b.kaynak || ' -> ' || b.hedef || '.' || b.sutun AS bag, format_type(ka.atttypid, ka.atttypmod) AS kaynak,
+              format_type(ha.atttypid, ha.atttypmod) AS hedef
+         FROM ayarlar_temizlik_fk_siz_baglar() b
+         LEFT JOIN pg_attribute ka ON ka.attrelid = to_regclass(b.kaynak) AND ka.attname = 'belge_no'
+         LEFT JOIN pg_attribute ha ON ha.attrelid = to_regclass(b.hedef) AND ha.attname = b.sutun`,
+    );
+    assert.ok(satirlar.length > 0);
+    for (const s of satirlar) {
+      assert.notEqual(s.kaynak, null, s.bag);
+      assert.equal(s.hedef, s.kaynak, s.bag);
+    }
+  });
+
+  test("dış sistem bağları: talepli emrin etkisi okunur, Logo'ya gitmiş talep ve karşılama kökü kilitler (3409)", async () => {
+    const e = await emir();
+    const talep = (await o().sahip.tek<{ id: string; sayi: number }>(
+      `INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, uretim_emri_id)
+       VALUES (gen_random_uuid(), 2099, (SELECT coalesce(max(sira), 0) + 1 FROM satin_alma_talep WHERE yil = 2099), 'ORN talep', $1, $1, $2)
+       RETURNING id, sayi_id AS sayi`, [yoneticiId, e]))!;
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }]);
+    // Talebin kendi silme kuralı kökü zaten kilitler; burada ölçülen etki okumasının düşmemesi ve Logo kilidinin eklenmesidir.
+    assert.ok(!(await etki([{ tur: 'uretim_emri', kimlik: e }])).kokler[0]!.kilitler.includes("Logo'ya gönderildi"), 'talep Logo kuyruğunda değil');
+    await o().sahip.sorgu(
+      "INSERT INTO logo_giden (belge_turu, belge_no, son_deneme, son_sonuc, logo_kayit_no) VALUES ('talep', $1, now(), 'gonderildi', 'ORN-T1')", [talep.sayi]);
+    assert.ok((await etki([{ tur: 'uretim_emri', kimlik: e }])).kokler[0]!.kilitler.includes("Logo'ya gönderildi"), "Logo'ya gitmiş talep kilitler");
+    await o().sahip.sorgu("DELETE FROM logo_giden WHERE belge_turu = 'talep' AND belge_no = $1", [talep.sayi]);
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }], false);
+  });
+
+  test('liste gizleme: işaretli emir üretim emri listelerinde görünmez, işaret kalkınca döner', async () => {
+    const [acik, kapali] = [await emir({ malzeme: await malzeme() }), await emir({ malzeme: await malzeme() })];
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [kapali]);
+    const no = async (id: number) => (await o().sahip.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [id]))!.n;
+    const [acikNo, kapaliNo] = [await no(acik), await no(kapali)];
+    const listeler = async () => {
+      const govde: string[] = [];
+      for (const url of ['/uretim-emirleri?kapsam=hepsi', '/uretim-emirleri?bitenGun=1', '/uretim-emirleri/bitenler?sayfa=1', '/adimli-emirler?kapsam=hepsi', '/adimli-emirler/bitenler?sayfa=1']) {
+        const c = await istek(yonetici, 'GET', url);
+        assert.equal(c.statusCode, 200, `${url} ${c.body}`);
+        govde.push(c.body);
+      }
+      return govde;
+    };
+    const once = await listeler();
+    assert.ok(once[0]!.includes(acikNo) && once[3]!.includes(acikNo), 'işaretsiz açık emir listede');
+    assert.ok(once[1]!.includes(kapaliNo) && once[2]!.includes(kapaliNo) && once[4]!.includes(kapaliNo), 'işaretsiz kapalı emir listede');
+    const secim: TemizlikKoku[] = [{ tur: 'uretim_emri', kimlik: acik }, { tur: 'uretim_emri', kimlik: kapali }];
+    await isaretle(secim);
+    for (const g of await listeler()) assert.ok(!g.includes(acikNo) && !g.includes(kapaliNo), g.slice(0, 300));
+    assert.equal((await istek(yonetici, 'GET', `/uretim-emirleri/${acik}`)).statusCode, 200, 'ayrıntı açılır');
+    await isaretle(secim, false);
+    const sonra = await listeler();
+    assert.ok(sonra[3]!.includes(acikNo) && sonra[4]!.includes(kapaliNo));
+  });
+
+  test('liste gizleme: işaretli sipariş sipariş listesinde görünmez ve sayılmaz, işaret kalkınca döner', async () => {
+    const sp = await siparis();
+    const no = `ORN-SP-${String(siparisSira)}`;
+    const liste = async () => {
+      const c = await istek(yonetici, 'GET', `/siparisler?ara=${no}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c;
+    };
+    assert.ok((await liste()).body.includes(no));
+    await isaretle([{ tur: 'siparis', kimlik: sp }]);
+    const gizli = await liste();
+    assert.ok(!gizli.body.includes(no), gizli.body);
+    assert.equal(gizli.json<{ toplam: number }>().toplam, 0);
+    assert.equal((await istek(yonetici, 'GET', `/siparisler/${sp}`)).statusCode, 200, 'ayrıntı açılır');
+    await isaretle([{ tur: 'siparis', kimlik: sp }], false);
+    assert.ok((await liste()).body.includes(no));
+  });
+
+  test('liste gizleme: işaretli malzeme kartı katalogda kayıtsız döner (önbellekten düşer), işaret kalkınca döner', async () => {
+    const no = await malzeme();
+    // Kart eskidir: değişenler okumasına kendi güncellemesiyle girmez.
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET guncelleme = '2020-01-01T00:00:00Z' WHERE no = $1", [no]);
+    assert.equal((await o().sahip.tek<{ g: string }>('SELECT guncelleme::text AS g FROM malzeme_katalog_karti WHERE no = $1', [no]))!.g.slice(0, 4), '2020');
+    const kart = async (sonra?: string) => {
+      const c = await istek(yonetici, 'GET', `/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=500${sonra === undefined ? '' : `&sonra=${encodeURIComponent(sonra)}`}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ satirlar: { no: number; kayit: unknown }[] }>().satirlar.find((k) => k.no === no);
+    };
+    assert.notEqual((await kart())?.kayit ?? null, null);
+    await isaretle([{ tur: 'malzeme', kimlik: no }]);
+    assert.equal((await kart())!.kayit, null, 'tam okumada kayıtsız');
+    assert.equal((await kart(new Date(Date.now() + 3_600_000).toISOString()))!.kayit, null, 'değişenler okumasında da gelir');
+    const an = (await istek(yonetici, 'GET', '/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=1')).json<{ an: string }>().an;
+    await isaretle([{ tur: 'malzeme', kimlik: no }], false);
+    assert.notEqual((await kart(an))?.kayit ?? null, null, 'işaret kalkınca değişenler okuması tam okumaya döner, kart geri gelir');
+    assert.notEqual((await kart())?.kayit ?? null, null);
+  });
+
+  test('liste gizleme: kalkma anı türe göre tutulur, aynı türde sonraki kaldırma anı günceller', async () => {
+    const no = await malzeme();
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET guncelleme = '2020-01-01T00:00:00Z' WHERE no = $1", [no]);
+    await o().sahip.sorgu(
+      "INSERT INTO ayarlar_deneme_isareti_kalkma (tur, zaman) VALUES ('malzeme', '2020-01-01T00:00:00Z') ON CONFLICT (tur) DO UPDATE SET zaman = excluded.zaman",
+    );
+    const kalkmaYili = async (tur: string) =>
+      (await o().sahip.tek<{ y: string }>("SELECT to_char(zaman, 'YYYY') AS y FROM ayarlar_deneme_isareti_kalkma WHERE tur = $1", [tur]))?.y ?? null;
+    const kart = async (sonra: string) => {
+      const c = await istek(yonetici, 'GET', `/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=500&sonra=${encodeURIComponent(sonra)}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ satirlar: { no: number; kayit: unknown }[] }>().satirlar.find((k) => k.no === no);
+    };
+    const sp = await siparis();
+    await isaretle([{ tur: 'siparis', kimlik: sp }]);
+    await isaretle([{ tur: 'siparis', kimlik: sp }], false);
+    assert.equal(await kalkmaYili('malzeme'), '2020', 'başka türün kaldırması malzeme anını değiştirmez');
+    const an = (await istek(yonetici, 'GET', '/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=1')).json<{ an: string }>().an;
+    assert.equal(await kart(an), undefined, 'sipariş işaretinin kalkması katalogu tam okumaya çevirmez');
+    await isaretle([{ tur: 'malzeme', kimlik: no }]);
+    await isaretle([{ tur: 'malzeme', kimlik: no }], false);
+    assert.notEqual(await kalkmaYili('malzeme'), '2020', 'aynı türde ikinci kaldırma anı günceller');
+    assert.notEqual((await kart(an))?.kayit ?? null, null, 'sonradan kalkan işaret kartı geri getirir');
+  });
+
+  test('operatör istasyon aramasında işaretli emir çıkmaz, işaret kalkınca döner', async () => {
+    const s = o().sahip;
+    const rol = (await s.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('orn_arayan', 'ORN Arayan') RETURNING id"))!.id;
+    await s.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'uretim-emirleri.ara-istasyon')", [rol]);
+    const yoneticiRolu = (await s.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'"))!.id;
+    const kisi = await o().vt.tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: 'ORN Operatör', kullaniciAdi: 'orn-operator', parola: PAROLA });
+      await rolAta(db, yoneticiId, id, rol);
+      await rolAl(db, yoneticiId, id, yoneticiRolu);
+      return id;
+    });
+    await s.sorgu("INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, '2000-01-01', 100)", [ist, kisi]);
+    const operator = await girisCerezi('orn-operator');
+    const e = await emir();
+    await s.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e]);
+    const emirNo = (await s.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [e]))!.n;
+    const bulur = async () => {
+      const c = await istek(operator, 'GET', `/uretim-emirleri/ara?q=${encodeURIComponent(emirNo)}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ sonuclar: { anahtar: string; yol: string }[] }>().sonuclar.some((x) => x.yol === `/uretim-terminali?emir=${String(e)}`);
+    };
+    assert.equal(await bulur(), true, 'istasyon araması kullanılır');
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }]);
+    assert.equal(await bulur(), false);
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }], false);
+    assert.equal(await bulur(), true);
+  });
+
+  test('seçici ve genel arama: işaretli emir, sipariş ve malzeme kartı aramada çıkmaz, işaret kalkınca döner', async () => {
+    const [e, sp, mlz] = [await emir(), await siparis(), await malzeme()];
+    const emirNo = (await o().sahip.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [e]))!.n;
+    const spNo = `ORN-SP-${String(siparisSira)}`;
+    const kod = (await o().sahip.tek<{ k: string }>('SELECT stok_kodu AS k FROM malzeme_katalog_karti WHERE no = $1', [mlz]))!.k;
+    const bul = async () => {
+      const emirAra = await istek(yonetici, 'GET', `/uretim-emirleri/ara?q=${encodeURIComponent(emirNo)}`);
+      const secim = await istek(yonetici, 'GET', `/malzemeler/secim-ara?q=${String(mlz)}&pasifler=true`);
+      const genelSp = await istek(yonetici, 'GET', `/arama?q=${encodeURIComponent(spNo)}`);
+      const genelMlz = await istek(yonetici, 'GET', `/arama?q=${encodeURIComponent(kod)}`);
+      for (const c of [emirAra, secim, genelSp, genelMlz]) assert.equal(c.statusCode, 200, c.body);
+      return {
+        emir: emirAra.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === String(e)),
+        secim: secim.json<{ sonuclar: { id: number }[] }>().sonuclar.some((x) => x.id === mlz),
+        siparis: genelSp.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === `siparis#${String(sp)}`),
+        malzeme: genelMlz.json<{ sonuclar: { anahtar: string }[] }>().sonuclar.some((x) => x.anahtar === `malzeme#${String(mlz)}`),
+      };
+    };
+    assert.deepEqual(await bul(), { emir: true, secim: true, siparis: true, malzeme: true });
+    const secim: TemizlikKoku[] = [{ tur: 'uretim_emri', kimlik: e }, { tur: 'siparis', kimlik: sp }, { tur: 'malzeme', kimlik: mlz }];
+    await isaretle(secim);
+    assert.deepEqual(await bul(), { emir: false, secim: false, siparis: false, malzeme: false });
+    await isaretle(secim, false);
+    assert.deepEqual(await bul(), { emir: true, secim: true, siparis: true, malzeme: true });
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(

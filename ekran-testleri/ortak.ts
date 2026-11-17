@@ -34,6 +34,11 @@ export const test = temel.extend<TestFixture>({
         sessionStorage.setItem('tmi.karsilama', `${String(id)}|${gun}`);
       } catch { /* depo kapalıysa ekran yine açılır; örten pencereyi test görür */ }
     }, kisiId);
+    // Playwright'ın istek havuzu boşta soketi süresiz tutar, sunucu 5 sn sonra kapatır: kapanan sokete giden ilk istek ECONNRESET alır.
+    // Sunucu o isteği okumadan kapattığından yeniden göndermek güvenlidir; tarayıcı da aynısını yapar. get/post/put/... fetch'e iner.
+    const istek = context.request;
+    const ozgun = istek.fetch.bind(istek);
+    istek.fetch = (adres, secenek) => ozgun(adres, { maxRetries: 2, ...secenek });
     await kullan(context);
   },
   ag: async ({ page }, kullan) => {

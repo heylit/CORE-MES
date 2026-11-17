@@ -21,7 +21,7 @@ import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/dis
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
+import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
 import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
@@ -547,7 +547,9 @@ function ozet(e: UstEmirSatiri, kendi: readonly IsEmriSatiri[], ad: Adlar, altEm
 export async function adimliListe(
   db: Db, arsiv: boolean, projeId: number | null = null, hepsi = true,
 ): Promise<{ emirler: AdimliEmirOzeti[] }> {
-  return { emirler: await ozetle(db, await s.ustEmirler(db, arsiv, projeId, hepsi)) };
+  // Deneme işaretli emir listede görünmez (3395 madde 2).
+  const gizli = new Set(await denemeIsaretliKimlikler(db, 'uretim_emri'));
+  return { emirler: await ozetle(db, (await s.ustEmirler(db, arsiv, projeId, hepsi)).filter((e) => !gizli.has(e.id))) };
 }
 
 // Gecikmenin günü tesis saatine göredir.
@@ -556,10 +558,11 @@ export async function adimliOzet(db: Db, simdi = Date.now()): Promise<AdimliOzet
 }
 
 // Biten (bitmiş ya da iptal) emirler, en yeni önce, sayfalı (kart #1323).
-export function adimliBitenler(db: Db, suzgec: s.BitenSuzgeci, sayfa: { sayfa: number; sayfaBoyu?: number | undefined }): Promise<SayfaliListe<AdimliEmirOzeti>> {
+export async function adimliBitenler(db: Db, suzgec: s.BitenSuzgeci, sayfa: { sayfa: number; sayfaBoyu?: number | undefined }): Promise<SayfaliListe<AdimliEmirOzeti>> {
+  const sz = { ...suzgec, gizli: await denemeIsaretliKimlikler(db, 'uretim_emri') };
   return sayfaliListe(sayfa, {
-    say: () => s.bitenUstEmirSay(db, suzgec),
-    satirlar: async (d) => ozetle(db, await s.bitenUstEmirler(db, suzgec, d)),
+    say: () => s.bitenUstEmirSay(db, sz),
+    satirlar: async (d) => ozetle(db, await s.bitenUstEmirler(db, sz, d)),
   });
 }
 

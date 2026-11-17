@@ -2037,33 +2037,48 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       assert.ok(paketOkumalari.every((q) => /kimlik = ANY/.test(q)), `bütün paketler önyüklenmemeli: ${paketOkumalari.join(' | ')}`);
     });
 
-    test('KD-004: budama imleçten sonraki iletileri sildiyse cevap yalnız yeniden yükleme iletisidir; imlecin kendi satırı silinmişse ileti kaçmamıştır; boş tabloda yeni imleç döngü yapmaz', async () => {
+    test('KD-004: budama imleçten sonraki iletileri sildiyse cevap yalnız yeniden yükleme iletisidir; imlecin kendi satırı budanmışsa ileti kaçmamıştır; geri alınan ekleme ve boş tablo yeniden yükletmez', async () => {
       const yokla = async (son?: number) => (await istek<{ son: number; iletiler: Record<string, unknown>[] }>(
         yonetici, 'GET', `/arkon/iletiler?kaynak=kd4${son === undefined ? '' : `&son=${son}`}`)).govde;
       const gonder = async (mid: string) => assert.equal((await istek(yonetici, 'POST', '/arkon/iletiler', { ileti: { type: 'progress', id: 'kd4', mid }, kaynak: 'kd4-g' })).durum, 200);
-      const sil = (sinir: number) => vt().sorgu('DELETE FROM arkon_ileti WHERE id <= $1', [sinir]);
+      // Gerçek budama: eskiyen satırlar iş tanımının sorgusuyla silinir.
+      const buda = async (sinir: number) => {
+        await vt().sorgu("UPDATE arkon_ileti SET zaman = now() - interval '1 hour' WHERE id <= $1", [sinir]);
+        await vt().tx((db) => sorgular.eskiIletileriSil(db));
+      };
+      // Yarım kalan ya da geri alınan ekleme gibi: sayaç satır yazılmadan ilerler (PostgreSQL dizisi işlemle geri alınmaz).
+      const bosluk = () => vt().sorgu("SELECT nextval(pg_get_serial_sequence('arkon_ileti', 'id'))");
 
+      await vt().tx((db) => sorgular.eskiIletileriSil(db));
+      assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_ileti_budama'))?.n, 0, 'budanacak satır yoksa iş hatasız geçer, iz yazmaz');
       const s0 = (await yokla()).son;
       await gonder('kd4-1');
       await gonder('kd4-2');
-      await sil(s0);
-      assert.deepEqual((await yokla(s0)).iletiler.map((i) => i['mid']), ['kd4-1', 'kd4-2'], 'imlecin kendi satırı silinmiş: ileti kaçmadı');
+      await buda(s0);
+      assert.deepEqual((await yokla(s0)).iletiler.map((i) => i['mid']), ['kd4-1', 'kd4-2'], 'imlecin kendi satırı budanmış: ileti kaçmadı');
 
       const s1 = (await yokla()).son;
       await gonder('kd4-3');
       await gonder('kd4-4');
-      await sil(s1 + 1);
+      await buda(s1 + 1);
       const kacan = await yokla(s1);
       assert.deepEqual(kacan.iletiler, [{ type: '$reload' }]);
-      assert.deepEqual((await yokla(kacan.son)).iletiler, []);
+      assert.deepEqual((await yokla(kacan.son)).iletiler.map((i) => i['mid']), [], 'yeniden yüklenen cihaz döngüye girmez');
 
       const s2 = (await yokla()).son;
+      await bosluk();
       await gonder('kd4-5');
-      await vt().sorgu('DELETE FROM arkon_ileti');
-      assert.deepEqual((await yokla(s2)).iletiler, [{ type: '$reload' }], 'boş tabloda kaçan ileti sayaçtan anlaşılır');
+      assert.deepEqual((await yokla(s2)).iletiler.map((i) => i['mid']), ['kd4-5'], 'kimlik boşluğu kaçırma değil');
+
+      const s3 = (await yokla()).son;
+      await gonder('kd4-6');
+      await buda(Number.MAX_SAFE_INTEGER);
+      assert.deepEqual((await yokla(s3)).iletiler, [{ type: '$reload' }], 'budamayla boşalan tabloda kaçan ileti budanandan anlaşılır');
       const yeni = (await yokla()).son;
-      assert.ok(yeni > s2);
+      assert.ok(yeni > s3);
       assert.deepEqual((await yokla(yeni)).iletiler, [], 'yeniden yüklenen cihaz yeniden yükleme döngüsüne girmemeli');
+      await bosluk();
+      assert.deepEqual((await yokla(yeni)).iletiler, [], 'boş tabloda ilerleyen sayaç (3394 CI) yeniden yükletmez');
     });
 
     test('eski iletiler kayıt işleminde değil, arka plan işinde silinir: ileti eklemek eski satıra dokunmaz, iş 15 dakikadan eskiyi siler', async () => {

@@ -332,6 +332,19 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(within(pencere).getByText('Standart · Rev B · seçilen rota yürürlükte değil, türün rotası')).toBeTruthy();
   });
 
+  it('3411 a: türünün yürürlükte rotası olmadığı için Seri rotasıyla açılacak emirler satırda ve özette sayıyla söylenir', async () => {
+    const acilis = { ...ACILIS, satirlar: [
+      ACILIS_SATIRI,
+      { ...ACILIS_SATIRI, kalemId: 51, kalemSira: 2, emirTuru: 'numune' as const, rota: { ad: 'Seri', harf: 'B', seriyeDustu: true } },
+    ] };
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, acilis) : undefined));
+    ac('/siparisler/5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
+    expect(await within(pencere).findByText('Seri · Rev B · Numune türünün yürürlükte rotası yok')).toBeTruthy();
+    expect(within(pencere).getByText('1 emir Seri rotasıyla açılır')).toBeTruthy();
+  });
+
   it('3272: onay penceresi açılacak projeyi, emirleri ve rota bekleyeni gösterir; proje no değişince gövdeye girer', async () => {
     const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/5/onayla' ? json(200, AYRINTI_ONAYLI) : undefined));
     ac('/siparisler/5');

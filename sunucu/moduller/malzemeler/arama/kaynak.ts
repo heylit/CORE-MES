@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
+import { denemeIsaretliKimlikler } from '../../ayarlar/disari.ts';
 import { katalogKayitAra } from '../sorgular.ts';
 
 const TUR_ADI: Record<string, string> = {
@@ -12,7 +13,8 @@ const ONAY_ADI: Record<string, string> = { taslak: 'taslak', onayda: 'onayda', p
 export const malzemeAramaKaynagi: KayitAramaKaynagi<Db> = {
   tur: 'malzeme',
   yetki: ['sayfa.malzemeler'],
-  ara: async (db, istek) => (await katalogKayitAra(db, istek)).map((m) => ({
+  // Deneme işaretli kart aramada çıkmaz (3395 madde 2).
+  ara: async (db, istek) => (await katalogKayitAra(db, istek, await denemeIsaretliKimlikler(db, 'malzeme'))).map((m) => ({
     anahtar: String(m.id),
     baslik: m.kod,
     aciklama: [m.ad, TUR_ADI[m.tur] ?? m.tur, ONAY_ADI[m.onayDurumu]].filter((p) => p !== undefined && p !== null).join(' · '),

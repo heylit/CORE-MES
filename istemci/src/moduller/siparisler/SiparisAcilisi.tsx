@@ -34,9 +34,11 @@ function RotaRozeti({ s }: { s: SiparisAcilisiSatiri }) {
   if (s.atlama !== null) return <Rozet ton="pasif" gorunum="cizgi">{ATLAMA_METNI[s.atlama]}</Rozet>;
   if (s.emir?.rotaBekliyor === true || (s.emir === null && s.rota === null)) return <Rozet ton="uyari">Rota bekliyor</Rozet>;
   if (s.emir !== null) return <Rozet ton={EMIR_DURUMU[s.emir.durum].ton}>{EMIR_DURUMU[s.emir.durum].etiket}</Rozet>;
-  // 3296-3 a: partide seçilen rota "elle"; seçilen rota yürürlükte değilse türün rotası gelir ve bu söylenir.
-  const ek = s.rota!.elle === true ? ' · elle' : s.rota!.elleDustu === true ? ' · seçilen rota yürürlükte değil, türün rotası' : '';
-  return <Rozet ton={s.rota!.elleDustu === true ? 'uyari' : 'tamam'}>{`${s.rota!.ad} · Rev ${s.rota!.harf}${ek}`}</Rozet>;
+  // 3296-3 a: partide seçilen rota "elle"; seçilen rota yürürlükte değilse türün rotası gelir ve bu söylenir. 3411 a: türün yürürlükte
+  // rotası yoksa Seri gelir ve bu da söylenir.
+  const ek = s.rota!.elle === true ? ' · elle' : s.rota!.elleDustu === true ? ' · seçilen rota yürürlükte değil, türün rotası'
+    : s.rota!.seriyeDustu === true ? ` · ${EMIR_TURU_ADLARI[s.emirTuru]} türünün yürürlükte rotası yok` : '';
+  return <Rozet ton={s.rota!.elleDustu === true || s.rota!.seriyeDustu === true ? 'uyari' : 'tamam'}>{`${s.rota!.ad} · Rev ${s.rota!.harf}${ek}`}</Rozet>;
 }
 
 const sutunlar = (emirli: boolean): Sutun<SiparisAcilisiSatiri>[] => [
@@ -88,6 +90,7 @@ export function SiparisOnayPenceresi({ siparis, kapat }: { siparis: SiparisAyrin
   });
   const sayi = c === undefined ? 0 : acilacaklar(c).length;
   const bekleyen = c === undefined ? [] : acilacaklar(c).filter((s) => s.rota === null);
+  const seriye = c === undefined ? 0 : acilacaklar(c).filter((s) => s.rota?.seriyeDustu === true).length;
   const eksik = c !== undefined && c.acik && c.eksikIslemler.length > 0;
   const onayMetni = c === undefined || !c.acik ? 'Onayla' : `Onayla${yeniProje ? ', proje' : ''}${sayi > 0 ? ` ve ${String(sayi)} emri` : ''}${yeniProje || sayi > 0 ? ' aç' : ''}`;
 
@@ -115,6 +118,7 @@ export function SiparisOnayPenceresi({ siparis, kapat }: { siparis: SiparisAyrin
               <Rozet ton="bilgi">{yeniProje ? '1 proje açılır' : `Proje ${c.proje.kod}`}</Rozet>
               <Rozet ton="tamam">{`${String(sayi - bekleyen.length)} emir dolu`}</Rozet>
               {bekleyen.length > 0 && <Rozet ton="uyari">{`${String(bekleyen.length)} emir rota bekliyor`}</Rozet>}
+              {seriye > 0 && <Rozet ton="uyari">{`${String(seriye)} emir Seri rotasıyla açılır`}</Rozet>}
             </div>
             {yeniProje && (
               <div className="tc-form">

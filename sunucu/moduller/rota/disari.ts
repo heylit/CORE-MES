@@ -70,6 +70,19 @@ export async function isEmriKaynakIstekleri(db: Db, isEmriIdleri: readonly numbe
   return sonuc;
 }
 
+// Planın ölçü aleti isteği: iş emrinin ekipman listesindeki ölçü aleti satırları (alet türü). Aparat isteğinden ayrıdır; plan onu
+// Kalibrasyon'daki kullanılabilir alet sayısıyla sayar (plan/girdi/ikincil.ts).
+export async function isEmriAletIstekleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, number[]>> {
+  const sonuc = new Map<number, number[]>();
+  if (isEmriIdleri.length === 0) return sonuc;
+  for (const x of await isEmriEkipmanlari(db, isEmriIdleri)) {
+    if (x.tur !== 'olcu_aleti' || x.aletTuruId === null) continue;
+    const l = sonuc.get(x.isEmriId) ?? [];
+    if (!l.includes(x.aletTuruId)) sonuc.set(x.isEmriId, [...l, x.aletTuruId]);
+  }
+  return sonuc;
+}
+
 // Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, rotasının yürürlükteki revizyonuyla mı açıldı. Rotadan açılmamış
 // emirde madde gerekmez; ürünün yürürlükte revizyonu yoksa ya da emir eski revizyonla açıldıysa eksiktir. Bağı kablolama.ts kurar.
 export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {

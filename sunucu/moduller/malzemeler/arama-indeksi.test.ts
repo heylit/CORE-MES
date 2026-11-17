@@ -43,10 +43,12 @@ describe('malzemeler arama indeksi (kart #1244, gerçek PostgreSQL)', () => {
       tek: async (sql, p = []) => { yakalanan.push({ sql, p }); return null; },
     };
     await malzemeAra(kaydeden, { metin, sayfa: 1 });
-    assert.equal(yakalanan.length, 2);
+    // Deneme işareti okuması (ayarlar, 3395 madde 2) kataloğa dokunmaz; plana yalnız liste ve sayım girer.
+    const katalog = yakalanan.filter((q) => q.sql.includes('malzeme_katalog_karti'));
+    assert.equal(katalog.length, 2);
     return vt().tx(async (db) => {
       const sonuc: string[] = [];
-      for (const { sql, p } of yakalanan) {
+      for (const { sql, p } of katalog) {
         const satirlar = await db.sorgu<{ 'QUERY PLAN': string }>(`EXPLAIN ${sql}`, p);
         sonuc.push(satirlar.map((s) => s['QUERY PLAN']).join('\n'));
       }

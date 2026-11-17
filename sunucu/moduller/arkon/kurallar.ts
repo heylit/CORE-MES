@@ -16,6 +16,9 @@ import { SABIT_HURDA_KODLARI } from '../durus-nedenleri/disari.ts';
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
   rolYok: 'Üretim Hazırlık için rolünüz yok.',
+  cihazBagiYetkisi: 'Cihazı istasyona ve makineye yalnız istasyon yönetimi yetkisi olan bağlar.',
+  cihazIstasyonuYok: 'Bu istasyon bulunamadı.',
+  cihazMakinesiYok: 'Bu makine seçilen istasyonda değil.',
   ozetRolYok: 'Özetim yalnız operatör ve amir içindir.',
   ozetKapsamDisi: 'Bu kişinin özetini göremezsiniz: yalnız kendi özetiniz ya da amiri olduğunuz iş merkezindeki kişiler açılır.',
   silmeSurumu: 'Silmede belgenin sürümü gönderilmeli.',
@@ -2263,12 +2266,13 @@ export function ikinciKontrolEksik(istek: unknown, onceki: unknown, paket: unkno
 }
 
 // İleti budaması (15 dk) cihazın imlecinden sonraki satırları silmişse cihaz depo değişikliklerini kaçırmıştır; yeniden yüklenmesi gerekir.
-// Boş tabloda imleç sayaçtır: yeni cihaz da kendini yenileyen cihaz da sayaçtan başlar, döngüye girmez.
-export interface IletiAraligi { taban: number | null; tavan: number | null; sayac: number }
+// Ölçü budanan en büyük kimliktir (budanan, hiç budanmadıysa 0): sayaç ya da kalan en küçük kimlik ölçü olamaz, yarım kalan ya da geri
+// alınan ekleme sayacı satır yazmadan ilerletir ve boşluk bırakır. Yeni cihaz budanandan geride başlamaz: yeniden yüklenen döngüye girmez.
+export interface IletiAraligi { taban: number | null; tavan: number | null; sayac: number; budanan: number }
 export const ILETI_YENIDEN_YUKLE = { type: '$reload' } as const;
-export const iletiBasi = (a: IletiAraligi): number => a.tavan ?? a.sayac;
+export const iletiBasi = (a: IletiAraligi): number => Math.max(a.tavan ?? a.sayac, a.budanan);
 export function iletiKacirildi(son: number, a: IletiAraligi): boolean {
-  return a.taban === null ? son < a.sayac : son < a.taban - 1;
+  return son < a.budanan;
 }
 
 // Sunuculu Arkon'da malzeme isteği (`logi` deposunda `kind: 'req'`) stokta istek kaydı açar (tekrar eden sayfalar temizliği, madde 10).
@@ -3183,3 +3187,6 @@ export function periyodikBakimPlanlari(belgeler: readonly { kimlik: string; govd
     }];
   });
 }
+
+// 3392 a: ortak cihazı istasyona ve makineye bağlayan, Arkon matrisinde "istasyon yönetimi" (prod.station) olan roldür.
+export const cihazBaglayabilir = (rol: ArkonRolu): boolean => rol === 'admin' || (yetkiMatrisi()[rol] ?? []).includes('prod.station');

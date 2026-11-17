@@ -6,6 +6,7 @@ import {
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
+  teklifEkiDosyaParametresi, teklifEkiGovdesi, teklifEkiParametresi, teklifEkleriCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
@@ -198,6 +199,28 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-siparis-satirlari/:id/belgeler/:belgeId/kaldir', yetki: 'satin-alma.yaz',
     parametre: siparisBelgesiParametresi, cevap: siparisBelgeleriCevabi,
     isle: ({ db, parametre }) => servis.siparisBelgesiKaldir(db, parametre.id, parametre.belgeId),
+  }),
+  // 3404: tedarikçinin PDF teklifi. Ek fiyat taşır: okuma kapısı teklif fiyatını gösteren değerlendirme ucuyla aynıdır; bağlama ve
+  // kaldırma satın almayı yazanındır. Yinelenen bağlama ikinci bağ açmaz (aynı özet aynı kayda bir kez bağlanır).
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    parametre: teklifEkiParametresi, cevap: teklifEkleriCevabi,
+    isle: ({ db, parametre }) => servis.teklifEkleri(db, parametre.id, parametre.teklifId),
+  }),
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/dosya', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    parametre: teklifEkiDosyaParametresi, cevap: ikiliCevap,
+    isle: ({ db, parametre }) => servis.teklifEkiDosyasi(db, parametre.id, parametre.teklifId, parametre.ozet),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ek-bagla', yetki: 'satin-alma.yaz', tekrarKorumali: true,
+    parametre: teklifEkiParametresi, govde: teklifEkiGovdesi, cevap: teklifEkleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.teklifEkiBagla(db, kullanici, parametre.id, parametre.teklifId, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/kaldir', yetki: 'satin-alma.yaz',
+    parametre: teklifEkiDosyaParametresi, cevap: teklifEkleriCevabi,
+    isle: ({ db, parametre }) => servis.teklifEkiKaldir(db, parametre.id, parametre.teklifId, parametre.ozet),
   }),
   // D6 b: sipariş ve finanstaki alış faturası bağı. Seçici tutarsız liste okur; bağı satın almayı yazan ya da yalnız fatura bağlayan işlem kurar.
   // Ağ kopunca aynı kimlikle yinelenen bağ ilk cevabı alır; geçmişe ikinci satır yazılmaz.

@@ -29,7 +29,8 @@ export const siparisAcilisiSatiri = z.object({
   teslim: tarihSemasi.nullable(),
   // Emrin türüne düşen rota ve yürürlükteki revizyonu; rota ya da yürürlükte revizyon yoksa null ("Rota bekliyor"). 3296-3 a: elle true
   // ise partide seçilen rota; seçilen rota kullanılamadıysa (yürürlükte değil) türün rotası gelir ve elleDustu true olur.
-  rota: z.object({ ad: z.string(), harf: z.string(), elle: z.boolean().optional(), elleDustu: z.boolean().optional() }).nullable(),
+  // seriyeDustu (3411 a): emrin türünün yürürlükte rotası yok; emir Seri rotasıyla açılır.
+  rota: z.object({ ad: z.string(), harf: z.string(), elle: z.boolean().optional(), elleDustu: z.boolean().optional(), seriyeDustu: z.boolean().optional() }).nullable(),
   emir: z.object({ id: KIMLIK, no: z.string(), durum: z.enum(EMIR_DURUMLARI), rotaBekliyor: z.boolean() }).nullable(),
   atlama: z.enum(SIPARIS_ACILISI_ATLAMALARI).nullable(),
 });

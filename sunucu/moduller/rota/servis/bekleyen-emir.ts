@@ -11,21 +11,21 @@ import { isEmirlerineSabitle, isEmriGirdileri, revizyonuAl } from './ortak.ts';
 import { emreKopyala, revizyonGetir } from './okuma.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 
-// 3272: siparişten açılan emrin rotası, emrin türüne düşen rota (3247 a: türe bağlı rota, yoksa Standart) ve yürürlükteki revizyonudur.
+// 3272: siparişten açılan emrin rotası, emrin türüne düşen rota (3411 a: türün yürürlükte rotası, yoksa Seri) ve yürürlükteki revizyonudur.
 // 3296-3 a: sipariş partisinde elle seçilen rota (aynı ürünün, yürürlükte revizyonu olan) önce gelir; başka ürünün ya da yürürlükte
 // revizyonu olmayan rotası seçildiyse türün rotasına düşülür ve `elle` false döner (onay penceresi bunu gösterir).
 export async function siparisAcilisiRotasi(
   db: Db, malzemeNo: number, emirTuru: EmirTuru, secilenRotaId: number | null = null,
-): Promise<{ rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean } | null> {
+): Promise<{ rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean; seriyeDustu: boolean } | null> {
   if (secilenRotaId !== null) {
     const r = await s.rotaOku(db, secilenRotaId);
     const y = r !== null && r.malzemeId === malzemeNo ? await s.rotaninYururlugu(db, r.id) : null;
-    if (r !== null && y !== null) return { rotaId: r.id, ad: r.ad, harf: y.harf, revizyonId: y.id, elle: true };
+    if (r !== null && y !== null) return { rotaId: r.id, ad: r.ad, harf: y.harf, revizyonId: y.id, elle: true, seriyeDustu: false };
   }
   const t = await s.turunRotasi(db, malzemeNo, emirTuru);
   if (t === null) return null;
   const harf = t.revizyonId === null ? null : revizyonuAl(await s.revizyonOku(db, t.revizyonId)).harf;
-  return { rotaId: t.rotaId, ad: t.ad, harf, revizyonId: t.revizyonId, elle: false };
+  return { rotaId: t.rotaId, ad: t.ad, harf, revizyonId: t.revizyonId, elle: false, seriyeDustu: t.seriyeDustu };
 }
 
 // 3296-2 a: emrin kaynak revizyonunun rotası (bölmede partinin türünün rotası bununla karşılaştırılır); revizyon yoksa null.

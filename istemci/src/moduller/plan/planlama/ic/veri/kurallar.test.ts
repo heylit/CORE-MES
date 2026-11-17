@@ -22,7 +22,7 @@ afterEach(() => { ufukKur(null); });
 describe('Veri ve kısıtlar hesapları', () => {
   it('kısıt kataloğu bugünkü sayfanınki: 6 grup, durum sayıları', () => {
     expect(KATALOG.map((g) => g.l.length)).toEqual([11, 6, 7, 12, 4, 7]);
-    expect(durumSayilari()).toEqual({ tam: 29, yaklasik: 5, karar: 2, yok: 11 });
+    expect(durumSayilari()).toEqual({ tam: 30, yaklasik: 5, karar: 2, yok: 10 });
   });
 
   it('parametre sınır dışını reddeder, seçimi ve boş fasoncuyu okur; yazma yerine göre', () => {

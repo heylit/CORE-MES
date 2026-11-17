@@ -9,9 +9,9 @@ import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmOnayliListeSatiri } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import type {
   AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, SiparisLogoBekletYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi, TeklifEki, TeklifEkiYazimi, TeklifEkleriCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
+import { STOK_AYRI_GRUPLARI, TEKLIF_EKI_AZAMI_BAYT } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
@@ -23,6 +23,7 @@ import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { dosyaTutamagi } from '../dosya/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
   acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
@@ -1008,6 +1009,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const oncekiSatirlar = await s.siparisSatirIdleri(db, id);
   await kisitKorumali({ satin_alma_fatura_eslemesi_satir: ILETILER.eslemeliSatir }, () => s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db)));
   await siparisRevizyonlariniYaz(db, id, oncekiSatirlar);
+  await teklifEkleriniBirak(db, id, eski.teklifler.filter((q) => !yazilacak.teklifler.some((y) => y.id === q.id)).map((q) => q.id));
   await s.siparisGuncellemesiniIsaretle(db, id, guncellenecek);
   const siparisteMi = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
   if (siparisteMi(yazilacak.durum) && !siparisteMi(eski.durum)) {
@@ -1508,6 +1510,7 @@ export async function talepSil(db: Db, k: Kullanici, id: string, surum: number):
   // 2876 (Veri): güncelleme talebinin kökü silinmez (RESTRICT); kök taslağa dönemez, kısıt yine de açık iletiyle karşılanır.
   await kisitKorumali({ satin_alma_talep_guncellenen: ILETILER.guncellemesiOlanSilinmez },
     () => surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok }));
+  await teklifEkleriniBirak(db, id, eski.teklifler.map((q) => q.id));
   return { tamam: true };
 }
 
@@ -1754,6 +1757,44 @@ export async function siparisSatiriBelgeleri(db: Db, satirIdler: readonly number
   const m = await kayitlaraBagliBelgeler(db, BELGE_HEDEFI, satirIdler);
   return new Map([...m].map(([id, l]) => [id, l.map(belgeOzeti)]));
 }
+// 3404: tedarikçinin PDF teklifi teklifin ekidir. Dosya ortak depodadır, bağ satın almanın tutamağıyla "teklif:<talep>:<teklif>" kaydına
+// yazılır; göç gerekmez. Teklif silinince bağ talep kaydında kaldırılır. Okuma kapısı teklif fiyatını okuyan uçla aynıdır (uclar.ts).
+const teklifTutamagi = dosyaTutamagi('satin-alma');
+const TEKLIF_EKI_SINIRI = { turler: ['pdf'] as const, azamiBayt: TEKLIF_EKI_AZAMI_BAYT };
+const TEKLIF_YOK = 'Teklif bulunamadı.';
+const EK_YOK = 'Dosya bu teklife bağlı değil.';
+export const teklifEkiKaydi = (talepId: string, teklifId: string): string => `teklif:${talepId}:${teklifId}`;
+const teklifEkiOzeti = (d: { ozet: string; ad: string; boyut: number; zaman: string }): TeklifEki => ({ ozet: d.ozet, ad: d.ad, boyut: d.boyut, zaman: d.zaman });
+async function teklifOlmali(db: Db, talepId: string, teklifId: string): Promise<void> {
+  if (!(await s.teklifVarMi(db, talepId, teklifId))) throw bulunamadi(TEKLIF_YOK);
+}
+const ekListesi = async (db: Db, talepId: string, teklifId: string): Promise<TeklifEkleriCevabi> =>
+  ({ ekler: (await teklifTutamagi.bagliDosyalar(db, teklifEkiKaydi(talepId, teklifId))).map(teklifEkiOzeti) });
+// Teklif denetimi her uçta bir kez, işin başında yapılır; yazan uç cevabı denetimsiz listeden verir.
+export async function teklifEkleri(db: Db, talepId: string, teklifId: string): Promise<TeklifEkleriCevabi> {
+  await teklifOlmali(db, talepId, teklifId);
+  return ekListesi(db, talepId, teklifId);
+}
+export async function teklifEkiBagla(db: Db, k: Kullanici, talepId: string, teklifId: string, g: TeklifEkiYazimi): Promise<TeklifEkleriCevabi> {
+  await teklifOlmali(db, talepId, teklifId);
+  await teklifTutamagi.dosyaBagla(db, k, { ozet: g.ozet, kayit: teklifEkiKaydi(talepId, teklifId), ad: g.dosyaAdi, belgeTuru: null }, TEKLIF_EKI_SINIRI);
+  return ekListesi(db, talepId, teklifId);
+}
+export async function teklifEkiKaldir(db: Db, talepId: string, teklifId: string, ozet: string): Promise<TeklifEkleriCevabi> {
+  await teklifOlmali(db, talepId, teklifId);
+  if ((await teklifTutamagi.bagKaldir(db, teklifEkiKaydi(talepId, teklifId), ozet)).length === 0) throw bulunamadi(EK_YOK);
+  return ekListesi(db, talepId, teklifId);
+}
+export async function teklifEkiDosyasi(db: Db, talepId: string, teklifId: string, ozet: string): Promise<IkiliCevap> {
+  const akis = await teklifTutamagi.dosyaAkisi(db, teklifEkiKaydi(talepId, teklifId), ozet);
+  if (akis === null) throw bulunamadi(EK_YOK);
+  return akis;
+}
+// Silinen teklifin ekleri bağsız kalır; dosya modülü bağsız dosyayı kendi süresinde temizler.
+async function teklifEkleriniBirak(db: Db, talepId: string, teklifIdler: readonly string[]): Promise<void> {
+  for (const id of teklifIdler) await teklifTutamagi.bagKaldir(db, teklifEkiKaydi(talepId, id), null);
+}
+
 // Dış operasyonlar (kart #542): fason iş emirleri üretim emirlerinden; firma adı finanstan, gecikme kuraldan.
 // 2428: her satır dış işlem emrini (no, durum) taşır; stoktaki partinin belgeleri ayrı listededir (emir satırlarının hesabı aynen kalır).
 export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {

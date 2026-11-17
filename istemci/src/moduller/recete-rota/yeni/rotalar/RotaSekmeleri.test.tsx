@@ -8,7 +8,8 @@ import { revizyonOrnegi, rotaDurumu } from './test-veri.ts';
 beforeEach(() => { try { localStorage.setItem('tc-rr1-gorunum', 'dikey'); } catch { /* test ortamında depo yoksa */ } });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* test ortamında depo yoksa */ } });
 
-// Uydurma: örnek mamul 11'in Standart rotası (1) Rev A yürürlükte, FAI rotası (2) Rev A taslak.
+// Uydurma: örnek mamul 11'in Seri (Standart) rotası (1) Rev A yürürlükte, FAI rotası (2) Rev A taslak. Sahibi Standart rotayı
+// "Seri" adıyla döner (3411 a).
 const standartRev = { ...revizyonOrnegi('71', 'A', 'yururlukte', 3), rotaId: '1', rotaStandart: true };
 const faiRev = { ...revizyonOrnegi('81', 'A', 'taslak', 1), rotaId: '2', rotaStandart: false };
 type Rota = UrunRevizyonlariCevabi['rotalar'][number];
@@ -18,14 +19,15 @@ const cevap = (rotalar: Rota[]): UrunRevizyonlariCevabi => ({
   revizyonlar: [], rotalar, taslakAcilabilir: true, kartOperasyonlari: null,
 });
 
-const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Standart', true), rota(2, 'FAI rotası', false, ['fai'])]) => {
+const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai'])]) => {
   let liste = rotalar;
   const istekler: Istek[] = sunucuKur(kullanici, {
     durum: () => json(200, rotaDurumu([standartRev, faiRev])),
     yazmalar: {
       'GET /rota/urunler/11': () => json(200, cevap(liste)),
       'POST /rota/urunler/11/rotalar': (g) => {
-        liste = [...liste, rota(3, (g as { ad: string }).ad, false)];
+        const t = (g as { emirTuru: 'numune' }).emirTuru;
+        liste = [...liste, rota(3, t === 'numune' ? 'Numune' : t, false, [t])];
         return json(200, cevap(liste));
       },
       'POST /rota/urunler/11/rotalar/2/turler': (g) => {
@@ -69,51 +71,44 @@ describe('Rota sekmeleri (3247 a)', () => {
     kur();
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
-    const std = await within(g).findByRole('button', { name: /Standart/ });
-    expect(std.textContent).toBe('StandartÖteki bütün türler · Rev A');
+    const std = await within(g).findByRole('button', { name: /^Seri/ });
+    expect(std.textContent).toBe('SeriSeri ve kendi rotası olmayan türler · Rev A');
     expect(std.getAttribute('aria-pressed')).toBe('true');
     const fai = within(g).getByRole('button', { name: /FAI rotası/ });
-    expect(fai.textContent).toBe('FAI rotasıFAI · yürürlükte revizyon yok · taslak var');
-    expect(revizyonlar('Standart')).toEqual(['Rev A · yürürlükte']);
+    expect(fai.textContent).toBe('FAI rotasıYalnız FAI emirleri · yürürlükte revizyon yok · taslak var');
+    expect(revizyonlar('Seri')).toEqual(['Rev A · yürürlükte']);
     fireEvent.click(fai);
     await waitFor(() => { expect(fai.getAttribute('aria-pressed')).toBe('true'); });
     expect(revizyonlar('FAI rotası')).toEqual(['Rev A · taslak']);
   });
 
-  it('"Yeni rota" adla rota açar, ona geçer ve Standart\'ın yürürlükteki revizyonundan taslak açar', async () => {
+  it('3411 a: "Yeni rota" ad sormaz, emir türü seçilir; rotası olan tür seçilemez; açılan rotaya geçer ve Seri\'nin yürürlükteki revizyonundan taslak açar', async () => {
     const istekler = kur();
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
     menudenSec(bolge, 'Yeni rota');
-    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: 'Numune rotası' } });
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Rotayı aç' }));
-    const yeni = await within(g).findByRole('button', { name: /Numune rotası/ });
+    expect(within(bolge).queryByRole('textbox', { name: 'Yeni rotanın adı' })).toBeNull();
+    const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
+    expect(within(turler).queryByRole('button', { name: 'Seri' })).toBeNull();
+    expect((within(turler).getByRole('button', { name: 'FAI (var)' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(bolge).getByRole('button', { name: 'Rotayı aç' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
+    expect(within(bolge).getByText('Numune emirleri, bu rota yürürlüğe girene kadar Seri rotasıyla açılmaya devam eder.')).toBeTruthy();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    const yeni = await within(g).findByRole('button', { name: /^Numune/ });
     await waitFor(() => { expect(yeni.getAttribute('aria-pressed')).toBe('true'); });
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(true); });
-    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ ad: 'Numune rotası' });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'numune' });
+    expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/taslak-ac')?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 71 }, rotaId: 3 });
-  });
-
-  it('3296: "Yeni rota" açılırken emir türü seçilir; tür rota açılınca bağlanır, başka rotadan taşınan önceden yazılır', async () => {
-    const istekler = kur();
-    rrAc('/recete-rota/schema');
-    const g = await sekmeler();
-    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
-    menudenSec(bolge, 'Yeni rota');
-    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: 'Numune rotası' } });
-    const turler = within(bolge).getByRole('group', { name: 'Bu rotayı kullanan emir türleri' });
-    fireEvent.click(within(turler).getByRole('checkbox', { name: 'Numune' }));
-    fireEvent.click(within(turler).getByRole('checkbox', { name: 'FAI' }));
-    expect(within(bolge).getByText('Kaydedince başka rotadan bu rotaya geçer: FAI (FAI rotası).')).toBeTruthy();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Rotayı aç' }));
-    await within(g).findByRole('button', { name: /Numune rotası/ });
-    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar/3/turler')).toBe(true); });
-    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/3/turler')?.govde).toEqual({ emirTurleri: ['numune', 'fai'], surum: 1 });
+    // Türüyle açılan rotanın adı ve türü değişmez: menüde "Rotanın adı ve emir türleri" yoktur.
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Rota işlemleri' }));
+    expect(screen.queryByRole('menuitem', { name: 'Rotanın adı ve emir türleri' })).toBeNull();
   });
 
   it('"Rotanın adı ve emir türleri" türleri yazar; başka rotadan taşınan tür kaydetmeden önce yazılır', async () => {
-    const istekler = kur(YONETICI, [rota(1, 'Standart', true), rota(2, 'FAI rotası', false, ['fai']), rota(4, 'Numune rotası', false, ['numune'])]);
+    const istekler = kur(YONETICI, [rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai']), rota(4, 'Numune rotası', false, ['numune'])]);
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     fireEvent.click(await within(g).findByRole('button', { name: /FAI rotası/ }));
@@ -129,7 +124,7 @@ describe('Rota sekmeleri (3247 a)', () => {
   });
 
   it('tek rotası olan üründe rota açamayan kullanıcıya sekme satırı çıkmaz', async () => {
-    const istekler = kur(OKUYAN, [rota(1, 'Standart', true)]);
+    const istekler = kur(OKUYAN, [rota(1, 'Seri', true)]);
     rrAc('/recete-rota/schema');
     const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11')).toBe(true); });
@@ -157,7 +152,7 @@ describe('Rota sekmeleri (3247 a)', () => {
       yazmalar: {
         'GET /rota/urunler/11': () => {
           if (ilk) { ilk = false; return json(500, { kod: 'IC_HATA', mesaj: 'Sunucu hatası.' }); }
-          return json(200, cevap([rota(1, 'Standart', true), rota(2, 'FAI rotası', false, ['fai'])]));
+          return json(200, cevap([rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai'])]));
         },
       },
     });

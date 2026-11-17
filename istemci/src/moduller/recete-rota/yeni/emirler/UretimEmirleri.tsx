@@ -323,6 +323,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
         )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
+      {rotali && rotaSecimi?.seriyeDusus && (
+        <p className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{rotaSecimi.seriyeDusus}</span></p>
+      )}
       {rotali && (
         <IsaretKutusu
           etiket="Stoktan rezerve et" checked={f.rezerve} onChange={(o) => { yaz({ rezerve: o.target.checked }); }}

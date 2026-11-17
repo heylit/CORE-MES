@@ -9,6 +9,7 @@ Kaynak: göçler `sunucu/gocler/*arkon*`, `arkon/shared/model.ts`, `sunucu/modul
 - `arkon_dosya_parcasi` (geçici), `arkon_ileti` (geçici). Dosya içeriği ortak `dosya` deposunda (`dosya_bagi` modul 'arkon', kayıt 'depo'; kart #732); `arkon_dosya` göçten sonra kullanılmaz.
 - `arkon_tmi_yansima`: `kayit_id`, `emir_id` (yabancı anahtarsız), `kisi_id`, `sonuc` (bekliyor, yazildi, reddedildi, eslenemedi, hatali), `neden`, `deneme`, `son_hata`, `son_deneme`, `zaman`.
 - `arkon_kuyruk_sirasi` (kart 527): `is_emri_id` (yabancı anahtarsız), `parca_no`, `istasyon_id`, `sira`, `surum`, `kisi_id`, `zaman`. İş sırası kavramı: canlı plan sırası plan modülünün, istasyon kuyruğu sırası Arkon'un.
+- `arkon_cihaz_bagi` (kart 3392, yalnız eklenir): `cihaz` (tarayıcının rastgele UUID'i), `istasyon_id` (istasyon), `makine_id` (makine, boş: sabit değil), `kisi_id`, `zaman`. Ortak cihazın bağı cihazda saklanır; tablo yalnız izdir.
 
 ## Kavramlar
 | Kavram | Arkon ne tutuyor | Yer | Bağ |

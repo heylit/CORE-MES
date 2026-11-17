@@ -37,14 +37,15 @@ describe('stok: başlangıç stoğu (gerçek PostgreSQL)', () => {
     const c = await app.inject({ method: yontem, url: `/api${yol}`, headers: baslik, ...(govde === undefined ? {} : { payload: govde as object }) });
     return { durum: c.statusCode, govde: (c.body ? c.json() : undefined) as T };
   }
-  async function kart(g: { tur?: string; birim?: string; skt?: boolean; durum?: string } = {}): Promise<{ no: number; kod: string }> {
+  async function kart(g: { tur?: string; birim?: string; skt?: boolean; durum?: string; onek?: string } = {}): Promise<{ no: number; kod: string }> {
     sira += 1;
-    await o().sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['ORN-BS-']);
+    const onek = g.onek ?? 'ORN-BS-';
+    await o().sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', [onek]);
     const r = (await o().sahip.tek<{ no: number; kod: string }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, hizmet_yonu)
-       VALUES ($1, $2, 'ORN-BS-', $3, $4, $5, $6, $6, CASE WHEN $2 = 'hizmet' THEN 'alinan' END) RETURNING no, stok_kodu AS kod`,
+       VALUES ($1, $2, $7, $3, $4, $5, $6, $6, CASE WHEN $2 = 'hizmet' THEN 'alinan' END) RETURNING no, stok_kodu AS kod`,
       [`orn-bs-${sira}`, g.tur ?? 'hammadde', sira, g.durum ?? 'aktif',
-        JSON.stringify({ id: `orn-bs-${sira}`, com: { ad: `ORN başlangıç ${sira}`, birim: g.birim ?? 'kg', ...(g.skt ? { skt: true } : {}) } }), yonetici]))!;
+        JSON.stringify({ id: `orn-bs-${sira}`, com: { ad: `ORN başlangıç ${sira}`, birim: g.birim ?? 'kg', ...(g.skt ? { skt: true } : {}) } }), yonetici, onek]))!;
     return r;
   }
   async function konum(tur = 'depo_zemini'): Promise<string> {
@@ -206,6 +207,13 @@ describe('stok: başlangıç stoğu (gerçek PostgreSQL)', () => {
     assert.deepEqual(ayr.baslangic, { dosyaAdi: 'ORN-sayim.xlsx', duzeltmeler: [{ sira: 3, alan: 'miktar', dosyada: '25', girilen: '2.5', toplu: false }] });
     const liste = malKabullerCevabi.parse((await istek('depo', 'GET', '/stok/mal-kabuller?tur=baslangic&asil=1')).govde);
     assert.ok(liste.satirlar.some((x) => x.id === c.belge!.id));
+  });
+
+  test('küçük harfle yazılan kod kartını bulur: i ve ı Türkçe büyük harfe çevrilmez, stok kodu ASCII', async () => {
+    const k = await kart({ onek: 'ORN-MIL-' });
+    const g = await konum();
+    const d = await denetle([satir({ malzemeKodu: k.kod.toLowerCase(), konumKodu: g }, 2), satir({ malzemeKodu: ` ${k.kod.toLowerCase()} `, konumKodu: g, lotNo: 'ORN-L-2' }, 3)]);
+    assert.deepEqual(d.satirlar.map((x) => x.durum), ['eklenecek', 'eklenecek'], JSON.stringify(d.satirlar));
   });
 
   test('hatalı satır varsa hiçbir şey yazılmaz; denetim satırlarla döner', async () => {
