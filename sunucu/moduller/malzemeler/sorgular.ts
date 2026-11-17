@@ -878,10 +878,13 @@ export async function kategorileriYaz(
 }
 
 // Değişiklik talebi kartın kaydında durur; katalogdaki sayım gibi iptal dışındaki her kartta sayılır.
-export async function onayBekleyenKartSayisi(db: Db): Promise<number> {
+// Deneme işaretli kart (gizli) sayılmaz (3395 madde 2).
+export async function onayBekleyenKartSayisi(db: Db, gizli: readonly number[]): Promise<number> {
   const r = await db.tek<{ n: number }>(
     `SELECT count(*)::int AS n FROM malzeme_katalog_karti
-      WHERE onay_durumu = 'onayda' OR (onay_durumu <> 'iptal' AND kayit->'talep'->>'durum' = 'beklemede')`,
+      WHERE (onay_durumu = 'onayda' OR (onay_durumu <> 'iptal' AND kayit->'talep'->>'durum' = 'beklemede'))
+        AND NOT (no = ANY($1::int[]))`,
+    [[...gizli]],
   );
   return r?.n ?? 0;
 }

@@ -554,7 +554,7 @@ export async function adimliListe(
 
 // Gecikmenin günü tesis saatine göredir.
 export async function adimliOzet(db: Db, simdi = Date.now()): Promise<AdimliOzetCevabi> {
-  return adimliOzetSay(await s.adimliOzetGruplari(db, tesisGunu(simdi)));
+  return adimliOzetSay(await s.adimliOzetGruplari(db, tesisGunu(simdi), await denemeIsaretliKimlikler(db, 'uretim_emri')));
 }
 
 // Biten (bitmiş ya da iptal) emirler, en yeni önce, sayfalı (kart #1323).

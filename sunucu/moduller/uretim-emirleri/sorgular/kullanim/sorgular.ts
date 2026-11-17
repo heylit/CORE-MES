@@ -32,37 +32,39 @@ export interface OzetSatiri {
 
 // Emir sayıları iş emirli listeyle aynı kümedir (arşivde olmayan, malzemeli). Kuyruk: kişiye atanmış, bitmemiş iş emirleri
 // (açık emirde). Bugün: veritabanı oturumu tesis saat dilimindedir (#cekirdek/db.ts), current_date tesis günüdür.
-export async function ozetGetir(db: Db, kisiId: number): Promise<OzetSatiri> {
+// Deneme işaretli emir (gizli) sayılmaz, sayımı da bugünkü toplama girmez (3395 madde 2).
+export async function ozetGetir(db: Db, kisiId: number, gizli: readonly number[]): Promise<OzetSatiri> {
   const satir = await db.tek<OzetSatiri>(
     `SELECT
-       (SELECT count(*)::int FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND e.durum = 'taslak') AS planlanacak,
-       (SELECT count(*)::int FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND e.durum IN ('planli', 'basladi')) AS acik,
+       (SELECT count(*)::int FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND e.durum = 'taslak' AND NOT (e.id = ANY($2::int[]))) AS planlanacak,
+       (SELECT count(*)::int FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND e.durum IN ('planli', 'basladi') AND NOT (e.id = ANY($2::int[]))) AS acik,
        (SELECT count(*)::int FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
-         WHERE i.kisi_id = $1 AND i.durum <> 'tamam' AND NOT e.arsiv AND e.durum IN ('planli', 'basladi')) AS kuyrugum,
+         WHERE i.kisi_id = $1 AND i.durum <> 'tamam' AND NOT e.arsiv AND e.durum IN ('planli', 'basladi') AND NOT (e.id = ANY($2::int[]))) AS kuyrugum,
        (SELECT sum(s.adet)::int FROM uretim_sayimi s
-         WHERE s.kisi_id = $1 AND s.tur = 'saglam' AND s.zaman >= current_date::timestamptz AND s.zaman < (current_date + 1)::timestamptz) AS "bugunSaglam",
+         WHERE s.kisi_id = $1 AND s.tur = 'saglam' AND s.zaman >= current_date::timestamptz AND s.zaman < (current_date + 1)::timestamptz
+           AND NOT (s.emir_id = ANY($2::int[]))) AS "bugunSaglam",
        count(*) FILTER (WHERE a.durum = 'planli' AND NOT a.baslamis)::int AS planda,
        count(*) FILTER (WHERE (a.durum = 'basladi' AND a.calisma = 'calisiyor') OR (a.durum = 'planli' AND a.baslamis))::int AS uretimde,
        count(*) FILTER (WHERE a.durum = 'basladi' AND a.calisma <> 'calisiyor')::int AS duraklatilmis,
        count(*) FILTER (WHERE a.durum = 'bitti' AND a.bitis >= date_trunc('week', current_date)::timestamptz)::int AS "buHaftaBiten"
        FROM (SELECT e.durum, e.calisma, e.bitis,
                     EXISTS (SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.durum <> 'bekliyor') AS baslamis
-               FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL) a`,
-    [kisiId],
+               FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND NOT (e.id = ANY($2::int[]))) a`,
+    [kisiId, [...gizli]],
   );
   if (satir === null) throw new Error('Özet okunamadı.');
   return satir;
 }
 
 // Gün sınırı veritabanı oturumunun dilimindedir (tesis saati); düzeltme satırları da sayılır, gün toplamı nettir.
-export function gunlukUretimGetir(db: Db, gun: number): Promise<{ gun: string; saglam: number; hurda: number }[]> {
+export function gunlukUretimGetir(db: Db, gun: number, gizli: readonly number[]): Promise<{ gun: string; saglam: number; hurda: number }[]> {
   return db.sorgu(
     `SELECT ${TARIH('s.zaman')} AS gun,
             COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'saglam'), 0)::int AS saglam,
             COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'hurda'), 0)::int AS hurda
-       FROM uretim_sayimi s WHERE s.zaman >= (current_date - ($1::int - 1))::timestamptz
+       FROM uretim_sayimi s WHERE s.zaman >= (current_date - ($1::int - 1))::timestamptz AND NOT (s.emir_id = ANY($2::int[]))
       GROUP BY 1 ORDER BY 1`,
-    [gun],
+    [gun, [...gizli]],
   );
 }
 
