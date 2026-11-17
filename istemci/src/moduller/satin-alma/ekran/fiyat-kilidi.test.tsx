@@ -6,7 +6,8 @@ import type { PurchaseRequest, Supplier } from '../merkez/tipler.ts';
 import { DEFAULT_SETTINGS } from '../merkez/constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, V, bump } from '../merkez/store.ts';
-import { kilitPaneli, money, setFiyatKilidi, short } from '../merkez/util.ts';
+import { KILIT_YETKISI, kilitPaneli, money, setFiyatKilidi, short } from '../merkez/util.ts';
+import { FIYAT_GOREN_ISLEMLER, biriVarMi } from '../fiyat-yetkisi.ts';
 import { Siparisler } from './Siparisler.tsx';
 import { Talepler } from './Talepler.tsx';
 
@@ -54,5 +55,23 @@ describe('satın alma merkezi: fiyat kilidi (3401-1 a)', () => {
     render(<MemoryRouter><Siparisler /></MemoryRouter>);
     expect(screen.queryByRole('columnheader', { name: /Tutar/ })).toBeNull();
     expect(screen.getByText(/Fiyat sütunları yetkinizde değil/)).toBeTruthy();
+  });
+
+  // Test T2: SatinAlma.tsx kilidi oturum işlemlerinden `!biriVarMi(islemler, FIYAT_GOREN_ISLEMLER)` ile kurar. Planlamanın oturumu yalnız
+  // satin-alma.oku taşır (kurulum/yetki-matrisi.md); listeye oku girerse planlama fiyatı görür ve bu test düşer.
+  it('planlama oturumu (yalnız satin-alma.oku): teklif fiyatı yerinde "Yetkiniz yok" ve yetki adı; satın almacıda değer', () => {
+    const kilitle = (islemler: readonly string[]) => setFiyatKilidi(!biriVarMi(islemler, FIYAT_GOREN_ISLEMLER));
+    kilitle(['satin-alma.oku']);
+    expect(money(1250.5)).toBe('Yetkiniz yok');
+    const panel = kilitPaneli('Teklif ve karar fiyatları');
+    expect(panel).toContain('Yetkiniz yok');
+    expect(panel).toContain(KILIT_YETKISI);
+    render(<MemoryRouter><Talepler /></MemoryRouter>);
+    expect(screen.queryByRole('columnheader', { name: /Tutar/ })).toBeNull();
+    cleanup();
+    for (const islemler of [['satin-alma.oku', 'satin-alma.fiyat-oku'], ['satin-alma.oku', 'satin-alma.yaz'], ['satin-alma.oku', 'satin-alma.onayla']]) {
+      kilitle(islemler);
+      expect(money(1250.5)).toBe('1.250,50 ₺');
+    }
   });
 });

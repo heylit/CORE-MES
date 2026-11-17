@@ -11,7 +11,7 @@ import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyati
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
-import { basamakEsigiReddi } from './kurallar.ts';
+import { basamakEsigiReddi, fiyatsizGorunum } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
@@ -894,4 +894,20 @@ test('2480: kalanı kapatılmış siparişte fatura gerçekleşen değerle karş
   assert.deepEqual(faturaEslesmeUyarilari(sip('1', true), { tutar: '19', paraBirimi: 'TRY' }), []);
   assert.deepEqual(faturaEslesmeUyarilari(sip('1', false), { tutar: '19', paraBirimi: 'TRY' }), [ILETILER.eslesmeEksikTeslim]);
   assert.deepEqual(faturaEslesmeUyarilari(sip('5', true), { tutar: '20', paraBirimi: 'TRY' }), [ILETILER.eslesmeFazlaTeslim, ILETILER.eslesmeTutarFazla]);
+});
+
+// 3401-1 a (Test T1): fiyatsız görünümde onay notu boşalır (not fiyat taşıyabilir); sonuç, kişi ve diğer alanlar kalır.
+test('fiyatsizGorunum: onay notu, karar gerekçesi ve teklif fiyatı boşalır; onayın sonucu ve kişisi kalır', () => {
+  const t = {
+    teklifler: [{ id: 'q1', notlar: 'Deneme teklif notu 555', fiyatlar: [{ kalemId: 'k1', birimFiyat: '1234.5' }], iskontoYuzdesi: '3', nakliye: '10', digerMasraf: '1', kur: '1', ilkToplam: '99' }],
+    karar: { gerekce: 'Deneme gerekçe 888', ogrenilenler: 'Deneme ders', sabitKurlar: [{ paraBirimi: 'USD', kur: '30' }] },
+    senaryolar: [{ ad: 'Deneme senaryo' }],
+    onaylar: [{ id: 'o1', kisiId: 4, sonuc: 'onay', notlar: 'Deneme gizli onay notu 777' }],
+    hareketler: [{ kisiId: 5 }, { kisiId: 2 }],
+  };
+  const g = fiyatsizGorunum(t, 5);
+  assert.deepEqual(g.onaylar, [{ id: 'o1', kisiId: 4, sonuc: 'onay', notlar: '' }]);
+  assert.deepEqual([g.karar?.gerekce, g.karar?.ogrenilenler, g.karar?.sabitKurlar, g.senaryolar, g.hareketler], ['', '', [], [], [{ kisiId: 5 }]]);
+  assert.deepEqual([g.teklifler[0]?.notlar, g.teklifler[0]?.fiyatlar, g.teklifler[0]?.iskontoYuzdesi], ['', [], null]);
+  assert.doesNotMatch(JSON.stringify(g), /777|888|555|1234\.5/);
 });
