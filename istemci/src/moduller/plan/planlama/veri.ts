@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MotorUyarilariCevabi, PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { DurumCevabi, KaynakDegisikligi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { DurumCevabi, KaynakDegisikligi, PlanlamaCalismasiCevabi, SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
 import { ufukKur } from './ufuk-olcegi.ts';
@@ -33,6 +33,9 @@ export interface PlanlamaDeposu {
   planSurumu: PlanSurumCevabi | null;
   senaryolar: SenaryolarCevabi | null;
   motorUyarilari: string[] | null;
+  // 3369: açık satın alma siparişleri (sipariş no, tedarikçi; anahtar Satın Alma satırı). Satın almayı okuyamayana ya da uç okunamazsa
+  // null: Kokpit malzeme satırında şirket boş kalır. Eksikliği `okunamayan`a yazılmaz (ekranın işi onsuz tamdır).
+  acikSiparisler?: SatinAlmaEkiCevabi['acikSiparisler'];
   okunamayan: IstegeBagliDilim[];
 }
 
@@ -44,7 +47,7 @@ async function dilim<T>(okuma: Promise<T>): Promise<T | null> {
 
 // ben, kayitlar ve çalışma zorunludur (eski ekran da bunlarsız açılmaz); öteki okumalar düşerse ekran o dilimsiz açılır.
 export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
-  const [ben, kayitlar, calismaCevabi, durum, planSurumu, senaryolar, uyari] = await Promise.all([
+  const [ben, kayitlar, calismaCevabi, durum, planSurumu, senaryolar, uyari, satinAlma] = await Promise.all([
     o.get<BenCevabi>('/recete-rota/ben'),
     o.get<KayitlarCevabi>('/recete-rota/kayitlar'),
     o.get<PlanlamaCalismasiCevabi>('/plan/planlama-calismasi'),
@@ -52,6 +55,7 @@ export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
     dilim(o.get<PlanSurumCevabi>('/plan/surum')),
     dilim(o.get<SenaryolarCevabi>('/plan/senaryolar')),
     dilim(o.get<MotorUyarilariCevabi>('/plan/motor-uyarilari')),
+    dilim(o.get<Partial<SatinAlmaEkiCevabi> | null>('/plan/satin-alma-eki')),
   ]);
   const kayit = (anahtar: string) => kayitlar.kayitlar.find((k) => k.anahtar === anahtar && k.bicim === 'json') ?? null;
   const calisma = calismaCevabi.calisma === null ? null : calismaOku(calismaCevabi.calisma);
@@ -66,6 +70,7 @@ export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
     receteRotaKaydi: kayit(ONEK)?.deger ?? null,
     durum, planSurumu, senaryolar,
     motorUyarilari: uyari?.uyarilar ?? null,
+    acikSiparisler: satinAlma?.acikSiparisler ?? null,
     okunamayan: (Object.keys(dilimler) as IstegeBagliDilim[]).filter((k) => dilimler[k] === null),
   };
 }

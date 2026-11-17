@@ -35,6 +35,28 @@ export interface PlanIslemi {
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string }
+// Emrin malzemesinin karşılanışı (3369, motor degerlendir.js malKaydi). pay.tur 'sa': verilmiş sipariş ya da onaylı talep (kim: Satın
+// Alma satırının anahtarı; elle girilen satırda yok); 'yok': siparişi verilmemiş eksik için motorun varsaydığı satır. tb: termini
+// girilmemiş, plan malzemeyi `gelis` anında gelmiş saydı. t: malzemenin hazır anı; karşılanmayan miktar (eksik) varsa null.
+export interface MalzemePayi { tur: 'sa' | 'yok'; kim: number | null; q: number; gelis: number | null; tb: boolean }
+export interface PlanMalzemesi { kod: string; adim: string | null; need: number; t: number | null; stok: number; eksik: number; pay: MalzemePayi[] }
+function malOku(v: unknown): Record<string, PlanMalzemesi[]> {
+  const s: Record<string, PlanMalzemesi[]> = {};
+  if (!nesne(v)) return s;
+  for (const [j, l] of Object.entries(v)) {
+    if (!Array.isArray(l)) continue;
+    s[j] = l.filter(nesne).flatMap((d) => {
+      const kod = metin(d.kod), need = sayi(d.need);
+      if (kod === null || need === null) return [];
+      const pay = (Array.isArray(d.pay) ? d.pay : []).filter(nesne).flatMap((x): MalzemePayi[] => {
+        const q = sayi(x.q);
+        return q === null ? [] : [{ tur: x.tur === 'yok' ? 'yok' : 'sa', kim: sayi(x.kim), q, gelis: sayi(x.gelis), tb: !!x.tb }];
+      });
+      return [{ kod, adim: d.adim === null || d.adim === undefined ? null : String(d.adim), need, t: sayi(d.t), stok: sayi(d.stok) ?? 0, eksik: sayi(d.eksik) ?? 0, pay }];
+    });
+  }
+  return s;
+}
 export interface OkunanPlan {
   ops: Record<string, PlanIslemi>;
   fail: string[];
@@ -47,6 +69,8 @@ export interface OkunanPlan {
   // Motorun yerleşmeme nedeni (2516-2); eski kayıtta yok. Kişi tezgâhına yerleşen iş canlı planın makine kuyruğuna yazılmaz.
   failNeden?: Record<string, FailNedeni>;
   kisiTezgahIsleri?: string[];
+  // Eski kayıtta yok (boş): Kokpit malzeme satırı yazmaz.
+  mal?: Record<string, PlanMalzemesi[]>;
 }
 
 function takimOku(l: unknown[]): TakimOmru[] {
@@ -86,6 +110,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
     warn: Array.isArray(p.warn) ? p.warn.filter(nesne).map((w) => ({ t: metin(w.t) ?? '', j: metin(w.j) ?? metin(w.job), txt: metin(w.txt) ?? '' })) : [],
     dataVer: p.dataVer,
     failNeden: failNedenOku(p.failNeden),
+    mal: malOku(p.mal),
     kisiTezgahIsleri: Array.isArray(o.kisiTezgahIsleri) ? o.kisiTezgahIsleri.filter((x): x is string => typeof x === 'string') : [],
   };
 }

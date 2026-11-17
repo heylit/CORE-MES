@@ -34,6 +34,22 @@ function dengeKilit(st) {
 
 /* planın kaydı (c-masa): ekranın sakladığı biçim. 3199: özel takımın ömür hesabı (değişim anı, kalan) yalnız takımlı işte taşınır */
 function opKaydi(r) { return { id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0, ...(r.bitti ? { bitti: 1 } : {}), ...(r.takim && r.takim.length ? { takim: r.takim } : {}), ...(r.ikBas != null ? { ikBas: r.ikBas } : {}) }; }
+/* 3369: emrin malzemesi nereden karşılanıyor (motorun dağıtımı, compile matAlloc). Plan kaydında yalnız miktar, an ve gelişin kararlı
+   anahtarı (kim: Satın Alma satırı) durur; sipariş numarası ve tedarikçi adı kayda girmez, ekran onları kendi okuma yetkisiyle ayrıca okur.
+   pay.tur 'sa': verilmiş sipariş ya da onaylı talep; 'yok': siparişi verilmemiş eksik için motorun varsaydığı satır. tb: termini girilmemiş,
+   plan malzemeyi `gelis` anında gelmiş saydı. t: malzemenin hazır anı (gecikme ve muayene dahil); karşılanmayan miktar varsa null. */
+/** @param {any} [p] @param {MotorDurumu} [st] */
+function malKaydi(p, st) {
+  const cx = p.cx || compile(st), sa = st.D.satinalma || [], mal = {};
+  for (const j in cx.mat.res) { const det = cx.mat.res[j].det; if (!det.length) continue;
+    mal[j] = det.map(d => {
+      let stok = 0; const pay = [];
+      for (const u of d.use) { if (u.k !== 'sa') { stok += u.q; continue; }
+        const r = sa[u.i] || {}, x = cx.mat.po[u.i] || {};
+        pay.push({ tur: r.tm === 'siparis-yok' ? 'yok' : 'sa', ...(r.kim != null ? { kim: r.kim } : {}), q: u.q, gelis: x.soz ?? null, tb: r.tb ? 1 : 0 }); }
+      return { kod: d.kod, adim: d.adim, need: d.need, t: d.t != null && isFinite(d.t) ? d.t : null, stok, eksik: d.eksikQ || 0, pay }; }); }
+  return mal;
+}
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const ef = evaluate(p, st, ref, false);
@@ -41,7 +57,7 @@ function planKaydi(p, st, ref) {
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
-  return { ops, fail: p.fail || [], failNeden: p.failNeden || {}, ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300) };
+  return { ops, fail: p.fail || [], failNeden: p.failNeden || {}, ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */

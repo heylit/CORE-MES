@@ -52,7 +52,7 @@ describe('Planlama satın alma eki onaylı talep (3256-2, gerçek PostgreSQL)', 
       [t, 83000 + sira, yoneticiId]);
     await s.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, no]);
     await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id, miktar, birim) VALUES ($1, $2, 1, 'Deneme çubuk', $3, 25, $4)", [t, kl, katalog, birim]);
-    await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, termin_gun) VALUES ($1, $2, 'TRY', current_date, $3)", [t, tk, terminGun]);
+    await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, termin_gun, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, $3, $4)", [t, tk, terminGun, terminGun === 10 ? 'Deneme Tedarikci' : '']);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, karar_tarihi) VALUES ($1, 'tek', $2, current_date)", [t, tk]);
     await s.sorgu("INSERT INTO satin_alma_onay (id, talep_id, kisi_id, sonuc) VALUES ($1, $2, $3, 'onay')", [randomUUID(), t, yoneticiId]);
     return (await s.tek<{ no: string }>('SELECT no FROM satin_alma_talep WHERE id = $1', [t]))!.no;
@@ -81,10 +81,13 @@ describe('Planlama satın alma eki onaylı talep (3256-2, gerçek PostgreSQL)', 
     const sonra = tesisGunu(Date.now());
     const gun = (g: string, n: number) => new Date(Date.parse(`${g}T00:00:00Z`) + n * GUN).toISOString().slice(0, 10);
     assert.ok(once === sonra, 'gün dönümünde koşmadı');
-    assert.deepEqual(l, [
-      { kod: String(no), miktar: 25, tarih: gun(once, 10), siparisNo: termini },
-      { kod: String(no), miktar: 25, tarih: null, siparisNo: terminsiz },
+    // 3369: ek, gelişin kararlı anahtarını (onaylı talepte eksi sayı) ve teklifteki tedarikçi adını da taşır; ad yazılmadıysa boştur.
+    assert.deepEqual(l?.map(({ satir: _, ...x }) => x), [
+      { kod: String(no), miktar: 25, tarih: gun(once, 10), siparisNo: termini, tedarikci: 'Deneme Tedarikci' },
+      { kod: String(no), miktar: 25, tarih: null, siparisNo: terminsiz, tedarikci: null },
     ]);
+    const anahtarlar = (l ?? []).map((x) => x.satir);
+    assert.ok(anahtarlar.every((k) => typeof k === 'number' && k < 0) && new Set(anahtarlar).size === 2, 'onaylı talebin anahtarı eksi ve tekildir');
   });
 
   test('OTE-02: açık sipariş okuması olmayan onaylı talebi de görmez (yetki değişmedi)', async () => {

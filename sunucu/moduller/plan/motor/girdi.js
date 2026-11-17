@@ -685,11 +685,12 @@ function tmiTerminler(malzemeler, l, eski) {
 }
 /* 525 1 a: satın almanın açık siparişi (kalan miktar, beklenen teslim) motorda satın alma satırıdır. Sunucudan gelen satır işaretlidir ve
    her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.js tmUygula
-   termini olmayan satır gibi tahmin eder. Sunucu satırı hiç yoksa ve gelmediyse alan değişmez (null). */
+   termini olmayan satır gibi tahmin eder. Sunucu satırı hiç yoksa ve gelmediyse alan değişmez (null). kim: gelişin Satın Alma'daki kararlı
+   anahtarı (3369); plan kaydı siparişi bununla anar, tedarikçi adı çalışmaya yazılmaz. */
 function tmiSatinalma(eski, l) {
   const elle = (eski || []).filter(p => !p.sunucu);
   if (!l.length && elle.length === (eski || []).length) return null;
-  return [...elle, ...l.map(x => ({ kod: String(x.kod), miktar: +x.miktar, gelis: x.tarih ? x.tarih + ' 08:00' : null, tedarikci: '', no: x.siparisNo, sunucu: true }))];
+  return [...elle, ...l.map(x => ({ kod: String(x.kod), miktar: +x.miktar, gelis: x.tarih ? x.tarih + ' 08:00' : null, tedarikci: '', no: x.siparisNo, sunucu: true, ...(x.satir != null ? { kim: x.satir } : {}) }))];
 }
 /* 13.4: kişinin onaylı izni (İK, Vardiya'nın kişi takvimiyle; /recete-rota/kapasite izinli günleri) motorda devamsızlıktır. Sunucudan
    gelen gün işaretlidir ve her okumada yeniden kurulur; planlamacının elle girdiği devamsızlık kalır. */
