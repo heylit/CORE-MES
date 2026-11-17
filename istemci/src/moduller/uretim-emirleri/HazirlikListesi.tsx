@@ -8,6 +8,8 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, zamanMetni } from './gorunum.ts';
+import { maddeGorunumu, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
+import { HazirlikProjesiDugmesi } from './HazirlikProjesi.tsx';
 import './uretim-emirleri.css';
 
 type Hal = HazirlikCevabi['maddeler'][number]['durum'];
@@ -79,10 +81,18 @@ export function HazirlikListesi({ emir }: { emir: { id: number; malzemeNo?: numb
   const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
   const gorur = emir.malzemeNo != null && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   if (!gorur) return null;
-  return <Matris emirId={emir.id} muafVerir={islemler.includes('uretim-emirleri.hazirlik-muaf') && emir.durum !== 'bitti' && emir.durum !== 'iptal'} islemler={islemler} />;
+  const acikEmir = emir.durum !== 'bitti' && emir.durum !== 'iptal';
+  return (
+    <Matris
+      emirId={emir.id}
+      muafVerir={islemler.includes('uretim-emirleri.hazirlik-muaf') && acikEmir}
+      dagitir={islemler.includes('projeler.hazirlik-dagit') && acikEmir}
+      islemler={islemler}
+    />
+  );
 }
 
-function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: boolean; islemler: readonly string[] }) {
+function Matris({ emirId, muafVerir, dagitir, islemler }: { emirId: number; muafVerir: boolean; dagitir: boolean; islemler: readonly string[] }) {
   const yonlendir = useNavigate();
   const [secili, seciliYaz] = useState<Hucre | null>(null);
   const [muaf, muafYaz] = useState<Hucre | null>(null);
@@ -92,6 +102,8 @@ function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: bo
   });
   const v = d.data;
   const acik = v?.isEmirleri.filter((i) => !i.bitti) ?? [];
+  const mg = maddeGorunumu(useHazirlikMaddeleri().data?.maddeler);
+  const sutunlar = (v?.maddeler ?? []).filter((m) => mg.acik(m.madde)).sort((a, b) => mg.sira(a.madde) - mg.sira(b.madde));
   const duran = v ? acik.filter((i) => satirDurur(v, i)).length : 0;
   const muafli = v?.maddeler.some((m) => m.durum === 'muaf') ?? false;
   const uyari = v ? uyariSayisi(v) : 0;
@@ -99,7 +111,7 @@ function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: bo
 
   const hucre = (h: Hucre, satir: IsEmriSatiri | null) => {
     const hal = halGorunumu(h.madde, v ? hucreHali(v, h) : 'bilinmiyor');
-    const ad = `${MADDE[h.madde].ad}${satir ? `, OP ${satir.opNo}` : ''}: ${hal.ad}`;
+    const ad = `${mg.ad(h.madde, MADDE[h.madde].ad)}${satir ? `, OP ${satir.opNo}` : ''}: ${hal.ad}`;
     return (
       <button type="button" className="tc-hz-hucre" data-ton={hal.ton} aria-pressed={ayni(secili, h)} aria-label={ad} title={ad} onClick={() => sec(h)}>
         <Simge ad={hal.simge} /><small>{hal.ad}</small>
@@ -114,6 +126,7 @@ function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: bo
         {v && (duran > 0 ? <Rozet ton="hata">{`${duran}/${acik.length} iş emri durur`}</Rozet>
           : uyari > 0 ? <Rozet ton="uyari">{`Hazır, ${uyari} uyarı`}</Rozet>
             : muafli ? <Rozet ton="uyari">Hazır, muafiyetle</Rozet> : <Rozet ton="tamam">Üretime hazır</Rozet>)}
+        {dagitir && <HazirlikProjesiDugmesi emirId={emirId} />}
       </div>
       {d.isPending && <p className="tc-emir-not">Hazırlık okunuyor…</p>}
       {d.isError && <p className="tc-emir-not">{hataIletisi(d.error, 'Hazırlık okunamadı.')}</p>}
@@ -126,9 +139,9 @@ function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: bo
               <thead>
                 <tr>
                   <th scope="col">İş emri</th>
-                  {v.maddeler.map((m) => (
-                    <th key={m.madde} scope="col" title={`${MADDE[m.madde].ad} · ${MADDE[m.madde].sahip}`}>
-                      {MADDE[m.madde].kisa}<small>{m.isEmriDuzeyi ? 'iş emri başına' : 'emir geneli'}</small>
+                  {sutunlar.map((m) => (
+                    <th key={m.madde} scope="col" title={`${mg.ad(m.madde, MADDE[m.madde].ad)} · ${MADDE[m.madde].sahip}`}>
+                      {mg.kisa(m.madde, MADDE[m.madde].kisa)}<small>{m.isEmriDuzeyi ? 'iş emri başına' : 'emir geneli'}</small>
                     </th>
                   ))}
                   <th scope="col">Başlar mı</th>
@@ -138,7 +151,7 @@ function Matris({ emirId, muafVerir, islemler }: { emirId: number; muafVerir: bo
                 {v.isEmirleri.map((s, i) => (
                   <tr key={s.isEmriId} data-bitti={s.bitti || undefined}>
                     <th scope="row">{`OP ${s.opNo}`}<small>{s.ad}</small></th>
-                    {v.maddeler.map((m) => (m.isEmriDuzeyi
+                    {sutunlar.map((m) => (m.isEmriDuzeyi
                       ? <td key={m.madde}>{hucre({ madde: m.madde, isEmriId: s.isEmriId }, s)}</td>
                       : i === 0 ? <td key={m.madde} className="tc-hz-ortak" rowSpan={v.isEmirleri.length}>{hucre({ madde: m.madde, isEmriId: null }, null)}</td>
                         : <Fragment key={m.madde} />))}

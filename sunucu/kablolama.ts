@@ -416,6 +416,8 @@ export function sunucununBaglari(): Bag[] {
       .every((f) => typeof f === 'function') ? siparisEmirBaglari : undefined),
     // 3244 b, 3254 a: yeniden onaylanan siparişin termini bağlı proje bitişine ve başlamamış emir teslimine kayar; elle değişen bağsızdır.
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),
+    // 3396 Risk K-A: biten, iptal edilen ya da silinen emrin açık hazırlık görevi kademe döngüsünde iptal olur.
+    bag('emir durumu -> projeler hazırlık kademesi', projeler.kapaliEmirCozucusuKaydet, uretimEmirleri.hazirligiKapananEmirler),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.

@@ -7,13 +7,20 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, T
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
+import { useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
 import { HAZIRLIK_METNI, SABLON_ISLEMI, atamaMetni } from './gosterim.ts';
 import { bosIseNull, useIslemVar, useIstekKimligi } from './komut.ts';
 import './projeler.css';
 
 const DAYANAK_SECENEKLERI: Secenek[] = [{ deger: 'baslangic', baslik: 'Proje başlangıcından' }, { deger: 'termin', baslik: 'Proje bitişinden (termin)' }];
 const KOSUL_SECENEKLERI: Secenek[] = [{ deger: 'her-zaman', baslik: 'Her zaman' }, { deger: 'yeni-revize', baslik: 'Yalnız yeni ya da revize olunca' }];
-const HAZIRLIK_SECENEKLERI: Secenek[] = Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `${ad} (iş emri başına)` }));
+// 3396 a: seçenekler sunucudaki madde listesidir (açık maddeler, özel dahil); liste okunamazsa kod adları.
+function useHazirlikSecenekleri(secili: readonly string[]): Secenek[] {
+  const l = useHazirlikMaddeleri().data?.maddeler;
+  if (l === undefined) return Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `${ad} (iş emri başına)` }));
+  return l.filter((m) => m.acik || secili.includes(m.kod))
+    .map((m) => ({ deger: m.kod, baslik: `${m.ad}${m.acik ? '' : ' (kapalı)'} (${m.isEmriDuzeyi ? 'iş emri' : 'emir'} başına)` }));
+}
 
 const baslangicMetni = (k: Pick<SablonKalemi, 'dayanak' | 'gun'>): string =>
   `${k.dayanak === 'termin' ? 'Termin' : 'Başlangıç'} ${k.gun >= 0 ? '+' : '−'}${Math.abs(k.gun)} gün`;
@@ -114,6 +121,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
   const [kalemler, kalemlerYaz] = useState<KalemTaslagi[]>(() => taslaklar(sablon, yeniAnahtar));
   const [hata, hataYaz] = useState<string | null>(null);
   const atamalar = useAtamaSecenekleri();
+  const hazirlikSecenekleri = useHazirlikSecenekleri(kalemler.map((k) => k.hazirlik));
 
   const komut = useMutation({
     mutationFn: (govde: SablonEkleGovdesi) => (sablon === null
@@ -201,7 +209,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 onChange={(e) => { degistir(k.anahtar, { sureGun: e.target.value }); }}
               />
               <Secim
-                etiket="Hazırlık maddesi" value={k.hazirlik} bosSecenek="Yok (proje başına bir kez)" secenekler={HAZIRLIK_SECENEKLERI}
+                etiket="Hazırlık maddesi" value={k.hazirlik} bosSecenek="Yok (proje başına bir kez)" secenekler={hazirlikSecenekleri}
                 onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
               />
               <AtamaSecimi

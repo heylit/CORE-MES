@@ -16,5 +16,9 @@ export const anahtarlar = {
   gorevlerim: ['projeler', 'gorevlerim'] as const,
   gorevAyrinti: (id: number) => ['projeler', 'gorev', id] as const,
   sablonlar: ['projeler', 'sablonlar'] as const,
+  hazirlik: (projeId: number) => ['projeler', 'hazirlik', projeId] as const,
+  kademeAyari: ['projeler', 'kademe-ayari'] as const,
+  kademeler: (gorevId: number) => ['projeler', 'kademeler', gorevId] as const,
+  uyarim: ['projeler', 'hazirlik-uyarim'] as const,
   sablonSecenekleri: ['projeler', 'sablon-secenekleri'] as const,
 };

@@ -11,6 +11,7 @@ import {
   makineHazirligi, onayGecerliMi, talimatHazirligi,
 } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
+import { IS_EMRI_DUZEYI, kapaliSistemMaddeleri } from './hazirlik-maddeleri.ts';
 import * as s from './sorgular.ts';
 import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
 
@@ -18,7 +19,6 @@ import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
 // bu modülü okuduğu için çözücüler kablolama.ts'te kaydedilir; kayıtsız madde emirde aranmaz. CNC kurulumu iş emri başınadır (266 a),
 // çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği. Uyaran maddeler (2146-1 a) başlatmada sorulmaz, yalnız görünümde.
 export type HazirlikCozucusu = (db: Db, idler: readonly number[]) => Promise<ReadonlyMap<number, HazirlikBilgisi>>;
-const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'takim-hazirla', 'makine', 'yayin', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti']);
 const BASLATMADA_SORULMAZ: ReadonlySet<string> = new Set(YALNIZ_GORUNUM_MADDELERI);
 const cozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu>();
 // Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
@@ -70,8 +70,10 @@ async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, m
     : [isEmriId];
   const onay = await elleOnaylar(db, isEmirleri);
   const eksik = await elleEksikler(db, isEmirleri);
+  const kapali = await kapaliSistemMaddeleri(db);
   for (const m of HAZIRLIK_MADDELERI) {
     if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m))) continue;
+    if (kapali.has(m)) { sonuc.set(m, 'gerekmez'); continue; }
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {
       const bilgi = c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined;
@@ -126,7 +128,9 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
   const isEmirleri = [...(await s.isEmirleriGetir(db, emirIdleri))].sort((a, b) => a.sira - b.sira);
   const isEmriIdleri = isEmirleri.map((i) => i.id);
   const durumlar = new Map<HazirlikMaddesi, ReadonlyMap<number, HazirlikBilgisi> | null>();
+  const kapali = await kapaliSistemMaddeleri(db);
   for (const m of HAZIRLIK_MADDELERI) {
+    if (kapali.has(m)) continue;
     const c = cozuculer.get(m);
     const idler = IS_EMRI_DUZEYI.has(m) ? isEmriIdleri : emirIdleri;
     durumlar.set(m, c && idler.length > 0 ? await c(db, idler) : null);
@@ -140,7 +144,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
     sonuc.set(id, {
       maddeler: HAZIRLIK_MADDELERI.map((madde) => {
         const d = durumlar.get(madde) ?? null;
-        const durum = IS_EMRI_DUZEYI.has(madde)
+        const durum: HazirlikHali = kapali.has(madde) ? 'gerekmez' : IS_EMRI_DUZEYI.has(madde)
           ? enKotu(acik.map((i) => elleUygula(hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum)), elleEksikMi(eksik, madde, i))))
           : elleUygula(hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum)), acik.some((i) => elleEksikMi(eksik, madde, i)));
         return { madde, durum, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) };
@@ -151,6 +155,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
         maddeler: HAZIRLIK_MADDELERI.filter((m) => IS_EMRI_DUZEYI.has(m))
           .map((madde) => {
             const b = durumlar.get(madde)?.get(i.id);
+            if (kapali.has(madde)) return { madde, durum: 'gerekmez' as const };
             return { madde, durum: elleUygula(hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)), elleEksikMi(eksik, madde, i.id)) };
           }),
       })),
@@ -210,7 +215,12 @@ export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdl
   const onay = await elleOnaylar(db, isEmriIdleri);
   const eksik = await elleEksikler(db, isEmriIdleri);
   const sonuc = new Map(isEmriIdleri.map((i) => [i, new Map<HazirlikMaddesi, IsEmriMaddeHali>()]));
+  const kapali = await kapaliSistemMaddeleri(db);
   for (const m of HAZIRLIK_MADDELERI) {
+    if (kapali.has(m)) {
+      for (const i of isEmriIdleri) sonuc.get(i)?.set(m, { hal: 'gerekmez', ham: 'gerekmez', surum: null });
+      continue;
+    }
     const c = cozuculer.get(m);
     const emirde = !IS_EMRI_DUZEYI.has(m);
     const durum = c && isEmriIdleri.length > 0 ? await c(db, emirde ? [uretimEmriId] : isEmriIdleri) : null;

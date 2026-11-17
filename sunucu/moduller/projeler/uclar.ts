@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  bitisBaglaGovdesi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, idParametresi,
+  bitisBaglaGovdesi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, hazirlikAtaCevabi, hazirlikAtaGovdesi, idParametresi, kademeAyariCevabi, kademeAyariGovdesi, kademeGecmisiCevabi, gecikenHazirliklarimCevabi,
   kilometreTasiEkleGovdesi, kilometreTasiGuncelleGovdesi, kilometreTasiParametresi, kisiSecenekleriCevabi, projeGuncelleGovdesi,
   projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
@@ -17,6 +17,8 @@ import {
   gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
 } from './servis.ts';
+import { hazirlikGoreviAta } from './hazirlik-gorevleri.ts';
+import { gecikenHazirliklarim, kademeAyariOku, kademeAyariYaz, kademeGecmisi } from './hazirlik-kademe.ts';
 
 // Sayfası olan rol okur; `projeler.oku` sayfasız okuma için ayrı verilebilir (başka modülün ekranı proje seçerken).
 const OKUMA = { biri: ['sayfa.projeler', 'projeler.oku'] } as const;
@@ -25,7 +27,7 @@ const maliyetGorur = (k: Kullanici): boolean => islemVarMi(k, 'finans.maliyet-ok
 // 3269: görev işleyen ve kontrol eden yalnız kendisine düşen kaydı görür; kayıt düzeyi denetim serviste.
 const GOREVLERIM = { biri: ['sayfa.proje-gorevlerim', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
 const GOREV_OKUMA = { biri: ['sayfa.projeler', 'projeler.oku', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
-const ATAMA_SECICI = { biri: ['projeler.gorev-yaz', 'projeler.sablon-yaz'] } as const;
+const ATAMA_SECICI = { biri: ['projeler.gorev-yaz', 'projeler.sablon-yaz', 'projeler.hazirlik-dagit', 'uretim-emirleri.hazirlik-ayar'] } as const;
 const gorevKomutu = (
   yol: string, yetki: 'projeler.gorev-isle' | 'projeler.gorev-kontrol',
   is: typeof gorevUstlen,
@@ -35,6 +37,47 @@ const gorevKomutu = (
 });
 
 export const uclar = [
+  // 3396 a: kademeli takip. Ayarı herkes okur (ekran açıklaması), hazirlik-ayar yazar; şerit yalnız kişinin kendi görevlerini döner.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/hazirlik-kademe-ayari',
+    yetki: 'oturum', sahiplik: 'yok',
+    cevap: kademeAyariCevabi,
+    isle: ({ db, kullanici }) => kademeAyariOku(db, kullanici),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/hazirlik-kademe-ayari',
+    yetki: 'uretim-emirleri.hazirlik-ayar',
+    govde: kademeAyariGovdesi,
+    cevap: kademeAyariCevabi,
+    isle: ({ db, kullanici, govde }) => kademeAyariYaz(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/gorevler/:gorevId/kademeler',
+    yetki: 'projeler.oku',
+    parametre: gorevParametresi,
+    cevap: kademeGecmisiCevabi,
+    isle: ({ db, parametre }) => kademeGecmisi(db, parametre.gorevId),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/hazirlik-uyarim',
+    yetki: 'oturum', sahiplik: 'yok',
+    cevap: gecikenHazirliklarimCevabi,
+    isle: ({ db, kullanici }) => gecikenHazirliklarim(db, kullanici),
+  }),
+  // 3396 a: hazırlık görevinin yapanını değiştirmek dağıtma işlemidir (Proje > Hazırlık yan paneli).
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/:gorevId/hazirlik-ata',
+    yetki: 'projeler.hazirlik-dagit',
+    parametre: gorevParametresi,
+    govde: hazirlikAtaGovdesi,
+    cevap: hazirlikAtaCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikGoreviAta(db, kullanici, parametre.gorevId, govde),
+  }),
   uc({
     yontem: 'GET',
     yol: '/projeler',
@@ -168,7 +211,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/projeler/sablon-secenekleri',
-    yetki: { biri: ['projeler.yaz', 'projeler.gorev-yaz'] },
+    yetki: { biri: ['projeler.yaz', 'projeler.gorev-yaz', 'projeler.hazirlik-dagit'] },
     cevap: sablonSecenekleriCevabi,
     isle: ({ db }) => sablonSecenekleri(db),
   }),
