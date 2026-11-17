@@ -68,6 +68,8 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [pref]
     @property {any} [sapma]
     @property {any} [adimEk]
+    @property {any} [adimBekle]
+    @property {string[]} [beklemeKilit]
     @property {any} [bitti]
     @property {any} [wipP]
     @property {any} [sabitYer]
@@ -396,12 +398,16 @@ function addUse(cx,u,M,r,apId,sign=1){
   if(u.ik)ikAdd(cx,u,M,r,sign);
 }
 
+/* 3335-3c: adıma bildirilen bekleme (malzeme yok, kişi yok): işlem bu andan önce başlayamaz (st.adimBekle: işlem -> { kadar }). */
+/** @param {any} st @param {string} id @returns {number} */
+function beklemeAni(st,id){const b=st.adimBekle&&st.adimBekle[id],k=b?+b.kadar:NaN;return isFinite(k)?k:-Infinity;}
 /* ---- tek işlem zamanlaması ---- */
 /** @param {any} [o] @param {Derleme} [cx] @param {any} [ctx] */
 function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
   let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
   if(j.rel!=null&&j.rel>s){s=j.rel;why={t:'serbest'};}
+  {const bk=beklemeAni(st,o.id);if(bk>s){s=bk;why={t:'bekleme'};}}
   {const mr=cx.mat.res[o.job],mt=mr&&mr.op?mr.op[o.id]:undefined;if(st.w.mat==='sert'&&mt!=null&&mt>s){s=mt;why={t:'malzeme'};}}
   if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
   const tas=+A.tasimaSaat||0;
@@ -724,6 +730,7 @@ function evaluate(plan,st,ref,fast){
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
   if(!fast)for(const jid in cx.jobs)if(cx.jobs[jid].geriSigmadi)warn.push({t:'geri',j:jid,txt:`${jid}: teslimden geriye sığmadı; en geç başlama ${cx.jobs[jid].enGec==null?'takvimden önce':fmtDT(cx.D,cx.jobs[jid].enGec)}, emir ileri planlandı`});
+  for(const id of st.beklemeKilit||[])warn.push({t:'bekleme',j:id.split('.')[0],id,txt:`${id}: bildirilen bekleme kilitli saatten sonra bitiyor; kilit uygulanmadı, iş beklemeden sonraya yerleşti`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],id,txt:`${id} planlanamadı: ${failNedenMetni((plan.failNeden||{})[id])}`});
   /* 3199: ikincil kaynağın aşımı (İzle kaynakta plan sınırlamaz; Sert kaynakta kilitli ya da başlamış iş aşabilir) ve takım değişimi uyarıdır */
@@ -756,7 +763,7 @@ function lowerBound(st,cx){
   cx=cx||compile(st);const LB={},tas=+cx.A.tasimaSaat||0;const done={};
   const order=[];const vis={};const visit=o=>{if(vis[o.id])return;vis[o.id]=1;for(const [p] of o.pr)visit(cx.byId[p]);order.push(o);};cx.ops.forEach(visit);
   const g=st.gercek||{};
-  for(const o of order){let s=st.now;const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
+  for(const o of order){let s=Math.max(st.now,beklemeAni(st,o.id));const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
     for(const [p,t] of o.pr){const q=done[p];if(q==null){s=Infinity;break;}s=Math.max(s,q.f+(t==='o'?-(q.f-q.l1):0)+(cx.byId[p].c.some(c=>c.fas)?0:tas));}
     let best=Infinity,l1=Infinity;
     const kr=!(g[o.id]&&g[o.id].S!=null)&&kilitYeri(o,st.locks&&st.locks[o.id],cx);
@@ -937,7 +944,7 @@ function lbHeadsTails(st,cx){
   for(const o of order){const ms=o.c.filter(c=>!c.fas);
     pmin[o.id]=ms.length&&!o.c.some(c=>c.fas)?Math.min(...ms.map(c=>c.run)):0;
     lastLot[o.id]=ms.length&&!o.c.some(c=>c.fas)?Math.min(...ms.map(c=>Math.min(c.run,c.tbRun))):0;
-    let s=st.now;const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
+    let s=Math.max(st.now,beklemeAni(st,o.id));const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
     for(const [p,t] of o.pr){if(fin[p]==null||!isFinite(fin[p])){s=Infinity;break;}const pf=cx.byId[p].c.some(c=>c.fas);s=Math.max(s,(t==='o'&&cx.byId[p].c.some(c=>!c.fas)?l1[p]:fin[p])+(pf?0:tas));}
     head[o.id]=s;
     let best=Infinity,b1=Infinity;

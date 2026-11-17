@@ -649,6 +649,17 @@ describe('Kokpit', () => {
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
   });
 
+  // 3335-3c: bildirilen bekleme operasyon satırının Başlangıç hücresinde yazar; başlamış adımın kaydı yazmaz.
+  it('adıma bildirilen bekleme satırda nedeni ve anıyla yazar; başlamış adımın kaydı yazmaz', () => {
+    const c = ornekCalisma();
+    (c.w as Record<string, unknown>)['adimBekle'] = { '2.40': { kadar: 9000, neden: 'malzeme' }, '2.20': { kadar: 9000, neden: 'kisi' } };
+    ac({ calisma: c, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-adim-satir="2.40"] [data-adim-bekle]')?.textContent).toMatch(/^bekliyor: malzeme yok, .+'e kadar$/);
+    // 2.20 başlamıştır: kaydı motor için etkisizdir, satırda yazmaz.
+    expect(bolum.querySelector('[data-adim-satir="2.20"] [data-adim-bekle]')).toBeNull();
+  });
+
   it('adıma sorun bildir düğmesi planda yeri olmayan adımın satırında yoktur', () => {
     const c = ornekCalisma();
     const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;

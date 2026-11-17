@@ -457,6 +457,21 @@ export function adimEkleri(c: PlanlamaCalismasi): Record<string, number> {
   }
   return s;
 }
+// Adıma bildirilen bekleme (3335-3c): çalışmanın w.adimBekle'sinde iş kimliğiyle durur; adım kadar'dan (plan ekseninde saat) önce başlamaz.
+// Geçmişte kalan kayıt motor için de etkisizdir, gösterilmez.
+export type BeklemeNedeni = 'malzeme' | 'kisi';
+export interface AdimBeklemesi { kadar: number; neden: BeklemeNedeni }
+export const BEKLEME_ADI: Record<BeklemeNedeni, string> = { malzeme: 'malzeme yok', kisi: 'kişi yok' };
+export function adimBeklemeleri(c: PlanlamaCalismasi, simdi: number): Record<string, AdimBeklemesi> {
+  const v = (c.w as Record<string, unknown>)['adimBekle'], s: Record<string, AdimBeklemesi> = {};
+  if (typeof v !== 'object' || v === null) return s;
+  for (const [id, e] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof e !== 'object' || e === null) continue;
+    const { kadar, neden } = e as Record<string, unknown>;
+    if (typeof kadar === 'number' && Number.isFinite(kadar) && kadar > simdi && (neden === 'malzeme' || neden === 'kisi')) s[id] = { kadar, neden };
+  }
+  return s;
+}
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.

@@ -24,6 +24,8 @@ export interface TaslakImzasi {
   mesai?: Record<string, string>; mesaiKisi?: Record<string, string>;
   // 3335-3b: adıma bildirilen ek süre (w.adimEk), işlem kimliğiyle; emir düzeyinde çatışır. Eski imzada yoksa boş sayılır.
   adimEk?: Record<string, string>;
+  // 3335-3c: adıma bildirilen bekleme (w.adimBekle); aynı kural.
+  adimBekle?: Record<string, string>;
 }
 // İmzaya giren plan ayarı alanları: Kokpit'in yazdığı çalışma ayarları ve kapalı kısıtlar (taslakAyarlari ile aynı küme).
 const W_ALANLARI = ['dondurma', 'mat', 'yon'] as const;
@@ -43,7 +45,7 @@ export function imza(c: unknown): TaslakImzasi {
   const ayar = JSON.stringify([W_ALANLARI.map((k) => w[k] ?? null), PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
   const yon = Object.fromEntries(Object.entries(nesne(w.yonEmir) ? w.yonEmir : {}).filter(([, v]) => v === 'ileri' || v === 'geri').map(([id, v]) => [id, String(v)]));
   const D = nesne(d.D) ? d.D : {}, meta = nesne(D.meta) ? D.meta : {};
-  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w) };
+  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w), adimBekle: adimBekleImzasi(w) };
 }
 
 // Adıma bildirilen ek süre: geçerli satır sayı taşıyan ekSaat ve bitis0'dır; anahtarlar sıralı yazılır.
@@ -52,6 +54,14 @@ const adimEkleri = (w: Nesne): Record<string, AdimEki> => Object.fromEntries(Obj
   .flatMap(([id, x]) => (nesne(x) && typeof x.ekSaat === 'number' && typeof x.bitis0 === 'number' ? [[id, { ekSaat: x.ekSaat, bitis0: x.bitis0 }] as const] : []))
   .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 const adimEkImzasi = (w: Nesne): Record<string, string> => Object.fromEntries(Object.entries(adimEkleri(w)).map(([id, x]) => [id, `${String(x.ekSaat)}|${String(x.bitis0)}`]));
+
+// Adıma bildirilen bekleme: geçerli satır sayı taşıyan kadar ve bilinen nedendir; anahtarlar sıralı yazılır.
+export type BeklemeNedeni = 'malzeme' | 'kisi';
+type AdimBeklemesi = { kadar: number; neden: BeklemeNedeni };
+const adimBeklemeleri = (w: Nesne): Record<string, AdimBeklemesi> => Object.fromEntries(Object.entries(nesne(w.adimBekle) ? w.adimBekle : {})
+  .flatMap(([id, x]) => (nesne(x) && typeof x.kadar === 'number' && (x.neden === 'malzeme' || x.neden === 'kisi') ? [[id, { kadar: x.kadar, neden: x.neden }] as const] : []))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+const adimBekleImzasi = (w: Nesne): Record<string, string> => Object.fromEntries(Object.entries(adimBeklemeleri(w)).map(([id, x]) => [id, `${String(x.kadar)}|${x.neden}`]));
 
 // Elle girilen duruş: otomatik olmayan (oto taşımayan) down satırı. Otomatik satırlar arızadan ve bakım planından gelir (motor/girdi.js
 // otoArizaUygula, otoBakimUygula); imzaya girmez, silinmez (Risk 2a S3, S5).
@@ -80,8 +90,8 @@ function mesaiImzasi(c: unknown): { mesai: Record<string, string>; mesaiKisi: Re
 }
 const DURUS_KOMUTLARI = new Set(['durus', 'durus-sil']);
 const MESAI_KOMUTLARI = new Set(['ek-mesai', 'ek-mesai-sil']);
-// Adım uzadı satırı bildirildiği andaki planlı bitişi (plan ekseninde saat) taşır: o da girildiği eksene bağlıdır.
-const KAPASITE_KOMUTLARI = new Set([...DURUS_KOMUTLARI, ...MESAI_KOMUTLARI, 'adim-uzadi']);
+// Adım uzadı satırı bildirildiği andaki planlı bitişi, bekleme satırı bekleme anını (plan ekseninde saat) taşır: onlar da girildiği eksene bağlıdır.
+const KAPASITE_KOMUTLARI = new Set([...DURUS_KOMUTLARI, ...MESAI_KOMUTLARI, 'adim-uzadi', 'adim-bekler']);
 
 // İşlem kimliği 'emir.adım' (motorun kimliği; paralel pay '~n' eki taşır). Emir kimliği son noktadan öncesidir.
 export const emirOf = (isId: string): string => { const i = isId.lastIndexOf('.'); return i > 0 ? isId.slice(0, i) : isId; };
@@ -98,7 +108,7 @@ export function komutAnahtarlari(k: SatirKomutu, taban: TaslakImzasi): string[] 
     }
     case 'plana-al': return [`emir:${k.emirId}`, `tezgah:${k.tezgah}`, ...(k.adimlar ?? []).map((a) => `tezgah:${a.tezgah}`)];
     case 'yon': return [`emir:${k.emirId}`];
-    case 'adim-uzadi': case 'adim-uzadi-sil': return [`emir:${emirOf(k.isId)}`];
+    case 'adim-uzadi': case 'adim-uzadi-sil': case 'adim-bekler': case 'adim-bekler-sil': return [`emir:${emirOf(k.isId)}`];
     case 'yeniden-planla': return k.isler.includes('*') ? ['*'] : [...new Set(k.isler)].map((id) => `emir:${id}`);
     case 'ayar': return ['*'];
     case 'durus': case 'durus-sil': case 'ek-mesai-sil': return [`tezgah:${k.tezgah}`];
@@ -125,6 +135,8 @@ export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): {
   for (const id of new Set([...Object.keys(ty), ...Object.keys(sy)])) if (ty[id] !== sy[id]) emir.add(id);
   const te = taban.adimEk ?? {}, se = simdi.adimEk ?? {};
   for (const id of new Set([...Object.keys(te), ...Object.keys(se)])) if (te[id] !== se[id]) emir.add(emirOf(id));
+  const tb = taban.adimBekle ?? {}, sb = simdi.adimBekle ?? {};
+  for (const id of new Set([...Object.keys(tb), ...Object.keys(sb)])) if (tb[id] !== sb[id]) emir.add(emirOf(id));
   // Başkasının değiştirdiği kapasite o tezgâhı, eksenin kayması bütün planı etkiler (saatler başka güne düşer; Risk 2a S2).
   const tk = taban.kapasite, sk = simdi.kapasite ?? {};
   if (tk !== undefined) for (const m of new Set([...Object.keys(tk), ...Object.keys(sk)])) if (tk[m] !== sk[m]) tezgah.add(m);
@@ -275,6 +287,48 @@ export function adimUzadiSilUygula(deger: unknown, k: { isId: string }, kisi: Ko
   (yeni.w as Nesne).adimEk = kalan;
   const geri: GeriYama[] = [{ yol: ['w'], id: 'adimEk', once: w.adimEk }];
   return { deger: isle(deger, yeni, { ne: 'Adım uzaması kaldırıldı', ayrinti: `${k.isId}: +${adimEkSaatYazisi(onceki.ekSaat)}`, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
+}
+// Adım bekliyor (3335-3c): w.adimBekle[isId] = { kadar, neden }. Adım kadar'dan (plan ekseninde saat) önce başlayamaz; motor onu işlemin
+// en erken başlangıcı sayar (motor/girdi.js stKur, engine.js predBound). Adım planda yerleşmiş, başlamamış, bitmemiş ve fason olmamalı;
+// kadar şimdiden sonra ve ufuk içinde olmalı. Aynı adıma yeni bildirim öncekinin yerine geçer. oynatma: taslak yeniden oynatılırken adım
+// bu arada başlamış, bitmiş ya da bekleme anı geçmişse komut sessizce etkisizdir (motor da o kaydı saymaz); taslağın öteki satırları bozulmaz.
+export const BEKLEME_NEDENI: Record<BeklemeNedeni, string> = { malzeme: 'malzeme yok', kisi: 'kişi yok' };
+export function adimBeklerUygula(deger: unknown, k: { isId: string; kadar: number; neden: BeklemeNedeni }, kisi: KomutKisisi, oynatma = false): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const ops = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops : {};
+  const op = ops[k.isId];
+  const etkisiz = (ileti: string): KomutSonucu => (oynatma ? { deger, degisti: false } : { hata: { tur: 'dogrulama', ileti, alan: 'isId' } });
+  if (!nesne(op) || typeof op.S !== 'number') return { hata: { tur: 'dogrulama', ileti: 'Adım planda yerleşmemiş; önce plana alın.', alan: 'isId' } };
+  if (op.done === 1 || op.done === true) return etkisiz('Adım bitmiş; bekleme bildirilemez.');
+  if (op.fas === 1 || op.fas === true || (typeof op.m === 'string' && op.m.startsWith('@'))) return { hata: { tur: 'dogrulama', ileti: 'Fason adımda bekleme bildirilmez; firma tarihini satın alma siparişinde güncelleyin.', alan: 'isId' } };
+  const g = nesne(deger.gercek) ? deger.gercek[k.isId] : undefined;
+  if (nesne(g) && g.S != null) return etkisiz("Adım başlamış; süresi uzadıysa 'adım uzadı' bildirin.");
+  if (k.kadar > ufukSaati(deger)) return { hata: { tur: 'dogrulama', ileti: 'Bekleme planın ufkunun dışında bitiyor.', alan: 'kadar' } };
+  const simdi = simdiSaati(deger, kisi.t);
+  if (simdi === null) return { hata: { tur: 'cakisma', ileti: 'Çalışmada başlangıç günü yok; sayfada planı kurup kaydedin.' } };
+  if (k.kadar <= simdi) return oynatma ? { deger, degisti: false } : { hata: { tur: 'dogrulama', ileti: 'Bekleme anı geçmişte; planı etkilemez.', alan: 'kadar' } };
+  const w = nesne(deger.w) ? deger.w : {};
+  const eski = adimBeklemeleri(w);
+  const onceki = eski[k.isId];
+  if (onceki !== undefined && onceki.kadar === k.kadar && onceki.neden === k.neden) return { deger, degisti: false };
+  const yeni = kopya(deger);
+  (yeni.w as Nesne | undefined) ??= {};
+  (yeni.w as Nesne).adimBekle = { ...eski, [k.isId]: { kadar: k.kadar, neden: k.neden } };
+  const geri: GeriYama[] = [w.adimBekle === undefined ? { yol: ['w'], id: 'adimBekle' } : { yol: ['w'], id: 'adimBekle', once: w.adimBekle }];
+  const ayrinti = `${k.isId}: ${BEKLEME_NEDENI[k.neden]}, ${saatYazisi(k.kadar)}'e kadar`;
+  return { deger: isle(deger, yeni, { ne: 'Adım bekliyor', ayrinti, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
+}
+export function adimBeklerSilUygula(deger: unknown, k: { isId: string }, kisi: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const w = nesne(deger.w) ? deger.w : {};
+  const eski = adimBeklemeleri(w);
+  const onceki = eski[k.isId];
+  if (onceki === undefined) return { deger, degisti: false };
+  const { [k.isId]: _, ...kalan } = eski;
+  const yeni = kopya(deger);
+  (yeni.w as Nesne).adimBekle = kalan;
+  const geri: GeriYama[] = [{ yol: ['w'], id: 'adimBekle', once: w.adimBekle }];
+  return { deger: isle(deger, yeni, { ne: 'Adım beklemesi kaldırıldı', ayrinti: `${k.isId}: ${BEKLEME_NEDENI[onceki.neden]}`, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
 }
 // Çalışmada adımın kayıtlı ilk bitişi (satıra yazılmak üzere); yoksa undefined.
 export const adimEkBitisi = (deger: unknown, isId: string): number | undefined => (nesne(deger) && nesne(deger.w) ? adimEkleri(deger.w)[isId]?.bitis0 : undefined);
@@ -443,6 +497,8 @@ export function komutAdi(k: SatirKomutu): string {
     case 'ek-mesai-sil': return `${k.tezgah} ek mesaisi silindi: ${String(k.gun + 1)}. gün ${k.vardiya}`;
     case 'adim-uzadi': return `${k.isId} uzadı: +${adimEkSaatYazisi(k.ekSaat)}`;
     case 'adim-uzadi-sil': return `${k.isId} uzaması kaldırıldı`;
+    case 'adim-bekler': return `${k.isId} bekliyor: ${BEKLEME_NEDENI[k.neden]}, ${saatYazisi(k.kadar)}'e kadar`;
+    case 'adim-bekler-sil': return `${k.isId} beklemesi kaldırıldı`;
   }
 }
 
@@ -454,7 +510,7 @@ export const kapasiteKomutuMu = (k: SatirKomutu): boolean => KAPASITE_KOMUTLARI.
 export const eksenOf = (c: unknown): string | null => imza(c).eksen ?? null;
 export const EKSEN_DEGISTI = 'Planın başlangıç günü değişti; saat ve günler başka güne düşer. Değişikliği geri alıp yeniden girin.';
 
-export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, h: TaslakHesaplari, kayitliBitis?: number): KomutSonucu {
+export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, h: TaslakHesaplari, kayitliBitis?: number, oynatma = false): KomutSonucu {
   switch (k.tur) {
     case 'tasi': { const { tur: _, ...g } = k; return isTasi(deger, g, kisi, h.tasima); }
     case 'plana-al': { const { tur: _, ...g } = k; return planaAl(deger, g, kisi, h.planaAlma); }
@@ -467,6 +523,8 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
     case 'ek-mesai-sil': return ekMesaiSilUygula(deger, k, kisi);
     case 'adim-uzadi': return adimUzadiUygula(deger, k, kayitliBitis, kisi);
     case 'adim-uzadi-sil': return adimUzadiSilUygula(deger, k, kisi);
+    case 'adim-bekler': return adimBeklerUygula(deger, k, kisi, oynatma);
+    case 'adim-bekler-sil': return adimBeklerSilUygula(deger, k, kisi);
   }
 }
 
@@ -483,7 +541,7 @@ export function oynat(c: unknown, l: readonly { komut: SatirKomutu; eksen?: stri
   const hatalar = l.map((s, i) => {
     const k = s.komut;
     const r = kapasiteKomutuMu(k) && s.eksen !== undefined && s.eksen !== eksen ? { hata: { tur: 'cakisma' as const, ileti: EKSEN_DEGISTI } }
-      : k.tur !== 'diz' ? komutUygula(deger, k, kisi, h, s.bitis0)
+      : k.tur !== 'diz' ? komutUygula(deger, k, kisi, h, s.bitis0, true)
       // Planı düşmüş (sonraki dizmenin örttüğü) dizme hiçbir şey yazmaz; bayatlığı da sorulmaz.
       : k.plan === null ? { deger, degisti: false }
       : k.onceki.n !== i || k.onceki.imza !== dizImzasi(deger, c) ? { hata: { tur: 'cakisma' as const, ileti: DIZ_BAYAT } }
@@ -499,7 +557,7 @@ export function oynat(c: unknown, l: readonly { komut: SatirKomutu; eksen?: stri
 // (kişinin ve başkasının kararları; Risk 2a S5). Yer görünümden alınmaz: kişinin önceki dizmesinin planı düştüğünde (yalnız son dizme plan taşır) sonraki bayatlamasın.
 export const dizImzasi = (gorunum: unknown, taban: unknown): string => {
   const g = imza(gorunum);
-  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}, ...(Object.keys(g.adimEk ?? {}).length > 0 ? [g.adimEk] : [])]);
+  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}, ...(Object.keys(g.adimEk ?? {}).length > 0 ? [g.adimEk] : []), ...(Object.keys(g.adimBekle ?? {}).length > 0 ? [{ bekle: g.adimBekle }] : [])]);
 };
 export const dataVerOf = (c: unknown): number => (nesne(c) && typeof c.dataVer === 'number' ? c.dataVer : 0);
 

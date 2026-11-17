@@ -469,6 +469,10 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   // saat adımlı). Aynı adıma yeni bildirim öncekinin yerine geçer. Oran ya da bitiş istemciden alınmaz; sunucu çalışmadan okur.
   z.object({ tur: z.literal('adim-uzadi'), isId: taslakKimlik, ekSaat: z.number().min(0.25).max(240).multipleOf(0.25) }).strict(),
   z.object({ tur: z.literal('adim-uzadi-sil'), isId: taslakKimlik }).strict(),
+  // 3335-3c: adımda sorun bildir, "malzeme yok" ve "kişi yok": adım kadar'dan önce başlayamaz. kadar planın ekseninde saattir (başlangıç
+  // gününün 00:00'ı 0, çeyrek saat adımlı); şimdiden sonra ve ufuk içinde olduğunu sunucu denetler. Aynı adıma yeni bildirim öncekinin yerine geçer.
+  z.object({ tur: z.literal('adim-bekler'), isId: taslakKimlik, kadar: durusSaati, neden: z.enum(['malzeme', 'kisi']) }).strict(),
+  z.object({ tur: z.literal('adim-bekler-sil'), isId: taslakKimlik }).strict(),
 ]);
 // taslakSurumu: sayfanın gördüğü taslak sürümü (taslak yoksa null); iki sekmede aynı kişinin yazması birbirini ezmez.
 export const taslakKomutGovdesi = z.object({ taslakSurumu: z.number().int().nullable(), komut: taslakKomutu }).strict();
