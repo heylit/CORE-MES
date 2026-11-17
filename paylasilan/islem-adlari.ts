@@ -41,6 +41,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'bildirim.yayinla': 'Uyarı, duyuru ve bilgi bildirimi yayınlama',
   'bildirim.yayin-oku': 'Bütün bildirim yayınlarını ve okunma raporlarını görme',
   'bildirim.eposta-yonet': 'E-posta gönderimini, şablonlarını ve tetikleyicilerini yönetme',
+  'bildirim.kademe-yonet': 'Kademeli uyarı kaynaklarını ayarlama ve bütün açık takipleri görme',
   'degisiklik-yonetimi.talep-ac': 'Değişiklik talebi açma',
   'degisiklik-yonetimi.siniflandir': 'Değişiklik talebini sınıflandırma ve etki analizi',
   'degisiklik-yonetimi.ccb-karar': 'Değişiklik talebine CCB onayı ve reti',
@@ -317,6 +318,7 @@ const SAYFA_GRUBU: Readonly<Record<string, string>> = {
   'sayfa.geri-bildirim': 'profil',
   'sayfa.profil': 'profil',
   'sayfa.proje-gorevlerim': 'projeler',
+  'sayfa.bildirim-merkezi': 'bildirim',
 };
 
 const SAYFA_ADLARI = new Map<string, string>(TUM_SAYFALAR.map((s) => [s.islem, s.baslik]));

@@ -110,7 +110,7 @@ describe('Profil sayfası', () => {
   it('herkese Bildirimlerim bağlantısı görünür', async () => {
     sunucuKur({ 'GET /profil': () => json(200, PROFIL) });
     ac('/profil');
-    expect((await screen.findByRole('link', { name: /Bildirimlerim/ })).getAttribute('href')).toBe('/profil/bildirimler');
+    expect((await screen.findByRole('link', { name: /Bildirimlerim/ })).getAttribute('href')).toBe('/bildirim-merkezi');
   });
 
   it('Üretim Terminali sayfası olana Özetim bağlantısı görünür, olmayana görünmez', async () => {

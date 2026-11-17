@@ -17,7 +17,7 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
 import type { KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisilerinIslemleri, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
 import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
@@ -29,7 +29,7 @@ import {
   acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
-import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat, type KademeKaydi } from '../bildirim/disari.ts';
 import { resmiTatilGunleri } from '../ik/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -2323,19 +2323,29 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string):
 
 // 2432: hatırlatma turu. Adaylar okunur, kural istenenleri verir; yeni olan açılır ve gönderilir, koşulu kalkan kapanır.
 // 2452 (vardiya takvimi) ve 2453 (yalnız seçilen kişiler) gelene kadar iş günü tesisin hafta içi günleridir (UYUM-BORCU).
+// 3405-1 a: onay bekleyen, siparişi verilmeyen, cevapsız teklif ve teslim hatırlatmaları kademeli uyarıya taşındı; burada üretilmez.
+// Eski türün açık bildirimi aynı kaynak kimliğiyle kalır, kaydı kapanınca kademeli uyarı kapatır (Risk K5); iz satırı burada kapanır.
 const ISGUNU_GERI_EN_COK = 400;
-export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Promise<{ acilan: number; kapanan: number }> {
-  const bugun = tesisGunu(simdi);
-  const ayar: Partial<Record<(typeof HATIRLATMA_ADLARI)[number], number | null>> = {};
-  for (const a of HATIRLATMA_ADLARI) ayar[a] = await sistemAyariOku(db, `satin-alma.hatirlatma-${a}`);
-  const okunan = await s.hatirlatmaTalepleriOku(db);
-  const talepler: HatirlatmaTalebi[] = okunan.map((r) => ({
+const TASINAN_HATIRLATMALAR: ReadonlySet<string> = new Set(['onay-bekliyor', 'siparis-bekliyor', 'teklif-cevapsiz', 'teslim-yaklasiyor', 'teslim-gecikti', 'teslim-gecikti-yonetici']);
+const KALAN_HATIRLATMALAR = ['ihtiyac-yaklasiyor', 'taslak-bekliyor', 'teklif-gecerlilik', 'degerlendirme-bekliyor'] as const;
+const tasinanTurMu = (tur: string): boolean => TASINAN_HATIRLATMALAR.has(tur.replace('satin-alma.hatirlatma-', ''));
+
+async function hatirlatmaTalepleri(db: Db): Promise<HatirlatmaTalebi[]> {
+  return (await s.hatirlatmaTalepleriOku(db)).map((r) => ({
     talepId: r.talepId, no: r.no, durum: r.durum, ihtiyacTarihi: r.ihtiyacTarihi, durumAni: r.durumZamani.toISOString(), durumGunu: tesisGunu(r.durumZamani),
     teklifIstegiVar: r.teklifIstegiVar, kararVar: r.kararVar, kararOnayli: r.kararVar && r.sonOnay?.sonuc === 'onay',
     sonOnay: r.sonOnay === null ? null : { id: r.sonOnay.id, gun: tesisGunu(new Date(r.sonOnay.zaman)) },
     kurKilidiBitisi: r.kurKilidi === null ? null : tesisGunu(new Date(r.kurKilidi.getTime() + KUR_KILIDI.gun * 86_400_000)),
     istekler: r.istekler, teklifler: r.teklifler, siparisler: r.siparisler,
   }));
+}
+
+export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Promise<{ acilan: number; kapanan: number }> {
+  const bugun = tesisGunu(simdi);
+  const ayar: Partial<Record<(typeof HATIRLATMA_ADLARI)[number], number | null>> = {};
+  for (const a of HATIRLATMA_ADLARI) ayar[a] = null;
+  for (const a of KALAN_HATIRLATMALAR) ayar[a] = await sistemAyariOku(db, `satin-alma.hatirlatma-${a}`);
+  const talepler = await hatirlatmaTalepleri(db);
   const enGeri = tesisGunu(new Date(simdi.getTime() - ISGUNU_GERI_EN_COK * 86_400_000));
   const baslangic = [...talepler.map((t) => t.durumGunu), ...talepler.flatMap((t) => t.istekler.map((r) => r.gonderim))]
     .reduce((a, b) => (b < a ? b : a), bugun);
@@ -2348,9 +2358,9 @@ export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Pr
     ...kgEskimeHatirlatmalari(kgGuncel, await sistemAyariOku(db, 'satin-alma.kg-fiyati-eskime-gun'), bugun),
   ];
   const kayitlar = await s.hatirlatmaKayitlari(db);
-  const { acilacak, kapanacak } = hatirlatmaFarki(istenen, new Set(kayitlar.map((k) => k.anahtar)), kayitlar.filter((k) => k.acik));
+  const { acilacak, kapanacak } = hatirlatmaFarki(istenen, new Set(kayitlar.map((k) => k.anahtar)), kayitlar.filter((k) => k.acik && !tasinanTurMu(k.tur)));
   for (const k of kapanacak) await bildirimKapat(db, { tur: k.tur as Parameters<typeof bildirimKapat>[1]['tur'], kaynakKimlik: k.kaynakKimlik });
-  await s.hatirlatmaKapat(db, kapanacak.map((k) => k.anahtar));
+  await s.hatirlatmaKapat(db, [...kapanacak.map((k) => k.anahtar), ...kayitlar.filter((k) => k.acik && tasinanTurMu(k.tur)).map((k) => k.anahtar)]);
   let acilan = 0;
   for (const o of acilacak) {
     if (!await s.hatirlatmaEkle(db, hatirlatmaAnahtari(o), o.tur, o.talepId)) continue;
@@ -2358,6 +2368,50 @@ export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Pr
     acilan += 1;
   }
   return { acilan, kapanan: kapanacak.length };
+}
+
+// 3405-1 a: kademeli uyarı kaynakları. Kayıt kimliği 2432'nin kaynak kimliğidir (talep ve dönem): eski türün açık bildirimi yeni
+// kayıtla eşleşir. K2-K3 satın almaya (yazan ya da onaylayan), K4-K5 satın alma yöneticisine (ayar yetkisi). Kayıt no talep ya da
+// sipariş numarasıdır; tedarikçi adı uygulama içi metne de girmez (Risk K3).
+export type SatinAlmaKademeKaynagi = 'satin-alma.talep-onay' | 'satin-alma.siparis-verilmedi' | 'satin-alma.teklif-cevapsiz' | 'satin-alma.teslim';
+async function islemSahipleri(db: Db): Promise<(islem: string) => number[]> {
+  const islemler = [...await kisilerinIslemleri(db)];
+  return (islem) => islemler.filter(([, l]) => (l as readonly string[]).includes(islem)).map(([k]) => k);
+}
+export function satinAlmaKademeOkuyucusu(kaynak: SatinAlmaKademeKaynagi): (db: Db) => Promise<KademeKaydi[]> {
+  return async (db) => {
+    const talepler = await hatirlatmaTalepleri(db);
+    const sahip = await islemSahipleri(db);
+    const yazan = sahip('satin-alma.yaz');
+    const yonetici = sahip('satin-alma.ayar');
+    const l: KademeKaydi[] = [];
+    for (const t of talepler) {
+      if (kaynak === 'satin-alma.talep-onay' && t.durum === 'onayda' && !t.kararOnayli) {
+        l.push({ kayit: `${t.talepId}:${t.durumAni}`, no: t.no, baslik: `${t.no}: onay bekliyor`, yol: '/satin-alma/onaylar', baslangic: t.durumGunu,
+          yapanlar: sahip('satin-alma.onayla'), yoneticiler: yonetici });
+      }
+      if (kaynak === 'satin-alma.siparis-verilmedi' && t.durum === 'onayda' && t.kararOnayli && t.sonOnay !== null) {
+        l.push({ kayit: `${t.talepId}:${t.sonOnay.id}`, no: t.no, baslik: `${t.no}: onaylandı, sipariş verilmedi`, yol: '/satin-alma/talepler',
+          baslangic: t.sonOnay.gun, yapanlar: yazan, yoneticiler: yonetici });
+      }
+      if (kaynak === 'satin-alma.teklif-cevapsiz' && (t.durum === 'teklif_isteniyor' || t.durum === 'degerlendirme')) {
+        for (const r of t.istekler) {
+          if (r.teklifVar) continue;
+          l.push({ kayit: `${t.talepId}:${String(r.firmaId)}:${r.gonderim}`, no: t.no, baslik: `${t.no}: teklif isteği cevapsız`, yol: '/satin-alma/talepler',
+            baslangic: r.gonderim, yapanlar: yazan, yoneticiler: yonetici });
+        }
+      }
+      if (kaynak === 'satin-alma.teslim' && t.durum === 'siparis_verildi') {
+        for (const p of t.siparisler) {
+          if (p.beklenenTeslim === null) continue;
+          const no = p.siparisNo ?? t.no;
+          l.push({ kayit: `${t.talepId}:${p.teklifId}:${p.beklenenTeslim}`, no, baslik: `${no}: teslim bekleniyor`, yol: '/satin-alma/talepler',
+            sonGun: p.beklenenTeslim, yapanlar: yazan, yoneticiler: yonetici });
+        }
+      }
+    }
+    return l;
+  };
 }
 
 // 2413 a: iptal edilmiş talep gerekçeyle iptalden önceki durumuna döner; dönüş genel kaydın bütün kurallarından geçer (sipariş onaylı

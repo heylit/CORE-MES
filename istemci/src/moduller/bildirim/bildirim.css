@@ -141,3 +141,17 @@
   .tc-bildirim-kisi { grid-template-columns: auto minmax(0, 1fr); }
   .tc-bildirim-kisi .tc-bildirim-zaman { grid-column: 2; }
 }
+
+/* Kademeli uyarı (3405). Kırmızı şerit yalnız kişisel oturumda, sayfanın en üstünde. */
+.tc-bildirim-kserit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-4);
+  border: 2px solid var(--stop); border-radius: var(--yari-2); color: var(--stop); background: var(--panel-solid); }
+.tc-bildirim-kserit p { margin: 0; flex: 1 1 20rem; }
+.tc-bildirim-kaynak-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-bildirim-kademe-form { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-bildirim-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+@media (max-width: 767px) {
+  .tc-bildirim-kserit { flex-wrap: nowrap; padding: var(--b-1) var(--b-3); }
+  .tc-bildirim-kserit p { flex: 1 1 auto; font-size: var(--yazi-s); }
+  .tc-bildirim-kserit-ek { display: none; }
+  .tc-bildirim-kserit a { white-space: nowrap; }
+}

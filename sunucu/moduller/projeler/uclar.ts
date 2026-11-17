@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  bitisBaglaGovdesi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, hazirlikAtaCevabi, hazirlikAtaGovdesi, idParametresi, kademeAyariCevabi, kademeAyariGovdesi, kademeGecmisiCevabi, gecikenHazirliklarimCevabi,
+  bitisBaglaGovdesi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, hazirlikAtaCevabi, hazirlikAtaGovdesi, idParametresi, kademeGecmisiCevabi,
   kilometreTasiEkleGovdesi, kilometreTasiGuncelleGovdesi, kilometreTasiParametresi, kisiSecenekleriCevabi, projeGuncelleGovdesi,
   projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
@@ -18,7 +18,7 @@ import {
   sablonEkle, sablonListesi, sablonSecenekleri,
 } from './servis.ts';
 import { hazirlikGoreviAta } from './hazirlik-gorevleri.ts';
-import { gecikenHazirliklarim, kademeAyariOku, kademeAyariYaz, kademeGecmisi } from './hazirlik-kademe.ts';
+import { kademeGecmisi } from './hazirlik-kademe.ts';
 
 // Sayfası olan rol okur; `projeler.oku` sayfasız okuma için ayrı verilebilir (başka modülün ekranı proje seçerken).
 const OKUMA = { biri: ['sayfa.projeler', 'projeler.oku'] } as const;
@@ -37,22 +37,7 @@ const gorevKomutu = (
 });
 
 export const uclar = [
-  // 3396 a: kademeli takip. Ayarı ayarlayan, dağıtan ve projeyi okuyan görür, hazirlik-ayar yazar; şerit yalnız kişinin kendi görevlerini döner.
-  uc({
-    yontem: 'GET',
-    yol: '/projeler/hazirlik-kademe-ayari',
-    yetki: { biri: ['uretim-emirleri.hazirlik-ayar', 'projeler.hazirlik-dagit', 'projeler.oku'] },
-    cevap: kademeAyariCevabi,
-    isle: ({ db, kullanici }) => kademeAyariOku(db, kullanici),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/projeler/hazirlik-kademe-ayari',
-    yetki: 'uretim-emirleri.hazirlik-ayar',
-    govde: kademeAyariGovdesi,
-    cevap: kademeAyariCevabi,
-    isle: ({ db, kullanici, govde }) => kademeAyariYaz(db, kullanici, govde),
-  }),
+  // 3396 a: hazırlık görevinin kademe geçmişi (ortak kademeli uyarı defterinden, 3405).
   uc({
     yontem: 'GET',
     yol: '/projeler/gorevler/:gorevId/kademeler',
@@ -60,13 +45,6 @@ export const uclar = [
     parametre: gorevParametresi,
     cevap: kademeGecmisiCevabi,
     isle: ({ db, parametre }) => kademeGecmisi(db, parametre.gorevId),
-  }),
-  uc({
-    yontem: 'GET',
-    yol: '/projeler/hazirlik-uyarim',
-    yetki: 'projeler.gorev-isle',
-    cevap: gecikenHazirliklarimCevabi,
-    isle: ({ db, kullanici }) => gecikenHazirliklarim(db, kullanici),
   }),
   // 3396 a: hazırlık görevinin yapanını değiştirmek dağıtma işlemidir (Proje > Hazırlık yan paneli).
   uc({

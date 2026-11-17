@@ -106,18 +106,7 @@ button.tc-prj-pano-kart { cursor: pointer; }
 .tc-prj-kademe li > .tc-prj-soluk, .tc-prj-kademe li > .tc-alan { flex-basis: 100%; }
 .tc-prj-kademe li[data-kademe="3"]::before { color: var(--hold); }
 .tc-prj-kademe li[data-kademe="4"]::before, .tc-prj-kademe li[data-kademe="5"]::before { color: var(--stop); }
-/* Kırmızı şerit: geciken hazırlık görevi (yalnız kişisel oturumda). */
-.tc-prj-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-4);
-  border: 2px solid var(--stop); border-radius: var(--yari-2); color: var(--stop); background: var(--panel-solid); }
-.tc-prj-serit p { margin: 0; flex: 1 1 20rem; }
 .tc-prj-hz-kademe { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--b-1); }
 .tc-prj-hz-kademe li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
-.tc-prj-kademe .tc-alan { max-inline-size: 16rem; }
-@media (max-width: 767px) {
-  .tc-prj-serit { flex-wrap: nowrap; padding: var(--b-1) var(--b-3); }
-  .tc-prj-serit p { flex: 1 1 auto; font-size: var(--yazi-s); }
-  .tc-prj-serit-ek { display: none; }
-  .tc-prj-serit a { white-space: nowrap; }
-}
 .tc-prj-hz-sutun { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-prj-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }

@@ -61,7 +61,7 @@ const liste = (satirlar: Bildirim[]): BildirimListeCevabi => ({ satirlar, toplam
 const TERCIH: BildirimTercihleriCevabi = {
   kanallar: { mesaj: false, eposta: false },
   epostaSecilebilir: true,
-  satirlar: [{ tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', mesaj: false, eposta: false, varsayilan: true }],
+  satirlar: [{ tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', mesaj: false, eposta: false, varsayilan: true, kapatilamaz: false }],
 };
 
 describe('Bildirim zili', () => {
@@ -114,13 +114,13 @@ describe('Bildirim zili', () => {
   });
 });
 
-describe('Bildirimler sayfası (Profilim altında)', () => {
+describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
   it('gelenleri listeler; süzgeç sunucuya gider; satır arşive kaldırılır', async () => {
     const istekler = sunucuKur({
       'GET /bildirimler': () => json(200, liste([B({}), B({ id: 2, baslik: 'Okunmuş haber', okundu: '2026-10-19T09:01:00+03:00', onem: 'bilgi' })])),
       'POST /bildirimler/2/arsivle': () => json(200, B({ id: 2, arsivlendi: '2026-10-19T09:10:00+03:00', okundu: '2026-10-19T09:01:00+03:00' })),
     });
-    ac('/profil/bildirimler');
+    ac('/bildirim-merkezi');
     expect(await screen.findByText('Okunmuş haber')).toBeTruthy();
     expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=gelen'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Uyarı ve acil' }));
@@ -138,7 +138,7 @@ describe('Bildirimler sayfası (Profilim altında)', () => {
         B({ id: 4, baslik: 'Makine durdu', sinif: 'bilgi' }),
       ])),
     });
-    ac('/profil/bildirimler');
+    ac('/bildirim-merkezi');
     const satir = async (baslik: string) => (await screen.findByText(baslik)).closest('li') as HTMLElement;
     expect(within(await satir('Kart onay bekliyor')).getByText('Görev')).toBeTruthy();
     expect(within(await satir('Termin yaklaşıyor')).getByText('Hatırlatma')).toBeTruthy();
@@ -152,9 +152,8 @@ describe('Bildirimler sayfası (Profilim altında)', () => {
 
   it('arşivde kaldırma düğmesi yok; boş arşiv söylenir', async () => {
     sunucuKur({ 'GET /bildirimler': () => json(200, liste([])) });
-    ac('/profil/bildirimler/arsiv');
+    ac('/bildirim-merkezi/arsiv');
     expect(await screen.findByText('Arşiv boş.')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Arşiv/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('tercih anahtarı seçimi kaydeder; uygulama kanalı kilitli', async () => {
@@ -162,7 +161,7 @@ describe('Bildirimler sayfası (Profilim altında)', () => {
       'GET /bildirimler/tercihler': () => json(200, TERCIH),
       'POST /bildirimler/tercihler/degistir': (g) => json(200, { ...TERCIH, satirlar: [{ ...TERCIH.satirlar[0], ...(g as object), varsayilan: false }] }),
     });
-    ac('/profil/bildirimler/tercihler');
+    ac('/bildirim-merkezi/tercihler');
     const uygulama = await screen.findByRole('switch', { name: 'Makine durdu: uygulama, hep açık' });
     expect((uygulama as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText(/kanalları henüz açılmadı/)).toBeTruthy();
@@ -176,7 +175,7 @@ describe('Bildirimler sayfası (Profilim altında)', () => {
     sunucuKur({
       'GET /bildirimler/tercihler': () => json(200, { ...TERCIH, epostaSecilebilir: false, satirlar: [{ ...TERCIH.satirlar[0], eposta: null }] }),
     });
-    ac('/profil/bildirimler/tercihler');
+    ac('/bildirim-merkezi/tercihler');
     expect(await screen.findByRole('switch', { name: 'Makine durdu: mesaj' })).toBeTruthy();
     expect(screen.queryByRole('switch', { name: 'Makine durdu: e-posta' })).toBeNull();
   });
@@ -241,7 +240,7 @@ describe('Cihaz bildirimi (342 a)', () => {
     satirlar = [B({ id: 9, yol: null, metin: 'Tezgah 4 arızada' })];
     h.rerender({ n: 1 });
     await waitFor(() => expect(gosterilen).toHaveLength(1));
-    expect(gosterilen[0]?.secenek).toEqual({ body: 'Tezgah 4 arızada', tag: 'tmi-bildirim-9', data: { yol: '/profil/bildirimler' } });
+    expect(gosterilen[0]?.secenek).toEqual({ body: 'Tezgah 4 arızada', tag: 'tmi-bildirim-9', data: { yol: '/bildirim-merkezi' } });
   });
 
   it('izin yalnız çekmecedeki düğmeyle istenir; verilince düğme kalkar, reddedilmiş ya da desteksizse düğme çıkmaz', async () => {
@@ -286,7 +285,7 @@ describe('uygulama kapalıyken cihaz bildirimi (Web Push)', () => {
     render(
       <QueryClientProvider client={istemci}>
         <BildirimSaglayici>
-          <MemoryRouter initialEntries={['/profil/bildirimler/tercihler']}><Tercihler push={push} /></MemoryRouter>
+          <MemoryRouter initialEntries={['/bildirim-merkezi/tercihler']}><Tercihler push={push} /></MemoryRouter>
         </BildirimSaglayici>
       </QueryClientProvider>,
     );

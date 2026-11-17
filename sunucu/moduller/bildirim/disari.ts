@@ -14,3 +14,7 @@ export type { IstasyonCozucusu, YayinIstasyonu } from './yayin.ts';
 // E-posta (3397): kişinin iş e-postasını İK verir; bağ kablolamada kurulur (İK bu modülü ithal eder).
 export { epostaAdresCozucusuKaydet, epostaAyarOkuyucusuKaydet } from './eposta.ts';
 export type { AyarOkuyucusu, EpostaAdresCozucusu, EpostaEki } from './eposta.ts';
+// Kademeli uyarı (3405): kaynak modül açık kayıtlarını verir, bağı kablolama kurar (kaynak bu modülü ithal eder). Kayıt türü buradadır.
+// Motoru dışarıdan koşturmak yalnız kaynak modülün testi içindir (iş kendi zamanlayıcısıyla koşar).
+export { kademeKaynagiKaydet, enYuksekKademeler, kademeleriIlerlet, kademeTatilCozucusuKaydet, kayitKademeGecmisi } from './kademe.ts';
+export type { KademeKaydi, KademeOkuyucusu, TatilCozucusu } from './kademe.ts';

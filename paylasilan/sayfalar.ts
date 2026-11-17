@@ -8,6 +8,7 @@ import { ARKON_IKINCI_MENU, ARKON_SAYFALARI, KUYRUK_IKINCI_MENU, URETIM_TERMINAL
 import { ATOLYE_IKINCI_MENU, ATOLYE_SAYFALARI } from './sayfalar/atolye.ts';
 import { AYARLAR_IKINCI_MENU, AYARLAR_SAYFALARI } from './sayfalar/ayarlar.ts';
 import { CIZELGE_SAYFALARI } from './sayfalar/cizelge.ts';
+import { BILDIRIM_IKINCI_MENU, BILDIRIM_SAYFALARI } from './sayfalar/bildirim.ts';
 import { BELGE_MERKEZI_IKINCI_MENU, BELGE_MERKEZI_SAYFALARI } from './sayfalar/belge-merkezi.ts';
 import { GEOMETRI_IKINCI_MENU, GEOMETRI_SAYFALARI } from './sayfalar/geometri.ts';
 import { CNC_KURULUM_IKINCI_MENU, CNC_KURULUM_SAYFALARI } from './sayfalar/cnc-kurulum.ts';
@@ -66,6 +67,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...AYARLAR_SAYFALARI,
   ...CIZELGE_SAYFALARI,
   ...BELGE_MERKEZI_SAYFALARI,
+  ...BILDIRIM_SAYFALARI,
   ...GEOMETRI_SAYFALARI,
   ...CNC_KURULUM_SAYFALARI,
   ...RECETE_ROTA_SAYFALARI,
@@ -167,6 +169,7 @@ export const TUM_IKINCI_MENULER = [
   DEGISIKLIK_YONETIMI_IKINCI_MENU,
   URETIM_EMIRLERI_IKINCI_MENU,
   ATOLYE_IKINCI_MENU,
+  BILDIRIM_IKINCI_MENU,
 ] as const satisfies readonly IkinciMenuTanimi[];
 
 export const IKINCI_MENULER = TUM_IKINCI_MENULER.filter((m) => !kapaliModulYoluMu(m.kok));

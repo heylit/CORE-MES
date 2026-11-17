@@ -1,12 +1,25 @@
+import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { Arsiv, Gelenler, HazirlaSayfasi, Tercihler, YayinlarSayfasi } from './Bildirimler.tsx';
+import { AcikTakipler, Gecikenlerim, KademeliUyari } from './Kademe.tsx';
 
-// Menü sayfası değildir (222 a, yeni sayfa işlemi yok): hiçbir sayfaya ait olmayan yol oturumu olan herkese açıktır; zil ve
-// Profilim buraya bağlanır, veri yetkisi uçlardadır (yalnız kişinin kendi satırları).
+// Bildirim Merkezi (3405-4 a): bildirim, duyuru ve kademeli takip tek sayfada. Bildirim yönetimi ve E-posta ayarları da bu menüdedir;
+// ekranları Sistem Ayarları modülündedir ve oradan bu adrese kaydedilir.
+function EskiAdres({ yeni }: { yeni: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${yeni}${search}`} replace />;
+}
+
 export const rotalar: ModulRotasi[] = [
-  { yol: '/profil/bildirimler', ekran: Gelenler },
-  { yol: '/profil/bildirimler/arsiv', ekran: Arsiv },
-  { yol: '/profil/bildirimler/tercihler', ekran: Tercihler },
-  { yol: '/profil/bildirimler/hazirla', ekran: HazirlaSayfasi },
-  { yol: '/profil/bildirimler/yayinlar', ekran: YayinlarSayfasi },
+  { yol: '/bildirim-merkezi', ekran: Gelenler },
+  { yol: '/bildirim-merkezi/gecikenlerim', ekran: Gecikenlerim },
+  { yol: '/bildirim-merkezi/arsiv', ekran: Arsiv },
+  { yol: '/bildirim-merkezi/tercihler', ekran: Tercihler },
+  { yol: '/bildirim-merkezi/hazirla', ekran: HazirlaSayfasi },
+  { yol: '/bildirim-merkezi/yayinlar', ekran: YayinlarSayfasi },
+  { yol: '/bildirim-merkezi/acik-takipler', ekran: AcikTakipler },
+  { yol: '/bildirim-merkezi/kademeli-uyari', ekran: KademeliUyari },
+  // Eski adresler (yer imi, gönderilmiş bildirim bağlantısı) yeni yere gider.
+  { yol: '/profil/bildirimler', ekran: () => <EskiAdres yeni="/bildirim-merkezi" /> },
+  ...(['arsiv', 'tercihler', 'hazirla', 'yayinlar'] as const).map((a) => ({ yol: `/profil/bildirimler/${a}`, ekran: () => <EskiAdres yeni={`/bildirim-merkezi/${a}`} /> })),
 ];

@@ -1,0 +1,50 @@
+import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
+
+// Bildirim Merkezi (3405-4 a): bildirimler, duyurular ve kademeli takip tek sayfada. Sayfa işlemi her role verilir (göç); kişinin
+// kendi bildirimi, gecikenleri ve tercihleri oturumla okunur, öteki maddeler kendi veri işlemiyle görünür. Yetki modeli değişmez.
+export const BILDIRIM_SAYFALARI = [
+  { yol: '/bildirim-merkezi', islem: 'sayfa.bildirim-merkezi', baslik: 'Bildirim Merkezi', simge: 'bell', grup: 'Yönetim', sira: 2 },
+] as const satisfies readonly SayfaTanimi[];
+
+export const BILDIRIM_IKINCI_MENU = {
+  kok: '/bildirim-merkezi',
+  baslik: 'Bildirim Merkezi',
+  simge: 'bell',
+  gruplar: [
+    {
+      maddeler: [
+        { anahtar: 'gelenler', baslik: 'Gelenler', yol: '/bildirim-merkezi', simge: 'bell', islem: 'sayfa.bildirim-merkezi' },
+        { anahtar: 'gecikenlerim', baslik: 'Gecikenlerim', yol: '/bildirim-merkezi/gecikenlerim', simge: 'clock', islem: 'sayfa.bildirim-merkezi' },
+        { anahtar: 'arsiv', baslik: 'Arşiv', yol: '/bildirim-merkezi/arsiv', simge: 'layers', islem: 'sayfa.bildirim-merkezi' },
+        { anahtar: 'tercihler', baslik: 'Tercihlerim', yol: '/bildirim-merkezi/tercihler', simge: 'gear', islem: 'sayfa.bildirim-merkezi' },
+      ],
+    },
+    {
+      baslik: 'Duyurular',
+      maddeler: [
+        { anahtar: 'hazirla', baslik: 'Hazırla', yol: '/bildirim-merkezi/hazirla', simge: 'plus', islem: 'bildirim.yayinla', okur: ['/bildirimler/yayinlar/hedefler'] },
+        {
+          anahtar: 'yayinlar', baslik: 'Yayınlar ve okunma', yol: '/bildirim-merkezi/yayinlar', simge: 'eye', islem: 'bildirim.yayinla',
+          veya: ['bildirim.yayin-oku'], okur: ['/bildirimler/yayinlar'],
+        },
+      ],
+    },
+    {
+      baslik: 'Takip',
+      maddeler: [
+        { anahtar: 'acik-takipler', baslik: 'Açık takipler', yol: '/bildirim-merkezi/acik-takipler', simge: 'list', islem: 'bildirim.kademe-yonet', okur: ['/bildirim-kademe/acik-takipler'] },
+      ],
+    },
+    {
+      baslik: 'Ayarlar',
+      maddeler: [
+        { anahtar: 'kademeli-uyari', baslik: 'Kademeli uyarı', yol: '/bildirim-merkezi/kademeli-uyari', simge: 'alert', islem: 'bildirim.kademe-yonet', okur: ['/bildirim-kademe/kaynaklar'] },
+        {
+          anahtar: 'yonetim', baslik: 'Bildirim yönetimi', yol: '/bildirim-merkezi/yonetim', simge: 'users', islem: 'ayarlar.yaz',
+          okur: ['/bildirimler/cagri-yonlendirme', '/bildirimler/alicilar', '/bildirimler/gosterim'],
+        },
+        { anahtar: 'eposta', baslik: 'E-posta', yol: '/bildirim-merkezi/eposta', simge: 'mail', islem: 'bildirim.eposta-yonet', okur: ['/bildirimler/eposta/durum'] },
+      ],
+    },
+  ],
+} as const satisfies IkinciMenuTanimi;

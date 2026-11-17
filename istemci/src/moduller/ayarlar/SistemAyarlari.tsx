@@ -1,5 +1,6 @@
 import { Fragment, useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { agAraligiHatasi } from '#paylasilan/ag-araligi.ts';
 import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
@@ -478,6 +479,15 @@ const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'cihazlar', baslik: 'Ortak cihazlar', simge: 'laptop' },
 ];
 
+// Bildirim Merkezi > Ayarlar > E-posta (3405-4 a): gönderim ayarları bu modülün ayar listesidir, ekran oradan açılır.
+export function EpostaSayfasi() {
+  return (
+    <div className="tc-ayar-sayfa">
+      <EpostaAyarlari gonderimAyarlari={(ek) => <AyarListesi baslik="Gönderim ayarları" kategori="eposta" ek={ek} />} />
+    </div>
+  );
+}
+
 // Sayfanın görünürlüğü yine `sayfa.ayarlar`dır; modül sekmesi yalnız modülün ayar menü maddesini gören kişiye çıkar.
 // Kategoriler yalnız düzendir: her bölüm eskisi gibi kendi ucunu okur ve yazar.
 export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readonly AyarEkrani[] }) {
@@ -534,7 +544,12 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
         )}
         {gecerli === 'formlar' && <Formlar ekranlar={formEkranlari} />}
         {gecerli === 'baglanti' && <Baglantilar ekranlar={baglantiEkranlari} hazirlikGorur={islemler.includes('saglik.ayrinti-oku')} />}
-        {gecerli === 'eposta' && <EpostaAyarlari gonderimAyarlari={(ek) => <AyarListesi baslik="Gönderim ayarları" kategori="eposta" ek={ek} />} />}
+        {gecerli === 'eposta' && (
+          <p className="tc-ayar-aciklama">
+            E-posta ayarları Bildirim Merkezi&apos;ne taşındı: <Link to="/bildirim-merkezi/eposta">Bildirim Merkezi &gt; Ayarlar &gt; E-posta</Link>.
+            Kademeli uyarı da aynı menüdedir.
+          </p>
+        )}
         {gecerli === 'moduller' && <ModulSekmeleri ekranlar={moduller} />}
         {gecerli === 'guncelleme' && <Guncelleme />}
         {gecerli === 'yedek' && <Yedekler />}
