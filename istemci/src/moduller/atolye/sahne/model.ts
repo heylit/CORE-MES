@@ -4,6 +4,7 @@ import type { Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ModelBirimi, YukariEkseni } from '#paylasilan/sozlesme/atolye.ts';
 import { BIRIM_CARPANI } from '../model-dosyasi.ts';
+import type { Animasyon } from './nesneler.ts';
 
 // Gerçek makine modeli sahnede: saklanan GLB okunur, birim, yukarı eksen ve dönüş uygulanır, ayak izine yerleşir.
 
@@ -56,6 +57,26 @@ export function modelYerlestir(sahne: Object3D, a: ModelYerlesimi, ayakIzi: { g:
     }
   });
   return { kok, boyut: kutu.getSize(new Vector3()) };
+}
+
+// Yüklenen makine modelinde adı belli parçalar, tipten çizilen gövdedeki hareketi alır: `kapi` ile başlayan ve
+// glTF ek alanında `acik` (açıkken x kayması, modelin biriminde) taşıyan parça duraklayınca kayar; `kafa` çalışırken
+// iner kalkar; `besik` çalışırken X ekseninde salınır; `ayna` çalışırken X ekseninde döner. Ad yoksa model durağandır.
+export function modelHareketleri(kok: Object3D): Animasyon {
+  const a: Animasyon = {};
+  const kapilar: NonNullable<Animasyon['kapilar']> = [];
+  kok.traverse((o) => {
+    const acik: unknown = o.userData.acik;
+    if (/^kapi/i.test(o.name)) {
+      if (typeof acik === 'number' && Number.isFinite(acik) && acik !== 0) kapilar.push({ nesne: o, kapali: o.position.x, acik: o.position.x + acik });
+    } else if (o.name === 'kafa' && !a.kafa) {
+      a.kafa = o;
+      a.kafaY = o.position.y;
+    } else if (o.name === 'besik' && !a.besik) a.besik = o;
+    else if (o.name === 'ayna' && !a.ayna) a.ayna = o;
+  });
+  if (kapilar.length > 0) a.kapilar = kapilar;
+  return a;
 }
 
 // İşlenen parçanın büyütülmüş önizlemesi: birim, eksen ve dönüş uygulanır, en uzun kenarı `kenar` metre olur,
