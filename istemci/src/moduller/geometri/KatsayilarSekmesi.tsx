@@ -5,6 +5,7 @@ import { DurumKutusu, Dugme, Girdi, Kart, Rozet, Simge, useBildirim } from '../.
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
+import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { katsayiMetni } from './gorunum.ts';
 import { useKaliteSecenekleri } from './ham-secimi.ts';
@@ -21,6 +22,23 @@ const KAYNAK: Readonly<Record<KatsayiSatiri['kaynak'], { ad: string; ton: RozetT
 const SIMGE = { malzeme: 'layers', tasarim: 'ruler', geometri: 'box' } as const;
 const sayi = (x: number): string => katsayiMetni(x);
 const ondalik = (metin: string): number => Number(metin.trim().replace(',', '.'));
+
+// Aynı ölçüm grubundaki (ör. ISO S) bütün satırların farkı tek uyarıdır: grubun son satırının altında, bütün sınıfların yeni değerleriyle.
+type GrupFarki = OlcumFarki & { satirlar: { baslik: string; elle: boolean; yeni: OlcumFarki['yeni'] }[] };
+function grupFarklari(satirlar: readonly KatsayiSatiri[], gruplar: GeometriKalibrasyonCevabi['gruplar']): Map<string, GrupFarki> {
+  const gruba = new Map<string, { son: string; fark: GrupFarki }>();
+  for (const s of satirlar) {
+    const f = olcumFarki(s, gruplar);
+    if (f === null) continue;
+    const g = gruba.get(f.grup);
+    if (g === undefined) gruba.set(f.grup, { son: s.kimlik, fark: { ...f, satirlar: [{ baslik: s.baslik, elle: s.kaynak === 'elle', yeni: f.yeni }] } });
+    else {
+      g.son = s.kimlik;
+      g.fark = { ...g.fark, yeni: [...g.fark.yeni, ...f.yeni], satirlar: [...g.fark.satirlar, { baslik: s.baslik, elle: s.kaynak === 'elle', yeni: f.yeni }] };
+    }
+  }
+  return new Map([...gruba.values()].map((g) => [g.son, g.fark]));
+}
 
 type Yazim = { tur: 'yaz'; degerler: { anahtar: string; deger: number }[]; not: string | null } | { tur: 'don'; anahtarlar: string[] };
 
@@ -53,6 +71,7 @@ export function KatsayilarSekmesi({ k, yazar }: { k: GeometriKalibrasyonCevabi; 
     <>
       {KATSAYI_BOLUMLERI.map((b) => {
         const satirlar = katsayiSatirlari(l, b.turler, sinifAdlari);
+        const farklar = grupFarklari(satirlar, k.gruplar);
         return (
           <Kart key={b.kimlik} baslik={b.baslik} simge={SIMGE[b.kimlik]} sag={b.kimlik === 'malzeme' ? <Rozet ton="pasif">{String(satirlar.length)} sınıf</Rozet> : undefined}>
             <table className="tc-g3b-su-tablo tc-g3b-ks-tablo">
@@ -69,7 +88,7 @@ export function KatsayilarSekmesi({ k, yazar }: { k: GeometriKalibrasyonCevabi; 
               </thead>
               <tbody>
                 {satirlar.map((s) => {
-                  const fark = olcumFarki(s, k.gruplar);
+                  const fark = farklar.get(s.kimlik) ?? null;
                   const elle = s.katsayilar.filter((x) => x.elle !== null).map((x) => x.anahtar);
                   return (
                     <SatirGrubu key={s.kimlik} s={s} fark={fark} yazar={yazar} bekliyor={komut.isPending} sinifAdlari={sinifAdlari}
@@ -94,10 +113,12 @@ export function KatsayilarSekmesi({ k, yazar }: { k: GeometriKalibrasyonCevabi; 
 }
 
 function SatirGrubu({ s, fark, yazar, bekliyor, sinifAdlari, acik, ac, don, yaz }: {
-  s: KatsayiSatiri; fark: OlcumFarki | null; yazar: boolean; bekliyor: boolean; sinifAdlari: ReadonlyMap<string, string>;
+  s: KatsayiSatiri; fark: GrupFarki | null; yazar: boolean; bekliyor: boolean; sinifAdlari: ReadonlyMap<string, string>;
   acik: boolean; ac: () => void; don: (() => void) | null; yaz: (degerler: { anahtar: string; deger: number }[], not: string | null) => void;
 }) {
   const kaynak = KAYNAK[s.kaynak];
+  const son = s.katsayilar.flatMap((x) => (x.elle === null ? [] : [x.elle])).sort((a, b) => b.zaman.localeCompare(a.zaman))[0];
+  const dayanak = son === undefined ? s.dayanak : `${s.not ?? s.dayanak} · ${son.kisi ?? 'Bilinmeyen kişi'}, ${zamanMetni(son.zaman)}`;
   const malzeme = s.iso !== null || s.kimlik.startsWith('malzeme:');
   const malzemeDegeri = (ad: 'kaba' | 'finis'): string => {
     const x = s.katsayilar.find((y) => y.anahtar.startsWith(`malzeme.${ad}.`));
@@ -110,11 +131,11 @@ function SatirGrubu({ s, fark, yazar, bekliyor, sinifAdlari, acik, ac, don, yaz 
       <tr>
         <td>
           {s.baslik}{s.iso !== null && <span className="tc-g3b-soluk"> · {s.iso}</span>}
-          <span className="tc-g3b-ks-dar"><br /><Rozet ton={kaynak.ton}>{kaynak.ad}</Rozet><br /><span className="tc-g3b-soluk">{s.not ?? s.dayanak}</span></span>
+          <span className="tc-g3b-ks-dar"><br /><Rozet ton={kaynak.ton}>{kaynak.ad}</Rozet><br /><span className="tc-g3b-soluk">{dayanak}</span></span>
         </td>
         {malzeme ? <><td className="tc-g3b-su-deger">{malzemeDegeri('kaba')}</td><td className="tc-g3b-su-deger">{malzemeDegeri('finis')}</td></> : <td>{degerler}</td>}
         <td className="tc-g3b-ks-genis"><Rozet ton={kaynak.ton}>{kaynak.ad}</Rozet></td>
-        <td className="tc-g3b-ks-genis">{s.not ?? s.dayanak}</td>
+        <td className="tc-g3b-ks-genis">{dayanak}</td>
         {yazar && (
           <td>
             {don !== null
@@ -129,13 +150,16 @@ function SatirGrubu({ s, fark, yazar, bekliyor, sinifAdlari, acik, ac, don, yaz 
             <p className="tc-g3b-su-uyari">
               <Simge ad="alert" />
               <span>
-                Ölçüm farklı: {fark.grup} ×{sayi(fark.carpan)} ({String(fark.n)} parça).
+                Ölçüm farklı: {fark.grup} ×{sayi(fark.carpan)} ({String(fark.n)} parça){fark.satirlar.length > 1 ? `; gruptaki ${String(fark.satirlar.length)} sınıf` : ''}.
                 {yazar && <> <button type="button" className="tc-g3b-ka-bag" disabled={bekliyor}
                   onClick={() => { yaz(fark.yeni, `Ölçümle güncellendi: ${fark.grup} ×${sayi(fark.carpan)}, ${String(fark.n)} parça`); }}>
-                  Bu çarpanla güncelle ({fark.yeni.map((y) => `×${sayi(y.deger)}`).join(' · ')})
+                  {fark.satirlar.length > 1 ? `${String(fark.satirlar.length)} sınıfı bu çarpanla güncelle` : `Bu çarpanla güncelle (${fark.yeni.map((y) => `×${sayi(y.deger)}`).join(' · ')})`}
                 </button></>}
               </span>
             </p>
+            {fark.satirlar.length > 1 && (
+              <p className="tc-g3b-soluk">Yeni değerler: {fark.satirlar.map((x) => `${x.baslik}${x.elle ? ' (elle ayarlı)' : ''} ${x.yeni.map((y) => `×${sayi(y.deger)}`).join(' · ')}`).join('; ')}</p>
+            )}
           </td>
         </tr>
       )}

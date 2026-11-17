@@ -323,10 +323,10 @@ export type GeometriSureKatsayilariCevabi = z.output<typeof geometriSureKatsayil
 const katsayiAnahtari = z.string().trim().min(3).max(80);
 // Bir satırın bütün değerleri (ör. malzeme sınıfının kaba ve finişi) tek komutla yazılır; not hepsine.
 export const sureKatsayisiYazGovdesi = z.object({
-  degerler: z.array(z.object({ anahtar: katsayiAnahtari, deger: z.number().finite() }).strict()).min(1).max(10),
+  degerler: z.array(z.object({ anahtar: katsayiAnahtari, deger: z.number().finite() }).strict()).min(1).max(40),
   not: z.string().trim().max(200).nullable().transform((x) => (x === '' ? null : x)),
 }).strict();
-export const sureKatsayisiAnahtarGovdesi = z.object({ anahtarlar: z.array(katsayiAnahtari).min(1).max(10) }).strict();
+export const sureKatsayisiAnahtarGovdesi = z.object({ anahtarlar: z.array(katsayiAnahtari).min(1).max(40) }).strict();
 export const sureTasarimiGovdesi = z.object({ ra: z.enum(YUZEY_RA_DEGERLERI), tolerans: z.enum(TOLERANS_SINIFLARI) }).strict();
 export const sureTasarimiCevabi = z.object({ revizyonId: z.number().int(), ra: z.enum(YUZEY_RA_DEGERLERI), tolerans: z.enum(TOLERANS_SINIFLARI) });
 export const geometriSureCevabi = z.object({

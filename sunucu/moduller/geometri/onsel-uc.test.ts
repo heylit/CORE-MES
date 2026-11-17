@@ -124,6 +124,15 @@ describe('geometri başlangıç katsayıları ucu (3363; gerçek PostgreSQL, ger
     const iki = geometriSureKatsayilariCevabi.parse(tamam(await yaz([{ anahtar: 'malzeme.kaba.metal/karbon', deger: 1.2 }, { anahtar: 'malzeme.finis.metal/karbon', deger: 1.4 }])));
     assert.deepEqual([katsayi(iki, 'malzeme.kaba.metal/karbon')?.deger, katsayi(iki, 'malzeme.finis.metal/karbon')?.deger], [1.2, 1.4]);
     tamam(await istek('POST', '/geometri/sure-katsayilari/yerlesige-don', { anahtarlar: ['malzeme.kaba.metal/karbon', 'malzeme.finis.metal/karbon'] }));
+    // 3379: ölçüm grubunun bütün sınıfları tek komutla (en çok 40 değer).
+    const p = (await katsayilar()).katsayilar.filter((x) => x.iso === 'P').map((x) => ({ anahtar: x.anahtar, deger: 1.5 }));
+    assert.ok(p.length > 10, 'P grubunda 10\'dan çok değer');
+    const grup = geometriSureKatsayilariCevabi.parse(tamam(await yaz(p)));
+    assert.ok(p.every((d) => katsayi(grup, d.anahtar)?.deger === 1.5));
+    tamam(await istek('POST', '/geometri/sure-katsayilari/yerlesige-don', { anahtarlar: p.map((d) => d.anahtar) }));
+    const fazla = Array.from({ length: 41 }, () => ({ anahtar: 'kesme.pay', deger: 0.7 }));
+    assert.equal((await yaz(fazla)).statusCode, 400);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM geometri_sure_katsayi'))?.n, 0);
   });
 
   test('GEO-OU4 yüzey ve tolerans revizyona yazılır, tahmini büyütür; yeniden yazmak günceller; olmayan revizyon 404', async () => {

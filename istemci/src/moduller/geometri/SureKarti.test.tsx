@@ -246,7 +246,7 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     const dokum = within(k).getByRole('table', { name: 'Çarpan dökümü' });
     const satirlar = within(dokum).getAllByRole('row').map((r) => r.textContent);
     expect(satirlar).toHaveLength(9);
-    expect(satirlar[2]).toMatch(/^Finiş \(kalibresiz 5,4 dk\)Ra 1,6 ×1,41 · Hassas ±0,05 ×1,1/);
+    expect(satirlar[2]).toMatch(/^Finiş \(fizik hesabı 5,4 dk\)Ra 1,6 ×1,41 · Hassas ±0,05 ×1,1/);
     expect(satirlar[5]).toMatch(/^Kesme dışı pay÷0,7/);
     expect(satirlar[7]).toMatch(/^Başlangıç tahmini.*11,4 dk$/);
     expect(satirlar[8]).toBe('Ölçümle düzeltme5 parçadan azyok');
