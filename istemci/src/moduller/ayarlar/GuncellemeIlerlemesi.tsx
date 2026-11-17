@@ -27,7 +27,7 @@ const ACIKLAMA: Readonly<Partial<Record<GuncellemeAdimi, string>>> = {
   hazirla: 'Paket açılıyor, sürüm klasörü kuruluyor',
 };
 
-// Sunucu "durdur" adımından sonra kapalıdır: yedek, göç ve açılış ekrandan izlenemez.
+// Sunucu "durdur" adımından sonra kapalıdır: yedek, göç ve açılış ekrandan izlenemez, hangisinin sürdüğü bilinmez.
 const KAPALI_ADIMLAR: readonly GuncellemeAdimi[] = ['yedek', 'goc', 'acilis'];
 
 export type Gorunum =
@@ -46,7 +46,7 @@ export function adimSatirlari(g: Gorunum): AdimSatiri[] {
     switch (g.tur) {
       case 'sirada': return 'bekliyor';
       case 'suruyor': return sira(a) < sira(g.adim) ? 'tamam' : sira(a) === sira(g.adim) ? 'suruyor' : 'bekliyor';
-      case 'kapali': return KAPALI_ADIMLAR.includes(a) ? 'suruyor' : 'tamam';
+      case 'kapali': return KAPALI_ADIMLAR.includes(a) ? 'bekliyor' : 'tamam';
       case 'bitti': {
         if (g.sonuc.sonuc === 'kuruldu' || g.sonuc.adim === null) return 'tamam';
         const bozulan = sira(g.sonuc.adim as GuncellemeAdimi);
@@ -58,10 +58,44 @@ export function adimSatirlari(g: Gorunum): AdimSatiri[] {
     const durum = durumu(adim);
     const ad = AD[adim];
     const metin = durum === 'tamam' ? ad.tamam : durum === 'suruyor' ? ad.suruyor : durum === 'hata' ? `${ad.bekliyor}: hata` : ad.bekliyor;
-    const not = durum === 'hata' && g.tur === 'bitti' ? g.sonuc.hata : durum === 'suruyor' ? ACIKLAMA[adim] ?? null : null;
+    const not = durum === 'hata' && g.tur === 'bitti' ? g.sonuc.hata
+      : durum === 'suruyor' ? ACIKLAMA[adim] ?? null
+        : g.tur === 'kapali' && KAPALI_ADIMLAR.includes(adim) ? 'Sunucu kapalı; açılınca işaretlenir.' : null;
     return { adim, durum, metin, not };
   });
 }
+
+// Sunucu adım içi ilerleme vermez: yüzde biten adım sayısıdır, ara değer uydurulmaz.
+export function ilerlemeYuzdesi(g: Gorunum, satirlar: readonly AdimSatiri[]): number {
+  if (g.tur === 'bitti' && g.sonuc.sonuc === 'kuruldu') return 100;
+  return Math.round((satirlar.filter((s) => s.durum === 'tamam').length / GUNCELLEME_ADIMLARI.length) * 100);
+}
+
+const HALKA_YARICAP = 54;
+const HALKA_CEVRE = 2 * Math.PI * HALKA_YARICAP;
+
+type HalkaTonu = 'suruyor' | 'tamam' | 'uyari' | 'hata';
+
+// Geri alınan ya da yarıda kalan kurulumda yüzde yazılmaz: yarım kurulum gibi okunur; halka sonucun tonuyla dolar.
+function Halka({ yuzde, ton, sonuc }: { yuzde: number; ton: HalkaTonu; sonuc: string | null }) {
+  const dolu = sonuc === null ? yuzde : 100;
+  return (
+    <div className={`tc-guncelleme-halka tc-guncelleme-halka-${ton}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={yuzde} aria-valuetext={sonuc ?? `%${String(yuzde)}`} aria-label="Kurulum ilerlemesi">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle className="tc-guncelleme-halka-yol" cx="60" cy="60" r={HALKA_YARICAP} fill="none" strokeWidth="8" />
+        {dolu > 0 && <circle
+          className="tc-guncelleme-halka-yay" cx="60" cy="60" r={HALKA_YARICAP} fill="none" strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={`${HALKA_CEVRE * (dolu / 100)} ${HALKA_CEVRE}`} transform="rotate(-90 60 60)"
+        />}
+      </svg>
+      <span className="tc-guncelleme-halka-ic" aria-hidden="true">
+        {sonuc === null ? <b>%{yuzde}</b> : <><Simge ad="x" boyut="b" /><small>{sonuc}</small></>}
+      </span>
+    </div>
+  );
+}
+
+const SAAT = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
 const SONUC: Readonly<Record<GuncellemeUygulamaSonucu['sonuc'], { ton: RozetTonu; metin: string; aciklama: string }>> = {
   kuruldu: { ton: 'tamam', metin: 'Kuruldu', aciklama: 'Yeni sürüm çalışıyor.' },
@@ -102,6 +136,8 @@ interface Ozellikler {
 export function GuncellemeIlerlemesi({ veri, istenen, yoklamaMs = YOKLAMA_MS }: Ozellikler) {
   const istemci = useQueryClient();
   const [takip, setTakip] = useState<Takip | null>(null);
+  // Sunucu kapanınca canlı adım gelmez; uzun beklemede başlangıç saati son bilinenden yazılır.
+  const [baslangic, setBaslangic] = useState<{ commit: string; an: string } | null>(null);
   const kapandi = useRef(false);
 
   const suren = veri?.uygulaniyor ?? veri?.bekleyen ?? null;
@@ -121,6 +157,11 @@ export function GuncellemeIlerlemesi({ veri, istenen, yoklamaMs = YOKLAMA_MS }: 
     refetchInterval: yoklamaMs,
     retry: false,
   });
+
+  const canliBaslangic = ilerleme.data?.suren ?? null;
+  useEffect(() => {
+    if (canliBaslangic !== null) setBaslangic((b) => (b?.an === canliBaslangic.baslangic ? b : { commit: canliBaslangic.commit, an: canliBaslangic.baslangic }));
+  }, [canliBaslangic]);
 
   // Sunucu kapanıp geri gelince ya da uygulama bitince liste yeniden okunur: sonuç oradan gelir.
   // Yalnız ulaşılamayan sunucu "yeniden başlıyor" sayılır; yetki ya da eski sunucu (uç yok) hatasında canlı adım gösterilmez.
@@ -147,31 +188,35 @@ export function GuncellemeIlerlemesi({ veri, istenen, yoklamaMs = YOKLAMA_MS }: 
     : gorunum.tur === 'kapali' ? <Rozet ton="uyari">Sunucu yeniden başlıyor</Rozet>
       : gorunum.tur === 'sirada' ? <Rozet ton="pasif">Sırada</Rozet>
         : <Rozet ton="uyari">Kuruluyor</Rozet>;
-  const gorunen = gorunum.tur === 'kapali' ? satirlar.filter((s) => !KAPALI_ADIMLAR.includes(s.adim)) : satirlar;
   const biten = satirlar.filter((s) => s.durum === 'tamam').length;
+
+  const yuzde = ilerlemeYuzdesi(gorunum, satirlar);
+  const halkaTonu: HalkaTonu = gorunum.tur !== 'bitti' ? 'suruyor' : gorunum.sonuc.sonuc === 'kuruldu' ? 'tamam'
+    : SONUC[gorunum.sonuc.sonuc].ton === 'uyari' ? 'uyari' : 'hata';
+  const halkaSonucu = gorunum.tur === 'bitti' && gorunum.sonuc.sonuc !== 'kuruldu' ? SONUC[gorunum.sonuc.sonuc].metin : null;
+  const basladi = baslangic !== null && baslangic.commit === takip.commit ? ` ${SAAT.format(new Date(baslangic.an))}'de başladı.` : '';
 
   return (
     <section className="tc-guncelleme-adimlar" aria-label={`${surum} kurulum adımları`}>
       <p className="tc-ayar-baslik">{surum} {rozet}</p>
-      <ol className="tc-guncelleme-adim-liste" role="status" aria-live="polite">
-        {gorunen.map((s) => <Satir key={s.adim} s={s} no={GUNCELLEME_ADIMLARI.indexOf(s.adim) + 1} />)}
-        {gorunum.tur === 'kapali' && (
-          <Satir
-            no={4}
-            s={{ adim: 'yedek', durum: 'suruyor', metin: 'Yedek, göç ve açılış sürüyor', not: 'Sunucu kapalı; bu adımlar sunucu açılınca işaretlenir.' }}
-          />
-        )}
-      </ol>
-      <p className="tc-ayar-aciklama">
-        {gorunum.tur === 'bitti'
-          ? `${derlemeTarihi(gorunum.sonuc.baslangic, true)} başladı, ${sure(gorunum.sonuc.baslangic, gorunum.sonuc.bitis)} sürdü. ${SONUC[gorunum.sonuc.sonuc].aciklama}`
-          : gorunum.tur === 'kapali'
-            ? 'Bağlantı yoklanıyor. Sayfayı kapatsanız da kurulum sürer.'
-            : gorunum.tur === 'sirada'
-              ? 'Güncelleyici isteği birazdan alır.'
-              : `${String(biten)} / ${String(GUNCELLEME_ADIMLARI.length)} adım tamam.`}
-      </p>
-      {gorunum.tur === 'bitti' && <Dugme simge="x" onClick={() => { setTakip(null); }}>Kapat</Dugme>}
+      <div className="tc-guncelleme-govde">
+        <Halka yuzde={yuzde} ton={halkaTonu} sonuc={halkaSonucu} />
+        <div className="tc-guncelleme-govde-sag">
+          <ol className="tc-guncelleme-adim-liste" role="status" aria-live="polite">
+            {satirlar.map((s) => <Satir key={s.adim} s={s} no={GUNCELLEME_ADIMLARI.indexOf(s.adim) + 1} />)}
+          </ol>
+          <p className="tc-ayar-aciklama">
+            {gorunum.tur === 'bitti'
+              ? `${derlemeTarihi(gorunum.sonuc.baslangic, true)} başladı, ${sure(gorunum.sonuc.baslangic, gorunum.sonuc.bitis)} sürdü. ${SONUC[gorunum.sonuc.sonuc].aciklama}`
+              : gorunum.tur === 'kapali'
+                ? `Bağlantı yoklanıyor.${basladi} Sayfayı kapatsanız da kurulum sürer.`
+                : gorunum.tur === 'sirada'
+                  ? 'Güncelleyici isteği birazdan alır.'
+                  : `${String(biten)} / ${String(GUNCELLEME_ADIMLARI.length)} adım tamam.${basladi}`}
+          </p>
+          {gorunum.tur === 'bitti' && <Dugme simge="x" onClick={() => { setTakip(null); }}>Kapat</Dugme>}
+        </div>
+      </div>
     </section>
   );
 }
