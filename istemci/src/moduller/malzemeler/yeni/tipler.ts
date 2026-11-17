@@ -43,6 +43,8 @@ export interface TicariBilgi {
   sertifika: string[];
   not: string;
   eskiKod?: string;
+  // 3399 a: firma kodlu türde kodun başı (Sistem Ayarları > Firma kodları); boşsa varsayılan. Kayıtlı kartın kodu değişmez.
+  firmaKodu?: string;
   // 1247 d: giriş kalite kontrolü; yoksa türün varsayılanı (sunucu da aynı kuralla okur).
   gkk?: boolean;
   // 2099-3 b: son kullanma takibi; yalnız true açıktır (varsayılan yok).
@@ -149,6 +151,8 @@ export interface GenelAyar {
   qrAdres?: string;
   firmaKodu?: string;
   firmaKoduTurleri?: string[];
+  // 3399 a: seçilebilen firma kodları; sunucu Sistem Ayarları'ndan koyar, ayar kaydına girmez.
+  firmaKodlari?: { kod: string; ad: string }[];
   [alan: string]: unknown;
 }
 

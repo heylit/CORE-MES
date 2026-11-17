@@ -1973,7 +1973,7 @@ export function baslat(girdi: BaslatGirdisi): void {
     malzemeAyarUygula();
     OpStore._son = clone({ gruplar: OpStore.gruplar, ops: OpStore.ops });
     if (a.genel && typeof a.genel === 'object')
-      ['onayAkisi', 'dortGoz', 'kodYapisi', 'acUzunluk', 'acBuyuk', 'qrAdres', 'firmaKodu', 'firmaKoduTurleri'].forEach(k => { if (a.genel![k] !== undefined) AYAR[k] = a.genel![k]; });
+      ['onayAkisi', 'dortGoz', 'kodYapisi', 'acUzunluk', 'acBuyuk', 'qrAdres', 'firmaKodu', 'firmaKoduTurleri', 'firmaKodlari'].forEach(k => { if (a.genel![k] !== undefined) AYAR[k] = a.genel![k]; });
     if (Array.isArray(a.operasyonlar) && (a.operasyonlar.length || a.operasyonKaynagi)) {
       if (a.operasyonKaynagi) OP_KAYNAK = String(a.operasyonKaynagi);
       const tl = a.operasyonTurleri || a.operasyonGruplari;

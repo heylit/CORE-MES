@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Dugme } from '../../../../../ortak/arayuz/index.ts';
 import * as K from '../../kurallar/index.ts';
 import * as S from '../../sabitler/index.ts';
@@ -32,12 +32,38 @@ function AdAlani() {
 }
 
 // Prototipte `kodGrubuHTML`.
+// 3399 a: firma kodlu türde kodun başı seçilir (Sistem Ayarları > Firma kodları); boşsa varsayılan. Kayıtlı kartın kodu değişmez.
+function FirmaKoduAlani() {
+  const { taslak: d, b, degistir } = useSihirbaz();
+  const id = useId();
+  const kodlar = b.genel.firmaKodlari ?? [];
+  const kayitli = !!d.com.kod;
+  if (b.genel.kodYapisi === 'teknik' || kodlar.length === 0 || !K.firmaKodluTurler(b).includes(d.tur || 'hammadde')) return null;
+  const secili = String(d.com.firmaKodu ?? '');
+  return (
+    <div className="tc-my-alan">
+      <label htmlFor={id} className="tc-my-alan-etiket">Firma kodu</label>
+      <span className="tc-my-girdi">
+        <select
+          id={id} value={secili} disabled={kayitli}
+          onChange={(e) => { const v = e.target.value; degistir((t) => { if (v === '') delete t.com.firmaKodu; else t.com.firmaKodu = v; }); }}
+        >
+          <option value="">{b.genel.firmaKodu ? `Varsayılan (${b.genel.firmaKodu})` : 'Seçilmedi'}</option>
+          {kodlar.map((k) => <option key={k.kod} value={k.kod}>{`${k.kod} · ${k.ad}`}</option>)}
+        </select>
+      </span>
+      {kayitli && <span className="tc-my-ipucu">Kayıtlı kartın kodu değişmez.</span>}
+    </div>
+  );
+}
+
 function KodGrubu() {
   const { taslak: d, b, degistir } = useSihirbaz();
   const standart = b.genel.kodYapisi !== 'teknik';
   const grupKapali = !standart || K.firmaKodluTur(d, b);
   return (
     <>
+      <FirmaKoduAlani />
       <MetinAlani
         etiket="Eski / ERP kodu" deger={d.com.eskiKod ?? ''} ipucu="varsa mevcut stok kodu"
         yaz={(v) => { degistir((t) => { t.com.eskiKod = String(v); }); }}
