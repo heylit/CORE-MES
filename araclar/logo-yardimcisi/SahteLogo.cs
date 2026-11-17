@@ -598,6 +598,37 @@ namespace LogoYardimcisi
                 .OrderBy(c => c.Kod, StringComparer.Ordinal).Take(enCok).ToList();
         }
 
+        // 3360 a: sahte arama no, cari ve satır kodunda; proje kod ve adda. Gerçek sorgu SqlOkuma'da.
+        public List<BelgeBulgusu> BelgeAra(string tur, string metin, DateTime baslangic, int enCok)
+        {
+            Func<string, bool> icinde = a => a != null && a.IndexOf(metin, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (tur == BelgeTurleri.Proje)
+                return Projeler.Where(x => icinde(x.Kod) || icinde(x.Ad)).OrderBy(x => x.Kod, StringComparer.Ordinal).Take(enCok)
+                    .Select(x => { var b = new BelgeBulgusu(); b.Ref = x.Ref; b.No = x.Kod; b.ProjeKod = x.Kod; b.ProjeAd = x.Ad; return b; }).ToList();
+            int nesne, trcode;
+            if (tur == BelgeTurleri.SatisSiparisi) { nesne = Nesne.SatisSiparisi; trcode = -1; }
+            else if (tur == BelgeTurleri.SatinAlmaSiparisi) { nesne = Nesne.SatinAlmaSiparisi; trcode = -1; }
+            else if (tur == BelgeTurleri.Teklif) { nesne = Nesne.SatisTeklifi; trcode = 1; }
+            else if (tur == BelgeTurleri.Talep) { nesne = Nesne.TalepFisi; trcode = -1; }
+            else throw new ArgumentException("Bilinmeyen belge türü: " + tur);
+            return Fisler.Where(x => x.Nesne == nesne && (trcode < 0 || x.Trcode == trcode) && (x.Tarih == null || x.Tarih >= baslangic)
+                    && (icinde(x.No) || icinde(x.Cari) || x.Satirlar.Any(y => icinde(y.Kod))))
+                .OrderByDescending(x => x.Tarih).ThenByDescending(x => x.Ref).Take(enCok)
+                .Select(x =>
+                {
+                    var b = new BelgeBulgusu();
+                    b.Ref = x.Ref; b.No = x.No; b.CariKod = x.Cari; b.Tarih = x.Tarih; b.Iptal = x.Iptal;
+                    if (nesne != Nesne.TalepFisi) { b.NetToplam = x.Net; b.DovizTuru = x.DovizTuru; }
+                    foreach (var y in x.Satirlar.Where(y => icinde(y.Kod)))
+                    {
+                        var r = new BulunanSatir();
+                        r.Ref = y.Ref; r.Kod = y.Kod; r.Miktar = y.Miktar; r.Birim = y.Birim; r.Aciklama = y.Aciklama;
+                        b.Satirlar.Add(r);
+                    }
+                    return b;
+                }).ToList();
+        }
+
         public CariKaydi Cari(string kod) { return CariDetaylari.FirstOrDefault(c => c.Kod == kod); }
 
         public List<KodAd> Ambarlar()

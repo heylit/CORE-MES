@@ -148,6 +148,31 @@ namespace LogoYardimcisi
         public bool Pasif;
     }
 
+    // 3360 a: Logo'da belge araması (başlık ve satır içeriği). Proje dışındaki türler son baslangic gününden eskiyi getirmez.
+    public static class BelgeTurleri
+    {
+        public const string Proje = "project", SatisSiparisi = "salesOrder", SatinAlmaSiparisi = "purchaseOrder", Teklif = "salesOffer", Talep = "demand";
+        public static readonly string[] Hepsi = { Proje, SatisSiparisi, SatinAlmaSiparisi, Teklif, Talep };
+    }
+
+    public sealed class BelgeBulgusu
+    {
+        public int Ref;
+        public string No, BelgeNo, CariKod, CariAd, ProjeKod, ProjeAd, Aciklama;
+        public DateTime? Tarih;
+        public decimal? NetToplam;
+        public int? DovizTuru;
+        public bool Iptal;
+        public List<BulunanSatir> Satirlar = new List<BulunanSatir>();
+    }
+
+    public sealed class BulunanSatir
+    {
+        public int Ref;
+        public string Kod, Ad, Birim, Aciklama;
+        public decimal Miktar;
+    }
+
     public sealed class FisBasligi
     {
         public int Ref;
@@ -360,5 +385,7 @@ namespace LogoYardimcisi
         // Kart 2987: fiş numarasıyla satın alma siparişi (TRCODE 2) başlığı ve satırları; tür sabittir, çağıran seçemez. Yoksa null;
         // aynı numarada birden çok sipariş varsa BirdenCokKayit.
         SiparisIcerigi SatinAlmaSiparisiIcerigi(string no);
+        // 3360 a: türde (BelgeTurleri) başlıkta ya da satırda metni içeren belgeler, en yeni önce, en çok enCok; her belgeyle eşleşen satırları.
+        List<BelgeBulgusu> BelgeAra(string tur, string metin, DateTime baslangic, int enCok);
     }
 }

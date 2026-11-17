@@ -242,6 +242,10 @@ Hepsi yalnız `GET` ve yalnız SQL `SELECT`; Logo'ya hiç yazmaz, COM oturumu ku
 - `GET /api/Material/{kod}/lastPurchases`: en yeni alış faturası satırları, en çok 10; alışı olmayan kart boş dizi.
 - `GET /api/Arp/search?q={metin}`: kullanımdaki (`ACTIVE = 0`) cariler kodda ya da ünvanda (içinde, `LIKE` özel karakterleri kaçırılır) ya da vergi /
   T.C. kimlik numarasında (tam) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç.
+- `GET /api/Document/search?type={project|salesOrder|purchaseOrder|salesOffer|demand}&q={metin}&days={gün}`: belge araması (3360 a). Başlıkta
+  (fiş no, belge no, cari kodu ve ünvanı, açıklama, proje kodu ve adı) ve satırda (malzeme ya da hizmet kodu ve adı, satır açıklaması; talepte
+  malzeme kodu ve adı) içinde arar; `q` 3-100 karakter, `days` 1-3650 (varsayılan 365; projede yok sayılır), en çok 50 belge, belge başına en çok
+  5 eşleşen satır. Yalnız okur. Kolon adları EkoTigerAPI'nin canlıdaki aramalarıyla aynıdır (DEMANDLINE.ITEMREF ve DEMANDFICHEREF).
 - `GET /api/Arp/card/{kod}`: tek carinin alanları (`logicalRef, code, name, cardType, taxNr, tckNo, taxOffice, address1, address2, town, city,
   postCode, phone, email, active`); yoksa 404.
 - DOĞRULANMADI: `ITEMS.ACTIVE`, `GNTOTST` sütunları ve -1 toplam satırı, `CLCARD` adres, vergi ve iletişim sütunları (`Sorgular.Dogrulanmadi`).
