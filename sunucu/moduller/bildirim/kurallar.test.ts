@@ -117,6 +117,9 @@ test('tercih kuralı: listede olmayan tür ve seçemeyenin e-posta isteği redde
   const liste = ['istasyonlar.makine-durdu'];
   assert.equal(tercihHatasi(liste, true, { tur: 'istasyonlar.makine-durdu', eposta: true }), null);
   assert.equal(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: false }), null);
+  // 3396-3 a: hazırlık kademesinin e-postası kapatılamaz; sıradan türünki kapatılır.
+  assert.match(tercihHatasi(['projeler.hazirlik-gecikti'], true, { tur: 'projeler.hazirlik-gecikti', eposta: false })?.mesaj ?? '', /kapatılamaz/);
+  assert.equal(tercihHatasi(['projeler.gorev-atandi'], true, { tur: 'projeler.gorev-atandi', eposta: false }), null);
   assert.deepEqual(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' });
   assert.deepEqual(tercihHatasi(liste, true, { tur: 'cnc-kurulum.takim-omru', eposta: false }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });
   assert.deepEqual(tercihHatasi([], false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });

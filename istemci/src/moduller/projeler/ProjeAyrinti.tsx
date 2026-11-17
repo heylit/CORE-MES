@@ -16,13 +16,14 @@ import { ProjeOzeti } from './ProjeOzeti.tsx';
 import { StatuGecmisi } from './StatuGecmisi.tsx';
 import { StatuCipi, StatuPenceresi } from './StatuPenceresi.tsx';
 import { EMIR_OKUMA_ISLEMLERI, ProjeEmirleri } from './ProjeEmirleri.tsx';
+import { ProjeHazirlik } from './ProjeHazirlik.tsx';
 import { ProjeFormu } from './ProjeFormu.tsx';
 import { ProjeIptal } from './ProjeIptal.tsx';
 import { ProjeLogoSatiri } from './ProjeLogoSatiri.tsx';
 import { BitisBagi, ProjeKalemleri } from './ProjeKalemleri.tsx';
 import './projeler.css';
 
-type SekmeAdi = 'ozet' | 'kalemler' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
+type SekmeAdi = 'ozet' | 'kalemler' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'hazirlik' | 'maliyet' | 'gecmis' | 'genel';
 
 const YONETIM_SEKMELERI: ReadonlySet<SekmeAdi> = new Set(['ozet', 'gorevler', 'taslar', 'gecmis']);
 
@@ -54,6 +55,8 @@ export function ProjeAyrinti() {
     ...(siparisli ? [{ anahtar: 'kalemler', baslik: 'Sipariş kalemleri', simge: 'box' } as const] : []),
     { anahtar: 'gorevler', baslik: 'Görevler', simge: 'check' },
     { anahtar: 'taslar', baslik: 'Kilometre taşları', simge: 'flag' },
+    // 3396 a: emir ve iş emri başına hazırlık görevleri.
+    ...(emirleriGorur ? [{ anahtar: 'hazirlik', baslik: 'Hazırlık', simge: 'flag' } as const] : []),
     { anahtar: 'plan', baslik: 'Plan', simge: 'clock' },
     ...(emirleriGorur ? [{ anahtar: 'emirler', baslik: 'Üretim emirleri', simge: 'list' } as const] : []),
     ...(maliyetGorur ? [{ anahtar: 'maliyet', baslik: 'Maliyet', simge: 'lira' } as const] : []),
@@ -104,6 +107,7 @@ export function ProjeAyrinti() {
       {sekme === 'kalemler' && <ProjeKalemleri proje={p} emirleriGorur={emirleriGorur} yazabilir={yazabilir} />}
       {sekme === 'plan' && <ProjePlani projeId={p.id} />}
       {sekme === 'emirler' && <ProjeEmirleri projeId={p.id} />}
+      {sekme === 'hazirlik' && <ProjeHazirlik projeId={p.id} />}
       {sekme === 'maliyet' && <ProjeMaliyeti projeId={p.id} />}
       {duzenle && <ProjeFormu proje={p} kapat={() => { duzenleYaz(false); }} />}
       {statuAcik && y && <StatuPenceresi projeId={p.id} yonetim={y} kapat={() => { statuAcikYaz(false); }} />}

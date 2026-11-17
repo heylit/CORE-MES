@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { EMIR_TURLERI } from './emir-turleri.ts';
-import { HAZIRLIK_MADDELERI } from './uretim-emirleri.ts';
+import { hazirlikMaddeKodu } from './uretim-emirleri.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // Projeler (kart #803): proje kaydı. Kod üretim emri numarasına girer ve Logo'daki proje koduyla eşleşebilecek biçimdedir.
@@ -341,6 +341,32 @@ export const rolSecenekleriCevabi = z.object({ roller: z.array(z.object({ id: z.
 // --- 3269: görev akışı (üstlen, başla, bitir, onayla, geri gönder) ---
 // Kişi yalnız kendisine ya da rolüne atanan görevi işler, yalnız kendisine ya da rolüne atanan kontrolü onaylar (sunucuda).
 export const gorevKomutuGovdesi = z.object({ ...beklenenSurum });
+// 3396 a: hazırlık görevinin yapanı kişi ya da rol olarak değişir (Proje > Hazırlık yan paneli); ikisi birden değil.
+export const hazirlikAtaGovdesi = z.object({ sorumluKisiId: kimlikYaDaYok, yapanRolId: kimlikYaDaYok, ...beklenenSurum })
+  .refine((g) => g.sorumluKisiId === null || g.yapanRolId === null, { message: 'Yapan kişi ya da rol olur, ikisi birden değil.', path: ['yapanRolId'] });
+export type HazirlikAtaGovdesi = z.input<typeof hazirlikAtaGovdesi>;
+export const hazirlikAtaCevabi = z.object({ id: z.number().int(), surum: z.number().int() });
+
+// 3396 a: kademeli takip ayarı (Projeler > Hazırlık > Kademeli takip). Gün sayıları iş günüdür (hafta sonu ve resmî tatil sayılmaz).
+const kademeGunu = (en: number) => z.number().int().min(0, 'Gün eksi olamaz.').max(en, `En çok ${String(en)} gün.`);
+export const kademeAyariGovdesi = z.object({
+  hatirlatGun: kademeGunu(30), yoneticiGun: kademeGunu(30), devretGun: kademeGunu(60), yoneticiRolId: kimlikYaDaYok, ...beklenenSurum,
+}).strict().refine((g) => g.devretGun >= g.yoneticiGun, { message: 'Devret, yöneticiye bildirmeden önce olamaz.', path: ['devretGun'] });
+export type KademeAyariGovdesi = z.output<typeof kademeAyariGovdesi>;
+export const kademeAyariCevabi = z.object({
+  hatirlatGun: z.number().int(), yoneticiGun: z.number().int(), devretGun: z.number().int(), yoneticiRolId: z.number().int().nullable(),
+  surum: z.number().int(), degistiren: z.string().nullable(), degisti: zamanSemasi.nullable(), yazabilir: z.boolean(),
+});
+export type KademeAyariCevabi = z.output<typeof kademeAyariCevabi>;
+export const kademeGecmisiCevabi = z.object({
+  kademeler: z.array(z.object({ kademe: z.number().int(), an: zamanSemasi, bildirildi: z.boolean(), aliciSayisi: z.number().int() })),
+});
+export type KademeGecmisiCevabi = z.output<typeof kademeGecmisiCevabi>;
+// Kırmızı şerit: kişinin geciken hazırlık görevleri (kendisi ya da üstlenilmemişse rolü yapan).
+export const gecikenHazirliklarimCevabi = z.object({
+  gorevler: z.array(z.object({ id: z.number().int(), ad: z.string(), planBitis: tarihSemasi, gecikmeGun: z.number().int(), kademe: z.number().int().nullable() })),
+});
+export type GecikenHazirliklarimCevabi = z.output<typeof gecikenHazirliklarimCevabi>;
 export const geriGonderGovdesi = z.object({
   gerekce: zorunluMetin(500, 'Neden geri gönderiyorsun? Gerekçe zorunlu.'),
   ...beklenenSurum,
@@ -368,6 +394,8 @@ export const gorevlerimSatiri = gorevSemasi.extend({
   projeKod: z.string(),
   projeAd: z.string(),
   izinler: gorevIzinleriSemasi,
+  // 3396 a: hazırlık görevinin ulaştığı en yüksek kademe (1-5); hazırlık görevi değilse ya da kademe yoksa null.
+  kademe: z.number().int().nullable(),
 });
 export const gorevlerimCevabi = z.object({ gorevler: z.array(gorevlerimSatiri) });
 
@@ -390,7 +418,7 @@ export const sablonKalemiGovdesi = z.object({
   yedekKontrolKisiId: kimlikYaDaYok,
   yedekKontrolRolId: kimlikYaDaYok,
   oncekiSira: z.number().int().min(0).max(SABLON_KALEMI_EN_COK - 1).nullish().transform((v) => v ?? null),
-  hazirlikMaddesi: z.enum(HAZIRLIK_MADDELERI).nullish().transform((v) => v ?? null),
+  hazirlikMaddesi: hazirlikMaddeKodu.nullish().transform((v) => v ?? null),
   kontrolKosulu: z.enum(KONTROL_KOSULLARI).default('her-zaman'),
 })
   .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, { message: TEK_YAPAN.message, path: ['yapanRolId'] })
@@ -418,7 +446,7 @@ export const sablonKalemiSemasi = z.object({
   yedekKontrolKisiId: z.number().int().nullable(), yedekKontrolKisiAd: z.string().nullable(),
   yedekKontrolRolId: z.number().int().nullable(), yedekKontrolRolAd: z.string().nullable(),
   oncekiSira: z.number().int().nullable(),
-  hazirlikMaddesi: z.enum(HAZIRLIK_MADDELERI).nullable(),
+  hazirlikMaddesi: hazirlikMaddeKodu.nullable(),
   kontrolKosulu: z.enum(KONTROL_KOSULLARI),
 });
 export const sablonSemasi = z.object({

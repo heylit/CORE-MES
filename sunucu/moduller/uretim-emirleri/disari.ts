@@ -5,7 +5,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { AsimlarCevabi, Emir, EmirDurumu, KaliteKarari, KatilimCevabi, RefakatKartiCevabi, SayimKaydi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
+import { adimlardanGorunum, hazirligiKapatanEmir, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
@@ -152,6 +152,12 @@ export async function emirDurumlari(db: Db, idler: readonly number[]): Promise<M
   const tekil = [...new Set(idler)];
   if (tekil.length === 0) return new Map();
   return new Map((await emirDurumlariGetir(db, tekil)).map((r) => [r.id, r.durum]));
+}
+
+// 3396 Risk K-A: projeler hazırlık kademesi bu kümedeki emirlerin açık hazırlık görevlerini iptal eder (kablolama.ts bağlar).
+export async function hazirligiKapananEmirler(db: Db, idler: readonly number[]): Promise<ReadonlySet<number>> {
+  const durum = await emirDurumlari(db, idler);
+  return new Set(idler.filter((id) => hazirligiKapatanEmir(durum.get(id))));
 }
 
 // Plan süre öğrenmesi (1714): emrin malzemesi ve üst emri tek sorguda; malzemesiz emirde malzemeNo null, kök emirde ustEmirId null.

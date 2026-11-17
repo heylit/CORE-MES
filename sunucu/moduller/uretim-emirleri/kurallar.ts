@@ -415,6 +415,9 @@ export function arsivUyarilari(d: {
 }
 
 // Plan bilgisi (öncelik, başlangıç, teslim) ve kaynak yalnız açık emirde değişir.
+// 3396 Risk K-A: emri biten, iptal edilen ya da artık olmayan (silinmiş) hazırlık görevi kapanır; taslak, planlı ve başlamış emrinki sürer.
+export const hazirligiKapatanEmir = (durum: EmirDurumu | undefined): boolean => durum === undefined || durum === 'bitti' || durum === 'iptal';
+
 export const acikEmirIhlali = (durum: EmirDurumu, arsiv: boolean): string | null =>
   !arsiv && (durum === 'taslak' || durum === 'planli' || durum === 'basladi') ? null : ACIK_DEGIL;
 
@@ -1986,3 +1989,14 @@ export function bekletmeBaslatmaIhlali(bekletmeZamani: string | null, kayitAni: 
   if (kayitAni !== null && Date.parse(kayitAni) < Date.parse(bekletmeZamani)) return null;
   return EMIR_BEKLEMEDE;
 }
+
+// 3396 a: özel hazırlık maddesinin kodu harflidir (1 -> a, 26 -> z, 27 -> aa); proje şablon kalemi kodu rakam kabul etmez.
+export function ozelMaddeKodu(n: number): string {
+  if (!Number.isInteger(n) || n < 1) throw new Error('Özel madde numarası geçersiz.');
+  let k = '';
+  for (let x = n; x > 0; x = Math.floor((x - 1) / 26)) k = String.fromCharCode(97 + ((x - 1) % 26)) + k;
+  return `ozel-${k}`;
+}
+// Durduran madde kapatılamaz (120-122 a); kısıt da reddeder, ileti burada.
+export const DURDURAN_KAPANMAZ = 'Durduran hazırlık maddesi kapatılamaz.';
+export const MADDE_DEGISTI = 'Madde bu arada değişti; listeyi yenileyip yeniden dene.';

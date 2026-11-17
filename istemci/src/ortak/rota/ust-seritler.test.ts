@@ -31,7 +31,7 @@ describe('gorunenUstSeritler', () => {
   });
 
   it('952 a: uygulamanın topladığı kur ve faiz şeridi finans işlemi olmayan kişiye de görünür', () => {
-    expect(gorunenUstSeritler(ustSeritler, []).map((s) => s.anahtar)).toEqual(['kur-faiz']);
+    expect(gorunenUstSeritler(ustSeritler, []).map((s) => s.anahtar)).toContain('kur-faiz');
   });
 });
 

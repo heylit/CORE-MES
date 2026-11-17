@@ -12,7 +12,7 @@ import {
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, yolTureUyar,
+  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, turKapatilamaz, yolTureUyar,
 } from './kurallar.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
@@ -150,7 +150,7 @@ export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimT
       return {
         tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur),
         mesaj: k?.mesaj ?? t.varsayilan.mesaj,
-        eposta: eposta ? (k?.eposta ?? t.varsayilan.eposta) : null,
+        eposta: eposta ? (turKapatilamaz(tur) ? true : k?.eposta ?? t.varsayilan.eposta) : null,
         varsayilan: k === undefined,
       };
     });

@@ -25,6 +25,7 @@ import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/di
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
 import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
+import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
@@ -284,6 +285,8 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   }
   await onculleriKopyala(db, sirali, new Map(sirali.map((ie, i) => [ie.opNo, isEmriIdleri[i]!])));
   await otomatikGkkKoy(db, acanId, id);
+  // 3396 a: projeye uygulanmış şablonun hazırlık kalemleri emirle birlikte görev olur.
+  if (baslik.proje !== null) await emrinHazirlikGorevleriniAc(db, acanId, id, baslik.proje.id, null);
   await emirAcildiBildir(db, { uretimEmriId: id, kisiId: acanId, stoktanRezerve: g.stoktanRezerve === true });
   return { uretimEmriId: id, isEmriIdleri };
 }

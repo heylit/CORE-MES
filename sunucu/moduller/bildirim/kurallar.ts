@@ -1,6 +1,6 @@
 import type { Islem } from '#paylasilan/islemler.ts';
 import {
-  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
+  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
 } from '#paylasilan/sozlesme/bildirim.ts';
 
 // BIL-1: mesaj ve e-posta kanalları bu aşamada kapalıdır (223 a e-postayı üçüncü, Mesaj kanalını dördüncü aşamaya koydu);
@@ -75,6 +75,7 @@ export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly n
 export const TERCIH_ILETILERI = {
   turYok: 'Bu bildirim size gelmiyor; tercihi kaydedilemez.',
   epostaYok: 'E-posta bildirimi sizin için seçilemez.',
+  kapatilamaz: 'Bu bildirimin e-postası kapatılamaz: geciken hazırlık görevi kademesidir.',
 } as const;
 
 // alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak).
@@ -83,6 +84,7 @@ export function tercihHatasi(
 ): { mesaj: string; alan: 'tur' | 'eposta' } | null {
   if (!alinabilen.includes(govde.tur)) return { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' };
   if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
+  if (!govde.eposta && epostaVar && bildirimTuruMu(govde.tur) && turKapatilamaz(govde.tur)) return { mesaj: TERCIH_ILETILERI.kapatilamaz, alan: 'eposta' };
   return null;
 }
 
@@ -133,3 +135,6 @@ export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
   const v = varsayilanGosterim(t);
   return v.ortada === g.ortada && v.onayIstenir === g.onayIstenir;
 };
+
+// 3396-3: e-postası kişi tercihinden kapatılamayan tür (hazırlık kademeleri).
+export const turKapatilamaz = (tur: BildirimTuru): boolean => (BILDIRIM_TURLERI[tur] as BildirimTuruTanimi).kapatilamaz === true;

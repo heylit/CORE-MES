@@ -65,3 +65,6 @@ export {
 export {
   type SiparisEmriSatiri, hazirligiTamamlananEmirler, siparisEmirleri, siparisEmirleriKilitle, acilisKaynagiYaz, kalemdenCoz, kalemeBagla, type RotaBekleyenEmir, rotaBekleyenEmirler,
 } from './sorgular/siparis-acilisi/sorgular.ts';
+export {
+  type HazirlikMaddeSatiri, hazirlikMaddeSatirlari, hazirlikMaddesiYaz, ozelMaddeNo, ozelMaddeEkle,
+} from './sorgular/hazirlik-maddesi/sorgular.ts';

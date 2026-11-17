@@ -773,6 +773,78 @@ export const YALNIZ_GORUNUM_MADDELERI = ['yayin'] as const;
 // Özel proses muafiyeti eski kayıtlarda kalabilir; değer listeden çıkarılmaz ki okunabilsin.
 export const MUAF_TUTULABILEN_MADDELER = ['cnc', 'ozel-proses'] as const;
 export const hazirlikMaddesi = z.enum(HAZIRLIK_MADDELERI);
+// 3396 a: madde listesi veridedir (ad, kısa ad, sıra, açık/kapalı; özel madde). Sistem maddesinin kodu yukarıdaki listedir, hâlini sahibi
+// modül verir; özel maddenin kodu `ozel-<harf>` olur, hâlini hazırlık görevi verir ve yalnız uyarır. Durduran üç madde kapatılamaz.
+export const OZEL_MADDE_DESENI = /^ozel-[a-z]{1,8}$/;
+export const hazirlikMaddeKodu = z.string().refine((k) => (HAZIRLIK_MADDELERI as readonly string[]).includes(k) || OZEL_MADDE_DESENI.test(k), 'Hazırlık maddesi bulunamadı.');
+export const hazirlikMaddeTanimi = z.object({
+  kod: z.string(), ad: z.string(), kisa: z.string(), sira: z.number().int(), acik: z.boolean(), sistem: z.boolean(), durduran: z.boolean(),
+  // Durumu veren: sistem maddesinde sahibi modül (çözücüsünün yeri), özel maddede hazırlık görevi.
+  sahip: z.string(), isEmriDuzeyi: z.boolean(), surum: z.number().int().positive(),
+});
+export type HazirlikMaddeTanimi = z.infer<typeof hazirlikMaddeTanimi>;
+export const hazirlikMaddeleriCevabi = z.object({ maddeler: z.array(hazirlikMaddeTanimi), yazabilir: z.boolean() });
+export type HazirlikMaddeleriCevabi = z.infer<typeof hazirlikMaddeleriCevabi>;
+const MADDE_ALANLARI = {
+  ad: metin(60, 'Madde adı zorunlu.'),
+  kisa: metin(20, 'Kısa ad zorunlu.'),
+  sira: z.number().int().min(1, 'Sıra 1-999 arasında olur.').max(999, 'Sıra 1-999 arasında olur.'),
+  acik: z.boolean(),
+};
+export const hazirlikMaddesiDegistirGovdesi = z.object({ ...MADDE_ALANLARI, surum: surumSemasi }).strict();
+export type HazirlikMaddesiDegistirGovdesi = z.infer<typeof hazirlikMaddesiDegistirGovdesi>;
+export const hazirlikMaddesiEkleGovdesi = z.object(MADDE_ALANLARI).strict();
+export type HazirlikMaddesiEkleGovdesi = z.infer<typeof hazirlikMaddesiEkleGovdesi>;
+export const hazirlikMaddeParametresi = z.object({ kod: hazirlikMaddeKodu });
+// 3396 a: emir için hazırlık projesi. Proje emrin projesi ya da başka aktif proje; şablon verilirse projeye (uygulanmadıysa) uygulanır.
+export const hazirlikProjesiGovdesi = z.object({ projeId: z.number().int().positive(), sablonId: z.number().int().positive().nullable() }).strict();
+export type HazirlikProjesiGovdesi = z.infer<typeof hazirlikProjesiGovdesi>;
+export const hazirlikProjesiCevabi = z.object({ eklenen: z.number().int() });
+export type HazirlikProjesiCevabi = z.infer<typeof hazirlikProjesiCevabi>;
+// Pencere seçenekleri: aktif projeler, etkin şablonlar ve her şablonla kaç görev doğacağı (açık madde, iş emri sayısıyla).
+export const hazirlikProjesiSecenekleri = z.object({
+  emirNo: z.string(),
+  emirProjeId: z.number().int().nullable(),
+  baslangic: z.string().nullable(),
+  teslim: z.string().nullable(),
+  acikGorev: z.number().int(),
+  projeler: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
+  sablonlar: z.array(z.object({ id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), dogacak: z.number().int(), ozet: z.string() })),
+});
+export type HazirlikProjesiSecenekleri = z.infer<typeof hazirlikProjesiSecenekleri>;
+
+// 3396 a (A): Proje > Hazırlık matrisi. Satır emir ve iş emri, sütun görevi olan madde; hücrenin hâlini görev verir.
+const hazirlikAtanan = z.object({ tur: z.enum(['kisi', 'rol']), id: z.number().int(), ad: z.string(), kisiSayisi: z.number().int() });
+export const hazirlikMatrisiSorgusu = z.object({ projeId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const hazirlikMatrisiCevabi = z.object({
+  proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), durum: z.string() }),
+  dagitir: z.boolean(),
+  maddeler: z.array(z.object({ kod: z.string(), ad: z.string(), kisa: z.string(), durduran: z.boolean(), isEmriDuzeyi: z.boolean() })),
+  emirler: z.array(z.object({
+    id: z.number().int(), emirNo: z.string(), parcaNo: z.string(), adet: z.number().int(), acik: z.boolean(),
+    isEmirleri: z.array(z.object({ id: z.number().int(), opNo: z.number().int(), ad: z.string() })),
+  })),
+  gorevler: z.array(z.object({
+    id: z.number().int(), madde: z.string(), emriId: z.number().int(), isEmriId: z.number().int().nullable(), ad: z.string(),
+    durum: z.string(), onaylandi: z.boolean(), planBitis: z.string(), gecikmeGun: z.number().int().nullable(),
+    yapan: hazirlikAtanan.nullable(), kontrol: hazirlikAtanan.nullable(), surum: z.number().int(), kademe: z.number().int().nullable(),
+  })),
+});
+export type HazirlikMatrisiCevabi = z.infer<typeof hazirlikMatrisiCevabi>;
+// Dağıt: projenin açık emirlerine şablonun hazırlık görevleri. Deneme yalnız kime kaç görev gideceğini döner, hiçbir şey yazmaz.
+export const hazirlikDagitGovdesi = z.object({
+  projeId: z.number().int().positive(), sablonId: z.number().int().positive().nullable(), deneme: z.boolean(),
+}).strict();
+export type HazirlikDagitGovdesi = z.infer<typeof hazirlikDagitGovdesi>;
+export const hazirlikDagitCevabi = z.object({
+  eklenen: z.number().int(),
+  gorevSayisi: z.number().int(),
+  toplamKisi: z.number().int(),
+  alicilar: z.array(hazirlikAtanan.extend({ gorevler: z.array(z.object({ madde: z.string(), ad: z.string(), sayi: z.number().int() })) })),
+  atanmamis: z.number().int(),
+});
+export type HazirlikDagitCevabi = z.infer<typeof hazirlikDagitCevabi>;
+
 export const hazirlikMuafiyetiGovdesi = z.object({
   madde: z.enum(MUAF_TUTULABILEN_MADDELER),
   // Boşsa muafiyet emrin bütün iş emirlerinedir.

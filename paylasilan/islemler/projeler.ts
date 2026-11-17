@@ -4,4 +4,6 @@ export const PROJELER_ISLEMLERI = [
   'projeler.gorev-isle', 'projeler.gorev-kontrol',
   // 3269-2 a: görev şablonlarını yazmak ayrı işlemdir.
   'projeler.sablon-yaz',
+  // 3396 a: üretim emri için hazırlık projesi kurup hazırlık görevlerini dağıtmak.
+  'projeler.hazirlik-dagit',
 ] as const;
