@@ -3,9 +3,9 @@ import { describe, test } from 'node:test';
 import {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, donguBul, dortGozEngeli,
   durumGecisiGecerliMi, etkinSure, kisiIstasyonlari, rotaOzeti, ilkAdimiDuzenle, kaynaktakiSure, izinliKomutlar, komutDenetle, ondalikMetin, onayaHazirMi,
-  fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
+  fasonTerminToplami, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
-import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi, turunRotasiSec } from './kurallar.ts';
+import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi, operasyonKodlari, turunRotasiSec } from './kurallar.ts';
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
@@ -196,12 +196,10 @@ describe('revizyon', () => {
 });
 
 describe('OP numarası ve taslak', () => {
-  test('RT-31: yeni numara kullanılmışların en büyüğü + 10; aradaki boş ve silinmiş numaralar yeniden verilmez', () => {
+  test('RT-31: emre eklenen adımın numarası en büyük + 10 (rotada numara sıradan verilir, 3252 b)', () => {
     assert.equal(yeniOpNo([]), 10);
     assert.equal(yeniOpNo([10, 20, 30]), 40);
     assert.equal(yeniOpNo([10, 50]), 60);
-    assert.deepEqual(opNolariVer([10, 20], 3), [30, 40, 50]);
-    assert.deepEqual(opNolariVer([], 0), []);
   });
 
   test('RT-30: dolu gelen OP numarası taslakta olmalı ve iki kez geçemez; yeni adım numarasız gelir', () => {
@@ -390,6 +388,13 @@ describe('fark', () => {
     assert.deepEqual(revizyonFarki([temel], yeni), ['OP 20 eklendi: Frezeleme', 'OP 10 birim süre: 2 -> 2.5']);
     assert.deepEqual(revizyonFarki([temel, { ...temel, opNo: 20, ad: 'X' }], [{ ...temel, opNo: 20, ad: 'X' }, temel]), ['Adım sırası değişti']);
     assert.deepEqual(revizyonFarki([temel], []), ['OP 10 çıkarıldı: Tornalama']);
+  });
+  test('3250-2 R4: adımlar operasyon kimliğiyle eşlenir; araya ekleme sonrakilerin numarasını kaydırır ama onları değişmiş göstermez', () => {
+    const a = { ...temel, kimlik: 1 };
+    const b = { ...temel, kimlik: 2, opNo: 20, ad: 'Frezeleme' };
+    const yeni = [{ ...temel, kimlik: 3, ad: 'Çapak' }, { ...a, opNo: 20 }, { ...b, opNo: 30, birimSureDk: '3' }];
+    assert.deepEqual(revizyonFarki([a, b], yeni), ['OP 10 eklendi: Çapak', 'OP 30 birim süre: 2 -> 3']);
+    assert.deepEqual(revizyonFarki([a, b], [{ ...b, opNo: 10 }, { ...a, opNo: 20 }]), ['Adım sırası değişti']);
   });
   test('RT-30: işlem ve değişim ayrımı farkta görünür', () => {
     assert.deepEqual(revizyonFarki([temel], [{ ...temel, islemSuresiDk: '1.6', degisimSuresiDk: '0.4' }]), [
@@ -806,5 +811,19 @@ describe('3411 a: emir türünün rotası', () => {
     assert.equal(turunRotasiSec([seri], null)?.seriyeDustu, false);
     assert.equal(turunRotasiSec([fai(null)], 'fai')?.rotaId, 2);
     assert.equal(turunRotasiSec([], 'fai'), null);
+  });
+});
+
+describe('türetilmiş operasyon kodu ve adı (3381)', () => {
+  const tipler = new Map([[1, { kisaltma: 'TRN', ad: 'Torna' }], [2, { kisaltma: 'FRZ', ad: 'Freze' }]]);
+  test('kod tip kısaltması ile tip içinde 10\'ar, ad tip adı ile tip içinde 1\'er artar; sıra girdiden değil adım sırasındandır', () => {
+    const adimlar = [{ sira: 3, operasyonTipiId: 1 }, { sira: 1, operasyonTipiId: 1 }, { sira: 2, operasyonTipiId: 2 }];
+    assert.deepEqual(operasyonKodlari(adimlar, tipler), [
+      { kod: 'TRN20', ad: 'Torna 2. operasyon' }, { kod: 'TRN10', ad: 'Torna 1. operasyon' }, { kod: 'FRZ10', ad: 'Freze 1. operasyon' },
+    ]);
+  });
+  test('tipi bilinmeyen adımın kodu null; sayacı başka tipi kaydırmaz', () => {
+    assert.deepEqual(operasyonKodlari([{ sira: 1, operasyonTipiId: 9 }, { sira: 2, operasyonTipiId: 2 }], tipler), [null, { kod: 'FRZ10', ad: 'Freze 1. operasyon' }]);
+    assert.deepEqual(operasyonKodlari([], tipler), []);
   });
 });

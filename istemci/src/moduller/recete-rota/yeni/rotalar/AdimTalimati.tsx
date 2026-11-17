@@ -18,8 +18,8 @@ type Taslak = NonNullable<TalimatlarCevabi['taslak']>;
 
 const tarih = (z: string): string => new Date(z).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
-export function AdimTalimati({ urunId, opNo }: { urunId: number; opNo: number | null }) {
-  const talimat = useTalimatlar(urunId, opNo);
+export function AdimTalimati({ urunId, opNo, revizyonId }: { urunId: number; opNo: number | null; revizyonId: number | null }) {
+  const talimat = useTalimatlar(urunId, opNo, revizyonId);
   const yazabilir = useRrYetkisi().talimatYaz;
   const [acik, setAcik] = useState(false);
   const [studyo, setStudyo] = useState(false);
@@ -47,9 +47,9 @@ export function AdimTalimati({ urunId, opNo }: { urunId: number; opNo: number | 
           {son && <Dugme tur="ikincil" simge="cube" onClick={() => { setStudyo(true); }}>{yazabilir ? '3B adım stüdyosu' : '3B sahneyi izle'}</Dugme>}
         </div>
       )}
-      {studyo && son && <Studyo urunId={urunId} opNo={opNo} talimat={son} yazabilir={yazabilir} kapat={() => { setStudyo(false); }} />}
+      {studyo && son && <Studyo urunId={urunId} opNo={opNo} revizyonId={revizyonId} talimat={son} yazabilir={yazabilir} kapat={() => { setStudyo(false); }} />}
       {acik && talimat.data && (
-        <TalimatPenceresi urunId={urunId} opNo={opNo} son={son} taslak={taslak} kapat={() => { setAcik(false); }} />
+        <TalimatPenceresi urunId={urunId} opNo={opNo} revizyonId={revizyonId} son={son} taslak={taslak} kapat={() => { setAcik(false); }} />
       )}
     </Bolme>
   );
@@ -78,10 +78,10 @@ function AdimOzeti({ adimlar }: { adimlar: Talimat['adimlar'] }) {
 }
 
 // Düzenleyici taslaktan, taslak yoksa yayındaki sürümden başlar. "Yayınla" kaydedilmemiş değişikliği önce taslağa yazar.
-function TalimatPenceresi({ urunId, opNo, son, taslak, kapat }: {
-  urunId: number; opNo: number; son: Talimat | null; taslak: Taslak | null; kapat: () => void;
+function TalimatPenceresi({ urunId, opNo, revizyonId, son, taslak, kapat }: {
+  urunId: number; opNo: number; revizyonId: number | null; son: Talimat | null; taslak: Taslak | null; kapat: () => void;
 }) {
-  const komut = useTalimatKomutu(urunId);
+  const komut = useTalimatKomutu(urunId, revizyonId);
   const { bildir } = useBildirim();
   const [adimlar, setAdimlar] = useState<AdimTaslagi[]>(() => (taslak ?? son)?.adimlar.map(taslagaCevir) ?? []);
   const [kirli, setKirli] = useState(false);

@@ -17,7 +17,7 @@ export const anahtarlar = {
   sablonlar: [...KOK, 'sablonlar'] as const,
   sablon: (id: number) => [...KOK, 'sablon', id] as const,
   revizyon: (id: number) => [...KOK, 'revizyon', id] as const,
-  talimat: (urunId: number, opNo: number) => [...KOK, 'talimat', urunId, opNo] as const,
+  talimat: (urunId: number, opNo: number, revizyonId: number | null = null) => [...KOK, 'talimat', urunId, opNo, revizyonId] as const,
   operasyonTipleri: [...KOK, 'operasyon-tipleri'] as const,
 };
 
@@ -120,10 +120,15 @@ export function useAdimSartnameleriKaydet(revizyonId: number) {
   });
 }
 
-export const useTalimatlar = (urunId: number, opNo: number | null) => useQuery({
-  queryKey: anahtarlar.talimat(urunId, opNo ?? 0),
+// OP numarası her revizyonda sıradan dizilir (3252 b): düzenlenen revizyon verilirse numara o revizyonun adımına çözülür.
+export const revizyonEki = (revizyonId: number | null): string => (revizyonId === null ? '' : `?revizyonId=${String(revizyonId)}`);
+export const talimatYolu = (urunId: number, opNo: number, revizyonId: number | null): string =>
+  `/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}${revizyonEki(revizyonId)}`;
+
+export const useTalimatlar = (urunId: number, opNo: number | null, revizyonId: number | null = null) => useQuery({
+  queryKey: anahtarlar.talimat(urunId, opNo ?? 0, revizyonId),
   enabled: opNo !== null,
-  queryFn: () => api.get<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}`),
+  queryFn: () => api.get<TalimatlarCevabi>(talimatYolu(urunId, opNo ?? 0, revizyonId)),
 });
 
 // Talimat taslağı ve yayını (1194 b): cevap OP'nin talimat listesidir (sürümler ve taslak), önbelleğe yazılır.
@@ -131,11 +136,12 @@ export type TalimatKomutu =
   | { ad: 'talimat-taslak-kaydet'; govde: TalimatTaslakKaydetGovdesi }
   | { ad: 'talimat-yayinla' | 'talimat-taslak-sil'; govde: TalimatTaslakKomutGovdesi };
 
-export function useTalimatKomutu(urunId: number) {
+export function useTalimatKomutu(urunId: number, revizyonId: number | null = null) {
   const istemci = useQueryClient();
   return useMutation({
-    mutationFn: (k: TalimatKomutu) => api.post<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/${k.ad}`, k.govde),
-    onSuccess: (c, k) => { istemci.setQueryData(anahtarlar.talimat(urunId, k.govde.opNo), c); },
+    mutationFn: (k: TalimatKomutu) =>
+      api.post<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/${k.ad}`, revizyonId === null ? k.govde : { ...k.govde, revizyonId }),
+    onSuccess: (c, k) => { istemci.setQueryData(anahtarlar.talimat(urunId, k.govde.opNo, revizyonId), c); },
   });
 }
 

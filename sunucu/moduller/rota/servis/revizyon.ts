@@ -12,14 +12,14 @@ import * as s from '../sorgular.ts';
 import { bekleyenEmirlereUygula } from './bekleyen-emir.ts';
 import type { AdimKaynagi, RevizyonSatiri } from '../sorgular.ts';
 import {
-  ROTA_VAR, TASLAK_ACIK, type TaslakKaynagi, adimlariKur, adimlariYaz, baskaUruneAdimlar, cevap, donguDenetle, gorunumBaglami, icerikYazimlari,
+  ROTA_VAR, TASLAK_ACIK, type TaslakKaynagi, adimlariKur, adimlariYaz, baskaUruneAdimlar, cevap, donguDenetle, gorunumBaglami, icerigiYenile, icerikYazimlari, revizyonKimlikleri,
   kaynakBaglami, kaynakOzetiAl, komutIcinAl, secilmisMi, olcumleriBosalt, operasyonTipleri, revizyonuAl, rotaKurulabilirUrun, rotaliTurMu, sartnameOnayDenetimi,
   taslagiAc, turu, urunOzetleri,
 } from './ortak.ts';
 
-function farkAdimlari(ayrinti: RevizyonAyrintisi['adimlar']): FarkAdimi[] {
+function farkAdimlari(ayrinti: RevizyonAyrintisi['adimlar'], kimlikler: ReadonlyMap<number, number>): FarkAdimi[] {
   return ayrinti.map((a) => ({
-    opNo: a.opNo, sira: a.sira, ad: a.ad, operasyonTipi: a.operasyonTipi.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? 'Fason, firma seçilmedi' : (a.kaynak.kod ?? a.kaynak.ad),
+    opNo: a.opNo, ...(kimlikler.has(a.opNo) ? { kimlik: kimlikler.get(a.opNo) } : {}), sira: a.sira, ad: a.ad, operasyonTipi: a.operasyonTipi.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? 'Fason, firma seçilmedi' : (a.kaynak.kod ?? a.kaynak.ad),
     ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk,
     terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde, bilesenler: a.bilesenler.map((b) => ({ ad: b.malzeme.stokKodu ?? b.malzeme.ad, miktar: b.miktar })),
   }));
@@ -35,7 +35,9 @@ export async function fark(db: Db, id: number): Promise<FarkCevabi> {
   const adimlar = async (rid: number) => adimlariKur(await gorunumBaglami(db, r.malzemeId, await s.icerikOku(db, rid)));
   return {
     karsilastirilan: { id: eskiR.id, harf: eskiR.harf },
-    farklar: revizyonFarki(farkAdimlari(await adimlar(yururlukte)), farkAdimlari(await adimlar(id))),
+    farklar: revizyonFarki(
+      farkAdimlari(await adimlar(yururlukte), await revizyonKimlikleri(db, yururlukte)), farkAdimlari(await adimlar(id), await revizyonKimlikleri(db, id)),
+    ),
   };
 }
 
@@ -269,8 +271,7 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
     return a === undefined || a.opNo === null || eskiCikti.get(a.opNo) !== a.ciktiMalzemeId;
   });
   if (ciktiHatasi) throw dogrulama(ciktiHatasi.ileti, ciktiHatasi.alan);
-  await s.icerikSil(db, id);
-  await adimlariYaz(db, id, r.malzemeId, dalli);
+  await icerigiYenile(db, id, r.malzemeId, dalli);
   return cevap(id, 'taslak', await s.kaydetYaz(db, id, govde.aciklama === '' ? null : govde.aciklama, kullanici.id));
 }
 
@@ -349,8 +350,8 @@ export async function iptal(db: Db, kullanici: Kullanici, id: number, surum: num
   return cevap(id, 'iptal', await s.iptalYaz(db, id, kullanici.id));
 }
 
-// Revizyon başka (ya da aynı) mamule taslak olarak kopyalanır. Aynı üründe numaralar korunur; başka üründe
-// hedefte kullanılmamış numara korunur, kullanılmış numara yeni numara alır.
+// Revizyon başka (ya da aynı) mamule taslak olarak kopyalanır. Aynı üründe adımlar operasyonlarını korur, başka üründe yeni operasyondur;
+// numaralar iki durumda da sıradan verilir (3252 b).
 export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUrunId: number): Promise<KomutCevabi> {
   // Uç düzenleme eylemini ister; kopya yeni taslak açtığı için taslak açma eylemi de gerekir (3165 a).
   if (!islemVarMi(kullanici, TASLAK_AC)) throw yetkiYok();
@@ -363,7 +364,7 @@ export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUru
   if (harf === null) throw gecersiz('Bu ürünün revizyon harfleri tükendi.');
   const adimlar = hedefUrunId === r.malzemeId ? icerikYazimlari(await s.icerikOku(db, id)) : await baskaUruneAdimlar(db, id, hedefUrunId);
   const yeni = await s.revizyonEkle(db, { malzemeId: hedefUrunId, malzemeTuru: turu(hedef), harf, acanKisiId: kullanici.id, kaynakRevizyonId: id, rotaId: hedefRota });
-  await adimlariYaz(db, yeni, hedefUrunId, adimlar);
+  await adimlariYaz(db, yeni, hedefUrunId, adimlar, hedefUrunId === r.malzemeId ? await revizyonKimlikleri(db, id) : new Map());
   if (hedefUrunId === r.malzemeId) await s.adimSartnameleriniKopyala(db, id, yeni);
   return cevap(yeni, 'taslak', 1);
 }

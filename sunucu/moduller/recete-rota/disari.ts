@@ -8,6 +8,8 @@ import { statuListesi } from './servis.ts';
 export { adimCiktisi, adimStatusu } from './servis.ts';
 // Patlamış rota önizlemesinin ara hal çözücüsü (2610 a); bağı kablolama.ts kurar, yazmaz, yetki denetlemez.
 export { adimAraHalleri } from './servis.ts';
+// Rota OP numaralarını yeniden dizince adım bağları adımı izler (3252 b); bağı kablolama.ts kurar.
+export { opNumaralariDizildiYansit } from './servis.ts';
 import { kayitGetir } from './sorgular.ts';
 
 // Bağlamada (Aşama 2) başka modül bu modülün kaydını yalnız buradan okur; yazma dışarı açılmaz. Prototipin durumu

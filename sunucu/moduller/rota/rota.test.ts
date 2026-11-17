@@ -1,3 +1,4 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
@@ -10,14 +11,14 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimGirdisi, AgacCevabi, OpNumaralariCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
+  AdimGirdisi, AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimliEmirAyrintisi, isEmriOperasyonKimlikleri, operasyonKoduCozucusu as uretimEmirleriOperasyonKoduCozucusu, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, gecerliTalimatlarToplu, isEmriOperasyonKodlari, revizyonGetir, revizyonOperasyonKimlikleri, revizyonlar, talimatSurumuAdimlari, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { FASON_KAYNAGI } from './kurallar.ts';
 import { isler } from './isler.ts';
 import { adimAraHalleri, adimStatusu } from '../recete-rota/disari.ts';
@@ -572,7 +573,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.match(red.json<{ mesaj: string }>().mesaj, /mamul/);
   });
 
-  test('RT-20, RT-30, RT-31, RT-32: kaydet sürümü artırır; yeni ve çoğaltılan adım numarayı sistemden alır; bilinmeyen numara ve eski sürüm reddedilir; silinen numara yeniden verilmez', async () => {
+  test('RT-20, RT-30, RT-32, 3252 b: kaydet sürümü artırır; numara sıradan 10, 20, 30 verilir ve her kayıtta yeniden dizilir; adım operasyonunu korur; bilinmeyen numara ve eski sürüm reddedilir', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();
     const ilk = await kaydet(id, 1, [yeniAdim({ ad: 'Bir' }), yeniAdim({ ad: 'İki' }), yeniAdim({ ad: 'Üç' })]);
@@ -589,16 +590,43 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       vt().sorgu('UPDATE rota_adimi SET operasyon_tipi_id = 2147483647 WHERE revizyon_id = $1', [id]),
       /rota_adimi_operasyon_tipi_bagi/,
     );
-    // OP 30 silinir, OP 10 çoğaltılır, yeni bir adım eklenir: 30 yeniden verilmez, yeni numaralar 40 ve 50 olur.
+    // OP 30 silinir, OP 10 çoğaltılır (araya), yeni bir adım eklenir: numaralar sıradan yeniden dizilir; İki eski OP 20 operasyonunu korur.
+    const kimlikler = async () => vt().sorgu<{ op: number; k: number }>('SELECT op_no AS op, operasyon_id AS k FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [id]);
+    const once = await kimlikler();
     const [bir, iki] = a.adimlar;
     if (!bir || !iki) throw new Error('adım yok');
     const ikinci = await kaydet(id, 2, [govdeye(bir), { ...govdeye(bir), opNo: null }, govdeye(iki), yeniAdim({ ad: 'Dört' })]);
     assert.equal(ikinci.statusCode, 200, ikinci.body);
     a = await ayrinti(id);
-    assert.deepEqual(a.adimlar.map((x) => [x.opNo, x.ad]), [[10, 'Bir'], [40, 'Bir'], [20, 'İki'], [50, 'Dört']]);
-    const ucuncu = await kaydet(id, 3, [...a.adimlar.map(govdeye), yeniAdim()]);
-    assert.equal(ucuncu.statusCode, 200);
-    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => x.opNo), [10, 40, 20, 50, 60]);
+    assert.deepEqual(a.adimlar.map((x) => [x.opNo, x.ad]), [[10, 'Bir'], [20, 'Bir'], [30, 'İki'], [40, 'Dört']]);
+    const sonra = await kimlikler();
+    assert.equal(sonra[0]?.k, once[0]?.k);
+    assert.equal(sonra[2]?.k, once[1]?.k, 'İki, OP 30 olsa da eski OP 20 operasyonudur');
+    assert.ok(![once[0]?.k, once[1]?.k, once[2]?.k].includes(sonra[1]?.k), 'çoğaltılan adım yeni operasyondur');
+    // Yer değiştirme: Dört başa alınınca 10 olur, ötekiler kayar.
+    const ucuncu = await kaydet(id, 3, [govdeye(a.adimlar[3]!), ...a.adimlar.slice(0, 3).map(govdeye), yeniAdim()]);
+    assert.equal(ucuncu.statusCode, 200, ucuncu.body);
+    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => [x.opNo, x.ad]), [[10, 'Dört'], [20, 'Bir'], [30, 'Bir'], [40, 'İki'], [50, 'Deneme adım']]);
+    assert.equal((await kimlikler())[0]?.k, sonra[3]?.k);
+  });
+
+  test('3250-2 D2: revizyon verilen talimat okuma ve yazması numarayı o revizyonun adımına çözer; verilmezse yürürlükteki rotanın', async () => {
+    const urun = await mamulAc();
+    const yid = await yururlugeAlinmisRota(urun, [yeniAdim({ ad: 'Kesim' }), yeniAdim({ ad: 'Taşlama' })]);
+    await tamam(c.cam, 'POST', `/rota/urunler/${urun}/talimat-yaz`, { opNo: 10, metin: 'Kesim talimatı', okunanSurum: null });
+    const t = (await taslakAc(urun, { tur: 'revizyon', revizyonId: yid })).json<KomutCevabi>();
+    const once = await ayrinti(t.id);
+    // Taslakta başa yeni adım eklenir: taslağın OP 10'u yeni operasyondur, Kesim OP 20 olur.
+    assert.equal((await kaydet(t.id, t.surum, [yeniAdim({ ad: 'Çapak' }), ...once.adimlar.map(govdeye)])).statusCode, 200);
+    const metin = async (yol: string) => (await tamam<TalimatlarCevabi>(c.planlama, 'GET', yol)).surumler[0]?.metin ?? null;
+    assert.equal(await metin(`/rota/urunler/${urun}/talimatlar/10`), 'Kesim talimatı', 'yürürlükteki rotada OP 10 Kesim');
+    assert.equal(await metin(`/rota/urunler/${urun}/talimatlar/10?revizyonId=${t.id}`), null, 'taslağın OP 10 Çapak');
+    assert.equal(await metin(`/rota/urunler/${urun}/talimatlar/20?revizyonId=${t.id}`), 'Kesim talimatı');
+    await tamam(c.cam, 'POST', `/rota/urunler/${urun}/talimat-yaz`, { opNo: 10, revizyonId: t.id, metin: 'Çapak talimatı', okunanSurum: null });
+    assert.equal(await metin(`/rota/urunler/${urun}/talimatlar/10`), 'Kesim talimatı', 'taslağa yazılan talimat yürürlükteki Kesim\'i değiştirmez');
+    // Başka ürünün revizyonu verilirse numara bulunmaz.
+    const baska = await mamulAc();
+    assert.equal((await istek(c.cam, 'POST', `/rota/urunler/${baska}/talimat-yaz`, { opNo: 10, revizyonId: t.id, metin: 'Yanlış', okunanSurum: null })).statusCode, 400);
   });
 
   test('RT-33, RT-34, RT-47: ilk adım bekleyen kaydedilir; devir adedi olmadan akışlı ve tek makinede en küçük parça reddedilir', async () => {
@@ -811,9 +839,11 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu('DELETE FROM rota_revizyonu WHERE id = $1', [id]), /silinmez/);
     await assert.rejects(vt().sorgu("UPDATE rota_revizyonu SET durum = 'taslak', iptal_eden_kisi_id = NULL, iptal_etme = NULL WHERE id = $1", [id]), /İptal edilen/);
     await assert.rejects(vt().sorgu('DELETE FROM rota_op_numarasi WHERE malzeme_id = $1', [urun]), /yalnız ekleme/);
-    // Kaydetmede kalkan adımın numarası da iptal taslakta kalan numara da yeniden verilmez.
+    // Numara sıradandır (3252 b): yeni taslağın ilk adımı yine OP 10, ama iptal taslaktaki operasyon değil yeni operasyondur.
     await kaydet(yeni, 1, [yeniAdim()]);
-    assert.deepEqual((await ayrinti(yeni)).adimlar.map((x) => x.opNo), [20]);
+    assert.deepEqual((await ayrinti(yeni)).adimlar.map((x) => x.opNo), [10]);
+    const k = await vt().sorgu<{ r: number; k: number }>('SELECT revizyon_id AS r, operasyon_id AS k FROM rota_adimi WHERE revizyon_id = ANY($1::int[])', [[id, yeni]]);
+    assert.notEqual(k.find((x) => x.r === id)?.k, k.find((x) => x.r === yeni)?.k);
   });
 
   test('RT-05, RT-06: yürürlükteki revizyondan açılan taslak içeriği kopyalar, numaraları korur; kaynak değişmez', async () => {
@@ -828,7 +858,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await kaydet(a, 1, [yeniAdim()])).statusCode, 409);
   });
 
-  test('RT-16: revizyon başka mamule kopyalanır; hedefte kullanılmış numara yeni numara alır; hedefte açık revizyon varsa 409', async () => {
+  test('RT-16: revizyon başka mamule kopyalanır; numaralar sıradan, operasyonlar hedefin yeni operasyonlarıdır; hedefte açık revizyon varsa 409', async () => {
     const kaynak = await mamulAc();
     const hedef = await mamulAc();
     const a = await yururlugeAlinmisRota(kaynak, [yeniAdim({ ad: 'Bir' }), yeniAdim({ ad: 'İki' })]);
@@ -840,7 +870,10 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(k.statusCode, 200, k.body);
     const kopya = await ayrinti(k.json<KomutCevabi>().id);
     assert.equal(kopya.urun.id, hedef);
-    assert.deepEqual(kopya.adimlar.map((x) => [x.opNo, x.ad]), [[30, 'Bir'], [20, 'İki']]);
+    assert.deepEqual(kopya.adimlar.map((x) => [x.opNo, x.ad]), [[10, 'Bir'], [20, 'İki']]);
+    const sahipler = await vt().sorgu<{ m: number }>(
+      'SELECT o.malzeme_id AS m FROM rota_adimi a JOIN rota_op_numarasi o ON o.id = a.operasyon_id WHERE a.revizyon_id = $1', [kopya.revizyon.id]);
+    assert.deepEqual(sahipler.map((x) => x.m), [hedef, hedef]);
   });
 
   test('ticari mal ve hizmet reçetede girdi olmaz: kaydet reddeder; eski taslakta kalmışsa onaya gidemez', async () => {
@@ -1001,6 +1034,68 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const sureler = await tamam<{ adimlar: { adimId: number; olcum: { islem: { sureDk: string } | null } }[] }>(c.planlama, 'GET', `/rota/revizyonlar/${id}/sureler`);
     assert.equal(sureler.adimlar.find((a) => a.adimId === ikinci)?.olcum.islem?.sureDk, '4');
     assert.equal(sureler.adimlar.find((a) => a.adimId !== ikinci)?.olcum.islem ?? null, null);
+  });
+
+  // 3250-2 D1: numara yeniden dizildikten sonra açılan emir, ürün düzeyi veriyi numara defterinden değil adımın kimliğinden okur.
+  test('3250-2 D1: yeniden dizilmiş rotadan açılan emirde iş emri, talimat ve sahne okuması adımın operasyonundadır', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ kaynak: null })]);
+    await tamam(c.cam, 'POST', `/rota/urunler/${urun}/talimat-yaz`, { opNo: 20, metin: 'Kimlikli talimat', okunanSurum: null });
+    const kimlik20 = (await vt().tx((db) => db.tek<{ id: number }>('SELECT operasyon_id AS id FROM rota_adimi WHERE revizyon_id = $1 AND op_no = 20', [id])))!.id;
+    // Aşama 2 benzetimi: iki adımın numarası yer değiştirir; numara defteri eski numarada kalır.
+    await ortam!.sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2)', [urun, id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1010 THEN 20 ELSE 10 END WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    assert.equal((await vt().tx((db) => revizyonOperasyonKimlikleri(db, id))).get(10), kimlik20);
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 3, teslim: null, taslak: true });
+    const ie = await vt().tx((db) => db.sorgu<{ id: number; opNo: number }>(
+      'SELECT id, op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [k.uretimEmriId]));
+    assert.deepEqual(ie.map((x) => x.opNo), [20, 10]);
+    const ilk = ie[1]!;
+    const kimlikler = await vt().tx((db) => isEmriOperasyonKimlikleri(db, ie.map((x) => x.id)));
+    assert.equal(kimlikler.get(ilk.id), kimlik20, 'emirdeki OP 10 talimatlı operasyondur');
+    const talimatlar = await vt().tx((db) => gecerliTalimatlarToplu(db, [{ malzemeId: urun, opNo: 10, operasyonId: kimlikler.get(ilk.id) ?? null }]));
+    assert.equal(talimatlar.get(`${String(urun)}:10`)?.metin, 'Kimlikli talimat');
+    // Kimliksiz okuma (eski iş emri) ekrandaki numarayla çözülür (3250-2 D3): yürürlükteki rotanın OP 10'u talimatlı operasyondur, defterin
+    // kayıtlı 10'u değil.
+    assert.equal((await vt().tx((db) => gecerliTalimatlarToplu(db, [{ malzemeId: urun, opNo: 10 }]))).get(`${String(urun)}:10`)?.metin, 'Kimlikli talimat');
+    assert.notEqual(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1, kimlik20)), null);
+    assert.notEqual(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1)), null);
+  });
+
+  // 3385: plan satırı adımın operasyon kodunu ve adını taşır (3377: tip içinde sayılır). Emir açıldıktan sonra rota numarası yeniden
+  // dizilse de kod operasyon kimliğiyle eşlenir; numarayla eşlense iki adımın kodu yer değiştirirdi.
+  test('3385: planlanacak iş emri satırı operasyon kodunu ve adını emrin rota revizyonundan kimlikle alır', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ operasyonTipiId: tip('BM'), kaynak: null }), yeniAdim()]);
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 2, teslim: null, taslak: true });
+    const tipler = new Map((await vt().tx((db) => db.sorgu<{ id: number; k: string; ad: string }>(
+      'SELECT id, coalesce(kisaltma, kod) AS k, ad FROM istasyonlar_operasyon_tipi WHERE id = ANY($1::int[])', [[tip('TRN'), tip('BM')]]))).map((x) => [x.id, x]));
+    const trn = tipler.get(tip('TRN'))!;
+    const bm = tipler.get(tip('BM'))!;
+    const beklenen = [{ kod: `${trn.k}10`, ad: `${trn.ad} 1. operasyon` }, { kod: `${bm.k}10`, ad: `${bm.ad} 1. operasyon` }, { kod: `${trn.k}20`, ad: `${trn.ad} 2. operasyon` }];
+    const satirlar = async () => (await vt().tx((db) => planlanacakIsEmirleri(db, { taslakDahil: true })))
+      .filter((x) => x.uretimEmriId === k.uretimEmriId).sort((a, b) => a.sira - b.sira);
+    const onceki = uretimEmirleriOperasyonKoduCozucusu(isEmriOperasyonKodlari);
+    try {
+      assert.deepEqual((await satirlar()).map((x) => [x.opNo, x.operasyon]), [[10, beklenen[0]], [20, beklenen[1]], [30, beklenen[2]]]);
+      // Rotada ilk iki adımın numarası yer değiştirir; emir eski numaraları korur (3250 b).
+      await ortam!.sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2), ($1, 1030, $2) ON CONFLICT DO NOTHING', [urun, id]);
+      await ortam!.sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+      await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [id]);
+      await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1010 THEN 20 WHEN 1020 THEN 10 ELSE 30 END WHERE revizyon_id = $1', [id]);
+      await ortam!.sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+      const sonra = await satirlar();
+      assert.deepEqual(sonra.map((x) => [x.opNo, x.operasyon]), [[10, beklenen[0]], [20, beklenen[1]], [30, beklenen[2]]]);
+      assert.ok(sonra.every((x) => typeof x.operasyonId === 'number'));
+      // Çözücü kayıtlı değilken kod yoktur; sıfır ya da uydurma kod verilmez.
+      uretimEmirleriOperasyonKoduCozucusu(null);
+      assert.deepEqual((await satirlar()).map((x) => x.operasyon), [null, null, null]);
+    } finally {
+      uretimEmirleriOperasyonKoduCozucusu(onceki);
+    }
   });
 
   test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {
@@ -1506,25 +1601,6 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const { uretimEmriId } = e.json<{ uretimEmriId: number }>();
     const ihtiyac = (await vt().tx((db) => emirlerinMalzemeIhtiyaci(db, [uretimEmriId]))).get(uretimEmriId);
     assert.deepEqual(ihtiyac?.map((m) => Number(m.brut)), a.adimlar.slice(0, 2).map((x) => Number(x.adimMiktari)));
-  });
-
-  test('B-2482-R4: OP numaraları ilk revizyonuyla döner, silinen numara listede kalır, sıradaki kaydetmenin vereceği numaradır; rota ve reçete okuyan okur, operatör okuyamaz', async () => {
-    const urun = await mamulAc();
-    const yol = `/rota/urunler/${urun}/op-numaralari`;
-    assert.deepEqual(await tamam<OpNumaralariCevabi>(c.planlama, 'GET', yol), { kullanilmis: [], siradaki: 10 });
-    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
-    const k = await kaydet(id, 1, [yeniAdim(), yeniAdim(), yeniAdim()]);
-    assert.equal(k.statusCode, 200, k.body);
-    const a = await ayrinti(id);
-    const k2 = await kaydet(id, k.json<KomutCevabi>().surum, a.adimlar.slice(0, 2).map(govdeye));
-    assert.equal(k2.statusCode, 200, k2.body);
-    const cevap = await tamam<OpNumaralariCevabi>(c.kalite, 'GET', yol);
-    assert.deepEqual(cevap, { kullanilmis: [10, 20, 30].map((opNo) => ({ opNo, ilkRevizyonId: id, ilkRevizyonHarfi: 'A' })), siradaki: 40 });
-    const k3 = await kaydet(id, k2.json<KomutCevabi>().surum, [...(await ayrinti(id)).adimlar.map(govdeye), yeniAdim()]);
-    assert.equal(k3.statusCode, 200, k3.body);
-    assert.equal((await ayrinti(id)).adimlar.at(-1)?.opNo, cevap.siradaki);
-    assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403);
-    assert.equal((await istek(c.planlama, 'GET', '/rota/urunler/999999/op-numaralari')).statusCode, 404);
   });
 
   test('#861: emre kopyala gövdesindeki projeId üretim emrine gider; pasif ya da olmayan proje reddedilir; projeId verilmezse seri emir açılmaz (224)', async () => {
@@ -2037,7 +2113,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
 
       // Rotadaki adımla aynı OP numarasında makine iş emri açılır; terminal ayar, başlat ve sayım geçmiş anlarla yazılır, ilk parça
       // onayı ve bitirme şimdidir (hazırlık 20 dk, 10 sağlam 30 dk'da: net birim 3 dk). Girdi verilmez: stok başlatmayı durdurmasın.
-      async function olculmusEmir(urun: number, rev: number, opNo: number, makineId: number): Promise<{ emirId: number; isEmriId: number }> {
+      async function olculmusEmir(
+        urun: number, rev: number, opNo: number, makineId: number, acilinca?: (db: Db, isEmriId: number) => Promise<unknown>,
+      ): Promise<{ emirId: number; isEmriId: number }> {
         const simdi = Date.now();
         const an = (dk: number) => new Date(simdi + dk * 60_000).toISOString();
         return vt().tx(async (db) => {
@@ -2050,6 +2128,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
               terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
             }],
           });
+          if (acilinca) await acilinca(db, isEmriIdleri[0]!);
           await emirAyar(db, operator!, emirId, an(-50));
           await emirBaslat(db, operator!, emirId, undefined, an(-30));
           await emirSayim(db, operator!, emirId, { tur: 'saglam', adet: 10 }, { an: an(-1) });
@@ -2081,6 +2160,22 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         await vt().tx((db) => emirBittiYansit(db, { uretimEmriId: emirId, saglamAdet: 10, kisiId: operatorId }));
         const adet = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_gerceklesen_sure WHERE malzeme_id = $1', [urun]));
         assert.equal(adet?.n, 2);
+      });
+
+      // 3250-2 Test T1: iş emrinin operasyonu numara defterindeki aynı numaradan ayrışınca (rota yeniden dizildi) ölçüm iş emrinin
+      // operasyonuna yazılır; defterden çözen eski davranış OP 10'un defterdeki operasyonuna yazardı.
+      test('3250-2 T1: ölçüm iş emrinin operasyon kimliğine yazılır, aynı numaranın defterdeki operasyonuna değil', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim(), ayrikAdim()]);
+        const defter = new Map((await vt().tx((db) => db.sorgu<{ opNo: number; id: number }>(
+          'SELECT op_no AS "opNo", id FROM rota_op_numarasi WHERE malzeme_id = $1', [urun]))).map((x) => [x.opNo, x.id]));
+        const oteki = defter.get(20)!;
+        const { isEmriId } = await olculmusEmir(urun, rev, 10, makineA, (db, ie) =>
+          db.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [ie, oteki]));
+        const satirlar = await vt().tx((db) => db.sorgu<{ operasyonId: number; opNo: number }>(
+          'SELECT operasyon_id AS "operasyonId", op_no AS "opNo" FROM rota_gerceklesen_sure WHERE is_emri_id = $1 ORDER BY id', [isEmriId]));
+        assert.equal(satirlar.length, 2);
+        assert.ok(satirlar.every((x) => x.operasyonId === oteki && x.opNo === 20), JSON.stringify(satirlar));
       });
 
       test('RT-77, RT-78, RT-79: kabul yürürlükteki revizyondan taslak açar, teorik süreye yazar; plan yürürlüğe kadar eskiyle çalışır, yürürlükte ölçüm boşalır', async () => {

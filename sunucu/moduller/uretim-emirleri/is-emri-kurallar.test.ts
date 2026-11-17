@@ -6,7 +6,7 @@ import {
   ACIK_DEGIL, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, DEVIR_TUTARSIZ, FASON_BITTI, FASON_DEGIL, FASON_DISARIDA, FASON_DONUSSUZ, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI,
   FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ, IS_EMIRSIZ, KAYNAK_BEKLEYENDE, OP_YINELENDI, PLANA_AL_DURUMU, SIRA_YINELENDI,
   TERMIN_FASON_DISI, TESLIM_ONCE, acikEmirIhlali, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali, gorunenDurum,
-  guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
+  guvenliUygula, rotayiEmreCevir, isEmriFarki, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESTIRME_ADIM, BIRLESTIRME_ADIMLAR_FARKLI, BIRLESTIRME_AKRABA_DEGIL, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KENDISI, BIRLESTIRME_KOK,
   BIRLESTIRME_TASLAK, BOLME_ADET, BOLME_ADIM_YOK, BOLME_BASLAMIS, BOLME_URETILMIS, birlestirmeIhlali, bolmeIhlali, eldekiAdet,
   BIRLESME_ADIMI_BASLAMIS, BIRLESME_ADIMI_YOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESME_KOL_ILERLEDI, BIRLESME_PLANI_KOLDA,
@@ -141,6 +141,21 @@ describe('uretim-emirleri iş emri kuralları', () => {
     const calisan = [{ opNo: 10, sira: 1, durum: 'tamam' as const }, { opNo: 20, sira: 2, durum: 'calisiyor' as const }, { opNo: 30, sira: 3, durum: 'bekliyor' as const }];
     assert.deepEqual(onde(rota(10, 15, 20, 30, 40), calisan), [15], 'çalışan adımın önüne');
     assert.deepEqual(onde(rota(10, 20, 25, 30), calisan), []);
+  });
+
+  // 3250 b: rota yeniden dizildi (A 10 -> 20, B 20 -> 10, yeni C araya 20'ye girdi), emir eski numaralarını korur.
+  test('3250-2 D4: rota adımları operasyon kimliğiyle emrin numarasına çevrilir; yeni adım emrin en büyüğü + 10, öncül de çevrilir', () => {
+    const emir = [{ opNo: 10, operasyonId: 1 }, { opNo: 20, operasyonId: 2 }, { opNo: 30, operasyonId: null }];
+    const rota = [
+      { opNo: 10, operasyonId: 2, onculler: null }, { opNo: 20, operasyonId: 3, onculler: [{ opNo: 10 }] },
+      { opNo: 30, operasyonId: 1, onculler: [{ opNo: 20 }] }, { opNo: 40, operasyonId: 4, onculler: null },
+    ];
+    assert.deepEqual(rotayiEmreCevir(emir, rota).map((r) => [r.operasyonId, r.opNo, r.onculler?.map((o) => o.opNo) ?? null]), [
+      [2, 20, null], [3, 40, [20]], [1, 10, [40]], [4, 50, null],
+    ]);
+    // Kimliksiz eski iş emri aynı numaralı adımla eşlenir; rotada kimlik yoksa rota olduğu gibi döner.
+    assert.deepEqual(rotayiEmreCevir(emir, [{ opNo: 30, operasyonId: 9 }]).map((r) => r.opNo), [30]);
+    assert.deepEqual(rotayiEmreCevir(emir, [{ opNo: 70 }]).map((r) => r.opNo), [70]);
   });
 
   test('ROT-2 iş emri farkı: değişmeyen alan yazılmaz, ondalık yazımı fark sayılmaz; süreler eski ve yeni değeriyle gelir', () => {

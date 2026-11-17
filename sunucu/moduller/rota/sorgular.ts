@@ -532,6 +532,7 @@ export async function icerikSil(db: Db, revizyonId: number): Promise<void> {
 
 export interface AdimYazimi {
   opNo: number;
+  operasyonId: OperasyonKimligi;
   sira: number;
   operasyonTipiId: number;
   ad: string;
@@ -568,11 +569,11 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, ayar_suresi_dk,
                              birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk, fason_firmasiz)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING id`,
+                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk, fason_firmasiz, operasyon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27) RETURNING id`,
     [revizyonId, malzemeId, a.opNo, a.sira, a.operasyonTipiId, a.ad, makineSutunu(a.kaynak), kisiSutunu(a.kaynak), fasonSutunu(a.kaynak),
       a.ayarSuresiDk, a.birimSureDk, a.terminGun, a.bagimlilik, a.devirAdedi, a.firePayiYuzde, a.makineKullanimi, a.enKucukParca, a.yenidenAyar,
-      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk, firmasizSutunu(a.kaynak)],
+      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk, firmasizSutunu(a.kaynak), a.operasyonId],
   );
   const adimId = satir!.id;
   if (a.adaylar.length) {
@@ -649,26 +650,23 @@ export function isEmriEkipmanlari(db: Db, isEmriIdleri: readonly number[]): Prom
 /* ---------------- OP numarası ---------------- */
 
 export async function kullanilmisOpNolari(db: Db, malzemeId: number): Promise<number[]> {
-  return (await db.sorgu<{ opNo: number }>('SELECT op_no AS "opNo" FROM rota_op_numarasi WHERE malzeme_id = $1', [malzemeId])).map((s) => s.opNo);
+  // Numara defteri ilk verilen numarayı tutar; yeniden dizilen adımın bugünkü numarası adımdadır (3250-2).
+  return (await db.sorgu<{ opNo: number }>(
+    'SELECT op_no AS "opNo" FROM rota_op_numarasi WHERE malzeme_id = $1 UNION SELECT op_no FROM rota_adimi WHERE malzeme_id = $1', [malzemeId],
+  )).map((s) => s.opNo);
 }
 
-export async function opNumaralari(db: Db, malzemeId: number): Promise<{ opNo: number; ilkRevizyonId: number; ilkRevizyonHarfi: string }[]> {
-  return db.sorgu(
-    `SELECT t.op_no AS "opNo", t.ilk_revizyon_id AS "ilkRevizyonId", r.harf AS "ilkRevizyonHarfi"
-       FROM rota_op_numarasi t JOIN rota_revizyonu r ON r.id = t.ilk_revizyon_id
-      WHERE t.malzeme_id = $1 ORDER BY t.op_no`,
-    [malzemeId],
+// Yeni operasyon (3250-2): kimlik yeni satırdır. Defterin op_no'su ürün içinde tekil "kayıtlı numara"dır (ürün düzeyi tablolar onunla
+// yazar); adımın ekrandaki numarası değildir: ürünün en büyük kayıtlı numarasından 10'ar artar, verilmiş numara yeniden verilmez.
+export async function operasyonlarEkle(db: Db, malzemeId: number, adet: number, revizyonId: number): Promise<OperasyonKimligi[]> {
+  if (adet === 0) return [];
+  const satirlar = await db.sorgu<{ id: OperasyonKimligi; n: number }>(
+    `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id)
+     SELECT $1, (SELECT coalesce(max(op_no), 0) FROM rota_op_numarasi WHERE malzeme_id = $1) + k * 10, $3 FROM generate_series(1, $2::int) AS k
+     RETURNING id, op_no AS n`,
+    [malzemeId, adet, revizyonId],
   );
-}
-
-// Ürüne aynı numara iki kez kaydolmaz; aynı ürünün başka revizyonundan gelen numara zaten kayıtlıdır.
-export async function opNolariKaydet(db: Db, malzemeId: number, opNolari: readonly number[], revizyonId: number): Promise<void> {
-  if (opNolari.length === 0) return;
-  await db.sorgu(
-    `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) SELECT $1, n, $3 FROM unnest($2::int[]) AS n
-     ON CONFLICT (malzeme_id, op_no) DO NOTHING`,
-    [malzemeId, opNolari, revizyonId],
-  );
+  return satirlar.sort((x, y) => x.n - y.n).map((x) => x.id);
 }
 
 // Numaranın ürünün herhangi bir revizyonunda (iptal dahil) adımı var mı.
@@ -739,16 +737,16 @@ export function operasyonlariBul(
   db: Db, anahtarlar: readonly { malzemeId: number; opNo: number }[],
 ): Promise<{ malzemeId: number; opNo: number; operasyonId: OperasyonKimligi }[]> {
   return db.sorgu(
-    `SELECT o.malzeme_id AS "malzemeId", o.op_no AS "opNo", o.id AS "operasyonId"
-       FROM rota_op_numarasi o JOIN unnest($1::int[], $2::int[]) AS k(m, n) ON o.malzeme_id = k.m AND o.op_no = k.n`,
+    `SELECT m AS "malzemeId", n AS "opNo", id AS "operasyonId"
+       FROM (SELECT DISTINCT k.m, k.n, rota_ekrandaki_operasyon(k.m, k.n) AS id FROM unnest($1::int[], $2::int[]) AS k(m, n)) x
+      WHERE id IS NOT NULL`,
     [anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.opNo)],
   );
 }
 
-// Aşama 2'ye kadar uçlar OP numarasıyla gelir; numara ürünün kalıcı numara defterinden kimliğe çevrilir.
+// Kimliği bilinmeyen (malzeme, OP) ekrandaki adımdan çözülür; defter tekil değildir, aynı numara başka operasyonda da olabilir (3250-2).
 export async function operasyonBul(db: Db, malzemeId: number, opNo: number): Promise<OperasyonKimligi | null> {
-  const r = await db.tek<{ id: number }>('SELECT id FROM rota_op_numarasi WHERE malzeme_id = $1 AND op_no = $2', [malzemeId, opNo]);
-  return r ? operasyonKimligi(r.id) : null;
+  return (await db.tek<{ id: OperasyonKimligi | null }>('SELECT rota_ekrandaki_operasyon($1, $2) AS id', [malzemeId, opNo]))?.id ?? null;
 }
 
 // Ürünün yürürlükteki revizyonundaki operasyonlar: bugünkü OP numarası ve numara defterindeki kayıtlı numara. Başka modül ürün düzeyi
@@ -756,14 +754,27 @@ export async function operasyonBul(db: Db, malzemeId: number, opNo: number): Pro
 // (eski (malzeme, op_no) tetikleyicisi aynı kimliği bulsun diye).
 // Ekrandan (ürün düzeyi uçlardan) gelen OP numarası, rotanın bugün gösterdiği numaradır: önce yürürlükteki revizyonun adımı, yoksa iptal
 // olmayan en yeni revizyonun adımı, o da yoksa numara defteri. Yeniden numaralamadan sonra kayıtlı numara ekrandakinden ayrışır (Risk K1).
-export async function ekrandakiOperasyon(db: Db, malzemeId: number, opNo: number): Promise<OperasyonKimligi | null> {
-  const r = await db.tek<{ id: OperasyonKimligi }>(
-    `SELECT a.operasyon_id AS id FROM rota_adimi a JOIN rota_revizyonu r ON r.id = a.revizyon_id
-      WHERE a.malzeme_id = $1 AND a.op_no = $2 AND r.durum <> 'iptal'
-      ORDER BY r.durum = 'yururlukte' DESC, r.id DESC LIMIT 1`,
-    [malzemeId, opNo],
+// Kural göçteki rota_ekrandaki_operasyon işlevindedir (tetikleyiciler de onu kullanır). Revizyon verilirse (taslak düzenlenirken ya da
+// birden çok yürürlükteki rotada) numara o revizyonun adımıdır; numara her revizyonda ayrı dizildiğinden başka revizyon başka operasyon gösterebilir.
+export async function ekrandakiOperasyon(db: Db, malzemeId: number, opNo: number, revizyonId?: number): Promise<OperasyonKimligi | null> {
+  if (revizyonId === undefined) return operasyonBul(db, malzemeId, opNo);
+  return (await db.tek<{ id: OperasyonKimligi }>(
+    'SELECT operasyon_id AS id FROM rota_adimi WHERE revizyon_id = $1 AND malzeme_id = $2 AND op_no = $3', [revizyonId, malzemeId, opNo],
+  ))?.id ?? null;
+}
+
+export function revizyonlarinAdimTipleri(
+  db: Db, revizyonIdleri: readonly number[],
+): Promise<{ revizyonId: number; sira: number; opNo: number; operasyonId: OperasyonKimligi; operasyonTipiId: number }[]> {
+  return db.sorgu(
+    `SELECT revizyon_id AS "revizyonId", sira, op_no AS "opNo", operasyon_id AS "operasyonId", operasyon_tipi_id AS "operasyonTipiId"
+       FROM rota_adimi WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
+    [revizyonIdleri],
   );
-  return r?.id ?? operasyonBul(db, malzemeId, opNo);
+}
+
+export function revizyonOperasyonlari(db: Db, revizyonId: number): Promise<{ opNo: number; operasyonId: OperasyonKimligi }[]> {
+  return db.sorgu('SELECT op_no AS "opNo", operasyon_id AS "operasyonId" FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [revizyonId]);
 }
 
 export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number }
@@ -1389,13 +1400,35 @@ export async function sahipsizAdimSartnameleriniSil(db: Db, revizyonId: number):
   );
 }
 
-// Aynı ürünün revizyonundan açılan taslak bağları da alır: OP numaraları korunur, hedefte olmayan adımın bağı kopyalanmaz.
+// Aynı ürünün revizyonundan açılan taslak bağları da alır: bağ adımın operasyonuyla eşlenir (numara yeniden dizilmiş olabilir, 3250-2),
+// hedefte olmayan operasyonun bağı kopyalanmaz.
 export async function adimSartnameleriniKopyala(db: Db, kaynakRevizyonId: number, hedefRevizyonId: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO rota_adim_sartnamesi (revizyon_id, op_no, sira, sartname_id, degerler)
-     SELECT $2, x.op_no, x.sira, x.sartname_id, x.degerler FROM rota_adim_sartnamesi x
-      WHERE x.revizyon_id = $1 AND EXISTS (SELECT 1 FROM rota_adimi a WHERE a.revizyon_id = $2 AND a.op_no = x.op_no)`,
+     SELECT $2, h.op_no, x.sira, x.sartname_id, x.degerler FROM rota_adim_sartnamesi x
+       JOIN rota_adimi k ON k.revizyon_id = x.revizyon_id AND k.op_no = x.op_no
+       JOIN rota_adimi h ON h.revizyon_id = $2 AND h.operasyon_id = k.operasyon_id
+      WHERE x.revizyon_id = $1`,
     [kaynakRevizyonId, hedefRevizyonId],
+  );
+}
+
+// Taslak kaydında OP numarası yeniden dizilince adımın şartname bağı yeni numarasına taşınır (`esle`: kalan her adımın eski -> yeni
+// numarası). Kalmayan adımın bağı gider; yoksa çıkarılan adımın eski numarasını alan başka adım onun bağını devralırdı. Satırlar okunur,
+// silinir ve yeni numarayla yazılır: aynı komutta silinip yazılan anahtar tekillikte çakışırdı (yer değiştiren iki numara).
+export async function adimSartnameleriniTasi(db: Db, revizyonId: number, esle: ReadonlyMap<number, number>): Promise<void> {
+  const ciftler = [...esle];
+  const satirlar = await db.sorgu<{ yeni: number; sira: number; sartnameId: number; degerler: unknown }>(
+    `SELECT e.yeni, x.sira, x.sartname_id AS "sartnameId", x.degerler FROM rota_adim_sartnamesi x
+       JOIN unnest($2::int[], $3::int[]) AS e(eski, yeni) ON x.op_no = e.eski WHERE x.revizyon_id = $1`,
+    [revizyonId, ciftler.map(([e]) => e), ciftler.map(([, y]) => y)],
+  );
+  await db.sorgu('DELETE FROM rota_adim_sartnamesi WHERE revizyon_id = $1', [revizyonId]);
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO rota_adim_sartnamesi (revizyon_id, op_no, sira, sartname_id, degerler)
+     SELECT $1, * FROM unnest($2::int[], $3::int[], $4::int[], $5::jsonb[])`,
+    [revizyonId, satirlar.map((x) => x.yeni), satirlar.map((x) => x.sira), satirlar.map((x) => x.sartnameId), satirlar.map((x) => JSON.stringify(x.degerler))],
   );
 }
 

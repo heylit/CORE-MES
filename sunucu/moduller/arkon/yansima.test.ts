@@ -2063,6 +2063,22 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.deepEqual(tek?.govde, p2);
   });
 
+  // 3250-2 Test T3: rota yeniden dizilince iş emrinin OP 10'u defterde OP 20 olan operasyonu gösterebilir; paketin adımları o operasyonun
+  // talimatındandır. Defterden çözen eski okuma OP 10'un talimatını verirdi.
+  test('3250-2 T3: iş emri paketinin talimat adımları iş emrinin operasyonundan, aynı numaranın defterdeki operasyonundan değil', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const sahip = ortam!.sahip;
+    const oteki = (await sahip.tek<{ id: number }>('SELECT id FROM rota_op_numarasi WHERE malzeme_id = $1 AND op_no = 20', [r.kart]))!.id;
+    await sahip.sorgu(
+      "INSERT INTO rota_talimati (malzeme_id, op_no, surum, metin, yazan_kisi_id) VALUES ($1, 10, 1, 'Defterdeki talimat', $2), ($1, 20, 1, 'Operasyonun talimatı', $2)",
+      [r.kart, yoneticiId]);
+    await sahip.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [ie1, oteki]);
+    const p1 = (await paketler()).get(ieKimligi(ie1!))?.govde;
+    assert.ok(p1);
+    assert.deepEqual((p1['steps'] as { t: string }[]).map((s) => s.t), ['Operasyonun talimatı']);
+  });
+
   // 3115 (2166-2 a): taslak paketin iş türü adımın operasyon tipi grubundan gelir; talaşlı istasyondaki boya ve kalite adımı kendi görünümüyle
   // açılır, kalite adımında alt görünüm kodu ve AQL lot planı gelir. Elle seçilip kaydedilen tür okumada korunur.
   test('3115: talaşlı istasyonda boya ve kalite gruplu adımın taslağı boya ve kalite açılır; elle seçilen tür kalır', async () => {

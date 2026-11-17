@@ -67,7 +67,7 @@ describe('3248-2 çalışma alanı', () => {
     const palet = within(bolge).getByRole('dialog', { name: 'Adım ekle' });
     expect(within(palet).getByText('MM-0001: yeni bağımsız Dal B, OP 40 Tornalama adımında ana hatta katılır')).toBeTruthy();
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
-    expect(within(hatAl(bolge)).getByText(/Dal B \(bağımsız\) · ana hatta OP 40'de katılır/)).toBeTruthy();
+    expect(within(hatAl(bolge)).getByText(/Dal B \(bağımsız\) · ana hatta OP 50'de katılır/)).toBeTruthy();
     expect(within(within(bolge).getByRole('region', { name: 'Süre şeridi' })).getByText('Dal B (bağımsız)')).toBeTruthy();
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(sira(k.govde)).toEqual([

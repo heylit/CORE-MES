@@ -92,11 +92,11 @@ describe('arkon terminal 3B montaj sahnesi (3209, gerçek PostgreSQL)', () => {
   const isEmriOf = async (uretimEmriId: number) =>
     (await o().sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [uretimEmriId]))!.id;
   // Sahne satırı rota'nın tablosuna doğrudan yazılır: kaydetme kuralları rota/sahne.test.ts'tedir, burada yalnız okuma bağı denenir.
-  const sahneYaz = (talimatSurum: number, sahneSurum: number, modelRevizyonId: number) => o().sahip.sorgu(
+  const sahneYaz = (talimatSurum: number, sahneSurum: number, modelRevizyonId: number, opNo = 10) => o().sahip.sorgu(
     `INSERT INTO rota_talimat_sahnesi (malzeme_id, op_no, talimat_surum, sahne_surum, model_revizyon_id, adimlar, yazan_kisi_id)
-     VALUES ($1, 10, $2, $3, $4, $5::jsonb, $6)`,
+     VALUES ($1, $7, $2, $3, $4, $5::jsonb, $6)`,
     [urunNo, talimatSurum, sahneSurum, modelRevizyonId,
-      JSON.stringify([{ sira: 1, hareket: { parcalar: [1], yon: '+Z', mesafeMm: 80, sureSn: 1.6, sirali: false, kamera: null } }]), yoneticiId],
+      JSON.stringify([{ sira: 1, hareket: { parcalar: [1], yon: '+Z', mesafeMm: 80, sureSn: 1.6, sirali: false, kamera: null } }]), yoneticiId, opNo],
   );
   const sahneUrl = (ie: number) => `/arkon/is-emirleri/${String(ie)}/sahne`;
 
@@ -129,7 +129,9 @@ describe('arkon terminal 3B montaj sahnesi (3209, gerçek PostgreSQL)', () => {
 
   test('künye: iş emrinin rota adımı ve sabitlenen talimat sürümü; sürüm sabitlenmemişse null', async () => {
     const e = await emirAc(1);
-    assert.deepEqual(await o().vt.tx(async (db) => isEmriTalimatKunyesi(db, await isEmriOf(e.uretimEmriId))), { malzemeNo: urunNo, opNo: 10, surum: 1 });
+    const ie = await isEmriOf(e.uretimEmriId);
+    const kimlik = (await o().vt.tx((db) => db.tek<{ id: number | null }>('SELECT operasyon_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [ie])))?.id ?? null;
+    assert.deepEqual(await o().vt.tx((db) => isEmriTalimatKunyesi(db, ie)), { malzemeNo: urunNo, opNo: 10, operasyonId: kimlik, surum: 1 });
     const bos = await emirAc(null);
     assert.equal(await o().vt.tx(async (db) => isEmriTalimatKunyesi(db, await isEmriOf(bos.uretimEmriId))), null);
   });
@@ -148,6 +150,22 @@ describe('arkon terminal 3B montaj sahnesi (3209, gerçek PostgreSQL)', () => {
     const m = await istek('operator', 'GET', `${sahneUrl(ie)}-modeli`);
     assert.equal(m.durum, 200);
     assert.ok(m.ham.toString('latin1').startsWith('ISO-10303-21;'));
+  });
+
+  // 3250-2 Test T2, T3: rota yeniden dizilince iş emrinin OP 10'u defterde OP 20 olan operasyonu gösterebilir. Künye o kimliği taşır,
+  // sahne o operasyonun sahnesidir; defterden çözen eski okuma OP 10'un sahnesini verirdi.
+  test('3250-2 T2: iş emri defterdeki aynı numaradan başka operasyona bağlıysa künye ve sahne iş emrinin operasyonundandır', async () => {
+    await o().sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 20, $2) ON CONFLICT DO NOTHING', [urunNo, revId]);
+    const oteki = (await o().sahip.tek<{ id: number }>('SELECT id FROM rota_op_numarasi WHERE malzeme_id = $1 AND op_no = 20', [urunNo]))!.id;
+    const e = await emirAc(6);
+    const ie = await isEmriOf(e.uretimEmriId);
+    await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [ie, oteki]);
+    await sahneYaz(6, 1, model);
+    await sahneYaz(6, 3, model, 20);
+    assert.deepEqual(await o().vt.tx((db) => isEmriTalimatKunyesi(db, ie)), { malzemeNo: urunNo, opNo: 10, operasyonId: oteki, surum: 6 });
+    const c = await istek('operator', 'GET', sahneUrl(ie));
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal(isEmriSahnesiCevabi.parse(c.govde).sahne?.sahneSurum, 3, 'sahne iş emrinin operasyonunun (defterde OP 20) sahnesidir');
   });
 
   test('görünmeyen iş 404 (olmayan, iptal edilen); oturumsuz 401; sahnesiz işte model dosyası 404', async () => {

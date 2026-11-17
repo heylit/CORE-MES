@@ -3,27 +3,29 @@ import type { GeometriModelListeCevabi, GeometriModelSatiri } from '#paylasilan/
 import type { TalimatSahneleriCevabi, TalimatSahnesiKaydetGovdesi, UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
+import { revizyonEki } from '../sartnameler/veri.ts';
 
 // Talimat sahnesinin okuma ve yazması (3209 a): rota uçları; model listesi ve dosyası geometri uçlarıdır (geometri.oku ister).
 
 const KOK = ['recete-rota', 'yeni', 'talimat-sahnesi'] as const;
 export const anahtarlar = {
-  sahneler: (urunId: number, opNo: number) => [...KOK, 'sahneler', urunId, opNo] as const,
+  sahneler: (urunId: number, opNo: number, revizyonId: number | null) => [...KOK, 'sahneler', urunId, opNo, revizyonId] as const,
   modeller: (urunId: number) => [...KOK, 'modeller', urunId] as const,
   dosya: (revizyonId: number) => [...KOK, 'dosya', revizyonId] as const,
 };
 
-export const useSahneler = (urunId: number, opNo: number) => useQuery({
-  queryKey: anahtarlar.sahneler(urunId, opNo),
-  queryFn: () => api.get<TalimatSahneleriCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}/sahneler`),
+export const useSahneler = (urunId: number, opNo: number, revizyonId: number | null) => useQuery({
+  queryKey: anahtarlar.sahneler(urunId, opNo, revizyonId),
+  queryFn: () => api.get<TalimatSahneleriCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}/sahneler${revizyonEki(revizyonId)}`),
 });
 
-export function useSahneKaydet(urunId: number) {
+export function useSahneKaydet(urunId: number, revizyonId: number | null) {
   const istemci = useQueryClient();
   return useMutation({
     mutationFn: (g: TalimatSahnesiKaydetGovdesi) =>
-      api.post<TalimatSahneleriCevabi>(`/rota/urunler/${String(urunId)}/talimat-sahnesi-kaydet`, g, { istekKimligi: yeniIstekKimligi() }),
-    onSuccess: (c, g) => { istemci.setQueryData(anahtarlar.sahneler(urunId, g.opNo), c); },
+      api.post<TalimatSahneleriCevabi>(`/rota/urunler/${String(urunId)}/talimat-sahnesi-kaydet`, revizyonId === null ? g : { ...g, revizyonId },
+        { istekKimligi: yeniIstekKimligi() }),
+    onSuccess: (c, g) => { istemci.setQueryData(anahtarlar.sahneler(urunId, g.opNo, revizyonId), c); },
   });
 }
 

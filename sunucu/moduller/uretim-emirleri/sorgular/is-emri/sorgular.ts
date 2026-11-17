@@ -169,6 +169,8 @@ export interface IsEmriYazisi {
   ekAciklama?: string | null;
   // 1476: çok katmanlı emirde adımın düğümü (alt parça), rotadaki op numarası ve kök başına adedi; tek katmanlı emirde yok.
   dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
+  // Rota adımının operasyon kimliği (3250-2); verilen kimlik korunur, verilmezse tetikleyici adımdan çözer.
+  operasyonId?: number | null;
 }
 
 const IS_EMRI_DEGERLERI = (y: IsEmriYazisi) => [
@@ -180,10 +182,10 @@ export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promi
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, istasyon_id,
        ayar_suresi_dk, birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric) RETURNING id`,
+       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani, operasyon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric, $27) RETURNING id`,
     [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null,
-      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null],
+      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null, y.operasyonId ?? null],
   );
   if (satir === null) throw new Error('İş emri eklenemedi.');
   return satir.id;
@@ -227,9 +229,9 @@ export async function bekleyenIsEmriniGuncelle(db: Db, id: number, y: IsEmriYazi
             fason_firma_id = CASE WHEN $20 AND fason_firma_id IS NOT NULL THEN fason_firma_id ELSE $8 END, istasyon_id = $9, ayar_suresi_dk = $10,
             birim_sure_dk = $11, termin_gun = $12, bagimlilik = $13, devir_adedi = $14, fire_payi_yuzde = $15, makine_kullanimi = $16,
             en_kucuk_parca = $17, yeniden_ayar = $18, talimat_surumu = $19, fason_firmasiz = $20 AND fason_firma_id IS NULL,
-            surum = surum + 1
+            operasyon_id = coalesce($21, operasyon_id), surum = surum + 1
       WHERE id = $1 AND durum = 'bekliyor'`,
-    [id, ...IS_EMRI_DEGERLERI(y)],
+    [id, ...IS_EMRI_DEGERLERI(y), y.operasyonId ?? null],
   );
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_adayi WHERE is_emri_id = $1', [id]);
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = $1', [id]);

@@ -6,7 +6,7 @@ import {
   talimatSablonParametresi, talimatSablonKopyalariCevabi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimEkipmaniGovdesi, aparatKullanimiCevabi, olcuAletiTurleriCevabi, adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
-  hamOnerisiCevabi, opNumaralariCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
+  hamOnerisiCevabi, talimatRevizyonSorgusu, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { sablonDurumGovdesi, rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
 import { sablonDurumuYaz, rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
@@ -14,7 +14,7 @@ import {
   agac, bekleyenEmreUygula, tekEmreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, aparatKullanimi, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
-  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, opNumaralari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
+  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
 // Rota verisi yalnız rotayla çalışan rollere açıktır (2490 b): Reçete ve Rota sayfası ya da bir rota işlemi. Üç uç başka sayfaların
@@ -131,8 +131,9 @@ export const uclar = [
     yol: '/rota/urunler/:urunId/talimatlar/:opNo',
     yetki: ROTA_OKUR,
     parametre: talimatParametresi,
+    sorgu: talimatRevizyonSorgusu,
     cevap: talimatlarCevabi,
-    isle: ({ db, parametre }) => talimatListesi(db, parametre.urunId, parametre.opNo),
+    isle: ({ db, parametre, sorgu }) => talimatListesi(db, parametre.urunId, parametre.opNo, sorgu.revizyonId),
   }),
   // Onaylı kartın ilk rota taslağı dakikalık taramayı beklemeden açılır (#688); Reçete ve Rota açılırken çağırır.
   uc({
@@ -671,23 +672,15 @@ export const uclar = [
     cevap: isEmriSartnameleriCevabi,
     isle: ({ db, kullanici, parametre, govde }) => ekAdimSartnameleriSabitle(db, kullanici, parametre.emirId, parametre.isEmriId, govde),
   }),
-  // B-2482-R4: Reçete ve Rota ekranı yeni adımın numarasını önceden gösterir; okuma, rota ve reçete okuyanlara.
-  uc({
-    yontem: 'GET',
-    yol: '/rota/urunler/:urunId/op-numaralari',
-    yetki: ROTA_OKUR,
-    parametre: urunParametresi,
-    cevap: opNumaralariCevabi,
-    isle: ({ db, parametre }) => opNumaralari(db, parametre.urunId),
-  }),
   // Montaj talimatının 3B sahnesi (3209 a): okuma talimat okumasıyla, yazma talimat yazmayla aynı yetkidir (yeni işlem yok).
   uc({
     yontem: 'GET',
     yol: '/rota/urunler/:urunId/talimatlar/:opNo/sahneler',
     yetki: ROTA_OKUR,
     parametre: talimatParametresi,
+    sorgu: talimatRevizyonSorgusu,
     cevap: talimatSahneleriCevabi,
-    isle: ({ db, parametre }) => talimatSahneleri(db, parametre.urunId, parametre.opNo),
+    isle: ({ db, parametre, sorgu }) => talimatSahneleri(db, parametre.urunId, parametre.opNo, sorgu.revizyonId),
   }),
   uc({
     yontem: 'POST',

@@ -1,5 +1,5 @@
 // Modülün servis girişi: işlevler alana göre servis/ altındadır. Uçlar, işler ve disari.ts yalnız bu dosyayı ithal eder.
-export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi, opNumaralari } from './servis/liste.ts';
+export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi } from './servis/liste.ts';
 export { adimEkipmaniKaydet, fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
@@ -10,7 +10,7 @@ export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGeti
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';
 export {
   type RotaAdimi, type RotaRevizyonu, girdisiEksikRevizyonlar, revizyonGetir, revizyonlar, type DurumRotaAdimi, type DurumRotaRevizyonu, durumRevizyonlari,
-  adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
+  adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, revizyonOperasyonKimlikleri, isEmriOperasyonKodlari, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
   malzemeAra, olcuAletiTurleri, aparatKullanimi,
 } from './servis/okuma.ts';
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
@@ -23,4 +23,5 @@ export {
   isEmriSartnameleri, isEmriSartnameleriCevabi, ekAdimSartnameleriSabitle,
 } from './servis/sartname.ts';
 export { talimatSahneleri, talimatSahnesiKaydet, talimatSahnesi } from './servis/sahne.ts';
+export { opNumaralariDizildiDinle, type OpNumaralariDizildi } from './servis/ortak.ts';
 export { siparisAcilisiRotasi, revizyonunRotasi, tekEmreKopyala, bekleyenEmreUygula, bekleyenEmirlereUygula, ROTA_BEKLEMIYOR, BEKLEYEN_ROTA_YOK } from './servis/bekleyen-emir.ts';

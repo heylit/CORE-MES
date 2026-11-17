@@ -72,9 +72,10 @@ export function sayiGirisi(ham: string): number | null {
 export const sirali = (adimlar: readonly Adim[]): Adim[] => [...adimlar].sort((a, b) => a.seq - b.seq);
 export const yenidenNumarala = (adimlar: readonly Adim[]): Adim[] => adimlar.map((a, i) => ({ ...a, seq: (i + 1) * 10 }));
 // Statünün adı adımın OP numarasıdır; yeni adımda sırası.
-export const statuNo = (a: Pick<Adim, 'opNo' | 'seq'>): number => a.opNo ?? a.seq;
-// Erişilebilir ad: numarası verilmiş adım "OP 20"; yeni adımın numarasını kayıt verir, bu yüzden sırasıyla okunur (OP numarası gibi değil).
-export const adimAdi = (a: Pick<Adim, 'opNo' | 'seq'>): string => (a.opNo === null ? `Yeni adım (${String(a.seq)}. sıra)` : `OP ${String(a.opNo)}`);
+// Gösterilen OP numarası adımın sırasıdır (10, 20, 30; 3252 b): ekleme, silme ve taşımada hemen yeniden dizilir, kayıt aynı numarayı verir.
+// `opNo` kayıtlı numaradır; yalnız adımın hangi operasyon olduğunu sunucuya söyler.
+export const statuNo = (a: Pick<Adim, 'seq'>): number => a.seq;
+export const adimAdi = (a: Pick<Adim, 'seq'>): string => `OP ${String(a.seq)}`;
 // Firması seçilmemiş fason adım (2682 a) da fasondur: `fason` bayrağı, fasonId boş.
 export const fasonMu = (a: Pick<Adim, 'fasonId' | 'fason' | 'stationId' | 'machineId'>): boolean =>
   (!!a.fasonId || a.fason === true) && !a.stationId && !a.machineId;
