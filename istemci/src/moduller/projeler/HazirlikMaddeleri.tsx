@@ -74,7 +74,7 @@ function MaddeFormu({ madde, sonraki, kapat }: { madde: HazirlikMaddeTanimi | nu
       const alanlar = { ad, kisa, sira: Number(sira), acik };
       return madde === null
         ? api.post<HazirlikMaddeleriCevabi>('/hazirlik-maddeleri/ozel-ekle', alanlar satisfies HazirlikMaddesiEkleGovdesi, { istekKimligi: istek.al() })
-        : api.post<HazirlikMaddeleriCevabi>(`/hazirlik-maddeleri/${madde.kod}/degistir`, { ...alanlar, surum: madde.surum } satisfies HazirlikMaddesiDegistirGovdesi);
+        : api.post<HazirlikMaddeleriCevabi>(`/hazirlik-maddeleri/${madde.kod}/degistir`, { ...alanlar, surum: madde.surum } satisfies HazirlikMaddesiDegistirGovdesi, { istekKimligi: istek.al() });
     },
     onSuccess: async (cevap) => {
       istemci.setQueryData(HAZIRLIK_MADDE_ANAHTARI, cevap);

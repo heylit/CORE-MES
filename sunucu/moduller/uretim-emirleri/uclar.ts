@@ -308,7 +308,8 @@ const adimliUclar = [
   uc({
     yontem: 'GET',
     yol: '/hazirlik-maddeleri',
-    yetki: 'oturum', sahiplik: 'yok',
+    // Emir hazırlığını okuyan, maddeleri ayarlayan, şablona hazırlık kalemi koyan ve dağıtan (ADR 0007 md 4: oturum ucu değil).
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'uretim-emirleri.hazirlik-ayar', 'projeler.sablon-yaz', 'projeler.hazirlik-dagit', 'projeler.oku'] },
     cevap: hazirlikMaddeleriCevabi,
     isle: ({ db, kullanici }) => hazirlikMaddeleri(db, kullanici),
   }),
@@ -319,6 +320,7 @@ const adimliUclar = [
     parametre: hazirlikMaddeParametresi,
     govde: hazirlikMaddesiDegistirGovdesi,
     cevap: hazirlikMaddeleriCevabi,
+    tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => hazirlikMaddesiDegistir(db, kullanici, parametre.kod, govde),
   }),
   uc({
@@ -327,6 +329,7 @@ const adimliUclar = [
     yetki: 'uretim-emirleri.hazirlik-ayar',
     govde: hazirlikMaddesiEkleGovdesi,
     cevap: hazirlikMaddeleriCevabi,
+    tekrarKorumali: true,
     isle: ({ db, kullanici, govde }) => ozelHazirlikMaddesiEkle(db, kullanici, govde),
   }),
   // 3396 a: emir için hazırlık projesi kurulur, şablonun hazırlık kalemleri emir ya da iş emri başına görev olur (tekrarında çoğalmaz).
@@ -345,6 +348,7 @@ const adimliUclar = [
     yetki: 'projeler.hazirlik-dagit',
     govde: hazirlikDagitGovdesi,
     cevap: hazirlikDagitCevabi,
+    tekrarKorumali: true,
     isle: ({ db, kullanici, govde }) => hazirlikDagit(db, kullanici, govde),
   }),
   uc({
@@ -362,6 +366,7 @@ const adimliUclar = [
     parametre: emirParametresi,
     govde: hazirlikProjesiGovdesi,
     cevap: hazirlikProjesiCevabi,
+    tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => hazirlikProjesiKur(db, kullanici, parametre.id, govde),
   }),
   // Adım Durumu (2893): okuma emri görene, terminal okuması (2893-3 b) operatöre de; yazma yalnız müdür ve planlama rollerine (2893-1 a).

@@ -37,11 +37,11 @@ const gorevKomutu = (
 });
 
 export const uclar = [
-  // 3396 a: kademeli takip. Ayarı herkes okur (ekran açıklaması), hazirlik-ayar yazar; şerit yalnız kişinin kendi görevlerini döner.
+  // 3396 a: kademeli takip. Ayarı ayarlayan, dağıtan ve projeyi okuyan görür, hazirlik-ayar yazar; şerit yalnız kişinin kendi görevlerini döner.
   uc({
     yontem: 'GET',
     yol: '/projeler/hazirlik-kademe-ayari',
-    yetki: 'oturum', sahiplik: 'yok',
+    yetki: { biri: ['uretim-emirleri.hazirlik-ayar', 'projeler.hazirlik-dagit', 'projeler.oku'] },
     cevap: kademeAyariCevabi,
     isle: ({ db, kullanici }) => kademeAyariOku(db, kullanici),
   }),
@@ -64,7 +64,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/projeler/hazirlik-uyarim',
-    yetki: 'oturum', sahiplik: 'yok',
+    yetki: 'projeler.gorev-isle',
     cevap: gecikenHazirliklarimCevabi,
     isle: ({ db, kullanici }) => gecikenHazirliklarim(db, kullanici),
   }),
