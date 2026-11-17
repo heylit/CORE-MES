@@ -17,7 +17,7 @@ import { DIS, GECIS_TURU_ADI, acikliklar, bolumYolu, disYolu, distaSerbestMi, ge
 import type { Aciklik, GecisliBolum, Kapi } from '../gecis.ts';
 import { govdeGorunumu, hazirMakineModeli, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from '../kurallar.ts';
-import { modelDizisi, modelSahnesi, modelYerlestir, parcaOnizlemesi, vekilMi } from './model.ts';
+import { modelDizisi, modelHareketleri, modelSahnesi, modelYerlestir, parcaOnizlemesi, vekilMi } from './model.ts';
 import type { ModelDizisi, ModelYerlesimi } from './model.ts';
 import { alanKutusu, duvarParcasi as duvarOlcusu, icindeMi, kapiKonumu, katilar, sahneNesneleri, odaParcalari, parcayaUzaklik, rafKutusu } from './geometri.ts';
 import type { Dikdortgen, Parca } from './geometri.ts';
@@ -1078,7 +1078,7 @@ export class SahneMotoru {
       const az = -Math.max(n.olcu.d, boyut.z) / 2 + 0.15;
       n.andon = andonKolonu(n.govde, this.palet, m, this.hale, ax, az, Math.min(2.6, Math.max(1.6, boyut.y)));
       n.ust = Math.max(boyut.y, n.andon.ust);
-      n.anim = {};
+      n.anim = modelHareketleri(kok);
       n.ekran = null;
       const kutu_ = this.secimKutulari.find((k) => k.userData.anahtar === anahtar);
       if (kutu_) {

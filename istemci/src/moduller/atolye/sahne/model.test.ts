@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, BoxGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Vector3 } from 'three';
-import { modelDizisi, modelYerlestir, parcaOnizlemesi, raftaYatis } from './model.ts';
+import { Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Object3D, Vector3 } from 'three';
+import { modelDizisi, modelHareketleri, modelYerlestir, parcaOnizlemesi, raftaYatis } from './model.ts';
 
 // Milimetre ve Z yukarı çizilmiş 2000 x 1000 x 500 mm kutu (CAD'deki gibi: yükseklik Z).
 const kutu = () => new Mesh(new BoxGeometry(2000, 1000, 500), new MeshBasicMaterial());
@@ -128,5 +128,37 @@ describe('model yerleşimi', () => {
     expect(o.y).toBeCloseTo(0.08);
     expect(k.min.y).toBeCloseTo(b.y);
     expect(dizi.yatis.sigdi).toBe(true);
+  });
+});
+
+describe('model hareketleri', () => {
+  const parca = (ad: string, x = 0, y = 0, acik?: unknown) => {
+    const o = new Object3D();
+    o.name = ad;
+    o.position.set(x, y, 0);
+    if (acik !== undefined) o.userData.acik = acik;
+    return o;
+  };
+
+  it('adı belli parçalar bulunur; kapı açık konumu kayma payından, kafa yüksekliği kendi konumundan', () => {
+    const sahne = new Group();
+    const ic = new Group();
+    ic.add(parca('kapi', 0.3, 1.2, -0.95), parca('kafa', 0.3, 1.75), parca('besik'));
+    sahne.add(ic, parca('ayna'));
+    const { kok } = modelYerlestir(sahne, { birim: 'm', yukari: 'y', donus: 0, sigdir: false }, null);
+    const a = modelHareketleri(kok);
+    expect(a.kapilar).toHaveLength(1);
+    expect(a.kapilar?.[0]?.kapali).toBeCloseTo(0.3);
+    expect(a.kapilar?.[0]?.acik).toBeCloseTo(-0.65);
+    expect(a.kafa?.name).toBe('kafa');
+    expect(a.kafaY).toBeCloseTo(1.75);
+    expect(a.besik?.name).toBe('besik');
+    expect(a.ayna?.name).toBe('ayna');
+  });
+
+  it('kayma payı olmayan ya da sayı olmayan kapı hareket almaz; adsız model durağandır', () => {
+    const sahne = new Group();
+    sahne.add(parca('kapi_sol', 0, 0), parca('kapi_sag', 0, 0, 'cok'), parca('kapi_ust', 0, 0, 0), new Mesh(new BoxGeometry(1, 1, 1)));
+    expect(modelHareketleri(sahne)).toEqual({});
   });
 });
