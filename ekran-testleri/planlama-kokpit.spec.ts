@@ -228,7 +228,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     // Taşıma taslağa yazılır, plan taslağın görünümünde yeniden dizilir. Geri taslağın değişiklik sayısını gösterir; geri alınınca taslak boşalır.
     await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['tasi', 'diz']);
     expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
-    const geri = kokpit.getByRole('group', { name: 'Geri' }).getByRole('button', { name: /Geri/ });
+    const geri = kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ });
     const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
     await expect(cubuk.getByText('Taslak · 1 değişiklik')).toBeVisible();
@@ -737,7 +737,7 @@ test('Kokpit 3335-2b: Planla menüsünde geride kalanları yeniden planla; sayı
   await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
   expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }]);
   await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
-  await kokpit.getByRole('group', { name: 'Geri' }).getByRole('button').click();
+  await kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button').click();
   await expect.poll(() => t.s.satirlar.length).toBe(0);
   expect(ag.hatalar).toEqual([]);
 });
@@ -792,7 +792,7 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
   await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
   expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S4'] }]);
   await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
-  await kokpit.getByRole('group', { name: 'Geri' }).getByRole('button').click();
+  await kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button').click();
   await expect.poll(() => t.s.satirlar.length).toBe(0);
 
   // Seçerek: yön satırın içinde; İleriye var olan plana alma komutunu yazar.
@@ -1160,7 +1160,7 @@ test('Kokpit 3317-2: veri değişikliği satırında Etkisini gör, önce ve son
   // Toplu düğme ortak planın bekleyenlerini sayar (2); not farkı söyler.
   await expect(liste).toContainText('1 veri değişikliği taslağınızda uygulandı, listede durmaz');
   await expect(kokpit.getByRole('region', { name: 'Taslak' })).toContainText('Taslak · 1 değişiklik');
-  await expect(kokpit.getByRole('group', { name: 'Geri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
+  await expect(kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
   await tasma();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-2-uygulandi-${bilgi.project.name}.png`, fullPage: true });
   expect(ag.hatalar).toEqual([]);
@@ -1245,7 +1245,7 @@ test('Kokpit 3317-3: plan geride satırında Etkisini gör, önce ve sonra; Uygu
   await expect(ozet).toHaveText('Plan güncel');
   expect(t.satirlar.map((x) => x.komut)).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }, { tur: 'diz', isler: ['S1'] }]);
   await expect(kokpit.getByRole('region', { name: 'Taslak' })).toContainText('Taslak · 1 değişiklik');
-  await expect(kokpit.getByRole('group', { name: 'Geri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
+  await expect(kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
   await tasma();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-3-uygulandi-${bilgi.project.name}.png`, fullPage: true });
   expect(ag.hatalar).toEqual([]);
@@ -1418,6 +1418,73 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
   await freze.click();
   await expect(yerler).toBeHidden();
   await expect(kokpit.getByRole('complementary')).toHaveCount(0);
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3365-2: Ctrl ile çoklu seçim ve birlikte kaydırma, Geri sonrası İleri (Ctrl+Y), sürekli yakınlaştırma ve Seçileni sığdır. Telefonda tahta
+// ve ölçek yoktur (liste).
+test('Kokpit 3365-2: çoklu seçim birlikte kayar; Geri sonra İleri; yakınlaştırma sürgüsü ve Seçileni sığdır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  if (bilgi.project.name === 'g360') {
+    await expect(kokpit.getByRole('slider', { name: 'Yakınlaştırma' })).toBeHidden();
+    await tasma();
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
+  // Çoklu seçim: S2.a1 seçilir, Ctrl ile S3.a1 eklenir; → ikisini yarım saat kaydırır (her biri ayrı taşıma, tezgâhı aynı).
+  await tahta.locator('[data-is="S2.a1"]').click();
+  await tahta.locator('[data-is="S3.a1"]').click({ modifiers: ['Control'] });
+  await expect(tahta.locator('[data-coklu]')).toHaveCount(2);
+  await expect(kokpit.getByText('2 iş seçili · birlikte kayar')).toBeVisible();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-coklu-${bilgi.project.name}.png` });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => t.tasinan().length).toBe(2);
+  expect(t.tasinan().map((k) => [k['isId'], k['tezgah'], k['baslangic']]).sort()).toEqual([['S2.a1', 'M2', 32.5], ['S3.a1', 'M1', 32.5]]);
+  await expect.poll(() => t.s.satirlar.filter((x) => x.komut.tur !== 'diz').length).toBe(2);
+  // Geri sonuncuyu alır; İleri görünür ve Ctrl+Y onu yeniden yazar, sonra kalkar.
+  const gi = kokpit.getByRole('group', { name: 'Geri ve İleri' });
+  await expect(gi.getByRole('button', { name: /Geri/ })).toBeEnabled();
+  await gi.getByRole('button', { name: /Geri/ }).click();
+  await expect(gi.getByRole('button', { name: /İleri/ })).toBeEnabled();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-ileri-${bilgi.project.name}.png` });
+  await page.keyboard.press('Control+y');
+  await expect.poll(() => t.tasinan().length).toBe(3);
+  await expect(gi.getByRole('button', { name: /İleri/ })).toHaveCount(0);
+  await expect.poll(() => t.s.satirlar.filter((x) => x.komut.tur !== 'diz').length).toBe(2);
+  // Düz tıklama kümeyi bırakır.
+  await page.keyboard.press('Escape');
+  await expect(tahta.locator('[data-coklu]')).toHaveCount(0);
+  // Yakınlaştırma: sürgü en yakına Gün'ü basar; Seçileni sığdır seçili işi genişletir.
+  const olcek = kokpit.getByRole('group', { name: 'Ölçek' });
+  const surgu = olcek.getByRole('slider', { name: 'Yakınlaştırma' });
+  await surgu.fill('100');
+  await expect(olcek.getByRole('button', { name: 'Gün', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await olcek.getByRole('button', { name: '3 gün', exact: true }).click();
+  const en = async () => (await tahta.locator('[data-is="S1.a1"]').boundingBox())?.width ?? 0;
+  const once = await en();
+  await tahta.locator('[data-is="S1.a1"]').click();
+  await olcek.getByRole('button', { name: 'Seçileni sığdır' }).click();
+  await expect.poll(en).toBeGreaterThan(once * 2);
+  // İş tahtanın görünen genişliğinin içindedir (yatayda).
+  await expect.poll(async () => {
+    const k = await tahta.boundingBox(), b = await tahta.locator('[data-is="S1.a1"]').boundingBox();
+    return k && b ? b.x >= k.x && b.x + b.width <= k.x + k.width : false;
+  }).toBe(true);
+  await tahta.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-sigdir-${bilgi.project.name}.png` });
   await tasma();
   expect(ag.hatalar).toEqual([]);
 });

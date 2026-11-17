@@ -71,7 +71,7 @@ describe('Kokpit adıma sorun bildir (3335-3b)', () => {
     fireEvent.change(within(panel).getByLabelText('Kaç saat uzadı'), { target: { value: '1' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Etkisini gör' }));
     fireEvent.click(within(await screen.findByRole('region', { name: 'Uzamanın etkisi' })).getByRole('button', { name: 'Vazgeç' }));
-    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
     expect(await within(panel).findByRole('button', { name: 'Etkisini gör' })).toBeTruthy();
   });
 
@@ -136,7 +136,7 @@ describe('Kokpit adıma sorun bildir: malzeme yok ve kişi yok (3335-3c)', () =>
     fireEvent.click(within(panel).getByRole('button', { name: 'Etkisini gör' }));
     fireEvent.click(within(await screen.findByRole('region', { name: 'Beklemenin etkisi' })).getByRole('button', { name: 'Vazgeç' }));
     expect(yazilan).toEqual([{ tur: 'adim-bekler', isId: 'ORN-1.10', kadar: 40, neden: 'kisi' }]);
-    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
   });
 
   it('bildirilmiş bekleme özetle yazar, panel o türle ve o anla açılır; Bildirimi kaldır silme komutunu yazar; geçmişte kalan kayıt gösterilmez', async () => {

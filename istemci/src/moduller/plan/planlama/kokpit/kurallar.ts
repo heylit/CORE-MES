@@ -200,6 +200,23 @@ export type KokpitOlcegi = (typeof OLCEKLER)[number][0];
 // Bir saatin ekrandaki eni. Ay ve Yıl'da tahta yük hücrelerine döner (hücre: gün ya da hafta).
 export const SAAT_ENI: Record<KokpitOlcegi, number> = { G: 44, '3': 15, H: 6.5, A: 1.5, Y: 0.14 };
 export const uzakMi = (o: KokpitOlcegi): boolean => o === 'A' || o === 'Y';
+// Sürekli yakınlaştırma (3365): yakın ölçeklerde (Gün, 3 gün, Hafta) saat eni bu aralıkta serbesttir. Altına inen Ay'a geçer.
+export const YAKIN_EN_AZ = SAAT_ENI.H * 0.6, YAKIN_EN_COK = SAAT_ENI.G * 2;
+const YAKINLAR = ['G', '3', 'H'] as const;
+export const yakinSinirla = (px: number): number => Math.min(YAKIN_EN_COK, Math.max(YAKIN_EN_AZ, px));
+// Saat enine en yakın düğme (logaritmik uzaklık): ölçek düğmelerinden hangisinin basılı görüneceği ve gün yazısının biçimi.
+export function yakinOlcegi(px: number): KokpitOlcegi {
+  return YAKINLAR.reduce<KokpitOlcegi>((a, k) => (Math.abs(Math.log(px / SAAT_ENI[k])) < Math.abs(Math.log(px / SAAT_ENI[a])) ? k : a), 'G');
+}
+// Sürgü 0..100, logaritmik: eşit adım eşit oranda büyütür.
+export const surguDegeri = (px: number): number => Math.round((Math.log(yakinSinirla(px) / YAKIN_EN_AZ) / Math.log(YAKIN_EN_COK / YAKIN_EN_AZ)) * 100);
+export const surgudenEn = (v: number): number => YAKIN_EN_AZ * (YAKIN_EN_COK / YAKIN_EN_AZ) ** (Math.min(100, Math.max(0, v)) / 100);
+// Seçileni sığdır: [bas, son] aralığı genişliğe kenarlarda payla sığar. Sonuç yakın aralıkta sınırlanır; odak görünümün sol kenarındaki saattir.
+export function sigdirma(bas: number, son: number, genislik: number): { px: number; odak: number } {
+  const sure = Math.max(0.5, son - bas), pay = sure * 0.075;
+  const px = yakinSinirla(genislik / (sure + 2 * pay));
+  return { px, odak: bas - pay };
+}
 export function olcekKomsusu(o: KokpitOlcegi, yon: 1 | -1): KokpitOlcegi {
   const i = OLCEKLER.findIndex(([k]) => k === o) + yon;
   return OLCEKLER[Math.max(0, Math.min(OLCEKLER.length - 1, i))]?.[0] ?? o;

@@ -25,11 +25,11 @@ import { useSatirEtkisi } from './satir-etkisi.ts';
 import { bekleyenDegisiklikleri, degisiklikler, gerideEmirleri, gorunumdeBekleyenler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, adimBeklemeleri, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
-import { Tahta, type OkKipi } from './Tahta.tsx';
+import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
@@ -63,6 +63,8 @@ const Sayi = ({ n }: { n: number }) => (n > 0 ? <b className="tc-pyq-rozet" aria
 const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
 // Sorun turu şimdilik kapalıdır (3304 a: üst şeritte benzer düğmeler azaltıldı); girişi bu değerle geri gelir.
 const TUR_ACIK = false as boolean;
+// Ctrl + tekerleğin bir adımı saat enini bu oranda büyütür ya da küçültür; sığdırmada tahta ölçülemezse (ilk çizim) bu genişlik alınır.
+const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000;
 const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
 
 // Üst şeritte açılır menü (3297): az kullanılan araçlar ve planın yönü tek düğmenin altında durur. Dışarı tıklamak, Esc ve seçim kapatır.
@@ -133,6 +135,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [goz, setGoz] = useState<Goz>('T');
   const [olcek, setOlcek] = useState<KokpitOlcegi>('3');
   const [odak, setOdak] = useState<number | null>(null);
+  // Sürekli yakınlaştırma (3365): null ise ölçeğin sabit saat enidir.
+  const [saatEni, setSaatEni] = useState<number | null>(null);
   // Telefonda gün gün tablo dardır; adım adım düzen açılır.
   const [duzen, setDuzen] = useState<MatrisDuzeni>(() => (darEkran() ? 'Y' : 'A'));
   const [ara, setAra] = useState('');
@@ -220,7 +224,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       : { tur: 'plana-al', emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) };
     const tamam = await taslak.yaz(k);
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
-    if (!tamam && yonYaz && !(await taslak.geriAl())) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
+    if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
     if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : yonYaz ? 'Emir teslimden geriye plana alındı (iki değişiklik: yön ve yerleşim); Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
     return tamam;
   }, [taslak, yazabilir, bildir, c]);
@@ -309,13 +313,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar, zaman]);
 
   // --- geri ---
-  // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri yoktur: alınan değişiklik yeniden yapılır.
-  const adim = tOzet.n;
+  // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri (3365) geri alınanı taslağa yeniden yazar.
+  const adim = tOzet.n, ileriAdim = taslak?.ileriAdim ?? 0;
   const geri = useCallback((): boolean => {
     if (!taslak || mesgul || adim === 0) return false;
     void taslak.geriAl();
     return true;
   }, [taslak, mesgul, adim]);
+  const ileri = useCallback((): boolean => {
+    if (!taslak || mesgul || ileriAdim === 0) return false;
+    void taslak.ileriAl();
+    return true;
+  }, [taslak, mesgul, ileriAdim]);
 
   // --- önce / sonra ---
   // 3B'nin Yük ve gecikme ile Önce / sonra bakışları da onaylı planı okur (kart 3208 a).
@@ -325,7 +334,27 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const once = onceAcik && canli.tur === 'tamam' ? canli.canli : null;
 
   // --- ölçek ---
-  const olcekSec = useCallback((x: KokpitOlcegi, saat: number | null = null) => { setOlcek(x); setOdak(saat); }, []);
+  const olcekSec = useCallback((x: KokpitOlcegi, saat: number | null = null) => { setOlcek(x); setOdak(saat); setSaatEni(null); }, []);
+  const simdikiEn = uzakMi(olcek) ? SAAT_ENI[olcek] : saatEni ?? SAAT_ENI[olcek];
+  // Yakınlaşırken görünümün ortasındaki saat yerinde kalır (tahta kaydırması ölçekle yeniden hesaplanır).
+  const yakinlas = useCallback((px: number) => {
+    const yeni = yakinSinirla(px), k = document.querySelector<HTMLElement>('.tc-pyq-tahta');
+    const yarim = (k?.clientWidth ?? 0) / 2, ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    // Ortadaki saat: içerikte ad sütunundan sonra gelen yer. Yeni ende aynı saat ortada kalsın diye tahtanın kaydırdığı odak buna göre seçilir.
+    const orta = k && yarim > 0 ? m.bas + (k.scrollLeft + yarim - ad) / simdikiEn : null;
+    setOdak(orta === null ? null : orta + (ad - yarim + ODAK_PAYI) / yeni);
+    setSaatEni(yeni); setOlcek(yakinOlcegi(yeni));
+  }, [m.bas, simdikiEn]);
+  // Seçileni sığdır; işlev seçim ve kart okunduktan sonra kurulur (aşağıda), klavye buradan çağırır.
+  const sigdirSon = useRef<() => void>(() => undefined);
+  const tekerSon = useRef<(ev: WheelEvent) => void>(() => undefined);
+  tekerSon.current = (ev: WheelEvent): void => {
+    if (uzakMi(olcek)) { setOdak(null); setOlcek((x) => olcekKomsusu(x, ev.deltaY > 0 ? 1 : -1)); return; }
+    const yeni = simdikiEn * (ev.deltaY > 0 ? 1 / TEKER_ORANI : TEKER_ORANI);
+    // Hafta'nın da altına uzaklaşınca Ay'a geçilir (gün yük hücreleri).
+    if (yeni < YAKIN_EN_AZ - 1e-6) { olcekSec('A'); return; }
+    yakinlas(yeni);
+  };
   const gunAc = useCallback((g: number) => {
     if (g >= Math.round((m.son - m.bas) / 24)) { bildir('bilgi', 'Bu gün planın ötesinde; emirler plana alınınca tahtada görünür.'); return; }
     // Yıl'dan haftaya (Ay ölçeği), öteki ölçeklerden güne inilir.
@@ -335,7 +364,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     const el = kok.current; if (!el) return undefined;
     const teker = (ev: WheelEvent): void => {
       if (!ev.ctrlKey || !(ev.target as Element).closest('.tc-pyq-tahta')) return;
-      ev.preventDefault(); setOdak(null); setOlcek((x) => olcekKomsusu(x, ev.deltaY > 0 ? 1 : -1));
+      ev.preventDefault(); tekerSon.current(ev);
     };
     el.addEventListener('wheel', teker, { passive: false });
     return () => { el.removeEventListener('wheel', teker); };
@@ -395,10 +424,37 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!e) return;
     sec(e.id, null); setGoster(e.adimlar.find((a) => m.isler[a.id])?.id ?? null);
   }, [gorunen, secEmir, sec, m]);
+  // Çoklu seçim (3365): Ctrl, Cmd ya da Shift ile tıklanan işler. İlk ek tıklamada o an seçili iş de kümeye girer; seçim kümenin dışına çıkınca
+  // (düz tıklama, Esc, boş alan) küme boşalır. Küme birlikte kayar: her iş kendi taşımasıdır, sıraya girer, Geri her birini ayrı alır.
+  const [coklu, setCoklu] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => { if (coklu.size > 0 && (secIs === null || !coklu.has(secIs))) setCoklu(new Set()); }, [secIs]);
+  const cokluSec = useCallback((id: string) => {
+    if (!m.isler[id]) return;
+    const n = new Set(coklu.size === 0 && secIs !== null ? [secIs] : coklu);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    const son = n.has(id) ? id : [...n].at(-1) ?? null;
+    setCoklu(n);
+    sec(son !== null ? m.isler[son]?.job ?? null : null, son);
+  }, [coklu, secIs, m, sec]);
+  // Kümeyi dS saat kaydırır. Sağa kayarken en geç başlayan, sola kayarken en erken başlayan önce taşınır: işler birbirini itmesin.
+  const grupKaydir = useCallback((dS: number) => {
+    const l = [...coklu].map((id) => m.isler[id]).filter((x) => x !== undefined);
+    const engelli = l.filter((x) => tasinabilir(x) !== null);
+    if (engelli.length > 0) bildir('bilgi', `${String(engelli.length)} iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.`);
+    for (const x of l.filter((y) => tasinabilir(y) === null).sort((a, b) => (dS > 0 ? b.S - a.S : a.S - b.S))) {
+      const h = kuyruk.current.get(x.id) ?? (suren.current?.isId === x.id ? suren.current : undefined);
+      tasiDene(x.id, h?.tezgah ?? x.m, (h?.S ?? x.S) + dS);
+    }
+  }, [coklu, m, bildir, tasiDene]);
   // Seçili iş ok tuşlarıyla kayar: ← → yarım saat (Shift ile dört saat), ↑ ↓ adımın öteki aday tezgâhı. Her basış bir taşımadır.
   const okla = useCallback((tus: string, buyuk: boolean): boolean => {
     const x = secIs ? m.isler[secIs] : undefined;
     if (!x || !yazabilir || tahtasiz(goz)) return false;
+    if (coklu.size > 1) {
+      if (tus === 'arrowleft' || tus === 'arrowright') { grupKaydir((tus === 'arrowleft' ? -1 : 1) * (buyuk ? 4 : 0.5)); return true; }
+      bildir('bilgi', 'Çoklu seçimde tezgâh değişmez; tek iş seçin.');
+      return true;
+    }
     const engel = tasinabilir(x);
     if (engel) { bildir('bilgi', engel); return true; }
     // Sırada bekleyen taşıması varsa yeni basış ondan devam eder.
@@ -409,7 +465,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (i < 0 || !t || t === m0) { bildir('bilgi', 'Bu adımın başka aday tezgâhı yok.'); return true; }
     tasiDene(x.id, t, S0);
     return true;
-  }, [secIs, m, yazabilir, goz, emir, bildir, tasiDene]);
+  }, [secIs, m, yazabilir, goz, emir, bildir, tasiDene, coklu, grupKaydir]);
   useEffect(() => {
     const tus = (ev: KeyboardEvent): void => {
       if (yazimda() || ev.altKey || document.querySelector('[role="dialog"]')) return;
@@ -418,10 +474,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         // Turda geri ve ileri turun kendi adımlarıdır (← →).
         if (tur) return;
         if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); geri(); }
+        else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); ileri(); }
         return;
       }
-      if (k === '+' || k === '=') { setOdak(null); setOlcek((x) => olcekKomsusu(x, -1)); }
-      else if (k === '-') { setOdak(null); setOlcek((x) => olcekKomsusu(x, 1)); }
+      if (k === '+' || k === '=') { setOdak(null); setSaatEni(null); setOlcek((x) => olcekKomsusu(x, -1)); }
+      else if (k === '-') { setOdak(null); setSaatEni(null); setOlcek((x) => olcekKomsusu(x, 1)); }
+      else if (k === 'f' && !tur) sigdirSon.current();
       else if (k === 'b') setOnceAcik((x) => !x);
       else if (k === 'j') sorunSec(1);
       else if (k === 'k') sorunSec(-1);
@@ -434,7 +492,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     };
     document.addEventListener('keydown', tus);
     return () => { document.removeEventListener('keydown', tus); };
-  }, [geri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
+  }, [geri, ileri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
 
   // --- canlıya al ---
   // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
@@ -474,6 +532,20 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const yanan = useMemo(() => { const k = !vurgu || kart === null ? undefined : kartlar.find((x) => x.kok === kart); return k && k.yerlesen > 0 ? new Set(k.emirler.map((e) => e.id)) : null; }, [vurgu, kart, kartlar]);
   // Okların açıklaması tahtada ok olabilecekken görünür: seçili iş (Seçili iş) ya da seçili sipariş veya iş (Seçili sipariş).
   const okAcik = !tur && okKipi !== 'yok' && (okKipi === 'is' ? secIs !== null : yanan !== null || secIs !== null);
+  // Seçileni sığdır (F): çoklu seçim, seçili iş, seçili sipariş ya da yanan kartın planlı işleri görünür genişliğe sığar.
+  const sigdir = useCallback((): void => {
+    const idler = coklu.size > 1 ? [...coklu] : secIs !== null ? [secIs]
+      : Object.values(m.isler).filter((x) => (secEmir !== null ? x.job === secEmir : yanan?.has(x.job) ?? false)).map((x) => x.id);
+    const l = idler.map((id) => m.isler[id]).filter((x) => x !== undefined);
+    if (l.length === 0) { bildir('bilgi', 'Sığdırmak için bir iş ya da sipariş seçin.'); return; }
+    // Görünen saat alanı: tahtanın genişliği eksi yapışık ad sütunu ve odağın sol payı.
+    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const gorunen = (k?.clientWidth ?? 0) - ad - ODAK_PAYI;
+    const r = sigdirma(Math.min(...l.map((x) => x.S)), Math.max(...l.map((x) => x.C)), gorunen > 0 ? gorunen : SIGDIRMA_ENI);
+    if (tahtasiz(goz)) setGoz('T');
+    setSaatEni(r.px); setOlcek(yakinOlcegi(r.px)); setOdak(r.odak);
+  }, [coklu, secIs, secEmir, yanan, m, bildir, goz]);
+  sigdirSon.current = sigdir;
   const secimiKaldir = useCallback(() => { sec(null, null); setVurgu(false); }, [sec]);
   const kartSec = useCallback((k: string) => { if (k === kart && vurgu) secimiKaldir(); else { setKart(k); setVurgu(true); } }, [kart, vurgu, secimiKaldir]);
   // Karta bağlı değişiklikler (saha olayı, geride kalan iş) kartta sayıyla görünür.
@@ -575,11 +647,19 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </span>
         <span className="tc-pyq-seg tc-pyq-olcek" role="group" aria-label="Ölçek">
           {OLCEKLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={olcek === k} onClick={() => { olcekSec(k); }}>{ad}</button>)}
+          <input
+            type="range" className="tc-pyq-yakin" min={0} max={100} step={1} aria-label="Yakınlaştırma" title="Yakınlaştırma (Ctrl + tekerlek)"
+            value={surguDegeri(simdikiEn)} disabled={uzakMi(olcek)} onChange={(ev) => { yakinlas(surgudenEn(Number(ev.target.value))); }}
+          />
+          <button type="button" aria-label="Seçileni sığdır" title="Seçileni sığdır (F)" onClick={sigdir}><Simge ad="fit" boyut="k" /></button>
         </span>
-        <span className="tc-pyq-gi" role="group" aria-label="Geri">
+        <span className="tc-pyq-gi" role="group" aria-label="Geri ve İleri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
+          {/* İleri yalnız geri alınmış değişiklik varken görünür: araç satırı dar ekranda kalabalıklaşmasın. */}
+          {ileriAdim > 0 && <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y): geri alınan değişikliği yeniden yapar" disabled={!yazabilir || mesgul || tur !== null} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriAdim} /></button>}
         </span>
         {sirada > 0 && <span className="tc-pyq-sirada" role="status">{sirada} taşıma sırada</span>}
+        {coklu.size > 1 && <span className="tc-pyq-sirada" role="status">{coklu.size} iş seçili · birlikte kayar</span>}
         {TUR_ACIK && <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>}
         <Acilir ad="Araçlar" etiket="Araçlar" simge="wrench" etkin={onceAcik || ayarAcik || kapasiteAcik}>
           {(kapat) => (
@@ -658,6 +738,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+                  coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null}
                 />
                 <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} sorunBildir={sorunBildir} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">

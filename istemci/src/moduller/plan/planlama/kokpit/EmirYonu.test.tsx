@@ -39,7 +39,7 @@ describe('Kokpit emrin planlama yönü (3282 1c)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ORN-1 yönünü değiştir' }));
     fireEvent.click(screen.getByRole('button', { name: 'Teslimden geriye' }));
     fireEvent.click(within(await screen.findByRole('region', { name: 'Yönün etkisi' })).getByRole('button', { name: 'Vazgeç' }));
-    await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
     cleanup();
     kur(ornekCalisma(), false);
     expect(screen.getByRole('button', { name: 'ORN-1 yönünü değiştir' }).hasAttribute('disabled')).toBe(true);

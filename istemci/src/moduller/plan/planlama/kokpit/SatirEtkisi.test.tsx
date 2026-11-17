@@ -66,7 +66,7 @@ describe('satır etkisi kancası', () => {
     expect(result.current).toMatchObject({ id: 'a', birlikte: 2, butun: true });
     act(() => { result.current?.vazgec(); });
     await waitFor(() => { expect(result.current?.id).toBeNull(); });
-    expect(t.geriAl).toHaveBeenCalledWith(false);
+    expect(t.geriAl).toHaveBeenCalledWith(false, false);
     expect(t.dizmeyiYaz).not.toHaveBeenCalled();
   });
 
