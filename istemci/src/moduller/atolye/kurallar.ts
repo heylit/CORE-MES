@@ -267,6 +267,17 @@ export function govdeGorunumu(tip: IstasyonTipi | string, ad: string, modelTuru:
   return { cins: GOVDE_CINSI[k.govde], dis: d ? { en: d.en / 1000, derinlik: d.derinlik / 1000, yukseklik: d.yukseklik / 1000 } : null };
 }
 
+// Katalog modelinin depoyla gelen hazır 3B gövdesi (`istemci/public/makine-modelleri/<model turu>.glb`, glTF: metre, Y yukarı).
+// Yalnız talaşlı ve kalite istasyonunda; Çizim Merkezi ve kütüphane modeli yoksa denenir, açılmazsa tipten çizilen gövde kalır.
+const HAZIR_MODEL: ReadonlySet<string> = new Set([
+  'm_dmgdmu50', 'm_dmgdmu60', 'm_dmgdmu75', 'm_dmgdmu95', 'm_dmgnhc5000', 'm_dmgntx3000', 'm_dmgnlx2500', 'm_dmgdmf360',
+]);
+
+export function hazirMakineModeli(tip: IstasyonTipi | string, modelTuru: string | null | undefined): string | null {
+  if (!modelTuru || (tip !== 'talasli' && tip !== 'kalite')) return null;
+  return HAZIR_MODEL.has(modelTuru) ? modelTuru : null;
+}
+
 // Haritadaki nesnenin model türü: makine yerinde makinenin kendisi, istasyon yerinde istasyonun tek makinesi (birden çoksa bilinmez).
 export function sahneModelTurleri(y: YerlesimCevabi): Map<string, string> {
   const h = new Map<string, string>();
