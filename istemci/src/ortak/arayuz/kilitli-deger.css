@@ -1,0 +1,13 @@
+.tc-kilitli {
+  display: inline-grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: center;
+  padding: var(--b-1) var(--b-2); border-radius: var(--b-1);
+  background: color-mix(in srgb, var(--muted) 10%, transparent); color: var(--muted); text-align: left;
+}
+.tc-kilitli .tc-simge { grid-row: span 2; }
+.tc-kilitli b { font-size: var(--yazi-xs); font-weight: 600; color: var(--ink); }
+.tc-kilitli small { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-kilitli-not {
+  display: flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--b-1);
+  font-size: var(--yazi-xs); color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent);
+}
+.tc-kilitli-not .tc-simge { flex: none; }
