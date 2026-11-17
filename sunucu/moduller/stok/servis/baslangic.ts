@@ -23,7 +23,8 @@ type Satir = DenetleKomutu['satirlar'][number];
 
 const bos = (x: string | undefined): string | null => (x === undefined || x.trim() === '' ? null : x.trim());
 const bindeMetni = (m: string | undefined): string | null => (m === undefined ? null : bindenMetin(binde(m)));
-const kodAnahtari = (k: string): string => k.trim().toLocaleUpperCase('tr');
+// Stok kodu ASCII'dir ve malzemeler de dil kuralsız büyütür: Türkçe büyük harf 'mil'i MİL yapar, kart bulunmaz.
+const kodAnahtari = (k: string): string => k.trim().toUpperCase();
 
 interface CozulenSatir {
   girdi: Satir;
