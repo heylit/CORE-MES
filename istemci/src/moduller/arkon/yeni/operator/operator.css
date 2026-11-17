@@ -1438,3 +1438,9 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-depo-bilgi > div { display: flex; justify-content: space-between; gap: var(--b-3); padding: var(--b-2) 0; border-bottom: thin solid var(--edge); }
 .tc-ay1-depo-bilgi dt { color: var(--muted); }
 .tc-ay1-depo-bilgi dd { margin: 0; font-weight: 600; text-align: right; }
+.tc-ay1-depo-kisa { display: none; }
+@media (max-width: 479px) {
+  .tc-ay1-depo-sekmeler > button { flex: 1 1 auto; padding: 0 var(--b-2); }
+  .tc-ay1-depo-ad { display: none; }
+  .tc-ay1-depo-kisa { display: inline; }
+}
