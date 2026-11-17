@@ -33,7 +33,7 @@ const { K } = await import('./satirlar.ts');
 const EMIR: EmirSecenegi = { id: 7, uretimEmriId: 3, emirNo: 'UE-0001', opNo: 10, ad: 'Frezeleme', parcaNo: 'P-1', parcaAd: 'Ornek parca', adet: 5, istasyon: 'CNC-1' } as EmirSecenegi;
 const yetki = (y: Partial<CncYetkisi>): CncYetkisi => ({
   kisi: { id: 1, ad: 'Deneme Kisi' }, yazabilir: false, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false,
-  stokKartiBaglayabilir: false, emirGorebilir: true, saltOnay: false, ...y,
+  stokKartiBaglayabilir: false, emirGorebilir: true, maliyetGorur: false, saltOnay: false, ...y,
 });
 const ac = () => render(<BildirimSaglayici><MemoryRouter initialEntries={['/cnc-kurulum/yeni/kurulum']}><Kurulum /></MemoryRouter></BildirimSaglayici>);
 

@@ -15,7 +15,7 @@ function kur(ayar: Partial<KayitAyari> = {}, ilk: Record<string, { deger: string
     surum += 1;
     return { kayit: { surum } };
   });
-  const y = new KayitYazici({ isle, yazabilir: true, onek: ONEK, emirAnahtari: EMIR, uyar: (i) => { uyarilar.push(i); }, ...ayar }, ilk);
+  const y = new KayitYazici({ isle, yazabilir: true, maliyetGorur: true, onek: ONEK, emirAnahtari: EMIR, uyar: (i) => { uyarilar.push(i); }, ...ayar }, ilk);
   return { y, istekler, uyarilar, isle };
 }
 
@@ -33,6 +33,20 @@ describe('KayitYazici', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(istekler).toEqual([{ tip: 'kayit-yaz', veri: { anahtar: ANAHTAR, bicim: 'json', deger: { a: 2 }, beklenenSurum: 3 } }]);
     expect(y.surum(ANAHTAR)).toBe(2);
+  });
+
+  it('maliyet yetkisi yoksa para alanları kayda gönderilmez, ölçüler gider; yetkiliyse hepsi gider', async () => {
+    const durum = { machine: 'f5a', stock: { ax: 40, price: 92.5 }, life: { vc: 180, price: 840, rate: 1750 } };
+    const yetkisiz = kur({ maliyetGorur: false });
+    yetkisiz.y.eylem();
+    yetkisiz.y.degistir(ANAHTAR, JSON.stringify(durum));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(yetkisiz.istekler[0]?.veri['deger']).toEqual({ machine: 'f5a', stock: { ax: 40 }, life: { vc: 180 } });
+    const yetkili = kur({ maliyetGorur: true });
+    yetkili.y.eylem();
+    yetkili.y.degistir(ANAHTAR, JSON.stringify(durum));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(yetkili.istekler[0]?.veri['deger']).toEqual(durum);
   });
 
   it('metni yazma anında üretir; JSON olmayan metin düz metin gider; silme sürümle gider', async () => {

@@ -1,3 +1,4 @@
+import { paraAlanlariniAyikla } from './maliyet.ts';
 import { kopruHatasi, type KopruIsleyici } from '../kopru.ts';
 
 // Kayıt yazma katmanı. Kurallar eski ekrandakiyle aynıdır (cerceve-kopru.ts "yerel depo"): anahtar başına bir kayıt, sürüm
@@ -20,6 +21,8 @@ export interface KayitAyari {
   isle: KopruIsleyici;
   // Yazma işlemi (ya da hazırlık onayı) yoksa değişiklikler yalnız açık sekmede kalır.
   yazabilir: boolean;
+  // Maliyet görmeyen kişide para alanları ekranda hiç dolmaz; kayda da gönderilmez (sunucu kayıttakini korur).
+  maliyetGorur: boolean;
   onek: string;
   // Emir ve emir başına saklanan kurulum anahtarları genel uçtan yazılmaz (sunucu emir seçimiyle değiştirir).
   emirAnahtari: string;
@@ -128,6 +131,7 @@ export class KayitYazici {
       // JSON ise ayrıştırılmış saklanır (sunucuda sorgulanabilir); değilse düz metin.
       let govde: { bicim: 'json' | 'metin'; deger: unknown };
       try { govde = { bicim: 'json', deger: JSON.parse(metin) as unknown }; } catch { govde = { bicim: 'metin', deger: metin }; }
+      if (!this.ayar.maliyetGorur && govde.bicim === 'json') govde = { ...govde, deger: paraAlanlariniAyikla(govde.deger) };
       const veri = { anahtar, ...govde, beklenenSurum: beklenen };
       if (new TextEncoder().encode(JSON.stringify(veri)).length > this.ayar.azamiBayt) {
         if (!this.buyukUyarildi) { this.buyukUyarildi = true; this.ayar.uyar(BUYUK_ILETISI); }

@@ -108,7 +108,8 @@ describe('cnc-kurulum maliyet kilidi (3401-1 a)', () => {
     for (const ad of ['cam', 'planlama']) {
       const k = await durumOku(ad);
       assert.deepEqual(k?.deger, OLCULER, ad);
-      for (const [g, a] of PARA_ALANLARI) assert.equal(k?.deger[g]?.[a] ?? null, null);
+      const deger: Record<string, Record<string, unknown> | undefined> | undefined = k?.deger;
+      for (const [g, a] of PARA_ALANLARI) assert.equal(deger?.[g]?.[a] ?? null, null);
       assert.deepEqual(paraliAnahtarlar(k?.deger), [], ad);
     }
   });
