@@ -1,7 +1,7 @@
 import type { MotorAyarlari, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 
-// Seçimle verilen ayarlar; acil iş payı sayıdır, ayrı alandır (ACIL_PAY).
-export type SecimAyari = Exclude<keyof MotorAyarlari, 'acilPay'>;
+// Seçimle verilen ayarlar; acil iş payı ve fason süresi sayıdır, ayrı alandır (ACIL_PAY, FASON_GUN).
+export type SecimAyari = Exclude<keyof MotorAyarlari, 'acilPay' | 'fasonGun'>;
 // Plan motoru ayarlarının ekrandaki adları (kart 811; 771 a, 772 a, 776 b). Sıra seçim kutusundaki sıradır, ilki varsayılandır.
 export const AYAR_SECENEKLERI: { [K in SecimAyari]: { baslik: string; ipucu: string; secenekler: readonly { deger: MotorAyarlari[K]; baslik: string }[] } } = {
   amac: {
@@ -76,6 +76,22 @@ export function yuzdeOku(metin: string, sinir: number): number | null {
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0 || n / 100 > sinir) return null;
   return Math.round(n * 10) / 1000;
+}
+
+// 3355 a: firması belirlenmemiş ya da süresi ve sipariş tarihi olmayan fason adımın dönüş süresi; adım bu süreyle yerleşir.
+export const FASON_GUN = {
+  baslik: 'Fason süresi (gün)',
+  ipucu: 'Rotada süresi, satın almada tarihi olmayan fason adımın dönüş süresi. Firması belirlenmemiş adım da bu süreyle planlanır; satın alma siparişine firma tarihi girilince o tarih geçer. 1 ile 90 arası.',
+};
+// Sunucu şemasındaki sınırla aynı (paylasilan/sozlesme/plan.ts FASON_GUN_SINIRI).
+export const FASON_GUN_SINIRI = { en: 1, cok: 90 } as const;
+export const gunMetni = (gun: number): string => `${String(gun)} gün`;
+// Girilen gün tam sayı ve sınır içindeyse sayı; değilse null (kaydedilmez).
+export function gunOku(metin: string): number | null {
+  const t = metin.trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n >= FASON_GUN_SINIRI.en && n <= FASON_GUN_SINIRI.cok ? n : null;
 }
 
 // Sürüm satırı: kim ne zaman yazdı; hiç sürüm yoksa varsayılan.

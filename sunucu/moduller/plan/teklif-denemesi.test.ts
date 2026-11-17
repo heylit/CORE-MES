@@ -211,6 +211,28 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.ok(r?.plan);
   });
 
+  test('3355: firması belirlenmemiş fason adım yerleşir, ardılı düşmez; kalem fason notunu taşır, süre motor ayarındandır', async () => {
+    // 95: torna, firmasız fason, taşlama. Fason adım "Firma belirlenmedi" hattında motor ayarının süresiyle (w.fasonGun) döner.
+    const rota = { base: null, steps: [
+      { id: 'o-95-10', seq: 10, opNo: 10, opId: '13', stationId: '10', setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [] },
+      { id: 'o-95-20', seq: 20, opNo: 20, opId: '15', stationId: null, fason: true, fasonId: null, setup: 0, cycle: 0, alts: [], altTimes: {}, ins: [] },
+      { id: 'o-95-30', seq: 30, opNo: 30, opId: '14', stationId: '11', setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [] },
+    ] };
+    const kayit = { ...KAYIT, opdefs: [...KAYIT.opdefs, { id: '15', name: 'Kaplama' }], items: [...KAYIT.items, { id: '95', code: 'MM-6', name: 'Ornek kanat', type: 'mamul' }], routes: { ...KAYIT.routes, 95: rota } };
+    const kaynak = { ...KAYNAK, durum: { ...KAYNAK.durum, fasonFirms: [] } };
+    const calisma = tabanli() as { w: Record<string, unknown> };
+    calisma.w = { ...calisma.w, fasonGun: 3 };
+    const r = await teklifDenemesi(istek({ calisma, kayit, kaynak, kalemler: [{ id: 'TK-1', urun: '95', adet: 2 }] }));
+    const k = r?.kalemler[0];
+    assert.equal(k?.tamam, true, JSON.stringify(k?.eksik));
+    const f = k.islemler.find((x) => x.fason)!;
+    assert.equal(f.m, '@~belirsiz');
+    assert.equal(f.C - f.S, 3 * 24);
+    assert.ok(k.islemler.find((x) => x.adim === '30')!.S >= f.C);
+    assert.deepEqual(k.fasonNotu, ['OP 20 Kaplama: firma belirlenmedi; 3 gün ile (Motor ayarları > Fason süresi) hesaplandı']);
+    assert.ok(r?.plan?.hatlar.some((h) => h.m === '@~belirsiz' && h.ad === 'Firma belirlenmedi' && h.fason));
+  });
+
   test('3347: adayı olan ama ufukta yer bulamayan adımda motorun zaman nedeni yazılır', async () => {
     const r = await teklifDenemesi(istek({ kalemler: [{ id: 'TK-1', urun: '60', adet: 1_000_000 }] }));
     const k = r?.kalemler[0];

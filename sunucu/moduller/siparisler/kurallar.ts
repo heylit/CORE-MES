@@ -360,6 +360,8 @@ export interface DenemeKalemi {
   satinalma: { kod: string; miktar: number; birim: string | null; gelis: string }[];
   islemler: DenemeIslemi[];
   eksikVeri: string[];
+  // 3355 a: firması belirlenmemiş fason adımın notu; varsa termin tahminidir. Eski motor vermezse yok.
+  fasonNotu?: string[];
 }
 export interface DenemeSonucu {
   planSurumu: string | null;
@@ -422,7 +424,7 @@ export function denemeCevabi(
     if (k === undefined) {
       return {
         ...ortak, yerlesti: false, bitis: null, planTermini: null, malzemeGelisi: null, satinalma: [], birimMaliyet: null, toplamMaliyet: null, dokum: null,
-        eksikVeri: [],
+        eksikVeri: [], fasonNotu: [],
       };
     }
     const m = kalemMaliyeti(k, Number(s.miktar), g.genelGiderSaatBasi);
@@ -433,7 +435,7 @@ export function denemeCevabi(
       satinalma: k.satinalma.map((a) => ({ kod: a.kod, miktar: String(a.miktar), birim: a.birim, gelis: a.gelis })),
       birimMaliyet: m.birim === null || gizli ? null : m.birim.toFixed(4), toplamMaliyet: gizli ? null : tl(m.toplam),
       // 2669 b: genel gidersiz satırların toplamı da genel gider hariç maliyet olurdu; gizli ayda dökümün bütün tutarları null.
-      dokum: gizli ? m.dokum.map((d) => ({ ...d, tutar: null })) : m.dokum, eksikVeri: eksik,
+      dokum: gizli ? m.dokum.map((d) => ({ ...d, tutar: null })) : m.dokum, eksikVeri: eksik, fasonNotu: k.fasonNotu ?? [],
     };
   });
   const planli = kalemler.filter((k) => !k.plansiz);
@@ -531,6 +533,8 @@ export interface MotorSonucu {
     islemler: { adim: string; makineId: string; fason: boolean; baslangic: string; bitis: string; ayarSaat: number; islemeSaat: number; tl: number | null }[];
     malzemeTl: number | null;
     eksik: string[];
+    // 3355 a: firması belirlenmemiş fason adımın notu (plan verir); eski motor vermezse yok.
+    fasonNotu?: string[];
   }[];
   kayan: { siparis: string; emirNo: string | null; once: string; sonra: string; termin: string | null }[];
   // Plan denemesi şeridi; Reçete ve Rota vermiyorsa yoktur.
@@ -578,7 +582,7 @@ export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu, tekl
         islemler: k.islemler.map((o) => ({
           opId: o.adim, tezgah: o.makineId, fason: o.fason, baslangic: o.baslangic, bitis: o.bitis, ayarSaat: o.ayarSaat, islemeSaat: o.islemeSaat, tl: o.tl,
         })),
-        eksikVeri: k.eksik,
+        eksikVeri: k.eksik, fasonNotu: k.fasonNotu ?? [],
       }];
     }),
     kayanlar: r.kayan.map((x) => ({

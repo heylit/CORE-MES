@@ -504,11 +504,13 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
   }
   const gec = deneme.kayanlar.filter((k) => k.gecikir);
   const gelis = deneme.kalemler.map((k) => k.malzemeGelisi).filter((g): g is string => g !== null).sort().at(-1) ?? null;
+  // 3355 a: firması belirlenmemiş fason adım yerleşir; termin o adımın varsayılan süresine dayandığı için tahminidir.
+  const fasonNotlari = deneme.kalemler.flatMap((k) => (k.fasonNotu ?? []).map((n) => `${k.sira}. ${k.tanim} · ${n}`));
   return (
     <div className="tc-sp-yigin">
       <dl className="tc-sp-termin" aria-label="Termin sonucu">
         <div className="tc-sp-termin-ana">
-          <dt>{deneme.istenenTermin === null || deneme.termin !== deneme.istenenTermin ? 'Termin (plandan)' : 'Girilen termin'}</dt>
+          <dt>{deneme.istenenTermin === null || deneme.termin !== deneme.istenenTermin ? (fasonNotlari.length > 0 ? 'Termin (plandan, tahmini)' : 'Termin (plandan)') : 'Girilen termin'}</dt>
           <dd>{tarihMetni(deneme.termin)}</dd>
           {deneme.terminGun !== null && <dd className="tc-sp-soluk">{`Geçerlilik tarihinden itibaren ${deneme.terminGun} gün`}</dd>}
         </div>
@@ -524,7 +526,15 @@ function TerminSonucu({ deneme }: { deneme: TerminDenemesiCevabi | 'yukleniyor' 
           : <Rozet ton="hata">Plan bu termine yetişmiyor</Rozet>)}
         {deneme.satinalmaGerekli && <Rozet ton="uyari">Malzeme satın alma ister</Rozet>}
         {deneme.onayGerekli && <Rozet ton="uyari">Plancı onayı gerekir</Rozet>}
+        {fasonNotlari.length > 0 && <Rozet ton="uyari">Fason firması belirlenmedi</Rozet>}
       </div>
+      {fasonNotlari.length > 0 && (
+        <div className="tc-sp-bildirim" role="status">
+          <Simge ad="alert" />
+          <strong>Termin tahmini</strong> Firması belirlenmemiş fason adım varsayılan süreyle planlandı; firma rotada ya da satın alma siparişinde seçilince kesinleşir.
+          <ul className="tc-sp-bildirim-liste" aria-label="Firması belirlenmemiş fason adımlar">{fasonNotlari.map((n) => <li key={n}>{n}</li>)}</ul>
+        </div>
+      )}
       {/* Seçilen günde başlatmada plan dondurulur, kimse kaymaz: kayan listesi ve onay kutusu yoktur. */}
       {deneme.istenenTermin !== null && deneme.yerlesim !== 'baslat' && (
         <Tablo

@@ -8,7 +8,7 @@ import {
   satinalmalar, siparisDurumu, siparisSuz, silmeEngeli, tedarikciler, type Aparat, type Karsilama, type ListeTuru, type SatinAlma, type SiparisSuzgeci,
   type Tedarikci,
 } from './kurallar.ts';
-import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
+import { gercekFasoncular, useKaynakAdlari } from '../../kaynak-kodu.tsx';
 import { KucukDugme, SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi, terminYazi, type Sutun } from './ortak.tsx';
 
 // Sahibinden gelen kayıtların listeleri (02-orta.betik sSiparisler, sTezgahlar, sPersonel, sMalzeme, sFason; listeTablosu, TANIM). Kaynak verisi
@@ -304,7 +304,7 @@ export function FasonListesi({ c, komut, planYaz, uyar }: ListeOzellikleri) {
     <div className="tc-pyi-iki">
       <VeriKarti baslik="Fasoncular" sag={<SahipDugmesi ad="Yeni fasoncu" simge="plus" metin="Yeni" />}>
         <VeriTablosu
-          etiket="Fasoncular" satirlar={c.D.fasoncular ?? []} anahtar={(f) => f.id}
+          etiket="Fasoncular" satirlar={gercekFasoncular(c.D.fasoncular)} anahtar={(f) => f.id}
           sutunlar={[
             { anahtar: 'id', baslik: 'Kod', hucre: (f) => mono(f.id) }, { anahtar: 'ad', baslik: 'Ad', hucre: (f) => f.ad ?? '—' },
             { anahtar: 'kap', baslik: 'Kapasite', sag: true, hucre: (f) => sayiYazi(f.kapasite) },

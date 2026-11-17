@@ -571,6 +571,8 @@ export interface TeklifKalemiSonucu {
   islemler: TeklifIslemi[];
   malzemeTl: number | null;
   eksik: string[];
+  // 3355 a: firması belirlenmemiş fason adımın notu; varsa termin tahminidir.
+  fasonNotu: string[];
   // satış taslağı olarak kaydedilirse kilitlenecek yer: adım -> makine ve başlangıç
   yerlesim: Record<string, { makineId: string; baslangic: string }>;
 }
@@ -663,6 +665,7 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
       islemler: k.islemler.map((o) => ({ adim: o.adim, makineId: makine(o.m), fason: o.fason, baslangic: an(o.S), bitis: an(o.C), ayarSaat: o.ayarSaat, islemeSaat: o.islemeSaat, tl: o.tl })),
       malzemeTl: k.malzemeTl,
       eksik: k.eksik,
+      fasonNotu: k.fasonNotu ?? [],
       yerlesim: Object.fromEntries(Object.entries(k.kilit).map(([id, y]) => [id.slice(id.lastIndexOf('.') + 1), { makineId: makine(y.m), baslangic: an(y.S) }])),
     })),
     kayan: r.kayan.map((x) => ({ siparis: x.siparis, emirNo: emirNo.get(x.siparis) ?? null, once: an(x.once), sonra: an(x.sonra), termin: x.termin === null ? null : an(x.termin) })),

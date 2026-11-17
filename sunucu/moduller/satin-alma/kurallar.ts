@@ -1743,13 +1743,14 @@ export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; t
 
 // 3257 a: fason iş emrinin açık siparişlerindeki teslim tarihi; adım birden çok siparişle gittiyse en geç dönüş esastır (numara o siparişindir).
 // Tarihsiz sipariş ve talep aşamasındaki kalem sayılmaz (sıra termin gününe, tahmine ya da varsayılana kalır).
-export interface FasonSiparisTarihi { tarih: string; siparisNo: string | null }
-export function fasonSiparisTarihiSec(l: readonly { isEmriId: number | null; asama: string; termin: string | null; siparisNo: string | null }[]): Map<number, FasonSiparisTarihi> {
+// 3355: firmaId siparişin firmasıdır (plan, rotada firması olmayan fason adımı ona yerleştirir); bilinmiyorsa null.
+export interface FasonSiparisTarihi { tarih: string; siparisNo: string | null; firmaId: number | null }
+export function fasonSiparisTarihiSec(l: readonly { isEmriId: number | null; asama: string; termin: string | null; siparisNo: string | null; firmaId?: number | null }[]): Map<number, FasonSiparisTarihi> {
   const m = new Map<number, FasonSiparisTarihi>();
   for (const x of l) {
     if (x.isEmriId === null || x.asama !== 'siparis' || x.termin === null) continue;
     const eski = m.get(x.isEmriId);
-    if (eski === undefined || x.termin > eski.tarih) m.set(x.isEmriId, { tarih: x.termin, siparisNo: x.siparisNo });
+    if (eski === undefined || x.termin > eski.tarih) m.set(x.isEmriId, { tarih: x.termin, siparisNo: x.siparisNo, firmaId: x.firmaId ?? null });
   }
   return m;
 }

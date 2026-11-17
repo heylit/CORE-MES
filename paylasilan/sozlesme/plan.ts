@@ -499,13 +499,17 @@ export const ACIL_PAY_SINIRI = 0.3;
 // değilse atölye kapatır. Varsayılan bugünkü davranıştır (açık, 3 pay).
 export const MOTOR_BOLME = ['otomatik', 'kapali'] as const;
 export const BOLME_PAY_SINIRI = { en: 2, cok: 5 } as const;
+// 3355 a: firması belirlenmemiş ya da süresi ve sipariş tarihi olmayan fason adımın dönüş süresi (gün); adım bu süreyle yerleşir.
+// Varsayılan bugünkü değerdir (uretim-emirleri FASON_VARSAYILAN_GUN).
+export const FASON_GUN_SINIRI = { en: 1, cok: 90 } as const;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
   acilPay: z.number().min(0).max(ACIL_PAY_SINIRI),
   bolmeKip: z.enum(MOTOR_BOLME), bolmeMaks: z.number().int().min(BOLME_PAY_SINIRI.en).max(BOLME_PAY_SINIRI.cok),
+  fasonGun: z.number().int().min(FASON_GUN_SINIRI.en).max(FASON_GUN_SINIRI.cok),
 });
 export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = {
-  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3, fasonGun: 7,
 };
 // Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
 // arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.

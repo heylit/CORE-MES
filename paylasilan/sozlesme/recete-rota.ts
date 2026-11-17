@@ -277,7 +277,8 @@ export const durumEmirSemasi = z.object({
     ustOpNo: z.number().int().nullable(),
     adimlar: z.array(z.object({
       opNo: z.number().int(), kaynakOpNo: z.number().int(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']),
-      fasonId: kimlikMetni.optional(), terminGun: z.number().int().nullable().optional(), fasonSiparis: z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable() }).optional(),
+      fasonId: kimlikMetni.optional(), terminGun: z.number().int().nullable().optional(),
+      fasonSiparis: z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable(), firmaId: z.number().int().positive().optional() }).optional(),
     })),
   })).optional(),
 });
@@ -289,7 +290,8 @@ export const durumEmirSemasi = z.object({
 // tahminGun (B-2483-11): termini girilmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini, takvim günü; tahmin yoksa alan yok.
 // fasonSiparis (3330 a): bitmemiş fason adımın açık siparişindeki firma tarihi (birden çok siparişte en geç olan) ve o siparişin numarası
 // (Satın Alma'yı göremeyene null); siparişi ya da tarihi olmayan adımda alan yok. Plan dönüşü o günün sabahına sabitler.
-export const durumFasonSiparisSemasi = z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable() });
+// firmaId (3355): siparişin firması; plan, rotada firması olmayan fason adımı ona yerleştirir. Bilinmiyorsa alan yok.
+export const durumFasonSiparisSemasi = z.object({ tarih: tarihSemasi, siparisNo: z.string().nullable(), firmaId: z.number().int().positive().optional() });
 export const durumEmirYeriSemasi = z.object({
   fasonId: kimlikMetni.nullable(), terminGun: z.number().int().nullable(), stationId: kimlikMetni.nullable(), setup: z.number().nullable(), cycle: z.number().nullable(),
   tahminGun: z.number().positive().optional(), fasonSiparis: durumFasonSiparisSemasi.optional(),

@@ -38,6 +38,14 @@ const MESAI_CARPANI=1.5;
 /* termini girilmemiş fasonun dönüş süresi (gün): uretim-emirleri FASON_VARSAYILAN_GUN ile aynı (B-2483-11: sunucu çözümü, sayfa motoru ve
    fasoncu kartı aynı değeri kullanır) */
 const FASON_VARSAYILAN_GUN=7;
+/* 3355 a: firması belirlenmemiş fason adımın hattı. Adım yine yerleşir; dönüş süresi adımın termin günü, yoksa motor ayarının fason süresi
+   (w.fasonGun), açık siparişin firma tarihi varsa o (kancalar.js tFason) */
+const FASON_BELIRSIZ='~belirsiz';
+const FASON_BELIRSIZ_AD='Firma belirlenmedi';
+/* firmasız fason adımın notundaki süre kaynağı (teklif ve Kokpit uyarısı aynı dili kullanır) */
+function fasonSureMetni(r){const g=Math.round((r.C-r.S)/24);
+  return r.gk==='siparis'?'satın alma siparişindeki tarihle':r.gk==='termin'?'girilen dönüş termini ile':r.gk==='rota'?`rotadaki ${g} gün ile`:`${g} gün ile (Motor ayarları > Fason süresi)`;}
+function fasonBelirsizi(w){const g=w&&+w.fasonGun>0?+w.fasonGun:FASON_VARSAYILAN_GUN;return {id:FASON_BELIRSIZ,ad:FASON_BELIRSIZ_AD,hemen:true,sureGun:g,kapasite:null};}
 function mesaiCarpani(D){const c=D&&D.planTL?+D.planTL.mesaiCarpan:NaN;return c>0?c:MESAI_CARPANI;}
 /* B-2483-12: ek mesai haftası pazartesi başlar (sunucu kurallar.ts haftaBasi ile aynı); gün plan başlangıcından sayılır */
 function haftaNo(D,gun){return Math.floor((gun+GUN.indexOf(wdOf(D,0)))/7);}
@@ -95,6 +103,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [merkezHaftalari]
     @property {any} [insanliIstasyonlar]
     @property {any} [ekipUyeleri]
+    @property {Record<string, string[]>} [fasonFirma]
 */
 /** Derlenmiş girdi (compile): takvim, tezgâh havuzu, işlemler. Alan adları denetlenir; içerikleri henüz tipsizdir.
     @typedef {object} Derleme
@@ -188,6 +197,10 @@ function compile(st){olcekKur(st.w);
   const genW=[];for(let d=-1;d<HDAYS;d++)for(const sid of gun(d).vard){const w=inst(d,sid);if(w)genW.push(w);}
   const gen=merge(genW);
   const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
+  FS[FASON_BELIRSIZ]=Object.assign({},FS[FASON_BELIRSIZ]||{},fasonBelirsizi(st.w));
+  /* 3355 a: fason adımın firması sırayla rotadan, emrin adımından, açık fason siparişinden (st.fasonFirma[iş]); fason listesinde olmayan
+     firma atlanır, hiçbiri yoksa adım FASON_BELIRSIZ hattına yerleşir */
+  const fasonFirmasi=(o,id)=>{const e=(st.fasonFirma||{})[id]||[];const f=[o.fason,...e].find(x=>x!=null&&x!==FASON_BELIRSIZ&&FS[x]);return f||FASON_BELIRSIZ;};
   const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));
   /* 3199 (A): ikincil kaynak (aparat, özel takım) personel gibi dilim dizisiyle sayılır: kapasite adettir, kesinti (bakım, kalibrasyon,
      ödünç) dokunduğu her dilimde adedi düşürür (0'a kadar, V10). Aynı kart istasyonda ve ortakta ayrı kaynaktır (IKK: kart@istasyon). */
@@ -222,7 +235,7 @@ function compile(st){olcekKur(st.w);
       const pid=p===0?id:id+'~'+(p+1),ad=N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
-      if(o.fason){c.push({m:'@'+o.fason,fas:1});}
+      if(o.fason){const f=fasonFirmasi(o,id);c.push(f===FASON_BELIRSIZ&&+o.fasonGun>0?{m:'@'+f,fas:1,gun:+o.fasonGun}:{m:'@'+f,fas:1});}
       else for(const t of adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
         c.push({m:t.id,run:ad*cyc/mm.verim+(p===0?ekS:0),cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
@@ -422,7 +435,9 @@ function predBound(o,cx,ctx){
 function tFason(o,c,cx,ctx,b){
   const f=cx.FS[c.m.slice(1)];if(!f)return null;let r=b.s,why=b.why;
   /* hemen çıkan fason (sunucu, CA-2): öncülün bitişinde çıkar, süresi kadar sonra döner */
-  if(f.hemen){const ret=r+(+f.sureGun||0)*24;return {id:o.id,job:o.job,m:c.m,fas:1,S:r,Su:r,C:ret,lot1:ret,su:0,run:ret-r,cost:null,why};}
+  if(f.hemen){const ret=r+(+c.gun||+f.sureGun||0)*24;const y={id:o.id,job:o.job,m:c.m,fas:1,S:r,Su:r,C:ret,lot1:ret,su:0,run:ret-r,cost:null,why};
+    /* firmasız adımın süresi nereden geldi: notlar kullanıcıyı değiştirebileceği yere yönlendirir (kancalar.js sipariş ve elle termini yazar) */
+    if(f.id===FASON_BELIRSIZ)y.gk=+c.gun>0?'rota':'ayar';return y;}
   const lots=ctx.fas[f.id]||[];
   for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
     const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;
@@ -776,7 +791,7 @@ function lowerBound(st,cx){
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       // başlamış işlemin yalnız kalan süresi sayılır
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);}l1=best;}else{best=st.now;l1=best;}}
-    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=v;l1=v;}}continue;}
+    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s,c.gun);if(v<best){best=v;l1=v;}}continue;}
       const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
     done[o.id]={f:best,l1};const jl=LB[o.job]||0;LB[o.job]=Math.max(jl,best);}
   let wT=0;for(const jid in cx.jobs){const j=cx.jobs[jid];if(j.due!=null&&isFinite(LB[jid]))wT+=Math.max(0,LB[jid]-j.due)*isAgirligi(j);}
@@ -957,7 +972,7 @@ function lbHeadsTails(st,cx){
     else if(kr){best=kr.C;b1=kr.lot1;}
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=b1=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}}else best=b1=st.now;}
-    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=b1=v;}}continue;}
+    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s,c.gun);if(v<best){best=b1=v;}}continue;}
       const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;b1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
     fin[o.id]=best;l1[o.id]=b1;}
   const tail={};
@@ -970,8 +985,8 @@ function lbHeadsTails(st,cx){
   return {head,tail,pmin,fin};
 }
 // fason kapasitesi yok sayılır, çıkış günü ve saati sayılır: gerçek dönüş bundan erken olamaz
-/** @param {Derleme} [cx] @param {any} [f] @param {any} [r] */
-function fasonEarliest(cx,f,r){if(!isFinite(r))return Infinity;if(f.hemen)return r+(+f.sureGun||0)*24;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
+/** @param {Derleme} [cx] @param {any} [f] @param {any} [r] @param {any} [gun] */
+function fasonEarliest(cx,f,r,gun){if(!isFinite(r))return Infinity;if(f.hemen)return r+(+gun||+f.sureGun||0)*24;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
   const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;return ex+(+f.sureGun||FASON_VARSAYILAN_GUN)*24;}return Infinity;}
 
 /* ---- değişiklik bütçesine indirme: sipariş sipariş başvuru planına geri dönülür ---- */

@@ -3,6 +3,7 @@ import { Pencere, Simge, useBildirim } from '../../../../../ortak/arayuz/index.t
 import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { KaynakAdlari } from '../../kaynak-kodu.tsx';
+import { gercekFasoncular } from '../../kaynak-kodu.tsx';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { useAtolyeKomutlari, useOtomatikUygula } from '../atolye/gonder.ts';
 import { saatOku, simdiSaati } from '../kurallar.ts';
@@ -22,7 +23,7 @@ interface FormOzellikleri { c: PlanlamaCalismasi; ad: KaynakAdlari; ekle: (o: At
 
 export function OlayFormu({ c, ad, ekle, kapat, on }: FormOzellikleri) {
   const D = c.D;
-  const tezgahlar = D.tezgahlar; const urunler = D.urunler; const malzemeler = D.malzemeler ?? []; const fasoncular = D.fasoncular ?? [];
+  const tezgahlar = D.tezgahlar; const urunler = D.urunler; const malzemeler = D.malzemeler ?? []; const fasoncular = gercekFasoncular(D.fasoncular);
   const vardiyalar = (D.vardiyalar ?? []).flatMap((v) => (typeof v.id === 'string' ? [{ id: v.id, ad: typeof v.ad === 'string' ? v.ad : v.id }] : []));
   const gruplar = [...new Set(tezgahlar.map((t) => (typeof t.grup === 'string' ? t.grup : '')).filter(Boolean))];
   const [tur, setTur] = useState<OlayTuru>(on ?? 'ariza');

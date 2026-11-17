@@ -9,7 +9,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayarlar } from './Ayarlar.tsx';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
-const MOTOR: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 };
+const MOTOR: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3, fasonGun: 7 };
 // Çalışma uydurmadır; sunucu yerine taslak sahtedir (3282 1d-2b: değişiklik kişinin taslağına komut olarak yazılır).
 afterEach(() => { cleanup(); vi.restoreAllMocks(); planKurSifirla(); });
 

@@ -6,6 +6,7 @@ import type { CalismaKomutu } from '../kayit.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from '../malzeme/kaynak.ts';
 import { alimPlani, bitenler, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs, tahsisEt, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import { TedarikTerminiKarti } from '../malzeme/TedarikTermini.tsx';
+import { gercekFasoncular } from '../kaynak-kodu.tsx';
 import type { Fasoncu, PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { MalzemeBekleyenKarti, useGorunumDegerlendiricisi } from './Degerlendirme.tsx';
@@ -81,7 +82,7 @@ function KatsayiKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu 
       ? <SayiGirdisi deger={v} etiket={ad} min={KAT_SINIRI[k].min} max={KAT_SINIRI[k].max} adim={0.1} yer={sayi(genel, 2)} yaz={(m) => { yaz(r, k, m); }} />
       : <span className="mono">{v == null ? '—' : sayi(v, 2)}</span>;
   };
-  const fas: KatSatiri[] = (D.fasoncular ?? []).map((x) => ({ tur: 'fas', x }));
+  const fas: KatSatiri[] = gercekFasoncular(D.fasoncular).map((x) => ({ tur: 'fas', x }));
   const fasSut: Sutun<KatSatiri>[] = [
     { anahtar: 'fasoncu', baslik: 'Fasoncu', hucre: (r) => <><b>{r.x.ad ?? r.x.id}</b><small className="tc-pys-not mono">{r.x.id}</small></> },
     { anahtar: 'sure', baslik: 'Süre', hizala: 'sag', hucre: (r) => <span className="mono">{sayi(+(r.x.sureGun ?? 0) || 1, 1)} gün</span> },

@@ -146,6 +146,8 @@ export type { EmirSatinAlmaAsamasi, EmirSatinAlmaDurumu } from './kurallar.ts';
 // Yalnız numara, aşama ve beklenen teslim döner; fiyat ve tedarikçi dönmez (operatör terminali de okur, 2893-3 b).
 export interface EmirTedariki {
   uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: TedarikAsamasi; talepNo: string; siparisNo: string | null; termin: string | null;
+  // 3355: siparişin firması; yalnız sipariş aşamasında, yoksa null.
+  firmaId: number | null;
 }
 export async function emirTedarikDurumlari(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedariki[]> {
   if (uretimEmriIdleri.length === 0 && isEmriIdleri.length === 0) return [];
@@ -153,7 +155,7 @@ export async function emirTedarikDurumlari(db: Db, uretimEmriIdleri: readonly nu
     const asama = tedarikAsamasi(s);
     return asama === null ? [] : [{
       uretimEmriId: s.uretimEmriId, isEmriId: s.isEmriId, malzemeNo: s.malzemeNo, asama, talepNo: s.talepNo, siparisNo: asama === 'siparis' ? s.siparisNo : null,
-      termin: asama === 'siparis' ? s.beklenenTeslim : null,
+      termin: asama === 'siparis' ? s.beklenenTeslim : null, firmaId: asama === 'siparis' ? s.firmaId : null,
     }];
   });
 }

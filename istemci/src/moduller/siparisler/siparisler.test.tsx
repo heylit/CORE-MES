@@ -1369,6 +1369,23 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.queryByText('Plancı onayı gerekir')).toBeNull();
   });
 
+  it('3355: firması belirlenmemiş fason adımlı kalemde termin tahminidir; adım notu ve uyarı yazılır, termin yine hesaplanır', async () => {
+    const not = 'OP 90 Kaplama: firma belirlenmedi; 7 gün ile (Motor ayarları > Fason süresi) hesaplandı';
+    kur(SATISCI, () => ({ ...DENEME, kalemler: [{ ...DENEME.kalemler[0]!, fasonNotu: [not] }] } satisfies TerminDenemesiCevabi));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('Fason firması belirlenmedi')).toBeTruthy();
+    const dl = screen.getByLabelText('Termin sonucu');
+    expect(within(dl).getByText('Termin (plandan, tahmini)')).toBeTruthy();
+    expect(within(dl).getByText('14.07.2099')).toBeTruthy();
+    const liste = screen.getByRole('list', { name: 'Firması belirlenmemiş fason adımlar' });
+    expect(within(liste).getByText(`1. Deneme Mil 20mm · ${not}`)).toBeTruthy();
+    cleanup();
+    kur(SATISCI);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(within(await screen.findByLabelText('Termin sonucu')).getByText('Termin (plandan)')).toBeTruthy();
+    expect(screen.queryByText('Fason firması belirlenmedi')).toBeNull();
+  });
+
   it('arkaya ekleme: termin plandan ve geçerlilikten gün olarak yazılır; fiyat maliyet artı kârla önerilir; sürüm plan taslağıyla gider', async () => {
     const istekler = kur(SATISCI);
     ac('/siparisler/teklifler/21/teklif-ver');

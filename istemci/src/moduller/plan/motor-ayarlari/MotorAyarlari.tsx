@@ -6,7 +6,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../../or
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { api, ApiHatasi, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
-import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, degerAdi, secilebilir, secimDegeri, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from './kurallar.ts';
+import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, FASON_GUN, degerAdi, gunMetni, gunOku, secilebilir, secimDegeri, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from './kurallar.ts';
 
 // Plan motoru ayarları (kart 811): planlama sayfalarını gören okur, plan.motor-ayari değiştirir (775 b). Kayıt yeni sürümdür; açık
 // taslaklar açıldıkları sürümde kalır (774 a).
@@ -19,7 +19,7 @@ export function MotorAyarlari() {
   const q = useQuery({ queryKey: ANAHTAR, queryFn: () => api.get<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU) });
   return (
     <div>
-      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı, sıralama kuralı, süre öğrenmesi, paralel bölmesi ve acil iş payı." />
+      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı, sıralama kuralı, süre öğrenmesi, paralel bölmesi, acil iş payı ve fason süresi." />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
         : q.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Motor ayarları alınamadı')} yenile={() => { void q.refetch(); }} />
           : <Kart baslik="Güncel ayarlar" simge="gear">
@@ -28,6 +28,7 @@ export function MotorAyarlari() {
               <dl>
                 {ANAHTARLAR.map((k) => <div key={k}><dt>{AYAR_SECENEKLERI[k].baslik}</dt><dd>{degerAdi(k, q.data.guncel.degerler[k])}</dd></div>)}
                 <div><dt>{ACIL_PAY.baslik}</dt><dd>{yuzdeMetni(q.data.guncel.degerler.acilPay)}</dd></div>
+                <div><dt>{FASON_GUN.baslik}</dt><dd>{gunMetni(q.data.guncel.degerler.fasonGun)}</dd></div>
               </dl>
             )}
             <p>Değişiklik sonraki planları etkiler. Açık taslaklar açıldıkları ayarda kalır; planlamacı taslakta güncel ayarları uygulayabilir.</p>
@@ -43,9 +44,12 @@ function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number |
   const [f, setF] = useState<Ayarlar>(degerler);
   const [pay, setPay] = useState(yuzdeMetni(degerler.acilPay));
   const payOrani = yuzdeOku(pay, ACIL_PAY_SINIRI);
-  const degisti = ANAHTARLAR.some((k) => f[k] !== degerler[k]) || (payOrani !== null && payOrani !== degerler.acilPay);
+  const [gunYazi, setGunYazi] = useState(String(degerler.fasonGun));
+  const fasonGun = gunOku(gunYazi);
+  const degisti = ANAHTARLAR.some((k) => f[k] !== degerler[k]) || (payOrani !== null && payOrani !== degerler.acilPay)
+    || (fasonGun !== null && fasonGun !== degerler.fasonGun);
   const yaz = useMutation({
-    mutationFn: () => api.post<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU, { ...f, acilPay: payOrani ?? degerler.acilPay, surumId }),
+    mutationFn: () => api.post<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU, { ...f, acilPay: payOrani ?? degerler.acilPay, fasonGun: fasonGun ?? degerler.fasonGun, surumId }),
     onSuccess: (c) => { istemci.setQueryData(ANAHTAR, c); bildir('tamam', 'Motor ayarları kaydedildi.'); },
     onError: (h) => {
       bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.'));
@@ -62,7 +66,9 @@ function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number |
       ))}
       <Girdi etiket={ACIL_PAY.baslik} ipucu={ACIL_PAY.ipucu} inputMode="decimal" value={pay} onChange={(e) => setPay(e.target.value)}
         hata={payOrani === null ? '0 ile 30 arasında bir sayı girin.' : undefined} />
-      <div className="tc-form-tam"><Dugme type="submit" simge="check" disabled={!degisti || payOrani === null} yukleniyor={yaz.isPending}>Kaydet</Dugme></div>
+      <Girdi etiket={FASON_GUN.baslik} ipucu={FASON_GUN.ipucu} inputMode="numeric" value={gunYazi} onChange={(e) => setGunYazi(e.target.value)}
+        hata={fasonGun === null ? '1 ile 90 arasında bir tam sayı girin.' : undefined} />
+      <div className="tc-form-tam"><Dugme type="submit" simge="check" disabled={!degisti || payOrani === null || fasonGun === null} yukleniyor={yaz.isPending}>Kaydet</Dugme></div>
     </form>
   );
 }

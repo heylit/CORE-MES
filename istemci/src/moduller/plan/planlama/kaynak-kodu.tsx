@@ -22,5 +22,10 @@ export function kaynakAdlariKur(D: Pick<PlanVerisi, 'tezgahlar' | 'fasoncular'> 
   return { kaynak: (m) => k.get(m) ?? cip(m), grup: (x) => g.get(x) ?? x, emir };
 }
 
+// Firması belirlenmemiş fason adımların hattı (motor girdi.js): plan ve adı taşır, ama gerçek firma değildir; firma listelerinde ve
+// seçimlerde gösterilmez (süresi motor ayarındandır, buradaki kayıt değil).
+export const FASON_BELIRSIZ = '~belirsiz';
+export const gercekFasoncular = <T extends { id: string }>(l: readonly T[] | null | undefined): T[] => (l ?? []).filter((f) => f.id !== FASON_BELIRSIZ);
+
 export const KaynakAdlariBaglami = createContext<KaynakAdlari>(KIMLIK_ADLARI);
 export const useKaynakAdlari = (): KaynakAdlari => useContext(KaynakAdlariBaglami);
