@@ -116,8 +116,8 @@ test.describe('Logo CRM durumu (3359, 3391)', () => {
     const pencere = page.getByRole('dialog', { name: f.ad, exact: true });
     await expect(pencere.getByText('(tekliflerde kullanılır)')).toBeVisible();
     const uyari = pencere.getByRole('status').filter({ hasText: 'CRM müşterisine bağlı' });
-    await expect(uyari).toContainText("Bu cari Logo'da 22 CRM müşterisine bağlı: ORN-CRM-UZUN-KOD-3002, ");
-    await expect(uyari).toContainText('ORN-CRM-UZUN-KOD-3021, +2 kod daha. Teklif ilkiyle gider;');
+    await expect(uyari).toContainText("Bu cari Logo'da 22 CRM müşterisine bağlı. Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın. ORN-CRM-UZUN-KOD-3002, ");
+    await expect(uyari).toContainText('ORN-CRM-UZUN-KOD-3021, +2 kod daha');
     const ilk = uyari.getByText('ORN-CRM-UZUN-KOD-3002', { exact: true });
     const kutu = await ilk.boundingBox();
     expect(kutu, 'kod görünür').not.toBeNull();

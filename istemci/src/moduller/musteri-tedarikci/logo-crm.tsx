@@ -53,10 +53,9 @@ export function CrmSatiri({ bilgi }: { bilgi: CrmBilgisi | null }) {
           <p className="tc-mt-crm-uyari" role="status">
             <Simge ad="alert" />
             <span>
-              {`Bu cari Logo'da ${String(liste.sayi)} CRM müşterisine bağlı: `}
+              {`Bu cari Logo'da ${String(liste.sayi)} CRM müşterisine bağlı. Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın. `}
               {liste.kodlar.map((k, i) => <span key={k}>{i > 0 && ', '}<span className="mono">{k}</span></span>)}
               {fazla > 0 && `, +${String(fazla)} kod daha`}
-              . Teklif ilkiyle gider; yanlışsa Logo&apos;da fazla bağı kaldırın.
             </span>
           </p>
         )}

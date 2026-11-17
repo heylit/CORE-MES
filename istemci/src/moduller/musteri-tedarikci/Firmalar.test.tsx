@@ -541,7 +541,7 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     const satirKutusu = (await within(pencere).findByText('Logo CRM satış müşterisi')).closest('div')!;
     expect(within(satirKutusu).getByText('(tekliflerde kullanılır)').previousElementSibling?.textContent).toBe('ORN-CRM-3002');
     const uyari = within(satirKutusu).getByRole('status');
-    expect(uyari.textContent).toBe("Bu cari Logo'da 2 CRM müşterisine bağlı: ORN-CRM-3002, ORN-CRM-3017. Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın.");
+    expect(uyari.textContent).toBe("Bu cari Logo'da 2 CRM müşterisine bağlı. Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın. ORN-CRM-3002, ORN-CRM-3017");
   });
 
   it('3391 20\'den fazla bağ: 20 kod ve "+N kod daha"; listede toplam sayı', async () => {
@@ -556,6 +556,6 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     ac('/musteri-tedarikci?firma=10');
     const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
     const uyari = await within(pencere).findByRole('status');
-    expect(uyari.textContent).toMatch(/^Bu cari Logo'da 23 CRM müşterisine bağlı: ORN-CRM-4000, .*ORN-CRM-4019, \+3 kod daha\. Teklif ilkiyle gider;/);
+    expect(uyari.textContent).toMatch(/^Bu cari Logo'da 23 CRM müşterisine bağlı\. Teklif ilkiyle gider; .* ORN-CRM-4000, .*ORN-CRM-4019, \+3 kod daha$/);
   });
 });
