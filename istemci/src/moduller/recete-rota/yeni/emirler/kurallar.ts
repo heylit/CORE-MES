@@ -695,9 +695,13 @@ export function sureOzetiNedenleri(o: AdimSureOzeti): { hazirlik: string | null;
 }
 
 // 3411 a: Seri dışı türdeki emir Seri (Standart) rotanın revizyonundan açıldıysa emir ayrıntısında not kalır (türün yürürlükte rotası
-// yoktu ya da Seri elle seçildi). Rotasız emirde ve revizyonu okunamayan emirde not yoktur.
-export function seriRotasiNotu(d: Pick<DurumCevabi, 'routeRevs'>, o: { tur: string; rev: string | null; rotasiz?: boolean | undefined }): string | null {
+// yoktu ya da Seri elle seçildi). Not yalnız ürünün bu türe bağlı rotası varsa çıkar: türün rotası hiç yoksa Seri zaten olağan yoldur.
+// Ürünün rotaları okunmadıysa, rotasız emirde ve revizyonu okunamayan emirde not yoktur.
+export function seriRotasiNotu(
+  d: Pick<DurumCevabi, 'routeRevs'>, o: { tur: string; rev: string | null; rotasiz?: boolean | undefined }, rotalar: UrunRotalari['rotalar'] | undefined,
+): string | null {
   if (o.rotasiz === true || o.rev === null || o.tur === 'seri') return null;
+  if (!(rotalar ?? []).some((r) => !r.standart && (r.emirTurleri as readonly string[]).includes(o.tur))) return null;
   const turAdi = (EMIR_TURU_ADLARI as Record<string, string>)[o.tur] ?? o.tur;
   const rev = d.routeRevs?.find((r) => r.id === o.rev);
   if (rev === undefined || rev.rotaStandart === false) return null;

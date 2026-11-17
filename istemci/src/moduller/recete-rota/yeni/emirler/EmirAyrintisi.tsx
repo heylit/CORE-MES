@@ -177,7 +177,15 @@ function EmirUyarilari({ durum: d, emir: o, yetki, komut, bittiNotu = false }: {
   const yonlen = useNavigate();
   const arsivKapanisi = useArsivKapanisi(o).data ?? null;
   const fark = rotaFarki(d, o);
-  const seri = seriRotasiNotu(d, o);
+  // 3411 a: not, ürünün bu türe bağlı rotası varsa çıkar; rotalar yeni emir formu ve bölmeyle aynı önbellekten okunur.
+  const urunNo = Number(o.itemId);
+  const urunRotalari = useQuery({
+    queryKey: [...RR_ANAHTARI, 'urun-rotalari', urunNo] as const,
+    enabled: o.tur !== 'seri' && !o.rotasiz && o.rev !== null && Number.isInteger(urunNo) && urunNo > 0,
+    queryFn: () => api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunNo)}`),
+    retry: false,
+  });
+  const seri = seriRotasiNotu(d, o, urunRotalari.data?.rotalar);
   return (
     <>
       {seri && (

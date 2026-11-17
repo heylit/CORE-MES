@@ -444,10 +444,14 @@ describe('3247 a: emir formunda rota', () => {
   });
   it('3411 a: Seri dışı türdeki emir Seri revizyonundan açıldıysa ayrıntıda not kalır', () => {
     const d = { routeRevs: [{ id: '10', no: 'C', rotaStandart: true }, { id: '11', no: 'A', rotaStandart: false }] } as unknown as Parameters<typeof seriRotasiNotu>[0];
-    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' })).toBe('Numune emri Seri rotasıyla açıldı (Rev C); Numune türünün kendi rotası kullanılmadı.');
-    expect(seriRotasiNotu(d, { tur: 'fai', rev: '11' })).toBeNull();
-    expect(seriRotasiNotu(d, { tur: 'seri', rev: '10' })).toBeNull();
-    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10', rotasiz: true })).toBeNull();
+    const rotalar = [{ id: 1, ad: 'Seri', standart: true, surum: 1, emirTurleri: [] }, { id: 2, ad: 'Numune', standart: false, surum: 1, emirTurleri: ['numune'] }] as unknown as Parameters<typeof seriRotasiNotu>[2];
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' }, rotalar)).toBe('Numune emri Seri rotasıyla açıldı (Rev C); Numune türünün kendi rotası kullanılmadı.');
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '11' }, rotalar)).toBeNull();
+    expect(seriRotasiNotu(d, { tur: 'seri', rev: '10' }, rotalar)).toBeNull();
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10', rotasiz: true }, rotalar)).toBeNull();
+    // Türün kendi rotası yoksa (tek rotalı ürün ya da başka türün rotası) ya da rotalar okunmadıysa not yok.
+    expect(seriRotasiNotu(d, { tur: 'fai', rev: '10' }, rotalar)).toBeNull();
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' }, undefined)).toBeNull();
   });
 });
 
