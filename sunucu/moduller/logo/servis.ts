@@ -19,7 +19,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { crmDurumu, crmSorguyuKeser, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmSorguyuKeser, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import { logoSiralari } from '../siparisler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
@@ -1279,11 +1279,11 @@ export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null,
   const durumlar: LogoCrmCevabi['durumlar'] = [];
   let kesildi: string | null = kapali;
   for (const f of firmalar) {
-    if (kesildi !== null || kopru === null) { durumlar.push({ firmaId: f.id, durum: 'okunamadi', neden: kesildi }); continue; }
+    if (kesildi !== null || kopru === null) { durumlar.push({ firmaId: f.id, durum: 'okunamadi', neden: kesildi, kodlar: null }); continue; }
     const r = await kopru.satisMusterisiVarMi((f.logoCariKodu ?? '').trim());
     const d = crmDurumu(r);
     if (crmSorguyuKeser(r)) kesildi = d.neden;
-    durumlar.push({ firmaId: f.id, ...d });
+    durumlar.push({ firmaId: f.id, ...d, kodlar: crmKodlari(r) });
   }
   return { durumlar };
 }

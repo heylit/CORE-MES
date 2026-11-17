@@ -292,6 +292,13 @@ namespace LogoYardimcisi
 
     // Logo'dan okuma yalnız bu arayüzle, salt okunur SELECT'lerle yapılır (rehber §0 kural 1; sorgular Sorgular.cs'te).
     // Bulunamayan kayıt 0 ya da null döner.
+    public sealed class SatisMusterileri
+    {
+        public const int Sinir = 20;
+        public List<string> Kodlar = new List<string>();
+        public int Sayi;
+    }
+
     public interface ILogoOkuma
     {
         int MalzemeRef(string kod);
@@ -336,7 +343,10 @@ namespace LogoYardimcisi
         List<TalepSatiri> TalepSatirlari(List<int> satirRefleri);
         List<Karsilama> Karsilamalar(int siparisRef);
         Karsilama KarsilamaBul(int talepSatirRef, int siparisSatirRef);
+        // Teklifte kullanılan CRM satış müşterisi: bağ sırasındaki ilki (SatisMusterileri ile aynı sıra).
         string SatisMusterisiKodu(string cariKod);
+        // 3391: cariye bağlı CRM satış müşterileri, bağ kaydının oluşma sırasıyla; en çok SatisMusterisiSiniri kod ve bütün bağların sayısı.
+        SatisMusterileri SatisMusterileri(string cariKod);
         FisBasligi Teklif(string no);
         FisBasligi TeklifRefIle(int kayit);
         List<TeklifSatiri> TeklifSatirlari(int teklifRef);

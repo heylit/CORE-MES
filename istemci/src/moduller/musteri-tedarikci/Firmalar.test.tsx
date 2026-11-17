@@ -61,7 +61,7 @@ const LOGO_ARAMA = {
 };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 // 3359 a: CRM satış müşterisi durumu (uydurma); test başında değiştirilir.
-let crmCevabi: () => Response = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null }] });
+let crmCevabi: () => Response = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null, kodlar: null }] });
 
 interface Istek { yontem: string; yol: string; govde: unknown; baslik: Record<string, string> }
 
@@ -108,7 +108,7 @@ const oturumCozuldu = async (istekler: Istek[]) => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null }] });
+  crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null, kodlar: null }] });
 });
 
 describe('Firma listesi', () => {
@@ -477,7 +477,7 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
 
   it('CRM yoksa ya da okunamadıysa listede CRM yazısı yok', async () => {
     for (const cevap of [{ durum: 'yok', neden: null }, { durum: 'okunamadi', neden: 'Köprüye ulaşılamadı.' }]) {
-      crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, ...cevap }] });
+      crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, ...cevap, kodlar: null }] });
       const istekler = sunucuKur(OKUYUCU);
       ac('/musteri-tedarikci');
       await screen.findByText('Ornek Musteri Ltd');
@@ -488,14 +488,14 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     }
   });
 
-  it('ayrıntıda CRM varsa "Logo CRM" satırı "CRM" yazar; yoksa satır yok; tedarikçi sorulmaz', async () => {
+  it('ayrıntıda CRM varsa satır, kod listesi yoksa (eski yardımcı) "CRM" yazar; yoksa satır yok; tedarikçi sorulmaz', async () => {
     let istekler = sunucuKur(OKUYUCU);
     ac('/musteri-tedarikci?firma=10');
     let pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
-    expect(await within(pencere).findByText('Logo CRM')).toBeTruthy();
+    expect(await within(pencere).findByText('Logo CRM satış müşterisi')).toBeTruthy();
     expect(within(pencere).getByText('CRM')).toBeTruthy();
     cleanup();
-    crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'yok', neden: null }] });
+    crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'yok', neden: null, kodlar: null }] });
     istekler = sunucuKur(OKUYUCU);
     ac('/musteri-tedarikci?firma=10');
     pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
@@ -507,5 +507,55 @@ describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hi
     const b = await screen.findByRole('dialog', { name: 'Ornek Fason Atolye' });
     expect(within(b).queryByText(/CRM/)).toBeNull();
     expect(crmIstekleri(istekler).some((y) => y.split('=')[1]?.split(',').includes('11'))).toBe(false);
+  });
+
+  const kodlu = (kodlar: string[], sayi = kodlar.length) => () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null, kodlar: { kodlar, sayi } }] });
+
+  it('3391 tek kod: ayrıntıda kod yazar, uyarı yok; listede "CRM"', async () => {
+    crmCevabi = kodlu(['ORN-CRM-3001']);
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(await satir('Ornek Musteri Ltd').findByText('CRM')).toBeTruthy();
+    expect(screen.queryByText('ORN-CRM-3001')).toBeNull();
+    cleanup();
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    expect(await within(pencere).findByText('ORN-CRM-3001')).toBeTruthy();
+    expect(within(pencere).queryByText('(tekliflerde kullanılır)')).toBeNull();
+    expect(within(pencere).queryByRole('status')).toBeNull();
+  });
+
+  it('3391 çok kod: listede uyarı tonunda "CRM ×2", ayrıntıda ilki "(tekliflerde kullanılır)" ve hepsini sayan uyarı', async () => {
+    crmCevabi = kodlu(['ORN-CRM-3002', 'ORN-CRM-3017']);
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    const rozet = await satir('Ornek Musteri Ltd').findByText('CRM ×2');
+    expect(rozet.className).toMatch(/tc-rozet-uyari/);
+    cleanup();
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    const satirKutusu = (await within(pencere).findByText('Logo CRM satış müşterisi')).closest('div')!;
+    expect(within(satirKutusu).getByText('(tekliflerde kullanılır)').previousElementSibling?.textContent).toBe('ORN-CRM-3002');
+    const uyari = within(satirKutusu).getByRole('status');
+    expect(uyari.textContent).toBe("Bu cari Logo'da 2 CRM müşterisine bağlı. Teklif ilkiyle gider; yanlışsa Logo'da fazla bağı kaldırın. ORN-CRM-3002, ORN-CRM-3017");
+  });
+
+  it('3391 20\'den fazla bağ: 20 kod ve "+N kod daha"; listede toplam sayı', async () => {
+    const yirmi = Array.from({ length: 20 }, (_, i) => `ORN-CRM-${String(4000 + i)}`);
+    crmCevabi = kodlu(yirmi, 23);
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(await satir('Ornek Musteri Ltd').findByText('CRM ×23')).toBeTruthy();
+    cleanup();
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    const pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    const uyari = await within(pencere).findByRole('status');
+    expect(uyari.textContent).toMatch(/^Bu cari Logo'da 23 CRM müşterisine bağlı\. Teklif ilkiyle gider; .* ORN-CRM-4000, .*ORN-CRM-4019, \+3 kod daha$/);
   });
 });

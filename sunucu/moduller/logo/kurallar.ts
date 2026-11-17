@@ -32,7 +32,8 @@ const GERI_CEKILME_EN_COK_MS = 30 * 60_000;
 // - belirsiz: istek köprüye ulaşmış olabilir, sonucu bilinmez (zaman aşımı, kopan bağlantı, 5xx, okunamayan cevap).
 export type KopruSonucu =
   // logoAdi: yalnız malzeme "var mı" okumasında, kart varsa Logo'daki adı (2089).
-  | { tur: 'basarili'; logicalRef: number | null; logoAdi?: string | null }
+  // crmKodlari: yalnız CRM satış müşterisi okumasında, cariye bağlı CRM müşteri kodları ve toplam bağ sayısı (eski yardımcıda yok: null).
+  | { tur: 'basarili'; logicalRef: number | null; logoAdi?: string | null; crmKodlari?: CrmKodlari | null }
   | { tur: 'reddedildi'; ileti: string }
   | { tur: 'yetkisiz'; ileti: string }
   | { tur: 'ulasilamadi'; ileti: string }
@@ -2094,6 +2095,19 @@ export function crmDurumu(r: KopruSonucu): CrmSonucu {
   if (r.tur === 'basarili') return r.logicalRef === null ? { durum: 'yok', neden: null } : { durum: 'var', neden: null };
   return { durum: 'okunamadi', neden: rozetNedeni(r.ileti) };
 }
+// 3391 a: cariye bağlı CRM satış müşterisi kodları, yardımcının sırasıyla (ilki tekliflerde kullanılır). En çok 20 kod taşınır, sayı
+// bütün bağlardır (ekran fazlasını "+N" der). Yalnız "var" iken; eski yardımcı listeyi vermez (null).
+export const LOGO_CRM_KOD_SINIRI = 20;
+export interface CrmKodlari { kodlar: string[]; sayi: number }
+export function crmKodlariniAyikla(govde: unknown): CrmKodlari | null {
+  const g = typeof govde === 'object' && govde !== null ? govde as { customers?: unknown; customerCount?: unknown } : {};
+  if (!Array.isArray(g.customers)) return null;
+  const kodlar = g.customers.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim());
+  const sayi = typeof g.customerCount === 'number' && Number.isInteger(g.customerCount) && g.customerCount > kodlar.length ? g.customerCount : kodlar.length;
+  return { kodlar: kodlar.slice(0, LOGO_CRM_KOD_SINIRI), sayi };
+}
+export const crmKodlari = (r: KopruSonucu): CrmKodlari | null =>
+  (r.tur === 'basarili' && r.logicalRef !== null ? r.crmKodlari ?? null : null);
 export const crmSorulurMu = (f: { tur: string; logoCariKodu: string | null }): boolean =>
   f.tur !== 'tedarikci' && (f.logoCariKodu ?? '').trim() !== '';
 export const crmSorguyuKeser = (r: KopruSonucu): boolean => r.tur === 'ulasilamadi' || r.tur === 'belirsiz';

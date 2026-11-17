@@ -106,6 +106,8 @@ namespace LogoYardimcisi
         public Dictionary<string, int> CariKartlari = new Dictionary<string, int>();
         public List<ProjeKaydi> Projeler = new List<ProjeKaydi>();
         public Dictionary<string, string> CrmMusterileri = new Dictionary<string, string>();
+        // 3391: carinin ilkinden sonra bağlı CRM müşterileri (bağ sırasıyla).
+        public Dictionary<string, List<string>> EkCrmMusterileri = new Dictionary<string, List<string>>();
         public List<KodAd> Birimler = new List<KodAd>();
         public List<MalKabulSatiri> MalKabulSatirlari = new List<MalKabulSatiri>();
         public List<StokToplami> Stoklar = new List<StokToplami>();
@@ -777,6 +779,18 @@ namespace LogoYardimcisi
         }
 
         public string SatisMusterisiKodu(string cariKod) { string k; return CrmMusterileri.TryGetValue(cariKod, out k) ? k : null; }
+        public SatisMusterileri SatisMusterileri(string cariKod)
+        {
+            var m = new SatisMusterileri();
+            var ilk = SatisMusterisiKodu(cariKod);
+            if (ilk == null) return m;
+            var hepsi = new List<string> { ilk };
+            List<string> ek;
+            if (EkCrmMusterileri.TryGetValue(cariKod, out ek)) hepsi.AddRange(ek);
+            m.Sayi = hepsi.Count;
+            m.Kodlar.AddRange(hepsi.Take(LogoYardimcisi.SatisMusterileri.Sinir));
+            return m;
+        }
         public FisBasligi Teklif(string no) { return Baslik(Fisler.FirstOrDefault(x => x.Nesne == Nesne.SatisTeklifi && x.Trcode == 1 && x.No == no)); }
         public FisBasligi TeklifRefIle(int kayit) { return Baslik(Fisler.FirstOrDefault(x => x.Nesne == Nesne.SatisTeklifi && x.Trcode == 1 && x.Ref == kayit)); }
 

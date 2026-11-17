@@ -1320,8 +1320,12 @@ namespace LogoYardimcisi
 
         Cevap SatisMusterisiOku(string cari)
         {
-            if (oku.SatisMusterisiKodu(cari) == null) return Cevap.Hata(404, "Customer not found");
-            return Cevap.Basari(oku.CariRef(cari));
+            var m = oku.SatisMusterileri(cari);
+            if (m.Kodlar.Count == 0) return Cevap.Hata(404, "Customer not found");
+            // 3391: bağlı bütün CRM müşteri kodları (ilki tekliflerde kullanılır) ve bağ sayısı; eski alanlar değişmez.
+            var c = Cevap.Basari(oku.CariRef(cari), "customers", m.Kodlar.ToArray());
+            ((Dictionary<string, object>)c.Govde)["customerCount"] = Math.Max(m.Sayi, m.Kodlar.Count);
+            return c;
         }
 
         // New() + FieldByName; alan adları tablo kolonu stilinde. TRCODE 1 zorunlu (New() varsayılanı 2 = alınan teklif), SLSCUSTCODE zorunlu (yoksa 4208).

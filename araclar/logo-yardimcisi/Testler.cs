@@ -1077,6 +1077,30 @@ namespace LogoYardimcisi
             Dogru(Basari(C(s, "GET", "/api/SalesOffer/customer/" + Alici, null)), "CRM var");
         }
 
+        // 3391: CRM satış müşterisi cevabı bağlı bütün kodları sırasıyla verir; teklif ilkini kullanır; eski alanlar aynı.
+        static void T_crm_musteri_cevabi_butun_kodlari_sirasiyla_verir()
+        {
+            var s = Logo();
+            var tek = Z(C(s, "GET", "/api/SalesOffer/customer/" + Alici, null));
+            Dogru(Equals(tek["success"], true) && Convert.ToInt32(tek["logicalRef"]) > 0, "eski alanlar");
+            Esit(1, ((object[])tek["customers"]).Length, "tek kod");
+            Esit("CRM-" + Alici, (string)((object[])tek["customers"])[0], "kod");
+            Esit(1, Convert.ToInt32(tek["customerCount"]), "tek sayi");
+            var ek = new List<string>();
+            for (var i = 0; i < 21; i++) ek.Add("ORN-CRM-" + (100 + i));
+            s.EkCrmMusterileri[Alici] = ek;
+            var cok = Z(C(s, "GET", "/api/SalesOffer/customer/" + Alici, null));
+            var kodlar = (object[])cok["customers"];
+            Esit(SatisMusterileri.Sinir, kodlar.Length, "en cok 20 kod");
+            Esit("CRM-" + Alici, (string)kodlar[0], "ilk bag ilk");
+            Esit("ORN-CRM-100", (string)kodlar[1], "sira korunur");
+            Esit(22, Convert.ToInt32(cok["customerCount"]), "butun bag sayisi");
+            var t = Teklif(s, "TKL-CRM", Alici);
+            Dogru(Basari(t), Json.Yaz(t.Govde));
+            Esit((string)kodlar[0], s.SonBaslik[0].Value, "teklif ilk kodu kullanir");
+            Esit(404, C(s, "GET", "/api/SalesOffer/customer/" + Satici, null).Durum, "CRM yok 404");
+        }
+
         static void T_tekliften_siparis_bagi_satirda_kurulur_ve_tamami_donunce_teklif_onaylanir()
         {
             var s = Logo();
@@ -1225,7 +1249,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(42, hepsi.Count, "sorgu sayısı");
+            Esit(43, hepsi.Count, "sorgu sayısı");
             Icerir(q.IrsaliyeBasliklari, "F.TRCODE IN (" + Sorgular.IrsaliyeTurleri + ")");
             Icerir(q.IrsaliyeBasliklari, "LG_007_03_STFICHE");
             Icerir(q.IrsaliyeSatirlari, "LG_007_03_STLINE");
@@ -1234,6 +1258,11 @@ namespace LogoYardimcisi
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
             Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");
             Icermez(q.SiparisIcerikBasligi, "@tr");
+            // 3391: teklifte giden CRM kodu ile ekrandaki listenin ilki aynı sıradan gelir.
+            Icerir(q.SatisMusterisi, "SELECT TOP 1 S.CODE FROM LG_CVARPASG");
+            Icerir(q.SatisMusterisi, "ORDER BY A.LOGICALREF");
+            Icerir(q.SatisMusterileri, "SELECT TOP 20 S.CODE, COUNT(*) OVER () FROM LG_CVARPASG");
+            Icerir(q.SatisMusterileri, "ORDER BY A.LOGICALREF");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");
