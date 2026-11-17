@@ -16,7 +16,7 @@ const KISITLAR=[
  {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar/makineler/enCok, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
   not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz. Kişiye makine ataması (makineler, enCok) yalnız sezgisel motordadır; CP-SAT grup düzeyinde kalır.'},
  {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat, ikincilKaynaklar (adet, kesinti, kısıt, ömür), opKaynak',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',
-  not:'3199: ikincil kaynak dilim dizisiyle sayılır; CP-SAT yalnız elle aparat listesini sayar, ikincil kaynağı hakem uygular.'},
+  not:'3199: ikincil kaynak dilim dizisiyle sayılır; CP-SAT yalnız elle aparat listesini sayar, ikincil kaynağı hakem uygular. Ölçü aleti de ikincil kaynaktır (tür başına kullanılabilir alet adedi, ortak), anahtarı ayrıdır (kalibrasyon).'},
  {id:'fason',ad:'Fason çıkış günü, süre, kapasite',veri:'fasoncular',motor:'tam',sinir:'yaklasik',cerceve:'tam',cpsat:'tam',not:'Alt sınır fason kapasitesini saymaz.'},
  {id:'program',ad:'CNC programı hazır olmadan başlamaz',veri:'rota[].program, ayarlar.programSaat',motor:'tam',sinir:'tam',cerceve:'yok',cpsat:'tam',not:''},
  {id:'serbest',ad:'Siparişin serbest bırakılma zamanı',veri:'siparisler[].serbest',motor:'tam',sinir:'tam',cerceve:'tam',cpsat:'tam',not:''},

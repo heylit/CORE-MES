@@ -13,7 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
 import { malzemeStokDurumlari } from '../stok/disari.ts';
-import { isEmriAparatHazirliklari, isEmriOlcuAletiHazirliklari } from './disari.ts';
+import { isEmriAletIstekleri, isEmriAparatHazirliklari, isEmriOlcuAletiHazirliklari } from './disari.ts';
 import { isEmriEkipmanlari } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -216,6 +216,9 @@ describe('rota adım ekipmanı (2893-4 a, gerçek PostgreSQL)', () => {
     const op = (e: typeof emir, n: number) => e.isEmirleri.find((i) => i.opNo === n)!.id;
     const liste = await vt().tx((db) => isEmriEkipmanlari(db, [op(emir, 10), op(emir, 20)]));
     assert.deepEqual(liste.map((x) => [x.isEmriId, x.tur, x.malzemeId, x.aletTuruId]), [[op(emir, 10), 'aparat', aparat, null], [op(emir, 10), 'olcu_aleti', null, mikrometre]]);
+    // 3403: planın ölçü aleti isteği yalnız ölçü aleti satırlarından (aparat süzülür); listesiz adım haritada yoktur.
+    const aletIstegi = await vt().tx((db) => isEmriAletIstekleri(db, [op(emir, 10), op(emir, 20)]));
+    assert.deepEqual([...aletIstegi], [[op(emir, 10), [mikrometre]]]);
     const aparatH = await vt().tx((db) => isEmriAparatHazirliklari(db, [op(emir, 10), op(emir, 20)], malzemeStokDurumlari));
     assert.deepEqual(aparatH.get(op(emir, 10)), { durum: 'yok', secildi: true }, 'aparat stokta yok');
     assert.deepEqual(aparatH.get(op(emir, 20)), { durum: 'yok', secildi: false }, 'listesiz adımda madde gerekmez');

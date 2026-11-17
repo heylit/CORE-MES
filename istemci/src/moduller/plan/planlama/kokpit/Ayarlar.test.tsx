@@ -139,11 +139,12 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     const b = kur(ornekCalisma(), false, 'geri');
     expect(b.t.yaz).not.toHaveBeenCalled();
   });
-  it('malzeme kuralının açıklaması seçime göre değişir; aparat anahtarı paneldedir', () => {
+  it('ölçü aleti adedi anahtarı paneldedir ve kapatılınca kapalı listesine yazılır', () => {
     kur(ornekCalisma());
     const panel = screen.getByRole('complementary', { name: 'Plan ayarları' });
-    expect((within(panel).getByLabelText('Aparat ve özel takım adedi') as HTMLInputElement).disabled).toBe(false);
-    fireEvent.change(within(panel).getByLabelText('Malzeme kuralı'), { target: { value: 'sert' } });
-    expect(within(panel).getByText(/termini olmayan eksik malzemeyi bekleyen iş yerleşmez/)).toBeTruthy();
+    const kutu = within(panel).getByLabelText('Ölçü aleti adedi') as HTMLInputElement;
+    expect(kutu.checked).toBe(true);
+    fireEvent.click(kutu);
+    expect(within(panel).getByText('Ölçü aleti adedi: açık → kapalı')).toBeTruthy();
   });
 });

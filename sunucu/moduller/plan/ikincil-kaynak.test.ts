@@ -195,3 +195,49 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     assert.deepEqual(ikincilKaynakKur({ kaynaklar: null, kartlar: new Map(), istekler: null, takimlar: null }), { kaynaklar: null, istekler: null });
   });
 });
+
+describe('plan: ölçü aleti kısıtı', () => {
+  const olcu = (aletler: { turId: number; tur: string; durum: string }[], turler = [7]) => ikincilKaynakKur({
+    kaynaklar: null, kartlar: new Map(), istekler: null, takimlar: null, aletler,
+    aletIstekleri: [{ anahtar: 'ORN-E1|10', turler }, { anahtar: 'ORN-E2|10', turler }],
+  });
+
+  test('tür başına kullanılabilir alet sayısı ortak kaynaktır; kalibrasyonu geçmiş alet sayılmaz, aleti olmayan tür kurulmaz', () => {
+    const e = olcu([{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' }, { turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecmis' },
+      { turId: 8, tur: 'ORN-KUMPAS', durum: 'gecmis' }]);
+    assert.deepEqual(e.kaynaklar?.map((k) => [k.id, k.adet, k.tur, k.istasyon]), [['olcu-7', 1, 'olcu_aleti', null]]);
+    assert.deepEqual(e.istekler?.['ORN-E1|10'], [{ kart: 'olcu-7', adet: 1, asama: 'isleme' }]);
+  });
+
+  test('tek aleti olan tür iki işi işleme boyunca sıraya koyar; anahtar kapanınca yalnız izlenir, aparat anahtarı ona dokunmaz', () => {
+    const e = olcu([{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' }]);
+    const [a, b] = planla(e).ops as [Islem, Islem];
+    assert.ok(yakin(a.S, 8) && b.S >= a.C - 1e-6, JSON.stringify([a, b]));
+    assert.ok(planla(e, 0, ['personel', 'kalibrasyon']).ops.every((o) => yakin(o.S, 8)));
+    const [c, d] = planla(e, 0, ['personel', 'aparat']).ops as [Islem, Islem];
+    assert.ok(d.S >= c.C - 1e-6, 'aparat anahtarı ölçü aletini gevşetmez');
+  });
+
+  test('yaklaşan kalibrasyonlu alet sayılır; geçmiş, kullanım dışı ve kaydı olmayan sayılmaz', () => {
+    const e = olcu([{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'yaklasan' }, { turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' },
+      { turId: 7, tur: 'ORN-MIKROMETRE', durum: 'kullanim-disi' }, { turId: 7, tur: 'ORN-MIKROMETRE', durum: 'kayit-yok' }]);
+    assert.deepEqual(e.kaynaklar?.map((k) => k.adet), [2]);
+  });
+
+  test('aynı adımın aparat ve ölçü aleti isteği birlikte gider; aparatsız adıma yalnız alet eklenir', () => {
+    const e = ikincilKaynakKur({
+      kaynaklar: [], kartlar: new Map(), takimlar: null,
+      istekler: [{ anahtar: 'ORN-E1|10', istekler: [{ malzemeId: 900, adet: 1, asama: 'ayar_isleme' }] }],
+      aletler: [{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' }],
+      aletIstekleri: [{ anahtar: 'ORN-E1|10', turler: [7] }, { anahtar: 'ORN-E2|10', turler: [7] }],
+    });
+    assert.deepEqual(e.istekler, {
+      'ORN-E1|10': [{ kart: '900', adet: 1, asama: 'ayar_isleme' }, { kart: 'olcu-7', adet: 1, asama: 'isleme' }],
+      'ORN-E2|10': [{ kart: 'olcu-7', adet: 1, asama: 'isleme' }],
+    });
+  });
+
+  test('kullanılabilir aleti olmayan tür planı bekletmez', () => {
+    assert.ok(planla(olcu([{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecmis' }])).ops.every((o) => yakin(o.S, 8)));
+  });
+});
