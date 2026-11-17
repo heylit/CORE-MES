@@ -127,6 +127,8 @@ function Taslakli(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
 interface Onay { aday: TurAdayi; ileti: string; turda: boolean; baslik: string; dugme: string; yonGeri?: boolean }
 
+const listedeSecimKalir = (): void => undefined;
+
 function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: TaslakYazici | null }) {
   const { c, komut, yetki, sec: ortakSec, taslak } = o;
   const { bildir } = useBildirim();
@@ -616,16 +618,17 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const adimEk = useMemo(() => adimEkleri(c), [c]);
   const adimBekle = useMemo(() => adimBeklemeleri(c, m.simdi), [c, m.simdi]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
+  // Liste düzeninde boş tahta alanına basmak açık satırı kapatmaz; tezgâha sorun bildirme ayrıntılı Kokpit'tedir.
   const listeTahtasi = (
     <>
       <Tahta
-        m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
-        yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={secimiKaldir}
-        sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+        yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={listedeSecimKalir}
+        sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
         coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme}
       />
-      <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} sorunBildir={sorunBildir} />
+      <Liste m={m} cx={cx} goz="T" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} sorunBildir={null} />
     </>
   );
   return (
