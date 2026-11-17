@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, sayiEki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
@@ -24,6 +24,9 @@ interface Ozellikler {
   // toplu düğme veri değişikliklerini adıyla söyler ve ikincildir (sayfanın tek birincili taslak çubuğundadır), nabzın olay sayısı satırda
   // çizilmez (şeritte tek sayı sayfanınkidir; olaylar açık nabızda listelenir).
   yuva?: SeritYuvaBaglari | null;
+  // Sayfa şeridi kendi çiziyorsa (Motor, 3317-1b) aynı iki yere doğrudan verdiği içerik: satırda plan durumu rozetinin yerine özet, şeridin
+  // altında liste. Toplu düğme birincil kalır (sayfanın tek birincili odur).
+  ek?: { satir: ReactNode; alt: ReactNode } | null;
 }
 
 // Durum ışığı: geciken yoksa yeşil; bir iki geciken ya da darboğaz %95 üstündeyse sarı; daha çok gecikende kırmızı.
@@ -69,7 +72,7 @@ export function Cubuk(o: Ozellikler) {
                 </button>
               );
             })}
-{!o.yuva && (
+{!o.yuva && !o.ek && (
                         <button type="button" className="tc-pym-sb-nb-k" data-ikincil="" data-olaylar="" aria-expanded={o.nabizAcik} title="Olaylar: arıza, acil sipariş, malzeme, eksik kişi, fason. Aç ya da kapat." onClick={() => o.nabizAc(!o.nabizAcik)}>
               <Simge ad="alert" boyut="k" /><b className="tc-pym-mono">{olaylar.length}</b><span>olay</span>
             </button>
@@ -77,8 +80,9 @@ export function Cubuk(o: Ozellikler) {
           </div>
         )}
         {o.yuva && <span className="tc-pym-sb-yuva" ref={o.yuva.satir} />}
+        {o.ek && <span className="tc-pym-sb-yuva">{o.ek.satir}</span>}
         <span className="tc-pym-sb-sag">
-          {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.yuva ? null : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
+          {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.yuva || o.ek ? null : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
@@ -104,6 +108,7 @@ export function Cubuk(o: Ozellikler) {
       </div>
       {n && o.nabizAcik && <NabizPaneli {...o} n={n} />}
       {o.yuva && <div className="tc-pym-sb-alt-yuva" ref={o.yuva.alt} />}
+      {o.ek && o.ek.alt !== null && <div className="tc-pym-sb-alt-yuva">{o.ek.alt}</div>}
     </div>
   );
 }

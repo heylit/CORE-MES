@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { CALISMA_DEGERI } from './siparis/test-veri.ts';
+import { ornekCalisma } from './motor/ornek.ts';
 import { CALISMA_KAYDI, YONETICI, ac, sunucuKur } from './test-ortak.tsx';
 
 // 2319 (2311 S7): /plan/surum cevabındaki bayat alanı değişiklik şeridinin ikinci satırına gelir. Veriler uydurmadır.
@@ -52,6 +53,17 @@ describe('PlanlamaYeni canlı plan bayat işareti', () => {
     surumKur({ ...BAYAT, bayat: { ...BAYAT.bayat!, bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0, 'adim-bitti': 0, 'emir-iptal': 0, 'satin-alma-termini': 0, 'fason-termini': 0 }, olaylar: [] } });
     ac('/plan/sevkiyat');
     await screen.findByRole('region', { name: 'Değişiklik akışı' }, { timeout: 10000 });
+    expect(canliSatiri()).toBeNull();
+  }, 20000);
+
+  // 3317-1b: Motor'da ayrı satır çizilmez; bekleyenler ve eskiten olaylar plan şeridindeki listededir.
+  it('Motor sayfasında ayrı değişiklik satırı yoktur; eskiten olaylar plan şeridinin özetindedir', async () => {
+    sunucuKur(YONETICI, [{ ...CALISMA_KAYDI, deger: ornekCalisma() }]);
+    surumKur(BAYAT);
+    ac('/plan/plan');
+    const ozet = await vi.waitFor(() => { const x = document.querySelector('[data-degisiklik-ozeti]'); expect(x?.textContent ?? '').toMatch(/2 saha/); return x as HTMLElement; }, { timeout: 10000 });
+    expect(ozet.closest('[role="toolbar"]')?.getAttribute('aria-label')).toBe('Plan çubuğu');
+    expect(screen.queryByRole('region', { name: 'Değişiklik akışı' })).toBeNull();
     expect(canliSatiri()).toBeNull();
   }, 20000);
 });

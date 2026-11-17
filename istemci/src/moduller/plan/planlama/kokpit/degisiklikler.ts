@@ -1,5 +1,6 @@
 import type { PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { BekleyenDegisiklik } from '../tipler.ts';
+import { bekleyenListesi } from '../kayit.ts';
+import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitModeli } from './kurallar.ts';
 
 // Planı etkileyen değişiklikler (3317 a, 1. adım): üç kaynağın tek listesi. "Veri değişti": başka sayfada ya da bu sayfada yapılan, plana
@@ -52,6 +53,13 @@ const sure = (saat: number): string => {
   const dk = Math.round(saat * 60), s = Math.floor(dk / 60), d = dk % 60;
   return s === 0 ? `${String(d)} dk` : d === 0 ? `${String(s)} sa` : `${String(s)} sa ${String(d)} dk`;
 };
+
+// "Veri değişti" satırlarının kaynağı: ortak çalışmanın kayıtlı bekleyenleri (plan veriden eskiyse) ve bu açılışta gelen, henüz yazılmamış
+// başka sayfa satırı (salt okunur kişide hiç yazılmaz).
+export function bekleyenDegisiklikleri(c: PlanlamaCalismasi | null, dis: BekleyenDegisiklik | null): BekleyenDegisiklik[] {
+  const kayitli = c && c.plan !== null && c.plan.dataVer !== c.dataVer ? bekleyenListesi(c) : [];
+  return dis === null || kayitli.some((b) => b.id === dis.id) ? kayitli : [...kayitli, dis];
+}
 
 export interface DegisiklikGirdisi {
   m: KokpitModeli;

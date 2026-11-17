@@ -13,7 +13,6 @@ import { useCanliPlan } from '../motor/fark.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz } from '../motor/kurallar.ts';
 import { useAn } from '../motor/saat.ts';
 import { SeritYuvasi } from '../motor/ust/yuva.ts';
-import { bekleyenListesi } from '../kayit.ts';
 import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
@@ -22,7 +21,7 @@ import { Ayarlar } from './Ayarlar.tsx';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { DegisiklikOzeti, Degisiklikler } from './Degisiklikler.tsx';
-import { degisiklikler, type Degisiklik } from './degisiklikler.ts';
+import { bekleyenDegisiklikleri, degisiklikler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
   OLCEKLER, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
@@ -424,10 +423,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Kayıtlı bekleyenler ve bu açılışta gelen, henüz yazılmamış başka sayfa satırı (salt okunur kişide hiç yazılmaz; sayfa üstündeki satırın
   // gösterdiğiyle aynı liste).
   const disSatir = yuva.dis ?? null;
-  const bekleyenDegisiklikler = useMemo(() => {
-    const kayitli = ortakCalisma && ortakCalisma.plan !== null && ortakCalisma.plan.dataVer !== ortakCalisma.dataVer ? bekleyenListesi(ortakCalisma) : [];
-    return disSatir === null || kayitli.some((b) => b.id === disSatir.id) ? kayitli : [...kayitli, disSatir];
-  }, [ortakCalisma, disSatir]);
+  const bekleyenDegisiklikler = useMemo(() => bekleyenDegisiklikleri(ortakCalisma, disSatir), [ortakCalisma, disSatir]);
   const degisiklikListesi = useMemo(() => degisiklikler({
     m, zaman, an: (ms) => new Date(ms).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }),
     bekleyen: bekleyenDegisiklikler,
