@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
 import { go } from '../merkez/ui.ts';
-import { fmtDate, money, norm, todayStr } from '../merkez/util.ts';
+import { fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 
 // Siparişler (2430): tedarikçiye verilen her sipariş bir satır; satıra basınca talebin Sipariş adımı açılır, geri tuşu buraya döner.
 // Veri merkezin açılış verisidir (ayrı uç yok); tanımlar iş kutusuyla aynı (2425).
@@ -73,7 +73,8 @@ export function Siparisler() {
   const acikTutar = acik.reduce((t, s) => t + (s.tutar ?? 0), 0);
   const tedarikciler = [...new Map(hepsi.map((s) => [s.supplierId, s.tedarikci])).entries()].sort((a, b) => a[1].localeCompare(b[1], 'tr'));
 
-  const sutunlar: Sutun<SiparisSatiri>[] = [
+  const kilit = fiyatKilitli();
+  const tumSutunlar: Sutun<SiparisSatiri>[] = [
     {
       anahtar: 'no', baslik: 'Sipariş', mono: true, sirala: true, csv: (s) => siparisEtiketi(s),
       hucre: (s) => (s.poNo ? <span className="sa-ekran-govde sa-sp-kod"><span>{s.orderNo || '–'}</span><small>{s.poNo}</small></span> : s.orderNo || '–'),
@@ -110,6 +111,8 @@ export function Siparisler() {
       },
     },
   ];
+  // 3401-1 a: fiyat görmeyen okuyucuda tutar sütunu ve açık sipariş tutarı çizilmez; üstte tek kilit notu durur.
+  const sutunlar = kilit ? tumSutunlar.filter((x) => x.anahtar !== 'tutar') : tumSutunlar;
 
   return (
     <div className="sa-ekran sa-ekran-siparisler">
@@ -120,9 +123,10 @@ export function Siparisler() {
             <SayiKarti baslik="Geciken teslim" simge="alert" sayi={geciken.length} ton="hata" altMetin={`en eskisi ${Math.max(...geciken.map((s) => s.gecikme ?? 0))} gün`} />
           )}
           {hafta.length > 0 && <SayiKarti baslik="Bu hafta gelecek" simge="calendar" sayi={hafta.length} altMetin="bugün dahil 7 gün" />}
-          {acik.length > 0 && <SayiKarti baslik="Açık sipariş" simge="cart" sayi={acik.length} altMetin={`${money(acikTutar, 'TRY', 0)}, KDV hariç`} />}
+          {acik.length > 0 && <SayiKarti baslik="Açık sipariş" simge="cart" sayi={acik.length} {...(kilit ? {} : { altMetin: `${money(acikTutar, 'TRY', 0)}, KDV hariç` })} />}
         </div>
       )}
+      {kilit && <KilitliSutunNotu ne="Fiyat sütunları" yetki={YETKI_ADI.satinAlmaFiyati} />}
       <Sekmeler etiket="Sipariş durumu" secili={bolum} sec={bolumYaz}
         sekmeler={BOLUMLER.map(([k, l, f, sayim]) => {
           const n = acik.filter(f).length;
@@ -140,7 +144,7 @@ export function Siparisler() {
               secenekler={tedarikciler.map(([deger, baslik]) => ({ deger, baslik }))} />
           ),
         }} />
-      <p className="sa-ekran-not">{`Tutarlar ₺, KDV hariç; bugün ${fmtDate(bugun)}. Geciken: teslimi bitmemiş ve beklenen teslimi geçmiş sipariş.`}</p>
+      <p className="sa-ekran-not">{`${kilit ? '' : 'Tutarlar ₺, KDV hariç; '}bugün ${fmtDate(bugun)}. Geciken: teslimi bitmemiş ve beklenen teslimi geçmiş sipariş.`}</p>
     </div>
   );
 }

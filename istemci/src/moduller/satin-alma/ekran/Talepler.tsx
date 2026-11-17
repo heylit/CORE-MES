@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
@@ -8,7 +8,7 @@ import { grupMetni } from '../merkez/guncelleme-grubu.ts';
 import { S, V, settings } from '../merkez/store.ts';
 import type { PurchaseRequest, RequestStatus } from '../merkez/tipler.ts';
 import { go } from '../merkez/ui.ts';
-import { dayDiff, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
+import { dayDiff, fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 import { STATUS_FILTERS, filteredRequests, gecikmisMi, kimde, render, reqValue } from '../merkez/views.ts';
 
 // Talepler (2412-2): durum sekmeleri, ortak tablo, "Kimde bekliyor" sütunu ve tek tutar. Süzgeç ve sıra merkezin durumundadır (V);
@@ -50,7 +50,8 @@ export function Talepler() {
   const bugun = todayStr();
   const pano = V.view === 'board';
   const birimler = [...new Set([...(settings().departments || []).map((d) => d.name), ...hepsi.map((r) => r.department).filter(Boolean)])] as string[];
-  const sutunlar: Sutun<PurchaseRequest>[] = [
+  const kilit = fiyatKilitli();
+  const tumSutunlar: Sutun<PurchaseRequest>[] = [
     { anahtar: 'no', baslik: 'No', hucre: (r) => r.no, mono: true, kirilmaz: true, sirala: true },
     {
       anahtar: 'title', baslik: 'Talep', sirala: true,
@@ -77,6 +78,8 @@ export function Talepler() {
     },
     { anahtar: 'need', baslik: 'İhtiyaç', kirilmaz: true, sirala: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
   ];
+  // 3401-1 a: fiyat görmeyen okuyucuda tutar sütunu çizilmez; üstte tek kilit notu durur.
+  const sutunlar = kilit ? tumSutunlar.filter((x) => x.anahtar !== 'value') : tumSutunlar;
   return (
     <div className="sa-ekran sa-ekran-talepler">
       <SayfaBasligi
@@ -86,6 +89,7 @@ export function Talepler() {
           ? { anahtar: 'liste', baslik: 'Liste görünümü', simge: 'list', sec: () => degistir(() => { V.view = 'list'; }) }
           : { anahtar: 'pano', baslik: 'Akış panosu', simge: 'kanban', sec: () => degistir(() => { V.view = 'board'; }) }]}
       />
+      {kilit && <KilitliSutunNotu ne="Fiyat sütunları" yetki={YETKI_ADI.satinAlmaFiyati} />}
       {!pano && (
         <Sekmeler
           etiket="Talep durumu" secili={V.status}

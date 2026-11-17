@@ -10,6 +10,7 @@ import { UNDO, V, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, ty
 import { AYRINTI, bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, toast, type BildirimYolu } from "./ui.ts";
 import { onAfterRender, render } from "./views.ts";
 import { setBasamakYazar, setRoller } from "./memory.ts";
+import { setFiyatKilidi } from "./util.ts";
 import { api } from "../../../ortak/veri/api.ts";
 
 // Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
@@ -34,7 +35,7 @@ const ISKELET = `<div class="app">
 
 export type MerkezSayfasi = Page;
 // git: adresi değiştirir; yerine true ise tarayıcı geçmişine yeni kayıt eklemez.
-export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string, yerine?: boolean) => void; onaylayabilir?: boolean; basamakYazar?: boolean; bildirim?: BildirimYolu }
+export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string, yerine?: boolean) => void; onaylayabilir?: boolean; basamakYazar?: boolean; fiyatGorur?: boolean; bildirim?: BildirimYolu }
 
 // Prototip sayfası → ikinci menü yolu. Ayrıntı sayfası ait olduğu listenin yolundadır; talep ayrıntısı geldiği yolda kalır.
 const YOLLAR: Partial<Record<Page, string>> = {
@@ -120,6 +121,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   setRole(secenek.rol);
   setOnaylayabilir(secenek.onaylayabilir ?? false);
   setBasamakYazar(secenek.basamakYazar ?? false);
+  setFiyatKilidi(!(secenek.fiyatGorur ?? true));
   // Basamağa rol seçimi yalnız yöneticide; rol listesi kişilerin ucundan (yönetici kisiler.oku taşır). Gelmezse seçimde yalnız kayıtlı rol görünür.
   if (secenek.basamakYazar && secenek.sayfa === "settings") void api.get<{ roller: { id: number; ad: string }[] }>("/roller").then((c) => { setRoller(c.roller); render(); }).catch(() => undefined);
   etkin = secenek;

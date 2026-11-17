@@ -12,7 +12,7 @@ import { ORNEK_AYAR, ORNEK_KARTLAR, ORNEK_SABLONLAR } from './ornek-veri.ts';
 import { kartOnbelleginiBosalt } from './veri.ts';
 
 const MALZEME: Islem[] = ['sayfa.malzemeler', 'malzemeler.yaz', 'malzemeler.onayla', 'malzemeler.tanim-yaz'];
-export const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: [YENI_EKRAN_ISLEMI, ...MALZEME, 'satin-alma.oku', 'sayfa.etiket-merkezi'] };
+export const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: [YENI_EKRAN_ISLEMI, ...MALZEME, 'satin-alma.fiyat-oku', 'sayfa.etiket-merkezi'] };
 export const YAZAN: Kullanici = { id: 7, ad: 'Deneme Yazan', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler', 'malzemeler.yaz'] };
 export const OKUYAN: Kullanici = { id: 9, ad: 'Deneme Okuyan', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler'] };
 export const KAPISIZ: Kullanici = { id: 11, ad: 'Deneme Kapısız', islemler: MALZEME };

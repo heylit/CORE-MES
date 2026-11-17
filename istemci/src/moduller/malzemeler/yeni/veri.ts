@@ -120,7 +120,8 @@ export function useKartlar() {
 // Kartın birim fiyatı satın almanın kg fiyatındandır; karta yazılmaz. Uç satın alma ya da maliyet okuma ister: yetkisi
 // olmayan rolde hiç sorulmaz (195 a). Okunamazsa null; ekran satırı çizmez.
 export type KgFiyati = Pick<MalzemeKgFiyatlariCevabi['malzemeler'][number], 'kgFiyati' | 'birimFiyati' | 'paraBirimi' | 'gecerlilik'>;
-export const KG_FIYATI_ISLEMLERI = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+// 3401-1 a: yalnız satin-alma.oku kg fiyatını açmaz; sunucudaki KG_FIYATI_OKUR ile aynıdır.
+export const KG_FIYATI_ISLEMLERI = ['satin-alma.fiyat-oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 const KG_FIYATI_PARCASI = 200;
 const hammaddeMi = (k: KatalogKarti): boolean => !k.kayit.tur || k.kayit.tur === 'hammadde';
 
