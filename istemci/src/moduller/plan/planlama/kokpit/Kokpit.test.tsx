@@ -57,7 +57,7 @@ function Yuvali({ children, dis = null }: { children: ReactNode; dis?: BekleyenD
 function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true, dis: BekleyenDegisiklik | null = null) {
   const sec = vi.fn();
   render(
-    <MemoryRouter><BildirimSaglayici><Yuvali dis={dis}>
+    <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali dis={dis}>
       <Kokpit
         depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} {...oz}
@@ -78,7 +78,7 @@ function SecimliKokpit() {
   );
 }
 function acSecimli() {
-  render(<MemoryRouter><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
 }
 
 describe('Kokpit', () => {
@@ -260,7 +260,7 @@ describe('Kokpit', () => {
     taslakSunucusu([satir(TASI, '3.10 → T2')]);
     const sen = (canliSurum: number) => ({ canli: null, canliSurum, senaryolar: [] });
     const sayfa = (canliSurum: number) => (
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar: sen(canliSurum) } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
@@ -293,7 +293,7 @@ describe('Kokpit', () => {
       gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: true, geriGonder: true, canliyaAl: true },
     };
     render(
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar: { canli: null, canliSurum: 3, senaryolar: [eski] } } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
@@ -404,7 +404,7 @@ describe('Kokpit', () => {
     });
     const senaryolar = { canli: null, canliSurum: 3, senaryolar: [senaryo(1, 'Onay Pzt', 'onayda'), senaryo(2, 'Deneme', 'acik')] };
     render(
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}

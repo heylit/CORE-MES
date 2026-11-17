@@ -43,7 +43,7 @@ const govdeler = (post: { mock: { calls: unknown[][] } }) => post.mock.calls.fil
 function sayfayiAc(senaryolar: unknown = { canli: null, canliSurum: 3, senaryolar: [] }) {
   const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
   render(
-    <MemoryRouter><BildirimSaglayici>
+    <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
       <Kokpit
         depo={depo} calisma={guncelCalisma()} komut={komut} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}

@@ -17,7 +17,7 @@ function kur(c: PlanlamaCalismasi, yazabilir = true, yon: 'ileri' | 'geri' | nul
   vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: null, degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
   const { t, yazilan } = sahteTaslak(c.dataVer);
   const kapat = vi.fn();
-  render(<MemoryRouter><Ayarlar c={c} taslak={t} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} yon={yon} etkiBekliyor={etkiBekliyor} /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/?duzen=klasik']}><Ayarlar c={c} taslak={t} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} yon={yon} etkiBekliyor={etkiBekliyor} /></MemoryRouter>);
   return { t, kapat, yazilan };
 }
 
@@ -110,7 +110,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
   it('yön panelinin başlığı komut taslağa girip plan yeni yönü gösterince de "eski → yeni" kalır', () => {
     vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: null, degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
     const c = ornekCalisma(), { t } = sahteTaslak(c.dataVer);
-    const ciz = (x: PlanlamaCalismasi) => <MemoryRouter><Ayarlar c={x} taslak={t} yazabilir kim="ORN-Planlamaci" kapat={() => {}} yon="geri" /></MemoryRouter>;
+    const ciz = (x: PlanlamaCalismasi) => <MemoryRouter initialEntries={['/?duzen=klasik']}><Ayarlar c={x} taslak={t} yazabilir kim="ORN-Planlamaci" kapat={() => {}} yon="geri" /></MemoryRouter>;
     const { rerender } = render(ciz(c));
     rerender(ciz({ ...c, w: { ...c.w, yon: 'geri' } }));
     expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' }).textContent).toContain('İleriye → Teslimden geriye');

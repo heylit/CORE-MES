@@ -58,3 +58,7 @@ function gecikmeNedeni(m: KokpitModeli, p: OkunanPlan | null, e: KokpitEmri, zam
   if (!r?.why || r.why.t === 'rota') return `${bas} ${sure} bekledi.`;
   return `${bas} ${sure} bekledi: ${nedenMetni(r)}`;
 }
+
+// Liste düzeninde (3414 b) sıra: ilgi bekleyen (plansız, geç, riskli) önce, sonra zamanında bitenler; kendi içlerinde gelen sıra (termin) korunur.
+const ILGI: Record<SiraKarti['durum'], number> = { plansiz: 0, gec: 0, risk: 0, iyi: 1 };
+export const listeSirasi = (kartlar: readonly SiraKarti[]): SiraKarti[] => kartlar.map((k, i) => [k, i] as const).sort((a, b) => ILGI[a[0].durum] - ILGI[b[0].durum] || a[1] - b[1]).map(([k]) => k);

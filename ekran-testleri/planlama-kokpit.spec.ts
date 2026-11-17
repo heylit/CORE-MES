@@ -156,7 +156,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     return json(r, { calismaSurumu: Number(q.get('calismaSurumu')), gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }], bitis: S + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -364,7 +364,7 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
   c.D.tezgahlar = [...c.D.tezgahlar, ...yedek];
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum: 1 }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -534,7 +534,7 @@ test('Kokpit 3297: yukarıdan aşağı düzen; kart, adım ve boş yere basarak 
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }, { isId: 'S4.a2', tezgah: iki, S: S2, C: S2 + 4 }], bitis: S2 + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -606,7 +606,7 @@ test('Kokpit 3318: operasyon tablosu; satırda tezgâh ve saat girişi, öngör�
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }, { isId: 'S4.a2', tezgah: iki, S: S + 10, C: S + 14 }], bitis: S + 14 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -676,7 +676,7 @@ test('Kokpit 3318-2: "Teslimden geriye yerleştir" onay sorar, emrin yönünü g
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }, { isId: 'S4.a2', tezgah: 'M3', S: S + sure - 4, C: S + sure }], bitis: S + sure });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -719,7 +719,7 @@ test('Kokpit 3318-2: "Teslimden geriye yerleştir" onay sorar, emrin yönünü g
 test('Kokpit 3335-2b: Planla menüsünde geride kalanları yeniden planla; sayı geride emir sayısı, komut taslağa yazılır ve Geri alır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.clock.setSystemTime(new Date('2026-10-19T12:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -763,7 +763,7 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }], bitis: S + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -862,7 +862,7 @@ test('Kokpit 3318-3: odaklı tezgâh paneli; uygun tezgâhlar, dolu işler ve bo
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -956,7 +956,7 @@ test('Kokpit 3318-4: odaklı tezgâh panelinde haftalar sonraya yerleşmiş iş 
   const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan({ ...d.ops, 'S1.a2': { job: 'S1', m: 'M2', S: 393, C: 401 } }) }));
   await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [] }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -999,7 +999,7 @@ test('Kokpit 3317: değişiklik özeti şeritte, liste üç başlıkta; Göster 
     ] },
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T10:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1127,7 +1127,7 @@ test('Kokpit 3317-2: veri değişikliği satırında Etkisini gör, önce ve son
     return json(r, cevap());
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1225,7 +1225,7 @@ test('Kokpit 3317-3: plan geride satırında Etkisini gör, önce ve sonra; Uygu
     return json(r, cevap());
   });
   await page.clock.setSystemTime(new Date('2026-10-19T12:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1285,7 +1285,7 @@ test('Kokpit 3330: kart seçilince siparişin işleri parlak, ötekiler soluk am
   c.D.urunler = c.D.urunler.map((u) => (u.id === 'U1' ? { ...u, rota: [...u.rota, { k: 'a3', ad: 'Capak', bag: [['a2', 'o']], tezgahlar: [{ id: 'M3', cevrim: 60 }] }] } : u));
   await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan({ ...ops, ...d.ops }) }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1400,7 +1400,7 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1459,7 +1459,7 @@ test('Kokpit 3365-2: çoklu seçim birlikte kayar; Geri sonra İleri; yakınlaş
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1532,7 +1532,7 @@ test('Kokpit 3330-3c: fason adımın satırında firma tarihi ve sipariş numara
     await r.fulfill({ response: cevap, json: { ...(await cevap.json()) as object, emirler: { orders: [], opStatus: {}, opProg: {}, opYer: { 'S1|root|2': yer } } } });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1562,7 +1562,7 @@ test('Kokpit 3369: malzeme satırı adımlardan önce; şirket, termin, stoktan 
     acikSiparisler: [{ kod: 'H1', miktar: 25, tarih: '2026-10-20', siparisNo: 'ORN-SA-7', satir: 7001, tedarikci: 'ORN-Tedarikçi A' }], tedarikTerminleri: [],
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1625,7 +1625,7 @@ test('Kokpit 3297-5: kartlar müşteri siparişine göre toplanır; siparişin e
     await r.fulfill({ response: cevap, json: { ...(await cevap.json()) as object, siparisBaglari: { S1: { ...a, kalem: 1 }, S3: { ...a, kalem: 2 }, S4: { ...b, kalem: 1 } } } });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1697,7 +1697,7 @@ test('Kokpit 3B: Matris düz açılır, 3B\'ye kalkar; hücre emirleri süzer; Y
     })),
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1756,7 +1756,7 @@ test('Kokpit 3B: tezgâh çoksa yalnız yükü olan tezgâhlar çizilir, düğme
   c.D.tezgahlar = [...c.D.tezgahlar, ...yedek];
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum: 1 }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -2141,7 +2141,7 @@ test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görün�
 // Araçlar menüsü düğmenin altında tam görünür: düğme şeridin solunda olsa da (şerit ikinci satıra indiğinde) menü sola taşıp kesilmez.
 test('Kokpit Araçlar menüsü: bütün maddeler ekranın içinde görünür, sola ve sağa taşmaz', async ({ page, ac }, bilgi) => {
   await taslakSunucusu(page, (d) => ({ ...calisma(ILK, {}), w: d.w, locks: d.locks, plan: plan(ILK) }));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -2185,7 +2185,7 @@ test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç c�
     return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: q.get('isId'), tezgah: q.get('tezgah'), S, C: S + 8, tur: 'tasinan' }] });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan/kokpit');
+  await ac('/plan/kokpit?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   const karsilama = page.getByRole('button', { name: 'Başlayalım' });
@@ -2245,5 +2245,57 @@ test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç c�
   await expect(kokpit).toHaveAttribute('data-sayfa', 'onay');
   await tasma();
   await cek('4-onay');
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3414 b: liste ortada düzeni Kokpit'in açılışıdır. Tek sipariş tablosu; satır açılınca sonuç cümlesi, adımlar ve tezgâhlardaki yer.
+test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonuç cümlesi yazar, geç siparişte neden; ayrıntılı Kokpit Diğer menüsünde; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const nedenli = (ops: Record<string, Is>) => ({ ...plan(ops), ops: { ...ops, 'S1.a2': { ...ops['S1.a2'], why: { t: 'tezgah', r: 'S2.a1' } } } });
+  // Yeniden planlama taslakta plansız emre yer verir (uydurma: ilk aday tezgâhta dört saat).
+  const yerlesik = (d: Durum, l: readonly Komut[]) => (l.some((k) => k.tur === 'yeniden-planla') ? { ...d.ops, 'S4.a1': { job: 'S4', m: 'M2', S: 41, C: 45 } } : d.ops);
+  let komutlar: readonly Komut[] = [];
+  const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: nedenli(yerlesik(d, komutlar)) }));
+  komutlar = t.s.komutlar;
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3414b-${ad}-${bilgi.project.name}.png` }); };
+  const tablo = kokpit.getByRole('table', { name: 'Siparişler' });
+  await expect(tablo).toBeVisible();
+  // Bölümler, operasyon tablosu ve Planla menüsü bu düzende yoktur.
+  await expect(kokpit.locator('.tc-pyq-planla')).toHaveCount(0);
+  await expect(kokpit.locator('.tc-pyq-bolum')).toHaveCount(0);
+  // İlgi bekleyenler üsttedir: plansız ve geç sipariş zamanında bitenlerden önce gelir.
+  const satirlar = tablo.locator('.tc-pyq-ld-satir');
+  await expect(satirlar.last()).toContainText('Zamanında');
+  await tasma();
+  await cek('1-liste');
+
+  const s4 = tablo.locator('.tc-pyq-ld-kart', { has: page.locator('[data-kart]', { hasText: 'S4' }) });
+  await s4.getByRole('button', { name: 'Planla' }).click();
+  await expect(s4.getByRole('status')).toContainText('Planda yeri yok.');
+  await s4.locator('.tc-pyq-ld-ayrinti').getByRole('button', { name: 'Planla' }).click();
+  await expect.poll(() => t.s.komutlar.map((k) => k.tur)).toEqual(['yeniden-planla']);
+  await expect(s4.getByRole('status')).toContainText(/1 operasyon planda\. Bitiş .+ erken\./);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await tasma();
+  await cek('2-planlandi');
+
+  const s1 = tablo.locator('.tc-pyq-ld-kart', { has: page.locator('[data-kart]', { hasText: 'S1' }) });
+  await s1.getByRole('button', { name: 'Düzelt' }).click();
+  await expect(s1.getByRole('status')).toContainText('Neden: 2. adım (Freze) F-01 tezgâhının boşalmasını');
+  await expect(s1.getByRole('list', { name: 'Adımlar' })).toContainText('1. Torna');
+  await tasma();
+  await cek('3-gec');
+
+  await kokpit.getByRole('button', { name: 'Diğer' }).click();
+  await kokpit.getByRole('menu', { name: 'Diğer' }).getByRole('menuitem', { name: /Ayrıntılı Kokpit/ }).click();
+  await expect(kokpit).toHaveAttribute('data-duzen', 'klasik');
+  await kokpit.getByRole('button', { name: 'Sade Kokpit' }).click();
+  await expect(tablo).toBeVisible();
   expect(ag.hatalar).toEqual([]);
 });
