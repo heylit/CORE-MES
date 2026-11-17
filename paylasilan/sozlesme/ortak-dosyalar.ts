@@ -140,10 +140,10 @@ export const kaynakKlasoruCevabi = z.object({ klasorId: z.number().int().nullabl
 
 // Hazır listeler (kart 3390, 3390 a): kaydın dosyaları, hangi modülde durursa dursun, kaynağına göre gruplu tek ekranda. Dosya kopyalanmaz;
 // satır yalnız kaydı ve dosyanın kaynağını okuyabilene gelir (Risk K1), indirme kaynağın kendi ucundandır (ADR 0009, 3).
-export const HAZIR_LISTELER = ['uretim-emri', 'satin-alma-siparisi'] as const;
+export const HAZIR_LISTELER = ['uretim-emri', 'satin-alma-siparisi', 'uretim-kaydi', 'plan'] as const;
 export type HazirListe = (typeof HAZIR_LISTELER)[number];
 // Grubun kaynağı; ekran başlığı ve ikonu bundan seçer.
-export const HAZIR_KAYNAKLARI = ['cizim', 'satin-alma', 'irsaliye', 'parti', 'klasor'] as const;
+export const HAZIR_KAYNAKLARI = ['cizim', 'talimat', 'adim-foto', 'satin-alma', 'irsaliye', 'parti', 'klasor'] as const;
 export type HazirKaynak = (typeof HAZIR_KAYNAKLARI)[number];
 export const HAZIR_KAYIT_SINIRI = 50;
 export const HAZIR_DOSYA_SINIRI = 200;

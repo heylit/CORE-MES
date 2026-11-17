@@ -1,6 +1,7 @@
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { AZAMI_AD, KLASOR_DUZEYLERI } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import type { KlasorDuzeyi, VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 
 // Kurallar ADR 0030'dandır; OD numaraları KURAL-TEST.md'de testine bağlanır.
 
@@ -198,4 +199,13 @@ export function arsivdeMi(id: number, klasorler: ReadonlyMap<number, KlasorDugum
     k = k.ustId === null ? undefined : klasorler.get(k.ustId);
   }
   return false;
+}
+
+const GUN_ADLARI = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'] as const;
+
+// Plan listesindeki başlangıç saati ('Sal 17.11 09:00'): sayfadaki kısa tarihle aynı; yedi günlük listede gün adı okunur.
+export function planSaati(an: number | Date): string {
+  const [yil, ay, gun] = tesisGunu(an).split('-') as [string, string, string];
+  const haftaGunu = new Date(Date.UTC(Number(yil), Number(ay) - 1, Number(gun))).getUTCDay();
+  return `${GUN_ADLARI[haftaGunu] ?? ''} ${gun}.${ay} ${tesisSaati(an).slice(11)}`;
 }

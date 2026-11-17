@@ -21,9 +21,13 @@ interface ListeTanimi { baslik: string; simge: SimgeAdi; ara: string; okuma: rea
 export const HAZIR_LISTE_TANIMLARI: Readonly<Record<HazirListe, ListeTanimi>> = {
   'uretim-emri': { baslik: 'Üretim emirleri', simge: 'list', ara: 'Emir no ya da malzeme', okuma: ADIMLI_OKUMA_ISLEMLERI },
   'satin-alma-siparisi': { baslik: 'Satın alma siparişleri', simge: 'cart', ara: 'Sipariş no, tedarikçi ya da kalem', okuma: ['satin-alma.oku', 'satin-alma.yaz'] },
+  'uretim-kaydi': { baslik: 'Üretim kayıtları', simge: 'clipboard-check', ara: 'Biten emir no ya da malzeme', okuma: ADIMLI_OKUMA_ISLEMLERI },
+  plan: { baslik: 'Plan (7 gün)', simge: 'calendar', ara: 'Planlı emir no ya da malzeme', okuma: ['plan.oku', 'plan.yaz'] },
 };
 const KAYNAK_ADI: Record<HazirKaynak, { baslik: string; kaynak: string; simge: SimgeAdi; ton: 'bilgi' | 'uyari' | 'tamam' | 'pasif' }> = {
   cizim: { baslik: 'Çizim ve 3B', kaynak: 'Çizim Merkezi', simge: 'ruler', ton: 'bilgi' },
+  talimat: { baslik: 'Talimat medyası', kaynak: 'Rota', simge: 'book', ton: 'bilgi' },
+  'adim-foto': { baslik: 'Adım fotoğrafları', kaynak: 'Üretim', simge: 'camera', ton: 'tamam' },
   'satin-alma': { baslik: 'Sipariş satırı belgeleri', kaynak: 'Satın alma', simge: 'cart', ton: 'uyari' },
   irsaliye: { baslik: 'Mal kabul irsaliyeleri', kaynak: 'Stok', simge: 'truck', ton: 'tamam' },
   parti: { baslik: 'Parti sertifikaları', kaynak: 'Stok', simge: 'tag', ton: 'tamam' },

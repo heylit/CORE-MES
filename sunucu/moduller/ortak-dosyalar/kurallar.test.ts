@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import {
-  adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, firmaKlasorAdi, gorunurMu, projeKlasorAdi, sablonDenetle, siparisKlasorAdi, sistemAdi, yetkiKaynagi,
+  adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, firmaKlasorAdi, gorunurMu, planSaati, projeKlasorAdi, sablonDenetle, siparisKlasorAdi, sistemAdi, yetkiKaynagi,
 } from './kurallar.ts';
 import type { KlasorDugumu } from './kurallar.ts';
 
@@ -106,5 +106,12 @@ describe('kayda bağlı klasör kuralları (kart 3288)', () => {
   test('KK-6 şablon adı tr-TR harf duyarsız tekil', () => {
     assert.equal(sablonDenetle(['Kalite', 'Teklif']), null);
     assert.notEqual(sablonDenetle(['İç', 'iç']), null);
+  });
+});
+
+describe('plan saati (kart 3390-2)', () => {
+  test('tesis saatinde gün adı ve kısa tarih; gece yarısı UTC gününü değil tesis gününü yazar', () => {
+    assert.equal(planSaati(new Date('2026-11-17T06:00:00Z')), 'Sal 17.11 09:00');
+    assert.equal(planSaati(new Date('2026-11-21T22:30:00Z')), 'Paz 22.11 01:30');
   });
 });
