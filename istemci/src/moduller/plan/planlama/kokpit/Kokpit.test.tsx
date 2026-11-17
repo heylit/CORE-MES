@@ -954,6 +954,46 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(komutlar).toHaveLength(3);
   });
 
+  // 3335-2b: geride kalan (başlaması geçmiş, başlamamış) işlerin emirleri tek satırla yeniden planlanır.
+  it('geride kalanları yeniden planla: sayı geride işi olan emir sayısıdır, komut o emirleri taşır; geride iş yokken satır pasiftir ve nedenini yazar', async () => {
+    // Bütün işler başlamamış ve çok eskide: her planlı emir geridedir.
+    const c = ornekCalisma();
+    const ops = Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { m: string; S: number; C: number; act?: number; fas?: number }> }).ops).map(([id, r]) => [id, { ...r, act: 0, S: r.S - 5000, C: r.C - 5000 }]));
+    const komutlar = kur({ ...c, plan: { ...c.plan, ops } } as typeof c, SAHA);
+    const m = await menu();
+    const geride = satir(m, /Geride kalanları yeniden planla \(\d+\)/);
+    const n = Number(/\((\d+)\)/.exec(geride.textContent ?? '')?.[1]);
+    expect(n).toBeGreaterThan(0);
+    expect(geride.disabled).toBe(false);
+    expect(geride.textContent).toContain('şimdiden sonraya dizer');
+    fireEvent.click(geride);
+    await waitFor(() => { expect(komutlar).toHaveLength(1); });
+    expect(komutlar[0]?.tur).toBe('yeniden-planla');
+    expect((komutlar[0]?.['isler'] as string[]).length).toBe(n);
+    expect(komutlar[0]?.['isler']).not.toContain('*');
+    cleanup();
+    // Bütün işler ileride: geride iş yok.
+    const ileri = Object.fromEntries(Object.entries(ops).map(([id, r]) => [id, { ...r, S: r.S + 15000, C: r.C + 15000 }]));
+    kur({ ...c, plan: { ...c.plan, ops: ileri } } as typeof c, SAHA);
+    const bos = satir(await menu(), /Geride kalanları yeniden planla \(0\)/);
+    expect(bos.disabled).toBe(true);
+    expect(bos.textContent).toContain('Geride kalan iş yok');
+    cleanup();
+    // Geride işlerden biri elle kilitli: satır etkindir, kilitli işin yerinde kalacağını yazar.
+    const idler = Object.keys(ops);
+    const kilit = (l: string[]): Record<string, unknown> => Object.fromEntries(l.map((id) => [id, { m: ops[id]?.m, S: ops[id]?.S }]));
+    kur({ ...c, plan: { ...c.plan, ops }, locks: kilit(idler.slice(0, 1)) } as typeof c, SAHA);
+    const biri = satir(await menu(), /Geride kalanları yeniden planla \(\d+\)/);
+    expect(biri.disabled).toBe(false);
+    expect(biri.textContent).toContain('Elle kilitli 1 iş yerinde kalır.');
+    cleanup();
+    // Geride işlerin hepsi elle kilitli: taşınacak emir yok, satır pasiftir ve nedenini yazar.
+    kur({ ...c, plan: { ...c.plan, ops }, locks: kilit(idler) } as typeof c, SAHA);
+    const hepsi = satir(await menu(), /Geride kalanları yeniden planla \(0\)/);
+    expect(hepsi.disabled).toBe(true);
+    expect(hepsi.textContent).toMatch(/Geride kalan \d+ iş elle kilitli; kilidi kaldırmadan taşınmaz/);
+  });
+
   it('seçili plansız siparişte yön satırın içinde seçilir: İleriye plana alır, Teslimden geriye onay sorar; plan yokken yeniden dizme pasiftir', async () => {
     const taban = ornekCalisma();
     const komutlar = kur({ ...taban, plan: null, bekleyen: [] } as unknown as ReturnType<typeof ornekCalisma>);
@@ -962,6 +1002,8 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     await waitFor(() => { expect(secili().textContent).toContain('yönü seçin'); }, { timeout: 4000 });
     expect(satir(m, /Bütün planı baştan kur/).disabled).toBe(true);
     expect(satir(m, /Bütün planı baştan kur/).textContent).toContain('Henüz plan yok');
+    expect(satir(m, /Geride kalanları yeniden planla \(0\)/).disabled).toBe(true);
+    expect(satir(m, /Geride kalanları yeniden planla/).textContent).toContain('Henüz plan yok');
     // Üç adım ve taslak cümlesi şeridin altında bir kez yazar.
     const akis = document.querySelector('[data-akis]') as HTMLElement;
     expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Planla2 Kontrol et3 Canlıya al');

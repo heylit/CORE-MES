@@ -284,6 +284,58 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.deepEqual(await uygula(['O3'], { ...calisma, plan: null }), { hata: 'plan-yok' });
   });
 
+  // 3335-2b: başlaması geçmiş, başlamamış iş motor için "çalışıyor" gibidir ve yerinde kalır; kişi o emri yeniden planlarsa şimdiden sonraya dizilir.
+  test('PD-20b (3335-2b): yeniden planlanan emrin geride kalan işi şimdiden sonraya taşınır, ardılı ondan sonra başlar; istenmeyen emrin geride işi, elle kilitli ve başlamış iş yerinde kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number };
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, Is> }).ops;
+    // Şimdi 20. saat: O6.10 (12-37) ve O0.20 (12-34) geride kalır (başlangıcı geçmiş, bitişi gelmemiş, başlamamış). O0.10 bitmiş kayıtlıdır;
+    // yoksa öncülü yapılmamış O0.20 zaten yeniden dizilirdi (B-2499-7) ve ölçümü bulandırırdı.
+    const simdi = 20, hedef = 'O6.10', sonraki = 'O6.20', oteki = 'O0.20';
+    for (const id of [hedef, oteki]) assert.ok(eski[id]!.S < simdi && eski[id]!.C > simdi, `${id} geride değil`);
+    const bitmis = { 'O0.10': { m: eski['O0.10']!.m, S: eski['O0.10']!.S, C: eski['O0.10']!.C } };
+    Object.assign(calisma, { gercek: bitmis });
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const uygula = (isler: string[], c: unknown = calisma) => degerlendirmeYap({ calisma: c, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler } }, an);
+    const z = zarf(await uygula([eski[hedef]!.job]));
+    assert.equal(z.simdi, simdi);
+    const s = degerlendirmeSonucu.parse(z.sonuc); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, Is>;
+    assert.ok(yeni[hedef]!.S >= simdi - 1e-6, `geride iş şimdiden sonra: ${String(yeni[hedef]?.S)} >= ${String(simdi)}`);
+    assert.ok(yeni[sonraki]!.S >= yeni[hedef]!.C - 1e-6, `ardıl öncülünden sonra: ${String(yeni[sonraki]?.S)} >= ${String(yeni[hedef]?.C)}`);
+    assert.deepEqual([yeni[oteki]?.m, yeni[oteki]?.S], [eski[oteki]?.m, eski[oteki]?.S], 'istenmeyen emrin geride işi yerinde');
+    // Başvuru planı: geride iş başvurudan çıkar, değişiklik sayısına girmez; yalnız ardılı (O6.20) değişmiş sayılır. Başlangıcı gelecekte olan
+    // ardıl geride sayılmaz (başvuruda kalır, sayılır); öteki emirler geçici kilitlidir, sayılmaz.
+    assert.equal((s.plan['ozet'] as { chg: number }).chg, 1);
+    // Bütün plan: iki geride iş de taşınır.
+    const h = sonuc(await uygula(['*'])); if (h.tur !== 'plan-uygula') return assert.fail(h.tur);
+    const hepsi = h.plan['ops'] as Record<string, Is>;
+    for (const id of [hedef, oteki]) assert.ok(hepsi[id]!.S >= simdi - 1e-6, `${id} şimdiden sonra`);
+    // Başlangıcı gelecekte olan iş geride sayılmaz: geride işi olmayan emrin denge penceresindeki işi kilidini korur, yerinde kalır;
+    // geride olmayıp yeri değişenler başvuruda kalır, değişiklik sayısına girer.
+    for (const id of ['O4.10', 'O2.10']) assert.deepEqual([hepsi[id]?.m, hepsi[id]?.S], [eski[id]?.m, eski[id]?.S], id);
+    assert.ok((h.plan['ozet'] as { chg: number }).chg > 1);
+    // Elle kilitli geride iş yerinde kalır.
+    const kilitli = sonuc(await uygula(['*'], { ...calisma, locks: { [hedef]: { m: eski[hedef]!.m, S: eski[hedef]!.S } } })); if (kilitli.tur !== 'plan-uygula') return assert.fail(kilitli.tur);
+    assert.equal((kilitli.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
+    // Fason, başlamış (act) ya da bitmiş (done) diye kayıtlı geride iş yerinde kalır.
+    const isaretli = (ek: Record<string, number>) => ({ ...calisma, plan: { ...(calisma['plan'] as object), ops: { ...eski, [hedef]: { ...eski[hedef], ...ek } } } });
+    for (const ek of [{ fas: 1 }, { act: 1 }, { done: 1 }] as Record<string, number>[]) {
+      const r = sonuc(await uygula([eski[hedef]!.job], isaretli(ek))); if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+      assert.equal((r.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S, JSON.stringify(ek));
+    }
+    // Geride işin elle kilitli ardılı: kilidi ve saati durur (geçici kilit kalkar, elle kilit kalkmaz); geride iş yine şimdiden sonraya gider.
+    const ardilKilitli = sonuc(await uygula([eski[hedef]!.job], { ...calisma, locks: { [sonraki]: { m: eski[sonraki]!.m, S: eski[sonraki]!.S } } })); if (ardilKilitli.tur !== 'plan-uygula') return assert.fail(ardilKilitli.tur);
+    const ak = ardilKilitli.plan['ops'] as Record<string, Is>;
+    assert.equal(ak[sonraki]?.S, eski[sonraki]!.S);
+    assert.ok(ak[hedef]!.S >= simdi - 1e-6);
+    // Başlamış (gerçekleşeni olan) iş yerinde kalır.
+    const baslamis = sonuc(await uygula(['*'], { ...calisma, gercek: { ...bitmis, [hedef]: { m: eski[hedef]!.m, S: eski[hedef]!.S } } })); if (baslamis.tur !== 'plan-uygula') return assert.fail(baslamis.tur);
+    assert.equal((baslamis.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
+    // Başlamış iş geride sayılmadığı için emrinin denge kilitleri de kalkmaz: ardılı yerinde kalır.
+    assert.equal((baslamis.plan['ops'] as Record<string, Is>)[sonraki]?.S, eski[sonraki]!.S);
+  });
+
   test('PD-30 (3233 a): plana yeni giren emir tek başına dizilir, yerleşmiş öteki işler tezgâhı ve başlangıcıyla yerinde kalır; plan kur bütün işleri yeniden dizer', async () => {
     type Is = { job: string; m: string; S: number };
     const yedi = { ...BUYUK_KAYIT, orders: BUYUK_KAYIT.orders.slice(0, 7) };

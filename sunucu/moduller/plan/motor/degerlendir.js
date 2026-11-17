@@ -365,8 +365,19 @@ function planUygula(isler) {
   const hepsi = isler.includes('*'), etk = new Set(isler);
   const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
   if (!hepsi) for (const r of Object.values(S.plan.ops)) if (!etk.has(r.job) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && isFinite(r.S)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
-  const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
+  /* 3335-2b: istenen emirlerin geride kalan işleri (başlaması geçmiş, başlamamış, bitmemiş, fason ve elle kilitli olmayan) şimdiden sonraya
+     yeniden dizilir. Motor böyle işi kendiliğinden yerinde tutar (çalışıyor sayar); yeniden planlama kişinin açık isteğidir. Başvuru
+     planından da çıkar: değişiklik bütçesi işi eski yerine geri çekmesin. İstenmeyen emirlerin geride işleri yerinde kalır. */
+  const geride = {}; const g = st.gercek || {};
+  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && !r.act && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  const gerideVar = Object.keys(geride).length > 0; if (gerideVar) st.geride = geride;
+  /* Geride işi olan emrin öteki işleri denge ufku için geçici kilitlenmiş olabilir; kilitli ardıl eski saatinde kalır ve ileri kayan
+     öncülünden önce başlardı. O emrin geçici kilitleri kalkar (elle kilit durur). */
+  if (gerideVar) { const ej = new Set(Object.keys(geride).map(id => S.plan.ops[id].job)); for (const r of Object.values(S.plan.ops)) if (ej.has(r.job) && st.locks[r.id] && st.locks[r.id].gecici) delete st.locks[r.id]; }
+  const refOps = gerideVar ? Object.fromEntries(Object.entries(S.plan.ops).filter(([id]) => !geride[id])) : S.plan.ops;
+  const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: refOps };
   let cur = lnsDecode(st, { ops: S.plan.ops, fail: [] }, [], cx, false); slack(cur, cx);
+  if (gerideVar) delete st.geride;
   let E = evaluate(cur, st, ref, true); const ilk = E.wT;
   let seed = 17, durgun = 0;
   while (Date.now() - t0 < ms && durgun < 4) {

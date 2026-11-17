@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import { ESKI_DEGISIKLIK } from '../kayit.ts';
-import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler, gorunumdeBekleyenler } from './degisiklikler.ts';
+import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler, gerideEmirleri, gorunumdeBekleyenler } from './degisiklikler.ts';
 
 // Uydurma örnek (ORN-): şimdi 10. saat; torna 8'de başlayacaktı ve başlamadı, freze başladı, taşlama on dakika önce başlayacaktı.
 const is = (id: string, S: number, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S, C: S + 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
@@ -24,6 +24,14 @@ describe('degisiklikler (3317 a)', () => {
     // Modelde emri olmayan iş: emir numarası yerine iş kimliğinin emri yazılır, termin yazılmaz.
     expect(l[0]?.ne).toBe('9 · Adım 9.10 · ORN-T1 · S7 başlayacaktı');
     expect(l[0]?.alt).toBe('3 sa geride');
+  });
+
+  // 3335-2b: "Geride kalanları yeniden planla" geride işi olan emirleri verir; elle kilitli geride iş yeniden planlamada yerinde kalır.
+  it('geride emirleri: geride işi olan emirler bir kez sayılır; başlamış, fason ve payın içindeki iş sayılmaz; elle kilitli iş ayrı sayılır', () => {
+    expect(gerideEmirleri(M)).toEqual({ emirler: ['1', '9'], kilitli: 0 });
+    const kilitli = { ...M, isler: { ...M.isler, '1.10': is('1.10', 8, { kilitli: true }), '9.20': is('9.20', 3) } };
+    expect(gerideEmirleri(kilitli)).toEqual({ emirler: ['9'], kilitli: 1 });
+    expect(gerideEmirleri({ simdi: 5, isler: M.isler })).toEqual({ emirler: [], kilitli: 0 });
   });
 
   it('gecikme süresi dakika ve saatle yazılır', () => {
