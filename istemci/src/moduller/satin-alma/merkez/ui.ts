@@ -12,7 +12,7 @@ import {
 } from "./store.ts";
 import {
   awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfDesc, perfScore, priceHistory, puanDegeri, supRating, quoteCalc,
-  supName, supplierStats, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI,
+  supName, supplierStats, terminGunu, terminTabani, terminTarihi, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI,
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
@@ -181,8 +181,8 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
         <div class="chips">${[["Peşin", 0], ["30 gün", 30], ["60 gün", 60], ["90 gün", 90], ["120 gün", 120]].map(([l, v]) => `<button class="chip" data-act="pay-chip" data-v="${v}">${l}</button>`).join("")}</div>
       </fieldset>
       <fieldset class="fs"><legend>Teslimat ve garanti</legend>
-        <div class="grid g2"><label class="f"><span>Termin (gün)</span><input type="number" min="0" id="q-lead" value="${parseNum(draftQ.leadDays) ?? ""}" placeholder="Siparişten teslime"></label><label class="f"><span>Garanti (ay)</span><input type="number" min="0" id="q-war" value="${parseNum(draftQ.warrantyMonths) ?? ""}"></label></div>
-        <label class="f"><span>Teslim şekli</span><input type="text" list="dl-dterms" id="q-dterm" value="${esc(draftQ.deliveryTerm || "")}"><datalist id="dl-dterms">${DELIVERY.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label>
+        <div class="grid g2"><label class="f"><span>Termin (gün)</span><input type="number" min="0" id="q-lead" value="${parseNum(draftQ.leadDays) ?? ""}" placeholder="Siparişten teslime"></label><label class="f"><span>Termin tarihi <small>— teklif tarihinden</small></span><input type="date" id="q-lead-date" value="${esc(terminTarihi(terminTabani(draftQ.date), parseNum(draftQ.leadDays)))}"></label></div>
+        <div class="grid g2"><label class="f"><span>Garanti (ay)</span><input type="number" min="0" id="q-war" value="${parseNum(draftQ.warrantyMonths) ?? ""}"></label><label class="f"><span>Teslim şekli</span><input type="text" list="dl-dterms" id="q-dterm" value="${esc(draftQ.deliveryTerm || "")}"><datalist id="dl-dterms">${DELIVERY.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label></div>
       </fieldset>
     </div>
     <div class="grid g3">
@@ -210,6 +210,16 @@ function eksiAlanVar(alanlar: readonly (HTMLInputElement | null | undefined)[]):
   const hatali = eksi ?? yuzdeAsan;
   if (!hatali) return false;
   hatali.setAttribute("aria-invalid", "true"); toast(eksi ? "Değer eksi olamaz." : "Yüzde 0 ile 100 arasında olur."); hatali.focus();
+  return true;
+}
+// Tarihten çıkan eksi gün genel "eksi olamaz" yerine tarih alanında, nedeniyle gösterilir.
+function terminOnceVar(tarihler: readonly (HTMLInputElement | null | undefined)[]): boolean {
+  const gunu = (t: HTMLInputElement): HTMLInputElement | null => t.id === "q-lead-date" ? $<HTMLInputElement>("#q-lead") : $<HTMLInputElement>(`#bulk [data-bf="leadDays"][data-col="${t.dataset.col}"]`);
+  const liste = tarihler.filter((t): t is HTMLInputElement => !!t);
+  liste.forEach(t => t.removeAttribute("aria-invalid"));
+  const hatali = liste.find(t => (parseNum(gunu(t)?.value ?? "") ?? 0) < 0 && t.value !== "");
+  if (!hatali) return false;
+  hatali.setAttribute("aria-invalid", "true"); toast("Termin tarihi teklif tarihinden önce olamaz."); hatali.focus();
   return true;
 }
 const yuzdeAlaniMi = (i: HTMLInputElement): boolean => i.id === "q-disc" || i.id === "q-adv" || i.dataset.bf === "discountPct" || i.dataset.bf === "advancePct";
@@ -568,7 +578,12 @@ function bulkGrid(r: PurchaseRequest): string {
     const tr = `<tr data-item="${it.id}"><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${last ? `, son alış ${money(last.unitTRY)}` : ""}</span></td>${cols.map((c, j) => `<td data-pc="${j}">${bulkHucre(c, j, it, row)}</td>`).join("")}</tr>`;
     row++; return tr;
   }).join("");
-  const termRows = BULK_FIELDS.map(([f, l, kind]) => { const tr = `<tr><td class="rl">${l}</td>${cols.map((c, j) => `<td>${cell(j, f, kind, c[f])}</td>`).join("")}</tr>`; row++; return tr; }).join("");
+  const termRows = BULK_FIELDS.map(([f, l, kind]) => {
+    const tr = `<tr><td class="rl">${l}</td>${cols.map((c, j) => `<td>${cell(j, f, kind, c[f])}</td>`).join("")}</tr>`; row++;
+    if (f !== "leadDays") return tr;
+    const nr = row; row++;
+    return tr + `<tr><td class="rl">Termin tarihi <span class="sub">teklif tarihinden</span></td>${cols.map((c, j) => `<td><input type="date" data-btermin data-col="${j}" data-nr="${nr}" value="${esc(terminTarihi(terminTabani(c.date), c.leadDays))}" aria-label="${j + 1}. sütun termin tarihi"></td>`).join("")}</tr>`;
+  }).join("");
   const res = [["total", "Toplam (teklif para birimi)"], ["tl", "Toplam TL (güncel kur)"], ["pv", "Net bugünkü maliyet"]].map(([k, l]) => `<tr class="res"><td class="rl">${l}</td>${cols.map((c, j) => `<td data-bres="${k}" data-col="${j}">–</td>`).join("")}</tr>`).join("");
   return `<p class="small muted">Her sütun bir teklif. Excel'den kopyaladığınız fiyat bloğunu bir hücreye yapıştırın. Enter aşağı, Tab sağa geçer. Satırın en uygun fiyatı sarıyla işaretlenir. Adete göre fiyat değişiyorsa Kademe ekle ile miktar ve fiyat girin.</p>
   <div class="tw"><table class="bulk"><thead>${head}</thead><tbody>
@@ -682,6 +697,7 @@ function bulkClose(): void {
 function bulkSave(): void {
   const r = S.requests[BULK!.rid]; if (!r || !canWrite()) return;
   bulkRead();
+  if (terminOnceVar($$<HTMLInputElement>("#bulk [data-btermin]"))) return;
   if (eksiAlanVar([...$$<HTMLInputElement>("#bulk [data-bi]"), ...$$<HTMLInputElement>("#bulk [data-bf]"), ...$$<HTMLInputElement>("#bulk [data-bt]")])) return;
   const set = settings();
   const used = BULK!.cols.map((c, j) => ({ c, j })).filter(x => Object.keys(x.c.prices).length || x.c.qid);
@@ -1025,6 +1041,7 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-quote": (_el, r) => {
     if (!r) return; readQuoteForm(); const n = clone(r);
+    if (terminOnceVar([$<HTMLInputElement>("#q-lead-date")])) return;
     if (eksiAlanVar([...$$<HTMLInputElement>("#qform [data-price], #qform [data-tmin0], #qform [data-tmin], #qform [data-tprice]"), ...EKSI_OLAMAZ.map(id => $<HTMLInputElement>("#" + id))])) return;
     if (draftQ.supplierId === "__new") {
       const nm = $("#q-newsup").value.trim(); if (!nm) { toast("Yeni tedarikçinin adını girin."); $("#q-newsup").focus(); return; }
@@ -1305,6 +1322,20 @@ function renderSettingsDraft(): void {
 }
 
 /* ================= giriş olayları ================= */
+// Termin gün ve tarih alanları birbirini doldurur; saklanan gündür. Teklif tarihi değişince gün kalır, tarih yeniden hesaplanır.
+function terminEsle(t: FormEl): void {
+  const tek = !!t.closest("#qform");
+  const kap = tek ? t.closest("#qform") : t.closest("#bulk");
+  const sec = (ad: "gun" | "tarih" | "baz"): HTMLInputElement | null => tek
+    ? kap!.querySelector<HTMLInputElement>(ad === "gun" ? "#q-lead" : ad === "tarih" ? "#q-lead-date" : "#q-date")
+    : kap!.querySelector<HTMLInputElement>(ad === "tarih" ? `[data-btermin][data-col="${t.dataset.col}"]` : `[data-bf="${ad === "gun" ? "leadDays" : "date"}"][data-col="${t.dataset.col}"]`);
+  const ad = tek ? ({ "q-lead": "gun", "q-lead-date": "tarih", "q-date": "baz" } as const)[t.id] : t.dataset.btermin !== undefined ? "tarih" : t.dataset.bf === "leadDays" ? "gun" : t.dataset.bf === "date" ? "baz" : undefined;
+  if (!ad) return;
+  const gun = sec("gun"), tarih = sec("tarih"), baz = terminTabani(sec("baz")?.value);
+  if (!gun || !tarih) return;
+  if (ad === "tarih") { const g = terminGunu(baz, tarih.value); gun.value = g === null ? "" : String(g); }
+  else { const g = parseNum(gun.value); tarih.value = terminTarihi(baz, g === null ? null : Math.round(g)); }
+}
 const SEARCH_KEYS: Record<string, "q" | "mq" | "sq"> = { "req-search": "q", "mat-search": "mq", "sup-search": "sq" };
 document.addEventListener("input", (e) => {
   if (!kokIcinde(e)) return;
@@ -1314,8 +1345,8 @@ document.addEventListener("input", (e) => {
   if (t.id === "m-kart-ara") { kartAra(t.value); return; }
   const sk = t.dataset.in ? SEARCH_KEYS[t.dataset.in] : undefined;
   if (sk) { V[sk] = t.value; render(); return; }
-  if (t.closest("#bulk")) { BULK!.dirty = true; BULK!.confirmClose = false; bulkRead(); bulkLive(); return; }
-  if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); return; }
+  if (t.closest("#bulk")) { terminEsle(t); BULK!.dirty = true; BULK!.confirmClose = false; bulkRead(); bulkLive(); return; }
+  if (t.closest("#qform")) { terminEsle(t); readQuoteForm(); updateQuoteLive(); return; }
   if (t.closest("#items-box") && t.dataset.it === "name") {
     syncItems(); const tr = t.closest<HTMLElement>("tr")!; const i = +tr.dataset.i!; const it = draftReq.items[i]; if (!it) return;
     const mid = matIndex()[norm(it.name)];
