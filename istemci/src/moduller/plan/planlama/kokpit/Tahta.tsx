@@ -60,6 +60,8 @@ export interface TahtaOzellikleri {
   saatEni?: number | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
+// Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
+export const ODAK_PAYI = 80;
 interface Ok extends AdimBagi { yol: string; uc: string }
 
 const SAATLER = [4, 8, 12, 16, 20] as const;
@@ -288,7 +290,7 @@ export function Tahta(o: TahtaOzellikleri) {
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
     const k = kap.current; if (!k || typeof k.scrollTo !== 'function') return;
-    k.scrollTo({ left: Math.max(0, ((odak ?? m.simdi) - m.bas) * px - 80) });
+    k.scrollTo({ left: Math.max(0, ((odak ?? m.simdi) - m.bas) * px - ODAK_PAYI) });
     // Ölçek değişince şimdiye (ya da istenen güne) dönülür; plan yenilenince kaydırma korunur.
   }, [px, odak]);
   useEffect(() => {

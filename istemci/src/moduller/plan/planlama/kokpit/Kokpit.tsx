@@ -29,7 +29,7 @@ import {
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
-import { Tahta, type OkKipi } from './Tahta.tsx';
+import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
@@ -339,8 +339,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Yakınlaşırken görünümün ortasındaki saat yerinde kalır (tahta kaydırması ölçekle yeniden hesaplanır).
   const yakinlas = useCallback((px: number) => {
     const yeni = yakinSinirla(px), k = document.querySelector<HTMLElement>('.tc-pyq-tahta');
-    const yarim = (k?.clientWidth ?? 0) / 2;
-    setOdak(k && yarim > 0 ? m.bas + (k.scrollLeft + yarim) / simdikiEn - yarim / yeni : null);
+    const yarim = (k?.clientWidth ?? 0) / 2, ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    // Ortadaki saat: içerikte ad sütunundan sonra gelen yer. Yeni ende aynı saat ortada kalsın diye tahtanın kaydırdığı odak buna göre seçilir.
+    const orta = k && yarim > 0 ? m.bas + (k.scrollLeft + yarim - ad) / simdikiEn : null;
+    setOdak(orta === null ? null : orta + (ad - yarim + ODAK_PAYI) / yeni);
     setSaatEni(yeni); setOlcek(yakinOlcegi(yeni));
   }, [m.bas, simdikiEn]);
   // Seçileni sığdır; işlev seçim ve kart okunduktan sonra kurulur (aşağıda), klavye buradan çağırır.
@@ -536,8 +538,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       : Object.values(m.isler).filter((x) => (secEmir !== null ? x.job === secEmir : yanan?.has(x.job) ?? false)).map((x) => x.id);
     const l = idler.map((id) => m.isler[id]).filter((x) => x !== undefined);
     if (l.length === 0) { bildir('bilgi', 'Sığdırmak için bir iş ya da sipariş seçin.'); return; }
-    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta .tc-pyq-alan');
-    const r = sigdirma(Math.min(...l.map((x) => x.S)), Math.max(...l.map((x) => x.C)), k?.clientWidth || SIGDIRMA_ENI);
+    // Görünen saat alanı: tahtanın genişliği eksi yapışık ad sütunu ve odağın sol payı.
+    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const gorunen = (k?.clientWidth ?? 0) - ad - ODAK_PAYI;
+    const r = sigdirma(Math.min(...l.map((x) => x.S)), Math.max(...l.map((x) => x.C)), gorunen > 0 ? gorunen : SIGDIRMA_ENI);
     if (tahtasiz(goz)) setGoz('T');
     setSaatEni(r.px); setOlcek(yakinOlcegi(r.px)); setOdak(r.odak);
   }, [coklu, secIs, secEmir, yanan, m, bildir, goz]);

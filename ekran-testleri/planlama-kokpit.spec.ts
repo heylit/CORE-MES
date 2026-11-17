@@ -1422,6 +1422,73 @@ test('Kokpit 3297-4: planlı operasyona basıp boş yere basarak taşıma; uygun
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3365-2: Ctrl ile çoklu seçim ve birlikte kaydırma, Geri sonrası İleri (Ctrl+Y), sürekli yakınlaştırma ve Seçileni sığdır. Telefonda tahta
+// ve ölçek yoktur (liste).
+test('Kokpit 3365-2: çoklu seçim birlikte kayar; Geri sonra İleri; yakınlaştırma sürgüsü ve Seçileni sığdır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  if (bilgi.project.name === 'g360') {
+    await expect(kokpit.getByRole('slider', { name: 'Yakınlaştırma' })).toBeHidden();
+    await tasma();
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
+  // Çoklu seçim: S2.a1 seçilir, Ctrl ile S3.a1 eklenir; → ikisini yarım saat kaydırır (her biri ayrı taşıma, tezgâhı aynı).
+  await tahta.locator('[data-is="S2.a1"]').click();
+  await tahta.locator('[data-is="S3.a1"]').click({ modifiers: ['Control'] });
+  await expect(tahta.locator('[data-coklu]')).toHaveCount(2);
+  await expect(kokpit.getByText('2 iş seçili · birlikte kayar')).toBeVisible();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-coklu-${bilgi.project.name}.png` });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => t.tasinan().length).toBe(2);
+  expect(t.tasinan().map((k) => [k['isId'], k['tezgah'], k['baslangic']]).sort()).toEqual([['S2.a1', 'M2', 32.5], ['S3.a1', 'M1', 32.5]]);
+  await expect.poll(() => t.s.satirlar.filter((x) => x.komut.tur !== 'diz').length).toBe(2);
+  // Geri sonuncuyu alır; İleri görünür ve Ctrl+Y onu yeniden yazar, sonra kalkar.
+  const gi = kokpit.getByRole('group', { name: 'Geri ve İleri' });
+  await expect(gi.getByRole('button', { name: /Geri/ })).toBeEnabled();
+  await gi.getByRole('button', { name: /Geri/ }).click();
+  await expect(gi.getByRole('button', { name: /İleri/ })).toBeEnabled();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-ileri-${bilgi.project.name}.png` });
+  await page.keyboard.press('Control+y');
+  await expect.poll(() => t.tasinan().length).toBe(3);
+  await expect(gi.getByRole('button', { name: /İleri/ })).toHaveCount(0);
+  await expect.poll(() => t.s.satirlar.filter((x) => x.komut.tur !== 'diz').length).toBe(2);
+  // Düz tıklama kümeyi bırakır.
+  await page.keyboard.press('Escape');
+  await expect(tahta.locator('[data-coklu]')).toHaveCount(0);
+  // Yakınlaştırma: sürgü en yakına Gün'ü basar; Seçileni sığdır seçili işi genişletir.
+  const olcek = kokpit.getByRole('group', { name: 'Ölçek' });
+  const surgu = olcek.getByRole('slider', { name: 'Yakınlaştırma' });
+  await surgu.fill('100');
+  await expect(olcek.getByRole('button', { name: 'Gün', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await olcek.getByRole('button', { name: '3 gün', exact: true }).click();
+  const en = async () => (await tahta.locator('[data-is="S1.a1"]').boundingBox())?.width ?? 0;
+  const once = await en();
+  await tahta.locator('[data-is="S1.a1"]').click();
+  await olcek.getByRole('button', { name: 'Seçileni sığdır' }).click();
+  await expect.poll(en).toBeGreaterThan(once * 2);
+  // İş tahtanın görünen genişliğinin içindedir (yatayda).
+  await expect.poll(async () => {
+    const k = await tahta.boundingBox(), b = await tahta.locator('[data-is="S1.a1"]').boundingBox();
+    return k && b ? b.x >= k.x && b.x + b.width <= k.x + k.width : false;
+  }).toBe(true);
+  await tahta.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-2-sigdir-${bilgi.project.name}.png` });
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3330 a, dilim 3c: fason adımın satırında açık satın alma siparişindeki firma tarihi ve sipariş numarası yazar. Burada S1'in ikinci
 // adımı fasondur; tarih ve numara kaynağın gerçek cevabına eklenen uydurma emir okumasındadır.
 test('Kokpit 3330-3c: fason adımın satırında firma tarihi ve sipariş numarası; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
