@@ -20,12 +20,13 @@ const kalem = (k: Partial<TumIsSatiri>): TumIsSatiri => ({
 }) as TumIsSatiri;
 
 function kur() {
-  const istekler: { yontem: string; yol: string }[] = [];
+  const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
-    istekler.push({ yontem: ayar?.method ?? 'GET', yol });
+    istekler.push({ yontem: ayar?.method ?? 'GET', yol, govde: ayar?.body ? JSON.parse(String(ayar.body)) : undefined });
     if (yol === '/oturum') return json(200, { kullanici: DEPOCU } satisfies OturumCevabi);
     if (yol === '/stok/depo-sevk/31/cikis') return json(200, { uyarilar: [] });
+    if (yol === '/sevkiyat/isler/1/belge-no') return json(200, { is: GUN_PLANI.isler[0] });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
@@ -50,7 +51,7 @@ describe('Yükle adımı ekranı (Test T6)', () => {
     expect(screen.queryByRole('button', { name: 'Çıkış yap' })).toBeNull();
   });
 
-  it('çıkış bekleyen durakta "Çıkış yap" depo çıkışını ister; tamamlanmış durakta irsaliye düğmesi yok; onaydan sonra irsaliye no kapalıdır', async () => {
+  it('çıkış bekleyen durakta "Çıkış yap" depo çıkışını ister; tamamlanmış ve alım durağında irsaliye düğmesi yok; yoldaki durağın irsaliye no\'su sürümle yazılır', async () => {
     const istekler = kur();
     ac(true);
     const arac = await screen.findByRole('region', { name: 'Kamyonet 1' });
@@ -58,10 +59,13 @@ describe('Yükle adımı ekranı (Test T6)', () => {
     // Rota sırası: iş 3 (aktarma, tamamlandı), iş 2 (alım), iş 1 (teslimat, çıkış bekliyor).
     expect(within(duraklar[0]!).queryByRole('button', { name: /İrsaliye no|Değiştir/ })).toBeNull();
     expect(within(duraklar[1]!).queryByRole('button', { name: /İrsaliye no|Değiştir/ })).toBeNull();
-    const irsaliye = within(duraklar[2]!).getByRole('button', { name: 'Değiştir' }) as HTMLButtonElement;
-    expect(irsaliye.disabled).toBe(true);
     fireEvent.click(await within(duraklar[2]!).findByRole('button', { name: 'Çıkış yap' }));
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/stok/depo-sevk/31/cikis']));
+    fireEvent.click(within(duraklar[2]!).getByRole('button', { name: 'Değiştir' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByLabelText('İrsaliye no'), { target: { value: ' DENEME-IRS-9 ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST').at(-1)).toMatchObject({ yol: '/sevkiyat/isler/1/belge-no', govde: { belgeNo: 'DENEME-IRS-9', surum: 1 } }));
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Is, TumIsSatiri } from '#paylasilan/sozlesme/sevkiyat.ts';
-import { ONAYDAN_SONRA_IRSALIYE, aracOzeti, yukDurumu } from './YukleAdimi.tsx';
+import { aracOzeti, yukDurumu } from './YukleAdimi.tsx';
 
 const kalem = (k: Partial<TumIsSatiri>): TumIsSatiri => ({
   anahtar: 'kalem:1', kalemId: 1, kaynak: 'urun', yon: 'gidis', asama: 'depoda', hazirTarihi: null, istenenTarih: null, uretimEmriId: null, emirNo: null,
@@ -20,8 +20,8 @@ describe('Yükle adımı (3348 a)', () => {
       .toMatchObject({ metin: 'Hazır değil · OP 20', ton: 'hata', bitti: false });
   });
 
-  it('araç özeti çıkış bekleyen ve (onaydan sonra yazılabiliyorsa) irsaliye no eksik durağı ayrı sayar; alımda istenmez', () => {
+  it('araç özeti çıkış bekleyen ve irsaliye no eksik durağı ayrı sayar; alımda irsaliye no istenmez', () => {
     const kalemler = new Map([[1, [kalem({})]], [2, [kalem({ asama: 'tamamlandi' })]]]);
-    expect(aracOzeti([is(1), is(2, { belgeNo: 'ORN-IRS-1' }), is(3, { tur: 'alim' })], kalemler)).toEqual({ cikis: 1, irsaliye: ONAYDAN_SONRA_IRSALIYE ? 1 : 0 });
+    expect(aracOzeti([is(1), is(2, { belgeNo: 'ORN-IRS-1' }), is(3, { tur: 'alim' })], kalemler)).toEqual({ cikis: 1, irsaliye: 1 });
   });
 });

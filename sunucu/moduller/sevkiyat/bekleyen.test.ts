@@ -737,19 +737,21 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const bos = await yaz(yazilan.surum, '  ');
     assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
     assert.equal(isCevabi.parse(bos.govde).is.belgeNo, null, 'boş metin numarayı siler');
-    // Risk N1: yoldaki işte (3348-1 göçü yokken) veritabanı reddi 500 değil, kullanıcıya okunur ret olarak döner.
+    // 3348-1 a: onaylı plandaki (yoldaki) işe irsaliye no yazılır; öteki alanlar veritabanında kilitli kalır.
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'yolda' WHERE id = $1", [is.id]);
     const yolda = await yaz(yazilan.surum + 1, 'IRS-0004');
-    assert.equal(yolda.durum, 422, JSON.stringify(yolda.govde));
+    assert.equal(yolda.durum, 200, JSON.stringify(yolda.govde));
+    assert.equal(isCevabi.parse(yolda.govde).is.belgeNo, 'IRS-0004');
+    await assert.rejects(o().sahip.sorgu("UPDATE sevkiyat_isi SET aciklama = 'degisti' WHERE id = $1", [is.id]), /sevkiyat_onayli_plandaki_is_degismez|değiştirilemez/);
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'havuzda' WHERE id = $1", [is.id]);
     // Test T2: tamamlanmış işin irsaliye numarası servisçe reddedilir (veritabanı kuralından önce, okunur iletiyle).
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'tamamlandi' WHERE id = $1", [is.id]);
-    const biten = await yaz(yazilan.surum + 1, 'IRS-0005');
+    const biten = await yaz(yazilan.surum + 2, 'IRS-0005');
     assert.equal(biten.durum, 422);
     assert.match(JSON.stringify(biten.govde), /Tamamlanmış işin irsaliye/);
     await o().sahip.sorgu("UPDATE sevkiyat_isi SET durum = 'havuzda' WHERE id = $1", [is.id]);
     assert.equal((await istek('planlama_proje', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 200);
-    assert.equal((await yaz(yazilan.surum + 1, 'IRS-0003')).durum, 404);
+    assert.equal((await yaz(yazilan.surum + 2, 'IRS-0003')).durum, 404);
   });
 
   test('1075 a: kapanışın sevkiyat maddesi sağlam adet kadar depo çıkışında tamam; kısmi çıkış ve geri alınan çıkış eksik; bitmemiş ve tanınmayan emir null', async () => {

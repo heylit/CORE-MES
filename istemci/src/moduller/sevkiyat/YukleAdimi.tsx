@@ -11,9 +11,6 @@ import { isBasligi } from './BekleyenIsler.tsx';
 import { sayiMetni } from './bicim.ts';
 import { kabulYolu, useDepoCikisi, useIsKomutu } from './veri.ts';
 
-// Veritabanı onaylı plandaki işin belge_no'sunu kilitliyor; onu açan göç gelene kadar Yükle'de irsaliye no yazılmaz ve eksik sayılmaz.
-export const ONAYDAN_SONRA_IRSALIYE = false;
-
 export interface YukDurumu { ton: RozetTonu; metin: string; cikis: TumIsSatiri | null; kabul: TumIsSatiri | null; bitti: boolean }
 
 // Durağın yük durumu: kalemsiz iş elle açılmıştır (depo kalemi yok); firma taşıması bu listede değildir.
@@ -36,7 +33,7 @@ export function aracOzeti(isler: readonly Is[], kalemler: ReadonlyMap<number, Tu
   for (const is of isler) {
     const d = yukDurumu(kalemler.get(is.id));
     if (d.cikis) cikis += 1;
-    if (ONAYDAN_SONRA_IRSALIYE && is.tur !== 'alim' && !is.belgeNo) irsaliye += 1;
+    if (is.tur !== 'alim' && !is.belgeNo) irsaliye += 1;
   }
   return { cikis, irsaliye };
 }
@@ -107,8 +104,7 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
                     )}
                     {d.kabul && kabulYapar && d.kabul.kalemId !== null && <Link className="tc-sevkiyat-baglanti-yazisi" to={kabulYolu(d.kabul.kalemId)}>Kabul et</Link>}
                     {isYazabilir && is.tur !== 'alim' && is.durum !== 'tamamlandi' && (
-                      <Dugme simge="file" disabled={!ONAYDAN_SONRA_IRSALIYE} title={ONAYDAN_SONRA_IRSALIYE ? undefined : 'Onaylı planda irsaliye no değişmez; onaydan önce işin formundan girilir.'}
-                        onClick={() => setIrsaliye({ is, no: is.belgeNo ?? '' })}>{is.belgeNo ? 'Değiştir' : 'İrsaliye no'}</Dugme>
+                      <Dugme simge="file" onClick={() => setIrsaliye({ is, no: is.belgeNo ?? '' })}>{is.belgeNo ? 'Değiştir' : 'İrsaliye no'}</Dugme>
                     )}
                   </li>
                 );
