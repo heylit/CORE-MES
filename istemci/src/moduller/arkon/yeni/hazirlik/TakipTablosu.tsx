@@ -13,10 +13,12 @@ import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
   type AdimDilimi, type TakipSuzgeci,
 } from './kurallar.ts';
+import { topluGonderilebilir } from './toplu.ts';
 import type { Pkg, Result, Ton } from './tipler.ts';
 
 // 3111: hazırlık paketlerini emir ve adım sırasıyla tek tabloda izlemek ve yayındakileri operatörden geri çekmek.
 // Geri çekme bugünkü "Operatörden geri çek"tir (aynı yazma, aynı yetki); burada tek satırdan ya da seçilenlerle yapılır.
+// 3362: seçilenler terminale toplu gönderilir ve boş taslaklar benzer paketten doldurulur; pencereler TopluPencereler.tsx'te.
 // Hazırlık sütunu Hazırlık matrisinin satır durumudur (aynı hesap); maddeler matristedir, burada tek rozet.
 interface Ozellikler {
   paketler: readonly Pkg[];
@@ -28,6 +30,9 @@ interface Ozellikler {
   seciliId: string | null;
   ac: (p: Pkg) => void;
   geriCekSor: (l: readonly Pkg[], toplu: boolean) => void;
+  duzenler: boolean;
+  gonderSor: (l: readonly Pkg[]) => void;
+  benzerSor: (l: readonly Pkg[]) => void;
 }
 
 const saat = (ms: number) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -36,13 +41,19 @@ const DILIM_ADI: Readonly<Record<AdimDilimi, string>> = {
 };
 const BASLAMA_TONU: Readonly<Record<keyof typeof BASLAMA_DURUMLARI, Ton>> = { durur: 'stop', uyari: 'hold', hazir: 'run' };
 
-export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor }: Ozellikler) {
+export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor }: Ozellikler) {
   const emirler = useMemo(() => takipEmirleri(paketleriGrupla(paketler, 'emir'), sonuclar, hazirlik, suz), [paketler, sonuclar, hazirlik, suz]);
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
-  const secilebilir = useMemo(() => new Set(emirler.flatMap((e) => e.satirlar.flatMap((s) => (s.paket && topluGeriCekilebilir(s.paket, s.sonuc) ? [s.paket.id] : [])))), [emirler]);
+  // Seçilebilir: yayındaki başlamamış iş (geri çekme) ya da gönderilebilir iş (3362-1). Başlamış iş tek tek çekilir.
+  const secilebilirMi = (p: Pkg, r: Result | null | undefined) => topluGeriCekilebilir(p, r) || topluGonderilebilir(p, r);
+  const secilebilir = useMemo(() => new Set(emirler.flatMap((e) => e.satirlar.flatMap((s) => (s.paket && secilebilirMi(s.paket, s.sonuc) ? [s.paket.id] : [])))), [emirler]);
   const gecerli = [...secili].filter((id) => secilebilir.has(id));
-  const isaretle = (id: string, on: boolean) => seciliYaz((o) => { const y = new Set(o); if (on) y.add(id); else y.delete(id); return y; });
+  const isaretle = (ids: readonly string[], on: boolean) => seciliYaz((o) => { const y = new Set(o); for (const id of ids) { if (on) y.add(id); else y.delete(id); } return y; });
   const seciliPaketler = () => paketler.filter((p) => gecerli.includes(p.id));
+  const sonucu = (p: Pkg) => sonuclar[p.id];
+  const gonderilecek = seciliPaketler().filter((p) => topluGonderilebilir(p, sonucu(p)));
+  const cekilecek = seciliPaketler().filter((p) => topluGeriCekilebilir(p, sonucu(p)));
+  const doldurulacak = seciliPaketler().filter((p) => p.status === 'draft');
 
   return (
     <div className="tc-ay2-takip">
@@ -52,7 +63,9 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
       {yayinlar && gecerli.length ? (
         <div className="tc-ay2-takip-toplu" role="toolbar" aria-label="Seçilenler">
           <span role="status">{gecerli.length} iş seçili</span>
-          <Dugme tur="tehlike" simge="rotate" onClick={() => geriCekSor(seciliPaketler(), true)}>{gecerli.length} işi operatörden geri çek</Dugme>
+          {gonderilecek.length ? <Dugme tur="birincil" simge="next" onClick={() => gonderSor(gonderilecek)}>{gonderilecek.length} işi terminale gönder</Dugme> : null}
+          {duzenler && doldurulacak.length ? <Dugme tur="ikincil" simge="layers" onClick={() => benzerSor(doldurulacak)}>Benzer paketten al</Dugme> : null}
+          {cekilecek.length ? <Dugme tur="tehlike" simge="rotate" onClick={() => geriCekSor(cekilecek, true)}>{cekilecek.length} işi operatörden geri çek</Dugme> : null}
           <Dugme tur="ikincil" simge="x" onClick={() => seciliYaz(new Set())}>Seçimi kaldır</Dugme>
         </div>
       ) : null}
@@ -66,11 +79,17 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
             <th scope="col"><span className="tc-gizli-etiket">İşlem</span></th>
           </tr>
         </thead>
-        {emirler.map((e) => (
+        {emirler.map((e) => {
+          const emirde = e.satirlar.flatMap((s) => (s.paket && secilebilir.has(s.paket.id) ? [s.paket.id] : []));
+          const hepsi = emirde.length > 0 && emirde.every((id) => secili.has(id));
+          return (
           <tbody key={e.anahtar}>
             <tr className="tc-ay2-takip-emir">
               <th scope="rowgroup" colSpan={yayinlar ? 9 : 8}>
                 <span className="tc-ay2-takip-emir-ic">
+                  {yayinlar && emirde.length ? (
+                    <input type="checkbox" className="tc-ay2-takip-emir-kutu" aria-label={`${e.no} işlerinin hepsini seç`} checked={hepsi} onChange={(o) => isaretle(emirde, o.target.checked)} />
+                  ) : null}
                   <b className="tc-ay2-mono">{e.no}</b><span className="tc-ay2-soluk">{e.urun}</span>
                   <BeklemeCipi neden={e.bekletme} />
                   <span className="tc-ay2-takip-ilerleme">
@@ -106,8 +125,8 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
                     <td className="tc-ay2-takip-kutu" onClick={(o) => o.stopPropagation()}>
                       <input
                         type="checkbox" aria-label={`${p.no} Op ${String(s.opNo ?? '')} seç`} checked={toplu && secili.has(p.id)} disabled={!toplu}
-                        title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'Terminalde değil'}
-                        onChange={(o) => isaretle(p.id, o.target.checked)}
+                        title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'İş bitti'}
+                        onChange={(o) => isaretle([p.id], o.target.checked)}
                       />
                     </td>
                   ) : null}
@@ -148,7 +167,8 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
               );
             })}
           </tbody>
-        ))}
+          );
+        })}
       </table>
     </div>
   );
