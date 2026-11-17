@@ -1,15 +1,17 @@
-import { useEffect } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
 import type { GeometriSureCevabi, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
-import { DurumKutusu, Dugme, Kart, Rozet, Simge } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { calismaYolu } from './calismalar.ts';
 import { aralikMetni, buyukSayi, katsayiMetni, cubukYeri, dakika, FORM_ADI, hacimCm3, ISO_ADI, ISO_GRUPLARI, kutuMetni, olcekUstu, stokOlcuMetni, uzunluk } from './gorunum.ts';
-import { sorguMetni, useHamSecimi } from './ham-secimi.ts';
-import { kalibreMetni } from './kalibrasyon.ts';
+import { sorguMetni, useHamSecimi, useKaliteSecenekleri } from './ham-secimi.ts';
+import { GEOMETRI_TIPI_ADI, kalibreMetni, katsayiAdi, RA_SECENEKLERI, raMetni, TOLERANS_ADI, TOLERANS_SECENEKLERI } from './kalibrasyon.ts';
 import { KalibrasyonDurumu } from './KalibrasyonSayfasi.tsx';
 
 type GeometriSureKalemi = GeometriSureCevabi['kalemler'][number];
@@ -102,14 +104,16 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
   useEffect(() => { onizlemeYaz(stok); }, [stok, onizlemeYaz]);
   useEffect(() => () => onizlemeYaz(null), [onizlemeYaz]);
   const v = sorgu.data;
-  // 3321-3: kalibre ise ana aralık düzeltilmiş aralıktır; kalemler kalibresiz kalır (çarpan yalnız toplama).
+  // 3321-3: kalibre ise ana aralık düzeltilmiş aralıktır; değilse başlangıç katsayılarıyla (3363); kalemler kalibresiz kalır.
   const kb = v?.kalibrasyon ?? null;
-  const ana = kb ?? (v?.altDk == null || v.ustDk == null ? null : { altDk: v.altDk, ustDk: v.ustDk, ortaDk: v.ortaDk });
-  const olcek = v?.ustDk == null ? 50 : olcekUstu(Math.max(v.ustDk, kb?.ustDk ?? 0));
+  const on = v?.onsel ?? null;
+  const ana = kb ?? on ?? (v?.altDk == null || v.ustDk == null ? null : { altDk: v.altDk, ustDk: v.ustDk, ortaDk: v.ortaDk });
+  const olcek = v?.ustDk == null ? 50 : olcekUstu(Math.max(v.ustDk, kb?.ustDk ?? 0, on?.ustDk ?? 0));
   const olcekMetni = (x: number): string => uzunluk(x);
   return (
     <>
-    <Kart baslik="Kaba süre (öneri)" simge="clock" sag={kb === null ? <Rozet ton="uyari">Kalibresiz</Rozet> : <Rozet ton="tamam">Kalibre</Rozet>}>
+    <Kart baslik="Kaba süre (öneri)" simge="clock"
+      sag={kb !== null ? <Rozet ton="tamam">Kalibre</Rozet> : on !== null ? <Rozet ton="bilgi">Başlangıç</Rozet> : <Rozet ton="uyari">Kalibresiz</Rozet>}>
       <p className="tc-g3b-su-etiket">Malzeme grubu (ISO) · {isoKaynakMetni(v, m?.kalite ?? null)}</p>
       <div className="tc-g3b-su-iso" role="group" aria-label="Malzeme grubu (ISO)">
         {ISO_GRUPLARI.map((g) => (
@@ -135,14 +139,15 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
                   <Cubuk alt={ana.altDk} ust={ana.ustDk} olcek={olcek} orta={ana.ortaDk} kalibre={kb !== null} />
                   <p className="tc-g3b-su-olcek" aria-hidden="true"><span>0</span><span>{olcekMetni(olcek / 2)} dk</span><span>{olcekMetni(olcek)} dk</span></p>
                   {kb === null
-                    ? <p className="tc-g3b-soluk">Olası değer alt ve üst sınırın geometrik ortasıdır (süre hataları oransaldır). Kalem çubukları aynı 0-{olcekMetni(olcek)} dk ölçeğindedir.</p>
+                    ? <p className="tc-g3b-soluk">{on === null ? 'Olası değer alt ve üst sınırın geometrik ortasıdır (süre hataları oransaldır). ' : 'Kaynaklı başlangıç katsayılarıyla; 5 parça ölçülünce ölçüm üstüne düzeltir. '}Kalem çubukları aynı 0-{olcekMetni(olcek)} dk ölçeğindedir.</p>
                     : (
                       <p className="tc-g3b-soluk">
-                        {kalibreMetni(kb)} Kalibresiz hesap {aralikMetni(v.altDk, v.ustDk, true)} idi; düzeltme ×{katsayiMetni(kb.carpan)}
+                        {kalibreMetni(kb)} {on === null ? `Kalibresiz hesap ${aralikMetni(v.altDk, v.ustDk, true)}` : `Başlangıç tahmini ${dakika(on.ortaDk)}`} idi; düzeltme ×{katsayiMetni(kb.carpan)}
                         {kb.hataYuzde === null ? '' : `, ölçülmüş parçalarda ortanca hata %${String(Math.round(kb.hataYuzde))}`}.
                       </p>
                     )}
-                  {kb !== null && <p className="tc-g3b-su-etiket">Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)</p>}
+                  {on !== null && <TasarimSecimi revizyonId={revizyonId} tasarim={on.tasarim} />}
+                  {(kb !== null || on !== null) && <p className="tc-g3b-su-etiket">{on === null ? 'Kalemler · kalibresiz (çarpan yalnız toplama uygulanır)' : 'Kalemler · kalibresiz (katsayılar aşağıdaki dökümde)'}</p>}
                   <ul className="tc-g3b-su-kalemler" aria-label="Süre kalemleri">
                     {v.kalemler.map((k) => (
                       <li key={k.kalem}>
@@ -154,6 +159,7 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
                     ))}
                   </ul>
                   {!v.ozellikOkundu && <p className="tc-g3b-soluk">Özellikler henüz okunmadı; delik süresi yok.</p>}
+                  {on !== null && <CarpanDokumu on={on} kb={kb} />}
                 </>
               )}
               <dl className="tc-g3b-degerler">
@@ -197,7 +203,7 @@ export function SureKarti({ revizyonId, alanMm2, onizlemeYaz }: {
               <RotaBolumu rota={v.rota} />
             </>
           )}
-      <p className="tc-g3b-su-uyari"><Simge ad="alert" /><span>{`${kb === null ? 'Kalibresiz kaba tahmin: bağlama' : 'Bağlama'}, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.`}</span></p>
+      <p className="tc-g3b-su-uyari"><Simge ad="alert" /><span>{on !== null ? 'Hazırlık (ayar) süresi yok; bağlama ve tutma dahil. Rotaya ve plana yazılmaz.' : `${kb === null ? 'Kalibresiz kaba tahmin: bağlama' : 'Bağlama'}, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.`}</span></p>
     </Kart>
     <KalibrasyonDurumu />
     </>
@@ -222,4 +228,72 @@ function kcMetni(v: GeometriSureCevabi): string {
     return `malzeme sınıfından (Kienzle: kc1 ${buyukSayi(v.kc.kc1, "N/mm²")}, mc ${katsayiMetni(v.kc.mc)}, talaş kalınlığı ${uzunluk(v.kc.hmMm)} mm)`;
   }
   return `${v.iso} grubunun ortalaması`;
+}
+
+type Onsel = NonNullable<GeometriSureCevabi['onsel']>;
+const KALIBRASYON_ISLEMI = 'geometri.kalibrasyon';
+const carpan = (x: number): string => `×${katsayiMetni(x)}`;
+
+// 3363: parçanın yüzey ve tolerans seçimi; revizyona kaydedilir. Yazma geometri.kalibrasyon ister; okuyan seçimi görür.
+function TasarimSecimi({ revizyonId, tasarim }: { revizyonId: number; tasarim: Onsel['tasarim'] }) {
+  const yazar = (useOturum().data?.islemler ?? []).includes(KALIBRASYON_ISLEMI);
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const komut = useKorumaliKomut<Pick<Onsel['tasarim'], 'ra' | 'tolerans'>, unknown>({
+    gonder: (g, d) => api.post(`/geometri/sure-tahmini/${String(revizyonId)}/tasarim`, g, d),
+    onSuccess: () => {
+      void istemci.invalidateQueries({ queryKey: ['geometri', 'sure', revizyonId] });
+      void istemci.invalidateQueries({ queryKey: ['geometri', 'kalibrasyon'] });
+    },
+    onError: (h) => bildir('hata', hataIletisi(h, 'Yüzey ve tolerans kaydedilemedi.')),
+  });
+  const yaz = (g: Partial<Pick<Onsel['tasarim'], 'ra' | 'tolerans'>>) => { komut.mutate({ ra: tasarim.ra, tolerans: tasarim.tolerans, ...g }); };
+  const kapali = !yazar || komut.isPending;
+  return (
+    <section className="tc-g3b-su-tasarim" aria-label="Tasarım">
+      <p className="tc-g3b-su-etiket"><Simge ad="ruler" /> Yüzey (Ra, µm) · varsayılan 3,2</p>
+      <div className="tc-g3b-su-iso" role="group" aria-label="Yüzey pürüzlülüğü">
+        {RA_SECENEKLERI.map((r) => <Dugme key={r} aria-pressed={tasarim.ra === r} disabled={kapali} onClick={() => { yaz({ ra: r }); }}>{raMetni(r)}</Dugme>)}
+      </div>
+      <p className="tc-g3b-su-etiket">Tolerans · varsayılan Genel</p>
+      <div className="tc-g3b-su-iso" role="group" aria-label="Tolerans sınıfı">
+        {TOLERANS_SECENEKLERI.map((t) => <Dugme key={t} aria-pressed={tasarim.tolerans === t} disabled={kapali} onClick={() => { yaz({ tolerans: t }); }}>{TOLERANS_ADI[t]}</Dugme>)}
+      </div>
+      <p className="tc-g3b-soluk">
+        {yazar ? 'Seçim bu revizyona kaydedilir; kalibrasyon da bu seçimle hesaplar.' : 'Seçimi Yönetici ve Proses Mühendisi değiştirir.'}
+        {!tasarim.kayitli && ' Şimdi varsayılan.'}{tasarim.ra === '0.4' && ' Ra 0,4 genelde taşlama ya da honlamadır: ayrı adım gerekebilir.'}
+      </p>
+    </section>
+  );
+}
+
+// 3363: kalibresiz kalemden başlangıç tahminine çarpanların dökümü; her satırın ara toplamı (Arayüz ön bakışı: Kalem / Çarpan / Ara toplam).
+function CarpanDokumu({ on, kb }: { on: Onsel; kb: GeometriSureCevabi['kalibrasyon'] }) {
+  const KALEM = { kaba: 'Kaba', finis: 'Finiş', delik: 'Delik' } as const;
+  const kaliteler = useKaliteSecenekleri();
+  const sinifAdlari = useMemo(() => new Map((kaliteler.data ?? []).map((q) => [q.sinif, q.sinifAdi])), [kaliteler.data]);
+  return (
+    <table className="tc-g3b-su-tablo tc-g3b-su-dokum" aria-label="Çarpan dökümü">
+      <thead><tr><th scope="col">Kalem</th><th scope="col">Çarpan</th><th scope="col">Ara toplam</th></tr></thead>
+      <tbody>
+        {on.dokum.map((d, i) => {
+          const ad = d.tur === 'geometri' ? `Geometri: ${GEOMETRI_TIPI_ADI[on.tip]}${on.cidarMm === null ? '' : `, cidar ${uzunluk(on.cidarMm)} mm`}`
+            : d.tur === 'kesme' ? 'Kesme dışı pay'
+              : d.tur === 'baglama' ? `Bağlama ${String(d.adet)} × tutma ${dakika(d.tutmaDk)} (${uzunluk(on.agirlikKg)} kg)`
+                : `${KALEM[d.tur]} (kalibresiz ${dakika(d.kalibresizDk)})`;
+          const c = d.tur === 'kesme' ? `÷${katsayiMetni(d.deger)}` : d.tur === 'baglama' ? `+${dakika(d.adet * d.tutmaDk)}`
+            : d.carpanlar.map((x) => `${katsayiAdi(x.anahtar, sinifAdlari)} ${carpan(x.deger)}`).join(' · ') || '×1';
+          return <tr key={`${d.tur}-${String(i)}`}><td>{ad}</td><td>{c}</td><td>{dakika(d.araToplamDk)}</td></tr>;
+        })}
+      </tbody>
+      <tfoot>
+        <tr><th scope="row">Başlangıç tahmini</th><td /><td><strong>{dakika(on.ortaDk)}</strong></td></tr>
+        <tr>
+          <th scope="row">Ölçümle düzeltme</th>
+          <td>{kb === null ? '5 parçadan az' : `×${katsayiMetni(kb.carpan)} (${String(kb.n)} parça)`}</td>
+          <td>{kb === null ? 'yok' : dakika(kb.ortaDk)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  );
 }

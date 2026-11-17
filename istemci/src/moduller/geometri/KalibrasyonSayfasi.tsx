@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { GeometriKalibrasyonCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { DurumKutusu, Dugme, Kart, Rozet, SayfaBasligi, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, Rozet, SayfaBasligi, Secim, Sekmeler, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KOK } from './calismalar.ts';
+import { KatsayilarSekmesi } from './KatsayilarSekmesi.tsx';
 import { dakika } from './gorunum.ts';
 import {
   ASAMA_ADI, asamaSatirlari, egriNoktalari, GRUP_TURU_ADI, grupAdi, logEksen, logYer, type EgriKipi, type EgriNoktasi, type EgriSecimi, type KalibrasyonParcasi,
@@ -128,6 +129,7 @@ export function KalibrasyonSayfasi() {
   const [kip, kipYaz] = useState<EgriKipi>('sonra');
   const [secili, seciliYaz] = useState<number | null>(null);
   const [tablo, tabloYaz] = useState(false);
+  const [sekme, sekmeYaz] = useState<'egri' | 'katsayilar'>('egri');
   const komut = useKorumaliKomut<{ malzemeNo: number; geri: boolean }, GeometriKalibrasyonCevabi>({
     gonder: (g, d) => api.post<GeometriKalibrasyonCevabi>(
       `/geometri/kalibrasyon/${String(g.malzemeNo)}/${g.geri ? 'geri-al' : 'disarida-birak'}`, g.geri ? undefined : { neden: null }, d),
@@ -150,6 +152,9 @@ export function KalibrasyonSayfasi() {
         : sorgu.isError || k === undefined ? <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Kalibrasyon okunamadı.')} yenile={() => { void sorgu.refetch(); }} />
           : (
             <div className="tc-g3b-ka">
+              <Sekmeler etiket="Süre kalibrasyonu" secili={sekme} sec={sekmeYaz}
+                sekmeler={[{ anahtar: 'egri', baslik: 'Kalibrasyon eğrisi', simge: 'chart' }, { anahtar: 'katsayilar', baslik: 'Başlangıç katsayıları', simge: 'layers' }]} />
+              {sekme === 'katsayilar' ? <KatsayilarSekmesi k={k} yazar={yazar} /> : (<>
               <Kart baslik="Kalibrasyon eğrisi" simge="chart" sag={<Rozet ton={k.asama === 'kalibresiz' ? 'uyari' : 'tamam'}>{String(k.n)} parça</Rozet>}>
                 <p className="tc-g3b-su-etiket">Aşama: {ASAMA_ADI[k.asama]}</p>
                 <div className="tc-g3b-su-iso" role="group" aria-label="Malzeme grubu">
@@ -172,8 +177,8 @@ export function KalibrasyonSayfasi() {
                 </div>
                 {k.n < k.esikler.tek && (
                   <p className="tc-g3b-soluk">
-                    Kalibrasyon {String(k.esikler.tek)} ölçülmüş parçadan sonra başlar; şimdi {String(k.n)} parça
-                    {k.olcumuEksik > 0 ? `, ölçümü eksik ${String(k.olcumuEksik)} parça` : ''}. Tahmin kalibresiz gösterilir.
+                    Ölçümle düzeltme {String(k.esikler.tek)} ölçülmüş parçadan sonra başlar; şimdi {String(k.n)} parça
+                    {k.olcumuEksik > 0 ? `, ölçümü eksik ${String(k.olcumuEksik)} parça` : ''}. Tahmin başlangıç katsayılarıyla gösterilir.
                   </p>
                 )}
                 {noktalar.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu seçimde ölçülmüş parça yok." /> : tablo ? (
@@ -196,6 +201,7 @@ export function KalibrasyonSayfasi() {
                 </p>
               </Kart>
               <Carpanlar k={k} />
+              </>)}
             </div>
           )}
     </div>
@@ -229,10 +235,10 @@ function Carpanlar({ k }: { k: GeometriKalibrasyonCevabi }) {
   return (
     <Kart baslik="Çarpanlar" simge="gauge">
       <p className="tc-g3b-soluk">
-        Tahmin üç çarpanla düzeltilir: malzeme grubu × tezgâh × işlem türü. Her biri ayrı hesaplanır; {String(k.esikler.grup)} parçanın altındaki
+        Tahmin dört çarpanla düzeltilir: malzeme grubu × tezgâh × işlem türü × geometri tipi. Her biri ayrı hesaplanır; {String(k.esikler.grup)} parçanın altındaki
         çarpan ("az veri") genel çarpana yakın tutulur.
       </p>
-      {k.carpan === null ? <p className="tc-g3b-soluk">Henüz çarpan yok; tahmin kalibresiz.</p> : (
+      {k.carpan === null ? <p className="tc-g3b-soluk">Henüz çarpan yok; tahmin başlangıç katsayılarıyla.</p> : (
         <table className="tc-g3b-su-tablo tc-g3b-ka-carpanlar">
           <thead><tr><th scope="col">Tür</th><th scope="col">Grup</th><th scope="col">Parça</th><th scope="col">Çarpan</th><th scope="col">Hata</th><th scope="col">Durum</th></tr></thead>
           <tbody>
@@ -251,7 +257,7 @@ function Carpanlar({ k }: { k: GeometriKalibrasyonCevabi }) {
         </table>
       )}
       {k.kalibresizHataYuzde !== null && (
-        <p className="tc-g3b-soluk">Ortanca hata: kalibresiz {yuzde(k.kalibresizHataYuzde)}{k.hataYuzde !== null ? `, düzeltilmiş ${yuzde(k.hataYuzde)}` : ''}.</p>
+        <p className="tc-g3b-soluk">Ortanca hata: başlangıç {yuzde(k.kalibresizHataYuzde)}{k.hataYuzde !== null ? `, düzeltilmiş ${yuzde(k.hataYuzde)}` : ''}.</p>
       )}
       {k.regresyon !== null && (
         <p className="tc-g3b-soluk">

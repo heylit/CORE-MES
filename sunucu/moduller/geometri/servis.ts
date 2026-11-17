@@ -15,9 +15,9 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeKaliteleri, hammaddeStokOlculeri, kesmeKatsayisi, makineIsMiliGucu, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   bicimDenetimi, bilesenListesi, disTablosuOku, donelEksen, DOSYA_EN_BUYUK_BAYT, enAzHam, enYakinKart, formGerekleri, HAM_KESME_VARSAYILAN_MM, hamGeregi, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, ozellikGruplari, saglikDegerlendir, STOK_FORMLARI,
-  kalibrasyonHesapla, kalibreAralik, kalibreOrta, KALIBRASYON_ESIGI, malzemeBasinaModel, KALIBRASYON_ILETILERI, kienzleKc, rotaToplamlari, stokEslestir, SURE_HM_MM, SURE_ISO, SURE_TEZGAH_GUCU_KW, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
+  baglamaSayisi, kalibrasyonHesapla, kalibreAralik, kalibreOrta, delikDk, ONSEL_ILETILERI, onselDegerleri, onselSatirlari, onselSiniri, onselSure, ortalamaCidarMm, VARSAYILAN_TASARIM, KALIBRASYON_ESIGI, malzemeBasinaModel, KALIBRASYON_ILETILERI, kienzleKc, rotaToplamlari, stokEslestir, SURE_HM_MM, SURE_ISO, SURE_TEZGAH_GUCU_KW, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
-import type { KalibrasyonCifti, KalibrasyonSonucu, YuzeyIsaretGirdisi } from './kurallar.ts';
+import type { GeometriTipi, KalibrasyonCifti, KalibrasyonSonucu, OnselDegerleri, OnselElle, OnselSatiri, ToleransSinifi, YuzeyIsaretGirdisi, YuzeyRa } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
 
@@ -293,7 +293,7 @@ type KalibresizSure = Omit<GeometriSureCevabi, 'kalibre' | 'kalibrasyon'> & { oz
 
 async function sureHesapla(
   db: Db, m: Model, sorgu: SureSorgusu,
-  onYuk: { adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'; stokListesi?: Awaited<ReturnType<typeof hammaddeStokOlculeri>> },
+  onYuk: { adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'; stokListesi?: Awaited<ReturnType<typeof hammaddeStokOlculeri>>; katsayilar?: OnselDegerleri; tasarim?: Tasarim | null },
 ): Promise<KalibresizSure> {
   const revizyonId = m.revizyonId;
   const katsayi = kesmeKatsayisi(sorgu.sinif ?? null);
@@ -311,7 +311,7 @@ async function sureHesapla(
     revizyonId, oneri: true as const, iso, isoKaynagi, sinif: katsayi === null ? null : sorgu.sinif ?? null,
     sinifIso: katsayi?.iso ?? null, kc, tezgah, hamFormu: null,
     payMm: ham.payMm, payKaynagi: ham.payKaynagi, hamKaynagi: null, hamKodu: null, hamHacimMm3: null, parcaHacimMm3: null, talasMm3: null,
-    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: sureRotasi(adimlar), ozellikSayisi: 0,
+    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false, rota: sureRotasi(adimlar), ozellikSayisi: 0, onsel: null,
   };
   const a = (await analizCevabi(db, m)).analiz;
   if (a === null || ham.enAz === null) return { ...bos, neden: 'analiz-yok' };
@@ -325,16 +325,33 @@ async function sureHesapla(
   const t = sureTahmini({ iso, hamHacimMm3, parcaHacimMm3: a.hacimMm3, alanMm2: a.alanMm2, delikler, kc: kc.degerNmm2, gucKw: tezgah.gucKw });
   const parca = { ...hamBilgisi, parcaHacimMm3: a.hacimMm3, ozellikOkundu: oz !== null, ozellikSayisi: oz?.length ?? 0 };
   if (t === null) return { ...bos, ...parca, neden: 'talas-yok' };
-  return { ...bos, ...parca, talasMm3: t.talasMm3, kalemler: t.kalemler, altDk: t.altDk, ortaDk: t.ortaDk, ustDk: t.ustDk, neden: null };
+  // 3363: başlangıç katsayıları. Tip dönel eksenden, plaka levha formunun uygunluğundan; ağırlık parça hacmi x yoğunluk (stok kartında
+  // yoksa ISO grubunun tipik yoğunluğu: yalnız tutma bandı için).
+  const tasarim = onYuk.tasarim === undefined ? await sorgular.sureTasarimi(db, revizyonId) : onYuk.tasarim;
+  const katsayilar = onYuk.katsayilar ?? onselDegerleri(onselSatirlari(await elleKatsayilar(db)));
+  const tip: GeometriTipi = ham.donel !== null ? 'donel' : ham.formlar.some((f) => f.form === 'levha' && f.neden === null) ? 'plaka' : 'prizmatik';
+  const cidarMm = ortalamaCidarMm(a.hacimMm3, a.alanMm2);
+  const baglama = baglamaSayisi(tip, (oz ?? []).flatMap((o) => (o.eksen === null ? [] : [o.eksen])));
+  const yogunluk = stok?.yogunluk ?? ISO_YOGUNLUK[iso];
+  const agirlikKg = (a.hacimMm3 * yogunluk) / 1e6;
+  const ra = tasarim?.ra ?? VARSAYILAN_TASARIM.ra, tolerans = tasarim?.tolerans ?? VARSAYILAN_TASARIM.tolerans;
+  const os = onselSure({
+    sinif: katsayi === null ? null : sorgu.sinif ?? null, kalemler: t.kalemler, ra, tolerans, tip, cidarMm, baglama, agirlikKg,
+    delikler: (delikler ?? []).filter((d) => d.capMm > 0 && d.derinlikMm > 0).map((d) => ({ dk: delikDk(iso, d), ld: d.derinlikMm / d.capMm })),
+  }, katsayilar);
+  const onsel = {
+    ...os, tasarim: { ra, tolerans, kayitli: tasarim !== null }, tip, cidarMm: cidarMm === null ? null : dk4(cidarMm), baglama, agirlikKg: dk4(agirlikKg),
+  };
+  return { ...bos, ...parca, talasMm3: t.talasMm3, kalemler: t.kalemler, altDk: t.altDk, ortaDk: t.ortaDk, ustDk: t.ustDk, neden: null, onsel };
 }
 
 export async function sureTahminiOku(db: Db, revizyonId: number, sorgu: SureSorgusu): Promise<GeometriSureCevabi> {
   const m = await model(db, revizyonId);
   const adimlar = await talasliRotaOku(db, m.malzemeNo);
   const { ozellikSayisi, ...h } = await sureHesapla(db, m, sorgu, { adimlar });
-  if (h.ortaDk === null || h.altDk === null || h.ustDk === null) return { ...h, kalibre: false, kalibrasyon: null };
+  if (h.ortaDk === null || h.altDk === null || h.ustDk === null || h.onsel === null) return { ...h, kalibre: false, kalibrasyon: null };
   const s = (await kalibrasyonVerisi(db)).sonuc;
-  const c = { ...bilesenleri(h.kalemler, ozellikSayisi), tahminDk: h.ortaDk, gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar) };
+  const c = { ...bilesenleri(h.kalemler, ozellikSayisi), tahminDk: h.onsel.ortaDk, gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar, h.onsel.tip) };
   const kalibrasyon = kalibreAralik(s, c);
   return { ...h, kalibre: kalibrasyon !== null, kalibrasyon };
 }
@@ -348,9 +365,9 @@ function bilesenleri(kalemler: GeometriSureCevabi['kalemler'], ozellikSayisi: nu
   return { kabaDk: olasi(k('kaba')), finisDk: olasi(k('finis')), delikDk: olasi(k('delik')), ozellikSayisi };
 }
 // Malzeme grubu ISO grubudur (sınıftan ya da elle seçilen); varsayılan P bilinmeyen sayılır. Tezgâh ve işlem ilk talaşlı adımdan.
-function kalibrasyonGrubu(iso: GeometriIsoGrubu, isoBilinir: boolean, adimlar: TalasliRotaAdimi[] | null | 'bagli-degil'): KalibrasyonCifti['gruplar'] {
+function kalibrasyonGrubu(iso: GeometriIsoGrubu, isoBilinir: boolean, adimlar: TalasliRotaAdimi[] | null | 'bagli-degil', tip: GeometriTipi): KalibrasyonCifti['gruplar'] {
   const ilk = Array.isArray(adimlar) ? adimlar[0] : undefined;
-  return { malzeme: isoBilinir ? iso : null, tezgah: ilk?.makineKod ?? null, islem: ilk?.islemTuru ?? null };
+  return { malzeme: isoBilinir ? iso : null, tezgah: ilk?.makineKod ?? null, islem: ilk?.islemTuru ?? null, geometri: tip };
 }
 
 type KalibrasyonParcasi = KalibrasyonCifti & { kod: string; ad: string | null; revizyonId: number; disaridaNedeni: string | null };
@@ -365,6 +382,8 @@ async function kalibrasyonHesabi(db: Db): Promise<KalibrasyonVerisi> {
   let stokListesi: Awaited<ReturnType<typeof hammaddeStokOlculeri>> | undefined;
   const parcalar: KalibrasyonParcasi[] = [];
   let olcumuEksik = 0;
+  const katsayilar = onselDegerleri(onselSatirlari(await elleKatsayilar(db)));
+  const tasarimlar = await sorgular.sureTasarimlari(db);
   for (const m of secili.values()) {
     const mz = ozetler.get(m.malzemeNo);
     const adimlar = await talasliRotaOku(db, m.malzemeNo);
@@ -373,12 +392,14 @@ async function kalibrasyonHesabi(db: Db): Promise<KalibrasyonVerisi> {
     const olcumDk = adimlar.reduce((t, a) => t + (a.olcumOrtancaDk ?? 0), 0);
     const rm = await rotaMalzemesi(db, adimlar);
     stokListesi ??= await hammaddeStokOlculeri(db, STOK_FORMLARI);
-    const h = await sureHesapla(db, m, { kalite: rm?.kalite ?? undefined, sinif: rm?.sinif ?? undefined }, { adimlar, stokListesi });
-    if (h.ortaDk === null || !(olcumDk > 0)) continue;
+    const h = await sureHesapla(db, m, { kalite: rm?.kalite ?? undefined, sinif: rm?.sinif ?? undefined }, {
+      adimlar, stokListesi, katsayilar, tasarim: tasarimlar.get(m.revizyonId) ?? null,
+    });
+    if (h.onsel === null || !(olcumDk > 0)) continue;
     parcalar.push({
-      malzemeNo: m.malzemeNo, kod: mz.kod, ad: mz.ad, revizyonId: m.revizyonId, tahminDk: h.ortaDk, olcumDk: dk4(olcumDk),
+      malzemeNo: m.malzemeNo, kod: mz.kod, ad: mz.ad, revizyonId: m.revizyonId, tahminDk: h.onsel.ortaDk, olcumDk: dk4(olcumDk),
       disarida: disarida.has(m.malzemeNo), disaridaNedeni: disarida.get(m.malzemeNo) ?? null,
-      gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar), ...bilesenleri(h.kalemler, h.ozellikSayisi),
+      gruplar: kalibrasyonGrubu(h.iso, h.isoKaynagi !== 'varsayilan', adimlar, h.onsel.tip), ...bilesenleri(h.kalemler, h.ozellikSayisi),
     });
   }
   parcalar.sort((a, b) => a.kod.localeCompare(b.kod, 'tr') || a.malzemeNo - b.malzemeNo);
@@ -437,6 +458,55 @@ export async function kalibrasyonaGeriAl(db: Db, malzemeNo: number): Promise<Geo
   kalibrasyonOnbellegiTemizle();
   // Yazan transaction kendi yazısını görür; sonuç önbelleğe konmaz (geri dönerse başkasına sızmasın).
   return kalibrasyonCevabi(await kalibrasyonHesabi(db));
+}
+
+// ---------------- Başlangıç katsayıları (3363) ----------------
+// Tipik yoğunluk (g/cm³), yalnız tutma süresinin ağırlık bandı için; stok kartında kalitenin yoğunluğu varsa o kullanılır.
+const ISO_YOGUNLUK: Readonly<Record<GeometriIsoGrubu, number>> = { P: 7.85, M: 7.9, K: 7.2, N: 2.7, S: 4.5, H: 7.85 };
+interface Tasarim { ra: YuzeyRa; tolerans: ToleransSinifi }
+
+async function elleKatsayilar(db: Db): Promise<Map<string, OnselElle>> {
+  const satirlar = await sorgular.sureKatsayilari(db);
+  const adlar = await kisiAdlari(db, [...new Set(satirlar.map((s) => s.kisiId))]);
+  return new Map(satirlar.map((s) => [s.anahtar, { deger: s.deger, not: s.not, kisi: adlar.get(s.kisiId) ?? null, zaman: s.zaman }]));
+}
+
+type KatsayiSatiri = OnselSatiri & { iso: GeometriIsoGrubu | null };
+export async function sureKatsayilariOku(db: Db): Promise<{ katsayilar: KatsayiSatiri[] }> {
+  return {
+    katsayilar: onselSatirlari(await elleKatsayilar(db)).map((s) => ({
+      ...s, iso: s.tur === 'malzeme' ? kesmeKatsayisi(s.anahtar.split('.').slice(2).join('.'))?.iso ?? null : null,
+    })),
+  };
+}
+
+// Elle değer yerleşiğin yerine geçer; aynı anahtara yeniden yazmak değeri, notu ve kişiyi günceller. Bütün parçaların tahmini değişir.
+// Satırın bütün değerleri tek komuttadır (uç transaction'ı): biri reddedilirse hiçbiri yazılmaz.
+export async function sureKatsayisiYaz(
+  db: Db, kullanici: Kullanici, g: { degerler: { anahtar: string; deger: number }[]; not: string | null },
+): Promise<{ katsayilar: KatsayiSatiri[] }> {
+  for (const d of g.degerler) {
+    const sinir = onselSiniri(d.anahtar);
+    if (sinir === null) throw dogrulama(ONSEL_ILETILERI.anahtarYok, d.anahtar);
+    if (d.deger < sinir.en || d.deger > sinir.cok) throw dogrulama(ONSEL_ILETILERI.sinirDisi(sinir.en, sinir.cok), d.anahtar);
+  }
+  for (const d of g.degerler) await sorgular.sureKatsayisiYaz(db, d.anahtar, d.deger, g.not, kullanici.id);
+  kalibrasyonOnbellegiTemizle();
+  return sureKatsayilariOku(db);
+}
+
+export async function sureKatsayisiYerlesigeDon(db: Db, anahtarlar: string[]): Promise<{ katsayilar: KatsayiSatiri[] }> {
+  for (const a of anahtarlar) if (onselSiniri(a) === null) throw dogrulama(ONSEL_ILETILERI.anahtarYok, a);
+  for (const a of anahtarlar) await sorgular.sureKatsayisiSil(db, a);
+  kalibrasyonOnbellegiTemizle();
+  return sureKatsayilariOku(db);
+}
+
+// Parçanın yüzey ve tolerans seçimi revizyona yazılır (yeni revizyonda varsayılana döner).
+export async function sureTasarimiYaz(db: Db, kullanici: Kullanici, revizyonId: number, t: Tasarim): Promise<void> {
+  await model(db, revizyonId);
+  await sorgular.sureTasarimiYaz(db, revizyonId, t.ra, t.tolerans, kullanici.id);
+  kalibrasyonOnbellegiTemizle();
 }
 
 // Malzemenin yayındaki 3B modeli, analizi ve ham önerisi: başka modül (CNC Kurulum ham ekranı) `disari.ts` ile okur (1703 a).

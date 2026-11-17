@@ -1416,7 +1416,7 @@ export function rotaToplamlari(adimlar: readonly GeometriTalasliAdim[]): {
 export const KALIBRASYON_ESIGI = { tek: 5, grup: 20, regresyon: 40 } as const;
 export const KALIBRASYON_TAU = 5;
 export const KALIBRASYON_ARALIK_EN_AZ = 9;
-export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem'] as const;
+export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem', 'geometri'] as const;
 export type KalibrasyonGrupTuru = (typeof KALIBRASYON_GRUP_TURLERI)[number];
 export type KalibrasyonAsamasi = 'kalibresiz' | 'tek' | 'grup' | 'regresyon';
 
@@ -1559,4 +1559,191 @@ export function malzemeBasinaModel<T extends { malzemeNo: number; kapak: boolean
     if (o === undefined || Number(m.kapak) > Number(o.kapak) || (m.kapak === o.kapak && m.revizyonId > o.revizyonId)) secili.set(m.malzemeNo, m);
   }
   return secili;
+}
+
+// ---- Başlangıç katsayıları (3363; ARASTIRMA 3363 bölüm 2) ----
+// Ölçüm gelmeden tahmin malzemeye, tasarıma ve geometriye göre değişsin diye kalibresiz kalemlerin üstüne gelen çarpanlar:
+//   süre = [kaba x Mk + (finiş x Y + delik x D) x T x Mf] x G / V + B x E
+// Yerleşik değerler burada (kaynak 'kaynakli' ya da 'tahmin', dayanak metni); elle değişen değer tabloda durur ve yerleşiğin yerine
+// geçer. Ölçüm kalibrasyonu bu tahminin üstüne düzeltir (artık ln(ölçüm / başlangıç)).
+// Malzeme: hedef K = 78 / işlenebilirlik (1018 = 1; Engineering ToolBox, Machining Doctor; Armillotta 2021 malzeme çarpanı). Fizik
+// modeli kabada kc ve ISO kavramayı, finişte ISO matkap hızını zaten taşır; çarpan yalnız artan farktır (Mk = K / fizik kaba oranı,
+// Mf = K / fizik finiş oranı). Yüzey: Ra ~ f²/(32 r) ise finiş süresi sqrt(3,2 / Ra) ile büyür. Tolerans: Armillotta karmaşıklık üssü
+// 0,37 ile Modus teslim tablosu arası. V: Makino taraması (çevrimin %30'u kesme dışı). E: Armillotta tutma süresi (ağırlığa göre).
+export type OnselKaynagi = 'kaynakli' | 'tahmin';
+export interface OnselYerlesik { deger: number; kaynak: OnselKaynagi; dayanak: string }
+export const ONSEL_TURLERI = ['malzeme', 'yuzey', 'tolerans', 'delik', 'geometri', 'cidar', 'kesme', 'tutma'] as const;
+export type OnselTuru = (typeof ONSEL_TURLERI)[number];
+export const YUZEY_RA = ['6.3', '3.2', '1.6', '0.8', '0.4'] as const;
+export type YuzeyRa = (typeof YUZEY_RA)[number];
+export const TOLERANS_SINIFLARI = ['genel', 'hassas', 'cok-hassas', 'ultra'] as const;
+export type ToleransSinifi = (typeof TOLERANS_SINIFLARI)[number];
+export const GEOMETRI_TIPLERI = ['donel', 'prizmatik', 'plaka'] as const;
+export type GeometriTipi = (typeof GEOMETRI_TIPLERI)[number];
+export const VARSAYILAN_TASARIM: { ra: YuzeyRa; tolerans: ToleransSinifi } = { ra: '3.2', tolerans: 'genel' };
+// Delik L/D, cidar ve ağırlık bant sınırları (üst sınırlar; son bant açık).
+export const DELIK_LD_SINIRI = { kisa: 3, orta: 5 } as const;
+export const CIDAR_SINIRI_MM = { ince: 3, orta: 6 } as const;
+export const TUTMA_SINIRI_KG = [0.2, 5, 15, 25] as const;
+export const ONSEL_SINIRI = { carpan: { en: 0.05, cok: 20 }, kesme: { en: 0.3, cok: 1 }, tutma: { en: 0, cok: 30 } } as const;
+
+const y = (deger: number, kaynak: OnselKaynagi, dayanak: string): OnselYerlesik => ({ deger, kaynak, dayanak });
+const MALZEME_ONSEL: Readonly<Record<string, readonly [number, number, OnselKaynagi, string]>> = {
+  'metal/karbon': [1, 1, 'kaynakli', '1018 işlenebilirlik 78 (taban)'],
+  'metal/sac': [1, 1, 'kaynakli', 'Karbon çeliğiyle aynı'],
+  'metal/islah': [0.86, 1.3, 'kaynakli', 'Armillotta orta karbon 1,3; 1040 64, 4140 66'],
+  'metal/celikdokum': [0.86, 1.3, 'tahmin', 'İslah çeliğiyle aynı alındı'],
+  'metal/yay': [0.92, 1.75, 'kaynakli', '1095 işlenebilirlik 42'],
+  'metal/takim': [1.16, 2.2, 'kaynakli', 'D2 27, O1 42, A2 42; Armillotta alaşımlı 2'],
+  'metal/paslanmaz': [0.9, 1.09, 'kaynakli', '304 ve 316 işlenebilirlik 45; Armillotta 1,5'],
+  'metal/dokme': [1.56, 1.46, 'kaynakli', 'Armillotta dökme demir 1,3; gri sınıf 25 55'],
+  'metal/aluminyum': [0.58, 0.75, 'kaynakli', 'Armillotta alüminyum 0,3; soğuk çekme 360'],
+  'metal/aldokum': [0.68, 0.87, 'tahmin', 'Silisyum aşındırır; dökümde 450, basınçlıda 76'],
+  'metal/bakir': [0.92, 1.25, 'kaynakli', 'Armillotta bakır alaşımı 0,5'],
+  'metal/magnezyum': [1, 0.5, 'kaynakli', 'Magnezyum işlenebilirlik 480'],
+  'metal/cinko': [2.51, 1.25, 'tahmin', 'Kaynak bulunamadı'],
+  'metal/titanyum': [1.77, 1.22, 'kaynakli', 'Ti-6Al-4V işlenebilirlik %20'],
+  'metal/nikel': [1.79, 2.44, 'kaynakli', 'Inconel 718 işlenebilirlik %10; Hastelloy X 19'],
+  'metal/kobalt': [1.37, 1.88, 'tahmin', 'Nikel ile Hastelloy arası alındı'],
+  'metal/wha': [1.41, 0.94, 'tahmin', 'Kaynak bulunamadı'],
+  'metal/refrakter': [2.35, 1.56, 'tahmin', 'Kaynak bulunamadı'],
+};
+export const ONSEL_YERLESIK: Readonly<Record<string, OnselYerlesik>> = {
+  ...Object.fromEntries(Object.entries(MALZEME_ONSEL).flatMap(([s, [k, f, kaynak, d]]) => [
+    [`malzeme.kaba.${s}`, y(k, kaynak, d)], [`malzeme.finis.${s}`, y(f, kaynak, d)],
+  ])),
+  'yuzey.6.3': y(0.71, 'kaynakli', 'sqrt(3,2 / Ra)'), 'yuzey.3.2': y(1, 'kaynakli', 'Taban'), 'yuzey.1.6': y(1.41, 'kaynakli', 'sqrt(3,2 / Ra)'),
+  'yuzey.0.8': y(2, 'kaynakli', 'sqrt(3,2 / Ra)'), 'yuzey.0.4': y(2.83, 'kaynakli', 'sqrt(3,2 / Ra); taşlama ayrı adım olabilir'),
+  'tolerans.genel': y(1, 'tahmin', '±0,1 ve gevşek; taban'), 'tolerans.hassas': y(1.1, 'tahmin', '±0,05; Armillotta 1,04 ile Modus 1,25 arası'),
+  'tolerans.cok-hassas': y(1.25, 'tahmin', '±0,02'), 'tolerans.ultra': y(1.45, 'tahmin', '±0,01 ve sıkı'),
+  'delik.kisa': y(1, 'tahmin', 'L/D ≤ 3'), 'delik.orta': y(1.3, 'tahmin', 'L/D 3-5; kademeli delme'), 'delik.derin': y(1.6, 'tahmin', 'L/D > 5'),
+  'geometri.donel': y(1, 'kaynakli', 'Armillotta: şekil anlamlı çıkmadı'), 'geometri.prizmatik': y(1, 'kaynakli', 'Armillotta: şekil anlamlı çıkmadı'),
+  'geometri.plaka': y(1, 'kaynakli', 'Armillotta: şekil anlamlı çıkmadı'),
+  'cidar.ince': y(1.3, 'tahmin', '2 x hacim / alan < 3 mm'), 'cidar.orta': y(1.15, 'tahmin', '2 x hacim / alan 3-6 mm'),
+  'kesme.pay': y(0.7, 'kaynakli', 'Makino: çevrimin %30\'u kesme dışı'),
+  'tutma.0': y(0.5, 'kaynakli', 'Armillotta: 0,2 kg altı'), 'tutma.1': y(0.75, 'kaynakli', 'Armillotta: 5 kg altı'),
+  'tutma.2': y(1, 'kaynakli', 'Armillotta: 15 kg altı'), 'tutma.3': y(1.5, 'kaynakli', 'Armillotta: 25 kg altı'), 'tutma.4': y(3, 'tahmin', '25 kg ve üstü'),
+};
+
+export function onselTuru(anahtar: string): OnselTuru | null {
+  const t = anahtar.split('.')[0] ?? '';
+  return (ONSEL_TURLERI as readonly string[]).includes(t) ? (t as OnselTuru) : null;
+}
+
+// Elle yazılabilecek değerin sınırı; anahtar yerleşikte yoksa null (bilinmeyen anahtar yazılmaz).
+export function onselSiniri(anahtar: string): { en: number; cok: number } | null {
+  if (!Object.hasOwn(ONSEL_YERLESIK, anahtar)) return null;
+  const t = onselTuru(anahtar);
+  return t === 'kesme' ? ONSEL_SINIRI.kesme : t === 'tutma' ? ONSEL_SINIRI.tutma : ONSEL_SINIRI.carpan;
+}
+
+export const ONSEL_ILETILERI = {
+  anahtarYok: 'Bu katsayı tanınmıyor.',
+  sinirDisi: (en: number, cok: number) => `Değer ${String(en).replace('.', ',')} ile ${String(cok).replace('.', ',')} arasında olmalı.`,
+} as const;
+
+export interface OnselElle { deger: number; not: string | null; kisi: string | null; zaman: string }
+export interface OnselSatiri extends OnselYerlesik { anahtar: string; tur: OnselTuru; yerlesik: number; elle: OnselElle | null }
+// Yerleşik ve elle değerlerin birleşimi; elle değer tanınmayan anahtardaysa (ileride kaldırılan katsayı) yok sayılır.
+export function onselSatirlari(elle: ReadonlyMap<string, OnselElle>): OnselSatiri[] {
+  return Object.entries(ONSEL_YERLESIK).map(([anahtar, ys]) => {
+    const e = elle.get(anahtar) ?? null;
+    return { anahtar, tur: onselTuru(anahtar)!, ...ys, yerlesik: ys.deger, deger: e?.deger ?? ys.deger, elle: e };
+  });
+}
+export type OnselDegerleri = ReadonlyMap<string, number>;
+export function onselDegerleri(satirlar: readonly OnselSatiri[]): Map<string, number> {
+  return new Map(satirlar.map((s) => [s.anahtar, s.deger]));
+}
+const deger = (k: OnselDegerleri, anahtar: string, yoksa = 1): number => k.get(anahtar) ?? ONSEL_YERLESIK[anahtar]?.deger ?? yoksa;
+
+export function delikBandi(ld: number): 'kisa' | 'orta' | 'derin' {
+  return ld <= DELIK_LD_SINIRI.kisa ? 'kisa' : ld <= DELIK_LD_SINIRI.orta ? 'orta' : 'derin';
+}
+export function cidarBandi(mm: number | null): 'ince' | 'orta' | null {
+  if (mm === null) return null;
+  return mm < CIDAR_SINIRI_MM.ince ? 'ince' : mm < CIDAR_SINIRI_MM.orta ? 'orta' : null;
+}
+export function tutmaBandi(kg: number | null): number {
+  if (kg === null) return 1;
+  const i = TUTMA_SINIRI_KG.findIndex((s) => kg < s);
+  return i === -1 ? TUTMA_SINIRI_KG.length : i;
+}
+// Ortalama cidar kalınlığı 2 x hacim / alan (ince levhada kalınlığa eşit; kalın parçada büyür).
+export function ortalamaCidarMm(hacimMm3: number | null, alanMm2: number): number | null {
+  return hacimMm3 === null || !(alanMm2 > 0) ? null : (2 * hacimMm3) / alanMm2;
+}
+// Bağlama sayısı: dönel ve plaka 2; prizmatikte özelliklerin farklı eksen yönü sayısı (zıt yön ayrı yüzdür), en az 2 en çok 6.
+export function baglamaSayisi(tip: GeometriTipi, eksenler: readonly (readonly number[])[]): number {
+  if (tip !== 'prizmatik') return 2;
+  const yonler: number[][] = [];
+  for (const e of eksenler) {
+    const n = Math.hypot(e[0] ?? 0, e[1] ?? 0, e[2] ?? 0);
+    if (!(n > 0)) continue;
+    const u = [(e[0] ?? 0) / n, (e[1] ?? 0) / n, (e[2] ?? 0) / n];
+    if (!yonler.some((v) => v[0]! * u[0]! + v[1]! * u[1]! + v[2]! * u[2]! > 0.98)) yonler.push(u);
+  }
+  return Math.min(6, Math.max(2, yonler.length));
+}
+
+export interface OnselGirdisi {
+  sinif: string | null; kalemler: readonly SureKalemi[];
+  // Delik kaleminin L/D çarpanı için her deliğin kalibresiz süresi ve L/D oranı.
+  delikler: readonly { dk: number; ld: number }[];
+  ra: YuzeyRa; tolerans: ToleransSinifi; tip: GeometriTipi; cidarMm: number | null; baglama: number; agirlikKg: number | null;
+}
+export type OnselDokumSatiri =
+  | { tur: 'kaba' | 'finis' | 'delik'; kalibresizDk: number; carpanlar: { anahtar: string; deger: number }[]; araToplamDk: number }
+  | { tur: 'geometri'; carpanlar: { anahtar: string; deger: number }[]; araToplamDk: number }
+  | { tur: 'kesme'; anahtar: string; deger: number; araToplamDk: number }
+  | { tur: 'baglama'; anahtar: string; adet: number; tutmaDk: number; araToplamDk: number };
+export interface OnselSonucu { altDk: number; ortaDk: number; ustDk: number; dokum: OnselDokumSatiri[] }
+
+const olasiDk = (k: { altDk: number; ustDk: number } | undefined): number => (k === undefined ? 0 : Math.sqrt(k.altDk * k.ustDk));
+
+// GEO-ON1: kalemlerin alt, orta ve üst değerlerine aynı çarpanlar uygulanır; tutma süresi üç değere de eklenir. Sınıf tabloda yoksa
+// malzeme çarpanı 1 (fizik modeli olduğu gibi). Döküm olası değer (orta) üzerindendir; ara toplam her satırdan sonraki toplamdır.
+export function onselSure(g: OnselGirdisi, k: OnselDegerleri): OnselSonucu {
+  const kalem = (ad: SureKalemi['kalem']) => g.kalemler.find((x) => x.kalem === ad);
+  const mk = g.sinif === null ? null : `malzeme.kaba.${g.sinif}`;
+  const mf = g.sinif === null ? null : `malzeme.finis.${g.sinif}`;
+  const mkD = mk !== null && Object.hasOwn(ONSEL_YERLESIK, mk) ? deger(k, mk) : 1;
+  const mfD = mf !== null && Object.hasOwn(ONSEL_YERLESIK, mf) ? deger(k, mf) : 1;
+  const yA = `yuzey.${g.ra}`, tA = `tolerans.${g.tolerans}`;
+  const toplamDelik = g.delikler.reduce((t, d) => t + d.dk, 0);
+  const dCarpan = toplamDelik > 0 ? g.delikler.reduce((t, d) => t + d.dk * deger(k, `delik.${delikBandi(d.ld)}`), 0) / toplamDelik : 1;
+  const dBantlar = [...new Set(g.delikler.map((d) => `delik.${delikBandi(d.ld)}`))];
+  const gA = `geometri.${g.tip}`;
+  const cb = cidarBandi(g.cidarMm);
+  const gCarpan = deger(k, gA) * (cb === null ? 1 : deger(k, `cidar.${cb}`));
+  const v = deger(k, 'kesme.pay', ONSEL_YERLESIK['kesme.pay']!.deger);
+  const tutmaA = `tutma.${String(tutmaBandi(g.agirlikKg))}`;
+  const e = deger(k, tutmaA, 0);
+  const cKaba = mkD, cFinis = deger(k, yA) * deger(k, tA) * mfD, cDelik = dCarpan * deger(k, tA) * mfD;
+  const uygula = (sec: (x: { altDk: number; ustDk: number }) => number): number => {
+    const v0 = (ad: SureKalemi['kalem']) => { const x = kalem(ad); return x === undefined ? 0 : sec(x); };
+    return ((v0('kaba') * cKaba + v0('finis') * cFinis + v0('delik') * cDelik) * gCarpan) / v + g.baglama * e;
+  };
+  const kabaO = olasiDk(kalem('kaba')) * cKaba, finisO = olasiDk(kalem('finis')) * cFinis, delikO = olasiDk(kalem('delik')) * cDelik;
+  const dokum: OnselDokumSatiri[] = [];
+  let ara = 0;
+  const kc = (anahtar: string | null, d: number) => (anahtar === null ? [] : [{ anahtar, deger: d }]);
+  if (kalem('kaba') !== undefined) { ara += kabaO; dokum.push({ tur: 'kaba', kalibresizDk: dk4(olasiDk(kalem('kaba'))), carpanlar: kc(mk, mkD), araToplamDk: dk4(ara) }); }
+  if (kalem('finis') !== undefined) {
+    ara += finisO;
+    dokum.push({ tur: 'finis', kalibresizDk: dk4(olasiDk(kalem('finis'))), carpanlar: [...kc(yA, deger(k, yA)), ...kc(tA, deger(k, tA)), ...kc(mf, mfD)], araToplamDk: dk4(ara) });
+  }
+  if (kalem('delik') !== undefined) {
+    ara += delikO;
+    const dc = dBantlar.length === 1 ? [{ anahtar: dBantlar[0]!, deger: dCarpan }] : [{ anahtar: 'delik.karma', deger: dk4(dCarpan) }];
+    dokum.push({ tur: 'delik', kalibresizDk: dk4(olasiDk(kalem('delik'))), carpanlar: [...dc, ...kc(tA, deger(k, tA)), ...kc(mf, mfD)], araToplamDk: dk4(ara) });
+  }
+  ara *= gCarpan;
+  dokum.push({ tur: 'geometri', carpanlar: [{ anahtar: gA, deger: deger(k, gA) }, ...(cb === null ? [] : [{ anahtar: `cidar.${cb}`, deger: deger(k, `cidar.${cb}`) }])], araToplamDk: dk4(ara) });
+  ara /= v;
+  dokum.push({ tur: 'kesme', anahtar: 'kesme.pay', deger: v, araToplamDk: dk4(ara) });
+  ara += g.baglama * e;
+  dokum.push({ tur: 'baglama', anahtar: tutmaA, adet: g.baglama, tutmaDk: e, araToplamDk: dk4(ara) });
+  const alt = uygula((x) => x.altDk), ust = uygula((x) => x.ustDk);
+  return { altDk: dk4(alt), ortaDk: dk4(ara), ustDk: dk4(ust), dokum };
 }

@@ -69,7 +69,7 @@ const SURE: GeometriSureCevabi = {
     { kalem: 'finis', altDk: 2.7, ustDk: 10.7, adet: null },
     { kalem: 'delik', altDk: 0.9, ustDk: 1.9, adet: 8 },
   ],
-  altDk: 4.1, ortaDk: 7.7, ustDk: 14.4, ozellikOkundu: true, neden: null,
+  altDk: 4.1, ortaDk: 7.7, ustDk: 14.4, ozellikOkundu: true, neden: null, onsel: null,
   rota: {
     durum: 'bagli', islemToplamDk: 6, olcumToplamDk: 11.8, eksik: true,
     adimlar: [
@@ -200,7 +200,7 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     expect(within(k).getByText('Bağlama, hazırlık ve el süresi yok. Rotaya ve plana yazılmaz.')).toBeTruthy();
     const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
     const satirlar = (await within(d).findAllByRole('row')).slice(1).map((r) => r.textContent);
-    expect(satirlar).toEqual(['Kalibresiz5 parçadan azgeçti', 'Tek çarpan5 parça ve üstüşimdi', 'Grup ve tezgâh çarpanı20 parça8 parça daha', 'Kalem kalem uyum40 parça28 parça daha']);
+    expect(satirlar).toEqual(['Başlangıç (kaynaklı)5 parçadan azgeçti', 'Tek çarpan5 parça ve üstüşimdi', 'Grup ve tezgâh çarpanı20 parça8 parça daha', 'Kalem kalem uyum40 parça28 parça daha']);
     expect(within(d).queryByRole('link', { name: 'Süre kalibrasyonu' })).toBeNull();
   });
 
@@ -210,5 +210,64 @@ describe('3D Atölyesi süre kartı (3278 D)', () => {
     const d = (await screen.findByRole('heading', { name: 'Kalibrasyon durumu' })).closest('section') as HTMLElement;
     expect(await within(d).findByText(/Şimdi 3 parça; ölçümü eksik 2 parça\./)).toBeTruthy();
     expect(within(d).getByText('2 parça daha')).toBeTruthy();
+  });
+
+  it('3363 başlangıç katsayıları: rozet, başlangıç aralığı, çarpan dökümü; yetkili seçim yüzey ve toleransı revizyona yazar', async () => {
+    const onsel: NonNullable<GeometriSureCevabi['onsel']> = {
+      altDk: 6.2, ortaDk: 11.4, ustDk: 21,
+      dokum: [
+        { tur: 'kaba', kalibresizDk: 0.95, carpanlar: [{ anahtar: 'malzeme.kaba.metal/karbon', deger: 1.6 }], araToplamDk: 1.52 },
+        { tur: 'finis', kalibresizDk: 5.4, carpanlar: [{ anahtar: 'yuzey.1.6', deger: 1.41 }, { anahtar: 'tolerans.hassas', deger: 1.1 }], araToplamDk: 9.9 },
+        { tur: 'delik', kalibresizDk: 1.3, carpanlar: [], araToplamDk: 11.2 },
+        { tur: 'geometri', carpanlar: [{ anahtar: 'geometri.prizmatik', deger: 1 }], araToplamDk: 11.2 },
+        { tur: 'kesme', anahtar: 'kesme.pay', deger: 0.7, araToplamDk: 16 },
+        { tur: 'baglama', anahtar: 'tutma.1', adet: 2, tutmaDk: 0.75, araToplamDk: 17.5 },
+      ],
+      tasarim: { ra: '1.6', tolerans: 'hassas', kayitli: true }, tip: 'prizmatik', cidarMm: 7.7, baglama: 2, agirlikKg: 1.5,
+    };
+    const govdeler: unknown[] = [];
+    const yollar = {
+      ...temel(() => json(200, { ...SURE, onsel })),
+      'GET /oturum': () => json(200, { kullanici: { id: 9, kullaniciAdi: 'deneme', adSoyad: 'Deneme', roller: [], islemler: ['geometri.oku', 'geometri.kalibrasyon'] } }),
+      'POST /geometri/sure-tahmini/41/tasarim': () => json(200, { revizyonId: 41, ra: '0.8', tolerans: 'hassas' }),
+    };
+    const istekler = sunucuKur(yollar);
+    const fetchAsil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      if (secenek?.method === 'POST') govdeler.push(JSON.parse(String(secenek.body)));
+      return fetchAsil(adres, secenek);
+    }));
+    ac();
+    const k = await kart();
+    expect(await within(k).findByText('Başlangıç')).toBeTruthy();
+    expect(within(k).queryByText('Kalibresiz')).toBeNull();
+    expect(within(k).getByText('6 – 21 dk')).toBeTruthy();
+    expect(within(k).getByText('olası ≈ 11,4 dk / parça')).toBeTruthy();
+    const dokum = within(k).getByRole('table', { name: 'Çarpan dökümü' });
+    const satirlar = within(dokum).getAllByRole('row').map((r) => r.textContent);
+    expect(satirlar).toHaveLength(9);
+    expect(satirlar[2]).toMatch(/^Finiş \(kalibresiz 5,4 dk\)Ra 1,6 ×1,41 · Hassas ±0,05 ×1,1/);
+    expect(satirlar[5]).toMatch(/^Kesme dışı pay÷0,7/);
+    expect(satirlar[7]).toMatch(/^Başlangıç tahmini.*11,4 dk$/);
+    expect(satirlar[8]).toBe('Ölçümle düzeltme5 parçadan azyok');
+    expect(within(k).getByText('Hazırlık (ayar) süresi yok; bağlama ve tutma dahil. Rotaya ve plana yazılmaz.')).toBeTruthy();
+    const yuzey = within(k).getByRole('group', { name: 'Yüzey pürüzlülüğü' });
+    await waitFor(() => { expect((within(yuzey).getByRole('button', { name: '0,8' }) as HTMLButtonElement).disabled).toBe(false); });
+    expect(within(yuzey).getByRole('button', { name: '1,6' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(yuzey).getByRole('button', { name: '0,8' }));
+    await waitFor(() => { expect(istekler).toContain('POST /geometri/sure-tahmini/41/tasarim'); });
+    expect(govdeler).toEqual([{ ra: '0.8', tolerans: 'hassas' }]);
+  });
+
+  it('3363 yetkisiz kullanıcı yüzey ve tolerans seçimini değiştiremez', async () => {
+    const onsel: NonNullable<GeometriSureCevabi['onsel']> = {
+      altDk: 6, ortaDk: 9, ustDk: 14, dokum: [], tasarim: { ra: '3.2', tolerans: 'genel', kayitli: false }, tip: 'plaka', cidarMm: null, baglama: 2, agirlikKg: 1,
+    };
+    sunucuKur(temel(() => json(200, { ...SURE, onsel })));
+    ac();
+    const k = await kart();
+    const tol = await within(k).findByRole('group', { name: 'Tolerans sınıfı' });
+    for (const d of within(tol).getAllByRole('button')) expect((d as HTMLButtonElement).disabled).toBe(true);
+    expect(within(k).getByText(/Seçimi Yönetici ve Proses Mühendisi değiştirir\. Şimdi varsayılan\./)).toBeTruthy();
   });
 });

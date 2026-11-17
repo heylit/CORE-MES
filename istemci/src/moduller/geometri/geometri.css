@@ -274,3 +274,22 @@ span.tc-g3b-mo-ac { cursor: default; }
 @media (min-width: 520px) { .tc-g3b-ka-tur-tel { display: none; } }
 .tc-g3b-ka-carpanlar :is(th, td):nth-child(2) { text-align: start; }
 .tc-g3b-ka-carpanlar :is(th, td) { overflow-wrap: normal; }
+/* 3363: başlangıç katsayıları (süre kartında tasarım ve döküm; kalibrasyon sayfasında katsayı tabloları) */
+.tc-g3b-su-tasarim { margin-block-start: var(--b-3); }
+.tc-g3b-su-tasarim > p { margin-block: 0 var(--b-1); }
+.tc-g3b-su-tasarim .tc-simge { vertical-align: middle; }
+.tc-g3b-su-dokum { margin-block-start: var(--b-3); }
+.tc-g3b-su-dokum :is(th, td):nth-child(2) { text-align: start; }
+.tc-g3b-su-dokum tfoot th { color: var(--ink); }
+.tc-g3b-ks-tablo :is(th, td):not(:last-child) { text-align: start; }
+.tc-g3b-ks-tablo td { vertical-align: top; }
+.tc-g3b-ks-fark td { border-block-start: 0; padding-block-start: 0; }
+.tc-g3b-ks-fark .tc-g3b-su-uyari { margin: 0; }
+.tc-g3b-ks-duzen { display: grid; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-g3b-ks-duzen > p { margin: 0; }
+.tc-g3b-ks-alanlar { display: grid; gap: var(--b-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 4)), 1fr)); }
+.tc-g3b-ks-eylem { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+@media (max-width: 519px) { .tc-g3b-ks-genis { display: none; } }
+@media (min-width: 520px) { .tc-g3b-ks-dar { display: none; } }
+.tc-g3b-su-dokum :is(th, td):nth-child(3) { white-space: nowrap; }
+.tc-g3b-ks-tablo th { overflow-wrap: normal; }

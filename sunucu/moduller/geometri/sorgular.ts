@@ -336,3 +336,42 @@ export async function kalibrasyonDisaridaYaz(db: Db, malzemeNo: number, neden: s
 export async function kalibrasyonDisaridaSil(db: Db, malzemeNo: number): Promise<void> {
   await db.sorgu('DELETE FROM geometri_kalibrasyon_disarida WHERE malzeme_no = $1', [malzemeNo]);
 }
+
+// 3363: elle değişen başlangıç katsayıları (yerleşik değerler kurallarda). Yeniden yazma değeri, notu ve kişiyi günceller.
+export function sureKatsayilari(db: Db): Promise<{ anahtar: string; deger: number; not: string | null; kisiId: number; zaman: string }[]> {
+  return db.sorgu(
+    `SELECT anahtar, deger::float8 AS deger, not_metni AS "not", kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman
+       FROM geometri_sure_katsayi ORDER BY anahtar`,
+  );
+}
+
+export async function sureKatsayisiYaz(db: Db, anahtar: string, deger: number, not: string | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO geometri_sure_katsayi (anahtar, deger, not_metni, kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger, not_metni = EXCLUDED.not_metni, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [anahtar, deger, not, kisiId],
+  );
+}
+
+export async function sureKatsayisiSil(db: Db, anahtar: string): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_sure_katsayi WHERE anahtar = $1', [anahtar]);
+}
+
+// 3363: revizyonun yüzey (Ra) ve tolerans seçimi.
+type TasarimSatiri = { ra: '6.3' | '3.2' | '1.6' | '0.8' | '0.4'; tolerans: 'genel' | 'hassas' | 'cok-hassas' | 'ultra' };
+export async function sureTasarimi(db: Db, revizyonId: number): Promise<TasarimSatiri | null> {
+  return (await db.tek<TasarimSatiri>('SELECT ra, tolerans FROM geometri_sure_tasarim WHERE revizyon_id = $1', [revizyonId])) ?? null;
+}
+
+export async function sureTasarimlari(db: Db): Promise<Map<number, TasarimSatiri>> {
+  const r = await db.sorgu<TasarimSatiri & { revizyonId: number }>('SELECT revizyon_id AS "revizyonId", ra, tolerans FROM geometri_sure_tasarim');
+  return new Map(r.map((x) => [x.revizyonId, { ra: x.ra, tolerans: x.tolerans }]));
+}
+
+export async function sureTasarimiYaz(db: Db, revizyonId: number, ra: string, tolerans: string, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO geometri_sure_tasarim (revizyon_id, ra, tolerans, kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (revizyon_id) DO UPDATE SET ra = EXCLUDED.ra, tolerans = EXCLUDED.tolerans, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [revizyonId, ra, tolerans, kisiId],
+  );
+}

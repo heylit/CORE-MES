@@ -18,7 +18,7 @@ import type { TalasliRotaAdimi } from './servis.ts';
 import { kalibrasyonOnbellegiSifirla, kalibrasyonOnbellegiTemizle } from './servis.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 
-// Süre kalibrasyonu ucu (3321-3): altı örnek malzemeye aynı küp modeli bağlanır (aynı geometri, aynı kalibresiz tahmin T); ölçümler
+// Süre kalibrasyonu ucu (3321-3): altı örnek malzemeye aynı küp modeli bağlanır (aynı geometri, aynı başlangıç tahmini T (3363)); ölçümler
 // rota çözücüsünden T'nin katları olarak verilir. Gerçek PostgreSQL, gerçek giriş.
 const yakin = (x: number | null | undefined, beklenen: number, m = ''): void =>
   assert.ok(x != null && Math.abs(x - beklenen) <= Math.abs(beklenen) * 1e-3, `${m} ${String(x)} != ${String(beklenen)}`);
@@ -110,7 +110,7 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
     const onceki = talasliAdimCozucusu(null);
     try {
       talasliAdimCozucusu(async () => [adim(null)]);
-      const t = (await sure(parcalar[0]!.revizyonId)).ortaDk!;
+      const t = (await sure(parcalar[0]!.revizyonId)).onsel!.ortaDk;
       assert.ok(t > 0);
       const oranlar = [1.8, 1.9, 2, 2, 2.2, 2.5];
       const olcum = new Map(parcalar.map((p, i) => [p.malzemeNo, t * oranlar[i]!]));
@@ -124,7 +124,7 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
       assert.deepEqual([k.asama, k.n, k.olcumuEksik, k.disarida, k.gruplar, k.regresyon], ['tek', 6, 0, 0, [], null]);
       yakin(k.carpan, 2, 'çarpan');
       assert.equal(k.parcalar.length, 6);
-      assert.deepEqual(k.parcalar[0]!.gruplar, { malzeme: null, tezgah: 'ORN-CNC-01', islem: 'Frezeleme' }, 'sınıfsız parçada malzeme grubu bilinmez');
+      assert.deepEqual(k.parcalar[0]!.gruplar, { malzeme: null, tezgah: 'ORN-CNC-01', islem: 'Frezeleme', geometri: 'prizmatik' }, 'sınıfsız parçada malzeme grubu bilinmez; küp prizmatik');
       yakin(k.parcalar[0]!.kalibreDk, 2 * t, 'parçanın kalibre süresi');
       const s = await sure(parcalar[0]!.revizyonId);
       assert.equal(s.kalibre, true);
@@ -133,7 +133,7 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
       yakin(s.kalibrasyon.ortaDk, 2 * t, 'orta');
       yakin(s.kalibrasyon.altDk, 1.8 * t, 'alt');
       yakin(s.kalibrasyon.ustDk, 2.5 * t, 'üst');
-      yakin(s.ortaDk, t, 'kalemler ve kalibresiz aralık değişmez');
+      yakin(s.onsel?.ortaDk, t, 'başlangıç tahmini değişmez');
     } finally {
       talasliAdimCozucusu(onceki);
     }
@@ -143,7 +143,7 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
     const onceki = talasliAdimCozucusu(null);
     try {
       talasliAdimCozucusu(async () => [adim(null)]);
-      const t = (await sure(parcalar[0]!.revizyonId)).ortaDk!;
+      const t = (await sure(parcalar[0]!.revizyonId)).onsel!.ortaDk;
       const oranlar = [1.8, 1.9, 2, 2, 2.2, 5];
       const olcum = new Map(parcalar.map((p, i) => [p.malzemeNo, t * oranlar[i]!]));
       talasliAdimCozucusu(async (_db, malzemeNo) => [adim(olcum.get(malzemeNo) ?? null)]);
@@ -175,7 +175,7 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
     const onceki = talasliAdimCozucusu(null);
     try {
       talasliAdimCozucusu(async () => [adim(null)]);
-      const t = (await sure(parcalar[0]!.revizyonId)).ortaDk!;
+      const t = (await sure(parcalar[0]!.revizyonId)).onsel!.ortaDk;
       const olcum = new Map(parcalar.map((p, i) => [p.malzemeNo, t * (1.5 + i / 10)]));
       talasliAdimCozucusu(async (_db, malzemeNo) => [adim(olcum.get(malzemeNo) ?? null)]);
       kalibrasyonOnbellegiSifirla();
@@ -200,8 +200,8 @@ describe('geometri süre kalibrasyonu ucu (3321-3; gerçek PostgreSQL, gerçek g
       await o().sahip.sorgu(`UPDATE malzeme_katalog_karti SET kayit = kayit || '{"cls":"islah"}' WHERE no = $1`, [cubuk]);
       talasliAdimCozucusu(async () => [adim(null)]);
       const rev = parcalar[0]!.revizyonId;
-      const duz = (await sure(rev)).ortaDk!;
-      const malzemeli = (await sure(rev, '?kalite=C45&sinif=metal%2Fislah')).ortaDk!;
+      const duz = (await sure(rev)).onsel!.ortaDk;
+      const malzemeli = (await sure(rev, '?kalite=C45&sinif=metal%2Fislah')).onsel!.ortaDk;
       assert.notEqual(malzemeli, duz, 'malzeme tahmini değiştirir');
       talasliAdimCozucusu(async () => [adim(10, null, 10, [cubuk])]);
       const k = await kalibrasyon();
