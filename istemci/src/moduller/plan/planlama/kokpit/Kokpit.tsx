@@ -218,6 +218,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const surum = o.depo.calismaSurumu;
   const { yenile } = o;
   // yonGeri: teslimden geriye yerleştirme (3318). Emrin yönü zaten geriye değilse önce yön komutu yazılır; plana alma yazılamazsa yön geri alınır.
+  // Çoklu kaydırmada her iş ayrı taşımadır; "taslağa yazıldı" bildirimi kümenin sonunda tek satırdır (ayrı ayrı çıksa tahtayı örter).
+  const grup = useRef<{ bekleyen: Set<string>; yazilan: number } | null>(null);
   const yaz = useCallback(async (a: TurAdayi, yonGeri = false): Promise<boolean> => {
     if (!taslak || !yazabilir) return false;
     const yonYaz = yonGeri && a.planaAl !== undefined && (emirYonu(c, a.planaAl) === 'plan' ? planYonu(c) : emirYonu(c, a.planaAl)) !== 'geri';
@@ -227,6 +229,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     const tamam = await taslak.yaz(k);
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
     if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
+    if (tamam && a.planaAl === undefined && grup.current?.bekleyen.has(a.isId)) { grup.current.yazilan += 1; return tamam; }
     if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : yonYaz ? 'Emir teslimden geriye plana alındı (iki değişiklik: yön ve yerleşim); Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
     return tamam;
   }, [taslak, yazabilir, bildir, c]);
@@ -251,7 +254,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!x) return;
     if (mesgul || tasiyor.current || onay !== null) { kuyruk.current.set(isId, { tezgah, S: hedefS }); setSirada(kuyruk.current.size); return; }
     tasiyor.current = true; suren.current = { isId, tezgah, S: hedefS };
-    const bitir = (): void => { tasiyor.current = false; suren.current = null; setTasimaBitti((n) => n + 1); };
+    const bitir = (): void => {
+      tasiyor.current = false; suren.current = null; setTasimaBitti((n) => n + 1);
+      const g = grup.current;
+      if (g?.bekleyen.delete(isId) && g.bekleyen.size === 0) {
+        grup.current = null;
+        if (g.yazilan > 0) bildir('bilgi', `${String(g.yazilan)} iş birlikte kaydı, taslağa yazıldı; Geri her birini ayrı alır.`);
+      }
+    };
     const S = tasimaSaati(hedefS, m.simdi);
     void isTasiOnizle({ isId, tezgah, baslangic: S }).then(async (oz) => {
       if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu taşıma yapılamıyor.'); return; }
@@ -443,7 +453,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     const l = [...coklu].map((id) => m.isler[id]).filter((x) => x !== undefined);
     const engelli = l.filter((x) => tasinabilir(x) !== null);
     if (engelli.length > 0) bildir('bilgi', `${String(engelli.length)} iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.`);
-    for (const x of l.filter((y) => tasinabilir(y) === null).sort((a, b) => (dS > 0 ? b.S - a.S : a.S - b.S))) {
+    const tasinan = l.filter((y) => tasinabilir(y) === null);
+    if (tasinan.length > 1) {
+      const g = grup.current ?? { bekleyen: new Set<string>(), yazilan: 0 };
+      for (const x of tasinan) g.bekleyen.add(x.id);
+      grup.current = g;
+    }
+    for (const x of tasinan.sort((a, b) => (dS > 0 ? b.S - a.S : a.S - b.S))) {
       const h = kuyruk.current.get(x.id) ?? (suren.current?.isId === x.id ? suren.current : undefined);
       tasiDene(x.id, h?.tezgah ?? x.m, (h?.S ?? x.S) + dS);
     }
