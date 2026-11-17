@@ -1740,6 +1740,11 @@ export interface PlanIsEmri {
   ad: string;
   // Terminalin kalite istasyonunda alt görünümü adımın operasyon tipi seçer (2011 a).
   operasyonTipiId?: number;
+  // Rotadaki gizli operasyon kimliği (3250-2); OP numarası yeniden dizilse de aynı operasyonu gösterir. Kimliksiz adımda null.
+  operasyonId?: number | null;
+  // Operasyon kodu ve adı (3377, 3385): emrin rota revizyonundan türetilir (TRN10, "Torna 1. operasyon"). Rotasız adımda, revizyonda
+  // bulunmayan adımda ya da çözücü kayıtlı değilken null.
+  operasyon?: { kod: string; ad: string } | null;
   kaynak: AtanabilirKaynak | null;
   // İş emrine yazılmış istasyon (sabit kimlik: istasyon iş emrinindir); Arkon paketi makine ya da kişiden türetmeden okur. Planın kendi
   // denediği emirde yoktur.
@@ -1777,6 +1782,18 @@ export type FasonTahmini = (sorgular: readonly { malzemeNo: number; operasyonTip
 // 3257 a: bitmemiş fason adımların açık siparişindeki teslim tarihi (iş emri kimliğinden 'GGGG-AA-GG'; tarihsiz ya da siparişsiz adım haritada
 // yok). Plan satın almadan verir; tarih termin gününün ve tahminin önüne geçer (fasonBeklemesi).
 export type FasonSiparisTermini = (isEmriIdleri: readonly number[]) => Promise<ReadonlyMap<number, string>>;
+
+// Operasyon kodu rotanın kuralıdır; rota bu modülü okuduğu için çözücü kablolama.ts'te kaydedilir (kapanış kalıbı). Sonuç girdiyle aynı sırada.
+export type OperasyonKoduCozucusu = (
+  db: Db, adimlar: readonly { revizyonId: number; operasyonId: number | null; opNo: number }[],
+) => Promise<({ kod: string; ad: string } | null)[]>;
+let operasyonKoduCozucusu: OperasyonKoduCozucusu | null = null;
+// Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
+export function operasyonKoduCozucusuKaydet(c: OperasyonKoduCozucusu | null): OperasyonKoduCozucusu | null {
+  const onceki = operasyonKoduCozucusu;
+  operasyonKoduCozucusu = c;
+  return onceki;
+}
 
 // Taslak emir plana alınmadan plan çizelgesinde denenebilir; varsayılan yalnız planlı ve başlamış emirlerdir.
 export const planlanacakIsEmirleri = (
@@ -1831,6 +1848,13 @@ async function acikAdimlar<R extends number | null>(
     return m === undefined ? undefined : i.makineId !== null && m.includes(i.makineId) ? i.makineId : m[0];
   };
   const plandaki = new Set(satirlar.map((i) => i.id));
+  const kimlikler = new Map(satirlar.length === 0 ? [] : (await s.isEmriOperasyonlari(db, satirlar.map((i) => i.id))).map((r) => [r.isEmriId, r.operasyonId]));
+  const rotali = satirlar.filter((i) => i.emir.kaynakRotaRevizyonId !== null);
+  const kodlar = new Map<number, { kod: string; ad: string } | null>();
+  if (operasyonKoduCozucusu && rotali.length > 0) {
+    const cevap = await operasyonKoduCozucusu(db, rotali.map((i) => ({ revizyonId: i.emir.kaynakRotaRevizyonId!, operasyonId: kimlikler.get(i.id) ?? null, opNo: i.opNo })));
+    rotali.forEach((i, n) => kodlar.set(i.id, cevap[n] ?? null));
+  }
   return satirlar.flatMap((i) => {
     const e = i.emir;
     const revizyon = e.kaynakRotaRevizyonId;
@@ -1841,7 +1865,7 @@ async function acikAdimlar<R extends number | null>(
       id: i.id, uretimEmriId: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, teslim: e.teslim, oncelik: e.oncelik, acilma: e.acilma, baslangic: e.baslangic,
       kaynakRotaRevizyonId: revizyon, ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, birlesmeOpNo: e.birlesmeOpNo, tur: i.tur, emirTuru: e.emirTuru,
       siparisSatiriId: e.siparisSatiriId, adimAdedi: adimAdedi.get(e.id)?.get(i.sira) ?? e.adet,
-      sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
+      sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, operasyonId: kimlikler.get(i.id) ?? null, operasyon: kodlar.get(i.id) ?? null, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
       devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi,

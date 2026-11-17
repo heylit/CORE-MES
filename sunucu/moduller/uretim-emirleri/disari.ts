@@ -423,6 +423,9 @@ export type { EmirDilimiSatiri } from './is-emri-servis.ts';
 
 // Plan (UE4, UE5, P6): planlanacak iş emirleri; kaynak, plan bilgisi, plana alma ve iptal komutları.
 export const planlanacakIsEmirleri = isEmri.planlanacakIsEmirleri;
+// Önceki çözücüyü döner (test geri yükler).
+export const operasyonKoduCozucusu = isEmri.operasyonKoduCozucusuKaydet;
+export type { OperasyonKoduCozucusu } from './is-emri-servis.ts';
 // Arkon Hazırlık (kart #1257): rotasız emrin açık adımları, plan satırı biçiminde; plana girmez.
 export const rotasizIsEmirleri = isEmri.rotasizIsEmirleri;
 // Arkon iş emri paketi (kart #199 adım 1, istek 11): iş emrine kopyalanmış kontrol listesi.

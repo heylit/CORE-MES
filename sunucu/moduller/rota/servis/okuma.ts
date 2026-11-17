@@ -9,11 +9,11 @@ import type { AgacCevabi, Bagimlilik, IlkParcaSecimi, KullanimCevabi, MakineKull
 import { malzemeAra as kartAra } from '../../malzemeler/disari.ts';
 import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { adimliEmirAyrintisi, isEmirleriniYenile, uretimEmriAc } from '../../uretim-emirleri/disari.ts';
-import { cokKatmanaCevir, emreKopyalanabilirMi, girdiEksigi, oncullerCikar } from '../kurallar.ts';
-import type { Oncul } from '../kurallar.ts';
+import { cokKatmanaCevir, emreKopyalanabilirMi, girdiEksigi, oncullerCikar, operasyonKodlari } from '../kurallar.ts';
+import type { Oncul, OperasyonKodu } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
-import { ARAMA_SAYFA_BOYU, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
+import { ARAMA_SAYFA_BOYU, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, operasyonTipleri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
 import { agac } from './agac.ts';
 
 /* ---------------- başka modüllere ---------------- */
@@ -369,4 +369,25 @@ export function aparatKullanimi(db: Db): Promise<{ malzemeId: number; adim: numb
 
 export async function olcuAletiTurleri(db: Db): Promise<{ turler: { id: number; ad: string }[] }> {
   return { turler: (await aletTurleri(db)).map((t) => ({ id: t.id, ad: t.ad })) };
+}
+
+// 3385: iş emrinin türetilmiş operasyon kodu ve adı (3381), emrin rota revizyonundaki adımından: adım operasyon kimliğiyle, kimliği olmayan
+// eski iş emrinde numarayla bulunur. Revizyonu ya da adımı bulunmayan, tipi bilinmeyen satır null'dur. Sonuç girdiyle hizalıdır.
+export async function isEmriOperasyonKodlari(
+  db: Db, adimlar: readonly { revizyonId: number; operasyonId: number | null; opNo: number }[],
+): Promise<(OperasyonKodu | null)[]> {
+  const idler = [...new Set(adimlar.map((a) => a.revizyonId))];
+  if (idler.length === 0) return [];
+  const satirlar = await s.revizyonlarinAdimTipleri(db, idler);
+  const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, { kisaltma: t.kisaltma, ad: t.ad }]));
+  const kodlar = new Map<number, { opNo: number; operasyonId: number; kod: OperasyonKodu | null }[]>();
+  for (const id of idler) {
+    const r = satirlar.filter((x) => x.revizyonId === id);
+    const k = operasyonKodlari(r, tipler);
+    kodlar.set(id, r.map((x, i) => ({ opNo: x.opNo, operasyonId: x.operasyonId, kod: k[i] ?? null })));
+  }
+  return adimlar.map((a) => {
+    const r = kodlar.get(a.revizyonId) ?? [];
+    return (a.operasyonId === null ? r.find((x) => x.opNo === a.opNo) : r.find((x) => x.operasyonId === a.operasyonId))?.kod ?? null;
+  });
 }

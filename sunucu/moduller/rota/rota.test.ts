@@ -17,8 +17,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, isEmriOperasyonKimlikleri, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, gecerliTalimatlarToplu, revizyonGetir, revizyonOperasyonKimlikleri, revizyonlar, talimatSurumuAdimlari, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimliEmirAyrintisi, isEmriOperasyonKimlikleri, operasyonKoduCozucusu as uretimEmirleriOperasyonKoduCozucusu, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, gecerliTalimatlarToplu, isEmriOperasyonKodlari, revizyonGetir, revizyonOperasyonKimlikleri, revizyonlar, talimatSurumuAdimlari, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { FASON_KAYNAGI } from './kurallar.ts';
 import { isler } from './isler.ts';
 import { adimAraHalleri, adimStatusu } from '../recete-rota/disari.ts';
@@ -1030,6 +1030,39 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tx((db) => gecerliTalimatlarToplu(db, [{ malzemeId: urun, opNo: 10 }]))).size, 0);
     assert.notEqual(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1, kimlik20)), null);
     assert.equal(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1)), null);
+  });
+
+  // 3385: plan satırı adımın operasyon kodunu ve adını taşır (3377: tip içinde sayılır). Emir açıldıktan sonra rota numarası yeniden
+  // dizilse de kod operasyon kimliğiyle eşlenir; numarayla eşlense iki adımın kodu yer değiştirirdi.
+  test('3385: planlanacak iş emri satırı operasyon kodunu ve adını emrin rota revizyonundan kimlikle alır', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ operasyonTipiId: tip('BM'), kaynak: null }), yeniAdim()]);
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 2, teslim: null, taslak: true });
+    const tipler = new Map((await vt().tx((db) => db.sorgu<{ id: number; k: string; ad: string }>(
+      'SELECT id, coalesce(kisaltma, kod) AS k, ad FROM istasyonlar_operasyon_tipi WHERE id = ANY($1::int[])', [[tip('TRN'), tip('BM')]]))).map((x) => [x.id, x]));
+    const trn = tipler.get(tip('TRN'))!;
+    const bm = tipler.get(tip('BM'))!;
+    const beklenen = [{ kod: `${trn.k}10`, ad: `${trn.ad} 1. operasyon` }, { kod: `${bm.k}10`, ad: `${bm.ad} 1. operasyon` }, { kod: `${trn.k}20`, ad: `${trn.ad} 2. operasyon` }];
+    const satirlar = async () => (await vt().tx((db) => planlanacakIsEmirleri(db, { taslakDahil: true })))
+      .filter((x) => x.uretimEmriId === k.uretimEmriId).sort((a, b) => a.sira - b.sira);
+    const onceki = uretimEmirleriOperasyonKoduCozucusu(isEmriOperasyonKodlari);
+    try {
+      assert.deepEqual((await satirlar()).map((x) => [x.opNo, x.operasyon]), [[10, beklenen[0]], [20, beklenen[1]], [30, beklenen[2]]]);
+      // Rotada ilk iki adımın numarası yer değiştirir; emir eski numaraları korur (3250 b).
+      await ortam!.sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2), ($1, 1030, $2) ON CONFLICT DO NOTHING', [urun, id]);
+      await ortam!.sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+      await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [id]);
+      await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1010 THEN 20 WHEN 1020 THEN 10 ELSE 30 END WHERE revizyon_id = $1', [id]);
+      await ortam!.sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+      const sonra = await satirlar();
+      assert.deepEqual(sonra.map((x) => [x.opNo, x.operasyon]), [[10, beklenen[0]], [20, beklenen[1]], [30, beklenen[2]]]);
+      assert.ok(sonra.every((x) => typeof x.operasyonId === 'number'));
+      // Çözücü kayıtlı değilken kod yoktur; sıfır ya da uydurma kod verilmez.
+      uretimEmirleriOperasyonKoduCozucusu(null);
+      assert.deepEqual((await satirlar()).map((x) => x.operasyon), [null, null, null]);
+    } finally {
+      uretimEmirleriOperasyonKoduCozucusu(onceki);
+    }
   });
 
   test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {

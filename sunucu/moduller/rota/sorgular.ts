@@ -766,6 +766,16 @@ export async function ekrandakiOperasyon(db: Db, malzemeId: number, opNo: number
   return r?.id ?? operasyonBul(db, malzemeId, opNo);
 }
 
+export function revizyonlarinAdimTipleri(
+  db: Db, revizyonIdleri: readonly number[],
+): Promise<{ revizyonId: number; sira: number; opNo: number; operasyonId: OperasyonKimligi; operasyonTipiId: number }[]> {
+  return db.sorgu(
+    `SELECT revizyon_id AS "revizyonId", sira, op_no AS "opNo", operasyon_id AS "operasyonId", operasyon_tipi_id AS "operasyonTipiId"
+       FROM rota_adimi WHERE revizyon_id = ANY($1::int[]) ORDER BY revizyon_id, sira`,
+    [revizyonIdleri],
+  );
+}
+
 export function revizyonOperasyonlari(db: Db, revizyonId: number): Promise<{ opNo: number; operasyonId: OperasyonKimligi }[]> {
   return db.sorgu('SELECT op_no AS "opNo", operasyon_id AS "operasyonId" FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [revizyonId]);
 }
