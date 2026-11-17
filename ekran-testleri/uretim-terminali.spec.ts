@@ -62,10 +62,12 @@ test.describe('operatör', () => {
 test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
-  test('cihazda istasyon yokken seçici kendiliğinden açılır ve bütün istasyonları listeler', async ({ page, ag, ac }) => {
+  test('cihazda istasyon yokken yer penceresi kendiliğinden açılır ve bütün istasyonları listeler', async ({ page, ag, ac }) => {
     await ac('/uretim-terminali');
-    const secici = page.getByRole('dialog', { name: 'Hangi istasyonda?' });
+    // Bağlama yetkilisi (3392 a) ilk açılışta cihazı yere bağlar; eski istasyon seçicisi açılmaz.
+    const secici = page.getByRole('dialog', { name: 'Bu cihazı yere bağla' }).getByRole('radiogroup', { name: 'İstasyon' });
     await expect(secici).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Hangi istasyonda?' })).toHaveCount(0);
     for (const istasyon of ['ORN-TORNA-1', 'ORN-TORNA-2', 'ORN-FREZE-1', 'ORN-FREZE-2', 'ORN-KONTROL']) await expect(secici).toContainText(istasyon);
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler')), 'seçici açmak yazmaz').toEqual([]);

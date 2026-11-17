@@ -7,10 +7,11 @@ const ONEK = 'arkon:';
 const KUYRUK = 'outbox';
 const VT_ADI = 'arkon-mes';
 
-/* Silinmeyen anahtarlar. Cihaz ayarı: sunucu adresi, tema, istasyon seçimi, performans ve görünüm ayarları.
+/* Silinmeyen anahtarlar. Cihaz ayarı: sunucu adresi, tema, istasyon seçimi, performans ve görünüm ayarları. Cihazın makine bağı ve
+   kimliği (3392 a) de cihazındır: kart okutulup kişi değişince bağ kalır.
    Aşağıdaki "emin olunmayan" gruplar kişiye ait olmayan ekran tercihi sayıldı; silinmesi kararı ayrıca istenir. */
 const KALAN_ANAHTARLAR: ReadonlySet<string> = new Set([
-  'server', 'theme', 'station', 'lite', 'feat', 'scale', 'cihazKipi',
+  'server', 'theme', 'station', 'machine', 'cihaz', 'lite', 'feat', 'scale', 'cihazKipi',
   'readCfg', 'pvStation', 'labOpen', 'setTab', 'planTab', 'maintTab', 'repRange', 'prepGrup', 'prepSuzAcik', 'planWc', 'boardWc',
 ]);
 const KALAN_ONEKLER: readonly string[] = ['bal:', 'lastState:'];

@@ -812,3 +812,7 @@ export function hazirlikMaddesiBul(db: Db, id: number): Promise<{ isEmriId: numb
 export async function hazirlikMaddesiOlayiEkle(db: Db, maddeId: number, olay: string, kisiId: number): Promise<void> {
   await db.sorgu('INSERT INTO arkon_hazirlik_maddesi_olayi (madde_id, olay, kisi_id) VALUES ($1, $2, $3)', [maddeId, olay, kisiId]);
 }
+
+export async function cihazBagiEkle(db: Db, cihaz: string, istasyonId: number, makineId: number | null, kisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO arkon_cihaz_bagi (cihaz, istasyon_id, makine_id, kisi_id) VALUES ($1, $2, $3, $4)', [cihaz, istasyonId, makineId, kisiId]);
+}

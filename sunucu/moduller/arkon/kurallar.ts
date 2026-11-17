@@ -16,6 +16,9 @@ import { SABIT_HURDA_KODLARI } from '../durus-nedenleri/disari.ts';
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
   rolYok: 'Üretim Hazırlık için rolünüz yok.',
+  cihazBagiYetkisi: 'Cihazı istasyona ve makineye yalnız istasyon yönetimi yetkisi olan bağlar.',
+  cihazIstasyonuYok: 'Bu istasyon bulunamadı.',
+  cihazMakinesiYok: 'Bu makine seçilen istasyonda değil.',
   ozetRolYok: 'Özetim yalnız operatör ve amir içindir.',
   ozetKapsamDisi: 'Bu kişinin özetini göremezsiniz: yalnız kendi özetiniz ya da amiri olduğunuz iş merkezindeki kişiler açılır.',
   silmeSurumu: 'Silmede belgenin sürümü gönderilmeli.',
@@ -3184,3 +3187,6 @@ export function periyodikBakimPlanlari(belgeler: readonly { kimlik: string; govd
     }];
   });
 }
+
+// 3392 a: ortak cihazı istasyona ve makineye bağlayan, Arkon matrisinde "istasyon yönetimi" (prod.station) olan roldür.
+export const cihazBaglayabilir = (rol: ArkonRolu): boolean => rol === 'admin' || (yetkiMatrisi()[rol] ?? []).includes('prod.station');

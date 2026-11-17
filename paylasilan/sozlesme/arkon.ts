@@ -655,6 +655,13 @@ export const AZAMI_HAZIRLIK_MADDESI = 30;
 export const HAZIRLIK_MADDESI_OLAYLARI = ['tamamla', 'geri-al', 'kaldir'] as const;
 const isEmriKimligi = z.coerce.number<number>({ message: 'İş emri sayı olmalı.' }).int().positive().max(2147483647);
 export const hazirlikMaddeleriSorgusu = z.object({ isEmriId: isEmriKimligi });
+// 3392 a madde 11: ortak cihazın istasyon ve makine bağı; cihaz tarayıcının ürettiği rastgele UUID'dir. Makine boş: sabit değil.
+export const cihazBagiGovdesi = z.object({
+  cihaz: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, 'Cihaz kimliği geçersiz.'),
+  istasyon: z.string().trim().min(1).max(60),
+  makine: z.string().trim().min(1).max(60).nullable(),
+});
+export type CihazBagiGovdesi = z.infer<typeof cihazBagiGovdesi>;
 export const hazirlikMaddesiEkleGovdesi = z.object({
   isEmriId: isEmriKimligi,
   ad: z.string().trim().min(1, 'Madde adı boş olamaz.').max(120, 'Madde adı en çok 120 karakter olur.'),

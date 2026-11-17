@@ -960,9 +960,17 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 /* N25: kabuğun üst çubuğundaki şerit de aynı kuralla: "Makine yok" ve istasyon kodu tam kalır, istasyon adı kısalır; 1280 altında ad ve Çağrı yazısı yer açmak için gizlenir (düğmenin adı aria-label'da). */
 :is(.tc-ay1-genis, .tc-ay1-kabukta) .tc-ay1-yer[data-uyari] { flex: none; }
 :is(.tc-ay1-genis, .tc-ay1-kabukta) .tc-ay1-yer[data-uyari] b { overflow: visible; }
-.tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) { display: flex; column-gap: var(--b-1); min-width: 0; }
+/* Izgara: ad sütununun en küçüğü 0, kodunki kendi boyu; kutunun en küçük boyu böylece yalnız koddur. */
+.tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) { display: grid; grid-template-columns: max-content minmax(0, max-content); column-gap: var(--b-1); min-width: 0; }
 .tc-ay1-kabukta .tc-ay1-yer-kod { flex: none; }
 .tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) > small { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Arayüz 3392: bağlı yerin kodu hiç kısalmaz (TORNA-1 ile TORNA-2 ayrılmalı); kutu en az kod kadar, yer gerekirse yalnız ad kısalır.
+   1680 altında düğme yazıları (İşlerim, İş kartı okut, Çağrı) yer açmak için gizlenir (1600 genişlikte vardiya satırı da üst çubuktadır); düğmenin adı aria-label'da. */
+.tc-ay1-kabukta .tc-ay1-yer:has(.tc-ay1-yer-kod) { min-inline-size: min-content; }
+.tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) > small { white-space: nowrap; }
+@media (max-width: 1679px) {
+  .tc-ay1-kabukta .tc-ay1-cagri-yazi { display: none; }
+}
 @media (max-width: 1279px) {
   .tc-ay1-kabukta .tc-ay1-yer b > small { display: none; }
   .tc-ay1-kabukta .tc-ay1-yer:has(.tc-ay1-yer-kod) { flex: none; }
@@ -1350,3 +1358,62 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 @container tc-izgara (max-height: 320px) {
   .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { white-space: nowrap; }
 }
+
+/* 3392 a: cihazı yere bağlama. Geniş ekranda iki sütun (1 İstasyon, 2 Makine), dar ekranda adım adım. */
+.tc-ay1-yer-bagla { display: grid; gap: var(--b-3); }
+.tc-ay1-yer-bagla > p { margin: 0; }
+.tc-ay1-yer-sutunlar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--b-4); align-items: start; }
+.tc-ay1-yer-sutun { display: grid; gap: var(--b-2); min-inline-size: 0; }
+.tc-ay1-yer-sutun[data-pasif] { opacity: 0.5; }
+.tc-ay1-yer-sutun h3 { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); color: var(--muted); text-transform: uppercase; letter-spacing: var(--harf-aralik-06); }
+.tc-ay1-yer-sutun > p { margin: 0; }
+.tc-ay1-yer-no {
+  display: inline-grid; place-items: center; inline-size: var(--b-5); block-size: var(--b-5); border-radius: var(--yari-tam);
+  background: var(--ink); color: var(--panel-solid); font-size: var(--yazi-xs); letter-spacing: 0;
+}
+.tc-ay1-yer-no[data-tamam] { background: var(--run); }
+.tc-ay1-yer-liste { display: grid; gap: var(--b-2); }
+.tc-ay1-yer-oge {
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-3); inline-size: 100%;
+  border: var(--cizgi) solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.tc-ay1-yer-oge > span:not(.tc-ay1-yer-rozet) { display: grid; flex: 1; min-inline-size: 0; }
+.tc-ay1-yer-oge b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-yer-oge small { color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.tc-ay1-yer-oge[data-secili] { border-color: var(--ink); background: var(--ink); color: var(--panel-solid); }
+.tc-ay1-yer-oge[data-secili] small { color: inherit; opacity: 0.8; }
+.tc-ay1-yer-oge:focus-visible { outline: var(--cizgi) solid var(--hazard-ink); outline-offset: var(--cizgi-ince); }
+.tc-ay1-yer-rozet { padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--hold); border-radius: var(--yari-tam); color: var(--hold); font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; }
+.tc-ay1-yer-adimlar { display: flex; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-ay1-yer-adimlar > li { flex: 1; padding: var(--b-2); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); text-align: center; font-weight: 600; }
+.tc-ay1-yer-adimlar > li[aria-current="step"] { background: var(--hazard); color: var(--on-hazard); }
+.tc-ay1-yer-adimlar > li[data-tamam] { color: var(--run); }
+@media (max-width: 699px) { .tc-ay1-yer-sutunlar { grid-template-columns: 1fr; } }
+
+/* 3392 a madde 6: kişinin çalışan işleri üst çubuktaki düğmeden açılan pencerede; sayfa kaymaz. */
+.tc-ay1-islerim { display: grid; gap: var(--b-2); }
+.tc-ay1-islerim-dugme {
+  display: inline-flex; align-items: center; gap: var(--b-1); flex: none; min-block-size: var(--dokunma); padding: 0 var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; font-family: var(--font-ana); font-size: var(--yazi-s); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tc-ay1-islerim-dugme > b { min-inline-size: var(--b-4); border-radius: var(--yari-tam); background: var(--ink); color: var(--panel-solid); font-size: var(--yazi-xs); text-align: center; }
+.tc-ay1-islerim-is {
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: var(--b-1) var(--b-3); min-inline-size: 0;
+  border: var(--cizgi) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.tc-ay1-islerim-is > b { flex: 1; min-inline-size: 0; }
+.tc-ay1-islerim-parca { white-space: nowrap; }
+.tc-ay1-islerim-is small { color: var(--muted); }
+.tc-ay1-islerim-is[data-durum="ekranda"] { border-color: var(--ink); background: var(--ink); color: var(--panel-solid); }
+.tc-ay1-islerim-is[data-durum="ekranda"] small { color: inherit; opacity: 0.8; }
+.tc-ay1-islerim-is:disabled { cursor: default; }
+.tc-ay1-islerim-is[data-durum="baska"], .tc-ay1-islerim-is[data-durum="kapali"] { opacity: 0.6; }
+
+/* 3392 a madde 7-8: kart isteme ve plan farkı. */
+.tc-ay1-kart-iste { display: grid; justify-items: center; gap: var(--b-2); padding: var(--b-4) var(--b-2); text-align: center; }
+.tc-ay1-kart-iste > svg { inline-size: var(--dokunma); block-size: var(--dokunma); }
+.tc-ay1-kart-iste > b { font-size: var(--yazi-l); }
+.tc-ay1-kart-iste > p { margin: 0; }
+.tc-ay1-kart-iste > small { color: var(--muted); }
+.tc-ay1-plan-farki { display: flex; gap: var(--b-2); align-items: flex-start; margin: 0; color: var(--ink); }
+.tc-ay1-plan-farki > svg { color: var(--hold); flex: none; }

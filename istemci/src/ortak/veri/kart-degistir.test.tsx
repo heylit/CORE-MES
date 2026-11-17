@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { memo } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { BildirimSaglayici } from '../arayuz/Bildirim.tsx';
 import { anahtarlar } from './anahtarlar.ts';
-import { OKUYUCU_BASI, kartNumarasiGibi, kartTusu, useKartlaKisiDegistir, type OkuyucuDurumu } from './kart-degistir.ts';
+import { OKUYUCU_BASI, kartNumarasiGibi, kartOkununca, kartTusu, useKartlaKisiDegistir, type OkuyucuDurumu } from './kart-degistir.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -50,9 +51,17 @@ describe('1898 a kart biçimi', () => {
   });
 });
 
+// Ekranda açık kalan, kişi değişince kendiliğinden yeniden çizilmeyen bir parça: sonucu sorgulandığı andaki kişidir.
+const EkranVerisi = memo(function EkranVerisi() {
+  const istemci = useQueryClient();
+  const ekran = useQuery({ queryKey: ['ekran', 'veri'], queryFn: () => `${istemci.getQueryData<Kullanici | null>(anahtarlar.oturum)?.ad ?? ''} verisi`, staleTime: Infinity });
+  return <output aria-label="ekran">{ekran.data ?? ''}</output>;
+});
 function Deneme({ etkin }: { etkin: boolean }) {
   useKartlaKisiDegistir(etkin);
-  return <><input aria-label="alan" /><button type="button">dugme</button></>;
+  // Kabuk kişiyi oturum sorgusundan okur; kart kişiyi değiştirince aynı ekranda yeni ad görünmeli.
+  const { data } = useQuery<Kullanici | null>({ queryKey: anahtarlar.oturum, queryFn: () => null, staleTime: Infinity, enabled: false });
+  return <><input aria-label="alan" /><button type="button">dugme</button><output aria-label="kisi">{data?.ad ?? ''}</output><EkranVerisi /></>;
 }
 function kur(etkin = true) {
   const istemci = new QueryClient();
@@ -84,6 +93,24 @@ describe('useKartlaKisiDegistir', () => {
     expect(istekler).toEqual([{ kart: '0004123456' }]);
     expect(await screen.findByText('Deneme A çıktı, Deneme B girdi.')).toBeTruthy();
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('3392: kartı isteyen ekran açıkken kişi değişir ama sayfa yerinde kalır; ekran kimin okuttuğunu duyar', async () => {
+    window.history.pushState(null, '', '/uretim-terminali');
+    const duyulan: number[] = [];
+    const birak = kartOkununca((k) => { duyulan.push(k.id); });
+    try {
+      const { istemci } = kur();
+      await waitFor(() => expect(screen.getByLabelText('ekran').textContent).toBe('Deneme A verisi'));
+      okut(screen.getByRole('button'), '0004123456');
+      await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(B));
+      expect(await screen.findByText('Deneme A çıktı, Deneme B girdi.')).toBeTruthy();
+      expect(duyulan).toEqual([8]);
+      expect(window.location.pathname).toBe('/uretim-terminali');
+      await waitFor(() => expect(screen.getByLabelText('kisi').textContent).toBe('Deneme B'));
+      // Açık ekrandaki sorgu eski kişinin sonucunda kalmaz, yeni kişiyle yeniden okunur.
+      await waitFor(() => expect(screen.getByLabelText('ekran').textContent).toBe('Deneme B verisi'));
+    } finally { birak(); }
   });
 
   it('tanınmayan kart oturumu değiştirmez, hata bildirilir (reddedilen)', async () => {

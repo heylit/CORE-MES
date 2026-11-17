@@ -272,7 +272,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
     const yazma = uclar.filter((u) => u.yontem === 'POST' && !u.yol.startsWith('/arkon/tmi-yansimalari') && !u.yol.startsWith('/arkon/kuyruk-sira/') && !u.yol.startsWith('/arkon/hazirlik-maddeleri'));
-    assert.equal(yazma.length, 12);
+    assert.equal(yazma.length, 13);
     // Kuyruk sırası (kart 527) Arkon rolüne değil ayrı işleme bağlıdır.
     for (const u of uclar.filter((x) => x.yol.startsWith('/arkon/kuyruk-sira/'))) assert.equal(u.yetki, 'arkon.kuyruk-sirala', u.yol);
     for (const u of yazma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -938,6 +938,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'POST', yol: '/arkon/cizim-merkezi/belgeler/999999999/ekle' },
     { yontem: 'POST', yol: '/arkon/makine-devral', govde: { emirId: 999999999, kullanimId: 999999999 } },
     { yontem: 'POST', yol: '/arkon/calisma-devral', govde: { emirId: 999999999 } },
+    { yontem: 'POST', yol: '/arkon/cihaz-bagi', govde: { cihaz: '00000000-0000-4000-8000-000000000000', istasyon: 'YOK-ISTASYON', makine: null } },
     { yontem: 'POST', yol: '/arkon/numuneler/yok-1/olcum', govde: { olcumler: [{ balonId: 1, deger: '1' }], kaynak: 'c9' } },
     { yontem: 'POST', yol: '/arkon/kuyruk-sira/sirala', govde: { istasyon: 'YOK-ISTASYON', onceki: ['tmi-ie-999999999'], yeni: ['tmi-ie-999999999'], kaynak: 'c9' } },
     { yontem: 'POST', yol: '/arkon/kuyruk-sira/plana-don', govde: { istasyon: 'YOK-ISTASYON', kaynak: 'c9' } },
@@ -1003,10 +1004,11 @@ describe('arkon (gerçek PostgreSQL)', () => {
       // Silme yetkisi, arkon.yansima-* işlemleri ve plan sıralaması operatörde yoktur: bu uçların kabulü yöneticiyle ölçülür. Bulunmayan yansıma 404,
       // canlı planda olmayan işin sıralaması 409'dur (yetkiden geçti).
       // Çizim Merkezi'nden alma paketi düzenleyen rolündür (operatörün değil). Kuyruk sırası ayrı işlemdir; bilinmeyen istasyon 404.
-      const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/kuyruk-sira/');
+      // Cihaz bağı (3392 a) istasyon yönetimi ister; bilinmeyen istasyon 422'dir (yetkiden geçti).
+      const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/kuyruk-sira/') || uc.yol === '/arkon/cihaz-bagi';
       const kabul = await istek(yoneticiyle ? yonetici : operator, uc.yontem, uc.yol, uc.govde);
       const bulunamaz = uc.yol.startsWith(`/arkon/dosyalar/${OZET}`) && uc.yontem === 'GET' || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/refakat-kartlari') || uc.yol.startsWith('/arkon/kuyruk-sira/') || uc.yol.startsWith('/arkon/numuneler/') || uc.yol.startsWith('/arkon/is-emirleri/');
-      assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
+      assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : uc.yol === '/arkon/cihaz-bagi' ? 422 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
     }
   });
 

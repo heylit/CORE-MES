@@ -56,6 +56,15 @@ function anaSayfayaDon(): void {
 const yaziAlani = (h: EventTarget | null): boolean =>
   h instanceof HTMLElement && (h.isContentEditable || h.tagName === 'INPUT' || h.tagName === 'TEXTAREA' || h.tagName === 'SELECT');
 
+// 3392 a madde 7: kart isteyen ekran (terminalin kişi güvencesi) okutulan kartın kime ait olduğunu buradan duyar; kişi değişimi yine
+// aşağıdaki kancanındır. Dinleyici yalnız başarılı kart girişinde çağrılır.
+type KartDinleyicisi = (kullanici: Kullanici) => void;
+const kartDinleyicileri = new Set<KartDinleyicisi>();
+export function kartOkununca(f: KartDinleyicisi): () => void {
+  kartDinleyicileri.add(f);
+  return () => { kartDinleyicileri.delete(f); };
+}
+
 // Kabarcık aşamasında dinlenir: kendi okutmasını yakalayan ekran (Arkon terminali, okut penceresi) Enter'ı durdurursa buraya gelmez.
 export function useKartlaKisiDegistir(etkin: boolean): void {
   const istemci = useQueryClient();
@@ -73,12 +82,19 @@ export function useKartlaKisiDegistir(etkin: boolean): void {
       bekliyor.current = true;
       try {
         const { kullanici } = await api.post<OturumCevabi>('/oturum/kart-giris', { kart }, { oturumBitirmez: true });
+        // Kartı isteyen ekran açıksa yeni kişi o ekranda kalır (pencere "iş ve makine yerinde kalır" der); yoksa ana sayfaya döner.
+        const isteyenVar = kartDinleyicileri.size > 0;
+        if (kullanici !== null) for (const f of [...kartDinleyicileri]) f(kullanici);
         if (kullanici === null || kullanici.id === onceki?.id) return;
         cikisKancalariniCalistir();
         karsilamaSifirla();
-        q.clear();
+        // Oturum sorgusu silinmez, üzerine yazılır: silinirse onu izleyen kabuk eski kişiyi göstermeye devam eder. Ekranda açık
+        // kalan sorgular da silinmez, sıfırlanıp yeni kişiyle yeniden okunur; izlenmeyenler silinir.
+        const baskasi = (s: { queryKey: readonly unknown[] }) => s.queryKey[0] !== anahtarlar.oturum[0] || s.queryKey.length !== anahtarlar.oturum.length;
+        q.removeQueries({ predicate: baskasi, type: 'inactive' });
         q.setQueryData(anahtarlar.oturum, kullanici);
-        anaSayfayaDon();
+        void q.resetQueries({ predicate: baskasi });
+        if (!isteyenVar) anaSayfayaDon();
         haber('bilgi', onceki ? `${onceki.ad} çıktı, ${kullanici.ad} girdi.` : `${kullanici.ad} girdi.`);
       } catch (hata) {
         haber('hata', hataIletisi(hata, 'Kart okunamadı.'));

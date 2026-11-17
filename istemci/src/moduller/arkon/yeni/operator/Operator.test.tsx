@@ -2,12 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NumunePenceresi } from './Pencereler.tsx';
 import { vardiyaOzetiAcilabilirMi, vardiyaOzetiniAc } from './vardiya-ozeti-istegi.ts';
+import type * as KartDegistir from '../../../../ortak/veri/kart-degistir.ts';
 import { arkonAc, OPERATOR, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
 // Üretim Terminali: açılışta yazma yok; üretim yetkisi olan başlatır; yetkisi olmayan yalnız görür; önizleme hiç yazmaz.
 // Paket ve kişi adları uydurmadır.
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear(); kartDinleyicileri.length = 0; });
+
+// 3392 a madde 7: kişi kartı kabukta okunur; testte okutma dinleyicilere doğrudan bildirilir.
+const kartDinleyicileri: ((k: { id: number }) => void)[] = [];
+vi.mock('../../../../ortak/veri/kart-degistir.ts', async (asil) => ({
+  ...(await asil<typeof KartDegistir>()),
+  kartOkununca: (f: (k: { id: number }) => void) => { kartDinleyicileri.push(f); return () => { kartDinleyicileri.splice(kartDinleyicileri.indexOf(f), 1); }; },
+}));
+const kisiKartiOkut = (id: number) => { act(() => { for (const f of [...kartDinleyicileri]) f({ id }); }); };
 
 const ISTASYONLU: Deneme = { ...OPERATOR, istasyon: 'IST-1' };
 const PAKET = {
@@ -203,6 +212,29 @@ describe('A1 Üretim Terminali', () => {
 
   // 2001 b: istasyonu belli olmayan operatörde üst şerit listedeki ilk istasyonu seçilmiş gibi göstermiyordu; seçici "atanmış istasyon
   // yok" derken üstte başka istasyon yazıyordu.
+  // 3392 a: cihaz makineye bağlıysa operatör makine seçmez; plan başka makinedeyse başlatmada tek dokunuşluk onay, iş cihazın makinesine yazılır.
+  it('3392 a: makineye bağlı cihazda seçim yok; plan farkında "Burada başlat" cihazın makinesiyle başlatır', async () => {
+    const tesis = { ...TESIS, mcs: [{ id: 'MK-1', name: 'Deneme makine 1', st: 'IST-1' }, { id: 'MK-2', name: 'Deneme makine 2', st: 'IST-1' }] };
+    const planli = { ...PAKET, id: 'pk-deneme-plan', no: 'IE-DENEME-PLAN', mc: 'MK-1' };
+    window.localStorage.setItem('arkon:station', JSON.stringify('IST-1'));
+    window.localStorage.setItem('arkon:machine', JSON.stringify('MK-2'));
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: planli.id, surum: 1, govde: planli }], kv: [{ kimlik: 'plant', surum: 3, govde: { v: tesis } }] } });
+    arkonAc('/uretim-terminali');
+    await ekran();
+    expect(await screen.findByText('Makine · bu cihaz', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByTitle('Makine · dokununca seçilir')).toBeNull();
+    expect(screen.queryByTitle('İstasyon · dokununca değişir')).toBeNull();
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    const p = await screen.findByRole('dialog', { name: 'Plan başka makinede' });
+    expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
+    fireEvent.click(within(p).getByRole('button', { name: /Burada başlat · MK-2/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    expect((olaylar(istekler).find((e) => e.state === 'running') as { mcs?: unknown } | undefined)?.mcs).toEqual(['MK-2']);
+    const planSonucu = () => istekler.filter((i) => i.yol === `/arkon/belgeler/results/${planli.id}/yaz`).map((i) => (i.govde as { govde: { state?: string } }).govde);
+    await waitFor(() => { expect(planSonucu().some((r) => r.state === 'running')).toBe(true); }, { timeout: 10000 });
+  }, 40000);
+
   it('2001 b: istasyonu olmayan operatörde üst şerit "İstasyon seçilmedi" yazar ve seçici açılır (reddedilen)', async () => {
     const istekler = sunucuKur(OPERATOR, sunucu());
     arkonAc('/uretim-terminali');
@@ -212,6 +244,16 @@ describe('A1 Üretim Terminali', () => {
     expect(ust && within(ust as HTMLElement).getByText('İstasyon seçilmedi')).toBeTruthy();
     expect(ust && within(ust as HTMLElement).queryByText('IST-1')).toBeNull();
     expect(window.localStorage.getItem('arkon:station')).toBeNull();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('3392: istasyonu olmayan cihazda bağlama yetkilisine ilk açılışta yer penceresi açılır, eski seçici açılmaz', async () => {
+    const istekler = sunucuKur(YONETICI, sunucu());
+    arkonAc('/uretim-terminali');
+    const p = await screen.findByRole('dialog', { name: 'Bu cihazı yere bağla' }, { timeout: 10000 });
+    expect(within(p).getByRole('radiogroup', { name: 'İstasyon' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Hangi istasyonda?' })).toBeNull();
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
@@ -258,16 +300,18 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     expect(within(screen.getByRole('dialog', { name: 'Neden durdu?' })).queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
   }, 40000);
 
-  it('3338-6 a: istasyon üst çubuktaki kutudan değişir; geçiş cihazın istasyonunu yazar; çark yok', async () => {
+  it('3392 a: istasyon yönetimi olan kişi cihazı üst çubuktaki kutudan iki adımda bağlar; bağ cihazın istasyonunu yazar; çark yok', async () => {
     const ikiIstasyon = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
     sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 7, govde: { v: ikiIstasyon } }] } });
     window.localStorage.setItem('arkon:station', JSON.stringify('IST-1'));
     arkonAc('/uretim-terminali');
     fireEvent.click(await screen.findByTitle('İstasyon · dokununca değişir', undefined, { timeout: 10000 }));
     expect(screen.queryByRole('region', { name: 'İş ve makine çarkı' })).toBeNull();
-    const p = await screen.findByRole('dialog', { name: 'İstasyon ve makine' });
-    expect(within(p).getByText(/Bu cihazın istasyonu/)).toBeTruthy();
-    fireEvent.click(within(p).getByRole('button', { name: 'Bu istasyona geç' }));
+    // 3392 a: istasyon yönetimi olan kişi cihazı iki adımda bağlar; makinesiz istasyonda makine adımı yoktur.
+    const p = await screen.findByRole('dialog', { name: 'Bu cihazı yere bağla' });
+    expect(within(p).getByRole('radio', { name: /IST-1/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(within(p).getByRole('radio', { name: /IST-2/ }));
+    fireEvent.click(within(p).getByRole('button', { name: /Bağla/ }));
     expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('IST-2');
     await waitFor(() => { expect(screen.getAllByText('IST-2').length).toBeGreaterThan(0); }, { timeout: 10000 });
   }, 40000);
@@ -492,12 +536,14 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     expect(screen.queryByRole('button', { name: '1 zorunlu madde eksik' })).toBeNull();
   }, 40000);
 
-  const talimatliIs = (adimlar: unknown[]) => {
+  const talimatliIs = (adimlar: unknown[], ortak = true) => {
     const tmi = { ...PAKET, id: 'tmi-ie-96', no: 'UE-DENEME-96', tmi: { emirId: 96, isEmriId: 96 } };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     const asil = globalThis.fetch;
     const atlama: unknown[] = [];
     vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      // 3392 a madde 7: kişi güvencesi yalnız ortak (istasyon) cihazda; bu iş ortak cihazda bitirilir.
+      if (String(adres).endsWith('/oturum/cihaz')) return new Response(JSON.stringify(ortak ? { ortak: true, id: 1, ad: 'Deneme tableti', profil: 'istasyon' } : { ortak: false }), { status: 200 });
       if (String(adres).endsWith('/uretim-emirleri/96/talimat-atlama')) { atlama.push(JSON.parse(String(istek?.body))); return new Response(JSON.stringify({ kayitId: 1 }), { status: 200 }); }
       if (/\/uretim-emirleri\/96$/.test(String(adres))) return new Response(JSON.stringify({ adimlar }), { status: 200 });
       return asil(adres, istek);
@@ -521,10 +567,53 @@ describe('A1 Üretim Terminali talimatları (3338-4 a)', () => {
     const bitir = await waitFor(() => grup().getByRole('button', { name: /Bitir/ }), { timeout: 10000 });
     fireEvent.click(bitir);
     fireEvent.click(bitir);
+    // 3392 a madde 7: ortak cihazda Bitir her seferinde kart ister; aynı kişinin kartı bitişi sürdürür.
+    expect(await screen.findByRole('dialog', { name: 'Kartınızı okutun' })).toBeTruthy();
+    kisiKartiOkut(ISTASYONLU.kullanici.id);
     const p = await screen.findByRole('dialog', { name: '1 zorunlu madde eksik' });
     expect(within(p).getByRole('listitem').textContent).toBe('Talaşı temizle');
     fireEvent.click(within(p).getByRole('button', { name: 'Yine de bitir' }));
     await waitFor(() => { expect(atlama).toEqual([{ eylem: 'bitir', adimIdler: [2] }]); }, { timeout: 10000 });
+  }, 40000);
+
+  // 3392 a madde 7: kişisel cihazda kart girişi kapalıdır; oturum zaten kişinindir, Bitir kart istemeden sürer.
+  it('kişisel cihazda Bitir kart istemez', async () => {
+    talimatliIs([adim(2, 'Talaşı temizle', 'bitis', true)], false);
+    await ekran();
+    const grup = () => within(screen.getByRole('group', { name: 'İş durumu' }));
+    await waitFor(() => { expect(screen.getByRole('tab', { name: /^Talimatlar/ })).toBeTruthy(); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(grup().getByRole('button', { name: /Başlat/ }));
+    kartlaBaslat();
+    const bitir = await waitFor(() => grup().getByRole('button', { name: /Bitir/ }), { timeout: 10000 });
+    fireEvent.click(bitir);
+    fireEvent.click(bitir);
+    expect(await screen.findByRole('dialog', { name: '1 zorunlu madde eksik' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Kartınızı okutun' })).toBeNull();
+  }, 40000);
+
+  // 3392 a madde 7: ortak cihazda ekrana 20 dk dokunulmadıysa hurda da kart ister; dokunulduysa doğrudan açılır.
+  it('ortak cihazda 20 dk boşluktan sonra hurda kart ister', async () => {
+    talimatliIs([]);
+    await ekran();
+    const grup = () => within(screen.getByRole('group', { name: 'İş durumu' }));
+    await waitFor(() => { expect(screen.getByRole('tab', { name: /^Talimatlar/ })).toBeTruthy(); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(grup().getByRole('button', { name: /Başlat/ }));
+    kartlaBaslat();
+    await waitFor(() => { expect(grup().getByRole('button', { name: /Bitir/ })).toBeTruthy(); }, { timeout: 10000 });
+    const hurda = () => screen.getAllByRole('button', { name: /^(Hatalı|Hurda \+1)/ })[0]!;
+    fireEvent.pointerDown(window);
+    fireEvent.click(hurda());
+    expect(screen.queryByRole('dialog', { name: 'Kartınızı okutun' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    const simdi = Date.now();
+    const saat = vi.spyOn(Date, 'now').mockReturnValue(simdi + 21 * 60 * 1000);
+    try {
+      fireEvent.pointerDown(window);
+      fireEvent.click(hurda());
+      expect(await screen.findByRole('dialog', { name: 'Kartınızı okutun' })).toBeTruthy();
+    } finally { saat.mockRestore(); }
   }, 40000);
 
   it('işaret CORE reddedince geri alınır ve neden yazar; yanıt gelmeden ikinci dokunuş gitmez', async () => {
