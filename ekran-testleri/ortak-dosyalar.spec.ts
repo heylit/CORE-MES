@@ -7,7 +7,7 @@ test.describe('ortak dosyalar, kayda bağlı klasörler', () => {
     await ac('/ortak-dosyalar');
     await expect(page.getByRole('main').getByRole('heading', { name: 'Ortak Dosyalar' })).toBeVisible();
     await expect(page.getByLabel('Dosya ara')).toBeVisible();
-    if ((page.viewportSize()?.width ?? 0) <= 860) await page.getByRole('button', { name: 'Klasörler', exact: true }).click();
+    if ((page.viewportSize()?.width ?? 0) <= 860) await page.getByRole('button', { name: 'Klasörler ve listeler', exact: true }).click();
     await expect(page.getByLabel('Klasör ara')).toBeVisible();
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     expect(await kesilenBasliklar(page)).toEqual([]);

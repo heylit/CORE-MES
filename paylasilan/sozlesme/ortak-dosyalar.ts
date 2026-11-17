@@ -138,6 +138,40 @@ export const topluGeriAlCevabi = z.object({ arsivlenen: z.number().int().nonnega
 // Klasör yoksa ya da kişiye görünmüyorsa `null` (kural 5); iki durum aynı cevaptır, görünmeyen klasörün varlığı sızmaz.
 export const kaynakKlasoruCevabi = z.object({ klasorId: z.number().int().nullable() });
 
+// Hazır listeler (kart 3390, 3390 a): kaydın dosyaları, hangi modülde durursa dursun, kaynağına göre gruplu tek ekranda. Dosya kopyalanmaz;
+// satır yalnız kaydı ve dosyanın kaynağını okuyabilene gelir (Risk K1), indirme kaynağın kendi ucundandır (ADR 0009, 3).
+export const HAZIR_LISTELER = ['uretim-emri', 'satin-alma-siparisi'] as const;
+export type HazirListe = (typeof HAZIR_LISTELER)[number];
+// Grubun kaynağı; ekran başlığı ve ikonu bundan seçer.
+export const HAZIR_KAYNAKLARI = ['cizim', 'satin-alma', 'irsaliye', 'parti', 'klasor'] as const;
+export type HazirKaynak = (typeof HAZIR_KAYNAKLARI)[number];
+export const HAZIR_KAYIT_SINIRI = 50;
+export const HAZIR_DOSYA_SINIRI = 200;
+// Kayıt anahtarı listenin kendi kimliğidir (emir kimliği, satın alma sipariş no); metin olarak taşınır.
+const hazirAnahtar = z.string().trim().min(1).max(80);
+export const hazirListeParametresi = z.object({ liste: z.enum(HAZIR_LISTELER) });
+export const hazirKayitParametresi = z.object({ liste: z.enum(HAZIR_LISTELER), anahtar: hazirAnahtar });
+export const hazirKayitSemasi = z.object({ anahtar: z.string(), no: z.string(), baslik: z.string(), alt: z.string().nullable() });
+export const hazirKayitlarCevabi = z.object({ kayitlar: z.array(hazirKayitSemasi), daha: z.boolean() });
+// `indir` aynı sunucudaki göreli yoldur; istemci başka adrese gitmez.
+const goreliYol = z.string().regex(/^\/[a-z0-9\-/]+$/, 'Göreli yol olmalı.');
+export const hazirDosyaSemasi = z.object({
+  ad: z.string(), dosyaTuru: z.string().nullable(), bilgi: z.string().nullable(), zaman: zamanSemasi.nullable(), indir: goreliYol,
+  // Dosyanın kaynak ekranı (Çizim Merkezi belgesi); yoksa null.
+  ac: goreliYol.nullable(),
+});
+export const hazirGrupSemasi = z.object({ kaynak: z.enum(HAZIR_KAYNAKLARI), dosyalar: z.array(hazirDosyaSemasi) });
+export const hazirDosyalarCevabi = z.object({
+  kayit: hazirKayitSemasi, kayitYolu: goreliYol.nullable(), gruplar: z.array(hazirGrupSemasi), kesildi: z.boolean(),
+  // Kaydın kişiye görünen ilk klasörü (sipariş, yoksa proje); görünmüyorsa null.
+  klasor: z.object({ tur: z.enum(KAYIT_TURLERI), id }).nullable(),
+});
+export type HazirKayit = z.output<typeof hazirKayitSemasi>;
+export type HazirKayitlarCevabi = z.output<typeof hazirKayitlarCevabi>;
+export type HazirDosya = z.output<typeof hazirDosyaSemasi>;
+export type HazirGrup = z.output<typeof hazirGrupSemasi>;
+export type HazirDosyalarCevabi = z.output<typeof hazirDosyalarCevabi>;
+
 export type Klasor = z.output<typeof klasorSemasi>;
 export type AyarlarCevabi = z.output<typeof ayarlarCevabi>;
 export type SablonGovdesi = z.input<typeof sablonGovdesi>;

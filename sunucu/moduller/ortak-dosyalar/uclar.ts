@@ -1,6 +1,6 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  ayarlarCevabi, kayitParametresi, kaynakKlasoruCevabi, mevcutAcCevabi, mevcutAcGovdesi, mevcutCevabi, sablonGovdesi, topluGeriAlCevabi,
+  ayarlarCevabi, hazirDosyalarCevabi, hazirKayitParametresi, hazirKayitlarCevabi, hazirListeParametresi, kayitParametresi, kaynakKlasoruCevabi, mevcutAcCevabi, mevcutAcGovdesi, mevcutCevabi, sablonGovdesi, topluGeriAlCevabi,
   topluIsParametresi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import {
@@ -10,6 +10,7 @@ import {
 import {
   arsiv, arsivDegistir, gecmis, indir, klasorAc, klasorDosyalari, klasorler, sonEklenenler, surumler, yetkiOku, yetkiYazKomutu, yukle,
 } from './servis.ts';
+import { hazirKayit, hazirKayitlar } from './hazir-listeler.ts';
 import { ayarlar, kaynakKlasoruBul, kokAc, mevcutAc, mevcutSayim, sablonKaydet, topluArsiv, yenidenDene } from './kayit-klasorleri.ts';
 
 // İşlem sayfayı açar; klasör düzeyi (ADR 0030) her uçta servis içinde, oturumdaki kişinin rollerinden çözülür. Yetki sekmesi ayrı
@@ -87,6 +88,15 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/ortak-dosyalar/kayit/:tur/:id', yetki: SAYFA, parametre: kayitParametresi, cevap: kaynakKlasoruCevabi,
     isle: ({ db, kullanici, parametre }) => kaynakKlasoruBul(db, kullanici, parametre.tur, parametre.id),
+  }),
+  // Hazır listeler (kart 3390): sayfa işlemine ek olarak kaydın okuma işlemi sağlayıcıda, dosya grubu kaynağın okuma işlemiyle süzülür.
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/hazir/:liste', yetki: SAYFA, parametre: hazirListeParametresi, sorgu: aramaSorgusu, cevap: hazirKayitlarCevabi,
+    isle: ({ db, kullanici, parametre, sorgu }) => hazirKayitlar(db, kullanici, parametre.liste, sorgu.ara),
+  }),
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/hazir/:liste/:anahtar', yetki: SAYFA, parametre: hazirKayitParametresi, cevap: hazirDosyalarCevabi,
+    isle: ({ db, kullanici, parametre }) => hazirKayit(db, kullanici, parametre.liste, parametre.anahtar),
   }),
   // Ayarlar yalnız yetki işlemiyle (Risk K4 a: yeni işlem açılmaz).
   uc({
