@@ -34,7 +34,7 @@ import {
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari, cevrimOku, cevrimSaniyesi, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
   hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi, adetOnayFarklari, ONAY_ILETILERI, SAYIM_AKTARIMI_AYARI,
-  onayaGirerMi,
+  onayaGirerMi, koddanTekKayit,
 } from './kurallar.ts';
 import type {
   AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
@@ -644,7 +644,8 @@ interface EslemeGorunumu {
   oneriler: Map<number, KodOnerisi>;
 }
 
-// Öneri yalnız eşlenmemiş aktif kayda, başka kayda verilmemiş koddan çıkar.
+// Öneri yalnız eşlenmemiş aktif kayda çıkar. İstasyon dışında kod tek kayda verilir; istasyonda birden çok CORE istasyonu aynı
+// SmartES iş istasyonuna bağlanabilir (atölyenin tek istasyonu), bu yüzden verilmiş kod da önerilir.
 async function eslemeGorunumu(db: Db, tur: EslemeTuru): Promise<EslemeGorunumu> {
   const kayitlar = await tmiKayitlari(db, tur);
   const eslemeler = new Map((await s.eslemeler(db, tur)).map((e) => [e.tmiId, e]));
@@ -652,7 +653,7 @@ async function eslemeGorunumu(db: Db, tur: EslemeTuru): Promise<EslemeGorunumu> 
   const kullanilan = new Set([...eslemeler.values()].map((e) => e.smartesKod));
   const oneriler = liste === null
     ? new Map<number, KodOnerisi>()
-    : kodOnerileri(kayitlar.filter((k) => k.aktif && !eslemeler.has(k.id)), liste.filter((x) => !kullanilan.has(x.kod)));
+    : kodOnerileri(kayitlar.filter((k) => k.aktif && !eslemeler.has(k.id)), liste.filter((x) => tur === 'istasyon' || !kullanilan.has(x.kod)));
   return { kayitlar, eslemeler, liste, oneriler };
 }
 
@@ -1518,14 +1519,14 @@ export async function sayimGecerlilikleri(db: Db, zaman: Date): Promise<Map<numb
 }
 
 // Satırın istasyonu CORE iş emrinden bulunur (giden kutusundaki tek karşılık); iş emri bulunamıyorsa SmartES iş istasyonu kodunun
-// eşlemesinden. İstasyon bulunamıyorsa ya da terminalden sayılıyorsa null: satır onaya girmez.
-async function sayimGecerliligi(db: Db, k: IsEmriDurumuKaydi, zaman: Date): Promise<Date | null> {
+// tek eşlemesinden. İstasyon bulunamıyorsa ya da terminalden sayılıyorsa null: satır onaya girmez.
+export async function sayimGecerliligi(db: Db, k: IsEmriDurumuKaydi, zaman: Date): Promise<Date | null> {
   const kaynaklar = await sayimGecerlilikleri(db, zaman);
   if (kaynaklar.size === 0) return null;
   const isEmriId = await s.tekGidenIsEmri(db, k.isEmriNo);
   const istasyonId = isEmriId !== null
     ? ((await isEmriOzeti(db, isEmriId))?.istasyonId ?? null)
-    : (k.istasyonKodu === null ? null : ((await s.eslemeler(db, 'istasyon')).find((e) => e.smartesKod === k.istasyonKodu)?.tmiId ?? null));
+    : (k.istasyonKodu === null ? null : koddanTekKayit(await s.eslemeler(db, 'istasyon'), k.istasyonKodu));
   return istasyonId === null ? null : (kaynaklar.get(istasyonId) ?? null);
 }
 

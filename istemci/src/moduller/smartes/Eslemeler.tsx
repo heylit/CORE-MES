@@ -133,9 +133,10 @@ export function Eslemeler() {
     },
     onError: (e) => { bildir('hata', hataIletisi(e, 'Öneriler kaydedilemedi')); },
   });
-  // Eşlenmemiş kod ya da bu satırın kendi kodu seçilebilir: aynı SmartES kodu iki kayda verilemez.
+  // İstasyon dışında yalnız eşlenmemiş kod ya da satırın kendi kodu seçilebilir. İstasyonda atölyenin tek SmartES istasyonu
+  // birden çok CORE istasyonuna verilebilir.
   const secilebilir = (s: Satir) => (smartesListesi === null ? null
-    : smartesListesi.filter((x) => x.kod === s.smartesKod || !satirlar.some((y) => y.smartesKod === x.kod)));
+    : smartesListesi.filter((x) => tur === 'istasyon' || x.kod === s.smartesKod || !satirlar.some((y) => y.smartesKod === x.kod)));
 
   const sutunlar: Sutun<Satir>[] = [
     { anahtar: 'tmiKod', baslik: 'CORE kodu', hucre: (s) => s.tmiKod, mono: true },

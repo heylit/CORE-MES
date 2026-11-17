@@ -204,14 +204,14 @@ describe('SmartES kod eşlemeleri', () => {
     expect(cagrilar.some((c) => c.yol === '/smartes/eslemeler?tur=makine')).toBe(true);
   });
 
-  it('SmartES listesi okunmuşsa karşılık listeden seçilir; başka kayda verilmiş kod listede yoktur', async () => {
+  it('SmartES listesi okunmuşsa karşılık listeden seçilir; istasyonda başka kayda verilmiş kod da seçilebilir (atölyenin tek istasyonu)', async () => {
     const cagrilar = sunucuKur(YONETICI, (yol) => (yol === '/smartes/eslemeler?tur=istasyon' ? json(200, ONERILI) : null));
     ac(<Eslemeler />);
     const dugmeler = await screen.findAllByRole('button', { name: 'Eşle' });
     fireEvent.click(dugmeler[2] as HTMLElement);
     const pencere = await screen.findByRole('dialog');
     const secim = within(pencere).getByLabelText(/SmartES’teki karşılığı/) as HTMLSelectElement;
-    expect([...secim.options].map((o) => o.value)).toEqual(['', 'S-02', 'IST-03', 'S-09']);
+    expect([...secim.options].map((o) => o.value)).toEqual(['', 'S-01', 'S-02', 'IST-03', 'S-09']);
     fireEvent.change(secim, { target: { value: 'S-09' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
