@@ -49,6 +49,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /sevkiyat/isler/:id/tetigi-geri-al': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/ekle': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/guncelle': 'sevkiyat.is-yaz',
+  'POST /sevkiyat/isler/:id/belge-no': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/iptal-et': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/durum': 'sevkiyat.is-yaz',
   'GET /sevkiyat/planlar/:tarih': 'sevkiyat.oku',

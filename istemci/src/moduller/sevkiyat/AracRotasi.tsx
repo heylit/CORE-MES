@@ -50,14 +50,14 @@ export interface AracRotasiOzellikleri {
 const TESLIM_ADI: Record<Is['tur'], string> = { teslimat: 'Teslim edildi', alim: 'Alındı', aktarma: 'Tamamlandı' };
 
 // Onaylı plandaki durağın durumu: sonuç yoksa yoldadır (işaretlenir); yapılamayan iş havuza döner ya da başka plana girer.
-function DurakSonucu({ is, sonuc, yazabilir, degistir }: {
-  is: Is; sonuc: { sonuc: 'tamamlandi' | 'yapilamadi'; not: string | null } | undefined; yazabilir: boolean;
+function DurakSonucu({ is, sonuc, yazabilir, degistir, birincil }: {
+  is: Is; sonuc: { sonuc: 'tamamlandi' | 'yapilamadi'; not: string | null } | undefined; yazabilir: boolean; birincil: boolean;
   degistir: (durum: 'tamamlandi' | 'yapilamadi' | 'havuzda' | 'yolda') => void;
 }) {
   if (!sonuc && is.durum === 'yolda') {
     return yazabilir ? (
       <span className="tc-sevkiyat-sonuc-dugmeleri">
-        <Dugme tur="birincil" simge="check" onClick={() => degistir('tamamlandi')}>{TESLIM_ADI[is.tur]}</Dugme>
+        <Dugme tur={birincil ? 'birincil' : 'ikincil'} simge="check" onClick={() => degistir('tamamlandi')}>{TESLIM_ADI[is.tur]}</Dugme>
         <Dugme simge="x" onClick={() => degistir('yapilamadi')}>Yapılamadı</Dugme>
       </span>
     ) : <Rozet ton="bilgi">Yolda</Rozet>;
@@ -94,6 +94,8 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
   const durakSayisi = ogeler.filter((o) => !araDonusMu(o)).length;
   // Harita paketi yokken hesap gelmez; yük çubuğu atanmış işlerden sayılır.
   const yuk = hesap ? { kilogram: hesap.enCokKilogram, palet: hesap.enCokPalet } : yukTepesi(ogeler, (id) => isler.get(id));
+  // Tek birincil düğme: sırada sonucu girilecek ilk durak.
+  const siradakiSonuc = sonuclar ? ogeler.flatMap((o) => (araDonusMu(o) ? [] : [isler.get(o.isId)])).find((x) => x && x.durum === 'yolda' && !sonuclar.has(x.id))?.id ?? null : null;
 
   const menu = (sira: number, is: Is, ad: string) => (
     <select className="tc-sevkiyat-menu tc-sevkiyat-menu-kucuk" value="" title="Sırayı değiştir, sabitle, düzenle" aria-label={`${ad} durağı işlemleri`}
@@ -223,7 +225,7 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
                 {duzenlenebilir && menu(sira, is, ad)}
                 {/* İki uçlu işin sonucu bırakış satırında girilir; alımın tek ucu alıştır. */}
                 {sonuclar && (!oge.alis || is.tur === 'alim') && (
-                  <DurakSonucu is={is} sonuc={sonuclar.get(is.id)} yazabilir={sonucYazabilir} degistir={(durum) => islem.durumDegistir(is, durum)} />
+                  <DurakSonucu is={is} sonuc={sonuclar.get(is.id)} yazabilir={sonucYazabilir} birincil={is.id === siradakiSonuc} degistir={(durum) => islem.durumDegistir(is, durum)} />
                 )}
               </li>
             );

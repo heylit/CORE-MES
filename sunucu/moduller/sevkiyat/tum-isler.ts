@@ -282,11 +282,41 @@ export async function isTetikle(db: Db, kisiId: number, isId: number): Promise<T
 export async function isTetiginiGeriAl(db: Db, isId: number): Promise<TumIsSatiri[]> {
   const is = await sorgu.isTetigi(db, isId);
   if (is === null || is.iptal) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+  // Onaylı plandaki işin tetiği onayla kalkar; burada kalkarsa onay kaldırma hiç yazılmamış yola hareketini geri alırdı.
+  if (is.durum === 'yolda') throw gecersiz('Onaylı plandaki işin tetiği plan onayıyla yönetilir; önce planın onayını kaldırın.');
   const kalemler = await sorgu.isinKalemleri(db, isId);
   const ihlal = tetikGeriAlIhlali({ tetiklendi: is.tetiklendi !== null }, kalemler.some((k) => k.depoZamani !== null || k.kabulAdet !== null));
   if (ihlal) throw gecersiz(ihlal);
   await sorgu.tetikYaz(db, isId, null);
   return kalemSatirlari(db, await sorgu.kalemlerGetir(db, kalemler.map((k) => k.id)));
+}
+
+// Plan onayı (3348 a): yola çıkan işlerin kalemleri ayrı "Sevk et" beklemeden depoya düşer. Kalemsiz (elle açılmış) iş, firma
+// taşıması, zaten tetiklenmiş iş ve hazır olmayan kalemi olan iş atlanır; atlanan iş Yükle adımında nedeniyle görünür.
+export async function onaydaTetikle(db: Db, kisiId: number, isIdleri: readonly number[]): Promise<number[]> {
+  const tetiklenen: number[] = [];
+  for (const isId of isIdleri) {
+    const is = await sorgu.isTetigi(db, isId);
+    if (is === null || is.iptal || is.tetiklendi !== null) continue;
+    const kalemler = await sorgu.isinKalemleri(db, isId);
+    if (kalemler.some((k) => (k.tasima ?? 'biz') !== 'biz')) continue;
+    const h = await hazirliklar(db, kalemler);
+    const ihlal = tetikIhlali({ durum: is.durum, tetiklendi: false },
+      kalemler.map((k) => ({ hazir: h.get(k.id)!.hazir, erken: k.erkenZamani !== null, gidisCikti: h.get(k.id)!.gidisCikti })));
+    if (ihlal !== null) continue;
+    await sorgu.tetikYaz(db, isId, kisiId);
+    tetiklenen.push(isId);
+  }
+  return tetiklenen;
+}
+// Onay kalkınca depo henüz çıkış ya da kabul yapmadıysa tetik de kalkar; depo yaptıysa kalem depoda kalır.
+export async function onayKalkincaTetikGeriAl(db: Db, isIdleri: readonly number[]): Promise<void> {
+  for (const isId of isIdleri) {
+    const is = await sorgu.isTetigi(db, isId);
+    if (is === null || is.tetiklendi === null) continue;
+    const kalemler = await sorgu.isinKalemleri(db, isId);
+    if (tetikGeriAlIhlali({ tetiklendi: true }, kalemler.some((k) => k.depoZamani !== null || k.kabulAdet !== null)) === null) await sorgu.tetikYaz(db, isId, null);
+  }
 }
 
 // ---------- depo (stok çağırır) ----------

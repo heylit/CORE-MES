@@ -11,9 +11,14 @@ const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', faso
 const YON_TURU = { gidis: 'teslimat', gelis: 'alim' } as const;
 const OK = { gidis: '↓', gelis: '↑' } as const;
 
-export const bekleyenBasligi = (b: Bekleyen): string => b.malzemeAd ?? (b.malzemeNo === null ? 'Malzeme' : `Malzeme ${String(b.malzemeNo)}`);
+export const bekleyenBasligi = (b: Bekleyen): string => b.malzemeAd ?? b.aciklama ?? (b.malzemeNo === null ? 'Malzeme' : `Malzeme ${String(b.malzemeNo)}`);
 
-export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir }: { bekleyenler: readonly Bekleyen[]; isYazabilir: boolean; iseCevir: (b: Bekleyen) => void }) {
+// Seçim (3348 a, Hazırla adımı): noktası belli kayıt işaretlenip topluca güne eklenir; satırın tamamı dokunma alanıdır.
+export interface BekleyenSecimi { secili: ReadonlySet<number>; degistir: (id: number) => void }
+
+export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir, secim, baslik = 'Bekleme listesi' }: {
+  bekleyenler: readonly Bekleyen[]; isYazabilir: boolean; iseCevir: (b: Bekleyen) => void; secim?: BekleyenSecimi; baslik?: string;
+}) {
   const kaldir = useBekleyenKaldir();
   const { bildir } = useBildirim();
   const [kaldirilacak, setKaldirilacak] = useState<Bekleyen | null>(null);
@@ -22,11 +27,11 @@ export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir }: { bekleye
   const [bolunecek, setBolunecek] = useState<{ b: Bekleyen; adet: string } | null>(null);
   if (bekleyenler.length === 0) return null;
   return (
-    <section className="tc-sevkiyat-bekleyen" data-dolu aria-label="Bekleme listesi">
+    <section className="tc-sevkiyat-bekleyen" data-dolu aria-label={baslik}>
       <header>
-        <h3>Bekleme listesi <em>{bekleyenler.length} kayıt</em></h3>
+        <h3>{baslik} <em>{bekleyenler.length} kayıt</em></h3>
       </header>
-      <p className="tc-sevkiyat-ince">Gün, nokta ve yük verilince iş sevkiyat havuzuna düşer.</p>
+      <p className="tc-sevkiyat-ince">{secim ? 'Noktası belli olanları seçip güne ekleyin; noktası olmayanda “Nokta seç” formu açar.' : 'Gün, nokta ve yük verilince iş sevkiyat havuzuna düşer.'}</p>
       <ul className="tc-sevkiyat-duraklar">
         {bekleyenler.map((b) => {
           const ayrinti = [
@@ -36,8 +41,12 @@ export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir }: { bekleye
             b.istenenTarih ? `istenen ${tarihMetni(b.istenenTarih)}` : '',
           ].filter(Boolean).join(' · ');
           return (
-            <li key={b.id} className="tc-sevkiyat-durak" data-tur={YON_TURU[b.yon]}>
-              <span className="tc-sevkiyat-durak-no">{OK[b.yon]}</span>
+            <li key={b.id} className="tc-sevkiyat-durak" data-tur={YON_TURU[b.yon]} data-secilebilir={secim && b.noktaId !== null ? true : undefined}
+              onClick={secim && b.noktaId !== null ? (e) => { if (!(e.target as HTMLElement).closest('button,input')) secim.degistir(b.id); } : undefined}>
+              {secim && isYazabilir ? (
+                <input type="checkbox" className="tc-sevkiyat-secim" aria-label={`${bekleyenBasligi(b)} seç`} disabled={b.noktaId === null}
+                  checked={secim.secili.has(b.id)} onChange={() => secim.degistir(b.id)} />
+              ) : <span className="tc-sevkiyat-durak-no">{OK[b.yon]}</span>}
               <span className="tc-sevkiyat-durak-adi">
                 {bekleyenBasligi(b)}
                 <em>{ayrinti}</em>
@@ -48,7 +57,7 @@ export function BeklemeListesi({ bekleyenler, isYazabilir, iseCevir }: { bekleye
               </span>
               {isYazabilir && (
                 <span className="tc-sevkiyat-satir">
-                  <Dugme simge="plus" onClick={() => iseCevir(b)} title="Gün, nokta ve yükü verip sevkiyat havuzuna ekler">İşe çevir</Dugme>
+                  <Dugme simge="plus" onClick={() => iseCevir(b)} title="Gün, nokta ve yükü verip sevkiyat havuzuna ekler">{secim && b.noktaId === null ? 'Nokta seç' : 'İşe çevir'}</Dugme>
                   {b.kaynak === 'urun' && b.adet !== null && (
                     <Dugme simge="layers" onClick={() => setBolunecek({ b, adet: '' })} title="Adedin bir kısmını ayrı kayda ayırır; kısımlar ayrı günlerde gönderilebilir">Böl</Dugme>
                   )}

@@ -1,5 +1,5 @@
-// Sevkiyat · Tüm işler (960, prototip 7.1): sevke ya da almaya aday bütün kalemler. Tablo kalemi yalnız serbest bırakır; sevkiyat
-// "Sevk et" ya da "Al" ile tetikler; depo son çıkışı ya da kabulü yapar ve stok orada oynar. Yetki ve aşama sunucudadır; düğme
+// Sevkiyat · Tüm işler (960, prototip 7.1): sevke ya da almaya aday bütün kalemler. Tablo kalemi yalnız serbest bırakır; kalem plan
+// onayıyla depoya düşer (3348 a); depo son çıkışı ya da kabulü yapar ve stok orada oynar. Yetki ve aşama sunucudadır; düğme
 // yalnız işlemi olana görünür.
 import { Fragment, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,7 +11,7 @@ import { hataIletisi } from '../../ortak/veri/api.ts';
 import { bugun as bugunGetir, sayiMetni, tarihMetni } from './bicim.ts';
 import {
   ASAMALAR, ASAMA_SIRASI, DONEMLER, GIDIS_CIKMADI, KALEM_SAHIBI, KAYNAK, KAYNAKLAR, OZETLER, adayMi, depoDurumu, donemAraligi, fark, farkYaz,
-  geciktiMi, gecKalacakMi, gidisCiktiMi, gorunumde, gunu, kapali, kisaTarih, rozetOf, suz, tetiklenebilir, uzunTarih,
+  geciktiMi, gecKalacakMi, gidisCiktiMi, gorunumde, gunu, kapali, kisaTarih, rozetOf, suz, uzunTarih,
   type Donem, type Gorunum, type Gruplama, type Hazirlik, type Ozet, type Suzgec, type Yon,
 } from './tum-isler.ts';
 import { ElleIsFormu } from './ElleIsFormu.tsx';
@@ -20,8 +20,8 @@ import './sevkiyat.css';
 import './tum-isler.css';
 
 const YON_ADI: Record<Yon, { etiket: string; tetik: string; simge: 'upload' | 'download'; aciklama: string }> = {
-  gidis: { etiket: 'Giden', tetik: 'Sevk et', simge: 'upload', aciklama: 'Biz götürürüz: sevkiyat "Sevk et" der, depo son çıkışı yapar' },
-  gelis: { etiket: 'Gelen', tetik: 'Al', simge: 'download', aciklama: 'Biz gidip alırız: sevkiyat "Al" der, depo kabulü yapar' },
+  gidis: { etiket: 'Giden', tetik: 'Sevk', simge: 'upload', aciklama: 'Biz götürürüz: plan onaylanınca depo son çıkışı yapar' },
+  gelis: { etiket: 'Gelen', tetik: 'Alım', simge: 'download', aciklama: 'Biz gidip alırız: plan onaylanınca depo kabulü bekler' },
 };
 const YER_ADI: Record<SonYazanYeri, string> = { 'tum-isler': 'Tüm işler', 'satin-alma': 'Satın alma siparişi teslim yöntemi', sevkiyat: 'Sevkiyat', otomatik: 'Otomatik (eski kayıt)' };
 const ilkHali = { hazirlik: new Set<Hazirlik>(['hazir', 'gelecek']), asamalar: new Set<TumIsAsamasi>(ASAMALAR.filter((a) => a.kod !== 'tamamlandi').map((a) => a.kod)) };
@@ -116,20 +116,6 @@ export function TumIsler() {
       },
       onError: (h) => hata(h, 'Serbest bırakılamadı'),
     });
-  };
-  const tetikle = (r: TumIsSatiri) => {
-    if (!r.is) return;
-    const isId = r.is.id;
-    komut.mutate({ tur: 'tetikle', isId }, {
-      onSuccess: () => bildir('tamam', `${YON_ADI[r.yon].tetik} · depoya ${r.yon === 'gelis' ? 'kabul' : 'son çıkış'} işi düştü.`, {
-        eylem: { etiket: 'Geri al', yap: () => komut.mutate({ tur: 'tetigi-geri-al', isId }, { onError: (h) => hata(h, 'Tetik geri alınamadı') }) },
-      }),
-      onError: (h) => hata(h, 'Tetiklenemedi'),
-    });
-  };
-  const tetigiGeriAl = (r: TumIsSatiri) => {
-    if (!r.is) return;
-    komut.mutate({ tur: 'tetigi-geri-al', isId: r.is.id }, { onSuccess: () => bildir('tamam', 'Tetik geri alındı.'), onError: (h) => hata(h, 'Tetik geri alınamadı') });
   };
   const tasimaDegistir = (r: TumIsSatiri, tasima: Tasima) => {
     if (r.kalemId === null) return;
@@ -265,7 +251,7 @@ export function TumIsler() {
     );
   }
 
-  // Sevkiyat sevk mi alım mı olacağını seçer (⋯) ve "Sevk et" / "Al" ile depoyu tetikler (960).
+  // Sevkiyat sevk mi alım mı olacağını seçer (⋯); kalem plan onayıyla depoya düşer (3348 a).
   function sevkiyatHucresi(r: TumIsSatiri) {
     const y = YON_ADI[r.yon];
     if (r.tasima === 'firma' || kapali(r) || r.asama === 'depoda' || !yetki.isYaz) {
@@ -286,8 +272,8 @@ export function TumIsler() {
           <Dugme tur="birincil" simge="list" className="tc-ti-tetik" title="Havuzdaki kalem Günlük sevkiyattaki bekleme listesinden işe çevrilir; tetik işe verilir"
             onClick={durdur(() => { void yonlendir('/sevkiyat'); })}>İşe çevir</Dugme>
         ) : (
-          <Dugme tur="birincil" simge={y.simge} className="tc-ti-tetik" disabled={kapaliTetik || !tetiklenebilir(r)} yukleniyor={komut.isPending && komut.variables?.tur === 'tetikle' && komut.variables.isId === r.is.id}
-            title={kapaliTetik ? 'Gidiş henüz depodan çıkmadı; çıkınca açılır' : y.aciklama} onClick={durdur(() => tetikle(r))}>{y.tetik}</Dugme>
+          <Dugme simge="expand" className="tc-ti-tetik" title={kapaliTetik ? 'Gidiş henüz depodan çıkmadı; çıkınca alınır' : 'Plan onaylanınca depoya düşer'}
+            onClick={durdur(() => { void yonlendir(`/sevkiyat?tarih=${r.is!.tarih}`); })}>Gününde aç</Dugme>
         )}
         <Dugme simge="more" className="tc-ti-diger" aria-label="Sevk ya da alım seç" title="Sevk ya da alım seç" onClick={durdur(() => setDiger(r.anahtar))} />
       </span>
@@ -527,8 +513,6 @@ export function TumIsler() {
   function ayrintiEylemi(r: TumIsSatiri) {
     if (r.asama === 'depoda' && r.yon === 'gidis' && cikisYapar) return <Dugme tur="birincil" simge="upload" yukleniyor={cikis.isPending} onClick={() => cikisYap(r)}>Çıkışı yap</Dugme>;
     if (r.asama === 'depoda' && r.yon === 'gelis' && kabulYapar) return <Dugme tur="birincil" simge="download" onClick={() => kabulEt(r)}>Kabul et</Dugme>;
-    if (yetki.isYaz && tetiklenebilir(r) && gidisCiktiMi(r)) return <Dugme tur="birincil" simge={YON_ADI[r.yon].simge} yukleniyor={komut.isPending} onClick={() => tetikle(r)}>{YON_ADI[r.yon].tetik}</Dugme>;
-    if (yetki.isYaz && r.asama === 'depoda' && r.is?.tetiklendi && r.depo === null) return <Dugme simge="rotate" yukleniyor={komut.isPending} onClick={() => tetigiGeriAl(r)}>Tetiği geri al</Dugme>;
     if (adayMi(r) && birakir(r)) return <>
       <Dugme simge="more" onClick={() => { setAyrinti(null); setDiger(r.anahtar); }}>Diğer</Dugme>
       <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} onClick={() => serbestBirak([r.anahtar], 'biz', null, () => setAyrinti(null))}>Serbest bırak</Dugme>
@@ -603,7 +587,7 @@ export function TumIsler() {
       adimlar.push({ ad: 'Araca verilir, plan onaylanır', alt: 'Sevk et bunu beklemez', bitti: sevkte && sira >= ASAMA_SIRASI.yolda });
     }
     adimlar.push({
-      ad: `Sevkiyat "${YON_ADI[r.yon].tetik}" der`, bitti: r.is?.tetiklendi != null || (r.tasima === 'firma' && !adayMi(r)),
+      ad: 'Plan onaylandı, depoya düştü', bitti: r.is?.tetiklendi != null || (r.tasima === 'firma' && !adayMi(r)),
       alt: r.tasima === 'firma' ? 'sevk yok: firma alır ya da getirir' : r.is?.tetiklendi ? tarihMetni(r.is.tetiklendi.slice(0, 10)) : 'sevk mi alım mı burada seçilir',
     });
     adimlar.push(r.yon === 'gidis'

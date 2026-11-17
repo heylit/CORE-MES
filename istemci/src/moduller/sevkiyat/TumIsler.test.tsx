@@ -107,16 +107,26 @@ describe('Tüm işler', () => {
     expect(within(pencere).queryByRole('button', { name: 'Şimdi sevke çıkar' })).toBeNull();
   });
 
-  it('sevkiyat işi tetikler; gidişi çıkmamış dönüşte "Al" kapalıdır', async () => {
+  it('sevk tetiği plan onayındadır: sevkiyattaki iş "Gününde aç" ile gününe gider, tetik yazması yoktur', async () => {
     const istekler = sunucuKur(SEVKIYATCI);
     ac();
     await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
     fireEvent.click(screen.getByRole('tab', { name: /Sevkiyattaki/ }));
     const tablo = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
-    expect((within(satirOf(tablo, 'DENEME-UE-14')).getByRole('button', { name: 'Al' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-13')).getByRole('button', { name: 'Sevk et' }));
-    await waitFor(() => expect(yazmalar(istekler).map((i) => i.yol)).toEqual(['/sevkiyat/isler/6/tetikle']));
-    expect(await screen.findByRole('button', { name: 'Geri al' })).toBeTruthy();
+    expect(within(tablo).queryAllByRole('button', { name: /^Sevk et$|^Al$/ })).toHaveLength(0);
+    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-13')).getByRole('button', { name: 'Gününde aç' }));
+    expect(yazmalar(istekler)).toHaveLength(0);
+  });
+
+  it('Test T9: "Gününde aç" işin gününe gider', async () => {
+    sunucuKur(SEVKIYATCI);
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Adres = () => <output data-testid="adres">{useLocation().pathname + useLocation().search}</output>;
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/tum-isler']}><TumIsler /><Adres /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('tab', { name: /Sevkiyattaki/ }));
+    const tablo = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
+    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-13')).getByRole('button', { name: 'Gününde aç' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe(`/sevkiyat?tarih=${BUGUN}`));
   });
 
   it('depocu düşen gidişin son çıkışını yapar; okuyucu düğme görmez', async () => {

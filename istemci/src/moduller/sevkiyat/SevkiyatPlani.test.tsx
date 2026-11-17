@@ -93,7 +93,7 @@ describe('SevkiyatPlani', () => {
     await screen.findByRole('button', { name: 'Otomatik dağıt' });
     const liste = screen.getByRole('region', { name: 'Sevkiyat listesi' });
     const bekleyen = within(liste).getByRole('region', { name: 'Sevkiyat havuzu' });
-    expect(screen.getByRole('region', { name: 'Sevkiyat adımları' }).querySelector('[aria-current="step"]')!.textContent).toContain('Araçlara dağıt');
+    expect(screen.getByRole('region', { name: 'Sevkiyat adımları' }).querySelector('[aria-current="step"]')!.textContent).toContain('Araca ver');
     expect(screen.getByRole('button', { name: 'Planı onayla' }).className).toContain('tc-dugme-birincil');
     expect(screen.getByRole('button', { name: 'Otomatik dağıt' }).className).not.toContain('tc-dugme-birincil');
     const bekleyenIs = GUN_PLANI.isler.find((i) => i.id === GUN_PLANI.bekleyen[0])!;
@@ -245,7 +245,7 @@ describe('SevkiyatPlani onaylı plan', () => {
     const onaySaatleri = rota.ogeler.map((_, i) => ({ varis: 600 + i * 30, ayrilis: 610 + i * 30 }));
     const onayli: GunPlaniCevabi = { ...GUN_PLANI, onaylandi: '2026-10-08T07:00:00.000+03:00', rotalar: GUN_PLANI.rotalar.map((r) => (r.aracId === 1 ? { ...r, onaySaatleri } : r)) };
     sunucuKur(PLANCI, undefined, onayli);
-    ac();
+    ac('&adim=teslim');
     await screen.findByRole('button', { name: 'Onayı kaldır' });
     const kamyon = await aracAc('Kamyonet 1');
     expect(within(kamyon).getAllByRole('listitem').filter((li) => li.getAttribute('aria-label'))[0]!.querySelector('time')!.textContent).toBe('10:00');
@@ -262,7 +262,7 @@ describe('SevkiyatPlani onaylı plan', () => {
     const teslim = GUN_PLANI.isler.find((i) => i.tur === 'teslimat' && i.durum === 'planlandi')!;
     const alim = GUN_PLANI.isler.find((i) => i.tur === 'alim')!;
     const istekler = sunucuKur(PLANCI, () => json(200, { is: teslim }), yolda);
-    ac();
+    ac('&adim=teslim');
     const kamyon = await screen.findByRole('region', { name: 'Kamyonet 1' });
     const teslimSatiri = within(kamyon).getAllByRole('listitem').find((li) => li.getAttribute('aria-label')?.includes('bırak Örnek Müşteri A'))!;
     fireEvent.click(within(teslimSatiri).getByRole('button', { name: 'Teslim edildi' }));

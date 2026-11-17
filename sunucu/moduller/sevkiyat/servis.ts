@@ -31,7 +31,7 @@ import {
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
 import * as sorgu from './sorgular.ts';
-import { tasimaDegistir } from './tum-isler.ts';
+import { onayKalkincaTetikGeriAl, onaydaTetikle, tasimaDegistir } from './tum-isler.ts';
 import type { AracSatiri, IsSatiri, NoktaSatiri, PlanSatiri } from './sorgular.ts';
 import {
   ayakCizgisi, cikisTaramasi, googleBaglantisi, tekRotaPlani, trafikSeviyeleri, yandexBaglantisi, yolAgiKur, yolOzeti,
@@ -408,6 +408,14 @@ export async function isGuncelle(db: Db, id: number, girdi: IsYazmaGirdisi & { s
   }
   return isCevabi(cikar ? (await sorgu.isGetir(db, id))! : yeni);
 }
+// İrsaliye no (3348 a): yükleme anında kesilir; yoldaki işe de yazılır, tamamlanmış işte değişmez.
+export async function isBelgeNoYaz(db: Db, id: number, govde: { belgeNo: string | null; surum: number }): Promise<Is> {
+  const onceki = await sorgu.isGetir(db, id);
+  if (!onceki || onceki.iptalEdildi) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+  surumDenetle(onceki.surum, govde.surum);
+  if (onceki.durum === 'tamamlandi') throw gecersiz('Tamamlanmış işin irsaliye numarası değişmez; önce sonucu geri alın.');
+  return isCevabi(surumluYazildi(await sorgu.isBelgeNoYaz(db, id, govde.surum, govde.belgeNo)));
+}
 export async function isIptalEt(db: Db, id: number): Promise<Is> {
   const ilk = await sorgu.isGetir(db, id);
   if (!ilk || ilk.iptalEdildi) throw bulunamadi('İş bulunamadı ya da zaten iptal edilmiş.');
@@ -565,7 +573,7 @@ export async function bekleyenleriListele(db: Db): Promise<Bekleyen[]> {
     talepId: b.talepId, talepNo: b.talepId === null ? null : talepler.get(b.talepId) ?? null, malzemeNo: b.malzemeNo, malzemeAd: b.malzemeNo === null ? null : malzemeler.get(b.malzemeNo) ?? null,
     firmaId: b.firmaId, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
     noktaId: b.firmaId === null ? null : noktalar.get(b.firmaId) ?? null,
-    adet: b.adet, istenenTarih: b.istenenTarih, hazirZamani: b.hazirZamani,
+    adet: b.adet, istenenTarih: b.istenenTarih, hazirZamani: b.hazirZamani, aciklama: b.aciklama,
   }));
 }
 
@@ -829,10 +837,22 @@ export async function onayla(db: Db, tarih: string, surum: number, kaynak: Harit
   await sorgu.onayYaz(db, plan.id);
   const yola = await sorgu.plandakiIslerinDurumu(db, plan.id, 'yolda', kisiId);
   await sorgu.urunFirmalariniYaz(db, yola);
-  const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, yola), onceki: 'planlandi', yeni: 'yolda', kisiId });
+  const satirlar = kisiId === null ? await sorgu.islerinUrunSatirlari(db, yola) : await onaydaTetikleVeDenetle(db, kisiId, yola);
+  const uyarilar = await urunSevkiBildir(db, { satirlar, onceki: 'planlandi', yeni: 'yolda', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
 
+// Kişili onayda ürün stoğu yalnız depo çıkışında oynar (3348-2 a): tetiklenemeyen (hazır olmayan) ürünlü iş eski yoldan onayda
+// stoktan düşmesin diye onay reddedilir. Kişisiz onay (iç çağrı) eski yolda kalır.
+async function onaydaTetikleVeDenetle(db: Db, kisiId: number, yola: readonly number[]): Promise<Awaited<ReturnType<typeof sorgu.islerinUrunSatirlari>>> {
+  await onaydaTetikle(db, kisiId, yola);
+  const kalan = await sorgu.islerinUrunSatirlari(db, yola);
+  if (kalan.length) {
+    const isler = new Set(kalan.map((k) => k.isId)).size;
+    throw gecersiz(`${String(isler)} işte depoya düşemeyen ürün var (hazır değil); işi plandan çıkarın ya da Tüm işler'den erken çıkış verin.`);
+  }
+  return [];
+}
 export async function onayiKaldir(db: Db, tarih: string, surum: number, kaynak: HaritaKaynagi, kisiId: number | null = null): Promise<GunPlaniCevabi> {
   const plan = await sorgu.planKilitle(db, tarih);
   if (!plan) throw bulunamadi('Bu gün için plan yok.');
@@ -842,7 +862,10 @@ export async function onayiKaldir(db: Db, tarih: string, surum: number, kaynak: 
   await sorgu.onayKaldir(db, plan.id);
   // Sonuçlu plan onaydan çıkamadığı için bu işlerin hepsi yoldaydı.
   const donen = await sorgu.plandakiIslerinDurumu(db, plan.id, 'planlandi', null);
-  const uyarilar = await urunSevkiBildir(db, { satirlar: await sorgu.islerinUrunSatirlari(db, donen), onceki: 'yolda', yeni: 'planlandi', kisiId });
+  // Satırlar tetik kalkmadan okunur: onayda tetiklenen iş yola çıkış bildirmedi, dönüşü de bildirmez.
+  const satirlar = await sorgu.islerinUrunSatirlari(db, donen);
+  await onayKalkincaTetikGeriAl(db, donen);
+  const uyarilar = await urunSevkiBildir(db, { satirlar, onceki: 'yolda', yeni: 'planlandi', kisiId });
   return uyarili(await gunPlani(db, tarih, kaynak), uyarilar);
 }
 

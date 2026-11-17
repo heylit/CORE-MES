@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BekleyenlerCevabi, HaritaCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { BekleyenlerCevabi, HaritaCevabi, TumIsSatiri, TumIslerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { SevkiyatPlani } from './SevkiyatPlani.tsx';
 import { GUN_PLANI } from './test-verisi.ts';
 
@@ -16,11 +16,24 @@ const OKUYUCU: Kullanici = { id: 4, ad: 'Deneme Okuyucu', islemler: ['sayfa.sevk
 const BEKLEYENLER = {
   bekleyenler: [
     { id: 7, kaynak: 'urun', yon: 'gidis', uretimEmriId: 11, emirNo: 'DENEME-UE-11', talepId: null, talepNo: null, malzemeNo: 5, malzemeAd: 'Deneme mamul', firmaId: null, firmaAd: null, noktaId: null,
-      adet: '7.0000', istenenTarih: null, hazirZamani: '2026-10-08T09:00:00+03:00' },
+      adet: '7.0000', istenenTarih: null, hazirZamani: '2026-10-08T09:00:00+03:00', aciklama: null },
     { id: 8, kaynak: 'fason', yon: 'gidis', uretimEmriId: 12, emirNo: 'DENEME-UE-12', talepId: null, talepNo: null, malzemeNo: 5, malzemeAd: 'Deneme mamul', firmaId: 9, firmaAd: 'Örnek Fason B', noktaId: 3,
-      adet: '3.0000', istenenTarih: null, hazirZamani: '2026-10-08T10:00:00+03:00' },
+      adet: '3.0000', istenenTarih: null, hazirZamani: '2026-10-08T10:00:00+03:00', aciklama: null },
   ],
 } satisfies BekleyenlerCevabi;
+
+const satir = (s: Partial<TumIsSatiri> & Pick<TumIsSatiri, 'anahtar' | 'asama'>): TumIsSatiri => ({
+  kalemId: null, kaynak: 'urun', yon: 'gidis', hazirTarihi: null, istenenTarih: null, uretimEmriId: null, emirNo: null, isEmriId: null, opNo: null, adim: null, ilerleme: null,
+  siparisNo: null, malzemeNo: 5, malzemeAd: null, adet: '4.0000', firmaId: 9, firmaAd: 'Örnek Firma B', noktaId: 3, tasima: null, elleTuru: null,
+  aciklama: null, is: null, depo: null, erken: null, sonYazan: null, bagliAnahtar: null, ...s,
+});
+const TUM_ISLER = {
+  satirlar: [
+    satir({ anahtar: 'urun:21', asama: 'hazir', malzemeAd: 'Deneme hazır mamul', emirNo: 'DENEME-UE-21' }),
+    satir({ anahtar: 'kalem:22', kalemId: 22, asama: 'bekliyor', malzemeAd: 'Deneme bekleyen mamul', emirNo: 'DENEME-UE-22', tasima: 'biz', ilerleme: 'OP 20 sürüyor' }),
+    satir({ anahtar: 'kalem:23', kalemId: 23, asama: 'havuzda', malzemeAd: 'Deneme havuz mamul', emirNo: 'DENEME-UE-23', tasima: 'biz' }),
+  ],
+} satisfies TumIslerCevabi;
 
 interface Istek { yontem: string; yol: string; govde: unknown }
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -34,6 +47,8 @@ function sunucuKur(kullanici: Kullanici) {
     if (istek.yol === '/sevkiyat/harita') return json(200, { harita: null } satisfies HaritaCevabi);
     if (istek.yol === `/sevkiyat/planlar/${TARIH}`) return json(200, GUN_PLANI);
     if (istek.yol === '/sevkiyat/bekleyenler') return json(200, BEKLEYENLER);
+    if (istek.yol.startsWith('/sevkiyat/tum-isler?')) return json(200, TUM_ISLER);
+    if (istek.yol === '/sevkiyat/tum-isler/serbest-birak') return json(200, { kalemIdleri: [51] });
     if (istek.yol.endsWith('/ise-cevir')) return json(200, { is: GUN_PLANI.isler[3] });
     if (istek.yol.endsWith('/kaldir')) return json(200, { id: 7 });
     if (istek.yol.endsWith('/bol')) return json(200, { id: 7, yeniId: 13 });
@@ -43,20 +58,52 @@ function sunucuKur(kullanici: Kullanici) {
 }
 function ac() {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[`/sevkiyat?tarih=${TARIH}&adim=hazirla`]}><SevkiyatPlani /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('Bekleme listesi', () => {
+describe('Hazırla adımı: sevke hazır liste', () => {
+  it('3348 a: noktası belli kayıt seçilip formsuz güne eklenir; noktasız kayıt seçilemez', async () => {
+    const istekler = sunucuKur(PLANCI);
+    ac();
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
+    const kutular = within(liste).getAllByRole('checkbox') as HTMLInputElement[];
+    expect(kutular.map((k) => k.disabled)).toEqual([true, false]);
+    fireEvent.click(kutular[1]!);
+    fireEvent.click(screen.getByRole('button', { name: /1 seçileni .* ekle/ }));
+    await waitFor(() => expect(yazmalar(istekler).length).toBe(1));
+    const yazma = yazmalar(istekler)[0]!;
+    expect(yazma.yol).toBe('/sevkiyat/bekleyenler/8/ise-cevir');
+    expect(yazma.govde).toMatchObject({ tarih: TARIH, tur: 'teslimat', birakisNoktasiId: 3, alisNoktasiId: null, paletSayisi: 1, agirlikKilogram: 0 });
+  });
+
+  it('Test T4, T5, T8: bırakılmamış hazır kalem "Sevkiyata al" ile bizim araca bırakılır; hazır olmayan nedeniyle görünür; Hazırla\'da dağıt ve onay yok', async () => {
+    const istekler = sunucuKur(PLANCI);
+    ac();
+    const birakilmamis = await screen.findByRole('region', { name: 'Sevkiyata bırakılmamış' });
+    expect(within(birakilmamis).getByText('Deneme hazır mamul')).toBeTruthy();
+    expect(within(birakilmamis).queryByText('Deneme havuz mamul')).toBeNull();
+    const bekleyen = screen.getByRole('region', { name: 'Hazır olunca düşecek' });
+    expect(within(bekleyen).getByText('Deneme bekleyen mamul')).toBeTruthy();
+    expect(within(bekleyen).getByText('OP 20 sürüyor')).toBeTruthy();
+    expect(within(bekleyen).queryByText('Deneme hazır mamul')).toBeNull();
+    expect(screen.queryByText('Deneme havuz mamul')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Otomatik dağıt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Planı onayla' })).toBeNull();
+    fireEvent.click(within(birakilmamis).getByRole('button', { name: 'Sevkiyata al' }));
+    await waitFor(() => expect(yazmalar(istekler).length).toBe(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/sevkiyat/tum-isler/serbest-birak', govde: { anahtarlar: ['urun:21'], tasima: 'biz', erkenGerekce: null } });
+  });
+
   it('fason kaydı firmanın noktasıyla işe çevrilir; gün, yük ve belge no formdan gider', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
-    expect(within(liste).getByText('Sevke hazır')).toBeTruthy();
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(liste).getByText('Fasona gidecek')).toBeTruthy();
-    fireEvent.click(within(liste).getAllByRole('button', { name: 'İşe çevir' })[1]!);
+    expect(within(liste).getByRole('button', { name: 'Nokta seç' })).toBeTruthy();
+    fireEvent.click(within(liste).getByRole('button', { name: 'İşe çevir' }));
     const form = await screen.findByRole('form', { name: 'İşe çevir' });
     expect((within(form).getByLabelText(/Teslim noktası/) as HTMLSelectElement).value).toBe('3');
     fireEvent.change(within(form).getByLabelText(/Palet/), { target: { value: '2' } });
@@ -70,7 +117,7 @@ describe('Bekleme listesi', () => {
   it('261 a: yalnız ürün kaydı bölünür; ayrılacak adet pencereden gider', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(liste).getAllByRole('button', { name: 'Böl' })).toHaveLength(1);
     fireEvent.click(within(liste).getByRole('button', { name: 'Böl' }));
     const pencere = screen.getByRole('dialog', { name: 'Kısmi sevk' });
@@ -84,14 +131,14 @@ describe('Bekleme listesi', () => {
   it('kaldırma onaydan geçer; yetkisiz kişi düğmeleri görmez', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    const liste = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const liste = await screen.findByRole('region', { name: 'Sevke hazır' });
     fireEvent.click(within(liste).getAllByRole('button', { name: 'Kaldır' })[0]!);
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Listeden kaldırılsın mı?' })).getByRole('button', { name: 'Kaldır' }));
     await waitFor(() => expect(yazmalar(istekler)).toEqual([{ yontem: 'POST', yol: '/sevkiyat/bekleyenler/7/kaldir', govde: undefined }]));
     cleanup();
     sunucuKur(OKUYUCU);
     ac();
-    const okunan = await screen.findByRole('region', { name: 'Bekleme listesi' });
+    const okunan = await screen.findByRole('region', { name: 'Sevke hazır' });
     expect(within(okunan).queryByRole('button', { name: 'İşe çevir' })).toBeNull();
   });
 });

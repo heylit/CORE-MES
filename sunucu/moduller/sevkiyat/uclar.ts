@@ -5,7 +5,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   aracCevabi, aracGovdesi, aracGuncelleGovdesi, araclarCevabi, aramaCevabi, aramaSorgusu, bekleyenBolCevabi, bekleyenBolGovdesi, bekleyenKaldirCevabi, bekleyenlerCevabi, dagitGovdesi, gunPlaniCevabi, haritaCevabi, idParametresi, isCevabi,
-  isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, konumOnerisiCevabi, konumOnerisiSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
+  isBelgeNoGovdesi, isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, konumOnerisiCevabi, konumOnerisiSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
   trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu, elleKalemGovdesi, kalemCevabi, serbestBirakCevabi, serbestBirakGovdesi, tasimaGovdesi,
   tumIslerCevabi, tumIslerSorgusu,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
@@ -119,6 +119,10 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
     uc({
       yontem: 'POST', yol: '/sevkiyat/isler/:id/guncelle', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: isGuncelleGovdesi, cevap: isCevabi,
       isle: async ({ db, parametre, govde }) => ({ is: await servis.isGuncelle(db, parametre.id, govde) }),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/belge-no', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, govde: isBelgeNoGovdesi, cevap: isCevabi,
+      isle: async ({ db, parametre, govde }) => ({ is: await servis.isBelgeNoYaz(db, parametre.id, govde) }),
     }),
     uc({
       yontem: 'POST', yol: '/sevkiyat/isler/:id/iptal-et', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, cevap: isCevabi,

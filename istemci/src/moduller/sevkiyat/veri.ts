@@ -1,7 +1,7 @@
 // Modülün sunucu çağrıları. Yazma komutu dönen gün planını önbelleğe koyar; ekran yeniden sormaz.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, KonumOnerisiCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
+  AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, KonumOnerisiCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsBelgeNoGovdesi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
   KaydetGovdesi, KalemCevabi, NoktaCevabi, NoktaGovdesi, NoktaGuncelleGovdesi, NoktalarCevabi, SerbestBirakCevabi, SerbestBirakGovdesi, Tasima, TekRotaCevabi,
   TrafikCevabi, TumIslerCevabi,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
@@ -90,6 +90,8 @@ export function usePlanKomutu(tarih: string) {
 export type IsKomutu =
   | { tur: 'ekle'; govde: IsGovdesi } | { tur: 'guncelle'; id: number; govde: IsGuncelleGovdesi } | { tur: 'iptal-et'; id: number }
   | { tur: 'durum'; id: number; govde: IsDurumuGovdesi }
+  // 3348 a: irsaliye no yükleme anında yazılır (yoldaki işe de).
+  | { tur: 'belge-no'; id: number; govde: IsBelgeNoGovdesi }
   // Bekleme listesindeki kayıt işe çevrilir (kart #1310).
   | { tur: 'ise-cevir'; bekleyenId: number; govde: IsGovdesi };
 
@@ -102,6 +104,7 @@ export function useIsKomutu() {
         : komut.tur === 'ise-cevir' ? korumaliPost<IsCevabi>(`/sevkiyat/bekleyenler/${komut.bekleyenId}/ise-cevir`, komut.govde)
           : komut.tur === 'iptal-et' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/iptal-et`)
             : komut.tur === 'durum' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/durum`, komut.govde)
+              : komut.tur === 'belge-no' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/belge-no`, komut.govde)
               : api.post<IsCevabi>(`/sevkiyat/isler/${komut.id}/guncelle`, komut.govde),
     onSuccess: (_c, komut) => {
       void istemci.invalidateQueries({ queryKey: ['sevkiyat', 'plan'] });
