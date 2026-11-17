@@ -15,7 +15,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, crmSorunu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { cariCrmDurumlari, cariHazirligi, crmDenetimi } from './servis.ts';
+import { cariCrmDurumlari, cariHazirligi, crmDenetimi, LOGO_CRM_DENETIM_SURESI_MS } from './servis.ts';
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu. Yardımcı sahte köprüdür; veriler uydurmadır (ORN-).
 const PAROLA = 'dogru-parola-1';
@@ -205,6 +205,23 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
       await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = NULL WHERE id = $1', [f.ikisi]);
       await ayar(true);
     }
+  });
+
+  test('CRM-11 denetim (Risk K3): aynı anda ikinci denetim yardımcıya sormadan reddedilir; süre sınırı dolunca durur, okunanlar kalır', async () => {
+    await ayar(true);
+    const once = kopru.istekler.length;
+    const [ilk, ikinci] = await Promise.all([crmDenetimi(vt(), istemci()), crmDenetimi(vt(), istemci())]);
+    assert.equal(ilk.durum, 'tamam');
+    assert.deepEqual(ikinci, { durum: 'okunamadi', neden: 'Başka bir CRM bağı denetimi sürüyor; bitince yeniden deneyin.', taranan: 0, eksik: false, satirlar: [] });
+    assert.equal(kopru.istekler.length - once, ilk.taranan, 'ikinci denetim yardımcıya sormadı');
+    assert.equal((await crmDenetimi(vt(), istemci())).durum, 'tamam', 'bitince yeniden çalışır');
+    let simdi = 0;
+    const saat = () => { const t = simdi; simdi += LOGO_CRM_DENETIM_SURESI_MS / 2 + 1; return t; };
+    const sure = await crmDenetimi(vt(), istemci(), saat);
+    assert.equal(sure.durum, 'okunamadi');
+    assert.match(sure.neden ?? '', /Süre sınırı \(2 dk\) doldu/);
+    assert.equal(sure.taranan, 1);
+    assert.equal(sure.eksik, true);
   });
 
   test('CRM-3 bağlantı kapalı ya da yardımcı tanımsız: istek atılmaz, hepsi okunamadı ve neden yazar', async () => {

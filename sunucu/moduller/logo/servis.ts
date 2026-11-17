@@ -1294,7 +1294,19 @@ export async function cariCrmKodlariOku(
 }
 
 // 3391-2 a: Logo geçişinde CRM bağı denetimi; yalnız GET, transaction dışında ve sırayla. Ulaşılamayan yardımcıda tarama durur.
-export async function crmDenetimi(vt: TxAcan, kopru: KopruIstemcisi | null): Promise<LogoCrmDenetimiCevabi> {
+// Tek lisanslı yardımcı denetim boyunca başka Logo işlerini bekletir: aynı anda tek denetim, toplam süre sınırlı (Risk K3).
+export const LOGO_CRM_DENETIM_SURESI_MS = 120_000;
+let crmDenetimiSuruyor = false;
+export async function crmDenetimi(vt: TxAcan, kopru: KopruIstemcisi | null, saat: () => number = Date.now): Promise<LogoCrmDenetimiCevabi> {
+  if (crmDenetimiSuruyor) return { durum: 'okunamadi', neden: 'Başka bir CRM bağı denetimi sürüyor; bitince yeniden deneyin.', taranan: 0, eksik: false, satirlar: [] };
+  crmDenetimiSuruyor = true;
+  try {
+    return await crmDenetimiYap(vt, kopru, saat);
+  } finally {
+    crmDenetimiSuruyor = false;
+  }
+}
+async function crmDenetimiYap(vt: TxAcan, kopru: KopruIstemcisi | null, saat: () => number): Promise<LogoCrmDenetimiCevabi> {
   const { acik, firmalar } = await vt.tx(async (db) => {
     const idler = (await tumFirmalar(db)).filter((f) => f.aktif && f.tur !== 'tedarikci').map((f) => f.id);
     const ozet = [...(await firmaOzetleri(db, idler)).values()].filter(crmSorulurMu).sort((a, b) => a.id - b.id);
@@ -1304,8 +1316,12 @@ export async function crmDenetimi(vt: TxAcan, kopru: KopruIstemcisi | null): Pro
   if (kapali !== null || kopru === null) return { durum: 'okunamadi', neden: kapali, taranan: 0, eksik: false, satirlar: [] };
   const sirada = firmalar.slice(0, LOGO_CRM_DENETIM_SINIRI);
   const satirlar: LogoCrmDenetimiCevabi['satirlar'] = [];
+  const bitis = saat() + LOGO_CRM_DENETIM_SURESI_MS;
   let taranan = 0;
   for (const f of sirada) {
+    if (saat() >= bitis) {
+      return { durum: 'okunamadi', neden: `Süre sınırı (${String(LOGO_CRM_DENETIM_SURESI_MS / 60_000)} dk) doldu; Logo işlerini bekletmemek için durduruldu.`, taranan, eksik: true, satirlar };
+    }
     const cari = (f.logoCariKodu ?? '').trim();
     const r = await kopru.satisMusterisiVarMi(cari);
     if (crmSorguyuKeser(r)) return { durum: 'okunamadi', neden: crmDurumu(r).neden, taranan, eksik: true, satirlar };
