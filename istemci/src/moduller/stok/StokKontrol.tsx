@@ -281,11 +281,11 @@ function Ihtiyaclar() {
     { anahtar: 'miktar', baslik: 'Stoktan / istenen', hizala: 'sag', kirilmaz: true,
       hucre: (x) => `${x.karsilanan === null ? '—' : miktarMetni(String(x.karsilanan))} / ${miktarMetni(x.miktar)} ${x.birim}` },
     { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <Rozet ton={IHTIYAC_ROZETI[x.durum].ton}>{IHTIYAC_ROZETI[x.durum].metin}</Rozet>, csv: (x) => x.durum },
-    { anahtar: 'aday', baslik: 'En uygun', hucre: (x) => (x.enIyi === null ? '—' : <>{`${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod} `}{durumRozeti(x.enIyi)}</>),
+    { anahtar: 'aday', baslik: 'En uygun', hucre: (x) => (x.enIyi === null ? '—' : <>{`${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod}`}<span className="tc-stok-blok">{durumRozeti(x.enIyi)}</span></>),
       csv: (x) => x.enIyi?.kod ?? '' },
     { anahtar: 'tarih', baslik: 'İhtiyaç', kirilmaz: true, hucre: (x) => x.ihtiyacTarihi ?? '—' },
     ...(karsilayabilir ? [{
-      anahtar: 'eylem', baslik: 'İşlem', sabit: 'sag', csv: false, hucre: (x: IhtiyacSatiri) => (x.engel !== null ? <span className="tc-stok-goz-alt">{ENGEL_METNI[x.engel]}</span>
+      anahtar: 'eylem', baslik: 'İşlem', sabit: 'sag', csv: false, hucre: (x: IhtiyacSatiri) => (x.engel !== null ? <span className="tc-stok-engel">{ENGEL_METNI[x.engel]}</span>
         : x.karsilanan !== null && x.karsilanan > 0 ? <Dugme simge="cart" onClick={() => seciliYaz(x)}>Stoktan karşıla</Dugme> : '—'),
     } satisfies Sutun<IhtiyacSatiri>] : []),
   ];
@@ -337,7 +337,7 @@ function AyirmaIstekleri() {
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => `${miktarMetni(s.miktar)} ${s.birim}` },
     { anahtar: 'kaynak', baslik: 'Stoktan', kes: true, hucre: kaynakMetni },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={AYIRMA_ROZETI[s.durum].ton}>{AYIRMA_ROZETI[s.durum].metin}</Rozet>, csv: (s) => s.durum },
-    { anahtar: 'isteyen', baslik: 'İsteyen', kes: true, hucre: (s) => s.isteyen ?? '—' },
+    { anahtar: 'isteyen', baslik: 'İsteyen', hucre: (s) => s.isteyen ?? '—' },
     ...(!kapali && (depo || iptalEdebilir) ? [{
       anahtar: 'eylem', baslik: 'İşlem', sabit: 'sag', hucre: (s: AyirmaIstegiSatiri) => (
         <span className="tc-stok-kontrol-eylem">
