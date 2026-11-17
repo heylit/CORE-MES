@@ -74,14 +74,15 @@ export function adimliOzetGruplari(db: Db, bugun: string): Promise<{ durum: Emir
   );
 }
 
-const BITEN_UST = `FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND ${KAPALI} AND ($1::text IS NULL OR e.durum = $1) AND ${ARAMA('2')}`;
+const BITEN_UST = `FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND ${KAPALI} AND ($1::text IS NULL OR e.durum = $1) AND ${ARAMA('2')}
+  AND NOT (e.id = ANY($3::int[]))`;
 
 export async function bitenUstEmirSay(db: Db, s: BitenSuzgeci): Promise<number> {
-  return (await db.tek<{ n: number }>(`SELECT count(*)::int AS n ${BITEN_UST}`, [s.durum, s.ara]))?.n ?? 0;
+  return (await db.tek<{ n: number }>(`SELECT count(*)::int AS n ${BITEN_UST}`, [s.durum, s.ara, [...(s.gizli ?? [])]]))?.n ?? 0;
 }
 
 export function bitenUstEmirler(db: Db, s: BitenSuzgeci, d: Dilim): Promise<UstEmirSatiri[]> {
-  return db.sorgu<UstEmirSatiri>(`SELECT ${UST} ${BITEN_UST} ORDER BY e.id DESC LIMIT $3 OFFSET $4`, [s.durum, s.ara, d.sinir, d.atla]);
+  return db.sorgu<UstEmirSatiri>(`SELECT ${UST} ${BITEN_UST} ORDER BY e.id DESC LIMIT $4 OFFSET $5`, [s.durum, s.ara, [...(s.gizli ?? [])], d.sinir, d.atla]);
 }
 
 export function ustEmirBul(db: Db, id: number, kilit = false): Promise<UstEmirSatiri | null> {

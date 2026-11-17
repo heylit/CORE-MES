@@ -79,17 +79,20 @@ export function yeniKapananEmirleriGetir(db: Db, gun: number, yalnizIstasyonlu: 
 export interface BitenSuzgeci {
   durum: EmirDurumu | null;
   ara: string | null;
+  // Deneme işaretli emirler sayfalı listede sayılmaz ve gösterilmez (3395 madde 2).
+  gizli?: readonly number[] | undefined;
 }
 
-const BITEN_IZLEME = `FROM uretim_emri e WHERE ${KAPALI} AND ($1::text IS NULL OR e.durum = $1) AND (NOT $2::boolean OR e.istasyon_id IS NOT NULL) AND ${ARAMA('3')}`;
+const BITEN_IZLEME = `FROM uretim_emri e WHERE ${KAPALI} AND ($1::text IS NULL OR e.durum = $1) AND (NOT $2::boolean OR e.istasyon_id IS NOT NULL) AND ${ARAMA('3')}
+  AND NOT (e.id = ANY($4::int[]))`;
 
 export async function bitenEmirSay(db: Db, s: BitenSuzgeci, yalnizIstasyonlu: boolean): Promise<number> {
-  return (await db.tek<{ n: number }>(`SELECT count(*)::int AS n ${BITEN_IZLEME}`, [s.durum, yalnizIstasyonlu, s.ara]))?.n ?? 0;
+  return (await db.tek<{ n: number }>(`SELECT count(*)::int AS n ${BITEN_IZLEME}`, [s.durum, yalnizIstasyonlu, s.ara, [...(s.gizli ?? [])]]))?.n ?? 0;
 }
 
 export function bitenEmirleriGetir(db: Db, s: BitenSuzgeci, yalnizIstasyonlu: boolean, d: Dilim): Promise<EmirSatiri[]> {
   return db.sorgu<EmirSatiri>(
-    `SELECT ${EMIR} ${BITEN_IZLEME} ORDER BY e.id DESC LIMIT $4 OFFSET $5`, [s.durum, yalnizIstasyonlu, s.ara, d.sinir, d.atla],
+    `SELECT ${EMIR} ${BITEN_IZLEME} ORDER BY e.id DESC LIMIT $5 OFFSET $6`, [s.durum, yalnizIstasyonlu, s.ara, [...(s.gizli ?? [])], d.sinir, d.atla],
   );
 }
 

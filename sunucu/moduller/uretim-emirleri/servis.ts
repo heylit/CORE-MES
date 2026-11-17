@@ -8,7 +8,7 @@ import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
   AcikAdim, AdimCevabi, BekletGovdesi, Bekletme, AdimKanitiGirdisi, AdimPaylariCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { denemeIsaretliKimlikler, sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
   aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, smartesSayimIstasyonlari, yetkinMi,
@@ -465,22 +465,29 @@ export async function izlemeListesi(
 ): Promise<{ emirler: IzlemeEmri[] }> {
   // Adımlar arasında satır 'planli' iken görünen durum 'basladi'dir: açık durumlarla süzme görünen durumla yapılır.
   const acikSuzgec = durum === 'planli' || durum === 'basladi';
-  const emirler = await izlemeyeCevir(db, await sorgular.emirleriGetir(db, acikSuzgec ? null : durum ?? null, !istasyonsuzDahil, hepsi));
+  const emirler = await izlemeyeCevir(db, await gizlileriAyikla(db, await sorgular.emirleriGetir(db, acikSuzgec ? null : durum ?? null, !istasyonsuzDahil, hepsi)));
   return { emirler: acikSuzgec ? emirler.filter((e) => e.durum === durum) : emirler };
 }
 
 // Son `gun` günde kapanan emirler, izleme biçiminde (Fabrika Haritası; karar 1613 a).
 export async function yeniKapananlar(db: Db, gun: number, istasyonsuzDahil: boolean): Promise<{ emirler: IzlemeEmri[] }> {
-  return { emirler: await izlemeyeCevir(db, await sorgular.yeniKapananEmirleriGetir(db, gun, !istasyonsuzDahil)) };
+  return { emirler: await izlemeyeCevir(db, await gizlileriAyikla(db, await sorgular.yeniKapananEmirleriGetir(db, gun, !istasyonsuzDahil))) };
+}
+
+// Deneme işaretli emir listelerde görünmez (3395 madde 2); ayrıntı ve temizlik ekranı açar, işaret kalkınca listeye döner.
+export async function gizlileriAyikla<T extends { id: number }>(db: Db, satirlar: T[]): Promise<T[]> {
+  const gizli = new Set(await denemeIsaretliKimlikler(db, 'uretim_emri'));
+  return gizli.size === 0 ? satirlar : satirlar.filter((s) => !gizli.has(s.id));
 }
 
 // Biten (bitmiş ya da iptal) emirler, en yeni önce, sayfalı (kart #1323).
-export function bitenEmirler(
+export async function bitenEmirler(
   db: Db, suzgec: sorgular.BitenSuzgeci, istasyonsuzDahil: boolean, sayfa: { sayfa: number; sayfaBoyu?: number | undefined },
 ): Promise<SayfaliListe<IzlemeEmri>> {
+  const s = { ...suzgec, gizli: await denemeIsaretliKimlikler(db, 'uretim_emri') };
   return sayfaliListe(sayfa, {
-    say: () => sorgular.bitenEmirSay(db, suzgec, !istasyonsuzDahil),
-    satirlar: async (d) => izlemeyeCevir(db, await sorgular.bitenEmirleriGetir(db, suzgec, !istasyonsuzDahil, d)),
+    say: () => sorgular.bitenEmirSay(db, s, !istasyonsuzDahil),
+    satirlar: async (d) => izlemeyeCevir(db, await sorgular.bitenEmirleriGetir(db, s, !istasyonsuzDahil, d)),
   });
 }
 

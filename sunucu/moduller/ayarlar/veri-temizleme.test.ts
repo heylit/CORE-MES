@@ -488,6 +488,32 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     await isaretle([{ tur: 'uretim_emri', kimlik: e }], false);
   });
 
+  test('liste gizleme: işaretli emir üretim emri listelerinde görünmez, işaret kalkınca döner', async () => {
+    const [acik, kapali] = [await emir({ malzeme: await malzeme() }), await emir({ malzeme: await malzeme() })];
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [kapali]);
+    const no = async (id: number) => (await o().sahip.tek<{ n: string }>('SELECT emir_no AS n FROM uretim_emri WHERE id = $1', [id]))!.n;
+    const [acikNo, kapaliNo] = [await no(acik), await no(kapali)];
+    const listeler = async () => {
+      const govde: string[] = [];
+      for (const url of ['/uretim-emirleri?kapsam=hepsi', '/uretim-emirleri?bitenGun=1', '/uretim-emirleri/bitenler?sayfa=1', '/adimli-emirler?kapsam=hepsi', '/adimli-emirler/bitenler?sayfa=1']) {
+        const c = await istek(yonetici, 'GET', url);
+        assert.equal(c.statusCode, 200, `${url} ${c.body}`);
+        govde.push(c.body);
+      }
+      return govde;
+    };
+    const once = await listeler();
+    assert.ok(once[0]!.includes(acikNo) && once[3]!.includes(acikNo), 'işaretsiz açık emir listede');
+    assert.ok(once[1]!.includes(kapaliNo) && once[2]!.includes(kapaliNo) && once[4]!.includes(kapaliNo), 'işaretsiz kapalı emir listede');
+    const secim: TemizlikKoku[] = [{ tur: 'uretim_emri', kimlik: acik }, { tur: 'uretim_emri', kimlik: kapali }];
+    await isaretle(secim);
+    for (const g of await listeler()) assert.ok(!g.includes(acikNo) && !g.includes(kapaliNo), g.slice(0, 300));
+    assert.equal((await istek(yonetici, 'GET', `/uretim-emirleri/${acik}`)).statusCode, 200, 'ayrıntı açılır');
+    await isaretle(secim, false);
+    const sonra = await listeler();
+    assert.ok(sonra[3]!.includes(acikNo) && sonra[4]!.includes(kapaliNo));
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(
