@@ -30,6 +30,9 @@ describe('Logo irsaliyeleri: okuma işi ve sayfa uçları (gerçek PostgreSQL, s
   let depocu = '';
   let gormeyen = '';
   let alisci = '';
+  let planci = '';
+  let yazar = '';
+  let onayci = '';
   let yoneticiId = 0;
   let simdi = Date.parse('2026-11-16T10:00:00Z');
   let bellek: SurecBellegi = yeniSurecBellegi();
@@ -105,15 +108,24 @@ describe('Logo irsaliyeleri: okuma işi ve sayfa uçları (gerçek PostgreSQL, s
     await kisiRolle('li-depocu', 'depo');
     await o().vt.sorgu("INSERT INTO rol (kod, ad) VALUES ('li_gormeyen', 'Görmeyen')");
     await kisiRolle('li-gormeyen', 'li_gormeyen');
-    // Alış fiyatını (satin-alma.oku) görür, satış fiyatını (siparisler.fiyat-oku) görmez.
+    // Alış fiyatını (satin-alma.fiyat-oku) görür, satış fiyatını (siparisler.fiyat-oku) görmez.
     await o().vt.sorgu("INSERT INTO rol (kod, ad) VALUES ('li_alisci', 'Alışçı')");
     await o().vt.sorgu(
-      "INSERT INTO rol_islemi (rol_id, islem) SELECT id, unnest(ARRAY['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku', 'satin-alma.oku']) FROM rol WHERE kod = 'li_alisci'");
+      "INSERT INTO rol_islemi (rol_id, islem) SELECT id, unnest(ARRAY['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku', 'satin-alma.fiyat-oku']) FROM rol WHERE kod = 'li_alisci'");
     await kisiRolle('li-alisci', 'li_alisci');
+    // 3401-1 a: yalnız satın almayı okuyan (planlama) alış fiyatını da görmez; yazan ve onaylayan görür.
+    for (const [rol, islem] of [['li_planci', 'satin-alma.oku'], ['li_yazar', 'satin-alma.yaz'], ['li_onayci', 'satin-alma.onayla']] as const) {
+      await o().vt.sorgu("INSERT INTO rol (kod, ad) VALUES ($1, $1)", [rol]);
+      await o().vt.sorgu("INSERT INTO rol_islemi (rol_id, islem) SELECT rol.id, i FROM rol, unnest($2::text[]) i WHERE kod = $1", [rol, ['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku', islem]]);
+      await kisiRolle(`li-${rol.slice(3)}`, rol);
+    }
     yonetici = await giris('li-yonetici');
     depocu = await giris('li-depocu');
     gormeyen = await giris('li-gormeyen');
     alisci = await giris('li-alisci');
+    planci = await giris('li-planci');
+    yazar = await giris('li-yazar');
+    onayci = await giris('li-onayci');
     await coreKayitlari();
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
@@ -286,7 +298,7 @@ describe('Logo irsaliyeleri: okuma işi ve sayfa uçları (gerçek PostgreSQL, s
     assert.equal(Date.parse(ic.baslik.okumaZamani), simdi, 'zaman bölge bilgili ISO metni');
     assert.match(ic.baslik.okumaZamani, /(Z|[+-]\d{2}:\d{2})$/);
   });
-  test('fiyat yetkisi yöne göre: alışta satin-alma.oku, satışta siparisler.fiyat-oku; döviz fiyatı ve tutar da maskelenir', async () => {
+  test('fiyat yetkisi yöne göre: alışta satin-alma.fiyat-oku/yaz/onayla, satışta siparisler.fiyat-oku; döviz fiyatı ve tutar da maskelenir', async () => {
     const doviz = { currency: 1, currencyPrice: 0.4 };
     kopru.irsaliyeler = [irsaliye(601, 1, {}, [satir(6001, doviz)]), irsaliye(602, 8, {}, [satir(6002, { ...doviz, orderLineRef: null })])];
     await tur();
@@ -299,6 +311,16 @@ describe('Logo irsaliyeleri: okuma işi ve sayfa uçları (gerçek PostgreSQL, s
     assert.equal(satis.fiyatGorunur, false, 'satın alma okuyan satış fiyatını görmez');
     assert.deepEqual([satis.satirlar[0]?.fiyat, satis.satirlar[0]?.tutar, satis.satirlar[0]?.dovizTuru, satis.satirlar[0]?.dovizFiyati], [null, null, null, null]);
     assert.ok(!satisCevabi.body.includes('12.5') && !satisCevabi.body.includes('0.4'), 'fiyat cevapta hiç yok');
+    const planAlis = await oku('/logo/irsaliyeler/1/1/601', planci);
+    assert.equal(planAlis.statusCode, 200, planAlis.body);
+    const plan = planAlis.json<IrsaliyeCevabi>();
+    assert.equal(plan.fiyatGorunur, false, 'yalnız satin-alma.oku (planlama) alış fiyatını görmez');
+    assert.deepEqual([plan.satirlar[0]?.fiyat, plan.satirlar[0]?.tutar, plan.satirlar[0]?.dovizTuru, plan.satirlar[0]?.dovizFiyati], [null, null, null, null]);
+    assert.ok(!planAlis.body.includes('12.5') && !planAlis.body.includes('375'), 'planlama cevabında fiyat yok');
+    for (const cerez of [yazar, onayci]) {
+      const k = (await oku('/logo/irsaliyeler/1/1/601', cerez)).json<IrsaliyeCevabi>();
+      assert.deepEqual([k.fiyatGorunur, k.satirlar[0]?.fiyat], [true, '12.5']);
+    }
     const yoneticiSatis = (await oku('/logo/irsaliyeler/1/1/602')).json<IrsaliyeCevabi>();
     assert.deepEqual([yoneticiSatis.fiyatGorunur, yoneticiSatis.satirlar[0]?.dovizFiyati], [true, '0.4']);
   });

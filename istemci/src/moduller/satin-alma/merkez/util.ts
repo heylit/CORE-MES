@@ -43,8 +43,20 @@ export const nfx = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 4 });
 export { nf2 };
 export const SYM: Record<string, string> = { TRY: "₺", USD: "$", EUR: "€", GBP: "£" };
 
-export const money = (n: unknown, cur = "TRY", dec = 2): string => (isNum(n) ? (dec ? nf2 : nf0).format(n) + " " + (SYM[cur] ?? cur) : "–");
+// 3401-1 a: fiyatı görmeyen okuyucuda (yalnız satin-alma.oku) tutar yerinde kilit yazısı çıkar; sıfır ya da tire gösterilmez. Sunucu fiyatı
+// zaten göndermez; bu bayrak ekranın kalan hesaplarının uydurma sıfır çizmesini önler. Bayrağı merkezi bağlarken yetkiler kurar.
+let fiyatKilidi = false;
+export const fiyatKilitli = (): boolean => fiyatKilidi;
+export const setFiyatKilidi = (v: boolean): void => { fiyatKilidi = v; };
+export const KILIT_YAZISI = "Yetkiniz yok";
+export const KILIT_YETKISI = "Satın alma fiyatlarını görür";
+/** Kilitli panel ve satır içi kilit (ortak KilitliDeger ile aynı metin; innerHTML ekranları için biçim). */
+export const kilitHTML = (): string => `<span class="sa-kilit"><b>${KILIT_YAZISI}</b><small>${KILIT_YETKISI}</small></span>`;
+export const kilitPaneli = (ne: string): string => `<div class="panel"><p class="sa-kilit-not">${esc(ne)} yetkinizde değil (${KILIT_YETKISI}). ${kilitHTML()}</p></div>`;
+
+export const money = (n: unknown, cur = "TRY", dec = 2): string => (fiyatKilidi ? KILIT_YAZISI : isNum(n) ? (dec ? nf2 : nf0).format(n) + " " + (SYM[cur] ?? cur) : "–");
 export function short(n: unknown): string {
+  if (fiyatKilidi) return KILIT_YAZISI;
   if (!isNum(n)) return "–";
   const a = Math.abs(n);
   if (a >= 1e6) return nf1.format(n / 1e6) + " mn ₺";

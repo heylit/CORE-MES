@@ -82,13 +82,24 @@ describe('Malzeme kg fiyatları (SAT-77, 2455 Teslim A)', () => {
   });
 
   it('okuyan fiyat giremez ve iptal edemez: Fiyat gir, Toplu giriş, İptal et ve işlem menüsü yok (Güvenlik E1)', async () => {
-    ac([satir({}), satir({ id: 3, kaliteKodu: 'DENEME-YT', kartta: false })], ['satin-alma.oku']);
+    ac([satir({}), satir({ id: 3, kaliteKodu: 'DENEME-YT', kartta: false })], ['satin-alma.fiyat-oku']);
     expect(await screen.findByText('DENEME-AL')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Fiyat gir/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /diğer işlemler/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /İptal et/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /için işlemler/ })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'İşlem' })).toBeNull();
+  });
+
+  it('planlama (yalnız satin-alma.oku) kg fiyatını görmez: kilit ve "Yetkiniz yok" yazar, fiyat ucu çağrılmaz; maliyet okuyan görür (3401-1 a)', async () => {
+    const istekler = ac([satir({})], ['satin-alma.oku']);
+    expect(await screen.findByText('Yetkiniz yok')).toBeTruthy();
+    expect(screen.queryByText('DENEME-AL')).toBeNull();
+    expect(screen.queryByText('125,50 ₺')).toBeNull();
+    expect(istekler.some((i) => i.yol.startsWith('/satin-alma-kg-fiyatlari'))).toBe(false);
+    cleanup();
+    ac([satir({})], ['finans.maliyet-oku']);
+    expect(await screen.findByText('DENEME-AL')).toBeTruthy();
   });
 
   it('satırdan fiyat girilir: kalite ve form satırdan, kaynak seçilir, virgüllü fiyat noktaya çevrilir, tekrar kimliğiyle gider', async () => {
@@ -216,7 +227,7 @@ describe('Malzeme kg fiyatları (SAT-77, 2455 Teslim A)', () => {
   });
 
   it('satıra basınca geçmiş açılır: kaydeden, kaynak, kayıt zamanı (tesis saati), iptal edilen giriş gerekçe, kişi ve zamanla (Güvenlik E2); grafik iptal edileni çizmez', async () => {
-    const istekler = ac([satir({})], ['satin-alma.oku']);
+    const istekler = ac([satir({})], ['satin-alma.fiyat-oku']);
     fireEvent.click(await screen.findByText('DENEME-AL'));
     const p = await screen.findByRole('dialog');
     const tablo = await within(p).findByRole('table', { name: 'Fiyat geçmişi' });

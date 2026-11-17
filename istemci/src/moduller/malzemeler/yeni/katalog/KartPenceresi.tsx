@@ -98,7 +98,7 @@ export function KartPenceresi({
       <TalepPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => talepIslemi(x, i, n)} />
       <OnayPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => onayIslemi(x, i, n)} />
       <Foy
-        veri={K.foyVerisi(x, b)} {...(kgFiyati !== undefined ? { kgFiyati } : {})}
+        veri={K.foyVerisi(x, b)} {...(kgFiyati !== undefined ? { kgFiyati } : {})} kgFiyatiKilitli={!yetki.kgFiyatiOkur}
         kunye={<TurKunyesi tur={turOf(x)} kisa={turKisa(turOf(x), b)} ad={turAdi(turOf(x), b)} kategori={kategoriAdi(x, b)} tamAd />}
       />
       {x.tur === 'hammadde' && <KartKesiti x={x} b={b} />}
