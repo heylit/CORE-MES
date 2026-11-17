@@ -64,7 +64,7 @@ describe('Stok kontrol (3398)', () => {
     expect([p.get('pay'), p.get('payDeger')]).toEqual(['mm', '7.5']);
   });
 
-  it('artık parçalar: depocu kullanıldı der, sürümle gider; satın almada işlem düğmesi yok', async () => {
+  it('artık parçalar: depocu onaylayıp kullanıldı der, sürümle gider; satın almada işlem düğmesi yok', async () => {
     const istekler = sunucuKur(DEPOCU, {
       'GET /stok/olcu-arama': () => json(200, KALITELER),
       'GET /stok/artik-parcalar': () => json(200, ARTIKLAR),
@@ -75,6 +75,11 @@ describe('Stok kontrol (3398)', () => {
     const tablo = await screen.findByRole('table', { name: 'Artık parçalar' });
     expect(within(tablo).getByText('Ø50 × 1.250 mm')).toBeTruthy();
     fireEvent.click(within(tablo).getByRole('button', { name: 'Kullanıldı' }));
+    // Tek tıkla kapanmaz: onay penceresi geri alınamaz der.
+    const onay = await screen.findByRole('dialog', { name: 'Artık kullanıldı' });
+    expect(onay.textContent).toContain('geri alınamaz');
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    fireEvent.click(within(onay).getByRole('button', { name: 'Kullanıldı' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ durum: 'kullanildi', surum: 1 }));
     cleanup();
     sunucuKur(SATIN_ALMA, { 'GET /stok/olcu-arama': () => json(200, KALITELER), 'GET /stok/artik-parcalar': () => json(200, ARTIKLAR) });

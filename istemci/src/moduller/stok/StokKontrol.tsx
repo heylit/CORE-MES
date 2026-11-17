@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ARTIK_HURDA_ESIGI_MM, FORM_ADLARI, FORM_OLCULERI, OLCU_ETIKETLERI, OLCULU_FORMLAR, VARSAYILAN_KESME_MM, type OlculuForm } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 import type { ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, OlcuAdayi, OlcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import {
-  Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, MalzemeSecici, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type SeciliKayit, type Sutun,
+  Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, MalzemeSecici, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type SeciliKayit, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -78,13 +78,13 @@ function OlcuyleAra() {
   const gonder = (e: FormEvent) => { e.preventDefault(); if (kesitVar) sorguYaz(aramaSorgusu(form)); };
   const yaz = (p: Partial<AramaFormu>) => formYaz((o) => ({ ...o, ...p }));
   const sutunlar: Sutun<OlcuAdayi>[] = [
-    { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (a) => (a.kaynak === 'artik' ? <Rozet ton="bilgi">Artık</Rozet> : 'Stok'), csv: (a) => (a.kaynak === 'artik' ? 'Artık' : 'Stok') },
-    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (a) => <Link to={`/stok/malzemeler/${a.malzemeNo}`}>{a.kod}</Link>, csv: (a) => a.kod },
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', hucre: (a) => <Link to={`/stok/malzemeler/${a.malzemeNo}`}>{a.kod}</Link>, csv: (a) => a.kod },
     { anahtar: 'olcu', baslik: 'Ölçü', hucre: (a) => olcuMetni(a.form, a.olcu) },
-    { anahtar: 'kalite', baslik: 'Kalite', hucre: (a) => a.kalite ?? '—' },
     { anahtar: 'durum', baslik: 'Uygunluk', hucre: durumRozeti, csv: (a) => a.durum },
-    { anahtar: 'fire', baslik: 'Fire', hizala: 'sag', hucre: (a) => (a.fireYuzde === null ? '—' : `%${a.fireYuzde}`) },
     { anahtar: 'parca', baslik: 'Parça', hizala: 'sag', hucre: (a) => (a.parcaSayisi === null ? '—' : String(a.parcaSayisi)) },
+    { anahtar: 'fire', baslik: 'Fire', hizala: 'sag', hucre: (a) => (a.fireYuzde === null ? '—' : `%${a.fireYuzde}`) },
+    { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (a) => (a.kaynak === 'artik' ? <Rozet ton="bilgi">Artık</Rozet> : 'Stok'), csv: (a) => (a.kaynak === 'artik' ? 'Artık' : 'Stok') },
+    { anahtar: 'kalite', baslik: 'Kalite', hucre: (a) => a.kalite ?? '—' },
     { anahtar: 'miktar', baslik: 'Stokta', hizala: 'sag', hucre: (a) => `${miktarMetni(a.miktar)} ${a.birim ?? ''}`.trim() },
     { anahtar: 'konum', baslik: 'Konum', kes: true, hucre: (a) => (a.konumlar.length === 0 ? '—' : a.konumlar.join(', ')) },
   ];
@@ -184,14 +184,15 @@ function ArtikParcalar() {
   const { bildir } = useBildirim();
   const yazabilir = useIslem('stok.cikis');
   const [pencere, pencereYaz] = useState(false);
+  const [kapatilan, kapatilanYaz] = useState<{ s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' } | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.liste('artik-parcalar', {}), queryFn: () => api.get<ArtikParcalarCevabi>('/stok/artik-parcalar') });
   const kapat = useMutation({
     mutationFn: ({ s, durum }: { s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' }) => api.post<ArtikParcaCevabi>(`/stok/artik-parcalar/${s.id}/kapat`, { durum, surum: s.surum }),
-    onSuccess: (_c, d) => { void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', d.durum === 'hurda' ? 'Artık hurdaya ayrıldı.' : 'Artık kullanıldı.'); },
+    onSuccess: (_c, d) => { kapatilanYaz(null); void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', d.durum === 'hurda' ? 'Artık hurdaya ayrıldı.' : 'Artık kullanıldı.'); },
     onError: (h) => bildir('hata', hataMetni(h)),
   });
   const sutunlar: Sutun<ArtikParcaSatiri>[] = [
-    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (s) => <Link to={`/stok/malzemeler/${s.malzemeNo}`}>{s.kod}</Link>, csv: (s) => s.kod },
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', hucre: (s) => <Link to={`/stok/malzemeler/${s.malzemeNo}`}>{s.kod}</Link>, csv: (s) => s.kod },
     { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (s) => s.ad ?? '—' },
     { anahtar: 'olcu', baslik: 'Ölçü', hucre: (s) => olcuMetni(s.form, s.olcu) },
     { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (s) => String(s.adet) },
@@ -199,9 +200,9 @@ function ArtikParcalar() {
     { anahtar: 'kaydeden', baslik: 'Kaydeden', kes: true, hucre: (s) => s.kaydeden ?? '—' },
     ...(yazabilir ? [{
       anahtar: 'eylem', baslik: 'İşlem', hucre: (s: ArtikParcaSatiri) => (
-        <span className="tc-stok-iki">
-          <Dugme simge="check" disabled={kapat.isPending} onClick={() => kapat.mutate({ s, durum: 'kullanildi' })}>Kullanıldı</Dugme>
-          <Dugme simge="trash" disabled={kapat.isPending} onClick={() => kapat.mutate({ s, durum: 'hurda' })}>Hurda</Dugme>
+        <span className="tc-stok-kontrol-eylem">
+          <Dugme simge="check" disabled={kapat.isPending} onClick={() => kapatilanYaz({ s, durum: 'kullanildi' })}>Kullanıldı</Dugme>
+          <Dugme simge="trash" disabled={kapat.isPending} onClick={() => kapatilanYaz({ s, durum: 'hurda' })}>Hurda</Dugme>
         </span>
       ), csv: () => '',
     } satisfies Sutun<ArtikParcaSatiri>] : []),
@@ -213,6 +214,11 @@ function ArtikParcalar() {
           : <Tablo etiket="Artık parçalar" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(s) => s.id}
               bosMesaj="Kayıtlı artık parça yok. Boy keserken kalan parçayı buradan kaydedin." />}
       {yazabilir && <ArtikKaydiPenceresi acik={pencere} kapat={() => pencereYaz(false)} />}
+      <OnayPenceresi acik={kapatilan !== null} baslik={kapatilan?.durum === 'hurda' ? 'Artığı hurdaya ayır' : 'Artık kullanıldı'}
+        onayMetni={kapatilan?.durum === 'hurda' ? 'Hurdaya ayır' : 'Kullanıldı'} tehlikeli={kapatilan?.durum === 'hurda'} yukleniyor={kapat.isPending}
+        onayla={() => { if (kapatilan !== null) kapat.mutate(kapatilan); }} vazgec={() => kapatilanYaz(null)}>
+        <p>{kapatilan === null ? '' : `${kapatilan.s.kod} · ${olcuMetni(kapatilan.s.form, kapatilan.s.olcu)} · ${kapatilan.s.konumKod}. Artık listeden ve aramadan düşer; bu işlem geri alınamaz.`}</p>
+      </OnayPenceresi>
     </Kart>
   );
 }
