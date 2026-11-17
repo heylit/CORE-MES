@@ -1294,3 +1294,59 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 /* Şerit, iş satırı ve rota üstte yer kaplar: sayaç (göstergeler ve kadran) bu boydan kısa olmaz, sığmazsa görünüm kayar, üst üste binmez. */
 .tc-ay1-dar .tc-ay1-uretim:has(> .tc-ay1-sira) > .tc-ay1-sayac { min-block-size: calc(var(--dokunma) * 5.5); }
 .tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon .tc-ay1-istasyon-makine { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); }
+/* 3353: geniş düzende iki sütun da kaymadan sığar. Izgaranın boyu sorgulanır: kısa pencerede sol sütunda tuşlar ve durum düğmeleri
+   alçalır, sağda araç çubuğu kendi içinde kaymak yerine yan yana ikinci sütuna geçer. */
+.tc-ay1-genis:has(> :is(.tc-ra, .tc-ay1-ds)) > .tc-ay1-izgara { container: tc-izgara / size; }
+.tc-ay1-genis .tc-ay1-resim .tc-ay5-araclar {
+  --tc-arac-boy: var(--dokunma);
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, var(--tc-arac-boy)); grid-auto-columns: var(--dokunma);
+  max-block-size: calc(100cqh - var(--b-3) * 2);
+}
+/* Araç çubuğunun boyu resim kutusundan ölçülür; kutu taşanı kestiği için kaba bir pay son aracı yarım gösteriyordu. */
+.tc-ay1-genis .tc-ay1-sag .tc-ay1-resim { container: tc-resim / size; }
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-araclar { --tc-arac-boy: calc(var(--dokunma) - var(--b-1)); }
+.tc-ay1-genis .tc-ay1-resim .tc-ay5-ayrac { display: none; }
+@container tc-izgara (max-height: 560px) {
+  .tc-ay1-genis .tc-ay1-sahne { gap: var(--b-2); padding: var(--b-2) var(--b-3); }
+  .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { min-block-size: var(--orb-1); }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(3)) { min-block-size: calc(var(--orb-1) + var(--dokunma) + var(--b-2)); }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(4)) { min-block-size: calc(var(--orb-1) * 2 + var(--b-2)); }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus:nth-child(5)) { min-block-size: calc(var(--orb-1) * 2 + var(--dokunma) + var(--b-2) * 2); }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus[data-duzeltme]):has(.tc-ay1-tus:nth-child(5)) { min-block-size: calc(var(--orb-1) + var(--dokunma) * 2 + var(--b-2) * 2); }
+  .tc-ay1-genis .tc-ay1-sahne .tc-orb { --s: calc(var(--dokunma) - var(--b-2)); min-block-size: var(--dokunma); padding-block: var(--pay-ince); }
+}
+/* Basılı tutulmayan düğmenin ipucu satırı boştur; yazı simgenin yanında dikeyde ortalanır. */
+@container sahne (min-width: 441px) {
+  .tc-ay1-genis .tc-ay1-sahne .tc-orb:not(.tc-orb-tut) > .tc-orb-ipucu { display: none; }
+  .tc-ay1-genis .tc-ay1-sahne .tc-orb:not(.tc-orb-tut) > .tc-orb-etiket { grid-row: 1 / 3; align-self: center; }
+}
+/* Teknik resim pencere boyunun yarısından kısa olabilir; sütunu aşağı uzatıp kaydırmak yerine kalan yere sığar. */
+.tc-ay1-genis .tc-ay1-resim .tc-ay5-resim { min-block-size: 0; }
+/* Çok kısa pencerede (dizüstü tarayıcısı) sayım tuşları simge ve yazı yan yana tek satırdır, Şimdi şeridi yalnız başlıktır. */
+@container tc-izgara (max-height: 320px) {
+  .tc-ay1-genis .tc-ay1-sahne { gap: var(--b-1); padding-block: var(--pay-ince); }
+  .tc-ay1-genis .tc-ay1-simdi { padding-block: 0; }
+  .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tuslar { gap: var(--b-1); }
+  .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { flex-direction: row; min-block-size: var(--dokunma); }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:is(:has(.tc-ay1-tus:nth-child(3)), :has(.tc-ay1-tus:nth-child(4)), :has(.tc-ay1-tus:nth-child(5)), :has(.tc-ay1-tus:nth-child(6))) {
+    min-block-size: calc(var(--dokunma) * 3 + var(--b-1) * 2);
+  }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac:has(.tc-ay1-tus[data-duzeltme]):has(.tc-ay1-tus:nth-child(5)) { min-block-size: calc(var(--dokunma) * 3 + var(--b-1) * 2); }
+  .tc-ay1-genis .tc-ay1-kadran { margin-block-end: var(--dokunma-x14); }
+  .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > small { display: none; }
+  .tc-ay1-genis .tc-ay1-sahne > .tc-orblar { padding-block: var(--pay-ince); margin-block: calc(var(--pay-ince) * -1); }
+}
+/* Kısa pencerede üst bölümler de alçalır: durum şeridinde kalan adet yazısı gizlenir (sayaçta da yazar), bölümler arası daralır.
+   Şerit kartlarında makine satırı kalır: istasyonun işleri başka makinede olabilir. */
+@media (max-height: 800px) {
+  .tc-ay1-genis:has(> :is(.tc-ra, .tc-ay1-ds)) { gap: var(--b-3); }
+  .tc-ay1-genis > .tc-ay1-ds { min-block-size: var(--dokunma); padding-block: var(--b-1); }
+  .tc-ay1-genis > .tc-ay1-ds .tc-ay1-ds-adet small { display: none; }
+  /* Acil etiketi iş satırının üstünde ayrı sıra açmaz, alanların solunda durur. */
+  .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik > div:first-child:has(> .tc-ay1-etiket) { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--b-3); }
+  .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik > div:first-child > .tc-ay1-etiket { align-self: center; }
+}
+
+@container tc-izgara (max-height: 320px) {
+  .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { white-space: nowrap; }
+}
