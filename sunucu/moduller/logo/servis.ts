@@ -2,7 +2,7 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import type { BirimSetleriCevabi, LogoCrmCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
@@ -1252,6 +1252,20 @@ export async function logoCariOku(vt: TxAcan, kopru: KopruIstemcisi | null, kod:
   return r.tur === 'basarili' ? { tur: 'tamam', veri: r.veri } : { tur: 'hata', ileti: r.ileti };
 }
 
+const crmKapaliNedeni = (acik: boolean, kopru: KopruIstemcisi | null): string | null =>
+  !acik ? 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı; CRM durumu okunmuyor.' : kopru === null ? BEKLEME_NEDENLERI['ortam-degiskeni-yok'] : null;
+
+// 3359 ek: teklif ve satış siparişinin firması Logo'ya hazır mı; firma kartında cari kodu yoksa yardımcıya sorulmaz. Firma yoksa null (404).
+export async function cariHazirligi(vt: TxAcan, kopru: KopruIstemcisi | null, firmaId: number): Promise<LogoCariHazirlikCevabi | null> {
+  const { acik, firma } = await vt.tx(async (db) => ({ acik: (await sistemAyariOku(db, 'logo.baglanti')) === true, firma: await firmaOzeti(db, firmaId) }));
+  if (firma === null) return null;
+  const kod = (firma.logoCariKodu ?? '').trim();
+  if (kod === '') return { durum: 'cari-yok', neden: null };
+  const kapali = crmKapaliNedeni(acik, kopru);
+  if (kapali !== null || kopru === null) return { durum: 'okunamadi', neden: kapali };
+  return crmDurumu(await kopru.satisMusterisiVarMi(kod));
+}
+
 // 3359 a: carinin Logo CRM satış müşterisi durumu, ekranda göstermek için (teklif gönderimindeki ön koşulla aynı okuma). Yalnız GET; firma ve
 // ayar kısa transaction'da okunur, yardımcı transaction dışında ve sırayla beklenir (yardımcı tek lisanslıdır).
 export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null, idler: readonly number[]): Promise<LogoCrmCevabi> {
@@ -1260,7 +1274,7 @@ export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null,
     firmalar: [...(await firmaOzetleri(db, [...idler])).values()].filter(crmSorulurMu),
   }));
   if (firmalar.length === 0) return { durumlar: [] };
-  const kapali = !acik ? 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı; CRM durumu okunmuyor.' : kopru === null ? BEKLEME_NEDENLERI['ortam-degiskeni-yok'] : null;
+  const kapali = crmKapaliNedeni(acik, kopru);
   const durumlar: LogoCrmCevabi['durumlar'] = [];
   let kesildi: string | null = kapali;
   for (const f of firmalar) {

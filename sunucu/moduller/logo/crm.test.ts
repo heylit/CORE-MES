@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { LogoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoCariHazirlikCevabi, LogoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -14,7 +14,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { crmDurumu, crmSorguyuKeser, crmSorulurMu } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { cariCrmDurumlari } from './servis.ts';
+import { cariCrmDurumlari, cariHazirligi } from './servis.ts';
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu. Yardımcı sahte köprüdür; veriler uydurmadır (ORN-).
 const PAROLA = 'dogru-parola-1';
@@ -145,5 +145,27 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
     assert.deepEqual(okuyan.govde.durumlar.map((d) => d.firmaId), [f.crmli]);
     assert.equal((await oku('crm-satis', `id=${f.crmli}`)).durum, 403);
     assert.equal((await oku('crm-yonetici', `id=${Array.from({ length: 51 }, (_, i) => i + 1).join(',')}`)).durum, 400);
+  });
+
+  test('CRM-6 teklif hazırlığı: cari kodu yoksa "cari-yok" ve istek yok; varsa CRM durumu; kapalıyken okunamadı; uç teklifi görebilene açık, firma yoksa 404', async () => {
+    await ayar(true);
+    const once = kopru.istekler.length;
+    assert.deepEqual(await cariHazirligi(vt(), istemci(), f.kodsuz), { durum: 'cari-yok', neden: null });
+    assert.equal(kopru.istekler.length, once);
+    assert.deepEqual(await cariHazirligi(vt(), istemci(), f.crmli), { durum: 'var', neden: null });
+    assert.deepEqual(await cariHazirligi(vt(), istemci(), f.crmsiz), { durum: 'yok', neden: null });
+    assert.equal(await cariHazirligi(vt(), istemci(), 999_999), null);
+    await ayar(false);
+    assert.equal((await cariHazirligi(vt(), istemci(), f.crmli))?.durum, 'okunamadi');
+    await ayar(true);
+    const oku = async (kim: string, firma: number) => {
+      const c = await app.inject({ method: 'GET', url: `/api/logo/cari-hazirligi?firma=${String(firma)}`, headers: { cookie: cerez.get(kim) ?? '' } });
+      return { durum: c.statusCode, govde: c.json<LogoCariHazirlikCevabi>() };
+    };
+    const satis = await oku('crm-satis', f.kodsuz);
+    assert.equal(satis.durum, 200, JSON.stringify(satis.govde));
+    assert.deepEqual(satis.govde, { durum: 'cari-yok', neden: null });
+    assert.equal((await oku('crm-satis', 999_999)).durum, 404);
+    assert.equal((await oku('crm-okuyan', f.kodsuz)).durum, 403);
   });
 });

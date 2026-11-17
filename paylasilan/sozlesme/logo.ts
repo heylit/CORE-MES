@@ -341,6 +341,12 @@ export const logoCrmCevabi = z.object({
   })),
 });
 export type LogoCrmCevabi = z.output<typeof logoCrmCevabi>;
+// 3359 ek (17.11 06:08Z): teklif ve satış siparişi ayrıntısında carinin Logo'ya hazırlığı; belgeyi görebilen sorar. "cari-yok": firma kartında
+// Logo cari kodu yok (teklif de sipariş de Logo'ya gitmez).
+export const LOGO_CARI_HAZIRLIKLARI = ['cari-yok', ...LOGO_CRM_DURUMLARI] as const;
+export const logoCariHazirlikSorgusu = z.object({ firma: z.coerce.number().int().positive() });
+export const logoCariHazirlikCevabi = z.object({ durum: z.enum(LOGO_CARI_HAZIRLIKLARI), neden: z.string().nullable() });
+export type LogoCariHazirlikCevabi = z.output<typeof logoCariHazirlikCevabi>;
 
 // 3345 a: Logo irsaliyeleri, yalnız okuma. Tür Logo STFICHE.TRCODE'dur. Fiyat ve tutar yalnız fiyat yetkisi olana dolu gelir
 // (alışta satin-alma.oku, satışta siparisler.fiyat-oku); yetkisizde null ve fiyatGorunur false.

@@ -8,6 +8,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SIPARIS_DURUMU, fiyatMetni, kalanGun, miktarMetni, paraMetni, tarihMetni, zamanMetni } from './gorunum.ts';
+import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
@@ -130,7 +131,7 @@ export function SiparisAyrinti() {
       <SayfaBasligi
         baslik={s.no}
         alt={`${s.firmaAd ?? `Firma ${s.firmaId}`}, ${tarihMetni(s.siparisTarihi)} tarihli sipariş.`}
-        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /></>}
+        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={s.firmaId} logoda={logo.durum(id)?.durum === 'logoda'} crm={false} /></>}
         geriYol="/siparisler"
         geriMetni="Siparişlere dön"
         islemler={islemler}
