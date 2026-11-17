@@ -29,6 +29,44 @@ export function degerCokBuyukMu(deger: unknown): boolean {
 type Nesne = Record<string, unknown>;
 const nesneMi = (d: unknown): d is Nesne => typeof d === 'object' && d !== null && !Array.isArray(d);
 
+// Maliyet analizinin para alanları (kart 3401, kullanıcı kararı 3401-1 a): ham malzeme kg fiyatı (stock.price), takım fiyatı
+// (life.price) ve tezgâh ücreti (life.rate). Hesaplanan maliyet kayda yazılmaz, ekranda bu girdilerden çıkar. Yeni para alanı
+// yalnız bu listeye eklenir; okuma ve yazma korumasını testteki yürüyüş de bu listeye bağlıdır.
+export const PARA_ALANLARI = [['stock', 'price'], ['life', 'price'], ['life', 'rate']] as const;
+
+// Para görme yetkisi olmayana giden durum: para alanları hiç yoktur (ekran varsayılanı kullanır, değer sızmaz).
+export function paraAlanlariniCikar(durum: unknown): unknown {
+  if (!nesneMi(durum)) return durum;
+  const sonuc: Nesne = { ...durum };
+  for (const [grup, alan] of PARA_ALANLARI) {
+    const g = sonuc[grup];
+    if (nesneMi(g) && alan in g) {
+      const { [alan]: _atilan, ...kalan } = g;
+      sonuc[grup] = kalan;
+    }
+  }
+  return sonuc;
+}
+
+// Para görme yetkisi olmayanın yazdığı durum: para alanları gelenden alınmaz, kayıttaki eski değer geri konur (kayıtta yoksa
+// alan da yoktur). Grup nesne değilse yalnız korunan alanları taşıyan nesneye çevrilir.
+export function paraAlanlariniKoru(onceki: unknown, gelen: unknown): unknown {
+  if (!nesneMi(gelen)) return gelen;
+  const eski = nesneMi(onceki) ? onceki : {};
+  const sonuc: Nesne = { ...gelen };
+  for (const [grup, alan] of PARA_ALANLARI) {
+    const eskiGrup = eski[grup];
+    const eskiDeger = nesneMi(eskiGrup) ? eskiGrup[alan] : undefined;
+    const g = sonuc[grup];
+    if (eskiDeger === undefined) {
+      if (nesneMi(g) && alan in g) { const { [alan]: _atilan, ...kalan } = g; sonuc[grup] = kalan; }
+      continue;
+    }
+    sonuc[grup] = { ...(nesneMi(g) ? g : {}), [alan]: eskiDeger };
+  }
+  return sonuc;
+}
+
 // Hazırlık onayı (yazma işlemi olmayan onaylayıcı): kayıtlı durumun yalnız hazırlık onay alanları (adım onayları, son onay,
 // kalınan adım) gelen durumdan alınır; öteki her alan kayıtlı haliyle kalır. Biçime uymayan onay alanı null döner.
 const HAZIRLIK_ONAY_ALANLARI = ['done', 'fin', 'at'] as const;
