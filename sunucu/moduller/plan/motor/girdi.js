@@ -289,6 +289,9 @@ function rrCevir(st) {
     const ana = siparisler.find(x => String(x.id) === String(o.id)) || {};
     const biten = (d.adimlar || []).filter(x => x.durum === 'tamam').map(x => kOf(d.itemId, steps, x.kaynakOpNo)).filter(k => k != null);
     const firma = Object.fromEntries((d.adimlar || []).filter(x => x.fasonSiparis && x.fasonSiparis.tarih).map(x => [kOf(d.itemId, steps, x.kaynakOpNo), x.fasonSiparis.tarih]).filter(x => x[0] != null));
+    /* 3383: düğüm adımının fason firması kökteki gibi emrin adımından, yoksa açık siparişin firmasından (engine.js fasonFirmasi sırası) */
+    const firmaKim = Object.fromEntries((d.adimlar || []).map(x => [kOf(d.itemId, steps, x.kaynakOpNo), [x.fasonId, (x.fasonSiparis || {}).firmaId].filter(f => f != null && f !== '').map(String)])
+      .filter(x => x[0] != null && x[1].length));
     const mal = steps.flatMap(t => (t.ins || []).filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty, adim: ak[t.seq] ?? String(t.seq) })));
     const bagli = ustAdim != null && +d.birim > 0;
     /* sayfanın eklediği alanlar (ağırlık, elle öncelik) önceki kopyada (d.plan) kalır; sunucunun alanları her okumada yeniden yazılır */
@@ -299,6 +302,7 @@ function rrCevir(st) {
       ust: bagli ? (d.ust === '0' ? String(o.id) : dugumSipId(o, d.ust)) : undefined, ustAdim: bagli ? String(ustAdim) : undefined, birim: bagli ? +d.birim : undefined,
       dugumBiten: biten.length ? biten : undefined,
       dugumFirma: Object.keys(firma).length ? firma : undefined,
+      dugumFirmaKim: Object.keys(firmaKim).length ? firmaKim : undefined,
     }));
   }
   siparisler.push(...dugumSiparisleri);
@@ -488,8 +492,12 @@ function tmiBitenler(emirler, D) {
     /* 3330 a: bitmemiş fason adımın açık satın alma siparişindeki firma tarihi (kök: opYer, düğüm: dugumFirma); o gün FASON_DONUS_SAATI'nde döner */
     rota.forEach((a, i) => { const t = s.dugum ? (s.dugumFirma || {})[a.k] : ((yer[`${s.id}|root|${i + 1}`] || {}).fasonSiparis || {}).tarih; if (t && !y.adim[`${s.id}.${a.k}`]) y.firma[`${s.id}.${a.k}`] = t + ' ' + FASON_DONUS_SAATI; });
     /* 3355 a: rotada firması olmayan ya da fason listesinde olmayan adımın firması emrin adımından, yoksa açık fason siparişinin firmasından
-       (engine.js fasonFirmasi sırasıyla bakar); yalnız kök adımlar (düğümde firma tarihi dugumFirma ile gelir, hat belirsiz kalır) */
-    if (!s.dugum) rota.forEach((a, i) => { const x = yer[`${s.id}|root|${i + 1}`] || {}; const l = [x.fasonId, (x.fasonSiparis || {}).firmaId].filter(f => f != null && f !== '').map(String); if (l.length && !y.adim[`${s.id}.${a.k}`]) y.firmaKim[`${s.id}.${a.k}`] = l; });
+       (engine.js fasonFirmasi sırasıyla bakar); kök adım opYer'den, düğüm adımı dugumFirmaKim'den (3383) */
+    rota.forEach((a, i) => {
+      const x = s.dugum ? null : yer[`${s.id}|root|${i + 1}`] || {};
+      const l = x ? [x.fasonId, (x.fasonSiparis || {}).firmaId].filter(f => f != null && f !== '').map(String) : (s.dugumFirmaKim || {})[a.k] || [];
+      if (l.length && !y.adim[`${s.id}.${a.k}`]) y.firmaKim[`${s.id}.${a.k}`] = l;
+    });
   }
   return y;
 }
