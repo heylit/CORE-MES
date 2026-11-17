@@ -101,3 +101,37 @@ test('elle bağlanmış sipariş "elle bağlandı" ve yöneticide "Bağı kaldı
   expect(ag.yazmalar).toEqual([]);
   expect(ag.hatalar).toEqual([]);
 });
+
+// Yalnız okuyabilen (siparisler.oku, yazma ve ayarlar.yaz yok): bağlama ve bağı kaldırma düğmesi çizilmez, rozet görünür.
+test.describe('yalnız okuyan hesap', () => {
+  test.use({ hesap: 'ornek.kalite' });
+
+  async function varOlanSiparis(page: Page): Promise<number> {
+    const r = await page.request.get(`${ADRES}/api/siparisler`);
+    expect(r.status(), await r.text()).toBe(200);
+    const ilk = (await r.json() as { satirlar: { id: number }[] }).satirlar[0];
+    test.skip(ilk === undefined, 'örnek veride satış siparişi yok');
+    return ilk?.id ?? 0;
+  }
+
+  test("Logo'ya gitmemiş siparişte \"Logo'da ara ve bağla\" yok", async ({ page, ag, ac }) => {
+    const id = await varOlanSiparis(page);
+    await rozetYonlendir(page, 'sirada');
+    await ac(`/siparisler/${String(id)}`);
+    await expect(page.getByText(/Logo: Sırada/).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: "Logo'da ara ve bağla" })).toHaveCount(0);
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('elle bağlı siparişte "elle bağlandı" var, "Bağı kaldır" yok', async ({ page, ag, ac }) => {
+    const id = await varOlanSiparis(page);
+    await rozetYonlendir(page, 'logoda');
+    await ac(`/siparisler/${String(id)}`);
+    await expect(page.getByText('elle bağlandı', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bağı kaldır' })).toHaveCount(0);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
