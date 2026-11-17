@@ -21,7 +21,8 @@ import { Ayarlar } from './Ayarlar.tsx';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { DegisiklikOzeti, Degisiklikler } from './Degisiklikler.tsx';
-import { bekleyenDegisiklikleri, degisiklikler, type Degisiklik } from './degisiklikler.ts';
+import { useSatirEtkisi } from './satir-etkisi.ts';
+import { bekleyenDegisiklikleri, degisiklikler, gorunumdeBekleyenler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
   OLCEKLER, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
@@ -423,7 +424,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Kayıtlı bekleyenler ve bu açılışta gelen, henüz yazılmamış başka sayfa satırı (salt okunur kişide hiç yazılmaz; sayfa üstündeki satırın
   // gösterdiğiyle aynı liste).
   const disSatir = yuva.dis ?? null;
-  const bekleyenDegisiklikler = useMemo(() => bekleyenDegisiklikleri(ortakCalisma, disSatir), [ortakCalisma, disSatir]);
+  const ortakBekleyen = useMemo(() => bekleyenDegisiklikleri(ortakCalisma, disSatir), [ortakCalisma, disSatir]);
+  // Taslakta uygulanan satır listeden düşer (3317 a, 2. adım); toplu düğme ortak çalışmanın bekleyenlerini sayar.
+  const bekleyenDegisiklikler = useMemo(() => gorunumdeBekleyenler(ortakBekleyen, c), [ortakBekleyen, c]);
+  const satirEtkisi = useSatirEtkisi({ c, taslak: yazabilir ? taslak : null, liste: bekleyenDegisiklikler });
   const degisiklikListesi = useMemo(() => degisiklikler({
     m, zaman, an: (ms) => new Date(ms).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }),
     bekleyen: bekleyenDegisiklikler,
@@ -648,7 +652,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <Degisiklikler
           l={degisiklikListesi} goster={degisiklikGoster} suzgec={degisiklikSuzgeci} suzgecKoy={setDegisiklikSuzgeci}
           kart={seciliKart ? { ad: seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? seciliKart.kok, emirler: new Set(seciliKart.emirler.map((e) => e.id)) } : null}
-          toplu={yetki.planYaz && komut !== null && degisiklikListesi.some((d) => d.baslik === 'veri') ? degisiklikListesi.filter((d) => d.baslik === 'veri').length : null}
+          toplu={yetki.planYaz && komut !== null && ortakBekleyen.length > 0 ? ortakBekleyen.length : null}
+          etki={satirEtkisi} taslakta={ortakBekleyen.length - bekleyenDegisiklikler.length}
         />, yuva.alt)}
       <OnayPenceresi
         acik={onay !== null} baslik={onay?.baslik ?? ''} onayMetni={onay?.dugme ?? ''}
