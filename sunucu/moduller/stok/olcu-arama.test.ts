@@ -277,6 +277,11 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     const kapali = ayirmaIstekleriCevabi.parse((await al('depo', '/stok/ayirma-istekleri?durum=kapali')).govde);
     assert.deepEqual(kapali.satirlar.filter((x) => x.id === yd.id).map((x) => [x.iptalNedeni, x.geriEklendi]), [['ORN', false]]);
     assert.equal((await al('operator', '/stok/ayirma-istekleri')).durum, 403);
+    // Logo'ya gitmiş kalem: neden kuyrukta görünür, karşılama 422.
+    const e = await talep(olcusuz, '1');
+    await o().sahip.sorgu("UPDATE satin_alma_talep_kalemi SET logo_satir_ref = 'ORN-1' WHERE id = $1", [e.kalemId]);
+    assert.equal((await satir(e.kalemId))?.engel, 'logo');
+    assert.equal((await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...e, miktar: '1' })).durum, 422);
   });
 });
 

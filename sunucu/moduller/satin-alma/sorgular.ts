@@ -1928,22 +1928,23 @@ export function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly s
 }
 
 // 3398-2: teklif istenmeden önce stokla karşılaştırılacak kalemler: taslak talebin kartlı, miktarlı kalemleri. Fiyat yok.
-// Stoktan karşılanabilir: Logo'ya gitmemiş, iş emrine ya da kalıba bağlı olmayan, teklif, karar, senaryo ya da siparişe girmemiş kalem.
-const STOKTAN_KARSILANABILIR = `(k.logo_satir_ref IS NULL AND k.is_emri_id IS NULL AND k.die_id IS NULL
-          AND NOT EXISTS (SELECT 1 FROM satin_alma_teklif_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
-          AND NOT EXISTS (SELECT 1 FROM satin_alma_karar_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
-          AND NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
-          AND NOT EXISTS (SELECT 1 FROM satin_alma_senaryo_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
-          AND NOT EXISTS (SELECT 1 FROM satin_alma_senaryo_payi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id))`;
+// Stoktan karşılamanın engeli (yoksa null): Logo'ya gitmiş, iş emrine ya da kalıba bağlı, teklif, karar, senaryo ya da siparişe girmiş kalem.
+const STOKTAN_ENGEL = `CASE WHEN k.logo_satir_ref IS NOT NULL THEN 'logo' WHEN k.is_emri_id IS NOT NULL THEN 'is-emri' WHEN k.die_id IS NOT NULL THEN 'kalip'
+          WHEN EXISTS (SELECT 1 FROM satin_alma_teklif_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_karar_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_senaryo_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
+            OR EXISTS (SELECT 1 FROM satin_alma_senaryo_payi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id) THEN 'teklif' END`;
+export type StoktanEngel = 'logo' | 'is-emri' | 'kalip' | 'teklif';
 export interface StokKontroluKalemiOkuma {
   talepId: string; talepNo: string; baslik: string; kalemId: string; ad: string; malzemeNo: number; miktar: string; birim: string;
-  uretimEmriId: number | null; ihtiyacTarihi: string | null; karsilanabilir: boolean;
+  uretimEmriId: number | null; ihtiyacTarihi: string | null; engel: StoktanEngel | null;
 }
 // tek verilirse yalnız o kalem (kilitsiz okuma; yazmadan önce stoktanKalemKilitle kilitler).
 export function stokKontroluKalemleriOku(db: Db, sinir: number, tek?: { talepId: string; kalemId: string }): Promise<StokKontroluKalemiOkuma[]> {
   return db.sorgu<StokKontroluKalemiOkuma>(
     `SELECT t.id AS "talepId", t.no AS "talepNo", t.baslik, k.id AS "kalemId", k.ad, c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim,
-        t.uretim_emri_id AS "uretimEmriId", t.ihtiyac_tarihi AS "ihtiyacTarihi", ${STOKTAN_KARSILANABILIR} AS karsilanabilir
+        t.uretim_emri_id AS "uretimEmriId", t.ihtiyac_tarihi AS "ihtiyacTarihi", ${STOKTAN_ENGEL} AS engel
        FROM satin_alma_talep t
        JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
@@ -1955,11 +1956,11 @@ export function stokKontroluKalemleriOku(db: Db, sinir: number, tek?: { talepId:
 }
 
 // 3398-2 a: stoktan karşılanan miktar talep kaleminden düşer; kalem tamamen karşılanırsa silinir ve satırı (jsonb) geri yükleme için döner.
-export interface StoktanKalemOkuma { durum: string; miktar: string | null; birim: string; malzemeNo: number | null; uretimEmriId: number | null; karsilanabilir: boolean }
+export interface StoktanKalemOkuma { durum: string; miktar: string | null; birim: string; malzemeNo: number | null; uretimEmriId: number | null; engel: StoktanEngel | null }
 export function stoktanKalemKilitle(db: Db, talepId: string, kalemId: string): Promise<StoktanKalemOkuma | null> {
   return db.tek<StoktanKalemOkuma>(
     `SELECT t.durum, k.miktar::text AS miktar, k.birim, c.malzeme_no AS "malzemeNo", t.uretim_emri_id AS "uretimEmriId",
-        ${STOKTAN_KARSILANABILIR} AS karsilanabilir
+        ${STOKTAN_ENGEL} AS engel
        FROM satin_alma_talep t JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
       WHERE t.id = $1 AND k.id = $2 FOR UPDATE OF t, k`, [talepId, kalemId]);
 }

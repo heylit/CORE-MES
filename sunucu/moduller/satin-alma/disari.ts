@@ -180,7 +180,7 @@ export async function kalemiStoktanKarsila(db: Db, talepId: string, kalemId: str
   const k = await sorgu.stoktanKalemKilitle(db, talepId, kalemId);
   if (k === null) throw bulunamadi('Talep kalemi bulunamadı.');
   if (k.durum !== 'taslak') throw gecersiz('Teklif istenmiş talepte stoktan karşılanamaz.');
-  if (!k.karsilanabilir) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
+  if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
   if (k.malzemeNo === null || k.miktar === null) throw gecersiz('Kalemin malzeme kartı ya da miktarı yok.');
   if (Number(miktar) > Number(k.miktar) + 1e-9) throw dogrulama(`Kalemde ${servis.sade(k.miktar)} ${k.birim} var; daha fazlası karşılanamaz.`, 'miktar');
   return { satir: await sorgu.stoktanKalemAzalt(db, talepId, kalemId, miktar), birim: k.birim, malzemeNo: k.malzemeNo, uretimEmriId: k.uretimEmriId };

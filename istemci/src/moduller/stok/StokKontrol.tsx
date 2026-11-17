@@ -255,7 +255,8 @@ function KarsilaPenceresi({ satir, kapat }: { satir: IhtiyacSatiri | null; kapat
       {satir !== null && (
         <div className="tc-stok-form">
           <p>{`${satir.talepNo} · ${satir.kod} · istenen ${miktarMetni(satir.miktar)} ${satir.birim}, stoktan en çok ${miktarMetni(String(ust))} ${satir.birim}.`}</p>
-          {satir.enIyi !== null && <p>{`En uygun: ${satir.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${satir.enIyi.kod} · ${olcuMetni(satir.enIyi.form, satir.enIyi.olcu)} · ${satir.enIyi.konumlar.join(', ')}`}</p>}
+          {satir.enIyi !== null && <p>{`En uygun: ${satir.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${satir.enIyi.kod} · ${olcuMetni(satir.enIyi.form, satir.enIyi.olcu)} · ${satir.enIyi.konumlar.join(', ')} `}
+            {durumRozeti(satir.enIyi)}{satir.enIyi.fireYuzde !== null && satir.enIyi.fireYuzde > 0 && <> <Rozet ton="pasif">{`Fire %${satir.enIyi.fireYuzde}`}</Rozet></>}</p>}
           <Girdi etiket={`Stoktan karşılanacak (${satir.birim})`} inputMode="decimal" value={miktar} onChange={(e) => miktarYaz(e.target.value)} required
             ipucu="Talep kalemi bu kadar azalır; tamamı karşılanırsa kalem teklife gitmez. İptalde miktar geri gelir." />
           {gonder.isError && <p role="alert">{hataMetni(gonder.error)}</p>}
@@ -265,23 +266,27 @@ function KarsilaPenceresi({ satir, kapat }: { satir: IhtiyacSatiri | null; kapat
   );
 }
 
+const ENGEL_METNI: Record<NonNullable<IhtiyacSatiri['engel']>, string> = {
+  logo: "Logo'ya bağlı", 'is-emri': 'İş emrine bağlı', kalip: 'Kalıba bağlı', teklif: 'Teklifte',
+};
+
 function Ihtiyaclar() {
   const karsilayabilir = useIslem('satin-alma.yaz');
   const [secili, seciliYaz] = useState<IhtiyacSatiri | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.liste('kontrol-ihtiyaclari', {}), queryFn: () => api.get<IhtiyaclarCevabi>('/stok/kontrol-ihtiyaclari') });
   const sutunlar: Sutun<IhtiyacSatiri>[] = [
     { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (x) => x.talepNo },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x) => <Link to={`/stok/malzemeler/${x.malzemeNo}`}>{x.kod}</Link>, csv: (x) => x.kod },
-    { anahtar: 'olcu', baslik: 'Ölçü', hucre: (x) => olcuMetni(x.form, x.olcu) },
-    { anahtar: 'istenen', baslik: 'İstenen', hizala: 'sag', hucre: (x) => `${miktarMetni(x.miktar)} ${x.birim}` },
-    { anahtar: 'karsilanan', baslik: 'Stoktan', hizala: 'sag', hucre: (x) => (x.karsilanan === null ? '—' : `${miktarMetni(String(x.karsilanan))} ${x.birim}`) },
+    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x) => <><Link to={`/stok/malzemeler/${x.malzemeNo}`}>{x.kod}</Link><span className="tc-stok-goz-alt tc-stok-blok">{olcuMetni(x.form, x.olcu)}</span></>,
+      csv: (x) => `${x.kod} ${olcuMetni(x.form, x.olcu)}` },
+    { anahtar: 'miktar', baslik: 'Stoktan / istenen', hizala: 'sag', kirilmaz: true,
+      hucre: (x) => `${x.karsilanan === null ? '—' : miktarMetni(String(x.karsilanan))} / ${miktarMetni(x.miktar)} ${x.birim}` },
     { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <Rozet ton={IHTIYAC_ROZETI[x.durum].ton}>{IHTIYAC_ROZETI[x.durum].metin}</Rozet>, csv: (x) => x.durum },
-    { anahtar: 'aday', baslik: 'En uygun', kes: true, hucre: (x) => (x.enIyi === null ? '—'
-      : `${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod} · ${olcuMetni(x.enIyi.form, x.enIyi.olcu)} · ${x.enIyi.konumlar.join(', ')}`) },
-    { anahtar: 'tarih', baslik: 'İhtiyaç', hucre: (x) => x.ihtiyacTarihi ?? '—' },
+    { anahtar: 'aday', baslik: 'En uygun', hucre: (x) => (x.enIyi === null ? '—' : <>{`${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod} `}{durumRozeti(x.enIyi)}</>),
+      csv: (x) => x.enIyi?.kod ?? '' },
+    { anahtar: 'tarih', baslik: 'İhtiyaç', kirilmaz: true, hucre: (x) => x.ihtiyacTarihi ?? '—' },
     ...(karsilayabilir ? [{
-      anahtar: 'eylem', baslik: 'İşlem', hucre: (x: IhtiyacSatiri) => (x.karsilanabilir && x.karsilanan !== null && x.karsilanan > 0
-        ? <Dugme simge="cart" onClick={() => seciliYaz(x)}>Stoktan karşıla</Dugme> : '—'), csv: () => '',
+      anahtar: 'eylem', baslik: 'İşlem', sabit: 'sag', csv: false, hucre: (x: IhtiyacSatiri) => (x.engel !== null ? <span className="tc-stok-goz-alt">{ENGEL_METNI[x.engel]}</span>
+        : x.karsilanan !== null && x.karsilanan > 0 ? <Dugme simge="cart" onClick={() => seciliYaz(x)}>Stoktan karşıla</Dugme> : '—'),
     } satisfies Sutun<IhtiyacSatiri>] : []),
   ];
   return (
@@ -327,14 +332,14 @@ function AyirmaIstekleri() {
     onError: (h) => bildir('hata', hataMetni(h)),
   });
   const sutunlar: Sutun<AyirmaIstegiSatiri>[] = [
-    { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (s) => s.talepNo },
-    { anahtar: 'kalem', baslik: 'Kalem', kes: true, hucre: (s) => s.kalemAd },
+    { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (s) => <>{s.talepNo}<span className="tc-stok-goz-alt tc-stok-blok">{s.kalemAd}</span></>,
+      csv: (s) => `${s.talepNo} ${s.kalemAd}` },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => `${miktarMetni(s.miktar)} ${s.birim}` },
     { anahtar: 'kaynak', baslik: 'Stoktan', kes: true, hucre: kaynakMetni },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={AYIRMA_ROZETI[s.durum].ton}>{AYIRMA_ROZETI[s.durum].metin}</Rozet>, csv: (s) => s.durum },
     { anahtar: 'isteyen', baslik: 'İsteyen', kes: true, hucre: (s) => s.isteyen ?? '—' },
     ...(!kapali && (depo || iptalEdebilir) ? [{
-      anahtar: 'eylem', baslik: 'İşlem', hucre: (s: AyirmaIstegiSatiri) => (
+      anahtar: 'eylem', baslik: 'İşlem', sabit: 'sag', hucre: (s: AyirmaIstegiSatiri) => (
         <span className="tc-stok-kontrol-eylem">
           {depo && s.durum === 'bekliyor' && <Dugme simge="check" disabled={ilerlet.isPending} onClick={() => ilerlet.mutate({ s, durum: 'ayrildi' })}>Ayrıldı</Dugme>}
           {depo && s.durum === 'ayrildi' && <Dugme simge="truck" disabled={ilerlet.isPending} onClick={() => ilerlet.mutate({ s, durum: 'teslim' })}>Teslim edildi</Dugme>}
@@ -351,18 +356,26 @@ function AyirmaIstekleri() {
               bosMesaj={kapali ? 'Kapanmış ayırma isteği yok.' : 'Açık ayırma isteği yok. Talepler sekmesinde "Stoktan karşıla" ile açılır.'} />}
       <OnayPenceresi acik={iptalEdilen !== null} baslik="Ayırma isteğini iptal et" onayMetni="İptal et" tehlikeli yukleniyor={iptal.isPending}
         onayla={() => { if (iptalEdilen !== null && neden.trim() !== '') iptal.mutate(iptalEdilen); }} vazgec={() => { iptalEdilenYaz(null); nedenYaz(''); }}>
-        <p>{iptalEdilen === null ? '' : `${iptalEdilen.talepNo} · ${miktarMetni(iptalEdilen.miktar)} ${iptalEdilen.birim}. Ayrılan stok serbest kalır; talep henüz teklif aşamasında değilse miktar talebe geri eklenir.`}</p>
-        <Girdi etiket="İptal nedeni" value={neden} maxLength={200} onChange={(e) => nedenYaz(e.target.value)} required />
+        <div className="tc-stok-form">
+          <p>{iptalEdilen === null ? '' : `${iptalEdilen.talepNo} · ${miktarMetni(iptalEdilen.miktar)} ${iptalEdilen.birim}. Ayrılan stok serbest kalır; talep henüz teklif aşamasında değilse miktar talebe geri eklenir.`}</p>
+          <Girdi etiket="İptal nedeni" value={neden} maxLength={200} onChange={(e) => nedenYaz(e.target.value)} required />
+        </div>
       </OnayPenceresi>
     </Kart>
   );
 }
 
 export function StokKontrol() {
-  const [sekme, sekmeYaz] = useState<Sekme>('ihtiyac');
+  // Depo (satın alma yazmayan, stok çıkışı yapan) ayırma isteklerinden başlar.
+  const stokCikis = useIslem('stok.cikis');
+  const satinAlma = useIslem('satin-alma.yaz');
+  const depo = stokCikis && !satinAlma;
+  const [secilen, sekmeYaz] = useState<Sekme | null>(null);
+  // Oturum geç gelir: seçilmemişse varsayılan yetkiden her çizimde bulunur.
+  const sekme: Sekme = secilen ?? (depo ? 'ayirma' : 'ihtiyac');
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Stok kontrol" aciklama="İstenen ölçüye en yakın stoğu bulur: aynı form ve kalite, istenenden küçük olmayan ve seçtiğiniz fazla pay içindeki çubuk, levha ve artık parçalar, en az fireden başlayarak." />
+      <SayfaBasi baslik="Stok kontrol" aciklama="Teklif istenmemiş talepleri stokla karşılaştırır, karşılananı depodan ayırır; ölçüyle aramada aynı form ve kalitede, fazla pay içindeki çubuk, levha ve artık parçaları en az fireden sıralar." />
       <Sekmeler etiket="Stok kontrol" secili={sekme} sec={sekmeYaz}
         sekmeler={[{ anahtar: 'ihtiyac', baslik: 'Talepler', simge: 'list' }, { anahtar: 'ayirma', baslik: 'Ayırma istekleri', simge: 'pallet' }, { anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
       {sekme === 'ihtiyac' ? <Ihtiyaclar /> : sekme === 'ayirma' ? <AyirmaIstekleri /> : sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}

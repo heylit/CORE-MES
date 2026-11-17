@@ -26,7 +26,7 @@ const IHTIYAC: IhtiyaclarCevabi = {
   sinirli: false,
   satirlar: [{ kaynak: 'satin-alma', talepId: 't1', talepNo: 'ST-2026-001', baslik: 'ORN talep', kalemId: 'k1', ad: 'ORN kalem', malzemeNo: 11, kod: 'ORN-HM-1',
     form: 'cubuk', kalite: 'ORN-K1', olcu: { d: 50, l: 3000 }, miktar: '3', birim: 'adet', uretimEmriId: null, ihtiyacTarihi: '2026-11-30',
-    durum: 'kismen', karsilanan: 2, enIyi: SONUC.adaylar[1]!, adaySayisi: 1, karsilanabilir: true }],
+    durum: 'kismen', karsilanan: 2, enIyi: SONUC.adaylar[1]!, adaySayisi: 1, engel: null }],
 };
 
 const AYIRMA: AyirmaIstekleriCevabi = {
@@ -45,10 +45,10 @@ describe('Stok kontrol (3398)', () => {
     const tablo = await screen.findByRole('table', { name: 'Teklif öncesi talepler' });
     const satir = within(tablo).getAllByRole('row')[1]!;
     expect(within(satir).getByText('ST-2026-001')).toBeTruthy();
-    expect(within(satir).getByText('3 adet')).toBeTruthy();
-    expect(within(satir).getByText('2 adet')).toBeTruthy();
+    expect(within(satir).getByText('2 / 3 adet')).toBeTruthy();
+    expect(within(satir).getByText('Ø50 × 3.000 mm')).toBeTruthy();
     expect(within(satir).getByText('Kısmen')).toBeTruthy();
-    expect(within(satir).getByText('ORN-HM-2 · Ø55 × 3.000 mm · A-02-1')).toBeTruthy();
+    expect(within(satir).getByText('Yakın +5 mm')).toBeTruthy();
   });
 
   it('ölçüyle arar: seçilen pay ve ölçü sorguya gider, artık önce, yakın fazla mm ile, karşılanan başlıkta', async () => {
@@ -120,12 +120,17 @@ describe('Stok kontrol (3398)', () => {
   });
 
   it('stoktan karşıla (3398-2 a): satın alma karşılanabilen kadar ister; fazlası gönderilmez; depo kalemi görmez düğmesiz', async () => {
+    const bagli = { ...IHTIYAC.satirlar[0]!, talepId: 't2', talepNo: 'ST-2026-002', engel: 'logo' as const };
     const istekler = sunucuKur(SATIN_ALMA, {
-      'GET /stok/kontrol-ihtiyaclari': () => json(200, IHTIYAC),
+      'GET /stok/kontrol-ihtiyaclari': () => json(200, { ...IHTIYAC, satirlar: [...IHTIYAC.satirlar, bagli] }),
       'POST /stok/kontrol-ihtiyaclari/karsila': () => json(200, { id: 9, surum: 1, durum: 'bekliyor', geriEklendi: null }),
     });
     ac('/stok/kontrol');
     const tablo = await screen.findByRole('table', { name: 'Teklif öncesi talepler' });
+    // Bağlı kalemde düğme yerine neden yazılır.
+    const bagliSatir = within(tablo).getAllByRole('row')[2]!;
+    expect(within(bagliSatir).getByText("Logo'ya bağlı")).toBeTruthy();
+    expect(within(bagliSatir).queryByRole('button', { name: 'Stoktan karşıla' })).toBeNull();
     fireEvent.click(within(tablo).getByRole('button', { name: 'Stoktan karşıla' }));
     const p = await screen.findByRole('dialog', { name: 'Stoktan karşıla' });
     const girdi = within(p).getByLabelText(/^Stoktan karşılanacak \(adet\)/) as HTMLInputElement;
@@ -137,8 +142,11 @@ describe('Stok kontrol (3398)', () => {
     fireEvent.click(iste);
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ talepId: 't1', kalemId: 'k1', miktar: '1' }));
     cleanup();
-    sunucuKur(DEPOCU, { 'GET /stok/kontrol-ihtiyaclari': () => json(200, IHTIYAC) });
+    sunucuKur(DEPOCU, { 'GET /stok/kontrol-ihtiyaclari': () => json(200, IHTIYAC), 'GET /stok/ayirma-istekleri': () => json(200, AYIRMA) });
     ac('/stok/kontrol');
+    // Depo ayırma isteklerinden başlar.
+    await screen.findByRole('table', { name: 'Ayırma istekleri' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Talepler' }));
     const t2 = await screen.findByRole('table', { name: 'Teklif öncesi talepler' });
     expect(within(t2).getByText('ST-2026-001')).toBeTruthy();
     expect(within(t2).queryByRole('button', { name: 'Stoktan karşıla' })).toBeNull();
@@ -152,7 +160,6 @@ describe('Stok kontrol (3398)', () => {
       'POST /stok/ayirma-istekleri/9/iptal': () => json(200, { id: 9, surum: 2, durum: 'iptal', geriEklendi: true }),
     });
     ac('/stok/kontrol');
-    fireEvent.click(await screen.findByRole('tab', { name: 'Ayırma istekleri' }));
     const tablo = await screen.findByRole('table', { name: 'Ayırma istekleri' });
     expect(within(tablo).getByText('ORN-HM-2 · A-02-1')).toBeTruthy();
     expect(within(tablo).getByText('Depoda bekliyor')).toBeTruthy();

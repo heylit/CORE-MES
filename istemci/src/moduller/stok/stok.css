@@ -49,6 +49,7 @@
 .tc-stok-goz-kod { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-stok-goz-ad { font-size: var(--yazi-s); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-stok-goz-alt { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-stok-blok { display: block; }
 
 /* Önizlemedeki panel: gösterge kartları, iki sütunlu özet ızgarası, grafik ve çubuklar. */
 .tc-stok-kpiler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); background: var(--panel-solid); border: thin solid var(--edge); border-radius: var(--yari-2); overflow: hidden; }

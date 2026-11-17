@@ -135,8 +135,8 @@ export const ihtiyacSatiri = z.object({
   // Pay içindeki en iyi aday (sıranın ilki) ve pay içindeki aday sayısı.
   enIyi: olcuAdayi.nullable(),
   adaySayisi: z.number().int(),
-  // Kalem Logo'ya, iş emrine, kalıba ya da teklife bağlı değilse stoktan karşılanabilir (3398-2 a).
-  karsilanabilir: z.boolean(),
+  // Kalem Logo'ya, iş emrine, kalıba ya da teklife bağlıysa stoktan karşılanamaz (3398-2 a); bağlı değilse null.
+  engel: z.enum(['logo', 'is-emri', 'kalip', 'teklif']).nullable(),
 });
 export type IhtiyacSatiri = z.output<typeof ihtiyacSatiri>;
 export const ihtiyaclarCevabi = z.object({ satirlar: z.array(ihtiyacSatiri), sinirli: z.boolean() });
