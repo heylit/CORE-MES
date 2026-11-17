@@ -22,7 +22,7 @@ const kodu = (c: Cevap): unknown => (c.govde as { kod?: unknown } | undefined)?.
 const alani = (c: Cevap): unknown => (c.govde as { alan?: unknown } | undefined)?.alan;
 
 // FNS-48: firma uçlarında ve disari.ts'te olabilecek alanların tamamı; bakiye, risk ya da tutar yok.
-const FIRMA_ALANLARI = ['ad', 'adres', 'aktif', 'boylam', 'ePosta', 'enlem', 'fason', 'guncelleme', 'id', 'il', 'ilce', 'kod', 'logoCariKodu', 'logoGonderimDurumu', 'logoKayitNo', 'musteriSinifi', 'olusturma', 'paraBirimi', 'postaKodu', 'surum', 'telefon', 'tur', 'ulkeKodu', 'vadeGunu', 'vergiDairesi', 'vergiNo'];
+const FIRMA_ALANLARI = ['ad', 'adres', 'aktif', 'boylam', 'ePosta', 'enlem', 'fason', 'guncelleme', 'id', 'il', 'ilce', 'kod', 'logoCariKodu', 'logoCrmKodu', 'logoGonderimDurumu', 'logoKayitNo', 'musteriSinifi', 'olusturma', 'paraBirimi', 'postaKodu', 'surum', 'telefon', 'tur', 'ulkeKodu', 'vadeGunu', 'vergiDairesi', 'vergiNo'];
 const RAKAM_ADI = /bakiye|tutar|risk|borc|alacak|toplam|limit/i;
 const LISTE_EKI = ['adresSayisi', 'koordinatli'];
 
