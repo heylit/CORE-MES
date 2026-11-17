@@ -75,6 +75,29 @@ export function opNolariVer(kullanilmislar: readonly number[], adet: number): nu
   return verilen;
 }
 
+/* ---------------- türetilmiş operasyon kodu ve adı (3381) ---------------- */
+
+// 3377 cevabı: adımın operasyon kodu tipin kısaltması ile tip içindeki sırasının 10 katıdır (TRN10, FRZ10, TRN20), adı tipin adı ile tip
+// içindeki sırasıdır ("Torna 1. operasyon"). Saklanmaz, rotadaki sıradan her okumada türetilir: adım yer değiştirince kod da değişir
+// (OP numarası gibi, 3250 b). Tipi bilinmeyen adımın kodu ve adı null'dur (uydurulmaz). Sonuç girdinin sırasıyla hizalıdır.
+export interface OperasyonKodu { kod: string; ad: string }
+export function operasyonKodlari(
+  adimlar: readonly { sira: number; operasyonTipiId: number }[],
+  tipler: ReadonlyMap<number, { kisaltma: string; ad: string }>,
+): (OperasyonKodu | null)[] {
+  const sayac = new Map<number, number>();
+  const sonuc: (OperasyonKodu | null)[] = adimlar.map(() => null);
+  const sirali = adimlar.map((a, i) => ({ a, i })).sort((x, y) => x.a.sira - y.a.sira);
+  for (const { a, i } of sirali) {
+    const tip = tipler.get(a.operasyonTipiId);
+    if (tip === undefined) continue;
+    const n = (sayac.get(a.operasyonTipiId) ?? 0) + 1;
+    sayac.set(a.operasyonTipiId, n);
+    sonuc[i] = { kod: `${tip.kisaltma}${String(n * OP_ARALIGI)}`, ad: `${tip.ad} ${String(n)}. operasyon` };
+  }
+  return sonuc;
+}
+
 /* ---------------- komutlar ve dört göz (RT-18) ---------------- */
 
 export interface KomutBaglami {

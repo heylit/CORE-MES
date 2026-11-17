@@ -5,7 +5,7 @@ import {
   durumGecisiGecerliMi, etkinSure, kisiIstasyonlari, rotaOzeti, ilkAdimiDuzenle, kaynaktakiSure, izinliKomutlar, komutDenetle, ondalikMetin, onayaHazirMi,
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
-import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi, turunRotasiSec } from './kurallar.ts';
+import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi, operasyonKodlari, turunRotasiSec } from './kurallar.ts';
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
@@ -806,5 +806,19 @@ describe('3411 a: emir türünün rotası', () => {
     assert.equal(turunRotasiSec([seri], null)?.seriyeDustu, false);
     assert.equal(turunRotasiSec([fai(null)], 'fai')?.rotaId, 2);
     assert.equal(turunRotasiSec([], 'fai'), null);
+  });
+});
+
+describe('türetilmiş operasyon kodu ve adı (3381)', () => {
+  const tipler = new Map([[1, { kisaltma: 'TRN', ad: 'Torna' }], [2, { kisaltma: 'FRZ', ad: 'Freze' }]]);
+  test('kod tip kısaltması ile tip içinde 10\'ar, ad tip adı ile tip içinde 1\'er artar; sıra girdiden değil adım sırasındandır', () => {
+    const adimlar = [{ sira: 3, operasyonTipiId: 1 }, { sira: 1, operasyonTipiId: 1 }, { sira: 2, operasyonTipiId: 2 }];
+    assert.deepEqual(operasyonKodlari(adimlar, tipler), [
+      { kod: 'TRN20', ad: 'Torna 2. operasyon' }, { kod: 'TRN10', ad: 'Torna 1. operasyon' }, { kod: 'FRZ10', ad: 'Freze 1. operasyon' },
+    ]);
+  });
+  test('tipi bilinmeyen adımın kodu null; sayacı başka tipi kaydırmaz', () => {
+    assert.deepEqual(operasyonKodlari([{ sira: 1, operasyonTipiId: 9 }, { sira: 2, operasyonTipiId: 2 }], tipler), [null, { kod: 'FRZ10', ad: 'Freze 1. operasyon' }]);
+    assert.deepEqual(operasyonKodlari([], tipler), []);
   });
 });

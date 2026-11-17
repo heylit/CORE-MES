@@ -33,6 +33,8 @@ export type { PatlatmaDugumu } from './servis.ts';
 export {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, etkinSure, girdiOlabilirMi, isEmriKaynagi, kaynaktakiSure, teorikSure, yeniOpNo,
 } from './kurallar.ts';
+// 3381: adımın türetilmiş operasyon kodu (TRN10) ve adı ("Torna 1. operasyon"); SmartES iş emrine yazar. Saf kural, yetki denetlemez.
+export { operasyonKodlari, type OperasyonKodu } from './kurallar.ts';
 // 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
 export { yuzeyIslemiAdimlari } from './servis.ts';
 // Patlamış rota önizlemesinde ara adımın statülü kartı ve stoğu (2610 a); bağı kablolama.ts kurar (Reçete ve Rota rotayı ithal eder).
