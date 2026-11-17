@@ -60,7 +60,7 @@
 .tc-hazirlik-akis-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .tc-hazirlik-akis-ad { font-weight: 600; overflow-wrap: anywhere; }
 .tc-hazirlik-adim { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-3); align-items: baseline; }
-.tc-hazirlik-adim > .tc-ayar-aciklama { grid-column: 2; overflow-wrap: anywhere; }
+.tc-hazirlik-adim > .tc-ayar-aciklama { grid-column: 2; overflow-wrap: anywhere; white-space: pre-line; }
 .tc-hazirlik-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-cagri-ekibi { align-items: flex-start; }
 /* Ekip adı rol kutularına sıkışıp harf harf kırılmasın: ad sütunu en uzun kelimesinden dar olmaz, kutular satıra sarar. */

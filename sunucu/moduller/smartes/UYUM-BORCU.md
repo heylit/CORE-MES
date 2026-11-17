@@ -26,6 +26,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
     duruş `DownTimeStatusListWithoutWorkOrder` (DownTimeList tanım listesidir), fire `WsWorkordersRejectStatusList` (RejectsList tanım listesidir),
     alarm makine başına (`ActiveMachinesList` + `AlarmsList` `MachineID`), ambar `StartDate/EndDate`, kalite `StartDateTime/EndDateTime`,
     istasyon ve operasyon `ID/Code/Name`, `WorkStationList` satırında `CODE`, iş emrinde `Multipler` ve `QuantityUpdate`.
+    Parametre adları artık "Bağlantıyı dene"de WSDL ile karşılaştırılır (3368; `kurallar.ts` `parametreFarklari`); satır alan adları (`ALANLAR`) açık kalır.
 12. Tanım gönderiminin sonucu kod eşlemesine yazılmıyor / `smartes_tanim_giden`; `smartes_esleme` kişi ister ve `malzeme` türü yok / eşleme ekranından elle,
     ya da bağlamada eşleme türü eklenip sistem yazımı (kullanıcı kararı).
 13. Tanım gönderimi `GEREKLI_METOTLAR` dışındadır / `ISTEGE_BAGLI_METOTLAR` yalnız bildirilir / canlı WSDL doğrulanınca gerekli listeye alınıp alınmayacağı kararlanır.
@@ -50,7 +51,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 
 21. Parametre adlarının harfi / kullanıcının WSDL'inde `WorkOrderStatusID`, `WorkOrderStatusFilter`; kodda `Workorder...` (`kurallar.ts:263`, `:276`).
     ASMX öğe adları büyük-küçük harfe duyarlı sayıldı (VARSAYIM): yanlış ad sessizce yok sayılır / WSDL dosyası gelince bütün adlar doğrulanır,
-    düzeltme yalnız `kurallar.ts`.
+    düzeltme yalnız `kurallar.ts`. Fark "Bağlantıyı dene"nin "Parametre adları (WSDL)" adımında metot metot görünür (3368).
 22. KAPANDI (346 a, 20.10): `IsErp` işaretini başka bir program koyar ve koymaya devam eder; TMI hiç işaretlemez (`smartes-isaret` işi ve `SetErpOkRed` çağrısı kaldırıldı,
     metot `YASAK_METOT_KALIBI`'nda kalır). `smartes_is_emri_durumu.isaret_*` sütunları göçsüz yerinde durur, kullanılmaz.
 

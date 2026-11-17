@@ -171,16 +171,41 @@ function torunBul(oge: XmlOgesi, ad: string): XmlOgesi | undefined {
   return undefined;
 }
 
-// WSDL'deki metot adları: portType altındaki operation öğelerinin name niteliği (SOAP 1.1 ve 1.2 portType'ı aynı adları taşır).
-export function wsdlMetotlari(metin: string): string[] {
+export interface WsdlParametresi {
+  ad: string;
+  // minOccurs 0 değilse servis parametreyi bekler (ASMX'te değer tipleri: sayı, tarih, mantıksal).
+  zorunlu: boolean;
+}
+
+export interface WsdlTanimi {
+  // portType altındaki operation adları (SOAP 1.1 ve 1.2 portType'ı aynı adları taşır).
+  metotlar: string[];
+  // types > schema altında metotla aynı adlı öğenin sequence'ındaki parametreler; şeması olmayan metot burada yoktur.
+  parametreler: Map<string, WsdlParametresi[]>;
+}
+
+export function wsdlOku(metin: string): WsdlTanimi {
   const kok = xmlAyristir(metin);
   if (kok.ad !== 'definitions') throw new XmlHatasi('WSDL değil: kök öğe definitions değil.');
   const adlar = new Set<string>();
   for (const p of kok.cocuklar.filter((c) => c.ad === 'portType')) {
     for (const o of p.cocuklar) if (o.ad === 'operation' && o.nitelikler['name']) adlar.add(o.nitelikler['name']);
   }
-  return [...adlar].sort();
+  const parametreler = new Map<string, WsdlParametresi[]>();
+  for (const sema of kok.cocuklar.filter((c) => c.ad === 'types').flatMap((t) => t.cocuklar.filter((c) => c.ad === 'schema'))) {
+    for (const oge of sema.cocuklar) {
+      const ad = oge.nitelikler['name'];
+      const tip = cocuk(oge, 'complexType');
+      if (oge.ad !== 'element' || ad === undefined || tip === undefined || !adlar.has(ad)) continue;
+      parametreler.set(ad, (cocuk(tip, 'sequence')?.cocuklar ?? [])
+        .filter((c) => c.ad === 'element' && c.nitelikler['name'] !== undefined)
+        .map((c) => ({ ad: c.nitelikler['name'] ?? '', zorunlu: (c.nitelikler['minOccurs'] ?? '1') !== '0' })));
+    }
+  }
+  return { metotlar: [...adlar].sort(), parametreler };
 }
+
+export const wsdlMetotlari = (metin: string): string[] => wsdlOku(metin).metotlar;
 
 // --- Gönderim ---------------------------------------------------------------
 

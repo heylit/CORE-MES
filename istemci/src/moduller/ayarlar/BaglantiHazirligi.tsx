@@ -212,7 +212,7 @@ function SmartesBolumu() {
         { baslik: 'SmartES → CORE', simge: 'download', akislar: akis('smartes-tmi') },
       ]}
       kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch(); } }}
-      not="Deneme yalnız okur: servis tanımı (WSDL) ve son bir saatin üretim listesi. Okunan satır kaydedilmez, işaretlenmez; MES verisi değişmez."
+      not="Deneme yalnız okur: servis tanımı (WSDL), parametre adları ve son bir saatin üretim listesi. Okunan satır kaydedilmez, işaretlenmez; MES verisi değişmez."
     />
   );
 }

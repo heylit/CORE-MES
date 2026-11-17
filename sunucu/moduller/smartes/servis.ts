@@ -24,7 +24,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
   adetDegistiMi, adimRozeti, emirRozeti, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
-  eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
+  eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, PARAMETRE_ADIMI_ADI, parametreAdimi, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
   KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti, IS_EMRI_METODU, isEmriDurumuOku,
   isEmriParametreleri, kapanisParametreleri, kesinRetMi, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi,
   operasyonParametreleri, redOku, skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI,
@@ -1248,8 +1248,8 @@ export async function hazirlik(db: Db, istemci: SmartesIstemcisi | null, ortam: 
   };
 }
 
-// SME-H2: kontrol "SmartES bağlantısı" anahtarına bakmaz (açmadan önce denensin diye) ve yalnız okur: WSDL ve son bir saatin
-// üretim listesi. Okunan satır kaydedilmez, işaretlenmez.
+// SME-H2: kontrol "SmartES bağlantısı" anahtarına bakmaz (açmadan önce denensin diye) ve yalnız okur: WSDL (metot ve parametre adları)
+// ve son bir saatin üretim listesi. Okunan satır kaydedilmez, işaretlenmez.
 // İsteğe bağlı (sonradan eklenen akışların) metotları eksikse bildirilir; sonucu kırmızı yapmaz.
 const isteBagliNotu = (wsdldekiler: readonly string[]): string => {
   const eksik = eksikIstegeBagliMetotlar(wsdldekiler);
@@ -1258,7 +1258,7 @@ const isteBagliNotu = (wsdldekiler: readonly string[]): string => {
 
 export async function kontrol(istemci: SmartesIstemcisi | null, saat: () => Date = () => new Date()): Promise<SmartesKontrolCevabi> {
   const simdi = saat();
-  const adlar = ['Servis tanımı (WSDL) ve metot adları', 'Salt okunur liste (WorkOrdersStatusList, son bir saat)'];
+  const adlar = ['Servis tanımı (WSDL) ve metot adları', PARAMETRE_ADIMI_ADI, 'Salt okunur liste (WorkOrdersStatusList, son bir saat)'];
   if (istemci === null) {
     return {
       zaman: simdi.toISOString(), ulasildi: false,
@@ -1270,26 +1270,29 @@ export async function kontrol(istemci: SmartesIstemcisi | null, saat: () => Date
   const w = await istemci.wsdl();
   let ulasildi = w.tur === 'basarili';
   if (w.tur === 'basarili') {
-    const eksik = eksikMetotlar(w.deger);
+    const { metotlar, parametreler } = w.deger;
+    const eksik = eksikMetotlar(metotlar);
     adimlar.push({
       ad: adlar[0] ?? '', sonuc: eksik.length === 0 ? 'tamam' : 'hata', sureMs: Date.now() - bas,
       ileti: eksik.length === 0
-        ? `${w.deger.length} metot var; gerekenlerin hepsi bulundu.${isteBagliNotu(w.deger)}`
+        ? `${metotlar.length} metot var; gerekenlerin hepsi bulundu.${isteBagliNotu(metotlar)}`
         : `Servis cevap verdi, ama şu metotlar yok: ${eksik.join(', ')}.`,
     });
+    adimlar.push({ ad: adlar[1] ?? '', sureMs: null, ...parametreAdimi(parametreler) });
   } else {
     adimlar.push({ ad: adlar[0] ?? '', sonuc: 'hata', sureMs: Date.now() - bas, ileti: hataMetni(w) });
+    adimlar.push({ ad: adlar[1] ?? '', sonuc: 'atlandi', sureMs: null, ileti: 'Servis tanımı okunamadı; adlar karşılaştırılamadı.' });
   }
   // Servise hiç ulaşılamadıysa liste denenmez: 1/3/9 sn yeniden denemeyle boşuna beklenmesin.
   if (w.tur === 'ag' || w.tur === 'zaman-asimi') {
-    adimlar.push({ ad: adlar[1] ?? '', sonuc: 'atlandi', sureMs: null, ileti: 'Servise ulaşılamadı; istek atılmadı.' });
+    adimlar.push({ ad: adlar[2] ?? '', sonuc: 'atlandi', sureMs: null, ileti: 'Servise ulaşılamadı; istek atılmadı.' });
     return { zaman: simdi.toISOString(), ulasildi: false, adimlar };
   }
   bas = Date.now();
   const l = await istemci.liste(OKUMA_METOTLARI['is-emri-durumu'], okumaParametreleri('is-emri-durumu', { bas: new Date(simdi.getTime() - KONTROL_PENCERESI_MS), son: simdi }));
   if (l.tur === 'basarili') ulasildi = true;
   adimlar.push({
-    ad: adlar[1] ?? '', sonuc: l.tur === 'basarili' ? 'tamam' : 'hata', sureMs: Date.now() - bas,
+    ad: adlar[2] ?? '', sonuc: l.tur === 'basarili' ? 'tamam' : 'hata', sureMs: Date.now() - bas,
     ileti: l.tur === 'basarili' ? `${l.deger.length} satır okundu (kaydedilmedi).` : hataMetni(l),
   });
   return { zaman: simdi.toISOString(), ulasildi, adimlar };
