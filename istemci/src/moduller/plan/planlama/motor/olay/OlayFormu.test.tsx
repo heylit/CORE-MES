@@ -47,6 +47,15 @@ describe('olay formu', () => {
     expect(screen.getByLabelText('Fasoncu')).toBeTruthy();
   });
 
+  it('3355: firması belirlenmemiş fason hattı fason gecikmesinde seçilemez', () => {
+    const c = ornekCalisma();
+    c.D.fasoncular = [...(c.D.fasoncular ?? []), { id: '~belirsiz', ad: 'Firma belirlenmedi', sureGun: 7 } as NonNullable<typeof c.D.fasoncular>[number]];
+    render(<OlayFormu c={c} ad={KIMLIK_ADLARI} ekle={vi.fn(() => Promise.resolve(true))} kapat={vi.fn()} on="fason" />);
+    const secenekler = [...(screen.getByLabelText('Fasoncu') as HTMLSelectElement).options].map((o) => o.value);
+    expect(secenekler.length).toBeGreaterThan(0);
+    expect(secenekler).not.toContain('~belirsiz');
+  });
+
   // 2506 a: arıza geçmişe yazılmaz. Geçmiş bir başlangıç seçilse de olay gönderme anından başlar; ileri bir başlangıç aynen gider.
   it('arızanın başlangıcı şimdiden önce olamaz: geçmiş an şimdiye çekilir, ileri an korunur', async () => {
     const c = ornekCalisma(); const gun0 = String(c.D.meta?.baslangic).slice(0, 10);

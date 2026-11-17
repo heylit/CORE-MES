@@ -191,8 +191,12 @@ function rrCevir(st) {
         }
         z.tezgahlar = tz;
       }
-      const sFason = s.fasonId && !s.stationId ? s.fasonId : null;
+      /* 3355 a: firması seçilmemiş fason adım (rotada kaynak türü fason, fasonId boş) motorun belirsiz fason hattına gider (engine.js
+         FASON_BELIRSIZ); süresi adımın termin günüdür, yoksa motor ayarının fason süresi */
+      const sFason = (s.fasonId || s.fason) && !s.stationId ? (s.fasonId || '~belirsiz') : null;
       if (!o0 || (ref.fasonId || null) !== sFason) { if (sFason) z.fason = sFason; else if (o0 && 'fason' in o0) z.fason = undefined; }
+      const sFasonGun = sFason === '~belirsiz' && +s.terminGun > 0 ? +s.terminGun : undefined;
+      if (sFasonGun !== undefined || (o0 && 'fasonGun' in o0)) z.fasonGun = sFasonGun;
       if (!o0 || ref.dep !== s.dep) { if (s.dep === 'ortulu') z.ortusebilir = true; else if (o0 && 'ortusebilir' in o0) z.ortusebilir = false; }
       /* 982 a: akışlı adımın devir adedi rotadandır (1 de); yoksa motor adedin dörtte birini devreder */
       if (!o0 || ref.depQty !== s.depQty || (s.dep === 'ortulu' && !('transfer' in o0))) { if (+s.depQty > 1 || s.dep === 'ortulu' || (o0 && 'transfer' in o0)) z.transfer = Math.max(1, +s.depQty || 1); }
@@ -430,8 +434,11 @@ function tmiFasoncular(st, firmalar, D, onceki) {
     const a = eski(String(f.id));
     const y = { id: String(f.id), ad: f.name, kapasite: null, sureGun: sure[f.id] || FASON_VARSAYILAN_GUN, cikisGunleri: gunler.length ? gunler : GUNLER.slice(0, 5), cikisSaat: 16 };
     return a ? Object.assign({}, y, rrKopya(a), { id: y.id, ad: y.ad }) : y;
-  });
+  }).concat([fasonBelirsizKaydi()]);
 }
+/* 3355 a: firması belirlenmemiş fason adımların hattı; ekranlar hattın adını fasoncu listesinden okur. Süresi motor ayarındandır (engine.js
+   fasonBelirsizi her derlemede yazar); burada yalnız ad ve kimlik. */
+const fasonBelirsizKaydi = () => ({ id: '~belirsiz', ad: 'Firma belirlenmedi', sureGun: 7 });
 /* Gerçek an -> planın saat ekseni (başlangıç günü 00:00'dan saat); okunamazsa null. */
 function tmiSaat(D, an) {
   if (an == null) return null; const s = duvarSaati(an); return s == null ? null : parseT(D, s);
@@ -465,7 +472,7 @@ const FASON_DONUS_SAATI = '08:00';
    emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
    rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
 function tmiBitenler(emirler, D) {
-  const y = { siparis: {}, adim: {}, firma: {} };
+  const y = { siparis: {}, adim: {}, firma: {}, firmaKim: {} };
   if (!emirler || typeof emirler !== 'object') return y;
   for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
   const durum = emirler.opStatus || {};
@@ -480,6 +487,9 @@ function tmiBitenler(emirler, D) {
     else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
     /* 3330 a: bitmemiş fason adımın açık satın alma siparişindeki firma tarihi (kök: opYer, düğüm: dugumFirma); o gün FASON_DONUS_SAATI'nde döner */
     rota.forEach((a, i) => { const t = s.dugum ? (s.dugumFirma || {})[a.k] : ((yer[`${s.id}|root|${i + 1}`] || {}).fasonSiparis || {}).tarih; if (t && !y.adim[`${s.id}.${a.k}`]) y.firma[`${s.id}.${a.k}`] = t + ' ' + FASON_DONUS_SAATI; });
+    /* 3355 a: rotada firması olmayan ya da fason listesinde olmayan adımın firması emrin adımından, yoksa açık fason siparişinin firmasından
+       (engine.js fasonFirmasi sırasıyla bakar); yalnız kök adımlar (düğümde firma tarihi dugumFirma ile gelir, hat belirsiz kalır) */
+    if (!s.dugum) rota.forEach((a, i) => { const x = yer[`${s.id}|root|${i + 1}`] || {}; const l = [x.fasonId, (x.fasonSiparis || {}).firmaId].filter(f => f != null && f !== '').map(String); if (l.length && !y.adim[`${s.id}.${a.k}`]) y.firmaKim[`${s.id}.${a.k}`] = l; });
   }
   return y;
 }
@@ -495,6 +505,7 @@ function firmaTarihiYaz(st, firma) {
 function bitenUygula(st, b) {
   if (!b || !st || !st.D) return st;
   firmaTarihiYaz(st, b.firma);
+  if (b.firmaKim && Object.keys(b.firmaKim).length) st.fasonFirma = Object.assign({}, st.fasonFirma, b.firmaKim);
   if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
   /* 1473 a: biten adımın malzemesi tüketilmiştir; siparişi verilmemiş eksik onsuz yeniden yazılır */
   if (Object.keys(b.adim).length) { st.bitti = Object.assign({}, st.bitti || {}, b.adim); tmEksikYaz(st); }
@@ -781,6 +792,8 @@ function stKur(S, ek = [], gevset = true) {
     w: { ...clone(W0), rule: MOTOR_KURALI.has(S.w.rule) ? S.w.rule : W0.rule, famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta),
       /* 1477 a: motor ölçeği (sistem ayarı); yoksa motor varsayılanı (engine olcekKur) */
       ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null,
+      /* 3355 a: firması ya da süresi belli olmayan fason adımın dönüş süresi (gün), motor ayarından */
+      fasonGun: +S.w.fasonGun > 0 ? +S.w.fasonGun : null,
       /* 1952 (1958 a): rotada "paralel böl" adımı motor kendisi böler; çalışmanın bölme ayarı "kapali" değilse, en çok bolmeMaks paya */
       bol: (S.param && S.param.bolmeKip) !== 'kapali', bolMaks: +((S.param && S.param.bolmeMaks) ?? 3),
       /* 3282 1c: planın yönü (emrin yönü D.siparisler[].yon onu ezer) ve geriye planlamanın termin tamponu (gün) */

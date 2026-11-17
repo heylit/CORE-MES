@@ -5,14 +5,14 @@ import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi } from '../../../ortak/veri/api.ts';
 import * as oturum from '../../../ortak/veri/oturum.ts';
-import { degerAdi, secilebilir, secimDegeri, surumMetni } from './kurallar.ts';
+import { degerAdi, gunOku, secilebilir, secimDegeri, surumMetni } from './kurallar.ts';
 import { MotorAyarlari } from './MotorAyarlari.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811: uydurma sürümler.
 const MOTOR_AYARI_VARSAYILAN: Ayarlar = {
-  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3, fasonGun: 7,
 };
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
 const yetki = (islemler: string[]) => vi.spyOn(oturum, 'useOturum').mockReturnValue({ data: { islemler } } as unknown as ReturnType<typeof oturum.useOturum>);
@@ -74,6 +74,26 @@ describe('motor ayarları', () => {
     fireEvent.change(alan, { target: { value: '2,5' } });
     fireEvent.click(kaydet);
     await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.025, surumId: null }); });
+  });
+
+  it('3355: fason süresi gün girilir ve gönderilir; 1-90 dışı ya da kesirli değer kaydedilmez; yalnız görende gün yazılır', async () => {
+    expect([gunOku('7'), gunOku(' 90 '), gunOku('0'), gunOku('91'), gunOku('2,5'), gunOku('7.5'), gunOku('1e1'), gunOku('')]).toEqual([7, 90, null, null, null, null, null, null]);
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(BOS);
+    ciz();
+    const alan = await screen.findByLabelText(/Fason süresi/);
+    expect((alan as HTMLInputElement).value).toBe('7');
+    const kaydet = screen.getByRole('button', { name: /Kaydet/ });
+    fireEvent.change(alan, { target: { value: '120' } });
+    expect((kaydet as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(alan, { target: { value: '10' } });
+    fireEvent.click(kaydet);
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, fasonGun: 10, surumId: null }); });
+    cleanup();
+    yetki(['plan.planlama-oku']);
+    ciz();
+    expect(await screen.findByText('7 gün')).toBeTruthy();
   });
 
   it('1714: süre öğrenmesi varsayılan kapalı; açılınca gönderilir', async () => {

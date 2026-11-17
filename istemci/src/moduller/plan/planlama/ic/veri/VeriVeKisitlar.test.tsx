@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { VERI_NOTU } from '../../motor/ortak.tsx';
-import { OKUYAN, ekranAc } from './test-veri.tsx';
+import { OKUYAN, calismaKur, ekranAc } from './test-veri.tsx';
 
 import { saatiSabitle } from '../../test-saati.ts';
 import { calismaKur as saatCalismasi } from './test-veri.tsx';
@@ -144,6 +144,17 @@ describe('Veri ve kısıtlar', () => {
     ekranAc({ maliyet: true });
     bolum('Malzeme');
     expect(within(tablo('Malzemeler')).getByText('TL/birim')).toBeTruthy();
+  });
+
+  it('Fason ve aparat: firması belirlenmemiş fason hattı fasoncu listesinde ve seçimlerde görünmez (3355)', () => {
+    ekranAc({ c: calismaKur((c) => { (c.D.fasoncular as { id: string; ad: string; sureGun: number }[]).push({ id: '~belirsiz', ad: 'Firma belirlenmedi', sureGun: 7 }); }) });
+    bolum('Fason ve aparat');
+    expect(satirlar('Fasoncular').map((r) => r.textContent).join(' ')).not.toContain('Firma belirlenmedi');
+    expect(satirlar('Fasoncular')).toHaveLength(1);
+    bolum('Kısıtlar');
+    const secenekler = [...(screen.getByRole('combobox', { name: 'Talaşlı fasoncu' }) as HTMLSelectElement).options].map((o) => o.textContent);
+    expect(secenekler).not.toContain('Firma belirlenmedi');
+    expect(secenekler).toContain('Deneme fason');
   });
 
   it('Fason ve aparat: rotada kullanılan aparat silinmez; yeni aparatta kod tekrarı reddedilir, yenisi eklenir', async () => {

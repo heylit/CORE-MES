@@ -57,6 +57,8 @@ export interface DenemeKalemi {
   islemler: DenemeIslemi[];
   malzemeTl: number | null;
   eksik: string[];
+  // 3355 a: firması belirlenmemiş fason adımın notu (adım, süre); varsa kalemin termini tahminidir.
+  fasonNotu: string[];
   kilit: Record<string, { m: string; S: number }>;
 }
 export interface DenemeSonucu {

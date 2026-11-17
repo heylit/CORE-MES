@@ -75,8 +75,10 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
   for (const id of kalaniYok) { const a = st.gercek && st.gercek[id]; if (a && a.S != null) st.gercek[id] = Object.assign({}, a, { C: Math.max(st.now, a.S) }); }
-  fasonlariAdimaCevir(k, st.D);
-  emirFasonlariniEkle(st.D, durum.emirler, k);
+  /* 3355 a: firması ya da süresi belli olmayan fason adımın süresi motor ayarındandır */
+  const fasonGun = st.w && +st.w.fasonGun > 0 ? +st.w.fasonGun : FASON_VARSAYILAN_GUN;
+  fasonlariAdimaCevir(k, st.D, fasonGun);
+  emirFasonlariniEkle(st.D, durum.emirler, k, fasonGun);
   emirYerleriniEkle(st.D, durum.emirler, k);
   kisiTezgahlariniEkle(k, st.D, istek, opOf, durum.emirler);
   const adayliEkler = ekAdimlariEkle(k, st.D, istek, opOf);
@@ -155,14 +157,14 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
 /* 669 a, Motor A'nın kuralı (CA-2, #1424): fason adım önceki iç adımın bitişinden rotadaki termin günü kadar sonra döner (termini girilmemiş
    fason uretim-emirleri'nin FASON_VARSAYILAN_GUN'ü, 7 gün); çıkış günü, saati ve kapasitesi beklenmez. Süre firmanın değil adımındır: her
    fason adıma ayrı, hemen çıkan bir fasoncu kurulur. Yalnız sunucu çözümünde; sayfa motoru firmanın çıkış ayarıyla çözmeyi sürdürür. */
-function fasonlariAdimaCevir(k, D) {
+function fasonlariAdimaCevir(k, D, fasonGun = FASON_VARSAYILAN_GUN) {
   D.fasoncular = (D.fasoncular || []).slice();
   for (const u of D.urunler || []) {
     const adimlar = ((((k && k.routes) || {})[u.id] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
     (u.rota || []).forEach((r, i) => {
       if (!r.fason) return;
-      const a = adimlar[i], gun = a && +a.terminGun > 0 ? +a.terminGun : FASON_VARSAYILAN_GUN, id = '~' + u.id + '.' + r.k;
-      D.fasoncular.push({ id, ad: 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() });
+      const a = adimlar[i], gun = a && +a.terminGun > 0 ? +a.terminGun : fasonGun, id = '~' + u.id + '.' + r.k;
+      D.fasoncular.push({ id, ad: r.fason === '~belirsiz' ? 'Firma belirlenmedi' : 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() });
       r.fason = id;
     });
   }
@@ -172,7 +174,7 @@ function fasonlariAdimaCevir(k, D) {
    FASON_VARSAYILAN_GUN). Emre özel ürün kopyası kurulur; adımın tezgâhı yoktur, kuyruğa girmez.
    1559 a: çok katmanlı emrin alt düğüm adımı opYer'de değil, düğümün adım listesindedir (fasonId, terminGun); düğüm siparişinin ürün
    rotasındaki yeri kaynakOpNo'dan bulunur (tmiIslemler ile aynı eşleme). */
-function emirFasonlariniEkle(D, emirler, k) {
+function emirFasonlariniEkle(D, emirler, k, fasonGun = FASON_VARSAYILAN_GUN) {
   const yer = Object.entries((emirler && emirler.opYer) || {}).map(([anahtar, y]) => { const [sid, , sira] = anahtar.split('|'); return [sid, +sira - 1, y]; });
   for (const o of (emirler && emirler.orders) || []) for (const d of o.dugumler || []) {
     const da = rotaAdimlari(k, d.itemId);
@@ -203,7 +205,7 @@ function emirFasonlariniEkle(D, emirler, k) {
       u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
       D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
     }
-    const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : +y.tahminGun > 0 ? +y.tahminGun : FASON_VARSAYILAN_GUN;
+    const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : +y.tahminGun > 0 ? +y.tahminGun : fasonGun;
     D.fasoncular = [...(D.fasoncular || []), { id, ad: 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() }];
     u.rota[i] = Object.assign({}, u.rota[i], { fason: id, tezgahlar: [] });
   }

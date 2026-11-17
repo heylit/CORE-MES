@@ -98,7 +98,7 @@ function teklifDene(st0, taban0, istek) {
         return `${adimAdi(o.id)}: ${metin}`;
       });
       ek.push(...(neden.length ? neden : [adimlar.length ? 'plan ufku içinde yerleşmedi' : 'ürünün planda rotası yok (Reçete ve Rota)']));
-      return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: [...new Set(ek)], kilit: {} };
+      return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: [...new Set(ek)], fasonNotu: [], kilit: {} };
     }
     const islemler = Object.values(p.ops).filter(r => r.job === k.id).sort((a, b) => a.S - b.S).map(r => {
       const y = { id: r.id, adim: r.id.slice(r.id.lastIndexOf('.') + 1), m: r.m, fason: !!r.fas, S: r.S, C: r.C, ayarSaat: +r.su || 0, islemeSaat: +r.run || 0, tl: null };
@@ -109,12 +109,17 @@ function teklifDene(st0, taban0, istek) {
       y.tl = y.islemeSaat * (1 - (M.pay || 0)) * M.ucret + y.ayarSaat * (M.ucret + (ayarci || 0));
       return y;
     });
+    /* 3355 a: firması belirlenmemiş fason adım yerleşir; termin tahminidir, kalem adım adım not taşır */
+    const fasonNotu = islemler.filter(r => r.m === '@~belirsiz').map(r => {
+      const o = ((cx.jobs[k.id] && cx.jobs[k.id].ops) || []).find(x => x.id === r.id);
+      return `${o && o.ad ? `OP ${r.adim} ${o.ad}` : `OP ${r.adim}`}: firma belirlenmedi; ${fasonSureMetni(r)} hesaplandı`;
+    });
     if (!malzeme.length) ek.push('reçetede hammadde yok');
     for (const m of j.miss) if (m !== 'gelir' && !/saat ücreti|fason fiyatı/.test(m)) ek.push(m);
     const planTerminGun = teklifCalismaGunu(s.D, Math.floor((j.C + (+istek.tamponGun || 0) * 24) / 24));
     const kilit = {}; for (const r of islemler) kilit[r.id] = { m: r.m, S: r.S };
     const istenen = istenenVar ? parseT(s.D, istek.termin) : null;
-    return { id: k.id, tamam, bitis: j.C, planTerminGun, ulasir: istenen == null ? null : j.C <= istenen, malzeme, satinalma: satinalma[k.id], islemler, malzemeTl: malzeme.length && j.mf != null ? j.mf : null, eksik: [...new Set(ek)], kilit };
+    return { id: k.id, tamam, bitis: j.C, planTerminGun, ulasir: istenen == null ? null : j.C <= istenen, malzeme, satinalma: satinalma[k.id], islemler, malzemeTl: malzeme.length && j.mf != null ? j.mf : null, eksik: [...new Set(ek)], fasonNotu, kilit };
   });
   const kayan = [];
   if (tabanE) for (const id in tabanE.J) {

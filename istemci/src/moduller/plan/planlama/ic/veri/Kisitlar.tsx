@@ -2,6 +2,7 @@ import { Rozet, SayiKarti, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { MOTOR_NOTU, YOK_NOTU, degisken } from '../../motor/ortak.tsx';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
+import { gercekFasoncular } from '../../kaynak-kodu.tsx';
 import {
   AMAC_SIRASI, DURUM_ROZETI, KATALOG, bedelEsigi, bedelOku, bolumAdi, durumSayilari, kisitBul, kisitDegistir, parametreDegeri, parametreOku, parametreYaz,
   type Kisit, type KisitBedeli, type Parametre, type VeriBolumu,
@@ -28,7 +29,7 @@ export function ParametreGirdisi({ p, c, yaz }: { p: Parametre; c: PlanlamaCalis
       ? (
         <select {...ortak} value={typeof v === 'string' ? v : ''} onChange={(e) => { yaz?.(p, e.target.value); }}>
           <option value="">Yok</option>
-          {(c.D.fasoncular ?? []).map((f) => <option key={f.id} value={f.id}>{f.ad ?? f.id}</option>)}
+          {gercekFasoncular(c.D.fasoncular).map((f) => <option key={f.id} value={f.id}>{f.ad ?? f.id}</option>)}
         </select>
       )
       // Değer kutudan çıkınca yazılır (eski sayfanın change olayı); geçersiz değer bildirilir, kutu kayıttaki değere döner.

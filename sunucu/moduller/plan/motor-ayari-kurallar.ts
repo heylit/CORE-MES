@@ -114,7 +114,8 @@ export function calismayaMotorAyari(
   return {
     ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira', ...(genelGider === undefined ? {} : { genelGider: genelGider.gizli ? null : genelGider.saatBasi, genelGiderGizli: genelGider.gizli }) } },
     param: { ...(param !== null && typeof param === 'object' ? param : {}), acilPay: ayar.acilPay, bolmeKip: ayar.bolmeKip, bolmeMaks: ayar.bolmeMaks },
-    w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
+    // 3355 a: firması ya da süresi belli olmayan fason adımın süresi motor ayarındandır (girdi.betik stKur w.fasonGun'u motora verir).
+    w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, fasonGun: ayar.fasonGun, ...(olcek ?? {}) },
     ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},
   };
 }

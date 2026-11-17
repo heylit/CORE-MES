@@ -103,7 +103,10 @@ function terminUygula() {
       const cx = plan.cx || compile(st); const D = st.D;
       for (const x of cx.mat.po) { const p = D.satinalma[x.i]; if (!p || !p.tb || x.soz == null) continue;
         for (const j of new Set(x.jobs.map(u => u.j))) e.warn.push({ t: 'Termin bekleniyor', j, gelis: x.soz, kod: p.kod, txt: `${j}: ${p.kod} için Satın Alma termini bekleniyor; malzeme olması gereken ${fmtDT(D, x.soz)} tarihinde gelmiş sayıldı.` }); }
-      for (const w of st.tmUyari || []) e.warn.push(w); }
+      for (const w of st.tmUyari || []) e.warn.push(w);
+      /* 3355 a: firması belirlenmemiş fason adım yerleşir; uyarı listesinde adım başına not */
+      for (const id in plan.ops) { const r = plan.ops[id]; if (!r || r.m !== '@~belirsiz') continue;
+        e.warn.push({ t: 'Firma belirlenmedi', j: r.job, fason: id, txt: `${id}: fason firması belirlenmedi; ${fasonSureMetni(r)} planlandı. Firma rotada ya da satın alma siparişinde seçilince kesinleşir.` }); } }
     return e;
   };
   const f0 = tFason;
@@ -115,7 +118,7 @@ function terminUygula() {
     if (cx.FS[c.m.slice(1)].hemen && Ts == null) return r;
     const k = D.fasonTermin && D.fasonTermin[o.id]; const T = Ts != null ? Ts : k ? parseT(D, k) : null;
     const C = T != null ? Math.max(r.S + 1, T) : r.S + tmSureFas(cx.FS[c.m.slice(1)], o.adet, A);
-    r.C = r.lot1 = C; r.run = C - r.S; return r;
+    r.C = r.lot1 = C; r.run = C - r.S; if (r.gk && T != null) r.gk = Ts != null ? 'siparis' : 'termin'; return r;
   };
 }
 terminUygula();

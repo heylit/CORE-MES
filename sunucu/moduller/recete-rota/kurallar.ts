@@ -315,7 +315,7 @@ export interface EmirKaydi {
     // B-2483-11: termini girilmemiş bitmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini (takvim günü; veri yoksa null ya da yok).
     tahminGun?: number | null;
     // 3330 a: iş emrinin kimliği ve bitmemiş fason adımın açık siparişindeki firma tarihi (Satın Alma; sipariş no yalnız görme yetkisi olana).
-    id?: number; fasonSiparis?: { tarih: string; siparisNo: string | null } | null;
+    id?: number; fasonSiparis?: { tarih: string; siparisNo: string | null; firmaId?: number } | null;
     // Rotadan gelen adım 'rota'dır; kola konan rework, tamir ya da ek adım türünü taşır. Verilmezse rota adımı sayılır.
     tur?: 'rota' | 'rework' | 'tamir' | 'ek';
     // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"), düğüm ürününün rotasındaki op numarası ve kök başına adedi; emir içindeki
@@ -436,12 +436,14 @@ export function fasonSiparisiSorulacaklar(emirler: readonly EmirKaydi[]): number
   return emirler.flatMap((e) => e.isEmirleri.flatMap((i) => (fasonSiparisiSorulur(e, i) ? [i.id!] : [])));
 }
 export function fasonSiparisleriniYaz(
-  emirler: EmirKaydi[], tarihler: ReadonlyMap<number, { tarih: string; siparisNo: string | null }>, noGorunur: boolean,
+  emirler: EmirKaydi[], tarihler: ReadonlyMap<number, { tarih: string; siparisNo: string | null; firmaId?: number | null }>, noGorunur: boolean,
 ): EmirKaydi[] {
   if (tarihler.size === 0) return emirler;
   return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => {
     const x = fasonSiparisiSorulur(e, i) ? tarihler.get(i.id!) : undefined;
-    return x === undefined ? i : { ...i, fasonSiparis: { tarih: x.tarih, siparisNo: noGorunur ? x.siparisNo : null } };
+    // 3355: siparişin firması plan içindir (rotada firması olmayan fason adımın hattı); firma kimliği emri okuyan herkese gider, adı plan
+    // fason listesinden okur.
+    return x === undefined ? i : { ...i, fasonSiparis: { tarih: x.tarih, siparisNo: noGorunur ? x.siparisNo : null, ...(x.firmaId == null ? {} : { firmaId: x.firmaId }) } };
   }) }));
 }
 

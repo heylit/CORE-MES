@@ -215,6 +215,18 @@ describe('P2 Terminler', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
+  it('3355: firması belirlenmemiş fason hattı fasoncu katsayı tablosunda yer almaz', async () => {
+    const deger = structuredClone(CALISMA_DEGERI);
+    (deger.D.fasoncular as { id: string; ad: string; sureGun: number }[]).push({ id: '~belirsiz', ad: 'Firma belirlenmedi', sureGun: 7 });
+    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }]);
+    ac('/plan/terminler');
+    await parca('terminler');
+    tumAc();
+    const tablo = await screen.findByRole('table', { name: 'Fasoncu katsayıları' });
+    expect(within(tablo).queryByText('Firma belirlenmedi')).toBeNull();
+    expect(within(tablo).getAllByRole('row').length).toBeGreaterThan(1);
+  }, 20000);
+
   it('malzemesi stoktan karşılanan planda malzeme satırı ve termin bekleyen yoktur (eski çerçeve gibi)', async () => {
     sunucuKur(YONETICI, KAYIT);
     ac('/plan/terminler');

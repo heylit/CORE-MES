@@ -18,7 +18,7 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
     const kayit = { surum: 2, D: { planTL: { amac: 'tl', risk: 0.5 }, siparisler: [] }, w: { famK: 0.3 } };
     const sirali = calismayaMotorAyari(kayit, MOTOR_AYARI_VARSAYILAN) as typeof kayit;
     assert.deepEqual(sirali.D.planTL, { amac: 'sira', risk: 0.5 });
-    assert.deepEqual([sirali.w, sirali.D.siparisler, kayit.D.planTL.amac], [{ ...kayit.w, rule: 'atcs', amac: 'sirali' }, kayit.D.siparisler, 'tl']);
+    assert.deepEqual([sirali.w, sirali.D.siparisler, kayit.D.planTL.amac], [{ ...kayit.w, rule: 'atcs', amac: 'sirali', fasonGun: 7 }, kayit.D.siparisler, 'tl']);
     const tl = calismayaMotorAyari({ D: {} }, { ...MOTOR_AYARI_VARSAYILAN, amac: 'tl' }) as { D: { planTL: unknown } };
     assert.deepEqual(tl.D.planTL, { amac: 'tl' });
     assert.equal(calismayaMotorAyari(null, MOTOR_AYARI_VARSAYILAN), null);
