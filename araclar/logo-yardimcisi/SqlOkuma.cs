@@ -13,7 +13,7 @@ namespace LogoYardimcisi
     public sealed class Sorgular
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Proje, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
-            MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
+            MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, SatisMusterileri, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
@@ -91,8 +91,11 @@ namespace LogoYardimcisi
             var karsilama = "SELECT P.LOGICALREF, P.CHILDREF, P.DEMANDLINEREF, P.MEETAMNT FROM " + d("DEMANDPEGGING") + " P ";
             Karsilamalar = karsilama + "JOIN " + d("ORFLINE") + " L ON L.LOGICALREF = P.CHILDREF WHERE P.LINETYPE = 4 AND L.ORDFICHEREF = @ref ORDER BY P.LOGICALREF";
             KarsilamaBul = karsilama + "WHERE P.LINETYPE = 4 AND P.DEMANDLINEREF = @talep AND P.CHILDREF = @siparis";
-            SatisMusterisi = "SELECT TOP 1 S.CODE FROM LG_CVARPASG A JOIN LG_CSTVND S ON S.LOGICALREF = A.CSTVNDREF JOIN " + f("CLCARD")
-                + " C ON C.LOGICALREF = A.ARPREF WHERE C.CODE = @kod AND A.FIRMNO = @firma";
+            // 3391: bir cari birden fazla CRM müşterisine bağlı olabilir; sıra bağ kaydının oluşma sırasıdır, teklif ilkini kullanır.
+            var crmBagi = "FROM LG_CVARPASG A JOIN LG_CSTVND S ON S.LOGICALREF = A.CSTVNDREF JOIN " + f("CLCARD")
+                + " C ON C.LOGICALREF = A.ARPREF WHERE C.CODE = @kod AND A.FIRMNO = @firma ORDER BY A.LOGICALREF";
+            SatisMusterisi = "SELECT TOP 1 S.CODE " + crmBagi;
+            SatisMusterileri = "SELECT TOP " + LogoYardimcisi.SatisMusterileri.Sinir + " S.CODE, COUNT(*) OVER () " + crmBagi;
             var teklifBasligi = "SELECT T.LOGICALREF, T.FICHENO, T.STATUS, C.CODE, T.NETTOTAL, T.TRCURR, T.TRRATE FROM " + f("PURCHOFFER") + " T LEFT JOIN "
                 + f("CLCARD") + " C ON C.LOGICALREF = T.CLIENTREF WHERE T.TRCODE = 1 AND ";
             Teklif = teklifBasligi + "T.FICHENO = @no";
@@ -723,6 +726,18 @@ namespace LogoYardimcisi
         {
             var l = Sorgula(q.SatisMusterisi, P("@kod", cariKod), P("@firma", firma));
             return l.Count == 0 ? null : Metin(l[0][0]);
+        }
+
+        public SatisMusterileri SatisMusterileri(string cariKod)
+        {
+            var m = new SatisMusterileri();
+            foreach (var s in Sorgula(q.SatisMusterileri, P("@kod", cariKod), P("@firma", firma)))
+            {
+                var k = Metin(s[0]);
+                if (k != null) m.Kodlar.Add(k);
+                m.Sayi = Tam(s[1]);
+            }
+            return m;
         }
 
         static FisBasligi TeklifBasligi(List<object[]> l)

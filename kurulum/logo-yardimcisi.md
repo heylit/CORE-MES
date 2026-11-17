@@ -181,7 +181,10 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
 
 - Sistem Ayarları'nda ayrı anahtar: "Logo: satış gönderimi" (`logo.satis-gonderimi`, varsayılan kapalı). İş (`logo-satis-gonderimi`) her turda koşar; anahtar kapalıyken istek atmaz. Teklif, portalda müşteriye gönderilince; sipariş, müşteri kabulü bizden onaylanınca aynı tekliften gider.
 - Teklif `POST /api/SalesOffer/AddRich` ile açılır. Firmanın Logo cari kodu CRM satış müşterisi olarak da tanımlı olmalı; değilse teklif gitmez
-  ve "satış müşterisi (CRM) olarak tanımlı değil" hatası görünür. Satış siparişi yalnız tekliften açılır (`POST /api/SalesOffer/{ref}/toOrder`).
+  ve "satış müşterisi (CRM) olarak tanımlı değil" hatası görünür. CRM satış müşterisi okuması (`GET /api/SalesOffer/customer/{cari}`,
+  kart 3391) yoksa 404, varsa zarfa ek olarak `customers` (cariye bağlı CRM müşteri kodları, bağ kaydının oluşma sırasıyla, en çok 20) ve
+  `customerCount` (bütün bağlar) döner. Teklif bu sıranın ilkini kullanır (`ORDER BY LG_CVARPASG.LOGICALREF`); Logo'nun "birincil" müşteri kavramı
+  varsa bilinmiyor. Eski yardımcı listeyi vermez, CORE yalnız "CRM" rozeti gösterir. Satış siparişi yalnız tekliften açılır (`POST /api/SalesOffer/{ref}/toOrder`).
 - Teklif ve satış siparişini numarayla bulma ucu yok: sonucu bilinmeyen gönderim yinelenmez, "Logo'da kontrol edin" hatası görünür.
 
 ## Kart güncelleme ve hizmet kartı (kart #777)
