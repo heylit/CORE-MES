@@ -1,0 +1,51 @@
+.tc-tzb { container: tc-tzb / inline-size; display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-tzb-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); margin: 0; }
+.tc-tzb-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-tzb-mono { font-family: var(--font-mono); }
+.tc-tzb-hata { margin: 0; color: var(--stop); overflow-wrap: anywhere; }
+.tc-tzb-tablo-kap { overflow-x: auto; border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); }
+.tc-tzb-tablo { width: 100%; border-collapse: collapse; }
+.tc-tzb-tablo th, .tc-tzb-tablo td { padding: var(--b-3); text-align: left; vertical-align: top; border-bottom: 1px solid var(--edge); }
+.tc-tzb-tablo thead th { color: var(--muted); font-size: var(--yazi-s); font-weight: 600; white-space: nowrap; }
+.tc-tzb-tablo tbody tr:last-child th, .tc-tzb-tablo tbody tr:last-child td { border-bottom: 0; }
+.tc-tzb-tablo tbody th { font-weight: 400; }
+.tc-tzb-alt { display: block; color: var(--muted); font-size: var(--yazi-s); }
+.tc-tzb-tablo td .tc-tzb-alt, .tc-tzb-tablo td > span:first-child { white-space: nowrap; }
+.tc-tzb-tablo td.tc-tzb-alarm > span, .tc-tzb-tablo td.tc-tzb-alarm { white-space: normal; }
+.tc-tzb-kart .tc-tzb-not .tc-tzb-alt { display: inline; }
+.tc-tzb-kart .tc-tzb-not .tc-tzb-alt::before { content: ' · '; color: var(--muted); }
+.tc-tzb-fark { background: var(--panel2); box-shadow: inset 3px 0 0 var(--hold); }
+.tc-tzb-fark .tc-tzb-alt, .tc-tzb-eski { color: var(--hold); }
+.tc-tzb-alarm { color: var(--stop); overflow-wrap: anywhere; }
+.tc-tzb-tablo td.tc-tzb-alarm { min-width: 9rem; }
+.tc-tzb-kartlar { display: none; margin: 0; padding: 0; list-style: none; gap: var(--b-3); }
+.tc-tzb-kart { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); min-width: 0; }
+.tc-tzb-kart-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-tzb-kod { font-family: var(--font-mono); font-weight: 700; overflow-wrap: anywhere; }
+.tc-tzb-sec .tc-tzb-kod { white-space: nowrap; }
+.tc-tzb-satirlar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-2) var(--b-3); margin: 0; }
+.tc-tzb-satirlar > * { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.tc-tzb-satirlar .tc-tzb-bas { color: var(--muted); font-size: var(--yazi-s); }
+.tc-tzb-satirlar dt { color: var(--muted); }
+.tc-tzb-satirlar dd.tc-tzb-fark { background: none; box-shadow: none; color: var(--hold); font-weight: 700; }
+.tc-tzb-iki { display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr); gap: var(--b-4); align-items: start; }
+.tc-tzb-liste { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-tzb-sec {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); width: 100%; min-height: 2.75rem;
+  padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer; white-space: nowrap;
+}
+.tc-tzb-sec[aria-pressed="true"] { border-color: var(--ink); }
+.tc-tzb-ogeler { width: 100%; border-collapse: collapse; }
+.tc-tzb-iki > section { min-width: 0; }
+.tc-tzb-ogeler th, .tc-tzb-ogeler td { padding: var(--b-2) var(--b-3); text-align: left; border-bottom: 1px solid var(--edge); overflow-wrap: break-word; }
+.tc-tzb-ogeler thead th { color: var(--muted); font-size: var(--yazi-s); font-weight: 600; }
+/* Dokuz sütun dar alana sığmaz: alan 1150 altındaysa tezgah başına kart. */
+@container tc-tzb (max-width: 1149px) {
+  .tc-tzb-tablo-kap { display: none; }
+  .tc-tzb-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
+  .tc-tzb-iki { grid-template-columns: minmax(0, 1fr); }
+  .tc-tzb-liste { flex-direction: row; overflow-x: auto; padding-bottom: var(--b-1); }
+  .tc-tzb-sec { flex: none; width: auto; }
+  .tc-tzb-ogeler .tc-tzb-genis { display: none; }
+}

@@ -19,6 +19,7 @@ import { SEVKIYAT_AYARLARI } from './ayarlar/sevkiyat.ts';
 import { SIPARISLER_AYARLARI } from './ayarlar/siparisler.ts';
 import { SMARTES_AYARLARI } from './ayarlar/smartes.ts';
 import { STOK_AYARLARI } from './ayarlar/stok.ts';
+import { TEZGAH_BAGLANTISI_AYARLARI } from './ayarlar/tezgah-baglantisi.ts';
 import { URETIM_EMIRLERI_AYARLARI } from './ayarlar/uretim-emirleri.ts';
 
 export type { AyarTuru } from './ayar-tanimi.ts';
@@ -46,6 +47,7 @@ export const AYAR_TANIMLARI = {
   ...SIPARISLER_AYARLARI,
   ...SMARTES_AYARLARI,
   ...STOK_AYARLARI,
+  ...TEZGAH_BAGLANTISI_AYARLARI,
   ...URETIM_EMIRLERI_AYARLARI,
 } as const satisfies Record<string, AyarTanimi>;
 
