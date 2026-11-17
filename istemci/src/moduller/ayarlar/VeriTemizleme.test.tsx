@@ -88,6 +88,7 @@ describe('Sistem Ayarları, veri temizleme', () => {
     const istekler = sunucuKur();
     ac(['sayfa.ayarlar', 'ayarlar.yaz', 'ayarlar.yedek-indir', 'ayarlar.veri-temizle']);
     fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kayıt seçerek (gelişmiş)' }));
     const etkiDugmesi = await screen.findByRole('button', { name: 'Etkiyi gör' });
     expect((etkiDugmesi as HTMLButtonElement).disabled).toBe(true);
 
@@ -126,6 +127,7 @@ describe('Sistem Ayarları, veri temizleme', () => {
     const istekler = sunucuKur();
     ac(['sayfa.ayarlar', 'ayarlar.yaz', 'ayarlar.yedek-indir', 'ayarlar.veri-temizle']);
     fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kayıt seçerek (gelişmiş)' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Tarihle sıfırla' }));
     const etkiDugmesi = screen.getByRole('button', { name: 'Etkiyi gör' }) as HTMLButtonElement;
     const geriDugmesi = screen.getByRole('button', { name: 'İşaretleri geri al' }) as HTMLButtonElement;
@@ -171,6 +173,7 @@ describe('Sistem Ayarları, veri temizleme', () => {
     const istekler = sunucuKur();
     ac(['sayfa.ayarlar', 'ayarlar.yaz', 'ayarlar.yedek-indir', 'ayarlar.veri-temizle']);
     fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kayıt seçerek (gelişmiş)' }));
     fireEvent.click(await screen.findByRole('button', { name: 'ORN-UE-0012 temizlemeye ekle' }));
     expect(screen.getByText('Temizlenecek: 1 emir')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'ORN-UE-0015 işaretini kaldır' }));
@@ -181,6 +184,7 @@ describe('Sistem Ayarları, veri temizleme', () => {
     sunucuKur({ durum: 409, govde: { kod: 'CAKISMA', mesaj: 'Etki değişti; etkiyi yeniden görün' } });
     ac(['sayfa.ayarlar', 'ayarlar.yaz', 'ayarlar.yedek-indir', 'ayarlar.veri-temizle']);
     fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Kayıt seçerek (gelişmiş)' }));
     fireEvent.click(await screen.findByRole('button', { name: 'ORN-UE-0012 temizlemeye ekle' }));
     fireEvent.click(screen.getByRole('button', { name: 'Etkiyi gör' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Yedek adımına geç' }));
@@ -191,5 +195,85 @@ describe('Sistem Ayarları, veri temizleme', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Temizle / }));
     expect(await screen.findByText(/Etki değişti; etkiyi yeniden görün/)).toBeTruthy();
     expect(screen.queryByText('Temizlendi')).toBeNull();
+  });
+
+  it('hızlı temizlik: tür ve satır seçmeden tarihe kadar her şey işaretlenir, kilitliler çıkarılır, özet, yedek ve onay tek sayfada', async () => {
+    const istekler = sunucuKur();
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    expect((await screen.findByRole('tab', { name: 'Hızlı temizlik' })).getAttribute('aria-selected')).toBe('true');
+    expect((screen.getByRole('button', { name: 'İşaretle ve özetle' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/^Son gün \(dahil\)/), { target: { value: '2026-11-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'İşaretle ve özetle' }));
+    expect(await screen.findByText('1 kayıt silinmeyecek (kilitli):')).toBeTruthy();
+    expect(screen.getByText('1 emir: Logo bağlantısı var')).toBeTruthy();
+    const isaret = istekler.find((i) => i.yol === '/veri-temizleme/isaret-tarihle');
+    expect(isaret?.govde).toEqual({ bitis: '2026-11-03', turler: ['uretim_emri', 'siparis', 'malzeme'], isaretli: true });
+    expect(istekler.find((i) => i.yol === '/veri-temizleme/isaret')?.govde).toEqual({ secim: [{ tur: 'uretim_emri', kimlik: 15 }], isaretli: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Yedek al' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam et' }));
+    fireEvent.change(screen.getByLabelText('Onay için TEMIZLE yazın'), { target: { value: 'TEMIZLE' } });
+    fireEvent.change(screen.getByLabelText('Parolanız'), { target: { value: 'ORN-parola' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Temizle \(1 kayıt/ }));
+    expect(await screen.findByText('Temizlendi')).toBeTruthy();
+    expect(istekler.find((i) => i.yol === '/veri-temizleme/temizle')?.govde).toMatchObject({
+      tarih: { bitis: '2026-11-03', turler: ['uretim_emri', 'siparis', 'malzeme'] }, ozet: TEMIZ.ozet, yedekAdi: YEDEK_ADI,
+    });
+  });
+
+  it('hızlı temizlik: "yalnız işaretlediklerim" yeni işaret koymaz', async () => {
+    const istekler = sunucuKur();
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.change(await screen.findByLabelText('Kapsam'), { target: { value: 'isaretli' } });
+    expect(screen.queryByLabelText(/^Son gün \(dahil\)/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Özeti göster' }));
+    expect(await screen.findByText('1 kayıt silinmeyecek (kilitli):')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/veri-temizleme/isaret-tarihle')).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Vazgeç, işaretleri kaldır' })).toBeNull();
+    const bugun = new Date().toLocaleDateString('sv-SE');
+    expect(istekler.filter((i) => i.yol.startsWith('/veri-temizleme/etki')).every((i) => i.yol.includes(`bitis=${bugun}&`))).toBe(true);
+  });
+
+  it('hızlı temizlik: kilitliler ayıklanamazsa yedek ve onay açılmaz', async () => {
+    sunucuKur();
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) =>
+      (String(adres).includes('/veri-temizleme/etki') ? json(200, KILITLI) : asil(adres, secenek))));
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.change(await screen.findByLabelText(/^Son gün \(dahil\)/), { target: { value: '2026-11-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'İşaretle ve özetle' }));
+    expect(await screen.findByText(/Kilitli kayıtlar ayıklanamadı/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yedek al' })).toBeNull();
+    expect(screen.queryByLabelText('Onay için TEMIZLE yazın')).toBeNull();
+  });
+
+  it('hızlı temizlik: vazgeçilince bu yolun koyduğu işaretler aynı tarihle kaldırılır', async () => {
+    const istekler = sunucuKur();
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.change(await screen.findByLabelText(/^Son gün \(dahil\)/), { target: { value: '2026-11-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'İşaretle ve özetle' }));
+    expect(screen.queryByText(/önceden işaretlediğiniz/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Vazgeç, işaretleri kaldır' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'İşaretle ve özetle' })).toBeTruthy());
+    expect(istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').map((i) => i.govde)).toEqual([
+      { bitis: '2026-11-10', turler: ['uretim_emri', 'siparis', 'malzeme'], isaretli: true },
+      { bitis: '2026-11-10', turler: ['uretim_emri', 'siparis', 'malzeme'], isaretli: false },
+    ]);
+  });
+
+  it('hızlı temizlik: özet yarıda kalırsa tarih işaretleri geri alınır', async () => {
+    const istekler = sunucuKur();
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) =>
+      (String(adres).includes('/veri-temizleme/etki') ? json(500, { kod: 'IC_HATA', mesaj: 'Beklenmeyen bir hata oluştu.' }) : asil(adres, secenek))));
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.change(await screen.findByLabelText(/^Son gün \(dahil\)/), { target: { value: '2026-11-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'İşaretle ve özetle' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').length).toBe(2));
+    expect(istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').map((i) => (i.govde as { isaretli: boolean }).isaretli)).toEqual([true, false]);
   });
 });
