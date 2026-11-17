@@ -1,9 +1,12 @@
 import { Dugme, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import './kokpit.css';
+import { etkiSatirlari } from './ayarlar.ts';
 import { BASLIK_ADI, BASLIK_NOTU, BASLIKLAR, degisiklikDokumu, type Degisiklik } from './degisiklikler.ts';
+import type { SatirEtkisiYuzu } from './satir-etkisi.ts';
 
 // Planı etkileyen değişiklikler (3317 a, 1. adım). İki parça: plan şeridinin satırındaki özet ("N değişiklik", döküm, "Gör ve uygula") ve
-// şeridin altında açılan liste (üç başlık, satırda "Göster"). Liste yalnız gösterir; veri değişiklikleri şeritteki toplu düğmeyle uygulanır.
+// şeridin altında açılan liste (üç başlık, satırda "Göster"). Veri değişiklikleri şeritteki toplu düğmeyle ya da satırdaki "Etkisini gör"
+// ile tek tek kişinin taslağına uygulanır (2. adım); öteki iki başlık yalnız gösterir.
 // salt: sayfa listeyi yalnız gösterir (Motor, 3317-1b); düğme "Gör"dür, uygulama Kokpit'tedir.
 export function DegisiklikOzeti({ l, acik, ac, salt = false }: { l: readonly Degisiklik[]; acik: boolean; ac: (a: boolean) => void; salt?: boolean }) {
   const ad = salt ? 'Gör' : 'Gör ve uygula';
@@ -31,9 +34,43 @@ export interface DegisikliklerOzellikleri {
   toplu: number | null;
   // Yalnız gösteren sayfada (Motor) listenin altındaki bağlantı: Kokpit'i açar, satırlar orada gösterilir ve düzeltilir.
   kokpiteGit?: (() => void) | null;
+  // Veri değişikliği satırının etkisi ve tek başına uygulanması; yazamayan kişide ve yalnız gösteren sayfada null.
+  etki?: SatirEtkisiYuzu | null;
+  // Taslakta uygulanmış, ortak planda hâlâ bekleyen veri değişikliği sayısı (listede durmaz, toplu düğme sayar).
+  taslakta?: number;
 }
 
-export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpiteGit = null }: DegisikliklerOzellikleri) {
+function SatirEtkisiBolumu({ e }: { e: SatirEtkisiYuzu }) {
+  const d = e.durum;
+  if (d.tur === 'duzen') return null;
+  if (d.tur === 'hesap') return <p className="tc-pyq-dg-etki" role="status">Etkisi hesaplanıyor; plan değişmedi.</p>;
+  if (d.tur === 'hata') {
+    return (
+      <div className="tc-pyq-dg-etki" role="alert">
+        <span>{d.ileti}</span>
+        <Dugme tur="ikincil" simge="x" onClick={e.vazgec}>Kapat</Dugme>
+      </div>
+    );
+  }
+  return (
+    <section className="tc-pyq-dg-etki" aria-label="Etkisi">
+      <dl>
+        {etkiSatirlari(d.e.once, d.e.sonra).map((s) => (
+          <div key={s.ad}><dt>{s.ad}</dt><dd data-yon={s.yon}>{s.once === null ? s.sonra : `${s.once} → ${s.sonra}`}</dd></div>
+        ))}
+      </dl>
+      {e.butun
+        ? <p className="tc-pyq-not">Bu değişiklik bütün planı etkiler: bütün işler yeniden dizilir ve bekleyen veri değişikliklerinin hepsi uygulanır.</p>
+        : e.birlikte > 0 && <p className="tc-pyq-not">{`Aynı emirleri etkileyen ${String(e.birlikte)} değişiklik de birlikte uygulanır.`}</p>}
+      <div className="tc-pyq-dg-etki-dugmeler">
+        <Dugme tur="ikincil" simge="check" disabled={e.mesgul} onClick={e.uygula}>Uygula</Dugme>
+        <Dugme simge="x" disabled={e.mesgul} onClick={e.vazgec}>Vazgeç</Dugme>
+      </div>
+    </section>
+  );
+}
+
+export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpiteGit = null, etki = null, taslakta = 0 }: DegisikliklerOzellikleri) {
   const kartta = kart === null ? [] : l.filter((d) => d.emirId !== null && kart.emirler.has(d.emirId));
   const suzulu = suzgec && kart !== null && kartta.length > 0;
   const gorunen = suzulu ? kartta : l;
@@ -56,6 +93,10 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpi
                 <li key={d.anahtar}>
                   <div className="tc-pyq-dg-ne"><b>{d.ne}</b><small>{d.alt}</small></div>
                   {goster !== null && d.emirId !== null && <Dugme className="tc-pyq-dg-dugme" tur="ikincil" simge="eye" onClick={() => { goster(d); }}>Göster</Dugme>}
+                  {etki !== null && d.bekleyenId !== null && etki.id !== d.bekleyenId && (
+                    <Dugme className="tc-pyq-dg-dugme" tur="ikincil" simge="clock" disabled={etki.mesgul || etki.id !== null} onClick={() => { etki.gor(d.bekleyenId!); }}>Etkisini gör</Dugme>
+                  )}
+                  {etki !== null && etki.id !== null && etki.id === d.bekleyenId && <SatirEtkisiBolumu e={etki} />}
                 </li>
               ))}
             </ul>
@@ -63,7 +104,8 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpi
         );
       })}
       <p className="tc-pyq-not">
-        {toplu !== null ? `"Planı güncelle (${String(toplu)})" yalnız "Veri değişti" satırlarının etkilediği işleri yeniden dizer. ` : ''}
+        {toplu !== null ? `"Planı güncelle (${String(toplu)})" yalnız "Veri değişti" satırlarının etkilediği işleri yeniden dizer${etki !== null ? '; "Etkisini gör" tek satırın planı nasıl değiştireceğini gösterir, "Uygula" taslağınıza yazar' : ''}. ` : ''}
+        {taslakta > 0 ? `${String(taslakta)} veri değişikliği taslağınızda uygulandı, listede durmaz; ortak plana taslak yazılınca girer, "Planı güncelle" o zamana kadar onu da sayar. ` : ''}
         {goster !== null
           ? '"Sahada oldu" ve "Plan geride" satırları bilgi içindir: "Göster" ile emre gidilir, düzeltme aşağıda elle yapılır.'
           : '"Sahada oldu" ve "Plan geride" satırları bilgi içindir; bu sayfa planı okur, emre gitmek ve düzeltmek Kokpit\'tedir.'}

@@ -176,6 +176,27 @@ describe('Kokpit', () => {
     return { post };
   }
 
+  // 3317 a (2. adım): satır taslakta uygulandıysa (görünümün bekleyenlerinde yok) listede durmaz; toplu düğme ortak planı sayar, not farkı söyler.
+  it('taslakta uygulanan veri değişikliği listeden düşer; not toplu düğmenin ortak plandaki sayısını ve taslaktaki satırı söyler', async () => {
+    const b = (id: string, isler: string[]): BekleyenDegisiklik => ({ id, ne: `Değişti ${id}`, ayrinti: '', kim: 'Deneme Kisi', t: 1, isler, geri: [] });
+    const temel = ornekCalisma();
+    const ortak = { ...temel, bekleyen: [b('ORN-a', ['1']), b('ORN-b', ['2'])] } as ReturnType<typeof ornekCalisma>;
+    expect(ortak.plan?.dataVer).not.toBe(ortak.dataVer);
+    // Görünüm: ORN-a dizildi ve düştü, ORN-b bekliyor; plan hâlâ veriden eski.
+    const g = { ...ortak, dataVer: ortak.dataVer + 2, bekleyen: [b('ORN-b', ['2'])] };
+    vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve((yol === '/plan/taslagim' ? { taslak: { surum: 12, tabanSurum: 4, satirlar: [satir({ tur: 'yeniden-planla', isler: ['1'] }, 'Yeniden planlama istendi'), satir({ tur: 'diz', isler: ['1'] }, 'Plan yeniden dizildi')] }, calisma: g, surum: 4 } : null) as never));
+    ac({ calisma: ortak });
+    await screen.findByRole('region', { name: 'Taslak' });
+    await waitFor(() => { expect((document.querySelector('[data-degisiklik-ozeti] b') as HTMLElement).textContent).toBe('1 değişiklik'); });
+    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    const veri = within(liste).getByRole('region', { name: 'Veri değişti' });
+    expect(within(veri).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Değişti ORN-b']);
+    expect(within(veri).getAllByRole('button', { name: 'Etkisini gör' })).toHaveLength(1);
+    expect(liste.textContent).toContain('"Planı güncelle (2)"');
+    expect(liste.textContent).toContain('1 veri değişikliği taslağınızda uygulandı, listede durmaz');
+  });
+
   it('taslak varken Geri taslağın değişiklik sayısını gösterir, son değişikliği dizmesiyle birlikte geri alır; Canlıya al yalnız taslak çubuğundadır', async () => {
     const { post } = taslakSunucusu([satir(AYAR, 'Plan ayarı'), satir(TASI, '3.10 → T2'), satir({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi')]);
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
@@ -447,8 +468,8 @@ describe('Kokpit', () => {
     expect(within(satirlar[0] as HTMLElement).queryByRole('button')).toBeNull();
     expect(satirlar[1]?.textContent).toContain('Malzemenin geliş tarihi değişti: 3');
     expect(satirlar[1]?.textContent).toContain('Satın alma');
-    // Veri değişikliği emre bağlı değildir; toplu düğmenin ne uygulayacağı notta yazar.
-    expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).queryByRole('button')).toBeNull();
+    // Veri değişikliği emre bağlı değildir ("Göster" yok), etkisi satırdan görülür (2. adım); toplu düğmenin ne uygulayacağı notta yazar.
+    expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).getAllByRole('button').map((x) => x.textContent)).toEqual(['Etkisini gör']);
     expect(liste.textContent).toContain('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
     fireEvent.click(within(satirlar[1] as HTMLElement).getByRole('button', { name: 'Göster' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
@@ -468,6 +489,9 @@ describe('Kokpit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
     expect(liste.textContent).not.toContain('Planı güncelle');
+    // Yazamayan kişi taslak açamaz: satırın etkisi de istenemez (2. adım).
+    expect(within(liste).getAllByRole('listitem').length).toBeGreaterThan(0);
+    expect(within(liste).queryByRole('button', { name: 'Etkisini gör' })).toBeNull();
     expect(liste.textContent).toContain('"Sahada oldu" ve "Plan geride" satırları bilgi içindir');
   });
 

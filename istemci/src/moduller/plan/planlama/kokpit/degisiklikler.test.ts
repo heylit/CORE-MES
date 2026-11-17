@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
-import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler } from './degisiklikler.ts';
+import { ESKI_DEGISIKLIK } from '../kayit.ts';
+import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler, gorunumdeBekleyenler } from './degisiklikler.ts';
 
 // Uydurma örnek (ORN-): şimdi 10. saat; torna 8'de başlayacaktı ve başlamadı, freze başladı, taşlama on dakika önce başlayacaktı.
 const is = (id: string, S: number, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S, C: S + 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
@@ -36,6 +37,8 @@ describe('degisiklikler (3317 a)', () => {
       ['veri', 'Değişti a', 'Başka sayfa · Deneme Kişi · A5 · ORN-fark', null],
       ['veri', 'Değişti b', 'Bu sayfa', null],
     ]);
+    // Tek başına uygulanabilen yalnız çalışmaya yazılmış satırdır; yazılmamış başka sayfa satırının bekleyen kimliği yoktur.
+    expect(l.map((d) => d.bekleyenId)).toEqual([null, 'b']);
   });
 
   it('saha olayları yeniden eskiye; emir numarasıyla emre bağlanır; satın alma olayı kaynağıyla ayrılır; sıra veri, saha, geride', () => {
@@ -85,5 +88,23 @@ describe('bekleyenDegisiklikleri', () => {
     expect(bekleyenDegisiklikleri(c(5, 5, []), dis).map((b) => b.id)).toEqual(['dis']);
     expect(bekleyenDegisiklikleri(null, dis).map((b) => b.id)).toEqual(['dis']);
     expect(bekleyenDegisiklikleri(c(5, 4, [bekleyen('a'), bekleyen('dis')]), dis).map((b) => b.id)).toEqual(['a', 'dis']);
+  });
+});
+
+// 3317 a (2. adım): taslakta uygulanan satır listeden düşer; taslağın kendi komutları satır olmaz.
+describe('gorunumdeBekleyenler', () => {
+  const g = (dataVer: number, planVer: number, l: BekleyenDegisiklik[]): PlanlamaCalismasi => ({ dataVer, plan: { dataVer: planVer }, bekleyen: l }) as unknown as PlanlamaCalismasi;
+  const ortak = [bekleyen('a', { geri: [] }), bekleyen('b', { geri: [] })];
+
+  it('görünümde duran satırlar kalır; dizmenin düşürdüğü satır çıkar; taslağın kendi bekleyeni eklenmez', () => {
+    expect(gorunumdeBekleyenler(ortak, g(5, 4, ortak)).map((b) => b.id)).toEqual(['a', 'b']);
+    expect(gorunumdeBekleyenler(ortak, g(6, 4, [ortak[1]!, bekleyen('taslak')])).map((b) => b.id)).toEqual(['b']);
+    expect(gorunumdeBekleyenler(ortak, g(6, 6, []))).toEqual([]);
+  });
+
+  it('kaydı olmayan önceki değişiklik satırı görünüm bayatken durur, dizilince çıkar; yazılmamış başka sayfa satırı hep durur', () => {
+    const eski = bekleyen(ESKI_DEGISIKLIK), dis = bekleyen('dis', { dis: true });
+    expect(gorunumdeBekleyenler([eski, dis], g(6, 4, [bekleyen('taslak')])).map((b) => b.id)).toEqual([ESKI_DEGISIKLIK, 'dis']);
+    expect(gorunumdeBekleyenler([eski, dis], g(6, 6, [])).map((b) => b.id)).toEqual(['dis']);
   });
 });

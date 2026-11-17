@@ -1,11 +1,11 @@
 import type { PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { bekleyenListesi } from '../kayit.ts';
+import { bekleyenler, bekleyenListesi, ESKI_DEGISIKLIK } from '../kayit.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitModeli } from './kurallar.ts';
 
 // Planı etkileyen değişiklikler (3317 a, 1. adım): üç kaynağın tek listesi. "Veri değişti": başka sayfada ya da bu sayfada yapılan, plana
-// henüz girmemiş değişiklikler (bekleyenler); toplu uygulanır. "Sahada oldu": son canlıya almadan sonraki saha ve satın alma olayları;
-// plan kendiliğinden değişmez. "Plan geride": planlanan başlangıcı geçmiş, başlamamış işler. Liste yalnız gösterir. Saf.
+// henüz girmemiş değişiklikler (bekleyenler); toplu ya da satır satır uygulanır. "Sahada oldu": son canlıya almadan sonraki saha ve satın alma olayları;
+// plan kendiliğinden değişmez. "Plan geride": planlanan başlangıcı geçmiş, başlamamış işler. Saf.
 type Olay = NonNullable<NonNullable<NonNullable<PlanSurumCevabi['bayat']>['olaylar']>[number]>;
 export type DegisiklikBasligi = 'veri' | 'saha' | 'geride';
 export const BASLIK_ADI: Record<DegisiklikBasligi, string> = { veri: 'Veri değişti', saha: 'Sahada oldu', geride: 'Plan geride' };
@@ -24,6 +24,9 @@ export interface Degisiklik {
   emirId: string | null;
   // Plan geride satırında işin kendisi (tahtada gösterilir).
   isId: string | null;
+  // "Veri değişti" satırında çalışmaya yazılmış bekleyenin kimliği (tek başına uygulanabilir); yazılmamış başka sayfa satırında ve öteki
+  // başlıklarda null.
+  bekleyenId: string | null;
 }
 
 const OLAY_NE: Record<Olay['neden'], string> = {
@@ -61,6 +64,15 @@ export function bekleyenDegisiklikleri(c: PlanlamaCalismasi | null, dis: Bekleye
   return dis === null || kayitli.some((b) => b.id === dis.id) ? kayitli : [...kayitli, dis];
 }
 
+// Taslak varken liste taslağın görünümünü izler: satır taslakta uygulandıysa (dizme onu görünümün bekleyenlerinden düşürdü) listede
+// durmaz. Taslağın kendi dizilmemiş komutları satır olmaz (taslak çubuğundadır). Kaydı olmayan önceki değişiklik satırı görünüm bayatken
+// durur; yazılmamış başka sayfa satırı hep durur. Taslak yokken görünüm ortak çalışmadır, liste değişmez.
+export function gorunumdeBekleyenler(ortak: readonly BekleyenDegisiklik[], gorunum: PlanlamaCalismasi): BekleyenDegisiklik[] {
+  const g = new Set(bekleyenler(gorunum).map((b) => b.id));
+  const bayat = gorunum.plan !== null && gorunum.plan.dataVer !== gorunum.dataVer;
+  return ortak.filter((b) => b.dis === true || (b.id === ESKI_DEGISIKLIK ? bayat : g.has(b.id)));
+}
+
 export interface DegisiklikGirdisi {
   m: KokpitModeli;
   bekleyen: readonly BekleyenDegisiklik[];
@@ -74,13 +86,13 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
   const noIle = new Map(m.emirler.map((e) => [e.no, e]));
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const veri: Degisiklik[] = bekleyen.map((b) => ({
-    anahtar: `veri:${b.id}`, baslik: 'veri', ne: b.ne, emirId: null, isId: null,
+    anahtar: `veri:${b.id}`, baslik: 'veri', ne: b.ne, emirId: null, isId: null, bekleyenId: b.dis === true ? null : b.id,
     alt: [b.dis === true ? 'Başka sayfa' : 'Bu sayfa', b.kim === '' ? null : b.kim, b.t > 0 ? an(b.t) : null, b.ayrinti === '' ? null : b.ayrinti].filter((x) => x !== null).join(' · '),
   }));
   const saha: Degisiklik[] = [...olaylar].map((o, i) => ({ o, i })).sort((a, b) => Date.parse(b.o.zaman) - Date.parse(a.o.zaman)).map(({ o, i }) => {
     const ne = o.emirNo ?? o.makineKod;
     return {
-      anahtar: `saha:${String(i)}:${o.neden}:${o.zaman}`, baslik: 'saha' as const, emirId: (o.emirNo === null ? undefined : noIle.get(o.emirNo))?.id ?? null, isId: null,
+      anahtar: `saha:${String(i)}:${o.neden}:${o.zaman}`, baslik: 'saha' as const, emirId: (o.emirNo === null ? undefined : noIle.get(o.emirNo))?.id ?? null, isId: null, bekleyenId: null,
       ne: ne === null ? OLAY_NE[o.neden] : `${OLAY_NE[o.neden]}: ${ne}`,
       alt: [o.neden === 'satin-alma-termini' || o.neden === 'fason-termini' ? 'Satın alma' : 'Saha', an(Date.parse(o.zaman)), OLAY_SONUCU[o.neden]].join(' · '),
     };
@@ -90,7 +102,7 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
     .sort((a, b) => a.S - b.S).map((x) => {
       const e = emirNo.get(x.job);
       return {
-        anahtar: `geride:${x.id}`, baslik: 'geride' as const, emirId: e?.id ?? null, isId: x.id,
+        anahtar: `geride:${x.id}`, baslik: 'geride' as const, emirId: e?.id ?? null, isId: x.id, bekleyenId: null,
         ne: `${e?.no ?? x.job} · ${x.ad} · ${kod.get(x.m) ?? x.m} · ${zaman(x.S)} başlayacaktı`,
         alt: [`${sure(m.simdi - x.S)} geride`, e && e.termin !== null ? `termin ${zaman(e.termin)}` : null].filter((y) => y !== null).join(' · '),
       };

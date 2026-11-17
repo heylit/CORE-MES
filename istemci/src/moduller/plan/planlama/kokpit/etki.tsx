@@ -24,7 +24,8 @@ export interface EtkiSecenekleri {
 export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
   const [durum, setDurum] = useState<EtkiDurumu>({ tur: 'duzen' });
 
-  const dene = async (k: TaslakKomutu) => {
+  // isler: yeniden dizilecek siparişler; verilmezse bütün plan.
+  const dene = async (k: TaslakKomutu, isler: readonly string[] = ['*']) => {
     if (taslak === null || taslak.mesgul) return;
     const once = c.plan === null ? null : ozetOku(c.plan);
     const oteki = bekleyenListesi(c).length;
@@ -32,7 +33,7 @@ export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
     if (c.plan === null) { sonuc('tazele'); setDurum({ tur: 'duzen' }); return; }
     setDurum({ tur: 'hesap' });
     try {
-      const d = await taslak.degerlendir({ tur: 'plan-uygula', isler: ['*'] });
+      const d = await taslak.degerlendir({ tur: 'plan-uygula', isler: [...isler] });
       const sonra = d.cevap.sonuc.tur === 'plan-uygula' ? ozetOku(d.cevap.sonuc.plan) : null;
       if (sonra === null) { setDurum({ tur: 'hata', ileti: 'Plan hesaplanırken veri değişti; etki gösterilemedi. Değişiklik taslakta kaldı.' }); return; }
       setDurum({ tur: 'etki', e: { is: d.is, once, sonra, oteki } });
