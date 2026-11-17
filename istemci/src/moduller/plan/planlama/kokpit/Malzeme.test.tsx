@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { planOku, type OkunanPlan, type PlanIslemi } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import { emirMalzemeleri, malzemeNedeni, malzemeVarsayimi, miktarYaz, terminYazisi, type AcikSiparisler } from './malzeme.ts';
+import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import { EmirAdimlari } from './Yerlestirme.tsx';
 import { siraKartlari } from './yerlestirme.ts';
 
@@ -181,5 +182,61 @@ describe('Kokpit malzeme satırı: ekran (3369)', () => {
     const ilk = k.querySelector('ol.tc-pyq-rota > li');
     expect(ilk?.getAttribute('data-malzeme')).toBe('H1');
     expect(ilk?.textContent).toBe('MalzemeORN-Çubuk Ø40g3 08:00 geliyor');
+  });
+});
+
+describe('Kokpit tahtasında malzeme çubuğu (3369)', () => {
+  const emir = (id: string): KokpitEmri => ({ id, no: `ORN-UE-${id}`, urun: 'ORN-Flanş', adet: 8, termin: 100, bitis: 90, durum: 'iyi', gecikme: -10, adimlar: [] });
+  const EMIRLER = ['1', '2', '3', '4', '7'].map(emir);
+  const mal: NonNullable<OkunanPlan['mal']> = {
+    ...MAL,
+    // Aynı günlerde bekleyen ikinci emir; siparişi okunamayan satır.
+    '7': [{ kod: 'H2', adim: '10', need: 5, t: 60, stok: 0, eksik: 0, pay: [{ tur: 'sa', kim: 9999, q: 5, gelis: 60, tb: false }] }],
+  };
+  const cubuklar = (simdi = 8) => malzemeCubuklari(emirMalzemeleri(C, plan(mal), ACIK, simdi), { simdi, bas: 0, emirler: EMIRLER }, zaman);
+
+  it('yalnız gelişi belli ve ileride olan malzeme çubuk olur: şimdiden hazır anına; termini girilmemiş, eksik ve stoktaki olmaz', () => {
+    expect(cubuklar().map((c) => [c.emir, c.a, c.b, c.sirket])).toEqual([['7', 8, 60, 'sipariş'], ['1', 8, 80, 'ORN-Tedarikçi A']]);
+    expect(cubuklar()[1]?.ad).toBe('ORN-UE-1 · ORN-Çubuk Ø40: 25 kg siparişten · ORN-Tedarikçi A · g3 08:00 geliyor');
+  });
+
+  it('gelişi geçmiş malzeme çubuk olmaz; malzeme verilmezse ve süzgeçte emir yoksa boştur', () => {
+    expect(cubuklar(70).map((c) => c.emir)).toEqual(['1']);
+    expect(cubuklar(90)).toEqual([]);
+    expect(malzemeCubuklari(null, { simdi: 8, bas: 0, emirler: EMIRLER }, zaman)).toEqual([]);
+    expect(malzemeCubuklari(emirMalzemeleri(C, plan(mal), ACIK, 8), { simdi: 8, bas: 0, emirler: [emir('4')] }, zaman)).toEqual([]);
+  });
+
+  it('satır: aynı günlerde bekleyen emirler alt alta dizilir; çubuk emri seçer; süzgeç dışı ve seçili kart dışı emir soluktur', () => {
+    const sec = vi.fn();
+    const k = render(<MalzemeSeridi cubuklar={cubuklar()} bas={0} px={4} zaman={zaman} secEmir="1" sec={sec} yanan={new Set(['1'])} uyar={() => true} />).container;
+    const satir = k.querySelector<HTMLElement>('[data-malzeme-satiri]');
+    expect(satir?.style.getPropertyValue('--seritler')).toBe('2');
+    expect(satir?.querySelector('.tc-pyq-bas')?.textContent).toBe('Malzeme2 emir bekliyor');
+    const [yedi, bir] = [...k.querySelectorAll<HTMLElement>('[data-malzeme-cubugu]')];
+    expect([yedi?.style.getPropertyValue('--serit'), bir?.style.getPropertyValue('--serit')]).toEqual(['0', '1']);
+    expect([bir?.style.getPropertyValue('--x'), bir?.style.getPropertyValue('--w')]).toEqual(['32px', '288px']);
+    expect(bir?.textContent).toBe('…UE-1ORN-Tedarikçi A · g3 08:00');
+    expect([bir?.getAttribute('aria-pressed'), bir?.hasAttribute('data-sonuk'), yedi?.hasAttribute('data-sonuk')]).toEqual(['true', false, true]);
+    fireEvent.click(yedi!);
+    expect(sec).toHaveBeenCalledWith('7');
+  });
+
+  it('boşalan şerit yeniden kullanılır; süzgeç dışı emir soluktur; aynı emrin iki malzemesi tek emir sayılır', () => {
+    const c = (anahtar: string, e: string, a: number, b: number) => ({ anahtar, emir: e, no: `ORN-UE-${e}`, a, b, sirket: 'sipariş', ad: anahtar });
+    // px 4: ilk çubuk 0-160, ikinci 40-200 (ikinci şerit), üçüncü 180'de başlar ve boşalan ilk şeride döner.
+    const k = render(<MalzemeSeridi cubuklar={[c('x', '1', 0, 40), c('y', '2', 10, 50), c('z', '2', 45, 90)]} bas={0} px={4} zaman={zaman} secEmir={null} sec={vi.fn()} yanan={null} uyar={(e) => e === '1'} />).container;
+    const l = [...k.querySelectorAll<HTMLElement>('[data-malzeme-cubugu]')];
+    expect(l.map((x) => x.style.getPropertyValue('--serit'))).toEqual(['0', '1', '0']);
+    expect(k.querySelector<HTMLElement>('[data-malzeme-satiri]')?.style.getPropertyValue('--seritler')).toBe('2');
+    expect(l.map((x) => x.hasAttribute('data-sonuk'))).toEqual([false, true, true]);
+    expect(k.querySelector('[data-malzeme-satiri] .tc-pyq-bas small')?.textContent).toBe('2 emir bekliyor');
+    const tek = render(<MalzemeSeridi cubuklar={[c('y', '2', 10, 50), c('z', '2', 45, 90)]} bas={0} px={4} zaman={zaman} secEmir={null} sec={vi.fn()} yanan={null} uyar={() => true} />).container;
+    expect(tek.querySelector('[data-malzeme-satiri] .tc-pyq-bas small')?.textContent).toBe('1 emir bekliyor');
+  });
+
+  it('çubuk yoksa satır çizilmez', () => {
+    const k = render(<MalzemeSeridi cubuklar={[]} bas={0} px={4} zaman={zaman} secEmir={null} sec={vi.fn()} yanan={null} uyar={() => true} />).container;
+    expect(k.querySelector('[data-malzeme-satiri]')).toBeNull();
   });
 });

@@ -299,9 +299,24 @@
 .tc-pyq-aciklama i[data-t="gec"] { border-left: var(--cizgi-kalin) solid var(--d-gec); }
 .tc-pyq-aciklama i[data-t^="ok-"] { height: 0; border: 0; border-top: var(--cizgi) solid var(--ink); border-radius: 0; background: none; }
 .tc-pyq-aciklama i[data-t="ok-o"] { border-top-style: dashed; }
+.tc-pyq-aciklama i[data-t="malzeme"] { border: var(--cizgi-ince) dashed var(--d-risk); background: color-mix(in oklab, var(--d-risk) 12%, var(--panel-solid)); }
 .tc-pyq-aciklama i[data-t="kapali"] { background: repeating-linear-gradient(135deg, var(--edge) 0 var(--pay-ince), transparent var(--pay-ince) var(--b-1)); }
 .tc-pyq-bosyer:hover, .tc-pyq-bosyer:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
 .tc-pyq-hayalet[data-gecersiz] { border-color: var(--stop); background: color-mix(in oklab, var(--stop) 25%, transparent); }
+
+/* Malzeme satırı (3369): gelişi beklenen malzeme şimdiden geliş anına kesik çerçeveli çubuk; bekleyen emirler alt alta dizilir. */
+.tc-pyq-malsatir { min-height: calc(var(--satir) * var(--seritler, 1)); background: var(--panel2); }
+.tc-pyq-malcubuk {
+  position: absolute; top: calc(var(--b-1) + var(--serit, 0) * var(--satir)); left: var(--x); width: var(--w); height: calc(var(--satir) - var(--b-1) * 2);
+  display: flex; align-items: center; gap: var(--b-1); padding: 0 var(--b-2);
+  border: var(--cizgi) dashed var(--d-risk); border-radius: var(--yari-1); background: color-mix(in oklab, var(--d-risk) 12%, var(--panel-solid)); color: var(--ink);
+  font: inherit; font-size: var(--yazi-xs); text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer;
+}
+.tc-pyq-malcubuk b { font-family: var(--font-mono); }
+.tc-pyq-malcubuk span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.tc-pyq-malcubuk[data-sonuk] { opacity: var(--saydam-55); }
+.tc-pyq-malcubuk[aria-pressed="true"] { border-style: solid; box-shadow: 0 0 0 var(--cizgi) var(--ink); }
+.tc-pyq-malcubuk:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
 
 /* Plansız emirler tepsisi. */
 .tc-pyq-tepsi { min-height: 0; background: var(--panel2); }
