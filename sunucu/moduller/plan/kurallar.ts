@@ -3,6 +3,9 @@
 import { PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanOnayKomutu, SenaryoDurumu, SenaryoYapabilir } from '#paylasilan/sozlesme/plan.ts';
 
+// 280 a: planı, karşılaştırmayı, canlı yerleşimi ve senaryoları planı gören ya da yazan okur (uçlar ve Ortak Dosyalar plan listesi).
+export const PLAN_OKUMA_ISLEMLERI = ['plan.oku', 'plan.yaz'] as const;
+
 export interface Kaynak { tur: 'makine' | 'kisi'; id: number }
 export const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
 export const ayniKaynak = (a: Kaynak, b: Kaynak): boolean => a.tur === b.tur && a.id === b.id;
