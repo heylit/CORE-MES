@@ -311,41 +311,6 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               ? 'Termin ve maliyet aynı plan denemesinden gelir. Kârı seçin, fiyat önerilir; isterseniz değiştirin.'
               : ilk ? 'Her kaleme birim fiyat girin.' : 'Önceki sürümün değerleri dolduruldu; değiştirip yeni sürüm olarak verin.'}
           </p>
-          {denenir && (
-            <section className="tc-sp-tf" aria-label="Termin">
-              <div className="tc-sp-izgara">
-                <Girdi etiket="Geçerlilik tarihi" type="date" ipucu="Satış taslağı bu tarihe kadar planda yer tutar; geçince plandan kalkar." {...form.alan('gecerlilik')} />
-                <fieldset className="tc-sp-secim">
-                  <legend>Termin yerleşimi</legend>
-                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'arkaya'} onChange={() => yerlesimSec('arkaya')} /> Planın arkasına ekle</label>
-                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'geriye'} onChange={() => yerlesimSec('geriye')} /> Terminden geriye</label>
-                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'baslat'} onChange={() => yerlesimSec('baslat')} /> Seçilen günde başlat</label>
-                </fieldset>
-                {d.yerlesim === 'baslat' && (
-                  <Girdi etiket="Başlangıç günü" type="date" required ipucu="İş bu günden önce başlamaz; plandan bir güne tıklayarak da seçilir. Plan dondurulur, hiçbir sipariş kaymaz." {...form.alan('baslangic')} />
-                )}
-                <Girdi
-                  etiket="İstenen termin"
-                  type="date"
-                  {...(d.yerlesim === 'geriye' ? { required: true } : {})}
-                  ipucu={d.yerlesim !== 'geriye'
-                    ? `İsteğe bağlı: girilirse planın yetişip yetişmediği yazılır.${d.yerlesim === 'arkaya' ? ' Plan dondurulur, hiçbir sipariş kaymaz.' : ''}`
-                    : 'İş terminden geriye en geç başlamayla yerleşir; başka sipariş gecikirse plancı onayı gerekir.'}
-                  {...form.alan('istenenTermin')}
-                />
-              </div>
-              <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
-              {/* 3347: şerit termin bulunamasa da çizilir; yerleşmeyen kalemin sebebi plandaki doluluktan okunur. */}
-              {terminDener && c !== undefined && c.durum === 'hazir' && (c.plan === null
-                ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
-                : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} secili={seciliGun === '' ? null : seciliGun}
-                  gunEtiketi={GUN_ETIKETI[d.yerlesim]} gunSec={gunSec} />)}
-              {terminDener && c?.durum === 'hazir' && c.plan !== null && !c.plan.bloklar.some((b) => b.tur === 'teklif') && (
-                <p className="tc-sp-ipucu">Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.</p>
-              )}
-            </section>
-          )}
-
           {planli && c !== undefined ? (
             <>
               <Tablo
@@ -408,6 +373,41 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               ))}
             </ol>
           )}
+          {denenir && (
+            <section className="tc-sp-tf" aria-label="Termin">
+              <div className="tc-sp-izgara">
+                <Girdi etiket="Geçerlilik tarihi" type="date" ipucu="Satış taslağı bu tarihe kadar planda yer tutar; geçince plandan kalkar." {...form.alan('gecerlilik')} />
+                <fieldset className="tc-sp-secim">
+                  <legend>Termin yerleşimi</legend>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'arkaya'} onChange={() => yerlesimSec('arkaya')} /> Planın arkasına ekle</label>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'geriye'} onChange={() => yerlesimSec('geriye')} /> Terminden geriye</label>
+                  <label><input type="radio" name="yerlesim" checked={d.yerlesim === 'baslat'} onChange={() => yerlesimSec('baslat')} /> Seçilen günde başlat</label>
+                </fieldset>
+                {d.yerlesim === 'baslat' && (
+                  <Girdi etiket="Başlangıç günü" type="date" required ipucu="İş bu günden önce başlamaz; plandan bir güne tıklayarak da seçilir. Plan dondurulur, hiçbir sipariş kaymaz." {...form.alan('baslangic')} />
+                )}
+                <Girdi
+                  etiket="İstenen termin"
+                  type="date"
+                  {...(d.yerlesim === 'geriye' ? { required: true } : {})}
+                  ipucu={d.yerlesim !== 'geriye'
+                    ? `İsteğe bağlı: girilirse planın yetişip yetişmediği yazılır.${d.yerlesim === 'arkaya' ? ' Plan dondurulur, hiçbir sipariş kaymaz.' : ''}`
+                    : 'İş terminden geriye en geç başlamayla yerleşir; başka sipariş gecikirse plancı onayı gerekir.'}
+                  {...form.alan('istenenTermin')}
+                />
+              </div>
+              <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
+              {/* 3347: şerit termin bulunamasa da çizilir; yerleşmeyen kalemin sebebi plandaki doluluktan okunur. */}
+              {terminDener && c !== undefined && c.durum === 'hazir' && (c.plan === null
+                ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
+                : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} secili={seciliGun === '' ? null : seciliGun}
+                  gunEtiketi={GUN_ETIKETI[d.yerlesim]} gunSec={gunSec} />)}
+              {terminDener && c?.durum === 'hazir' && c.plan !== null && !c.plan.bloklar.some((b) => b.tur === 'teklif') && (
+                <p className="tc-sp-ipucu">Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.</p>
+              )}
+            </section>
+          )}
+
         </Kart>
       )}
 
