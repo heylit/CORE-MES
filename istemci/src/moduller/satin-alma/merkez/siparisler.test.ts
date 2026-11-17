@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SiparisLogoOzetiCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { PurchaseRequest, Quote, Supplier } from './tipler.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
@@ -6,7 +8,7 @@ import { S, V, bump } from './store.ts';
 import { siparisListesi } from './calc.ts';
 import { render } from './views.ts';
 import { setRole } from './roles.ts';
-import { ekranCiz, ekranKaldir, sekme, talepSatiri } from './test-ekrani.ts';
+import { ekranCiz, ekranKaldir, sekme, talepSatiri, testOturumuYaz } from './test-ekrani.ts';
 import { addDays, todayStr } from './util.ts';
 
 const BUGUN = todayStr();
@@ -49,7 +51,7 @@ function kur(): void {
   S.ready = true;
   bump();
 }
-afterEach(() => { ekranKaldir(); S.ready = false; setRole('buyer'); document.body.innerHTML = ''; });
+afterEach(() => { ekranKaldir(); testOturumuYaz(null); vi.unstubAllGlobals(); S.ready = false; setRole('buyer'); document.body.innerHTML = ''; });
 
 describe('Siparişler (2430)', () => {
   it('her sipariş bir satır; gecikme, bu hafta, teslim ve gelen miktar merkezin verisinden', () => {
@@ -90,5 +92,45 @@ describe('Siparişler (2430)', () => {
     const k = ekranCiz();
     talepSatiri(k, 't2:qa')!.click();
     expect([V.page, V.id, V.tab]).toEqual(['request', 't2', 'order']);
+  });
+
+  it("3384 a: Logo irsaliyelerini görene rozet altında irsaliye ve fatura özeti, Logo'da fark sayısı ve sekmesi; görmeyene hiçbiri", async () => {
+    kur();
+    V.page = 'orders'; V.id = null; V.tab = null;
+    const cevap: SiparisLogoOzetiCevabi = {
+      okuma: { irsaliye: true, fatura: true, sonOkuma: null },
+      siparisler: [{
+        siparisNo: 'SP-DEN-001', logoda: true, irsaliyeler: [], irsaliyeliKalem: 1, farkliKalem: 1, faturalar: [],
+        kalemler: [{ siparisSatiriId: 1, kalemAdi: 'Deneme rulman 6204', siparisMiktari: '40', birim: 'adet', coreMiktari: '30', logoMiktari: '28', logoBirimi: 'adet', durum: 'fark', fark: '-2' }],
+      }],
+    };
+    const istekler: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      istekler.push(adres);
+      return new Response(JSON.stringify(cevap), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    testOturumuYaz({ id: 7, ad: 'Deneme Alıcı', islemler: ['satin-alma.oku', 'logo.irsaliye-oku'] } as never);
+    render();
+    const k = ekranCiz();
+    await vi.waitFor(() => { expect(k.querySelector('.sa-sp-logo-ozet')).not.toBeNull(); });
+    expect(istekler).toEqual([`/api/logo/satin-alma-siparisleri/ozet?nolar=${encodeURIComponent('SP-DEN-001')}`]);
+    expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('İrsaliye 1/1 kalem · 1 kalemde fark');
+    expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('Fatura yok');
+    expect(sekme(k, 'logo-fark')?.textContent).toContain("Logo'da fark · 1");
+    expect(k.textContent).not.toMatch(/undefined|NaN/);
+    // Sayı kartına basınca "Logo'da fark" sekmesi seçilir ve yalnız farklı sipariş kalır.
+    expect(k.querySelectorAll('tbody tr[data-satir]')).toHaveLength(2);
+    act(() => { k.querySelector<HTMLElement>('.sa-sp-kart-dugme')!.click(); });
+    await vi.waitFor(() => { expect(sekme(k, 'logo-fark')?.getAttribute('aria-selected')).toBe('true'); });
+    expect([...k.querySelectorAll('tbody tr[data-satir]')].map((tr) => tr.getAttribute('data-satir'))).toEqual(['t1:q1']);
+    ekranKaldir();
+
+    // Logo irsaliyelerini görmeyen: istek atılmaz, özet ve sekme çizilmez.
+    istekler.length = 0;
+    testOturumuYaz({ id: 8, ad: 'Deneme Okuyan', islemler: ['satin-alma.oku'] } as never);
+    const g = ekranCiz();
+    expect(istekler).toEqual([]);
+    expect(g.querySelector('.sa-sp-logo-ozet')).toBeNull();
+    expect(sekme(g, 'logo-fark')).toBeNull();
   });
 });

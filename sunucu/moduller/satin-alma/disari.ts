@@ -173,6 +173,8 @@ export async function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: read
   if (logoSatirRefleri.length === 0) return new Map();
   return new Map((await sorgu.logoSatirliSiparisSatirlari(db, logoSatirRefleri)).map(({ logoSatirRef, ...x }) => [logoSatirRef, x]));
 }
+// 3384 a: logo modülü siparişin Logo irsaliye ve fatura özetini kurarken siparişin satırlarını buradan okur; yetki denetlemez, fiyat yok.
+export { logoSiparisKalemleri, type LogoSiparisKalemiOkuma as LogoSiparisKalemi } from './sorgular.ts';
 // 3398-2: Stok kontrol sayfası teklif istenmeden önceki (taslak) talep kalemlerini buradan okur; yetki denetlemez, fiyat yok.
 export { stokKontroluKalemleriOku as stokKontroluKalemleri, type StokKontroluKalemiOkuma as StokKontroluKalemi } from './sorgular.ts';
 // 3398-2 a: stok modülü "stoktan karşıla" ve iptalinde kendi işleminin içinde çağırır; yetkiyi stok ucu denetler. Yalnız taslak talepte,
