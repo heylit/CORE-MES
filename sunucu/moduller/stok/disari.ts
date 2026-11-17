@@ -448,3 +448,12 @@ export async function siparisSatirlarininBelgeleri(
     partiBelgeleri: [...partiler].flatMap(([partiId, lotNo]) => (parti.get(partiId) ?? []).map((b) => ({ partiId, lotNo, belgeId: b.id, ad: b.ad, revKodu: b.revKodu ?? null }))),
   };
 }
+
+// 3390-2: emre sarf edilen partilerin belgeleri (Ortak Dosyalar hazır listesi). Yetki denetlemez; çağıran parti belge ucunun okuma
+// işlemiyle süzer, indirme o uçtandır.
+export async function emrinPartiBelgeleri(db: Db, emirId: number): Promise<SiparisPartiBelgesi[]> {
+  const partiler = new Map((await sorgular.emrinPartileri(db, emirId)).flatMap((x) => (x.partiId === null ? [] : [[x.partiId, x.lotNo] as const])));
+  if (partiler.size === 0) return [];
+  const parti = await servis.partiBelgeleri(db, [...partiler.keys()]);
+  return [...partiler].flatMap(([partiId, lotNo]) => (parti.get(partiId) ?? []).map((b) => ({ partiId, lotNo, belgeId: b.id, ad: b.ad, revKodu: b.revKodu ?? null })));
+}
