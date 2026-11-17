@@ -442,6 +442,8 @@ export interface SiparisGovdeSecenegi {
   // Malzeme ve hizmet satırının KDV oranı (logo.kdv-orani, logo.hizmet-kdv-orani); boşsa gönderilmez.
   kdv: number | null;
   hizmetKdv: number | null;
+  // 3391-2 a: yalnız satış teklifinde, firma kartında seçilmiş CRM satış müşterisi kodu; yoksa yardımcı bağ sırasının ilkini kullanır.
+  crmKodu?: string | null;
 }
 
 // Logo tarihi dd.MM.yyyy (not 1); ISO tarih (YYYY-MM-DD) dışı değer null.
@@ -710,6 +712,7 @@ export function malzemeGuncellemeGovdesi(k: {
 export const SATIS_TEKLIF_ALANLARI = Object.freeze({
   no: 'number', tarih: 'date', cari: 'arpCode', gecerlilik: 'validUntil', doviz: 'currencyCode', kur: 'rate', durum: 'status', satirlar: 'lines',
   tur: 'type', kod: 'masterCode', miktar: 'quantity', fiyat: 'price', iskonto: 'discountRate', kdv: 'vatRate', birim: 'unitCode', termin: 'dueDate',
+  crm: 'salesCustomerCode',
 });
 export const SATIS_TEKLIF_LOGO_DURUMU = 1;
 
@@ -770,6 +773,8 @@ export function satisTeklifiGovdesi(t: GonderilecekSatisTeklifi, o: SiparisGovde
     satirlar.push(satir);
   }
   const govde: Record<string, unknown> = { [a.no]: no, [a.tarih]: tarih, [a.cari]: cari, [a.durum]: SATIS_TEKLIF_LOGO_DURUMU };
+  const crm = o.crmKodu?.trim() ?? '';
+  if (crm !== '') govde[a.crm] = crm;
   const gecerlilik = t.gecerlilikBitis === null ? null : logoTarihi(t.gecerlilikBitis);
   if (gecerlilik !== null) govde[a.gecerlilik] = gecerlilik;
   if (doviz !== null) {
@@ -2098,16 +2103,31 @@ export function crmDurumu(r: KopruSonucu): CrmSonucu {
 // 3391 a: cariye bağlı CRM satış müşterisi kodları, yardımcının sırasıyla (ilki tekliflerde kullanılır). En çok 20 kod taşınır, sayı
 // bütün bağlardır (ekran fazlasını "+N" der). Yalnız "var" iken; eski yardımcı listeyi vermez (null).
 export const LOGO_CRM_KOD_SINIRI = 20;
-export interface CrmKodlari { kodlar: string[]; sayi: number }
+// secilebilir (3391-2 a): yardımcı teklifte verilen CRM kodunu (salesCustomerCode) kullanır; eski yardımcı alanı yok sayar.
+export interface CrmKodlari { kodlar: string[]; sayi: number; secilebilir: boolean }
 export function crmKodlariniAyikla(govde: unknown): CrmKodlari | null {
-  const g = typeof govde === 'object' && govde !== null ? govde as { customers?: unknown; customerCount?: unknown } : {};
+  const g = typeof govde === 'object' && govde !== null ? govde as { customers?: unknown; customerCount?: unknown; salesCustomerCodeAccepted?: unknown } : {};
   if (!Array.isArray(g.customers)) return null;
   const kodlar = g.customers.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim());
   const sayi = typeof g.customerCount === 'number' && Number.isInteger(g.customerCount) && g.customerCount > kodlar.length ? g.customerCount : kodlar.length;
-  return { kodlar: kodlar.slice(0, LOGO_CRM_KOD_SINIRI), sayi };
+  return { kodlar: kodlar.slice(0, LOGO_CRM_KOD_SINIRI), sayi, secilebilir: g.salesCustomerCodeAccepted === true };
 }
 export const crmKodlari = (r: KopruSonucu): CrmKodlari | null =>
   (r.tur === 'basarili' && r.logicalRef !== null ? r.crmKodlari ?? null : null);
+// 3391-2 a: firma kartında seçilmiş CRM kodu teklif gitmeden denetlenir: yardımcı kodu kullanabilmeli ve kod Logo'da hâlâ bu cariye bağlı
+// olmalı. Seçim yoksa null (bağ sırasının ilki gider). Ret iletisi kullanıcıya gösterilir.
+export function seciliCrmEngeli(secili: string | null, cari: string, r: KopruSonucu): string | null {
+  const kod = secili?.trim() ?? '';
+  if (kod === '') return null;
+  const l = crmKodlari(r);
+  if (l === null || !l.secilebilir) {
+    return kirp(`Firma kartında CRM satış müşterisi ${kod} seçili ama Logo yardımcısı seçimi desteklemiyor; yardımcıyı güncelleyin ya da seçimi kaldırın.`);
+  }
+  if (!l.kodlar.some((k) => k.toUpperCase() === kod.toUpperCase())) {
+    return kirp(`CRM satış müşterisi ${kod} Logo'da artık cari ${cari} ile bağlı değil; firma kartında yeniden seçin.`);
+  }
+  return null;
+}
 export const crmSorulurMu = (f: { tur: string; logoCariKodu: string | null }): boolean =>
   f.tur !== 'tedarikci' && (f.logoCariKodu ?? '').trim() !== '';
 export const crmSorguyuKeser = (r: KopruSonucu): boolean => r.tur === 'ulasilamadi' || r.tur === 'belirsiz';

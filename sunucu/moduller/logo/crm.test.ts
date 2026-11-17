@@ -12,7 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
-import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { cariCrmDurumlari, cariHazirligi } from './servis.ts';
@@ -39,20 +39,42 @@ describe('CRM durumu kuralı (3359)', () => {
   test('CRM-7 kod listesi (3391): sıra korunur, boş ve metin olmayan atılır, en çok 20 kod ve bütün bağların sayısı; eski yardımcıda null', () => {
     assert.equal(crmKodlariniAyikla({ success: true, logicalRef: 88 }), null);
     assert.equal(crmKodlariniAyikla(null), null);
-    assert.deepEqual(crmKodlariniAyikla({ customers: [' ORN-CRM-2 ', 'ORN-CRM-1', '', 7, null] }), { kodlar: ['ORN-CRM-2', 'ORN-CRM-1'], sayi: 2 });
+    assert.deepEqual(crmKodlariniAyikla({ customers: [' ORN-CRM-2 ', 'ORN-CRM-1', '', 7, null] }), { kodlar: ['ORN-CRM-2', 'ORN-CRM-1'], sayi: 2, secilebilir: false });
     const yirmiBir = Array.from({ length: 21 }, (_, i) => `ORN-CRM-${String(i + 1)}`);
     const kesik = crmKodlariniAyikla({ customers: yirmiBir });
     assert.equal(kesik?.kodlar.length, 20);
     assert.equal(kesik?.kodlar[0], 'ORN-CRM-1');
     assert.equal(kesik?.sayi, 21);
-    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 34 }), { kodlar: ['ORN-CRM-1'], sayi: 34 });
-    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1', 'ORN-CRM-2'], customerCount: 1 }), { kodlar: ['ORN-CRM-1', 'ORN-CRM-2'], sayi: 2 });
-    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 2.5 }), { kodlar: ['ORN-CRM-1'], sayi: 1 });
-    const liste = { kodlar: ['ORN-CRM-1'], sayi: 1 };
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 34 }), { kodlar: ['ORN-CRM-1'], sayi: 34, secilebilir: false });
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1', 'ORN-CRM-2'], customerCount: 1 }), { kodlar: ['ORN-CRM-1', 'ORN-CRM-2'], sayi: 2, secilebilir: false });
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 2.5 }), { kodlar: ['ORN-CRM-1'], sayi: 1, secilebilir: false });
+    assert.equal(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], salesCustomerCodeAccepted: true })?.secilebilir, true);
+    assert.equal(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], salesCustomerCodeAccepted: 'true' })?.secilebilir, false);
+    const liste = { kodlar: ['ORN-CRM-1'], sayi: 1, secilebilir: false };
     assert.deepEqual(crmKodlari({ tur: 'basarili', logicalRef: 88, crmKodlari: liste }), liste);
     assert.equal(crmKodlari({ tur: 'basarili', logicalRef: null, crmKodlari: liste }), null);
     assert.equal(crmKodlari({ tur: 'basarili', logicalRef: 88 }), null);
     assert.equal(crmKodlari({ tur: 'reddedildi', ileti: 'x' }), null);
+  });
+});
+
+describe('Seçili CRM kodu (3391-2 a)', () => {
+  test('CRM-9 seçim yoksa engel yok; yardımcı desteklemiyor ya da kod bağlı değilse ret; harf büyüklüğü fark etmez; gövdeye yalnız seçim varken gider', () => {
+    const r = (kodlar: string[], secilebilir: boolean) => ({ tur: 'basarili' as const, logicalRef: 88, crmKodlari: { kodlar, sayi: kodlar.length, secilebilir } });
+    assert.equal(seciliCrmEngeli(null, 'ORN-C-1', r(['ORN-CRM-1'], false)), null);
+    assert.equal(seciliCrmEngeli('  ', 'ORN-C-1', { tur: 'basarili', logicalRef: 88 }), null);
+    assert.equal(seciliCrmEngeli('orn-crm-2', 'ORN-C-1', r(['ORN-CRM-1', 'ORN-CRM-2'], true)), null);
+    assert.match(seciliCrmEngeli('ORN-CRM-2', 'ORN-C-1', r(['ORN-CRM-1', 'ORN-CRM-2'], false)) ?? '', /desteklemiyor/);
+    assert.match(seciliCrmEngeli('ORN-CRM-2', 'ORN-C-1', { tur: 'basarili', logicalRef: 88 }) ?? '', /desteklemiyor/);
+    assert.match(seciliCrmEngeli('ORN-CRM-3', 'ORN-C-1', r(['ORN-CRM-1'], true)) ?? '', /ORN-CRM-3 Logo'da artık cari ORN-C-1 ile bağlı değil/);
+    const t = { id: 1, no: 'TK-1', tarih: '2026-11-17', gecerlilikBitis: null, paraBirimi: 'TRY', kur: null,
+      satirlar: [{ satirId: 1, stokKodu: 'ORN-MLZ-1', hizmet: false, miktar: '1', birim: 'adet', birimFiyat: '10', iskontoYuzdesi: null, termin: null }] };
+    const govde = (crmKodu: string | null | undefined) => {
+      const g = satisTeklifiGovdesi(t, { cariKodu: 'ORN-C-1', kdv: null, hizmetKdv: null, ...(crmKodu === undefined ? {} : { crmKodu }) });
+      return 'govde' in g ? g.govde : null;
+    };
+    assert.equal(govde(' ORN-CRM-2 ')?.['salesCustomerCode'], 'ORN-CRM-2');
+    for (const k of [null, undefined, ' ']) assert.equal('salesCustomerCode' in (govde(k) ?? {}), false);
   });
 });
 
@@ -137,7 +159,7 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
     try {
       const c = await cariCrmDurumlari(vt(), istemci(), sorgu());
       const harita = new Map(c.durumlar.map((d) => [d.firmaId, d]));
-      assert.deepEqual(harita.get(f.crmli)?.kodlar, { kodlar: ['ORN-CRM-3002', 'ORN-CRM-3017'], sayi: 2 });
+      assert.deepEqual(harita.get(f.crmli)?.kodlar, { kodlar: ['ORN-CRM-3002', 'ORN-CRM-3017'], sayi: 2, secilebilir: true });
       assert.equal(harita.get(f.crmsiz)?.kodlar, null);
       assert.equal(harita.get(f.ikisi)?.kodlar, null);
       assert.deepEqual(logoCrmCevabi.parse(c), c, 'uç şeması kodları atmaz');

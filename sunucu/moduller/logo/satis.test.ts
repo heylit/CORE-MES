@@ -177,6 +177,49 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     assert.equal(kaynak.teklifler.get(kodsuz.id)?.hata, 'Firmanın Logo cari kodu yok.');
   });
 
+  test('LGT-12 (3391-2 a) firma kartında seçilmiş CRM kodu teklifle gider; Logo\'da bağ kalkmışsa ya da yardımcı desteklemiyorsa teklif açılmaz', async () => {
+    const id = await firma('M-CRM-SEC');
+    kopru.satisMusterileri.add('M-CRM-SEC');
+    kopru.crmKodlari.set('M-CRM-SEC', ['ORN-CRM-1', 'ORN-CRM-2']);
+    await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = $2 WHERE id = $1', [id, 'ORN-CRM-2']);
+    const t = teklifEkle({ firmaId: id });
+    const bellek = yeniSurecBellegi();
+    await tur(ortami(bellek));
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'gonderildi' });
+    const govde = kopru.istekler.find((i) => i.yol === '/api/SalesOffer/AddRich')?.govde as Record<string, unknown>;
+    assert.equal(govde['salesCustomerCode'], 'ORN-CRM-2');
+    assert.equal(govde['arpCode'], 'M-CRM-SEC');
+    kaynak.teklifler.delete(t.id);
+
+    kopru.crmKodlari.set('M-CRM-SEC', ['ORN-CRM-1']);
+    const kalkti = teklifEkle({ firmaId: id });
+    const once = yazmalar().length;
+    const b2 = yeniSurecBellegi();
+    await tur(ortami(b2));
+    assert.deepEqual(await tur(ortami(b2)), { tur: 'siparisler-teklifi', no: kalkti.id, sonuc: 'reddedildi' });
+    assert.equal(yazmalar().length, once, 'bağ kalkınca AddRich yok');
+    assert.match(kaynak.teklifler.get(kalkti.id)?.hata ?? '', /ORN-CRM-2 Logo'da artık cari M-CRM-SEC ile bağlı değil; firma kartında yeniden seçin/);
+    kaynak.teklifler.delete(kalkti.id);
+
+    kopru.crmKodlari.set('M-CRM-SEC', ['ORN-CRM-1', 'ORN-CRM-2']);
+    kopru.crmSecimi = false;
+    const eski = teklifEkle({ firmaId: id });
+    const b3 = yeniSurecBellegi();
+    await tur(ortami(b3));
+    assert.deepEqual(await tur(ortami(b3)), { tur: 'siparisler-teklifi', no: eski.id, sonuc: 'reddedildi' });
+    assert.equal(yazmalar().length, once, 'eski yardımcıya seçili kodla teklif gitmez');
+    assert.match(kaynak.teklifler.get(eski.id)?.hata ?? '', /yardımcısı seçimi desteklemiyor/);
+    kaynak.teklifler.delete(eski.id);
+
+    await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = NULL WHERE id = $1', [id]);
+    const secimsiz = teklifEkle({ firmaId: id });
+    const b4 = yeniSurecBellegi();
+    await tur(ortami(b4));
+    assert.deepEqual(await tur(ortami(b4)), { tur: 'siparisler-teklifi', no: secimsiz.id, sonuc: 'gonderildi' });
+    const son = kopru.istekler.filter((i) => i.yol === '/api/SalesOffer/AddRich').at(-1)?.govde as Record<string, unknown>;
+    assert.equal('salesCustomerCode' in son, false, 'seçim yoksa alan gitmez');
+  });
+
   test('LGT-9 kalkan (ret): cevap kaybolursa teklif yeniden açılmaz; 5 dk sonra "Logo\'da kontrol edin", yeni süreçte de', async () => {
     const t = teklifEkle();
     kopru.senaryo = 'cevap-kayboldu';

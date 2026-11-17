@@ -19,7 +19,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { crmDurumu, crmKodlari, crmSorguyuKeser, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmSorguyuKeser, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import { logoSiralari } from '../siparisler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
@@ -927,23 +927,34 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
   const kopru = o.kopru;
   const kdv = await sistemAyariOku(db, 'logo.kdv-orani');
   const hizmetKdv = await sistemAyariOku(db, 'logo.hizmet-kdv-orani');
-  const cariler = new Map<number, string | null>();
-  const cariKodu = async (firmaId: number | null): Promise<string | null> => {
-    if (firmaId === null) return null;
-    if (!cariler.has(firmaId)) cariler.set(firmaId, (await firmaOzeti(db, firmaId))?.logoCariKodu ?? null);
-    return cariler.get(firmaId) ?? null;
+  // 3391-2 a: firma kartında seçilmiş CRM satış müşterisi kodu da okunur; teklif o kodla gider.
+  const cariler = new Map<number, { cari: string | null; crm: string | null }>();
+  const firmaKodlari = async (firmaId: number | null): Promise<{ cari: string | null; crm: string | null }> => {
+    if (firmaId === null) return { cari: null, crm: null };
+    if (!cariler.has(firmaId)) {
+      const f = await firmaOzeti(db, firmaId);
+      cariler.set(firmaId, { cari: f?.logoCariKodu ?? null, crm: f?.logoCrmKodu ?? null });
+    }
+    return cariler.get(firmaId) ?? { cari: null, crm: null };
   };
   // Köprü adımı veritabanına dönmez: gövdeyi kuran ilk transaction aynı firmanın kodunu önbelleğe almıştır.
-  const bilinenCariKodu = (firmaId: number | null): string | null => (firmaId === null ? null : cariler.get(firmaId) ?? null);
+  const bilinenKodlar = (firmaId: number | null): { cari: string | null; crm: string | null } =>
+    (firmaId === null ? { cari: null, crm: null } : cariler.get(firmaId) ?? { cari: null, crm: null });
   const teklif = await niyetliAcmaTuru(db, o, {
     belge: 'siparisler-teklifi', kuyruk: await o.kaynak.teklifGidecekler(db, KUYRUK_SINIRI),
-    govde: async (t) => satisTeklifiGovdesi(await logoKoduyla(db, t), { cariKodu: await cariKodu(t.firmaId), kdv, hizmetKdv }),
+    govde: async (t) => {
+      const k = await firmaKodlari(t.firmaId);
+      return satisTeklifiGovdesi(await logoKoduyla(db, t), { cariKodu: k.cari, crmKodu: k.crm, kdv, hizmetKdv });
+    },
     // Logo teklifi CRM satış müşterisi kaydı ister (not 2.6, validate 4208); yoksa istek atılmaz.
     onKosul: async (t) => {
-      const kod = bilinenCariKodu(t.firmaId) ?? '';
-      const m = await kopru.satisMusterisiVarMi(kod.trim());
+      const k = bilinenKodlar(t.firmaId);
+      const kod = (k.cari ?? '').trim();
+      const m = await kopru.satisMusterisiVarMi(kod);
       if (m.tur !== 'basarili') return { sonuc: m.tur === 'reddedildi' ? 'reddedildi' : m.tur, hata: `Satış müşterisi okuması: ${m.ileti}` };
-      return m.logicalRef === null ? { sonuc: 'reddedildi', hata: kirp(`Cari ${kod.trim()} Logo'da satış müşterisi (CRM) olarak tanımlı değil.`) } : null;
+      if (m.logicalRef === null) return { sonuc: 'reddedildi', hata: kirp(`Cari ${kod} Logo'da satış müşterisi (CRM) olarak tanımlı değil.`) };
+      const engel = seciliCrmEngeli(k.crm, kod, m);
+      return engel === null ? null : { sonuc: 'reddedildi', hata: engel };
     },
     ekle: async (_t, govde) => {
       const r = await kopru.satisTeklifiEkle(govde);
@@ -1265,6 +1276,20 @@ export async function cariHazirligi(vt: TxAcan, kopru: KopruIstemcisi | null, fi
   const kapali = crmKapaliNedeni(acik, kopru);
   if (kapali !== null || kopru === null) return { durum: 'okunamadi', neden: kapali };
   return crmDurumu(await kopru.satisMusterisiVarMi(kod));
+}
+
+// 3391-2 a: firma kartında CRM kodu seçilirken carinin Logo'daki bağları (yalnız GET). Bağ yoksa veri null.
+export async function cariCrmKodlariOku(
+  vt: TxAcan, kopru: KopruIstemcisi | null, kod: string,
+): Promise<CariOkumasi<{ kodlar: string[]; secilebilir: boolean } | null>> {
+  const acik = await vt.tx(async (db) => (await sistemAyariOku(db, 'logo.baglanti')) === true);
+  const kapali = crmKapaliNedeni(acik, kopru);
+  if (kapali !== null || kopru === null) return { tur: acik ? 'ortam-degiskeni-yok' : 'kapali', ileti: kapali ?? BEKLEME_NEDENLERI['ortam-degiskeni-yok'] };
+  const r = await kopru.satisMusterisiVarMi(kod.trim());
+  if (r.tur !== 'basarili') return { tur: 'hata', ileti: `Satış müşterisi okuması: ${r.ileti}` };
+  if (r.logicalRef === null) return { tur: 'tamam', veri: null };
+  const l = crmKodlari(r);
+  return { tur: 'tamam', veri: { kodlar: l?.kodlar ?? [], secilebilir: l?.secilebilir ?? false } };
 }
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu, ekranda göstermek için (teklif gönderimindeki ön koşulla aynı okuma). Yalnız GET; firma ve
