@@ -545,6 +545,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                   <button type="button" role="menuitem" disabled={planYok} onClick={() => { kapat(); void yenidenPlanla(['*'], 'Bütün plan baştan kuruldu.'); }}>
                     <span>Bütün planı baştan kur<small>{planYok ? PLAN_YOK : 'Sistem hepsini yeniden dizer, plansız emirlere de yer verir; elle kilitlediğiniz yerler ve başlamış işler kalır'}</small></span>
                   </button>
+                  {/* Planı değiştiren her seçim bu menüdedir; Araçlar yalnız görünüm ve ayar taşır (iki menüde "planla" durmasın). */}
+                  <b className="tc-pyq-menu-baslik" role="presentation">Tüm planın yönü</b>
+                  {(['ileri', 'geri'] as const).map((y) => (
+                    <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={tur !== null || onayAcik}
+                      onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(y); setAyarAcik(true); }}>
+                      <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>Tüm plan: {YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
+                    </button>
+                  ))}
                 </>
               );
             }}
@@ -582,12 +590,6 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               ))}
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
                 onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
-              {(['ileri', 'geri'] as const).map((y) => (
-                <button type="button" key={y} role="menuitemradio" aria-checked={planYonu(c) === y} disabled={!yazabilir || tur !== null || onayAcik}
-                  onClick={() => { kapat(); if (planYonu(c) === y) return; sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(y); setAyarAcik(true); }}>
-                  <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>Tüm plan: {YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
-                </button>
-              ))}
               <button type="button" role="menuitemcheckbox" aria-checked={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik}
                 onClick={() => { kapat(); if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
             </>
