@@ -371,6 +371,22 @@ test.describe('A1 Operatör', () => {
             await expect.poll(() => kayanlar(page), 'bitince').toEqual([]);
             await expect(grup).toBeInViewport({ ratio: 1 });
             await expect(page.locator('.tc-ay1-resim .tc-ay5-araclar')).toBeInViewport({ ratio: 1 });
+            // Resim kutusu taşanı keser (kaydırma görünmez): her araç kutunun içinde tam görünür.
+            const kesik = await page.evaluate(() => {
+              const k = document.querySelector('.tc-ay1-resim .tc-ay5-resim')!.getBoundingClientRect();
+              return [...document.querySelectorAll('.tc-ay1-resim .tc-ay5-arac')].map((e) => e.getBoundingClientRect())
+                .filter((r) => r.height > 0 && (r.top < k.top || r.bottom > k.bottom + 0.5)).length;
+            });
+            expect(kesik).toBe(0);
+            // Basılı tutulmayan ana düğmede yazı simgeyle dikeyde ortalıdır, simge düğmeden taşmaz.
+            const orb = await grup.getByRole('button', { name: /Sıradaki İş/ }).evaluate((d) => {
+              const r = d.getBoundingClientRect();
+              const y = d.querySelector('.tc-orb-yuz')!.getBoundingClientRect();
+              const e = d.querySelector('.tc-orb-etiket')!.getBoundingClientRect();
+              return { tasan: Math.max(r.top - y.top, y.bottom - r.bottom), kayma: Math.abs((e.top + e.bottom) / 2 - (y.top + y.bottom) / 2) };
+            });
+            expect(orb.tasan, JSON.stringify(orb)).toBeLessThanOrEqual(0);
+            expect(orb.kayma, JSON.stringify(orb)).toBeLessThanOrEqual(2);
             expect(await tasma(page)).toBeLessThanOrEqual(0);
           });
         }
