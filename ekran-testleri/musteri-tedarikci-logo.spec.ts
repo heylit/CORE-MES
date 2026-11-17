@@ -57,6 +57,46 @@ test.describe('Listeden Logo\'da arama (3343)', () => {
   });
 });
 
+// 3359 a: CRM satış müşterisi durumu. Örnek veride bağlı firma yok: liste ve ayrıntı cevabında bir müşteri bağlı gösterilir,
+// CRM cevabı yönlendirilir (Logo'ya istek yok). Uydurma kod ORN-C-3001.
+test.describe('Logo CRM durumu (3359)', () => {
+  test('CRM varsa listede bağlı rozetinin yanında ve ayrıntıda "CRM"; taşma yok', async ({ page, ag, ac }) => {
+    const f = await firmaBul(page, 'ORN-MUS-02');
+    const bagli = { logoKayitNo: 3001, logoCariKodu: 'ORN-C-3001' };
+    await page.route('**/api/musteri-tedarikci/firmalar?*', async (r) => {
+      const c = await r.fetch();
+      const g = await c.json() as { satirlar: FirmaSatiri[] };
+      await r.fulfill({ response: c, json: { ...g, satirlar: g.satirlar.map((x) => (x.id === f.id ? { ...x, ...bagli } : x)) } });
+    });
+    await page.route(`**/api/musteri-tedarikci/firmalar/${String(f.id)}`, async (r) => {
+      const c = await r.fetch();
+      const g = await c.json() as { firma: object };
+      await r.fulfill({ response: c, json: { ...g, firma: { ...g.firma, ...bagli, logoGonderimDurumu: 'gonderildi' } } });
+    });
+    const crm: string[] = [];
+    await page.route('**/api/logo/cari-crm?*', (r) => {
+      crm.push(new URL(r.request().url()).searchParams.get('id') ?? '');
+      return r.fulfill({ json: { durumlar: [{ firmaId: f.id, durum: 'var', neden: null }] } });
+    });
+    await ac('/musteri-tedarikci/musteriler');
+    const rozet = page.getByText('CRM', { exact: true }).filter({ visible: true }).first();
+    await expect(rozet).toBeVisible();
+    await rozet.scrollIntoViewIfNeeded();
+    expect(crm.every((q) => q.split(',').includes(String(f.id)))).toBe(true);
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('crm-liste.png') });
+    await ac(`/musteri-tedarikci/musteriler?firma=${String(f.id)}`);
+    const pencere = page.getByRole('dialog', { name: f.ad, exact: true });
+    await expect(pencere.getByText('Logo CRM')).toBeVisible();
+    await expect(pencere.getByText('CRM', { exact: true })).toBeVisible();
+    await pencere.getByText('Logo CRM').scrollIntoViewIfNeeded();
+    expect((await tasmaOlc(page)).belge, 'ayrıntıda yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('crm-ayrinti.png') });
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
 test.describe('Yazamayan rol', () => {
   test.use({ hesap: 'ornek.depo' });
   test('bağlı olmayan firmada düğme yok, "Bağlı değil" yazar', async ({ page, ag, ac }) => {

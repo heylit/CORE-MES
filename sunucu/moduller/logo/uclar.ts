@@ -1,7 +1,7 @@
 import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoCrmCevabi, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { projeLogoDurumu } from './proje.ts';
@@ -15,7 +15,7 @@ import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
-  BEKLEME_NEDENLERI, belgeRozetleri, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
+  BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
   logoAramaSonucunuEkle, logoMalzemeAramasiAcik,
 } from './servis.ts';
 
@@ -110,6 +110,16 @@ export const uclar = [
       if (kullanici === null || !ROZET_YETKISI[sorgu.tur].some((i) => islemVarMi(kullanici, i))) throw yetkiYok();
       return belgeRozetleri(db, sorgu.tur, sorgu.id, new Date());
     },
+  }),
+  // 3359 a: firmayı görebilen okur; Logo'ya yazmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/cari-crm',
+    yetki: { biri: ['musteri-tedarikci.oku', 'musteri-tedarikci.yaz'] },
+    txDisi: true,
+    sorgu: logoCrmSorgusu,
+    cevap: logoCrmCevabi,
+    isle: ({ db, sorgu }) => cariCrmDurumlari({ tx: (f) => f(db) }, ortamKoprusu, sorgu.id),
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({

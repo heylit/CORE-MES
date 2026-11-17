@@ -60,6 +60,8 @@ const LOGO_ARAMA = {
   }],
 };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
+// 3359 a: CRM satış müşterisi durumu (uydurma); test başında değiştirilir.
+let crmCevabi: () => Response = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null }] });
 
 interface Istek { yontem: string; yol: string; govde: unknown; baslik: Record<string, string> }
 
@@ -75,6 +77,7 @@ function sunucuKur(kullanici: Kullanici, yazma: (yol: string, govde: unknown) =>
     if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/10') return json(200, AYRINTI);
     if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/11') return json(200, AYRINTI_B);
     if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, LOGO_ARAMA);
+    if (yontem === 'GET' && yol.startsWith('/logo/cari-crm?')) return crmCevabi();
     if (yontem === 'POST') return yazma(yol, govde);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -102,7 +105,11 @@ const oturumCozuldu = async (istekler: Istek[]) => {
   await new Promise((coz) => setTimeout(coz, 20));
 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'var', neden: null }] });
+});
 
 describe('Firma listesi', () => {
   it('liste gelir; kod, ad, tür, fason, il, adres sayısı ve koordinat görünür', async () => {
@@ -452,5 +459,53 @@ describe('Listede Logo bağı (3065)', () => {
     expect(istekler.some((i) => i.yol === '/musteri-tedarikci/firmalar/11')).toBe(true);
     fireEvent.click(within(pencere).getAllByRole('button', { name: 'Kapat' })[0]!);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: "Logo'ya bağla: Ornek Fason Atolye" })).toBeNull());
+  });
+});
+
+describe('Logo CRM satış müşterisi durumu (3359 a: CRM varsa "CRM", yoksa hiçbir şey)', () => {
+  const crmIstekleri = (istekler: Istek[]) => istekler.filter((i) => i.yol.startsWith('/logo/cari-crm?')).map((i) => i.yol);
+  const satir = (ad: string) => within(screen.getAllByRole('row').find((s) => s.textContent?.includes(ad))!);
+
+  it('listede yalnız bağlı müşteri sorulur, tek istekle; CRM varsa bağlı rozetinin yanında "CRM"', async () => {
+    const istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(await satir('Ornek Musteri Ltd').findByText('CRM')).toBeTruthy();
+    expect(crmIstekleri(istekler)).toEqual(['/logo/cari-crm?id=10']);
+    expect(satir('Ornek Fason Atolye').queryByText(/CRM/)).toBeNull();
+  });
+
+  it('CRM yoksa ya da okunamadıysa listede CRM yazısı yok', async () => {
+    for (const cevap of [{ durum: 'yok', neden: null }, { durum: 'okunamadi', neden: 'Köprüye ulaşılamadı.' }]) {
+      crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, ...cevap }] });
+      const istekler = sunucuKur(OKUYUCU);
+      ac('/musteri-tedarikci');
+      await screen.findByText('Ornek Musteri Ltd');
+      await waitFor(() => expect(crmIstekleri(istekler)).toHaveLength(1));
+      await waitFor(() => expect(satir('Ornek Musteri Ltd').getByText('Bağlı')).toBeTruthy());
+      expect(screen.queryByText(/CRM/)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('ayrıntıda CRM varsa "Logo CRM" satırı "CRM" yazar; yoksa satır yok; tedarikçi sorulmaz', async () => {
+    let istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    let pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    expect(await within(pencere).findByText('Logo CRM')).toBeTruthy();
+    expect(within(pencere).getByText('CRM')).toBeTruthy();
+    cleanup();
+    crmCevabi = () => json(200, { durumlar: [{ firmaId: 10, durum: 'yok', neden: null }] });
+    istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=10');
+    pencere = await screen.findByRole('dialog', { name: 'Ornek Musteri Ltd' });
+    await waitFor(() => expect(crmIstekleri(istekler)).toEqual(['/logo/cari-crm?id=10']));
+    expect(within(pencere).queryByText(/CRM/)).toBeNull();
+    cleanup();
+    istekler = sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci?firma=11');
+    const b = await screen.findByRole('dialog', { name: 'Ornek Fason Atolye' });
+    expect(within(b).queryByText(/CRM/)).toBeNull();
+    expect(crmIstekleri(istekler).some((y) => y.split('=')[1]?.split(',').includes('11'))).toBe(false);
   });
 });

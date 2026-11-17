@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { LOGO_CRM_SINIRI } from './logo-gecisi-sabitleri.ts';
 
 // Logo birim seti listesi (kart #207, LB6 c): köprüden okunan ve yönetici eliyle girilen kodlar.
 // Köprüden liste hiç okunmadıysa elle girilen kod geçerlidir; okunduysa yalnız listede olan geçerlidir.
@@ -320,6 +321,26 @@ export const logoRozetCevabi = z.object({
   })),
 });
 export type LogoRozetCevabi = z.output<typeof logoRozetCevabi>;
+
+// 3359 a: cari Logo'da CRM satış müşterisine bağlı mı (satış teklifi bunu ister, validate 4208). Firma kimliğiyle sorulur; yalnız Logo cari
+// kodu olan ve tedarikçi olmayan firma cevapta yer alır. Okunamazsa neden yazar.
+export { LOGO_CRM_SINIRI };
+export const LOGO_CRM_DURUMLARI = ['var', 'yok', 'okunamadi'] as const;
+export type LogoCrmDurumu = (typeof LOGO_CRM_DURUMLARI)[number];
+export const logoCrmSorgusu = z.object({
+  id: z.string().trim().min(1, 'En az bir kimlik verin.')
+    .transform((v) => v.split(',').map((p) => Number(p.trim())))
+    .pipe(z.array(z.number().int().positive()).max(LOGO_CRM_SINIRI, `En çok ${LOGO_CRM_SINIRI} kimlik.`)),
+});
+export type LogoCrmSorgusu = z.input<typeof logoCrmSorgusu>;
+export const logoCrmCevabi = z.object({
+  durumlar: z.array(z.object({
+    firmaId: z.number().int().positive(),
+    durum: z.enum(LOGO_CRM_DURUMLARI),
+    neden: z.string().nullable(),
+  })),
+});
+export type LogoCrmCevabi = z.output<typeof logoCrmCevabi>;
 
 // 3345 a: Logo irsaliyeleri, yalnız okuma. Tür Logo STFICHE.TRCODE'dur. Fiyat ve tutar yalnız fiyat yetkisi olana dolu gelir
 // (alışta satin-alma.oku, satışta siparisler.fiyat-oku); yetkisizde null ve fiyatGorunur false.

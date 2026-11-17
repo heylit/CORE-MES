@@ -2,11 +2,11 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoCrmCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
-import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
+import { firmaOzeti, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoKayitNolari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
@@ -19,7 +19,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { crmDurumu, crmSorguyuKeser, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
@@ -1250,6 +1250,27 @@ export async function logoCariOku(vt: TxAcan, kopru: KopruIstemcisi | null, kod:
   if ('tur' in k) return k;
   const r = await k.cariOku(kod.trim());
   return r.tur === 'basarili' ? { tur: 'tamam', veri: r.veri } : { tur: 'hata', ileti: r.ileti };
+}
+
+// 3359 a: carinin Logo CRM satış müşterisi durumu, ekranda göstermek için (teklif gönderimindeki ön koşulla aynı okuma). Yalnız GET; firma ve
+// ayar kısa transaction'da okunur, yardımcı transaction dışında ve sırayla beklenir (yardımcı tek lisanslıdır).
+export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null, idler: readonly number[]): Promise<LogoCrmCevabi> {
+  const { acik, firmalar } = await vt.tx(async (db) => ({
+    acik: (await sistemAyariOku(db, 'logo.baglanti')) === true,
+    firmalar: [...(await firmaOzetleri(db, [...idler])).values()].filter(crmSorulurMu),
+  }));
+  if (firmalar.length === 0) return { durumlar: [] };
+  const kapali = !acik ? 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı; CRM durumu okunmuyor.' : kopru === null ? BEKLEME_NEDENLERI['ortam-degiskeni-yok'] : null;
+  const durumlar: LogoCrmCevabi['durumlar'] = [];
+  let kesildi: string | null = kapali;
+  for (const f of firmalar) {
+    if (kesildi !== null || kopru === null) { durumlar.push({ firmaId: f.id, durum: 'okunamadi', neden: kesildi }); continue; }
+    const r = await kopru.satisMusterisiVarMi((f.logoCariKodu ?? '').trim());
+    const d = crmDurumu(r);
+    if (crmSorguyuKeser(r)) kesildi = d.neden;
+    durumlar.push({ firmaId: f.id, ...d });
+  }
+  return { durumlar };
 }
 
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız GET'tir ve transaction dışında beklenir; bulunanlar kişinin süreç belleğinde

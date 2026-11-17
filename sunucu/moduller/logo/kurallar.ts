@@ -2086,3 +2086,14 @@ export function irsaliyeEslesmesi(b: EslesmeGirdisi, k: EslesmeKaynaklari): Irsa
 }
 
 const karsilikAdi = (c: CoreKarsiligi): string => (c.tur === 'sevk' ? `Sevk ${c.no}` : c.tur === 'mal-kabul' ? `İade mal kabulü ${c.no}` : `Sipariş ${c.no}`);
+
+// 3359 a: CRM satış müşterisi okumasının sonucu. Yardımcı 404 ile "yok" der (bulma ucu). Ulaşılamayan yardımcıya aynı istekte yeniden
+// sorulmaz: kalan cariler aynı nedenle "okunamadı" olur (her biri zaman aşımı beklemesin).
+export type CrmSonucu = { durum: 'var' | 'yok' | 'okunamadi'; neden: string | null };
+export function crmDurumu(r: KopruSonucu): CrmSonucu {
+  if (r.tur === 'basarili') return r.logicalRef === null ? { durum: 'yok', neden: null } : { durum: 'var', neden: null };
+  return { durum: 'okunamadi', neden: rozetNedeni(r.ileti) };
+}
+export const crmSorulurMu = (f: { tur: string; logoCariKodu: string | null }): boolean =>
+  f.tur !== 'tedarikci' && (f.logoCariKodu ?? '').trim() !== '';
+export const crmSorguyuKeser = (r: KopruSonucu): boolean => r.tur === 'ulasilamadi' || r.tur === 'belirsiz';
