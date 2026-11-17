@@ -85,6 +85,12 @@ export const teklifSemasi = z.object({
   })).max(500),
 });
 
+// 3401-1 a: fiyatı göremeyen okuyucuda (yalnız satin-alma.oku) teklifin iskonto, nakliye ve diğer masraf alanı sıfır değil boş gelir;
+// kayıt gövdesinde (teklifSemasi) bu alanlar dolu kalır.
+export const teklifCikisSemasi = teklifSemasi.extend({
+  iskontoYuzdesi: yuzde.nullable(), nakliye: eksiOlmayan.nullable(), digerMasraf: eksiOlmayan.nullable(),
+});
+
 export const VADE_BASLANGICLARI = ['teslim', 'siparis'] as const;
 export type VadeBaslangici = (typeof VADE_BASLANGICLARI)[number];
 
@@ -315,6 +321,7 @@ export const talepKaynagiSemasi = z.object({
 export type TalepKaynagi = z.output<typeof talepKaynagiSemasi>;
 export const talepSemasi = z.object({
   ...talepAlanlari,
+  teklifler: z.array(teklifCikisSemasi).max(30),
   birlesme: birlesmeSemasi.nullable().optional(),
   kaynaklar: z.array(talepKaynagiSemasi).optional(),
   guncellemeGrubu: guncellemeGrubuSemasi.optional(),
@@ -445,7 +452,8 @@ export const ayarlarSemasi = z.object({
   // 2238-3 c: aylikFaizYuzdesi vadenin puanlandığı kredi faizidir; mevduat yanında gösterilir. İkisi de finansın yıllık oranının aylığı.
   kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable(), mevduatAylikFaizYuzdesi: ondalikMetinSemasi.nullable().optional() })),
   kategoriler: z.array(z.string()),
-  birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
+  // 3401-1 a: yıllık bütçe fiyat görmeyene boş gelir.
+  birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi.nullable() })),
   // 2397 b: basamağın rolü (boş: onaylama yetkisi yeter). Sunucu her zaman yazar; eski ekran fikstürleri için isteğe bağlı.
   // rolAdi yalnız okumadır (2397-6): rolleri göremeyen satın almacı basamağın rolünü adıyla görür; kayıt gövdesi taşımaz.
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string(), rolId: z.number().int().nullable().optional(), rolAdi: z.string().nullable().optional() })),
@@ -669,6 +677,8 @@ export const firmaParametresi = z.object({ id: z.coerce.number<number>().int().p
 export const tamamCevabi = z.object({ tamam: z.literal(true) });
 
 export type Talep = z.output<typeof talepSemasi>;
+// Sunucuda saklanan talep: teklifin para alanları dolu. `Talep` (çıkış) fiyatsız görünümde boş gelebilir (3401-1 a).
+export type TalepKaydi = Omit<Talep, 'teklifler'> & { teklifler: z.output<typeof talepGovdesi>['teklifler'] };
 export type TalepGovdesi = z.input<typeof talepGovdesi>;
 export type TalepYazimi = z.output<typeof talepGovdesi>;
 export type TalepKaydetYazimi = z.output<typeof talepKaydetGovdesi>;
@@ -694,6 +704,8 @@ export type TedarikciKaydetYazimi = z.output<typeof tedarikciKaydetGovdesi>;
 export type KatalogKaydi = z.output<typeof katalogSemasi>;
 export type KatalogKaydetYazimi = z.output<typeof katalogKaydetGovdesi>;
 export type Ayarlar = z.output<typeof ayarlarSemasi>;
+// Sunucuda saklanan ayar: bütçe dolu. `Ayarlar` (çıkış) fiyat görmeyene boş bütçe ve limit ile gelir (3401-1 a).
+export type AyarlarKaydi = Omit<Ayarlar, 'birimler'> & { birimler: { ad: string; yillikButce: string }[] };
 export type AyarlarKaydetYazimi = z.output<typeof ayarlarKaydetGovdesi>;
 export type AcilisCevabi = z.output<typeof acilisCevabi>;
 export type FirmaSecenekleriCevabi = z.output<typeof firmaSecenekleriCevabi>;

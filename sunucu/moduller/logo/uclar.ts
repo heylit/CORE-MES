@@ -23,7 +23,7 @@ import {
 // sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
 const KART_OKUMA = { biri: ['sayfa.malzemeler'] } as const;
 const KART_STOK = ['sayfa.stok', ...STOK_ISLEMLERI] as const;
-const KART_FIYAT = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+const KART_FIYAT = ['satin-alma.fiyat-oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 
 // 3344: rozet, belgeyi görebilen okur; tür başına o belgenin okuma yetkisi (ucun yetkisi bunların birleşimidir).
 const ROZET_YETKISI = {
