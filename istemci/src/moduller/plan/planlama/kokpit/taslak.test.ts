@@ -141,6 +141,17 @@ describe('useTaslak', () => {
     expect(result.current.ileriAdim).toBe(0);
   });
 
+  // Test T1: plana yazınca İleri listesi boşalır; uygulanmış plana eski komut yeniden gönderilmez.
+  it('plana yazmak İleri listesini boşaltır (3365)', async () => {
+    const { u } = sahteUc([satir(TASI, 'a'), satir(TASI, 'b')], ornekCalisma() as unknown as Record<string, unknown>);
+    const { result } = kur(u);
+    await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
+    await act(async () => { await result.current.geriAl(false); });
+    expect(result.current.ileriAdim).toBe(1);
+    await act(async () => { await result.current.uygula({ '*': 'benim' }); });
+    expect(result.current.ileriAdim).toBe(0);
+  });
+
   it('hata bildirilir, taslak yeniden okunur ve düğme false döner', async () => {
     const { u, post } = sahteUc([satir(TASI, 'a')]);
     post.mockImplementationOnce(() => Promise.reject(new Error('kapalı')));

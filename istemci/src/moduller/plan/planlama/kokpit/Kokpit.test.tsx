@@ -240,8 +240,18 @@ describe('Kokpit', () => {
     expect(ileri.querySelector('.tc-pyq-rozet')?.textContent).toBe('1');
     await waitFor(() => { expect(ileri.hasAttribute('disabled')).toBe(false); });
     post.mockClear();
+    // Yazma sürerken (meşgul) ikinci Ctrl+Y aynı değişikliği yeniden yazmaz (Test T2).
+    const asil = post.getMockImplementation()!;
+    let birak = (): void => undefined;
+    post.mockImplementation(((yol: string, ...r: unknown[]) => (yol === '/plan/taslagim/komut'
+      ? new Promise((t) => { birak = () => { t((asil as (...x: unknown[]) => unknown)(yol, ...r)); }; })
+      : (asil as (...x: unknown[]) => unknown)(yol, ...r))) as never);
     fireEvent.keyDown(document, { key: 'y', ctrlKey: true });
     await waitFor(() => { expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/plan/taslagim/komut', { taslakSurumu: 11, komut: TASI }]); });
+    await waitFor(() => { expect(ileri.hasAttribute('disabled')).toBe(true); });
+    fireEvent.keyDown(document, { key: 'y', ctrlKey: true });
+    expect(post.mock.calls.filter((c) => c[0] === '/plan/taslagim/komut')).toHaveLength(1);
+    birak();
     await waitFor(() => { expect(within(screen.getByRole('group', { name: 'Geri ve İleri' })).queryByRole('button', { name: /İleri/ })).toBeNull(); });
   });
 
@@ -967,6 +977,50 @@ describe('Kokpit', () => {
     expect(Math.abs(d1 - d2)).toBeLessThanOrEqual(0.25);
     expect(c['2.40']!.tezgah).toBe('5');
     geriKur();
+  });
+
+  // Test T3, T4, T6: kümede başlamış iş kaymaz; Shift+ok dört saat kaydırır; küme dışı iş bırakılınca yalnız o taşınır.
+  it('kümede başlamış iş atlanır, Shift+ok kümeyi dört saat kaydırır; küme dışı iş sürüklenince yalnız o taşınır (3365)', async () => {
+    const geriKur = imlecOlayiKur();
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
+    acSecimli();
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    const S = (id: string) => (ornekCalisma().plan as unknown as { ops: Record<string, { S: number }> }).ops[id]!.S;
+    fireEvent.click(is('3.10'));
+    fireEvent.click(is('2.20'), { ctrlKey: true });
+    fireEvent.click(is('2.40'), { ctrlKey: true });
+    expect(screen.getByText('3 iş seçili · birlikte kayar')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'ArrowRight', shiftKey: true });
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
+    expect(await screen.findByText('1 iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.')).toBeTruthy();
+    const c = Object.fromEntries(oz.mock.calls.map((x) => [x[0].isId, x[0]]));
+    expect(Object.keys(c).sort()).toEqual(['2.40', '3.10']);
+    for (const id of ['2.40', '3.10']) expect(Math.abs(c[id]!.baslangic - S(id) - 4)).toBeLessThanOrEqual(0.25);
+    // Küme dışındaki iş sürüklenip bırakılınca yalnız o taşınır; küme kaymaz.
+    await new Promise((r) => setTimeout(r, 0));
+    oz.mockClear();
+    const alan = is('3.20').closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    fireEvent.pointerDown(is('3.20'), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    await waitFor(() => { expect(oz).toHaveBeenCalled(); });
+    await new Promise((r) => setTimeout(r, 250));
+    expect(oz.mock.calls.map((x) => x[0].isId)).toEqual(['3.20']);
+    geriKur();
+  });
+
+  // Test T5: sığdır kümenin bütününü kapsar, yalnız seçili işi değil.
+  it('çoklu seçimde F kümedeki bütün işleri sığdırır (3365)', () => {
+    acSecimli();
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    const en = () => parseFloat(is('3.10').style.getPropertyValue('--w'));
+    fireEvent.click(is('3.10'));
+    fireEvent.keyDown(document, { key: 'f' });
+    const tek = en();
+    fireEvent.click(is('2.40'), { ctrlKey: true });
+    fireEvent.keyDown(document, { key: 'f' });
+    expect(en()).toBeLessThan(tek);
   });
 
   it('yakınlaştırma sürekli: sürgü ve Ctrl+tekerlek saat enini değiştirir, en yakın ölçek basılı görünür, en uzakta Ay\'a geçer; F seçili işi sığdırır (3365)', () => {
