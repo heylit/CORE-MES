@@ -2,6 +2,12 @@ import { YENI_ADIM_VARSAYILANI } from '#paylasilan/sozlesme/rota.ts';
 import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
+import { ROTA_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
+
+// Rota verisi yalnız rotayla çalışan rollere açıktır (2490 b); uçlar ve rota dosyalarını gösteren başka modüller (Ortak Dosyalar) bu listeyi kullanır.
+export const ROTA_OKUMA_ISLEMLERI = [
+  'sayfa.recete-rota', 'recete-rota.oku', ...ROTA_YAZMA_ISLEMLERI, 'rota.onayla', 'rota.talimat-yaz', 'rota.emre-kopyala', 'rota.sartname-yaz', 'rota.sartname-yayinla',
+] as const;
 
 // rota.yaz bölündü (3165 a): revizyonu düzenlemek ile onaya göndermek ayrı eylemdir.
 export const YAZ = 'rota.revizyon-yaz';

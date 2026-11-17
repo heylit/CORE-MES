@@ -121,3 +121,6 @@ export { siparisAcilisiRotasi, revizyonunRotasi } from './servis.ts';
 // Terminal: emre sabitlenen talimat sürümünün 3B sahnesi (3209 a); yetki denetlemez.
 export { talimatSahnesi } from './servis.ts';
 export type { TalimatSahnesi } from '#paylasilan/sozlesme/rota.ts';
+
+// 3390-2: rota okuma işlemleri (talimat medyası ucunun yetkisi); Ortak Dosyalar hazır listesi bu listeyle süzer.
+export { ROTA_OKUMA_ISLEMLERI } from './kurallar.ts';
