@@ -346,7 +346,8 @@ export const rotaTanimi = z.object({
 
 export const ROTA_ADI_EN_COK = 60;
 const rotaAdi = z.string().trim().min(1).max(ROTA_ADI_EN_COK);
-export const rotaEkleGovdesi = z.object({ ad: rotaAdi });
+// 3411 a: yeni rota ad yerine emir türüyle açılır; adı türün adıdır. Seri'nin rotası ürünün Standart rotasıdır, ayrıca açılmaz.
+export const rotaEkleGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI).refine((t) => t !== 'seri', 'Seri rotası ürünün varsayılan rotasıdır; ayrıca açılmaz.') }).strict();
 export const rotaAdiGovdesi = z.object({ ad: rotaAdi, surum: KIMLIK });
 // Rotaya bağlı emir türleri bütünüyle yazılır; başka rotaya bağlı tür bu rotaya taşınır. Standart rotaya tür yazılmaz.
 export const rotaTurleriGovdesi = z.object({ emirTurleri: z.array(z.enum(EMIR_TURLERI)).max(EMIR_TURLERI.length), surum: KIMLIK });
@@ -666,7 +667,8 @@ export const emreKopyalaTopluGovdesi = z.object({
   satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)
     .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.'),
 }).strict();
-export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+// seriyeDusen (3411 a): türünün yürürlükte rotası olmadığı için Seri rotasıyla açılan emir sayısı.
+export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), seriyeDusen: z.number().int().min(0) });
 export type EmreKopyalaTopluSatiri = z.input<typeof emreKopyalaTopluSatiri>;
 export type EmreKopyalaTopluGirdisi = z.output<typeof emreKopyalaTopluGovdesi>;
 export type EmreKopyalaTopluCevabi = z.output<typeof emreKopyalaTopluCevabi>;

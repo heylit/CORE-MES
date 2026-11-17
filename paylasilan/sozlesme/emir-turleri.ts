@@ -4,3 +4,5 @@ export const EMIR_TURLERI = ['seri', 'fai', 'numune', 'prototip', 'stok', 'rewor
 export const EMIR_TURU_ADLARI: Record<(typeof EMIR_TURLERI)[number], string> = {
   seri: 'Seri', fai: 'FAI', numune: 'Numune', prototip: 'Prototip', stok: 'Stoğa üretim', rework: 'Rework', bakim_deneme: 'Bakım ve deneme', fason: 'Fason',
 };
+// 3411 a: ürüne türüyle açılabilen rotalar; Seri'nin rotası ürünün Standart rotasıdır, ayrıca açılmaz.
+export const ROTA_ACILABILEN_TURLER = EMIR_TURLERI.filter((t) => t !== 'seri');

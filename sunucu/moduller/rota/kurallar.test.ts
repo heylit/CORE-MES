@@ -5,7 +5,7 @@ import {
   durumGecisiGecerliMi, etkinSure, kisiIstasyonlari, rotaOzeti, ilkAdimiDuzenle, kaynaktakiSure, izinliKomutlar, komutDenetle, ondalikMetin, onayaHazirMi,
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
-import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
+import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi, turunRotasiSec } from './kurallar.ts';
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
@@ -788,5 +788,23 @@ describe('Excel ile rota adımları (2627)', () => {
     assert.equal(excelDayanagiTutar(null, null), true);
     assert.equal(excelDayanagiTutar(null, { id: 8, surum: 1 }), false);
     assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, null), false);
+  });
+});
+
+describe('3411 a: emir türünün rotası', () => {
+  const seri = { rotaId: 1, ad: 'Seri', standart: true, revizyonId: 10, turun: false };
+  const fai = (revizyonId: number | null) => ({ rotaId: 2, ad: 'FAI', standart: false, revizyonId, turun: true });
+  test('türün yürürlükte rotası varsa o seçilir', () => {
+    assert.deepEqual(turunRotasiSec([seri, fai(20)], 'fai'), { rotaId: 2, ad: 'FAI', standart: false, revizyonId: 20, seriyeDustu: false, turunRotasi: null });
+  });
+  test('türün rotası yürürlükte değilse ya da yoksa Seri seçilir ve düşüş söylenir', () => {
+    assert.deepEqual(turunRotasiSec([seri, fai(null)], 'fai'), { rotaId: 1, ad: 'Seri', standart: true, revizyonId: 10, seriyeDustu: true, turunRotasi: 'FAI' });
+    assert.deepEqual(turunRotasiSec([seri], 'numune'), { rotaId: 1, ad: 'Seri', standart: true, revizyonId: 10, seriyeDustu: true, turunRotasi: null });
+  });
+  test('Seri türünde ve türsüz okumada düşüş yoktur; Seri rotası yoksa türün rotası kalır', () => {
+    assert.equal(turunRotasiSec([seri], 'seri')?.seriyeDustu, false);
+    assert.equal(turunRotasiSec([seri], null)?.seriyeDustu, false);
+    assert.equal(turunRotasiSec([fai(null)], 'fai')?.rotaId, 2);
+    assert.equal(turunRotasiSec([], 'fai'), null);
   });
 });

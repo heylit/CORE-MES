@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { turunRotasiSec, type TurunRotasi, type TurunRotasiAdayi } from './kurallar.ts';
 import type {
   Bagimlilik, EkipmanAsamasi, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
@@ -160,7 +161,9 @@ export async function rotadaAcikRevizyonVarMi(db: Db, rotaId: number | null): Pr
 /* ---------------- rotalar (3247 a) ---------------- */
 
 export interface RotaSatiri { id: number; malzemeId: number; ad: string; standart: boolean; surum: number; emirTurleri: EmirTuru[] }
-const ROTA = `t.id, t.malzeme_id AS "malzemeId", t.ad, t.standart, t.surum,
+// 3411 a: Standart rota her yerde "Seri" adıyla görünür; kayıttaki ad değişmez (veri dönüşmez).
+const ROTA_ADI = `CASE WHEN t.standart THEN 'Seri' ELSE t.ad END`;
+const ROTA = `t.id, t.malzeme_id AS "malzemeId", ${ROTA_ADI} AS ad, t.standart, t.surum,
   COALESCE((SELECT array_agg(u.emir_turu ORDER BY u.emir_turu) FROM rota_tanimi_turu u WHERE u.rota_id = t.id), '{}') AS "emirTurleri"`;
 
 export function urunRotalari(db: Db, malzemeId: number): Promise<RotaSatiri[]> {
@@ -221,32 +224,27 @@ export async function rotaTurleriniYaz(db: Db, id: number, malzemeId: number, tu
   return satir.surum;
 }
 
-// Emir türünün rotası: türe bağlı rota varsa o, yoksa Standart. Rotanın yürürlükte revizyonu yoksa revizyonId null.
-export interface TurunRotasi { rotaId: number; ad: string; standart: boolean; revizyonId: number | null }
-export function turunRotasi(db: Db, malzemeId: number, emirTuru: EmirTuru | null): Promise<TurunRotasi | null> {
-  return db.tek<TurunRotasi>(
-    `SELECT t.id AS "rotaId", t.ad, t.standart, y.id AS "revizyonId"
+// Emir türünün rotası (3411 a): türe bağlı rotanın yürürlükte revizyonu varsa o; yoksa Standart (Seri). Seri'ye düşülürse
+// turunRotasi türe bağlı rotanın adını (yürürlükte değil) ya da null'ı (türün rotası yok) taşır; tür Seri ise düşüş yoktur.
+export type { TurunRotasi } from './kurallar.ts';
+const TUR_ADAYLARI = `SELECT t.malzeme_id::int AS m, t.id AS "rotaId", ${ROTA_ADI} AS ad, t.standart, y.id AS "revizyonId", (u.rota_id IS NOT NULL) AS "turun"
        FROM rota_tanimi t
        LEFT JOIN rota_revizyonu y ON y.rota_id = t.id AND y.durum = 'yururlukte'
-      WHERE t.malzeme_id = $1
-        AND (t.id = (SELECT u.rota_id FROM rota_tanimi_turu u WHERE u.malzeme_id = $1 AND u.emir_turu = $2)
-             OR (t.standart AND NOT EXISTS (SELECT 1 FROM rota_tanimi_turu u WHERE u.malzeme_id = $1 AND u.emir_turu = $2)))`,
-    [malzemeId, emirTuru],
-  );
+       LEFT JOIN rota_tanimi_turu u ON u.rota_id = t.id AND u.emir_turu = $2
+      WHERE t.malzeme_id = ANY($1::int[]) AND (t.standart OR u.rota_id IS NOT NULL)`;
+type TurAdayi = TurunRotasiAdayi & { m: number };
+
+export async function turunRotasi(db: Db, malzemeId: number, emirTuru: EmirTuru | null): Promise<TurunRotasi | null> {
+  return turunRotasiSec(await db.sorgu<TurAdayi>(TUR_ADAYLARI, [[malzemeId], emirTuru]), emirTuru);
 }
 
 // Toplu: ürün başına türün rotası (turunRotasi ile aynı kural).
 export async function turlerinRotalari(db: Db, malzemeIdleri: readonly number[], emirTuru: EmirTuru | null): Promise<Map<number, TurunRotasi>> {
   if (malzemeIdleri.length === 0) return new Map();
-  const satirlar = await db.sorgu<TurunRotasi & { m: number }>(
-    `SELECT t.malzeme_id::int AS m, t.id AS "rotaId", t.ad, t.standart, y.id AS "revizyonId"
-       FROM rota_tanimi t
-       LEFT JOIN rota_revizyonu y ON y.rota_id = t.id AND y.durum = 'yururlukte'
-       LEFT JOIN rota_tanimi_turu u ON u.malzeme_id = t.malzeme_id AND u.emir_turu = $2
-      WHERE t.malzeme_id = ANY($1::int[]) AND (u.rota_id = t.id OR (t.standart AND u.rota_id IS NULL))`,
-    [[...malzemeIdleri], emirTuru],
-  );
-  return new Map(satirlar.map(({ m, ...r }) => [m, r]));
+  const satirlar = await db.sorgu<TurAdayi>(TUR_ADAYLARI, [[...malzemeIdleri], emirTuru]);
+  const urunler = new Map<number, TurAdayi[]>();
+  for (const x of satirlar) urunler.set(x.m, [...(urunler.get(x.m) ?? []), x]);
+  return new Map([...urunler].flatMap(([m, a]) => { const r = turunRotasiSec(a, emirTuru); return r === null ? [] : [[m, r] as const]; }));
 }
 
 // Emir listesi "Rev N" ve "rota değişti": emrin kaynak revizyonunun harfi ve ürünün yürürlükteki revizyonu.

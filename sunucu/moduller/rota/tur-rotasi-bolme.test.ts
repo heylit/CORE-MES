@@ -69,13 +69,14 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
     await tamam(c.onayci, 'POST', `/rota/revizyonlar/${id}/onayla`, { surum: g.surum, yururlugeAl: true });
     return id;
   }
-  // Standart rota iki adımlı, FAI rotası üç adımlı: hangi revizyonun emre girdiği adım sayısından da okunur.
+  // Standart rota iki adımlı, FAI rotası üç adımlı: hangi revizyonun emre girdiği adım sayısından da okunur. Rota ilk türüyle açılır
+  // (3411 a; adı türün adı), öteki türler eşleme ucuyla bağlanır.
   async function ikiRotaliUrun(turler: readonly string[] = ['fai']): Promise<{ urun: number; standart: number; fai: number; faiRota: number }> {
     const urun = await kart('mamul');
     const standart = await yururlugeAl(urun, 2);
-    const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { ad: 'ORN FAI' });
+    const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: turler[0] });
     const faiRota = r.rotalar.find((x) => !x.standart)!;
-    await tamam(c.onayci, 'POST', `/rota/urunler/${urun}/rotalar/${faiRota.id}/turler`, { emirTurleri: turler, surum: faiRota.surum });
+    if (turler.length > 1) await tamam(c.onayci, 'POST', `/rota/urunler/${urun}/rotalar/${faiRota.id}/turler`, { emirTurleri: turler, surum: faiRota.surum });
     const fai = await yururlugeAl(urun, 3, faiRota.id);
     return { urun, standart, fai, faiRota: faiRota.id };
   }
@@ -181,8 +182,8 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
   test('Test T3: partide başka ürünün rotası ya da yürürlükte revizyonu olmayan rota elle seçildiyse parti türün rotasına düşer', async () => {
     const { urun, standart } = await ikiRotaliUrun();
     const baska = await ikiRotaliUrun();
-    const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { ad: 'ORN Taslak' });
-    const taslak = r.rotalar.find((x) => x.ad === 'ORN Taslak')!;
+    const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: 'numune' });
+    const taslak = r.rotalar.find((x) => x.ad === 'Numune')!;
     const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 4, rotaId: baska.faiRota }, { tur: 'seri', adet: 6, rotaId: taslak.id }]);
     assert.deepEqual((await emirler(satir)).map((x) => [x.tur, x.adet, x.kaynak]), [['seri', 4, standart], ['seri', 6, standart]]);
   });
@@ -197,18 +198,17 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
     assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [10, 1]);
   });
 
-  test('Test T2: türün rotasının yürürlükte revizyonu yoksa farklı rotalı bölme reddedilir', async () => {
+  test('3411 a: türün rotası yürürlükte değilse parti Seri rotasında kalır; bölme kol açar, sipariş açılışı Seri ile açar', async () => {
     const urun = await kart('mamul');
-    await yururlugeAl(urun, 2);
-    const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { ad: 'ORN FAI' });
-    const faiRota = r.rotalar.find((x) => !x.standart)!;
-    await tamam(c.onayci, 'POST', `/rota/urunler/${urun}/rotalar/${faiRota.id}/turler`, { emirTurleri: ['fai'], surum: faiRota.surum });
-    const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
-    const ana = (await emirler(satir))[0]!;
-    const b = await bol(ana.id, { adet: 3, emirTuru: 'fai', surum: ana.surum });
-    assert.equal(b.statusCode, 409, b.body);
-    assert.match(b.json<Hata>().mesaj, /FAI türünün rotası \(ORN FAI\) yürürlükte değil; parti ayrılmadı/);
-    assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [10, 1]);
+    const standart = await yururlugeAl(urun, 2);
+    await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: 'fai' });
+    const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }, { tur: 'fai', adet: 2 }]);
+    const [ana, faiEmri] = await emirler(satir);
+    assert.deepEqual([faiEmri!.tur, faiEmri!.kaynak], ['fai', standart]);
+    const b = await bol(ana!.id, { adet: 3, emirTuru: 'fai', surum: ana!.surum });
+    assert.equal(b.statusCode, 200, b.body);
+    const kol = await emir(b.json<{ altEmirId: number }>().altEmirId);
+    assert.deepEqual([b.json<{ ayriEmir: boolean }>().ayriEmir, kol.tur, kol.kaynak, kol.ust], [false, 'fai', standart, ana!.id]);
   });
 
   test('Test T2: ayrı emir yolunda emrin tüm adedi bölünemez', async () => {
@@ -221,12 +221,12 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
     assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [10, 1]);
   });
 
-  // Proje istemeyen tür (stok) ile: türe bağlı rota "ORN FAI" adıyla stoğa üretime bağlanır.
+  // Proje istemeyen tür (stok) ile: rota stoğa üretim türüyle açılır.
   test('Risk N2: tek emir ucu türe bağlı rotası olan emri Standart revizyondan açmaz; rota elle seçildiyse açar', async () => {
     const { standart, fai } = await ikiRotaliUrun(['stok']);
     const govde = { adet: 2, teslim: null, emirTuru: 'stok' };
     const red = await istek(c.yazan, 'POST', `/rota/revizyonlar/${standart}/emre-kopyala`, govde);
-    assert.deepEqual([red.statusCode, red.json<Hata>().mesaj], [409, turunRotasiDegilIletisi('Stoğa üretim', 'ORN FAI')]);
+    assert.deepEqual([red.statusCode, red.json<Hata>().mesaj], [409, turunRotasiDegilIletisi('Stoğa üretim', 'Stoğa üretim')]);
     await tamam(c.yazan, 'POST', `/rota/revizyonlar/${standart}/emre-kopyala`, { ...govde, rotaElle: true });
     await tamam(c.yazan, 'POST', `/rota/revizyonlar/${fai}/emre-kopyala`, govde);
     const seri = await istek(c.yazan, 'POST', `/rota/revizyonlar/${fai}/emre-kopyala`, { adet: 2, teslim: null });

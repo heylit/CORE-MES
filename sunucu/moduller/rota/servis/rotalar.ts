@@ -4,14 +4,16 @@ import { cakisma, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import * as s from '../sorgular.ts';
 import { ROTA_BASKA_URUNUN, rotaKurulabilirUrun, rotaliTurMu, urunOzetiAl } from './ortak.ts';
 import { urunRevizyonlari } from './liste.ts';
 
 /* ---------------- ürünün rotaları (3247 a) ---------------- */
 
-const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var.';
-const STANDART_TURSUZ = 'Standart rotaya emir türü bağlanmaz; bağlanmayan her tür zaten Standart rotayı kullanır.';
+const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var; o rotaya türü "Adı ve türleri"nden bağlayın.';
+const turunRotasiVarIletisi = (tur: string): string => `Bu üründe ${tur} türünün rotası var.`;
+const STANDART_TURSUZ = 'Seri rotasına emir türü bağlanmaz; bağlanmayan her tür zaten Seri rotasını kullanır.';
 
 async function adiKoru<T>(is: () => Promise<T>): Promise<T> {
   try {
@@ -28,12 +30,15 @@ async function urununRotasi(db: Db, urunId: number, rotaId: number): Promise<s.R
   return rota;
 }
 
-// Yeni rota boş açılır; revizyonu "taslak aç" ile (çoğunlukla Standart rotanın yürürlükteki revizyonundan) gelir. Ürünün Standart
-// rotası henüz yoksa önce o açılır: her üründe türü bağlanmamış emirler için tek Standart rota vardır.
-export async function rotaEkle(db: Db, kullanici: Kullanici, urunId: number, ad: string): Promise<UrunRevizyonlariCevabi> {
+// Yeni rota emir türüyle açılır (3411 a): adı türün adıdır ve tür hemen bağlanır; rota yürürlüğe girene kadar o türün emirleri Seri
+// (Standart) rotasıyla açılır, bu yüzden bağlama onay yetkisi istemez. Revizyonu "taslak aç" ile gelir. Ürünün Standart rotası henüz
+// yoksa önce o açılır. Türün rotası varsa yeni rota açılmaz.
+export async function rotaEkle(db: Db, kullanici: Kullanici, urunId: number, emirTuru: EmirTuru): Promise<UrunRevizyonlariCevabi> {
   await rotaKurulabilirUrun(db, urunId);
   await s.standartRotaAc(db, urunId, kullanici.id);
-  await adiKoru(() => s.rotaEkle(db, urunId, ad, kullanici.id));
+  if ((await s.urunRotalari(db, urunId)).some((r) => r.emirTurleri.includes(emirTuru))) throw cakisma(turunRotasiVarIletisi(EMIR_TURU_ADLARI[emirTuru]));
+  const id = await adiKoru(() => s.rotaEkle(db, urunId, EMIR_TURU_ADLARI[emirTuru], kullanici.id));
+  if ((await s.rotaTurleriniYaz(db, id, urunId, [emirTuru], 1)) === null) throw eskiSurum();
   return urunRevizyonlari(db, kullanici, urunId);
 }
 

@@ -272,7 +272,7 @@ function patlatmaRotasi(revizyonId: number, icerik: Icerik): PatlatmaRotasi {
 }
 
 // Kökün rotası verilen revizyondur; alt ürünler emir türünün rotasının yürürlükteki revizyonuyla açılır (türe bağlı rota yoksa
-// Standart, 3247 a). Türe bağlı rotası olup yürürlükte revizyonu olmayan alt ürün sessizce Standart'a düşmez: emir açılmaz (409).
+// Standart, 3247 a). Türe bağlı rotası yürürlükte olmayan alt ürün Seri (Standart) rotasıyla açılır (3411 a).
 // Döngüde zaten okunmuş ürün yeniden okunmaz, döngüyü kural (rotaPatlat) yol üzerinden bulur.
 async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number, emirTuru: EmirTuru | null): Promise<Map<number, PatlatmaRotasi>> {
   const kokIcerik = await s.icerikOku(db, kokRevizyon);
@@ -296,11 +296,6 @@ async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number, emirTu
 async function alturunRevizyonlari(db: Db, urunler: readonly number[], emirTuru: EmirTuru | null): Promise<Map<number, number>> {
   if (emirTuru === null) return s.yururluktekiRevizyonIdleri(db, urunler);
   const rotalar = await s.turlerinRotalari(db, urunler, emirTuru);
-  const eksik = [...rotalar].filter(([, r]) => !r.standart && r.revizyonId === null);
-  if (eksik.length > 0) {
-    const adlar = await urunOzetleri(db, eksik.map(([m]) => m));
-    throw cakisma(`${eksik.map(([m, r]) => `${adlar.get(m)?.stokKodu ?? adlar.get(m)?.ad ?? String(m)} (${r.ad})`).join(', ')}: bu emir türünün rotası yürürlükte değil.`);
-  }
   return new Map([...rotalar].flatMap(([m, r]) => (r.revizyonId === null ? [] : [[m, r.revizyonId] as const])));
 }
 

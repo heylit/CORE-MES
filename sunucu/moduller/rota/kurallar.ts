@@ -1432,3 +1432,17 @@ export function turRotasiIhlali(g: { revizyonRotaId: number; turRotasi: { rotaId
   if (g.elle || g.turRotasi === null || g.turRotasi.rotaId === g.revizyonRotaId) return null;
   return turunRotasiDegilIletisi(g.turAdi, g.turRotasi.ad);
 }
+
+// Emir türünün rotası (3411 a): türe bağlı rotanın yürürlükte revizyonu varsa o; yoksa Standart (Seri). Standart yoksa türe bağlı rota
+// (yürürlükte revizyonu yoksa emir rota bekler). seriyeDustu: tür Seri değilken Standart seçildi; turunRotasi o zaman yürürlükte olmayan
+// türe bağlı rotanın adıdır (türün rotası yoksa null).
+export interface TurunRotasi { rotaId: number; ad: string; standart: boolean; revizyonId: number | null; seriyeDustu: boolean; turunRotasi: string | null }
+export interface TurunRotasiAdayi { rotaId: number; ad: string; standart: boolean; revizyonId: number | null; turun: boolean }
+export function turunRotasiSec(adaylar: readonly TurunRotasiAdayi[], emirTuru: string | null): TurunRotasi | null {
+  const turun = adaylar.find((a) => a.turun && !a.standart) ?? null;
+  const standart = adaylar.find((a) => a.standart) ?? null;
+  const sec = turun !== null && (turun.revizyonId !== null || standart === null) ? turun : standart;
+  if (sec === null) return null;
+  const seriyeDustu = sec.standart && emirTuru !== null && emirTuru !== 'seri';
+  return { rotaId: sec.rotaId, ad: sec.ad, standart: sec.standart, revizyonId: sec.revizyonId, seriyeDustu, turunRotasi: seriyeDustu ? turun?.ad ?? null : null };
+}

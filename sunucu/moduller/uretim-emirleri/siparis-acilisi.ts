@@ -21,7 +21,7 @@ import {
 // 3272: sipariş onaylanınca proje ve her kalem partisi için taslak emir. Rota modülü bu modülün üstündedir (ADR 0006); emrin rotası ve
 // rotadan emir açma kablolama.ts'te kaydedilen çözücüden gelir. Emir taşıyan satın alma ve stok bağları da öyle (iki modül de bunu ithal eder).
 // 3296: secilenRotaId partide elle seçilen rotadır (elle: kullanıldı mı); revizyonunRotasi bölmede emrin rotasını bulur.
-export interface SiparisAcilisiRotasi { rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean }
+export interface SiparisAcilisiRotasi { rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean; seriyeDustu?: boolean }
 export interface SiparisAcilisiCozuculeri {
   turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru, secilenRotaId?: number | null) => Promise<SiparisAcilisiRotasi | null>;
   revizyonunRotasi: (db: Db, revizyonId: number) => Promise<number | null>;
@@ -98,7 +98,7 @@ export async function siparisAcilisiDurumu(db: Db, kullanici: Kullanici, siparis
     satirlar.push({
       kalemId: p.kalemId, kalemSira: p.kalemSira, partiId: p.partiId, malzemeNo: p.malzemeNo, malzemeKodu: k?.malzemeKodu ?? null,
       malzemeAdi: k?.malzemeAdi ?? null, emirTuru: p.emirTuru, adet: p.adet, teslim: p.teslim,
-      rota: rota?.revizyonId == null ? null : { ad: rota.ad, harf: rota.harf ?? '', elle: rota.elle, elleDustu: p.rotaId !== null && !rota.elle },
+      rota: rota?.revizyonId == null ? null : { ad: rota.ad, harf: rota.harf ?? '', elle: rota.elle, elleDustu: p.rotaId !== null && !rota.elle, seriyeDustu: rota.seriyeDustu === true },
       emir: emir === null ? null : { id: emir.id, no: emir.emirNo, durum: emir.durum, rotaBekliyor: emir.rotaBekliyor },
       atlama: p.atlama,
     });
