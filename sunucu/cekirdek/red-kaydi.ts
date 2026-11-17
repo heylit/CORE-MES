@@ -78,6 +78,11 @@ export function istekKisisiniIsaretle(istek: object, kisiId: number): void {
   kisiler.set(istek, kisiId);
 }
 
+// Kapıdan geçmiş isteğin kişisi; açık uçta ve kapıda reddedilen istekte null. İstek satırı "kim neyi okudu"yu bununla taşır.
+export function istekKisisi(istek: object): number | null {
+  return kisiler.get(istek) ?? null;
+}
+
 // Hata işleyicisi çağırır: kapıdan geçmiş isteğin işleyicide aldığı yetki reddi (kapsam dışı kayıt ya da modülün kendi denetimi).
 // Kapıdan geçmemiş istekte kişi yoktur; o red kapıda yazılmıştır ya da açık uçtadır (girişin kendi kaydı vardır).
 export function isleyiciReddiniKaydet(istek: RetIstegi & { readonly method: string }, yol: string | null, kapsam: boolean): void {

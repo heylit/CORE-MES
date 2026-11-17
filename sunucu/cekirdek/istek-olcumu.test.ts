@@ -10,7 +10,7 @@ import { uc, uclariKaydet } from './uc.ts';
 import { hataYonetiminiKur } from './uygulama.ts';
 
 // Yavaşlık ölçülmeden düzeltilemez: her uç cevabında süre ve o isteğin sorgu sayısı yerel günlüğe bir satır
-// yazılır, eşiği geçen uç ayrı iletiyle ayrılır. Satır kalıbı, sorgu dizgesiz yolu ve istemci adresini taşır; sorgu metni girmez.
+// yazılır, eşiği geçen uç ayrı iletiyle ayrılır. Satır kalıbı, sorgu dizgesiz yolu, istemci adresini ve kişi numarasını taşır; sorgu metni ve kişi adı girmez.
 describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   // Eşik uygulamaya göre seçilir: sayım testi yüklü makinede de yavaş sayılmasın, eşik testi kesin yavaş olsun.
@@ -41,6 +41,7 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
             return { n: parametre.kac };
           },
         }),
+        uc({ yontem: 'GET', yetki: 'oturum', sahiplik: 'yok', yol: '/uc-kisi', cevap, isle: () => ({ n: 1 }) }),
         uc({
           yontem: 'GET', yetki: 'acik', yol: '/uc-yavas', cevap,
           isle: async ({ db: d }) => {
@@ -49,7 +50,7 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
           },
         }),
       ],
-      { vt: db.vt, kimlik: async () => null },
+      { vt: db.vt, kimlik: async (istek) => (istek.headers['x-kisi'] === '7' ? { id: 7, ad: 'ORN-kisi', islemler: [] } : null) },
     );
     return app;
   };
@@ -84,6 +85,24 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
     }
     assert.equal(gunluk.filter((s) => s.includes('"Uç süresi"') || s.includes('"Yavaş uç"')).join('').includes('deger-91'), false);
     assert.equal(satirlar('Yavaş uç').length, 0);
+  });
+
+  // Okuma denetim defterine düşmez: kimin neyi okuduğu yalnız bu satırdan bulunur. Kapıdan geçemeyen istekte kişi yoktur.
+  test('kapıdan geçen istekte satır kişi numarasını taşır; açık uçta ve oturumsuz retteki satırda kişi null', async () => {
+    gunluk.length = 0;
+    const kisili = await sayimApp.inject({ method: 'GET', url: '/api/uc-kisi', headers: { 'x-kisi': '7' } });
+    assert.equal(kisili.statusCode, 200, kisili.body);
+    const oturumsuz = await sayimApp.inject({ method: 'GET', url: '/api/uc-kisi' });
+    assert.equal(oturumsuz.statusCode, 401, oturumsuz.body);
+    const acik = await sayimApp.inject({ method: 'GET', url: '/api/uc-sayi/0', headers: { 'x-kisi': '7' } });
+    assert.equal(acik.statusCode, 200, acik.body);
+    await satirBekle(3);
+    const olcumler = satirlar('Uç süresi');
+    const kisi = (yol: string, durum: number): unknown => olcumler.find((s) => s.yol === yol && s.durum === durum)?.kisiId;
+    assert.equal(kisi('/api/uc-kisi', 200), 7);
+    assert.equal(kisi('/api/uc-kisi', 401), null);
+    assert.equal(kisi('/api/uc-sayi/:kac', 200), null);
+    assert.equal(gunluk.join('').includes('ORN-kisi'), false);
   });
 
   test('eşiği geçen uç "Yavaş uç" uyarısıyla ayrılır', async () => {
