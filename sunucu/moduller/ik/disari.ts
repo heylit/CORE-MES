@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { FAZLA_MESAI_TURLERI, resmiTatilTarihleri } from './kurallar.ts';
-import { departmanSatirlari, gunDevamKisiNolari, izinliKisiNolari, kisilerinCikisSatirlari, kisilerinDepartmanSatirlari, resmiTatilListesi } from './sorgular.ts';
+import { departmanSatirlari, gunDevamKisiNolari, izinliKisiNolari, kisilerinCikisSatirlari, kisilerinDepartmanSatirlari, kisilerinIsEpostaSatirlari, resmiTatilListesi } from './sorgular.ts';
 
 // IK-54: o gün onaylı izinde ya da raporda olan kişilerin kimlikleri (kisi.id); anomali hesabında bu kişiler beklenene girmez.
 // Eşleme personel kartındaki "TMI kullanıcısı" alanıdır (ik_personel.kisi_id); bu alanı boş personelin izni sayılmaz.
@@ -72,3 +72,11 @@ export type { HavuzDegeri } from './saat-maliyeti/servis.ts';
 // verir (cevaba ayrı alan olarak konmaz). Katılım kaynağını kablolama verir (uretim-emirleri katilimSureleri). Yetki denetlemez.
 export { dogrudanEmilmeyenToplami, dogrudanEmilmeyenToplamiYalnizHesapIcin, dolayliPersonelToplami, dolayliPersonelToplamiYalnizHesapIcin } from './saat-maliyeti/servis.ts';
 export type { KatilimKaynagi, PersonelToplami } from './saat-maliyeti/servis.ts';
+
+// 3397: bildirim e-postasının alıcı adresi personel kartındaki iş e-postasıdır (kişisel e-posta kullanılmaz). Bağı kablolama kurar.
+// Personel kaydı, adresi olmayan, iptal ya da çıkmış kişi haritada yoktur. Tek sorgu, boş dizide sorgu atılmaz. Yetki denetlemez.
+export async function kisilerinIsEpostalari(db: Db, kisiIdleri: readonly number[]): Promise<Map<number, string>> {
+  const tekil = [...new Set(kisiIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await kisilerinIsEpostaSatirlari(db, tekil)).map((r) => [r.kisi_id, r.eposta]));
+}

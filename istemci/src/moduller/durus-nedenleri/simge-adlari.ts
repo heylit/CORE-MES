@@ -35,6 +35,7 @@ export const SIMGE_ADLARI: Record<SimgeAdi, string> = {
   rotate: 'Döndür',
   tool: 'Alet',
   bell: 'Zil',
+  mail: 'E-posta',
   help: 'Soru işareti',
   book: 'Kitap',
   sun: 'Güneş',

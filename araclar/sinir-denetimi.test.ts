@@ -584,6 +584,12 @@ test('kural i (ADR 0031): bildirim modülünde dış istek ve ağ ithali yalnız
     assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.ts', satir), [], satir);
     assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.test.ts', satir), [], satir);
   }
+  // ADR 0015 (3397): posta.ts kurum içi posta sunucusuna node:net ve node:tls ile bağlanır; fetch orada da yasak.
+  for (const satir of ["import { isIP, Socket } from 'node:net';", "import { connect as tlsBagla } from 'node:tls';"]) {
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/posta.ts', satir), [], satir);
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/eposta.ts', satir), ['i'], satir);
+  }
+  assert.deepEqual(kurallar('sunucu/moduller/bildirim/posta.ts', "const c = await fetch('https://ornek.invalid/x');"), ['i']);
   // Başka modülün kurum içi istisnaları kendi ADR'leriyle sınanır; bu kural onlara dokunmaz.
   assert.deepEqual(kurallar('sunucu/moduller/smartes/istemci.ts', "const c = await fetch(adres);"), []);
   assert.deepEqual(kurallar('sunucu/moduller/bildirim/servis.ts', "import { createHash } from 'node:crypto';"), []);

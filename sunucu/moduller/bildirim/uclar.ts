@@ -12,6 +12,13 @@ import {
   pushAboneOl, pushAbonelikSil, pushDurumu, pushTuruYaz, pushTurleri,
 } from './servis.ts';
 import {
+  epostaDefterCevabi, epostaDefterSorgusu, epostaDenemeCevabi, epostaDenemeGovdesi, epostaDurumuCevabi, epostaSablonDegistirGovdesi, epostaSablonParametresi,
+  epostaSablonlariCevabi, epostaSinamaCevabi, epostaTetikleyiciDegistirGovdesi, epostaTetikleyiciParametresi, epostaTetikleyicileriCevabi,
+} from '#paylasilan/sozlesme/bildirim-eposta.ts';
+import {
+  epostaDefteri, epostaDenemesi, epostaDurumu, epostaSablonlari, epostaSablonuYaz, epostaSinamasi, epostaTetikleyicileri, epostaTetikleyicisiYaz,
+} from './eposta.ts';
+import {
   geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
 } from './yayin.ts';
 
@@ -109,4 +116,27 @@ export const uclar = [
     yontem: 'GET', yol: '/bildirimler/yayinlar/:id/gorsel', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimYayinParametresi, cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => yayinGorseli(db, kullanici, parametre.id),
   }),
+  // E-posta kanalı (ADR 0015, 3397): sunucu adresi ve parola ortamdadır, hiçbir uçtan yazılmaz. Deneme yalnız isteyenin kendi adresine.
+  uc({ yontem: 'GET', yol: '/bildirimler/eposta/durum', yetki: 'bildirim.eposta-yonet', cevap: epostaDurumuCevabi, isle: ({ db }) => epostaDurumu(db) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/eposta/sablonlar', yetki: 'bildirim.eposta-yonet', cevap: epostaSablonlariCevabi, isle: ({ db }) => epostaSablonlari(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/sablonlar/:konu/degistir', yetki: 'bildirim.eposta-yonet', parametre: epostaSablonParametresi,
+    govde: epostaSablonDegistirGovdesi, cevap: epostaSablonlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => epostaSablonuYaz(db, kullanici, parametre.konu, govde),
+  }),
+  uc({ yontem: 'GET', yol: '/bildirimler/eposta/tetikleyiciler', yetki: 'bildirim.eposta-yonet', cevap: epostaTetikleyicileriCevabi, isle: ({ db }) => epostaTetikleyicileri(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/tetikleyiciler/:tur/degistir', yetki: 'bildirim.eposta-yonet', parametre: epostaTetikleyiciParametresi,
+    govde: epostaTetikleyiciDegistirGovdesi, cevap: epostaTetikleyicileriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => epostaTetikleyicisiYaz(db, kullanici, parametre.tur, govde),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirimler/eposta/defter', yetki: 'bildirim.eposta-yonet', sorgu: epostaDefterSorgusu, cevap: epostaDefterCevabi,
+    isle: ({ db, sorgu }) => epostaDefteri(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/deneme', yetki: 'bildirim.eposta-yonet', govde: epostaDenemeGovdesi, cevap: epostaDenemeCevabi,
+    isle: ({ db, kullanici, govde }) => epostaDenemesi(db, kullanici, govde.konu),
+  }),
+  uc({ yontem: 'POST', yol: '/bildirimler/eposta/sina', yetki: 'bildirim.eposta-yonet', cevap: epostaSinamaCevabi, isle: ({ db }) => epostaSinamasi(db) }),
 ];

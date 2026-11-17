@@ -29,7 +29,9 @@ const KAYNAK_OKUMA =
   /\b(?:readFile(?:Sync)?|createReadStream)\b|\?(?:raw|inline)['"`&]|\bas:\s*['"`]raw['"`]|\bquery:\s*\{\s*raw\b/;
 
 // ADR 0031 madde 1: bildirim modülünde dışarıya yalnız push.ts istek atar; push servisi adları yalnız orada geçer.
+// ADR 0015 (3397): kurum içi posta sunucusuyla yalnız posta.ts konuşur (node:net, node:tls); fetch orada da yoktur.
 const PUSH_DOSYASI = 'sunucu/moduller/bildirim/push.ts';
+const POSTA_DOSYASI = 'sunucu/moduller/bildirim/posta.ts';
 const BILDIRIM_SUNUCU = 'sunucu/moduller/bildirim/';
 const DIS_ISTEK_CAGRISI = /\bfetch\s*\(/;
 const AG_ITHALI = /^(?:node:)?(?:https?|http2|net|tls|dgram|undici)$/;
@@ -184,8 +186,8 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
       if (sonuc) ihlaller.push({ dosya, satir: satirNo, ...sonuc });
     }
 
-    if (disIstekDenetlenir && ITHAL_DESENLERI.some((desen) => [...satir.matchAll(desen)].some((e) => AG_ITHALI.test(e[1] ?? '')))) {
-      ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `bildirim modülünde ağ ithali yalnız ${PUSH_DOSYASI} içinde olur (ADR 0031)` });
+    if (disIstekDenetlenir && dosya !== POSTA_DOSYASI && ITHAL_DESENLERI.some((desen) => [...satir.matchAll(desen)].some((e) => AG_ITHALI.test(e[1] ?? '')))) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `bildirim modülünde ağ ithali yalnız ${PUSH_DOSYASI} ve ${POSTA_DOSYASI} içinde olur (ADR 0031, 0015)` });
     }
 
     if (disIstekDenetlenir && DIS_ISTEK_CAGRISI.test(satir)) {

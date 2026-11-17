@@ -11,3 +11,6 @@ export type { EkipCagrisi } from './servis.ts';
 // İstasyona elle bildirim (2147): etkin istasyonları ve o günkü atamalarını kablolama verir (istasyonlar bu modülü ithal eder).
 export { istasyonCozucusuKaydet } from './yayin.ts';
 export type { IstasyonCozucusu, YayinIstasyonu } from './yayin.ts';
+// E-posta (3397): kişinin iş e-postasını İK verir; bağ kablolamada kurulur (İK bu modülü ithal eder).
+export { epostaAdresCozucusuKaydet, epostaAyarOkuyucusuKaydet } from './eposta.ts';
+export type { AyarOkuyucusu, EpostaAdresCozucusu, EpostaEki } from './eposta.ts';
