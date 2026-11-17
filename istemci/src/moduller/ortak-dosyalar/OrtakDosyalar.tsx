@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
+  DosyaListesiCevabi, DosyalarCevabi, HazirListe, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
   SurumluGovde, VerilenDuzey, YetkiCevabi, YetkiGovdesi, YukleGovdesi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
@@ -13,9 +13,10 @@ import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komu
 import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { Ayarlar } from './Ayarlar.tsx';
+import { HAZIR_LISTE_TANIMLARI, HazirListeGorunumu, HazirMenu } from './HazirListeler.tsx';
 import './ortak-dosyalar.css';
 
-export type Gorunum = 'klasorler' | 'son' | 'arsiv' | 'ayarlar';
+export type Gorunum = 'klasorler' | 'son' | 'arsiv' | 'ayarlar' | 'hazir';
 type SekmeAdi = 'dosyalar' | 'yetkiler' | 'gecmis';
 
 const DUZEY_ADI: Record<KlasorDuzeyi, string> = { yok: 'Yok', gorur: 'Görür', ekler: 'Ekler', yonetir: 'Yönetir' };
@@ -496,7 +497,7 @@ function yolu(klasorler: readonly Klasor[], id: number | null): Klasor[] {
   return y;
 }
 
-export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
+export function OrtakDosyalar({ gorunum, liste = null }: { gorunum: Gorunum; liste?: HazirListe | null }) {
   const git = useNavigate();
   // Kayıt ekranındaki "Klasör" bağlantısı klasörü `?klasor=` ile açar (kart 3288-2); görünmeyen kimlik seçimi değiştirmez.
   const [adres] = useSearchParams();
@@ -518,6 +519,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
   if (gorunum === 'ayarlar') govde = yonetici ? <Ayarlar /> : <p className="tc-od-bos">Ayarlar yalnız yöneticidedir.</p>;
   else if (gorunum === 'son') govde = <SonEklenenler ara={ara} klasorler={klasorler} />;
   else if (gorunum === 'arsiv') govde = <Arsiv />;
+  else if (gorunum === 'hazir' && liste !== null) govde = <HazirListeGorunumu liste={liste} anahtar={adres.get('kayit')} />;
   else if (seciliKlasor === null) govde = <p className="tc-od-bos">Bu rolün görebildiği klasör yok.</p>;
   else if (gecerliSekme === 'yetkiler') govde = <YetkilerSekmesi key={seciliKlasor.id} klasorId={seciliKlasor.id} ustVar={seciliKlasor.ustId !== null} />;
   else if (gecerliSekme === 'gecmis') govde = <GecmisSekmesi klasorId={seciliKlasor.id} />;
@@ -526,7 +528,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
     <div className="tc-od-sayfa">
       <div className="tc-od-bas">
         <h1><Simge ad="file" />Ortak Dosyalar</h1>
-        {gorunum !== 'ayarlar' && (
+        {gorunum !== 'ayarlar' && gorunum !== 'hazir' && (
           <label className="tc-od-ara">
             <Simge ad="search" boyut="k" />
             <input type="search" placeholder="Dosya ara" aria-label="Dosya ara" value={ara} onChange={(o) => araYaz(o.target.value)} />
@@ -534,7 +536,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
         )}
       </div>
       {gorunum === 'ayarlar' ? govde : (
-      <div className="tc-od-izgara">
+      <div className={`tc-od-izgara${gorunum === 'hazir' ? ' tc-od-izgara-hazir' : ''}`}>
         <div className={`tc-od-agac-kart${agacAcik ? ' tc-od-acik' : ''}`}>
           <Kart
             baslik="Klasörler" simge="layers"
@@ -546,10 +548,11 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
             </label>
             <Agac klasorler={agacSuz(klasorler, agacAra)} aranan={agacAra.trim() !== ''} secili={gorunum === 'klasorler' ? seciliKlasor?.id ?? null : null} sec={sec} />
           </Kart>
+          <HazirMenu secili={gorunum === 'hazir' ? liste : null} />
         </div>
         <Kart>
           <div className="tc-od-arac tc-od-cizgili">
-            <span className="tc-od-agac-ac"><Dugme simge="layers" onClick={() => agacAcikYaz((a) => !a)}>Klasörler</Dugme></span>
+            <span className="tc-od-agac-ac"><Dugme simge="layers" onClick={() => agacAcikYaz((a) => !a)}>Klasörler ve listeler</Dugme></span>
             <nav className="tc-od-yol" aria-label="Klasör yolu">
               {gorunum === 'klasorler'
                 ? yolu(klasorler, seciliKlasor?.id ?? null).map((k, i) => (
@@ -558,7 +561,7 @@ export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
                     <button type="button" onClick={() => seciliYaz(k.id)}>{k.ad}</button>
                   </span>
                 ))
-                : <button type="button">{gorunum === 'son' ? 'Son eklenenler' : 'Arşiv'}</button>}
+                : <button type="button">{gorunum === 'son' ? 'Son eklenenler' : gorunum === 'hazir' && liste !== null ? HAZIR_LISTE_TANIMLARI[liste].baslik : 'Arşiv'}</button>}
             </nav>
           </div>
           {gorunum === 'klasorler' && seciliKlasor !== null && (

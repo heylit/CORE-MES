@@ -3,6 +3,7 @@ import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ayarDegistiDinle } from './moduller/ayarlar/disari.ts';
 import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
+import { kaydaBagliBelgeler } from './moduller/belge-merkezi/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
 import { gkkOzetiCozucusuKaydet } from './moduller/etiket-merkezi/disari.ts';
@@ -24,6 +25,7 @@ import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as pla
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
+import { siparisSatiriBelgeleri, siparisSatirlari } from './moduller/satin-alma/disari.ts';
 import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
@@ -31,8 +33,12 @@ import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, tumFirmalar } 
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
+import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
+import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import * as stok from './moduller/stok/disari.ts';
 import * as uretimEmirleri from './moduller/uretim-emirleri/disari.ts';
@@ -123,6 +129,110 @@ const esitle = (oku: (db: Db, id: number) => Promise<Zincir | null>) => async (d
 const firmaEsitle = esitle(firmaZinciri);
 const siparisEsitle = esitle(siparisZinciri);
 const projeEsitle = esitle(projeZinciri);
+
+// Hazır listeler (kart 3390, 3390 a). Risk K1: her grup dosyanın kaynak ucundaki okuma işlemiyle süzülür; o işlem yoksa grup hiç gelmez.
+// İşlem listeleri kaynak uçlarınınkiyle aynıdır (belge-merkezi OKUMA, satin-alma belge ucu, stok OKUMA ve SON_PARTI_OKUMA).
+const CIZIM_OKUMA: readonly Islem[] = ['sayfa.cizimler', 'belge-merkezi.oku'];
+const SATIN_ALMA_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz'];
+const PARTI_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
+const IRSALIYE_OKUMA: readonly Islem[] = [...PARTI_OKUMA, ...SATIN_ALMA_OKUMA];
+const okur = (k: Kullanici, islemler: readonly Islem[]): boolean => islemler.some((i) => k.islemler.includes(i));
+const yol = (...p: (string | number)[]): string => `/${p.map(String).join('/')}`;
+
+async function emirAyrintisiOku(db: Db, id: number) {
+  try {
+    return await uretimEmirleri.adimliEmirAyrintisi(db, id);
+  } catch (h) {
+    if (h instanceof UygulamaHatasi && h.durum === 404) return null;
+    throw h;
+  }
+}
+
+// Sağlayıcıların okuduğu kaynak işlevleri; test, süzmeyi gerçek sağlayıcıyla sahte kaynak üstünde ölçer.
+export const URETIM_EMRI_KAYNAKLARI = {
+  liste: (db: Db) => uretimEmirleri.adimliEmirListesi(db, false, null, true),
+  emir: emirAyrintisiOku,
+  cizimler: (db: Db, malzemeId: number) => kaydaBagliBelgeler(db, 'malzemeler', malzemeId),
+  siparisSatirlari: siparisSatiriOzetleri,
+};
+export const SATIN_ALMA_KAYNAKLARI = { satirlar: siparisSatirlari, belgeler: siparisSatiriBelgeleri, stokBelgeleri: stok.siparisSatirlarininBelgeleri };
+
+export const uretimEmriSaglayicisi = (kaynak: typeof URETIM_EMRI_KAYNAKLARI = URETIM_EMRI_KAYNAKLARI): ortakDosyalar.HazirSaglayici => ({
+  okuma: ADIMLI_OKUMA_ISLEMLERI,
+  async kayitlar(db, ara, sinir) {
+    const { emirler } = await kaynak.liste(db);
+    return emirler.filter((e) => ortakDosyalar.aramaUyar(ara, e.emirNo, e.urun.kod, e.urun.ad)).slice(0, sinir)
+      .map((e) => ({ anahtar: String(e.id), no: e.emirNo, baslik: `${e.urun.kod} ${e.urun.ad}`.trim(), alt: `${String(e.adet)} adet` }));
+  },
+  async kayit(db, k, anahtar) {
+    const id = Number(anahtar);
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+    const e = await kaynak.emir(db, id);
+    if (e === null) return null;
+    const gruplar: ortakDosyalar.HazirKayitSonucu['gruplar'] = [];
+    if (e.urun.id !== null && okur(k, CIZIM_OKUMA)) {
+      const belgeler = (await kaynak.cizimler(db, e.urun.id)).flatMap((b) => (b.revizyonId === null ? [] : [{ ...b, revizyonId: b.revizyonId }]));
+      gruplar.push({ kaynak: 'cizim', dosyalar: belgeler.map((b) => ({
+        ad: b.ad, dosyaTuru: b.dosyaTuru, bilgi: b.revKodu === null ? null : `Rev ${b.revKodu}`, zaman: null,
+        indir: yol('cizimler', b.id, 'revizyonlar', b.revizyonId, 'dosya'), ac: yol('cizimler', 'belge', b.id),
+      })) });
+    }
+    const satir = e.siparisSatiriId == null ? null : (await kaynak.siparisSatirlari(db, [e.siparisSatiriId])).get(e.siparisSatiriId) ?? null;
+    const klasorler: ortakDosyalar.HazirKayitSonucu['klasorler'] = [
+      ...(satir === null ? [] : [{ tur: 'siparis' as const, id: satir.siparisId }]),
+      ...(e.projeId == null ? [] : [{ tur: 'proje' as const, id: e.projeId }]),
+    ];
+    return {
+      kayit: { anahtar: String(e.id), no: e.emirNo, baslik: `${e.urun.kod} ${e.urun.ad}`.trim(), alt: `${String(e.adet)} adet${satir === null ? '' : ` · ${satir.siparisNo}`}` },
+      kayitYolu: yol('uretim-emirleri', e.id), gruplar, klasorler,
+    };
+  },
+});
+
+// Satın alma siparişi satırların sipariş numarasıyla toplanır (VARSAYIM: sipariş no tekil; satin_alma_siparis talep ve teklifle anahtarlanır).
+export const satinAlmaSaglayicisi = (kaynak: typeof SATIN_ALMA_KAYNAKLARI = SATIN_ALMA_KAYNAKLARI): ortakDosyalar.HazirSaglayici => ({
+  okuma: SATIN_ALMA_OKUMA,
+  async kayitlar(db, ara, sinir) {
+    const gruplar = new Map<string, { tedarikci: string; satir: number; kalemler: string[] }>();
+    for (const x of await kaynak.satirlar(db)) {
+      const g = gruplar.get(x.siparisNo) ?? { tedarikci: x.tedarikciAdi, satir: 0, kalemler: [] };
+      g.satir += 1;
+      g.kalemler.push(x.kalemAdi);
+      gruplar.set(x.siparisNo, g);
+    }
+    return [...gruplar].filter(([no, g]) => ortakDosyalar.aramaUyar(ara, no, g.tedarikci, ...g.kalemler))
+      .sort(([a], [b]) => b.localeCompare(a, 'tr')).slice(0, sinir)
+      .map(([no, g]) => ({ anahtar: no, no, baslik: g.tedarikci, alt: `${String(g.satir)} satır` }));
+  },
+  async kayit(db, k, anahtar) {
+    const satirlar = (await kaynak.satirlar(db)).filter((x) => x.siparisNo === anahtar);
+    if (satirlar.length === 0) return null;
+    const kalem = new Map(satirlar.map((x) => [x.id, x.kalemAdi]));
+    const ids = satirlar.map((x) => x.id);
+    const gruplar: ortakDosyalar.HazirKayitSonucu['gruplar'] = [];
+    const belgeler = await kaynak.belgeler(db, ids);
+    gruplar.push({ kaynak: 'satin-alma', dosyalar: [...belgeler].flatMap(([satirId, l]) => l.map((b) => ({
+      ad: b.ad, dosyaTuru: null, bilgi: kalem.get(satirId) ?? null, zaman: null, ac: null, indir: yol('satin-alma-siparis-satirlari', satirId, 'belgeler', b.id, 'dosya'),
+    }))) });
+    if (okur(k, IRSALIYE_OKUMA) || okur(k, PARTI_OKUMA)) {
+      const st = await kaynak.stokBelgeleri(db, ids);
+      if (okur(k, IRSALIYE_OKUMA)) {
+        gruplar.push({ kaynak: 'irsaliye', dosyalar: st.irsaliyeler.map((b) => ({
+          ad: b.ad, dosyaTuru: null, bilgi: `Mal kabul ${b.malKabulNo}`, zaman: null, ac: null, indir: yol('stok', 'mal-kabuller', b.malKabulId, 'irsaliyeler', b.belgeId),
+        })) });
+      }
+      if (okur(k, PARTI_OKUMA)) {
+        gruplar.push({ kaynak: 'parti', dosyalar: st.partiBelgeleri.map((b) => ({
+          ad: b.ad, dosyaTuru: null, bilgi: b.lotNo === null ? null : `Parti ${b.lotNo}`, zaman: null, ac: null, indir: yol('stok', 'partiler', b.partiId, 'belgeler', b.belgeId),
+        })) });
+      }
+    }
+    return {
+      kayit: { anahtar, no: anahtar, baslik: satirlar[0]!.tedarikciAdi, alt: `${String(satirlar.length)} satır` },
+      kayitYolu: '/satin-alma/siparisler', gruplar, klasorler: [],
+    };
+  },
+});
 
 // Toplu komutun kaynağı: bütün müşteri firmaları, siparişler (sayfa sayfa) ve projeler; zincir firma ve sipariş başına bir kez okunur.
 async function mevcutKayitlar(db: Db): Promise<Zincir[]> {
@@ -321,6 +431,8 @@ export function sunucununBaglari(): Bag[] {
     // 3315 madde 7: proje kartı kaydedilince Logo'nun reddettiği proje yeniden sıraya girer.
     bag('proje değişti -> Logo proje kartı', projeler.projeDegistiDinle, (db: Db, o: { projeId: number }) => logo.logoProjesiDegisti(db, o.projeId, new Date())),
     bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
+    bag('üretim emri dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('uretim-emri', f()); }, () => uretimEmriSaglayicisi()),
+    bag('satın alma siparişi dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('satin-alma-siparisi', f()); }, () => satinAlmaSaglayicisi()),
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),
     bag('istasyon kişileri -> bildirim yayını', bildirimIstasyonCozucusu, [aktifIstasyonlar, istasyondakiKisiler].every((f) => typeof f === 'function')

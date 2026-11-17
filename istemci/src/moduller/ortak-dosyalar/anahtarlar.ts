@@ -7,4 +7,6 @@ export const anahtarlar = {
   gecmis: (klasorId: number) => ['ortak-dosyalar', 'gecmis', klasorId] as const,
   son: (ara: string) => ['ortak-dosyalar', 'son', ara] as const,
   arsiv: ['ortak-dosyalar', 'arsiv'] as const,
+  hazirKayitlar: (liste: string, ara: string) => ['ortak-dosyalar', 'hazir', liste, ara] as const,
+  hazirKayit: (liste: string, anahtar: string) => ['ortak-dosyalar', 'hazir-kayit', liste, anahtar] as const,
 };

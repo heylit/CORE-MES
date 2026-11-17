@@ -68,6 +68,22 @@ Kullanıcı onay kartında bu eki açıkça seçti (Ne değişti 8). Miras (4), 
    komutla arşive kalkar (içinde dosya olan klasör atlanır) ve geri alınır.
 6. **Şablon.** Sipariş ve proje klasörünün alt klasörleri yönetici şablonundan gelir; şablon kişi klasörüdür, değişiklik yalnız sonra
    açılanlara uygulanır.
+## Ek: hazır listeler (kart 3390; 3390 a, 17.11.2026)
+
+Kayıttan dosyaya giden yol: ağaçta klasörün yanında hazır listeler (üretim emirleri, satın alma siparişleri; sonra üretim kayıtları
+ve plan) durur; kayıt seçilince kaynak modüllerdeki dosyalar kaynağına göre gruplu gelir. Dosya kopyalanmaz.
+
+1. **Sağlayıcı.** Ortak Dosyalar kaynak modülü ithal etmez; her liste bir sağlayıcıdır ve `sunucu/kablolama.ts`'te kaynakların
+   `disari.ts`'inden kurulur. Sağlayıcı kaydı okuma işlemlerini, kayıt listesini ve bir kaydın dosya gruplarını verir.
+2. **Görme (Risk K1).** Liste yalnız kaydı okuyabilene açılır, yoksa 404. Her grup dosyanın kaynak modülündeki okuma işlemiyle
+   süzülür; yetkisiz grup ne satırıyla ne sayısıyla görünür. Kaydın Ortak Dosyalar klasörü (sipariş, proje) klasör düzeyiyle süzülür.
+3. **İndirme.** Satır kaynağın kendi indirme ucunu taşır; yetkiyi o uç yeniden denetler. Önizleme aynı uçtan oturumla okunur
+   (PDF ve resim tarayıcıda; sunucuda dönüştürme yok), cevap ekli ve korumalı kalır.
+4. **Sınır.** Liste 50, kaydın dosyaları 200 satırla sınırlıdır; aşılınca "kesildi" söylenir, sayı uydurulmaz.
+5. **Sonraki dilimler (aynı onay).** Teklif klasörü yalnız `siparisler.fiyat-oku` kitlesine (K3), klasör aktarma önce rapor ve
+   sunucuda karar (K4; sunucu ağ paylaşımına bağlanmaz), metin önizlemesi `text/plain` ve ekli (K5), DWG ve CNC türü imzası
+   denenince, yetki genişleten klasör taşıması denetim kaydıyla (K6).
+
 ## Sonuçlar
 
 - `paylasilan/sozlesme/dosya.ts` tür listesi genişler (ortak nokta, ayrı kart ve kilit). Ofis belgesi diğer modüllere açılmaz;
