@@ -198,8 +198,8 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
 // Ana sayfadan satın alma talebi (kart #375): talep oturumdaki kişi adına açılır; fiyat, teklif ve tedarikçi burada yoktur.
 // 2871-1 a: `duzenlenen` verilirse form o talebin taslağını düzenler (tür ve emir değişmez); kayıt talebimi-duzenle ucuna sürümle gider.
 // 2876: `guncelleme` ile aynı form teklif toplanan talebin güncelleme talebini açar; eski talep değişmez, yeni talep ona bağlanır.
-export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenlemeBitti, guncelleme = false }: {
-  taslak?: readonly OnTalep[] | null; taslakBitti?: (gonderildi: boolean) => void; duzenlenen?: Talebim | null; duzenlemeBitti?: () => void;
+export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenlenen = null, duzenlemeBitti, guncelleme = false }: {
+  taslak?: readonly OnTalep[] | null; taslakEmri?: number | null; taslakBitti?: (gonderildi: boolean) => void; duzenlenen?: Talebim | null; duzenlemeBitti?: () => void;
   guncelleme?: boolean;
 } = {}) {
   const istemci = useQueryClient();
@@ -249,6 +249,17 @@ export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenle
   });
   const bagli = kalemler.some((k) => k.isEmriId !== null);
   const emirler = useQuery({ queryKey: anahtarlar.acikEmirler, queryFn: () => cagri.get('/satin-alma-acik-emirler', SURE) });
+  // Taslak bir üretim emrinden geldiyse (3364) emir seçili gelir; eksiklerin hepsi istenmişse boş forma da bağ taşınır. Görünen gönderilendir:
+  // emir açık emirler listesinde yoksa (planlı ya da başlamış değil) seçim boş kalır.
+  // Bir kez yazılır: liste yeniden okununca kullanıcının elle değiştirdiği seçim geri alınmaz.
+  const emirListesi = emirler.data?.emirler;
+  const yazilanEmir = useRef<{ emir: number; taslak: readonly OnTalep[] | null } | null>(null);
+  useEffect(() => {
+    if (taslakEmri === null || emirListesi === undefined) return;
+    if (yazilanEmir.current?.emir === taslakEmri && yazilanEmir.current.taslak === taslak) return;
+    yazilanEmir.current = { emir: taslakEmri, taslak };
+    emirIdYaz(emirListesi.some((e) => e.id === taslakEmri) ? String(taslakEmri) : '');
+  }, [taslakEmri, taslak, emirListesi]);
   const gonder = useMutation({
     mutationFn: (govde: HizliAcGovdesi) =>
       tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/hizli-ac', { govde, ...deneme, ...SURE }), { ...SURE, istekKimligi: govde.id }),

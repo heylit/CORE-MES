@@ -147,10 +147,12 @@ function ueSar(adres: string, icerik: ReactNode) {
 
 function GidilenAdres() {
   const yer = useLocation();
-  const taslak = (yer.state as { taslak?: readonly { malzeme: { kod: string }; miktar: number; gerekenTarih: string; emirler: string[] }[] } | null)?.taslak;
+  const durum = yer.state as { taslak?: readonly { malzeme: { kod: string }; miktar: number; gerekenTarih: string; emirler: string[] }[]; uretimEmriId?: number } | null;
+  const taslak = durum?.taslak;
   return (
     <>
       <p>Gidilen adres: {yer.pathname}{yer.search}</p>
+      {durum?.uretimEmriId !== undefined && <p>Taslak emri {String(durum.uretimEmriId)}</p>}
       {taslak?.map((t) => <p key={t.malzeme.kod}>Taslak {t.malzeme.kod} {String(t.miktar)} {t.gerekenTarih} {t.emirler.join(',')}</p>)}
     </>
   );

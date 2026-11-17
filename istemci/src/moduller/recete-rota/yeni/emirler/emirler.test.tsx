@@ -711,6 +711,7 @@ describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', (
     const b = await emirAc();
     fireEvent.click(await within(b).findByRole('button', { name: 'Satın alma talebi aç' }));
     expect(await screen.findByText('Gidilen adres: /taleplerim?bolum=yeni')).toBeTruthy();
+    expect(screen.getByText(`Taslak emri ${String(ornekDurum().emirler!.orders[0]!.kayitNo)}`)).toBeTruthy();
     expect(screen.getByText(new RegExp(`^Taslak HM-0001 100 \\d{4}-\\d{2}-\\d{2} ${ornekDurum().emirler!.orders[0]!.no}$`))).toBeTruthy();
   });
 

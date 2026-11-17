@@ -16,6 +16,8 @@ type Bolum = 'on' | 'liste' | 'yeni';
 export function TaleplerimSayfasi() {
   const [bolum, bolumYaz] = useState<Bolum>('on');
   const [taslak, taslakYaz] = useState<readonly OnTalep[] | null>(null);
+  // Üretim emrinden (3329) gelen talep o emre bağlı açılır: formdaki emir seçili gelir.
+  const [taslakEmri, taslakEmriYaz] = useState<number | null>(null);
   const [duzenlenen, duzenlenenYaz] = useState<Talebim | null>(null);
   const [kip, kipYaz] = useState<Duzenleme>('duzenle');
   const [suzgec, suzgecYaz] = useState<DurumSuzgeci>('acik');
@@ -26,8 +28,10 @@ export function TaleplerimSayfasi() {
   useEffect(() => {
     const istenen = adres.get('bolum');
     if (istenen !== 'yeni' && istenen !== 'liste') return;
-    const gelen = (konum.state as { taslak?: readonly OnTalep[] | null } | null)?.taslak;
+    const durum = konum.state as { taslak?: readonly OnTalep[] | null; uretimEmriId?: number | null } | null;
+    const gelen = durum?.taslak;
     if (istenen === 'yeni' && gelen && gelen.length > 0) taslakYaz(gelen);
+    if (istenen === 'yeni' && typeof durum?.uretimEmriId === 'number') taslakEmriYaz(durum.uretimEmriId);
     bolumYaz(istenen);
     adresYaz({}, { replace: true });
   }, [adres, adresYaz, konum.state]);
@@ -56,11 +60,11 @@ export function TaleplerimSayfasi() {
         ))}
       </div>
       <Sekmeler etiket="Taleplerim bölümleri" sekmeler={sekmeler} secili={bolum} sec={bolumYaz} />
-      {bolum === 'on' && <OnTalepler cevir={(l) => { taslakYaz(l); bolumYaz('yeni'); }} />}
+      {bolum === 'on' && <OnTalepler cevir={(l) => { taslakYaz(l); taslakEmriYaz(null); bolumYaz('yeni'); }} />}
       {bolum === 'liste' && <Taleplerim tam suzgec={suzgec} suzgecYaz={suzgecYaz} duzenle={(t, k) => { kipYaz(k); duzenlenenYaz(t); bolumYaz('yeni'); }} />}
       {/* Form bölüm değişse de bağlı kalır ki yarım kalan talep kaybolmasın. */}
       <div hidden={bolum !== 'yeni'}>
-        <TalepAc taslak={taslak} taslakBitti={(gonderildi) => { taslakYaz(null); bolumYaz(gonderildi ? 'liste' : 'on'); suzgecYaz('acik'); }}
+        <TalepAc taslak={taslak} taslakEmri={taslakEmri} taslakBitti={(gonderildi) => { taslakYaz(null); taslakEmriYaz(null); bolumYaz(gonderildi ? 'liste' : 'on'); suzgecYaz('acik'); }}
           duzenlenen={duzenlenen} guncelleme={kip === 'guncelle'} duzenlemeBitti={() => { duzenlenenYaz(null); bolumYaz('liste'); }} />
       </div>
     </div>

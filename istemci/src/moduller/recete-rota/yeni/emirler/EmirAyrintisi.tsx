@@ -615,7 +615,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
             Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
           </span>
           {yetki.talepAc && <Dugme simge="cart" onClick={() => {
-            void yonlen(TALEP_YOLU, { state: { taslak: emirTalepTaslagi(o.no, R.eksikler, talepGunu(plan.tur === 'plan' ? plan.ilk : null, o.due)) } });
+            void yonlen(TALEP_YOLU, { state: { taslak: emirTalepTaslagi(o.no, R.eksikler, talepGunu(plan.tur === 'plan' ? plan.ilk : null, o.due)), uretimEmriId: o.kayitNo } });
           }}>Satın alma talebi aç</Dugme>}
         </div>
       )}
