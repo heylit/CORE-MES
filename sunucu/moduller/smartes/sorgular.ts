@@ -559,6 +559,15 @@ export function makineDurumlari(db: Db, sinir: number): Promise<MakineDurumSatir
   return db.sorgu<MakineDurumSatiri>(`SELECT ${MAKINE_SUTUNLARI} FROM smartes_makine_durumu ORDER BY makine_kodu LIMIT $1`, [sinir]);
 }
 
+export interface MakineDegeri { makineKodu: string; durum: MakineDurumu; program: string | null; sayac: number | null; isMiliHizi: number | null; isMiliYuku: number | null; okundu: string }
+
+export function makineDegerleri(db: Db): Promise<MakineDegeri[]> {
+  return db.sorgu<MakineDegeri>(
+    `SELECT makine_kodu AS "makineKodu", durum, program_no AS program, sayac, spindle_hizi AS "isMiliHizi", spindle_yuku AS "isMiliYuku",
+       ${zamanMetni('okundu')} AS okundu FROM smartes_makine_durumu ORDER BY makine_kodu LIMIT 500`,
+  );
+}
+
 export function makineDurumuGetir(db: Db, makineKodu: string): Promise<MakineDurumSatiri | null> {
   return db.tek<MakineDurumSatiri>(`SELECT ${MAKINE_SUTUNLARI} FROM smartes_makine_durumu WHERE makine_kodu = $1`, [makineKodu]);
 }

@@ -47,6 +47,7 @@ import { SMARTES_IKINCI_MENU, SMARTES_SAYFALARI } from './sayfalar/smartes.ts';
 import { STOK_IKINCI_MENU, STOK_SAYFALARI } from './sayfalar/stok.ts';
 import { TAKVIM_IKINCI_MENU, TAKVIM_SAYFALARI } from './sayfalar/takvim.ts';
 import { TERMINAL_SAYFALARI } from './sayfalar/terminal.ts';
+import { TEZGAH_BAGLANTISI_IKINCI_MENU, TEZGAH_BAGLANTISI_SAYFALARI } from './sayfalar/tezgah-baglantisi.ts';
 import { URETIM_EMIRLERI_IKINCI_MENU, URETIM_EMIRLERI_SAYFALARI } from './sayfalar/uretim-emirleri.ts';
 import { VARDIYA_IKINCI_MENU, VARDIYA_SAYFALARI } from './sayfalar/vardiya.ts';
 import { PLAN_IKINCI_MENU, PLAN_SAYFALARI } from './sayfalar/plan.ts';
@@ -104,6 +105,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...STOK_SAYFALARI,
   ...TAKVIM_SAYFALARI,
   ...TERMINAL_SAYFALARI,
+  ...TEZGAH_BAGLANTISI_SAYFALARI,
   ...URETIM_EMIRLERI_SAYFALARI,
   ...VARDIYA_SAYFALARI,
   ...PORTAL_SAYFALARI,
@@ -142,6 +144,7 @@ export const TUM_IKINCI_MENULER = [
   SIPARISLER_IKINCI_MENU,
   BELGE_MERKEZI_IKINCI_MENU,
   SMARTES_IKINCI_MENU,
+  TEZGAH_BAGLANTISI_IKINCI_MENU,
   PORTAL_IKINCI_MENU,
   PROJELER_IKINCI_MENU,
   MESAJ_IKINCI_MENU,

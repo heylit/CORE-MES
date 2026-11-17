@@ -60,6 +60,7 @@ Hiçbir role verilmez; yalnız bayraklı yönetici yapar:
 - Arkon yöneticisi: `arkon.yonetici`
 - Logo birim seti listesini yazma: `logo.birim-seti-yaz`
 - SmartES kod eşlemelerini düzenleme: `smartes.esleme-yaz`
+- Tezgah bağlantısı (deneme) sayfası: `sayfa.tezgah-baglantisi` (3373 a)
 - denetim kaydının gövdesi ve bütün parametreleri: `denetim.govde-oku`
 - Mesaj kurulumu: `mesaj.yonet`
 - Güvenlik Merkezi sayfası, okuma ve yönetme: `sayfa.guvenlik` `guvenlik.oku` `guvenlik.yonet` (kullanıcı onayı 2026-10-14)

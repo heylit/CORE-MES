@@ -44,6 +44,7 @@ const DIS_ISTEK_IZINLI: readonly string[] = [
   'sunucu/moduller/smartes/istemci.ts', // ADR 0013
   'sunucu/moduller/etiket-merkezi/gonderici.ts', // ADR 0014
   'sunucu/moduller/dis-kopru/', // ADR 0021
+  'sunucu/moduller/tezgah-baglantisi/istemci.ts', // ADR 0033
 ];
 const DIS_ISTEK_J =
   /(?:(?<![.\w])|\b(?:globalThis|window|self)\.)fetch\s*\(|\bnew\s+(?:net\.)?(?:Socket|WebSocket)\s*\(|\b(?:https?|net|tls|http2|dgram)\.(?:request|get|connect|createConnection|createSocket)\s*\(|\bcreateConnection\s*\(/;
@@ -405,7 +406,7 @@ export const KATMANLAR: Katmanlar = {
     /* 6 */ ['geometri', 'idari-isler', 'oturum', 'projeler'],
     /* 7 */ ['uretim-emirleri'],
     /* 8 */ ['atolye', 'markalama', 'oee', 'rota', 'satin-alma', 'smartes'],
-    /* 9 */ ['kaynak-izi', 'portal', 'sevkiyat'],
+    /* 9 */ ['kaynak-izi', 'portal', 'sevkiyat', 'tezgah-baglantisi'],
     /* 10 */ ['stok', 'takvim'],
     /* 11 */ ['cnc-kurulum', 'degisiklik-yonetimi', 'etiket-merkezi', 'kalite-merkezi', 'logo', 'recete-rota'],
     /* 12 */ ['guvenlik', 'malzeme-izi', 'plan', 'proses'],
@@ -417,6 +418,7 @@ export const KATMANLAR: Katmanlar = {
       'akis', 'atolye', 'bildirim', 'degisiklik-yonetimi', 'denetim', 'denetim-hazirlik', 'durus-nedenleri', 'etiket-merkezi',
       'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
       'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'proses', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
+      'tezgah-baglantisi',
     ],
     /* 1 */ ['ayarlar', 'guvenlik', 'ik', 'istasyonlar', 'kisiler', 'musteri-tedarikci', 'projeler', 'siparisler'],
     /* 2 */ ['belge-merkezi', 'vardiya'],
