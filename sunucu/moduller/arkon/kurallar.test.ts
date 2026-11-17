@@ -395,13 +395,16 @@ test('tablet gönderim hatası: bilinmeyen sonuç kuyruğa, açık ret düşmeye
   for (const status of [400, 403, 404, 409, 413, 422, 429]) assert.equal(gonderimSonucu({ status }), 'red', String(status));
 });
 
-test('KD-004 kural: imleç kalan en küçük kimlikten bir geriden daha gerideyse ya da tablo boşken sayaçtan gerideyse ileti kaçmıştır', () => {
-  assert.equal(iletiKacirildi(10, { taban: 11, tavan: 20, sayac: 20 }), false);
-  assert.equal(iletiKacirildi(9, { taban: 11, tavan: 20, sayac: 20 }), true);
-  assert.equal(iletiKacirildi(20, { taban: null, tavan: null, sayac: 20 }), false);
-  assert.equal(iletiKacirildi(19, { taban: null, tavan: null, sayac: 20 }), true);
-  assert.equal(iletiBasi({ taban: null, tavan: null, sayac: 20 }), 20);
-  assert.equal(iletiBasi({ taban: 11, tavan: 15, sayac: 20 }), 15);
+test('KD-004 kural: imleç budanan en büyük kimlikten gerideyse ileti kaçmıştır; sayaç ve kimlik boşluğu kaçırma sayılmaz', () => {
+  const a = (budanan: number, taban: number | null = null, tavan: number | null = null) => ({ taban, tavan, sayac: 20, budanan });
+  assert.equal(iletiKacirildi(10, a(10, 11, 20)), false, 'imlecin kendi satırı budanmış');
+  assert.equal(iletiKacirildi(9, a(10, 11, 20)), true);
+  assert.equal(iletiKacirildi(5, a(0, 11, 20)), false, 'kalan en küçük kimlikten önceki boşluk (geri alınan ekleme) kaçırma değil');
+  assert.equal(iletiKacirildi(19, a(0)), false, 'boş tabloda sayaç yarım ya da geri alınan eklemeyle ilerler');
+  assert.equal(iletiKacirildi(19, a(20)), true, 'tablo budamayla boşaldı');
+  assert.equal(iletiBasi(a(0)), 20);
+  assert.equal(iletiBasi(a(0, 11, 15)), 15);
+  assert.equal(iletiBasi(a(18, 11, 15)), 18, 'yeni cihaz budanandan geride başlamaz (yeniden yükleme döngüsü olmaz)');
 });
 
 test('ikinci menü: her Arkon rolü yalnız sabit matriste açabildiği sayfaların maddesini görür; operatör ekranı menüde yok', () => {
