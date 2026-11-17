@@ -12,7 +12,7 @@ import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, azOlcumUyarisi, olcumOzeti
 import type { EtkinAdimSuresi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { Icerik } from '../sorgular.ts';
-import { adimlariKur, adimlariYaz, cevap, gerceklesenSatirlari, gorunumBaglami, icerikYazimlari, operasyonTipleri, revizyonuAl, sayiMi, taslagiAc } from './ortak.ts';
+import { adimlariKur, cevap, gerceklesenSatirlari, gorunumBaglami, icerigiYenile, icerikYazimlari, operasyonTipleri, revizyonuAl, sayiMi, taslagiAc } from './ortak.ts';
 
 const metinMi = (x: number | null, basamak = 4): string | null => (x === null ? null : ondalikMetin(x, basamak));
 
@@ -198,8 +198,7 @@ export async function gerceklesenKabulEt(
     const { toplam, ...bolum } = hazirlikBol({ ayarSuresiDk: sayi(hedef.ayarSuresiDk) }, eskiBolum);
     Object.assign(hedef, bolum, { ayarSuresiDk: toplam });
   }
-  await s.icerikSil(db, taslakId);
-  await adimlariYaz(db, taslakId, adim.malzemeId, yazimlar);
+  await icerigiYenile(db, taslakId, adim.malzemeId, yazimlar);
   const surum = await s.duzenlemeYaz(db, taslakId, kullanici.id);
   if (satir.isEmriId !== null) {
     await s.gerceklesenEkle(db, {

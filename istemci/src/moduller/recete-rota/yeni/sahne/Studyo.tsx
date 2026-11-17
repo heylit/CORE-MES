@@ -5,7 +5,7 @@ import type { SahneAdimi, TalimatlarCevabi } from '#paylasilan/sozlesme/rota.ts'
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { dosyaYukle, MontajOynatici as Sahne3B, type SahneDenetimi } from '../../../belge-merkezi/disari.ts';
-import { anahtarlar as talimatAnahtarlari, useTalimatKomutu } from '../sartnameler/veri.ts';
+import { anahtarlar as talimatAnahtarlari, talimatYolu, useTalimatKomutu } from '../sartnameler/veri.ts';
 import type { ParcaKutusu } from './kurallar.ts';
 import { donguSuresi, hareketYaz, kaydedilecekler, SAHNE_SINIRI, SAHNE_YONLERI, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET } from './kurallar.ts';
 import { useModelDosyasi, useSahneKaydet, useSahneler, useUrunModelleri } from './veri.ts';
@@ -19,8 +19,10 @@ type Surum = TalimatlarCevabi['surumler'][number];
 
 const sayi = (x: number, h = 1): string => x.toLocaleString('tr-TR', { minimumFractionDigits: h, maximumFractionDigits: h });
 
-export function Studyo({ urunId, opNo, talimat, yazabilir, kapat }: { urunId: number; opNo: number; talimat: Surum; yazabilir: boolean; kapat: () => void }) {
-  const sahneler = useSahneler(urunId, opNo);
+export function Studyo({ urunId, opNo, revizyonId, talimat, yazabilir, kapat }: {
+  urunId: number; opNo: number; revizyonId: number | null; talimat: Surum; yazabilir: boolean; kapat: () => void;
+}) {
+  const sahneler = useSahneler(urunId, opNo, revizyonId);
   const modeller = useUrunModelleri(urunId);
   const kayitli = sahneler.data?.sahneler.find((s) => s.talimatSurum === talimat.surum) ?? null;
   // Bu sürümün sahnesi yoksa önceki sürümün son sahnesinden başlanır (talimat yeniden yayınlanınca sahne kaybolmasın); kayıt yine bu sürüme gider.
@@ -31,7 +33,7 @@ export function Studyo({ urunId, opNo, talimat, yazabilir, kapat }: { urunId: nu
       {yukleniyor ? <DurumKutusu durum="yukleniyor" mesaj="Sahne ve modeller okunuyor" />
         : sahneler.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(sahneler.error, 'Sahne okunamadı.')} yenile={() => { void sahneler.refetch(); }} />
           : (
-            <StudyoGovdesi key={`${String(kayitli?.sahneSurum ?? 0)}`} yazabilir={yazabilir} urunId={urunId} opNo={opNo} talimat={talimat} kapat={kapat}
+            <StudyoGovdesi key={`${String(kayitli?.sahneSurum ?? 0)}`} yazabilir={yazabilir} urunId={urunId} opNo={opNo} revizyonId={revizyonId} talimat={talimat} kapat={kapat}
               kayitliSurum={kayitli?.sahneSurum ?? null} ilkAdimlar={(kayitli ?? onceki)?.adimlar ?? []} ilkModel={(kayitli ?? onceki)?.modelRevizyonId ?? null}
               oncekidenMi={onceki !== null} modeller={modeller.data ?? []} modelHatasi={modeller.isError ? hataIletisi(modeller.error, 'Modeller okunamadı.') : null} />
           )}
@@ -39,12 +41,12 @@ export function Studyo({ urunId, opNo, talimat, yazabilir, kapat }: { urunId: nu
   );
 }
 
-function StudyoGovdesi({ yazabilir, urunId, opNo, talimat, kapat, kayitliSurum, ilkAdimlar, ilkModel, oncekidenMi, modeller, modelHatasi }: {
-  yazabilir: boolean; urunId: number; opNo: number; talimat: Surum; kapat: () => void; kayitliSurum: number | null; ilkAdimlar: readonly SahneAdimi[];
+function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, kayitliSurum, ilkAdimlar, ilkModel, oncekidenMi, modeller, modelHatasi }: {
+  yazabilir: boolean; urunId: number; opNo: number; revizyonId: number | null; talimat: Surum; kapat: () => void; kayitliSurum: number | null; ilkAdimlar: readonly SahneAdimi[];
   ilkModel: number | null; oncekidenMi: boolean; modeller: readonly GeometriModelSatiri[];
   modelHatasi: string | null;
 }) {
-  const kaydet = useSahneKaydet(urunId);
+  const kaydet = useSahneKaydet(urunId, revizyonId);
   const { bildir } = useBildirim();
   const talimatSiralari = useMemo(() => talimat.adimlar.map((a) => a.sira), [talimat.adimlar]);
   const [adimlar, adimlarYaz] = useState<SahneAdimi[]>(() => ilkAdimlar.filter((a) => talimatSiralari.includes(a.sira)));
@@ -61,7 +63,7 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, talimat, kapat, kayitliSurum, 
   const [tuvalVar, tuvalVarYaz] = useState(false);
   const [video, videoYaz] = useState<'yok' | 'kayit' | 'yukleme'>('yok');
   const istemci = useQueryClient();
-  const talimatKomutu = useTalimatKomutu(urunId);
+  const talimatKomutu = useTalimatKomutu(urunId, revizyonId);
   const dosya = useModelDosyasi(modelId);
 
   const degistir = (yeni: SahneAdimi[]) => { adimlarYaz(yeni); kirliYaz(true); hataYaz(null); };
@@ -110,8 +112,8 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, talimat, kapat, kayitliSurum, 
       videoYaz('yukleme');
       const ozet = await dosyaYukle(new Uint8Array(await blob.arrayBuffer()), () => {});
       const liste = await istemci.fetchQuery({
-        queryKey: talimatAnahtarlari.talimat(urunId, opNo), staleTime: 0,
-        queryFn: () => api.get<TalimatlarCevabi>(`/rota/urunler/${String(urunId)}/talimatlar/${String(opNo)}`),
+        queryKey: talimatAnahtarlari.talimat(urunId, opNo, revizyonId), staleTime: 0,
+        queryFn: () => api.get<TalimatlarCevabi>(talimatYolu(urunId, opNo, revizyonId)),
       });
       const t = videoluTaslak(liste, talimat.surum, adimNo, opNo, { ozet, ad: `OP${String(opNo)}-adim${String(adimNo + 1)}-3b.mp4` });
       if ('hata' in t) throw new Error(t.hata);

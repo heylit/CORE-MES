@@ -73,7 +73,7 @@ describe('Rota adımının talimatı: taslak ve yayın (1193 a, 1194 b)', () => 
     await waitFor(() => { expect(yazilan.map((x) => x.yol)).toEqual(['kaydet', 'yayinla']); });
     expect(yazilan[0]?.govde).toMatchObject({ opNo: 10, okunanSurum: 2, taslakSurum: null });
     expect((yazilan[0]?.govde as { adimlar: { baslik: string }[] }).adimlar.map((a) => a.baslik)).toEqual(['Programı doğrula', 'Çapak al']);
-    expect(yazilan[1]?.govde).toEqual({ opNo: 10, taslakSurum: 1 });
+    expect(yazilan[1]?.govde).toEqual({ opNo: 10, revizyonId: 71, taslakSurum: 1 });
     await within(panel).findByText('Talimat · yayında sürüm 3');
   });
 

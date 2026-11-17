@@ -174,7 +174,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             )}
             <button type="button" className="tc-rr1-fsop" aria-label={`${adimAdi(a)} ${op?.name ?? 'Operasyon seç'}`}
               onClick={() => { r.sec({ tur: 'adim', urunId, adimId: a.id, seq: a.seq, miktar: q }); }}>
-              <b>{op?.abbr ?? op?.code ?? '???'}</b><span>{a.opNo === null ? 'Yeni' : `OP ${String(a.opNo)}`}</span>
+              <b>{op?.abbr ?? op?.code ?? '???'}</b><span>{`OP ${String(a.seq)}`}</span>
             </button>
             <span className="tc-rr1-fst">
               {fason ? `Termin ${a.terminGun !== null && a.terminGun > 0 ? `${String(a.terminGun)} gün` : 'girilmedi'}`

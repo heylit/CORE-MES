@@ -16,14 +16,14 @@ import { SARTNAME_YOK, surumAdimlari, talimatAdimlariKur, urunOzetleri } from '.
 
 // Uç ekrandaki OP numarasıyla gelir (aşama 2'ye kadar); içeride her şey operasyonun kimliğiyle (3250 b).
 const opYok = (opNo: number) => dogrulama(`OP ${opNo} bu ürünün hiçbir revizyonunda yok; talimat yazılamaz.`, 'opNo');
-async function yazilacakOperasyon(db: Db, urunId: number, opNo: number): Promise<s.OperasyonKimligi> {
-  const op = (await s.opNoAdimiVarMi(db, urunId, opNo)) ? await s.ekrandakiOperasyon(db, urunId, opNo) : null;
+async function yazilacakOperasyon(db: Db, urunId: number, opNo: number, revizyonId?: number): Promise<s.OperasyonKimligi> {
+  const op = revizyonId !== undefined || (await s.opNoAdimiVarMi(db, urunId, opNo)) ? await s.ekrandakiOperasyon(db, urunId, opNo, revizyonId) : null;
   if (op === null) throw opYok(opNo);
   return op;
 }
 
-export async function talimatListesi(db: Db, urunId: number, opNo: number): Promise<TalimatlarCevabi> {
-  const op = await s.ekrandakiOperasyon(db, urunId, opNo);
+export async function talimatListesi(db: Db, urunId: number, opNo: number, revizyonId?: number): Promise<TalimatlarCevabi> {
+  const op = await s.ekrandakiOperasyon(db, urunId, opNo, revizyonId);
   return op === null ? { taslak: null, surumler: [] } : operasyonTalimatlari(db, op);
 }
 
@@ -134,9 +134,9 @@ export async function talimatMedyasi(db: Db, ozet: string): Promise<IkiliCevap> 
 }
 
 export async function talimatYaz(
-  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; metin: string; okunanSurum: number | null },
+  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; revizyonId?: number | undefined; metin: string; okunanSurum: number | null },
 ): Promise<TalimatlarCevabi> {
-  const op = await yazilacakOperasyon(db, urunId, govde.opNo);
+  const op = await yazilacakOperasyon(db, urunId, govde.opNo, govde.revizyonId);
   const son = (await s.talimatlar(db, op))[0]?.surum ?? null;
   if (son !== govde.okunanSurum) {
     throw eskiSurum();
@@ -148,10 +148,10 @@ export async function talimatYaz(
 // Adımlı yazım da yeni talimat sürümüdür (989 a): metni adım başlıklarıdır, adımlar ayrı tabloda sürüme bağlanır.
 export async function adimliTalimatYaz(
   db: Db, kullanici: Kullanici, urunId: number,
-  govde: { opNo: number; okunanSurum: number | null; adimlar: readonly TalimatAdimiYazisi[]; kaynakSablon?: KaynakSablon | null | undefined },
+  govde: { opNo: number; revizyonId?: number | undefined; okunanSurum: number | null; adimlar: readonly TalimatAdimiYazisi[]; kaynakSablon?: KaynakSablon | null | undefined },
   denetimEki: DenetimEki,
 ): Promise<TalimatlarCevabi> {
-  const op = await yazilacakOperasyon(db, urunId, govde.opNo);
+  const op = await yazilacakOperasyon(db, urunId, govde.opNo, govde.revizyonId);
   const yazilar = await adimYazilari(db, kullanici, govde.adimlar, denetimEki);
   const toplam = urunMedyaToplami(await s.urunMedyalari(db, urunId), yazilar.flatMap((a) => a.medya));
   if (toplam > MEDYA_SINIRI.urunBayt) throw cokBuyuk('Ürünün talimat medyası 1 GB sınırını aşıyor.');
@@ -172,8 +172,8 @@ const TALIMAT_TASLAGI_YOK = 'Bu OP için talimat taslağı yok.';
 
 const sonYayin = async (db: Db, op: s.OperasyonKimligi): Promise<number | null> => (await s.talimatlar(db, op))[0]?.surum ?? null;
 
-async function taslakAl(db: Db, urunId: number, opNo: number, taslakSurum: number): Promise<{ t: s.TalimatTaslagiSatiri; op: s.OperasyonKimligi }> {
-  const op = await s.ekrandakiOperasyon(db, urunId, opNo);
+async function taslakAl(db: Db, urunId: number, opNo: number, taslakSurum: number, revizyonId?: number): Promise<{ t: s.TalimatTaslagiSatiri; op: s.OperasyonKimligi }> {
+  const op = await s.ekrandakiOperasyon(db, urunId, opNo, revizyonId);
   const t = op === null ? null : await s.talimatTaslagi(db, op, true);
   if (!t || op === null) throw bulunamadi(TALIMAT_TASLAGI_YOK);
   if (t.surum !== taslakSurum) throw eskiSurum();
@@ -183,11 +183,11 @@ async function taslakAl(db: Db, urunId: number, opNo: number, taslakSurum: numbe
 export async function talimatTaslakKaydet(
   db: Db, kullanici: Kullanici, urunId: number,
   govde: {
-    opNo: number; okunanSurum: number | null; taslakSurum: number | null; adimlar: readonly TalimatAdimiYazisi[]; kaynakSablon?: KaynakSablon | null | undefined;
+    opNo: number; revizyonId?: number | undefined; okunanSurum: number | null; taslakSurum: number | null; adimlar: readonly TalimatAdimiYazisi[]; kaynakSablon?: KaynakSablon | null | undefined;
   },
   denetimEki: DenetimEki,
 ): Promise<TalimatlarCevabi> {
-  const op = await yazilacakOperasyon(db, urunId, govde.opNo);
+  const op = await yazilacakOperasyon(db, urunId, govde.opNo, govde.revizyonId);
   const mevcut = await s.talimatTaslagi(db, op, true);
   if ((mevcut?.surum ?? null) !== govde.taslakSurum) throw eskiSurum();
   if ((await sonYayin(db, op)) !== govde.okunanSurum) throw eskiSurum();
@@ -206,9 +206,9 @@ export async function talimatTaslakKaydet(
 }
 
 export async function talimatYayinla(
-  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; taslakSurum: number },
+  db: Db, kullanici: Kullanici, urunId: number, govde: { opNo: number; taslakSurum: number; revizyonId?: number | undefined },
 ): Promise<TalimatlarCevabi> {
-  const { t, op } = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum);
+  const { t, op } = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum, govde.revizyonId);
   const son = await sonYayin(db, op);
   if (son !== t.tabanSurum) {
     throw cakisma(`Taslak açıldıktan sonra OP ${govde.opNo} talimatının ${String(son)}. sürümü yayınlandı; taslağı son sürüme bakarak yeniden kaydet.`);
@@ -228,9 +228,9 @@ export async function talimatYayinla(
 }
 
 export async function talimatTaslakSil(
-  db: Db, urunId: number, govde: { opNo: number; taslakSurum: number }, denetimEki: DenetimEki,
+  db: Db, urunId: number, govde: { opNo: number; taslakSurum: number; revizyonId?: number | undefined }, denetimEki: DenetimEki,
 ): Promise<TalimatlarCevabi> {
-  const { t, op } = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum);
+  const { t, op } = await taslakAl(db, urunId, govde.opNo, govde.taslakSurum, govde.revizyonId);
   const ozetler = (await s.taslakMedyalari(db, t.id)).map((m) => m.ozet);
   await s.talimatTaslagiSil(db, t.id);
   await kullanilmayanMedyayiBirak(db, ozetler, denetimEki);

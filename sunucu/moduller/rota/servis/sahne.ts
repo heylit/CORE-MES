@@ -33,16 +33,16 @@ async function cevapKur(db: Db, satirlar: readonly s.SahneSatiri[]): Promise<Tal
   }));
 }
 
-export async function talimatSahneleri(db: Db, urunId: number, opNo: number): Promise<TalimatSahneleriCevabi> {
-  const op = await s.ekrandakiOperasyon(db, urunId, opNo);
+export async function talimatSahneleri(db: Db, urunId: number, opNo: number, revizyonId?: number): Promise<TalimatSahneleriCevabi> {
+  const op = await s.ekrandakiOperasyon(db, urunId, opNo, revizyonId);
   return { sahneler: op === null ? [] : await cevapKur(db, await s.sonSahneler(db, op)) };
 }
 
 export async function talimatSahnesiKaydet(
   db: Db, kullanici: Kullanici, urunId: number,
-  govde: { opNo: number; talimatSurum: number; okunanSahneSurum: number | null; modelRevizyonId: number; adimlar: readonly SahneAdimi[] },
+  govde: { opNo: number; revizyonId?: number | undefined; talimatSurum: number; okunanSahneSurum: number | null; modelRevizyonId: number; adimlar: readonly SahneAdimi[] },
 ): Promise<TalimatSahneleriCevabi> {
-  const op = await s.ekrandakiOperasyon(db, urunId, govde.opNo);
+  const op = await s.ekrandakiOperasyon(db, urunId, govde.opNo, govde.revizyonId);
   const adimlar = op === null ? null : await operasyonTalimatAdimlari(db, op, govde.talimatSurum);
   if (adimlar === null || op === null) throw bulunamadi(SURUM_YOK(govde.opNo, govde.talimatSurum));
   // Risk R2: model başka ürünün ya da yayından düşmüş revizyonun olamaz; sahne terminalde bu modeli açtırır.

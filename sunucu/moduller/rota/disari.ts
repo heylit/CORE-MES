@@ -41,6 +41,8 @@ export { isEmriOperasyonKodlari } from './servis.ts';
 export { yuzeyIslemiAdimlari } from './servis.ts';
 // Patlamış rota önizlemesinde ara adımın statülü kartı ve stoğu (2610 a); bağı kablolama.ts kurar (Reçete ve Rota rotayı ithal eder).
 export { araHalCozucusuKaydet } from './servis.ts';
+// OP numaraları revizyonda yeniden dizildi (3252 b); Reçete ve Rota'nın (revizyon, OP) bağları adımını izler. Bağı kablolama.ts kurar.
+export { opNumaralariDizildiDinle, type OpNumaralariDizildi } from './servis.ts';
 export type { AraHalCozucusu, AraHalCozumu } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 // Hazırlık matrisinin aparat ve ölçü aleti maddeleri (2893-4 a, yalnız uyarır): iş emrine rota adımından kopyalanan liste. Aparat

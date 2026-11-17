@@ -10,7 +10,7 @@ import { aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi
 import { kisiAdlari, kisileriListele } from '../../kisiler/disari.ts';
 import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { malzemeOperasyonlari, malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, OP_ARALIGI, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
 import type { AdimSureleri, GerceklesenSatiri, PatlamisSatir, PatlatmaRotasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
@@ -318,7 +318,7 @@ export async function patlat(db: Db, kisiId: number, revizyonId: number, kokMalz
 
 /* ---------------- komutlar ---------------- */
 
-type YeniAdim = Omit<s.AdimYazimi, 'opNo' | 'sira'> & { opNo: number | null };
+type YeniAdim = Omit<s.AdimYazimi, 'opNo' | 'sira' | 'operasyonId'> & { opNo: number | null };
 
 export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[] {
   return icerik.adimlar.map((a) => ({
@@ -336,21 +336,48 @@ export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[]
   }));
 }
 
-// Numarasız adıma ürünün kullanılmış en büyük numarasının üstünden numara verilir, numara kayda yazılır, adımlar sırayla yazılır.
-export async function adimlariYaz(db: Db, revizyonId: number, malzemeId: number, adimlar: readonly YeniAdim[]): Promise<void> {
-  const kullanilmis = await s.kullanilmisOpNolari(db, malzemeId);
-  const dolu = adimlar.flatMap((a) => (a.opNo === null ? [] : [a.opNo]));
-  const yeniler = opNolariVer([...kullanilmis, ...dolu], adimlar.filter((a) => a.opNo === null).length);
-  let siradaki = 0;
-  const numarali = adimlar.map((a) => {
-    if (a.opNo !== null) return { ...a, opNo: a.opNo };
-    const opNo = yeniler[siradaki] as number;
-    siradaki += 1;
-    return { ...a, opNo };
-  });
-  await s.opNolariKaydet(db, malzemeId, numarali.map((a) => a.opNo), revizyonId);
-  for (const [i, a] of numarali.entries()) await s.adimYaz(db, revizyonId, malzemeId, { ...a, sira: i + 1 });
+// OP numarası adımın sırasından verilir: 10, 20, 30 (3252 b). Gelen adımın numarası yalnız hangi operasyon olduğunu söyler: `kimlikler`
+// (numara -> operasyon) aynı revizyonun kayıttan önceki ya da aynı ürünün kaynak revizyonunun adımlarıdır. Eşleşmeyen ve numarasız adım
+// yeni operasyondur. Aynı revizyonda numarası değişen adımın şartname bağı yeni numaraya taşınır.
+export async function adimlariYaz(
+  db: Db, revizyonId: number, malzemeId: number, adimlar: readonly YeniAdim[], kimlikler: ReadonlyMap<number, s.OperasyonKimligi> = new Map(),
+): Promise<Map<number, number>> {
+  const numarali = adimlar.map((a, i) => ({ ...a, eskiNo: a.opNo, opNo: (i + 1) * OP_ARALIGI, operasyonId: a.opNo === null ? undefined : kimlikler.get(a.opNo) }));
+  const yeniler = numarali.filter((a) => a.operasyonId === undefined);
+  const verilen = await s.operasyonlarEkle(db, malzemeId, yeniler.length, revizyonId);
+  const kimligi = new Map(yeniler.map((a, i) => [a.opNo, verilen[i] as s.OperasyonKimligi]));
+  for (const [i, a] of numarali.entries()) {
+    const { eskiNo: _eski, ...yazim } = a;
+    await s.adimYaz(db, revizyonId, malzemeId, { ...yazim, operasyonId: a.operasyonId ?? (kimligi.get(a.opNo) as s.OperasyonKimligi), sira: i + 1 });
+  }
+  const esle = new Map(numarali.flatMap((a) => (a.eskiNo === null || a.operasyonId === undefined ? [] : [[a.eskiNo, a.opNo] as const])));
+  await s.adimSartnameleriniTasi(db, revizyonId, esle);
   await s.sahipsizAdimSartnameleriniSil(db, revizyonId);
+  return esle;
+}
+
+// Revizyonun OP numaraları yeniden dizildi (3252 b): revizyona (revizyon, OP) ile bağlı başka modül verisi (Reçete ve Rota adım bağı, giren
+// statü) adımını izler. esle kalan adımların eski -> yeni numarasıdır; eslede olmayan eski numaranın adımı silinmiştir. Bağı kablolama.ts kurar.
+export interface OpNumaralariDizildi { revizyonId: number; malzemeId: number; esle: ReadonlyMap<number, number>; silinen: readonly number[] }
+type DizmeDinleyicisi = (db: Db, olay: OpNumaralariDizildi) => Promise<void>;
+const dizmeDinleyicileri: DizmeDinleyicisi[] = [];
+export function opNumaralariDizildiDinle(d: DizmeDinleyicisi): () => void {
+  dizmeDinleyicileri.push(d);
+  return () => { const i = dizmeDinleyicileri.indexOf(d); if (i >= 0) dizmeDinleyicileri.splice(i, 1); };
+}
+
+// Taslağın içeriği bütün olarak yeniden yazılır; adımlar operasyonlarını korur (numara -> kimlik silmeden önce okunur).
+export async function icerigiYenile(db: Db, revizyonId: number, malzemeId: number, adimlar: readonly YeniAdim[]): Promise<void> {
+  const kimlikler = await revizyonKimlikleri(db, revizyonId);
+  await s.icerikSil(db, revizyonId);
+  const esle = await adimlariYaz(db, revizyonId, malzemeId, adimlar, kimlikler);
+  const silinen = [...kimlikler.keys()].filter((n) => !esle.has(n));
+  if (silinen.length === 0 && [...esle].every(([eski, yeni]) => eski === yeni)) return;
+  for (const d of dizmeDinleyicileri) await d(db, { revizyonId, malzemeId, esle, silinen });
+}
+
+export async function revizyonKimlikleri(db: Db, revizyonId: number): Promise<Map<number, s.OperasyonKimligi>> {
+  return new Map((await s.revizyonOperasyonlari(db, revizyonId)).map((a) => [a.opNo, a.operasyonId]));
 }
 
 export const TASLAK_ACIK = 'Bu rotanın açık bir revizyonu var; önce onu bitirin ya da iptal edin.';
@@ -443,8 +470,8 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     adimlar = await baskaUruneAdimlar(db, kaynakId, urunId);
   }
   const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId, rotaId: hedefRota, kaynakSablonId });
-  await adimlariYaz(db, id, urunId, adimlar);
-  // Şartname bağı OP numarasıyla tutulur: yalnız aynı ürünün revizyonundan açılan taslak bağları alır.
+  await adimlariYaz(db, id, urunId, adimlar, kaynak.tur === 'revizyon' && kaynakId !== null ? await revizyonKimlikleri(db, kaynakId) : new Map());
+  // Şartname bağı operasyonla eşlenir: yalnız aynı ürünün revizyonundan açılan taslak bağları alır.
   if (kaynak.tur === 'revizyon' && kaynakId !== null) await s.adimSartnameleriniKopyala(db, kaynakId, id);
   return cevap(id, 'taslak', 1);
 }

@@ -13,7 +13,6 @@ import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimEkipmani, useAdimEkipmanSayisi } from './AdimEkipmani.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
-import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
 import { BAG_ADI, Bolme, KatBolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK, useKatlar } from './ortak.tsx';
 import { useRevizyonSartnameleri, useTalimatlar } from '../sartnameler/veri.ts';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
@@ -157,12 +156,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const liste = sirali(dz.adimlar(s.urunId));
   const a = liste.find((x) => x.id === s.adimId) ?? liste.find((x) => x.seq === s.seq && x.id.startsWith('o'));
   const sahip = h.malzeme.get(s.urunId);
-  const { data: numaralar } = useOpNumaralari(s.urunId, liste, a?.opNo === null);
   const katlar = useKatlar();
   const gorulen = dz.gorulen(s.urunId);
   const sartnameler = useRevizyonSartnameleri(gorulen ? Number(gorulen.id) : null);
   const ekipmanSay = useAdimEkipmanSayisi(gorulen, a?.opNo ?? null);
-  const talimat = useTalimatlar(Number(s.urunId), a?.opNo ?? null);
+  const talimat = useTalimatlar(Number(s.urunId), a?.opNo ?? null, gorulen ? Number(gorulen.id) : null);
   if (!a || !sahip) return <BosPanel r={r} />;
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
@@ -238,8 +236,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const ciktiMetni = son || !kart ? `${sahip.code} (ürün)` : kartBasligi(kartlar.get(kart.itemId), kart.adim, dz.opAdi);
   return (
     <>
-      <Baslik baslik={`${op?.abbr ?? op?.code ?? 'Adım'} ${a.opNo === null ? '· yeni adım' : String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
-      {a.opNo === null && <YeniNumara siradaki={numaralar ? yeniAdimNumaralari(liste, numaralar.siradaki).get(a.id) : undefined} />}
+      <Baslik baslik={`${op?.abbr ?? op?.code ?? 'Adım'} ${String(a.seq)}${a.opNo === null ? ' · yeni adım' : ''}`} etiket={sahip.code} kapat={kapat} />
+      {a.opNo === null && <YeniNumara no={a.seq} />}
       <div className="tc-rr1-adimoz">
         <p className="tc-rr1-adimoz-satir">{ozetOp}</p>
         <div className="tc-rr1-adimoz-akis">
@@ -514,7 +512,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
         <AdimSartnameleri rev={dz.gorulen(s.urunId)} opNo={a.opNo} fason={fason} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul}
           taslakAc={() => { const g = dz.gorulen(s.urunId); if (g) void dz.yeniTaslak(s.urunId, g); }} />
         <AdimEkipmani rev={dz.gorulen(s.urunId)} opNo={a.opNo} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul} />
-        <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} />
+        <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} revizyonId={gorulen ? Number(gorulen.id) : null} />
       </KatBolme>
       {duzen && (
         <div className="tc-rr1-altcubuk">
@@ -699,11 +697,11 @@ function YeniRotaPaneli({ r, kapat }: { r: RotaEkrani; kapat: () => void }) {
   );
 }
 
-// RT-31: numara kayıtta verilir, kullanıcı yazmaz; silinmiş numara yeniden verilmez (2519 a).
-function YeniNumara({ siradaki }: { siradaki: number | undefined }) {
+// 3252 b: numara sıradan verilir, kullanıcı yazmaz; araya eklenen adım sonrakileri kaydırır.
+function YeniNumara({ no }: { no: number }) {
   return (
     <p className="tc-rr1-ipucu" data-parca="yeni-op-no">
-      <Simge ad="tag" boyut="k" /> {siradaki === undefined ? 'Numarayı sistem kayıtta verir.' : `Numarayı sistem verir: sıradaki OP ${String(siradaki)}.`}
+      <Simge ad="tag" boyut="k" /> {`Kayıtta OP ${String(no)} olur; numaralar sıradan verilir (10, 20, 30).`}
     </p>
   );
 }
@@ -731,7 +729,7 @@ function secimAdi(r: RotaEkrani): string {
     case 'adim': {
       const a = r.duzen.adimlar(s.urunId).find((x) => x.id === s.adimId);
       const op = a ? h.op.get(a.opId) : undefined;
-      return a ? `${a.opNo === null ? 'Yeni adım' : `OP ${String(a.opNo)}`} ${op?.name ?? ''}`.trim() : 'Adım';
+      return a ? `OP ${String(a.seq)} ${op?.name ?? ''}`.trim() : 'Adım';
     }
     case 'urun': return h.malzeme.get(s.urunId)?.code ?? 'Ürün';
     case 'giren': case 'girenEkle': return 'Giren';

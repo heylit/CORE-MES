@@ -207,18 +207,24 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     assert.equal((await durumOku(tam)).routes !== null, true);
   });
 
-  test('RRR-6: adım sırası seq, OP numarası opNo ve kimliktir; sıra değişince seq yeniden 10, 20 olur, OP numarası adımla kalır', async () => {
+  test('RRR-6, 3252 b: adım sırası seq, OP numarası opNo ve kimliktir; sıra değişince numara da sıradan yeniden dizilir, adım bağı adımını izler', async () => {
     const urun = await kart('mamul', 'RRR mamul 6');
+    const ym = await kart('yarimamul', 'RRR YM 6');
     const k = await taslakKur(urun, [adim({ ad: 'Bir' }), adim({ ad: 'İki' }), adim({ ad: 'Üç' })]);
     const ilk = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
     const o = (n: number): string => `${String(urun)}-o${String(n)}`;
     assert.deepEqual(ilk.map((s) => [s.id, s.seq, s.opNo, s.name]), [[o(10), 10, 10, 'Bir'], [o(20), 20, 20, 'İki'], [o(30), 30, 30, 'Üç']]);
-    const ters = [...ilk].reverse();
+    // Eski adım bağı (revizyon, OP) 'Bir' adımındadır; 'İki' silinip kalanlar ters dizilince bağ 'Bir' ile OP 20'ye gider.
+    await vt().sorgu('INSERT INTO recete_rota_adim_bagi (rota_revizyonu_id, malzeme_id, op_no, cikti_malzeme_id, guncelleyen_kisi_id) VALUES ($1, $2, 10, $3, $4), ($1, $2, 20, $3, $4)',
+      [k.id, urun, ym, yoneticiId]);
+    const ters = [ilk[2]!, ilk[0]!];
     await tamamIstek(tam, 'POST', `/rota/revizyonlar/${String(k.id)}/kaydet`, {
       surum: k.surum, aciklama: null, adimlar: ters.map((s) => adim({ opNo: s.opNo, ad: s.name })),
     });
     const sonra = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
-    assert.deepEqual(sonra.map((s) => [s.id, s.seq, s.opNo, s.name]), [[o(30), 10, 30, 'Üç'], [o(20), 20, 20, 'İki'], [o(10), 30, 10, 'Bir']]);
+    assert.deepEqual(sonra.map((s) => [s.id, s.seq, s.opNo, s.name]), [[o(10), 10, 10, 'Üç'], [o(20), 20, 20, 'Bir']]);
+    assert.deepEqual(await vt().sorgu('SELECT op_no AS op FROM recete_rota_adim_bagi WHERE rota_revizyonu_id = $1 ORDER BY op_no', [k.id]), [{ op: 20 }],
+      'silinen adımın bağı silinir, kalan adımın bağı yeni numarasına gider');
   });
 
   test('1248 a, 1257 a: adımın dalı, dal çarpanı ve birleşen dalları gelir; öncüller sıra (seq) ile, tek hatlı rotada null', async () => {

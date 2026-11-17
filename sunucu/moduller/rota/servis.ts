@@ -1,5 +1,5 @@
 // Modülün servis girişi: işlevler alana göre servis/ altındadır. Uçlar, işler ve disari.ts yalnız bu dosyayı ithal eder.
-export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi, opNumaralari } from './servis/liste.ts';
+export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi } from './servis/liste.ts';
 export { adimEkipmaniKaydet, fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
@@ -23,4 +23,5 @@ export {
   isEmriSartnameleri, isEmriSartnameleriCevabi, ekAdimSartnameleriSabitle,
 } from './servis/sartname.ts';
 export { talimatSahneleri, talimatSahnesiKaydet, talimatSahnesi } from './servis/sahne.ts';
+export { opNumaralariDizildiDinle, type OpNumaralariDizildi } from './servis/ortak.ts';
 export { siparisAcilisiRotasi, revizyonunRotasi, tekEmreKopyala, bekleyenEmreUygula, bekleyenEmirlereUygula, ROTA_BEKLEMIYOR, BEKLEYEN_ROTA_YOK } from './servis/bekleyen-emir.ts';

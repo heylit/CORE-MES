@@ -55,24 +55,14 @@ export function durumGecisiGecerliMi(eski: RevizyonDurumu, yeni: RevizyonDurumu)
   return DURUM_GECISLERI[eski].includes(yeni);
 }
 
-/* ---------------- OP numarası (RT-30, RT-31) ---------------- */
+/* ---------------- OP numarası (RT-30, RT-31, 3252 b) ---------------- */
 
 export const OP_ARALIGI = 10;
 
-// Ürüne bir kez verilmiş numara yeniden verilmez: yeni numara bütün kullanılmışların en büyüğünün üstündedir,
-// aradaki boş ya da silinmiş numaralar atlanır.
+// OP numarası revizyonda adımın sırasından verilir: 10, 20, 30; ekleme, silme ve sıra değişiminde yeniden dizilir (3252 b; 2519 a kalktı).
+// Ürün düzeyinde kalıcı olan numara değil, operasyonun gizli kimliğidir (3250 b).
 export function yeniOpNo(kullanilmislar: readonly number[]): number {
   return kullanilmislar.reduce((m, n) => Math.max(m, n), 0) + OP_ARALIGI;
-}
-
-export function opNolariVer(kullanilmislar: readonly number[], adet: number): number[] {
-  const verilen: number[] = [];
-  let son = yeniOpNo(kullanilmislar) - OP_ARALIGI;
-  for (let i = 0; i < adet; i += 1) {
-    son += OP_ARALIGI;
-    verilen.push(son);
-  }
-  return verilen;
 }
 
 /* ---------------- türetilmiş operasyon kodu ve adı (3381) ---------------- */
@@ -857,6 +847,8 @@ export function etkinAdimSuresi(teorik: TeorikSureler): EtkinAdimSuresi {
 
 export interface FarkAdimi {
   opNo: number;
+  // Operasyonun gizli kimliği (3250 b): numara revizyonda sıradan dizildiğinden adımlar kimlikle eşlenir (yoksa numarayla).
+  kimlik?: number;
   sira: number;
   ad: string;
   operasyonTipi: string;
@@ -877,15 +869,17 @@ const BAGIMLILIK_ADI: Record<Bagimlilik, string> = { bagimsiz: 'bağımsız', be
 // Adımlar OP numarasıyla eşlenir: numara kalıcı olduğu için aynı numara aynı adımdır.
 export function revizyonFarki(eski: readonly FarkAdimi[], yeni: readonly FarkAdimi[]): string[] {
   const farklar: string[] = [];
-  const eskiler = new Map(eski.map((a) => [a.opNo, a]));
-  const yeniler = new Map(yeni.map((a) => [a.opNo, a]));
-  for (const a of yeni) if (!eskiler.has(a.opNo)) farklar.push(`OP ${a.opNo} eklendi: ${a.ad}`);
-  for (const a of eski) if (!yeniler.has(a.opNo)) farklar.push(`OP ${a.opNo} çıkarıldı: ${a.ad}`);
-  const ortakEski = eski.filter((a) => yeniler.has(a.opNo)).map((a) => a.opNo);
-  const ortakYeni = yeni.filter((a) => eskiler.has(a.opNo)).map((a) => a.opNo);
+  // Numara farkı tek başına değişiklik sayılmaz (3250-2 R4): eklenen adımdan sonrakiler kayar, operasyonları aynıdır.
+  const anahtar = (a: FarkAdimi): number => a.kimlik ?? a.opNo;
+  const eskiler = new Map(eski.map((a) => [anahtar(a), a]));
+  const yeniler = new Map(yeni.map((a) => [anahtar(a), a]));
+  for (const a of yeni) if (!eskiler.has(anahtar(a))) farklar.push(`OP ${a.opNo} eklendi: ${a.ad}`);
+  for (const a of eski) if (!yeniler.has(anahtar(a))) farklar.push(`OP ${a.opNo} çıkarıldı: ${a.ad}`);
+  const ortakEski = eski.filter((a) => yeniler.has(anahtar(a))).map(anahtar);
+  const ortakYeni = yeni.filter((a) => eskiler.has(anahtar(a))).map(anahtar);
   if (ortakEski.join(',') !== ortakYeni.join(',')) farklar.push('Adım sırası değişti');
   for (const y of yeni) {
-    const e = eskiler.get(y.opNo);
+    const e = eskiler.get(anahtar(y));
     if (!e) continue;
     const alan = (ad: string, once: string | number | null, sonra: string | number | null) => {
       if (once !== sonra) farklar.push(`OP ${y.opNo} ${ad}: ${once ?? 'yok'} -> ${sonra ?? 'yok'}`);
