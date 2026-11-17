@@ -15,7 +15,7 @@ const calisma = (D: Record<string, unknown>): Record<string, unknown> => ({
 });
 const adim = (urun: string, op: number, ins: { itemId: string; qty: number }[] = []) =>
   ({ id: `${urun}-o${String(op)}`, seq: op, opNo: op, opId: '13', stationId: '10', setup: 10, cycle: 2, alts: [], altTimes: {}, ins });
-type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string; fasonId?: string; terminGun?: number | null; fasonSiparis?: { tarih: string; siparisNo: string | null } }[] };
+type Dugum = { dugum: string; itemId: string; carpan: number | null; birim: number | null; ust: string; ustOpNo: number | null; adimlar: { opNo: number; kaynakOpNo: number; durum: string; fasonId?: string; terminGun?: number | null; fasonSiparis?: { tarih: string; siparisNo: string | null; firmaId?: number } }[] };
 const DUGUMLER: Dugum[] = [
   { dugum: '0.1.1', itemId: '70', carpan: 6, birim: 3, ust: '0.1', ustOpNo: 10,
     adimlar: [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }, { opNo: 1040, kaynakOpNo: 20, durum: 'bekliyor' }] },
@@ -43,7 +43,7 @@ const durum = (dugumler: Dugum[] | undefined, status = 'serbest') => ({
   },
 });
 type Siparis = { id: string; urun: string; adet: number; termin: string | null; ust?: string; ustAdim?: string; birim?: number; gelir?: number | null };
-type Sonuc = { S: { D: Record<string, unknown> & { siparisler: Siparis[] } }; st: { D: { siparisler: Siparis[] }; bitti?: Record<string, number>; montaj?: Record<string, unknown>; fasonSiparis?: Record<string, string> } };
+type Sonuc = { S: { D: Record<string, unknown> & { siparisler: Siparis[] } }; st: { D: { siparisler: Siparis[] }; bitti?: Record<string, number>; montaj?: Record<string, unknown>; fasonSiparis?: Record<string, string>; fasonFirma?: Record<string, string[]> } };
 const kur = (dugumler: Dugum[] | undefined, D: Record<string, unknown> = D0, status?: string): Sonuc =>
   planGirdisi({ calisma: calisma(D), kayit: KAYIT, kaynak: { durum: durum(dugumler, status), ek: null }, bugun: '2026-10-19' }) as unknown as Sonuc;
 
@@ -66,6 +66,25 @@ describe('plan girdisi: çok katmanlı emrin düğümleri montaj bağıyla (1476
     const r = kur(dugumler);
     assert.deepEqual(r.st.fasonSiparis, { '7-Y1.20': '2026-10-27 08:00' });
     assert.equal(kur(DUGUMLER).st.fasonSiparis, undefined);
+  });
+
+  test('3383: düğüm adımının fason firması emrin adımından, yoksa açık siparişin firmasından gelir; bitmiş adımda gelmez', () => {
+    const tarih = { tarih: '2026-10-27', siparisNo: null };
+    const ile = (f: (a: Dugum['adimlar'][number]) => Dugum['adimlar'][number]) => DUGUMLER.map((d) => ({ ...d, adimlar: d.adimlar.map(f) }));
+    const emirde = kur(ile((a) => (a.opNo === 1020 || a.opNo === 1030 ? { ...a, fasonId: '9' } : a)));
+    assert.deepEqual(emirde.st.fasonFirma, { '7-Y1.20': ['9'] });
+    const sipariste = kur(ile((a) => (a.opNo === 1040 ? { ...a, fasonSiparis: { ...tarih, firmaId: 11 } } : a)));
+    assert.deepEqual(sipariste.st.fasonFirma, { '7-Y1-Y1.20': ['11'] });
+    const ikisi = kur(ile((a) => (a.opNo === 1020 ? { ...a, fasonId: '9', fasonSiparis: { ...tarih, firmaId: 11 } } : a)));
+    assert.deepEqual(ikisi.st.fasonFirma, { '7-Y1.20': ['9', '11'] }, 'emrin firması önce');
+    assert.equal(kur(DUGUMLER).st.fasonFirma, undefined);
+    // Adımın motor anahtarı OP numarasından farklı olabilir (rota sırası 1, 2; OP 10, 20): firma emirdeki OP'nin rotadaki adımına bağlanır.
+    const d = durum(ile((a) => (a.opNo === 1020 ? { ...a, fasonId: '9' } : a)));
+    d.routes[60] = { steps: [{ ...adim('60', 10, [{ itemId: '70', qty: 3 }]), seq: 1 }, { ...adim('60', 20), seq: 2 }] };
+    const r = planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak: { durum: d, ek: null }, bugun: '2026-10-19' }) as unknown as Sonuc;
+    const rota = (r.st.D as unknown as { urunler: { id: string; rota: { k: string }[] }[] }).urunler.find((u) => u.id === '60')!.rota;
+    assert.notEqual(rota[1]!.k, '20', 'örnek anahtarı OP numarasından ayırmalı');
+    assert.deepEqual(r.st.fasonFirma, { [`7-Y1.${rota[1]!.k}`]: ['9'] });
   });
 
   test('motor tüketen üst adımı alt düğümün son adımından sonra başlatır', () => {
