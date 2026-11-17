@@ -228,33 +228,66 @@ test.describe('A1 Operatör', () => {
       expect(ag.hatalar).toEqual([]);
     });
 
-    // Kullanıcının bildirdiği kayma (eski istasyon şeridi): not ve "Bu istasyona geç" satırı sıkıştırıp karta biniyordu.
-    // 3338-6 a: istasyon ve makine üst çubuktaki kutudan açılan pencerede seçilir; her satırda kart ile eylem kesişmez, pencere yana taşmaz.
-    for (const boy of [{ width: 1280, height: 1000 }, { width: 2000, height: 1146 }]) {
-      test(`${String(boy.width)}x${String(boy.height)} istasyon ve makine penceresinde kart ile eylem birbirine binmez`, async ({ page, ag, ac }, bilgi) => {
-        test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
-        await ac900(page, ac, 0, boy);
-        await page.getByTitle(/^(İstasyon · dokununca değişir|Makine · dokununca seçilir)$/).first().click();
-        const pencere = page.getByRole('dialog', { name: 'İstasyon ve makine' });
+    // Arayüz 3392: üst çubukta istasyon ve makine kodu kesilmez (ORN-TORNA-1 ile ORN-TORNA-2 ayrılmalı); yer gerekirse yalnız ad kısalır.
+    test('üst çubukta istasyon ve makine kodu tam görünür', async ({ page, ag, ac }) => {
+      await ac900(page, ac, 1);
+      const kodlar = await page.locator('.tc-ay1-yer .tc-ay1-yer-kod').evaluateAll((l) => l.map((k) => {
+        const kutu = k.closest('.tc-ay1-yer')!.getBoundingClientRect(); const r = k.getBoundingClientRect();
+        return { kod: k.textContent, tasma: Math.max(k.scrollWidth - k.clientWidth, Math.ceil(r.right - kutu.right)) };
+      }));
+      // Dar düzende yer kutusu üst çubukta değil, iş satırındadır; orada kod kutusu yoktur.
+      if (!(await darMi(page))) expect(kodlar.length, JSON.stringify(kodlar)).toBeGreaterThan(0);
+      for (const k of kodlar) expect(k.tasma, JSON.stringify(kodlar)).toBeLessThanOrEqual(0);
+      expect(ag.hatalar).toEqual([]);
+    });
+
+    // 3392 a madde 2: istasyon yönetimi olmayan operatör istasyon değiştirmez ve cihazı yere bağlamaz; bağlama penceresi ona hiç açılmaz.
+    test('operatör istasyon değiştirmez: "Bu istasyona geç" ve "Bu cihazı yere bağla" yok', async ({ page, ag, ac }) => {
+      await ac900(page, ac, 1);
+      const kutu = page.getByTitle('İstasyon ve makine · dokununca seçilir').or(page.getByTitle('Makine · dokununca seçilir')).first();
+      if (await kutu.count()) await kutu.click();
+      await expect(page.getByRole('dialog', { name: 'Bu cihazı yere bağla' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Bu istasyona geç' })).toHaveCount(0);
+      expect(yazmalar(ag.yazmalar)).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+
+    // 3392 a madde 1: istasyon yönetimi olan kişi cihazı iki adımda bağlar; genişte iki sütun yan yana ve birbirine binmez, "Bağla"
+    // makine seçilene kadar pasiftir, pencere yana taşmaz. Bağlanmadan kapatılır: yazma gitmez.
+    test.describe('cihazı yere bağlama', () => {
+      test.use({ hesap: 'ornek.yonetici' });
+      test('iki sütun yan yana, Bağla makine seçilene kadar pasif; dar ekranda adım adım', async ({ page, ag, ac }) => {
+        await page.addInitScript(() => { localStorage.setItem('arkon:station', JSON.stringify('ORN-TORNA-1')); });
+        await ac900(page, ac, 1);
+        await page.locator('button.tc-ay1-istasyon, button.tc-ay1-yer').first().click();
+        const pencere = page.getByRole('dialog', { name: 'Bu cihazı yere bağla' });
         await expect(pencere).toBeVisible();
-        await expect(pencere.getByRole('button', { name: 'Bu istasyona geç' }).first()).toBeVisible();
-        const satirlar = await pencere.locator('.tc-ay1-yer-satiri').evaluateAll((ss) => ss.map((s) => {
-          const [kart, ...eylem] = [...s.children].map((c) => c.getBoundingClientRect());
-          return { kart: kart ? [kart.left, kart.top, kart.right, kart.bottom] : null, eylem: eylem.map((b) => [b.left, b.top, b.right, b.bottom]) };
-        }));
-        const m = JSON.stringify(satirlar);
-        expect(satirlar.length, m).toBeGreaterThanOrEqual(2);
-        for (const s of satirlar) {
-          expect(s.kart, m).not.toBeNull();
-          for (const b of s.eylem) {
-            const [a, c] = [s.kart!, b];
-            expect(a[0]! < c[2]! && c[0]! < a[2]! && a[1]! < c[3]! && c[1]! < a[3]!, m).toBe(false);
+        const istasyon = pencere.getByRole('radiogroup', { name: 'İstasyon' });
+        await istasyon.getByRole('radio').first().click();
+        const bagla = pencere.getByRole('button', { name: 'Bağla' });
+        if (await pencere.getByRole('list', { name: 'Adımlar' }).count()) {
+          // Dar ekran: makineli istasyonda İleri, makinesizde doğrudan Bağla.
+          await expect(bagla.or(pencere.getByRole('button', { name: 'İleri' })).first()).toBeEnabled();
+        } else {
+          const sutunlar = await pencere.locator('.tc-ay1-yer-sutun').evaluateAll((ss) => ss.map((x) => { const r = x.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }));
+          const m = JSON.stringify(sutunlar);
+          expect(sutunlar.length, m).toBe(2);
+          const [a, c] = [sutunlar[0]!, sutunlar[1]!];
+          expect(a[0]! < c[2]! && c[0]! < a[2]! && a[1]! < c[3]! && c[1]! < a[3]!, m).toBe(false);
+          const makine = pencere.getByRole('radiogroup', { name: 'Makine' });
+          if (await makine.count()) {
+            await expect(bagla).toBeDisabled();
+            await makine.getByRole('radio').first().click();
           }
+          await expect(bagla).toBeEnabled();
         }
         expect(await pencere.evaluate((p) => p.scrollWidth - p.clientWidth)).toBeLessThanOrEqual(0);
+        await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+        await expect(pencere).toHaveCount(0);
+        expect(yazmalar(ag.yazmalar)).toEqual([]);
         expect(ag.hatalar).toEqual([]);
       });
-    }
+    });
 
     // Düzeltme yetkisi olan kişide sayaçta beş tuş durur: üstte İyi +1 ve Hurda +1, altında düzeltme (−1) tuşları tek kısa sırada
     // (1046 a), en altta Toplu giriş. Tuşlar sayacın içinde, Şimdi şeridinin altında kalır, kadran küçülüp yazıları üst üste gelmez.

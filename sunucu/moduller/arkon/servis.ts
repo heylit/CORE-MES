@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  ArkonDeposu, ArkonRefakatKarti, CalismaDevralGovdesi, CalismaDevralRedAyrintisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, IslerimCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
+  ArkonDeposu, ArkonRefakatKarti, CalismaDevralGovdesi, CihazBagiGovdesi, CalismaDevralRedAyrintisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, IslerimCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -62,7 +62,7 @@ import {
   icerikSurumu, planYokDamgala, uyariBirlestir, baslatmaKaydiKarti, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, sayimKaynagiAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
-  HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi,
+  HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi, cihazBaglayabilir,
   KAYIT_YAZARLARI, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_MESGUL, KENDI_YENIDEN_SONRADAN_SAYILDI, KENDI_YENIDEN_YALNIZ_RET, kendiSayimYenidenReddi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
   adetEksikMi, araliklariBirlestir, araliklariKes, beklenenTopla, bitenIsBeklenen, girisYokAktifDakika, girisYokMu, isEmriBeklenenAdet, kaynakKarsilastir, kesinBeklenen, kisiBeklenen, makineIzinliMi, toplamOran, uretimOrani,
@@ -3292,4 +3292,21 @@ export async function isEmriSahneModeli(db: Db, kullanici: Kullanici, isEmriId: 
   const { kunye, sahne } = await isinSahnesi(db, kullanici, isEmriId);
   if (kunye === null || sahne === null || !(await malzemeModelRevizyonlari(db, kunye.malzemeNo)).includes(sahne.modelRevizyonId)) throw bulunamadi(SAHNE_MODELI_YOK);
   return modelDosyasi(db, sahne.modelRevizyonId);
+}
+
+// 3392 a madde 11: cihaz bağının izi. Bağ cihazda saklanır ve oradan okunur; sunucu yalnız kimin ne zaman hangi yere bağladığını tutar.
+export async function cihazBagiYaz(db: Db, kullanici: Kullanici, g: CihazBagiGovdesi): Promise<{ tamam: true }> {
+  const rol = await rolGerekli(db, kullanici);
+  if (!cihazBaglayabilir(rol)) throw yetkiYok(ILETILER.cihazBagiYetkisi);
+  const istasyon = (await istasyonlar(db, { pasiflerDahil: false })).find((i) => i.kod === g.istasyon) ?? null;
+  if (istasyon === null) throw gecersiz(ILETILER.cihazIstasyonuYok);
+  if (!kapsamdaMi(await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri), istasyon.isMerkeziId)) throw kapsamDisi();
+  let makineId: number | null = null;
+  if (g.makine !== null) {
+    const makine = (await istasyondakiMakineler(db, istasyon.id)).find((m) => m.kod === g.makine) ?? null;
+    if (makine === null) throw gecersiz(ILETILER.cihazMakinesiYok);
+    makineId = makine.id;
+  }
+  await sorgular.cihazBagiEkle(db, g.cihaz, istasyon.id, makineId, kullanici.id);
+  return { tamam: true };
 }

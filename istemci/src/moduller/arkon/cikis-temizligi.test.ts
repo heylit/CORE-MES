@@ -107,6 +107,8 @@ function yerelAyarKur(): void {
   yaz('session', { token: 't', srv: 'http://sunucu.test', user: { id: '1', name: 'Ali', role: 'prep' } });
   yaz('theme', 'dark');
   yaz('station', 'CNC-1');
+  yaz('machine', 'CNC-1-M2');
+  yaz('cihaz', '0f8e2a4c-1b3d-4e5f-8a9b-0c1d2e3f4a5b');
   yaz('opName', 'Ali Veli');
   yaz('lastUser', '1');
   yaz('usersCache', [{ id: '1', name: 'Ali' }]);
@@ -151,6 +153,9 @@ describe('Arkon çıkışında yerel veri temizliği', () => {
     expect(ls('server')).toBe('http://sunucu.test');
     expect(ls('theme')).toBe('dark');
     expect(ls('station')).toBe('CNC-1');
+    // 3392 a: cihazın makine bağı ve kimliği kişi değişince kalır.
+    expect(ls('machine')).toBe('CNC-1-M2');
+    expect(ls('cihaz')).toBe('0f8e2a4c-1b3d-4e5f-8a9b-0c1d2e3f4a5b');
   });
 
   it('aynı kişi yeniden girince kuyruktaki kayıt temizlikten sağ çıkmış belgeyle sunucuya gider', async () => {

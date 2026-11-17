@@ -3,7 +3,7 @@ import {
   anomaliCevabi, anomaliIstatistikCevabi, eksikIslerCevabi, eksikIslerimCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi, calismaDevralGovdesi,
-  kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, kendiSayimParametresi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
+  cihazBagiGovdesi, kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, kendiSayimParametresi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
   hazirlikMaddeleriCevabi, hazirlikMaddeleriSorgusu, hazirlikMaddesiEkleGovdesi, hazirlikMaddesiIsaretleGovdesi, hazirlikMaddesiParametresi,
   numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
@@ -395,6 +395,15 @@ export const uclar = [
     sorgu: hazirlikMaddeleriSorgusu,
     cevap: hazirlikMaddeleriCevabi,
     isle: ({ db, sorgu }) => servis.hazirlikMaddeleriListesi(db, sorgu.isEmriId),
+  }),
+  // 3392 a madde 11: cihaz bağının izi; rol (istasyon yönetimi), kapsam ve makinenin istasyonu serviste denetlenir.
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/cihaz-bagi',
+    yetki: ARKON_SAYFASI,
+    govde: cihazBagiGovdesi,
+    cevap: tamamCevabi,
+    isle: ({ db, kullanici, govde }) => servis.cihazBagiYaz(db, kullanici, govde),
   }),
   uc({
     yontem: 'POST',
