@@ -149,7 +149,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'cmm', ad: 'CMM ve ölçüm kapasitesi', durum: 'yaklasik', not: 'Rotada ayrı adım ve tezgâh olarak tanımlanırsa tam uygulanır.' },
     { id: 'takim', ad: 'Kesici takım ve magazin', durum: 'yok' },
     { id: 'omur', ad: 'Takım ömrü', durum: 'yok' },
-    { id: 'kalibrasyon', ad: 'Ölçü aleti ve kalibrasyon', durum: 'yok' },
+    { id: 'kalibrasyon', ad: 'Ölçü aleti adedi', durum: 'tam', g: true, not: 'Rotada adıma girilen ölçü aleti türü, Kalibrasyon\'da kalibrasyonu geçerli alet sayısından fazla işe aynı anda verilmez. Aleti olmayan tür sayılmaz.' },
   ] },
   { grup: 'Malzeme, rota ve akış', simge: 'layers', l: [
     { id: 'malzeme', ad: 'Malzeme hazır olması', durum: 'karar', g: true, not: 'Kullanıcı 16:50 (4 c): geliş tarihi belli olan malzeme (stok ya da söz tarihli satın alma) sert kısıttır, iş malzemeden önce başlamaz; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.', p: [{ tur: 'sec', yer: 'w', k: 'mat', etiket: 'Kural', secenekler: MALZEME_KURALLARI.map(([d, a]): [string, string] => [d, a]) }], sayfa: 'malzeme' },

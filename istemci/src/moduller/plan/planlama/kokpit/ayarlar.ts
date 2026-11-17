@@ -28,7 +28,7 @@ export const AYAR_ALANLARI: readonly AyarAlani[] = [
     } },
 ];
 // Panelde açılıp kapanan kısıtlar: planlamacının en sık değiştirdikleri; tam liste Kısıtlar sayfasındadır.
-export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'aparat', 'malzeme'] as const;
+export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'aparat', 'kalibrasyon', 'malzeme'] as const;
 // Ad Kısıtlar sayfasıyla aynıdır (tek katalog).
 export const panelKisitAdi = (k: (typeof PANEL_KISITLARI)[number]): string => kisitBul(k)?.ad ?? k;
 

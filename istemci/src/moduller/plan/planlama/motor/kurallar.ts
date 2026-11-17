@@ -740,7 +740,7 @@ const KISIT_AD: Record<string, string> = {
   toplu: 'Toplu işlem (fırın partisi)', enerji: 'Enerji ve puant saat', personel: 'Operatör sayısı', yetkin: 'Operatör yetkinliği (tezgâh grubu)', devam: 'Devamsızlık',
   ayarci: 'Ayarcı sayısı', cokmakine: 'Çok tezgâha bakan operatör', verim: 'Kişiye göre verim', aparat: 'Aparat ve özel takım adedi',
   program: 'NC programının hazır olması', fai: 'İlk parça onayı', cmm: 'CMM ve ölçüm kapasitesi', takim: 'Kesici takım ve magazin', omur: 'Takım ömrü',
-  kalibrasyon: 'Ölçü aleti ve kalibrasyon', malzeme: 'Malzeme hazır olması', serbest: 'Serbest bırakma zamanı', rota: 'Rota sırası (bitince başla)',
+  kalibrasyon: 'Ölçü aleti adedi', malzeme: 'Malzeme hazır olması', serbest: 'Serbest bırakma zamanı', rota: 'Rota sırası (bitince başla)',
   ortusme: 'Örtüşmeli geçiş ve son parti kuralı', tasima: 'Taşıma süresi', fasonGun: 'Fason çıkış günü ve süresi', fasonKap: 'Fason kapasitesi',
   fasonTalas: 'Talaşlı işi fasona verme', bekleme: 'En az ve en çok bekleme (soğuma, kuruma)', nowait: 'Ara beklemesiz akış', bolme: 'Parti bölme',
   wip: 'Alan ve WIP sınırı', ayar: 'Ayar süresi', sdst: 'Sıraya bağlı ayar (aile matrisi)', aile: 'Aynı aile kısalması', kampanya: 'Kampanya uzunluğu (en az, en çok)',

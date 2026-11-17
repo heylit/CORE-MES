@@ -2,7 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { takimOmruDurumlari } from '../../cnc-kurulum/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi } from '../../istasyonlar/disari.ts';
 import { cncKimlikliMalzemeler, malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { isEmriKaynakIstekleri } from '../../rota/disari.ts';
+import { aletKimlikleri } from '../../kalibrasyon/disari.ts';
+import { isEmriAletIstekleri, isEmriKaynakIstekleri } from '../../rota/disari.ts';
 import { ikincilKaynakKur, type IkincilEki, type IkincilOkuma } from './ikincil-kurallar.ts';
 
 // 3199 (A + D): planın ikincil kaynak okuması. Kaynak tanımı İstasyonlar'ın aparat kapasitesi satırıdır (tür, adet, yer, kısıt, kesinti,
@@ -10,7 +11,7 @@ import { ikincilKaynakKur, type IkincilEki, type IkincilOkuma } from './ikincil-
 // CNC Kurulum'un takım yükünden (cebe yüklü, kartla aynı CNC kimliği); kayıt yoksa bilinmez (V13). Okunamayan dilim null'dır: girdi.betik
 // o alanı açık çalışmadaki gibi bırakır. Çağıran yetkiyi verir (istasyon ve emir okuması).
 export async function ikincilEkiOku(
-  db: Db, yetki: { istasyon: boolean; emir: boolean }, isler: readonly { id: number; emirNo: string; opNo: number }[],
+  db: Db, yetki: { istasyon: boolean; emir: boolean; alet?: boolean }, isler: readonly { id: number; emirNo: string; opNo: number }[],
 ): Promise<IkincilEki> {
   const okuma: IkincilOkuma = { kaynaklar: null, kartlar: new Map(), istekler: null, takimlar: null };
   if (yetki.istasyon) {
@@ -37,6 +38,18 @@ export async function ikincilEkiOku(
       const l = istek.get(i.id);
       return l === undefined ? [] : [{ anahtar: `${i.emirNo}|${String(i.opNo)}`, istekler: l }];
     });
+  }
+  // Ölçü aleti: plana yalnız tür başına kullanılabilir alet SAYISI girer (alet numarası, vade ve kayıt girmez); bu yüzden kalibrasyon.oku
+  // istenmez, planı okuyan herkeste aynı plan çıkar (Risk 3403 K1 a). Adımın istediği tür iş emrinin ekipman listesinden.
+  if (yetki.alet === true) {
+    okuma.aletler = (await aletKimlikleri(db)).map((a) => ({ turId: a.turId, tur: a.tur, durum: a.durum }));
+    if (yetki.emir) {
+      const istek = await isEmriAletIstekleri(db, isler.map((i) => i.id));
+      okuma.aletIstekleri = isler.flatMap((i) => {
+        const l = istek.get(i.id);
+        return l === undefined ? [] : [{ anahtar: `${i.emirNo}|${String(i.opNo)}`, turler: l }];
+      });
+    }
   }
   return ikincilKaynakKur(okuma);
 }

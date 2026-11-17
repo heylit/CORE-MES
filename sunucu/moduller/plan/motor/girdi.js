@@ -771,7 +771,9 @@ const GEVSEK = {
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
   /* 3199: ikincil kaynak (aparat, özel takım) aynı kısıttır; gevşeyince plan onu yalnız izler (İzle), ömür yine sayılır */
-  aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; for (const k of st.D.ikincilKaynaklar || []) k.kisit = 'izle'; },
+  aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; for (const k of st.D.ikincilKaynaklar || []) if (k.tur !== 'olcu_aleti') k.kisit = 'izle'; },
+  /* ölçü aleti ikincil kaynağın ayrı anahtarıdır: kapanınca plan aleti yalnız izler */
+  kalibrasyon: st => { for (const k of st.D.ikincilKaynaklar || []) if (k.tur === 'olcu_aleti') k.kisit = 'izle'; },
   program: st => { st.D.ayarlar.programSaat = 0; },
   fai: st => { for (const u of st.D.urunler) for (const o of u.rota) o.fai = false; },
   serbest: st => { for (const s of st.D.siparisler) s.serbest = null; },
