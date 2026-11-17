@@ -1655,7 +1655,8 @@ export async function sonAlisFiyatlari(db: Db, malzemeNolar: readonly number[]):
   return new Map(l.map(({ malzemeNo, ...x }) => [malzemeNo, { ...x, birimFiyat: sade(x.birimFiyat), tryBirimFiyat: x.tryBirimFiyat === null ? null : sade(x.tryBirimFiyat) }]));
 }
 // Plan motoru: açık siparişte gelecek malzeme, termin sırasıyla (tarihsiz en sonda). Miktar kalemin birimiyle; fiyat yok.
-export interface MalzemeGelisi { tarih: string | null; miktar: string; birim: string; siparisNo: string }
+// satirId gelişin kararlı anahtarıdır (sipariş satırı; onaylı talepte kalemin eksi sayı kimliği); tedarikciAdi teklifteki addır.
+export interface MalzemeGelisi { tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export async function malzemeGelisTarihleri(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, MalzemeGelisi[]>> {
   const tekil = [...new Set(malzemeNolar)];
   const m = new Map<number, MalzemeGelisi[]>();
