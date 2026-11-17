@@ -60,8 +60,11 @@ export async function talimatSahnesiKaydet(
 
 // Emre sabitlenen talimat sürümünün en son sahnesi (terminal okur; yetki denetlemez, çağıran denetler). Sahne yoksa null.
 // Emirden gelen (malzeme, OP) kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) kimlikle çağrılır.
-export async function talimatSahnesi(db: Db, malzemeId: number, opNo: number, talimatSurum: number): Promise<TalimatSahnesi | null> {
-  const op = await s.operasyonBul(db, malzemeId, opNo);
+// Emirden gelen okuma iş emrinin operasyon kimliğini verir (3250-2); kimliği olmayan eski iş emri numara defterinden çözülür.
+export async function talimatSahnesi(
+  db: Db, malzemeId: number, opNo: number, talimatSurum: number, operasyonId: number | null = null,
+): Promise<TalimatSahnesi | null> {
+  const op = operasyonId === null ? await s.operasyonBul(db, malzemeId, opNo) : s.operasyonKimligi(operasyonId);
   const x = op === null ? null : await s.sonSahne(db, op, talimatSurum);
   return x === null ? null : (await cevapKur(db, [x]))[0] ?? null;
 }

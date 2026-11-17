@@ -339,16 +339,26 @@ export async function malzemeAra(db: Db, g: { metin: string | null; tur: string[
 }
 
 // gecerliTalimat'ın toplu hâli: anahtar `${malzemeId}:${opNo}`; talimatı olmayan anahtar haritada yoktur. Paket listesi adım başına
-// ayrı sorgu atmasın diye.
-export async function gecerliTalimatlarToplu(db: Db, anahtarlar: readonly { malzemeId: number; opNo: number }[]): Promise<Map<string, { surum: number; metin: string }>> {
+// ayrı sorgu atmasın diye. Operasyon kimliği verilen anahtar kimlikle okunur (OP numarası rotada yeniden dizilse de doğru operasyon,
+// 3250-2); verilmeyen (eski, kimliği eşleşmemiş emir) numara defterinden çözülür.
+export async function gecerliTalimatlarToplu(
+  db: Db, anahtarlar: readonly { malzemeId: number; opNo: number; operasyonId?: number | null }[],
+): Promise<Map<string, { surum: number; metin: string }>> {
   if (anahtarlar.length === 0) return new Map();
-  // Emirden gelen anahtar (malzeme, OP) kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) bu çeviri kalkar.
-  const oplar = await s.operasyonlariBul(db, anahtarlar);
+  const kimlikli = anahtarlar.flatMap((a) => (a.operasyonId == null ? [] : [{ malzemeId: a.malzemeId, opNo: a.opNo, operasyonId: s.operasyonKimligi(a.operasyonId) }]));
+  const defterden = await s.operasyonlariBul(db, anahtarlar.filter((a) => a.operasyonId == null));
+  const oplar = [...kimlikli, ...defterden];
   const talimat = new Map((await s.gecerliTalimatlarToplu(db, oplar.map((o) => o.operasyonId))).map((t) => [t.operasyonId, t]));
   return new Map(oplar.flatMap((o) => {
     const t = talimat.get(o.operasyonId);
     return t ? [[`${String(o.malzemeId)}:${String(o.opNo)}`, { surum: t.surum, metin: t.metin }] as const] : [];
   }));
+}
+
+// Revizyondaki her adımın operasyon kimliği (OP numarası -> kimlik). Başka modül yürürlükteki rotayı gösterirken ürün düzeyi veriyi
+// (talimat) bu kimlikle ister; numara yeniden dizilince ürünün numara defteri başka operasyonu gösterebilir (3250-2).
+export async function revizyonOperasyonKimlikleri(db: Db, revizyonId: number): Promise<Map<number, number>> {
+  return new Map((await s.revizyonOperasyonlari(db, revizyonId)).map((a) => [a.opNo, a.operasyonId]));
 }
 
 // Adım ekipmanında seçilebilen ölçü aleti türleri (2893-4 a).

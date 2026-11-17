@@ -238,9 +238,11 @@ export async function talimatTaslakSil(
 }
 
 // Emre sabitlenen talimat sürümünün adımları (terminal okur); sürüm yoksa null, düz metin sürüm tek adımdır.
-// Emirden gelen (malzeme, OP) kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) kimlikle çağrılır.
-export async function talimatSurumuAdimlari(db: Db, malzemeId: number, opNo: number, surum: number): Promise<TalimatAdimi[] | null> {
-  const op = await s.operasyonBul(db, malzemeId, opNo);
+// Emirden gelen okuma iş emrinin operasyon kimliğini verir (3250-2); kimliği olmayan eski iş emri numara defterinden çözülür.
+export async function talimatSurumuAdimlari(
+  db: Db, malzemeId: number, opNo: number, surum: number, operasyonId: number | null = null,
+): Promise<TalimatAdimi[] | null> {
+  const op = operasyonId === null ? await s.operasyonBul(db, malzemeId, opNo) : s.operasyonKimligi(operasyonId);
   return op === null ? null : operasyonTalimatAdimlari(db, op, surum);
 }
 

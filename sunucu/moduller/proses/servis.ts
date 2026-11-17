@@ -6,7 +6,7 @@ import { ilkParcaKararlari, studyoParcasi } from '../kalite-merkezi/disari.ts';
 import { istasyonAdlari, makineGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { durumRevizyonlari, gecerliTalimatlarToplu, sureler, yururluktekiRevizyon } from '../rota/disari.ts';
+import { durumRevizyonlari, gecerliTalimatlarToplu, revizyonOperasyonKimlikleri, sureler, yururluktekiRevizyon } from '../rota/disari.ts';
 import { malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
 import { cizimHalkasi, ilkParcaHalkasi, kontrolHalkasi, operasyonlar, planKarakteristigi, plansizOperasyonlar, rotaHalkasi, zincir } from './kurallar.ts';
 import type { OperasyonGirdisi } from './kurallar.ts';
@@ -45,7 +45,9 @@ export async function parcaDosyasi(db: Db, malzemeNo: number): Promise<ProsesPar
       gercek: o === null ? null : { ortancaDk: o.ortancaDk, n: o.n },
     };
   });
-  const talimatlar = await gecerliTalimatlarToplu(db, adimlar.map((a) => ({ malzemeId: malzemeNo, opNo: a.opNo })));
+  // Talimat adımın operasyon kimliğiyle okunur; OP numarası rotada yeniden dizilse de doğru adımın talimatı (3250-2).
+  const kimlikler = rota === null ? new Map<number, number>() : await revizyonOperasyonKimlikleri(db, rota.id);
+  const talimatlar = await gecerliTalimatlarToplu(db, adimlar.map((a) => ({ malzemeId: malzemeNo, opNo: a.opNo, operasyonId: kimlikler.get(a.opNo) ?? null })));
   const talimatli = new Set(adimlar.filter((a) => talimatlar.has(`${String(malzemeNo)}:${String(a.opNo)}`)).map((a) => a.opNo));
 
   const studyo = await studyoParcasi(db, malzemeNo);

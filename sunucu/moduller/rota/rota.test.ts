@@ -16,8 +16,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimliEmirAyrintisi, isEmriOperasyonKimlikleri, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, adimBittiDinle, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, adimBittiYansit, gecerliTalimatlarToplu, revizyonGetir, revizyonOperasyonKimlikleri, revizyonlar, talimatSurumuAdimlari, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { FASON_KAYNAGI } from './kurallar.ts';
 import { isler } from './isler.ts';
 import { adimAraHalleri, adimStatusu } from '../recete-rota/disari.ts';
@@ -1001,6 +1001,34 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const sureler = await tamam<{ adimlar: { adimId: number; olcum: { islem: { sureDk: string } | null } }[] }>(c.planlama, 'GET', `/rota/revizyonlar/${id}/sureler`);
     assert.equal(sureler.adimlar.find((a) => a.adimId === ikinci)?.olcum.islem?.sureDk, '4');
     assert.equal(sureler.adimlar.find((a) => a.adimId !== ikinci)?.olcum.islem ?? null, null);
+  });
+
+  // 3250-2 D1: numara yeniden dizildikten sonra açılan emir, ürün düzeyi veriyi numara defterinden değil adımın kimliğinden okur.
+  test('3250-2 D1: yeniden dizilmiş rotadan açılan emirde iş emri, talimat ve sahne okuması adımın operasyonundadır', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ kaynak: null })]);
+    await tamam(c.cam, 'POST', `/rota/urunler/${urun}/talimat-yaz`, { opNo: 20, metin: 'Kimlikli talimat', okunanSurum: null });
+    const kimlik20 = (await vt().tx((db) => db.tek<{ id: number }>('SELECT operasyon_id AS id FROM rota_adimi WHERE revizyon_id = $1 AND op_no = 20', [id])))!.id;
+    // Aşama 2 benzetimi: iki adımın numarası yer değiştirir; numara defteri eski numarada kalır.
+    await ortam!.sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2)', [urun, id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1010 THEN 20 ELSE 10 END WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    assert.equal((await vt().tx((db) => revizyonOperasyonKimlikleri(db, id))).get(10), kimlik20);
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 3, teslim: null, taslak: true });
+    const ie = await vt().tx((db) => db.sorgu<{ id: number; opNo: number }>(
+      'SELECT id, op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [k.uretimEmriId]));
+    assert.deepEqual(ie.map((x) => x.opNo), [20, 10]);
+    const ilk = ie[1]!;
+    const kimlikler = await vt().tx((db) => isEmriOperasyonKimlikleri(db, ie.map((x) => x.id)));
+    assert.equal(kimlikler.get(ilk.id), kimlik20, 'emirdeki OP 10 talimatlı operasyondur');
+    const talimatlar = await vt().tx((db) => gecerliTalimatlarToplu(db, [{ malzemeId: urun, opNo: 10, operasyonId: kimlikler.get(ilk.id) ?? null }]));
+    assert.equal(talimatlar.get(`${String(urun)}:10`)?.metin, 'Kimlikli talimat');
+    // Kimliksiz okuma numara defterine düşer: defterde (ürün, 10) öteki operasyondur, talimatı yoktur.
+    assert.equal((await vt().tx((db) => gecerliTalimatlarToplu(db, [{ malzemeId: urun, opNo: 10 }]))).size, 0);
+    assert.notEqual(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1, kimlik20)), null);
+    assert.equal(await vt().tx((db) => talimatSurumuAdimlari(db, urun, 10, 1)), null);
   });
 
   test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {

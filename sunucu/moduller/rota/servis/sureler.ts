@@ -6,7 +6,7 @@ import type { GerceklesenKabulCevabi, GerceklesenTuru, SurelerCevabi } from '#pa
 import type { TalasliRotaAdimi } from '../../geometri/disari.ts';
 import { istasyonlar as istasyonListesi, makineler as makineListesi } from '../../istasyonlar/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { adimliEmirAyrintisi, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, isEmriOperasyonKimlikleri, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi, AdimBittiOlayi } from '../../uretim-emirleri/disari.ts';
 import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, teorikAyrim, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from '../kurallar.ts';
 import type { EtkinAdimSuresi } from '../kurallar.ts';
@@ -227,10 +227,14 @@ async function olcumleriYaz(db: Db, uretimEmriId: number, kisiId: number, yalniz
   const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
   const adaylar = terminalOlcumAdaylari(ayrinti.isEmirleri.filter((i) => yalniz === null || i.id === yalniz), opNolari).rotada;
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
-  // Emrin OP numarası kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) bu çeviri kalkar.
-  const oplar = new Map((await s.operasyonlariBul(db, adaylar.map((i) => ({ malzemeId, opNo: i.opNo })))).map((o) => [o.opNo, o.operasyonId]));
+  // Ölçüm iş emrinin operasyonuna yazılır (3250-2): OP numarası rotada yeniden dizilse de doğru operasyon. Kimliği olmayan eski iş emri
+  // numara defterinden çözülür.
+  const kimlikler = await isEmriOperasyonKimlikleri(db, adaylar.map((i) => i.id));
+  const defter = new Map((await s.operasyonlariBul(db, adaylar.filter((i) => (kimlikler.get(i.id) ?? null) === null).map((i) => ({ malzemeId, opNo: i.opNo }))))
+    .map((o) => [o.opNo, o.operasyonId]));
   for (const i of adaylar) {
-    const operasyonId = oplar.get(i.opNo);
+    const kimlik = kimlikler.get(i.id) ?? null;
+    const operasyonId = kimlik === null ? defter.get(i.opNo) : s.operasyonKimligi(kimlik);
     if (olculmus.has(i.id) || operasyonId === undefined) continue;
     const makineId = i.kaynak?.tur === 'makine' ? i.kaynak.id : null;
     // Atlama nedeni burada kullanılmaz; sayım bilgisi yalnız nedeni ayırır, yazılacak türü değiştirmez.

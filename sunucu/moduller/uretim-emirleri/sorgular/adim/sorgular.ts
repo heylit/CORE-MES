@@ -85,6 +85,11 @@ export function notAnahtari(db: Db, isEmriId: number): Promise<(NotAnahtari & { 
   );
 }
 
+// İş emrinin rota operasyonunun gizli kimliği (3250 b): rotadan gelmeyen ya da kimliği eşleşmemiş adımda null.
+export function isEmriOperasyonlari(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; operasyonId: number | null }[]> {
+  return db.sorgu('SELECT id AS "isEmriId", operasyon_id AS "operasyonId" FROM uretim_emirleri_is_emri WHERE id = ANY($1::int[])', [[...isEmriIdleri]]);
+}
+
 export function adimNotuEkle(db: Db, g: NotAnahtari & { emirId: number; sira: number; kisiId: number; metin: string; an: string }): Promise<unknown> {
   return db.sorgu(
     `INSERT INTO emir_adim_notu (emir_id, malzeme_no, op_no, operasyon_id, adim_sira, kisi_id, metin, zaman) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)`,

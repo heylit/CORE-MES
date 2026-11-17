@@ -766,6 +766,10 @@ export async function ekrandakiOperasyon(db: Db, malzemeId: number, opNo: number
   return r?.id ?? operasyonBul(db, malzemeId, opNo);
 }
 
+export function revizyonOperasyonlari(db: Db, revizyonId: number): Promise<{ opNo: number; operasyonId: OperasyonKimligi }[]> {
+  return db.sorgu('SELECT op_no AS "opNo", operasyon_id AS "operasyonId" FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [revizyonId]);
+}
+
 export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number }
 export function yururlukteOperasyonlar(db: Db, malzemeIdleri: readonly number[]): Promise<YururlukteOperasyon[]> {
   return db.sorgu(

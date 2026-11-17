@@ -311,7 +311,12 @@ async function isEmriTaslaklari(
   const revizyonlar = new Map<number, string | null>();
   // Talimat adım başına ayrı okunmasın: listedeki bütün (malzeme, adım) anahtarlarının geçerli talimatı tek okumadır. Talimat yine yalnız
   // kayıtsız ve şablonsuz pakette o anahtar için açılır; açılan anahtar sonraki paketlerde de kullanılır.
-  const talimatlar = new Map([...await gecerliTalimatlarToplu(db, isEmirleri.map((ie) => { const r = anahtar(ie); return { malzemeId: r.malzemeNo, opNo: r.opNo }; }))]
+  // Talimat iş emrinin operasyon kimliğiyle okunur (3250-2); anahtar ekrandaki (malzeme, OP) olarak kalır.
+  const operasyonlar = await isEmriOperasyonKimlikleri(db, isEmirleri.map((ie) => ie.id));
+  const talimatlar = new Map([...await gecerliTalimatlarToplu(db, isEmirleri.map((ie) => {
+    const r = anahtar(ie);
+    return { malzemeId: r.malzemeNo, opNo: r.opNo, operasyonId: operasyonlar.get(ie.id) ?? null };
+  }))]
     .map(([k, t]) => [k, t.metin] as const));
   const acilanTalimatlar = new Set<string>();
   const govdeler = kayitli.map((b) => b.govde);
@@ -3276,13 +3281,13 @@ export async function hazirlikMaddesiIsaretle(db: Db, kullanici: Kullanici, id: 
 import type { IsEmriSahnesiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { modelDosyasi, malzemeModelRevizyonlari } from '../geometri/disari.ts';
 import { talimatSahnesi } from '../rota/disari.ts';
-import { isEmriTalimatKunyesi } from '../uretim-emirleri/disari.ts';
+import { isEmriOperasyonKimlikleri, isEmriTalimatKunyesi } from '../uretim-emirleri/disari.ts';
 const SAHNE_ISI_YOK = 'İş bu terminalde görünmüyor.';
 const SAHNE_MODELI_YOK = 'Bu işin talimatında 3B sahne yok.';
 async function isinSahnesi(db: Db, kullanici: Kullanici, isEmriId: number) {
   if ((await belge(db, kullanici, 'pkgs', isEmriPaketKimligi(isEmriId))) === null) throw bulunamadi(SAHNE_ISI_YOK);
   const kunye = await isEmriTalimatKunyesi(db, isEmriId);
-  const sahne = kunye === null ? null : await talimatSahnesi(db, kunye.malzemeNo, kunye.opNo, kunye.surum);
+  const sahne = kunye === null ? null : await talimatSahnesi(db, kunye.malzemeNo, kunye.opNo, kunye.surum, kunye.operasyonId);
   return { kunye, sahne };
 }
 export async function isEmriSahnesi(db: Db, kullanici: Kullanici, isEmriId: number): Promise<IsEmriSahnesiCevabi> {

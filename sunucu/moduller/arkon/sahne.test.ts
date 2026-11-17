@@ -129,7 +129,9 @@ describe('arkon terminal 3B montaj sahnesi (3209, gerçek PostgreSQL)', () => {
 
   test('künye: iş emrinin rota adımı ve sabitlenen talimat sürümü; sürüm sabitlenmemişse null', async () => {
     const e = await emirAc(1);
-    assert.deepEqual(await o().vt.tx(async (db) => isEmriTalimatKunyesi(db, await isEmriOf(e.uretimEmriId))), { malzemeNo: urunNo, opNo: 10, surum: 1 });
+    const ie = await isEmriOf(e.uretimEmriId);
+    const kimlik = (await o().vt.tx((db) => db.tek<{ id: number | null }>('SELECT operasyon_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [ie])))?.id ?? null;
+    assert.deepEqual(await o().vt.tx((db) => isEmriTalimatKunyesi(db, ie)), { malzemeNo: urunNo, opNo: 10, operasyonId: kimlik, surum: 1 });
     const bos = await emirAc(null);
     assert.equal(await o().vt.tx(async (db) => isEmriTalimatKunyesi(db, await isEmriOf(bos.uretimEmriId))), null);
   });

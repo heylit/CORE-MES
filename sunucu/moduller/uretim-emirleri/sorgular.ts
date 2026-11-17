@@ -12,7 +12,7 @@ export {
   type BekletmeYazisi, bekletmeOlayiEkle, type BekletmeSatiri, aktifBekletmeler, type BekletmeOlaySatiri, bekletmeOlaylari,
 } from './sorgular/bekletme/sorgular.ts';
 export {
-  type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, adimNotuEkle, type AdimNotuSatiri,
+  type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, isEmriOperasyonlari, adimNotuEkle, type AdimNotuSatiri,
   adimNotlari, atlananAdimlar, talimatAtlamaEkle, type TalimatAtlamaSatiri, talimatAtlamalari,
 } from './sorgular/adim/sorgular.ts';
 export {
