@@ -66,7 +66,7 @@ const { EmirKarti, HazirlikPaneli, gecerliOnaylar, kurulumMetni, adimAdi } = awa
 
 const yetki = (y: Partial<CncYetkisi>): CncYetkisi => ({
   kisi: { id: 1, ad: 'Deneme Kisi' }, yazabilir: false, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false,
-  stokKartiBaglayabilir: false, emirGorebilir: true, saltOnay: false, ...y,
+  stokKartiBaglayabilir: false, emirGorebilir: true, maliyetGorur: false, saltOnay: false, ...y,
 });
 const YAZAR = yetki({ yazabilir: true });
 const SALT_ONAY = yetki({ hazirlikOnaylayabilir: true, saltOnay: true });

@@ -1,7 +1,9 @@
-import { MODEL_DOSYA_TURLERI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { MODEL_DOSYA_TURLERI, PARA_ALANLARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type { CncModel, ModelBelgesi, ModelHedefi, Tezgah, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 
 // CNC kurulum kayıt deposunun saf kuralları.
+
+export { PARA_ALANLARI };
 
 // Yazma yalnız kayıt istemcinin bildiği sürümdeyse olur; null "kayıt hiç yok" demektir. Ortak kayıtta başkasının yazdığının
 // üstüne yazılmaz.
@@ -28,11 +30,6 @@ export function degerCokBuyukMu(deger: unknown): boolean {
 
 type Nesne = Record<string, unknown>;
 const nesneMi = (d: unknown): d is Nesne => typeof d === 'object' && d !== null && !Array.isArray(d);
-
-// Maliyet analizinin para alanları (kart 3401, kullanıcı kararı 3401-1 a): ham malzeme kg fiyatı (stock.price), takım fiyatı
-// (life.price) ve tezgâh ücreti (life.rate). Hesaplanan maliyet kayda yazılmaz, ekranda bu girdilerden çıkar. Yeni para alanı
-// yalnız bu listeye eklenir; okuma ve yazma korumasını testteki yürüyüş de bu listeye bağlıdır.
-export const PARA_ALANLARI = [['stock', 'price'], ['life', 'price'], ['life', 'rate']] as const;
 
 // Para görme yetkisi olmayana giden durum: para alanları hiç yoktur (ekran varsayılanı kullanır, değer sızmaz).
 export function paraAlanlariniCikar(durum: unknown): unknown {

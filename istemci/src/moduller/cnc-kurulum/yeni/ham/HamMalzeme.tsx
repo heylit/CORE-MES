@@ -34,7 +34,7 @@ type Bekleyen = { olcu: NonNullable<HamAnaliziCevabi['olcu']>; kaynak: string };
 export function HamMalzeme() {
   useCncSurum();
   useParca();
-  const { yazabilir } = useCncYetkisi();
+  const { yazabilir, maliyetGorur } = useCncYetkisi();
   const dosya = useRef<HTMLInputElement>(null), alan = useRef<HTMLDivElement>(null), sahne = useRef<HamSahnesi | null>(null);
   const [cizici2b] = useState(() => new Ham2b()), mod = useCizimModu();
   const [birak, setBirak] = useState(false);
@@ -134,12 +134,12 @@ export function HamMalzeme() {
         />
         <HamFormu
           st={st} malzemeler={allMaterials()} seciliMalzeme={st.mat || state.material} varsayilanRho={mat.rho}
-          modelVar={!!S.P} mesaj={ileti(S.msg)} degistir={degistir} malzemeSec={malzemeSec} eylem={eylem}
+          maliyetGorur={maliyetGorur} modelVar={!!S.P} mesaj={ileti(S.msg)} degistir={degistir} malzemeSec={malzemeSec} eylem={eylem}
           sonuc={
             <HamSonucu
               r={r} geo={S.geo} otomatikEksen={st.axis === 'auto'} malzeme={mat.name}
               model={S.P ? { area: S.area, tris: S.tris, solids: S.solids } : null}
-              govdeler={S.bodies} govdeSecili={S.bodySel} govdeSec={govdeSec} eylem={sonucEylemi} yazabilir={yazabilir}
+              govdeler={S.bodies} govdeSecili={S.bodySel} govdeSec={govdeSec} eylem={sonucEylemi} yazabilir={yazabilir} maliyetGorur={maliyetGorur}
             />
           }
         />

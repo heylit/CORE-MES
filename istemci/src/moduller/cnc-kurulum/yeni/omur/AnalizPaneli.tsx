@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
-import { Dugme, Girdi, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, KilitliDeger, Simge, YETKI_ADI } from '../../../../ortak/arayuz/index.ts';
+import { KilitliAlan } from '../KilitliAlan.tsx';
 import {
   allLathe, allMaterials, allMill, D, fmtN, lifeKind, lifeMat, lifeRefs, machine, num, pad2, state, toolById, tools, wearPeek,
 } from './cekirdek.ts';
@@ -12,6 +13,7 @@ import { Baslik, Bolum, degisince, Kv, Not, Uyari } from './parcalar.tsx';
 interface Ozellikler {
   res: AnalizSonucu;
   yazabilir: boolean;
+  maliyetGorur: boolean;
   geri: () => void;
   // Durum değişti: analiz yeniden hesaplanır ve kaydedilir.
   degisti: () => void;
@@ -51,7 +53,7 @@ const REL = [['50', '%50 (ortalama)'], ['80', '%80'], ['90', '%90'], ['95', '%95
 
 // Tek takım analizi (prototipin lifeForm + lifeRender'ı): girdiler, büyük sonuç, hesap zinciri, parti planı, ekonomik hız ve
 // kalibrasyon. Analiz girdileri her rolde açıktır (hesap ekranda); kalibrasyonu kaydetmek yazma ister.
-export function AnalizPaneli({ res, yazabilir, geri, degisti }: Ozellikler) {
+export function AnalizPaneli({ res, yazabilir, maliyetGorur, geri, degisti }: Ozellikler) {
   const [gozlenen, gozlenenYaz] = useState('');
   const l = state.life, t = res.t, K = lifeKind(t), m = machine(), arr = tools();
   const R0 = res.M.err === undefined ? res.M.R : lifeRefs(t, res.mat);
@@ -101,10 +103,10 @@ export function AnalizPaneli({ res, yazabilir, geri, degisti }: Ozellikler) {
         <div className="tc-co-izgara">
           <SayiAlani k="tp" etiket="Parça başı kesme (dk)" step="0.01" min="0" oto={oto.tp} placeholder="programdan" degisti={degisti} />
           <SayiAlani k="batch" etiket="Parti adedi" min="1" oto={oto.batch} degisti={degisti} />
-          <SayiAlani k="price" etiket="Takım fiyatı (TL)" min="0" placeholder="isteğe bağlı" degisti={degisti} />
+          {maliyetGorur ? <SayiAlani k="price" etiket="Takım fiyatı (TL)" min="0" placeholder="isteğe bağlı" degisti={degisti} /> : <KilitliAlan etiket="Takım fiyatı (TL)" />}
           <SayiAlani k="uses" etiket="Kenar / bileme sayısı" min="1" oto={oto.uses} placeholder="uçlu 2 · bütün 3" degisti={degisti} />
           <SayiAlani k="tc" etiket="Takım değişimi (dk)" step="0.1" min="0" oto={oto.tc} degisti={degisti} />
-          <SayiAlani k="rate" etiket="Tezgâh ücreti (TL/sa)" min="0" oto={oto.rate} degisti={degisti} />
+          {maliyetGorur ? <SayiAlani k="rate" etiket="Tezgâh ücreti (TL/sa)" min="0" oto={oto.rate} degisti={degisti} /> : <KilitliAlan etiket="Tezgâh ücreti (TL/sa)" />}
         </div>
       </Bolum>
       {otoVar && (
@@ -162,12 +164,13 @@ export function AnalizPaneli({ res, yazabilir, geri, degisti }: Ozellikler) {
             <Kv k="Parti">{fmtN(r.batch.Q)} parça · {fmtN(r.tp, 2)} dk/parça</Kv>
             <Kv k="Gereken kenar / takım">{fmtN(r.batch.edgesMean, 1)} (en kötü %10: {r.batch.edgesP90})</Kv>
             <Kv k="Planlı değişimden önce kırılma">en az bir kez %{fmtN(r.batch.pFail * 100, 0)} ihtimal</Kv>
-            {r.costEdge > 0 && <Kv k="Takım + değişim maliyeti">{fmtN(r.batch.cost, 2)} TL / parça</Kv>}
+            {!maliyetGorur && <Kv k="Takım + değişim maliyeti"><KilitliDeger yetki={YETKI_ADI.maliyet} /></Kv>}
+            {maliyetGorur && r.costEdge > 0 && <Kv k="Takım + değişim maliyeti">{fmtN(r.batch.cost, 2)} TL / parça</Kv>}
           </>
         ) : <Not>Parça başı kesme süresi olmadan hesaplanamaz.</Not>}
       </Bolum>
       <Bolum baslik="En ekonomik kesme hızı">
-        {r.vOpt ? (
+        {!maliyetGorur ? <Kv k="En ekonomik hız"><KilitliDeger yetki={YETKI_ADI.maliyet} /></Kv> : r.vOpt ? (
           <>
             <p className="tc-co-neden">
               Takım fiyatı {fmtN(r.price)} TL, {r.uses} kullanım ve tezgâh ücretine göre parça başı maliyeti en düşük yapan hız
