@@ -185,8 +185,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const tutFis = useCallback((emirId: string): void => {
     const e = emir.get(emirId), ilk = e?.adimlar[0];
     if (!e || !ilk || !planaAl) return;
-    if (goz !== 'T') { uyari('Plana almak için Tezgâh görünümüne geçin'); return; }
-    if (e.adimlar.some((a) => m.isler[a.id])) { uyari('Bu emrin bir adımı planda; öteki adımları plan yeniden dizilince yerleşir'); return; }
+    if (goz !== 'T') { uyari('Planlamak için Tezgâh görünümüne geçin'); return; }
+    if (e.adimlar.some((a) => m.isler[a.id])) { uyari('Bu emrin bir adımı planda; öteki adımları planlanınca yerleşir'); return; }
     if (!fisAdaylari(emirId).length) { uyari('Bu emrin ilk adımı tezgâhta yapılmıyor'); return; }
     setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
   }, [emir, m, planaAl, goz, uyari, fisAdaylari]);
@@ -504,7 +504,7 @@ export function Tahta(o: TahtaOzellikleri) {
                 </span>
               )}
               {oneri?.planaAl !== undefined && !tasinan && goz === 'T' && oneri.tezgah === r.kimlik && (
-                <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, FIS_SAATI * px); }}>{zaman(oneri.baslangic).slice(6)} · plana al</span>
+                <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, FIS_SAATI * px); }}>{zaman(oneri.baslangic).slice(6)} · planla</span>
               )}
               {!tasinan && yerlestirme?.yerler.filter((b) => b.tezgah === r.kimlik).map((b) => {
                 const ad = `${r.bas} · ${zaman(b.S).slice(6)} → ${zaman(b.C).slice(-5)} · ${b.enErken ? 'en erken biten yer' : 'boş yer'} · ${yerlestirme.fiil === 'tasi' ? 'taşı' : 'yerleştir'}`;
@@ -517,7 +517,7 @@ export function Tahta(o: TahtaOzellikleri) {
               })}
               {tasinan?.fis !== undefined && hedef?.satir === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-gecersiz={hedef.gecerli ? undefined : ''} ref={(el) => { yerYaz(el, (hedef.S - m.bas) * px, FIS_SAATI * px); }}>
-                  {hedef.gecerli ? `${zaman(hedef.S).slice(6)} · plana al` : 'buraya olmaz'}
+                  {hedef.gecerli ? `${zaman(hedef.S).slice(6)} · planla` : 'buraya olmaz'}
                 </span>
               )}
               {tasinanIs && hedef?.satir === r.kimlik && (
@@ -545,8 +545,8 @@ export function Tahta(o: TahtaOzellikleri) {
           </div>
         )}
       </div>
-      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: taslağa yazılır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''} · Esc vazgeçer</p>}
-      {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde taslakta ne kadar kaydığı yazar</p>}
+      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''} · Esc vazgeçer</p>}
+      {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>
   );
 }

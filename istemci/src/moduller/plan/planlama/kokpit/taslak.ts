@@ -95,7 +95,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
 
   const oku = useCallback(() => {
     if (!yazabilir) return;
-    u.get<TaslakCevabi>(YOL).then(koy, (h: unknown) => { setHata(hataIletisi(h, 'Taslak okunamadı.')); });
+    u.get<TaslakCevabi>(YOL).then(koy, (h: unknown) => { setHata(hataIletisi(h, 'Değişiklikleriniz okunamadı.')); });
   }, [yazabilir, u, koy]);
   useEffect(oku, [oku]);
 
@@ -116,7 +116,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   }, [u]);
 
   const dizmeyiYaz = useCallback(async (is: string): Promise<boolean> => {
-    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/diz`, { taslakSurumu: surum(), is }), 'Plan dizilemedi');
+    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/diz`, { taslakSurumu: surum(), is }), 'Planlanamadı');
     if (r !== null) koy(r);
     return r !== null;
   }, [calis, u, koy]);
@@ -126,9 +126,9 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
     if (isler.length === 0 || surum() === null) return true;
     setDiziliyor(true);
     try {
-      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler: [...isler] }), 'Plan dizilemedi');
+      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler: [...isler] }), 'Planlanamadı');
       if (d === null) return false;
-      if (d.cevap.sonuc.tur !== 'plan-uygula') { bildir('Plan dizilemedi: veri bu arada değişti; Yeniden diz ile tekrar deneyin.'); return false; }
+      if (d.cevap.sonuc.tur !== 'plan-uygula') { bildir('Planlanamadı: veri bu arada değişti; Planla ile tekrar deneyin.'); return false; }
       return dizmeyiYaz(d.is);
     } finally { setDiziliyor(false); }
   }, [calis, degerlendir, dizmeyiYaz, bildir]);
@@ -175,7 +175,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   }, [calis, u, koy, diz, ileriKur]);
 
   const vazgec = useCallback(async (): Promise<boolean> => {
-    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/vazgec`, { taslakSurumu: surum() }), 'Taslaktan vazgeçilemedi');
+    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/vazgec`, { taslakSurumu: surum() }), 'Değişikliklerden vazgeçilemedi');
     if (r !== null) { koy(r); ileriKur([]); }
     return r !== null;
   }, [calis, u, koy, ileriKur]);

@@ -40,7 +40,7 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
           <li key={k} aria-current={k === adim ? 'step' : undefined} data-bitti={i < sira ? '' : undefined}><b>{i + 1}</b> {yazi}</li>
         ))}
       </ol>
-      <small className="tc-pyq-yol-not">Hepsi önce taslağınıza yazılır, Geri ile alınır; atölyenin gördüğü plan yalnız Canlıya al ile değişir.</small>
+      <small className="tc-pyq-yol-not">Değişiklikleriniz canlıya alınana kadar sizde kalır, Geri al ile alınır; atölyenin gördüğü plan yalnız Canlıya al ile değişir.</small>
       {adim === 'sec' && (
         <div className="tc-pyq-yol-govde">
           <p><b>Sıradan bir sipariş seçin.</b><small>Seçtiğiniz siparişin operasyonları altında açılır; tahta bugünkü planı gösterir.</small></p>
@@ -49,7 +49,7 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
       )}
       {adim === 'oner' && (
         <div className="tc-pyq-yol-govde" data-tur="risk">
-          <p role="status"><b>{ad}: {bekleyen > 1 ? `${String(bekleyen)} emir` : `${String(pd?.adim ?? 0)} adım`} plana alınmayı bekliyor.</b><small>Sistem yerleştirir, sonucu ve nedenini burada yazar.</small></p>
+          <p role="status"><b>{ad}: {bekleyen > 1 ? `${String(bekleyen)} emir` : `${String(pd?.adim ?? 0)} adım`} planlanmayı bekliyor.</b><small>Sistem yerleştirir, sonucu ve nedenini burada yazar.</small></p>
           <Dugme tur="birincil" simge="play" disabled={mesgul || !pd?.ileriHazir} onClick={() => { oner('ileri'); }}>Sistem önersin</Dugme>
           <Dugme disabled={mesgul || !pd?.terminVar} title={pd && !pd.terminVar ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir'} onClick={() => { oner('geri'); }}>Teslimden geriye</Dugme>
         </div>

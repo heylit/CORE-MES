@@ -124,7 +124,8 @@ export const KATALOG: readonly KisitGrubu[] = [
   { grup: 'Makine ve takvim', simge: 'cpu', l: [
     { id: 'tek', ad: 'Tezgâhta aynı anda tek iş', durum: 'tam', not: 'Fiziksel kısıt; kapatılamaz.' },
     { id: 'uygun', ad: 'Tezgâh uygunluğu, alternatif tezgâh ve farklı süre', durum: 'tam', not: 'Rotada her adımın uygun tezgâhları ve çevrimi; motor en iyisini seçer. Verim katsayısı süreyi böler.', sayfa: 'rotalar' },
-    { id: 'vardiya', ad: 'Vardiya ve çalışma günü', durum: 'tam', not: 'Fabrika kapalıyken iş yerleşmez; kapatılamaz.', sayfa: 'takvim' },
+    { id: 'vardiya', ad: 'Vardiya saatleri', durum: 'tam', not: 'Vardiya dışında iş yerleşmez. Saatler Takvim sayfasından değişir; aç kapa değildir.', sayfa: 'takvim' },
+    { id: 'calismaGunu', ad: 'Çalışma günü (hafta sonu ve kapalı günler)', durum: 'tam', g: true, not: 'Kapatılırsa her gün, fabrikanın bütün vardiyalarında açık sayılır.', sayfa: 'takvim' },
     { id: 'tvardiya', ad: 'Tezgâhın kendi vardiyası', durum: 'tam', g: true, not: 'Kapatılırsa her tezgâh fabrikanın bütün vardiyalarında çalışır.', sayfa: 'tezgahlar' },
     { id: 'tatil', ad: 'Tatil günleri', durum: 'tam', g: true, sayfa: 'takvim' },
     { id: 'ariza', ad: 'Arıza ve planlı bakım', durum: 'tam', g: true, not: 'Bilinen kapalı pencere takvimden düşülür.', sayfa: 'takvim' },
@@ -154,7 +155,7 @@ export const KATALOG: readonly KisitGrubu[] = [
   { grup: 'Malzeme, rota ve akış', simge: 'layers', l: [
     { id: 'malzeme', ad: 'Malzeme hazır olması', durum: 'karar', g: true, not: 'Kullanıcı 16:50 (4 c): geliş tarihi belli olan malzeme (stok ya da söz tarihli satın alma) sert kısıttır, iş malzemeden önce başlamaz; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.', p: [{ tur: 'sec', yer: 'w', k: 'mat', etiket: 'Kural', secenekler: MALZEME_KURALLARI.map(([d, a]): [string, string] => [d, a]) }], sayfa: 'malzeme' },
     { id: 'serbest', ad: 'Serbest bırakma zamanı', durum: 'tam', g: true, sayfa: 'siparisler' },
-    { id: 'rota', ad: 'Rota sırası (bitince başla)', durum: 'tam', not: 'Kapatılamaz.', sayfa: 'rotalar' },
+    { id: 'rota', ad: 'Rota sırası (bitince başla)', durum: 'tam', g: true, not: 'Kapatılırsa adımlar birbirini beklemez: sonraki adım öncekinden önce planlanabilir. Yalnız deneme içindir; böyle plan atölyede uygulanamaz.', sayfa: 'rotalar' },
     { id: 'ortusme', ad: 'Örtüşmeli geçiş ve son parti kuralı', durum: 'tam', not: 'Sonraki adım ilk transfer partisi gelince başlar; önceki bitmeden son partiyi bitiremez.', p: [sayiP('ayarlar', 'transferOran', 'Transfer partisi', 'oran', 0.05, 1, 0.05)] },
     { id: 'tasima', ad: 'Taşıma süresi', durum: 'tam', g: true, p: [sayiP('ayarlar', 'tasimaSaat', 'Taşıma', 'sa', 0, 24, 0.25)] },
     { id: 'fasonGun', ad: 'Fason çıkış günü ve süresi', durum: 'tam', g: true, not: 'Kapatılırsa fasona her gün çıkış var sayılır.', sayfa: 'fason' },

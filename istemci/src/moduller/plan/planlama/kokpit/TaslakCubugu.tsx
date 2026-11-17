@@ -30,7 +30,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
   const [secim, setSecim] = useState<Secim>({});
   if (t === null && !taslak.mesgul) return null;
   const bekle = taslak.mesgul || taslak.diziliyor;
-  const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık uygulanamayan değişikliği geri alın.' : o.bayat ? 'Önce taslağı yeniden dizin.' : null);
+  const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık geçerli olmayan değişikliği geri alın.' : o.bayat ? 'Önce Planla ile planı güncelleyin.' : null);
   const ad = canliyaAlir ? 'Canlıya al' : 'Onaya gönder';
 
   const yaz = async (s?: Secim) => {
@@ -40,32 +40,32 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
     setCatisma(null); setSecim({});
     // Onay ve canlı bölümünde vazgeçilirse taslak ortak planda kalır; bildirim bunu söyler.
     const dusen = r.dusen > 0 ? ` ${String(r.dusen)} değişiklik başkasınınki seçildiği için düştü.` : '';
-    yazildi(`Taslak plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için onay sayfasını tamamlayın.`);
+    yazildi(`Değişiklikleriniz plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için onay sayfasını tamamlayın.`);
     onayiAc();
   };
   const tamam = catisma !== null && catisma.every((c) => secim[c.anahtar] !== undefined);
 
   return (
-    <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Taslak">
-      <b>Taslak · {o.n} değişiklik</b>
+    <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz">
+      <b>{o.n} değişiklik · canlıya alınmadı</b>
       {ozet}
-      {taslak.diziliyor ? <span role="status">Plan diziliyor</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
+      {taslak.diziliyor ? <span role="status">Planlanıyor</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
       {o.bozuk.map((b, i) => (
-        <span key={`${String(i)}-${b.ne}`} className="tc-pyq-taslak-hata" role="alert"><Simge ad="alert" boyut="k" />{`Artık uygulanamıyor: ${b.ne} (${b.hata})`}</span>
+        <span key={`${String(i)}-${b.ne}`} className="tc-pyq-taslak-hata" role="alert"><Simge ad="alert" boyut="k" />{`Artık geçerli değil: ${b.ne} (${b.hata})`}</span>
       ))}
       {o.bayat && (
         <span className="tc-pyq-taslak-hata">
-          Plan bu arada değişti; kararlarınız yeni plana göre yeniden dizilir.
-          <Dugme simge="rotate" disabled={bekle} onClick={() => { void taslak.diz(); }}>Yeniden diz</Dugme>
+          Plan bu arada değişti; kararlarınız yeni plana göre yeniden planlanır.
+          <Dugme simge="rotate" disabled={bekle} onClick={() => { void taslak.diz(); }}>Planla</Dugme>
         </span>
       )}
       <span className="tc-pyq-taslak-dugmeler">
         <Dugme simge="chev-left" disabled={bekle || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
         <Dugme simge="x" disabled={bekle} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
-        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Taslağı plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
+        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Değişikliklerinizi plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
       </span>
       <OnayPenceresi
-        acik={vazgecAcik} baslik="Taslaktan vazgeçilsin mi?" onayMetni="Taslağı sil" tehlikeli
+        acik={vazgecAcik} baslik="Değişikliklerden vazgeçilsin mi?" onayMetni="Değişiklikleri sil" tehlikeli
         vazgec={() => { setVazgecAcik(false); }} onayla={() => { setVazgecAcik(false); void taslak.vazgec(); }}
       >{`${String(o.n)} değişiklik silinir; ortak plan değişmez.`}</OnayPenceresi>
       <Pencere
@@ -77,7 +77,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
           </>
         )}
       >
-        <p className="tc-pyq-not">Taslağınızı açtığınızdan beri başkası aşağıdakileri değiştirdi. Her biri için hangisinin kalacağını seçin.</p>
+        <p className="tc-pyq-not">Siz değiştirmeye başladığınızdan beri başkası aşağıdakileri değiştirdi. Her biri için hangisinin kalacağını seçin.</p>
         <ul className="tc-pyq-catisma">
           {(catisma ?? []).map((c) => (
             <li key={c.anahtar}>

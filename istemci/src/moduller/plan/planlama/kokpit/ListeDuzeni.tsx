@@ -69,14 +69,14 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                 <div className="tc-pyq-ld-panel">
                   {k.durum === 'plansiz' ? (
                     <div className="tc-pyq-yol-govde" data-tur="risk">
-                      <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Taslağınıza yazılır, Geri ile alınır.</small></p>
+                      <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Canlıya almadan atölye görmez; Geri al ile alınır.</small></p>
                       {planla && <Dugme tur="birincil" simge="play" disabled={mesgul} onClick={() => { planla(k); }}>Planla</Dugme>}
                     </div>
                   ) : sonuc && (
                     <div className="tc-pyq-yol-govde" data-tur={sonuc.tur}>
                       <p role="status"><b>{sonuc.baslik}</b>{sonuc.neden !== null && <small>Neden: {sonuc.neden}</small>}</p>
                       {sonuc.emir && hamle && !secenekAcik && <Dugme tur="birincil" simge="route" onClick={() => { setSecenekAcik(true); }}>Seçenekleri göster</Dugme>}
-                      {yenidenPlanla && <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" onClick={() => { yenidenPlanla(k); }}>Yeniden planla</Dugme>}
+                      {yenidenPlanla && <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" onClick={() => { yenidenPlanla(k); }}>Planla</Dugme>}
                       {sonuc.emir && secenekAcik && (
                         <div className="tc-pyq-yol-secenek" role="group" aria-label="Düzeltme seçenekleri">
                           <small>Her seçeneğin sonucu basmadan önce yazılıdır</small>

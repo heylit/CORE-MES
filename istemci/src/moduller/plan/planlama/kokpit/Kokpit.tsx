@@ -163,7 +163,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Onay sayfası Kokpit'in yerine açılır ve adrestedir (`?sayfa=onay`, 3335 a): tarayıcının geri düğmesi Kokpit'e döner.
   const [sorgu, sorguYaz] = useSearchParams();
   const onayAcik = sorgu.get('sayfa') === 'onay';
+  // Kişi Canlıya al'a bastı (adresle açılan onay sayfası sayılmaz): bekleyen veri değişiklikleri o zaman kendiliğinden plana işlenir.
+  const canliIstendi = useRef(false);
   const setOnayAcik = useCallback((acik: boolean): void => {
+    canliIstendi.current = acik;
     sorguYaz((q) => { const y = new URLSearchParams(q); if (acik) y.set('sayfa', 'onay'); else y.delete('sayfa'); return y; });
   }, [sorguYaz]);
   // Liste ortada düzeni (3414 b) varsayılandır; bölümlü eski düzen adresle açılır (`?duzen=klasik`) ve öteki özellikleri taşır.
@@ -215,7 +218,16 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const ortakBekler = taslakVar || (taslak !== null && taslak.cevap === null);
   const ortak = ortakBekler ? { ...o, komut: null, depo: { ...o.depo, calismaSurumu: null } } : o;
   useOtomatikUygula(ortak, uyarYaz);
-  const diziliyor = useBekleyenUygula(ortak, uyarYaz)?.suruyor === true;
+  const bekleyenUygulayici = useBekleyenUygula(ortak, uyarYaz);
+  const diziliyor = bekleyenUygulayici?.suruyor === true;
+  // 3414-5 a: Canlıya al bekleyen veri değişikliklerini kendisi plana işler (ayrı bir Uygula adımı yoktur). Kişinin değişiklikleri plana
+  // yazılana kadar uygulayıcı yoktur (ortakBekler); yazılınca gelir ve bir kez çalışır.
+  useEffect(() => {
+    if (!onayAcik || !canliIstendi.current || !bekleyenUygulayici || bekleyenUygulayici.suruyor) return;
+    canliIstendi.current = false;
+    uyarYaz(`${String(bekleyenUygulayici.say)} bekleyen değişiklik plana işleniyor; bitince canlıya alabilirsiniz.`);
+    bekleyenUygulayici.uygula();
+  }, [onayAcik, bekleyenUygulayici, uyarYaz]);
   const mesgul = diziliyor || taslak?.mesgul === true || taslak?.diziliyor === true;
 
   const secEmir = o.secim.siparis !== null && emir.has(o.secim.siparis) ? o.secim.siparis : null;
@@ -248,15 +260,15 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       : { tur: 'plana-al', emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) };
     const tamam = await taslak.yaz(k);
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
-    if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği taslağınızda kaldı. Geri ile alabilirsiniz.');
+    if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği kaldı. Geri al ile alabilirsiniz.');
     if (tamam && a.planaAl === undefined && grup.current?.bekleyen.has(a.isId)) { grup.current.yazilan += 1; return tamam; }
-    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'Taşıma taslağa yazıldı; Geri ile alınır.' : yonYaz ? 'Emir teslimden geriye plana alındı (iki değişiklik: yön ve yerleşim); Geri ile alınır.' : 'Emir taslakta plana alındı; Geri ile alınır.');
+    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'İş taşındı; Geri al ile alınır.' : yonYaz ? 'Emir teslimden geriye planlandı (iki değişiklik: yön ve yerleşim); Geri al ile alınır.' : 'Emir planlandı; Geri al ile alınır.');
     return tamam;
   }, [taslak, yazabilir, bildir, c]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
-    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) bildir('bilgi', `${ileti} Geri ile alınır.`);
+    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) bildir('bilgi', `${ileti} Geri al ile alınır.`);
   }, [taslak, yazabilir, bildir]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
@@ -279,7 +291,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       const g = grup.current;
       if (g?.bekleyen.delete(isId) && g.bekleyen.size === 0) {
         grup.current = null;
-        if (g.yazilan > 0) bildir('bilgi', `${String(g.yazilan)} iş birlikte kaydı, taslağa yazıldı; Geri her birini ayrı alır.`);
+        if (g.yazilan > 0) bildir('bilgi', `${String(g.yazilan)} iş birlikte taşındı; Geri al her birini ayrı alır.`);
       }
     };
     const S = tasimaSaati(hedefS, m.simdi);
@@ -312,7 +324,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     void planaAlOnizle({ emirId, tezgah, baslangic: aday.baslangic }, surum).then((oz) => {
       if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu emir buraya alınamıyor.'); return; }
       if (oz?.bitis != null && e.termin !== null && oz.bitis > e.termin + 0.01) {
-        setOnay({ aday, turda: false, baslik: 'Emir terminine yetişmiyor', dugme: 'Yine de plana al', ileti: `${e.no} bu yerde terminden ${sureYaz(oz.bitis - e.termin)} sonra biter.` });
+        setOnay({ aday, turda: false, baslik: 'Emir terminine yetişmiyor', dugme: 'Yine de planla', ileti: `${e.no} bu yerde terminden ${sureYaz(oz.bitis - e.termin)} sonra biter.` });
         return;
       }
       void yaz(aday);
@@ -336,7 +348,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     }
     if (gecBirakir && e) {
       setOnay({
-        aday: a, turda: tur !== null, baslik: al ? 'Emir terminine yetişmiyor' : 'Bu taşıma emri geç bırakır', dugme: al ? 'Yine de plana al' : 'Yine de uygula',
+        aday: a, turda: tur !== null, baslik: al ? 'Emir terminine yetişmiyor' : 'Bu taşıma emri geç bırakır', dugme: al ? 'Yine de planla' : 'Yine de taşı',
         ileti: al ? `${e.no} bu yerde terminden sonra biter.` : `${e.no} bu hamleyle terminden sonra biter.`,
       });
       return;
@@ -641,7 +653,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             ))}
           </span>
           <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Sipariş, emir, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
-          {yazabilir && adim > 0 && <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={mesgul} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri al</span><Sayi n={adim} /></button>}
+          {yazabilir && adim > 0 && <button type="button" className="tc-pyq-ok" title="Geri al (Ctrl+Z): son değişikliğiniz" disabled={mesgul} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri al</span><Sayi n={adim} /></button>}
           <Acilir ad="Diğer" etiket="Diğer" simge="wrench">
             {(kapat) => (
               <>
@@ -742,7 +754,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           </span>
         </span>
         <span className="tc-pyq-gi" role="group" aria-label="Geri ve İleri">
-          <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
+          <button type="button" className="tc-pyq-ok" title="Geri al (Ctrl+Z): son değişikliğiniz" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
           {/* İleri yalnız geri alınmış değişiklik varken görünür: araç satırı dar ekranda kalabalıklaşmasın. */}
           {ileriAdim > 0 && <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y): geri alınan değişikliği yeniden yapar" disabled={!yazabilir || mesgul || tur !== null} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriAdim} /></button>}
         </span>
@@ -786,7 +798,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       )}
       {taslak && !onayAcik && (
         <TaslakCubugu
-          taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarın etkisini uygulayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
+          taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarı planlayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
           onayiAc={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
@@ -800,7 +812,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           <ListeDuzeni
             m={m} p={p} kartlar={listeKartlari} acik={vurgu ? kart : null} zaman={zaman} mesgul={mesgul} hamle={yazabilir ? hamleUygula : null} surum={surum} malzemeBekleyen={malzeme?.bekleyen}
             ac={(k) => { if (k === null) secimiKaldir(); else { sec(null, null); setKart(k); setVurgu(true); } }}
-            planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} plana alındı.`); } : null}
+            planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi}
           />

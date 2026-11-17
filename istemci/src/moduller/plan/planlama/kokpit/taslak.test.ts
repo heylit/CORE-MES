@@ -95,7 +95,7 @@ describe('useTaslak', () => {
     await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
     await act(async () => { expect(await result.current.diz()).toBe(false); });
     expect(yollar(post)).toEqual(['/degerlendirme']);
-    expect(bildir).toHaveBeenCalledWith('Plan dizilemedi: veri bu arada değişti; Yeniden diz ile tekrar deneyin.');
+    expect(bildir).toHaveBeenCalledWith('Planlanamadı: veri bu arada değişti; Planla ile tekrar deneyin.');
   });
 
   it('geri al son değişikliği ardındaki dizmelerle birlikte siler; dizme istenmezse yeniden dizmez', async () => {
@@ -159,7 +159,7 @@ describe('useTaslak', () => {
     const { result } = kur(u, bildir);
     await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
     await act(async () => { expect(await result.current.vazgec()).toBe(false); });
-    expect(bildir.mock.calls[0]![0]).toMatch(/^Taslaktan vazgeçilemedi: /);
+    expect(bildir.mock.calls[0]![0]).toMatch(/^Değişikliklerden vazgeçilemedi: /);
     expect(u.get).toHaveBeenCalledTimes(2);
     expect(result.current.mesgul).toBe(false);
   });

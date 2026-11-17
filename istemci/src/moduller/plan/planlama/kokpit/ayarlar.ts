@@ -34,10 +34,10 @@ export const AYAR_ALANLARI: readonly AyarAlani[] = [
       sert: 'Stok tamsa iş serbesttir. Eksikte iş malzeme gelene kadar başlamaz; termini olmayan eksik malzemeyi bekleyen iş yerleşmez.',
     } },
 ];
-// Panelde açılıp kapanan kısıtlar: motorun kapatabildiği bütün kısıtlar (katalogda g işaretli). Vardiya ve çalışma günü, tezgâhta tek iş,
-// rota sırası, başlamış ve kilitli iş kapatılamaz; onlar yalnız Kısıtlar sayfasında açıklamasıyla durur.
+// Panelde açılıp kapanan kısıtlar: motorun kapatabildiği bütün kısıtlar (katalogda g işaretli). Tezgâhta aynı anda tek iş ve gerçekten
+// başlamış iş aç kapa değildir; panel nedenini yazar.
 export const PANEL_KISITLARI = [
-  'tvardiya', 'tatil', 'ariza', 'personel', 'ayarci', 'yetkin', 'devam', 'aparat', 'kalibrasyon', 'program', 'fai',
+  'calismaGunu', 'tvardiya', 'tatil', 'ariza', 'rota', 'personel', 'ayarci', 'yetkin', 'devam', 'aparat', 'kalibrasyon', 'program', 'fai',
   'malzeme', 'serbest', 'tasima', 'fasonGun', 'fasonKap', 'ayar',
 ] as const;
 // Ad Kısıtlar sayfasıyla aynıdır (tek katalog).

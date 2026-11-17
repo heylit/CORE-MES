@@ -39,7 +39,7 @@ export function KokpitOnay({ o, c, p, kapat, taslakYazildi = false }: { o: Planl
           </button>
         ))}
       </div>
-      {taslakYazildi && canliAyni && <p className="tc-pym-pa-not" role="status"><Simge ad="flag" boyut="k" /><span>Taslak ortak plana yazıldı; <strong>canlı plan değişmedi.</strong></span></p>}
+      {taslakYazildi && canliAyni && <p className="tc-pym-pa-not" role="status"><Simge ad="flag" boyut="k" /><span>Değişiklikleriniz ortak plana yazıldı; <strong>canlı plan değişmedi.</strong></span></p>}
       <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={kapat} sade={{ sekme, sekmeSec: setSekme }} />
     </div>
   );

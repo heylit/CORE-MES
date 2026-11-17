@@ -222,7 +222,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await page.mouse.move(kutu.x + 6, kutu.y + kutu.height / 2);
     await page.mouse.down();
     await page.mouse.move(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2, { steps: 6 });
-    await expect(tahta.getByText(/Bırakın: taslağa yazılır/)).toBeVisible();
+    await expect(tahta.getByText(/Bırakın: iş taşınır/)).toBeVisible();
     await expect(tahta.locator('.tc-pyq-hayalet')).toBeVisible();
     await page.mouse.up();
     await expect.poll(() => tasinan().length).toBe(1);
@@ -233,9 +233,9 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['tasi', 'diz']);
     expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
     const geri = kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ });
-    const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
+    const cubuk = kokpit.getByRole('region', { name: 'Değişiklikleriniz' });
     await expect(geri.locator('.tc-pyq-rozet')).toHaveText('1');
-    await expect(cubuk.getByText('Taslak · 1 değişiklik')).toBeVisible();
+    await expect(cubuk.getByText('1 değişiklik · canlıya alınmadı')).toBeVisible();
     // Taslak varken canlıya alma taslak çubuğundaki tek düğmededir (3282-5 a).
     await expect(kokpit.locator('.tc-pyq-gonder')).toHaveCount(0);
     await expect(cubuk.getByRole('button', { name: 'Canlıya al' })).toBeVisible();
@@ -302,7 +302,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect.poll(() => tasinan().length).toBe(n + 1);
     expect(tasinan()[n]).toMatchObject({ isId: 'S3.a1', baslangic: eski - 0.5 });
     // Yazma bitince taslakta bekleyen taşıma kalmaz (3365: yazılırken gelen taşıma sıraya girer, geri çevrilmez).
-    await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByRole('status')).toHaveCount(0);
+    await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' }).getByRole('status')).toHaveCount(0);
   }
 
   // Plana alma. Geniş ekranda tepsideki emir basılıp sürüklenir ve ilk adımının aday tezgâhına bırakılır; ötekilerde emrin kartı seçilir ve
@@ -321,9 +321,9 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     const alan = await tahta.locator('[data-satir="M2"] .tc-pyq-alan').boundingBox();
     if (!alan) throw new Error('satır görünmüyor');
     await page.mouse.move(alan.x + 420, alan.y + alan.height / 2, { steps: 6 });
-    await expect(tahta.getByText(/Bırakın: taslağa yazılır/)).toBeVisible();
+    await expect(tahta.getByText(/Bırakın: iş taşınır/)).toBeVisible();
     await expect(tahta.locator('[data-satir="M3"]')).toHaveAttribute('data-aday', 'hayir');
-    await expect(tahta.locator('[data-satir="M2"] .tc-pyq-hayalet')).toContainText('plana al');
+    await expect(tahta.locator('[data-satir="M2"] .tc-pyq-hayalet')).toContainText('planla');
     await page.mouse.up();
     await expect.poll(() => alinan().length).toBe(1);
     expect(alinan()[0]).toMatchObject({ emirId: 'S4', tezgah: 'M2' });
@@ -335,21 +335,21 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect.poll(() => alinan().length).toBe(1);
     expect(alinan()[0]).toMatchObject({ emirId: 'S4', tezgah: 'M1' });
     // Sonuç bildirimle yazar; sayfa yerinde kalır.
-    await expect(page.getByText('Emir taslakta plana alındı; Geri ile alınır.')).toBeVisible();
+    await expect(page.getByText('Emir planlandı; Geri al ile alınır.')).toBeVisible();
   }
   await expect(suzgec.getByRole('button', { name: /Plansız/ })).toContainText('0');
 
   // Taslak çubuğundaki Canlıya al taslağı ortak çalışmaya yazar ve aynı adımda onay sayfasını açar (3282-5 a); canlıya alma oradadır.
-  const cubuk = kokpit.getByRole('region', { name: 'Taslak' });
-  await expect(cubuk.getByText('Taslak · 2 değişiklik')).toBeVisible();
+  const cubuk = kokpit.getByRole('region', { name: 'Değişiklikleriniz' });
+  await expect(cubuk.getByText('2 değişiklik · canlıya alınmadı')).toBeVisible();
   await tasma();
   await cubuk.getByRole('button', { name: 'Canlıya al' }).click();
   await expect(cubuk).toHaveCount(0);
   expect(t.s.uygulandi).toBe(1);
-  await expect(page.getByText('Taslak plana yazıldı. Canlıya almak için onay sayfasını tamamlayın.')).toBeVisible();
+  await expect(page.getByText('Değişiklikleriniz plana yazıldı. Canlıya almak için onay sayfasını tamamlayın.')).toBeVisible();
   await expect(page.getByText(/O zamana kadar atölye eski planı görür/)).toBeVisible({ timeout: 10_000 });
   // Bildirim kaybolsa da bölüm, kişi oradayken taslağın ortak plana yazıldığını ve canlının değişmediğini söyler (Risk 3282 1d-3 N1).
-  await expect(kokpit.locator('[data-sek="onay"]').getByRole('status').filter({ hasText: 'Taslak ortak plana yazıldı; canlı plan değişmedi.' })).toBeVisible();
+  await expect(kokpit.locator('[data-sek="onay"]').getByRole('status').filter({ hasText: 'Değişiklikleriniz ortak plana yazıldı; canlı plan değişmedi.' })).toBeVisible();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-1d4-onay-${bilgi.project.name}.png` });
 
   await tasma();
@@ -747,7 +747,7 @@ test('Kokpit 3335-2b: Planla menüsünde geride kalanları yeniden planla; sayı
   await expect(menu).toHaveCount(0);
   await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
   expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }]);
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   await kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button').click();
   await expect.poll(() => t.s.satirlar.length).toBe(0);
   expect(ag.hatalar).toEqual([]);
@@ -806,7 +806,7 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
   await expect(menu).toHaveCount(0);
   await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
   expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S4'] }]);
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   await kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button').click();
   await expect.poll(() => t.s.satirlar.length).toBe(0);
 
@@ -1183,7 +1183,7 @@ test('Kokpit 3317-2: veri değişikliği satırında Etkisini gör, önce ve son
   expect(t.satirlar.map((x) => x.komut)).toEqual([{ tur: 'yeniden-planla', isler: ['S3'] }, { tur: 'diz', isler: ['S3'] }]);
   // Toplu düğme ortak planın bekleyenlerini sayar (2); not farkı söyler.
   await expect(liste).toContainText('1 veri değişikliği taslağınızda uygulandı, listede durmaz');
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toContainText('Taslak · 1 değişiklik');
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toContainText('1 değişiklik · canlıya alınmadı');
   await expect(kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
   await tasma();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-2-uygulandi-${bilgi.project.name}.png`, fullPage: true });
@@ -1269,7 +1269,7 @@ test('Kokpit 3317-3: plan geride satırında Etkisini gör, önce ve sonra; Uygu
   await etki.getByRole('button', { name: 'Uygula' }).click();
   await expect(ozet).toHaveText('Plan güncel');
   expect(t.satirlar.map((x) => x.komut)).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }, { tur: 'diz', isler: ['S1'] }]);
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toContainText('Taslak · 1 değişiklik');
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toContainText('1 değişiklik · canlıya alınmadı');
   await expect(kokpit.getByRole('group', { name: 'Geri ve İleri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
   await tasma();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-3-uygulandi-${bilgi.project.name}.png`, fullPage: true });
@@ -1812,7 +1812,7 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await expect(panel).toHaveCount(0);
   // Uygula hesaplanan planı taslağa yazar; taslak çubuğu bir değişiklik gösterir.
   expect(t.s.satirlar.map((x) => x.komut.tur)).toEqual(['ayar', 'diz']);
-  await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByText('Taslak · 1 değişiklik')).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' }).getByText('1 değişiklik · canlıya alınmadı')).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-taslak-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
@@ -1834,7 +1834,7 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   const yonMenusu = kokpit.getByRole('menu', { name: 'Planla' });
   const panel = kokpit.getByRole('complementary', { name: 'Tüm planın yönü' });
   const yonEtkisi = panel.getByRole('region', { name: 'Ayarın etkisi' });
-  const taslakCubugu = kokpit.getByRole('region', { name: 'Taslak' });
+  const taslakCubugu = kokpit.getByRole('region', { name: 'Değişiklikleriniz' });
   await expect(kokpit.getByRole('button', { name: /^Tüm plan:/ })).toHaveCount(0);
   await ustYon.click();
   await yonMenusu.getByRole('button', { name: 'Diğer seçenekler' }).click();
@@ -1937,7 +1937,7 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza 
   await expect(serit.locator('.tc-pyq-durus[data-plan="bakım"]')).toHaveCount(1);
   // Telefonda tahta yerine liste durur; çubuk görüntüde tahtalı genişliklerde görünsün.
   if (bilgi.project.name !== 'g360') await serit.locator('.tc-pyq-durus[data-plan="arıza"]').scrollIntoViewIfNeeded();
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a1-kapasite-sonra-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
@@ -2035,7 +2035,7 @@ test('Kokpit 3335-3b: operasyon satırından adıma sorun bildir; uzama taslağa
   await expect(panel.locator('dl')).toContainText('19.10 Pzt 18:30');
   await expect(satir.locator('td[data-ad="Bitiş"]')).toContainText('19.10 Pzt 18:30');
   await expect(panel.getByLabel('Toplam kaç saat uzadı')).toBeVisible();
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3b-sonra-${bilgi.project.name}.png` });
   await panel.getByRole('button', { name: 'Uzamayı kaldır' }).click();
@@ -2089,7 +2089,7 @@ test('Kokpit 3335-3c: adıma malzeme yok bildirilir; bekleme taslağa yazılır,
   // Adım beklemeden sonra başlar (21.10 08:00), ardılı o bitince (21.10 16:00).
   await expect(satir.locator('td[data-ad="Bitiş"]')).toContainText('21.10 Çar 16:00');
   await expect(kokpit.locator('[data-adim-satir="S1.a2"] td[data-ad="Bitiş"]')).toContainText('22.10 Per 00:00');
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-3c-sonra-${bilgi.project.name}.png` });
   await panel.getByRole('button', { name: 'Bildirimi kaldır' }).click();
@@ -2212,7 +2212,7 @@ test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç c�
 
   // 2. adım: plansız sipariş açık gelir; tek birincil düğme sistemin yerleştirmesidir.
   await expect(adim).toHaveText('2 Sistem önersin');
-  await expect(yol.getByRole('status')).toContainText('S4: 1 adım plana alınmayı bekliyor.');
+  await expect(yol.getByRole('status')).toContainText('S4: 1 adım planlanmayı bekliyor.');
   await tasma();
   await cek('2-oner');
   await yol.getByRole('button', { name: 'Sistem önersin' }).click();
@@ -2237,7 +2237,7 @@ test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç c�
   await expect(secenek.locator('li').first()).toContainText('erken');
   await tasma();
   await cek('3-gec-secenek');
-  await secenek.getByRole('button', { name: 'Uygula' }).first().click();
+  await secenek.getByRole('button', { name: 'Taşı' }).first().click();
   await expect.poll(() => t.tasinan().length).toBe(1);
 
   // 4. adım: onay sayfası açılır.
@@ -2281,7 +2281,7 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
   await s4.locator('.tc-pyq-ld-ayrinti').getByRole('button', { name: 'Planla' }).click();
   await expect.poll(() => t.s.komutlar.map((k) => k.tur)).toEqual(['yeniden-planla']);
   await expect(s4.getByRole('status')).toContainText(/1 operasyon planda\. Bitiş .+ erken\./);
-  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
   await tasma();
   await cek('2-planlandi');
 

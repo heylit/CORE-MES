@@ -761,6 +761,10 @@ function calisanBirlestir(S, y, cx) {
 
 /* Kısıt gevşetmeleri motoru değiştirmez; veriyi değiştirir. Böylece "bu kısıt olmasaydı" sorusu aynı motorla ölçülür. */
 const GEVSEK = {
+  /* 3414: çalışma günü kapatılınca her gün, fabrikanın herhangi bir gününde çalışılan bütün vardiyalarla açık sayılır */
+  calismaGunu: st => { const cg = st.D.calismaGunleri || {}; const hepsi = [...new Set(Object.values(cg).flat())]; st.D.calismaGunleri = Object.fromEntries(GUNLER.map(g => [g, hepsi.slice()])); },
+  /* 3414: rota sırası kapatılınca adımlar birbirini beklemez (yalnız deneme; kisitlar.js rota) */
+  rota: st => { for (const u of st.D.urunler) for (const o of u.rota) o.bag = []; },
   tvardiya: st => { for (const m of st.D.tezgahlar) delete m.vardiyalar; },
   tatil: st => { st.D.tatiller = []; },
   ariza: st => { st.down = []; },
@@ -1001,6 +1005,10 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
 
 /* 657 a: kayıt yoksa yeni Planlama sayfası boş çalışmayı sunucuya kurdurur. Değerler çerçevenin yeniCalisma'sıyla aynıdır (a-durum.js ve
    zz31-tmi.betik): veri Reçete ve Rota kaydından (kayıt yoksa boş kayıttan), kayıt okunmuş sayılır, 1650 kararının varsayılanı konur. */
+/* 3414-4 b: yeni çalışma kapatılabilen bütün kısıtlar kapalı başlar; planlamacı Kokpit Ayarlar'dan tek tek açar. Var olan çalışmanın
+   listesi kendi kararıdır, değişmez. Arıza payı ve termin tamponu kısıt listesinde değil param.tampon'dadır; o da kapalı başlar.
+   Rota sırası ve çalışma günü açık başlar: onlarsız plan atölyede uygulanamaz, kapatmak yalnız deneme içindir. */
+const YENI_CALISMA_KAPALI = Object.keys(GEVSEK).filter(k => k !== 'tampon' && k !== 'rota' && k !== 'calismaGunu');
 const BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
 function yeniCalismaKur(kayit, kaynak, bugun) {
   const k = kayit && kayit.items ? kayit : null;
@@ -1010,7 +1018,7 @@ function yeniCalismaKur(kayit, kaynak, bugun) {
   return {
     surum: 2, setId: 'tmi', D, down: [], ekMesai: [], locks: {}, pref: {},
     w: { dondurma: 4, famK: 0.3, mat: 'karma', sure: 10 },
-    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: ['personel'], kisitSurum: 2, bedel: null,
+    param: { tampon: false, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: YENI_CALISMA_KAPALI.slice(), kisitSurum: 2, bedel: null,
     olaylar: [], plan: null, dataVer: 1, senaryolar: [], canli: null, canliSurum: 0, tabanSurum: 0, iz: [], rrSavedAt: k && k.savedAt ? k.savedAt : 0,
   };
 }

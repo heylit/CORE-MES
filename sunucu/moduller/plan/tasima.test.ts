@@ -125,4 +125,14 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.equal(s.gecerli, false);
     assert.match(s.ileti!, /OP 20 bitmiş; yeri değişmez/);
   });
+
+  test('TH-13 (3414): rota sırası kapalıyken ardıl itilmez; çalışma günü kapalıyken iş cumartesiye yerleşir', () => {
+    const isler = { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10) };
+    // Açıkken OP 10 15:00'e gidince OP 20 arkasına itilir (TH-01); rota kapalıyken yerinde kalır.
+    assert.deepEqual(ozet(tasimaHesabi(calisma('b', isler, { kapali: ['rota'] }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: 15 })), { 'S1.10': ['T1', 15, 33, 'tasinan'] });
+    // Cumartesi 09:00 (5. gün): açıkken pazartesiye kayar, çalışma günü kapalıyken cumartesi 09:00-11:00.
+    const cmt = 5 * 24 + 9;
+    assert.deepEqual(ozet(tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8) }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: cmt })), { 'S1.10': ['T1', 7 * 24 + 8, 7 * 24 + 10, 'tasinan'] });
+    assert.deepEqual(ozet(tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8) }, { kapali: ['calismaGunu'] }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: cmt })), { 'S1.10': ['T1', cmt, cmt + 2, 'tasinan'] });
+  });
 });
