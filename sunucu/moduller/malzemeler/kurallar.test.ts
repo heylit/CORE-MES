@@ -472,3 +472,18 @@ test('3321-2 kesme katsayısı: sınıf "aile/sinif" anahtarıyla; aynı sınıf
   // Sertleştirilmiş çelik bir sınıf değildir; H grubu tabloda yoktur (kullanıcı elle seçer).
   assert.ok(Object.values(KESME_SINIFLARI).every((k) => k.iso !== 'H'));
 });
+
+test('3400-3 yerlilik oranı yalnız mamul ve yarı mamulde, 0-100 ve en çok iki ondalık; boş alan yok sayılır', async () => {
+  const { kartYerlilikHatasi } = await import('./kurallar.ts');
+  const k = (v: unknown) => ({ g: { yerlilik: v } });
+  assert.equal(kartYerlilikHatasi(k(62.5), 'mamul'), null);
+  assert.equal(kartYerlilikHatasi(k(0), 'yarimamul'), null);
+  assert.equal(kartYerlilikHatasi(k(100), 'mamul'), null);
+  assert.equal(kartYerlilikHatasi(k(62.57), 'mamul'), null);
+  assert.equal(kartYerlilikHatasi(k(''), 'sarf'), null);
+  assert.equal(kartYerlilikHatasi({ g: {} }, 'sarf'), null);
+  assert.match(kartYerlilikHatasi(k(50), 'sarf') ?? '', /yalnız mamul/);
+  assert.match(kartYerlilikHatasi(k(100.5), 'mamul') ?? '', /0 ile 100/);
+  assert.match(kartYerlilikHatasi(k(12.345), 'mamul') ?? '', /iki ondalık/);
+  assert.match(kartYerlilikHatasi(k('62'), 'mamul') ?? '', /0 ile 100/);
+});

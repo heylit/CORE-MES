@@ -343,4 +343,33 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
       await ayarla(false);
     }
   });
+
+  test('3400-2/3 kalem birimi ve yerlilik: kartsız kalem seçilen birimi ve girilen oranı, karta bağlı kalem kartın birimini ve oranını taşır', async () => {
+    sayac += 1;
+    const kimlik = `tkl-dnm-${sayac}`;
+    const yerli = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'mamul', 'TKL-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [kimlik, sayac, JSON.stringify({ id: kimlik, com: { ad: 'Deneme yerli', birim: 'adet' }, g: { yerlilik: 62.5 } }), yoneticiId],
+    ))!.no;
+    const t = await teklifAc({ satirlar: [
+      { malzemeNo: yerli, tanim: 'Yerli parça', miktar: '5', birim: 'kg', yerlilikOrani: '10' },
+      { malzemeNo: null, tanim: 'Kartsız takım', miktar: '2', birim: 'set', yerlilikOrani: '40' },
+      { malzemeNo: mamulNo, tanim: 'Oransız kart', miktar: '1', yerlilikOrani: '55.5' },
+    ] });
+    assert.deepEqual(t.satirlar.map((x) => [x.birim, x.yerlilikOrani]), [['adet', '62.50'], ['set', '40.00'], [null, '55.50']]);
+
+    const yok = await gonder(yonetici, '/siparisler/teklifler/ekle', talep({ satirlar: [{ malzemeNo: null, tanim: 'Bilinmeyen birim', miktar: '1', birim: 'yok-boyle-birim' }] }));
+    assert.equal(yok.statusCode, 400, yok.body);
+    assert.match(yok.body, /Birim listede yok/);
+    assert.match(yok.body, /satirlar\.0\.birim/);
+    const fazla = await gonder(yonetici, '/siparisler/teklifler/ekle', talep({ satirlar: [{ malzemeNo: null, tanim: 'Fazla oran', miktar: '1', yerlilikOrani: '100.5' }] }));
+    assert.notEqual(fazla.statusCode, 200, fazla.body);
+
+    const birimler = (await oku(yonetici, '/siparisler/birim-secenekleri')).json<{ birimler: { kod: string; logo: string | null }[] }>().birimler;
+    assert.ok(birimler.some((b) => b.kod === 'set'));
+    assert.equal((await oku(operator, '/siparisler/birim-secenekleri')).statusCode, 403);
+    const secenek = (await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=Deneme%20yerli')).json<{ satirlar: { no: number; yerlilikOrani: string | null }[] }>().satirlar;
+    assert.equal(secenek.find((x) => x.no === yerli)?.yerlilikOrani, '62.50');
+  });
 });

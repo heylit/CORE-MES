@@ -552,6 +552,19 @@ export function hammaddeTanimHatasi(kayitli: Nesne | null, gelen: Nesne): { alan
   return null;
 }
 
+// 3400-3: yerlilik oranı yalnız mamul ve yarı mamulde, 0-100 arasında en çok iki ondalıklı sayıdır; boş alan yok sayılır.
+export function kartYerlilikHatasi(gelen: Nesne, tur: string): string | null {
+  for (const k of kartAdaylari(gelen)) {
+    const v = gAlani(k, 'yerlilik');
+    if (!doluMu(v)) continue;
+    if (tur !== 'mamul' && tur !== 'yarimamul') return 'Yerlilik oranı yalnız mamul ve yarı mamul kartında girilir.';
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 100 || Math.abs(Math.round(v * 100) - v * 100) > 1e-6) {
+      return 'Yerlilik oranı 0 ile 100 arasında, en çok iki ondalıklı sayı olmalı.';
+    }
+  }
+  return null;
+}
+
 // Ekranın yerleşik zorunlu alanları (`katalog.html` `ALAN.*` ve `SARF_KAT` `gerekli: true`, koşulsuz olanlar; `alanZorunlu`): ayar `kurallar[tür].zorunlu`
 // false ile kapatabilir, adı kapatamaz. Hizmette ad çeşitten kurulduğu için zorunlu değildir; "Diğer" çeşidin adı zorunludur.
 const YERLESIK_ZORUNLU: Readonly<Record<string, readonly string[]>> = {

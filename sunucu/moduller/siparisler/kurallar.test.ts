@@ -414,3 +414,14 @@ describe('teklif formu kuralları', () => {
     assert.deepEqual(k, { ad: 'Kopya', dil: 'en', icerik: { baslik: 'QUOTATION', giris: '', sartlar: ['a'], imza1: '', imza2: '', alt: '' } });
   });
 });
+
+describe('3400 talep kalemi', () => {
+  test('kartsız kalem seçilen birimi ve girilen oranı taşır; karta bağlı kalemde birim yazılmaz, kartta oran varsa kartınki geçer', async () => {
+    const { talepKalemi } = await import('./kurallar.ts');
+    const kartsiz = { malzemeNo: null, tanim: 'a', miktar: '1', birim: 'set', yerlilikOrani: '40' };
+    assert.deepEqual(talepKalemi(kartsiz, null), kartsiz);
+    const bagli = { malzemeNo: 7, tanim: 'b', miktar: '1', birim: 'kg', yerlilikOrani: '10' };
+    assert.deepEqual(talepKalemi(bagli, '62.50'), { ...bagli, birim: null, yerlilikOrani: '62.50' });
+    assert.deepEqual(talepKalemi(bagli, null), { ...bagli, birim: null, yerlilikOrani: '10' });
+  });
+});

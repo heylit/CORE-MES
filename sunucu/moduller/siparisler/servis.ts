@@ -10,11 +10,11 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
-  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
+  BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
-import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
@@ -241,10 +241,18 @@ async function tahsilatiFinansaYaz(db: Db, kisiId: number, id: number): Promise<
 export async function malzemeSecenekleri(db: Db, g: { ara: string | null; sayfa: number }): Promise<MalzemeSecenekleriCevabi> {
   const r = await malzemeAra(db, { metin: g.ara, turler: SATILAN_TURLER, yalnizAktif: true, sayfa: g.sayfa });
   const ayrintilar = await malzemeSatinAlmaAyrintilari(db, r.satirlar.map((m) => m.id));
+  const oranlar = await malzemeYerlilikOranlari(db, r.satirlar.map((m) => m.id));
   return {
-    satirlar: r.satirlar.map((m) => ({ no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim, aciklamalar: ayrintilar.get(m.id)?.aciklamalar ?? [] })),
+    satirlar: r.satirlar.map((m) => ({
+      no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim, aciklamalar: ayrintilar.get(m.id)?.aciklamalar ?? [], yerlilikOrani: oranlar.get(m.id) ?? null,
+    })),
     toplam: r.toplam, sayfa: r.sayfa, sayfaBoyu: r.sayfaBoyu,
   };
+}
+
+// 3400-2: teklif kaleminin birim listesi (aktif birimler, Logo karşılığıyla).
+export async function birimSecenekleri(db: Db): Promise<BirimSecenekleriCevabi> {
+  return { birimler: (await satisBirimleri(db)).map((b) => ({ kod: b.kod, logo: b.logoBirimSeti })) };
 }
 
 // --- Başka modüllere (disari.ts) ---

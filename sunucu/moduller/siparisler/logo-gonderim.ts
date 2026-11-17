@@ -32,7 +32,7 @@ export async function logoyaGidecekSatisTeklifleri(db: Db, sinir: number): Promi
       satirlar: satirlar.map((r) => {
         const kart = r.malzeme_no === null ? undefined : kartlar.get(r.malzeme_no);
         return {
-          satirId: r.satir_id, stokKodu: kart?.kod ?? null, hizmet: kart?.tur === 'hizmet', miktar: r.miktar, birim: kart?.birim ?? '',
+          satirId: r.satir_id, stokKodu: kart?.kod ?? null, hizmet: kart?.tur === 'hizmet', miktar: r.miktar, birim: r.birim ?? kart?.birim ?? '',
           birimFiyat: r.birim_fiyat, iskontoYuzdesi: iskonto, termin: s.termin_tarihi,
         };
       }),

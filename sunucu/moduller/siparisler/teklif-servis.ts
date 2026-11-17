@@ -12,11 +12,11 @@ import type {
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
-  formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
+  BIRIM_LISTEDE_YOK, FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
+  formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, talepKalemi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -76,7 +76,7 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
       const aciklamalar = t.malzeme_no === null ? [] : (ayrintilar.get(t.malzeme_no)?.aciklamalar ?? []);
       return {
         id: t.id, sira: t.sira, malzemeNo: t.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null, aciklamalar,
-        tanim: t.tanim, birim: kart?.birim ?? null, miktar: t.miktar,
+        tanim: t.tanim, birim: t.birim ?? kart?.birim ?? null, miktar: t.miktar, yerlilikOrani: t.yerlilik_orani,
       };
     }),
     surumler,
@@ -103,6 +103,16 @@ async function kartlariDenetle(
   });
 }
 
+// 3400-2/3: kalemin yazılacak birimi ve yerlilik oranı; kartsız kalemin birimi aktif listede olmalı.
+async function talepKalemleri(db: Db, satirlar: TeklifEkleVerisi['satirlar']): Promise<TeklifEkleVerisi['satirlar']> {
+  const oranlar = await malzemeYerlilikOranlari(db, satirlar.flatMap((s) => (s.malzemeNo === null ? [] : [s.malzemeNo])));
+  const birimler = new Set((await satisBirimleri(db)).map((b) => b.kod));
+  return satirlar.map((s, i) => {
+    if (s.malzemeNo === null && s.birim !== null && !birimler.has(s.birim)) throw dogrulama(BIRIM_LISTEDE_YOK, `satirlar.${i}.birim`);
+    return talepKalemi(s, s.malzemeNo === null ? null : (oranlar.get(s.malzemeNo) ?? null));
+  });
+}
+
 const alanlar = (g: TeklifEkleVerisi): TeklifAlanlari => ({
   firmaId: g.firmaId, baslik: g.baslik, paraBirimi: g.paraBirimi, istenenTarih: g.istenenTarih, aciklama: g.aciklama,
 });
@@ -112,7 +122,7 @@ export async function teklifEkle(db: Db, kullanici: Kullanici, g: TeklifEkleVeri
   await kartlariDenetle(db, g.satirlar, (i, ad) => `satirlar.${i}.${ad}`);
   const no = await numaraAl(db, 'siparisler.teklif-no', { varMi: (n) => sorgular.teklifNoVarMi(db, n) });
   const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, no, alanlar(g), kullanici.id));
-  await sorgular.talepSatirlariniYaz(db, id, g.satirlar);
+  await sorgular.talepSatirlariniYaz(db, id, await talepKalemleri(db, g.satirlar));
   return teklifAyrintisi(db, id);
 }
 
@@ -137,7 +147,7 @@ export async function teklifGuncelle(db: Db, kullanici: Kullanici, id: number, g
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
   await kartlariDenetle(db, g.satirlar, (i, ad) => `satirlar.${i}.${ad}`);
   await surumluYaz(db, id, () => sorgular.teklifGuncelle(db, id, alanlar(g), g.surum, kullanici.id));
-  await sorgular.talepSatirlariniYaz(db, id, g.satirlar);
+  await sorgular.talepSatirlariniYaz(db, id, await talepKalemleri(db, g.satirlar));
   return teklifAyrintisi(db, id);
 }
 

@@ -28,7 +28,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogSilinirMi,
   katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
@@ -224,6 +224,18 @@ export async function malzemeSecimAra(
     sonuclar: r.satirlar.map((m) => ({ id: m.id, kod: m.kod, ad: m.ad ?? '', aktif: m.onayDurumu === 'aktif', ust: null })),
     dahaVar: g.sayfa * MALZEME_SECIM_SAYFA_BOYU < (r.toplam ?? 0),
   };
+}
+
+// 3400-2: satış kaleminde seçilen birimler (aktif); Logo karşılığı olmayan birimde logoBirimSeti null.
+export function satisBirimleri(db: Db): Promise<{ kod: string; logoBirimSeti: string | null }[]> {
+  return s.satisBirimleri(db);
+}
+
+// 3400-3: kartın yerlilik oranı (yüzde, metin); oranı olmayan, mamul ya da yarı mamul olmayan kart haritada yok.
+export async function malzemeYerlilikOranlari(db: Db, nolar: readonly number[]): Promise<Map<number, string>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.yerlilikOranlari(db, benzersiz)).map((r) => [r.no, r.oran]));
 }
 
 // Pasifler de döner (eski kartın birimi gösterilir); seçim listesi yalnız aktifleri sunar.
@@ -623,6 +635,8 @@ export async function katalogKartiKaydet(
       throw dogrulama(`"${kat}" kategorisi listede yok ya da kapalı; listedeki bir kategoriyi seçin ya da kategoriyi Malzeme ayarlarından açın.`, 'kayit.g.kat');
     }
   }
+  const yerlilikHatasi = kartYerlilikHatasi(g.kayit, tur);
+  if (yerlilikHatasi) throw dogrulama(yerlilikHatasi, 'kayit.g.yerlilik');
   const malzemeAyari = await katalogMalzemeAyari(db);
   const zorunluEksigi = kartZorunluAlanEksigi(kayitli, g.kayit, tur, malzemeAyari);
   if (zorunluEksigi) throw dogrulama(zorunluEksigi.mesaj, zorunluEksigi.alan);

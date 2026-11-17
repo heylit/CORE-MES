@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
@@ -77,6 +77,14 @@ export const uclar = [
     sorgu: malzemeSecenekSorgusu,
     cevap: malzemeSecenekleriCevabi,
     isle: ({ db, sorgu }) => servis.malzemeSecenekleri(db, sorgu),
+  }),
+  // 3400-2: teklif kaleminin birim listesi; teklif yazanın işidir.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/birim-secenekleri',
+    yetki: 'siparisler.yaz',
+    cevap: birimSecenekleriCevabi,
+    isle: ({ db }) => servis.birimSecenekleri(db),
   }),
   uc({
     yontem: 'GET',

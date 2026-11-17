@@ -63,6 +63,15 @@ export function miktarReddi(birim: string | null, miktar: string): string | null
   return birim?.trim().toLocaleLowerCase('tr') === 'adet' && !/^\d+(\.0*)?$/.test(miktar.trim()) ? MIKTAR_TAM_SAYI : null;
 }
 
+// 3400-2: kartsız kalemin birimi aktif birim listesinden seçilir; karta bağlı kalemde kartın birimi geçerlidir (birim yazılmaz).
+export const BIRIM_LISTEDE_YOK = 'Birim listede yok ya da kapalı; listeden bir birim seçin.';
+// 3400-3: kartta yerlilik oranı varsa kalem kartınkini taşır; yoksa kalemde girilen (boş olabilir). Talep ilk sürümden sonra değişmez (TKL-03).
+export function talepKalemi<T extends { malzemeNo: number | null; birim: string | null; yerlilikOrani: string | null }>(
+  s: T, kartOrani: string | null,
+): T {
+  return { ...s, birim: s.malzemeNo === null ? s.birim : null, yerlilikOrani: s.malzemeNo !== null && kartOrani !== null ? kartOrani : s.yerlilikOrani };
+}
+
 // SIP-18 (3244 b): kalem partilere ayrıldıysa parti adetleri toplamı kalem miktarıdır; boş liste tek seri partidir. Adet birimli kartta
 // parti de tam sayıdır (SIP-4 a ile aynı gerekçe). Karşılaştırma binde bir hassasiyetle tam sayıda yapılır: kayan nokta 0.1 + 0.2'de şaşar.
 export const PARTI_TOPLAMI_TUTMUYOR = 'Parti adetlerinin toplamı kalem miktarına eşit olmalı.';

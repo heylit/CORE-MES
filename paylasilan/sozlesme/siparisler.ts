@@ -186,11 +186,18 @@ export const teklifDurumuSemasi = z.enum(TEKLIF_DURUMLARI);
 const ISKONTO = /^\d{1,2}(\.\d{1,2})?$/;
 export const iskontoSemasi = z.string().trim().regex(ISKONTO, 'İskonto 0 ile 99.99 arasında, en çok iki ondalıklı olmalı.');
 
+const YERLILIK = /^(100(\.0{1,2})?|\d{1,2}(\.\d{1,2})?)$/;
+export const yerlilikSemasi = z.string().trim().regex(YERLILIK, 'Yerlilik oranı 0 ile 100 arasında, en çok iki ondalıklı olmalı.');
+
 export const teklifSatiriGovdesi = z.object({
   // Kartı henüz açılmamış parça tanımla girilir; siparişe dönüşmeden kart bağlanır (TKL-06).
   malzemeNo: z.number().int().positive().nullish().transform((m) => m ?? null),
   tanim: z.string().trim().min(1, 'Satır tanımı zorunlu.').max(200, 'En çok 200 karakter.'),
   miktar: miktarSemasi,
+  // 3400-2: kartsız kalemin birimi (malzeme birim listesinden); karta bağlı kalemde kartın birimi geçerlidir, gelen yok sayılır.
+  birim: z.string().trim().max(40, 'En çok 40 karakter.').nullish().transform((b) => (b ? b : null)),
+  // 3400-3: kartta oran yoksa kalemde girilen yerlilik oranı (yüzde); kartta varsa kartınki yazılır.
+  yerlilikOrani: yerlilikSemasi.nullish().transform((y) => y ?? null),
 });
 
 const teklifAlanlari = {
@@ -289,8 +296,11 @@ export const teklifSatiriSemasi = z.object({
   malzemeAdi: z.string().nullable(),
   aciklamalar: z.array(z.string()),
   tanim: z.string(),
+  // 3400-2: kalemin birimi; kartsız kalemde seçilen, karta bağlı kalemde kartın birimi; ikisi de yoksa null.
   birim: z.string().nullable(),
   miktar: ondalikMetinSemasi,
+  // 3400-3: talep kaydında yazılan yerlilik oranı (yüzde); girilmediyse null.
+  yerlilikOrani: ondalikMetinSemasi.nullable(),
 });
 
 export const teklifSurumuSemasi = z.object({
@@ -373,11 +383,16 @@ export const malzemeSecenegiSemasi = z.object({
   tur: z.string(),
   birim: z.string().nullable(),
   aciklamalar: z.array(z.string()),
+  // 3400-3: kartın yerlilik oranı (yüzde); yoksa null.
+  yerlilikOrani: ondalikMetinSemasi.nullable(),
 });
 export const malzemeSecenekleriCevabi = z.object({
   satirlar: z.array(malzemeSecenegiSemasi), toplam: z.number().int().nullable(), sayfa: z.number().int(), sayfaBoyu: z.number().int(),
 });
 export type MalzemeSecenegi = z.output<typeof malzemeSecenegiSemasi>;
+// 3400-2: teklif kaleminin birim listesi; logo null ise birimin Logo karşılığı tanımlı değildir.
+export const birimSecenekleriCevabi = z.object({ birimler: z.array(z.object({ kod: z.string(), logo: z.string().nullable() })) });
+export type BirimSecenekleriCevabi = z.output<typeof birimSecenekleriCevabi>;
 export type MalzemeSecenekleriCevabi = z.output<typeof malzemeSecenekleriCevabi>;
 
 // ---- Teklif termin ve fiyat denemesi (44) ----

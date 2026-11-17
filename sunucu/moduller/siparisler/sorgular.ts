@@ -337,23 +337,27 @@ export function teklifGuncelle(db: Db, id: number, a: TeklifAlanlari, surum: num
   );
 }
 
-export interface TalepSatiri { id: number; teklif_id: number; sira: number; malzeme_no: number | null; tanim: string; miktar: string }
+export interface TalepSatiri {
+  id: number; teklif_id: number; sira: number; malzeme_no: number | null; tanim: string; miktar: string; birim: string | null; yerlilik_orani: string | null;
+}
 
 export function talepSatirlari(db: Db, teklifId: number): Promise<TalepSatiri[]> {
   return db.sorgu<TalepSatiri>(
-    'SELECT id, teklif_id, sira, malzeme_no, tanim, miktar FROM siparisler_teklif_satiri WHERE teklif_id = $1 ORDER BY sira', [teklifId],
+    'SELECT id, teklif_id, sira, malzeme_no, tanim, miktar, birim, yerlilik_orani FROM siparisler_teklif_satiri WHERE teklif_id = $1 ORDER BY sira', [teklifId],
   );
 }
 
 export async function talepSatirlariniYaz(
-  db: Db, teklifId: number, satirlar: { malzemeNo: number | null; tanim: string; miktar: string }[],
+  db: Db, teklifId: number,
+  satirlar: { malzemeNo: number | null; tanim: string; miktar: string; birim: string | null; yerlilikOrani: string | null }[],
 ): Promise<void> {
   await db.sorgu('DELETE FROM siparisler_teklif_satiri WHERE teklif_id = $1', [teklifId]);
   await db.sorgu(
-    `INSERT INTO siparisler_teklif_satiri (teklif_id, sira, malzeme_no, tanim, miktar)
-     SELECT $1, k.sira, k.malzeme_no, k.tanim, k.miktar
-       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[]) AS k (sira, malzeme_no, tanim, miktar)`,
-    [teklifId, satirlar.map((_, i) => i + 1), satirlar.map((s) => s.malzemeNo), satirlar.map((s) => s.tanim), satirlar.map((s) => s.miktar)],
+    `INSERT INTO siparisler_teklif_satiri (teklif_id, sira, malzeme_no, tanim, miktar, birim, yerlilik_orani)
+     SELECT $1, k.sira, k.malzeme_no, k.tanim, k.miktar, k.birim, k.yerlilik_orani
+       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::numeric[]) AS k (sira, malzeme_no, tanim, miktar, birim, yerlilik_orani)`,
+    [teklifId, satirlar.map((_, i) => i + 1), satirlar.map((s) => s.malzemeNo), satirlar.map((s) => s.tanim), satirlar.map((s) => s.miktar),
+      satirlar.map((s) => s.birim), satirlar.map((s) => s.yerlilikOrani)],
   );
 }
 
@@ -734,11 +738,11 @@ export function logoyaGidecekTeklifSiralari(db: Db, sinir: number): Promise<Logo
   );
 }
 
-export interface LogoTeklifSatiri { satir_id: number; malzeme_no: number | null; miktar: string; birim_fiyat: string }
+export interface LogoTeklifSatiri { satir_id: number; malzeme_no: number | null; miktar: string; birim: string | null; birim_fiyat: string }
 
 export function logoTeklifSatirlari(db: Db, teklifId: number, surumNo: number): Promise<LogoTeklifSatiri[]> {
   return db.sorgu<LogoTeklifSatiri>(
-    `SELECT r.id AS satir_id, r.malzeme_no, r.miktar, f.birim_fiyat
+    `SELECT r.id AS satir_id, r.malzeme_no, r.miktar, r.birim, f.birim_fiyat
        FROM siparisler_teklif_satiri r
        JOIN siparisler_teklif_surumu v ON v.teklif_id = r.teklif_id AND v.surum_no = $2
        JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id
