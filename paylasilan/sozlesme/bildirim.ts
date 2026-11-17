@@ -34,6 +34,8 @@ export interface BildirimTuruTanimi {
   varsayilan: Record<BildirimKanali, boolean>;
   // Verilirse bildirim, Bildirim yönetimi ayarlanmadıkça "Okudum, anladım" denene dek kalır (3303-2 a).
   onayIstenir?: true;
+  // 3396-3: kişi tercihinde e-postası kapatılamaz (yalnız hazırlık kademeleri; uygulama kanalı zaten hep açıktır).
+  kapatilamaz?: true;
 }
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
@@ -182,6 +184,28 @@ export const BILDIRIM_TURLERI = {
   'projeler.gorev-kontrol-bekliyor': {
     baslik: 'Proje görevi kontrolünü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['projeler.gorev-kontrol'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3396 a: hazırlık görevinin kademeleri (K2-K5) ve günlük özet. Alıcı kayda bağlıdır (yapan, kontrol eden, ayardaki rol); özet alıcı
+  // ayarlıdır. Kademe yükselince projeler gönderir, görev bitince ya da kontrole düşünce kapatır. Gövde yalnız görev adı ve son gün (Risk K8).
+  'projeler.hazirlik-hatirlatma': {
+    baslik: 'Hazırlık görevinin son günü yaklaşıyor', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim',
+    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+  },
+  'projeler.hazirlik-gecikti': {
+    baslik: 'Hazırlık görevin gecikti', onem: 'acil', sinif: 'gorev', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim',
+    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+  },
+  'projeler.hazirlik-yoneticiye': {
+    baslik: 'Geciken hazırlık görevi yöneticiye bildirildi', onem: 'acil', sinif: 'gorev',
+    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+  },
+  'projeler.hazirlik-devret': {
+    baslik: 'Geciken hazırlık görevini devret', onem: 'acil', sinif: 'gorev',
+    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+  },
+  'projeler.hazirlik-ozet': {
+    baslik: 'Geciken hazırlık görevleri günlük özeti', onem: 'uyari', alanIslemler: ['projeler.hazirlik-dagit'], yol: '/projeler',
+    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;
@@ -306,7 +330,10 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // durumda da alır. Ekip çağrısı kendi yönlendirmesiyle seçildiği için bu ayarda yoktur. Okuma ve yazma `ayarlar.yaz` ister.
 // Alıcısı kayda bağlı türler (proje görevinin atananı, kontrol edeni) alıcı seçimine girmez: seçim ya başka projelerin görevini
 // yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
-const KAYDA_BAGLI_TURLER: readonly string[] = ['arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor'];
+const KAYDA_BAGLI_TURLER: readonly string[] = [
+  'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor',
+  'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret',
+];
 export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];
 export const ALICI_ROL_EN_COK = 20;
 export const ALICI_KISI_EN_COK = 50;

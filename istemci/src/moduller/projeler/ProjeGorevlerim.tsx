@@ -5,7 +5,7 @@ import type { GorevlerimCevabi, GorevlerimSatiri, GorevlerimTuru } from '#paylas
 import { DurumKutusu, Kart, Rozet, SayiKarti, Sekmeler, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { GOREV_DURUM_TONU, atamaMetni, bugun, gorevDurumMetni, tarihMetni } from './gosterim.ts';
+import { GOREV_DURUM_TONU, KADEME_TONU, atamaMetni, bugun, gorevDurumMetni, kademeMetni, tarihMetni } from './gosterim.ts';
 import { GorevPaneli } from './GorevPaneli.tsx';
 import { gorevGecikiyor } from './ProjeGorevleri.tsx';
 import './projeler.css';
@@ -40,12 +40,17 @@ export function ProjeGorevlerim() {
       <span>{g.ad}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>
     ), csv: (g) => g.ad },
     { anahtar: 'proje', baslik: 'Proje', mono: true, kirilmaz: true, hucre: (g) => <Link to={`/projeler/${g.projeId}`}>{g.projeKod}</Link>, csv: (g) => g.projeKod },
-    { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
-    { anahtar: 'kontrol', baslik: 'Kontrol eden', hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
+    { anahtar: 'yapan', baslik: 'Yapan', kirilmaz: true, hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
+    { anahtar: 'kontrol', baslik: 'Kontrol eden', kirilmaz: true, hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
     { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (g) => (
       <span className={gorevGecikiyor(g, gun) ? 'tc-prj-gec' : undefined}>{tarihMetni(g.planBitis)}</span>
     ), csv: (g) => g.planBitis },
     { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
+    ...(hepsi.some((g) => g.kademe !== null) ? [{
+      anahtar: 'kademe', baslik: 'Kademe', kirilmaz: true,
+      hucre: (g: GorevlerimSatiri) => (g.kademe === null ? null : <Rozet ton={KADEME_TONU[g.kademe] ?? 'bilgi'}>{kademeMetni(g.kademe)}</Rozet>),
+      csv: (g: GorevlerimSatiri) => kademeMetni(g.kademe),
+    } satisfies Sutun<GorevlerimSatiri>] : []),
   ];
 
   return (

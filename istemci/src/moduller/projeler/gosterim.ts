@@ -74,3 +74,8 @@ export const HAZIRLIK_METNI: Record<(typeof HAZIRLIK_MADDELERI)[number], string>
   'takim-omru': 'Takım ömrü', 'takim-hazirla': 'Takım hazırla', makine: 'Makine durumu', talimat: 'Hazırlık talimatı',
   'ek-madde': 'Ek hazırlık maddesi', aparat: 'Aparat', 'olcu-aleti': 'Ölçü aleti (kalibrasyon)',
 };
+
+// 3396 a: hazırlık görevinin ulaştığı en yüksek kademe; kademesiz görevde boş kalır.
+export const KADEME_ADI: Record<number, string> = { 1: 'Atandı', 2: 'Hatırlatıldı', 3: 'Sert uyarı', 4: 'Yöneticide', 5: 'Devret' };
+export const KADEME_TONU: Record<number, 'bilgi' | 'uyari' | 'hata'> = { 1: 'bilgi', 2: 'bilgi', 3: 'uyari', 4: 'hata', 5: 'hata' };
+export const kademeMetni = (k: number | null): string => (k === null ? '' : `K${String(k)} ${KADEME_ADI[k] ?? ''}`.trim());

@@ -6,7 +6,7 @@ import {
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
-  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
   adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
@@ -24,6 +24,8 @@ import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
+import { hazirlikMaddeleri, hazirlikMaddesiDegistir, ozelHazirlikMaddesiEkle } from './hazirlik-maddeleri.ts';
+import { hazirlikDagit, hazirlikMatrisi, hazirlikProjesiKur, hazirlikProjesiSecenekleri as hazirlikProjesiSecenekleriAl } from './hazirlik-gorevi.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
   adimNotuYaz, adimTamamla, talimatAtlamaYaz, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, baslatmaKartiniDenetle, sonOlaylar, adimPaylari, makineEkle,
@@ -300,6 +302,67 @@ const adimliUclar = [
     govde: hazirlikMuafiyetiGovdesi,
     cevap: hazirlikCevabi,
     isle: ({ db, kullanici, parametre, govde }) => muafiyetVer(db, kullanici, parametre.id, govde),
+  }),
+  // 3396 a: hazırlık maddesi listesi. Okuma oturumla (ad ve sıra bütün hazırlık ekranlarında kullanılır, kayıt bilgisi yok); yazma
+  // yalnız hazirlik-ayar. Durduran maddenin kapatılmasını hem kural hem kısıt reddeder.
+  uc({
+    yontem: 'GET',
+    yol: '/hazirlik-maddeleri',
+    yetki: 'oturum', sahiplik: 'yok',
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, kullanici }) => hazirlikMaddeleri(db, kullanici),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/hazirlik-maddeleri/:kod/degistir',
+    yetki: 'uretim-emirleri.hazirlik-ayar',
+    parametre: hazirlikMaddeParametresi,
+    govde: hazirlikMaddesiDegistirGovdesi,
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikMaddesiDegistir(db, kullanici, parametre.kod, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/hazirlik-maddeleri/ozel-ekle',
+    yetki: 'uretim-emirleri.hazirlik-ayar',
+    govde: hazirlikMaddesiEkleGovdesi,
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, kullanici, govde }) => ozelHazirlikMaddesiEkle(db, kullanici, govde),
+  }),
+  // 3396 a: emir için hazırlık projesi kurulur, şablonun hazırlık kalemleri emir ya da iş emri başına görev olur (tekrarında çoğalmaz).
+  // 3396 a (A): Proje > Hazırlık matrisi; okuma proje okuyana, dağıtma hazirlik-dagit işlemine.
+  uc({
+    yontem: 'GET',
+    yol: '/hazirlik-matrisi',
+    yetki: 'projeler.oku',
+    sorgu: hazirlikMatrisiSorgusu,
+    cevap: hazirlikMatrisiCevabi,
+    isle: ({ db, kullanici, sorgu }) => hazirlikMatrisi(db, kullanici, sorgu.projeId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/hazirlik-matrisi/dagit',
+    yetki: 'projeler.hazirlik-dagit',
+    govde: hazirlikDagitGovdesi,
+    cevap: hazirlikDagitCevabi,
+    isle: ({ db, kullanici, govde }) => hazirlikDagit(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/hazirlik-projesi',
+    yetki: 'projeler.hazirlik-dagit',
+    parametre: emirParametresi,
+    cevap: hazirlikProjesiSecenekleri,
+    isle: ({ db, parametre }) => hazirlikProjesiSecenekleriAl(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/hazirlik-projesi',
+    yetki: 'projeler.hazirlik-dagit',
+    parametre: emirParametresi,
+    govde: hazirlikProjesiGovdesi,
+    cevap: hazirlikProjesiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikProjesiKur(db, kullanici, parametre.id, govde),
   }),
   // Adım Durumu (2893): okuma emri görene, terminal okuması (2893-3 b) operatöre de; yazma yalnız müdür ve planlama rollerine (2893-1 a).
   uc({
