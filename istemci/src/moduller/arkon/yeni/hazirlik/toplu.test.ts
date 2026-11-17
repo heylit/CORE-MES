@@ -82,7 +82,7 @@ describe('3362-2 benzer paketten doldurma', () => {
   it('Risk K2: onay, kayıt, kişi ve geçmiş alanları taşınmaz; hedefte kapalı ilk parça kapalı kalır', () => {
     const kaynak = gonderilmis({
       id: 's', rev: 'B', rules: { q: { firstPiece: true, who: 'quality' } }, approval: { ok: true, by: 'ORN', at: 9 }, apReq: { at: 1, by: 'ORN' },
-      history: [{ v: 1, rev: 'B', at: 1, by: 'ORN', ap: null, st: 'ORN-IST', planYok: true }] as Pkg['history'], fpRe: { on: true, key: 'x', why: 'red' },
+      history: [{ v: 1, rev: 'B', at: 1, by: 'ORN', ap: null, st: 'ORN-IST', planYok: true }] as unknown as Pkg['history'], fpRe: { on: true, key: 'x', why: 'red' },
       yayinImza: { a: '1' },
     });
     const k = benzerKopya(hedef, kaynak, varsayilanKopya(hedef, kaynak));
@@ -92,8 +92,8 @@ describe('3362-2 benzer paketten doldurma', () => {
   });
 
   it('dolu hedefte silinecek ve gelecek alanlar söylenir', () => {
-    const dolu = { ...hedef, steps: [{ id: 'a', t: 'x', d: '', r: false }, { id: 'b', t: 'y', d: '', r: false }] } as Pkg;
-    const kaynak = gonderilmis({ id: 's', rev: 'B', steps: [{ id: 'c', t: 'z', d: '', r: false }] as Pkg['steps'] });
+    const dolu = { ...hedef, steps: [{ id: 'a', t: 'x', d: '', r: false }, { id: 'b', t: 'y', d: '', r: false }] } as unknown as Pkg;
+    const kaynak = gonderilmis({ id: 's', rev: 'B', steps: [{ id: 'c', t: 'z', d: '', r: false }] as unknown as Pkg['steps'] });
     const k = benzerKopya(dolu, kaynak, new Set<KopyaAlani>(['steps']));
     expect(silinecekler(dolu, k)).toEqual(['2 adım']);
     expect(gelecekler(k)).toEqual(['1 adım']);

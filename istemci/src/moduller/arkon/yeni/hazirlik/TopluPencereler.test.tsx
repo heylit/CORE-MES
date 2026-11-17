@@ -51,7 +51,7 @@ describe('3362-1 toplu terminale gönder', () => {
     fireEvent.click(within(p).getByRole('button', { name: '2 işi gönder' }));
     await waitFor(() => {
       expect(yazim(istekler, a.id).some((x) => x.status === 'published' && !x.dirty)).toBe(true);
-      expect(yazim(istekler, b.id).some((x) => x.status === 'published' && x.history?.at(-1)?.['planYok'] === true)).toBe(true);
+      expect(yazim(istekler, b.id).some((x) => x.status === 'published' && (x.history?.at(-1) as Record<string, unknown> | undefined)?.['planYok'] === true)).toBe(true);
     }, { timeout: 10000 });
     expect(yazim(istekler, c.id)).toEqual([]);
     expect(await screen.findByText(/2 iş terminale gönderildi/, undefined, { timeout: 10000 })).toBeTruthy();
@@ -120,7 +120,7 @@ describe('3362-2 benzer paketten al', () => {
   });
 
   const kaynak = paket('tmi-ie-B1', 'ORN-UE-B0', 20, 31, {
-    status: 'published', dirty: false, publishedAt: 5, steps: [{ id: 'k1', t: 'Sık', d: '', r: true }, { id: 'k2', t: 'Ölç', d: '', r: false }] as Pkg['steps'],
+    status: 'published', dirty: false, publishedAt: 5, steps: [{ id: 'k1', t: 'Sık', d: '', r: true }, { id: 'k2', t: 'Ölç', d: '', r: false }] as unknown as Pkg['steps'],
     approval: { ok: true, by: 'ORN Kalite', at: 6 }, files: [{ name: 'r.pdf', kind: 'pdf' }] as Pkg['files'],
   });
   const hedef = paket('tmi-ie-B2', 'ORN-UE-B1', 20, 32, { rev: 'C', steps: [], plan: [], primary: null, updatedAt: 9 });
