@@ -645,7 +645,7 @@ export const teklifFormuSorgusu = z.object({
   kdvOrani: kdvOraniSemasi,
 });
 export const teklifFormuVerisiCevabi = z.object({
-  musteri: z.object({ ad: z.string().nullable(), adres: z.string().nullable(), vergiNo: z.string().nullable() }),
+  musteri: z.object({ ad: z.string().nullable(), adres: z.string().nullable(), vergiDairesi: z.string().nullable(), vergiNo: z.string().nullable() }),
   araToplam: ondalikMetinSemasi,
   iskontoTutari: ondalikMetinSemasi,
   kdvHaric: ondalikMetinSemasi,

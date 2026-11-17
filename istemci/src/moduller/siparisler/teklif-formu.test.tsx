@@ -26,7 +26,7 @@ const AYAR = {
   ],
 } satisfies TeklifFormuCevabi;
 const FORM_VERISI = {
-  musteri: { ad: 'Deneme Musteri A', adres: 'Deneme Mah.\nDeneme İl', vergiNo: 'Deneme VD 2' },
+  musteri: { ad: 'Deneme Musteri A', adres: 'Deneme Mah.\nDeneme İl', vergiDairesi: 'Deneme VD', vergiNo: '2' },
   araToplam: '400.00', iskontoTutari: '40.00', kdvHaric: '360.00', kdvOrani: '20', kdvTutari: '72.00', genelToplam: '432.00', metin: null,
 } satisfies TeklifFormuVerisiCevabi;
 const SURUM = {
@@ -106,10 +106,10 @@ describe('Teklif formu kâğıdı', () => {
   const veri: FormVerisi = {
     no: 'TK-1', surumNo: 2, tarih: '2026-10-02', gecerlilik: '2026-11-01', baslik: 'Deneme', paraBirimi: 'TRY', teslimGun: 14, terminTarihi: null, odemeKosulu: null, iskontoOrani: '0',
     satirlar: [{ id: 1, kod: null, ad: 'Deneme kalem', miktar: '2', birim: null, birimFiyat: '5.0000', iskontoluFiyat: '5.0000', tutar: '10.00' }],
-    musteri: { ad: 'Deneme Musteri', adres: null, vergiNo: null }, ilgili: '',
+    musteri: { ad: 'Deneme Musteri', adres: null, vergiDairesi: null, vergiNo: null }, ilgili: '',
     toplam: { araToplam: '10.00', iskontoTutari: '0.00', kdvHaric: '10.00', kdvOrani: '20', kdvTutari: '2.00', genelToplam: '12.00' },
   };
-  it('boş giriş, şart ve imza basılmaz; iskontosuz teklifte ara toplam ve iskonto satırı yoktur', () => {
+  it('boş giriş ve şart basılmaz, onay alanları imza adı boşken de basılır; iskontosuz teklifte ara toplam ve iskonto satırı yoktur', () => {
     render(<TeklifFormuKagidi dil="tr" icerik={{ ...ICERIK, giris: '', sartlar: [], imza1: '', imza2: '' }} kurum={KURUM} logo={null} veri={veri} />);
     const kagit = screen.getByRole('article', { name: 'Teklif TK-1' });
     expect(kagit.getAttribute('data-theme')).toBe('light');
@@ -117,7 +117,11 @@ describe('Teklif formu kâğıdı', () => {
     expect(within(kagit).queryByText('Ara toplam')).toBeNull();
     expect(within(kagit).queryByText('İskontolu')).toBeNull();
     expect(within(kagit).getByText('12,00 TRY')).toBeTruthy();
-    expect(kagit.querySelector('.tc-tf-imzalar')).toBeNull();
+    // 3356: örnek formdaki gibi iki onay alanı her zaman basılır; boş vergi dairesi basılmaz.
+    expect(within(kagit).getByText('FİRMA ONAYI / COMPANY CONFIRMATION')).toBeTruthy();
+    expect(within(kagit).getByText('MÜŞTERİ ONAYI / CUSTOMER CONFIRMATION')).toBeTruthy();
+    expect(within(kagit).queryByText('Vergi dairesi')).toBeNull();
+    expect(within(kagit).getByText('Satış teklifi')).toBeTruthy();
     // Ödeme koşulu yoksa satır basılmaz.
     expect(within(kagit).queryByText('Ödeme')).toBeNull();
   });
@@ -141,10 +145,20 @@ describe('Teklif formu kâğıdı', () => {
     expect(within(kagit).getByRole('cell', { name: 'adet' })).toBeTruthy();
   });
   it('İngilizce şablon etiketleri ve sayı biçimi İngilizcedir; giriş alanları teklifle dolar', () => {
-    render(<TeklifFormuKagidi dil="en" icerik={{ ...ICERIK, giris: 'Dear {YETKILI}, {TEKLIF_NO}' }} kurum={KURUM} logo={null} veri={{ ...veri, ilgili: 'Deneme Kisi' }} />);
+    render(<TeklifFormuKagidi dil="en" icerik={{ ...ICERIK, giris: 'Dear {YETKILI}, {TEKLIF_NO}' }} kurum={KURUM} logo={null}
+      veri={{ ...veri, ilgili: 'Deneme Kisi', musteri: { ...veri.musteri, vergiDairesi: 'Deneme VD' } }} />);
     expect(screen.getByText('Grand total')).toBeTruthy();
     expect(screen.getByText('12.00 TRY')).toBeTruthy();
     expect(screen.getByText('Dear Deneme Kisi, TK-1')).toBeTruthy();
+    // 3356: onay başlığı şablon diliyle; eski şablonun başlık gibi yazılmış imza adı ('Müşteri onayı') tekrar basılmaz, gerçek ad basılır.
+    expect(screen.getByText('CUSTOMER CONFIRMATION')).toBeTruthy();
+    expect(screen.getByText('COMPANY CONFIRMATION')).toBeTruthy();
+    expect(screen.getByText('Sales quotation').previousElementSibling?.textContent).toBe('Type');
+    expect(screen.getByText('Deneme VD').previousElementSibling?.textContent).toBe('Tax office');
+    // müşteri onayının altında müşteri firması
+    expect(screen.getByText('CUSTOMER CONFIRMATION').parentElement?.querySelector('small')?.textContent).toBe('Deneme Musteri');
+    expect(screen.queryByText('Müşteri onayı')).toBeNull();
+    expect(screen.getByText('Hazırlayan')).toBeTruthy();
   });
 });
 
@@ -155,6 +169,10 @@ describe('Teklif formu penceresi', () => {
     const pencere = await screen.findByRole('dialog', { name: /Teklif formu · TK-2026-0021/ });
     await waitFor(() => expect(within(pencere).getByText('432,00 TRY')).toBeTruthy());
     expect((within(pencere).getByLabelText('Şablon') as HTMLSelectElement).value).toBe('1');
+    // 3356: firmanın vergi dairesi sunucudan gelir, müşteri kutusunda vergi numarasından önce basılır.
+    const musteri = within(pencere).getByRole('article').querySelector('.tc-tf-bilgi section')!;
+    expect([...musteri.querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Ünvan', 'Adres', 'Vergi dairesi', 'Vergi no']);
+    expect(within(musteri as HTMLElement).getByText('Deneme VD')).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/form?surumNo=1&kdvOrani=20')).toBe(true);
     // Basım kopyası gövdeye konur; ekranda gizlidir, basımda yalnız o çıkar.
     expect(document.body.querySelector(':scope > .tc-tf-baski .tc-tf-kagit')).not.toBeNull();

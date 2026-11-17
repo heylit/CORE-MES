@@ -70,7 +70,8 @@ export async function teklifFormuVerisi(db: Db, teklifId: number, s: TeklifFormu
   if (toplam === null) throw bulunamadi(SURUM_YOK);
   const firma = await firmaOzeti(db, teklif.firma_id);
   return {
-    musteri: firma === null ? { ad: null, adres: null, vergiNo: null } : { ad: firma.ad, adres: firmaAdresi(firma), vergiNo: firma.vergiNo },
+    musteri: firma === null ? { ad: null, adres: null, vergiDairesi: null, vergiNo: null }
+      : { ad: firma.ad, adres: firmaAdresi(firma), vergiDairesi: firma.vergiDairesi, vergiNo: firma.vergiNo },
     ...formToplamlari(toplam.ara_toplam, toplam.kdv_haric, toplam.kdv_tutari, s.kdvOrani),
     metin: formMetni(await sorgular.teklifFormMetni(db, teklifId)),
   };

@@ -33,8 +33,8 @@ export function FormMetniAlanlari({ icerik, degistir }: Ozellikler) {
         {FORM_ALANLARI.map((a) => <button key={a} type="button" className="tc-tf-cip" aria-label={`${a} alanını ekle`} onClick={() => alanEkle(a)}>{a}</button>)}
       </div>
       <p className="tc-tf-ipucu">Alan, imlecin durduğu yere eklenir; basarken teklifin bilgisiyle dolar.</p>
-      <Girdi etiket="İmza 1 (firma)" autoComplete="off" maxLength={60} value={icerik.imza1} onChange={(o) => degistir({ imza1: o.target.value })} />
-      <Girdi etiket="İmza 2 (müşteri)" autoComplete="off" maxLength={60} value={icerik.imza2} onChange={(o) => degistir({ imza2: o.target.value })} />
+      <Girdi etiket="İmza 1 (firma)" ipucu="Onay başlığının altında, çizginin altına basılır: ad ya da ünvan." autoComplete="off" maxLength={60} value={icerik.imza1} onChange={(o) => degistir({ imza1: o.target.value })} />
+      <Girdi etiket="İmza 2 (müşteri)" ipucu="Çizginin altına basılır: ad ya da ünvan." autoComplete="off" maxLength={60} value={icerik.imza2} onChange={(o) => degistir({ imza2: o.target.value })} />
       <Girdi
         etiket="Alt bilgi"
         autoComplete="off"

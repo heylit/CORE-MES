@@ -264,13 +264,13 @@ export const firmaKayitKaynagi: KayitAramaKaynagi<Db> = {
 };
 
 export interface FirmaOzeti {
-  id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; vergiNo: string | null;
+  id: number; kod: string | null; ad: string; tur: FirmaTuru; fason: boolean; vergiNo: string | null; vergiDairesi: string | null;
   paraBirimi: string; vadeGunu: number | null; aktif: boolean; logoCariKodu: string | null;
   telefon: string | null; ePosta: string | null; adres: string | null; ilce: string | null; il: string | null;
   postaKodu: string | null; enlem: number | null; boylam: number | null; surum: number;
 }
 const ozetle = (f: Firma): FirmaOzeti => ({
-  id: f.id, kod: f.kod, ad: f.ad, tur: f.tur, fason: f.fason, vergiNo: f.vergiNo, paraBirimi: f.paraBirimi,
+  id: f.id, kod: f.kod, ad: f.ad, tur: f.tur, fason: f.fason, vergiNo: f.vergiNo, vergiDairesi: f.vergiDairesi, paraBirimi: f.paraBirimi,
   vadeGunu: f.vadeGunu, aktif: f.aktif, logoCariKodu: f.logoCariKodu, telefon: f.telefon, ePosta: f.ePosta,
   adres: f.adres, ilce: f.ilce, il: f.il, postaKodu: f.postaKodu, enlem: f.enlem, boylam: f.boylam, surum: f.surum,
 });

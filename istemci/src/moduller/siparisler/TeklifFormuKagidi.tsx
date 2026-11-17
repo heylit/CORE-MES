@@ -15,12 +15,17 @@ export interface FormVerisi {
   odemeKosulu: string | null;
   iskontoOrani: string | null;
   satirlar: readonly FormSatiri[];
-  musteri: { ad: string | null; adres: string | null; vergiNo: string | null };
+  musteri: { ad: string | null; adres: string | null; vergiDairesi: string | null; vergiNo: string | null };
   ilgili: string;
   toplam: { araToplam: string; iskontoTutari: string; kdvHaric: string; kdvOrani: string; kdvTutari: string; genelToplam: string } | null;
 }
 
 interface Ozellikler { dil: TeklifFormuDili; icerik: TeklifFormuIcerigi; kurum: TeklifFormuKurumu; logo: string | null; veri: FormVerisi }
+
+// 3356: imza adı çizginin altındaki ad ya da ünvandır. Eski şablonlarda (varsayılan şablon 'Müşteri onayı') imza adı başlık olarak yazılmıştı;
+// onay başlığını tekrarlayan ad basılmaz.
+const ONAY_ADLARI = new Set(['müşteri onayı', 'firma onayı', 'onay', 'customer confirmation', 'company confirmation', 'customer approval']);
+const imzaAdi = (ad: string): string => (ONAY_ADLARI.has(ad.trim().toLocaleLowerCase('tr')) ? '' : ad);
 
 // A4 teklif formu (3245 d; 3328 düzeni kullanıcının verdiği örnek formdan, sistemin diliyle): antette logo solda, başlık ortada, sağda
 // doküman kontrol kutusu (şablonda doluysa; yoksa firma bilgisi). Altında müşteri ve teklif bilgisi iki sütun etiket-değer; kalemler kod,
@@ -45,7 +50,7 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
   // Logo yoksa ünvan zaten antetin solundadır; doküman kutulu antette alt satırda tekrarlanmaz.
   const kurumAlti = [logo ? kurum.unvan : '', ...kurumSatirlari].filter((k) => k !== '');
   const musteriSatirlari = ([
-    [z.unvan, veri.musteri.ad ?? '—'], [z.adres, veri.musteri.adres], [z.vergi, veri.musteri.vergiNo], [z.ilgili, veri.ilgili.trim() === '' ? null : veri.ilgili.trim()],
+    [z.unvan, veri.musteri.ad ?? '—'], [z.adres, veri.musteri.adres], [z.vergiDairesi, veri.musteri.vergiDairesi], [z.vergi, veri.musteri.vergiNo], [z.ilgili, veri.ilgili.trim() === '' ? null : veri.ilgili.trim()],
   ] satisfies [string, string | null][]).flatMap(([dt, dd]) => (dd === null ? [] : [[dt, dd] as const]));
   return (
     <article ref={ref} className="tc-tf-kagit" data-theme="light" lang={dil} aria-label={`${z.teklif} ${veri.no}`}>
@@ -73,6 +78,7 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
           <h2>{z.teklif}</h2>
           <dl className="tc-tf-meta">
             <div><dt>{z.no}</dt><dd>{veri.no}</dd></div>
+            <div><dt>{z.tur}</dt><dd>{z.satisTeklifi}</dd></div>
             <div><dt>{z.surum}</dt><dd>{veri.surumNo}</dd></div>
             <div><dt>{z.tarih}</dt><dd>{formTarihi(veri.tarih, dil)}</dd></div>
             <div><dt>{z.gecerlilik}</dt><dd>{formTarihi(veri.gecerlilik, dil)}</dd></div>
@@ -128,12 +134,10 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
           <ol className="tc-tf-sartlar">{icerik.sartlar.map((s, i) => <li key={`${String(i)}-${s}`}>{s}</li>)}</ol>
         </section>
       )}
-      {(icerik.imza1 !== '' || icerik.imza2 !== '') && (
-        <div className="tc-tf-imzalar">
-          <div className="tc-tf-imza">{icerik.imza1}<small>{kurum.unvan}</small></div>
-          <div className="tc-tf-imza">{icerik.imza2}<small>{veri.musteri.ad ?? ''}</small></div>
-        </div>
-      )}
+      <div className="tc-tf-imzalar">
+        <div className="tc-tf-imza"><span className="tc-tf-onay">{z.firmaOnayi}</span>{imzaAdi(icerik.imza1)}<small>{kurum.unvan}</small></div>
+        <div className="tc-tf-imza"><span className="tc-tf-onay">{z.musteriOnayi}</span>{imzaAdi(icerik.imza2)}<small>{veri.musteri.ad ?? ''}</small></div>
+      </div>
       <footer className="tc-tf-alt"><span>{alt}</span><span>{`${veri.no} · ${z.surum} ${String(veri.surumNo)}`}</span></footer>
     </article>
   );
