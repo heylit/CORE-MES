@@ -435,7 +435,7 @@ describe('3247 a: emir formunda rota', () => {
   });
   it('3411 a: türün rotası yürürlükte değilse ya da yoksa Seri (Standart) seçilir ve formda düşüş söylenir', () => {
     const n = emirRotasi(c, 'numune', 'Numune', '')!;
-    expect(n).toMatchObject({ secili: '1', revizyonId: 10, uyari: null, ipucu: 'Numune türünün rotası' });
+    expect(n).toMatchObject({ secili: '1', revizyonId: 10, uyari: null, ipucu: 'Numune türü Seri rotasından açılır' });
     expect(n.seriyeDusus).toBe('Numune rotası henüz yürürlükte değil. Emir Seri rotası Rev C ile açılır; emir ayrıntısında bu not kalır.');
     expect(emirRotasi(c, 'prototip', 'Prototip', '')!.seriyeDusus).toMatch(/^Prototip türünün rotası yok\./);
     expect(emirRotasi(c, 'seri', 'Seri', '')!.seriyeDusus).toBeNull();

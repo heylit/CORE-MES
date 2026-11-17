@@ -564,7 +564,10 @@ export function emirRotasi(c: UrunRotalari | undefined, tur: string, turAdi: str
     }),
     secili: String(secili.id),
     revizyonId: rev?.id ?? null,
-    ipucu: secili.id === turun.id ? `${turAdi} türünün rotası` : `Elle seçildi; ${turAdi} türünün rotası ${turun.ad}`,
+    // Seri'ye düşüşte Seri "türün rotası" değildir: ipucu düşüşü söyler (ayrıntısı formdaki not kutusunda).
+    ipucu: t.seriyeDustu
+      ? (secili.id === turun.id ? `${turAdi} türü ${turun.ad} rotasından açılır` : `Elle seçildi; ${turAdi} türü ${turun.ad} rotasından açılır`)
+      : (secili.id === turun.id ? `${turAdi} türünün rotası` : `Elle seçildi; ${turAdi} türünün rotası ${turun.ad}`),
     uyari: rev === null ? `${secili.ad} rotasının yürürlükte revizyonu yok; emri açmak için ${seri.ad} rotasını seçin.` : null,
     seriyeDusus: secili.id === turun.id && t.seriyeDustu && rev !== null
       ? `${seriyeDususMetni(turAdi, t.turunRotasi)}. Emir ${turun.ad} rotası Rev ${rev.harf} ile açılır; emir ayrıntısında bu not kalır.` : null,
