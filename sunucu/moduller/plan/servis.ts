@@ -922,6 +922,8 @@ type Yer = Aralik & { isEmriId: number; kaynak: Kaynak; parcalar?: (Aralik & { n
 // Çalışan iş planlanan makinede değil, terminalin çalıştırdığı makinededir (393 d); bölünmüş iş saklı parçalarıyla kalır.
 const kaynakOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Kaynak =>
   ('fiili' in b && !y.parcalar?.length ? b.fiili.get(y.isEmriId) : undefined) ?? y.kaynak;
+// Çalışmanın saatleri dakikaya yuvarlanarak yazılır (planAni); süre sınırında bu kadar pay bırakılır.
+const YUVARLAMA_DK = 1;
 const yerOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Yer & { kilitli: boolean; dondurulmus: boolean; elleSira: number | null; elleIstasyonId: number | null; elleKaynak: boolean } => ({
   isEmriId: y.isEmriId, kaynak: kaynakOf(b, y), ...(gerceklesenAralik(b, y) ?? { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis) }), kilitli: y.kilitli, dondurulmus: y.dondurulmus, elleSira: y.elleSira,
   elleIstasyonId: y.elleIstasyonId ?? null, elleKaynak: y.elleKaynak ?? false,
@@ -1820,16 +1822,22 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
       const sureOf = (i: (typeof kuyruklar)[number]['isler'][number], kaynak: Kaynak): number | null => (i.x.parca
         ? (() => { const d = parcaSuresi(i.is, i.x.parca.adet); return d === null ? null : verimliSure(d, i.is.ayarDk, verimi(b)(kaynak)); })()
         : i.is.sureDk !== null ? verimliSure(i.is.sureDk, i.is.ayarDk, verimi(b)(kaynak)) : i.mevcut && !bolunmus(i.mevcut) ? dk(b, i.mevcut.bitis) - dk(b, i.mevcut.baslangic) : null);
-      // B-2500-1: çalışmada sabitlenen iş önizlemedeki saatinde, kaynağın takvim ve veriminden gelen süresiyle yerleşir ve kilitlenir. O saatte
+      // B-2500-1: çalışmada sabitlenen iş önizlemedeki saatinde ve çalışmadaki süresiyle yerleşir ve kilitlenir. O saatte
       // başlayamıyorsa (vardiya dışı, bu yazımda taşınmayan ya da başka sabit işle üst üste) yazım durur: saat planlamacının kararıdır, sessizce kaydırılmaz.
       const sabitYer = new Map<number, Aralik & { kaynak: Kaynak }>();
       const sabitlenecek = kuyruklar.flatMap(({ q, isler }) => isler.filter((i) => tasinacak.has(i.is.id) && !i.x.parca && i.x.onizleme !== undefined
         && sabitler.has(`${i.x.emirNo}|${String(i.x.opNo)}`)).map((i) => ({ q, i })));
       if (sabitlenecek.length > 0 && !islemVarMi(k, 'plan.kilitle')) throw yetkiYok('Sabitlenen işi plana yazmak plan kilitleme yetkisi ister.');
       for (const { q, i } of sabitlenecek) {
-        const sure = sureOf(i, q.kaynak);
-        if (sure === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
         const bas = dk(b, new Date(i.x.onizleme!.baslangic));
+        // Süre çalışmanınkidir (önizlemenin bu kaynaktaki çalışma dakikası): motor sıraya bağlı ayarı (aynı aile, ayar matrisi) kısa sayar,
+        // iş emrinin tam ayarı daha uzundur. Tam ayarla yazılan sabit öncül çalışmadakinden geç biter; ona yapışık ardıl canlıya alırken sıraya
+        // aykırı kalır. Çalışma belgesi sayfadan yazılır: süre yalnız ayarsız işlemle tam süre arasındaysa (ayar kısalabilir, işlem kısalmaz)
+        // kabul edilir; dışındaysa kaynağın takvim ve veriminden gelen tam süre kullanılır.
+        const tam = sureOf(i, q.kaynak);
+        if (tam === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
+        const calismaSuresi = kesisimDk(takvim(b)(q.kaynak), bas, dk(b, new Date(i.x.onizleme!.bitis)));
+        const sure = calismaSuresi >= tam - (i.is.ayarDk ?? 0) - YUVARLAMA_DK && calismaSuresi <= tam ? calismaSuresi : tam;
         const dolu: Aralik[] = [
           ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
           ...[...sabitYer.values()].filter((y) => ayniKaynak(y.kaynak, q.kaynak)),

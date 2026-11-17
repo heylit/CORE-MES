@@ -10,7 +10,7 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 // 3308-5 a: çalışma planı tek komutla onaya gider ya da canlıya alınır. Plan taslağı, onay ve canlıya alma aynı işlemdedir; canlıya alma
 // reddedilirse onaya gitmiş ya da açık kalmış taslak geride kalmaz. Veriler uydurmadır.
 describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canlıya', () => {
-  const { c, tamam, istek, yeniAdim, isEmirleriAc } = planTestOrtami();
+  const { c, tamam, istek, yeniAdim, isEmirleriAc, durum } = planTestOrtami();
 
   type Calisma = Record<string, unknown> & { dataVer: number; plan: (Record<string, unknown> & { ops: Record<string, { m: string; S: number; C: number }> }) | null; locks: Record<string, unknown> };
   const calismaOku = async () => {
@@ -33,8 +33,8 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
   };
 
   // Emir açılır, plan sunucuda kurulur ve çalışmaya alınır; dönen sürüm kayıtlı çalışmanınkidir.
-  const planliCalisma = async (): Promise<{ surum: number; isler: [number, number] }> => {
-    const isler = await isEmirleriAc([yeniAdim(), yeniAdim()], 10) as [number, number];
+  const planliCalisma = async (ikinciMakine = false): Promise<{ surum: number; isler: [number, number] }> => {
+    const isler = await isEmirleriAc([yeniAdim(), yeniAdim(ikinciMakine ? { kaynak: { tur: 'makine', id: durum().makineB } } : {})], 10) as [number, number];
     const ilk = await calismaOku();
     const s0 = await calismaKaydet(ilk.calisma, ilk.surum);
     const cevap = await planKur(s0);
@@ -127,5 +127,42 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     const yetkisiz = await istek(c.operator, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Yetkisiz', calismaSurumu: surum });
     assert.equal(yetkisiz.statusCode, 403, yetkisiz.body);
     assert.deepEqual((await senaryolar()).senaryolar.map((x) => x.id), once.senaryolar.map((x) => x.id));
+  });
+  // 3365-5: çalışmada sabitlenen (Kokpit'te taşınan) iş çalışmadaki süresiyle yazılır. Motor sıraya bağlı ayarı (aynı aile, ayar matrisi)
+  // kısa sayar; iş emrinin tam ayarıyla yazılsaydı sabit öncül geç biter, ona yapışık sabit ardıl canlıya alırken sıraya aykırı kalırdı.
+  test('TK-06: sabit öncül çalışmadaki kısa süresiyle yazılır; ona yapışık sabit ardıl canlıya geçer (izinli)', async () => {
+    const { surum, isler } = await planliCalisma(true);
+    const { calisma } = await calismaOku();
+    const plan = calisma.plan!;
+    const ops = plan.ops as Record<string, { m: string; S: number; C: number; job?: string }>;
+    const son = Object.values(ops).map((o) => String(o.job)).sort().at(-1);
+    const [p, q] = Object.keys(ops).filter((x) => String(ops[x]!.job) === son).sort((a, b) => ops[a]!.S - ops[b]!.S) as [string, string];
+    assert.notEqual(ops[p]!.m, ops[q]!.m, 'iki adım ayrı tezgâhta');
+    // Öncülün çalışmadaki süresi iş emrinin tam süresinin yarısı (motorun kısalttığı ayar); ardıl tam bitişine yapışık, ikisi sabit.
+    const bitis = ops[p]!.S + (ops[p]!.C - ops[p]!.S) / 2;
+    const yeniOps = { ...ops, [p]: { ...ops[p]!, C: bitis }, [q]: { ...ops[q]!, S: bitis, C: bitis + ops[q]!.C - ops[q]!.S } };
+    const locks = { [p]: { m: ops[p]!.m, S: ops[p]!.S }, [q]: { m: ops[q]!.m, S: bitis } };
+    const s1 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: yeniOps } as Calisma['plan'], locks }, surum);
+    const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Sabit yapışık', calismaSurumu: s1, dortSaatGerekcesi: null });
+    assert.equal(r.statusCode, 200, r.body);
+    const yerler = (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler;
+    const [y1, y2] = isler.map((i) => yerler.find((x) => x.isEmriId === i)!);
+    assert.ok(y1 && y2, 'iki adım canlıda');
+    assert.equal(Date.parse(y1.bitis), Date.parse(y2.baslangic), 'öncül çalışmadaki bitişinde biter, ardıl ona yapışık başlar');
+  });
+  // Risk K1: çalışma belgesi sayfadan yazılır; ayarsız işlemden kısa süre kabul edilmez, sabit iş tam süreyle yazılır.
+  test('TK-07: sabit işin çalışmadaki süresi ayarsız işlemden kısaysa tam süreyle yazılır (reddedilen süre)', async () => {
+    const { surum, isler } = await planliCalisma(true);
+    const { calisma } = await calismaOku();
+    const plan = calisma.plan!;
+    const ops = plan.ops as Record<string, { m: string; S: number; C: number; job?: string }>;
+    const son = Object.values(ops).map((o) => String(o.job)).sort().at(-1);
+    const [p] = Object.keys(ops).filter((x) => String(ops[x]!.job) === son).sort((a, b) => ops[a]!.S - ops[b]!.S) as [string];
+    const tamDk = Math.round((ops[p]!.C - ops[p]!.S) * 60);
+    const s1 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: { ...ops, [p]: { ...ops[p]!, C: ops[p]!.S + 1 / 60 } } } as Calisma['plan'], locks: { [p]: { m: ops[p]!.m, S: ops[p]!.S } } }, surum);
+    const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Sabit bir dakika', calismaSurumu: s1, dortSaatGerekcesi: null });
+    assert.equal(r.statusCode, 200, r.body);
+    const y1 = (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.find((x) => x.isEmriId === isler[0])!;
+    assert.ok((Date.parse(y1.bitis) - Date.parse(y1.baslangic)) / 60_000 >= tamDk, `bir dakikalık önizleme kabul edilmedi: ${y1.baslangic} - ${y1.bitis}, tam ${String(tamDk)} dk`);
   });
 });
