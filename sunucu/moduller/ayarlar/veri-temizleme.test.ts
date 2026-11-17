@@ -249,11 +249,113 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     assert.equal(await varMi('uretim_emri', 'id', alt), true);
   });
 
-  test('saat dilimi: aday süzgeci tesis gününe göre (23:30 dahil, ertesi 00:30 değil)', async () => {
+  test("tarihle sıfırlama: sayı önce, işaret geri alınır; Logo'ya gitmiş kayıt da silinir, işaretsize bağlı kök ve sonraki kayıt kalır", async () => {
+    const eskiye = (tablo: string, sutun: string, anahtar: string, id: number) =>
+      o().sahip.sorgu(`UPDATE ${tablo} SET ${sutun} = '2020-01-05T09:00:00Z' WHERE ${anahtar} = $1`, [id]);
+    const [eskiEmir, yeniEmir, eskiSp, logolu, eskiUst] = [await emir(), await emir(), await siparis(), await malzeme(), await emir()];
+    const yeniAlt = await emir({ ust: eskiUst, malzeme: await malzeme() });
+    await eskiye('uretim_emri', 'acilma', 'id', eskiEmir);
+    await eskiye('uretim_emri', 'acilma', 'id', eskiUst);
+    await oncelikDegisimi(eskiEmir);
+    await eskiye('siparisler_siparis', 'olusturma', 'id', eskiSp);
+    await eskiye('malzeme_katalog_karti', 'acilma', 'no', logolu);
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET logo_gonderim_durumu = 'gonderildi', logo_kayit_no = 'ORN-L2', logo_gonderim_zamani = now() WHERE no = $1", [logolu]);
+    await o().sahip.sorgu(
+      "INSERT INTO logo_giden (belge_turu, belge_no, son_deneme, son_sonuc, logo_kayit_no) VALUES ('malzeme', $1, now(), 'gonderildi', 'ORN-K2'), ('proje', $1, now(), 'gonderildi', 'ORN-P2')", [logolu]);
+    const tarih = { bitis: '2020-01-10', turler: ['uretim_emri', 'siparis', 'malzeme'] };
+    const sorguMetni = `bitis=${tarih.bitis}&turler=${tarih.turler.join(',')}`;
+    const tarihEtkisi = async () => {
+      const c = await istek(yonetici, 'GET', `/veri-temizleme/etki?${sorguMetni}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return temizlikEtkisiCevabi.parse(c.json());
+    };
+    const sayi = async () => {
+      const c = await istek(yonetici, 'GET', `/veri-temizleme/tarih-sayisi?${sorguMetni}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ toplam: number; isaretli: number }>();
+    };
+    const tarihleIsaret = async (isaretli: boolean) => {
+      const c = await istek(yonetici, 'POST', '/veri-temizleme/isaret-tarihle', { ...tarih, isaretli });
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ degisen: number }>().degisen;
+    };
+
+    assert.equal((await istek(planci, 'GET', `/veri-temizleme/tarih-sayisi?${sorguMetni}`)).statusCode, 403);
+    assert.equal((await istek(planci, 'POST', '/veri-temizleme/isaret-tarihle', tarih)).statusCode, 403);
+    assert.deepEqual(await sayi(), { toplam: 4, isaretli: 0 });
+    assert.equal(await tarihleIsaret(true), 4);
+    assert.deepEqual(await sayi(), { toplam: 4, isaretli: 4 });
+    assert.equal(await tarihleIsaret(false), 4, 'yanlış tarihin işareti geri alınır');
+    assert.deepEqual(await sayi(), { toplam: 4, isaretli: 0 });
+    assert.equal(await tarihleIsaret(true), 4);
+    assert.equal((await istek(yonetici, 'GET', `/veri-temizleme/etki?${sorguMetni}&secim=uretim_emri:${eskiEmir}`)).statusCode, 400);
+
+    const ilk = await tarihEtkisi();
+    const kok = (tur: string, kimlik: number) => ilk.kokler.find((k) => k.tur === tur && k.kimlik === kimlik)!;
+    assert.deepEqual(ilk.kokler.map((k) => `${k.tur}:${k.kimlik}`).sort(),
+      [`malzeme:${logolu}`, `siparis:${eskiSp}`, `uretim_emri:${eskiEmir}`, `uretim_emri:${eskiUst}`].sort());
+    assert.deepEqual(kok('malzeme', logolu).kilitler, [], "tarihle yolda Logo'ya gitmiş kayıt kilitli değil");
+    assert.ok(kok('uretim_emri', eskiUst).kilitler.some((k) => k.startsWith('İşaretsiz')), JSON.stringify(ilk.kokler));
+    const secerek = await etki([{ tur: 'malzeme', kimlik: logolu }]);
+    assert.deepEqual(secerek.kokler[0]!.kilitler, ["Logo'ya gönderildi"], 'seçerek yolda kilit kalır');
+    const govde = { tarih, ozet: ilk.ozet, yedekAdi: await yedekKoy(new Date()), onay: 'TEMIZLE', parola: PAROLA };
+    assert.equal((await temizleIstegi(yonetici, govde)).statusCode, 409, 'işaretsize bağlı kök tarihle de temizlenmez');
+    assert.equal((await temizleIstegi(yonetici, { ...govde, secim: [{ tur: 'uretim_emri', kimlik: eskiEmir }] })).statusCode, 400);
+
+    await isaretle([{ tur: 'uretim_emri', kimlik: eskiUst }], false);
+    const ikinci = await tarihEtkisi();
+    assert.equal(ikinci.kokler.length, 3);
+    assert.equal(ikinci.tablolar['uretim_emirleri_oncelik_degisimi'], 1);
+    const c = await temizleIstegi(yonetici, { ...govde, ozet: ikinci.ozet });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.equal(await varMi('uretim_emri', 'id', eskiEmir), false);
+    assert.equal(await varMi('siparisler_siparis', 'id', eskiSp), false);
+    assert.equal(await varMi('malzeme_katalog_karti', 'no', logolu), false);
+    assert.equal((await o().sahip.tek<{ var: boolean }>("SELECT EXISTS (SELECT FROM logo_giden WHERE belge_turu = 'malzeme' AND belge_no = $1) AS var", [logolu]))!.var, false);
+    assert.equal((await o().sahip.tek<{ var: boolean }>("SELECT EXISTS (SELECT FROM logo_giden WHERE belge_turu = 'proje' AND belge_no = $1) AS var", [logolu]))!.var, true,
+      'aynı numaralı başka türün kuyruk satırı kalır');
+    await o().sahip.sorgu("DELETE FROM logo_giden WHERE belge_turu = 'proje' AND belge_no = $1", [logolu]);
+    for (const id of [yeniEmir, eskiUst, yeniAlt]) assert.equal(await varMi('uretim_emri', 'id', id), true);
+    assert.equal((await istek(yonetici, 'GET', `/veri-temizleme/etki?bitis=${tarih.bitis}&turler=uretim_emri`)).statusCode, 409, 'işaretli kayıt kalmadı');
+    await o().sahip.sorgu('DELETE FROM uretim_emri WHERE id = ANY($1)', [[yeniAlt, eskiUst]]);
+  });
+
+  test('tarihle: gün sınırı tesis saatiyle (23:59:59 dahil, 00:00 değil), tür süzgeci ve kök sınırı', async () => {
+    const [son, ertesi, tur] = [await emir(), await emir(), await siparis()];
+    await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2018-06-01T20:59:59Z' WHERE id = $1", [son]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2018-06-01T21:00:00Z' WHERE id = $1", [ertesi]);
+    await o().sahip.sorgu("UPDATE siparisler_siparis SET olusturma = '2018-05-01T09:00:00Z' WHERE id = $1", [tur]);
+    const isaretVar = async (t: string, kimlik: number) =>
+      (await o().sahip.tek<{ var: boolean }>('SELECT EXISTS (SELECT FROM ayarlar_deneme_isareti WHERE tur = $1 AND kimlik = $2) AS var', [t, kimlik]))!.var;
+    const yalnizSiparis = await istek(yonetici, 'POST', '/veri-temizleme/isaret-tarihle', { bitis: '2018-06-01', turler: ['siparis'] });
+    assert.equal(yalnizSiparis.statusCode, 200, yalnizSiparis.body);
+    assert.equal(await isaretVar('siparis', tur), true);
+    assert.equal(await isaretVar('uretim_emri', son), false, 'seçilmeyen tür işaretlenmez');
+    const c = await istek(yonetici, 'POST', '/veri-temizleme/isaret-tarihle', { bitis: '2018-06-01', turler: ['uretim_emri'] });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.equal(await isaretVar('uretim_emri', son), true);
+    assert.equal(await isaretVar('uretim_emri', ertesi), false);
+    await assert.rejects(
+      o().sahip.sorgu("SELECT ayarlar_temizlik_tarih_secimi(ARRAY['uretim_emri','siparis'], '2018-06-01', 1)"), /en çok 1/);
+    await isaretle([{ tur: 'uretim_emri', kimlik: son }, { tur: 'siparis', kimlik: tur }], false);
+  });
+
+  test('saat dilimi: tarihle işaretleme tesis gününe göre (23:30 dahil, ertesi 00:30 değil)', async () => {
     const [dahil, disari] = [await emir(), await emir()];
     await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2019-03-10T20:30:00Z' WHERE id = $1", [dahil]);
     await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2019-03-10T21:30:00Z' WHERE id = $1", [disari]);
-    const c = await istek(yonetici, 'GET', '/veri-temizleme/adaylar?tur=uretim_emri&baslangic=2019-03-10&bitis=2019-03-10');
+    const c = await istek(yonetici, 'POST', '/veri-temizleme/isaret-tarihle', { bitis: '2019-03-10', turler: ['uretim_emri'] });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.equal(await varMi('ayarlar_deneme_isareti', 'kimlik', dahil), true);
+    assert.equal(await varMi('ayarlar_deneme_isareti', 'kimlik', disari), false);
+    await isaretle([{ tur: 'uretim_emri', kimlik: dahil }], false);
+  });
+
+  test('saat dilimi: aday süzgeci tesis gününe göre (23:30 dahil, ertesi 00:30 değil)', async () => {
+    const [dahil, disari] = [await emir(), await emir()];
+    await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2019-03-12T20:30:00Z' WHERE id = $1", [dahil]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2019-03-12T21:30:00Z' WHERE id = $1", [disari]);
+    const c = await istek(yonetici, 'GET', '/veri-temizleme/adaylar?tur=uretim_emri&baslangic=2019-03-12&bitis=2019-03-12');
     assert.equal(c.statusCode, 200, c.body);
     assert.deepEqual(temizlikAdaylariCevabi.parse(c.json()).adaylar.map((a) => a.kimlik), [dahil]);
   });
@@ -313,6 +415,45 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
       await o().sahip.sorgu('DROP TRIGGER orn_kural ON uretim_emirleri_oncelik_degisimi');
       await o().sahip.sorgu('DROP FUNCTION orn_silme_kurali()');
       await o().sahip.sorgu('DROP TABLE orn_bag');
+    }
+  });
+
+  test('dış sistem tablosu adıyla kilit: seçerek yolda kök kilitli ve hiçbir şey silinmez, kilit seçime düşürülemez; tarihle yolda silme kurallı bağlı satırla birlikte silinir', async () => {
+    const e = await emir();
+    await o().sahip.sorgu('CREATE TABLE orn_sevkiyat_bag (id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY, emir_id int NOT NULL REFERENCES uretim_emri)');
+    await o().sahip.sorgu("CREATE FUNCTION orn_sevk_kurali() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'ORN sevk kuralı'; END $$");
+    await o().sahip.sorgu('CREATE TRIGGER orn_sevk_kural BEFORE DELETE ON orn_sevkiyat_bag FOR EACH ROW EXECUTE FUNCTION orn_sevk_kurali()');
+    try {
+      await o().sahip.sorgu('INSERT INTO orn_sevkiyat_bag (emir_id) VALUES ($1)', [e]);
+      const secim: TemizlikKoku[] = [{ tur: 'uretim_emri', kimlik: e }];
+      await isaretle(secim);
+      const sonuc = await etki(secim);
+      assert.deepEqual([...sonuc.kokler[0]!.kilitler].sort(), ['Sevkiyat kaydı var', 'Silme kuralı var (orn_sevk_kurali)'].sort(), JSON.stringify(sonuc.kokler));
+      const c = await temizleIstegi(yonetici, { secim, ozet: sonuc.ozet, yedekAdi: await yedekKoy(new Date()), onay: 'TEMIZLE', parola: PAROLA });
+      assert.equal(c.statusCode, 409, c.body);
+      assert.equal(await varMi('uretim_emri', 'id', e), true);
+      assert.equal(await varMi('orn_sevkiyat_bag', 'emir_id', e), true);
+      // Kilit düşürme keyfi seçime uygulanamaz: seçim ve tarih birlikte verilemez, seçimle doğrudan çağrı kilitte durur.
+      const secimJson = JSON.stringify(secim);
+      await assert.rejects(o().sahip.sorgu("SELECT ayarlar_veri_temizle_kur($1::jsonb, ARRAY['uretim_emri'], '2017-02-01', 10, $2)", [secimJson, sonuc.ozet]), /seçim verilmez/);
+      await assert.rejects(o().sahip.sorgu("SELECT ayarlar_temizlik_etkisi_kur($1::jsonb, ARRAY['uretim_emri'], '2017-02-01', 10)", [secimJson]), /seçim verilmez/);
+      await assert.rejects(o().sahip.sorgu('SELECT ayarlar_veri_temizle($1::jsonb, $2)', [secimJson, sonuc.ozet]), /Kilitli kayıt temizlenmez/);
+
+      await o().sahip.sorgu("UPDATE uretim_emri SET acilma = '2017-02-01T09:00:00Z' WHERE id = $1", [e]);
+      const tarih = { bitis: '2017-02-01', turler: ['uretim_emri'] };
+      const t = await istek(yonetici, 'GET', `/veri-temizleme/etki?bitis=${tarih.bitis}&turler=uretim_emri`);
+      assert.equal(t.statusCode, 200, t.body);
+      const tarihEtkisi = temizlikEtkisiCevabi.parse(t.json());
+      assert.deepEqual(tarihEtkisi.kokler.map((k) => [k.kimlik, k.kilitler]), [[e, []]]);
+      assert.equal(tarihEtkisi.tablolar['orn_sevkiyat_bag'], 1);
+      const d = await temizleIstegi(yonetici, { tarih, ozet: tarihEtkisi.ozet, yedekAdi: await yedekKoy(new Date()), onay: 'TEMIZLE', parola: PAROLA });
+      assert.equal(d.statusCode, 200, d.body);
+      assert.equal(await varMi('uretim_emri', 'id', e), false);
+      assert.equal(await varMi('orn_sevkiyat_bag', 'emir_id', e), false);
+      assert.equal((await o().sahip.tek<{ d: string }>("SELECT tgenabled AS d FROM pg_trigger WHERE tgname = 'orn_sevk_kural'"))!.d, 'O', 'kapanan kural sonda açılır');
+    } finally {
+      await o().sahip.sorgu('DROP TABLE orn_sevkiyat_bag');
+      await o().sahip.sorgu('DROP FUNCTION orn_sevk_kurali()');
     }
   });
 

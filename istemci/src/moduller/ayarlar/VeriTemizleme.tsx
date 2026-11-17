@@ -1,10 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, YedekAlCevabi, YedeklerCevabi,
+  TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi, TemizlikTarihSayisiCevabi, YedekAlCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
-import { TEMIZLIK_ONAY_METNI, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
+import { TEMIZLIK_ONAY_METNI, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_TURLERI, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -13,7 +13,9 @@ import './veri-temizleme.css';
 // Deneme verisi temizleme (3395 a): kayıt önce "Deneme" işaretlenir, etki görülür, yedek alınır, parola ve TEMIZLE ile silinir.
 // Sunucu her adımı yeniden denetler; ekran yalnız akışı yürütür.
 type Adim = 'kapsam' | 'etki' | 'yedek' | 'onay' | 'sonuc';
-type Kip = 'secerek' | 'toplu';
+type Kip = 'secerek' | 'toplu' | 'tarih';
+// Kapsam ya elle toplanan seçimdir ya da tarihtir (o güne kadar açılmış işaretli kökler; sunucu çevirir).
+type Kapsami = { secim: TemizlikKoku[] } | { tarih: TemizlikTarihi };
 
 const TUR_SEKMELERI: readonly Sekme<TemizlikTuru>[] = [
   { anahtar: 'uretim_emri', baslik: 'Üretim emirleri', simge: 'list' },
@@ -24,6 +26,7 @@ const TUR_ADI: Readonly<Record<TemizlikTuru, string>> = { uretim_emri: 'emir', s
 const KIP_SEKMELERI: readonly Sekme<Kip>[] = [
   { anahtar: 'secerek', baslik: 'Seçerek', simge: 'check' },
   { anahtar: 'toplu', baslik: 'Toplu (süzgece uyan işaretliler)', simge: 'list' },
+  { anahtar: 'tarih', baslik: 'Tarihle sıfırla', simge: 'calendar' },
 ];
 const ADIMLAR: readonly { anahtar: Adim; baslik: string }[] = [
   { anahtar: 'kapsam', baslik: '1 Kapsam' }, { anahtar: 'etki', baslik: '2 Etki' }, { anahtar: 'yedek', baslik: '3 Yedek' }, { anahtar: 'onay', baslik: '4 Onay' },
@@ -58,7 +61,9 @@ function Adimlar({ simdi }: { simdi: Adim }) {
   );
 }
 
-function Kapsam({ secim, setSecim, ilerle }: { secim: readonly TemizlikKoku[]; setSecim: (s: TemizlikKoku[]) => void; ilerle: () => void }) {
+function Kapsam({ secim, setSecim, ilerle, tarihleIlerle }: {
+  secim: readonly TemizlikKoku[]; setSecim: (s: TemizlikKoku[]) => void; ilerle: () => void; tarihleIlerle: (t: TemizlikTarihi) => void;
+}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [tur, setTur] = useState<TemizlikTuru>('uretim_emri');
@@ -119,6 +124,14 @@ function Kapsam({ secim, setSecim, ilerle }: { secim: readonly TemizlikKoku[]; s
     { anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, hucre: satirDugmeleri },
   ];
   const veri = liste.data;
+  if (kip === 'tarih') {
+    return (
+      <>
+        <Sekmeler etiket="Temizlik yolu" sekmeler={KIP_SEKMELERI} secili={kip} sec={setKip} />
+        <TarihleKapsam ilerle={tarihleIlerle} />
+      </>
+    );
+  }
   return (
     <>
       <Sekmeler etiket="Temizlik yolu" sekmeler={KIP_SEKMELERI} secili={kip} sec={setKip} />
@@ -168,24 +181,101 @@ function Kapsam({ secim, setSecim, ilerle }: { secim: readonly TemizlikKoku[]; s
   );
 }
 
-function Etki({ secim, setSecim, geri, ilerle }: {
-  secim: readonly TemizlikKoku[]; setSecim: (s: TemizlikKoku[]) => void; geri: () => void; ilerle: (etki: TemizlikEtkisiCevabi) => void;
+// Tek tarihle toplu sıfırlama (3395 ek b): o gün dahil o güne kadar açılan bütün kayıtlar önce Deneme işaretlenir, sonra etki görülür.
+// Bu yolda dış sisteme gitmiş kayıt da silinir; sayı işaretlemeden önce gösterilir, yanlış tarihin işareti geri alınır.
+function TarihleKapsam({ ilerle }: { ilerle: (t: TemizlikTarihi) => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const [bitis, setBitis] = useState('');
+  const [turler, setTurler] = useState<TemizlikTuru[]>([...TEMIZLIK_TURLERI]);
+  const tarih: TemizlikTarihi = { bitis, turler };
+  const hazir = bitis !== '' && turler.length > 0;
+  const sorgu = `bitis=${bitis}&turler=${turler.join(',')}`;
+  const sayi = useQuery({
+    queryKey: [...anahtarlar.temizlikAdaylari, 'tarih-sayisi', sorgu],
+    queryFn: () => api.get<TemizlikTarihSayisiCevabi>(`/veri-temizleme/tarih-sayisi?${sorgu}`),
+    enabled: hazir,
+  });
+  const isaret = useMutation({
+    mutationFn: (isaretli: boolean) => api.post<{ degisen: number }>('/veri-temizleme/isaret-tarihle', { ...tarih, isaretli }),
+    onSuccess: ({ degisen }, isaretli) => {
+      bildir('tamam', isaretli ? `${String(degisen)} kayıt Deneme işaretlendi.` : `${String(degisen)} kaydın işareti kaldırıldı.`);
+    },
+    onError: (hata) => { bildir('hata', hataIletisi(hata, 'İşaret değiştirilemedi.')); },
+    onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.temizlikAdaylari }),
+  });
+  const turDegistir = (tur: TemizlikTuru, acik: boolean) => {
+    setTurler(acik ? TEMIZLIK_TURLERI.filter((t) => t === tur || turler.includes(t)) : turler.filter((t) => t !== tur));
+  };
+  const s = hazir ? sayi.data : undefined;
+  const durum = !hazir ? 'Tarih ve en az bir tür seçin.'
+    : s === undefined ? (sayi.isError ? hataIletisi(sayi.error, 'Sayılamadı.') : 'Sayılıyor')
+      : `Bu tarihe kadar ${String(s.toplam)} kayıt var, ${String(s.isaretli)} tanesi işaretli.`;
+  return (
+    <>
+      <p className="tc-ayar-aciklama">
+        {`Canlıda hiç gerçek veri yoksa: seçilen günün sonuna kadar açılmış bütün kayıtlar işaretlenir ve birlikte temizlenir. Bir seferde en çok ${String(TEMIZLIK_TARIHLE_EN_COK_KOK)} kayıt.`}
+      </p>
+      <p className="tc-temizlik-uyari" role="note">
+        Bu yolda Logo'ya ya da SmartES'e gitmiş, etiketi basılmış, sevk ya da fatura görmüş kayıtlar da silinir; karşılıkları orada sahipsiz kalır. Geri dönüş yalnız yedekten.
+      </p>
+      <div className="tc-temizlik-suzgec">
+        <Girdi etiket="Bu tarih dahil, öncesinde açılanlar" type="date" value={bitis} onChange={(e) => setBitis(e.target.value)} />
+      </div>
+      <fieldset className="tc-temizlik-turler">
+        <legend className="tc-ayar-aciklama">Kayıt türleri</legend>
+        {TUR_SEKMELERI.map((t) => (
+          <IsaretKutusu key={t.anahtar} etiket={t.baslik} checked={turler.includes(t.anahtar)} onChange={(e) => turDegistir(t.anahtar, e.target.checked)} />
+        ))}
+      </fieldset>
+      <div className="tc-temizlik-cubuk">
+        <span className="tc-ayar-aciklama" aria-live="polite">{durum}</span>
+        <Dugme simge="rotate" disabled={(s?.isaretli ?? 0) === 0} yukleniyor={isaret.isPending && isaret.variables === false} onClick={() => isaret.mutate(false)}>İşaretleri geri al</Dugme>
+        <Dugme simge="flag" disabled={s === undefined || s.toplam === s.isaretli} yukleniyor={isaret.isPending && isaret.variables === true} onClick={() => isaret.mutate(true)}>
+          {s === undefined ? 'Tarihe kadar açılanları işaretle' : s.toplam === s.isaretli ? 'Hepsi işaretli' : `${String(s.toplam - s.isaretli)} kaydı işaretle`}
+        </Dugme>
+        <Dugme tur="birincil" simge="search" disabled={(s?.isaretli ?? 0) === 0} onClick={() => ilerle(tarih)}>Etkiyi gör</Dugme>
+      </div>
+    </>
+  );
+}
+
+const kapsamSorgusu = (k: Kapsami): string => ('secim' in k
+  ? `secim=${encodeURIComponent(k.secim.map(anahtar).join(','))}`
+  : `bitis=${k.tarih.bitis}&turler=${k.tarih.turler.join(',')}`);
+
+function Etki({ kapsam, setSecim, geri, ilerle }: {
+  kapsam: Kapsami; setSecim: (s: TemizlikKoku[]) => void; geri: () => void; ilerle: (etki: TemizlikEtkisiCevabi) => void;
 }) {
-  const metin = secim.map(anahtar).join(',');
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const metin = kapsamSorgusu(kapsam);
   const etki = useQuery({
     queryKey: [...anahtarlar.temizlikEtkisi, metin],
-    queryFn: () => api.get<TemizlikEtkisiCevabi>(`/veri-temizleme/etki?secim=${encodeURIComponent(metin)}`),
+    queryFn: () => api.get<TemizlikEtkisiCevabi>(`/veri-temizleme/etki?${metin}`),
+  });
+  // Tarihle kapsamda kilitli kök seçimden ancak işareti kaldırılarak çıkar.
+  const isaretKaldir = useMutation({
+    mutationFn: (kokler: TemizlikKoku[]) => api.post<{ degisen: number }>('/veri-temizleme/isaret', { secim: kokler, isaretli: false }),
+    onError: (hata) => { bildir('hata', hataIletisi(hata, 'Kilitliler çıkarılamadı.')); },
+    onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.temizlikEtkisi }),
   });
   if (etki.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Bağlı kayıtlar sayılıyor" />;
   if (etki.isError) return <DurumKutusu durum="hata" hata={etki.error} yenile={() => { void etki.refetch(); }} />;
   const veri = etki.data;
   const kilitli = veri.kokler.filter((k) => k.kilitler.length > 0);
+  const kilitsizSayi = veri.kokler.length - kilitli.length;
+  const kilitlileriCikar = () => {
+    const kokler = kilitli.map((k) => ({ tur: k.tur, kimlik: k.kimlik }));
+    if ('secim' in kapsam) { const cikan = new Set(kokler.map(anahtar)); setSecim(kapsam.secim.filter((k) => !cikan.has(anahtar(k)))); }
+    else isaretKaldir.mutate(kokler);
+  };
   const tablolar = Object.entries(veri.tablolar).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const toplam = tablolar.reduce((t, [, n]) => t + n, 0);
   const stokVar = tablolar.some(([t]) => t.startsWith('stok_'));
   return (
     <>
-      <p className="tc-ayar-aciklama">{`${String(secim.length - kilitli.length)} kayıt ve bağlı ${String(toplam - (secim.length - kilitli.length))} kayıt birlikte silinir. Sayılar şimdiki sayımdır.`}</p>
+      <p className="tc-ayar-aciklama">{`${String(kilitsizSayi)} kayıt ve bağlı ${String(toplam - kilitsizSayi)} kayıt birlikte silinir. Sayılar şimdiki sayımdır.`}</p>
       {tablolar.length > 0 && (
         <ul className="tc-temizlik-etki" aria-label="Silinecek kayıtlar">
           {tablolar.map(([t, n]) => <li key={t}><b>{n}</b><span>{tabloAdi(t)}</span></li>)}
@@ -200,7 +290,7 @@ function Etki({ secim, setSecim, geri, ilerle }: {
           <ul>
             {kilitli.map((k) => <li key={anahtar(k)}><span className="tc-temizlik-no">{k.no ?? String(k.kimlik)}</span>{` ${k.kilitler.join('; ')}`}</li>)}
           </ul>
-          <Dugme simge="x" onClick={() => { const cikan = new Set(kilitli.map(anahtar)); setSecim(secim.filter((k) => !cikan.has(anahtar(k)))); }}>Kilitlileri çıkar</Dugme>
+          <Dugme simge="x" yukleniyor={isaretKaldir.isPending} onClick={kilitlileriCikar}>Kilitlileri çıkar</Dugme>
         </div>
       )}
       <div className="tc-temizlik-cubuk">
@@ -245,16 +335,17 @@ function YedekAdimi({ geri, ilerle }: { geri: () => void; ilerle: (ad: string) =
   );
 }
 
-function Onay({ secim, etki, yedekAdi, geri, bitti }: {
-  secim: readonly TemizlikKoku[]; etki: TemizlikEtkisiCevabi; yedekAdi: string; geri: () => void; bitti: (s: TemizleCevabi) => void;
+function Onay({ kapsam, etki, yedekAdi, geri, bitti }: {
+  kapsam: Kapsami; etki: TemizlikEtkisiCevabi; yedekAdi: string; geri: () => void; bitti: (s: TemizleCevabi) => void;
 }) {
   const istemci = useQueryClient();
   const [onay, setOnay] = useState('');
   const [parola, setParola] = useState('');
   const [istekKimligi] = useState(yeniIstekKimligi);
   const toplam = Object.values(etki.tablolar).reduce((t, n) => t + n, 0);
+  const kokSayisi = etki.kokler.filter((k) => k.kilitler.length === 0).length;
   const temizle = useMutation({
-    mutationFn: () => api.post<TemizleCevabi>('/veri-temizleme/temizle', { secim, ozet: etki.ozet, yedekAdi, onay, parola }, { istekKimligi }),
+    mutationFn: () => api.post<TemizleCevabi>('/veri-temizleme/temizle', { ...kapsam, ozet: etki.ozet, yedekAdi, onay, parola }, { istekKimligi }),
     onSuccess: (s) => { bitti(s); },
     onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.temizlikAdaylari }),
   });
@@ -271,7 +362,7 @@ function Onay({ secim, etki, yedekAdi, geri, bitti }: {
       <div className="tc-temizlik-cubuk">
         <Dugme simge="back" onClick={geri}>Geri</Dugme>
         <Dugme type="submit" tur="tehlike" simge="trash" yukleniyor={temizle.isPending} disabled={onay !== TEMIZLIK_ONAY_METNI || parola === ''}>
-          {`Temizle (${String(secim.length)} kayıt, ${String(Math.max(toplam - secim.length, 0))} bağlı)`}
+          {`Temizle (${String(kokSayisi)} kayıt, ${String(Math.max(toplam - kokSayisi, 0))} bağlı)`}
         </Dugme>
       </div>
     </form>
@@ -295,18 +386,22 @@ function Sonuc({ sonuc, yeni }: { sonuc: TemizleCevabi; yeni: () => void }) {
 export function VeriTemizleme() {
   const [adim, setAdim] = useState<Adim>('kapsam');
   const [secim, setSecim] = useState<TemizlikKoku[]>([]);
+  const [tarih, setTarih] = useState<TemizlikTarihi | null>(null);
+  const kapsam: Kapsami = tarih === null ? { secim } : { tarih };
   const [etki, setEtki] = useState<TemizlikEtkisiCevabi | null>(null);
   const [yedekAdi, setYedekAdi] = useState<string | null>(null);
   const [sonuc, setSonuc] = useState<TemizleCevabi | null>(null);
   return (
     <Kart baslik="Deneme verisini temizle" simge="trash">
-      <p className="tc-ayar-aciklama">Seçilen kayıtlar ve bağlı kayıtları kalıcı silinir. Logo'ya ya da SmartES'e gitmiş, sevkli, faturalı ya da gerçek kayıtta kullanılan kayıt temizlenmez.</p>
+      <p className="tc-ayar-aciklama">Seçilen kayıtlar ve bağlı kayıtları kalıcı silinir. Seçerek ve toplu yolda Logo'ya ya da SmartES'e gitmiş, sevkli, faturalı ya da gerçek kayıtta kullanılan kayıt temizlenmez.</p>
       <Adimlar simdi={adim} />
-      {adim === 'kapsam' && <Kapsam secim={secim} setSecim={setSecim} ilerle={() => setAdim('etki')} />}
-      {adim === 'etki' && <Etki secim={secim} setSecim={setSecim} geri={() => setAdim('kapsam')} ilerle={(e) => { setEtki(e); setAdim('yedek'); }} />}
+      {adim === 'kapsam' && (
+        <Kapsam secim={secim} setSecim={setSecim} ilerle={() => { setTarih(null); setAdim('etki'); }} tarihleIlerle={(t) => { setTarih(t); setAdim('etki'); }} />
+      )}
+      {adim === 'etki' && <Etki kapsam={kapsam} setSecim={setSecim} geri={() => setAdim('kapsam')} ilerle={(e) => { setEtki(e); setAdim('yedek'); }} />}
       {adim === 'yedek' && <YedekAdimi geri={() => setAdim('etki')} ilerle={(ad) => { setYedekAdi(ad); setAdim('onay'); }} />}
       {adim === 'onay' && etki !== null && yedekAdi !== null && (
-        <Onay secim={secim} etki={etki} yedekAdi={yedekAdi} geri={() => setAdim('etki')} bitti={(s) => { setSonuc(s); setSecim([]); setAdim('sonuc'); }} />
+        <Onay kapsam={kapsam} etki={etki} yedekAdi={yedekAdi} geri={() => setAdim('etki')} bitti={(s) => { setSonuc(s); setSecim([]); setTarih(null); setAdim('sonuc'); }} />
       )}
       {adim === 'sonuc' && sonuc !== null && <Sonuc sonuc={sonuc} yeni={() => { setSonuc(null); setEtki(null); setYedekAdi(null); setAdim('kapsam'); }} />}
     </Kart>

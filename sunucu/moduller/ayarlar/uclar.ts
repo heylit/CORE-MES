@@ -6,13 +6,16 @@ import {
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
   temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
   temizlikIsaretGovdesi,
+  temizlikTarihleIsaretGovdesi,
+  temizlikTarihSayisiCevabi,
+  temizlikTarihSayisiSorgusu,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
   ayarDegistir, ayarlariListele, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
-import { denemeIsaretiDegistir, temizlikAdaylari, temizlikEtkisi, veriTemizle } from './veri-temizleme.ts';
+import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
 
 export const uclar = [
@@ -236,7 +239,25 @@ export const uclar = [
     yetki: 'ayarlar.veri-temizle',
     sorgu: temizlikEtkisiSorgusu,
     cevap: temizlikEtkisiCevabi,
-    isle: ({ db, sorgu, kullanici }) => temizlikEtkisi(db, kullanici.id, sorgu.secim),
+    isle: ({ db, sorgu, kullanici }) => temizlikEtkisi(
+      db, kullanici.id, sorgu.bitis !== undefined && sorgu.turler !== undefined ? { tarih: { bitis: sorgu.bitis, turler: sorgu.turler } } : { secim: sorgu.secim ?? [] },
+    ),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/veri-temizleme/isaret-tarihle',
+    yetki: 'ayarlar.veri-temizle',
+    govde: temizlikTarihleIsaretGovdesi,
+    cevap: temizlikIsaretCevabi,
+    isle: ({ db, govde, kullanici }) => denemeIsaretleTarihleUc(db, kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/veri-temizleme/tarih-sayisi',
+    yetki: 'ayarlar.veri-temizle',
+    sorgu: temizlikTarihSayisiSorgusu,
+    cevap: temizlikTarihSayisiCevabi,
+    isle: ({ db, sorgu, kullanici }) => temizlikTarihSayisi(db, kullanici.id, sorgu),
   }),
   // Parola sözleşmede gizlidir, deftere girmez; silinen numaralar denetim ekiyle girer.
   uc({

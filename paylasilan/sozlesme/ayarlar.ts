@@ -420,9 +420,37 @@ export type TemizlikAdaylariCevabi = z.output<typeof temizlikAdaylariCevabi>;
 export const temizlikIsaretGovdesi = z.object({ secim: temizlikSecimi, isaretli: z.boolean() });
 export const temizlikIsaretCevabi = z.object({ degisen: z.number().int().nonnegative() });
 
+// Tek tarihle toplu sıfırlama (3395 ek): seçilen türlerde o gün dahil o güne kadar açılan bütün kökler. Önce hepsi işaretlenir;
+// etki ve temizlik "o güne kadar işaretli kökler" kümesiyle yürür (seçim listesi gönderilmez).
+const temizlikTarihi = z.object({
+  bitis: z.string().regex(GUN, 'Tarih geçersiz.'),
+  turler: z.array(z.enum(TEMIZLIK_TURLERI)).min(1, 'En az bir tür seçin.').max(TEMIZLIK_TURLERI.length),
+});
+export type TemizlikTarihi = z.output<typeof temizlikTarihi>;
+// isaretli false: o güne kadar açılan köklerin işareti kalkar (yanlış tarihle işaretleme geri alınır).
+export const temizlikTarihleIsaretGovdesi = temizlikTarihi.extend({ isaretli: z.boolean().default(true) });
+export const temizlikTarihSayisiSorgusu = z.object({
+  bitis: z.string().regex(GUN, 'Tarih geçersiz.'),
+  turler: z.string().max(60).transform((metin, ctx) => {
+    const sonuc = temizlikTarihi.shape.turler.safeParse(metin.split(','));
+    if (!sonuc.success) { ctx.addIssue({ code: 'custom', message: 'Tür listesi geçersiz.' }); return z.NEVER; }
+    return sonuc.data;
+  }),
+});
+export const temizlikTarihSayisiCevabi = z.object({ toplam: z.number().int().nonnegative(), isaretli: z.number().int().nonnegative() });
+export type TemizlikTarihSayisiCevabi = z.output<typeof temizlikTarihSayisiCevabi>;
+
 // Etki okuması GET'tir: seçim "tur:kimlik" listesi olarak sorguda gelir.
 export const temizlikEtkisiSorgusu = z.object({
-  secim: z.string().max(20_000).transform((metin, ctx) => {
+  bitis: z.string().regex(GUN).optional(),
+  turler: z.string().max(60).optional().transform((metin, ctx) => {
+    if (metin === undefined) return undefined;
+    const sonuc = temizlikTarihi.shape.turler.safeParse(metin.split(','));
+    if (!sonuc.success) { ctx.addIssue({ code: 'custom', message: 'Tür listesi geçersiz.' }); return z.NEVER; }
+    return sonuc.data;
+  }),
+  secim: z.string().max(20_000).optional().transform((metin, ctx) => {
+    if (metin === undefined) return undefined;
     const kokler: TemizlikKoku[] = [];
     for (const parca of metin.split(',')) {
       const [tur, kimlik] = parca.split(':');
@@ -433,6 +461,11 @@ export const temizlikEtkisiSorgusu = z.object({
     if (kokler.length > TEMIZLIK_EN_COK_KOK) { ctx.addIssue({ code: 'custom', message: `Bir seferde en çok ${TEMIZLIK_EN_COK_KOK} kayıt.` }); return z.NEVER; }
     return kokler;
   }),
+}).superRefine((s, ctx) => {
+  const tarihle = s.bitis !== undefined && s.turler !== undefined;
+  if (tarihle === (s.secim !== undefined) || (s.bitis === undefined) !== (s.turler === undefined)) {
+    ctx.addIssue({ code: 'custom', message: 'Ya seçim ya da tarih ve türler verilir.' });
+  }
 });
 export const temizlikKokEtkisi = z.object({
   tur: z.enum(TEMIZLIK_TURLERI),
@@ -450,12 +483,13 @@ export const temizlikEtkisiCevabi = z.object({
 export type TemizlikEtkisiCevabi = z.output<typeof temizlikEtkisiCevabi>;
 
 export const temizleGovdesi = z.object({
-  secim: temizlikSecimi,
+  secim: temizlikSecimi.optional(),
+  tarih: temizlikTarihi.optional(),
   ozet: z.string().length(32),
   yedekAdi: z.string().max(120).regex(YEDEK_ADI, 'Yedek adı geçersiz.'),
   onay: z.literal(TEMIZLIK_ONAY_METNI, { message: `Onay için ${TEMIZLIK_ONAY_METNI} yazın.` }),
   parola: gizli(z.string().min(1, 'Parola zorunlu.').max(200)),
-});
+}).refine((g) => (g.secim === undefined) !== (g.tarih === undefined), { message: 'Ya seçim ya da tarih verilir.', path: ['secim'] });
 export const temizleCevabi = z.object({
   tablolar: z.record(z.string(), z.number().int()),
   kokler: z.array(z.object({ tur: z.enum(TEMIZLIK_TURLERI), no: z.string().nullable() })),

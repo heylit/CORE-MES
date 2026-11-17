@@ -44,7 +44,16 @@ function sunucuKur(temizleCevabi: { durum: number; govde: unknown } | null = nul
     if (yol === '/ayarlar') return json(200, { ayarlar: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
     if (yol.startsWith('/veri-temizleme/adaylar')) return json(200, ADAYLAR);
-    if (yol.startsWith('/veri-temizleme/etki')) return json(200, yol.includes('uretim_emri%3A15') ? KILITLI : TEMIZ);
+    if (yol === '/veri-temizleme/isaret-tarihle') return json(200, { degisen: 3 });
+    if (yol.startsWith('/veri-temizleme/tarih-sayisi')) {
+      const son = istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').at(-1)?.govde as { isaretli?: boolean } | undefined;
+      return json(200, { toplam: 3, isaretli: son?.isaretli === true ? 3 : 0 });
+    }
+    if (yol === '/veri-temizleme/isaret') return json(200, { degisen: 1 });
+    if (yol.startsWith('/veri-temizleme/etki')) {
+      const kaldirildi = istekler.some((i) => i.yol === '/veri-temizleme/isaret');
+      return json(200, yol.includes('uretim_emri%3A15') || (yol.includes('bitis=') && !kaldirildi) ? KILITLI : TEMIZ);
+    }
     if (yol === '/yedekler/al') return json(200, { baslangic: '2026-11-17T12:00:00.000Z' });
     if (yol === '/yedekler') return json(200, YEDEKLER);
     if (yol === '/veri-temizleme/temizle' && temizleCevabi !== null) return json(temizleCevabi.durum, temizleCevabi.govde);
@@ -111,6 +120,50 @@ describe('Sistem Ayarları, veri temizleme', () => {
     const gonderilen = istekler.find((i) => i.yol === '/veri-temizleme/temizle');
     expect(gonderilen?.govde).toEqual({ secim: [{ tur: 'uretim_emri', kimlik: 12 }], ozet: TEMIZ.ozet, yedekAdi: YEDEK_ADI, onay: 'TEMIZLE', parola: 'ornek-parola' });
     expect(gonderilen?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('tarihle sıfırlama: tarih ve tür seçilir, sayı görülür, işaretlenir ve geri alınır; kilitliler işareti kaldırılarak çıkar; temizlik tarihle gider', async () => {
+    const istekler = sunucuKur();
+    ac(['sayfa.ayarlar', 'ayarlar.yaz', 'ayarlar.yedek-indir', 'ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tarihle sıfırla' }));
+    const etkiDugmesi = screen.getByRole('button', { name: 'Etkiyi gör' }) as HTMLButtonElement;
+    const geriDugmesi = screen.getByRole('button', { name: 'İşaretleri geri al' }) as HTMLButtonElement;
+    expect((screen.getByRole('button', { name: 'Tarihe kadar açılanları işaretle' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('note').textContent).toContain("Logo'ya ya da SmartES'e gitmiş");
+    fireEvent.change(screen.getByLabelText('Bu tarih dahil, öncesinde açılanlar'), { target: { value: '2026-11-16' } });
+    fireEvent.click(screen.getByLabelText('Malzemeler'));
+    expect(await screen.findByText('Bu tarihe kadar 3 kayıt var, 0 tanesi işaretli.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/veri-temizleme/tarih-sayisi?bitis=2026-11-16&turler=uretim_emri,siparis')).toBe(true);
+    expect(etkiDugmesi.disabled).toBe(true);
+    expect(geriDugmesi.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '3 kaydı işaretle' }));
+    expect(await screen.findByText('Bu tarihe kadar 3 kayıt var, 3 tanesi işaretli.')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').at(-1)?.govde).toEqual({ bitis: '2026-11-16', turler: ['uretim_emri', 'siparis'], isaretli: true });
+    fireEvent.click(geriDugmesi);
+    expect(await screen.findByText('Bu tarihe kadar 3 kayıt var, 0 tanesi işaretli.')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === '/veri-temizleme/isaret-tarihle').at(-1)?.govde).toEqual({ bitis: '2026-11-16', turler: ['uretim_emri', 'siparis'], isaretli: false });
+    fireEvent.click(screen.getByRole('button', { name: '3 kaydı işaretle' }));
+    expect(await screen.findByText('Bu tarihe kadar 3 kayıt var, 3 tanesi işaretli.')).toBeTruthy();
+    fireEvent.click(etkiDugmesi);
+
+    expect(await screen.findByText('1 kayıt temizlenmez')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/veri-temizleme/etki?bitis=2026-11-16&turler=uretim_emri,siparis')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Kilitlileri çıkar' }));
+    await waitFor(() => { expect(screen.queryByText('1 kayıt temizlenmez')).toBeNull(); });
+    expect(istekler.find((i) => i.yol === '/veri-temizleme/isaret')?.govde).toEqual({ secim: [{ tur: 'uretim_emri', kimlik: 15 }], isaretli: false });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Yedek adımına geç' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yedek al' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam et' }));
+    fireEvent.change(screen.getByLabelText('Onay için TEMIZLE yazın'), { target: { value: 'TEMIZLE' } });
+    fireEvent.change(screen.getByLabelText('Parolanız'), { target: { value: 'ornek-parola' } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Temizle \(1 kayıt, 3 bağlı\)$/ }));
+
+    expect(await screen.findByText('Temizlendi')).toBeTruthy();
+    expect(istekler.find((i) => i.yol === '/veri-temizleme/temizle')?.govde).toEqual({
+      tarih: { bitis: '2026-11-16', turler: ['uretim_emri', 'siparis'] }, ozet: TEMIZ.ozet, yedekAdi: YEDEK_ADI, onay: 'TEMIZLE', parola: 'ornek-parola',
+    });
   });
 
   it('tablonun toplu seçimi kapalıyken satır düğmeleriyle işaretlenir ve eklenir', async () => {

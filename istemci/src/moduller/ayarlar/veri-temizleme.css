@@ -4,7 +4,7 @@
   padding: var(--b-1) var(--b-3); border-radius: var(--yari-tam); font-size: var(--yazi-s); background: var(--panel2); color: var(--muted);
 }
 .tc-temizlik-adimlar > li[data-durum='tamam'] { color: var(--run); }
-.tc-temizlik-adimlar > li[data-durum='simdi'] { background: var(--ink); color: var(--hazard); font-weight: 700; }
+.tc-temizlik-adimlar > li[data-durum='simdi'] { background: var(--ink); color: var(--bg); font-weight: 700; }
 .tc-temizlik-suzgec { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--dokunma) * 4)), 1fr)); gap: var(--b-3); }
 .tc-temizlik-cubuk { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); justify-content: flex-end; }
 .tc-temizlik-cubuk > .tc-ayar-aciklama { margin-right: auto; }
@@ -27,5 +27,6 @@
   .tc-temizlik-cubuk { flex-direction: column-reverse; align-items: stretch; }
   .tc-temizlik-cubuk > .tc-ayar-aciklama { margin-right: 0; }
 }
+.tc-temizlik-turler { display: flex; flex-wrap: wrap; gap: var(--b-3); border: 0; margin: 0; padding: 0; }
 .tc-temizlik-satir-dugme { display: inline-flex; gap: var(--b-1); }
 .tc-temizlik-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); justify-content: flex-end; }

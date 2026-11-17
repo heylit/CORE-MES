@@ -1,11 +1,13 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
-import type { TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku } from '#paylasilan/sozlesme/ayarlar.ts';
-import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
+import type { TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
+import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { temizlikEkiSatirlari, temizlikYedegiUygunMu } from './kurallar.ts';
-import { denemeIsaretiniKaldir, denemeIsaretle, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle } from './sorgular.ts';
+import {
+  denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, denemeIsaretle, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
+} from './sorgular.ts';
 import { yedekOrtaminiKur } from './yedek-dizini.ts';
 import { yedekleriListele } from './yedek.ts';
 
@@ -43,9 +45,26 @@ export async function denemeIsaretiDegistir(db: Db, kisiId: number, secim: reado
   return { degisen: isaretli ? await denemeIsaretle(db, secim, kisiId) : await denemeIsaretiniKaldir(db, secim) };
 }
 
-export async function temizlikEtkisi(db: Db, kisiId: number, secim: readonly TemizlikKoku[]): Promise<TemizlikEtkisiCevabi> {
+export async function denemeIsaretleTarihleUc(db: Db, kisiId: number, tarih: TemizlikTarihi & { isaretli: boolean }): Promise<{ degisen: number }> {
   await bayrakliIste(db, kisiId);
-  const etki = await temizlikEtkisiniOku(db, secim);
+  return { degisen: tarih.isaretli ? await denemeIsaretleTarihle(db, tarih, kisiId) : await denemeIsaretiniKaldirTarihle(db, tarih) };
+}
+
+export async function temizlikTarihSayisi(db: Db, kisiId: number, tarih: TemizlikTarihi): Promise<{ toplam: number; isaretli: number }> {
+  await bayrakliIste(db, kisiId);
+  return temizlikTarihSayisiniOku(db, tarih);
+}
+
+// Kapsam ya açık seçimdir ya da tarihtir; tarih, o güne kadar açılmış işaretli köklere veritabanı işlevinde çevrilir (etki ve
+// temizlik aynı çeviriyi yapar, arada değişen küme özeti tutturmaz).
+export type TemizlikKapsami = { secim: readonly TemizlikKoku[] } | { tarih: TemizlikTarihi };
+
+const kapsamSatiri = (kapsam: TemizlikKapsami): TemizlikKapsamSatiri =>
+  ('secim' in kapsam ? { secim: kapsam.secim } : { tarih: kapsam.tarih, sinir: TEMIZLIK_TARIHLE_EN_COK_KOK });
+
+export async function temizlikEtkisi(db: Db, kisiId: number, kapsam: TemizlikKapsami): Promise<TemizlikEtkisiCevabi> {
+  await bayrakliIste(db, kisiId);
+  const etki = await temizlikEtkisiniOku(db, kapsamSatiri(kapsam)).catch(vtHatasiniCevir);
   return {
     kokler: etki.kokler.map((k) => ({ ...k, tur: k.tur as TemizlikTuru })),
     tablolar: etki.tablolar,
@@ -54,7 +73,8 @@ export async function temizlikEtkisi(db: Db, kisiId: number, secim: readonly Tem
 }
 
 export interface TemizleIstegi {
-  secim: TemizlikKoku[];
+  secim?: TemizlikKoku[] | undefined;
+  tarih?: TemizlikTarihi | undefined;
   ozet: string;
   yedekAdi: string;
   parola: string;
@@ -73,7 +93,8 @@ export async function veriTemizle(
   if (!temizlikYedegiUygunMu(yedekler.find((y) => y.ad === istek.yedekAdi), simdi, TEMIZLIK_YEDEK_EN_ESKI_DK)) {
     throw cakisma(`Temizlikten önce son ${TEMIZLIK_YEDEK_EN_ESKI_DK} dakikada alınmış tamamlanmış bir yedek gerekir.`);
   }
-  const sonuc = await veriyiTemizle(db, istek.secim, istek.ozet).catch(vtHatasiniCevir);
+  const kapsam: TemizlikKapsami = istek.tarih === undefined ? { secim: istek.secim ?? [] } : { tarih: istek.tarih };
+  const sonuc = await veriyiTemizle(db, kapsamSatiri(kapsam), istek.ozet).catch(vtHatasiniCevir);
   const kokler = sonuc.kokler.map((k) => ({ tur: k.tur as TemizlikTuru, no: k.no }));
   denetimEki(temizlikEkiSatirlari(kokler));
   return { tablolar: sonuc.tablolar, kokler, yedekAdi: istek.yedekAdi };
