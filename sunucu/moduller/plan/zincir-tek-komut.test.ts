@@ -150,4 +150,19 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     assert.ok(y1 && y2, 'iki adım canlıda');
     assert.equal(Date.parse(y1.bitis), Date.parse(y2.baslangic), 'öncül çalışmadaki bitişinde biter, ardıl ona yapışık başlar');
   });
+  // Risk K1: çalışma belgesi sayfadan yazılır; ayarsız işlemden kısa süre kabul edilmez, sabit iş tam süreyle yazılır.
+  test('TK-07: sabit işin çalışmadaki süresi ayarsız işlemden kısaysa tam süreyle yazılır (reddedilen süre)', async () => {
+    const { surum, isler } = await planliCalisma(true);
+    const { calisma } = await calismaOku();
+    const plan = calisma.plan!;
+    const ops = plan.ops as Record<string, { m: string; S: number; C: number; job?: string }>;
+    const son = Object.values(ops).map((o) => String(o.job)).sort().at(-1);
+    const [p] = Object.keys(ops).filter((x) => String(ops[x]!.job) === son).sort((a, b) => ops[a]!.S - ops[b]!.S) as [string];
+    const tamDk = Math.round((ops[p]!.C - ops[p]!.S) * 60);
+    const s1 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: { ...ops, [p]: { ...ops[p]!, C: ops[p]!.S + 1 / 60 } } } as Calisma['plan'], locks: { [p]: { m: ops[p]!.m, S: ops[p]!.S } } }, surum);
+    const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Sabit bir dakika', calismaSurumu: s1, dortSaatGerekcesi: null });
+    assert.equal(r.statusCode, 200, r.body);
+    const y1 = (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.find((x) => x.isEmriId === isler[0])!;
+    assert.ok((Date.parse(y1.bitis) - Date.parse(y1.baslangic)) / 60_000 >= tamDk, `bir dakikalık önizleme kabul edilmedi: ${y1.baslangic} - ${y1.bitis}, tam ${String(tamDk)} dk`);
+  });
 });

@@ -922,6 +922,8 @@ type Yer = Aralik & { isEmriId: number; kaynak: Kaynak; parcalar?: (Aralik & { n
 // Çalışan iş planlanan makinede değil, terminalin çalıştırdığı makinededir (393 d); bölünmüş iş saklı parçalarıyla kalır.
 const kaynakOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Kaynak =>
   ('fiili' in b && !y.parcalar?.length ? b.fiili.get(y.isEmriId) : undefined) ?? y.kaynak;
+// Çalışmanın saatleri dakikaya yuvarlanarak yazılır (planAni); süre sınırında bu kadar pay bırakılır.
+const YUVARLAMA_DK = 1;
 const yerOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Yer & { kilitli: boolean; dondurulmus: boolean; elleSira: number | null; elleIstasyonId: number | null; elleKaynak: boolean } => ({
   isEmriId: y.isEmriId, kaynak: kaynakOf(b, y), ...(gerceklesenAralik(b, y) ?? { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis) }), kilitli: y.kilitli, dondurulmus: y.dondurulmus, elleSira: y.elleSira,
   elleIstasyonId: y.elleIstasyonId ?? null, elleKaynak: y.elleKaynak ?? false,
@@ -1830,10 +1832,12 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const bas = dk(b, new Date(i.x.onizleme!.baslangic));
         // Süre çalışmanınkidir (önizlemenin bu kaynaktaki çalışma dakikası): motor sıraya bağlı ayarı (aynı aile, ayar matrisi) kısa sayar,
         // iş emrinin tam ayarı daha uzundur. Tam ayarla yazılan sabit öncül çalışmadakinden geç biter; ona yapışık ardıl canlıya alırken sıraya
-        // aykırı kalır. Önizlemenin süresi yoksa kaynağın takvim ve veriminden gelen süre kullanılır.
+        // aykırı kalır. Çalışma belgesi sayfadan yazılır: süre yalnız ayarsız işlemle tam süre arasındaysa (ayar kısalabilir, işlem kısalmaz)
+        // kabul edilir; dışındaysa kaynağın takvim ve veriminden gelen tam süre kullanılır.
+        const tam = sureOf(i, q.kaynak);
+        if (tam === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
         const calismaSuresi = kesisimDk(takvim(b)(q.kaynak), bas, dk(b, new Date(i.x.onizleme!.bitis)));
-        const sure = calismaSuresi > 0 ? calismaSuresi : sureOf(i, q.kaynak);
-        if (sure === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
+        const sure = calismaSuresi >= tam - (i.is.ayarDk ?? 0) - YUVARLAMA_DK && calismaSuresi <= tam ? calismaSuresi : tam;
         const dolu: Aralik[] = [
           ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
           ...[...sabitYer.values()].filter((y) => ayniKaynak(y.kaynak, q.kaynak)),
