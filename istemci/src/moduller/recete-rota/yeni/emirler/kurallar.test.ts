@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  emirRotasi, emirTalepTaslagi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, talepGunu, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
+  emirRotasi, emirTalepTaslagi, seriRotasiNotu, turRotasi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, talepGunu, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -415,23 +415,39 @@ describe('3247 a: emir formunda rota', () => {
     ({ id, rotaId, harf, durum, surum: 1, aciklama: null, acilma: '2026-11-14T00:00:00Z', onaylama: null, yururlugeAlma: null });
   const rota = (id: number, ad: string, standart: boolean, emirTurleri: ('fai' | 'numune')[]) => ({ id, ad, standart, surum: 1, emirTurleri, taslakAcilabilir: true });
   const c = {
-    rotalar: [rota(1, 'Standart', true, []), rota(2, 'FAI', false, ['fai']), rota(3, 'Numune', false, ['numune'])],
+    rotalar: [rota(1, 'Seri', true, []), rota(2, 'FAI', false, ['fai']), rota(3, 'Numune', false, ['numune'])],
     revizyonlar: [rev(10, 1, 'C', 'yururlukte'), rev(11, 2, 'A', 'yururlukte'), rev(12, 3, 'A', 'taslak')],
   };
   it('tek rotalı üründe alan yok', () => {
     expect(emirRotasi({ rotalar: [c.rotalar[0]!], revizyonlar: [c.revizyonlar[0]!] }, 'seri', 'Seri', '')).toBeNull();
     expect(emirRotasi(undefined, 'seri', 'Seri', '')).toBeNull();
   });
-  it('türün rotası kendiliğinden seçilir, bağlı rota yoksa Standart', () => {
+  it('türün rotası kendiliğinden seçilir, bağlı rota yoksa Seri', () => {
     expect(emirRotasi(c, 'fai', 'FAI', '')).toMatchObject({ secili: '2', revizyonId: 11, uyari: null, ipucu: 'FAI türünün rotası' });
     expect(emirRotasi(c, 'seri', 'Seri', '')).toMatchObject({ secili: '1', revizyonId: 10, uyari: null });
   });
-  it('elle seçilen rota türün rotasını söyler; yürürlükte olmayan rota listeye yalnız türün rotasıyken girer ve uyarır', () => {
-    expect(emirRotasi(c, 'fai', 'FAI', '1')).toMatchObject({ secili: '1', revizyonId: 10, ipucu: 'Elle seçildi; FAI türünün rotası FAI' });
+  it('elle seçilen rota türün rotasını söyler; yürürlükte olmayan rota elle seçilirse uyarır', () => {
+    expect(emirRotasi(c, 'fai', 'FAI', '1')).toMatchObject({ secili: '1', revizyonId: 10, ipucu: 'Elle seçildi; FAI türünün rotası FAI', seriyeDusus: null });
     expect(emirRotasi(c, 'seri', 'Seri', '')!.secenekler.map((s) => s.deger)).toEqual(['1', '2']);
+    const n = emirRotasi(c, 'numune', 'Numune', '3')!;
+    expect(n.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rev C', 'FAI · Rev A', 'Numune · yürürlükte değil']);
+    expect([n.revizyonId, n.uyari]).toEqual([null, 'Numune rotasının yürürlükte revizyonu yok; emri açmak için Seri rotasını seçin.']);
+  });
+  it('3411 a: türün rotası yürürlükte değilse ya da yoksa Seri (Standart) seçilir ve formda düşüş söylenir', () => {
     const n = emirRotasi(c, 'numune', 'Numune', '')!;
-    expect(n.secenekler.map((s) => s.baslik)).toEqual(['Standart · Rev C', 'FAI · Rev A', 'Numune · yürürlükte değil']);
-    expect([n.revizyonId, n.uyari]).toEqual([null, 'Numune rotasının yürürlükte revizyonu yok; emri açmak için Standart rotasını seçin.']);
+    expect(n).toMatchObject({ secili: '1', revizyonId: 10, uyari: null, ipucu: 'Numune türünün rotası' });
+    expect(n.seriyeDusus).toBe('Numune rotası henüz yürürlükte değil. Emir Seri rotası Rev C ile açılır; emir ayrıntısında bu not kalır.');
+    expect(emirRotasi(c, 'prototip', 'Prototip', '')!.seriyeDusus).toMatch(/^Prototip türünün rotası yok\./);
+    expect(emirRotasi(c, 'seri', 'Seri', '')!.seriyeDusus).toBeNull();
+    expect(turRotasi(c, 'numune')).toMatchObject({ rota: { id: 1 }, seriyeDustu: true, turunRotasi: { id: 3 } });
+    expect(turRotasi(c, 'fai')).toMatchObject({ rota: { id: 2 }, seriyeDustu: false, turunRotasi: null });
+  });
+  it('3411 a: Seri dışı türdeki emir Seri revizyonundan açıldıysa ayrıntıda not kalır', () => {
+    const d = { routeRevs: [{ id: '10', no: 'C', rotaStandart: true }, { id: '11', no: 'A', rotaStandart: false }] } as unknown as Parameters<typeof seriRotasiNotu>[0];
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' })).toBe('Numune emri Seri rotasıyla açıldı (Rev C); Numune türünün kendi rotası kullanılmadı.');
+    expect(seriRotasiNotu(d, { tur: 'fai', rev: '11' })).toBeNull();
+    expect(seriRotasiNotu(d, { tur: 'seri', rev: '10' })).toBeNull();
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10', rotasiz: true })).toBeNull();
   });
 });
 

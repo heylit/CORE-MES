@@ -2,6 +2,7 @@ import type { DurumEmirleri, DurumRotaAdimi, MalzemeIhtiyaciSatiri } from '#payl
 import type { PlanOnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
 import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
 import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
 import type { PatlatmaOnizlemeCevabi, UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -523,22 +524,39 @@ export const stoktanCikar = (dugum: string, stoktan: ReadonlySet<string>): boole
 
 type OnizlemeDugumu = PatlatmaOnizlemeCevabi['dugumler'][number];
 // Emir yalnız ürünün yürürlükteki revizyonundan açılır (emir-ac komutu da onu bulur); yoksa null.
-// 3247 a: ürünün birden çok rotası varsa emir formunda "Rota" alanı. Varsayılan emir türüne bağlı rota, yoksa Standart; kullanıcı
-// yürürlükte revizyonu olan başka rotayı seçebilir. Türün rotası yürürlükte değilse uyarı çıkar, emir Standart seçilince açılır.
+// 3247 a: ürünün birden çok rotası varsa emir formunda "Rota" alanı; kullanıcı yürürlükte revizyonu olan başka rotayı seçebilir.
+// 3411 a: varsayılan emir türünün yürürlükte rotasıdır; türün rotası yoksa ya da yürürlükte değilse Seri (Standart) gelir ve uyarı çıkar.
+type UrunRotalari = Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'>;
+type UrunRotasi = UrunRevizyonlariCevabi['rotalar'][number];
+export interface TurRotasi { rota: UrunRotasi; seriyeDustu: boolean; turunRotasi: UrunRotasi | null }
+export function turRotasi(c: UrunRotalari, tur: string): TurRotasi | null {
+  const standart = c.rotalar.find((r) => r.standart) ?? null;
+  const turun = c.rotalar.find((r) => !r.standart && (r.emirTurleri as readonly string[]).includes(tur)) ?? null;
+  const yururlukte = turun !== null && c.revizyonlar.some((r) => r.rotaId === turun.id && r.durum === 'yururlukte');
+  const rota = turun !== null && (yururlukte || standart === null) ? turun : standart ?? c.rotalar[0] ?? null;
+  if (rota === null) return null;
+  return { rota, seriyeDustu: rota.standart && tur !== 'seri', turunRotasi: rota.standart ? turun : null };
+}
+export const seriyeDususMetni = (turAdi: string, turunRotasi: { ad: string } | null): string =>
+  turunRotasi === null ? `${turAdi} türünün rotası yok` : `${turunRotasi.ad} rotası henüz yürürlükte değil`;
+
 export interface EmirRotasi {
   secenekler: { deger: string; baslik: string }[];
   secili: string;
   revizyonId: number | null;
   ipucu: string;
   uyari: string | null;
+  // 3411 a: emir Seri'ye düştüyse formdaki uyarı (hata değil; emir açılır).
+  seriyeDusus: string | null;
 }
-export function emirRotasi(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined, tur: string, turAdi: string, secilen: string): EmirRotasi | null {
+export function emirRotasi(c: UrunRotalari | undefined, tur: string, turAdi: string, secilen: string): EmirRotasi | null {
   if (c === undefined || c.rotalar.length < 2) return null;
   const yururlukte = (id: number) => c.revizyonlar.find((r) => r.rotaId === id && r.durum === 'yururlukte') ?? null;
-  const standart = c.rotalar.find((r) => r.standart) ?? c.rotalar[0]!;
-  const turun = c.rotalar.find((r) => (r.emirTurleri as readonly string[]).includes(tur)) ?? standart;
+  const t = turRotasi(c, tur)!;
+  const turun = t.rota;
   const secili = (secilen === '' ? undefined : c.rotalar.find((r) => String(r.id) === secilen)) ?? turun;
   const rev = yururlukte(secili.id);
+  const seri = c.rotalar.find((r) => r.standart) ?? turun;
   return {
     secenekler: c.rotalar.filter((r) => r.id === secili.id || yururlukte(r.id) !== null).map((r) => {
       const y = yururlukte(r.id);
@@ -547,7 +565,9 @@ export function emirRotasi(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyon
     secili: String(secili.id),
     revizyonId: rev?.id ?? null,
     ipucu: secili.id === turun.id ? `${turAdi} türünün rotası` : `Elle seçildi; ${turAdi} türünün rotası ${turun.ad}`,
-    uyari: rev === null ? `${secili.ad} rotasının yürürlükte revizyonu yok; emri açmak için ${standart.ad} rotasını seçin.` : null,
+    uyari: rev === null ? `${secili.ad} rotasının yürürlükte revizyonu yok; emri açmak için ${seri.ad} rotasını seçin.` : null,
+    seriyeDusus: secili.id === turun.id && t.seriyeDustu && rev !== null
+      ? `${seriyeDususMetni(turAdi, t.turunRotasi)}. Emir ${turun.ad} rotası Rev ${rev.harf} ile açılır; emir ayrıntısında bu not kalır.` : null,
   };
 }
 
@@ -564,8 +584,7 @@ export function tekRotaMetni(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizy
 export interface BolmeTurRotasi { ad: string; harf: string | null; farkli: boolean; adimlar: EmirAdimi[] }
 export function bolmeTurRotasi(d: Durum, c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined, o: Emir, tur: string): BolmeTurRotasi | null {
   if (c === undefined || c.rotalar.length === 0) return null;
-  const standart = c.rotalar.find((r) => r.standart) ?? c.rotalar[0]!;
-  const rota = c.rotalar.find((r) => (r.emirTurleri as readonly string[]).includes(tur)) ?? standart;
+  const rota = turRotasi(c, tur)!.rota;
   const y = c.revizyonlar.find((r) => r.rotaId === rota.id && r.durum === 'yururlukte') ?? null;
   const emirRev = o.rev === null ? undefined : c.revizyonlar.find((r) => String(r.id) === o.rev);
   const farkli = emirRev !== undefined && emirRev.rotaId !== rota.id;
@@ -673,4 +692,14 @@ export function sureOzetiNedenleri(o: AdimSureOzeti): { hazirlik: string | null;
     : o.saglam === 0 && o.hurda === 0 ? 'Sayım yok: işlem süresi ölçülmedi'
       : o.saglam === 0 ? 'Sağlam sayım yok: işlem süresi ölçülmedi' : 'İşlem süresi ölçülmedi';
   return { hazirlik: o.hazirlikDk === null ? 'Ayar basılmadı: hazırlık ölçülmedi' : null, islem };
+}
+
+// 3411 a: Seri dışı türdeki emir Seri (Standart) rotanın revizyonundan açıldıysa emir ayrıntısında not kalır (türün yürürlükte rotası
+// yoktu ya da Seri elle seçildi). Rotasız emirde ve revizyonu okunamayan emirde not yoktur.
+export function seriRotasiNotu(d: Pick<DurumCevabi, 'routeRevs'>, o: { tur: string; rev: string | null; rotasiz?: boolean | undefined }): string | null {
+  if (o.rotasiz === true || o.rev === null || o.tur === 'seri') return null;
+  const turAdi = (EMIR_TURU_ADLARI as Record<string, string>)[o.tur] ?? o.tur;
+  const rev = d.routeRevs?.find((r) => r.id === o.rev);
+  if (rev === undefined || rev.rotaStandart === false) return null;
+  return `${turAdi} emri Seri rotasıyla açıldı (Rev ${rev.no}); ${turAdi} türünün kendi rotası kullanılmadı.`;
 }

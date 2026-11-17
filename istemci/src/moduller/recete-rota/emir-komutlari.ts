@@ -1,6 +1,7 @@
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { AdimliEmirAyrintisi, AdimliEmirCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
+import { turRotasi } from './yeni/emirler/kurallar.ts';
 
 // Emir komutları (kart #1185): prototipin emir eylemleri sahibi modüllerin VAR OLAN uçlarına gider. Emir yalnız yürürlükteki rota
 // revizyonundan açılır: prototip revizyon seçmez, köprü ürünün yürürlükteki revizyonunu kendisi okur. Emrin sürümü ekranın yüklediği
@@ -136,14 +137,12 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         };
       }
       const rotalar = await api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunId)}`);
-      // 3247 a: formda seçilen rota; seçilmediyse emir türüne bağlı rota, o da yoksa Standart. Türe bağlı rotası yürürlükte olmayan
-      // emir Standart'a sessizce düşmez: kullanıcı formda Standart'ı seçerek açar.
+      // 3247 a: formda seçilen rota; seçilmediyse emir türünün rotası (3411 a: türün yürürlükte rotası yoksa Seri).
       const secilen = girdi['rotaId'] === undefined ? null : kimlik(girdi['rotaId'], 'rota');
-      const rota = secilen !== null ? rotalar.rotalar.find((x) => x.id === secilen)
-        : rotalar.rotalar.find((x) => emirTuru !== undefined && (x.emirTurleri as readonly string[]).includes(emirTuru)) ?? rotalar.rotalar.find((x) => x.standart);
+      const rota = secilen !== null ? rotalar.rotalar.find((x) => x.id === secilen) : turRotasi(rotalar, emirTuru ?? 'seri')?.rota;
       if (secilen !== null && rota === undefined) throw hata(409, 'Seçilen rota bu ürünün değil.');
       const yururlukte = rotalar.revizyonlar.find((r) => r.durum === 'yururlukte' && (rota === undefined || r.rotaId === rota.id));
-      if (yururlukte === undefined && rota !== undefined && !rota.standart) throw hata(409, `${rota.ad} rotasının yürürlükte revizyonu yok; Standart rotayı seçerek açabilirsiniz.`);
+      if (yururlukte === undefined && rota !== undefined && !rota.standart) throw hata(409, `${rota.ad} rotasının yürürlükte revizyonu yok; Seri rotasını seçerek açabilirsiniz.`);
       if (yururlukte === undefined) throw hata(422, 'Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.');
       // Risk N1: çok katmanlı seçim (stoktan karşılanan düğümler) formun önizlediği revizyondandır. Sipariş partisi emri başka türün
       // rotasına düşürdüyse o düğümler bu revizyonda olmayabilir: emir açılmaz, kullanıcı türü formda seçip yeniden önizler.
