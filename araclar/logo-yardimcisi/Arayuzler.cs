@@ -212,6 +212,40 @@ namespace LogoYardimcisi
         public string Birim;
     }
 
+    // Kart 3345 a: alış ve satış irsaliyesi başlığı (STFICHE) ve malzeme satırları (STLINE); yalnız okunur. Türler Sorgular.IrsaliyeTurleri.
+    // Değişme zamanı Logo sunucusunun yerel saatidir (CAPIBLOCK_MODIFIEDDATE); yalnız imleç olarak kullanılır.
+    public sealed class IrsaliyeBasligi
+    {
+        public int Ref;
+        public int Tur;
+        public string FisNo;
+        public string BelgeNo;
+        public DateTime Tarih;
+        public bool Iptal;
+        public int AmbarNo;
+        public string CariKodu;
+        public string CariAdi;
+        public string FaturaNo;
+        public bool EIrsaliye;
+        public DateTime? Degisme;
+        public List<IrsaliyeSatiri> Satirlar = new List<IrsaliyeSatiri>();
+    }
+
+    public sealed class IrsaliyeSatiri
+    {
+        public int Ref;
+        public string MalzemeKodu;
+        public string MalzemeAdi;
+        public decimal Miktar;
+        public string Birim;
+        public decimal Fiyat;
+        public int DovizTuru;
+        public decimal DovizFiyati;
+        public int SiparisRef;
+        public int SiparisSatirRef;
+        public string SiparisNo;
+    }
+
     public sealed class FaturaOzeti
     {
         public int Ref;
@@ -293,6 +327,11 @@ namespace LogoYardimcisi
         Dictionary<int, string> SiparisSatirBirimleri(int fisRef);
         List<MalKabulSatiri> MalKabul(int sonGorulen, int enCok);
         List<FaturaOzeti> Faturalar(int siparisRef);
+        // Kart 3345 a: irsaliyeler başlık kaydı sırasıyla (sonGorulen'den sonrası, baslangic gününden eski gelmez), değişenler (değişme zamanı,
+        // eşitte başlık kaydı sırasıyla) ve baslangic'tan beri var olan başlık kayıtları (silineni bulmak için). Satırlar başlıkla gelir.
+        List<IrsaliyeBasligi> Irsaliyeler(int sonGorulen, DateTime baslangic, int enCok);
+        List<IrsaliyeBasligi> DegisenIrsaliyeler(DateTime sonra, int sonRef, DateTime baslangic, int enCok);
+        List<int> IrsaliyeRefleri(DateTime baslangic);
         FisBasligi Talep(string no);
         List<TalepSatiri> TalepSatirlari(List<int> satirRefleri);
         List<Karsilama> Karsilamalar(int siparisRef);

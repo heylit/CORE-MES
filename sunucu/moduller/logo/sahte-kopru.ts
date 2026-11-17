@@ -89,6 +89,10 @@ export interface SahteKopru {
   malKabulBicimi: 'dizi' | 'zarf' | 'bozuk';
   // Mal kabul isteklerinin since değerleri (istek sırasıyla).
   malKabulSince: number[];
+  // 3345 a: yardımcının /api/Dispatch uçları gibi: başlıklar (lines dahil) ve dönem; isteklerin sorgu dizgeleri sırasıyla.
+  irsaliyeler: Record<string, unknown>[];
+  irsaliyeDonemi: { firm: number; period: number };
+  irsaliyeIstekleri: string[];
   cariListesi: unknown;
   ambarlar: unknown;
   faturalar: Map<string, unknown[]>;
@@ -180,6 +184,9 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     malKabulSatirlari: [],
     malKabulBicimi: 'dizi',
     malKabulSince: [],
+    irsaliyeler: [],
+    irsaliyeDonemi: { firm: 1, period: 1 },
+    irsaliyeIstekleri: [],
     cariListesi: [],
     ambarlar: [{ nr: 0, name: 'Merkez' }],
     faturalar: new Map(),
@@ -285,6 +292,25 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         kopru.malKabulSince.push(since);
         const liste = kopru.malKabulSatirlari.filter((x) => typeof x['logicalRef'] !== 'number' || x['logicalRef'] > since);
         json(cevap, 200, kopru.malKabulBicimi === 'bozuk' ? { success: true } : kopru.malKabulBicimi === 'zarf' ? { success: true, data: liste } : liste);
+        return;
+      }
+      // Yardımcının Islemler.IrsaliyeListesi ve IrsaliyeRefleri davranışı: from'dan yeni tarihli, kayıt (ya da değişme zamanı ve kayıt) sırasıyla 100'lük sayfa.
+      if (istek.method === 'GET' && (yol === '/api/Dispatch/list' || yol === '/api/Dispatch/refs')) {
+        const q = new URL(istek.url ?? '', 'http://sahte').searchParams;
+        kopru.irsaliyeIstekleri.push(`${yol}?${q.toString()}`);
+        const from = q.get('from') ?? '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { json(cevap, 400, { success: false, error: 'from yyyy-MM-dd olmalı.' }); return; }
+        const ref = (x: Record<string, unknown>): number => Number(x['logicalRef']);
+        const tarihli = kopru.irsaliyeler.filter((x) => String(x['date']) >= from);
+        if (yol === '/api/Dispatch/refs') { json(cevap, 200, { ...kopru.irsaliyeDonemi, refs: tarihli.map(ref) }); return; }
+        const since = Number(q.get('since') ?? 0);
+        const sonra = q.get('changedAfter');
+        const degisme = (x: Record<string, unknown>): string => (typeof x['modifiedAt'] === 'string' ? x['modifiedAt'] : '');
+        const secilen = sonra === null
+          ? tarihli.filter((x) => ref(x) > since).sort((a, b) => ref(a) - ref(b))
+          : tarihli.filter((x) => degisme(x) > sonra || (degisme(x) === sonra && ref(x) > since))
+            .sort((a, b) => (degisme(a) < degisme(b) ? -1 : degisme(a) > degisme(b) ? 1 : ref(a) - ref(b)));
+        json(cevap, 200, { ...kopru.irsaliyeDonemi, dispatches: secilen.slice(0, 100) });
         return;
       }
       if (istek.method === 'GET' && yol === '/api/Arp/list') {

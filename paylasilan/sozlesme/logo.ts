@@ -320,3 +320,94 @@ export const logoRozetCevabi = z.object({
   })),
 });
 export type LogoRozetCevabi = z.output<typeof logoRozetCevabi>;
+
+// 3345 a: Logo irsaliyeleri, yalnız okuma. Tür Logo STFICHE.TRCODE'dur. Fiyat ve tutar yalnız fiyat yetkisi olana dolu gelir
+// (alışta satin-alma.oku, satışta siparisler.fiyat-oku); yetkisizde null ve fiyatGorunur false.
+export const LOGO_IRSALIYE_TURLERI = [1, 3, 4, 5, 6, 8, 9, 10] as const;
+export const IRSALIYE_YONLERI = ['alis', 'satis'] as const;
+export const IRSALIYE_ESLESME_DURUMLARI = ['eslesti', 'fark', 'eslesmedi', 'karsiligi-yok', 'iptal', 'logoda-yok'] as const;
+export const IRSALIYE_GUN_SECENEKLERI = [7, 30, 90] as const;
+const imzaliMiktar = z.string().regex(/^-?\d+(\.\d+)?$/);
+
+export const irsaliyeListesiSorgusu = z.object({
+  sayfa: z.coerce.number<number>().int().min(1).max(100_000).prefault(1),
+  sayfaBoyu: z.coerce.number<number>().int().min(1).max(200).optional(),
+  yon: z.enum(IRSALIYE_YONLERI).prefault('alis'),
+  tur: z.coerce.number<number>().int().optional(),
+  gun: z.coerce.number<number>().int().refine((g) => (IRSALIYE_GUN_SECENEKLERI as readonly number[]).includes(g), 'Gün 7, 30 ya da 90 olmalı.').prefault(30),
+  durum: z.enum(IRSALIYE_ESLESME_DURUMLARI).optional(),
+  ara: z.string().trim().max(64).optional(),
+});
+
+const coreKarsiligi = z.object({ tur: z.enum(['siparis', 'sevk', 'mal-kabul']), id: z.number().int(), no: z.string() });
+
+export const irsaliyeListeSatiri = z.object({
+  firma: z.number().int(),
+  donem: z.number().int(),
+  kayitNo: z.number().int(),
+  tur: z.number().int(),
+  turAdi: z.string(),
+  fisNo: z.string().nullable(),
+  belgeNo: z.string().nullable(),
+  tarih: tarihSemasi,
+  cariKodu: z.string().nullable(),
+  cariAdi: z.string().nullable(),
+  eIrsaliye: z.boolean(),
+  faturaNo: z.string().nullable(),
+  satirSayisi: z.number().int(),
+  durum: z.enum(IRSALIYE_ESLESME_DURUMLARI),
+  ozet: z.string(),
+});
+export type IrsaliyeListeSatiri = z.output<typeof irsaliyeListeSatiri>;
+
+const irsaliyeOkumasi = z.object({
+  // "Logo bağlantısı" ve "Logo: irsaliye okuması" ikisi de açık mı.
+  acik: z.boolean(),
+  sonOkuma: zamanSemasi.nullable(),
+});
+
+export const irsaliyeListesiCevabi = z.object({
+  satirlar: z.array(irsaliyeListeSatiri),
+  toplam: z.number().int().min(0).nullable(),
+  sayfa: z.number().int().min(1),
+  sayfaBoyu: z.number().int().min(1),
+  // Seçili yön, gün ve aramayla tür başına irsaliye sayısı; görünmeyen (ölçülmemiş konsinye) türler yoktur.
+  turler: z.array(z.object({ tur: z.number().int(), ad: z.string(), sayi: z.number().int() })),
+  durumlar: z.array(z.object({ durum: z.enum(IRSALIYE_ESLESME_DURUMLARI), sayi: z.number().int() })),
+  okuma: irsaliyeOkumasi,
+});
+export type IrsaliyeListesiCevabi = z.output<typeof irsaliyeListesiCevabi>;
+
+export const irsaliyeParametresi = z.object({
+  firma: z.coerce.number<number>().int().min(0),
+  donem: z.coerce.number<number>().int().min(0),
+  kayitNo: z.coerce.number<number>().int().positive(),
+});
+
+export const irsaliyeCevabi = z.object({
+  baslik: irsaliyeListeSatiri.extend({
+    ambar: z.string().nullable(),
+    iptal: z.boolean(),
+    logodaYok: z.boolean(),
+    okumaZamani: zamanSemasi,
+  }),
+  fiyatGorunur: z.boolean(),
+  satirlar: z.array(z.object({
+    kayitNo: z.number().int(),
+    malzemeKodu: z.string().nullable(),
+    malzemeAdi: z.string().nullable(),
+    miktar: imzaliMiktar.nullable(),
+    birim: z.string().nullable(),
+    fiyat: imzaliMiktar.nullable(),
+    tutar: imzaliMiktar.nullable(),
+    dovizTuru: z.number().int().nullable(),
+    dovizFiyati: imzaliMiktar.nullable(),
+    siparisNo: z.string().nullable(),
+    durum: z.enum(IRSALIYE_ESLESME_DURUMLARI),
+    neden: z.string().nullable(),
+    core: coreKarsiligi.nullable(),
+    coreMiktari: imzaliMiktar.nullable(),
+    coreBirimi: z.string().nullable(),
+  })),
+});
+export type IrsaliyeCevabi = z.output<typeof irsaliyeCevabi>;

@@ -855,3 +855,12 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar)],
   );
 }
+
+// 3345 a: belge numarasıyla iptal edilmemiş sevk işleri (Logo satış irsaliyesinin karşılığı). Aynı numaralı birden çok iş varsa en yenisi.
+export function belgeNoluIsler(db: Db, belgeNolar: readonly string[]): Promise<{ belgeNo: string; id: number; tarih: string }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT ON (belge_no) belge_no AS "belgeNo", id, tarih::text AS tarih FROM sevkiyat_isi
+      WHERE iptal_edildi IS NULL AND belge_no = ANY($1::text[]) ORDER BY belge_no, tarih DESC, id DESC`,
+    [[...new Set(belgeNolar)]],
+  );
+}
