@@ -131,7 +131,7 @@ export function SiparisAyrinti() {
       <SayfaBasligi
         baslik={s.no}
         alt={`${s.firmaAd ?? `Firma ${s.firmaId}`}, ${tarihMetni(s.siparisTarihi)} tarihli sipariş.`}
-        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={s.firmaId} logoda={logo.durum(id)?.durum === 'logoda'} crm={false} /></>}
+        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={s.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={false} /></>}
         geriYol="/siparisler"
         geriMetni="Siparişlere dön"
         islemler={islemler}

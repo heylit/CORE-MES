@@ -163,7 +163,7 @@ export function TeklifAyrinti() {
       <SayfaBasligi
         baslik={t.baslik}
         alt={`${t.firmaAd ?? `Firma ${t.firmaId}`}, ${zamanMetni(t.olusturma)} tarihinde açıldı. İstenen teslim: ${tarihMetni(t.istenenTarih)}.`}
-        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={t.firmaId} logoda={logo.durum(id)?.durum === 'logoda'} crm={true} /></>)}
+        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={t.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={true} /></>)}
         geriYol="/siparisler/teklifler"
         geriMetni="Tekliflere dön"
         islemler={islemler || undefined}
