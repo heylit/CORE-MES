@@ -180,7 +180,11 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal(d.kalemler[0]?.malzemeGelisi, '2099-07-03T08:00:00+03:00');
     const fiyatli = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene', 'siparisler.fiyat-oku']);
     const f = (await oku(fiyatli, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
-    assert.deepEqual([f.termin, f.maliyetToplami, f.kalemler[0]?.dokum, f.genelGiderSaatBasi], [PLAN_TERMINI, '380.00', null, null]);
+    // 3401-1 a: satış fiyatını görmek maliyet toplamını açmaz; toplam finans.maliyet-oku ile gelir.
+    assert.deepEqual([f.termin, f.maliyetToplami, f.kalemler[0]?.birimMaliyet, f.kalemler[0]?.dokum, f.genelGiderSaatBasi], [PLAN_TERMINI, null, null, null, null]);
+    const maliyetli = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene', 'finans.maliyet-oku']);
+    const ml = (await oku(maliyetli, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([ml.termin, ml.maliyetToplami, ml.kalemler[0]?.birimMaliyet, ml.kalemler[0]?.dokum, ml.genelGiderSaatBasi], [PLAN_TERMINI, '380.00', '38.0000', null, null]);
     const fiyatsiz = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene']);
     const s = (await oku(fiyatsiz, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
     assert.deepEqual([s.termin, s.maliyetToplami, s.kalemler[0]?.birimMaliyet, s.kalemler[0]?.dokum], [PLAN_TERMINI, null, null, null]);
@@ -408,15 +412,66 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     const satis = await girisYap('satis');
     let t = await teklifAc();
     const d = (await oku(satis.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
-    assert.deepEqual([d.termin, d.maliyetToplami, d.kalemler[0]?.dokum, d.genelGiderSaatBasi], [PLAN_TERMINI, '380.00', null, null]);
+    // 3401-1 a: satış satış fiyatını ve tutarı görür; maliyet toplamı, birim maliyet ve kâr oranı finans.maliyet-oku ister.
+    assert.deepEqual([d.termin, d.maliyetToplami, d.kalemler[0]?.birimMaliyet, d.kalemler[0]?.dokum, d.genelGiderSaatBasi], [PLAN_TERMINI, null, null, null, null]);
     t = await komut(t, 'surum-ver', satisSurumu(t), 200, satis.cerez);
     assert.deepEqual([t.durum, t.surumler[0]?.toplam !== null], ['verildi', true]);
-    assert.deepEqual((await taslaklar(t, satis.cerez)).map((x) => [x.gorunum, x.karOrani]), [['satis', '25.00']]);
+    assert.deepEqual((await taslaklar(t, satis.cerez)).map((x) => [x.gorunum, x.karOrani, x.maliyetToplami]), [['satis', null, null]]);
     // 272 1a: satış termin onayı yetkilisidir; onay bekleyen termin yoksa ret geçiştendir (422), yetkiden değil.
     assert.equal((await gonder(satis.cerez, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 422);
     assert.equal((await oku(satis.cerez, '/musteri-tedarikci/firmalar/secim')).statusCode, 200);
     const mudur = await girisYap('mudur');
-    assert.equal((await oku(mudur.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>().kalemler[0]?.dokum?.length, 3);
+    const md = (await oku(mudur.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([md.kalemler[0]?.dokum?.length, md.maliyetToplami, md.kalemler[0]?.birimMaliyet], [3, '380.00', '38.0000']);
+    assert.deepEqual((await taslaklar(t, mudur.cerez)).map((x) => [x.karOrani, x.maliyetToplami]), [['25.00', '380.00']]);
+  });
+
+  // 3401-1 a: maliyet toplamı, birim maliyet ve kâr oranı yalnız finans.maliyet-oku ile gelir; satış fiyatı ve tutar fiyat-oku ile. Her alan için
+  // yetkisizde null ve yetkilide dolu, dört uçta (termin ve adet denemesi, deneme taslağı, plan ve satış taslakları).
+  test('3401-1 a: kâr ve maliyet dört uçta yalnız finans.maliyet-oku; satış fiyatı ve tutar fiyat-oku ile ayrı gelir', async () => {
+    const satis = await girisYap('satis');
+    const muhasebe = await girisYap('muhasebe_finans');
+    const mudur = await girisYap('mudur');
+    const sadeceFiyat = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene', 'siparisler.fiyat-oku']);
+    const sadeceMaliyet = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene', 'finans.maliyet-oku']);
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', satisSurumu(t));
+    // Adet denemesi: birim maliyet ve toplam maliyet.
+    const adet = async (cerez: string) => (await oku(cerez, `/siparisler/teklifler/${t.id}/adet-denemesi`)).json<AdetDenemesiCevabi>().satirlar[1];
+    for (const cerez of [satis.cerez, sadeceFiyat]) assert.deepEqual([(await adet(cerez))?.maliyetToplami, (await adet(cerez))?.kalemler[0]?.birimMaliyet], [null, null]);
+    for (const cerez of [sadeceMaliyet, mudur.cerez]) assert.deepEqual([(await adet(cerez))?.maliyetToplami, (await adet(cerez))?.kalemler[0]?.birimMaliyet], ['380.00', '38.0000']);
+    // Termin denemesi: toplam ve kalem maliyeti.
+    const termin = async (cerez: string) => (await oku(cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
+    for (const cerez of [satis.cerez, sadeceFiyat]) assert.deepEqual([(await termin(cerez)).maliyetToplami, (await termin(cerez)).kalemler[0]?.toplamMaliyet], [null, null]);
+    for (const cerez of [sadeceMaliyet, mudur.cerez]) assert.deepEqual([(await termin(cerez)).maliyetToplami, (await termin(cerez)).kalemler[0]?.toplamMaliyet], ['380.00', '380.00']);
+    // Plan taslakları (okuma) ve deneme taslağı (yazma cevabı): kâr oranı ve maliyet toplamı.
+    const planTaslak = async (cerez: string) => (await taslaklar(t, cerez)).map((x) => [x.karOrani, x.maliyetToplami]);
+    for (const cerez of [satis.cerez, sadeceFiyat, planlama.cerez]) assert.deepEqual(await planTaslak(cerez), [[null, null]]);
+    for (const cerez of [sadeceMaliyet, mudur.cerez, muhasebe.cerez]) {
+      const c = await oku(cerez, `/siparisler/teklifler/${t.id}/plan-taslaklari`);
+      if (c.statusCode === 200) assert.deepEqual(c.json<PlanTaslaklariCevabi>().taslaklar.map((x) => [x.karOrani, x.maliyetToplami]), [['25.00', '380.00']]);
+    }
+    assert.deepEqual(await planTaslak(mudur.cerez), [['25.00', '380.00']]);
+    const denemeTaslagi = async (cerez: string) => (await gonder(cerez, `/siparisler/teklifler/${t.id}/deneme-taslagi`, { karOrani: '30', gecerlilik: GECERLILIK })).json<PlanTaslaklariCevabi>().taslaklar.find((x) => x.tur === 'deneme');
+    const sd = await denemeTaslagi(satis.cerez);
+    assert.deepEqual([sd?.karOrani, sd?.maliyetToplami], [null, null]);
+    const md = await denemeTaslagi(mudur.cerez);
+    assert.deepEqual([md?.karOrani, md?.maliyetToplami], ['30.00', '380.00']);
+    // Satış taslakları: kâr finans.maliyet-oku, tutar fiyat-oku; ikisi birbirini açmaz.
+    const atolye = async (cerez: string) => {
+      const c = await oku(cerez, '/siparisler/satis-taslaklari');
+      assert.equal(c.statusCode, 200, c.body);
+      const x = c.json<AtolyeTaslaklariCevabi>().taslaklar.find((y) => y.teklifId === t.id);
+      return [x?.karOrani, x?.tutar];
+    };
+    assert.deepEqual(await atolye(satis.cerez), [null, '75.00']);
+    assert.deepEqual(await atolye(sadeceFiyat), [null, '75.00']);
+    assert.deepEqual(await atolye(sadeceMaliyet), ['25.00', null]);
+    assert.deepEqual(await atolye(mudur.cerez), ['25.00', '75.00']);
+    assert.deepEqual(await atolye(planlama.cerez), [null, null]);
+    // Satışın gördüğü sürümde satış fiyatı ve tutar dolu kalır (3401-2 a).
+    const sv = (await oku(satis.cerez, `/siparisler/teklifler/${t.id}`)).json<TeklifAyrintisi>();
+    assert.deepEqual([sv.surumler[0]?.toplam, sv.surumler[0]?.fiyatlar[0]?.birimFiyat], ['75.00', '5.0000']);
   });
 
   test('TKL-19 plan şeridi: motorun plan verisi geçer; sipariş emir noyla, satış taslağı teklif noyla, bu teklif adıyla; motor vermezse null', async () => {

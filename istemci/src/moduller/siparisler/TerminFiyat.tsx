@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type {
   MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi, TerminYerlesimi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, Kart, KilitliDeger, KilitliSutunNotu, Rozet, Secim, Simge, Tablo, YETKI_ADI, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { AdetTablosu } from './AdetTablosu.tsx';
@@ -18,7 +18,7 @@ import { PlanSeridi } from './PlanSeridi.tsx';
 import { bugun, teslimGunu, terminGunu } from './teslim-suresi.ts';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
-import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
+import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useMaliyetToplamiGorur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
 // 3301 (D): kademe 3 termin ve fiyat, kademe 4 koşullar ve gönder; ikisi tek formdur, sürüm kademe 4'ten verilir.
 export type FiyatKademesi = 3 | 4;
@@ -107,7 +107,8 @@ const tutarMetni = (n: number | null, pb: string): string => (n === null || !Num
 // Kademe 3'ün alanları (geçerlilik yalnız termin denenirken); kademe 4'ten gönderimde bunlardan biri hatalıysa kademe 3 açılır.
 const KADEME3_ALANI = /^(fiyatlar\.|kar$|istenenTermin$|baslangic$|gecerlilik$)/;
 
-function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
+// Kâr oranı maliyet görmeyene gösterilmez ve sorulmaz; alan zorunlu denetimine girmez (3401-1 a).
+function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean, karGorunur: boolean) {
   return (d: Degerler): AlanHatalari => {
     const hata: AlanHatalari = {};
     d.fiyatlar.forEach((f, i) => {
@@ -116,7 +117,7 @@ function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean) {
     });
     if (planli) {
       if (d.gecerlilik === '') hata['gecerlilik'] = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
-      if (karSayisi(d.kar) === null) hata['kar'] = 'Kâr en çok iki ondalıklı bir yüzde olmalı.';
+      if (karGorunur && karSayisi(d.kar) === null) hata['kar'] = 'Kâr en çok iki ondalıklı bir yüzde olmalı.';
     }
     if (denenir && d.yerlesim === 'geriye' && d.istenenTermin === '') hata['istenenTermin'] = GERIYE_TERMIN_ZORUNLU;
     if (denenir && d.yerlesim === 'baslat' && d.baslangic === '') hata['baslangic'] = BASLAT_TARIHI_ZORUNLU;
@@ -147,6 +148,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   const { bildir } = useBildirim();
   const terminDener = useTerminDener();
   const maliyetOkur = useMaliyetOkur();
+  const maliyetGorur = useMaliyetToplamiGorur();
   const korumali = useKorumaliGonderim();
   const ilk = teklif.surumler.length === 0;
   const pb = teklif.paraBirimi;
@@ -160,7 +162,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   kademeRef.current = kademe;
   const form = useForm<Degerler, TeklifAyrintiCevabi | null>({
     ilk: ilkDegerler(teklif),
-    dogrula: (d) => dogrula(planliRef.current, kademeRef.current, denenir)(d),
+    dogrula: (d) => dogrula(planliRef.current, kademeRef.current, denenir, maliyetGorur)(d),
     hataIletisi: 'Sürüm verilemedi.',
     // Kademe 3'te kayıt yoktur: denetim geçince koşullara geçilir.
     kaydet: (d) => {
@@ -278,19 +280,20 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
     else form.degistir({ istenenTermin: gun === d.istenenTermin && d.yerlesim === 'arkaya' ? '' : gun });
   };
 
-  const kalemSutunlari: Sutun<{ s: TeklifAyrintiCevabi['satirlar'][number]; k: TerminDenemesiKalemi | undefined; i: number }>[] = [
+  type KalemSatiri = { s: TeklifAyrintiCevabi['satirlar'][number]; k: TerminDenemesiKalemi | undefined; i: number };
+  const kalemSutunlari: Sutun<KalemSatiri>[] = [
     {
       anahtar: 'kalem', baslik: 'Kalem', hucre: ({ s, k }) => (
         <span className="tc-sp-ad">
           <strong>{s.tanim}</strong>
           <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
           {k?.plansiz && <Rozet ton="uyari">Plansız: elle fiyat</Rozet>}
-          {k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <Rozet ton="uyari">Maliyet yok: kâr eklenmez, elle fiyat</Rozet>}
+          {maliyetGorur && k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <Rozet ton="uyari">Maliyet yok: kâr eklenmez, elle fiyat</Rozet>}
         </span>
       ),
     },
     { anahtar: 'bitis', baslik: 'Plan bitişi', hizala: 'sag', kirilmaz: true, hucre: ({ k }) => (k?.plansiz ? '—' : tarihMetni(k?.bitis ?? null)) },
-    { anahtar: 'maliyet', baslik: 'Birim maliyet', hizala: 'sag', kirilmaz: true, hucre: ({ k }) => (gizli && k !== undefined && !k.plansiz ? GIZLI : fiyatMetni(k?.birimMaliyet ?? null, pb)) },
+    ...(maliyetGorur ? [{ anahtar: 'maliyet', baslik: 'Birim maliyet', hizala: 'sag', kirilmaz: true, hucre: ({ k }: KalemSatiri) => (gizli && k !== undefined && !k.plansiz ? GIZLI : fiyatMetni(k?.birimMaliyet ?? null, pb)) }] as Sutun<KalemSatiri>[] : []),
     {
       anahtar: 'fiyat', baslik: 'Birim fiyat', hucre: ({ s, i }) => (
         <Girdi
@@ -328,28 +331,36 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               {gizli && (
                 <p className="tc-sp-bildirim" role="note"><Rozet ton="bilgi"><Simge ad="lock" boyut="k" /> {GIZLI}</Rozet> {FIYAT_ONERISI_YOK}</p>
               )}
-              <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
-                <span className="tc-sp-etiket">Kâr (maliyet üstü)</span>
-                <div className="tc-sp-kar-dugmeler">
-                  {KARLAR.map((k) => (
-                    <Dugme key={k} tur={karSayisi(d.kar) === Number(k) ? 'birincil' : 'ikincil'} aria-pressed={karSayisi(d.kar) === Number(k)} onClick={() => form.degistir({ kar: k })}>{`%${k}`}</Dugme>
-                  ))}
+              {maliyetGorur ? (
+                <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
+                  <span className="tc-sp-etiket">Kâr (maliyet üstü)</span>
+                  <div className="tc-sp-kar-dugmeler">
+                    {KARLAR.map((k) => (
+                      <Dugme key={k} tur={karSayisi(d.kar) === Number(k) ? 'birincil' : 'ikincil'} aria-pressed={karSayisi(d.kar) === Number(k)} onClick={() => form.degistir({ kar: k })}>{`%${k}`}</Dugme>
+                    ))}
+                  </div>
+                  <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
                 </div>
-                <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
-              </div>
-              {karsiz.length > 0 && (
+              ) : (
+                <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
+                  <span className="tc-sp-etiket">Kâr oranı</span>
+                  <KilitliDeger yetki={YETKI_ADI.maliyet} />
+                </div>
+              )}
+              {!maliyetGorur && <KilitliSutunNotu ne="Birim maliyet sütunu" yetki={YETKI_ADI.maliyet} />}
+              {maliyetGorur && karsiz.length > 0 && (
                 <p className="tc-sp-bildirim" role="status">
                   <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
                   {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
                 </p>
               )}
               <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
-                <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
+                <div><dt>Maliyet toplamı</dt><dd>{!maliyetGorur ? <KilitliDeger yetki={YETKI_ADI.maliyet} /> : gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
                 <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
-                <div className="tc-sp-genel"><dt>Net kâr (iskontosuz)</dt><dd>{gizli ? GIZLI : tumMaliyet && satis !== null && maliyet !== null ? tutarMetni(satis - maliyet, pb) : '—'}</dd></div>
+                <div className="tc-sp-genel"><dt>Net kâr (iskontosuz)</dt><dd>{!maliyetGorur ? <KilitliDeger yetki={YETKI_ADI.maliyet} /> : gizli ? GIZLI : tumMaliyet && satis !== null && maliyet !== null ? tutarMetni(satis - maliyet, pb) : '—'}</dd></div>
               </dl>
-              {!tumMaliyet && !gizli && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
-              <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} />
+              {maliyetGorur && !tumMaliyet && !gizli && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
+              <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} maliyetGorur={maliyetGorur} />
               <div className="tc-sp-satir-sag">
                 <Dugme simge="file" disabled={deneniyor} onClick={() => { void taslakAc(); }}>Deneme taslağı kaydet</Dugme>
                 <span className="tc-sp-ipucu">Deneme taslağı planda yer tutmaz; verilen teklif satış taslağı olarak yer tutar.</span>

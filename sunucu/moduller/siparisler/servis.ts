@@ -18,14 +18,14 @@ import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlil
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
   TAKVIM_SIPARIS_DURUMU, kilitliKalemReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
-import type { BaslikAlanlari, KalemSatiri, SiparisSatiri as BaslikSatiri } from './sorgular.ts';
+import type { BaslikAlanlari, SiparisKilidi, KalemSatiri, SiparisSatiri as BaslikSatiri } from './sorgular.ts';
 
 const KISITLAR = {
   siparisler_siparis_musteri_no_tekil: { ileti: MUSTERI_NO_KULLANILIYOR, alan: 'musteriSiparisNo' },
@@ -115,9 +115,11 @@ const baslik = (g: SiparisEkleVerisi): BaslikAlanlari => ({
   cezaOraniGun: g.cezaOraniGun, cezaTavaniOrani: g.cezaTavaniOrani, odemeVadesiGun: g.odemeVadesiGun,
 });
 
+const kayitliTicariSart = (m: SiparisKilidi) => ({ cezaOraniGun: m.gecikme_ceza_orani, cezaTavaniOrani: m.ceza_tavani_orani, odemeVadesiGun: m.odeme_vadesi_gun });
+
 // `fiyatYazar` uçta `siparisler.fiyat-oku`dan gelir (201 a); disari çağıranlar (Portal) fiyatı kendi yetkisiyle yazar.
 export async function siparisEkle(db: Db, kullanici: Kullanici, g: SiparisEkleVerisi, fiyatYazar = true): Promise<SiparisAyrintisi> {
-  const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar);
+  const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
   await firmayiDenetle(db, g.firmaId, null);
   await kalemleriDenetle(db, g);
@@ -154,7 +156,7 @@ export async function taslakSiparisAc(db: Db, kullanici: Kullanici, g: TaslakSip
   return siparisEkle(db, kullanici, govde.data);
 }
 
-async function kilitle(db: Db, id: number): Promise<{ durum: SiparisDurumu; firma_id: number }> {
+async function kilitle(db: Db, id: number): Promise<SiparisKilidi> {
   const mevcut = await sorgular.siparisKilitle(db, id);
   if (mevcut === null) throw bulunamadi(SIPARIS_YOK);
   return mevcut;
@@ -163,7 +165,7 @@ async function kilitle(db: Db, id: number): Promise<{ durum: SiparisDurumu; firm
 export async function siparisGuncelle(
   db: Db, kullanici: Kullanici, id: number, g: SiparisGuncelleVerisi, fiyatYazar = true,
 ): Promise<SiparisAyrintisi> {
-  const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar);
+  const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
   const mevcut = await kilitle(db, id);
   const ret = duzenlemeReddi(mevcut.durum);
@@ -187,7 +189,7 @@ export async function siparisGuncelle(
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
   await kalemleriDenetle(db, { ...g, satirlar });
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
-    guncelle: () => sorgular.siparisGuncelle(db, id, baslik(g), g.surum, kullanici.id),
+    guncelle: () => sorgular.siparisGuncelle(db, id, fiyatYazar ? baslik(g) : { ...baslik(g), ...kayitliTicariSart(mevcut) }, g.surum, kullanici.id),
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));

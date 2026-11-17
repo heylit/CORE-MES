@@ -480,6 +480,12 @@ export const bedelAyari = z.object({
   yuksekEsigi: z.number().gt(1), dusukEsigi: z.number().gt(0).lt(1),
   yuksekCarpani: carpan, normalCarpani: carpan, dusukCarpani: carpan,
 });
+// 3401-1 a: okuma cevabında para alanları (taban bedel, finansman ve kâr riski oranları) maliyet göremeyene null gelir; eşikler ve çarpanlar
+// öncelik sınıfının kuralıdır, planı yazan da görür. Yazma gövdesi (bedelAyariGovdesi) dolu değer ister.
+export const bedelAyariCevabi = bedelAyari.extend({
+  tabanBedelSaat: bedelAyari.shape.tabanBedelSaat.nullable(), finansmanOraniGun: bedelAyari.shape.finansmanOraniGun,
+  karRiskiOraniGun: bedelAyari.shape.karRiskiOraniGun.nullable(),
+});
 // 1448 a: finansman oranı salt okunurdur (finansın tek oranı); gövdede gelirse yazılmaz.
 export const bedelAyariGovdesi = bedelAyari.partial({
   yuksekCarpani: true, normalCarpani: true, dusukCarpani: true, finansmanOraniGun: true,
@@ -561,6 +567,7 @@ export type OnizleSorgusu = z.input<typeof onizleSorgusu>;
 export type CanliYerlesimCevabi = z.output<typeof canliYerlesimCevabi>;
 export type ProjePlaniCevabi = z.output<typeof projePlaniCevabi>;
 export type BedelAyari = z.output<typeof bedelAyari>;
+export type BedelAyariCevabi = z.output<typeof bedelAyariCevabi>;
 export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
 export type MotorAyarlari = z.output<typeof motorAyarlari>;
 export type MotorAyariGovdesi = z.output<typeof motorAyariGovdesi>;

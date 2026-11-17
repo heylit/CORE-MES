@@ -454,17 +454,17 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.equal(yeniOp.statusCode, 400, yeniOp.body);
   });
 
-  test('CA-9: plan öncelik ayarları plan modülüne yazılır; müdür yazar, planlama 403 alır, okuma herkese açık', async () => {
-    const onceki = await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari');
+  test('CA-9: plan öncelik ayarları plan modülüne yazılır; müdür yazar, planlama 403 alır; TL alanlarını müdür okur (3401-1 a)', async () => {
+    const onceki = await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari');
     const yeni = { ...onceki, tabanBedelSaat: onceki.tabanBedelSaat + 1, finansmanOraniGun: null };
     const r = { yol: '/plan/bedel-ayari', govde: { ...yeni, taslak: null } };
     assert.equal((await istek(c.planlama, 'POST', r.yol, r.govde)).statusCode, 403);
     // 148 a: bedel ayarı taslağa yazılır, onayla canlıya geçer.
     const t = (await tamam<PlanCevabi>(c.mudur, 'POST', r.yol, r.govde)).taslak!.id;
-    assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', `/plan/bedel-ayari?taslak=${String(t)}`), yeni);
-    assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari'), onceki, 'onaya kadar canlı değişmez');
+    assert.deepEqual(await tamam<BedelAyari>(c.mudur, 'GET', `/plan/bedel-ayari?taslak=${String(t)}`), yeni);
+    assert.deepEqual(await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari'), onceki, 'onaya kadar canlı değişmez');
     await canliyaYaz(t, c.mudur);
-    assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari'), yeni);
+    assert.deepEqual(await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari'), yeni);
     await canliyaYaz((await tamam<PlanCevabi>(c.mudur, 'POST', r.yol, { ...onceki, taslak: null })).taslak!.id, c.mudur);
   });
   // 499 a, 503 a, 505 a, 506 a: çalışma planı sunucuda plan modülünün diliyle okunur ve yazılır. Çalışmanın işlem kimlikleri sayfanın
