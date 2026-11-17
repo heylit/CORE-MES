@@ -716,8 +716,6 @@
 .tc-pyq-acilir-menu .tc-pyq-menu-yon { flex: 0 0 auto; flex-direction: row; gap: var(--b-1); }
 .tc-pyq-acilir-menu .tc-pyq-menu-yon button { border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); padding: 0 var(--b-3); font-weight: 700; }
 .tc-pyq-planla .tc-pyq-acilir-menu button > span, .tc-pyq-menu-secili > span:first-child { font-weight: 700; }
-.tc-pyq-akis { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
-.tc-pyq-akis > small { color: var(--muted); font-size: var(--yazi-xs); }
 /* 3335-3b: operasyon satırında adıma sorun bildir düğmesi. Kart düzeninde (dar ekran) yazısıyla durur; geniş tabloda sütun dar olduğu için yalnız simgedir. */
 .tc-pyq-adim-sorun {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--b-1); min-width: var(--dokunma); min-height: var(--dokunma); padding: 0 var(--b-2);
@@ -728,3 +726,18 @@
   .tc-pyq-adim-sorun { padding: 0; border-color: transparent; color: var(--muted); }
   .tc-pyq-adim-sorun > span { display: none; }
 }
+
+/* Planlama yolu (3414): adımlar, sonuç cümlesi ve o adımın düğmeleri. */
+.tc-pyq-yol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.tc-pyq-yol-not { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-yol > .tc-pyq-yol-govde { flex: 1 1 100%; }
+.tc-pyq-yol .tc-pyq-onay-adimlar li[data-bitti] { color: var(--ink); }
+.tc-pyq-yol-govde { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-left: var(--kayma) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-pyq-yol-govde[data-tur="gec"] { border-left-color: var(--d-gec); }
+.tc-pyq-yol-govde[data-tur="risk"] { border-left-color: var(--d-risk); }
+.tc-pyq-yol-govde[data-tur="iyi"] { border-left-color: var(--d-iyi); }
+.tc-pyq-yol-govde > p { flex: 1 1 20rem; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pyq-yol-govde > p small { color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyq-yol-govde[data-tur="gec"] > p small { color: var(--ink); }
+.tc-pyq-yol-secenek { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pyq-yol-secenek > small { color: var(--muted); font-size: var(--yazi-xs); }

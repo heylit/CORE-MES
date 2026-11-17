@@ -1369,9 +1369,9 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(satir(m, /Bütün planı baştan kur/).textContent).toContain('Henüz plan yok');
     expect(satir(m, /Geride kalanları yeniden planla \(0\)/).disabled).toBe(true);
     expect(satir(m, /Geride kalanları yeniden planla/).textContent).toContain('Henüz plan yok');
-    // Üç adım ve taslak cümlesi şeridin altında bir kez yazar.
+    // Dört adım ve taslak cümlesi şeridin altında bir kez yazar.
     const akis = document.querySelector('[data-akis]') as HTMLElement;
-    expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Planla2 Kontrol et3 Canlıya al');
+    expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Seç2 Sistem önersin3 Düzelt4 Onayla');
     expect(akis.textContent).toContain('atölyenin gördüğü plan yalnız Canlıya al ile değişir');
     expect(satir(m, /Plansızların hepsini planla/).disabled).toBe(true);
     expect(satir(m, /İşaretli adımları planla \(0\)/).disabled).toBe(true);

@@ -38,6 +38,7 @@ import { TaslakCubugu } from './TaslakCubugu.tsx';
 import { EmirAdimlari, SiraSeridi, type GeriOzeti, type PlanlaDurumu, type PlanlaIstegi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
+import { Yol } from './Yol.tsx';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -709,15 +710,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         )}
       </div>
       )}
-      {!onayAcik && yazabilir && (
-        <div className="tc-pyq-akis" data-akis="">
-          <ol className="tc-pyq-onay-adimlar" aria-label="Plan adımları">
-            <li aria-current="step"><b>1</b> Planla</li>
-            <li><b>2</b> Kontrol et</li>
-            <li><b>3</b> Canlıya al</li>
-          </ol>
-          <small>Hepsi önce taslağınıza yazılır, Geri ile alınır; atölyenin gördüğü plan yalnız Canlıya al ile değişir.</small>
-        </div>
+      {!onayAcik && yazabilir && !tur && (
+        <Yol
+          m={m} p={p} kart={seciliKart} vurgu={vurgu} zaman={zaman} pd={seciliKart ? planlaDurumu : null} plansiz={plansizlar.length} taslakVar={taslakVar} mesgul={mesgul}
+          malzemeBekleyen={malzeme?.bekleyen} oner={planlaIste} hamle={hamleUygula} surum={surum}
+          hepsiniPlanla={() => { void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}
+          yenidenPlanla={() => { if (seciliKart) void yenidenPlanla(seciliKart.emirler.filter((e) => e.durum !== 'plansiz').map((e) => e.id), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''} yeniden planlandı.`); }}
+          onayaGec={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}
+        />
       )}
       {taslak && !onayAcik && (
         <TaslakCubugu
