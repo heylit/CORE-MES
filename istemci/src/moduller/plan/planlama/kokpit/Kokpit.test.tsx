@@ -18,6 +18,13 @@ import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { Kokpit } from './index.tsx';
 import { onayAcIste } from './istek.ts';
+import * as gonder from '../motor/atolye/gonder.ts';
+
+// Oklar seçimi Araçlar menüsündedir (3365).
+function okKipiSec(ad: string): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: new RegExp(ad) }));
+}
 
 // Örnek çalışma uydurmadır (iki emir: biri geç, biri riskli). Sunucu çağrısı yapılmaz; taşıma ve tur ekran testindedir
 // (ekran-testleri/planlama-kokpit.spec.ts).
@@ -303,14 +310,15 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
   });
 
-  it('yazabilen kişide sağ tık menüsü Yapışarak tut ve Ayrıntı sunar; tutulan iş için ipucu çıkar, Esc vazgeçer', () => {
+  it('yazabilen kişide sağ tık menüsü yalnız Ayrıntı sunar (3365); çift tık işi tutar, ipucu çıkar, Esc vazgeçer', () => {
     ac();
     const is = document.querySelector<HTMLElement>('[data-is="3.10"]');
     if (!is) throw new Error('iş yok');
     fireEvent.contextMenu(is);
     const menu = screen.getByRole('menu');
-    expect(within(menu).getAllByRole('menuitem').map((x) => x.textContent)).toEqual([expect.stringContaining('Yapışarak tut'), expect.stringContaining('Ayrıntı')]);
-    fireEvent.click(within(menu).getByRole('menuitem', { name: /Yapışarak tut/ }));
+    expect(within(menu).getAllByRole('menuitem').map((x) => x.textContent)).toEqual([expect.stringContaining('Ayrıntı')]);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.doubleClick(is);
     expect(screen.getByText(/Bırakmak için tıklayın/)).toBeTruthy();
     expect(document.querySelector('[data-satir="1"]')?.getAttribute('data-aday')).toBe('evet');
     expect(document.querySelector('[data-satir="3"]')?.getAttribute('data-aday')).toBe('hayir');
@@ -559,7 +567,7 @@ describe('Kokpit', () => {
     arac('Ayarlar');
     // Tüm planın yönü de bu menüdedir (3335-2); açıklaması küçük yazıdadır.
     const adi = (x: Element): string => (x.textContent ?? '').slice(0, (x.textContent ?? '').length - (x.querySelector('small')?.textContent?.length ?? 0));
-    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Duruş ve mesai', 'Tüm plan: İleriye', 'Tüm plan: Teslimden geriye', 'Ayarlar']);
+    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Oklar: seçili iş', 'Oklar: seçili sipariş', 'Oklar kapalı', 'Duruş ve mesai', 'Tüm plan: İleriye', 'Tüm plan: Teslimden geriye', 'Ayarlar']);
     // Sorun turu şimdilik kapalıdır: üst şeritte düğmesi yoktur.
     expect(screen.queryByRole('button', { name: 'Sorunları sırayla çöz' })).toBeNull();
     fireEvent.click(arac('Duruş ve mesai'));
@@ -703,14 +711,15 @@ describe('Kokpit', () => {
     const yon = screen.getByRole('button', { name: 'Araçlar' });
     fireEvent.click(yon);
     const menu = screen.getByRole('menu', { name: 'Araçlar' });
-    const l = within(menu).getAllByRole('menuitemradio');
+    const yonler = (m: HTMLElement) => within(m).getAllByRole('menuitemradio').filter((x) => x.textContent.includes('Tüm plan'));
+    const l = yonler(menu);
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
     fireEvent.click(l[0]!);
     expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     fireEvent.click(yon);
-    fireEvent.click(within(screen.getByRole('menu', { name: 'Araçlar' })).getAllByRole('menuitemradio')[1]!);
+    fireEvent.click(yonler(screen.getByRole('menu', { name: 'Araçlar' }))[1]!);
     expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
     expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
@@ -736,6 +745,148 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-ust')).toBeNull();
   });
 
+  it('oklar varsayılan yalnız seçili işin önceki ve sonraki adımına çizilir; kart seçmek tek başına ok çizmez; Oklar kapalı hiç çizmez (3365)', () => {
+    const oklar = () => [...document.querySelectorAll('.tc-pyq-tahta .tc-pyq-oklar [data-ok]')].map((el) => el.getAttribute('data-ok') ?? '');
+    const { sec } = ac();
+    fireEvent.click(document.querySelector('[data-kart="3"]') as HTMLElement);
+    expect(oklar()).toEqual([]);
+    fireEvent.click(document.querySelector('.tc-pyq-tahta [data-is="3.20"]') as HTMLElement);
+    expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: '3.20' });
+    cleanup();
+    ac({ secim: { ...BOS_SECIM, siparis: '3', adim: '3.20' } });
+    expect(document.querySelector('.tc-pyq-tahta [data-is="3.20"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(oklar().length).toBeGreaterThan(0);
+    expect(oklar().length).toBeLessThanOrEqual(2);
+    expect(oklar().every((k) => k.split('>').includes('3.20'))).toBe(true);
+    expect(document.querySelectorAll('[data-ok-aciklama]').length).toBe(2);
+    okKipiSec('Oklar kapalı');
+    expect(document.querySelector('.tc-pyq-tahta .tc-pyq-oklar')).toBeNull();
+    expect(document.querySelector('[data-ok-aciklama]')).toBeNull();
+  });
+
+  // jsdom'da PointerEvent yoktur; fare olayı üstüne pointerType eklenir.
+  const imlecOlayiKur = (): (() => void) => {
+    const eski = (window as { PointerEvent?: unknown }).PointerEvent;
+    class Imlec extends MouseEvent { pointerType: string; constructor(t: string, i: PointerEventInit = {}) { super(t, i); this.pointerType = i.pointerType ?? 'mouse'; } }
+    (window as { PointerEvent?: unknown }).PointerEvent = Imlec;
+    return () => { (window as { PointerEvent?: unknown }).PointerEvent = eski; };
+  };
+
+  it('iş basılıp sürüklenir: imleç kıpırdayınca tutulur, bırakınca taşıma önizlemesi sorulur; kıpırdamadan bırakmak yalnız seçer (3365)', async () => {
+    const geriKur = imlecOlayiKur();
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
+    ac();
+    const is = document.querySelector<HTMLElement>('[data-is="3.10"]');
+    if (!is) throw new Error('iş yok');
+    const satir = is.closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    // Kıpırdamadan bırakmak tutmaz.
+    fireEvent.pointerDown(is, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    expect(screen.queryByText(/Bırakın/)).toBeNull();
+    fireEvent.pointerDown(is, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 2, clientY: 0 });
+    expect(screen.queryByText(/Bırakın/)).toBeNull();
+    fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+    expect(screen.getByText(/Bırakın: taslağa yazılır/)).toBeTruthy();
+    expect(document.querySelector('.tc-pyq-tahta [data-tasinan]')?.getAttribute('data-is')).toBe('3.10');
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    expect(screen.queryByText(/Bırakın/)).toBeNull();
+    await waitFor(() => { expect(oz).toHaveBeenCalledWith(expect.objectContaining({ isId: '3.10' })); });
+    // Dokunmatikte basmak sürükleme başlatmaz (sayfa kayar).
+    oz.mockClear();
+    fireEvent.pointerDown(is, { button: 0, pointerType: 'touch', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(satir, { pointerType: 'touch', clientX: 400, clientY: 0 });
+    expect(screen.queryByText(/Bırakın/)).toBeNull();
+    oz.mockRestore();
+    geriKur();
+  });
+
+  it('yazma sürerken gelen taşıma reddedilmez, sıraya girer ve "1 taşıma sırada" görünür; art arda ok tuşu tek taşımaya birleşir, hedef iki adım kayar (3365)', async () => {
+    let ilkBitir: (() => void) | null = null;
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockImplementation(() => new Promise((r) => {
+      const cevap = { calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] };
+      if (ilkBitir === null) ilkBitir = () => { r(cevap); }; else r(cevap);
+    }));
+    ac({ secim: { ...BOS_SECIM, siparis: '3', adim: '3.10' } });
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(1); });
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByText('1 taşıma sırada')).toBeTruthy();
+    expect(oz).toHaveBeenCalledTimes(1);
+    ilkBitir!();
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
+    expect(screen.queryByText(/taşıma sırada/)).toBeNull();
+    const [ilk, ikinci] = oz.mock.calls.map((c) => c[0]);
+    expect(ikinci).toMatchObject({ isId: '3.10', tezgah: ilk!.tezgah });
+    expect(ikinci!.baslangic - ilk!.baslangic).toBeCloseTo(1, 5);
+    expect(screen.queryByText(/Önceki taşıma yazılıyor/)).toBeNull();
+  });
+
+  it('kısa iş okunur genişlikte çizilir; çakışan iki kısa iş iki şeride açılır; fason satırı şeritlenmez (3365)', () => {
+    const c = ornekCalisma();
+    type Op = { S: number; C: number; m: string; Su: number; lot1: number };
+    const plan = c.plan as unknown as { ops: Record<string, Op> };
+    const ops = structuredClone(plan.ops);
+    // 3.20, 3.10'un hemen ardından aynı tezgâhta: gerçek genişlikte yan yana, okunur genişlikte üst üste biner.
+    const a = ops['3.10']!, b = ops['3.20']!;
+    Object.assign(b, { m: a.m, S: a.C, C: a.C + (b.C - b.S), Su: a.C, lot1: a.C });
+    // Fason satırında iki kısa iş üst üste: fason satırı şeritlenmez.
+    const f = ops['2.30']!, g = ops['2.40']!;
+    Object.assign(f, { C: f.S + 0.5 });
+    Object.assign(g, { m: f.m, S: f.S + 0.5, C: f.S + 1, Su: f.S + 0.5, lot1: f.S + 1 });
+    ac({ calisma: { ...c, plan: { ...c.plan, ops } } as typeof c });
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    const en = (id: string) => parseFloat(is(id).style.getPropertyValue('--w'));
+    const serit = (id: string) => is(id).style.getPropertyValue('--serit');
+    expect(is('3.10').hasAttribute('data-kisa')).toBe(true);
+    expect(en('3.10')).toBeGreaterThanOrEqual(64);
+    expect(is('3.10').style.getPropertyValue('--gercek')).toMatch(/px$/);
+    expect(new Set([serit('3.10'), serit('3.20')])).toEqual(new Set(['0', '1']));
+    const satir = is('3.10').closest<HTMLElement>('[data-satir]')!;
+    expect(satir.hasAttribute('data-seritli')).toBe(true);
+    expect(satir.style.getPropertyValue('--seritler')).toBe('2');
+    expect([serit('2.30'), serit('2.40')]).toEqual(['0', '0']);
+    expect(is('2.30').closest('[data-satir]')?.hasAttribute('data-seritli')).toBe(false);
+  });
+
+  it('seçili işte uzak adımın oku çizilmez; üstüne gelinen işin oku çizilir (3365)', () => {
+    const oklar = () => [...document.querySelectorAll('.tc-pyq-tahta .tc-pyq-oklar [data-ok]')].map((el) => el.getAttribute('data-ok') ?? '').sort();
+    // Emir 2'nin üç adımı planda: 2.20 > 2.30 > 2.40. 2.20 seçiliyken yalnız 2.20 > 2.30 çizilir.
+    ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    expect(oklar()).toEqual(['2.20>2.30']);
+    cleanup();
+    ac();
+    expect(oklar()).toEqual([]);
+    const is = document.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="3.20"]')!;
+    fireEvent.pointerEnter(is);
+    expect(oklar()).toEqual(['3.10>3.20']);
+    fireEvent.pointerLeave(is);
+    expect(oklar()).toEqual([]);
+  });
+
+  it('aday olmayan tezgâha bırakmak uyarır ve taşıma gitmez (3365)', async () => {
+    const geriKur = imlecOlayiKur();
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: true, ileti: null, isler: [] });
+    ac();
+    const is = document.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="3.10"]')!;
+    const baska = document.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="3.20"]')!.closest<HTMLElement>('[data-satir]')!;
+    expect(baska.dataset.satir).not.toBe(is.closest<HTMLElement>('[data-satir]')!.dataset.satir);
+    const alan = baska.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    fireEvent.pointerDown(is, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
+    expect(screen.getByText(/Bırakın: taslağa yazılır/)).toBeTruthy();
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    expect(await screen.findByText('Bu adım bu tezgâhta yapılamaz')).toBeTruthy();
+    expect(document.querySelector('.tc-pyq-tahta [data-tasinan]')).toBeNull();
+    await new Promise((r) => setTimeout(r, 250));
+    expect(oz).not.toHaveBeenCalled();
+    oz.mockRestore();
+    geriKur();
+  });
+
   // 3330: vurgu ve okun çizilmediği durumlar. Hiç adımı planda olmayan kart tahtayı soldurmaz (yer aranırken dolu yerler olduğu gibi görünür);
   // Ay ve Yıl ölçeğinde (yük hücreleri) ok yoktur; seçim başka yerden (arama, liste) gelince de sipariş yanar.
   it('plansız kart tahtayı soldurmaz ve ok çizmez; uzak ölçekte ok yoktur; dışarıdan seçilen sipariş yanar (3330)', () => {
@@ -743,6 +894,7 @@ describe('Kokpit', () => {
     const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
     // Sahadan okunan emir durumu boş: planda işi olmayan emir bitmiş sayılmaz, plansız görünür.
     ac({ calisma: plansiz, depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu });
+    okKipiSec('Oklar: seçili sipariş');
     const tahta = () => document.querySelector('.tc-pyq-tahta') as HTMLElement;
     const kart = (k: string) => document.querySelector(`[data-kart="${k}"]`) as HTMLElement;
     fireEvent.click(kart('2'));
@@ -767,6 +919,7 @@ describe('Kokpit', () => {
 
   it('kart seçilince o siparişin işleri yanar, ötekiler solar, adımlar arasına bağ oku ve açıklaması gelir; karta yeniden basınca, Esc ile ve boş alana tıklayınca kalkar (3330)', () => {
     ac();
+    okKipiSec('Oklar: seçili sipariş');
     const tahta = document.querySelector('.tc-pyq-tahta') as HTMLElement;
     const yanan = () => [...tahta.querySelectorAll('[data-yanan]')].map((el) => el.getAttribute('data-is'));
     const sonuk = () => [...tahta.querySelectorAll('[data-sonuk]')].map((el) => el.getAttribute('data-is'));

@@ -2,7 +2,7 @@ import type { Locator, Page, Route } from '@playwright/test';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kart 3151: Kokpit (Planlama > Kokpit). Genişlik projeden gelir (360, 768, 1280). Çalışma okuması ve sunucu komutları ağ katmanında uydurma
-// cevaplarla verilir (page.route); veritabanına yazılmaz. Akış: tahta açılır, iş sağ tıkla tutulup bırakılır (önizleme, sonra iş taşı),
+// cevaplarla verilir (page.route); veritabanına yazılmaz. Akış: tahta açılır, iş basılıp sürüklenir ve bırakılır (önizleme, sonra iş taşı),
 // taslağa yazar ve Geri sayar, Matris yükü ve emirleri tek ekranda gösterir, plansız emir boş yere basılarak plana alınır. Telefonda tahta yerine liste
 // vardır; taşıma ve plana alma operasyon bölümündeki yer listesindendir. Sayfa hiçbir adımda yatay taşmaz.
 test.use({ hesap: 'ornek.yonetici' });
@@ -204,22 +204,23 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect(suzgec.getByRole('button', { name: /Geç/ })).toContainText('0');
     await tasma();
   } else {
-    // Tahta: iş sağ tıkla tutulur, başka saate bırakılır; önce önizleme sorulur, sonra iş taşı gider.
-    // Tahta: iş sağ tıkla tutulur, başka saate bırakılır; önce önizleme sorulur, sonra iş taşı gider.
+    // Tahta (3365): iş basılıp sürüklenir, başka saate bırakılır; sürüklerken ve bırakınca önizleme sorulur, sonra iş taşı gider.
     const tahta = kokpit.locator('.tc-pyq-tahta');
     await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
     const is = tahta.locator('[data-is="S2.a1"]');
     await expect(is).toBeVisible();
     await is.click({ button: 'right' });
-    const menu = tahta.getByRole('menu');
-    await expect(menu.getByRole('menuitem', { name: /Yapışarak tut/ })).toBeVisible();
-    await menu.getByRole('menuitem', { name: /Yapışarak tut/ }).click();
-    await expect(tahta.getByText(/Bırakmak için tıklayın/)).toBeVisible();
+    // Sağ tık menüsünde tutma yoktur; yalnız Ayrıntı.
+    await expect(tahta.getByRole('menu').getByRole('menuitem')).toHaveText(['Ayrıntı']);
+    await page.keyboard.press('Escape');
     const kutu = await is.boundingBox();
     if (!kutu) throw new Error('iş görünmüyor');
-    await page.mouse.move(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2, { steps: 4 });
+    await page.mouse.move(kutu.x + 6, kutu.y + kutu.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2, { steps: 6 });
+    await expect(tahta.getByText(/Bırakın: taslağa yazılır/)).toBeVisible();
     await expect(tahta.locator('.tc-pyq-hayalet')).toBeVisible();
-    await page.mouse.click(kutu.x + kutu.width + 60, kutu.y + kutu.height / 2);
+    await page.mouse.up();
     await expect.poll(() => tasinan().length).toBe(1);
     expect(onizleme).toContain('S2.a1');
     expect(tasinan()[0]).toMatchObject({ isId: 'S2.a1', tezgah: 'M2' });
@@ -296,25 +297,30 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await page.keyboard.press('ArrowLeft');
     await expect.poll(() => tasinan().length).toBe(n + 1);
     expect(tasinan()[n]).toMatchObject({ isId: 'S3.a1', baslangic: eski - 0.5 });
-    // Taşıma yazılırken yeni bırakma alınmaz (bildirimle geri çevrilir): sonraki adım yazma bitince başlar.
+    // Yazma bitince taslakta bekleyen taşıma kalmaz (3365: yazılırken gelen taşıma sıraya girer, geri çevrilmez).
     await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByRole('status')).toHaveCount(0);
   }
 
-  // Plana alma. Geniş ekranda tepsideki emir sağ tıkla tutulur ve ilk adımının aday tezgâhına bırakılır; ötekilerde emrin kartı seçilir ve
+  // Plana alma. Geniş ekranda tepsideki emir basılıp sürüklenir ve ilk adımının aday tezgâhına bırakılır; ötekilerde emrin kartı seçilir ve
   // operasyonun boş yer listesinden yerleştirilir. İkisi de aynı komuta gider; Plansız sayısı düşer.
   if (bilgi.project.name === 'g1280') {
     await page.keyboard.press('Escape');
     const tahta = kokpit.locator('.tc-pyq-tahta');
     await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
-    await tahta.locator('[data-fis="S4"]').click({ button: 'right' });
-    await tahta.getByRole('menu').getByRole('menuitem', { name: /Tut ve tahtaya bırak/ }).click();
-    await expect(tahta.getByText(/Bırakmak için tıklayın/)).toBeVisible();
-    await expect(tahta.locator('[data-satir="M3"]')).toHaveAttribute('data-aday', 'hayir');
+    // Tepsideki emir de basılıp tezgâh satırına sürüklenir (3365). Fare olayı yalnız görünen alanda olur: önce satır görünür kılınır.
+    await tahta.locator('[data-satir="M2"]').scrollIntoViewIfNeeded();
+    await tahta.locator('[data-fis="S4"]').scrollIntoViewIfNeeded();
+    const fis = await tahta.locator('[data-fis="S4"]').boundingBox();
+    if (!fis) throw new Error('emir görünmüyor');
+    await page.mouse.move(fis.x + fis.width / 2, fis.y + fis.height / 2);
+    await page.mouse.down();
     const alan = await tahta.locator('[data-satir="M2"] .tc-pyq-alan').boundingBox();
     if (!alan) throw new Error('satır görünmüyor');
-    await page.mouse.move(alan.x + 420, alan.y + alan.height / 2, { steps: 4 });
+    await page.mouse.move(alan.x + 420, alan.y + alan.height / 2, { steps: 6 });
+    await expect(tahta.getByText(/Bırakın: taslağa yazılır/)).toBeVisible();
+    await expect(tahta.locator('[data-satir="M3"]')).toHaveAttribute('data-aday', 'hayir');
     await expect(tahta.locator('[data-satir="M2"] .tc-pyq-hayalet')).toContainText('plana al');
-    await page.mouse.click(alan.x + 420, alan.y + alan.height / 2);
+    await page.mouse.up();
     await expect.poll(() => alinan().length).toBe(1);
     expect(alinan()[0]).toMatchObject({ emirId: 'S4', tezgah: 'M2' });
   } else {
@@ -1298,6 +1304,9 @@ test('Kokpit 3330: kart seçilince siparişin işleri parlak, ötekiler soluk am
   // Soluk iş okunur: saydamlık yarının üstünde, yazısı mürekkep rengi.
   const soluk = tahta.locator('.tc-pyq-is[data-sonuk]').first();
   await expect.poll(() => soluk.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThanOrEqual(0.5);
+  // 3365: ok yalnız odaktaki işin (seçili ya da üstüne gelinen) önceki ve sonraki adımına çizilir; kart seçmek tek başına ok çizmez.
+  await expect(oklar).toHaveCount(0);
+  await tahta.locator('[data-is="S1.a2"]').click();
   await expect(oklar).toHaveCount(2);
   await expect(kokpit.locator('[data-ok="S1.a1>S1.a2"]')).toHaveAttribute('data-tur', 'b');
   await expect(kokpit.locator('[data-ok="S1.a2>S1.a3"]')).toHaveAttribute('data-tur', 'o');
@@ -1328,12 +1337,19 @@ test('Kokpit 3330: kart seçilince siparişin işleri parlak, ötekiler soluk am
   await page.keyboard.press('Escape');
   await expect(tahta.locator('[data-yanan]')).toHaveCount(0);
   await expect(tahta.locator('[data-sonuk]')).toHaveCount(0);
+  // İmleç işin üstünde kaldıkça o işin okları durur; çekilince kalkar.
+  await page.mouse.move(0, 0);
   await expect(oklar).toHaveCount(0);
   await kart.click();
+  await expect(oklar).toHaveCount(0);
+  // Oklar: seçili sipariş (Araçlar) kart seçilince siparişin bütün bağlarını çizer.
+  await kokpit.getByRole('button', { name: 'Araçlar' }).click();
+  await kokpit.getByRole('menuitemradio', { name: /Oklar: seçili sipariş/ }).click();
   await expect(oklar).toHaveCount(2);
   await kart.click();
   await expect(oklar).toHaveCount(0);
   await kart.click();
+  await expect(oklar).toHaveCount(2);
   // Boş alan: T-01 satırının görünen sağ ucu (orada iş yok; kapalı saat taraması da boş alandır).
   await tahta.locator('[data-satir="M1"]').scrollIntoViewIfNeeded();
   const kutu = (await tahta.boundingBox())!, satir = (await tahta.locator('[data-satir="M1"]').boundingBox())!;

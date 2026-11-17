@@ -11,6 +11,7 @@
 
 /* --- üst çubuk --- */
 .tc-pyq-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pyq-sirada { display: inline-flex; align-items: center; min-height: var(--dokunma); padding: 0 var(--b-2); color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
 .tc-pyq-seg, .tc-pyq-suzgec, .tc-pyq-gi { display: inline-flex; gap: var(--pay-ince); padding: var(--pay-ince); border-radius: var(--yari-2); background: var(--panel2); }
 .tc-pyq-seg button, .tc-pyq-suzgec button, .tc-pyq-ok, .tc-pyq-kucuk {
   position: relative; display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); min-width: var(--dokunma); padding: 0 var(--b-3);
@@ -173,6 +174,15 @@
   overscroll-behavior-x: contain;
 }
 .tc-pyq-tahta[data-tasima] { cursor: grabbing; }
+.tc-pyq-tahta .tc-pyq-is, .tc-pyq-tahta .tc-pyq-fis { user-select: none; -webkit-user-select: none; }
+/* 3365: çakışan kutular (okunur genişlikteki kısa iş) satırda alt alta şeride iner; satır şerit sayısı kadar uzar. */
+.tc-pyq-satir[data-seritli] { min-height: calc(var(--satir) * var(--seritler, 1)); }
+.tc-pyq-satir[data-seritli] .tc-pyq-is { top: calc(var(--b-1) + var(--serit, 0) * var(--satir)); bottom: auto; height: calc(var(--satir) - var(--b-1) * 2); }
+/* Kısa iş okunur genişlikte: gerçek süresi dolu kısım, okunsun diye eklenen kısım soluk ve kesik kenarlı. */
+.tc-pyq-is[data-kisa] {
+  border-right-style: dashed;
+  background: linear-gradient(90deg, var(--panel-solid) var(--gercek), color-mix(in oklab, var(--panel-solid) 45%, transparent) var(--gercek));
+}
 .tc-pyq-ic { position: relative; width: calc(var(--bas-en) + var(--en)); min-width: 100%; }
 .tc-pyq-satir { display: flex; min-height: var(--satir); border-bottom: var(--cizgi-ince) solid var(--edge); }
 .tc-pyq-satir[data-aday="evet"] { background: color-mix(in oklab, var(--run) 10%, transparent); }
