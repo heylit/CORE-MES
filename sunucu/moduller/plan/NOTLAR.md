@@ -10,3 +10,4 @@
 - Başlamış, kilitli ya da dondurulmuş iş sunucuda sabittir: atlanır ve `atlanan` sayısına girer. Bölünmüş işte yalnız en erken parça yazılır.
 - VARSAYIM (kart #1185'e bağlı): prototip emir kimliği = `uretim_emri.id` (sayı dizesi), emir no = `emir_no`, adım `seq` = `op_no`.
   Sayı olmayan kimlikli (yerel) emir ve sunucu makinesi olmayan iş yazılmaz.
+- 3401-1 a: `/plan/bedel-ayari` planı yazana açıktır ama taban bedel, finansman ve kâr riski oranı yalnız `finans.maliyet-oku` ya da `plan.bedel-ayari` olana gelir (ötekine null); eşik ve çarpanlar herkese. Çarpan geçmişi yalnız bu ikisine (satış ve planlama 403). Motor bedeli sunucuda okur, planlamacının planı kurması bundan etkilenmez.

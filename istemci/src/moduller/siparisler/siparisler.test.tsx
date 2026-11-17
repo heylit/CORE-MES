@@ -22,7 +22,7 @@ import { ESKI_SURUM_ILETISI } from './yazma.ts';
 const KOK: Islem[] = ['sayfa.siparisler', 'siparisler.oku'];
 const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: KOK };
 const YAZAR: Kullanici = { id: 3, ad: 'Deneme Yazar', islemler: [...KOK, 'siparisler.yaz'] };
-const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: [...KOK, 'siparisler.yaz', 'siparisler.onayla', 'siparisler.fiyat-oku'] };
+const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: [...KOK, 'siparisler.yaz', 'siparisler.onayla', 'siparisler.fiyat-oku', 'finans.maliyet-oku'] };
 // 180: fiyatı yalnız fiyat-oku olan görür ve girer; yetkisiz okuyana sunucu fiyat alanlarını boş döner.
 const FIYAT_OKUYUCU: Kullanici = { ...OKUYUCU, islemler: [...KOK, 'siparisler.fiyat-oku'] };
 const FIYATCI: Kullanici = { ...YAZAR, islemler: [...YAZAR.islemler, 'siparisler.fiyat-oku'] };
@@ -101,7 +101,7 @@ const CARPAN_KAYDI = { carpan: 1.5, gerekce: 'Deneme gerekce', kisiId: 4, kisiAd
 const CARPAN_VAR = {
   siparisId: 5, gecerli: CARPAN_KAYDI, gecmis: [CARPAN_KAYDI, { ...CARPAN_KAYDI, carpan: 1.2, gerekce: 'Ilk deneme', zaman: '2026-10-02T09:00:00+03:00' }],
 } satisfies SiparisCarpaniCevabi;
-const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz', 'siparisler.termin-onayla'] };
+const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz', 'siparisler.termin-onayla', 'finans.maliyet-oku'] };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const hata = (durum: number, govde: HataGovdesi) => json(durum, govde);
@@ -270,7 +270,11 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(screen.getByText('100 adet')).toBeTruthy();
     expect(screen.queryByRole('columnheader', { name: 'Birim fiyat' })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Tutar' })).toBeNull();
-    expect(screen.queryByText('Genel toplam')).toBeNull();
+    // 3401-1 a: toplam, ceza ve vade yerinde kilitle çizilir; sayı yok, gereken yetki yazılı.
+    const kilitler = screen.getAllByLabelText('Yetkiniz yok: Sipariş fiyatını görür');
+    expect(kilitler).toHaveLength(4);
+    expect(within(screen.getByText('Genel toplam').closest('div')!).getByLabelText('Yetkiniz yok: Sipariş fiyatını görür')).toBeTruthy();
+    expect(screen.getByText(/Birim fiyat ve tutar sütunları yetkinizde değil/)).toBeTruthy();
   });
 
   it('fiyatı olmayan kalem varsa fiyatı gören taslakta onay öncesi uyarı görür (201 a)', async () => {
@@ -579,17 +583,20 @@ describe('Sipariş ayrıntısında çarpan geçmişi (815)', () => {
     }
   });
 
-  it('çarpan okuma yetkisi olmayana kart çizilmez, istek gitmez (237 a)', async () => {
-    const istekler = sunucuKur(OKUYUCU);
-    ac('/siparisler/5');
-    await screen.findByText('Deneme Braket');
-    await oturumCozuldu(istekler);
-    expect(screen.queryByRole('heading', { name: 'Öncelik çarpanı geçmişi' })).toBeNull();
-    expect(istekler.some((i) => i.yol.startsWith('/plan/'))).toBe(false);
+  it('çarpan okuma yetkisi olmayana kart çizilmez, istek gitmez (237 a); fiyat görmek ve plan yazmak tek başına yetmez (3401-1 a)', async () => {
+    for (const kisi of [OKUYUCU, FIYAT_OKUYUCU, { ...OKUYUCU, islemler: [...KOK, 'plan.yaz'] } satisfies Kullanici]) {
+      const istekler = sunucuKur(kisi);
+      ac('/siparisler/5');
+      await screen.findByText('Deneme Braket');
+      await oturumCozuldu(istekler);
+      expect(screen.queryByRole('heading', { name: 'Öncelik çarpanı geçmişi' })).toBeNull();
+      expect(istekler.some((i) => i.yol.startsWith('/plan/'))).toBe(false);
+      cleanup();
+    }
   });
 
   it('geçmişi olmayan siparişte kart çizilmez', async () => {
-    const istekler = sunucuKur(FIYAT_OKUYUCU);
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...KOK, 'siparisler.fiyat-oku', 'finans.maliyet-oku'] });
     ac('/siparisler/5');
     await screen.findByText('Deneme Braket');
     await waitFor(() => expect(istekler.some((i) => i.yol === '/plan/siparisler/5/carpan')).toBe(true));
@@ -787,7 +794,7 @@ describe('Yeni satış siparişi', () => {
     });
     ac('/siparisler/5/duzenle');
     await screen.findByText('Düzenle: SS-2026-0005');
-    const vade = screen.getByLabelText(/^Ödeme vadesi/) as HTMLInputElement;
+    const vade = (await screen.findByLabelText(/^Ödeme vadesi/)) as HTMLInputElement;
     expect(vade.value).toBe('60');
     // E-9: plan sırası vadeyi henüz okumaz; ipucu bunu söyler, yalnız proje maliyeti kullanır.
     expect(screen.getByText('Proje maliyeti finansmanı bu vadeden hesaplar; plan sırası henüz okumaz.')).toBeTruthy();
@@ -804,17 +811,37 @@ describe('Yeni satış siparişi', () => {
   it('düzenleme ceza alanlarını korur; boşaltılan alan null gider', async () => {
     // Sunucu numeric metni "1.000" biçiminde verir; belirsiz sayı sanılıp düzenleme kilitlenmemeli.
     const cezali = { ...AYRINTI_TASLAK, cezaOraniGun: '0.100', cezaTavaniOrani: '10.00', satirlar: [{ ...SATIR, miktar: '1.000' }] } satisfies SiparisAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/5') return json(200, cezali);
+      return yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, cezali) : undefined;
+    });
+    ac('/siparisler/5/duzenle');
+    await screen.findByText('Düzenle: SS-2026-0005');
+    expect(((await screen.findByLabelText(/^Gecikme cezası/)) as HTMLInputElement).value).toBe('0,1');
+    fireEvent.change(screen.getByLabelText(/^Ceza tavanı/), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ cezaOraniGun: '0.1', cezaTavaniOrani: null });
+  });
+});
+
+describe('Fiyat görmeyen yazarda ceza ve vade (3401-2 a)', () => {
+  it('ceza ve vade alanları yerine kilit çizilir; kayıtta gönderilmez (null), zorunlu denetimine takılmaz', async () => {
+    const cezali = { ...AYRINTI_TASLAK, cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null } satisfies SiparisAyrintisi;
     const istekler = sunucuKur(YAZAR, (yontem, yol) => {
       if (yontem === 'GET' && yol === '/siparisler/5') return json(200, cezali);
       return yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, cezali) : undefined;
     });
     ac('/siparisler/5/duzenle');
     await screen.findByText('Düzenle: SS-2026-0005');
-    expect((screen.getByLabelText(/^Gecikme cezası/) as HTMLInputElement).value).toBe('0,1');
-    fireEvent.change(screen.getByLabelText(/^Ceza tavanı/), { target: { value: '' } });
+    await oturumCozuldu(istekler);
+    expect(screen.queryByLabelText(/^Gecikme cezası/)).toBeNull();
+    expect(screen.queryByLabelText(/^Ceza tavanı/)).toBeNull();
+    expect(screen.queryByLabelText(/^Ödeme vadesi/)).toBeNull();
+    expect(screen.getAllByLabelText('Yetkiniz yok: Sipariş fiyatını görür').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ cezaOraniGun: '0.1', cezaTavaniOrani: null });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null });
   });
 });
 
@@ -1373,8 +1400,9 @@ describe('Teklifler', () => {
 });
 
 describe('Teklif termin ve fiyat (44)', () => {
-  // 65 a: satış rolü dener, fiyat ve maliyet toplamını görür; döküm maliyet okuyanda.
-  const SATISCI: Kullanici = { id: 9, ad: 'Deneme Satisci', islemler: [...KOK, 'siparisler.yaz', 'siparisler.fiyat-oku', 'siparisler.termin-dene'] };
+  // 3401-1 a: maliyet toplamı, birim maliyet ve kâr finans.maliyet-oku ister; satış fiyatını görmek tek başına yetmez. Döküm siparisler.maliyet-oku'da.
+  const SATISCI: Kullanici = { id: 9, ad: 'Deneme Satisci', islemler: [...KOK, 'siparisler.yaz', 'siparisler.fiyat-oku', 'siparisler.termin-dene', 'finans.maliyet-oku'] };
+  const SATISCI_KILITLI: Kullanici = { ...SATISCI, islemler: SATISCI.islemler.filter((i) => i !== 'finans.maliyet-oku') };
   const MUDUR: Kullanici = { ...SATISCI, islemler: [...SATISCI.islemler, 'siparisler.maliyet-oku'] };
   const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1'], birim: 'adet' };
   const TEKLIF_KARTLI = { ...TEKLIF_YENI, satirlar: [KARTLI_SATIR] } satisfies TeklifAyrintisi;
@@ -1720,6 +1748,35 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.getByText('Maliyet yok: kâr eklenmez, elle fiyat')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '%40' }));
     expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('3401-1 a: maliyet görmeyen satışçıda maliyet toplamı, kâr oranı ve maliyet sütunları kilitli; fiyat elle girilir, sürüm gider', async () => {
+    const kilitli = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null }],
+    } satisfies TerminDenemesiCevabi;
+    const adet = { ...ADET, satirlar: ADET.satirlar.map((r) => ({ ...r, maliyetToplami: null, kalemler: r.kalemler.map((k) => ({ ...k, birimMaliyet: null })) })) };
+    const istekler = kur(SATISCI_KILITLI, () => kilitli, TEKLIF_KARTLI, adet);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    const ozet = await screen.findByLabelText('Fiyat özeti');
+    const kilit = 'Yetkiniz yok: Maliyet görür';
+    expect(within(within(ozet).getByText('Maliyet toplamı').closest('div')!).getByLabelText(kilit)).toBeTruthy();
+    expect(within(within(ozet).getByText('Net kâr (iskontosuz)').closest('div')!).getByLabelText(kilit)).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Kâr oranı' })).getByLabelText(kilit)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '%40' })).toBeNull();
+    expect(screen.queryByLabelText(/^Başka oran/)).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Birim maliyet' })).toBeNull();
+    expect(screen.queryByText(/Maliyet yok: kâr eklenmez/)).toBeNull();
+    expect(screen.queryByText(/Kâr \d+ kalemin fiyatına eklenmedi/)).toBeNull();
+    const adetTablosu = await screen.findByRole('table', { name: 'Adet değişirse' });
+    expect(within(adetTablosu).queryByRole('columnheader', { name: /maliyet|fiyat/i })).toBeNull();
+    expect(screen.getByText(/Birim maliyet, fiyat önerisi ve toplam sütunları yetkinizde değil/)).toBeTruthy();
+    // Fiyat önerilmez; satışçı elle yazar ve sürüm gider (kâr alanı doğrulamaya girmez).
+    const fiyat = screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement;
+    expect(fiyat.value).toBe('');
+    fireEvent.change(fiyat, { target: { value: '15,5' } });
+    expect(screen.queryByText('Kâr en çok iki ondalıklı bir yüzde olmalı.')).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
   });
 
   it('motor bağlı değilse elle: termin tarihi ve fiyat elle girilir, plan taslağı gitmez', async () => {

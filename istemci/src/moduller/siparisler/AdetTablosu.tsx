@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { AdetDenemesiCevabi, AdetDenemesiSatiri } from '#paylasilan/sozlesme/siparisler.ts';
-import { Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { KilitliSutunNotu, Tablo, YETKI_ADI, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { miktarMetni, paraMetni, tarihMetni } from './gorunum.ts';
@@ -11,7 +11,7 @@ const sayi = (m: string | null | undefined): number | null => (m === null || m =
 
 // Örnek sayfanın "Adet değişirse" tablosu: teklif yarım, aynı, iki ve dört kat adetle arkaya eklenerek ayrı denenir (aynı kâr).
 // Fiyat seçili kârla maliyetten önerilir (iskonto hariç). Tek kalemli teklifte birim değerler, çok kalemlide toplamlar yazılır.
-export function AdetTablosu({ teklifId, gecerlilik, kar, paraBirimi }: { teklifId: number; gecerlilik: string; kar: number | null; paraBirimi: string }) {
+export function AdetTablosu({ teklifId, gecerlilik, kar, paraBirimi, maliyetGorur }: { teklifId: number; gecerlilik: string; kar: number | null; paraBirimi: string; maliyetGorur: boolean }) {
   const sorgu = { gecerlilik };
   const deneme = useQuery({
     queryKey: anahtarlar.adetDenemesi(teklifId, sorgu),
@@ -31,17 +31,18 @@ export function AdetTablosu({ teklifId, gecerlilik, kar, paraBirimi }: { teklifI
       hucre: (s) => <span className={s.carpan === '1' ? 'tc-sp-guclu' : undefined}>{s.kalemler.map((k) => miktarMetni(k.adet)).join(' + ')}</span>,
     },
     { anahtar: 'termin', baslik: 'Termin', hizala: 'sag', kirilmaz: true, hucre: (s) => tarihMetni(s.termin) },
-    ...(tek ? [
+    ...(!maliyetGorur ? [] : tek ? [
       { anahtar: 'maliyet', baslik: 'Birim maliyet', hizala: 'sag', kirilmaz: true, hucre: (s: AdetDenemesiSatiri) => tutar(sayi(s.kalemler[0]?.birimMaliyet), paraBirimi) },
       { anahtar: 'fiyat', baslik: 'Birim fiyat', hizala: 'sag', kirilmaz: true, hucre: (s: AdetDenemesiSatiri) => tutar(carp(sayi(s.kalemler[0]?.birimMaliyet)), paraBirimi) },
     ] as Sutun<AdetDenemesiSatiri>[] : [
       { anahtar: 'maliyet', baslik: 'Maliyet', hizala: 'sag', kirilmaz: true, hucre: (s: AdetDenemesiSatiri) => tutar(sayi(s.maliyetToplami), paraBirimi) },
     ] as Sutun<AdetDenemesiSatiri>[]),
-    { anahtar: 'toplam', baslik: 'Toplam fiyat', hizala: 'sag', kirilmaz: true, hucre: (s) => tutar(carp(sayi(s.maliyetToplami)), paraBirimi) },
+    ...(maliyetGorur ? [{ anahtar: 'toplam', baslik: 'Toplam fiyat', hizala: 'sag', kirilmaz: true, hucre: (s: AdetDenemesiSatiri) => tutar(carp(sayi(s.maliyetToplami)), paraBirimi) }] as Sutun<AdetDenemesiSatiri>[] : []),
   ];
   return (
     <section className="tc-sp-yigin" aria-label="Adet değişirse">
       <h3 className="tc-sp-alt-baslik">Adet değişirse <small className="tc-sp-soluk">arkaya ekleme, aynı kâr</small></h3>
+      {!maliyetGorur && <KilitliSutunNotu ne="Birim maliyet, fiyat önerisi ve toplam sütunları" yetki={YETKI_ADI.maliyet} />}
       <Tablo etiket="Adet değişirse" sutunlar={sutunlar} satirlar={c.satirlar} satirAnahtari={(s) => s.carpan} bosMesaj="Deneme yok." />
       <p className="tc-sp-ipucu">Ayar süresi adede bölündüğü için birim fiyat adetle düşer; termin tezgâh doluluğu, malzeme ve fasonla uzar.</p>
     </section>

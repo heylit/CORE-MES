@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisSatiri } from '#paylasilan/sozlesme/siparisler.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { CokSatir, Dugme, DurumKutusu, Kart, KlasorBaglantisi, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Kart, KilitliDeger, KilitliSutunNotu, KlasorBaglantisi, OnayPenceresi, Rozet, Tablo, YETKI_ADI, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -171,9 +171,9 @@ export function SiparisAyrinti() {
           <Ozellik ad="Para birimi">{s.paraBirimi}</Ozellik>
           <Ozellik ad="KDV oranı">{`%${miktarMetni(s.kdvOrani)}`}</Ozellik>
           <Ozellik ad="Ödeme koşulu">{s.odemeKosulu ?? '—'}</Ozellik>
-          <Ozellik ad="Ödeme vadesi">{s.odemeVadesiGun === null ? '—' : `${s.odemeVadesiGun} gün`}</Ozellik>
-          <Ozellik ad="Gecikme cezası">{s.cezaOraniGun === null ? '—' : `%${miktarMetni(s.cezaOraniGun)} / gün`}</Ozellik>
-          <Ozellik ad="Ceza tavanı">{s.cezaTavaniOrani === null ? '—' : `%${miktarMetni(s.cezaTavaniOrani)}`}</Ozellik>
+          <Ozellik ad="Ödeme vadesi">{!fiyatGorur ? <KilitliDeger yetki={YETKI_ADI.siparisFiyati} /> : s.odemeVadesiGun === null ? '—' : `${s.odemeVadesiGun} gün`}</Ozellik>
+          <Ozellik ad="Gecikme cezası">{!fiyatGorur ? <KilitliDeger yetki={YETKI_ADI.siparisFiyati} /> : s.cezaOraniGun === null ? '—' : `%${miktarMetni(s.cezaOraniGun)} / gün`}</Ozellik>
+          <Ozellik ad="Ceza tavanı">{!fiyatGorur ? <KilitliDeger yetki={YETKI_ADI.siparisFiyati} /> : s.cezaTavaniOrani === null ? '—' : `%${miktarMetni(s.cezaTavaniOrani)}`}</Ozellik>
           <Ozellik ad="Açıklama">{s.aciklama ?? '—'}</Ozellik>
         </dl>
       </Kart>
@@ -182,8 +182,13 @@ export function SiparisAyrinti() {
         baslik="Kalemler"
         sag={<GecmisDugmesi kayitlar={s.satirlar.map((m) => ({ tablo: 'siparisler_siparis_satiri', anahtar: { id: m.id } }))} />}
       >
+        {!fiyatGorur && <KilitliSutunNotu ne="Birim fiyat ve tutar sütunları" yetki={YETKI_ADI.siparisFiyati} />}
         <Tablo etiket="Sipariş kalemleri" sutunlar={sutunlar} satirlar={s.satirlar} satirAnahtari={(m) => m.id} bosMesaj="Satır yok." />
-        {fiyatGorur && (
+        {!fiyatGorur ? (
+          <dl className="tc-sp-toplamlar">
+            <div className="tc-sp-genel"><dt>Genel toplam</dt><dd><KilitliDeger yetki={YETKI_ADI.siparisFiyati} /></dd></div>
+          </dl>
+        ) : (
           <dl className="tc-sp-toplamlar">
             <div><dt>Ara toplam</dt><dd>{paraMetni(s.araToplam, s.paraBirimi)}</dd></div>
             <div><dt>{`KDV (%${miktarMetni(s.kdvOrani)})`}</dt><dd>{paraMetni(s.kdvTutari, s.paraBirimi)}</dd></div>

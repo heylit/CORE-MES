@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { AtolyeTaslagi, AtolyeTaslaklariCevabi } from '#paylasilan/sozlesme/siparisler.ts';
-import { Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Kart, KilitliSutunNotu, Rozet, Tablo, YETKI_ADI, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useMaliyetToplamiGorur } from './yazma.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { PLAN_TASLAGI_GORUNUMU, miktarMetni, paraMetni, tarihMetni } from './gorunum.ts';
 
@@ -10,6 +11,7 @@ import { PLAN_TASLAGI_GORUNUMU, miktarMetni, paraMetni, tarihMetni } from './gor
 // Satırdan teklife gidilir; termin orada değiştirilir. Kâr ve tutar fiyat görmeyene boş gelir.
 export function AtolyeTaslaklari() {
   const gezin = useNavigate();
+  const karGorur = useMaliyetToplamiGorur();
   const liste = useQuery({
     queryKey: anahtarlar.atolyeTaslaklari,
     queryFn: () => api.get<AtolyeTaslaklariCevabi>('/siparisler/satis-taslaklari'),
@@ -24,11 +26,12 @@ export function AtolyeTaslaklari() {
     { anahtar: 'kalemler', baslik: 'Kalemler', hucre: (t) => t.kalemler.map((k) => `${k.tanim} × ${miktarMetni(k.adet)}`).join(', ') },
     { anahtar: 'termin', baslik: 'Termin', hizala: 'sag', kirilmaz: true, hucre: (t) => tarihMetni(t.termin) },
     { anahtar: 'gecerlilik', baslik: 'Geçerlilik', hizala: 'sag', kirilmaz: true, hucre: (t) => tarihMetni(t.gecerlilik) },
-    { anahtar: 'kar', baslik: 'Kâr', hizala: 'sag', kirilmaz: true, hucre: (t) => (t.karOrani === null ? '—' : `%${miktarMetni(t.karOrani)}`) },
+    ...(karGorur ? [{ anahtar: 'kar', baslik: 'Kâr', hizala: 'sag', kirilmaz: true, hucre: (t: AtolyeTaslagi) => (t.karOrani === null ? '—' : `%${miktarMetni(t.karOrani)}`) }] as Sutun<AtolyeTaslagi>[] : []),
     { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, hucre: (t) => paraMetni(t.tutar, t.paraBirimi) },
   ];
   return (
     <Kart baslik="Atölyedeki satış taslakları">
+      {!karGorur && <KilitliSutunNotu ne="Kâr sütunu" yetki={YETKI_ADI.maliyet} />}
       {liste.isError
         ? <p className="tc-sp-hata" role="alert">{hataIletisi(liste.error, 'Satış taslakları okunamadı.')}</p>
         : (

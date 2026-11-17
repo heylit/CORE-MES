@@ -8,7 +8,7 @@ import { STATU_KOMUTLARI } from './statu-komutlari.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
 import type { SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { BedelAyariCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri, AdimliEmirCevabi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -385,9 +385,17 @@ export function kopruKur(
       // Plan senaryolarının sunucudaki durumu (onayda, canlı, geri gönderildi): planlama sayfası onay listesini bununla eşitler.
       case 'plan-senaryolar-oku':
         return api.get<unknown>('/plan/senaryolar');
-      // Plan öncelik ayarları (taban bedel, oranlar, eşikler): plan sayfasını gören herkes okur.
-      case 'bedel-ayari-oku':
-        return { ayar: await api.get<BedelAyari>('/plan/bedel-ayari'), yazabilir: secenek.bedelAyariYazabilir === true };
+      // Plan öncelik ayarları: eşikler ve çarpanlar planı yazana açıktır; taban bedel ve oranlar maliyet görmeyene null gelir (3401-1 a,
+      // çerçeve KilitliDeger çizer). Uç 403 verirse sayfa düşmez: ayar null, çerçeve paneli kilitli çizer.
+      case 'bedel-ayari-oku': {
+        const yazabilir = secenek.bedelAyariYazabilir === true;
+        try {
+          return { ayar: await api.get<BedelAyariCevabi>('/plan/bedel-ayari'), yazabilir };
+        } catch (h) {
+          if (h instanceof ApiHatasi && h.durum === 403) return { ayar: null, yazabilir: false };
+          throw h;
+        }
+      }
       // Süreler bölümü (169 c): revizyonun teorik süresi, plan için etkin süresi ve tür başına bekleyen ölçümü; makine verilirse o makinenin
       // görünümü. Sahibi rota modülüdür; ekran adımı OP numarasıyla eşler.
       // 2571: emir ayrıntısında başlamış iş emirlerinin süre özeti (hazırlık, net ve brüt birim, sağlam ve hurda). Sahibi üretim emirleridir;

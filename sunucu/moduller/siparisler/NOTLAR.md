@@ -13,3 +13,6 @@
 - VARSAYIM: elle (plansız) verilen yeni sürüm teklifin plandaki yerini kaldırır; kabul yeri korur, sipariş ve red kaldırır.
 - VARSAYIM: plancı onayı `plan.yaz` ile verilir (63 b); ayrı işlem açılmadı.
 - `onay-bekliyor` artık iskonto ya da termin onayıdır; durum adı "onay bekliyor".
+- 3401-1 a: maliyet toplamı, birim maliyet ve kâr oranı yalnız `finans.maliyet-oku` (satış fiyatını görmek açmaz; karar 65 a ve 180 bu yönde değişti). Satış fiyatı ve tutar `fiyat-oku`'da kalır.
+- 3401-2 a: ceza, tavan ve vade fiyat-oku'nun parçası. Fiyatsız yazar bunları göndermez (gönderirse 403); düzenlemede kayıttaki korunur.
+- VARSAYIM: plan taslağının `kar_orani` kolonu NOT NULL; maliyet görmeyen satışçının formu varsayılan kârı (%25) gizli gönderir. Kâr gizli olduğundan fiyat önerisi yoktur, satışçı fiyatı elle girer.

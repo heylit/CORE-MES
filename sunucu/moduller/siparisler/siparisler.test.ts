@@ -148,6 +148,73 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(s.genelToplam, '1500.00');
   });
 
+  // Onaylı matristen bağımsız: yalnız verilen işlemleri taşıyan deneme rolü (rol bazında rol_islemi).
+  async function rolluGiris(islemler: string[]): Promise<string> {
+    const kod = `sip_dnm_rol_${(sayac += 1)}`;
+    await o().sahip.sorgu('INSERT INTO rol (kod, ad) VALUES ($1, $1)', [kod]);
+    await o().sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT (SELECT id FROM rol WHERE kod = $1), unnest($2::text[])', [kod, islemler]);
+    return (await girisYap(kod)).cerez;
+  }
+
+  test('3401-2 a: gecikme cezası, tavanı ve ödeme vadesi yalnız fiyat-oku olana; liste ve ayrıntıda null, özet fiyat ve ceza taşımaz; fiyatsız yazar göndermez, kayıttaki korunur', async () => {
+    const s = await siparisAc({ cezaOraniGun: '0.5', cezaTavaniOrani: '10', odemeVadesiGun: 45 });
+    assert.deepEqual([s.cezaOraniGun, s.cezaTavaniOrani, s.odemeVadesiGun], ['0.500', '10.00', 45]);
+    const fiyatsizlar = [(await girisYap('planlama_proje')).cerez, (await girisYap('planlama_muduru')).cerez, await rolluGiris(['siparisler.oku', 'siparisler.yaz'])];
+    const fiyatlilar = [yonetici, (await girisYap('mudur')).cerez, (await girisYap('satis')).cerez, await rolluGiris(['siparisler.oku', 'siparisler.fiyat-oku'])];
+    for (const cerez of fiyatsizlar) {
+      const a = (await oku(cerez, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+      assert.deepEqual([a.cezaOraniGun, a.cezaTavaniOrani, a.odemeVadesiGun], [null, null, null]);
+      const l = (await oku(cerez, `/siparisler?ara=${encodeURIComponent(s.no)}`)).json<SiparisListesiCevabi>().satirlar.find((x) => x.id === s.id);
+      assert.deepEqual([l?.no, l?.cezaOraniGun, l?.cezaTavaniOrani, l?.odemeVadesiGun], [s.no, null, null, null]);
+      const ozet = (await oku(cerez, '/siparisler/ozet')).body;
+      assert.doesNotMatch(ozet, /ceza|vade|fiyat|toplam/i, 'özet yalnız sayı taşır');
+    }
+    for (const cerez of fiyatlilar) {
+      const a = (await oku(cerez, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+      assert.deepEqual([a.cezaOraniGun, a.cezaTavaniOrani, a.odemeVadesiGun, a.genelToplam], ['0.500', '10.00', 45, '1500.00']);
+      const l = (await oku(cerez, `/siparisler?ara=${encodeURIComponent(s.no)}`)).json<SiparisListesiCevabi>().satirlar.find((x) => x.id === s.id);
+      assert.deepEqual([l?.cezaOraniGun, l?.cezaTavaniOrani, l?.odemeVadesiGun], ['0.500', '10.00', 45]);
+    }
+    // Fiyatsız yazar ceza ve vade gönderirse 403; göndermezse (null) düzenleme kayıttakini silmez.
+    const fiyatsizYazar = fiyatsizlar[2]!;
+    const fiyatsizKalem = { malzemeNo: mamulNo, miktar: '100', birimFiyat: null, termin: null, aciklama: null };
+    const red = await gonder(fiyatsizYazar, `/siparisler/${s.id}/guncelle`, { ...govde({ satirlar: [fiyatsizKalem], cezaOraniGun: '2' }), surum: s.surum });
+    assert.equal(red.statusCode, 403, red.body);
+    assert.equal((await gonder(fiyatsizYazar, '/siparisler/ekle', govde({ satirlar: [fiyatsizKalem], odemeVadesiGun: 30 }))).statusCode, 403);
+    const tamam = await gonder(fiyatsizYazar, `/siparisler/${s.id}/guncelle`, { ...govde({ satirlar: [fiyatsizKalem], aciklama: 'Fiyatsız düzenleme' }), surum: s.surum });
+    assert.equal(tamam.statusCode, 200, tamam.body);
+    assert.deepEqual([tamam.json<SiparisAyrintisi>().cezaOraniGun, tamam.json<SiparisAyrintisi>().odemeVadesiGun], [null, null], 'cevap fiyatsızdır');
+    const kayit = (await oku(yonetici, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+    assert.deepEqual([kayit.aciklama, kayit.cezaOraniGun, kayit.cezaTavaniOrani, kayit.odemeVadesiGun, kayit.satirlar[0]?.birimFiyat], ['Fiyatsız düzenleme', '0.500', '10.00', 45, '12.5000']);
+  });
+
+  // Yetkisiz cevabı dolaşır, maliyet|kâr|bedel|ceza|vade adlı dolu alan kalmadığını ölçer. İzinli istisnalar adıyla listelenir:
+  // anahtar adı bu kalıba uyan ama para ya da ticari şart taşımayan alanlar (kart bağlantısı, termin kayması gibi).
+  const YASAK_AD = /maliyet|kar|bedel|ceza|vade/i;
+  const IZINLI_AD = new Set(['malzemeKarti', 'malzemeKartlari', 'kartsizSatir', 'kartBagli', 'kartNo', 'kartKodu']);
+  function doluYasakAlanlar(deger: unknown, yol = ''): string[] {
+    if (Array.isArray(deger)) return deger.flatMap((x, i) => doluYasakAlanlar(x, `${yol}[${String(i)}]`));
+    if (deger === null || typeof deger !== 'object') return [];
+    return Object.entries(deger).flatMap(([ad, v]) => {
+      const tam = `${yol}.${ad}`;
+      if (v !== null && typeof v === 'object') return doluYasakAlanlar(v, tam);
+      return v !== null && YASAK_AD.test(ad) && !IZINLI_AD.has(ad) ? [tam] : [];
+    });
+  }
+
+  test('3401-1 a tarama: fiyat ve maliyet görmeyenin sipariş cevaplarında maliyet, kâr, bedel, ceza ya da vade adlı dolu alan kalmaz; yetkilide dolu', async () => {
+    const s = await siparisAc({ cezaOraniGun: '0.5', cezaTavaniOrani: '10', odemeVadesiGun: 45 });
+    const fiyatsiz = await rolluGiris(['siparisler.oku', 'siparisler.yaz', 'siparisler.termin-dene']);
+    const yollar = [`/siparisler/${s.id}`, '/siparisler', '/siparisler/ozet', '/siparisler/termin-dagilimi', '/siparisler/satis-taslaklari'];
+    for (const yol of yollar) {
+      const c = await oku(fiyatsiz, yol);
+      assert.equal(c.statusCode, 200, `${yol}: ${c.body}`);
+      assert.deepEqual(doluYasakAlanlar(c.json()), [], yol);
+    }
+    const dolu = doluYasakAlanlar((await oku(yonetici, `/siparisler/${s.id}`)).json());
+    assert.deepEqual(dolu.sort(), ['.cezaOraniGun', '.cezaTavaniOrani', '.odemeVadesiGun'], 'yetkilide aynı tarama ticari şartı yakalar');
+  });
+
   test('SIP-14 sipariş açılınca onaylayanlara "onay bekliyor" bildirimi gider; açan kendi siparişi için almaz (bildirim merkezi)', async () => {
     const acan = await girisYap('mudur');
     const onaylayan = await girisYap('mudur');

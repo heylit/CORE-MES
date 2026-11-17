@@ -107,10 +107,15 @@ export function kalemleriGetir(db: Db, idler: number[]): Promise<KalemSatiri[]> 
   return db.sorgu<KalemSatiri>(`${KALEM_SECIMI} WHERE id = ANY($1::int[]) ORDER BY id`, [idler]);
 }
 
+export interface SiparisKilidi {
+  durum: SiparisDurumu; firma_id: number; surum: number;
+  gecikme_ceza_orani: string | null; ceza_tavani_orani: string | null; odeme_vadesi_gun: number | null;
+}
+
 // Durum ve firma kilitlenerek okunur: eşzamanlı komutta kural güncel duruma göre işler.
-export function siparisKilitle(db: Db, id: number): Promise<{ durum: SiparisDurumu; firma_id: number; surum: number } | null> {
-  return db.tek<{ durum: SiparisDurumu; firma_id: number; surum: number }>(
-    'SELECT durum, firma_id, surum FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [id],
+export function siparisKilitle(db: Db, id: number): Promise<SiparisKilidi | null> {
+  return db.tek<SiparisKilidi>(
+    'SELECT durum, firma_id, surum, gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [id],
   );
 }
 

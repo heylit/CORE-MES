@@ -20,11 +20,13 @@ const FIYAT_ISLEMI = 'siparisler.fiyat-oku';
 const fiyatGorur = (k: Kullanici): boolean => islemVarMi(k, FIYAT_ISLEMI);
 const siparisCevabi = (k: Kullanici) => async (s: Promise<SiparisAyrintisi>) => (fiyatGorur(k) ? s : siparisAyrintisiFiyatsiz(await s));
 const teklifCevabi = (k: Kullanici) => async (t: Promise<TeklifAyrintisi>) => (fiyatGorur(k) ? t : teklifFiyatsiz(await t));
-// 65 a: maliyet toplamı fiyatla, dökümü `siparisler.maliyet-oku` ile görünür.
+// 3401-1 a: maliyet toplamı, birim maliyet ve kâr oranı yalnız `finans.maliyet-oku` ile görünür (satış fiyatı görmek maliyeti açmaz, kârdan
+// maliyet çıkarılabilir); dökümü `siparisler.maliyet-oku` ile görünür.
 const TERMIN_ISLEMI = 'siparisler.termin-dene';
 const MALIYET_ISLEMI = 'siparisler.maliyet-oku';
+const FINANS_MALIYET_ISLEMI = 'finans.maliyet-oku';
 const TERMIN_YETKISI_YOK = 'Plan taslağıyla sürüm yalnız termin deneme yetkisiyle verilir; termini elle girin.';
-const maliyetGorusu = (k: Kullanici) => ({ toplam: fiyatGorur(k) || islemVarMi(k, MALIYET_ISLEMI), dokum: islemVarMi(k, MALIYET_ISLEMI) });
+const maliyetGorusu = (k: Kullanici) => ({ toplam: islemVarMi(k, FINANS_MALIYET_ISLEMI), dokum: islemVarMi(k, MALIYET_ISLEMI) });
 const taslakCevabi = (k: Kullanici) => async (l: Promise<PlanTaslagi[]>) => {
   const toplam = maliyetGorusu(k).toplam;
   return { taslaklar: (await l).map((t) => (toplam ? t : { ...t, karOrani: null, maliyetToplami: null })) };
@@ -36,8 +38,9 @@ const adetCevabi = (k: Kullanici) => async (c: Promise<AdetDenemesiCevabi>): Pro
   return { ...a, satirlar: a.satirlar.map((s) => ({ ...s, maliyetToplami: null, kalemler: s.kalemler.map((m) => ({ ...m, birimMaliyet: null })) })) };
 };
 const atolyeCevabi = (k: Kullanici) => async (l: Promise<AtolyeTaslagi[]>) => {
-  const gorur = fiyatGorur(k);
-  return { taslaklar: (await l).map((t) => (gorur ? t : { ...t, karOrani: null, tutar: null })) };
+  const tutarGorur = fiyatGorur(k);
+  const karGorur = maliyetGorusu(k).toplam;
+  return { taslaklar: (await l).map((t) => ({ ...t, karOrani: karGorur ? t.karOrani : null, tutar: tutarGorur ? t.tutar : null })) };
 };
 
 // Taslağı `siparisler.yaz` açar ve düzenler; onay, kapatma ve iptal `siparisler.onayla` ister (onaylı kayıt onaysız değişmez).
