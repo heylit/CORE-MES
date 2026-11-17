@@ -32,7 +32,7 @@ describe('atölye kod anahtarı katlama göçü (gerçek PostgreSQL)', () => {
     await ortam?.kaldir();
   });
 
-  test('çakışma varken durur ve değiştirmez; çakışma kalkınca katlar, yedekler ve katlanmamış anahtarı reddeder', async () => {
+  test('görünüm ya da göz çakışması varken durur ve değiştirmez; çakışma kalkınca katlar, yedekler ve katlanmamış anahtarı reddeder', async () => {
     const hepsi = (await readdir(GERCEK_KLASOR)).filter((ad) => ad.endsWith('.sql')).sort();
     const sira = hepsi.findIndex((ad) => ad.endsWith('_atolye_kod_anahtari_katlama.sql'));
     assert.equal(sira > 0, true, 'göç bulunamadı ya da öncesinde göç yok');
@@ -68,11 +68,23 @@ describe('atölye kod anahtarı katlama göçü (gerçek PostgreSQL)', () => {
       ['ORN-KİT-2', 'ORN-MIL-1', 'ORN-MİL-1']);
 
     await sahip.sorgu("DELETE FROM atolye_kalem_gorunumu WHERE kod_anahtari = 'ORN-MIL-1'");
+    // Aynı gözde aynı parça iki yazımla: görünüm temizken göz sayımı durdurur.
+    await gozeEkle('ORN-KIT-2');
+    const gozler = async (): Promise<string[]> =>
+      (await sahip.sorgu<{ k: string }>('SELECT kod_anahtari AS k FROM atolye_goz_kalemi ORDER BY 1')).map((s) => s.k);
+    await assert.rejects(gocleriUygula(ayar, GERCEK_KLASOR, { sema }), (hata: Error) => {
+      assert.match(hata.message, new RegExp(`aynı gözde aynı anahtara düşen kalemler var, hiçbir şey değişmedi: göz ${String(goz)}, ORN-KIT-2: ORN-KIT-2, ORN-KİT-2`));
+      return true;
+    });
+    assert.deepEqual(await gozler(), ['ORN-KIT-2', 'ORN-KİT-2', 'ORN-PIM-3']);
+    assert.deepEqual((await sahip.sorgu<{ k: string }>('SELECT kod_anahtari AS k FROM atolye_kalem_gorunumu ORDER BY 1')).map((s) => s.k),
+      ['ORN-KİT-2', 'ORN-MİL-1']);
+
+    await sahip.sorgu("DELETE FROM atolye_goz_kalemi WHERE kod_anahtari = 'ORN-KIT-2'");
     await gocleriUygula(ayar, GERCEK_KLASOR, { sema });
     assert.deepEqual((await sahip.sorgu<{ k: string }>('SELECT kod_anahtari AS k FROM atolye_kalem_gorunumu ORDER BY 1')).map((s) => s.k),
       ['ORN-KIT-2', 'ORN-MIL-1']);
-    assert.deepEqual((await sahip.sorgu<{ k: string }>('SELECT kod_anahtari AS k FROM atolye_goz_kalemi ORDER BY 1')).map((s) => s.k),
-      ['ORN-KIT-2', 'ORN-PIM-3']);
+    assert.deepEqual(await gozler(), ['ORN-KIT-2', 'ORN-PIM-3']);
     assert.deepEqual(await sahip.sorgu('SELECT tablo, eski, yeni FROM atolye_kod_anahtari_yedegi ORDER BY tablo, eski'), [
       { tablo: 'atolye_goz_kalemi', eski: 'ORN-KİT-2', yeni: 'ORN-KIT-2' },
       { tablo: 'atolye_kalem_gorunumu', eski: 'ORN-KİT-2', yeni: 'ORN-KIT-2' },
