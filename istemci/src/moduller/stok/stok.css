@@ -845,3 +845,5 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-depo-sepeti > .tc-stok-teslim-satir { flex-wrap: wrap; }
   .tc-stok-depo-sepeti > .tc-stok-teslim-satir > div { flex: 1 1 100%; }
 }
+/* 3398: artık satırında iki kapatma düğmesi yan yana. */
+.tc-stok-kontrol-eylem { display: inline-flex; flex-wrap: nowrap; gap: var(--b-2); }

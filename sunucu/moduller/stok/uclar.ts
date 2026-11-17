@@ -30,6 +30,7 @@ import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdes
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi, irsaliyeParametresi } from '#paylasilan/sozlesme/stok-irsaliye.ts';
 import { malKabulTaslagiCevabi, malKabulTaslagiKaydetCevabi, malKabulTaslagiKaydetGovdesi, malKabulTaslagiSilGovdesi } from '#paylasilan/sozlesme/stok-mal-kabul-taslagi.ts';
+import { artikParcaCevabi, artikParcaGovdesi, artikParcaKapatGovdesi, artikParcaParametresi, artikParcalarCevabi, artikParcalarSorgusu, olcuAramaCevabi, olcuAramaSorgusu } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 import { emrinFisleri } from './emir-fisleri.ts';
@@ -45,6 +46,9 @@ const SON_PARTI_OKUMA = { biri: ['sayfa.stok', ...STOK_ISLEMLERI, 'satin-alma.ok
 const ROTA_STOK_OKUMA = { biri: [...OKUMA.biri, 'sayfa.rota'] } as const;
 // Haritadan eşleme raf, konum ya da depo haritası yazımının ardından koşar (3165 a): üçünden biri yeter.
 const ESLEME = { biri: STOK_ESLEME_ISLEMLERI } as const;
+// 3398 (surum 4 a): Stok kontrol sayfası satın alma ve planlamanın ortak sayfasıdır; ölçüyle arama ve artık listesi stok okumasına ek
+// olarak satın almacıya ve planlayıcıya açıktır. Artığı depo keserken kaydeder (stok.cikis; VARSAYIM, yeni işlem yok).
+const KONTROL_OKUMA = { biri: [...OKUMA.biri, 'satin-alma.yaz', 'plan.yaz'] } as const;
 const ACIK_SIPARIS_OKUMA = { biri: ['stok.giris', 'plan.planlama-oku'] } as const;
 export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/is-kutusu', yetki: OKUMA, cevap: isKutusuCevabi, isle: ({ db, kullanici }) => s.isKutusu(db, kullanici.islemler, kullanici.id) }),
@@ -277,4 +281,8 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/stok/yerlesim/kaydet', yetki: 'stok.harita-yaz', govde: yerlesimKaydetGovdesi, cevap: yerlesimCevabi, isle: ({ db, govde }) => s.yerlesimKaydet(db, govde) }),
   uc({ yontem: 'GET', yol: '/stok/ara', yetki: OKUMA, sorgu: araSorgusu, cevap: araCevabi, isle: ({ db, sorgu }) => s.ara(db, sorgu.q) }),
   uc({ yontem: 'GET', yol: '/stok/sayim-bekleyenler', yetki: OKUMA, cevap: sayimBekleyenlerCevabi, isle: ({ db }) => s.sayimBekleyenler(db) }),
+  uc({ yontem: 'GET', yol: '/stok/olcu-arama', yetki: KONTROL_OKUMA, sorgu: olcuAramaSorgusu, cevap: olcuAramaCevabi, isle: ({ db, sorgu }) => s.olcuyleAra(db, sorgu) }),
+  uc({ yontem: 'GET', yol: '/stok/artik-parcalar', yetki: KONTROL_OKUMA, sorgu: artikParcalarSorgusu, cevap: artikParcalarCevabi, isle: ({ db, sorgu }) => s.artikParcaListesi(db, sorgu) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar', yetki: 'stok.cikis', govde: artikParcaGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, govde }) => s.artikParcaKaydet(db, kullanici, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar/:id/kapat', yetki: 'stok.cikis', parametre: artikParcaParametresi, govde: artikParcaKapatGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.artikParcaKapat(db, kullanici, parametre.id, govde) }),
 ];
