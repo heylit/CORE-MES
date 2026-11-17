@@ -149,7 +149,7 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
   });
 
   test('form verisi: müşteri firma kartından, toplamlar sürümden ve verilen KDV oranından; yalnız fiyat gören okur', async () => {
-    const firma = await gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'ORN Müşteri Deneme', tur: 'musteri' });
+    const firma = await gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'ORN Müşteri Deneme', tur: 'musteri', vergiDairesi: 'ORN Vergi Dairesi', vergiNo: '0000000000' });
     assert.equal(firma.statusCode, 200, firma.body);
     const firmaId = firma.json<{ firma: { id: number } }>().firma.id;
     const t = await gonder(yonetici, '/siparisler/teklifler/ekle', { firmaId, baslik: 'Form denemesi', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: null, tanim: 'ORN parça', miktar: '5' }] });
@@ -161,7 +161,7 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
     const c = await oku(satis, `${yol}?surumNo=1&kdvOrani=20`);
     assert.equal(c.statusCode, 200, c.body);
     const f = c.json<TeklifFormuVerisiCevabi>();
-    assert.deepEqual(f.musteri, { ad: 'ORN Müşteri Deneme', adres: null, vergiNo: null });
+    assert.deepEqual(f.musteri, { ad: 'ORN Müşteri Deneme', adres: null, vergiDairesi: 'ORN Vergi Dairesi', vergiNo: '0000000000' });
     assert.deepEqual([f.araToplam, f.iskontoTutari, f.kdvHaric, f.kdvTutari, f.genelToplam], ['500.00', '20.00', '480.00', '96.00', '576.00']);
     assert.equal(f.kdvHaric, v.json<TeklifAyrintisi>().surumler[0]?.toplam);
     assert.equal((await oku(satis, `${yol}?surumNo=1&kdvOrani=10`)).json<TeklifFormuVerisiCevabi>().genelToplam, '528.00');

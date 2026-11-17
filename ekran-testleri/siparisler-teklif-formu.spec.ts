@@ -22,12 +22,40 @@ test('Teklif formu: satış hesabı şablonla formu açar, toplamlar ve kâğıt
   });
   expect(ver.status(), await ver.text()).toBe(200);
 
+  // 3356: müşteri kutusu örnek firmanın vergi dairesi ve numarasıyla çizilir (örnek veride boş olabilir; cevap ORN değerle yönlendirilir).
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/form?**`, async (r) => {
+    const c = await r.fetch(); const g = await c.json() as { musteri: Record<string, unknown> };
+    await r.fulfill({ response: c, json: { ...g, musteri: { ...g.musteri, vergiDairesi: 'ORN Vergi Dairesi', vergiNo: '0000000000' } } });
+  });
+  const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
+  // İnceleme resmi için antet örnek kurum bilgisi ve doküman kutusuyla doldurulur (örnek veride boştur).
+  if (klasor) {
+    await page.route('**/api/siparisler/teklif-formu', async (r) => {
+      const c = await r.fetch(); const g = await c.json() as { kurum: Record<string, unknown>; sablonlar: { icerik: Record<string, unknown> }[] };
+      await r.fulfill({ response: c, json: {
+        ...g, kurum: { ...g.kurum, unvan: 'ORN Deneme Makina San. Ltd. Şti.', adres: 'ORN OSB 1. Cad. No: 1', telefon: '0 000 000 00 00', eposta: 'satis@ornek.invalid', vergi: 'ORN VD 0000000000' },
+        sablonlar: g.sablonlar.map((x) => ({ ...x, icerik: { ...x.icerik, imza1: 'ORN Satış Sorumlusu', belge: { no: 'ORN-F-11', yayin: '01.01.2026', revTarihi: '-', revNo: '00' } } })),
+      } });
+    });
+  }
   await ac(`/siparisler/teklifler/${String(t.id)}`);
   await page.getByRole('button', { name: 'Teklif formu' }).click();
   const pencere = page.getByRole('dialog', { name: new RegExp(`Teklif formu · ${t.no}`) });
   await expect(pencere.getByRole('article', { name: `Teklif ${t.no}` })).toBeVisible();
   await expect(pencere.getByText('400,00').first()).toBeVisible();
   await expect(pencere.getByText('480,00 TRY')).toBeVisible();
+  const kagit = pencere.getByRole('article', { name: `Teklif ${t.no}` });
+  await expect(kagit.getByText('ORN Vergi Dairesi')).toBeVisible();
+  await expect(kagit.getByText('Satış teklifi')).toBeVisible();
+  await expect(kagit.getByText('FİRMA ONAYI / COMPANY CONFIRMATION')).toBeVisible();
+  await expect(kagit.getByText('MÜŞTERİ ONAYI / CUSTOMER CONFIRMATION')).toBeVisible();
+  if (klasor) {
+    const boyut = page.viewportSize() ?? { width: 1280, height: 800 };
+    await page.setViewportSize({ width: boyut.width, height: 2600 });
+    // geniş ekranda bütün kâğıt; dar ekranda onay alanları (kâğıt pencereye sığacak kadar küçülür)
+    await (boyut.width >= 1100 ? kagit : kagit.locator('.tc-tf-imzalar')).screenshot({ path: `${klasor}/3356-g${String(boyut.width)}.png` });
+    await page.setViewportSize(boyut);
+  }
   await expect(pencere.getByRole('button', { name: 'Yazdır / PDF' })).toBeEnabled();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
 

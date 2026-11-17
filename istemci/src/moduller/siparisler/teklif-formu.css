@@ -55,7 +55,13 @@
 }
 .tc-tf-sartlar { padding-inline-start: var(--b-4); }
 .tc-tf-imzalar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--b-6); margin-block-start: auto; padding-block-start: var(--b-5); break-inside: avoid; }
-.tc-tf-imza { border-block-start: var(--cizgi-ince) solid var(--ink); padding-block-start: var(--b-1); display: flex; flex-direction: column; }
+.tc-tf-imza { display: flex; flex-direction: column; }
+/* Örnek formdaki gibi onay başlığı üstte; altındaki boşluk ıslak imza yeri, çizginin altında ad ve ünvan. */
+.tc-tf-onay {
+  /* büyük harf metindedir: Türkçe kâğıtta text-transform İngilizce i'yi İ yapardı */
+  font-size: var(--yazi-xs); letter-spacing: var(--harf-aralik-10); color: var(--bp); font-weight: 600;
+  padding-block-end: var(--b-6); border-block-end: var(--cizgi-ince) solid var(--ink); margin-block-end: var(--b-1);
+}
 .tc-tf-imza small { color: var(--muted); }
 .tc-tf-alt { display: flex; justify-content: space-between; gap: var(--b-3); border-block-start: var(--cizgi-ince) solid var(--edge); padding-block-start: var(--b-2); color: var(--muted); }
 .tc-tf-imzalar + .tc-tf-alt { margin-block-start: 0; }

@@ -24,7 +24,7 @@ const ORNEK: FormVerisi = {
     { id: 2, kod: 'ORN-MLZ-102', ad: 'ORN- mil Ø40 x 300', miktar: '120.000', birim: 'adet', birimFiyat: '185.5000', iskontoluFiyat: '176.2250', tutar: '21147.00' },
     { id: 3, kod: null, ad: 'ORN- burç (kartsız kalem)', miktar: '200.000', birim: 'adet', birimFiyat: '42.0000', iskontoluFiyat: '39.9000', tutar: '7980.00' },
   ],
-  musteri: { ad: 'ORN- Makine A.Ş.', adres: 'ORN- Sanayi Mah. 1. Cad. No: 1\nORN- İlçe / ORN- İl', vergiNo: 'ORN-VD 0000000000' },
+  musteri: { ad: 'ORN- Makine A.Ş.', adres: 'ORN- Sanayi Mah. 1. Cad. No: 1\nORN- İlçe / ORN- İl', vergiDairesi: 'ORN- Vergi Dairesi', vergiNo: '0000000000' },
   ilgili: '',
   toplam: { araToplam: '51660.00', iskontoTutari: '2583.00', kdvHaric: '49077.00', kdvOrani: '20', kdvTutari: '9815.40', genelToplam: '58892.40' },
 };
