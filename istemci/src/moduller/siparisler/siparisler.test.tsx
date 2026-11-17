@@ -1289,7 +1289,13 @@ describe('Teklifler', () => {
     fireEvent.change(screen.getByLabelText(/^Konu/), { target: { value: 'Deneme braket ihtiyacı' } });
     fireEvent.click(screen.getByRole('button', { name: 'Devam' }));
     const tanim = await screen.findByRole('combobox', { name: /^Kalem 1 tanım/ });
+    // Kartsızken elle girilen oran, oranlı kart seçilince gövdeye gitmez (kartın oranı sunucuda yazılır).
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 yerlilik/), { target: { value: '30' } });
+    // Tek harfte arama yapılmaz.
     fireEvent.focus(tanim);
+    fireEvent.change(tanim, { target: { value: 'D' } });
+    await new Promise((r) => { setTimeout(r, 400); });
+    expect(istekler.some((i) => i.yol.startsWith('/siparisler/malzeme-secenekleri'))).toBe(false);
     fireEvent.change(tanim, { target: { value: 'Deneme' } });
     const secenek = await screen.findByRole('option', { name: /Deneme Braket/ });
     expect(secenek.textContent).toMatch(/%62,5 yerli/);
@@ -1299,10 +1305,31 @@ describe('Teklifler', () => {
     expect((screen.getByLabelText(/^Kalem 1 birim/) as HTMLInputElement).value).toBe('adet');
     expect((screen.getByLabelText(/^Kalem 1 yerlilik/) as HTMLInputElement).value).toBe('62,5');
     expect(screen.getByText('Karttan')).toBeTruthy();
+    // Kartlı kalemde tanım değişince arama yapılmaz.
+    const once = istekler.filter((i) => i.yol.startsWith('/siparisler/malzeme-secenekleri')).length;
+    fireEvent.change(tanim, { target: { value: 'Deneme Braket özel' } });
+    await new Promise((r) => { setTimeout(r, 400); });
+    expect(istekler.filter((i) => i.yol.startsWith('/siparisler/malzeme-secenekleri')).length).toBe(once);
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, tanim: 'Deneme Braket', miktar: '40', birim: null, yerlilikOrani: null }] });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, tanim: 'Deneme Braket özel', miktar: '40', birim: null, yerlilikOrani: null }] });
+  });
+
+  it('3400-2: Logo karşılığı hiç yoksa bütün aktif birimler listelenir; listede olmayan kayıtlı birim düzenlemede seçili kalır', async () => {
+    const LOGOSUZ = { birimler: [{ kod: 'adet', logo: null }, { kod: 'kg', logo: null }] } satisfies BirimSecenekleriCevabi;
+    const KUTULU = { ...TEKLIF_YENI, satirlar: [{ ...TEKLIF_SATIR, birim: 'kutu' }] } satisfies TeklifAyrintisi;
+    sunucuKur(YAZAR, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/birim-secenekleri') return json(200, LOGOSUZ);
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, KUTULU);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21/duzenle');
+    fireEvent.click(await screen.findByRole('tab', { name: '2 Kalemler' }));
+    const birim = await screen.findByLabelText(/^Kalem 1 birim/) as HTMLSelectElement;
+    await waitFor(() => expect(within(birim).queryByRole('option', { name: 'kg' })).toBeTruthy());
+    expect([...birim.options].map((o) => o.value)).toEqual(['', 'kutu', 'adet', 'kg']);
+    expect(birim.value).toBe('kutu');
   });
 
   it('3400-1: müşteri kutusuna yazmak seçimi bırakır; seçilmeyen müşteriyle Devam reddedilir', async () => {

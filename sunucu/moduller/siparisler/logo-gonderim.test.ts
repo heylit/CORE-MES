@@ -111,6 +111,23 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     assert.deepEqual(ikinci?.satirlar.map((s) => [s.birimFiyat, s.iskontoYuzdesi]), [['12.0000', null], ['22.0000', null]]);
   });
 
+  test('3400-2: Logo satırına kartsız kalemin seçilen birimi, karta bağlı kalemde kartın birimi gider', async () => {
+    sayac += 1;
+    const kimlik = `sip-logo-dnm-${sayac}`;
+    const adetKart = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'mamul', 'SLG-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [kimlik, sayac, JSON.stringify({ id: kimlik, com: { ad: 'Deneme adetli', birim: 'adet' } }), yoneticiId],
+    ))!.no;
+    let t = await komut<TeklifAyrintisi>('/siparisler/teklifler/ekle', {
+      firmaId: musteriId, baslik: 'Logo birim denemesi', istenenTarih: '2026-11-30', aciklama: null,
+      satirlar: [{ malzemeNo: adetKart, tanim: 'Kartlı', miktar: '3', birim: 'kg' }, { malzemeNo: null, tanim: 'Kartsız', miktar: '2.5', birim: 'kg' }],
+    });
+    t = await surumVer(t, '0', '10', '20');
+    const [gonderim] = await teklifSirasi(t.no);
+    assert.deepEqual(gonderim?.satirlar.map((s) => [s.miktar, s.birim]), [[t.satirlar[0]?.miktar, 'adet'], [t.satirlar[1]?.miktar, 'kg']]);
+  });
+
   test('iskonto onayı bekleyen sürüm müşteriye gitmediği için sıraya girmez; müdür onaylayınca girer', async () => {
     const mudur = await girisYap('mudur');
     let t = await teklifAc();

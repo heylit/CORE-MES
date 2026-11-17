@@ -361,9 +361,11 @@ export async function talepSatirlariniYaz(
   );
 }
 
+// Karta bağlanan satırın birimi kartın birimidir (karta bağlı kalemde birim yazılmaz); kartsızken seçilen birim
+// kartın birim kümesinde olmayabilir ve Logo'ya yanlış birim gitmesin diye bırakılır.
 export function kartBagla(db: Db, teklifId: number, satirId: number, malzemeNo: number): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
-    'UPDATE siparisler_teklif_satiri SET malzeme_no = $3 WHERE id = $2 AND teklif_id = $1 RETURNING id', [teklifId, satirId, malzemeNo],
+    'UPDATE siparisler_teklif_satiri SET malzeme_no = $3, birim = NULL WHERE id = $2 AND teklif_id = $1 RETURNING id', [teklifId, satirId, malzemeNo],
   );
 }
 

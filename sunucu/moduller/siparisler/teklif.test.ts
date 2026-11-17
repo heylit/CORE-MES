@@ -358,6 +358,30 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
       { malzemeNo: mamulNo, tanim: 'Oransız kart', miktar: '1', yerlilikOrani: '55.5' },
     ] });
     assert.deepEqual(t.satirlar.map((x) => [x.birim, x.yerlilikOrani]), [['adet', '62.50'], ['set', '40.00'], [null, '55.50']]);
+    // Kartsız kalem sonradan karta bağlanınca kartsızken seçilen birim bırakılır, kartın birimi geçer; girilen oran kalır.
+    const kartsiz = t.satirlar[1]!;
+    const bagli = await komut(t, `satirlar/${kartsiz.id}/kart-bagla`, { malzemeNo: yerli });
+    assert.deepEqual(bagli.satirlar.filter((x) => x.id === kartsiz.id).map((x) => [x.malzemeNo, x.birim, x.yerlilikOrani]), [[yerli, 'adet', '40.00']]);
+    assert.equal((await o().sahip.tek<{ birim: string | null }>('SELECT birim FROM siparisler_teklif_satiri WHERE id = $1', [kartsiz.id]))?.birim, null);
+
+    // Pasif birim kartsız kalemde kabul edilmez; ticari mal kartında kayıtlı oran (yalnız mamul ve yarı mamulde geçerli) kaleme gelmez.
+    await o().sahip.sorgu("INSERT INTO malzeme_birimi (kod, aktif) VALUES ('dnm-pasif', false) ON CONFLICT (kod) DO UPDATE SET aktif = false");
+    const pasif = await gonder(yonetici, '/siparisler/teklifler/ekle', talep({ satirlar: [{ malzemeNo: null, tanim: 'Pasif birim', miktar: '1', birim: 'dnm-pasif' }] }));
+    assert.equal(pasif.statusCode, 400, pasif.body);
+    assert.match(pasif.body, /Birim listede yok/);
+    sayac += 1;
+    const hmKimlik = `tkl-dnm-${sayac}`;
+    const hammadde = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'ticari_mal', 'TKL-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [hmKimlik, sayac, JSON.stringify({ id: hmKimlik, com: { ad: 'Deneme ticari yerli', birim: 'kg' }, g: { yerlilik: 80 } }), yoneticiId],
+    ))!.no;
+    const hmSecenek = (await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=Deneme%20ticari%20yerli')).json<{ satirlar: { no: number; yerlilikOrani: string | null }[] }>().satirlar;
+    const hmSatir = hmSecenek.find((x) => x.no === hammadde);
+    assert.ok(hmSatir, 'ticari mal kartı seçeneklerde');
+    assert.equal(hmSatir.yerlilikOrani, null);
+    const hmTeklif = await teklifAc({ satirlar: [{ malzemeNo: hammadde, tanim: 'Ticari', miktar: '1' }] });
+    assert.equal(hmTeklif.satirlar[0]?.yerlilikOrani, null);
 
     const yok = await gonder(yonetici, '/siparisler/teklifler/ekle', talep({ satirlar: [{ malzemeNo: null, tanim: 'Bilinmeyen birim', miktar: '1', birim: 'yok-boyle-birim' }] }));
     assert.equal(yok.statusCode, 400, yok.body);
