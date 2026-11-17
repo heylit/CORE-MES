@@ -6,7 +6,7 @@ import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESK
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { temizlikEkiSatirlari, temizlikYedegiUygunMu } from './kurallar.ts';
 import {
-  denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, denemeIsaretle, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
+  denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, denemeIsaretle, denemeIsaretiKalkmaAniniOku, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
 } from './sorgular.ts';
 import { yedekOrtaminiKur } from './yedek-dizini.ts';
 import { yedekleriListele } from './yedek.ts';
@@ -103,4 +103,9 @@ export async function veriTemizle(
 // Liste gizleme (3395 madde 2): üretim emri, sipariş ve malzeme listeleri işaretli kökleri göstermez. İşaret kalkınca kayıt döner.
 export function denemeIsaretliKimlikler(db: Db, tur: TemizlikTuru): Promise<number[]> {
   return denemeIsaretliKimlikleriOku(db, tur);
+}
+
+// Türde son işaret kalkma anı (yoksa null): önbellekli liste bu andan eski "değişenler" okumasını tam okumaya çevirir.
+export function denemeIsaretiKalkmaAni(db: Db, tur: TemizlikTuru): Promise<string | null> {
+  return denemeIsaretiKalkmaAniniOku(db, tur);
 }

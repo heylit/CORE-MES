@@ -34,18 +34,22 @@ export interface KatalogKartiSatiri {
 const DEGISENLER = `($1::timestamptz IS NULL OR guncelleme > $1::timestamptz - interval '5 minutes')`;
 
 // Sıra kart numarasıdır (değişmez, yeni kart sona eklenir): düzenleme sayfalar arasında kart kaydırmaz.
+// Deneme işaretli kart (3395 madde 2) iptal gibi kayıtsız döner: istemci önbellekten düşürür. İşaretlemek kartın güncelleme anını
+// değiştirmez; işaretli kart her okumada (değişenler okumasında da) gelir ki önbellekteki kopya da düşsün.
+const LISTEDEKILER = `(${DEGISENLER} OR no = ANY($2::int[]))`;
+
 export function katalogKartlari(
-  db: Db, sonra: string | null, d: Dilim,
+  db: Db, sonra: string | null, gizli: readonly number[], d: Dilim,
 ): Promise<{ kimlik: string; no: number; kayit: Record<string, unknown> | null; surum: number }[]> {
   return db.sorgu(
-    `SELECT kimlik, no, CASE WHEN onay_durumu = 'iptal' THEN NULL ELSE kayit END AS kayit, surum
-       FROM malzeme_katalog_karti WHERE ${DEGISENLER} ORDER BY no LIMIT $2 OFFSET $3`,
-    [sonra, d.sinir, d.atla],
+    `SELECT kimlik, no, CASE WHEN onay_durumu = 'iptal' OR no = ANY($2::int[]) THEN NULL ELSE kayit END AS kayit, surum
+       FROM malzeme_katalog_karti WHERE ${LISTEDEKILER} ORDER BY no LIMIT $3 OFFSET $4`,
+    [sonra, [...gizli], d.sinir, d.atla],
   );
 }
 
-export async function katalogKartSayisi(db: Db, sonra: string | null): Promise<number> {
-  const satir = await db.tek<{ sayi: number }>(`SELECT count(*)::int AS sayi FROM malzeme_katalog_karti WHERE ${DEGISENLER}`, [sonra]);
+export async function katalogKartSayisi(db: Db, sonra: string | null, gizli: readonly number[]): Promise<number> {
+  const satir = await db.tek<{ sayi: number }>(`SELECT count(*)::int AS sayi FROM malzeme_katalog_karti WHERE ${LISTEDEKILER}`, [sonra, [...gizli]]);
   return satir?.sayi ?? 0;
 }
 

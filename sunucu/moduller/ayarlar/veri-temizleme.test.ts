@@ -532,6 +532,51 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     assert.ok((await liste()).body.includes(no));
   });
 
+  test('liste gizleme: işaretli malzeme kartı katalogda kayıtsız döner (önbellekten düşer), işaret kalkınca döner', async () => {
+    const no = await malzeme();
+    // Kart eskidir: değişenler okumasına kendi güncellemesiyle girmez.
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET guncelleme = '2020-01-01T00:00:00Z' WHERE no = $1", [no]);
+    assert.equal((await o().sahip.tek<{ g: string }>('SELECT guncelleme::text AS g FROM malzeme_katalog_karti WHERE no = $1', [no]))!.g.slice(0, 4), '2020');
+    const kart = async (sonra?: string) => {
+      const c = await istek(yonetici, 'GET', `/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=500${sonra === undefined ? '' : `&sonra=${encodeURIComponent(sonra)}`}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ satirlar: { no: number; kayit: unknown }[] }>().satirlar.find((k) => k.no === no);
+    };
+    assert.notEqual((await kart())?.kayit ?? null, null);
+    await isaretle([{ tur: 'malzeme', kimlik: no }]);
+    assert.equal((await kart())!.kayit, null, 'tam okumada kayıtsız');
+    assert.equal((await kart(new Date(Date.now() + 3_600_000).toISOString()))!.kayit, null, 'değişenler okumasında da gelir');
+    const an = (await istek(yonetici, 'GET', '/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=1')).json<{ an: string }>().an;
+    await isaretle([{ tur: 'malzeme', kimlik: no }], false);
+    assert.notEqual((await kart(an))?.kayit ?? null, null, 'işaret kalkınca değişenler okuması tam okumaya döner, kart geri gelir');
+    assert.notEqual((await kart())?.kayit ?? null, null);
+  });
+
+  test('liste gizleme: kalkma anı türe göre tutulur, aynı türde sonraki kaldırma anı günceller', async () => {
+    const no = await malzeme();
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET guncelleme = '2020-01-01T00:00:00Z' WHERE no = $1", [no]);
+    await o().sahip.sorgu(
+      "INSERT INTO ayarlar_deneme_isareti_kalkma (tur, zaman) VALUES ('malzeme', '2020-01-01T00:00:00Z') ON CONFLICT (tur) DO UPDATE SET zaman = excluded.zaman",
+    );
+    const kalkmaYili = async (tur: string) =>
+      (await o().sahip.tek<{ y: string }>("SELECT to_char(zaman, 'YYYY') AS y FROM ayarlar_deneme_isareti_kalkma WHERE tur = $1", [tur]))?.y ?? null;
+    const kart = async (sonra: string) => {
+      const c = await istek(yonetici, 'GET', `/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=500&sonra=${encodeURIComponent(sonra)}`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ satirlar: { no: number; kayit: unknown }[] }>().satirlar.find((k) => k.no === no);
+    };
+    const sp = await siparis();
+    await isaretle([{ tur: 'siparis', kimlik: sp }]);
+    await isaretle([{ tur: 'siparis', kimlik: sp }], false);
+    assert.equal(await kalkmaYili('malzeme'), '2020', 'başka türün kaldırması malzeme anını değiştirmez');
+    const an = (await istek(yonetici, 'GET', '/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=1')).json<{ an: string }>().an;
+    assert.equal(await kart(an), undefined, 'sipariş işaretinin kalkması katalogu tam okumaya çevirmez');
+    await isaretle([{ tur: 'malzeme', kimlik: no }]);
+    await isaretle([{ tur: 'malzeme', kimlik: no }], false);
+    assert.notEqual(await kalkmaYili('malzeme'), '2020', 'aynı türde ikinci kaldırma anı günceller');
+    assert.notEqual((await kart(an))?.kayit ?? null, null, 'sonradan kalkan işaret kartı geri getirir');
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(

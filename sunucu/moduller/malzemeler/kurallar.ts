@@ -1366,3 +1366,8 @@ export function logoKullanimNedenleri(
   if (k.acikSiparis === true) n.push('siparis');
   return n;
 }
+
+// Değişenler okuması güncelleme anına 5 dakika pay bırakır (sorgular DEGISENLER); işaret kalkma anı da aynı payla karşılaştırılır.
+export function kalkmaSonradirMi(kalkma: string, sonra: string): boolean {
+  return Date.parse(kalkma) > Date.parse(sonra) - 5 * 60_000;
+}

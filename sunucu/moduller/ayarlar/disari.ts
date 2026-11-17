@@ -32,4 +32,4 @@ export {
   MEDYA_AYNA_KLASORU, dosyasiOlmayanlar, medyaAynala, medyaDiziniOku, medyaGeriYukle, type MedyaAynaSonucu, type MedyaGeriYuklemeSonucu,
 } from './medya-yedek.ts';
 // Deneme işaretli kayıt kimlikleri: sahibi modül listesinden gizler (3395 madde 2).
-export { denemeIsaretliKimlikler } from './veri-temizleme.ts';
+export { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler } from './veri-temizleme.ts';

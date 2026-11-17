@@ -4,7 +4,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaAra, firmaOzeti, tedarikciOlabilirMi } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
@@ -31,7 +31,7 @@ import {
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
-import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
+import { kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur, olcuListesi, olcuMetni } from './kurallar.ts';
 import type { OlcuDegeri } from './kurallar.ts';
@@ -467,11 +467,14 @@ export async function malzemelerOzeti(db: Db, islemler: readonly string[]): Prom
 export async function katalogKartlariniGetir(
   db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; sonra?: string | undefined },
 ): Promise<KatalogKartlariCevabi> {
-  const sonra = sorgu.sonra ?? null;
   const an = await s.okumaAni(db);
+  const gizli = await denemeIsaretliKimlikler(db, 'malzeme');
+  // İşareti kalkan kart değişenlere girmez (güncelleme anı eski): son okumadan sonra işaret kalktıysa tam okunur.
+  const kalkma = sorgu.sonra === undefined ? null : await denemeIsaretiKalkmaAni(db, 'malzeme');
+  const sonra = sorgu.sonra === undefined || (kalkma !== null && kalkmaSonradirMi(kalkma, sorgu.sonra)) ? null : sorgu.sonra;
   const liste = await sayfaliListe(sorgu, {
-    say: () => s.katalogKartSayisi(db, sonra),
-    satirlar: (d) => s.katalogKartlari(db, sonra, d),
+    say: () => s.katalogKartSayisi(db, sonra, gizli),
+    satirlar: (d) => s.katalogKartlari(db, sonra, gizli, d),
     sayfaBoyu: { varsayilan: 200, azami: 500 },
   });
   return { ...liste, an };
