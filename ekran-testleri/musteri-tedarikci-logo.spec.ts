@@ -161,6 +161,38 @@ test.describe('Logo CRM seçimi (3391-2)', () => {
   });
 });
 
+test.describe('Logo geçişinde CRM bağı denetimi (3391-2)', () => {
+  test('düğmeyle denetler; düzeltilecek müşteriler sorunuyla listelenir, firma açılır; taşma yok', async ({ page, ag, ac }) => {
+    let istek = 0;
+    await page.route('**/api/logo/crm-denetimi', (r) => {
+      istek += 1;
+      return r.fulfill({ json: { durum: 'tamam', neden: null, taranan: 12, eksik: false, satirlar: [
+        { firmaId: 900001, kod: 'ORN-F-UZUN-KOD-0001', ad: 'ORN Deneme Uzun Adlı Müşteri Sanayi', cariKodu: 'ORN-C-UZUN-KOD-0001', sorun: 'crm-yok', sayi: null, secili: null },
+        { firmaId: 900002, kod: 'ORN-F-0002', ad: 'ORN Deneme Müşteri 2', cariKodu: 'ORN-C-0002', sorun: 'cok-bag', sayi: 3, secili: null },
+        { firmaId: 900003, kod: 'ORN-F-0003', ad: 'ORN Deneme Müşteri 3', cariKodu: 'ORN-C-0003', sorun: 'secim-kalkti', sayi: 1, secili: 'ORN-CRM-9' },
+      ] } });
+    });
+    await ac('/logo-gecisi');
+    await page.getByRole('tab', { name: 'Cariler' }).click();
+    const kart = page.getByText('CRM bağı denetimi');
+    await kart.scrollIntoViewIfNeeded();
+    expect(istek).toBe(0);
+    await page.getByRole('button', { name: 'Denetle' }).click();
+    const tablo = page.getByRole('table', { name: 'CRM bağı düzeltilecek müşteriler' });
+    await expect(tablo.getByText('CRM yok').first()).toBeVisible();
+    await expect(tablo.getByText('CRM ×3').first()).toBeVisible();
+    await expect(tablo.getByText('Seçim geçersiz').first()).toBeVisible();
+    await expect(page.getByText('12 cari denetlendi; 3 düzeltilecek.')).toBeVisible();
+    await tablo.scrollIntoViewIfNeeded();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath('crm-denetimi.png') });
+    await tablo.getByRole('button', { name: 'ORN Deneme Müşteri 2 firmasını aç' }).first().click();
+    await expect(page).toHaveURL(/\/musteri-tedarikci\?firma=900002/);
+    expect(istek).toBe(1);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
+
 test.describe('Yazamayan rol', () => {
   test.use({ hesap: 'ornek.depo' });
   test('bağlı olmayan firmada düğme yok, "Bağlı değil" yazar', async ({ page, ag, ac }) => {

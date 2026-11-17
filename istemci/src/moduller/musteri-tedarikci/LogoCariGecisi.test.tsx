@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
+import type { LogoCrmDenetimiCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { LogoCariAramaCevabi, LogoCariSatiri, LogoCariTopluCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { LogoCariGecisi } from './LogoCariGecisi.tsx';
@@ -36,6 +37,13 @@ const ALINAMAZ = satir(6, { alinamaz: 'Logo cari kodu 1-40 karakter olmalı; bu 
 const PASIF = satir(7, { aktif: false });
 const HEPSI = [BAGLI, BAGLANABILIR, YENI, YENI2, ESLESIK, ALINAMAZ, PASIF];
 
+const CRM_DENETIMI: LogoCrmDenetimiCevabi = {
+  durum: 'tamam', neden: null, taranan: 3, eksik: false,
+  satirlar: [
+    { firmaId: 21, kod: 'ORN-F-21', ad: 'ORN Firma 21', cariKodu: 'ORN-C-21', sorun: 'crm-yok', sayi: null, secili: null },
+    { firmaId: 22, kod: 'ORN-F-22', ad: 'ORN Firma 22', cariKodu: 'ORN-C-22', sorun: 'cok-bag', sayi: 3, secili: null },
+  ],
+};
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: 'tamam', ileti: null, cariler: HEPSI }) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
@@ -46,6 +54,7 @@ function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: '
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, arama);
     if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 11, durum: 'var', neden: null, kodlar: null }] });
+    if (yol === '/logo/crm-denetimi') return json(200, CRM_DENETIMI);
     if (yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 20 });
     if (yontem === 'POST' && yol === '/musteri-tedarikci/logo-cari/toplu') {
       return json(200, {
@@ -160,5 +169,26 @@ describe('Logo geçişi cariler sekmesi (3343)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/musteri-tedarikci/logo-cari/al')).toBe(true));
     expect(istekler.find((i) => i.yol === '/musteri-tedarikci/logo-cari/al')?.govde).toMatchObject({ logoKodu: YENI.kod, kod: YENI.kod, tur: 'tedarikci' });
+  });
+
+  it('3391-2: CRM bağı denetimi düğmeyle gider; düzeltilecek müşteriler sorunuyla listelenir, firma açılır', async () => {
+    const istekler = sunucuKur(YAZAN);
+    ciz();
+    const dugme = await screen.findByRole('button', { name: 'Denetle' });
+    expect(istekler.some((i) => i.yol === '/logo/crm-denetimi')).toBe(false);
+    fireEvent.click(dugme);
+    const tablo = await screen.findByRole('table', { name: 'CRM bağı düzeltilecek müşteriler' });
+    expect(istekler.filter((i) => i.yol === '/logo/crm-denetimi')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toMatch(/3 cari denetlendi; 2 düzeltilecek/);
+    expect(within(tablo).getByText('CRM yok')).toBeTruthy();
+    expect(within(tablo).getByText('CRM ×3')).toBeTruthy();
+    expect(within(tablo).getByRole('button', { name: 'ORN Firma 22 firmasını aç' })).toBeTruthy();
+  });
+
+  it('3391-2: yazamayana CRM bağı denetimi gösterilmez', async () => {
+    sunucuKur(OKUYAN);
+    ciz();
+    expect(await screen.findByText(/firma yazma yetkisi ister/)).toBeTruthy();
+    expect(screen.queryByText('CRM bağı denetimi')).toBeNull();
   });
 });

@@ -12,10 +12,10 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
-import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, crmSorunu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { cariCrmDurumlari, cariHazirligi } from './servis.ts';
+import { cariCrmDurumlari, cariHazirligi, crmDenetimi } from './servis.ts';
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu. Yardımcı sahte köprüdür; veriler uydurmadır (ORN-).
 const PAROLA = 'dogru-parola-1';
@@ -67,6 +67,12 @@ describe('Seçili CRM kodu (3391-2 a)', () => {
     assert.match(seciliCrmEngeli('ORN-CRM-2', 'ORN-C-1', r(['ORN-CRM-1', 'ORN-CRM-2'], false)) ?? '', /desteklemiyor/);
     assert.match(seciliCrmEngeli('ORN-CRM-2', 'ORN-C-1', { tur: 'basarili', logicalRef: 88 }) ?? '', /desteklemiyor/);
     assert.match(seciliCrmEngeli('ORN-CRM-3', 'ORN-C-1', r(['ORN-CRM-1'], true)) ?? '', /ORN-CRM-3 Logo'da artık cari ORN-C-1 ile bağlı değil/);
+    assert.equal(crmSorunu('ORN-CRM-1', { tur: 'basarili', logicalRef: null }), 'secim-kalkti');
+    assert.equal(crmSorunu(null, { tur: 'basarili', logicalRef: null }), 'crm-yok');
+    assert.equal(crmSorunu(null, r(['ORN-CRM-1'], true)), null);
+    assert.equal(crmSorunu(null, { tur: 'basarili', logicalRef: 88 }), null, 'eski yardımcıda sayı bilinmez');
+    assert.equal(crmSorunu('orn-crm-1', r(['ORN-CRM-1', 'ORN-CRM-2'], true)), null);
+    assert.equal(crmSorunu(null, { tur: 'reddedildi', ileti: 'x' }), null);
     const t = { id: 1, no: 'TK-1', tarih: '2026-11-17', gecerlilikBitis: null, paraBirimi: 'TRY', kur: null,
       satirlar: [{ satirId: 1, stokKodu: 'ORN-MLZ-1', hizmet: false, miktar: '1', birim: 'adet', birimFiyat: '10', iskontoYuzdesi: null, termin: null }] };
     const govde = (crmKodu: string | null | undefined) => {
@@ -167,6 +173,36 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
       assert.ok((await cariCrmDurumlari(vt(), istemci(), sorgu())).durumlar.every((d) => d.kodlar === null));
     } finally {
       kopru.crmKodlari.clear();
+      await ayar(true);
+    }
+  });
+
+  test('CRM-10 denetim (3391-2): yalnız sorunlu müşteri carileri döner (CRM yok, seçimsiz çok bağ, bağı kalkmış seçim); tedarikçi sorulmaz; kapalıda istek yok', async () => {
+    await ayar(true);
+    kopru.crmKodlari.set('ORN-C-1003', ['ORN-CRM-1', 'ORN-CRM-2']);
+    try {
+      const once = kopru.istekler.length;
+      const c = await crmDenetimi(vt(), istemci());
+      assert.equal(c.durum, 'tamam');
+      const harita = new Map(c.satirlar.map((x) => [x.firmaId, x]));
+      assert.equal(harita.has(f.crmli), false, 'tek bağlı sorunsuz');
+      assert.equal(harita.get(f.crmsiz)?.sorun, 'crm-yok');
+      assert.deepEqual(harita.get(f.ikisi) && { sorun: harita.get(f.ikisi)?.sorun, sayi: harita.get(f.ikisi)?.sayi }, { sorun: 'cok-bag', sayi: 2 });
+      assert.equal(harita.has(f.tedarikci), false);
+      assert.equal(kopru.istekler.slice(once).some((i) => i.yol.endsWith('/ORN-C-1004')), false, 'tedarikçiye sorulmaz');
+      assert.equal(kopru.istekler.slice(once).some((i) => i.yontem !== 'GET'), false);
+      await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = $2 WHERE id = $1', [f.ikisi, 'ORN-CRM-2']);
+      assert.equal((await crmDenetimi(vt(), istemci())).satirlar.some((x) => x.firmaId === f.ikisi), false, 'seçim varsa çok bağ sorun değil');
+      await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = $2 WHERE id = $1', [f.ikisi, 'ORN-CRM-9']);
+      const kalkti = (await crmDenetimi(vt(), istemci())).satirlar.find((x) => x.firmaId === f.ikisi);
+      assert.deepEqual(kalkti && { sorun: kalkti.sorun, secili: kalkti.secili }, { sorun: 'secim-kalkti', secili: 'ORN-CRM-9' });
+      await ayar(false);
+      const sayi = kopru.istekler.length;
+      assert.deepEqual(await crmDenetimi(vt(), istemci()), { durum: 'okunamadi', neden: 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı; CRM durumu okunmuyor.', taranan: 0, eksik: false, satirlar: [] });
+      assert.equal(kopru.istekler.length, sayi);
+    } finally {
+      kopru.crmKodlari.clear();
+      await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = NULL WHERE id = $1', [f.ikisi]);
       await ayar(true);
     }
   });

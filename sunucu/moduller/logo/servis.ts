@@ -2,11 +2,12 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import type { BirimSetleriCevabi, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { LOGO_CRM_DENETIM_SINIRI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
+import type { BirimSetleriCevabi, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
-import { firmaOzeti, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
+import { firmaOzeti, firmaOzetleri, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoKayitNolari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
@@ -19,7 +20,7 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { crmDurumu, crmKodlari, crmSorguyuKeser, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
 import { logoSiralari } from '../siparisler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
@@ -1290,6 +1291,29 @@ export async function cariCrmKodlariOku(
   if (r.logicalRef === null) return { tur: 'tamam', veri: null };
   const l = crmKodlari(r);
   return { tur: 'tamam', veri: { kodlar: l?.kodlar ?? [], secilebilir: l?.secilebilir ?? false } };
+}
+
+// 3391-2 a: Logo geçişinde CRM bağı denetimi; yalnız GET, transaction dışında ve sırayla. Ulaşılamayan yardımcıda tarama durur.
+export async function crmDenetimi(vt: TxAcan, kopru: KopruIstemcisi | null): Promise<LogoCrmDenetimiCevabi> {
+  const { acik, firmalar } = await vt.tx(async (db) => {
+    const idler = (await tumFirmalar(db)).filter((f) => f.aktif && f.tur !== 'tedarikci').map((f) => f.id);
+    const ozet = [...(await firmaOzetleri(db, idler)).values()].filter(crmSorulurMu).sort((a, b) => a.id - b.id);
+    return { acik: (await sistemAyariOku(db, 'logo.baglanti')) === true, firmalar: ozet };
+  });
+  const kapali = crmKapaliNedeni(acik, kopru);
+  if (kapali !== null || kopru === null) return { durum: 'okunamadi', neden: kapali, taranan: 0, eksik: false, satirlar: [] };
+  const sirada = firmalar.slice(0, LOGO_CRM_DENETIM_SINIRI);
+  const satirlar: LogoCrmDenetimiCevabi['satirlar'] = [];
+  let taranan = 0;
+  for (const f of sirada) {
+    const cari = (f.logoCariKodu ?? '').trim();
+    const r = await kopru.satisMusterisiVarMi(cari);
+    if (crmSorguyuKeser(r)) return { durum: 'okunamadi', neden: crmDurumu(r).neden, taranan, eksik: true, satirlar };
+    taranan += 1;
+    const sorun = crmSorunu(f.logoCrmKodu, r);
+    if (sorun !== null) satirlar.push({ firmaId: f.id, kod: f.kod, ad: f.ad, cariKodu: cari, sorun, sayi: crmKodlari(r)?.sayi ?? null, secili: f.logoCrmKodu });
+  }
+  return { durum: 'tamam', neden: null, taranan, eksik: firmalar.length > sirada.length, satirlar };
 }
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu, ekranda göstermek için (teklif gönderimindeki ön koşulla aynı okuma). Yalnız GET; firma ve

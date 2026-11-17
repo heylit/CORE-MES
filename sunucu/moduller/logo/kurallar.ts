@@ -2114,6 +2114,17 @@ export function crmKodlariniAyikla(govde: unknown): CrmKodlari | null {
 }
 export const crmKodlari = (r: KopruSonucu): CrmKodlari | null =>
   (r.tur === 'basarili' && r.logicalRef !== null ? r.crmKodlari ?? null : null);
+// 3391-2 a: CRM bağı denetiminde carinin sorunu; sorun yoksa null. Seçim varken birden fazla bağ sorun değildir.
+export type CrmSorunu = 'crm-yok' | 'cok-bag' | 'secim-kalkti';
+export function crmSorunu(secili: string | null, r: KopruSonucu): CrmSorunu | null {
+  if (r.tur !== 'basarili') return null;
+  if (r.logicalRef === null) return secili?.trim() ? 'secim-kalkti' : 'crm-yok';
+  const l = crmKodlari(r);
+  const kod = secili?.trim() ?? '';
+  if (kod !== '') return l !== null && !l.kodlar.some((k) => k.toUpperCase() === kod.toUpperCase()) ? 'secim-kalkti' : null;
+  return l !== null && l.sayi > 1 ? 'cok-bag' : null;
+}
+
 // 3391-2 a: firma kartında seçilmiş CRM kodu teklif gitmeden denetlenir: yardımcı kodu kullanabilmeli ve kod Logo'da hâlâ bu cariye bağlı
 // olmalı. Seçim yoksa null (bağ sırasının ilki gider). Ret iletisi kullanıcıya gösterilir.
 export function seciliCrmEngeli(secili: string | null, cari: string, r: KopruSonucu): string | null {
