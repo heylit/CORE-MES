@@ -4,12 +4,15 @@ import {
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
+  temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
+  temizlikIsaretGovdesi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
   ayarDegistir, ayarlariListele, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
+import { denemeIsaretiDegistir, temizlikAdaylari, temizlikEtkisi, veriTemizle } from './veri-temizleme.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
 
 export const uclar = [
@@ -209,5 +212,40 @@ export const uclar = [
     govde: yedekDiziniGovdesi,
     cevap: yedekDiziniCevabi,
     isle: ({ db, govde, kullanici }) => yedekDiziniDegistir(db, kullanici.id, govde.dizin),
+  }),
+  // Deneme verisi temizleme (3395 a): yalnız bayraklı yönetici; işlem hiçbir role verilmez.
+  uc({
+    yontem: 'GET',
+    yol: '/veri-temizleme/adaylar',
+    yetki: 'ayarlar.veri-temizle',
+    sorgu: temizlikAdaylariSorgusu,
+    cevap: temizlikAdaylariCevabi,
+    isle: ({ db, sorgu, kullanici }) => temizlikAdaylari(db, kullanici.id, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/veri-temizleme/isaret',
+    yetki: 'ayarlar.veri-temizle',
+    govde: temizlikIsaretGovdesi,
+    cevap: temizlikIsaretCevabi,
+    isle: ({ db, govde, kullanici }) => denemeIsaretiDegistir(db, kullanici.id, govde.secim, govde.isaretli),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/veri-temizleme/etki',
+    yetki: 'ayarlar.veri-temizle',
+    sorgu: temizlikEtkisiSorgusu,
+    cevap: temizlikEtkisiCevabi,
+    isle: ({ db, sorgu, kullanici }) => temizlikEtkisi(db, kullanici.id, sorgu.secim),
+  }),
+  // Parola sözleşmede gizlidir, deftere girmez; silinen numaralar denetim ekiyle girer.
+  uc({
+    yontem: 'POST',
+    yol: '/veri-temizleme/temizle',
+    yetki: 'ayarlar.veri-temizle',
+    tekrarKorumali: true,
+    govde: temizleGovdesi,
+    cevap: temizleCevabi,
+    isle: ({ db, govde, kullanici, denetimEki }) => veriTemizle(db, kullanici.id, govde, denetimEki, new Date()),
   }),
 ];

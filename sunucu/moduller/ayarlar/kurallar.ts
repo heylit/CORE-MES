@@ -509,3 +509,39 @@ export function pgSurumuDenetle(g: PgSurumGirdisi): PgSurumu {
           : null;
   return { ...ortak, uyumlu: ileti === null, ileti };
 }
+
+// Temizlik denetim eki (3395 K8): silinen kök numaraları türe göre, satır başına 450 bayta sığacak paketlerle; satır sınırı
+// (100) aşılırsa son satır kalan sayıyı söyler. Numara metni kırpılmaz: sığmayan numara bir sonraki satıra geçer.
+export const TEMIZLIK_EKI_SATIR_BAYTI = 450;
+export const TEMIZLIK_EKI_SATIR_SAYISI = 100;
+
+export function temizlikEkiSatirlari(kokler: readonly { tur: string; no: string | null }[]): { tur: string; nolar: string }[] {
+  const satirlar: { tur: string; nolar: string }[] = [];
+  const turler = [...new Set(kokler.map((k) => k.tur))].sort();
+  let kalan = 0;
+  for (const tur of turler) {
+    let paket: string[] = [];
+    const bitir = (): void => {
+      if (paket.length === 0) return;
+      if (satirlar.length < TEMIZLIK_EKI_SATIR_SAYISI - 1) satirlar.push({ tur, nolar: paket.join(',') });
+      else kalan += paket.length;
+      paket = [];
+    };
+    for (const { no } of kokler.filter((k) => k.tur === tur)) {
+      const metin = no ?? '?';
+      if (Buffer.byteLength([...paket, metin].join(','), 'utf8') > TEMIZLIK_EKI_SATIR_BAYTI) bitir();
+      paket.push(metin);
+    }
+    bitir();
+  }
+  if (kalan > 0) satirlar.push({ tur: 'kalan', nolar: `${kalan} numara daha` });
+  return satirlar;
+}
+
+// Temizlik yalnız bu veritabanının, son TEMIZLIK_YEDEK_EN_ESKI_DK dakikada tamamlanmış yedeğiyle başlar.
+// Boş dosya yarım kalmış yedektir (3395 Risk K6); geri yüklenebilirlik denenmez, kart madde 5'in "doğrulanmış"ı var, tam ve yakın demektir.
+export function temizlikYedegiUygunMu(yedek: { zaman: string; boyut: number } | undefined, simdi: Date, enEskiDk: number): boolean {
+  if (yedek === undefined || !(yedek.boyut > 0)) return false;
+  const yas = simdi.getTime() - Date.parse(yedek.zaman);
+  return yas >= -60_000 && yas <= enEskiDk * 60_000;
+}

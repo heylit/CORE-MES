@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { agAraligiHatasi } from '../ag-araligi.ts';
 import { METIN_BICIMLERI } from '../ayar-tanimi.ts';
 import type { AyarTanimi } from '../ayar-tanimi.ts';
+import { gizli } from '../gizli.ts';
 import { istekKimligiMi } from '../istek-kimligi.ts';
 import { kalipHatasi } from '../numara.ts';
 import { tarihAraligiHatasi } from '../tarih-araligi.ts';
+import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_ONAY_METNI, TEMIZLIK_TURLERI } from '../veri-temizleme.ts';
 import { zamanSemasi } from '../zaman.ts';
 
 export const SAYI_ONDALIK_EN_COK = 6;
@@ -382,3 +384,81 @@ export const guncellemeIlerlemesiCevabi = z.object({
 });
 export type GuncellemeAdimi = (typeof GUNCELLEME_ADIMLARI)[number];
 export type GuncellemeIlerlemesiCevabi = z.output<typeof guncellemeIlerlemesiCevabi>;
+
+// Deneme verisi temizleme (3395 a): kök kayıt önce "Deneme" işaretlenir, etkisi görülür, yedek alınır, sonra yalnız işaretli ve
+// kilitsiz kökler bağlı kayıtlarıyla silinir. Yalnız bayraklı yönetici (ayarlar.veri-temizle hiçbir role verilmez).
+const temizlikKoku = z.object({ tur: z.enum(TEMIZLIK_TURLERI), kimlik: z.number().int().positive() });
+export type TemizlikKoku = z.output<typeof temizlikKoku>;
+const temizlikSecimi = z.array(temizlikKoku).min(1).max(TEMIZLIK_EN_COK_KOK);
+
+const GUN = /^\d{4}-\d{2}-\d{2}$/;
+export const temizlikAdaylariSorgusu = z.object({
+  tur: z.enum(TEMIZLIK_TURLERI),
+  baslangic: z.string().regex(GUN).optional(),
+  bitis: z.string().regex(GUN).optional(),
+  kisi: z.coerce.number().int().positive().optional(),
+  isaret: z.enum(['isaretli', 'hepsi']).default('hepsi'),
+});
+export const temizlikAdayi = z.object({
+  kimlik: z.number().int(),
+  no: z.string(),
+  ad: z.string().nullable(),
+  acan: z.string(),
+  acilis: zamanSemasi,
+  durum: z.string(),
+  isaretli: z.boolean(),
+});
+export type TemizlikAdayi = z.output<typeof temizlikAdayi>;
+export const temizlikAdaylariCevabi = z.object({
+  adaylar: z.array(temizlikAdayi),
+  // Süzgece uyan bütün satırlar; liste en çok TEMIZLIK_EN_COK_KOK satır taşır.
+  toplam: z.number().int().nonnegative(),
+  kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+});
+export type TemizlikAdaylariCevabi = z.output<typeof temizlikAdaylariCevabi>;
+
+export const temizlikIsaretGovdesi = z.object({ secim: temizlikSecimi, isaretli: z.boolean() });
+export const temizlikIsaretCevabi = z.object({ degisen: z.number().int().nonnegative() });
+
+// Etki okuması GET'tir: seçim "tur:kimlik" listesi olarak sorguda gelir.
+export const temizlikEtkisiSorgusu = z.object({
+  secim: z.string().max(20_000).transform((metin, ctx) => {
+    const kokler: TemizlikKoku[] = [];
+    for (const parca of metin.split(',')) {
+      const [tur, kimlik] = parca.split(':');
+      const sonuc = temizlikKoku.safeParse({ tur, kimlik: Number(kimlik) });
+      if (!sonuc.success) { ctx.addIssue({ code: 'custom', message: `Seçim geçersiz: ${parca}` }); return z.NEVER; }
+      kokler.push(sonuc.data);
+    }
+    if (kokler.length > TEMIZLIK_EN_COK_KOK) { ctx.addIssue({ code: 'custom', message: `Bir seferde en çok ${TEMIZLIK_EN_COK_KOK} kayıt.` }); return z.NEVER; }
+    return kokler;
+  }),
+});
+export const temizlikKokEtkisi = z.object({
+  tur: z.enum(TEMIZLIK_TURLERI),
+  kimlik: z.number().int(),
+  no: z.string().nullable(),
+  kilitler: z.array(z.string()),
+  tablolar: z.record(z.string(), z.number().int()),
+});
+export const temizlikEtkisiCevabi = z.object({
+  kokler: z.array(temizlikKokEtkisi),
+  // Yalnız kilitsiz köklerin birleşik kümesi: tablo adı -> silinecek satır.
+  tablolar: z.record(z.string(), z.number().int()),
+  ozet: z.string(),
+});
+export type TemizlikEtkisiCevabi = z.output<typeof temizlikEtkisiCevabi>;
+
+export const temizleGovdesi = z.object({
+  secim: temizlikSecimi,
+  ozet: z.string().length(32),
+  yedekAdi: z.string().max(120).regex(YEDEK_ADI, 'Yedek adı geçersiz.'),
+  onay: z.literal(TEMIZLIK_ONAY_METNI, { message: `Onay için ${TEMIZLIK_ONAY_METNI} yazın.` }),
+  parola: gizli(z.string().min(1, 'Parola zorunlu.').max(200)),
+});
+export const temizleCevabi = z.object({
+  tablolar: z.record(z.string(), z.number().int()),
+  kokler: z.array(z.object({ tur: z.enum(TEMIZLIK_TURLERI), no: z.string().nullable() })),
+  yedekAdi: z.string(),
+});
+export type TemizleCevabi = z.output<typeof temizleCevabi>;

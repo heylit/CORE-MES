@@ -1,0 +1,31 @@
+/* Deneme verisi temizleme (3395 a). */
+.tc-temizlik-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-2); list-style: none; margin: 0; padding: 0; }
+.tc-temizlik-adimlar > li {
+  padding: var(--b-1) var(--b-3); border-radius: var(--yari-tam); font-size: var(--yazi-s); background: var(--panel2); color: var(--muted);
+}
+.tc-temizlik-adimlar > li[data-durum='tamam'] { color: var(--run); }
+.tc-temizlik-adimlar > li[data-durum='simdi'] { background: var(--ink); color: var(--hazard); font-weight: 700; }
+.tc-temizlik-suzgec { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--dokunma) * 4)), 1fr)); gap: var(--b-3); }
+.tc-temizlik-cubuk { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); justify-content: flex-end; }
+.tc-temizlik-cubuk > .tc-ayar-aciklama { margin-right: auto; }
+.tc-temizlik-etki {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--dokunma) * 3.5)), 1fr)); gap: var(--b-2);
+  list-style: none; margin: 0; padding: 0;
+}
+.tc-temizlik-etki > li { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-temizlik-etki b { font-size: var(--yazi-l); }
+.tc-temizlik-etki span { font-size: var(--yazi-s); color: var(--muted); overflow-wrap: anywhere; }
+.tc-temizlik-uyari { margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); border: 1px solid var(--hold); color: var(--ink); }
+.tc-temizlik-kilit {
+  display: flex; flex-direction: column; gap: var(--b-2); align-items: flex-start; padding: var(--b-3); border-radius: var(--yari-2); border: 1px solid var(--stop);
+}
+.tc-temizlik-kilit ul { margin: 0; padding-left: var(--b-4); font-size: var(--yazi-s); }
+.tc-temizlik-no { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.tc-temizlik-bilgi { margin: 0; overflow-wrap: anywhere; }
+.tc-temizlik-onay { display: flex; flex-direction: column; gap: var(--b-3); }
+@media (max-width: 560px) {
+  .tc-temizlik-cubuk { flex-direction: column-reverse; align-items: stretch; }
+  .tc-temizlik-cubuk > .tc-ayar-aciklama { margin-right: 0; }
+}
+.tc-temizlik-satir-dugme { display: inline-flex; gap: var(--b-1); }
+.tc-temizlik-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); justify-content: flex-end; }

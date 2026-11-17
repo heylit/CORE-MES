@@ -69,3 +69,67 @@ export async function sunucuSurumu(db: Db): Promise<SunucuSurumu> {
   );
   return { surumNo: satir?.surum_no ?? null, metin: satir?.metin ?? null };
 }
+
+// Deneme verisi temizleme (3395 a). Kök tablolar başka modüllerindir: okuma, etki ve silme göç rolüne ait işlevlerdedir
+// (sunucu/gocler/20261117122000_ayarlar_veri_temizleme.sql); burada yalnız işlev çağrılır ve işaret tablosu yazılır.
+export interface TemizlikAdayiSatiri {
+  kimlik: string;
+  no: string;
+  ad: string | null;
+  acan: string;
+  acilis: Date;
+  durum: string;
+  isaretli: boolean;
+  toplam: string;
+}
+
+export function temizlikAdaylariniOku(
+  db: Db, s: { tur: string; baslangic: string | null; bitis: string | null; kisi: number | null; yalnizIsaretli: boolean; sinir: number },
+): Promise<TemizlikAdayiSatiri[]> {
+  return db.sorgu<TemizlikAdayiSatiri>(
+    'SELECT * FROM ayarlar_temizlik_adaylari($1, $2::date, $3::date, $4, $5, $6)',
+    [s.tur, s.baslangic, s.bitis, s.kisi, s.yalnizIsaretli, s.sinir],
+  );
+}
+
+export async function denemeIsaretle(db: Db, kokler: readonly { tur: string; kimlik: number }[], kisiId: number): Promise<number> {
+  const satirlar = await db.sorgu<{ tur: string }>(
+    `INSERT INTO ayarlar_deneme_isareti (tur, kimlik, isaretleyen_id)
+     SELECT k.tur, k.kimlik, $2 FROM jsonb_to_recordset($1::jsonb) AS k(tur text, kimlik bigint)
+     ON CONFLICT DO NOTHING RETURNING tur`,
+    [JSON.stringify(kokler), kisiId],
+  );
+  return satirlar.length;
+}
+
+export async function denemeIsaretiniKaldir(db: Db, kokler: readonly { tur: string; kimlik: number }[]): Promise<number> {
+  const satirlar = await db.sorgu<{ tur: string }>(
+    `DELETE FROM ayarlar_deneme_isareti i USING jsonb_to_recordset($1::jsonb) AS k(tur text, kimlik bigint)
+     WHERE i.tur = k.tur AND i.kimlik = k.kimlik RETURNING i.tur`,
+    [JSON.stringify(kokler)],
+  );
+  return satirlar.length;
+}
+
+export interface TemizlikEtkisiSatiri {
+  kokler: { tur: string; kimlik: number; no: string | null; kilitler: string[]; tablolar: Record<string, number> }[];
+  tablolar: Record<string, number>;
+  ozet: string;
+}
+
+export async function temizlikEtkisiniOku(db: Db, kokler: readonly { tur: string; kimlik: number }[]): Promise<TemizlikEtkisiSatiri> {
+  const satir = await db.tek<{ etki: TemizlikEtkisiSatiri }>('SELECT ayarlar_temizlik_etkisi($1::jsonb) - \'satirlar\' AS etki', [JSON.stringify(kokler)]);
+  if (satir === null) throw new Error('Temizlik etkisi okunamadı');
+  return satir.etki;
+}
+
+export interface TemizlikSonucuSatiri {
+  tablolar: Record<string, number>;
+  kokler: { tur: string; no: string | null }[];
+}
+
+export async function veriyiTemizle(db: Db, kokler: readonly { tur: string; kimlik: number }[], ozet: string): Promise<TemizlikSonucuSatiri> {
+  const satir = await db.tek<{ sonuc: TemizlikSonucuSatiri }>('SELECT ayarlar_veri_temizle($1::jsonb, $2) AS sonuc', [JSON.stringify(kokler), ozet]);
+  if (satir === null) throw new Error('Temizlik sonucu okunamadı');
+  return satir.sonuc;
+}
