@@ -5,4 +5,6 @@ export const BILDIRIM_ISLEMLERI = [
   'bildirim.yayinla',
   // Bütün yayınları ve okunma raporlarını görür; yayınlamaz, geri çekmez.
   'bildirim.yayin-oku',
+  // E-posta kanalını yönetir (3397, ADR 0015): sunucu durumu, tetikleyiciler, şablonlar, gönderim defteri, kendine deneme e-postası.
+  'bildirim.eposta-yonet',
 ] as const;

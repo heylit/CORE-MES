@@ -487,6 +487,17 @@ export function kisilerinCikisSatirlari(db: Db, kisiIdleri: readonly number[]): 
   );
 }
 
+// 3397: kişinin iş e-postası (bildirim e-postası); iptal ya da çıkışı geçmiş personel ve boş adres sayılmaz.
+export function kisilerinIsEpostaSatirlari(db: Db, kisiIdleri: readonly number[]): Promise<{ kisi_id: number; eposta: string }[]> {
+  return db.sorgu<{ kisi_id: number; eposta: string }>(
+    `SELECT DISTINCT ON (kisi_id) kisi_id, btrim(eposta) AS eposta FROM ik_personel
+      WHERE kisi_id = ANY($1::int[]) AND NOT iptal AND eposta IS NOT NULL AND btrim(eposta) <> ''
+        AND (cikis_tarihi IS NULL OR cikis_tarihi >= current_date)
+      ORDER BY kisi_id, no DESC`,
+    [[...kisiIdleri]],
+  );
+}
+
 // 2452: kişinin departmanı (vardiya iş günü sorgusu departman varsayılanını buradan alır). İptal personel ve departman sayılmaz.
 export function kisilerinDepartmanSatirlari(db: Db, kisiIdleri: readonly number[]): Promise<{ kisi_id: number; departman_no: number | null }[]> {
   return db.sorgu<{ kisi_id: number; departman_no: number | null }>(

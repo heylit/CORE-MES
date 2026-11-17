@@ -40,6 +40,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'ayarlar.veri-temizle': 'Deneme verisini temizleme',
   'bildirim.yayinla': 'Uyarı, duyuru ve bilgi bildirimi yayınlama',
   'bildirim.yayin-oku': 'Bütün bildirim yayınlarını ve okunma raporlarını görme',
+  'bildirim.eposta-yonet': 'E-posta gönderimini, şablonlarını ve tetikleyicilerini yönetme',
   'degisiklik-yonetimi.talep-ac': 'Değişiklik talebi açma',
   'degisiklik-yonetimi.siniflandir': 'Değişiklik talebini sınıflandırma ve etki analizi',
   'degisiklik-yonetimi.ccb-karar': 'Değişiklik talebine CCB onayı ve reti',
