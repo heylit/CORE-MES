@@ -1325,6 +1325,8 @@ namespace LogoYardimcisi
             // 3391: bağlı bütün CRM müşteri kodları (ilki tekliflerde kullanılır) ve bağ sayısı; eski alanlar değişmez.
             var c = Cevap.Basari(oku.CariRef(cari), "customers", m.Kodlar.ToArray());
             ((Dictionary<string, object>)c.Govde)["customerCount"] = Math.Max(m.Sayi, m.Kodlar.Count);
+            // 3391-2: teklifte salesCustomerCode alanını denetleyip kullanır; CORE bu bilgi olmadan seçili kodla teklif göndermez.
+            ((Dictionary<string, object>)c.Govde)["salesCustomerCodeAccepted"] = true;
             return c;
         }
 
@@ -1336,6 +1338,7 @@ namespace LogoYardimcisi
             var tarih = Bicim.TarihDenetle(Json.Metin(g, "date", true), "date");
             var cari = Json.Metin(g, "arpCode", true);
             var gecerlilik = Bicim.TarihDenetle(Json.Metin(g, "validUntil", false), "validUntil");
+            var secili = Json.Metin(g, "salesCustomerCode", false);
             var durum = Secenek(g, "status", new[] { 0, 1, 4 });
             var d = DovizCoz(g);
             var satirlar = new List<SiparisSatiri>();
@@ -1357,7 +1360,14 @@ namespace LogoYardimcisi
             }
             var varolan = oku.Teklif(no);
             if (varolan != null) return Cevap.Ret("Bu numarada satış teklifi zaten var (logicalRef " + varolan.Ref + ").");
-            var musteri = oku.SatisMusterisiKodu(cari);
+            string musteri;
+            if (secili == null) musteri = oku.SatisMusterisiKodu(cari);
+            else
+            {
+                // 3391-2: CORE'da seçilen kod yalnız Logo'da bu cariye bağlıysa kullanılır (Logo'daki yazımıyla); değilse teklif yazılmaz.
+                musteri = oku.SatisMusterileri(cari).Kodlar.Find(k => string.Equals(k, secili, StringComparison.OrdinalIgnoreCase));
+                if (musteri == null) return Cevap.Ret("CRM satış müşterisi " + secili + " Logo'da cari " + cari + " ile bağlı değil; firma kartında yeniden seçin.");
+            }
             if (musteri == null) return Cevap.Ret("Cari " + cari + " CRM satış müşterisi olarak tanımlı değil (Logo validate 4208).");
             for (var i = 0; i < satirlar.Count; i++)
             {

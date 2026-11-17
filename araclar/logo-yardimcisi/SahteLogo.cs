@@ -108,6 +108,8 @@ namespace LogoYardimcisi
         public Dictionary<string, string> CrmMusterileri = new Dictionary<string, string>();
         // 3391: carinin ilkinden sonra bağlı CRM müşterileri (bağ sırasıyla).
         public Dictionary<string, List<string>> EkCrmMusterileri = new Dictionary<string, List<string>>();
+        // 3391-2: Logo'da "varsayılan" işaretli bağ (DEFAULTFLG); listede ve teklifte önce gelir.
+        public Dictionary<string, string> VarsayilanCrm = new Dictionary<string, string>();
         public List<KodAd> Birimler = new List<KodAd>();
         public List<MalKabulSatiri> MalKabulSatirlari = new List<MalKabulSatiri>();
         public List<StokToplami> Stoklar = new List<StokToplami>();
@@ -778,15 +780,17 @@ namespace LogoYardimcisi
             return Pegler.FirstOrDefault(x => x.TalepSatirRef == talepSatirRef && x.SiparisSatirRef == siparisSatirRef);
         }
 
-        public string SatisMusterisiKodu(string cariKod) { string k; return CrmMusterileri.TryGetValue(cariKod, out k) ? k : null; }
+        public string SatisMusterisiKodu(string cariKod) { return SatisMusterileri(cariKod).Kodlar.FirstOrDefault(); }
         public SatisMusterileri SatisMusterileri(string cariKod)
         {
             var m = new SatisMusterileri();
-            var ilk = SatisMusterisiKodu(cariKod);
-            if (ilk == null) return m;
+            string ilk;
+            if (!CrmMusterileri.TryGetValue(cariKod, out ilk)) return m;
             var hepsi = new List<string> { ilk };
             List<string> ek;
             if (EkCrmMusterileri.TryGetValue(cariKod, out ek)) hepsi.AddRange(ek);
+            string varsayilan;
+            if (VarsayilanCrm.TryGetValue(cariKod, out varsayilan) && hepsi.Remove(varsayilan)) hepsi.Insert(0, varsayilan);
             m.Sayi = hepsi.Count;
             m.Kodlar.AddRange(hepsi.Take(LogoYardimcisi.SatisMusterileri.Sinir));
             return m;
