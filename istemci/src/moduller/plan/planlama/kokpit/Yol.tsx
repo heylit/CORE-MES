@@ -51,7 +51,7 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
         <div className="tc-pyq-yol-govde" data-tur="risk">
           <p role="status"><b>{ad}: {bekleyen > 1 ? `${String(bekleyen)} emir` : `${String(pd?.adim ?? 0)} adım`} plana alınmayı bekliyor.</b><small>Sistem yerleştirir, sonucu ve nedenini burada yazar.</small></p>
           <Dugme tur="birincil" simge="play" disabled={mesgul || !pd?.ileriHazir} onClick={() => { oner('ileri'); }}>Sistem önersin</Dugme>
-          <Dugme disabled={mesgul || !pd?.terminVar} title={pd && !pd.terminVar ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir'} onClick={() => { oner('geri'); }}>Teslimden geriye yerleştir</Dugme>
+          <Dugme disabled={mesgul || !pd?.terminVar} title={pd && !pd.terminVar ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir'} onClick={() => { oner('geri'); }}>Teslimden geriye</Dugme>
         </div>
       )}
       {sonuc && kart && (
