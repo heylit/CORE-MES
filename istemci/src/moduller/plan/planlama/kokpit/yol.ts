@@ -4,13 +4,15 @@ import { malzemeNedeni } from './malzeme.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 
 // Planlama yolu (3414): kişi her an hangi adımda olduğunu ve yaptığının sonucunu cümleyle görür.
-// sec: sipariş seçili değil; oner: seçili siparişin yeri olmayan emri var; duzelt: seçili siparişin bütün emirleri planda.
+// sec: sipariş seçili değil; oner: açık kartın yeri olmayan emri var; duzelt: seçili siparişin bütün emirleri planda.
 export type YolAdimi = 'sec' | 'oner' | 'duzelt';
 export const YOL_ADIMLARI = [['sec', 'Seç'], ['oner', 'Sistem önersin'], ['duzelt', 'Düzelt'], ['onay', 'Onayla']] as const;
 
 export function yolAdimi(kart: SiraKarti | null, vurgu: boolean): YolAdimi {
-  if (!kart || !vurgu) return 'sec';
-  return kart.emirler.some((e) => e.durum === 'plansiz') ? 'oner' : 'duzelt';
+  if (!kart) return 'sec';
+  // Plansız kart seçilmeden de açık gelir (sıradaki iş odur); planlı kartta sonuç yalnız kişi kartı seçince yazar.
+  if (kart.emirler.some((e) => e.durum === 'plansiz')) return 'oner';
+  return vurgu ? 'duzelt' : 'sec';
 }
 
 export interface KartSonucu {

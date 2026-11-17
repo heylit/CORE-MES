@@ -713,7 +713,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {!onayAcik && yazabilir && !tur && (
         <Yol
           m={m} p={p} kart={seciliKart} vurgu={vurgu} zaman={zaman} pd={seciliKart ? planlaDurumu : null} plansiz={plansizlar.length} taslakVar={taslakVar} mesgul={mesgul}
-          malzemeBekleyen={malzeme?.bekleyen} oner={planlaIste} hamle={hamleUygula} surum={surum}
+          malzemeBekleyen={malzeme?.bekleyen} oner={(y) => { if (seciliKart) { setKart(seciliKart.kok); setVurgu(true); } planlaIste(y); }} hamle={hamleUygula} surum={surum}
           hepsiniPlanla={() => { void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}
           yenidenPlanla={() => { if (seciliKart) void yenidenPlanla(seciliKart.emirler.filter((e) => e.durum !== 'plansiz').map((e) => e.id), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''} yeniden planlandı.`); }}
           onayaGec={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}

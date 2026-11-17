@@ -759,8 +759,8 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
   const dugme = kokpit.getByRole('button', { name: 'Planla', exact: true });
   const menu = kokpit.getByRole('menu', { name: 'Planla' });
   await expect(dugme).toBeEnabled();
-  // Üç adım ve taslak cümlesi üst şeridin altında, taşmadan durur.
-  await expect(kokpit.locator('.tc-pyq-akis')).toBeVisible();
+  // Planlama yolu ve taslak cümlesi üst şeridin altında, taşmadan durur.
+  await expect(kokpit.locator('.tc-pyq-yol')).toBeVisible();
   const karsilama = page.getByRole('button', { name: 'Başlayalım' });
   if (await karsilama.isVisible()) await karsilama.click();
   await expect(karsilama).toHaveCount(0);
@@ -2128,4 +2128,67 @@ test('Kokpit Araçlar menüsü: bütün maddeler ekranın içinde görünür, so
   const dugme = (await kokpit.getByRole('button', { name: 'Araçlar' }).boundingBox())!, m = (await menu.boundingBox())!;
   expect(Math.abs(m.x - dugme.x)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: '/tmp/tmiv2-ekran/araclar-menu-g1100.png' });
+});
+
+// Kart 3414: planlama yolu. Kişi hangi adımda olduğunu ve yaptığının sonucunu cümleyle görür: plansız siparişte "Sistem önersin", plana
+// alınınca bitiş ve termin, geç siparişte motorun kaydındaki neden ve sonucu yazılı seçenekler, taslak varken "Onaya geç".
+test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç cümlesi, geç siparişte neden ve seçenekler, Onaya geç; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const nedenli = (ops: Record<string, Is>) => ({ ...plan(ops), ops: { ...ops, 'S1.a2': { ...ops['S1.a2'], why: { t: 'tezgah', r: 'S2.a1' } } } });
+  const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: nedenli(d.ops) }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, tezgah = q.get('tezgah') ?? '', S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah, S, C: S + 4 }], bitis: S + 4 });
+  });
+  // Freze adımı öteki frezede 24 saat erken biter.
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: q.get('isId'), tezgah: q.get('tezgah'), S, C: S + 8, tur: 'tasinan' }] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3414-${ad}-${bilgi.project.name}.png` }); };
+  const yol = kokpit.getByRole('region', { name: 'Planlama yolu' });
+  const adim = yol.locator('li[aria-current="step"]');
+
+  // 2. adım: plansız sipariş açık gelir; tek birincil düğme sistemin yerleştirmesidir.
+  await expect(adim).toHaveText('2 Sistem önersin');
+  await expect(yol.getByRole('status')).toContainText('S4: 1 adım plana alınmayı bekliyor.');
+  await tasma();
+  await cek('2-oner');
+  await yol.getByRole('button', { name: 'Sistem önersin' }).click();
+  await expect.poll(() => t.alinan().length).toBe(1);
+
+  // 3. adım: sonuç cümlesi operasyon sayısını, bitişi ve termine göre yeri yazar; taslak olduğu için Onaya geç birincildir.
+  await expect(adim).toHaveText('3 Düzelt');
+  await expect(yol.getByRole('status')).toContainText(/S4: 1 operasyon planda\. Bitiş .+, termin .+: .+ erken\./);
+  await expect(yol.getByRole('button', { name: 'Onaya geç' })).toBeVisible();
+  await expect(yol.getByRole('button', { name: 'Seçenekleri göster' })).toHaveCount(0);
+  await tasma();
+  await cek('3-sonuc');
+
+  // Geç sipariş: neden motorun kaydından, tezgâhın kodu ve önündeki işle; seçenekler istenince ve sonucuyla gelir.
+  await kokpit.getByRole('region', { name: /Siparişler/ }).getByRole('button', { name: /S1/ }).first().click();
+  await expect(yol.getByRole('status')).toContainText(/S1: 2 operasyon planda\. Bitiş .+ geç\./);
+  await expect(yol.getByRole('status')).toContainText('Neden: 2. adım (Freze) F-01 tezgâhının boşalmasını');
+  await expect(yol.getByRole('status')).toContainText('önündeki iş S2');
+  await yol.getByRole('button', { name: 'Seçenekleri göster' }).click();
+  const secenek = yol.getByRole('group', { name: 'Düzeltme seçenekleri' });
+  await expect(secenek.locator('li').first()).toContainText(/Freze → F-0[12]/);
+  await expect(secenek.locator('li').first()).toContainText('erken');
+  await tasma();
+  await cek('3-gec-secenek');
+  await secenek.getByRole('button', { name: 'Uygula' }).first().click();
+  await expect.poll(() => t.tasinan().length).toBe(1);
+
+  // 4. adım: onay sayfası açılır.
+  await yol.getByRole('button', { name: 'Onaya geç' }).click();
+  await expect(kokpit).toHaveAttribute('data-sayfa', 'onay');
+  await tasma();
+  await cek('4-onay');
+  expect(ag.hatalar).toEqual([]);
 });

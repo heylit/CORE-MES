@@ -21,7 +21,8 @@ describe('planlama yolu (3414)', () => {
   it('adım: seçim yokken Seç, plansız emirde Sistem önersin, hepsi plandaysa Düzelt', () => {
     const a = emir('1', {}), b = emir('2', { durum: 'iyi', bitis: 50, gecikme: -50 });
     expect(yolAdimi(null, false)).toBe('sec');
-    expect(yolAdimi(kart([a]), false)).toBe('sec');
+    expect(yolAdimi(kart([a]), false)).toBe('oner');
+    expect(yolAdimi(kart([b]), false)).toBe('sec');
     expect(yolAdimi(kart([a]), true)).toBe('oner');
     expect(yolAdimi(kart([b, a]), true)).toBe('oner');
     expect(yolAdimi(kart([b]), true)).toBe('duzelt');
