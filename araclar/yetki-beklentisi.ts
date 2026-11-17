@@ -48,6 +48,7 @@ export const ROL_MATRISI = {
       'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.cikis', 'stok.giris', 'stok.istek', 'stok.malzeme-fisi-gonder',
       'stok.sayim', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer', 'uretim-emirleri.fason',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
+      'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
   },
   genel_mudur: {
@@ -225,6 +226,7 @@ export const ROL_MATRISI = {
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.siparisler',
       'sayfa.stok', 'sayfa.uretim-emirleri', 'sevkiyat.oku', 'siparisler.fiyat-oku', 'siparisler.oku', 'siparisler.yaz', 'stok.istek',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
+      'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
   },
   operator: {
@@ -320,6 +322,7 @@ export const ROL_MATRISI = {
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.stok',
       'sayfa.taleplerim', 'sevkiyat.oku', 'stok.istek', 'uretim-emirleri.fason',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
+      'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
   },
   satin_alma_muduru: {
@@ -333,6 +336,7 @@ export const ROL_MATRISI = {
       'sayfa.personel', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.stok',
       'sayfa.taleplerim', 'sevkiyat.oku', 'stok.istek', 'uretim-emirleri.fason',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
+      'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
   },
   satis: {
@@ -354,6 +358,7 @@ export const ROL_MATRISI = {
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.sevkiyat', 'sayfa.siparisler', 'sayfa.stok', 'sevkiyat.is-yaz',
       'sevkiyat.oku', 'sevkiyat.onayla', 'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.istek',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
+      'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
   },
   uretim_muduru: {
