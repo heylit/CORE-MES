@@ -44,8 +44,8 @@ export const bagParcaNo = (b: BelgeKaydi): string => b.bagli?.parcaNo ?? '';
 
 // Belgeler sekmesi: parçanın kendi belgeleri ve parça numarasıyla kayıtlara eklenmiş belgeler.
 export function parcaBelgeleri(veri: KmVerisi, p: ParcaOzeti): { kendi: BelgeKaydi[]; kayitlarda: BelgeKaydi[] } {
-  const kimlik = parcaKimligi(p.no);
-  const kendiMi = (b: BelgeKaydi) => b.bagli?.col === 'parca' && b.bagli.id === kimlik;
+  const kimlikler = new Set([parcaKimligi(p.no), ...p.kartlar]);
+  const kendiMi = (b: BelgeKaydi) => b.bagli?.col === 'parca' && kimlikler.has(b.bagli.id);
   const ilgili = veri.belge.filter((b) => b.bagli && (parcaAnahtari(bagParcaNo(b)) === p.k || kendiMi(b)));
   return { kendi: ilgili.filter(kendiMi), kayitlarda: ilgili.filter((b) => !kendiMi(b)) };
 }

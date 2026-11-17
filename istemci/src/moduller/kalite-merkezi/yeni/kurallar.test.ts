@@ -88,6 +88,14 @@ describe('karantina ve parça dizini', () => {
     expect(d.map((p) => [p.k, p.insp.length])).toEqual([['ORN-MIL-01', 3]]);
   });
 
+  it('iki yazımın iki kartı varsa ilk kart satırın bilgisidir, ikincisi ezmez; iki kartın kimliği de satırdadır', () => {
+    const d = parcaDizini({ cizim: [], insp: [], ncr: [], lot: [], spc: [], capa: [], parca: [
+      { _id: 'p-ORN-M_L-01', parcaNo: 'orn-mil-01', ad: 'İlk kart', malzemeNo: 5 }, { _id: 'p-ORN-MIL-01', parcaNo: 'ORN-MIL-01', ad: 'İkinci kart' },
+    ] });
+    expect(d).toHaveLength(1);
+    expect([d[0]!.no, d[0]!.ad, d[0]!.meta?.malzemeNo, d[0]!.kartlar]).toEqual(['orn-mil-01', 'İlk kart', 5, ['p-ORN-M_L-01', 'p-ORN-MIL-01']]);
+  });
+
   it('parça dizini kayıtlardan türer, durum en ağırdan', () => {
     const d = parcaDizini({ cizim: [], insp, ncr, lot, spc: [], capa: [{ _id: 'c1', ncrRef: 'n1' }], parca: [{ _id: 'p', parcaNo: 'p1', ad: 'Mil' }] });
     const p1 = d.find((p) => p.k === 'P1')!;
