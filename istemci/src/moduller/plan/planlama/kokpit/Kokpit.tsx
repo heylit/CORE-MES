@@ -29,7 +29,7 @@ import {
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
-import { Tahta } from './Tahta.tsx';
+import { Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
@@ -232,20 +232,41 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
   // Tahtadan bırakılan iş: önce sunucu önizlemesi. Geçersiz yer yazılmaz; emri terminden sonraya atan taşıma onay ister.
+  // Önceki taşıma yazılırken gelen taşıma reddedilmez, sıraya girer (3365); aynı işin sıradaki taşıması sonuncusuyla değişir (art arda ok tuşu
+  // tek taşıma olur). Sıra, yazma bitince ve onay penceresi kapanınca yürür.
+  const kuyruk = useRef(new Map<string, { tezgah: string; S: number }>());
+  const tasiyor = useRef(false);
+  // Yazılmakta olan taşımanın hedefi: ok tuşuna art arda basınca sonraki basış buradan devam eder (plan henüz yenilenmedi).
+  const suren = useRef<{ isId: string; tezgah: string; S: number } | null>(null);
+  const [sirada, setSirada] = useState(0);
+  const [tasimaBitti, setTasimaBitti] = useState(0);
   const tasiDene = useCallback((isId: string, tezgah: string, hedefS: number): void => {
     const x = m.isler[isId], e = x ? emir.get(x.job) : undefined;
-    if (!x || mesgul) { if (mesgul) bildir('bilgi', 'Önceki taşıma yazılıyor; bitince yeniden deneyin.'); return; }
+    if (!x) return;
+    if (mesgul || tasiyor.current || onay !== null) { kuyruk.current.set(isId, { tezgah, S: hedefS }); setSirada(kuyruk.current.size); return; }
+    tasiyor.current = true; suren.current = { isId, tezgah, S: hedefS };
+    const bitir = (): void => { tasiyor.current = false; suren.current = null; setTasimaBitti((n) => n + 1); };
     const S = tasimaSaati(hedefS, m.simdi);
-    void isTasiOnizle({ isId, tezgah, baslangic: S }).then((oz) => {
+    void isTasiOnizle({ isId, tezgah, baslangic: S }).then(async (oz) => {
       if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu taşıma yapılamıyor.'); return; }
       const bitis = oz && e ? onizlemeBitisi(m, e, oz.isler.map((y) => ({ isId: y.isId, C: y.C }))) : null;
       if (e && bitis !== null && e.termin !== null && bitis > e.termin + 0.01 && e.durum !== 'gec') {
         setOnay({ aday: { isId, tezgah, baslangic: S }, turda: false, baslik: 'Bu taşıma emri geç bırakır', dugme: 'Yine de taşı', ileti: `${e.no} terminden ${sureYaz(bitis - e.termin)} sonra biter.` });
         return;
       }
-      void yaz({ isId, tezgah, baslangic: S });
-    });
-  }, [m, emir, mesgul, bildir, yaz]);
+      await yaz({ isId, tezgah, baslangic: S });
+    }).finally(bitir);
+  }, [m, emir, mesgul, onay, bildir, yaz]);
+  useEffect(() => {
+    if (mesgul || tasiyor.current || onay !== null) return;
+    const ilk = kuyruk.current.entries().next();
+    if (ilk.done) return;
+    const [isId, h] = ilk.value;
+    kuyruk.current.delete(isId); setSirada(kuyruk.current.size);
+    tasiDene(isId, h.tezgah, h.S);
+  }, [mesgul, onay, sirada, tasimaBitti, tasiDene]);
+  const onizle = useMemo(() => (yazabilir ? (isId: string, tezgah: string, S: number) => isTasiOnizle({ isId, tezgah, baslangic: S }) : null), [yazabilir]);
+  const [okKipi, setOkKipi] = useState<OkKipi>('is');
 
   // Tepsiden tahtaya bırakılan plansız emir: önce sunucu önizlemesi (ilk adımın oturacağı yer ve emrin bitişi), sonra plana alma komutu.
   const planaAlDene = useCallback((emirId: string, tezgah: string, hedefS: number): void => {
@@ -380,11 +401,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!x || !yazabilir || tahtasiz(goz)) return false;
     const engel = tasinabilir(x);
     if (engel) { bildir('bilgi', engel); return true; }
-    if (tus === 'arrowleft' || tus === 'arrowright') { tasiDene(x.id, x.m, x.S + (tus === 'arrowleft' ? -1 : 1) * (buyuk ? 4 : 0.5)); return true; }
+    // Sırada bekleyen taşıması varsa yeni basış ondan devam eder.
+    const sirali = kuyruk.current.get(x.id) ?? (suren.current?.isId === x.id ? suren.current : undefined), m0 = sirali?.tezgah ?? x.m, S0 = sirali?.S ?? x.S;
+    if (tus === 'arrowleft' || tus === 'arrowright') { tasiDene(x.id, m0, S0 + (tus === 'arrowleft' ? -1 : 1) * (buyuk ? 4 : 0.5)); return true; }
     const l = (emir.get(x.job)?.adimlar.find((a) => a.id === x.id)?.adaylar ?? []).filter((t) => !fasonMu(t));
-    const i = l.indexOf(x.m), t = l[(i + (tus === 'arrowdown' ? 1 : l.length - 1)) % l.length];
-    if (i < 0 || !t || t === x.m) { bildir('bilgi', 'Bu adımın başka aday tezgâhı yok.'); return true; }
-    tasiDene(x.id, t, x.S);
+    const i = l.indexOf(m0), t = l[(i + (tus === 'arrowdown' ? 1 : l.length - 1)) % l.length];
+    if (i < 0 || !t || t === m0) { bildir('bilgi', 'Bu adımın başka aday tezgâhı yok.'); return true; }
+    tasiDene(x.id, t, S0);
     return true;
   }, [secIs, m, yazabilir, goz, emir, bildir, tasiDene]);
   useEffect(() => {
@@ -449,6 +472,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // 3330: kart açıkça seçildiyse (ilk kart kendiliğinden gösterilirken değil) tahtada o siparişin emirleri yanar, ötekiler solar. Hiçbir adımı
   // planda olmayan kartta tahta solmaz: yerleştirirken dolu yerler olduğu gibi görünür.
   const yanan = useMemo(() => { const k = !vurgu || kart === null ? undefined : kartlar.find((x) => x.kok === kart); return k && k.yerlesen > 0 ? new Set(k.emirler.map((e) => e.id)) : null; }, [vurgu, kart, kartlar]);
+  // Okların açıklaması tahtada ok olabilecekken görünür: seçili iş (Seçili iş) ya da seçili sipariş veya iş (Seçili sipariş).
+  const okAcik = !tur && okKipi !== 'yok' && (okKipi === 'is' ? secIs !== null : yanan !== null || secIs !== null);
   const secimiKaldir = useCallback(() => { sec(null, null); setVurgu(false); }, [sec]);
   const kartSec = useCallback((k: string) => { if (k === kart && vurgu) secimiKaldir(); else { setKart(k); setVurgu(true); } }, [kart, vurgu, secimiKaldir]);
   // Karta bağlı değişiklikler (saha olayı, geride kalan iş) kartta sayıyla görünür.
@@ -546,11 +571,15 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-gi" role="group" aria-label="Geri">
           <button type="button" className="tc-pyq-ok" title="Geri (Ctrl+Z): taslağın son değişikliği" disabled={!yazabilir || mesgul || tur !== null || adim === 0} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri</span><Sayi n={adim} /></button>
         </span>
+        {sirada > 0 && <span className="tc-pyq-sirada" role="status">{sirada} taşıma sırada</span>}
         {TUR_ACIK && <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>}
         <Acilir ad="Araçlar" etiket="Araçlar" simge="wrench" etkin={onceAcik || ayarAcik || kapasiteAcik}>
           {(kapat) => (
             <>
               <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { kapat(); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
+              {([['is', 'Oklar: seçili iş', 'Üstüne gelinen ya da seçili işin önceki ve sonraki adımı'], ['siparis', 'Oklar: seçili sipariş', 'Seçili siparişin bütün adımları'], ['yok', 'Oklar kapalı', 'Bağ oku çizilmez']] as const).map(([k, ad, aciklama]) => (
+                <button type="button" key={k} role="menuitemradio" aria-checked={okKipi === k} onClick={() => { kapat(); setOkKipi(k); }}><Simge ad="route" boyut="k" /><span>{ad}<small>{aciklama}</small></span></button>
+              ))}
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
                 onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
               {(['ileri', 'geri'] as const).map((y) => (
@@ -626,12 +655,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                   m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yanan} secimiKaldir={secimiKaldir}
-                  sorunBildir={sorunBildir}
+                  sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 />
                 <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yanan} sorunBildir={sorunBildir} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
                   <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li>
-                  {yanan && !tur && <><li data-ok-aciklama=""><i data-t="ok-b" />Önceki adım bitince başlar</li><li data-ok-aciklama=""><i data-t="ok-o" />Örtüşmeli: önceki bitmeden başlayabilir</li></>}
+                  {okAcik && <><li data-ok-aciklama=""><i data-t="ok-b" />Önceki adım bitince başlar</li><li data-ok-aciklama=""><i data-t="ok-o" />Örtüşmeli: önceki bitmeden başlayabilir</li></>}
                 </ul>
               </>
             )}
