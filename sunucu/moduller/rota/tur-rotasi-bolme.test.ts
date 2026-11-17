@@ -7,6 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { AdimGirdisi, KomutCevabi, SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { SiparisAcilisiCevabi } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -209,6 +210,28 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
     assert.equal(b.statusCode, 200, b.body);
     const kol = await emir(b.json<{ altEmirId: number }>().altEmirId);
     assert.deepEqual([b.json<{ ayriEmir: boolean }>().ayriEmir, kol.tur, kol.kaynak, kol.ust], [false, 'fai', standart, ana!.id]);
+  });
+
+  test('Test T1 (3411 a): sipariş açılışı Seri dışı türün rotası yürürlükte değilse ya da yoksa rotayı Seri düştü diye işaretler; Seri ve yürürlükteki tür rotası işaretsiz', async () => {
+    const urun = await kart('mamul');
+    await yururlugeAl(urun, 2);
+    const faiRota = (await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: 'fai' })).rotalar.find((x) => !x.standart)!;
+    const taslak = async (): Promise<number> => {
+      sayac += 1;
+      const id = await tek(
+        `INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id)
+         VALUES ($1, 'taslak', $2, current_date, current_date + 30, 20, $3) RETURNING id`, [`ORN-TR-${sayac}`, firmaId, yoneticiId]);
+      const satir = await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 7, 5) RETURNING id', [id, urun]);
+      for (const [i, p] of [{ tur: 'seri', adet: 4 }, { tur: 'fai', adet: 2 }, { tur: 'numune', adet: 1 }].entries()) {
+        await o().sahip.sorgu('INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, $2, $3, $4)', [satir, i + 1, p.tur, p.adet]);
+      }
+      return id;
+    };
+    const dusenler = async (id: number): Promise<unknown[]> =>
+      (await tamam<SiparisAcilisiCevabi>(c.yazan, 'GET', `/uretim-emirleri/siparis-acilisi/${id}`)).satirlar.map((x) => [x.emirTuru, x.rota?.seriyeDustu]);
+    assert.deepEqual(await dusenler(await taslak()), [['seri', false], ['fai', true], ['numune', true]]);
+    await yururlugeAl(urun, 3, faiRota.id);
+    assert.deepEqual(await dusenler(await taslak()), [['seri', false], ['fai', false], ['numune', true]]);
   });
 
   test('Test T2: ayrı emir yolunda emrin tüm adedi bölünemez', async () => {
