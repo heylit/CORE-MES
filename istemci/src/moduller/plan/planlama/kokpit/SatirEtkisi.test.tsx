@@ -4,7 +4,7 @@ import { ornekCalisma } from '../motor/ornek.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import { Degisiklikler } from './Degisiklikler.tsx';
 import type { Degisiklik } from './degisiklikler.ts';
-import { birlikteUygulananlar, satirIsleri, useSatirEtkisi, type SatirEtkisiYuzu } from './satir-etkisi.ts';
+import { birlikteUygulananlar, gerideBirlikte, satirIsleri, useSatirEtkisi, type SatirEtkisiYuzu } from './satir-etkisi.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
 // 3317 a (2. adım): "Veri değişti" satırında "Etkisini gör"; satırın emirleri için taslağa yeniden planlama isteği yazılır, önce ve sonra
@@ -102,10 +102,70 @@ describe('satır etkisi kancası', () => {
   });
 });
 
+describe('plan geride satırının etkisi (3317 a, 3. adım)', () => {
+  const g = (isId: string, emirId: string | null, ek: Partial<Degisiklik> = {}): Degisiklik => ({ anahtar: `geride:${isId}`, baslik: 'geride', ne: isId, alt: '', emirId, isId, bekleyenId: null, ...(emirId === null ? {} : { yenidenDiz: true as const }), ...ek });
+
+  it('Etkisini gör taslağa yalnız satırın emri için yeniden planlama isteği yazar; açık satır satırın anahtarıdır; Uygula dizmeyi taslağa yazar', async () => {
+    const liste = [e('a', [S1]), e('b', [S1, S2])];
+    const c = calisma(liste);
+    const { t, yazilan } = sahteTaslak(c.dataVer, { wT: 5.5, late: 2, n: 3 });
+    const satirlar = [g('ORN-1', S1), g('ORN-2', S1), g('ORN-3', S2)];
+    const { result } = renderHook(() => useSatirEtkisi({ c, taslak: t, liste }));
+    act(() => { result.current?.gorGeride(satirlar[0]!, satirlar); });
+    await waitFor(() => { expect(result.current?.durum.tur).toBe('etki'); });
+    expect(yazilan).toEqual([{ tur: 'yeniden-planla', isler: [S1] }]);
+    expect(result.current?.id).toBe('geride:ORN-1');
+    // Aynı emrin öteki geride işi ve yalnız o emri etkileyen veri değişikliği birlikte uygulanır.
+    expect([result.current?.birlikte, result.current?.butun]).toEqual([2, false]);
+    act(() => { result.current?.uygula(); });
+    await waitFor(() => { expect(result.current?.id).toBeNull(); });
+    expect(t.degerlendir).toHaveBeenCalledWith({ tur: 'plan-uygula', isler: [S1] });
+    expect(t.dizmeyiYaz).toHaveBeenCalledWith('ORN-is');
+  });
+
+  it('elle kilitli ya da emre bağlanamayan satırda istek yazılmaz; birlikte sayımı yalnız aynı emrin taşınabilir geride işlerini ve o emre özgü veri satırlarını sayar', () => {
+    const liste = [e('a', [S1]), e('b', [S1, S2]), e('c', ['*']), e('d', [])];
+    const c = calisma(liste);
+    const { t, yazilan } = sahteTaslak(c.dataVer, { wT: 1, late: 0, n: 1 });
+    const kilitli = g('ORN-4', S1, {}); delete kilitli.yenidenDiz;
+    const satirlar = [g('ORN-1', S1), kilitli, g('ORN-3', S2), g('ORN-5', null)];
+    const { result } = renderHook(() => useSatirEtkisi({ c, taslak: t, liste }));
+    act(() => { result.current?.gorGeride(kilitli, satirlar); result.current?.gorGeride(satirlar[3]!, satirlar); });
+    expect(yazilan).toEqual([]);
+    expect(result.current?.id).toBeNull();
+    expect(gerideBirlikte(satirlar, liste, satirlar[0]!)).toBe(1);
+    expect(gerideBirlikte(satirlar, liste, satirlar[2]!)).toBe(0);
+  });
+
+  it('listede düğme yalnız taşınabilir geride satırındadır; açık satırda etki ve Uygula çizilir, not satırın ne yaptığını yazar', () => {
+    const L = [g('ORN-1', S1), g('ORN-2', S1, { anahtar: 'geride:ORN-2' }), { ...g('ORN-4', S1), yenidenDiz: undefined } as unknown as Degisiklik, { anahtar: 'saha:0', baslik: 'saha', ne: 'saha', alt: '', emirId: S1, isId: null, bekleyenId: null } satisfies Degisiklik];
+    const yuz = (x: Partial<SatirEtkisiYuzu> = {}): SatirEtkisiYuzu => ({ id: null, durum: { tur: 'duzen' }, birlikte: 0, butun: false, gor: vi.fn(), gorGeride: vi.fn(), uygula: vi.fn(), vazgec: vi.fn(), mesgul: false, ...x });
+    const e1 = yuz();
+    const { unmount } = render(<Degisiklikler l={L} kart={null} suzgec={false} suzgecKoy={vi.fn()} goster={vi.fn()} toplu={null} etki={e1} />);
+    const dugmeler = screen.getAllByRole('button', { name: 'Etkisini gör' });
+    expect(dugmeler.map((x) => x.closest('li')?.querySelector('b')?.textContent)).toEqual(['ORN-1', 'ORN-2']);
+    fireEvent.click(dugmeler[1]!);
+    expect(e1.gorGeride).toHaveBeenCalledWith(L[1], L);
+    expect(e1.gor).not.toHaveBeenCalled();
+    const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+    expect(liste.textContent).toContain('"Plan geride" satırında "Etkisini gör" o emir yeniden dizilince ne olacağını gösterir (geride kalan iş şimdiden sonraya gider); "Uygula" taslağınıza yazar. "Sahada oldu" satırları bilgi içindir');
+    unmount();
+    const e2 = yuz({ id: 'geride:ORN-2', birlikte: 1, durum: { tur: 'etki', e: { is: 'ORN-is', once: { wT: 4, late: 1, n: 3 }, sonra: { wT: 6, late: 2, n: 3 }, oteki: 0 } } });
+    render(<Degisiklikler l={L} kart={null} suzgec={false} suzgecKoy={vi.fn()} goster={vi.fn()} toplu={null} etki={e2} />);
+    const acik = screen.getByRole('region', { name: 'Etkisi' });
+    expect(acik.closest('li')?.querySelector('b')?.textContent).toBe('ORN-2');
+    expect(acik.textContent).toContain('Aynı emirleri etkileyen 1 değişiklik de birlikte uygulanır.');
+    fireEvent.click(within(acik).getByRole('button', { name: 'Uygula' }));
+    expect(e2.uygula).toHaveBeenCalledTimes(1);
+    // Açık satır varken öteki satırın düğmesi bekler.
+    expect(screen.getAllByRole('button', { name: 'Etkisini gör' }).map((x) => x.hasAttribute('disabled'))).toEqual([true]);
+  });
+});
+
 describe('listede satır etkisi', () => {
   const d = (x: Partial<Degisiklik> & { anahtar: string }): Degisiklik => ({ baslik: 'veri', ne: x.anahtar, alt: 'Bu sayfa', emirId: null, isId: null, bekleyenId: null, ...x });
   const L = [d({ anahtar: 'veri:a', bekleyenId: 'a' }), d({ anahtar: 'veri:b', bekleyenId: 'b' }), d({ anahtar: 'veri:dis' }), d({ anahtar: 'saha:0', baslik: 'saha', emirId: 'S1' })];
-  const yuz = (x: Partial<SatirEtkisiYuzu> = {}): SatirEtkisiYuzu => ({ id: null, durum: { tur: 'duzen' }, birlikte: 0, butun: false, gor: vi.fn(), uygula: vi.fn(), vazgec: vi.fn(), mesgul: false, ...x });
+  const yuz = (x: Partial<SatirEtkisiYuzu> = {}): SatirEtkisiYuzu => ({ id: null, durum: { tur: 'duzen' }, birlikte: 0, butun: false, gor: vi.fn(), gorGeride: vi.fn(), uygula: vi.fn(), vazgec: vi.fn(), mesgul: false, ...x });
   const etkiDurumu = (once: { wT: number; late: number; n: number } | null, sonra: { wT: number; late: number; n: number }) => ({ tur: 'etki' as const, e: { is: 'ORN-is', once, sonra, oteki: 0 } });
   const ciz = (etki: SatirEtkisiYuzu | null) => render(<Degisiklikler l={L} kart={null} suzgec={false} suzgecKoy={vi.fn()} goster={vi.fn()} toplu={3} etki={etki} />);
 

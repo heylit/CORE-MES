@@ -1152,6 +1152,91 @@ test('Kokpit 3317-2: veri değişikliği satırında Etkisini gör, önce ve son
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3317 a (3. adım): "Plan geride" satırında "Etkisini gör" o emri yeniden dizdirir (geride kalan iş şimdiden sonraya gider), önce ile
+// sonrayı satırın altında gösterir; "Uygula" dizmeyi taslağa yazar ve satır listeden düşer. Saat 12:00: S1'in ilk adımı 08:00'de
+// başlayacaktı, başlamadı. Veriler uydurmadır.
+test('Kokpit 3317-3: plan geride satırında Etkisini gör, önce ve sonra; Uygula emri taslakta yeniden dizer, satır düşer; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const ortak = calisma({ ...ILK }, {});
+  const YENI = { ...plan({ ...ILK, 'S1.a1': { job: 'S1', m: 'M1', S: 13, C: 21 } }), ozet: { wT: 25, T: 25, late: 1 } };
+  const t = { surum: 0, satirlar: [] as { komut: { tur: string; isler: string[] }; ne: string; t: number; hata: null }[], degerlendirme: [] as unknown[] };
+  const gorunum = () => {
+    let c: Record<string, unknown> = ortak, bek: unknown[] = [];
+    for (const x of t.satirlar) {
+      if (x.komut.tur === 'yeniden-planla') bek = [{ id: 'ORN-t', ne: 'Yeniden planlama istendi', ayrinti: '', kim: '', t: 0, isler: x.komut.isler, geri: [] }];
+      else { bek = []; c = { ...c, plan: { ...YENI, dataVer: Number(c['dataVer']) + 1 } }; }
+      c = { ...c, dataVer: Number(c['dataVer']) + 1, bekleyen: bek };
+    }
+    return c;
+  };
+  const cevap = () => (t.satirlar.length === 0 ? { taslak: null, calisma: ortak, surum: 1 } : { taslak: { surum: t.surum, tabanSurum: 1, satirlar: t.satirlar }, calisma: gorunum(), surum: 1 });
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: ortak, surum: 1 }));
+  await page.route('**/api/plan/taslagim', (r) => json(r, cevap()));
+  await page.route('**/api/plan/taslagim/komut', (r) => {
+    const k = (r.request().postDataJSON() as { komut: { tur: string; isler: string[] } }).komut;
+    t.satirlar.push({ komut: k, ne: 'Yeniden planlama istendi', t: 0, hata: null }); t.surum += 1;
+    return json(r, cevap());
+  });
+  await page.route('**/api/plan/taslagim/geri-al', (r) => { t.satirlar.pop(); t.surum += 1; return json(r, cevap()); });
+  await page.route('**/api/plan/taslagim/degerlendirme', (r) => { t.degerlendirme.push((r.request().postDataJSON() as { istek: unknown }).istek); return json(r, { is: IS }); });
+  await page.route(`**/api/plan/planlama-degerlendirmesi/${IS}`, (r) => json(r, {
+    durum: 'bitti', cevap: { calismaSurumu: 1, dataVer: 3, baslangic: '2026-10-19', simdi: 12, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: YENI } },
+  }));
+  await page.route('**/api/plan/taslagim/diz', (r) => {
+    const son = t.satirlar.at(-1)?.komut.isler ?? ['*'];
+    t.satirlar.push({ komut: { tur: 'diz', isler: son }, ne: 'Plan yeniden dizildi', t: 0, hata: null }); t.surum += 1;
+    return json(r, cevap());
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T12:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible().catch(() => false)) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const telefon = bilgi.project.name === 'g360';
+  const ozet = page.getByRole('toolbar', { name: 'Plan çubuğu' }).locator('[data-degisiklik-ozeti]');
+  await expect(ozet.locator('b')).toHaveText('1 değişiklik');
+  await ozet.getByRole('button', { name: 'Gör ve uygula' }).click();
+  const liste = page.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
+  const geride = liste.getByRole('region', { name: 'Plan geride' });
+  await expect(geride.getByRole('listitem')).toHaveCount(1);
+  const gor = geride.getByRole('button', { name: 'Etkisini gör' });
+  await expect(gor).toHaveCount(1);
+  if (telefon) expect((await gor.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(liste).toContainText('"Plan geride" satırında "Etkisini gör" o emir yeniden dizilince ne olacağını gösterir');
+  await tasma();
+
+  await gor.click();
+  const etki = liste.getByRole('region', { name: 'Etkisi' });
+  await expect(etki).toBeVisible();
+  expect(t.satirlar.map((x) => x.komut)).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }]);
+  expect(t.degerlendirme).toEqual([{ tur: 'plan-uygula', isler: ['S1'] }]);
+  await expect(etki).toContainText('Ağırlıklı gecikme20,0 sa → 25,0 sa');
+  await expect(geride.getByRole('listitem').getByRole('region', { name: 'Etkisi' })).toHaveCount(1);
+  await expect(gor).toHaveCount(0);
+  const uygula = etki.getByRole('button', { name: 'Uygula' });
+  if (telefon) expect((await uygula.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-3-etki-${bilgi.project.name}.png`, fullPage: true });
+
+  // Vazgeç: istek taslaktan geri alınır, satır eski hâline döner.
+  await etki.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(etki).toHaveCount(0);
+  await expect(gor).toHaveCount(1);
+  expect(t.satirlar).toEqual([]);
+
+  // Uygula: dizme taslağa yazılır; iş şimdiden sonraya gittiği için satır düşer, plan güncel yazar; taslak çubuğu ve Geri açılır.
+  await gor.click();
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(ozet).toHaveText('Plan güncel');
+  expect(t.satirlar.map((x) => x.komut)).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }, { tur: 'diz', isler: ['S1'] }]);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toContainText('Taslak · 1 değişiklik');
+  await expect(kokpit.getByRole('group', { name: 'Geri' }).getByRole('button', { name: /Geri/ })).toBeEnabled();
+  await tasma();
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3317-3-uygulandi-${bilgi.project.name}.png`, fullPage: true });
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3297-4: planlı operasyon seç-yerleştir ile taşınır. Operasyona basılınca taşınabileceği yerler listelenir ve tahtada çerçevelenir;
 // yere basınca taşıma taslağa tek değişiklik olarak yazılır. Önizleme uydurmadır: istenen yer geçerlidir.
 test('Kokpit 3330: kart seçilince siparişin işleri parlak, ötekiler soluk ama okunur; adımlar arasında bağ oku (düz bitince, kesik örtüşmeli); Esc ve boş alan seçimi kaldırır; telefonda bağ satırda; operasyonlar tablosunda bağımlılık; yatay taşma yok', async ({ page, ac }, bilgi) => {

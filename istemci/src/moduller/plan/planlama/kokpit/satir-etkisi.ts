@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
+import type { Degisiklik } from './degisiklikler.ts';
 import { useEtki, type EtkiDurumu } from './etki.tsx';
 import type { TaslakYazici } from './taslak.ts';
 
@@ -22,14 +23,23 @@ export function satirIsleri(c: PlanlamaCalismasi, b: BekleyenDegisiklik): string
   return l.length === 0 ? ['*'] : l;
 }
 
+// "Plan geride" satırı (3317 a, 3. adım): satırın emri aynı yoldan yeniden dizilir; geride kalan iş şimdiden sonraya gider (3335-2b).
+// Emrin öteki geride işleri ve yalnız o emri etkileyen veri değişiklikleri de aynı dizmeyle plana girer.
+export function gerideBirlikte(satirlar: readonly Degisiklik[], liste: readonly BekleyenDegisiklik[], d: Degisiklik): number {
+  const digerGeride = satirlar.filter((x) => x.baslik === 'geride' && x.yenidenDiz === true && x.emirId === d.emirId && x.anahtar !== d.anahtar).length;
+  return digerGeride + liste.filter((b) => b.isler.length > 0 && b.isler.every((x) => x === d.emirId)).length;
+}
+
 export interface SatirEtkisiYuzu {
-  // Etkisi açık satırın bekleyen kimliği; durum 'duzen' iken açık satır yoktur.
+  // Etkisi açık satır: veri satırında bekleyen kimliği, "Plan geride" satırında satırın anahtarı; durum 'duzen' iken açık satır yoktur.
   id: string | null;
   durum: EtkiDurumu;
   // Açık satırla birlikte uygulanacak öteki satır sayısı ve bütün planın dizilip dizilmeyeceği.
   birlikte: number;
   butun: boolean;
   gor: (id: string) => void;
+  // "Plan geride" satırının etkisi; satirlar: listedeki bütün satırlar (birlikte taşınanların sayımı için).
+  gorGeride: (d: Degisiklik, satirlar: readonly Degisiklik[]) => void;
   uygula: () => void;
   vazgec: () => void;
   mesgul: boolean;
@@ -48,9 +58,14 @@ export function useSatirEtkisi({ c, taslak, liste }: { c: PlanlamaCalismasi; tas
     void dene({ tur: 'yeniden-planla', isler }, isler);
   // dene her çizimde yenidir; taslağın ve çalışmanın o anki hâlini okur.
   }, [liste, c, dene]);
+  const gorGeride = useCallback((d: Degisiklik, satirlar: readonly Degisiklik[]) => {
+    if (d.yenidenDiz !== true || d.emirId === null) return;
+    setAcik({ id: d.anahtar, butun: false, birlikte: gerideBirlikte(satirlar, liste, d) });
+    void dene({ tur: 'yeniden-planla', isler: [d.emirId] }, [d.emirId]);
+  }, [liste, dene]);
   if (taslak === null || c.plan === null) return null;
   return {
-    id: durum.tur === 'duzen' ? null : acik?.id ?? null, durum, birlikte: acik?.birlikte ?? 0, butun: acik?.butun ?? false, gor,
+    id: durum.tur === 'duzen' ? null : acik?.id ?? null, durum, birlikte: acik?.birlikte ?? 0, butun: acik?.butun ?? false, gor, gorGeride,
     uygula: () => { if (durum.tur === 'etki') void uygula(durum.e); },
     // Hata iletisi kapatılır: istek taslakta kaldıysa taslak çubuğundaki Geri ile alınır (ileti söyler).
     vazgec: () => { if (durum.tur === 'hata') { setDurum({ tur: 'duzen' }); setAcik(null); } else void vazgec(); },
