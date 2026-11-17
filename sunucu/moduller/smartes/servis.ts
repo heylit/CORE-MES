@@ -1590,3 +1590,6 @@ export async function adetReddet(db: Db, kisiId: number, idler: readonly number[
   }
   return { islenen, hatalar };
 }
+
+// Tezgah bağlantısı denemesi (3373): makine başına son okunan değerler, yalnız okuma.
+export const smartesMakineDegerleri = (db: Db): Promise<s.MakineDegeri[]> => s.makineDegerleri(db);

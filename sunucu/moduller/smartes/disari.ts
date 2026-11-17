@@ -8,3 +8,6 @@ export type { CoreOeeCozucusu } from './servis.ts';
 export function smartesBaglantisiAcikMi(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
   return smartesAyariOku(env) !== null;
 }
+
+// Tezgah bağlantısı denemesi (3373) aynı kodlu makinenin son SmartES değerini yan yana gösterir; yalnız okur.
+export { smartesMakineDegerleri } from './servis.ts';
