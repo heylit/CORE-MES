@@ -6,8 +6,8 @@ import type { KalibrasyonCifti } from './kurallar.ts';
 // Süre kalibrasyonu (3321-3): saf kural, elle hesaplanmış değerlerle.
 const yakin = (x: number, beklenen: number, m = '', tol = 1e-3): void => assert.ok(Math.abs(x - beklenen) < tol, `${m} ${String(x)} != ${String(beklenen)}`);
 let sayac = 0;
-const cift = (tahminDk: number, olcumDk: number, g: Partial<KalibrasyonCifti['gruplar']> = {}, ek: Partial<KalibrasyonCifti> = {}): KalibrasyonCifti => ({
-  malzemeNo: ++sayac, tahminDk, olcumDk, disarida: false, gruplar: { malzeme: null, tezgah: null, islem: null, ...g },
+const cift = (tahminDk: number, olcumDk: number, g: { -readonly [K in keyof KalibrasyonCifti['gruplar']]?: string | null } = {}, ek: Partial<KalibrasyonCifti> = {}): KalibrasyonCifti => ({
+  malzemeNo: ++sayac, tahminDk, olcumDk, disarida: false, gruplar: { malzeme: null, tezgah: null, islem: null, geometri: null, ...g },
   kabaDk: tahminDk / 2, finisDk: tahminDk / 2, delikDk: 0, ozellikSayisi: 0, ...ek,
 });
 
@@ -50,8 +50,8 @@ describe('geometri: süre kalibrasyonu (3321-3)', () => {
     assert.deepEqual([tezgah.n, tezgah.azVeri], [20, false]);
     // Parça çarpanı: log(genel) + her grubun log farkı.
     const beklenen = Math.exp(Math.log(s.carpan!) + (Math.log(m.carpan) - Math.log(s.carpan!)) + (Math.log(tezgah.carpan) - Math.log(s.carpan!)) * 2);
-    yakin(parcaCarpani(s, { malzeme: 'M', tezgah: 'ORN-CNC-01', islem: 'FRZ' }), beklenen);
-    yakin(parcaCarpani(s, { malzeme: null, tezgah: null, islem: null }), s.carpan!, 'grubu bilinmeyen parça genel çarpanı alır');
+    yakin(parcaCarpani(s, { malzeme: 'M', tezgah: 'ORN-CNC-01', islem: 'FRZ', geometri: null }), beklenen);
+    yakin(parcaCarpani(s, { malzeme: null, tezgah: null, islem: null, geometri: null }), s.carpan!, 'grubu bilinmeyen parça genel çarpanı alır');
     assert.equal(s.aralik?.genis, false);
   });
 
@@ -103,7 +103,7 @@ describe('geometri: süre kalibrasyonu (3321-3)', () => {
     assert.equal(s.asama, 'grup');
     const p = kalibreAralik(s, { ...cift(5, 1, { malzeme: 'P' }) });
     assert.ok(p !== null);
-    yakin(p.carpan, parcaCarpani(s, { malzeme: 'P', tezgah: null, islem: null }), 'parça çarpanı');
+    yakin(p.carpan, parcaCarpani(s, { malzeme: 'P', tezgah: null, islem: null, geometri: null }), 'parça çarpanı');
     assert.ok(Math.abs(p.carpan - (s.carpan ?? 0)) > 0.05, 'genel çarpandan farklı');
     yakin(p.ortaDk, 5 * p.carpan, 'orta', 1e-3);
     yakin(p.altDk, p.ortaDk * Math.exp(s.aralik!.altLn), 'alt', 1e-3);

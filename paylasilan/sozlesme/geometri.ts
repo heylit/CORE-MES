@@ -286,6 +286,49 @@ export const geometriSureRotasi = z.object({
   olcumToplamDk: dk.nullable(),
   eksik: z.boolean(),
 });
+// 3363: başlangıç katsayıları. Anahtar "tur.ad" (malzeme.kaba.<sınıf>, yuzey.<Ra>, tolerans.<sınıf>, delik.<bant>, geometri.<tip>,
+// cidar.<bant>, kesme.pay, tutma.<bant>). Döküm satırı sırasıyla kaba, finiş, delik, geometri, kesme dışı pay, bağlama; araToplamDk
+// o satırdan sonraki olası toplam.
+export const YUZEY_RA_DEGERLERI = ['6.3', '3.2', '1.6', '0.8', '0.4'] as const;
+export const TOLERANS_SINIFLARI = ['genel', 'hassas', 'cok-hassas', 'ultra'] as const;
+export const GEOMETRI_TIPLERI = ['donel', 'prizmatik', 'plaka'] as const;
+export const ONSEL_TURLERI = ['malzeme', 'yuzey', 'tolerans', 'delik', 'geometri', 'cidar', 'kesme', 'tutma'] as const;
+const katsayiCarpani = z.object({ anahtar: z.string(), deger: z.number().min(0) });
+export const geometriOnselDokumSatiri = z.discriminatedUnion('tur', [
+  z.object({ tur: z.enum(['kaba', 'finis', 'delik']), kalibresizDk: dk, carpanlar: z.array(katsayiCarpani), araToplamDk: dk }),
+  z.object({ tur: z.literal('geometri'), carpanlar: z.array(katsayiCarpani), araToplamDk: dk }),
+  z.object({ tur: z.literal('kesme'), anahtar: z.string(), deger: z.number().positive(), araToplamDk: dk }),
+  z.object({ tur: z.literal('baglama'), anahtar: z.string(), adet: z.number().int().min(0), tutmaDk: dk, araToplamDk: dk }),
+]);
+export const geometriOnselSemasi = z.object({
+  altDk: dk, ortaDk: dk, ustDk: dk,
+  dokum: z.array(geometriOnselDokumSatiri),
+  // kayitli: seçim bu revizyona kaydedilmiş; değilse varsayılan (Ra 3,2, genel).
+  tasarim: z.object({ ra: z.enum(YUZEY_RA_DEGERLERI), tolerans: z.enum(TOLERANS_SINIFLARI), kayitli: z.boolean() }),
+  tip: z.enum(GEOMETRI_TIPLERI),
+  cidarMm: mm.nullable(),
+  baglama: z.number().int().min(0),
+  agirlikKg: z.number().min(0),
+});
+export const geometriSureKatsayisi = z.object({
+  anahtar: z.string(), tur: z.enum(ONSEL_TURLERI), deger: z.number().min(0), yerlesik: z.number().min(0),
+  // Malzeme satırında sınıfın ISO grubu (kalibrasyonun malzeme grubu); öbürlerinde null.
+  iso: z.enum(GEOMETRI_ISO_GRUPLARI).nullable(),
+  kaynak: z.enum(['kaynakli', 'tahmin']), dayanak: z.string(),
+  elle: z.object({ deger: z.number().min(0), not: z.string().nullable(), kisi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+});
+export type GeometriSureKatsayisi = z.output<typeof geometriSureKatsayisi>;
+export const geometriSureKatsayilariCevabi = z.object({ katsayilar: z.array(geometriSureKatsayisi) });
+export type GeometriSureKatsayilariCevabi = z.output<typeof geometriSureKatsayilariCevabi>;
+const katsayiAnahtari = z.string().trim().min(3).max(80);
+// Bir satırın bütün değerleri (ör. malzeme sınıfının kaba ve finişi) tek komutla yazılır; not hepsine.
+export const sureKatsayisiYazGovdesi = z.object({
+  degerler: z.array(z.object({ anahtar: katsayiAnahtari, deger: z.number().finite() }).strict()).min(1).max(10),
+  not: z.string().trim().max(200).nullable().transform((x) => (x === '' ? null : x)),
+}).strict();
+export const sureKatsayisiAnahtarGovdesi = z.object({ anahtarlar: z.array(katsayiAnahtari).min(1).max(10) }).strict();
+export const sureTasarimiGovdesi = z.object({ ra: z.enum(YUZEY_RA_DEGERLERI), tolerans: z.enum(TOLERANS_SINIFLARI) }).strict();
+export const sureTasarimiCevabi = z.object({ revizyonId: z.number().int(), ra: z.enum(YUZEY_RA_DEGERLERI), tolerans: z.enum(TOLERANS_SINIFLARI) });
 export const geometriSureCevabi = z.object({
   revizyonId: z.number().int(),
   oneri: z.literal(true),
@@ -321,6 +364,8 @@ export const geometriSureCevabi = z.object({
   ozellikOkundu: z.boolean(),
   rota: geometriSureRotasi,
   neden: z.enum(GEOMETRI_SURE_NEDENLERI).nullable(),
+  // 3363: başlangıç katsayılarıyla tahmin (kalibrasyonun tabanı); kalemler hesaplanamadıysa null.
+  onsel: geometriOnselSemasi.nullable(),
 });
 export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;
 
@@ -329,8 +374,8 @@ export type GeometriSureCevabi = z.output<typeof geometriSureCevabi>;
 // malzemedir; tahmin parçanın varsayılan malzeme ve hamla kalibresiz olası süresi, ölçüm adımların son 5 ölçüm ortancalarının toplamı.
 // Grup: malzeme (ISO grubu, rotadaki hammaddenin sınıfından), tezgâh (ilk talaşlı adımın makinesi), işlem (ilk talaşlı adımın operasyon
 // tipi). olcumuEksik: modeli ve rotası olup bir talaşlı adımı ölçülmemiş parça sayısı.
-export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem'] as const;
-const kalibrasyonGruplari = z.object({ malzeme: z.string().nullable(), tezgah: z.string().nullable(), islem: z.string().nullable() });
+export const KALIBRASYON_GRUP_TURLERI = ['malzeme', 'tezgah', 'islem', 'geometri'] as const;
+const kalibrasyonGruplari = z.object({ malzeme: z.string().nullable(), tezgah: z.string().nullable(), islem: z.string().nullable(), geometri: z.string().nullable() });
 export const geometriKalibrasyonCevabi = z.object({
   asama: z.enum(KALIBRASYON_ASAMALARI),
   esikler: z.object({ tek: z.number().int(), grup: z.number().int(), regresyon: z.number().int() }),

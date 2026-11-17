@@ -1,12 +1,13 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi, geometriSaglikCevabi,
-  geometriSureCevabi, geometriSureSorgusu, geometriKalibrasyonCevabi, disaridaBirakGovdesi,
+  geometriSureCevabi, geometriSureSorgusu, geometriKalibrasyonCevabi, disaridaBirakGovdesi, geometriSureKatsayilariCevabi,
+  sureKatsayisiAnahtarGovdesi, sureKatsayisiYazGovdesi, sureTasarimiCevabi, sureTasarimiGovdesi,
   geometriYuzeyCevabi, geometriYuzeyKaydetGovdesi, revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisiRotayla, kalibrasyonaGeriAl, kalibrasyondanCikar, kalibrasyonOku, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, sureTahminiOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisiRotayla, kalibrasyonaGeriAl, kalibrasyondanCikar, kalibrasyonOku, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, sureKatsayilariOku, sureKatsayisiYaz, sureKatsayisiYerlesigeDon, sureTahminiOku, sureTasarimiYaz, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -93,6 +94,30 @@ export const uclar = [
     yontem: 'POST', yol: '/geometri/kalibrasyon/:malzemeNo/geri-al', yetki: 'geometri.kalibrasyon', tekrarKorumali: true,
     parametre: malzemeParametresi, cevap: geometriKalibrasyonCevabi,
     isle: ({ db, parametre }) => kalibrasyonaGeriAl(db, parametre.malzemeNo),
+  }),
+  // 3363: başlangıç katsayıları (okuma geometri.oku); elle değiştirme, yerleşiğe dönme ve parçanın yüzey/tolerans seçimi
+  // geometri.kalibrasyon (S1 önerisi a).
+  uc({
+    yontem: 'GET', yol: '/geometri/sure-katsayilari', yetki: 'geometri.oku', cevap: geometriSureKatsayilariCevabi,
+    isle: ({ db }) => sureKatsayilariOku(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/geometri/sure-katsayilari/yaz', yetki: 'geometri.kalibrasyon', tekrarKorumali: true,
+    govde: sureKatsayisiYazGovdesi, cevap: geometriSureKatsayilariCevabi,
+    isle: ({ db, kullanici, govde }) => sureKatsayisiYaz(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/geometri/sure-katsayilari/yerlesige-don', yetki: 'geometri.kalibrasyon', tekrarKorumali: true,
+    govde: sureKatsayisiAnahtarGovdesi, cevap: geometriSureKatsayilariCevabi,
+    isle: ({ db, govde }) => sureKatsayisiYerlesigeDon(db, govde.anahtarlar),
+  }),
+  uc({
+    yontem: 'POST', yol: '/geometri/sure-tahmini/:revizyonId/tasarim', yetki: 'geometri.kalibrasyon', tekrarKorumali: true,
+    parametre: revizyonParametresi, govde: sureTasarimiGovdesi, cevap: sureTasarimiCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await sureTasarimiYaz(db, kullanici, parametre.revizyonId, govde);
+      return { revizyonId: parametre.revizyonId, ...govde };
+    },
   }),
   // 1704 a: kart yazan da okur (net ağırlığı forma yalnız düğmeyle yazar); geometri okuyan da.
   uc({
