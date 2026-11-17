@@ -143,3 +143,23 @@ describe('taranmış sayfa', () => {
     expect(eslesmeler.find((e) => e.kalem.id === 'k1')!.durum).toBe('emin');
   });
 });
+
+describe('ad benzerliği eşikleri', () => {
+  it('orta benzerlikteki satır bağlanır ama "satır doğru" kararı ister; düşük benzerlik bağlanmaz', () => {
+    const sayfa = [
+      ...satir(10, [[20, '#'], [40, 'Malzeme'], [220, 'Miktar'], [270, 'Birim'], [310, 'Fiyat'], [430, 'Tutar']]),
+      ...satir(26, [[20, '1'], [40, 'AL 6061 Ø80 çubuk'], [222, '100'], [270, 'KG'], [312, '5,10'], [430, '510,00']]),
+      ...satir(42, [[20, '2'], [40, 'C45 çubuk'], [222, '80'], [270, 'KG'], [312, '1,90'], [430, '152,00']]),
+    ];
+    const k1 = KALEMLER[0]!, k5 = KALEMLER[4]!;
+    const orta = benzerlik(k1.ad, 'AL 6061 Ø80 çubuk');
+    expect(orta).toBeGreaterThanOrEqual(0.35);
+    expect(orta).toBeLessThan(0.6);
+    const { eslesmeler } = eslestir([k1, k5], tabloOku(satirlaraAyir(sayfa)));
+    const e = eslesmeler[0]!;
+    expect([e.okunan?.ad, e.durum, e.bekleyen, e.fiyat]).toEqual(['AL 6061 Ø80 çubuk', 'kontrol', ['satir'], 5.1]);
+    expect(kararVer(e, 'satir').durum).toBe('emin');
+    // "C45 çubuk" iki kaleme de eşiğin altında kalır: hiçbir kaleme fiyat yazılmaz.
+    expect(eslesmeler[1]!.durum).toBe('yok');
+  });
+});

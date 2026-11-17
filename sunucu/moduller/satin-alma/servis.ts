@@ -1768,19 +1768,22 @@ const teklifEkiOzeti = (d: { ozet: string; ad: string; boyut: number; zaman: str
 async function teklifOlmali(db: Db, talepId: string, teklifId: string): Promise<void> {
   if (!(await s.teklifVarMi(db, talepId, teklifId))) throw bulunamadi(TEKLIF_YOK);
 }
+const ekListesi = async (db: Db, talepId: string, teklifId: string): Promise<TeklifEkleriCevabi> =>
+  ({ ekler: (await teklifTutamagi.bagliDosyalar(db, teklifEkiKaydi(talepId, teklifId))).map(teklifEkiOzeti) });
+// Teklif denetimi her uçta bir kez, işin başında yapılır; yazan uç cevabı denetimsiz listeden verir.
 export async function teklifEkleri(db: Db, talepId: string, teklifId: string): Promise<TeklifEkleriCevabi> {
   await teklifOlmali(db, talepId, teklifId);
-  return { ekler: (await teklifTutamagi.bagliDosyalar(db, teklifEkiKaydi(talepId, teklifId))).map(teklifEkiOzeti) };
+  return ekListesi(db, talepId, teklifId);
 }
 export async function teklifEkiBagla(db: Db, k: Kullanici, talepId: string, teklifId: string, g: TeklifEkiYazimi): Promise<TeklifEkleriCevabi> {
   await teklifOlmali(db, talepId, teklifId);
   await teklifTutamagi.dosyaBagla(db, k, { ozet: g.ozet, kayit: teklifEkiKaydi(talepId, teklifId), ad: g.dosyaAdi, belgeTuru: null }, TEKLIF_EKI_SINIRI);
-  return teklifEkleri(db, talepId, teklifId);
+  return ekListesi(db, talepId, teklifId);
 }
 export async function teklifEkiKaldir(db: Db, talepId: string, teklifId: string, ozet: string): Promise<TeklifEkleriCevabi> {
   await teklifOlmali(db, talepId, teklifId);
   if ((await teklifTutamagi.bagKaldir(db, teklifEkiKaydi(talepId, teklifId), ozet)).length === 0) throw bulunamadi(EK_YOK);
-  return teklifEkleri(db, talepId, teklifId);
+  return ekListesi(db, talepId, teklifId);
 }
 export async function teklifEkiDosyasi(db: Db, talepId: string, teklifId: string, ozet: string): Promise<IkiliCevap> {
   const akis = await teklifTutamagi.dosyaAkisi(db, teklifEkiKaydi(talepId, teklifId), ozet);

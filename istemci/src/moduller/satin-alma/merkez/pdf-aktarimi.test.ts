@@ -34,6 +34,8 @@ describe('3404: PDF tekliften toplu teklif tablosuna', () => {
     const istekler: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (adres: string, i?: RequestInit) => {
       istekler.push(`${i?.method ?? 'GET'} ${adres}`);
+      // Talep kaydı yavaş döner: PDF eki ancak kayıt bittikten sonra gönderilmeli (teklif sunucuda yoksa bağ 404 olur).
+      if (i?.method === 'POST' && !adres.includes('ek-bagla')) { await new Promise((bitti) => { setTimeout(bitti, 40); }); istekler.push(`BITTI ${adres}`); }
       return new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } });
     }));
     Element.prototype.scrollIntoView = () => {};
@@ -62,10 +64,10 @@ describe('3404: PDF tekliften toplu teklif tablosuna', () => {
     expect(istekler.slice(once).filter((y) => !y.startsWith('GET'))).toEqual([]);
     kok.querySelector<HTMLElement>('[data-act="bulk-save"]')!.click();
     await vi.waitFor(() => expect(istekler.some((y) => /^POST .*\/teklifler\/[^/]+\/ek-bagla$/.test(y))).toBe(true));
-    const kayit = istekler.findIndex((y) => y.startsWith('POST') && !y.includes('ek-bagla'));
+    const kayitBitti = istekler.findIndex((y) => y.startsWith('BITTI') && y.includes('/satin-alma-talepleri/'));
     const ek = istekler.findIndex((y) => y.includes('ek-bagla'));
-    expect(kayit).toBeGreaterThanOrEqual(0);
-    expect(kayit).toBeLessThan(ek);
+    expect(kayitBitti).toBeGreaterThanOrEqual(0);
+    expect(kayitBitti).toBeLessThan(ek);
     kapat();
   });
 });

@@ -3581,7 +3581,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await istek(c.sa, 'POST', `/dosyalar/${duzOzet}/parca`, { sira: 0, toplam: 1, veri: duz.toString('base64') }, null));
     assert.equal((await istek(c.sa, 'POST', `${yol(b.id)}/ek-bagla`, { ozet: duzOzet, dosyaAdi: 'x.pdf' })).statusCode, 400);
     assert.equal((await ekler(c.sa, randomUUID())).statusCode, 404);
-    assert.equal((await istek(c.sa, 'POST', `${yol(randomUUID())}/ek-bagla`, { ozet, dosyaAdi: 'x.pdf' })).statusCode, 404);
+    const yokTeklif = randomUUID();
+    assert.equal((await istek(c.sa, 'POST', `${yol(yokTeklif)}/ek-bagla`, { ozet, dosyaAdi: 'x.pdf' })).statusCode, 404);
+    assert.equal((await vt().tx((db) => db.sorgu("SELECT 1 FROM dosya_bagi WHERE modul = 'satin-alma' AND kayit = $1", [`teklif:${t.id}:${yokTeklif}`]))).length, 0);
 
     // b'ye de bağlanır; b talepten çıkınca bağı düşer, a'nınki kalır.
     tamam(await istek(c.sa, 'POST', `${yol(b.id)}/ek-bagla`, { ozet, dosyaAdi: 'ORN-b.pdf' }));
@@ -3593,6 +3595,21 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const kaldir = () => istek(c.sa, 'POST', `${yol(a.id)}/ekler/${ozet}/kaldir`);
     assert.deepEqual(tamam<TeklifEkleriCevabi>(await kaldir()).ekler, []);
     assert.equal((await kaldir()).statusCode, 404);
+  });
+
+  test('3404: talep silinince tekliflerinin PDF ekleri düşer', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
+    const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    const { ozet } = await belgeYukle(c.sa);
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/teklifler/${a.id}/ek-bagla`, { ozet, dosyaAdi: 'ORN-teklif.pdf' }));
+    const baglar = () => vt().tx((db) => db.sorgu("SELECT 1 FROM dosya_bagi WHERE modul = 'satin-alma' AND kayit LIKE $1", [`teklif:${t.id}:%`]));
+    assert.equal((await baglar()).length, 1);
+    // Yalnız taslak silinir; teklifler taslağa dönen talepte de durur (silme ekleri bırakmalı).
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'taslak' WHERE id = $1", [t.id]);
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: deg.surum }));
+    assert.equal((await baglar()).length, 0);
   });
 
   // 1096 a ve 1099 a: onaya giden kararın kuru sunucuda sabitlenir; kalem ayrıntısı toplamlara girer.
