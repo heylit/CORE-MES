@@ -1,0 +1,230 @@
+// Stok kontrol (3398, surum 4 a): satın alma ve planlamanın ortak sayfası. Ölçüyle arama aynı form ve kalitede, istenenden küçük
+// olmayan ve seçilen fazla pay içindeki stoğu ve artık parçaları en az fireden sıralar; kesimden kalan parça burada kaydedilir.
+// İhtiyaç kuyruğu (satın alma kalemleri, planlanan emirler, satış teklifleri) sonraki dilimlerde bu sayfaya eklenir.
+import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ARTIK_HURDA_ESIGI_MM, FORM_ADLARI, FORM_OLCULERI, OLCU_ETIKETLERI, OLCULU_FORMLAR, VARSAYILAN_KESME_MM, type OlculuForm } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
+import type { ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, OlcuAdayi, OlcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import {
+  Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, MalzemeSecici, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type SeciliKayit, type Sutun,
+} from '../../ortak/arayuz/index.ts';
+import { api } from '../../ortak/veri/api.ts';
+import { anahtarlar } from './anahtarlar.ts';
+import { miktarMetni } from './gorunum.ts';
+import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
+import { hataMetni, korumaliPost, SayfaBasi, useIslem } from './ortak.tsx';
+import './stok.css';
+
+type Sekme = 'ara' | 'artik';
+
+// Fazla pay seçenekleri (surum 4 madde 11); değer sorgu parametresidir.
+const PAYLAR = [
+  { deger: 'yuzde-15', baslik: '+%15 (en az 3 mm)', sorgu: { pay: 'yuzde', payDeger: '15', payEnAzMm: '3' } },
+  { deger: 'tam', baslik: 'Yalnız tam ölçü', sorgu: { pay: 'tam' } },
+  { deger: 'mm-5', baslik: '+5 mm', sorgu: { pay: 'mm', payDeger: '5' } },
+  { deger: 'mm-10', baslik: '+10 mm', sorgu: { pay: 'mm', payDeger: '10' } },
+  { deger: 'yuzde-25', baslik: '+%25 (en az 3 mm)', sorgu: { pay: 'yuzde', payDeger: '25', payEnAzMm: '3' } },
+  { deger: 'elle', baslik: 'Elle (mm)', sorgu: { pay: 'mm' } },
+] as const;
+const KESMELER = ['0', '3', '5'] as const;
+
+const CAPLI = new Set<OlculuForm>(['cubuk', 'boru', 'disk']);
+export function olcuMetni(form: string | null, olcu: Readonly<Record<string, number>>): string {
+  const f = form !== null && (OLCULU_FORMLAR as readonly string[]).includes(form) ? FORM_OLCULERI[form as OlculuForm] : null;
+  const sira = f === null ? Object.keys(olcu) : [...f.kesit, ...(f.en === null ? [] : [f.en]), ...(f.boy === null ? [] : [f.boy])];
+  const parca = sira.flatMap((k) => (olcu[k] === undefined ? [] : [miktarMetni(String(olcu[k]))]));
+  if (parca.length === 0) return '—';
+  return `${f !== null && CAPLI.has(form as OlculuForm) ? 'Ø' : ''}${parca.join(' × ')} mm`;
+}
+
+function durumRozeti(a: OlcuAdayi) {
+  if (a.durum === 'tam') return <Rozet ton="tamam">Tam ölçü</Rozet>;
+  const fazla = Object.values(a.fazla).filter((x) => x > 0);
+  const metin = fazla.length === 0 ? '' : `+${miktarMetni(String(Math.max(...fazla)))} mm`;
+  return a.durum === 'yakin' ? <Rozet ton="uyari">{`Yakın ${metin}`.trim()}</Rozet> : <Rozet ton="pasif">{`Pay dışı ${metin}`.trim()}</Rozet>;
+}
+
+interface AramaFormu { form: OlculuForm; kalite: string; olcu: Record<string, string>; parcaBoyu: string; parcaEni: string; adet: string; pay: string; payElle: string; kesme: string; artik: boolean }
+const BOS_FORM: AramaFormu = { form: 'cubuk', kalite: '', olcu: {}, parcaBoyu: '', parcaEni: '', adet: '', pay: 'yuzde-15', payElle: '', kesme: String(VARSAYILAN_KESME_MM), artik: true };
+
+function aramaSorgusu(f: AramaFormu): string {
+  const p = new URLSearchParams({ form: f.form, kesmeMm: f.kesme, artik: f.artik ? 'evet' : 'hayir' });
+  for (const [k, v] of Object.entries(PAYLAR.find((x) => x.deger === f.pay)?.sorgu ?? {})) p.set(k, v);
+  if (f.pay === 'elle') p.set('payDeger', f.payElle.trim().replace(',', '.') || '0');
+  if (f.kalite !== '') p.set('kalite', f.kalite);
+  for (const k of FORM_OLCULERI[f.form].kesit) if ((f.olcu[k] ?? '').trim() !== '') p.set(k, f.olcu[k]!.trim().replace(',', '.'));
+  if (f.parcaBoyu.trim() !== '') p.set('parcaBoyu', f.parcaBoyu.trim().replace(',', '.'));
+  if (f.parcaEni.trim() !== '') p.set('parcaEni', f.parcaEni.trim().replace(',', '.'));
+  if (f.adet.trim() !== '') p.set('adet', f.adet.trim());
+  return p.toString();
+}
+
+function OlcuyleAra() {
+  const [form, formYaz] = useState<AramaFormu>(BOS_FORM);
+  const [sorgu, sorguYaz] = useState<string | null>(null);
+  const kaliteler = useQuery({
+    queryKey: anahtarlar.liste('olcu-kaliteleri', { form: form.form }),
+    // Kalite listesi formun kartlarındandır; kesit vermeden sorulamadığı için 1 mm ile sorulur, adaylar kullanılmaz.
+    queryFn: () => api.get<OlcuAramaCevabi>(`/stok/olcu-arama?form=${form.form}&${FORM_OLCULERI[form.form].kesit[0]}=1&artik=hayir`),
+  });
+  const sonuc = useQuery({
+    queryKey: anahtarlar.liste('olcu-arama', { sorgu }),
+    queryFn: () => api.get<OlcuAramaCevabi>(`/stok/olcu-arama?${sorgu}`),
+    enabled: sorgu !== null,
+  });
+  const f = FORM_OLCULERI[form.form];
+  const kesitVar = f.kesit.some((k) => (form.olcu[k] ?? '').trim() !== '');
+  const gonder = (e: FormEvent) => { e.preventDefault(); if (kesitVar) sorguYaz(aramaSorgusu(form)); };
+  const yaz = (p: Partial<AramaFormu>) => formYaz((o) => ({ ...o, ...p }));
+  const sutunlar: Sutun<OlcuAdayi>[] = [
+    { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (a) => (a.kaynak === 'artik' ? <Rozet ton="bilgi">Artık</Rozet> : 'Stok'), csv: (a) => (a.kaynak === 'artik' ? 'Artık' : 'Stok') },
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (a) => <Link to={`/stok/malzemeler/${a.malzemeNo}`}>{a.kod}</Link>, csv: (a) => a.kod },
+    { anahtar: 'olcu', baslik: 'Ölçü', hucre: (a) => olcuMetni(a.form, a.olcu) },
+    { anahtar: 'kalite', baslik: 'Kalite', hucre: (a) => a.kalite ?? '—' },
+    { anahtar: 'durum', baslik: 'Uygunluk', hucre: durumRozeti, csv: (a) => a.durum },
+    { anahtar: 'fire', baslik: 'Fire', hizala: 'sag', hucre: (a) => (a.fireYuzde === null ? '—' : `%${a.fireYuzde}`) },
+    { anahtar: 'parca', baslik: 'Parça', hizala: 'sag', hucre: (a) => (a.parcaSayisi === null ? '—' : String(a.parcaSayisi)) },
+    { anahtar: 'miktar', baslik: 'Stokta', hizala: 'sag', hucre: (a) => `${miktarMetni(a.miktar)} ${a.birim ?? ''}`.trim() },
+    { anahtar: 'konum', baslik: 'Konum', kes: true, hucre: (a) => (a.konumlar.length === 0 ? '—' : a.konumlar.join(', ')) },
+  ];
+  const s = sonuc.data;
+  return (
+    <>
+      <Kart baslik="Ölçüyle ara" simge="ruler">
+        <form className="tc-stok-form" onSubmit={gonder} aria-label="Ölçüyle ara">
+          <div className="tc-stok-iki">
+            <Secim etiket="Form" value={form.form} secenekler={OLCULU_FORMLAR.map((x) => ({ deger: x, baslik: FORM_ADLARI[x] }))}
+              onChange={(e) => yaz({ form: e.target.value as OlculuForm, olcu: {}, kalite: '' })} />
+            <Secim etiket="Kalite" value={form.kalite} bosSecenek="Bütün kaliteler"
+              secenekler={(kaliteler.data?.kaliteler ?? []).map((k) => ({ deger: k, baslik: k }))} onChange={(e) => yaz({ kalite: e.target.value })} />
+            {f.kesit.map((k) => (
+              <Girdi key={k} etiket={`${OLCU_ETIKETLERI[form.form][k] ?? k} (mm)`} inputMode="decimal" value={form.olcu[k] ?? ''}
+                onChange={(e) => yaz({ olcu: { ...form.olcu, [k]: e.target.value } })} />
+            ))}
+            {f.boy !== null && <Girdi etiket="Parça boyu (mm)" inputMode="decimal" value={form.parcaBoyu} onChange={(e) => yaz({ parcaBoyu: e.target.value })} />}
+            {f.en !== null && <Girdi etiket="Parça eni (mm)" inputMode="decimal" value={form.parcaEni} onChange={(e) => yaz({ parcaEni: e.target.value })} />}
+            <Girdi etiket="Adet" inputMode="numeric" value={form.adet} onChange={(e) => yaz({ adet: e.target.value })} />
+            <Secim etiket="Fazla pay" value={form.pay} secenekler={PAYLAR.map((p) => ({ deger: p.deger, baslik: p.baslik }))} onChange={(e) => yaz({ pay: e.target.value })} />
+            {form.pay === 'elle' && <Girdi etiket="Fazla pay (mm)" inputMode="decimal" value={form.payElle} onChange={(e) => yaz({ payElle: e.target.value })} />}
+            {f.boy !== null && (
+              <Secim etiket="Kesme payı" value={form.kesme} secenekler={KESMELER.map((k) => ({ deger: k, baslik: `${k} mm` }))} onChange={(e) => yaz({ kesme: e.target.value })} />
+            )}
+          </div>
+          <IsaretKutusu etiket="Artık parçaları dahil et" checked={form.artik} onChange={(e) => yaz({ artik: e.target.checked })} />
+          <div><Dugme tur="birincil" type="submit" simge="search" disabled={!kesitVar}>Ara</Dugme></div>
+        </form>
+      </Kart>
+      {sorgu !== null && (
+        sonuc.isPending ? <DurumKutusu durum="yukleniyor" />
+          : sonuc.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(sonuc.error)} yenile={() => void sonuc.refetch()} />
+            : s && (
+              <Kart baslik={s.gereken === null ? `${s.adaylar.filter((a) => a.durum !== 'pay-disi').length} uygun stok`
+                : s.karsilanan === null ? `Gereken ${s.gereken} parça; parça sayısı hesaplanamadı`
+                  : `Stokta karşılanan ${s.karsilanan} / ${s.gereken} parça`}>
+                <div className="tc-stok-form">
+                  {s.gereken !== null && s.karsilanan !== null && (
+                    <div><Rozet ton={s.karsilanan >= s.gereken ? 'tamam' : s.karsilanan > 0 ? 'uyari' : 'hata'}>{s.karsilanan >= s.gereken ? 'Stoktan karşılanır' : `${s.gereken - s.karsilanan} parça eksik`}</Rozet></div>
+                  )}
+                  {s.olcusuzKart > 0 && <p role="note">{`Bu formda ölçüsü girilmemiş ${s.olcusuzKart} kart aranamadı; Malzemeler'de ölçüsünü tamamlayın.`}</p>}
+                  <Tablo etiket="Uygun stok" kip="kaydir" sutunlar={sutunlar} satirlar={s.adaylar}
+                    satirAnahtari={(a) => `${a.kaynak}-${a.malzemeNo}-${a.artikId ?? 0}`} bosMesaj="Bu ölçü ve kalitede pay içinde stok yok." />
+                </div>
+              </Kart>
+            )
+      )}
+    </>
+  );
+}
+
+function ArtikKaydiPenceresi({ acik, kapat }: { acik: boolean; kapat: () => void }) {
+  const qc = useQueryClient();
+  const { bildir } = useBildirim();
+  const [malzeme, malzemeYaz] = useState<SeciliKayit | null>(null);
+  const [konum, konumYaz] = useState<KonumSecimi | null>(null);
+  const [boy, boyYaz] = useState('');
+  const [en, enYaz] = useState('');
+  const [adet, adetYaz] = useState('1');
+  const [aciklama, aciklamaYaz] = useState('');
+  const kaydet = useMutation({
+    mutationFn: (g: ArtikParcaGovdesi) => korumaliPost<ArtikParcaCevabi>('/stok/artik-parcalar', g),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', 'Artık parça kaydedildi.'); kapat(); },
+  });
+  const boySayi = Number(boy.replace(',', '.'));
+  const kisa = Number.isFinite(boySayi) && boySayi > 0 && boySayi < ARTIK_HURDA_ESIGI_MM;
+  const hazir = malzeme !== null && konum !== null && Number.isFinite(boySayi) && boySayi > 0;
+  return (
+    <Pencere acik={acik} kapat={kapat} baslik="Kesimden kalan parça"
+      alt={<><Dugme onClick={kapat}>Vazgeç</Dugme><Dugme tur="birincil" simge="check" disabled={!hazir} yukleniyor={kaydet.isPending}
+        onClick={() => {
+          if (!hazir) return;
+          kaydet.mutate({
+            malzemeNo: malzeme.id, konumId: konum.id, boy: boySayi, en: en.trim() === '' ? null : Number(en.replace(',', '.')),
+            adet: Number(adet) || 1, aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+          });
+        }}>Artık olarak sakla</Dugme></>}>
+      <div className="tc-stok-form">
+        <MalzemeSecici etiket="Malzeme kartı" tur="hammadde" deger={malzeme} sec={(k) => malzemeYaz(k === null ? null : { id: k.id, kod: k.kod, ad: k.ad })} />
+        <KonumSecici etiket="Konum" deger={konum} degistir={konumYaz} zorunlu />
+        <div className="tc-stok-iki">
+          <Girdi etiket="Kalan boy (mm)" inputMode="decimal" value={boy} onChange={(e) => boyYaz(e.target.value)} required
+            ipucu={kisa ? `${ARTIK_HURDA_ESIGI_MM} mm altı genelde hurdadır.` : undefined} />
+          <Girdi etiket="Kalan en (mm)" inputMode="decimal" value={en} onChange={(e) => enYaz(e.target.value)} ipucu="Yalnız levhada." />
+          <Girdi etiket="Adet" inputMode="numeric" value={adet} onChange={(e) => adetYaz(e.target.value)} />
+        </div>
+        <Girdi etiket="Açıklama" value={aciklama} maxLength={200} onChange={(e) => aciklamaYaz(e.target.value)} />
+        {kaydet.isError && <p role="alert">{hataMetni(kaydet.error)}</p>}
+      </div>
+    </Pencere>
+  );
+}
+
+function ArtikParcalar() {
+  const qc = useQueryClient();
+  const { bildir } = useBildirim();
+  const yazabilir = useIslem('stok.cikis');
+  const [pencere, pencereYaz] = useState(false);
+  const liste = useQuery({ queryKey: anahtarlar.liste('artik-parcalar', {}), queryFn: () => api.get<ArtikParcalarCevabi>('/stok/artik-parcalar') });
+  const kapat = useMutation({
+    mutationFn: ({ s, durum }: { s: ArtikParcaSatiri; durum: 'kullanildi' | 'hurda' }) => api.post<ArtikParcaCevabi>(`/stok/artik-parcalar/${s.id}/kapat`, { durum, surum: s.surum }),
+    onSuccess: (_c, d) => { void qc.invalidateQueries({ queryKey: anahtarlar.hepsi }); bildir('tamam', d.durum === 'hurda' ? 'Artık hurdaya ayrıldı.' : 'Artık kullanıldı.'); },
+    onError: (h) => bildir('hata', hataMetni(h)),
+  });
+  const sutunlar: Sutun<ArtikParcaSatiri>[] = [
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (s) => <Link to={`/stok/malzemeler/${s.malzemeNo}`}>{s.kod}</Link>, csv: (s) => s.kod },
+    { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (s) => s.ad ?? '—' },
+    { anahtar: 'olcu', baslik: 'Ölçü', hucre: (s) => olcuMetni(s.form, s.olcu) },
+    { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (s) => String(s.adet) },
+    { anahtar: 'konum', baslik: 'Konum', hucre: (s) => s.konumKod },
+    { anahtar: 'kaydeden', baslik: 'Kaydeden', kes: true, hucre: (s) => s.kaydeden ?? '—' },
+    ...(yazabilir ? [{
+      anahtar: 'eylem', baslik: 'İşlem', hucre: (s: ArtikParcaSatiri) => (
+        <span className="tc-stok-iki">
+          <Dugme simge="check" disabled={kapat.isPending} onClick={() => kapat.mutate({ s, durum: 'kullanildi' })}>Kullanıldı</Dugme>
+          <Dugme simge="trash" disabled={kapat.isPending} onClick={() => kapat.mutate({ s, durum: 'hurda' })}>Hurda</Dugme>
+        </span>
+      ), csv: () => '',
+    } satisfies Sutun<ArtikParcaSatiri>] : []),
+  ];
+  return (
+    <Kart baslik="Artık parçalar" simge="box" sag={yazabilir ? <Dugme tur="birincil" simge="plus" onClick={() => pencereYaz(true)}>Kalan parça kaydet</Dugme> : undefined}>
+      {liste.isPending ? <DurumKutusu durum="yukleniyor" />
+        : liste.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />
+          : <Tablo etiket="Artık parçalar" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(s) => s.id}
+              bosMesaj="Kayıtlı artık parça yok. Boy keserken kalan parçayı buradan kaydedin." />}
+      {yazabilir && <ArtikKaydiPenceresi acik={pencere} kapat={() => pencereYaz(false)} />}
+    </Kart>
+  );
+}
+
+export function StokKontrol() {
+  const [sekme, sekmeYaz] = useState<Sekme>('ara');
+  return (
+    <section className="tc-stok">
+      <SayfaBasi baslik="Stok kontrol" aciklama="İstenen ölçüye en yakın stoğu bulur: aynı form ve kalite, istenenden küçük olmayan ve seçtiğiniz fazla pay içindeki çubuk, levha ve artık parçalar, en az fireden başlayarak." />
+      <Sekmeler etiket="Stok kontrol" secili={sekme} sec={sekmeYaz}
+        sekmeler={[{ anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
+      {sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}
+    </section>
+  );
+}

@@ -90,3 +90,6 @@ export {
   baslangicBilgisi, baslangicEksenleriniKilitle, type HareketGorenSatir, hareketGorenSatirlar, baslangicSayilari,
 } from './sorgular/baslangic/sorgular.ts';
 
+export {
+  type KullanilabilirStokHam, kullanilabilirStoklar, type ArtikParcaHam, acikArtiklar, artikParcalar, artikParcaEkle, artikParcaKapat, artikParcaVarMi,
+} from './sorgular/kontrol/sorgular.ts';

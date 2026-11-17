@@ -27,6 +27,7 @@ import { SayimOnaylari } from './SayimOnaylari.tsx';
 import { DefterFarklari } from './DefterFarklari.tsx';
 import { SahipsizStatulu } from './SahipsizStatulu.tsx';
 import { Sepet } from './Sepet.tsx';
+import { StokKontrol } from './StokKontrol.tsx';
 import { SeriListeler } from './SeriListeler.tsx';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
 
@@ -66,6 +67,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/kimyasallar', ekran: eskiTurAdresi(MALZEME_SEKME_YOLLARI.kimyasallar) },
   { yol: '/stok/kesici-takimlar', ekran: eskiTurAdresi(MALZEME_SEKME_YOLLARI['kesici-takimlar']) },
   { yol: '/stok/aparatlar', ekran: eskiTurAdresi(MALZEME_SEKME_YOLLARI.aparatlar) },
+  { yol: '/stok/kontrol', ekran: StokKontrol },
   { yol: '/stok/hareketler', ekran: Hareketler },
   { yol: '/stok/refakat-kartlari', ekran: RefakatKartlari },
   { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },

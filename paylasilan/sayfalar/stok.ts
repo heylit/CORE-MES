@@ -30,6 +30,8 @@ export const STOK_IKINCI_MENU = {
       maddeler: [
         // Kimyasallar, kesici takımlar ve aparatlar (2099-6 a) Malzemeler'in sekmeleridir (2896); yolları bu maddenin altındadır.
         { anahtar: 'malzemeler', baslik: 'Malzemeler', yol: '/stok/malzemeler', simge: 'layers', islem: 'sayfa.stok' },
+        // 3398: ölçüyle stok ve artık parça arama; satın alma ve planlama da kullanır.
+        { anahtar: 'kontrol', baslik: 'Stok kontrol', yol: '/stok/kontrol', simge: 'search', islem: 'sayfa.stok', veya: ['satin-alma.yaz', 'plan.yaz'] },
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Belgeler', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
