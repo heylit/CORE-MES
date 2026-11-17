@@ -12,6 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
+import type { KopruIstemcisi } from './kopru.ts';
 import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, crmSorunu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
@@ -180,6 +181,8 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
   test('CRM-10 denetim (3391-2): yalnız sorunlu müşteri carileri döner (CRM yok, seçimsiz çok bağ, bağı kalkmış seçim); tedarikçi sorulmaz; kapalıda istek yok', async () => {
     await ayar(true);
     kopru.crmKodlari.set('ORN-C-1003', ['ORN-CRM-1', 'ORN-CRM-2']);
+    const pasif = await firma('musteri', 'ORN-C-PAS1');
+    await vt().sorgu('UPDATE musteri_tedarikci_firma SET aktif = false WHERE id = $1', [pasif]);
     try {
       const once = kopru.istekler.length;
       const c = await crmDenetimi(vt(), istemci());
@@ -190,6 +193,8 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
       assert.deepEqual(harita.get(f.ikisi) && { sorun: harita.get(f.ikisi)?.sorun, sayi: harita.get(f.ikisi)?.sayi }, { sorun: 'cok-bag', sayi: 2 });
       assert.equal(harita.has(f.tedarikci), false);
       assert.equal(kopru.istekler.slice(once).some((i) => i.yol.endsWith('/ORN-C-1004')), false, 'tedarikçiye sorulmaz');
+      assert.equal(kopru.istekler.slice(once).some((i) => i.yol.endsWith('/ORN-C-PAS1')), false, 'pasif müşteriye sorulmaz');
+      assert.equal(harita.has(pasif), false);
       assert.equal(kopru.istekler.slice(once).some((i) => i.yontem !== 'GET'), false);
       await vt().sorgu('UPDATE musteri_tedarikci_firma SET logo_crm_kodu = $2 WHERE id = $1', [f.ikisi, 'ORN-CRM-2']);
       assert.equal((await crmDenetimi(vt(), istemci())).satirlar.some((x) => x.firmaId === f.ikisi), false, 'seçim varsa çok bağ sorun değil');
@@ -222,6 +227,24 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
     assert.match(sure.neden ?? '', /Süre sınırı \(2 dk\) doldu/);
     assert.equal(sure.taranan, 1);
     assert.equal(sure.eksik, true);
+  });
+
+  test('CRM-12 denetim: yardımcıya ikinci caride ulaşılamazsa durur; okunanlar kalır, kalan carilere sorulmaz', async () => {
+    await ayar(true);
+    const sorulan: string[] = [];
+    const yarim = {
+      satisMusterisiVarMi: (cari: string) => {
+        sorulan.push(cari);
+        return Promise.resolve(sorulan.length === 1 ? { tur: 'basarili' as const, logicalRef: null } : { tur: 'ulasilamadi' as const, ileti: 'Köprüye ulaşılamadı (ECONNREFUSED).' });
+      },
+    } as unknown as KopruIstemcisi;
+    const c = await crmDenetimi(vt(), yarim);
+    assert.equal(c.durum, 'okunamadi');
+    assert.equal(c.neden, 'Köprüye ulaşılamadı (ECONNREFUSED).');
+    assert.equal(c.eksik, true);
+    assert.equal(c.taranan, 1);
+    assert.equal(c.satirlar.length, 1, 'ilk caride CRM yok satırı kalır');
+    assert.equal(sorulan.length, 2, 'üçüncü cariye sorulmaz');
   });
 
   test('CRM-3 bağlantı kapalı ya da yardımcı tanımsız: istek atılmaz, hepsi okunamadı ve neden yazar', async () => {

@@ -42,8 +42,10 @@ const CRM_DENETIMI: LogoCrmDenetimiCevabi = {
   satirlar: [
     { firmaId: 21, kod: 'ORN-F-21', ad: 'ORN Firma 21', cariKodu: 'ORN-C-21', sorun: 'crm-yok', sayi: null, secili: null },
     { firmaId: 22, kod: 'ORN-F-22', ad: 'ORN Firma 22', cariKodu: 'ORN-C-22', sorun: 'cok-bag', sayi: 3, secili: null },
+    { firmaId: 23, kod: 'ORN-F-23', ad: 'ORN Firma 23', cariKodu: 'ORN-C-23', sorun: 'secim-kalkti', sayi: 1, secili: 'ORN-CRM-9' },
   ],
 };
+let crmDenetimiCevabi: LogoCrmDenetimiCevabi = CRM_DENETIMI;
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: 'tamam', ileti: null, cariler: HEPSI }) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
@@ -54,7 +56,7 @@ function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: '
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, arama);
     if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 11, durum: 'var', neden: null, kodlar: null }] });
-    if (yol === '/logo/crm-denetimi') return json(200, CRM_DENETIMI);
+    if (yol === '/logo/crm-denetimi') return json(200, crmDenetimiCevabi);
     if (yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 20 });
     if (yontem === 'POST' && yol === '/musteri-tedarikci/logo-cari/toplu') {
       return json(200, {
@@ -82,7 +84,7 @@ async function ara(metin: string) {
   fireEvent.click(screen.getByRole('button', { name: "Logo'da ara" }));
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); crmDenetimiCevabi = CRM_DENETIMI; });
 
 describe('cari durumu ve toplu plan (3343)', () => {
   it('durum sırası: alınamaz, Logo kaydıyla bağlı, pasif, yeni, bağlanabilir, elle bakılmalı', () => {
@@ -179,10 +181,27 @@ describe('Logo geçişi cariler sekmesi (3343)', () => {
     fireEvent.click(dugme);
     const tablo = await screen.findByRole('table', { name: 'CRM bağı düzeltilecek müşteriler' });
     expect(istekler.filter((i) => i.yol === '/logo/crm-denetimi')).toHaveLength(1);
-    expect(screen.getByRole('status').textContent).toMatch(/3 cari denetlendi; 2 düzeltilecek/);
+    expect(screen.getByRole('status').textContent).toMatch(/3 cari denetlendi; 3 düzeltilecek\.$/);
     expect(within(tablo).getByText('CRM yok')).toBeTruthy();
     expect(within(tablo).getByText('CRM ×3')).toBeTruthy();
+    expect(within(tablo).getByText('Seçim geçersiz')).toBeTruthy();
+    expect(within(tablo).getByText(/Seçili kod Logo'da artık bağlı değil/)).toBeTruthy();
     expect(within(tablo).getByRole('button', { name: 'ORN Firma 22 firmasını aç' })).toBeTruthy();
+  });
+
+  it('3391-2: denetim yarıda kalırsa neden ve denetlenen sayısı uyarıda, okunanlar tabloda; sınırda kalanlar için not', async () => {
+    crmDenetimiCevabi = { ...CRM_DENETIMI, durum: 'okunamadi', neden: 'Köprüye ulaşılamadı.', taranan: 2, eksik: true, satirlar: CRM_DENETIMI.satirlar.slice(0, 1) };
+    sunucuKur(YAZAN);
+    ciz();
+    fireEvent.click(await screen.findByRole('button', { name: 'Denetle' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Köprüye ulaşılamadı. 2 cari denetlendi.');
+    expect(within(screen.getByRole('table', { name: 'CRM bağı düzeltilecek müşteriler' })).getByText('CRM yok')).toBeTruthy();
+    cleanup();
+    crmDenetimiCevabi = { ...CRM_DENETIMI, eksik: true };
+    sunucuKur(YAZAN);
+    ciz();
+    fireEvent.click(await screen.findByRole('button', { name: 'Denetle' }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/İlk 500 müşteri denetlendi; kalanlar için firmaları tek tek açın\.$/);
   });
 
   it('3391-2: yazamayana CRM bağı denetimi gösterilmez', async () => {
