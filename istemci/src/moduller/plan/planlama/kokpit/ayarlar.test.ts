@@ -32,6 +32,18 @@ describe('Kokpit ayarları (3282 1b)', () => {
     expect(farklar(c, t)).toEqual([]);
   });
 
+  it('aparat ve özel takım kısıtı panelden kapanır; çalışmanın kapalı listesine girer, malzeme kuralı stok ve termini anlatır', () => {
+    const c = ornekCalisma();
+    const t = kisitYaz(ayarTaslagi(c), 'aparat', false);
+    expect(farklar(c, t)).toEqual(['Aparat ve özel takım adedi: açık → kapalı']);
+    expect(ayarlariYaz(c, t)).toBe(true);
+    expect(c.kapali).toContain('aparat');
+    const m = alan('mat');
+    if (m.tur !== 'sec') throw new Error('tur');
+    expect(m.secenekler.find(([d]) => d === 'karma')?.[1]).toBe('Termin belliyse bekle');
+    expect(Object.keys(m.ipucuSecim ?? {}).sort()).toEqual(['karma', 'sert', 'uyari']);
+  });
+
   it('sayı girdisi sınır dışında ya da boşsa hata verir; virgüllü ondalık okunur', () => {
     const z = alan('tamponZ');
     if (z.tur !== 'sayi') throw new Error('tur');

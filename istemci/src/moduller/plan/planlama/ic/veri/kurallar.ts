@@ -118,6 +118,8 @@ export type Parametre =
 export interface Kisit { id: string; ad: string; durum: KisitDurumu; g?: true; not?: string; p?: Parametre[]; sayfa?: VeriBolumu }
 export interface KisitGrubu { grup: string; simge: SimgeAdi; l: Kisit[] }
 const sayiP = (yer: ParametreYeri, k: string, etiket: string, birim: string, min: number, max: number, adim: number): Parametre => ({ tur: 'sayi', yer, k, etiket, birim, min, max, adim });
+// Malzeme kuralının seçenekleri; Kokpit ayar paneli ve Kısıtlar sayfası aynı adları yazar.
+export const MALZEME_KURALLARI: readonly (readonly [string, string])[] = [['karma', 'Termin belliyse bekle'], ['uyari', 'Yalnız uyarı'], ['sert', 'Her zaman bekle']];
 export const KATALOG: readonly KisitGrubu[] = [
   { grup: 'Makine ve takvim', simge: 'cpu', l: [
     { id: 'tek', ad: 'Tezgâhta aynı anda tek iş', durum: 'tam', not: 'Fiziksel kısıt; kapatılamaz.' },
@@ -141,7 +143,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'verim', ad: 'Kişiye göre verim', durum: 'yok' },
   ] },
   { grup: 'Yardımcı kaynaklar', simge: 'tool', l: [
-    { id: 'aparat', ad: 'Bağlama aparatı ve fikstür adedi', durum: 'tam', g: true, sayfa: 'fason' },
+    { id: 'aparat', ad: 'Aparat ve özel takım adedi', durum: 'tam', g: true, not: 'Rotada adıma girilen aparat ya da özel takım, tanımlı adedinden fazla işe aynı anda verilmez. Kapatılırsa yalnız izlenir.', sayfa: 'fason' },
     { id: 'program', ad: 'NC programının hazır olması', durum: 'tam', g: true, not: 'Programı hazır olmayan adım program süresi dolmadan başlamaz.', p: [sayiP('ayarlar', 'programSaat', 'Program hazırlama', 'sa', 0, 72, 1)] },
     { id: 'fai', ad: 'İlk parça onayı', durum: 'tam', g: true, not: 'Ayardan sonra bir parça işlenir, onay süresi beklenir.', p: [sayiP('ayarlar', 'faiSaat', 'Onay süresi', 'sa', 0, 24, 0.5)] },
     { id: 'cmm', ad: 'CMM ve ölçüm kapasitesi', durum: 'yaklasik', not: 'Rotada ayrı adım ve tezgâh olarak tanımlanırsa tam uygulanır.' },
@@ -150,7 +152,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'kalibrasyon', ad: 'Ölçü aleti ve kalibrasyon', durum: 'yok' },
   ] },
   { grup: 'Malzeme, rota ve akış', simge: 'layers', l: [
-    { id: 'malzeme', ad: 'Malzeme hazır olması', durum: 'karar', g: true, not: 'Kullanıcı 16:50 (4 c): geliş tarihi belli olan malzeme (stok ya da söz tarihli satın alma) sert kısıttır, iş malzemeden önce başlamaz; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.', p: [{ tur: 'sec', yer: 'w', k: 'mat', etiket: 'Kural', secenekler: [['karma', 'Belliyse sert'], ['uyari', 'Yalnız uyarı'], ['sert', 'Her zaman sert']] }], sayfa: 'malzeme' },
+    { id: 'malzeme', ad: 'Malzeme hazır olması', durum: 'karar', g: true, not: 'Kullanıcı 16:50 (4 c): geliş tarihi belli olan malzeme (stok ya da söz tarihli satın alma) sert kısıttır, iş malzemeden önce başlamaz; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.', p: [{ tur: 'sec', yer: 'w', k: 'mat', etiket: 'Kural', secenekler: MALZEME_KURALLARI.map(([d, a]): [string, string] => [d, a]) }], sayfa: 'malzeme' },
     { id: 'serbest', ad: 'Serbest bırakma zamanı', durum: 'tam', g: true, sayfa: 'siparisler' },
     { id: 'rota', ad: 'Rota sırası (bitince başla)', durum: 'tam', not: 'Kapatılamaz.', sayfa: 'rotalar' },
     { id: 'ortusme', ad: 'Örtüşmeli geçiş ve son parti kuralı', durum: 'tam', not: 'Sonraki adım ilk transfer partisi gelince başlar; önceki bitmeden son partiyi bitiremez.', p: [sayiP('ayarlar', 'transferOran', 'Transfer partisi', 'oran', 0.05, 1, 0.05)] },
