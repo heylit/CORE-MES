@@ -395,7 +395,7 @@ test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plans�
     return json(r, { calismaSurumu: 1, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }], bitis: S + 4 });
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1783,7 +1783,7 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
     guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1825,7 +1825,7 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
     guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
   }));
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1908,7 +1908,7 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza 
   const t = await taslakSunucusu(page);
   t.s.ortak = { ...t.s.ortak, down: [{ m: 'M2', from: 30, to: 34, neden: 'bakım', oto: 1, bakim: 'ORN-b1' }] };
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1948,7 +1948,7 @@ test('Kokpit 3282 2a-1: üst şeritteki Duruş ve mesai; tahtada çubuk; arıza 
 test('Kokpit 3335-3a: tezgâh adından sorun bildir; Duruş ve mesai o tezgâhla açılır, arıza taslağa yazılır, etkisi görünür; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -1987,7 +1987,7 @@ test('Kokpit 3335-3a: tezgâh adından sorun bildir; Duruş ve mesai o tezgâhla
 test('Kokpit 3335-3b: operasyon satırından adıma sorun bildir; uzama taslağa yazılır, etkisi görünür, Uygula; satırda yazar; kaldırılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -2049,7 +2049,7 @@ test('Kokpit 3335-3b: operasyon satırından adıma sorun bildir; uzama taslağa
 test('Kokpit 3335-3c: adıma malzeme yok bildirilir; bekleme taslağa yazılır, etkisi görünür, Uygula; satırda yazar; kaldırılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
@@ -2105,7 +2105,7 @@ test('Kokpit 3282 2a-2: ek mesai operatörle taslağa yazılır, etkisi görün�
     return { ...x, D: { ...x.D, personel: [{ id: '7', ad: 'Deneme gündüz', vardiya: '1', gruplar: [], makineler: ['M2'] }, { id: '8', ad: 'Deneme gece', vardiya: '2', gruplar: [], makineler: ['M2'] }] } };
   });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
-  await ac('/plan');
+  await ac('/plan?duzen=klasik');
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
