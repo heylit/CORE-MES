@@ -56,11 +56,13 @@ export interface SiparisSuzgeci {
   kalip: string | null;
   durum: SiparisDurumu | null;
   firmaId: number | null;
+  // Deneme işaretli sipariş listede sayılmaz ve görünmez (3395 madde 2).
+  gizli: readonly number[];
 }
 
 const KOSUL = `WHERE ($1::text IS NULL OR s.no ILIKE $1 OR s.musteri_siparis_no ILIKE $1)
-                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3)`;
-const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId];
+                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3) AND NOT (s.id = ANY($4::int[]))`;
+const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId, [...s.gizli]];
 
 export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM siparisler_siparis s ${KOSUL}`, kosulParametreleri(s));
@@ -69,7 +71,7 @@ export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
 
 export function siparisSatirlari(db: Db, s: SiparisSuzgeci, siralama: SiralamaIstegi<SiparisSiralamasi>, dilim: Dilim): Promise<SiparisSatiri[]> {
   return db.sorgu<SiparisSatiri>(
-    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $4 OFFSET $5`,
+    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $5 OFFSET $6`,
     [...kosulParametreleri(s), dilim.sinir, dilim.atla],
   );
 }
@@ -815,14 +817,14 @@ export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Pro
 // kaçırılmış gelir (#paylasilan/kayit-aramasi.ts). LIKE ifade indeksine düşer (göç 134000).
 // Numarası ya da müşteri sipariş no'su tam tutan önce, sonra numarası sorguyla başlayan, sonra yeniden eskiye.
 export interface SiparisAramaSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; musteri_siparis_no: string | null }
-export function siparisAra(db: Db, sade: string, icinde: string, bas: string, sinir: number): Promise<SiparisAramaSatiri[]> {
+export function siparisAra(db: Db, sade: string, icinde: string, bas: string, sinir: number, gizli: readonly number[]): Promise<SiparisAramaSatiri[]> {
   return db.sorgu<SiparisAramaSatiri>(
     `SELECT s.id, s.no, s.durum, s.firma_id, s.musteri_siparis_no FROM siparisler_siparis s
-      WHERE public.arama_sade(s.no) LIKE $2 OR public.arama_sade(s.musteri_siparis_no) LIKE $2
+      WHERE (public.arama_sade(s.no) LIKE $2 OR public.arama_sade(s.musteri_siparis_no) LIKE $2) AND NOT (s.id = ANY($5::int[]))
       ORDER BY (public.arama_sade(s.no) = $1 OR public.arama_sade(s.musteri_siparis_no) = $1) IS TRUE DESC,
                (public.arama_sade(s.no) LIKE $3) DESC, s.id DESC
       LIMIT $4`,
-    [sade, icinde, bas, sinir],
+    [sade, icinde, bas, sinir, [...gizli]],
   );
 }
 

@@ -2,6 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { kayitAramaCevapSemasi, kayitAramaSorguSemasi } from '#paylasilan/ikinci-menu.ts';
 import { KAYIT_ARAMA_EN_COK_SONUC, type KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { denemeIsaretliKimlikler } from '../../ayarlar/disari.ts';
 import { istasyonKisiAtamalari } from '../../istasyonlar/disari.ts';
 import { gorunenDurum, kisininIstasyonu } from '../kurallar.ts';
 import { emirAra, istasyondaEmirAra, type EmirAramaSatiri } from './sorgular.ts';
@@ -27,13 +28,15 @@ export const aramaUclari = [
     sorgu: kayitAramaSorguSemasi,
     cevap: kayitAramaCevapSemasi,
     isle: async ({ db, sorgu, kullanici }) => {
+      // Deneme işaretli emir aramada çıkmaz (3395 madde 2).
+      const gizli = await denemeIsaretliKimlikler(db, 'uretim_emri');
       if (ADIMLI_OKUMA_ISLEMLERI.some((i) => kullanici.islemler.includes(i))) {
-        return { sonuclar: (await emirAra(db, sorgu.q, KAYIT_ARAMA_EN_COK_SONUC)).map((e) => sonuc(e, `/uretim-emirleri/${e.id}`)) };
+        return { sonuclar: (await emirAra(db, sorgu.q, KAYIT_ARAMA_EN_COK_SONUC, gizli)).map((e) => sonuc(e, `/uretim-emirleri/${e.id}`)) };
       }
       const istasyonId = kisininIstasyonu(await istasyonKisiAtamalari(db, { kisiId: kullanici.id }), kullanici.id);
       if (istasyonId === null) return { sonuclar: [] };
       return {
-        sonuclar: (await istasyondaEmirAra(db, sorgu.q, istasyonId, KAYIT_ARAMA_EN_COK_SONUC)).map((e) => sonuc(e, `/uretim-terminali?emir=${e.id}`)),
+        sonuclar: (await istasyondaEmirAra(db, sorgu.q, istasyonId, KAYIT_ARAMA_EN_COK_SONUC, gizli)).map((e) => sonuc(e, `/uretim-terminali?emir=${e.id}`)),
       };
     },
   }),

@@ -4,7 +4,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaAra, firmaOzeti, tedarikciOlabilirMi } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
@@ -31,7 +31,7 @@ import {
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
-import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
+import { kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur, olcuListesi, olcuMetni } from './kurallar.ts';
 import type { OlcuDegeri } from './kurallar.ts';
@@ -207,8 +207,10 @@ export async function malzemeAra(
   const sayfa = Math.max(1, Math.trunc(g.sayfa));
   const sayfaBoyu = Math.min(200, Math.max(1, Math.trunc(g.sayfaBoyu ?? ARAMA_SAYFA_BOYU)));
   const metin = g.metin?.trim() || null;
+  // Deneme işaretli kart seçicide ve aramada çıkmaz: gerçek kayıt deneme kartına bağlanmasın (3395 madde 2).
   const r = await s.katalogMalzemeAra(db, {
-    metin, turler: g.turler ?? [], yalnizAktif: g.yalnizAktif ?? false, hizmetYonu: g.hizmetYonu ?? null, sinir: sayfaBoyu, atla: (sayfa - 1) * sayfaBoyu,
+    metin, turler: g.turler ?? [], yalnizAktif: g.yalnizAktif ?? false, hizmetYonu: g.hizmetYonu ?? null,
+    gizli: await denemeIsaretliKimlikler(db, 'malzeme'), sinir: sayfaBoyu, atla: (sayfa - 1) * sayfaBoyu,
   });
   return { satirlar: r.satirlar, toplam: r.toplam, sayfa, sayfaBoyu };
 }
@@ -467,11 +469,14 @@ export async function malzemelerOzeti(db: Db, islemler: readonly string[]): Prom
 export async function katalogKartlariniGetir(
   db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; sonra?: string | undefined },
 ): Promise<KatalogKartlariCevabi> {
-  const sonra = sorgu.sonra ?? null;
   const an = await s.okumaAni(db);
+  const gizli = await denemeIsaretliKimlikler(db, 'malzeme');
+  // İşareti kalkan kart değişenlere girmez (güncelleme anı eski): son okumadan sonra işaret kalktıysa tam okunur.
+  const kalkma = sorgu.sonra === undefined ? null : await denemeIsaretiKalkmaAni(db, 'malzeme');
+  const sonra = sorgu.sonra === undefined || (kalkma !== null && kalkmaSonradirMi(kalkma, sorgu.sonra)) ? null : sorgu.sonra;
   const liste = await sayfaliListe(sorgu, {
-    say: () => s.katalogKartSayisi(db, sonra),
-    satirlar: (d) => s.katalogKartlari(db, sonra, d),
+    say: () => s.katalogKartSayisi(db, sonra, gizli),
+    satirlar: (d) => s.katalogKartlari(db, sonra, gizli, d),
     sayfaBoyu: { varsayilan: 200, azami: 500 },
   });
   return { ...liste, an };
@@ -1370,6 +1375,7 @@ export async function logoGecisiGeriAl(db: Db, kullanici: Kullanici, islem: stri
 // Aktif kartların sayfasız, sınırlı okuması (Reçete-Rota ve planlama bağlı durumu): stok kodu ve no sırasıyla en çok `sinir` kart;
 // sınırdan fazlası varsa `kesildi`. Sayfa sayfa okumak her sayfada kataloğu baştan sayardı; burada tek okuma ve tek sayım vardır.
 export async function aktifMalzemelerSinirli(db: Db, sinir: number): Promise<{ kartlar: KatalogMalzemeOzeti[]; kesildi: boolean }> {
-  const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, sinir: sinir + 1, atla: 0 });
+  // Seçici değil (bağlı durum okuması): tek okuma sözü (iki sorgu) korunur, işaretli kart süzülmez.
+  const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, gizli: [], sinir: sinir + 1, atla: 0 });
   return { kartlar: r.satirlar.slice(0, sinir), kesildi: r.satirlar.length > sinir };
 }

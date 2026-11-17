@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
+import { zamanMetni } from '#cekirdek/zaman.ts';
 
 export interface SaklananDeger {
   deger: unknown;
@@ -158,4 +159,15 @@ export async function denemeIsaretiniKaldirTarihle(db: Db, t: { turler: readonly
 export async function temizlikTarihSayisiniOku(db: Db, t: { turler: readonly string[]; bitis: string }): Promise<{ toplam: number; isaretli: number }> {
   const satir = await db.tek<{ toplam: string; isaretli: string }>('SELECT * FROM ayarlar_temizlik_tarih_sayisi($1::text[], $2::date)', [t.turler, t.bitis]);
   return { toplam: Number(satir?.toplam ?? 0), isaretli: Number(satir?.isaretli ?? 0) };
+}
+
+// Deneme işaretli kökler listelerden gizlenir (3395 madde 2); sahibi modül kimlikleri dışarı ithalle alır.
+export async function denemeIsaretliKimlikleriOku(db: Db, tur: string): Promise<number[]> {
+  const satirlar = await db.sorgu<{ kimlik: string }>('SELECT kimlik FROM ayarlar_deneme_isareti WHERE tur = $1', [tur]);
+  return satirlar.map((s) => Number(s.kimlik));
+}
+
+export async function denemeIsaretiKalkmaAniniOku(db: Db, tur: string): Promise<string | null> {
+  const satir = await db.tek<{ zaman: string }>(`SELECT ${zamanMetni('zaman')} AS zaman FROM ayarlar_deneme_isareti_kalkma WHERE tur = $1`, [tur]);
+  return satir?.zaman ?? null;
 }
