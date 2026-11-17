@@ -29,7 +29,7 @@ import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, rotayiEmreCevir, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
@@ -95,6 +95,9 @@ export interface IsEmriGirdisi {
   adetCarpani?: number | null;
   // 1476: çok katmanlı emirde adımın düğümü (rota cokKatmanaCevir); tek katmanlı emirde yok.
   dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
+  // Rota adımının gizli operasyon kimliği (3250-2): iş emrine yazılır; rota emre yeniden uygulanınca adım bununla eşlenir. Yoksa
+  // tetikleyici adımdan çözer.
+  operasyonId?: number | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -165,7 +168,7 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
     istasyonId: g.fasonFirmasiz === true ? null : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
-    talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null,
+    talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null, operasyonId: g.operasyonId ?? null,
   };
 }
 
@@ -412,17 +415,21 @@ export async function rotaBekleyenEmirAc(db: Db, kullanici: Kullanici, g: EmirBa
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
 // surum: çağıranın kararını verdiği emrin sürümü; satır kilidi alındıktan sonra denetlenir, arada değişen emir yenilenmez.
 export async function isEmirleriniYenile(
-  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum?: number },
+  db: Db, kullanici: Kullanici, uretimEmriId: number, girdi: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum?: number },
 ): Promise<{ degisenler: string[] }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.emir-ac', 'rota.emre-kopyala']);
   const e = await kilitliUstEmir(db, uretimEmriId);
-  surumDenetle(e, g.surum);
+  surumDenetle(e, girdi.surum);
   await cokKatmanliDegil(db, uretimEmriId, COK_KATMANLI_DEGISMEZ);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
-  girdiDenetle(g.isEmirleri);
+  girdiDenetle(girdi.isEmirleri);
   const tipler = await tipKimlikleri(db);
   const hepsi = await s.isEmirleriGetir(db, [uretimEmriId]);
+  // 3250 b: açık emir numarasını korur; rota adımları operasyon kimliğiyle emrin numarasına çevrilir (yeni adım emrin en büyüğü + 10).
+  const kimlikleri = new Map((await s.isEmriOperasyonlari(db, hepsi.map((i) => i.id))).map((x) => [x.isEmriId, x.operasyonId]));
+  const g = { ...girdi, isEmirleri: rotayiEmreCevir(
+    hepsi.filter((i) => i.tur === 'rota').map((i) => ({ opNo: i.opNo, operasyonId: kimlikleri.get(i.id) ?? null })), girdi.isEmirleri) };
   const bekleyenGkk = hepsi.filter((i) => otomatikGkkMi(i) && i.durum === 'bekliyor');
   const mevcut = hepsi.filter((i) => !bekleyenGkk.includes(i));
   // Kola konmuş rework, tamir ya da ek adım rotada yoktur; güvenli kip onu "rotada yok" diye silerdi. Böyle kol olduğu gibi kalır.

@@ -532,7 +532,7 @@ export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullab
     if (a.length > 0) sablonlar.set(x.operasyonTipiId, adimliKontrolListesi(a));
   }
   return rota.adimlar.map((a) => ({
-    sira: a.sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId,
+    sira: a.sira, opNo: a.opNo, operasyonId: a.operasyonId as number, ad: a.ad, operasyonTipiId: a.operasyonTipiId,
     ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, talimatSurumu: a.talimatSurumu,
     ...isEmriBagimliligi(a),
