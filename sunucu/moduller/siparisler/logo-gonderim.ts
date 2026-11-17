@@ -66,3 +66,7 @@ async function logoSonucuYaz(db: Db, tur: 'teklif' | 'siparis', id: number, sonu
 
 export const satisTeklifiLogoSonucu = (db: Db, id: number, sonuc: SiparislerLogoSonucu): Promise<void> => logoSonucuYaz(db, 'teklif', id, sonuc);
 export const satisSiparisiLogoSonucu = (db: Db, id: number, sonuc: SiparislerLogoSonucu): Promise<void> => logoSonucuYaz(db, 'siparis', id, sonuc);
+
+// Logo modülünün rozeti ve araması için: belge kimliğinden sıralara ya da sıradan belgeye.
+export const logoSiralari = (db: Db, tur: 'teklif' | 'siparis', belgeIdler: readonly number[]) => sorgular.logoSiraEslemesi(db, tur, 'belge', belgeIdler);
+export const logoSiraBelgeleri = (db: Db, tur: 'teklif' | 'siparis', siraIdler: readonly number[]) => sorgular.logoSiraEslemesi(db, tur, 'sira', siraIdler);

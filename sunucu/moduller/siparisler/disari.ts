@@ -38,7 +38,7 @@ export type { SatisTaslagiKilidi, TeklifDenemeCozucusu } from './teklif-deneme.t
 export type { MotorGirdisi as TeklifDenemeGirdisi, MotorSonucu as TeklifDenemeSonucu } from './kurallar.ts';
 // Logo satış işinin kaynağı (H10, soru 238): müşteriye verilen teklif sürümü ve onaylı, tekliften açılmış sipariş. Yetki denetlemez; çağıran Logo işidir.
 export {
-  logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
+  logoSiraBelgeleri, logoSiralari, logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
 } from './logo-gonderim.ts';
 export type { SiparislerLogoSiparisi, SiparislerLogoSonucu, SiparislerLogoTeklifi } from './logo-gonderim.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';

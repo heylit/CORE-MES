@@ -21,6 +21,7 @@ import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, St
 import * as s from './sorgular.ts';
 import { crmDurumu, crmSorguyuKeser, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
+import { logoSiralari } from '../siparisler/disari.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
 // Sürecin belleği: veritabanı geri alınsa da süreç içinde çift açmayı önler. Süreç yeniden başlayınca boştur;
@@ -1719,17 +1720,31 @@ export async function kontrol(kopru: KopruIstemcisi | null, saat: () => Date = (
 
 // 3344: liste ve ayrıntıdaki Logo rozeti. Logo'ya istek atılmaz; giden kutusu, süreç belleğindeki bekleme ve (malzemede) kartın kayıt
 // numarası okunur. Eskimiş bekleme sayılmaz (izlemeyle aynı süre).
+// 3374: satış teklifi ve siparişinin giden satırı Siparişler'in Logo sırası kimliğiyle tutulur (belge kimliğiyle değil); teklifte
+// her verilen sürüm ayrı sıradır (Logo'da ayrı teklif). Rozet izi olan en yeni sıranındır: yeni sürüm sıradayken eski sürümün Logo kaydı
+// belgeyi "Logo'da" göstermez.
+const SATIS_SIRA_TURU: Partial<Record<LogoRozetTuru, 'teklif' | 'siparis'>> = { teklif: 'teklif', 'satis-siparisi': 'siparis' };
 export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly number[], simdi: Date): Promise<LogoRozetCevabi> {
   const tekil = [...new Set(idler)];
   const belgeler = ROZET_BELGELERI[tur] as readonly BelgeTuru[];
+  const siraTuru = SATIS_SIRA_TURU[tur];
+  // Belge kimliği -> giden kutusundaki kimlikler (en yeni önce). Satış dışında ikisi aynıdır.
+  const kayitlar = new Map<number, number[]>(tekil.map((id) => [id, siraTuru === undefined ? [id] : []]));
+  if (siraTuru !== undefined) {
+    for (const e of await logoSiralari(db, siraTuru, tekil)) kayitlar.get(e.belgeId)?.unshift(e.siraId);
+  }
+  const nolar = [...new Set([...kayitlar.values()].flat())];
   const giden = new Map<number, GidenSatiri>();
-  for (const b of belgeler) for (const g of await s.gidenSatirlari(db, b, tekil)) if (!giden.has(g.belgeNo) || g.logoKayitNo !== null) giden.set(g.belgeNo, g);
+  for (const b of belgeler) for (const g of await s.gidenSatirlari(db, b, nolar)) if (!giden.has(g.belgeNo) || g.logoKayitNo !== null) giden.set(g.belgeNo, g);
   const bagli = tur === 'malzeme' ? await logoKayitNolari(db, tekil) : new Map<number, string>();
   const durumlar: LogoRozetCevabi['durumlar'] = [];
   for (const id of tekil) {
-    const v = belgeler.map((b) => kartBekleyenBelgeler.get(kartKaydiAnahtari(b, id))).find((x) => x !== undefined) ?? null;
+    const sira = kayitlar.get(id) ?? [];
+    const no = sira.find((n) => giden.has(n) || belgeler.some((b) => kartBekleyenBelgeler.has(kartKaydiAnahtari(b, n))));
+    const g = no === undefined ? null : giden.get(no) ?? null;
+    const v = no === undefined ? null : belgeler.map((b) => kartBekleyenBelgeler.get(kartKaydiAnahtari(b, no))).find((x) => x !== undefined) ?? null;
     const bekleyen = v !== null && bekleyenTaze(v.goruldu, simdi) ? v : null;
-    const d = belgeRozetDurumu(giden.get(id) ?? null, bekleyen, bagli.get(id) ?? null);
+    const d = belgeRozetDurumu(g, bekleyen, bagli.get(id) ?? null);
     if (d !== null) durumlar.push({ id, ...d });
   }
   return { durumlar };

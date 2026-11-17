@@ -924,3 +924,14 @@ export function teklifFormuToplamlari(db: Db, teklifId: number, surumNo: number,
     [teklifId, surumNo, kdvOrani],
   );
 }
+
+// Logo sırası (siparisler_logo_gonderim) ile belge kimliği arasında iki yönlü eşleme: Logo'nun giden kutusu sıra kimliğini tutar,
+// ekran teklif ya da sipariş kimliğini bilir. Teklifte her verilen sürüm ayrı sıradır.
+export function logoSiraEslemesi(db: Db, tur: 'teklif' | 'siparis', yon: 'belge' | 'sira', kimlikler: readonly number[]): Promise<{ siraId: number; belgeId: number }[]> {
+  const belge = tur === 'teklif' ? 'teklif_id' : 'siparis_id';
+  return db.sorgu<{ siraId: number; belgeId: number }>(
+    `SELECT id AS "siraId", ${belge} AS "belgeId" FROM siparisler_logo_gonderim
+      WHERE tur = $1 AND ${yon === 'belge' ? belge : 'id'} = ANY($2::int[]) ORDER BY id`,
+    [tur, kimlikler],
+  );
+}
