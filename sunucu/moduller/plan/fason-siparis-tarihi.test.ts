@@ -10,7 +10,7 @@ import { durumVeEmirler } from '../recete-rota/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { gelisleriBirlestir } from './planlama-kurallar.ts';
-import { planlanacakIsler } from './servis.ts';
+import { okumaBellegiyle, planlanacakIsler } from './servis.ts';
 
 describe('plan satın alma gelişleri (3256-2, 3257 a)', () => {
   test('açık sipariş ve onaylı talep gelişleri malzeme başına birleşir, önce siparişler', () => {
@@ -51,6 +51,11 @@ describe('plan fason siparişi teslim tarihi uçtan uca (3257 a, gerçek Postgre
     const ac = () => ortam!.vt.tx((db) => uretimEmriAc(db, yonetici, { projeId: proje, malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [adim(1, true), adim(2, false)] }));
     const siparisli = await ac();
     const siparissiz = await ac();
+    // 3382: firması ve termini girilmemiş fason adım motor ayarının fason süresi kadar bekletir (verilmezse 7 gün).
+    const firmasiz = await ortam.vt.tx((db) => uretimEmriAc(db, yonetici, {
+      projeId: proje, malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev,
+      isEmirleri: [{ ...adim(1, true), kaynak: null, fasonFirmasiz: true, terminGun: null }, adim(2, false)],
+    }));
 
     const [t, kl, tk] = [randomUUID(), randomUUID(), randomUUID()];
     await s.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, 82001, 'Deneme fason talebi', $2, $2, 'siparis_verildi')", [t, yoneticiId]);
@@ -70,6 +75,16 @@ describe('plan fason siparişi teslim tarihi uçtan uca (3257 a, gerçek Postgre
     assert.equal(bekleme(siparissiz.isEmriIdleri[1]), 4, 'siparişsiz adım termin gününü bekler');
     const tahminsiz = await ortam.vt.okumaTx((db) => planlanacakIsler(db, { taslakDahil: true }));
     assert.equal(tahminsiz.find((i) => i.id === siparisli.isEmriIdleri[1])?.fasonBekleGun, 4, 'yalnız planın kendi okuması sipariş tarihini sorar');
+    assert.equal(bekleme(firmasiz.isEmriIdleri[1]), 7, 'motor ayarı verilmezse firmasız fason 7 gün');
+    const ayarli = await ortam.vt.okumaTx((db) => planlanacakIsler(db, { taslakDahil: true, fasonTahmini: true, fasonGun: 5 }));
+    assert.equal(ayarli.find((i) => i.id === firmasiz.isEmriIdleri[1])?.fasonBekleGun, 5, 'motor ayarının fason süresi');
+    assert.equal(ayarli.find((i) => i.id === siparissiz.isEmriIdleri[1])?.fasonBekleGun, 4, 'termin günü ayarın önündedir');
+    // Aynı istekte farklı fason süreli iki okuma belleği paylaşır; her biri kendi süresini alır.
+    const [uc, bes] = await ortam.vt.okumaTx((db) => okumaBellegiyle(db, async () => [
+      await planlanacakIsler(db, { taslakDahil: true, fasonTahmini: true, fasonGun: 3 }),
+      await planlanacakIsler(db, { taslakDahil: true, fasonTahmini: true, fasonGun: 5 }),
+    ]));
+    assert.deepEqual([uc, bes].map((l) => l!.find((i) => i.id === firmasiz.isEmriIdleri[1])?.fasonBekleGun), [3, 5], 'okuma belleği fason süresine göre ayrılır');
     // 3330 a: aynı tarih Reçete ve Rota'nın emir okumasında adımın yerindedir (Kokpit'in çalışma planını kuran motor oradan alır); sipariş
     // numarası Satın Alma'yı görebilene gider.
     const { durum } = await ortam.vt.okumaTx((db) => durumVeEmirler(db, yonetici));

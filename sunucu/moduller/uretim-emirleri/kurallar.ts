@@ -1142,7 +1142,8 @@ export function rotadanAdimAdetleri(adet: number, adimlar: readonly { opNo: numb
 export const FASON_VARSAYILAN_GUN = 7;
 const GUN_MS = 24 * 60 * 60_000;
 
-// Öncül zincirinde geriye, ilk iç adıma kadar bitmemiş fason adımların süresi: termin, yoksa tahmin, yoksa FASON_VARSAYILAN_GUN. Gönderilmiş
+// Öncül zincirinde geriye, ilk iç adıma kadar bitmemiş fason adımların süresi: termin, yoksa tahmin, yoksa varsayilanGun (planın motor
+// ayarındaki fason süresi, 3355 a; verilmezse FASON_VARSAYILAN_GUN). Gönderilmiş
 // (başlamış) fason adımda termin ilk gidişten sayılır: geçen gün düşülür, termini geçmiş adım beklemez (0). simdi verilmezse düşülmez.
 // Zincir adetOnculleri'ndendir (B-2): dallı rotada paralel dalın fasonu bu adımı bekletmez; birleşme adımı öncül dallarından en uzun
 // bekleyeni bekler. Listesi olmayan eski emirde zincir sıradır.
@@ -1155,6 +1156,7 @@ export function fasonBeklemesi(
   }[], sira: number,
   tahmin: (x: { sira: number; fasonFirmaId: number }) => number | null = () => null, simdi?: number,
   siparisGelisi: (x: { id?: number; sira: number }) => number | null = () => null,
+  varsayilanGun: number = FASON_VARSAYILAN_GUN,
 ): number {
   type Adim = (typeof emrinIsEmirleri)[number];
   const bekleme = (a: Pick<Adim, 'sira' | 'onculler'>): number => Math.max(0, ...adetOnculleri(emrinIsEmirleri, a).map((x) => {
@@ -1164,7 +1166,7 @@ export function fasonBeklemesi(
     if (x.durum === 'tamam') return bekleme(x);
     const gelis = simdi === undefined ? null : siparisGelisi(x);
     if (gelis !== null) return Math.max(0, (gelis - simdi!) / GUN_MS) + bekleme(x);
-    const sure = x.terminGun ?? (x.fasonFirmaId === null ? null : tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId })) ?? FASON_VARSAYILAN_GUN;
+    const sure = x.terminGun ?? (x.fasonFirmaId === null ? null : tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId })) ?? varsayilanGun;
     const gecen = simdi !== undefined && x.baslama ? Math.max(0, (simdi - Date.parse(x.baslama)) / GUN_MS) : 0;
     return Math.max(0, sure - gecen) + bekleme(x);
   }));

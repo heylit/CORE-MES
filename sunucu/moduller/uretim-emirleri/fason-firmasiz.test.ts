@@ -55,6 +55,9 @@ describe('2874 firmasız fason kuralı (saf)', () => {
     ];
     assert.equal(fasonBeklemesi(adimlar, 2, () => 99), FASON_VARSAYILAN_GUN, 'firması yokken tahmin sorulmaz');
     assert.equal(fasonBeklemesi([{ ...adimlar[0]!, terminGun: 3 }, adimlar[1]!], 2), 3);
+    // 3382: planın motor ayarındaki fason süresi varsayılanın yerine geçer; termin günü yine önce gelir.
+    assert.equal(fasonBeklemesi(adimlar, 2, () => 99, undefined, () => null, 5), 5);
+    assert.equal(fasonBeklemesi([{ ...adimlar[0]!, terminGun: 3 }, adimlar[1]!], 2, () => null, undefined, () => null, 5), 3);
     assert.equal(siradakiFasonAdimi(adimlar)?.id, 1);
     const calisan = adimlar.map((a) => ({ ...a, durum: 'calisiyor' as const }));
     assert.equal((varsayilanAdim(calisan) as { id: number } | null)?.id, 2, 'firmasız fason açık adım sayılmaz');
