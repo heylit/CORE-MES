@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
@@ -8,7 +10,7 @@ import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
   depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, stokYukleri, depoYukleri, gozMiktarMetni, STOKLU_GOZ_DOLULUGU, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
-  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, sahneModelTurleri,
+  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, hazirMakineModeli, sahneModelTurleri,
 } from './kurallar.ts';
 
 const emir = (istasyonId: number, calisma: 'calisiyor' | 'durakli' | 'durdu' | null, saglam = 0): Emir => ({
@@ -380,6 +382,23 @@ describe('haritaya eklenebilen makineler', () => {
     expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 }, true)).toBe('Stok: 2 yer henüz stok konumu değil. Stok > Ayarlar\'da "Haritadan eşle" ile güncelleyin.');
     expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 }, false)).toBe('Stok: 2 yer henüz stok konumu değil. Stok yetkilisi Stok > Ayarlar\'dan eşlemeli.');
     expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 1 }, true)).toContain('1 stoklu konumun haritada yeri kalmadı');
+  });
+});
+
+describe('katalog modelinin hazır 3B gövdesi (3378-2 b)', () => {
+  it('katalogdaki sekiz modelin dosyası model türüyle adlanır ve depoda vardır', () => {
+    const turler = ['m_dmgdmu50', 'm_dmgdmu60', 'm_dmgdmu75', 'm_dmgdmu95', 'm_dmgnhc5000', 'm_dmgntx3000', 'm_dmgnlx2500', 'm_dmgdmf360'];
+    const adlar = turler.map((t) => hazirMakineModeli('talasli', t));
+    expect(adlar).toEqual(turler);
+    for (const ad of adlar) expect(existsSync(join(import.meta.dirname, `../../../public/makine-modelleri/${String(ad)}.glb`))).toBe(true);
+  });
+
+  it('model yoksa, hazır gövdesi yoksa ya da istasyon talaşlı veya kalite değilse null', () => {
+    expect(hazirMakineModeli('talasli', null)).toBeNull();
+    expect(hazirMakineModeli('talasli', 'm_dmgdmu65')).toBeNull();
+    expect(hazirMakineModeli('talasli', 'toString')).toBeNull();
+    expect(hazirMakineModeli('montaj', 'm_dmgdmu50')).toBeNull();
+    expect(hazirMakineModeli('kalite', 'm_dmgdmu50')).toBe('m_dmgdmu50');
   });
 });
 

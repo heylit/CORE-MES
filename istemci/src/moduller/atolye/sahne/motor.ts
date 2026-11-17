@@ -15,7 +15,7 @@ import { duzMu, gozKodu } from '../raf-kodlama.ts';
 import type { Nokta2 } from '../fabrika.ts';
 import { DIS, GECIS_TURU_ADI, acikliklar, bolumYolu, disYolu, distaSerbestMi, gecisOrtasi, kapiKusagindaMi, kapilar } from '../gecis.ts';
 import type { Aciklik, GecisliBolum, Kapi } from '../gecis.ts';
-import { govdeGorunumu, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
+import { govdeGorunumu, hazirMakineModeli, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from '../kurallar.ts';
 import { modelDizisi, modelSahnesi, modelYerlestir, parcaOnizlemesi, vekilMi } from './model.ts';
 import type { ModelDizisi, ModelYerlesimi } from './model.ts';
@@ -882,6 +882,8 @@ export class SahneMotoru {
       const kaynaklar: ModelKaynagi[] = [];
       if (yer.merkezModeli && yer.merkezSahibi !== null) kaynaklar.push(this.merkezKaynagi(yer.merkezSahibi, yer.merkezModeli));
       if (yer.model) kaynaklar.push(this.kutuphaneKaynagi(yer.model));
+      const hazir = hazirMakineModeli(yer.tip, modelTurleri.get(yer.anahtar));
+      if (hazir) kaynaklar.push(this.hazirKaynak(hazir));
       this.modelKoy(anahtar, kaynaklar, kurulum, modelSahneleri);
     }
 
@@ -1030,6 +1032,19 @@ export class SahneMotoru {
     };
   }
 
+  // Depoyla gelen katalog gövdesi: istemcinin kendi sunduğu dosya, dış istek değil.
+  private hazirKaynak(ad: string): ModelKaynagi {
+    return {
+      anahtar: `hazir:${ad}`, ad,
+      getir: async () => {
+        const c = await fetch(`${import.meta.env.BASE_URL}makine-modelleri/${ad}.glb`);
+        if (!c.ok) throw new Error(`hazir model ${c.status}`);
+        return new Uint8Array(await c.arrayBuffer());
+      },
+      yerlesim: { birim: 'm', yukari: 'y', donus: 0, sigdir: true },
+    };
+  }
+
   // Merkez modelinin ayarı yoktur: birim ve yukarı eksen dosya türünden, model ayak izine sığdırılır.
   private merkezKaynagi(istasyonId: number, m: MerkezModeli): ModelKaynagi {
     return {
@@ -1038,7 +1053,7 @@ export class SahneMotoru {
     };
   }
 
-  // Kaynaklar sırayla denenir (kart #921: Çizim Merkezi, sonra kütüphane); hiçbiri açılmazsa tipten çizilen gövde kalır.
+  // Kaynaklar sırayla denenir (kart #921: Çizim Merkezi, sonra kütüphane, sonra katalog gövdesi); hiçbiri açılmazsa tipten çizilen gövde kalır.
   private modelKoy(anahtar: string, kaynaklar: readonly ModelKaynagi[], kurulum: number, sahneler: Map<string, Promise<Object3D>>): void {
     const [model, ...kalan] = kaynaklar;
     if (!model) return;
