@@ -1162,6 +1162,10 @@ export async function bugun(db: Db): Promise<string> {
   return satir.bugun;
 }
 
+export async function teklifVarMi(db: Db, talepId: string, teklifId: string): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM satin_alma_teklif WHERE talep_id = $1 AND id = $2) AS var', [talepId, teklifId]))?.var ?? false;
+}
+
 export async function siparisSatiriVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri WHERE id = $1) AS var', [id]))?.var ?? false;
 }

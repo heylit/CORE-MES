@@ -27,6 +27,7 @@ import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
+import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import "../../../ortak/arayuz/pencere.css";
@@ -194,9 +195,18 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
       <label class="chk" data-sa-y="29"><input type="checkbox" id="q-comp" ${draftQ.compliant !== false ? "checked" : ""}> Teknik şartlara uygun</label>
       <label class="f span2"><span>Not</span><input type="text" id="q-note" value="${esc(draftQ.note || "")}" placeholder="Muadil marka, stok durumu, opsiyon"></label>
     </div>
+    ${q ? `<div class="pt-ek-liste" id="q-ekler" hidden></div>` : ""}
   </div>
   <div class="mf"><div class="live" id="q-live"></div><span class="spacer"></span><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="save-quote">${q ? "Değişiklikleri kaydet" : "Teklifi kaydet"}</button></div>`);
   readQuoteForm(); updateQuoteLive();
+  if (q) void teklifEkleriniGoster(r.id, q.id);
+}
+/** 3404: teklifin PDF ekleri; uç yalnız fiyat görebilene açılır, açamayan için liste boş kalır. */
+async function teklifEkleriniGoster(talepId: string, teklifId: string): Promise<void> {
+  const l = await backend.teklifEkleri(talepId, teklifId);
+  const kutu = $<HTMLElement>("#q-ekler"); if (!kutu || !l || !l.length || draftQ.id !== teklifId) return;
+  kutu.innerHTML = `<span class="small muted">Teklif PDF'i</span>${l.map(e => `<a href="/api/satin-alma-talepleri/${encodeURIComponent(talepId)}/teklifler/${encodeURIComponent(teklifId)}/ekler/${encodeURIComponent(e.ozet)}/dosya" download="${esc(e.ad)}">${PDF_SIMGESI}${esc(e.ad)} <span class="muted small">${esc(fmtDate(e.zaman.slice(0, 10)))}</span></a>`).join("")}`;
+  kutu.hidden = false;
 }
 const EKSI_OLAMAZ = ["q-fx", "q-disc", "q-pay", "q-adv", "q-lead", "q-war", "q-ship", "q-other"];
 // TMI A5: sunucu eksi değeri 400 ile reddeder ve ekran sunucudaki hâle döner (tasiyici `hata`), girilen her şey kaybolurdu;
@@ -522,6 +532,8 @@ interface BulkCol {
   discountPct: number; payDays: number; advancePct: number; leadDays: number | null; warrantyMonths: number | null; deliveryTerm: string;
   deliveryIncluded: boolean; shipping: number; otherCost: number; compliant: boolean; note: string; prices: Record<string, number>;
   tiers?: Record<string, PriceTier[]>; minQty?: Record<string, number | null>;
+  /** 3404: PDF tekliften okunduysa PDF; kayıtta teklifin eki olur. */
+  pdf?: { ozet: string; ad: string };
 }
 type BulkKind = "cur" | "num" | "int" | "text" | "bool" | "date";
 /** inline: talep sayfasındaki teklif tablosu (açılır pencere değil) */
@@ -548,9 +560,25 @@ export function inlineBulkHTML(r: PurchaseRequest): string {
   if (!BULK || BULK.rid !== r.id || !BULK.inline || !BULK.dirty) BULK = { rid: r.id, cols: bulkCols(r), dirty: false, inline: true };
   else BULK.cols = BULK.cols.filter(c => !c.qid || (r.quotes || []).some(q => q.id === c.qid)); // bu arada silinen teklif sütunları düşer
   const n = (r.quotes || []).length;
-  return `<section class="panel"><div class="panel-h"><h2>Teklif tablosu</h2><span class="sub">${n ? `${n} kayıtlı teklif` : "Fiyatları girin ya da Excel'den yapıştırın"}</span><span class="spacer"></span><button class="btn sm" data-act="bulk-add">Tedarikçi ekle</button></div>
+  return `<section class="panel"><div class="panel-h"><h2>Teklif tablosu</h2><span class="sub">${n ? `${n} kayıtlı teklif` : "Fiyatları girin ya da Excel'den yapıştırın"}</span><span class="spacer"></span>${canWrite() ? `<button class="btn sm" data-act="pdf-oku">${PDF_SIMGESI}PDF'ten oku</button>` : ""}<button class="btn sm" data-act="bulk-add">Tedarikçi ekle</button></div>
     <div class="panel-b" id="bulk" data-inline="1">${bulkGrid(r)}</div>
     <div class="bulk-bar" id="bulk-bar" ${BULK.dirty ? "" : "hidden"}><span id="bulk-st" class="small"></span><span class="spacer"></span><button class="btn ghost" data-act="bulk-close">Vazgeç</button><button class="btn primary" data-act="bulk-save">Teklifleri kaydet</button></div></section>`;
+}
+const PDF_SIMGESI = `<svg class="tc-simge tc-simge-o" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>`;
+/** 3404: PDF'ten okunan teklif toplu tabloya taslak yazılır: aynı tedarikçinin sütunu, yoksa boş sütun, yoksa yeni sütun. Kayıt "Teklifleri kaydet"tir. */
+export function bulkPdfAktar(a: PdfAktarimi): void {
+  if (!BULK) return;
+  const bos = (c: BulkCol) => !c.qid && !c.supplierId && !Object.keys(c.prices).length;
+  let c = BULK.cols.find(x => x.supplierId === a.supplierId) ?? BULK.cols.find(bos);
+  if (!c) { c = bulkBlank(""); BULK.cols.push(c); }
+  Object.assign(c, {
+    supplierId: a.supplierId, currency: a.currency, discountPct: a.discountPct, payDays: a.payDays, shipping: a.shipping, deliveryIncluded: a.deliveryIncluded,
+    leadDays: a.leadDays, prices: { ...a.prices }, note: a.note, pdf: a.pdf,
+    ...(a.date ? { date: a.date } : {}), ...(a.validUntil ? { validUntil: a.validUntil } : {}),
+  });
+  BULK.dirty = true;
+  if ($("#bulk")) bulkCiz();
+  toast(`${Object.keys(a.prices).length} fiyat teklif tablosuna yazıldı; kontrol edip "Teklifleri kaydet"e basın.`);
 }
 function bulkModal(r: PurchaseRequest): void {
   BULK = { rid: r.id, cols: bulkCols(r), dirty: false };
@@ -714,6 +742,7 @@ function bulkSave(): void {
   const dup = ids.find((v, i) => ids.indexOf(v) !== i);
   if (dup) { toast("Aynı tedarikçi iki sütunda seçilmiş; birini değiştirin."); return; }
   const n = clone(r); let added = 0, updated = 0;
+  const pdfEkleri: { qid: string; pdf: { ozet: string; ad: string } }[] = [];
   for (const { c } of used) {
     let supId = c.supplierId;
     if (supId === "__new") {
@@ -730,6 +759,7 @@ function bulkSave(): void {
       warrantyMonths: c.warrantyMonths, compliant: c.compliant !== false, note: c.note || "",
       ...(c.tiers ? { tiers: basamakTemiz(c.tiers) } : {})
     };
+    if (c.pdf) pdfEkleri.push({ qid: q.id, pdf: c.pdf });
     const total = quoteCalc(n, q, set).total;
     const i = n.quotes.findIndex(x => x.id === q.id);
     if (i < 0) { q.firstTotal = total; q.createdAt = Date.now(); n.quotes.push(q); added++; }
@@ -745,6 +775,8 @@ function bulkSave(): void {
   if (n.status === "draft") n.status = "rfq";
   if (n.status === "rfq" && n.quotes.length >= set.minQuotes) n.status = "eval";
   saveRequest(n, `Toplu teklif girişi: ${added} yeni${updated ? `, ${updated} güncellendi` : ""}`);
+  // Teklif sunucuya yazıldıktan sonra PDF ona bağlanır (tasıyıcı yazımı bekler).
+  for (const x of pdfEkleri) void backend.teklifEkiBagla(n.id, x.qid, uid(), { ozet: x.pdf.ozet, dosyaAdi: x.pdf.ad }).then(l => { if (l) toast("PDF teklife eklendi"); });
   if (BULK?.inline) BULK = null; else closeModal();
   V.tab = n.quotes.length >= 2 ? "compare" : "quotes"; render();
   toast(`${added} yeni teklif eklendi${updated ? `, ${updated} teklif güncellendi` : ""}.`);
@@ -1274,6 +1306,15 @@ const ACTIONS: Record<string, Action> = {
     if (!OPEN.includes(r.status)) { bulkModal(r); return; }
     V.tab = "quotes"; render();
     requestAnimationFrame(() => { const sec = $<HTMLElement>('[data-sec="quotes"]'); sec?.scrollIntoView({ block: "start", behavior: "smooth" }); const first = $<HTMLElement>("#bulk .bp"); first?.focus({ preventScroll: true }); });
+  },
+  "pdf-oku": (_el, r) => {
+    if (!r || !canWrite() || !BULK) return;
+    bulkRead();
+    pdfOkuAc({
+      r, firmalar: Object.values(S.suppliers).map(s => ({ id: s.id, ad: s.name, vergiNo: s.taxNo || "" })),
+      openModal: html => openModal(html, "wide", true), closeModal, toast,
+      dosyaYukle: veri => dosyaYukle(veri, () => {}), aktar: bulkPdfAktar,
+    });
   },
   "bulk-add": () => { bulkRead(); BULK!.cols.push(bulkBlank("")); bulkRerender(); const sel = $$("#bulk [data-bf=supplierId]"); sel[sel.length - 1]?.focus(); },
   "bulk-add-tier": el => {

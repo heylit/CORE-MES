@@ -253,7 +253,7 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
    yazılmaz. Sürümlü kayıtta en yeni hâl gider. Sunucunun reddettiği (4xx) değişiklik bugünkü gibi bırakılır, ekran yenilenir. */
 type Veri = Entity | Settings | null;
 interface Belirsiz { d: Veri; kimlik: string }
-interface Bekleyen { mesgul: boolean; sonraki: Veri | undefined; belirsiz: Belirsiz | null }
+interface Bekleyen { mesgul: boolean; sonraki: Veri | undefined; belirsiz: Belirsiz | null; bitince?: (() => void)[] }
 const Q = new Map<string, Bekleyen>();
 export const YENIDEN_DENEME_MS = [2_000, 5_000, 15_000, 30_000] as const;
 
@@ -293,6 +293,15 @@ async function kuyruk(coll: Coll | 'settings', id: string, w: Bekleyen): Promise
     }
   }
   w.mesgul = false;
+  const l = w.bitince ?? []; w.bitince = [];
+  for (const f of l) f();
+}
+
+// 3404: teklifin eki teklif sunucuya yazıldıktan sonra bağlanır; kuyruk boşalınca çözülür.
+function yazimBitti(coll: Coll, id: string): Promise<void> {
+  const w = Q.get(`${coll}:${id}`);
+  if (!w || !w.mesgul) return Promise.resolve();
+  return new Promise((coz) => { (w.bitince ??= []).push(coz); });
 }
 
 const bekleyenVarMi = (): boolean => [...Q.values()].some((w) => w.belirsiz !== null);
@@ -522,6 +531,23 @@ const backend: Backend = {
   async siparisBelgesiEkle(satirId, kimlik, govde) {
     try {
       return (await korumali((deneme) => uc.post('/satin-alma-siparis-satirlari/:id/belge-ekle', { ...deneme, parametre: { id: satirId }, govde }), kimlik)).belgeler;
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
+  async teklifEkleri(talepId, teklifId) {
+    try {
+      return (await uc.get('/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', { parametre: { id: talepId, teklifId }, ...sure })).ekler;
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
+  async teklifEkiBagla(talepId, teklifId, kimlik, govde) {
+    await yazimBitti('requests', talepId);
+    try {
+      return (await korumali((deneme) => uc.post('/satin-alma-talepleri/:id/teklifler/:teklifId/ek-bagla', { ...deneme, parametre: { id: talepId, teklifId }, govde }), kimlik)).ekler;
     } catch (h) {
       await hata(h);
       return null;
