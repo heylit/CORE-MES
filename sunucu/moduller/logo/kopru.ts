@@ -1,5 +1,5 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import { agHatasiniYorumla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
 import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, IrsaliyeSayfasi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
@@ -328,7 +328,12 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
       if (!('tur' in c) && c.durum === 404) return { tur: 'basarili', logicalRef: null };
       return yorumla(c);
     },
-    satisMusterisiVarMi: (kod) => bul(`/api/SalesOffer/customer/${encodeURIComponent(kod)}`),
+    async satisMusterisiVarMi(kod) {
+      const c = await istek('GET', `/api/SalesOffer/customer/${encodeURIComponent(kod)}`);
+      if (!('tur' in c) && c.durum === 404) return { tur: 'basarili', logicalRef: null };
+      const r = yorumla(c);
+      return r.tur === 'basarili' && !('tur' in c) ? { ...r, crmKodlari: crmKodlariniAyikla(c.govde) } : r;
+    },
     async satisTeklifiEkle(govde) {
       return satirli(await istek('POST', '/api/SalesOffer/AddRich', govde));
     },

@@ -338,6 +338,9 @@ export const logoCrmCevabi = z.object({
     firmaId: z.number().int().positive(),
     durum: z.enum(LOGO_CRM_DURUMLARI),
     neden: z.string().nullable(),
+    // 3391 a: cariye bağlı CRM satış müşterisi kodları (ilki tekliflerde kullanılır, en çok 20) ve bütün bağların sayısı; yalnız "var"
+    // iken, eski yardımcıda null.
+    kodlar: z.object({ kodlar: z.array(z.string()), sayi: z.number().int().nonnegative() }).nullable(),
   })),
 });
 export type LogoCrmCevabi = z.output<typeof logoCrmCevabi>;

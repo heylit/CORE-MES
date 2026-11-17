@@ -5,13 +5,14 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { logoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { LogoCariHazirlikCevabi, LogoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
-import { crmDurumu, crmSorguyuKeser, crmSorulurMu } from './kurallar.ts';
+import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { cariCrmDurumlari, cariHazirligi } from './servis.ts';
@@ -33,6 +34,25 @@ describe('CRM durumu kuralı (3359)', () => {
     assert.equal(crmSorulurMu({ tur: 'tedarikci', logoCariKodu: 'ORN-C-1' }), false);
     assert.equal(crmSorulurMu({ tur: 'musteri', logoCariKodu: '  ' }), false);
     assert.equal(crmSorulurMu({ tur: 'musteri', logoCariKodu: null }), false);
+  });
+
+  test('CRM-7 kod listesi (3391): sıra korunur, boş ve metin olmayan atılır, en çok 20 kod ve bütün bağların sayısı; eski yardımcıda null', () => {
+    assert.equal(crmKodlariniAyikla({ success: true, logicalRef: 88 }), null);
+    assert.equal(crmKodlariniAyikla(null), null);
+    assert.deepEqual(crmKodlariniAyikla({ customers: [' ORN-CRM-2 ', 'ORN-CRM-1', '', 7, null] }), { kodlar: ['ORN-CRM-2', 'ORN-CRM-1'], sayi: 2 });
+    const yirmiBir = Array.from({ length: 21 }, (_, i) => `ORN-CRM-${String(i + 1)}`);
+    const kesik = crmKodlariniAyikla({ customers: yirmiBir });
+    assert.equal(kesik?.kodlar.length, 20);
+    assert.equal(kesik?.kodlar[0], 'ORN-CRM-1');
+    assert.equal(kesik?.sayi, 21);
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 34 }), { kodlar: ['ORN-CRM-1'], sayi: 34 });
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1', 'ORN-CRM-2'], customerCount: 1 }), { kodlar: ['ORN-CRM-1', 'ORN-CRM-2'], sayi: 2 });
+    assert.deepEqual(crmKodlariniAyikla({ customers: ['ORN-CRM-1'], customerCount: 2.5 }), { kodlar: ['ORN-CRM-1'], sayi: 1 });
+    const liste = { kodlar: ['ORN-CRM-1'], sayi: 1 };
+    assert.deepEqual(crmKodlari({ tur: 'basarili', logicalRef: 88, crmKodlari: liste }), liste);
+    assert.equal(crmKodlari({ tur: 'basarili', logicalRef: null, crmKodlari: liste }), null);
+    assert.equal(crmKodlari({ tur: 'basarili', logicalRef: 88 }), null);
+    assert.equal(crmKodlari({ tur: 'reddedildi', ileti: 'x' }), null);
   });
 });
 
@@ -102,12 +122,31 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
     const c = await cariCrmDurumlari(vt(), istemci(), sorgu());
     const harita = new Map(c.durumlar.map((d) => [d.firmaId, d]));
     assert.equal(c.durumlar.length, 3);
-    assert.deepEqual(harita.get(f.crmli), { firmaId: f.crmli, durum: 'var', neden: null });
-    assert.deepEqual(harita.get(f.crmsiz), { firmaId: f.crmsiz, durum: 'yok', neden: null });
+    assert.deepEqual(harita.get(f.crmli), { firmaId: f.crmli, durum: 'var', neden: null, kodlar: null });
+    assert.deepEqual(harita.get(f.crmsiz), { firmaId: f.crmsiz, durum: 'yok', neden: null, kodlar: null });
     assert.equal(harita.get(f.ikisi)?.durum, 'var');
     const istenen = kopru.istekler.slice(once).map((i) => i.yol).sort();
     assert.deepEqual(istenen, ['/api/SalesOffer/customer/ORN-C-1001', '/api/SalesOffer/customer/ORN-C-1002', '/api/SalesOffer/customer/ORN-C-1003']);
     assert.equal(kopru.istekler.slice(once).some((i) => i.yontem !== 'GET'), false);
+  });
+
+  test('CRM-8 yardımcı kodları verirse (3391): cevapta sırasıyla kodlar ve sayı; yok ve okunamadıda null; uç şeması taşır', async () => {
+    await ayar(true);
+    kopru.crmKodlari.set('ORN-C-1001', ['ORN-CRM-3002', 'ORN-CRM-3017']);
+    kopru.crmKodlari.set('ORN-C-1002', ['ORN-CRM-9999']);
+    try {
+      const c = await cariCrmDurumlari(vt(), istemci(), sorgu());
+      const harita = new Map(c.durumlar.map((d) => [d.firmaId, d]));
+      assert.deepEqual(harita.get(f.crmli)?.kodlar, { kodlar: ['ORN-CRM-3002', 'ORN-CRM-3017'], sayi: 2 });
+      assert.equal(harita.get(f.crmsiz)?.kodlar, null);
+      assert.equal(harita.get(f.ikisi)?.kodlar, null);
+      assert.deepEqual(logoCrmCevabi.parse(c), c, 'uç şeması kodları atmaz');
+      await ayar(false);
+      assert.ok((await cariCrmDurumlari(vt(), istemci(), sorgu())).durumlar.every((d) => d.kodlar === null));
+    } finally {
+      kopru.crmKodlari.clear();
+      await ayar(true);
+    }
   });
 
   test('CRM-3 bağlantı kapalı ya da yardımcı tanımsız: istek atılmaz, hepsi okunamadı ve neden yazar', async () => {

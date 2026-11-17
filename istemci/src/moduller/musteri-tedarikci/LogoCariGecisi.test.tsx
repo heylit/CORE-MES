@@ -45,7 +45,7 @@ function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: '
     istekler.push({ yontem, yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : undefined });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, arama);
-    if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 11, durum: 'var', neden: null }] });
+    if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 11, durum: 'var', neden: null, kodlar: null }] });
     if (yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 20 });
     if (yontem === 'POST' && yol === '/musteri-tedarikci/logo-cari/toplu') {
       return json(200, {
