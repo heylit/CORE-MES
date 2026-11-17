@@ -56,7 +56,9 @@ describe('ayarlar: belge numarası (gerçek PostgreSQL)', () => {
     const al = (alanlar: Record<string, string | null>) =>
       vt().tx((db) => numaraAl(db, 'uretim-emirleri.emir-no', { alanlar, varMi: bosMu }));
     assert.equal(await al({ FIRMA: 'FRM', PROJE: 'PRJ', PARCA: 'PRC' }), `FRM-PRJ-PRC-${yyaa}-001`);
-    assert.equal(await al({ FIRMA: null, PROJE: '', PARCA: 'PRC' }), `PRC-${yyaa}-002`);
+    // 3399 a: {FIRMA}'lı kalıpta sayaç firma başınadır; kod listesi boşken boş firmanın sırası ayrı yürür.
+    assert.equal(await al({ FIRMA: null, PROJE: '', PARCA: 'PRC' }), `PRC-${yyaa}-001`);
+    assert.equal(await al({ FIRMA: 'FRM', PROJE: 'PRJ', PARCA: 'PRC' }), `FRM-PRJ-PRC-${yyaa}-002`);
   });
 
   test('kullanılan numara atlanır: kalıp eski numarayla çakışırsa sıradaki boş numara verilir', async () => {

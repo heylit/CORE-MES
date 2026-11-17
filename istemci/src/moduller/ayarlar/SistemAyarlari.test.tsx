@@ -387,7 +387,7 @@ describe('Sistem Ayarları: modüllerin ayar ekranları', () => {
     sunucuKur();
     ac(EKRANLAR, [], null);
     const sekmeler = within(screen.getByRole('tablist', { name: 'Ayar kategorileri' })).getAllByRole('tab').map((t) => t.textContent);
-    expect(sekmeler).toEqual(['Genel', 'Görünüm ve hareket', 'Sayfalar', 'Onay kuralları', 'Numara kuralları', 'Bağlantılar']);
+    expect(sekmeler).toEqual(['Genel', 'Görünüm ve hareket', 'Sayfalar', 'Onay kuralları', 'Firma kodları', 'Numara kuralları', 'Bağlantılar']);
   });
 });
 

@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { agAraligiHatasi } from '../ag-araligi.ts';
+import { FIRMA_ADI_EN_UZUN, FIRMA_KODU_ILETISI, firmaKoduGecerliMi } from '../firma-kodu.ts';
 import { METIN_BICIMLERI } from '../ayar-tanimi.ts';
 import type { AyarTanimi } from '../ayar-tanimi.ts';
 import { gizli } from '../gizli.ts';
 import { istekKimligiMi } from '../istek-kimligi.ts';
-import { kalipHatasi } from '../numara.ts';
+import { enUzunNumara, kalipHatasi } from '../numara.ts';
+import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihAraligiHatasi } from '../tarih-araligi.ts';
 import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_ONAY_METNI, TEMIZLIK_TURLERI } from '../veri-temizleme.ts';
 import { zamanSemasi } from '../zaman.ts';
@@ -25,7 +27,11 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
       .string({ error: (s) => (s.input === undefined ? 'Değer zorunlu.' : 'Bu ayar numara kalıbıdır.') })
       .superRefine((kalip, ctx) => {
         const hata = kalipHatasi(kalip, alanlar);
-        if (hata !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: hata });
+        if (hata !== null) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: hata }); return; }
+        const uzunluk = tanim.enUzun === undefined ? null : enUzunNumara(kalip);
+        if (uzunluk !== null && tanim.enUzun !== undefined && uzunluk > tanim.enUzun) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Bu kalıpla numara ${uzunluk} karaktere çıkabilir; en çok ${tanim.enUzun} olabilir. {YYYY} yerine {YY} ya da daha kısa önek kullanın.` });
+        }
       });
   }
   if (tanim.tur === 'secim') {
@@ -496,3 +502,28 @@ export const temizleCevabi = z.object({
   yedekAdi: z.string(),
 });
 export type TemizleCevabi = z.output<typeof temizleCevabi>;
+
+// 3399 a: kendi firmalarımızın kodu. Kod verildikten sonra değişmez; ad, varsayılan ve aktiflik değişir.
+const firmaAdi = z.string().trim().min(1, 'Ad zorunlu.').max(FIRMA_ADI_EN_UZUN, `Ad en çok ${FIRMA_ADI_EN_UZUN} karakter olur.`);
+export const firmaKoduSemasi = z.object({
+  id: z.number().int(),
+  kod: z.string(),
+  ad: z.string(),
+  varsayilan: z.boolean(),
+  aktif: z.boolean(),
+  surum: surumSemasi,
+});
+export const firmaKodlariCevabi = z.object({ firmaKodlari: z.array(firmaKoduSemasi) });
+export const firmaKoduEkleGovdesi = z.object({
+  kod: z.string().trim().toUpperCase().refine(firmaKoduGecerliMi, FIRMA_KODU_ILETISI),
+  ad: firmaAdi,
+  varsayilan: z.boolean().prefault(false),
+});
+export const firmaKoduDuzenleGovdesi = z.object({ ad: firmaAdi, varsayilan: z.boolean(), aktif: z.boolean(), ...beklenenSurum });
+export const firmaKoduParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
+// Kayıt gövdelerinde seçilen firma kodu; boş seçim null'dır (eski kayıt ya da kodsuz kurulum).
+export const secilenFirmaKodu = z.string().trim().toUpperCase().refine(firmaKoduGecerliMi, FIRMA_KODU_ILETISI).nullable();
+export type FirmaKodu = z.output<typeof firmaKoduSemasi>;
+export type FirmaKodlariCevabi = z.output<typeof firmaKodlariCevabi>;
+export type FirmaKoduEkleGovdesi = z.output<typeof firmaKoduEkleGovdesi>;
+export type FirmaKoduDuzenleGovdesi = z.output<typeof firmaKoduDuzenleGovdesi>;

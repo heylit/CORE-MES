@@ -42,12 +42,13 @@ export async function simdikiYilAy(db: Db): Promise<{ yil: number; ay: number }>
   return satir;
 }
 
-export async function sayacArtir(db: Db, anahtar: string, donem: string): Promise<number> {
+// Kalıpta {FIRMA} yoksa firma boş metindir (''); varsa her firma kendi sırasını yürütür (3399 a).
+export async function sayacArtir(db: Db, anahtar: string, donem: string, firmaKodu = ''): Promise<number> {
   const satir = await db.tek<{ sira: number }>(
-    `INSERT INTO ayar_numara_sayaci (anahtar, donem, son_sira) VALUES ($1, $2, 1)
-     ON CONFLICT (anahtar, donem) DO UPDATE SET son_sira = ayar_numara_sayaci.son_sira + 1
+    `INSERT INTO ayar_numara_sayaci (anahtar, donem, firma_kodu, son_sira) VALUES ($1, $2, $3, 1)
+     ON CONFLICT (anahtar, donem, firma_kodu) DO UPDATE SET son_sira = ayar_numara_sayaci.son_sira + 1
      RETURNING son_sira AS sira`,
-    [anahtar, donem],
+    [anahtar, donem, firmaKodu],
   );
   if (satir === null) throw new Error('Sayaç artırılamadı.');
   return satir.sira;
@@ -170,4 +171,56 @@ export async function denemeIsaretliKimlikleriOku(db: Db, tur: string): Promise<
 export async function denemeIsaretiKalkmaAniniOku(db: Db, tur: string): Promise<string | null> {
   const satir = await db.tek<{ zaman: string }>(`SELECT ${zamanMetni('zaman')} AS zaman FROM ayarlar_deneme_isareti_kalkma WHERE tur = $1`, [tur]);
   return satir?.zaman ?? null;
+}
+
+// 3399 a: firma kodları. Kod sütunu güncellenmez; satır silinmez.
+const FIRMA_KODU = 'id, kod, ad, varsayilan, aktif, surum';
+export interface FirmaKoduSatiri { id: number; kod: string; ad: string; varsayilan: boolean; aktif: boolean; surum: number }
+
+export function firmaKodlariniOku(db: Db): Promise<FirmaKoduSatiri[]> {
+  return db.sorgu<FirmaKoduSatiri>(`SELECT ${FIRMA_KODU} FROM ayar_firma_kodu ORDER BY varsayilan DESC, aktif DESC, kod`);
+}
+
+export function firmaKoduOku(db: Db, kod: string): Promise<FirmaKoduSatiri | null> {
+  return db.tek<FirmaKoduSatiri>(`SELECT ${FIRMA_KODU} FROM ayar_firma_kodu WHERE kod = $1`, [kod]);
+}
+
+export function firmaKoduIdIleOku(db: Db, id: number): Promise<FirmaKoduSatiri | null> {
+  return db.tek<FirmaKoduSatiri>(`SELECT ${FIRMA_KODU} FROM ayar_firma_kodu WHERE id = $1`, [id]);
+}
+
+export async function varsayilanFirmaKoduOku(db: Db): Promise<string | null> {
+  return (await db.tek<{ kod: string }>('SELECT kod FROM ayar_firma_kodu WHERE varsayilan'))?.kod ?? null;
+}
+
+// Yeni varsayılan yazılmadan önce eskisi düşer: tek varsayılan dizini aynı anda iki satırı kabul etmez.
+export async function varsayilaniBirak(db: Db, haricId: number | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE ayar_firma_kodu SET varsayilan = false, surum = surum + 1, guncelleyen_kisi_id = $2, guncelleme = now()
+      WHERE varsayilan AND ($1::int IS NULL OR id <> $1)`,
+    [haricId, kisiId],
+  );
+}
+
+export function firmaKoduEkle(db: Db, g: { kod: string; ad: string; varsayilan: boolean }, kisiId: number): Promise<FirmaKoduSatiri | null> {
+  return db.tek<FirmaKoduSatiri>(
+    `INSERT INTO ayar_firma_kodu (kod, ad, varsayilan, olusturan_kisi_id, guncelleyen_kisi_id) VALUES ($1, $2, $3, $4, $4)
+     RETURNING ${FIRMA_KODU}`,
+    [g.kod, g.ad, g.varsayilan, kisiId],
+  );
+}
+
+export function firmaKoduGuncelle(
+  db: Db, id: number, g: { ad: string; varsayilan: boolean; aktif: boolean }, surum: number, kisiId: number,
+): Promise<FirmaKoduSatiri | null> {
+  return db.tek<FirmaKoduSatiri>(
+    `UPDATE ayar_firma_kodu SET ad = $2, varsayilan = $3, aktif = $4, surum = surum + 1, guncelleyen_kisi_id = $6, guncelleme = now()
+      WHERE id = $1 AND surum = $5 RETURNING ${FIRMA_KODU}`,
+    [id, g.ad, g.varsayilan, g.aktif, surum, kisiId],
+  );
+}
+
+// Listeyi değiştiren iki komut sırayla çalışır: varsayılanın bırakılıp yenisinin yazılması bölünmez.
+export async function firmaKodlariniKilitle(db: Db): Promise<void> {
+  await islemKilidiAl(db, 'ayar-firma-kodu');
 }

@@ -7,7 +7,7 @@ export const URETIM_EMIRLERI_AYARLARI = {
     varsayilan: '{FIRMA}-{PROJE}-{PARCA}-{YY}-{AA}-{SAYAC:3}',
     alanlar: ['FIRMA', 'PROJE', 'PARCA'],
     baslik: 'Üretim emri numarası',
-    aciklama: 'Yeni üretim emrinin numarası. Firma kodu Malzeme ayarlarındandır; boş alan numaradan düşer. Sayaç ay ya da yıl kalıpta varsa o dönemde sıfırlanır. Bölünen emir üst emrin numarasına /1, /2 eklenerek numaralanır; var olan numaralar değişmez.',
+    aciklama: 'Yeni üretim emrinin numarası. Firma kodu projenin firma kodudur (Firma kodları), projesiz emirde varsayılan kod; kalıpta {FIRMA} varsa her firmanın sırası ayrıdır. Boş alan numaradan düşer. Sayaç ay ya da yıl kalıpta varsa o dönemde sıfırlanır. Bölünen emir üst emrin numarasına /1, /2 eklenerek numaralanır; var olan numaralar değişmez.',
   },
   // Kullanıcı kararı 14.10.2026: rotasız emir kapatılmaz, ayara bağlanır; adımları sonradan Reçete ve Rota'da eklenir. Varsayılan
   // kapalı (denetim #27, 224 ve 120 a): emir yürürlükteki revizyondan, onaylı rotayla açılır; rotasız emir bilerek açılan istisnadır.

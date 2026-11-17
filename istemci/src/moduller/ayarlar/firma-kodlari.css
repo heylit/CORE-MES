@@ -1,0 +1,9 @@
+.tc-firma-kodlari { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--b-4); align-items: start; }
+.tc-firma-kodu-kod { display: inline-flex; align-items: center; gap: var(--b-1); font-family: var(--font-mono); }
+.tc-firma-kodu-durum { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); justify-content: flex-end; }
+.tc-firma-kodu-form { display: grid; gap: var(--b-3); }
+.tc-firma-kodu-dugmeler { display: flex; gap: var(--b-2); justify-content: flex-end; flex-wrap: wrap; }
+
+@media (max-width: 1023px) {
+  .tc-firma-kodlari { grid-template-columns: minmax(0, 1fr); }
+}
