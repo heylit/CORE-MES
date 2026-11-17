@@ -8,7 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { ButceKullanimiCevabi, FaturaEslemesiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { ButceKullanimiCevabi, FaturaEslemesiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi, TeklifEkleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi, TedarikciAlacagi, TedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
 import type { BildirimListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -3542,6 +3542,57 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(tamam<SiparisBelgeleriCevabi>(await kaldir()).belgeler, []);
     assert.equal((await kaldir()).statusCode, 404);
     assert.equal((await istek(c.mudur, 'GET', `/satin-alma-siparis-satirlari/${satirA}/belgeler/${belgeId}/dosya`)).statusCode, 404);
+  });
+
+  test('3404: PDF teklif teklifin ekidir; fiyatı görmeyen okuyamaz, yalnız yazan bağlar, PDF olmayan ve başka teklifin dosyası reddedilir, silinen teklifin eki düşer', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
+    const b = teklif(firmaB, [[k1, '9'], [k2, '6']]);
+    const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a, b] }));
+    const yol = (q: string) => `/satin-alma-talepleri/${t.id}/teklifler/${q}`;
+    const ekler = (cerez: string, q: string) => istek(cerez, 'GET', `${yol(q)}/ekler`);
+    assert.deepEqual(tamam<TeklifEkleriCevabi>(await ekler(c.mudur, a.id)).ekler, []);
+
+    const { ozet, icerik } = await belgeYukle(c.sa);
+    const kimlik = randomUUID();
+    const ilk = tamam<TeklifEkleriCevabi>(await istek(c.sa, 'POST', `${yol(a.id)}/ek-bagla`, { ozet, dosyaAdi: 'ORN-teklif.pdf' }, kimlik));
+    assert.deepEqual(ilk.ekler.map((x) => [x.ozet, x.ad, x.boyut]), [[ozet, 'ORN-teklif.pdf', icerik.length]]);
+    assert.deepEqual(tamam<TeklifEkleriCevabi>(await istek(c.sa, 'POST', `${yol(a.id)}/ek-bagla`, { ozet, dosyaAdi: 'ORN-teklif.pdf' }, kimlik)), ilk);
+
+    // Okuyan açar; dosya indirme olarak gelir. Aynı özet başka teklifin ucundan verilmez.
+    const dosya = await istek(c.mudur, 'GET', `${yol(a.id)}/ekler/${ozet}/dosya`);
+    assert.equal(dosya.statusCode, 200, dosya.body);
+    assert.ok(dosya.rawPayload.equals(icerik));
+    assert.match(String(dosya.headers['content-disposition']), /^attachment;/);
+    assert.equal((await istek(c.mudur, 'GET', `${yol(b.id)}/ekler/${ozet}/dosya`)).statusCode, 404);
+
+    // Teklif fiyatını görmeyen (yalnız talep açan, satın almasız) ne listeyi ne dosyayı alır; okuyan bağlayamaz ve kaldıramaz.
+    for (const cerez of [c.talep, c.operator]) {
+      assert.equal((await ekler(cerez, a.id)).statusCode, 403);
+      assert.equal((await istek(cerez, 'GET', `${yol(a.id)}/ekler/${ozet}/dosya`)).statusCode, 403);
+    }
+    assert.equal((await istek(c.mudur, 'POST', `${yol(b.id)}/ek-bagla`, { ozet, dosyaAdi: 'x.pdf' })).statusCode, 403);
+    assert.equal((await istek(c.mudur, 'POST', `${yol(a.id)}/ekler/${ozet}/kaldir`)).statusCode, 403);
+
+    // Yalnız PDF: depoya girebilen başka tür (PNG imzası) teklife bağlanmaz. Olmayan teklif 404.
+    const duz = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), randomBytes(500)]);
+    const duzOzet = createHash('sha256').update(duz).digest('hex');
+    tamam(await istek(c.sa, 'POST', `/dosyalar/${duzOzet}/parca`, { sira: 0, toplam: 1, veri: duz.toString('base64') }, null));
+    assert.equal((await istek(c.sa, 'POST', `${yol(b.id)}/ek-bagla`, { ozet: duzOzet, dosyaAdi: 'x.pdf' })).statusCode, 400);
+    assert.equal((await ekler(c.sa, randomUUID())).statusCode, 404);
+    assert.equal((await istek(c.sa, 'POST', `${yol(randomUUID())}/ek-bagla`, { ozet, dosyaAdi: 'x.pdf' })).statusCode, 404);
+
+    // b'ye de bağlanır; b talepten çıkınca bağı düşer, a'nınki kalır.
+    tamam(await istek(c.sa, 'POST', `${yol(b.id)}/ek-bagla`, { ozet, dosyaAdi: 'ORN-b.pdf' }));
+    tamam<Talep>(await kaydet(c.sa, { ...govde(deg), teklifler: [a] }));
+    const baglar = await vt().tx((db) => db.sorgu<{ kayit: string }>("SELECT kayit FROM dosya_bagi WHERE modul = 'satin-alma' AND kayit LIKE $1 ORDER BY kayit", [`teklif:${t.id}:%`]));
+    assert.deepEqual(baglar.map((x) => x.kayit), [`teklif:${t.id}:${a.id}`]);
+
+    // Kaldırılan ek düşer; ikinci kaldırma 404.
+    const kaldir = () => istek(c.sa, 'POST', `${yol(a.id)}/ekler/${ozet}/kaldir`);
+    assert.deepEqual(tamam<TeklifEkleriCevabi>(await kaldir()).ekler, []);
+    assert.equal((await kaldir()).statusCode, 404);
   });
 
   // 1096 a ve 1099 a: onaya giden kararın kuru sunucuda sabitlenir; kalem ayrıntısı toplamlara girer.

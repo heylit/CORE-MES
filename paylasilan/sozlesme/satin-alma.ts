@@ -521,6 +521,17 @@ export const siparisBelgeleriCevabi = z.object({ belgeler: z.array(siparisBelges
 export type SiparisBelgesi = z.output<typeof siparisBelgesiSemasi>;
 export type SiparisBelgesiYazimi = z.output<typeof siparisBelgesiGovdesi>;
 export type SiparisBelgeleriCevabi = z.output<typeof siparisBelgeleriCevabi>;
+// 3404: tedarikçinin PDF teklifi teklifin ekidir. Dosya ortak depoda; bağ satın almanındır (kayıt "teklif:<talep>:<teklif>").
+// Ek teklif fiyatını taşır: okuma kapısı teklif fiyatını okuyan uçla aynıdır. İstemci dosyayı önce `/dosyalar/:ozet/parca` ile yükler.
+export const TEKLIF_EKI_AZAMI_BAYT = 25 * 1024 * 1024;
+export const teklifEkiParametresi = z.object({ id: uuid, teklifId: uuid });
+export const teklifEkiDosyaParametresi = z.object({ id: uuid, teklifId: uuid, ozet: dosyaOzeti });
+export const teklifEkiGovdesi = z.object({ ozet: dosyaOzeti, dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120) }).strict();
+export const teklifEkiSemasi = z.object({ ozet: dosyaOzeti, ad: z.string(), boyut: z.number().int().positive(), zaman: z.string() });
+export const teklifEkleriCevabi = z.object({ ekler: z.array(teklifEkiSemasi) });
+export type TeklifEki = z.output<typeof teklifEkiSemasi>;
+export type TeklifEkiYazimi = z.output<typeof teklifEkiGovdesi>;
+export type TeklifEkleriCevabi = z.output<typeof teklifEkleriCevabi>;
 // Talep türü (#1192): malzeme talebi fiziksel kartları, hizmet talebi yalnız alınan hizmet kartlarını seçer. Fason talebi (2428) de
 // alınan hizmet kartını (işlem) seçer; her kalemi emrin fason adımına ya da stoktaki partiye bağlanır ve dış işlem emri açar.
 export const TALEP_TURLERI = ['malzeme', 'hizmet', 'fason'] as const;
@@ -731,6 +742,9 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-siparis-satirlari/:id/belgeler': { cevap: SiparisBelgeleriCevabi };
   'POST /satin-alma-siparis-satirlari/:id/belge-ekle': { govde: z.input<typeof siparisBelgesiGovdesi>; cevap: SiparisBelgeleriCevabi };
   'POST /satin-alma-siparis-satirlari/:id/belgeler/:belgeId/kaldir': { cevap: SiparisBelgeleriCevabi };
+  'GET /satin-alma-talepleri/:id/teklifler/:teklifId/ekler': { cevap: TeklifEkleriCevabi };
+  'POST /satin-alma-talepleri/:id/teklifler/:teklifId/ek-bagla': { govde: z.input<typeof teklifEkiGovdesi>; cevap: TeklifEkleriCevabi };
+  'POST /satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/kaldir': { cevap: TeklifEkleriCevabi };
   'GET /satin-alma-siparis-faturalari': { sorgu: z.input<typeof siparisFaturalariSorgusu>; cevap: SiparisFaturalariCevabi };
   'POST /satin-alma-talepleri/:id/siparis-faturasi': { govde: z.input<typeof siparisFaturasiGovdesi>; cevap: SiparisFaturalariCevabi };
   'GET /satin-alma-firma-secenekleri': { sorgu: z.input<typeof firmaSecenekleriSorgusu>; cevap: FirmaSecenekleriCevabi };
