@@ -304,7 +304,7 @@ export function Guncelleme() {
   const uygulamaEngeli = !liste.data || kanal !== 'acik' || !gosterilen ? 'Uygulanacak paket yok.'
     : !liste.data.guncelleyici ? 'Sunucu güncelleyiciyle açılmadı; paket uygulanamaz ("npm run baslat").'
       : kuruluyor !== null ? `${kisaCommit(kuruluyor) ?? ''} şu an kuruluyor.`
-      : bekleyen !== null ? `${kisaCommit(bekleyen.commit) ?? ''} uygulanmayı bekliyor; sunucu birazdan yeniden başlar.`
+      : bekleyen !== null ? `${kisaCommit(bekleyen.commit) ?? ''} için kurulum istendi; ilerleme aşağıda.`
       : liste.data.yedek.dizin === null ? 'Yedek klasörü seçilmedi; yedeksiz güncelleme yapılmaz. Sistem Ayarları > Yedekler bölümünden klasör seçin.'
       : !liste.data.yedek.hazir ? `Yedek klasörü sunucuda yok (${liste.data.yedek.dizin}); Yedekler bölümünden geçerli bir klasör seçin.`
         : gosterilen.uygulanamaz;

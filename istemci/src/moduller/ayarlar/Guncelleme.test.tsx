@@ -12,7 +12,7 @@ import type {
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { PARCA_BAYT, taramaRozeti, yeniGocSayisi } from './Guncelleme.tsx';
-import { GuncellemeIlerlemesi, adimSatirlari } from './GuncellemeIlerlemesi.tsx';
+import { GuncellemeIlerlemesi, adimSatirlari, ilerlemeYuzdesi } from './GuncellemeIlerlemesi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
@@ -248,7 +248,7 @@ describe('Sistem Ayarları, güncelleme', () => {
     fireEvent.click(onay);
     expect(await screen.findByText(/uygulanacak: önce yedek alınır/)).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual([`/guncelleme/paketler/${PAKET.commit}/uygula`]);
-    expect(await screen.findByText(/uygulanmayı bekliyor/)).toBeTruthy();
+    expect(await screen.findByText(/için kurulum istendi/)).toBeTruthy();
     expect((screen.getByRole('button', { name: /Uygula/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -345,10 +345,10 @@ describe('Güncelleme, kurulum adımları', () => {
   };
   const durumlar = (g: Parameters<typeof adimSatirlari>[0]) => adimSatirlari(g).map((s) => s.durum);
 
-  it('süren adımdan öncesi tamam, sonrası bekler; sunucu kapalıyken durdur sonrası sürüyor sayılır', () => {
+  it('süren adımdan öncesi tamam, sonrası bekler; sunucu kapalıyken durdur sonrası açılınca işaretlenir', () => {
     expect(durumlar({ tur: 'sirada' })).toEqual(['bekliyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor']);
     expect(durumlar({ tur: 'suruyor', adim: 'hazirla' })).toEqual(['tamam', 'suruyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor']);
-    expect(durumlar({ tur: 'kapali' })).toEqual(['tamam', 'tamam', 'tamam', 'suruyor', 'suruyor', 'suruyor']);
+    expect(durumlar({ tur: 'kapali' })).toEqual(['tamam', 'tamam', 'tamam', 'bekliyor', 'bekliyor', 'bekliyor']);
   });
 
   it('bozulan adım hatalı ve hata metniyle, sonrası yapılmamış; kurulan uygulamada hepsi tamam', () => {
@@ -356,6 +356,15 @@ describe('Güncelleme, kurulum adımları', () => {
     expect(satirlar.map((s) => s.durum)).toEqual(['tamam', 'tamam', 'tamam', 'tamam', 'hata', 'bekliyor']);
     expect(satirlar[4]).toMatchObject({ metin: 'Göçler: hata', not: 'Deneme göç hatası' });
     expect(durumlar({ tur: 'bitti', sonuc: { ...SONUC, sonuc: 'kuruldu', adim: null, hata: null } })).toEqual(Array(6).fill('tamam'));
+  });
+
+  it('yüzde biten adım sayısıdır; kurulunca 100, geri alınınca bozulan adımda kalır', () => {
+    const yuzde = (g: Parameters<typeof adimSatirlari>[0]) => ilerlemeYuzdesi(g, adimSatirlari(g));
+    expect(yuzde({ tur: 'sirada' })).toBe(0);
+    expect(yuzde({ tur: 'suruyor', adim: 'hazirla' })).toBe(17);
+    expect(yuzde({ tur: 'kapali' })).toBe(50);
+    expect(yuzde({ tur: 'bitti', sonuc: SONUC })).toBe(67);
+    expect(yuzde({ tur: 'bitti', sonuc: { ...SONUC, sonuc: 'kuruldu', adim: null, hata: null } })).toBe(100);
   });
 
   it('izlenen uygulama canlı adımla başlar, sunucu kapanınca yeniden başlıyor der, açılınca sonucu bozulan adımla gösterir', async () => {
@@ -385,20 +394,48 @@ describe('Güncelleme, kurulum adımları', () => {
 
     expect(await screen.findByText('Hazırlanıyor')).toBeTruthy();
     expect(screen.getByText('Paket doğrulandı')).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Kurulum ilerlemesi' }).getAttribute('aria-valuenow')).toBe('17');
 
     asama = 'kapali';
     expect(await screen.findByText('Sunucu yeniden başlıyor')).toBeTruthy();
-    expect(screen.getByText('Yedek, göç ve açılış sürüyor')).toBeTruthy();
+    expect(screen.getAllByText('Sunucu kapalı; açılınca işaretlenir.')).toHaveLength(3);
+    expect(screen.getByText('Göçler')).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Kurulum ilerlemesi' }).getAttribute('aria-valuenow')).toBe('50');
 
     asama = 'bitti';
     liste = cevap('acik', [LISTEDE], { sonUygulama: SONUC });
     act(() => { yenile(liste); });
     expect(await screen.findByText('Göçler: hata')).toBeTruthy();
     expect(screen.getByText('Deneme göç hatası')).toBeTruthy();
-    expect(screen.getByText('Geri alındı')).toBeTruthy();
+    expect(screen.getAllByText('Geri alındı').length).toBeGreaterThan(0);
+    expect(screen.getByRole('progressbar', { name: 'Kurulum ilerlemesi' }).getAttribute('aria-valuetext')).toBe('Geri alındı');
     expect(screen.getByText('Veritabanı yedeklendi')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Kapat/ }));
     await waitFor(() => { expect(screen.queryByText('Göçler: hata')).toBeNull(); });
+  });
+
+  it('sunucu kapanınca son bilinen başlangıç saati yazılır; başka paketin başlangıcı yazılmaz', async () => {
+    const BASKA = 'c'.repeat(40);
+    const dene = async (surenCommit: string) => {
+      let kapali = false;
+      vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+        if (kapali) throw new TypeError('Failed to fetch');
+        if (adres.replace('/api', '') !== '/guncelleme/ilerleme') return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+        const govde: GuncellemeIlerlemesiCevabi = { suren: { commit: surenCommit, surum: '0.1.0', adim: 'durdur', baslangic: '2026-10-14T08:00:05.000Z' } };
+        return json(200, govde);
+      }));
+      const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const liste = cevap('acik', [LISTEDE], { uygulaniyor: { commit: PAKET.commit, isteyenId: 1, istenme: '2026-10-14T08:00:00.000Z' } });
+      const sayfa = render(<QueryClientProvider client={istemci}><GuncellemeIlerlemesi veri={liste} istenen={null} yoklamaMs={30} /></QueryClientProvider>);
+      await waitFor(() => { expect(istemci.getQueryData(['ayarlar', 'guncelleme-ilerlemesi'])).toBeTruthy(); });
+      kapali = true;
+      expect(await screen.findByText('Sunucu yeniden başlıyor')).toBeTruthy();
+      const metin = screen.getByText(/Bağlantı yoklanıyor/).textContent ?? '';
+      sayfa.unmount();
+      return metin;
+    };
+    expect(await dene(PAKET.commit)).toMatch(/\d{2}:\d{2}'de başladı\./);
+    expect(await dene(BASKA)).not.toMatch(/başladı/);
   });
 
   it('eski sunucuda ilerleme ucu yoksa adım listesi çıkmaz', async () => {

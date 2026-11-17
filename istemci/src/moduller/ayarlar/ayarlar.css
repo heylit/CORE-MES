@@ -88,13 +88,30 @@
 }
 .tc-guncelleme-adim-tamam .tc-guncelleme-adim-isaret { background: var(--run); border-color: var(--run); color: var(--on-sig); }
 .tc-guncelleme-adim-hata .tc-guncelleme-adim-isaret { background: var(--stop); border-color: var(--stop); color: var(--on-sig); }
-.tc-guncelleme-adim-suruyor .tc-guncelleme-adim-isaret {
-  border-color: var(--hold); border-top-color: transparent; animation: tc-guncelleme-adim-don 1s linear infinite;
-}
+.tc-guncelleme-adim-suruyor .tc-guncelleme-adim-isaret { border-color: var(--hold); }
+.tc-guncelleme-adim-suruyor .tc-guncelleme-adim-isaret::after { content: ""; width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--hold); }
 .tc-guncelleme-adim-metin { display: grid; gap: var(--pay-ince); min-width: 0; }
 .tc-guncelleme-adim-metin b { overflow-wrap: anywhere; }
 .tc-guncelleme-adim-bekliyor .tc-guncelleme-adim-metin b { color: var(--muted); font-weight: 400; }
 .tc-guncelleme-adim-hata .tc-guncelleme-adim-metin b { color: var(--stop); }
 .tc-guncelleme-adim-metin small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
-@keyframes tc-guncelleme-adim-don { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .tc-guncelleme-adim-suruyor .tc-guncelleme-adim-isaret { animation: none; } }
+.tc-guncelleme-govde { display: flex; gap: var(--b-6); align-items: flex-start; min-width: 0; width: 100%; }
+.tc-guncelleme-govde-sag { display: grid; gap: var(--b-2); justify-items: start; min-width: 0; flex: 1; }
+.tc-guncelleme-halka { position: relative; flex: none; width: var(--dokunma-x24); height: var(--dokunma-x24); }
+.tc-guncelleme-halka svg { width: 100%; height: 100%; display: block; }
+.tc-guncelleme-halka-yol { stroke: var(--edge); }
+.tc-guncelleme-halka-yay { stroke: var(--hold); transition: stroke-dasharray .4s; }
+.tc-guncelleme-halka-tamam .tc-guncelleme-halka-yay { stroke: var(--run); }
+.tc-guncelleme-halka-uyari .tc-guncelleme-halka-yay { stroke: var(--hold); }
+.tc-guncelleme-halka-hata .tc-guncelleme-halka-yay { stroke: var(--stop); }
+.tc-guncelleme-halka-uyari .tc-guncelleme-halka-ic { color: var(--hold); }
+.tc-guncelleme-halka-hata .tc-guncelleme-halka-ic { color: var(--stop); }
+.tc-guncelleme-halka-ic { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; }
+.tc-guncelleme-halka-ic b { font-size: var(--yazi-xl); font-variant-numeric: tabular-nums; line-height: 1; }
+.tc-guncelleme-halka-ic .tc-simge { width: var(--b-6); height: var(--b-6); }
+.tc-guncelleme-halka-ic small { font-size: var(--yazi-xs); font-weight: 700; margin-top: var(--b-1); }
+@media (max-width: 479px) {
+  .tc-guncelleme-govde { flex-direction: column; align-items: stretch; gap: var(--b-4); }
+  .tc-guncelleme-halka { align-self: center; }
+}
+@media (prefers-reduced-motion: reduce) { .tc-guncelleme-halka-yay { transition: none; } }
