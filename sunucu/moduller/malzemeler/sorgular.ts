@@ -801,6 +801,26 @@ export function olcuBirimleri(db: Db): Promise<{ kod: string; aktif: boolean }[]
   return db.sorgu('SELECT kod, aktif FROM malzeme_birimi ORDER BY aktif DESC, kod');
 }
 
+// 3400-2: teklif kaleminin birim listesi; aktif birimler ve Logo birim karşılığı (yoksa null).
+export function satisBirimleri(db: Db): Promise<{ kod: string; logoBirimSeti: string | null }[]> {
+  return db.sorgu(
+    `SELECT b.kod, k.logo_degeri AS "logoBirimSeti" FROM malzeme_birimi b
+       LEFT JOIN malzeme_logo_karsiligi k ON k.cesit = 'birim' AND k.tmi_degeri = b.kod
+      WHERE b.aktif ORDER BY b.kod`,
+  );
+}
+
+// 3400-3: mamul ve yarı mamul kartının yerlilik oranı (`kayit.g.yerlilik`, sayı); yoksa satır dönmez.
+export function yerlilikOranlari(db: Db, nolar: readonly number[]): Promise<{ no: number; oran: string }[]> {
+  return db.sorgu(
+    `SELECT no, (kayit -> 'g' ->> 'yerlilik')::numeric(5,2)::text AS oran FROM malzeme_katalog_karti
+      WHERE no = ANY($1::int[]) AND tur IN ('mamul', 'yarimamul')
+        AND jsonb_typeof(kayit -> 'g') = 'object' AND jsonb_typeof(kayit -> 'g' -> 'yerlilik') = 'number'
+        AND (kayit -> 'g' ->> 'yerlilik')::numeric BETWEEN 0 AND 100`,
+    [nolar],
+  );
+}
+
 export function birimTablosu(db: Db): Promise<{ kod: string; yerlesikListeler: string[] }[]> {
   return db.sorgu('SELECT kod, yerlesik_listeler AS "yerlesikListeler" FROM malzeme_birimi FOR UPDATE');
 }

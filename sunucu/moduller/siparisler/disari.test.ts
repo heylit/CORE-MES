@@ -42,11 +42,11 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
     const sonuc = await o().vt.tx(async (db) => {
       let t = await siparisler.teklifEkle(db, kisi, {
         firmaId, baslik: 'Deneme talebi', paraBirimi: 'TRY', istenenTarih: null, aciklama: null,
-        satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '5' }],
+        satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '5', birim: null, yerlilikOrani: null }],
       });
       t = await siparisler.teklifGuncelle(db, kisi, t.id, {
         firmaId, baslik: 'Düzeltilmiş', paraBirimi: 'TRY', istenenTarih: null, aciklama: null, surum: t.surum,
-        satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '10' }],
+        satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '10', birim: null, yerlilikOrani: null }],
       });
       t = await siparisler.surumVer(db, kisi, t.id, {
         surum: t.surum, fiyatlar: t.satirlar.map((s) => ({ satirId: s.id, birimFiyat: '20' })), iskontoOrani: '10',

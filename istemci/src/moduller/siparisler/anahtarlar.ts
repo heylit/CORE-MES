@@ -29,4 +29,5 @@ export const anahtarlar = {
   teklifFormuVerisi: (id: number, sorgu: object) => ['siparisler', 'teklif', 'form', id, sorgu] as const,
   firmaSecimi: (ara: string) => ['siparisler', 'firma-secimi', ara] as const,
   malzemeArama: (metin: string) => ['siparisler', 'malzeme-arama', metin] as const,
+  birimSecenekleri: ['siparisler', 'birim-secenekleri'] as const,
 };

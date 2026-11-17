@@ -46,6 +46,8 @@
 .tc-tf-tablo tr { break-inside: avoid; }
 .tc-tf-sag { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tc-tf-tablo th.tc-tf-sag { text-align: end; }
+/* 3400: sağa yaslı miktarın yanındaki birim başlığa yapışmasın. */
+.tc-tf-tablo .tc-tf-birim { padding-inline-start: var(--b-3); }
 .tc-tf-kod { font-family: var(--font-mono); color: var(--muted); white-space: nowrap; }
 .tc-tf-toplam { margin-inline-start: auto; min-inline-size: 75mm; display: grid; grid-template-columns: 1fr auto; column-gap: var(--b-4); row-gap: var(--b-1); }
 .tc-tf-toplam > div { display: contents; }

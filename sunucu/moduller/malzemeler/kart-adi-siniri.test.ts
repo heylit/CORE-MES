@@ -63,4 +63,13 @@ describe('MLZ-4: kart adının sunucuda üst sınırı var (gerçek PostgreSQL)'
     assert.equal(c.statusCode, 400, c.body);
     assert.equal((c.json() as { alan: string }).alan, 'kayit.talep.yeni.com.ad');
   });
+
+  test('3400-3: mamul kartında yerlilik 0-100 dışıysa 400 alır ve kart yazılmaz; aralıktaki oran kaydedilir', async () => {
+    const fazla = await kaydet('ads4', 'Yerlilik fazla', { g: { yerlilik: 120 } });
+    assert.equal(fazla.statusCode, 400, fazla.body);
+    assert.equal((fazla.json() as { alan: string }).alan, 'kayit.g.yerlilik');
+    assert.equal(await kartSayisi('ads4'), 0);
+    const uygun = await kaydet('ads5', 'Yerlilik uygun', { g: { yerlilik: 62.5 } });
+    assert.equal(uygun.statusCode, 200, uygun.body);
+  });
 });

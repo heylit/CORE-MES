@@ -70,7 +70,7 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       anahtar: ++satirSayaci,
       id: m.id,
       kilitli: m.emreBagli,
-      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar },
+      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: null },
       miktar: girdiMetni(m.miktar),
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
       termin: m.termin === null || m.termin === s.termin ? '' : m.termin,

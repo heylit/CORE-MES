@@ -95,6 +95,32 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(screen.queryByText('Kaliteden')).toBeNull();
   });
 
+  test('3400-3: mamul kartında yerlilik oranı Ticari bilgilerde girilir ve kayda sayı olarak gider; sarf kartında alan yok', async () => {
+    const mamul = { ...ornekKayit('mdnm3', 'MM-DNM-00001', 'Deneme mamul', 'mamul'), g: { ad: 'Deneme mamul', yerlilik: 62.5 }, onay: { durum: 'taslak' } };
+    const istekler = sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm3', kayit: mamul }, { kimlik: 'mdnm4', kayit: sarfKarti('mdnm4') }),
+      'POST /malzeme-katalogu-kartlari/mdnm3/kaydet': () => json(200, { id: 'mdnm3', stok_kodu: 'MM-DNM-00001', surum: 2 }),
+    });
+    ac('?kart=mdnm3');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    const adimlar = within(screen.getByRole('navigation', { name: 'Adımlar' }));
+    fireEvent.click(adimlar.getByRole('button', { name: /Ticari/ }));
+    const alan = await screen.findByLabelText('Yerlilik oranı') as HTMLInputElement;
+    expect(alan.value).toBe('62,5');
+    fireEvent.change(alan, { target: { value: '70' } });
+    fireEvent.click(adimlar.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yontem === 'POST')).toBe(true); });
+    const govde = istekler.find((i) => i.yontem === 'POST')?.govde as { kayit: { g: { yerlilik: unknown } } };
+    expect(govde.kayit.g.yerlilik).toBe(70);
+    cleanup();
+    ac('?kart=mdnm4');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Ticari/ }));
+    await screen.findByRole('textbox', { name: 'Marka' });
+    expect(screen.queryByLabelText('Yerlilik oranı')).toBeNull();
+  });
+
   test('onaylı kartta değişiklik yoksa istek gitmez, "Kartta değişiklik yok." denir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac('?kart=mornek1');
