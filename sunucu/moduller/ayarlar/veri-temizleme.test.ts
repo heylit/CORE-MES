@@ -457,6 +457,37 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('dış sistem bağları: kaynak ve hedef sütunun türü aynıdır (3409)', async () => {
+    const satirlar = await o().sahip.sorgu<{ bag: string; kaynak: string | null; hedef: string | null }>(
+      `SELECT b.kaynak || ' -> ' || b.hedef || '.' || b.sutun AS bag, format_type(ka.atttypid, ka.atttypmod) AS kaynak,
+              format_type(ha.atttypid, ha.atttypmod) AS hedef
+         FROM ayarlar_temizlik_fk_siz_baglar() b
+         LEFT JOIN pg_attribute ka ON ka.attrelid = to_regclass(b.kaynak) AND ka.attname = 'belge_no'
+         LEFT JOIN pg_attribute ha ON ha.attrelid = to_regclass(b.hedef) AND ha.attname = b.sutun`,
+    );
+    assert.ok(satirlar.length > 0);
+    for (const s of satirlar) {
+      assert.notEqual(s.kaynak, null, s.bag);
+      assert.equal(s.hedef, s.kaynak, s.bag);
+    }
+  });
+
+  test("dış sistem bağları: talepli emrin etkisi okunur, Logo'ya gitmiş talep ve karşılama kökü kilitler (3409)", async () => {
+    const e = await emir();
+    const talep = (await o().sahip.tek<{ id: string; sayi: number }>(
+      `INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, uretim_emri_id)
+       VALUES (gen_random_uuid(), 2099, (SELECT coalesce(max(sira), 0) + 1 FROM satin_alma_talep WHERE yil = 2099), 'ORN talep', $1, $1, $2)
+       RETURNING id, sayi_id AS sayi`, [yoneticiId, e]))!;
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }]);
+    // Talebin kendi silme kuralı kökü zaten kilitler; burada ölçülen etki okumasının düşmemesi ve Logo kilidinin eklenmesidir.
+    assert.ok(!(await etki([{ tur: 'uretim_emri', kimlik: e }])).kokler[0]!.kilitler.includes("Logo'ya gönderildi"), 'talep Logo kuyruğunda değil');
+    await o().sahip.sorgu(
+      "INSERT INTO logo_giden (belge_turu, belge_no, son_deneme, son_sonuc, logo_kayit_no) VALUES ('talep', $1, now(), 'gonderildi', 'ORN-T1')", [talep.sayi]);
+    assert.ok((await etki([{ tur: 'uretim_emri', kimlik: e }])).kokler[0]!.kilitler.includes("Logo'ya gönderildi"), "Logo'ya gitmiş talep kilitler");
+    await o().sahip.sorgu("DELETE FROM logo_giden WHERE belge_turu = 'talep' AND belge_no = $1", [talep.sayi]);
+    await isaretle([{ tur: 'uretim_emri', kimlik: e }], false);
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(
