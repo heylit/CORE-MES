@@ -3,7 +3,7 @@ import { bulunamadi, cakisma, gecersiz } from '#cekirdek/hata.ts';
 import type { LogoBaglanabilirTur, LogoBelgeAramaCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { projeGetir } from '../projeler/disari.ts';
-import { logoBaglamaSirasi, logoSiraBelgeleri, logoSiralari, logoSirasiniGeriAl, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
+import { type SiparislerLogoBaglamaSirasi, logoBaglamaSirasi, logoSiraBelgeleri, logoSiralari, logoSirasiniGeriAl, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
 import { BELGE_ARAMA_GIDEN_TURU, ELLE_BAGLI_TEKLIF_SIPARISI, ELLE_BAGLI_TEKLIF_SURUMU, baglamaUyumu, baglanacakEngeli } from './kurallar.ts';
 import type { LogoBelgeBulgusuHam } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -19,6 +19,7 @@ export interface BaglanacakBelge {
   // Giden kutusundaki satır: projede proje kimliği, satışta Siparişler'in en yeni Logo sırası. Sıra yoksa null.
   gidenNo: number | null;
   engel: string | null;
+  tutar: SiparislerLogoBaglamaSirasi['tutar'] | null;
 }
 
 export async function baglanacakBelge(db: Db, tur: LogoBaglanabilirTur, id: number): Promise<BaglanacakBelge> {
@@ -28,13 +29,13 @@ export async function baglanacakBelge(db: Db, tur: LogoBaglanabilirTur, id: numb
     const p = await projeGetir(db, id);
     if (p === null) throw bulunamadi('Proje bulunamadı.');
     const g = await s.gidenSatiri(db, 'proje', id);
-    return { tur, id, no: p.kod, tarih: null, cariKodu: null, projeKodu: p.kod, gidenNo: id, engel: baglanacakEngeli(g, undefined) };
+    return { tur, id, no: p.kod, tarih: null, cariKodu: null, projeKodu: p.kod, gidenNo: id, engel: baglanacakEngeli(g, undefined), tutar: null };
   }
   const sira = await logoBaglamaSirasi(db, st, id);
-  if (sira === null) return { tur, id, no: null, tarih: null, cariKodu: null, projeKodu: null, gidenNo: null, engel: baglanacakEngeli(null, null) };
+  if (sira === null) return { tur, id, no: null, tarih: null, cariKodu: null, projeKodu: null, gidenNo: null, engel: baglanacakEngeli(null, null), tutar: null };
   const g = await s.gidenSatiri(db, gidenTuru as s.BelgeTuru, sira.siraId);
   const cariKodu = sira.firmaId === null ? null : (await firmaOzeti(db, sira.firmaId))?.logoCariKodu ?? null;
-  return { tur, id, no: sira.no, tarih: sira.tarih, cariKodu, projeKodu: null, gidenNo: sira.siraId, engel: baglanacakEngeli(g, sira) };
+  return { tur, id, no: sira.no, tarih: sira.tarih, cariKodu, projeKodu: null, gidenNo: sira.siraId, engel: baglanacakEngeli(g, sira), tutar: sira.tutar };
 }
 
 export function bulguBaglamasi(b: BaglanacakBelge, bulgu: Pick<LogoBelgeBulgusuHam, 'iptal' | 'cariKodu' | 'projeKodu'>, baskaBagli: boolean): { uygun: boolean; neden: string | null } {
@@ -42,7 +43,9 @@ export function bulguBaglamasi(b: BaglanacakBelge, bulgu: Pick<LogoBelgeBulgusuH
   return { uygun: neden === null, neden };
 }
 
-export const baglanacakOzeti = (b: BaglanacakBelge): NonNullable<LogoBelgeAramaCevabi['baglanacak']> => ({ no: b.no, tarih: b.tarih, engel: b.engel });
+export const baglanacakOzeti = (b: BaglanacakBelge, fiyat: boolean): NonNullable<LogoBelgeAramaCevabi['baglanacak']> => ({
+  no: b.no, tarih: b.tarih, engel: b.engel, tutar: fiyat ? b.tutar : null,
+});
 
 // Kişinin son belge araması süreç belleğinde tutulur (3080 malzeme araması kalıbı, tek sunucu): bağlama köprüye gitmez, yalnız kişinin
 // gördüğü kaydı bağlar (istemcinin yazdığı alanlara güvenilmez). Sunucu yeniden açılırsa ya da 30 dakika geçerse yeniden aranır.

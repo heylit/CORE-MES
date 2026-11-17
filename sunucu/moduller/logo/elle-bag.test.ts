@@ -148,7 +148,9 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
 
   test('EB-2 aramada bağlanacak belge verilince her kayda uygunluk ve neden gelir; bağlama sırayı ve giden kutusunu "Logo\'da, elle" yazar, Logo\'ya yazmaz', async () => {
     const r = await ara('teklif', 'ORN-BAG', teklifId);
-    assert.deepEqual(r.baglanacak, { no: teklifNo, tarih: r.baglanacak?.tarih ?? null, engel: null });
+    assert.deepEqual(r.baglanacak, { no: teklifNo, tarih: r.baglanacak?.tarih ?? null, engel: null, tutar: { kdvHaric: '150.00', kdvDahil: null, paraBirimi: 'TRY' } });
+    const fiyatsiz = await logoBelgeAra(vt(), k(), 'teklif', 'ORN-BAG', false, { kisiId: yoneticiId, belge: teklifId });
+    assert.equal(fiyatsiz.baglanacak?.tutar, null, 'fiyatı görmeyene tutar gitmez');
     assert.deepEqual(r.belgeler.map((b) => [b.logoKayitNo, b.bagla?.uygun, b.bagla?.neden ?? null]), [
       [61, true, null],
       [62, false, 'Cari farklı; bağlanamaz.'],
@@ -199,6 +201,7 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
     assert.deepEqual(await hata(ikinci.id), { durum: 'hata', hata: ELLE_BAGLI_TEKLIF_SURUMU });
     assert.deepEqual(await hata(sip.id), { durum: 'hata', hata: ELLE_BAGLI_TEKLIF_SIPARISI });
     // Siparişin kendisi Logo'da elle açıldıysa o da bağlanır; teklif kuralı engel olmaz.
+    assert.deepEqual((await ara('satis-siparisi', 'ORN-BAG', siparisId)).baglanacak?.tutar, { kdvHaric: '150.00', kdvDahil: '180.00', paraBirimi: 'TRY' });
     assert.deepEqual(await bagla('satis-siparisi', siparisId, 71, 'ORN-BAG'), { kayitNo: '71' });
     assert.deepEqual(await giden('siparisler-siparisi', sip.id), { son_sonuc: 'zaten-vardi', logo_kayit_no: '71', elle: true });
     // Teklifin yeni sürümü, ilk sürümün bağlı olduğu Logo kaydına ikinci kez bağlanmaz.
@@ -207,6 +210,7 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
 
   test('EB-4 proje aynı kodla bağlanır; uçta bağlama yazma yetkisi, bağı kaldırma yönetici ister; kaldırılınca belge yeniden sıraya döner', async () => {
     const r = await ara('proje', 'ORN.EB', projeId);
+    assert.equal(r.baglanacak?.tutar, null, 'projede tutar yok');
     assert.deepEqual(r.belgeler.map((b) => [b.logoKayitNo, b.bagla?.neden ?? null]), [[81, null], [82, 'Proje kodu farklı; bağlanamaz.']]);
     assert.deepEqual(await bagla('proje', projeId, 81, 'ORN.EB'), { kayitNo: '81' });
     assert.deepEqual(await giden('proje', projeId), { son_sonuc: 'zaten-vardi', logo_kayit_no: '81', elle: true });

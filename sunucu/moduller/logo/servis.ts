@@ -1403,7 +1403,7 @@ export async function logoBelgeAra(
     };
   });
   return {
-    durum: 'tamam', fiyatGorunur, belgeler, baglanacak: bag === null ? null : baglanacakOzeti(bag),
+    durum: 'tamam', fiyatGorunur, belgeler, baglanacak: bag === null ? null : baglanacakOzeti(bag, fiyatGorunur),
     ileti: belgeler.length === 0 ? `Logo'da son ${String(BELGE_ARAMA_GUN)} günde bu metinle belge yok.` : null,
   };
 }

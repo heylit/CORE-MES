@@ -24,9 +24,9 @@ async function siparisAc(page: Page): Promise<number> {
   return (await c.json() as { id: number }).id;
 }
 
-const bulgu = (ref: number, no: string, tarih: string, bagla: { uygun: boolean; neden: string | null }) => ({
+const bulgu = (ref: number, no: string, tarih: string, bagla: { uygun: boolean; neden: string | null }, tutar = '48000') => ({
   logoKayitNo: ref, no, belgeNo: null, tarih, cariKodu: 'ORN-C-1001', cariAdi: 'ORN Deneme Makina Sanayi ve Ticaret',
-  projeKodu: null, projeAdi: null, aciklama: null, tutar: '48000', dovizTuru: null, iptal: !bagla.uygun, satirSayisi: 1,
+  projeKodu: null, projeAdi: null, aciklama: null, tutar, dovizTuru: null, iptal: !bagla.uygun, satirSayisi: 1,
   satirlar: [{ kod: 'ORN-MLZ-0042', ad: 'ORNEK Mil Ø40 uzun açıklamalı kart adı', miktar: '40', birim: 'ADET', aciklama: null }],
   core: null, bagla,
 });
@@ -43,15 +43,17 @@ async function rozetYonlendir(page: Page, durum: 'sirada' | 'logoda'): Promise<v
 
 test("sipariş ayrıntısında Logo'da ara ve bağla: uygun kayıtta Bağla, onayda tarih farkı", async ({ page, ag, ac }) => {
   const id = await siparisAc(page);
+  // Bağlanacak belgenin numarası sunucuda sayfadaki numaradır; tutar oluşturulan siparişin (40 x 10, KDV %20) tutarıdır.
+  const no = (await (await page.request.get(`${ADRES}/api/siparisler/${String(id)}`)).json() as { no: string }).no;
   await rozetYonlendir(page, 'sirada');
   const sorulan: string[] = [];
   await page.route('**/api/logo/belge-ara?*', (r) => {
     sorulan.push(new URL(r.request().url()).search);
     return r.fulfill({ json: {
       durum: 'tamam', ileti: null, fiyatGorunur: true,
-      baglanacak: { no: 'ORN-SS-0007', tarih: gun(0), engel: null },
+      baglanacak: { no, tarih: gun(0), engel: null, tutar: { kdvHaric: '400.00', kdvDahil: '480.00', paraBirimi: 'TRY' } },
       belgeler: [
-        bulgu(41, 'ORN-SS-141', '2026-11-12', { uygun: true, neden: null }),
+        bulgu(41, 'ORN-SS-141', '2026-11-12', { uygun: true, neden: null }, '480'),
         bulgu(42, 'ORN-SS-142', '2026-11-10', { uygun: false, neden: "Logo'da iptal ya da pasif; bağlanamaz." }),
       ],
     } });
@@ -67,14 +69,14 @@ test("sipariş ayrıntısında Logo'da ara ve bağla: uygun kayıtta Bağla, ona
   await pencere.getByRole('button', { name: 'Ara', exact: true }).click();
   await expect(pencere.getByText('ORN-SS-141')).toBeVisible();
   expect(sorulan).toEqual([`?tur=satis-siparisi&q=ORN-MLZ-0042&belge=${String(id)}`]);
-  await expect(pencere.getByText("ORN-SS-0007 Logo'ya gitmedi.", { exact: false })).toBeVisible();
+  await expect(pencere.getByText(`${no} Logo'ya gitmedi.`, { exact: false })).toBeVisible();
   await expect(pencere.getByText("Logo'da iptal ya da pasif; bağlanamaz.")).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('bagla-arama.png') });
   await pencere.getByRole('button', { name: 'Bağla', exact: true }).click();
-  const onay = page.getByRole('dialog', { name: 'ORN-SS-0007 ↔ ORN-SS-141 bağlansın mı?' });
+  const onay = page.getByRole('dialog', { name: `${no} ↔ ORN-SS-141 bağlansın mı?` });
   await expect(onay).toBeVisible();
-  await expect(onay.getByText(/^Fark var: tarih CORE .+, Logo 12\.11\.2026\.$/)).toBeVisible();
+  await expect(onay.getByText(/^Fark var: tarih CORE .+, Logo 12\.11\.2026\. Tutar aynı \(480,00 TL\)\.$/)).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('bagla-onay.png') });
   await onay.getByRole('button', { name: 'Bağla', exact: true }).click();
@@ -90,6 +92,8 @@ test('elle bağlanmış sipariş "elle bağlandı" ve yöneticide "Bağı kaldı
   await ac(`/siparisler/${String(id)}`);
   await expect(page.getByText('elle bağlandı', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: "Logo'da ara ve bağla" })).toHaveCount(0);
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath('elle-bagli-baslik.png') });
   await page.getByRole('button', { name: 'Bağı kaldır' }).click();
   await expect(page.getByRole('dialog', { name: 'Logo bağı kaldırılsın mı?' })).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);

@@ -825,18 +825,26 @@ export async function logoHatasiYaz(db: Db, tur: 'teklif' | 'siparis', id: numbe
 }
 
 // 3360-2 a: Logo'ya elle bağlanacak belgenin en yeni sırası (teklifte son sürüm, siparişte siparişin sırası). Sıra yoksa null.
-export interface LogoBaglamaSirasi { id: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logo_kayit_no: string | null; no: string; surum_no: number; firma_id: number | null; tarih: string }
+export interface LogoBaglamaSirasi {
+  id: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logo_kayit_no: string | null; no: string; surum_no: number; firma_id: number | null; tarih: string;
+  para_birimi: string; kdv_haric: string; kdv_dahil: string | null;
+}
 export function logoBaglamaSirasi(db: Db, tur: 'teklif' | 'siparis', belgeId: number): Promise<LogoBaglamaSirasi | null> {
   return db.tek<LogoBaglamaSirasi>(
     tur === 'teklif'
-      ? `SELECT g.id, g.durum, g.logo_kayit_no, t.no, g.surum_no, t.firma_id, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih
+      ? `SELECT g.id, g.durum, g.logo_kayit_no, t.no, g.surum_no, t.firma_id, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih, t.para_birimi,
+                round(coalesce((SELECT sum(r.miktar * f.birim_fiyat) FROM siparisler_teklif_satiri r
+                  JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id WHERE r.teklif_id = t.id), 0) * (1 - v.iskonto_orani / 100), 2)::text AS kdv_haric,
+                NULL AS kdv_dahil
            FROM siparisler_logo_gonderim g
            JOIN siparisler_teklif t ON t.id = g.teklif_id
            JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no
           WHERE g.tur = 'teklif' AND g.teklif_id = $1 ORDER BY g.surum_no DESC, g.id DESC LIMIT 1`
-      : `SELECT g.id, g.durum, g.logo_kayit_no, s.no, g.surum_no, s.firma_id, s.siparis_tarihi::text AS tarih
+      : `SELECT g.id, g.durum, g.logo_kayit_no, s.no, g.surum_no, s.firma_id, s.siparis_tarihi::text AS tarih, s.para_birimi,
+                round(x.toplam, 2)::text AS kdv_haric, round(x.toplam * (1 + s.kdv_orani / 100), 2)::text AS kdv_dahil
            FROM siparisler_logo_gonderim g
            JOIN siparisler_siparis s ON s.id = g.siparis_id
+           CROSS JOIN LATERAL (SELECT coalesce(sum(r.miktar * r.birim_fiyat), 0) AS toplam FROM siparisler_siparis_satiri r WHERE r.siparis_id = s.id) x
           WHERE g.tur = 'siparis' AND g.siparis_id = $1 ORDER BY g.id DESC LIMIT 1`,
     [belgeId],
   );

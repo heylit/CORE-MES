@@ -72,10 +72,16 @@ export const logoSiralari = (db: Db, tur: 'teklif' | 'siparis', belgeIdler: read
 export const logoSiraBelgeleri = (db: Db, tur: 'teklif' | 'siparis', siraIdler: readonly number[]) => sorgular.logoSiraEslemesi(db, tur, 'sira', siraIdler);
 
 // 3360-2 a: Logo'ya elle bağlama. Bağlanacak sıra belgenin en yeni sırasıdır; numara Logo'daki gibi sürümlüdür. Yetki denetlemez.
-export interface SiparislerLogoBaglamaSirasi { siraId: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logoKayitNo: string | null; no: string; firmaId: number | null; tarih: string }
+// Tutar karşılaştırma içindir: KDV hariç (teklifte iskontolu); KDV dahil yalnız siparişte (teklifte KDV oranı yok).
+export interface SiparislerLogoBaglamaSirasi {
+  siraId: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logoKayitNo: string | null; no: string; firmaId: number | null; tarih: string;
+  tutar: { kdvHaric: string; kdvDahil: string | null; paraBirimi: string };
+}
 export async function logoBaglamaSirasi(db: Db, tur: 'teklif' | 'siparis', belgeId: number): Promise<SiparislerLogoBaglamaSirasi | null> {
   const s = await sorgular.logoBaglamaSirasi(db, tur, belgeId);
   if (s === null) return null;
-  return { siraId: s.id, durum: s.durum, logoKayitNo: s.logo_kayit_no, no: tur === 'teklif' ? surumluNo(s.no, s.surum_no) : s.no, firmaId: s.firma_id, tarih: s.tarih };
+  return { siraId: s.id, durum: s.durum, logoKayitNo: s.logo_kayit_no, no: tur === 'teklif' ? surumluNo(s.no, s.surum_no) : s.no, firmaId: s.firma_id, tarih: s.tarih,
+    tutar: { kdvHaric: s.kdv_haric, kdvDahil: s.kdv_dahil, paraBirimi: s.para_birimi },
+  };
 }
 export const logoSirasiniGeriAl = (db: Db, tur: 'teklif' | 'siparis', siraId: number): Promise<boolean> => sorgular.logoSirasiniGeriAl(db, tur, siraId);

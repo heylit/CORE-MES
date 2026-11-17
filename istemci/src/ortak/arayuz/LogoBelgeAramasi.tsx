@@ -29,14 +29,14 @@ const TUTARSIZ: readonly LogoBelgeAramaTuru[] = ['proje', 'talep'];
 // 3360-2 a: bağlamak belgeyi yazabilenin (sunucudaki BAGLAMA_YETKISI ile aynı); ekran yalnız gizler.
 export const LOGO_BAGLAMA_YETKISI: Record<LogoBaglanabilirTur, Islem> = { proje: 'projeler.yaz', 'satis-siparisi': 'siparisler.yaz', teklif: 'siparisler.yaz' };
 // Logo TRCURR: 0 ya da boş yerel para (TL); bilinmeyen kod sayıyla yazılır.
-const DOVIZ: Record<number, string> = { 1: 'USD', 17: 'GBP', 20: 'EUR' };
+export const DOVIZ: Record<number, string> = { 1: 'USD', 17: 'GBP', 20: 'EUR' };
 
 export function tarihMetni(t: string | null): string {
   if (t === null) return '—';
   const [y, a, g] = t.split('-');
   return `${g ?? ''}.${a ?? ''}.${y ?? ''}`;
 }
-function tutarMetni(t: string, doviz: number | null): string {
+export function tutarMetni(t: string, doviz: number | null): string {
   const [tam = '0', ondalik = ''] = t.replace(/^-/, '').split('.');
   const binlik = tam.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `${t.startsWith('-') ? '-' : ''}${binlik},${ondalik.padEnd(2, '0').slice(0, 2)} ${doviz === null ? 'TL' : (DOVIZ[doviz] ?? `döviz ${String(doviz)}`)}`;

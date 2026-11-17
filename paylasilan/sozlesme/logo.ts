@@ -569,7 +569,11 @@ export const logoBelgeAramaCevabi = z.object({
   fiyatGorunur: z.boolean(),
   belgeler: z.array(logoBelgeBulgusu).max(LOGO_BELGE_ARAMA_SONUCU),
   // Bağlanacak CORE belgesi (numara, tarih) ve bağlanamıyorsa nedeni; aramada belge verilmediyse null.
-  baglanacak: z.object({ no: z.string().nullable(), tarih: tarihSemasi.nullable(), engel: z.string().nullable() }).nullable(),
+  // tutar yalnız satışta ve fiyatı görene; KDV dahil yalnız siparişte.
+  baglanacak: z.object({
+    no: z.string().nullable(), tarih: tarihSemasi.nullable(), engel: z.string().nullable(),
+    tutar: z.object({ kdvHaric: z.string(), kdvDahil: z.string().nullable(), paraBirimi: z.string() }).nullable(),
+  }).nullable(),
 });
 export type LogoBelgeAramaCevabi = z.output<typeof logoBelgeAramaCevabi>;
 // Bağlama: kayıt kişinin son aramasında olmalı ve kurala uymalıdır (sunucu kendi okuduğunu kullanır). Logo'ya yazılmaz.

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { LogoBelgeAramaCevabi, LogoBelgeBulgusu } from '#paylasilan/sozlesme/logo.ts';
 import { BildirimSaglayici } from './Bildirim.tsx';
-import { LogoBagi } from './LogoBagi.tsx';
+import { LogoBagi, tutarKarsilastirmasi } from './LogoBagi.tsx';
 import type { LogoRozetBilgisi } from './LogoRozeti.tsx';
 
 // 3360-2 a: ayrıntıda "Logo'da ara ve bağla" ve "Bağı kaldır". Belgeler uydurmadır (ORN-).
@@ -13,7 +13,7 @@ const BELGE: LogoBelgeBulgusu = {
   aciklama: null, tutar: null, dovizTuru: null, iptal: false, satirSayisi: 0, satirlar: [], core: null, bagla: { uygun: true, neden: null },
 };
 const CEVAP: LogoBelgeAramaCevabi = {
-  durum: 'tamam', ileti: null, fiyatGorunur: false, baglanacak: { no: 'SS-2026-001', tarih: '2026-11-14', engel: null },
+  durum: 'tamam', ileti: null, fiyatGorunur: false, baglanacak: { no: 'SS-2026-001', tarih: '2026-11-14', engel: null, tutar: null },
   belgeler: [BELGE, { ...BELGE, logoKayitNo: 42, no: 'ORN-SS-142', cariKodu: 'ORN-C-9', bagla: { uygun: false, neden: 'Cari farklı; bağlanamaz.' } }],
 };
 const json = (govde: unknown) => new Response(JSON.stringify(govde), { status: 200 });
@@ -43,6 +43,20 @@ const SIRADA: LogoRozetBilgisi = { id: 5, durum: 'sirada', kayitNo: null, neden:
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Logo bağı (3360-2 a)', () => {
+  it('tutar karşılaştırması: KDV hariç ya da dahilden birine eşitse aynı; para birimi farklıysa karşılaştırılmaz', () => {
+    const siparis = { kdvHaric: '40000.00', kdvDahil: '48000.00', paraBirimi: 'TRY' };
+    expect(tutarKarsilastirmasi(null, { tutar: '1', dovizTuru: null })).toBeNull();
+    expect(tutarKarsilastirmasi(siparis, { tutar: '48000', dovizTuru: null })).toEqual({ metin: 'Tutar aynı (48.000,00 TL).', fark: false });
+    expect(tutarKarsilastirmasi(siparis, { tutar: '40000.001', dovizTuru: 0 })).toEqual({ metin: 'Tutar aynı (40.000,00 TL).', fark: false });
+    expect(tutarKarsilastirmasi(siparis, { tutar: '47000', dovizTuru: null }))
+      .toEqual({ metin: 'Tutar farklı: CORE 40.000,00 TL KDV hariç (48.000,00 TL KDV dahil), Logo 47.000,00 TL.', fark: true });
+    expect(tutarKarsilastirmasi({ kdvHaric: '120.5', kdvDahil: null, paraBirimi: 'EUR' }, { tutar: '130', dovizTuru: 20 }))
+      .toEqual({ metin: 'Tutar farklı: CORE 120,50 EUR KDV hariç, Logo 130,00 EUR.', fark: true });
+    expect(tutarKarsilastirmasi(siparis, { tutar: '48000', dovizTuru: 1 }))
+      .toEqual({ metin: 'Tutar karşılaştırılamadı: para birimi farklı (CORE TL, Logo USD).', fark: true });
+    expect(tutarKarsilastirmasi(siparis, { tutar: null, dovizTuru: null })?.fark).toBe(true);
+  });
+
   it('yazabilen arar, uyan kayıtta "Bağla" onaylı gider; uymayanda neden yazar, tarih farkı onayda görünür', async () => {
     const istekler = sunucuKur();
     ciz(['siparisler.yaz'], SIRADA);
