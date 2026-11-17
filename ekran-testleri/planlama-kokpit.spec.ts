@@ -1517,6 +1517,58 @@ test('Kokpit 3330-3c: fason adımın satırında firma tarihi ve sipariş numara
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3369 a: emrin malzemesi rotadan önceki satırdır. Pay plan kaydından (uydurma), sipariş no ve tedarikçi satın alma ekinden gelir.
+test('Kokpit 3369: malzeme satırı adımlardan önce; şirket, termin, stoktan ve siparişten miktar; geç emrin nedeni malzeme; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  // S1'in tornası malzemeyi bekleyerek 20.10 08:00'de (eksen saati 32) başlar; S3'ün malzemesinin 40 adedi için sipariş yok.
+  const ops = { ...ILK, 'S1.a1': { job: 'S1', m: 'M1', S: 32, C: 40, why: { t: 'malzeme' } }, 'S3.a1': { job: 'S3', m: 'M1', S: 8, C: 14 } } as unknown as Record<string, Is>;
+  const mal = {
+    S1: [{ kod: 'H1', adim: 'a1', need: 40, t: 32, stok: 15, eksik: 0, pay: [{ tur: 'sa', kim: 7001, q: 25, gelis: 32, tb: 0 }] }],
+    S3: [{ kod: 'H2', adim: 'a1', need: 60, t: 7, stok: 20, eksik: 0, pay: [{ tur: 'yok', q: 40, gelis: 7, tb: 1 }] }],
+    S2: [{ kod: 'H1', adim: 'a1', need: 16, t: 7, stok: 16, eksik: 0, pay: [] }],
+  };
+  const c = calisma(ops, {});
+  (c.D as Record<string, unknown>)['malzemeler'] = [{ kod: 'H1', ad: 'ORN-Çubuk Ø40', birim: 'kg', stok: 31 }, { kod: 'H2', ad: 'ORN-Levha 12 mm', birim: 'adet', stok: 20 }];
+  await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: { ...plan(ops), mal } }));
+  await page.route('**/api/plan/satin-alma-eki', (r) => json(r, {
+    acikSiparisler: [{ kod: 'H1', miktar: 25, tarih: '2026-10-20', siparisNo: 'ORN-SA-7', satir: 7001, tedarikci: 'ORN-Tedarikçi A' }], tedarikTerminleri: [],
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.locator('[data-kart="S1"]').click();
+  const emir = kokpit.locator('[data-emir="S1"]');
+  const satir = emir.locator('tr[data-malzeme="H1"]');
+  await expect(satir).toHaveAttribute('data-durum', 'geliyor');
+  await expect(satir.locator('td[data-ad="Operasyon"]')).toContainText('ORN-Çubuk Ø40 · 40 kg gerekli');
+  await expect(satir.locator('td[data-ad="Şirket"]')).toHaveText('ORN-Tedarikçi Asipariş ORN-SA-7');
+  await expect(satir.locator('td[data-ad="Termin"]')).toContainText('20.10');
+  await expect(satir.locator('td[data-ad="Termin"]')).toContainText('Torna bu tarihten önce başlamaz');
+  await expect(satir.locator('td[data-ad="Adet"]')).toHaveText('15 kg stoktan25 kg siparişten');
+  // Malzeme satırı tablonun ilk satırıdır; adım satırları ondan sonra gelir.
+  await expect(emir.locator('tbody > tr').first()).toHaveAttribute('data-malzeme', 'H1');
+  await expect(emir.locator('[data-emir-neden="malzeme"]')).toContainText('1. adım (Torna) malzemeyi bekliyor');
+  await satir.scrollIntoViewIfNeeded();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3369-malzeme-geliyor-${bilgi.project.name}.png` });
+
+  await kokpit.locator('[data-kart="S3"]').click();
+  const eksik = kokpit.locator('[data-emir="S3"] tr[data-malzeme="H2"]');
+  await expect(eksik).toHaveAttribute('data-durum', 'eksik');
+  await expect(eksik.locator('td[data-ad="Şirket"]')).toHaveText('sipariş yok');
+  await expect(eksik.locator('td[data-ad="Adet"]')).toHaveText('20 adet stoktan40 adet eksik');
+  await expect(eksik.locator('td[data-ad="Durum"]')).toHaveText('Eksik');
+  await eksik.scrollIntoViewIfNeeded();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3369-malzeme-eksik-${bilgi.project.name}.png` });
+
+  await kokpit.locator('[data-kart="S2"]').click();
+  const stokta = kokpit.locator('[data-emir="S2"] tr[data-malzeme="H1"]');
+  await expect(stokta.locator('td[data-ad="Termin"]')).toHaveText('stokta');
+  await expect(stokta.locator('td[data-ad="Adet"]')).toHaveText('16 kg stoktan');
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3297-5 a: üstteki kartlar müşteri siparişidir. Bağ plan kaynağından gelir; burada kaynağın gerçek cevabına uydurma bağ eklenir:
 // S1 ve S3 aynı siparişte, S4 başka siparişte, S2 siparişe bağlı değil.
 test('Kokpit 3297-5: kartlar müşteri siparişine göre toplanır; siparişin emirleri alt alta; siparişsiz emir kendi kartında; arama siparişle bulur; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {

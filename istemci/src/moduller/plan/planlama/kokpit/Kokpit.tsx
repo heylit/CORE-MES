@@ -31,6 +31,7 @@ import {
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
+import { emirMalzemeleri } from './malzeme.ts';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
@@ -128,6 +129,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const firma = useMemo(() => (emirKaynagi ? firmaYazilari(c, emirKaynagi, bugun) : null), [c, emirKaynagi, bugun]);
   const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
+  const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
   const saatGirdisi = useMemo(() => ({ yaz: (t: number) => girdiSaati(c.D, t), oku: (v: string) => girdidenSaat(c.D, v) }), [c]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
@@ -717,7 +719,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}
-              saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu} adimSorunu={adimSorunu} adimEk={adimEk} adimBekle={adimBekle}
+              saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu} adimSorunu={adimSorunu} adimEk={adimEk} adimBekle={adimBekle} malzeme={malzeme}
             />
           )}
           <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label={BOLUM_ADI[goz]}>

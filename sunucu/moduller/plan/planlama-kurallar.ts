@@ -354,14 +354,15 @@ export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]
 
 // 525 1 a: açık satın alma siparişinden kalan miktar ve beklenen teslim günü, plandaki malzeme koduyla. Miktar kalemin birimindedir: birimi
 // malzemenin biriminden farklı satır çevrilmeden toplanamaz, alınmaz; kalanı olmayan satır da alınmaz.
-export interface AcikSiparisGelisi { kod: string; miktar: number; tarih: string | null; siparisNo: string }
+// 3369: satir gelişin Satın Alma'daki kararlı anahtarı, tedarikci teklifteki ad (yazılmadıysa null); ikisi de yalnız bu okumada taşınır.
+export interface AcikSiparisGelisi { kod: string; miktar: number; tarih: string | null; siparisNo: string; satir: number; tedarikci: string | null }
 export function acikSiparisSatirlari(
   malzemeler: readonly { id: string; kayitNo: number; unit: string | null }[],
-  gelisler: ReadonlyMap<number, readonly { tarih: string | null; miktar: string; birim: string; siparisNo: string }[]>,
+  gelisler: ReadonlyMap<number, readonly { tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }[]>,
 ): AcikSiparisGelisi[] {
   return malzemeler.flatMap((m) => (gelisler.get(m.kayitNo) ?? [])
     .filter((g) => g.birim === m.unit && Number(g.miktar) > 0)
-    .map((g) => ({ kod: m.id, miktar: Number(g.miktar), tarih: g.tarih, siparisNo: g.siparisNo })));
+    .map((g) => ({ kod: m.id, miktar: Number(g.miktar), tarih: g.tarih, siparisNo: g.siparisNo, satir: g.satirId, tedarikci: g.tedarikciAdi })));
 }
 
 // 3256-2: açık siparişlerin ve onaylı taleplerin gelişleri malzeme başına tek listede; her malzemede önce sipariş satırları, sonra talepler.

@@ -39,11 +39,12 @@ function hazir(st: MotorDurumu): number {
 describe('açık satın alma siparişi plana', () => {
   test('sunucu satırı her okumada yeniden kurulur, elle verilen sipariş satırı kalır; teslim günü yoksa geliş boştur', () => {
     const r = planGirdisi({ calisma: calisma(D0, 'uyari'), kayit: KAYIT, kaynak: kaynak([
-      { kod: '60', miktar: 5, tarih: '2026-10-22', siparisNo: 'PO-1' }, { kod: '60', miktar: 3, tarih: null, siparisNo: 'PO-2' },
+      { kod: '60', miktar: 5, tarih: '2026-10-22', siparisNo: 'PO-1', satir: 11, tedarikci: 'Deneme Tedarikci' }, { kod: '60', miktar: 3, tarih: null, siparisNo: 'PO-2' },
     ]) });
+    // Satın Alma satırının anahtarı (kim) çalışmaya girer; tedarikçi adı girmez (3369).
     assert.deepEqual(satinalma(r), [
       ELLE,
-      { kod: '60', miktar: 5, gelis: '2026-10-22 08:00', tedarikci: '', no: 'PO-1', sunucu: true },
+      { kod: '60', miktar: 5, gelis: '2026-10-22 08:00', tedarikci: '', no: 'PO-1', sunucu: true, kim: 11 },
       { kod: '60', miktar: 3, gelis: null, tedarikci: '', no: 'PO-2', sunucu: true },
     ]);
   });
@@ -66,13 +67,15 @@ describe('açık satın alma siparişi plana', () => {
   test('açık sipariş satırı malzemenin plandaki koduyla gelir; birimi farklı ya da kalanı olmayan satır alınmaz', () => {
     const gelisler = new Map([
       [60, [
-        { tarih: '2026-10-22', miktar: '5.5', birim: 'kg', siparisNo: 'PO-1' }, { tarih: null, miktar: '3', birim: 'adet', siparisNo: 'PO-2' },
-        { tarih: '2026-10-23', miktar: '0', birim: 'kg', siparisNo: 'PO-3' },
+        { tarih: '2026-10-22', miktar: '5.5', birim: 'kg', siparisNo: 'PO-1', satirId: 11, tedarikciAdi: 'Deneme Tedarikci' },
+        { tarih: null, miktar: '3', birim: 'adet', siparisNo: 'PO-2', satirId: 12, tedarikciAdi: null },
+        { tarih: '2026-10-23', miktar: '0', birim: 'kg', siparisNo: 'PO-3', satirId: 13, tedarikciAdi: null },
       ]],
-      [61, [{ tarih: null, miktar: '2', birim: 'adet', siparisNo: 'PO-4' }]],
+      [61, [{ tarih: null, miktar: '2', birim: 'adet', siparisNo: 'PO-4', satirId: -14, tedarikciAdi: null }]],
     ]);
     assert.deepEqual(acikSiparisSatirlari([{ id: '60', kayitNo: 60, unit: 'kg' }, { id: '61', kayitNo: 61, unit: 'adet' }, { id: '62', kayitNo: 62, unit: 'kg' }], gelisler), [
-      { kod: '60', miktar: 5.5, tarih: '2026-10-22', siparisNo: 'PO-1' }, { kod: '61', miktar: 2, tarih: null, siparisNo: 'PO-4' },
+      { kod: '60', miktar: 5.5, tarih: '2026-10-22', siparisNo: 'PO-1', satir: 11, tedarikci: 'Deneme Tedarikci' },
+      { kod: '61', miktar: 2, tarih: null, siparisNo: 'PO-4', satir: -14, tedarikci: null },
     ]);
   });
 });
