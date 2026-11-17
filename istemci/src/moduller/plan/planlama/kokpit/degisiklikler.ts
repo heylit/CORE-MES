@@ -82,6 +82,15 @@ export interface DegisiklikGirdisi {
   an: (ms: number) => string;
 }
 
+// Geride kalan iş: planlanan başlangıcı paydan fazla geçmiş, başlamamış, fason olmayan iş.
+const gerideMi = (m: Pick<KokpitModeli, 'simdi'>, x: KokpitModeli['isler'][string]): boolean => !x.basladi && !x.fason && m.simdi - x.S > GERIDE_PAYI;
+// "Geride kalanları yeniden planla" (3335-2b): geride işi olan emirler. Elle kilitli geride iş yeniden planlamada yerinde kalır (motor
+// kilidi kişinin kararı sayar); yalnız kilitli geride işi olan emir listeye girmez, sayısı ayrıca döner.
+export function gerideEmirleri(m: Pick<KokpitModeli, 'isler' | 'simdi'>): { emirler: string[]; kilitli: number } {
+  const emirler = new Set<string>(); let kilitli = 0;
+  for (const x of Object.values(m.isler)) if (gerideMi(m, x)) { if (x.kilitli) kilitli++; else emirler.add(x.job); }
+  return { emirler: [...emirler], kilitli };
+}
 export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGirdisi): Degisiklik[] {
   const noIle = new Map(m.emirler.map((e) => [e.no, e]));
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
@@ -98,7 +107,7 @@ export function degisiklikler({ m, bekleyen, olaylar, zaman, an }: DegisiklikGir
     };
   });
   const emirNo = new Map(m.emirler.map((e) => [e.id, e]));
-  const geride: Degisiklik[] = Object.values(m.isler).filter((x) => !x.basladi && !x.fason && m.simdi - x.S > GERIDE_PAYI)
+  const geride: Degisiklik[] = Object.values(m.isler).filter((x) => gerideMi(m, x))
     .sort((a, b) => a.S - b.S).map((x) => {
       const e = emirNo.get(x.job);
       return {

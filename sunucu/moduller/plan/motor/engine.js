@@ -69,6 +69,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [sapma]
     @property {any} [adimEk]
     @property {any} [adimBekle]
+    @property {any} [geride]
     @property {string[]} [beklemeKilit]
     @property {any} [bitti]
     @property {any} [wipP]
@@ -553,6 +554,9 @@ function schedule(st,mode,base,opt={}){
     if(b.C<=now+1e-9){if(b.fas||b.bitti||b.act)pins.push({...b,pin:1,done:1});else gecmis.add(o.id);continue;}
     const hit=!b.fas&&(st.down||[]).some(d=>d.m===b.m&&d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
     if(b.S<now-1e-9){
+      /* 3335-2b: kişi yeniden planlama istediyse (st.geride: işlem -> 1) başlaması geçmiş, başlamamış iş çalışıyor sayılmaz; saati geçmiş iş
+         gibi şimdiden sonraya yeniden dizilir, ardılı da aşağıdaki kuralla (B-2499-7) sabit kalmaz. */
+      if(st.geride&&st.geride[o.id]){gecmis.add(o.id);continue;}
       if(hit&&!b.fas){const M=cx.M[b.m];const Su=adv(M.sw,b.S,b.su);const C=adv(M.rw,Su,b.run);pins.push({...b,Su,C,lot1:Math.min(C,b.lot1),pin:1,kesik:1});}
       else pins.push({...b,pin:1});continue;}
     if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});

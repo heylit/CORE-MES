@@ -700,6 +700,42 @@ test('Kokpit 3318-2: "Teslimden geriye yerleştir" onay sorar, emrin yönünü g
   expect(ag.hatalar).toEqual([]);
 });
 
+// Kart 3335 a, dilim 2b: "Geride kalanları yeniden planla (N)". Saat 12:00: S1'in Torna adımı 08:00'de başlayacaktı, başlamadı.
+test('Kokpit 3335-2b: Planla menüsünde geride kalanları yeniden planla; sayı geride emir sayısı, komut taslağa yazılır ve Geri alır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T12:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible().catch(() => false)) await karsilama.click();
+  const dugme = kokpit.getByRole('button', { name: 'Planla', exact: true });
+  await expect(dugme).toBeEnabled();
+  await dugme.click();
+  const menu = kokpit.getByRole('menu', { name: 'Planla' });
+  const geride = menu.getByRole('menuitem', { name: /Geride kalanları yeniden planla \(1\)/ });
+  await expect(geride).toBeEnabled();
+  await expect(geride).toContainText('şimdiden sonraya dizer');
+  // Sıra ön izlemedeki gibi: seçili sipariş, geride kalanlar, bütün plan.
+  await expect(menu.getByRole('menuitem').filter({ hasText: /yeniden planla|baştan kur/ })).toHaveText([/Seçili siparişi yeniden planla/, /Geride kalanları yeniden planla/, /Bütün planı baştan kur/]);
+  const kutu = await menu.boundingBox(), gen = page.viewportSize()!.width;
+  expect(kutu!.x).toBeGreaterThanOrEqual(0);
+  expect(kutu!.x + kutu!.width).toBeLessThanOrEqual(gen + 1);
+  if (bilgi.project.name === 'g360') expect((await geride.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await geride.scrollIntoViewIfNeeded();
+  await expect(geride).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3335-2b-menu-${bilgi.project.name}.png` });
+  await geride.click();
+  await expect(menu).toHaveCount(0);
+  await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['yeniden-planla', 'diz']);
+  expect(t.s.komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['S1'] }]);
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  await kokpit.getByRole('group', { name: 'Geri' }).getByRole('button').click();
+  await expect.poll(() => t.s.satirlar.length).toBe(0);
+  expect(ag.hatalar).toEqual([]);
+});
+
 // Kart 3335 a, 2. dilim: "Planla" menüsü üst şeridin başındadır. Toplu ve yeniden planlama taslağa "yeniden-planla" komutu yazar, plan
 // taslağın görünümünde yeniden dizilir, Geri ikisini birlikte alır; seçili plansız siparişin yönü satırın içinde seçilir (var olan plana alma).
 test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yazar ve Geri alır; seçili siparişi ileriye planla; tüm planın yönü Araçlar\'da; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
