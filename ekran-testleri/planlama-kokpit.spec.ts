@@ -1556,6 +1556,22 @@ test('Kokpit 3369: malzeme satırı adımlardan önce; şirket, termin, stoktan 
   await satir.scrollIntoViewIfNeeded();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3369-malzeme-geliyor-${bilgi.project.name}.png` });
+  // 3369-2: tahtada "Malzeme" satırı; gelişi beklenen malzeme şimdiden geliş anına çubuktur, eksik ve stoktaki çubuk olmaz. Çubuk emri seçer.
+  const cubuk = kokpit.locator('.tc-pyq-tahta [data-malzeme-cubugu]');
+  if (await kokpit.locator('.tc-pyq-tahta').isVisible()) {
+    await expect(kokpit.locator('.tc-pyq-tahta [data-malzeme-satiri] .tc-pyq-bas')).toHaveText('Malzeme1 emir bekliyor');
+    await expect(cubuk).toHaveCount(1);
+    await expect(cubuk).toHaveAttribute('data-malzeme-cubugu', 'S1');
+    await expect(cubuk).toContainText('ORN-Tedarikçi A');
+    const kutu = await cubuk.boundingBox(), is = await kokpit.locator('.tc-pyq-tahta [data-is="S1.a1"]').boundingBox();
+    expect(kutu && is && Math.abs(kutu.x + kutu.width - is.x)).toBeLessThanOrEqual(2);
+    await cubuk.scrollIntoViewIfNeeded();
+    // Satır öteki satırların başlığını örtmez; görüntü kaydırma bittikten sonra alınır.
+    await expect(kokpit.locator('.tc-pyq-tahta [data-satir="M1"] .tc-pyq-bas')).toBeVisible();
+    await expect(kokpit.locator('[data-aciklama="malzeme"]')).toHaveText('Malzeme bekleniyor');
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `/tmp/tmiv2-ekran/3369-tahta-cubugu-${bilgi.project.name}.png` });
+  }
 
   await kokpit.locator('[data-kart="S3"]').click();
   const eksik = kokpit.locator('[data-emir="S3"] tr[data-malzeme="H2"]');

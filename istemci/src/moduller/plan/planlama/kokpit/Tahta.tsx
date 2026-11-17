@@ -7,6 +7,8 @@ import {
   SAAT_ENI, adimBaglari, aralikYuku, durumYazisi, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
+import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
+import type { EmirMalzemeleri } from './malzeme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 
 // Kokpit tahtası: tezgâh ya da emir başına bir satır, satırda saat eksenli işler. İş bir düğmedir; yeri CSS değişkeniyle verilir
@@ -58,6 +60,8 @@ export interface TahtaOzellikleri {
   grupKaydir?: ((dS: number) => void) | null;
   // Sürekli yakınlaştırma (3365): verilirse saat eni ölçeğin sabit eni yerine budur (yalnız Gün, 3 gün, Hafta).
   saatEni?: number | null;
+  // Emirlerin malzemesi (3369): verilince gelişi beklenen malzeme tahtanın üstünde "Malzeme" satırında çubuk olur.
+  malzeme?: EmirMalzemeleri | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 // Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
@@ -390,6 +394,7 @@ export function Tahta(o: TahtaOzellikleri) {
     ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
     : emirler.filter((e) => e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum }));
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
+  const cubuklar = once ? [] : malzemeCubuklari(o.malzeme, { simdi: m.simdi, bas: m.bas, emirler }, zaman);
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
   const oneriIsi = oneri ? m.isler[oneri.isId] : undefined;
   const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : yerlestirme ? new Set(yerlestirme.tezgahlar) : null;
@@ -474,6 +479,7 @@ export function Tahta(o: TahtaOzellikleri) {
             </div></div>
           </div>
         )}
+        <MalzemeSeridi cubuklar={cubuklar} bas={m.bas} px={px} zaman={zaman} secEmir={secEmir} sec={(e) => { if (!tasinan) sec(e, null); }} yanan={yanan} uyar={uyar} />
         {satirlar.map((r) => (
           <div
             className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum} data-seritli={(yerlesim.satir.get(r.kimlik) ?? 1) > 1 ? '' : undefined}
