@@ -1774,16 +1774,16 @@ export type FasonSiparisTermini = (isEmriIdleri: readonly number[]) => Promise<R
 
 // Taslak emir plana alınmadan plan çizelgesinde denenebilir; varsayılan yalnız planlı ve başlamış emirlerdir.
 export const planlanacakIsEmirleri = (
-  db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: FasonTahmini; fasonSiparisTermini?: FasonSiparisTermini } = {},
+  db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: FasonTahmini; fasonSiparisTermini?: FasonSiparisTermini; fasonGun?: number } = {},
 ): Promise<PlanIsEmri[]> =>
-  acikAdimlar(db, secenek.taslakDahil ?? false, (r): r is number => r !== null, secenek.fasonTahmini, secenek.fasonSiparisTermini);
+  acikAdimlar(db, secenek.taslakDahil ?? false, (r): r is number => r !== null, secenek.fasonTahmini, secenek.fasonSiparisTermini, secenek.fasonGun);
 
 // Rotasız emrin (B13) açık adımları, plan satırıyla aynı biçimde (kart #1257): plan bunları yerleştirmez, Arkon Hazırlık'a iş paketi olarak alır.
 export type RotasizIsEmri = Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: null };
 export const rotasizIsEmirleri = (db: Db): Promise<RotasizIsEmri[]> => acikAdimlar(db, false, (r): r is null => r === null);
 
 async function acikAdimlar<R extends number | null>(
-  db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini, fasonSiparisTermini?: FasonSiparisTermini,
+  db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini, fasonSiparisTermini?: FasonSiparisTermini, fasonGun?: number,
 ): Promise<(Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: R })[]> {
   // 1208: otomatik GKK plana girmez (fason adımı gibi): kaynaksız ve süresizdir, girse ardılını bekletirdi; fasonun beklemesi ardıla geçer.
   const satirlar = (await s.planlanacakIsEmirleriGetir(db, taslakDahil)).filter((i) => !otomatikGkkMi(i));
@@ -1839,7 +1839,7 @@ async function acikAdimlar<R extends number | null>(
       devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi,
-        (x) => (x.id === undefined ? null : siparisGelisleri.get(x.id) ?? null)),
+        (x) => (x.id === undefined ? null : siparisGelisleri.get(x.id) ?? null), fasonGun),
       ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
       ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];

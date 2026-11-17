@@ -29,7 +29,7 @@ import { fasonSiparisTarihleri, fasonSuresiTahminleri } from '../satin-alma/disa
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import {
-  FASON_VARSAYILAN_GUN, adimOnculleri, baslatmaYetkinlikIhlali, bekleyenEmirler, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, makineYetkinlikIhlali,
+  adimOnculleri, baslatmaYetkinlikIhlali, bekleyenEmirler, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, makineYetkinlikIhlali,
   planlanacakIsEmirleri, rotadanAdimAdetleri,
 } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -45,7 +45,7 @@ import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu
 import { planBayatligi } from './bayat/servis.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
-import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
+import { hedefMotorAyari, taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
 import * as s from './sorgular.ts';
 import { onayDefterSatiri } from './degisiklik-defteri-kurallar.ts';
 import { degisimler, emirBitisleri } from './olcum-kurallar.ts';
@@ -347,12 +347,13 @@ function denemeOnculleri(adimlar: readonly RotaAdimi[], icler: readonly { a: Rot
   return icler.map(({ a }) => (a.onculler === null ? null : coz(a.onculler, new Set())));
 }
 
-// Rotanın iç adımları; fason adım iş olmaz, termini sonraki iç adımın beklemesine eklenir (termini girilmemiş fason FASON_VARSAYILAN_GUN).
+// Rotanın iç adımları; fason adım iş olmaz, termini sonraki iç adımın beklemesine eklenir (termini girilmemiş fason motor ayarının fason
+// süresi kadar, 3355 a).
 type RotaAdimi = NonNullable<Awaited<ReturnType<typeof revizyonGetir>>>['adimlar'][number];
-function icAdimlar(adimlar: readonly RotaAdimi[]): { a: RotaAdimi; fasonBekleGun: number }[] {
+function icAdimlar(adimlar: readonly RotaAdimi[], fasonGun: number): { a: RotaAdimi; fasonBekleGun: number }[] {
   let gun = 0;
   return [...adimlar].sort((x, y) => x.sira - y.sira).flatMap((a) => {
-    if (a.fason !== null) { gun += a.fason.terminGun ?? FASON_VARSAYILAN_GUN; return []; }
+    if (a.fason !== null) { gun += a.fason.terminGun ?? fasonGun; return []; }
     const fasonBekleGun = gun;
     gun = 0;
     return [{ a, fasonBekleGun }];
@@ -361,7 +362,7 @@ function icAdimlar(adimlar: readonly RotaAdimi[]): { a: RotaAdimi; fasonBekleGun
 
 // Deneme emri (Hızlı dene: acil sipariş): yürürlükteki rotadan, eksi kimlikli iş emirleriyle; canlıya geçmez.
 async function denemeIsleri(
-  db: Db, d: DegisiklikSatiri, rotalar: RotaOnbellek, urunler: Map<number, { kod: string; ad: string }>, istasyonMakineleri: IstasyonMakineleri,
+  db: Db, d: DegisiklikSatiri, rotalar: RotaOnbellek, urunler: Map<number, { kod: string; ad: string }>, istasyonMakineleri: IstasyonMakineleri, fasonGun: number,
 ): Promise<Is[]> {
   const v = d.veri as { malzemeNo: number; adet: number; teslim: string; revizyonId: number } | null;
   if (!v) return [];
@@ -369,7 +370,7 @@ async function denemeIsleri(
   rotalar.set(v.revizyonId, r);
   if (!r) return [];
   const sonuc: Is[] = [];
-  const icler = icAdimlar(r.adimlar);
+  const icler = icAdimlar(r.adimlar, fasonGun);
   const onculler = denemeOnculleri(r.adimlar, icler, (n) => -(d.id * 1000 + n + 1));
   // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); adet gerçek emirdeki gibi uretim-emirleri'nin kuralından.
   const adimAdetleri = rotadanAdimAdetleri(v.adet, r.adimlar);
@@ -452,12 +453,12 @@ export async function okumaBellegiyle<T>(db: Db, is: () => Promise<T>): Promise<
   okumaBellekleri.set(db, new Map());
   try { return await is(); } finally { okumaBellekleri.delete(db); }
 }
-export function planlanacakIsler(db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: boolean } = {}): Promise<PlanIsEmri[]> {
+export function planlanacakIsler(db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: boolean; fasonGun?: number } = {}): Promise<PlanIsEmri[]> {
   const taslakDahil = secenek.taslakDahil ?? false;
-  const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q), fasonSiparisTermini: async (idler: readonly number[]) => new Map([...await fasonSiparisTarihleri(db, idler)].map(([id, x]) => [id, x.tarih])) } : {}) });
+  const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonGun === undefined ? {} : { fasonGun: secenek.fasonGun }), ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q), fasonSiparisTermini: async (idler: readonly number[]) => new Map([...await fasonSiparisTarihleri(db, idler)].map(([id, x]) => [id, x.tarih])) } : {}) });
   const bellek = okumaBellekleri.get(db);
   if (bellek === undefined) return oku();
-  const anahtar = `${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}`;
+  const anahtar = `${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}|${String(secenek.fasonGun ?? '')}`;
   if (!bellek.has(anahtar)) bellek.set(anahtar, oku());
   return bellek.get(anahtar)!;
 }
@@ -492,8 +493,9 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
   const ayar = await s.ayarOku(db, hedef);
   // Açık işler ve onlardan türeyen okumalar yalnız "taslak emirleri de planla" ayarına bağlıdır.
   const t = String(ayar.taslakEmirler);
-  // Termini girilmemiş fason adım: satın almanın geçmiş teslim tahmini, yoksa FASON_VARSAYILAN_GUN (CA-2).
-  const acik = await bir(`acik:${t}`, () => planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: true }));
+  // Termini girilmemiş fason adım: satın almanın geçmiş teslim tahmini, yoksa motor ayarının fason süresi (CA-2, 3355 a).
+  const { fasonGun } = (await hedefMotorAyari(db, hedef)).degerler;
+  const acik = await bir(`acik:${t}:${String(fasonGun)}`, () => planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: true, fasonGun }));
   const eksikRevizyon = await bir(`eksik:${t}`, () => girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId)));
   const siparisSatirlari = await bir(`siparis:${t}`, () => siparisSatiriOzetleri(db, acik.flatMap((i) => (i.siparisSatiriId == null ? [] : [i.siparisSatiriId]))));
   // Kaynaklar ve ürün adları işlerden önce tek turda okunur: iş başına okuma olmasın.
@@ -541,7 +543,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
     }
     if (d.tur === 'makine_ariza') { const k = kaynaklar.get(`makine:${String(v.makineId)}`); if (k) kaynaklar.set(`makine:${k.id}`, { ...k, aktif: false }); }
     if (d.tur === 'gun_kapat') { const g = Math.round(((tesisGunBasi(String(v.tarih)) - simdi) / DK - gun0) / GUN_DK); if (g >= 0) b.kapaliGunler.push(g); }
-    if (d.tur === 'acil_emir') for (const i of await denemeIsleri(db, d, rotalar, urunler, istasyonMakineleri)) isler.set(i.id, i);
+    if (d.tur === 'acil_emir') for (const i of await denemeIsleri(db, d, rotalar, urunler, istasyonMakineleri, fasonGun)) isler.set(i.id, i);
   }
   devirleriKur(isler);
   b.eskiRota = await eskiRotaliEmirler(db, isler, rotalar, ortak);
@@ -2598,7 +2600,7 @@ export async function onizle(db: Db, k: Kullanici, g: {
   const once = await kos();
   const rotalar: RotaOnbellek = new Map([[r.id, r]]);
   const urunler = new Map<number, { kod: string; ad: string }>();
-  const icler = icAdimlar(r.adimlar);
+  const icler = icAdimlar(r.adimlar, (await hedefMotorAyari(db, g.taslak)).degerler.fasonGun);
   const onculler = denemeOnculleri(r.adimlar, icler, (n) => ONIZLEME_EMRI - n);
   for (const [n, { a, fasonBekleGun }] of icler.entries()) {
     const i = await isKur(db, {
