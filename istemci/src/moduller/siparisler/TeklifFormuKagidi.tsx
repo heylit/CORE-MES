@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import { FORM_SOZLERI, alanlariDoldur, formSayisi, formTarihi, hitap } from './teklif-formu.ts';
 
-export interface FormSatiri { id: number; kod: string | null; ad: string; miktar: string; birim: string | null; birimFiyat: string | null; iskontoluFiyat: string | null; tutar: string | null }
+export interface FormSatiri { id: number; kod: string | null; ad: string; miktar: string; birim: string | null; yerlilik: string | null; birimFiyat: string | null; iskontoluFiyat: string | null; tutar: string | null }
 export interface FormVerisi {
   no: string;
   surumNo: number;
@@ -42,6 +42,8 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
   const alt = doldur(icerik.alt).trim();
   const iskontolu = veri.iskontoOrani !== null && Number(veri.iskontoOrani) > 0;
   const kodlu = veri.satirlar.some((s) => s.kod !== null);
+  // 3400-3: hiçbir kalemde yerlilik yoksa sütun basılmaz.
+  const yerli = veri.satirlar.some((s) => s.yerlilik !== null);
   const para = veri.paraBirimi;
   const kurumSatirlari = [kurum.adres, [kurum.telefon && `${z.tel} ${kurum.telefon}`, kurum.eposta].filter(Boolean).join(' · '), kurum.vergi].filter((x) => x !== '');
   const belge = icerik.belge;
@@ -91,7 +93,7 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
       <table className="tc-tf-tablo">
         <thead>
           <tr>
-            <th className="tc-tf-sag">#</th>{kodlu && <th>{z.kod}</th>}<th>{z.aciklama}</th><th className="tc-tf-sag">{z.miktar}</th><th>{z.birim}</th>
+            <th className="tc-tf-sag">#</th>{kodlu && <th>{z.kod}</th>}<th>{z.aciklama}</th><th className="tc-tf-sag">{z.miktar}</th><th className="tc-tf-birim">{z.birim}</th>{yerli && <th className="tc-tf-sag">{z.yerlilik}</th>}
             <th className="tc-tf-sag">{z.birimFiyat}</th>{iskontolu && <th className="tc-tf-sag">{z.iskontolu}</th>}<th className="tc-tf-sag">{`${z.tutar} (${para})`}</th>
           </tr>
         </thead>
@@ -102,7 +104,8 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
               {kodlu && <td className="tc-tf-kod">{s.kod ?? ''}</td>}
               <td>{s.ad}</td>
               <td className="tc-tf-sag">{formSayisi(s.miktar, dil, 'miktar')}</td>
-              <td>{s.birim ?? ''}</td>
+              <td className="tc-tf-birim">{s.birim ?? ''}</td>
+              {yerli && <td className="tc-tf-sag">{s.yerlilik === null ? '' : `%${formSayisi(s.yerlilik, dil, 'miktar')}`}</td>}
               <td className="tc-tf-sag">{formSayisi(s.birimFiyat, dil, 'fiyat')}</td>
               {iskontolu && <td className="tc-tf-sag">{formSayisi(s.iskontoluFiyat, dil, 'fiyat')}</td>}
               <td className="tc-tf-sag">{formSayisi(s.tutar, dil)}</td>

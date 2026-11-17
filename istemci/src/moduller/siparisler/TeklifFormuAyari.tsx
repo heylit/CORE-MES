@@ -20,9 +20,9 @@ const ORNEK: FormVerisi = {
   no: 'ORN-T-0001', surumNo: 2, tarih: '2026-01-15', gecerlilik: '2026-02-14', baslik: 'ORN- flanş ve mil işleme', paraBirimi: 'TRY',
   teslimGun: 21, terminTarihi: null, odemeKosulu: '30 gün vadeli', iskontoOrani: '5.00',
   satirlar: [
-    { id: 1, kod: 'ORN-MLZ-101', ad: 'ORN- flanş Ø120', miktar: '50.000', birim: 'adet', birimFiyat: '420.0000', iskontoluFiyat: '399.0000', tutar: '19950.00' },
-    { id: 2, kod: 'ORN-MLZ-102', ad: 'ORN- mil Ø40 x 300', miktar: '120.000', birim: 'adet', birimFiyat: '185.5000', iskontoluFiyat: '176.2250', tutar: '21147.00' },
-    { id: 3, kod: null, ad: 'ORN- burç (kartsız kalem)', miktar: '200.000', birim: 'adet', birimFiyat: '42.0000', iskontoluFiyat: '39.9000', tutar: '7980.00' },
+    { id: 1, kod: 'ORN-MLZ-101', ad: 'ORN- flanş Ø120', miktar: '50.000', birim: 'adet', birimFiyat: '420.0000', iskontoluFiyat: '399.0000', tutar: '19950.00', yerlilik: '62.50' },
+    { id: 2, kod: 'ORN-MLZ-102', ad: 'ORN- mil Ø40 x 300', miktar: '120.000', birim: 'adet', birimFiyat: '185.5000', iskontoluFiyat: '176.2250', tutar: '21147.00', yerlilik: null },
+    { id: 3, kod: null, ad: 'ORN- burç (kartsız kalem)', miktar: '200.000', birim: 'adet', birimFiyat: '42.0000', iskontoluFiyat: '39.9000', tutar: '7980.00', yerlilik: null },
   ],
   musteri: { ad: 'ORN- Makine A.Ş.', adres: 'ORN- Sanayi Mah. 1. Cad. No: 1\nORN- İlçe / ORN- İl', vergiDairesi: 'ORN- Vergi Dairesi', vergiNo: '0000000000' },
   ilgili: '',

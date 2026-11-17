@@ -36,7 +36,7 @@ const SURUM = {
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
   istenenTarih: null, aciklama: null, not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1, olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
-  satirlar: [{ id: 11, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Mil', aciklamalar: [], tanim: 'Deneme Mil 20mm', birim: 'adet', miktar: '40.000' }],
+  satirlar: [{ id: 11, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Mil', aciklamalar: [], tanim: 'Deneme Mil 20mm', birim: 'adet', miktar: '40.000', yerlilikOrani: '62.50' }],
   surumler: [SURUM],
 } satisfies TeklifAyrintiCevabi;
 
@@ -105,7 +105,7 @@ describe('Teklif formu biçimleri', () => {
 describe('Teklif formu kâğıdı', () => {
   const veri: FormVerisi = {
     no: 'TK-1', surumNo: 2, tarih: '2026-10-02', gecerlilik: '2026-11-01', baslik: 'Deneme', paraBirimi: 'TRY', teslimGun: 14, terminTarihi: null, odemeKosulu: null, iskontoOrani: '0',
-    satirlar: [{ id: 1, kod: null, ad: 'Deneme kalem', miktar: '2', birim: null, birimFiyat: '5.0000', iskontoluFiyat: '5.0000', tutar: '10.00' }],
+    satirlar: [{ id: 1, kod: null, ad: 'Deneme kalem', miktar: '2', birim: null, birimFiyat: '5.0000', iskontoluFiyat: '5.0000', tutar: '10.00', yerlilik: null }],
     musteri: { ad: 'Deneme Musteri', adres: null, vergiDairesi: null, vergiNo: null }, ilgili: '',
     toplam: { araToplam: '10.00', iskontoTutari: '0.00', kdvHaric: '10.00', kdvOrani: '20', kdvTutari: '2.00', genelToplam: '12.00' },
   };
@@ -144,6 +144,17 @@ describe('Teklif formu kâğıdı', () => {
     expect(within(kagit).getByRole('cell', { name: 'ORN-001' })).toBeTruthy();
     expect(within(kagit).getByRole('cell', { name: 'adet' })).toBeTruthy();
   });
+  it('3400-3: yerlilik sütunu yalnız oranı olan kalem varken basılır; oransız kalemde hücre boştur', () => {
+    render(<TeklifFormuKagidi dil="tr" icerik={ICERIK} kurum={KURUM} logo={null} veri={veri} />);
+    expect(within(screen.getByRole('article', { name: 'Teklif TK-1' })).queryByRole('columnheader', { name: 'Yerlilik' })).toBeNull();
+    cleanup();
+    const yerli = { ...veri, satirlar: [{ ...veri.satirlar[0]!, yerlilik: '62.50' }, { ...veri.satirlar[0]!, id: 2, ad: 'Deneme kalem 2' }] };
+    render(<TeklifFormuKagidi dil="tr" icerik={ICERIK} kurum={KURUM} logo={null} veri={yerli} />);
+    const kagit = screen.getByRole('article', { name: 'Teklif TK-1' });
+    expect(within(kagit).getByRole('columnheader', { name: 'Yerlilik' })).toBeTruthy();
+    expect(within(kagit).getByRole('cell', { name: '%62,5' })).toBeTruthy();
+  });
+
   it('İngilizce şablon etiketleri ve sayı biçimi İngilizcedir; giriş alanları teklifle dolar', () => {
     render(<TeklifFormuKagidi dil="en" icerik={{ ...ICERIK, giris: 'Dear {YETKILI}, {TEKLIF_NO}' }} kurum={KURUM} logo={null}
       veri={{ ...veri, ilgili: 'Deneme Kisi', musteri: { ...veri.musteri, vergiDairesi: 'Deneme VD' } }} />);

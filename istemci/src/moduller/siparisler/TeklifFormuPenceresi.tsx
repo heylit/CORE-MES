@@ -86,7 +86,7 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
       no: teklif.no, surumNo: surum.surumNo, tarih: surum.olusturma, gecerlilik: surum.gecerlilik, baslik: teklif.baslik, paraBirimi: teklif.paraBirimi,
       teslimGun: surum.teslimGun, terminTarihi: surum.terminTarihi, odemeKosulu: surum.odemeKosulu, iskontoOrani: surum.iskontoOrani,
       satirlar: teklif.satirlar.map((s) => ({
-        id: s.id, kod: s.malzemeKodu, ad: s.tanim, miktar: s.miktar, birim: s.birim,
+        id: s.id, kod: s.malzemeKodu, ad: s.tanim, miktar: s.miktar, birim: s.birim, yerlilik: s.yerlilikOrani,
         birimFiyat: fiyat.get(s.id)?.birimFiyat ?? null, iskontoluFiyat: fiyat.get(s.id)?.iskontoluFiyat ?? null, tutar: fiyat.get(s.id)?.tutar ?? null,
       })),
       musteri: veri.data.musteri, ilgili,

@@ -12,6 +12,8 @@ export interface SecilenKart {
   ad: string;
   birim: string | null;
   aciklamalar: readonly string[];
+  // 3400-3: kartın yerlilik oranı (yüzde); yoksa ya da bilinmiyorsa null.
+  yerlilikOrani: string | null;
 }
 
 // 2120: satırda kartın adı, altında Açıklama 1-3; ad yoksa tire, açıklama yoksa ikinci satır çizilmez.
@@ -27,6 +29,10 @@ export function KalemMetni({ ad, aciklamalar }: { ad: string | null; aciklamalar
 export const secilenKartMetni = (k: SecilenKart): string =>
   [`${k.kod ?? ''} ${k.ad}${k.birim ? ` (${k.birim})` : ''}`.trim(), ...k.aciklamalar].join(' · ');
 
+
+export const kartSecimi = (m: MalzemeSecenegi): SecilenKart => ({
+  no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: m.yerlilikOrani,
+});
 
 // Sunucu yalnız aktif mamul, yarı mamul ve ticari mal kartlarını verir (SIP-02).
 const SUTUNLAR: readonly Sutun<MalzemeSecenegi>[] = [
@@ -65,7 +71,7 @@ export function MalzemeSecici({ acik, kapat, sec }: Ozellikler) {
             sutunlar={SUTUNLAR}
             satirlar={satirlar}
             satirAnahtari={(m) => m.no}
-            satirSec={(m) => sec({ no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar })}
+            satirSec={(m) => sec(kartSecimi(m))}
             mesgul={liste.isPending}
             bosMesaj={liste.isPending ? 'Yükleniyor' : 'Satılabilir kart bulunamadı.'}
           />
