@@ -5,7 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ARTIK_HURDA_ESIGI_MM, FORM_ADLARI, FORM_OLCULERI, OLCU_ETIKETLERI, OLCULU_FORMLAR, VARSAYILAN_KESME_MM, type OlculuForm } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
-import type { ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, OlcuAdayi, OlcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import type { ArtikParcaCevabi, ArtikParcaGovdesi, ArtikParcalarCevabi, ArtikParcaSatiri, IhtiyacDurumu, IhtiyaclarCevabi, IhtiyacSatiri, OlcuAdayi, OlcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import {
   Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, MalzemeSecici, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type SeciliKayit, type Sutun,
 } from '../../ortak/arayuz/index.ts';
@@ -16,7 +16,7 @@ import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem } from './ortak.tsx';
 import './stok.css';
 
-type Sekme = 'ara' | 'artik';
+type Sekme = 'ihtiyac' | 'ara' | 'artik';
 
 // Fazla pay seçenekleri (surum 4 madde 11); değer sorgu parametresidir.
 const PAYLAR = [
@@ -223,14 +223,43 @@ function ArtikParcalar() {
   );
 }
 
+const IHTIYAC_ROZETI: Record<IhtiyacDurumu, { ton: 'tamam' | 'uyari' | 'hata' | 'pasif'; metin: string }> = {
+  karsilanir: { ton: 'tamam', metin: 'Stoktan karşılanır' }, kismen: { ton: 'uyari', metin: 'Kısmen' }, yok: { ton: 'hata', metin: 'Stokta yok' },
+  bilinmiyor: { ton: 'pasif', metin: 'Hesaplanamadı' },
+};
+
+// 3398-2: teklif istenmeden önceki satın alma kalemleri; karar ve ayırma sonraki adımda.
+function Ihtiyaclar() {
+  const liste = useQuery({ queryKey: anahtarlar.liste('kontrol-ihtiyaclari', {}), queryFn: () => api.get<IhtiyaclarCevabi>('/stok/kontrol-ihtiyaclari') });
+  const sutunlar: Sutun<IhtiyacSatiri>[] = [
+    { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (x) => x.talepNo },
+    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x) => <Link to={`/stok/malzemeler/${x.malzemeNo}`}>{x.kod}</Link>, csv: (x) => x.kod },
+    { anahtar: 'olcu', baslik: 'Ölçü', hucre: (x) => olcuMetni(x.form, x.olcu) },
+    { anahtar: 'istenen', baslik: 'İstenen', hizala: 'sag', hucre: (x) => `${miktarMetni(x.miktar)} ${x.birim}` },
+    { anahtar: 'karsilanan', baslik: 'Stoktan', hizala: 'sag', hucre: (x) => (x.karsilanan === null ? '—' : `${miktarMetni(String(x.karsilanan))} ${x.birim}`) },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <Rozet ton={IHTIYAC_ROZETI[x.durum].ton}>{IHTIYAC_ROZETI[x.durum].metin}</Rozet>, csv: (x) => x.durum },
+    { anahtar: 'aday', baslik: 'En uygun', kes: true, hucre: (x) => (x.enIyi === null ? '—'
+      : `${x.enIyi.kaynak === 'artik' ? 'Artık · ' : ''}${x.enIyi.kod} · ${olcuMetni(x.enIyi.form, x.enIyi.olcu)} · ${x.enIyi.konumlar.join(', ')}`) },
+    { anahtar: 'tarih', baslik: 'İhtiyaç', hucre: (x) => x.ihtiyacTarihi ?? '—' },
+  ];
+  return (
+    <Kart baslik="Teklif öncesi talepler" simge="list">
+      {liste.isPending ? <DurumKutusu durum="yukleniyor" />
+        : liste.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />
+          : <Tablo etiket="Teklif öncesi talepler" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(x) => `${x.talepId}-${x.kalemId}`}
+              bosMesaj="Teklif istenmemiş talep kalemi yok." />}
+    </Kart>
+  );
+}
+
 export function StokKontrol() {
-  const [sekme, sekmeYaz] = useState<Sekme>('ara');
+  const [sekme, sekmeYaz] = useState<Sekme>('ihtiyac');
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Stok kontrol" aciklama="İstenen ölçüye en yakın stoğu bulur: aynı form ve kalite, istenenden küçük olmayan ve seçtiğiniz fazla pay içindeki çubuk, levha ve artık parçalar, en az fireden başlayarak." />
       <Sekmeler etiket="Stok kontrol" secili={sekme} sec={sekmeYaz}
-        sekmeler={[{ anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
-      {sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}
+        sekmeler={[{ anahtar: 'ihtiyac', baslik: 'Talepler', simge: 'list' }, { anahtar: 'ara', baslik: 'Ölçüyle ara', simge: 'search' }, { anahtar: 'artik', baslik: 'Artık parçalar', simge: 'box' }]} />
+      {sekme === 'ihtiyac' ? <Ihtiyaclar /> : sekme === 'ara' ? <OlcuyleAra /> : <ArtikParcalar />}
     </section>
   );
 }

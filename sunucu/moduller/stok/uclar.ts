@@ -30,7 +30,7 @@ import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdes
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi, irsaliyeParametresi } from '#paylasilan/sozlesme/stok-irsaliye.ts';
 import { malKabulTaslagiCevabi, malKabulTaslagiKaydetCevabi, malKabulTaslagiKaydetGovdesi, malKabulTaslagiSilGovdesi } from '#paylasilan/sozlesme/stok-mal-kabul-taslagi.ts';
-import { artikParcaCevabi, artikParcaGovdesi, artikParcaKapatGovdesi, artikParcaParametresi, artikParcalarCevabi, artikParcalarSorgusu, olcuAramaCevabi, olcuAramaSorgusu } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import { artikParcaCevabi, artikParcaGovdesi, artikParcaKapatGovdesi, artikParcaParametresi, artikParcalarCevabi, artikParcalarSorgusu, ihtiyaclarCevabi, olcuAramaCevabi, olcuAramaSorgusu } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 import { emrinFisleri } from './emir-fisleri.ts';
@@ -281,6 +281,8 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/stok/yerlesim/kaydet', yetki: 'stok.harita-yaz', govde: yerlesimKaydetGovdesi, cevap: yerlesimCevabi, isle: ({ db, govde }) => s.yerlesimKaydet(db, govde) }),
   uc({ yontem: 'GET', yol: '/stok/ara', yetki: OKUMA, sorgu: araSorgusu, cevap: araCevabi, isle: ({ db, sorgu }) => s.ara(db, sorgu.q) }),
   uc({ yontem: 'GET', yol: '/stok/sayim-bekleyenler', yetki: OKUMA, cevap: sayimBekleyenlerCevabi, isle: ({ db }) => s.sayimBekleyenler(db) }),
+  // 3398-2: teklif öncesi satın alma kalemleri stokla; fiyat yok. Satın almayı okuyan da görür.
+  uc({ yontem: 'GET', yol: '/stok/kontrol-ihtiyaclari', yetki: { biri: [...KONTROL_OKUMA.biri, 'satin-alma.oku'] }, cevap: ihtiyaclarCevabi, isle: ({ db }) => s.ihtiyaclar(db) }),
   uc({ yontem: 'GET', yol: '/stok/olcu-arama', yetki: KONTROL_OKUMA, sorgu: olcuAramaSorgusu, cevap: olcuAramaCevabi, isle: ({ db, sorgu }) => s.olcuyleAra(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/artik-parcalar', yetki: KONTROL_OKUMA, sorgu: artikParcalarSorgusu, cevap: artikParcalarCevabi, isle: ({ db, sorgu }) => s.artikParcaListesi(db, sorgu) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/artik-parcalar', yetki: 'stok.cikis', govde: artikParcaGovdesi, cevap: artikParcaCevabi, isle: ({ db, kullanici, govde }) => s.artikParcaKaydet(db, kullanici, govde) }),

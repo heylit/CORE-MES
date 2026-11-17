@@ -108,3 +108,34 @@ export const artikParcaKapatGovdesi = z.object({ durum: z.enum(['kullanildi', 'h
 export type ArtikParcaKapatGovdesi = z.input<typeof artikParcaKapatGovdesi>;
 export const artikParcaCevabi = z.object({ id: z.number().int(), surum: surumSemasi });
 export type ArtikParcaCevabi = z.output<typeof artikParcaCevabi>;
+
+// ---- İhtiyaç kuyruğu (3398-2): teklif istenmeden önceki satın alma kalemleri stokla karşılaştırılır. Yalnız okur. ----
+// karsilanir: istenen miktar stoktan çıkar; kismen: bir kısmı; yok: aday yok; bilinmiyor: kart ölçüsüz ya da birim çevrilemiyor.
+export const IHTIYAC_DURUMLARI = ['karsilanir', 'kismen', 'yok', 'bilinmiyor'] as const;
+export type IhtiyacDurumu = (typeof IHTIYAC_DURUMLARI)[number];
+export const ihtiyacSatiri = z.object({
+  kaynak: z.literal('satin-alma'),
+  talepId: z.string(),
+  talepNo: z.string(),
+  baslik: z.string(),
+  kalemId: z.string(),
+  ad: z.string(),
+  malzemeNo: z.number().int(),
+  kod: z.string(),
+  form: z.string().nullable(),
+  kalite: z.string().nullable(),
+  olcu: olcuNesnesi,
+  miktar: ondalikMetinSemasi,
+  birim: z.string(),
+  uretimEmriId: z.number().int().nullable(),
+  ihtiyacTarihi: z.string().nullable(),
+  durum: z.enum(IHTIYAC_DURUMLARI),
+  // Kalemin biriminde stoktan karşılanan; bilinmiyorsa null.
+  karsilanan: z.number().nullable(),
+  // Pay içindeki en iyi aday (sıranın ilki) ve pay içindeki aday sayısı.
+  enIyi: olcuAdayi.nullable(),
+  adaySayisi: z.number().int(),
+});
+export type IhtiyacSatiri = z.output<typeof ihtiyacSatiri>;
+export const ihtiyaclarCevabi = z.object({ satirlar: z.array(ihtiyacSatiri), sinirli: z.boolean() });
+export type IhtiyaclarCevabi = z.output<typeof ihtiyaclarCevabi>;

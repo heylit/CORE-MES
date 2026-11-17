@@ -7,7 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { artikParcaCevabi, artikParcalarCevabi, olcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
+import { artikParcaCevabi, artikParcalarCevabi, ihtiyaclarCevabi, olcuAramaCevabi } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -173,6 +173,36 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     const pasif = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO stok_konum (depo_id, kod, tur, ad, aktif) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), 'ORN-Z3', 'depo_zemini', 'Deneme pasif', false) RETURNING id"))!.id;
     assert.equal((await gonder('depo', '/stok/artik-parcalar', { malzemeNo: m, konumId: pasif, boy: 700 })).durum, 400);
+  });
+
+  test('ihtiyaç kuyruğu (3398-2): taslak talebin kartlı kalemi stokla karşılaştırılır; teklifteki ve kartı ölçüsüz kalem; yetki', async () => {
+    const m = await kart('ORN-K4', 'cubuk', { d: 25, l: 3000 });
+    const olcusuz = await kart('ORN-K4', 'cubuk', { l: 3000 });
+    await giris(m, '2');
+    await giris(olcusuz, '1');
+    let katalog = 0;
+    const kalemli = async (durum: string, malzemeNo: number, miktar: string) => {
+      katalog += 1;
+      const kat = randomUUID();
+      await o().sahip.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [kat, malzemeNo]);
+      const t = randomUUID();
+      await o().sahip.sorgu(
+        `INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2026, $2, 'ORN talep', $3, $3, $4)`,
+        [t, 900 + katalog, kisi, durum]);
+      await o().sahip.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, katalog_id, ad, miktar, birim) VALUES ($1, $2, 1, $3, 'ORN kalem', $4, 'adet')",
+        [t, randomUUID(), kat, miktar]);
+      return t;
+    };
+    const taslak = await kalemli('taslak', m, '3');
+    await kalemli('teklif_isteniyor', m, '1');
+    const olcusuzTalep = await kalemli('taslak', olcusuz, '1');
+    assert.equal((await al('operator', '/stok/kontrol-ihtiyaclari')).durum, 403);
+    const c = await al('satin_alma', '/stok/kontrol-ihtiyaclari');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const g = ihtiyaclarCevabi.parse(c.govde);
+    assert.deepEqual(g.satirlar.map((x) => [x.talepId, x.durum, x.karsilanan, x.enIyi?.malzemeNo ?? null]),
+      [[taslak, 'kismen', 2, m], [olcusuzTalep, 'karsilanir', 1, null]]);
+    assert.equal((await al('planlama_muduru', '/stok/kontrol-ihtiyaclari')).durum, 200);
   });
 });
 

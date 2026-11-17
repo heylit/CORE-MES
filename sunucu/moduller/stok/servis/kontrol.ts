@@ -5,11 +5,12 @@ import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  FORM_OLCULERI, OLCU_ANAHTARLARI, OLCULU_FORMLAR, type ArtikParcaCevabi, type ArtikParcalarCevabi, type OlcuAdayi, type OlcuAramaCevabi, type OlculuForm,
+  FORM_OLCULERI, OLCU_ANAHTARLARI, OLCULU_FORMLAR, type ArtikParcaCevabi, type ArtikParcalarCevabi, type IhtiyacDurumu, type IhtiyaclarCevabi, type IhtiyacSatiri, type OlcuAdayi, type OlcuAramaCevabi, type OlculuForm,
   type OlcuAnahtari, type artikParcaGovdesi, type artikParcaKapatGovdesi, type artikParcalarSorgusu, type olcuAramaSorgusu,
 } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import type { z } from 'zod';
 import { kisiAdlari } from '../../kisiler/disari.ts';
+import { stokKontroluKalemleri } from '../../satin-alma/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri, type HammaddeStokOlcusu } from '../../malzemeler/disari.ts';
 import { adaySirala, artikOlcusu, artikPayi, karsilanan, olcuEslestir, type OlcuIstegi } from '../olcu-kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -21,7 +22,8 @@ const kesitTamMi = (form: OlculuForm, o: Readonly<Record<string, unknown>>) => F
 // Pay dışı adaylardan en çok bu kadarı gösterilir (gri, "neden olmadı" için).
 const PAY_DISI_SINIRI = 3;
 
-export async function olcuyleAra(db: Db, s: z.output<typeof olcuAramaSorgusu>): Promise<OlcuAramaCevabi> {
+// onbellek: ihtiyaç kuyruğu aynı formun kartlarını her kalemde yeniden okumasın diye (form -> kartlar).
+export async function olcuyleAra(db: Db, s: z.output<typeof olcuAramaSorgusu>, onbellek?: Map<string, HammaddeStokOlcusu[]>): Promise<OlcuAramaCevabi> {
   const olcu: Partial<Record<OlcuAnahtari, number>> = {};
   for (const k of OLCU_ANAHTARLARI) if (s[k] !== undefined) olcu[k] = s[k];
   const f = FORM_OLCULERI[s.form];
@@ -31,7 +33,8 @@ export async function olcuyleAra(db: Db, s: z.output<typeof olcuAramaSorgusu>): 
     form: s.form, olcu, parcaBoyu: s.parcaBoyu ?? null, parcaEni: s.parcaEni ?? null, adet: s.adet ?? null,
     pay: { tur: s.pay, deger: s.payDeger, enAzMm: s.payEnAzMm }, kesmeMm: s.kesmeMm,
   };
-  const butun = await hammaddeStokOlculeri(db, [s.form]);
+  const butun = onbellek?.get(s.form) ?? await hammaddeStokOlculeri(db, [s.form]);
+  onbellek?.set(s.form, butun);
   const kaliteler = [...new Set(butun.flatMap((k) => (k.kalite === null ? [] : [k.kalite])))].sort((x, y) => x.localeCompare(y, 'tr'));
   const kartlar = s.kalite === undefined ? butun : butun.filter((k) => k.kalite === s.kalite);
   const olcusuzKart = kartlar.filter((k) => !kesitTamMi(s.form, k.olcu)).length;
@@ -127,4 +130,66 @@ export async function artikParcaKapat(db: Db, k: Kullanici, id: number, g: z.out
   if (v === null) throw bulunamadi('Artık parça bulunamadı.');
   if (v.durum !== 'acik') throw gecersiz('Artık parça zaten kapatılmış.');
   throw eskiSurum();
+}
+
+// 3398-2: ihtiyaç kuyruğu. Teklif istenmeden önceki satın alma kalemleri stokla karşılaştırılır; yalnız okur. Ölçülü hammadde kartında
+// kartın kendi ölçüsü ve kalitesiyle arama yapılır (adet biriminde istenen boy kadar çubuk), ölçüsüz kartta yalnız aynı kartın stoğu.
+const IHTIYAC_SINIRI = 100;
+const ayniBirim = (a: string | null, b: string | null) => a !== null && b !== null && a.trim().toLocaleLowerCase('tr') === b.trim().toLocaleLowerCase('tr');
+function ihtiyacDurumu(karsilanan: number | null, gereken: number): IhtiyacDurumu {
+  if (karsilanan === null) return 'bilinmiyor';
+  if (karsilanan + 1e-9 >= gereken) return 'karsilanir';
+  return karsilanan > 0 ? 'kismen' : 'yok';
+}
+export async function ihtiyaclar(db: Db): Promise<IhtiyaclarCevabi> {
+  const l = await stokKontroluKalemleri(db, IHTIYAC_SINIRI + 1);
+  const kalemler = l.slice(0, IHTIYAC_SINIRI);
+  const nolar = [...new Set(kalemler.map((k) => k.malzemeNo))];
+  if (nolar.length === 0) return { satirlar: [], sinirli: false };
+  const hepsi = await hammaddeStokOlculeri(db, OLCULU_FORMLAR);
+  const kartlar = new Map(hepsi.map((k) => [k.malzemeNo, k]));
+  const onbellek = new Map<string, HammaddeStokOlcusu[]>(OLCULU_FORMLAR.map((f) => [f, hepsi.filter((k) => k.form === f)]));
+  const ozetler = await malzemeOzetleri(db, nolar);
+  const stoklar = new Map((await sorgular.kullanilabilirStoklar(db, nolar)).map((x) => [x.malzemeId, x]));
+  const satirlar: IhtiyacSatiri[] = [];
+  for (const k of kalemler) {
+    const kart = kartlar.get(k.malzemeNo);
+    const ozet = ozetler.get(k.malzemeNo);
+    const gereken = Number(k.miktar);
+    const temel = {
+      kaynak: 'satin-alma' as const, talepId: k.talepId, talepNo: k.talepNo, baslik: k.baslik, kalemId: k.kalemId, ad: k.ad, malzemeNo: k.malzemeNo,
+      kod: ozet?.kod ?? String(k.malzemeNo), miktar: k.miktar, birim: k.birim, uretimEmriId: k.uretimEmriId, ihtiyacTarihi: k.ihtiyacTarihi,
+    };
+    if (kart === undefined || !olculuMu(kart.form) || !kesitTamMi(kart.form, kart.olcu)) {
+      const st = stoklar.get(k.malzemeNo);
+      const karsilanan = ayniBirim(ozet?.birim ?? null, k.birim) ? Math.min(gereken, Number(st?.miktar ?? 0)) : null;
+      satirlar.push({ ...temel, form: kart?.form ?? null, kalite: kart?.kalite ?? null, olcu: kart === undefined ? {} : sayiNesnesi(kart.olcu),
+        durum: ihtiyacDurumu(karsilanan, gereken), karsilanan, enIyi: null, adaySayisi: st === undefined ? 0 : 1 });
+      continue;
+    }
+    const form = kart.form;
+    const f = FORM_OLCULERI[form];
+    const o = sayiNesnesi(kart.olcu);
+    const adetli = ayniBirim(k.birim, 'adet') && Number.isInteger(gereken) && gereken > 0;
+    const boy = f.boy === null ? undefined : o[f.boy];
+    const en = f.en === null ? undefined : o[f.en];
+    const sorgu: z.output<typeof olcuAramaSorgusu> = {
+      form, artik: 'evet', pay: 'yuzde', payDeger: 15, payEnAzMm: 3, kesmeMm: 0,
+      ...(kart.kalite === null ? {} : { kalite: kart.kalite }),
+      ...Object.fromEntries(f.kesit.map((a) => [a, o[a]])),
+      ...(adetli ? { adet: gereken } : {}),
+      ...(adetli && boy !== undefined ? { parcaBoyu: boy } : {}),
+      ...(adetli && en !== undefined ? { parcaEni: en } : {}),
+    };
+    const r = await olcuyleAra(db, sorgu, onbellek);
+    const icinde = r.adaylar.filter((a) => a.durum !== 'pay-disi');
+    let karsilanan: number | null = null;
+    if (adetli && (f.boy === null || boy !== undefined)) karsilanan = r.karsilanan;
+    else if (icinde.length > 0 && icinde.every((a) => a.kaynak === 'stok' && ayniBirim(a.birim, k.birim))) {
+      karsilanan = Math.min(gereken, icinde.reduce((t, a) => t + Number(a.miktar), 0));
+    } else if (icinde.length === 0) karsilanan = 0;
+    satirlar.push({ ...temel, form, kalite: kart.kalite, olcu: o, durum: ihtiyacDurumu(karsilanan, gereken), karsilanan,
+      enIyi: icinde[0] ?? null, adaySayisi: icinde.length });
+  }
+  return { satirlar, sinirli: l.length > IHTIYAC_SINIRI };
 }

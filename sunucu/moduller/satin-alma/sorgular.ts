@@ -1926,3 +1926,22 @@ export function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly s
     [[...new Set(logoSatirRefleri)]],
   );
 }
+
+// 3398-2: teklif istenmeden önce stokla karşılaştırılacak kalemler: taslak talebin kartlı, miktarlı kalemleri. Fiyat yok.
+export interface StokKontroluKalemiOkuma {
+  talepId: string; talepNo: string; baslik: string; kalemId: string; ad: string; malzemeNo: number; miktar: string; birim: string;
+  uretimEmriId: number | null; ihtiyacTarihi: string | null;
+}
+export function stokKontroluKalemleriOku(db: Db, sinir: number): Promise<StokKontroluKalemiOkuma[]> {
+  return db.sorgu<StokKontroluKalemiOkuma>(
+    `SELECT t.id AS "talepId", t.no AS "talepNo", t.baslik, k.id AS "kalemId", k.ad, c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim,
+        t.uretim_emri_id AS "uretimEmriId", t.ihtiyac_tarihi AS "ihtiyacTarihi"
+       FROM satin_alma_talep t
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE t.durum = 'taslak' AND k.miktar IS NOT NULL
+      ORDER BY t.ihtiyac_tarihi NULLS LAST, t.yil, t.sira, k.sira
+      LIMIT $1`,
+    [sinir],
+  );
+}

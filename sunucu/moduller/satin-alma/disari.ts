@@ -171,3 +171,5 @@ export async function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: read
   if (logoSatirRefleri.length === 0) return new Map();
   return new Map((await sorgu.logoSatirliSiparisSatirlari(db, logoSatirRefleri)).map(({ logoSatirRef, ...x }) => [logoSatirRef, x]));
 }
+// 3398-2: Stok kontrol sayfası teklif istenmeden önceki (taslak) talep kalemlerini buradan okur; yetki denetlemez, fiyat yok.
+export { stokKontroluKalemleriOku as stokKontroluKalemleri, type StokKontroluKalemiOkuma as StokKontroluKalemi } from './sorgular.ts';
