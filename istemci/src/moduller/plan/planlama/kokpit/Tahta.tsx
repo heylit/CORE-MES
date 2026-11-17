@@ -52,6 +52,12 @@ export interface TahtaOzellikleri {
   onizle?: ((isId: string, tezgah: string, S: number) => Promise<IsTasiOnizlemesi | null>) | null;
   // Bağ okları (3365): is = üstüne gelinen ya da seçili işin önceki ve sonraki adımı; siparis = seçili siparişin (yoksa işin emrinin) bütün bağları.
   okKipi?: OkKipi;
+  // Çoklu seçim (3365): Ctrl, Cmd ya da Shift ile tıklanan işler. Seçilenlerden biri sürüklenince hepsi aynı süre kayar (tezgâhları kalır).
+  coklu?: ReadonlySet<string>;
+  cokluSec?: ((isId: string) => void) | null;
+  grupKaydir?: ((dS: number) => void) | null;
+  // Sürekli yakınlaştırma (3365): verilirse saat eni ölçeğin sabit eni yerine budur (yalnız Gün, 3 gün, Hafta).
+  saatEni?: number | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 interface Ok extends AdimBagi { yol: string; uc: string }
@@ -78,6 +84,7 @@ interface Tasinan { id: string; tut: number; fis?: string; suruk?: boolean }
 // Plansız emrin süresi plana alınmadan bilinmez; bırakma çerçevesi bu genişlikte çizilir.
 const FIS_SAATI = 2;
 interface Hedef { satir: string; S: number; gecerli: boolean }
+const BOS_KUME: ReadonlySet<string> = new Set();
 interface Etki { anahtar: string; gecerli: boolean; ileti: string | null; kayan: Record<string, number> }
 
 export function Tahta(o: TahtaOzellikleri) {
@@ -86,7 +93,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const yanan = o.yanan ?? null, secimiKaldir = o.secimiKaldir, onizle = o.onizle ?? null, okKipi = o.okKipi ?? 'is';
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
   const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
-  const px = SAAT_ENI[olcek];
+  const coklu = o.coklu ?? BOS_KUME, cokluSec = o.cokluSec ?? null, grupKaydir = o.grupKaydir ?? null;
+  const px = !uzakMi(olcek) && o.saatEni != null ? o.saatEni : SAAT_ENI[olcek];
   const en = (m.son - m.bas) * px;
   const kap = useRef<HTMLDivElement | null>(null);
   const [tasinan, setTasinan] = useState<Tasinan | null>(null);
@@ -192,8 +200,10 @@ export function Tahta(o: TahtaOzellikleri) {
     if (!hedef.gecerli) { birakma('Bu adım bu tezgâhta yapılamaz'); return; }
     const tezgah = goz === 'T' ? hedef.satir : x.m;
     setTasinan(null); setHedef(null);
+    // Çoklu seçimin bir işi bırakılınca hepsi aynı süre kayar; tezgâh değişmez (her iş kendi satırında kalır).
+    if (grupKaydir && coklu.size > 1 && coklu.has(x.id)) { if (Math.abs(hedef.S - x.S) > 0.01) grupKaydir(hedef.S - x.S); return; }
     if (tezgah !== x.m || Math.abs(hedef.S - x.S) > 0.01) tasi(x.id, tezgah, hedef.S);
-  }, [tasinan, hedef, m, tasi, planaAl, goz, uyari]);
+  }, [tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
 
   // Tutulan iş imleci izler: satır imlecin altındaki satırdır, saat imlecin yeri eksi tutulan noktadır (çeyrek saate oturur).
   const izle = (ev: ImlecOlayi<HTMLDivElement>): void => {
@@ -408,7 +418,12 @@ export function Tahta(o: TahtaOzellikleri) {
           if (ev.button > 0 || ev.pointerType === 'touch' || !tasi || tasinan) return;
           basilan.current = { id: x.id, x: ev.clientX, y: ev.clientY, tut: (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px };
         }}
-        onClick={() => { if (!tasinan) sec(x.job, x.id); }}
+        data-coklu={coklu.has(x.id) ? '' : undefined}
+        onClick={(ev) => {
+          if (tasinan) return;
+          if (cokluSec && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) { cokluSec(x.id); return; }
+          sec(x.job, x.id);
+        }}
         onDoubleClick={(ev) => { ev.preventDefault(); tut(x.id, (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px); }}
         onContextMenu={(ev: FareOlayi<HTMLButtonElement>) => {
           if (!tasi || tasinan) return;
@@ -522,7 +537,7 @@ export function Tahta(o: TahtaOzellikleri) {
           </div>
         )}
       </div>
-      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: taslağa yazılır' : 'Bırakmak için tıklayın ya da Space'}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''} · Esc vazgeçer</p>}
+      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: taslağa yazılır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde taslakta ne kadar kaydığı yazar</p>}
     </div>
   );

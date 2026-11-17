@@ -67,7 +67,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Ayarın etkisi' })).toBeNull(); });
-    expect(t.geriAl).toHaveBeenCalledWith(false);
+    expect(t.geriAl).toHaveBeenCalledWith(false, false);
     expect(t.dizmeyiYaz).not.toHaveBeenCalled();
   });
 
@@ -101,7 +101,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     // Etki ekrandayken sayfaya haber verilir (taslak çubuğundaki birincil kapanır), Vazgeç'ten sonra kalkar.
     expect(bekliyor).toHaveBeenLastCalledWith(true);
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
-    await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
     await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(false); });
     // Vazgeçince panel kapanır: yön yalnız üst şeritten seçilir.
     await waitFor(() => { expect(kapat).toHaveBeenCalled(); });

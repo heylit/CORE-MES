@@ -86,7 +86,7 @@ describe('Kokpit kapasite bölümü (3282 2a-1)', () => {
     const etki = await screen.findByRole('region', { name: 'Duruşun etkisi' });
     expect(yazilan).toEqual([{ tur: 'durus-sil', tezgah: 'ORN-T1', bas: 50, bit: 58 }]);
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
-    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await vi.waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
   });
 
   it('ters aralık ve geçmişte biten duruş yazılmaz, nedeni yazılır', () => {

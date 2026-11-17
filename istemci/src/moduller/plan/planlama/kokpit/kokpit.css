@@ -275,7 +275,7 @@
 .tc-pyq-liste button[data-yanan] { border-color: var(--ink); }
 .tc-pyq-is[data-sabit] { background: repeating-linear-gradient(135deg, var(--panel-solid) 0 var(--b-2), var(--panel2) var(--b-2) var(--b-4)); }
 .tc-pyq-is[data-emir-secili] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi) var(--ink); z-index: 1; }
-.tc-pyq-is[aria-pressed="true"] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
+.tc-pyq-is[aria-pressed="true"], .tc-pyq-is[data-coklu] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
 .tc-pyq-is[data-tasinan] { opacity: var(--saydam-45); }
 .tc-pyq-is[data-kaydi] { outline: var(--cizgi) dashed var(--hazard); outline-offset: var(--pay-ince); }
 .tc-pyq-is:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }

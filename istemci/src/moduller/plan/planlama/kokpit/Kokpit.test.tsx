@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
-import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaSecimi } from '../gorunumler.ts';
 import { bekleyenListesi, type CalismaKomutu } from '../kayit.ts';
 import type { BekleyenDegisiklik } from '../tipler.ts';
 import { kaynakSatiri } from '../ortak/degisiklik-seridi/kurallar.ts';
@@ -65,6 +65,20 @@ function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true, dis: Bekleye
     </Yuvali></BildirimSaglayici></MemoryRouter>,
   );
   return { sec };
+}
+
+// Seçimi tutan sarmal: tıklama seçimi gerçekten değiştirir (çoklu seçim seçili işe bakar).
+function SecimliKokpit() {
+  const [secim, kur] = useState<PlanlamaSecimi>(BOS_SECIM);
+  return (
+    <Kokpit
+      depo={DEPO} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+      olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={secim} sec={(x) => { kur((y) => ({ ...y, ...x })); }}
+    />
+  );
+}
+function acSecimli() {
+  render(<MemoryRouter><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
 }
 
 describe('Kokpit', () => {
@@ -897,6 +911,61 @@ describe('Kokpit', () => {
     await new Promise((r) => setTimeout(r, 250));
     expect(oz).not.toHaveBeenCalled();
     oz.mockRestore();
+    geriKur();
+  });
+
+  it('Ctrl ya da Shift ile tıklanan işler birlikte seçilir; ok tuşu hepsini aynı süre kaydırır, geç başlayan önce gider; düz tıklama kümeyi bırakır (3365)', async () => {
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
+    acSecimli();
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    fireEvent.click(is('3.10'));
+    expect(is('3.10').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(is('2.40'), { ctrlKey: true });
+    expect(['3.10', '2.40'].every((id) => is(id).hasAttribute('data-coklu'))).toBe(true);
+    expect(screen.getByText('2 iş seçili · birlikte kayar')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
+    const c = oz.mock.calls.map((x) => x[0]);
+    expect(c.map((x) => x.isId)).toEqual(['2.40', '3.10']);
+    // Başlamamış işler yarım saat kayar (çeyrek saate oturur), tezgâhları değişmez.
+    expect(c[0]).toMatchObject({ tezgah: '5' });
+    expect(c[1]).toMatchObject({ tezgah: '1' });
+    // ↑ ↓ çoklu seçimde tezgâh değiştirmez.
+    oz.mockClear();
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(await screen.findByText('Çoklu seçimde tezgâh değişmez; tek iş seçin.')).toBeTruthy();
+    expect(oz).not.toHaveBeenCalled();
+    // Shift ile tıklamak kümeden çıkarır; tek iş kalınca küme yazısı kalkar.
+    fireEvent.click(is('2.40'), { shiftKey: true });
+    expect(is('2.40').hasAttribute('data-coklu')).toBe(false);
+    expect(screen.queryByText(/iş seçili/)).toBeNull();
+    fireEvent.click(is('3.20'), { metaKey: true });
+    expect(screen.getByText('2 iş seçili · birlikte kayar')).toBeTruthy();
+    fireEvent.click(is('2.40'));
+    expect(document.querySelectorAll('.tc-pyq-tahta [data-coklu]')).toHaveLength(0);
+    expect(is('2.40').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('çoklu seçimin bir işi sürüklenip bırakılınca hepsi aynı süre kayar (3365)', async () => {
+    const geriKur = imlecOlayiKur();
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
+    acSecimli();
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    fireEvent.click(is('3.10'));
+    fireEvent.click(is('2.40'), { ctrlKey: true });
+    const satir = is('3.10').closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    fireEvent.pointerDown(is('3.10'), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+    expect(screen.getByText(/seçili 2 iş aynı süre kayar/)).toBeTruthy();
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
+    const c = Object.fromEntries(oz.mock.calls.map((x) => [x[0].isId, x[0]]));
+    const S = (id: string) => (ornekCalisma().plan as unknown as { ops: Record<string, { S: number }> }).ops[id]!.S;
+    const d1 = c['3.10']!.baslangic - S('3.10'), d2 = c['2.40']!.baslangic - S('2.40');
+    expect(Math.abs(d1)).toBeGreaterThan(0.25);
+    expect(Math.abs(d1 - d2)).toBeLessThanOrEqual(0.25);
+    expect(c['2.40']!.tezgah).toBe('5');
     geriKur();
   });
 
