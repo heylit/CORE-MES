@@ -182,22 +182,27 @@ describe('Başlangıç katsayıları (3363)', () => {
     sunucuKur({
       'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku']),
       'GET /geometri/kalibrasyon': () => json(200, { ...KAL, gruplar: [{ tur: 'malzeme', anahtar: 'S', n: 9, carpan: 0.62, hataYuzde: 20, azVeri: true }] }),
-      'GET /geometri/sure-katsayilari': () => json(200, { katsayilar: KATSAYILAR }),
+      'GET /geometri/sure-katsayilari': () => json(200, {
+        katsayilar: KATSAYILAR.map((x) => (x.anahtar === 'malzeme.finis.metal/aluminyum'
+          ? { ...x, elle: { deger: 0.75, not: null, kisi: 'ORN-Yeni', zaman: '2026-11-17T08:30:00+03:00' } } : x)),
+      }),
     });
     ac();
     fireEvent.click(await screen.findByRole('tab', { name: /Katsayılar/ }));
     const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
     expect(within(malzeme).getAllByText('Elle').length).toBeGreaterThan(0);
+    expect(within(malzeme).getAllByText(/^ORN not · ORN-Yeni, 17\.11/).length).toBeGreaterThan(0);
+    expect(within(malzeme).queryAllByText(/· ORN-Kişi, 17\.11/)).toHaveLength(0);
     expect(within(malzeme).getByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\)/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /düzenle$/ })).toBeNull();
-    expect(within(malzeme).getAllByText(/^ORN not · ORN-Kişi, 17\.11/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Bu çarpanla güncelle/ })).toBeNull();
   });
 
   it('aynı ölçüm grubundaki sınıflar tek uyarı alır: grubun son satırının altında, bütün sınıfların yeni değerleriyle tek komut', async () => {
     const yazilan: unknown[] = [];
     const nikel = [
-      kat('malzeme.kaba.metal/nikel', 1.79, { iso: 'S' }), kat('malzeme.finis.metal/nikel', 2.44, { iso: 'S' }),
+      kat('malzeme.kaba.metal/nikel', 1.79, { iso: 'S', yerlesik: 1.6, elle: { deger: 1.79, not: null, kisi: 'ORN-Kişi', zaman: '2026-11-17T06:00:00+03:00' } }),
+      kat('malzeme.finis.metal/nikel', 2.44, { iso: 'S' }),
     ];
     sunucuKur({
       'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku', 'geometri.kalibrasyon']),
@@ -210,7 +215,12 @@ describe('Başlangıç katsayıları (3363)', () => {
     const malzeme = (await screen.findByRole('heading', { name: 'Malzeme' })).closest('section') as HTMLElement;
     const uyarilar = within(malzeme).getAllByRole('row', { name: /Ölçüm farklı: S · Süper alaşım ×0,62 \(9 parça\); gruptaki 2 sınıf/ });
     expect(uyarilar).toHaveLength(1);
-    expect(within(uyarilar[0]!).getByText(/^Yeni değerler: \S*titanyum ×1,1 · ×0,76; [^;]*nikel[^;]* ×1,11 · ×1,51$/i)).toBeTruthy();
+    // Uyarı grubun son satırının (nikel) hemen altında; ilk satırın (titanyum) altında değil.
+    const satirlar = within(malzeme).getAllByRole('row');
+    const i = satirlar.indexOf(uyarilar[0]!);
+    expect(satirlar[i - 1]?.textContent).toMatch(/nikel/i);
+    expect(satirlar.findIndex((r) => /titanyum/i.test(r.textContent))).toBeLessThan(i - 1);
+    expect(within(uyarilar[0]!).getByText(/^Yeni değerler: \S*titanyum ×1,1 · ×0,76; [^;]*nikel[^;]* \(elle ayarlı\) ×1,11 · ×1,51$/i)).toBeTruthy();
     fireEvent.click(within(malzeme).getByRole('button', { name: '2 sınıfı bu çarpanla güncelle' }));
     await vi.waitFor(() => { expect(yazilan).toHaveLength(1); });
     expect(yazilan[0]).toEqual({

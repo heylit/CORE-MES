@@ -24,17 +24,17 @@ const sayi = (x: number): string => katsayiMetni(x);
 const ondalik = (metin: string): number => Number(metin.trim().replace(',', '.'));
 
 // Aynı ölçüm grubundaki (ör. ISO S) bütün satırların farkı tek uyarıdır: grubun son satırının altında, bütün sınıfların yeni değerleriyle.
-type GrupFarki = OlcumFarki & { satirlar: { baslik: string; yeni: OlcumFarki['yeni'] }[] };
+type GrupFarki = OlcumFarki & { satirlar: { baslik: string; elle: boolean; yeni: OlcumFarki['yeni'] }[] };
 function grupFarklari(satirlar: readonly KatsayiSatiri[], gruplar: GeometriKalibrasyonCevabi['gruplar']): Map<string, GrupFarki> {
   const gruba = new Map<string, { son: string; fark: GrupFarki }>();
   for (const s of satirlar) {
     const f = olcumFarki(s, gruplar);
     if (f === null) continue;
     const g = gruba.get(f.grup);
-    if (g === undefined) gruba.set(f.grup, { son: s.kimlik, fark: { ...f, satirlar: [{ baslik: s.baslik, yeni: f.yeni }] } });
+    if (g === undefined) gruba.set(f.grup, { son: s.kimlik, fark: { ...f, satirlar: [{ baslik: s.baslik, elle: s.kaynak === 'elle', yeni: f.yeni }] } });
     else {
       g.son = s.kimlik;
-      g.fark = { ...g.fark, yeni: [...g.fark.yeni, ...f.yeni], satirlar: [...g.fark.satirlar, { baslik: s.baslik, yeni: f.yeni }] };
+      g.fark = { ...g.fark, yeni: [...g.fark.yeni, ...f.yeni], satirlar: [...g.fark.satirlar, { baslik: s.baslik, elle: s.kaynak === 'elle', yeni: f.yeni }] };
     }
   }
   return new Map([...gruba.values()].map((g) => [g.son, g.fark]));
@@ -158,7 +158,7 @@ function SatirGrubu({ s, fark, yazar, bekliyor, sinifAdlari, acik, ac, don, yaz 
               </span>
             </p>
             {fark.satirlar.length > 1 && (
-              <p className="tc-g3b-soluk">Yeni değerler: {fark.satirlar.map((x) => `${x.baslik} ${x.yeni.map((y) => `×${sayi(y.deger)}`).join(' · ')}`).join('; ')}</p>
+              <p className="tc-g3b-soluk">Yeni değerler: {fark.satirlar.map((x) => `${x.baslik}${x.elle ? ' (elle ayarlı)' : ''} ${x.yeni.map((y) => `×${sayi(y.deger)}`).join(' · ')}`).join('; ')}</p>
             )}
           </td>
         </tr>
