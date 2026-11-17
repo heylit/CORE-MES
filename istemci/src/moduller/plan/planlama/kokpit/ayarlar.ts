@@ -1,4 +1,5 @@
 import { kisitBul, kisitDegistir, parametreDegeri, parametreYaz, type ParametreYeri } from '../ic/veri/kurallar.ts';
+import { MALZEME_KURALLARI } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit ayarlar paneli (3282 1b): Kokpit'in motorunun okuduğu çalışma ayarları tek yerde. Kural, amaç, bölme ve acil pay motor ayarındadır
@@ -7,7 +8,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 export type AyarAlani =
   | { tur: 'sayi'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; birim: string; min: number; max: number; adim: number; varsayilan?: number }
   | { tur: 'acik'; yer: ParametreYeri; k: string; etiket: string; ipucu: string }
-  | { tur: 'sec'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; secenekler: readonly (readonly [string, string])[]; varsayilan?: string };
+  | { tur: 'sec'; yer: ParametreYeri; k: string; etiket: string; ipucu: string; secenekler: readonly (readonly [string, string])[]; varsayilan?: string; ipucuSecim?: Readonly<Record<string, string>> };
 
 // Sınırlar Kısıtlar sayfası ve Hesaplar'la aynıdır (ic/veri/kurallar.ts KATALOG, ic/hesap mesai bütçesi 0-60).
 // Yön ve geri tamponu (3282 1c) motorun girdi.js stKur'unda okunur; yazılmamışsa ileri ve 0'dır.
@@ -19,10 +20,17 @@ export const AYAR_ALANLARI: readonly AyarAlani[] = [
   { tur: 'sayi', yer: 'param', k: 'tamponZ', etiket: 'Tampon katsayısı (z)', ipucu: 'Büyüdükçe tampon uzar; termin daha güvenli, plan daha seyrek.', birim: '', min: 0, max: 3, adim: 0.05 },
   { tur: 'sayi', yer: 'param', k: 'mesaiHafta', etiket: 'Haftalık ek mesai bütçesi', ipucu: 'Motorun bir haftada önerebileceği en çok ek mesai. 0 sınırsızdır.', birim: 'sa', min: 0, max: 60, adim: 1 },
   { tur: 'sayi', yer: 'param', k: 'maxChg', etiket: 'Değişiklik bütçesi', ipucu: 'Onarımda canlı plana göre en çok bu kadar iş yer değiştirir.', birim: 'iş', min: 0, max: 500, adim: 1 },
-  { tur: 'sec', yer: 'w', k: 'mat', etiket: 'Malzeme kuralı', ipucu: 'Geliş tarihi belli olan malzemeden önce iş başlamaz; ötekinde uyarı verilir.', secenekler: [['karma', 'Belliyse sert'], ['uyari', 'Yalnız uyarı'], ['sert', 'Her zaman sert']] },
+  { tur: 'sec', yer: 'w', k: 'mat', etiket: 'Malzeme kuralı', ipucu: 'Stok tamsa iş serbesttir.', secenekler: MALZEME_KURALLARI,
+    ipucuSecim: {
+      karma: 'Stok tamsa iş serbesttir. Stok eksik ya da kısmiyse iş, satın almanın termin tarihinden önce başlamaz; termini olmayan eksikte iş başlar, uyarı verilir.',
+      uyari: 'Malzeme işi bekletmez; stok ya da satın alma yetmiyorsa yalnız uyarı verilir.',
+      sert: 'Stok tamsa iş serbesttir. Eksikte iş malzeme gelene kadar başlamaz; termini olmayan eksik malzemeyi bekleyen iş yerleşmez.',
+    } },
 ];
 // Panelde açılıp kapanan kısıtlar: planlamacının en sık değiştirdikleri; tam liste Kısıtlar sayfasındadır.
-export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'malzeme'] as const;
+export const PANEL_KISITLARI = ['personel', 'ayarci', 'yetkin', 'devam', 'aparat', 'malzeme'] as const;
+// Ad Kısıtlar sayfasıyla aynıdır (tek katalog).
+export const panelKisitAdi = (k: (typeof PANEL_KISITLARI)[number]): string => kisitBul(k)?.ad ?? k;
 
 export type AyarDegeri = string | number | boolean | null;
 export interface AyarTaslagi { alan: Record<string, AyarDegeri>; acik: Record<string, boolean> }
@@ -63,7 +71,7 @@ export function farklar(c: PlanlamaCalismasi, t: AyarTaslagi): string[] {
   const alan = AYAR_ALANLARI.filter((a) => alanDegeri(simdi, a) !== alanDegeri(t, a))
     .map((a) => `${a.etiket}: ${yazi(a, alanDegeri(simdi, a))} → ${yazi(a, alanDegeri(t, a))}`);
   const kisit = PANEL_KISITLARI.filter((k) => simdi.acik[k] !== t.acik[k])
-    .map((k) => `${kisitBul(k)?.ad ?? k}: ${t.acik[k] ? 'kapalı → açık' : 'açık → kapalı'}`);
+    .map((k) => `${panelKisitAdi(k)}: ${t.acik[k] ? 'kapalı → açık' : 'açık → kapalı'}`);
   return [...alan, ...kisit];
 }
 

@@ -5,10 +5,9 @@ import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { AYAR_SECENEKLERI, degerAdi, surumMetni } from '../../motor-ayarlari/kurallar.ts';
 import { altEkranAdresi } from '../gorunumler.ts';
-import { kisitBul } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, planYonu, sayiOku,
+  AYAR_ALANLARI, PANEL_KISITLARI, panelKisitAdi, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, planYonu, sayiOku,
   type AyarAlani, type AyarTaslagi,
 } from './ayarlar.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
@@ -32,7 +31,7 @@ export interface AyarlarOzellikleri {
 
 const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
 
-export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor }: AyarlarOzellikleri) {
+export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}: AyarlarOzellikleri) {
   const [t, setT] = useState<AyarTaslagi>(() => {
     const t0 = ayarTaslagi(c), a = AYAR_ALANLARI.find((x) => x.k === 'yon');
     return yon !== null && a ? alanYaz(t0, a, yon) : t0;
@@ -90,7 +89,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
             }}
           />
         )}
-        <small className={h ? 'tc-pyq-ayar-hata' : undefined} role={h ? 'alert' : undefined}>{h ?? a.ipucu}</small>
+        <small className={h ? 'tc-pyq-ayar-hata' : undefined} role={h ? 'alert' : undefined}>{h ?? (a.tur === 'sec' && typeof v === 'string' ? a.ipucuSecim?.[v] : undefined) ?? a.ipucu}</small>
       </div>
     );
   };
@@ -136,7 +135,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor 
       {AYAR_ALANLARI.filter((a) => a.k !== 'mat' && a.k !== 'yon').map(alan)}
       <h3>Kısıtlar</h3>
       {PANEL_KISITLARI.map((k) => (
-        <IsaretKutusu key={k} etiket={kisitBul(k)?.ad ?? k} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
+        <IsaretKutusu key={k} etiket={panelKisitAdi(k)} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
       ))}
       {AYAR_ALANLARI.filter((a) => a.k === 'mat').map(alan)}
       <p className="tc-pyq-not">Öteki kısıtlar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
