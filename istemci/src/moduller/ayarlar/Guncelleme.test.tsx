@@ -414,6 +414,30 @@ describe('Güncelleme, kurulum adımları', () => {
     await waitFor(() => { expect(screen.queryByText('Göçler: hata')).toBeNull(); });
   });
 
+  it('sunucu kapanınca son bilinen başlangıç saati yazılır; başka paketin başlangıcı yazılmaz', async () => {
+    const BASKA = 'c'.repeat(40);
+    const dene = async (surenCommit: string) => {
+      let kapali = false;
+      vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+        if (kapali) throw new TypeError('Failed to fetch');
+        if (adres.replace('/api', '') !== '/guncelleme/ilerleme') return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+        const govde: GuncellemeIlerlemesiCevabi = { suren: { commit: surenCommit, surum: '0.1.0', adim: 'durdur', baslangic: '2026-10-14T08:00:05.000Z' } };
+        return json(200, govde);
+      }));
+      const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const liste = cevap('acik', [LISTEDE], { uygulaniyor: { commit: PAKET.commit, isteyenId: 1, istenme: '2026-10-14T08:00:00.000Z' } });
+      const sayfa = render(<QueryClientProvider client={istemci}><GuncellemeIlerlemesi veri={liste} istenen={null} yoklamaMs={30} /></QueryClientProvider>);
+      await waitFor(() => { expect(istemci.getQueryData(['ayarlar', 'guncelleme-ilerlemesi'])).toBeTruthy(); });
+      kapali = true;
+      expect(await screen.findByText('Sunucu yeniden başlıyor')).toBeTruthy();
+      const metin = screen.getByText(/Bağlantı yoklanıyor/).textContent ?? '';
+      sayfa.unmount();
+      return metin;
+    };
+    expect(await dene(PAKET.commit)).toMatch(/\d{2}:\d{2}'de başladı\./);
+    expect(await dene(BASKA)).not.toMatch(/başladı/);
+  });
+
   it('eski sunucuda ilerleme ucu yoksa adım listesi çıkmaz', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' })));
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
