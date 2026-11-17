@@ -11,12 +11,14 @@ import {
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
 import { satinAlmaAnalizi } from './analiz.ts';
+import { FIYAT_GOREN_ISLEMLER, KG_FIYATI_OKUR } from './kurallar.ts';
 import * as servis from './servis.ts';
 
 const katalogParametresi = z.object({ id: z.guid() });
 
-// 215 a: maliyet okuyan (müdür, muhasebe/finans) kg fiyatını görür, değiştiremez.
-const KG_FIYATI_OKUR = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+// 215 a: maliyet okuyan (müdür, muhasebe/finans) kg fiyatını görür, değiştiremez. 3401-1 a: yalnız satin-alma.oku açmaz (KG_FIYATI_OKUR, kurallar.ts).
+// Fiyat tutan uçlar (analiz, bütçe, karşılaştırma) fiyat görene açıktır; planlama bunları 403 alır, ekranı kilit notunu çizer.
+const FIYAT_ANALIZI = ['satin-alma.fiyat-oku', 'satin-alma.yaz'] as const;
 // 534 1 a: tedarik terminini satın almayı yazan ve planı yazan girer (Planlama ekranındaki giriş de bu uca gelir); yeni işlem yok.
 const TERMIN_YAZAR = ['satin-alma.yaz', 'plan.yaz'] as const;
 // K8 a (2077-3 a): muhasebe fatura-sipariş bağını yalnız bu dar işlemle kurar, satın alma kaydı yazmaz.
@@ -41,7 +43,7 @@ export const uclar = [
   }),
   // 2151 (2151-1 b): Analiz sayfası; yalnız okur, dış operasyonlarla aynı yetki.
   uc({
-    yontem: 'GET', yol: '/satin-alma-analiz', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: satinAlmaAnaliziCevabi,
+    yontem: 'GET', yol: '/satin-alma-analiz', yetki: { biri: FIYAT_ANALIZI }, cevap: satinAlmaAnaliziCevabi,
     isle: ({ db }) => satinAlmaAnalizi(db),
   }),
   // 3279 a: Tedarikçiler > Onaylı liste ve teklif rehberi; yalnız okur, Satın Alma ekranını gören görür (yeni işlem yok, Risk 3279 V1).
@@ -153,11 +155,11 @@ export const uclar = [
   // 1094 b: teklif karşılaştırması ve kararın tutarı sunucuda hesaplanır; teklifleri gören görür.
   // 2454: bütçe kullanımı yalnız tam görenlere (V4; talep eden görmez).
   uc({
-    yontem: 'GET', yol: '/satin-alma-butce-kullanimi', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] }, sorgu: butceKullanimiSorgusu,
+    yontem: 'GET', yol: '/satin-alma-butce-kullanimi', yetki: { biri: FIYAT_GOREN_ISLEMLER }, sorgu: butceKullanimiSorgusu,
     cevap: butceKullanimiCevabi, isle: ({ db, sorgu }) => servis.butceKullanimiOku(db, sorgu.yil),
   }),
   uc({
-    yontem: 'GET', yol: '/satin-alma-talepleri/:id/degerlendirme', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/degerlendirme', yetki: { biri: FIYAT_GOREN_ISLEMLER },
     parametre: talepParametresi, cevap: degerlendirmeCevabi,
     isle: ({ db, parametre }) => servis.degerlendirme(db, parametre.id),
   }),
@@ -171,7 +173,7 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-talepleri/:id/siparis-takibi', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] },
     parametre: talepParametresi, cevap: siparisTakibiCevabi,
-    isle: ({ db, parametre }) => servis.siparisTakibi(db, parametre.id),
+    isle: ({ db, kullanici, parametre }) => servis.siparisTakibi(db, parametre.id, kullanici.islemler),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/odeme-plani', yetki: 'satin-alma.yaz', parametre: talepParametresi,
@@ -203,12 +205,12 @@ export const uclar = [
   // 3404: tedarikçinin PDF teklifi. Ek fiyat taşır: okuma kapısı teklif fiyatını gösteren değerlendirme ucuyla aynıdır; bağlama ve
   // kaldırma satın almayı yazanındır. Yinelenen bağlama ikinci bağ açmaz (aynı özet aynı kayda bir kez bağlanır).
   uc({
-    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler', yetki: { biri: FIYAT_GOREN_ISLEMLER },
     parametre: teklifEkiParametresi, cevap: teklifEkleriCevabi,
     isle: ({ db, parametre }) => servis.teklifEkleri(db, parametre.id, parametre.teklifId),
   }),
   uc({
-    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/dosya', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/dosya', yetki: { biri: FIYAT_GOREN_ISLEMLER },
     parametre: teklifEkiDosyaParametresi, cevap: ikiliCevap,
     isle: ({ db, parametre }) => servis.teklifEkiDosyasi(db, parametre.id, parametre.teklifId, parametre.ozet),
   }),
@@ -283,7 +285,7 @@ export const uclar = [
   }),
   uc({
     yontem: 'GET', yol: '/satin-alma-kg-fiyatlari/gecmis', yetki: { biri: KG_FIYATI_OKUR }, sorgu: kgFiyatiGecmisiSorgusu,
-    cevap: kgFiyatiGecmisiCevabi, isle: ({ db, sorgu }) => servis.kgFiyatiGecmisi(db, sorgu.kalite, sorgu.form ?? null),
+    cevap: kgFiyatiGecmisiCevabi, isle: ({ db, kullanici, sorgu }) => servis.kgFiyatiGecmisi(db, sorgu.kalite, sorgu.form ?? null, kullanici.islemler),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-kg-fiyatlari/ekle', yetki: 'satin-alma.yaz', govde: kgFiyatiEkleGovdesi, cevap: kgFiyatlariCevabi,
@@ -298,7 +300,7 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-kg-fiyatlari/malzemeler', yetki: { biri: KG_FIYATI_OKUR }, sorgu: malzemeKgFiyatlariSorgusu,
     cevap: malzemeKgFiyatlariCevabi,
-    isle: async ({ db, sorgu }) => ({ malzemeler: [...(await servis.malzemeKgFiyatlari(db, sorgu.nolar))].map(([malzemeNo, f]) => ({ malzemeNo, ...f })) }),
+    isle: async ({ db, kullanici, sorgu }) => ({ malzemeler: servis.talasSuz([...(await servis.malzemeKgFiyatlari(db, sorgu.nolar))].map(([malzemeNo, f]) => ({ malzemeNo, ...f })), kullanici.islemler) }),
   }),
   // 533 a: malzeme başına tedarik termini; liste planın gereken tarihini ve girilen termini gösterir.
   uc({

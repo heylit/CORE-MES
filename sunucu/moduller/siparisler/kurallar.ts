@@ -283,9 +283,10 @@ export function kartBaglamaReddi(durum: TeklifDurumu): string | null {
   return durum === 'red' || durum === 'siparis' ? KART_BAGLANAMAZ : null;
 }
 
-// SIP-10 (180): fiyat, iskonto, tutar ve toplamlar yalnız fiyat ve maliyet görene gider; görmeyene null (sıfır uydurulmaz).
+// SIP-10 (180): fiyat, iskonto, tutar ve toplamlar yalnız fiyat görene gider; görmeyene null (sıfır uydurulmaz).
+// 3401-2 a: gecikme cezası ve ödeme vadesi de ticari şarttır, fiyat görmeyene (planlama, kalite, depo, sevkiyat) gitmez.
 export function siparisFiyatsiz(s: Siparis): Siparis {
-  return { ...s, araToplam: null, kdvTutari: null, genelToplam: null };
+  return { ...s, araToplam: null, kdvTutari: null, genelToplam: null, cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null };
 }
 export function siparisAyrintisiFiyatsiz(s: SiparisAyrintisi): SiparisAyrintisi {
   return { ...siparisFiyatsiz(s), satirlar: s.satirlar.map((m) => ({ ...m, birimFiyat: null, tutar: null })) };
@@ -304,6 +305,12 @@ export function teklifFiyatsiz(t: TeklifAyrintisi): TeklifAyrintiCevabi {
 // Fiyatsız kalemli sipariş onaylanmaz.
 export const FIYAT_YETKISI_YOK = 'Fiyatı yalnız fiyat görme yetkisi olan girer; kalemleri fiyatsız gönderin.';
 export const SIPARIS_FIYAT_EKSIK = 'Fiyatı girilmemiş kalem var; sipariş fiyatlar girilmeden onaylanamaz.';
+
+// 3401-2 a: ceza ve vade fiyat görme yetkisinin parçasıdır; göremeyen göndermez, düzenlemede kayıttaki kalır.
+export const TICARI_SART_YETKISI_YOK = 'Gecikme cezası ve ödeme vadesini yalnız fiyat görme yetkisi olan girer.';
+export function ticariSartReddi(fiyatYazar: boolean, g: { cezaOraniGun: string | null; cezaTavaniOrani: string | null; odemeVadesiGun: number | null }): string | null {
+  return !fiyatYazar && (g.cezaOraniGun !== null || g.cezaTavaniOrani !== null || g.odemeVadesiGun !== null) ? TICARI_SART_YETKISI_YOK : null;
+}
 
 export function fiyatYazmaReddi(fiyatYazar: boolean, satirlar: readonly { birimFiyat: string | null }[]): string | null {
   return !fiyatYazar && satirlar.some((s) => s.birimFiyat !== null) ? FIYAT_YETKISI_YOK : null;

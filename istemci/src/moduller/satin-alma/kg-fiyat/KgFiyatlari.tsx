@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FiyatsizKalite, GuncelKgFiyatiSatiri, KgFiyatiSatiri, KgStokDegeri } from '#paylasilan/sozlesme/satin-alma.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import {
-  CokSatir, DurumKutusu, Dugme, Girdi, Menu, Pencere, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, useBildirim, type Sekme, type Sutun,
+  CokSatir, DurumKutusu, Dugme, Girdi, KilitliDeger, Menu, Pencere, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, useBildirim, YETKI_ADI, type Sekme, type Sutun,
 } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
+import { KG_FIYATI_OKUR, useYetkiVarMi } from '../fiyat-yetkisi.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
 import { KgFiyatGrafigi } from './KgFiyatGrafigi.tsx';
 import { PARA_BIRIMLERI, SABLON_BASLIKLARI, katsayiOku, ondalikOku, sablonSatirlari, tarihOku, yapistirilaniOku, type KgFiyatiGirdisi } from './yapistir.ts';
@@ -285,6 +286,21 @@ type Acik = { tur: 'yeni'; x: Baslangic | null } | { tur: 'toplu' } | { tur: 'ge
 // geçmemiş, iptal edilmemiş en son giriştir; hepsini sunucu hesaplar, ekran yalnız gösterir. Fiyatı satın almayı yazan girer, okuyan görür
 // (Güvenlik E1: yazma düğmeleri yalnız satin-alma.yaz olana; asıl kapı sunucu).
 export function KgFiyatlari() {
+  const okur = useYetkiVarMi(KG_FIYATI_OKUR);
+  if (okur === null) return null;
+  // 3401-1 a: yalnız satın almayı okuyan (planlama) kg fiyatını görmez; uç 403 verir, istek atılmaz.
+  if (!okur) {
+    return (
+      <div>
+        <SayfaBasligi baslik="Kg fiyatları" simge="lira" alt="Kalite ve form başına güncel kg fiyatı." />
+        <KilitliDeger yetki={YETKI_ADI.satinAlmaFiyati} />
+      </div>
+    );
+  }
+  return <KgFiyatlariEkrani />;
+}
+
+function KgFiyatlariEkrani() {
   const { data: kullanici } = useOturum();
   const yazar = kullanici?.islemler.includes('satin-alma.yaz') ?? false;
   const [ara, araYaz] = useState('');

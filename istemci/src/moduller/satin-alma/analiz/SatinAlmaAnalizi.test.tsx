@@ -72,6 +72,9 @@ const RAPOR: SatinAlmaAnaliziCevabi = {
     },
   },
 };
+// 3401-1 a: sayfa oturumdaki işleme göre açılır; /oturum ayrı, analiz ucu ayrı yanıtlanır.
+const oturumlu = (islemler: string[], rapor: unknown = RAPOR) => vi.spyOn(api, 'get').mockImplementation(async (yol: string) =>
+  (yol === '/oturum' ? { kullanici: { id: 3, ad: 'Deneme', islemler } } : rapor) as never);
 const sayfa = (adres = '/satin-alma/analiz') => render(
   <MemoryRouter initialEntries={[adres]}><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><SatinAlmaAnalizi /></QueryClientProvider></MemoryRouter>);
 
@@ -111,8 +114,16 @@ describe('satın alma analizi (2151)', () => {
     expect(isaretliTl(0.2)).toBe('0 ₺');
   });
 
+  it('planlama (yalnız satin-alma.oku): analiz kilitli, Yetkiniz yok yazar, analiz ucu çağrılmaz', async () => {
+    oturumlu(['satin-alma.oku']);
+    sayfa();
+    expect(await screen.findByText(/Yetkiniz yok/)).toBeTruthy();
+    expect(screen.queryByText('Kural dışı alım (vekil)')).toBeNull();
+    expect(vi.mocked(api.get).mock.calls.some(([yol]) => yol === '/satin-alma-analiz')).toBe(false);
+  });
+
   it('sayfa: özet varsayılan sekme; darboğaz ve kıyas', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue(RAPOR as never);
+    oturumlu(['satin-alma.fiyat-oku']);
     sayfa();
     expect(await screen.findByText('Kural dışı alım (vekil)')).toBeTruthy();
     expect(screen.getByText(/Darboğaz: Karar → son onay, ortanca 5 gün/)).toBeTruthy();
@@ -122,7 +133,7 @@ describe('satın alma analizi (2151)', () => {
   });
 
   it('sayfa: harcama, fiyat, tedarik ve tüketim sekmeleri adresten açılır', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue(RAPOR as never);
+    oturumlu(['satin-alma.fiyat-oku']);
     sayfa('/satin-alma/analiz?sekme=tedarik');
     expect(await screen.findByText('Tedarikçi başarımı')).toBeTruthy();
     expect(screen.getAllByText('Deneme tedarik').length).toBeGreaterThan(0);

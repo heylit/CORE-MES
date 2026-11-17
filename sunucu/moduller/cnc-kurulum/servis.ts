@@ -21,7 +21,7 @@ import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
   hazirlikOnaylariniBindir, kurulumEksikAdimlari, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
-  hedefSutunu, modelBelgesiSec, modelDosyasiMi, modelKaydi, tezgahKaydi, tezgahListesi, tezgahOlabilirMi,
+  paraAlanlariniCikar, paraAlanlariniKoru, hedefSutunu, modelBelgesiSec, modelDosyasiMi, modelKaydi, tezgahKaydi, tezgahListesi, tezgahOlabilirMi,
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -37,6 +37,7 @@ const ISLEM_HAZIRLIK = 'cnc-kurulum.hazirlik-onayla';
 const ISLEM_TAKIM = 'cnc-kurulum.takim-degistir';
 const ISLEM_STOK_DUS = 'cnc-kurulum.stok-dus';
 const ISLEM_KART_YAZ = 'malzemeler.yaz';
+const ISLEM_MALIYET = 'finans.maliyet-oku';
 const CAKISMA_ILETISI = 'Kurulum kayıtları siz açtıktan sonra başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 const BUYUK_ILETISI = 'Kurulum kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
 const ONAY_UCU_ILETISI = 'Hazırlık onayları yalnız hazırlık onayıyla değiştirilir.';
@@ -60,13 +61,19 @@ export function ben(kullanici: Kullanici): BenCevabi {
   };
 }
 
-export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
+// 3401-1 a: elle girilen kg fiyatı, takım fiyatı, tezgâh ücreti yalnız maliyet görene gider ve yalnız o yazar; öbürü sunucuda
+// kayıttaki eski değeri korur. Prototipin durumu opak gövdedir: alanlar PARA_ALANLARI ile adıyla süzülür.
+const maliyetGorebilirMi = (k: Kullanici): boolean => k.islemler.includes(ISLEM_MALIYET);
+const kullaniciyaGoster = <T extends { anahtar: string; deger: unknown }>(k: T, kullanici: Kullanici): T =>
+  k.anahtar === DURUM_ANAHTARI && !maliyetGorebilirMi(kullanici) ? { ...k, deger: paraAlanlariniCikar(k.deger) } : k;
+
+export async function kayitlar(db: Db, kullanici: Kullanici): Promise<KayitlarCevabi> {
   const liste = await sorgular.kayitlar(db);
   const secili = await seciliIsEmri(db);
   const istasyonId = secili === null ? null : (await acikIsEmri(db, secili.isEmriId))?.istasyonId ?? null;
   const sayaclar = istasyonId === null ? [] : await takimOmruDurumlari(db, [istasyonId]);
   const stok = await stokKalemleri(db);
-  return { kayitlar: liste.map((k) => (k.anahtar === DURUM_ANAHTARI && k.bicim === 'json' ? { ...k, deger: stokBindir(asinmaBindir(k.deger, sayaclar), stok) } : k)) };
+  return { kayitlar: liste.map((k) => kullaniciyaGoster(k.anahtar === DURUM_ANAHTARI && k.bicim === 'json' ? { ...k, deger: stokBindir(asinmaBindir(k.deger, sayaclar), stok) } : k, kullanici)) };
 }
 
 // ---- Takım stoğu (153 a, 163 b, 164 b): kalemin adedi stoktan okunur, azalan adet stoktan düşer, bağı kart yazan kurar.
@@ -132,13 +139,15 @@ export async function emirler(db: Db, kullanici: Kullanici): Promise<EmirlerCeva
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Promise<YazCevabi> {
-  return kaydet(db, kullanici, g, false);
+  const c = await kaydet(db, kullanici, g, false);
+  return { kayit: kullaniciyaGoster(c.kayit, kullanici) };
 }
 
 // Onay ucu: yalnız onay alanları gelir ve alınır; kayıt açılamaz, durum anahtarı dışına yazılamaz. Yazma işlemi olan kişi de
 // onayını buradan verir (köprü önce bunu, sonra bütün durumu yazar); defterdeki kişi ve zaman sunucunundur.
 export async function hazirlikOnayla(db: Db, kullanici: Kullanici, g: HazirlikOnayGovdesi): Promise<YazCevabi> {
-  return kaydet(db, kullanici, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: { prep: g.hazirlik }, beklenenSurum: g.beklenenSurum }, true);
+  const c = await kaydet(db, kullanici, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: { prep: g.hazirlik }, beklenenSurum: g.beklenenSurum }, true);
+  return { kayit: kullaniciyaGoster(c.kayit, kullanici) };
 }
 
 async function kaydet(db: Db, kullanici: Kullanici, g: YazGovdesi, yalnizHazirlik: boolean): Promise<YazCevabi> {
@@ -150,7 +159,8 @@ async function kaydet(db: Db, kullanici: Kullanici, g: YazGovdesi, yalnizHazirli
   if (!surumUyarMi(mevcut, g.beklenenSurum)) throw cakisma(CAKISMA_ILETISI);
   const onceki = g.anahtar === DURUM_ANAHTARI && mevcut !== null ? (await sorgular.kayitGetir(db, g.anahtar))?.deger ?? null : null;
   if (yalnizHazirlik && onceki === null) throw yetkiYok();
-  const deger = yalnizHazirlik ? hazirlikOnaylariniBindir(onceki, g.deger) : g.deger;
+  const gelen = yalnizHazirlik ? hazirlikOnaylariniBindir(onceki, g.deger) : g.deger;
+  const deger = g.anahtar === DURUM_ANAHTARI && !maliyetGorebilirMi(kullanici) ? paraAlanlariniKoru(onceki, gelen) : gelen;
   if (deger === null) throw dogrulama('Hazırlık onayı okunamadı.', 'deger');
   if (yalnizHazirlik && sonOnaySiraDisiMi(onceki, deger)) throw gecersiz(SIRA_ILETISI);
   if (!yalnizHazirlik && g.anahtar === DURUM_ANAHTARI && hazirlikOnaylariDegistiMi(onceki, deger)) throw yetkiYok(ONAY_UCU_ILETISI);

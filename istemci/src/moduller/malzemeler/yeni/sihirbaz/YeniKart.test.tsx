@@ -219,8 +219,9 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(screen.getByRole('heading', { name: 'Form ve ölçüler' })).toBeTruthy();
   });
 
-  test('kg fiyatı yalnız satın alma ya da maliyet okuyabilene sorulur (195 a)', async () => {
-    for (const [kullanici, sorulur] of [[YONETICI, true], [YAZAN, false]] as const) {
+  test('kg fiyatı yalnız fiyat görene sorulur; yalnız satin-alma.oku (planlama) sormaz (195 a, 3401-1 a)', async () => {
+    const PLANLAMA: typeof YAZAN = { ...YAZAN, islemler: [...YAZAN.islemler, 'satin-alma.oku'] };
+    for (const [kullanici, sorulur] of [[YONETICI, true], [YAZAN, false], [PLANLAMA, false]] as const) {
       const istekler = sunucuKur(kullanici, {
         'GET /satin-alma-kg-fiyatlari/malzemeler': () => json(200, { malzemeler: [] }),
       });

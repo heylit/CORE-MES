@@ -97,6 +97,14 @@ describe('köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/bedel-ayari', 'GET /plan/bedel-ayari']);
   });
 
+  it('KOM-02d: öncelik ayarı ucu 403 verirse çerçeve düşmez, ayar null gelir; planlamacıda taban bedel ve oranlar null gelir', async () => {
+    sunucuKur(() => json(403, { kod: 'YETKI_YOK', mesaj: 'Yetkiniz yok.' }));
+    expect(await kopruKur([], { bedelAyariYazabilir: true })('bedel-ayari-oku', {})).toEqual({ ayar: null, yazabilir: false });
+    const kismi = { tabanBedelSaat: null, finansmanOraniGun: null, karRiskiOraniGun: null, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 };
+    sunucuKur(() => json(200, kismi));
+    expect(await kopruKur()('bedel-ayari-oku', {})).toEqual({ ayar: kismi, yazabilir: false });
+  });
+
   it('KOM-02b: fason termin tahmini dörtlüleri tek GET sorgusunda gider; bozuk sorgu istek atmadan 400 ile döner', async () => {
     const istekler = sunucuKur(() => json(200, { gunler: [4, null] }));
     const isle = kopruKur();

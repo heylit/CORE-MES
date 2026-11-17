@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, KilitliDeger, Simge, YETKI_ADI } from '../../../../ortak/arayuz/index.ts';
 import { fmtN } from '../bicim.ts';
 import { hamTipiAdi, type Geometri, type HamSonuc } from '../hesap/ham.ts';
 
@@ -20,6 +20,7 @@ interface Ozellikler {
   govdeSec: (i: number) => void;
   eylem: (a: SonucEylemi) => void;
   yazabilir: boolean;
+  maliyetGorur: boolean;
 }
 
 const kg = (v: number) => fmtN(v, v < 10 ? 3 : 2);
@@ -33,7 +34,7 @@ function Not({ children, uyari = false }: { children: ReactNode; uyari?: boolean
   return <p className={uyari ? 'tc-ch-not tc-ch-not-uyari' : 'tc-ch-not'}>{uyari && <Simge ad="alert" boyut="k" />}{children}</p>;
 }
 
-export function HamSonucu({ r, geo, otomatikEksen, malzeme, model, govdeler, govdeSecili, govdeSec, eylem, yazabilir }: Ozellikler) {
+export function HamSonucu({ r, geo, otomatikEksen, malzeme, model, govdeler, govdeSecili, govdeSec, eylem, yazabilir, maliyetGorur }: Ozellikler) {
   if (!r) return <Not>STEP / STL yükleyin, örnek parçayı açın ya da aşağıdan parça ölçülerini elle girin.</Not>;
   const yuzde = r.ratio * 100;
   return (
@@ -100,7 +101,8 @@ export function HamSonucu({ r, geo, otomatikEksen, malzeme, model, govdeler, gov
           <Satir k="Toplam hammadde">{fmtN(r.ms * r.qty, 1)} kg</Satir>
           {r.Vp > 0 && <Satir k="Toplam talaş">{fmtN(r.mc * r.qty, 1)} kg</Satir>}
           {r.type === 'bar' && <Satir k={r.tube ? 'Toplam boru boyu' : 'Toplam çubuk boyu'}>{fmtN((r.L || 0) * r.qty / 1000, 2)} m</Satir>}
-          {r.price > 0 && <Satir k="Hammadde maliyeti">{fmtN(r.ms * r.price, 2)} TL/adet · {fmtN(r.ms * r.price * r.qty, 0)} TL toplam</Satir>}
+          {!maliyetGorur && <Satir k="Hammadde maliyeti"><KilitliDeger yetki={YETKI_ADI.maliyet} /></Satir>}
+          {maliyetGorur && r.price > 0 && <Satir k="Hammadde maliyeti">{fmtN(r.ms * r.price, 2)} TL/adet · {fmtN(r.ms * r.price * r.qty, 0)} TL toplam</Satir>}
         </>
       )}
       <div className="tc-ch-dugmeler">

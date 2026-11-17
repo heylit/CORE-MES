@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Siparis, SiparisListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, useLogoRozetleri, type Sutun,
+  Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, YETKI_ADI, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -96,6 +96,7 @@ export function SiparisListesi() {
           </span>
         )}
       >
+        {!fiyatGorur && <KilitliSutunNotu ne="Tutar sütunu" yetki={YETKI_ADI.siparisFiyati} />}
         <Sekmeler
           etiket="Sipariş durumu"
           sekmeler={SIPARIS_SEKMELERI}

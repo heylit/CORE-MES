@@ -11,7 +11,8 @@ export function FoyGorunumu({ d, kisa = false }: { d: Taslak; kisa?: boolean }) 
   const { b, kartlar, yetki } = useSihirbaz();
   const fiyatlar = useKgFiyatlari(kartlar, yetki.kgFiyatiOkur && !kisa && !!d.id);
   const veri = K.foyVerisi(d, b, kisa);
-  const foy = !fiyatlar || !d.id ? <Foy veri={veri} /> : <Foy veri={veri} kgFiyati={fiyatlar.get(d.id) ?? null} />;
+  const kilitli = !kisa && !!d.id && !yetki.kgFiyatiOkur;
+  const foy = !fiyatlar || !d.id ? <Foy veri={veri} kgFiyatiKilitli={kilitli} /> : <Foy veri={veri} kgFiyati={fiyatlar.get(d.id) ?? null} />;
   // 3215 c: kısa (canlı) föyün başında hammaddenin ölçüden çizilen modeli.
   return kisa ? <><FoyModeli d={d} />{foy}</> : foy;
 }

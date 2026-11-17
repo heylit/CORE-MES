@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { ADET_CARPANLARI, terminYerlesimi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   AdetCarpani, AdetDenemesiCevabi, AtolyeTaslagi, AdetDenemesiSatiri, AdetDenemesiSuzgeci, DenemeTaslagiVerisi, PlanTaslagi, PlanTaslagiVerisi, TerminDenemesiCevabi, TerminDenemesiSuzgeci,
@@ -128,13 +128,15 @@ export async function satisTaslagiHazirla(db: Db, kullanici: Kullanici, teklifId
 export async function satisTaslagiYaz(
   db: Db, kullanici: Kullanici, teklifId: number, surumId: number, gecerlilik: string, p: PlanTaslagiVerisi, h: SatisTaslagiHazirligi,
 ): Promise<void> {
+  // 3401-1 a: kârı görmeyen (finans.maliyet-oku yok) formda gizli kârı gönderemez; son satış taslağının kârı ezilmez.
+  const karOrani = islemVarMi(kullanici, 'finans.maliyet-oku') ? p.karOrani : (await sorgular.sonSatisKarOrani(db, teklifId)) ?? p.karOrani;
   if (h.tur === 'tasi') {
-    await sorgular.taslagiSurumeTasi(db, h.mevcut.id, surumId, gecerlilik, p.karOrani);
+    await sorgular.taslagiSurumeTasi(db, h.mevcut.id, surumId, gecerlilik, karOrani);
     return;
   }
   await sorgular.yerTutaniKaldir(db, teklifId);
   await sorgular.planTaslagiEkle(db, {
-    ...yazim(teklifId, h.cevap, h.sonuc, p.karOrani), surumId, tur: 'satis', durum: h.cevap.onayGerekli ? 'onay-bekliyor' : 'aktif',
+    ...yazim(teklifId, h.cevap, h.sonuc, karOrani), surumId, tur: 'satis', durum: h.cevap.onayGerekli ? 'onay-bekliyor' : 'aktif',
     onayGerekli: h.cevap.onayGerekli,
   }, kullanici.id);
 }

@@ -10,7 +10,7 @@ import { HamMalzeme } from './HamMalzeme.tsx';
 
 const YETKI: CncYetkisi = {
   kisi: { id: 1, ad: 'Deneme' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false,
-  stokKartiBaglayabilir: false, emirGorebilir: false, saltOnay: false,
+  stokKartiBaglayabilir: false, emirGorebilir: false, maliyetGorur: true, saltOnay: false,
 };
 
 function ac(yetki: CncYetkisi = YETKI) {

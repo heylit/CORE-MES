@@ -28,7 +28,7 @@ export const uclar = [
     yol: '/cnc-kurulum/kayitlar',
     yetki: OKUMA,
     cevap: kayitlarCevabi,
-    isle: ({ db }) => kayitlar(db),
+    isle: ({ db, kullanici }) => kayitlar(db, kullanici),
   }),
   uc({
     yontem: 'GET',

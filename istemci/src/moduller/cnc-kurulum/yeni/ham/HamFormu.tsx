@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Secim } from '../../../../ortak/arayuz/index.ts';
+import { KilitliAlan } from '../KilitliAlan.tsx';
 import { fmt, num } from '../bicim.ts';
 import type { IsMalzemesi } from '../veri/tipler.ts';
 import type { HamAyar, HamTipi } from '../hesap/ham.ts';
@@ -18,6 +19,7 @@ interface Ozellikler {
   malzemeSec: (id: string) => void;
   eylem: (a: HamEylemi) => void;
   sonuc: ReactNode;
+  maliyetGorur: boolean;
 }
 
 const TIPLER: { deger: HamTipi; baslik: string }[] = [
@@ -27,7 +29,7 @@ const TIPLER: { deger: HamTipi; baslik: string }[] = [
 const deger = (v: unknown): string => (v == null ? '' : String(v));
 const PAYLAR: readonly (keyof HamAyar)[] = ['ax', 'ay', 'az', 'dAllow', 'face', 'cut', 'idAllow'];
 
-export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVar, mesaj, degistir, malzemeSec, eylem, sonuc }: Ozellikler) {
+export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVar, mesaj, degistir, malzemeSec, eylem, sonuc, maliyetGorur }: Ozellikler) {
   const cubuk = st.type === 'bar' || st.type === 'tube';
   // Sayı kutusu (type="number") Türkçe virgülü atar: "0,5" yazılınca değer "05" olur ve pay 5 mm hesaplanır. Metin kutusu virgülü
   // korur; hesap (num) virgülü ondalık okur.
@@ -110,7 +112,7 @@ export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVa
         />
         {sayi('rho', 'Yoğunluk g/cm³', { placeholder: fmt(varsayilanRho) + ' (malzemeden)' })}
         {sayi('qty', 'Adet')}
-        {sayi('price', 'Fiyat (TL/kg)', { placeholder: 'isteğe bağlı' })}
+        {maliyetGorur ? sayi('price', 'Fiyat (TL/kg)', { placeholder: 'isteğe bağlı' }) : <KilitliAlan etiket="Fiyat (TL/kg)" />}
       </div>
 
       {!modelVar && (

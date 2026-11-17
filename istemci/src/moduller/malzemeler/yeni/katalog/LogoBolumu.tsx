@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LogoKartAlislariCevabi, LogoKartBolumuCevabi, LogoKartHareketleriCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { Dugme, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Kart, KilitliSutunNotu, Rozet, Simge, YETKI_ADI } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { tarihMetni, tarihSaatMetni } from '../../../../ortak/veri/zaman-metni.ts';
 
@@ -149,6 +149,8 @@ function Hareketler({ kod, fiyat, birim }: { kod: string; fiyat: boolean; birim:
     <>
       <Cizgi kayitlar={kayitlar} alislar={alisListesi} birim={birim} />
       {fiyat && alislar.data && alislar.data.durum !== 'tamam' && <p className="tc-mk-soluk">Son alış fiyatları okunamadı.</p>}
+      {/* 3401-1 a: yalnız satın almayı okuyan (fiyat görmeyen) son alış fiyatını görmez. */}
+      {!fiyat && <KilitliSutunNotu ne="Son alış fiyatı" yetki={YETKI_ADI.satinAlmaFiyati} />}
       <div className="tc-mk-logo-oku">
         {son.dahaEski !== null && <Dugme onClick={() => sayfalarYaz([...sayfalar, son.dahaEski])}>Daha eski hareketler</Dugme>}
         <p className="tc-mk-logo-kaynak"><span>Logo'dan şimdi okundu · {kayitlar.length} hareket</span></p>

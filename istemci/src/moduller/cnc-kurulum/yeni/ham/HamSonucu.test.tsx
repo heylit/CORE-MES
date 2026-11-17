@@ -10,11 +10,11 @@ afterEach(cleanup);
 const sonuc = (degis: Partial<typeof STOCK_DEF>) =>
   sCompute({ st: { ...STOCK_DEF, mx: 100, my: 50, mz: 20, ...degis }, parca: null, rho: 7.85, fmtN }, 0).res;
 
-function sonucCiz(yazabilir: boolean, eylem = vi.fn()) {
+function sonucCiz(yazabilir: boolean, eylem = vi.fn(), maliyetGorur = true) {
   render(
     <HamSonucu
       r={sonuc({ qty: 4, price: 10, mvol: 40 })} geo={null} otomatikEksen malzeme="C45" model={null}
-      govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={eylem} yazabilir={yazabilir}
+      govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={eylem} yazabilir={yazabilir} maliyetGorur={maliyetGorur}
     />,
   );
   return eylem;
@@ -26,6 +26,25 @@ describe('Ham Malzeme sonuc bolumu', () => {
     expect(screen.getByText('110 × 60 × 30 mm')).toBeTruthy();
     expect(screen.getByText('Parti · 4 adet')).toBeTruthy();
     expect(screen.getByText(/TL\/adet · .* TL toplam/)).toBeTruthy();
+  });
+
+  it('maliyet yetkisi yoksa hammadde maliyeti ve fiyat girdisi yerinde kilit yazisi durur', () => {
+    sonucCiz(true, vi.fn(), false);
+    expect(screen.queryByText(/TL\/adet · .* TL toplam/)).toBeNull();
+    expect(screen.getByText('Yetkiniz yok')).toBeTruthy();
+    expect(screen.getByText('Maliyet görür')).toBeTruthy();
+    expect(screen.getByText('Toplam hammadde')).toBeTruthy();
+    cleanup();
+    render(
+      <HamFormu
+        st={{ ...STOCK_DEF, price: 12 }} malzemeler={[]} seciliMalzeme="" varsayilanRho={7.85} modelVar mesaj={null}
+        degistir={() => undefined} malzemeSec={() => undefined} eylem={() => undefined} sonuc={null} maliyetGorur={false}
+      />,
+    );
+    expect(screen.queryByLabelText('Fiyat (TL/kg)')).toBeNull();
+    expect(screen.queryByDisplayValue('12')).toBeNull();
+    expect(screen.getByText('Yetkiniz yok')).toBeTruthy();
+    expect(screen.getByLabelText('Adet')).toBeTruthy();
   });
 
   it('izinli: Kurulum kartina aktar gorunur ve eylemi cagirir', () => {
@@ -41,13 +60,13 @@ describe('Ham Malzeme sonuc bolumu', () => {
   });
 
   it('sonuc yoksa yonlendirme notu', () => {
-    render(<HamSonucu r={null} geo={null} otomatikEksen malzeme="" model={null} govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={() => undefined} yazabilir />);
+    render(<HamSonucu r={null} geo={null} otomatikEksen malzeme="" model={null} govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={() => undefined} yazabilir maliyetGorur />);
     expect(screen.getByText(/STEP \/ STL yükleyin/)).toBeTruthy();
   });
 
   it('boru: delik bulunamazsa uyari', () => {
     render(
-      <HamSonucu r={sonuc({ type: 'tube' })} geo={null} otomatikEksen malzeme="C45" model={null} govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={() => undefined} yazabilir />,
+      <HamSonucu r={sonuc({ type: 'tube' })} geo={null} otomatikEksen malzeme="C45" model={null} govdeler={null} govdeSecili={0} govdeSec={() => undefined} eylem={() => undefined} yazabilir maliyetGorur />,
     );
     expect(screen.getByText(/Parçada boydan boya eksenel delik bulunamadı/)).toBeTruthy();
   });
@@ -59,7 +78,7 @@ describe('Ham Malzeme formu', () => {
     const ciz = (type: 'block' | 'bar' | 'tube') => render(
       <HamFormu
         st={{ ...STOCK_DEF, type }} malzemeler={[]} seciliMalzeme="" varsayilanRho={7.85} modelVar={false} mesaj={null}
-        degistir={degistir} malzemeSec={() => undefined} eylem={() => undefined} sonuc={null}
+        degistir={degistir} malzemeSec={() => undefined} eylem={() => undefined} sonuc={null} maliyetGorur
       />,
     );
     ciz('block');
