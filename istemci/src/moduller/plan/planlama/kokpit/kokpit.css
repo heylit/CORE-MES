@@ -33,6 +33,8 @@
   max-height: var(--ekran-boy-60); overflow-y: auto; overscroll-behavior: contain;
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); box-shadow: var(--shadow);
 }
+/* Düğme şeridin solundaysa menü sola taşmasın: düğmenin sol kenarına yaslanır (Kokpit.tsx solaYasla). */
+.tc-pyq-acilir-menu[data-hiza="sol"] { left: 0; right: auto; }
 .tc-pyq-acilir-menu button {
   display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: var(--b-1) var(--b-2); border: 0; border-radius: var(--yari-1); background: transparent; color: var(--ink);
   font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer;
