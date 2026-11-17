@@ -119,5 +119,8 @@ describe('stok kontrol: ölçüyle eşleştirme (3398)', () => {
     assert.equal(parcaIcinStok('cubuk', o, 5, { ...p, parcaBoyu: 2000 }, 'adet', null), null);
     assert.equal(parcaIcinStok('levha', { t: 10, w: 1000, l: 2000 }, 9, { parcaBoyu: 400, parcaEni: 300, kesmeMm: 0 }, 'adet', null), 1);
     assert.equal(parcaIcinStok('levha', { t: 10, w: 1000, l: 2000 }, 9, { parcaBoyu: 400, parcaEni: 300, kesmeMm: 0 }, 'm', null), null);
+    // Boyu olmayan formda bütün parça kullanılır: adette parça sayısı kadar, başka birimde hesaplanamaz.
+    assert.equal(parcaIcinStok('disk', { d: 100, t: 20 }, 4, p, 'adet', null), 4);
+    assert.equal(parcaIcinStok('disk', { d: 100, t: 20 }, 4, p, 'kg', 7.85), null);
   });
 });
