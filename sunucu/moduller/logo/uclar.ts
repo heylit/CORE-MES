@@ -6,6 +6,8 @@ import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrm
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
+import { belgeBagla, belgeBaginiKaldir } from './elle-bag.ts';
+import { logoBagKaldirGovdesi, logoBelgeBagCevabi, logoBelgeBaglaGovdesi, type LogoBaglanabilirTur } from '#paylasilan/sozlesme/logo.ts';
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoBelgeAramaCevabi, logoBelgeAramaSorgusu, type LogoBelgeAramaTuru, logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
@@ -50,6 +52,8 @@ const ARAMA_YETKISI = {
 const ARAMA_OKUMA = {
   biri: ['sayfa.projeler', 'projeler.oku', 'siparisler.oku', 'siparisler.yaz', 'satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
 } as const;
+// 3360-2 a: bağlamak belgeyi yazabilenin; bağı kaldırmak yöneticinin (Sistem Ayarları yazma yetkisi, yeni yetki yok).
+const BAGLAMA_YETKISI: Readonly<Record<LogoBaglanabilirTur, Islem>> = { proje: 'projeler.yaz', 'satis-siparisi': 'siparisler.yaz', teklif: 'siparisler.yaz' };
 // Tutar fiyat yetkisiyle (irsaliyedeki gibi): satışta siparisler.fiyat-oku, alışta satin-alma.oku; proje ve talepte tutar yok.
 const ARAMA_FIYAT_YETKISI: Readonly<Record<LogoBelgeAramaTuru, Islem | null>> = {
   proje: null, 'satis-siparisi': 'siparisler.fiyat-oku', teklif: 'siparisler.fiyat-oku', talep: null, 'satin-alma-siparisi': 'satin-alma.oku',
@@ -181,8 +185,29 @@ export const uclar = [
     isle: ({ db, kullanici, sorgu }) => {
       if (kullanici === null || !ARAMA_YETKISI[sorgu.tur].some((i) => islemVarMi(kullanici, i))) throw yetkiYok();
       const fiyat = ARAMA_FIYAT_YETKISI[sorgu.tur];
-      return logodaBelgeAra({ tx: (f) => f(db) }, sorgu.tur, sorgu.q, fiyat !== null && islemVarMi(kullanici, fiyat));
+      return logodaBelgeAra({ tx: (f) => f(db) }, sorgu.tur, sorgu.q, fiyat !== null && islemVarMi(kullanici, fiyat), { kisiId: kullanici.id, belge: sorgu.belge });
     },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/belge-bagla',
+    yetki: { biri: ['projeler.yaz', 'siparisler.yaz'] },
+    tekrarKorumali: true,
+    govde: logoBelgeBaglaGovdesi,
+    cevap: logoBelgeBagCevabi,
+    isle: ({ db, kullanici, govde }) => {
+      if (!islemVarMi(kullanici, BAGLAMA_YETKISI[govde.tur])) throw yetkiYok();
+      return belgeBagla(db, kullanici.id, govde, new Date());
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/belge-bag-kaldir',
+    yetki: 'ayarlar.yaz',
+    tekrarKorumali: true,
+    govde: logoBagKaldirGovdesi,
+    cevap: logoBelgeBagCevabi,
+    isle: async ({ db, govde }) => { await belgeBaginiKaldir(db, govde); return { kayitNo: null }; },
   }),
   // 3360 a: listedeki "Logo'da ara" düğmesi yalnız arama açıkken görünür; yalnız ayar okunur, köprüye istek yok.
   uc({

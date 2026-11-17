@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { PlanTaslaklariCevabi, SiparisDonusumCevabi, TeklifAyrintiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, OnayPenceresi, Pencere, Rozet, Tablo, YETKI_ADI, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
+import { LogoBagi, CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, OnayPenceresi, Pencere, Rozet, Tablo, YETKI_ADI, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
@@ -164,7 +164,7 @@ export function TeklifAyrinti() {
       <SayfaBasligi
         baslik={t.baslik}
         alt={`${t.firmaAd ?? `Firma ${t.firmaId}`}, ${zamanMetni(t.olusturma)} tarihinde açıldı. İstenen teslim: ${tarihMetni(t.istenenTarih)}.`}
-        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={t.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={true} /></>)}
+        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={t.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={true} /><LogoBagi tur="teklif" id={id} bilgi={logo.durum(id)} /></>)}
         geriYol="/siparisler/teklifler"
         geriMetni="Tekliflere dön"
         islemler={islemler || undefined}

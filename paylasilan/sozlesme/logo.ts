@@ -318,6 +318,8 @@ export const logoRozetCevabi = z.object({
     kayitNo: z.string().nullable(),
     // Gitmeyen belgenin nedeni (Logo'nun ya da CORE'un iletisi); "logoda" ve "sirada"da null.
     neden: z.string().nullable(),
+    // 3360-2 a: belge Logo'daki kayda elle bağlandı (CORE göndermedi, bir daha da göndermez).
+    elle: z.boolean(),
   })),
 });
 export type LogoRozetCevabi = z.output<typeof logoRozetCevabi>;
@@ -522,9 +524,15 @@ export type LogoBelgeAramaTuru = (typeof LOGO_BELGE_ARAMA_TURLERI)[number];
 export const LOGO_BELGE_ARAMA_EN_AZ = 3;
 export const LOGO_BELGE_ARAMA_EN_COK = 100;
 export const LOGO_BELGE_ARAMA_SONUCU = 50;
+// 3360-2 a: elle bağlama bu türlerde (satın alma talebi ve siparişi ayrıca gelir).
+export const LOGO_BAGLANABILIR_TURLER = ['proje', 'satis-siparisi', 'teklif'] as const;
+export type LogoBaglanabilirTur = (typeof LOGO_BAGLANABILIR_TURLER)[number];
+const aramaMetni = z.string().trim().min(LOGO_BELGE_ARAMA_EN_AZ, `En az ${LOGO_BELGE_ARAMA_EN_AZ} karakter yazın.`).max(LOGO_BELGE_ARAMA_EN_COK);
 export const logoBelgeAramaSorgusu = z.object({
   tur: z.enum(LOGO_BELGE_ARAMA_TURLERI),
-  q: z.string().trim().min(LOGO_BELGE_ARAMA_EN_AZ, `En az ${LOGO_BELGE_ARAMA_EN_AZ} karakter yazın.`).max(LOGO_BELGE_ARAMA_EN_COK),
+  q: aramaMetni,
+  // Bağlanacak CORE belgesi: verilince her bulguya "bağlanabilir mi" ve nedeni eklenir.
+  belge: z.coerce.number().int().positive().optional(),
 });
 export type LogoBelgeAramaSorgusu = z.input<typeof logoBelgeAramaSorgusu>;
 const logoBelgeSatiri = z.object({
@@ -551,6 +559,8 @@ export const logoBelgeBulgusu = z.object({
   satirSayisi: z.number().int().nonnegative(),
   // CORE'dan bu Logo kaydına gitmiş belge (giden kutusundan); yoksa null.
   core: z.object({ id: z.number().int().positive() }).nullable(),
+  // Aramada bağlanacak belge verildiyse bu kayda bağlanabilir mi; uymuyorsa nedeni. Verilmediyse null.
+  bagla: z.object({ uygun: z.boolean(), neden: z.string().nullable() }).nullable(),
 });
 export type LogoBelgeBulgusu = z.output<typeof logoBelgeBulgusu>;
 export const logoBelgeAramaCevabi = z.object({
@@ -558,5 +568,18 @@ export const logoBelgeAramaCevabi = z.object({
   ileti: z.string().nullable(),
   fiyatGorunur: z.boolean(),
   belgeler: z.array(logoBelgeBulgusu).max(LOGO_BELGE_ARAMA_SONUCU),
+  // Bağlanacak CORE belgesi (numara, tarih) ve bağlanamıyorsa nedeni; aramada belge verilmediyse null.
+  baglanacak: z.object({ no: z.string().nullable(), tarih: tarihSemasi.nullable(), engel: z.string().nullable() }).nullable(),
 });
 export type LogoBelgeAramaCevabi = z.output<typeof logoBelgeAramaCevabi>;
+// Bağlama: kayıt kişinin son aramasında olmalı ve kurala uymalıdır (sunucu kendi okuduğunu kullanır). Logo'ya yazılmaz.
+export const logoBelgeBaglaGovdesi = z.object({
+  tur: z.enum(LOGO_BAGLANABILIR_TURLER),
+  belgeId: z.number().int().positive(),
+  logoKayitNo: z.number().int().positive(),
+});
+export type LogoBelgeBaglaGovdesi = z.input<typeof logoBelgeBaglaGovdesi>;
+export const logoBagKaldirGovdesi = z.object({ tur: z.enum(LOGO_BAGLANABILIR_TURLER), belgeId: z.number().int().positive() });
+export type LogoBagKaldirGovdesi = z.input<typeof logoBagKaldirGovdesi>;
+export const logoBelgeBagCevabi = z.object({ kayitNo: z.string().nullable() });
+export type LogoBelgeBagCevabi = z.output<typeof logoBelgeBagCevabi>;

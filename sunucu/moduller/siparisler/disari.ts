@@ -41,4 +41,7 @@ export {
   logoSiraBelgeleri, logoSiralari, logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
 } from './logo-gonderim.ts';
 export type { SiparislerLogoSiparisi, SiparislerLogoSonucu, SiparislerLogoTeklifi } from './logo-gonderim.ts';
+// 3360-2 a: Logo'ya elle bağlama ve bağı kaldırma (Logo modülü çağırır; yetki onun ucunda).
+export { logoBaglamaSirasi, logoSirasiniGeriAl } from './logo-gonderim.ts';
+export type { SiparislerLogoBaglamaSirasi } from './logo-gonderim.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';

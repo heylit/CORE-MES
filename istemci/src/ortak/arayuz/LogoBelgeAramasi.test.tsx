@@ -9,7 +9,7 @@ import { LogoBelgeAramasi } from './LogoBelgeAramasi.tsx';
 const BELGE: LogoBelgeBulgusu = {
   logoKayitNo: 41, no: 'ORN-SS-141', belgeNo: null, tarih: '2026-11-12', cariKodu: 'ORN-C-1001', cariAdi: 'ORN Deneme Makina', projeKodu: null, projeAdi: null,
   aciklama: null, tutar: '48000', dovizTuru: null, iptal: false, satirSayisi: 2,
-  satirlar: [{ kod: 'ORN-MLZ-0042', ad: 'ORNEK Mil', miktar: '120', birim: 'ADET', aciklama: null }], core: { id: 88 },
+  satirlar: [{ kod: 'ORN-MLZ-0042', ad: 'ORNEK Mil', miktar: '120', birim: 'ADET', aciklama: null }], core: { id: 88 }, bagla: null,
 };
 const json = (govde: unknown) => new Response(JSON.stringify(govde), { status: 200 });
 function sunucuKur(acik: boolean, cevap: LogoBelgeAramaCevabi) {
@@ -31,7 +31,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Logo\'da belge arama (3360 a)', () => {
   it('arama kapalıyken düğme çizilmez ve aramaya istek gitmez', async () => {
-    const istekler = sunucuKur(false, { durum: 'tamam', ileti: null, fiyatGorunur: true, belgeler: [] });
+    const istekler = sunucuKur(false, { durum: 'tamam', ileti: null, fiyatGorunur: true, belgeler: [], baglanacak: null });
     const { container } = ciz('satis-siparisi');
     await waitFor(() => { expect(istekler).toContain('/logo/belge-arama-durumu'); });
     expect(container.textContent).toBe('');
@@ -39,7 +39,7 @@ describe('Logo\'da belge arama (3360 a)', () => {
   });
 
   it('türünde arar; eşleşen satır, tutar, CORE karşılığı ve "CORE\'da aç" bağlantısı görünür', async () => {
-    const istekler = sunucuKur(true, { durum: 'tamam', ileti: null, fiyatGorunur: true, belgeler: [BELGE, { ...BELGE, logoKayitNo: 42, no: 'ORN-SS-142', core: null, iptal: true, satirlar: [], satirSayisi: 0, aciklama: 'numune' }] });
+    const istekler = sunucuKur(true, { durum: 'tamam', ileti: null, fiyatGorunur: true, belgeler: [BELGE, { ...BELGE, logoKayitNo: 42, no: 'ORN-SS-142', core: null, iptal: true, satirlar: [], satirSayisi: 0, aciklama: 'numune' }], baglanacak: null });
     ciz('satis-siparisi');
     fireEvent.click(await screen.findByRole('button', { name: "Logo'da ara" }));
     const pencere = await screen.findByRole('dialog');
@@ -56,7 +56,7 @@ describe('Logo\'da belge arama (3360 a)', () => {
   });
 
   it('talepte tutar sütunu yok; kapalı cevabın iletisi yazılır', async () => {
-    sunucuKur(true, { durum: 'kapali', ileti: 'Logo\'da belge araması Sistem Ayarları\'nda kapalı.', fiyatGorunur: false, belgeler: [] });
+    sunucuKur(true, { durum: 'kapali', ileti: 'Logo\'da belge araması Sistem Ayarları\'nda kapalı.', fiyatGorunur: false, belgeler: [], baglanacak: null });
     ciz('talep');
     fireEvent.click(await screen.findByRole('button', { name: "Logo'da ara" }));
     const pencere = await screen.findByRole('dialog');

@@ -824,6 +824,33 @@ export async function logoHatasiYaz(db: Db, tur: 'teklif' | 'siparis', id: numbe
   );
 }
 
+// 3360-2 a: Logo'ya elle bağlanacak belgenin en yeni sırası (teklifte son sürüm, siparişte siparişin sırası). Sıra yoksa null.
+export interface LogoBaglamaSirasi { id: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logo_kayit_no: string | null; no: string; surum_no: number; firma_id: number | null; tarih: string }
+export function logoBaglamaSirasi(db: Db, tur: 'teklif' | 'siparis', belgeId: number): Promise<LogoBaglamaSirasi | null> {
+  return db.tek<LogoBaglamaSirasi>(
+    tur === 'teklif'
+      ? `SELECT g.id, g.durum, g.logo_kayit_no, t.no, g.surum_no, t.firma_id, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih
+           FROM siparisler_logo_gonderim g
+           JOIN siparisler_teklif t ON t.id = g.teklif_id
+           JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no
+          WHERE g.tur = 'teklif' AND g.teklif_id = $1 ORDER BY g.surum_no DESC, g.id DESC LIMIT 1`
+      : `SELECT g.id, g.durum, g.logo_kayit_no, s.no, g.surum_no, s.firma_id, s.siparis_tarihi::text AS tarih
+           FROM siparisler_logo_gonderim g
+           JOIN siparisler_siparis s ON s.id = g.siparis_id
+          WHERE g.tur = 'siparis' AND g.siparis_id = $1 ORDER BY g.id DESC LIMIT 1`,
+    [belgeId],
+  );
+}
+
+// Elle bağ kaldırılınca sıra yeniden bekler; Logo işi onu ilk kez gidecekmiş gibi gönderir.
+export async function logoSirasiniGeriAl(db: Db, tur: 'teklif' | 'siparis', id: number): Promise<boolean> {
+  return (await db.sorgu<{ id: number }>(
+    `UPDATE siparisler_logo_gonderim SET durum = 'bekliyor', logo_kayit_no = NULL, satir_refleri = '{}'::jsonb, hata = NULL, gonderildi = NULL
+      WHERE id = $1 AND tur = $2 AND durum = 'gonderildi' RETURNING id`,
+    [id, tur],
+  )).length > 0;
+}
+
 // Takvim (891, 1162 b): termini aralıkta olan, iptal edilmemiş siparişler.
 export interface TakvimSiparisSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; termin: string }
 export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {

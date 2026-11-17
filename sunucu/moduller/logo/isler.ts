@@ -164,8 +164,9 @@ export const logodaCariAra = (vt: TxAcan, metin: string): Promise<CariOkumasi<Lo
 export const logodaMalzemeAra = (vt: TxAcan, kisiId: number, metin: string): Promise<CariOkumasi<LogoMalzemeKarti[]>> =>
   sirali(() => logoMalzemeAra(vt, ortamKoprusu, kisiId, metin));
 // 3360 a: beş listedeki "Logo'da ara"; cari aramasıyla aynı sıradan gider. Uç transaction dışında çağırır.
-export const logodaBelgeAra = (vt: TxAcan, tur: LogoBelgeAramaTuru, metin: string, fiyatGorunur: boolean): Promise<LogoBelgeAramaCevabi> =>
-  sirali(() => logoBelgeAra(vt, ortamKoprusu, tur, metin, fiyatGorunur));
+export const logodaBelgeAra = (
+  vt: TxAcan, tur: LogoBelgeAramaTuru, metin: string, fiyatGorunur: boolean, a: { kisiId?: number; belge?: number } = {},
+): Promise<LogoBelgeAramaCevabi> => sirali(() => logoBelgeAra(vt, ortamKoprusu, tur, metin, fiyatGorunur, a));
 export const logodanCariOku = (vt: TxAcan, kod: string): Promise<CariOkumasi<LogoCari | null>> => sirali(() => logoCariOku(vt, ortamKoprusu, kod));
 // 3391-2 a: firma kartında CRM kodu seçimi; kullanıcı isteğiyle, sırayla.
 export const logodanCrmKodlari = (vt: TxAcan, kod: string): Promise<CariOkumasi<{ kodlar: string[]; secilebilir: boolean } | null>> =>

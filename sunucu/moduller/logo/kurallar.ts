@@ -1084,6 +1084,33 @@ export interface LogoBelgeBulgusuHam {
   satirlar: { kod: string | null; ad: string | null; miktar: string | null; birim: string | null; aciklama: string | null }[];
   satirSayisi: number;
 }
+// 3360-2 a: Logo'ya elle girilmiş belge CORE belgesine elle bağlanır; bağlanan belge ve ondan doğan belgeler bir daha gönderilmez,
+// sonraki değişiklik Logo'da elle yapılır (kullanıcı cevabı "yalnız işaretlensin"). Kural: satış teklifi ve siparişinde aynı cari;
+// projede aynı proje kodu (Logo projesinde cari yoktur). İptal edilmiş ya da başka CORE belgesine bağlı kayıt bağlanmaz.
+export const ELLE_BAGLI_TEKLIF_SURUMU = "Teklifin önceki sürümü Logo'ya elle bağlandı; bu sürüm gönderilmez. Logo'ya elle girip Logo'da ara ile bağlayın.";
+export const ELLE_BAGLI_TEKLIF_SIPARISI = "Teklif Logo'ya elle bağlandı; sipariş gönderilmez. Siparişi Logo'da elle açıp Logo'da ara ile bağlayın.";
+const kodEsit = (a: string | null, b: string | null): boolean =>
+  a !== null && b !== null && a.trim() !== '' && a.trim().toLocaleUpperCase('tr') === b.trim().toLocaleUpperCase('tr');
+export function baglamaUyumu(
+  tur: 'proje' | 'satis-siparisi' | 'teklif', core: { cariKodu: string | null; projeKodu: string | null },
+  logo: { iptal: boolean; cariKodu: string | null; projeKodu: string | null; baskaBagli: boolean },
+): string | null {
+  if (logo.baskaBagli) return 'Başka bir CORE belgesine bağlı; bağlanamaz.';
+  if (logo.iptal) return "Logo'da iptal ya da pasif; bağlanamaz.";
+  if (tur === 'proje') return kodEsit(core.projeKodu, logo.projeKodu) ? null : 'Proje kodu farklı; bağlanamaz.';
+  if (core.cariKodu === null || core.cariKodu.trim() === '') return 'Firmanın Logo cari kodu yok; bağlanamaz.';
+  return kodEsit(core.cariKodu, logo.cariKodu) ? null : 'Cari farklı; bağlanamaz.';
+}
+// CORE belgesi bağlanabilir mi (giden izi ve sahibi modülün sırası). Sırası yoksa belge Logo'ya gidecek durumda değildir.
+export function baglanacakEngeli(
+  g: { sonSonuc: GidenSonucu | null; niyetZamani: Date | null; logoKayitNo: string | null } | null, sira: { durum: string; logoKayitNo: string | null } | null | undefined,
+): string | null {
+  if (sira === null) return "Belge henüz Logo'ya gidecek durumda değil (teklif verilmedi ya da sipariş onaylanmadı).";
+  const kayit = g?.logoKayitNo ?? sira?.logoKayitNo ?? null;
+  if (kayit !== null || sira?.durum === 'gonderildi') return `Belge zaten Logo'da${kayit === null ? '' : ` (kayıt ${kayit})`}.`;
+  if (g?.niyetZamani != null) return "Belge şu an Logo'ya gönderiliyor; sonuç gelince yeniden bakın.";
+  return null;
+}
 const miktarMetni = (d: number | null): string | null => (d === null || !Number.isFinite(d) ? null : String(Math.round(d * 1e6) / 1e6));
 export function belgeBulgulariniAyikla(govde: unknown): LogoBelgeBulgusuHam[] | null {
   if (!Array.isArray(govde)) return null;
