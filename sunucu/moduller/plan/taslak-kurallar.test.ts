@@ -71,6 +71,14 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.ok(!('hata' in ayni) && !ayni.degisti);
   });
 
+  test('3414: ayar komutu süre ayarını (D.ayarlar), aile katsayısını ve saati geçmiş iş seçeneğini yazar; geri yaması iç içe yolu taşır', () => {
+    const r = ayarUygula(calisma(), { w: { famK: 0.5, gerideTasinir: true }, param: { chgTL: 80 }, ayarlar: { tasimaSaat: 1.5 }, ac: [], kapat: [] }, '', k);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as { w: Record<string, unknown>; param: Record<string, unknown>; D: { ayarlar: Record<string, unknown> }; bekleyen: { geri: { yol: string[]; id?: string }[] }[] };
+    assert.deepEqual([d.w['famK'], d.w['gerideTasinir'], d.param['chgTL'], d.D.ayarlar['tasimaSaat']], [0.5, true, 80, 1.5]);
+    assert.ok(d.bekleyen[0]!.geri.some((g) => g.yol.join('/') === 'D/ayarlar' && g.id === 'tasimaSaat'));
+  });
+
   test('emrin yönü yazılır ve planınkine döner; çalışmada olmayan emir reddedilir', () => {
     const r = yonUygula(calisma(), 'S1', 'geri', k);
     assert.ok(!('hata' in r) && r.degisti);

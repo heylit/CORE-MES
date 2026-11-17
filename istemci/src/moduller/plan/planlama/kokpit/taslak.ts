@@ -32,15 +32,15 @@ export const dizmeMi = (s: TaslakSatiri): boolean => s.komut.tur === 'diz';
 // Panelin taslağından ayar komutu: yalnız değişen alanlar ve kısıtlar; değişen yoksa null.
 export function ayarKomutu(c: PlanlamaCalismasi, t: AyarTaslagi, ayrinti: string): TaslakKomutu | null {
   const simdi = ayarTaslagi(c);
-  const w: Record<string, unknown> = {}, param: Record<string, unknown> = {};
+  const w: Record<string, unknown> = {}, param: Record<string, unknown> = {}, ayarlar: Record<string, unknown> = {};
   for (const a of AYAR_ALANLARI) {
     const v = alanDegeri(t, a);
-    if (v !== null && v !== alanDegeri(simdi, a)) (a.yer === 'w' ? w : param)[a.k] = v;
+    if (v !== null && v !== alanDegeri(simdi, a)) (a.yer === 'w' ? w : a.yer === 'param' ? param : ayarlar)[a.k] = v;
   }
   const ac = PANEL_KISITLARI.filter((k) => t.acik[k] === true && simdi.acik[k] === false);
   const kapat = PANEL_KISITLARI.filter((k) => t.acik[k] === false && simdi.acik[k] === true);
-  if (Object.keys(w).length + Object.keys(param).length + ac.length + kapat.length === 0) return null;
-  return { tur: 'ayar', ayar: { w, param, ac, kapat }, ayrinti } as TaslakKomutu;
+  if (Object.keys(w).length + Object.keys(param).length + Object.keys(ayarlar).length + ac.length + kapat.length === 0) return null;
+  return { tur: 'ayar', ayar: { w, param, ...(Object.keys(ayarlar).length > 0 ? { ayarlar } : {}), ac, kapat }, ayrinti } as TaslakKomutu;
 }
 
 // Dizmenin işleri: görünümdeki bekleyenlerin işleri; biri bütün planı etkiliyorsa '*'. Bekleyen yoksa dizilecek bir şey yoktur.

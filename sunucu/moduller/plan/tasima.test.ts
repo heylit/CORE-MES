@@ -40,7 +40,7 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.deepEqual(ozet(r), { 'S1.10': ['T1', 15, 33, 'tasinan'], 'S1.20': ['T2', 35, 37, 'itilen'] });
   });
 
-  test('TH-09 (3414-3): başka siparişin işinin önüne bırakılan iş onu arkaya iter; içine ya da arkasına bırakılan iş arkasındaki boşluğa oturur', () => {
+  test('TH-11 (3414-3): başka siparişin işinin önüne bırakılan iş onu arkaya iter; içine ya da arkasına bırakılan iş arkasındaki boşluğa oturur', () => {
     // S2.10 T2'de salı 09:00-11:00 (33-35). S1.20 onun başına bırakılır: S2.10 arkaya, 11:00-13:00'e itilir.
     const c = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10), 'S2.10': op('S2', 'T2', 33) });
     const one = tasimaHesabi(c, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 33 });
@@ -61,7 +61,21 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     const c = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10) }, { w: { famK: 0.3, mat: 'uyari', dondurma: 4 } });
     const r = tasimaHesabi(c, 8, { isId: 'S1.10', tezgah: 'T1', baslangic: 15 });
     assert.equal(r.gecerli, false);
-    assert.match(r.ileti!, /OP 20 başlamış ya da donuk bölgede/);
+    assert.match(r.ileti!, /OP 20 dondurulmuş bölgede; yeri değişmez\. Ayarlar'da Dondurulmuş bölge kısaltılırsa taşınır\./);
+  });
+
+  test('TH-12 (3414): saati geçmiş, başlamamış ardıl varsayılan yerinde kalır ve ileti nedenini söyler; ayar açıkken birlikte kayar; başlamış ardıl ayarla da kaymaz', () => {
+    // Şimdi 11:00. S1.20 10:00-12:00 planlı, başlamamış: geride. S1.10 15:00'e taşınır.
+    const isler = (ek: Record<string, unknown> = {}) => ({ 'S1.10': op('S1', 'T1', 11.5), 'S1.20': op('S1', 'T2', 10, ek) });
+    const kapali = tasimaHesabi(calisma('b', isler()), 11, { isId: 'S1.10', tezgah: 'T1', baslangic: 15 });
+    assert.equal(kapali.gecerli, false);
+    assert.match(kapali.ileti!, /OP 20 başlamamış ama başlama saati geçmiş; plan onu çalışıyor sayar/);
+    assert.match(kapali.ileti!, /Saati geçmiş, başlamamış iş taşınabilsin/);
+    const acik = (ops: Record<string, unknown>) => tasimaHesabi(calisma('b', ops, { w: { famK: 0.3, mat: 'uyari', dondurma: 0, gerideTasinir: true } }), 11, { isId: 'S1.10', tezgah: 'T1', baslangic: 15 });
+    assert.deepEqual(ozet(acik(isler())), { 'S1.10': ['T1', 15, 33, 'tasinan'], 'S1.20': ['T2', 33, 35, 'itilen'] });
+    const basladi = acik(isler({ act: 1 }));
+    assert.equal(basladi.gecerli, false);
+    assert.match(basladi.ileti!, /OP 20 başlamış; yeri değişmez/);
   });
 
   test('TH-05: biten öncül beklenmez; tezgâh işe uygun değilse taşıma yapılmaz', () => {
@@ -98,7 +112,7 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     // Gerçekleşme kaydı olan (act) adım kımıldamaz: başlamış ardıl sırayı bozacaksa taşıma yapılmaz.
     const basladi = tasimaHesabi(calisma('b', { ...gecmis, 'S1.20': op('S1', 'T2', 10, { act: 1, done: 1 }) }), 32, { isId: 'S1.10', tezgah: 'T1', baslangic: 33 });
     assert.equal(basladi.gecerli, false);
-    assert.match(basladi.ileti!, /OP 20 başlamış ya da donuk bölgede/);
+    assert.match(basladi.ileti!, /OP 20 bitmiş; yeri değişmez/);
   });
 
   test('TH-09: tabana bitmiş diye konan adım (bitti, act yok) biten gibidir: öncül olarak beklenmez, ardıl olarak kımıldamaz', () => {
@@ -109,6 +123,6 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     // Ardıl bitti işaretli ve donuk bölgenin dışında (şimdide): yine itilmez, sırayı bozacak taşıma yapılmaz.
     const s = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8, { done: 1 }), 'S1.20': op('S1', 'T2', 32, bitti) }), 32, { isId: 'S1.10', tezgah: 'T1', baslangic: 33 });
     assert.equal(s.gecerli, false);
-    assert.match(s.ileti!, /OP 20 başlamış ya da donuk bölgede/);
+    assert.match(s.ileti!, /OP 20 bitmiş; yeri değişmez/);
   });
 });

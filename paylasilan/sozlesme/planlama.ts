@@ -446,12 +446,17 @@ const ekMesaiGunu = z.number().int().min(0).max(182);
 // Ayar komutu Kokpit Ayarlar panelinin alanlarıdır (istemci kokpit/ayarlar.ts AYAR_ALANLARI); sınırlar aynı.
 export const taslakAyarlari = z.object({
   w: z.object({
-    dondurma: z.number().min(0).max(72), mat: z.enum(['karma', 'uyari', 'sert']), yon: z.enum(['ileri', 'geri']),
+    dondurma: z.number().min(0).max(72), mat: z.enum(['karma', 'uyari', 'sert']), yon: z.enum(['ileri', 'geri']), gerideTasinir: z.boolean(),
+    famK: z.number().min(0).max(1),
   }).partial().strict(),
   param: z.object({
     tampon: z.boolean(), tamponZ: z.number().min(0).max(3), mesaiHafta: z.number().min(0).max(60), maxChg: z.number().int().min(0).max(500),
-    geriTamponGun: z.number().int().min(0).max(30),
+    geriTamponGun: z.number().int().min(0).max(30), chgTL: z.number().min(0).max(100000),
   }).partial().strict(),
+  // Çalışmanın süre ayarları (D.ayarlar); eski satırlarda alan yoktur.
+  ayarlar: z.object({
+    programSaat: z.number().min(0).max(72), faiSaat: z.number().min(0).max(24), transferOran: z.number().min(0.05).max(1), tasimaSaat: z.number().min(0).max(24),
+  }).partial().strict().optional(),
   // Açılan ve kapanan kısıtlar (çalışmanın kapali listesi).
   ac: z.array(taslakKimlik).max(40), kapat: z.array(taslakKimlik).max(40),
 }).strict();

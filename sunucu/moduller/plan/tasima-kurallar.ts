@@ -10,6 +10,8 @@ export interface TasimaIsi {
   id: string; job: string; opNo: string; m: string; S: number; C: number; lot1: number;
   // Başlamış, biten ya da donuk bölgedeki iş yerinde kalır.
   sabit: boolean; fas: boolean;
+  // Sabitliğin nedeni; ileti ne yapılacağını buna göre söyler. Yoksa genel ileti yazılır.
+  neden?: 'basladi' | 'bitti' | 'geride' | 'donuk';
 }
 export interface TasimaYeri { S: number; C: number; lot1: number }
 export interface TasimaGirdisi {
@@ -63,6 +65,15 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       t = Math.max(c.C, t + E);
     }
     return 'ufuk';
+  };
+  // Yerinden oynamayan adımın nedeni ve ne yapılacağı (3414).
+  const sabitNedeni = (id: string): string => {
+    const n = g.isler.get(id)?.neden;
+    if (n === 'bitti') return `${op(id)} bitmiş; yeri değişmez. Taşıdığınız işi ondan önce bitecek bir saate bırakın.`;
+    if (n === 'basladi') return `${op(id)} başlamış; yeri değişmez. Taşıdığınız işi ondan sonraya bırakın.`;
+    if (n === 'geride') return `${op(id)} başlamamış ama başlama saati geçmiş; plan onu çalışıyor sayar ve yerinde tutar. Emri Yeniden planla ile şimdiden sonraya dizin ya da Ayarlar'da "Saati geçmiş, başlamamış iş taşınabilsin" seçeneğini açın.`;
+    if (n === 'donuk') return `${op(id)} dondurulmuş bölgede; yeri değişmez. Ayarlar'da Dondurulmuş bölge kısaltılırsa taşınır.`;
+    return `${op(id)} başlamış ya da donuk bölgede.`;
   };
   const bosRed = (id: string, m: string, r: 'uygunsuz' | 'ufuk') => red(r === 'uygunsuz'
     ? `${op(id)} ${g.tezgahAdi(m)} tezgâhında yerleşemiyor; taşıma yapılmadı.` : `${op(id)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
@@ -155,7 +166,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       const ai = g.isler.get(a)!;
       const s = sinir(a), y0 = yeri(a);
       if (y0.S >= s.bas - E && y0.C >= s.bit - E) continue;
-      if (ai.sabit) return red(`${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.`);
+      if (ai.sabit) return red(ai.neden === undefined ? `${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.` : `Taşıma yapılmadı: sonraki adım rota sırasının dışında kalırdı. ${sabitNedeni(a)}`);
       // Fason adım tezgâhta durmaz ve kilitlenmez; süresini motor plan uygulanınca kurar. Arkasındakiler bekleyecek diye aynı süreyle
       // kaydırılmış sayılır, kendisi sonuca girmez.
       if (ai.fas) {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
-import { AYAR_SECENEKLERI, degerAdi, surumMetni } from '../../motor-ayarlari/kurallar.ts';
+import { ACIL_PAY, AYAR_SECENEKLERI, degerAdi, surumMetni, yuzdeMetni } from '../../motor-ayarlari/kurallar.ts';
 import { altEkranAdresi } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
@@ -131,7 +131,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Ayarları kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!yazabilir && <p className="tc-pyq-not">Ayarları yalnız planı yazabilen kişi değiştirir.</p>}
-      <h3>Zaman ve tampon</h3>
+      <h3>Zaman, süre ve tampon</h3>
       {AYAR_ALANLARI.filter((a) => a.k !== 'mat' && a.k !== 'yon').map(alan)}
       <h3>Kısıtlar</h3>
       {PANEL_KISITLARI.map((k) => (
@@ -148,7 +148,9 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}
               <>
                 <div><dt>{AYAR_SECENEKLERI.kural.baslik}</dt><dd>{degerAdi('kural', motor.degerler.kural)}</dd></div>
                 <div><dt>{AYAR_SECENEKLERI.amac.baslik}</dt><dd>{degerAdi('amac', motor.degerler.amac)}</dd></div>
-                <div><dt>{AYAR_SECENEKLERI.bolmeKip.baslik}</dt><dd>{degerAdi('bolmeKip', motor.degerler.bolmeKip)}</dd></div>
+                <div><dt>{AYAR_SECENEKLERI.bolmeKip.baslik}</dt><dd>{degerAdi('bolmeKip', motor.degerler.bolmeKip)} (en çok {motor.degerler.bolmeMaks} pay)</dd></div>
+                <div><dt>{AYAR_SECENEKLERI.eksikStok.baslik}</dt><dd>{degerAdi('eksikStok', motor.degerler.eksikStok)}</dd></div>
+                <div><dt>{ACIL_PAY.baslik}</dt><dd>{yuzdeMetni(motor.degerler.acilPay)}</dd></div>
               </>
             )}
       </dl>

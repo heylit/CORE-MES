@@ -13,6 +13,8 @@ export function tasimaHesabi(calisma: Nesne, simdi: number, g: { isId: string; t
   const plan = nesne(calisma.plan) ? calisma.plan : null;
   const ops = plan !== null && nesne(plan.ops) ? plan.ops : {};
   const t = tasimaTakvimi(calisma, simdi);
+  // Saati geçmiş, başlamamış iş (3414): varsayılan çalışıyor sayılır ve yerinde kalır; çalışma ayarı açıksa öteki adımlarla birlikte kayar.
+  const gerideTasinir = nesne(calisma.w) && calisma.w.gerideTasinir === true;
   const isler = new Map<string, TasimaIsi>();
   const biten = new Set<string>();
   for (const [id, r] of Object.entries(ops)) {
@@ -21,9 +23,13 @@ export function tasimaHesabi(calisma: Nesne, simdi: number, g: { isId: string; t
     const gecmis = Boolean(r.done) && !bitti;
     if (bitti) biten.add(id);
     const lot1 = typeof r.lot1 === 'number' && Number.isFinite(r.lot1) ? r.lot1 : r.C;
+    const basladi = Boolean(r.act) || bitti;
+    const geride = !basladi && !gecmis && r.S < simdi - E;
+    const donuk = !basladi && !gecmis && !geride && r.S < t.donuk - E;
+    const sabit = basladi || (id !== g.isId && (donuk || (geride && !gerideTasinir)));
     isler.set(id, {
-      id, job: String(r.job), opNo: t.opNo[id] ?? id, m: String(r.m), S: r.S, C: r.C, lot1,
-      sabit: Boolean(r.act) || bitti || (!gecmis && id !== g.isId && r.S < t.donuk - E), fas: Boolean(r.fas),
+      id, job: String(r.job), opNo: t.opNo[id] ?? id, m: String(r.m), S: r.S, C: r.C, lot1, sabit, fas: Boolean(r.fas),
+      ...(sabit ? { neden: bitti ? 'bitti' as const : basladi ? 'basladi' as const : geride ? 'geride' as const : 'donuk' as const } : {}),
     });
   }
   const onculler = new Map<string, (readonly [string, BagTuru])[]>();

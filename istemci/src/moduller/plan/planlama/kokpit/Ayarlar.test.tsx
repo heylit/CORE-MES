@@ -94,7 +94,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     const panel = screen.getByRole('complementary', { name: 'Tüm planın yönü' });
     expect(panel.textContent).toContain('İleriye → Teslimden geriye');
     expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Zaman ve tampon' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Zaman, süre ve tampon' })).toBeNull();
     const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
     expect(yazilan).toEqual([{ tur: 'ayar', ayar: { w: { yon: 'geri' }, param: {}, ac: [], kapat: [] }, ayrinti: 'Planlama yönü: İleri: hemen başla → Geri: teslimden geriye' }]);
     expect(t.yaz).toHaveBeenCalledTimes(1);
@@ -121,7 +121,7 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
     expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Yön' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Zaman ve tampon' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Zaman, süre ve tampon' })).toBeTruthy();
   });
 
   it('etki beklerken panel kapanırsa (kaldırılırsa) bekleme bildirimi düşer: Canlıya al kilitli kalmaz', async () => {
