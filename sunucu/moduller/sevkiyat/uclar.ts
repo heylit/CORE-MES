@@ -121,7 +121,7 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
       isle: async ({ db, parametre, govde }) => ({ is: await servis.isGuncelle(db, parametre.id, govde) }),
     }),
     uc({
-      yontem: 'POST', yol: '/sevkiyat/isler/:id/belge-no', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: isBelgeNoGovdesi, cevap: isCevabi,
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/belge-no', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, govde: isBelgeNoGovdesi, cevap: isCevabi,
       isle: async ({ db, parametre, govde }) => ({ is: await servis.isBelgeNoYaz(db, parametre.id, govde) }),
     }),
     uc({

@@ -104,7 +104,7 @@ export function useIsKomutu() {
         : komut.tur === 'ise-cevir' ? korumaliPost<IsCevabi>(`/sevkiyat/bekleyenler/${komut.bekleyenId}/ise-cevir`, komut.govde)
           : komut.tur === 'iptal-et' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/iptal-et`)
             : komut.tur === 'durum' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/durum`, komut.govde)
-              : komut.tur === 'belge-no' ? api.post<IsCevabi>(`/sevkiyat/isler/${komut.id}/belge-no`, komut.govde)
+              : komut.tur === 'belge-no' ? korumaliPost<IsCevabi>(`/sevkiyat/isler/${komut.id}/belge-no`, komut.govde)
               : api.post<IsCevabi>(`/sevkiyat/isler/${komut.id}/guncelle`, komut.govde),
     onSuccess: (_c, komut) => {
       void istemci.invalidateQueries({ queryKey: ['sevkiyat', 'plan'] });
