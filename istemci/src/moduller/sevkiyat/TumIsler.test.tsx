@@ -106,6 +106,31 @@ describe('Tüm işler', () => {
     expect(yazmalar(istekler)[0]!.govde).toMatchObject({ anahtarlar: ['urun:11'], tasima: 'biz' });
   });
 
+  it('3361: toplu "Sevk yok" yalnız hazırı gönderir; yalnız hazır olmayan seçiliyken iki düğme de pasif; ayrıntıdaki düğme pasif', async () => {
+    const istekler = sunucuKur(SEVKIYATCI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    fireEvent.click(within(tablo).getByRole('checkbox', { name: 'Hepsini seç' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Toplu karar' })).getByRole('button', { name: 'Sevk yok (1)' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]!.govde).toMatchObject({ anahtarlar: ['urun:11'], tasima: 'firma' });
+
+    const tablo2 = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    const kutu = within(satirOf(tablo2, 'DENEME-UE-11')).queryByRole('checkbox');
+    if (kutu && (kutu as HTMLInputElement).checked) fireEvent.click(kutu);
+    const hazirDegilKutu = within(satirOf(tablo2, 'DENEME-UE-12')).getByRole('checkbox');
+    if (!(hazirDegilKutu as HTMLInputElement).checked) fireEvent.click(hazirDegilKutu);
+    const toplu = screen.getByRole('region', { name: 'Toplu karar' });
+    expect((within(toplu).getByRole('button', { name: 'Serbest bırak (0)' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(toplu).getByRole('button', { name: 'Sevk yok (0)' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(within(satirOf(tablo2, 'DENEME-UE-12')).getByText('DENEME-UE-12'));
+    const yan = await screen.findByRole('dialog');
+    const birak = within(yan).getByRole('button', { name: 'Serbest bırak' }) as HTMLButtonElement;
+    expect([birak.disabled, birak.title]).toEqual([true, 'Önceki adım bitince açılır (OP 30 bitti)']);
+    expect(yazmalar(istekler)).toHaveLength(1);
+  });
+
   it('genel aramadan gelen emir no: görünüm, arama kutusu ve bütün tarihler ayarlı açılır (932 a)', async () => {
     const istekler = sunucuKur(OKUYUCU);
     ac('/sevkiyat/tum-isler?ara=DENEME-UE-13&gorunum=sevkiyat');

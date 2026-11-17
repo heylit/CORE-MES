@@ -456,7 +456,7 @@ export function TumIsler() {
                     <Dugme tur="birincil" simge="route" yukleniyor={komut.isPending} disabled={seciliHazir.length === 0}
                       title={seciliHazir.length < secili.size ? `${secili.size - seciliHazir.length} kalem hazır değil; atlanır` : undefined}
                       onClick={() => serbestBirak(seciliHazir, 'biz')}>{seciliHazir.length < secili.size ? `Serbest bırak (${seciliHazir.length})` : 'Serbest bırak'}</Dugme>
-                    <Dugme simge="minus" disabled={komut.isPending || seciliHazir.length === 0} onClick={() => serbestBirak(seciliHazir, 'firma')}>Sevk yok</Dugme>
+                    <Dugme simge="minus" disabled={komut.isPending || seciliHazir.length === 0} onClick={() => serbestBirak(seciliHazir, 'firma')}>{seciliHazir.length < secili.size ? `Sevk yok (${seciliHazir.length})` : 'Sevk yok'}</Dugme>
                     <Dugme className="tc-ti-toplu-birak" onClick={() => setSecili(new Set())}>Seçimi bırak</Dugme>
                   </div>
                 )}
