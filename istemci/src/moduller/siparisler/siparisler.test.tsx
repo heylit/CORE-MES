@@ -1625,3 +1625,43 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/termin-onayla', govde: { surum: 4 } });
   });
 });
+
+// 3359-1: başlıktaki cari hazırlığı, belgenin Logo durumu (belge-durumlari) gelmeden ya da hata dönmeden sorulmaz;
+// Logo'daki belge için boşuna sorulmasın. Cevaplar uydurmadır.
+describe('Başlıkta cari Logo hazırlığı belgenin Logo durumunu bekler (3359-1)', () => {
+  function logoKur(): { istekler: Istek[]; coz: (r: Response) => void } {
+    const istekler = sunucuKur(FIYAT_OKUYUCU);
+    const onceki = globalThis.fetch;
+    let coz: (r: Response) => void = () => undefined;
+    const bekleyen = new Promise<Response>((c) => { coz = c; });
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      if (yol.startsWith('/logo/belge-durumlari?')) { istekler.push({ yontem: 'GET', yol, govde: undefined, baslik: {} }); return bekleyen; }
+      if (yol.startsWith('/logo/cari-hazirligi?')) { istekler.push({ yontem: 'GET', yol, govde: undefined, baslik: {} }); return json(200, { durum: 'cari-yok', neden: null }); }
+      return onceki(adres, secenek);
+    }));
+    return { istekler, coz };
+  }
+  const hazirlikSorulan = (istekler: Istek[]) => istekler.filter((i) => i.yol.startsWith('/logo/cari-hazirligi?')).map((i) => i.yol);
+
+  for (const [ad, adres, belge] of [['satış siparişi', '/siparisler/5', 5], ['teklif', '/siparisler/teklifler/21', 21]] as const) {
+    it(`${ad}: Logo durumu beklenirken sorulmaz; "Sırada" gelince sorulur`, async () => {
+      const { istekler, coz } = logoKur();
+      ac(adres);
+      await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/logo/belge-durumlari?'))).toBe(true));
+      await screen.findAllByText(/Deneme/);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(hazirlikSorulan(istekler)).toEqual([]);
+      coz(json(200, { durumlar: [{ id: belge, durum: 'sirada', kayitNo: null, neden: null }] }));
+      await waitFor(() => expect(hazirlikSorulan(istekler)).toEqual(['/logo/cari-hazirligi?firma=7']));
+      expect(await screen.findByText('Logo cari yok')).toBeTruthy();
+    });
+
+    it(`${ad}: Logo durumu okunamazsa yine sorulur`, async () => {
+      const { istekler, coz } = logoKur();
+      ac(adres);
+      coz(json(500, { kod: 'IC_HATA', mesaj: 'Deneme hata' }));
+      await waitFor(() => expect(hazirlikSorulan(istekler)).toEqual(['/logo/cari-hazirligi?firma=7']));
+    });
+  }
+});

@@ -6,7 +6,7 @@ import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 // 3359 ek: teklif ve satış siparişi başlığında carinin Logo hazırlığı. Cevaplar uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function ciz(durum: string, ozellik: { logoda?: boolean; crm?: boolean } = {}) {
+function ciz(durum: string, ozellik: { logoda?: boolean | null; crm?: boolean } = {}) {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
     istekler.push(adres);
@@ -14,7 +14,7 @@ function ciz(durum: string, ozellik: { logoda?: boolean; crm?: boolean } = {}) {
   }));
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <span data-testid="r"><LogoCariHazirligi firmaId={7} logoda={ozellik.logoda ?? false} crm={ozellik.crm ?? true} /></span>
+      <span data-testid="r"><LogoCariHazirligi firmaId={7} logoda={ozellik.logoda === undefined ? false : ozellik.logoda} crm={ozellik.crm ?? true} /></span>
     </QueryClientProvider>,
   );
   return istekler;
@@ -49,6 +49,13 @@ describe('Teklifte cari Logo hazırlığı (3359 ek)', () => {
     const i3 = ciz('cari-yok', { logoda: true });
     await new Promise((r) => setTimeout(r, 0));
     expect(i3).toEqual([]);
+    expect(screen.getByTestId('r').textContent).toBe('');
+  });
+
+  it('belgenin Logo durumu henüz bilinmiyorsa sorulmaz, hiçbir şey yazmaz', async () => {
+    const istekler = ciz('cari-yok', { logoda: null });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(istekler).toEqual([]);
     expect(screen.getByTestId('r').textContent).toBe('');
   });
 });
