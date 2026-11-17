@@ -88,7 +88,10 @@ const imlecVeya = (i: IrsaliyeImleci | null, d: { firma: number; donem: number }
 
 /* ---------------- Sayfa: liste ve tek irsaliye ---------------- */
 
-const fiyatYetkisi = (k: Kullanici, tur: IrsaliyeTuru): boolean => islemVarMi(k, ALIS_TURLERI.includes(tur) ? 'satin-alma.oku' : 'siparisler.fiyat-oku');
+// 3401-1 a: alış fiyatını satın alma fiyat yetkisi, yazan ve onaylayan görür; yalnız satın almayı okuyan (planlama) görmez.
+const ALIS_FIYAT_YETKILERI = ['satin-alma.fiyat-oku', 'satin-alma.yaz', 'satin-alma.onayla'] as const;
+const fiyatYetkisi = (k: Kullanici, tur: IrsaliyeTuru): boolean =>
+  ALIS_TURLERI.includes(tur) ? ALIS_FIYAT_YETKILERI.some((i) => islemVarMi(k, i)) : islemVarMi(k, 'siparisler.fiyat-oku');
 
 async function okumaDurumu(db: Db): Promise<IrsaliyeListesiCevabi['okuma']> {
   const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, AYAR)) === true;
@@ -171,7 +174,7 @@ export async function irsaliyeListesi(db: Db, simdi: Date, q: IrsaliyeListeIsteg
   };
 }
 
-// Fiyat ve tutar yalnız fiyat yetkisi olana çıkar (alışta satin-alma.oku, satışta siparisler.fiyat-oku); yetkisizde alan null (Risk K3).
+// Fiyat ve tutar yalnız fiyat yetkisi olana çıkar (alışta satin-alma.fiyat-oku/yaz/onayla, satışta siparisler.fiyat-oku); yetkisizde alan null (Risk K3).
 // Ölçülmemiş konsinye türünün kaydı da bulunamadı sayılır.
 export async function irsaliyeGetir(db: Db, k: Kullanici, p: { firma: number; donem: number; kayitNo: number }): Promise<IrsaliyeCevabi> {
   const b = await s.irsaliyeBasligi(db, p.firma, p.donem, p.kayitNo);
