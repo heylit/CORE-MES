@@ -351,24 +351,46 @@ test.describe('A1 Operatör', () => {
               const p = { ...paket(i), id: `ekran-3353-${tur}-${String(i)}`, target: 100 };
               return { kimlik: p.id, surum: 1, govde: p };
             }) } }));
+            // 3394: CI'da ara sıra "İşi Başlat"tan sonra ana belge /uretim-terminali'ne yeniden yükleniyor; yerelde üretilemedi. Kim
+            // yüklüyor görülsün diye ana çerçeve gezinmesi, konsol hata ve uyarısı ve belge isteğinin yönlendireni ile referer'ı
+            // toplanır; adım düşerse hata iletisine eklenir. Atlama ya da yeniden deneme yoktur.
+            const tani: string[] = [];
+            const an = () => new Date().toISOString().slice(11, 23);
+            page.on('framenavigated', (f) => { if (f === page.mainFrame()) tani.push(`${an()} gezinme ${f.url()}`); });
+            page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') tani.push(`${an()} konsol ${m.type()}: ${m.text().slice(0, 300)}`); });
+            page.on('request', (q) => {
+              if (!q.isNavigationRequest() || q.frame() !== page.mainFrame()) return;
+              tani.push(`${an()} belge isteği ${q.method()} ${q.url()} yönlendiren=${q.redirectedFrom()?.url() ?? '-'} referer=${q.headers()['referer'] ?? '-'}`);
+            });
+            const adim = async (ad: string, f: () => Promise<unknown>): Promise<void> => {
+              try { await f(); } catch (h) {
+                throw new Error(`${ad}: ${h instanceof Error ? h.message : String(h)}\n--- tanı (3394) ---\n${tani.join('\n') || '(olay yok)'}`, { cause: h });
+              }
+            };
             await ac('/uretim-terminali');
             const grup = page.getByRole('group', { name: 'İş durumu' });
-            await expect(grup).toBeVisible();
-            await expect(page.getByRole('tab', { name: /Teknik Resim/ })).toHaveAttribute('aria-selected', 'true');
-            await expect.poll(() => kayanlar(page), 'beklerken').toEqual([]);
-            await grup.getByRole('button', { name: /İşi Başlat/ }).click();
-            await expect(grup.getByRole('button', { name: /Bitir/ })).toBeVisible();
-            await expect.poll(() => kayanlar(page), 'sürerken').toEqual([]);
-            const b = (await grup.getByRole('button', { name: /Bitir/ }).boundingBox())!;
-            await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-            await page.mouse.down();
-            await page.waitForTimeout(1600);
-            await page.mouse.up();
-            await page.getByRole('button', { name: 'Yine de bitir' }).click();
-            await expect(page.getByText('İş emri tamamlandı')).toBeVisible();
-            await page.keyboard.press('Escape');
-            await expect(grup.getByRole('button', { name: /Sıradaki İş/ })).toBeVisible();
-            await expect.poll(() => kayanlar(page), 'bitince').toEqual([]);
+            await adim('açılış', async () => {
+              await expect(grup).toBeVisible();
+              await expect(page.getByRole('tab', { name: /Teknik Resim/ })).toHaveAttribute('aria-selected', 'true');
+              await expect.poll(() => kayanlar(page), 'beklerken').toEqual([]);
+            });
+            await adim('başlat', async () => {
+              await grup.getByRole('button', { name: /İşi Başlat/ }).click();
+              await expect(grup.getByRole('button', { name: /Bitir/ })).toBeVisible();
+              await expect.poll(() => kayanlar(page), 'sürerken').toEqual([]);
+            });
+            await adim('bitir', async () => {
+              const b = (await grup.getByRole('button', { name: /Bitir/ }).boundingBox())!;
+              await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+              await page.mouse.down();
+              await page.waitForTimeout(1600);
+              await page.mouse.up();
+              await page.getByRole('button', { name: 'Yine de bitir' }).click();
+              await expect(page.getByText('İş emri tamamlandı')).toBeVisible();
+              await page.keyboard.press('Escape');
+              await expect(grup.getByRole('button', { name: /Sıradaki İş/ })).toBeVisible();
+              await expect.poll(() => kayanlar(page), 'bitince').toEqual([]);
+            });
             await expect(grup).toBeInViewport({ ratio: 1 });
             await expect(page.locator('.tc-ay1-resim .tc-ay5-araclar')).toBeInViewport({ ratio: 1 });
             // Resim kutusu taşanı keser (kaydırma görünmez): her araç kutunun içinde tam görünür.
