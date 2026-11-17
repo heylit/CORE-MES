@@ -15,6 +15,7 @@ import { FirmaFormu } from './FirmaFormu.tsx';
 import { ADRES_TURU_ETIKETI, LOGO_DURUMU, SINIF_ETIKETI, TUR_ETIKETI } from './gorunum.ts';
 import { koordinatMetni } from './koordinat.ts';
 import { LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
+import { CrmRozeti, crmSorulur, useLogoCrm } from './logo-crm.tsx';
 import { cevabiYaz, eskiyseYenile, useYazabilir, yazmaIletisi } from './yazma.ts';
 
 function Satir({ etiket, children }: { etiket: string; children: ReactNode }) {
@@ -114,6 +115,9 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
   }
 
   const logo = firma?.logoGonderimDurumu == null ? null : LOGO_DURUMU[firma.logoGonderimDurumu];
+  const crmSor = firma !== undefined && crmSorulur(firma);
+  const crm = useLogoCrm(crmSor && firma ? [firma.id] : []);
+  const crmBilgisi = crmSor && firma ? crm.durum(firma.id) : null;
   const kapatAcik = () => acikYaz(null);
 
   return (
@@ -178,6 +182,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
                 <Satir etiket="E-posta">{firma.ePosta}</Satir>
                 <Satir etiket="Logo cari kodu">{firma.logoCariKodu}</Satir>
                 <Satir etiket="Logo durumu">{logo && <Rozet ton={logo.ton}>{logo.etiket}</Rozet>}</Satir>
+                {crmBilgisi?.durum === 'var' && <Satir etiket="Logo CRM"><CrmRozeti bilgi={crmBilgisi} /></Satir>}
               </dl>
             </section>
             <section aria-label="Merkez adresi">

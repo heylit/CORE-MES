@@ -45,6 +45,7 @@ function sunucuKur(kullanici: Kullanici, arama: LogoCariAramaCevabi = { durum: '
     istekler.push({ yontem, yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : undefined });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, arama);
+    if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 11, durum: 'var', neden: null }] });
     if (yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 20 });
     if (yontem === 'POST' && yol === '/musteri-tedarikci/logo-cari/toplu') {
       return json(200, {
@@ -115,6 +116,17 @@ describe('Logo geçişi cariler sekmesi (3343)', () => {
     expect(within(tablo).getByRole('button', { name: `${YENI.kod} CORE'a al` })).toBeTruthy();
     expect(within(tablo).getByText('Açılacak: Tedarikçi')).toBeTruthy();
     expect(screen.getByText(/Yeni \(2\)/)).toBeTruthy();
+  });
+
+  it('3359 a: yalnız bağlı satırın CORE firması CRM için sorulur; CRM varsa "Bağlı" rozetinin yanında "CRM"', async () => {
+    const istekler = sunucuKur(YAZAN);
+    ciz();
+    await ara('ORN');
+    const tablo = await screen.findByRole('table', { name: 'Logo carileri' });
+    const bagli = within(within(tablo).getAllByRole('row').find((r) => r.textContent?.includes(BAGLI.kod))!);
+    expect(await bagli.findByText('CRM')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/logo/cari-crm?')).map((i) => i.yol)).toEqual(['/logo/cari-crm?id=11']);
+    expect(within(tablo).getAllByText(/CRM/)).toHaveLength(1);
   });
 
   it('seçilenler tek komutla işlenir: pencere ne olacağını söyler, sonuç satır satır gösterilir', async () => {

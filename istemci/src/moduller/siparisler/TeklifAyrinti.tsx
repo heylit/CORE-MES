@@ -8,6 +8,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
 import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
 import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
+import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
@@ -162,7 +163,7 @@ export function TeklifAyrinti() {
       <SayfaBasligi
         baslik={t.baslik}
         alt={`${t.firmaAd ?? `Firma ${t.firmaId}`}, ${zamanMetni(t.olusturma)} tarihinde açıldı. İstenen teslim: ${tarihMetni(t.istenenTarih)}.`}
-        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /></>)}
+        ek={(<><span className="tc-sp-belge mono">{t.no}</span><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={t.firmaId} logoda={logo.durum(id)?.durum === 'logoda'} crm={true} /></>)}
         geriYol="/siparisler/teklifler"
         geriMetni="Tekliflere dön"
         islemler={islemler || undefined}

@@ -12,6 +12,7 @@ import { FirmaFormu } from './FirmaFormu.tsx';
 import { LogoAramaPenceresi, LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
 import type { LogoCariSatiri } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { TUR_ETIKETI, menuSuzgeci } from './gorunum.ts';
+import { CrmRozeti, crmSorulur, useLogoCrm } from './logo-crm.tsx';
 import { useYazabilir } from './yazma.ts';
 import './musteri-tedarikci.css';
 
@@ -24,7 +25,8 @@ const SIRALAMA_ALANLARI = ['kod', 'ad'] as const;
 
 // Logo bağı: firma Logo kaydına bağlıysa (kayıt no var) cari koduyla "Bağlı"; değilse yazabilene satırda "Logo'ya bağla" (3065).
 // Ayrıntıdaki düğmeyle aynı pencere açılır; bağlama davranışı değişmez. Düğme satırı seçmez.
-function logoSutunu(bagla: ((f: FirmaSatiri) => void) | null): Sutun<FirmaSatiri> {
+// 3359 a: bağlı müşteride yanında CRM satış müşterisi durumu.
+function logoSutunu(bagla: ((f: FirmaSatiri) => void) | null, crm: ReturnType<typeof useLogoCrm>): Sutun<FirmaSatiri> {
   return {
     anahtar: 'logo',
     baslik: 'Logo',
@@ -35,6 +37,7 @@ function logoSutunu(bagla: ((f: FirmaSatiri) => void) | null): Sutun<FirmaSatiri
           <span className="tc-mt-logo-bag">
             <Rozet ton="tamam">Bağlı</Rozet>
             {f.logoCariKodu && <span className="mono">{f.logoCariKodu}</span>}
+            {crmSorulur(f) && <CrmRozeti bilgi={crm.durum(f.id)} />}
           </span>
         );
       }
@@ -123,7 +126,9 @@ export function Firmalar() {
   });
   useEffect(() => { if (firmalar.data) liste.sayfaEsitle(firmalar.data.sayfa, liste.sorgu.sayfa); }, [firmalar.data]);
 
-  const logo = logoSutunu(yazabilir ? (f) => baglananYaz(f.id) : null);
+  const crmIdleri = (firmalar.data?.satirlar ?? []).filter((f) => f.logoKayitNo !== null && crmSorulur(f)).map((f) => f.id);
+  const crm = useLogoCrm(crmIdleri);
+  const logo = logoSutunu(yazabilir ? (f) => baglananYaz(f.id) : null, crm);
   const sutunlar = [...SUTUNLAR.slice(0, 4), logo, ...SUTUNLAR.slice(4)];
 
   return (

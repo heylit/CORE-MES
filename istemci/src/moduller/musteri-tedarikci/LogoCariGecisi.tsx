@@ -14,6 +14,7 @@ import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komu
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaFormu } from './FirmaFormu.tsx';
+import { CrmRozeti, crmSorulur, useLogoCrm } from './logo-crm.tsx';
 import { cariDurumu, topluPlan, type CariDurumu, type TopluPlan } from './logo-cari-gecisi.ts';
 import { cevabiYaz } from './yazma.ts';
 import './musteri-tedarikci.css';
@@ -74,6 +75,12 @@ export function LogoCariGecisi() {
     onError: (e) => bildir('hata', hataIletisi(e, 'Bağlanamadı.')),
   });
 
+  // 3359 a: bağlı satırda CORE firmasının CRM durumu (bulunan bağlı cariler tek istekle; kanca erken dönüşten önce).
+  const crmFirmasi = (c: LogoCariSatiri): number | null =>
+    cariDurumu(c) === 'bagli' && c.eslesme && crmSorulur({ tur: c.oneri.tur, logoCariKodu: c.kod }) ? c.eslesme.firmaId : null;
+  const bulunan = sonucSorgu.data?.durum === 'tamam' ? sonucSorgu.data.cariler : [];
+  const crm = useLogoCrm(bulunan.map(crmFirmasi).filter((id): id is number => id !== null));
+
   if (oturum.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (!yazabilir) {
     return <Kart><p className="tc-mt-yok">Logo'da cari aramak ve CORE'a almak firma yazma yetkisi ister; yetkiniz yok.</p></Kart>;
@@ -132,7 +139,13 @@ export function LogoCariGecisi() {
       anahtar: 'durum', baslik: 'Durum', kirilmaz: true,
       hucre: (c) => {
         const d = DURUM[cariDurumu(c)];
-        return <Rozet ton={d.ton}><Simge ad={d.simge} boyut="k" />{d.ad}</Rozet>;
+        const firmaId = crmFirmasi(c);
+        return (
+          <span className="tc-mt-logo-bag">
+            <Rozet ton={d.ton}><Simge ad={d.simge} boyut="k" />{d.ad}</Rozet>
+            {firmaId !== null && <CrmRozeti bilgi={crm.durum(firmaId)} />}
+          </span>
+        );
       },
       csv: (c) => DURUM[cariDurumu(c)].ad,
     },

@@ -109,3 +109,81 @@ test('sipariş başlığında listedekiyle aynı Logo durumu ve listede Logo sü
   await page.screenshot({ path: test.info().outputPath('siparisler.png') });
   expect(ag.hatalar).toEqual([]);
 });
+
+// 3359 ek: carinin Logo hazırlığı başlıkta Logo rozetinin yanında; uzun başlıkta da sayfa taşmaz. Cevaplar yönlendirilir (Logo'ya istek yok).
+test('sipariş başlığında cari Logo\'ya bağlı değilse "Logo cari yok" uyarısı', async ({ page, ag, ac }) => {
+  const id = await siparisAc(page);
+  await page.route('**/api/logo/belge-durumlari?*', (r) =>
+    r.fulfill({ json: { durumlar: [{ id, durum: 'sirada', kayitNo: null, neden: null }] } }));
+  const sorulan: string[] = [];
+  await page.route('**/api/logo/cari-hazirligi?*', (r) => {
+    sorulan.push(new URL(r.request().url()).searchParams.get('firma') ?? '');
+    return r.fulfill({ json: { durum: 'cari-yok', neden: null } });
+  });
+  await ac(`/siparisler/${String(id)}`);
+  await expect(page.getByText('Logo cari yok', { exact: true })).toBeVisible();
+  expect(sorulan.length).toBeGreaterThan(0);
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath('siparis-cari-hazirligi.png') });
+  expect(ag.yazmalar).toEqual([]);
+  expect(ag.hatalar).toEqual([]);
+});
+
+async function teklifAc(page: Page): Promise<number> {
+  const firma = (await (await page.request.get(`${ADRES}/api/musteri-tedarikci/firmalar/secim`)).json() as { firmalar: { id: number; tur: string }[] })
+    .firmalar.find((f) => f.tur !== 'tedarikci');
+  const kart = (await (await page.request.get(`${ADRES}/api/siparisler/malzeme-secenekleri`)).json() as { satirlar: { no: number }[] }).satirlar[0];
+  test.skip(firma === undefined || kart === undefined, 'örnek veride müşteri firması ya da satılan kart yok');
+  const c = await page.request.post(`${ADRES}/api/siparisler/teklifler/ekle`, {
+    headers: { 'istek-kimligi': randomUUID() },
+    data: { firmaId: firma?.id, baslik: 'Ekran testi teklifi', satirlar: [{ malzemeNo: kart?.no, tanim: `Ekran testi ${randomUUID().slice(0, 8)}`, miktar: '40' }] },
+  });
+  expect(c.status(), await c.text()).toBe(200);
+  return (await c.json() as { id: number }).id;
+}
+
+// 3359 ek: kullanıcının istediği asıl yer teklif başlığıdır; teklif Logo'da CRM satış müşterisi ister, bu yüzden burada "CRM yok" da yazılır.
+for (const [durum, metin] of [['yok', 'CRM yok'], ['var', 'CRM']] as const) {
+  test(`teklif başlığında carinin CRM durumu: ${metin}`, async ({ page, ag, ac }) => {
+    const id = await teklifAc(page);
+    await page.route('**/api/logo/belge-durumlari?*', (r) =>
+      r.fulfill({ json: { durumlar: [{ id, durum: 'sirada', kayitNo: null, neden: null }] } }));
+    await page.route('**/api/logo/cari-hazirligi?*', (r) => r.fulfill({ json: { durum, neden: null } }));
+    await ac(`/siparisler/teklifler/${String(id)}`);
+    await expect(page.getByText(metin, { exact: true })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath(`teklif-crm-${durum}.png`) });
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+}
+
+// 3359 ek, Test T1-T2: siparişte "CRM yok" yazılmaz (Logo siparişi CRM istemez); belge Logo'daysa iki başlıkta da hazırlık sorulmaz.
+test('sipariş başlığında CRM yok yazılmaz; Logo\'daki sipariş ve teklifte cari hazırlığı sorulmaz', async ({ page, ag, ac }) => {
+  const sid = await siparisAc(page);
+  const tid = await teklifAc(page);
+  let logoda = false;
+  await page.route('**/api/logo/belge-durumlari?*', (r) => {
+    const id = Number(new URL(r.request().url()).searchParams.get('id'));
+    return r.fulfill({ json: { durumlar: [{ id, durum: logoda ? 'logoda' : 'sirada', kayitNo: logoda ? '4211' : null, neden: null }] } });
+  });
+  const sorulan: string[] = [];
+  await page.route('**/api/logo/cari-hazirligi?*', (r) => {
+    sorulan.push(r.request().url());
+    return r.fulfill({ json: { durum: 'yok', neden: null } });
+  });
+  await ac(`/siparisler/${String(sid)}`);
+  await expect(page.getByText('Logo: Sırada', { exact: true })).toBeVisible();
+  await expect.poll(() => sorulan.length).toBeGreaterThan(0);
+  await expect(page.getByText('CRM yok', { exact: true })).toHaveCount(0);
+  logoda = true;
+  sorulan.length = 0;
+  for (const yol of [`/siparisler/${String(sid)}`, `/siparisler/teklifler/${String(tid)}`]) {
+    await ac(yol);
+    await expect(page.getByText('Logo\'da', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('CRM yok', { exact: true })).toHaveCount(0);
+  }
+  expect(sorulan, 'Logo\'daki belgede cari hazırlığı sorulmaz').toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+  expect(ag.hatalar).toEqual([]);
+});
