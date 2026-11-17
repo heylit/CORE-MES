@@ -8,10 +8,21 @@ import { GonderHatasi } from '../motor/atolye/gonder.ts';
 // ucuna gider. Önizleme okunamazsa null: seçenek sonuçsuz gösterilir, komutu sunucu yine denetler.
 export type PlanaAlOnizlemesi = PlanaAlOnizlemesiCevabi;
 export const PLANA_AL_ONIZLEME_YOLU = '/plan/planlama-calismasi/plana-al-onizlemesi';
-export function planaAlOnizle(g: Omit<PlanaAlGovdesi, 'calismaSurumu'>, calismaSurumu: number): Promise<PlanaAlOnizlemesi | null> {
+// Sayfanın bildiği sürüm eskiyse (sayfa açıkken çalışma yazıldı: açılıştaki kaynak değişikliği satırı, sayfanın kendi yazması, başka kişi)
+// sunucu "Plan bu sırada değişti" diye reddeder ve güncel sürümü döner. Önizleme bir kez güncel sürümle yeniden sorulur; eski sürümün
+// yerine geçen sürüm bellekte tutulur, sonraki sorular doğrudan onunla gider. Yazma bu sürümü kullanmaz (taslak komutu ya da kendi denetimi).
+const yerineGecen = new Map<number, number>();
+function onizlemeSor(g: Omit<PlanaAlGovdesi, 'calismaSurumu'>, calismaSurumu: number): Promise<PlanaAlOnizlemesi | null> {
   const q = new URLSearchParams({ calismaSurumu: String(calismaSurumu), emirId: g.emirId, tezgah: g.tezgah, baslangic: String(g.baslangic) });
   if (g.adimlar && g.adimlar.length > 0) q.set('adimlar', JSON.stringify(g.adimlar));
   return api.get<PlanaAlOnizlemesi>(`${PLANA_AL_ONIZLEME_YOLU}?${q.toString()}`).then((c) => c, () => null);
+}
+export async function planaAlOnizle(g: Omit<PlanaAlGovdesi, 'calismaSurumu'>, calismaSurumu: number): Promise<PlanaAlOnizlemesi | null> {
+  const v = yerineGecen.get(calismaSurumu) ?? calismaSurumu;
+  const c = await onizlemeSor(g, v);
+  if (c === null || c.gecerli || c.calismaSurumu === null || c.calismaSurumu === v) return c;
+  yerineGecen.set(calismaSurumu, c.calismaSurumu);
+  return onizlemeSor(g, c.calismaSurumu);
 }
 export async function emriPlanaAl(komut: CalismaKomutu, g: Omit<PlanaAlGovdesi, 'calismaSurumu'>): Promise<AtolyeKomutuCevabi> {
   const calismaSurumu = await komut.kaydet();
