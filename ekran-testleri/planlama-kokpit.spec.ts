@@ -744,7 +744,7 @@ test('Kokpit 3335-2b: Planla menüsünde geride kalanları yeniden planla; sayı
 
 // Kart 3335 a, 2. dilim: "Planla" menüsü üst şeridin başındadır. Toplu ve yeniden planlama taslağa "yeniden-planla" komutu yazar, plan
 // taslağın görünümünde yeniden dizilir, Geri ikisini birlikte alır; seçili plansız siparişin yönü satırın içinde seçilir (var olan plana alma).
-test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yazar ve Geri alır; seçili siparişi ileriye planla; tüm planın yönü Araçlar\'da; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yazar ve Geri alır; seçili siparişi ileriye planla; tüm planın yönü Planla menüsünde; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const c = calisma({ ...ILK }, {});
   const t = await taslakSunucusu(page, (d) => ({ ...c, w: d.w, locks: d.locks, plan: plan(d.ops) }));
   await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
@@ -803,10 +803,18 @@ test('Kokpit 3335-2: Planla menüsü; plansızların hepsini planla taslağa yaz
   await expect.poll(() => t.alinan().length).toBe(1);
   expect(t.alinan()[0]).toMatchObject({ tur: 'plana-al', emirId: 'S4' });
 
-  // Tüm planın yönü üst şeritte ayrı düğme değildir; Araçlar menüsündedir.
+  // Tüm planın yönü üst şeritte ayrı düğme değildir; Planla menüsündedir, Araçlar'da yoktur (3365-4).
   await expect(kokpit.getByRole('button', { name: /^Tüm plan:/ })).toHaveCount(0);
+  await kokpit.getByRole('button', { name: 'Planla' }).click();
+  await expect(kokpit.getByRole('menu', { name: 'Planla' }).getByRole('menuitemradio', { name: /Tüm plan: İleriye/ })).toHaveAttribute('aria-checked', 'true');
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-4-planla-${bilgi.project.name}.png` });
+  await page.keyboard.press('Escape');
+  await expect(kokpit.getByRole('menu', { name: 'Planla' })).toHaveCount(0);
   await kokpit.getByRole('button', { name: 'Araçlar' }).click();
-  await expect(kokpit.getByRole('menu', { name: 'Araçlar' }).getByRole('menuitemradio', { name: /Tüm plan: İleriye/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(kokpit.getByRole('menu', { name: 'Araçlar' })).toBeVisible();
+  await expect(kokpit.getByRole('menu', { name: 'Araçlar' }).getByRole('menuitemradio', { name: /Tüm plan:/ })).toHaveCount(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3365-4-araclar-${bilgi.project.name}.png` });
+  await page.keyboard.press('Escape');
   await tasma();
   expect(ag.hatalar).toEqual([]);
 });
@@ -1652,8 +1660,8 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   const kokpit = page.locator('.tc-pyq');
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   // Düğme geçerli yönü yazar, menüde iki yön açıklamasıyla durur; öteki yön seçilince yalnız yönün etkisini taşıyan küçük panel açılır.
-  const ustYon = kokpit.getByRole('button', { name: 'Araçlar' });
-  const yonMenusu = kokpit.getByRole('menu', { name: 'Araçlar' });
+  const ustYon = kokpit.getByRole('button', { name: 'Planla' });
+  const yonMenusu = kokpit.getByRole('menu', { name: 'Planla' });
   const panel = kokpit.getByRole('complementary', { name: 'Tüm planın yönü' });
   const yonEtkisi = panel.getByRole('region', { name: 'Ayarın etkisi' });
   const taslakCubugu = kokpit.getByRole('region', { name: 'Taslak' });

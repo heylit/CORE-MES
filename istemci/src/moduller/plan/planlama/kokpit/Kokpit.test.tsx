@@ -565,9 +565,9 @@ describe('Kokpit', () => {
     expect(within(screen.getByRole('button', { name: 'Araçlar' })).queryByText('Araçlar')).not.toBeNull();
     expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('false');
     arac('Ayarlar');
-    // Tüm planın yönü de bu menüdedir (3335-2); açıklaması küçük yazıdadır.
+    // Araçlar yalnız görünüm ve ayar taşır; tüm planın yönü Planla menüsündedir (3365-4), iki menüde planlama durmaz.
     const adi = (x: Element): string => (x.textContent ?? '').slice(0, (x.textContent ?? '').length - (x.querySelector('small')?.textContent?.length ?? 0));
-    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Oklar: seçili iş', 'Oklar: seçili sipariş', 'Oklar kapalı', 'Duruş ve mesai', 'Tüm plan: İleriye', 'Tüm plan: Teslimden geriye', 'Ayarlar']);
+    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Oklar: seçili iş', 'Oklar: seçili sipariş', 'Oklar kapalı', 'Duruş ve mesai', 'Ayarlar']);
     // Sorun turu şimdilik kapalıdır: üst şeritte düğmesi yoktur.
     expect(screen.queryByRole('button', { name: 'Sorunları sırayla çöz' })).toBeNull();
     fireEvent.click(arac('Duruş ve mesai'));
@@ -705,22 +705,27 @@ describe('Kokpit', () => {
     expect(tezgah()).toBe(ilkTezgah);
   });
 
-  it('Tüm planın yönü Araçlar menüsündedir (3335-2): iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', () => {
+  it('Tüm planın yönü Planla menüsündedir (3365-4): Araçlar menüsünde yoktur; iki yön açıklamasıyla durur; geçerli yön bir şey açmaz, öteki yön yalnız yön panelini açar', async () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
     expect(screen.queryByRole('button', { name: /Tüm plan:/ })).toBeNull();
-    const yon = screen.getByRole('button', { name: 'Araçlar' });
+    fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
+    expect(within(screen.getByRole('menu', { name: 'Araçlar' })).queryAllByRole('menuitemradio').filter((x) => x.textContent.includes('Tüm plan'))).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
+    const yon = screen.getByRole('button', { name: 'Planla' }) as HTMLButtonElement;
+    await waitFor(() => { expect(yon.disabled).toBe(false); }, { timeout: 4000 });
     fireEvent.click(yon);
-    const menu = screen.getByRole('menu', { name: 'Araçlar' });
+    const menu = screen.getByRole('menu', { name: 'Planla' });
+    expect(within(menu).getByText('Tüm planın yönü')).toBeTruthy();
     const yonler = (m: HTMLElement) => within(m).getAllByRole('menuitemradio').filter((x) => x.textContent.includes('Tüm plan'));
     const l = yonler(menu);
     expect(l.map((x) => x.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     expect(l[1]!.textContent).toContain('iş termine yetişecek en geç saatte başlar');
     fireEvent.click(l[0]!);
-    expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
+    expect(screen.queryByRole('menu', { name: 'Planla' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     fireEvent.click(yon);
-    fireEvent.click(yonler(screen.getByRole('menu', { name: 'Araçlar' }))[1]!);
-    expect(screen.queryByRole('menu', { name: 'Araçlar' })).toBeNull();
+    fireEvent.click(yonler(screen.getByRole('menu', { name: 'Planla' }))[1]!);
+    expect(screen.queryByRole('menu', { name: 'Planla' })).toBeNull();
     expect(screen.getByRole('complementary', { name: 'Tüm planın yönü' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
