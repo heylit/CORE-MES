@@ -713,6 +713,16 @@ export interface ListeSatiri {
   ilkGorulme: Date;
 }
 
+// Makine listesinin saklanan ham satırından tanım bilgisi. Adres (IP) alanı okunmaz: ekrana ve cevaba çıkmaz.
+export interface MakineTanimi { kod: string; marka: string | null; model: string | null; kontrolUnitesi: string | null }
+export function makineTanimlari(db: Db): Promise<MakineTanimi[]> {
+  return db.sorgu<MakineTanimi>(
+    `SELECT kod, NULLIF(btrim(ham->>'MARKA'), '') AS marka, NULLIF(btrim(ham->>'MODEL'), '') AS model,
+       NULLIF(btrim(ham->>'KONTROLUNITE'), '') AS "kontrolUnitesi"
+     FROM smartes_liste_kaydi WHERE tur = 'makine' AND var AND kod IS NOT NULL`,
+  );
+}
+
 export function listeSatirlari(db: Db, tur: ListeTuru): Promise<ListeSatiri[]> {
   return db.sorgu<ListeSatiri>(
     `SELECT anahtar, smartes_id AS "smartesId", kod, ad, grup, operator_kaynakli AS "operatorKaynakli", pasif, var, ilk_gorulme AS "ilkGorulme"

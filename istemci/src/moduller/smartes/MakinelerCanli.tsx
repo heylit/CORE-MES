@@ -74,6 +74,9 @@ const CalisanIs = ({ m }: { m: Makine }) => (m.calisanIs === null ? <span classN
   <span className="tc-sm-mono">{m.calisanIs.emirNo} · Op {m.calisanIs.opNo} {m.calisanIs.opAdi}</span>
 ));
 
+// Marka, model ve kontrol ünitesi tek satırda; boş parça yazılmaz, hepsi boşsa satır çıkmaz.
+const tanimMetni = (m: Makine): string | null => [m.marka, m.model, m.kontrolUnitesi].filter((x) => x !== null).join(' · ') || null;
+
 function MakineKarti({ m, simdi, aralik, ac }: { m: Makine; simdi: number; aralik: number; ac: () => void }) {
   const yas = simdi - new Date(m.okundu).getTime();
   const eski = yas > ESKI_ARALIK * aralik * 1000;
@@ -87,6 +90,7 @@ function MakineKarti({ m, simdi, aralik, ac }: { m: Makine; simdi: number; arali
           <span className="tc-sm-kod">{m.makineKodu}</span>
           <span className="tc-sm-ad">{m.makineAdi ?? YOK}</span>
         </span>
+        {tanimMetni(m) !== null && <span className="tc-sm-not tc-sm-tanim">{tanimMetni(m)}</span>}
         <span className="tc-sm-durum">
           {eski
             ? <Rozet ton="pasif">Veri eski ({sureMetni(yas)})</Rozet>
@@ -146,6 +150,9 @@ function Ayrinti({ m, simdi, kapat }: { m: Makine; simdi: number; kapat: () => v
         </p>
         {m.alarm !== null && <p className="tc-sm-alarm"><Simge ad="alert" />{m.alarm}</p>}
         <dl className="tc-smartes-liste">
+          {m.marka !== null && (<><dt>Marka</dt><dd>{m.marka}</dd></>)}
+          {m.model !== null && (<><dt>Model</dt><dd>{m.model}</dd></>)}
+          {m.kontrolUnitesi !== null && (<><dt>Kontrol ünitesi</dt><dd>{m.kontrolUnitesi}</dd></>)}
           <dt>CORE’da çalışan</dt><dd><CalisanIs m={m} /></dd>
           {m.calisanIs?.tamamlananYuzde != null && (<><dt>Tamamlanan</dt><dd className="tc-sm-mono">%{Math.round(m.calisanIs.tamamlananYuzde)}</dd></>)}
           {m.calisanIs?.tahminiBitis != null && (<><dt>Tahmini bitiş</dt><dd className="tc-sm-mono">{zamanMetni(m.calisanIs.tahminiBitis)}</dd></>)}

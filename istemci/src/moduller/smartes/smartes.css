@@ -47,6 +47,7 @@
 /* Kod ortasından bölünmez; satır yalnız parçalar arasından kırılır. */
 .tc-sm-kirilmaz { white-space: nowrap; }
 .tc-sm-ad { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-sm-tanim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .tc-sm-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-sm-durum-ad { display: inline-flex; align-items: center; gap: var(--b-2); font-weight: 700; color: var(--idle); }
 .tc-sm-durum-ad[data-durum="calisiyor"] { color: var(--run); }
