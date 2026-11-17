@@ -286,6 +286,12 @@ export interface GidecekIsEmri {
 export const IS_EMRI_METODU = 'WorkOrdersCreateUpdate';
 export const OPERASYON_METODU = 'OperationCreateUpdate';
 
+// Aynı SmartES koduna birden çok CORE kaydı bağlıysa (atölyenin tek iş istasyonu) koddan kayıt çıkarılamaz: null.
+export function koddanTekKayit(eslemeler: readonly { tmiId: number; smartesKod: string }[], kod: string): number | null {
+  const uyan = eslemeler.filter((e) => e.smartesKod === kod);
+  return uyan.length === 1 ? (uyan[0]?.tmiId ?? null) : null;
+}
+
 // SmartES iş emri no: üretim emri no ve adım no (her adım ayrı iş emridir, brief tuzak 12).
 export const smartesIsEmriNo = (emirNo: string, opNo: number): string => `${emirNo}-${opNo}`;
 // Operasyon kodu adım numarasıdır (VARSAYIM): iş emrinde operasyon tipi kimliği yok (BASKA-MODUL-ISTEKLERI madde 1); gelince eşlemeden okunur.

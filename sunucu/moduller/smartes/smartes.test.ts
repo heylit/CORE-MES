@@ -20,7 +20,7 @@ import { isler } from './isler.ts';
 import { smartesIstemcisiKur } from './istemci.ts';
 import { sahteSmartesAc, tabloCevapMetni } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
+import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -303,8 +303,11 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     const r1 = await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIA', surum: null });
     assert.equal(r1.statusCode, 200, r1.body);
     assert.deepEqual(r1.json(), { tmiId: a, smartesKod: 'TIA', surum: 1 });
-    // Aynı kod başka istasyona verilmez; yeni eşlemenin üstüne sürümsüz yazılmaz; eski sürüm reddedilir.
-    assert.equal((await ata({ tur: 'istasyon', tmiId: b, smartesKod: 'TIA', surum: null })).statusCode, 409);
+    // Atölyenin tek SmartES istasyonu birden çok CORE istasyonuna verilebilir (makinede kod tekildir: SME-18).
+    const ortak = await ata({ tur: 'istasyon', tmiId: b, smartesKod: 'TIA', surum: null });
+    assert.equal(ortak.statusCode, 200, ortak.body);
+    assert.equal((await istek('POST', '/smartes/eslemeler/kaldir', { tur: 'istasyon', tmiId: b, surum: 1 })).statusCode, 200);
+    // Yeni eşlemenin üstüne sürümsüz yazılmaz; eski sürüm reddedilir.
     assert.equal((await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIB', surum: null })).statusCode, 409);
     const r2 = await ata({ tur: 'istasyon', tmiId: a, smartesKod: 'TIB', surum: 1 });
     assert.equal(r2.statusCode, 200, r2.body);
@@ -785,6 +788,30 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [iki.id] })).json(),
       { islenen: 0, hatalar: [{ id: iki.id, ileti: ONAY_ILETILERI.isEmriYok }] });
     assert.deepEqual((await sayimlar()).map((x) => x.adet), [10, 2]);
+  });
+
+  test('3376: iş emri bulunamayan satırın istasyonu, SmartES kodu birden çok CORE istasyonuna bağlıysa çıkarılmaz; satır onaya girmez', async () => {
+    const [a, b, c] = [await istasyonAc(), await istasyonAc(), await istasyonAc()];
+    const ata = (tmiId: number, smartesKod: string) => istek('POST', '/smartes/eslemeler/ata', { tur: 'istasyon', tmiId, smartesKod, surum: null });
+    for (const [id, kod] of [[a, 'ORN-ORTAK'], [b, 'ORN-ORTAK'], [c, 'ORN-TEKIL']] as const) assert.equal((await ata(id, kod)).statusCode, 200);
+    await aktarimAc();
+    await hepsiSmartes();
+    const kayit = (smartesId: number, istasyonKodu: string): IsEmriDurumuKaydi => ({
+      smartesId, isEmriNo: 'ORN-IE-ESLESMEZ', erpId: null, istasyonKodu, operasyonKodu: null, makineKodu: null, stokNo: null, saglam: 6, red: null, makineSaglam: null,
+      makineRed: null, baslangic: new Date(simdi), bitis: null, bitti: null, erpSaglam: null, erpRed: null, ham: {},
+    });
+    const dene = (k: IsEmriDurumuKaydi) => vt().tx(async (db) => {
+      await db.sorgu(
+        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, saglam, baslangic, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, '{}', now(), now())
+         ON CONFLICT (smartes_id) DO NOTHING`, [k.smartesId, k.isEmriNo, k.saglam, k.baslangic]);
+      const g = await sayimGecerliligi(db, k, new Date(simdi));
+      return [g !== null, await adetOnayinaAl(db, k, new Date(simdi), g)] as const;
+    });
+    assert.deepEqual(await dene(kayit(7601, 'ORN-ORTAK')), [false, 0], 'ortak kodda sayım ilk eşlenen istasyona yazılmaz');
+    assert.deepEqual(await dene(kayit(7602, 'ORN-TEKIL')), [true, 1]);
+    // Ortak kod tek istasyona inince aynı satır onaya girer.
+    assert.equal((await istek('POST', '/smartes/eslemeler/kaldir', { tur: 'istasyon', tmiId: b, surum: 1 })).statusCode, 200);
+    assert.deepEqual(await dene(kayit(7601, 'ORN-ORTAK')), [true, 1]);
   });
 
   test('3173 b: karar verilmiş satır yeniden karara girmez; red de onay yetkisi ister; red adedi ve eşlenmiş makine korunur', async () => {
