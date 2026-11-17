@@ -100,7 +100,9 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
   const r = (planOf(d.deger)!.ops as Nesne)[g.isId] as Nesne;
   const ne = String(r.m) === g.tezgah ? 'İş saati kaydırıldı' : 'İş başka tezgâha taşındı';
   const geri: GeriYama[] = degisen.map((id) => (locks[id] === undefined ? { yol: ['locks'], id } : { yol: ['locks'], id, once: locks[id] }));
-  const isler = typeof r.job === 'string' ? [r.job] : ['*'];
+  const ops = planOf(d.deger)!.ops as Nesne;
+  const emirler = [...new Set([g.isId, ...degisen].map((id) => (nesne(ops[id]) ? ops[id].job : null)))];
+  const isler = emirler.every((j): j is string => typeof j === 'string') ? emirler : ['*'];
   const ayrinti = `${g.isId} → ${g.tezgah}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
   return { deger: isle(d.deger, yeni, { ne, ayrinti, isler, geri }, k), degisti: true, ileti: sonuc.ileti };
 }

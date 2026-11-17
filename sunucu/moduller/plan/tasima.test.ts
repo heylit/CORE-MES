@@ -40,6 +40,23 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.deepEqual(ozet(r), { 'S1.10': ['T1', 15, 33, 'tasinan'], 'S1.20': ['T2', 35, 37, 'itilen'] });
   });
 
+  test('TH-09 (3414-3): başka siparişin işinin önüne bırakılan iş onu arkaya iter; içine ya da arkasına bırakılan iş arkasındaki boşluğa oturur', () => {
+    // S2.10 T2'de salı 09:00-11:00 (33-35). S1.20 onun başına bırakılır: S2.10 arkaya, 11:00-13:00'e itilir.
+    const c = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10), 'S2.10': op('S2', 'T2', 33) });
+    const one = tasimaHesabi(c, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 33 });
+    assert.deepEqual(ozet(one), { 'S1.20': ['T2', 33, 35, 'tasinan'], 'S2.10': ['T2', 35, 37, 'itilen'] });
+    assert.match(one.ileti!, /başka siparişin 1 işi arkaya itildi/);
+    // İçine bırakılır (10:00): S2.10 oynamaz, S1.20 arkasındaki boşluğa (11:00) oturur.
+    const ic = tasimaHesabi(c, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 34 });
+    assert.deepEqual(ozet(ic), { 'S1.20': ['T2', 35, 37, 'tasinan'] });
+    assert.match(ic.ileti!, /dolu yerin arkasındaki boşluğa/);
+    // Önünden başlayıp üstüne taşan iş de öne bırakılmış sayılır.
+    assert.deepEqual(ozet(tasimaHesabi(c, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 32 })), { 'S1.20': ['T2', 32, 34, 'tasinan'], 'S2.10': ['T2', 34, 36, 'itilen'] });
+    // Başlamış iş itilmez: önüne bırakılan iş arkasına oturur.
+    const bas = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10), 'S2.10': op('S2', 'T2', 33, { act: 1 }) });
+    assert.deepEqual(ozet(tasimaHesabi(bas, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 33 })), { 'S1.20': ['T2', 35, 37, 'tasinan'] });
+  });
+
   test('TH-04: donuk bölgedeki ardıl kımıldamaz; taşımanın tamamı yapılmaz', () => {
     const c = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10) }, { w: { famK: 0.3, mat: 'uyari', dondurma: 4 } });
     const r = tasimaHesabi(c, 8, { isId: 'S1.10', tezgah: 'T1', baslangic: 15 });
