@@ -301,12 +301,16 @@ function Etki({ kapsam, setSecim, geri, ilerle }: {
   );
 }
 
+// Yedek adı başlangıç anını saniyesiyle taşır ve listedeki zaman addan çözülür; milisaniyeli başlangıçla kıyaslanırsa aynı saniyedeki
+// yedek hiç bulunmaz. Bu yüzden başlangıç saniyeye kırpılır.
+const saniyeyeKirp = (an: string): string => new Date(Math.floor(Date.parse(an) / 1000) * 1000).toISOString();
+
 // Yedek elle alınır; ekran listede o andan sonra tamamlanan elle yedeği bekler. Sunucu temizlikte yedeğin yaşını yeniden denetler.
 function YedekAdimi({ geri, ilerle }: { geri?: () => void; ilerle: (ad: string) => void }) {
   const [baslangic, setBaslangic] = useState<string | null>(null);
   const al = useMutation({
     mutationFn: () => api.post<YedekAlCevabi>('/yedekler/al', {}),
-    onSuccess: (c) => { setBaslangic(c.baslangic); },
+    onSuccess: (c) => { setBaslangic(saniyeyeKirp(c.baslangic)); },
   });
   const liste = useQuery({
     queryKey: [...anahtarlar.yedekler, 'temizlik'],
