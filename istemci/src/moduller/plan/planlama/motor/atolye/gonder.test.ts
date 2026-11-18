@@ -145,6 +145,12 @@ describe('Çalışmaya aç ve geri al (507 3 a, 508 2 a)', () => {
     expect(gonderHataIletisi(await calismayiGeriAl(9).catch((e: unknown) => e))).toBe('Geri alınamadı: Çalışma bu arada değişti.');
   });
 
+  it('sunucunun yazım uyarısı (terminalde durdurulmayı bekleyen iş) özetin sonunda söylenir', async () => {
+    const uyari = 'ORN-1 / OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.';
+    expect(gonderOzeti({ yazilan: 3, atlanan: 1, yazilamaz: [], uyarilar: [uyari] })).toBe(`3 iş taslağa yazıldı, 1 iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş). ${uyari}`);
+    expect(gonderOzeti({ yazilan: 3, atlanan: 0, yazilamaz: [], uyarilar: [] })).toBe('3 iş taslağa yazıldı.');
+  });
+
   it('taslağa geçmeyen ek vardiya gönderme özetinde söylenir', () => {
     expect(gonderOzeti({ yazilan: 2, atlanan: 0, yazilamaz: [], ekMesaiAtlanan: 1 })).toBe('2 iş taslağa yazıldı; 1 ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi.');
   });

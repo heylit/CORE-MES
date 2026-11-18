@@ -3,6 +3,8 @@ import { describe, test } from 'node:test';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CalismaGonderCevabi, DegerlendirmeDurumuCevabi, DegisiklikDefteriCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { randomUUID } from 'node:crypto';
+import { kullaniciYukle } from '../kisiler/disari.ts';
+import { emirBaslat } from '../uretim-emirleri/disari.ts';
 import { canliyaAlSecenekleri } from './calisma-plani.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
@@ -10,7 +12,7 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 // 3308-5 a: çalışma planı tek komutla onaya gider ya da canlıya alınır. Plan taslağı, onay ve canlıya alma aynı işlemdedir; canlıya alma
 // reddedilirse onaya gitmiş ya da açık kalmış taslak geride kalmaz. Veriler uydurmadır.
 describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canlıya', () => {
-  const { c, tamam, istek, yeniAdim, isEmirleriAc, durum } = planTestOrtami();
+  const { c, vt, tamam, istek, yeniAdim, isEmirleriAc, isEmriDurumu, durum } = planTestOrtami();
 
   type Calisma = Record<string, unknown> & { dataVer: number; plan: (Record<string, unknown> & { ops: Record<string, { m: string; S: number; C: number }> }) | null; locks: Record<string, unknown> };
   const calismaOku = async () => {
@@ -150,6 +152,46 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     assert.ok(y1 && y2, 'iki adım canlıda');
     assert.equal(Date.parse(y1.bitis), Date.parse(y2.baslangic), 'öncül çalışmadaki bitişinde biter, ardıl ona yapışık başlar');
   });
+  // 3414-6 a, 3414-7 a: süren iş çalışmada durdurulup kalanı taşınır; canlıya geçmesi operatörün işi terminalde durdurmasına bağlıdır.
+  test('TK-08: durdurulup taşınan iş sahada sürerken canlıda eski yerinde kalır ve adıyla söylenir; durunca yeni yerine geçer (izinli)', async () => {
+    const { surum, isler } = await planliCalisma(true);
+    await tamam<CalismaGonderCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Durdurma ilk', calismaSurumu: surum, dortSaatGerekcesi: null });
+    const { istasyonA, operatorId } = durum();
+    await vt().tx((db) => db.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [operatorId, istasyonA]));
+    const op = (await vt().tx((db) => kullaniciYukle(db, operatorId)))!;
+    const emir = (await vt().tx((db) => db.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [isler[0]])))!.u;
+    await vt().tx((db) => emirBaslat(db, op, emir));
+    const yerOf = async (id: number) => (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.find((x) => x.isEmriId === id)!;
+    const once = await yerOf(isler[0]);
+
+    const { calisma, surum: s1 } = await calismaOku();
+    const plan = calisma.plan!;
+    const ops = plan.ops as Record<string, { m: string; S: number; C: number; job?: string }>;
+    const son = Object.values(ops).map((o) => String(o.job)).sort().at(-1);
+    const [p, q] = Object.keys(ops).filter((x) => String(ops[x]!.job) === son).sort((a, b) => ops[a]!.S - ops[b]!.S) as [string, string];
+    // İlk adım bir gün sonraya taşınır (durdurulmuş sayılır), ardılı arkasına kilitlenir.
+    const yeniS = Math.ceil(ops[q]!.C) + 24, pBitis = yeniS + (ops[p]!.C - ops[p]!.S);
+    const yeniOps = { ...ops, [p]: { ...ops[p]!, S: yeniS, C: pBitis }, [q]: { ...ops[q]!, S: pBitis, C: pBitis + ops[q]!.C - ops[q]!.S } };
+    const locks = { [p]: { m: ops[p]!.m, S: yeniS }, [q]: { m: ops[q]!.m, S: pBitis } };
+    const w = { ...(calisma['w'] as Record<string, unknown>), durdurulan: { [p]: 1 } };
+    const s2 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: yeniOps } as Calisma['plan'], locks, w }, s1);
+    const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Durdurma bekler', calismaSurumu: s2, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
+    assert.equal(r.statusCode, 200, r.body);
+    const cevap = r.json<CalismaGonderCevabi>();
+    assert.equal(cevap.uyarilar?.length, 1, JSON.stringify(cevap.uyarilar));
+    assert.match(cevap.uyarilar![0]!, / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı/);
+    assert.equal((await yerOf(isler[0])).baslangic, once.baslangic, 'süren iş canlıda yerinden oynamaz');
+
+    // Operatör işi durdurur: aynı çalışma yeniden canlıya alınınca kalan yeni yerine geçer, uyarı kalmaz.
+    await isEmriDurumu(isler[0], 'bekliyor');
+    const { surum: s3 } = await calismaOku();
+    const r2 = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Durdurma sonrası', calismaSurumu: s3, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
+    assert.equal(r2.statusCode, 200, r2.body);
+    assert.equal(r2.json<CalismaGonderCevabi>().uyarilar, undefined);
+    const sonra = await yerOf(isler[0]);
+    assert.ok(Date.parse(sonra.baslangic) > Date.parse(once.baslangic) + 20 * 3_600_000, `durdurulan iş yeni yerinde: ${once.baslangic} -> ${sonra.baslangic}`);
+  });
+
   // Risk K1: çalışma belgesi sayfadan yazılır; ayarsız işlemden kısa süre kabul edilmez, sabit iş tam süreyle yazılır.
   test('TK-07: sabit işin çalışmadaki süresi ayarsız işlemden kısaysa tam süreyle yazılır (reddedilen süre)', async () => {
     const { surum, isler } = await planliCalisma(true);

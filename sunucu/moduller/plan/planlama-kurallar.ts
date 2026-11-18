@@ -282,6 +282,17 @@ export function calismaKuyruklari(baslangic: string, isler: readonly CalismaIsi[
   return { kuyruklar, sabitler };
 }
 
+// 3414-6 a: planlamacının durdurup kalanını taşıdığı işler (kaydın w.durdurulan'ı, işlem kimliğiyle).
+export function calismaDurdurulanlari(kayit: unknown): string[] {
+  const d = nesne(nesne(nesne(kayit)?.['w'])?.['durdurulan']);
+  return Object.keys(d ?? {});
+}
+// 3414-7 a: durdurulan iş sahada hâlâ sürüyorsa canlıya alınırken yeri değişmez; her biri için işi adıyla söyleyen ileti.
+export function durdurmaBekleyenler(durdurulan: readonly string[], kimlik: Readonly<Record<string, string>>, suren: ReadonlySet<string>): string[] {
+  return durdurulan.map((id) => kimlik[id]).filter((a): a is string => a !== undefined && suren.has(a))
+    .map((a) => `${opMetni(a)} terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.`);
+}
+
 // Kaydın kalıcı kilitleri (S.locks): planlamacının sabitlediği ya da elle taşıdığı işler. Motorun değerlendirmede koyduğu geçici kilit
 // (gecici) sayılmaz.
 export function calismaKilitleri(kayit: unknown): Set<string> {

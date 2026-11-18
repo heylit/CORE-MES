@@ -99,6 +99,15 @@ describe('Kokpit', () => {
     expect(document.querySelector('[data-is="2.30"]')?.hasAttribute('data-sabit')).toBe(true);
   });
 
+  it('durdurulup taşınan iş sahada sürerken çubuk adında "terminalde durdurulmayı bekliyor" yazar (3414-7 a)', () => {
+    const c = ornekCalisma();
+    ac({ calisma: { ...c, w: { ...c.w, durdurulan: { '2.20': 1 } }, gercek: { '2.20': { m: '3', S: 138.5, A: 10, n: 4 } } } as typeof c });
+    const cubuk = document.querySelector('[data-is="2.20"]');
+    expect(cubuk?.hasAttribute('data-durdurma-bekliyor')).toBe(true);
+    expect(cubuk?.getAttribute('title')).toContain('terminalde durdurulmayı bekliyor');
+    expect(document.querySelector('[data-is="3.10"]')?.hasAttribute('data-durdurma-bekliyor')).toBe(false);
+  });
+
   it('süzgeç uymayan emrin işlerini soluklaştırır, listeyi daraltır', () => {
     ac();
     fireEvent.click(within(screen.getByRole('group', { name: 'Durum süzgeci' })).getByRole('button', { name: /Geç/ }));

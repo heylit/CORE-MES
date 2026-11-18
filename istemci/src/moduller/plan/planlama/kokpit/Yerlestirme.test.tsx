@@ -143,6 +143,15 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
   });
 
+  it('durdurulup taşınan, sahada süren adımın başlangıcının altında "terminalde durdurulmayı bekliyor" yazar (3414-7 a)', () => {
+    const m = { ...M, isler: { '1.10': { ...is('1.10', 'T1', 8, 12), durdurmaBekliyor: true } } };
+    render(<EmirAdimlari m={m} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durdurma-bekliyor="1.10"]')?.textContent).toBe('terminalde durdurulmayı bekliyor; canlıda eski yerinde');
+    cleanup();
+    render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
+  });
+
   it('yazamayan kişi adımları görür, yerleştiremez', () => {
     onizlemeKur();
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={null} surum={4} adimAc={vi.fn()} />);

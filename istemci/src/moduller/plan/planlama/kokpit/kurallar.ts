@@ -13,6 +13,8 @@ export interface KokpitIsi {
   id: string; job: string; ad: string; m: string; S: number; C: number;
   // Biten iş ve fason adım tahtadan taşınmaz. Süren iş taşınınca durdurulmuş sayılır: yapılan kısım yerinde kalır, kalan adet taşınır (3414-6 a).
   basladi: boolean; fason: boolean; kilitli: boolean; bitti?: boolean;
+  // Durdurulup kalanı taşınan, sahada hâlâ süren iş (3414-7 a): operatör terminalde durdurana kadar canlıda eski yerinde kalır.
+  durdurmaBekliyor?: boolean;
   // Rotadaki yeri (0'dan).
   sira: number;
 }
@@ -116,6 +118,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   const urunAdi = new Map(c.D.urunler.map((u) => [u.id, u.ad ?? u.id]));
   const siparis = new Map(c.D.siparisler.map((s) => [s.id, s]));
   const isler: Record<string, KokpitIsi> = {};
+  const bekleyen = durdurmaBekleyenler(c);
   const emirler: KokpitEmri[] = [];
   let enSon = simdi;
   for (const j of Object.values(cx.jobs)) {
@@ -125,7 +128,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}) };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}), ...(bekleyen.has(a.id) ? { durdurmaBekliyor: true } : {}) };
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
     });
@@ -467,6 +470,18 @@ export const kokpitEkMesaileri = (c: PlanlamaCalismasi): KokpitEkMesaisi[] => c.
     ? [{ m: e['m'], gun: e['gun'], vardiya: String(e['vardiya']), personel: e['personel'] === undefined || e['personel'] === null ? null : String(e['personel']) }] : []);
 
 // Adıma bildirilen uzama (3335-3b): çalışmanın w.adimEk'inde iş kimliğiyle durur (motor girdi.js stKur); iş kimliği → ek saat.
+// Planlamacının durdurup kalanını taşıdığı (w.durdurulan) ve sunucunun hâlâ sürüyor dediği (gercek, bitişsiz) işler (3414-7 a).
+export const DURDURMA_BEKLIYOR = 'terminalde durdurulmayı bekliyor';
+export function durdurmaBekleyenler(c: PlanlamaCalismasi): ReadonlySet<string> {
+  const v = (c.w as Record<string, unknown>)['durdurulan'], g = c['gercek'];
+  const s = new Set<string>();
+  if (typeof v !== 'object' || v === null || typeof g !== 'object' || g === null) return s;
+  for (const id of Object.keys(v)) {
+    const a = (g as Record<string, unknown>)[id];
+    if (typeof a === 'object' && a !== null && (a as Record<string, unknown>)['S'] != null && (a as Record<string, unknown>)['C'] == null) s.add(id);
+  }
+  return s;
+}
 export function adimEkleri(c: PlanlamaCalismasi): Record<string, number> {
   const v = (c.w as Record<string, unknown>)['adimEk'], s: Record<string, number> = {};
   if (typeof v !== 'object' || v === null) return s;

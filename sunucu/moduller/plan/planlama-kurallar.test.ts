@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ayarCevir, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, planAni, taslaktanCalismaya } from './planlama-kurallar.ts';
+import { ayarCevir, calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, planAni, taslaktanCalismaya } from './planlama-kurallar.ts';
 
 // Planlama çalışmasının saf kuralları (658 b: Reçete ve Rota'dan taşındı; test kimlikleri aynı kaldı).
 describe('planlama kuralları: plan ayarı', () => {
@@ -198,5 +198,18 @@ describe('planlama kuralları: elle bölme (2524 b)', () => {
     assert.deepEqual((r.deger as { elleBol: unknown }).elleBol, { x: [{ adet: 7, m: '5' }, { adet: 3, m: 'kisi-9' }], t: [{ adet: 10, m: '5' }] });
     assert.equal((taslaktanCalismaya({ D: { meta: { baslangic: b } }, plan: { ops: { x: { S: 1, C: 2, m: '5' } } } }, [yer('x')])!.deger as { elleBol?: unknown }).elleBol, undefined,
       'bölmesiz çalışmaya alan eklenmez');
+  });
+});
+
+// 3414-7 a: durdurulup kalanı taşınan iş sahada sürüyorsa canlıya almada adıyla söylenir. Uydurma.
+describe('planlama kuralları: terminalde durdurulmayı bekleyen iş', () => {
+  test('RR-K60: yalnız çalışmada durdurulmuş ve sahada süren iş söylenir; durmuş, karşılıksız ya da işaretsiz iş söylenmez', () => {
+    assert.deepEqual(calismaDurdurulanlari({ w: { durdurulan: { '1.10': 1, '2.10': 1 } } }), ['1.10', '2.10']);
+    assert.deepEqual(calismaDurdurulanlari({ w: {} }), []);
+    assert.deepEqual(calismaDurdurulanlari(null), []);
+    const kimlik = { '1.10': 'ORN-1|10', '2.10': 'ORN-2|10', '3.10': 'ORN-3|10' };
+    assert.deepEqual(durdurmaBekleyenler(['1.10', '2.10', '9.10'], kimlik, new Set(['ORN-1|10', 'ORN-3|10'])),
+      ['ORN-1 OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.']);
+    assert.deepEqual(durdurmaBekleyenler([], kimlik, new Set(['ORN-1|10'])), []);
   });
 });
