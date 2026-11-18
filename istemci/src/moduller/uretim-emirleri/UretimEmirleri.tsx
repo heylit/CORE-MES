@@ -10,7 +10,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
 import { SmartesEmirHucresi, useSmartesRozetleri } from './SmartesRozeti.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { beklemeNedeni } from './Bekletme.tsx';
+import { beklemeNedeniKisa, beklemeSuresi } from './Bekletme.tsx';
 import './uretim-emirleri.css';
 
 type Gorunum = 'acik' | 'bitenler';
@@ -20,7 +20,10 @@ const GORUNUMLER = [{ anahtar: 'acik', baslik: 'Açık emirler', simge: 'list' }
 // Beklemedeki emirde (3050 a) önce bekletmenin nedeni ve bekleten kişi yazılır.
 function suAnMetni(e: IzlemeEmri): ReactNode {
   const b = e.bekletme;
-  if (b) return <><span className="tc-emir-hurda">Beklemede: {beklemeNedeni(b)}</span><small className="tc-emir-alt-satir">{b.kisi.ad}</small></>;
+  if (b) {
+    const sure = beklemeSuresi(b);
+    return <><span className="tc-emir-hurda">Beklemede: {beklemeNedeniKisa(b)}</span><small className="tc-emir-alt-satir">{b.kisi.ad}{sure && ` · ${sure}`}</small></>;
+  }
   const c = e.canli;
   if (c?.isEmri) {
     const hal = c.durusNedeni ? <span className="tc-emir-hurda"> · Durdu: {c.durusNedeni.ad}</span>

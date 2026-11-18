@@ -36,6 +36,7 @@ import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
+import { surenBeklemeler } from './bekleme-kademe.ts';
 import { siraDisiBaslatmaEkle, siraDisiBaslatmalarGetir } from './sorgular/sira-disi/sorgular.ts';
 import type { AdimDurumSatiri, AdimSatiri, EmirSatiri, IsEmriSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
@@ -179,7 +180,10 @@ async function bekletmeHaritasi(db: Db, satirlar: readonly EmirSatiri[]): Promis
   const aktif = await sorgular.aktifBekletmeler(db, idler);
   if (aktif.length === 0) return new Map();
   const adlar = await adlariAl(db);
-  return new Map(aktif.map((b) => [b.uretimEmriId, { neden: b.neden, not: b.not, kisi: adli(adlar.kisi, b.kisiId, 'Kişi'), zaman: b.zaman }]));
+  const suren = await surenBeklemeler(db, aktif.map((b) => b.uretimEmriId));
+  return new Map(aktif.map((b) => [b.uretimEmriId, {
+    neden: b.neden, not: b.not, kisi: adli(adlar.kisi, b.kisiId, 'Kişi'), zaman: b.zaman, isGunu: suren.get(b.uretimEmriId)?.isGunu ?? null,
+  }]));
 }
 
 interface ParalelAlanlar { acikAdimlar: AcikAdim[]; baslatilabilirAdimlar: number[] }

@@ -18,3 +18,5 @@ export type { AyarOkuyucusu, EpostaAdresCozucusu, EpostaEki } from './eposta.ts'
 // Motoru dışarıdan koşturmak yalnız kaynak modülün testi içindir (iş kendi zamanlayıcısıyla koşar).
 export { kademeKaynagiKaydet, enYuksekKademeler, kademeleriIlerlet, kademeTatilCozucusuKaydet, kayitKademeGecmisi } from './kademe.ts';
 export type { KademeKaydi, KademeOkuyucusu, TatilCozucusu } from './kademe.ts';
+// İş günü farkı motorun saydığıdır: kaynak modül ekranda gösterdiği bekleme gününü aynı kuralla sayar (3416-1).
+export { isGunuFarki } from './kurallar.ts';

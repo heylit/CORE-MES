@@ -10,6 +10,7 @@ export {
 } from './sorgular/emir/sorgular.ts';
 export {
   type BekletmeYazisi, bekletmeOlayiEkle, type BekletmeSatiri, aktifBekletmeler, type BekletmeOlaySatiri, bekletmeOlaylari,
+  type AcikBekletmeOlayi, acikBekletmeOlaylari,
 } from './sorgular/bekletme/sorgular.ts';
 export {
   type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, isEmriOperasyonlari, adimNotuEkle, type AdimNotuSatiri,
