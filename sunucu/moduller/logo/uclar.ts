@@ -1,3 +1,4 @@
+import type { Islem } from '#paylasilan/islemler.ts';
 import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
@@ -5,19 +6,22 @@ import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrm
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
+import { belgeBagla, belgeBaginiKaldir } from './elle-bag.ts';
+import { logoBagKaldirGovdesi, logoBelgeBagCevabi, logoBelgeBaglaGovdesi, type LogoBaglanabilirTur } from '#paylasilan/sozlesme/logo.ts';
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoBelgeAramaCevabi, logoBelgeAramaSorgusu, type LogoBelgeAramaTuru, logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
-import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
+import { FIYAT_GOREN_ISLEMLER as SATIN_ALMA_FIYAT_GOREN_ISLEMLER } from '../satin-alma/disari.ts';
+import { logodaBelgeAra, logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
   BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
-  logoAramaSonucunuEkle, logoMalzemeAramasiAcik,
+  logoAramaSonucunuEkle, logoBelgeAramasiAcik, logoMalzemeAramasiAcik,
 } from './servis.ts';
 
 // 3201 a: bölümü kartı görebilen ister; stok ve hareket parçası yalnız stoğu okuyabilene (stok uçlarının okuma yetkisi; malzeme
@@ -37,6 +41,25 @@ const ROZET_YETKISI = {
 const ROZET_OKUMA = {
   biri: ['sayfa.malzemeler', 'sayfa.projeler', 'projeler.oku', 'siparisler.oku', 'satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
 } as const;
+
+// 3360 a: "Logo'da ara" belgeyi görebilen arar; tür başına o listenin okuma yetkisi (ucun yetkisi bunların birleşimidir).
+const ARAMA_YETKISI = {
+  proje: ['sayfa.projeler', 'projeler.oku'],
+  'satis-siparisi': ['siparisler.oku', 'siparisler.yaz'],
+  teklif: ['siparisler.oku', 'siparisler.yaz'],
+  talep: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
+  'satin-alma-siparisi': ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
+} as const;
+const ARAMA_OKUMA = {
+  biri: ['sayfa.projeler', 'projeler.oku', 'siparisler.oku', 'siparisler.yaz', 'satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'],
+} as const;
+// 3360-2 a: bağlamak belgeyi yazabilenin; bağı kaldırmak yöneticinin (Sistem Ayarları yazma yetkisi, yeni yetki yok).
+const BAGLAMA_YETKISI: Readonly<Record<LogoBaglanabilirTur, Islem>> = { proje: 'projeler.yaz', 'satis-siparisi': 'siparisler.yaz', teklif: 'siparisler.yaz' };
+// Tutar fiyat yetkisiyle: satışta siparisler.fiyat-oku; alışta satın almanın fiyat gören işlemleri (fiyat-oku, yaz ya da onayla; yalnız
+// satin-alma.oku fiyatsızdır, 3401-1 a); proje ve talepte tutar yok.
+const ARAMA_FIYAT_YETKISI: Readonly<Record<LogoBelgeAramaTuru, readonly Islem[]>> = {
+  proje: [], 'satis-siparisi': ['siparisler.fiyat-oku'], teklif: ['siparisler.fiyat-oku'], talep: [], 'satin-alma-siparisi': SATIN_ALMA_FIYAT_GOREN_ISLEMLER,
+};
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
@@ -153,6 +176,48 @@ export const uclar = [
     txDisi: true,
     cevap: logoCrmDenetimiCevabi,
     isle: ({ db }) => crmDenetimi({ tx: (f) => f(db) }, ortamKoprusu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/belge-ara',
+    yetki: ARAMA_OKUMA,
+    txDisi: true,
+    sorgu: logoBelgeAramaSorgusu,
+    cevap: logoBelgeAramaCevabi,
+    isle: ({ db, kullanici, sorgu }) => {
+      if (kullanici === null || !ARAMA_YETKISI[sorgu.tur].some((i) => islemVarMi(kullanici, i))) throw yetkiYok();
+      const fiyat = ARAMA_FIYAT_YETKISI[sorgu.tur];
+      return logodaBelgeAra({ tx: (f) => f(db) }, sorgu.tur, sorgu.q, fiyat.some((i) => islemVarMi(kullanici, i)), { kisiId: kullanici.id, belge: sorgu.belge });
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/belge-bagla',
+    yetki: { biri: ['projeler.yaz', 'siparisler.yaz'] },
+    tekrarKorumali: true,
+    govde: logoBelgeBaglaGovdesi,
+    cevap: logoBelgeBagCevabi,
+    isle: ({ db, kullanici, govde }) => {
+      if (!islemVarMi(kullanici, BAGLAMA_YETKISI[govde.tur])) throw yetkiYok();
+      return belgeBagla(db, kullanici.id, govde, new Date());
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/belge-bag-kaldir',
+    yetki: 'ayarlar.yaz',
+    tekrarKorumali: true,
+    govde: logoBagKaldirGovdesi,
+    cevap: logoBelgeBagCevabi,
+    isle: async ({ db, govde }) => { await belgeBaginiKaldir(db, govde); return { kayitNo: null }; },
+  }),
+  // 3360 a: listedeki "Logo'da ara" düğmesi yalnız arama açıkken görünür; yalnız ayar okunur, köprüye istek yok.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/belge-arama-durumu',
+    yetki: ARAMA_OKUMA,
+    cevap: logoMalzemeAramaDurumuCevabi,
+    isle: async ({ db }) => ({ acik: (await logoBelgeAramasiAcik(db)) && ortamKoprusu !== null, neden: null }),
   }),
   // 3313: duran belgeyi yeniden gönderme; Sistem Ayarları'nın yazma yetkisiyle (yeni yetki yok). Kim ve ne zaman denetim kaydındadır.
   uc({

@@ -200,3 +200,6 @@ export async function kalemiStoktanGeriAl(db: Db, talepId: string, kalemId: stri
     : `Stoktan karşılama iptal edildi: ${servis.sade(miktar)} geri eklenemedi (talep ilerledi ya da kalem çıkarıldı).`, kisiId);
   return eklendi;
 }
+
+// 3401-1 a: satın almada fiyat gören işlemler; logo modülü Logo belge aramasında alış tutarını bunlarla açar.
+export { FIYAT_GOREN_ISLEMLER } from './kurallar.ts';

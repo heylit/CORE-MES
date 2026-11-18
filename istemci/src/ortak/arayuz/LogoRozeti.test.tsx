@@ -14,9 +14,9 @@ describe('LogoRozeti (3344)', () => {
 
   it('başlıkta "Logo: " öneki, Logo\'da durumunda kayıt no ipucu; hata "Okunamadı"', () => {
     render(<>
-      <LogoRozeti bilgi={{ id: 1, durum: 'sirada', kayitNo: null, neden: null }} baslik />
-      <LogoRozeti bilgi={{ id: 2, durum: 'logoda', kayitNo: '77', neden: null }} baslik />
-      <LogoRozeti bilgi={{ id: 3, durum: 'durdu', kayitNo: null, neden: 'x' }} hata />
+      <LogoRozeti bilgi={{ id: 1, durum: 'sirada', kayitNo: null, neden: null, elle: false }} baslik />
+      <LogoRozeti bilgi={{ id: 2, durum: 'logoda', kayitNo: '77', neden: null, elle: false }} baslik />
+      <LogoRozeti bilgi={{ id: 3, durum: 'durdu', kayitNo: null, neden: 'x', elle: false }} hata />
     </>);
     expect(screen.getByText('Logo: Sırada')).toBeTruthy();
     expect(screen.getByTitle('Logo kayıt 77').textContent).toBe('Logo\'da');
@@ -24,16 +24,16 @@ describe('LogoRozeti (3344)', () => {
   });
 
   it('Logo\'da olmayan rozetin ipucu nedendir', () => {
-    render(<LogoRozeti bilgi={{ id: 4, durum: 'yeniden-denenecek', kayitNo: null, neden: 'Yardımcıya ulaşılamadı' }} />);
+    render(<LogoRozeti bilgi={{ id: 4, durum: 'yeniden-denenecek', kayitNo: null, neden: 'Yardımcıya ulaşılamadı', elle: false }} />);
     expect(screen.getByTitle('Yardımcıya ulaşılamadı').textContent).toBe('Yeniden denenecek');
   });
 
   it('hücre nedeni rozetin altında yazar, hata varken yazmaz', () => {
-    render(<LogoRozetHucresi bilgi={{ id: 1, durum: 'kart-bekliyor', kayitNo: null, neden: 'Malzeme kartı Logo\'da yok' }} hata={false} />);
+    render(<LogoRozetHucresi bilgi={{ id: 1, durum: 'kart-bekliyor', kayitNo: null, neden: 'Malzeme kartı Logo\'da yok', elle: false }} hata={false} />);
     expect(screen.getByText('Kart bekliyor')).toBeTruthy();
     expect(screen.getByText('Malzeme kartı Logo\'da yok')).toBeTruthy();
     cleanup();
-    render(<LogoRozetHucresi bilgi={{ id: 1, durum: 'durdu', kayitNo: null, neden: 'gizli' }} hata />);
+    render(<LogoRozetHucresi bilgi={{ id: 1, durum: 'durdu', kayitNo: null, neden: 'gizli', elle: false }} hata />);
     expect(screen.queryByText('gizli')).toBeNull();
   });
 });

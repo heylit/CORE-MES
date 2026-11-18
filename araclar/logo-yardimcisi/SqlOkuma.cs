@@ -14,7 +14,8 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Proje, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, SatisMusterileri, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
+            MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri,
+            BelgeAraSatisSiparisi, BelgeAraSatinAlmaSiparisi, BelgeAraTeklif, BelgeAraTalep, BelgeAraProje, BelgeSatirSiparis, BelgeSatirTeklif, BelgeSatirTalep;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -117,6 +118,39 @@ namespace LogoYardimcisi
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0"
                 + " ORDER BY L.DATE_ DESC, L.LOGICALREF DESC";
             // 2987: yalnız satın alma siparişi (TRCODE 2, parametre değil sabit); satır adı hizmette hizmet kartından, malzemede malzeme kartından.
+            // 3360 a: Logo'da belge araması. Kolon adları EkoTigerAPI'nin canlıda çalışan aramalarıyla aynı (SalesController orders, LogoDocController
+            // demands, ProjectController list, SalesOfferController). LIKE deseni parametredir (Desen kaçırır); satır eşleşmesi başlıkta EXISTS ile aranır.
+            var es = " ESCAPE '\\'";
+            Func<string, string> benzer = a => a + " LIKE @desen" + es;
+            var siparisSatiri = "(L.LINETYPE <> 4 AND (" + benzer("I.CODE") + " OR " + benzer("I.NAME") + ")) OR (L.LINETYPE = 4 AND (" + benzer("S.CODE") + " OR "
+                + benzer("S.DEFINITION_") + ")) OR " + benzer("L.LINEEXP");
+            var talepSatiri = benzer("I.CODE") + " OR " + benzer("I.NAME");
+            var talepBirlesimi = " LEFT JOIN " + f("ITEMS") + " I ON I.LOGICALREF = L.ITEMREF";
+            Func<string, string, string, string, string, string> baslikAramasi = (baslik, tabloSatir, birlesim, fisRef, satirKosulu) =>
+                " AND H.DATE_ >= @baslangic AND (" + benzer("H.FICHENO") + " OR " + benzer("H.DOCODE") + " OR " + benzer("PR.CODE") + " OR " + benzer("PR.NAME")
+                + baslik + " OR EXISTS (SELECT 1 FROM " + tabloSatir + " L" + birlesim + " WHERE L." + fisRef + " = H.LOGICALREF AND (" + satirKosulu + ")))"
+                + " ORDER BY H.DATE_ DESC, H.LOGICALREF DESC";
+            var cariBasligi = " OR " + benzer("C.CODE") + " OR " + benzer("C.DEFINITION_") + " OR " + benzer("H.GENEXP1");
+            var siparisAlanlari = "SELECT TOP (@enCok) H.LOGICALREF, H.FICHENO, H.DOCODE, H.DATE_, C.CODE, C.DEFINITION_, PR.CODE, PR.NAME, H.GENEXP1, H.NETTOTAL, H.TRCURR, H.CANCELLED FROM ";
+            var cariProje = " H LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = H.CLIENTREF LEFT JOIN " + f("PROJECT") + " PR ON PR.LOGICALREF = H.PROJECTREF";
+            Func<int, string> siparisAramasi = tr => siparisAlanlari + d("ORFICHE") + cariProje
+                + " WHERE H.TRCODE = " + tr.ToString(CultureInfo.InvariantCulture) + baslikAramasi(cariBasligi, d("ORFLINE"), kodBirlesimi, "ORDFICHEREF", siparisSatiri);
+            BelgeAraSatisSiparisi = siparisAramasi(1);
+            BelgeAraSatinAlmaSiparisi = siparisAramasi(2);
+            BelgeAraTeklif = siparisAlanlari + f("PURCHOFFER") + cariProje
+                + " WHERE H.TRCODE = 1" + baslikAramasi(cariBasligi, f("PURCHOFFERLN"), kodBirlesimi, "ORDFICHEREF", siparisSatiri);
+            BelgeAraTalep = "SELECT TOP (@enCok) H.LOGICALREF, H.FICHENO, H.DOCODE, H.DATE_, NULL, NULL, PR.CODE, PR.NAME, NULL, NULL, NULL, 0 FROM " + d("DEMANDFICHE")
+                + " H LEFT JOIN " + f("PROJECT") + " PR ON PR.LOGICALREF = H.PROJECTREF"
+                + " WHERE 1 = 1" + baslikAramasi("", d("DEMANDLINE"), talepBirlesimi, "DEMANDFICHEREF", talepSatiri);
+            BelgeAraProje = "SELECT TOP (@enCok) LOGICALREF, CODE, NULL, NULL, NULL, NULL, CODE, NAME, NULL, NULL, NULL, ACTIVE FROM " + f("PROJECT")
+                + " WHERE " + benzer("CODE") + " OR " + benzer("NAME") + " ORDER BY CODE";
+            var satirAlanlari = "SELECT L.{0}, L.LOGICALREF, " + satirKodu + ", CASE WHEN L.LINETYPE = 4 THEN S.DEFINITION_ ELSE I.NAME END, L.AMOUNT, U.CODE, L.LINEEXP FROM ";
+            var birimBirlesimi = " LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF";
+            BelgeSatirSiparis = string.Format(CultureInfo.InvariantCulture, satirAlanlari, "ORDFICHEREF") + d("ORFLINE") + " L" + kodBirlesimi + birimBirlesimi
+                + " WHERE L.ORDFICHEREF IN ({0}) AND (" + siparisSatiri + ") ORDER BY L.ORDFICHEREF, L.LOGICALREF";
+            BelgeSatirTeklif = string.Format(CultureInfo.InvariantCulture, satirAlanlari, "ORDFICHEREF") + f("PURCHOFFERLN") + " L" + kodBirlesimi + birimBirlesimi
+                + " WHERE L.ORDFICHEREF IN ({0}) AND (" + siparisSatiri + ") ORDER BY L.ORDFICHEREF, L.LOGICALREF";
+            BelgeSatirTalep = "SELECT L.DEMANDFICHEREF, L.LOGICALREF, I.CODE, I.NAME, L.AMOUNT, NULL, NULL FROM " + d("DEMANDLINE") + " L" + talepBirlesimi + " WHERE L.DEMANDFICHEREF IN ({0}) AND (" + talepSatiri + ") ORDER BY L.DEMANDFICHEREF, L.LOGICALREF";
             SiparisIcerikBasligi = "SELECT O.LOGICALREF, O.FICHENO, O.DATE_, C.CODE, O.TRCURR, O.TRRATE, O.STATUS, O.CANCELLED FROM " + d("ORFICHE")
                 + " O LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = O.CLIENTREF WHERE O.TRCODE = 2 AND O.FICHENO = @no";
             SiparisIcerikSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", CASE WHEN L.LINETYPE = 4 THEN S.DEFINITION_ ELSE I.NAME END, L.AMOUNT, U.CODE,"
@@ -363,6 +397,63 @@ namespace LogoYardimcisi
         static DateTime? TarihYa(object o)
         {
             return o == null ? (DateTime?)null : Convert.ToDateTime(o, CultureInfo.InvariantCulture);
+        }
+
+        // 3360 a: başlık sorgusu belgeleri, ikinci sorgu yalnız bulunan belgelerin eşleşen satırlarını getirir (belge başına tekil).
+        public List<BelgeBulgusu> BelgeAra(string tur, string metin, DateTime baslangic, int enCok)
+        {
+            string baslik, satir;
+            if (tur == BelgeTurleri.SatisSiparisi) { baslik = q.BelgeAraSatisSiparisi; satir = q.BelgeSatirSiparis; }
+            else if (tur == BelgeTurleri.SatinAlmaSiparisi) { baslik = q.BelgeAraSatinAlmaSiparisi; satir = q.BelgeSatirSiparis; }
+            else if (tur == BelgeTurleri.Teklif) { baslik = q.BelgeAraTeklif; satir = q.BelgeSatirTeklif; }
+            else if (tur == BelgeTurleri.Talep) { baslik = q.BelgeAraTalep; satir = q.BelgeSatirTalep; }
+            else if (tur == BelgeTurleri.Proje) { baslik = q.BelgeAraProje; satir = null; }
+            else throw new ArgumentException("Bilinmeyen belge türü: " + tur);
+            var desen = Desen(metin);
+            var l = new List<BelgeBulgusu>();
+            var p = new List<SqlParameter> { P("@desen", desen), P("@enCok", enCok) };
+            if (tur != BelgeTurleri.Proje) p.Add(P("@baslangic", baslangic));
+            foreach (var h in Sorgula(baslik, p.ToArray()))
+            {
+                var b = new BelgeBulgusu();
+                b.Ref = Tam(h[0]);
+                b.No = Metin(h[1]);
+                b.BelgeNo = Metin(h[2]);
+                b.Tarih = TarihYa(h[3]);
+                b.CariKod = Metin(h[4]);
+                b.CariAd = Metin(h[5]);
+                b.ProjeKod = Metin(h[6]);
+                b.ProjeAd = Metin(h[7]);
+                b.Aciklama = Metin(h[8]);
+                b.NetToplam = h[9] == null ? (decimal?)null : Ondalik(h[9]);
+                b.DovizTuru = h[10] == null ? (int?)null : Tam(h[10]);
+                b.Iptal = Tam(h[11]) != 0;
+                l.Add(b);
+            }
+            if (satir == null || l.Count == 0) return l;
+            var adlar = new List<string>();
+            var sp = new List<SqlParameter> { P("@desen", desen) };
+            for (var i = 0; i < l.Count; i++)
+            {
+                adlar.Add("@b" + i);
+                sp.Add(P("@b" + i, l[i].Ref));
+            }
+            var harita = new Dictionary<int, BelgeBulgusu>();
+            foreach (var x in l) harita[x.Ref] = x;
+            foreach (var r in Sorgula(string.Format(CultureInfo.InvariantCulture, satir, string.Join(", ", adlar.ToArray())), sp.ToArray()))
+            {
+                BelgeBulgusu b;
+                if (!harita.TryGetValue(Tam(r[0]), out b)) continue;
+                var x = new BulunanSatir();
+                x.Ref = Tam(r[1]);
+                x.Kod = Metin(r[2]);
+                x.Ad = Metin(r[3]);
+                x.Miktar = Ondalik(r[4]);
+                x.Birim = Metin(r[5]);
+                x.Aciklama = Metin(r[6]);
+                b.Satirlar.Add(x);
+            }
+            return l;
         }
 
         public SiparisIcerigi SatinAlmaSiparisiIcerigi(string no)

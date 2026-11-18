@@ -995,6 +995,35 @@ namespace LogoYardimcisi
             Esit(0, s.Cagrilar.Count, "okumalar Logo'ya yazmaz");
         }
 
+        static void T_belge_aramasi_turde_baslik_ve_satirda_arar_eslesen_satiri_dondurur()
+        {
+            var s = Logo();
+            var simdi = new DateTime(2026, 10, 21);
+            var f1 = new SahteLogo.Fis { Ref = 9001, Nesne = Nesne.SatisSiparisi, No = "ORN-SS-1", Cari = "ORN-C-1", Tarih = simdi.AddDays(-3), Net = 100m };
+            f1.Satirlar.Add(new SahteLogo.Satir { Ref = 9101, Kod = "ORN-MLZ-7", Miktar = 4m, Birim = "ADET", Ust = f1 });
+            f1.Satirlar.Add(new SahteLogo.Satir { Ref = 9102, Kod = "ORN-MLZ-8", Miktar = 1m, Birim = "ADET", Ust = f1 });
+            var f2 = new SahteLogo.Fis { Ref = 9002, Nesne = Nesne.SatinAlmaSiparisi, No = "ORN-SA-1", Cari = "ORN-T-1", Tarih = simdi.AddDays(-3) };
+            f2.Satirlar.Add(new SahteLogo.Satir { Ref = 9201, Kod = "ORN-MLZ-7", Miktar = 2m, Ust = f2 });
+            var eski = new SahteLogo.Fis { Ref = 9003, Nesne = Nesne.SatisSiparisi, No = "ORN-SS-ESKI", Cari = "ORN-C-1", Tarih = simdi.AddDays(-400) };
+            s.Fisler.AddRange(new[] { f1, f2, eski });
+            s.Projeler.Add(new ProjeKaydi { Ref = 77, Kod = "ORN.PRJ.1", Ad = "Deneme Proje" });
+            Func<Dictionary<string, string>, Cevap> ara = q => C(s, "GET", "/api/Document/search", null, q);
+            Func<string, string, object[]> bul = (tur, q) => (object[])ara(new Dictionary<string, string> { { "type", tur }, { "q", q } }).Govde;
+            var r = bul("salesOrder", "mlz-7");
+            Esit(1, r.Length, "satır içeriğinde, türde, son 365 günde");
+            var b = D(r[0]);
+            Esit("ORN-SS-1", b["number"], "no");
+            Esit(1, b["matchedLineCount"], "yalnız eşleşen satır");
+            Esit("ORN-MLZ-7", D(((object[])b["matchedLines"])[0])["code"], "eşleşen satır kodu");
+            Esit(1, bul("purchaseOrder", "MLZ-7").Length, "satın alma ayrı tür");
+            Esit(2, ((object[])ara(new Dictionary<string, string> { { "type", "salesOrder" }, { "q", "ORN-C-1" }, { "days", "500" } }).Govde).Length, "days geriye uzatır");
+            Esit("ORN.PRJ.1", D(bul("project", "deneme")[0])["projectCode"], "proje adında");
+            Esit(400, ara(new Dictionary<string, string> { { "type", "invoice" }, { "q", "ORN" } }).Durum, "bilinmeyen tür");
+            Esit(400, ara(new Dictionary<string, string> { { "type", "salesOrder" }, { "q", "ab" } }).Durum, "iki karakter");
+            Esit(400, ara(new Dictionary<string, string> { { "type", "salesOrder" }, { "q", "ORN" }, { "days", "0" } }).Durum, "gün sınırı");
+            Esit(0, s.Cagrilar.Count, "arama Logo'ya yazmaz");
+        }
+
         /* ---------------- Talep fişi ve karşılama ---------------- */
 
         static Cevap Talep(SahteLogo s, string no, int durum)
@@ -1282,7 +1311,19 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(43, hepsi.Count, "sorgu sayısı");
+            Esit(51, hepsi.Count, "sorgu sayısı");
+            Icerir(q.BelgeAraSatisSiparisi, "FROM LG_007_03_ORFICHE H");
+            Icerir(q.BelgeAraSatisSiparisi, "H.TRCODE = 1 AND H.DATE_ >= @baslangic");
+            Icerir(q.BelgeAraSatinAlmaSiparisi, "H.TRCODE = 2 AND H.DATE_ >= @baslangic");
+            Icerir(q.BelgeAraSatisSiparisi, "EXISTS (SELECT 1 FROM LG_007_03_ORFLINE L");
+            Icerir(q.BelgeAraTeklif, "FROM LG_007_PURCHOFFER H");
+            Icerir(q.BelgeAraTeklif, "LG_007_PURCHOFFERLN L");
+            Icerir(q.BelgeAraTalep, "LG_007_03_DEMANDLINE L LEFT JOIN LG_007_ITEMS I ON I.LOGICALREF = L.ITEMREF WHERE L.DEMANDFICHEREF = H.LOGICALREF");
+            Icermez(q.BelgeAraTalep, "STOCKREF");
+            Icermez(q.BelgeSatirTalep, "STOCKREF");
+            Icerir(q.BelgeAraProje, "FROM LG_007_PROJECT WHERE");
+            Icerir(q.BelgeSatirSiparis, "L.ORDFICHEREF IN ({0})");
+            Icerir(q.BelgeAraSatisSiparisi, "C.DEFINITION_ LIKE @desen ESCAPE");
             Icerir(q.IrsaliyeBasliklari, "F.TRCODE IN (" + Sorgular.IrsaliyeTurleri + ")");
             Icerir(q.IrsaliyeBasliklari, "LG_007_03_STFICHE");
             Icerir(q.IrsaliyeSatirlari, "LG_007_03_STLINE");

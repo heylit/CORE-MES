@@ -30,7 +30,8 @@ beforeEach(() => {
   bump();
 });
 afterEach(() => { cleanup(); setFiyatKilidi(false); });
-// Siparişler Logo özeti için oturumdan yetki okur (3384 a); oturum önceden yazılır ki ağa gidilmesin.
+// Siparişler Logo özeti için oturumdan yetki okur (3384 a); oturum önceden yazılır ki ağa gidilmesin. Talepler başlığındaki
+// "Logo'da ara" (3360) da sorgu istemcisi ister.
 function sorguIle(ic: React.ReactNode) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   istemci.setQueryData(anahtarlar.oturum, null);
@@ -47,13 +48,13 @@ describe('satın alma merkezi: fiyat kilidi (3401-1 a)', () => {
 
   it('Talepler: kilitliyken Tutar sütunu çizilmez ve kilit notu durur; yetkiliyse sütun var', () => {
     setFiyatKilidi(true);
-    render(<MemoryRouter><Talepler /></MemoryRouter>);
+    render(sorguIle(<MemoryRouter><Talepler /></MemoryRouter>));
     expect(screen.getByText('Deneme talep')).toBeTruthy();
     expect(screen.queryByRole('columnheader', { name: /Tutar/ })).toBeNull();
     expect(screen.getByText(/Fiyat sütunları yetkinizde değil/)).toBeTruthy();
     cleanup();
     setFiyatKilidi(false);
-    render(<MemoryRouter><Talepler /></MemoryRouter>);
+    render(sorguIle(<MemoryRouter><Talepler /></MemoryRouter>));
     expect(screen.getByRole('columnheader', { name: /Tutar/ })).toBeTruthy();
     expect(screen.queryByText(/Fiyat sütunları yetkinizde değil/)).toBeNull();
   });
@@ -74,7 +75,7 @@ describe('satın alma merkezi: fiyat kilidi (3401-1 a)', () => {
     const panel = kilitPaneli('Teklif ve karar fiyatları');
     expect(panel).toContain('Yetkiniz yok');
     expect(panel).toContain(KILIT_YETKISI);
-    render(<MemoryRouter><Talepler /></MemoryRouter>);
+    render(sorguIle(<MemoryRouter><Talepler /></MemoryRouter>));
     expect(screen.queryByRole('columnheader', { name: /Tutar/ })).toBeNull();
     cleanup();
     for (const islemler of [['satin-alma.oku', 'satin-alma.fiyat-oku'], ['satin-alma.oku', 'satin-alma.yaz'], ['satin-alma.oku', 'satin-alma.onayla']]) {

@@ -20,11 +20,13 @@ interface Ozellikler {
   birincil?: BirincilEylem;
   // İkincil işlemler tek "diğer işlemler" düğmesinin altında toplanır; boşsa düğme çizilmez.
   eylemler?: readonly MenuOgesi[];
+  // Birincilden önce duran kendi durumunu taşıyan düğme (ör. "Logo'da ara"); kendisi null dönebilir.
+  ek?: ReactNode;
 }
 
 // Kabuk sayfa adını h1 olarak yazar; bu başlık sayfanın içindeki görünümün adıdır (h2).
 // Dar ekranda tek satırda kalır: başlık kısalır, eylemler yerinde durur; simgeli birincil düğmenin metni gizlenir (erişilebilir adda kalır).
-export function SayfaBasligi({ baslik, simge, alt, birincil, eylemler = [] }: Ozellikler) {
+export function SayfaBasligi({ baslik, simge, alt, birincil, eylemler = [], ek }: Ozellikler) {
   return (
     <header className="tc-sbaslik">
       <div className="tc-sbaslik-bas">
@@ -34,8 +36,9 @@ export function SayfaBasligi({ baslik, simge, alt, birincil, eylemler = [] }: Oz
         </h2>
         {alt && <div className="tc-sbaslik-alt">{alt}</div>}
       </div>
-      {(birincil || eylemler.length > 0) && (
+      {(birincil || eylemler.length > 0 || ek) && (
         <div className="tc-sbaslik-eylem">
+          {ek}
           <Menu etiket={`${baslik}: diğer işlemler`} ogeler={eylemler} ipucu="Diğer işlemler" />
           {birincil && (
             <Dugme

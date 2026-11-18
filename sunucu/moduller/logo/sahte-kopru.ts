@@ -16,7 +16,7 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 // GET ve DELETE /api/DemandFiche/peg/byOrder/{ref}. Kart güncelleme: POST /api/Material/UpdateRich, /api/{Purchase|Sales}Service/UpdateRich.
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
-// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Material/usage (3079), /api/Material/search (3080), /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
+// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Material/usage (3079), /api/Material/search (3080), /api/Arp/search, /api/Arp/card/{kod}; 3360: /api/Document/search?type=&q=&days= (days yok sayılır). Malzeme fişi: POST
 // /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Kartı kullanım dışı bırakma (2114b):
 // POST /api/Material/{ref}/deactivate ve /api/{Purchase|Sales}Service/{ref}/deactivate (gövde { code }). Hepsinin cevap biçimi VARSAYIM.
 // Proje kartı (3315): GET /api/Project/exists/{kod} (yoksa logicalRef 0), POST /api/Project/AddRich { code, name }; ölçüm yokken 501.
@@ -110,6 +110,8 @@ export interface SahteKopru {
   // 3079 a: kart başına kullanım izi (itemCode, lastMovement, openOrder); sayfa kart sayfasıyla aynı, satırı olmayan kart dönmez.
   logoKullanimlari: Record<string, unknown>[];
   logoCarileri: Record<string, unknown>[];
+  // 3360 a: Document/search için tür başına belgeler (yardımcının cevap biçiminde; type alanı yardımcıdaki tür adı).
+  logoBelgeleri: Record<string, unknown>[];
   sayfaBoyu: number;
   // 2114b: Logo'da kullanım dışı bırakılan kart kodları (istek sırasıyla; kart haritada kalır).
   pasifKartlar: string[];
@@ -202,6 +204,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     logoStoklari: [],
     logoKullanimlari: [],
     logoCarileri: [],
+    logoBelgeleri: [],
     sayfaBoyu: 500,
     pasifKartlar: [],
     istekler: [],
@@ -340,6 +343,25 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         const icinde = (d: unknown): boolean => typeof d === 'string' && d.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr'));
         json(cevap, 200, kopru.logoKartlari.filter((k) => k['active'] !== false && (icinde(k['code']) || icinde(k['name'])))
           .sort((a, b) => String(a['code']).localeCompare(String(b['code']))).slice(0, 20));
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/Document/search') {
+        const p = new URL(istek.url ?? '', 'http://sahte').searchParams;
+        const q = (p.get('q') ?? '').trim().toLocaleLowerCase('tr');
+        const tur = p.get('type') ?? '';
+        if (q.length < 3 || !['project', 'salesOrder', 'salesOffer', 'demand', 'purchaseOrder'].includes(tur)) {
+          json(cevap, 400, { success: false, logicalRef: 0, error: 'q', validate: null }); return;
+        }
+        const icinde = (d: unknown): boolean => typeof d === 'string' && d.toLocaleLowerCase('tr').includes(q);
+        const sonuc = kopru.logoBelgeleri.filter((b) => b['type'] === tur).flatMap((b) => {
+          const satirlar = (Array.isArray(b['lines']) ? b['lines'] as Record<string, unknown>[] : [])
+            .filter((x) => icinde(x['code']) || icinde(x['name']) || icinde(x['description']));
+          const baslik = ['number', 'docNumber', 'arpCode', 'arpName', 'projectCode', 'projectName', 'description'].some((a) => icinde(b[a]));
+          if (!baslik && satirlar.length === 0) return [];
+          const { type: _t, lines: _l, ...ust } = b;
+          return [{ ...ust, matchedLines: satirlar.slice(0, 5), matchedLineCount: satirlar.length }];
+        }).slice(0, 50);
+        json(cevap, 200, sonuc);
         return;
       }
       if (istek.method === 'GET' && yol === '/api/Arp/search') {

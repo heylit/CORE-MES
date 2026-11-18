@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -61,7 +62,7 @@ describe('2876: merkezde güncelleme grubu', () => {
     V.q = 'ST-DEN-2';
     expect(filteredRequests().map((r) => r.id)).toEqual([KOK]);
     V.q = '';
-    render(<MemoryRouter><Talepler /></MemoryRouter>);
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><Talepler /></MemoryRouter></QueryClientProvider>);
     expect(document.body.textContent).toContain('Güncellemeleri: ST-DEN-2 satın almada');
     expect(document.body.textContent?.match(/Güncelle/g)?.length).toBe(1);
   });

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Siparis, SiparisListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, YETKI_ADI, useLogoRozetleri, type Sutun,
+  LogoBelgeAramasi, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, YETKI_ADI, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -92,6 +92,7 @@ export function SiparisListesi() {
         baslik="Satış siparişleri"
         sag={(
           <span className="tc-sp-islemler">
+            <LogoBelgeAramasi tur="satis-siparisi" />
             {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { void gezin('/siparisler/yeni'); }}>Yeni sipariş</Dugme>}
             <Dugme simge="rotate" aria-label="Yenile" onClick={() => { void siparisler.refetch(); }} yukleniyor={siparisler.isFetching} />
           </span>
