@@ -203,3 +203,7 @@ export async function kalemiStoktanGeriAl(db: Db, talepId: string, kalemId: stri
 
 // 3401-1 a: satın almada fiyat gören işlemler; logo modülü Logo belge aramasında alış tutarını bunlarla açar.
 export { FIYAT_GOREN_ISLEMLER } from './kurallar.ts';
+
+// 3405-1 a: kademeli uyarı kaynakları (onay bekleyen, siparişi verilmeyen, cevapsız teklif, teslim); bağ kablolamadadır.
+export { satinAlmaKademeOkuyucusu } from './servis.ts';
+export type { SatinAlmaKademeKaynagi } from './servis.ts';

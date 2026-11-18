@@ -5,7 +5,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import type {
   BildirimListeCevabi, BildirimListeDurumu, BildirimPushDurumuCevabi, BildirimTercihDegistirGovdesi, BildirimTercihleriCevabi, BildirimTercihSatiri,
 } from '#paylasilan/sozlesme/bildirim.ts';
-import { DurumKutusu, Dugme, Kart, Sayfalama, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, Sayfalama, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { tarayiciPushOrtami, type PushOrtami } from './cihaz.ts';
@@ -15,21 +15,11 @@ import { BildirimSatiri, BosListe, useBildirimKomutlari } from './ortak.tsx';
 import { Yayinlar } from './Yayinlar.tsx';
 import './bildirim.css';
 
-type Gorunum = 'gelen' | 'arsiv' | 'tercihler' | 'hazirla' | 'yayinlar';
-// Hazırla ve Yayınlar yalnız işlemi olana görünür (2147-2 c); veri yetkisi uçlardadır.
-const SEKMELER: readonly (Sekme<Gorunum> & { islemler?: readonly string[] })[] = [
-  { anahtar: 'gelen', baslik: 'Gelenler', simge: 'bell' },
-  { anahtar: 'arsiv', baslik: 'Arşiv', simge: 'layers' },
-  { anahtar: 'tercihler', baslik: 'Tercihlerim', simge: 'gear' },
-  { anahtar: 'hazirla', baslik: 'Hazırla', simge: 'plus', islemler: ['bildirim.yayinla'] },
-  { anahtar: 'yayinlar', baslik: 'Yayınlar ve okunma', simge: 'eye', islemler: ['bildirim.yayinla', 'bildirim.yayin-oku'] },
-];
-const YOL: Record<Gorunum, string> = {
-  gelen: '/profil/bildirimler', arsiv: '/profil/bildirimler/arsiv', tercihler: '/profil/bildirimler/tercihler',
-  hazirla: '/profil/bildirimler/hazirla', yayinlar: '/profil/bildirimler/yayinlar',
+// Hazırla ve Yayınlar yalnız işlemi olana açılır (2147-2 c); veri yetkisi uçlardadır. Menüyü Bildirim Merkezi'nin ikinci menüsü çizer.
+const SEKME_ISLEMLERI: Record<'hazirla' | 'yayinlar', readonly string[]> = {
+  hazirla: ['bildirim.yayinla'],
+  yayinlar: ['bildirim.yayinla', 'bildirim.yayin-oku'],
 };
-const sekmeAcikMi = (s: { islemler?: readonly string[] }, islemler: readonly string[]): boolean =>
-  s.islemler === undefined || s.islemler.some((i) => islemler.includes(i));
 
 type Suzgec = Exclude<BildirimListeDurumu, 'arsiv'>;
 const SUZGECLER: readonly { anahtar: Suzgec; baslik: string }[] = [
@@ -48,16 +38,8 @@ const BOS_METIN: Partial<Record<BildirimListeDurumu, string>> = {
   hatirlatma: 'Bekleyen hatırlatma yok.', yapildi: 'Yapılmış görev yok.',
 };
 
-function Cerceve({ gorunum, children }: { gorunum: Gorunum; children: React.ReactNode }) {
-  const git = useNavigate();
-  const islemler = useOturum().data?.islemler ?? [];
-  const sekmeler = SEKMELER.filter((s) => sekmeAcikMi(s, islemler)).map(({ anahtar, baslik, simge }) => ({ anahtar, baslik, simge }));
-  return (
-    <div className="tc-bildirim-sayfa">
-      <Sekmeler etiket="Bildirimler" sekmeler={sekmeler} secili={gorunum} sec={(a) => { void git(YOL[a]); }} />
-      {children}
-    </div>
-  );
+function Cerceve({ children }: { children: React.ReactNode }) {
+  return <div className="tc-bildirim-sayfa">{children}</div>;
 }
 
 function Liste({ durum, arsivde }: { durum: BildirimListeDurumu; arsivde: boolean }) {
@@ -87,7 +69,7 @@ export function Gelenler() {
   const [suzgec, suzgecYaz] = useState<Suzgec>('gelen');
   const { tumu } = useBildirimKomutlari();
   return (
-    <Cerceve gorunum="gelen">
+    <Cerceve>
       <div className="tc-bildirim-suzgec">
         {SUZGECLER.map((s) => (
           <button key={s.anahtar} type="button" className="tc-bildirim-cip" aria-pressed={suzgec === s.anahtar} onClick={() => suzgecYaz(s.anahtar)}>
@@ -105,7 +87,7 @@ export function Gelenler() {
 
 export function Arsiv() {
   return (
-    <Cerceve gorunum="arsiv">
+    <Cerceve>
       <Liste durum="arsiv" arsivde />
     </Cerceve>
   );
@@ -140,7 +122,10 @@ function TercihSatiri({ s, epostaVar, yaz, bekliyor }: {
         {epostaVar && (
           <span className="tc-bildirim-kanal">
             <Simge ad="upload" boyut="k" /><span>E-posta</span>
-            <Anahtar acik={s.eposta ?? false} kilitli={bekliyor} etiket={`${s.baslik}: e-posta`} degistir={(eposta) => yaz(govde({ eposta }))} />
+            <Anahtar
+              acik={s.kapatilamaz || (s.eposta ?? false)} kilitli={bekliyor || s.kapatilamaz}
+              etiket={s.kapatilamaz ? `${s.baslik}: e-posta; yönetici kapatılamaz yaptı (geciken işin kademesi)` : `${s.baslik}: e-posta`} degistir={(eposta) => yaz(govde({ eposta }))}
+            />
           </span>
         )}
       </span>
@@ -212,7 +197,7 @@ export function Tercihler({ push }: { push?: PushOrtami } = {}) {
     onError: (h) => bildir('hata', hataIletisi(h, 'Tercih kaydedilemedi.')),
   });
   return (
-    <Cerceve gorunum="tercihler">
+    <Cerceve>
       {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
         : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
         : (
@@ -240,13 +225,13 @@ export function Tercihler({ push }: { push?: PushOrtami } = {}) {
   );
 }
 
-// Sayfa adresi oturumu olan herkese açıktır (menü sayfası değil); sekme ve veri işlemi olana açılır.
+// Bildirim Merkezi her rolün sayfasıdır; bu görünüm yalnız veri işlemi olana açılır.
 function YetkiliSekme({ gorunum, children }: { gorunum: 'hazirla' | 'yayinlar'; children: (kisiId: number | null) => React.ReactNode }) {
   const oturum = useOturum();
-  const sekme = SEKMELER.find((s) => s.anahtar === gorunum);
-  const acik = sekme !== undefined && sekmeAcikMi(sekme, oturum.data?.islemler ?? []);
+  const islemler = oturum.data?.islemler ?? [];
+  const acik = SEKME_ISLEMLERI[gorunum].some((i) => (islemler as readonly string[]).includes(i));
   return (
-    <Cerceve gorunum={gorunum}>
+    <Cerceve>
       {oturum.isPending ? <DurumKutusu durum="yukleniyor" />
         : acik ? children(oturum.data?.id ?? null)
         : <DurumKutusu durum="bos" mesaj="Bu sekme için yetkiniz yok. Yöneticiniz rol yönetiminden verebilir." />}
@@ -256,7 +241,7 @@ function YetkiliSekme({ gorunum, children }: { gorunum: 'hazirla' | 'yayinlar'; 
 
 export function HazirlaSayfasi() {
   const git = useNavigate();
-  return <YetkiliSekme gorunum="hazirla">{() => <Hazirla yayinlandi={(y) => { void git(`/profil/bildirimler/yayinlar?yayin=${String(y.id)}`); }} />}</YetkiliSekme>;
+  return <YetkiliSekme gorunum="hazirla">{() => <Hazirla yayinlandi={(y) => { void git(`/bildirim-merkezi/yayinlar?yayin=${String(y.id)}`); }} />}</YetkiliSekme>;
 }
 
 export function YayinlarSayfasi() {

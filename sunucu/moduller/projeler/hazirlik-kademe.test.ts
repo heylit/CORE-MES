@@ -5,62 +5,26 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { BILDIRIM_TURLERI } from '#paylasilan/sozlesme/bildirim.ts';
-import type { BildirimTuruTanimi } from '#paylasilan/sozlesme/bildirim.ts';
-import type { GecikenHazirliklarimCevabi, GorevlerimCevabi, KademeAyariCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type { GecikenlerimCevabi } from '#paylasilan/sozlesme/bildirim-kademe.ts';
+import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
+import type { GorevlerimCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import { kademeleriIlerlet } from '../bildirim/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { gunlukOzet, kademeleriIlerlet, kapaliEmirCozucusuKaydet } from './hazirlik-kademe.ts';
-import { bildirilecekKademe, gerekenKademeler, isGunuFarki } from './kurallar.ts';
+import { kapananEmirlerinGorevleri, kapaliEmirCozucusuKaydet } from './hazirlik-kademe.ts';
 
 const PAROLA = 'dogru-parola-1';
-const AYAR = { hatirlatGun: 1, yoneticiGun: 1, devretGun: 2 };
-const BOS = new Set<string>();
+// 3405 a: hazırlık görevi ortak kademeli uyarı motorunun kaynağıdır (bildirim). Kademe kuralının saf testleri bildirim modülündedir;
+// burada kaynağın alıcıları, kapanışı ve 3396'nın korunan davranışı ölçülür. Emir kapanışı projelerin işidir, motordan önce koşar.
+const ilerlet1 = async (db: Parameters<typeof kademeleriIlerlet>[0], simdi?: Date) => {
+  const kapanan = await kapananEmirlerinGorevleri(db);
+  const r = await kademeleriIlerlet(db, simdi);
+  return { ...r, kapanan: r.kapanan + kapanan };
+};
 
-// 3396 a: kademe kuralı saf; iş günü hafta sonu ve resmî tatili saymaz.
-describe('projeler hazırlık kademe kuralı (3396)', () => {
-  test('iş günü farkı: cuma→pazartesi 1, pazartesi→cuma 4, tatil düşer, geriye eksi', () => {
-    assert.equal(isGunuFarki('2026-11-20', '2026-11-23', BOS), 1);
-    assert.equal(isGunuFarki('2026-11-16', '2026-11-20', BOS), 4);
-    assert.equal(isGunuFarki('2026-11-16', '2026-11-20', new Set(['2026-11-18'])), 3);
-    assert.equal(isGunuFarki('2026-11-23', '2026-11-20', BOS), -1);
-    assert.equal(isGunuFarki('2026-11-20', '2026-11-20', BOS), 0);
-  });
-
-  test('kademeler: yarın son gün K2; cuma biten pazartesi K3+K4; iki iş günü gecikme K5; yapansız görev yalnız K4/K5', () => {
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-18', yapanVar: true }, AYAR, '2026-11-17', BOS), [1, 2]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, AYAR, '2026-11-17', BOS), [1]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, AYAR, '2026-11-21', BOS), [1, 2, 3], 'cumartesi gecikme iş günü değil');
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, AYAR, '2026-11-23', BOS), [1, 2, 3, 4]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, AYAR, '2026-11-24', BOS), [1, 2, 3, 4, 5]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: false }, AYAR, '2026-11-24', BOS), [4, 5]);
-  });
-
-  test('kesintiden sonra yalnız en yüksek yeni kademe bildirilir; K1 hiç bildirilmez; yazılmış kademe yeniden gelmez (Risk K6)', () => {
-    assert.deepEqual(bildirilecekKademe([1, 2, 3, 4, 5], new Set()), { yeni: [1, 2, 3, 4, 5], bildirilecek: 5 });
-    assert.deepEqual(bildirilecekKademe([1, 2, 3], new Set([1, 2])), { yeni: [3], bildirilecek: 3 });
-    assert.deepEqual(bildirilecekKademe([1], new Set()), { yeni: [1], bildirilecek: null });
-    assert.deepEqual(bildirilecekKademe([1, 2], new Set([1, 2])), { yeni: [], bildirilecek: null });
-  });
-
-  test('sınırlar: son gün K3 doğurmaz; 0 gün ayarında K4/K5 en erken bir iş günü gecikmede (cumartesi sayılmaz)', () => {
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, AYAR, '2026-11-20', BOS), [1, 2]);
-    const SIFIR = { hatirlatGun: 0, yoneticiGun: 0, devretGun: 0 };
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, SIFIR, '2026-11-20', BOS), [1, 2]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, SIFIR, '2026-11-21', BOS), [1, 2, 3]);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: false }, SIFIR, '2026-11-21', BOS), []);
-    assert.deepEqual(gerekenKademeler({ planBitis: '2026-11-20', yapanVar: true }, SIFIR, '2026-11-23', BOS), [1, 2, 3, 4, 5]);
-  });
-
-  test('kapatılamaz yalnız hazırlık kademelerinde (Risk K9)', () => {
-    const kapali = Object.entries(BILDIRIM_TURLERI).filter(([, t]) => (t as BildirimTuruTanimi).kapatilamaz === true).map(([k]) => k);
-    assert.ok(kapali.length > 0 && kapali.every((k) => k.startsWith('projeler.hazirlik-')), kapali.join(','));
-  });
-});
-
-describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
+describe('projeler hazırlık kademesi (3396, 3405 ortak motor, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yoneticiId = 0;
@@ -100,7 +64,7 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     return s?.id ?? 0;
   }
   const defter = async (gorevId: number) => (await vt().sorgu<{ kademe: number; bildirildi: boolean }>(
-    'SELECT kademe, bildirildi FROM projeler_hazirlik_kademe WHERE gorev_id = $1 ORDER BY kademe', [gorevId])).map((x) => `${String(x.kademe)}${x.bildirildi ? '!' : ''}`);
+    "SELECT kademe, bildirildi FROM bildirim_kademe_defteri WHERE kaynak = 'projeler.hazirlik' AND kayit = $1 ORDER BY kademe", [String(gorevId)])).map((x) => `${String(x.kademe)}${x.bildirildi ? '!' : ''}`);
   const bildirimler = async (kisiId: number, tur: string, acik = true) => (await vt().tek<{ n: number }>(
     `SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = $2${acik ? ' AND okundu IS NULL' : ''}`, [kisiId, tur]))?.n ?? -1;
 
@@ -119,15 +83,15 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     const yapan = await kisi('kalite');
     const kontrol = await kisi('operator', 'projeler.gorev-kontrol');
     const g = await gorev(-10, { sorumlu: yapan.id, kontrolRol: rol.get('operator') ?? null });
-    const ilk = await vt().tx((db) => kademeleriIlerlet(db));
+    const ilk = await vt().tx((db) => ilerlet1(db));
     assert.ok(ilk.bildirilen >= 1);
     assert.deepEqual(await defter(g), ['1', '2', '3', '4', '5!']);
     assert.equal(await bildirimler(kontrol.id, 'projeler.hazirlik-devret'), 1, 'kontrol eden rolü devret önerisini alır');
     assert.equal(await bildirimler(yapan.id, 'projeler.hazirlik-gecikti'), 0, 'atlanan kademe gönderilmez');
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     assert.deepEqual(await defter(g), ['1', '2', '3', '4', '5!']);
     assert.equal(await bildirimler(kontrol.id, 'projeler.hazirlik-devret', false), 1, 'tekrar yok');
-    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM projeler_hazirlik_kademe WHERE gorev_id = $1', [g]), /yalnız ekleme/);
+    await assert.rejects(ortam!.sahip.sorgu("DELETE FROM bildirim_kademe_defteri WHERE kaynak = 'projeler.hazirlik' AND kayit = $1", [String(g)]), /yalnız ekleme/);
     const yonetici = { cerez: String((await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } })).headers['set-cookie']).split(';')[0] ?? '', id: yoneticiId };
     const gecmis = (await oku(yonetici, `/projeler/gorevler/${String(g)}/kademeler`)).json<{ kademeler: { kademe: number; bildirildi: boolean; aliciSayisi: number }[] }>();
     assert.deepEqual(gecmis.kademeler.map((k) => [k.kademe, k.bildirildi]), [[1, false], [2, false], [3, false], [4, false], [5, true]]);
@@ -142,13 +106,14 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     const yapan = await kisi('kalite');
     const yarin = await gorev(1, { sorumlu: yapan.id });
     const gecmis = await gorev(-1, { sorumlu: yapan.id });
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     assert.deepEqual(await defter(yarin), ['1', '2!']);
     assert.equal(await bildirimler(yapan.id, 'projeler.hazirlik-hatirlatma'), 1);
-    const serit = (await oku(yapan, '/projeler/hazirlik-uyarim')).json<GecikenHazirliklarimCevabi>();
-    assert.deepEqual(serit.gorevler.map((x) => x.id), [gecmis]);
+    const serit = (await oku(yapan, '/bildirim-kademe/seridim')).json<GecikenlerimCevabi>();
+    assert.deepEqual(serit.kayitlar.filter((x) => x.kaynak === 'projeler.hazirlik').map((x) => x.kayit), [String(gecmis)]);
+    assert.equal(serit.kayitlar[0]?.gecikmeGun !== null, true, 'gecikme iş günüdür (hafta sonu günü 0 olabilir)');
     const baska = await kisi('operator');
-    assert.deepEqual((await oku(baska, '/projeler/hazirlik-uyarim')).json<GecikenHazirliklarimCevabi>().gorevler, []);
+    assert.deepEqual((await oku(baska, '/bildirim-kademe/seridim')).json<GecikenlerimCevabi>().kayitlar, []);
     const liste = (await oku(yapan, '/projeler/gorevlerim/liste')).json<GorevlerimCevabi>().gorevler;
     assert.equal(liste.find((x) => x.id === yarin)?.kademe, 2);
   });
@@ -157,19 +122,19 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     const yapan = await kisi('kalite');
     const izleyen = await kisi('operator', 'projeler.gorev-kontrol');
     const g = await gorev(-3, { sorumlu: yapan.id, kontrolRol: rol.get('operator') ?? null });
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     const acikKademeZili = async () => (await vt().tek<{ n: number }>(
       'SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tekil_anahtar LIKE $2 AND okundu IS NULL', [izleyen.id, `%:${String(g)}:k%`]))?.n;
     assert.ok((await acikKademeZili() ?? 0) >= 1, 'üç takvim günü gecikme en az K4: kontrol eden alır');
     assert.equal(await bildirimler(yapan.id, 'projeler.hazirlik-gecikti') + await bildirimler(yapan.id, 'projeler.hazirlik-devret'), 0, 'yapan K5 almaz');
     const emir = (await vt().tek<{ e: number }>('SELECT hazirlik_emri_id AS e FROM projeler_gorev WHERE id = $1', [g]))!.e;
     kapaliEmirler.add(emir);
-    const sonuc = await vt().tx((db) => kademeleriIlerlet(db));
+    const sonuc = await vt().tx((db) => ilerlet1(db));
     assert.ok(sonuc.kapanan >= 1);
     assert.equal((await vt().tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [g]))?.durum, 'iptal');
     assert.equal(await acikKademeZili(), 0, 'emri kapanınca açık kademe zili kapanır');
     const once = await defter(g);
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     assert.deepEqual(await defter(g), once, 'kapanan göreve kademe yazılmaz');
 
     // Kontroldeki görev de iptal olur ve kontrol bekliyor bildirimi kapanır.
@@ -185,12 +150,12 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     kapaliEmirler.add(kEmir);
     kapaliEmirCozucusuKaydet(null);
     try {
-      assert.equal((await vt().tx((db) => kademeleriIlerlet(db))).kapanan, 0);
+      assert.equal((await vt().tx((db) => ilerlet1(db))).kapanan, 0);
       assert.equal((await vt().tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [kg]))?.durum, 'kontrolde');
     } finally {
       kapaliEmirCozucusuKaydet(async (_db, idler) => new Set(idler.filter((i) => kapaliEmirler.has(i))));
     }
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     assert.equal((await vt().tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [kg]))?.durum, 'iptal');
     assert.equal(await kontrolZili(), 0, 'kontrol bekliyor bildirimi kapanır');
 
@@ -198,28 +163,17 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     const okuyan = await kisi('operator', 'projeler.oku');
     const dagitan = await kisi('cam', 'projeler.hazirlik-dagit');
     await gorev(-10, { sorumlu: yapan.id });
-    await vt().tx((db) => kademeleriIlerlet(db));
+    await vt().tx((db) => ilerlet1(db));
     assert.equal(await bildirimler(okuyan.id, 'projeler.hazirlik-devret'), 0, 'yalnız okuyan almaz');
     assert.ok(await bildirimler(dagitan.id, 'projeler.hazirlik-devret') >= 1, 'dağıtan alır');
   });
 
-  test('kademe ayarı: herkes okur, hazirlik-ayar yazar; devret yöneticiden önce olamaz; sürüm tutmazsa 409', async () => {
-    const okuyan = await kisi('operator');
-    const ayarci = await kisi('kalite', 'uretim-emirleri.hazirlik-ayar');
-    const a = (await oku(okuyan, '/projeler/hazirlik-kademe-ayari')).json<KademeAyariCevabi>();
-    assert.deepEqual([a.hatirlatGun, a.yoneticiGun, a.devretGun, a.yazabilir], [1, 1, 2, false]);
-    const govde = { hatirlatGun: 2, yoneticiGun: 1, devretGun: 3, yoneticiRolId: rol.get('kalite'), surum: a.surum };
-    assert.equal((await gonder(okuyan, '/projeler/hazirlik-kademe-ayari', govde)).statusCode, 403);
-    assert.equal((await gonder(ayarci, '/projeler/hazirlik-kademe-ayari', { ...govde, devretGun: 0 })).statusCode, 400);
-    const c = await gonder(ayarci, '/projeler/hazirlik-kademe-ayari', govde);
-    assert.equal(c.statusCode, 200, c.body);
-    assert.deepEqual([c.json<KademeAyariCevabi>().devretGun, c.json<KademeAyariCevabi>().yazabilir], [3, true]);
-    assert.equal((await gonder(ayarci, '/projeler/hazirlik-kademe-ayari', govde)).statusCode, 409);
-  });
   // --- Test incelemesi T1-T3, T5, T6 (3396) ---
   async function ayarla(hatirlat: number, yonetici: number, devret: number, rolId: number | null): Promise<void> {
     await ortam!.sahip.sorgu(
-      'UPDATE projeler_hazirlik_kademe_ayari SET hatirlat_gun = $1, yonetici_gun = $2, devret_gun = $3, yonetici_rol_id = $4, surum = surum + 1 WHERE id = 1',
+      `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, yonetici_rol_id)
+       VALUES ('projeler.hazirlik', true, $1, $2, $3, 2, true, true, $4)
+       ON CONFLICT (kaynak) DO UPDATE SET k2_gun = $1, k4_gun = $2, k5_gun = $3, yonetici_rol_id = $4, surum = bildirim_kademe_ayari.surum + 1`,
       [hatirlat, yonetici, devret, rolId]);
   }
   interface GorevEki { sorumlu?: number | null; yapanRol?: number | null; kontrolKisi?: number | null; kontrolRol?: number | null; yedekKisi?: number | null }
@@ -233,7 +187,7 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     );
     return s?.id ?? 0;
   }
-  const ilerlet = () => vt().tx((db) => kademeleriIlerlet(db));
+  const ilerlet = () => vt().tx((db) => ilerlet1(db));
   const aldi = async (k: Kisi, tur: string, gorevId: number, kademe: number, acik = true) => (await vt().tek<{ n: number }>(
     `SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tekil_anahtar = $2${acik ? ' AND okundu IS NULL' : ''}`,
     [k.id, `${tur}:${String(gorevId)}:k${String(kademe)}`]))?.n ?? -1;
@@ -297,37 +251,29 @@ describe('projeler hazırlık kademesi (3396, gerçek PostgreSQL)', () => {
     const dagitan = await kisi('cam', 'projeler.hazirlik-dagit');
     await gorevEk(1, { sorumlu: dagitan.id });
     await ilerlet();
+    // İleri bir gün: bütün açık görevler gecikir; özet o günün satırına yazılır.
     const gun = '2030-01-07';
-    const satir = () => vt().tek<{ n: number }>('SELECT gorev_sayisi AS n FROM projeler_hazirlik_ozet WHERE gun = $1', [gun]);
+    const an = (saat: number) => new Date(tesisGunBasi(gun) + saat * 3_600_000);
+    const satir = () => vt().tek<{ n: number }>("SELECT kayit_sayisi AS n FROM bildirim_kademe_ozet WHERE kaynak = 'projeler.hazirlik' AND gun = $1", [gun]);
     const zil = async () => (await vt().tek<{ n: number }>(
       'SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tekil_anahtar = $2', [dagitan.id, `projeler.hazirlik-ozet:ozet:${gun}`]))?.n;
-    await vt().tx((db) => gunlukOzet(db, gun, 7));
+    await vt().tx((db) => ilerlet1(db, an(7)));
     assert.equal(await satir(), null, '08:00 öncesi');
-    const sayi = await vt().tek<{ devret: number; hepsi: number }>(
-      `SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM projeler_hazirlik_kademe k WHERE k.gorev_id = g.id AND k.kademe = 5))::int AS devret,
-              count(*)::int AS hepsi
-         FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
-        WHERE g.hazirlik_maddesi IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif'`);
-    assert.ok((sayi?.devret ?? 0) >= 1 && (sayi?.hepsi ?? 0) > (sayi?.devret ?? 0), JSON.stringify(sayi));
-    await vt().tx((db) => gunlukOzet(db, gun, 9));
+    await vt().tx((db) => ilerlet1(db, an(9)));
+    const devret = (await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM bildirim_kademe_takip WHERE kaynak = 'projeler.hazirlik' AND kademe = 5"))?.n ?? 0;
+    assert.ok(devret >= 1);
     // Okunan özet tekil anahtarı serbest bırakır: ikinci gönderimi yalnız gün satırı durdurur.
     await ortam!.sahip.sorgu('UPDATE bildirim_kaydi SET okundu = now() WHERE kisi_id = $1 AND tekil_anahtar = $2', [dagitan.id, `projeler.hazirlik-ozet:ozet:${gun}`]);
-    await vt().tx((db) => gunlukOzet(db, gun, 10));
-    assert.equal((await satir())?.n, sayi?.devret, 'yalnız devret kademesi');
+    await vt().tx((db) => ilerlet1(db, an(10)));
+    assert.equal((await satir())?.n, devret, 'yalnız devret kademesi');
     assert.equal(await zil(), 1, 'günde bir kez');
   });
 
-  test('T5 yetki: projeyi okuyan ve dağıtan ayar yazamaz (403, yazabilir false); dağıtan kişi ve rol seçicilerini açar', async () => {
+  test('T5 yetki: dağıtan kişi ve rol seçicilerini açar; kademe ayarı yalnız kademe yöneticisinindir (3405-3 a)', async () => {
     const rolId = rol.get('guvenlik_gorevlisi') ?? 0;
-    const diger = await ortam!.sahip.sorgu<{ islem: string }>(
-      "SELECT islem FROM rol_islemi WHERE rol_id = $1 AND islem IN ('projeler.yaz', 'projeler.gorev-yaz', 'projeler.sablon-yaz', 'uretim-emirleri.hazirlik-ayar')", [rolId]);
-    assert.deepEqual(diger, [], 'rol başka yoldan açmaz');
     await ortam!.sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'projeler.oku') ON CONFLICT DO NOTHING", [rolId]);
     const k = await kisi('guvenlik_gorevlisi', 'projeler.hazirlik-dagit');
-    const a = (await oku(k, '/projeler/hazirlik-kademe-ayari')).json<KademeAyariCevabi>();
-    assert.equal(a.yazabilir, false);
-    const govde = { hatirlatGun: a.hatirlatGun, yoneticiGun: a.yoneticiGun, devretGun: a.devretGun, yoneticiRolId: a.yoneticiRolId, surum: a.surum };
-    assert.equal((await gonder(k, '/projeler/hazirlik-kademe-ayari', govde)).statusCode, 403);
+    assert.equal((await oku(k, '/bildirim-kademe/kaynaklar')).statusCode, 403);
     for (const yol of ['/projeler/sorumlu-secenekleri', '/projeler/rol-secenekleri', '/projeler/sablon-secenekleri']) {
       assert.equal((await oku(k, yol)).statusCode, 200, yol);
     }

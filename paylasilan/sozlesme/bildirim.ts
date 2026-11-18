@@ -5,6 +5,7 @@ import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { kayitYoluMu } from '../sayfa-tanimi.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { CAGRI_EKIPLERI } from './durus-nedenleri.ts';
+import { KADEME_ADLARI, KADEME_KAYNAKLARI, KADEME_KAYNAK_ANAHTARLARI, type KademeKaynagi, type KademeKaynagiTanimi, type KademeTuruAdi, kademeTuru, kaynakKademeleri } from './kademe-sabitleri.ts';
 
 // Bildirim merkezi: kişiye gelen kalıcı haberler (zil). Kişi her zaman oturumdan gelir: adres ve gövde başka kişiyi seçemez,
 // başkasının bildirimi hiçbir uçtan dönmez. Olay türünü üreten modüldür; bu modül olayın anlamını bilmez, yalnız taşır.
@@ -39,7 +40,7 @@ export interface BildirimTuruTanimi {
 }
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
-export const BILDIRIM_TURLERI = {
+const ELLE_TANIMLI_TURLER = {
   'satin-alma.talep-onay-bekliyor': {
     // 2432: karar verilince (onay, ret, iptal ya da onaydan çıkış) satın alma kendi transaction'ında kapatır.
     baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: true },
@@ -208,6 +209,22 @@ export const BILDIRIM_TURLERI = {
   },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
+// 3405: kademeli uyarı türleri katalogdan türer (kaynak başına K2-K5). Alıcı kaynağın okuma işlemini taşıyandır (Risk K1); alıcı
+// kayda bağlıdır, alıcı seçimine girmez. E-posta varsayılanı kaynağın ilk e-posta kademesidir; para taşıyan kaynakta kapalıdır
+// (Risk K3). Hazırlık görevi 3396'nın elle tanımlı türlerini kullanır.
+function kademeTurTanimi(kaynak: KademeKaynagi, k: 2 | 3 | 4 | 5): BildirimTuruTanimi {
+  const t: KademeKaynagiTanimi = KADEME_KAYNAKLARI[kaynak];
+  return {
+    baslik: `${t.ad}: ${KADEME_ADLARI[k]}`, onem: k === 2 ? 'uyari' : 'acil', sinif: k === 2 ? 'hatirlatma' : 'gorev', alanIslemler: t.okumaIslemleri, yol: t.yol,
+    varsayilan: { mesaj: false, eposta: t.para !== true && k >= t.varsayilan.epostaKademe }, ...(t.varsayilan.kapatilamaz && k >= 3 ? { kapatilamaz: true } : {}),
+  };
+}
+const KADEME_BILDIRIM_TURLERI = Object.fromEntries(KADEME_KAYNAK_ANAHTARLARI.filter((k) => k !== 'projeler.hazirlik')
+  .flatMap((kaynak) => kaynakKademeleri(kaynak).map((k) => [kademeTuru(kaynak, k), kademeTurTanimi(kaynak, k)]))) as Record<KademeTuruAdi, BildirimTuruTanimi>;
+export const KADEME_TURLERI = Object.keys(KADEME_BILDIRIM_TURLERI) as KademeTuruAdi[];
+
+export const BILDIRIM_TURLERI = { ...ELLE_TANIMLI_TURLER, ...KADEME_BILDIRIM_TURLERI };
+
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;
 export const BILDIRIM_TUR_ANAHTARLARI = Object.keys(BILDIRIM_TURLERI) as [BildirimTuru, ...BildirimTuru[]];
 export const bildirimTuruMu = (deger: string): deger is BildirimTuru => Object.hasOwn(BILDIRIM_TURLERI, deger);
@@ -286,6 +303,8 @@ export const bildirimTercihSatiri = z.object({
   eposta: z.boolean().nullable(),
   // Kişi bu olay için seçim yapmadı: olay türünün varsayılanı geçiyor.
   varsayilan: z.boolean(),
+  // E-postası kişi tercihinden kapatılamaz (3396-3, kademe türünde kaynağın ayarı 3405-2 a).
+  kapatilamaz: z.boolean(),
 });
 export const bildirimTercihleriCevabi = z.object({
   // Mesaj ve e-posta kanalları sonraki aşamalarda açılır; o zamana kadar seçim saklanır, gönderim yalnız uygulamadandır.
@@ -332,7 +351,7 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
 const KAYDA_BAGLI_TURLER: readonly string[] = [
   'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor',
-  'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret',
+  'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret', ...KADEME_TURLERI,
 ];
 export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];
 export const ALICI_ROL_EN_COK = 20;

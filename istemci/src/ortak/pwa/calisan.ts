@@ -44,7 +44,7 @@ export function statikMi(yol: string): boolean {
   return yol.startsWith('/assets/') || yol.startsWith('/simgeler/') || yol === '/apple-touch-icon.png';
 }
 
-export const YOLSUZ_BILDIRIM_YOLU = '/profil/bildirimler';
+export const YOLSUZ_BILDIRIM_YOLU = '/bildirim-merkezi';
 
 // Cihaz bildirimi (342 a) yalnız uygulama içi yolu açar: başka kaynağa ya da "//" ile başlayan adrese gidilmez.
 export function bildirimYolu(data: unknown): string {

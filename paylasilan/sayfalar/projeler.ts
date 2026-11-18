@@ -22,7 +22,6 @@ export const PROJELER_IKINCI_MENU = {
     // 3396 a: hazırlık ayarları tek yerde (Arayüz ön bakışı); madde listesinin sahibi Üretim Emirleri'dir.
     { baslik: 'Hazırlık', maddeler: [
       { anahtar: 'hazirlik-maddeleri', baslik: 'Hazırlık maddeleri', yol: '/projeler/hazirlik-maddeleri', simge: 'flag', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/hazirlik-maddeleri'] },
-      { anahtar: 'hazirlik-kademe', baslik: 'Kademeli takip', yol: '/projeler/hazirlik-kademe', simge: 'bell', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/projeler/hazirlik-kademe-ayari'] },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

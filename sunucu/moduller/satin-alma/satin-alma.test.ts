@@ -463,6 +463,42 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.ok((await bildirimler()).every((b) => b.yapildi));
   });
 
+  test('3405: dört kademe okuyucusu açık kaydı verir, kapanma koşulundaki kaydı vermez; onay kaynağının yapanı onaylayandır', async () => {
+    const oku = async (kaynak: servis.SatinAlmaKademeKaynagi, id: string) =>
+      (await vt().tx((db) => servis.satinAlmaKademeOkuyucusu(kaynak)(db))).filter((k) => k.kayit.startsWith(`${id}:`));
+    // Onayda bekleyen: yalnız talep onayı; yapan onaylayan (müdür), satın alma değil.
+    const ond = await kararli();
+    const onay = await oku('satin-alma.talep-onay', ond.id);
+    assert.equal(onay.length, 1);
+    assert.ok(onay[0]!.baslangic !== undefined && onay[0]!.baslangic !== null);
+    assert.ok(onay[0]!.yapanlar.includes(kisi.mudur!), 'onaylayan yapar');
+    assert.ok(!onay[0]!.yapanlar.includes(kisi.satinalma!), 'satın alma onay kaynağının yapanı değil');
+    assert.deepEqual(await oku('satin-alma.siparis-verilmedi', ond.id), []);
+    // Onaylanınca onay kaynağından düşer, sipariş verilmedi kaynağına girer.
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
+    assert.deepEqual(await oku('satin-alma.talep-onay', ond.id), []);
+    const verilmedi = await oku('satin-alma.siparis-verilmedi', ond.id);
+    assert.equal(verilmedi.length, 1);
+    assert.ok(verilmedi[0]!.yapanlar.includes(kisi.satinalma!));
+    // Sipariş verilince teslim kaynağına beklenen teslimle girer; teslim alınınca düşer.
+    const siparisli = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: onayli.karar!.teklifId!, siparisNo: 'ORN-SP-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    assert.deepEqual(await oku('satin-alma.siparis-verilmedi', ond.id), []);
+    assert.deepEqual((await oku('satin-alma.teslim', ond.id)).map((k) => k.sonGun), ['2026-10-20']);
+    // Okuma sorgusunun da elediği teslim alınmış talep yanında, sorgudan gelen ama sipariş aşamasında olmayan talebin siparişi de dönmez.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'onayda' WHERE id = $1", [siparisli.id]);
+    assert.deepEqual(await oku('satin-alma.teslim', ond.id), []);
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'teslim_alindi' WHERE id = $1", [siparisli.id]);
+    assert.deepEqual(await oku('satin-alma.teslim', ond.id), []);
+    // Teklif isteği: cevapsız istek döner, teklif gelince düşer.
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const istendi = await teklifIste(t);
+    assert.deepEqual((await oku('satin-alma.teklif-cevapsiz', t.id)).map((k) => k.baslangic), ['2026-10-05']);
+    const a = teklif(firmaA, istendi.kalemler.map((k): [string, string] => [k.id, '10']));
+    tamam<Talep>(await kaydet(c.sa, { ...govde(istendi), durum: 'degerlendirme', teklifler: [a] }));
+    assert.deepEqual(await oku('satin-alma.teklif-cevapsiz', t.id), []);
+  });
+
   test('SAT-13 SAT-56: ilk toplam ve revizyon sunucuda hesaplanır; istemcinin değeri yok sayılır', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];

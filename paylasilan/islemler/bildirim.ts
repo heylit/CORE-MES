@@ -7,4 +7,6 @@ export const BILDIRIM_ISLEMLERI = [
   'bildirim.yayin-oku',
   // E-posta kanalını yönetir (3397, ADR 0015): sunucu durumu, tetikleyiciler, şablonlar, gönderim defteri, kendine deneme e-postası.
   'bildirim.eposta-yonet',
+  // Kademeli uyarı kaynaklarını ayarlar ve bütün açık takipleri görür (3405-3 a: yalnız yönetici bayrağı; hiçbir role göçle verilmez).
+  'bildirim.kademe-yonet',
 ] as const;

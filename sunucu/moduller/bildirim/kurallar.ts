@@ -1,4 +1,5 @@
 import type { Islem } from '#paylasilan/islemler.ts';
+import type { KademeSayaci } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import {
   BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
@@ -79,16 +80,17 @@ export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly n
 export const TERCIH_ILETILERI = {
   turYok: 'Bu bildirim size gelmiyor; tercihi kaydedilemez.',
   epostaYok: 'E-posta bildirimi sizin için seçilemez.',
-  kapatilamaz: 'Bu bildirimin e-postası kapatılamaz: geciken hazırlık görevi kademesidir.',
+  kapatilamaz: 'Bu bildirimin e-postası kapatılamaz: geciken işin kademesidir.',
 } as const;
 
-// alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak).
+// alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak). kapali verilirse kapatılamazlık ondan okunur
+// (kademe türünde kaynağın ayarı, 3405-2 a); verilmezse türün tanımından.
 export function tercihHatasi(
-  alinabilen: readonly string[], epostaVar: boolean, govde: { tur: string; eposta: boolean },
+  alinabilen: readonly string[], epostaVar: boolean, govde: { tur: string; eposta: boolean }, kapali?: readonly string[],
 ): { mesaj: string; alan: 'tur' | 'eposta' } | null {
   if (!alinabilen.includes(govde.tur)) return { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' };
   if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
-  if (!govde.eposta && epostaVar && bildirimTuruMu(govde.tur) && turKapatilamaz(govde.tur)) return { mesaj: TERCIH_ILETILERI.kapatilamaz, alan: 'eposta' };
+  if (!govde.eposta && epostaVar && (kapali === undefined ? bildirimTuruMu(govde.tur) && turKapatilamaz(govde.tur) : kapali.includes(govde.tur))) return { mesaj: TERCIH_ILETILERI.kapatilamaz, alan: 'eposta' };
   return null;
 }
 
@@ -229,8 +231,9 @@ export const varsayilanTetikleyici = (tur: BildirimTuru): EpostaTetikleyicisi =>
 });
 
 // BIL-46: kişi e-postayı alır mı: tür açık, kişi e-posta seçebilen (operatör değil, BIL-2) ve kendi tercihinde kapatmamış.
-export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[], tercih: boolean | undefined): boolean =>
-  turAcik && epostaSecilebilir(islemler) && tercih !== false;
+// Kapatılamaz e-postada (3396-3, 3405-2 a) kişinin kapalı tercihi okunmaz; seçemeyen (operatör) yine almaz.
+export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[], tercih: boolean | undefined, kapatilamaz = false): boolean =>
+  turAcik && epostaSecilebilir(islemler) && (kapatilamaz || tercih !== false);
 
 // BIL-47: tekrar ve kademe kaynak bildirim açıkken sürer: görev ve hatırlatma yapılana, bilgi okunana dek; arşivlenen kapanmıştır.
 export const bildirimAcikMi = (b: { sinif: BildirimSinifi; okundu: string | null; arsivlendi: string | null; yapildi: string | null }): boolean =>
@@ -239,3 +242,70 @@ export const bildirimAcikMi = (b: { sinif: BildirimSinifi; okundu: string | null
 // BIL-48: geçici hatada en çok 3 deneme; aralık 5, 15 dakika. Kalıcı hata ya da son deneme deftere "gönderilemedi" yazılır.
 export const EPOSTA_DENEME_EN_COK = 3;
 export const sonrakiDenemeDk = (deneme: number): number | null => (deneme >= EPOSTA_DENEME_EN_COK ? null : [5, 15][deneme - 1] ?? 15);
+
+// --- Kademeli uyarı (3405) ----------------------------------------------------------------------------------------------
+
+// Kaynağın geçerli ayarı: satırı olmayan kaynakta katalog varsayılanı. Sayaç kaynağın tanımındadır, ayarla değişmez.
+export interface KademeKurali {
+  sayac: KademeSayaci;
+  k2Gun: number | null;
+  k3Gun: number | null;
+  k4Gun: number | null;
+  k5Gun: number | null;
+}
+
+const tarihEkle = (t: string, g: number): string => new Date(Date.parse(`${t}T00:00:00Z`) + g * 86_400_000).toISOString().slice(0, 10);
+
+// bas'tan bit'e kadar (bas hariç, bit dahil) iş günü: hafta sonu ve resmi tatil sayılmaz; bit öndeyse eksi.
+export function isGunuFarki(bas: string, bit: string, tatiller: ReadonlySet<string>): number {
+  if (bas === bit) return 0;
+  const yon = bit > bas ? 1 : -1;
+  let sayi = 0;
+  for (let t = tarihEkle(bas, yon); ; t = tarihEkle(t, yon)) {
+    const gun = new Date(`${t}T00:00:00Z`).getUTCDay();
+    if (gun !== 0 && gun !== 6 && !tatiller.has(t)) sayi += 1;
+    if (t === bit) return yon * sayi;
+  }
+}
+
+// Kaydın bugün ulaşması gereken kademeler ve gecikme günü (iş günü; gecikmenin ilk günü 1). 3396'nın kuralıdır:
+// son gün sayacında K2 son güne en çok `k2Gun` iş günü kala, K3 son gün geçince; bekleme sayacında K3 `k3Gun` iş günü bekleyince.
+// K4 ve K5 gecikmenin `k4Gun`'üncü ve `k5Gun`'üncü iş gününde. Yapanı olmayan kayıt K1-K3'e girmez ama gecikince yukarı çıkar:
+// atanmamış iş de yapılmamış iştir. Tarihi olmayan kayıt hiçbir kademeye girmez (sıfır uydurulmaz).
+export function gerekenKademeler(
+  kayit: { sonGun: string | null; baslangic: string | null; yapanVar: boolean }, kural: KademeKurali, bugun: string, tatiller: ReadonlySet<string>,
+): { kademeler: number[]; gecikme: number | null } {
+  const l: number[] = [];
+  if (kayit.yapanVar) l.push(1);
+  let gecikme: number | null = null;
+  if (kural.sayac === 'son-gun') {
+    if (kayit.sonGun === null) return { kademeler: l, gecikme: null };
+    if (kayit.yapanVar && kural.k2Gun !== null && isGunuFarki(bugun, kayit.sonGun, tatiller) <= kural.k2Gun) l.push(2);
+    if (bugun > kayit.sonGun) gecikme = Math.max(0, isGunuFarki(kayit.sonGun, bugun, tatiller));
+  } else {
+    if (kayit.baslangic === null || kural.k3Gun === null) return { kademeler: l, gecikme: null };
+    const bekleme = Math.max(0, isGunuFarki(kayit.baslangic, bugun, tatiller));
+    if (bekleme >= kural.k3Gun) gecikme = bekleme - kural.k3Gun + 1;
+  }
+  if (gecikme === null) return { kademeler: l, gecikme: null };
+  if (kayit.yapanVar) l.push(3);
+  if (kural.k4Gun !== null && gecikme >= Math.max(1, kural.k4Gun)) l.push(4);
+  if (kural.k5Gun !== null && gecikme >= Math.max(1, kural.k5Gun)) l.push(5);
+  return { kademeler: l, gecikme };
+}
+
+// Kesintiden sonra yalnız en yüksek yeni kademe bildirilir; aradakiler bildirimsiz deftere girer. K1 hiç bildirilmez (atama zili ayrıdır).
+export function bildirilecekKademe(gereken: readonly number[], yazilmis: ReadonlySet<number>): { yeni: number[]; bildirilecek: number | null } {
+  const yeni = gereken.filter((k) => !yazilmis.has(k));
+  const en = yeni.length === 0 ? null : Math.max(...yeni);
+  return { yeni, bildirilecek: en === null || en === 1 ? null : en };
+}
+
+// Ayar yazımı: günlerin anlamı sayaca göre değişir. Sırası bozuk gün (K5, K4'ten önce) reddedilir; ekran da aynı denetimi yapar.
+export function kademeAyarHatasi(sayac: KademeSayaci, g: { acik: boolean; k2Gun: number | null; k3Gun: number | null; k4Gun: number | null; k5Gun: number | null }): { mesaj: string; alan: string } | null {
+  if (sayac === 'bekleme' && g.k2Gun !== null) return { mesaj: 'Bu kaynakta Yaklaşıyor kademesi yoktur.', alan: 'k2Gun' };
+  if (sayac === 'son-gun' && g.k3Gun !== null) return { mesaj: 'Bu kaynakta Gecikti son gün geçince başlar; gün yazılmaz.', alan: 'k3Gun' };
+  if (sayac === 'bekleme' && g.acik && g.k3Gun === null) return { mesaj: 'Gecikti için bekleme günü gerekir.', alan: 'k3Gun' };
+  if (g.k4Gun !== null && g.k5Gun !== null && g.k5Gun <= g.k4Gun) return { mesaj: 'Devret, Yöneticide kademesinden sonra gelmelidir.', alan: 'k5Gun' };
+  return null;
+}

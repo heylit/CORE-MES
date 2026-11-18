@@ -116,7 +116,7 @@ describe('Merkez listesi', () => {
       'GET /bildirimler': () => json(200, liste([B({}), B({ id: 22, baslik: 'Geri çekilen', onayIstenir: false, yayin: { ...B({}).yayin!, geriCekildi: '2026-11-05T10:00:00+03:00' } })])),
       'POST /bildirimler/21/onayla': () => json(200, { id: 21, okundu: 'x', onaylandi: 'x' }),
     });
-    ac('/profil/bildirimler');
+    ac('/bildirim-merkezi');
     expect(await screen.findByText('Uyarı · Deneme Yönetici · onay bekliyor')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Arşive kaldır: Kompresör bakımı' })).toBeNull();
     expect(screen.getByText(/geri çekildi/)).toBeTruthy();
@@ -136,12 +136,12 @@ const HEDEF: BildirimYayinHedefleriCevabi = {
 };
 
 describe('Hazırla ve Yayınlar', () => {
-  it('işlemi olmayana Hazırla ve Yayınlar sekmesi görünmez; adres açılsa da form gelmez', async () => {
+  // Menü maddesinin görünürlüğü Bildirim Merkezi ikinci menüsündedir (paylasilan/sayfalar/bildirim.ts); burada yalnız adres.
+  it('işlemi olmayan adresi açsa da form gelmez', async () => {
     sunucuKur({ 'GET /oturum': oturum([]), 'GET /bildirimler/yayinlar/hedefler': () => json(200, HEDEF) });
-    ac('/profil/bildirimler/hazirla');
+    ac('/bildirim-merkezi/hazirla');
     expect(await screen.findByText(/Bu sekme için yetkiniz yok/)).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /Hazırla/ })).toBeNull();
-    expect(screen.queryByRole('tab', { name: /Yayınlar/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yayınla' })).toBeNull();
   });
 
   it('rol hedefli onaylı bildirim tekrar korumalı tek komutla yayınlanır', async () => {
@@ -151,8 +151,7 @@ describe('Hazırla ve Yayınlar', () => {
       'POST /bildirimler/yayinlar/yayinla': () => json(200, Y({})),
       'GET /bildirimler/yayinlar': () => json(200, { satirlar: [Y({})], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies BildirimYayinListeCevabi),
     });
-    ac('/profil/bildirimler/hazirla');
-    expect(await screen.findByRole('tab', { name: /Hazırla/ })).toBeTruthy();
+    ac('/bildirim-merkezi/hazirla');
     const yayinla = await screen.findByRole('button', { name: 'Yayınla' });
     expect((yayinla as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/Başlık/), { target: { value: 'Kompresör bakımı' } });
@@ -185,7 +184,7 @@ describe('Hazırla ve Yayınlar', () => {
       } satisfies BildirimYayinAlicilariCevabi),
       'POST /bildirimler/yayinlar/3/geri-cek': () => json(200, Y({ geriCekildi: '2026-11-05T10:00:00+03:00' })),
     });
-    ac('/profil/bildirimler/yayinlar');
+    ac('/bildirim-merkezi/yayinlar');
     expect((await screen.findAllByText('Okudu 1 / 2 · Onayladı 1 / 2')).length).toBe(2);
     expect(await screen.findByText('Deneme Ayarcı')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Bekliyor' }));

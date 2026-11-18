@@ -663,81 +663,30 @@ export function hazirlikGoreviDurumu(db: Db, id: number): Promise<{ proje_id: nu
   return db.tek('SELECT proje_id, durum, hazirlik_maddesi FROM projeler_gorev WHERE id = $1', [id]);
 }
 
-// --- Hazırlık kademesi (3396 a) ---
+// --- Hazırlık kademesi (3396 a; motor ortak kademeli uyarıdadır, 3405) ---
 
-export interface KademeAyariSatiri {
-  hatirlat_gun: number; yonetici_gun: number; devret_gun: number; yonetici_rol_id: number | null; surum: number;
-  degistiren_id: number | null; degisti: string | null;
-}
-export async function kademeAyari(db: Db): Promise<KademeAyariSatiri> {
-  const s = await db.tek<KademeAyariSatiri>(
-    `SELECT hatirlat_gun, yonetici_gun, devret_gun, yonetici_rol_id, surum, degistiren_id, ${zamanMetni('degisti')} AS degisti
-       FROM projeler_hazirlik_kademe_ayari WHERE id = 1`,
-  );
-  if (s === null) throw new Error('Kademe ayarı satırı yok');
-  return s;
-}
-export function kademeAyariYaz(
-  db: Db, g: { hatirlatGun: number; yoneticiGun: number; devretGun: number; yoneticiRolId: number | null }, surum: number, kisiId: number,
-): Promise<{ surum: number } | null> {
-  return db.tek(
-    `UPDATE projeler_hazirlik_kademe_ayari
-        SET hatirlat_gun = $1, yonetici_gun = $2, devret_gun = $3, yonetici_rol_id = $4, degistiren_id = $5, degisti = now(), surum = surum + 1
-      WHERE id = 1 AND surum = $6 RETURNING surum`,
-    [g.hatirlatGun, g.yoneticiGun, g.devretGun, g.yoneticiRolId, kisiId, surum],
-  );
-}
-
-// Açık (bitmemiş, kontrole düşmemiş) hazırlık görevleri, aktif projede; yazılmış kademeleriyle.
+// Açık (bitmemiş, kontrole düşmemiş) hazırlık görevleri, aktif projede.
 export interface TakipGorevi {
   id: number; proje_id: number; ad: string; plan_bitis: string; sorumlu_kisi_id: number | null; yapan_rol_id: number | null;
   kontrol_kisi_id: number | null; kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null;
-  hazirlik_emri_id: number | null; kademeler: number[];
+  hazirlik_emri_id: number | null;
+}
+// 3405: hazırlık dışındaki açık proje görevleri (son günü olan, aktif projede); kademeli uyarının "Proje görevi" kaynağı.
+export function takipProjeGorevleri(db: Db): Promise<TakipGorevi[]> {
+  return db.sorgu<TakipGorevi>(
+    `SELECT g.id, g.proje_id, g.ad, g.plan_bitis::text AS plan_bitis, g.sorumlu_kisi_id, g.yapan_rol_id, g.kontrol_kisi_id, g.kontrol_rol_id,
+            g.yedek_kontrol_kisi_id, g.yedek_kontrol_rol_id, g.hazirlik_emri_id
+       FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
+      WHERE g.hazirlik_maddesi IS NULL AND g.plan_bitis IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif'
+      ORDER BY g.id`,
+  );
 }
 export function takipGorevleri(db: Db): Promise<TakipGorevi[]> {
   return db.sorgu<TakipGorevi>(
     `SELECT g.id, g.proje_id, g.ad, g.plan_bitis::text AS plan_bitis, g.sorumlu_kisi_id, g.yapan_rol_id, g.kontrol_kisi_id, g.kontrol_rol_id,
-            g.yedek_kontrol_kisi_id, g.yedek_kontrol_rol_id, g.hazirlik_emri_id,
-            COALESCE((SELECT array_agg(k.kademe::int ORDER BY k.kademe) FROM projeler_hazirlik_kademe k WHERE k.gorev_id = g.id), '{}') AS kademeler
+            g.yedek_kontrol_kisi_id, g.yedek_kontrol_rol_id, g.hazirlik_emri_id
        FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
       WHERE g.hazirlik_maddesi IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif'
       ORDER BY g.id`,
   );
-}
-export async function kademeYaz(db: Db, gorevId: number, kademe: number, bildirildi: boolean, aliciSayisi: number): Promise<boolean> {
-  return (await db.tek(
-    `INSERT INTO projeler_hazirlik_kademe (gorev_id, kademe, bildirildi, alici_sayisi) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (gorev_id, kademe) DO NOTHING RETURNING kademe`,
-    [gorevId, kademe, bildirildi, aliciSayisi],
-  )) !== null;
-}
-export function gorevKademeleri(db: Db, gorevId: number): Promise<{ kademe: number; an: string; bildirildi: boolean; alici_sayisi: number }[]> {
-  return db.sorgu(`SELECT kademe, ${zamanMetni('an')} AS an, bildirildi, alici_sayisi FROM projeler_hazirlik_kademe WHERE gorev_id = $1 ORDER BY kademe`, [gorevId]);
-}
-// Günlük özet gün başına bir kez: satır yazılabildiyse bu çalışma gönderir.
-export async function ozetYaz(db: Db, gun: string, sayi: number): Promise<boolean> {
-  return (await db.tek('INSERT INTO projeler_hazirlik_ozet (gun, gorev_sayisi) VALUES ($1, $2) ON CONFLICT (gun) DO NOTHING RETURNING gun', [gun, sayi])) !== null;
-}
-export async function tesisSaati(db: Db): Promise<number> {
-  const s = await db.tek<{ saat: number }>('SELECT extract(hour FROM now())::int AS saat');
-  return s?.saat ?? 0;
-}
-// Kişinin geciken hazırlık görevleri (kendisi yapan, ya da üstlenilmemiş ve rolüne atanmış): kırmızı şerit.
-export function gecikenHazirliklarim(db: Db, kisiId: number, rolIdleri: readonly number[]): Promise<{ id: number; ad: string; plan_bitis: string; gecikme_gun: number; kademe: number | null }[]> {
-  return db.sorgu(
-    `SELECT g.id, g.ad, g.plan_bitis::text AS plan_bitis, current_date - g.plan_bitis AS gecikme_gun,
-            (SELECT max(k.kademe)::int FROM projeler_hazirlik_kademe k WHERE k.gorev_id = g.id) AS kademe
-       FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
-      WHERE g.hazirlik_maddesi IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif' AND g.plan_bitis < current_date
-        AND (g.sorumlu_kisi_id = $1 OR (g.sorumlu_kisi_id IS NULL AND g.yapan_rol_id = ANY($2::int[])))
-      ORDER BY g.plan_bitis, g.id`,
-    [kisiId, [...rolIdleri]],
-  );
-}
-export async function enYuksekKademeler(db: Db, gorevIdleri: readonly number[]): Promise<Map<number, number>> {
-  if (gorevIdleri.length === 0) return new Map();
-  const satirlar = await db.sorgu<{ gorev_id: number; kademe: number }>(
-    'SELECT gorev_id, max(kademe)::int AS kademe FROM projeler_hazirlik_kademe WHERE gorev_id = ANY($1::int[]) GROUP BY gorev_id', [[...gorevIdleri]],
-  );
-  return new Map(satirlar.map((x) => [x.gorev_id, x.kademe]));
 }

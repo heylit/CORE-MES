@@ -176,7 +176,7 @@ function HesapKarti() {
         <Dugme simge="lock" onClick={() => pencereYaz('pin')}>PIN'imi değiştir</Dugme>
         <Dugme simge="clock" onClick={() => pencereYaz('saat')}>Akıllı saatimi eşleştir</Dugme>
         <Dugme simge="laptop" onClick={() => pencereYaz('oturumlar')}>Açık oturumlarım</Dugme>
-        <Bag to="/profil/bildirimler" simge="bell">Bildirimlerim</Bag>
+        <Bag to="/bildirim-merkezi" simge="bell">Bildirimlerim</Bag>
       </div>
       {pencere === 'parola' && <ParolaPenceresi kapat={() => pencereYaz(null)} />}
       {pencere === 'pin' && <PinPenceresi kapat={() => pencereYaz(null)} />}

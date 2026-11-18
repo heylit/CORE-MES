@@ -17,9 +17,9 @@ import { varsayilanDeger, type AyarAnahtari, type AyarDegeri } from '#paylasilan
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
   VARSAYILAN_SABLONLAR, bildirimAcikMi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
-  sessizMi, sonrakiDenemeDk, varsayilanTetikleyici, type EpostaDegerleri, type EpostaTetikleyicisi,
+  sessizMi, sonrakiDenemeDk, turKapatilamaz, varsayilanTetikleyici, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
-import { disKipMi, epostaKipi, turKapatilamaz } from './kurallar.ts';
+import { disKipMi, epostaKipi } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
 import { simgePng } from './posta-simgeleri.ts';
 import * as s from './sorgular.ts';
@@ -76,18 +76,17 @@ async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyici
 // bildirimGonder'in transaction'ında: yeni açılan bildirim satırlarının e-postası kuyruğa yazılır. Ortam değişkeni yoksa kuyruk
 // tutulmaz (posta sunucusu olmayan kurulumda birikmesin); ayar kapalıysa kuyruk birikir, gönderilmez (ADR 0015 md 5).
 export async function epostaKuyrugaAl(
-  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined },
+  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; kapatilamaz?: boolean | undefined; epostaYok?: boolean | undefined },
   yazilan: readonly { kisiId: number; id: number; yeni: boolean }[], islemler: ReadonlyMap<number, readonly string[]>,
 ): Promise<void> {
-  if (await postaAyari(db) === null) return;
+  if (olay.epostaYok === true || await postaAyari(db) === null) return;
   const yeniler = yazilan.filter((y) => y.yeni);
   if (yeniler.length === 0) return;
   const t = await tetikleyici(db, olay.tur);
   if (!t.eposta) return;
   const tercih = new Map((await s.epostaTercihleri(db, olay.tur, yeniler.map((y) => y.kisiId))).map((r) => [r.kisiId, r.eposta]));
-  // Kapatılamaz türde (3396-3) kişinin eski 'kapalı' tercihi yok sayılır.
-  const kilitli = turKapatilamaz(olay.tur);
-  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? [], kilitli ? undefined : tercih.get(y.kisiId)));
+  const zorunlu = olay.kapatilamaz ?? turKapatilamaz(olay.tur);
+  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? [], tercih.get(y.kisiId), zorunlu));
   const ozet = t.zaman === 'ozet';
   const ozetZamani = ozet ? new Date(sonrakiSaat(Date.now(), await sistemAyariOku(db, 'bildirim.eposta-ozet-saati') ?? 7)).toISOString() : null;
   const ortak = {
@@ -263,8 +262,7 @@ async function kademeleriAc(db: Db): Promise<void> {
       const adaylar = [...new Set([...await rollerdekiKisiler(db, t.yukseltRolIdleri), ...t.yukseltKisiIdleri])];
       const tercih = new Map((await s.epostaTercihleri(db, q.tur, adaylar)).map((r) => [r.kisiId, r.eposta]));
       // Etkin girişli olmayan (pasif, çıkmış) kişi kademede de almaz.
-      const kilitli = turKapatilamaz(q.tur as BildirimTuru);
-      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? [], kilitli ? undefined : tercih.get(k)));
+      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? [], tercih.get(k), turKapatilamaz(q.tur as BildirimTuru)));
       await s.epostaKuyrugaYaz(db, kisiler.map((kisiId) => ({
         kisiId, bildirimId: null, tur: q.tur, onem: q.onem, baslik: q.baslik, kayitNo: q.kayitNo, yol: q.yol, gecikmeGunu: q.gecikmeGunu,
         istasyon: q.istasyon, kademe: 1 as const, ozet: false, zamani: null,
