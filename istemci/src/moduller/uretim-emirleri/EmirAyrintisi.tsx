@@ -21,7 +21,7 @@ import { SmartesEmirBasligi } from './SmartesRozeti.tsx';
 import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
-import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, useBekletOgesi } from './Bekletme.tsx';
+import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, beklemeSuresi, useBekletOgesi } from './Bekletme.tsx';
 import { RotaBekliyorSeridi } from './RotaBekliyor.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
@@ -158,7 +158,7 @@ function OzetKutulari({ emir, veri, kayitlariAc, statu, bekleme }: {
   const durdu = canli?.durusNedeni ?? null;
   const st = adim ? statu(adim.opNo) : null;
   const statuMetni = st ? `${st.ad}${st.kisi ? ` · ${st.kisi}` : ''}` : null;
-  const suAn: { deger: ReactNode; alt: ReactNode; ton?: 'uyari' | 'hata' } = bekleme ? { deger: 'Beklemede', alt: `${beklemeNedeni(bekleme)} · ${bekleme.kisi.ad}`, ton: 'uyari' }
+  const suAn: { deger: ReactNode; alt: ReactNode; ton?: 'uyari' | 'hata' } = bekleme ? { deger: 'Beklemede', alt: [beklemeNedeni(bekleme), bekleme.kisi.ad, beklemeSuresi(bekleme)].filter(Boolean).join(' · '), ton: 'uyari' }
     : emir.durum === 'iptal' ? { deger: 'İptal edildi', alt: null }
     : emir.durum === 'bitti' ? { deger: 'Bütün adımlar bitti', alt: fark }
       : emir.durum === 'taslak' ? { deger: 'Plana alınmadı', alt: 'Plana alınınca terminale gider.' }

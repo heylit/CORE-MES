@@ -104,6 +104,38 @@ export const KADEME_KAYNAKLARI = {
     ad: 'Satış siparişi termini', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],
     yol: '/siparisler', varsayilan: sonGun(3, 1, 3),
   },
+  // 3416-1 a: bekletilen üretim emri, neden başına (İş Akışı v4.7 bekleme tablosu). K3 ilk sınır, K4 ikinci sınır: gecikmenin
+  // k4'üncü günü ikinci sınırın günüdür (malzeme 2 / 5 iş günü: k3 2, k4 4). Motor iş günü sayar; saatli sınır en yakın iş gününe iner.
+  'uretim-emirleri.bekleme-malzeme': {
+    ad: 'Emir malzeme bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(2, 4, null),
+  },
+  'uretim-emirleri.bekleme-fason': {
+    ad: 'Emir fason dönüşü bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(2, 4, null),
+  },
+  'uretim-emirleri.bekleme-takim': {
+    ad: 'Emir tezgah, takım ya da aparat bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(1, 2, null, { acik: false }),
+  },
+  'uretim-emirleri.bekleme-kalite': {
+    ad: 'Emir kalite kararı bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(1, 2, null),
+  },
+  'uretim-emirleri.bekleme-muhendislik': {
+    ad: 'Emir mühendislik kararı bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(1, 2, null),
+  },
+  'uretim-emirleri.bekleme-teslim': {
+    ad: 'Emir teslim edilmedi', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(1, 2, null),
+  },
+  // Aynı neden iki iş günü sürerse kendi sınırı dolmasa da yöneticiye çıkar (k3 2, k4 1: ikinci gün doğrudan Yöneticide). Yalnız
+  // kendi kaynağı ikinci güne kadar yöneticiye çıkmayan nedenler girer (beklemeSuruyorNedenleri).
+  'uretim-emirleri.bekleme-suruyor': {
+    ad: 'Emir aynı nedenle iki gündür bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
+    yol: '/uretim-emirleri', varsayilan: bekleme(2, 1, null),
+  },
   'degisiklik-yonetimi.gorev': {
     ad: 'Değişiklik görevi hedef süresi', grup: 'Değişiklik yönetimi', sayac: 'bekleme', asama: 2, okumaIslemleri: ['degisiklik-yonetimi.talep-ac', 'degisiklik-yonetimi.siniflandir'],
     yol: '/degisiklik-yonetimi', varsayilan: bekleme(5, 2, 5, { acik: false, serit: false, kapatilamaz: false }),
