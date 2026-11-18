@@ -117,6 +117,8 @@ namespace LogoYardimcisi
         public decimal Fiyat;
         public int DovizTuru;
         public decimal DovizFiyati;
+        // 3384-c: yalnız toplu okumada dolar; malzeme başına okumada kart zaten bellidir.
+        public string MalzemeKodu;
     }
 
     // Cari kart (CLCARD). Alan adları Logo'nun genel adlandırmasından (VARSAYIM; Sorgular.Dogrulanmadi).
@@ -382,6 +384,8 @@ namespace LogoYardimcisi
         // 3204: en yeniden geriye (once 0 ise sınırsız, değilse once'den küçük kayıtlar), en çok enCok; kart son hareketleri tek istekle gösterir.
         List<MalzemeHareketi> MalzemeHareketleriGeriye(int malzemeRef, int once, int enCok);
         List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok);
+        // 3384-c: bütün kartların alış faturası satırları kayıt sırasıyla (sonGorulen'den sonrası, en çok enCok); CORE son alış kopyasını imleçle doldurur.
+        List<AlisFiyati> TopluAlisFiyatlari(int sonGorulen, int enCok);
         // Kart 2987: fiş numarasıyla satın alma siparişi (TRCODE 2) başlığı ve satırları; tür sabittir, çağıran seçemez. Yoksa null;
         // aynı numarada birden çok sipariş varsa BirdenCokKayit.
         SiparisIcerigi SatinAlmaSiparisiIcerigi(string no);

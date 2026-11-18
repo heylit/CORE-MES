@@ -6,6 +6,7 @@ import { ESKI_SURUM_NEDENI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
+import type { LogoSonAlisCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
@@ -1452,6 +1453,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', yerlesim: 'geriye', termin: '2099-07-05', yetisir: false, onayGerekli: true,
     kayanlar: [{ siparis: 'SS-DNM-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }] } satisfies TerminDenemesiCevabi;
 
+  let sonAlis: LogoSonAlisCevabi = { okuma: 'acik', kayitlar: [] };
   const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI, adet: AdetDenemesiCevabi = ADET) => sunucuKur(kullanici, (yontem, yol) => {
     if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, teklif);
     if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/termin-denemesi')) return json(200, deneme(yol));
@@ -1460,6 +1462,7 @@ describe('Teklif termin ve fiyat (44)', () => {
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/deneme-taslagi') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
     if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/adet-denemesi')) return json(200, adet);
     if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, ATOLYE);
+    if (yontem === 'GET' && yol.startsWith('/logo/son-alislar?')) return json(200, sonAlis);
     return undefined;
   });
 
@@ -1751,6 +1754,64 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.getByText('Maliyet yok: kâr eklenmez, elle fiyat')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '%40' }));
     expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('3384-c a: maliyeti olmayan kalemde hammadde başına Logo son alış önerisi; birim tutmayan karşılaştırılmaz, fiyat alanı dolmaz', async () => {
+    sonAlis = {
+      okuma: 'acik',
+      kayitlar: [
+        { stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: 'ORN-C-1', faturaNo: 'ORN-F-1', miktar: '40', birim: 'KG', fiyat: '186.4', dovizTuru: 20, dovizFiyati: '5.21', dovizKodu: 'EUR' },
+        { stokKodu: 'ORN-HM-3', tarih: '2026-10-15', cariKodu: null, faturaNo: null, miktar: '200', birim: 'ADET', fiyat: '3.2', dovizTuru: null, dovizFiyati: null, dovizKodu: null },
+      ],
+    };
+    const eksik = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{
+        ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, eksikVeri: ['malzeme kg fiyatı'],
+        hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }, { kod: 'ORN-HM-2', birim: 'kg' }, { kod: 'ORN-HM-3', birim: 'kg' }],
+      }],
+    } satisfies TerminDenemesiCevabi;
+    const istekler = kur(SATISCI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('ORN-HM-1: Logo son alış 186,40 TRY / kg · faturada 5,21 EUR · 04.11.2026 · ORN-C-1')).toBeTruthy();
+    expect(screen.getByText("ORN-HM-2: Logo'da faturalı alış yok")).toBeTruthy();
+    expect(screen.getByText('ORN-HM-3: Logo son alış 3,20 TRY / adet; birim tutmuyor (kalem kg), karşılaştırılmaz')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/logo/son-alislar?'))[0]?.yol).toBe(`/logo/son-alislar?malzemeler=${encodeURIComponent('ORN-HM-1,ORN-HM-2,ORN-HM-3')}`);
+    expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+    expect(screen.queryByText(/Logo son alış okuması kapalı/)).toBeNull();
+  });
+
+  it('3384-c a: okuma kapalıysa kalemlere öneri eklenmez, altta bir kez yazılır; maliyet görmeyen hiç sormaz', async () => {
+    // Kopyada satır olsa da okuma kapalıysa satır çizilmez.
+    sonAlis = { okuma: 'kapali', kayitlar: [{ stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: null, faturaNo: null, miktar: '1', birim: 'KG', fiyat: '186.4', dovizTuru: null, dovizFiyati: null, dovizKodu: null }] };
+    const eksik = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }] }],
+    } satisfies TerminDenemesiCevabi;
+    kur(SATISCI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('Logo son alış okuması kapalı; öneri gösterilmiyor.')).toBeTruthy();
+    expect(screen.queryByText(/Logo son alış \d/)).toBeNull();
+    cleanup();
+    sonAlis = { okuma: 'acik', kayitlar: [] };
+    const istekler = kur(SATISCI_KILITLI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText('Fiyat özeti');
+    expect(istekler.some((i) => i.yol.startsWith('/logo/'))).toBe(false);
+    expect(screen.queryByText(/Logo/)).toBeNull();
+  });
+
+  it('3384-c a: genel gider gizli ayda maliyet gören de öneri görmez, öneri sorulmaz', async () => {
+    sonAlis = { okuma: 'acik', kayitlar: [{ stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: null, faturaNo: null, miktar: '1', birim: 'KG', fiyat: '186.4', dovizTuru: null, dovizFiyati: null, dovizKodu: null }] };
+    const gizli = {
+      ...DENEME, maliyetToplami: null, genelGiderGizli: true,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }] }],
+    } satisfies TerminDenemesiCevabi;
+    const istekler = kur(SATISCI, () => gizli);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText('Fiyat özeti');
+    expect(istekler.some((i) => i.yol.startsWith('/logo/'))).toBe(false);
+    expect(screen.queryByText(/Logo/)).toBeNull();
   });
 
   it('3401-1 a: maliyet görmeyen satışçıda maliyet toplamı, kâr oranı ve maliyet sütunları kilitli; fiyat elle girilir, sürüm gider', async () => {

@@ -290,6 +290,23 @@ export const logoKartAlislariCevabi = z.object({
 });
 export type LogoKartAlislariCevabi = z.output<typeof logoKartAlislariCevabi>;
 
+// 3384-c a: Logo son alış önerisi (CORE kopyasından). Malzeme CORE stok koduyla sorulur; satır yoksa o kod listede yoktur. Fiyat yerel para
+// (TL), dövizli satırda döviz türü ve faturadaki döviz fiyatı ayrıca; kur çevrilmez. Okuma kapalıyken satır dönmez.
+export const logoSonAlisSorgusu = z.object({
+  malzemeler: z.string().max(4000).transform((m) => [...new Set(m.split(',').map((k) => k.trim()).filter((k) => k !== ''))])
+    .pipe(z.array(z.string().max(64)).max(200)),
+});
+export const logoSonAlisCevabi = z.object({
+  okuma: z.enum(['acik', 'kapali']),
+  kayitlar: z.array(z.object({
+    stokKodu: z.string(), tarih: tarihSemasi, cariKodu: z.string().nullable(), faturaNo: z.string().nullable(), miktar: kartMiktari,
+    birim: z.string().nullable(), fiyat: kartMiktari, dovizTuru: z.number().int().nullable(), dovizFiyati: kartMiktari.nullable(),
+    // Logo döviz türünün para birimi kodu (USD, EUR); bilinmeyen türde null.
+    dovizKodu: z.string().nullable(),
+  })),
+});
+export type LogoSonAlisCevabi = z.output<typeof logoSonAlisCevabi>;
+
 // 3315: proje kartının Logo durumu (proje kartı "Genel" bölümü). Logo kodu CORE kodudur (aynen gider); yalnız "logoda"da dolu.
 export const LOGO_PROJE_DURUMLARI = ['logoda', 'sirada', 'yeniden-denenecek', 'durdu', 'gonderilmez'] as const;
 export const logoProjeParametresi = z.object({ id: z.coerce.number<number>().int().positive() });

@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { MaliyetOzeti, MasrafSecenekleriCevabi, ProjeMaliyetCevabi } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import type { LogoSonAlisCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { ProjeMaliyeti } from './disari.ts';
 
@@ -64,6 +65,16 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 const SECENEKLER: MasrafSecenekleriCevabi = { belgeler: [{ id: 43, belgeNo: 'GDR-43', belgeTarihi: '2026-10-20', kategori: 'lojistik', aciklama: 'Kurye', tutarTl: 90 }] };
 
+const SON_ALIS: LogoSonAlisCevabi = {
+  okuma: 'acik',
+  kayitlar: [{ stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: 'ORN-C-1', faturaNo: 'ORN-F-1', miktar: '50', birim: 'KG', fiyat: '186.4', dovizTuru: 20, dovizFiyati: '5.21', dovizKodu: 'EUR' }],
+};
+let sonAlisYaniti = (): Response => json(200, SON_ALIS);
+const FIYATSIZ = [
+  { malzemeNo: 7, stokKodu: 'ORN-HM-1', ad: 'ORN Mil', miktar: 20, birim: 'kg' },
+  { malzemeNo: 8, stokKodu: 'ORN-HM-2', ad: 'ORN Levha', miktar: 3, birim: 'adet' },
+];
+
 interface Cagri { yontem: string; yol: string; govde: unknown; kimlik: string | undefined }
 const cagrilar: Cagri[] = [];
 
@@ -78,6 +89,7 @@ function sunucuKur(yanit: () => Response, kullanici: Kullanici | null = null) {
     if (yol === '/oturum' && kullanici !== null) return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/proje-maliyet/7') return yanit();
     if (yol.startsWith('/proje-maliyet/masraf-secenekleri')) return json(200, SECENEKLER);
+    if (yol.startsWith('/logo/son-alislar?')) return sonAlisYaniti();
     if (yol === '/projeler/7/yonetim') return json(200, { gorevler: [{ id: 9, ad: 'Numune ölçümü' }] });
     if (secenek?.method === 'POST') return json(200, { tamam: true });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
@@ -90,7 +102,7 @@ function cizdir() {
   return render(<QueryClientProvider client={istemci}><MemoryRouter><ProjeMaliyeti projeId={7} /></MemoryRouter></QueryClientProvider>);
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); sonAlisYaniti = () => json(200, SON_ALIS); });
 
 describe('Proje maliyet sekmesi', () => {
   it('fiyat yetkilisine dört göstergeyi, kâr riskini, grafikleri ve sapan iş emirlerini gösterir', async () => {
@@ -250,6 +262,45 @@ describe('Proje maliyet sekmesi', () => {
     cizdir();
     expect(await screen.findByText(/Rotada işçilik \(kişi\) süresi planlanmamış/)).toBeTruthy();
     expect(screen.getAllByText('İşçilik planı yok')).toHaveLength(2);
+  });
+
+  it('3384-c a: fiyatı bilinmeyen malzemeler Logo son alış önerisiyle listelenir; öneri toplamlara girmez', async () => {
+    const yollar = sunucuKur(() => json(200, cevap(true, { fiyatsizMalzemeler: FIYATSIZ })), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku'] });
+    cizdir();
+    const tablo = await screen.findByRole('table', { name: 'Fiyatı bilinmeyen malzemeler' });
+    const mil = within(tablo).getByText('ORN Mil').closest('tr')!;
+    expect(await within(mil).findByText('186,40 TL / kg')).toBeTruthy();
+    expect(within(mil).getByText('faturada 5,21 EUR')).toBeTruthy();
+    expect(within(mil).getByText('04.11.2026 · ORN-C-1 · ORN-F-1')).toBeTruthy();
+    expect(within(within(tablo).getByText('ORN Levha').closest('tr')!).getByText("Logo'da faturalı alış yok")).toBeTruthy();
+    expect(screen.getByText('Fiyatı bilinmeyen').closest('div')?.textContent).toContain('2');
+    expect(yollar).toContain(`GET /logo/son-alislar?malzemeler=${encodeURIComponent('ORN-HM-1,ORN-HM-2')}`);
+  });
+
+  it('3384-c a: birim tutmayan alış karşılaştırılmaz; okuma kapalıysa ya da öneri alınamazsa hücre "Okuma kapalı" yazar, fiyat yazmaz', async () => {
+    sonAlisYaniti = () => json(200, { okuma: 'acik', kayitlar: [{ ...SON_ALIS.kayitlar[0]!, birim: 'ADET', fiyat: '3.2', dovizTuru: null, dovizFiyati: null, dovizKodu: null }] } satisfies LogoSonAlisCevabi);
+    sunucuKur(() => json(200, cevap(true, { fiyatsizMalzemeler: FIYATSIZ })), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku'] });
+    cizdir();
+    const tablo = await screen.findByRole('table', { name: 'Fiyatı bilinmeyen malzemeler' });
+    expect(await within(tablo).findByText('3,20 TL / adet; birim tutmuyor (kg), karşılaştırılmaz')).toBeTruthy();
+    cleanup();
+    for (const yanit of [() => json(200, { okuma: 'kapali', kayitlar: SON_ALIS.kayitlar } satisfies LogoSonAlisCevabi), () => json(500, { kod: 'SUNUCU', mesaj: 'Hata' } satisfies HataGovdesi)]) {
+      sonAlisYaniti = yanit;
+      sunucuKur(() => json(200, cevap(true, { fiyatsizMalzemeler: FIYATSIZ })), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku'] });
+      cizdir();
+      const t2 = await screen.findByRole('table', { name: 'Fiyatı bilinmeyen malzemeler' });
+      expect(await within(t2).findAllByText('Okuma kapalı')).toHaveLength(2);
+      expect(within(t2).queryByText(/186,40/)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('3384-c a: genel gider gizli ayda fiyatı bilinmeyen malzeme kartı ve öneri isteği yok', async () => {
+    const yollar = sunucuKur(() => json(200, cevap(true, { genelGiderGizli: true, fiyatsizMalzemeler: FIYATSIZ })), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku'] });
+    cizdir();
+    expect(await screen.findByText('Gerçekleşen maliyet')).toBeTruthy();
+    expect(screen.queryByText('Fiyatı bilinmeyen malzemeler')).toBeNull();
+    expect(yollar.some((y) => y.includes('/logo/son-alislar'))).toBe(false);
   });
 
   it('sunucu hatasında iletiyi gösterir', async () => {

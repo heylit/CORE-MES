@@ -109,6 +109,7 @@ namespace LogoYardimcisi
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
                 if (yol == "/api/version") return SurumBilgisi();
                 if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
+                if (yol == "/api/Material/purchases") return TopluAlisFiyatlari(sorgu);
                 if (yol == "/api/Material/list") return MalzemeListesi(sorgu);
                 if ((m = MalzemeOkumasi.Match(yol)).Success)
                     return m.Groups[2].Value == "movements" ? MalzemeHareketleri(Coz(m, 1), sorgu) : SonAlisFiyatlari(Coz(m, 1));
@@ -473,6 +474,35 @@ namespace LogoYardimcisi
                 l.Add(o);
             }
             return new Cevap(200, l);
+        }
+
+        // 3384-c: bütün kartların alış faturası satırları kayıt sırasıyla, KartSayfasi kadar; since ile sonrası. Zarf { firm, period, data, next }:
+        // kayıt numarası dönem tablosunundur, CORE imleci firma ve dönemle tutar.
+        Cevap TopluAlisFiyatlari(Dictionary<string, string> sorgu)
+        {
+            var satirlar = oku.TopluAlisFiyatlari(Imlec(sorgu), KartSayfasi);
+            var l = new List<object>();
+            var son = 0;
+            foreach (var x in satirlar)
+            {
+                var o = new Dictionary<string, object>();
+                o["logicalRef"] = x.Ref;
+                o["itemCode"] = x.MalzemeKodu;
+                o["date"] = x.Tarih.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                o["arpCode"] = x.CariKod;
+                o["invoiceNo"] = x.FaturaNo;
+                o["quantity"] = x.Miktar;
+                o["unitCode"] = x.Birim;
+                o["price"] = x.Fiyat;
+                o["currencyType"] = x.DovizTuru;
+                o["currencyPrice"] = x.DovizFiyati;
+                l.Add(o);
+                if (x.Ref > son) son = x.Ref;
+            }
+            var z = Sayfa(l, son, satirlar.Count >= KartSayfasi);
+            z["firm"] = ayar.FirmaNo;
+            z["period"] = ayar.DonemNo;
+            return new Cevap(200, z);
         }
 
         static Dictionary<string, object> CariNesnesi(CariKaydi c)
