@@ -515,6 +515,7 @@ describe('Satış siparişi ayrıntısı', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3 } });
     await screen.findByText('Sipariş tamamlandı olarak kapandı');
+    expect(screen.getByText('Tamamlandı')).toBeTruthy();
   });
 });
 

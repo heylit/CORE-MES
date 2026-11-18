@@ -5,7 +5,7 @@ import type { RozetTonu, Sekme } from '../../ortak/arayuz/index.ts';
 export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetTonu }> = {
   taslak: { etiket: 'Taslak', ton: 'uyari' },
   onayli: { etiket: 'Onaylı', ton: 'bilgi' },
-  kapandi: { etiket: 'Kapandı', ton: 'tamam' },
+  kapandi: { etiket: 'Tamamlandı', ton: 'tamam' },
   iptal: { etiket: 'İptal', ton: 'hata' },
 };
 
