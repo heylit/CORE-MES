@@ -66,6 +66,8 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
   }));
   await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
   const form = page.getByRole('form', { name: 'Termin ve fiyat' });
+  // 3427-2 b: plan denemesi istenince açılır.
+  await form.getByRole('button', { name: 'Planda dene' }).click();
   await expect(form.getByText('14.07.2099').first()).toBeVisible();
   await expect(form.getByRole('region', { name: 'Plan denemesi' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Adet değişirse' })).toBeVisible();
@@ -111,6 +113,8 @@ test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşm
   }));
   await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
   const form = page.getByRole('form', { name: 'Termin ve fiyat' });
+  // 3427-2 b: plan denemesi istenince açılır.
+  await form.getByRole('button', { name: 'Planda dene' }).click();
   await expect(form.getByText('Termin denemesi kullanılamıyor')).toBeVisible();
   await form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`)).fill('11');
   await form.getByRole('button', { name: 'Devam' }).click();
@@ -141,6 +145,8 @@ test('Teklif termin ve fiyat (3347): kalem yerleşmezse sebebi kalem kalem yazı
   }));
   await ac(`/siparisler/teklifler/${String(t.id)}/teklif-ver`);
   const form = page.getByRole('form', { name: 'Termin ve fiyat' });
+  // 3427-2 b: plan denemesi istenince açılır.
+  await form.getByRole('button', { name: 'Planda dene' }).click();
   const liste = form.getByRole('list', { name: 'Yerleşmeyen kalemler' });
   await expect(liste.getByText(`1. ${t.tanim}`)).toBeVisible();
   for (const n of neden) await expect(liste.getByRole('list', { name: `${t.tanim} sebepleri` }).getByText(n)).toBeVisible();

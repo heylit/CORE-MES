@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDenemesiKalemi, TerminYerlesimi,
@@ -142,8 +142,9 @@ interface Ozellikler {
   verildi: (cevap: TeklifAyrintiCevabi) => void;
 }
 
-// 44: teklif sürümü planlama tezgâhının denemesiyle verilir. Termin ve maliyet aynı yerleşimden gelir; satışçı kârı seçer, fiyat
-// önerilir ve değiştirilebilir. Motor yoksa, kalemlerin kartı yoksa ya da termin deneme yetkisi yoksa fiyat ve termin elle girilir.
+// 44: teklif sürümü istenirse planlama tezgâhının denemesiyle verilir. Termin ve maliyet aynı yerleşimden gelir; satışçı kârı seçer, fiyat
+// önerilir ve değiştirilebilir. 3427-2 b: form elle termin ve fiyatla açılır; deneme yalnız "Planda dene" ile açılır, açılmazsa sürüm
+// planda yer tutmaz. Motor yoksa, kalemlerin kartı yoksa ya da termin deneme yetkisi yoksa düğme yoktur.
 export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -154,7 +155,9 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   const ilk = teklif.surumler.length === 0;
   const pb = teklif.paraBirimi;
   const kartli = teklif.satirlar.some((s) => s.malzemeNo !== null);
-  const denenir = terminDener && kartli;
+  const [planAcik, planAcikYaz] = useState(false);
+  const planOlur = terminDener && kartli;
+  const denenir = planOlur && planAcik;
 
   // Plan denemesi yapılacaksa doğrulama ve gövde plan taslaklıdır; karar deneme cevabından sonra, her çizimde verilir.
   const planliRef = useRef(false);
@@ -223,7 +226,8 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   const c = deneme.data;
   planTerminRef.current = c?.termin ?? null;
   const planGun = c === undefined ? null : teslimGunu(c.termin, bugun());
-  const planli = terminDener && c !== undefined && c.durum === 'hazir' && c.planTermini !== null;
+  // Kapatılan denemenin önbellekteki sonucu planlı saydırmasın: yalnız açık denemede.
+  const planli = denenir && c !== undefined && c.durum === 'hazir' && c.planTermini !== null;
   planliRef.current = planli;
   const kar = karSayisi(d.kar);
 
@@ -322,6 +326,16 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               ? 'Termin ve maliyet aynı plan denemesinden gelir. Kârı seçin, fiyat önerilir; isterseniz değiştirin.'
               : ilk ? 'Her kaleme birim fiyat girin.' : 'Önceki sürümün değerleri dolduruldu; değiştirip yeni sürüm olarak verin.'}
           </p>
+          {planOlur && (
+            <div className="tc-sp-satir-sag">
+              <Dugme simge="gantt" aria-pressed={planAcik} disabled={deneniyor && planAcik} onClick={() => planAcikYaz(!planAcik)}>{planAcik ? 'Planı kapat' : 'Planda dene'}</Dugme>
+              <span className="tc-sp-ipucu">
+                {planAcik
+                  ? 'Kapatınca termin ve fiyat elle girilir; teklif planda yer tutmaz.'
+                  : 'İsterseniz termin ve maliyet plandan önerilir; verilen teklif o zaman planda yer tutar.'}
+              </span>
+            </div>
+          )}
           {planli && c !== undefined ? (
             <>
               <Tablo
@@ -420,11 +434,11 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
               </div>
               <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
               {/* 3347: şerit termin bulunamasa da çizilir; yerleşmeyen kalemin sebebi plandaki doluluktan okunur. */}
-              {terminDener && c !== undefined && c.durum === 'hazir' && (c.plan === null
+              {c !== undefined && c.durum === 'hazir' && (c.plan === null
                 ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
                 : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} secili={seciliGun === '' ? null : seciliGun}
                   gunEtiketi={GUN_ETIKETI[d.yerlesim]} gunSec={gunSec} />)}
-              {terminDener && c?.durum === 'hazir' && c.plan !== null && !c.plan.bloklar.some((b) => b.tur === 'teklif') && (
+              {c?.durum === 'hazir' && c.plan !== null && !c.plan.bloklar.some((b) => b.tur === 'teklif') && (
                 <p className="tc-sp-ipucu">Bu teklifin yerleşen adımı yok; şeritte yalnız plandaki işler görünür.</p>
               )}
             </section>

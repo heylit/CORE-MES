@@ -6,14 +6,13 @@ import { LogoBagi, CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
 import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_ARSIV_NEDENI, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
 import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
-import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useOnaylayabilir, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
+import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useOnaylayabilir, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
 type Satir = TeklifAyrintiCevabi['satirlar'][number];
@@ -36,7 +35,6 @@ export function TeklifAyrinti() {
   const iskontoOnaylar = useIskontoOnaylar();
   const fiyatGorur = useFiyatGorur();
   const maliyetGorur = useMaliyetToplamiGorur();
-  const terminDener = useTerminDener();
   const terminOnaylar = useTerminOnaylar();
   const donustur = useKorumaliGonderim();
   const [dialog, dialogYaz] = useState<Dialog | null>(null);
@@ -286,7 +284,6 @@ export function TeklifAyrinti() {
           </Kart>
         </div>
       </div>
-      {(terminDener || terminOnaylar) && <AtolyeTaslaklari />}
 
       <OnayPenceresi
         acik={dialog === 'kabul' && son !== null}
