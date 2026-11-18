@@ -126,7 +126,7 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
       bekleyenUygula={uygulayici(uygula)} yuva={yuva} />,
   );
 
-  it('yuva verilince iki öğe bağlanır; rozet yoktur; toplu düğme "Planı güncelle (2)" ve ikincildir, basınca uygular', () => {
+  it('yuva verilince iki öğe bağlanır; rozet yoktur; toplu düğme "Veri değişikliklerini uygula (2)" ve ikincildir, basınca uygular', () => {
     const satir = vi.fn(), alt = vi.fn(), uygula = vi.fn();
     yuvali({ satir, alt }, uygula);
     expect(satir.mock.calls.at(-1)?.[0]).toBeInstanceOf(HTMLElement);
@@ -136,21 +136,21 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
     expect(cubukEl.contains(satir.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(true);
     expect(cubukEl.contains(alt.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(false);
     expect(cubuk().queryByText('Veri değişti')).toBeNull();
-    const d = cubuk().getByRole('button', { name: 'Planı güncelle' });
-    expect(d.querySelector('[data-uzun]')?.textContent).toBe('Planı güncelle (2)');
+    const d = cubuk().getByRole('button', { name: 'Veri değişikliklerini uygula' });
+    expect(d.querySelector('[data-uzun]')?.textContent).toBe('Veri değişikliklerini uygula (2)');
     // Orta genişlikte görünen kısa ad ekran okuyucuya ikinci kez okunmaz.
-    expect(d.querySelector('[data-kisa]')?.textContent).toBe('Güncelle (2)');
+    expect(d.querySelector('[data-kisa]')?.textContent).toBe('Veriyi uygula (2)');
     expect(d.querySelector('[data-kisa]')?.getAttribute('aria-hidden')).toBe('true');
     expect(d.classList.contains('tc-dugme-birincil')).toBe(false);
     fireEvent.click(d);
     expect(uygula).toHaveBeenCalledTimes(1);
   });
 
-  it('yuva verilmeyince şerit eskisi gibidir: "Veri değişti" rozeti ve birincil "Planı güncelle (2)"', () => {
+  it('yuva verilmeyince şerit eskisi gibidir: "Veri değişti" rozeti ve birincil "Veri değişikliklerini uygula (2)"', () => {
     yuvali(null);
     expect(cubuk().getByText('Veri değişti')).toBeTruthy();
-    const d = cubuk().getByRole('button', { name: 'Planı güncelle' });
-    expect(d.textContent).toBe('Planı güncelle (2)');
+    const d = cubuk().getByRole('button', { name: 'Veri değişikliklerini uygula' });
+    expect(d.textContent).toBe('Veri değişikliklerini uygula (2)');
     expect(d.classList.contains('tc-dugme-birincil')).toBe(true);
     expect(document.querySelector('.tc-pym-sb-yuva, .tc-pym-sb-alt-yuva')).toBeNull();
   });

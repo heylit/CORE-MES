@@ -148,14 +148,14 @@ describe('plan geride satırının etkisi (3317 a, 3. adım)', () => {
     expect(e1.gorGeride).toHaveBeenCalledWith(L[1], L);
     expect(e1.gor).not.toHaveBeenCalled();
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
-    expect(liste.textContent).toContain('"Plan geride" satırında "Etkisini gör" o emir yeniden dizilince ne olacağını gösterir (geride kalan iş şimdiden sonraya gider); "Uygula" taslağınıza yazar. "Sahada oldu" satırları bilgi içindir');
+    expect(liste.textContent).toContain('"Etkisini gör" yalnız o satırın planı nasıl değiştireceğini hesaplar, plan değişmez; altında çıkan düğme taslağınıza yazar. "Sahada oldu" satırları bilgi içindir');
     unmount();
     const e2 = yuz({ id: 'geride:ORN-2', birlikte: 1, durum: { tur: 'etki', e: { is: 'ORN-is', once: { wT: 4, late: 1, n: 3 }, sonra: { wT: 6, late: 2, n: 3 }, oteki: 0 } } });
     render(<Degisiklikler l={L} kart={null} suzgec={false} suzgecKoy={vi.fn()} goster={vi.fn()} toplu={null} etki={e2} />);
     const acik = screen.getByRole('region', { name: 'Etkisi' });
     expect(acik.closest('li')?.querySelector('b')?.textContent).toBe('ORN-2');
     expect(acik.textContent).toContain('Aynı emirleri etkileyen 1 değişiklik de birlikte uygulanır.');
-    fireEvent.click(within(acik).getByRole('button', { name: 'Uygula' }));
+    fireEvent.click(within(acik).getByRole('button', { name: 'Bu emri yeniden diz' }));
     expect(e2.uygula).toHaveBeenCalledTimes(1);
     // Açık satır varken öteki satırın düğmesi bekler.
     expect(screen.getAllByRole('button', { name: 'Etkisini gör' }).map((x) => x.hasAttribute('disabled'))).toEqual([true]);
@@ -176,7 +176,7 @@ describe('listede satır etkisi', () => {
     expect(dugmeler.map((x) => x.closest('li')?.querySelector('b')?.textContent)).toEqual(['veri:a', 'veri:b']);
     fireEvent.click(dugmeler[0]!);
     expect(e1.gor).toHaveBeenCalledWith('a');
-    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).toContain('"Etkisini gör" tek satırın planı nasıl değiştireceğini gösterir, "Uygula" taslağınıza yazar');
+    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).toContain('"Etkisini gör" yalnız o satırın planı nasıl değiştireceğini hesaplar, plan değişmez; altında çıkan düğme taslağınıza yazar');
     cleanup();
     // Taslak meşgulken (başka komut yazılıyor, plan diziliyor) düğmeler bekler.
     ciz(yuz({ mesgul: true }));
@@ -197,7 +197,7 @@ describe('listede satır etkisi', () => {
     const oteki = screen.getAllByRole('button', { name: 'Etkisini gör' });
     expect(oteki).toHaveLength(1);
     expect(oteki[0]?.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(within(etki).getByRole('button', { name: 'Uygula' }));
+    fireEvent.click(within(etki).getByRole('button', { name: 'Bu değişikliği uygula' }));
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
     expect(e1.uygula).toHaveBeenCalledTimes(1);
     expect(e1.vazgec).toHaveBeenCalledTimes(1);
@@ -205,12 +205,12 @@ describe('listede satır etkisi', () => {
     ciz(yuz({ id: 'a', mesgul: true, butun: true, birlikte: 1, durum: etkiDurumu(null, { wT: 0, late: 0, n: 3 }) }));
     const butun = screen.getByRole('region', { name: 'Etkisi' });
     expect(butun.textContent).toContain('Bu değişiklik bütün planı etkiler');
-    expect(within(butun).getByRole('button', { name: 'Uygula' }).hasAttribute('disabled')).toBe(true);
+    expect(within(butun).getByRole('button', { name: 'Bu değişikliği uygula' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('taslakta uygulanan satır varsa not toplu düğmenin onu da saydığını söyler; yoksa yazmaz', () => {
     render(<Degisiklikler l={L} kart={null} suzgec={false} suzgecKoy={vi.fn()} goster={vi.fn()} toplu={3} etki={yuz()} taslakta={1} />);
-    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).toContain('1 veri değişikliği taslağınızda uygulandı, listede durmaz; ortak plana taslak yazılınca girer, "Planı güncelle" o zamana kadar onu da sayar.');
+    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).toContain('1 veri değişikliği taslağınızda uygulandı, listede durmaz; ortak plana taslak yazılınca girer, toplu düğme o zamana kadar onu da sayar.');
     cleanup();
     ciz(yuz());
     expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).not.toContain('taslağınızda uygulandı');

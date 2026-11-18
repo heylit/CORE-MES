@@ -27,6 +27,8 @@ export interface ListeDuzeniOzellikleri {
   tahta: ReactNode;
   // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
   satirBirincil: boolean;
+  // Planda yeri olan adıma basınca iş seçilir ve tezgâhlarda görünür; seçili adıma yeniden basmak bırakır.
+  adimSec: (emirId: string, isId: string) => void; seciliIs: string | null;
 }
 
 // Açık satırın kendi birincil düğmesi var mı: plansızda Planla, geç ya da riskli siparişte Seçenekleri göster.
@@ -40,7 +42,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs }: ListeDuzeniOzellikleri) {
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [acik]);
   const sirali = listeSirasi(kartlar);
@@ -97,11 +99,18 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                   <ol className="tc-pyq-ld-adimlar" aria-label="Adımlar">
                     {k.emirler.flatMap((e) => e.adimlar.map((a, i) => {
                       const x = m.isler[a.id];
-                      return (
-                        <li key={a.id} data-yok={x ? undefined : ''}>
+                      const govde = (
+                        <>
                           <span>{k.emirler.length > 1 ? `${e.no} · ` : ''}{String(i + 1)}. {a.ad}</span>
                           <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
                           {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
+                        </>
+                      );
+                      return (
+                        <li key={a.id} data-yok={x ? undefined : ''}>
+                          {x
+                            ? <button type="button" data-adim={a.id} aria-pressed={seciliIs === a.id} title="Tezgâhlarda göster" onClick={() => { adimSec(e.id, a.id); }}>{govde}</button>
+                            : govde}
                         </li>
                       );
                     }))}
