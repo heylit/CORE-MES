@@ -5,7 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { SiparisAyrintisi, SiparisListesiCevabi, SiparisOzetiCevabi, TeklifAyrintisi, TerminDagilimiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisAyrintisi, SiparisListesiCevabi, SiparisOzetiCevabi, SiparisRevizyonlariCevabi, TeklifAyrintisi, TerminDagilimiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -467,6 +467,69 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(await teslim(kapaliEmir), '2026-11-15', 'taslak ya da planlı olmayan emir değişmez');
   });
 
+  test('SIP-40 (3427-4 a): onaylı sipariş gerekçeyle yeni sürüm alır; kalem yerinde kalır, termin emre ve projeye kayar, tahsilat yenilenir, sürüm geçmişi okunur', async () => {
+    const taslak = await siparisAc();
+    const yeniSurum = (s: SiparisAyrintisi, degisen: Record<string, unknown>, cerez = yonetici): Promise<LightMyRequestResponse> =>
+      gonder(cerez, `/siparisler/${s.id}/yeni-surum`, { ...govde(), surum: s.surum, gerekce: 'Müşteri fiyatı ve termini değiştirdi', ...degisen });
+    const t1 = await yeniSurum(taslak, { satirlar: [{ id: taslak.satirlar[0]!.id, malzemeNo: mamulNo, miktar: '100', birimFiyat: '13', termin: null, aciklama: null }] });
+    assert.deepEqual([t1.statusCode, t1.json().mesaj], [422, 'Yalnız onaylı sipariş yeni sürümle düzenlenir.']);
+
+    const onayli = (await gonder(yonetici, `/siparisler/${taslak.id}/onayla`, { surum: taslak.surum })).json<SiparisAyrintisi>();
+    const satirId = onayli.satirlar[0]!.id;
+    const kalem = { id: satirId, malzemeNo: mamulNo, miktar: '100', birimFiyat: '12.5', termin: null, aciklama: null };
+    const proje = await gonder(yonetici, `/projeler/siparisten/${onayli.id}/ac`, { kod: `RV.${String(onayli.id)}`, ad: 'Yeni sürüm' });
+    assert.equal(proje.statusCode, 200, proje.body);
+    const bagliEmir = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO uretim_emri (emir_no, parca_no, parca_ad, adet, acan_id, malzeme_no, siparis_satiri_id, teslim, teslim_bagli)
+       VALUES ($1, 'P', 'Deneme', 10, $2, $3, $4, '2026-11-15', true) RETURNING id`, [`ORN-RV-${randomUUID().slice(0, 8)}`, yoneticiId, mamulNo, satirId]))!.id;
+
+    assert.equal((await yeniSurum(onayli, { satirlar: [kalem], gerekce: '' })).statusCode, 400, 'gerekçesiz yeni sürüm açılmaz');
+    const yok = await yeniSurum(onayli, { satirlar: [kalem] });
+    assert.deepEqual([yok.statusCode, yok.json().mesaj], [422, 'Değişiklik yok; yeni sürüm açılmadı.']);
+    const miktar = await yeniSurum(onayli, { satirlar: [{ ...kalem, miktar: '90' }] });
+    assert.equal(miktar.statusCode, 400, miktar.body);
+    assert.match(miktar.json().mesaj, /malzeme ve miktar değişmez/);
+    const ekle = await yeniSurum(onayli, { satirlar: [kalem, { ...kalem, id: undefined }] });
+    assert.equal(ekle.statusCode, 400, ekle.body);
+    const firma = await yeniSurum(onayli, { firmaId: tedarikciId, satirlar: [kalem] });
+    assert.equal(firma.statusCode, 400, firma.body);
+    assert.equal((await gonder(operator, `/siparisler/${onayli.id}/yeni-surum`, { ...govde(), surum: onayli.surum, gerekce: 'Deneme' })).statusCode, 403);
+
+    const r1 = await yeniSurum(onayli, { termin: '2026-11-25', satirlar: [{ ...kalem, birimFiyat: '13' }] });
+    assert.equal(r1.statusCode, 200, r1.body);
+    const s1 = r1.json<SiparisAyrintisi>();
+    assert.deepEqual([s1.durum, s1.termin, s1.satirlar[0]?.id, s1.satirlar[0]?.birimFiyat, s1.genelToplam], ['onayli', '2026-11-25', satirId, '13.0000', '1560.00']);
+    assert.equal(s1.surum, onayli.surum + 1);
+    const tahsilat = await o().sahip.tek<{ tutar: string; sevk: string }>(
+      "SELECT tutar::text AS tutar, to_char(sevk_tarihi, 'YYYY-MM-DD') AS sevk FROM finans_beklenen_tahsilat WHERE siparis_id = $1", [onayli.id]);
+    assert.deepEqual(tahsilat, { tutar: '1560.00', sevk: '2026-11-25' }, 'beklenen tahsilat yeni tutar ve terminle');
+    const projeSonra = await o().sahip.tek<{ bitis: string }>("SELECT to_char(bitis, 'YYYY-MM-DD') AS bitis FROM projeler_proje WHERE id = $1", [proje.json<{ id: number }>().id]);
+    assert.equal(projeSonra?.bitis, '2026-11-25', 'bağlı proje bitişi kayar');
+    const teslim = await o().sahip.tek<{ t: string }>("SELECT to_char(teslim, 'YYYY-MM-DD') AS t FROM uretim_emri WHERE id = $1", [bagliEmir]);
+    assert.equal(teslim?.t, '2026-11-25', 'bağlı, başlamamış emrin teslimi kayar');
+    assert.equal((await yeniSurum(onayli, { termin: '2026-11-26', satirlar: [kalem] })).statusCode, 409, 'eski sürümle yazılmaz');
+
+    const r2 = await yeniSurum(s1, { termin: '2026-11-25', satirlar: [{ ...kalem, birimFiyat: '13', aciklama: 'Kaplamalı' }], gerekce: 'Açıklama eklendi' });
+    assert.equal(r2.statusCode, 200, r2.body);
+
+    const gecmis = (await oku(yonetici, `/siparisler/${onayli.id}/surumler`)).json<SiparisRevizyonlariCevabi>();
+    assert.deepEqual(gecmis.revizyonlar.map((r) => [r.revNo, r.gerekce, r.logoGitmisti]), [[2, 'Açıklama eklendi', false], [1, 'Müşteri fiyatı ve termini değiştirdi', false]]);
+    assert.deepEqual(gecmis.revizyonlar[1]?.degisiklikler, [
+      { alan: 'termin', kalemSira: null, eski: '2026-11-15', yeni: '2026-11-25', fiyat: false },
+      { alan: 'birimFiyat', kalemSira: 1, eski: '12.5000', yeni: '13', fiyat: true },
+    ]);
+    assert.deepEqual(gecmis.revizyonlar[0]?.degisiklikler, [{ alan: 'aciklama', kalemSira: 1, eski: null, yeni: 'Kaplamalı', fiyat: false }]);
+    assert.equal(gecmis.revizyonlar[0]?.kisi !== null, true);
+
+    const planlama = (await girisYap('planlama_proje')).cerez;
+    const gizli = (await oku(planlama, `/siparisler/${onayli.id}/surumler`)).json<SiparisRevizyonlariCevabi>();
+    assert.deepEqual(gizli.revizyonlar[1]?.degisiklikler[1], { alan: 'birimFiyat', kalemSira: 1, eski: null, yeni: null, fiyat: true }, 'fiyatı görmeyene değer gizli');
+    assert.equal((await oku(operator, `/siparisler/${onayli.id}/surumler`)).statusCode, 403);
+    assert.equal((await oku(yonetici, '/siparisler/999999/surumler')).statusCode, 404);
+
+    await assert.rejects(o().sahip.sorgu('UPDATE siparisler_siparis_revizyonu SET gerekce = $2 WHERE siparis_id = $1', [onayli.id, 'Değişti']), 'sürüm kaydı yalnız eklenir');
+  });
+
   test('SIP-19 (3254 a): emre bağlı partili kalemde parti çıkarılamaz ve değişmez (409, partiler yerinde); aynı partilerle kayıt geçer', async () => {
     const partiler = [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }];
     const taslak = await siparisAc({ satirlar: [{ malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', partiler }] });
@@ -691,6 +754,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
       [`/siparisler/${id}/kapat`, { surum }],
       [`/siparisler/${id}/iptal`, { surum, neden: 'Deneme' }],
       [`/siparisler/${id}/onay-geri-al`, { surum, neden: 'Deneme' }],
+      [`/siparisler/${id}/yeni-surum`, { ...govde(), surum, gerekce: 'Deneme' }],
       [`/siparisler/${id}/arsivle`, { surum }],
       [`/siparisler/${id}/arsivden-cikar`, { surum }],
     ];

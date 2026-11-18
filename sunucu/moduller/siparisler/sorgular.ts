@@ -1069,3 +1069,57 @@ export function logoSiraEslemesi(db: Db, tur: 'teklif' | 'siparis', yon: 'belge'
     [tur, kimlikler],
   );
 }
+
+// ---- 3427-4 a: onaylı siparişin sürümleri (SIP-40) ----
+
+// Başlığın değişebilen alanları; firma, para birimi ve sipariş tarihi kural gereği aynıdır. Yalnız onaylı yazılır.
+export function revizyonBasligiYaz(db: Db, id: number, a: BaslikAlanlari, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_siparis
+        SET musteri_siparis_no = $2, termin = $3, kdv_orani = $4, odeme_kosulu = $5, aciklama = $6, gecikme_ceza_orani = $7,
+            ceza_tavani_orani = $8, odeme_vadesi_gun = $9, guncelleyen_id = $10, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $11 AND durum = 'onayli' RETURNING id`,
+    [id, a.musteriSiparisNo, a.termin, a.kdvOrani, a.odemeKosulu, a.aciklama, a.cezaOraniGun, a.cezaTavaniOrani, a.odemeVadesiGun, kisiId, surum],
+  );
+}
+
+// Kalem yerinde kalır (emir ve parti bağı kimliğe bağlıdır); yalnız fiyat, termin ve açıklama yazılır.
+export async function revizyonKalemleriYaz(
+  db: Db, siparisId: number, kalemler: readonly { id: number; birimFiyat: string | null; termin: string | null; aciklama: string | null }[],
+): Promise<void> {
+  if (kalemler.length === 0) return;
+  await db.sorgu(
+    `UPDATE siparisler_siparis_satiri r SET birim_fiyat = k.birim_fiyat, termin = k.termin, aciklama = k.aciklama
+       FROM unnest($2::int[], $3::numeric[], $4::date[], $5::text[]) AS k (id, birim_fiyat, termin, aciklama)
+      WHERE r.id = k.id AND r.siparis_id = $1
+        AND (r.birim_fiyat IS DISTINCT FROM k.birim_fiyat OR r.termin IS DISTINCT FROM k.termin OR r.aciklama IS DISTINCT FROM k.aciklama)`,
+    [siparisId, kalemler.map((k) => k.id), kalemler.map((k) => k.birimFiyat), kalemler.map((k) => k.termin), kalemler.map((k) => k.aciklama)],
+  );
+}
+
+export interface RevizyonSatiri {
+  rev_no: number; gerekce: string; kisi_id: number; an: string; degisiklikler: unknown; logo_gitmisti: boolean;
+}
+
+export function revizyonlar(db: Db, siparisId: number): Promise<RevizyonSatiri[]> {
+  return db.sorgu<RevizyonSatiri>(
+    `SELECT rev_no, gerekce, kisi_id, ${zamanMetni('an')} AS an, degisiklikler, logo_gitmisti
+       FROM siparisler_siparis_revizyonu WHERE siparis_id = $1 ORDER BY rev_no DESC`,
+    [siparisId],
+  );
+}
+
+// Sürüm numarası sipariş satırı kilitliyken verilir (servis kilitle ile); tekillik kısıtı yine de çakışmayı yakalar.
+export async function revizyonEkle(
+  db: Db, g: { siparisId: number; gerekce: string; kisiId: number; onceki: unknown; degisiklikler: unknown },
+): Promise<{ rev_no: number; logo_gitmisti: boolean }> {
+  const satir = await db.tek<{ rev_no: number; logo_gitmisti: boolean }>(
+    `INSERT INTO siparisler_siparis_revizyonu (siparis_id, rev_no, gerekce, kisi_id, onceki, degisiklikler, logo_gitmisti)
+     SELECT $1, coalesce((SELECT max(rev_no) FROM siparisler_siparis_revizyonu WHERE siparis_id = $1), 0) + 1, $2, $3, $4::jsonb, $5::jsonb,
+            EXISTS (SELECT 1 FROM siparisler_logo_gonderim WHERE siparis_id = $1 AND durum = 'gonderildi')
+     RETURNING rev_no, logo_gitmisti`,
+    [g.siparisId, g.gerekce, g.kisiId, JSON.stringify(g.onceki), JSON.stringify(g.degisiklikler)],
+  );
+  if (satir === null) throw new Error('Sipariş sürümü eklenemedi');
+  return satir;
+}
