@@ -3,10 +3,10 @@ import type { Db } from '#cekirdek/db.ts';
 // 3405 a: kademeli uyarı tabloları (göç bildirim_kademe). Ayar satırı yalnız değiştirilen kaynakta vardır; defter yalnız eklenir.
 
 export interface KademeAyarSatiri {
-  kaynak: string; acik: boolean; k2_gun: number | null; k3_gun: number | null; k4_gun: number | null; k5_gun: number | null;
+  kaynak: string; acik: boolean; k2_gun: number | null; k3_gun: number | null; k4_gun: number | null; k5_gun: number | null; k3_birim: 'gun' | 'saat' | null;
   eposta_kademe: number; serit: boolean; kapatilamaz: boolean; yonetici_rol_id: number | null; surum: number; degistiren_id: number | null; degisti: string | null;
 }
-const AYAR = `kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, yonetici_rol_id, surum, degistiren_id,
+const AYAR = `kaynak, acik, k2_gun, k3_gun, k3_birim, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, yonetici_rol_id, surum, degistiren_id,
   to_char(degisti AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS degisti`;
 
 export function ayarSatirlari(db: Db): Promise<KademeAyarSatiri[]> {
@@ -15,21 +15,21 @@ export function ayarSatirlari(db: Db): Promise<KademeAyarSatiri[]> {
 
 export interface KademeAyarYazimi {
   acik: boolean; k2Gun: number | null; k3Gun: number | null; k4Gun: number | null; k5Gun: number | null; epostaKademe: number; serit: boolean;
-  kapatilamaz: boolean; yoneticiRolId: number | null;
+  kapatilamaz: boolean; yoneticiRolId: number | null; k3Birim: 'gun' | 'saat';
 }
 // Satırı olmayan kaynağın sürümü 1 sayılır (katalog varsayılanı): ilk yazım satırı 2 ile açar. Sürüm tutmazsa null döner.
 export async function ayarYaz(db: Db, kaynak: string, g: KademeAyarYazimi, surum: number, kisiId: number): Promise<{ surum: number } | null> {
-  const degerler = [kaynak, g.acik, g.k2Gun, g.k3Gun, g.k4Gun, g.k5Gun, g.epostaKademe, g.serit, g.kapatilamaz, g.yoneticiRolId, surum, kisiId];
+  const degerler = [kaynak, g.acik, g.k2Gun, g.k3Gun, g.k4Gun, g.k5Gun, g.epostaKademe, g.serit, g.kapatilamaz, g.yoneticiRolId, surum, kisiId, g.k3Birim];
   const guncel = await db.tek<{ surum: number }>(
     `UPDATE bildirim_kademe_ayari SET acik = $2, k2_gun = $3, k3_gun = $4, k4_gun = $5, k5_gun = $6, eposta_kademe = $7, serit = $8, kapatilamaz = $9,
-       yonetici_rol_id = $10, surum = surum + 1, degistiren_id = $12, degisti = now()
+       yonetici_rol_id = $10, k3_birim = $13, surum = surum + 1, degistiren_id = $12, degisti = now()
       WHERE kaynak = $1 AND surum = $11 RETURNING surum`,
     degerler,
   );
   if (guncel !== null || surum !== 1) return guncel;
   return db.tek<{ surum: number }>(
-    `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, yonetici_rol_id, surum, degistiren_id, degisti)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 2, $12, now() WHERE $11::int = 1
+    `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, yonetici_rol_id, k3_birim, surum, degistiren_id, degisti)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $13, 2, $12, now() WHERE $11::int = 1
      ON CONFLICT (kaynak) DO NOTHING RETURNING surum`,
     degerler,
   );

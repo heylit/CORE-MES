@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const SATIR: KademeAyarSatiri = {
   kaynak: 'kalibrasyon.vade', ad: 'Kalibrasyon vadesi', grup: 'Kalibrasyon', sayac: 'son-gun', asama: 1, para: false, acik: true,
-  k2Gun: 10, k3Gun: null, k4Gun: 3, k5Gun: 7, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, varsayilan: true,
+  k2Gun: 10, k3Gun: null, k3Birim: 'gun', k4Gun: 3, k5Gun: 7, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, varsayilan: true,
   surum: 1, degistiren: null, degisti: null, takipte: 4, gecikti: 1,
 };
 const AYARLAR: KademeAyarlariCevabi = { kaynaklar: [SATIR], roller: [{ id: 3, ad: 'ORN-Müdür' }] };
@@ -49,7 +49,7 @@ describe('Kademeli uyarı (3405)', () => {
     await waitFor(() => { expect(c.some((x) => x.yontem === 'POST')).toBe(true); });
     expect(c.find((x) => x.yontem === 'POST')).toEqual({
       yontem: 'POST', yol: '/bildirim-kademe/kaynaklar/kalibrasyon.vade/ayarla',
-      govde: { acik: true, k2Gun: 10, k3Gun: null, k4Gun: 3, k5Gun: 9, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, surum: 1 },
+      govde: { acik: true, k2Gun: 10, k3Gun: null, k3Birim: 'gun', k4Gun: 3, k5Gun: 9, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, surum: 1 },
     });
   });
 
@@ -60,6 +60,50 @@ describe('Kademeli uyarı (3405)', () => {
     fireEvent.change(within(pencere).getByLabelText(/K2 Yaklaşıyor/), { target: { value: '' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect((c.find((x) => x.yontem === 'POST')?.govde as { k2Gun: unknown } | undefined)?.k2Gun).toBeNull(); });
+  });
+
+  it('bekleme kaynağında Gecikti saat birimiyle gönderilir; son gün kaynağında birim seçilmez (3418)', async () => {
+    const bekleme: KademeAyarSatiri = {
+      ...SATIR, kaynak: 'uretim-emirleri.bekleme-takim', ad: 'Takım bekleyen iş emri', grup: 'Üretim', sayac: 'bekleme', k2Gun: null, k3Gun: 4,
+      k3Birim: 'saat', k4Gun: 2, k5Gun: null, epostaKademe: 3,
+    };
+    const c = kur(<KademeliUyari />, (yol, yontem) => (yontem === 'POST' || yol === '/bildirim-kademe/kaynaklar'
+      ? json(200, { ...AYARLAR, kaynaklar: [SATIR, bekleme] }) : json(404, {})));
+    expect(await screen.findByText(/K3 4 saat bekleyince/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Kalibrasyon vadesi'));
+    expect(within(await screen.findByRole('dialog')).queryByLabelText('K3 süre birimi')).toBeNull();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(screen.getByText('Takım bekleyen iş emri'));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByLabelText(/iş günlerinde kaç saat/)).toBeTruthy();
+    expect(within(pencere).getByText(/Gecikmenin 1. iş günü K3'ün geldiği gündür/)).toBeTruthy();
+    fireEvent.change(within(pencere).getByLabelText(/K3 Gecikti/), { target: { value: '6' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(c.some((x) => x.yontem === 'POST')).toBe(true); });
+    expect(c.find((x) => x.yontem === 'POST')?.govde).toMatchObject({ k3Gun: 6, k3Birim: 'saat' });
+    c.length = 0;
+    fireEvent.click(await screen.findByText('Takım bekleyen iş emri'));
+    const ikinci = await screen.findByRole('dialog');
+    fireEvent.change(within(ikinci).getByLabelText('K3 süre birimi'), { target: { value: 'gun' } });
+    expect(within(ikinci).getByLabelText(/kaç iş günü bekleyince/)).toBeTruthy();
+    fireEvent.click(within(ikinci).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(c.find((x) => x.yontem === 'POST')?.govde).toMatchObject({ k3Birim: 'gun' }); });
+  });
+
+  it('gün birimli bekleme kaynağında Saat seçilince govdeye saat gider (3418, Test T1)', async () => {
+    const bekleme: KademeAyarSatiri = {
+      ...SATIR, kaynak: 'uretim-emirleri.bekleme-malzeme', ad: 'Malzeme bekleyen iş emri', grup: 'Üretim', sayac: 'bekleme', k2Gun: null, k3Gun: 2,
+      k3Birim: 'gun', k4Gun: 4, k5Gun: null, epostaKademe: 3,
+    };
+    const c = kur(<KademeliUyari />, (yol, yontem) => (yontem === 'POST' || yol === '/bildirim-kademe/kaynaklar'
+      ? json(200, { ...AYARLAR, kaynaklar: [bekleme] }) : json(404, {})));
+    fireEvent.click(await screen.findByText('Malzeme bekleyen iş emri'));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByLabelText(/kaç iş günü bekleyince/)).toBeTruthy();
+    fireEvent.change(within(pencere).getByLabelText('K3 süre birimi'), { target: { value: 'saat' } });
+    expect(within(pencere).getByLabelText(/iş günlerinde kaç saat/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(c.find((x) => x.yontem === 'POST')?.govde).toMatchObject({ k3Gun: 2, k3Birim: 'saat' }); });
   });
 
   it('Gecikenlerim kaydı kademe adıyla ve kaydın ekranına bağlantıyla verir', async () => {

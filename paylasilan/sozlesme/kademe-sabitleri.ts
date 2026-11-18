@@ -14,12 +14,19 @@ export const KADEME_ADLARI: Record<Kademe, string> = { 1: 'Atandı', 2: 'Yaklaş
 export const KADEME_SAYACLARI = ['son-gun', 'bekleme'] as const;
 export type KademeSayaci = (typeof KADEME_SAYACLARI)[number];
 
+// 3418 a: bekleme sayacında Gecikti sınırı gün ya da saat olabilir. Saat, iş günlerinde (hafta sonu ve resmi tatil dışı) geçen
+// saattir; mesai dışı saatler de sayılır. Yöneticide ve Devret her zaman iş günüdür.
+export const KADEME_BIRIMLERI = ['gun', 'saat'] as const;
+export type KademeBirimi = (typeof KADEME_BIRIMLERI)[number];
+
 export interface KademeVarsayilani {
   acik: boolean;
   // Son gün sayacında son günden kaç iş günü önce hatırlatılır; null K2 kapalı (bekleme sayacında hep null).
   k2Gun: number | null;
   // Bekleme sayacında kaç iş günü bekleyince gecikti sayılır; son gün sayacında null (son gün geçince).
   k3Gun: number | null;
+  // k3Gun'un birimi (yalnız bekleme sayacında saat olabilir).
+  k3Birim: KademeBirimi;
   // Gecikmeden (K3'ün başladığı günden) sonraki iş günü; null o kademe kapalı.
   k4Gun: number | null;
   k5Gun: number | null;
@@ -48,10 +55,10 @@ export interface KademeKaynagiTanimi {
 }
 
 const sonGun = (k2: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
-  acik: true, k2Gun: k2, k3Gun: null, k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
+  acik: true, k2Gun: k2, k3Gun: null, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
 const bekleme = (k3: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
-  acik: true, k2Gun: null, k3Gun: k3, k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
+  acik: true, k2Gun: null, k3Gun: k3, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
 
 // Anahtar `<modül>.<kaynak>`; bildirim türleri bu anahtardan türetilir (kademeTuru). Hazırlık görevi 3396'nın türlerini korur.
@@ -116,7 +123,8 @@ export const KADEME_KAYNAKLARI = {
   },
   'uretim-emirleri.bekleme-takim': {
     ad: 'Emir tezgah, takım ya da aparat bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],
-    yol: '/uretim-emirleri', varsayilan: bekleme(1, 2, null, { acik: false }),
+    // 3418 a: 4 saat bekleyince Gecikti, başlangıçtan bir iş günü sonra (gecikmenin 2. iş günü) Yöneticide.
+    yol: '/uretim-emirleri', varsayilan: bekleme(4, 2, null, { k3Birim: 'saat' }),
   },
   'uretim-emirleri.bekleme-kalite': {
     ad: 'Emir kalite kararı bekliyor', grup: 'Üretim', sayac: 'bekleme', asama: 1, okumaIslemleri: ['sayfa.uretim-emirleri'],

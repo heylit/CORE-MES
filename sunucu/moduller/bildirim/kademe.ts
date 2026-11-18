@@ -34,6 +34,8 @@ export interface KademeKaydi {
   // Son gün sayacında son gün; bekleme sayacında beklemenin başladığı tesis günü.
   sonGun?: string | null;
   baslangic?: string | null;
+  // 3418 a: beklemenin başladığı an (ISO). Saat birimli ayar bunu sayar; vermeyen kaynakta başlangıç gününün başı sayılır.
+  baslangicAni?: string | null;
   // K2-K3 alıcıları (işi yapacak kişiler). Boşsa kayıt K1-K3'e girmez, gecikince yine yukarı çıkar.
   yapanlar: readonly number[];
   // K4 alıcıları (kontrol eden, sorumlu rol); K5'te devralanlarla birlikte.
@@ -79,7 +81,8 @@ async function kademeBildirimleriniKapat(db: Db, kaynak: KademeKaynagi, kayit: s
   for (const tur of ESKI_TURLER[kaynak] ?? []) await bildirimKapat(db, { tur, kaynakKimlik: kayit });
 }
 
-const kuralOf = (kaynak: KademeKaynagi, a: GecerliAyar): KademeKurali => ({ sayac: KADEME_KAYNAKLARI[kaynak].sayac, k2Gun: a.k2Gun, k3Gun: a.k3Gun, k4Gun: a.k4Gun, k5Gun: a.k5Gun });
+const kuralOf = (kaynak: KademeKaynagi, a: GecerliAyar): KademeKurali => ({ sayac: KADEME_KAYNAKLARI[kaynak].sayac, k2Gun: a.k2Gun, k3Gun: a.k3Gun, k4Gun: a.k4Gun, k5Gun: a.k5Gun,
+  k3Birim: a.k3Birim });
 
 export interface IlerlemeSonucu { yazilan: number; bildirilen: number; kapanan: number; hatali: KademeKaynagi[] }
 
@@ -115,7 +118,9 @@ export async function kademeleriIlerlet(db: Db, simdi: Date = new Date()): Promi
     const bildirenKademeler: readonly number[] = kaynakKademeleri(kaynak);
     const acikKalan = new Set<string>();
     for (const r of okunan.deger) {
-      const { kademeler, gecikme } = gerekenKademeler({ sonGun: r.sonGun ?? null, baslangic: r.baslangic ?? null, yapanVar: r.yapanlar.length > 0 }, kural, bugun, tatiller);
+      const { kademeler, gecikme } = gerekenKademeler(
+        { sonGun: r.sonGun ?? null, baslangic: r.baslangic ?? null, baslangicAni: r.baslangicAni ?? null, yapanVar: r.yapanlar.length > 0 }, kural, bugun, tatiller,
+        simdi.getTime());
       const yazilmis = defter.get(r.kayit) ?? new Set<number>();
       const { yeni, bildirilecek } = bildirilecekKademe(kademeler, yazilmis);
       const ustler = tekil([r.yoneticiler, rolKisileri]);
@@ -178,7 +183,7 @@ export async function kademeAyarlari(db: Db): Promise<KademeAyarlariCevabi> {
       const bagli = okuyucular.has(kaynak);
       return {
         kaynak, ad: t.ad, grup: t.grup, sayac: t.sayac, asama: t.asama, para: t.para === true, acik: a.acik, k2Gun: a.k2Gun, k3Gun: a.k3Gun, k4Gun: a.k4Gun,
-        k5Gun: a.k5Gun, epostaKademe: a.epostaKademe, serit: a.serit, kapatilamaz: a.kapatilamaz, yoneticiRolId: a.yoneticiRolId, varsayilan: a.varsayilan,
+        k5Gun: a.k5Gun, k3Birim: a.k3Birim, epostaKademe: a.epostaKademe, serit: a.serit, kapatilamaz: a.kapatilamaz, yoneticiRolId: a.yoneticiRolId, varsayilan: a.varsayilan,
         surum: a.surum, degistiren: a.degistirenId === null ? null : adlar.get(a.degistirenId) ?? null, degisti: a.degisti,
         takipte: bagli ? s?.takipte ?? 0 : null, gecikti: bagli ? s?.gecikti ?? 0 : null,
       };

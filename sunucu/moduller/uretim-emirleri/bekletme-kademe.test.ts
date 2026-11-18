@@ -38,11 +38,11 @@ describe('uretim-emirleri bekletme kademeli uyarı (gerçek PostgreSQL)', () => 
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('kablolama yedi kaynağı motora bağlar; açık altı kaynak ilk koşuda başlangıç yazar, kapalı tezgah-takım yazmaz', async () => {
+  test('kablolama yedi kaynağı motora bağlar; açık yedi kaynak ilk koşuda başlangıç yazar (tezgah-takım 3418 a ile açık)', async () => {
     await vt().tx((db) => kademeleriIlerlet(db));
     const yazilan = (await ortam!.sahip.sorgu<{ kaynak: string }>(
       "SELECT kaynak FROM bildirim_kademe_baslangic WHERE kaynak LIKE 'uretim-emirleri.bekleme-%' ORDER BY kaynak")).map((r) => r.kaynak);
-    assert.deepEqual(yazilan, ['fason', 'kalite', 'malzeme', 'muhendislik', 'suruyor', 'teslim'].map((n) => `uretim-emirleri.bekleme-${n}`));
+    assert.deepEqual(yazilan, ['fason', 'kalite', 'malzeme', 'muhendislik', 'suruyor', 'takim', 'teslim'].map((n) => `uretim-emirleri.bekleme-${n}`));
   });
 
   test('mühendislik ve teslim edilmedi nedenleriyle bekletilir; bilinmeyen neden kısıta takılır', async () => {
