@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 import { kartSonucu, listeSirasi } from './yol.ts';
 
@@ -92,6 +92,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                         <li key={a.id} data-yok={x ? undefined : ''}>
                           <span>{k.emirler.length > 1 ? `${e.no} · ` : ''}{String(i + 1)}. {a.ad}</span>
                           <small>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}` : 'yeri yok'}</small>
+                          {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                         </li>
                       );
                     }))}
