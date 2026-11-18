@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { TEMIZLIK_EKI_SATIR_BAYTI, temizlikEkiSatirlari, temizlikYedegiUygunMu, yedekAdi } from './kurallar.ts';
+import { TEMIZLIK_EKI_SATIR_BAYTI, temizlikEkiSatirlari, temizlikYedegiUygunMu, yedekAdi, yedekAdiniCoz } from './kurallar.ts';
 
 // Deneme verisi temizleme (3395 a): yalnız bayraklı yönetici, yalnız işaretli ve kilitsiz kök, bağlı kayıtlarıyla; parola ve
 // yakın tarihli yedek sunucuda istenir; değişmez defterin kilidi yalnız işlev içinde açılır. Veriler uydurmadır.
@@ -742,4 +742,9 @@ test('yedek uygunluğu: yoksa, boşsa, eskiyse ya da gelecekteyse uygun değil',
   assert.equal(temizlikYedegiUygunMu({ zaman: '2026-11-17T11:45:00Z', boyut: 0 }, simdi, 30), false);
   assert.equal(temizlikYedegiUygunMu({ zaman: '2026-11-17T11:20:00Z', boyut: 10 }, simdi, 30), false);
   assert.equal(temizlikYedegiUygunMu({ zaman: '2026-11-17T12:30:00Z', boyut: 10 }, simdi, 30), false);
+  // Ad saniyeye kırpılır: aynı saniyede alınıp hemen kullanılan yedek de uygundur; sınır saniye kadar sıkılaşır, gevşemez.
+  const an = new Date('2026-11-17T12:00:00.033Z');
+  const yedek = yedekAdiniCoz(yedekAdi('tmiv2', 'elle', an))!;
+  assert.equal(temizlikYedegiUygunMu({ zaman: yedek.zaman.toISOString(), boyut: 10 }, an, 30), true);
+  assert.equal(temizlikYedegiUygunMu({ zaman: yedek.zaman.toISOString(), boyut: 10 }, new Date(an.getTime() + 30 * 60_000), 30), false);
 });

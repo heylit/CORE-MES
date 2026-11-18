@@ -29,7 +29,11 @@ const TEMIZ: TemizlikEtkisiCevabi = { ...KILITLI, kokler: [KILITLI.kokler[0]!], 
 const YEDEK_ADI = 'tmiv2-20261117T120000Z-elle.dump';
 const YEDEKLER = {
   durum: 'acik', dizin: 'D:\\ORN', kaynak: 'ortam', saat: 2, saklamaGun: 14, enAzKalan: 3, suruyor: null, sonHata: null,
-  yedekler: [{ ad: YEDEK_ADI, tur: 'elle', zaman: '2026-11-17T12:00:01.000Z', boyut: 1024 }],
+  // Gerçekteki gibi: zaman addan, saniyeye kırpık. Önce gelen eski elle yedek, adımın başlangıçtan önceki yedeği almadığını ölçer.
+  yedekler: [
+    { ad: 'tmiv2-20261117T115930Z-elle.dump', tur: 'elle', zaman: '2026-11-17T11:59:30.000Z', boyut: 1024 },
+    { ad: YEDEK_ADI, tur: 'elle', zaman: '2026-11-17T12:00:00.000Z', boyut: 1024 },
+  ],
   alan: null, dosyaDeposu: { bayt: 0, sinir: 1, uyari: false }, pgSurumu: null,
 } satisfies YedeklerCevabi;
 
@@ -54,7 +58,7 @@ function sunucuKur(temizleCevabi: { durum: number; govde: unknown } | null = nul
       const kaldirildi = istekler.some((i) => i.yol === '/veri-temizleme/isaret');
       return json(200, yol.includes('uretim_emri%3A15') || (yol.includes('bitis=') && !kaldirildi) ? KILITLI : TEMIZ);
     }
-    if (yol === '/yedekler/al') return json(200, { baslangic: '2026-11-17T12:00:00.000Z' });
+    if (yol === '/yedekler/al') return json(200, { baslangic: '2026-11-17T12:00:00.600Z' });
     if (yol === '/yedekler') return json(200, YEDEKLER);
     if (yol === '/veri-temizleme/temizle' && temizleCevabi !== null) return json(temizleCevabi.durum, temizleCevabi.govde);
     if (yol === '/veri-temizleme/temizle') return json(200, { tablolar: TEMIZ.tablolar, kokler: [{ tur: 'uretim_emri', no: 'ORN-UE-0012' }], yedekAdi: YEDEK_ADI });
