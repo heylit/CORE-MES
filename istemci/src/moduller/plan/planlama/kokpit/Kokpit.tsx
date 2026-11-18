@@ -40,6 +40,7 @@ import { EmirAdimlari, SiraSeridi, type GeriOzeti, type PlanlaDurumu, type Planl
 import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import { Yol } from './Yol.tsx';
+import { eksikPlanlanacaklar, yenidenPlanlanacaklar } from './yol.ts';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -686,7 +687,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             {(kapat) => {
               const pd = seciliKart ? planlaDurumu : null;
               // Kısmen planlı emir de yeniden planlanır (plana alınamaz); eksik adımları böyle yerleşir.
-              const planli = seciliKart ? seciliKart.emirler.filter((e) => e.durum !== 'plansiz' || kismiPlanli(m, e)).map((e) => e.id) : [];
+              const planli = seciliKart ? yenidenPlanlanacaklar(m, seciliKart) : [];
               const kismiVar = seciliKart !== null && seciliKart !== undefined && seciliKart.emirler.some((e) => kismiPlanli(m, e));
               const kartAdi = seciliKart ? seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? '' : '';
               // Yeniden dizme kurulmuş planın üstünde çalışır; plan yokken satırlar pasiftir ve nedenini yazar.
@@ -797,7 +798,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <Yol
           m={m} p={p} kart={seciliKart} vurgu={vurgu} zaman={zaman} pd={seciliKart ? planlaDurumu : null} plansiz={plansizlar.length} taslakVar={taslakVar} mesgul={mesgul}
           malzemeBekleyen={malzeme?.bekleyen} oner={(y) => { if (seciliKart) { setKart(seciliKart.kok); setVurgu(true); } planlaIste(y); }} hamle={hamleUygula} surum={surum}
-          eksikPlanla={() => { if (seciliKart) void yenidenPlanla(seciliKart.emirler.filter((e) => kismiPlanli(m, e)).map((e) => e.id), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''}: eksik adımlar planlandı.`); }}
+          eksikPlanla={() => { if (seciliKart) void yenidenPlanla(eksikPlanlanacaklar(m, seciliKart), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''}: eksik adımlar planlandı.`); }}
           hepsiniPlanla={() => { void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}
           yenidenPlanla={() => { if (seciliKart) void yenidenPlanla(seciliKart.emirler.filter((e) => e.durum !== 'plansiz').map((e) => e.id), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''} yeniden planlandı.`); }}
           onayaGec={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}

@@ -1313,6 +1313,24 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(komutlar).toHaveLength(3);
   });
 
+  // 3423: yarım planlı emir plana alınmaz; menü ve yol onu yeniden planlamaya yollar.
+  it('yarım planlı emir: menü "Kısmen planda" der, "Seçili siparişi yeniden planla" ve yoldaki "Eksik adımları planla" o emri yeniden planlar; plana alma komutu yazılmaz', async () => {
+    const c = ornekCalisma(), ops = (c.plan as unknown as { ops: Record<string, { job: string }> }).ops;
+    const eksik = Object.keys(ops).filter((id) => ops[id]?.job === '3').sort().at(-1) as string;
+    const yarim = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries(ops).filter(([id]) => id !== eksik)), fail: [eksik] } } as typeof c;
+    const komutlar = kur(yarim, SAHA);
+    fireEvent.click(await screen.findByText('ORNEK Burç', { exact: false, selector: '[data-kart="3"] *' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eksik adımları planla' }));
+    await waitFor(() => { expect(komutlar).toEqual([{ tur: 'yeniden-planla', isler: ['3'] }]); });
+    const m = await menu();
+    expect(within(m).getByRole('group', { name: 'Seçili siparişi planla' }).textContent).toContain('Kısmen planda');
+    const yeniden = satir(m, /Seçili siparişi yeniden planla/);
+    expect(yeniden.disabled).toBe(false);
+    fireEvent.click(yeniden);
+    await waitFor(() => { expect(komutlar).toHaveLength(2); });
+    expect(komutlar[1]).toEqual({ tur: 'yeniden-planla', isler: ['3'] });
+  });
+
   // 3335-2b: geride kalan (başlaması geçmiş, başlamamış) işlerin emirleri tek satırla yeniden planlanır.
   it('geride kalanları yeniden planla: sayı geride işi olan emir sayısıdır, komut o emirleri taşır; geride iş yokken satır pasiftir ve nedenini yazar', async () => {
     // Bütün işler başlamamış ve çok eskide: her planlı emir geridedir.

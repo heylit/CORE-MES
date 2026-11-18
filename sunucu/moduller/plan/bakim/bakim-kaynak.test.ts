@@ -52,4 +52,26 @@ describe('plan (gerçek PostgreSQL): periyodik bakım kaynak okumasında', () =>
       await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
     }
   });
+
+  test('BK-K3: tesis geneli, her gün tekrarlayan ve ufkun ilerisindeki duruş her makineye ve her gerçekleşmesiyle gelir', async () => {
+    const { ortam, makineA, makineB, yoneticiId } = durum();
+    const tam: Kullanici = { id: yoneticiId, ad: 'Deneme yonetici', islemler: [...ISLEMLER] };
+    const gun = (n: number) => tesisSaati(Date.now() + n * 86_400_000).slice(0, 10);
+    const { id } = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO vardiya_planli_durus (baslik, kapsam, baslangic, bitis, tekrar, gunler, aktif, yazan_id)
+       VALUES ('Deneme sayım', 'tesis', ($1 || ' 13:00')::timestamp AT TIME ZONE current_setting('TimeZone'),
+               ($1 || ' 13:30')::timestamp AT TIME ZONE current_setting('TimeZone'), 'gunluk', '{}', true, $2) RETURNING id`, [gun(40), yoneticiId]))!;
+    try {
+      const l = (await vt().tx(async (db) => ((await kaynakOku(db, tam)).ek as { planliDuruslar: { anahtar: string; m: string; bas: string; bit: string }[] }).planliDuruslar))
+        .filter((d) => d.anahtar.startsWith(`vd:${String(id)}|`));
+      for (const m of [makineA, makineB]) {
+        const baslar = l.filter((d) => d.m === String(m)).map((d) => d.bas);
+        for (const n of [40, 41, 45]) assert.ok(baslar.includes(`${gun(n)} 13:00`), `makine ${String(m)} gün +${String(n)}: ${baslar.slice(0, 3).join(', ')}`);
+        assert.equal(baslar.includes(`${gun(39)} 13:00`), false, 'ilk başlangıçtan önce gerçekleşme yok');
+      }
+      assert.equal(new Set(l.map((d) => d.anahtar)).size, l.length, 'anahtarlar tekil');
+    } finally {
+      await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
+    }
+  });
 });
