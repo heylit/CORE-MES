@@ -1,6 +1,6 @@
 import type {
   AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketKaynagi, HareketTuru, KonumTuru, ListeFisiTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulBelgeTuru, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
-  StokDurumuSuzgeci, TeslimDurumu,
+  SifirlamaNedeni, StokDurumuSuzgeci, TeslimDurumu,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -75,6 +75,11 @@ export const DURUM_ETIKETI: Record<'yeterli' | 'kritik' | 'eksi' | 'tanimsiz', {
 export const CIKIS_NEDENI: Record<CikisNedeni, string> = {
   uretime_sarf: 'Üretime sarf', sevk: 'Müşteriye sevk', fire: 'Fire / hurda', numune: 'Numune', diger: 'Diğer', tedarikci_iade: 'Tedarikçiye iade',
 };
+// 3417 a: kartı sıfırlamanın nedeni ve sayım farkının kaynağı.
+export const SIFIRLAMA_NEDENI: Record<SifirlamaNedeni, string> = {
+  kart_kapatilacak: 'Kart kapatılacak', kayip: 'Kayıp', hasarli: 'Hasarlı / hurda', yanlis_giris: 'Yanlış giriş',
+};
+export const SAYIM_KAYNAGI: Record<'sayim' | 'sifirlama', string> = { sayim: 'Sayım', sifirlama: 'Sıfırlama' };
 // Parti gereksinimi karttaki türe göredir (DEP-20); sunucu da denetler, ekran yalnız alanı gösterir.
 // Bu türlerde her mal kabul satırı lot alır; tedarikçi parti/döküm no isteğe bağlıdır (#1018).
 export const lotluMu = (tur: MalzemeTuru | null): boolean => tur !== null && tur !== 'demirbas' && tur !== 'hizmet';

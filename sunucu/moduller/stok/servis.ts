@@ -15,3 +15,4 @@ export * from './servis/irsaliye.ts';
 export * from './servis/taslak.ts';
 export * from './servis/baslangic.ts';
 export * from './servis/kontrol.ts';
+export * from './servis/sayim-duzeltme.ts';

@@ -176,8 +176,8 @@ describe('stok kör sayım ve sayım farkı onayı (gerçek PostgreSQL)', () => 
     assert.equal((await istek('depo', 'POST', '/stok/sayim', { konumId: z, satirlar: [{ malzemeId: k, partiId: p, beklenenMiktar: '9', sayilanMiktar: '7' }] })).durum, 409);
     assert.equal((await sayim('depo', z, k, p, '7')).durum, 200);
     const sayac = await istek<Record<string, number | null>>('mudur', 'GET', '/stok/menu-sayaclari');
-    assert.ok((sayac.govde['sayim-onaylari'] ?? 0) >= 1, JSON.stringify(sayac.govde));
-    assert.equal((await istek<Record<string, number | null>>('operator', 'GET', '/stok/menu-sayaclari')).govde['sayim-onaylari'], null);
+    assert.ok((sayac.govde['sayim-duzeltme'] ?? 0) >= 1, JSON.stringify(sayac.govde));
+    assert.equal((await istek<Record<string, number | null>>('operator', 'GET', '/stok/menu-sayaclari')).govde['sayim-duzeltme'], null);
     // Sayımdan sonra aynı partiden çıkış: onay yalnız sayım farkını (-3) yazar, çıkışı ezmez (10 - 2 - 3).
     assert.equal((await istek('depo', 'POST', '/stok/cikis', { malzemeId: k, konumId: z, miktar: '2', cikisNedeni: 'numune' })).durum, 200);
     const f = (await bekleyen(k))!;

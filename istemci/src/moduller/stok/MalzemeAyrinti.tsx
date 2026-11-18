@@ -181,6 +181,7 @@ export function MalzemeAyrinti() {
   const tanimlar = useIslem('stok.malzeme-ayari');
   const sepetYetkisi = useIslem('stok.transfer');
   const ayirabilir = useIslem('stok.statu-degistir');
+  const sayabilir = useIslem('stok.sayim');
   const [islem, setIslem] = useState<Islem | null>(null);
   const [oneriMiktari, setOneriMiktari] = useState('');
   const statuAdi = useStatuAdi();
@@ -249,6 +250,7 @@ export function MalzemeAyrinti() {
           {sepetYetkisi && <Dugme simge="box" onClick={() => setIslem({ tur: 'sepet' })}>Sepete ekle</Dugme>}
           <EtiketMerkeziDugmesi tur="malzeme" simge="scan" idler={[id]}>QR etiketi</EtiketMerkeziDugmesi>
           {tanimlar && <Dugme simge="tool" onClick={() => setIslem({ tur: 'ayar' })}>Stok ayarı</Dugme>}
+          {sayabilir && <Link to={`/stok/sayim-duzeltme?sekme=sifirla&malzeme=${s.malzemeId}`}><Dugme simge="x">Stoğu sıfırla</Dugme></Link>}
           <GecmisDugmesi kayitlar={[{ tablo: 'stok_malzeme_ayari', anahtar: { malzeme_id: s.malzemeId } }]} />
         </>} />
       <Kart baslik="Bakiye satırları"><Tablo etiket="Bakiye satırları" kip="kaydir" sutunlar={sutunlar} satirlar={m.data.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu malzemenin stoğu yok." /></Kart>
