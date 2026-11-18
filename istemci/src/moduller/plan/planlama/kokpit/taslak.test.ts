@@ -43,6 +43,17 @@ describe('ayarKomutu', () => {
     const k = ayarKomutu(c, kisitYaz(alanYaz(t, dondurma, 7), 'personel', !acik), 'Dondurma 7');
     expect(k).toEqual({ tur: 'ayar', ayar: { w: { dondurma: 7 }, param: {}, ac: acik ? [] : ['personel'], kapat: acik ? ['personel'] : [] }, ayrinti: 'Dondurma 7' });
   });
+
+  it('çalışmanın süre ayarları (taşıma, transfer, program, ilk parça) komutta ayarlar altında gider; ağırlık ve bedel kendi yerinde', () => {
+    const c = ornekCalisma();
+    const alan = (k: string) => AYAR_ALANLARI.find((a) => a.k === k)!;
+    let t = ayarTaslagi(c);
+    for (const [k, v] of [['tasimaSaat', 1.5], ['transferOran', 0.5], ['programSaat', 6], ['faiSaat', 2], ['famK', 0.9], ['chgTL', 75]] as const) t = alanYaz(t, alan(k), v);
+    const k = ayarKomutu(c, t, 'Süreler') as unknown as { ayar: Record<string, unknown> };
+    expect(k.ayar['ayarlar']).toEqual({ tasimaSaat: 1.5, transferOran: 0.5, programSaat: 6, faiSaat: 2 });
+    expect(k.ayar['w']).toEqual({ famK: 0.9 });
+    expect(k.ayar['param']).toEqual({ chgTL: 75 });
+  });
 });
 
 function sahteUc(ilk: TaslakSatiri[], gorunum: Record<string, unknown> | null = null) {
@@ -95,7 +106,7 @@ describe('useTaslak', () => {
     await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
     await act(async () => { expect(await result.current.diz()).toBe(false); });
     expect(yollar(post)).toEqual(['/degerlendirme']);
-    expect(bildir).toHaveBeenCalledWith('Plan dizilemedi: veri bu arada değişti; Yeniden diz ile tekrar deneyin.');
+    expect(bildir).toHaveBeenCalledWith('Planlanamadı: veri bu arada değişti; Planla ile tekrar deneyin.');
   });
 
   it('geri al son değişikliği ardındaki dizmelerle birlikte siler; dizme istenmezse yeniden dizmez', async () => {
@@ -159,7 +170,7 @@ describe('useTaslak', () => {
     const { result } = kur(u, bildir);
     await waitFor(() => { expect(result.current.cevap).not.toBeNull(); });
     await act(async () => { expect(await result.current.vazgec()).toBe(false); });
-    expect(bildir.mock.calls[0]![0]).toMatch(/^Taslaktan vazgeçilemedi: /);
+    expect(bildir.mock.calls[0]![0]).toMatch(/^Değişikliklerden vazgeçilemedi: /);
     expect(u.get).toHaveBeenCalledTimes(2);
     expect(result.current.mesgul).toBe(false);
   });

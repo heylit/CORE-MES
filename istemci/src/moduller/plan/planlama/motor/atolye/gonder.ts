@@ -19,6 +19,8 @@ import { simdiSaati } from '../kurallar.ts';
 // kalmaz. Ayrı deneme kaydı yoktur (3308-5 a): çalışma planı ya onaya gider ya canlıya alınır. Kimin neyi yapabileceğine uçlar karar verir; ekran sunucunun cevabını gösterir.
 export interface GonderSonucu {
   taslak: number; ad: string; yazilan: number; atlanan: number; yazilamaz: string[]; ekMesaiAtlanan: number; senaryolar: SenaryolarCevabi | null;
+  // Sunucunun yazımda söyledikleri (örneğin terminalde durdurulmayı bekleyen iş, 3414-7 a); özetin sonuna eklenir.
+  uyarilar?: string[];
 }
 
 export type GonderHedefi = 'onay' | 'canli';
@@ -82,15 +84,15 @@ export async function calismayiGonder(a: {
     throw new GonderHatasi(`${bas}: ${sebep(h)}`);
   }
   const senaryolar = g.senaryolar ?? null;
-  return { taslak: g.taslak.id, ad: a.ad, yazilan: g.yazilan, atlanan: g.atlanan, yazilamaz: g.yazilamaz, ekMesaiAtlanan: g.ekMesai?.atlanan ?? 0, senaryolar };
+  return { taslak: g.taslak.id, ad: a.ad, yazilan: g.yazilan, atlanan: g.atlanan, yazilamaz: g.yazilamaz, ekMesaiAtlanan: g.ekMesai?.atlanan ?? 0, senaryolar, ...(g.uyarilar?.length ? { uyarilar: g.uyarilar } : {}) };
 }
 
 const ilkUc = (l: string[]) => `${l.slice(0, 3).join(', ')}${l.length > 3 ? '…' : ''}`;
 // Eski gonderOzeti: yazılan, yerinde kalan ve sunucuda karşılığı olmadığı için yazılmayan işler; taslağa geçmeyen ek vardiya (507 2 a) da söylenir.
-export const gonderOzeti = (g: Pick<GonderSonucu, 'yazilan' | 'atlanan' | 'yazilamaz'> & { ekMesaiAtlanan?: number }): string =>
+export const gonderOzeti = (g: Pick<GonderSonucu, 'yazilan' | 'atlanan' | 'yazilamaz' | 'uyarilar'> & { ekMesaiAtlanan?: number }): string =>
   `${g.yazilan} iş taslağa yazıldı${g.atlanan ? `, ${g.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş)` : ''}`
   + `${g.yazilamaz.length ? `; ${g.yazilamaz.length} iş sunucuda karşılığı olmadığı için yazılmadı (${ilkUc(g.yazilamaz)})` : ''}`
-  + `${g.ekMesaiAtlanan ? `; ${g.ekMesaiAtlanan} ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi` : ''}.`;
+  + `${g.ekMesaiAtlanan ? `; ${g.ekMesaiAtlanan} ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi` : ''}.${g.uyarilar?.length ? ` ${g.uyarilar.join(' ')}` : ''}`;
 
 // Onaya giden planın adı (gün adıyla): "Onay <gün> · <kişi>".
 export const taslakAdi = (gun: string, kisi: string): string => `Onay ${gun.trim()} · ${kisi}`;

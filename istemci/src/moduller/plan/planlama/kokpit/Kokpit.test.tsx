@@ -57,7 +57,7 @@ function Yuvali({ children, dis = null }: { children: ReactNode; dis?: BekleyenD
 function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true, dis: BekleyenDegisiklik | null = null) {
   const sec = vi.fn();
   render(
-    <MemoryRouter><BildirimSaglayici><Yuvali dis={dis}>
+    <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali dis={dis}>
       <Kokpit
         depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} {...oz}
@@ -78,7 +78,7 @@ function SecimliKokpit() {
   );
 }
 function acSecimli() {
-  render(<MemoryRouter><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
 }
 
 describe('Kokpit', () => {
@@ -93,9 +93,19 @@ describe('Kokpit', () => {
     expect(is?.dataset.d).toBe('risk');
     if (is) fireEvent.click(is);
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: '3.10' });
-    // Başlamış iş ve fason adım taşınmaz diye işaretlidir.
-    expect(document.querySelector('[data-is="2.20"]')?.hasAttribute('data-sabit')).toBe(true);
+    // Fason adım taşınmaz diye işaretlidir; süren iş taşınır (durdurulur, kalanı gider) ve bunu adında söyler.
+    expect(document.querySelector('[data-is="2.20"]')?.hasAttribute('data-sabit')).toBe(false);
+    expect(document.querySelector('[data-is="2.20"]')?.getAttribute('title')).toContain('sürüyor, taşınırsa durdurulur');
     expect(document.querySelector('[data-is="2.30"]')?.hasAttribute('data-sabit')).toBe(true);
+  });
+
+  it('durdurulup taşınan iş sahada sürerken çubuk adında "terminalde durdurulmayı bekliyor" yazar (3414-7 a)', () => {
+    const c = ornekCalisma();
+    ac({ calisma: { ...c, w: { ...c.w, durdurulan: { '2.20': 1 } }, gercek: { '2.20': { m: '3', S: 138.5, A: 10, n: 4 } } } as typeof c });
+    const cubuk = document.querySelector('[data-is="2.20"]');
+    expect(cubuk?.hasAttribute('data-durdurma-bekliyor')).toBe(true);
+    expect(cubuk?.getAttribute('title')).toContain('terminalde durdurulmayı bekliyor');
+    expect(document.querySelector('[data-is="3.10"]')?.hasAttribute('data-durdurma-bekliyor')).toBe(false);
   });
 
   it('süzgeç uymayan emrin işlerini soluklaştırır, listeyi daraltır', () => {
@@ -207,7 +217,7 @@ describe('Kokpit', () => {
     const g = { ...ortak, dataVer: ortak.dataVer + 2, bekleyen: [b('ORN-b', ['2'])] };
     vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve((yol === '/plan/taslagim' ? { taslak: { surum: 12, tabanSurum: 4, satirlar: [satir({ tur: 'yeniden-planla', isler: ['1'] }, 'Yeniden planlama istendi'), satir({ tur: 'diz', isler: ['1'] }, 'Plan yeniden dizildi')] }, calisma: g, surum: 4 } : null) as never));
     ac({ calisma: ortak });
-    await screen.findByRole('region', { name: 'Taslak' });
+    await screen.findByRole('region', { name: 'Değişiklikleriniz' });
     await waitFor(() => { expect((document.querySelector('[data-degisiklik-ozeti] b') as HTMLElement).textContent).toBe('1 değişiklik'); });
     fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
@@ -221,14 +231,14 @@ describe('Kokpit', () => {
   it('taslak varken Geri taslağın değişiklik sayısını gösterir, son değişikliği dizmesiyle birlikte geri alır; Canlıya al yalnız taslak çubuğundadır', async () => {
     const { post } = taslakSunucusu([satir(AYAR, 'Plan ayarı'), satir(TASI, '3.10 → T2'), satir({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi')]);
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
-    const cubuk = await screen.findByRole('region', { name: 'Taslak' });
-    expect(within(cubuk).getByText('Taslak · 2 değişiklik')).toBeTruthy();
+    const cubuk = await screen.findByRole('region', { name: 'Değişiklikleriniz' });
+    expect(within(cubuk).getByText('2 değişiklik · canlıya alınmadı')).toBeTruthy();
     const geri = within(screen.getByRole('group', { name: 'Geri ve İleri' })).getByRole('button', { name: /Geri/ });
     expect(geri.querySelector('.tc-pyq-rozet')?.textContent).toBe('2');
     // Taslak varken canlıya alma taslak çubuğundaki tek düğmededir; üst şeritte ikincisi yoktur.
     expect(screen.getAllByRole('button', { name: /Canlıya al/ }).map((b) => cubuk.contains(b))).toEqual([true]);
     fireEvent.click(geri);
-    await waitFor(() => { expect(within(cubuk).getByText('Taslak · 1 değişiklik')).toBeTruthy(); });
+    await waitFor(() => { expect(within(cubuk).getByText('1 değişiklik · canlıya alınmadı')).toBeTruthy(); });
     // Geri alınca kalan taslak yeniden dizilir: önce iki geri-al, sonra taslağın görünümünde değerlendirme.
     await waitFor(() => { expect(post.mock.calls.length).toBeGreaterThanOrEqual(3); });
     expect(post.mock.calls.slice(0, 3).map((c) => [c[0], c[1]])).toEqual([
@@ -260,7 +270,7 @@ describe('Kokpit', () => {
     taslakSunucusu([satir(TASI, '3.10 → T2')]);
     const sen = (canliSurum: number) => ({ canli: null, canliSurum, senaryolar: [] });
     const sayfa = (canliSurum: number) => (
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar: sen(canliSurum) } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
@@ -268,9 +278,9 @@ describe('Kokpit', () => {
       </BildirimSaglayici></MemoryRouter>
     );
     const { rerender } = render(sayfa(3));
-    const SATIR = 'Taslak ortak plana yazıldı; canlı plan değişmedi.';
+    const SATIR = 'Değişiklikleriniz ortak plana yazıldı; canlı plan değişmedi.';
     const satirVar = () => screen.queryAllByRole('status').some((e) => e.textContent === SATIR);
-    fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Değişiklikleriniz' })).getByRole('button', { name: 'Canlıya al' }));
     expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(satirVar()).toBe(true);
     rerender(sayfa(4));
@@ -293,14 +303,14 @@ describe('Kokpit', () => {
       gostergeler: null, degisiklikler: [], etki: null, bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: true, geriGonder: true, canliyaAl: true },
     };
     render(
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar: { canli: null, canliSurum: 3, senaryolar: [eski] } } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
         />
       </BildirimSaglayici></MemoryRouter>,
     );
-    if (taslaktan) fireEvent.click(within(await screen.findByRole('region', { name: 'Taslak' })).getByRole('button', { name: 'Canlıya al' }));
+    if (taslaktan) fireEvent.click(within(await screen.findByRole('region', { name: 'Değişiklikleriniz' })).getByRole('button', { name: 'Canlıya al' }));
     else fireEvent.click(screen.getByRole('button', { name: /^Canlıya al/ }));
     await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 });
     expect(screen.getByRole('tab', { name: 'Planım' }).getAttribute('aria-selected')).toBe('true');
@@ -320,7 +330,7 @@ describe('Kokpit', () => {
     const kaydet = vi.fn(() => new Promise<number>(() => undefined));
     otomatikUygulaIste({ calismaSurumu: 4, oncekiSurum: 3 });
     ac({ komut: { ...komutKur(0), kaydet } });
-    if (taslakVar) await screen.findByRole('region', { name: 'Taslak' });
+    if (taslakVar) await screen.findByRole('region', { name: 'Değişiklikleriniz' });
     await waitFor(() => { expect(kaydet).toHaveBeenCalledTimes(n); });
     expect(kaydet).toHaveBeenCalledTimes(n);
   });
@@ -330,7 +340,7 @@ describe('Kokpit', () => {
     ac();
     await waitFor(() => { expect(api.get).toHaveBeenCalledWith('/plan/taslagim'); });
     expect(within(screen.getByRole('group', { name: 'Geri ve İleri' })).getByRole('button', { name: /Geri/ }).hasAttribute('disabled')).toBe(true);
-    expect(screen.queryByRole('region', { name: 'Taslak' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Değişiklikleriniz' })).toBeNull();
   });
 
   it('yazamayan kişide tutma kapalıdır: sağ tık menü açmaz, Onaya gönder yoktur', () => {
@@ -404,7 +414,7 @@ describe('Kokpit', () => {
     });
     const senaryolar = { canli: null, canliSurum: 3, senaryolar: [senaryo(1, 'Onay Pzt', 'onayda'), senaryo(2, 'Deneme', 'acik')] };
     render(
-      <MemoryRouter><BildirimSaglayici>
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
         <Kokpit
           depo={{ ...DEPO, senaryolar } as unknown as PlanlamaDeposu} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()}
           yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al'])} olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
@@ -825,7 +835,7 @@ describe('Kokpit', () => {
     expect(screen.queryByText(/Bırakın/)).toBeNull();
     fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 30, clientY: 0 });
     fireEvent.pointerMove(satir, { pointerType: 'mouse', clientX: 400, clientY: 0 });
-    expect(screen.getByText(/Bırakın: taslağa yazılır/)).toBeTruthy();
+    expect(screen.getByText(/Bırakın: iş taşınır/)).toBeTruthy();
     expect(document.querySelector('.tc-pyq-tahta [data-tasinan]')?.getAttribute('data-is')).toBe('3.10');
     fireEvent.pointerUp(document, { pointerType: 'mouse' });
     expect(screen.queryByText(/Bırakın/)).toBeNull();
@@ -914,7 +924,7 @@ describe('Kokpit', () => {
     fireEvent.pointerDown(is, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
     fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
     fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
-    expect(screen.getByText(/Bırakın: taslağa yazılır/)).toBeTruthy();
+    expect(screen.getByText(/Bırakın: iş taşınır/)).toBeTruthy();
     fireEvent.pointerUp(document, { pointerType: 'mouse' });
     expect(await screen.findByText('Bu adım bu tezgâhta yapılamaz')).toBeTruthy();
     expect(document.querySelector('.tc-pyq-tahta [data-tasinan]')).toBeNull();
@@ -979,8 +989,8 @@ describe('Kokpit', () => {
     geriKur();
   });
 
-  // Test T3, T4, T6: kümede başlamış iş kaymaz; Shift+ok dört saat kaydırır; küme dışı iş bırakılınca yalnız o taşınır.
-  it('kümede başlamış iş atlanır, Shift+ok kümeyi dört saat kaydırır; küme dışı iş sürüklenince yalnız o taşınır (3365)', async () => {
+  // Test T3, T4, T6: kümede süren iş kaymaz; Shift+ok dört saat kaydırır; küme dışı iş bırakılınca yalnız o taşınır.
+  it('kümede süren iş atlanır, Shift+ok kümeyi dört saat kaydırır; küme dışı iş sürüklenince yalnız o taşınır (3365)', async () => {
     const geriKur = imlecOlayiKur();
     const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
     acSecimli();
@@ -992,7 +1002,7 @@ describe('Kokpit', () => {
     expect(screen.getByText('3 iş seçili · birlikte kayar')).toBeTruthy();
     fireEvent.keyDown(document, { key: 'ArrowRight', shiftKey: true });
     await waitFor(() => { expect(oz).toHaveBeenCalledTimes(2); });
-    expect(await screen.findByText('1 iş taşınamaz (başlamış ya da sabit); ötekiler kaydı.')).toBeTruthy();
+    expect(await screen.findByText('1 iş kaymadı (süren, biten ya da fason); ötekiler kaydı. Süren işi tek başına taşıyın.')).toBeTruthy();
     const c = Object.fromEntries(oz.mock.calls.map((x) => [x[0].isId, x[0]]));
     expect(Object.keys(c).sort()).toEqual(['2.40', '3.10']);
     for (const id of ['2.40', '3.10']) expect(Math.abs(c[id]!.baslangic - S(id) - 4)).toBeLessThanOrEqual(0.25);
@@ -1019,9 +1029,9 @@ describe('Kokpit', () => {
     fireEvent.click(is('3.10'));
     fireEvent.click(is('2.40'), { ctrlKey: true });
     fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(await screen.findByText('2 iş birlikte kaydı, taslağa yazıldı; Geri her birini ayrı alır.', undefined, { timeout: 4000 })).toBeTruthy();
+    expect(await screen.findByText('2 iş birlikte taşındı; Geri al her birini ayrı alır.', undefined, { timeout: 4000 })).toBeTruthy();
     expect(oz).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText('Taşıma taslağa yazıldı; Geri ile alınır.')).toBeNull();
+    expect(screen.queryByText('İş taşındı; Geri al ile alınır.')).toBeNull();
   });
 
   // Test T5: sığdır kümenin bütününü kapsar, yalnız seçili işi değil.
@@ -1369,9 +1379,9 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     expect(satir(m, /Bütün planı baştan kur/).textContent).toContain('Henüz plan yok');
     expect(satir(m, /Geride kalanları yeniden planla \(0\)/).disabled).toBe(true);
     expect(satir(m, /Geride kalanları yeniden planla/).textContent).toContain('Henüz plan yok');
-    // Üç adım ve taslak cümlesi şeridin altında bir kez yazar.
+    // Dört adım ve taslak cümlesi şeridin altında bir kez yazar.
     const akis = document.querySelector('[data-akis]') as HTMLElement;
-    expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Planla2 Kontrol et3 Canlıya al');
+    expect(within(akis).getByRole('list', { name: 'Plan adımları' }).textContent).toBe('1 Seç2 Sistem önersin3 Düzelt4 Onayla');
     expect(akis.textContent).toContain('atölyenin gördüğü plan yalnız Canlıya al ile değişir');
     expect(satir(m, /Plansızların hepsini planla/).disabled).toBe(true);
     expect(satir(m, /İşaretli adımları planla \(0\)/).disabled).toBe(true);

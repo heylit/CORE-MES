@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -39,6 +39,16 @@ describe('Kokpit modeli', () => {
     expect(Object.values(modelKur({ ...c, locks: {} }, p, cx, (id) => id).isler).some((x) => x.kilitli)).toBe(false);
     const m = modelKur({ ...c, locks: { [sabit ?? '']: { m: 'x', S: 0 } } }, p, cx, (id) => id);
     expect(Object.values(m.isler).filter((x) => x.kilitli).map((x) => x.id)).toEqual([sabit]);
+  });
+
+  it('durdurulup taşınan iş sahada sürerken "terminalde durdurulmayı bekliyor" diye işaretlenir; durunca ya da bitince işaret kalkar', () => {
+    const { c, p, cx } = ornek();
+    const kur = (w: Record<string, unknown>, gercek: Record<string, unknown>) => modelKur({ ...c, w: { ...c.w, ...w }, gercek } as typeof c, p, cx, (id) => id).isler['2.20'];
+    expect(kur({ durdurulan: { '2.20': 1 } }, { '2.20': { m: '3', S: 100, A: 10, n: 4 } })?.durdurmaBekliyor).toBe(true);
+    expect(kur({ durdurulan: { '2.20': 1 } }, {})?.durdurmaBekliyor).toBeUndefined();
+    expect(kur({ durdurulan: { '2.20': 1 } }, { '2.20': { m: '3', S: 100, C: 120 } })?.durdurmaBekliyor).toBeUndefined();
+    expect(kur({}, { '2.20': { m: '3', S: 100 } })?.durdurmaBekliyor).toBeUndefined();
+    expect([...durdurmaBekleyenler({ ...c, w: { ...c.w, durdurulan: { '2.20': 1, '3.10': 1 } }, gercek: { '2.20': { S: 1 } } } as typeof c)]).toEqual(['2.20']);
   });
 
   it('kodu olmayan tezgâh satırı kimliğiyle değil adıyla yazılır', () => {
@@ -133,11 +143,12 @@ describe('Kokpit yükü ve ölçeği', () => {
 });
 
 describe('Kokpit taşıma ve tur', () => {
-  it('taşıma saati çeyrek saate oturur ve şimdiden önce olamaz; başlamış ve fason iş taşınmaz', () => {
+  it('taşıma saati çeyrek saate oturur ve şimdiden önce olamaz; süren iş taşınır, biten ve fason iş taşınmaz', () => {
     expect(tasimaSaati(10.1, 0)).toBe(10);
     expect(tasimaSaati(3, 8.1)).toBe(8.25);
     expect(tasinabilir(is('a.1', 'T1', 0, 1))).toBeNull();
-    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true }))).toMatch(/Başlamış/);
+    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true }))).toBeNull();
+    expect(tasinabilir(is('a.1', 'T1', 0, 1, { basladi: true, bitti: true }))).toMatch(/Biten/);
     expect(tasinabilir(is('a.1', '@F', 0, 1, { fason: true }))).toMatch(/Fason/);
   });
 

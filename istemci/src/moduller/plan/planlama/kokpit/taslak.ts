@@ -32,15 +32,15 @@ export const dizmeMi = (s: TaslakSatiri): boolean => s.komut.tur === 'diz';
 // Panelin taslağından ayar komutu: yalnız değişen alanlar ve kısıtlar; değişen yoksa null.
 export function ayarKomutu(c: PlanlamaCalismasi, t: AyarTaslagi, ayrinti: string): TaslakKomutu | null {
   const simdi = ayarTaslagi(c);
-  const w: Record<string, unknown> = {}, param: Record<string, unknown> = {};
+  const w: Record<string, unknown> = {}, param: Record<string, unknown> = {}, ayarlar: Record<string, unknown> = {};
   for (const a of AYAR_ALANLARI) {
     const v = alanDegeri(t, a);
-    if (v !== null && v !== alanDegeri(simdi, a)) (a.yer === 'w' ? w : param)[a.k] = v;
+    if (v !== null && v !== alanDegeri(simdi, a)) (a.yer === 'w' ? w : a.yer === 'param' ? param : ayarlar)[a.k] = v;
   }
   const ac = PANEL_KISITLARI.filter((k) => t.acik[k] === true && simdi.acik[k] === false);
   const kapat = PANEL_KISITLARI.filter((k) => t.acik[k] === false && simdi.acik[k] === true);
-  if (Object.keys(w).length + Object.keys(param).length + ac.length + kapat.length === 0) return null;
-  return { tur: 'ayar', ayar: { w, param, ac, kapat }, ayrinti } as TaslakKomutu;
+  if (Object.keys(w).length + Object.keys(param).length + Object.keys(ayarlar).length + ac.length + kapat.length === 0) return null;
+  return { tur: 'ayar', ayar: { w, param, ...(Object.keys(ayarlar).length > 0 ? { ayarlar } : {}), ac, kapat }, ayrinti } as TaslakKomutu;
 }
 
 // Dizmenin işleri: görünümdeki bekleyenlerin işleri; biri bütün planı etkiliyorsa '*'. Bekleyen yoksa dizilecek bir şey yoktur.
@@ -95,7 +95,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
 
   const oku = useCallback(() => {
     if (!yazabilir) return;
-    u.get<TaslakCevabi>(YOL).then(koy, (h: unknown) => { setHata(hataIletisi(h, 'Taslak okunamadı.')); });
+    u.get<TaslakCevabi>(YOL).then(koy, (h: unknown) => { setHata(hataIletisi(h, 'Değişiklikleriniz okunamadı.')); });
   }, [yazabilir, u, koy]);
   useEffect(oku, [oku]);
 
@@ -116,7 +116,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   }, [u]);
 
   const dizmeyiYaz = useCallback(async (is: string): Promise<boolean> => {
-    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/diz`, { taslakSurumu: surum(), is }), 'Plan dizilemedi');
+    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/diz`, { taslakSurumu: surum(), is }), 'Planlanamadı');
     if (r !== null) koy(r);
     return r !== null;
   }, [calis, u, koy]);
@@ -126,9 +126,9 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
     if (isler.length === 0 || surum() === null) return true;
     setDiziliyor(true);
     try {
-      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler: [...isler] }), 'Plan dizilemedi');
+      const d = await calis(() => degerlendir({ tur: 'plan-uygula', isler: [...isler] }), 'Planlanamadı');
       if (d === null) return false;
-      if (d.cevap.sonuc.tur !== 'plan-uygula') { bildir('Plan dizilemedi: veri bu arada değişti; Yeniden diz ile tekrar deneyin.'); return false; }
+      if (d.cevap.sonuc.tur !== 'plan-uygula') { bildir('Planlanamadı: veri bu arada değişti; Planla ile tekrar deneyin.'); return false; }
       return dizmeyiYaz(d.is);
     } finally { setDiziliyor(false); }
   }, [calis, degerlendir, dizmeyiYaz, bildir]);
@@ -175,7 +175,7 @@ export function useTaslak(yazabilir: boolean, bildir: (ileti: string) => void, u
   }, [calis, u, koy, diz, ileriKur]);
 
   const vazgec = useCallback(async (): Promise<boolean> => {
-    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/vazgec`, { taslakSurumu: surum() }), 'Taslaktan vazgeçilemedi');
+    const r = await calis(() => u.post<TaslakCevabi>(`${YOL}/vazgec`, { taslakSurumu: surum() }), 'Değişikliklerden vazgeçilemedi');
     if (r !== null) { koy(r); ileriKur([]); }
     return r !== null;
   }, [calis, u, koy, ileriKur]);

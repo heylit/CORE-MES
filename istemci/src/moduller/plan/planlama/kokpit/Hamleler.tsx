@@ -86,7 +86,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
   if (!gecerliler.length) {
     if (e.durum !== 'plansiz') return <p className="tc-pyq-not">{isId !== null && yalnizKazanc ? 'Bu adımı taşımak emri erken bitirmiyor.' : 'Tek işi taşıyarak daha erkene alınacak boş yer yok; tahtadan elle bakın.'}</p>;
     const neden = adaylar.map((a) => sonuc[anahtar(a)]).find((r) => r && r !== 'okunamadi' && r.ileti);
-    return <p className="tc-pyq-not">{neden && neden !== 'okunamadi' ? neden.ileti : 'Bu emir buradan plana alınamıyor; planı Planlama motoru sayfasında yeniden kurun.'}</p>;
+    return <p className="tc-pyq-not">{neden && neden !== 'okunamadi' ? neden.ileti : 'Bu emir buradan planlanamıyor; planı Planlama motoru sayfasında yeniden kurun.'}</p>;
   }
   const ozet = (a: TurAdayi) => {
     const r = sonuc[anahtar(a)];
@@ -104,18 +104,18 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
   const satir = (a: TurAdayi, sira = 0) => {
     const { r, bitis, kazanc, gec, itilen, al, belirsiz, yer } = ozet(a);
     const gecBirakir = gec !== null && gec > 0.01 && e.durum !== 'gec';
-    const dugme = al ? 'Plana al' : 'Uygula';
+    const dugme = al ? 'Planla' : 'Taşı';
     return (
       <li key={anahtar(a)} data-hamle={a.tezgah}>
         <span>
           <b>{yer}</b>
           <small>
             {r === undefined ? 'hesaplanıyor'
-              : belirsiz ? 'bitişi plan dizilince belli olur' : bitis === null ? 'sonucu sunucu taşırken denetler'
+              : belirsiz ? 'bitişi planlanınca belli olur' : bitis === null ? 'sonucu sunucu taşırken denetler'
                 : `biter ${zaman(bitis).slice(6)}${kazanc !== null && kazanc > 0.01 ? ` · ${sureYaz(kazanc)} erken` : ''}${gec === null ? '' : gec > 0.01 ? ` · ${al ? '' : 'yine '}${sureYaz(gec)} geç` : ' · termine yetişir'}${itilen ? ` · aynı emrin ${String(itilen)} adımı kayar` : ''}`}
           </small>
         </span>
-        <Dugme tur={sira === 0 && (yalnizKazanc || (gec !== null && gec <= 0.01)) ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'plana al' : 'uygula'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
+        <Dugme tur={sira === 0 && (yalnizKazanc || (gec !== null && gec <= 0.01)) ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'planla' : 'taşı'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
       </li>
     );
   };
