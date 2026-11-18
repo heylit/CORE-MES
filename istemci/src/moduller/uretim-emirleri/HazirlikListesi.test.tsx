@@ -110,7 +110,7 @@ describe('Emir hazırlık matrisi', () => {
     const istekler = sunucuKur({ id: 1, ad: 'Deneme', islemler: ['terminal.uret'] }, {});
     ac(ekran(), '/e/3');
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/oturum')).toBe(true); });
-    expect(screen.queryByRole('region', { name: 'Hazırlık' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Hazırlık durumu' })).toBeNull();
     expect(istekler.some((i) => i.yol.includes('/hazirlik'))).toBe(false);
   });
 });

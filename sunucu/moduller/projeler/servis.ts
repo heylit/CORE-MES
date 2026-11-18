@@ -243,7 +243,7 @@ const gorevCevir = (g: GorevSatiri, a: Adlar): Gorev => ({
   kontrolRolId: g.kontrol_rol_id, kontrolRolAd: ad(a.roller, g.kontrol_rol_id),
   yedekKontrolKisiId: g.yedek_kontrol_kisi_id, yedekKontrolKisiAd: ad(a.kisiler, g.yedek_kontrol_kisi_id),
   yedekKontrolRolId: g.yedek_kontrol_rol_id, yedekKontrolRolAd: ad(a.roller, g.yedek_kontrol_rol_id),
-  onaylandi: g.onaylandi, surum: g.surum,
+  onaylandi: g.onaylandi, hazirlikMaddesi: g.hazirlik_maddesi, surum: g.surum,
 });
 const gorevKisileri = (g: GorevSatiri): number[] =>
   [g.sorumlu_kisi_id, g.kontrol_kisi_id, g.yedek_kontrol_kisi_id].filter((x): x is number => x !== null);

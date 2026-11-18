@@ -13,7 +13,8 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { hazirlikGorevleri, hazirlikGorevleriAc } from '../projeler/disari.ts';
 import { hazirligiKapananEmirler, uretimEmriAc } from './disari.ts';
-import { hazirligiKapatanEmir } from './kurallar.ts';
+import { hazirlikCozucusuKaydet } from './hazirlik.ts';
+import { gorevinSistemHali, hazirligiKapatanEmir } from './kurallar.ts';
 import { EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 
@@ -97,6 +98,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     await kisiEkle('planlama_proje', 'planlama_proje');
     // Hazırlık dağıtma işlemi olmayan rol (3396-4 a: planlama artık dağıtır).
     await kisiEkle('yetkisiz', 'cam');
+    // Emrin sistem hâli yalnız adımlı emri okuyana gider; satış projeyi okur, emri okumaz (yetki matrisi).
+    await kisiEkle('okur', 'satis');
     await kisiEkle('dagitici', 'kalite', 'projeler.hazirlik-dagit');
     planlamaRolId = (await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'planlama_proje'"))!.id;
     await ortam.sahip.sorgu("INSERT INTO uretim_emirleri_hazirlik_maddesi (kod, ad, kisa, sira, sistem) VALUES ('ozel-a', 'Boya onayı', 'Boya', 130, false)");
@@ -212,6 +215,49 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await ata({ sorumluKisiId: null, yapanRolId: planlamaRolId, surum: hedef.surum })).durum, 409, 'eski sürüm');
     const sonra = (await gorevler(b.uretimEmriId)).find((x) => x.id === hedef.id);
     assert.deepEqual([sonra?.sorumluKisiId, sonra?.yapanRolId], [kim('planlama_proje').id, null]);
+  });
+
+  // 3430 a: hücre görevin hâlinin yanında maddenin sistemdeki hâlini taşır; görev bitse de madde eksik kalabilir.
+  test('matris görevin yanında maddenin sistem hâlini verir: iş emri satırından, emir genelinden; özel maddede null', async () => {
+    const proje = (await o().sahip.tek<{ id: number }>("INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.HZS', 'Sistem', $1) RETURNING id", [yoneticiId]))!.id;
+    const a = await emirAc(proje);
+    const [ie1, ie2] = a.isEmriIdleri;
+    assert.equal((await istek('dagitici', '/hazirlik-matrisi/dagit', { projeId: proje, sablonId, deneme: false })).durum, 200);
+    await o().sahip.sorgu("UPDATE projeler_gorev SET durum = 'bitti', ilerleme = 100, gercek_baslangic = CURRENT_DATE, gercek_bitis = CURRENT_DATE WHERE hazirlik_emri_id = $1 AND hazirlik_maddesi = 'cnc'", [a.uretimEmriId]);
+    const onceki = hazirlikCozucusuKaydet('cnc', async (_db, idler) => new Map(idler.filter((x) => x === ie1).map((x) => [x, { durum: 'tamam', secildi: true }] as const)));
+    try {
+      const m = await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(proje)}`, headers: { cookie: cerezler.get('dagitici') ?? '' } });
+      assert.equal(m.statusCode, 200, m.body);
+      const v = m.json<{ gorevler: { madde: string; isEmriId: number | null; durum: string; sistem: string | null }[] }>();
+      const hal = (madde: string, isEmriId: number | null) => v.gorevler.find((g) => g.madde === madde && g.isEmriId === isEmriId);
+      assert.deepEqual([hal('cnc', ie1!)?.durum, hal('cnc', ie1!)?.sistem], ['bitti', 'tamam']);
+      assert.deepEqual([hal('cnc', ie2!)?.durum, hal('cnc', ie2!)?.sistem], ['bitti', 'bilinmiyor'], 'çözücünün bilmediği iş emri: görev bitti, sistem bilinmiyor');
+      assert.ok(hal('cizim', null)?.sistem !== null, 'emir geneli madde emrin hâlinden');
+      assert.ok(v.gorevler.filter((g) => g.madde.startsWith('ozel-')).every((g) => g.sistem === null), 'özel maddenin sistem hâli yok');
+      const okur = await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(proje)}`, headers: { cookie: cerezler.get('okur') ?? '' } });
+      assert.equal(okur.statusCode, 200, okur.body);
+      const ov = okur.json<{ gorevler: { sistem: string | null }[] }>();
+      assert.ok(ov.gorevler.length > 0 && ov.gorevler.every((g) => g.sistem === null), 'emri okuyamayana sistem hâli gitmez');
+      const y = await app.inject({ method: 'GET', url: `/api/projeler/${String(proje)}/yonetim`, headers: { cookie: cerezler.get('okur') ?? '' } });
+      assert.equal(y.statusCode, 200, y.body);
+      const tur = y.json<{ gorevler: { hazirlikMaddesi: string | null }[] }>().gorevler.map((g) => g.hazirlikMaddesi);
+      assert.ok(tur.includes('cnc') && tur.includes('cizim'), 'proje görev listesinde hazırlık görevi maddesiyle gelir');
+    } finally {
+      hazirlikCozucusuKaydet('cnc', onceki);
+    }
+  });
+
+  test('gorevinSistemHali: iş emri satırı önce, yoksa emir geneli; okunamayan emirde null', () => {
+    const h = {
+      maddeler: [{ madde: 'cnc' as const, durum: 'eksik' as const, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim' as const, durum: 'tamam' as const, muafTutulur: true, isEmriDuzeyi: false }],
+      muafiyetler: [],
+      isEmirleri: [{ isEmriId: 5, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc' as const, durum: 'tamam' as const }] }],
+    };
+    assert.equal(gorevinSistemHali(h, 'cnc', 5), 'tamam');
+    assert.equal(gorevinSistemHali(h, 'cnc', null), 'eksik');
+    assert.equal(gorevinSistemHali(h, 'cizim', 5), 'tamam', 'iş emri satırında olmayan madde emir geneline düşer');
+    assert.equal(gorevinSistemHali(h, 'ozel-a', 5), null);
+    assert.equal(gorevinSistemHali(undefined, 'cnc', 5), null);
   });
 
   test('kapalı projeye kurulmaz; şablonsuz projede açılan emir görev doğurmaz', async () => {

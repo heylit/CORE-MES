@@ -11,8 +11,12 @@ import {
 } from './gosterim.ts';
 import { AtamaSecimi, GorevPaneli, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
+import { HazirlikGorevleriAc, ProjeHazirlik } from './ProjeHazirlik.tsx';
 
 // Bitiş sapması: biten görevde gerçek bitiş, açık görevde bugün plan bitişini geçtiyse bugün; iptal edilen görevde yoktur.
+// CSV'de tür ayrı sütun değil, adın önekidir: ekrandaki rozetle aynı ayrım.
+export const gorevCsvAdi = (g: Gorev): string => `${g.hazirlikMaddesi === null ? 'Proje' : 'Hazırlık'}: ${g.ad}`;
+
 export function gorevSapmasi(g: Gorev, bugunTarihi: string): number | null {
   if (g.durum === 'iptal') return null;
   if (g.gercekBitis !== null) return gunFarki(g.planBitis, g.gercekBitis);
@@ -31,11 +35,16 @@ export function Ilerleme({ deger }: { deger: number | null }) {
   );
 }
 
-type Gorunum = 'tablo' | 'pano';
+type Gorunum = 'tablo' | 'matris' | 'pano';
 
-export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yonetim: ProjeYonetimiCevabi; acik: boolean }) {
+// 3430 a: proje görevleri ve hazırlık görevleri tek sekmede. Hazırlık görevi maddeye ve emre bağlı proje görevidir; listede rozetle ayrılır,
+// "Emir × madde" görünümü hazırlık görevlerini emir ve madde tablosunda, maddenin sistemdeki hâliyle gösterir (emri okuyamayana yok).
+export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
+  projeId: number; yonetim: ProjeYonetimiCevabi; acik: boolean; emirleriGorur: boolean;
+}) {
   const yazabilir = useIslemVar(GOREV_ISLEMI) && acik;
-  const [gorunum, gorunumYaz] = useState<Gorunum>('tablo');
+  const [secilenGorunum, gorunumYaz] = useState<Gorunum>('tablo');
+  const gorunum = secilenGorunum === 'matris' && !emirleriGorur ? 'tablo' : secilenGorunum;
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
   const [panel, panelYaz] = useState<number | null>(null);
   const [sablondan, sablondanYaz] = useState(false);
@@ -48,15 +57,16 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
   const sutunlar: Sutun<Gorev>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
       <span>
+        {g.hazirlikMaddesi === null ? <Rozet ton="pasif">Proje</Rozet> : <Rozet ton="bilgi">Hazırlık</Rozet>}{' '}
         {g.ad}
         {g.kilometreTasiId !== null && <span className="tc-prj-soluk"> · {taslar.get(g.kilometreTasiId) ?? '—'}</span>}
         {g.asama !== null && <span className="tc-prj-soluk"> · {g.asama}</span>}
       </span>
-    ), csv: (g) => g.ad },
+    ), csv: gorevCsvAdi },
     { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
     { anahtar: 'kontrol', baslik: 'Kontrol eden', hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
-    { anahtar: 'plan', baslik: 'Plan', mono: true, kirilmaz: true, hucre: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
-    { anahtar: 'gercek', baslik: 'Gerçekleşen', mono: true, kirilmaz: true, hucre: (g) => (
+    { anahtar: 'plan', baslik: 'Plan', mono: true, hucre: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
+    { anahtar: 'gercek', baslik: 'Gerçekleşen', mono: true, hucre: (g) => (
       g.gercekBaslangic === null ? '—' : `${tarihMetni(g.gercekBaslangic)} – ${tarihMetni(g.gercekBitis)}`
     ) },
     { anahtar: 'sapma', baslik: 'Sapma', mono: true, kirilmaz: true, hizala: 'sag', hucre: (g) => {
@@ -68,19 +78,21 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
   ];
 
   return (
-    <Kart
-      baslik="Görevler"
-      simge="list"
-      sag={(
-        <div className="tc-prj-gorunum">
-          <Dugme simge="list" aria-pressed={gorunum === 'tablo'} onClick={() => { gorunumYaz('tablo'); }}>Tablo</Dugme>
+    <Kart baslik="Görevler" simge="list">
+      <div className="tc-prj-gorunum">
+        <div className="tc-prj-secici" role="group" aria-label="Görünüm">
+          <Dugme simge="list" aria-pressed={gorunum === 'tablo'} onClick={() => { gorunumYaz('tablo'); }}>Liste</Dugme>
+          {emirleriGorur && <Dugme simge="grid" aria-pressed={gorunum === 'matris'} onClick={() => { gorunumYaz('matris'); }}>Emir × madde</Dugme>}
           <Dugme simge="gantt" aria-pressed={gorunum === 'pano'} onClick={() => { gorunumYaz('pano'); }}>Pano</Dugme>
-          {yazabilir && <Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme>}
-          {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
         </div>
-      )}
-    >
-      {gorunum === 'tablo'
+        <div className="tc-prj-eylemler">
+          {yazabilir && <Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme>}
+          {yazabilir && <Dugme simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
+          {emirleriGorur && <HazirlikGorevleriAc projeId={projeId} />}
+        </div>
+      </div>
+      {gorunum === 'matris' && <ProjeHazirlik projeId={projeId} />}
+      {gorunum === 'matris' ? null : gorunum === 'tablo'
         ? (
           <Tablo
             etiket="Projenin görevleri"
@@ -120,6 +132,7 @@ function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: 
               const icerik = (
                 <>
                   <strong>{g.ad}</strong>
+                  {g.hazirlikMaddesi !== null && <Rozet ton="bilgi">Hazırlık</Rozet>}
                   <span className="tc-prj-soluk">{atamaMetni(g.sorumluAd, g.yapanRolAd, 'Atanmadı')} · {tarihMetni(g.planBitis)}</span>
                   {g.onaylandi && <span className="tc-prj-soluk">Onaylandı</span>}
                   {gorevGecikiyor(g, gun) && <span className="tc-prj-gec">Gecikiyor</span>}

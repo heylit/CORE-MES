@@ -122,7 +122,7 @@ test.describe('kalite', () => {
     await projeVeGorev(await yonetici.newPage(), ad, true);
     await yonetici.close();
     await ac('/proje-gorevlerim');
-    const tablo = page.getByRole('table', { name: 'Proje görevlerim' });
+    const tablo = page.getByRole('table', { name: 'Görevlerim' });
     await page.getByRole('tab', { name: /Kontrolümde/ }).click();
     await expect(tablo.getByText(ad).first()).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });

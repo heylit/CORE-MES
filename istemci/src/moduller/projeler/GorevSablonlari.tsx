@@ -209,7 +209,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 onChange={(e) => { degistir(k.anahtar, { sureGun: e.target.value }); }}
               />
               <Secim
-                etiket="Hazırlık maddesi" value={k.hazirlik} bosSecenek="Yok (proje başına bir kez)" secenekler={hazirlikSecenekleri}
+                etiket="Hazırlık görevi olsun" value={k.hazirlik} bosSecenek="Hayır, proje başına bir kez" secenekler={hazirlikSecenekleri}
                 onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
               />
               <AtamaSecimi

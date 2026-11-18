@@ -120,9 +120,9 @@ function Matris({ emirId, muafVerir, dagitir, islemler }: { emirId: number; muaf
   };
 
   return (
-    <section className="tc-emir-bolum-hazirlik" aria-label="Hazırlık">
+    <section className="tc-emir-bolum-hazirlik" aria-label="Hazırlık durumu">
       <div className="tc-hz-bas">
-        <h3 className="tc-emir-bolum"><Simge ad="flag" />Hazırlık</h3>
+        <h3 className="tc-emir-bolum"><Simge ad="flag" />Hazırlık durumu</h3>
         {v && (duran > 0 ? <Rozet ton="hata">{`${duran}/${acik.length} iş emri durur`}</Rozet>
           : uyari > 0 ? <Rozet ton="uyari">{`Hazır, ${uyari} uyarı`}</Rozet>
             : muafli ? <Rozet ton="uyari">Hazır, muafiyetle</Rozet> : <Rozet ton="tamam">Üretime hazır</Rozet>)}

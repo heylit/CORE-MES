@@ -24,7 +24,7 @@ const SEKME_ISLEMLERI: Record<'hazirla' | 'yayinlar', readonly string[]> = {
 type Suzgec = Exclude<BildirimListeDurumu, 'arsiv'>;
 const SUZGECLER: readonly { anahtar: Suzgec; baslik: string }[] = [
   { anahtar: 'gelen', baslik: 'Hepsi' },
-  { anahtar: 'gorev', baslik: 'Görevlerim' },
+  { anahtar: 'gorev', baslik: 'İş bildirimleri' },
   { anahtar: 'hatirlatma', baslik: 'Hatırlatmalar' },
   { anahtar: 'okunmamis', baslik: 'Okunmamış' },
   { anahtar: 'onay-bekleyen', baslik: 'Onay bekleyen' },
@@ -34,7 +34,7 @@ const SUZGECLER: readonly { anahtar: Suzgec; baslik: string }[] = [
   { anahtar: 'yapildi', baslik: 'Yapıldı' },
 ];
 const BOS_METIN: Partial<Record<BildirimListeDurumu, string>> = {
-  okunmamis: 'Okunmamış bildirim yok.', 'onay-bekleyen': 'Onay bekleyen bildirim yok.', gorev: 'Bekleyen görev yok.',
+  okunmamis: 'Okunmamış bildirim yok.', 'onay-bekleyen': 'Onay bekleyen bildirim yok.', gorev: 'Bekleyen iş bildirimi yok.',
   hatirlatma: 'Bekleyen hatırlatma yok.', yapildi: 'Yapılmış görev yok.',
 };
 

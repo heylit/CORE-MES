@@ -92,7 +92,7 @@ export function HazirlikMatrisi() {
   const sayi = (d: Durum) => tum.filter((s) => s.durum === d).length;
 
   return (
-    <Kart baslik="Hazırlık matrisi" simge="clipboard-check">
+    <Kart baslik="Hazırlık durumu" simge="clipboard-check">
       <div className="tc-hzm">
         <p className="tc-hzm-not">
           Açık emirlerin her operasyonu için hazırlık maddeleri. Maddeyi sahibi modül verir; ayrıntı, muafiyet ve bağlantılar emir ayrıntısındadır.
