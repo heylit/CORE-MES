@@ -25,7 +25,7 @@ import { useSatirEtkisi } from './satir-etkisi.ts';
 import { bekleyenDegisiklikleri, degisiklikler, gerideEmirleri, gorunumdeBekleyenler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, kismiPlanli, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
@@ -40,6 +40,7 @@ import { EmirAdimlari, SiraSeridi, type GeriOzeti, type PlanlaDurumu, type Planl
 import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import { Yol } from './Yol.tsx';
+import { eksikPlanlanacaklar, yenidenPlanlanacaklar } from './yol.ts';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -685,14 +686,16 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           <Acilir ad="Planla" etiket="Planla" simge="play" sinif="tc-pyq-planla" disabled={mesgul || tur !== null}>
             {(kapat) => {
               const pd = seciliKart ? planlaDurumu : null;
-              const planli = seciliKart ? seciliKart.emirler.filter((e) => e.durum !== 'plansiz').map((e) => e.id) : [];
+              // Kısmen planlı emir de yeniden planlanır (plana alınamaz); eksik adımları böyle yerleşir.
+              const planli = seciliKart ? yenidenPlanlanacaklar(m, seciliKart) : [];
+              const kismiVar = seciliKart !== null && seciliKart !== undefined && seciliKart.emirler.some((e) => kismiPlanli(m, e));
               const kartAdi = seciliKart ? seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? '' : '';
               // Yeniden dizme kurulmuş planın üstünde çalışır; plan yokken satırlar pasiftir ve nedenini yazar.
               const planYok = c.plan === null, PLAN_YOK = 'Henüz plan yok; önce planı kurun';
               return (
                 <>
                   <div className="tc-pyq-menu-secili" role="group" aria-label="Seçili siparişi planla" data-pasif={pd ? undefined : ''}>
-                    <span>Seçili siparişi planla<small>{pd ? `${pd.emirNo} · ${String(pd.adim)} adım · yönü seçin` : seciliKart ? 'Zaten planlı; yeniden planlayın' : 'Önce sıradan bir sipariş seçin'}</small></span>
+                    <span>Seçili siparişi planla<small>{pd ? `${pd.emirNo} · ${String(pd.adim)} adım · yönü seçin` : kismiVar ? 'Kısmen planda; eksik adımları "Seçili siparişi yeniden planla" yerleştirir' : seciliKart ? 'Zaten planlı; yeniden planlayın' : 'Önce sıradan bir sipariş seçin'}</small></span>
                     <span className="tc-pyq-menu-yon">
                       <button type="button" role="menuitem" disabled={!pd || !pd.ileriHazir} title="İlk boş saate yerleştirir" onClick={() => { kapat(); planlaIste('ileri'); }}>İleriye</button>
                       <button type="button" role="menuitem" disabled={!pd || !pd.terminVar} title={pd && !pd.terminVar ? 'Emrin termini yok; geriye yerleştirilemez.' : 'Termine yetişecek en geç saate yerleştirir'} onClick={() => { kapat(); planlaIste('geri'); }}>Teslimden geriye</button>
@@ -795,6 +798,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <Yol
           m={m} p={p} kart={seciliKart} vurgu={vurgu} zaman={zaman} pd={seciliKart ? planlaDurumu : null} plansiz={plansizlar.length} taslakVar={taslakVar} mesgul={mesgul}
           malzemeBekleyen={malzeme?.bekleyen} oner={(y) => { if (seciliKart) { setKart(seciliKart.kok); setVurgu(true); } planlaIste(y); }} hamle={hamleUygula} surum={surum}
+          eksikPlanla={() => { if (seciliKart) void yenidenPlanla(eksikPlanlanacaklar(m, seciliKart), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''}: eksik adımlar planlandı.`); }}
           hepsiniPlanla={() => { void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emre yer verildi.`); }}
           yenidenPlanla={() => { if (seciliKart) void yenidenPlanla(seciliKart.emirler.filter((e) => e.durum !== 'plansiz').map((e) => e.id), `${seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? ''} yeniden planlandı.`); }}
           onayaGec={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}
@@ -830,7 +834,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           />
           {seciliKart && (
             <EmirAdimlari
-              firma={firma}
+              firma={firma} plan={p}
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}

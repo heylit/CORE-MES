@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import type { SiraKarti } from './yerlestirme.ts';
-import { kartSonucu, yolAdimi } from './yol.ts';
+import { eksikPlanlanacaklar, kartSonucu, yenidenPlanlanacaklar, yolAdimi } from './yol.ts';
 
 const zaman = (t: number): string => `g${String(Math.floor(t / 24))} ${String(t % 24).padStart(2, '0')}:00`;
 const is = (id: string, m: string, S: number, C: number, sira: number): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${String(sira + 1)}`, m, S, C, basladi: false, fason: false, kilitli: false, sira });
@@ -18,6 +18,14 @@ const kart = (emirler: KokpitEmri[]): SiraKarti => ({ kok: emirler[0]?.id ?? '',
 const plan = (ops: Record<string, { why: { t: string; r?: string } | null }>): OkunanPlan => ({ ops } as unknown as OkunanPlan);
 
 describe('planlama yolu (3414)', () => {
+  it('yarım planlı emir (3423): eksik adımları planlamak yalnız kısmen planlı emirleri, yeniden planlamak planda adımı olan her emri verir', () => {
+    // 1 tam planlı, 2 kısmen planlı (ilk adımı planda), 3 hiç planlanmamış.
+    const tam = emir('1', { durum: 'iyi', bitis: 20, gecikme: -80 }), yarim = emir('2', {}), yeni = emir('3', {});
+    const m = model([tam, yarim, yeni], [is('1.1', 'T1', 0, 10, 0), is('1.2', 'T2', 10, 20, 1), is('2.1', 'T1', 10, 20, 0)]);
+    const k = kart([tam, yarim, yeni]);
+    expect(eksikPlanlanacaklar(m, k)).toEqual(['2']);
+    expect(yenidenPlanlanacaklar(m, k)).toEqual(['1', '2']);
+  });
   it('adım: seçim yokken Seç, plansız emirde Sistem önersin, hepsi plandaysa Düzelt', () => {
     const a = emir('1', {}), b = emir('2', { durum: 'iyi', bitis: 50, gecikme: -50 });
     expect(yolAdimi(null, false)).toBe('sec');

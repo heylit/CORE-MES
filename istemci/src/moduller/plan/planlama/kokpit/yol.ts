@@ -1,5 +1,5 @@
 import { nedenMetni, type OkunanPlan } from '../motor/kurallar.ts';
-import { enCokBekleyen, sureYaz, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
+import { enCokBekleyen, kismiPlanli, sureYaz, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 import { malzemeNedeni } from './malzeme.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 
@@ -62,3 +62,9 @@ function gecikmeNedeni(m: KokpitModeli, p: OkunanPlan | null, e: KokpitEmri, zam
 // Liste düzeninde (3414 b) sıra: ilgi bekleyen (plansız, geç, riskli) önce, sonra zamanında bitenler; kendi içlerinde gelen sıra (termin) korunur.
 const ILGI: Record<SiraKarti['durum'], number> = { plansiz: 0, gec: 0, risk: 0, iyi: 1 };
 export const listeSirasi = (kartlar: readonly SiraKarti[]): SiraKarti[] => kartlar.map((k, i) => [k, i] as const).sort((a, b) => ILGI[a[0].durum] - ILGI[b[0].durum] || a[1] - b[1]).map(([k]) => k);
+
+// Yeniden planlamaya giden emirler. Eksik adımları planlamak yalnız kısmen planlı emirleri verir (tam planlı emir yerinde kalır);
+// seçili siparişi yeniden planlamak planda adımı olan her emri verir (hiç planlanmamış emir plana alınır, burada yoktur).
+type Isli = Pick<KokpitModeli, 'isler'>;
+export const eksikPlanlanacaklar = (m: Isli, kart: SiraKarti): string[] => kart.emirler.filter((e) => kismiPlanli(m, e)).map((e) => e.id);
+export const yenidenPlanlanacaklar = (m: Isli, kart: SiraKarti): string[] => kart.emirler.filter((e) => e.durum !== 'plansiz' || kismiPlanli(m, e)).map((e) => e.id);

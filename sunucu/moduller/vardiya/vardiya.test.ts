@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, kisiVardiyalari, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz, takvimKayitlari } from './disari.ts';
+import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, kisiVardiyalari, makinePlanliDuruslari, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz, takvimKayitlari } from './disari.ts';
 import type { ArkonDurusSonucu, PlanliDurusKaydi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -613,6 +613,13 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       })).govde.durus;
       makine = await oku('makine', makineA);
       assert.equal(makine.gunler[0]!.dakika, 360);
+      // Plan girdisi: makineye inen duruş gerçekleşmeleri duvar saatiyle; istasyon duruşu yalnız o istasyonun makinesine, tesis duruşu hepsine.
+      const inen = await vt().tx((db) => makinePlanliDuruslari(db, { baslangic: PERSEMBE, bitis: PERSEMBE }));
+      assert.deepEqual(inen.filter((d) => d.makineId === makineA && d.bas.startsWith(PERSEMBE)).map((d) => [d.durusId, d.baslik, d.bas, d.bit]).sort(), [
+        [istasyonDurusu.id, 'Bakım', `${PERSEMBE} 10:00`, `${PERSEMBE} 11:00`],
+        [tesis.id, 'Bakım', `${PERSEMBE} 15:00`, `${PERSEMBE} 15:30`],
+      ].sort());
+      assert.equal(inen.some((d) => d.makineId !== makineA && d.durusId === istasyonDurusu.id), false);
       assert.equal((await oku('is-merkezi', merkezB)).gunler[0]!.dakika, 420);
       assert.equal(await vt().tx((db) => calismaSuresi(db, merkezB, PERSEMBE)), 420);
       await tamam(c.planlama, 'POST', `/planli-duruslar/${tesis.id}/guncelle`, { ...govde({

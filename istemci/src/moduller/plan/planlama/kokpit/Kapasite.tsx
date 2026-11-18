@@ -4,7 +4,7 @@ import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { durusDenetle, girdiSaati, girdidenSaat, gunSirasi, gunTarihi } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
-import { gunYazisi, kokpitEkMesaileri, mesaiButcesi, uygunOperatorler, vardiyaAdi, type KokpitEkMesaisi, type KokpitModeli } from './kurallar.ts';
+import { durusAdi, gunYazisi, kokpitEkMesaileri, mesaiButcesi, uygunOperatorler, vardiyaAdi, type KokpitEkMesaisi, type KokpitModeli } from './kurallar.ts';
 import type { TaslakYazici } from './taslak.ts';
 
 // Kokpit'in Duruş ve mesai bölümü (3282 2a-1, 2a-2): tezgâhın arıza ve bakım duruşları ile ek mesaisi. Elle girilen duruş kişinin taslağına komut olarak yazılır ve
@@ -12,7 +12,7 @@ import type { TaslakYazici } from './taslak.ts';
 // (Risk 2a S3); sunucu da reddeder. Saatler planın ekseninde, çeyrek saat adımlıdır (motorun dilimi). Ek mesai vardiya dışı ek kapasitedir
 // (3282-7 b): gün, vardiya ve o tezgâhı çalıştıracak operatör seçilir; listede yalnız o pencerede çalışabilen kişiler durur.
 
-type Durus = { m: string; from: number; to: number; neden: string | null; oto: boolean };
+type Durus = { m: string; from: number; to: number; neden: string | null; oto: boolean; baslik?: string };
 const ceyrek = (h: number): number => Math.round(h * 4) / 4;
 const anahtar = (a: number, b: number, oto: boolean): string => `${String(a)}-${String(b)}-${oto ? 'o' : 'e'}`;
 const MESAI_ETKISI = 'Ek mesainin etkisi';
@@ -22,7 +22,7 @@ const saatYazisi = (h: number): string => String(Math.round(h * 10) / 10);
 export function duruslar(c: PlanlamaCalismasi, tezgah: string, simdi: number): Durus[] {
   return c.down
     .filter((d) => String(d['m']) === tezgah && typeof d['from'] === 'number' && typeof d['to'] === 'number' && (d['to'] as number) > simdi)
-    .map((d) => ({ m: tezgah, from: d['from'] as number, to: d['to'] as number, neden: typeof d['neden'] === 'string' ? d['neden'] : null, oto: Boolean(d['oto']) }))
+    .map((d) => ({ m: tezgah, from: d['from'] as number, to: d['to'] as number, neden: typeof d['neden'] === 'string' ? d['neden'] : null, oto: Boolean(d['oto']), ...(typeof d['baslik'] === 'string' ? { baslik: d['baslik'] } : {}) }))
     .sort((a, b) => a.from - b.from);
 }
 
@@ -114,7 +114,7 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
   return (
     <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-kapasite" aria-label="Duruş ve mesai">
       <header>
-        <div><b>Duruş ve mesai</b><small>Tezgâhın arıza ve bakım duruşları, ek mesaisi.</small></div>
+        <div><b>Duruş ve mesai</b><small>Tezgâhın arıza, bakım ve vardiya duruşları, ek mesaisi.</small></div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Duruş ve mesaiyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!yazabilir && <p className="tc-pyq-not">Duruşu ve ek mesaiyi yalnız planı yazabilen kişi ekler ya da siler.</p>}
@@ -124,12 +124,12 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
           {tezgahlar.map((t) => <option key={t.id} value={t.id}>{t.ad ? `${t.kod} · ${t.ad}` : t.kod}</option>)}
         </select>
       </div>
-      <h3>Arıza ve bakım</h3>
+      <h3>Duruşlar</h3>
       {l.length === 0 ? <p className="tc-pyq-not">{`${kod(tezgah)} için önümüzdeki duruş yok.`}</p> : (
         <ul className="tc-pyq-kap-liste">
           {l.map((d) => (
             <li key={anahtar(d.from, d.to, d.oto)} data-anahtar={anahtar(d.from, d.to, d.oto)} tabIndex={-1} data-oto={d.oto ? '' : undefined}>
-              <span><b>{d.neden === 'bakım' ? 'Bakım' : 'Arıza'}</b> {zaman(d.from)} → {zaman(d.to)}{d.oto && <small> · kendiliğinden geldi</small>}</span>
+              <span><b>{durusAdi(d.neden, d.baslik)}</b> {zaman(d.from)} → {zaman(d.to)}{d.oto && <small>{d.neden === 'planlı duruş' ? ' · Vardiya ekranından geldi; orada değişir' : ' · kendiliğinden geldi'}</small>}</span>
               {!d.oto && yazabilir && (
                 <button type="button" className="tc-pyq-simge-dugme" disabled={kilitli} aria-label={`${kod(d.m)} ${zaman(d.from)} → ${zaman(d.to)} duruşunu sil`} title="Duruşu sil" onClick={() => { sil(d); }}>
                   <Simge ad="trash" boyut="k" />

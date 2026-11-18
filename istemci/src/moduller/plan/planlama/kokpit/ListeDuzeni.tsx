@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, eksikNedeni, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 import { kartSonucu, listeSirasi } from './yol.ts';
 
@@ -57,6 +57,8 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
         const bitis = k.durum === 'plansiz' || bitisler.length === 0 ? null : Math.max(...bitisler);
         const sonuc = secili && k.durum !== 'plansiz' ? kartSonucu(m, p, k, zaman, malzemeBekleyen) : null;
         const bekleyen = k.emirler.filter((e) => e.durum === 'plansiz').length;
+        // Kısmen planlı sipariş: tezgâh adımlarından planda yeri olmayanlar.
+        const eksik = k.adim - k.yerlesen;
         return (
           <div className="tc-pyq-ld-kart" key={k.kok} data-d={k.durum} data-acik={secili ? '' : undefined}>
             <div className="tc-pyq-ld-satir" role="row" data-kart={k.kok}>
@@ -74,7 +76,9 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                 <div className="tc-pyq-ld-panel">
                   {k.durum === 'plansiz' ? (
                     <div className="tc-pyq-yol-govde" data-tur="risk">
-                      <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Canlıya almadan atölye görmez; Geri al ile alınır.</small></p>
+                      {eksik > 0 && k.yerlesen > 0
+                        ? <p role="status" data-kismi=""><b>{String(eksik)} adımın planda yeri yok; {String(k.yerlesen)} adım planda.</b><small>Planla eksik adımlara yer bulur; bu siparişin planda olan adımları da yeniden dizilebilir, öteki siparişler yerinde kalır. Geri al ile alınır.</small></p>
+                        : <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Canlıya almadan atölye görmez; Geri al ile alınır.</small></p>}
                       {planla && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="play" disabled={mesgul} onClick={() => { planla(k); }}>Planla</Dugme>}
                     </div>
                   ) : sonuc && (
@@ -96,7 +100,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                       return (
                         <li key={a.id} data-yok={x ? undefined : ''}>
                           <span>{k.emirler.length > 1 ? `${e.no} · ` : ''}{String(i + 1)}. {a.ad}</span>
-                          <small>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}` : 'yeri yok'}</small>
+                          <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
                           {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                         </li>
                       );

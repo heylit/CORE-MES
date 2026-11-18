@@ -963,22 +963,28 @@ function otoArizaUygula(S, makineler, cx) {
 /* 2319 (S10): Arkon'un periyodik bakımı (kaynak okumasının ek.bakimlar; aralığı bakim/kurallar.ts tesis duvar saatiyle kurar) tezgâhın
    duruş satırı olur. Satır S.down'dadır, oto ve bakım anahtarı taşır; planlamacı silebilir ya da değiştirebilir. S.bakimOto açılan anahtarları
    tutar: silinen satır geri gelmez. Listede artık olmayan anahtarın (bakım yapıldı ya da Arkon planı değişti) başlamamış satırı düşer,
-   başlamışsa şimdide kapanır. bakimlar null ya da dizi değilse okunmamıştır, dokunulmaz. Dönen: değişti mi. */
-/** @param {any} [S] @param {any} [bakimlar] @param {number} [now] */
-function otoBakimUygula(S, bakimlar, now) {
+   başlamışsa şimdide kapanır. bakimlar null ya da dizi değilse okunmamıştır, dokunulmaz. Dönen: değişti mi.
+   Vardiya'nın planlı duruşu (ek.planliDuruslar, anahtarı "vd:" ile başlar) aynı yoldan duruş satırı olur: canlıya alma çalışma takvimini
+   planlı duruş düşülmüş okur, motor görmezse işi duruşun içine koyar ve canlıya alma reddeder. İki liste ayrı okunur; her çağrı yalnız
+   kendi türünün anahtarlarını ekler ve düşürür (biri okunamadıysa ötekinin satırları silinmesin). */
+const DURUS_ONEKI = 'vd:';
+/** @param {any} [S] @param {any} [bakimlar] @param {number} [now] @param {boolean} [durus] */
+function otoBakimUygula(S, bakimlar, now, durus) {
   if (!Array.isArray(bakimlar) || !S || !S.D || now == null) return false;
+  const bizim = a => a.startsWith(DURUS_ONEKI) === !!durus;
   const oto = Object.assign({}, S.bakimOto || {}); const gecerli = new Set(); let down = (S.down || []).slice(); let degisti = false;
   for (const b of bakimlar) {
-    if (!b || typeof b.anahtar !== 'string') continue;
+    if (!b || typeof b.anahtar !== 'string' || !bizim(b.anahtar)) continue;
     const from = parseT(S.D, b.bas), to = parseT(S.D, b.bit);
     if (from == null || to == null || !(to > from)) continue;
     gecerli.add(b.anahtar);
     if (oto[b.anahtar]) continue;
-    down.push({ m: String(b.m), from, to, neden: 'bakım', oto: 1, bakim: b.anahtar });
+    down.push(durus ? { m: String(b.m), from, to, neden: 'planlı duruş', baslik: String(b.baslik || ''), oto: 1, bakim: b.anahtar }
+      : { m: String(b.m), from, to, neden: 'bakım', oto: 1, bakim: b.anahtar });
     oto[b.anahtar] = 1; degisti = true;
   }
   for (const a of Object.keys(oto)) {
-    if (gecerli.has(a)) continue;
+    if (!bizim(a) || gecerli.has(a)) continue;
     delete oto[a]; degisti = true;
     down = down.filter(d => !(d.bakim === a && d.from >= now)).map(d => (d.bakim === a && d.to > now ? { ...d, to: now } : d));
   }
@@ -1008,6 +1014,7 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
     if (kaynakBirlestir(S.D, k, kn, bugun).length) S.dataVer = (+S.dataVer || 0) + 1;
     if (otoArizaGerekli(S, kn.durum.machines) && otoArizaUygula(S, kn.durum.machines, compile(stBitenle()))) S.dataVer = (+S.dataVer || 0) + 1;
     if (kn.ek && otoBakimUygula(S, kn.ek.bakimlar, parseT(S.D, duvarSaati(Date.now())))) S.dataVer = (+S.dataVer || 0) + 1;
+    if (kn.ek && otoBakimUygula(S, kn.ek.planliDuruslar, parseT(S.D, duvarSaati(Date.now())), true)) S.dataVer = (+S.dataVer || 0) + 1;
     if (Array.isArray(kn.durum.calisanAdimlar)) {
       const cx = compile(stBitenle());
       /* çerçevede tmiCalisanlar sunucunun emirleriyle sarılıdır (zz40 sunucuyla); burada aynı kayıt doğrudan verilir */
