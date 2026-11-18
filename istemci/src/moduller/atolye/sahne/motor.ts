@@ -1032,7 +1032,9 @@ export class SahneMotoru {
     };
   }
 
-  // Depoyla gelen katalog gövdesi: istemcinin kendi sunduğu dosya, dış istek değil.
+  // Depoyla gelen katalog gövdesi: istemcinin kendi sunduğu dosya, dış istek değil. Dosya üreticinin dış ölçüsünde (metre)
+  // çizildiği için ayak izine sığdırılmaz: eşit ölçek, kısa çizilmiş alanda makineyi alçaltır; seçim kutusu ve andon
+  // zaten alanın ve modelin büyüğüne göre konur.
   private hazirKaynak(ad: string): ModelKaynagi {
     return {
       anahtar: `hazir:${ad}`, ad,
@@ -1041,7 +1043,7 @@ export class SahneMotoru {
         if (!c.ok) throw new Error(`hazir model ${c.status}`);
         return new Uint8Array(await c.arrayBuffer());
       },
-      yerlesim: { birim: 'm', yukari: 'y', donus: 0, sigdir: true },
+      yerlesim: { birim: 'm', yukari: 'y', donus: 0, sigdir: false },
     };
   }
 

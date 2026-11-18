@@ -468,6 +468,8 @@ export const yerlesimCevabi = z.object({
   alanlar: z.array(alanSemasi),
   duvarlar: z.array(duvarSemasi),
   gecisler: z.array(gecisSemasi),
+  // Etkin makinelerin model türü (makine kimliği -> tür): palette henüz yerleşmemiş makinenin alanı üretici ölçüsünde açılır.
+  makineModelTurleri: z.record(z.string(), z.string()).optional(),
 });
 
 // Öğe anahtarı düzenleyicinin gönderdiği diziye göre: istasyon:<istasyonId>, makine:<makineId>, raf:<sıra>, alan:<sıra>, duvar:<sıra>, gecis:<sıra>, giris.

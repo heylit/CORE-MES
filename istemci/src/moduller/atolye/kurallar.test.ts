@@ -4,13 +4,14 @@ import { join } from 'node:path';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  bulgulariEsle, dondur, gecmisKur, gecmiseYaz, geriAl, govdeyeCevir, guncelle, kaldir, rafSil, ogeEkle, sonrakiRafKodu, taslakKur, tasi, yinele,
+  bulgulariEsle, dondur, gecmisKur, istasyonCiz, istasyonEkle, istasyonModelOlcusu, makineCiz, makineEkle, modelOlculeriniUygula, modelTurleriniTopla, gecmiseYaz, geriAl, govdeyeCevir, guncelle, kaldir, rafSil, ogeEkle, sonrakiRafKodu, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
+import type { Istasyon, Makine } from '#paylasilan/sozlesme/istasyonlar.ts';
 import {
   depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, stokYukleri, depoYukleri, gozMiktarMetni, STOKLU_GOZ_DOLULUGU, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
-  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, hazirMakineModeli, sahneModelTurleri,
+  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, hazirMakineModeli, modelAyakIzi, sahneModelTurleri,
 } from './kurallar.ts';
 
 const emir = (istasyonId: number, calisma: 'calisiyor' | 'durakli' | 'durdu' | null, saglam = 0): Emir => ({
@@ -399,6 +400,60 @@ describe('katalog modelinin hazır 3B gövdesi (3378-2 b)', () => {
     expect(hazirMakineModeli('talasli', 'toString')).toBeNull();
     expect(hazirMakineModeli('montaj', 'm_dmgdmu50')).toBeNull();
     expect(hazirMakineModeli('kalite', 'm_dmgdmu50')).toBe('m_dmgdmu50');
+  });
+});
+
+describe('alan üretici ölçüsünde (3408-3 c)', () => {
+  const MAKINE: Makine = {
+    id: 3, kod: 'CNC-13', ad: 'Deneme portal', tur: null, markaModel: null, seriNo: null, istasyonId: 5, baglantiTuru: null, baglantiAdresi: null, aktif: true,
+  };
+  const ISTASYON: Istasyon = { id: 5, kod: 'CNC-01', ad: 'Deneme Tezgahı', isMerkeziId: 1, tip: 'talasli', aktif: true };
+
+  it('önce katalogdaki dış ölçü, yoksa hazır gövdenin ölçüsü; bilinmeyen ya da talaşlı/kalite dışı tipte null', () => {
+    expect(modelAyakIzi('talasli', 'm_dmgdmu50')).toEqual([3.44, 2.735]);
+    expect(modelAyakIzi('talasli', 'm_haasvf2')).toEqual([2.286, 2.311]);
+    expect(modelAyakIzi('kalite', 'm_dmgdmf360')).toEqual([11, 4.2]);
+    expect(modelAyakIzi(null, 'm_dmgdmf360')).toEqual([11, 4.2]);
+    expect(modelAyakIzi('montaj', 'm_dmgdmf360')).toBeNull();
+    expect(modelAyakIzi('talasli', 'toString')).toBeNull();
+    expect(modelAyakIzi('talasli', null)).toBeNull();
+  });
+
+  it('açılışta modelden küçük alan üretici ölçüsüne büyür, büyük alan ve modelsiz öğe kalır', () => {
+    const y = {
+      ...YERLESIM,
+      istasyonYerleri: [{ ...YERLESIM.istasyonYerleri[0]!, makineler: [{ id: 3, kod: 'CNC-13', ad: 'Deneme portal', tur: null, markaModel: null, modelTuru: 'm_dmgdmf360' }] }],
+      makineYerleri: [
+        { ...YERLESIM_MAKINE, modelTuru: 'm_dmgdmu50' }, { ...YERLESIM_MAKINE, makineId: 2, kod: 'M2' },
+        { ...YERLESIM_MAKINE, makineId: 4, kod: 'M4', genislik: '5.00', derinlik: '2.00', modelTuru: 'm_dmgdmu50' },
+        { ...YERLESIM_MAKINE, makineId: 6, kod: 'M6', genislik: '5.00', derinlik: '4.00', modelTuru: 'm_dmgdmu50' },
+      ],
+    } satisfies YerlesimCevabi;
+    const r = modelOlculeriniUygula(taslakKur(y), modelTurleriniTopla([y]));
+    expect(r.degisen).toBe(3);
+    expect(r.taslak.istasyonlar.map((i) => [i.genislik, i.derinlik])).toEqual([[11, 4.2]]);
+    // Büyük çizilen kenar (bakım payı) kalır, yalnız modelden kısa kenar büyür.
+    expect(r.taslak.makineler.map((m) => [m.genislik, m.derinlik])).toEqual([[3.44, 2.735], [2, 2], [5, 2.735], [5, 4]]);
+    expect(modelOlculeriniUygula(r.taslak, modelTurleriniTopla([y])).degisen).toBe(0);
+  });
+
+  it('palette tek makineli istasyon ve makine üretici ölçüsüyle eklenir; çizimde yalnız yer alınır', () => {
+    const y = { ...YERLESIM, istasyonYerleri: [], makineModelTurleri: { 3: 'm_dmgdmf360' } } satisfies YerlesimCevabi;
+    const turler = modelTurleriniTopla([y]);
+    const olcu = istasyonModelOlcusu(ISTASYON, [MAKINE], turler);
+    expect(olcu).toEqual([11, 4.2]);
+    expect(istasyonModelOlcusu(ISTASYON, [MAKINE, { ...MAKINE, id: 4 }], turler)).toBeNull();
+    // Pasif makine istasyonu çok makineli saymaz.
+    expect(istasyonModelOlcusu(ISTASYON, [MAKINE, { ...MAKINE, id: 4, aktif: false }], turler)).toEqual([11, 4.2]);
+    const t = taslakKur(y);
+    const e = istasyonEkle(t, ISTASYON, 10, 10, olcu).taslak.istasyonlar[0];
+    expect([e?.genislik, e?.derinlik]).toEqual([11, 4.2]);
+    const c = istasyonCiz(t, ISTASYON, { x: 0, z: 0 }, { x: 4, z: 2 }, olcu)?.taslak.istasyonlar[0];
+    expect([c?.x, c?.z, c?.genislik, c?.derinlik]).toEqual([2, 1, 11, 4.2]);
+    const m = makineCiz(t, MAKINE, 'talasli', { x: 0, z: 0 }, { x: 4, z: 2 }, [3.44, 2.735])?.taslak.makineler[0];
+    expect([m?.genislik, m?.derinlik]).toEqual([3.44, 2.735]);
+    const k = makineEkle(t, MAKINE, 'talasli', 1, 1).taslak.makineler[0];
+    expect([k?.genislik, k?.derinlik]).toEqual([3.5, 2.6]);
   });
 });
 

@@ -6,7 +6,7 @@ import { bolumIcinde, bolumeCevir, fabrikaKutusu, fabrikayaCevir, konumOku } fro
 import type { BolumKonumu, Kutu } from './fabrika.ts';
 import { GECIS_ENAZ, GECIS_ENCOK, GECIS_GENISLIGI, GECIS_TURU_ADI, gecisAraligi, gecisOrtasi, kenarBoyu, kenaraOtur, ortakDuvarlar, sinirParcalari } from './gecis.ts';
 import type { GecisliBolum, OrtakDuvar } from './gecis.ts';
-import { sayi } from './kurallar.ts';
+import { modelAyakIzi, sahneModelTurleri, sayi } from './kurallar.ts';
 
 // Düzenleyicinin taslağı: kayıtlı yerleşimin düzenlenebilir kopyası. Her öğenin taslakta yerel bir anahtarı vardır;
 // kayıt gövdesine dizi sırasıyla çevrilir, sunucunun bulgu anahtarları (raf:<sıra>) bu sırayla geri eşlenir.
@@ -326,8 +326,43 @@ export function ogeEkle(t: Taslak, tur: EklenecekTur, x: number, z: number): { t
   return { anahtar, taslak: { ...t, alanlar: [...t.alanlar, { anahtar, id: null, tur: alanTuru, ad: v.ad, x, z, donus: 0, genislik: v.genislik, derinlik: v.derinlik, kapi: v.kapi }] } };
 }
 
-export function istasyonEkle(t: Taslak, i: Istasyon, x: number, z: number): { taslak: Taslak; anahtar: string } {
-  const [g, d] = AYAK_IZI[i.tip];
+// Yerleşim cevaplarından model türleri: yerleşmiş öğeler (istasyon:<id>, makine:<id>) ve palette bekleyen makineler (kimlik).
+export interface ModelTurleri { ogeler: Map<string, string>; makineler: Map<number, string> }
+
+export function modelTurleriniTopla(cevaplar: readonly YerlesimCevabi[]): ModelTurleri {
+  const ogeler = new Map<string, string>();
+  const makineler = new Map<number, string>();
+  for (const y of cevaplar) {
+    sahneModelTurleri(y).forEach((tur, anahtar) => ogeler.set(anahtar, tur));
+    for (const [id, tur] of Object.entries(y.makineModelTurleri ?? {})) makineler.set(Number(id), tur);
+  }
+  return { ogeler, makineler };
+}
+
+// Palette istasyonun alanı: tek makinesinin modeli biliniyorsa üretici ölçüsü (birden çok makinede hangisi bilinmez).
+export function istasyonModelOlcusu(i: Istasyon, makineler: readonly Makine[], turler: ModelTurleri): [number, number] | null {
+  const bagli = makineler.filter((m) => m.aktif && m.istasyonId === i.id);
+  return bagli.length === 1 && bagli[0] ? modelAyakIzi(i.tip, turler.makineler.get(bagli[0].id)) : null;
+}
+
+// Modeli bilinen yerleşmiş istasyon ve makinenin alanı modelden küçük kaldığı kenarda üretici ölçüsüne büyütülür (3408-3 c):
+// model haritada gerçek boyunda çizilir, alan onu taşımaz. Büyük çizilmiş alan (bakım, operatör payı) küçültülmez.
+// Değişen öğe sayısı döner; taslak ancak kaydedilince saklanır.
+export function modelOlculeriniUygula(t: Taslak, turler: ModelTurleri): { taslak: Taslak; degisen: number } {
+  let degisen = 0;
+  const uygula = <O extends { anahtar: string; genislik: number; derinlik: number }>(o: O, tip: IstasyonTipi | null): O => {
+    const olcu = modelAyakIzi(tip, turler.ogeler.get(o.anahtar));
+    if (!olcu || (o.genislik >= olcu[0] - 0.005 && o.derinlik >= olcu[1] - 0.005)) return o;
+    degisen += 1;
+    return { ...o, genislik: Math.max(o.genislik, olcu[0]), derinlik: Math.max(o.derinlik, olcu[1]) };
+  };
+  const istasyonlar = t.istasyonlar.map((i) => uygula(i, i.tip));
+  const makineler = t.makineler.map((m) => uygula(m, m.tip));
+  return { taslak: degisen ? { ...t, istasyonlar, makineler } : t, degisen };
+}
+
+export function istasyonEkle(t: Taslak, i: Istasyon, x: number, z: number, olcu: [number, number] | null = null): { taslak: Taslak; anahtar: string } {
+  const [g, d] = olcu ?? AYAK_IZI[i.tip];
   const anahtar = `istasyon:${i.id}`;
   return {
     anahtar,
@@ -378,16 +413,20 @@ export function ogeCiz(t: Taslak, tur: EklenecekTur, a: Konum, b: Konum): { tasl
   return { anahtar: r.anahtar, taslak: guncelle(r.taslak, r.anahtar, { genislik: sinirla(k.g, 0.2, 500), derinlik: sinirla(k.d, 0.2, 500) }) };
 }
 
-export function istasyonCiz(t: Taslak, i: Istasyon, a: Konum, b: Konum): { taslak: Taslak; anahtar: string } | null {
+// Modeli bilinen öğede çizim yalnız yeri verir: alan çizilenin ortasında üretici ölçüsündedir.
+export function istasyonCiz(t: Taslak, i: Istasyon, a: Konum, b: Konum, olcu: [number, number] | null = null): { taslak: Taslak; anahtar: string } | null {
   const k = dikdortgen(a, b);
   if (k.g < CIZIM_ENAZ || k.d < CIZIM_ENAZ) return null;
-  const r = istasyonEkle(t, i, k.x, k.z);
+  const r = istasyonEkle(t, i, k.x, k.z, olcu);
+  if (olcu) return r;
   return { anahtar: r.anahtar, taslak: guncelle(r.taslak, r.anahtar, { genislik: sinirla(k.g, 0.2, 50), derinlik: sinirla(k.d, 0.2, 50) }) };
 }
 
 // Makinenin önerilen ayak izi istasyonun tipinden gelir; istasyonsuz makine talaşlı sayılır.
-export function makineEkle(t: Taslak, m: Makine, tip: IstasyonTipi | null, x: number, z: number): { taslak: Taslak; anahtar: string } {
-  const [g, d] = AYAK_IZI[tip ?? 'talasli'];
+export function makineEkle(
+  t: Taslak, m: Makine, tip: IstasyonTipi | null, x: number, z: number, olcu: [number, number] | null = null,
+): { taslak: Taslak; anahtar: string } {
+  const [g, d] = olcu ?? AYAK_IZI[tip ?? 'talasli'];
   const anahtar = `makine:${m.id}`;
   return {
     anahtar,
@@ -400,10 +439,13 @@ export function makineEkle(t: Taslak, m: Makine, tip: IstasyonTipi | null, x: nu
   };
 }
 
-export function makineCiz(t: Taslak, m: Makine, tip: IstasyonTipi | null, a: Konum, b: Konum): { taslak: Taslak; anahtar: string } | null {
+export function makineCiz(
+  t: Taslak, m: Makine, tip: IstasyonTipi | null, a: Konum, b: Konum, olcu: [number, number] | null = null,
+): { taslak: Taslak; anahtar: string } | null {
   const k = dikdortgen(a, b);
   if (k.g < CIZIM_ENAZ || k.d < CIZIM_ENAZ) return null;
-  const r = makineEkle(t, m, tip, k.x, k.z);
+  const r = makineEkle(t, m, tip, k.x, k.z, olcu);
+  if (olcu) return r;
   return { anahtar: r.anahtar, taslak: guncelle(r.taslak, r.anahtar, { genislik: sinirla(k.g, 0.2, 50), derinlik: sinirla(k.d, 0.2, 50) }) };
 }
 
