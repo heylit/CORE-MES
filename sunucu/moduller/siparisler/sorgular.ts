@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { SiparisDurumu, TeklifDurumu, TeklifFormuMetni, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisDurumu, TeklifArsivNedeni, TeklifDurumu, TeklifFormuMetni, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
@@ -267,11 +267,17 @@ export interface TeklifBaslikSatiri {
   olusturma: string;
   guncelleme: string | null;
   surum: number;
+  olusturan_id: number;
+  arsiv_an: string | null;
+  arsivleyen_id: number | null;
+  arsiv_nedeni: TeklifArsivNedeni | null;
+  arsiv_notu: string | null;
 }
 
 const TEKLIF_SECIMI = `SELECT t.id, t.no, t.durum, t.firma_id, t.firma_kodu, t.baslik, t.para_birimi, t.istenen_tarih, t.aciklama, t.not_metni, t.kabul_surumu,
                               t.siparis_id, (SELECT max(v.surum_no) FROM siparisler_teklif_surumu v WHERE v.teklif_id = t.id)::int AS son_surum_no,
-                              ${zamanMetni('t.olusturma')} AS olusturma, ${zamanMetni('t.guncelleme')} AS guncelleme, t.surum
+                              ${zamanMetni('t.olusturma')} AS olusturma, ${zamanMetni('t.guncelleme')} AS guncelleme, t.surum,
+                              t.olusturan_id, ${zamanMetni('t.arsiv_an')} AS arsiv_an, t.arsivleyen_id, t.arsiv_nedeni, t.arsiv_notu
                          FROM siparisler_teklif t`;
 
 export type TeklifSiralamasi = 'no' | 'olusturma';
@@ -282,9 +288,10 @@ export const TEKLIF_SIRALAMASI: SiralamaTanimi<TeklifSiralamasi> = {
 };
 
 const TEKLIF_KOSULU = `WHERE ($1::text IS NULL OR t.no ILIKE $1 OR t.baslik ILIKE $1)
-                         AND ($2::text IS NULL OR t.durum = $2) AND ($3::int IS NULL OR t.firma_id = $3)`;
-export interface TeklifSuzgeci { kalip: string | null; durum: TeklifDurumu | null; firmaId: number | null }
-const teklifParametreleri = (s: TeklifSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId];
+                         AND ($2::text IS NULL OR t.durum = $2) AND ($3::int IS NULL OR t.firma_id = $3)
+                         AND (t.arsiv_an IS NOT NULL) = $4`;
+export interface TeklifSuzgeci { kalip: string | null; durum: TeklifDurumu | null; firmaId: number | null; arsiv: boolean }
+const teklifParametreleri = (s: TeklifSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId, s.arsiv];
 
 export async function teklifSay(db: Db, s: TeklifSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM siparisler_teklif t ${TEKLIF_KOSULU}`, teklifParametreleri(s));
@@ -293,7 +300,7 @@ export async function teklifSay(db: Db, s: TeklifSuzgeci): Promise<number> {
 
 export function teklifSatirlari(db: Db, s: TeklifSuzgeci, siralama: SiralamaIstegi<TeklifSiralamasi>, dilim: Dilim): Promise<TeklifBaslikSatiri[]> {
   return db.sorgu<TeklifBaslikSatiri>(
-    `${TEKLIF_SECIMI} ${TEKLIF_KOSULU} ORDER BY ${siralamaSql(TEKLIF_SIRALAMASI, siralama)} LIMIT $4 OFFSET $5`,
+    `${TEKLIF_SECIMI} ${TEKLIF_KOSULU} ORDER BY ${siralamaSql(TEKLIF_SIRALAMASI, siralama)} LIMIT $5 OFFSET $6`,
     [...teklifParametreleri(s), dilim.sinir, dilim.atla],
   );
 }
@@ -306,9 +313,13 @@ export function teklifGetir(db: Db, id: number): Promise<TeklifBaslikSatiri | nu
   return db.tek<TeklifBaslikSatiri>(`${TEKLIF_SECIMI} WHERE t.id = $1`, [id]);
 }
 
-export function teklifKilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string } | null> {
-  return db.tek<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string }>(
-    'SELECT durum, firma_id, firma_kodu, para_birimi FROM siparisler_teklif WHERE id = $1 FOR UPDATE', [id],
+export interface KilitliTeklif {
+  no: string; durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string; olusturan_id: number; arsivde: boolean; surum: number;
+}
+export function teklifKilitle(db: Db, id: number): Promise<KilitliTeklif | null> {
+  return db.tek<KilitliTeklif>(
+    `SELECT no, durum, firma_id, firma_kodu, para_birimi, olusturan_id, arsiv_an IS NOT NULL AS arsivde, surum
+       FROM siparisler_teklif WHERE id = $1 FOR UPDATE`, [id],
   );
 }
 
@@ -499,6 +510,47 @@ export function teklifFormMetniYaz(db: Db, id: number, metin: TeklifFormuMetni |
     `UPDATE siparisler_teklif SET form_metni = $2::jsonb, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $4 RETURNING id`,
     [id, metin === null ? null : JSON.stringify(metin), kisiId, surum],
+  );
+}
+
+// ---- 3419 a: teklif silme ve arşiv ----
+
+export async function teklifSurumSayisi(db: Db, id: number): Promise<number> {
+  return (await db.tek<{ sayi: number }>('SELECT count(*)::int AS sayi FROM siparisler_teklif_surumu WHERE teklif_id = $1', [id]))?.sayi ?? 0;
+}
+
+export async function teklifSilinecekleri(db: Db, id: number): Promise<{ kalem: number; taslak: number }> {
+  const s = await db.tek<{ kalem: number; taslak: number }>(
+    `SELECT (SELECT count(*) FROM siparisler_teklif_satiri WHERE teklif_id = $1)::int AS kalem,
+            (SELECT count(*) FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1)::int AS taslak`, [id],
+  );
+  return s ?? { kalem: 0, taslak: 0 };
+}
+
+// Sürümü olmayan teklifin bağlı satırları yalnız talep kalemleri ve deneme taslaklarıdır (sürüm, fiyat ve Logo sırası sürüme bağlıdır).
+export async function teklifSil(db: Db, id: number): Promise<boolean> {
+  await db.sorgu('DELETE FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1', [id]);
+  await db.sorgu('DELETE FROM siparisler_teklif_satiri WHERE teklif_id = $1', [id]);
+  return (await db.tek('DELETE FROM siparisler_teklif WHERE id = $1 RETURNING id', [id])) !== null;
+}
+
+export function teklifArsivle(
+  db: Db, id: number, g: { surum: number; kisiId: number; neden: TeklifArsivNedeni; not: string | null },
+): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif SET arsiv_an = now(), arsivleyen_id = $3, arsiv_nedeni = $4, arsiv_notu = $5,
+            guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, g.surum, g.kisiId, g.neden, g.not],
+  );
+}
+
+export function teklifArsivdenCikar(db: Db, id: number, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif SET arsiv_an = NULL, arsivleyen_id = NULL, arsiv_nedeni = NULL, arsiv_notu = NULL,
+            guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, surum, kisiId],
   );
 }
 
@@ -694,7 +746,7 @@ export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number, g
 }> {
   const sayilar = await db.tek<{ acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number }>(
     `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
-     SELECT (SELECT count(*) FROM siparisler_teklif WHERE durum NOT IN ('red', 'siparis'))::int AS "acikTeklif",
+     SELECT (SELECT count(*) FROM siparisler_teklif WHERE durum NOT IN ('red', 'siparis') AND arsiv_an IS NULL)::int AS "acikTeklif",
             (SELECT count(*) FROM siparisler_siparis, bugun
               WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int AND NOT (id = ANY($2::int[])))::int AS "yaklasanTermin",
             (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun AND NOT (id = ANY($2::int[])))::int AS "gecikenSiparis"`,
@@ -759,7 +811,7 @@ export function logoyaGidecekTeklifSiralari(db: Db, sinir: number): Promise<Logo
        FROM siparisler_logo_gonderim g
        JOIN siparisler_teklif t ON t.id = g.teklif_id
        JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no
-      WHERE g.tur = 'teklif' AND g.durum <> 'gonderildi' ORDER BY g.durum = 'hata', g.id LIMIT $1`,
+      WHERE g.tur = 'teklif' AND g.durum <> 'gonderildi' AND t.arsiv_an IS NULL ORDER BY g.durum = 'hata', g.id LIMIT $1`,
     [sinir],
   );
 }

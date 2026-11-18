@@ -12,6 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { teklifDurumlari } from './disari.ts';
+import * as sorgular from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -460,5 +461,140 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(operator, '/siparisler/birim-secenekleri')).statusCode, 403);
     const secenek = (await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=Deneme%20yerli')).json<{ satirlar: { no: number; yerlilikOrani: string | null }[] }>().satirlar;
     assert.equal(secenek.find((x) => x.no === yerli)?.yerlilikOrani, '62.50');
+  });
+  test('3419 a: fiyatı verilmemiş teklifi açan ya da onay yetkilisi siler; başkası 403, fiyatlı 422, eski sürüm 409; denetim kaydı kalır, numara geri verilmez', async () => {
+    const acan = await girisYap('planlama_proje');
+    const baska = (await girisYap('planlama_proje')).cerez;
+    const mudur = (await girisYap('mudur')).cerez;
+    const ac = async (cerez: string) => {
+      const c = await gonder(cerez, '/siparisler/teklifler/ekle', talep());
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<TeklifAyrintisi>();
+    };
+    const sil = (cerez: string, t: Pick<TeklifAyrintisi, 'id' | 'surum'>, surum = t.surum) => gonder(cerez, `/siparisler/teklifler/${t.id}/sil`, { surum });
+
+    const t = await ac(acan.cerez);
+    assert.equal(t.olusturanId, acan.id);
+    assert.equal((await sil(operator, t)).statusCode, 403);
+    const red = await sil(baska, t);
+    assert.equal(red.statusCode, 403, red.body);
+    assert.equal((await sil(acan.cerez, t, t.surum + 1)).statusCode, 409);
+    const c = await sil(acan.cerez, t);
+    assert.equal(c.statusCode, 200, c.body);
+    assert.deepEqual(c.json(), { id: t.id, no: t.no });
+    assert.equal((await oku(yonetici, `/siparisler/teklifler/${t.id}`)).statusCode, 404);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM siparisler_teklif_satiri WHERE teklif_id = $1', [t.id]))?.n, 0);
+    const kayit = await o().sahip.tek<{ kisi_id: number; ek: unknown }>(
+      "SELECT kisi_id, govde->'_ek' AS ek FROM denetim_kaydi WHERE yol = '/siparisler/teklifler/:id/sil' AND parametre->>'id' = $1", [String(t.id)]);
+    assert.equal(kayit?.kisi_id, acan.id);
+    assert.deepEqual(kayit?.ek, [{ islem: 'teklif-sil', teklif: t.id, no: t.no, firma: musteriId, baslik: 'Deneme talebi', kalem: 2, taslak: 0 }]);
+    assert.notEqual((await teklifAc()).no, t.no);
+
+    // Onay yetkilisi başkasının taslağını siler; fiyatı verilmiş teklif silinmez, kaydı değişmez.
+    const u = await ac(acan.cerez);
+    assert.equal((await sil(mudur, u)).statusCode, 200);
+    let f = await teklifAc();
+    f = await komut(f, 'surum-ver', { fiyatlar: fiyatlar(f) });
+    const fiyatli = await sil(yonetici, f);
+    assert.equal(fiyatli.statusCode, 422, fiyatli.body);
+    assert.equal((await oku(yonetici, `/siparisler/teklifler/${f.id}`)).json<TeklifAyrintisi>().surum, f.surum);
+    // Fiyatsız ama reddedilmiş teklif de silinmez: müşterinin reddi kayıt olarak kalır.
+    let r = await ac(acan.cerez);
+    r = await komut(r, 'reddet', { not: 'Deneme' });
+    assert.equal((await sil(acan.cerez, r)).statusCode, 422);
+  });
+
+  test('3419 a: fiyatlı teklif nedenle arşivlenir; listede ve sayıda yok, komut almaz, Logo sırası bekler; arşivden çıkınca döner', async () => {
+    const liste = async (arsiv: 'evet' | 'hayir') =>
+      (await oku(yonetici, `/siparisler/teklifler?arsiv=${arsiv}&sayfaBoyu=200`)).json<TeklifListesiCevabi>().satirlar.map((x) => x.id);
+    const sirada = async (id: number) => (await sorgular.logoyaGidecekTeklifSiralari(o().sahip, 1000)).some((x) => x.teklif_id === id);
+    let t = await teklifAc();
+    await komut(t, 'arsivle', { neden: 'deneme' }, 422);
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t) });
+    assert.equal(t.durum, 'verildi');
+    assert.equal(await sirada(t.id), true);
+    await komut(t, 'arsivle', {}, 400);
+    await komut(t, 'arsivle', { neden: 'olmayan' }, 400);
+    await komut(t, 'arsivden-cikar', {}, 422);
+    const acikSayi = async () => (await oku(yonetici, '/siparisler/ozet')).json<{ acikTeklif: number }>().acikTeklif;
+    const acikOnce = await acikSayi();
+    assert.equal((await gonder(operator, `/siparisler/teklifler/${t.id}/arsivle`, { surum: t.surum, neden: 'deneme' })).statusCode, 403);
+    const a = await komut(t, 'arsivle', { neden: 'yanlis-firma', not: 'Deneme notu' });
+    assert.equal(a.durum, 'verildi');
+    assert.equal(a.surum, t.surum + 1);
+    assert.equal(a.arsiv?.neden, 'yanlis-firma');
+    assert.equal(a.arsiv?.not, 'Deneme notu');
+    assert.match(a.arsiv?.kisi ?? '', /^Deneme teklif-/);
+    assert.ok((await liste('evet')).includes(t.id));
+    assert.ok(!(await liste('hayir')).includes(t.id));
+    assert.equal(await sirada(t.id), false);
+    assert.equal(await acikSayi(), acikOnce - 1);
+    await komut(a, 'surum-ver', { fiyatlar: fiyatlar(a) }, 422);
+    await komut(a, 'kabul', { surumNo: 1 }, 422);
+    await komut(a, 'reddet', { not: 'Deneme' }, 422);
+    await komut(a, 'arsivle', { neden: 'deneme' }, 422);
+    await komut(a, 'form-metni-kaydet', { metin: null }, 422);
+    await komut(a, 'revizyon-iste', { not: 'Deneme' }, 422);
+    const kartsiz = a.satirlar.find((x) => x.malzemeNo === null)!;
+    await komut(a, `satirlar/${kartsiz.id}/kart-bagla`, { malzemeNo: mamulNo }, 422);
+    const degismedi = (await oku(yonetici, `/siparisler/teklifler/${t.id}`)).json<TeklifAyrintisi>();
+    assert.deepEqual([degismedi.surum, degismedi.durum, degismedi.satirlar.find((x) => x.id === kartsiz.id)?.malzemeNo], [a.surum, 'verildi', null]);
+    assert.equal((await gonder(yonetici, `/siparisler/teklifler/${t.id}/sil`, { surum: a.surum })).statusCode, 422);
+
+    const c = await komut(a, 'arsivden-cikar', {});
+    assert.equal(c.arsiv, null);
+    assert.ok((await liste('hayir')).includes(t.id));
+    assert.equal(await sirada(t.id), true);
+    assert.equal(await acikSayi(), acikOnce);
+    const k = await komut(c, 'kabul', { surumNo: 1 });
+    await komut(k, 'arsivle', { neden: 'deneme' }, 422);
+    // Reddedilen (kayıp) teklif de arşivlenir.
+    let r = await teklifAc();
+    r = await komut(r, 'reddet', { not: 'Deneme' });
+    assert.equal((await komut(r, 'arsivle', { neden: 'tekrar' })).arsiv?.neden, 'tekrar');
+    // Kısıt: kabul edilmiş teklif veritabanında da arşivlenemez.
+    await assert.rejects(o().sahip.sorgu("UPDATE siparisler_teklif SET arsiv_an = now(), arsivleyen_id = $2, arsiv_nedeni = 'deneme' WHERE id = $1", [k.id, yoneticiId]),
+      /siparisler_teklif_arsiv_durum/);
+    await assert.rejects(o().sahip.sorgu('UPDATE siparisler_teklif SET arsiv_an = NULL WHERE id = $1', [r.id]), /siparisler_teklif_arsiv_butun/);
+  });
+
+  test('3419 a (K3): onay bekleyen teklif arşivlenince iskonto onayı bildirimi kapanır', async () => {
+    const mudur = await girisYap('mudur');
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t), iskontoOrani: '30' });
+    assert.equal(t.durum, 'onay-bekliyor');
+    const acik = () => o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'siparisler.iskonto-onay-bekliyor' AND yol = $2 AND okundu IS NULL",
+      [mudur.id, `/siparisler/teklifler/${t.id}`]);
+    assert.equal((await acik())?.n, 1);
+    t = await komut(t, 'arsivle', { neden: 'diger' });
+    assert.equal((await acik())?.n, 0);
+    assert.equal((await gonder(mudur.cerez, `/siparisler/teklifler/${t.id}/iskonto-onayla`, { surum: t.surum })).statusCode, 422);
+  });
+
+  test('3419 a (K1): eşzamanlı fiyat verme ile silme, arşivleme ile kabul: biri geçer, öbürü çakışır; yarım kayıt kalmaz', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      const t = await teklifAc();
+      const [v, s] = await Promise.all([
+        gonder(yonetici, `/siparisler/teklifler/${t.id}/surum-ver`, { surum: t.surum, fiyatlar: fiyatlar(t) }),
+        gonder(yonetici, `/siparisler/teklifler/${t.id}/sil`, { surum: t.surum }),
+      ]);
+      const kodlar = [v.statusCode, s.statusCode].sort();
+      assert.equal(kodlar.filter((x) => x === 200).length, 1, `${v.body} ${s.body}`);
+      assert.ok([404, 409].includes(kodlar.find((x) => x !== 200) ?? 0), `${v.body} ${s.body}`);
+      const kalan = await o().sahip.tek<{ teklif: number; surum: number }>(
+        'SELECT (SELECT count(*)::int FROM siparisler_teklif WHERE id = $1) AS teklif, (SELECT count(*)::int FROM siparisler_teklif_surumu WHERE teklif_id = $1) AS surum', [t.id]);
+      assert.deepEqual(kalan, s.statusCode === 200 ? { teklif: 0, surum: 0 } : { teklif: 1, surum: 1 });
+
+      let u = await teklifAc();
+      u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u) });
+      const [a, k] = await Promise.all([
+        gonder(yonetici, `/siparisler/teklifler/${u.id}/arsivle`, { surum: u.surum, neden: 'deneme' }),
+        gonder(yonetici, `/siparisler/teklifler/${u.id}/kabul`, { surum: u.surum, surumNo: 1 }),
+      ]);
+      assert.equal([a.statusCode, k.statusCode].filter((x) => x === 200).length, 1, `${a.body} ${k.body}`);
+      const son = (await oku(yonetici, `/siparisler/teklifler/${u.id}`)).json<TeklifAyrintisi>();
+      assert.ok(son.durum === 'kabul' ? son.arsiv === null : son.arsiv !== null);
+    }
   });
 });

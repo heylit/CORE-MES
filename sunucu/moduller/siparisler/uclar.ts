@@ -5,7 +5,7 @@ import {
   adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
-  teklifSurumuGovdesi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
+  teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
   teklifFormuSablonKopyalaGovdesi, teklifFormuVarsayilanGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import type { AdetDenemesiCevabi, AtolyeTaslagi, PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
@@ -219,6 +219,34 @@ export const uclar = [
     govde: teklifNotGovdesi,
     cevap: teklifAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.notluGecis(db, kullanici, parametre.id, 'red', govde)),
+  }),
+  // 3419 a: fiyatı verilmemiş teklif kalıcı silinir (açan ya da siparisler.onayla, servis denetler); fiyatlı teklif arşivlenir, geri alınır.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/sil',
+    yetki: 'siparisler.yaz',
+    parametre: idParametresi,
+    govde: teklifSilGovdesi,
+    cevap: teklifSilmeCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => teklif.teklifSil(db, kullanici, parametre.id, govde.surum, denetimEki),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/arsivle',
+    yetki: 'siparisler.yaz',
+    parametre: idParametresi,
+    govde: teklifArsivGovdesi,
+    cevap: teklifAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.teklifArsivle(db, kullanici, parametre.id, govde)),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/arsivden-cikar',
+    yetki: 'siparisler.yaz',
+    parametre: idParametresi,
+    govde: teklifSilGovdesi,
+    cevap: teklifAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.teklifArsivdenCikar(db, kullanici, parametre.id, govde)),
   }),
   // 291 a: eşiği aşan iskontoyu yalnız müdür onaylar; yazma işlemi tek başına yetmez.
   uc({
