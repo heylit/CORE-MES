@@ -312,6 +312,24 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.equal((k.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
   });
 
+  // Yarım planlı emir: bir işi planda, öteki dışarıda (plan kurulduktan sonra gelen adım ya da motorun yerleştiremediği iş).
+  test('PD-20d: yarım planlı emrin eksik işi, emir yeniden planlanınca öncülünün arkasına yerleşir; öteki emirlerin işleri yerinde kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number };
+    const { calisma } = buyukPlanli();
+    const plan = calisma['plan'] as { ops: Record<string, Is> };
+    const eksik = 'O3.20';
+    assert.ok(plan.ops[eksik] && plan.ops['O3.10']);
+    const { [eksik]: _cikan, ...kalan } = plan.ops;
+    const yarim = { ...calisma, plan: { ...plan, ops: kalan, fail: [eksik], failNeden: { [eksik]: { kod: 'zaman' } } } };
+    const r = sonuc(await degerlendirmeYap({ calisma: yarim, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['O3'] } }, AN));
+    if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+    const yeni = r.plan['ops'] as Record<string, Is>;
+    assert.ok(yeni[eksik], 'eksik iş plana girdi');
+    assert.ok(yeni[eksik].S >= yeni['O3.10']!.C - 1e-9, 'öncülünden sonra');
+    assert.deepEqual(r.plan['fail'], []);
+    for (const [id, x] of Object.entries(kalan)) if (x.job !== 'O3') assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [x.m, x.S], id);
+  });
+
   // 3335-2b: başlaması geçmiş, başlamamış iş motor için "çalışıyor" gibidir ve yerinde kalır; kişi o emri yeniden planlarsa şimdiden sonraya dizilir.
   test('PD-20b (3335-2b): yeniden planlanan emrin geride kalan işi şimdiden sonraya taşınır, ardılı ondan sonra başlar; istenmeyen emrin geride işi, elle kilitli ve başlamış iş yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };

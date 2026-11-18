@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
-import { modelKur } from './kurallar.ts';
+import { eksikNedeni, modelKur } from './kurallar.ts';
 import { siraKartlari } from './yerlestirme.ts';
 
 afterEach(() => { cleanup(); });
@@ -21,6 +21,41 @@ function ciz(x: ReturnType<typeof kur>, acik: string | null, ek: Partial<Paramet
   render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik={acik} ac={ac} zaman={zaman} mesgul={false} planla={planla} yenidenPlanla={yenidenPlanla} hamle={null} surum={4} tahta={<div data-test-tahta="" />} satirBirincil {...ek} />);
   return { ac, planla, yenidenPlanla };
 }
+
+// Yarım planlı emir: ORN-3'ün son adımı planın dışında kalmış.
+function yarimKur(neden: Record<string, unknown>) {
+  const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
+  const eksik = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort().at(-1) as string;
+  const { [eksik]: _cikan, ...kalan } = plan.ops;
+  const c = { ...c0, plan: { ...plan, ops: kalan, fail: [eksik], failNeden: { [eksik]: neden } } } as unknown as typeof c0;
+  const p = planOku(c), m = modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => `ORN-${id}`);
+  return { m, p, kartlar: siraKartlari(m), eksik };
+}
+
+describe('yarım planlı emir', () => {
+  it('satır "N / M planda" der; açık satır kaç adımın eksik olduğunu ve nedenini yazar; Planla eksik adımlar için çağrılır', () => {
+    const x = yarimKur({ kod: 'aday' });
+    const k = x.kartlar.find((y) => y.kok === '3');
+    expect(k?.durum).toBe('plansiz');
+    const { planla, yenidenPlanla } = ciz(x, '3');
+    expect(document.querySelector('[data-kart="3"]')?.textContent).toContain(`${String(k?.yerlesen)} / ${String(k?.adim)} planda`);
+    const durum = document.querySelector('[data-kismi]');
+    expect(durum?.querySelector('b')?.textContent).toBe(`1 adımın planda yeri yok; ${String(k?.yerlesen)} adım planda.`);
+    expect(screen.queryByText('Planda yeri yok.')).toBeNull();
+    expect(document.querySelector(`[data-yeri-yok="${x.eksik}"]`)?.textContent).toBe('yeri yok: uygun tezgâh ya da fasoncu yok');
+    expect(document.querySelectorAll('[data-yeri-yok]').length).toBe(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Planla' }));
+    expect(planla).toHaveBeenCalledWith(k);
+    expect(yenidenPlanla).not.toHaveBeenCalled();
+  });
+
+  it('yerleşmeyen adımın nedeni: motorun kodu; motor denediyse ama neden yazmadıysa ufuk; hiç denemediyse son planlamada yoktu', () => {
+    expect(eksikNedeni({ fail: ['a'], failNeden: { a: { kod: 'oncul', oncul: 'b' } } }, 'a')).toBe('önceki adım yerleşmedi');
+    expect(eksikNedeni({ fail: ['a'] }, 'a')).toBe('ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı');
+    expect(eksikNedeni({ fail: [] }, 'a')).toBe('son planlamada yoktu');
+    expect(eksikNedeni(null, 'a')).toBe('son planlamada yoktu');
+  });
+});
 
 describe('Kokpit liste düzeni (3414 b)', () => {
   it('her sipariş tek satırdır: durumu ve tek düğmesi; düğme satırı açar, açık satırda Kapat yazar', () => {

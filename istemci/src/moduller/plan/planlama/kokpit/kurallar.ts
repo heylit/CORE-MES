@@ -404,6 +404,17 @@ export function sureYaz(saat: number): string {
   if (a < 0.01) return '0 dk';
   return [g ? `${String(g)} gün` : '', s ? `${String(s)} sa` : '', dk ? `${String(dk)} dk` : ''].filter(Boolean).join(' ');
 }
+// Kısmen planlı emir: adımlarının bir kısmı planda, bir kısmı dışarıda (motor yerleştiremedi ya da adım plan kurulduktan sonra geldi).
+// Böyle emir plana alınmaz (sunucu "planda" der); eksik adımlarını yeniden planlama yerleştirir.
+export const kismiPlanli = (m: Pick<KokpitModeli, 'isler'>, e: KokpitEmri): boolean => e.durum === 'plansiz' && e.adimlar.some((a) => m.isler[a.id] !== undefined);
+export const eksikAdimlar = (m: Pick<KokpitModeli, 'isler'>, e: KokpitEmri): KokpitAdimi[] => e.adimlar.filter((a) => m.isler[a.id] === undefined);
+// Planda yeri olmayan adımın nedeni: motor denediyse onun bildirdiği; denemediyse adım son planlamadan sonra gelmiştir.
+const EKSIK_NEDENI = { aday: 'uygun tezgâh ya da fasoncu yok', oncul: 'önceki adım yerleşmedi', zaman: 'ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı' } as const;
+export function eksikNedeni(p: Pick<OkunanPlan, 'fail' | 'failNeden'> | null, id: string): string {
+  const n = p?.failNeden?.[id];
+  if (n) return EKSIK_NEDENI[n.kod];
+  return p?.fail.includes(id) ? EKSIK_NEDENI.zaman : 'son planlamada yoktu';
+}
 export function durumYazisi(e: KokpitEmri): string {
   if (e.durum === 'plansiz') return 'plansız';
   if (e.gecikme === null) return 'termin yok';

@@ -198,7 +198,7 @@ describe('atölye komutlarının kuralı', () => {
     assert.equal('degisti' in tekrar && tekrar.degisti, false);
     let cagri = 0;
     const say = (): PlanaAlSonucu => { cagri++; return hesap(); };
-    assert.deepEqual(hata(planaAl(c, { emirId: 'J1', tezgah: 'T2', baslangic: 11 }, KISI, say)), { tur: 'cakisma', ileti: 'Emir zaten planda; yerini tahtadan değiştirin.' });
+    assert.deepEqual(hata(planaAl(c, { emirId: 'J1', tezgah: 'T2', baslangic: 11 }, KISI, say)), { tur: 'cakisma', ileti: 'Emrin planda adımı var; plana alınamaz. Eksik adımı varsa "Planla" yerleştirir; planda olanın yeri tahtadan değişir.' });
     assert.equal(hata(planaAl(c, { emirId: 'J3', tezgah: 'T2', baslangic: 11 }, KISI, say)).tur, 'cakisma');
     assert.equal(hata(planaAl(c, { emirId: 'J4', tezgah: 'T2', baslangic: 11 }, KISI, say)).tur, 'cakisma');
     assert.deepEqual(hata(planaAl(c, { emirId: 'YOK', tezgah: 'T2', baslangic: 11 }, KISI, say)), { tur: 'dogrulama', ileti: 'Emir çalışmada yok.', alan: 'emirId' });
