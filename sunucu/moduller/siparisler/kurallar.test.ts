@@ -7,6 +7,7 @@ import {
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
+  SIPARIS_ARSIVDE, SIPARIS_ARSIVDE_DEGIL, SIPARIS_ARSIVLENEMEZ, siparisArsivReddi,
   FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
@@ -426,4 +427,12 @@ describe('3400 talep kalemi', () => {
     assert.deepEqual(talepKalemi(bagli, '62.50'), { ...bagli, birim: null, yerlilikOrani: '62.50' });
     assert.deepEqual(talepKalemi(bagli, null), { ...bagli, birim: null, yerlilikOrani: '10' });
   });
+});
+
+test('3425 a: yalnız iptal edilmiş ve arşivde olmayan sipariş arşive kalkar; yalnız arşivdeki çıkar', () => {
+  for (const durum of ['taslak', 'onayli', 'kapandi'] as const) assert.equal(siparisArsivReddi(durum, false, true), SIPARIS_ARSIVLENEMEZ);
+  assert.equal(siparisArsivReddi('iptal', false, true), null);
+  assert.equal(siparisArsivReddi('iptal', true, true), SIPARIS_ARSIVDE);
+  assert.equal(siparisArsivReddi('iptal', true, false), null);
+  assert.equal(siparisArsivReddi('iptal', false, false), SIPARIS_ARSIVDE_DEGIL);
 });

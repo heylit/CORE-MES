@@ -32,7 +32,7 @@ const SIPARIS_TASLAK = {
   id: 5, no: 'SS-2026-0005', durum: 'taslak', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, musteriSiparisNo: 'DM-100',
   siparisTarihi: '2026-10-01', termin: '2026-10-30', paraBirimi: 'TRY', kdvOrani: '20.00', odemeKosulu: '30 gün vadeli', aciklama: null, cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null,
   araToplam: '1250.00', kdvTutari: '250.00', genelToplam: '1500.00', iptalNedeni: null,
-  olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, onayZamani: null, surum: 2,
+  olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, onayZamani: null, surum: 2, arsiv: null,
 } satisfies Siparis;
 const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'onayli', musteriSiparisNo: null, firmaAd: 'Deneme Musteri B', firmaId: 8, onayZamani: '2026-10-02T10:00:00+03:00' } satisfies Siparis;
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
@@ -203,6 +203,24 @@ describe('Satış siparişleri listesi', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('ara=dm-1'))).toBe(true));
     fireEvent.click(screen.getByRole('tab', { name: 'Tümü' }));
     await waitFor(() => expect(istekler.filter((i) => i.yol.startsWith('/siparisler?')).at(-1)!.yol).not.toContain('durum='));
+  });
+
+  it('3425 a: sekmeler arşivdekileri istemez; Arşiv sekmesi yalnız arşivi ister ve arşivleyeni gösterir', async () => {
+    const arsivdeki = { ...SIPARIS_ONAYLI, id: 9, no: 'SS-2026-0009', durum: 'iptal', arsiv: { an: '2026-11-18T09:20:00+03:00', kisi: 'Deneme Yonetici' } } satisfies Siparis;
+    const istekler = sunucuKur(OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol.startsWith('/siparisler?') && yol.includes('arsiv=evet')
+      ? json(200, { satirlar: [arsivdeki], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi)
+      : undefined));
+    ac('/siparisler');
+    await screen.findByText('SS-2026-0005');
+    expect(istekler.find((i) => i.yol.startsWith('/siparisler?'))!.yol).toContain('arsiv=hayir');
+    fireEvent.click(screen.getByRole('tab', { name: 'Arşiv' }));
+    await screen.findByText('SS-2026-0009');
+    const son = istekler.filter((i) => i.yol.startsWith('/siparisler?')).at(-1)!.yol;
+    expect(son).toContain('arsiv=evet');
+    expect(son).not.toContain('durum=');
+    expect(screen.getByRole('columnheader', { name: 'Arşivleyen' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Durum' })).toBeNull();
+    expect(screen.getByText('Deneme Yonetici')).toBeTruthy();
   });
 
   it('firma süzgeci seçilen firmanın kimliğini gönderir (adla eşleme yok)', async () => {
@@ -517,6 +535,64 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3 } });
     await screen.findByText('Sipariş tamamlandı olarak kapandı');
     expect(screen.getByText('Tamamlandı')).toBeTruthy();
+  });
+});
+
+describe('İptal edilen siparişi silme (3425 a)', () => {
+  const IPTAL = { ...AYRINTI_ONAYLI, id: 7, no: 'SS-2026-0007', durum: 'iptal', iptalNedeni: 'Deneme neden', surum: 4 } satisfies SiparisAyrintisi;
+  const ARSIVDE = { ...IPTAL, surum: 5, arsiv: { an: '2026-11-18T09:20:00+03:00', kisi: 'Deneme Yonetici' } } satisfies SiparisAyrintisi;
+
+  it('Arşive kaldır yalnız iptal edilmiş siparişte ve onay yetkilisine çıkar', async () => {
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/7' ? json(200, IPTAL) : undefined));
+    ac('/siparisler/6');
+    await screen.findByRole('button', { name: 'Siparişi iptal et' });
+    expect(screen.queryByRole('button', { name: 'Arşive kaldır' })).toBeNull();
+    cleanup();
+    sunucuKur(YAZAR, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/7' ? json(200, IPTAL) : undefined));
+    ac('/siparisler/7');
+    await screen.findByText('Sipariş iptal edildi');
+    expect(screen.queryByRole('button', { name: 'Arşive kaldır' })).toBeNull();
+  });
+
+  it('Arşive kaldır kaydı silmediğini söyler, bildirimle listeye döner', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/7') return json(200, IPTAL);
+      if (yontem === 'POST' && yol === '/siparisler/7/arsivle') return json(200, ARSIVDE);
+      return undefined;
+    });
+    ac('/siparisler/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Arşive kaldır' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi arşive kaldır' });
+    expect(within(pencere).getByText(/Kayıt kalıcı silinmez/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Arşive kaldır' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/7/arsivle', govde: { surum: 4 } });
+    expect(await screen.findByText('SS-2026-0007 arşive kaldırıldı.')).toBeTruthy();
+    await screen.findByRole('tab', { name: 'Arşiv' });
+  });
+
+  it('arşivdeki sipariş yalnız Arşivden çıkar gösterir; istek sürümle gider', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/7') return json(200, ARSIVDE);
+      if (yontem === 'POST' && yol === '/siparisler/7/arsivden-cikar') return json(200, { ...IPTAL, surum: 6 });
+      return undefined;
+    });
+    ac('/siparisler/7');
+    expect(await screen.findByText('Sipariş arşivde')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Arşive kaldır' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Arşivden çıkar' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/7/arsivden-cikar', govde: { surum: 5 } });
+    await waitFor(() => expect(screen.queryByText('Sipariş arşivde')).toBeNull());
+    expect(await screen.findByText('Sipariş arşivden çıkarıldı.')).toBeTruthy();
+  });
+
+  it('onay yetkisi olmayan kişi arşivdeki siparişte Arşivden çıkar görmez', async () => {
+    sunucuKur(YAZAR, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/7' ? json(200, ARSIVDE) : undefined));
+    ac('/siparisler/7');
+    expect(await screen.findByText('Sipariş arşivde')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Arşivden çıkar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Arşive kaldır' })).toBeNull();
   });
 });
 

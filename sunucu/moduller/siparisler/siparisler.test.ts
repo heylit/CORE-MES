@@ -11,7 +11,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
+import { siparisDegistiDinle, siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
 import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { kablola } from '../../kablolama.ts';
 import { satisSevkleriCozucusu } from '../finans/disari.ts';
@@ -337,7 +337,56 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual([iptal.json<SiparisAyrintisi>().durum, iptal.json<SiparisAyrintisi>().iptalNedeni], ['iptal', 'müşteri vazgeçti']);
   });
 
-  test('SIP-07 termin sipariş tarihinden önce olamaz (başlık ve satır); eşit olabilir', async () => {
+  test('3425 a: yalnız iptal edilmiş sipariş arşive kalkar; liste arsiv süzgeci, arşivden çıkarma, eski sürüm', async () => {
+    const acik = await siparisAc();
+    assert.equal((await gonder(yonetici, `/siparisler/${acik.id}/arsivle`, { surum: acik.surum })).statusCode, 422);
+    const onayli = (await gonder(yonetici, `/siparisler/${acik.id}/onayla`, { surum: acik.surum })).json<SiparisAyrintisi>();
+    const kapali = (await gonder(yonetici, `/siparisler/${acik.id}/kapat`, { surum: onayli.surum })).json<SiparisAyrintisi>();
+    assert.equal((await gonder(yonetici, `/siparisler/${acik.id}/arsivle`, { surum: kapali.surum })).statusCode, 422);
+
+    const s = await siparisAc();
+    const iptal = (await gonder(yonetici, `/siparisler/${s.id}/iptal`, { surum: s.surum, neden: 'müşteri vazgeçti' })).json<SiparisAyrintisi>();
+    assert.equal(iptal.arsiv, null);
+    assert.equal((await gonder(yonetici, `/siparisler/${s.id}/arsivden-cikar`, { surum: iptal.surum })).statusCode, 422);
+    assert.equal((await gonder(yonetici, `/siparisler/${s.id}/arsivle`, { surum: iptal.surum - 1 })).statusCode, 409);
+    // Ortak Dosyalar sipariş klasörünü bu olayla eşitler (arşiv durumu dahil).
+    const olaylar: number[] = [];
+    const birak = siparisDegistiDinle(async (_db, olay) => { if (olay.siparisId === s.id) olaylar.push(olay.siparisId); });
+    const sil = await gonder(yonetici, `/siparisler/${s.id}/arsivle`, { surum: iptal.surum });
+    assert.equal(sil.statusCode, 200, sil.body);
+    const arsivde = sil.json<SiparisAyrintisi>();
+    assert.equal(arsivde.surum, iptal.surum + 1);
+    assert.deepEqual(olaylar, [s.id]);
+    assert.equal(arsivde.durum, 'iptal');
+    assert.equal(arsivde.iptalNedeni, 'müşteri vazgeçti');
+    assert.ok(arsivde.arsiv !== null && arsivde.arsiv.kisi !== null);
+    assert.equal((await gonder(yonetici, `/siparisler/${s.id}/arsivle`, { surum: arsivde.surum })).statusCode, 422);
+
+    const liste = async (sorgu: string): Promise<number[]> =>
+      (await oku(yonetici, `/siparisler?sayfaBoyu=200&ara=${encodeURIComponent(s.no)}${sorgu}`)).json<SiparisListesiCevabi>().satirlar.map((x) => x.id);
+    assert.deepEqual(await liste('&arsiv=hayir'), []);
+    assert.deepEqual(await liste('&durum=iptal&arsiv=hayir'), []);
+    assert.deepEqual(await liste('&arsiv=evet'), [s.id]);
+    // Süzgeç verilmezse arşiv süzülmez: başka modüllerin okuması değişmez.
+    assert.deepEqual(await liste(''), [s.id]);
+
+    const geri = await gonder(yonetici, `/siparisler/${s.id}/arsivden-cikar`, { surum: arsivde.surum });
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.equal(geri.json<SiparisAyrintisi>().arsiv, null);
+    assert.equal(geri.json<SiparisAyrintisi>().durum, 'iptal');
+    assert.equal(geri.json<SiparisAyrintisi>().surum, arsivde.surum + 1);
+    assert.deepEqual(olaylar, [s.id, s.id]);
+    birak();
+    assert.equal((await gonder(yonetici, `/siparisler/${s.id}/arsivle`, { surum: arsivde.surum })).statusCode, 409);
+    assert.deepEqual(await liste('&durum=iptal&arsiv=hayir'), [s.id]);
+
+    await assert.rejects(
+      o().sahip.sorgu("UPDATE siparisler_siparis SET arsiv_an = now(), arsivleyen_id = $2 WHERE id = $1", [acik.id, yoneticiId]),
+      /siparisler_siparis_arsiv_durum/,
+    );
+  });
+
+    test('SIP-07 termin sipariş tarihinden önce olamaz (başlık ve satır); eşit olabilir', async () => {
     assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ termin: '2026-10-18' }))).statusCode, 400);
     const satir = [{ malzemeNo: mamulNo, miktar: '1', birimFiyat: '1', termin: '2026-10-01' }];
     assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ satirlar: satir }))).statusCode, 400);
@@ -642,6 +691,8 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
       [`/siparisler/${id}/kapat`, { surum }],
       [`/siparisler/${id}/iptal`, { surum, neden: 'Deneme' }],
       [`/siparisler/${id}/onay-geri-al`, { surum, neden: 'Deneme' }],
+      [`/siparisler/${id}/arsivle`, { surum }],
+      [`/siparisler/${id}/arsivden-cikar`, { surum }],
     ];
     const once = (await oku(yonetici, '/siparisler')).json<SiparisListesiCevabi>().toplam;
     for (const yol of ['/siparisler', '/siparisler/malzeme-secenekleri', `/siparisler/${s.id}`]) {

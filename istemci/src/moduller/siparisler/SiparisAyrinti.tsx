@@ -17,7 +17,7 @@ import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
-type Komut = 'onayla' | 'kapat' | 'iptal' | 'onay-geri-al';
+type Komut = 'onayla' | 'kapat' | 'iptal' | 'onay-geri-al' | 'arsivle' | 'arsivden-cikar';
 
 const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string; govde: string }> = {
   onayla: { baslik: 'Siparişi onayla', dugme: 'Onayla', basari: 'Sipariş onaylandı.', govde: 'Onaylanınca satırlar ve tutarlar değişmez.' },
@@ -29,6 +29,15 @@ const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string
   iptal: {
     baslik: 'Siparişi iptal et', dugme: 'Siparişi iptal et', basari: 'Sipariş iptal edildi.',
     govde: 'Sipariş yapılmayacaksa kullanın. Satış raporlarından ve beklenen tahsilattan çıkar; taslaktaki üretim emirleri iptal olur. Planlanmış, başlamış ya da malzeme bağlanmış emir varsa iptal edilemez, önce o emirleri kapatın. Yeniden açılmaz. Nedeni yazın.',
+  },
+  // 3425 a: kayıt silinmez; sipariş listeden kalkar, yalnız Arşiv sekmesinde görünür ve arşivden çıkarılır. Adı 3419'daki
+  // kalıcı "Teklifi sil"den ayrılsın diye "Arşive kaldır"dır.
+  arsivle: {
+    baslik: 'Siparişi arşive kaldır', dugme: 'Arşive kaldır', basari: 'arşive kaldırıldı.',
+    govde: 'Sipariş listesinden kalkar ve Arşiv sekmesine taşınır. Kayıt kalıcı silinmez: iptal nedeni, geçmiş ve Logo kaydı olduğu gibi kalır. İstediğinizde arşivden çıkarabilirsiniz.',
+  },
+  'arsivden-cikar': {
+    baslik: 'Arşivden çıkar', dugme: 'Arşivden çıkar', basari: 'Sipariş arşivden çıkarıldı.', govde: '',
   },
   // SIP-19 (3254 a): onay geri alınır, sipariş taslağa döner; emre bağlı kalemde yalnız termin değişir.
   'onay-geri-al': {
@@ -72,6 +81,12 @@ export function SiparisAyrinti() {
     onSuccess: (cevap, { k }) => {
       istemci.setQueryData(anahtarlar.siparis(id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.siparisListeleri });
+      if (k === 'arsivle') {
+        bildir('tamam', `${cevap.no} ${KOMUT_METNI.arsivle.basari}`);
+        kapat();
+        void gezin('/siparisler');
+        return;
+      }
       bildir('tamam', KOMUT_METNI[k].basari);
       kapat();
     },
@@ -122,13 +137,22 @@ export function SiparisAyrinti() {
 
   const duzenlenebilir = yazabilir && s.durum === 'taslak';
   const emreBagliVar = s.satirlar.some((m) => m.emreBagli);
-  const islemler = (
+  const arsivde = s.arsiv !== null;
+  const islemler = arsivde ? (
+    <>
+      <KlasorBaglantisi tur="siparis" id={s.id} />
+      {onaylayabilir && (
+        <Dugme tur="birincil" simge="rotate" yukleniyor={gonder.isPending} onClick={() => gonder.mutate({ k: 'arsivden-cikar', surum: s.surum })}>Arşivden çıkar</Dugme>
+      )}
+    </>
+  ) : (
     <>
       <KlasorBaglantisi tur="siparis" id={s.id} />
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme tur="birincil" simge="flag" title="Teslimat ve fatura bitti; sipariş tamamlandı sayılır" onClick={() => komutYaz('kapat')}>Tamamlandı olarak kapat</Dugme>}
+      {onaylayabilir && s.durum === 'iptal' && <Dugme simge="box" title="Listeden kaldırır; kayıt Arşiv sekmesinde kalır" onClick={() => komutYaz('arsivle')}>Arşive kaldır</Dugme>}
       {onaylayabilir && acik && <Dugme tur="tehlike" simge="stop" title="Sipariş yapılmayacak; raporlardan ve tahsilattan çıkar" onClick={() => komutYaz('iptal')}>Siparişi iptal et</Dugme>}
     </>
   );
@@ -162,6 +186,11 @@ export function SiparisAyrinti() {
         <p className="tc-sp-bildirim" role="status"><strong>Sipariş onaylandı</strong> {s.onayZamani === null ? '' : zamanMetni(s.onayZamani)}</p>
       )}
       {s.durum === 'kapandi' && <p className="tc-sp-bildirim" role="status"><strong>Sipariş tamamlandı olarak kapandı</strong></p>}
+      {s.arsiv !== null && (
+        <p className="tc-sp-bildirim" role="status">
+          <strong>Sipariş arşivde</strong> {`${s.arsiv.kisi ?? '—'} · ${zamanMetni(s.arsiv.an)}. Listede yalnız Arşiv sekmesinde görünür.`}
+        </p>
+      )}
       {s.durum === 'iptal' && (
         <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status"><strong>Sipariş iptal edildi</strong> {s.iptalNedeni ?? ''}</p>
       )}
@@ -209,7 +238,7 @@ export function SiparisAyrinti() {
       <SiparisProjeleri siparis={s} />
 
       {komut === 'onayla' && <SiparisOnayPenceresi siparis={s} kapat={kapat} />}
-      {komut !== null && komut !== 'onayla' && (
+      {komut !== null && komut !== 'onayla' && komut !== 'arsivden-cikar' && (
         <OnayPenceresi
           acik
           baslik={KOMUT_METNI[komut].baslik}
