@@ -67,6 +67,19 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(satirBirincilIster({ ...x.kartlar[0]!, durum: 'iyi' })).toBe(false);
   });
 
+  it('plansız satır: yazabilen kişi Planla düğmesini görür ve basınca planlama çağrılır; yazamayan kişide düğme çizilmez', () => {
+    const x = kur();
+    const kartlar = x.kartlar.map((k) => (k.kok === '3' ? { ...k, durum: 'plansiz' as const, emirler: k.emirler.map((e) => ({ ...e, durum: 'plansiz' as const })) } : k));
+    const { planla } = ciz({ ...x, kartlar }, '3');
+    expect(screen.getByRole('status').textContent).toContain('Planda yeri yok.');
+    fireEvent.click(screen.getByRole('button', { name: 'Planla' }));
+    expect(planla).toHaveBeenCalledWith(kartlar.find((k) => k.kok === '3'));
+    cleanup();
+    ciz({ ...x, kartlar }, '3', { planla: null, yenidenPlanla: null });
+    expect(screen.getByRole('status').textContent).toContain('Planda yeri yok.');
+    expect(screen.queryByRole('button', { name: 'Planla' })).toBeNull();
+  });
+
   it('yazamayan kişide satır açılır, plan değiştiren düğme çıkmaz', () => {
     ciz(kur(), '2', { planla: null, yenidenPlanla: null });
     expect(screen.queryByRole('button', { name: 'Planla' })).toBeNull();

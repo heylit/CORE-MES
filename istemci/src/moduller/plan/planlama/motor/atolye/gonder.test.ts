@@ -145,6 +145,17 @@ describe('Çalışmaya aç ve geri al (507 3 a, 508 2 a)', () => {
     expect(gonderHataIletisi(await calismayiGeriAl(9).catch((e: unknown) => e))).toBe('Geri alınamadı: Çalışma bu arada değişti.');
   });
 
+  it('canlıya almada sunucunun uyarıları sonuca taşınır; uyarı yoksa alan hiç gelmez (3414-7 a)', async () => {
+    const uyari = 'ORN-1 OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.';
+    vi.spyOn(api, 'post').mockResolvedValueOnce({ ...TASLAK, uyarilar: [uyari], senaryolar: liste('canliya_alindi', 3) } as never);
+    const g = await calismayiGonder({ komut: komut(8), ad: 'Onay 25.10 Cum · Ayşe', not: '', planSurumu: 3, hedef: 'canli' });
+    expect(g.uyarilar).toEqual([uyari]);
+    expect(gonderOzeti(g)).toContain(uyari);
+    sunucu();
+    const u = await calismayiGonder({ komut: komut(8), ad: 'Onay 25.10 Cum · Ayşe', not: '', planSurumu: 3, hedef: 'canli' });
+    expect('uyarilar' in u).toBe(false);
+  });
+
   it('sunucunun yazım uyarısı (terminalde durdurulmayı bekleyen iş) özetin sonunda söylenir', async () => {
     const uyari = 'ORN-1 / OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.';
     expect(gonderOzeti({ yazilan: 3, atlanan: 1, yazilamaz: [], uyarilar: [uyari] })).toBe(`3 iş taslağa yazıldı, 1 iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş). ${uyari}`);
