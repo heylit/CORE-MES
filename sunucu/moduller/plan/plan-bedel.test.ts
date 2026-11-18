@@ -9,7 +9,7 @@ import { anSabit, gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
-  const { c, istek, tamam, motorAyariYaz, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
+  const { c, girisCerezi, kisiEkle, istek, tamam, motorAyariYaz, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
   // 148 a: bedel ayarı taslağa yazılır; yazan taslağı onaya gönderir, müdür canlıya alır.
   const canliyaGecir = async (yazan: string, p: PlanCevabi) => {
     const s = (await tamam<SenaryolarCevabi>(yazan, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
@@ -64,14 +64,75 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     assert.equal(await sayi(), once, 'öner ve canlıya alma çarpan tablolarına yazmaz');
     const okunan = await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol);
     assert.deepEqual([okunan.gecerli, okunan.gecmis], [null, []]);
-    assert.equal((await tamam<SiparisCarpaniCevabi>(c.planlama, 'GET', yol)).gecerli, null);
+    assert.equal((await istek(c.planlama, 'GET', yol)).statusCode, 403, '3401-1 a: çarpan gerekçesi planlamaya açık değil');
     for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 403, '237 a: gerekçe ticari bilgi');
   });
 
-  test('6b: bedel ayarı plan ayarında; varsayılanlar kodun değerleri; 237 a: yalnız planı yazan, ayarı yapan ya da fiyat gören okur', async () => {
+  test('6b: bedel ayarı plan ayarında; varsayılanlar kodun değerleri; 3401-1 a: yalnız planı yazan, ayarı yapan ya da maliyet gören okur', async () => {
     for (const kim of [c.kalite, c.operator]) assert.equal((await istek(kim, 'GET', '/plan/bedel-ayari')).statusCode, 403);
     assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'),
       { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5 });
+  });
+
+  // 3401-1 a: öncelik ayarının para alanları (taban bedel, finansman ve kâr riski oranları) ve sipariş çarpanı gerekçesi finans.maliyet-oku ya da
+  // plan.bedel-ayari ister; eşikler ve çarpanlar öncelik sınıfının kuralıdır, planı yazan da okur. Yazma yalnız plan.bedel-ayari'dadır.
+  describe('3401-1 a: bedel ayarı ve çarpan okuması maliyet yetkisine bağlı', () => {
+    const rolId = async (kod: string) => (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]))!.id;
+    const kisi = async (kullaniciAdi: string, rol: string) => { await kisiEkle(kullaniciAdi, await rolId(rol)); return girisCerezi(kullaniciAdi); };
+    const cerez: Record<'planlamaMuduru' | 'satis' | 'muhasebe', string> = { planlamaMuduru: '', satis: '', muhasebe: '' };
+    const KURAL = ['yuksekEsigi', 'dusukEsigi', 'yuksekCarpani', 'normalCarpani', 'dusukCarpani'] as const;
+    const PARA = ['tabanBedelSaat', 'finansmanOraniGun', 'karRiskiOraniGun'] as const;
+    before(async () => {
+      cerez.planlamaMuduru = await kisi('bedel3401pm', 'planlama_muduru');
+      cerez.satis = await kisi('bedel3401satis', 'satis');
+      cerez.muhasebe = await kisi('bedel3401muh', 'muhasebe_finans');
+    });
+
+    test('okuma: planlama eşik ve çarpanı görür, TL alanları null; satış 403; müdür ve muhasebe dolu görür', async () => {
+      const dolu = await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari');
+      assert.deepEqual(PARA.map((a) => typeof dolu[a]), ['number', 'object', 'number'], 'finansman oranı finans oranı girilmedikçe null olabilir');
+      for (const kim of [c.planlama, cerez.planlamaMuduru]) {
+        const g = await tamam<Record<string, unknown>>(kim, 'GET', '/plan/bedel-ayari');
+        for (const a of PARA) assert.equal(g[a], null, `planlama ${a} görmez`);
+        for (const a of KURAL) assert.equal(g[a], dolu[a], `planlama ${a} görür`);
+      }
+      assert.equal((await istek(cerez.satis, 'GET', '/plan/bedel-ayari')).statusCode, 403, 'satış fiyatı görür ama öncelik ayarına erişmez');
+      assert.deepEqual(await tamam(cerez.muhasebe, 'GET', '/plan/bedel-ayari'), dolu);
+      assert.deepEqual(await tamam(c.yonetici, 'GET', '/plan/bedel-ayari'), dolu);
+    });
+
+    test('yazma: yalnız plan.bedel-ayari; planlama müdürü, planlama ve satış 403, muhasebe 403, müdür kabul', async () => {
+      const dolu = await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari');
+      const govde = { ...dolu, taslak: null };
+      for (const kim of [cerez.planlamaMuduru, c.planlama, cerez.satis, cerez.muhasebe]) assert.equal((await istek(kim, 'POST', '/plan/bedel-ayari', govde)).statusCode, 403);
+      assert.equal((await istek(c.mudur, 'POST', '/plan/bedel-ayari', govde)).statusCode, 200);
+    });
+
+    test('çarpan geçmişi: yalnız finans.maliyet-oku ya da plan.bedel-ayari; planlama ve satış 403, müdür ve muhasebe 200; yazma ucu yok', async () => {
+      const yol = '/plan/siparisler/1/carpan';
+      for (const kim of [c.planlama, cerez.planlamaMuduru, cerez.satis]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 403);
+      for (const kim of [c.mudur, cerez.muhasebe, c.yonetici]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 200);
+      for (const kim of [c.mudur, c.planlama, cerez.satis]) assert.equal((await istek(kim, 'POST', yol, { carpan: 2, gerekce: 'Deneme', taslak: null })).statusCode, 404);
+    });
+
+    // Risk K3: motor bedeli sunucuda okur; planlamacı TL'yi görmese de planı çalıştırıp kaydeder.
+    test('K3: planlamacı TL görmezken planı çalıştırır ve kaydeder; motor müdürün yazdığı bedeli kullanır', async () => {
+      await gunduzde(async () => {
+        const [a] = await isEmirleriAc([yeniAdim()], 10, '2030-03-10');
+        const once = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', '/plan/motor-yerlesimi');
+        assert.ok(once.yerlesimler.some((x) => x.isEmriId === a), 'motor yerleşimi planlamacıya döner');
+        const eski = await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari');
+        await bedelYaz({ ...eski, tabanBedelSaat: 777 });
+        try {
+          assert.equal((await tamam<BedelAyari>(c.mudur, 'GET', '/plan/bedel-ayari')).tabanBedelSaat, 777);
+          assert.equal((await tamam<Record<string, unknown>>(c.planlama, 'GET', '/plan/bedel-ayari'))['tabanBedelSaat'], null);
+          const p = await taslaktaOner();
+          assert.ok(p.taslak !== null && p.yerlesimler.some((x) => x.isEmriId === a), 'planlamacının önerdiği plan taslağa yazıldı');
+          const kayitli = await planOku(p.taslak.id);
+          assert.ok(kayitli.yerlesimler.some((x) => x.isEmriId === a), 'kayıt okununca yerleşim durur');
+        } finally { await bedelYaz({ ...eski }); }
+      });
+    });
   });
 
   test('220 a: motor yerleşimi yazmadan döner; plan ekranını açan okur, açamayan okuyamaz (232 a); Planı kur aynı yerleri yazar', async () => {
@@ -303,17 +364,17 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     try {
       // 148 a: yazma taslağa gider; canlı onaya kadar değişmez, taslağın okuması yeni değeri verir. 955 b: sınıf çarpanı artık alan değildir.
       const t = await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...yeni, ...carpanlar, sinifACarpani: 2, taslak });
-      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), varsayilan, 'canlı onaya kadar değişmez');
-      assert.deepEqual(await tamam(c.cam, 'GET', `/plan/bedel-ayari?taslak=${t.taslak!.id}`), { ...okunan, ...carpanlar });
+      assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'), varsayilan, 'canlı onaya kadar değişmez');
+      assert.deepEqual(await tamam(c.mudur, 'GET', `/plan/bedel-ayari?taslak=${t.taslak!.id}`), { ...okunan, ...carpanlar });
       await canliyaGecir(c.mudur, t);
-      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar });
+      assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar });
       assert.equal((await ortam!.sahip.tek<{ f: string | null }>('SELECT finansman_orani_gun AS f FROM plan_ayari'))!.f, null, 'elle oran yazılmadı');
       await bedelYaz({ ...yeni, tabanBedelSaat: 250 });
-      assert.deepEqual(await tamam(c.cam, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar, tabanBedelSaat: 250 },
+      assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'), { ...okunan, ...carpanlar, tabanBedelSaat: 250 },
         'çarpanları göstermeyen ekranın gövdesi çarpanları değiştirmez');
     } finally {
       await bedelYaz(varsayilan);
     }
-    assert.deepEqual(await tamam(c.planlama, 'GET', '/plan/bedel-ayari'), varsayilan);
+    assert.deepEqual(await tamam(c.mudur, 'GET', '/plan/bedel-ayari'), varsayilan);
   });
 });

@@ -5,7 +5,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { AsimlarCevabi, Emir, EmirDurumu, KaliteKarari, KatilimCevabi, RefakatKartiCevabi, SayimKaydi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
+import { adimlardanGorunum, hazirligiKapatanEmir, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
@@ -152,6 +152,12 @@ export async function emirDurumlari(db: Db, idler: readonly number[]): Promise<M
   const tekil = [...new Set(idler)];
   if (tekil.length === 0) return new Map();
   return new Map((await emirDurumlariGetir(db, tekil)).map((r) => [r.id, r.durum]));
+}
+
+// 3396 Risk K-A: projeler hazırlık kademesi bu kümedeki emirlerin açık hazırlık görevlerini iptal eder (kablolama.ts bağlar).
+export async function hazirligiKapananEmirler(db: Db, idler: readonly number[]): Promise<ReadonlySet<number>> {
+  const durum = await emirDurumlari(db, idler);
+  return new Set(idler.filter((id) => hazirligiKapatanEmir(durum.get(id))));
 }
 
 // Plan süre öğrenmesi (1714): emrin malzemesi ve üst emri tek sorguda; malzemesiz emirde malzemeNo null, kök emirde ustEmirId null.
@@ -417,6 +423,9 @@ export type { EmirDilimiSatiri } from './is-emri-servis.ts';
 
 // Plan (UE4, UE5, P6): planlanacak iş emirleri; kaynak, plan bilgisi, plana alma ve iptal komutları.
 export const planlanacakIsEmirleri = isEmri.planlanacakIsEmirleri;
+// Önceki çözücüyü döner (test geri yükler).
+export const operasyonKoduCozucusu = isEmri.operasyonKoduCozucusuKaydet;
+export type { OperasyonKoduCozucusu } from './is-emri-servis.ts';
 // Arkon Hazırlık (kart #1257): rotasız emrin açık adımları, plan satırı biçiminde; plana girmez.
 export const rotasizIsEmirleri = isEmri.rotasizIsEmirleri;
 // Arkon iş emri paketi (kart #199 adım 1, istek 11): iş emrine kopyalanmış kontrol listesi.
@@ -697,10 +706,18 @@ export async function makinelerdekiIsler(db: Db, makineIdleri: readonly number[]
 
 // Terminalin 3B montaj sahnesi (3209 a): iş emrinin rota adımı ve emir açılırken sabitlenen talimat sürümü (adımların talimat künyesiyle aynı
 // kaynak). Sürüm sabitlenmemişse ya da emir malzemesizse null. Yetki denetlemez; çağıran (arkon) işin görünürlüğünü denetler.
-import { notAnahtari as talimatKunyesiOku } from './sorgular.ts';
-export async function isEmriTalimatKunyesi(db: Db, isEmriId: number): Promise<{ malzemeNo: number; opNo: number; surum: number } | null> {
+import { isEmriOperasyonlari as isEmriOperasyonlariOku, notAnahtari as talimatKunyesiOku } from './sorgular.ts';
+export async function isEmriTalimatKunyesi(db: Db, isEmriId: number): Promise<{ malzemeNo: number; opNo: number; operasyonId: number | null; surum: number } | null> {
   const a = await talimatKunyesiOku(db, isEmriId);
-  return a === null || a.talimatSurumu === null ? null : { malzemeNo: a.malzemeNo, opNo: a.opNo, surum: a.talimatSurumu };
+  return a === null || a.talimatSurumu === null ? null : { malzemeNo: a.malzemeNo, opNo: a.opNo, operasyonId: a.operasyonId, surum: a.talimatSurumu };
+}
+
+// Ürün düzeyi veri (talimat, gerçekleşen süre) emirden operasyon kimliğiyle okunur; OP numarası rotada yeniden dizilse de iş emri aynı
+// operasyonu gösterir (3250-2). Kimliği olmayan iş emri haritada null'dır. Yetki denetlemez.
+export async function isEmriOperasyonKimlikleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, number | null>> {
+  const tekil = [...new Set(isEmriIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await isEmriOperasyonlariOku(db, tekil)).map((r) => [r.isEmriId, r.operasyonId]));
 }
 
 // 3272: sipariş onayında proje ve emir. Olay dinleyicileri ve çözücü kaydı kablolama.ts'tedir; rota bekleyen emirleri rota modülü okur.

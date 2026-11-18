@@ -19,10 +19,12 @@ export const useIskontoOnaylar = (): boolean => useIslemVar('siparisler.iskonto-
 export const useFiyatGorur = (): boolean => useIslemVar('siparisler.fiyat-oku');
 // 44, 65 a: teklifi plana dener; maliyet dökümü ayrı işlemdir. 63 b, 871: geciktiren termini siparisler.termin-onayla yetkilisi onaylar.
 export const useTerminDener = (): boolean => useIslemVar('siparisler.termin-dene');
+// 3401-1 a: maliyet toplamı, birim maliyet ve kâr oranı satış fiyatını görmekle açılmaz; yalnız finans.maliyet-oku.
+export const useMaliyetToplamiGorur = (): boolean => useIslemVar('finans.maliyet-oku');
 export const useMaliyetOkur = (): boolean => useIslemVar('siparisler.maliyet-oku');
 export const useTerminOnaylar = (): boolean => useIslemVar('siparisler.termin-onayla');
-// 237 a: çarpan geçmişini okuma ucu bu işlemlerden birini ister; hiçbiri olmayana kart çizilmez (403 kutusu çıkmaz).
-const CARPAN_OKUMA: readonly Islem[] = ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku', 'siparisler.onayla'];
+// 3401-1 a: çarpan geçmişini okuma ucu bu işlemlerden birini ister (sunucudaki PLAN_BEDELI_OKUR); hiçbiri olmayana kart çizilmez (403 kutusu çıkmaz).
+const CARPAN_OKUMA: readonly Islem[] = ['finans.maliyet-oku', 'plan.bedel-ayari'];
 export const useCarpanGorur = (): boolean => {
   const islemler = useOturum().data?.islemler ?? [];
   return CARPAN_OKUMA.some((i) => islemler.includes(i));

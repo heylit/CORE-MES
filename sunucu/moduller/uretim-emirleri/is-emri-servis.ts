@@ -23,12 +23,13 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
-import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
+import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
+import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, rotayiEmreCevir, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
@@ -94,6 +95,9 @@ export interface IsEmriGirdisi {
   adetCarpani?: number | null;
   // 1476: çok katmanlı emirde adımın düğümü (rota cokKatmanaCevir); tek katmanlı emirde yok.
   dugum?: { ad: string; malzemeNo: number; kaynakOpNo: number; birimCarpani: string } | null;
+  // Rota adımının gizli operasyon kimliği (3250-2): iş emrine yazılır; rota emre yeniden uygulanınca adım bununla eşlenir. Yoksa
+  // tetikleyici adımdan çözer.
+  operasyonId?: number | null;
 }
 
 export interface UretimEmriGirdisi {
@@ -164,7 +168,7 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
     istasyonId: g.fasonFirmasiz === true ? null : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
-    talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null,
+    talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null, operasyonId: g.operasyonId ?? null,
   };
 }
 
@@ -284,6 +288,8 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   }
   await onculleriKopyala(db, sirali, new Map(sirali.map((ie, i) => [ie.opNo, isEmriIdleri[i]!])));
   await otomatikGkkKoy(db, acanId, id);
+  // 3396 a: projeye uygulanmış şablonun hazırlık kalemleri emirle birlikte görev olur.
+  if (baslik.proje !== null) await emrinHazirlikGorevleriniAc(db, acanId, id, baslik.proje.id, null);
   await emirAcildiBildir(db, { uretimEmriId: id, kisiId: acanId, stoktanRezerve: g.stoktanRezerve === true });
   return { uretimEmriId: id, isEmriIdleri };
 }
@@ -295,7 +301,7 @@ interface DenetlenmisBaslik {
   baslangic: string | null;
   aciklama: string | null;
   emirTuru: EmirTuru;
-  proje: { id: number; kod: string } | null;
+  proje: { id: number; kod: string; firmaKodu: string | null } | null;
   siparisSatiriId: number | null;
   teslim: string | null;
   teslimBagli: boolean;
@@ -345,7 +351,7 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   const tarihIhlali = teslimIhlali(baslangic, teslim.teslim);
   if (tarihIhlali !== null) throw dogrulama(tarihIhlali, 'teslim');
   return {
-    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod }, siparisSatiriId,
+    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod, firmaKodu: proje.firmaKodu }, siparisSatiriId,
     teslim: teslim.teslim, teslimBagli: teslim.bagli, siparisPartiId,
   };
 }
@@ -357,7 +363,8 @@ async function basligiYaz(
   const parcaNo = b.urun.kod.slice(0, 60);
   // Numara ve sayaç "Numara kuralları" ayarındadır; sayaç bu işlemin içinde ilerler, emir eklenmezse geri alınır.
   const emirNo = await numaraAl(db, 'uretim-emirleri.emir-no', {
-    alanlar: { FIRMA: await firmaKodu(db), PROJE: b.proje?.kod ?? null, PARCA: parcaNo },
+    // 3399 a: firma kodu projenindir; projesiz ya da kodsuz projede numaraAl varsayılan kodu koyar.
+    alanlar: { FIRMA: b.proje?.firmaKodu ?? null, PROJE: b.proje?.kod ?? null, PARCA: parcaNo },
     varMi: (no) => s.emirNoVarMi(db, no),
   });
   return s.ustEmirEkle(db, {
@@ -409,17 +416,21 @@ export async function rotaBekleyenEmirAc(db: Db, kullanici: Kullanici, g: EmirBa
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
 // surum: çağıranın kararını verdiği emrin sürümü; satır kilidi alındıktan sonra denetlenir, arada değişen emir yenilenmez.
 export async function isEmirleriniYenile(
-  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum?: number },
+  db: Db, kullanici: Kullanici, uretimEmriId: number, girdi: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum?: number },
 ): Promise<{ degisenler: string[] }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.emir-ac', 'rota.emre-kopyala']);
   const e = await kilitliUstEmir(db, uretimEmriId);
-  surumDenetle(e, g.surum);
+  surumDenetle(e, girdi.surum);
   await cokKatmanliDegil(db, uretimEmriId, COK_KATMANLI_DEGISMEZ);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
-  girdiDenetle(g.isEmirleri);
+  girdiDenetle(girdi.isEmirleri);
   const tipler = await tipKimlikleri(db);
   const hepsi = await s.isEmirleriGetir(db, [uretimEmriId]);
+  // 3250 b: açık emir numarasını korur; rota adımları operasyon kimliğiyle emrin numarasına çevrilir (yeni adım emrin en büyüğü + 10).
+  const kimlikleri = new Map((await s.isEmriOperasyonlari(db, hepsi.map((i) => i.id))).map((x) => [x.isEmriId, x.operasyonId]));
+  const g = { ...girdi, isEmirleri: rotayiEmreCevir(
+    hepsi.filter((i) => i.tur === 'rota').map((i) => ({ opNo: i.opNo, operasyonId: kimlikleri.get(i.id) ?? null })), girdi.isEmirleri) };
   const bekleyenGkk = hepsi.filter((i) => otomatikGkkMi(i) && i.durum === 'bekliyor');
   const mevcut = hepsi.filter((i) => !bekleyenGkk.includes(i));
   // Kola konmuş rework, tamir ya da ek adım rotada yoktur; güvenli kip onu "rotada yok" diye silerdi. Böyle kol olduğu gibi kalır.
@@ -554,7 +565,7 @@ export async function adimliListe(
 
 // Gecikmenin günü tesis saatine göredir.
 export async function adimliOzet(db: Db, simdi = Date.now()): Promise<AdimliOzetCevabi> {
-  return adimliOzetSay(await s.adimliOzetGruplari(db, tesisGunu(simdi)));
+  return adimliOzetSay(await s.adimliOzetGruplari(db, tesisGunu(simdi), await denemeIsaretliKimlikler(db, 'uretim_emri')));
 }
 
 // Biten (bitmiş ya da iptal) emirler, en yeni önce, sayfalı (kart #1323).
@@ -1737,6 +1748,11 @@ export interface PlanIsEmri {
   ad: string;
   // Terminalin kalite istasyonunda alt görünümü adımın operasyon tipi seçer (2011 a).
   operasyonTipiId?: number;
+  // Rotadaki gizli operasyon kimliği (3250-2); OP numarası yeniden dizilse de aynı operasyonu gösterir. Kimliksiz adımda null.
+  operasyonId?: number | null;
+  // Operasyon kodu ve adı (3377, 3385): emrin rota revizyonundan türetilir (TRN10, "Torna 1. operasyon"). Rotasız adımda, revizyonda
+  // bulunmayan adımda ya da çözücü kayıtlı değilken null.
+  operasyon?: { kod: string; ad: string } | null;
   kaynak: AtanabilirKaynak | null;
   // İş emrine yazılmış istasyon (sabit kimlik: istasyon iş emrinindir); Arkon paketi makine ya da kişiden türetmeden okur. Planın kendi
   // denediği emirde yoktur.
@@ -1774,6 +1790,18 @@ export type FasonTahmini = (sorgular: readonly { malzemeNo: number; operasyonTip
 // 3257 a: bitmemiş fason adımların açık siparişindeki teslim tarihi (iş emri kimliğinden 'GGGG-AA-GG'; tarihsiz ya da siparişsiz adım haritada
 // yok). Plan satın almadan verir; tarih termin gününün ve tahminin önüne geçer (fasonBeklemesi).
 export type FasonSiparisTermini = (isEmriIdleri: readonly number[]) => Promise<ReadonlyMap<number, string>>;
+
+// Operasyon kodu rotanın kuralıdır; rota bu modülü okuduğu için çözücü kablolama.ts'te kaydedilir (kapanış kalıbı). Sonuç girdiyle aynı sırada.
+export type OperasyonKoduCozucusu = (
+  db: Db, adimlar: readonly { revizyonId: number; operasyonId: number | null; opNo: number }[],
+) => Promise<({ kod: string; ad: string } | null)[]>;
+let operasyonKoduCozucusu: OperasyonKoduCozucusu | null = null;
+// Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
+export function operasyonKoduCozucusuKaydet(c: OperasyonKoduCozucusu | null): OperasyonKoduCozucusu | null {
+  const onceki = operasyonKoduCozucusu;
+  operasyonKoduCozucusu = c;
+  return onceki;
+}
 
 // Taslak emir plana alınmadan plan çizelgesinde denenebilir; varsayılan yalnız planlı ve başlamış emirlerdir.
 export const planlanacakIsEmirleri = (
@@ -1828,6 +1856,13 @@ async function acikAdimlar<R extends number | null>(
     return m === undefined ? undefined : i.makineId !== null && m.includes(i.makineId) ? i.makineId : m[0];
   };
   const plandaki = new Set(satirlar.map((i) => i.id));
+  const kimlikler = new Map(satirlar.length === 0 ? [] : (await s.isEmriOperasyonlari(db, satirlar.map((i) => i.id))).map((r) => [r.isEmriId, r.operasyonId]));
+  const rotali = satirlar.filter((i) => i.emir.kaynakRotaRevizyonId !== null);
+  const kodlar = new Map<number, { kod: string; ad: string } | null>();
+  if (operasyonKoduCozucusu && rotali.length > 0) {
+    const cevap = await operasyonKoduCozucusu(db, rotali.map((i) => ({ revizyonId: i.emir.kaynakRotaRevizyonId!, operasyonId: kimlikler.get(i.id) ?? null, opNo: i.opNo })));
+    rotali.forEach((i, n) => kodlar.set(i.id, cevap[n] ?? null));
+  }
   return satirlar.flatMap((i) => {
     const e = i.emir;
     const revizyon = e.kaynakRotaRevizyonId;
@@ -1838,7 +1873,7 @@ async function acikAdimlar<R extends number | null>(
       id: i.id, uretimEmriId: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, teslim: e.teslim, oncelik: e.oncelik, acilma: e.acilma, baslangic: e.baslangic,
       kaynakRotaRevizyonId: revizyon, ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, birlesmeOpNo: e.birlesmeOpNo, tur: i.tur, emirTuru: e.emirTuru,
       siparisSatiriId: e.siparisSatiriId, adimAdedi: adimAdedi.get(e.id)?.get(i.sira) ?? e.adet,
-      sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
+      sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, operasyonId: kimlikler.get(i.id) ?? null, operasyon: kodlar.get(i.id) ?? null, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
       devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi,

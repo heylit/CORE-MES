@@ -10,6 +10,7 @@ export interface ProjeSatiri {
   ad: string;
   durum: ProjeDurumu;
   firma_id: number | null;
+  firma_kodu: string | null;
   siparis_id: number | null;
   butce_tutari: string | null;
   butce_para_birimi: string | null;
@@ -22,7 +23,7 @@ export interface ProjeSatiri {
   surum: number;
 }
 
-const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.bitis_bagli,
+const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.firma_kodu, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.bitis_bagli,
                       p.aciklama, ${zamanMetni('p.olusturma')} AS olusturma, ${zamanMetni('p.guncelleme')} AS guncelleme, p.surum
                  FROM projeler_proje p`;
 
@@ -80,17 +81,18 @@ export function siparisProjeleri(db: Db, siparisId: number): Promise<ProjeSatiri
 }
 
 export interface KilitliProje {
-  firma_id: number | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null; durum: string;
+  firma_id: number | null; firma_kodu: string | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null; durum: string;
 }
 export async function projeFirmasi(db: Db, id: number): Promise<KilitliProje | null> {
   return db.tek<KilitliProje>(
-    'SELECT firma_id, siparis_id, butce_tutari, butce_para_birimi, durum FROM projeler_proje WHERE id = $1 FOR UPDATE', [id],
+    'SELECT firma_id, firma_kodu, siparis_id, butce_tutari, butce_para_birimi, durum FROM projeler_proje WHERE id = $1 FOR UPDATE', [id],
   );
 }
 
 export interface ProjeAlanlari {
   ad: string;
   firmaId: number | null;
+  firmaKodu: string | null;
   baslangic: string | null;
   bitis: string | null;
   aciklama: string | null;
@@ -102,9 +104,9 @@ export async function projeEkle(
   db: Db, kod: string, a: ProjeAlanlari, kisiId: number, siparisId: number | null = null, bitisBagli = false,
 ): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi, bitis_bagli)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi, bitisBagli],
+    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi, bitis_bagli, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi, bitisBagli, a.firmaKodu],
   );
   if (satir === null) throw new Error('Proje eklenemedi');
   return satir.id;
@@ -118,9 +120,9 @@ export function projeGuncelle(
     `UPDATE projeler_proje
         SET ad = $2, firma_id = $3, baslangic = $4, bitis = $5, aciklama = $6, durum = $7,
             bitis_bagli = bitis_bagli AND bitis IS NOT DISTINCT FROM $5::date,
-            butce_tutari = $10, butce_para_birimi = $11, guncelleyen_id = $8, guncelleme = now(), surum = surum + 1
+            butce_tutari = $10, butce_para_birimi = $11, firma_kodu = $12, guncelleyen_id = $8, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $9 RETURNING id`,
-    [id, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, a.durum, kisiId, surum, a.butceTutari, a.butceParaBirimi],
+    [id, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, a.durum, kisiId, surum, a.butceTutari, a.butceParaBirimi, a.firmaKodu],
   );
 }
 
@@ -420,6 +422,22 @@ export function gorevIptal(db: Db, id: number, kisiId: number, surum: number): P
   );
 }
 
+// 3396 Risk K-A: emri kapanan (biten, iptal edilen ya da silinen) açık hazırlık görevi sistemce iptal olur; kişi yazılmaz.
+// Emre bağlı açık hazırlık görevleri; kontroldekiler dahil (emri kapanınca onlar da iptal olur, kontrol bildirimi kapanır).
+export function emreBagliAcikHazirliklar(db: Db): Promise<{ id: number; hazirlik_emri_id: number }[]> {
+  return db.sorgu(
+    `SELECT id, hazirlik_emri_id FROM projeler_gorev
+      WHERE hazirlik_maddesi IS NOT NULL AND hazirlik_emri_id IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor', 'kontrolde') ORDER BY id`,
+  );
+}
+export function hazirlikGoreviniKapat(db: Db, id: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'iptal', guncelleyen_id = NULL, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND hazirlik_maddesi IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor', 'kontrolde') RETURNING id`,
+    [id],
+  );
+}
+
 export function gorevGeriGonder(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE projeler_gorev SET durum = 'suruyor', guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
@@ -566,4 +584,160 @@ export async function bugun(db: Db): Promise<string> {
   const s = await db.tek<{ bugun: string }>('SELECT current_date::text AS bugun');
   if (s === null) throw new Error('Tarih okunamadı');
   return s.bugun;
+}
+
+// --- Hazırlık görevi (3396 a) ---
+
+export interface HazirlikGoreviAlanlari extends GorevAlanlari { hazirlikMaddesi: string; emriId: number; isEmriId: number | null }
+// Aynı emir, iş emri ve madde için iptal edilmemiş görev varsa eklenmez (tekil dizin): null döner.
+export async function hazirlikGoreviEkle(db: Db, projeId: number, g: HazirlikGoreviAlanlari, kisiId: number): Promise<number | null> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO projeler_gorev (proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, onceki_gorev_id, olusturan_id,
+                                 asama, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id, yedek_kontrol_kisi_id, yedek_kontrol_rol_id,
+                                 hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+     ON CONFLICT (hazirlik_emri_id, (COALESCE(hazirlik_is_emri_id, 0)), hazirlik_maddesi)
+       WHERE hazirlik_maddesi IS NOT NULL AND durum <> 'iptal' DO NOTHING
+     RETURNING id`,
+    [projeId, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId, kisiId,
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId, g.hazirlikMaddesi, g.emriId, g.isEmriId],
+  );
+  return satir?.id ?? null;
+}
+
+// Projeye uygulanmış şablonların donmuş kalemleri (uygulama sırasıyla).
+export async function uygulananKalemler(db: Db, projeId: number): Promise<unknown[]> {
+  const satirlar = await db.sorgu<{ kalemler: unknown[] }>('SELECT kalemler FROM projeler_proje_sablonu WHERE proje_id = $1 ORDER BY id', [projeId]);
+  return satirlar.flatMap((s) => s.kalemler);
+}
+export async function sablonUygulandiMi(db: Db, projeId: number, sablonId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM projeler_proje_sablonu WHERE proje_id = $1 AND sablon_id = $2', [projeId, sablonId])) !== null;
+}
+
+export interface HazirlikGoreviSatiri {
+  id: number; proje_id: number; ad: string; durum: string; hazirlik_maddesi: string; hazirlik_emri_id: number; hazirlik_is_emri_id: number | null;
+  sorumlu_kisi_id: number | null; yapan_rol_id: number | null; kontrol_kisi_id: number | null; kontrol_rol_id: number | null;
+  plan_bitis: string; ilerleme: number; onaylandi: boolean; surum: number; gecikme_gun: number | null; kademe: number | null;
+}
+export function hazirlikGorevleri(db: Db, emirIdleri: readonly number[]): Promise<HazirlikGoreviSatiri[]> {
+  if (emirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<HazirlikGoreviSatiri>(
+    `SELECT id, proje_id, ad, durum, hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id, sorumlu_kisi_id, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id,
+            plan_bitis::text AS plan_bitis, ilerleme, onaylandi, surum,
+            CASE WHEN durum <> 'bitti' AND plan_bitis < current_date THEN current_date - plan_bitis END AS gecikme_gun,
+            (SELECT max(k.kademe)::int FROM projeler_hazirlik_kademe k WHERE k.gorev_id = projeler_gorev.id) AS kademe
+       FROM projeler_gorev WHERE hazirlik_emri_id = ANY($1::int[]) AND durum <> 'iptal' ORDER BY hazirlik_emri_id, hazirlik_is_emri_id NULLS FIRST, id`,
+    [emirIdleri],
+  );
+}
+export async function hazirlikGoreviVarMi(db: Db, emriId: number, isEmriId: number | null, madde: string): Promise<boolean> {
+  return (await db.tek(
+    `SELECT 1 AS var FROM projeler_gorev
+      WHERE hazirlik_emri_id = $1 AND COALESCE(hazirlik_is_emri_id, 0) = COALESCE($2::int, 0) AND hazirlik_maddesi = $3 AND durum <> 'iptal'`,
+    [emriId, isEmriId, madde],
+  )) !== null;
+}
+export function projeninHazirlikGorevleri(db: Db, projeId: number): Promise<HazirlikGoreviSatiri[]> {
+  return db.sorgu<HazirlikGoreviSatiri>(
+    `SELECT id, proje_id, ad, durum, hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id, sorumlu_kisi_id, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id,
+            plan_bitis::text AS plan_bitis, ilerleme, onaylandi, surum,
+            CASE WHEN durum <> 'bitti' AND plan_bitis < current_date THEN current_date - plan_bitis END AS gecikme_gun,
+            (SELECT max(k.kademe)::int FROM projeler_hazirlik_kademe k WHERE k.gorev_id = projeler_gorev.id) AS kademe
+       FROM projeler_gorev WHERE proje_id = $1 AND hazirlik_maddesi IS NOT NULL AND durum <> 'iptal'
+      ORDER BY hazirlik_emri_id, hazirlik_is_emri_id NULLS FIRST, id`,
+    [projeId],
+  );
+}
+// Yalnız bitmemiş hazırlık görevi yeniden atanır; üstlenen kişi rol atanınca bırakılır.
+export function hazirlikGoreviAta(
+  db: Db, id: number, g: { sorumluKisiId: number | null; yapanRolId: number | null }, surum: number, kisiId: number,
+): Promise<{ id: number; proje_id: number; surum: number } | null> {
+  return db.tek(
+    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, yapan_rol_id = $3, guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $5 AND hazirlik_maddesi IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor')
+      RETURNING id, proje_id, surum`,
+    [id, g.sorumluKisiId, g.yapanRolId, kisiId, surum],
+  );
+}
+export function hazirlikGoreviDurumu(db: Db, id: number): Promise<{ proje_id: number; durum: string; hazirlik_maddesi: string | null } | null> {
+  return db.tek('SELECT proje_id, durum, hazirlik_maddesi FROM projeler_gorev WHERE id = $1', [id]);
+}
+
+// --- Hazırlık kademesi (3396 a) ---
+
+export interface KademeAyariSatiri {
+  hatirlat_gun: number; yonetici_gun: number; devret_gun: number; yonetici_rol_id: number | null; surum: number;
+  degistiren_id: number | null; degisti: string | null;
+}
+export async function kademeAyari(db: Db): Promise<KademeAyariSatiri> {
+  const s = await db.tek<KademeAyariSatiri>(
+    `SELECT hatirlat_gun, yonetici_gun, devret_gun, yonetici_rol_id, surum, degistiren_id, ${zamanMetni('degisti')} AS degisti
+       FROM projeler_hazirlik_kademe_ayari WHERE id = 1`,
+  );
+  if (s === null) throw new Error('Kademe ayarı satırı yok');
+  return s;
+}
+export function kademeAyariYaz(
+  db: Db, g: { hatirlatGun: number; yoneticiGun: number; devretGun: number; yoneticiRolId: number | null }, surum: number, kisiId: number,
+): Promise<{ surum: number } | null> {
+  return db.tek(
+    `UPDATE projeler_hazirlik_kademe_ayari
+        SET hatirlat_gun = $1, yonetici_gun = $2, devret_gun = $3, yonetici_rol_id = $4, degistiren_id = $5, degisti = now(), surum = surum + 1
+      WHERE id = 1 AND surum = $6 RETURNING surum`,
+    [g.hatirlatGun, g.yoneticiGun, g.devretGun, g.yoneticiRolId, kisiId, surum],
+  );
+}
+
+// Açık (bitmemiş, kontrole düşmemiş) hazırlık görevleri, aktif projede; yazılmış kademeleriyle.
+export interface TakipGorevi {
+  id: number; proje_id: number; ad: string; plan_bitis: string; sorumlu_kisi_id: number | null; yapan_rol_id: number | null;
+  kontrol_kisi_id: number | null; kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null;
+  hazirlik_emri_id: number | null; kademeler: number[];
+}
+export function takipGorevleri(db: Db): Promise<TakipGorevi[]> {
+  return db.sorgu<TakipGorevi>(
+    `SELECT g.id, g.proje_id, g.ad, g.plan_bitis::text AS plan_bitis, g.sorumlu_kisi_id, g.yapan_rol_id, g.kontrol_kisi_id, g.kontrol_rol_id,
+            g.yedek_kontrol_kisi_id, g.yedek_kontrol_rol_id, g.hazirlik_emri_id,
+            COALESCE((SELECT array_agg(k.kademe::int ORDER BY k.kademe) FROM projeler_hazirlik_kademe k WHERE k.gorev_id = g.id), '{}') AS kademeler
+       FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
+      WHERE g.hazirlik_maddesi IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif'
+      ORDER BY g.id`,
+  );
+}
+export async function kademeYaz(db: Db, gorevId: number, kademe: number, bildirildi: boolean, aliciSayisi: number): Promise<boolean> {
+  return (await db.tek(
+    `INSERT INTO projeler_hazirlik_kademe (gorev_id, kademe, bildirildi, alici_sayisi) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (gorev_id, kademe) DO NOTHING RETURNING kademe`,
+    [gorevId, kademe, bildirildi, aliciSayisi],
+  )) !== null;
+}
+export function gorevKademeleri(db: Db, gorevId: number): Promise<{ kademe: number; an: string; bildirildi: boolean; alici_sayisi: number }[]> {
+  return db.sorgu(`SELECT kademe, ${zamanMetni('an')} AS an, bildirildi, alici_sayisi FROM projeler_hazirlik_kademe WHERE gorev_id = $1 ORDER BY kademe`, [gorevId]);
+}
+// Günlük özet gün başına bir kez: satır yazılabildiyse bu çalışma gönderir.
+export async function ozetYaz(db: Db, gun: string, sayi: number): Promise<boolean> {
+  return (await db.tek('INSERT INTO projeler_hazirlik_ozet (gun, gorev_sayisi) VALUES ($1, $2) ON CONFLICT (gun) DO NOTHING RETURNING gun', [gun, sayi])) !== null;
+}
+export async function tesisSaati(db: Db): Promise<number> {
+  const s = await db.tek<{ saat: number }>('SELECT extract(hour FROM now())::int AS saat');
+  return s?.saat ?? 0;
+}
+// Kişinin geciken hazırlık görevleri (kendisi yapan, ya da üstlenilmemiş ve rolüne atanmış): kırmızı şerit.
+export function gecikenHazirliklarim(db: Db, kisiId: number, rolIdleri: readonly number[]): Promise<{ id: number; ad: string; plan_bitis: string; gecikme_gun: number; kademe: number | null }[]> {
+  return db.sorgu(
+    `SELECT g.id, g.ad, g.plan_bitis::text AS plan_bitis, current_date - g.plan_bitis AS gecikme_gun,
+            (SELECT max(k.kademe)::int FROM projeler_hazirlik_kademe k WHERE k.gorev_id = g.id) AS kademe
+       FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
+      WHERE g.hazirlik_maddesi IS NOT NULL AND g.durum IN ('yapilacak', 'suruyor', 'bekliyor') AND p.durum = 'aktif' AND g.plan_bitis < current_date
+        AND (g.sorumlu_kisi_id = $1 OR (g.sorumlu_kisi_id IS NULL AND g.yapan_rol_id = ANY($2::int[])))
+      ORDER BY g.plan_bitis, g.id`,
+    [kisiId, [...rolIdleri]],
+  );
+}
+export async function enYuksekKademeler(db: Db, gorevIdleri: readonly number[]): Promise<Map<number, number>> {
+  if (gorevIdleri.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ gorev_id: number; kademe: number }>(
+    'SELECT gorev_id, max(kademe)::int AS kademe FROM projeler_hazirlik_kademe WHERE gorev_id = ANY($1::int[]) GROUP BY gorev_id', [[...gorevIdleri]],
+  );
+  return new Map(satirlar.map((x) => [x.gorev_id, x.kademe]));
 }

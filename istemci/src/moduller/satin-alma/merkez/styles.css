@@ -821,3 +821,14 @@
 .sa-kok .sa-oz-ayrinti dl{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:var(--b-1) var(--b-2); margin:var(--b-1) 0 0; font-size:var(--yazi-s); }
 .sa-kok .sa-oz-ayrinti dt{ color:var(--muted); }
 .sa-kok .sa-oz-ayrinti dd{ margin:0; overflow-wrap:anywhere; }
+
+/* 3401-1 a: fiyatı göremeyen okuyucuda tutar yerindeki kilit (ortak KilitliDeger ile aynı görünüm). */
+.sa-kok .sa-kilit{ display:inline-flex; flex-direction:column; padding:var(--b-1) var(--b-2); border-radius:var(--b-1); background:color-mix(in srgb, var(--muted) 10%, transparent); color:var(--muted); text-align:left; }
+.sa-kok .sa-kilit b{ font-size:var(--yazi-xs); font-weight:600; color:var(--ink); }
+.sa-kok .sa-kilit small{ font-size:var(--yazi-xs); color:var(--muted); }
+.sa-kok .sa-kilit-not{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-2); margin:0; padding:var(--b-3) var(--b-4); color:var(--muted); }
+/* 3384 a: sipariş takibinde Logo irsaliye farkı ve kalem kalem karşılaştırma. */
+.sa-kok .todo[data-sa-takip-listesi] li[data-sa-takip="fark"] > span:first-child{ color:var(--sa-warn); }
+.sa-kok .todo[data-sa-takip-listesi] li[data-sa-takip="fark"] b{ color:var(--sa-ink); }
+.sa-kok .sa-logo-kalemler summary{ cursor:pointer; font-weight:600; }
+.sa-kok .sa-logo-kalemler .sa-logo-fark{ color:var(--sa-warn); }

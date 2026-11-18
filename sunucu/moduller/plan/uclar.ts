@@ -1,7 +1,8 @@
 import { uc } from '#cekirdek/uc.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
+  ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
@@ -40,8 +41,11 @@ import * as servis from './servis.ts';
 import { veriSagligi } from './veri-sagligi.ts';
 import { yillikCozBaslat, yillikCozDurumu } from './yillik-cozucu.ts';
 
-// 237 a: plan öncelik ayarlarını ve sipariş çarpanını planı yazan, bedel ayarını yapan ya da fiyatı gören okur; gerekçe ticari bilgi taşır.
-const PLAN_BEDELI_OKUR = { biri: ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku'] } as const;
+// 3401-1 a: sipariş çarpanının gerekçesi ticari bilgidir; yalnız maliyet gören ya da bedel ayarını yapan okur (satış ve planlama okumaz).
+const PLAN_BEDELI_OKUR = { biri: ['finans.maliyet-oku', 'plan.bedel-ayari'] } as const;
+// Öncelik ayarının eşikleri ve çarpanları planlamacıya da açıktır (planı yazan sınıfın ne demek olduğunu görür); taban bedel ve oranlar
+// PLAN_BEDELI_OKUR'a göre null gelir.
+const PLAN_AYARI_OKUR = { biri: ['plan.yaz', 'finans.maliyet-oku', 'plan.bedel-ayari'] } as const;
 
 // Her yazma adından belli ayrı bir uçtur (genel kaydet yok). Planlama işlemleri taslağa yazar (P6); taslak verilmezse açılır.
 // 280 a: planı, karşılaştırmayı, canlı yerleşimi ve senaryoları planı gören ya da yazan okur. Sürüm ve menü sayaçları oturumludur
@@ -128,10 +132,14 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => servis.elleSiralariSil(db, kullanici, govde.taslak) }),
   uc({ yontem: 'POST', yol: '/plan/ayar', yetki: 'plan.yaz', tekrarKorumali: true, govde: ayarGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, govde }) => servis.ayarYaz(db, kullanici, govde.taslak, govde.ayar) }),
-  // Bedel ayarı (209 a): değiştirmek yalnız plan.bedel-ayari (210 a, müdür); bütün siparişlerin sırasını değiştirir. Okuma ticari bilgidir (237 a).
+  // Bedel ayarı (209 a): değiştirmek yalnız plan.bedel-ayari (210 a, müdür); bütün siparişlerin sırasını değiştirir. Para alanları ticari bilgidir (3401-1 a).
   // 148 a: yazma taslağa gider (taslak verilmezse açılır), onayla canlıya geçer; okuma taslak verilirse taslağınki.
-  uc({ yontem: 'GET', yol: '/plan/bedel-ayari', yetki: PLAN_BEDELI_OKUR, sorgu: planSorgusu, cevap: bedelAyari,
-    isle: ({ db, sorgu }) => servis.bedelAyari(db, sorgu.taslak) }),
+  uc({ yontem: 'GET', yol: '/plan/bedel-ayari', yetki: PLAN_AYARI_OKUR, sorgu: planSorgusu, cevap: bedelAyariCevabi,
+    isle: async ({ db, kullanici, sorgu }) => {
+      const ayar = await servis.bedelAyari(db, sorgu.taslak);
+      return islemVarMi(kullanici, 'finans.maliyet-oku') || islemVarMi(kullanici, 'plan.bedel-ayari')
+        ? ayar : { ...ayar, tabanBedelSaat: null, finansmanOraniGun: null, karRiskiOraniGun: null };
+    } }),
   uc({ yontem: 'POST', yol: '/plan/bedel-ayari', yetki: 'plan.bedel-ayari', tekrarKorumali: true, govde: bedelAyariTaslakGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, govde: { taslak, ...ayar } }) => servis.bedelAyariYaz(db, kullanici, taslak ?? null, ayar) }),
   // Plan motoru ayarları (kart 811): planı ya da planlama sayfalarını gören okur; değiştirmek plan.motor-ayari (775 b). Yazma yeni sürümdür,

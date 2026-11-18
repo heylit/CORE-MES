@@ -3,8 +3,9 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
@@ -104,7 +105,8 @@ function dogrula(d: Degerler): AlanHatalari {
 
 const alanEsle = (alan: string): string => (alan === 'firmaId' ? 'firma' : alan.replace(/^(satirlar\.\d+)\.malzemeNo$/, '$1.kart'));
 
-function govdeKur(d: Degerler) {
+// Ceza ve vade fiyat görme yetkisinin parçasıdır (3401-2 a): göremeyen göndermez (null), sunucu kayıttakini korur.
+function govdeKur(d: Degerler, ticariSartGorur: boolean) {
   return {
     firmaId: d.firma?.id ?? 0,
     musteriSiparisNo: bosYap(d.musteriSiparisNo),
@@ -115,10 +117,10 @@ function govdeKur(d: Degerler) {
     odemeKosulu: bosYap(d.odemeKosulu),
     aciklama: bosYap(d.aciklama),
     // Boş ceza alanı "ceza yok" demektir (177-179 a: tutar ya da ceza yoksa taban ağırlık); sıfır uydurulmaz.
-    cezaOraniGun: d.cezaOraniGun.trim() === '' ? null : sayiGirdisi(d.cezaOraniGun),
-    cezaTavaniOrani: d.cezaTavaniOrani.trim() === '' ? null : sayiGirdisi(d.cezaTavaniOrani),
+    cezaOraniGun: !ticariSartGorur || d.cezaOraniGun.trim() === '' ? null : sayiGirdisi(d.cezaOraniGun),
+    cezaTavaniOrani: !ticariSartGorur || d.cezaTavaniOrani.trim() === '' ? null : sayiGirdisi(d.cezaTavaniOrani),
     // Boş vade null gider; proje maliyeti onu eksik sayar, plan sırası vadeyi okumaz (205 a, E-9).
-    odemeVadesiGun: d.odemeVadesiGun.trim() === '' ? null : Number(d.odemeVadesiGun.trim()),
+    odemeVadesiGun: !ticariSartGorur || d.odemeVadesiGun.trim() === '' ? null : Number(d.odemeVadesiGun.trim()),
     satirlar: d.satirlar.map((s) => ({
       ...(s.id === null ? {} : { id: s.id }),
       malzemeNo: s.kart?.no ?? 0,
@@ -145,6 +147,10 @@ function Form({ siparis }: FormOzellikleri) {
   const fiyatGorur = useFiyatGorur();
   const [acilisSurumu] = useState(siparis?.surum ?? null);
   const [secilecek, secilecekYaz] = useState<number | null>(null);
+  // 3399 a: firma kodu sipariş numarasını belirler; yalnız açılışta seçilir.
+  const { varsayilan: varsayilanFirmaKodu } = useFirmaKodlari();
+  const [secilenFirmaKodu, firmaKoduYaz] = useState<string | null>(null);
+  const firmaKodu = siparis === null ? (secilenFirmaKodu ?? varsayilanFirmaKodu) : siparis.firmaKodu;
 
   const form = useForm<Degerler, SiparisAyrintisi>({
     ilk: ilkDegerler(siparis),
@@ -152,8 +158,8 @@ function Form({ siparis }: FormOzellikleri) {
     alanEsle,
     hataIletisi: 'Sipariş kaydedilemedi.',
     kaydet: (d) => {
-      const govde = govdeKur(d);
-      if (siparis === null || acilisSurumu === null) return ekle<SiparisAyrintisi>('/siparisler/ekle', govde);
+      const govde = govdeKur(d, fiyatGorur);
+      if (siparis === null || acilisSurumu === null) return ekle<SiparisAyrintisi>('/siparisler/ekle', firmaKodu === null ? govde : { ...govde, firmaKodu });
       return api.post<SiparisAyrintisi>(`/siparisler/${siparis.id}/guncelle`, { ...govde, surum: acilisSurumu } satisfies SiparisGuncelleGovdesi);
     },
     basarili: (cevap) => {
@@ -197,10 +203,20 @@ function Form({ siparis }: FormOzellikleri) {
               <Girdi etiket="Termin" type="date" required {...form.alan('termin')} onChange={(o) => tarihYaz(o.target.value)} />
             </div>
             <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
+            <FirmaKoduSecimi deger={firmaKodu} degistir={firmaKoduYaz} kilitli={siparis !== null} {...(siparis === null ? {} : { ipucu: kayitliKodIpucu('Sipariş', siparis.no, siparis.firmaKodu) })} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
-            <Girdi etiket="Gecikme cezası (%/gün)" inputMode="decimal" autoComplete="off" ipucu="Boş: sözleşmede ceza yok." {...form.alan('cezaOraniGun')} />
-            <Girdi etiket="Ceza tavanı (%)" inputMode="decimal" autoComplete="off" {...form.alan('cezaTavaniOrani')} />
-            <Girdi etiket="Ödeme vadesi (gün)" inputMode="numeric" autoComplete="off" ipucu="Proje maliyeti finansmanı bu vadeden hesaplar; plan sırası henüz okumaz." {...form.alan('odemeVadesiGun')} />
+            {fiyatGorur ? (
+              <>
+                <Girdi etiket="Gecikme cezası (%/gün)" inputMode="decimal" autoComplete="off" ipucu="Boş: sözleşmede ceza yok." {...form.alan('cezaOraniGun')} />
+                <Girdi etiket="Ceza tavanı (%)" inputMode="decimal" autoComplete="off" {...form.alan('cezaTavaniOrani')} />
+                <Girdi etiket="Ödeme vadesi (gün)" inputMode="numeric" autoComplete="off" ipucu="Proje maliyeti finansmanı bu vadeden hesaplar; plan sırası henüz okumaz." {...form.alan('odemeVadesiGun')} />
+              </>
+            ) : (
+              <div className="tc-sp-yigin" role="group" aria-label="Ticari şartlar">
+                <span className="tc-sp-etiket">Gecikme cezası, ceza tavanı ve ödeme vadesi</span>
+                <KilitliDeger yetki={YETKI_ADI.siparisFiyati} />
+              </div>
+            )}
           </div>
           <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
           <CokSatir etiket="Açıklama" {...form.alan('aciklama')} />

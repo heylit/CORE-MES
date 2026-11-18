@@ -96,7 +96,7 @@ describe('2542 çatallı rota: izinli', () => {
     const panel = await adimSec(bolge, 20);
     fireEvent.click(within(panel).getByRole('button', { name: 'Yukarı' }));
     const pencere = await screen.findByRole('dialog', { name: 'Dalın yeri değişsin mi?' });
-    expect(within(pencere).getByText('Dal A: OP 10 ardından başlar, OP 40 adımında birleşir.')).toBeTruthy();
+    expect(within(pencere).getByText('Dal A: OP 20 ardından başlar, OP 40 adımında birleşir.')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
     await new Promise((r) => { setTimeout(r, 1000); });
     expect(k.govde).toBeNull();

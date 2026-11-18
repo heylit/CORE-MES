@@ -17,7 +17,8 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { uclar } from './uclar.ts';
 
 const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
-const PLAN_BEDELI_OKUR = { biri: ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku'] } as const;
+const PLAN_BEDELI_OKUR = { biri: ['finans.maliyet-oku', 'plan.bedel-ayari'] } as const;
+const PLAN_AYARI_OKUR = { biri: ['plan.yaz', 'finans.maliyet-oku', 'plan.bedel-ayari'] } as const;
 const KAYNAK_OKUR = { biri: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'] } as const;
 const KAYIT_YAZAR = { biri: ['recete-rota.yaz', 'plan.yaz'] } as const;
 // Motor yerleşimi ve uyarıları bugün bir sayfa işlemiyle (sayfa.recete-rota) açılır; plan okuma işlemi (plan.oku) bu iki uca girmez.
@@ -56,7 +57,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/dondurmayi-kaldir': 'plan.kilitle',
   'POST /plan/elle-siralari-sil': 'plan.yaz',
   'POST /plan/ayar': 'plan.yaz',
-  'GET /plan/bedel-ayari': PLAN_BEDELI_OKUR,
+  'GET /plan/bedel-ayari': PLAN_AYARI_OKUR,
   'POST /plan/bedel-ayari': 'plan.bedel-ayari',
   'GET /plan/motor-ayarlari': { biri: ['plan.oku', 'plan.yaz', 'plan.planlama-oku', 'plan.motor-ayari'] } as const,
   'POST /plan/motor-ayarlari': 'plan.motor-ayari',

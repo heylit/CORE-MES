@@ -24,21 +24,23 @@ export interface CncYetkisi {
   stokDusebilir: boolean;
   stokKartiBaglayabilir: boolean;
   emirGorebilir: boolean;
+  // finans.maliyet-oku (3401-1 a): kg fiyatı, takım fiyatı, tezgâh ücreti ve hesaplanan maliyet yalnız buna açılır; oturum işlemlerinden gelir.
+  maliyetGorur: boolean;
   // Yazma işlemi yok, hazırlık onayı var: yalnız Hazırlık açılır, seçimler kilitlidir.
   saltOnay: boolean;
 }
 
-export function yetkiKur(ben: BenCevabi): CncYetkisi {
+export function yetkiKur(ben: BenCevabi, maliyetGorur: boolean): CncYetkisi {
   return {
     kisi: ben.kisi, yazabilir: ben.yazabilir, hazirlikOnaylayabilir: ben.hazirlikOnaylayabilir, takimDegistirebilir: ben.takimDegistirebilir,
-    stokDusebilir: ben.stokDusebilir, stokKartiBaglayabilir: ben.stokKartiBaglayabilir, emirGorebilir: ben.emirGorebilir,
+    stokDusebilir: ben.stokDusebilir, stokKartiBaglayabilir: ben.stokKartiBaglayabilir, emirGorebilir: ben.emirGorebilir, maliyetGorur,
     saltOnay: !ben.yazabilir && ben.hazirlikOnaylayabilir,
   };
 }
 
 const YETKISIZ: CncYetkisi = {
   kisi: { id: 0, ad: '' }, yazabilir: false, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false,
-  stokKartiBaglayabilir: false, emirGorebilir: false, saltOnay: false,
+  stokKartiBaglayabilir: false, emirGorebilir: false, maliyetGorur: false, saltOnay: false,
 };
 export const CncYetkiBaglami = createContext<CncYetkisi>(YETKISIZ);
 export function useCncYetkisi(): CncYetkisi { return useContext(CncYetkiBaglami); }

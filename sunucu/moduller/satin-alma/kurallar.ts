@@ -4,7 +4,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
-import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
@@ -12,6 +12,8 @@ export const ISLEM = {
   oku: 'satin-alma.oku', talepAc: 'satin-alma.talep-ac', yaz: 'satin-alma.yaz', onayla: 'satin-alma.onayla', ayar: 'satin-alma.ayar',
   // Fatura-sipariş bağını satın almayı yazmadan kurar (modul-test K8 a, 2077-3 a): muhasebe başka satın alma kaydı yazmaz.
   faturaBagla: 'satin-alma.fatura-bagla',
+  // 3401-1 a: alış fiyatı, teklif ve sipariş tutarı, kg fiyatı, analiz ve bütçe tutarı.
+  fiyatOku: 'satin-alma.fiyat-oku',
 } as const;
 export type SatinAlmaIslemi = (typeof ISLEM)[keyof typeof ISLEM];
 
@@ -420,7 +422,9 @@ export function dortGozSonucu(
 // firması, kararın seçtiği tedarikçiler) talep edene açıktır; teklif, fiyat ve karar (tutar, gerekçe, sabit kur) kapalı kalır.
 // 2414 a (K3, K4): birleştirilmiş kaynak talepte kalemler birleşik talepten, kaynağın kalemleriyle süzülerek gelir; seçilen tedarikçiler
 // yalnız bu kalemleri kapsayan karar ve tekliflerdendir. Başka kaynağın kalemi ve talep edeni görünmez; birleşik talebin kaynak listesi düşer.
-export function talepEdenGorunumu<T extends TalepYazimi>(t: T, kisiId: number, birlesen?: Talep): T {
+type GorunumKaynagi = Pick<TalepYazimi, 'id' | 'kalemler' | 'karar' | 'onaylar' | 'hareketler'>
+  & { teklifler: readonly { id: string; firmaId: number | null; tedarikciAdi: string; fiyatlar: readonly { kalemId: string }[] }[] };
+export function talepEdenGorunumu<T extends GorunumKaynagi>(t: T, kisiId: number, birlesen?: Talep): T {
   const kendi = birlesen === undefined ? null : new Set(birlesen.kaynaklar?.find((x) => x.talepId === t.id)?.kalemIdleri ?? []);
   const kalemler = kendi === null ? t.kalemler : birlesen!.kalemler.filter((k) => kendi.has(k.id));
   const teklifler = kendi === null ? t.teklifler : birlesen!.teklifler.filter((q) => q.fiyatlar.some((f) => kendi.has(f.kalemId)));
@@ -448,6 +452,35 @@ export function talepEdenGorunumu<T extends TalepYazimi>(t: T, kisiId: number, b
 // Kullanıcı satın almanın tamamını görür mü (iş kutusu, bütün talepler, tedarikçiler)?
 export const tamGorurMu = (islemler: readonly string[]): boolean =>
   islemler.includes(ISLEM.oku) || islemler.includes(ISLEM.yaz) || islemler.includes(ISLEM.onayla);
+
+// 3401-1 a: fiyat görür = fiyat-oku, yaz ya da onayla (yazan ve onaylayan fiyatla çalışır). Yalnız oku (planlama) tam görür ama fiyatsız.
+export const FIYAT_GOREN_ISLEMLER = [ISLEM.fiyatOku, ISLEM.yaz, ISLEM.onayla] as const;
+export const fiyatGorurMu = (islemler: readonly string[]): boolean => FIYAT_GOREN_ISLEMLER.some((i) => islemler.includes(i));
+// finans.maliyet-oku tek başına kg fiyatını açar (215 a); satin-alma.oku açmaz.
+export const KG_FIYATI_OKUR = [ISLEM.fiyatOku, ISLEM.yaz, 'finans.maliyet-oku'] as const;
+// 214 a: talaşın satış fiyatı yalnız maliyeti okuyanındır; satın alma rolleri de görmez.
+export const talasFiyatiGorurMu = (islemler: readonly string[]): boolean => islemler.includes('finans.maliyet-oku');
+
+// 3401-1 a: fiyatı göremeyen tam okuyucunun (planlama) talep görünümü. Talep, kalem, tedarikçi, termin ve durum kalır; teklif fiyatları,
+// iskonto, nakliye, toplam, karar gerekçesi ve sabit kur, senaryolar ve onay notları düşer (not ve gerekçe fiyat taşıyabilir).
+// Geçmişte yalnız kişinin kendi yazdığı kalır (talepEdenGorunumu gibi). Kayıtta gelen gövde de aynı süzgeçten geçip eskiyle kıyaslanır.
+type FiyatsizAlanlar = {
+  teklifler: readonly object[]; karar: { gerekce: string; ogrenilenler: string; sabitKurlar: readonly object[] } | null; senaryolar: readonly object[];
+  onaylar: readonly { notlar: string }[]; hareketler: readonly { kisiId: number | null }[];
+};
+export function fiyatsizGorunum<T extends FiyatsizAlanlar>(t: T, kisiId: number): T {
+  const teklifler = t.teklifler.map((q) => ({
+    ...q, iskontoYuzdesi: null, nakliye: null, digerMasraf: null, kur: null, ilkToplam: null, notlar: '', fiyatlar: [],
+  }));
+  return {
+    ...t,
+    teklifler: teklifler as unknown as T['teklifler'],
+    karar: t.karar === null ? null : { ...t.karar, gerekce: '', ogrenilenler: '', sabitKurlar: [] },
+    senaryolar: [],
+    onaylar: t.onaylar.map((o) => ({ ...o, notlar: '' })),
+    hareketler: t.hareketler.filter((h) => h.kisiId === kisiId),
+  };
+}
 
 // S2 (07.10.2026): teklif fiyatı denetim kaydına ne tam gövdeyle ne gövdesiz girer; fiyatı değişen her teklif ve kalem için bir
 // ek satırı yazılır. Serbest metin (not, tedarikçi adı) ve dosya eki girmez. Satır sayısı çekirdeğin ek sınırını aşarsa ilk
@@ -1026,7 +1059,7 @@ export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kay
   return { ...o, ayrinti: satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }])), kayitsiz: !('islem' in a) || !('olcu' in a) };
 }
 export function talebim(
-  t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
+  t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
   ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(),
 ): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };

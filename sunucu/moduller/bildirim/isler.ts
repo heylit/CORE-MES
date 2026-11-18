@@ -1,4 +1,5 @@
 import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
+import { epostaTuru } from './eposta.ts';
 import { ortamPushAyari, pushTuru } from './push.ts';
 import { zamaniGelenleriDagit } from './yayin.ts';
 
@@ -12,6 +13,14 @@ export const isler = [
       const ayar = ortamPushAyari();
       if (ayar === null) return isBekliyor('Web Push kapalı (TMIV2_PUSH_ACIK)');
       await pushTuru(vt, ayar, gunluk);
+    },
+  }),
+  // E-posta (ADR 0015, 3397): ileti transaction dışında gönderilir; ortam değişkeni ya da ayar kapalıyken iş beklemede görünür.
+  isTanimi({
+    ad: 'bildirim-eposta-gonder', aralikMs: 60_000,
+    txDisi: async (vt, gunluk) => {
+      const r = await epostaTuru(vt, gunluk);
+      if ('durum' in r) return r;
     },
   }),
 ];

@@ -96,10 +96,10 @@ describe('Yenileme paneli yetkisi', () => {
 });
 
 describe('Analiz paneli yetkisi', () => {
-  const ciz = (yazabilir: boolean) => {
+  const ciz = (yazabilir: boolean, maliyetGorur = true) => {
     state.life.sel = 'p:0';
     const degisti = vi.fn();
-    render(<AnalizPaneli res={lifeCompute()} yazabilir={yazabilir} geri={vi.fn()} degisti={degisti} />);
+    render(<AnalizPaneli res={lifeCompute()} yazabilir={yazabilir} maliyetGorur={maliyetGorur} geri={vi.fn()} degisti={degisti} />);
     return degisti;
   };
   it('kalibrasyon yazma yetkisiyle kaydedilir', () => {
@@ -108,6 +108,22 @@ describe('Analiz paneli yetkisi', () => {
     fireEvent.click(dugme('Kaydet')!);
     expect(state.life.cal['em10|c45']).toBeCloseTo(1.5);
     expect(degisti).toHaveBeenCalled();
+  });
+  it('maliyet yetkisi yoksa takım fiyatı ve tezgâh ücreti yerinde kilit yazısı durur, girdi yoktur', () => {
+    ciz(true, false);
+    expect(screen.queryByLabelText('Takım fiyatı (TL)')).toBeNull();
+    expect(screen.queryByLabelText('Tezgâh ücreti (TL/sa)')).toBeNull();
+    expect(screen.getAllByText('Yetkiniz yok').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Maliyet görür').length).toBeGreaterThanOrEqual(2);
+    // Süre ve ölçü girdileri açık kalır.
+    expect(screen.getByLabelText('Parti adedi')).toBeTruthy();
+    expect(screen.getByLabelText('Takım değişimi (dk)')).toBeTruthy();
+  });
+  it('maliyet yetkisiyle fiyat ve ücret girdileri vardır, kilit yazısı yoktur', () => {
+    ciz(true, true);
+    expect(screen.getByLabelText('Takım fiyatı (TL)')).toBeTruthy();
+    expect(screen.getByLabelText('Tezgâh ücreti (TL/sa)')).toBeTruthy();
+    expect(screen.queryByText('Yetkiniz yok')).toBeNull();
   });
   it('yetkisizken kalibrasyon kaydedilmez', () => {
     ciz(false);

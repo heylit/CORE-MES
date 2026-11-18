@@ -10,7 +10,7 @@ import {
   approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
 } from "./calc.ts";
 import {
-  $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fmtDate, fmtTs, isNum, money, MONTHS, nf0, nf2, nfx, norm, numIn,
+  $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fiyatKilitli, fmtDate, fmtTs, isNum, kilitPaneli, money, MONTHS, nf0, nf2, nfx, norm, numIn,
   pad, parseNum, pct, short, sum, todayStr, type FormEl,
 } from "./util.ts";
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
@@ -47,6 +47,8 @@ export function render(): void {
   const role = getRole();
   if (V.page === "dash") P.dash = role === "approver" ? viewApprovals : role === "requester" ? viewRequesterHome : () => "";
   if (role === "buyer" && V.page === "requests") P.requests = () => (V.view === "board" ? boardHTML() : "");
+  // 3401-1 a: fiyatı görmeyen okuyucuya raporlar ve ayarlar (harcama, bütçe, onay limiti) kilit paneli olarak çizilir.
+  if (fiyatKilitli()) { P.reports = () => kilitPaneli("Raporlar"); P.settings = () => kilitPaneli("Ayarlar"); }
   m.innerHTML = (P[V.page] ?? viewDash)();
   cizimSurumu++;
   for (const f of DINLEYICILER) f();
@@ -366,7 +368,9 @@ export function talepGovdesi(r: PurchaseRequest): string {
   const sec = talepBolumu(r);
   const iptal = r.status === "cancelled" ? `<div class="callout" data-sa-y="1">Bu talep iptal edildi${r.cancelReason ? ": " + esc(r.cancelReason) : "."} Kayıt ve teklifler hafızada kalır.${ikinciAlimUyarisi(r) ? ` <b>Uyarı:</b> ${esc(ikinciAlimUyarisi(r))}` : ""}</div>` : "";
   let govde: string;
-  if (sec === "items") govde = tabItems(r);
+  // 3401-1 a: teklif girişi, karşılaştırma ve karar/onay adımı fiyat taşır; fiyat görmeyen okuyucuya kilit paneli çizilir.
+  if (fiyatKilitli() && (sec === "quotes" || sec === "compare" || sec === "approval")) govde = kilitPaneli("Teklif ve karar fiyatları");
+  else if (sec === "items") govde = tabItems(r);
   else if (sec === "quotes") govde = tabQuotes(r);
   else if (sec === "compare") {
     if (!(r.quotes || []).length) govde = tabCompare(r);
@@ -505,6 +509,8 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
   if (!items.length) return `<div class="panel">${empty("Kalem yok", "Teklif istemeden önce ne alınacağını miktar ve birimiyle girin.", '<button class="btn primary" data-act="edit-request">Kalem ekle</button>')}</div>`;
   const prevSup: Record<string, { id: string; name: string; items: Set<string>; wins: number }> = {}; const lessons: { r: PurchaseRequest; t: string }[] = [];
   let est = 0;
+  // 3401-1 a: son alış, ortalama teklif ve tahmini tutar sütunları fiyat görmeyene çizilmez; tablonun üstünde kilit notu durur.
+  const kilit = fiyatKilitli();
   const rows = items.map(it => {
     const mid = matOf(it), m = mid ? S.materials[mid] : null, st = mid ? matStats(mid) : null;
     const prev = st ? st.buys.filter(e => e.reqId !== r.id) : [];
@@ -514,15 +520,15 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
     return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}</td>${ozellikHucreleri(it.malzeme)}
       <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${karsilikAlti(it)}</td>
-      <td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
+      ${kilit ? "" : `<td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
-      <td class="r num">${last ? money(last.unitTRY * (parseNum(it.qty) || 0), "TRY", 0) : "–"}</td></tr>`;
+      <td class="r num">${last ? money(last.unitTRY * (parseNum(it.qty) || 0), "TRY", 0) : "–"}</td>`}</tr>`;
   });
   const ps = Object.values(prevSup).sort((a, b) => b.wins - a.wins);
   const uniq: { r: PurchaseRequest; t: string }[] = []; const seen = new Set<string>(); lessons.forEach(l => { if (!seen.has(l.r.id)) { seen.add(l.r.id); uniq.push(l); } });
   return `<div class="stack">
-  <div class="panel"><div class="panel-h"><h2>Kalemler</h2><span class="sub">${items.length} kalem${est ? ", son fiyatlarla tahmini " + money(est, "TRY", 0) : ""}</span><span class="spacer"></span>${simple && r.status !== "draft" ? "" : `<button class="btn sm" data-act="edit-request">Düzenle</button>`}</div>
-    <div class="tw"><table class="rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th class="r">Miktar</th><th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
+  <div class="panel"><div class="panel-h"><h2>Kalemler</h2><span class="sub">${items.length} kalem${est && !kilit ? ", son fiyatlarla tahmini " + money(est, "TRY", 0) : ""}</span><span class="spacer"></span>${simple && r.status !== "draft" ? "" : `<button class="btn sm" data-act="edit-request">Düzenle</button>`}</div>
+    ${kilit ? kilitPaneli("Fiyat sütunları") : ""}<div class="tw"><table class="rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th class="r">Miktar</th>${kilit ? "" : '<th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th>'}</tr></thead><tbody>${rows.join("")}</tbody></table></div>${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
   ${!simple && (ps.length || uniq.length) ? `<div class="callout memory"><h3>Hafıza bu kalemler hakkında ne diyor</h3>
     ${ps.length ? `<p class="small" data-sa-y="5">Bu kalemler için daha önce teklif veren tedarikçiler:</p><div class="chips" data-sa-y="20">${ps.map(p => `<button class="chip" data-act="open-sup" data-id="${p.id}">${esc(p.name)}${p.wins ? ` <span class="faint">${p.wins} kez seçildi</span>` : ""}</button>`).join("")}</div>` : ""}
     ${uniq.length ? `<p class="small" data-sa-y="14">Önceki alımlardan notlar:</p>${uniq.slice(0, 4).map(l => `<div class="note" data-sa-y="20"><span class="xs muted">${esc(l.r.no)}, ${esc(l.r.title)}</span><br>${esc(l.t)}</div>`).join("")}` : ""}

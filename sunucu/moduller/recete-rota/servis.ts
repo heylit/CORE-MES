@@ -20,7 +20,7 @@ import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { emrinSatinAlmaDurumlari, fasonSiparisTarihleri, fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
-import type { AraHalCozumu } from '../rota/disari.ts';
+import type { AraHalCozumu, OpNumaralariDizildi } from '../rota/disari.ts';
 import type { malzemeAra } from '../malzemeler/disari.ts';
 import { aktifMalzemelerSinirli, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { emirlerinNetSarfi, emrinRezerveleri, malzemeStokDurumlari, sonHareketler, statuluStoklar, statuStoklari, stokMiktarlari } from '../stok/disari.ts';
@@ -420,6 +420,11 @@ async function sayimRevizyonu(db: Db, malzemeNo: number, uretimEmriId: number | 
 // revizyonuna aittir: emir verilirse adım ve statü emrin açıldığı revizyondandır (alt düğümde patlatmadaki), verilmezse (ya da emir rotasızsa)
 // yürürlükteki revizyondan. Satır henüz yoksa yazma işleminde burada açılır (çerçevenin yazımındaki eşitlemeyle aynı); okuma (salt okunur
 // işlem) açamaz, 'acilmamis' döner: o statüde henüz stok yoktur, statüsüz (null) sayılmaz.
+// Rota taslağında OP numaraları yeniden dizilince (3252 b) revizyonun adım bağları adımlarını izler; bağı kablolama.ts kurar.
+export async function opNumaralariDizildiYansit(db: Db, olay: OpNumaralariDizildi): Promise<void> {
+  await sorgular.revizyonBaglariniDiz(db, olay.revizyonId, olay.esle);
+}
+
 export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; uretimEmriId?: number | null | undefined }): Promise<number | null | 'acilmamis'> {
   const emirRevizyonu = await sayimRevizyonu(db, g.malzemeNo, g.uretimEmriId);
   const belge = await sayimDurumu(db, g.malzemeNo, emirRevizyonu);

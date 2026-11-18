@@ -5,6 +5,7 @@ import type {
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, Girdi, Pencere, Secim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { FirmaKoduSecimi } from '../../ortak/veri/firma-kodlari.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUMLAR, DURUM_METNI, KOD_EN_COK, MALIYET_ISLEMI, tarihMetni } from './gosterim.ts';
@@ -96,6 +97,8 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const [ad, adYaz] = useState(proje?.ad ?? '');
   const [firmaId, firmaYaz] = useState(proje?.firmaId === null || proje === null ? '' : String(proje.firmaId));
   const [siparisId, siparisYaz] = useState('');
+  // 3399 a: yeni projede boş seçim siparişin kodunu (yoksa varsayılanı) alır; düzenlemede kayıtlı kod gelir.
+  const [firmaKodu, firmaKoduYaz] = useState<string | null>(proje?.firmaKodu ?? null);
   const [sablon, sablonYaz] = useState('');
   const [siparisHatasi, siparisHatasiYaz] = useState<string | undefined>(undefined);
   // 3244 b: yeni projede bitiş seçilen siparişin termininden gelir; termine eşit kalan bitiş sipariş terminine bağlı açılır.
@@ -120,11 +123,11 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const komut = useMutation({
     mutationFn: () => (proje === null
       ? api.post<Proje>('/projeler', {
-        kod, ...ortak, siparisId: Number(siparisId),
+        kod, ...ortak, siparisId: Number(siparisId), ...(firmaKodu === null ? {} : { firmaKodu }),
         ...(sablon === '' ? {} : { sablonId: sablon === SABLONSUZ ? null : Number(sablon) }),
       } satisfies ProjeOlusturGovdesi)
       : api.post<Proje>(`/projeler/${proje.id}/guncelle`, {
-        ...ortak, firmaId: firmaId === '' ? null : Number(firmaId), durum, surum: proje.surum,
+        ...ortak, firmaId: firmaId === '' ? null : Number(firmaId), firmaKodu, durum, surum: proje.surum,
         ...(yenidenAcma ? { yenidenAcmaGerekcesi: gerekce } : {}),
       } satisfies ProjeGuncelleGovdesi)),
     onSuccess: async (kayit) => {
@@ -171,6 +174,10 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
           <Girdi etiket="Müşteri" value={proje.firmaAd ?? '—'} disabled ipucu="Siparişe bağlı projenin müşterisi siparişten gelir." />
         )}
         {proje === null && <SablonSecimi deger={sablon} degistir={sablonYaz} />}
+        <FirmaKoduSecimi
+          deger={firmaKodu} degistir={firmaKoduYaz} bosSecenek={proje === null ? 'Siparişten (yoksa varsayılan)' : 'Seçilmedi'}
+          ipucu="Üretim emri numarasındaki {FIRMA} bu koddur."
+        />
         <Girdi etiket="Başlangıç" type="date" value={baslangic} onChange={(e) => { baslangicYaz(e.target.value); }} />
         <Girdi etiket="Bitiş" type="date" value={bitis} ipucu={bitisIpucu(proje, bitis, termin)} onChange={(e) => { bitisYaz(e.target.value); }} />
         {maliyetGorur && (

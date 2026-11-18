@@ -3,9 +3,8 @@ import { Dugme, Menu, OnayPenceresi, Simge, Tablo, type MenuOgesi } from '../../
 import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { tarih } from '../bicim.ts';
 import {
-  acikRevizyon, gkkUyarilari, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Adim, type Revizyon,
+  acikRevizyon, gkkUyarilari, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Revizyon,
 } from './kurallar.ts';
-import { rotadaOlmayanNumaralar, useOpNumaralari } from './opNumaralari.ts';
 import { useRotaSekmeleri } from './RotaSekmeleri.tsx';
 import type { RotaEkrani } from './ortak.tsx';
 import type { RevEylemi } from './useRotaDuzeni.ts';
@@ -15,24 +14,6 @@ const AZAMI_GERI_GONDERME_NEDENI = 500;
 
 type Panel = 'gonder' | 'onay' | 'fark' | 'gecmis' | 'kopya' | null;
 interface Onay { baslik: string; metin: string; onayMetni: string; tehlikeli?: boolean; yap: () => Promise<unknown> }
-
-// RT-31 (2519 a): verilmiş numara silinse de yeniden verilmez; geçmişte görünür ki boşluk açıklansın.
-function KullanilmisNumaralar({ urunId, adimlar }: { urunId: string; adimlar: readonly Adim[] }) {
-  const { data, isError } = useOpNumaralari(urunId, adimlar);
-  if (isError) return null;
-  if (!data) return <p className="tc-rr1-ipucu">OP numaraları okunuyor…</p>;
-  const disarida = rotadaOlmayanNumaralar(data, adimlar);
-  return (
-    <div className="tc-rr1-ipucu" data-parca="kullanilmis-op">
-      <p>
-        Sıradaki yeni adım OP {data.siradaki} alır.{' '}
-        {disarida.length === 0 ? 'Bu üründe silinmiş OP numarası yok.'
-          : `Bu rotada olmayan, daha önce verilmiş numaralar: ${disarida.map((k) => `OP ${String(k.opNo)} (ilk: Rev ${k.ilkRevizyonHarfi})`).join(', ')}.`}
-      </p>
-      {disarida.length > 0 && <p>Verilmiş numara yeniden verilmez; böylece eski emir ve kayıtlardaki OP numarası başka işi göstermez.</p>}
-    </div>
-  );
-}
 
 function SonDegisiklik({ r }: { r: RotaEkrani }) {
   const s = r.duzen.sonDegisiklik;
@@ -277,7 +258,6 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
             <GecmisDugmesi kayitlar={revs.flatMap((x) => (Number.isSafeInteger(Number(x.id)) ? [{ tablo: 'rota_revizyonu', anahtar: { id: Number(x.id) } }] : []))} />
             <Dugme tur="ikincil" simge="x" aria-label="Revizyonları kapat" onClick={() => { setPanel(null); }} />
           </div>
-          <KullanilmisNumaralar urunId={urunId} adimlar={adimlar} />
           <Tablo
             etiket={`${m.code} revizyon geçmişi`} satirlar={[...revs].reverse()} satirAnahtari={(x) => x.id} bosMesaj="Henüz revizyon yok."
             sutunlar={[

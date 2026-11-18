@@ -83,7 +83,10 @@ interface Baglam {
   // #1372: girensiz adımlı rotadan açılmış emir yerleşmez; emir no -> neden.
   rotaEksik: Map<string, string>;
   // 983 b: sunucu motoru emri ürünün yürürlükteki rotasıyla dizer. Eski revizyondan açılmış emir -> yürürlükteki rotanın OP numaraları.
-  eskiRota: Map<number, ReadonlySet<number>>;
+  eskiRota: Map<number, ReadonlySet<string>>;
+  // 3250-2: motor emrin adımını ürünün yürürlükteki rotasının numarasıyla tanır; numarası emirdekinden ayrışan iş -> motordaki numarası
+  // (operasyon kimliğiyle bulunur). Yürürlükteki rotada olmayan iş eksi kimliğini alır: motor bulamaz, 'rotada-yok' yerleşmez.
+  motorNo: Map<number, number>;
   kaynaklar: Map<string, KaynakBilgisi>;
   izinli: number[];
   kapaliGunler: number[];
@@ -277,7 +280,7 @@ async function dugumAdimi(db: Db, i: PlanIsEmri, rotalar: RotaOnbellek, dugumler
   const r = (await yururluktekiRevizyonIdleri(db, [d.malzemeNo])).get(d.malzemeNo);
   if (r === undefined) return undefined;
   if (!rotalar.has(r)) rotalar.set(r, await revizyonGetir(db, r));
-  return rotalar.get(r)?.adimlar.find((a) => a.opNo === d.kaynakOpNo);
+  return rotalar.get(r)?.adimlar.find((a) => (i.operasyonId == null ? a.opNo === d.kaynakOpNo : a.operasyonId === i.operasyonId));
 }
 async function isKur(
   db: Db, i: PlanIsEmri, rotalar: RotaOnbellek, urunler: Map<number, { kod: string; ad: string }>, istasyonMakineleri: IstasyonMakineleri,
@@ -285,7 +288,8 @@ async function isKur(
 ): Promise<Is> {
   if (!rotalar.has(i.kaynakRotaRevizyonId)) rotalar.set(i.kaynakRotaRevizyonId, await revizyonGetir(db, i.kaynakRotaRevizyonId));
   if (!urunler.has(i.malzemeNo)) { const o = await malzemeOzeti(db, i.malzemeNo); urunler.set(i.malzemeNo, { kod: o?.kod ?? '?', ad: o?.ad ?? o?.kod ?? '?' }); }
-  const adim = rotalar.get(i.kaynakRotaRevizyonId)?.adimlar.find((a) => a.opNo === i.opNo) ?? await dugumAdimi(db, i, rotalar, dugumler);
+  // 3250 b: açık emir numarasını korur, kaynak revizyon yeniden dizilmiş olabilir; adım operasyon kimliğiyle, kimliksiz eski iş emrinde numarayla.
+  const adim = rotalar.get(i.kaynakRotaRevizyonId)?.adimlar.find((a) => rotaAdimiMi(a, i)) ?? await dugumAdimi(db, i, rotalar, dugumler);
   const ayar = i.ayarSuresiDk === null ? null : Number(i.ayarSuresiDk);
   const birim = i.birimSureDk === null ? null : Number(i.birimSureDk);
   // 1567 a: rotada fason olup emirde içeri alınan adım (fason iş emri plana gelmez) emrin istasyonunda yapılır; istasyonu yoksa kaynaksız kalır.
@@ -512,7 +516,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
     else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri, dugumler));
   }
   const b: Baglam = {
-    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef),
+    simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), motorNo: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef),
     finansmanOraniGun: await bir('finansman', () => planFinansmanOrani(db, tesisGunu(simdi))), kurlar: await bir('kurlar', () => planKurlari(db, tesisGunu(simdi))),
     yetkinlik: await bir('yetkinlik', () => yetkinlikOku(db)), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await ekMesaiTakvimde(db, hedef, simdi, await bir('vardiya', () => vardiyaOku(db, simdi, okunanKaynaklar))),
@@ -547,8 +551,44 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
   }
   devirleriKur(isler);
   b.eskiRota = await eskiRotaliEmirler(db, isler, rotalar, ortak);
+  b.motorNo = await motorNumaralari(db, isler, rotalar, b.eskiRota, ortak);
   return b;
 }
+
+// Açık emir numarasını korur (3250 b); motor ise emri ürünün yürürlükteki rotasıyla, rotanın numarasıyla dizer. Rota adımı (tek katman)
+// kimlikle bulunur; bulunamayan adım eski revizyondan açılmış emirde (983 b) rotada yoktur, çok katmanlı emrin düğüm adımı numarasıyla kalır.
+async function motorNumaralari(
+  db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek, eskiRota: Baglam['eskiRota'], ortak?: BaglamOrtak,
+): Promise<Baglam['motorNo']> {
+  const h: Baglam['motorNo'] = new Map();
+  if (planMotoru === null) return h;
+  const rotali = [...isler.values()].filter((i) => (i.tur ?? 'rota') === 'rota' && i.operasyonId != null);
+  const nolar = [...new Set(rotali.map((i) => i.malzemeNo))];
+  if (nolar.length === 0) return h;
+  const yururlukte = await ortakOku(ortak, `yururlukte:${[...nolar].sort((a, c) => a - c).join(',')}`, () => yururluktekiRevizyonIdleri(db, nolar));
+  const dugumler: DugumOnbellek = new Map();
+  for (const i of rotali) {
+    const r = yururlukte.get(i.malzemeNo);
+    if (r === undefined) continue;
+    if (!rotalar.has(r)) rotalar.set(r, await revizyonGetir(db, r));
+    const a = rotalar.get(r)?.adimlar.find((x) => x.operasyonId === i.operasyonId);
+    if (a !== undefined) { if (a.opNo !== i.opNo) h.set(i.id, a.opNo); continue; }
+    if (!eskiRota.has(i.uretimEmriId) || i.uretimEmriId <= 0) continue;
+    if (!dugumler.has(i.uretimEmriId)) dugumler.set(i.uretimEmriId, await emirDugumleri(db, i.uretimEmriId));
+    const d = dugumler.get(i.uretimEmriId)!.get(i.opNo);
+    if (d === undefined || d.malzemeNo === i.malzemeNo) h.set(i.id, -i.id);
+  }
+  return h;
+}
+
+// Yürürlükteki rotanın adımları kimlikle ('k') ve numarayla ('n'); emrin adımı kimliği varsa kimlikle aranır (3250-2: numara yeniden dizilmiş
+// olabilir), kimliksiz eski iş emrinde numarayla. Emir eski revizyondan açılmadıysa undefined.
+const rotadakiAnahtarlar = (adimlar: readonly { opNo: number; operasyonId: number }[]): ReadonlySet<string> =>
+  new Set(adimlar.flatMap((a) => [`k${String(a.operasyonId)}`, `n${String(a.opNo)}`]));
+const eskiRotadaVar = (b: Baglam, i: { uretimEmriId: number; opNo: number; operasyonId?: number | null }): boolean | undefined =>
+  b.eskiRota.get(i.uretimEmriId)?.has(i.operasyonId == null ? `n${String(i.opNo)}` : `k${String(i.operasyonId)}`);
+const rotaAdimiMi = (a: { opNo: number; operasyonId: number }, i: { opNo: number; operasyonId?: number | null }): boolean =>
+  (i.operasyonId == null ? a.opNo === i.opNo : a.operasyonId === i.operasyonId);
 
 async function eskiRotaliEmirler(db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek, ortak?: BaglamOrtak): Promise<Baglam['eskiRota']> {
   const h: Baglam['eskiRota'] = new Map();
@@ -559,7 +599,7 @@ async function eskiRotaliEmirler(db: Db, isler: Baglam['isler'], rotalar: RotaOn
     const r = yururlukte.get(i.malzemeNo);
     if (r === undefined || r === i.kaynakRotaRevizyonId || h.has(i.uretimEmriId)) continue;
     if (!rotalar.has(r)) rotalar.set(r, await revizyonGetir(db, r));
-    h.set(i.uretimEmriId, new Set((rotalar.get(r)?.adimlar ?? []).map((a) => a.opNo)));
+    h.set(i.uretimEmriId, rotadakiAnahtarlar(rotalar.get(r)?.adimlar ?? []));
   }
   return h;
 }
@@ -688,7 +728,9 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
   // B-2482-11: kuyruksuz ek adım aday tezgâhlarıyla gider; motor yerleştirmezse yerleşmemiş kalır, komutu durdurmaz.
   const adayli = kip === 'yeni' ? new Map([...secenek.ekAdaylari ?? []].filter(([id, l]) => l.length > 0 && !yeniden.has(id) && !kisiye.has(id))) : new Map<number, readonly number[]>();
   if (planMotoru === null || hepsi.length + adayli.size === 0) return { yer, makine, kisi, fark: [], yerlesmez, malzemeBekleyen: 0, yerlesmeyen, parca };
-  const anahtarOf = (id: number) => { const is = b.isler.get(id); return is ? `${is.emirNo}|${is.opNo}` : null; };
+  // Motor anahtarı emir no ile motorun tanıdığı numaradır (3250-2, motorNo); çalışan adımın emirdeki anahtarı da ona çevrilir.
+  const anahtarOf = (id: number): string | null => { const is = b.isler.get(id); return is ? `${is.emirNo}|${b.motorNo.get(id) ?? is.opNo}` : null; };
+  const motoraCevir = new Map<string, string>([...b.motorNo.keys()].flatMap((id) => { const is = b.isler.get(id); return is ? [[`${is.emirNo}|${is.opNo}`, anahtarOf(id)!] as const] : []; }));
   const idOf = new Map<string, number>();
   for (const id of [...hepsi, ...adayli.keys()]) {
     const a = anahtarOf(id)!;
@@ -698,7 +740,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
   const yerlesimler = await s.yerlesimler(db, taslakId);
   // Plan bölünmüş ya da ileriye sıralanmış çalışan işi saklı yerinde tutar (gerceklesenAralik); motora da o yerle sabit gider.
   const sakli = new Set(yerlesimler.filter((y) => !yeniden.has(y.isEmriId) && !kisiye.has(y.isEmriId) && (bolunmus(y) || dk(b, y.baslangic) > ILERI_SIRA_DK)).map((y) => anahtarOf(y.isEmriId)));
-  const calisanlar = (await calisanAdimlar(db)).filter((c) => !sakli.has(c.anahtar));
+  const calisanlar = (await calisanAdimlar(db)).map((c) => ({ ...c, anahtar: motoraCevir.get(c.anahtar) ?? c.anahtar })).filter((c) => !sakli.has(c.anahtar));
   const calisan = new Set(calisanlar.map((c) => c.anahtar));
   const sabitParcalar = yerlesimler.flatMap((y) => {
     const a = anahtarOf(y.isEmriId);
@@ -824,7 +866,7 @@ function yerlesmemeNedeni(b: Baglam, i: Is, yerlesmis: ReadonlySet<number>): Yer
     return k.tur === 'makine' ? yerlesmeme('makine-pasif', `${k.ad} makinesi kullanımda değil.`, hedef('makine', k.id, k.ad))
       : yerlesmeme('kisi-pasif', `${k.ad} kullanımda değil.`, hedef('kisi', k.id, k.ad));
   }
-  if (b.eskiRota.get(i.uretimEmriId)?.has(i.opNo) === false) return yerlesmeme('rotada-yok', 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.');
+  if (eskiRotadaVar(b, i) === false) return yerlesmeme('rotada-yok', 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.');
   const once = icOnculler(b.isler, i).find((o) => planlanacak(o.is) && !yerlesmis.has(o.is.id));
   if (once !== undefined) return yerlesmeme('oncul', `Önceki adım (OP ${once.is.opNo}) yerleşmedi.`);
   if ((partiBaglariOf(b).get(i.id) ?? []).some((o) => { const x = b.isler.get(o); return x !== undefined && planlanacak(x) && !yerlesmis.has(o); })) return BAGLI_PARTI;
@@ -2480,7 +2522,7 @@ async function planlanabilirlikKur(db: Db, k: Kullanici): Promise<Planlanabilirl
         adimlar: [...l].sort((x, y) => x.opNo - y.opNo).map((i) => {
           const istasyon = i.istasyonId == null ? null : hedef('istasyon', i.istasyonId, adlar.get(i.istasyonId) ?? null);
           const { kok, kontroller } = emirAdimKontrolleri(nedenler.get(i.id)!, {
-            rotadaVar: b.eskiRota.get(i.uretimEmriId)?.has(i.opNo) !== false, sureVar: i.sureDk !== null, istasyon,
+            rotadaVar: eskiRotadaVar(b, i) !== false, sureVar: i.sureDk !== null, istasyon,
           });
           const kokAdim = kok === 'oncul' || kok === 'bagli-parti' ? bekledigi(i) : null;
           return {

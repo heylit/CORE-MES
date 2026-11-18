@@ -60,8 +60,8 @@ function TedarikAkisi() {
 
 // Talep ana sayfa kartı değildir (1841, kullanıcı kararı 02.11): menüdeki Taleplerim sayfasından açılır.
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
-  // Şirket özeti kartlarını satın almayı okuyan görür (kart #1085).
-  { anahtar: 'satin-alma-yonetim-ozet', sira: 150, bolum: 'yonetim', islem: 'satin-alma.oku', veya: ['satin-alma.yaz'], ekran: SirketOzeti },
+  // Şirket özeti kartlarını satın almayı okuyan görür (kart #1085). Özet açık sipariş tutarıdır: 3401-1 a, fiyat görmeyen (yalnız oku) bu kartı görmez.
+  { anahtar: 'satin-alma-yonetim-ozet', sira: 150, bolum: 'yonetim', islem: 'satin-alma.fiyat-oku', veya: ['satin-alma.yaz', 'satin-alma.onayla'], ekran: SirketOzeti },
   { anahtar: 'satin-alma-yonetim-akis', sira: 510, bolum: 'yonetim', genis: true, islem: 'satin-alma.oku', veya: ['satin-alma.yaz'], ekran: TedarikAkisi },
   { anahtar: 'satin-alma-onay-bekleyen', sira: 300, bolum: 'is', islem: 'satin-alma.onayla', ekran: OnayBekleyen },
   { anahtar: 'satin-alma-acik-talep', sira: 310, bolum: 'is', islem: 'satin-alma.yaz', ekran: AcikTalepler },

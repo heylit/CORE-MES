@@ -16,7 +16,7 @@ const YAZAR: Kullanici = { id: 1, ad: 'Deneme Planlama', islemler: ['sayfa.proje
 const OKUR: Kullanici = { id: 2, ad: 'Deneme Okur', islemler: ['sayfa.projeler'] };
 
 const proje = (ek: Partial<Proje>): Proje => ({
-  id: 1, kod: 'ORN.01', ad: 'Deneme projesi', durum: 'aktif', firmaId: 7, firmaAd: 'ORN Müşteri', siparisId: 21, baslangic: null,
+  id: 1, kod: 'ORN.01', ad: 'Deneme projesi', durum: 'aktif', firmaId: 7, firmaAd: 'ORN Müşteri', firmaKodu: null, siparisId: 21, baslangic: null,
   bitis: '2026-11-18', bitisBagli: false, aciklama: null, olusturma: '2026-10-12T09:00:00+03:00', guncelleme: null, surum: 3,
   statu: null, ilerleme: null, ...ek,
 });

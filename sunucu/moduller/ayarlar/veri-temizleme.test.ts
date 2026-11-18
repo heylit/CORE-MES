@@ -631,6 +631,56 @@ describe('veri temizleme (gerçek PostgreSQL)', () => {
     assert.deepEqual(await bul(), { emir: true, secim: true, siparis: true, malzeme: true });
   });
 
+  test('özet sayılar: işaretli emir, sipariş ve malzeme kartı özetlerde sayılmaz, işaret kalkınca sayılır', async () => {
+    // Her özet alanı ayrı ölçülür: örnek veri her alanı en az birer doldurur, işaretleyince alan tam o kadar azalır.
+    const [taslak, planli] = [await emir({ malzeme: await malzeme() }), await emir({ malzeme: await malzeme() })];
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'taslak' WHERE id = $1", [taslak]);
+    const tip = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('ORN-OZT', 'ORN tipi', 'TAL') RETURNING id"))!.id;
+    await o().sahip.sorgu(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, kisi_id) VALUES ($1, 1, 10, $2, 'ORN-OP10', $3)", [planli, tip, yoneticiId]);
+    await o().sahip.sorgu("INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet) VALUES ($1, $2, $3, 'saglam', 2)", [planli, yoneticiId, ist]);
+    const [yaklasan, geciken] = [await siparis(), await siparis()];
+    await o().sahip.sorgu(
+      `UPDATE siparisler_siparis SET durum = 'onayli', onay_zamani = now(), onaylayan_id = $3, siparis_tarihi = current_date - 2,
+              termin = CASE WHEN id = $1 THEN current_date + 1 ELSE current_date - 1 END WHERE id IN ($1, $2)`, [yaklasan, geciken, yoneticiId]);
+    const mlz = await malzeme();
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'onayda' WHERE no = $1", [mlz]);
+    const yollar = ['/uretim-emirleri/ozet', '/uretim-emirleri/gunluk-uretim?gun=7', '/adimli-emirler/ozet', '/siparisler/ozet', '/siparisler/termin-dagilimi', '/malzemeler/ozet'];
+    const oku = async () => Promise.all(yollar.map(async (y) => {
+      const c = await istek(yonetici, 'GET', y);
+      assert.equal(c.statusCode, 200, `${y} ${c.body}`);
+      return c.json<Record<string, unknown>>();
+    }));
+    type EmirOzeti = { planlanacak: number; acik: number; kuyrugum: number; bugunSaglam: number | null; asamalar: { planlanacak: number; planda: number } };
+    type SiparisOzeti = { yaklasanTermin: number; gecikenSiparis: number };
+    const alanlar = (c: Record<string, unknown>[]) => {
+      const ue = c[0] as unknown as EmirOzeti;
+      const sp = c[3] as unknown as SiparisOzeti;
+      return {
+        planlanacak: ue.planlanacak, acik: ue.acik, kuyrugum: ue.kuyrugum, bugunSaglam: ue.bugunSaglam ?? 0,
+        asamaPlanlanacak: ue.asamalar.planlanacak, asamaPlanda: ue.asamalar.planda,
+        yaklasanTermin: sp.yaklasanTermin, gecikenSiparis: sp.gecikenSiparis,
+      };
+    };
+    const once = await oku();
+    const secim: TemizlikKoku[] = [
+      { tur: 'uretim_emri', kimlik: taslak }, { tur: 'uretim_emri', kimlik: planli },
+      { tur: 'siparis', kimlik: yaklasan }, { tur: 'siparis', kimlik: geciken }, { tur: 'malzeme', kimlik: mlz },
+    ];
+    await isaretle(secim);
+    const gizli = await oku();
+    const [a, g] = [alanlar(once), alanlar(gizli)];
+    assert.deepEqual(g, {
+      planlanacak: a.planlanacak - 1, acik: a.acik - 1, kuyrugum: a.kuyrugum - 1, bugunSaglam: a.bugunSaglam - 2,
+      asamaPlanlanacak: a.asamaPlanlanacak - 1, asamaPlanda: a.asamaPlanda - 1,
+      yaklasanTermin: a.yaklasanTermin - 1, gecikenSiparis: a.gecikenSiparis - 1,
+    });
+    yollar.forEach((y, i) => { assert.notDeepEqual(gizli[i], once[i], `${y} işaretliyi saymamalı`); });
+    await isaretle(secim, false);
+    assert.deepEqual(await oku(), once);
+  });
+
   test('stok: deneme girişinin bakiyesi düşülür, defter ile bakiye tutar; gerçek stoktan düşen deneme hareketi kilitlidir', async () => {
     const m = await malzeme();
     const konum = (await o().sahip.tek<{ id: number }>(

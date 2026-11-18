@@ -63,6 +63,29 @@ export async function statuEsitle(db: Db, liste: readonly { malzemeNo: string; a
   );
 }
 
+// Rota revizyonunun OP numaraları yeniden dizildi (3252 b): adım bağı ve giren statü adımıyla gider; kalan adımı olmayan satır (silinen
+// adımın ya da önceden sahipsiz kalmış) silinir, yoksa yeni numarayı alan başka adıma geçerdi. Tekillik (revizyon, OP) ertelenemez: önce
+// geçici aralığa, sonra yeni numaraya. Kimlik sütununu tetikleyici yeni numaradan yeniden doldurur.
+const DIZME_ARALIGI = 100_000_000;
+export async function revizyonBaglariniDiz(db: Db, revizyonId: number, esle: ReadonlyMap<number, number>): Promise<void> {
+  const eski = [...esle.keys()];
+  const yeni = [...esle.values()];
+  for (const tablo of ['recete_rota_adim_bagi', 'recete_rota_giren_statusu'] as const) {
+    await db.sorgu(`DELETE FROM ${tablo} WHERE rota_revizyonu_id = $1 AND NOT (op_no = ANY($2::int[]))`, [revizyonId, eski]);
+    if (eski.length === 0) continue;
+    await db.sorgu(
+      `UPDATE ${tablo} t SET op_no = t.op_no + ${String(DIZME_ARALIGI)} FROM unnest($2::int[], $3::int[]) AS y(e, n)
+        WHERE t.rota_revizyonu_id = $1 AND t.op_no = y.e AND y.e <> y.n`,
+      [revizyonId, eski, yeni],
+    );
+    await db.sorgu(
+      `UPDATE ${tablo} t SET op_no = y.n FROM unnest($2::int[], $3::int[]) AS y(e, n)
+        WHERE t.rota_revizyonu_id = $1 AND t.op_no = y.e + ${String(DIZME_ARALIGI)}`,
+      [revizyonId, eski, yeni],
+    );
+  }
+}
+
 export async function statuler(db: Db): Promise<(Omit<Statu, 'urunKodu' | 'revizyon'> & { rotaRevizyonuId: number | null })[]> {
   return db.sorgu(
     `SELECT id, malzeme_no AS "malzemeNo", ad, kaynak_adim AS "kaynakAdim", renk, tur, rota_revizyonu_id AS "rotaRevizyonuId", ${zamanMetni('zaman')} AS zaman

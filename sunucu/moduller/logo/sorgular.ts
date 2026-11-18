@@ -781,6 +781,37 @@ export function irsaliyeImleci(db: Db): Promise<IrsaliyeImleci | null> {
   );
 }
 
+// 3384 a: satın alma siparişlerine (CORE numarasıyla) bağlı Logo alış ve alış iade irsaliyesi satırları; iptal ve silinmiş başlık gelmez.
+// Sipariş numarası da aranır: Logo kayıt numarası yalnız dönem içinde tekildir, numara başka dönemin aynı kayıtlı satırını ayırır.
+export interface SiparisIrsaliyeSatiri {
+  firma: number; donem: number; irsaliyeRef: number; fisNo: string | null; belgeNo: string | null; tarih: string; tur: number; faturaNo: string | null;
+  siparisNo: string; siparisSatirRef: string; miktar: string | null; birim: string | null;
+}
+export function siparisIrsaliyeSatirlari(db: Db, nolar: readonly string[]): Promise<SiparisIrsaliyeSatiri[]> {
+  if (nolar.length === 0) return Promise.resolve([]);
+  return db.sorgu<SiparisIrsaliyeSatiri>(
+    `SELECT i.firma, i.donem, i.logical_ref::int AS "irsaliyeRef", i.fis_no AS "fisNo", i.belge_no AS "belgeNo", i.tarih::text AS tarih, i.tur::int AS tur,
+            i.fatura_no AS "faturaNo", s.siparis_no AS "siparisNo", s.siparis_satir_ref::text AS "siparisSatirRef", s.miktar::text AS miktar, s.birim
+       FROM logo_irsaliye_satiri s JOIN logo_irsaliye i ON i.firma = s.firma AND i.donem = s.donem AND i.logical_ref = s.irsaliye_ref
+      WHERE s.siparis_no = ANY($1::text[]) AND s.siparis_satir_ref IS NOT NULL AND i.tur IN (1, 6) AND NOT i.iptal AND i.logoda_yok IS NULL
+      ORDER BY i.tarih, i.logical_ref, s.sira`,
+    [[...new Set(nolar)]],
+  );
+}
+
+// 3384 a: siparişlerin Logo'dan okunan fatura numaraları; yalnız en az bir kez okunmuş sipariş döner (okunmamış "fatura yok" sayılmaz).
+export async function siparisFaturaNolari(db: Db, nolar: readonly string[]): Promise<Map<string, string[]>> {
+  if (nolar.length === 0) return new Map();
+  const r = await db.sorgu<{ siparisNo: string; faturalar: (string | null)[] }>(
+    `SELECT o.siparis_no AS "siparisNo", coalesce(array_agg(f.fatura_no ORDER BY f.fatura_no) FILTER (WHERE f.fatura_no IS NOT NULL), '{}') AS faturalar
+       FROM logo_fatura_okuma o LEFT JOIN logo_fatura f ON f.siparis_no = o.siparis_no
+      WHERE o.siparis_no = ANY($1::text[])
+      GROUP BY o.siparis_no`,
+    [[...new Set(nolar)]],
+  );
+  return new Map(r.map((x) => [x.siparisNo, x.faturalar.filter((n): n is string => n !== null)]));
+}
+
 export function irsaliyeSonOkumasi(db: Db): Promise<string | null> {
   return db.tek<{ son: string | null }>(`SELECT ${zamanMetni('max(son_okuma)')} AS son FROM logo_irsaliye_imleci`).then((r) => r?.son ?? null);
 }

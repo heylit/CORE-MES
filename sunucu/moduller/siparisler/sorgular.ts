@@ -11,6 +11,7 @@ export interface SiparisSatiri {
   no: string;
   durum: SiparisDurumu;
   firma_id: number;
+  firma_kodu: string | null;
   musteri_siparis_no: string | null;
   siparis_tarihi: string;
   termin: string;
@@ -32,7 +33,7 @@ export interface SiparisSatiri {
 }
 
 // Satır tutarı iki ondalığa yuvarlanır; toplam yuvarlanmış satırların toplamıdır, KDV toplamdan hesaplanır.
-const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.musteri_siparis_no, s.siparis_tarihi, s.termin, s.para_birimi, s.kdv_orani,
+const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.firma_kodu, s.musteri_siparis_no, s.siparis_tarihi, s.termin, s.para_birimi, s.kdv_orani,
                       s.odeme_kosulu, s.aciklama, t.ara_toplam, round(t.ara_toplam * s.kdv_orani / 100, 2) AS kdv_tutari,
                       t.ara_toplam + round(t.ara_toplam * s.kdv_orani / 100, 2) AS genel_toplam, s.gecikme_ceza_orani,
                       s.ceza_tavani_orani, s.odeme_vadesi_gun, s.iptal_nedeni,
@@ -107,10 +108,15 @@ export function kalemleriGetir(db: Db, idler: number[]): Promise<KalemSatiri[]> 
   return db.sorgu<KalemSatiri>(`${KALEM_SECIMI} WHERE id = ANY($1::int[]) ORDER BY id`, [idler]);
 }
 
+export interface SiparisKilidi {
+  durum: SiparisDurumu; firma_id: number; surum: number;
+  gecikme_ceza_orani: string | null; ceza_tavani_orani: string | null; odeme_vadesi_gun: number | null;
+}
+
 // Durum ve firma kilitlenerek okunur: eşzamanlı komutta kural güncel duruma göre işler.
-export function siparisKilitle(db: Db, id: number): Promise<{ durum: SiparisDurumu; firma_id: number; surum: number } | null> {
-  return db.tek<{ durum: SiparisDurumu; firma_id: number; surum: number }>(
-    'SELECT durum, firma_id, surum FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [id],
+export function siparisKilitle(db: Db, id: number): Promise<SiparisKilidi | null> {
+  return db.tek<SiparisKilidi>(
+    'SELECT durum, firma_id, surum, gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [id],
   );
 }
 
@@ -124,6 +130,8 @@ export async function siparisNoVarMi(db: Db, no: string): Promise<boolean> {
 
 export interface BaslikAlanlari {
   firmaId: number;
+  // 3399 a: yalnız eklenirken yazılır; numara bu kodla verildiği için sonra değişmez.
+  firmaKodu?: string | null;
   musteriSiparisNo: string | null;
   siparisTarihi: string;
   termin: string;
@@ -139,10 +147,10 @@ export interface BaslikAlanlari {
 export async function siparisEkle(db: Db, no: string, a: BaslikAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO siparisler_siparis (no, firma_id, musteri_siparis_no, siparis_tarihi, termin, para_birimi, kdv_orani, odeme_kosulu, aciklama, olusturan_id,
-                                     gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+                                     gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [no, a.firmaId, a.musteriSiparisNo, a.siparisTarihi, a.termin, a.paraBirimi, a.kdvOrani, a.odemeKosulu, a.aciklama, kisiId, a.cezaOraniGun, a.cezaTavaniOrani,
-     a.odemeVadesiGun],
+     a.odemeVadesiGun, a.firmaKodu ?? null],
   );
   if (satir === null) throw new Error('Sipariş eklenemedi');
   return satir.id;
@@ -247,6 +255,7 @@ export interface TeklifBaslikSatiri {
   no: string;
   durum: TeklifDurumu;
   firma_id: number;
+  firma_kodu: string | null;
   baslik: string;
   para_birimi: string;
   istenen_tarih: string | null;
@@ -260,7 +269,7 @@ export interface TeklifBaslikSatiri {
   surum: number;
 }
 
-const TEKLIF_SECIMI = `SELECT t.id, t.no, t.durum, t.firma_id, t.baslik, t.para_birimi, t.istenen_tarih, t.aciklama, t.not_metni, t.kabul_surumu,
+const TEKLIF_SECIMI = `SELECT t.id, t.no, t.durum, t.firma_id, t.firma_kodu, t.baslik, t.para_birimi, t.istenen_tarih, t.aciklama, t.not_metni, t.kabul_surumu,
                               t.siparis_id, (SELECT max(v.surum_no) FROM siparisler_teklif_surumu v WHERE v.teklif_id = t.id)::int AS son_surum_no,
                               ${zamanMetni('t.olusturma')} AS olusturma, ${zamanMetni('t.guncelleme')} AS guncelleme, t.surum
                          FROM siparisler_teklif t`;
@@ -297,9 +306,9 @@ export function teklifGetir(db: Db, id: number): Promise<TeklifBaslikSatiri | nu
   return db.tek<TeklifBaslikSatiri>(`${TEKLIF_SECIMI} WHERE t.id = $1`, [id]);
 }
 
-export function teklifKilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; para_birimi: string } | null> {
-  return db.tek<{ durum: TeklifDurumu; firma_id: number; para_birimi: string }>(
-    'SELECT durum, firma_id, para_birimi FROM siparisler_teklif WHERE id = $1 FOR UPDATE', [id],
+export function teklifKilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string } | null> {
+  return db.tek<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string }>(
+    'SELECT durum, firma_id, firma_kodu, para_birimi FROM siparisler_teklif WHERE id = $1 FOR UPDATE', [id],
   );
 }
 
@@ -313,6 +322,8 @@ export async function teklifNoVarMi(db: Db, no: string): Promise<boolean> {
 
 export interface TeklifAlanlari {
   firmaId: number;
+  // 3399 a: yalnız eklenirken yazılır; numara bu kodla verildiği için sonra değişmez.
+  firmaKodu?: string | null;
   baslik: string;
   paraBirimi: string;
   istenenTarih: string | null;
@@ -321,9 +332,9 @@ export interface TeklifAlanlari {
 
 export async function teklifEkle(db: Db, no: string, a: TeklifAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO siparisler_teklif (no, firma_id, baslik, para_birimi, istenen_tarih, aciklama, olusturan_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [no, a.firmaId, a.baslik, a.paraBirimi, a.istenenTarih, a.aciklama, kisiId],
+    `INSERT INTO siparisler_teklif (no, firma_id, baslik, para_birimi, istenen_tarih, aciklama, olusturan_id, firma_kodu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [no, a.firmaId, a.baslik, a.paraBirimi, a.istenenTarih, a.aciklama, kisiId, a.firmaKodu ?? null],
   );
   if (satir === null) throw new Error('Teklif eklenemedi');
   return satir.id;
@@ -547,6 +558,14 @@ export function yerTutanTaslak(db: Db, teklifId: number): Promise<YerTutanTaslak
   );
 }
 
+// Teklifin son satış taslağındaki kâr oranı; kârı görmeyen yeni sürüm verdiğinde bu korunur (3401-1 a).
+export async function sonSatisKarOrani(db: Db, teklifId: number): Promise<string | null> {
+  const r = await db.tek<{ kar_orani: string }>(
+    "SELECT kar_orani FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1 AND tur = 'satis' ORDER BY id DESC LIMIT 1", [teklifId],
+  );
+  return r?.kar_orani ?? null;
+}
+
 // Yerine yenisi gelen ya da teklifi biten satış taslağı kalkar; geçerliliği zaten geçmişse "süresi doldu" olarak kalır.
 export async function yerTutaniKaldir(db: Db, teklifId: number): Promise<void> {
   await db.sorgu(
@@ -669,16 +688,17 @@ export function atolyeTaslaklari(db: Db): Promise<AtolyeTaslagiSatiri[]> {
 }
 
 // Ana sayfa özeti tek okumada: gün tesis saatine göre (Europe/Istanbul), istemciden alınmaz.
-export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): Promise<{
+// Deneme işaretli sipariş (gizli) sayılmaz (3395 madde 2); teklif işaretlenmez.
+export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number, gizli: readonly number[]): Promise<{
   acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number; aylik: { ay: string; sayi: number }[];
 }> {
   const sayilar = await db.tek<{ acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number }>(
     `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
      SELECT (SELECT count(*) FROM siparisler_teklif WHERE durum NOT IN ('red', 'siparis'))::int AS "acikTeklif",
             (SELECT count(*) FROM siparisler_siparis, bugun
-              WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int)::int AS "yaklasanTermin",
-            (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun)::int AS "gecikenSiparis"`,
-    [yaklasanGun],
+              WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int AND NOT (id = ANY($2::int[])))::int AS "yaklasanTermin",
+            (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun AND NOT (id = ANY($2::int[])))::int AS "gecikenSiparis"`,
+    [yaklasanGun, [...gizli]],
   );
   const aylik = await db.sorgu<{ ay: string; sayi: number }>(
     `WITH aylar AS (
@@ -688,20 +708,22 @@ export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): 
      SELECT to_char(a.bas, 'YYYY-MM') AS ay, count(s.id)::int AS sayi
        FROM aylar a
        LEFT JOIN siparisler_siparis s ON s.durum IN ('onayli', 'kapandi') AND date_trunc('month', s.siparis_tarihi)::date = a.bas
+                                     AND NOT (s.id = ANY($2::int[]))
       GROUP BY a.bas ORDER BY a.bas`,
-    [ay],
+    [ay, [...gizli]],
   );
   return { ...sayilar!, aylik };
 }
 
 // Yönetim panosu (kart 1773): onaylı siparişler termine kalan güne göre; aralığa bölmek kuraldadır.
-export async function terminKalanlari(db: Db): Promise<{ kalan: number; sayi: number }[]> {
+export async function terminKalanlari(db: Db, gizli: readonly number[]): Promise<{ kalan: number; sayi: number }[]> {
   return db.sorgu<{ kalan: number; sayi: number }>(
     `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
      SELECT (s.termin - bugun.gun)::int AS kalan, count(*)::int AS sayi
        FROM siparisler_siparis s, bugun
-      WHERE s.durum = 'onayli'
+      WHERE s.durum = 'onayli' AND NOT (s.id = ANY($1::int[]))
       GROUP BY 1`,
+    [[...gizli]],
   );
 }
 

@@ -53,6 +53,18 @@ export function katalogFirmaKodluTurler(genel: Record<string, unknown> | null): 
   const l = genel?.['firmaKoduTurleri'];
   return Array.isArray(l) && katalogFirmaKoduTurleriGecerliMi(l) ? (l as string[]) : FIRMA_KODLU_VARSAYILAN;
 }
+// 3399 a: kartın seçtiği firma kodu kaydın `com.firmaKodu` alanındadır; seçilmemişse null (sunucu varsayılan kodu koyar).
+export function kartFirmaKodu(kayit: unknown): string | null {
+  const com = (kayit as { com?: { firmaKodu?: unknown } } | null)?.com;
+  const kod = typeof com?.firmaKodu === 'string' ? com.firmaKodu.trim().toUpperCase() : '';
+  return kod === '' ? null : kod;
+}
+// Firma kodlu önekin firma kodu (ORNA-MM- -> ORNA); tür-grup öneki (HM-PAS-) firma kodlu değildir, null.
+const FIRMA_ONEKI = /^([A-Z0-9]{2,5})-[A-Z]{2}-$/;
+export function onekFirmaKodu(onek: string | null): string | null {
+  const kod = FIRMA_ONEKI.exec(onek ?? '')?.[1] ?? null;
+  return kod === null || TUR_KISALTMALARI.includes(kod) ? null : kod;
+}
 export function katalogFirmaOneki(genel: Record<string, unknown> | null, tur: string): string | null {
   const turKodu = TUR_ONEKI[tur];
   const firma = katalogFirmaKodu(genel);

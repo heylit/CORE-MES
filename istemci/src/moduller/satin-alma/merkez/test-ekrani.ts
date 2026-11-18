@@ -2,12 +2,23 @@ import { createElement } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { Kullanici } from '#paylasilan/kullanici.ts';
+import { anahtarlar } from '../../../ortak/veri/anahtarlar.ts';
 import { MerkezEkrani } from '../ekran/MerkezEkrani.tsx';
 import { merkeziBagla, type BaglamaSecenegi } from './bagla.ts';
 
 // Yalnız testler için: satın almacının ortak parçalı ekranı (2412-2) uygulamada SatinAlma.tsx'in portalıyla #sa-ekran'a çizilir;
 // merkezi doğrudan bağlayan testler aynı yeri aynı parçayla doldurur.
-const ekran = () => createElement(MemoryRouter, null, createElement(MerkezEkrani));
+// Ekran oturumu (yetkiyi) sorgu önbelleğinden okur; test oturumu önceden yazar ki ağa gidilmesin. Varsayılan oturumsuz: Logo özeti gibi
+// yetkiye bağlı parçalar çizilmez.
+let testOturumu: Kullanici | null = null;
+export function testOturumuYaz(kullanici: Kullanici | null): void { testOturumu = kullanici; }
+function ekran() {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  istemci.setQueryData(anahtarlar.oturum, testOturumu);
+  return createElement(QueryClientProvider, { client: istemci }, createElement(MemoryRouter, null, createElement(MerkezEkrani)));
+}
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
 
 export function ekranliBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => void {

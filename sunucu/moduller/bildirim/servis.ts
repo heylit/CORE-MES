@@ -12,8 +12,9 @@ import {
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, yolTureUyar,
+  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, turKapatilamaz, yolTureUyar,
 } from './kurallar.ts';
+import { epostaKanaliAcik, epostaKuyrugaAl, type EpostaEki } from './eposta.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
 
@@ -31,6 +32,8 @@ interface BildirimOlayiTemeli {
   kisiler?: readonly number[];
   // Olayı tetikleyen kişi: kendi eylemi için bildirim almaz.
   haric?: number | null;
+  // E-postanın bilgi tablosu için isteğe bağlı alanlar (3397); metin ve serbest alan e-postaya girmez.
+  eposta?: EpostaEki;
 }
 // 2453: yalnizKisiler true iken alıcı yalnız `kisiler` içinden türü alanlardır (liste yalnız daraltır); kişi listesi zorunludur.
 export type BildirimOlayi =
@@ -52,17 +55,20 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (olay.yol !== undefined && olay.yol !== null && !kayitYoluMu(olay.yol)) throw new Error(`Bildirim yolu geçersiz: ${olay.yol}`);
   if (!yolTureUyar(olay.tur, olay.yol)) throw new Error(`Bildirim yolu türün ekranında değil: ${olay.tur} ${olay.yol}`);
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
-  const alicilar = alicilariSec(olay.tur, await kisilerinIslemleri(db), {
+  const islemler = await kisilerinIslemleri(db);
+  const alicilar = alicilariSec(olay.tur, islemler, {
     kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur), yalnizKisiler: olay.yalnizKisiler,
   });
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
   const gosterim = otomatikGosterim(tanim, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
+  const yazilan: { kisiId: number; id: number; yeni: boolean }[] = [];
   for (const kisiId of alicilar) {
-    await s.bildirimYaz(db, {
+    yazilan.push({ kisiId, ...await s.bildirimYaz(db, {
       kisiId, tur: olay.tur, onem: tanim.onem, baslik, metin, yol: olay.yol ?? null, kaynakModul: kaynakModulu(olay.tur), tekilAnahtar: anahtar,
       ortada: gosterim.ortada, onayIstenir: gosterim.onayIstenir, sinif: turSinifi(olay.tur),
-    });
+    }) });
   }
+  await epostaKuyrugaAl(db, { tur: olay.tur, baslik, yol: olay.yol ?? null, eposta: olay.eposta }, yazilan, islemler);
   if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
   return alicilar.length;
 }
@@ -138,6 +144,8 @@ export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise
 export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimTercihleriCevabi> {
   const kayitli = new Map((await s.kisininTercihleri(db, kullanici.id)).map((t) => [t.tur, t]));
   const eposta = epostaSecilebilir(kullanici.islemler);
+  // Seçilmemiş türde e-posta, Sistem Ayarları'ndaki tetikleyiciyi izler (3397): tetikleyici kapalıysa e-posta gitmez.
+  const tetik = new Map((await s.epostaTetikleyicileri(db)).map((r) => [r.tur, r.eposta]));
   const ayarli = new Map<string, boolean>();
   for (const a of await s.turAyarlari(db)) {
     ayarli.set(a.tur, a.kisiIdleri.includes(kullanici.id) || (await rollerdekiKisiler(db, a.rolIdleri)).includes(kullanici.id));
@@ -150,11 +158,11 @@ export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimT
       return {
         tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur),
         mesaj: k?.mesaj ?? t.varsayilan.mesaj,
-        eposta: eposta ? (k?.eposta ?? t.varsayilan.eposta) : null,
+        eposta: eposta ? (turKapatilamaz(tur) ? true : k?.eposta ?? tetik.get(tur) ?? t.varsayilan.eposta) : null,
         varsayilan: k === undefined,
       };
     });
-  return { kanallar: { ...ACIK_KANALLAR }, epostaSecilebilir: eposta, satirlar };
+  return { kanallar: { ...ACIK_KANALLAR, eposta: await epostaKanaliAcik(db) }, epostaSecilebilir: eposta, satirlar };
 }
 
 // Tercih yalnız kişinin alabildiği türe yazılır; e-posta seçemeyenin e-posta isteği reddedilir, sessizce kapatılmaz.

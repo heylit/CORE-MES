@@ -82,7 +82,7 @@ describe('3B adım stüdyosu (3209 a, A Adım şeridi)', () => {
     expect(kaydet.disabled).toBe(false);
     fireEvent.click(kaydet);
     await waitFor(() => { expect(yazilan).toHaveLength(1); });
-    expect(yazilan[0]).toEqual({ opNo: 10, talimatSurum: 2, okunanSahneSurum: 1, modelRevizyonId: 41, adimlar: [{ sira: 1, hareket: { ...hareket, yon: '-X' } }] });
+    expect(yazilan[0]).toEqual({ opNo: 10, revizyonId: 71, talimatSurum: 2, okunanSahneSurum: 1, modelRevizyonId: 41, adimlar: [{ sira: 1, hareket: { ...hareket, yon: '-X' } }] });
   });
 
   it('parça iki adımda girerse kayıt kapanır ve neden yazılır; parçayı çıkarınca kayıt boşsa yine kapalıdır', async () => {

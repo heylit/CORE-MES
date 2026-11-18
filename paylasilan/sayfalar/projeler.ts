@@ -19,5 +19,10 @@ export const PROJELER_IKINCI_MENU = {
       { anahtar: 'statuler', baslik: 'Statü listesi', yol: '/projeler/statuler', simge: 'tag', islem: 'projeler.statu-ayar' },
       { anahtar: 'sablonlar', baslik: 'Görev şablonları', yol: '/projeler/sablonlar', simge: 'layers', islem: 'projeler.sablon-yaz', okur: ['/projeler/sablonlar/liste'] },
     ] },
+    // 3396 a: hazırlık ayarları tek yerde (Arayüz ön bakışı); madde listesinin sahibi Üretim Emirleri'dir.
+    { baslik: 'Hazırlık', maddeler: [
+      { anahtar: 'hazirlik-maddeleri', baslik: 'Hazırlık maddeleri', yol: '/projeler/hazirlik-maddeleri', simge: 'flag', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/hazirlik-maddeleri'] },
+      { anahtar: 'hazirlik-kademe', baslik: 'Kademeli takip', yol: '/projeler/hazirlik-kademe', simge: 'bell', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/projeler/hazirlik-kademe-ayari'] },
+    ] },
   ],
 } as const satisfies IkinciMenuTanimi;

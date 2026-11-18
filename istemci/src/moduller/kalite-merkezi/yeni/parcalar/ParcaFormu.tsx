@@ -38,7 +38,7 @@ export function ParcaFormu({ parca, kart, rol, kapat, kaydedildi }: Ozellikler) 
     const parcaNo = parca?.no ?? String(d.kartKod ?? '').trim();
     const malzemeNo = typeof d.malzemeNo === 'number' ? d.malzemeNo : undefined;
     await komut.kaydet('parca', {
-      ...(meta ?? {}), parcaNo, ...(malzemeNo ? { malzemeNo } : {}), sinif: String(d.sinif ?? ''), not: String(d.not ?? ''), _id: parcaKimligi(parcaNo),
+      ...(meta ?? {}), parcaNo, ...(malzemeNo ? { malzemeNo } : {}), sinif: String(d.sinif ?? ''), not: String(d.not ?? ''), _id: meta?._id || parcaKimligi(parcaNo),
     });
     bildir('tamam', 'Parça kaydedildi');
     kaydedildi(parcaNo);

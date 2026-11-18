@@ -29,6 +29,7 @@ const SUTUNLAR: Sutun<Teklif>[] = [
     ),
   },
   { anahtar: 'firma', baslik: 'Firma', hucre: (t) => t.firmaAd ?? `Firma ${t.firmaId}` },
+  { anahtar: 'firmaKodu', baslik: 'Firma kodu', kirilmaz: true, hucre: (t) => t.firmaKodu ?? '—' },
   { anahtar: 'istenen', baslik: 'İstenen teslim', kirilmaz: true, hucre: (t) => tarihMetni(t.istenenTarih) },
   { anahtar: 'surum', baslik: 'Son sürüm', kirilmaz: true, hucre: (t) => (t.sonSurumNo === null ? '—' : `Sürüm ${t.sonSurumNo}`) },
   { anahtar: 'olusturma', baslik: 'Açılış', sirala: true, kirilmaz: true, hucre: (t) => tarihMetni(t.olusturma) },

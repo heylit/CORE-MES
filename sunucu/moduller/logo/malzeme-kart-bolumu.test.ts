@@ -97,6 +97,8 @@ describe('3201 malzeme kartının Logo bölümü (gerçek PostgreSQL)', () => {
   let cerez = '';
   let okuyucu = '';
   let stokcu = '';
+  // 3401-1 a: yalnız satin-alma.oku (planlama) son alış fiyatını görmez; fiyat-oku, yaz ve maliyet-oku görür.
+  const fiyatKisileri: Record<string, string> = {};
   const KOD = 'KL-00001';
 
   const o = (): TestVeritabani => {
@@ -145,6 +147,14 @@ describe('3201 malzeme kartının Logo bölümü (gerçek PostgreSQL)', () => {
     await ortam.vt.sorgu("UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = 'lkstokcu') WHERE kisi_id = $1", [stId]);
     const sg = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'lk-stokcu', parola: PAROLA } });
     stokcu = String(sg.headers['set-cookie']).split(';')[0] ?? '';
+    for (const [ad, islem] of [['plan', 'satin-alma.oku'], ['fiyat', 'satin-alma.fiyat-oku'], ['yaz', 'satin-alma.yaz'], ['maliyet', 'finans.maliyet-oku'], ['onay', 'satin-alma.onayla']] as const) {
+      const id = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: `Deneme ${ad}`, kullaniciAdi: `lk-${ad}`, parola: PAROLA }));
+      await ortam.vt.sorgu("INSERT INTO rol (kod, ad) VALUES ($1, $1)", [`lkf${ad}`]);
+      await ortam.vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT rol.id, i FROM rol, unnest($2::text[]) i WHERE kod = $1', [`lkf${ad}`, ['sayfa.malzemeler', 'sayfa.stok', islem]]);
+      await ortam.vt.sorgu('UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = $1) WHERE kisi_id = $2', [`lkf${ad}`, id]);
+      const r = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: `lk-${ad}`, parola: PAROLA } });
+      fiyatKisileri[ad] = String(r.headers['set-cookie']).split(';')[0] ?? '';
+    }
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
@@ -173,6 +183,18 @@ describe('3201 malzeme kartının Logo bölümü (gerçek PostgreSQL)', () => {
     const st = (await al(`/logo/malzeme-karti/${KOD}`, stokcu)).json() as LogoKartBolumuCevabi;
     assert.deepEqual([st.parcalar, st.stok?.eslenen?.fark], [{ stok: true, hareket: false, fiyat: false }, '7.5'], 'fiyat yetkisi olmayana fiyat parçası yok');
     assert.equal((await al(`/logo/malzeme-karti/${KOD}/son-alislar`, stokcu)).statusCode, 403);
+  });
+
+  test('3401-1 a: son alış fiyatı fiyat-oku, yaz ve maliyet-oku\'ya açık; yalnız satin-alma.oku (planlama) fiyat parçasını görmez, uç 403', async () => {
+    await ayar('logo.baglanti', true);
+    await ayar('logo.stok-okumasi', true);
+    await ayar('logo.son-alis-fiyatlari-okumasi', true);
+    const bolum = async (k: string) => ((await al(`/logo/malzeme-karti/${KOD}`, fiyatKisileri[k])).json() as LogoKartBolumuCevabi).parcalar.fiyat;
+    assert.deepEqual([await bolum('plan'), await bolum('fiyat'), await bolum('yaz'), await bolum('maliyet')], [false, true, true, true]);
+    // Kart bölümünde onayla tek başına fiyat açmaz (KART_FIYAT'ta yok).
+    assert.equal(await bolum('onay'), false);
+    assert.equal((await al(`/logo/malzeme-karti/${KOD}/son-alislar`, fiyatKisileri.plan)).statusCode, 403);
+    for (const k of ['fiyat', 'yaz', 'maliyet']) assert.notEqual((await al(`/logo/malzeme-karti/${KOD}/son-alislar`, fiyatKisileri[k])).statusCode, 403, k);
   });
 
   test('stok okuma yetkisi olmayan (yalnız malzeme sayfası) stok ve hareket parçasını görmez; hareket ucu 403', async () => {

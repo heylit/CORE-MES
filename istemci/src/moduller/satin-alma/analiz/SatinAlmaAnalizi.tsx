@@ -6,11 +6,13 @@ import { tarihMetni } from '../../../ortak/veri/zaman-metni.ts';
 import { DurumKutusu } from '../../../ortak/arayuz/DurumKutusu.tsx';
 import { Sekmeler, type Sekme } from '../../../ortak/arayuz/Sekmeler.tsx';
 import { Kart } from '../../../ortak/arayuz/Kart.tsx';
+import { KilitliDeger, YETKI_ADI } from '../../../ortak/arayuz/KilitliDeger.tsx';
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { SayiKarti } from '../../../ortak/arayuz/SayiKarti.tsx';
 import { Tablo, type Sutun } from '../../../ortak/arayuz/Tablo.tsx';
 import { CizgiGrafikKarti, YatayCubukKarti } from '../../../ortak/arayuz/grafik/grafikler.tsx';
 import { api } from '../../../ortak/veri/api.ts';
+import { FIYAT_ANALIZI_ISLEMLERI, useYetkiVarMi } from '../fiyat-yetkisi.ts';
 import {
   XYZ_ACIKLAMA, ayEtiketi, bayesMetni, gecikmeMetni, guvenlikMetni, gunMetni, harcamaAltMetni, isaretliBirimTl, isaretliYuzde, karneMetni, miktarMetni,
   sureMetni, tahminMetni, tlMetni, yuzdeMetni,
@@ -24,6 +26,21 @@ import './analiz.css';
 export const SATIN_ALMA_ANALIZI_YOLU = '/satin-alma-analiz';
 
 export function SatinAlmaAnalizi() {
+  const okur = useYetkiVarMi(FIYAT_ANALIZI_ISLEMLERI);
+  if (okur === null) return null;
+  // 3401-1 a: analiz tutar ve fiyat taşır; yalnız satın almayı okuyan (planlama) görmez, uç 403 verir, istek atılmaz.
+  if (!okur) {
+    return (
+      <div>
+        <SayfaBasligi baslik="Satın alma analizi" simge="chart" alt="Süreç, harcama, fiyat, tedarikçi ve tüketim." />
+        <KilitliDeger yetki={YETKI_ADI.satinAlmaFiyati} />
+      </div>
+    );
+  }
+  return <AnalizEkrani />;
+}
+
+function AnalizEkrani() {
   const q = useQuery({ queryKey: ['satin-alma', 'analiz'], queryFn: () => api.get<SatinAlmaAnaliziCevabi>(SATIN_ALMA_ANALIZI_YOLU) });
   const yenile = () => { void q.refetch(); };
   return (

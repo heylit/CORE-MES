@@ -223,14 +223,14 @@ describe('ağaç, fark ve seçici', () => {
     expect(rotaFarki(A, A, ad)).toEqual([]);
   });
 
-  it('fark adımı sıra numarasıyla değil OP numarasıyla anar (RR-6)', () => {
+  it('fark adımı şemanın gösterdiği numarayla anar; numara sıradandır (RR-6, 3252 b)', () => {
     const ad = { op: (id: string) => `op${id}`, istasyon: (id: string | null) => id ?? 'yok', malzeme: (id: string) => `m${id}` };
-    // Şema OP 40 gösterir; sıra numarası 10 olsa da fark aynı numarayı yazmalı.
+    // Kayıtlı numara 40 olsa da şema adımı sırasıyla OP 10 gösterir; fark aynı numarayı yazar.
     const A = [adim('a', 10, { opNo: 40, proc: 4 })];
     const B = [adim('a', 10, { opNo: 40, proc: 5 })];
     const f = rotaFarki(A, B, ad);
     expect(f.length).toBe(1);
-    expect(f[0]).toMatch(/^OP 40 op21: /);
+    expect(f[0]).toMatch(/^OP 10 op21: /);
   });
 
   it('sunucunun katalog türü (yarimamul, hammadde) kısa ada ve yerel türe çevrilir; bilinmeyen tür olduğu gibi kalır (RR-6)', () => {
@@ -461,7 +461,7 @@ describe('3248-2 ana hatta katılan bağımsız dal (göçsüz, veri biçimi ayn
     const b = dalBilgileri(katilanDalEkle(rota(), 'c', adim('y', 0), 'B'))[0]!;
     expect(b).toMatchObject({ bagimsiz: true, catal: null });
     expect(b.birlesme?.id).toBe('c');
-    expect(dalEtiketi(b)).toBe('Dal B: bağımsız dal, hiçbir adımı beklemeden rotanın başından başlar, OP 30 adımında birleşir.');
+    expect(dalEtiketi(b)).toBe('Dal B: bağımsız dal, hiçbir adımı beklemeden rotanın başından başlar, OP 40 adımında birleşir.');
   });
   it('dal adımına katılan dal eklenmez', () => {
     const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { birlesen: ['A'] })];
@@ -526,7 +526,7 @@ describe('2542 çatallı rota kolaylıkları (veri biçimi aynı)', () => {
   it('E: taşıma çatal ya da birleşme yerini değiştirirse yeni etiket döner, değiştirmezse boş', () => {
     const l = rota();
     expect(catalFarki(l, adimSurukle(l, 'c', 'd'))).toEqual([]);
-    expect(catalFarki(l, adimSurukle(l, 'b', 'a'))).toEqual(['Dal A: OP 10 ardından başlar, OP 60 adımında birleşir.']);
+    expect(catalFarki(l, adimSurukle(l, 'b', 'a'))).toEqual(['Dal A: OP 20 ardından başlar, OP 60 adımında birleşir.']);
     expect(catalFarki(l, adimSurukle(l, 'f', 'e'))).toEqual([]);
   });
   it('A: rotada kullanılmayan ilk harf; yeni adım verilen kolu açar, ardına eklenen dal adımının dalını ve çarpanını alır', () => {
@@ -605,8 +605,8 @@ describe('2542 C: şemada kollar yan yana', () => {
 });
 
 describe('2558-3 adımın erişilebilir adı', () => {
-  it('numarası verilmiş adım OP numarasıyla, yeni adım sırasıyla okunur', () => {
-    expect(adimAdi({ opNo: 20, seq: 2 })).toBe('OP 20');
-    expect(adimAdi({ opNo: null, seq: 3 })).toBe('Yeni adım (3. sıra)');
+  it('3252 b: adım sıradaki OP numarasıyla okunur; yeni adım da kayıtta alacağı numarayla', () => {
+    expect(adimAdi({ seq: 20 })).toBe('OP 20');
+    expect(adimAdi({ seq: 30 })).toBe('OP 30');
   });
 });

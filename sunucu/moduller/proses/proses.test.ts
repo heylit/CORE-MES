@@ -133,6 +133,17 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
     assert.equal(h['kontrol']?.durum, 'yok');
     assert.deepEqual([h['ilk-parca']?.durum, h['ilk-parca']?.ozet], ['eksik', '2/2 açık emirde karar yok']);
 
+    // 3250-2 Test T4: yeniden dizilmiş rotada adımın operasyonu defterde başka numaralı operasyon olabilir; talimat sütunu adımın
+    // operasyonundandır: talimatlı operasyon OP 20'ye geçer. Defterden çözen eski okuma talimatı OP 10'da gösterirdi.
+    const k10 = (await vt().sahip.tek<{ id: number }>('SELECT operasyon_id AS id FROM rota_adimi WHERE revizyon_id = $1 AND op_no = 10', [id]))!.id;
+    const yeni = (await vt().sahip.tek<{ id: number }>('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 40, $2) RETURNING id', [parca, id]))!.id;
+    await vt().sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    await vt().sahip.sorgu('UPDATE rota_adimi SET operasyon_id = $2 WHERE revizyon_id = $1 AND op_no = 10', [id, yeni]);
+    await vt().sahip.sorgu('UPDATE rota_adimi SET operasyon_id = $2 WHERE revizyon_id = $1 AND op_no = 20', [id, k10]);
+    await vt().sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    const yd = await oku('proses', parca);
+    assert.deepEqual(yd.govde.operasyonlar.map((o) => [o.opNo, o.talimat]), [[10, false], [20, true], [30, false]]);
+
     // Onay bekleyen taslak da açık taslaktır: yürürlükte rotası olmayan parçada rota halkası eksik ve nedenini söyler.
     const bekleyen = (await vt().sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)

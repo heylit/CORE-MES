@@ -26,17 +26,23 @@ export { talimatSurumuAdimlari } from './servis.ts';
 // 3249-2 a: Adım Durumu'nun "Şablona da ekle"si; bağı kablolama.ts kurar (uretim-emirleri rotayı ithal edemez). Yetki denetlemez.
 export { emreGelenSablonOzetleri, emreGelenSablonaAdimEkle } from './servis.ts';
 export type { KontrolNoktasi, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
-export { acikRevizyonSayisi, adimBilesenleri, adimIlkParcaSecimleri, adimEtkinSureleri, adimEtkinSureleriToplu, durumRevizyonlari, emreKopyala, gecerliTalimat, gecerliTalimatlarToplu, girdisiEksikRevizyonlar, revizyonGetir, revizyonKunyeleri, revizyonlar, urunAgaci, yururluktekiRevizyon } from './servis.ts';
+export { acikRevizyonSayisi, adimBilesenleri, adimIlkParcaSecimleri, adimEtkinSureleri, adimEtkinSureleriToplu, durumRevizyonlari, emreKopyala, gecerliTalimat, gecerliTalimatlarToplu, revizyonOperasyonKimlikleri, girdisiEksikRevizyonlar, revizyonGetir, revizyonKunyeleri, revizyonlar, urunAgaci, yururluktekiRevizyon } from './servis.ts';
 // 1476-E: çok katmanlı emirde düğümün patlatmadaki rota revizyonu ve malzemesi; yetki denetlemez.
 export { patlatmaDugumleri, patlatmaRevizyonu } from './servis.ts';
 export type { PatlatmaDugumu } from './servis.ts';
 export {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, etkinSure, girdiOlabilirMi, isEmriKaynagi, kaynaktakiSure, teorikSure, yeniOpNo,
 } from './kurallar.ts';
+// 3381: adımın türetilmiş operasyon kodu (TRN10) ve adı ("Torna 1. operasyon"); SmartES iş emrine yazar. Saf kural, yetki denetlemez.
+export { operasyonKodlari, type OperasyonKodu } from './kurallar.ts';
+// Emir adımlarının operasyon kodu ve adı (3385): emrin rota revizyonundan, operasyon kimliğiyle eşlenir.
+export { isEmriOperasyonKodlari } from './servis.ts';
 // 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
 export { yuzeyIslemiAdimlari } from './servis.ts';
 // Patlamış rota önizlemesinde ara adımın statülü kartı ve stoğu (2610 a); bağı kablolama.ts kurar (Reçete ve Rota rotayı ithal eder).
 export { araHalCozucusuKaydet } from './servis.ts';
+// OP numaraları revizyonda yeniden dizildi (3252 b); Reçete ve Rota'nın (revizyon, OP) bağları adımını izler. Bağı kablolama.ts kurar.
+export { opNumaralariDizildiDinle, type OpNumaralariDizildi } from './servis.ts';
 export type { AraHalCozucusu, AraHalCozumu } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 // Hazırlık matrisinin aparat ve ölçü aleti maddeleri (2893-4 a, yalnız uyarır): iş emrine rota adımından kopyalanan liste. Aparat

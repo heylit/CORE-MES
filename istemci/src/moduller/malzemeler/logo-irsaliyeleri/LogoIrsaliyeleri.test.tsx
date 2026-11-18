@@ -13,7 +13,7 @@ import { LogoIrsaliyeleri } from './LogoIrsaliyeleri.tsx';
 
 // 3345 a: Logo irsaliyeleri yalnız okuma; fikstürler sözleşme tipine uyar, değerler sentetiktir (ORN-).
 const DEPOCU: Kullanici = { id: 1, ad: 'Deneme Depo', islemler: ['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku'] };
-const YONETICI: Kullanici = { id: 2, ad: 'Deneme Yonetici', islemler: ['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku', 'ayarlar.yaz', 'satin-alma.oku'] };
+const YONETICI: Kullanici = { id: 2, ad: 'Deneme Yonetici', islemler: ['sayfa.logo-irsaliyeleri', 'logo.irsaliye-oku', 'ayarlar.yaz', 'satin-alma.fiyat-oku'] };
 
 const SATIR: IrsaliyeListesiCevabi['satirlar'][number] = {
   firma: 1, donem: 1, kayitNo: 101, tur: 1, turAdi: 'Satın alma', fisNo: 'ORN-IRS-101', belgeNo: 'ORN-E-101', tarih: '2026-11-10', cariKodu: 'ORN-C-1',

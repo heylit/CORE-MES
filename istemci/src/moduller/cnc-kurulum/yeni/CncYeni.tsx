@@ -41,6 +41,7 @@ export function CncYeni() {
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
   // Kayıt geçmişi (CNC-7 a) yalnız okuma işlemiyle açılır (uçla aynı).
+  const maliyetGorur = kullanici?.islemler.includes('finans.maliyet-oku') ?? false;
   const gecmisGorebilir = kullanici?.islemler.includes('cnc-kurulum.oku') ?? false;
   const [gecmisAcik, gecmisAcikYaz] = useState(false);
 
@@ -55,7 +56,7 @@ export function CncYeni() {
           api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar'),
           api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar').then((c) => c.tezgahlar),
         ]);
-        if (!bitti) setAcilis({ yetki: yetkiKur(ben), kayitlar, tezgahlar });
+        if (!bitti) setAcilis({ yetki: yetkiKur(ben, maliyetGorur), kayitlar, tezgahlar });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'CNC Kurulum Motoru açılamadı.'));
       }
@@ -75,7 +76,7 @@ export function CncYeni() {
     const isle = kopruKur(yetki.saltOnay, degerler[DURUM_ANAHTARI]?.deger, (g) => { yenidenKur(g === 'lib' ? 'lib' : 'setup'); },
       yetki.takimDegistirebilir, yetki.stokDusebilir);
     const y = new KayitYazici({
-      isle, yazabilir: yetki.yazabilir || yetki.hazirlikOnaylayabilir, onek: ONEK, emirAnahtari: EMIR,
+      isle, yazabilir: yetki.yazabilir || yetki.hazirlikOnaylayabilir, maliyetGorur: yetki.maliyetGorur, onek: ONEK, emirAnahtari: EMIR,
       uyar: (ileti) => { bildir('hata', ileti); }, yazildi: kayitYazildi,
     }, degerler);
     baglantiKur({ yetki, isle, yazici: y });

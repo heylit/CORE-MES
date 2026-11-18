@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Ayar, AyarlarCevabi, KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { EpostaDurumuCevabi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
@@ -23,10 +24,11 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 interface Kurulum {
   liste?: () => Response;
+  ek?: Readonly<Record<string, unknown>>;
   yazma?: (yol: string, govde: { deger: Ayar['deger'] }) => Response | Promise<Response>;
 }
 
-function sunucuKur({ liste, yazma }: Kurulum = {}) {
+function sunucuKur({ liste, yazma, ek }: Kurulum = {}) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
     const yol = adres.replace('/api', '');
@@ -36,6 +38,7 @@ function sunucuKur({ liste, yazma }: Kurulum = {}) {
     if (yol === '/kapali-sayfalar') return json(200, { kapali: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
     if (yol === '/karsilama') return json(200, KARSILAMA_KAPALI);
+    if (ek?.[yol] !== undefined && (secenek.method ?? 'GET') === 'GET') return json(200, ek[yol]);
     if (yazma && secenek.method === 'POST') return yazma(yol, govde);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -103,6 +106,28 @@ describe('Sistem Ayarları', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     // Öteki ayar yerinde kalır.
     expect(acikMi(await anahtar(OTEKI))).toBe(false);
+  });
+
+  it('3397: e-posta gönderimini açmak önce onay penceresi açar; komut onaydan sonra gider', async () => {
+    const ACKAPA: Ayar = { anahtar: 'bildirim.eposta', baslik: 'E-posta gönderimi', aciklama: 'Deneme açıklaması', tur: 'boolean', deger: false };
+    const DURUM = {
+      ortam: 'hazir', ayarAcik: false, kip: 'dis-servis', adres: 'smtp.ornek-servis.com:587', guvenlik: 'starttls', alanAdlari: ['ornek.local'],
+      gonderen: 'mes@ornek.local', kuyrukta: 3, son24Gonderilen: 0, son24Hata: 0, epostasizKisi: 0, sonGonderim: null,
+    } satisfies EpostaDurumuCevabi;
+    const istekler = sunucuKur({
+      liste: () => json(200, { ayarlar: [ACKAPA] } satisfies AyarlarCevabi),
+      ek: { '/bildirimler/eposta/durum': DURUM },
+      yazma: (_yol, govde) => json(200, { ...ACKAPA, deger: govde.deger as boolean } satisfies Ayar),
+    });
+    ac(undefined, ['bildirim.eposta-yonet'], 'E-posta');
+    fireEvent.click(await anahtar(ACKAPA));
+    const pencere = await screen.findByRole('dialog');
+    expect(pencere.textContent).toContain('kuyruktaki 3 e-posta Dış posta servisi üzerinden hemen gidecek');
+    expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
+      { yontem: 'POST', yol: '/ayarlar/bildirim.eposta/degistir', govde: { deger: true, beklenen: false } },
+    ]));
   });
 
   it('başka yönetici arada değiştirdiyse sunucunun 409 iletisi uyarı olarak çıkar ve liste yeniden okunur', async () => {
@@ -362,7 +387,7 @@ describe('Sistem Ayarları: modüllerin ayar ekranları', () => {
     sunucuKur();
     ac(EKRANLAR, [], null);
     const sekmeler = within(screen.getByRole('tablist', { name: 'Ayar kategorileri' })).getAllByRole('tab').map((t) => t.textContent);
-    expect(sekmeler).toEqual(['Genel', 'Görünüm ve hareket', 'Sayfalar', 'Onay kuralları', 'Numara kuralları', 'Bağlantılar']);
+    expect(sekmeler).toEqual(['Genel', 'Görünüm ve hareket', 'Sayfalar', 'Onay kuralları', 'Firma kodları', 'Numara kuralları', 'Bağlantılar']);
   });
 });
 

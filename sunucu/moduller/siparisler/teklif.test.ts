@@ -70,6 +70,10 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(c.statusCode, beklenen, c.body);
     return c.json<TeklifAyrintisi>();
   }
+  const siparisGovdesi = () => ({
+    firmaId: musteriId, musteriSiparisNo: null, siparisTarihi: '2026-10-19', termin: '2026-11-15', kdvOrani: '20', odemeKosulu: null, aciklama: null,
+    satirlar: [{ malzemeNo: mamulNo, miktar: '1', birimFiyat: '1', termin: null, aciklama: null }],
+  });
   const fiyatlar = (t: TeklifAyrintisi, ...birim: string[]) => t.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: birim[i] ?? '1' }));
 
   async function kartAc(tur: string): Promise<number> {
@@ -123,14 +127,75 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(sira((await teklifAc()).no), sira(a.no) + 1);
   });
 
-  test('teklif numarası kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşan numara kayıt açmaz (422)', async () => {
-    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.teklif-no/degistir', { deger })).statusCode, 200);
+  test('teklif numarası kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşabilecek kalıp kaydedilmez', async () => {
+    const kalip = async (deger: string, durum = 200) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.teklif-no/degistir', { deger })).statusCode, durum);
     await kalip('TEK{YY}/{SAYAC:5}');
     assert.match((await teklifAc()).no, /^TEK\d{2}\/\d{5}$/);
-    await kalip('SATISTEKLIFI-{YYYY}-{SAYAC:3}');
-    const uzun = await gonder(yonetici, '/siparisler/teklifler/ekle', talep());
-    assert.equal(uzun.statusCode, 422, uzun.body);
+    // 3399 a: sınır kalıp kaydında denetlenir; numara almadan önce kullanıcı uyarılır.
+    await kalip('SATISTEKLIFI-{YYYY}-{SAYAC:3}', 400);
+    assert.match((await teklifAc()).no, /^TEK\d{2}\/\d{5}$/);
     await kalip('TK-{YYYY}-{SAYAC:3}');
+  });
+
+  test('3399 a: teklif firma kodunu taşır; {FIRMA}lı kalıpta numara firma kodlu ve firma başına sıralıdır', async () => {
+    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.teklif-no/degistir', { deger })).statusCode, 200);
+    for (const [kod, varsayilan] of [['ORNA', true], ['ORNB', false]] as const) {
+      const c = await gonder(yonetici, '/firma-kodlari/ekle', { kod, ad: `Deneme ${kod}`, varsayilan });
+      assert.ok([200, 409].includes(c.statusCode), c.body);
+    }
+    await kalip('{FIRMA}-T{YY}-{SAYAC:3}');
+    try {
+      const a = await teklifAc({ firmaKodu: 'ORNB' });
+      const b = await teklifAc({ firmaKodu: 'ORNB' });
+      const v = await teklifAc();
+      assert.deepEqual([a.firmaKodu, v.firmaKodu], ['ORNB', 'ORNA']);
+      assert.match(a.no, /^ORNB-T\d{2}-\d{3}$/);
+      assert.equal(Number(b.no.slice(-3)), Number(a.no.slice(-3)) + 1);
+      assert.match(v.no, /^ORNA-T\d{2}-\d{3}$/);
+      assert.equal((await gonder(yonetici, '/siparisler/teklifler/ekle', talep({ firmaKodu: 'YOK' }))).statusCode, 400);
+    } finally {
+      await kalip('TK-{YYYY}-{SAYAC:3}');
+    }
+  });
+
+  test('3399 a: tekliften dönen sipariş teklifin kodunu ve {FIRMA}lı kalıpta o kodla numarasını alır; kod sonradan pasif olsa da döner', async () => {
+    const siparisKalibi = async (deger: string) =>
+      assert.equal((await gonder(yonetici, '/ayarlar/siparisler.siparis-no/degistir', { deger })).statusCode, 200);
+    for (const [kod, varsayilan] of [['ORNA', true], ['ORNB', false]] as const) {
+      const c = await gonder(yonetici, '/firma-kodlari/ekle', { kod, ad: `Deneme ${kod}`, varsayilan });
+      assert.ok([200, 409].includes(c.statusCode), c.body);
+    }
+    await siparisKalibi('{FIRMA}-S{YY}-{SAYAC:3}');
+    try {
+      let t = await teklifAc({ firmaKodu: 'ORNB' });
+      t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), iskontoOrani: '0' });
+      t = await komut(t, 'kabul', { surumNo: 1 });
+      for (const s of t.satirlar.filter((x) => x.malzemeNo === null)) t = await komut(t, `satirlar/${s.id}/kart-bagla`, { malzemeNo: mamulNo });
+      const kodlar = (await oku(yonetici, '/firma-kodlari')).json<{ firmaKodlari: { id: number; kod: string; ad: string; surum: number }[] }>().firmaKodlari;
+      const b = kodlar.find((k) => k.kod === 'ORNB');
+      assert.ok(b);
+      const pasif = await gonder(yonetici, `/firma-kodlari/${b.id}/duzenle`, { ad: b.ad, varsayilan: false, aktif: false, surum: b.surum });
+      assert.equal(pasif.statusCode, 200, pasif.body);
+      const c = await gonder(yonetici, `/siparisler/teklifler/${t.id}/siparise-donustur`, {
+        surum: t.surum, siparisTarihi: '2026-10-19', termin: '2026-11-20', kdvOrani: '20', musteriSiparisNo: null,
+      });
+      assert.equal(c.statusCode, 200, c.body);
+      const s = (await oku(yonetici, `/siparisler/${c.json<SiparisDonusumCevabi>().siparisId}`)).json<SiparisAyrintisi>();
+      assert.equal(s.firmaKodu, 'ORNB');
+      assert.match(s.no, /^ORNB-S\d{2}-\d{3}$/);
+      assert.equal((await gonder(yonetici, '/siparisler/ekle', { ...siparisGovdesi(), firmaKodu: 'ORNB' })).statusCode, 400, 'pasif kod yeni siparişe seçilemez');
+      const yeni = await gonder(yonetici, '/siparisler/ekle', { ...siparisGovdesi(), firmaKodu: 'ORNA' });
+      assert.equal(yeni.statusCode, 200, yeni.body);
+      assert.match(yeni.json<SiparisAyrintisi>().no, /^ORNA-S\d{2}-\d{3}$/);
+    } finally {
+      await siparisKalibi('SS-{YYYY}-{SAYAC:3}');
+    }
+  });
+
+  test('3399 a: firma kodu listesini kayıt yazma işlemi olmayan okuyamaz (403); ekleme ayar yazma ister (403)', async () => {
+    assert.equal((await oku(operator, '/firma-kodlari')).statusCode, 403);
+    const planlama = (await girisYap('planlama_proje')).cerez;
+    assert.equal((await gonder(planlama, '/firma-kodlari/ekle', { kod: 'ORNX', ad: 'Deneme X', varsayilan: false })).statusCode, 403);
   });
 
   test('SIP-10 (180): teklif fiyatları, iskonto ve toplam yalnız siparisler.fiyat-oku olana gider', async () => {

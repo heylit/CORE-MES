@@ -114,18 +114,12 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(1));
   });
 
-  test('firma kodu biçimi denetlenir; geçerli kod genel ayara yazılır', async () => {
+  test('3399 a: firma kodu burada yazılmaz; Sistem Ayarları > Firma kodları\'na yönlendirilir', async () => {
     const istekler = sunucuKur(YONETICI, { [yaz('genel')]: tamam });
     yeniEkranAc(`${KOK}?bolum=kural`);
-    const kutu = await screen.findByLabelText('Firma kodu (firma kodlu türlerde kodun başı)');
-    fireEvent.change(kutu, { target: { value: 'MM' } });
-    fireEvent.blur(kutu);
-    expect(await screen.findByText(/Firma kodu 2-5 harf ya da rakam olmalı/)).toBeTruthy();
+    expect(await screen.findByText(/Firma kodları/, { selector: 'a' })).toBeTruthy();
+    expect(screen.queryByLabelText('Firma kodu (firma kodlu türlerde kodun başı)')).toBeNull();
     expect(kayitlar(istekler, 'genel')).toHaveLength(0);
-    fireEvent.change(kutu, { target: { value: 'abc' } });
-    fireEvent.blur(kutu);
-    await waitFor(() => expect(kayitlar(istekler, 'genel')).toHaveLength(1));
-    expect((kayitlar(istekler, 'genel')[0]?.govde as { deger: Record<string, unknown> }).deger).toMatchObject({ firmaKodu: 'ABC', kodYapisi: 'standart', acUzunluk: 40 });
   });
 
   test('1879: hammaddede kalite, form, ölçü, durum ve yüzey çakışma alanı olarak seçilebilir; varsayılan kural seçili görünür', async () => {
@@ -207,7 +201,6 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     const pencere = await screen.findByRole('dialog', { name: 'Ayarlar' });
     const onay = within(pencere).getByLabelText('Yeni ve değişen kartlar onaydan sonra aktif olsun');
     expect((onay as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByLabelText('Firma kodu (firma kodlu türlerde kodun başı)') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Kataloğu tara' }));
     expect(await screen.findByText('Mükerrer kart bulunamadı.')).toBeTruthy();
   });

@@ -12,7 +12,7 @@ export {
   type BekletmeYazisi, bekletmeOlayiEkle, type BekletmeSatiri, aktifBekletmeler, type BekletmeOlaySatiri, bekletmeOlaylari,
 } from './sorgular/bekletme/sorgular.ts';
 export {
-  type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, adimNotuEkle, type AdimNotuSatiri,
+  type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, isEmriOperasyonlari, adimNotuEkle, type AdimNotuSatiri,
   adimNotlari, atlananAdimlar, talimatAtlamaEkle, type TalimatAtlamaSatiri, talimatAtlamalari,
 } from './sorgular/adim/sorgular.ts';
 export {
@@ -65,3 +65,6 @@ export {
 export {
   type SiparisEmriSatiri, hazirligiTamamlananEmirler, siparisEmirleri, siparisEmirleriKilitle, acilisKaynagiYaz, kalemdenCoz, kalemeBagla, type RotaBekleyenEmir, rotaBekleyenEmirler,
 } from './sorgular/siparis-acilisi/sorgular.ts';
+export {
+  type HazirlikMaddeSatiri, hazirlikMaddeSatirlari, hazirlikMaddesiYaz, ozelMaddeNo, ozelMaddeEkle,
+} from './sorgular/hazirlik-maddesi/sorgular.ts';

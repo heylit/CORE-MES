@@ -1,6 +1,7 @@
 import type { AyarTanimi, TurDegerleri } from './ayar-tanimi.ts';
 import { ARKON_AYARLARI } from './ayarlar/arkon.ts';
 import { ATOLYE_AYARLARI } from './ayarlar/atolye.ts';
+import { BILDIRIM_AYARLARI } from './ayarlar/bildirim.ts';
 import { KABUK_AYARLARI } from './ayarlar/kabuk.ts';
 import { ETIKET_MERKEZI_AYARLARI } from './ayarlar/etiket-merkezi.ts';
 import { GEOMETRI_AYARLARI } from './ayarlar/geometri.ts';
@@ -29,6 +30,7 @@ export type { AyarTuru } from './ayar-tanimi.ts';
 export const AYAR_TANIMLARI = {
   ...ARKON_AYARLARI,
   ...ATOLYE_AYARLARI,
+  ...BILDIRIM_AYARLARI,
   ...KABUK_AYARLARI,
   ...ETIKET_MERKEZI_AYARLARI,
   ...GEOMETRI_AYARLARI,

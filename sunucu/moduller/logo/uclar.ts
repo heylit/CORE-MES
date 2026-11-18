@@ -2,8 +2,9 @@ import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmDenetimiCevabi, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
-import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi } from '#paylasilan/sozlesme/logo.ts';
+import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
+import { siparisLogoOzeti } from './siparis-ozeti.ts';
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
@@ -23,7 +24,7 @@ import {
 // sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
 const KART_OKUMA = { biri: ['sayfa.malzemeler'] } as const;
 const KART_STOK = ['sayfa.stok', ...STOK_ISLEMLERI] as const;
-const KART_FIYAT = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+const KART_FIYAT = ['satin-alma.fiyat-oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 
 // 3344: rozet, belgeyi görebilen okur; tür başına o belgenin okuma yetkisi (ucun yetkisi bunların birleşimidir).
 const ROZET_YETKISI = {
@@ -55,6 +56,15 @@ export const uclar = [
     parametre: irsaliyeParametresi,
     cevap: irsaliyeCevabi,
     isle: ({ db, kullanici, parametre }) => irsaliyeGetir(db, kullanici, parametre),
+  }),
+  // 3384 a: satın alma siparişinin Logo irsaliye ve fatura özeti (Siparişler listesi ve sipariş takibi). Yalnız okuma, fiyat yok.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/satin-alma-siparisleri/ozet',
+    yetki: 'logo.irsaliye-oku',
+    sorgu: siparisLogoOzetiSorgusu,
+    cevap: siparisLogoOzetiCevabi,
+    isle: ({ db, sorgu }) => siparisLogoOzeti(db, new Date(), sorgu.nolar),
   }),
   uc({
     yontem: 'GET',

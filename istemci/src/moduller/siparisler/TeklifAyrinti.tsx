@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { PlanTaslaklariCevabi, SiparisDonusumCevabi, TeklifAyrintiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, OnayPenceresi, Pencere, Rozet, Tablo, YETKI_ADI, useBildirim, type Sutun, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
@@ -12,7 +12,7 @@ import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
-import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
+import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
 type Satir = TeklifAyrintiCevabi['satirlar'][number];
@@ -28,6 +28,7 @@ export function TeklifAyrinti() {
   const yazabilir = useYazabilir();
   const iskontoOnaylar = useIskontoOnaylar();
   const fiyatGorur = useFiyatGorur();
+  const maliyetGorur = useMaliyetToplamiGorur();
   const terminDener = useTerminDener();
   const terminOnaylar = useTerminOnaylar();
   const donustur = useKorumaliGonderim();
@@ -217,6 +218,7 @@ export function TeklifAyrinti() {
         <div className="tc-sp-sutun">
           {(taslaklar.data?.taslaklar.length ?? 0) > 0 && (
             <Kart baslik="Plan taslakları">
+              {!maliyetGorur && <KilitliSutunNotu ne="Kâr oranı" yetki={YETKI_ADI.maliyet} />}
               <ul className="tc-sp-surumler" aria-label="Plan taslakları">
                 {taslaklar.data?.taslaklar.map((x) => (
                   <li key={x.id}>
@@ -227,7 +229,7 @@ export function TeklifAyrinti() {
                     <span>
                       {`Termin ${tarihMetni(x.termin)}`}
                       {x.gecerlilik !== null && x.tur === 'satis' && ` · ${tarihMetni(x.gecerlilik)} tarihine kadar`}
-                      {x.karOrani !== null && ` · %${miktarMetni(x.karOrani)} kâr`}
+                      {maliyetGorur && x.karOrani !== null && ` · %${miktarMetni(x.karOrani)} kâr`}
                       {x.onaylayan !== null && <> <Rozet ton="bilgi">{`Termin onayı: ${x.onaylayan}`}</Rozet></>}
                     </span>
                   </li>

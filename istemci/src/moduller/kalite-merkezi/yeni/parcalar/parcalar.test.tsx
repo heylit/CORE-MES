@@ -82,6 +82,18 @@ describe('Parçalar listesi', () => {
     expect((y?.govde as { govde: Record<string, unknown> }).govde.ad).toBeUndefined();
   });
 
+  it('var olan kart düzenlenince kendi kimliğiyle yazılır; satırın yazımından ikinci kart açılmaz', async () => {
+    const kayitlar = { ...KAYITLAR, parca: [{ _id: 'p-DNM-01-ESKI', parcaNo: 'dnm-01', ad: 'Deneme mili' }] };
+    const s = ac(MUAYENECI, kayitlar);
+    fireEvent.click(await satir(/dnm-01/));
+    await screen.findByRole('heading', { level: 2, name: /dnm-01/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Düzenle' }));
+    const pencere = await screen.findByRole('dialog', { name: /bilgileri/ });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(kayitYazmalari(s.yazmalar, 'parca')).toHaveLength(1); });
+    expect(kayitYazmalari(s.yazmalar, 'parca')[0]?.yol).toContain('/kayitlar/parca/p-DNM-01-ESKI/');
+  });
+
   it('kartı Malzemeler\'e bağlı parçanın adı oradan gelir', async () => {
     const kayitlar = { ...KAYITLAR, parca: [{ _id: parcaKimligi('DNM-01'), parcaNo: 'DNM-01', malzemeNo: 40, ad: 'Eski ad' }] };
     kmAc('parcalar', MUAYENECI, kayitlar, { parcalar: [{ malzemeNo: 40, kod: 'DNM-01', ad: 'Kart adı', aktif: true }] });

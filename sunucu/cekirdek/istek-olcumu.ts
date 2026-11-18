@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { FastifyInstance } from 'fastify';
+import { istekKisisi } from './red-kaydi.ts';
 
 interface Sayac {
   sorgu: number;
@@ -76,7 +77,8 @@ export function istekSayaclari(): UcSayaci[] {
 }
 
 // Yavaşlık ölçülmeden hangi düzeltmenin işe yaradığı bilinmez: her cevapta süre ve sorgu sayısı yalnız yerel günlüğe
-// yazılır. İstek başına tek satır budur (1748): güvenlik izi için istemci adresi ve sorgu dizgesiz yol da buradadır.
+// yazılır. İstek başına tek satır budur (1748): güvenlik izi için istemci adresi, kişi numarası ve sorgu dizgesiz yol da buradadır.
+// Okuma denetim defterine düşmez; kimin neyi okuduğu yalnız bu satırdan bulunur. Ad yazılmaz, yalnız numara.
 // Sorgu dizgesi günlüğe girmez: arama metni gibi kişisel veri taşıyabilir.
 export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = {}): void {
   const yavasMs = secenek.yavasMs ?? YAVAS_UC_MS;
@@ -94,6 +96,7 @@ export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = 
       yol: istek.routeOptions.url ?? null,
       adres: istek.url.split('?', 1)[0] ?? '',
       ip: istek.ip,
+      kisiId: istekKisisi(istek),
       durum: yanit.statusCode,
       sureMs,
       sorgu: sayaclar.get(istek)?.sorgu ?? 0,

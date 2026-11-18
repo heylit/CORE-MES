@@ -1927,6 +1927,23 @@ export function logoSatirliSiparisSatirlari(db: Db, logoSatirRefleri: readonly s
   );
 }
 
+// 3384 a: Logo özeti için siparişin bütün satırları (CORE numarasıyla); teslim, düzeltmeler düşülmüş net toplamdır. Fiyat yok.
+export interface LogoSiparisKalemiOkuma {
+  siparisNo: string; siparisTarihi: string | null; siparisSatiriId: number; kalemAdi: string; miktar: string; birim: string; teslim: string; logoSatirRef: string | null;
+}
+export function logoSiparisKalemleri(db: Db, nolar: readonly string[]): Promise<LogoSiparisKalemiOkuma[]> {
+  return db.sorgu<LogoSiparisKalemiOkuma>(
+    `SELECT p.no AS "siparisNo", p.siparis_tarihi::text AS "siparisTarihi", s.id AS "siparisSatiriId", k.ad AS "kalemAdi", s.miktar::text AS miktar, s.birim,
+            coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim, s.logo_satir_ref AS "logoSatirRef"
+       FROM satin_alma_siparis p
+       JOIN satin_alma_siparis_satiri s ON s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+      WHERE p.no = ANY($1::text[])
+      ORDER BY p.no, k.sira, s.id`,
+    [[...new Set(nolar)]],
+  );
+}
+
 // 3398-2: teklif istenmeden önce stokla karşılaştırılacak kalemler: taslak talebin kartlı, miktarlı kalemleri. Fiyat yok.
 // Stoktan karşılamanın engeli (yoksa null): Logo'ya gitmiş, iş emrine ya da kalıba bağlı, teklif, karar, senaryo ya da siparişe girmiş kalem.
 const STOKTAN_ENGEL = `CASE WHEN k.logo_satir_ref IS NOT NULL THEN 'logo' WHEN k.is_emri_id IS NOT NULL THEN 'is-emri' WHEN k.die_id IS NOT NULL THEN 'kalip'

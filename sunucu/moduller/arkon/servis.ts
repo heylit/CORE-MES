@@ -33,7 +33,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisile
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneKarariYansit, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
-import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimatlarToplu, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir } from '../rota/disari.ts';
+import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimatlarToplu, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir, revizyonOperasyonKimlikleri } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
@@ -311,7 +311,12 @@ async function isEmriTaslaklari(
   const revizyonlar = new Map<number, string | null>();
   // Talimat adım başına ayrı okunmasın: listedeki bütün (malzeme, adım) anahtarlarının geçerli talimatı tek okumadır. Talimat yine yalnız
   // kayıtsız ve şablonsuz pakette o anahtar için açılır; açılan anahtar sonraki paketlerde de kullanılır.
-  const talimatlar = new Map([...await gecerliTalimatlarToplu(db, isEmirleri.map((ie) => { const r = anahtar(ie); return { malzemeId: r.malzemeNo, opNo: r.opNo }; }))]
+  // Talimat iş emrinin operasyon kimliğiyle okunur (3250-2); anahtar ekrandaki (malzeme, OP) olarak kalır.
+  const operasyonlar = await isEmriOperasyonKimlikleri(db, isEmirleri.map((ie) => ie.id));
+  const talimatlar = new Map([...await gecerliTalimatlarToplu(db, isEmirleri.map((ie) => {
+    const r = anahtar(ie);
+    return { malzemeId: r.malzemeNo, opNo: r.opNo, operasyonId: operasyonlar.get(ie.id) ?? null };
+  }))]
     .map(([k, t]) => [k, t.metin] as const));
   const acilanTalimatlar = new Set<string>();
   const govdeler = kayitli.map((b) => b.govde);
@@ -1153,7 +1158,21 @@ async function rotaAnahtarlari(
 ): Promise<Map<number, RotaAnahtari>> {
   const dugumler = await isEmriDugumleri(db, isEmirleri.map((i) => i.id));
   const patlatmalar = await patlatmaDugumleri(db, [...dugumler.values()].flatMap((d) => (d.patlatmaId === null ? [] : [d.patlatmaId])));
-  return new Map(isEmirleri.map((i) => [i.id, rotaAnahtari(i, dugumler.get(i.id), patlatmalar)]));
+  const anahtarlar = new Map(isEmirleri.map((i) => [i.id, rotaAnahtari(i, dugumler.get(i.id), patlatmalar)]));
+  // 3250 b: açık emir numarasını korur, revizyon yeniden dizilmiş olabilir. Anahtarın OP'si iş emrinin operasyonunun o revizyondaki
+  // numarasıdır (ilk parça seçimi, etkin süre bu numarayla okunur); kimliksiz ya da revizyonda bulunmayan adımda emirdeki numara kalır.
+  const kimlikler = await isEmriOperasyonKimlikleri(db, isEmirleri.map((i) => i.id));
+  const revizyonNumaralari = new Map<number, Map<number, number>>();
+  for (const [id, a] of anahtarlar) {
+    const k = kimlikler.get(id) ?? null;
+    if (k === null || a.revizyonId === null) continue;
+    if (!revizyonNumaralari.has(a.revizyonId)) {
+      revizyonNumaralari.set(a.revizyonId, new Map([...await revizyonOperasyonKimlikleri(db, a.revizyonId)].map(([no, op]) => [op, no])));
+    }
+    const no = revizyonNumaralari.get(a.revizyonId)!.get(k);
+    if (no !== undefined) anahtarlar.set(id, { ...a, opNo: no });
+  }
+  return anahtarlar;
 }
 
 const ilkParcaSecimiOku = (secimler: ReadonlyMap<string, IlkParcaSecimi>, rota: RotaAnahtari): IlkParcaSecimi | undefined =>
@@ -3276,13 +3295,13 @@ export async function hazirlikMaddesiIsaretle(db: Db, kullanici: Kullanici, id: 
 import type { IsEmriSahnesiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { modelDosyasi, malzemeModelRevizyonlari } from '../geometri/disari.ts';
 import { talimatSahnesi } from '../rota/disari.ts';
-import { isEmriTalimatKunyesi } from '../uretim-emirleri/disari.ts';
+import { isEmriOperasyonKimlikleri, isEmriTalimatKunyesi } from '../uretim-emirleri/disari.ts';
 const SAHNE_ISI_YOK = 'İş bu terminalde görünmüyor.';
 const SAHNE_MODELI_YOK = 'Bu işin talimatında 3B sahne yok.';
 async function isinSahnesi(db: Db, kullanici: Kullanici, isEmriId: number) {
   if ((await belge(db, kullanici, 'pkgs', isEmriPaketKimligi(isEmriId))) === null) throw bulunamadi(SAHNE_ISI_YOK);
   const kunye = await isEmriTalimatKunyesi(db, isEmriId);
-  const sahne = kunye === null ? null : await talimatSahnesi(db, kunye.malzemeNo, kunye.opNo, kunye.surum);
+  const sahne = kunye === null ? null : await talimatSahnesi(db, kunye.malzemeNo, kunye.opNo, kunye.surum, kunye.operasyonId);
   return { kunye, sahne };
 }
 export async function isEmriSahnesi(db: Db, kullanici: Kullanici, isEmriId: number): Promise<IsEmriSahnesiCevabi> {

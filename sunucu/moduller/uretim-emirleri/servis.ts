@@ -1170,7 +1170,7 @@ export async function adimNotuYaz(db: Db, kisiId: number, emirId: number, adimId
 }
 
 export async function anaSayfaOzeti(db: Db, kisiId: number, listeyiOkur: boolean): Promise<OzetCevabi> {
-  const s = await sorgular.ozetGetir(db, kisiId);
+  const s = await sorgular.ozetGetir(db, kisiId, await denemeIsaretliKimlikler(db, 'uretim_emri'));
   return {
     planlanacak: listeyiOkur ? s.planlanacak : null, acik: listeyiOkur ? s.acik : null, kuyrugum: s.kuyrugum, bugunSaglam: s.bugunSaglam,
     asamalar: listeyiOkur ? {
@@ -1180,7 +1180,7 @@ export async function anaSayfaOzeti(db: Db, kisiId: number, listeyiOkur: boolean
 }
 
 export async function gunlukUretim(db: Db, gun: number): Promise<GunlukUretimCevabi> {
-  return { gunler: await sorgular.gunlukUretimGetir(db, gun) };
+  return { gunler: await sorgular.gunlukUretimGetir(db, gun, await denemeIsaretliKimlikler(db, 'uretim_emri')) };
 }
 
 // Silinmiş neden olmaz (yabancı anahtar); pasif nedenler de ad için okunur.

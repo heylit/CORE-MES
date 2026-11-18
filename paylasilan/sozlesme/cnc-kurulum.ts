@@ -12,6 +12,11 @@ export const DEGER_BICIMLERI = ['json', 'metin'] as const;
 
 const anahtar = z.string().regex(ANAHTAR_BICIMI, 'Geçersiz anahtar.');
 
+// Maliyet analizinin para alanları (kart 3401, kullanıcı kararı 3401-1 a): ham malzeme kg fiyatı (stock.price), takım fiyatı
+// (life.price) ve tezgâh ücreti (life.rate). Hesaplanan maliyet kayda yazılmaz, ekranda bu girdilerden çıkar. Yeni para alanı
+// yalnız bu listeye eklenir; sunucunun okuma ve yazma koruması, istemcinin kilidi ve testteki yürüyüş bu listeye bağlıdır.
+export const PARA_ALANLARI = [['stock', 'price'], ['life', 'price'], ['life', 'rate']] as const;
+
 export const kayitSemasi = z.object({
   anahtar: z.string(),
   bicim: z.enum(DEGER_BICIMLERI),

@@ -23,7 +23,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
 });
 const IZIN = { ustlenebilir: false, baslayabilir: false, bitirebilir: false, onaylayabilir: true };
 const satir = (ek: Partial<GorevlerimSatiri>): GorevlerimSatiri => ({
-  ...gorev({}), tur: 'kontrolumde', projeId: 1, projeKod: 'PRJ.01', projeAd: 'Deneme projesi', izinler: IZIN, ...ek,
+  ...gorev({}), tur: 'kontrolumde', projeId: 1, projeKod: 'PRJ.01', projeAd: 'Deneme projesi', izinler: IZIN, kademe: null, ...ek,
 });
 const LISTE: GorevlerimCevabi = {
   gorevler: [

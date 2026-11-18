@@ -23,3 +23,6 @@
 - Stil `.sa-kok` altında, değişkenler `--sa-` önekli ve TMI değişkenlerine eşli; sabit satır içi stiller `data-sa-y` kurallarında.
 - Sayaç ucu `/satin-alma-menu-sayaclari`: "Talepler" prototipin açık tanımını (OPEN) sayar; yetkisiz madde boş.
 - Kaldırılanlar: TCMB'den kur (dış servis yok), örnek veri, JSON yedek, görünüm seçicisi, depo ekranı.
+- Fiyat kapısı (3401-1 a): fiyat görür = fiyat-oku, yaz ya da onayla; yalnız oku (planlama) tam görür ama fiyatsız. Kapı `fiyatsizGorunum` ve uç yetkisidir; istemci kilidi yalnız çizim içindir.
+- Fiyatsız kişi kaydederken eski ve gelen gövde aynı süzgeçten geçip kıyaslanır; fiyat alanları (teklif, karar, senaryo, limit) sunucuda eski değerde kalır, istemci göndermez.
+- `finans.maliyet-oku` yalnız kg fiyatını açar; talaş satış fiyatı yalnız ona gelir, satın alma rolleri null görür.

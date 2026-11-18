@@ -415,6 +415,9 @@ export function arsivUyarilari(d: {
 }
 
 // Plan bilgisi (öncelik, başlangıç, teslim) ve kaynak yalnız açık emirde değişir.
+// 3396 Risk K-A: emri biten, iptal edilen ya da artık olmayan (silinmiş) hazırlık görevi kapanır; taslak, planlı ve başlamış emrinki sürer.
+export const hazirligiKapatanEmir = (durum: EmirDurumu | undefined): boolean => durum === undefined || durum === 'bitti' || durum === 'iptal';
+
 export const acikEmirIhlali = (durum: EmirDurumu, arsiv: boolean): string | null =>
   !arsiv && (durum === 'taslak' || durum === 'planli' || durum === 'basladi') ? null : ACIK_DEGIL;
 
@@ -648,6 +651,29 @@ export function gkkFasonu<T extends { id?: number; sira: number; operasyonTipiId
 export function firmaHatalisiIhlali(gkk: { gonderilen: number; donen: number; firmadaHatali: number } | null, adet: number): string | null {
   if (gkk === null) return FIRMA_HATALISI_GKK_DISI;
   return gkk.firmadaHatali + adet > gkk.gonderilen - gkk.donen ? FIRMA_HATALISI_ASIMI : null;
+}
+
+// 3250 b: rota yeniden dizilse de açık emir eski numarasını korur. Rotayı emre uygulamadan önce rota adımları emrin numarasına çevrilir:
+// operasyonu emirde olan adım emrin numarasını alır, kimliksiz eski iş emri aynı numaralı adımla eşlenir, emirde olmayan adım emrin en büyük
+// numarası + 10 alır (rota sırasıyla). Öncül listesi de aynı çeviriyle yazılır. Rotada kimlik yoksa rota olduğu gibi döner.
+export function rotayiEmreCevir<T extends { opNo: number; operasyonId?: number | null; onculler?: readonly { opNo: number }[] | null }>(
+  emir: readonly { opNo: number; operasyonId: number | null }[], rota: readonly T[],
+): T[] {
+  if (rota.every((r) => r.operasyonId == null)) return [...rota];
+  const kimlikle = new Map(emir.flatMap((e) => (e.operasyonId === null ? [] : [[e.operasyonId, e.opNo] as const])));
+  const kimliksiz = new Set(emir.filter((e) => e.operasyonId === null).map((e) => e.opNo));
+  let enBuyuk = Math.max(0, ...emir.map((e) => e.opNo));
+  const cevir = new Map<number, number>();
+  for (const r of rota) {
+    const n = r.operasyonId == null ? undefined : kimlikle.get(r.operasyonId);
+    if (n !== undefined) cevir.set(r.opNo, n);
+    else if (kimliksiz.has(r.opNo)) cevir.set(r.opNo, r.opNo);
+    else { enBuyuk += 10; cevir.set(r.opNo, enBuyuk); }
+  }
+  return rota.map((r) => ({
+    ...r, opNo: cevir.get(r.opNo)!,
+    ...(r.onculler ? { onculler: r.onculler.map((o) => ({ ...o, opNo: cevir.get(o.opNo) ?? o.opNo })) } : {}),
+  }));
 }
 
 export type IsEmriPlani = { koru: number[]; guncelle: number[]; sil: number[]; ekle: number[]; sira: number[] };
@@ -1986,3 +2012,14 @@ export function bekletmeBaslatmaIhlali(bekletmeZamani: string | null, kayitAni: 
   if (kayitAni !== null && Date.parse(kayitAni) < Date.parse(bekletmeZamani)) return null;
   return EMIR_BEKLEMEDE;
 }
+
+// 3396 a: özel hazırlık maddesinin kodu harflidir (1 -> a, 26 -> z, 27 -> aa); proje şablon kalemi kodu rakam kabul etmez.
+export function ozelMaddeKodu(n: number): string {
+  if (!Number.isInteger(n) || n < 1) throw new Error('Özel madde numarası geçersiz.');
+  let k = '';
+  for (let x = n; x > 0; x = Math.floor((x - 1) / 26)) k = String.fromCharCode(97 + ((x - 1) % 26)) + k;
+  return `ozel-${k}`;
+}
+// Durduran madde kapatılamaz (120-122 a); kısıt da reddeder, ileti burada.
+export const DURDURAN_KAPANMAZ = 'Durduran hazırlık maddesi kapatılamaz.';
+export const MADDE_DEGISTI = 'Madde bu arada değişti; listeyi yenileyip yeniden dene.';

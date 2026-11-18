@@ -256,7 +256,7 @@ export function TakimOmru() {
           {kip === 'renew' && (
             <YenilemePaneli d={d} c={secili} takimDegistirebilir={yetki.takimDegistirebilir} kartSec={(k) => cark.setSel(k)} degisti={kayit} />
           )}
-          {kip === 'anal' && res && <AnalizPaneli res={res} yazabilir={yetki.yazabilir} geri={() => kipSec('track')} degisti={kayit} />}
+          {kip === 'anal' && res && <AnalizPaneli res={res} yazabilir={yetki.yazabilir} maliyetGorur={yetki.maliyetGorur} geri={() => kipSec('track')} degisti={kayit} />}
         </div>
       </aside>
     </div>

@@ -5,7 +5,7 @@ import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
 import { tesisGunBasi, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
-import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
+import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
 import { KarsilamaOnizleme } from '../../ortak/arayuz/Karsilama.tsx';
 import { ayarEkranlari, gorunenAyarEkranlari, type AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -15,12 +15,14 @@ import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { gorulenDeger } from './gorulen.ts';
 import { BaglantiHazirligi } from './BaglantiHazirligi.tsx';
+import { EpostaAyarlari } from './EpostaAyarlari.tsx';
 import { GORUNUM_ANAHTARLARI, GorunumAyarlari } from './GorunumAyarlari.tsx';
 import { Guncelleme } from './Guncelleme.tsx';
 import { OrtakCihazlar } from './OrtakCihazlar.tsx';
 import { SayfaAyarlari } from './SayfaAyarlari.tsx';
 import { VeriTemizleme } from './VeriTemizleme.tsx';
 import { Yedekler } from './Yedekler.tsx';
+import { FirmaKodlari } from './FirmaKodlari.tsx';
 import { KurumLogosu, SurumBilgisi } from './KurumAyarlari.tsx';
 import './ayarlar.css';
 
@@ -279,7 +281,7 @@ function AyarSatiri({ ayar, mesgul, degistir }: { ayar: Ayar; mesgul: boolean; d
   );
 }
 
-export type AyarKategorisi = 'genel' | 'konum' | 'onay' | 'logo' | 'smartes' | 'pdks' | 'numara' | 'arkon' | 'gorunum';
+export type AyarKategorisi = 'genel' | 'konum' | 'onay' | 'logo' | 'smartes' | 'pdks' | 'numara' | 'arkon' | 'gorunum' | 'eposta';
 
 // Numara kalıpları türünden, ötekiler anahtardan ayrılır: dört göz ayarları modül adıyla biter, dış bağlantıların (Logo,
 // SmartES) ayarları kendi adlarıyla başlar, PDKS kart okuyucu ayarı `nizamiye.pdks-` ile; hepsi Bağlantılar'da kendi alt sekmesine düşer. Arkon ayarları (üretim anomalisi eşikleri)
@@ -294,15 +296,25 @@ export function ayarKategorisi({ anahtar, tur }: { anahtar: string; tur: Ayar['t
   if (anahtar.startsWith('nizamiye.pdks-')) return 'pdks';
   if (anahtar.endsWith('.dort-goz')) return 'onay';
   if (anahtar.startsWith('arkon.')) return 'arkon';
+  // E-posta gönderim ayarları E-posta sekmesinin Sunucu bölümündedir (3397).
+  if (anahtar.startsWith('bildirim.eposta')) return 'eposta';
   return 'genel';
 }
 
 // Önizleme satırı karşılama ayarlarının sonuncusunun altına girer.
 const KARSILAMA_SON_AYARI = 'kabuk.karsilama-kurban';
 
-function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string; kategori: AyarKategorisi; bossaGizle?: boolean }) {
+// Geri alınamayan sonucu olan ayar (e-posta gönderimini açmak kuyruğu hemen gönderir) önce onay penceresi açar: `onayMetni` null
+// dönmezse değer pencere onaylanınca yazılır. `kaydedilince` ayarı okuyan başka ekranın verisini yeniler.
+export interface AyarListesiEki {
+  onayMetni?: (anahtar: string, deger: AyarDegeri) => string | null;
+  kaydedilince?: () => void;
+}
+
+function AyarListesi({ baslik, kategori, bossaGizle = false, ek = {} }: { baslik: string; kategori: AyarKategorisi; bossaGizle?: boolean; ek?: AyarListesiEki }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
+  const [bekleyen, setBekleyen] = useState<{ anahtar: string; deger: AyarDegeri; metin: string } | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.liste, queryFn: () => api.get<AyarlarCevabi>('/ayarlar') });
 
   // Anahtar sunucunun kabul ettiği değeri gösterir: cevap gelene kadar yerinde kalır. Ekranın gördüğü değer `beklenen` olarak
@@ -315,6 +327,7 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
         onceki && { ayarlar: onceki.ayarlar.map((a) => (a.anahtar === guncel.anahtar ? guncel : a)) });
       // Başlıklar adı uzun süre önbellekte tutar; değiştiren kişi yenisini hemen görsün.
       if (guncel.anahtar === 'kabuk.kurum-adi') void istemci.invalidateQueries({ queryKey: ortakAnahtarlar.kurum });
+      ek.kaydedilince?.();
       bildir('tamam', 'Ayar kaydedildi.');
     },
     onError: (hata) => {
@@ -338,13 +351,24 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
               <AyarSatiri
                 ayar={ayar}
                 mesgul={degistir.isPending}
-                degistir={(deger) => degistir.mutate({ anahtar: ayar.anahtar, deger })}
+                degistir={(deger) => {
+                  const metin = ek.onayMetni?.(ayar.anahtar, deger) ?? null;
+                  if (metin === null) degistir.mutate({ anahtar: ayar.anahtar, deger });
+                  else setBekleyen({ anahtar: ayar.anahtar, deger, metin });
+                }}
               />
               {ayar.anahtar === KARSILAMA_SON_AYARI && <KarsilamaOnizleSatiri />}
             </Fragment>
           ))}
         </ul>
       )}
+      <OnayPenceresi
+        acik={bekleyen !== null} baslik={ayarlar?.find((a) => a.anahtar === bekleyen?.anahtar)?.baslik ?? 'Ayar'} onayMetni="Onayla"
+        onayla={() => { if (bekleyen !== null) degistir.mutate({ anahtar: bekleyen.anahtar, deger: bekleyen.deger }); setBekleyen(null); }}
+        vazgec={() => { setBekleyen(null); }}
+      >
+        {bekleyen?.metin}
+      </OnayPenceresi>
     </Kart>
   );
 }
@@ -435,16 +459,18 @@ function Formlar({ ekranlar }: { ekranlar: readonly AyarEkrani[] }) {
   );
 }
 
-type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'formlar' | 'baglanti' | 'moduller' | 'guncelleme' | 'yedek' | 'temizlik' | 'cihazlar';
+type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'firma' | 'numara' | 'formlar' | 'baglanti' | 'eposta' | 'moduller' | 'guncelleme' | 'yedek' | 'temizlik' | 'cihazlar';
 
 const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'genel', baslik: 'Genel', simge: 'gear' },
   { anahtar: 'gorunum', baslik: 'Görünüm ve hareket', simge: 'eye' },
   { anahtar: 'sayfalar', baslik: 'Sayfalar', simge: 'list' },
   { anahtar: 'onay', baslik: 'Onay kuralları', simge: 'eye' },
+  { anahtar: 'firma', baslik: 'Firma kodları', simge: 'building' },
   { anahtar: 'numara', baslik: 'Numara kuralları', simge: 'tag' },
   { anahtar: 'formlar', baslik: 'Formlar', simge: 'file' },
   { anahtar: 'baglanti', baslik: 'Bağlantılar', simge: 'upload' },
+  { anahtar: 'eposta', baslik: 'E-posta', simge: 'mail' },
   { anahtar: 'moduller', baslik: 'Modül ayarları', simge: 'grid' },
   { anahtar: 'guncelleme', baslik: 'Güncelleme', simge: 'download' },
   { anahtar: 'yedek', baslik: 'Yedekler', simge: 'box' },
@@ -470,9 +496,11 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
   const temizleyebilir = islemler.includes('ayarlar.veri-temizle');
   // Ortak cihaz sekmesi yalnız cihaz kaydedebilene (bayraklı yönetici) çıkar.
   const cihazKaydedebilir = islemler.includes('oturum.ortak-cihaz');
+  // E-posta sekmesi yalnız e-postayı yönetebilene çıkar; göremeyen ayar yazarı gönderim ayarlarını Genel'de bulur.
+  const epostaYonetir = islemler.includes('bildirim.eposta-yonet');
   const sekmeler = SEKMELER.filter((s) => (s.anahtar !== 'moduller' || moduller.length > 0) && (s.anahtar !== 'formlar' || formEkranlari.length > 0)
     && (s.anahtar !== 'guncelleme' || guncelleyebilir) && (s.anahtar !== 'yedek' || yedekleyebilir) && (s.anahtar !== 'temizlik' || temizleyebilir)
-    && (s.anahtar !== 'cihazlar' || cihazKaydedebilir));
+    && (s.anahtar !== 'cihazlar' || cihazKaydedebilir) && (s.anahtar !== 'eposta' || epostaYonetir));
   const [secili, setSecili] = useState<SayfaSekmesi>('genel');
   const gecerli = sekmeler.some((s) => s.anahtar === secili) ? secili : 'genel';
   return (
@@ -485,6 +513,7 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
             <AyarListesi baslik="Firma konumu" kategori="konum" bossaGizle />
             <AyarListesi baslik="Genel ayarlar" kategori="genel" bossaGizle />
             {genelde.map(([anahtar, l]) => l && <AyarListesi key={anahtar} baslik={l.baslik} kategori={l.kategori} bossaGizle />)}
+            {!epostaYonetir && <AyarListesi baslik="E-posta gönderimi" kategori="eposta" bossaGizle />}
             <SurumBilgisi />
           </>
         )}
@@ -493,16 +522,19 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
         {gecerli === 'onay' && (
           <AyarListesi baslik="Onay kuralları" kategori="onay" />
         )}
+        {gecerli === 'firma' && <FirmaKodlari yazar={islemler.includes('ayarlar.yaz')} />}
         {gecerli === 'numara' && (
           <>
             <p className="tc-ayar-aciklama">
-              Firma kodu ({'{FIRMA}'}) <a href="/malzemeler/ayarlar">Malzeme ayarlarında</a> tanımlanır. Kalıbı değiştirmek yalnız yeni kayıtları etkiler.
+              Firma kodu ({'{FIRMA}'}) Firma kodları sekmesinde tanımlanır; kalıpta varsa her firmanın sırası ayrıdır, firma kodu boş kayıt
+              varsayılan kodu alır, {'{FIRMA}'} boş kalırsa yanındaki tire de düşer. Kalıbı değiştirmek yalnız yeni kayıtları etkiler.
             </p>
             <AyarListesi baslik="Numara kuralları" kategori="numara" />
           </>
         )}
         {gecerli === 'formlar' && <Formlar ekranlar={formEkranlari} />}
         {gecerli === 'baglanti' && <Baglantilar ekranlar={baglantiEkranlari} hazirlikGorur={islemler.includes('saglik.ayrinti-oku')} />}
+        {gecerli === 'eposta' && <EpostaAyarlari gonderimAyarlari={(ek) => <AyarListesi baslik="Gönderim ayarları" kategori="eposta" ek={ek} />} />}
         {gecerli === 'moduller' && <ModulSekmeleri ekranlar={moduller} />}
         {gecerli === 'guncelleme' && <Guncelleme />}
         {gecerli === 'yedek' && <Yedekler />}

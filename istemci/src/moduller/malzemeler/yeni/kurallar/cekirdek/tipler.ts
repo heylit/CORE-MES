@@ -158,6 +158,7 @@ export interface Ayar {
   qrAdres?: string;
   firmaKodu?: string;
   firmaKoduTurleri?: string[];
+  firmaKodlari?: { kod: string; ad: string }[];
   [alan: string]: unknown;
 }
 

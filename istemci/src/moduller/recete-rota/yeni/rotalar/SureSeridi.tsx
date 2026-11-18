@@ -97,7 +97,7 @@ export function SureSeridi({ r, d, z, miktar, ymler = [] }: { r: RotaEkrani; d: 
                 if (!t) return null;
                 const op = r.duzen.h.op.get(a.opId);
                 const g = sure(a);
-                const ad = `${a.opNo === null ? 'Yeni adım' : `OP ${String(a.opNo)}`} ${op?.name ?? ''}`;
+                const ad = `OP ${String(a.seq)} ${op?.name ?? ''}`;
                 const ayrinti = t.fason ? `fason, ${a.terminGun ? `${String(a.terminGun)} gün` : 'termin girilmedi'}`
                   : t.sureYok ? 'süre hesaplanmadı: istasyon yok' : `hazırlık ${sayi(Math.round(g.hazirlikDk))} dk + işlem ${sayi(Math.round((g.dk ?? 0) - g.hazirlikDk))} dk`;
                 return (

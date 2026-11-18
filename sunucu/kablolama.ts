@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
-import { ayarDegistiDinle } from './moduller/ayarlar/disari.ts';
+import { ayarDegistiDinle, sistemAyariOku } from './moduller/ayarlar/disari.ts';
 import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import { kaydaBagliBelgeler } from './moduller/belge-merkezi/disari.ts';
@@ -11,7 +11,7 @@ import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonla
 import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
 import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyonlar/disari.ts';
-import { istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
+import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
@@ -32,7 +32,7 @@ import {
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, logoCrmCozucusuKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
 import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlari } from './moduller/rota/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -373,6 +373,8 @@ export function sunucununBaglari(): Bag[] {
     bag('istasyon silinecek -> kullanılmamış stok konumu', istasyonSilinecekDinle, stok.istasyonSilinecekYansit),
     bag('adım çıktısı çözücüsü -> stok', stok.adimCiktisiCozucusu, receteRota.adimCiktisi),
     bag('ara hal çözücüsü -> rota önizlemesi', rotaAraHalCozucusu, receteRota.adimAraHalleri),
+    bag('rota OP numaraları dizildi -> reçete adım bağları', rotaOpNumaralariDizildiDinle, receteRota.opNumaralariDizildiYansit),
+    bag('rota operasyon kodu -> plan iş emri satırı', uretimEmirleri.operasyonKoduCozucusu, isEmriOperasyonKodlari),
     bag('statü listesi -> stok', stok.statuListesiCozucusu, receteRota.receteRotaStatuleri),
     bag('parça revizyonu -> stok partisi', stok.parcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
@@ -416,6 +418,8 @@ export function sunucununBaglari(): Bag[] {
       .every((f) => typeof f === 'function') ? siparisEmirBaglari : undefined),
     // 3244 b, 3254 a: yeniden onaylanan siparişin termini bağlı proje bitişine ve başlamamış emir teslimine kayar; elle değişen bağsızdır.
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),
+    // 3396 Risk K-A: biten, iptal edilen ya da silinen emrin açık hazırlık görevi kademe döngüsünde iptal olur.
+    bag('emir durumu -> projeler hazırlık kademesi', projeler.kapaliEmirCozucusuKaydet, uretimEmirleri.hazirligiKapananEmirler),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
@@ -533,6 +537,10 @@ export function sunucununBaglari(): Bag[] {
         return sonuc;
       }
       : undefined),
+    // 3397: bildirim e-postasının adresi İK'daki iş e-postası (İK bildirim'i ithal eder: döngü olmasın diye burada).
+    bag('İK iş e-postası -> bildirim e-postası', bildirimEpostaAdresCozucusu, typeof ik.kisilerinIsEpostalari === 'function'
+      ? (db: Db, kisiIdleri: readonly number[]) => ik.kisilerinIsEpostalari(db, kisiIdleri) : undefined),
+    bag('sistem ayarları -> bildirim e-postası', bildirimEpostaAyarOkuyucusu, sistemAyariOku),
     // 2647 a, 2659: genel gider personel bileşenleri İK'dan; yalnız toplam, gerçek değerle (gizleme Finans'ta, 2652 a). Emilmeyen için
     // katılım üretim emirlerinden (İK onu ithal etmez).
     bag('İK dolaylı personel -> finans genel gider', dolayliPersonelCozucusu, typeof ik.dolayliPersonelToplamiYalnizHesapIcin === 'function'

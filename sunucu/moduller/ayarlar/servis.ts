@@ -2,17 +2,23 @@ import { crc32 } from 'node:zlib';
 import type { Db } from '#cekirdek/db.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
+import { kisitKorumali } from '#cekirdek/kisit.ts';
+import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { AYAR_ANAHTARLARI, AYAR_TANIMLARI, ayarAnahtariMi, ayarTanimi } from '#paylasilan/ayarlar.ts';
 import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
 import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
 import { tarihAraliginiCoz } from '#paylasilan/tarih-araligi.ts';
 import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { FirmaKodlariCevabi, FirmaKodu, FirmaKoduDuzenleGovdesi, FirmaKoduEkleGovdesi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayar, AyarlarCevabi, GirisSesiCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { ayarDegistiBildir } from './ayar-olaylari.ts';
 import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
-import { ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarKilitle, sayacArtir, simdikiYilAy } from './sorgular.ts';
+import {
+  ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarKilitle, firmaKoduEkle as firmaKoduSatiriEkle, firmaKoduGuncelle,
+  firmaKoduIdIleOku, firmaKoduOku, firmaKodlariniKilitle, firmaKodlariniOku, sayacArtir, simdikiYilAy, varsayilanFirmaKoduOku, varsayilaniBirak,
+} from './sorgular.ts';
 
 const DEGISTIR_YOLU = '/ayarlar/:anahtar/degistir';
 
@@ -56,13 +62,17 @@ export interface NumaraIstegi {
 
 // Numarayı isteyen modülün işleminde çalışır: sayaç satırı işlem bitene kadar kilitli kalır, aynı anda iki kayıt aynı
 // sırayı alamaz; kayıt geri alınırsa sıra da geri alınır.
+// 3399 a: kalıpta {FIRMA} varsa boş firma kodu varsayılan koda döner ve sayaç firma başına ayrı yürür.
 export async function numaraAl(db: Db, anahtar: NumaraAnahtari, istek: NumaraIstegi): Promise<string> {
   const kalip = await sistemAyariOku(db, anahtar);
   const { yil, ay } = await simdikiYilAy(db);
   const donem = donemAnahtari(numaraDonemi(kalip), yil, ay);
+  const firmali = kalip.includes('{FIRMA}');
+  const firma = firmali ? (istek.alanlar?.['FIRMA']?.trim() || (await varsayilanFirmaKoduOku(db)) || '') : '';
+  const alanlar = firmali ? { ...istek.alanlar, FIRMA: firma } : istek.alanlar;
   for (let i = 0; i < ATLAMA_EN_COK; i += 1) {
-    const sira = await sayacArtir(db, anahtar, donem);
-    const no = numaraKur(kalip, { yil, ay, sira, alanlar: istek.alanlar });
+    const sira = await sayacArtir(db, anahtar, donem, firma);
+    const no = numaraKur(kalip, { yil, ay, sira, alanlar });
     if (!(await istek.varMi(no))) return no;
   }
   throw new Error(`Numara üretilemedi: ${anahtar} kalıbında ${ATLAMA_EN_COK} dolu numara atlandı.`);
@@ -263,4 +273,70 @@ export async function girisLogosuOku(db: Db): Promise<IkiliCevap | null> {
   const [, tur = 'image/png', govde = ''] = parca;
   const veri = Buffer.from(govde, 'base64');
   return { tur, ad: `giris-logosu.${tur === 'image/jpeg' ? 'jpg' : tur.slice(6)}`, boyut: veri.length, akis: async function* () { yield veri; } };
+}
+
+// 3399 a: firma kodları. Okuma kodu seçen kayıtları yazanlara açıktır; yazma ayar yazma yetkisiyledir.
+const FIRMA_KODU_YOK = 'Firma kodu bulunamadı.';
+const FIRMA_KODU_KISITLARI = {
+  ayar_firma_kodu_kod_tek: { ileti: 'Bu firma kodu zaten var.', alan: 'kod' },
+  ayar_firma_kodu_kod_bicimi: { ileti: 'Firma kodu 2-5 büyük harf ya da rakam olmalı ve tür kısaltması olamaz.', alan: 'kod' },
+  ayar_firma_kodu_varsayilan_aktif: { ileti: 'Varsayılan firma kodu pasif yapılamaz.', alan: 'aktif' },
+} as const;
+
+export async function firmaKodlari(db: Db): Promise<FirmaKodlariCevabi> {
+  return { firmaKodlari: await firmaKodlariniOku(db) };
+}
+
+export async function firmaKoduEkle(db: Db, kisiId: number, g: FirmaKoduEkleGovdesi): Promise<FirmaKodu> {
+  await firmaKodlariniKilitle(db);
+  // İlk kod kendiliğinden varsayılandır: {FIRMA}'lı kalıp boş kayıtta varsayılana döner.
+  const varsayilan = g.varsayilan || (await varsayilanFirmaKoduOku(db)) === null;
+  if (varsayilan) await varsayilaniBirak(db, null, kisiId);
+  const satir = await kisitKorumali(FIRMA_KODU_KISITLARI, () => firmaKoduSatiriEkle(db, { kod: g.kod, ad: g.ad, varsayilan }, kisiId));
+  if (satir === null) throw new Error('Firma kodu eklenemedi.');
+  return satir;
+}
+
+export async function firmaKoduDuzenle(db: Db, kisiId: number, id: number, g: FirmaKoduDuzenleGovdesi): Promise<FirmaKodu> {
+  await firmaKodlariniKilitle(db);
+  const mevcut = await firmaKoduIdIleOku(db, id);
+  if (mevcut === null) throw bulunamadi(FIRMA_KODU_YOK);
+  if (mevcut.surum !== g.surum) throw eskiSurum();
+  if (mevcut.varsayilan && !g.varsayilan) throw dogrulama('Varsayılanı kaldırmak için başka bir firma kodunu varsayılan yapın.', 'varsayilan');
+  if (g.varsayilan && !g.aktif) throw dogrulama('Varsayılan firma kodu pasif yapılamaz; önce başka bir kodu varsayılan yapın.', 'aktif');
+  if (g.varsayilan && !mevcut.varsayilan) await varsayilaniBirak(db, id, kisiId);
+  return kisitKorumali(FIRMA_KODU_KISITLARI, () => surumluGuncelle({
+    guncelle: () => firmaKoduGuncelle(db, id, { ad: g.ad, varsayilan: g.varsayilan, aktif: g.aktif }, g.surum, kisiId),
+    varMi: async () => (await firmaKoduIdIleOku(db, id)) !== null,
+    bulunamadiIletisi: FIRMA_KODU_YOK,
+  }));
+}
+
+export function varsayilanFirmaKodu(db: Db): Promise<string | null> {
+  return varsayilanFirmaKoduOku(db);
+}
+
+// Kayıt formunun gönderdiği seçim: boşsa varsayılan, doluysa listede ve aktif olmalı. Kod yoksa (liste boş) null.
+// `eski` kaydın kayıtlı kodudur: pasife alınmış kod o kayıtta kalabilir, yeni seçilemez.
+export async function firmaKoduSecimi(db: Db, secilen: string | null | undefined, alan: string, eski: string | null = null): Promise<string | null> {
+  const kod = secilen?.trim().toUpperCase() || null;
+  if (kod === null) return varsayilanFirmaKoduOku(db);
+  if (kod === eski) return kod;
+  const satir = await firmaKoduOku(db, kod);
+  if (satir === null || !satir.aktif) throw dogrulama(`"${kod}" firma kodu Sistem Ayarları > Firma kodları listesinde aktif değil.`, alan);
+  return satir.kod;
+}
+
+// Malzeme kartının stok kodu öneki için: kod listede var mı (pasif dahil). Eski kartın kodu pasife alınsa da tanınır.
+export async function firmaKoduVarMi(db: Db, kod: string): Promise<boolean> {
+  return (await firmaKoduOku(db, kod)) !== null;
+}
+
+export async function firmaKoduListesi(db: Db): Promise<string[]> {
+  return (await firmaKodlariniOku(db)).map((f) => f.kod);
+}
+
+// Seçim listesi: aktif kodlar, kod ve adıyla (malzeme ekranı genel ayarla alır).
+export async function firmaKoduSecenekleri(db: Db): Promise<{ kod: string; ad: string }[]> {
+  return (await firmaKodlariniOku(db)).filter((f) => f.aktif).map((f) => ({ kod: f.kod, ad: f.ad }));
 }

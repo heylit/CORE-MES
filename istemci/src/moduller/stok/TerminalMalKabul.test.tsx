@@ -7,6 +7,7 @@ import type { AcikSiparisSatirlariCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
 import { BEKLEYEN_SAYFA_BOYU, TerminalMalKabul } from './disari.ts';
+import { donenEksigi, fasonDonusGovdesi, firmadaKalan } from './TerminalFasonDonusu.tsx';
 
 // 2013 a, 2027: terminaldeki mal kabul Stok'un kaydını yazar; stok.giris olmayan kişi listeyi de görmez.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -81,5 +82,36 @@ describe('terminal mal kabulü (2027)', () => {
     expect(await screen.findByText('Mal kabul için stok girişi yetkisi gerekir.')).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/oturum')).toBe(true);
     expect(istekler.some((i) => i.yol.startsWith('/stok/'))).toBe(false);
+  });
+
+});
+
+// 3388 a: fason dönüşünün kuralları; terminaldeki akış TerminalKabul.test.tsx'te. Değerler uydurmadır.
+const FASON_ACIK: AcikSiparisSatirlariCevabi = { satirlar: [
+  satir(31, 901, 'ORN-Çubuk'),
+  { ...satir(41, 950, 'ORN-Flanş', 'hizmet'), kalanMiktar: '60.000', isEmriId: 77, emirNo: 'ORN-UE-1' },
+  satir(42, 951, 'ORN-Saf hizmet', 'hizmet'),
+] };
+const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 40, adim: 'Kaplama', gonderilen: 60, donen: 10, hurda: 2, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş kaplamalı', birim: 'adet' }, statulu: false };
+
+describe('fason dönüşü kuralları (3388 a)', () => {
+  it('kurallar: firmada kalan, fazla adet ve gövdeler', () => {
+    expect(firmadaKalan(IS)).toBe(48);
+    expect(donenEksigi('', 48)).toBe('Dönen adedi girin.');
+    expect(donenEksigi('49', 48)).toContain('en çok 48');
+    expect(donenEksigi('0', 48)).not.toBeNull();
+    expect(donenEksigi('48', 48)).toBeNull();
+    const s = FASON_ACIK.satirlar[1]!;
+    expect(fasonDonusGovdesi(s, 'dondu', IS, '12')).toEqual({ tur: 'satin_alma', satirlar: [{ malzemeId: 960, miktar: '12', parti: null, siparisSatirId: 41, fasonIsi: { isEmriId: 77 }, ambalaj: null }] });
+    expect(fasonDonusGovdesi(s, 'donmedi', null, '')).toEqual({ tur: 'satin_alma', satirlar: [{ malzemeId: 950, miktar: '60.000', siparisSatirId: 41 }] });
+  });
+
+  it('fason satırı listede yalnız bilgi olarak durur; saf hizmet satırı listede yok', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/acik-siparis-satirlari': () => json(200, FASON_ACIK) });
+    ac();
+    const liste = await screen.findByRole('list', { name: 'Bekleyen kabuller' });
+    expect(within(liste).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(liste).getByText('ORN-Flanş · fason dönüşü')).toBeTruthy();
+    expect(within(liste).queryByText(/Saf hizmet/)).toBeNull();
   });
 });
