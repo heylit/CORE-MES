@@ -93,19 +93,19 @@ describe('PlanlamaMotoru', () => {
     const kaydet = vi.fn(async () => null);
     ac({ c, komut: { kaydet, degistir: vi.fn(() => true) } as unknown as CalismaKomutu });
     const cubuk = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
-    const d = within(cubuk).getByRole('button', { name: 'Planı güncelle' });
-    expect(d.textContent).toBe('Planı güncelle (1)');
+    const d = within(cubuk).getByRole('button', { name: 'Veri değişikliklerini uygula' });
+    expect(d.textContent).toBe('Veri değişikliklerini uygula (1)');
     expect(within(cubuk).queryByText('Motor kapalı')).toBeNull();
     await act(async () => { fireEvent.click(d); });
     expect(kaydet).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(KAYDEDILEMEDI)).toBeTruthy();
     cleanup();
     ac({ c, yaz: false, komut: { kaydet, degistir: vi.fn() } as unknown as CalismaKomutu });
-    expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Veri değişikliklerini uygula' })).toBeNull();
     cleanup();
     const g = ornekCalisma(); g.dataVer = g.plan?.dataVer ?? 0;
     ac({ c: g, komut: { kaydet, degistir: vi.fn() } as unknown as CalismaKomutu });
-    expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Veri değişikliklerini uygula' })).toBeNull();
   });
 
   // 3317-1b: Kokpit'in şeridindeki değişiklik listesi Motor'da da aynı yerdedir; Motor yalnız gösterir, düzeltme Kokpit'tedir.
@@ -121,14 +121,14 @@ describe('PlanlamaMotoru', () => {
     // Plan durumu rozeti ve olay sayısı satırda ikinci kez yazılmaz; toplu düğme sayfanın birincilidir.
     expect(within(cubuk).queryByText('Veri değişti')).toBeNull();
     expect(cubuk.querySelector('[data-olaylar]')).toBeNull();
-    expect(within(cubuk).getByRole('button', { name: 'Planı güncelle' }).className).toContain('tc-dugme-birincil');
+    expect(within(cubuk).getByRole('button', { name: 'Veri değişikliklerini uygula' }).className).toContain('tc-dugme-birincil');
     expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
-    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri gör' }));
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri aç' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
     expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem').length).toBe(1);
     expect(within(within(liste).getByRole('region', { name: 'Sahada oldu' })).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Duruş: ORN-T01', 'Malzemenin geliş tarihi değişti: 3']);
-    expect(within(liste).queryByRole('button', { name: 'Göster' })).toBeNull();
-    expect(liste.textContent).toContain('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
+    expect(within(liste).queryByRole('button', { name: 'Emre git' })).toBeNull();
+    expect(liste.textContent).toContain('"Veri değişikliklerini uygula (1)" başka sayfalarda yapılan 1 değişikliği plana işler');
     expect(liste.textContent).toContain('emre gitmek ve düzeltmek Kokpit\'tedir');
     fireEvent.click(within(liste).getByRole('button', { name: 'Kokpit\'te gör ve düzelt' }));
     expect(git).toHaveBeenCalledWith('kokpit');
@@ -141,7 +141,7 @@ describe('PlanlamaMotoru', () => {
     ac({ c: g, yaz: false, dis: { id: 'ORN-dis', ne: 'Ürün rotası değişti', ayrinti: '', kim: '', t: 0, isler: ['*'], geri: null, dis: true } });
     const ozet = document.querySelector('[data-degisiklik-ozeti]') as HTMLElement;
     expect(ozet.textContent).toContain('1 veri');
-    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri gör' }));
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Değişiklikleri aç' }));
     const veri = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Veri değişti' });
     expect(within(veri).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Ürün rotası değişti']);
     expect(veri.textContent).toContain('Başka sayfa');
@@ -155,8 +155,8 @@ describe('PlanlamaMotoru', () => {
     expect(within(ozet).queryByRole('button')).toBeNull();
     cleanup();
     ac({ yaz: false });
-    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri gör' }));
-    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).not.toContain('Planı güncelle');
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
+    expect(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' }).textContent).not.toContain('Veri değişikliklerini uygula');
   });
 
   it('plan yazma yetkisi yoksa Planı kur görünmez ya da pasif kalır', () => {

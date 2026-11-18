@@ -18,7 +18,7 @@ function kur(ek: { w?: Record<string, unknown>; gercek?: Record<string, unknown>
 const zaman = (t: number): string => `01.01 ${String(Math.round(t))}`;
 function ciz(x: ReturnType<typeof kur>, acik: string | null, ek: Partial<Parameters<typeof ListeDuzeni>[0]> = {}) {
   const ac = vi.fn(), planla = vi.fn(), yenidenPlanla = vi.fn();
-  render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik={acik} ac={ac} zaman={zaman} mesgul={false} planla={planla} yenidenPlanla={yenidenPlanla} hamle={null} surum={4} tahta={<div data-test-tahta="" />} satirBirincil {...ek} />);
+  render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik={acik} ac={ac} zaman={zaman} mesgul={false} planla={planla} yenidenPlanla={yenidenPlanla} hamle={null} surum={4} tahta={<div data-test-tahta="" />} satirBirincil adimSec={vi.fn()} seciliIs={null} {...ek} />);
   return { ac, planla, yenidenPlanla };
 }
 
@@ -127,6 +127,20 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     cleanup();
     ciz(kur(), '2');
     expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
+  });
+
+  it('planda yeri olan adım düğmedir ve basınca emri ile işi bildirir; seçili adım basılı görünür; yeri olmayan adım düğme değildir', () => {
+    const x = yarimKur({ kod: 'aday' });
+    const adimSec = vi.fn();
+    const e = x.kartlar.find((y) => y.kok === '3')?.emirler[0];
+    const planli = e?.adimlar.find((a) => x.m.isler[a.id])?.id ?? '';
+    ciz(x, '3', { adimSec, seciliIs: planli });
+    const d = document.querySelector<HTMLButtonElement>(`.tc-pyq-ld-adimlar button[data-adim="${planli}"]`);
+    expect(d?.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(d!);
+    expect(adimSec).toHaveBeenCalledWith(e?.id, planli);
+    expect(document.querySelector(`[data-yeri-yok="${x.eksik}"]`)?.closest('button')).toBeNull();
+    expect(document.querySelectorAll('.tc-pyq-ld-adimlar button').length).toBe((e?.adimlar.length ?? 0) - 1);
   });
 
   it('süzgeçle eşleşen sipariş yoksa bunu söyler', () => {

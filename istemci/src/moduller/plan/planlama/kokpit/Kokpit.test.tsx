@@ -219,12 +219,12 @@ describe('Kokpit', () => {
     ac({ calisma: ortak });
     await screen.findByRole('region', { name: 'Değişiklikleriniz' });
     await waitFor(() => { expect((document.querySelector('[data-degisiklik-ozeti] b') as HTMLElement).textContent).toBe('1 değişiklik'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
     const veri = within(liste).getByRole('region', { name: 'Veri değişti' });
     expect(within(veri).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent)).toEqual(['Değişti ORN-b']);
     expect(within(veri).getAllByRole('button', { name: 'Etkisini gör' })).toHaveLength(1);
-    expect(liste.textContent).toContain('"Planı güncelle (2)"');
+    expect(liste.textContent).toContain('"Veri değişikliklerini uygula (2)"');
     expect(liste.textContent).toContain('1 veri değişikliği taslağınızda uygulandı, listede durmaz');
   });
 
@@ -502,11 +502,11 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Tümü \(/ })).toBeNull();
     const ozet = document.querySelector('[data-test-yuva="satir"] [data-degisiklik-ozeti]') as HTMLElement;
-    expect(ozet.textContent).toBe('3 değişiklik1 veri · 2 sahaGör ve uygula');
+    expect(ozet.textContent).toBe('3 değişiklik1 veri · 2 sahaAç');
     const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
     expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 değişiklik');
     expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
-    const dugme = within(ozet).getByRole('button', { name: 'Gör ve uygula' });
+    const dugme = within(ozet).getByRole('button', { name: 'Değişiklikleri aç' });
     expect(dugme.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(dugme);
     const liste = within(document.querySelector('[data-test-yuva="alt"]') as HTMLElement).getByRole('region', { name: 'Planı etkileyen değişiklikler' });
@@ -520,8 +520,8 @@ describe('Kokpit', () => {
     expect(satirlar[1]?.textContent).toContain('Satın alma');
     // Veri değişikliği emre bağlı değildir ("Göster" yok), etkisi satırdan görülür (2. adım); toplu düğmenin ne uygulayacağı notta yazar.
     expect(within(within(liste).getByRole('region', { name: 'Veri değişti' })).getAllByRole('button').map((x) => x.textContent)).toEqual(['Etkisini gör']);
-    expect(liste.textContent).toContain('"Planı güncelle (1)" yalnız "Veri değişti" satırlarının');
-    fireEvent.click(within(satirlar[1] as HTMLElement).getByRole('button', { name: 'Göster' }));
+    expect(liste.textContent).toContain('"Veri değişikliklerini uygula (1)" başka sayfalarda yapılan 1 değişikliği plana işler');
+    fireEvent.click(within(satirlar[1] as HTMLElement).getByRole('button', { name: 'Emre git' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
     expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
     vi.unstubAllGlobals();
@@ -536,9 +536,9 @@ describe('Kokpit', () => {
     expect(within(ozet).queryByRole('button')).toBeNull();
     cleanup();
     ac({}, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
-    expect(liste.textContent).not.toContain('Planı güncelle');
+    expect(liste.textContent).not.toContain('Veri değişikliklerini uygula');
     // Yazamayan kişi taslak açamaz: satırın etkisi de istenemez (2. adım).
     expect(within(liste).getAllByRole('listitem').length).toBeGreaterThan(0);
     expect(within(liste).queryByRole('button', { name: 'Etkisini gör' })).toBeNull();
@@ -552,18 +552,18 @@ describe('Kokpit', () => {
     const dis = kaynakSatiri({ alanlar: ['urunler'], farklar: [], kesik: false } as unknown as Parameters<typeof kaynakSatiri>[0], 0, c.dataVer);
     ac({ calisma: c }, false, dis);
     expect((document.querySelector('[data-degisiklik-ozeti] b') as HTMLElement).textContent).toBe('1 değişiklik');
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     const veri = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Veri değişti' });
     expect(within(veri).getAllByRole('listitem')).toHaveLength(1);
     expect(veri.textContent).toContain(dis.ne);
     cleanup();
     ac({}, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     const once = within(screen.getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem').length;
     cleanup();
     const kayitli = bekleyenListesi(ornekCalisma())[0]!;
     ac({}, false, kayitli);
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     expect(within(screen.getByRole('region', { name: 'Veri değişti' })).getAllByRole('listitem')).toHaveLength(once);
   });
 
@@ -579,7 +579,7 @@ describe('Kokpit', () => {
     expect(serit.querySelector('[data-kart="3"]')).toBeNull();
     expect(serit.querySelector('[data-kart="sp:50"] [data-olay]')?.textContent).toContain('1 değişiklik');
     fireEvent.click(serit.querySelector('[data-kart="sp:50"]') as HTMLElement);
-    fireEvent.click(screen.getByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri aç' }));
     const liste = screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' });
     expect(liste.querySelectorAll('li')).toHaveLength(3);
     fireEvent.click(within(liste).getByRole('button', { name: 'Yalnız ORN-SP-50' }));
@@ -1376,7 +1376,7 @@ describe('Kokpit Planla menüsü (3335-2)', () => {
     const c = ornekCalisma();
     const ops = Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string; S: number; C: number; act?: number }> }).ops).map(([id, r]) => [id, { ...r, act: 0, S: r.S - 5000, C: r.C - 5000 }]));
     const komutlar = kur({ ...c, plan: { ...c.plan, ops } } as typeof c, SAHA);
-    fireEvent.click(await screen.findByRole('button', { name: 'Gör ve uygula' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri aç' }));
     const geride = within(screen.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).getByRole('region', { name: 'Plan geride' });
     const satir = within(geride).getAllByRole('listitem')[0] as HTMLElement;
     fireEvent.click(within(satir).getByRole('button', { name: 'Etkisini gör' }));
@@ -1508,5 +1508,67 @@ describe('Kokpit fason adımında firma tarihi (3330-3c)', () => {
     cleanup();
     ac({ depo: { ...DEPO, durum: null } as unknown as PlanlamaDeposu });
     expect(await satirNotu()).toBeNull();
+  });
+});
+
+// Kokpit tek görünümdür: ayrıntılı düzene geçiş yoktur; araçları liste düzeninin "Diğer" menüsünden, liste düzeninin içinde açılır.
+describe('Kokpit tek görünüm', () => {
+  function SadeKokpit() {
+    const [secim, kur] = useState<PlanlamaSecimi>(BOS_SECIM);
+    return (
+      <Kokpit
+        depo={DEPO} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+        olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={secim} sec={(x) => { kur((y) => ({ ...y, ...x })); }}
+      />
+    );
+  }
+  const sadeAc = (): void => { render(<MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali><SadeKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>); };
+  const diger = (ad: string): HTMLElement => {
+    if (!screen.queryByRole('menu', { name: 'Diğer' })) fireEvent.click(screen.getByRole('button', { name: 'Diğer' }));
+    return within(screen.getByRole('menu', { name: 'Diğer' })).getByText(ad).closest('button')!;
+  };
+
+  it('"Diğer" menüsünde ayrıntılı Kokpit yoktur; Ayarlar ile Duruş ve mesai liste düzeninde panel olarak açılır, biri ötekini kapatır', () => {
+    sadeAc();
+    fireEvent.click(screen.getByRole('button', { name: 'Diğer' }));
+    expect(screen.getByRole('menu', { name: 'Diğer' }).textContent).not.toContain('Ayrıntılı Kokpit');
+    fireEvent.click(diger('Ayarlar'));
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Siparişler' })).toBeTruthy();
+    expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
+    fireEvent.click(diger('Duruş ve mesai'));
+    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
+    expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
+  });
+
+  it('Matris liste düzeninde açılır; "Listeye dön" sipariş tablosunu geri getirir', () => {
+    sadeAc();
+    expect(screen.queryByRole('button', { name: 'Listeye dön' })).toBeNull();
+    fireEvent.click(diger('Matris'));
+    expect(screen.getByRole('region', { name: 'Matris' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Siparişler' })).toBeNull();
+    expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
+    fireEvent.click(screen.getByRole('button', { name: 'Listeye dön' }));
+    expect(screen.getByRole('table', { name: 'Siparişler' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Matris' })).toBeNull();
+  });
+
+  it('açık satırda planda yeri olan adıma basınca iş seçilir; yeniden basınca bırakılır', () => {
+    // Tahta seçilen işi görünüme getirirken CSS.escape kullanır; test ortamında yoktur.
+    vi.stubGlobal('CSS', { escape: (x: string) => x });
+    sadeAc();
+    const satir = document.querySelector('.tc-pyq-ld-kart:not([data-d="plansiz"]) [data-kart]')!;
+    fireEvent.click(within(satir as HTMLElement).getByRole('button'));
+    const adim = document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[data-adim]')!;
+    expect(adim.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(adim);
+    expect(document.querySelector(`.tc-pyq-ld-adimlar button[data-adim="${adim.dataset['adim'] ?? ''}"]`)?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(1);
+    fireEvent.click(document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[aria-pressed="true"]')!);
+    expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(0);
+    // Satır açık kalır: adımı bırakmak siparişi kapatmaz.
+    expect(document.querySelector('.tc-pyq-ld-adimlar')).not.toBeNull();
+    vi.unstubAllGlobals();
   });
 });
