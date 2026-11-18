@@ -1,12 +1,14 @@
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { KademeBirimi, KademeSayaci } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
+import {
+  KADEME_ADLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, kaynakKademeleri, type KademeBirimi, type KademeSayaci,
+} from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import {
   BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSimgesi, type EpostaTabloAlani, type EpostaZamani,
+  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSimgesi, type EpostaTabloAlani, type EpostaZamani,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 
 // BIL-1: mesaj kanalı kapalıdır (223 a Mesaj kanalını dördüncü aşamaya koydu). E-posta kanalı burada kapalı yazılır; açıklığı ortam
@@ -14,10 +16,12 @@ import {
 export const ACIK_KANALLAR: Record<BildirimKanali, boolean> = { mesaj: false, eposta: false };
 
 // BIL-6: gönderilen yol türün ekranı ya da onun altıdır; başka ekrana giden bildirim alıcıya açılmayan sayfa gösterebilirdi.
+// Sorgu ekranı değiştirmez (`/malzemeler?kart=` aynı ekranda kaydı açar); denetim yolun sorgusuz kısmına bakar (3431).
 export const yolTureUyar = (tur: BildirimTuru, yol: string | null | undefined): boolean => {
   if (yol === null || yol === undefined) return true;
   const kok = BILDIRIM_TURLERI[tur].yol;
-  return yol === kok || yol.startsWith(`${kok}/`);
+  const ekran = yol.split('?')[0] ?? '';
+  return ekran === kok || ekran.startsWith(`${kok}/`);
 };
 
 export const kaynakModulu = (tur: BildirimTuru): string => tur.slice(0, tur.indexOf('.'));
@@ -181,38 +185,107 @@ const ONEM_RENGI: Record<BildirimOnemi, { serit: string; zemin: string }> = {
 };
 
 export interface EpostaGovdesi { konu: string; metin: string; html: string }
+// 3431 a: kademeli uyarının basamağı (K2-K5) ve 3397 tetikleyicisinin yükseltmesi e-postada görünür.
+export interface EpostaKademesi { no: number; toplam: number; ad: string }
 export interface EpostaGirdisi {
   sablon: { konuKalibi: string; govde: string; tabloAlanlari: readonly EpostaTabloAlani[] };
   degerler: EpostaDegerleri;
   baslik: string;
   onem: BildirimOnemi;
   simgeVar: boolean;
+  // Üst bilgideki ad (Sistem Ayarları > gönderen adı); verilmezse CORE MES.
+  gonderenAdi?: string | undefined;
+  // Onay türünde Onayla (ve türde ret varsa Reddet) düğmesi; bağlantı yoksa düğme yok.
+  onay?: { reddet: boolean } | null | undefined;
+  kademe?: EpostaKademesi | null | undefined;
+  // Yükseltme cümlesi: "2 gün içinde kapanmazsa ... de alır" ya da "yükseltildi".
+  yukseltme?: string | null | undefined;
+}
+
+// 3431 a: kaynak türden kademe basamağı; kademeli uyarı türü değilse null.
+const KADEME_BASAMAKLARI: ReadonlyMap<string, 2 | 3 | 4 | 5> = new Map(
+  KADEME_KAYNAK_ANAHTARLARI.flatMap((k) => kaynakKademeleri(k).map((n) => [kademeTuru(k, n) as string, n] as const)),
+);
+export function turKademesi(tur: string): EpostaKademesi | null {
+  const n = KADEME_BASAMAKLARI.get(tur);
+  return n === undefined ? null : { no: n, toplam: 5, ad: KADEME_ADLARI[n] };
+}
+
+const ONEM_ADI: Record<BildirimOnemi, string> = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' };
+
+// BIL-51 (3431 a): konu satırının başında önem (yalnız acil), onay ve kademe etiketi. Bilgi ve uyarıda etiket yok: her e-postada
+// "[UYARI]" görmek önemi değersizleştirir.
+export function konuEtiketi(g: Pick<EpostaGirdisi, 'onem' | 'onay' | 'kademe'>): string | null {
+  const parca = [g.onem === 'acil' ? 'ACİL' : null, g.onay ? 'Onay' : null, g.kademe ? `Kademe ${String(g.kademe.no)}/${String(g.kademe.toplam)}` : null]
+    .filter((x): x is string => x !== null);
+  return parca.length === 0 ? null : `[${parca.join(' · ')}]`;
 }
 
 // BIL-43: e-postanın konusu, düz metni ve HTML'i. Tablo yalnız seçili ve değeri olan alanlardan kurulur; HTML'de her değer kaçışlanır.
+// 3431 a: ortak üst bilgi (gönderen adı, önem), kademe göstergesi, yükseltme cümlesi, onay düğmeleri. Düğmeler yalnız uygulamadaki
+// kaydı açar; adres onay vermez (iletilen e-posta yetki taşımaz).
 export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
-  const konu = sablonDoldur(g.sablon.konuKalibi, g.degerler).replace(/\s*·\s*$/, '').trim() || g.baslik;
+  const etiket = konuEtiketi(g);
+  const sablonKonusu = sablonDoldur(g.sablon.konuKalibi, g.degerler).replace(/\s*·\s*$/, '').trim() || g.baslik;
+  const konu = etiket === null ? sablonKonusu : `${etiket} ${sablonKonusu}`;
   const govde = sablonDoldur(g.sablon.govde, g.degerler).trim();
   const satirlar = g.sablon.tabloAlanlari.flatMap((a) => {
     const d = g.degerler[a];
     return d === null || d === '' ? [] : [[EPOSTA_TABLO_ADLARI[a], d] as const];
   });
   const baglanti = g.degerler.kayit_baglantisi;
-  const alt = 'Bu e-posta CORE MES tarafından kurum içi posta sunucusundan gönderildi. Almak istemiyorsan Profil > Bildirim tercihleri\'nden kapatabilirsin.';
-  const metin = [govde, '', ...satirlar.map(([a, d]) => `${a}: ${d}`), ...(baglanti === null ? [] : ['', `Kayda git: ${baglanti}`]), '', '--', alt].join('\n');
+  const onay = g.onay && baglanti !== null ? g.onay : null;
+  const ad = g.gonderenAdi?.trim() || 'CORE MES';
+  const kademeMetni = g.kademe ? `Kademe ${String(g.kademe.no)} / ${String(g.kademe.toplam)}: ${g.kademe.ad}` : null;
+  const altlar = [
+    `Bu e-posta ${ad === 'CORE MES' ? 'CORE MES' : `CORE MES tarafından ${ad} adına`} gönderildi.`,
+    ...(onay !== null ? ['Düğmeler CORE MES\'te bu kaydı açar; onay girişle ve kendi yetkinle verilir. Bu e-postayı iletmek kimseye onay yetkisi vermez.'] : []),
+    'Almak istemiyorsan Bildirim Merkezi > Tercihler sayfasından kapatabilirsin.',
+  ];
+  const metin = [
+    govde, '', ...[kademeMetni, g.yukseltme ?? null].filter((x): x is string => x !== null && x !== ''), ...satirlar.map(([a, d]) => `${a}: ${d}`),
+    ...(baglanti === null ? [] : onay !== null
+      ? ['', `Onayla: ${onayEylemiYolu(baglanti, 'onayla')}`, ...(onay.reddet ? [`Reddet: ${onayEylemiYolu(baglanti, 'reddet')}`] : []), `Kaydı aç: ${baglanti}`]
+      : ['', `Kayda git: ${baglanti}`]),
+    '', '--', ...altlar,
+  ].join('\n');
   const r = ONEM_RENGI[g.onem];
   const tablo = satirlar.length === 0 ? '' : `<table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #e3dfd6;border-collapse:collapse;margin:12px 0;width:100%">${
     satirlar.map(([a, d]) => `<tr><td style="padding:7px 10px;border-bottom:1px solid #eeeeee;color:#6d685d;width:40%;font-size:13px">${kacis(a)}</td><td style="padding:7px 10px;border-bottom:1px solid #eeeeee;color:#1c1a14;font-size:13px">${kacis(d)}</td></tr>`).join('')}</table>`;
   const simge = g.simgeVar ? `<td style="width:56px;vertical-align:middle"><img src="cid:simge" width="44" height="44" alt="" style="display:block;border-radius:10px;background:${r.zemin}"></td>` : '';
-  const dugme = baglanti === null ? '' : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="display:inline-block;background:#1c1a14;color:#f6c400;border:2px solid #f6c400;padding:10px 16px;border-radius:8px;font-weight:bold;text-decoration:none">Kayda git</a></p>`;
+  const dugmeStili = (zemin: string, yazi: string, kenar: string) =>
+    `display:inline-block;background:${zemin};color:${yazi};border:2px solid ${kenar};padding:10px 16px;border-radius:8px;font-weight:bold;text-decoration:none;margin:0 8px 8px 0`;
+  const dugme = baglanti === null ? '' : onay !== null
+    ? `<p style="margin:16px 0 0"><a href="${kacis(onayEylemiYolu(baglanti, 'onayla'))}" style="${dugmeStili('#1f7a4a', '#ffffff', '#1f7a4a')}">Onayla</a>`
+      + (onay.reddet ? `<a href="${kacis(onayEylemiYolu(baglanti, 'reddet'))}" style="${dugmeStili('#ffffff', '#c62f45', '#c62f45')}">Reddet</a>` : '')
+      + `<a href="${kacis(baglanti)}" style="${dugmeStili('#ffffff', '#1c1a14', '#1c1a14')}">Kaydı aç</a></p>`
+    : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="${dugmeStili('#1c1a14', '#f6c400', '#f6c400')}">Kayda git</a></p>`;
+  const kademeCubugu = g.kademe ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:4px 0 2px"><tr>${
+    Array.from({ length: g.kademe.toplam }, (_, i) => `<td style="height:6px;padding:0 2px"><div style="height:6px;border-radius:3px;background:${i < (g.kademe?.no ?? 0) ? r.serit : '#e3dfd6'}"></div></td>`).join('')
+  }</tr></table><div style="font-size:12px;color:#6d685d;margin-bottom:8px">${kacis(kademeMetni ?? '')}</div>` : '';
+  const yukseltme = g.yukseltme ? `<div style="font-size:12.5px;color:#6d685d;margin:0 0 10px">${kacis(g.yukseltme)}</div>` : '';
   const paragraflar = govde.split(/\n{2,}/).map((p) => `<p style="margin:0 0 10px">${kacis(p).replace(/\n/g, '<br>')}</p>`).join('');
+  const ust = `<tr><td style="padding:10px 22px;background:#1c1a14;border-radius:6px 6px 0 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr>`
+    + `<td style="color:#ffffff;font-weight:bold;font-size:14px">${kacis(ad)}</td>`
+    + `<td style="text-align:right"><span style="display:inline-block;background:${r.zemin};color:${r.serit};font-size:12px;font-weight:bold;padding:2px 8px;border-radius:999px">${ONEM_ADI[g.onem]}</span></td></tr></table></td></tr>`;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="color-scheme" content="light"></head><body style="margin:0;padding:16px;background:#f1eee7">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;margin:0 auto;background:#ffffff;border-radius:6px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#1c1a14">`
-    + `<tr><td style="height:6px;background:${r.serit};border-radius:6px 6px 0 0"></td></tr><tr><td style="padding:20px 22px">`
+    + `${ust}<tr><td style="height:6px;background:${r.serit}"></td></tr><tr><td style="padding:20px 22px">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:14px"><tr>${simge}<td style="vertical-align:middle"><div style="font-size:18px;font-weight:bold">${kacis(g.baslik)}</div>`
     + `<div style="font-size:12px;color:#6d685d">${kacis([g.degerler.kayit_no, g.degerler.tarih].filter((x) => x !== null && x !== '').join(' · '))}</div></td></tr></table>`
-    + `${paragraflar}${tablo}${dugme}</td></tr><tr><td style="padding:12px 22px;background:#f3f1ec;color:#6d685d;font-size:12.5px;border-radius:0 0 6px 6px">${kacis(alt)}</td></tr></table></body></html>`;
+    + `${kademeCubugu}${yukseltme}${paragraflar}${tablo}${dugme}</td></tr><tr><td style="padding:12px 22px;background:#f3f1ec;color:#6d685d;font-size:12.5px;border-radius:0 0 6px 6px">${altlar.map(kacis).join('<br>')}</td></tr></table></body></html>`;
   return { konu, metin, html };
+}
+
+// BIL-52 (3431 a): yükseltme cümlesi. İlk alıcıya "kapanmazsa kime gideceği", yükseltmeyle alana "neden aldığı" yazılır. Kişi adı yazılmaz,
+// yalnız rol adı; yalnız kişi seçilmişse "yöneticiler" denir.
+export function yukseltmeCumlesi(kademe: number, yukseltGun: number | null, rolAdlari: readonly string[], kisiVar: boolean): string | null {
+  if (yukseltGun === null) return null;
+  const gun = `${String(yukseltGun)} gün`;
+  if (kademe === 1) return `Bu kayıt ${gun}dür kapanmadığı için sana da gönderildi.`;
+  if (rolAdlari.length === 0 && !kisiVar) return null;
+  const kime = rolAdlari.length === 0 ? 'yöneticiler' : rolAdlari.length === 1 ? `${rolAdlari[0] ?? ''} rolü` : `${rolAdlari.join(', ')} rolleri`;
+  return `${gun} içinde kapanmazsa ${kime} de alır.`;
 }
 
 // BIL-44: sessiz saatler tesis saatiyle; başlangıç bitişten büyükse gece yarısını aşar. Biri boşsa ya da eşitse sessiz saat yok.

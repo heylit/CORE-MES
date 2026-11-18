@@ -1009,7 +1009,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   // 221 a: onaya yeni düşen talep onaylayanlara bildirilir; onaydayken yeniden kaydetmek yeni bildirim açmaz.
   if (yazilacak.durum === 'onayda' && eski.durum !== 'onayda') {
     await bildirimGonder(db, {
-      tur: 'satin-alma.talep-onay-bekliyor', baslik: `Onay bekleyen talep: ${eski.no}`, metin: yazilacak.baslik, yol: '/satin-alma/onaylar', kaynakKimlik: id, haric: k.id,
+      tur: 'satin-alma.talep-onay-bekliyor', baslik: `Onay bekleyen talep: ${eski.no}`, metin: yazilacak.baslik, yol: `/satin-alma/onaylar?talep=${encodeURIComponent(id)}`, kaynakKimlik: id, haric: k.id,
     });
   }
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);

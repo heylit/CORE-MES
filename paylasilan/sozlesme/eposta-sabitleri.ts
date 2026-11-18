@@ -57,3 +57,22 @@ export const EPOSTA_YUKSELT_KISI_EN_COK = 50;
 
 export const EPOSTA_SONUCLARI = ['gonderildi', 'gonderilemedi', 'atlandi'] as const;
 export type EpostaSonucu = (typeof EPOSTA_SONUCLARI)[number];
+
+// 3431 a: onay bekleyen türlerin e-postasında Onayla ve Reddet düğmesi vardır. Düğme yalnız kaydın ekranını `?eylem=` ile açar;
+// onay uygulamada, girişle ve kişinin kendi yetkisiyle verilir (adres onay vermez, iletilen e-posta yetki taşımaz).
+// Ret, onaycının ekranında ret düğmesi olan türde vardır (sipariş, iskonto ve termin onayında onaycı reddetmez).
+export const EPOSTA_ONAY_TURLERI: Readonly<Partial<Record<BildirimTuru, { reddet: boolean }>>> = {
+  'satin-alma.talep-onay-bekliyor': { reddet: true }, 'malzemeler.kart-onay-bekliyor': { reddet: true }, 'ik.izin-onay-bekliyor': { reddet: true },
+  'siparisler.onay-bekliyor': { reddet: false }, 'siparisler.iskonto-onay-bekliyor': { reddet: false }, 'siparisler.termin-onay-bekliyor': { reddet: false },
+};
+export const turOnayi = (tur: string): { reddet: boolean } | null => EPOSTA_ONAY_TURLERI[tur as BildirimTuru] ?? null;
+export const ONAY_EYLEMLERI = ['onayla', 'reddet'] as const;
+export type OnayEylemi = (typeof ONAY_EYLEMLERI)[number];
+export const ONAY_EYLEMI_PARAMETRESI = 'eylem';
+// Kaydın yoluna eylem eklenir; yolda zaten sorgu varsa `&` ile.
+export const onayEylemiYolu = (yol: string, eylem: OnayEylemi): string => `${yol}${yol.includes('?') ? '&' : '?'}${ONAY_EYLEMI_PARAMETRESI}=${eylem}`;
+// Ekran adresindeki eylem; bilinmeyen değer yok sayılır.
+export function adrestekiOnayEylemi(arama: string | URLSearchParams): OnayEylemi | null {
+  const d = (typeof arama === 'string' ? new URLSearchParams(arama) : arama).get(ONAY_EYLEMI_PARAMETRESI);
+  return (ONAY_EYLEMLERI as readonly string[]).includes(d ?? '') ? d as OnayEylemi : null;
+}

@@ -75,7 +75,7 @@ describe('Malzeme kartı onay bildirimleri (gerçek PostgreSQL, gerçek giriş)'
     await kaydet(depo, k, 'onayda');
     const tur = 'malzemeler.kart-onay-bekliyor';
     assert.deepEqual(await bildirimler(kalite.id, tur, k), [
-      { baslik: `Onay bekleyen malzeme kartı: ${k.stokKodu}`, metin: `${k.stokKodu} · Bildirim kart ${k.kimlik}`, yol: '/malzemeler' },
+      { baslik: `Onay bekleyen malzeme kartı: ${k.stokKodu}`, metin: `${k.stokKodu} · Bildirim kart ${k.kimlik}`, yol: `/malzemeler?kart=${encodeURIComponent(k.kimlik)}` },
     ]);
     assert.deepEqual(await bildirimler(depo.id, tur, k), []);
     assert.deepEqual(await bildirimler(satinAlma.id, tur, k), []);

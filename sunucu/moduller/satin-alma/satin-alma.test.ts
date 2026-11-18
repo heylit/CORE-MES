@@ -411,7 +411,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await bildirimler(c.mudur)).length, 0);
     const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(ara), durum: 'onayda' }));
     const ilk = await bildirimler(c.mudur);
-    assert.deepEqual(ilk.map((b) => [b.yol, b.metin, b.kaynakModul]), [['/satin-alma/onaylar', t.baslik, 'satin-alma']]);
+    assert.deepEqual(ilk.map((b) => [b.yol, b.metin, b.kaynakModul]), [[`/satin-alma/onaylar?talep=${encodeURIComponent(t.id)}`, t.baslik, 'satin-alma']]);
     assert.equal((await bildirimler(c.sa)).length, 0);
     tamam<Talep>(await kaydet(c.sa, govde(onayda)));
     assert.deepEqual((await bildirimler(c.mudur)).map((b) => b.tekrarSayisi), ilk.map((b) => b.tekrarSayisi));

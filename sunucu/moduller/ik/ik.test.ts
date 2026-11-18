@@ -449,10 +449,10 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!ilk.some((b) => b.kisi_id === kim.uzm), 'talebi giren almaz');
     assert.ok(!ilk.some((b) => b.kisi_id === kim.opr), 'izin onayı olmayan almaz');
     assert.deepEqual({ ...ilk.find((b) => b.kisi_id === kim.mud) }, {
-      kisi_id: kim.mud, baslik: 'İzin talebi onay bekliyor', metin: `Ad emp_bl Deneme · Yıllık izin · ${izinBasi} - ${izinSonu}`, yol: '/ik-islemlerim/onaylar',
+      kisi_id: kim.mud, baslik: 'İzin talebi onay bekliyor', metin: `Ad emp_bl Deneme · Yıllık izin · ${izinBasi} - ${izinSonu}`, yol: '/ik-islemlerim/onaylar?talep=leave_bl1',
     });
     // Bağlantı alıcının açabildiği sayfaya gider: müdürde sayfa.ik yok; Onaylar maddesi izin onayı yetkisiyle görünür.
-    const madde = IK_ISLEMLERIM_IKINCI_MENU.gruplar.flatMap((g): readonly { yol: string; islem: string }[] => g.maddeler).find((m) => m.yol === ilk[0]!.yol);
+    const madde = IK_ISLEMLERIM_IKINCI_MENU.gruplar.flatMap((g): readonly { yol: string; islem: string }[] => g.maddeler).find((m) => m.yol === ilk[0]!.yol?.split('?')[0]);
     assert.equal(madde?.islem, 'ik.izin-onay');
     await kaydet(c.uzm, 'izinler', { ...izin('leave_bl1', 'emp_bl', 'Beklemede'), aciklama: 'not' });
     assert.equal((await bildirimler('leave_bl1')).length, ilk.length, 'bekleyen talebin düzeltilmesi yeni bildirim açmaz');

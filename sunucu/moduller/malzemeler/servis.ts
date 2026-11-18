@@ -755,7 +755,7 @@ export async function katalogKartiKaydet(
 }
 
 // MLZ-5 a: onaya gönderilen kart onaycılara, reddedilen kart gönderene bildirilir; onaydan çıkan kartın bekleyen bildirimi kapanır; yazımla aynı transaction'da (ADR 0006).
-// Yol türün yolunda kalır: kartın derin bağı (`?kart=`) tür yolu denetimine uymaz. Kaynak kimlik kartın kimliğidir; okunmamış bildirim yinelenmez.
+// Onay bildirimi kartı açar (`?kart=`, 3431 a). Kaynak kimlik kartın kimliğidir; okunmamış bildirim yinelenmez.
 async function kartOnayiBildir(db: Db, g: {
   kimlik: string; stokKodu: string; ad: string | null; gonderildi: boolean; onceki: string | null; yeni: string;
   geriCekildi: boolean; gonderenKisiId: number | null; kisiId: number;
@@ -765,7 +765,7 @@ async function kartOnayiBildir(db: Db, g: {
   if (g.onceki === 'onayda' && g.yeni !== 'onayda') await bildirimKapat(db, { tur: 'malzemeler.kart-onay-bekliyor', kaynakKimlik: g.kimlik });
   if (g.gonderildi) {
     await bildirimGonder(db, {
-      tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: '/malzemeler', kaynakKimlik: g.kimlik, haric: g.kisiId,
+      tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: `/malzemeler?kart=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: g.kisiId,
     });
   }
   // Geri çekme (ret damgasında `geri`) ret değildir; gönderen kendi kartını taslağa aldıysa `haric` onu düşürür.

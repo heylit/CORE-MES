@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, turSinifi, type BildirimOnemi, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  EPOSTA_KONULARI, turKonusu, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
+  EPOSTA_KONULARI, turKonusu, turOnayi, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
   type EpostaSablonlariCevabi, type EpostaSablonu, type EpostaSimgesi, type EpostaSinamaCevabi, type EpostaSonucu, type EpostaTabloAlani,
   type EpostaTetikleyiciDegistirGovdesi, type EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
@@ -17,7 +17,7 @@ import { varsayilanDeger, type AyarAnahtari, type AyarDegeri } from '#paylasilan
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
   VARSAYILAN_SABLONLAR, bildirimAcikMi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
-  sessizMi, sonrakiDenemeDk, turKapatilamaz, varsayilanTetikleyici, type EpostaDegerleri, type EpostaTetikleyicisi,
+  sessizMi, sonrakiDenemeDk, turKademesi, turKapatilamaz, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
 import { disKipMi, epostaKipi } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
@@ -169,7 +169,8 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
         if ((BILDIRIM_TUR_ANAHTARLARI as readonly string[]).includes(tur)) tetikler.set(tur, await tetikleyici(db, tur as BildirimTuru));
       }
       const gunBasi = new Date(tesisGunBasi(tesisGunu(simdi()))).toISOString();
-      return { sira, adresler, adlar, sablonlar, tetikler, ayarlar: await gonderimAyarlari(db), bugun: await s.epostaBugunGidenler(db, kisiler, gunBasi) };
+      const rolAdlari = [...tetikler.values()].some((t) => t.yukseltRolIdleri.length > 0) ? new Map((await rolSecenekleri(db)).map((r) => [r.id, r.ad])) : new Map<number, string>();
+      return { sira, adresler, adlar, sablonlar, tetikler, rolAdlari, ayarlar: await gonderimAyarlari(db), bugun: await s.epostaBugunGidenler(db, kisiler, gunBasi) };
     });
     const { ayarlar } = hazirlik;
     const saat = saatSayisi(simdi());
@@ -215,8 +216,12 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
         const ilk = parca[0] as s.KuyrukSatiri;
         const konu = ozet ? 'genel' : turKonusu(ilk.tur);
         const sablon = hazirlik.sablonlar.get(konu) ?? VARSAYILAN_SABLONLAR[konu];
-        const g = ozet ? ozetGirdisi(parca, ad, ayarlar.uygulamaAdresi) : {
+        const tetik = hazirlik.tetikler.get(ilk.tur);
+        const g = ozet ? { ...ozetGirdisi(parca, ad, ayarlar.uygulamaAdresi), gonderenAdi: ayarlar.gonderenAdi } : {
           sablon, degerler: degerler(ilk, ad, ayarlar.uygulamaAdresi), baslik: ilk.baslik, onem: ilk.onem, simgeVar: true,
+          gonderenAdi: ayarlar.gonderenAdi, onay: turOnayi(ilk.tur), kademe: turKademesi(ilk.tur),
+          yukseltme: tetik === undefined ? null
+            : yukseltmeCumlesi(ilk.kademe, tetik.yukseltGun, tetik.yukseltRolIdleri.flatMap((id) => hazirlik.rolAdlari.get(id) ?? []), tetik.yukseltKisiIdleri.length > 0),
         };
         const r = await tekGonder(ayar, adres, ad, ayarlar.gonderenAdi, ozet ? VARSAYILAN_SABLONLAR.genel : sablon, g, ac);
         for (const q of parca) {
@@ -377,7 +382,7 @@ export async function epostaDenemesi(db: Db, kullanici: Kullanici, konu: EpostaK
   const ayarlar = await gonderimAyarlari(db);
   const onem: BildirimOnemi = 'bilgi';
   const r = await tekGonder(ayar, adres, kullanici.ad, ayarlar.gonderenAdi, sablon, {
-    sablon, baslik: 'Deneme e-postası', onem, simgeVar: true,
+    sablon, baslik: 'Deneme e-postası', onem, simgeVar: true, gonderenAdi: ayarlar.gonderenAdi,
     degerler: {
       alici_adi: kullanici.ad, olay: 'Deneme e-postası', kayit_no: 'ORN-0001', tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: '0',
       istasyon: null, kayit_baglantisi: kayitBaglantisi(ayarlar.uygulamaAdresi, '/ayarlar'),

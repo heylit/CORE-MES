@@ -9,7 +9,8 @@ import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import {
   epostaDefterCevabi, epostaDurumuCevabi, epostaSablonlariCevabi, epostaTetikleyicileriCevabi, type EpostaTetikleyiciDegistirGovdesi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
-import type { BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
+import { BILDIRIM_TURLERI, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
+import { KADEME_KAYNAK_ANAHTARLARI, kademeTuru } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -342,6 +343,38 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     assert.deepEqual(posta.iletiler.map((i) => i.alici), ['mudur@ornek.local']);
     assert.deepEqual(await kuyruk(), []);
     assert.equal((await tetikle(TUR, { yukseltGun: null, yukseltRolIdleri: [] })).durum, 200);
+  });
+
+  test('3431 a: kuyruktan giden onay e-postası Onayla/Reddet bağlantısı, yükseltme cümlesi; kademe türü "Kademe n / 5" taşır', async () => {
+    await ayar('bildirim.eposta', true);
+    await ayar('bildirim.eposta-uygulama-adresi', 'http://10.0.0.5:4100');
+    assert.equal((await tetikle(ONAY, { eposta: true, yukseltGun: 2, yukseltRolIdleri: [await rolNo('kalite')] })).durum, 200);
+    await gonder(ONAY, ['mudur'], { kayitNo: 'ORN-TLP-0077' });
+    await tur();
+    const ilk = metinParcasi(posta.iletiler[0]?.veri ?? '');
+    assert.match(ilk, /Onayla: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\?eylem=onayla/);
+    assert.match(ilk, /Reddet: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\?eylem=reddet/);
+    assert.match(ilk, /Kaydı aç: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\n/);
+    assert.match(ilk, /2 gün içinde kapanmazsa .+ rolü de alır\./);
+    assert.match(ilk, /iletmek kimseye onay yetkisi vermez/);
+    assert.match(konuBasligi(posta.iletiler[0]?.veri ?? ''), /^\[Onay\] /);
+    await zamaniGelsin();
+    await tur();
+    assert.deepEqual(posta.iletiler.map((i) => i.alici), ['mudur@ornek.local', 'kalite@ornek.local']);
+    assert.match(metinParcasi(posta.iletiler[1]?.veri ?? ''), /Bu kayıt 2 gündür kapanmadığı için sana da gönderildi\./);
+    assert.equal((await tetikle(ONAY, { yukseltGun: null, yukseltRolIdleri: [] })).durum, 200);
+
+    posta.iletiler.length = 0;
+    const kademeli = kademeTuru(KADEME_KAYNAK_ANAHTARLARI[0], 3);
+    assert.equal((await tetikle(kademeli, { eposta: true })).durum, 200);
+    await o().vt.tx((db) => bildirimGonder(db, { tur: kademeli, baslik: 'Olay: ORN-KAD-0001', metin: 'Gizli', kaynakKimlik: 'kad1', yol: BILDIRIM_TURLERI[kademeli].yol, kisiler: [kim('mudur')], yalnizKisiler: true }));
+    await tur();
+    const kademeMetni = metinParcasi(posta.iletiler[0]?.veri ?? '');
+    assert.match(kademeMetni, /Kademe 3 \/ 5: Gecikti/);
+    assert.doesNotMatch(kademeMetni, /Onayla:/);
+    assert.match(kademeMetni, /Kayda git: /);
+    assert.match(konuBasligi(posta.iletiler[0]?.veri ?? ''), /Kademe 3\/5\]/);
+    await ayar('bildirim.eposta-uygulama-adresi', '');
   });
 
   test('sessiz saatte acil olmayan bekler, acil gider', async () => {

@@ -101,6 +101,9 @@ describe('bildirim kuralları', () => {
     assert.equal(yolTureUyar('siparisler.iskonto-onay-bekliyor', '/siparisler/tekliflerx'), false);
     assert.equal(yolTureUyar('siparisler.iskonto-onay-bekliyor', '/siparisler'), false);
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', '/ik/izinler'), false);
+    assert.equal(yolTureUyar('ik.izin-onay-bekliyor', '/ik-islemlerim/onaylar?talep=leave_1'), true);
+    assert.equal(yolTureUyar('malzemeler.kart-onay-bekliyor', '/malzemeler?kart=k1'), true);
+    assert.equal(yolTureUyar('ik.izin-onay-bekliyor', '/ik-islemlerimx?talep=1'), false);
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', null), true);
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', undefined), true);
   });

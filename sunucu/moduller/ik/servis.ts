@@ -369,7 +369,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   });
   if (g.tur === 'leave') {
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
-    if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: '/ik-islemlerim/onaylar', kaynakKimlik: g.kimlik, haric: kullanici.id });
+    if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: `/ik-islemlerim/onaylar?talep=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: kullanici.id });
   }
   const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde, kisiAcilacak !== null) : null;
   const uyari = g.tur === 'emp'
