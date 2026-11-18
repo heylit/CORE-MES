@@ -319,6 +319,22 @@ describe('R3 Üretim emirleri: komutlar', () => {
     await waitFor(() => expect(istekler.find((i) => i.yol === '/adimli-emirler/61/iptal')?.govde).toEqual({ surum: 1 }));
   });
 
+  it("iptalden sonra Üretim Emirleri'nin listesi ve ayrıntısı yeniden okunur; iptal edilen emir sayfa yenilenmeden listeden kalkar", async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}) } });
+    const istemci = emirSayfasiAc();
+    const liste = ['uretim-emirleri', 'liste', ''] as const;
+    const ayrinti = ['uretim-emirleri', 'ayrinti', 61] as const;
+    istemci.setQueryData(liste, { emirler: [] });
+    istemci.setQueryData(ayrinti, { emir: null });
+    const b = await screen.findByRole('region', { name: 'Emir sayfası' });
+    fireEvent.click(await within(b).findByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' })).getByRole('button', { name: 'İptal et' }));
+    await screen.findByText('Emir iptal edildi.');
+    expect(istemci.getQueryState(liste)?.isInvalidated).toBe(true);
+    expect(istemci.getQueryState(ayrinti)?.isInvalidated).toBe(true);
+  });
+
   it('rotası olmayan ürüne rotasız emir açılır (uretim-emirleri.rotasiz-ac)', async () => {
     const istekler = sunucuKur(YONETICI, {
       yazmalar: {
