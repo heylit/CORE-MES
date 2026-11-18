@@ -2,7 +2,7 @@ import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { ListeKanitiGirdisi, ListeKontrolu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikCevabi, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -2023,3 +2023,14 @@ export function ozelMaddeKodu(n: number): string {
 // Durduran madde kapatılamaz (120-122 a); kısıt da reddeder, ileti burada.
 export const DURDURAN_KAPANMAZ = 'Durduran hazırlık maddesi kapatılamaz.';
 export const MADDE_DEGISTI = 'Madde bu arada değişti; listeyi yenileyip yeniden dene.';
+
+// 3430 a: hazırlık görevinin hücresinde maddenin sistemdeki hâli. İş emrine bağlı görev o iş emrinin satırından, emir geneli görev
+// emrin madde hâlinden okunur; iş emri satırında olmayan madde emir geneline düşer. Özel madde ve hazırlığı okunamayan emir null döner.
+export function gorevinSistemHali(h: HazirlikCevabi | undefined, madde: string, isEmriId: number | null): HazirlikHali | null {
+  if (h === undefined) return null;
+  if (isEmriId !== null) {
+    const ie = h.isEmirleri.find((i) => i.isEmriId === isEmriId)?.maddeler.find((m) => m.madde === madde);
+    if (ie !== undefined) return ie.durum;
+  }
+  return h.maddeler.find((m) => m.madde === madde)?.durum ?? null;
+}

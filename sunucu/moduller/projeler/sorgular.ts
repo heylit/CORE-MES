@@ -301,12 +301,12 @@ export interface GorevSatiri {
   plan_baslangic: string; plan_bitis: string; gercek_baslangic: string | null; gercek_bitis: string | null; ilerleme: number; durum: string;
   onceki_gorev_id: number | null; surum: number;
   asama: string | null; yapan_rol_id: number | null; kontrol_kisi_id: number | null; kontrol_rol_id: number | null;
-  yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null; onaylandi: boolean;
+  yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null; onaylandi: boolean; hazirlik_maddesi: string | null;
 }
 const GOREV_SUTUNLARI = [
   'id', 'proje_id', 'kilometre_tasi_id', 'ad', 'aciklama', 'sorumlu_kisi_id', 'plan_baslangic', 'plan_bitis', 'gercek_baslangic', 'gercek_bitis',
   'ilerleme', 'durum', 'onceki_gorev_id', 'surum', 'asama', 'yapan_rol_id', 'kontrol_kisi_id', 'kontrol_rol_id', 'yedek_kontrol_kisi_id',
-  'yedek_kontrol_rol_id', 'onaylandi',
+  'yedek_kontrol_rol_id', 'onaylandi', 'hazirlik_maddesi',
 ] as const;
 const GOREV_ALANLARI = GOREV_SUTUNLARI.join(', ');
 const GOREV_SECIMI = `SELECT ${GOREV_ALANLARI} FROM projeler_gorev`;

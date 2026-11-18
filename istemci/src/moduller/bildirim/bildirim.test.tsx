@@ -144,7 +144,7 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
     expect(within(await satir('Termin yaklaşıyor')).getByText('Hatırlatma')).toBeTruthy();
     expect(within(await satir('Kart onaylandı')).getByText('Yapıldı')).toBeTruthy();
     expect(within(await satir('Makine durdu')).queryByText(/Görev|Hatırlatma|Yapıldı/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Görevlerim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'İş bildirimleri' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=gorev'))).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Yapıldı' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=yapildi'))).toBe(true));

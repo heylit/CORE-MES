@@ -2,16 +2,18 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  HazirlikDagitCevabi, HazirlikDagitGovdesi, HazirlikMatrisiCevabi, HazirlikProjesiGovdesi, HazirlikProjesiCevabi, HazirlikProjesiSecenekleri,
+  HazirlikCevabi, HazirlikDagitCevabi, HazirlikDagitGovdesi, HazirlikMatrisiCevabi, HazirlikProjesiGovdesi, HazirlikProjesiCevabi, HazirlikProjesiSecenekleri,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
   hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
 } from '../projeler/disari.ts';
 import type { HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
+import { hazirliklar } from './hazirlik.ts';
 import { hazirlikMaddeTanimlari } from './hazirlik-maddeleri.ts';
-import { acikEmirIhlali } from './kurallar.ts';
+import { acikEmirIhlali, gorevinSistemHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // 3396 a: emrin hazırlık görevleri projede açılır. Proje emrin projesi olabileceği gibi başka bir aktif proje de olabilir (emrin
@@ -96,6 +98,10 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
     gorevler.flatMap((g) => [g.sorumluKisiId, g.kontrolKisiId]).filter((x): x is number => x !== null),
     gorevler.flatMap((g) => [g.yapanRolId, g.kontrolRolId]).filter((x): x is number => x !== null),
   );
+  // Yalnız görevi olan emirlerin hazırlığı okunur: görevsiz emirde hücre yoktur. Emrin hazırlığı emir tarafında yalnız adımlı emri okuyana
+  // açıktır (Risk 3430 K1); uç projeler.oku ister, bu yüzden emri okuyamayana sistem hâli gitmez.
+  const emirOkur = ADIMLI_OKUMA_ISLEMLERI.some((i) => islemVarMi(kullanici, i));
+  const sistem = emirOkur ? await hazirliklar(db, [...new Set(gorevler.map((g) => g.emriId))]) : new Map<number, HazirlikCevabi>();
   return {
     proje: { id: proje.id, kod: proje.kod, ad: proje.ad, durum: proje.durum },
     dagitir: islemVarMi(kullanici, 'projeler.hazirlik-dagit') && proje.durum === 'aktif',
@@ -107,6 +113,7 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
     gorevler: gorevler.map((g) => ({
       id: g.id, madde: g.madde, emriId: g.emriId, isEmriId: g.isEmriId, ad: g.ad, durum: g.durum, onaylandi: g.onaylandi, planBitis: g.planBitis,
       gecikmeGun: g.gecikmeGun, yapan: atanan(g.sorumluKisiId, g.yapanRolId), kontrol: atanan(g.kontrolKisiId, g.kontrolRolId), surum: g.surum, kademe: g.kademe,
+      sistem: gorevinSistemHali(sistem.get(g.emriId), g.madde, g.isEmriId),
     })),
   };
 }

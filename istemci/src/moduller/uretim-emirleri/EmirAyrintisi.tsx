@@ -246,7 +246,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     { anahtar: 'adimlar', baslik: 'Adımlar', simge: 'route' },
     { anahtar: 'malzeme', baslik: 'Malzeme', simge: 'box' },
     ...(fislerGorur ? [{ anahtar: 'fisler', baslik: 'Fişler', simge: 'file' } as const] : []),
-    { anahtar: 'hazirlik', baslik: 'Hazırlık', simge: 'clipboard-check' },
+    { anahtar: 'hazirlik', baslik: 'Hazırlık durumu', simge: 'clipboard-check' },
     { anahtar: 'stok', baslik: 'Stok ve kapanış', simge: 'pallet' },
     { anahtar: 'kayitlar', baslik: 'Kayıtlar', simge: 'list' },
   ] as const;

@@ -18,7 +18,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   id: 7, kilometreTasiId: null, ad: 'Teknik resim kontrolü', aciklama: null, sorumluKisiId: 9, sorumluAd: 'Deneme Yapan',
   planBaslangic: '2026-12-01', planBitis: '2099-12-03', gercekBaslangic: '2026-12-01', gercekBitis: null, ilerleme: 50, durum: 'kontrolde',
   oncekiGorevId: null, asama: 'Mühendislik', yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: 2,
-  kontrolRolAd: 'Kalite', yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false,
+  kontrolRolAd: 'Kalite', yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
   surum: 4, ...ek,
 });
 const IZIN = { ustlenebilir: false, baslayabilir: false, bitirebilir: false, onaylayabilir: true };
@@ -117,7 +117,7 @@ describe('3269 proje görevlerim ve şablon', () => {
   it('görevlerim türe göre süzülür; kontrolümdeki görev panelden sürümle onaylanır', async () => {
     const cagrilar = sunucuKur(KONTROLCU);
     ac('/proje-gorevlerim');
-    const tablo = await screen.findByRole('table', { name: 'Proje görevlerim' });
+    const tablo = await screen.findByRole('table', { name: 'Görevlerim' });
     await within(tablo).findByText('İlk parça onayı');
     fireEvent.click(screen.getByRole('tab', { name: /Kontrolümde/ }));
     await waitFor(() => { expect(within(tablo).queryByText('İlk parça onayı')).toBeNull(); });
@@ -134,7 +134,7 @@ describe('3269 proje görevlerim ve şablon', () => {
   it('Geciken kutusunun aynı adlı sekmesi yalnız geciken görevi gösterir', async () => {
     sunucuKur(KONTROLCU);
     ac('/proje-gorevlerim');
-    const tablo = await screen.findByRole('table', { name: 'Proje görevlerim' });
+    const tablo = await screen.findByRole('table', { name: 'Görevlerim' });
     await within(tablo).findByText('Gecikmiş sertifika');
     fireEvent.click(screen.getByRole('tab', { name: /Geciken/ }));
     await waitFor(() => { expect(within(tablo).queryByText('İlk parça onayı')).toBeNull(); });

@@ -328,6 +328,8 @@ export const gorevSemasi = z.object({
   yedekKontrolRolAd: z.string().nullable(),
   // Kontrollü görev onayla bitti: ekranda "Onaylandı". Kontrolsüz görevde hep false.
   onaylandi: z.boolean(),
+  // 3430 a: hazırlık görevi (maddeye ve emre bağlı) listede "Hazırlık" rozetiyle ayrılır; proje görevinde null.
+  hazirlikMaddesi: z.string().nullable(),
   surum: surumSemasi,
 });
 

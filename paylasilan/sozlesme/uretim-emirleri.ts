@@ -820,6 +820,7 @@ export type HazirlikProjesiSecenekleri = z.infer<typeof hazirlikProjesiSecenekle
 // 3396 a (A): Proje > Hazırlık matrisi. Satır emir ve iş emri, sütun görevi olan madde; hücrenin hâlini görev verir.
 const hazirlikAtanan = z.object({ tur: z.enum(['kisi', 'rol']), id: z.number().int(), ad: z.string(), kisiSayisi: z.number().int() });
 export const hazirlikMatrisiSorgusu = z.object({ projeId: z.coerce.number<number>().int().positive().max(2147483647) });
+const hazirlikHaliSemasi = z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']);
 export const hazirlikMatrisiCevabi = z.object({
   proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), durum: z.string() }),
   dagitir: z.boolean(),
@@ -832,6 +833,9 @@ export const hazirlikMatrisiCevabi = z.object({
     id: z.number().int(), madde: z.string(), emriId: z.number().int(), isEmriId: z.number().int().nullable(), ad: z.string(),
     durum: z.string(), onaylandi: z.boolean(), planBitis: z.string(), gecikmeGun: z.number().int().nullable(),
     yapan: hazirlikAtanan.nullable(), kontrol: hazirlikAtanan.nullable(), surum: z.number().int(), kademe: z.number().int().nullable(),
+    // 3430 a: maddenin sistemdeki hâli (emrin Hazırlık durumu ile aynı kaynak). Görev bitse de madde eksik olabilir; özel maddede ya da
+    // malzemesiz emirde sistem hâli yoktur.
+    sistem: hazirlikHaliSemasi.nullable(),
   })),
 });
 export type HazirlikMatrisiCevabi = z.infer<typeof hazirlikMatrisiCevabi>;
@@ -858,7 +862,6 @@ export const hazirlikMuafiyetiGovdesi = z.object({
 const hazirlikMuafiyeti = z.object({
   madde: z.enum(MUAF_TUTULABILEN_MADDELER), isEmriId: KIMLIK.nullable(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), gerekce: z.string(), zaman: zamanSemasi,
 });
-const hazirlikHaliSemasi = z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']);
 export const hazirlikCevabi = z.object({
   // Madde başına: sahibi bağlı değilse 'bilinmiyor'; emirde aranmıyorsa 'gerekmez'; eksikse 'eksik', muafsa 'muaf'. Uyaran maddenin
   // 'eksik' hâli başlatmayı durdurmaz (hazirlikUyarirMi).

@@ -36,7 +36,19 @@ button.tc-prj-statu { cursor: pointer; font: inherit; font-size: var(--yazi-s); 
 .tc-prj-liste { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--b-2); }
 .tc-prj-liste li { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: baseline; overflow-wrap: anywhere; }
 .tc-prj-soluk { color: var(--muted); }
-.tc-prj-gorunum { display: flex; gap: var(--b-2); flex-wrap: wrap; }
+.tc-prj-gorunum { display: flex; gap: var(--b-2) var(--b-4); flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: var(--b-3); }
+.tc-prj-secici { display: inline-flex; flex-wrap: wrap; }
+.tc-prj-secici .tc-dugme { border-radius: 0; }
+.tc-prj-secici .tc-dugme + .tc-dugme { margin-left: calc(-1 * var(--cizgi-ince)); }
+.tc-prj-secici .tc-dugme:first-child { border-radius: var(--yari-1) 0 0 var(--yari-1); }
+.tc-prj-secici .tc-dugme:last-child { border-radius: 0 var(--yari-1) var(--yari-1) 0; }
+.tc-prj-secici .tc-dugme[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tc-prj-eylemler { display: flex; gap: var(--b-2); flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .tc-prj-secici { display: flex; flex-wrap: nowrap; width: 100%; }
+  .tc-prj-secici .tc-dugme { flex: 1 1 auto; min-width: 0; padding-inline: var(--b-2); }
+  .tc-prj-secici .tc-dugme .tc-simge { display: none; }
+}
 .tc-prj-pano { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .tc-prj-pano-sutun { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
 .tc-prj-pano-sutun h3 { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
@@ -75,13 +87,19 @@ button.tc-prj-pano-kart { cursor: pointer; }
 .tc-prj-hz-grup th { background: var(--panel2); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .04em; color: var(--muted); }
 .tc-prj-hz-ortak { background: var(--panel2); }
 .tc-prj-hz-yok { color: var(--faint); }
-.tc-prj-hz-hucre { display: inline-flex; align-items: center; justify-content: center; min-width: var(--dokunma); min-height: var(--dokunma);
-  padding: var(--b-1); border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.tc-prj-hz-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: var(--dokunma); min-height: var(--dokunma);
+  padding: var(--b-1) var(--b-2); text-align: left; border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
 .tc-prj-hz-hucre[data-hal="atanmamis"] { border-style: dashed; background: none; color: var(--muted); }
-.tc-prj-hz-hucre[data-hal="kontrolde"] { border-radius: 50%; color: var(--hold); }
-.tc-prj-hz-hucre[data-hal="hazir"] { border-color: transparent; color: var(--run); }
-.tc-prj-hz-hucre[data-gecikmis] { border: 2px solid var(--stop); color: var(--stop); }
+.tc-prj-hz-hucre[data-hal="hazir"] { border-color: transparent; }
+.tc-prj-hz-hucre[data-gecikmis] { border: 2px solid var(--stop); }
 .tc-prj-hz-hucre[aria-pressed="true"] { outline: 2px solid var(--edge2); outline-offset: 2px; }
+.tc-prj-hz-ikili { display: inline-flex; }
+.tc-prj-hz-kim { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); font-weight: 400; color: var(--muted); white-space: nowrap; }
+.tc-prj-hz-hucre[data-gecikmis] .tc-prj-hz-kim { color: var(--stop); font-weight: 600; }
+.tc-prj-hz-matris td.tc-prj-hz-celiski { background: color-mix(in srgb, var(--stop) 14%, transparent); }
+.tc-prj-hz-uyari { display: flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: color-mix(in srgb, var(--stop) 14%, transparent); color: var(--stop); font-weight: 600; }
+.tc-prj-hz-liste li[data-celiski] .tc-prj-hz-kart { background: color-mix(in srgb, var(--stop) 10%, transparent); }
 .tc-prj-hz-liste { display: none; margin: 0; padding: 0; list-style: none; flex-direction: column; gap: var(--b-2); }
 .tc-prj-hz-kart { display: flex; flex-direction: column; gap: var(--b-1); width: 100%; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2);
   background: var(--panel-solid); color: inherit; font: inherit; text-align: left; cursor: pointer; }

@@ -8,7 +8,7 @@ import type { Gorev, KilometreTasi, Proje, ProjeYonetimiCevabi, StatuListesiCeva
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { ProjeAyrinti } from './ProjeAyrinti.tsx';
 import { StatuListesi } from './StatuListesi.tsx';
-import { gorevSapmasi } from './ProjeGorevleri.tsx';
+import { gorevCsvAdi, gorevSapmasi } from './ProjeGorevleri.tsx';
 
 const PLANLAMACI: Kullanici = { id: 3, ad: 'Deneme Planlamacı', islemler: ['sayfa.projeler', 'projeler.gorev-yaz', 'projeler.statu-yaz'] };
 const MUDUR: Kullanici = { id: 4, ad: 'Deneme Müdür', islemler: ['sayfa.projeler', 'projeler.gorev-yaz', 'projeler.statu-yaz', 'projeler.statu-ayar'] };
@@ -26,7 +26,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   id: 7, kilometreTasiId: 5, ad: 'Fikstür tasarımı', aciklama: null, sorumluKisiId: null, sorumluAd: null,
   planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 40, durum: 'suruyor',
   oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
-  kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false,
+  kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
   surum: 1, ...ek,
 });
 const YONETIM: ProjeYonetimiCevabi = {
@@ -54,6 +54,7 @@ function sunucuKur(kullanici: Kullanici, durum: Proje['durum'] = 'aktif') {
     if (yontem === 'GET' && yol === '/projeler/1') return json(200, proje(durum));
     if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
+    if (yontem === 'GET' && yol === '/hazirlik-matrisi?projeId=1') return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum: 'aktif' }, dagitir: false, maddeler: [], emirler: [], gorevler: [] });
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 3, ad: 'Deneme Planlamacı' }] });
     if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 8, ad: 'Kalite' }] });
     if (yontem === 'POST' && yol.startsWith('/projeler/statu')) return json(200, STATULER);
@@ -117,6 +118,37 @@ describe('Proje yönetimi (890 c)', () => {
     expect(screen.queryByRole('button', { name: /Kilometre taşı ekle/ })).toBeNull();
   });
 
+  // 3430 a: Hazırlık ayrı sekme değil; Görevler sekmesinde Liste, Emir × madde (emri okuyana) ve Pano; hazırlık görevi rozetle ayrılır.
+  it('hazırlık görevi Görevler sekmesinde rozetle; Emir × madde yalnız emri okuyana; Hazırlık sekmesi yok', async () => {
+    YONETIM.gorevler = [gorev({}), gorev({ id: 8, ad: 'CNC programı', hazirlikMaddesi: 'cnc' })];
+    try {
+      sunucuKur({ ...PLANLAMACI, islemler: [...PLANLAMACI.islemler, 'sayfa.uretim-emirleri'] });
+      ac();
+      await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
+      expect(screen.queryByRole('tab', { name: /^Hazırlık/ })).toBeNull();
+      fireEvent.click(screen.getByRole('tab', { name: /Görevler/ }));
+      const tablo = await screen.findByRole('table', { name: 'Projenin görevleri' });
+      expect(within(tablo).getByRole('row', { name: /CNC programı/ }).textContent).toContain('Hazırlık');
+      expect(within(tablo).getByRole('row', { name: /Fikstür tasarımı/ }).textContent).toContain('Proje');
+      fireEvent.click(screen.getByRole('button', { name: 'Pano' }));
+      const kart = await screen.findByRole('button', { name: /CNC programı/ });
+      expect(kart.textContent).toContain('Hazırlık');
+      expect(screen.getByRole('button', { name: /Fikstür tasarımı/ }).textContent).not.toContain('Hazırlık');
+      fireEvent.click(screen.getByRole('button', { name: 'Emir × madde' }));
+      expect(screen.getByRole('button', { name: 'Emir × madde' }).getAttribute('aria-pressed')).toBe('true');
+      await screen.findByText('Projede üretim emri yok');
+      expect(screen.queryByRole('table', { name: 'Projenin görevleri' })).toBeNull();
+      cleanup();
+      sunucuKur(PLANLAMACI);
+      ac();
+      fireEvent.click(await screen.findByRole('tab', { name: /Görevler/ }));
+      await screen.findByRole('table', { name: 'Projenin görevleri' });
+      expect(screen.queryByRole('button', { name: 'Emir × madde' })).toBeNull();
+    } finally {
+      YONETIM.gorevler = [gorev({})];
+    }
+  });
+
   it('görev eklenir; plan alanları ve kilometre taşı gövdeye girer', async () => {
     const cagrilar = sunucuKur(PLANLAMACI);
     ac();
@@ -174,6 +206,11 @@ describe('Proje yönetimi (890 c)', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /elle yazılabilsin/ }));
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
     expect(cagrilar.find((c) => c.yontem === 'POST')).toMatchObject({ yol: '/projeler/statu-ayari/guncelle', govde: { serbestStatu: true, surum: 4 } });
+  });
+
+  it('CSV görev adı türü önekle taşır', () => {
+    expect(gorevCsvAdi(gorev({}))).toBe('Proje: Fikstür tasarımı');
+    expect(gorevCsvAdi(gorev({ ad: 'CNC programı', hazirlikMaddesi: 'cnc' }))).toBe('Hazırlık: CNC programı');
   });
 
   it('görev sapması: biten görevde gerçek bitişe, açık görevde geçmişse bugüne göre; iptalde yok', () => {

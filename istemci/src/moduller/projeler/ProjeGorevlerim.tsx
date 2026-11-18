@@ -61,14 +61,14 @@ export function ProjeGorevlerim() {
         <SayiKarti baslik="Kontrolümde" simge="eye" sayi={say('kontrolumde')} ton="uyari" hata={l.isError} />
         <SayiKarti baslik="Geciken" simge="clock" sayi={geciken} ton="hata" hata={l.isError} />
       </div>
-      <Kart baslik="Proje görevlerim" simge="clipboard-check">
+      <Kart baslik="Görevlerim" simge="clipboard-check">
         <div className="tc-prj-icerik">
           <Sekmeler etiket="Görev türü" sekmeler={sekmeler} secili={suzgec} sec={suzgecYaz} />
           {l.isError
             ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, 'Görevler alınamadı')} yenile={() => { void l.refetch(); }} />
             : (
               <Tablo
-                etiket="Proje görevlerim"
+                etiket="Görevlerim"
                 sutunlar={sutunlar}
                 satirlar={satirlar}
                 satirAnahtari={(g) => g.id}
