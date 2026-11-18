@@ -95,6 +95,9 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
     await girisliKisi('ba-satis-fiyat', ['siparisler.oku', 'siparisler.fiyat-oku']);
     await girisliKisi('ba-malzeme', ['sayfa.malzemeler']);
     await girisliKisi('ba-alis', ['satin-alma.oku']);
+    await girisliKisi('ba-alis-fiyat', ['satin-alma.oku', 'satin-alma.fiyat-oku']);
+    await girisliKisi('ba-alis-yaz', ['satin-alma.yaz']);
+    await girisliKisi('ba-alis-onay', ['satin-alma.onayla']);
     // 3374: satış belgelerinin giden satırı Siparişler'in Logo sırasıdır; sıra kimlikleri belge kimliklerinden uzaklaştırılır.
     const { sahip } = ortam;
     await sahip.sorgu("SELECT setval(pg_get_serial_sequence('siparisler_logo_gonderim', 'id'), 500)");
@@ -197,9 +200,14 @@ describe('Logo belge araması, sahte köprüyle (3360; gerçek PostgreSQL)', () 
     assert.deepEqual([s.govde.durum, s.govde.fiyatGorunur, s.govde.belgeler], ['ortam-degiskeni-yok', false, []]);
     const f = await ara('ba-satis-fiyat', 'tur=teklif&q=ORN-MLZ');
     assert.deepEqual([f.durum, f.govde.fiyatGorunur], [200, true]);
-    // Satın alma siparişinde tutar satın alma okumasıyla görünür; satış fiyatını gören satın almada arayamaz.
+    // 3401-1 a: satın alma siparişinde tutar fiyat gören işlemle (fiyat-oku, yaz, onayla); yalnız satin-alma.oku arar ama fiyatsız.
+    // Satış fiyatını gören satın almada arayamaz.
     const a = await ara('ba-alis', 'tur=satin-alma-siparisi&q=ORN-MLZ');
-    assert.deepEqual([a.durum, a.govde.fiyatGorunur], [200, true]);
+    assert.deepEqual([a.durum, a.govde.fiyatGorunur], [200, false]);
+    for (const k of ['ba-alis-fiyat', 'ba-alis-yaz', 'ba-alis-onay']) {
+      const r = await ara(k, 'tur=satin-alma-siparisi&q=ORN-MLZ');
+      assert.deepEqual([k, r.durum, r.govde.fiyatGorunur], [k, 200, true]);
+    }
     assert.equal((await ara('ba-satis-fiyat', 'tur=satin-alma-siparisi&q=ORN-MLZ')).durum, 403);
     // Düğme durumu: ayar açık ama ortam köprüsü yok, düğme çizilmez; listeyi görmeyen soramaz.
     const d = await app.inject({ method: 'GET', url: '/api/logo/belge-arama-durumu', headers: { cookie: cerez.get('ba-satis') ?? '' } });

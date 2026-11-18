@@ -17,6 +17,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
+import { FIYAT_GOREN_ISLEMLER as SATIN_ALMA_FIYAT_GOREN_ISLEMLER } from '../satin-alma/disari.ts';
 import { logodaBelgeAra, logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
   BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
@@ -54,9 +55,10 @@ const ARAMA_OKUMA = {
 } as const;
 // 3360-2 a: bağlamak belgeyi yazabilenin; bağı kaldırmak yöneticinin (Sistem Ayarları yazma yetkisi, yeni yetki yok).
 const BAGLAMA_YETKISI: Readonly<Record<LogoBaglanabilirTur, Islem>> = { proje: 'projeler.yaz', 'satis-siparisi': 'siparisler.yaz', teklif: 'siparisler.yaz' };
-// Tutar fiyat yetkisiyle (irsaliyedeki gibi): satışta siparisler.fiyat-oku, alışta satin-alma.oku; proje ve talepte tutar yok.
-const ARAMA_FIYAT_YETKISI: Readonly<Record<LogoBelgeAramaTuru, Islem | null>> = {
-  proje: null, 'satis-siparisi': 'siparisler.fiyat-oku', teklif: 'siparisler.fiyat-oku', talep: null, 'satin-alma-siparisi': 'satin-alma.oku',
+// Tutar fiyat yetkisiyle: satışta siparisler.fiyat-oku; alışta satın almanın fiyat gören işlemleri (fiyat-oku, yaz ya da onayla; yalnız
+// satin-alma.oku fiyatsızdır, 3401-1 a); proje ve talepte tutar yok.
+const ARAMA_FIYAT_YETKISI: Readonly<Record<LogoBelgeAramaTuru, readonly Islem[]>> = {
+  proje: [], 'satis-siparisi': ['siparisler.fiyat-oku'], teklif: ['siparisler.fiyat-oku'], talep: [], 'satin-alma-siparisi': SATIN_ALMA_FIYAT_GOREN_ISLEMLER,
 };
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
@@ -185,7 +187,7 @@ export const uclar = [
     isle: ({ db, kullanici, sorgu }) => {
       if (kullanici === null || !ARAMA_YETKISI[sorgu.tur].some((i) => islemVarMi(kullanici, i))) throw yetkiYok();
       const fiyat = ARAMA_FIYAT_YETKISI[sorgu.tur];
-      return logodaBelgeAra({ tx: (f) => f(db) }, sorgu.tur, sorgu.q, fiyat !== null && islemVarMi(kullanici, fiyat), { kisiId: kullanici.id, belge: sorgu.belge });
+      return logodaBelgeAra({ tx: (f) => f(db) }, sorgu.tur, sorgu.q, fiyat.some((i) => islemVarMi(kullanici, i)), { kisiId: kullanici.id, belge: sorgu.belge });
     },
   }),
   uc({
