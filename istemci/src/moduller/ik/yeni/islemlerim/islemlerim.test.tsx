@@ -181,6 +181,23 @@ describe('P6 Onaylar, Ekip ve İzin takvimi', () => {
     expect(yazmalar[0]?.govde).toEqual({ durum: 'Onaylandı', surum: 3 });
   });
 
+  it('e-postadaki Onayla ve Reddet talep satırına odaklanıp düğmeyi gösterir; düğme odak almaz (tek Enter karar vermesin), karar kendiliğinden verilmez (3431 a)', async () => {
+    const kaydir = vi.fn();
+    Element.prototype.scrollIntoView = kaydir;
+    try {
+      for (const [eylem, ad] of [['reddet', 'Reddet'], ['onayla', 'Onayla']] as const) {
+        cleanup();
+        kaydir.mockClear();
+        const { yazmalar } = ikAc(`/ik-islemlerim/onaylar?talep=leave_1&eylem=${eylem}`, { kullanici: MUDUR, veri: mudur() });
+        const dugme = await screen.findByRole('button', { name: ad });
+        await waitFor(() => { expect(document.activeElement?.id).toBe('tc-ikm-talep-leave_1'); });
+        expect(kaydir.mock.contexts).toContain(dugme);
+        await waitFor(() => { expect(screen.getByTestId('arama').textContent).toBe('?talep=leave_1'); });
+        expect(yazmalar).toEqual([]);
+      }
+    } finally { Reflect.deleteProperty(Element.prototype, 'scrollIntoView'); }
+  });
+
   it.runIf(motorVar)('onaylanırsa kalan izin bekleyen talebin gününü düşer (413/3 b)', async () => {
     const kalan = async (gun: number): Promise<number> => {
       const v = mudur();

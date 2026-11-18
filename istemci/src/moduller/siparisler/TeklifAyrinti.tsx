@@ -13,6 +13,7 @@ import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useOnaylayabilir, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
+import { useOnayOdagi } from './onay-odagi.ts';
 import './siparisler.css';
 
 type Satir = TeklifAyrintiCevabi['satirlar'][number];
@@ -55,6 +56,7 @@ export function TeklifAyrinti() {
     queryFn: () => api.get<PlanTaslaklariCevabi>(`/siparisler/teklifler/${id}/plan-taslaklari`),
     enabled: Number.isInteger(id) && id > 0,
   });
+  useOnayOdagi(teklif.data !== undefined && !taslaklar.isPending);
 
   const yenile = (cevap: TeklifAyrintiCevabi) => {
     istemci.setQueryData(anahtarlar.teklif(id), cevap);
@@ -148,8 +150,8 @@ export function TeklifAyrinti() {
   const islemler = (yazabilir || iskontoOnaylanir || terminOnaylanir || formBasilir) && (
     <>
       {formBasilir && <Dugme simge="printer" onClick={() => formAcikYaz(true)}>Teklif formu</Dugme>}
-      {iskontoOnaylanir && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('iskonto')}>İskontoyu onayla</Dugme>}
-      {terminOnaylanir && <Dugme tur="birincil" simge="gantt" onClick={() => dialogYaz('termin')}>Termini onayla</Dugme>}
+      {iskontoOnaylanir && <Dugme tur="birincil" simge="check" data-onay-eylemi="onayla" onClick={() => dialogYaz('iskonto')}>İskontoyu onayla</Dugme>}
+      {terminOnaylanir && <Dugme tur="birincil" simge="gantt" data-onay-eylemi="onayla" onClick={() => dialogYaz('termin')}>Termini onayla</Dugme>}
       {yazabilir && fiyatGorur && surumVerilir && (
         <Dugme tur={t.durum === 'yeni' || t.durum === 'revizyon' ? 'birincil' : 'ikincil'} simge="next" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/teklif-ver`); }}>
           {t.surumler.length === 0 ? 'Teklif ver' : 'Yeni sürüm ver'}

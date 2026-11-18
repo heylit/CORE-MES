@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { ESKI_SURUM_NEDENI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -154,12 +154,15 @@ async function kartSec(ad = 'Deneme Braket', sira = 1) {
   fireEvent.click(await screen.findByRole('option', { name: new RegExp(ad) }));
 }
 
+function Arama() { return <p data-testid="arama" hidden>{useLocation().search}</p>; }
+
 function ac(adres: string) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
+          <Arama />
           <Routes>
             {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
           </Routes>
@@ -325,6 +328,16 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/5');
     expect(await screen.findByRole('button', { name: 'Düzenle' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Onayla' })).toBeNull();
+  });
+
+  it('e-postadaki Onayla siparişi açıp Onayla düğmesine odaklanır; pencere ve onay kendiliğinden açılmaz (3431 a)', async () => {
+    const istekler = sunucuKur(YONETICI, () => undefined);
+    ac('/siparisler/5?eylem=onayla');
+    const dugme = await screen.findByRole('button', { name: 'Onayla' });
+    await waitFor(() => { expect(document.activeElement).toBe(dugme); });
+    await waitFor(() => { expect(screen.getByTestId('arama').textContent).toBe(''); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
   });
 
   it('onay penceresi sürümü gönderir; cevap ekrana işlenir ve taslak düğmeleri gider', async () => {
@@ -1247,6 +1260,14 @@ describe('Teklifler', () => {
     cleanup();
     const MUDUR: Kullanici = { id: 5, ad: 'Deneme Mudur', islemler: [...KOK, 'siparisler.iskonto-onayla'] };
     const istekler = sunucuKur(MUDUR, yaniti);
+    // 3431 a: e-postadaki Onayla teklifi açıp İskontoyu onayla düğmesine odaklanır; pencere açılmaz, adresten eylem silinir.
+    ac('/siparisler/teklifler/21?eylem=onayla');
+    const iskontoDugmesi = await screen.findByRole('button', { name: 'İskontoyu onayla' });
+    await waitFor(() => { expect(document.activeElement).toBe(iskontoDugmesi); });
+    await waitFor(() => { expect(screen.getByTestId('arama').textContent).toBe(''); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
+    cleanup();
     ac('/siparisler/teklifler/21');
     fireEvent.click(await screen.findByRole('button', { name: 'İskontoyu onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'İskontoyu onayla' });
@@ -2173,10 +2194,15 @@ describe('Teklif termin ve fiyat (44)', () => {
       if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, { taslaklar: [] } satisfies AtolyeTaslaklariCevabi);
       return undefined;
     });
-    ac('/siparisler/teklifler/21');
+    ac('/siparisler/teklifler/21?eylem=onayla');
     expect(await screen.findByText('Termin onayı bekliyor')).toBeTruthy();
     expect(screen.queryByText('İskonto onayı bekliyor')).toBeNull();
     expect(screen.getByText('Plancı onayı bekliyor')).toBeTruthy();
+    // 3431 a: e-postadaki Onayla, plan taslakları yüklenince Termini onayla düğmesine odaklanır; pencere açılmaz.
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Termini onayla' })); });
+    await waitFor(() => { expect(screen.getByTestId('arama').textContent).toBe(''); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Termini onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'Termini onayla' });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));

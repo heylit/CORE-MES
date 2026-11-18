@@ -163,6 +163,25 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     }
   });
 
+  test('e-postadaki Onayla kartı açıp düğmeyi gösterir, odak vermez (tek Enter onaylamasın); Reddet gerekçe düğmesine odaklanır; onay kendiliğinden verilmez (3431 a)', async () => {
+    const kaydir = vi.fn();
+    Element.prototype.scrollIntoView = kaydir;
+    try {
+      for (const [eylem, ad] of [['onayla', 'Onayla'], ['reddet', 'Reddet']] as const) {
+        cleanup();
+        const istekler = kur(YONETICI, kartlar(satir('m1', 1, onayda('m1', 'HM-A', 3))));
+        yeniEkranAc(`${KOK}?kart=m1&eylem=${eylem}`);
+        const dugme = within(await screen.findByRole('dialog')).getByRole('button', { name: ad });
+        if (eylem === 'onayla') {
+          await waitFor(() => { expect(kaydir.mock.contexts).toContain(dugme); });
+          expect(document.activeElement).not.toBe(dugme);
+        } else await waitFor(() => { expect(document.activeElement).toBe(dugme); });
+        await waitFor(() => { expect(screen.getByTestId('arama').textContent).toBe('?kart=m1'); });
+        expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+      }
+    } finally { Reflect.deleteProperty(Element.prototype, 'scrollIntoView'); }
+  });
+
   test('okuyan yalnız görür: düzenleme, kopya, şablon, silme ve onay düğmesi yok (reddedilen)', async () => {
     kur(OKUYAN, kartlar(satir('m1', 1, onayda('m1', 'HM-A', 3))));
     yeniEkranAc(KOK);

@@ -50,6 +50,8 @@ export function yeniIstemci(): QueryClient {
 }
 
 function Adres() { return <p data-testid="adres">{useLocation().pathname}</p>; }
+// Sorgu dizgisi ayrı ve gizli: adres metnini bekleyen testler değişmez.
+function Arama() { return <p data-testid="arama" hidden>{useLocation().search}</p>; }
 
 // Modülün gerçek rota listesiyle açar.
 export function yeniEkranAc(adres: string, istemci = yeniIstemci()) {
@@ -58,6 +60,7 @@ export function yeniEkranAc(adres: string, istemci = yeniIstemci()) {
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
           <Adres />
+          <Arama />
           <Routes>
             {rotalar.map((e) => <Route key={e.yol} path={e.yol} element={<e.ekran />} />)}
             <Route path="*" element={<p>Başka sayfa</p>} />

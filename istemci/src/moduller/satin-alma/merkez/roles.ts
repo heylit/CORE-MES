@@ -230,8 +230,8 @@ export function viewApproval(r: PurchaseRequest): string {
     ${ev.ranking.map((x, i) => { const chosen = orders.some(o => o.qid === x.q.id); return `<tr class="${chosen ? "chosen" : ""}"><td>${i + 1}</td><td class="lead"><b>${esc(supName(x.q))}</b>${chosen ? ' <span class="flag good">seçilen</span>' : ""}${x.c.covered < (r.items || []).length ? ' <span class="flag warn">eksik kalemli</span>' : ""}</td><td class="r num">${money(x.c.pvTRY, "TRY", 0)}</td><td>${esc(payText(x.q))}</td><td class="r num">${parseNum(x.q.leadDays) ?? "–"} gün</td><td class="r num">${nf0.format(x.score)}</td></tr>`; }).join("")}
   </tbody></table></div></section>
   ${aps.state === "pending" && r.status === "approval" ? `<section class="panel appr-act"><div class="panel-b">
-    <label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin"></label>
-    <div class="row" data-sa-y="14"><button class="btn good" data-act="approve">Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>
+    <label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin" data-onay-eylemi="reddet"></label>
+    <div class="row" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>
   </div></section>` : ""}
   <details class="adv"><summary>Kalemler ve hareket geçmişi</summary>${tabItems(r, true)}${tabLog(r)}</details>`;
 }
