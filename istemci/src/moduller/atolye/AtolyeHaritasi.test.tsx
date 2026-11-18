@@ -1006,6 +1006,80 @@ describe('fabrika haritası', () => {
     expect(govde.makineYerleri?.map((m) => [m.makineId, m.genislik, m.derinlik])).toEqual([[31, 3.5, 2.6]]);
   });
 
+  describe('alan üretici ölçüsünde (3408-3 c)', () => {
+    // CNC-01'in tek makinesi DMF 360 (11 x 4,2 m); paletteki M-31 DMU 50 (3,44 x 2,735 m).
+    const MODELLI = {
+      ...YERLESIM,
+      istasyonYerleri: YERLESIM.istasyonYerleri.map((i) => (i.istasyonId === 5 ? { ...i, makineler: i.makineler.map((m) => ({ ...m, modelTuru: 'm_dmgdmf360' })) } : i)),
+      makineModelTurleri: { 31: 'm_dmgdmu50', 50: 'm_dmgdmf360' },
+    } satisfies YerlesimCevabi;
+    const BILDIRIM = /1 makinenin alanı üretici ölçüsüne büyütüldü/;
+    const ac = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Bölümün yerleşimini düzenle' }));
+      return screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+    };
+    const kaydedilen = async (cagrilar: Cagri[], duzen: HTMLElement) => {
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Kaydet' }));
+      await waitFor(() => expect(cagrilar.some((c) => c.yol.endsWith('/yerlesim-kaydet'))).toBe(true));
+      return cagrilar.find((c) => c.yol.endsWith('/yerlesim-kaydet'))?.govde as YerlesimGovdesi;
+    };
+
+    it('açılışta kısa alan büyür ve bildirilir; paletten eklenen makine üretici ölçüsünde gider', async () => {
+      const cagrilar = sunucuKur(YAZAN, { bolumler: [MODELLI] });
+      goster(<AtolyeHaritasi />);
+      const duzen = await ac();
+      expect(await screen.findByText(BILDIRIM)).toBeTruthy();
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(await within(duzen).findByRole('button', { name: /M-31/ }));
+      const govde = await kaydedilen(cagrilar, duzen);
+      expect(govde.istasyonYerleri.map((i) => [i.istasyonId, i.genislik, i.derinlik])).toEqual([[5, 11, 4.2], [6, 3, 2]]);
+      expect(govde.makineYerleri?.map((m) => [m.makineId, m.genislik, m.derinlik])).toEqual([[31, 3.44, 2.735]]);
+    });
+
+    it('Geri al açılıştaki büyütmeyi geri alır; kayıtta kayıtlı ölçü gider', async () => {
+      const cagrilar = sunucuKur(YAZAN, { bolumler: [MODELLI] });
+      goster(<AtolyeHaritasi />);
+      const duzen = await ac();
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Geri al' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(await within(duzen).findByRole('button', { name: /M-31/ }));
+      const govde = await kaydedilen(cagrilar, duzen);
+      expect(govde.istasyonYerleri.map((i) => [i.istasyonId, i.genislik, i.derinlik])).toEqual([[5, 3, 2], [6, 3, 2]]);
+    });
+
+    it('paletten eklenen istasyon tek etkin makinesinin üretici ölçüsünde gider (pasif makine sayılmaz)', async () => {
+      const bos = { ...MODELLI, istasyonYerleri: MODELLI.istasyonYerleri.filter((i) => i.istasyonId !== 5) } satisfies YerlesimCevabi;
+      const cagrilar = sunucuKur(YAZAN, { bolumler: [bos] });
+      goster(<AtolyeHaritasi />);
+      const duzen = await ac();
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      const grup = within(duzen).getByRole('region', { name: 'Eklenecek makineler' });
+      fireEvent.click(await within(grup).findByRole('button', { name: /CNC-01/ }));
+      const govde = await kaydedilen(cagrilar, duzen);
+      // CNC-01'de etkin M-31 (DMU 50) ve pasif M-32 var: tek makineli sayılır.
+      expect(govde.istasyonYerleri.find((i) => i.istasyonId === 5)).toMatchObject({ genislik: 3.44, derinlik: 2.735 });
+    });
+
+    it('yalnız kroki yazan kişide ve depo kipinde açılış ölçüsü değişmez, bildirim çıkmaz', async () => {
+      sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'atolye.kroki-yaz'] }, { bolumler: [MODELLI] });
+      const { unmount } = goster(<AtolyeHaritasi />);
+      const duzen = await ac();
+      await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+      expect(screen.queryByText(BILDIRIM)).toBeNull();
+      expect((within(duzen).getByRole('button', { name: 'Geri al' }) as HTMLButtonElement).disabled).toBe(true);
+      unmount();
+      cleanup();
+      // Harita eylemi olmayan kişi depo kipinde sayfanın yazımıyla yalnız raf düzenler.
+      sunucuKur(OKUYAN, { bolumler: [MODELLI] });
+      const depoYazimi = { rafKaydet: vi.fn(), kalemYaz: vi.fn(), kalemSil: vi.fn() };
+      goster(<DepoPaneli salonIdler={null} depoYazimi={depoYazimi} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Raf ekle ve düzenle' }));
+      const depo = await screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+      expect(screen.queryByText(BILDIRIM)).toBeNull();
+      expect((within(depo).getByRole('button', { name: 'Geri al' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
   it('düzenleyici: Çizim Merkezi\'nde makineyle eşleştirilen model Ekle listesinde istasyonun yanında işaretli ve başta gelir (kart #1196)', async () => {
     const b = MERKEZ_MODELLERI.belgeler[1]!;
     const merkezModeli = { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru };

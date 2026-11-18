@@ -278,6 +278,21 @@ export function hazirMakineModeli(tip: IstasyonTipi | string, modelTuru: string 
   return HAZIR_MODEL.has(modelTuru) ? modelTuru : null;
 }
 
+// Hazır gövdesi olup katalogda dış ölçüsü yazılmayan modellerin ölçüsü (metre, en x derinlik): dosya bu ölçüde çizildi
+// (3408); üreticinin yayımladığı değer değil, bayi ve broşür görselinden okunan yaklaşık değerdir.
+const HAZIR_MODEL_OLCUSU: Readonly<Record<string, [number, number]>> = {
+  m_dmgdmu60: [3.65, 2.9], m_dmgdmu75: [4, 3.25], m_dmgdmu95: [4.3, 3.45], m_dmgnhc5000: [3.25, 4.65], m_dmgdmf360: [11, 4.2],
+};
+
+// Modeli bilinen makinenin haritadaki alanı (3408-3 c): önce katalogdaki üretici dış ölçüsü, yoksa hazır gövdenin ölçüsü;
+// ikisi de yoksa null (alan istasyon tipinin önerisiyle açılır).
+export function modelAyakIzi(tip: IstasyonTipi | string | null, modelTuru: string | null | undefined): [number, number] | null {
+  if (!modelTuru || (tip !== null && tip !== 'talasli' && tip !== 'kalite')) return null;
+  const d = katalogModeli(modelTuru)?.dis;
+  if (d) return [d.en / 1000, d.derinlik / 1000];
+  return Object.hasOwn(HAZIR_MODEL_OLCUSU, modelTuru) ? HAZIR_MODEL_OLCUSU[modelTuru] ?? null : null;
+}
+
 // Haritadaki nesnenin model türü: makine yerinde makinenin kendisi, istasyon yerinde istasyonun tek makinesi (birden çoksa bilinmez).
 export function sahneModelTurleri(y: YerlesimCevabi): Map<string, string> {
   const h = new Map<string, string>();

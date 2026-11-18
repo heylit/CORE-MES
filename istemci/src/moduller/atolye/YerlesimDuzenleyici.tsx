@@ -11,12 +11,12 @@ import { RafSilmePenceresi } from './RafSilmePenceresi.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
-  PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, gecmisiDegistir, geriAl,
+  PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, istasyonModelOlcusu, modelOlculeriniUygula, modelTurleriniTopla, gecmisiDegistir, geriAl,
   bolumYapistir, bolumunu, govdeyeCevir, ortakDuvarAc, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, rafSil, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import { bolumeCevir, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { EklenecekTur, Gecmis, Taslak } from './duzenleyici-durumu.ts';
-import { ISTASYON_TIPI_ADI, MAKINE_CINSI_ADI, eklenebilirIstasyonlar, makineCinsi, ornekIstasyonMu, saatMetni, stokEslemeIletisi } from './kurallar.ts';
+import { ISTASYON_TIPI_ADI, MAKINE_CINSI_ADI, eklenebilirIstasyonlar, makineCinsi, modelAyakIzi, ornekIstasyonMu, saatMetni, stokEslemeIletisi } from './kurallar.ts';
 import { useDepoYazimi } from './depo-yazimi.ts';
 import { OgeSimgesi } from './plan-simgeleri.tsx';
 import { OzellikPaneli } from './OzellikPaneli.tsx';
@@ -112,7 +112,16 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const [merkezModelleri, merkezModelleriYaz] = useState<ReadonlyMap<number, MerkezModeli | null>>(
     () => new Map(bolumler.flatMap((b) => b.istasyonYerleri.map((y) => [y.istasyonId, y.merkezModeli] as const))),
   );
-  const [gecmis, gecmisYaz] = useState<Gecmis>(() => gecmisKur(yerlesim ? taslakKur(yerlesim) : fabrikaTaslagiKur(bolumler)));
+  const modelTurleri = useMemo(() => modelTurleriniTopla(bolumler), [bolumler]);
+  // 3408-3 c: modeli bilinen makinenin modelden küçük alanı açılışta üretici ölçüsüne büyür; değişiklik geri alınabilir, "Kaydet" ile saklanır.
+  const [acilis] = useState(() => {
+    const ham = yerlesim ? taslakKur(yerlesim) : fabrikaTaslagiKur(bolumler);
+    return yerlesimYazar && !yalnizRaf ? { ham, ...modelOlculeriniUygula(ham, modelTurleri) } : { ham, taslak: ham, degisen: 0 };
+  });
+  const [gecmis, gecmisYaz] = useState<Gecmis>(() => (acilis.degisen ? { onceki: [acilis.ham], simdi: acilis.taslak, sonraki: [] } : gecmisKur(acilis.ham)));
+  useEffect(() => {
+    if (acilis.degisen) bildir('bilgi', `${acilis.degisen} makinenin alanı üretici ölçüsüne büyütüldü. "Kaydet" ile saklanır, "Geri al" ile eski hâline döner.`);
+  }, [acilis, bildir]);
   const t = gecmis.simdi;
   // Bölüm düzenlenirken fabrika krokisi (varsa) bölümün metresine getirilip altta gösterilir.
   const bolumYeri = useMemo(() => (yerlesim ? konumOku(yerlesim.salon) : null), [yerlesim]);
@@ -335,8 +344,10 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       </Dugme>
     );
   };
+  const istasyonOlcusu = (i: Istasyon) => istasyonModelOlcusu(i, makineler.data?.makineler ?? [], modelTurleri);
+  const makineOlcusu = (m: Makine, tip: IstasyonTipi | null) => modelAyakIzi(tip, modelTurleri.makineler.get(m.id));
   const istasyonYerlestir = (i: Istasyon, x: number, z: number) => {
-    const r = istasyonEkle(t, i, x, z); yaz(r.taslak); seciliYaz(r.anahtar);
+    const r = istasyonEkle(t, i, x, z, istasyonOlcusu(i)); yaz(r.taslak); seciliYaz(r.anahtar);
     bekleyenModeliAl(i.id);
   };
   const isaretli = useMemo(() => new Set(bulgular.ihlaller.flatMap((b) => b.ogeler)), [bulgular]);
@@ -532,7 +543,8 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const cizimBitti = (a: Nokta, b: Nokta) => {
     if (arac?.tur !== 'ciz') return;
     const h = arac.hedef;
-    const r = 'oge' in h ? ogeCiz(t, h.oge, a, b) : 'istasyon' in h ? istasyonCiz(t, h.istasyon, a, b) : makineCiz(t, h.makine, h.tip, a, b);
+    const r = 'oge' in h ? ogeCiz(t, h.oge, a, b) : 'istasyon' in h ? istasyonCiz(t, h.istasyon, a, b, istasyonOlcusu(h.istasyon))
+      : makineCiz(t, h.makine, h.tip, a, b, makineOlcusu(h.makine, h.tip));
     if (!r) { bildir('bilgi', 'Çizim çok küçük: köşeden köşeye sürükleyin.'); return; }
     yaz(r.taslak);
     seciliYaz(r.anahtar);
@@ -908,7 +920,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
                           if (window.matchMedia?.('(max-width: 1023px)').matches) paletAcikYaz(false);
                           return;
                         }
-                        const o = merkez(); const r = makineEkle(t, m, tip, o.x, o.z); yaz(r.taslak); seciliYaz(r.anahtar);
+                        const o = merkez(); const r = makineEkle(t, m, tip, o.x, o.z, makineOlcusu(m, tip)); yaz(r.taslak); seciliYaz(r.anahtar);
                       }}
                     >
                       <OgeSimgesi ad={makineCinsi(tip ?? 'talasli', m.ad)} />
