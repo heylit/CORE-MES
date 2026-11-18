@@ -748,3 +748,5 @@ export async function emrinTalimatKunyeleri(db: Db, emirId: number): Promise<{ i
 }
 // 3390-2: biten ve iptal emirler, en yeni önce, sayfalı (Bitenler ekranının listesi). Yetki denetlemez.
 export const adimliBitenEmirler = isEmri.adimliBitenler;
+// 3416-1 a: bekletilen emirlerin kademeli uyarı kayıtları, kaynak başına (kablolama bağlar). Yetki denetlemez.
+export { bekletmeKademeOkuyucusu } from './bekleme-kademe.ts';

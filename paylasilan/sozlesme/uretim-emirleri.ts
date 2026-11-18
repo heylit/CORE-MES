@@ -198,13 +198,17 @@ export const acikAdimSemasi = z.object({
 export const KAPANIS_SONUCLARI = ['tamamlandi', 'saglamsiz'] as const;
 
 // 3050 a: emri bekletmenin nedenleri. Bekletme emrin durumu değildir, üstünde bir işarettir (emrin durumu ve sayıları değişmez).
-export const BEKLEME_NEDENLERI = ['malzeme', 'musteri', 'fason', 'kalite', 'takim', 'diger'] as const;
+// Mühendislik ve teslim edilmedi (3416-1 a): teslim edilmedi, parçanın içeride olup sonraki birime geçmediği beklemedir; kalite
+// beklemesinden ayrı sayılır ki üretimin beklemesi kaliteye yazılmasın.
+export const BEKLEME_NEDENLERI = ['malzeme', 'musteri', 'fason', 'kalite', 'takim', 'muhendislik', 'teslim', 'diger'] as const;
 export type BeklemeNedeni = (typeof BEKLEME_NEDENLERI)[number];
 export const BEKLEME_NEDENI_ADLARI: Record<BeklemeNedeni, string> = {
   malzeme: 'Malzeme bekleniyor', musteri: 'Müşteri onayı bekleniyor', fason: 'Fason dönüşü bekleniyor', kalite: 'Kalite kararı bekleniyor',
-  takim: 'Takım ya da aparat bekleniyor', diger: 'Diğer',
+  takim: 'Tezgah, takım ya da aparat bekleniyor', muhendislik: 'Mühendislik bilgisi ya da kararı bekleniyor',
+  teslim: 'Teslim edilmedi (parça içeride, sonraki birime geçmedi)', diger: 'Diğer',
 };
-export const bekletmeSemasi = z.object({ neden: z.enum(BEKLEME_NEDENLERI), not: z.string().nullable(), kisi: adliKayit, zaman });
+// isGunu: aynı nedenle süren beklemenin (3416-1 a: yeniden bekletme sayacı sıfırlamaz) başından bugüne iş günü; tarih yoksa null.
+export const bekletmeSemasi = z.object({ neden: z.enum(BEKLEME_NEDENLERI), not: z.string().nullable(), kisi: adliKayit, zaman, isGunu: z.number().int().nullable().optional() });
 export const bekletGovdesi = z.object({ neden: z.enum(BEKLEME_NEDENLERI), not: z.string().trim().max(500).optional() }).strict();
 // Kayıt defterinde bekletme olayları ("Bekletildi", "Devam etti"); emrin kendi olay defterinden ayrıdır (istasyonsuz yazılır).
 export const bekletmeOlaySemasi = z.object({

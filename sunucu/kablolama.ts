@@ -472,6 +472,10 @@ export function sunucununBaglari(): Bag[] {
     bag('kalibrasyon vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalibrasyon.vade', o); }, typeof kalibrasyonAletleri === 'function' ? kalibrasyonVadeleri : undefined),
     bag('arkon bakım vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('arkon.bakim-vade', o); }, typeof arkon.periyodikBakimlar === 'function' ? bakimVadeleri : undefined),
     bag('satış siparişi termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.termin', o); }, typeof siparisTakvimi === 'function' ? siparisTerminleri : undefined),
+    // 3416-1 a: bekletilen emir neden başına ve aynı nedenle süren bekleme.
+    ...(['uretim-emirleri.bekleme-malzeme', 'uretim-emirleri.bekleme-fason', 'uretim-emirleri.bekleme-takim', 'uretim-emirleri.bekleme-kalite',
+      'uretim-emirleri.bekleme-muhendislik', 'uretim-emirleri.bekleme-teslim', 'uretim-emirleri.bekleme-suruyor'] as const).map((k) =>
+      bag(`üretim emri bekletme ${k} -> kademeli uyarı`, (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet(k, o); }, uretimEmirleri.bekletmeKademeOkuyucusu(k))),
     bag('projeler hazırlık görevi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.hazirlik', o); }, projeler.hazirlikKademeKayitlari),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
