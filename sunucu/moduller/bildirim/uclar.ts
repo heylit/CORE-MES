@@ -156,11 +156,11 @@ export const uclar = [
     isle: ({ db, kullanici }) => acikTakipler(db, kullanici),
   }),
   uc({
-    yontem: 'GET', yol: '/bildirim-kademe/gecikenlerim', yetki: 'oturum', sahiplik: 'kendi', cevap: gecikenlerimCevabi,
+    yontem: 'GET', yol: '/bildirim-kademe/gecikenlerim', yetki: { biri: ['sayfa.bildirim-merkezi'] }, cevap: gecikenlerimCevabi,
     isle: ({ db, kullanici }) => gecikenlerim(db, kullanici),
   }),
   uc({
-    yontem: 'GET', yol: '/bildirim-kademe/seridim', yetki: 'oturum', sahiplik: 'kendi', cevap: gecikenlerimCevabi,
+    yontem: 'GET', yol: '/bildirim-kademe/seridim', yetki: { biri: ['sayfa.bildirim-merkezi'] }, cevap: gecikenlerimCevabi,
     isle: ({ db, kullanici }) => seridim(db, kullanici),
   }),
 ];
