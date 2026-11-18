@@ -1554,9 +1554,24 @@ describe('Kokpit tek görünüm', () => {
     expect(screen.queryByRole('region', { name: 'Matris' })).toBeNull();
   });
 
+  it('3B liste düzeninde açılır ve "Listeye dön" çıkar; "Önce / sonra" işaretlenir, ikinci basışta kalkar', () => {
+    sadeAc();
+    expect(diger('Önce / sonra').getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(diger('Önce / sonra'));
+    expect(diger('Önce / sonra').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(diger('Önce / sonra'));
+    expect(diger('Önce / sonra').getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(diger('3B'));
+    expect(screen.getByRole('region', { name: '3B' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Siparişler' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Listeye dön' })).toBeTruthy();
+    expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
+  });
+
   it('açık satırda planda yeri olan adıma basınca iş seçilir; yeniden basınca bırakılır', () => {
     // Tahta seçilen işi görünüme getirirken CSS.escape kullanır; test ortamında yoktur.
-    vi.stubGlobal('CSS', { escape: (x: string) => x });
+    const kacis = vi.fn((x: string) => x);
+    vi.stubGlobal('CSS', { escape: kacis });
     sadeAc();
     const satir = document.querySelector('.tc-pyq-ld-kart:not([data-d="plansiz"]) [data-kart]')!;
     fireEvent.click(within(satir as HTMLElement).getByRole('button'));
@@ -1564,6 +1579,8 @@ describe('Kokpit tek görünüm', () => {
     expect(adim.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(adim);
     expect(document.querySelector(`.tc-pyq-ld-adimlar button[data-adim="${adim.dataset['adim'] ?? ''}"]`)?.getAttribute('aria-pressed')).toBe('true');
+    // Seçilen iş tezgâhlarda görünüme getirilir: tahta o işin kutusunu arar.
+    expect(kacis).toHaveBeenCalledWith(adim.dataset['adim']);
     expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(1);
     fireEvent.click(document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[aria-pressed="true"]')!);
     expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(0);
