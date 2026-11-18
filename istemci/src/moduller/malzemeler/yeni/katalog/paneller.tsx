@@ -72,8 +72,8 @@ export function OnayPaneli({ x, yetki, b, mesgul, islem }: {
           <span className="tc-mk-eylemler">
             {k === 'onayda' && yetkili && (
               <>
-                <Dugme tur="birincil" simge="check" yukleniyor={mesgul} onClick={() => islem('onayla')}>Onayla</Dugme>
-                <Dugme onClick={() => nedenYaz('reddet')}>Reddet</Dugme>
+                <Dugme tur="birincil" simge="check" yukleniyor={mesgul} data-onay-eylemi="onayla" onClick={() => islem('onayla')}>Onayla</Dugme>
+                <Dugme data-onay-eylemi="reddet" onClick={() => nedenYaz('reddet')}>Reddet</Dugme>
               </>
             )}
             {K.geriCekebilir(x, b) && <Dugme yukleniyor={mesgul} onClick={() => islem('geri')}>Onaydan geri çek</Dugme>}

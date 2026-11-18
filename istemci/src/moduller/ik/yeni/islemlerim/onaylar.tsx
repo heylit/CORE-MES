@@ -1,3 +1,6 @@
+import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { adrestekiOnayEylemi, ONAY_EYLEMI_PARAMETRESI } from '#paylasilan/sozlesme/eposta-sabitleri.ts';
 import {
   DurumKutusu, Dugme, Kart, SayfaBasligi, Simge,
 } from '../../../../ortak/arayuz/index.ts';
@@ -32,6 +35,22 @@ export function Onaylar(o: IkEkranOzellikleri) {
     anahtar: l.id, baslik: `${ad(l.empId)}: ${l.tur}`, simge: 'check' as const, aciklama: `${tarih(l.baslangic)} – ${tarih(l.bitis)}`,
     sozcukler: ['onay', 'izin', ad(l.empId)], calistir: () => { document.getElementById(`tc-ikm-talep-${l.id}`)?.focus(); },
   })) : null);
+  // Bildirim ve e-posta talebi `?talep=` ile açar (3431 a): talep satırı odak alır, e-postadaki eylemin düğmesi görünür alana alınır.
+  // Onayla ve Reddet doğrudan yazar; düğmeye odak verilirse tek Enter kararı verirdi.
+  const [adres, adresYaz] = useSearchParams();
+  const hedefTalep = adres.get('talep');
+  const eylem = adrestekiOnayEylemi(adres);
+  const hedefBekliyor = hedefTalep !== null && bekleyen.some((l) => l.id === hedefTalep);
+  const odaklanan = useRef<string | null>(null);
+  useEffect(() => {
+    if (hedefTalep === null || !hedefBekliyor || odaklanan.current === hedefTalep) return;
+    odaklanan.current = hedefTalep;
+    const kok = document.getElementById(`tc-ikm-talep-${hedefTalep}`);
+    kok?.focus();
+    const dugme = eylem === null ? null : kok?.querySelector<HTMLElement>(`[data-onay-eylemi="${eylem}"]`);
+    if (typeof dugme?.scrollIntoView === 'function') dugme.scrollIntoView({ block: 'center' });
+    if (eylem !== null) adresYaz((a) => { const y = new URLSearchParams(a); y.delete(ONAY_EYLEMI_PARAMETRESI); return y; }, { replace: true });
+  }, [hedefTalep, hedefBekliyor, eylem, adresYaz]);
   if (!me) return <BagliDegil baslik="Onaylar" simge="check" />;
 
   const karar = (l: Izin, durum: typeof IZIN_ONAYLI | typeof IZIN_RED) => yaz(
@@ -79,8 +98,8 @@ export function Onaylar(o: IkEkranOzellikleri) {
                 </div>
                 {o.yetki.izinOnay && (
                   <div className="tc-ikm-talep-eylem">
-                    <Dugme tur="birincil" disabled={komut.calisiyor} onClick={() => { void karar(l, IZIN_ONAYLI); }}>Onayla</Dugme>
-                    <Dugme disabled={komut.calisiyor} onClick={() => { void karar(l, IZIN_RED); }}>Reddet</Dugme>
+                    <Dugme tur="birincil" disabled={komut.calisiyor} data-onay-eylemi="onayla" onClick={() => { void karar(l, IZIN_ONAYLI); }}>Onayla</Dugme>
+                    <Dugme disabled={komut.calisiyor} data-onay-eylemi="reddet" onClick={() => { void karar(l, IZIN_RED); }}>Reddet</Dugme>
                   </div>
                 )}
               </li>

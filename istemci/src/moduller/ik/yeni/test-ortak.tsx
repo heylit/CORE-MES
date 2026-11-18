@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
@@ -91,6 +91,9 @@ export function sunucuKur(kullanici: Kullanici, veri: IkVeriCevabi = ornekVeri()
   return yazmalar;
 }
 
+// Sorgu dizgisi gizli öğede: e-postadaki eylemin adresten silindiği ölçülür (3431 a).
+function Arama() { return <p data-testid="arama" hidden>{useLocation().search}</p>; }
+
 export function ikAc(adres: string, { kullanici = IK_YONETICI, veri, okumalar }: { kullanici?: Kullanici; veri?: IkVeriCevabi; okumalar?: Okumalar } = {}) {
   const yazmalar = sunucuKur(kullanici, veri, okumalar);
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -98,6 +101,7 @@ export function ikAc(adres: string, { kullanici = IK_YONETICI, veri, okumalar }:
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
+          <Arama />
           <Suspense fallback={null}>
             <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
           </Suspense>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { adrestekiOnayEylemi, ONAY_EYLEMI_PARAMETRESI } from '#paylasilan/sozlesme/eposta-sabitleri.ts';
 import {
   Dugme, DurumKutusu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Simge, Tablo, useBildirim, useLogoRozetleri, type LogoRozetBilgisi, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
@@ -241,6 +242,16 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const acikKart = kartKimligi ? bul(kartKimligi) : undefined;
   const kartAc = (kimlik: string) => { pencereYaz(null); adresYaz((a) => { const y = new URLSearchParams(a); y.set('kart', kimlik); return y; }); };
   const kartKapat = () => adresYaz((a) => { const y = new URLSearchParams(a); y.delete('kart'); return y; });
+  // E-postadaki Onayla / Reddet (3431 a): kart açılınca düğme görünür alana alınır. Onayla doğrudan yazar, odak verilirse tek Enter
+  // onaylardı; yalnız gerekçe penceresi açan Reddet odak alır.
+  const eylem = adrestekiOnayEylemi(adres);
+  useEffect(() => {
+    if (eylem === null || acikKart === undefined) return;
+    const hedef = document.querySelector<HTMLElement>(`[data-onay-eylemi="${eylem}"]`);
+    if (eylem === 'reddet') hedef?.focus();
+    else if (hedef && typeof hedef.scrollIntoView === 'function') hedef.scrollIntoView({ block: 'center' });
+    adresYaz((a) => { const y = new URLSearchParams(a); y.delete(ONAY_EYLEMI_PARAMETRESI); return y; }, { replace: true });
+  }, [eylem, acikKart, adresYaz]);
 
   const yaz = async (kayit: KartKaydi): Promise<boolean> => {
     try {

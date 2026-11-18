@@ -16,6 +16,7 @@ import { SiparisSurumleri } from './SiparisSurumleri.tsx';
 import { GeriAlmaUyarisi, SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
+import { useOnayOdagi } from './onay-odagi.ts';
 import './siparisler.css';
 
 type Komut = 'onayla' | 'kapat' | 'iptal' | 'onay-geri-al' | 'arsivle' | 'arsivden-cikar';
@@ -74,6 +75,7 @@ export function SiparisAyrinti() {
     queryFn: () => api.get<SiparisAyrintisi>(`/siparisler/${id}`),
     enabled: Number.isInteger(id) && id > 0,
   });
+  useOnayOdagi(siparis.data !== undefined);
 
   const kapat = () => { komutYaz(null); nedenYaz(''); hataYaz(null); };
   const gonder = useMutation({
@@ -150,7 +152,7 @@ export function SiparisAyrinti() {
     <>
       <KlasorBaglantisi tur="siparis" id={s.id} />
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
-      {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
+      {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" data-onay-eylemi="onayla" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
       {/* SIP-40 (3427-4 a): onaylı sipariş taslağa dönmeden yeni sürümle düzenlenir; onayı geri almak kalem ve miktar içindir. */}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="edit" title="Fiyat, termin ve açıklama değişir; kayıt yeni sürüm olur" onClick={() => { void gezin(`/siparisler/${s.id}/yeni-surum`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}

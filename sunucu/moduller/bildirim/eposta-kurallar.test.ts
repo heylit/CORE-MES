@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { EPOSTA_KONULARI, EPOSTA_YER_TUTUCULARI, turKonusu } from '#paylasilan/sozlesme/bildirim-eposta.ts';
+import { EPOSTA_KONULARI, EPOSTA_YER_TUTUCULARI, adrestekiOnayEylemi, onayEylemiYolu, turKonusu, turOnayi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { basliktanKayitNo } from './eposta.ts';
 import {
   VARSAYILAN_SABLONLAR, bildirimAcikMi, disKipMi, epostaKipi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, sablonDoldur, sessizMi,
-  sonrakiDenemeDk, varsayilanTetikleyici, type EpostaDegerleri,
+  konuEtiketi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri,
 } from './kurallar.ts';
 
 const DEGER: EpostaDegerleri = {
@@ -120,5 +120,71 @@ describe('e-posta kuralları (3397)', () => {
     assert.equal(basliktanKayitNo('Talep onaylandı: Rulman alımı'), null);
     assert.equal(basliktanKayitNo('ORN-TLP-0042'), null);
     assert.equal(basliktanKayitNo('Emir: 2026/118'), '2026/118');
+  });
+
+  test('BIL-51 (3431 a): konu etiketi yalnız acil, onay ve kademede; kademe türden okunur', () => {
+    assert.equal(konuEtiketi({ onem: 'uyari' }), null);
+    assert.equal(konuEtiketi({ onem: 'bilgi', onay: null, kademe: null }), null);
+    assert.equal(konuEtiketi({ onem: 'acil', onay: { reddet: true } }), '[ACİL · Onay]');
+    assert.equal(konuEtiketi({ onem: 'uyari', kademe: { no: 3, toplam: 5, ad: 'Gecikti' } }), '[Kademe 3/5]');
+    assert.deepEqual(turKademesi('malzemeler.kademe-kart-onay-gecikti'), { no: 3, toplam: 5, ad: 'Gecikti' });
+    assert.equal(turKademesi('satin-alma.talep-onay-bekliyor'), null);
+    const g = epostaKur({
+      sablon: VARSAYILAN_SABLONLAR['satin-alma'], degerler: DEGER, baslik: 'Satın alma talebi onay bekliyor', onem: 'acil', simgeVar: false,
+      onay: { reddet: true }, kademe: { no: 3, toplam: 5, ad: 'Gecikti' },
+    });
+    assert.equal(g.konu, '[ACİL · Onay · Kademe 3/5] [CORE MES] Satın alma talebi onay bekliyor · ORN-TLP-0042');
+    assert.match(g.metin, /Kademe 3 \/ 5: Gecikti/);
+    assert.match(g.html, /Kademe 3 \/ 5: Gecikti/);
+    assert.match(g.html, />Acil</);
+  });
+
+  test('BIL-52 (3431 a): yükseltme cümlesi rol adıyla; kişi adı yazılmaz; yükseltme yoksa cümle yok', () => {
+    assert.equal(yukseltmeCumlesi(0, null, ['ORN Müdür'], false), null);
+    assert.equal(yukseltmeCumlesi(0, 2, ['ORN Müdür'], false), '2 gün içinde kapanmazsa ORN Müdür rolü de alır.');
+    assert.equal(yukseltmeCumlesi(0, 2, ['ORN A', 'ORN B'], true), '2 gün içinde kapanmazsa ORN A, ORN B rolleri de alır.');
+    assert.equal(yukseltmeCumlesi(0, 3, [], true), '3 gün içinde kapanmazsa yöneticiler de alır.');
+    assert.equal(yukseltmeCumlesi(0, 3, [], false), null);
+    assert.equal(yukseltmeCumlesi(1, 3, ['ORN Müdür'], false), 'Bu kayıt 3 gündür kapanmadığı için sana da gönderildi.');
+  });
+
+  test('BIL-53 (3431 a): onay türünde düğmeler kaydı eylemle açar; ret yalnız ret olan türde; bağlantısız e-postada düğme yok', () => {
+    assert.deepEqual(turOnayi('ik.izin-onay-bekliyor'), { reddet: true });
+    assert.deepEqual(turOnayi('siparisler.iskonto-onay-bekliyor'), { reddet: false });
+    assert.equal(turOnayi('satin-alma.talep-onaylandi'), null);
+    assert.equal(onayEylemiYolu('/malzemeler?kart=k1', 'reddet'), '/malzemeler?kart=k1&eylem=reddet');
+    assert.equal(onayEylemiYolu('/siparisler/4', 'onayla'), '/siparisler/4?eylem=onayla');
+    assert.equal(adrestekiOnayEylemi('?talep=1&eylem=onayla'), 'onayla');
+    assert.equal(adrestekiOnayEylemi('?eylem=sil'), null);
+    const kur = (onay: { reddet: boolean }, baglanti: string | null) => epostaKur({
+      sablon: VARSAYILAN_SABLONLAR['satin-alma'], degerler: { ...DEGER, kayit_baglantisi: baglanti }, baslik: 'Onay bekliyor', onem: 'uyari', simgeVar: false, onay,
+    });
+    const tam = kur({ reddet: true }, 'http://10.0.0.5:4100/satin-alma/onaylar?talep=t1');
+    assert.ok(tam.html.includes('href="http://10.0.0.5:4100/satin-alma/onaylar?talep=t1&amp;eylem=onayla"'));
+    assert.ok(tam.html.includes('eylem=reddet'));
+    assert.match(tam.metin, /Onayla: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\?talep=t1&eylem=onayla/);
+    assert.match(tam.metin, /iletmek kimseye onay yetkisi vermez/);
+    const retsiz = kur({ reddet: false }, 'http://10.0.0.5:4100/siparisler/4');
+    assert.ok(retsiz.html.includes('eylem=onayla') && !retsiz.html.includes('eylem=reddet'));
+    assert.match(tam.metin, /Reddet: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\?talep=t1&eylem=reddet/);
+    assert.match(tam.metin, /Kaydı aç: http:\/\/10\.0\.0\.5:4100\/satin-alma\/onaylar\?talep=t1$/m);
+    for (const satir of ['Kayıt no: ORN-TLP-0042', 'Olay: Satın alma talebi onay bekliyor', 'Tarih: 17.11.2026 09:30']) {
+      assert.ok(tam.metin.includes(satir), satir);
+      assert.ok(tam.html.includes(satir.split(': ')[1] ?? ''), satir);
+    }
+    assert.match(retsiz.metin, /Onayla: /);
+    assert.doesNotMatch(retsiz.metin, /Reddet:/);
+    for (const tur of ['siparisler.onay-bekliyor', 'siparisler.iskonto-onay-bekliyor', 'siparisler.termin-onay-bekliyor'] as const) assert.deepEqual(turOnayi(tur), { reddet: false }, tur);
+    for (const tur of ['satin-alma.talep-onay-bekliyor', 'malzemeler.kart-onay-bekliyor', 'ik.izin-onay-bekliyor'] as const) assert.deepEqual(turOnayi(tur), { reddet: true }, tur);
+    const baglantisiz = kur({ reddet: true }, null);
+    assert.doesNotMatch(baglantisiz.html, /eylem=|>Onayla</);
+  });
+
+  test('3431 a: alt bilgi kipten bağımsızdır ve tercih yolu Bildirim Merkezi\'dir; üst bilgi gönderen adını taşır', () => {
+    const g = epostaKur({ sablon: VARSAYILAN_SABLONLAR.genel, degerler: DEGER, baslik: 'Olay', onem: 'bilgi', simgeVar: false, gonderenAdi: 'ORN Makina' });
+    assert.doesNotMatch(g.metin, /kurum içi/);
+    assert.match(g.metin, /Bildirim Merkezi > Tercihler/);
+    assert.match(g.metin, /CORE MES tarafından ORN Makina adına gönderildi/);
+    assert.ok(g.html.includes('>ORN Makina<'));
   });
 });

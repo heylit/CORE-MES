@@ -55,6 +55,60 @@ describe('TMI Ç5: Satın Alma ekranında onay düğmeleri yalnız onay işlemi 
   });
 });
 
+describe('3431 a: e-postadaki Onayla ve Reddet talebi açıp ilgili denetime odaklanır', () => {
+  afterEach(() => { window.history.replaceState(null, '', '/'); });
+  for (const [eylem, secici] of [['onayla', '[data-act="approve"]'], ['reddet', '#ap-note']] as const) {
+    it(`${eylem}: ${eylem === 'onayla' ? 'Onayla görünür alana alınır, odak almaz (tek Enter onaylamasın)' : 'ret notu odak alır'}; onay kendiliğinden verilmez`, async () => {
+      const kaydir = vi.fn();
+      Element.prototype.scrollIntoView = kaydir;
+      const fetch = vi.fn(async (_yol: string, _secenek?: RequestInit) => new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } }));
+      vi.stubGlobal('fetch', fetch);
+      window.history.replaceState(null, '', `/satin-alma/onaylar?talep=${t.id}&eylem=${eylem}`);
+      const kok = document.createElement('div');
+      document.body.append(kok);
+      const kapat = ekranliBagla(kok, { rol: 'approver', sayfa: 'dash', yol: '/satin-alma/onaylar', git: () => {}, onaylayabilir: true });
+      if (eylem === 'reddet') await vi.waitFor(() => expect(document.activeElement).toBe(kok.querySelector(secici)));
+      else {
+        await vi.waitFor(() => expect(kaydir.mock.contexts).toContain(kok.querySelector(secici)));
+        expect(document.activeElement).not.toBe(kok.querySelector(secici));
+      }
+      expect(fetch.mock.calls.some((c) => c[1]?.method === 'POST')).toBe(false);
+      expect(new URLSearchParams(window.location.search).get('eylem')).toBeNull();
+      expect(new URLSearchParams(window.location.search).get('talep')).toBe(t.id);
+      kapat();
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    });
+  }
+});
+
+describe('3431 a: onay yetkili satın almacının karar sekmesinde (views.ts) e-postadaki eylem aynı denetimi bulur', () => {
+  afterEach(() => { window.history.replaceState(null, '', '/'); Reflect.deleteProperty(Element.prototype, 'scrollIntoView'); });
+  it('onayla: Onayla görünür alana alınır, odak almaz; reddet: not alanı odak alır; yazma yok, eylem adresten silinir', async () => {
+    for (const eylem of ['onayla', 'reddet'] as const) {
+      const kaydir = vi.fn();
+      Element.prototype.scrollIntoView = kaydir;
+      const fetch = vi.fn(async (_yol: string, _secenek?: RequestInit) => new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } }));
+      vi.stubGlobal('fetch', fetch);
+      window.history.replaceState(null, '', `/satin-alma/talepler?talep=${t.id}&eylem=${eylem}`);
+      const kok = document.createElement('div');
+      document.body.append(kok);
+      const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, onaylayabilir: true });
+      await vi.waitFor(() => expect(kok.querySelector('[data-act="approval-form"]')).not.toBeNull());
+      const onayla = kok.querySelector('[data-act="approve"]');
+      expect(onayla?.getAttribute('data-onay-eylemi')).toBe('onayla');
+      if (eylem === 'onayla') {
+        // Ekran yeniden çizilebilir; kaydırılan öğe aynı işaretli Onayla düğmesidir.
+        await vi.waitFor(() => expect((kaydir.mock.contexts as Element[]).some((e) => e.id === 'ap-onayla' && e.getAttribute('data-onay-eylemi') === 'onayla')).toBe(true));
+        expect(document.activeElement?.getAttribute('data-onay-eylemi')).not.toBe('onayla');
+      } else await vi.waitFor(() => expect(document.activeElement).toBe(kok.querySelector('#ap-note')));
+      expect(new URLSearchParams(window.location.search).get('eylem')).toBeNull();
+      expect(fetch.mock.calls.some((c) => c[1]?.method === 'POST')).toBe(false);
+      kapat();
+      document.body.innerHTML = '';
+    }
+  });
+});
+
 describe('TMI Ç3: Talepler süzgecinde onaylanıp siparişi beklenen talep "Onayda" sayılmaz', () => {
   // Sekme sayısı sıfırken çizilmez.
   const sayi = (kok: HTMLElement, v: string) => { const s = sekme(kok, v); return s ? (s.querySelector('.tc-gizli-etiket')?.textContent?.match(/\d+/)?.[0] ?? '0') : undefined; };

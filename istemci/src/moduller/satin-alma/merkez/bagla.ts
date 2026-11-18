@@ -12,6 +12,7 @@ import { onAfterRender, render } from "./views.ts";
 import { setBasamakYazar, setRoller } from "./memory.ts";
 import { setFiyatKilidi } from "./util.ts";
 import { api } from "../../../ortak/veri/api.ts";
+import { adrestekiOnayEylemi, ONAY_EYLEMI_PARAMETRESI, type OnayEylemi } from "#paylasilan/sozlesme/eposta-sabitleri.ts";
 
 // Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
 // Pencere kökü ortak pencere gibi sayfanın gövdesine konur: kabuğun üst çubuğu ve şeritleri perdenin altında kalır. Kök
@@ -68,6 +69,23 @@ let ilkYukleme: Promise<void> | null = null;
 let etkin: BaglamaSecenegi | null = null;
 // Ayrıntıyı merkezin kendisi açtıysa (listeden, iş kutusundan) "geri" düğmesi tarayıcı geçmişinde bir adım döner; adresle gelindiyse listeye gider.
 let icerdenAcilan: string | null = null;
+// E-postadaki Onayla / Reddet (3431 a): talep çizilince ilgili denetime odaklanılır; onay yine kişinin tıklamasıyla verilir. Açılış
+// verisi ve ayrıntı birkaç çizimde gelir; denetim görünene dek kısa aralıkla bakılır, en çok ODAK_DENEME kez.
+const ODAK_DENEME = 40;
+const ODAK_ARALIK_MS = 250;
+function eylemeOdaklan(eylem: OnayEylemi, kalan: number): ReturnType<typeof setTimeout> | null {
+  const hedef = document.querySelector<HTMLElement>(`[data-sa-merkez] [data-onay-eylemi="${eylem}"]`);
+  if (!hedef) return kalan > 0 ? setTimeout(() => { odakZamanlayici = eylemeOdaklan(eylem, kalan - 1); }, ODAK_ARALIK_MS) : null;
+  // Onayla doğrudan yazar: odak verilirse tek Enter onaylardı; düğme yalnız görünür alana alınır. Ret notu alanı odak alır.
+  if (hedef.tagName === 'INPUT') hedef.focus();
+  else if (typeof hedef.scrollIntoView === 'function') hedef.scrollIntoView({ block: 'center' });
+  // Yenilemede ya da geri dönüşte yeniden gösterilmesin; talep adresi kalır.
+  const adres = new URL(window.location.href);
+  adres.searchParams.delete(ONAY_EYLEMI_PARAMETRESI);
+  window.history.replaceState(window.history.state, "", adres);
+  return null;
+}
+let odakZamanlayici: ReturnType<typeof setTimeout> | null = null;
 
 function kancalariKur(): void {
   if (kancalar) return;
@@ -116,6 +134,9 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   // Adreste talep varsa ayrıntı açılır (yenileme, geri ve ileri tuşu); yoksa içeriden gelinen ayrıntı (aynı madde yolunda) korunur,
   // değilse maddenin ekranı açılır.
   const adrestekiTalep = new URLSearchParams(window.location.search).get("talep");
+  const eylem = adrestekiTalep ? adrestekiOnayEylemi(window.location.search) : null;
+  if (odakZamanlayici !== null) clearTimeout(odakZamanlayici);
+  odakZamanlayici = eylem === null ? null : eylemeOdaklan(eylem, ODAK_DENEME);
   if (adrestekiTalep) { if (V.page !== "request" || V.id !== adrestekiTalep) { V.page = "request"; V.id = adrestekiTalep; V.tab = null; } }
   else if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
   setRole(secenek.rol);
@@ -136,6 +157,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   document.addEventListener("visibilitychange", gorunce);
   return () => {
     clearInterval(zamanlayici);
+    if (odakZamanlayici !== null) { clearTimeout(odakZamanlayici); odakZamanlayici = null; }
     document.removeEventListener("visibilitychange", gorunce);
     if (etkin === secenek) { etkin = null; icerdenAcilan = null; bildirimYoluKur(null); } kok.innerHTML = ""; delete kok.dataset.saMerkez; pencereKoku.remove();
   };
