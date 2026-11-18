@@ -1,4 +1,5 @@
 // Başka modül ekranlarının ithal edebildiği tek dosya.
+import { anahtarlar } from './anahtarlar.ts';
 
 // Okutulan emrin sıradaki fason adımına gidiş (kart #97); Malzeme · Teslim paneli Teslim et altında gösterir.
 export { FasonaGonder } from './FasonaGonder.tsx';
@@ -13,5 +14,7 @@ export { RotaAkisi, type RotaAkisiAdimi } from './RotaAkisi.tsx';
 // Liste ve emir ayrıntısı (3003 a): Reçete ve Rota açma penceresini ve emrin işlemlerini parametre olarak verip bu adreslerde çizer.
 export { UretimEmirleri, type EmirAcmaYuvasi } from './UretimEmirleri.tsx';
 export { EmirAyrintisi } from './EmirAyrintisi.tsx';
+// Başka modülün köprüsünden emre yazılınca (iptal, plana al, bölme) liste ve ayrıntı bu önekle yeniden okunur; yoksa 30 sn eski kalır.
+export const URETIM_EMIRLERI_ONBELLEGI = anahtarlar.hepsi;
 // 3155: refakat kartı okutulunca emrin özeti (Malzeme · Teslim paneli okutma sonucu).
 export { KartEmirOzeti, useEmirAdimlari } from './KartEmirOzeti.tsx';

@@ -6,6 +6,7 @@ import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { HamOnerisiCevabi, PatlatmaOnizlemeCevabi, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { api } from '../../../ortak/veri/api.ts';
+import { URETIM_EMIRLERI_ONBELLEGI } from '../../uretim-emirleri/disari.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
 
 // Yeni Reçete ve Rota ekranının veri katmanı. Okuma ve yazma bugünkü köprünün TS tarafıdır (kopru.ts): aynı uçlar, aynı sürüm sırası,
@@ -94,6 +95,9 @@ export function useRrKomutu() {
         // Hafif komutlarda (rota, statü) kaynaklar yeniden okunmaz: ek eskisi kalır.
         istemci.setQueryData<RrVerisi>(anahtarlar.veri, (eski) => (eski ? { durum: c.durum as RrDurumu, ek: c.ek ?? eski.ek } : eski));
       }
+      // Emrin ana yeri Üretim Emirleri'dir (3003 a); listesi ve ayrıntısı kendi uçlarından okunur. Geçersiz kılınmazsa iptal edilen emir
+      // tazelik süresince listede kalır.
+      void istemci.invalidateQueries({ queryKey: URETIM_EMIRLERI_ONBELLEGI });
       return { sonuc: c.sonuc, durum: c.durum };
     },
     onError: (h) => {

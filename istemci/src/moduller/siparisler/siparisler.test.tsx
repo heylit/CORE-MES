@@ -289,7 +289,7 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/5');
     await screen.findByText('Deneme Braket');
     await oturumCozuldu(istekler);
-    for (const ad of ['Düzenle', 'Onayla', 'Kapat', 'İptal et']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+    for (const ad of ['Düzenle', 'Onayla', 'Tamamlandı olarak kapat', 'Siparişi iptal et']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
   });
 
   it('yazan taslağı düzenler ama onay düğmesi görmez', async () => {
@@ -309,7 +309,7 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/5/onayla', govde: { surum: 2 } });
     await screen.findByText('Sipariş onaylandı');
     expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Kapat' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tamamlandı olarak kapat' })).toBeTruthy();
   });
 
   it('sunucunun ret iletisi pencerede gösterilir', async () => {
@@ -407,13 +407,14 @@ describe('Satış siparişi ayrıntısı', () => {
       ? json(200, { ...AYRINTI_ONAYLI, durum: 'iptal', iptalNedeni: 'Deneme neden' } satisfies SiparisAyrintisi)
       : undefined));
     ac('/siparisler/6');
-    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Siparişi iptal et' }));
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
+    expect(within(pencere).getByText(/Planlanmış, başlamış ya da malzeme bağlanmış emir varsa iptal edilemez/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Siparişi iptal et' }));
     expect((await within(pencere).findByRole('alert')).textContent).toBe('İptal nedeni zorunlu.');
     expect(yazmalar(istekler)).toHaveLength(0);
     fireEvent.change(within(pencere).getByLabelText(/İptal nedeni/), { target: { value: 'Deneme neden' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Siparişi iptal et' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]!.govde).toEqual({ surum: 3, neden: 'Deneme neden' });
     await screen.findByText('Sipariş iptal edildi');
@@ -453,7 +454,7 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(geriAl.closest('[role="status"]')?.textContent).toMatch(/^Bu emirler kalemden çözülür/);
     expect((within(pencere).getByRole('button', { name: 'Onayı geri al' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Siparişi iptal et' }));
     pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
     expect((await within(pencere).findByText(/satın almada açık kalır/)).closest('[role="status"]')?.textContent).toMatch(/^Bu emirler iptal olur/);
   });
@@ -465,7 +466,7 @@ describe('Satış siparişi ayrıntısı', () => {
     } satisfies SiparisAcilisiCevabi;
     sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, hazirlik) : undefined));
     ac('/siparisler/6');
-    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Siparişi iptal et' }));
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
     const uyari = (await within(pencere).findByText(/hazırlık maddesi tamamlanmış/)).closest('[role="status"]');
     expect(uyari?.textContent).toMatch(/^Bu emirler iptal olur/);
@@ -507,12 +508,14 @@ describe('Satış siparişi ayrıntısı', () => {
       ? json(200, { ...AYRINTI_ONAYLI, durum: 'kapandi' } satisfies SiparisAyrintisi)
       : undefined));
     ac('/siparisler/6');
-    fireEvent.click(await screen.findByRole('button', { name: 'Kapat' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Siparişi kapat' });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Siparişi kapat' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi tamamlandı olarak kapat' });
+    expect(within(pencere).getByText(/satış raporlarında ve beklenen tahsilatta kalır/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Tamamlandı olarak kapat' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3 } });
-    await screen.findByText('Sipariş kapandı');
+    await screen.findByText('Sipariş tamamlandı olarak kapandı');
+    expect(screen.getByText('Tamamlandı')).toBeTruthy();
   });
 });
 

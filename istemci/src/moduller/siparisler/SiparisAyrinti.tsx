@@ -21,8 +21,15 @@ type Komut = 'onayla' | 'kapat' | 'iptal' | 'onay-geri-al';
 
 const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string; govde: string }> = {
   onayla: { baslik: 'Siparişi onayla', dugme: 'Onayla', basari: 'Sipariş onaylandı.', govde: 'Onaylanınca satırlar ve tutarlar değişmez.' },
-  kapat: { baslik: 'Siparişi kapat', dugme: 'Siparişi kapat', basari: 'Sipariş kapandı.', govde: 'Kapanan sipariş yeniden açılmaz. Teslimatın ve faturanın bittiğini kontrol edip kapatın.' },
-  iptal: { baslik: 'Siparişi iptal et', dugme: 'İptal et', basari: 'Sipariş iptal edildi.', govde: 'İptal edilen sipariş yeniden açılmaz. Nedeni yazın.' },
+  // Kapatma işin bittiğini, iptal hiç yapılmayacağını söyler; ikisi de "pencereyi kapat / formdan vazgeç" ile karışmasın diye adları sonucu anar.
+  kapat: {
+    baslik: 'Siparişi tamamlandı olarak kapat', dugme: 'Tamamlandı olarak kapat', basari: 'Sipariş tamamlandı olarak kapandı.',
+    govde: 'Teslimat ve fatura bittiyse kullanın. Sipariş satış raporlarında ve beklenen tahsilatta kalır; yeniden açılmaz.',
+  },
+  iptal: {
+    baslik: 'Siparişi iptal et', dugme: 'Siparişi iptal et', basari: 'Sipariş iptal edildi.',
+    govde: 'Sipariş yapılmayacaksa kullanın. Satış raporlarından ve beklenen tahsilattan çıkar; taslaktaki üretim emirleri iptal olur. Planlanmış, başlamış ya da malzeme bağlanmış emir varsa iptal edilemez, önce o emirleri kapatın. Yeniden açılmaz. Nedeni yazın.',
+  },
   // SIP-19 (3254 a): onay geri alınır, sipariş taslağa döner; emre bağlı kalemde yalnız termin değişir.
   'onay-geri-al': {
     baslik: 'Onayı geri al', dugme: 'Onayı geri al', basari: 'Onay geri alındı; sipariş taslakta.',
@@ -121,8 +128,8 @@ export function SiparisAyrinti() {
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}
-      {onaylayabilir && s.durum === 'onayli' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('kapat')}>Kapat</Dugme>}
-      {onaylayabilir && acik && <Dugme tur="tehlike" simge="x" onClick={() => komutYaz('iptal')}>İptal et</Dugme>}
+      {onaylayabilir && s.durum === 'onayli' && <Dugme tur="birincil" simge="flag" title="Teslimat ve fatura bitti; sipariş tamamlandı sayılır" onClick={() => komutYaz('kapat')}>Tamamlandı olarak kapat</Dugme>}
+      {onaylayabilir && acik && <Dugme tur="tehlike" simge="stop" title="Sipariş yapılmayacak; raporlardan ve tahsilattan çıkar" onClick={() => komutYaz('iptal')}>Siparişi iptal et</Dugme>}
     </>
   );
 
@@ -154,7 +161,7 @@ export function SiparisAyrinti() {
       {s.durum === 'onayli' && (
         <p className="tc-sp-bildirim" role="status"><strong>Sipariş onaylandı</strong> {s.onayZamani === null ? '' : zamanMetni(s.onayZamani)}</p>
       )}
-      {s.durum === 'kapandi' && <p className="tc-sp-bildirim" role="status"><strong>Sipariş kapandı</strong></p>}
+      {s.durum === 'kapandi' && <p className="tc-sp-bildirim" role="status"><strong>Sipariş tamamlandı olarak kapandı</strong></p>}
       {s.durum === 'iptal' && (
         <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status"><strong>Sipariş iptal edildi</strong> {s.iptalNedeni ?? ''}</p>
       )}
