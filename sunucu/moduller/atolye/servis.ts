@@ -216,6 +216,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
     alanlar: alanlar.map((a) => alanCevabi(a, o)),
     duvarlar,
     gecisler: gecisler.map(({ salonId: _s, ...g }) => g),
+    makineModelTurleri: Object.fromEntries([...modelTurleri].map(([id, tur]) => [String(id), tur])),
   };
 }
 

@@ -19,7 +19,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { modulAyariDegistir } from '../ayarlar/disari.ts';
-import { depoMalzemeCozucusu, gozBul, istasyonYerleri, rafSilmeEngeliCozucusu, rafYenidenNumarala } from './disari.ts';
+import { depoMalzemeCozucusu, gozBul, istasyonYerleri, makineModelTuruCozucusu, rafSilmeEngeliCozucusu, rafYenidenNumarala } from './disari.ts';
 import { uclar } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -1156,6 +1156,22 @@ describe('atolye (gerçek PostgreSQL)', () => {
       vt().sorgu('INSERT INTO atolye_makine_yeri (makine_id, salon_id, x, z, donus, genislik, derinlik) VALUES ($1, $2, 500, 5, 0, 2, 2)', [m1.id, s.id]),
       (h: { constraint?: string }) => h.constraint === 'atolye_salon_icinde',
     );
+  });
+
+  test('3408-3 c: yerleşim cevabı yerleşmemiş etkin makinelerin model türünü de taşır; türü olmayan makine yazılmaz', async () => {
+    const s = await salonKur();
+    const ist = await istasyonKur();
+    const m = (await yaz<{ id: number }>('/makineler', { kod: yeniKod('MK-'), ad: 'Deneme portal', istasyonId: ist.id })).govde;
+    const turu = (await yaz<{ id: number }>('/makineler', { kod: yeniKod('MK-'), ad: 'Deneme torna', istasyonId: ist.id })).govde;
+    makineModelTuruCozucusu(async (_db, idler) => new Map(idler.filter((id) => id === turu.id).map((id) => [id, 'm_dmgdmf360'] as const)));
+    try {
+      const c = (await oku<YerlesimCevabi>(`/atolye/salonlar/${s.id}`)).govde;
+      assert.equal(c.makineModelTurleri?.[String(turu.id)], 'm_dmgdmf360');
+      assert.equal(Object.hasOwn(c.makineModelTurleri ?? {}, String(m.id)), false);
+      assert.deepEqual(c.makineYerleri, []);
+    } finally {
+      makineModelTuruCozucusu(async () => new Map());
+    }
   });
   test('ATL-30 salonun krokisi parça parça yüklenir; PDF olmayan, eksik ve bozuk dosya reddedilir; hizalama sürümle yazılır; yeni yükleme eskisinin yerine geçer', async () => {
     const s = await salonKur();
