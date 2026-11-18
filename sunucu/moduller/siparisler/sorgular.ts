@@ -30,6 +30,8 @@ export interface SiparisSatiri {
   guncelleme: string | null;
   onay_zamani: string | null;
   surum: number;
+  arsiv_an: string | null;
+  arsivleyen_id: number | null;
 }
 
 // Satır tutarı iki ondalığa yuvarlanır; toplam yuvarlanmış satırların toplamıdır, KDV toplamdan hesaplanır.
@@ -38,7 +40,7 @@ const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.firma_kodu, s.musteri_s
                       t.ara_toplam + round(t.ara_toplam * s.kdv_orani / 100, 2) AS genel_toplam, s.gecikme_ceza_orani,
                       s.ceza_tavani_orani, s.odeme_vadesi_gun, s.iptal_nedeni,
                       ${zamanMetni('s.olusturma')} AS olusturma, ${zamanMetni('s.guncelleme')} AS guncelleme,
-                      ${zamanMetni('s.onay_zamani')} AS onay_zamani, s.surum
+                      ${zamanMetni('s.onay_zamani')} AS onay_zamani, s.surum, ${zamanMetni('s.arsiv_an')} AS arsiv_an, s.arsivleyen_id
                  FROM siparisler_siparis s
                  CROSS JOIN LATERAL (
                    SELECT CASE WHEN bool_and(r.birim_fiyat IS NOT NULL) IS FALSE THEN NULL
@@ -59,11 +61,14 @@ export interface SiparisSuzgeci {
   firmaId: number | null;
   // Deneme işaretli sipariş listede sayılmaz ve görünmez (3395 madde 2).
   gizli: readonly number[];
+  // 3425 a: null süzmez; true yalnız arşivdekiler, false arşivdekiler hariç.
+  arsiv: boolean | null;
 }
 
 const KOSUL = `WHERE ($1::text IS NULL OR s.no ILIKE $1 OR s.musteri_siparis_no ILIKE $1)
-                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3) AND NOT (s.id = ANY($4::int[]))`;
-const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId, [...s.gizli]];
+                 AND ($2::text IS NULL OR s.durum = $2) AND ($3::int IS NULL OR s.firma_id = $3) AND NOT (s.id = ANY($4::int[]))
+                 AND ($5::boolean IS NULL OR (s.arsiv_an IS NOT NULL) = $5)`;
+const kosulParametreleri = (s: SiparisSuzgeci): unknown[] => [s.kalip, s.durum, s.firmaId, [...s.gizli], s.arsiv];
 
 export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM siparisler_siparis s ${KOSUL}`, kosulParametreleri(s));
@@ -72,7 +77,7 @@ export async function siparisSay(db: Db, s: SiparisSuzgeci): Promise<number> {
 
 export function siparisSatirlari(db: Db, s: SiparisSuzgeci, siralama: SiralamaIstegi<SiparisSiralamasi>, dilim: Dilim): Promise<SiparisSatiri[]> {
   return db.sorgu<SiparisSatiri>(
-    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $5 OFFSET $6`,
+    `${SECIM} ${KOSUL} ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $6 OFFSET $7`,
     [...kosulParametreleri(s), dilim.sinir, dilim.atla],
   );
 }
@@ -109,14 +114,15 @@ export function kalemleriGetir(db: Db, idler: number[]): Promise<KalemSatiri[]> 
 }
 
 export interface SiparisKilidi {
-  durum: SiparisDurumu; firma_id: number; surum: number;
+  durum: SiparisDurumu; firma_id: number; surum: number; arsivde: boolean;
   gecikme_ceza_orani: string | null; ceza_tavani_orani: string | null; odeme_vadesi_gun: number | null;
 }
 
 // Durum ve firma kilitlenerek okunur: eşzamanlı komutta kural güncel duruma göre işler.
 export function siparisKilitle(db: Db, id: number): Promise<SiparisKilidi | null> {
   return db.tek<SiparisKilidi>(
-    'SELECT durum, firma_id, surum, gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [id],
+    `SELECT durum, firma_id, surum, arsiv_an IS NOT NULL AS arsivde, gecikme_ceza_orani, ceza_tavani_orani, odeme_vadesi_gun
+       FROM siparisler_siparis WHERE id = $1 FOR UPDATE`, [id],
   );
 }
 
@@ -245,6 +251,17 @@ export function durumYaz(
             guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $5 RETURNING id`,
     [id, g.hedef, g.iptalNedeni, g.kisiId, g.surum],
+  );
+}
+
+// 3425 a: arşiv yalnız görünürlüktür; durum ve iptal nedeni değişmez, sürüm artar.
+export function siparisArsivYaz(db: Db, id: number, g: { surum: number; kisiId: number; arsivle: boolean }): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_siparis
+        SET arsiv_an = CASE WHEN $3 THEN now() END, arsivleyen_id = CASE WHEN $3 THEN $4::int END,
+            guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, g.surum, g.arsivle, g.kisiId],
   );
 }
 

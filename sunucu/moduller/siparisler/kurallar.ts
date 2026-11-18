@@ -183,6 +183,16 @@ export function gecisReddi(durum: SiparisDurumu, komut: DurumKomutu): string | n
 
 // SIP-04 (2103 a): bağlı açık üretim emri olan sipariş iptal edilmez; önce emir kapatılır ya da iptal edilir. İptal olayı yoktur:
 // emir ve plan iptalden habersiz çalışmaya devam ederdi. Açık, bitmemiş ve iptal edilmemiş emirdir (taslak, planlı, başlamış).
+// 3425 a: yalnız iptal edilmiş sipariş arşive kalkar; kayıt silinmez, geri alınır. Arşiv yalnız listenin görünürlüğüdür.
+export const SIPARIS_ARSIVLENEMEZ = 'Yalnız iptal edilmiş sipariş arşive kaldırılır.';
+export const SIPARIS_ARSIVDE = 'Sipariş zaten arşivde.';
+export const SIPARIS_ARSIVDE_DEGIL = 'Sipariş arşivde değil.';
+export function siparisArsivReddi(durum: SiparisDurumu, arsivde: boolean, arsivle: boolean): string | null {
+  if (!arsivle) return arsivde ? null : SIPARIS_ARSIVDE_DEGIL;
+  if (arsivde) return SIPARIS_ARSIVDE;
+  return durum === 'iptal' ? null : SIPARIS_ARSIVLENEMEZ;
+}
+
 export const BAGLI_ACIK_EMIR = 'Siparişe bağlı açık üretim emri var; önce emirleri kapatın ya da iptal edin';
 const GOSTERILEN_EMIR = 5;
 

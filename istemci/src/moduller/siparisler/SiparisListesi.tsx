@@ -9,12 +9,12 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
-import { SIPARIS_DURUMU, SIPARIS_SEKMELERI, kalanGun, paraMetni, tarihMetni, type SiparisSekmesi } from './gorunum.ts';
+import { SIPARIS_DURUMU, SIPARIS_SEKMELERI, kalanGun, paraMetni, tarihMetni, zamanMetni, type SiparisSekmesi } from './gorunum.ts';
 import { useFiyatGorur, useYazabilir } from './yazma.ts';
 import './siparisler.css';
 
 const SIRALAMA_ALANLARI = ['no', 'siparisTarihi', 'termin'] as const;
-const DURUMLAR = ['tumu', 'taslak', 'onayli', 'kapandi', 'iptal'] as const;
+const DURUMLAR = ['tumu', 'taslak', 'onayli', 'kapandi', 'iptal', 'arsiv'] as const;
 
 const SUTUNLAR: Sutun<Siparis>[] = [
   {
@@ -50,6 +50,18 @@ const SUTUNLAR: Sutun<Siparis>[] = [
   { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={SIPARIS_DURUMU[s.durum].ton}>{SIPARIS_DURUMU[s.durum].etiket}</Rozet> },
 ];
 
+const ARSIV_SUTUNU: Sutun<Siparis> = {
+  anahtar: 'arsivleyen',
+  baslik: 'Arşivleyen',
+  hucre: (s) => (s.arsiv === null ? '—' : (
+    <span className="tc-sp-ad">
+      <span>{s.arsiv.kisi ?? '—'}</span>
+      <span className="tc-sp-soluk">{zamanMetni(s.arsiv.an)}</span>
+    </span>
+  )),
+  csv: (s) => (s.arsiv === null ? '' : `${s.arsiv.kisi ?? '—'} · ${zamanMetni(s.arsiv.an)}`),
+};
+
 // Satış siparişleri (asıl sayfa): durum sekmeleri, arama ve firma süzgeci; satır ayrıntıya gider.
 export function SiparisListesi() {
   const gezin = useNavigate();
@@ -57,7 +69,7 @@ export function SiparisListesi() {
   const fiyatGorur = useFiyatGorur();
   const liste = useListeDurumu({
     suzgecler: { ara: '', durum: '' as string },
-    suzgecDegerleri: { durum: ['taslak', 'onayli', 'kapandi', 'iptal'] },
+    suzgecDegerleri: { durum: ['taslak', 'onayli', 'kapandi', 'iptal', 'arsiv'] },
     siralamaAlanlari: SIRALAMA_ALANLARI,
     adres: true,
   });
@@ -71,7 +83,9 @@ export function SiparisListesi() {
 
   const sekme: SiparisSekmesi = DURUMLAR.find((d) => d === liste.suzgecler.durum) ?? 'tumu';
   // Firma süzgeci adrese yazılmaz: seçili firmanın adı yalnız bu oturumda bellidir.
-  const sorgu = { ...liste.sorgu, ...(firma === null ? {} : { firmaId: firma.id }) };
+  // 3425 a: arşiv sekmesi durum süzgeci değil, ayrı sorgu alanıdır; öbür sekmeler arşivdekileri göstermez.
+  const arsivde = sekme === 'arsiv';
+  const sorgu = { ...liste.sorgu, ...(arsivde ? { durum: undefined, arsiv: 'evet' } : { arsiv: 'hayir' }), ...(firma === null ? {} : { firmaId: firma.id }) };
   const suzulu = liste.suzulu || firma !== null;
   const siparisler = useQuery({
     queryKey: anahtarlar.siparisListe(sorgu),
@@ -84,7 +98,9 @@ export function SiparisListesi() {
     anahtar: 'logo', baslik: 'Logo', hucre: (s) => <LogoRozetHucresi bilgi={logo.durum(s.id)} hata={logo.hata} />,
     csv: (s) => { const d = logo.durum(s.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
   };
-  const sutunlar = [...(fiyatGorur ? SUTUNLAR : SUTUNLAR.filter((k) => k.anahtar !== 'tutar')), logoSutunu];
+  // Arşivde yalnız iptal edilmiş sipariş durur; hep aynı olan Durum sütunu yerine arşivleyen gösterilir.
+  const temel = SUTUNLAR.filter((k) => (fiyatGorur || k.anahtar !== 'tutar') && (!arsivde || k.anahtar !== 'durum'));
+  const sutunlar = [...temel, logoSutunu, ...(arsivde ? [ARSIV_SUTUNU] : [])];
 
   return (
     <section className="tc-sp">
@@ -131,7 +147,7 @@ export function SiparisListesi() {
             satirAnahtari={(s) => s.id}
             satirSec={(s) => { void gezin(`/siparisler/${s.id}`); }}
             mesgul={siparisler.isPending}
-            bosMesaj={siparisler.isPending ? 'Yükleniyor' : suzulu ? 'Bu süzgece uyan sipariş yok.' : 'Henüz satış siparişi yok.'}
+            bosMesaj={siparisler.isPending ? 'Yükleniyor' : arsivde ? 'Arşivde sipariş yok.' : suzulu ? 'Bu süzgece uyan sipariş yok.' : 'Henüz satış siparişi yok.'}
             bosEylem={siparisler.isPending ? undefined : suzulu
               ? <Dugme simge="x" onClick={() => { liste.suzgecleriTemizle(); firmaYaz(null); }}>Süzgeci temizle</Dugme>
               : yazabilir && <Dugme simge="plus" onClick={() => { void gezin('/siparisler/yeni'); }}>Yeni sipariş</Dugme>}

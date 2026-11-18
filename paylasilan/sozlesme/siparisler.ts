@@ -97,6 +97,8 @@ export const onayGeriAlGovdesi = z.object({
   ...beklenenSurum,
   neden: z.string().trim().min(1, 'Onayı geri alma nedeni zorunlu.').max(500, 'En çok 500 karakter.'),
 }).strict();
+// 3425 a: arşive kaldırma ve arşivden çıkarma yalnız sürümle gelir; neden sorulmaz (iptal nedeni yazılıdır).
+export const siparisArsivGovdesi = z.object({ ...beklenenSurum });
 export const iptalGovdesi = z.object({
   ...beklenenSurum,
   neden: z.string().trim().min(1, 'İptal nedeni zorunlu.').max(500, 'En çok 500 karakter.'),
@@ -107,6 +109,8 @@ export const siparisListesiSorgusu = z.object({
   ara: z.string().trim().max(80).optional(),
   durum: siparisDurumuSemasi.optional(),
   firmaId: z.coerce.number<number>().int().positive().max(2147483647).optional(),
+  // 3425 a: verilmezse süzülmez (başka modüllerin okuması değişmez); sipariş sayfası her zaman gönderir.
+  arsiv: z.enum(['evet', 'hayir']).optional(),
 });
 
 export const siparisSatiriSemasi = z.object({
@@ -160,6 +164,8 @@ export const siparisSemasi = z.object({
   guncelleme: zamanSemasi.nullable(),
   onayZamani: zamanSemasi.nullable(),
   surum: surumSemasi,
+  // 3425 a: iptal edilip arşive kalkan sipariş; kim ve ne zaman. Arşivde değilse null.
+  arsiv: z.object({ an: zamanSemasi, kisi: z.string().nullable() }).nullable(),
 });
 
 export const siparisAyrintiSemasi = siparisSemasi.extend({ satirlar: z.array(siparisSatiriSemasi) });
