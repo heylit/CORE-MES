@@ -35,3 +35,12 @@
   display: grid;
   gap: var(--b-3);
 }
+
+/* Sıfırdan başla (3426 a). */
+.tc-temizlik-tehlike { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3); border-radius: var(--yari-2); border: 1px solid var(--stop); color: var(--ink); }
+.tc-temizlik-tehlike > b { color: var(--stop); }
+.tc-temizlik-kutular { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--dokunma) * 6)), 1fr)); gap: var(--b-3); }
+.tc-temizlik-sil, .tc-temizlik-kal { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); border-radius: var(--yari-2); min-width: 0; }
+.tc-temizlik-sil { border: 1px solid var(--stop); }
+.tc-temizlik-kal { border: 1px solid var(--run); }
+.tc-temizlik-sil ul, .tc-temizlik-kal ul { margin: 0; padding-left: var(--b-4); font-size: var(--yazi-s); overflow-wrap: anywhere; }

@@ -545,3 +545,59 @@ export function temizlikYedegiUygunMu(yedek: { zaman: string; boyut: number } | 
   const yas = simdi.getTime() - Date.parse(yedek.zaman);
   return yas >= -60_000 && yas <= enEskiDk * 60_000;
 }
+
+// "Sıfırdan başla" (3426 a). Listede olmayan her tablo boşalır; yeni tablo ekleyen göç bir şey yazmazsa tablosu silinenlere girer.
+// Sistem: ilk kurulumda satırı olan tablolar (sistemin kendi tanımları; test göç sonrası dolu tabloları buna karşı denetler) ve
+// sistem ayarları. Numara sayaçları da kalır: yeni belge numarası Logo'daki eski belgelerle çakışmaz.
+export const SIFIRLAMA_SISTEM = [
+  'ayar', 'ayar_firma_kodu', 'ayar_numara_sayaci',
+  'bildirim_cagri_alicisi', 'bildirim_cagri_ekibi', 'bildirim_eposta_sablonu', 'bildirim_eposta_tetikleyici', 'bildirim_eposta_yukselt_rolu',
+  'bildirim_kademe_ayari', 'bildirim_kademe_baslangic', 'bildirim_push_turu', 'bildirim_tur_ayari', 'bildirim_tur_gosterimi', 'bildirim_tur_rolu',
+  'cekirdek_aylik_bolum', 'durus_nedeni', 'etiket_merkezi_etiket_turu', 'finans_ayar', 'finans_kdv_orani', 'hurda_nedeni',
+  'istasyonlar_operasyon_tipi', 'logo_malzeme_fisi_imleci', 'malzeme_birimi', 'malzeme_kategorisi', 'musteri_tedarikci_karne_agirlik',
+  'olcu_aleti_turu', 'ortak_dosyalar_sablon', 'oturum_cihaz_ayari', 'oturum_cihaz_profili', 'plan_ayari', 'plan_durumu',
+  'profil_geri_bildirim_kategori', 'projeler_ayar', 'projeler_hazirlik_kademe_ayari', 'rol', 'rol_islemi',
+  'rota_islem_kategorisi', 'rota_islem_sartnamesi', 'rota_islem_sartnamesi_atfi', 'rota_islem_sartnamesi_parametresi',
+  'rota_islem_sartnamesi_surumu', 'rota_sablon_adimi', 'rota_sablonu', 'rota_standart_adim', 'rota_standart_atfi',
+  'rota_talimat_sablon_adimi', 'rota_talimat_sablonu', 'satin_alma_ayar', 'satin_alma_kur', 'siparisler_teklif_formu_kurum',
+  'siparisler_teklif_formu_sablonu', 'smartes_sayim_aktarimi', 'stok_depo', 'stok_depo_yerlesimi', 'stok_konum',
+  'uretim_emirleri_hazirlik_maddesi',
+] as const;
+// Kişiye bağlı yetki satırları: "kullanıcılar kalsın" seçilmezse yalnız işlemi yapan yöneticinin satırları kalır.
+export const SIFIRLAMA_KISI = ['kisi_rolu', 'kisi_islemi', 'kisi_islem_kisiti'] as const;
+// Oturumlar her durumda yalnız yöneticininki kalır: öteki kullanıcılar oturumdan çıkar.
+export const SIFIRLAMA_HER_ZAMAN_KISMI = ['oturum'] as const;
+export const SIFIRLAMA_TANIM = [
+  'ekip', 'ekip_uye', 'is_merkezi', 'istasyon', 'istasyon_kisi', 'istasyonlar_aparat_kapasitesi', 'istasyonlar_aparat_kesintisi',
+  'istasyonlar_ayar_yetkinligi', 'istasyonlar_ayar_yetkinligi_gecmisi', 'istasyonlar_kisi_tezgah_siniri', 'istasyonlar_kod_gecmisi',
+  'istasyonlar_makine_durumu', 'istasyonlar_makine_yetkinlik', 'istasyonlar_makine_yetkinlik_gecmisi', 'istasyonlar_plan_ayari',
+  'istasyonlar_yetkinlik', 'istasyonlar_yetkinlik_gecmisi', 'kisi_is_merkezi', 'makine', 'makine_kisi',
+  'vardiya', 'vardiya_departman', 'vardiya_fazla_mesai', 'vardiya_fazla_mesai_kisi', 'vardiya_gunu', 'vardiya_kisi', 'vardiya_matrisi',
+  'vardiya_molasi', 'vardiya_planli_durus', 'vardiya_takvim_gunu', 'vardiya_varsayilani',
+] as const;
+export const SIFIRLAMA_DENETIM = ['denetim_kaydi', 'denetim_degisiklik', 'okuma_kaydi'] as const;
+
+// Denetim izi seçenek değildir, her zaman kalır (3426 denetim a; ADR 0002, ADR 0005); göç işlevi de ona dokunmaz.
+export interface SifirlamaSecimi { kullanicilar: boolean; tanimlar: boolean }
+
+export function sifirlamaKapsami(s: SifirlamaSecimi): { kalan: string[]; kismi: string[] } {
+  const kalan: string[] = [...SIFIRLAMA_SISTEM, ...SIFIRLAMA_DENETIM];
+  if (s.tanimlar) kalan.push(...SIFIRLAMA_TANIM);
+  if (s.kullanicilar) kalan.push(...SIFIRLAMA_KISI);
+  return { kalan, kismi: [...SIFIRLAMA_HER_ZAMAN_KISMI, ...(s.kullanicilar ? [] : SIFIRLAMA_KISI)] };
+}
+
+// Ekranın özet satırları: ana kayıtlar adıyla, gerisi tek satırda.
+export const SIFIRLAMA_ANA_TABLOLAR = {
+  uretim_emri: 'Üretim emri', siparisler_siparis: 'Sipariş', malzeme_katalog_karti: 'Malzeme kartı', stok_hareketi: 'Stok hareketi', kisi: 'Kişi (silinir ya da girişsiz kalır)',
+} as const;
+
+export function sifirlamaOzetSatirlari(sayilar: Record<string, number>): { ad: string; sayi: number }[] {
+  const ana = Object.entries(SIFIRLAMA_ANA_TABLOLAR).flatMap(([t, ad]) => (sayilar[t] ?? 0) > 0 ? [{ ad, sayi: sayilar[t]! }] : []);
+  const digerleri = Object.entries(sayilar).filter(([t]) => !(t in SIFIRLAMA_ANA_TABLOLAR));
+  const diger = digerleri.reduce((top, [, n]) => top + n, 0);
+  return diger > 0 ? [...ana, { ad: `Diğer (${String(digerleri.length)} tablo)`, sayi: diger }] : ana;
+}
+
+// Varsayılan kapalı: canlı pakette de açık gelmesin; sunucu ortamında TMIV2_SIFIRLAMA_ACIK=1 ile açılır (kullanıcı denemesinden sonra).
+export const sifirlamaAcikMi = (env: Readonly<Record<string, string | undefined>>): boolean => env['TMIV2_SIFIRLAMA_ACIK']?.trim() === '1';
