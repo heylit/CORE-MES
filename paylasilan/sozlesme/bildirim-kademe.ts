@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { KADEME_GUN_EN_COK, KADEME_KAYNAK_ANAHTARLARI, KADEME_SAYACLARI } from './kademe-sabitleri.ts';
+import { KADEME_BIRIMLERI, KADEME_GUN_EN_COK, KADEME_KAYNAK_ANAHTARLARI, KADEME_SAYACLARI } from './kademe-sabitleri.ts';
 
 export * from './kademe-sabitleri.ts';
 
@@ -24,6 +24,7 @@ export const kademeAyarSatiri = z.object({
   acik: z.boolean(),
   k2Gun: gun,
   k3Gun: gun,
+  k3Birim: z.enum(KADEME_BIRIMLERI),
   k4Gun: gun,
   k5Gun: gun,
   epostaKademe: z.number().int().min(2).max(5),
@@ -51,6 +52,8 @@ export const kademeAyarDegistirGovdesi = z.object({
   acik: z.boolean(),
   k2Gun: gun,
   k3Gun: gun,
+  // Eski istemci birimi göndermez: gün sayılır.
+  k3Birim: z.enum(KADEME_BIRIMLERI).default('gun'),
   k4Gun: gun,
   k5Gun: gun,
   epostaKademe: z.number().int().min(2).max(5),

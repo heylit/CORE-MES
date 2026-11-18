@@ -1,5 +1,6 @@
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { KademeSayaci } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
+import type { KademeBirimi, KademeSayaci } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import {
   BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
@@ -252,6 +253,8 @@ export interface KademeKurali {
   k3Gun: number | null;
   k4Gun: number | null;
   k5Gun: number | null;
+  // 3418 a: bekleme sayacında k3Gun saat olabilir; verilmezse gündür.
+  k3Birim?: KademeBirimi;
 }
 
 const tarihEkle = (t: string, g: number): string => new Date(Date.parse(`${t}T00:00:00Z`) + g * 86_400_000).toISOString().slice(0, 10);
@@ -268,12 +271,36 @@ export function isGunuFarki(bas: string, bit: string, tatiller: ReadonlySet<stri
   }
 }
 
+const isGunuMu = (t: string, tatiller: ReadonlySet<string>): boolean => {
+  const gun = new Date(`${t}T00:00:00Z`).getUTCDay();
+  return gun !== 0 && gun !== 6 && !tatiller.has(t);
+};
+
+// 3418 a: bas anından bit anına iş günlerinde geçen süre (saat). Gün, tesis takvim günüdür; hafta sonu ve resmi tatil sayılmaz,
+// iş günündeki mesai dışı saatler sayılır. `esik` verilirse sürenin o saate ulaştığı tesis günü de döner (ulaşmadıysa null).
+export function isSaatiFarki(bas: number, bit: number, tatiller: ReadonlySet<string>, esik: number | null = null): { saat: number; esikGunu: string | null } {
+  let ms = 0;
+  let esikGunu: string | null = null;
+  if (bit <= bas) return { saat: 0, esikGunu: null };
+  const son = tesisGunu(bit);
+  for (let t = tesisGunu(bas); t <= son; t = tarihEkle(t, 1)) {
+    if (!isGunuMu(t, tatiller)) continue;
+    const pay = Math.min(bit, tesisGunBasi(tarihEkle(t, 1))) - Math.max(bas, tesisGunBasi(t));
+    if (pay <= 0) continue;
+    ms += pay;
+    if (esik !== null && esikGunu === null && ms >= esik * 3_600_000) esikGunu = t;
+  }
+  return { saat: ms / 3_600_000, esikGunu };
+}
+
 // Kaydın bugün ulaşması gereken kademeler ve gecikme günü (iş günü; gecikmenin ilk günü 1). 3396'nın kuralıdır:
 // son gün sayacında K2 son güne en çok `k2Gun` iş günü kala, K3 son gün geçince; bekleme sayacında K3 `k3Gun` iş günü bekleyince.
+// Saat biriminde K3, başlangıç anından iş günlerinde `k3Gun` saat geçince; gecikmenin ilk günü sınırın aşıldığı gündür.
 // K4 ve K5 gecikmenin `k4Gun`'üncü ve `k5Gun`'üncü iş gününde. Yapanı olmayan kayıt K1-K3'e girmez ama gecikince yukarı çıkar:
 // atanmamış iş de yapılmamış iştir. Tarihi olmayan kayıt hiçbir kademeye girmez (sıfır uydurulmaz).
 export function gerekenKademeler(
-  kayit: { sonGun: string | null; baslangic: string | null; yapanVar: boolean }, kural: KademeKurali, bugun: string, tatiller: ReadonlySet<string>,
+  kayit: { sonGun: string | null; baslangic: string | null; baslangicAni?: string | null; yapanVar: boolean }, kural: KademeKurali, bugun: string,
+  tatiller: ReadonlySet<string>, simdi: number = tesisGunBasi(bugun),
 ): { kademeler: number[]; gecikme: number | null } {
   const l: number[] = [];
   if (kayit.yapanVar) l.push(1);
@@ -284,8 +311,16 @@ export function gerekenKademeler(
     if (bugun > kayit.sonGun) gecikme = Math.max(0, isGunuFarki(kayit.sonGun, bugun, tatiller));
   } else {
     if (kayit.baslangic === null || kural.k3Gun === null) return { kademeler: l, gecikme: null };
-    const bekleme = Math.max(0, isGunuFarki(kayit.baslangic, bugun, tatiller));
-    if (bekleme >= kural.k3Gun) gecikme = bekleme - kural.k3Gun + 1;
+    if (kural.k3Birim === 'saat') {
+      // Anı vermeyen kaynakta bekleme başlangıç gününün başından sayılır.
+      const ani = kayit.baslangicAni ?? null;
+      const an = ani === null ? tesisGunBasi(kayit.baslangic) : Date.parse(ani);
+      const { esikGunu } = isSaatiFarki(an, simdi, tatiller, kural.k3Gun);
+      if (esikGunu !== null) gecikme = Math.max(0, isGunuFarki(esikGunu, bugun, tatiller)) + 1;
+    } else {
+      const bekleme = Math.max(0, isGunuFarki(kayit.baslangic, bugun, tatiller));
+      if (bekleme >= kural.k3Gun) gecikme = bekleme - kural.k3Gun + 1;
+    }
   }
   if (gecikme === null) return { kademeler: l, gecikme: null };
   if (kayit.yapanVar) l.push(3);
@@ -302,7 +337,11 @@ export function bildirilecekKademe(gereken: readonly number[], yazilmis: Readonl
 }
 
 // Ayar yazımı: günlerin anlamı sayaca göre değişir. Sırası bozuk gün (K5, K4'ten önce) reddedilir; ekran da aynı denetimi yapar.
-export function kademeAyarHatasi(sayac: KademeSayaci, g: { acik: boolean; k2Gun: number | null; k3Gun: number | null; k4Gun: number | null; k5Gun: number | null }): { mesaj: string; alan: string } | null {
+export function kademeAyarHatasi(
+  sayac: KademeSayaci, g: { acik: boolean; k2Gun: number | null; k3Gun: number | null; k4Gun: number | null; k5Gun: number | null; k3Birim?: KademeBirimi },
+): { mesaj: string; alan: string } | null {
+  if (sayac === 'son-gun' && g.k3Birim === 'saat') return { mesaj: 'Saat birimi yalnız bekleme süresi sayılan kaynakta seçilir.', alan: 'k3Birim' };
+  if (sayac === 'bekleme' && g.k3Birim === 'saat' && g.k3Gun !== null && g.k3Gun < 1) return { mesaj: 'Gecikti için en az 1 saat gerekir.', alan: 'k3Gun' };
   if (sayac === 'bekleme' && g.k2Gun !== null) return { mesaj: 'Bu kaynakta Yaklaşıyor kademesi yoktur.', alan: 'k2Gun' };
   if (sayac === 'son-gun' && g.k3Gun !== null) return { mesaj: 'Bu kaynakta Gecikti son gün geçince başlar; gün yazılmaz.', alan: 'k3Gun' };
   if (sayac === 'bekleme' && g.acik && g.k3Gun === null) return { mesaj: 'Gecikti için bekleme günü gerekir.', alan: 'k3Gun' };

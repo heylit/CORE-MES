@@ -27,7 +27,7 @@ const gunMetni = (g: number | null): string => (g === null ? 'kapalı' : `${Stri
 function gunOzeti(s: KademeAyarSatiri): string {
   const parcalar = s.sayac === 'son-gun'
     ? [`K2 ${s.k2Gun === null ? 'kapalı' : `${String(s.k2Gun)} iş günü kala`}`, 'K3 son gün geçince']
-    : [`K3 ${gunMetni(s.k3Gun)} bekleyince`];
+    : [`K3 ${s.k3Birim === 'saat' && s.k3Gun !== null ? `${String(s.k3Gun)} saat` : gunMetni(s.k3Gun)} bekleyince`];
   parcalar.push(`K4 ${gunMetni(s.k4Gun)}`, `K5 ${gunMetni(s.k5Gun)}`);
   return parcalar.join(' · ');
 }
@@ -60,7 +60,7 @@ export function KademeliUyari() {
     <div className="tc-bildirim-sayfa">
       <Kart baslik="Kademeli uyarı">
         <p className="tc-bildirim-not">
-          Bekleyen iş yapılmadıkça uyarı kademe kademe sertleşir: K2 yaklaşıyor, K3 gecikti, K4 yöneticiye, K5 devret. Günler iş günüdür.
+          Bekleyen iş yapılmadıkça uyarı kademe kademe sertleşir: K2 yaklaşıyor, K3 gecikti, K4 yöneticiye, K5 devret. Günler iş günüdür; saat, iş günlerinde geçen saattir.
           Takipte ve Gecikti boşsa kaynak henüz bağlanmamıştır.
         </p>
         <Tablo
@@ -74,13 +74,14 @@ export function KademeliUyari() {
   );
 }
 
+const BIRIM_SECENEKLERI = [{ deger: 'gun', baslik: 'İş günü' }, { deger: 'saat', baslik: 'Saat (iş günlerinde)' }];
 const sayiYaz = (deger: string): number | null => (deger.trim() === '' ? null : Number(deger));
 
 function AyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roller: KademeAyarlariCevabi['roller']; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [g, gYaz] = useState<Omit<KademeAyarDegistirGovdesi, 'surum'>>({
-    acik: satir.acik, k2Gun: satir.k2Gun, k3Gun: satir.k3Gun, k4Gun: satir.k4Gun, k5Gun: satir.k5Gun, epostaKademe: satir.epostaKademe,
+    acik: satir.acik, k2Gun: satir.k2Gun, k3Gun: satir.k3Gun, k4Gun: satir.k4Gun, k5Gun: satir.k5Gun, k3Birim: satir.k3Birim, epostaKademe: satir.epostaKademe,
     serit: satir.serit, kapatilamaz: satir.kapatilamaz, yoneticiRolId: satir.yoneticiRolId,
   });
   const [hata, hataYaz] = useState<string | null>(null);
@@ -115,8 +116,20 @@ function AyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roll
         <IsaretKutusu etiket="Bu kaynak takip edilsin" checked={g.acik} onChange={(o) => degistir({ acik: o.target.checked })} />
         {satir.sayac === 'son-gun'
           ? gunAlani('K2 Yaklaşıyor: son günden kaç iş günü önce', g.k2Gun, 'k2Gun', 'Boş bırakılırsa hatırlatma gitmez.')
-          : gunAlani('K3 Gecikti: kaç iş günü bekleyince', g.k3Gun, 'k3Gun', 'Bekleme bu kadar sürünce iş gecikmiş sayılır.')}
-        {gunAlani('K4 Yöneticide: gecikmenin kaçıncı iş günü', g.k4Gun, 'k4Gun', 'Boş bırakılırsa yöneticiye gitmez.')}
+          : (
+            <>
+              <Secim
+                etiket="K3 süre birimi" value={g.k3Birim} secenekler={BIRIM_SECENEKLERI}
+                onChange={(o) => degistir({ k3Birim: o.target.value === 'saat' ? 'saat' : 'gun' })}
+              />
+              {g.k3Birim === 'saat'
+                ? gunAlani('K3 Gecikti: iş günlerinde kaç saat bekleyince', g.k3Gun, 'k3Gun', 'Hafta sonu ve resmi tatil sayılmaz; mesai dışı saatler sayılır.')
+                : gunAlani('K3 Gecikti: kaç iş günü bekleyince', g.k3Gun, 'k3Gun', 'Bekleme bu kadar sürünce iş gecikmiş sayılır.')}
+            </>
+          )}
+        {gunAlani('K4 Yöneticide: gecikmenin kaçıncı iş günü', g.k4Gun, 'k4Gun',
+          satir.sayac === 'bekleme' && g.k3Birim === 'saat'
+            ? "Gecikmenin 1. iş günü K3'ün geldiği gündür. Boş bırakılırsa yöneticiye gitmez." : 'Boş bırakılırsa yöneticiye gitmez.')}
         {gunAlani('K5 Devret: gecikmenin kaçıncı iş günü', g.k5Gun, 'k5Gun', 'K4 gününden sonra olmalıdır; boş bırakılırsa devredilmez.')}
         <Secim
           etiket="Ek yönetici rolü (K4 ve sonrası)" bosSecenek="Yalnız kaydın yöneticisi" value={g.yoneticiRolId === null ? '' : String(g.yoneticiRolId)}
