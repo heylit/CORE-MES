@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Proje, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, SatisMusterileri, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri,
+            MalzemeFisi, MalzemeFisiSatirlari, IrsaliyeBasliklari, DegisenIrsaliyeler, IrsaliyeRefleriSorgusu, IrsaliyeSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, TopluAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri,
             BelgeAraSatisSiparisi, BelgeAraSatinAlmaSiparisi, BelgeAraTeklif, BelgeAraTalep, BelgeAraProje, BelgeSatirSiparis, BelgeSatirTeklif, BelgeSatirTalep;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
@@ -117,6 +117,11 @@ namespace LogoYardimcisi
                 + d("INVOICE") + " V ON V.LOGICALREF = L.INVOICEREF LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = L.CLIENTREF LEFT JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0"
                 + " ORDER BY L.DATE_ DESC, L.LOGICALREF DESC";
+            // 3384-c: aynı süzgeç, bütün kartlar; malzeme kodu kart tablosundan, sıra kayıt numarasıyla (imleç).
+            TopluAlisFiyatlari = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, C.CODE, V.FICHENO, L.AMOUNT, U.CODE, L.PRICE, L.PRCURR, L.PRPRICE, I.CODE FROM " + d("STLINE") + " L JOIN "
+                + d("INVOICE") + " V ON V.LOGICALREF = L.INVOICEREF JOIN " + f("ITEMS") + " I ON I.LOGICALREF = L.STOCKREF LEFT JOIN " + f("CLCARD")
+                + " C ON C.LOGICALREF = L.CLIENTREF LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF"
+                + " WHERE L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0 AND L.LOGICALREF > @son ORDER BY L.LOGICALREF";
             // 2987: yalnız satın alma siparişi (TRCODE 2, parametre değil sabit); satır adı hizmette hizmet kartından, malzemede malzeme kartından.
             // 3360 a: Logo'da belge araması. Kolon adları EkoTigerAPI'nin canlıda çalışan aramalarıyla aynı (SalesController orders, LogoDocController
             // demands, ProjectController list, SalesOfferController). LIKE deseni parametredir (Desen kaçırır); satır eşleşmesi başlıkta EXISTS ile aranır.
@@ -389,6 +394,27 @@ namespace LogoYardimcisi
                 x.Fiyat = Ondalik(s[6]);
                 x.DovizTuru = Tam(s[7]);
                 x.DovizFiyati = Ondalik(s[8]);
+                l.Add(x);
+            }
+            return l;
+        }
+
+        public List<AlisFiyati> TopluAlisFiyatlari(int sonGorulen, int enCok)
+        {
+            var l = new List<AlisFiyati>();
+            foreach (var s in Sorgula(q.TopluAlisFiyatlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            {
+                var x = new AlisFiyati();
+                x.Ref = Tam(s[0]);
+                x.Tarih = Tarih(s[1]);
+                x.CariKod = Metin(s[2]);
+                x.FaturaNo = Metin(s[3]);
+                x.Miktar = Ondalik(s[4]);
+                x.Birim = Metin(s[5]);
+                x.Fiyat = Ondalik(s[6]);
+                x.DovizTuru = Tam(s[7]);
+                x.DovizFiyati = Ondalik(s[8]);
+                x.MalzemeKodu = Metin(s[9]);
                 l.Add(x);
             }
             return l;

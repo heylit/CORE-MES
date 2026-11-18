@@ -11,6 +11,8 @@ import { logoBagKaldirGovdesi, logoBelgeBagCevabi, logoBelgeBaglaGovdesi, type L
 import { projeLogoDurumu } from './proje.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoBelgeAramaCevabi, logoBelgeAramaSorgusu, type LogoBelgeAramaTuru, logoMalzemeAramaCevabi, logoMalzemeAramaDurumuCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoSonAlisCevabi, logoSonAlisSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { sonAlisOnerileri } from './son-alis.ts';
 import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -358,5 +360,14 @@ export const uclar = [
     parametre: logoKartParametresi,
     cevap: logoKartAlislariCevabi,
     isle: ({ db, parametre }) => logodanKartAlislari({ tx: (f) => f(db) }, parametre.kod),
+  }),
+  // 3384-c a: teklif ve proje maliyetindeki "Logo son alış" önerisi; maliyeti görebilen okur (3401: alış fiyatından maliyet çıkarılır). Logo'ya gitmez.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/son-alislar',
+    yetki: 'finans.maliyet-oku',
+    sorgu: logoSonAlisSorgusu,
+    cevap: logoSonAlisCevabi,
+    isle: ({ db, sorgu }) => sonAlisOnerileri(db, sorgu.malzemeler),
   }),
 ];

@@ -452,6 +452,9 @@ export const terminDenemesiKalemiSemasi = z.object({
   eksikVeri: z.array(z.string()),
   // 3355 a: firması belirlenmemiş fason adımın notu; varsa kalemin termini tahminidir (adım yine yerleşir).
   fasonNotu: z.array(z.string()).optional(),
+  // 3384-c a: kalemin hammaddeleri (planın reçetesinden; stok kodu ve stok birimi, tekrarsız); "Logo son alış" önerisi bunlarla sorulur.
+  // Eski cevapta yok.
+  hammaddeler: z.array(z.object({ kod: z.string(), birim: z.string().nullable() })).optional(),
 });
 export const kayanSiparisSemasi = z.object({
   siparis: z.string(),

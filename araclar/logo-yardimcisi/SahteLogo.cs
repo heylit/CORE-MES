@@ -568,6 +568,17 @@ namespace LogoYardimcisi
             return AlisSatirlari.Where(x => x.Item1 == malzemeRef).Select(x => x.Item2).OrderByDescending(x => x.Tarih).ThenByDescending(x => x.Ref).Take(enCok).ToList();
         }
 
+        // Gerçek sorgunun eşi: kartı olmayan satır gelmez (JOIN ITEMS); kod karttan.
+        public List<AlisFiyati> TopluAlisFiyatlari(int sonGorulen, int enCok)
+        {
+            return AlisSatirlari.Where(x => x.Item2.Ref > sonGorulen && Kartlar.Any(k => k.Ref == x.Item1)).OrderBy(x => x.Item2.Ref).Take(enCok)
+                .Select(x => new AlisFiyati
+                {
+                    Ref = x.Item2.Ref, Tarih = x.Item2.Tarih, CariKod = x.Item2.CariKod, FaturaNo = x.Item2.FaturaNo, Miktar = x.Item2.Miktar, Birim = x.Item2.Birim,
+                    Fiyat = x.Item2.Fiyat, DovizTuru = x.Item2.DovizTuru, DovizFiyati = x.Item2.DovizFiyati, MalzemeKodu = Kartlar.First(k => k.Ref == x.Item1).Kod,
+                }).ToList();
+        }
+
         public List<StokToplami> StokToplamlari(int sonGorulen, int enCok)
         {
             var refler = new HashSet<int>(MalzemeKartlari(sonGorulen, enCok).Select(x => x.Ref));

@@ -145,6 +145,14 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: malzeme araması',
     aciklama: 'Açıkken Logo geçişinde okunan listede olmayan kart Logo\'da kod ya da adla aranabilir (en çok 20 sonuç); bulunan kart listeye eklenir. Yalnız okur, Logo\'ya yazmaz. "Logo bağlantısı" da açık olmalı.',
   },
+  // 3384-c a: Logo alış faturası satırlarının CORE kopyası; yalnız GET, varsayılan kapalı. Öneri hesaba girmez.
+  'logo.son-alis-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: son alış fiyatı kopyası',
+    aciklama: 'Açıkken Logo\'daki alış faturası satırları okunup CORE\'da kopyalanır (önce bütün geçmiş sayfa sayfa, sonra saatte bir yenileri). Teklifte ve proje maliyetinde fiyatı bilinmeyen malzemenin yanında "Logo son alış" önerisi olarak görünür, hesaba girmez. Logo yardımcısının bu sürümü gerekir; Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
+  },
   'logo.cari-aramasi': {
     modul: 'logo',
     tur: 'boolean',

@@ -13,7 +13,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
 import { projeGetir } from '../projeler/disari.ts';
-import { malzemeMaliyetBilgileri } from '../malzemeler/disari.ts';
+import { malzemeMaliyetBilgileri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriFasonTutarlari, malzemeKgFiyatlari, siparisBirimFiyatlari, stokBirimiBasinaKg } from '../satin-alma/disari.ts';
 import { emirSarfSonAlisTutarlari } from '../stok/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
@@ -41,10 +41,11 @@ const DEFTER_TARAMA_SONU = '9999-12-31T00:00:00Z';
 // kuru olmayan tutar bilinmez sayılır.
 async function maliyetKayitlari(
   db: Db, projeId: number, bugun: string,
-): Promise<{ kayitlar: MaliyetKaydi[]; eksikler: EksikVeri[]; isler: ProjeIsEmri[] }> {
+): Promise<{ kayitlar: MaliyetKaydi[]; eksikler: EksikVeri[]; isler: ProjeIsEmri[]; fiyatsiz: Map<number, number> }> {
   const eksikler = new Set<EksikVeri>();
+  const fiyatsiz = new Map<number, number>();
   const isler = await projeninIsEmirleri(db, projeId);
-  if (isler.length === 0) return { kayitlar: [], eksikler: [...eksikler], isler };
+  if (isler.length === 0) return { kayitlar: [], eksikler: [...eksikler], isler, fiyatsiz };
   const idler = isler.map((i) => i.isEmriId);
   const sureler = await isEmriSureleri(db, idler);
   const fasonlar = await isEmriFasonTutarlari(db, idler);
@@ -87,8 +88,8 @@ async function maliyetKayitlari(
       planBitisGunu: planBitis.get(i.isEmriId) ?? null, bitisGunu: i.bitis === null ? null : tesisGunu(new Date(i.bitis)),
     }, bugun));
   }
-  for (const k of await malzemeKayitlari(db, projeId, isler, kayitlar, eksikler)) kayitlar.push(k);
-  return { kayitlar, eksikler: [...eksikler], isler };
+  for (const k of await malzemeKayitlari(db, projeId, isler, kayitlar, eksikler, fiyatsiz)) kayitlar.push(k);
+  return { kayitlar, eksikler: [...eksikler], isler, fiyatsiz };
 }
 
 type ProjeIsi = Awaited<ReturnType<typeof projeninIsEmirleri>>[number];
@@ -96,7 +97,10 @@ type ProjeIsi = Awaited<ReturnType<typeof projeninIsEmirleri>>[number];
 // PM-25, PM-27: üretim emri başına malzeme kaydı (iş emrine bağlı değil, dondurulmaz). Plan reçeteden (emrin brüt ihtiyacı), gerçek stoktan
 // emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından teslimine kadar (PM-51, PM-53), fazlası çıkış anındaki son alıştan (PM-52), eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
 // maliyeti kendi emrinde olduğu için burada sayılmaz. Gerçek talaşın parça adedi PM-31.
-async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>): Promise<MaliyetKaydi[]> {
+// 3384-c a: fiyatı bilinmeyen bileşen `fiyatsiz`a malzeme başına brüt miktarla yazılır (plan bileşeni varsa onun miktarı, yoksa gerçek sarf).
+async function malzemeKayitlari(
+  db: Db, projeId: number, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>, fiyatsiz: Map<number, number>,
+): Promise<MaliyetKaydi[]> {
   const emirIdleri = [...new Set(isler.map((i) => i.uretimEmriId))];
   // Net sarf ve çıkış anındaki son alış tutarı aynı okumadan (PM-27, PM-52): çift ve miktar emirlerinNetSarfi ile birebir aynıdır.
   const sonAlislar = await emirSarfSonAlisTutarlari(db, emirIdleri);
@@ -110,8 +114,11 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
   const { bilesenler, netKg: urunNetKg, planBilesenleri } = await malzemeHazirla(db, emirIdleri, sarfNolari);
   const siparisFiyatlari = sarfNolari.length === 0 ? [] : await siparisBirimFiyatlari(db, { emirIdleri, projeIdleri: [projeId], malzemeNolar: sarfNolari });
   const ciftTutarlari = gercekCiftTutarlari(sonAlislar, siparisFiyatlari, projeId);
-  const tutar = (b: readonly MalzemeBileseni[], adet: number, netKg: number | null, kullanim?: TalasAdedi): number | null => {
+  const fiyatsizMiktar = { plan: new Map<number, number>(), gercek: new Map<number, number>() };
+  const tutar = (tur: 'plan' | 'gercek', b: readonly MalzemeBileseni[], adet: number, netKg: number | null, kullanim?: TalasAdedi): number | null => {
     if (b.some(bilesenTutariBilinmiyor)) eksikler.add('birim_maliyet_eksik');
+    const m = fiyatsizMiktar[tur];
+    for (const x of b.filter(bilesenTutariBilinmiyor)) m.set(x.malzemeNo, (m.get(x.malzemeNo) ?? 0) + x.brut);
     const p = malzemePlani(b, adet, netKg, kullanim);
     if (p.talas === null && p.tutar !== null) eksikler.add('talas_dusulmedi');
     return p.tutar;
@@ -127,8 +134,8 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
     const netKg = urunNetKg(emirId);
     const bitti = isleri.every((i) => i.durum === 'tamam');
     const planB = planBilesenleri(emirId);
-    const plan = planB === null ? null : tutar(planB, ilk.adet, netKg);
-    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), ciftTutarlari, emirId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
+    const plan = planB === null ? null : tutar('plan', planB, ilk.adet, netKg);
+    const gercek = tutar('gercek', gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), ciftTutarlari, emirId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
     const kayitlari = isleri.flatMap((i) => kayitBul.get(i.isEmriId) ?? []);
     const planlar = kayitlari.flatMap((k) => (k.planTarihi === null ? [] : [k.planTarihi])).sort();
     const gercekler = kayitlari.flatMap((k) => (k.gercekTarihi === null ? [] : [k.gercekTarihi])).sort();
@@ -137,6 +144,9 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
       planTarihi: planlar.at(-1) ?? null, gercekTarihi: gercekler.at(-1) ?? null,
       plan: { malzeme: plan }, gercek: { malzeme: gercek },
     });
+  }
+  for (const no of new Set([...fiyatsizMiktar.plan.keys(), ...fiyatsizMiktar.gercek.keys()])) {
+    fiyatsiz.set(no, fiyatsizMiktar.plan.get(no) ?? fiyatsizMiktar.gercek.get(no) ?? 0);
   }
   return sonuc;
 }
@@ -265,7 +275,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
   const { butce, kurYok: butceKuruYok } = butceTl(proje.butceTutari, proje.butceParaBirimi, butceKuru);
   if (butceKuruYok) eksikler.push('butce_kuru_yok');
 
-  const { kayitlar: guncel, eksikler: kayitEksikleri, isler } = await maliyetKayitlari(db, projeId, bugun);
+  const { kayitlar: guncel, eksikler: kayitEksikleri, isler, fiyatsiz } = await maliyetKayitlari(db, projeId, bugun);
   const { gelir, kurFarki } = await gelirHesapla(db, isler, bugun, eksikler);
   // 199 a: bitmiş iş emri defterden, açık iş emri güncel fiyatla.
   const isKayitlari = defteriUygula(guncel, await defterOku(db, projeId));
@@ -328,7 +338,18 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
     eksikler,
     genelGiderGizli: genelGiderGizliMi(kayitlar),
     isEmriSayisi: isler.length,
+    fiyatsizMalzemeler: await fiyatsizMalzemeler(db, fiyatsiz),
   };
+}
+
+// 3384-c a: "Fiyatı bilinmeyen malzemeler" kartı; ekran Logo son alış önerisini stok koduyla sorar. Fiyat taşımaz.
+async function fiyatsizMalzemeler(db: Db, fiyatsiz: ReadonlyMap<number, number>): Promise<NonNullable<ProjeMaliyetCevabi['fiyatsizMalzemeler']>> {
+  if (fiyatsiz.size === 0) return [];
+  const ozet = await malzemeOzetleri(db, [...fiyatsiz.keys()]);
+  return [...fiyatsiz].flatMap(([no, miktar]) => {
+    const o = ozet.get(no);
+    return o === undefined ? [] : [{ malzemeNo: no, stokKodu: o.kod, ad: o.ad, miktar: Number(miktar.toFixed(4)), birim: o.birim }];
+  }).sort((a, b) => a.stokKodu.localeCompare(b.stokKodu, 'tr'));
 }
 
 // 199 a, 236 a: bitmiş iş emirlerinin o anki maliyetini deftere sunucu işi yazar; ekran yalnız okur. Defterde olmayan bitmiş iş emri

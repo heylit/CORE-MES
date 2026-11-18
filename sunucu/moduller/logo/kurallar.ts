@@ -1374,7 +1374,7 @@ export interface LogoAkisTanimi {
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
-  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'malzeme-arama' | 'cari';
+  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'malzeme-arama' | 'cari' | 'son-alis';
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
@@ -1411,6 +1411,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Malzeme kartının "Logo\'da" bölümünde Logo\'daki giriş ve çıkışlar "Hareketleri oku" denince okunur (son 20, sonra daha eskiler).' },
   { anahtar: 'son-alis-fiyatlari', yon: 'logo-tmi', baslik: 'Son alış fiyatları', kaynak: 'bagli', ayarlar: ['logo.son-alis-fiyatlari-okumasi'], belgeTurleri: [],
     aciklama: 'Malzemenin son alış faturası fiyatları istenince okunur; yalnız fiyat görene açılır.' },
+  { anahtar: 'son-alis-kopyasi', yon: 'logo-tmi', baslik: 'Son alış fiyatı kopyası', kaynak: 'bagli', ayarlar: ['logo.son-alis-okumasi'], belgeTurleri: [], okuma: 'son-alis',
+    aciklama: 'Logo alış faturası satırları (Material/purchases) sayfa sayfa, yetişince saatte bir okunup CORE\'da kopyalanır (yalnız eklenir). Teklif ve proje maliyetinde fiyatı bilinmeyen malzemeye "Logo son alış" önerisi buradan gelir, hesaba girmez. Logo\'ya yazılmaz. Sayı kopyadaki satır sayısıdır.' },
   { anahtar: 'sozlukler', yon: 'logo-tmi', baslik: 'Ödeme planı, masraf merkezi, proje, kur', kaynak: 'kodda-yok', ayarlar: ['logo.sozluk-okumasi'], belgeTurleri: [],
     aciklama: 'Formlardaki seçim listeleri ve günün kurları Logo\'dan okunur.' },
   { anahtar: 'birim-setleri', yon: 'logo-tmi', baslik: 'Birim seti listesi', kaynak: 'bagli', ayarlar: [], belgeTurleri: [],
@@ -1527,25 +1529,53 @@ export function geriHareketSayfasiniAyikla(govde: unknown): { sayfa: Sayfa<LogoM
   return sayfa === null ? null : { sayfa, geriye: kayitMi(govde) && govde['order'] === 'desc' };
 }
 
+function alisFiyatiAyikla(o: Record<string, unknown>): LogoAlisFiyati | null {
+  const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+  const tarih = ilkMetin(o, ['date'], 10);
+  const miktar = ilkSayi(o, ['quantity']);
+  const fiyat = ilkSayi(o, ['price']);
+  if (logoKayitNo === null || tarih === null || !ISO_TARIH.test(tarih) || miktar === null || fiyat === null) return null;
+  const tur = tamSayi(ilkSayi(o, ['currencyType']));
+  const dovizli = tur !== null && tur > 0;
+  const dovizFiyati = dovizli ? ilkSayi(o, ['currencyPrice']) : null;
+  return {
+    logoKayitNo, tarih, cariKodu: ilkMetin(o, ['arpCode'], 64), faturaNo: ilkMetin(o, ['invoiceNo'], 40), miktar: String(miktar),
+    birim: ilkMetin(o, ['unitCode'], 40), fiyat: String(fiyat), dovizTuru: dovizli ? tur : null, dovizFiyati: dovizFiyati === null ? null : String(dovizFiyati),
+  };
+}
+
 export function alisFiyatlariniAyikla(govde: unknown): LogoAlisFiyati[] | null {
   if (!Array.isArray(govde)) return null;
-  const l: LogoAlisFiyati[] = [];
-  for (const o of govde) {
-    if (!kayitMi(o)) continue;
-    const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
-    const tarih = ilkMetin(o, ['date'], 10);
-    const miktar = ilkSayi(o, ['quantity']);
-    const fiyat = ilkSayi(o, ['price']);
-    if (logoKayitNo === null || tarih === null || !ISO_TARIH.test(tarih) || miktar === null || fiyat === null) continue;
-    const tur = tamSayi(ilkSayi(o, ['currencyType']));
-    const dovizli = tur !== null && tur > 0;
-    const dovizFiyati = dovizli ? ilkSayi(o, ['currencyPrice']) : null;
-    l.push({
-      logoKayitNo, tarih, cariKodu: ilkMetin(o, ['arpCode'], 64), faturaNo: ilkMetin(o, ['invoiceNo'], 40), miktar: String(miktar),
-      birim: ilkMetin(o, ['unitCode'], 40), fiyat: String(fiyat), dovizTuru: dovizli ? tur : null, dovizFiyati: dovizFiyati === null ? null : String(dovizFiyati),
-    });
-  }
-  return l;
+  return govde.map((o) => (kayitMi(o) ? alisFiyatiAyikla(o) : null)).filter((x): x is LogoAlisFiyati => x !== null);
+}
+
+// 3384-c a: bütün kartların alış faturası satırları (GET /api/Material/purchases), kayıt sırasıyla sayfa. Kayıt numarası dönem tablosunundur:
+// firma ya da dönem yoksa sayfa okunmamış sayılır. Döviz türü verilip döviz fiyatı okunamayan satır dövizsiz saklanır (kısıt ikisini birlikte ister).
+export interface LogoTopluAlis extends LogoAlisFiyati {
+  malzemeKodu: string;
+}
+export interface TopluAlisSayfasi extends Sayfa<LogoTopluAlis> {
+  firma: number;
+  donem: number;
+}
+export function topluAlisSayfasiniAyikla(govde: unknown): TopluAlisSayfasi | null {
+  if (!kayitMi(govde)) return null;
+  const firma = govde['firm'];
+  const donem = govde['period'];
+  if (!(typeof firma === 'number' && Number.isSafeInteger(firma) && firma > 0 && typeof donem === 'number' && Number.isSafeInteger(donem) && donem > 0)) return null;
+  const sayfa = sayfaAyikla(govde, (o): LogoTopluAlis | null => {
+    const malzemeKodu = ilkMetin(o, ['itemCode'], 64);
+    const a = alisFiyatiAyikla(o);
+    if (malzemeKodu === null || a === null) return null;
+    return a.dovizFiyati === null ? { ...a, dovizTuru: null, malzemeKodu } : { ...a, malzemeKodu };
+  });
+  return sayfa === null ? null : { ...sayfa, firma, donem };
+}
+
+// Okuma sırası: son sayfa doluysa hemen devam, değilse en çok saatte bir (yeni fatura satırı için).
+export const SON_ALIS_ARALIGI_MS = 60 * 60 * 1000;
+export function sonAlisOkunmaliMi(imlec: { dolu: boolean; sonOkuma: Date } | null, simdi: Date): boolean {
+  return imlec === null || imlec.dolu || simdi.getTime() - imlec.sonOkuma.getTime() >= SON_ALIS_ARALIGI_MS;
 }
 
 /* ---------------- Logo'da CORE MES dışında açılmış satın alma siparişini düzeltme (D7; kararlar 2986 a, 2987 a) ---------------- */

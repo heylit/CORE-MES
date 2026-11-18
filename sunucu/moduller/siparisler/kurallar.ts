@@ -378,6 +378,8 @@ export interface DenemeKalemi {
   eksikVeri: string[];
   // 3355 a: firması belirlenmemiş fason adımın notu; varsa termin tahminidir. Eski motor vermezse yok.
   fasonNotu?: string[];
+  // 3384-c a: reçetedeki hammaddeler (stok kodu ve birimi, tekrarsız); motor vermezse yok.
+  hammaddeler?: { kod: string; birim: string | null }[];
 }
 export interface DenemeSonucu {
   planSurumu: string | null;
@@ -452,6 +454,7 @@ export function denemeCevabi(
       birimMaliyet: m.birim === null || gizli ? null : m.birim.toFixed(4), toplamMaliyet: gizli ? null : tl(m.toplam),
       // 2669 b: genel gidersiz satırların toplamı da genel gider hariç maliyet olurdu; gizli ayda dökümün bütün tutarları null.
       dokum: gizli ? m.dokum.map((d) => ({ ...d, tutar: null })) : m.dokum, eksikVeri: eksik, fasonNotu: k.fasonNotu ?? [],
+      hammaddeler: k.hammaddeler ?? [],
     };
   });
   const planli = kalemler.filter((k) => !k.plansiz);
@@ -544,7 +547,7 @@ export interface MotorSonucu {
     tamam: boolean;
     bitis: string | null;
     planTermini: string | null;
-    malzeme: { gelis: string | null }[];
+    malzeme: { kod?: string; birim?: string; gelis: string | null }[];
     satinalma: { kod: string; birim: string; miktar: number; gelis: string }[];
     islemler: { adim: string; makineId: string; fason: boolean; baslangic: string; bitis: string; ayarSaat: number; islemeSaat: number; tl: number | null }[];
     malzemeTl: number | null;
@@ -582,6 +585,12 @@ export const TEKLIF_ETIKETI = 'Bu teklif';
 const enGecAn = (anlar: readonly (string | null)[]): string | null =>
   anlar.reduce<string | null>((a, x) => (x === null || (a !== null && Date.parse(a) >= Date.parse(x)) ? a : x), null);
 
+const hammaddeler = (l: readonly { kod?: string; birim?: string }[]): { kod: string; birim: string | null }[] => {
+  const g = new Map<string, string | null>();
+  for (const m of l) if (typeof m.kod === 'string' && m.kod !== '' && !g.has(m.kod)) g.set(m.kod, m.birim ?? null);
+  return [...g].map(([kod, birim]) => ({ kod, birim }));
+};
+
 // Motor sonucunu teklifin satırlarına çevirir: kalem sırası denemeye verilen sırayla aynıdır. Kayan siparişin termini motorda
 // tesis anıdır; gün olarak ilk on karakteri alınır, gecikme anla karşılaştırılır.
 export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu, teklifNolari: ReadonlyMap<string, string> = new Map()): DenemeSonucu {
@@ -599,6 +608,7 @@ export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu, tekl
           opId: o.adim, tezgah: o.makineId, fason: o.fason, baslangic: o.baslangic, bitis: o.bitis, ayarSaat: o.ayarSaat, islemeSaat: o.islemeSaat, tl: o.tl,
         })),
         eksikVeri: k.eksik, fasonNotu: k.fasonNotu ?? [],
+        hammaddeler: hammaddeler(k.malzeme),
       }];
     }),
     kayanlar: r.kayan.map((x) => ({

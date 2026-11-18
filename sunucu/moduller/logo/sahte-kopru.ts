@@ -109,6 +109,10 @@ export interface SahteKopru {
   logoStoklari: Record<string, unknown>[];
   // 3079 a: kart başına kullanım izi (itemCode, lastMovement, openOrder); sayfa kart sayfasıyla aynı, satırı olmayan kart dönmez.
   logoKullanimlari: Record<string, unknown>[];
+  // 3384-c a: yardımcının /api/Material/purchases ucu gibi: alış faturası satırları (itemCode dahil), kayıt sırasıyla sayfaBoyu kadar; dönem irsaliyeDonemi.
+  logoAlislari: Record<string, unknown>[];
+  // Bu ucu bilmeyen eski yardımcı gibi 404 "Not found".
+  topluAlisUcuYok: boolean;
   logoCarileri: Record<string, unknown>[];
   // 3360 a: Document/search için tür başına belgeler (yardımcının cevap biçiminde; type alanı yardımcıdaki tür adı).
   logoBelgeleri: Record<string, unknown>[];
@@ -203,6 +207,8 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     logoKartlari: [],
     logoStoklari: [],
     logoKullanimlari: [],
+    logoAlislari: [],
+    topluAlisUcuYok: false,
     logoCarileri: [],
     logoBelgeleri: [],
     sayfaBoyu: 500,
@@ -335,6 +341,14 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         const data = yol === '/api/Material/list' ? kartlar
           : (yol === '/api/Stock/totals' ? kopru.logoStoklari : kopru.logoKullanimlari).filter((x) => refler.has(Number(x['itemRef'])));
         json(cevap, 200, { data, next: sonraki });
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/Material/purchases') {
+        if (kopru.topluAlisUcuYok) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null }); return; }
+        const since = Number(new URL(istek.url ?? '', 'http://sahte').searchParams.get('since') ?? 0);
+        const data = kopru.logoAlislari.filter((x) => Number(x['logicalRef']) > since)
+          .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
+        json(cevap, 200, { ...kopru.irsaliyeDonemi, data, next: data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null });
         return;
       }
       if (istek.method === 'GET' && yol === '/api/Material/search') {

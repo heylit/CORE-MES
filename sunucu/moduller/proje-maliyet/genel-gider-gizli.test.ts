@@ -98,8 +98,15 @@ describe('2663 genel gider gizli maskesi', () => {
   test('alan listesi sözleşmeyle bağlı: cevaba yeni alan eklenirse bu test maske kararını ister', () => {
     const bilinen = ['proje', 'siparis', 'fiyatGorunur', 'bugun', 'gelir', 'kurFarki', 'butce', 'hedef', 'plan', 'gerceklesen', 'bugunePlan', 'kalanPlan',
       'sapma', 'katkiPayi', 'katkiOrani', 'planlananKatkiOrani', 'karRiski', 'kalemler', 'haftalar', 'sapanIsEmirleri', 'eksikKalemler', 'eksikler',
-      'genelGiderGizli', 'ozet'];
+      'genelGiderGizli', 'ozet', 'fiyatsizMalzemeler'];
     assert.deepEqual(Object.keys(projeMaliyetCevabi.shape).sort(), [...bilinen].sort());
+  });
+
+  test('3384-c a: gizli ayda fiyatı bilinmeyen malzeme listesi boş döner; alan yoksa eklenmez', () => {
+    const gercek = cevap(120, true, null);
+    const m = { malzemeNo: 7, stokKodu: 'ORN-HM-1', ad: null, miktar: 2, birim: 'kg' };
+    assert.deepEqual(genelGiderGizliMaskesi({ ...gercek, fiyatsizMalzemeler: [m] }).fiyatsizMalzemeler, []);
+    assert.equal('fiyatsizMalzemeler' in genelGiderGizliMaskesi(gercek), false);
   });
 
   test('gizli olmayan ayda cevap değişmez; gizlilik yalnız yük alan adımda (kişi ve fason adımı oran almaz)', () => {
