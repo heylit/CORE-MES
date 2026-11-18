@@ -135,7 +135,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     'depo-sevk': null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
     malzemeler: null, hareketler: null, 'refakat-kartlari': null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
-    'sayim-onaylari': islemler.includes('stok.sayim-onayla') ? await sorgular.bekleyenSayimFarkiSayisi(db) : null,
+    'sayim-duzeltme': islemler.includes('stok.sayim-onayla') ? await sorgular.bekleyenSayimFarkiSayisi(db) : null,
     'sahipsiz-statulu': null,
     'defter-farklari': k.defterFarki ?? null,
   };

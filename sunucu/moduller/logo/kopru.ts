@@ -1,6 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, belgeBulgulariniAyikla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
-import type { LogoAlisFiyati, LogoBelgeBulgusuHam, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, IrsaliyeSayfasi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
+import { agHatasiniYorumla, belgeBulgulariniAyikla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, topluAlisSayfasiniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import type { LogoAlisFiyati, LogoBelgeBulgusuHam, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, IrsaliyeSayfasi, TopluAlisSayfasi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
@@ -54,6 +54,8 @@ export interface KopruIstemcisi {
   stokToplamlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoStokSatiri>>>;
   // 3079 a: kart başına son hareket ve açık sipariş, malzeme listesiyle aynı sayfalama.
   kullanimlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoKullanimSatiri>>>;
+  // 3384-c a: bütün kartların alış faturası satırları kayıt sırasıyla sayfa; firma ve dönemle (kayıt numarası dönem tablosunundur).
+  topluAlislariOku(since: number): Promise<OkumaSonucu<TopluAlisSayfasi>>;
   // 2961-D4: malzemenin hareketleri (kayıt sırasıyla sayfa) ve en yeni alış faturası satırları (en çok 10). Logo'da kart yoksa veri null.
   malzemeHareketleriOku(kod: string, since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeHareketi> | null>>;
   sonAlisFiyatlariOku(kod: string): Promise<OkumaSonucu<LogoAlisFiyati[] | null>>;
@@ -235,6 +237,7 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     malzemeKartlariOku: (since) => oku(`/api/Material/list?since=${since}`, malzemeKartlariniAyikla),
     stokToplamlariOku: (since) => oku(`/api/Stock/totals?since=${since}`, stokToplamlariniAyikla),
     kullanimlariOku: (since) => oku(`/api/Material/usage?since=${since}`, kullanimlariAyikla),
+    topluAlislariOku: (since) => oku(`/api/Material/purchases?since=${since}`, topluAlisSayfasiniAyikla),
     malzemeHareketleriOku: (kod, since) =>
       oku<Sayfa<LogoMalzemeHareketi> | null>(`/api/Material/${encodeURIComponent(kod)}/movements?since=${since}`, malzemeHareketleriniAyikla, null),
     sonAlisFiyatlariOku: (kod) => oku<LogoAlisFiyati[] | null>(`/api/Material/${encodeURIComponent(kod)}/lastPurchases`, alisFiyatlariniAyikla, null),

@@ -35,7 +35,7 @@ const SURUM = {
 };
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
-  istenenTarih: null, aciklama: null, not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1, olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
+  istenenTarih: null, aciklama: null, not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1, olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4, olusturanId: 3, arsiv: null,
   satirlar: [{ id: 11, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Mil', aciklamalar: [], tanim: 'Deneme Mil 20mm', birim: 'adet', miktar: '40.000', yerlilikOrani: '62.50' }],
   surumler: [SURUM],
 } satisfies TeklifAyrintiCevabi;

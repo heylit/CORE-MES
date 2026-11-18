@@ -343,7 +343,7 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     const islemM = { adim: '10', makineId: 'T1', fason: false, baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-01T11:00:00+03:00', ayarSaat: 1, islemeSaat: 2, tl: 250 };
     const kalemM = (planTermini: string | null) => ({
       tamam: planTermini !== null, bitis: null, planTermini, malzemeTl: 100, satinalma: [], islemler: [islemM], eksik: ['ucret'],
-      malzeme: [{ gelis: '2099-07-03T08:00:00+03:00' }, { gelis: null }, { gelis: '2099-07-05T08:00:00+03:00' }],
+      malzeme: [{ kod: 'ORN-HM-1', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }, { gelis: null }, { kod: 'ORN-HM-1', birim: 'kg', gelis: '2099-07-05T08:00:00+03:00' }],
     });
     const kayan = (sonra: string, termin: string | null) => ({ siparis: 'p-1', emirNo: null, once: '2099-07-01T10:00:00+03:00', sonra, termin });
     const r = motorSonucu([7, 9], {
@@ -354,6 +354,8 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
       [7, true, '2099-07-14', '2099-07-05T08:00:00+03:00', ['ucret']], [9, false, null, '2099-07-05T08:00:00+03:00', ['ucret']],
     ]);
     assert.deepEqual(r.kalemler[0]?.islemler.map((i) => [i.opId, i.tezgah, i.tl]), [['10', 'T1', 250]]);
+    // 3384-c a: hammadde stok kodları tekrarsız; kodsuz satır atlanır.
+    assert.deepEqual(r.kalemler[0]?.hammaddeler, [{ kod: 'ORN-HM-1', birim: 'kg' }]);
     assert.deepEqual(r.kayanlar.map((k) => [k.siparis, k.termin, k.gecikir]), [['p-1', '2099-07-02', true], ['p-1', '2099-07-02', false], ['p-1', null, false]]);
     // Motor denemeye verilenden fazla kalem dönerse fazlası eşlenmez.
     assert.equal(motorSonucu([7], { kalemler: [kalemM('2099-07-14'), kalemM('2099-07-14')], kayan: [] }).kalemler.length, 1);

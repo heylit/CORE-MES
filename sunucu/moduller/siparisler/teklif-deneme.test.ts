@@ -553,4 +553,40 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal((await atolye()).find((x) => x.teklifId === b.id), undefined, 'kalkan taslak listede yok');
     assert.equal((await oku(operator, '/siparisler/satis-taslaklari')).statusCode, 403);
   });
+  test('3419 a: taslak teklif deneme taslağıyla silinir; arşivlenen teklif plandaki yerini bırakır, deneme almaz; çıkınca yeniden denenir', async () => {
+    const t = await teklifAc();
+    const d = await gonder(yonetici, `/siparisler/teklifler/${t.id}/deneme-taslagi`, { karOrani: '30', istenenTermin: '2099-07-20' });
+    assert.equal(d.statusCode, 200, d.body);
+    const sil = await gonder(yonetici, `/siparisler/teklifler/${t.id}/sil`, { surum: t.surum });
+    assert.equal(sil.statusCode, 200, sil.body);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1', [t.id]))?.n, 0);
+    const ek = await o().sahip.tek<{ taslak: number }>(
+      "SELECT (govde->'_ek'->0->>'taslak')::int AS taslak FROM denetim_kaydi WHERE yol = '/siparisler/teklifler/:id/sil' AND parametre->>'id' = $1", [String(t.id)]);
+    assert.equal(ek?.taslak, 1);
+
+    let u = await teklifAc();
+    u = await komut(u, 'surum-ver', satisSurumu(u));
+    assert.equal((await kilitli(u)).length, 1);
+    u = await komut(u, 'arsivle', { neden: 'deneme' });
+    assert.deepEqual(await kilitli(u), []);
+    assert.equal((await gonder(yonetici, `/siparisler/teklifler/${u.id}/deneme-taslagi`, { karOrani: '30' })).statusCode, 422);
+    u = await komut(u, 'arsivden-cikar', {});
+    assert.deepEqual(await kilitli(u), []);
+    u = await komut(u, 'surum-ver', satisSurumu(u));
+    assert.equal((await kilitli(u)).length, 1);
+  });
+  test('3419 a (K3): termin onayı bekleyen teklif arşivlenince bildirim kapanır, termin onaylanamaz', async () => {
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', satisSurumu(t));
+    geciktirir = true;
+    t = await komut(t, 'surum-ver', satisSurumu(t, '2099-07-05'));
+    assert.equal(t.durum, 'onay-bekliyor');
+    const acik = async () => (await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'siparisler.termin-onay-bekliyor' AND yol = $2 AND okundu IS NULL",
+      [planlama.id, `/siparisler/teklifler/${t.id}`]))?.n;
+    assert.equal(await acik(), 1);
+    t = await komut(t, 'arsivle', { neden: 'diger' });
+    assert.equal(await acik(), 0);
+    await komut(t, 'termin-onayla', {}, 422, planlama.cerez);
+  });
 });

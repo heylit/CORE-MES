@@ -9,7 +9,7 @@ import { genelGiderOrani } from '../finans/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import {
-  DENENECEK_KALEM_YOK, TEKLIF_YOK, TERMIN_CIKMADI, TERMIN_DENEMESI_YOK, adetSatirlari, carpilmisAdet, denemeCevabi, kilitler, motorSonucu, motorTaslaklari, yenidenYerlesirMi,
+  arsivdeReddi, DENENECEK_KALEM_YOK, TEKLIF_YOK, TERMIN_CIKMADI, TERMIN_DENEMESI_YOK, adetSatirlari, carpilmisAdet, denemeCevabi, kilitler, motorSonucu, motorTaslaklari, yenidenYerlesirMi,
 } from './kurallar.ts';
 import type { DenemeSonucu, MotorGirdisi, MotorSonucu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -146,7 +146,11 @@ export const yerTutaniKaldir = (db: Db, teklifId: number): Promise<void> => sorg
 
 // Deneme taslağı yer tutmaz; satışçının denediğini sonra açmak için kaydedilir.
 export async function denemeTaslagiAc(db: Db, kullanici: Kullanici, id: number, g: DenemeTaslagiVerisi): Promise<PlanTaslagi[]> {
-  await teklifVar(db, id);
+  // 3419 a: silme ve arşiv teklifi kilitler; deneme taslağı aynı kilitle yazılır, arşivdeki teklife yazılmaz.
+  const kilitli = await sorgular.teklifKilitle(db, id);
+  if (kilitli === null) throw bulunamadi(TEKLIF_YOK);
+  const ret = arsivdeReddi(kilitli.arsivde);
+  if (ret !== null) throw gecersiz(ret);
   const yer = await sorgular.yerTutanTaslak(db, id);
   const d = await dene(db, kullanici, id, g, yer?.id ?? null);
   const sonuc = yerlesmisSonuc(d);

@@ -92,6 +92,11 @@ export const projeMaliyetCevabi = z.object({
   // 2661 a: genel gider oranı gizli bir ayda (az kişili personel bileşeni) hesaplanan pay varsa true; o paydan türeyen bütün sayılar null
   // döner ve ekran "Gizli" yazar. Hesap gerçek oranla yapılmıştır.
   genelGiderGizli: z.boolean(),
+  // 3384-c a: birim fiyatı bilinmeyen malzemeler (plan brüt ihtiyacı, yoksa gerçek sarf; stok biriminde). Fiyat taşımaz; ekran Logo son alış
+  // önerisini stok koduyla ayrıca sorar. Eski cevapta yok.
+  fiyatsizMalzemeler: z.array(z.object({
+    malzemeNo: z.number().int(), stokKodu: z.string(), ad: z.string().nullable(), miktar: z.number(), birim: z.string().nullable(),
+  })).optional(),
   ozet: z.lazy(() => maliyetOzetiSemasi),
 }).strict();
 export type ProjeMaliyetCevabi = z.output<typeof projeMaliyetCevabi>;

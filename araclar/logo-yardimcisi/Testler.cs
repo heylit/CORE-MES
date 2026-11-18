@@ -902,6 +902,33 @@ namespace LogoYardimcisi
             Esit(404, C(s, "POST", "/api/Material/" + k1.Kod + "/lastPurchases", N()).Durum, "yalnız GET");
         }
 
+        static void T_toplu_alis_fiyatlari_kayit_sirasiyla_imlecle_sayfalanir()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            var k2 = s.Kartlar[1];
+            for (var i = 1; i <= Islemler.KartSayfasi + 3; i++)
+                s.AlisSatirlari.Add(Tuple.Create(i % 2 == 0 ? k2.Ref : k1.Ref, new AlisFiyati { Ref = 1000 + i, Tarih = new DateTime(2026, 9, 1 + i % 28), CariKod = Satici, FaturaNo = "FT-" + i, Miktar = i, Birim = "KG", Fiyat = 10 + i, DovizTuru = 20, DovizFiyati = 0.5m }));
+            s.AlisSatirlari.Add(Tuple.Create(999999, new AlisFiyati { Ref = 900, Tarih = new DateTime(2026, 9, 1), CariKod = Satici, FaturaNo = "FT-X", Miktar = 1, Birim = "KG", Fiyat = 1 }));
+            var m = D(C(s, "GET", "/api/Material/purchases", null).Govde);
+            var l = (object[])m["data"];
+            Esit(Islemler.KartSayfasi, l.Length, "ilk sayfa dolu");
+            Esit(1001, D(l[0])["logicalRef"], "kayıt sırası; kartı olmayan satır yok");
+            Esit(k1.Kod, D(l[0])["itemCode"], "malzeme kodu karttan");
+            Esit(k2.Kod, D(l[1])["itemCode"], "ikinci kart");
+            Esit("FT-1", D(l[0])["invoiceNo"], "fatura");
+            Esit(Satici, D(l[0])["arpCode"], "cari");
+            Esit(11m, Convert.ToDecimal(D(l[0])["price"], System.Globalization.CultureInfo.InvariantCulture), "fiyat");
+            Esit(20, D(l[0])["currencyType"], "döviz türü");
+            Esit(1000 + Islemler.KartSayfasi, m["next"], "sonraki imleç son kayıt");
+            Esit(true, m.ContainsKey("firm") && m.ContainsKey("period"), "firma ve dönem zarfta");
+            var m2 = D(C(s, "GET", "/api/Material/purchases", null, new Dictionary<string, string> { { "since", Convert.ToString(m["next"], System.Globalization.CultureInfo.InvariantCulture) } }).Govde);
+            Esit(3, ((object[])m2["data"]).Length, "kalan üç");
+            Esit(null, m2["next"], "son sayfa");
+            Esit(400, C(s, "GET", "/api/Material/purchases", null, new Dictionary<string, string> { { "since", "x" } }).Durum, "imleç sayı değil");
+            Esit(404, C(s, "POST", "/api/Material/purchases", N()).Durum, "yalnız GET");
+        }
+
         static void T_malzeme_listesi_ve_stok_toplamlari_imlecle_sayfalanir()
         {
             var s = Logo();
@@ -1311,7 +1338,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(51, hepsi.Count, "sorgu sayısı");
+            Esit(52, hepsi.Count, "sorgu sayısı");
             Icerir(q.BelgeAraSatisSiparisi, "FROM LG_007_03_ORFICHE H");
             Icerir(q.BelgeAraSatisSiparisi, "H.TRCODE = 1 AND H.DATE_ >= @baslangic");
             Icerir(q.BelgeAraSatinAlmaSiparisi, "H.TRCODE = 2 AND H.DATE_ >= @baslangic");
@@ -1324,6 +1351,9 @@ namespace LogoYardimcisi
             Icerir(q.BelgeAraProje, "FROM LG_007_PROJECT WHERE");
             Icerir(q.BelgeSatirSiparis, "L.ORDFICHEREF IN ({0})");
             Icerir(q.BelgeAraSatisSiparisi, "C.DEFINITION_ LIKE @desen ESCAPE");
+            Icerir(q.TopluAlisFiyatlari, "LG_007_03_STLINE");
+            Icerir(q.TopluAlisFiyatlari, "JOIN LG_007_ITEMS I ON I.LOGICALREF = L.STOCKREF");
+            Icerir(q.TopluAlisFiyatlari, "L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0 AND L.LOGICALREF > @son ORDER BY L.LOGICALREF");
             Icerir(q.IrsaliyeBasliklari, "F.TRCODE IN (" + Sorgular.IrsaliyeTurleri + ")");
             Icerir(q.IrsaliyeBasliklari, "LG_007_03_STFICHE");
             Icerir(q.IrsaliyeSatirlari, "LG_007_03_STLINE");

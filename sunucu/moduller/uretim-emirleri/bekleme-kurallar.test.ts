@@ -45,14 +45,14 @@ describe('uretim-emirleri süren bekleme (3416-1)', () => {
     assert.equal(surenBekleme([beklet('fason', '2026-11-02T08:00:00Z'), devam('2026-11-02T10:00:00Z'), yeni], gun, fark)?.baslangicId, yeni.id);
   });
 
-  test('kaynak varsayılanları: neden başına iki sınır, tezgah-takım saatli sayaç gelene kadar kapalı', () => {
+  test('kaynak varsayılanları: neden başına iki sınır; tezgah-takım 4 saatte Gecikti, açık (3418 a)', () => {
     const tablo = Object.fromEntries(Object.entries(KADEME_KAYNAKLARI).filter(([k]) => k.startsWith('uretim-emirleri.bekleme-'))
-      .map(([k, d]) => [k, [d.sayac, d.varsayilan.k3Gun, d.varsayilan.k4Gun, d.varsayilan.acik]]));
+      .map(([k, d]) => [k, [d.sayac, d.varsayilan.k3Gun, d.varsayilan.k3Birim, d.varsayilan.k4Gun, d.varsayilan.acik]]));
     assert.deepEqual(tablo, {
-      'uretim-emirleri.bekleme-malzeme': ['bekleme', 2, 4, true], 'uretim-emirleri.bekleme-fason': ['bekleme', 2, 4, true],
-      'uretim-emirleri.bekleme-takim': ['bekleme', 1, 2, false], 'uretim-emirleri.bekleme-kalite': ['bekleme', 1, 2, true],
-      'uretim-emirleri.bekleme-muhendislik': ['bekleme', 1, 2, true], 'uretim-emirleri.bekleme-teslim': ['bekleme', 1, 2, true],
-      'uretim-emirleri.bekleme-suruyor': ['bekleme', 2, 1, true],
+      'uretim-emirleri.bekleme-malzeme': ['bekleme', 2, 'gun', 4, true], 'uretim-emirleri.bekleme-fason': ['bekleme', 2, 'gun', 4, true],
+      'uretim-emirleri.bekleme-takim': ['bekleme', 4, 'saat', 2, true], 'uretim-emirleri.bekleme-kalite': ['bekleme', 1, 'gun', 2, true],
+      'uretim-emirleri.bekleme-muhendislik': ['bekleme', 1, 'gun', 2, true], 'uretim-emirleri.bekleme-teslim': ['bekleme', 1, 'gun', 2, true],
+      'uretim-emirleri.bekleme-suruyor': ['bekleme', 2, 'gun', 1, true],
     });
   });
 
@@ -77,7 +77,7 @@ describe('uretim-emirleri süren bekleme (3416-1)', () => {
     assert.ok(s);
     assert.deepEqual(beklemeKaydi({ id: 41, emirNo: 'UE-ORN-1' }, s, gun), {
       kayit: `41:teslim:${String(b.id)}`, no: 'UE-ORN-1', baslik: 'UE-ORN-1 beklemede: Teslim edilmedi (parça içeride, sonraki birime geçmedi)',
-      yol: '/uretim-emirleri/41', baslangic: '2026-11-02', yapanlar: [7], yoneticiler: [],
+      yol: '/uretim-emirleri/41', baslangic: '2026-11-02', baslangicAni: '2026-11-02T08:00:00Z', yapanlar: [7], yoneticiler: [],
     });
   });
 });

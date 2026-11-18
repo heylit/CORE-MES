@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI, sonrakiDenemeYazilir } from './kurallar.ts';
-import type { FaturaKaydi, FisGidenDurumu, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
+import type { FaturaKaydi, FisGidenDurumu, LogoTopluAlis, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
@@ -574,6 +574,72 @@ export async function kullanimlariYaz(db: Db, satirlar: readonly LogoKullanimSat
      SELECT k, h, a, $4 FROM unnest($1::text[], $2::date[], $3::boolean[]) AS t(k, h, a)
      ON CONFLICT (malzeme_kodu) DO UPDATE SET son_hareket = EXCLUDED.son_hareket, acik_siparis = EXCLUDED.acik_siparis, son_okuma = EXCLUDED.son_okuma`,
     [satirlar.map((x) => x.malzemeKodu), satirlar.map((x) => x.sonHareket), satirlar.map((x) => x.acikSiparis), zaman],
+  );
+}
+
+/* ---------------- 3384-c a: Logo son alış kopyası (yalnız eklenir) ---------------- */
+
+export interface SonAlisImleci { firma: number; donem: number; sonRef: number; dolu: boolean; sonOkuma: Date }
+
+// Yardımcının son okunan firma ve dönemi en son okunandır.
+export function sonAlisImleci(db: Db): Promise<SonAlisImleci | null> {
+  return db.tek<SonAlisImleci>(
+    `SELECT firma, donem, son_ref::float8 AS "sonRef", dolu, son_okuma AS "sonOkuma"
+       FROM logo_son_alis_imleci ORDER BY son_okuma DESC, firma DESC, donem DESC LIMIT 1`,
+  );
+}
+
+export function sonAlisImleciVar(db: Db, firma: number, donem: number): Promise<{ sonRef: number } | null> {
+  return db.tek<{ sonRef: number }>('SELECT son_ref::float8 AS "sonRef" FROM logo_son_alis_imleci WHERE firma = $1 AND donem = $2', [firma, donem]);
+}
+
+export async function sonAlisImleciYaz(db: Db, i: Omit<SonAlisImleci, 'sonOkuma'>, zaman: Date): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO logo_son_alis_imleci (firma, donem, son_ref, dolu, son_okuma) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (firma, donem) DO UPDATE SET son_ref = EXCLUDED.son_ref, dolu = EXCLUDED.dolu, son_okuma = EXCLUDED.son_okuma`,
+    [i.firma, i.donem, i.sonRef, i.dolu, zaman],
+  );
+}
+
+// Aynı satır ikinci kez gelirse atlanır; kopya güncellenmez, silinmez (tablo yalnız eklemeye açıktır).
+export async function sonAlislariYaz(db: Db, firma: number, donem: number, satirlar: readonly LogoTopluAlis[], zaman: Date): Promise<number> {
+  if (satirlar.length === 0) return 0;
+  const r = await db.sorgu<{ x: number }>(
+    `INSERT INTO logo_son_alis (firma, donem, logo_kayit_no, malzeme_kodu, tarih, cari_kodu, fatura_no, miktar, birim, fiyat, doviz_turu, doviz_fiyati, okuma_zamani)
+     SELECT $1, $2, r, k, t, c, f, m, b, fy, dt, df, $13
+       FROM unnest($3::bigint[], $4::text[], $5::date[], $6::text[], $7::text[], $8::numeric[], $9::text[], $10::numeric[], $11::int[], $12::numeric[])
+         AS x(r, k, t, c, f, m, b, fy, dt, df)
+     ON CONFLICT (firma, donem, logo_kayit_no) DO NOTHING RETURNING 1 AS x`,
+    [firma, donem, satirlar.map((x) => x.logoKayitNo), satirlar.map((x) => x.malzemeKodu), satirlar.map((x) => x.tarih), satirlar.map((x) => x.cariKodu),
+      satirlar.map((x) => x.faturaNo), satirlar.map((x) => x.miktar), satirlar.map((x) => x.birim), satirlar.map((x) => x.fiyat),
+      satirlar.map((x) => x.dovizTuru), satirlar.map((x) => x.dovizFiyati), zaman],
+  );
+  return r.length;
+}
+
+export async function sonAlisOzeti(db: Db): Promise<{ sayi: number | null; son: string | null }> {
+  const r = await db.tek<{ sayi: number; son: string | null }>(
+    `SELECT (SELECT count(*)::int FROM logo_son_alis) AS sayi,
+            (SELECT ${zamanMetni('max(son_okuma)')} FROM logo_son_alis_imleci) AS son`,
+  );
+  return r === null || (r.sayi === 0 && r.son === null) ? { sayi: null, son: null } : r;
+}
+
+export interface SonAlisSatiri {
+  stokKodu: string; tarih: string; cariKodu: string | null; faturaNo: string | null; miktar: string; birim: string | null;
+  fiyat: string; dovizTuru: number | null; dovizFiyati: string | null;
+}
+
+// CORE stok kodu Logo koduna eşlemeyle çevrilir (eşlemesi yoksa aynı kod). Malzeme başına en yeni fatura tarihli satır.
+export function sonAlislar(db: Db, stokKodlari: readonly string[]): Promise<SonAlisSatiri[]> {
+  return db.sorgu<SonAlisSatiri>(
+    `SELECT DISTINCT ON (k.stok_kodu) k.stok_kodu AS "stokKodu", a.tarih::text AS tarih, a.cari_kodu AS "cariKodu", a.fatura_no AS "faturaNo",
+            a.miktar::text AS miktar, a.birim, a.fiyat::text AS fiyat, a.doviz_turu AS "dovizTuru", a.doviz_fiyati::text AS "dovizFiyati"
+       FROM unnest($1::text[]) AS k(stok_kodu)
+       LEFT JOIN logo_malzeme_eslemesi e ON e.stok_kodu = k.stok_kodu
+       JOIN logo_son_alis a ON a.malzeme_kodu = coalesce(e.logo_kodu, k.stok_kodu)
+      ORDER BY k.stok_kodu, a.tarih DESC, a.okuma_zamani DESC, a.logo_kayit_no DESC`,
+    [[...new Set(stokKodlari)]],
   );
 }
 

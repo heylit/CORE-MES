@@ -15,13 +15,16 @@ export const SUREN_BEKLEME_KAYNAGI = 'uretim-emirleri.bekleme-suruyor' satisfies
 export const SUREN_BEKLEME_GUNU = 2;
 
 // Kendi kaynağı varsayılan ayarla ikinci iş gününe kadar Yöneticide'ye çıkmayan nedenler süren bekleme kaynağına girer; çıkanlarda
-// ikinci uyarı aynı güne düşerdi. Bekleme sayacında Yöneticide, k3 + k4 - 1'inci iş günüdür (bildirim gerekenKademeler).
+// ikinci uyarı aynı güne düşerdi. Bekleme sayacında Yöneticide, k3 + k4 - 1'inci iş günüdür (bildirim gerekenKademeler); saat
+// biriminde k3 saati en çok bu kadar iş gününe yayılır (3418 a).
 export function beklemeSuruyorNedenleri(): BeklemeNedeni[] {
   return BEKLEME_NEDENLERI.filter((n) => {
     const k = NEDEN_KAYNAKLARI[n];
     if (k === null) return true;
     const v = KADEME_KAYNAKLARI[k].varsayilan;
-    return v.k3Gun === null || v.k4Gun === null || v.k3Gun + v.k4Gun - 1 > SUREN_BEKLEME_GUNU;
+    if (v.k3Gun === null || v.k4Gun === null) return true;
+    const k3IsGunu = v.k3Birim === 'saat' ? Math.ceil(v.k3Gun / 24) : v.k3Gun;
+    return k3IsGunu + v.k4Gun - 1 > SUREN_BEKLEME_GUNU;
   });
 }
 
@@ -64,6 +67,7 @@ export interface BeklemeKaydi {
   baslik: string;
   yol: `/${string}`;
   baslangic: string;
+  baslangicAni: string;
   yapanlar: number[];
   yoneticiler: number[];
 }
@@ -76,6 +80,7 @@ export function beklemeKaydi(emir: { id: number; emirNo: string }, b: SurenBekle
     baslik: `${emir.emirNo} beklemede: ${BEKLEME_NEDENI_ADLARI[b.neden]}`,
     yol: `/uretim-emirleri/${String(emir.id)}`,
     baslangic: gun(b.baslangicAni),
+    baslangicAni: b.baslangicAni,
     yapanlar: [b.kisiId],
     yoneticiler: [],
   };

@@ -18,6 +18,7 @@ import { PlanSeridi } from './PlanSeridi.tsx';
 import { bugun, teslimGunu, terminGunu } from './teslim-suresi.ts';
 import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
+import { LogoSonAlisSatirlari, useLogoSonAlislar } from './logo-son-alis.tsx';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useMaliyetToplamiGorur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
 // 3301 (D): kademe 3 termin ve fiyat, kademe 4 koşullar ve gönder; ikisi tek formdur, sürüm kademe 4'ten verilir.
@@ -266,6 +267,8 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   // Kâr yalnız maliyeti bilinen kaleme eklenir; bilinmeyen kalem sessiz kalmasın diye adıyla yazılır (gizli ayda öneri hiç yoktur).
   const karsiz = c === undefined || gizli ? [] : c.kalemler.filter((k) => !k.plansiz && k.birimMaliyet === null);
   const karsizEksik = [...new Set(karsiz.flatMap((k) => k.eksikVeri))];
+  // 3384-c a: maliyeti olmayan kalemin hammaddesine Logo son alış önerisi; yalnız maliyet gören sorar, hesaba girmez.
+  const sonAlis = useLogoSonAlislar(karsiz.flatMap((k) => (k.hammaddeler ?? []).map((h) => h.kod)), maliyetGorur && !gizli);
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
   // Fiyatsız kalem varken kademe 3'ten geçilmez; neden alt çubukta yazar (Ne değişti 8).
@@ -289,6 +292,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
           <span className="tc-sp-soluk">{`${miktarMetni(s.miktar)}${s.birim ? ` ${s.birim}` : ''}`}</span>
           {k?.plansiz && <Rozet ton="uyari">Plansız: elle fiyat</Rozet>}
           {maliyetGorur && k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <Rozet ton="uyari">Maliyet yok: kâr eklenmez, elle fiyat</Rozet>}
+          {maliyetGorur && k !== undefined && !k.plansiz && !gizli && k.birimMaliyet === null && <LogoSonAlisSatirlari hammaddeler={k.hammaddeler ?? []} veri={sonAlis.data} />}
         </span>
       ),
     },
@@ -353,6 +357,9 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
                   <strong>{`Kâr ${String(karsiz.length)} kalemin fiyatına eklenmedi`}</strong>
                   {` Bu kalemlerin maliyeti hesaplanamadı${karsizEksik.length > 0 ? ` (eksik: ${karsizEksik.join('; ')})` : ''}; fiyatı elle girin ya da eksik veriyi tamamlayın.`}
                 </p>
+              )}
+              {maliyetGorur && karsiz.length > 0 && sonAlis.data?.okuma === 'kapali' && (
+                <p className="tc-sp-ipucu tc-sp-logo-alis"><Simge ad="file" boyut="k" />Logo son alış okuması kapalı; öneri gösterilmiyor.</p>
               )}
               <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
                 <div><dt>Maliyet toplamı</dt><dd>{!maliyetGorur ? <KilitliDeger yetki={YETKI_ADI.maliyet} /> : gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>

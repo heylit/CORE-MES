@@ -15,7 +15,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kademeKaynagiKaydet, kademeleriIlerlet, type KademeKaydi } from './kademe.ts';
 import { bildirimGonder } from './servis.ts';
-import { bildirilecekKademe, gerekenKademeler, isGunuFarki, kademeAyarHatasi, kisiEpostaAlir } from './kurallar.ts';
+import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAyarHatasi, kisiEpostaAlir } from './kurallar.ts';
 
 const BOS = new Set<string>();
 const SON_GUN = { sayac: 'son-gun', k2Gun: 1, k3Gun: null, k4Gun: 1, k5Gun: 2 } as const;
@@ -58,6 +58,33 @@ describe('kademeli uyarı kuralı (3405)', () => {
     assert.deepEqual(bk('2026-11-16', '2026-11-23', false).kademeler, [4, 5]);
   });
 
+  // 3418 a: saat iş günlerinde geçen saattir (tesis saati UTC+3); hafta sonu ve tatil düşer, mesai dışı saat sayılır.
+  test('iş saati farkı: cuma 18:00 → pazartesi 10:00 16 saat; pazartesi tatilse 6; eşiğin aşıldığı gün döner (3418)', () => {
+    const an = (s: string) => Date.parse(s);
+    assert.deepEqual(isSaatiFarki(an('2026-11-20T15:00:00Z'), an('2026-11-23T07:00:00Z'), BOS), { saat: 16, esikGunu: null });
+    assert.equal(isSaatiFarki(an('2026-11-20T15:00:00Z'), an('2026-11-23T07:00:00Z'), new Set(['2026-11-23'])).saat, 6);
+    assert.equal(isSaatiFarki(an('2026-11-20T15:00:00Z'), an('2026-11-23T07:00:00Z'), BOS, 8).esikGunu, '2026-11-23');
+    assert.equal(isSaatiFarki(an('2026-11-20T15:00:00Z'), an('2026-11-23T07:00:00Z'), BOS, 17).esikGunu, null);
+    assert.deepEqual(isSaatiFarki(an('2026-11-23T07:00:00Z'), an('2026-11-20T15:00:00Z'), BOS), { saat: 0, esikGunu: null });
+  });
+
+  test('bekleme saat biriminde: K3 4 iş saati geçince; K4 gecikmenin 2. iş günü; hafta sonu ve tatil sayılmaz; an yoksa gün başı (3418)', () => {
+    const kural = { sayac: 'bekleme', k2Gun: null, k3Gun: 4, k4Gun: 2, k5Gun: null, k3Birim: 'saat' } as const;
+    const sa = (baslangicAni: string | null, simdi: string, tatiller: ReadonlySet<string> = BOS) => {
+      const t = Date.parse(simdi);
+      const gun = new Date(t + 3 * 3_600_000).toISOString().slice(0, 10);
+      const bas = baslangicAni === null ? '2026-11-16' : new Date(Date.parse(baslangicAni) + 3 * 3_600_000).toISOString().slice(0, 10);
+      return gerekenKademeler({ sonGun: null, baslangic: bas, baslangicAni, yapanVar: true }, kural, gun, tatiller, t);
+    };
+    assert.deepEqual(sa('2026-11-16T06:00:00Z', '2026-11-16T09:00:00Z'), { kademeler: [1], gecikme: null }, '3 saat');
+    assert.deepEqual(sa('2026-11-16T06:00:00Z', '2026-11-16T10:00:00Z'), { kademeler: [1, 3], gecikme: 1 }, '4 saat');
+    assert.deepEqual(sa('2026-11-16T06:00:00Z', '2026-11-17T06:00:00Z'), { kademeler: [1, 3, 4], gecikme: 2 }, 'bir iş günü sonra Yöneticide');
+    assert.deepEqual(sa('2026-11-20T19:00:00Z', '2026-11-23T05:00:00Z'), { kademeler: [1, 3], gecikme: 1 }, 'cuma 22:00 başlayan pazartesi 02:00 gecikir');
+    assert.deepEqual(sa('2026-11-20T19:00:00Z', '2026-11-22T20:00:00Z'), { kademeler: [1], gecikme: null }, 'hafta sonu saat sayılmaz');
+    assert.deepEqual(sa('2026-11-20T19:00:00Z', '2026-11-23T20:00:00Z', new Set(['2026-11-23'])), { kademeler: [1], gecikme: null }, 'tatil sayılmaz');
+    assert.deepEqual(sa(null, '2026-11-16T01:00:00Z'), { kademeler: [1, 3], gecikme: 1 }, 'an vermeyen kaynakta gün başından');
+  });
+
   test('tarihi olmayan kayıt hiçbir gecikme kademesine girmez (sıfır uydurulmaz)', () => {
     assert.deepEqual(gerekenKademeler({ sonGun: null, baslangic: null, yapanVar: true }, SON_GUN, '2026-11-17', BOS), { kademeler: [1], gecikme: null });
     assert.deepEqual(gerekenKademeler({ sonGun: null, baslangic: null, yapanVar: true }, BEKLEME, '2026-11-17', BOS), { kademeler: [1], gecikme: null });
@@ -76,6 +103,9 @@ describe('kademeli uyarı kuralı (3405)', () => {
     assert.equal(kademeAyarHatasi('bekleme', { ...g, k3Gun: null })?.alan, 'k3Gun');
     assert.equal(kademeAyarHatasi('son-gun', g)?.alan, 'k3Gun');
     assert.equal(kademeAyarHatasi('bekleme', { ...g, k5Gun: 2 })?.alan, 'k5Gun');
+    assert.equal(kademeAyarHatasi('bekleme', { ...g, k3Birim: 'saat' }), null);
+    assert.equal(kademeAyarHatasi('bekleme', { ...g, k3Gun: 0, k3Birim: 'saat' })?.alan, 'k3Gun');
+    assert.equal(kademeAyarHatasi('son-gun', { ...g, k3Gun: null, k3Birim: 'saat' })?.alan, 'k3Birim');
   });
 
   test('türler katalogdan: her kaynakta K3-K5, son gün sayacında K2 de; alıcı kaynağın okuma işlemi; para kaynağında e-posta kapalı', () => {
@@ -158,7 +188,7 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
   const ayarla = async (ek: Record<string, unknown>, kaynak: KademeKaynagi = KAYNAK) => {
     const a = await ayar(kaynak);
     const govde = { acik: a.acik, k2Gun: a.k2Gun, k3Gun: a.k3Gun, k4Gun: a.k4Gun, k5Gun: a.k5Gun, epostaKademe: a.epostaKademe, serit: a.serit,
-      kapatilamaz: a.kapatilamaz, yoneticiRolId: a.yoneticiRolId, surum: a.surum, ...ek };
+      kapatilamaz: a.kapatilamaz, yoneticiRolId: a.yoneticiRolId, k3Birim: a.k3Birim, surum: a.surum, ...ek };
     return gonder(yonetici, `/bildirim-kademe/kaynaklar/${kaynak}/ayarla`, govde);
   };
 
@@ -343,5 +373,25 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
     // Motor çalışmadan da (takip satırı dururken) kapalı kaynak görünmez.
     assert.equal((await ayarla({ acik: false }, DOF)).statusCode, 200);
     assert.deepEqual([await liste('/bildirim-kademe/gecikenlerim'), await liste('/bildirim-kademe/seridim')], [[], []]);
+  });
+  test('saat birimi (3418 a): K3 iş günlerinde 4 saat geçince, K4 ertesi iş günü; son gün kaynağında saat 400; boş birim gün sayılır', async () => {
+    const yapan = await kisi('kalite', 'malzemeler.onayla');
+    assert.equal((await ayarla({ acik: true, k3Gun: 4, k3Birim: 'saat', k4Gun: 2, k5Gun: null })).statusCode, 200);
+    assert.deepEqual([(await ayar()).k3Birim, (await ayar()).k3Gun], ['saat', 4]);
+    assert.equal((await ayarla({ k3Birim: 'saat' }, DOF)).statusCode, 400, 'son gün sayacında saat yok');
+    const kademeler = async () => (await defter('saat1')).map((x) => x.replace('!', ''));
+    kayitlar = [{
+      kayit: 'saat1', no: 'ORN-MK-9', baslik: 'Kart onayı', yol: '/malzemeler', baslangic: PAZARTESI, baslangicAni: an(PAZARTESI, 9).toISOString(),
+      yapanlar: [yapan.id], yoneticiler: [],
+    }];
+    await ilerlet(PAZARTESI, 12);
+    assert.deepEqual(await kademeler(), ['1'], '3 saat');
+    await ilerlet(PAZARTESI, 13);
+    assert.deepEqual(await kademeler(), ['1', '3'], '4 saat');
+    assert.equal(await zil(yapan, 'saat1', 3), 1);
+    await ilerlet('2030-01-08', 9);
+    assert.deepEqual(await kademeler(), ['1', '3', '4'], 'bir iş günü sonra Yöneticide');
+    await ortam!.sahip.sorgu('UPDATE bildirim_kademe_ayari SET k3_birim = NULL WHERE kaynak = $1', [KAYNAK]);
+    assert.equal((await ayar()).k3Birim, 'gun', 'göçten önceki satır gün sayılır');
   });
 });

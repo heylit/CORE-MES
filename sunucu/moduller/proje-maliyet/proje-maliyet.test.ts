@@ -244,12 +244,16 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     let malzeme = c.kalemler.find((x) => x.kalem === 'malzeme')!;
     assert.deepEqual([malzeme.plan, malzeme.gerceklesen], [0, 0]);
     assert.ok(!c.eksikKalemler.includes('malzeme'));
+    assert.deepEqual(c.fiyatsizMalzemeler, []);
     const bilesen = await mamulAc();
     await ortam!.sahip.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 2, 0)', [isEmriId, bilesen]);
     c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
     malzeme = c.kalemler.find((x) => x.kalem === 'malzeme')!;
     assert.deepEqual([malzeme.plan, malzeme.gerceklesen], [null, 0]);
     assert.ok(c.eksikler.includes('birim_maliyet_eksik'));
+    // 3384-c a: fiyatı bilinmeyen malzeme kartta listelenir (emrin plan brüt ihtiyacı, stok koduyla); fiyatsız proje boş liste.
+    assert.deepEqual(c.fiyatsizMalzemeler?.map((m) => [m.malzemeNo, m.miktar]), [[bilesen, 20]], '2 x 10 adet');
+    assert.ok((c.fiyatsizMalzemeler?.[0]?.stokKodu ?? '') !== '');
     // Stoktan emre net sarf: fiyatı olmayan malzeme gerçeği de bilinmez yapar.
     const emir = await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]);
     const konum = await ortam!.sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'PM-SARF', 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id");

@@ -651,7 +651,7 @@ export function aramaKalibi(ara: string): string | null {
 // ceza oranla değişmez, kalır. Genel gider bekleme finansmanının tabanına girmediği için (FINANSMAN_TABANI) finansman kalemi de kalır.
 export type MaskelenecekMaliyet = Pick<ProjeMaliyetCevabi,
   'butce' | 'hedef' | 'plan' | 'gerceklesen' | 'bugunePlan' | 'kalanPlan' | 'sapma' | 'katkiPayi' | 'katkiOrani' | 'planlananKatkiOrani'
-  | 'karRiski' | 'kalemler' | 'haftalar' | 'sapanIsEmirleri'>;
+  | 'karRiski' | 'kalemler' | 'haftalar' | 'sapanIsEmirleri' | 'fiyatsizMalzemeler'>;
 export function genelGiderGizliMaskesi<T extends MaskelenecekMaliyet>(h: T): T {
   return {
     ...h,
@@ -668,6 +668,8 @@ export function genelGiderGizliMaskesi<T extends MaskelenecekMaliyet>(h: T): T {
     kalemler: h.kalemler.map((k) => (k.kalem === 'genel_gider' ? { ...k, plan: null, gerceklesen: null, sapmaOrani: null } : k)),
     haftalar: [],
     sapanIsEmirleri: [],
+    // 3384-c a: gizli ayda fiyatı bilinmeyen malzeme listesi ve Logo önerisi de gösterilmez.
+    ...(h.fiyatsizMalzemeler === undefined ? {} : { fiyatsizMalzemeler: [] }),
   };
 }
 

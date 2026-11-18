@@ -11,7 +11,7 @@ import { sevkIsiOzeti } from '../../sevkiyat/disari.ts';
 import {
   binde, bindenMetin, dusumKarari, geriAlmaEngeli, partiEtiketi, statuDegisimiEngeli, stoklanirMi, partiSec, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, tersYon, serbestMiktarEngeli,
   cikisKaliteKarari, kaliteDegisimiEngeli, kaliteKarariHareketiMi, karantinaEngeli, gozTamSayildiMi, eksiKaliteEngeli, statuKartEngeli, sevkTeslimIsi, faturaliSevkEngeli, sevkCikisEngeli,
-  sktGecmisMi, SKT_GECMIS_ONAY_GEREKLI,
+  sktGecmisMi, SKT_GECMIS_ONAY_GEREKLI, sifirlamaKartEngeli,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { cikisOnerisiOku } from './malzeme.ts';
@@ -366,6 +366,7 @@ export async function sayimFarklari(db: Db): Promise<SayimFarklariCevabi> {
       sistemMiktar: f.sistemMiktar, sayilanMiktar: f.sayilanMiktar, fark: bindenMetin(binde(f.sayilanMiktar) - binde(f.sistemMiktar)), guncelMiktar: f.guncelMiktar,
       sayanKisiId: f.sayanKisiId, sayanAd: kisiler.get(f.sayanKisiId) ?? null, sayimZamani: f.sayimZamani, durum: f.durum,
       kararAd: f.kararKisiId === null ? null : kisiler.get(f.kararKisiId) ?? null, kararZamani: f.kararZamani, kararNotu: f.kararNotu, hareketId: f.hareketId, surum: f.surum,
+      kaynak: f.kaynak, neden: f.neden, aciklama: f.aciklama,
     })),
     esikler: await sorgular.sayimEsikleri(db),
   };
@@ -380,15 +381,33 @@ async function bekleyenSayimFarki(db: Db, kisiId: number, id: number): Promise<s
 // Onayda sayımdaki fark (sayılan - sistem) hareketle yazılır; sayım ile onay arasındaki hareketler korunur. Hareketin kişisi
 // onaylayandır; sayanı fark kaydı taşır.
 export async function sayimFarkiOnayla(db: Db, kisiId: number, id: number, g: { surum: number; not?: string | null | undefined }): Promise<SayimFarklariCevabi> {
+  await sayimFarkiOnayYaz(db, kisiId, id, g);
+  return sayimFarklari(db);
+}
+// Tek farkın onayı; toplu onay (3417 a) her fark için ayrı ara kayıtta çağırır.
+export async function sayimFarkiOnayYaz(db: Db, kisiId: number, id: number, g: { surum: number; not?: string | null | undefined }): Promise<void> {
   await korumali(async () => {
+    // Sıfırlama "gözü 0 yap" demektir (3417 a): gönderimden sonra stok değiştiyse ya da emre ayrıldıysa eski farkla yazılmaz.
+    // Kilit sırası sıfırlama komutuyla aynı: kartın rezerve kilidi farkın satır kilidinden ve bakiyeden önce (kilitlenme olmasın).
+    const on = await sorgular.sayimFarkiBul(db, id, false);
+    if (on?.kaynak === 'sifirlama') await sorgular.rezerveKilidi(db, on.malzemeId);
     const f = await bekleyenSayimFarki(db, kisiId, id);
     await aktifKonum(db, f.konumId, 'id');
+    if (f.kaynak === 'sifirlama') {
+      const r = await sorgular.rezerveler(db, [f.malzemeId]);
+      const nolar = await emirNoHaritasi(db, r.map((x) => x.uretimEmriId));
+      const engel = sifirlamaKartEngeli(r.map((x) => ({ statuId: x.statuId, uretimEmriId: x.uretimEmriId, emirNo: emirNoDe(nolar, x.uretimEmriId) })), await sorgular.acikAyirmaIstekleri(db, f.malzemeId));
+      if (engel !== null) throw gecersiz(engel);
+    }
     const fark = binde(f.sayilanMiktar) - binde(f.sistemMiktar);
-    await sorgular.bakiyeKilitle(db, f.malzemeId, f.konumId, f.partiId);
+    const b = await sorgular.bakiyeKilitle(db, f.malzemeId, f.konumId, f.partiId);
+    if (f.kaynak === 'sifirlama' && binde(b?.miktar ?? '0') !== binde(f.sistemMiktar)) {
+      throw cakisma(`${f.konumKod}: sıfırlamaya gönderildikten sonra stok değişti (${bindenMetin(binde(b?.miktar ?? '0'))}); farkı reddedip yeniden gönderin.`, { id: f.id });
+    }
     const yon = fark > 0n ? { tur: 'sayim_fazla' as const, hedefKonumId: f.konumId } : { tur: 'sayim_eksik' as const, kaynakKonumId: f.konumId };
     const hareketId = await sorgular.hareketYaz(db, hareket({
       ...yon, malzemeId: f.malzemeId, miktar: bindenMetin(fark < 0n ? -fark : fark), kisiId, partiId: f.partiId, partiSecimi: f.partiId === null ? null : 'kisi',
-      aciklama: `Sayım farkı #${f.id} onayı`,
+      aciklama: f.kaynak === 'sifirlama' ? `Sıfırlama #${f.id} onayı` : `Sayım farkı #${f.id} onayı`,
     }));
     await bakiyeDegistir(db, { malzemeId: f.malzemeId, konumId: f.konumId, partiId: f.partiId, fark });
     await surumluGuncelle({
@@ -396,7 +415,6 @@ export async function sayimFarkiOnayla(db: Db, kisiId: number, id: number, g: { 
       varMi: () => sorgular.sayimFarkiVarMi(db, id), bulunamadiIletisi: 'Sayım farkı bulunamadı.',
     });
   });
-  return sayimFarklari(db);
 }
 export async function sayimFarkiReddet(db: Db, kisiId: number, id: number, g: { surum: number; neden: string }): Promise<SayimFarklariCevabi> {
   await bekleyenSayimFarki(db, kisiId, id);

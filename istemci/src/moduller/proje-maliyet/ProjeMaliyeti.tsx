@@ -6,6 +6,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KALEM_ADI, MaliyetTabani, tl } from './MaliyetTabani.tsx';
 import { MasrafBelgeleri } from './MasrafBelgeleri.tsx';
+import { FiyatsizMalzemeler } from './FiyatsizMalzemeler.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { GIZLI, GIZLI_ACIKLAMA, GIZLI_BIRIKIM, GIZLI_KIRILIM, GIZLI_SAPMA, gizliVeyaDeger } from './gizli.ts';
 import './proje-maliyet.css';
@@ -116,6 +117,8 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
   const planaOran = bolum(m.gerceklesen, m.hedef);
   const kalemNoktalari = m.kalemler.flatMap((k) => (k.plan === null || k.gerceklesen === null || (k.plan === 0 && k.gerceklesen === 0)
     ? [] : [{ etiket: KALEM_ADI[k.kalem], birinci: k.plan, ikinci: k.gerceklesen }]));
+  // 3384-c a: gizli ayda (2661 a) öneri kartı çizilmez.
+  const fiyatsiz = g ? [] : (m.fiyatsizMalzemeler ?? []);
   const uyarilar = [
     ...m.eksikler.map((e) => EKSIK_METNI[e]),
     ...(m.eksikKalemler.length > 0 ? [`Toplamlara girmeyen kalemler (bilinmeyen tutar var): ${m.eksikKalemler.map((k) => KALEM_ADI[k]).join(', ')}.`] : []),
@@ -155,6 +158,9 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
           <SayiKarti baslik="Bugüne kadarki sapma" simge="gauge" metin={g ? GIZLI : m.sapma === null ? '—' : `${m.sapma > 0 ? '+' : ''}${tl(m.sapma)}`}
             altMetin={`Bugüne kadarki plan ${gizliVeyaDeger(tl(m.bugunePlan), g)}`} ton={m.sapma !== null && m.sapma > 0 ? 'uyari' : 'bilgi'} />
         )}
+        {fiyatsiz.length > 0 && (
+          <SayiKarti baslik="Fiyatı bilinmeyen" simge="alert" metin={String(fiyatsiz.length)} altMetin="malzeme toplamlara girmedi" ton="uyari" />
+        )}
       </div>
       <MaliyetTabani projeId={projeId} ozet={m.ozet} kalemler={m.kalemler} yazabilir={yazabilir} gizli={g} />
       <KarRiskiSeridi m={m} />
@@ -168,6 +174,7 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
       <Kart baslik="Kalemler">
         <Tablo etiket="Maliyet kalemleri" sutunlar={kalemSutunlari(g)} satirlar={m.kalemler} satirAnahtari={(k) => k.kalem} />
       </Kart>
+      <FiyatsizMalzemeler malzemeler={fiyatsiz} />
       <MasrafBelgeleri projeId={projeId} ozet={m.ozet} yazabilir={yazabilir} />
       {m.fiyatGorunur && (
         <Kart baslik="En çok sapan iş emirleri">

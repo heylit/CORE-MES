@@ -9,12 +9,12 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
-import { TEKLIF_DURUMU, TEKLIF_SEKMELERI, tarihMetni, type TeklifSekmesi } from './gorunum.ts';
+import { TEKLIF_ARSIV_NEDENI, TEKLIF_DURUMU, TEKLIF_SEKMELERI, tarihMetni, zamanMetni, type TeklifSekmesi } from './gorunum.ts';
 import { useYazabilir } from './yazma.ts';
 import './siparisler.css';
 
 const SIRALAMA_ALANLARI = ['no', 'olusturma'] as const;
-const DURUMLAR = ['tumu', 'yeni', 'verildi', 'revizyon', 'kabul', 'red', 'siparis'] as const;
+const DURUMLAR = ['tumu', 'yeni', 'onay-bekliyor', 'verildi', 'revizyon', 'kabul', 'red', 'siparis', 'arsiv'] as const;
 
 const SUTUNLAR: Sutun<Teklif>[] = [
   {
@@ -36,13 +36,26 @@ const SUTUNLAR: Sutun<Teklif>[] = [
   { anahtar: 'durum', baslik: 'Durum', hucre: (t) => <Rozet ton={TEKLIF_DURUMU[t.durum].ton}>{TEKLIF_DURUMU[t.durum].etiket}</Rozet> },
 ];
 
+// 3275 a: 1280'de tablo sığsın diye neden ve arşivleyen tek sütunda; arşiv sekmesinde firma kodu düşer.
+const ARSIV_SUTUNU: Sutun<Teklif> = {
+  anahtar: 'arsiv',
+  baslik: 'Arşiv',
+  hucre: (t) => (t.arsiv === null ? '—' : (
+    <span className="tc-sp-ad">
+      <span>{TEKLIF_ARSIV_NEDENI[t.arsiv.neden]}</span>
+      <span className="tc-sp-soluk">{`${t.arsiv.kisi ?? '—'} · ${zamanMetni(t.arsiv.an)}`}</span>
+    </span>
+  )),
+  csv: (t) => (t.arsiv === null ? '' : `${TEKLIF_ARSIV_NEDENI[t.arsiv.neden]} · ${t.arsiv.kisi ?? '—'} · ${zamanMetni(t.arsiv.an)}`),
+};
+
 // Teklifler (prototipte "Müşteri teklif talepleri"): durum sekmeleri, arama ve firma süzgeci; satır teklif föyüne gider.
 export function TeklifListesi() {
   const gezin = useNavigate();
   const yazabilir = useYazabilir();
   const liste = useListeDurumu({
     suzgecler: { ara: '', durum: '' as string },
-    suzgecDegerleri: { durum: ['yeni', 'verildi', 'revizyon', 'kabul', 'red', 'siparis'] },
+    suzgecDegerleri: { durum: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon', 'kabul', 'red', 'siparis', 'arsiv'] },
     siralamaAlanlari: SIRALAMA_ALANLARI,
     adres: true,
   });
@@ -55,7 +68,9 @@ export function TeklifListesi() {
   }, [arama]);
 
   const sekme: TeklifSekmesi = DURUMLAR.find((d) => d === liste.suzgecler.durum) ?? 'tumu';
-  const sorgu = { ...liste.sorgu, ...(firma === null ? {} : { firmaId: firma.id }) };
+  // 3419 a: arşiv sekmesi durum süzgeci değil, ayrı sorgu alanıdır.
+  const arsivde = sekme === 'arsiv';
+  const sorgu = { ...liste.sorgu, ...(arsivde ? { durum: undefined, arsiv: 'evet' } : {}), ...(firma === null ? {} : { firmaId: firma.id }) };
   const teklifler = useQuery({
     queryKey: anahtarlar.teklifListe(sorgu),
     queryFn: () => api.get<TeklifListesiCevabi>(`/siparisler/teklifler${sorguMetni(sorgu)}`),
@@ -63,10 +78,10 @@ export function TeklifListesi() {
   useEffect(() => { if (teklifler.data) liste.sayfaEsitle(teklifler.data.sayfa, liste.sorgu.sayfa); }, [teklifler.data]);
   // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
   const logo = useLogoRozetleri('teklif', (teklifler.data?.satirlar ?? []).map((t) => t.id));
-  const sutunlar: Sutun<Teklif>[] = [...SUTUNLAR, {
+  const sutunlar: Sutun<Teklif>[] = [...(arsivde ? SUTUNLAR.filter((x) => x.anahtar !== 'firmaKodu') : SUTUNLAR), {
     anahtar: 'logo', baslik: 'Logo', hucre: (t) => <LogoRozetHucresi bilgi={logo.durum(t.id)} hata={logo.hata} />,
     csv: (t) => { const d = logo.durum(t.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
-  }];
+  }, ...(arsivde ? [ARSIV_SUTUNU] : [])];
 
   return (
     <section className="tc-sp">
@@ -112,7 +127,7 @@ export function TeklifListesi() {
             satirAnahtari={(t) => t.id}
             satirSec={(t) => { void gezin(`/siparisler/teklifler/${t.id}`); }}
             mesgul={teklifler.isPending}
-            bosMesaj={teklifler.isPending ? 'Yükleniyor' : 'Bu süzgece uyan teklif yok.'}
+            bosMesaj={teklifler.isPending ? 'Yükleniyor' : arsivde ? 'Arşivde teklif yok.' : 'Bu süzgece uyan teklif yok.'}
             siralama={liste.siralama}
             siralamaDegistir={liste.siralamaDegistir}
             {...(teklifler.data

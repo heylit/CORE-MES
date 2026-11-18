@@ -74,7 +74,8 @@ export {
 export {
   konumunSayimEsigi, type SayimFarkiYeni, sayimFarkiEkle, type SayimFarkiHam, sayimFarklari, sayimFarkiBul, sayimFarkiVarMi, bekleyenSayimFarkiSayisi,
   sayimFarkiKarar, sayimEsikleri, sayimEsigiYaz, type PartiBakiyesi, malzemePartiBakiyeleri, sonDefterKarsilastirmasi, defterKarsilastirmaZamaniMi,
-  defterKarsilastir, type DefterFarkiHam, defterFarklari,
+  defterKarsilastir, type DefterFarkiHam, defterFarklari, type SifirlamaBakiyesiHam, sifirlamaBakiyeleri, bekleyenFarkAnahtarlari, acikAyirmaIstekleri,
+  type SonDuzeltmeHam, sonDuzeltmeler,
 } from './sorgular/sayim/sorgular.ts';
 export {
   type SeriListeHam, type SeriSatirHam, seriAcikListeler, seriListe, seriListeKilitle, seriListeAc, seriSatirlari, seriSatirEkle, seriAdetYaz, seriSatirSil,

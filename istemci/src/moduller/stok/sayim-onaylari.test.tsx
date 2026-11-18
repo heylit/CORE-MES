@@ -17,7 +17,7 @@ const KONUM: KonumAyrintiCevabi = {
 const fark = (o: Partial<SayimFarki>): SayimFarki => ({
   id: 9, konumId: 41, konumKod: 'A-01-1', depoId: 1, malzemeId: 921, malzemeAd: 'Deneme flanş', partiId: 77, partiEtiketi: 'LOT-DENEME-77', sistemMiktar: '10.000',
   sayilanMiktar: '7.000', fark: '-3', guncelMiktar: '8.000', sayanKisiId: 5, sayanAd: 'Deneme Depocu', sayimZamani: '2026-11-01T09:00:00+03:00', durum: 'bekliyor',
-  kararAd: null, kararZamani: null, kararNotu: null, hareketId: null, surum: 1, ...o,
+  kararAd: null, kararZamani: null, kararNotu: null, hareketId: null, surum: 1, kaynak: 'sayim', neden: null, aciklama: null, ...o,
 });
 const LISTE: SayimFarklariCevabi = {
   farklar: [fark({}), fark({ id: 10, sayanKisiId: 7, sayanAd: 'Deneme Müdür', malzemeAd: 'Deneme mil' }), fark({ id: 3, durum: 'reddedildi', kararAd: 'Deneme Müdür', kararZamani: '2026-10-31T10:00:00+03:00', kararNotu: 'Yeniden say', surum: 2 })],
@@ -58,7 +58,7 @@ describe('Kör sayım ve sayım onayları (1279 a)', () => {
     const bekleyen = await screen.findByRole('table', { name: 'Onay bekleyen sayım farkları' });
     expect(bekleyen.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(bekleyen).getByRole('columnheader', { name: 'Konum' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
-    expect(within(bekleyen).getByRole('columnheader', { name: 'Sayım zamanı' })).toBeTruthy();
+    expect(within(bekleyen).getByRole('columnheader', { name: 'Sayan / zaman' })).toBeTruthy();
     expect(within(bekleyen).getAllByText('-3')).toHaveLength(2);
     expect(within(bekleyen).getByText('Kendi sayımınız')).toBeTruthy();
     expect(within(bekleyen).getAllByRole('button', { name: /Onayla/ })).toHaveLength(1);

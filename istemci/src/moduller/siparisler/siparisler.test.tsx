@@ -6,6 +6,7 @@ import { ESKI_SURUM_NEDENI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
+import type { LogoSonAlisCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
@@ -46,7 +47,7 @@ const TEKLIF_SATIR = { id: 11, sira: 1, malzemeNo: null, malzemeKodu: null, malz
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
   istenenTarih: '2026-11-15', aciklama: 'Deneme açıklaması', not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1,
-  olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
+  olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4, olusturanId: 3, arsiv: null,
 } satisfies Teklif;
 const SURUM_1 = {
   surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
@@ -1402,6 +1403,106 @@ describe('Teklifler', () => {
   });
 });
 
+describe('Teklif silme ve arşiv (3419 a)', () => {
+  const yeniTeklif = (yontem: string, yol: string) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, TEKLIF_YENI) : undefined);
+
+  it('fiyatı verilmemiş teklifte "Teklifi sil" açana ve onay yetkilisine çizilir; başka yazara ve fiyatlı teklifte çizilmez', async () => {
+    for (const [kullanici, gorur] of [[YAZAR, true], [YONETICI, true], [{ ...YAZAR, id: 9 }, false], [OKUYUCU, false]] as const) {
+      const istekler = sunucuKur(kullanici, yeniTeklif);
+      ac('/siparisler/teklifler/21');
+      await screen.findAllByText('Deneme Mil 20mm');
+      await oturumCozuldu(istekler);
+      expect(screen.queryByRole('button', { name: 'Teklifi sil' }) !== null).toBe(gorur);
+      expect(screen.queryByRole('button', { name: 'Arşivle' })).toBeNull();
+      cleanup();
+    }
+    const istekler = sunucuKur(YAZAR);
+    ac('/siparisler/teklifler/21');
+    await screen.findAllByText('Deneme Mil 20mm');
+    await oturumCozuldu(istekler);
+    expect(screen.queryByRole('button', { name: 'Teklifi sil' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Arşivle' })).toBeTruthy();
+  });
+
+  it('silme penceresi silinecekleri ve geri alınamazlığı söyler; sürümle gider, bildirimle listeye döner', async () => {
+    const istekler = sunucuKur(YAZAR, (yontem, yol) => yeniTeklif(yontem, yol)
+      ?? (yontem === 'POST' && yol === '/siparisler/teklifler/21/sil' ? json(200, { id: 21, no: 'TK-2026-0021' }) : undefined));
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Teklifi sil' }));
+    const pencere = await screen.findByRole('dialog', { name: 'TK-2026-0021 silinsin mi?' });
+    expect(within(pencere).getByText('1 kalem')).toBeTruthy();
+    expect(within(pencere).getByText('Bu işlem geri alınamaz.')).toBeTruthy();
+    expect(within(pencere).getByText(/"Reddet" kullanın/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Sil' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/sil', govde: { surum: 4 } });
+    expect(await screen.findByText('TK-2026-0021 silindi.')).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/siparisler/teklifler?'))).toBe(true));
+  });
+
+  it('arşiv nedeni seçilmeden Arşivle pasif; nedenle ve boş not null olarak gider', async () => {
+    const istekler = sunucuKur(YAZAR, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/teklifler/21/arsivle'
+      ? json(200, { ...TEKLIF_VERILDI, surum: 5, arsiv: { an: '2026-11-18T09:00:00+03:00', kisi: 'Deneme Yazar', neden: 'deneme', not: null } }) : undefined));
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Arşivle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'TK-2026-0021 arşivlensin mi?' });
+    const dugme = within(pencere).getByRole('button', { name: 'Arşivle' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText(/^Neden/), { target: { value: 'deneme' } });
+    expect(dugme.disabled).toBe(false);
+    fireEvent.click(dugme);
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/arsivle', govde: { surum: 4, neden: 'deneme', not: null } });
+  });
+
+  it('reddedilmiş teklif de arşivlenir; yazılan not kırpılıp gövdede gider', async () => {
+    const istekler = sunucuKur(YAZAR, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, { ...TEKLIF_VERILDI, durum: 'red', not: 'Fiyat yüksek' });
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/arsivle') return json(200, TEKLIF_VERILDI);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Arşivle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'TK-2026-0021 arşivlensin mi?' });
+    fireEvent.change(within(pencere).getByLabelText(/^Neden/), { target: { value: 'tekrar' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Not/), { target: { value: '  TK-2026-0022 ile aynı  ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Arşivle' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/arsivle', govde: { surum: 4, neden: 'tekrar', not: 'TK-2026-0022 ile aynı' } });
+  });
+
+  it('arşivdeki teklif salt okunur: nedeni ve kişisi yazar, yalnız "Arşivden çıkar" kalır', async () => {
+    const arsivli = { ...TEKLIF_VERILDI, arsiv: { an: '2026-11-18T09:00:00+03:00', kisi: 'Deneme Yazar', neden: 'yanlis-firma', not: 'Deneme notu' } } satisfies TeklifAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, arsivli);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/arsivden-cikar') return json(200, { ...TEKLIF_VERILDI, surum: 6 });
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText(/Yanlış firma · Deneme Yazar/)).toBeTruthy();
+    await oturumCozuldu(istekler);
+    for (const ad of ['Müşteri kabulünü kaydet', 'Revizyon iste', 'Reddet', 'Yeni sürüm ver', 'Arşivle', 'Teklifi sil']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Arşivden çıkar' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/arsivden-cikar', govde: { surum: 4 } });
+  });
+
+  it('Arşiv sekmesi durum göndermeden arşivdekileri ister; nedeni ve arşivleyeni sütunda gösterir', async () => {
+    const arsivliSatir = { ...TEKLIF, arsiv: { an: '2026-11-18T09:00:00+03:00', kisi: 'Deneme Yazar', neden: 'tekrar', not: null } } satisfies Teklif;
+    const istekler = sunucuKur(OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol.includes('arsiv=evet')
+      ? json(200, { ...TEKLIF_LISTESI, satirlar: [arsivliSatir] }) : undefined));
+    ac('/siparisler/teklifler');
+    await screen.findByText('Deneme braket ihtiyacı');
+    expect(istekler.find((i) => i.yol.startsWith('/siparisler/teklifler?'))?.yol).not.toContain('arsiv=evet');
+    fireEvent.click(screen.getByRole('tab', { name: 'Arşiv' }));
+    expect(await screen.findByRole('columnheader', { name: 'Arşiv' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Firma kodu' })).toBeNull();
+    expect(screen.getByText('Tekrar açılmış')).toBeTruthy();
+    const istek = istekler.filter((i) => i.yol.includes('arsiv=evet')).at(-1)!;
+    expect(istek.yol).not.toContain('durum=');
+  });
+});
+
 describe('Teklif termin ve fiyat (44)', () => {
   // 3401-1 a: maliyet toplamı, birim maliyet ve kâr finans.maliyet-oku ister; satış fiyatını görmek tek başına yetmez. Döküm siparisler.maliyet-oku'da.
   const SATISCI: Kullanici = { id: 9, ad: 'Deneme Satisci', islemler: [...KOK, 'siparisler.yaz', 'siparisler.fiyat-oku', 'siparisler.termin-dene', 'finans.maliyet-oku'] };
@@ -1452,6 +1553,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', yerlesim: 'geriye', termin: '2099-07-05', yetisir: false, onayGerekli: true,
     kayanlar: [{ siparis: 'SS-DNM-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }] } satisfies TerminDenemesiCevabi;
 
+  let sonAlis: LogoSonAlisCevabi = { okuma: 'acik', kayitlar: [] };
   const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI, adet: AdetDenemesiCevabi = ADET) => sunucuKur(kullanici, (yontem, yol) => {
     if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, teklif);
     if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/termin-denemesi')) return json(200, deneme(yol));
@@ -1460,6 +1562,7 @@ describe('Teklif termin ve fiyat (44)', () => {
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/deneme-taslagi') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
     if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/adet-denemesi')) return json(200, adet);
     if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, ATOLYE);
+    if (yontem === 'GET' && yol.startsWith('/logo/son-alislar?')) return json(200, sonAlis);
     return undefined;
   });
 
@@ -1751,6 +1854,64 @@ describe('Teklif termin ve fiyat (44)', () => {
     expect(screen.getByText('Maliyet yok: kâr eklenmez, elle fiyat')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '%40' }));
     expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('3384-c a: maliyeti olmayan kalemde hammadde başına Logo son alış önerisi; birim tutmayan karşılaştırılmaz, fiyat alanı dolmaz', async () => {
+    sonAlis = {
+      okuma: 'acik',
+      kayitlar: [
+        { stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: 'ORN-C-1', faturaNo: 'ORN-F-1', miktar: '40', birim: 'KG', fiyat: '186.4', dovizTuru: 20, dovizFiyati: '5.21', dovizKodu: 'EUR' },
+        { stokKodu: 'ORN-HM-3', tarih: '2026-10-15', cariKodu: null, faturaNo: null, miktar: '200', birim: 'ADET', fiyat: '3.2', dovizTuru: null, dovizFiyati: null, dovizKodu: null },
+      ],
+    };
+    const eksik = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{
+        ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, eksikVeri: ['malzeme kg fiyatı'],
+        hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }, { kod: 'ORN-HM-2', birim: 'kg' }, { kod: 'ORN-HM-3', birim: 'kg' }],
+      }],
+    } satisfies TerminDenemesiCevabi;
+    const istekler = kur(SATISCI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('ORN-HM-1: Logo son alış 186,40 TRY / kg · faturada 5,21 EUR · 04.11.2026 · ORN-C-1')).toBeTruthy();
+    expect(screen.getByText("ORN-HM-2: Logo'da faturalı alış yok")).toBeTruthy();
+    expect(screen.getByText('ORN-HM-3: Logo son alış 3,20 TRY / adet; birim tutmuyor (kalem kg), karşılaştırılmaz')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/logo/son-alislar?'))[0]?.yol).toBe(`/logo/son-alislar?malzemeler=${encodeURIComponent('ORN-HM-1,ORN-HM-2,ORN-HM-3')}`);
+    expect((screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement).value).toBe('');
+    expect(screen.queryByText(/Logo son alış okuması kapalı/)).toBeNull();
+  });
+
+  it('3384-c a: okuma kapalıysa kalemlere öneri eklenmez, altta bir kez yazılır; maliyet görmeyen hiç sormaz', async () => {
+    // Kopyada satır olsa da okuma kapalıysa satır çizilmez.
+    sonAlis = { okuma: 'kapali', kayitlar: [{ stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: null, faturaNo: null, miktar: '1', birim: 'KG', fiyat: '186.4', dovizTuru: null, dovizFiyati: null, dovizKodu: null }] };
+    const eksik = {
+      ...DENEME, maliyetToplami: null,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }] }],
+    } satisfies TerminDenemesiCevabi;
+    kur(SATISCI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    expect(await screen.findByText('Logo son alış okuması kapalı; öneri gösterilmiyor.')).toBeTruthy();
+    expect(screen.queryByText(/Logo son alış \d/)).toBeNull();
+    cleanup();
+    sonAlis = { okuma: 'acik', kayitlar: [] };
+    const istekler = kur(SATISCI_KILITLI, () => eksik);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText('Fiyat özeti');
+    expect(istekler.some((i) => i.yol.startsWith('/logo/'))).toBe(false);
+    expect(screen.queryByText(/Logo/)).toBeNull();
+  });
+
+  it('3384-c a: genel gider gizli ayda maliyet gören de öneri görmez, öneri sorulmaz', async () => {
+    sonAlis = { okuma: 'acik', kayitlar: [{ stokKodu: 'ORN-HM-1', tarih: '2026-11-04', cariKodu: null, faturaNo: null, miktar: '1', birim: 'KG', fiyat: '186.4', dovizTuru: null, dovizFiyati: null, dovizKodu: null }] };
+    const gizli = {
+      ...DENEME, maliyetToplami: null, genelGiderGizli: true,
+      kalemler: [{ ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null, hammaddeler: [{ kod: 'ORN-HM-1', birim: 'kg' }] }],
+    } satisfies TerminDenemesiCevabi;
+    const istekler = kur(SATISCI, () => gizli);
+    ac('/siparisler/teklifler/21/teklif-ver');
+    await screen.findByLabelText('Fiyat özeti');
+    expect(istekler.some((i) => i.yol.startsWith('/logo/'))).toBe(false);
+    expect(screen.queryByText(/Logo/)).toBeNull();
   });
 
   it('3401-1 a: maliyet görmeyen satışçıda maliyet toplamı, kâr oranı ve maliyet sütunları kilitli; fiyat elle girilir, sürüm gider', async () => {
