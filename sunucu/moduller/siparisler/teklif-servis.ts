@@ -1,28 +1,30 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama, gecersiz } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import type { DenetimSecimi } from '#cekirdek/uc.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
-  SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
+  SiparisDonusumVerisi, Teklif, TeklifArsivVerisi, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci,
+  TeklifSilmeCevabi, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { bildirimGonder } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  BIRIM_LISTEDE_YOK, FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
+  ARSIVDE_DEGIL, arsivdeReddi, arsivReddi, silmeReddi, silmeYetkisiReddi, BIRIM_LISTEDE_YOK, FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
   formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, talepKalemi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { satisTaslagiHazirla, satisTaslagiYaz, yerTutaniKaldir } from './teklif-deneme.ts';
-import type { TeklifAlanlari, TeklifBaslikSatiri } from './sorgular.ts';
+import type { KilitliTeklif, TeklifAlanlari, TeklifBaslikSatiri } from './sorgular.ts';
 
 const KISITLAR = {
   siparisler_teklif_firma: { ileti: FIRMA_YOK, alan: 'firmaId' },
@@ -32,15 +34,20 @@ const KISITLAR = {
 
 async function cevir(db: Db, satirlar: TeklifBaslikSatiri[]): Promise<Teklif[]> {
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
+  const arsivleyenler = await kisiAdlari(db, satirlar.flatMap((s) => (s.arsivleyen_id === null ? [] : [s.arsivleyen_id])));
   return satirlar.map((s) => ({
     id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null, firmaKodu: s.firma_kodu, baslik: s.baslik,
     paraBirimi: s.para_birimi, istenenTarih: s.istenen_tarih, aciklama: s.aciklama, not: s.not_metni, kabulSurumu: s.kabul_surumu,
     siparisId: s.siparis_id, sonSurumNo: s.son_surum_no, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
+    olusturanId: s.olusturan_id,
+    arsiv: s.arsiv_an === null || s.arsiv_nedeni === null ? null : {
+      an: s.arsiv_an, kisi: s.arsivleyen_id === null ? null : (arsivleyenler.get(s.arsivleyen_id) ?? null), neden: s.arsiv_nedeni, not: s.arsiv_notu,
+    },
   }));
 }
 
 export async function teklifListesi(db: Db, sorgu: TeklifListesiSuzgeci): Promise<SayfaliListe<Teklif>> {
-  const suzgec = { kalip: aramaKalibi(sorgu.ara), durum: sorgu.durum ?? null, firmaId: sorgu.firmaId ?? null };
+  const suzgec = { kalip: aramaKalibi(sorgu.ara), durum: sorgu.durum ?? null, firmaId: sorgu.firmaId ?? null, arsiv: sorgu.arsiv === 'evet' };
   return sayfaliListe(sorgu, {
     say: () => sorgular.teklifSay(db, suzgec),
     satirlar: async (dilim) => cevir(db, await sorgular.teklifSatirlari(db, suzgec, sorgu, dilim)),
@@ -128,9 +135,17 @@ export async function teklifEkle(db: Db, kullanici: Kullanici, g: TeklifEkleVeri
   return teklifAyrintisi(db, id);
 }
 
-async function kilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string }> {
+async function kilitleArsivDahil(db: Db, id: number): Promise<KilitliTeklif> {
   const mevcut = await sorgular.teklifKilitle(db, id);
   if (mevcut === null) throw bulunamadi(TEKLIF_YOK);
+  return mevcut;
+}
+
+// 3419 a (Risk K1): arşivdeki teklife hiçbir komut işlemez; denetim satır kilidi altındadır.
+async function kilitle(db: Db, id: number): Promise<KilitliTeklif> {
+  const mevcut = await kilitleArsivDahil(db, id);
+  const ret = arsivdeReddi(mevcut.arsivde);
+  if (ret !== null) throw gecersiz(ret);
   return mevcut;
 }
 
@@ -306,6 +321,46 @@ export async function siparisDonustur(
   // Sipariş plana kendi emriyle girer; satış taslağının yeri kalkar.
   await yerTutaniKaldir(db, id);
   return { teklif: await teklifAyrintisi(db, id), siparisId: siparis.id };
+}
+
+// 3419 a: yalnız sürümü olmayan teklif kalıcı silinir; açan ya da sipariş onay yetkilisi siler. Numara geri verilmez.
+// Denetim kaydı aynı transaction'da, uç kaydının ekinde: no, firma, başlık, kalem ve taslak sayısı (Risk K4).
+export async function teklifSil(
+  db: Db, kullanici: Kullanici, id: number, surum: number, denetimEki: (satirlar: readonly DenetimSecimi[]) => void,
+): Promise<TeklifSilmeCevabi> {
+  const mevcut = await kilitle(db, id);
+  const yetki = silmeYetkisiReddi(mevcut.olusturan_id, kullanici.id, islemVarMi(kullanici, 'siparisler.onayla'));
+  if (yetki !== null) throw yetkiYok(yetki);
+  if (mevcut.surum !== surum) throw eskiSurum();
+  const silme = silmeReddi({ durum: mevcut.durum, surumSayisi: await sorgular.teklifSurumSayisi(db, id) });
+  if (silme !== null) throw gecersiz(silme);
+  const baslik = await sorgular.teklifGetir(db, id);
+  const silinecek = await sorgular.teklifSilinecekleri(db, id);
+  if (!(await sorgular.teklifSil(db, id))) throw bulunamadi(TEKLIF_YOK);
+  denetimEki([{
+    islem: 'teklif-sil', teklif: id, no: mevcut.no, firma: mevcut.firma_id, baslik: baslik?.baslik ?? null, kalem: silinecek.kalem, taslak: silinecek.taslak,
+  }]);
+  return { id, no: mevcut.no };
+}
+
+// 3419 a: fiyatı verilmiş, siparişe dönmemiş teklif arşivlenir. Plandaki yeri kalkar, onay bildirimleri kapanır (K3);
+// Logo'ya gitmemiş sürümü gönderim sırasında bekler ve arşivden çıkınca gider (K2). Logo'ya gitmiş kayıt Logo'da kalır (2963 a).
+export async function teklifArsivle(db: Db, kullanici: Kullanici, id: number, g: TeklifArsivVerisi): Promise<TeklifAyrintisi> {
+  const mevcut = await kilitleArsivDahil(db, id);
+  const ret = arsivReddi(mevcut.durum, mevcut.arsivde);
+  if (ret !== null) throw gecersiz(ret);
+  await surumluYaz(db, id, () => sorgular.teklifArsivle(db, id, { surum: g.surum, kisiId: kullanici.id, neden: g.neden, not: g.not }));
+  await yerTutaniKaldir(db, id);
+  await bildirimKapat(db, { tur: 'siparisler.iskonto-onay-bekliyor', kaynakKimlik: String(id) });
+  await bildirimKapat(db, { tur: 'siparisler.termin-onay-bekliyor', kaynakKimlik: String(id) });
+  return teklifAyrintisi(db, id);
+}
+
+export async function teklifArsivdenCikar(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
+  const mevcut = await kilitleArsivDahil(db, id);
+  if (!mevcut.arsivde) throw gecersiz(ARSIVDE_DEGIL);
+  await surumluYaz(db, id, () => sorgular.teklifArsivdenCikar(db, id, g.surum, kullanici.id));
+  return teklifAyrintisi(db, id);
 }
 
 // Portal talep listesi (254 a): tek sorgu; boş dizide sorgu yok; olmayan kimlik haritada yok.

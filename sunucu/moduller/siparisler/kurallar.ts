@@ -283,6 +283,29 @@ export function kartBaglamaReddi(durum: TeklifDurumu): string | null {
   return durum === 'red' || durum === 'siparis' ? KART_BAGLANAMAZ : null;
 }
 
+// 3419 a: yalnız fiyatı verilmemiş (müşteriye ve Logo'ya gitmemiş) teklif kalıcı silinir; açan ya da sipariş onay yetkilisi siler.
+export const SILINMEZ_TEKLIF = 'Fiyatı verilmiş teklif silinmez; arşivleyin.';
+export const SILME_YETKISI_YOK = 'Teklifi yalnız açan kişi ya da sipariş onay yetkilisi silebilir.';
+export function silmeReddi(t: { durum: TeklifDurumu; surumSayisi: number }): string | null {
+  return t.durum === 'yeni' && t.surumSayisi === 0 ? null : SILINMEZ_TEKLIF;
+}
+export function silmeYetkisiReddi(olusturanId: number, kisiId: number, onaylayabilir: boolean): string | null {
+  return olusturanId === kisiId || onaylayabilir ? null : SILME_YETKISI_YOK;
+}
+
+// 3419 a: fiyatı verilmiş, siparişe dönmemiş teklif arşivlenir; arşivdeki teklife komut işlemez, arşivden çıkınca sürer.
+export const ARSIVLENEMEZ = 'Yalnız fiyatı verilmiş, siparişe dönmemiş teklif arşivlenir; fiyatı verilmemiş teklif silinir.';
+export const ARSIVDE = 'Teklif arşivde; önce arşivden çıkarın.';
+export const ARSIVDE_DEGIL = 'Teklif arşivde değil.';
+const ARSIVLENIR: readonly TeklifDurumu[] = ['onay-bekliyor', 'verildi', 'revizyon', 'red'];
+export function arsivReddi(durum: TeklifDurumu, arsivde: boolean): string | null {
+  if (arsivde) return ARSIVDE;
+  return ARSIVLENIR.includes(durum) ? null : ARSIVLENEMEZ;
+}
+export function arsivdeReddi(arsivde: boolean): string | null {
+  return arsivde ? ARSIVDE : null;
+}
+
 // SIP-10 (180): fiyat, iskonto, tutar ve toplamlar yalnız fiyat görene gider; görmeyene null (sıfır uydurulmaz).
 // 3401-2 a: gecikme cezası ve ödeme vadesi de ticari şarttır, fiyat görmeyene (planlama, kalite, depo, sevkiyat) gitmez.
 export function siparisFiyatsiz(s: Siparis): Siparis {

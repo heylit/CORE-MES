@@ -269,6 +269,19 @@ export const teklifNotGovdesi = z.object({
   not: z.string().trim().min(1, 'Not zorunlu.').max(500, 'En çok 500 karakter.'),
 });
 export const teklifKabulGovdesi = z.object({ ...beklenenSurum, surumNo: z.number().int().min(1).max(99) });
+// 3419 a: fiyatı verilmiş, siparişe dönmemiş teklif silinmez, arşivlenir; neden zorunlu, not isteğe bağlı. Arşiv geri alınır.
+export const TEKLIF_ARSIV_NEDENLERI = ['tekrar', 'yanlis-firma', 'deneme', 'diger'] as const;
+export const teklifArsivNedeniSemasi = z.enum(TEKLIF_ARSIV_NEDENLERI, { error: 'Arşiv nedeni seçin.' });
+export const teklifArsivGovdesi = z.object({
+  ...beklenenSurum,
+  neden: teklifArsivNedeniSemasi,
+  not: z.string().trim().max(500, 'En çok 500 karakter.').nullish().transform((v) => (v === undefined || v === null || v === '' ? null : v)),
+});
+export const teklifSilGovdesi = z.object(beklenenSurum);
+export const teklifSilmeCevabi = z.object({ id: z.number().int(), no: z.string() });
+export type TeklifArsivNedeni = z.output<typeof teklifArsivNedeniSemasi>;
+export type TeklifArsivVerisi = z.output<typeof teklifArsivGovdesi>;
+export type TeklifSilmeCevabi = z.output<typeof teklifSilmeCevabi>;
 export const iskontoOnayGovdesi = z.object(beklenenSurum);
 export const kartBaglaGovdesi = z.object({ ...beklenenSurum, malzemeNo: z.number().int().positive() });
 export const siparisDonusumGovdesi = z.object({
@@ -292,6 +305,8 @@ export const teklifListesiSorgusu = z.object({
   ara: z.string().trim().max(80).optional(),
   durum: teklifDurumuSemasi.optional(),
   firmaId: z.coerce.number<number>().int().positive().max(2147483647).optional(),
+  // 3419 a: arşivdeki teklifler yalnız arşiv sekmesinde; öbür sekmelerde ve sayılarda yoktur.
+  arsiv: z.enum(['evet', 'hayir']).prefault('hayir'),
 });
 
 export const teklifSatiriSemasi = z.object({
@@ -346,6 +361,9 @@ export const teklifSemasi = z.object({
   olusturma: zamanSemasi,
   guncelleme: zamanSemasi.nullable(),
   surum: surumSemasi,
+  // 3419 a: silme düğmesi açana ve onay yetkilisine çizilir; asıl denetim sunucudadır.
+  olusturanId: z.number().int(),
+  arsiv: z.object({ an: zamanSemasi, kisi: z.string().nullable(), neden: teklifArsivNedeniSemasi, not: z.string().nullable() }).nullable(),
 });
 
 export const teklifAyrintiSemasi = teklifSemasi.extend({

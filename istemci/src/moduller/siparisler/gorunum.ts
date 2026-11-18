@@ -1,4 +1,4 @@
-import type { PlanTaslagiGorunumu, SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { PlanTaslagiGorunumu, SiparisDurumu, TeklifArsivNedeni, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu, Sekme } from '../../ortak/arayuz/index.ts';
 
@@ -44,7 +44,8 @@ export const PLAN_TASLAGI_GORUNUMU: Record<PlanTaslagiGorunumu, { etiket: string
 };
 
 export type SiparisSekmesi = SiparisDurumu | 'tumu';
-export type TeklifSekmesi = TeklifDurumu | 'tumu';
+// 3419 a: arşiv bir durum değildir; arşivdeki teklifler yalnız kendi sekmesinde görünür.
+export type TeklifSekmesi = TeklifDurumu | 'tumu' | 'arsiv';
 
 export const SIPARIS_SEKMELERI: readonly Sekme<SiparisSekmesi>[] = [
   { anahtar: 'tumu', baslik: 'Tümü' },
@@ -63,7 +64,12 @@ export const TEKLIF_SEKMELERI: readonly Sekme<TeklifSekmesi>[] = [
   { anahtar: 'kabul', baslik: TEKLIF_DURUMU.kabul.etiket },
   { anahtar: 'red', baslik: TEKLIF_DURUMU.red.etiket },
   { anahtar: 'siparis', baslik: TEKLIF_DURUMU.siparis.etiket },
+  { anahtar: 'arsiv', baslik: 'Arşiv' },
 ];
+
+export const TEKLIF_ARSIV_NEDENI: Record<TeklifArsivNedeni, string> = {
+  tekrar: 'Tekrar açılmış', 'yanlis-firma': 'Yanlış firma', deneme: 'Deneme kaydı', diger: 'Diğer',
+};
 
 const binlik = (s: string): string => s.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
