@@ -145,6 +145,14 @@ async function musteriSec(ad = 'Deneme Musteri A') {
   fireEvent.click(await screen.findByRole('option', { name: new RegExp(ad) }));
 }
 
+// Sipariş kaleminin kartı tek kutudan aranıp seçilir; ayrı pencere yoktur.
+async function kartSec(ad = 'Deneme Braket', sira = 1) {
+  const kutu = screen.getByRole('combobox', { name: new RegExp(`^Kalem ${String(sira)} malzeme kartı`) });
+  fireEvent.focus(kutu);
+  fireEvent.change(kutu, { target: { value: 'Deneme' } });
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(ad) }));
+}
+
 function ac(adres: string) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
@@ -685,16 +693,12 @@ describe('Sipariş ayrıntısında çarpan geçmişi (815)', () => {
 });
 
 describe('Yeni satış siparişi', () => {
-  it('firma ve kart kimlikle seçilir; gövde tekrar korumalı gider ve ayrıntıya geçilir', async () => {
+  it('müşteri ve kart tek kutudan yazılıp kimlikle seçilir (ikinci seçim yok); gövde tekrar korumalı gider ve ayrıntıya geçilir', async () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
-    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    const secici = await screen.findByRole('dialog', { name: 'Malzeme kartı seç' });
-    await within(secici).findByText('Deneme Braket');
-    fireEvent.click(within(secici).getByText('Deneme Braket'));
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '1,5' } });
     fireEvent.change(screen.getByLabelText(/^Kalem 1 birim fiyat/), { target: { value: '12,5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
@@ -713,13 +717,11 @@ describe('Yeni satış siparişi', () => {
   it('fiyat yetkisi olmayan fiyat alanını görmez; kalem fiyatsız gider (201 a)', async () => {
     const istekler = sunucuKur(YAZAR, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_FIYATSIZ) : undefined));
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
     await oturumCozuldu(istekler);
     expect(screen.queryByLabelText(/^Kalem 1 birim fiyat/)).toBeNull();
-    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    fireEvent.click(await screen.findByText('Deneme Braket'));
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
@@ -729,15 +731,13 @@ describe('Yeni satış siparişi', () => {
   it('3244 b: termin gün yazılınca tarih, tarih yazılınca gün hesaplanır; kalem termini siparişten dolu gelir, partiler gövdede gider', async () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
-    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
     fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
     expect((screen.getByLabelText(/^Termin( \*)?$/) as HTMLInputElement).value).toBe('2026-12-29');
     fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2027-01-13' } });
     expect((screen.getByLabelText(/^Termin \(gün\)/) as HTMLInputElement).value).toBe('60');
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    fireEvent.click(await screen.findByText('Deneme Braket'));
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
     expect((screen.getByLabelText(/^Kalem 1 termin/) as HTMLInputElement).value).toBe('2027-01-13');
     expect(screen.getByText('Sipariş termini')).toBeTruthy();
@@ -761,12 +761,10 @@ describe('Yeni satış siparişi', () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK)
       : yontem === 'GET' && yol === '/rota/urunler/31' ? json(200, ROTALAR) : undefined));
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
-    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
     fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    fireEvent.click(await screen.findByText('Deneme Braket'));
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
     fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
@@ -782,12 +780,28 @@ describe('Yeni satış siparişi', () => {
     });
   });
 
+  it('kalem kartı yeni seçime kadar kalır: yazıp seçmeyince önceki kart gider, ipucu söyler; seçilen kart başka satırda yinelenmez', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
+    ac('/siparisler/yeni');
+    await musteriSec();
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
+    await kartSec();
+    const kutu = screen.getByRole('combobox', { name: /^Kalem 1 malzeme kartı/ }) as HTMLInputElement;
+    expect(kutu.value).toBe('DNM-001 · Deneme Braket');
+    expect(screen.queryByText(/DNM-001 Deneme Braket/, { selector: '.tc-sp-secili' })).toBeNull();
+    fireEvent.change(kutu, { target: { value: 'baska' } });
+    expect(screen.getByText('Seçmezseniz DNM-001 · Deneme Braket kalır.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, miktar: '2' }] });
+  });
+
   it('3296-3 a: Reçete ve Rota okunamıyorsa partide rota seçimi görünmez', async () => {
     sunucuKur(FIYATCI);
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    fireEvent.click(await screen.findByText('Deneme Braket'));
+    await screen.findByRole('combobox', { name: /^Müşteri/ });
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
     await screen.findByLabelText(/^Kalem 1 parti 1 adet/);
@@ -824,11 +838,9 @@ describe('Yeni satış siparişi', () => {
       ? hata(422, { kod: 'GECERSIZ', mesaj: 'Firma müşteri değil.', alan: 'firmaId' })
       : undefined));
     ac('/siparisler/yeni');
-    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
-    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
-    fireEvent.click(await screen.findByText('Deneme Braket'));
+    await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     expect(await screen.findByText('Firma müşteri değil.')).toBeTruthy();
@@ -861,6 +873,9 @@ describe('Yeni satış siparişi', () => {
     expect(screen.queryByRole('button', { name: 'Kalem 1 sil' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Kalem 2 sil' })).toBeTruthy();
     expect(screen.getByText('Üretim emri açıldı; yalnız termin değişir.')).toBeTruthy();
+    // Kilitli kalemde kart arama kutusu yok, kart metni salt okunur; bağsız kalemde kutu var.
+    expect(screen.queryByRole('combobox', { name: /^Kalem 1 malzeme kartı/ })).toBeNull();
+    expect(screen.getByRole('combobox', { name: /^Kalem 2 malzeme kartı/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ id: 50, miktar: '100' }, { id: 51, miktar: '20' }] });
@@ -1363,23 +1378,25 @@ describe('Teklifler', () => {
     expect(screen.queryByRole('button', { name: 'Yazdır / PDF' })).toBeNull();
   });
 
-  it('teklif kalemi malzemeden seçilir: tanım kart adıyla dolar, kart değişince güncellenir, elle yazılan tanım korunur', async () => {
+  it('teklif kalemi yazarak seçilir, ayrı seçim düğmesi yoktur: tanım kart adıyla dolar, başka ad yazıp seçince kart değişir, seçmeden yazılan tanım kartı korur', async () => {
     sunucuKur(YAZAR);
     ac('/siparisler/teklifler/yeni');
     fireEvent.click(await screen.findByRole('tab', { name: '2 Kalemler' }));
     const tanim = await screen.findByLabelText(/^Kalem 1 tanım/);
-    const sec = async (ad: string) => {
-      fireEvent.click(screen.getByRole('button', { name: /^(Listeden seç|Malzemeyi değiştir)$/ }));
-      const secici = await screen.findByRole('dialog', { name: 'Malzeme kartı seç' });
-      fireEvent.click(await within(secici).findByText(ad));
+    expect(screen.queryByRole('button', { name: /^(Listeden seç|Malzemeyi değiştir)$/ })).toBeNull();
+    const sec = async (yazilan: string, ad: string) => {
+      fireEvent.focus(tanim);
+      fireEvent.change(tanim, { target: { value: yazilan } });
+      fireEvent.click(await screen.findByRole('option', { name: new RegExp(ad) }));
     };
-    await sec('Deneme Braket');
+    await sec('Deneme', 'Deneme Braket');
     expect((tanim as HTMLInputElement).value).toBe('Deneme Braket');
-    await sec('Deneme Mil');
+    await sec('Deneme M', 'Deneme Mil');
     expect((tanim as HTMLInputElement).value).toBe('Deneme Mil');
+    expect(screen.getByText(/DNM-002 Deneme Mil/, { selector: '.tc-sp-secili' })).toBeTruthy();
     fireEvent.change(tanim, { target: { value: 'Deneme özel ölçü' } });
-    await sec('Deneme Braket');
-    expect((tanim as HTMLInputElement).value).toBe('Deneme özel ölçü');
+    expect(await screen.findByText('Seçmezseniz kart kalır, tanım yazdığınız gibi gider.')).toBeTruthy();
+    expect(screen.getByText(/DNM-002 Deneme Mil/, { selector: '.tc-sp-secili' })).toBeTruthy();
   });
 
   it('malzemeden seçilen kalemde tanım istenmez: boş tanımla talep açılır, kartın adı gider; malzemesiz kalemde tanım zorunlu', async () => {
@@ -1392,8 +1409,10 @@ describe('Teklifler', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
     expect((await screen.findAllByText('Malzeme seçin ya da tanımı yazın.')).length).toBeGreaterThan(0);
     expect(yazmalar(istekler)).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Listeden seç' }));
-    fireEvent.click(await within(await screen.findByRole('dialog', { name: 'Malzeme kartı seç' })).findByText('Deneme Braket'));
+    const kutu = screen.getByLabelText(/^Kalem 1 tanım/);
+    fireEvent.focus(kutu);
+    fireEvent.change(kutu, { target: { value: 'Deneme' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Deneme Braket/ }));
     const tanim = screen.getByLabelText(/^Kalem 1 tanım \(isteğe bağlı\)/) as HTMLInputElement;
     expect(tanim.required).toBe(false);
     fireEvent.change(tanim, { target: { value: '' } });
@@ -1425,11 +1444,10 @@ describe('Teklifler', () => {
     expect((screen.getByLabelText(/^Kalem 1 birim/) as HTMLInputElement).value).toBe('adet');
     expect((screen.getByLabelText(/^Kalem 1 yerlilik/) as HTMLInputElement).value).toBe('62,5');
     expect(screen.getByText('Karttan')).toBeTruthy();
-    // Kartlı kalemde tanım değişince arama yapılmaz.
-    const once = istekler.filter((i) => i.yol.startsWith('/siparisler/malzeme-secenekleri')).length;
+    // Kartlı kalemde başka metin yazınca da aranır (ayrı seçim penceresi yok); seçilmezse kart kalır, tanım yazıldığı gibi gider.
     fireEvent.change(tanim, { target: { value: 'Deneme Braket özel' } });
-    await new Promise((r) => { setTimeout(r, 400); });
-    expect(istekler.filter((i) => i.yol.startsWith('/siparisler/malzeme-secenekleri')).length).toBe(once);
+    await waitFor(() => expect(istekler.some((i) => i.yol.includes('ara=Deneme+Braket') || i.yol.includes('ara=Deneme%20Braket'))).toBe(true));
+    expect(screen.getByText('Karttan')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Talebi aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));

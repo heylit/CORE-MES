@@ -182,15 +182,20 @@ test('Yeni teklif (3301): dört kademe sekmesi ve alt çubuk taşmadan çizilir;
   await tanimKutusu.press('Escape');
   await expect(liste).toBeHidden();
   await expect(tanimKutusu).toHaveValue('ab');
-  await tanimKutusu.fill('');
-  await page.getByRole('button', { name: 'Listeden seç' }).click();
-  const secici = page.getByRole('dialog', { name: 'Malzeme kartı seç' });
-  const ilk = secici.getByRole('table', { name: 'Malzeme kartları' }).locator('tbody tr.tc-tablo-secilir').first();
-  test.skip(!(await ilk.waitFor({ timeout: 10_000 }).then(() => true, () => false)), 'örnek veride satılan kart yok');
+  // Ayrı seçim penceresi yoktur: kart tanım kutusuna yazılıp listeden seçilir.
+  await expect(page.getByRole('button', { name: /^(Listeden seç|Malzemeyi değiştir)$/ })).toHaveCount(0);
+  let ilk = liste.getByRole('option').first();
+  let bulundu = false;
+  for (const metin of ['ma', 'an', 'ar', 'er', 'ka', 'in']) {
+    await tanimKutusu.fill(metin);
+    ilk = liste.getByRole('option').first();
+    if (await ilk.waitFor({ timeout: 3_000 }).then(() => true, () => false)) { bulundu = true; break; }
+  }
+  test.skip(!bulundu, 'örnek veride satılan kart yok');
   await ilk.click();
-  await expect(secici).toBeHidden();
+  await expect(liste).toBeHidden();
   await expect(page.getByLabel(/^Kalem 1 tanım \(isteğe bağlı\)/)).not.toHaveValue('');
-  await expect(page.getByRole('button', { name: 'Malzemeyi değiştir' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Kalem 1 kartını kaldır' })).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'malzemeli kalemde yatay taşma').toBeLessThanOrEqual(0);
   await page.getByRole('tab', { name: '3 Termin ve fiyat' }).click();
   await expect(page.getByText(/Önce kalemleri kaydedin/)).toBeVisible();

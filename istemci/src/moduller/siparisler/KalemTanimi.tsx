@@ -17,19 +17,22 @@ interface Ozellikler {
   tanim: string;
   tanimYaz: (tanim: string) => void;
   sec: (kart: SecilenKart) => void;
-  karta: boolean;
+  // Bağlı kartın adı; kart yoksa null.
+  kartAdi: string | null;
   hata?: string;
 }
 
 // 3400-1: kalem tanımına yazınca satılabilir kartlar altında açılır; seçilen kart kaleme bağlanır. Seçilmezse yazılan tanımla
-// kartsız kalem kalır (siparişe dönüşmeden kart seçilir). İki harften kısa metinde aranmaz.
-export function KalemTanimi({ etiket, tanim, tanimYaz, sec, karta, hata }: Ozellikler) {
+// kartsız kalem kalır (siparişe dönüşmeden kart seçilir). İki harften kısa metinde aranmaz. Ayrı seçim penceresi yoktur: kartlı
+// kalemde kartın adından farklı yazılan metin de aranır; listeden seçilen kart eskisinin yerine geçer, seçilmezse kart kalır.
+export function KalemTanimi({ etiket, tanim, tanimYaz, sec, kartAdi, hata }: Ozellikler) {
+  const karta = kartAdi !== null;
   const [ara, araYaz] = useState('');
   useEffect(() => {
     const sayac = setTimeout(() => araYaz(tanim.trim()), 300);
     return () => clearTimeout(sayac);
   }, [tanim]);
-  const aranir = !karta && ara.length >= EN_AZ_HARF;
+  const aranir = ara.length >= EN_AZ_HARF && ara !== kartAdi;
   const liste = useQuery({
     queryKey: anahtarlar.malzemeArama(ara),
     queryFn: () => api.get<MalzemeSecenekleriCevabi>(`/siparisler/malzeme-secenekleri${sorguMetni({ ara })}`),
@@ -39,13 +42,14 @@ export function KalemTanimi({ etiket, tanim, tanimYaz, sec, karta, hata }: Ozell
   const not = !aranir ? undefined
     : liste.isError ? 'Kartlar alınamadı; yazdığınız tanımla devam edebilirsiniz.'
       : liste.isPending ? 'Aranıyor'
-        : 'Seçmezseniz yazdığınız tanımla kartsız kalem olur; siparişe dönüşmeden kart seçilir.';
+        : karta ? 'Seçmezseniz kart kalır, tanım yazdığınız gibi gider.'
+          : 'Seçmezseniz yazdığınız tanımla kartsız kalem olur; siparişe dönüşmeden kart seçilir.';
 
   return (
     <AramaKutusu
       etiket={etiket}
       zorunlu={!karta}
-      placeholder={karta ? 'Boşsa malzeme adı yazılır' : 'Yazın: kartlar listelenir ya da tanım olarak kalır'}
+      placeholder={karta ? 'Boşsa malzeme adı yazılır; başka kart için yazın' : 'Yazın: kartlar listelenir ya da tanım olarak kalır'}
       metin={tanim}
       yaz={tanimYaz}
       secenekler={satirlar.map((m) => ({

@@ -10,7 +10,7 @@ import type { SecilenFirma } from './FirmaSecici.tsx';
 import { GonderimHatasi } from './GonderimHatasi.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, miktarMetni, paraBirimiSecenekleri, sayiGirdisi } from './gorunum.ts';
 import { KalemTanimi } from './KalemTanimi.tsx';
-import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
+import { secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { MusteriArama } from './MusteriArama.tsx';
 import { eskiyseYenile, useKorumaliGonderim } from './yazma.ts';
 
@@ -134,7 +134,6 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
   const { bildir } = useBildirim();
   const ekle = useKorumaliGonderim();
   const [acilisSurumu] = useState(teklif?.surum ?? null);
-  const [secilecek, secilecekYaz] = useState<number | null>(null);
   const birimler = useQuery({
     queryKey: anahtarlar.birimSecenekleri,
     queryFn: () => api.get<BirimSecenekleriCevabi>('/siparisler/birim-secenekleri'),
@@ -174,13 +173,8 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
 
   const satirDegistir = (i: number, yama: Partial<SatirDegeri>) =>
     form.degistir({ satirlar: d.satirlar.map((s, j) => (j === i ? { ...s, ...yama } : s)) });
-  // Listeden seçilince tanım boşsa ya da önceki kartın adıysa yeni kartın adı yazılır; elle yazılan tanım korunur.
   // Tanımdan aranıp seçilince yazılan metin arama metnidir: kartın adı yazılır.
-  const kartSec = (i: number, kart: SecilenKart, aramadan = true) => {
-    const satir = d.satirlar[i];
-    const kendiliginden = aramadan || (satir !== undefined && (satir.tanim.trim() === '' || satir.tanim === satir.kart?.ad));
-    satirDegistir(i, { kart, ...(kendiliginden ? { tanim: kart.ad } : {}) });
-  };
+  const kartSec = (i: number, kart: SecilenKart) => satirDegistir(i, { kart, tanim: kart.ad });
   const birincil = kademe === 1 ? 'Devam' : fiyatVerir ? 'Kaydet ve devam' : teklif === null ? 'Talebi aç' : 'Kaydet';
 
   return (
@@ -214,7 +208,7 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
                     etiket={s.kart === null ? `Kalem ${i + 1} tanım` : `Kalem ${i + 1} tanım (isteğe bağlı)`}
                     tanim={s.tanim}
                     tanimYaz={(t) => satirDegistir(i, { tanim: t })}
-                    karta={s.kart !== null}
+                    kartAdi={s.kart?.ad ?? null}
                     sec={(kart) => kartSec(i, kart)}
                     {...(form.hata(`satirlar.${i}.tanim`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.tanim`) })}
                   />
@@ -257,7 +251,6 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
                     )}
                 </div>
                 <div className="tc-sp-kart-sec">
-                  <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Listeden seç' : 'Malzemeyi değiştir'}</Dugme>
                   {s.kart !== null && <Dugme aria-label={`Kalem ${i + 1} kartını kaldır`} simge="x" onClick={() => satirDegistir(i, { kart: null })} />}
                   <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
                     {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Kartsız kalem: siparişe dönüşmeden malzeme seçilir.' : secilenKartMetni(s.kart))}
@@ -276,14 +269,6 @@ export function TalepKademeleri({ teklif, kademe, kademeYaz, fiyatVerir, kaydedi
           <Dugme tur="birincil" type="submit" simge={kademe === 1 || fiyatVerir ? 'next' : 'check'} yukleniyor={form.gonderiliyor}>{birincil}</Dugme>
         </div>
       </div>
-      <MalzemeSecici
-        acik={secilecek !== null}
-        kapat={() => secilecekYaz(null)}
-        sec={(kart) => {
-          if (secilecek !== null) kartSec(secilecek, kart, false);
-          secilecekYaz(null);
-        }}
-      />
     </form>
   );
 }
