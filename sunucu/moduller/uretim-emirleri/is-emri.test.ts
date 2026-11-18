@@ -1789,6 +1789,12 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const sayaclar = await Promise.all([a, b, projesiz].map(async (id) => Number((await ayrinti(id)).emirNo.slice(-3))));
     const [ilk = 0] = sayaclar;
     assert.deepEqual(sayaclar, [ilk, ilk + 1, ilk + 2], 'sayaç her emirde bir ilerler, reddedilen emir sayaç yakmaz');
+    // 3399 a: {FIRMA} projenin firma kodudur ve o kodun sırası ayrıdır. Kod varsayılan değil: öteki testlerin numarası değişmez.
+    await o().sahip.sorgu("INSERT INTO ayar_firma_kodu (kod, ad) VALUES ('ORNB', 'Deneme firma B') ON CONFLICT (kod) DO NOTHING");
+    const pf = await proje('PRJF');
+    await o().sahip.sorgu("UPDATE projeler_proje SET firma_kodu = 'ORNB' WHERE id = $1", [pf]);
+    const { uretimEmriId: firmali } = await ac([adim(1, mk)], { projeId: pf });
+    assert.match((await ayrinti(firmali)).emirNo, new RegExp(`^ORNB-PRJF-.+-\\d{2}-\\d{2}-001$`), 'firma kodu projeden, sıra firmanın');
 
     const kol = await istek<PartiBolCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${a}/bol`, { adimSira: 2, adet: 2, surum: (await ayrinti(a)).surum }, randomUUID());
     assert.equal(kol.durum, 200, JSON.stringify(kol.govde));

@@ -9,7 +9,7 @@ import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/
 import type {
   SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
+import { firmaKoduSecimi, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
@@ -33,7 +33,7 @@ const KISITLAR = {
 async function cevir(db: Db, satirlar: TeklifBaslikSatiri[]): Promise<Teklif[]> {
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
   return satirlar.map((s) => ({
-    id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null, baslik: s.baslik,
+    id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null, firmaKodu: s.firma_kodu, baslik: s.baslik,
     paraBirimi: s.para_birimi, istenenTarih: s.istenen_tarih, aciklama: s.aciklama, not: s.not_metni, kabulSurumu: s.kabul_surumu,
     siparisId: s.siparis_id, sonSurumNo: s.son_surum_no, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
   }));
@@ -120,13 +120,15 @@ const alanlar = (g: TeklifEkleVerisi): TeklifAlanlari => ({
 export async function teklifEkle(db: Db, kullanici: Kullanici, g: TeklifEkleVerisi): Promise<TeklifAyrintisi> {
   await firmayiDenetle(db, g.firmaId, null);
   await kartlariDenetle(db, g.satirlar, (i, ad) => `satirlar.${i}.${ad}`);
-  const no = await numaraAl(db, 'siparisler.teklif-no', { varMi: (n) => sorgular.teklifNoVarMi(db, n) });
-  const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, no, alanlar(g), kullanici.id));
+  // 3399 a: seçilmediyse varsayılan kod; numara bu kodla verilir.
+  const firmaKodu = await firmaKoduSecimi(db, g.firmaKodu, 'firmaKodu');
+  const no = await numaraAl(db, 'siparisler.teklif-no', { alanlar: { FIRMA: firmaKodu }, varMi: (n) => sorgular.teklifNoVarMi(db, n) });
+  const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, no, { ...alanlar(g), firmaKodu }, kullanici.id));
   await sorgular.talepSatirlariniYaz(db, id, await talepKalemleri(db, g.satirlar));
   return teklifAyrintisi(db, id);
 }
 
-async function kilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; para_birimi: string }> {
+async function kilitle(db: Db, id: number): Promise<{ durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string }> {
   const mevcut = await sorgular.teklifKilitle(db, id);
   if (mevcut === null) throw bulunamadi(TEKLIF_YOK);
   return mevcut;
@@ -288,13 +290,13 @@ export async function siparisDonustur(
   const paraBirimi = paraBirimiSemasi.safeParse(mevcut.para_birimi);
   if (!paraBirimi.success) throw dogrulama(PARA_BIRIMI_LISTEDE_YOK, 'paraBirimi');
   const siparis = await siparisEkle(db, kullanici, {
-    firmaId: mevcut.firma_id, musteriSiparisNo: g.musteriSiparisNo, siparisTarihi: g.siparisTarihi, termin: g.termin,
+    firmaId: mevcut.firma_id, firmaKodu: mevcut.firma_kodu, musteriSiparisNo: g.musteriSiparisNo, siparisTarihi: g.siparisTarihi, termin: g.termin,
     paraBirimi: paraBirimi.data, kdvOrani: g.kdvOrani, odemeKosulu: kabul.odemeKosulu, aciklama: `${teklif.no} teklifinden (sürüm ${kabul.surumNo}).`,
     cezaOraniGun: g.cezaOraniGun, cezaTavaniOrani: g.cezaTavaniOrani, odemeVadesiGun: g.odemeVadesiGun,
     satirlar: teklif.satirlar.map((s) => ({
       malzemeNo: s.malzemeNo ?? 0, miktar: s.miktar, birimFiyat: fiyat.get(s.id) ?? null, termin: null, aciklama: null,
     })),
-  });
+  }, true, mevcut.firma_kodu);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: teklifHedefi('siparis'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: siparis.id,
   }));

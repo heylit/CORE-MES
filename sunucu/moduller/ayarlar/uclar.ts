@@ -1,6 +1,6 @@
 import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
-  ayarDegistirGovdesi, ayarParametresi, ayarSemasi, ayarlarCevabi, guncellemeIlerlemesiCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
+  ayarDegistirGovdesi, ayarParametresi, firmaKodlariCevabi, firmaKoduDuzenleGovdesi, firmaKoduEkleGovdesi, firmaKoduParametresi, firmaKoduSemasi, ayarSemasi, ayarlarCevabi, guncellemeIlerlemesiCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
@@ -12,7 +12,7 @@ import {
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
-  ayarDegistir, ayarlariListele, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
+  ayarDegistir, ayarlariListele, firmaKoduDuzenle, firmaKoduEkle, firmaKodlari, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
 import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
@@ -50,6 +50,31 @@ export const uclar = [
     govde: ayarDegistirGovdesi,
     cevap: ayarSemasi,
     isle: ({ db, parametre, govde, kullanici }) => ayarDegistir(db, kullanici.id, parametre.anahtar, govde.deger, govde.beklenen),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/firma-kodlari',
+    // 3399 a: proje, malzeme, teklif ve sipariş formları seçer; o kayıtları yazan okur. Yeni 'oturum' ucu açılmaz (ADR 0007 madde 4).
+    yetki: { biri: ['ayarlar.yaz', 'projeler.yaz', 'malzemeler.yaz', 'siparisler.yaz'] },
+    cevap: firmaKodlariCevabi,
+    isle: ({ db }) => firmaKodlari(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/firma-kodlari/ekle',
+    yetki: 'ayarlar.yaz',
+    govde: firmaKoduEkleGovdesi,
+    cevap: firmaKoduSemasi,
+    isle: ({ db, govde, kullanici }) => firmaKoduEkle(db, kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/firma-kodlari/:id/duzenle',
+    yetki: 'ayarlar.yaz',
+    parametre: firmaKoduParametresi,
+    govde: firmaKoduDuzenleGovdesi,
+    cevap: firmaKoduSemasi,
+    isle: ({ db, parametre, govde, kullanici }) => firmaKoduDuzenle(db, kullanici.id, parametre.id, govde),
   }),
   uc({
     yontem: 'GET',

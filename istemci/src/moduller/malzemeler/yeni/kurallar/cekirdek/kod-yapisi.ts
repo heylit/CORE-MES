@@ -42,8 +42,10 @@ export function kodGrubu(d: Taslak = D): string {
     return _g3(d.g && (d.g.grup || d.g.ad)) || 'GEN';
 }
 export function firmaKodluTurler(): string[] { return (Array.isArray(AYAR.firmaKoduTurleri) ? AYAR.firmaKoduTurleri : ['mamul', 'yarimamul']); }
-export function firmaKodluTur(d: Taslak): boolean { return (!!AYAR.firmaKodu && firmaKodluTurler().includes(d.tur || 'hammadde')); }
-export function kodOnek(d: Taslak): string { return (firmaKodluTur(d) ? `${AYAR.firmaKodu}-${KOD_TUR[d.tur || 'hammadde']}-` : `${KOD_TUR[d.tur || 'hammadde']}-${kodGrubu(d)}-`); }
+// 3399 a: kartın seçtiği firma kodu (com.firmaKodu), seçilmemişse varsayılan (AYAR.firmaKodu, Sistem Ayarları > Firma kodları).
+export function kartFirmaKodu(d: Taslak): string { return String((d.com && d.com.firmaKodu) || AYAR.firmaKodu || ''); }
+export function firmaKodluTur(d: Taslak): boolean { return (!!kartFirmaKodu(d) && firmaKodluTurler().includes(d.tur || 'hammadde')); }
+export function kodOnek(d: Taslak): string { return (firmaKodluTur(d) ? `${kartFirmaKodu(d)}-${KOD_TUR[d.tur || 'hammadde']}-` : `${KOD_TUR[d.tur || 'hammadde']}-${kodGrubu(d)}-`); }
 export function siradakiKod(d: Taslak = D, ekstra: string[] = []): string {
     const on = kodOnek(d);
     const re = new RegExp('^' + on.replace(/-/g, '\\-') + '(\\d{' + KOD_HANE + ',})$');
@@ -126,6 +128,8 @@ export function kalipUygula(kalip: unknown, d: Taslak, oto?: string, ad?: string
             return oto || '';
         if (k === 'AD')
             return ad === undefined ? (oto || '') : (ad || '');
+        if (k === 'FIRMA')
+            return kartFirmaKodu(d);
         const a = alanlar.find(x => x.k === k);
         if (a)
             return gAlanDegeri(d, a);

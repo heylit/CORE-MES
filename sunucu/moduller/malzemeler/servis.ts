@@ -4,7 +4,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler, sistemAyariOku } from '../ayarlar/disari.ts';
+import { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler, firmaKoduSecenekleri, firmaKoduSecimi, sistemAyariOku, varsayilanFirmaKodu } from '../ayarlar/disari.ts';
 import { firmaAra, firmaOzeti, tedarikciOlabilirMi } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
@@ -26,7 +26,7 @@ import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogSilinirMi,
-  katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
+  kartFirmaKodu, onekFirmaKodu, katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
@@ -518,9 +518,15 @@ export function ornekMalzemeNo(db: Db, anahtar: OrnekMalzemeAnahtari): Promise<n
 
 export const ornekKartVarMi = (db: Db): Promise<boolean> => s.ornekKartVarMi(db);
 
-// Kurumun firma kodu (Malzeme ayarları > genel); yoksa null. Başka modüllerin numara kuralları için (kart #802).
-export async function firmaKodu(db: Db): Promise<string | null> {
-  return katalogFirmaKodu(await katalogGenelAyari(db));
+// Varsayılan firma kodu (3399 a: Sistem Ayarları > Firma kodları); yoksa null.
+export function firmaKodu(db: Db): Promise<string | null> {
+  return varsayilanFirmaKodu(db);
+}
+
+// 3399 a: firma kodu artık Sistem Ayarları'ndadır; genel ayardaki eski `firmaKodu` okunmaz. Firma kodlu önek ve Logo kod biçimi
+// bu birleşik nesneden kurulur: verilen kod (kartın seçimi) ya da varsayılan.
+async function firmaliGenel(db: Db, kod?: string | null): Promise<Record<string, unknown>> {
+  return { ...(await katalogGenelAyari(db)), firmaKodu: kod ?? (await varsayilanFirmaKodu(db)) ?? '' };
 }
 
 // 2089-2 a: Logo'da kullanılan malzeme kodları Logo modülündedir; Logo bu modülü ithal ettiği için tersini sunucu/kablolama.ts kaydeder.
@@ -548,8 +554,10 @@ async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
 
 // Yeni kart ve taslakta tür değişimi: önek ekranın kodundan (yalnız standart biçim), sıra sunucudan; boşalan eski kod yeniden verilmez.
 // Firma kodu ayarlıysa firma kodlu türün (varsayılan mamul ve yarı mamul) önekini ayar verir; ekranın gönderdiği önek yok sayılır.
-async function yeniStokKodu(db: Db, gelenKod: string | null, tur: string): Promise<{ onek: string; sira: number; stokKodu: string }> {
-  const firmaOneki = katalogFirmaOneki(await katalogGenelAyari(db), tur);
+async function yeniStokKodu(
+  db: Db, gelenKod: string | null, tur: string, firma: string | null = null,
+): Promise<{ onek: string; sira: number; stokKodu: string }> {
+  const firmaOneki = katalogFirmaOneki(await firmaliGenel(db, firma), tur);
   if (firmaOneki) {
     const sira = await logoyuAtlayanSira(db, firmaOneki);
     return { onek: firmaOneki, sira, stokKodu: katalogStokKodu(firmaOneki, sira) };
@@ -726,13 +734,15 @@ export async function katalogKartiKaydet(
     gkk,
   };
   // Firma kodlu türde önek ayardan gelir, gelen kod okunmaz.
-  const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await katalogGenelAyari(db), tur) === null
+  const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await firmaliGenel(db), tur) === null
     && katalogYeniOnek({ durum: kayitli.onayDurumu, aktifOlmus: kayitli.aktifOlmus, kayitliOnek: kayitli.onek, tur, gelenKod: alanlar.stokKodu }) !== null;
   let r: { stokKodu: string; surum: number };
   if (kayitli && !turDegisti && !onekDegisti) {
     r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, null));
   } else {
-    const { onek, sira, stokKodu } = await yeniStokKodu(db, alanlar.stokKodu, tur);
+    // 3399 a: yeni kartta ve tür değişiminde seçilen firma kodu (boşsa varsayılan) firma kodlu türün önekidir; kayıtlı kartın kodu değişmez.
+    const firma = await firmaKoduSecimi(db, kartFirmaKodu(kayit), 'kayit.com.firmaKodu', onekFirmaKodu(kayitli?.onek ?? null));
+    const { onek, sira, stokKodu } = await yeniStokKodu(db, alanlar.stokKodu, tur, firma);
     r = kayitli
       ? await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, { tur: tur, onek, sira, stokKodu }))
       : await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, onek, sira));
@@ -903,11 +913,20 @@ export async function katalogAyarlariniGetir(db: Db, kullanici: Kullanici): Prom
   const surum = (anahtar: string) => satirlar.find((x) => x.anahtar === anahtar)?.surum ?? null;
   return {
     surumler: { malzeme: surum('malzeme'), operasyonlar: surum('operasyonlar'), genel: surum('genel') },
-    malzeme: a.get('malzeme') ?? null, operasyonlar: a.get('operasyonlar') ?? null, genel: a.get('genel') ?? null,
+    // 3399 a: ekran firma kodunu ve seçilebilen kodları genel ayarla alır; kaynak Sistem Ayarları > Firma kodları'dır.
+    malzeme: a.get('malzeme') ?? null, operasyonlar: a.get('operasyonlar') ?? null,
+    genel: await firmaliGenelGorunumu(db, a.get('genel') ?? null),
     operasyonTipleri: (await operasyonTipleri(db, { pasiflerDahil: true }))
       .map((t) => ({ kod: t.kod, ad: t.ad, grup: t.grup, grupAdi: OPERASYON_GRUP_ADLARI[t.grup], aktif: t.aktif })),
     dortGoz: await dortGozAcikMi(db), rol: katalogRolu(kullanici.islemler), ayarYazabilir: kullanici.islemler.includes('malzemeler.tanim-yaz'),
   };
+}
+
+// 3399 a: ekran firma kodunu ve seçim listesini genel ayarla alır; kod yoksa ikisi de eklenmez (kayıtlı ayar olduğu gibi döner).
+async function firmaliGenelGorunumu(db: Db, genel: Record<string, unknown> | null): Promise<Record<string, unknown> | null> {
+  const varsayilan = await varsayilanFirmaKodu(db);
+  if (varsayilan === null) return genel;
+  return { ...genel, firmaKodu: varsayilan, firmaKodlari: await firmaKoduSecenekleri(db) };
 }
 
 export async function katalogAyariKaydet(
@@ -919,8 +938,11 @@ export async function katalogAyariKaydet(
   if (anahtar === 'genel' && katalogOnayAkisiAcikMi(deger) !== katalogOnayAkisiAcikMi(await katalogGenelAyari(db)) && !(await kisiBayrakliMi(db, kullanici.id))) {
     throw yetkiYok('Onay akışını yalnız yönetici açıp kapatır.');
   }
-  if (anahtar === 'genel' && !katalogFirmaKoduGecerliMi(deger['firmaKodu'])) {
-    throw dogrulama('Firma kodu 2-5 büyük harf ya da rakam olmalı ve tür kısaltması (HM, YM, MM, SF, DB, HZ) olamaz.', 'deger.firmaKodu');
+  // 3399 a: firma kodu artık Sistem Ayarları'nda; okumada eklenen kod ve liste ayara yazılmaz, kayıtlı eski değer olduğu gibi kalır.
+  if (anahtar === 'genel') {
+    const kalan = Object.fromEntries(Object.entries(deger).filter(([alan]) => alan !== 'firmaKodu' && alan !== 'firmaKodlari'));
+    const eskiKod = (await katalogGenelAyari(db))?.['firmaKodu'];
+    deger = eskiKod === undefined ? kalan : { ...kalan, firmaKodu: eskiKod };
   }
   if (anahtar === 'genel' && !katalogFirmaKoduTurleriGecerliMi(deger['firmaKoduTurleri'])) {
     throw dogrulama('Firma kodlu türler, malzeme türlerinden tekrarsız bir liste olmalı.', 'deger.firmaKoduTurleri');
@@ -928,7 +950,7 @@ export async function katalogAyariKaydet(
   // Ekran genel ayarı bütün olarak yazar; alan eklenmeden önce açılmış bir sekme onu göndermez ve kayıtlı değeri silmemeli. Boş metin siler.
   if (anahtar === 'genel') {
     const kayitliGenel = await katalogGenelAyari(db);
-    for (const alan of ['firmaKodu', 'firmaKoduTurleri']) {
+    for (const alan of ['firmaKoduTurleri']) {
       if (deger[alan] === undefined && kayitliGenel?.[alan] !== undefined) deger = { ...deger, [alan]: kayitliGenel[alan] };
     }
   }
@@ -1093,7 +1115,7 @@ export async function logodanGelenler(db: Db, q: z.output<typeof logoGelenSorgus
   if (!logoKartAynasi) return { baglanti: false, kartlar: [], sonraki: null };
   const kartlar = await logoKartAynasi(db, { ...(q.ara ? { ara: q.ara } : {}), sinir: LOGO_GELEN_SAYFA_BOYU, sonra: q.sonra });
   const { esleme, refle, kodla } = await logoGelenTmiKartlari(db, kartlar);
-  const firma = katalogFirmaKodu(await katalogGenelAyari(db));
+  const firma = katalogFirmaKodu(await firmaliGenel(db));
   return {
     baglanti: true,
     kartlar: kartlar.map((k) => {
@@ -1129,7 +1151,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
   const esik = logoKullanimEsigi(bugun.toISOString().slice(0, 10));
   const nedenler = (k: { stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }) =>
     (kullanim ? logoKullanimNedenleri(k, esik) : null);
-  const firma = katalogFirmaKodu(await katalogGenelAyari(db));
+  const firma = katalogFirmaKodu(await firmaliGenel(db));
   const birimKarsiliklari = (await s.logoKarsiliklari(db)).filter((k) => k.cesit === 'birim');
   const tumKartlar = ozet.kartlar.map((k) => ({ ...k, ad: null, aciklama2: null, aciklama3: null, kartTuru: null, birimSeti: null, sonOkuma: '' }));
   const { esleme, refle, kodla } = await logoGelenTmiKartlari(db, tumKartlar);
@@ -1202,7 +1224,7 @@ export async function logodanKartAl(
   if (durum === 'bagsiz') throw cakisma(`TMI'de aynı kodlu kart var: ${tmi!.stokKodu}. Yeni kart açmak yerine bağlayın.`);
   if (!(await s.birimSecilebilirMi(db, g.birim))) throw dogrulama(`"${g.birim}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, 'birim');
   if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
-  const genel = await katalogGenelAyari(db);
+  const genel = await firmaliGenel(db);
   const firmaOneki = katalogFirmaOneki(genel, g.tur);
   const firmaKodu = katalogFirmaKodu(genel);
   const eskiKod = esleme.get(k.kod) ?? null;

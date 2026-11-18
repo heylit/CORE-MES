@@ -90,3 +90,12 @@ export function numaraKur(kalip: string, g: NumaraGirdisi): string {
   }).join('');
   return metin.replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
 }
+
+// 3399 a: kalıbın verebileceği en uzun numara; yalnız belge alanı {FIRMA} olan kalıpta ölçülür (firma kodu en çok 5 karakter).
+// Diğer belge alanlarının uzunluğu kalıptan bilinmez; o kalıpta ölçü yapılmaz (null).
+export function enUzunNumara(kalip: string): number | null {
+  const parcalar = parcala(kalip);
+  if (parcalar.some((p) => p.tur === 'alan' && p.ad !== 'SAYAC' && p.ad !== 'FIRMA' && !(ZAMAN_ALANLARI as readonly string[]).includes(p.ad))) return null;
+  const hane = parcalar.find((p): p is AlanParcasi => p.tur === 'alan' && p.ad === 'SAYAC')?.hane ?? 1;
+  return numaraKur(kalip, { yil: 2026, ay: 12, sira: Number('9'.repeat(hane)), alanlar: { FIRMA: 'XXXXX' } }).length;
+}

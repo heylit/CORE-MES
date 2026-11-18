@@ -22,6 +22,7 @@ import { OrtakCihazlar } from './OrtakCihazlar.tsx';
 import { SayfaAyarlari } from './SayfaAyarlari.tsx';
 import { VeriTemizleme } from './VeriTemizleme.tsx';
 import { Yedekler } from './Yedekler.tsx';
+import { FirmaKodlari } from './FirmaKodlari.tsx';
 import { KurumLogosu, SurumBilgisi } from './KurumAyarlari.tsx';
 import './ayarlar.css';
 
@@ -458,13 +459,14 @@ function Formlar({ ekranlar }: { ekranlar: readonly AyarEkrani[] }) {
   );
 }
 
-type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'formlar' | 'baglanti' | 'eposta' | 'moduller' | 'guncelleme' | 'yedek' | 'temizlik' | 'cihazlar';
+type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'firma' | 'numara' | 'formlar' | 'baglanti' | 'eposta' | 'moduller' | 'guncelleme' | 'yedek' | 'temizlik' | 'cihazlar';
 
 const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'genel', baslik: 'Genel', simge: 'gear' },
   { anahtar: 'gorunum', baslik: 'Görünüm ve hareket', simge: 'eye' },
   { anahtar: 'sayfalar', baslik: 'Sayfalar', simge: 'list' },
   { anahtar: 'onay', baslik: 'Onay kuralları', simge: 'eye' },
+  { anahtar: 'firma', baslik: 'Firma kodları', simge: 'building' },
   { anahtar: 'numara', baslik: 'Numara kuralları', simge: 'tag' },
   { anahtar: 'formlar', baslik: 'Formlar', simge: 'file' },
   { anahtar: 'baglanti', baslik: 'Bağlantılar', simge: 'upload' },
@@ -520,10 +522,12 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
         {gecerli === 'onay' && (
           <AyarListesi baslik="Onay kuralları" kategori="onay" />
         )}
+        {gecerli === 'firma' && <FirmaKodlari yazar={islemler.includes('ayarlar.yaz')} />}
         {gecerli === 'numara' && (
           <>
             <p className="tc-ayar-aciklama">
-              Firma kodu ({'{FIRMA}'}) <a href="/malzemeler/ayarlar">Malzeme ayarlarında</a> tanımlanır. Kalıbı değiştirmek yalnız yeni kayıtları etkiler.
+              Firma kodu ({'{FIRMA}'}) Firma kodları sekmesinde tanımlanır; kalıpta varsa her firmanın sırası ayrıdır, firma kodu boş kayıt
+              varsayılan kodu alır, {'{FIRMA}'} boş kalırsa yanındaki tire de düşer. Kalıbı değiştirmek yalnız yeni kayıtları etkiler.
             </p>
             <AyarListesi baslik="Numara kuralları" kategori="numara" />
           </>

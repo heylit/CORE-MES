@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { secilenFirmaKodu } from './ayarlar.ts';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
@@ -63,6 +64,8 @@ export const siparisSatiriGovdesi = z.object({
 
 const siparisAlanlari = {
   firmaId: z.number().int().positive(),
+  // 3399 a: kendi firma kodumuz; yalnız açılışta okunur (boşsa varsayılan), numara bu kodla verilir, sonra değişmez.
+  firmaKodu: secilenFirmaKodu.optional(),
   musteriSiparisNo: istege(40),
   siparisTarihi: tarihSemasi,
   termin: tarihSemasi,
@@ -135,6 +138,8 @@ export const siparisSemasi = z.object({
   firmaId: z.number().int(),
   // Firma adı müşteri-tedarikçiden okunur; bulunamazsa null.
   firmaAd: z.string().nullable(),
+  // 3399 a: kendi firma kodumuz; eski kayıtta null.
+  firmaKodu: z.string().nullable(),
   musteriSiparisNo: z.string().nullable(),
   siparisTarihi: tarihSemasi,
   termin: tarihSemasi,
@@ -202,6 +207,8 @@ export const teklifSatiriGovdesi = z.object({
 
 const teklifAlanlari = {
   firmaId: z.number().int().positive(),
+  // 3399 a: kendi firma kodumuz; yalnız açılışta okunur (boşsa varsayılan), numara bu kodla verilir, sonra değişmez.
+  firmaKodu: secilenFirmaKodu.optional(),
   baslik: z.string().trim().min(1, 'Başlık zorunlu.').max(200, 'En çok 200 karakter.'),
   paraBirimi: paraBirimiSemasi.prefault('TRY'),
   istenenTarih: tarihSemasi.nullish().transform((t) => t ?? null),
@@ -326,6 +333,8 @@ export const teklifSemasi = z.object({
   durum: teklifDurumuSemasi,
   firmaId: z.number().int(),
   firmaAd: z.string().nullable(),
+  // 3399 a: kendi firma kodumuz; eski kayıtta null.
+  firmaKodu: z.string().nullable(),
   baslik: z.string(),
   paraBirimi: z.string(),
   istenenTarih: tarihSemasi.nullable(),

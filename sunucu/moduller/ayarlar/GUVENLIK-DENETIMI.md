@@ -17,6 +17,17 @@ Tablo korumaları: `tablo: boş değer, biçimsiz anahtar ve var olmayan kişi r
 
 Yok.
 
+## Firma kodları (3399 a)
+
+Dosya `firma-kodlari.test.ts`. Kişi ve zaman sunucudan (`olusturan_kisi_id`, `guncelleyen_kisi_id`). Ekleme ve düzenleme tek danışma kilidiyle sıralanır;
+düzenleme sürümlüdür. Kod verildikten sonra değişmez ve silinmez (silme ucu yok). Seçim kuralı (`firmaKoduSecimi`) proje, malzeme, teklif ve sipariş servislerinde.
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| GET /firma-kodlari | biri: `ayarlar.yaz`, `projeler.yaz`, `malzemeler.yaz`, `siparisler.yaz` | liste kod, ad, varsayılan, aktif; yeni `oturum` ucu açılmaz | `liste boşken seçim boştur; ...` | `okuma kayıt yazanlara açık, girişsiz 401` |
+| POST /firma-kodlari/ekle | `ayarlar.yaz` | kod 2-5 büyük harf/rakam, tür kısaltması değil (sözleşme ve CHECK); tekrar 409; ilk kod kendiliğinden varsayılan; varsayılan tek (kısmi tekil dizin) | `liste boşken seçim boştur; ilk kod kendiliğinden varsayılan olur; ...` | aynı test (biçim 400, tekrar 409), `okuma kayıt yazanlara açık, girişsiz 401` |
+| POST /firma-kodlari/:id/duzenle | `ayarlar.yaz` | yalnız ad, varsayılan, aktif; varsayılan kaldırılamaz, pasif yapılamaz (CHECK de); eski sürüm 409; olmayan kod 404 | `varsayılan tektir; kaldırılamaz ve pasif yapılamaz; kodun kendisi değişmez` | aynı test |
+
 ## Güncelleme kanalı (kart #870)
 
 Dosya `guncelleme.test.ts`. Kayıt zamanı ve yükleyen sunucudan. Yükleme kimliği UUID (yola başka şey girmez) ve onu açan kişiye aittir.

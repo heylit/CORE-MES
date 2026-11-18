@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { secilenFirmaKodu } from './ayarlar.ts';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { EMIR_TURLERI } from './emir-turleri.ts';
@@ -58,6 +59,8 @@ const siparistenAlanlar = {
   kod: projeKoduSemasi, ad: projeAlanlari.ad, baslangic: projeAlanlari.baslangic, bitis: projeAlanlari.bitis, aciklama: projeAlanlari.aciklama,
   ...butceAlanlari,
   sablonId: z.number().int().positive().max(2147483647).nullable().optional(),
+  // 3399 a: gönderilmezse siparişin firma kodu, o da yoksa varsayılan kod.
+  firmaKodu: secilenFirmaKodu.optional(),
 };
 export const siparistenProjeGovdesi = z.object(siparistenAlanlar).refine(tarihSirasi, TARIH_SIRASI);
 // PRJ-10 (224): yeni proje sipariş seçilmeden açılmaz; firma siparişten gelir.
@@ -86,6 +89,8 @@ export const projeGuncelleGovdesi = z
     durum: projeDurumuSemasi,
     // PRJ-17: tamamlanmış ya da iptal projeyi yeniden aktife alırken zorunlu; sunucu denetler ve statü geçmişine yazar.
     yenidenAcmaGerekcesi: istege(500),
+    // 3399 a: gönderilmezse kayıtlı kod kalır; null kodu kaldırır.
+    firmaKodu: secilenFirmaKodu.optional(),
     ...beklenenSurum,
   })
   .refine(tarihSirasi, TARIH_SIRASI);
@@ -105,6 +110,8 @@ export const projeSemasi = z.object({
   firmaId: z.number().int().nullable(),
   // Firma adı finanstan okunur; bulunamazsa null (uydurulmaz).
   firmaAd: z.string().nullable(),
+  // 3399 a: kendi firma kodumuz (Firma kodları); eski projede null.
+  firmaKodu: z.string().nullable(),
   // Proje siparişten açıldıysa o sipariş (176 a); elle açılan projede null.
   siparisId: z.number().int().nullable(),
   // Bütçe yalnız `finans.maliyet-oku` olana gelir (180); işlemi olmayana alan hiç gelmez. Girilmediyse null:

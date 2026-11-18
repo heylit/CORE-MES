@@ -23,7 +23,7 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
-import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
+import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
@@ -301,7 +301,7 @@ interface DenetlenmisBaslik {
   baslangic: string | null;
   aciklama: string | null;
   emirTuru: EmirTuru;
-  proje: { id: number; kod: string } | null;
+  proje: { id: number; kod: string; firmaKodu: string | null } | null;
   siparisSatiriId: number | null;
   teslim: string | null;
   teslimBagli: boolean;
@@ -351,7 +351,7 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   const tarihIhlali = teslimIhlali(baslangic, teslim.teslim);
   if (tarihIhlali !== null) throw dogrulama(tarihIhlali, 'teslim');
   return {
-    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod }, siparisSatiriId,
+    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod, firmaKodu: proje.firmaKodu }, siparisSatiriId,
     teslim: teslim.teslim, teslimBagli: teslim.bagli, siparisPartiId,
   };
 }
@@ -363,7 +363,8 @@ async function basligiYaz(
   const parcaNo = b.urun.kod.slice(0, 60);
   // Numara ve sayaç "Numara kuralları" ayarındadır; sayaç bu işlemin içinde ilerler, emir eklenmezse geri alınır.
   const emirNo = await numaraAl(db, 'uretim-emirleri.emir-no', {
-    alanlar: { FIRMA: await firmaKodu(db), PROJE: b.proje?.kod ?? null, PARCA: parcaNo },
+    // 3399 a: firma kodu projenindir; projesiz ya da kodsuz projede numaraAl varsayılan kodu koyar.
+    alanlar: { FIRMA: b.proje?.firmaKodu ?? null, PROJE: b.proje?.kod ?? null, PARCA: parcaNo },
     varMi: (no) => s.emirNoVarMi(db, no),
   });
   return s.ustEmirEkle(db, {

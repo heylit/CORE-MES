@@ -56,4 +56,6 @@ export type AyarTanimi =
     varsayilan: string;
     // Zaman alanları ve sayaç dışında kalıpta kullanılabilen, değerini numarayı isteyen modülün verdiği alanlar.
     alanlar: readonly string[];
+    // Numaranın en çok uzunluğu (ör. Logo fiş numarası 16); kalıp en uzun örneğiyle denetlenir (3399 a).
+    enUzun?: number;
   });

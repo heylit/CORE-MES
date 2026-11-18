@@ -3,44 +3,28 @@ import { useEffect, useState } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Tablo, type Sutun } from '../../../../../ortak/arayuz/index.ts';
 import type { Duzen } from '../duzen.ts';
 import {
-  CAKISMA_OZEL, CAKISMA_VARSAYILAN, FIRMA_KODU_DESEN, KOD_TUR, TURLER, alanZorunlu, cakismaAlanAdi, firmaKodluTurler, turAlanlari, type Alan,
+  CAKISMA_OZEL, CAKISMA_VARSAYILAN, KOD_TUR, TURLER, alanZorunlu, cakismaAlanAdi, firmaKodluTurler, turAlanlari, type Alan,
 } from '../kaynak.ts';
 import {
-  CAKISMA_VARSAYILAN_ALANI, asc, cakismaVarsayilanaDon, cakismaYaz, kalipYaz, kuralVarsayilanaDon, turKurali, varsayilanBirlesirMi, zorunluYaz,
+  CAKISMA_VARSAYILAN_ALANI, cakismaVarsayilanaDon, cakismaYaz, kalipYaz, kuralVarsayilanaDon, turKurali, varsayilanBirlesirMi, zorunluYaz,
 } from '../islemler.ts';
 import { BolumBasligi, Kutu, Secici } from '../parcalar.tsx';
 
 const turAdi = (t: string) => TURLER[t]?.ad ?? t;
 
-export function FirmaKodu({ d, kilitli }: { d: Duzen; kilitli: boolean }) {
-  const kayitli = String((d.genel as { firmaKodu?: string }).firmaKodu ?? '');
-  const [deger, degerYaz] = useState(kayitli);
-  useEffect(() => { degerYaz(kayitli); }, [kayitli]);
-  const yaz = () => {
-    const v = asc(deger).replace(/[^A-Z0-9]/g, '');
-    if (v && (!FIRMA_KODU_DESEN.test(v) || Object.values(KOD_TUR).includes(v))) {
-      d.bildir('hata', 'Firma kodu 2-5 harf ya da rakam olmalı ve tür kısaltması (HM, YM, MM, SF, DB, HZ) olamaz.');
-      degerYaz(kayitli);
-      return;
-    }
-    if (v === kayitli) { degerYaz(kayitli); return; }
-    d.genelYaz({ firmaKodu: v }, v ? `Firma kodlu türlerin yeni kartları ${v}- koduyla açılır.` : 'Kodlar tür-grup-sıra yapısına döndü.');
-  };
+// 3399 a: firma kodu Sistem Ayarları > Firma kodları'ndadır; burada yalnız varsayılan ve seçilebilen kodlar gösterilir.
+// Kart açılırken firma kodlu türde kod seçilir; boşsa varsayılan.
+export function FirmaKodu({ d }: { d: Duzen; kilitli?: boolean }) {
+  const genel = d.genel as { firmaKodu?: string; firmaKodlari?: { kod: string; ad: string }[] };
+  const varsayilan = String(genel.firmaKodu ?? '');
+  const kodlar = (genel.firmaKodlari ?? []).map((k) => k.kod).join(', ');
   const turler = firmaKodluTurler(d.b).map(turAdi).join(', ') || 'hiçbiri';
   return (
-    <>
-      <div className="tc-ma-dar">
-        <Girdi
-          etiket="Firma kodu (firma kodlu türlerde kodun başı)" maxLength={5} placeholder="ör. ABC" autoComplete="off" className="tc-ma-buyuk"
-          disabled={kilitli} value={deger} onChange={(e) => degerYaz(e.target.value)} onBlur={yaz}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); yaz(); } }}
-        />
-      </div>
-      <p className="tc-ma-yardim">
-        Doluysa firma kodlu türlerin ({turler}) yeni kartları {kayitli || 'FİRMA'}-MM-00001 biçiminde kod alır (her tür kendi sırasıyla); boşsa tür-grup-sıra (MM-GRP-00001).
-        Türler "Ad, açıklama ve zorunlu alanlar" bölümünde seçilir. Var olan kodlar değişmez.
-      </p>
-    </>
+    <p className="tc-ma-yardim">
+      Firma kodları <a href="/ayarlar">Sistem Ayarları &gt; Firma kodları</a>'nda tanımlanır{varsayilan ? <>; varsayılan <b>{varsayilan}</b>{kodlar ? `, seçilebilenler ${kodlar}` : ''}</> : ': henüz kod yok'}.
+      Firma kodlu türlerin ({turler}) yeni kartı açılırken kod seçilir ve {varsayilan || 'FİRMA'}-MM-00001 biçiminde kod alır (her firma ve tür kendi sırasıyla);
+      kod yoksa tür-grup-sıra (MM-GRP-00001). Var olan kodlar değişmez.
+    </p>
   );
 }
 
@@ -124,7 +108,7 @@ export function TurKurallari({ d }: { d: Duzen }) {
       <Kutu baslik="Kod düzeni">
         <IsaretKutusu etiket="Şirket kodu + tür + numara" checked={fk} disabled={d.ro} onChange={(e) => firmaTuru(e.target.checked)} />
         <p className="tc-ma-yardim">
-          Yeni kartın kodu: <b>{ornekKod}</b>. {firmaKodu ? '' : 'Firma kodu boş; doldurulunca seçili türler bu düzene geçer. '}Numara her tür için ayrı sıradır; var olan kodlar değişmez.
+          Yeni kartın kodu: <b>{ornekKod}</b>. {firmaKodu ? '' : 'Firma kodu yok; Sistem Ayarları > Firma kodları\'na eklenince seçili türler bu düzene geçer. '}Numara her tür için ayrı sıradır; var olan kodlar değişmez.
         </p>
         <FirmaKodu d={d} kilitli={d.ro} />
       </Kutu>

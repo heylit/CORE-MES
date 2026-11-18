@@ -1,4 +1,6 @@
 export { numaraAl, sistemAyariOku, type NumaraIstegi } from './servis.ts';
+// 3399 a: kendi firmalarımızın kodu; proje, malzeme, teklif ve sipariş seçimi buradan doğrular.
+export { firmaKoduListesi, firmaKoduSecenekleri, firmaKoduSecimi, firmaKoduVarMi, varsayilanFirmaKodu } from './servis.ts';
 // Modül kendi ayarını kendi ekranından değiştirir (Fabrika Haritası kroki saydamlığı, 2122-5 a).
 export { modulAyariDegistir, type AyarKaynagi } from './servis.ts';
 // 2133-4 a: fabrika ayarı değişince sevkiyat fabrika noktasını açar ya da günceller; bağ sunucu/kablolama.ts'te.
