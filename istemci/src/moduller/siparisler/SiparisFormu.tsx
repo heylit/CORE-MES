@@ -8,10 +8,12 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
+import type { SecilenFirma } from './FirmaSecici.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
 import { KalemPartileri, type PartiDegeri, partiAnahtari } from './KalemPartileri.tsx';
-import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
+import { KartArama } from './KartArama.tsx';
+import { secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
+import { MusteriArama } from './MusteriArama.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useFiyatGorur, useKorumaliGonderim } from './yazma.ts';
 import './siparisler.css';
@@ -146,7 +148,6 @@ function Form({ siparis }: FormOzellikleri) {
   const ekle = useKorumaliGonderim();
   const fiyatGorur = useFiyatGorur();
   const [acilisSurumu] = useState(siparis?.surum ?? null);
-  const [secilecek, secilecekYaz] = useState<number | null>(null);
   // 3399 a: firma kodu sipariş numarasını belirler; yalnız açılışta seçilir.
   const { varsayilan: varsayilanFirmaKodu } = useFirmaKodlari();
   const [secilenFirmaKodu, firmaKoduYaz] = useState<string | null>(null);
@@ -195,7 +196,7 @@ function Form({ siparis }: FormOzellikleri) {
         {form.genelHata !== null && <p className="tc-sp-hata" role="alert">{form.eskiSurum ? 'Kayıt başkası tarafından değişti, yeniden yükleyin.' : form.genelHata}</p>}
         <Kart baslik="Sipariş bilgileri">
           <div className="tc-sp-izgara">
-            <FirmaSecici etiket="Müşteri" zorunlu deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
+            <MusteriArama deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
             <Girdi etiket="Müşteri sipariş no" autoComplete="off" {...form.alan('musteriSiparisNo')} />
             <Girdi etiket="Sipariş tarihi" type="date" required {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
             <div className="tc-sp-termin">
@@ -234,12 +235,16 @@ function Form({ siparis }: FormOzellikleri) {
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}
                 </div>
-                <div className="tc-sp-kart-sec">
-                  {!s.kilitli && <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzeme kartı seç' : 'Kartı değiştir'}</Dugme>}
-                  <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
-                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Kart seçilmedi' : secilenKartMetni(s.kart))}
-                  </span>
-                </div>
+                {s.kilitli ? (
+                  <span className="tc-sp-secili">{s.kart === null ? 'Kart seçilmedi' : secilenKartMetni(s.kart)}</span>
+                ) : (
+                  <KartArama
+                    etiket={`Kalem ${i + 1} malzeme kartı`}
+                    deger={s.kart}
+                    degistir={(kart) => satirDegistir(i, { kart })}
+                    {...(form.hata(`satirlar.${i}.kart`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.kart`) })}
+                  />
+                )}
                 <div className="tc-sp-izgara">
                   <Girdi
                     etiket={`Kalem ${i + 1} miktar`}
@@ -313,11 +318,6 @@ function Form({ siparis }: FormOzellikleri) {
           <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{siparis === null ? 'Taslak aç' : 'Kaydet'}</Dugme>
         </div>
       </form>
-      <MalzemeSecici
-        acik={secilecek !== null}
-        kapat={() => secilecekYaz(null)}
-        sec={(kart) => { if (secilecek !== null) satirDegistir(secilecek, { kart }); secilecekYaz(null); }}
-      />
     </section>
   );
 }
