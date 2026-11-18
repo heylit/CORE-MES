@@ -618,8 +618,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   }, [sec, tasinacak, secIs]);
   const birak = useCallback(() => { setTasinacak(null); sec(null, null); }, [sec]);
 
-  // Emir seçilince üstüne açılan paneller kapanır: seçilen emrin satırı görünür kalsın.
-  useEffect(() => { if (secEmir !== null) setAyarAcik(false); }, [secEmir]);
+  // Emir seçilince üstüne açılan paneller kapanır: seçilen emrin satırı görünür kalsın. Liste düzeninde panel kapanmaz: açık satırın
+  // operasyonuna basmak yazılmakta olan ayarı düşürmesin.
+  useEffect(() => { if (secEmir !== null && klasik) setAyarAcik(false); }, [secEmir]);
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
 
   // Tezgâhta sorun bildir (3335 a): tezgâh adından Duruş ve mesai o tezgâhla açılır; aynı taslak komutu ve etki akışı.

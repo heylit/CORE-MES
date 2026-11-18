@@ -1569,6 +1569,10 @@ describe('Kokpit tek görünüm', () => {
     expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(0);
     // Satır açık kalır: adımı bırakmak siparişi kapatmaz.
     expect(document.querySelector('.tc-pyq-ld-adimlar')).not.toBeNull();
+    // Ayarlar açıkken operasyona basmak paneli kapatmaz (yazılmakta olan ayar düşmez).
+    fireEvent.click(diger('Ayarlar'));
+    fireEvent.click(document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[data-adim]')!);
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
     vi.unstubAllGlobals();
   });
 });
