@@ -871,3 +871,6 @@ button.tc-stok-bekleyen { cursor: pointer; }
 @media (max-width: 479px) {
   .tc-stok-bekleyen .tc-rozet { display: none; }
 }
+.tc-stok-iki-satir { display: flex; flex-direction: column; gap: var(--b-1); }
+/* Açıklama kayan tabloda da kırpılmaz: sütun en çok menü genişliğinde, yazı alt satıra iner (3417 Arayüz). */
+.tc-stok-iki-satir > .tc-stok-not { white-space: normal; max-inline-size: var(--menu-genis); overflow-wrap: anywhere; }

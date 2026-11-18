@@ -8,6 +8,7 @@ import {
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
   emirFisleriCevabi, rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sahipsizStatuluCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
+  sifirlamaAdaylariCevabi, sifirlamaCevabi, sifirlamaGovdesi, sonDuzeltmelerCevabi, sonDuzeltmelerSorgusu, topluSayimOnayCevabi, topluSayimOnayGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi, rafKodlamaGovdesi, rafKodlamaOnizlemeCevabi, rafKodlamaOnizlemeSorgusu } from '#paylasilan/sozlesme/atolye.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
@@ -179,6 +180,11 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/sayim-farklari', yetki: { biri: ['stok.sayim-onayla', 'stok.sayim'] }, cevap: sayimFarklariCevabi, isle: ({ db }) => s.sayimFarklari(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim-farklari/:id/onayla', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimFarkiOnayGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sayimFarkiOnayla(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim-farklari/:id/reddet', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimFarkiRedGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sayimFarkiReddet(db, kullanici.id, parametre.id, govde) }),
+  // Sayım ve düzeltme (3417 a): kartı sıfırla onaya gönderir (stok değişmez), seçilenler ayrı ara kayıtlarda onaylanır, son düzeltmeler okunur.
+  uc({ yontem: 'GET', yol: '/stok/malzemeler/:id/sifirlama', yetki: 'stok.sayim', parametre: kimlikParametresi, cevap: sifirlamaAdaylariCevabi, isle: ({ db, parametre }) => s.sifirlamaAdaylari(db, parametre.id) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sifirla', yetki: 'stok.sayim', govde: sifirlamaGovdesi, cevap: sifirlamaCevabi, isle: ({ db, kullanici, govde }) => s.sifirla(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim-farklari/toplu-onayla', yetki: 'stok.sayim-onayla', govde: topluSayimOnayGovdesi, cevap: topluSayimOnayCevabi, isle: ({ db, kullanici, govde }) => s.sayimFarklariniOnayla(db, kullanici.id, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/sayim-duzeltmeleri', yetki: { biri: ['stok.sayim', 'stok.sayim-onayla'] }, sorgu: sonDuzeltmelerSorgusu, cevap: sonDuzeltmelerCevabi, isle: ({ db, sorgu }) => s.sonDuzeltmeler(db, sorgu.gun) }),
   // Gece defter karşılaştırması (1692 a): son turun farkları; eksi bakiye onayı gibi müdürün tutarlılık işidir.
   uc({ yontem: 'GET', yol: '/stok/defter-farklari', yetki: 'stok.eksi-onayla', cevap: defterFarklariCevabi, isle: ({ db }) => s.defterFarklari(db) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/depolar/:id/sayim-esigi', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimEsigiGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, parametre, govde }) => s.sayimEsigiDegistir(db, parametre.id, govde) }),

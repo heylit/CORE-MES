@@ -1,20 +1,28 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import type { KaliteDurumu, SifirlamaNedeni } from '#paylasilan/sozlesme/stok.ts';
 import { DEFTER_FARKI_SECIMI } from '../ortak/sorgular.ts';
 
 // ---- Kör sayım ve sayım farkı onayı (1279 a, 1691 teyit) ------------------------------------------------------------------
 export const konumunSayimEsigi = async (db: Db, konumId: number): Promise<string> => (await db.tek<{ esik: string }>(
   'SELECT d.sayim_esik_yuzde::text AS esik FROM stok_konum k JOIN stok_depo d ON d.id = k.depo_id WHERE k.id = $1', [konumId]))?.esik ?? '0';
-export interface SayimFarkiYeni { konumId: number; malzemeId: number; partiId: number | null; sistemMiktar: string; sayilanMiktar: string; sayanKisiId: number }
+export interface SayimFarkiYeni {
+  konumId: number; malzemeId: number; partiId: number | null; sistemMiktar: string; sayilanMiktar: string; sayanKisiId: number;
+  // 3417 a: kartı sıfırlamada kaynak, neden ve açıklama; verilmezse göz sayımı.
+  sifirlama?: { neden: SifirlamaNedeni; aciklama: string | null };
+}
 // Aynı gözde bekleyen fark varsa yazılmaz (null döner): ikinci sayım ilk farkın kararını bekler.
 export const sayimFarkiEkle = async (db: Db, f: SayimFarkiYeni): Promise<number | null> => (await db.tek<{ id: number }>(
-  `INSERT INTO stok_sayim_farki (konum_id, malzeme_id, parti_id, sistem_miktar, sayilan_miktar, sayan_kisi_id) VALUES ($1, $2, $3, $4, $5, $6)
+  `INSERT INTO stok_sayim_farki (konum_id, malzeme_id, parti_id, sistem_miktar, sayilan_miktar, sayan_kisi_id, kaynak, neden, aciklama)
+   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
    ON CONFLICT (konum_id, malzeme_id, (COALESCE(parti_id, 0))) WHERE durum = 'bekliyor' DO NOTHING RETURNING id`,
-  [f.konumId, f.malzemeId, f.partiId, f.sistemMiktar, f.sayilanMiktar, f.sayanKisiId]))?.id ?? null;
+  [f.konumId, f.malzemeId, f.partiId, f.sistemMiktar, f.sayilanMiktar, f.sayanKisiId, f.sifirlama ? 'sifirlama' : 'sayim', f.sifirlama?.neden ?? null,
+    f.sifirlama?.aciklama ?? null]))?.id ?? null;
 export interface SayimFarkiHam {
   id: number; konumId: number; konumKod: string; depoId: number; malzemeId: number; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null;
   dokumNo: string | null; partiEmirId: number | null; sistemMiktar: string; sayilanMiktar: string; guncelMiktar: string; sayanKisiId: number; sayimZamani: string;
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi'; kararKisiId: number | null; kararZamani: string | null; kararNotu: string | null; hareketId: number | null; surum: number;
+  kaynak: 'sayim' | 'sifirlama'; neden: SifirlamaNedeni | null; aciklama: string | null;
 }
 // Güncel miktar sayımın eksenindedir (statüsüz, serbest): sayım yalnız o bakiyeyi sayar.
 const SAYIM_FARKI_SECIMI = `SELECT f.id, f.konum_id AS "konumId", k.kod AS "konumKod", k.depo_id AS "depoId", f.malzeme_id AS "malzemeId", f.parti_id AS "partiId",
@@ -23,7 +31,8 @@ const SAYIM_FARKI_SECIMI = `SELECT f.id, f.konum_id AS "konumId", k.kod AS "konu
   COALESCE((SELECT b.miktar FROM stok_bakiye b WHERE b.malzeme_id = f.malzeme_id AND b.konum_id = f.konum_id AND b.parti_id IS NOT DISTINCT FROM f.parti_id
     AND b.statu_id IS NULL AND b.kalite_durumu = 'serbest'), 0)::text AS "guncelMiktar",
   f.sayan_kisi_id AS "sayanKisiId", ${zamanMetni('f.sayim_zamani')} AS "sayimZamani", f.durum, f.karar_kisi_id AS "kararKisiId",
-  ${zamanMetni('f.karar_zamani')} AS "kararZamani", f.karar_notu AS "kararNotu", f.hareket_id AS "hareketId", f.surum
+  ${zamanMetni('f.karar_zamani')} AS "kararZamani", f.karar_notu AS "kararNotu", f.hareket_id AS "hareketId", f.surum,
+  f.kaynak, f.neden, f.aciklama
   FROM stok_sayim_farki f JOIN stok_konum k ON k.id = f.konum_id LEFT JOIN stok_parti p ON p.id = f.parti_id`;
 // Bekleyenlerin hepsi ve karara bağlanan son 50 fark.
 export const sayimFarklari = (db: Db): Promise<SayimFarkiHam[]> => db.sorgu(
@@ -78,3 +87,41 @@ export const defterFarklari = (db: Db, karsilastirmaId: number): Promise<DefterF
    FROM stok_defter_farki f LEFT JOIN malzeme_katalog_karti m ON m.no = f.malzeme_id LEFT JOIN stok_konum k ON k.id = f.konum_id
      LEFT JOIN stok_parti p ON p.id = f.parti_id
    WHERE f.karsilastirma_id = $1 ORDER BY k.kod NULLS LAST, f.malzeme_id, f.parti_id NULLS FIRST`, [karsilastirmaId]);
+
+// ---- Sayım ve düzeltme (3417 a) ---------------------------------------------------------------------------------------------
+export interface SifirlamaBakiyesiHam {
+  konumId: number; konumKod: string; depoKod: string; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null;
+  partiEmirId: number | null; miktar: string; statuId: number | null; kaliteDurumu: KaliteDurumu;
+}
+// Kartın sıfırdan farklı bütün bakiye satırları (aktif konumlarda), depo ve göz koduna göre.
+export const sifirlamaBakiyeleri = (db: Db, malzemeId: number): Promise<SifirlamaBakiyesiHam[]> => db.sorgu(
+  `SELECT b.konum_id AS "konumId", k.kod AS "konumKod", d.kod AS "depoKod", b.parti_id AS "partiId", p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo",
+     p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId", b.miktar::text AS miktar, b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu"
+     FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id JOIN stok_depo d ON d.id = k.depo_id LEFT JOIN stok_parti p ON p.id = b.parti_id
+    WHERE b.malzeme_id = $1 AND b.miktar <> 0 AND k.aktif
+    ORDER BY d.kod, k.kod, b.parti_id NULLS FIRST, b.statu_id NULLS FIRST, b.kalite_durumu`, [malzemeId]);
+// Kartın onay bekleyen farkları: aynı gözde ikinci fark açılmaz.
+export const bekleyenFarkAnahtarlari = (db: Db, malzemeId: number): Promise<{ konumId: number; partiId: number | null }[]> => db.sorgu(
+  `SELECT konum_id AS "konumId", parti_id AS "partiId" FROM stok_sayim_farki WHERE malzeme_id = $1 AND durum = 'bekliyor'`, [malzemeId]);
+// Açık "stoktan karşıla" istekleri (3398-2).
+export const acikAyirmaIstekleri = (db: Db, malzemeId: number): Promise<{ id: number; talepNo: string; miktar: string }[]> => db.sorgu(
+  `SELECT id, talep_no AS "talepNo", miktar::text AS miktar FROM stok_ayirma_istegi WHERE malzeme_id = $1 AND durum IN ('bekliyor', 'ayrildi') ORDER BY id`, [malzemeId]);
+export interface SonDuzeltmeHam {
+  hareketId: number; fisNo: string | null; zaman: string; tur: 'sayim_fazla' | 'sayim_eksik'; konumId: number; konumKod: string; malzemeId: number; partiId: number | null;
+  lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null; miktar: string; kaynak: 'sayim' | 'sifirlama';
+  neden: SifirlamaNedeni | null; sayanKisiId: number; onaylayanKisiId: number | null; geriAlindi: boolean;
+}
+// Son günlerin sayım fazlası ve eksiği hareketleri. Fark kaydı olanın sayanı fark kaydından, onaylayanı hareketin kişisidir; eşik içinde
+// onaysız yazılan sayımın sayanı hareketin kişisidir, onaylayanı yoktur. sinir + 1 satır okunur: fazlası "kesildi" demektir.
+export const sonDuzeltmeler = (db: Db, gun: number, sinir: number): Promise<SonDuzeltmeHam[]> => db.sorgu(
+  `SELECT h.id AS "hareketId", COALESCE((SELECT f.no FROM stok_fis_satiri fs JOIN stok_fis f ON f.id = fs.fis_id WHERE fs.hareket_id = h.id LIMIT 1),
+       (SELECT f.no FROM stok_hareket_fisi_satiri hs JOIN stok_hareket_fisi f ON f.id = hs.fis_id WHERE hs.hareket_id = h.id LIMIT 1)) AS "fisNo",
+     ${zamanMetni('h.zaman')} AS zaman, h.tur, COALESCE(h.hedef_konum_id, h.kaynak_konum_id) AS "konumId", k.kod AS "konumKod", h.malzeme_id AS "malzemeId",
+     h.parti_id AS "partiId", p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId",
+     h.miktar::text AS miktar, COALESCE(sf.kaynak, 'sayim') AS kaynak, sf.neden, COALESCE(sf.sayan_kisi_id, h.kisi_id) AS "sayanKisiId",
+     CASE WHEN sf.id IS NULL THEN NULL ELSE h.kisi_id END AS "onaylayanKisiId",
+     EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id) AS "geriAlindi"
+     FROM stok_hareketi h JOIN stok_konum k ON k.id = COALESCE(h.hedef_konum_id, h.kaynak_konum_id) LEFT JOIN stok_parti p ON p.id = h.parti_id
+     LEFT JOIN stok_sayim_farki sf ON sf.hareket_id = h.id
+    WHERE h.tur IN ('sayim_fazla', 'sayim_eksik') AND h.zaman >= now() - make_interval(days => $1)
+    ORDER BY h.zaman DESC, h.id DESC LIMIT $2`, [gun, sinir + 1]);

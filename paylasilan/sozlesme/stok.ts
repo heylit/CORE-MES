@@ -874,6 +874,9 @@ export type MalKabulCevabi = z.output<typeof malKabulCevabi>;
 export const sayimCevabi = z.object({ hareketIdler: z.array(z.number().int()), farkSayisi: z.number().int(), onayaGiden: z.number().int() });
 export type SayimCevabi = z.output<typeof sayimCevabi>;
 export const SAYIM_FARKI_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
+export const SAYIM_FARKI_KAYNAKLARI = ['sayim', 'sifirlama'] as const;
+export const SIFIRLAMA_NEDENLERI = ['kart_kapatilacak', 'kayip', 'hasarli', 'yanlis_giris'] as const;
+export type SifirlamaNedeni = (typeof SIFIRLAMA_NEDENLERI)[number];
 export const sayimFarki = z.object({
   id: z.number().int(), konumId: z.number().int(), konumKod: z.string(), depoId: z.number().int(), malzemeId: z.number().int(), malzemeAd: z.string().nullable(),
   partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), sistemMiktar: ondalikMetinSemasi, sayilanMiktar: ondalikMetinSemasi,
@@ -881,6 +884,8 @@ export const sayimFarki = z.object({
   fark: ondalikMetinSemasi, guncelMiktar: ondalikMetinSemasi, sayanKisiId: z.number().int(), sayanAd: z.string().nullable(), sayimZamani: zamanSemasi,
   durum: z.enum(SAYIM_FARKI_DURUMLARI), kararAd: z.string().nullable(), kararZamani: zamanSemasi.nullable(), kararNotu: z.string().nullable(),
   hareketId: z.number().int().nullable(), surum: surumSemasi,
+  // 3417 a: farkın kaynağı (göz sayımı ya da kartı sıfırlama); sıfırlamanın nedeni ve onaylayana açıklaması. Sayımda ikisi de null.
+  kaynak: z.enum(SAYIM_FARKI_KAYNAKLARI), neden: z.enum(SIFIRLAMA_NEDENLERI).nullable(), aciklama: z.string().nullable(),
 });
 export type SayimFarki = z.output<typeof sayimFarki>;
 export const sayimFarklariCevabi = z.object({
@@ -897,6 +902,57 @@ export const sayimEsigiGovdesi = z.object({
     .refine((v) => Number(v) <= 100, 'Eşik 100\'ü aşamaz.'),
 });
 export type SayimEsigiGovdesi = z.input<typeof sayimEsigiGovdesi>;
+
+// ---- Sayım ve düzeltme (3417 a) ---------------------------------------------------------------------------------------------
+// Kartı sıfırla: malzemenin bütün bakiye satırları. Yalnız serbest (statüsüz, kalitesi serbest) satır sıfırlanır; statüdeki (emre ayrılmış),
+// karantinadaki ya da red satır ve bekleyen farkı olan satır gösterilir ama gönderilmez. Serbest stoktan emre ayırma ya da açık "stoktan
+// karşıla" isteği varken kart sıfırlanmaz.
+export const SIFIRLAMA_ENGELLERI = ['statude', 'kalite', 'bekleyen_fark'] as const;
+export const sifirlamaSatiri = z.object({
+  konumId: z.number().int(), konumKod: z.string(), depoKod: z.string(), partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(),
+  miktar: ondalikMetinSemasi, statuId: z.number().int().nullable(), kaliteDurumu: z.enum(KALITE_DURUMLARI), engel: z.enum(SIFIRLAMA_ENGELLERI).nullable(),
+});
+export type SifirlamaSatiri = z.output<typeof sifirlamaSatiri>;
+export const sifirlamaAdaylariCevabi = z.object({
+  malzemeId: z.number().int(), malzemeAd: z.string().nullable(), kod: z.string(), birim: z.string().nullable(),
+  satirlar: z.array(sifirlamaSatiri),
+  // Emirlere ayrılan (rezerve). Statüsüz ayırma serbest stoğun ayrılanıdır: varken kart sıfırlanmaz (önce ayırma kaldırılır).
+  rezerveler: z.array(z.object({ uretimEmriId: z.number().int(), emirNo: z.string().nullable(), statuId: z.number().int().nullable(), miktar: ondalikMetinSemasi })),
+  // Açık "stoktan karşıla" istekleri (talep numarası); biri bile varsa sıfırlama reddedilir.
+  ayirmaIstekleri: z.array(z.object({ id: z.number().int(), talepNo: z.string(), miktar: ondalikMetinSemasi })),
+});
+export type SifirlamaAdaylariCevabi = z.output<typeof sifirlamaAdaylariCevabi>;
+export const sifirlamaGovdesi = z.object({
+  malzemeId: kimlik,
+  neden: z.enum(SIFIRLAMA_NEDENLERI),
+  aciklama: bosOlabilir(200),
+  // Ekranda görülen miktar: arada değiştiyse 409 (sayımdaki beklenen miktar gibi).
+  satirlar: z.array(z.object({ konumId: kimlik, partiId: buyukKimlik.nullable(), beklenenMiktar: z.string().trim().regex(/^-?\d{1,11}(\.\d{1,3})?$/) })).min(1).max(200),
+});
+export type SifirlamaGovdesi = z.input<typeof sifirlamaGovdesi>;
+export type SifirlamaKomutu = z.output<typeof sifirlamaGovdesi>;
+export const sifirlamaCevabi = z.object({ onayaGiden: z.number().int() });
+export type SifirlamaCevabi = z.output<typeof sifirlamaCevabi>;
+// Seçilenleri onayla: her fark kendi ara kaydında; biri reddedilirse ötekiler yazılır.
+export const topluSayimOnayGovdesi = z.object({ farklar: z.array(z.object({ id: buyukKimlik, ...beklenenSurum })).min(1).max(200) });
+export type TopluSayimOnayGovdesi = z.input<typeof topluSayimOnayGovdesi>;
+export const topluSayimOnayCevabi = sayimFarklariCevabi.extend({
+  sonuclar: z.array(z.object({ id: z.number().int(), tamam: z.boolean(), ileti: z.string().nullable() })),
+});
+export type TopluSayimOnayCevabi = z.output<typeof topluSayimOnayCevabi>;
+// Son düzeltmeler: sayım fazlası ve eksiği hareketleri. Eşik içinde onaysız yazılan sayımın fark kaydı yoktur (kaynak sayım, onaylayan null).
+export const SON_DUZELTME_GUNLERI = [7, 30, 90] as const;
+export const sonDuzeltmelerSorgusu = z.object({ gun: z.coerce.number<number>().int().refine((g) => (SON_DUZELTME_GUNLERI as readonly number[]).includes(g)).default(30) });
+export const sonDuzeltmelerCevabi = z.object({
+  satirlar: z.array(z.object({
+    hareketId: z.number().int(), fisNo: z.string().nullable(), zaman: zamanSemasi, konumId: z.number().int(), konumKod: z.string(), malzemeId: z.number().int(),
+    malzemeAd: z.string().nullable(), partiEtiketi: z.string().nullable(), fark: ondalikMetinSemasi, kaynak: z.enum(SAYIM_FARKI_KAYNAKLARI),
+    neden: z.enum(SIFIRLAMA_NEDENLERI).nullable(), sayanAd: z.string().nullable(), onaylayanAd: z.string().nullable(), geriAlindi: z.boolean(),
+  })),
+  // Liste en çok 500 satırdır; daha fazlası varsa true.
+  kesildi: z.boolean(),
+});
+export type SonDuzeltmelerCevabi = z.output<typeof sonDuzeltmelerCevabi>;
 
 export const hareketlerSorgusu = z.object({
   ...listeSorguAlanlari(['zaman']),

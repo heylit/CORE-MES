@@ -1883,3 +1883,21 @@ export function kartAdediOnerisi(g: { emirAdet: number; ayrilmis: number; brut: 
 }
 export const KART_ADEDI_FAZLA = 'Kart adedi emrin adedini geçemez.';
 export const kartAdediEngeli = (adet: number, emirAdet: number): string | null => (adet > emirAdet ? KART_ADEDI_FAZLA : null);
+
+// ---- Sayım ve düzeltme (3417 a) ------------------------------------------------------------------------------------------------
+// Kartı sıfırlama yalnız serbest stoğa dokunur (sayım gibi, STK-S3): statüdeki (emre ayrılmış) ya da kalitesi serbest olmayan satır statü veya
+// kalite kararıyla serbeste döner; bekleyen farkı olan göz önce o farkın kararını bekler.
+export function sifirlamaSatirEngeli(b: { statuId: number | null; kaliteDurumu: KaliteDurumu }, bekleyenFarkVar: boolean): 'statude' | 'kalite' | 'bekleyen_fark' | null {
+  if (b.statuId !== null) return 'statude';
+  if (b.kaliteDurumu !== 'serbest') return 'kalite';
+  return bekleyenFarkVar ? 'bekleyen_fark' : null;
+}
+// Serbest stoktan emre ayırma (statüsüz rezerve) ya da açık "stoktan karşıla" isteği varken kart sıfırlanmaz: ayrılan stok kaybolurdu.
+export function sifirlamaKartEngeli(rezerveler: readonly { statuId: number | null; emirNo: string | null; uretimEmriId: number }[], ayirmaIstekleri: readonly { talepNo: string }[]): string | null {
+  const serbestAyrilan = rezerveler.filter((r) => r.statuId === null);
+  if (serbestAyrilan.length > 0) {
+    return `Bu kartın serbest stoğu emre ayrılmış (${serbestAyrilan.map((r) => r.emirNo ?? `emir ${r.uretimEmriId}`).join(', ')}); önce ayırma kaldırılır.`;
+  }
+  if (ayirmaIstekleri.length > 0) return `Bu kart için açık stoktan karşılama isteği var (${ayirmaIstekleri.map((a) => a.talepNo).join(', ')}); önce istek kapanır.`;
+  return null;
+}

@@ -33,6 +33,8 @@ export const STOK_IKINCI_MENU = {
         // 3398: ölçüyle stok ve artık parça arama; satın alma ve planlama da kullanır.
         { anahtar: 'kontrol', baslik: 'Stok kontrol', yol: '/stok/kontrol', simge: 'search', islem: 'sayfa.stok', veya: ['satin-alma.yaz', 'plan.yaz'] },
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
+        // 3417 a: göz sayımı, kartı sıfırlama, onay bekleyen farklar (1279 a) ve son düzeltmeler; eski Sayım onayları yolu buraya yönlenir.
+        { anahtar: 'sayim-duzeltme', baslik: 'Sayım ve düzeltme', yol: '/stok/sayim-duzeltme', simge: 'check', islem: 'stok.sayim', veya: ['stok.sayim-onayla'] },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Belgeler', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
         // Göz ve etiket okutarak kör sayım; okuyucunun hafızasından aktarım da buradan (1905).
@@ -40,8 +42,6 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'seri-listeler', baslik: 'Seri listeler', yol: '/stok/seri-listeler', simge: 'list', islem: 'stok.istek' },
         // Basılı komut barkodları (1909): okuyucuyla ekrandaki düğmeye basılır.
         { anahtar: 'komut-karti', baslik: 'Komut kartı', yol: '/stok/komut-karti', simge: 'printer', islem: 'sayfa.stok' },
-        // Eşiği aşan sayım farkı ikinci yetkilinin onayını bekler (1279 a); sayan da listeyi görür.
-        { anahtar: 'sayim-onaylari', baslik: 'Sayım onayları', yol: '/stok/sayim-onaylari', simge: 'check', islem: 'stok.sayim-onayla', veya: ['stok.sayim'] },
         // 2547 a: statüde durup hiçbir açık emre ayrılmamış stok (rezervesi kaldırılan ya da emri kapanan).
         { anahtar: 'sahipsiz-statulu', baslik: 'Sahipsiz statülü stok', yol: '/stok/sahipsiz-statulu', simge: 'alert', islem: 'sayfa.stok' },
         { anahtar: 'defter-farklari', baslik: 'Defter farkları', yol: '/stok/defter-farklari', simge: 'alert', islem: 'stok.eksi-onayla' },
