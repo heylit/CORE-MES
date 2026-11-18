@@ -3,7 +3,7 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi, SiparisRevizyonGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
@@ -185,6 +185,9 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
     hatada: (hata) => { if (siparis !== null) eskiyseYenile(istemci, anahtarlar.siparis(siparis.id), hata); },
   });
   const d = form.degerler;
+  // Logo'ya gitmiş siparişte yeni sürüm Logo'ya gitmez; kaydetmeden önce söylenir (sürüm geçmişinde de işaretlenir).
+  const logo = useLogoRozetleri('satis-siparisi', siparis === null ? [] : [siparis.id], yeniSurum);
+  const logoda = siparis !== null && logo.durum(siparis.id)?.durum === 'logoda';
 
   const satirDegistir = (i: number, yama: Partial<SatirDegeri>) =>
     form.degistir({ satirlar: d.satirlar.map((s, j) => (j === i ? { ...s, ...yama } : s)) });
@@ -208,6 +211,9 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
         geriMetni={siparis === null ? 'Siparişlere dön' : 'Siparişe dön'}
       />
       <form className="tc-sp-form" onSubmit={form.gonder} noValidate>
+        {yeniSurum && logoda && (
+          <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status"><strong>Sipariş Logo'da</strong> Kaydedince Logo'daki kaydı elle güncellemeniz gerekir.</p>
+        )}
         {form.genelHata !== null && <p className="tc-sp-hata" role="alert">{form.eskiSurum ? 'Kayıt başkası tarafından değişti, yeniden yükleyin.' : form.genelHata}</p>}
         <Kart baslik="Sipariş bilgileri">
           <div className="tc-sp-izgara">
@@ -215,12 +221,12 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
               ? <Girdi etiket="Müşteri" value={d.firma?.ad ?? ''} disabled readOnly />
               : <MusteriArama deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />}
             <Girdi etiket="Müşteri sipariş no" autoComplete="off" {...form.alan('musteriSiparisNo')} />
-            <Girdi etiket="Sipariş tarihi" type="date" required disabled={yeniSurum} {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
+            <Girdi etiket="Sipariş tarihi" type="date" required={!yeniSurum} disabled={yeniSurum} {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
             <div className="tc-sp-termin">
               <Girdi etiket="Termin (gün)" inputMode="numeric" autoComplete="off" ipucu="Sipariş tarihinden takvim günü." value={d.terminGun} onChange={(o) => gunYaz(o.target.value)} />
               <Girdi etiket="Termin" type="date" required {...form.alan('termin')} onChange={(o) => tarihYaz(o.target.value)} />
             </div>
-            <Secim etiket="Para birimi" required disabled={yeniSurum} secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
+            <Secim etiket="Para birimi" required={!yeniSurum} disabled={yeniSurum} secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
             <FirmaKoduSecimi deger={firmaKodu} degistir={firmaKoduYaz} kilitli={siparis !== null} {...(siparis === null ? {} : { ipucu: kayitliKodIpucu('Sipariş', siparis.no, siparis.firmaKodu) })} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
             {fiyatGorur ? (

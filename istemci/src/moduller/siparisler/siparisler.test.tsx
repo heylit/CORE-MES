@@ -6,7 +6,7 @@ import { ESKI_SURUM_NEDENI, type HataGovdesi } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { LogoSonAlisCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoRozetCevabi, LogoSonAlisCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
@@ -569,11 +569,13 @@ describe('Onaylı siparişin yeni sürümü (SIP-40, 3427-4 a)', () => {
   it('onaylı siparişte Düzenle yeni sürüm formunu açar: müşteri, tarih, para birimi, kalem ve miktar kilitli; neden zorunlu; gövde gerekçe ve sürümle gider', async () => {
     const istekler = sunucuKur(YONETICI, (yontem, yol) => {
       if (yontem === 'GET' && yol === '/siparisler/5') return json(200, AYRINTI_ONAYLI);
+      if (yontem === 'GET' && yol.startsWith('/logo/belge-durumlari?')) return json(200, { durumlar: [{ id: 5, durum: 'logoda', kayitNo: 'ORN-1', neden: null, elle: false }] } satisfies LogoRozetCevabi);
       return yontem === 'POST' && yol === '/siparisler/5/yeni-surum' ? json(200, { ...AYRINTI_ONAYLI, surum: 4 } satisfies SiparisAyrintisi) : undefined;
     });
     ac('/siparisler/6');
     fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
     expect(await screen.findByRole('heading', { name: 'Yeni sürüm: SS-2026-0005' })).toBeTruthy();
+    expect(await screen.findByText(/Kaydedince Logo'daki kaydı elle güncellemeniz gerekir/)).toBeTruthy();
     expect((screen.getByLabelText('Müşteri') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText(/^Sipariş tarihi/) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText(/^Para birimi/) as HTMLSelectElement).disabled).toBe(true);
@@ -596,6 +598,12 @@ describe('Onaylı siparişin yeni sürümü (SIP-40, 3427-4 a)', () => {
   });
 
   it('Düzenle yalnız onaylayana; taslakta düzenleme eski yolundan gider; yeni sürüm adresi onaysız siparişte açılmaz', async () => {
+    sunucuKur(YONETICI);
+    ac('/siparisler/5');
+    await screen.findByText('Taslak sipariş');
+    expect(screen.getAllByRole('button', { name: 'Düzenle' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Düzenle' }).getAttribute('title')).toBeNull();
+    cleanup();
     sunucuKur(YAZAR);
     ac('/siparisler/6');
     await screen.findByText('Sipariş onaylandı');
