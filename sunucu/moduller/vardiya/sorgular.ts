@@ -209,6 +209,7 @@ export async function planliDurusVarMi(db: Db, id: number): Promise<boolean> {
 }
 
 export interface TakvimDurusu {
+  id: number; baslik: string;
   kapsam: PlanliDurusKapsami; isMerkeziId: number | null; istasyonId: number | null;
   // Dakika ekseni (`tarih`in 00:00'ı, tesis duvar saati): başlangıç, süre ve tekrarın son başlangıcı.
   basDk: number; sureDk: number; sonDk: number | null; tekrar: DurusTekrari; gunler: number[];
@@ -225,7 +226,7 @@ export const takvimDuruslari = (db: Db, tarih: string, gunSayisi: number): Promi
           AND d.baslangic < (($1::date + $2::int + 1)::timestamp AT TIME ZONE current_setting('TimeZone'))
           AND (CASE WHEN d.tekrar = 'yok' THEN d.bitis ELSE COALESCE(d.tekrar_bitis + interval '1 day', 'infinity'::timestamptz) END)
               > (($1::date - 1)::timestamp AT TIME ZONE current_setting('TimeZone')))
-     SELECT kapsam, is_merkezi_id AS "isMerkeziId", istasyon_id AS "istasyonId",
+     SELECT id, baslik, kapsam, is_merkezi_id AS "isMerkeziId", istasyon_id AS "istasyonId",
             floor(extract(epoch FROM yb - $1::date::timestamp) / 60)::int AS "basDk",
             ceil(extract(epoch FROM ys - yb) / 60)::int AS "sureDk",
             CASE WHEN yt IS NULL THEN NULL ELSE floor(extract(epoch FROM yt - $1::date::timestamp) / 60)::int END AS "sonDk",

@@ -330,6 +330,36 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     for (const [id, x] of Object.entries(kalan)) if (x.job !== 'O3') assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [x.m, x.S], id);
   });
 
+  test('PD-20e: Vardiya planlı duruşu tezgâhın duruş satırı olur; yeniden planlanan iş duruşun içine yerleşmez; bakım okunmadıysa satır kalır', async () => {
+    type Is = { m: string; S: number; C: number };
+    // Salı 08:00-12:00 (çalışmanın ekseninde 32-36. saat); duruşsuz planda tezgâh o saatte doludur.
+    const [a, b] = [32, 36];
+    const icinde = (ops: Record<string, Is>) => Object.entries(ops).filter(([, x]) => x.m === '100' && x.S < b - 1e-9 && x.C > a + 1e-9).map(([id]) => id);
+    assert.notDeepEqual(icinde((planli()['plan'] as { ops: Record<string, Is> }).ops), []);
+    const durus = { anahtar: 'vd:7|100|2026-10-20 08:00|2026-10-20 12:00', m: '100', bas: '2026-10-20 08:00', bit: '2026-10-20 12:00', baslik: 'Bakım' };
+    const kaynakIle = (ek: Record<string, unknown>): KaynakOkumasi => ({ ...KAYNAK, ek: { ...KAYNAK.ek, ...ek } }) as unknown as KaynakOkumasi;
+    const g = planGirdisi({ calisma: planli(), kayit: KAYIT, kaynak: kaynakIle({ planliDuruslar: [durus] }), bugun: '2026-10-19' });
+    assert.ok(g);
+    const satir = (S: Record<string, unknown>) => (S['down'] as Record<string, unknown>[]).map((d) => [d['m'], d['from'], d['to'], d['neden'], d['baslik'], d['oto'], d['bakim']]);
+    assert.deepEqual(satir(g.S), [['100', a, b, 'planlı duruş', 'Bakım', 1, durus.anahtar]]);
+    assert.ok(g.kaynakDegisikligi?.alanlar.includes('ariza'));
+    const r = sonuc(await degerlendirmeYap({ calisma: planli(), kayit: KAYIT, kaynak: kaynakIle({ planliDuruslar: [durus] }), bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['*'] } }, AN));
+    if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+    // Duruş çalışma saati değildir: hiçbir iş duruşun içinde başlamaz; duruşu aşan iş duruş kadar geç biter (iş duruşta bekler).
+    const yeni = r.plan['ops'] as Record<string, Is>;
+    assert.deepEqual(Object.entries(yeni).filter(([, x]) => x.m === '100' && x.S >= a - 1e-9 && x.S < b - 1e-9).map(([id]) => id), []);
+    for (const id of icinde(yeni)) assert.ok(yeni[id]!.C >= b + (b - a) - 1e-9, `${id} duruşta çalışmış sayıldı`);
+    assert.deepEqual(r.plan['fail'], []);
+    // İki liste ayrı okunur: bakım listesi (boş ya da okunmadı) planlı duruş satırını silmez; duruş listeden çıkınca satır düşer.
+    for (const ek of [{ planliDuruslar: [durus], bakimlar: [] }, { planliDuruslar: null, bakimlar: [] }, { bakimlar: null }]) {
+      assert.equal(satir(planGirdisi({ calisma: g.S, kayit: KAYIT, kaynak: kaynakIle(ek), bugun: '2026-10-19' })!.S).length, 1, JSON.stringify(ek));
+    }
+    const ileride = { ...durus, anahtar: 'vd:7|100|2099-10-20 08:00|2099-10-20 12:00', bas: '2099-10-20 08:00', bit: '2099-10-20 12:00' };
+    const g2 = planGirdisi({ calisma: planli(), kayit: KAYIT, kaynak: kaynakIle({ planliDuruslar: [ileride] }), bugun: '2026-10-19' })!;
+    assert.equal(satir(g2.S).length, 1);
+    assert.deepEqual(satir(planGirdisi({ calisma: g2.S, kayit: KAYIT, kaynak: kaynakIle({ planliDuruslar: [] }), bugun: '2026-10-19' })!.S), []);
+  });
+
   // 3335-2b: başlaması geçmiş, başlamamış iş motor için "çalışıyor" gibidir ve yerinde kalır; kişi o emri yeniden planlarsa şimdiden sonraya dizilir.
   test('PD-20b (3335-2b): yeniden planlanan emrin geride kalan işi şimdiden sonraya taşınır, ardılı ondan sonra başlar; istenmeyen emrin geride işi, elle kilitli ve başlamış iş yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };

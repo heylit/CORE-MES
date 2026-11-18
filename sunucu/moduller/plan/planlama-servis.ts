@@ -22,7 +22,7 @@ import { kurlar } from '../finans/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
-import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, makinePlanliDuruslari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { bakimAraliklariOku } from './bakim/servis.ts';
 import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { ikincilEkiOku } from './girdi/ikincil.ts';
@@ -297,6 +297,15 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // 2319 (2311 S10): bayrak (plan.bakim-girdisi) açık ve kişi makineleri okuyabiliyorsa Arkon'un periyodik bakımı girdi.betik'te duruş olur.
   // Kapalıyken null: girdi.betik bakım satırına dokunmaz.
   const bakimlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && (await sistemAyariOku(db, 'plan.bakim-girdisi')) ? await bakimAraliklariOku(db) : null;
+  // Vardiya'nın planlı duruşları makineye inmiş hâliyle (tesis, iş merkezi ve istasyon duruşu): girdi.betik'te tezgâhın duruş satırı olur.
+  // Makineleri okuyamayan kişide null: duruş satırlarına dokunulmaz.
+  let planliDuruslar: { anahtar: string; m: string; bas: string; bit: string; baslik: string }[] | null = null;
+  if (yetkiliMi(kullanici, ISTASYON_OKUMA)) {
+    const bugun = tesisGunu(Date.now());
+    const bitis = new Date(Date.parse(`${bugun}T00:00:00Z`) + Math.min((await motorOlcegi(db)).ufukGun, 365) * 86_400_000).toISOString().slice(0, 10);
+    planliDuruslar = (await makinePlanliDuruslari(db, { baslangic: bugun, bitis }))
+      .map((d) => ({ anahtar: `vd:${String(d.durusId)}|${String(d.makineId)}|${d.bas}|${d.bit}`, m: String(d.makineId), bas: d.bas, bit: d.bit, baslik: d.baslik }));
+  }
   // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; tanımı İstasyonlar'da, adımın isteği iş emrinin ekipman listesinde.
   const emirOkur = yetkiliMi(kullanici, KAYNAK_OKUMA.emir);
   const ikincil = await ikincilEkiOku(db, { istasyon: yetkiliMi(kullanici, ISTASYON_OKUMA), emir: emirOkur, alet: true },
@@ -304,7 +313,7 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
     durum: d,
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, ikincil },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, planliDuruslar, ikincil },
   };
 }
 

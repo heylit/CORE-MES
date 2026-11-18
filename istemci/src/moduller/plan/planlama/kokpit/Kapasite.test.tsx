@@ -25,6 +25,14 @@ function kur(yazabilir = true, down: unknown[] = [OTO, ELLE, GECMIS]) {
 }
 
 describe('Kokpit kapasite bölümü (3282 2a-1)', () => {
+  it('Vardiya ekranından gelen planlı duruş başlığıyla yazar, kaynağını söyler ve buradan silinmez', () => {
+    const v = kur();
+    v.yenile([{ m: 'ORN-T1', from: 30, to: 40, neden: 'planlı duruş', baslik: 'ORN-Bakım', oto: 1, bakim: 'vd:1' }]);
+    const vs = within(v.panel).getAllByRole('listitem');
+    expect(vs.map((x) => x.textContent)).toEqual(['Planlı duruş (ORN-Bakım) 20.10 Sal 06:00 → 20.10 Sal 16:00 · Vardiya ekranından geldi; orada değişir']);
+    expect(within(vs[0]!).queryByRole('button')).toBeNull();
+  });
+
   it('tezgâhın önümüzdeki duruşlarını gösterir; kendiliğinden geleni silinmez, elle gireni adıyla silinir; fason seçilmez', () => {
     const { panel } = kur();
     expect(within(within(panel).getByLabelText('Tezgâh')).getAllByRole('option').map((o) => o.textContent)).toEqual(['T1 · Torna', 'T2']);

@@ -94,7 +94,8 @@ export interface KokpitEmri {
 // grup: planın istasyon kimliği; grupAdi istasyonun adı (yoksa kodu), 3B istasyona göre toplarken başlık olur.
 export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boolean; grup?: string; grupAdi?: string }
 // ariza: olaydan gelen (şu anki) arıza; değilse çalışmanın duruş listesinden planlı duruş, neden'i ile.
-export interface KokpitDurusu { a: number; b: number; ariza: boolean; neden?: 'arıza' | 'bakım' }
+// neden 'duruş': Vardiya ekranında girilen planlı duruş (baslik onun başlığı).
+export interface KokpitDurusu { a: number; b: number; ariza: boolean; neden?: 'arıza' | 'bakım' | 'duruş'; baslik?: string }
 export interface KokpitModeli {
   simdi: number;
   tezgahlar: KokpitTezgahi[];
@@ -113,6 +114,13 @@ export interface KokpitModeli {
 const FASON_SATIRI = '@';
 export const fasonMu = (m: string): boolean => m.startsWith('@');
 
+const PLANLI_DURUS = 'planlı duruş';
+function durusNedeni(x: Record<string, unknown>): Pick<KokpitDurusu, 'neden' | 'baslik'> {
+  if (x['neden'] !== PLANLI_DURUS) return { neden: x['neden'] === 'bakım' ? 'bakım' : 'arıza' };
+  return { neden: 'duruş', ...(typeof x['baslik'] === 'string' && x['baslik'] !== '' ? { baslik: x['baslik'] } : {}) };
+}
+export const durusAdi = (neden: string | null | undefined, baslik?: string | null): string =>
+  (neden === PLANLI_DURUS || neden === 'duruş' ? `Planlı duruş${baslik ? ` (${baslik})` : ''}` : neden === 'bakım' ? 'Bakım' : 'Arıza');
 export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme, emirNo: EmirNo): KokpitModeli {
   const simdi = cx.now;
   const urunAdi = new Map(c.D.urunler.map((u) => [u.id, u.ad ?? u.id]));
@@ -149,7 +157,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   for (const d of cx.g.down) {
     if (d.to <= bas) continue;
     const plan = c.down.find((x) => String(x['m']) === d.m && x['from'] === d.from && x['to'] === d.to);
-    (durus[d.m] ??= []).push(plan ? { a: d.from, b: d.to, ariza: false, neden: plan['neden'] === 'bakım' ? 'bakım' : 'arıza' } : { a: d.from, b: d.to, ariza: true });
+    (durus[d.m] ??= []).push(plan ? { a: d.from, b: d.to, ariza: false, ...durusNedeni(plan) } : { a: d.from, b: d.to, ariza: true });
   }
   const mesai: Record<string, (KokpitEkMesaisi & { vardiyaAd: string })[]> = {};
   for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bas) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
@@ -165,7 +173,7 @@ export const suAndakiDurus = (m: Pick<KokpitModeli, 'durus' | 'simdi'>, tezgah: 
   m.durus[tezgah]?.find((d) => d.ariza && d.a <= m.simdi && m.simdi < d.b) ?? null;
 export const durusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string => `arızada · ${zaman(d.b).slice(6)}`;
 export const planliDurusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string =>
-  `${d.neden === 'bakım' ? 'Bakım' : 'Arıza'} · ${zaman(d.a)} → ${zaman(d.b)}`;
+  `${durusAdi(d.neden, d.baslik)} · ${zaman(d.a)} → ${zaman(d.b)}`;
 
 // Fason işler tek satırda toplanır (fasoncu kimliği satır değildir).
 export const satirKimligi = (x: Pick<KokpitIsi, 'm' | 'fason'>): string => (x.fason ? FASON_SATIRI : x.m);

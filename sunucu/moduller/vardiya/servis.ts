@@ -358,6 +358,33 @@ export async function calismaTakvimleri(db: Db, kaynaklar: readonly TakvimKaynag
   return new Map([...(await takvimleriHesapla(db, kaynaklar, aralik))].map(([k, h]) => [k, h?.takvim ?? null]));
 }
 
+// Plan girdisi: aktif makinelerin aralıktaki planlı duruş gerçekleşmeleri (tesis geneli, iş merkezi ve istasyon duruşları makineye iner),
+// tesis duvar saatiyle ('GGGG-AA-GG SS:DD'). Çalışma takvimi bu saatleri zaten düşer (yukarıda); plan motoru takvimi vardiya matrisinden
+// kurduğu için duruşu ayrıca duruş satırı olarak alır, yoksa işi duruşun içine yerleştirir ve canlıya alma reddeder.
+export interface MakineDurusu { makineId: number; durusId: number; baslik: string; bas: string; bit: string }
+const duvarYaz = (baslangic: string, dk: number): string => {
+  // 1440: günün dakikası.
+  const g = Math.floor(dk / 1440), k = dk - g * 1440, iki = (n: number) => String(n).padStart(2, '0');
+  return `${tarihEkle(baslangic, g)} ${iki(Math.floor(k / 60))}:${iki(k % 60)}`;
+};
+export async function makinePlanliDuruslari(db: Db, aralik: TakvimAraligiGirdisi): Promise<MakineDurusu[]> {
+  const gunSayisi = araligiDenetle(aralik);
+  const duruslar = await s.takvimDuruslari(db, aralik.baslangic, gunSayisi);
+  if (duruslar.length === 0) return [];
+  const merkezi = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.isMerkeziId]));
+  const sonuc: MakineDurusu[] = [];
+  for (const m of await aktifMakineler(db)) {
+    const isMerkeziId = m.istasyonId === null ? null : merkezi.get(m.istasyonId) ?? null;
+    if (isMerkeziId === null) continue;
+    for (const d of kaynagaUyanlar(duruslar, isMerkeziId, m.istasyonId)) {
+      for (const a of durusAraliklari(d, aralik.baslangic, gunSayisi)) {
+        sonuc.push({ makineId: m.id, durusId: d.id, baslik: d.baslik, bas: duvarYaz(aralik.baslangic, a.bas), bit: duvarYaz(aralik.baslangic, a.bit) });
+      }
+    }
+  }
+  return sonuc;
+}
+
 // 1970 a: ataması olmayan kişi, bugün yetkin olduğu istasyonun iş merkezinin takvimini alır (vardiyası varsa yalnız o vardiya). Planlama
 // insanlı istasyonda kişiyi yetkinlikten aday yapar (1954 a); takvimi olmayan kişi plana ve vardiya ekranına çalışmıyor görünürdü. Birden çok
 // yetkin istasyonda önce insanlı istasyon, sonra en küçük kimlik (planlama atölyesinin el tezgâhı grubuyla aynı); pasif istasyon sayılmaz.
