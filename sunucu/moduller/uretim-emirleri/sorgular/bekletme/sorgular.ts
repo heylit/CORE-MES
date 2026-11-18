@@ -31,3 +31,22 @@ export function bekletmeOlaylari(db: Db, emirId: number): Promise<BekletmeOlaySa
     [emirId],
   );
 }
+
+// Kademeli uyarı okuyucusu (3416-1 a): şu an beklemedeki açık emirlerin bütün bekletme olayları, emir ve olay sırasıyla. Yeniden
+// bekletme zinciri olaylardan kurulur; yalnız son olayı 'beklet' olan emir gelir.
+export interface AcikBekletmeOlayi extends BekletmeOlaySatiri { uretimEmriId: number; emirNo: string }
+export function acikBekletmeOlaylari(db: Db, emirIdleri: readonly number[] | null = null): Promise<AcikBekletmeOlayi[]> {
+  return db.sorgu<AcikBekletmeOlayi>(
+    `SELECT b.uretim_emri_id AS "uretimEmriId", e.emir_no AS "emirNo", b.id, b.olay, b.neden, b.not_metni AS "not", b.kisi_id AS "kisiId",
+            ${ISO('b.zaman')} AS zaman
+       FROM uretim_emirleri_bekletme b JOIN uretim_emri e ON e.id = b.uretim_emri_id
+      WHERE e.durum IN ('planli', 'basladi') AND ($1::int[] IS NULL OR b.uretim_emri_id = ANY($1::int[]))
+        AND b.uretim_emri_id IN (
+          SELECT s.uretim_emri_id FROM (
+            SELECT DISTINCT ON (uretim_emri_id) uretim_emri_id, olay FROM uretim_emirleri_bekletme
+             WHERE $1::int[] IS NULL OR uretim_emri_id = ANY($1::int[]) ORDER BY uretim_emri_id, id DESC
+          ) s WHERE s.olay = 'beklet')
+      ORDER BY b.uretim_emri_id, b.id`,
+    [emirIdleri === null ? null : [...emirIdleri]],
+  );
+}

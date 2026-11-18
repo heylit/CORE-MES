@@ -16,11 +16,18 @@ export const BEKLETME_YETKISI = 'uretim-emirleri.beklet';
 // Kayıt tipi eksik ya da fazla nedeni derlemede yakalar.
 const BEKLEME_NEDENI_ADLARI = {
   malzeme: 'Malzeme bekleniyor', musteri: 'Müşteri onayı bekleniyor', fason: 'Fason dönüşü bekleniyor', kalite: 'Kalite kararı bekleniyor',
-  takim: 'Takım ya da aparat bekleniyor', diger: 'Diğer',
+  takim: 'Tezgah, takım ya da aparat bekleniyor', muhendislik: 'Mühendislik bilgisi ya da kararı bekleniyor',
+  teslim: 'Teslim edilmedi (parça içeride, sonraki birime geçmedi)', diger: 'Diğer',
 } as const satisfies Record<BeklemeNedeni, string>;
 const BEKLEME_NEDENLERI = Object.keys(BEKLEME_NEDENI_ADLARI) as BeklemeNedeni[];
 const NEDEN_SECENEKLERI = BEKLEME_NEDENLERI.map((deger) => ({ deger, baslik: BEKLEME_NEDENI_ADLARI[deger] }));
 export const beklemeNedeni = (b: Pick<Bekletme, 'neden'>): string => BEKLEME_NEDENI_ADLARI[b.neden];
+// Liste hücresi dar: parantezli açıklama yalnız ayrıntıda ve seçimde görünür.
+export const beklemeNedeniKisa = (b: Pick<Bekletme, 'neden'>): string => BEKLEME_NEDENI_ADLARI[b.neden].replace(/\s*\(.*\)$/, '');
+// 3416-1 a: aynı nedenle süren beklemenin iş günü (yeniden bekletme sayacı sıfırlamaz); sunucu saymadıysa yazılmaz.
+// 0, "bugün" değildir: cuma bekletilip hafta sonu ya da tatilde bekletilen emir de 0'dır.
+export const beklemeSuresi = (b: Pick<Bekletme, 'isGunu'>): string | null =>
+  b.isGunu == null ? null : b.isGunu === 0 ? 'Bekliyor: 1 iş gününden az' : `Bekliyor: ${String(b.isGunu)} iş günü`;
 const ACIK = new Set(['planli', 'basladi']);
 
 export function useBekletmeYazar(): boolean {
@@ -55,7 +62,7 @@ export function BeklemeSeridi({ emirId, bilgi }: { emirId: number; bilgi: Beklet
       <div className="tc-emir-bekleme-metin">
         <b>Beklemede: {beklemeNedeni(bilgi)}</b>
         {bilgi.not && <span>{bilgi.not}</span>}
-        <small>{bilgi.kisi.ad} · {zamanMetni(bilgi.zaman)} · Terminalde adım başlatılamaz.</small>
+        <small>{bilgi.kisi.ad} · {zamanMetni(bilgi.zaman)}{beklemeSuresi(bilgi) && <> · <b>{beklemeSuresi(bilgi)}</b></>} · Terminalde adım başlatılamaz.</small>
         {komut.isError && <small className="tc-emir-hurda">{hataIletisi(komut.error, 'Kaydedilemedi.')}</small>}
       </div>
       {yazar && (

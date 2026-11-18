@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import type { Bekletme, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Menu, type MenuOgesi } from '../../ortak/arayuz/index.ts';
 import { EmirAyrintisi, type EmirParcalari } from './EmirAyrintisi.tsx';
+import { beklemeNedeniKisa, beklemeSuresi } from './Bekletme.tsx';
 import { UretimEmirleri } from './UretimEmirleri.tsx';
 import { OKUYUCU, YAZAR, ac, json, sunucuKur } from './test-ortak.tsx';
 
@@ -142,5 +143,15 @@ describe('3050 bekletme: emir sayfası', () => {
     const beklet = within(defter).getByText('Bekletildi').closest('tr')!;
     expect(beklet.querySelector('td[data-baslik="Neden"]')?.textContent).toBe('Kalite kararı bekleniyor · Deneme notu');
     expect(within(beklet).getByText('Deneme Planlamaci')).toBeTruthy();
+  });
+});
+
+describe('bekleme süresi ve kısa neden (3416-1)', () => {
+  it('0 iş günü "bugün" demez; listede parantezli açıklama düşer', () => {
+    expect(beklemeSuresi({ isGunu: 0 })).toBe('Bekliyor: 1 iş gününden az');
+    expect(beklemeSuresi({ isGunu: 3 })).toBe('Bekliyor: 3 iş günü');
+    expect(beklemeSuresi({ isGunu: null })).toBeNull();
+    expect(beklemeNedeniKisa({ neden: 'teslim' })).toBe('Teslim edilmedi');
+    expect(beklemeNedeniKisa({ neden: 'malzeme' })).toBe('Malzeme bekleniyor');
   });
 });
