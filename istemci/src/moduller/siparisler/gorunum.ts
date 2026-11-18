@@ -43,7 +43,8 @@ export const PLAN_TASLAGI_GORUNUMU: Record<PlanTaslagiGorunumu, { etiket: string
   kalkti: { etiket: 'Plandan kalktı', ton: 'pasif' },
 };
 
-export type SiparisSekmesi = SiparisDurumu | 'tumu';
+// 3425 a: arşiv bir durum değildir; arşive kalkan iptal siparişler yalnız kendi sekmesinde görünür.
+export type SiparisSekmesi = SiparisDurumu | 'tumu' | 'arsiv';
 // 3419 a: arşiv bir durum değildir; arşivdeki teklifler yalnız kendi sekmesinde görünür.
 export type TeklifSekmesi = TeklifDurumu | 'tumu' | 'arsiv';
 
@@ -53,6 +54,7 @@ export const SIPARIS_SEKMELERI: readonly Sekme<SiparisSekmesi>[] = [
   { anahtar: 'onayli', baslik: SIPARIS_DURUMU.onayli.etiket },
   { anahtar: 'kapandi', baslik: SIPARIS_DURUMU.kapandi.etiket },
   { anahtar: 'iptal', baslik: SIPARIS_DURUMU.iptal.etiket },
+  { anahtar: 'arsiv', baslik: 'Arşiv' },
 ];
 
 export const TEKLIF_SEKMELERI: readonly Sekme<TeklifSekmesi>[] = [

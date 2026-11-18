@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
@@ -152,6 +152,25 @@ export const uclar = [
     govde: iptalGovdesi,
     cevap: siparisAyrintiSemasi,
     isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.durumDegistir(db, kullanici, parametre.id, 'iptal', govde)),
+  }),
+  // 3425 a: iptal edilmiş sipariş arşive kalkar (kayıt silinmez); arşivden çıkarma aynı yetkiyle.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/:id/arsivle',
+    yetki: 'siparisler.onayla',
+    parametre: idParametresi,
+    govde: siparisArsivGovdesi,
+    cevap: siparisAyrintiSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.siparisArsivle(db, kullanici, parametre.id, govde, true)),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/:id/arsivden-cikar',
+    yetki: 'siparisler.onayla',
+    parametre: idParametresi,
+    govde: siparisArsivGovdesi,
+    cevap: siparisAyrintiSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.siparisArsivle(db, kullanici, parametre.id, govde, false)),
   }),
   // Satış teklifi (soru 148): bütün teklif yazmaları `siparisler.yaz`; tekliften açılan sipariş taslaktır, onayı ayrıca `siparisler.onayla` ister.
   uc({

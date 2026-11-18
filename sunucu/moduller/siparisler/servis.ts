@@ -17,8 +17,9 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
   TAKVIM_SIPARIS_DURUMU, kilitliKalemReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
@@ -42,12 +43,14 @@ async function kalemPartileri(db: Db, satirIdleri: number[]): Promise<Map<number
 
 async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
+  const arsivleyenler = await kisiAdlari(db, satirlar.flatMap((s) => (s.arsivleyen_id === null ? [] : [s.arsivleyen_id])));
   return satirlar.map((s) => ({
     id: s.id, no: s.no, durum: s.durum, firmaId: s.firma_id, firmaAd: adlar.get(s.firma_id) ?? null, firmaKodu: s.firma_kodu,
     musteriSiparisNo: s.musteri_siparis_no, siparisTarihi: s.siparis_tarihi, termin: s.termin, paraBirimi: s.para_birimi,
     kdvOrani: s.kdv_orani, odemeKosulu: s.odeme_kosulu, aciklama: s.aciklama, araToplam: s.ara_toplam, kdvTutari: s.kdv_tutari,
     genelToplam: s.genel_toplam, cezaOraniGun: s.gecikme_ceza_orani, cezaTavaniOrani: s.ceza_tavani_orani, odemeVadesiGun: s.odeme_vadesi_gun, iptalNedeni: s.iptal_nedeni, olusturma: s.olusturma, guncelleme: s.guncelleme,
     onayZamani: s.onay_zamani, surum: s.surum,
+    arsiv: s.arsiv_an === null ? null : { an: s.arsiv_an, kisi: s.arsivleyen_id === null ? null : (arsivleyenler.get(s.arsivleyen_id) ?? null) },
   }));
 }
 
@@ -72,6 +75,7 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
 export async function siparisListesi(db: Db, sorgu: SiparisListesiSuzgeci): Promise<SayfaliListe<Siparis>> {
   const suzgec = {
     kalip: aramaKalibi(sorgu.ara), durum: sorgu.durum ?? null, firmaId: sorgu.firmaId ?? null, gizli: await denemeIsaretliKimlikler(db, 'siparis'),
+    arsiv: sorgu.arsiv === undefined ? null : sorgu.arsiv === 'evet',
   };
   return sayfaliListe(sorgu, {
     say: () => sorgular.siparisSay(db, suzgec),
@@ -231,6 +235,20 @@ export async function durumDegistir(
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
   if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
+  return siparisAyrintisi(db, id);
+}
+
+// 3425 a: iptal edilmiş sipariş arşive kalkar ya da geri gelir; durum, iptal nedeni, tahsilat ve emirler değişmez.
+export async function siparisArsivle(db: Db, kullanici: Kullanici, id: number, g: { surum: number }, arsivle: boolean): Promise<SiparisAyrintisi> {
+  const mevcut = await kilitle(db, id);
+  const ret = siparisArsivReddi(mevcut.durum, mevcut.arsivde, arsivle);
+  if (ret !== null) throw gecersiz(ret);
+  await surumluGuncelle({
+    guncelle: () => sorgular.siparisArsivYaz(db, id, { surum: g.surum, kisiId: kullanici.id, arsivle }),
+    varMi: () => sorgular.siparisVarMi(db, id),
+    bulunamadiIletisi: SIPARIS_YOK,
+  });
+  await siparisDegistiBildir(db, { siparisId: id, kullanici });
   return siparisAyrintisi(db, id);
 }
 
