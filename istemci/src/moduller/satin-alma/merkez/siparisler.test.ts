@@ -113,7 +113,8 @@ describe('Siparişler (2430)', () => {
     render();
     const k = ekranCiz();
     await vi.waitFor(() => { expect(k.querySelector('.sa-sp-logo-ozet')).not.toBeNull(); });
-    expect(istekler).toEqual([`/api/logo/satin-alma-siparisleri/ozet?nolar=${encodeURIComponent('SP-DEN-001')}`]);
+    // Sayfa başlığındaki "Logo'da ara" (3360) kendi durumunu ayrıca sorar; özet tek toplu istektir.
+    expect(istekler.filter((a) => a !== '/api/logo/belge-arama-durumu')).toEqual([`/api/logo/satin-alma-siparisleri/ozet?nolar=${encodeURIComponent('SP-DEN-001')}`]);
     expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('İrsaliye 1/1 kalem · 1 kalemde fark');
     expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('Fatura yok');
     expect(sekme(k, 'logo-fark')?.textContent).toContain("Logo'da fark · 1");
@@ -129,7 +130,7 @@ describe('Siparişler (2430)', () => {
     istekler.length = 0;
     testOturumuYaz({ id: 8, ad: 'Deneme Okuyan', islemler: ['satin-alma.oku'] } as never);
     const g = ekranCiz();
-    expect(istekler).toEqual([]);
+    expect(istekler.filter((a) => a !== '/api/logo/belge-arama-durumu')).toEqual([]);
     expect(g.querySelector('.sa-sp-logo-ozet')).toBeNull();
     expect(sekme(g, 'logo-fark')).toBeNull();
   });

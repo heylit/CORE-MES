@@ -120,3 +120,4 @@ button.tc-prj-pano-kart { cursor: pointer; }
   .tc-prj-serit a { white-space: nowrap; }
 }
 .tc-prj-hz-sutun { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-prj-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }

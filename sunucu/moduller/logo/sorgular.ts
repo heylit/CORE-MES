@@ -963,3 +963,52 @@ export async function logoSiparisNetleri(db: Db, firma: number, donem: number, s
   );
   return new Map(r.map((x) => [Number(x.ref), x.net]));
 }
+
+// 3360 a: Logo kayıt numarasından o kayda gitmiş CORE belgesi (giden kutusu; gönderildi ya da Logo'da vardı).
+export async function logoKaydinaGidenler(db: Db, belgeTuru: string, kayitNolari: readonly string[]): Promise<{ belgeNo: number; logoKayitNo: string }[]> {
+  if (kayitNolari.length === 0) return [];
+  return db.sorgu(
+    `SELECT belge_no AS "belgeNo", logo_kayit_no AS "logoKayitNo" FROM logo_giden
+      WHERE belge_turu = $1 AND islem = 'gonder' AND son_sonuc IN ('gonderildi', 'zaten-vardi') AND logo_kayit_no = ANY($2::text[])
+      ORDER BY belge_no`,
+    [belgeTuru, kayitNolari],
+  );
+}
+
+// 3360-2 a: elle bağlama. Satır "zaten-vardi" sonucuyla ve Logo kayıt numarasıyla yazılır; deneme izi kalır, niyet ve bekleme boşalır.
+export async function elleBagYaz(db: Db, belgeTuru: string, no: number, kayitNo: string, kisiId: number, zaman: Date): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO logo_giden AS g (belge_turu, belge_no, islem, son_deneme, son_sonuc, logo_kayit_no, elle_baglandi, elle_baglayan)
+     VALUES ($1, $2, 'gonder', $4, 'zaten-vardi', $3, $4, $5)
+     ON CONFLICT (belge_turu, belge_no, islem) DO UPDATE SET
+       niyet_zamani = NULL, ardisik_hata = 0, son_deneme = $4, son_sonuc = 'zaten-vardi', son_hata = NULL, sonraki_deneme = NULL,
+       logo_kayit_no = $3, elle_baglandi = $4, elle_baglayan = $5`,
+    [belgeTuru, no, kayitNo, zaman, kisiId],
+  );
+}
+
+export function elleBagliNolar(db: Db, belgeTuru: string, nolar: readonly number[]): Promise<{ belgeNo: number; logoKayitNo: string }[]> {
+  if (nolar.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT belge_no AS "belgeNo", logo_kayit_no AS "logoKayitNo" FROM logo_giden
+      WHERE belge_turu = $1 AND islem = 'gonder' AND elle_baglandi IS NOT NULL AND belge_no = ANY($2::int[]) ORDER BY belge_no`,
+    [belgeTuru, nolar],
+  );
+}
+
+export async function elleBagliKayitMi(db: Db, belgeTuru: string, kayitNo: string): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    `SELECT true AS var FROM logo_giden WHERE belge_turu = $1 AND islem = 'gonder' AND elle_baglandi IS NOT NULL AND logo_kayit_no = $2 LIMIT 1`,
+    [belgeTuru, kayitNo],
+  )) !== null;
+}
+
+// Bağ kaldırılınca belge hiç gitmemiş gibi sıraya döner; deneme sayısı iz olarak kalır.
+export async function elleBagKaldir(db: Db, belgeTuru: string, no: number): Promise<boolean> {
+  return (await db.tek<{ belgeNo: number }>(
+    `UPDATE logo_giden SET son_deneme = NULL, son_sonuc = NULL, logo_kayit_no = NULL, ardisik_hata = 0, sonraki_deneme = NULL,
+            elle_baglandi = NULL, elle_baglayan = NULL
+      WHERE belge_turu = $1 AND belge_no = $2 AND islem = 'gonder' AND elle_baglandi IS NOT NULL RETURNING belge_no AS "belgeNo"`,
+    [belgeTuru, no],
+  )) !== null;
+}

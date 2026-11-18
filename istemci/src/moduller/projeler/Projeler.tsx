@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, LOGO_DURUM_ADI, LogoRozeti, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
+  Dugme, DurumKutusu, LogoBelgeAramasi, Girdi, Kart, LOGO_DURUM_ADI, LogoRozeti, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -74,7 +74,12 @@ export function Projeler() {
   return (
     <Kart
       baslik="Projeler"
-      sag={yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { yeniYaz(true); }}>Proje ekle</Dugme>}
+      sag={(
+        <span className="tc-prj-islemler">
+          <LogoBelgeAramasi tur="proje" />
+          {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { yeniYaz(true); }}>Proje ekle</Dugme>}
+        </span>
+      )}
     >
       <div className="tc-prj-icerik">
         <div className="tc-prj-suzgec">

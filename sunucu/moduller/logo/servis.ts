@@ -3,8 +3,8 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { LOGO_CRM_DENETIM_SINIRI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
-import type { BirimSetleriCevabi, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoBaglanabilirTur, LogoBelgeAramaCevabi, LogoBelgeAramaTuru, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { LOGO_BAGLANABILIR_TURLER, LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti, firmaOzetleri, tumFirmalar } from '../musteri-tedarikci/disari.ts';
@@ -20,9 +20,10 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { BELGE_ARAMA_GIDEN_TURU, BELGE_ARAMA_TURU, crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
-import { logoSiralari } from '../siparisler/disari.ts';
+import { logoSiraBelgeleri, logoSiralari } from '../siparisler/disari.ts';
+import { aramayiHatirla, baglanacakBelge, baglanacakOzeti, bulguBaglamasi, satisElleEngeli } from './elle-bag.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
 // Sürecin belleği: veritabanı geri alınsa da süreç içinde çift açmayı önler. Süreç yeniden başlayınca boştur;
@@ -689,6 +690,8 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
     bildir: (db: Db, t: T, x: SiparisLogoSonucu) => Promise<void>;
     // 3315: belgenin CORE projesi (yoksa null); verilmezse belge projesiz gider.
     projeId?: (t: T) => Promise<number | null>;
+    // 3360-2 a: elle bağlanmış belgeden doğan iş gönderilmez; neden yazılır ve iş durur (kendiliğinden yeniden denenmez).
+    elleEngeli?: (t: T) => Promise<string | null>;
   },
 ): Promise<TurSonucu | KopruAdimi | null> {
   if (a.kuyruk.length === 0) return null;
@@ -703,6 +706,8 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
     const sonucla = (sonuc: GidenSonucu): TurSonucu => ({ tur: a.belge, no: t.id, sonuc });
     const basarisiz = (sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number): Yazici<TurSonucu> =>
       async (yazDb) => sonucla(await basarisizAcma(yazDb, o, a.belge, t.id, g, bildir, sonuc, hata, niyet, bekleme));
+    const elle = a.elleEngeli ? await a.elleEngeli(t) : null;
+    if (elle !== null) return basarisiz('reddedildi', elle, null)(db);
     if (eylem === 'niyet-yaz') {
       const k = await satirKartlari(db, t as Parameters<typeof belgeStokKodlari>[0]);
       if (a.belge === 'talep' && k.hizmet.length > 0) return basarisiz('reddedildi', TALEP_HIZMET_ILETISI, undefined)(db);
@@ -965,6 +970,7 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
       return oku.tur === 'basarili' ? { ...r, satirRefleri: oku.satirRefleri } : r;
     },
     bildir: (yazDb, t, x) => o.kaynak.teklifSonucu(yazDb, t.id, x),
+    elleEngeli: (t) => satisElleEngeli(db, { tur: 'teklif', siraId: t.id }),
   });
   if (teklif !== null) return teklif;
   const siparis = await niyetliAcmaTuru(db, o, {
@@ -979,6 +985,7 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
     // Gövde kuralı teklif kaydının geçerli olduğunu denetledi.
     ekle: (t, govde) => kopru.satisSiparisiAc(Number(t.teklifKayitNo), govde),
     bildir: (yazDb, t, x) => o.kaynak.siparisSonucu(yazDb, t.id, x),
+    elleEngeli: (t) => satisElleEngeli(db, { tur: 'siparis', teklifKayitNo: t.teklifKayitNo }),
   });
   return siparis ?? { tur: 'bos' };
 }
@@ -1351,6 +1358,54 @@ export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null,
     durumlar.push({ firmaId: f.id, ...d, kodlar: crmKodlari(r) });
   }
   return { durumlar };
+}
+
+// 3360 a: beş listede "Logo'da ara". Ayar kısa transaction'da, köprü transaction dışında; CORE karşılığı giden kutusundan okunur.
+export const BELGE_ARAMA_GUN = 365;
+export async function logoBelgeAramasiAcik(db: Db): Promise<boolean> {
+  return (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.belge-aramasi')) === true;
+}
+export const LOGO_BELGE_ARAMA_KAPALI = 'Logo\'da belge araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: belge araması").';
+export async function logoBelgeAra(
+  vt: TxAcan, kopru: KopruIstemcisi | null, tur: LogoBelgeAramaTuru, metin: string, fiyatGorunur: boolean, a: { kisiId?: number; belge?: number } = {},
+): Promise<LogoBelgeAramaCevabi> {
+  const baglanacakId = a.belge;
+  const q = metin.trim();
+  const bos = (durum: 'kapali' | 'ortam-degiskeni-yok' | 'hata', ileti: string): LogoBelgeAramaCevabi => ({ durum, ileti, fiyatGorunur, belgeler: [], baglanacak: null });
+  // 3360-2 a: bağlanacak belge önce okunur (yoksa 404, köprüye gidilmez).
+  const bagTuru = baglanacakId === undefined ? null : (LOGO_BAGLANABILIR_TURLER as readonly string[]).includes(tur) ? (tur as LogoBaglanabilirTur) : null;
+  if (baglanacakId !== undefined && bagTuru === null) throw gecersiz('Bu belge türünde bağlama yok.');
+  const ilk = bagTuru === null || baglanacakId === undefined ? null : await vt.tx((db) => baglanacakBelge(db, bagTuru, baglanacakId));
+  if (!(await vt.tx(logoBelgeAramasiAcik))) return bos('kapali', LOGO_BELGE_ARAMA_KAPALI);
+  if (kopru === null) return bos('ortam-degiskeni-yok', BEKLEME_NEDENLERI['ortam-degiskeni-yok']);
+  const r = await kopru.belgeAra(BELGE_ARAMA_TURU[tur], q, BELGE_ARAMA_GUN);
+  if (r.tur !== 'basarili') return bos('hata', r.ileti);
+  if (a.kisiId !== undefined) aramayiHatirla(a.kisiId, tur, r.veri, Date.now());
+  const core = await vt.tx(async (db) => {
+    const giden = await s.logoKaydinaGidenler(db, BELGE_ARAMA_GIDEN_TURU[tur], r.veri.map((b) => String(b.logoKayitNo)));
+    // 3374: satış teklifi ve siparişinin giden satırı Siparişler'in Logo sırasıdır; CORE kimliği sıradan okunur.
+    const siraTuru = tur === 'teklif' ? 'teklif' : tur === 'satis-siparisi' ? 'siparis' : null;
+    const belgesi = siraTuru === null ? null : new Map((await logoSiraBelgeleri(db, siraTuru, giden.map((g) => g.belgeNo))).map((e) => [e.siraId, e.belgeId]));
+    const m = new Map<string, number>();
+    for (const g of giden) {
+      const id = belgesi === null ? g.belgeNo : belgesi.get(g.belgeNo);
+      if (id !== undefined && !m.has(g.logoKayitNo)) m.set(g.logoKayitNo, id);
+    }
+    return m;
+  });
+  // Bağlanabilirlik bağlamanın kendi kuralıdır; burada yalnız gösterilir, bağlama komutu yeniden denetler.
+  const bag = ilk;
+  const belgeler = r.veri.map((b) => {
+    const id = core.get(String(b.logoKayitNo));
+    return {
+      ...b, tutar: fiyatGorunur ? b.tutar : null, dovizTuru: fiyatGorunur ? b.dovizTuru : null, core: id === undefined ? null : { id },
+      bagla: bag === null ? null : bulguBaglamasi(bag, b, id !== undefined && id !== bag.id),
+    };
+  });
+  return {
+    durum: 'tamam', fiyatGorunur, belgeler, baglanacak: bag === null ? null : baglanacakOzeti(bag, fiyatGorunur),
+    ileti: belgeler.length === 0 ? `Logo'da son ${String(BELGE_ARAMA_GUN)} günde bu metinle belge yok.` : null,
+  };
 }
 
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız GET'tir ve transaction dışında beklenir; bulunanlar kişinin süreç belleğinde
@@ -1802,6 +1857,8 @@ export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly
   const giden = new Map<number, GidenSatiri>();
   for (const b of belgeler) for (const g of await s.gidenSatirlari(db, b, nolar)) if (!giden.has(g.belgeNo) || g.logoKayitNo !== null) giden.set(g.belgeNo, g);
   const bagli = tur === 'malzeme' ? await logoKayitNolari(db, tekil) : new Map<number, string>();
+  const elle = new Set<number>();
+  for (const b of belgeler) for (const e of await s.elleBagliNolar(db, b, nolar)) elle.add(e.belgeNo);
   const durumlar: LogoRozetCevabi['durumlar'] = [];
   for (const id of tekil) {
     const sira = kayitlar.get(id) ?? [];
@@ -1810,7 +1867,7 @@ export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly
     const v = no === undefined ? null : belgeler.map((b) => kartBekleyenBelgeler.get(kartKaydiAnahtari(b, no))).find((x) => x !== undefined) ?? null;
     const bekleyen = v !== null && bekleyenTaze(v.goruldu, simdi) ? v : null;
     const d = belgeRozetDurumu(g, bekleyen, bagli.get(id) ?? null);
-    if (d !== null) durumlar.push({ id, ...d });
+    if (d !== null) durumlar.push({ id, ...d, elle: d.durum === 'logoda' && no !== undefined && elle.has(no) });
   }
   return { durumlar };
 }

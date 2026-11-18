@@ -254,4 +254,15 @@ describe('satın alma fiyat kapısı (gerçek PostgreSQL)', () => {
     const duz = JSON.stringify((await istek(c.plan, 'GET', '/satin-alma-acilis')).json());
     assert.doesNotMatch(duz, /1234\.5|gizli karar|gizli onay|gizli teklif/);
   });
+
+  test("Logo belge araması (3360): satın alma siparişinde tutar yalnız fiyat görene açılır; planlama arar ama fiyatsız", async () => {
+    const fiyatGorunur = async (cerez: string) => tamam<{ fiyatGorunur: boolean; belgeler: { tutar: string | null }[] }>(
+      await istek(cerez, 'GET', '/logo/belge-ara?tur=satin-alma-siparisi&q=Deneme'));
+    for (const k of [c.plan, c.planp]) {
+      const r = await fiyatGorunur(k);
+      assert.equal(r.fiyatGorunur, false);
+      assert.deepEqual(r.belgeler.filter((b) => b.tutar !== null), []);
+    }
+    for (const k of [c.sa, c.samuduru, c.mudur]) assert.equal((await fiyatGorunur(k)).fiyatGorunur, true);
+  });
 });

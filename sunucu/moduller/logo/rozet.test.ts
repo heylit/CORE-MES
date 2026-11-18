@@ -158,21 +158,21 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
     const t = await oku('rz-satis', `tur=teklif&id=${String(a)},${String(b)},${String(bos)},${String(c)}`);
     assert.equal(t.durum, 200, JSON.stringify(t.govde));
     assert.deepEqual(t.govde.durumlar, [
-      { id: a, durum: 'sirada', kayitNo: null, neden: null },
-      { id: b, durum: 'durdu', kayitNo: null, neden: 'Deneme ret' },
-      { id: c, durum: 'logoda', kayitNo: '9003', neden: null },
+      { id: a, durum: 'sirada', kayitNo: null, neden: null, elle: false },
+      { id: b, durum: 'durdu', kayitNo: null, neden: 'Deneme ret', elle: false },
+      { id: c, durum: 'logoda', kayitNo: '9003', neden: null, elle: false },
     ]);
     const s = await oku('rz-satis', `tur=satis-siparisi&id=${String(sip)},${String(b)}`);
-    assert.deepEqual(s.govde.durumlar, [{ id: sip, durum: 'logoda', kayitNo: '9004', neden: null }]);
+    assert.deepEqual(s.govde.durumlar, [{ id: sip, durum: 'logoda', kayitNo: '9004', neden: null, elle: false }]);
   });
 
   test('RZ-5 malzeme: hizmet satırı da sayılır, kayıt no\'lu satır seçilir; giden satırı olmayan bağlı kart Logo\'da', async () => {
     const m = await oku('rz-malzeme', `tur=malzeme&id=10,11,${String(malzemeNo)}`);
     assert.equal(m.durum, 200, JSON.stringify(m.govde));
     assert.deepEqual(m.govde.durumlar, [
-      { id: 10, durum: 'logoda', kayitNo: '7010', neden: null },
-      { id: 11, durum: 'sirada', kayitNo: null, neden: null },
-      { id: malzemeNo, durum: 'logoda', kayitNo: '8123', neden: null },
+      { id: 10, durum: 'logoda', kayitNo: '7010', neden: null, elle: false },
+      { id: 11, durum: 'sirada', kayitNo: null, neden: null, elle: false },
+      { id: malzemeNo, durum: 'logoda', kayitNo: '8123', neden: null, elle: false },
     ]);
   });
 

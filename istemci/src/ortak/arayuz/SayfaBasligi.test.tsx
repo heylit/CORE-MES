@@ -22,6 +22,17 @@ describe('SayfaBasligi', () => {
     expect(sec).toHaveBeenCalledOnce();
   });
 
+  it('ek yuvası birincilden önce çizilir; yalnız ek varken de eylem alanı açılır, ek boşsa alan yok', () => {
+    render(<SayfaBasligi baslik="Talepler" ek={<button type="button">Logo'da ara</button>} birincil={{ etiket: 'Yeni talep', yap: vi.fn() }} />);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(["Logo'da ara", 'Yeni talep']);
+    cleanup();
+    const { container } = render(<SayfaBasligi baslik="Talepler" ek={<button type="button">Logo'da ara</button>} />);
+    expect(container.querySelector('.tc-sbaslik-eylem')?.textContent).toBe("Logo'da ara");
+    cleanup();
+    const bos = render(<SayfaBasligi baslik="Talepler" ek={null} />);
+    expect(bos.container.querySelector('.tc-sbaslik-eylem')).toBeNull();
+  });
+
   it('eylem verilmezse düğme çizmez; pasif birincil eylem tıklanmaz', () => {
     render(<SayfaBasligi baslik="Rapor" />);
     expect(screen.queryByRole('button')).toBeNull();

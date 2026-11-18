@@ -19,6 +19,8 @@ namespace LogoYardimcisi
         public const int KartSayfasi = 500;
         public const int CariAramaEnCok = 20;
         public const int CariAramaEnAz = 3;
+        // 3360 a: belge araması en çok 50 belge, belge başına en çok 5 eşleşen satır; varsayılan son 365 gün, en çok 3650.
+        public const int BelgeAramaEnCok = 50, BelgeSatirEnCok = 5, BelgeGunVarsayilan = 365, BelgeGunEnCok = 3650;
         // 2961-D4: hareket sayfası ve son alış satırı sayısı.
         public const int HareketSayfasi = 500;
         public const int SonAlisEnCok = 10;
@@ -114,6 +116,7 @@ namespace LogoYardimcisi
                 if (yol == "/api/Material/usage") return MalzemeKullanimlari(sorgu);
                 if (yol == "/api/Material/search") return MalzemeAra(sorgu);
                 if (yol == "/api/Arp/search") return CariAra(sorgu);
+                if (yol == "/api/Document/search") return BelgeAra(sorgu);
                 if ((m = CariKarti.Match(yol)).Success) return CariOku(Coz(m, 1));
                 if (yol == "/api/Lookup/unitsets") return BirimSetleri();
                 if (yol == "/api/Lookup/warehouses") return Ambarlar();
@@ -502,6 +505,55 @@ namespace LogoYardimcisi
             if (q.Length > 100) throw new GecersizIstek("q en çok 100 karakter olabilir.");
             var l = new List<object>();
             foreach (var c in oku.CariAra(q, CariAramaEnCok)) l.Add(CariNesnesi(c));
+            return new Cevap(200, l);
+        }
+
+        // 3360 a: Logo'da belge araması; yalnız okur. type BelgeTurleri'nden biri, q 3-100 karakter, days geriye gün (projede yok sayılır).
+        Cevap BelgeAra(Dictionary<string, string> sorgu)
+        {
+            string tur, q, gunMetni;
+            if (!sorgu.TryGetValue("type", out tur) || Array.IndexOf(BelgeTurleri.Hepsi, tur) < 0)
+                throw new GecersizIstek("type şunlardan biri olmalı: " + string.Join(", ", BelgeTurleri.Hepsi) + ".");
+            if (!sorgu.TryGetValue("q", out q) || q == null || q.Trim().Length < CariAramaEnAz)
+                throw new GecersizIstek("q en az " + CariAramaEnAz + " karakter olmalı.");
+            q = q.Trim();
+            if (q.Length > 100) throw new GecersizIstek("q en çok 100 karakter olabilir.");
+            var gun = BelgeGunVarsayilan;
+            if (sorgu.TryGetValue("days", out gunMetni) && (!int.TryParse(gunMetni, NumberStyles.None, CultureInfo.InvariantCulture, out gun) || gun < 1 || gun > BelgeGunEnCok))
+                throw new GecersizIstek("days 1-" + BelgeGunEnCok + " olmalı.");
+            var l = new List<object>();
+            foreach (var b in oku.BelgeAra(tur, q, saat().Date.AddDays(-gun), BelgeAramaEnCok))
+            {
+                var o = new Dictionary<string, object>();
+                o["logicalRef"] = b.Ref;
+                o["number"] = b.No;
+                o["docNumber"] = b.BelgeNo;
+                o["date"] = b.Tarih.HasValue ? b.Tarih.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+                o["arpCode"] = b.CariKod;
+                o["arpName"] = b.CariAd;
+                o["projectCode"] = b.ProjeKod;
+                o["projectName"] = b.ProjeAd;
+                o["description"] = b.Aciklama;
+                o["netTotal"] = b.NetToplam;
+                o["currency"] = b.DovizTuru;
+                o["cancelled"] = b.Iptal;
+                var satirlar = new List<object>();
+                for (var i = 0; i < b.Satirlar.Count && i < BelgeSatirEnCok; i++)
+                {
+                    var x = b.Satirlar[i];
+                    var so = new Dictionary<string, object>();
+                    so["logicalRef"] = x.Ref;
+                    so["code"] = x.Kod;
+                    so["name"] = x.Ad;
+                    so["amount"] = x.Miktar;
+                    so["unit"] = x.Birim;
+                    so["description"] = x.Aciklama;
+                    satirlar.Add(so);
+                }
+                o["matchedLines"] = satirlar;
+                o["matchedLineCount"] = b.Satirlar.Count;
+                l.Add(o);
+            }
             return new Cevap(200, l);
         }
 
