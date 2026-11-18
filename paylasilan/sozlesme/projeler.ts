@@ -354,26 +354,11 @@ export const hazirlikAtaGovdesi = z.object({ sorumluKisiId: kimlikYaDaYok, yapan
 export type HazirlikAtaGovdesi = z.input<typeof hazirlikAtaGovdesi>;
 export const hazirlikAtaCevabi = z.object({ id: z.number().int(), surum: z.number().int() });
 
-// 3396 a: kademeli takip ayarı (Projeler > Hazırlık > Kademeli takip). Gün sayıları iş günüdür (hafta sonu ve resmî tatil sayılmaz).
-const kademeGunu = (en: number) => z.number().int().min(0, 'Gün eksi olamaz.').max(en, `En çok ${String(en)} gün.`);
-export const kademeAyariGovdesi = z.object({
-  hatirlatGun: kademeGunu(30), yoneticiGun: kademeGunu(30), devretGun: kademeGunu(60), yoneticiRolId: kimlikYaDaYok, ...beklenenSurum,
-}).strict().refine((g) => g.devretGun >= g.yoneticiGun, { message: 'Devret, yöneticiye bildirmeden önce olamaz.', path: ['devretGun'] });
-export type KademeAyariGovdesi = z.output<typeof kademeAyariGovdesi>;
-export const kademeAyariCevabi = z.object({
-  hatirlatGun: z.number().int(), yoneticiGun: z.number().int(), devretGun: z.number().int(), yoneticiRolId: z.number().int().nullable(),
-  surum: z.number().int(), degistiren: z.string().nullable(), degisti: zamanSemasi.nullable(), yazabilir: z.boolean(),
-});
-export type KademeAyariCevabi = z.output<typeof kademeAyariCevabi>;
+// 3396 a: hazırlık görevinin kademe geçmişi (ortak kademeli uyarı defteri, 3405).
 export const kademeGecmisiCevabi = z.object({
   kademeler: z.array(z.object({ kademe: z.number().int(), an: zamanSemasi, bildirildi: z.boolean(), aliciSayisi: z.number().int() })),
 });
 export type KademeGecmisiCevabi = z.output<typeof kademeGecmisiCevabi>;
-// Kırmızı şerit: kişinin geciken hazırlık görevleri (kendisi ya da üstlenilmemişse rolü yapan).
-export const gecikenHazirliklarimCevabi = z.object({
-  gorevler: z.array(z.object({ id: z.number().int(), ad: z.string(), planBitis: tarihSemasi, gecikmeGun: z.number().int(), kademe: z.number().int().nullable() })),
-});
-export type GecikenHazirliklarimCevabi = z.output<typeof gecikenHazirliklarimCevabi>;
 export const geriGonderGovdesi = z.object({
   gerekce: zorunluMetin(500, 'Neden geri gönderiyorsun? Gerekçe zorunlu.'),
   ...beklenenSurum,

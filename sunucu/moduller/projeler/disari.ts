@@ -10,5 +10,6 @@ export type { ProjeOlayi, ProjeOlayiDinleyicisi } from './proje-olaylari.ts';
 export type { SiparistenProjeVerisi } from '#paylasilan/sozlesme/projeler.ts';
 export { hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeninHazirlikGorevleri } from './hazirlik-gorevleri.ts';
 export type { HazirlikGorevi, HazirlikGorevleriAcVerisi, HazirlikHedefi, HazirlikMaddeBilgisi, HazirlikPlani } from './hazirlik-gorevleri.ts';
-export { kapaliEmirCozucusuKaydet } from './hazirlik-kademe.ts';
+// 3405: kademeli uyarı kaynakları (hazırlık görevi ve proje görevi); bağ kablolamadadır.
+export { hazirlikKademeKayitlari, kapaliEmirCozucusuKaydet, projeGoreviKademeKayitlari } from './hazirlik-kademe.ts';
 export type { KapaliEmirCozucusu } from './hazirlik-kademe.ts';

@@ -19,6 +19,10 @@ import {
   epostaDefteri, epostaDenemesi, epostaDurumu, epostaSablonlari, epostaSablonuYaz, epostaSinamasi, epostaTetikleyicileri, epostaTetikleyicisiYaz,
 } from './eposta.ts';
 import {
+  acikTakiplerCevabi, gecikenlerimCevabi, kademeAyarDegistirGovdesi, kademeAyarlariCevabi, kademeKaynagiParametresi,
+} from '#paylasilan/sozlesme/bildirim-kademe.ts';
+import { acikTakipler, gecikenlerim, kademeAyarlari, kademeAyariYaz, seridim } from './kademe.ts';
+import {
   geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
 } from './yayin.ts';
 
@@ -139,4 +143,24 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => epostaDenemesi(db, kullanici, govde.konu),
   }),
   uc({ yontem: 'POST', yol: '/bildirimler/eposta/sina', yetki: 'bildirim.eposta-yonet', cevap: epostaSinamaCevabi, isle: ({ db }) => epostaSinamasi(db) }),
+  // Kademeli uyarı (3405): ayar ve bütün açık takipler yalnız `bildirim.kademe-yonet` (yönetici bayrağı, 3405-3 a). Kişinin kendi
+  // geciken işleri yalnız oturumdur; servis kaynağı okuyamayanın satırını vermez (Risk K2).
+  uc({ yontem: 'GET', yol: '/bildirim-kademe/kaynaklar', yetki: 'bildirim.kademe-yonet', cevap: kademeAyarlariCevabi, isle: ({ db }) => kademeAyarlari(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirim-kademe/kaynaklar/:kaynak/ayarla', yetki: 'bildirim.kademe-yonet', parametre: kademeKaynagiParametresi,
+    govde: kademeAyarDegistirGovdesi, cevap: kademeAyarlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kademeAyariYaz(db, kullanici, parametre.kaynak, govde),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirim-kademe/acik-takipler', yetki: 'bildirim.kademe-yonet', cevap: acikTakiplerCevabi,
+    isle: ({ db, kullanici }) => acikTakipler(db, kullanici),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirim-kademe/gecikenlerim', yetki: { biri: ['sayfa.bildirim-merkezi'] }, cevap: gecikenlerimCevabi,
+    isle: ({ db, kullanici }) => gecikenlerim(db, kullanici),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirim-kademe/seridim', yetki: { biri: ['sayfa.bildirim-merkezi'] }, cevap: gecikenlerimCevabi,
+    isle: ({ db, kullanici }) => seridim(db, kullanici),
+  }),
 ];

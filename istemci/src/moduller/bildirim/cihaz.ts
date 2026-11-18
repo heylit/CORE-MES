@@ -20,7 +20,7 @@ export interface CihazOrtami {
 }
 
 export const CIHAZ_LISTE_BOYU = 20;
-export const YOLSUZ_BILDIRIM_YOLU = '/profil/bildirimler';
+export const YOLSUZ_BILDIRIM_YOLU = '/bildirim-merkezi';
 
 export function cihazBildirimi(b: Bildirim): { baslik: string; secenek: CihazBildirimi } {
   return {

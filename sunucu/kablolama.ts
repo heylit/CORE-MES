@@ -11,12 +11,15 @@ import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonla
 import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
 import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyonlar/disari.ts';
+import * as bildirim from './moduller/bildirim/disari.ts';
 import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
+import { aletKimlikleri as kalibrasyonAletleri } from './moduller/kalibrasyon/disari.ts';
+import { kisilerinIslemleri } from './moduller/kisiler/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import * as ortakDosyalar from './moduller/ortak-dosyalar/disari.ts';
@@ -26,7 +29,7 @@ import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as pla
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
-import { siparisSatiriBelgeleri, siparisSatirlari } from './moduller/satin-alma/disari.ts';
+import { satinAlmaKademeOkuyucusu, siparisSatiriBelgeleri, siparisSatirlari } from './moduller/satin-alma/disari.ts';
 import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
@@ -35,7 +38,7 @@ import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlar
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -65,6 +68,46 @@ export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, 
     kur: () => { kur!(karsilik!); },
   };
 }
+
+// 3405 a: kademeli uyarı kaynakları, yalnız kaynak modülün dışa açık okumasıyla. Kaydın sorumlu kişisi olmayan kaynakta K2-K3 işi
+// yapan işlemi, K4-K5 yönetici işlemi taşıyanlara gider (motor ayardaki rolü ekler). Kayıt dönemi taşır: yeni vade yeni kayıttır.
+const GUN_MS = 86_400_000;
+const gunEkle = (t: string, g: number): string => new Date(Date.parse(`${t}T00:00:00Z`) + g * GUN_MS).toISOString().slice(0, 10);
+async function islemSahipleri(db: Db): Promise<(islem: Islem) => number[]> {
+  const l = [...await kisilerinIslemleri(db)];
+  return (islem) => l.filter(([, i]) => i.includes(islem)).map(([k]) => k);
+}
+// Eşleme saftır (kademe-okuyuculari.test.ts sınar); okuyucu yalnız kaynak modülün okumasını ve işlem sahiplerini verir.
+type Sahip = (islem: Islem) => number[];
+export const kalibrasyonKademeKayitlari = (aletler: Awaited<ReturnType<typeof kalibrasyonAletleri>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const yapan = sahip('kalibrasyon.yaz');
+  return aletler.flatMap((a) => (a.vade === null || a.durum === 'kullanim-disi' || a.durum === 'kayit-yok' ? [] : [{
+    kayit: `${String(a.id)}:${a.vade}`, no: a.no, baslik: `${a.no} · ${a.tur}`, yol: '/kalibrasyon' as const, sonGun: a.vade, yapanlar: yapan, yoneticiler: [],
+  }]));
+};
+export const bakimKademeKayitlari = (planlar: Awaited<ReturnType<typeof arkon.periyodikBakimlar>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const yapan = sahip('arkon.bakim');
+  const amir = sahip('arkon.amir');
+  return planlar.flatMap((p) => {
+    if (p.sonYapilma === null) return [];
+    const vade = gunEkle(tesisGunu(p.sonYapilma), p.herGun);
+    return [{ kayit: `${p.kimlik}:${vade}`, no: p.makineKod, baslik: p.baslik === '' ? p.makineKod : `${p.makineKod} · ${p.baslik}`, yol: '/arkon/bakim' as const,
+      sonGun: vade, yapanlar: yapan, yoneticiler: amir }];
+  });
+};
+export const siparisTerminKademeKayitlari = (kayitlar: Awaited<ReturnType<typeof siparisTakvimi>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const yazan = sahip('siparisler.yaz');
+  const onaylayan = sahip('siparisler.onayla');
+  return kayitlar.flatMap((k) => (k.bitti ? [] : [{
+    kayit: `${k.kimlik}:${k.tarih}`, no: k.no ?? k.kimlik, baslik: k.baslik, yol: '/siparisler' as const, sonGun: k.tarih, yapanlar: yazan, yoneticiler: onaylayan,
+  }]));
+};
+const kalibrasyonVadeleri = async (db: Db) => kalibrasyonKademeKayitlari(await kalibrasyonAletleri(db), await islemSahipleri(db));
+const bakimVadeleri = async (db: Db) => bakimKademeKayitlari(await arkon.periyodikBakimlar(db), await islemSahipleri(db));
+const siparisTerminleri = async (db: Db) => {
+  const bugun = tesisGunu(new Date());
+  return siparisTerminKademeKayitlari(await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60)), await islemSahipleri(db));
+};
 
 // 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik ya da stok fişi. Talep kilitlemez, uyarır (3272-2).
 const siparisEmirBaglari = async (db: Db, idler: readonly number[]) => {
@@ -420,6 +463,16 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     // 3396 Risk K-A: biten, iptal edilen ya da silinen emrin açık hazırlık görevi kademe döngüsünde iptal olur.
     bag('emir durumu -> projeler hazırlık kademesi', projeler.kapaliEmirCozucusuKaydet, uretimEmirleri.hazirligiKapananEmirler),
+    // 3405 a: kademeli uyarı kaynakları açık kayıtlarını ortak motora verir; iş günü İK resmi tatilini düşer.
+    bag('İK resmi tatil -> kademeli uyarı', bildirim.kademeTatilCozucusuKaydet, typeof ik.resmiTatilGunleri === 'function'
+      ? async (db: Db, bas: string, bit: string) => (await ik.resmiTatilGunleri(db, bas, bit)).map((t) => t.tarih) : undefined),
+    ...(['satin-alma.talep-onay', 'satin-alma.siparis-verilmedi', 'satin-alma.teklif-cevapsiz', 'satin-alma.teslim'] as const).map((k) =>
+      bag(`satın alma ${k} -> kademeli uyarı`, (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet(k, o); }, typeof satinAlmaKademeOkuyucusu === 'function' ? satinAlmaKademeOkuyucusu(k) : undefined)),
+    bag('projeler proje görevi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.gorev', o); }, projeler.projeGoreviKademeKayitlari),
+    bag('kalibrasyon vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalibrasyon.vade', o); }, typeof kalibrasyonAletleri === 'function' ? kalibrasyonVadeleri : undefined),
+    bag('arkon bakım vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('arkon.bakim-vade', o); }, typeof arkon.periyodikBakimlar === 'function' ? bakimVadeleri : undefined),
+    bag('satış siparişi termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.termin', o); }, typeof siparisTakvimi === 'function' ? siparisTerminleri : undefined),
+    bag('projeler hazırlık görevi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.hazirlik', o); }, projeler.hazirlikKademeKayitlari),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.

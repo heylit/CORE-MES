@@ -181,7 +181,7 @@ describe('service worker cihaz bildirimi (342 a)', () => {
     for (const data of [{ yol: 'https://baska.yerel/x' }, { yol: '//baska.yerel/x' }, { yol: 5 }, null]) {
       const c = calisaniKurSahte();
       await c.bildirimeBas(data);
-      expect(c.pencere.navigate).toHaveBeenCalledWith('https://tmi.yerel/profil/bildirimler');
+      expect(c.pencere.navigate).toHaveBeenCalledWith('https://tmi.yerel/bildirim-merkezi');
     }
   });
 });
@@ -194,7 +194,7 @@ describe('Web Push sinyali (ADR 0031)', () => {
     await c.sinyal();
     expect(c.ortam.veriGetir).toHaveBeenCalledWith('https://tmi.yerel/api/bildirimler?durum=okunmamis&sayfaBoyu=3');
     expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('Makine durdu', { body: 'Arıza', tag: 'tmi-bildirim-7', data: { yol: '/istasyonlar' } });
-    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('Onay bekliyor', { body: '', tag: 'tmi-bildirim-8', data: { yol: '/profil/bildirimler' } });
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('Onay bekliyor', { body: '', tag: 'tmi-bildirim-8', data: { yol: '/bildirim-merkezi' } });
   });
 
   it('iç sunucuya ulaşamazsa ya da okunmamış yoksa yalnız genel metin gösterir', async () => {
@@ -202,7 +202,7 @@ describe('Web Push sinyali (ADR 0031)', () => {
       const c = calisaniKurSahte('yeni', veri);
       await c.sinyal();
       expect(c.ortam.bildirimGoster).toHaveBeenCalledTimes(1);
-      expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('CORE: yeni bildirim', { body: '', tag: 'core-push-genel', data: { yol: '/profil/bildirimler' } });
+      expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('CORE: yeni bildirim', { body: '', tag: 'core-push-genel', data: { yol: '/bildirim-merkezi' } });
     }
   });
 
@@ -211,6 +211,6 @@ describe('Web Push sinyali (ADR 0031)', () => {
     const c = calisaniKurSahte('yeni', () => Promise.resolve({ satirlar }));
     await c.sinyal();
     expect(c.ortam.bildirimGoster).toHaveBeenCalledTimes(3);
-    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('B1', { body: '', tag: 'tmi-bildirim-1', data: { yol: '/profil/bildirimler' } });
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('B1', { body: '', tag: 'tmi-bildirim-1', data: { yol: '/bildirim-merkezi' } });
   });
 });

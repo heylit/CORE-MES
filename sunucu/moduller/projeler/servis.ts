@@ -16,7 +16,7 @@ import type {
 import { PROJE_KODU_BICIMI } from '#paylasilan/sozlesme/projeler.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi } from '../ayarlar/disari.ts';
-import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat, enYuksekKademeler } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiSecenekleri as kisiListesi, kisininRolleri, rolSecenekleri as rolListesi, rollerdekiKisiler } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisListesi } from '../siparisler/disari.ts';
@@ -542,7 +542,7 @@ export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<Gorevler
   const bitirenler = await sorgular.sonBitirenler(db, adaylar.filter((g) => g.durum === 'kontrolde').map((g) => g.id));
   const adlar = await kisiAdlari(db, adaylar.flatMap(gorevKisileri));
   const roller = await rolAdlari(db);
-  const kademeler = await sorgular.enYuksekKademeler(db, adaylar.map((g) => g.id));
+  const kademeler = await enYuksekKademeler(db, 'projeler.hazirlik', adaylar.map((g) => String(g.id)));
   const satirlar: GorevlerimSatiri[] = [];
   for (const g of adaylar) {
     const b = bitirenler.get(g.id) ?? null;
@@ -550,7 +550,7 @@ export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<Gorevler
     if (tur === null || (tur === 'kontrolumde' && !islem.kontrol)) continue;
     satirlar.push({
       ...gorevCevir(g, { kisiler: adlar, roller }), tur, projeId: g.proje_id, projeKod: g.proje_kod, projeAd: g.proje_ad,
-      izinler: gorevIzinleri(atamasi(g), k, islem, b?.kisiId ?? null, b?.gun ?? 0), kademe: kademeler.get(g.id) ?? null,
+      izinler: gorevIzinleri(atamasi(g), k, islem, b?.kisiId ?? null, b?.gun ?? 0), kademe: kademeler.get(String(g.id)) ?? null,
     });
   }
   return { gorevler: satirlar };

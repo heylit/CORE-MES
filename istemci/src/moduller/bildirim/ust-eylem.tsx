@@ -39,8 +39,8 @@ function Cekmece({ kapat, cihaz }: { kapat: () => void; cihaz: CihazIzinDugmesi 
       alt={(
         <div className="tc-bildirim-cekmece-alt">
           <Dugme simge="check" onClick={() => tumu.mutate()} yukleniyor={tumu.isPending}>Tümünü okundu yap</Dugme>
-          <Dugme simge="list" onClick={() => sayfayaGit('/profil/bildirimler')}>Hepsini gör</Dugme>
-          <Dugme simge="gear" onClick={() => sayfayaGit('/profil/bildirimler/tercihler')}>Bildirim ayarları</Dugme>
+          <Dugme simge="list" onClick={() => sayfayaGit('/bildirim-merkezi')}>Hepsini gör</Dugme>
+          <Dugme simge="gear" onClick={() => sayfayaGit('/bildirim-merkezi/tercihler')}>Bildirim ayarları</Dugme>
           {cihaz.izin === 'default' && <Dugme simge="bell" onClick={cihaz.iste}>Cihaz bildirimini aç</Dugme>}
         </div>
       )}

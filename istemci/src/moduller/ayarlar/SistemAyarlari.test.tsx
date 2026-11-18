@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Ayar, AyarlarCevabi, KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
@@ -9,7 +10,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { SistemAyarlari, ayarKategorisi, numaraOnizlemesi, onizlemeAniCoz, sayiCoz } from './SistemAyarlari.tsx';
+import { EpostaSayfasi, SistemAyarlari, ayarKategorisi, numaraOnizlemesi, onizlemeAniCoz, sayiCoz } from './SistemAyarlari.tsx';
 
 // Sunucunun gerçek cevap biçimi; başlık ve açıklama deneme metnidir.
 const DORT_GOZ: Ayar = { anahtar: 'malzemeler.dort-goz', baslik: 'Deneme dört göz', aciklama: 'Dört göz açıklaması', tur: 'boolean', deger: true };
@@ -47,12 +48,12 @@ function sunucuKur({ liste, yazma, ek }: Kurulum = {}) {
 
 // Oturum, uygulamada olduğu gibi ekran açılmadan önce bellidir (kabuk girişten sonra çizer). Sayfa Genel'de açılır;
 // denenen ayarın kategorisi sekmesiyle seçilir.
-function ac(ekranlar?: readonly AyarEkrani[], islemler?: Islem[], sekme: string | null = 'Onay kuralları') {
+function ac(ekranlar?: readonly AyarEkrani[], islemler?: Islem[], sekme: string | null = 'Onay kuralları', ekran?: React.ReactNode) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (islemler) istemci.setQueryData<Kullanici>(ortakAnahtarlar.oturum, { id: 1, ad: 'Deneme', islemler });
   render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><SistemAyarlari ekranlar={ekranlar} /></BildirimSaglayici>
+      <BildirimSaglayici><MemoryRouter>{ekran ?? <SistemAyarlari ekranlar={ekranlar} />}</MemoryRouter></BildirimSaglayici>
     </QueryClientProvider>,
   );
   if (sekme !== null) fireEvent.click(screen.getByRole('tab', { name: sekme }));
@@ -119,7 +120,8 @@ describe('Sistem Ayarları', () => {
       ek: { '/bildirimler/eposta/durum': DURUM },
       yazma: (_yol, govde) => json(200, { ...ACKAPA, deger: govde.deger as boolean } satisfies Ayar),
     });
-    ac(undefined, ['bildirim.eposta-yonet'], 'E-posta');
+    // 3405-4 a: E-posta Bildirim Merkezi > Ayarlar'dadır; Sistem Ayarları'nda yalnız bağlantı kalır.
+    ac(undefined, ['bildirim.eposta-yonet'], null, <EpostaSayfasi />);
     fireEvent.click(await anahtar(ACKAPA));
     const pencere = await screen.findByRole('dialog');
     expect(pencere.textContent).toContain('kuyruktaki 3 e-posta Dış posta servisi üzerinden hemen gidecek');
