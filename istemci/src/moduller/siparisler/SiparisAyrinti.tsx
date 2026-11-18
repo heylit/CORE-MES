@@ -12,6 +12,7 @@ import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
+import { SiparisSurumleri } from './SiparisSurumleri.tsx';
 import { GeriAlmaUyarisi, SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
@@ -150,6 +151,8 @@ export function SiparisAyrinti() {
       <KlasorBaglantisi tur="siparis" id={s.id} />
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
+      {/* SIP-40 (3427-4 a): onaylı sipariş taslağa dönmeden yeni sürümle düzenlenir; onayı geri almak kalem ve miktar içindir. */}
+      {onaylayabilir && s.durum === 'onayli' && <Dugme simge="edit" title="Fiyat, termin ve açıklama değişir; kayıt yeni sürüm olur" onClick={() => { void gezin(`/siparisler/${s.id}/yeni-surum`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme tur="birincil" simge="flag" title="Teslimat ve fatura bitti; sipariş tamamlandı sayılır" onClick={() => komutYaz('kapat')}>Tamamlandı olarak kapat</Dugme>}
       {onaylayabilir && s.durum === 'iptal' && <Dugme simge="box" title="Listeden kaldırır; kayıt Arşiv sekmesinde kalır" onClick={() => komutYaz('arsivle')}>Arşive kaldır</Dugme>}
@@ -232,6 +235,8 @@ export function SiparisAyrinti() {
           </dl>
         )}
       </Kart>
+
+      <SiparisSurumleri siparis={s} />
 
       <SiparisCarpani siparis={s} />
 

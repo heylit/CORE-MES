@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi, SiparisRevizyonGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
@@ -47,6 +47,8 @@ interface Degerler {
   cezaTavaniOrani: string;
   odemeVadesiGun: string;
   satirlar: SatirDegeri[];
+  // SIP-40 (3427-4 a): onaylı siparişin yeni sürümünde zorunlu; taslakta ve yeni siparişte gönderilmez.
+  gerekce: string;
 }
 
 let satirSayaci = 0;
@@ -54,7 +56,7 @@ const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, id: null, kilitli
 
 function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
   if (s === null) {
-    return { firma: null, musteriSiparisNo: '', siparisTarihi: bugun(), termin: '', terminGun: '', paraBirimi: 'TRY', kdvOrani: '20', odemeKosulu: '', aciklama: '', cezaOraniGun: '', cezaTavaniOrani: '', odemeVadesiGun: '', satirlar: [bosSatir()] };
+    return { firma: null, musteriSiparisNo: '', siparisTarihi: bugun(), termin: '', terminGun: '', paraBirimi: 'TRY', kdvOrani: '20', odemeKosulu: '', aciklama: '', cezaOraniGun: '', cezaTavaniOrani: '', odemeVadesiGun: '', satirlar: [bosSatir()], gerekce: '' };
   }
   return {
     firma: { id: s.firmaId, ad: s.firmaAd ?? `Firma ${s.firmaId}` },
@@ -80,13 +82,17 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       aciklama: m.aciklama ?? '',
       partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet), rotaId: p.rotaId })),
     })),
+    gerekce: '',
   };
 }
 
 // Biçim ve iş kuralı sunucuda denetlenir; burada yalnız boş bırakılan zorunlu alan ve belirsiz sayı yakalanır.
 // Birim fiyat zorunlu değildir (201 a): fiyatsız kalem açılır, sipariş fiyatlar girilmeden onaylanamaz.
-function dogrula(d: Degerler): AlanHatalari {
+// Sunucu en az REVIZYON_GEREKCESI_EN_AZ (3) harf ister; istemci sözleşmeyi değerle ithal etmez (zod).
+const GEREKCE_EN_AZ = 3;
+const dogrula = (yeniSurum: boolean) => (d: Degerler): AlanHatalari => {
   const hata: AlanHatalari = {};
+  if (yeniSurum && d.gerekce.trim().length < GEREKCE_EN_AZ) hata['gerekce'] = 'Neden değiştiğini yazın (en az 3 harf).';
   if (d.firma === null) hata['firma'] = 'Firma seçin.';
   if (d.siparisTarihi === '') hata['siparisTarihi'] = 'Sipariş tarihi zorunlu.';
   if (d.termin === '') hata['termin'] = 'Termin zorunlu.';
@@ -103,7 +109,7 @@ function dogrula(d: Degerler): AlanHatalari {
     else if (s.partiler.some((p) => belirsizSayi(p.adet))) hata[`satirlar.${i}.partiler`] = BELIRSIZ_SAYI;
   });
   return hata;
-}
+};
 
 const alanEsle = (alan: string): string => (alan === 'firmaId' ? 'firma' : alan.replace(/^(satirlar\.\d+)\.malzemeNo$/, '$1.kart'));
 
@@ -137,11 +143,14 @@ function govdeKur(d: Degerler, ticariSartGorur: boolean) {
 }
 
 interface FormOzellikleri {
-  // null: yeni sipariş; dolu: taslak düzenleme.
+  // null: yeni sipariş; dolu: taslak düzenleme ya da (yeniSurum) onaylı siparişin yeni sürümü.
   siparis: SiparisAyrintisi | null;
+  yeniSurum?: boolean;
 }
 
-function Form({ siparis }: FormOzellikleri) {
+// SIP-40 (3427-4 a): onaylı siparişte müşteri, sipariş tarihi, para birimi, kalem, malzeme, miktar ve partiler değişmez (emir ve plan
+// bunlarla açıldı); fiyat, termin, açıklama ve ticari şartlar değişir, kayıt gerekçeyle yeni sürüm olur.
+function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
   const gezin = useNavigate();
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -155,18 +164,22 @@ function Form({ siparis }: FormOzellikleri) {
 
   const form = useForm<Degerler, SiparisAyrintisi>({
     ilk: ilkDegerler(siparis),
-    dogrula,
+    dogrula: dogrula(yeniSurum),
     alanEsle,
     hataIletisi: 'Sipariş kaydedilemedi.',
     kaydet: (d) => {
       const govde = govdeKur(d, fiyatGorur);
       if (siparis === null || acilisSurumu === null) return ekle<SiparisAyrintisi>('/siparisler/ekle', firmaKodu === null ? govde : { ...govde, firmaKodu });
+      if (yeniSurum) {
+        return api.post<SiparisAyrintisi>(`/siparisler/${siparis.id}/yeni-surum`, { ...govde, surum: acilisSurumu, gerekce: d.gerekce.trim() } satisfies SiparisRevizyonGovdesi);
+      }
       return api.post<SiparisAyrintisi>(`/siparisler/${siparis.id}/guncelle`, { ...govde, surum: acilisSurumu } satisfies SiparisGuncelleGovdesi);
     },
     basarili: (cevap) => {
       istemci.setQueryData(anahtarlar.siparis(cevap.id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.siparisListeleri });
-      bildir('tamam', siparis === null ? 'Sipariş taslağı açıldı.' : 'Sipariş güncellendi.');
+      if (yeniSurum) void istemci.invalidateQueries({ queryKey: anahtarlar.siparisSurumleri(cevap.id) });
+      bildir('tamam', siparis === null ? 'Sipariş taslağı açıldı.' : yeniSurum ? 'Yeni sürüm kaydedildi.' : 'Sipariş güncellendi.');
       void gezin(`/siparisler/${cevap.id}`);
     },
     hatada: (hata) => { if (siparis !== null) eskiyseYenile(istemci, anahtarlar.siparis(siparis.id), hata); },
@@ -187,8 +200,10 @@ function Form({ siparis }: FormOzellikleri) {
   return (
     <section className="tc-sp">
       <SayfaBasligi
-        baslik={siparis === null ? 'Yeni satış siparişi' : `Düzenle: ${siparis.no}`}
-        alt={siparis === null ? 'Teklif süreci olmadan doğrudan sipariş taslağı açın; onay sonrası satırlar değişmez.' : 'Yalnız taslak sipariş düzenlenir.'}
+        baslik={siparis === null ? 'Yeni satış siparişi' : yeniSurum ? `Yeni sürüm: ${siparis.no}` : `Düzenle: ${siparis.no}`}
+        alt={siparis === null
+          ? 'Teklif süreci olmadan doğrudan sipariş taslağı açın; onay sonrası satırlar değişmez.'
+          : yeniSurum ? 'Fiyat, termin, açıklama ve ticari şartlar değişir; kayıt nedeniyle yeni sürüm olur, eski hâl sürüm geçmişinde kalır.' : 'Yalnız taslak sipariş düzenlenir.'}
         geriYol={geri}
         geriMetni={siparis === null ? 'Siparişlere dön' : 'Siparişe dön'}
       />
@@ -196,14 +211,16 @@ function Form({ siparis }: FormOzellikleri) {
         {form.genelHata !== null && <p className="tc-sp-hata" role="alert">{form.eskiSurum ? 'Kayıt başkası tarafından değişti, yeniden yükleyin.' : form.genelHata}</p>}
         <Kart baslik="Sipariş bilgileri">
           <div className="tc-sp-izgara">
-            <MusteriArama deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
+            {yeniSurum
+              ? <Girdi etiket="Müşteri" value={d.firma?.ad ?? ''} disabled readOnly />
+              : <MusteriArama deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />}
             <Girdi etiket="Müşteri sipariş no" autoComplete="off" {...form.alan('musteriSiparisNo')} />
-            <Girdi etiket="Sipariş tarihi" type="date" required {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
+            <Girdi etiket="Sipariş tarihi" type="date" required disabled={yeniSurum} {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
             <div className="tc-sp-termin">
               <Girdi etiket="Termin (gün)" inputMode="numeric" autoComplete="off" ipucu="Sipariş tarihinden takvim günü." value={d.terminGun} onChange={(o) => gunYaz(o.target.value)} />
               <Girdi etiket="Termin" type="date" required {...form.alan('termin')} onChange={(o) => tarihYaz(o.target.value)} />
             </div>
-            <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
+            <Secim etiket="Para birimi" required disabled={yeniSurum} secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
             <FirmaKoduSecimi deger={firmaKodu} degistir={firmaKoduYaz} kilitli={siparis !== null} {...(siparis === null ? {} : { ipucu: kayitliKodIpucu('Sipariş', siparis.no, siparis.firmaKodu) })} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
             {fiyatGorur ? (
@@ -223,19 +240,22 @@ function Form({ siparis }: FormOzellikleri) {
           <CokSatir etiket="Açıklama" {...form.alan('aciklama')} />
         </Kart>
 
-        <Kart baslik="Kalemler" sag={<Dugme simge="plus" onClick={() => form.degistir({ satirlar: [...d.satirlar, bosSatir()] })}>Kalem ekle</Dugme>}>
+        <Kart baslik="Kalemler" {...(yeniSurum ? {} : { sag: <Dugme simge="plus" onClick={() => form.degistir({ satirlar: [...d.satirlar, bosSatir()] })}>Kalem ekle</Dugme> })}>
           <ol className="tc-sp-kalemler">
-            {d.satirlar.map((s, i) => (
+            {d.satirlar.map((s, i) => {
+              const sabit = yeniSurum || s.kilitli;
+              const yalnizTermin = s.kilitli && !yeniSurum;
+              return (
               <li key={s.anahtar} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
                 <div className="tc-sp-kalem-ust">
                   <strong>{`Kalem ${i + 1}`}</strong>
                   {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">Emre bağlı</Rozet>}
-                  {s.kilitli && <span className="tc-sp-parti-bos">Üretim emri açıldı; yalnız termin değişir.</span>}
-                  {d.satirlar.length > 1 && !s.kilitli && (
+                  {yalnizTermin && <span className="tc-sp-parti-bos">Üretim emri açıldı; yalnız termin değişir.</span>}
+                  {d.satirlar.length > 1 && !sabit && (
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}
                 </div>
-                {s.kilitli ? (
+                {sabit ? (
                   <span className="tc-sp-secili">{s.kart === null ? 'Kart seçilmedi' : secilenKartMetni(s.kart)}</span>
                 ) : (
                   <KartArama
@@ -252,7 +272,7 @@ function Form({ siparis }: FormOzellikleri) {
                     inputMode="decimal"
                     autoComplete="off"
                     value={s.miktar}
-                    disabled={s.kilitli}
+                    disabled={sabit}
                     onChange={(o) => satirDegistir(i, { miktar: o.target.value })}
                     {...(form.hata(`satirlar.${i}.miktar`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.miktar`) })}
                   />
@@ -263,7 +283,7 @@ function Form({ siparis }: FormOzellikleri) {
                       autoComplete="off"
                       ipucu={sifirFiyat(s.birimFiyat) ? 'Fiyat 0: kalem bedelsiz kaydedilir. Bedelsizse doğru; değilse fiyatı girin.' : 'Boşsa fiyat sonra girilir; fiyatsız sipariş onaylanmaz.'}
                       value={s.birimFiyat}
-                      disabled={s.kilitli}
+                      disabled={yalnizTermin}
                       onChange={(o) => satirDegistir(i, { birimFiyat: o.target.value })}
                       {...(form.hata(`satirlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.birimFiyat`) })}
                     />
@@ -286,7 +306,7 @@ function Form({ siparis }: FormOzellikleri) {
                       )}
                   </div>
                 </div>
-                {s.kilitli ? (
+                {sabit ? (
                   <span className="tc-sp-parti-cipleri">
                     {s.partiler.length === 0
                       ? <Rozet ton="bilgi" gorunum="cizgi">{`${s.miktar} Seri`}</Rozet>
@@ -304,18 +324,25 @@ function Form({ siparis }: FormOzellikleri) {
                   etiket={`Kalem ${i + 1} açıklama`}
                   autoComplete="off"
                   value={s.aciklama}
-                  disabled={s.kilitli}
+                  disabled={yalnizTermin}
                   onChange={(o) => satirDegistir(i, { aciklama: o.target.value })}
                   {...(form.hata(`satirlar.${i}.aciklama`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.aciklama`) })}
                 />
               </li>
-            ))}
+              );
+            })}
           </ol>
         </Kart>
 
+        {yeniSurum && (
+          <Kart baslik="Değişiklik nedeni">
+            <CokSatir etiket="Neden değişti" required placeholder="Örnek: Müşteri termini iki hafta öne aldı" ipucu="Sürüm geçmişinde kim ve ne zamanla birlikte görünür." {...form.alan('gerekce')} />
+          </Kart>
+        )}
+
         <div className="tc-sp-alt-cubuk">
           <Dugme onClick={() => { void gezin(geri); }} disabled={form.gonderiliyor}>Vazgeç</Dugme>
-          <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{siparis === null ? 'Taslak aç' : 'Kaydet'}</Dugme>
+          <Dugme tur="birincil" type="submit" simge="check" yukleniyor={form.gonderiliyor}>{siparis === null ? 'Taslak aç' : yeniSurum ? 'Yeni sürümü kaydet' : 'Kaydet'}</Dugme>
         </div>
       </form>
     </section>
@@ -323,19 +350,23 @@ function Form({ siparis }: FormOzellikleri) {
 }
 
 // Düzenlemede kayıt önce okunur; form ilk değerlerini yalnız ilk çizimde alır.
-export function SiparisFormu({ duzenle = false }: { duzenle?: boolean }) {
+export function SiparisFormu({ duzenle = false, yeniSurum = false }: { duzenle?: boolean; yeniSurum?: boolean }) {
   const id = Number(useParams()['id']);
   const siparis = useQuery({
     queryKey: anahtarlar.siparisDuzenle(id),
     queryFn: () => api.get<SiparisAyrintisi>(`/siparisler/${id}`),
-    enabled: duzenle,
+    enabled: duzenle || yeniSurum,
     // Form açıldığı andaki güncel kayıttan kurulur ve sonradan yenilenip içindeki yazıyı kaybetmez.
     gcTime: 0,
     refetchOnWindowFocus: false,
   });
-  if (!duzenle) return <Form siparis={null} />;
+  if (!duzenle && !yeniSurum) return <Form siparis={null} />;
   if (siparis.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (siparis.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(siparis.error, 'Sipariş alınamadı')} yenile={() => { void siparis.refetch(); }} />;
+  if (yeniSurum) {
+    if (siparis.data.durum !== 'onayli' || siparis.data.arsiv !== null) return <DurumKutusu durum="bos" mesaj="Yalnız onaylı sipariş yeni sürümle düzenlenir." />;
+    return <Form siparis={siparis.data} yeniSurum />;
+  }
   if (siparis.data.durum !== 'taslak') {
     return <DurumKutusu durum="bos" mesaj="Yalnız taslak sipariş düzenlenir." />;
   }

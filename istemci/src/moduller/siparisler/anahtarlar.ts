@@ -6,6 +6,7 @@ export const anahtarlar = {
   siparisListe: (sorgu: object) => ['siparisler', 'siparis', 'liste', sorgu] as const,
   siparis: (id: number) => ['siparisler', 'siparis', 'ayrinti', id] as const,
   siparisDuzenle: (id: number) => ['siparisler', 'siparis', 'duzenle', id] as const,
+  siparisSurumleri: (id: number) => ['siparisler', 'siparis', 'surumler', id] as const,
   teklifDuzenle: (id: number) => ['siparisler', 'teklif', 'duzenle', id] as const,
   teklifListeleri: ['siparisler', 'teklif', 'liste'] as const,
   teklifListe: (sorgu: object) => ['siparisler', 'teklif', 'liste', sorgu] as const,

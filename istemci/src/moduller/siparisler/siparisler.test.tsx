@@ -13,7 +13,7 @@ import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projele
 import type { SiparisAcilisiCevabi } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
-  AdetDenemesiCevabi, AtolyeTaslaklariCevabi, BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
+  AdetDenemesiCevabi, AtolyeTaslaklariCevabi, BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, SiparisRevizyonlariCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
   TeklifListesiCevabi, TerminDenemesiCevabi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -131,6 +131,7 @@ function sunucuKur(kullanici: Kullanici, ozel: Ozel = () => undefined) {
       if (yol === '/siparisler/birim-secenekleri') return json(200, BIRIMLER);
       if (/^\/plan\/siparisler\/\d+\/carpan$/.test(yol)) return json(200, CARPAN_YOK);
       if (yol === '/uretim-emirleri/siparis-acilisi/5') return json(200, ACILIS);
+      if (/^\/siparisler\/\d+\/surumler$/.test(yol)) return json(200, { revizyonlar: [] } satisfies SiparisRevizyonlariCevabi);
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
@@ -335,7 +336,9 @@ describe('Satış siparişi ayrıntısı', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/5/onayla', govde: { surum: 2 } });
     await screen.findByText('Sipariş onaylandı');
-    expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Onayla' })).toBeNull();
+    // SIP-40: onaylıda Düzenle taslak formunu değil yeni sürüm formunu açar.
+    expect(screen.getByRole('button', { name: 'Düzenle' }).getAttribute('title')).toBe('Fiyat, termin ve açıklama değişir; kayıt yeni sürüm olur');
     expect(screen.getByRole('button', { name: 'Tamamlandı olarak kapat' })).toBeTruthy();
   });
 
@@ -543,6 +546,82 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3 } });
     await screen.findByText('Sipariş tamamlandı olarak kapandı');
     expect(screen.getByText('Tamamlandı')).toBeTruthy();
+  });
+});
+
+describe('Onaylı siparişin yeni sürümü (SIP-40, 3427-4 a)', () => {
+  const REV = {
+    revizyonlar: [
+      {
+        revNo: 2, gerekce: 'Deneme aciklama eklendi', kisi: 'Deneme Yonetici', an: '2026-10-05T10:00:00+03:00', logoGitmisti: true,
+        degisiklikler: [{ alan: 'aciklama', kalemSira: 1, eski: null, yeni: 'Kaplamali', fiyat: false }],
+      },
+      {
+        revNo: 1, gerekce: 'Deneme musteri termini', kisi: 'Deneme Yonetici', an: '2026-10-04T10:00:00+03:00', logoGitmisti: false,
+        degisiklikler: [
+          { alan: 'termin', kalemSira: null, eski: '2026-10-30', yeni: '2026-11-05', fiyat: false },
+          { alan: 'birimFiyat', kalemSira: 1, eski: '12.5000', yeni: '13', fiyat: true },
+        ],
+      },
+    ],
+  } satisfies SiparisRevizyonlariCevabi;
+
+  it('onaylı siparişte Düzenle yeni sürüm formunu açar: müşteri, tarih, para birimi, kalem ve miktar kilitli; neden zorunlu; gövde gerekçe ve sürümle gider', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/5') return json(200, AYRINTI_ONAYLI);
+      return yontem === 'POST' && yol === '/siparisler/5/yeni-surum' ? json(200, { ...AYRINTI_ONAYLI, surum: 4 } satisfies SiparisAyrintisi) : undefined;
+    });
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+    expect(await screen.findByRole('heading', { name: 'Yeni sürüm: SS-2026-0005' })).toBeTruthy();
+    expect((screen.getByLabelText('Müşteri') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/^Sipariş tarihi/) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/^Para birimi/) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/^Kalem 1 miktar/) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Kalem ekle' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: /^Kalem 1 malzeme kartı/ })).toBeNull();
+    const fiyat = screen.getByLabelText(/^Kalem 1 birim fiyat/) as HTMLInputElement;
+    expect(fiyat.disabled).toBe(false);
+    fireEvent.change(fiyat, { target: { value: '13' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni sürümü kaydet' }));
+    expect(await screen.findByText('Neden değiştiğini yazın (en az 3 harf).')).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/^Neden değişti/), { target: { value: 'Deneme fiyat farki' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni sürümü kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({
+      yol: '/siparisler/5/yeni-surum',
+      govde: { surum: 3, gerekce: 'Deneme fiyat farki', firmaId: 7, satirlar: [{ id: 50, malzemeNo: 31, miktar: '100', birimFiyat: '13' }] },
+    });
+  });
+
+  it('Düzenle yalnız onaylayana; taslakta düzenleme eski yolundan gider; yeni sürüm adresi onaysız siparişte açılmaz', async () => {
+    sunucuKur(YAZAR);
+    ac('/siparisler/6');
+    await screen.findByText('Sipariş onaylandı');
+    expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    cleanup();
+    sunucuKur(YONETICI);
+    ac('/siparisler/5/yeni-surum');
+    expect(await screen.findByText('Yalnız onaylı sipariş yeni sürümle düzenlenir.')).toBeTruthy();
+  });
+
+  it('sürüm geçmişi yeniden eskiye: kim, ne zaman, neden, ne değişti; Logo uyarısı; fiyatı görmeyene yalnız "değişti"', async () => {
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5/surumler' ? json(200, REV) : undefined));
+    ac('/siparisler/6');
+    const rev1 = await screen.findByRole('listitem', { name: 'Rev 1' });
+    expect(within(rev1).getByText('Deneme musteri termini')).toBeTruthy();
+    expect(within(rev1).getByText('Termin: 30.10.2026 → 05.11.2026')).toBeTruthy();
+    expect(within(rev1).getByText('Kalem 1 birim fiyat: 12,50 TRY → 13,00 TRY')).toBeTruthy();
+    const rev2 = screen.getByRole('listitem', { name: 'Rev 2' });
+    expect(within(rev2).getByText("Logo'da elle güncellenmeli")).toBeTruthy();
+    expect(within(rev2).getByText('Kalem 1 açıklama: — → Kaplamali')).toBeTruthy();
+    expect(screen.getByRole('listitem', { name: 'Rev 0' })).toBeTruthy();
+    cleanup();
+    const gizli = { revizyonlar: [{ ...REV.revizyonlar[1]!, degisiklikler: [{ alan: 'birimFiyat', kalemSira: 1, eski: null, yeni: null, fiyat: true }] }] } satisfies SiparisRevizyonlariCevabi;
+    sunucuKur(OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5/surumler' ? json(200, gizli) : undefined));
+    ac('/siparisler/6');
+    expect(await screen.findByText('Kalem 1 birim fiyat değişti')).toBeTruthy();
   });
 });
 
