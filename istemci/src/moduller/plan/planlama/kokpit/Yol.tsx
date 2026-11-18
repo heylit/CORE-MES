@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import type { KokpitModeli } from './kurallar.ts';
+import { eksikAdimlar, kismiPlanli, type KokpitModeli } from './kurallar.ts';
 import type { PlanlaDurumu } from './Yerlestirme.tsx';
 import type { SiraKarti } from './yerlestirme.ts';
 import { YOL_ADIMLARI, kartSonucu, yolAdimi } from './yol.ts';
@@ -18,13 +18,15 @@ export interface YolOzellikleri {
   plansiz: number; taslakVar: boolean; mesgul: boolean;
   malzemeBekleyen?: Readonly<Record<string, number>>;
   oner: (yon: 'ileri' | 'geri') => void;
+  // Kısmen planlı emrin eksik adımlarını sistem yerleştirir (plana alma böyle emri reddeder).
+  eksikPlanla: () => void;
   hepsiniPlanla: () => void;
   yenidenPlanla: () => void;
   onayaGec: () => void;
   hamle: HamleOzellikleri['uygula']; surum: number | null;
 }
 
-export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, malzemeBekleyen, oner, hepsiniPlanla, yenidenPlanla, onayaGec, hamle, surum }: YolOzellikleri) {
+export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, malzemeBekleyen, oner, eksikPlanla, hepsiniPlanla, yenidenPlanla, onayaGec, hamle, surum }: YolOzellikleri) {
   const adim = yolAdimi(kart, vurgu);
   const sira = YOL_ADIMLARI.findIndex(([k]) => k === adim);
   const ad = kart ? kart.siparis?.no ?? kart.emirler[0]?.no ?? '' : '';
@@ -32,7 +34,10 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
   // Seçenekler istenince hesaplanır: her seçeneğin sonucu sunucu önizlemesidir, sipariş seçmek tek başına istek atmaz.
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [kart?.kok]);
-  const bekleyen = adim === 'oner' && kart ? kart.emirler.filter((e) => e.durum === 'plansiz').length : 0;
+  const kismi = adim === 'oner' && kart ? kart.emirler.filter((e) => kismiPlanli(m, e)) : [];
+  const eksik = kismi.reduce((n, e) => n + eksikAdimlar(m, e).length, 0);
+  // Hiç planlanmamış emir plana alınır; kısmen planlı emir yeniden planlanır.
+  const bekleyen = adim === 'oner' && kart ? kart.emirler.filter((e) => e.durum === 'plansiz').length - kismi.length : 0;
   return (
     <section className="tc-pyq-yol" aria-label="Planlama yolu" data-adim={adim} data-akis="">
       <ol className="tc-pyq-onay-adimlar" aria-label="Plan adımları">
@@ -47,7 +52,13 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
           {plansiz > 0 && <Dugme simge="play" disabled={mesgul} onClick={hepsiniPlanla}>Plansızların hepsini planla ({plansiz})</Dugme>}
         </div>
       )}
-      {adim === 'oner' && (
+      {adim === 'oner' && kismi.length > 0 && (
+        <div className="tc-pyq-yol-govde" data-tur="risk" data-kismi="">
+          <p role="status"><b>{ad}: {String(eksik)} adımın planda yeri yok; öteki adımlar planda.</b><small>Sistem eksik adımlara yer bulur; bu emrin planda olan adımları da yeniden dizilebilir, öteki emirler yerinde kalır.</small></p>
+          <Dugme tur={bekleyen > 0 || taslakVar ? 'ikincil' : 'birincil'} simge="play" disabled={mesgul} onClick={eksikPlanla}>Eksik adımları planla</Dugme>
+        </div>
+      )}
+      {adim === 'oner' && bekleyen > 0 && (
         <div className="tc-pyq-yol-govde" data-tur="risk">
           <p role="status"><b>{ad}: {bekleyen > 1 ? `${String(bekleyen)} emir` : `${String(pd?.adim ?? 0)} adım`} planlanmayı bekliyor.</b><small>Sistem yerleştirir, sonucu ve nedenini burada yazar.</small></p>
           <Dugme tur="birincil" simge="play" disabled={mesgul || !pd?.ileriHazir} onClick={() => { oner('ileri'); }}>Sistem önersin</Dugme>

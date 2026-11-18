@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { KAYNAK_OKUMA } from '../../recete-rota/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
 import { kaynakOku } from '../planlama-servis.ts';
@@ -27,6 +28,50 @@ describe('plan (gerçek PostgreSQL): periyodik bakım kaynak okumasında', () =>
       assert.equal(await bakimlar(tam), null, 'bayrak kapalı');
     } finally {
       await ortam!.sahip.sorgu("DELETE FROM ayar WHERE anahtar = 'plan.bakim-girdisi'");
+    }
+  });
+  // Vardiya ekranında girilen planlı duruş makineye inmiş hâliyle ek.planliDuruslar alanında gelir (girdi.betik duruş satırı yapar).
+  test('BK-K2: istasyonun planlı duruşu makinesinin duruşu olarak gelir (anahtar "vd:" ile başlar); kaldırılınca gelmez; makine okuması olmayana null', async () => {
+    const { ortam, makineA, makineB, istasyonA, yoneticiId } = durum();
+    const tam: Kullanici = { id: yoneticiId, ad: 'Deneme yonetici', islemler: [...ISLEMLER] };
+    const makinesiz: Kullanici = { ...tam, islemler: ISLEMLER.filter((i) => !(KAYNAK_OKUMA.istasyon as readonly string[]).includes(i)) };
+    const duruslar = (k: Kullanici) => vt().tx(async (db) => ((await kaynakOku(db, k)).ek as { planliDuruslar: { anahtar: string; m: string; bas: string; bit: string; baslik: string }[] | null }).planliDuruslar);
+    const gun = tesisSaati(Date.now() + 2 * 86_400_000).slice(0, 10);
+    const { id } = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO vardiya_planli_durus (baslik, kapsam, istasyon_id, baslangic, bitis, tekrar, gunler, aktif, yazan_id)
+       VALUES ('Deneme bakım', 'istasyon', $1, ($2 || ' 08:00')::timestamp AT TIME ZONE current_setting('TimeZone'),
+               ($2 || ' 10:00')::timestamp AT TIME ZONE current_setting('TimeZone'), 'yok', '{}', true, $3) RETURNING id`, [istasyonA, gun, yoneticiId]))!;
+    try {
+      const l = await duruslar(tam);
+      assert.deepEqual(l?.filter((d) => d.anahtar.startsWith(`vd:${String(id)}|`)).map((d) => [d.m, d.bas, d.bit, d.baslik]), [[String(makineA), `${gun} 08:00`, `${gun} 10:00`, 'Deneme bakım']]);
+      assert.equal(l?.some((d) => d.m === String(makineB) && d.anahtar.startsWith(`vd:${String(id)}|`)), false);
+      assert.equal(await duruslar(makinesiz), null);
+      await ortam!.sahip.sorgu('UPDATE vardiya_planli_durus SET aktif = false WHERE id = $1', [id]);
+      assert.deepEqual((await duruslar(tam))?.filter((d) => d.anahtar.startsWith(`vd:${String(id)}|`)), []);
+    } finally {
+      await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
+    }
+  });
+
+  test('BK-K3: tesis geneli, her gün tekrarlayan ve ufkun ilerisindeki duruş her makineye ve her gerçekleşmesiyle gelir', async () => {
+    const { ortam, makineA, makineB, yoneticiId } = durum();
+    const tam: Kullanici = { id: yoneticiId, ad: 'Deneme yonetici', islemler: [...ISLEMLER] };
+    const gun = (n: number) => tesisSaati(Date.now() + n * 86_400_000).slice(0, 10);
+    const { id } = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO vardiya_planli_durus (baslik, kapsam, baslangic, bitis, tekrar, gunler, aktif, yazan_id)
+       VALUES ('Deneme sayım', 'tesis', ($1 || ' 13:00')::timestamp AT TIME ZONE current_setting('TimeZone'),
+               ($1 || ' 13:30')::timestamp AT TIME ZONE current_setting('TimeZone'), 'gunluk', '{}', true, $2) RETURNING id`, [gun(40), yoneticiId]))!;
+    try {
+      const l = (await vt().tx(async (db) => ((await kaynakOku(db, tam)).ek as { planliDuruslar: { anahtar: string; m: string; bas: string; bit: string }[] }).planliDuruslar))
+        .filter((d) => d.anahtar.startsWith(`vd:${String(id)}|`));
+      for (const m of [makineA, makineB]) {
+        const baslar = l.filter((d) => d.m === String(m)).map((d) => d.bas);
+        for (const n of [40, 41, 45]) assert.ok(baslar.includes(`${gun(n)} 13:00`), `makine ${String(m)} gün +${String(n)}: ${baslar.slice(0, 3).join(', ')}`);
+        assert.equal(baslar.includes(`${gun(39)} 13:00`), false, 'ilk başlangıçtan önce gerçekleşme yok');
+      }
+      assert.equal(new Set(l.map((d) => d.anahtar)).size, l.length, 'anahtarlar tekil');
+    } finally {
+      await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
     }
   });
 });

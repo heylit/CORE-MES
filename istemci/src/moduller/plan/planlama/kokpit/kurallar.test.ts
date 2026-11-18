@@ -74,6 +74,12 @@ describe('Kokpit modeli', () => {
     const m3 = modelKur(c3, planOku(c3), derle(girdiKur(c3, plandanBitenler(c3, planOku(c3)))), (id) => id);
     expect(m3.durus[u]?.[0]).toMatchObject({ ariza: false, neden: 'bakım' });
     expect(planliDurusYazisi(m3.durus[u]![0]!, (x) => `s${String(x)}`)).toBe('Bakım · s0 → s1000');
+    // Vardiya ekranında girilen planlı duruş: başlığıyla yazılır, arıza sayılmaz (tezgâh başlığına "arızada" yazılmaz).
+    const c4 = { ...c, down: [{ m: u, from: 0, to: 1000, neden: 'planlı duruş', baslik: 'ORN-Bakım', oto: 1, bakim: 'vd:1' }] };
+    const m4 = modelKur(c4, planOku(c4), derle(girdiKur(c4, plandanBitenler(c4, planOku(c4)))), (id) => id);
+    expect(m4.durus[u]?.[0]).toEqual({ a: 0, b: 1000, ariza: false, neden: 'duruş', baslik: 'ORN-Bakım' });
+    expect(planliDurusYazisi(m4.durus[u]![0]!, (x) => `s${String(x)}`)).toBe('Planlı duruş (ORN-Bakım) · s0 → s1000');
+    expect(suAndakiDurus(m4, u)).toBeNull();
     expect(a && durusYazisi(a, () => '13.11 Cum 18:00')).toBe('arızada · Cum 18:00');
     expect(suAndakiDurus(modelKur(c, planOku(c), derle(girdiKur(c, plandanBitenler(c, planOku(c)))), (id) => id), t)).toBeNull();
   });

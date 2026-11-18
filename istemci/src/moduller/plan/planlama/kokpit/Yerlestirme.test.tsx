@@ -827,3 +827,22 @@ describe('Kokpit odaklı tezgâh paneli (3318 a, 3. dilim)', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 });
+
+describe('yarım planlı emir (klasik düzen)', () => {
+  const YARIM: KokpitEmri = { ...YENI, id: '3', no: 'ORN-UE-3', adimlar: [{ id: '3.10', ad: 'Torna', adaylar: ['T1', 'T2'] }, { id: '3.20', ad: 'Freze', adaylar: ['F1'], onculler: [['3.10', 'b']] }] };
+  const MY: KokpitModeli = { ...M, isler: { ...M.isler, '3.10': is('3.10', 'T2', 8, 10) }, emirler: [YARIM] };
+  it('plana alma önizlemesi sorulmaz, seç-yerleştir açılmaz; eksik adım nedeniyle yazar ve yolu söyler', async () => {
+    const oz = onizlemeKur(), durum = vi.fn();
+    const k = siraKartlari(MY).find((x) => x.kok === '3');
+    if (!k) throw new Error('kart');
+    render(<EmirAdimlari m={MY} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} planlaDurumu={durum} plan={{ fail: ['3.20'], failNeden: { '3.20': { kod: 'zaman' } } }} />);
+    const not = document.querySelector('[data-emir-neden="kismi"]');
+    expect(not?.textContent).toContain('2. Freze: ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı. Yoldaki');
+    expect(not?.textContent).toContain('Eksik adımları planla');
+    expect(document.querySelector('[data-emir-ozet]')?.textContent).toContain('kısmen planda, 1 adımın yeri yok');
+    expect(document.querySelector('[data-etkin]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
+    await waitFor(() => { expect(durum).toHaveBeenLastCalledWith(null); });
+    expect(oz).not.toHaveBeenCalled();
+  });
+});

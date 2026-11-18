@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { isTasiOnizle } from '../motor/atolye/gonder.ts';
+import type { OkunanPlan } from '../motor/kurallar.ts';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, enCokBekleyen, fasonMu, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -300,6 +301,8 @@ export interface EmirAdimlariOzellikleri {
   ilkGorunum?: OperasyonGorunumu;
   // Fason adımın firma tarihi yazısı (3330 a), adım kimliğiyle; verilmezse satır yazmaz (emir okunamadı).
   firma?: Record<string, FirmaYazisi> | null;
+  // Çalışmanın planı: yeri olmayan adımın nedeni buradan okunur.
+  plan?: Pick<OkunanPlan, 'fail' | 'failNeden'> | null;
   // "Planla" menüsünden gelen istek (3335-2): sıradaki plansız emre uygulanır. n her istekte artar; aynı istek bir kez işlenir.
   planla?: PlanlaIstegi | null;
   // Sıradaki plansız emrin durumu menüye bildirilir (işaretli adım sayısı; önizleme hazır mı). Plansız emir yoksa null.
@@ -319,13 +322,15 @@ export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => n
 export type OperasyonGorunumu = 'tablo' | 'akis';
 const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null, plan = null }: EmirAdimlariOzellikleri) {
   const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
   // Planlı adım seçiliyken tahtadaki işaretler onundur; plansız emrin yerleştirmesi bekler (tahtada tek hedef olur).
   const tasinan = secIs !== null && m.isler[secIs] ? kart.emirler.find((e) => e.adimlar.some((a) => a.id === secIs))?.id ?? null : null;
-  const etkin = tasinan !== null ? null : kart.emirler.find((e) => e.id === dokunulan && e.durum === 'plansiz')?.id ?? kart.emirler.find((e) => e.durum === 'plansiz')?.id ?? null;
+  // Kısmen planlı emir plana alınmaz (sunucu reddeder); seç-yerleştir yalnız hiç planlanmamış emirde çalışır.
+  const yeni = (e: KokpitEmri): boolean => e.durum === 'plansiz' && !kismiPlanli(m, e);
+  const etkin = tasinan !== null ? null : kart.emirler.find((e) => e.id === dokunulan && yeni(e))?.id ?? kart.emirler.find(yeni)?.id ?? null;
   const bas = kart.emirler[0];
   useEffect(() => { if (etkin === null) planlaDurumu?.(null); }, [etkin, planlaDurumu]);
   useEffect(() => () => { planlaDurumu?.(null); }, [planlaDurumu]);
@@ -339,7 +344,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} adimSorunu={adimSorunu} {...(adimEk ? { adimEk } : {})} {...(adimBekle ? { adimBekle } : {})} malzeme={malzeme} />
+          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} adimSorunu={adimSorunu} {...(adimEk ? { adimEk } : {})} {...(adimBekle ? { adimBekle } : {})} malzeme={malzeme} plan={plan} />
         ))}
       </div>
     </section>
@@ -364,7 +369,7 @@ function useGenis(): boolean {
   return v;
 }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null, plan = null }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
   const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
@@ -385,7 +390,9 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   const kod = useMemo(() => new Map(m.tezgahlar.map((t) => [t.id, t.kod])), [m]);
   const tz = (id: string): string => kod.get(id) ?? id;
   const an = (a: number, b: number): string => `${zaman(a).slice(6)} → ${zaman(b).slice(-5)}`;
-  const plansiz = e.durum === 'plansiz';
+  // Kısmen planlı emirde seç-yerleştir kapalıdır: eksik adımları yeniden planlama yerleştirir.
+  const kismi = kismiPlanli(m, e), eksik = kismi ? eksikAdimlar(m, e) : [];
+  const plansiz = e.durum === 'plansiz' && !kismi;
   // Geç ya da riskli emrin en çok bekleyen adımı malzemeyi bekleyerek yerleştiyse neden her görünümde yazar (3369): sıra beklemesi değildir.
   const enCok = e.durum === 'gec' || e.durum === 'risk' ? enCokBekleyen(m, e) : null;
   const malNeden = enCok && malzeme ? malzemeNedeni(e, enCok.k, malzeme.bekleyen, zaman) : null;
@@ -485,9 +492,10 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
       <div className="tc-pyq-emir-ad">
         <b className="tc-pyq-mono">{e.no}</b> {e.urun}
         <small data-emir-ozet="">
-          {`${String(e.adet)} adet · `}<b data-d={e.durum}>{durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
+          {`${String(e.adet)} adet · `}<b data-d={e.durum}>{kismi ? `kısmen planda, ${String(eksik.length)} adımın yeri yok` : durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
           {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
         </small>
+        {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad}: ${eksikNedeni(plan, x.id)}`).join('; ')}. Yoldaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
         {malNeden !== null && <small data-emir-neden="malzeme">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {malNeden}</small>}
         {bekleyen && <small data-emir-neden="">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {bekleyen.k + 1}. adım ({e.adimlar[bekleyen.k]?.ad}) {tz(bekleyen.tezgah)} tezgâhında {sureYaz(bekleyen.bekleme.sure)} sıra bekliyor.</small>}
       </div>

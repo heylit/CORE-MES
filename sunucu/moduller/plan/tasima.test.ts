@@ -40,6 +40,14 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.deepEqual(ozet(r), { 'S1.10': ['T1', 15, 33, 'tasinan'], 'S1.20': ['T2', 35, 37, 'itilen'] });
   });
 
+  test('TH-15: planlı duruş çalışma saati değildir: duruşun içine bırakılan iş duruştan sonra başlar, itilen ardıl da duruşa girmez', () => {
+    // T1 salı 08:00-10:00 (32-34), T2 salı 10:00-12:00 (34-36) planlı duruşta (Vardiya'dan gelen duruş satırı).
+    const down = [{ m: 'T1', from: 32, to: 34, neden: 'planlı duruş', oto: 1, bakim: 'vd:1' }, { m: 'T2', from: 34, to: 36, neden: 'planlı duruş', oto: 1, bakim: 'vd:2' }];
+    const r = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10) }, { down }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: 32 });
+    assert.equal(r.gecerli, true, r.ileti ?? '');
+    assert.deepEqual(ozet(r), { 'S1.10': ['T1', 34, 36, 'tasinan'], 'S1.20': ['T2', 36, 38, 'itilen'] });
+  });
+
   test('TH-11 (3414-3): başka siparişin işinin önüne bırakılan iş onu arkaya iter; içine ya da arkasına bırakılan iş arkasındaki boşluğa oturur', () => {
     // S2.10 T2'de salı 09:00-11:00 (33-35). S1.20 onun başına bırakılır: S2.10 arkaya, 11:00-13:00'e itilir.
     const c = calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10), 'S2.10': op('S2', 'T2', 33) });

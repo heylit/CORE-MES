@@ -3,9 +3,9 @@
 // Arkon planlı duruş takvimi (kart #519) `planliDuruslarinHepsi` ile okur, `planliDurusYaz` ve `planliDurusSilArkon` ile yazar (çağıranın
 // transaction'ında; `vardiya.durus-yaz`, kapsam ve kurallar çağıran kişiye göre denetlenir; Arkon belge sürümü kilitten sonra `guncelMi` ile).
 export {
-  calismaSuresi, calismaTakvimi, calismaTakvimleri, gunYaz, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz, takvimGunleri,
+  calismaSuresi, calismaTakvimi, calismaTakvimleri, gunYaz, makinePlanliDuruslari, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz, takvimGunleri,
 } from './servis.ts';
-export type { ArkonDurusHedefi, ArkonDurusSonucu, PlanliDurusKaydi, TakvimAraligiGirdisi, TakvimKaynagi } from './servis.ts';
+export type { ArkonDurusHedefi, ArkonDurusSonucu, MakineDurusu, PlanliDurusKaydi, TakvimAraligiGirdisi, TakvimKaynagi } from './servis.ts';
 // Arkon (A7, #517) vardiya saatlerini ve molalarını buradan okur; Arkon'da vardiya yazılmaz. Haftanın hangi günü hangi vardiyanın
 // çalıştığını (`vardiyaMatrisi`, takvim ekranının matrisi) ve tatil günlerini (`takvimGunleri`) de buradan okur.
 export { vardiyaMatrisi, vardiyaTanimlari } from './servis.ts';
