@@ -10,7 +10,7 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
-  BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
+  BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisRevizyonlariCevabi, SiparisRevizyonVerisi, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
@@ -20,11 +20,11 @@ import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, kilitliKalemReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
+  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
-import type { DurumKomutu } from './kurallar.ts';
-import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
+import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
+import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisRevizeEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { BaslikAlanlari, SiparisKilidi, KalemSatiri, SiparisSatiri as BaslikSatiri } from './sorgular.ts';
 
@@ -250,6 +250,74 @@ export async function siparisArsivle(db: Db, kullanici: Kullanici, id: number, g
   });
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   return siparisAyrintisi(db, id);
+}
+
+// SIP-40 (3427-4 a): onaylı sipariş yeni sürümle düzenlenir. Kalem yerinde kalır; fiyat, termin, açıklama ve ticari şartlar değişir.
+// Fiyatı görmeyenin gövdesi fiyatsızdır: kayıtlı fiyat ve ticari şart kimlikle korunur. Termin bağlı projeye ve başlamamış emre onaydaki
+// gibi kayar (olay), tutar beklenen tahsilata yeniden yazılır. Logo'ya gitmiş siparişte sürüm bunu işaretler; Logo'ya yeniden gitmez.
+export async function siparisRevizeEt(
+  db: Db, kullanici: Kullanici, id: number, g: SiparisRevizyonVerisi, fiyatYazar = true,
+): Promise<SiparisAyrintisi> {
+  const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
+  if (fiyatRet !== null) throw yetkiYok(fiyatRet);
+  const mevcut = await kilitle(db, id);
+  const ret = revizyonReddi(mevcut.durum, mevcut.arsivde);
+  if (ret !== null) throw gecersiz(ret);
+  const once = await siparisAyrintisi(db, id);
+  const onceki = revizyonHali(once);
+  const kayitliFiyat = new Map(onceki.kalemler.map((k) => [k.id, k.birimFiyat]));
+  const satirlar = fiyatYazar ? g.satirlar : g.satirlar.map((s) => ({ ...s, birimFiyat: s.id === undefined ? null : (kayitliFiyat.get(s.id) ?? null) }));
+  const baslikYeni = fiyatYazar ? baslik(g) : { ...baslik(g), ...kayitliTicariSart(mevcut) };
+  const girdi = { baslik: baslikYeni, kalemler: satirlar };
+  const girdiRet = revizyonGirdiReddi(onceki, girdi);
+  if (girdiRet !== null) throw dogrulama(girdiRet.mesaj, girdiRet.alan);
+  const degisiklikler = revizyonDegisiklikleri(onceki, girdi);
+  if (degisiklikler.length === 0) throw gecersiz(REVIZYON_DEGISIKLIK_YOK);
+  const eksik = fiyatEksikReddi(satirlar);
+  if (eksik !== null) throw cakisma(eksik);
+  const tarih = tarihAraligiReddi(tesisGunu(Date.now()), { ...g, satirlar });
+  if (tarih !== null) throw dogrulama(tarih.mesaj, tarih.alan);
+  const tasma = tutarTasmaReddi(g.kdvOrani, satirlar);
+  if (tasma !== null) throw dogrulama(tasma.mesaj, tasma.alan);
+  await kisitKorumali(KISITLAR, () => surumluGuncelle({
+    guncelle: () => sorgular.revizyonBasligiYaz(db, id, baslikYeni, g.surum, kullanici.id),
+    varMi: () => sorgular.siparisVarMi(db, id),
+    bulunamadiIletisi: SIPARIS_YOK,
+  }));
+  await sorgular.revizyonKalemleriYaz(db, id, onceki.kalemler.map((k, i) => {
+    const s = satirlar[i];
+    return { id: k.id, birimFiyat: s?.birimFiyat ?? null, termin: s?.termin ?? null, aciklama: s?.aciklama ?? null };
+  }));
+  await sorgular.revizyonEkle(db, { siparisId: id, gerekce: g.gerekce, kisiId: kullanici.id, onceki: once, degisiklikler });
+  await siparisRevizeEdildiBildir(db, { siparisId: id, kullanici });
+  await siparisDegistiBildir(db, { siparisId: id, kullanici });
+  await tahsilatiFinansaYaz(db, kullanici.id, id);
+  return siparisAyrintisi(db, id);
+}
+
+function revizyonHali(s: SiparisAyrintisi): RevizyonHali {
+  return {
+    baslik: {
+      firmaId: s.firmaId, siparisTarihi: s.siparisTarihi, paraBirimi: s.paraBirimi, musteriSiparisNo: s.musteriSiparisNo, termin: s.termin, kdvOrani: s.kdvOrani,
+      odemeKosulu: s.odemeKosulu, aciklama: s.aciklama, cezaOraniGun: s.cezaOraniGun, cezaTavaniOrani: s.cezaTavaniOrani, odemeVadesiGun: s.odemeVadesiGun,
+    },
+    kalemler: s.satirlar.map((k) => ({ id: k.id, sira: k.sira, malzemeNo: k.malzemeNo, miktar: k.miktar, birimFiyat: k.birimFiyat, termin: k.termin, aciklama: k.aciklama })),
+  };
+}
+
+export async function siparisRevizyonlari(db: Db, id: number, fiyatGorur: boolean): Promise<SiparisRevizyonlariCevabi> {
+  if (!(await sorgular.siparisVarMi(db, id))) throw bulunamadi(SIPARIS_YOK);
+  const satirlar = await sorgular.revizyonlar(db, id);
+  const adlar = await kisiAdlari(db, [...new Set(satirlar.map((r) => r.kisi_id))]);
+  return {
+    revizyonlar: satirlar.map((r) => {
+      const degisiklikler = r.degisiklikler as RevizyonDegisikligi[];
+      return {
+        revNo: r.rev_no, gerekce: r.gerekce, kisi: adlar.get(r.kisi_id) ?? null, an: r.an, logoGitmisti: r.logo_gitmisti,
+        degisiklikler: fiyatGorur ? degisiklikler : degisiklikler.map(degisiklikFiyatsiz),
+      };
+    }),
+  };
 }
 
 // 2132c (karar 2132-1): onaylanan sipariş finansa beklenen tahsilat olarak düşer. Sevk günü sevk planlanana kadar siparişin terminidir;

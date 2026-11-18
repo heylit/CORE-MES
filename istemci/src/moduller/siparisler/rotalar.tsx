@@ -8,6 +8,7 @@ import { TeklifVer } from './TeklifVer.tsx';
 
 const YeniSiparis = () => <SiparisFormu />;
 const SiparisDuzenle = () => <SiparisFormu duzenle />;
+const SiparisYeniSurum = () => <SiparisFormu yeniSurum />;
 const YeniTeklif = () => <TeklifVer />;
 const TeklifDuzenle = () => <TeklifVer duzenle />;
 
@@ -22,4 +23,5 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/siparisler/teklifler/:id/teklif-ver', ekran: YeniTeklif },
   { yol: '/siparisler/:id', ekran: SiparisAyrinti },
   { yol: '/siparisler/:id/duzenle', ekran: SiparisDuzenle },
+  { yol: '/siparisler/:id/yeni-surum', ekran: SiparisYeniSurum },
 ];

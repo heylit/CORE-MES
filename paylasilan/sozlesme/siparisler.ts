@@ -89,6 +89,13 @@ export const idParametresi = z.object({ id: z.coerce.number<number>().int().posi
 export const siparisEkleGovdesi = z.object(siparisAlanlari).refine(tarihSirasi, TARIH_SIRASI);
 // Güncelleme tam kayıttır: satırlar bütün olarak yeniden yazılır (SIP-03: yalnız taslak).
 export const siparisGuncelleGovdesi = z.object({ ...siparisAlanlari, ...beklenenSurum }).refine(tarihSirasi, TARIH_SIRASI);
+// SIP-40 (3427-4 a): onaylı siparişte "Düzenle" yeni sürüm açar; gövde tam kayıttır, gerekçe zorunludur. Değişmeyecek alanlar
+// (müşteri, para birimi, sipariş tarihi, kalem, malzeme, miktar) sunucuda denetlenir.
+export const REVIZYON_GEREKCESI_EN_AZ = 3;
+export const siparisRevizyonGovdesi = z.object({
+  ...siparisAlanlari, ...beklenenSurum,
+  gerekce: z.string().trim().min(REVIZYON_GEREKCESI_EN_AZ, 'Değişiklik gerekçesi zorunlu (en az 3 harf).').max(500, 'En çok 500 karakter.'),
+}).refine(tarihSirasi, TARIH_SIRASI);
 export const durumGovdesi = z.object({ ...beklenenSurum });
 // 3272: onayda kendiliğinden açılan projenin numarası; verilmezse sipariş numarasından türetilir. Biçimi Projeler denetler (PRJ-01).
 export const onayGovdesi = z.object({ ...beklenenSurum, projeKodu: z.string().trim().min(1).max(24).optional() });
@@ -171,6 +178,21 @@ export const siparisSemasi = z.object({
 export const siparisAyrintiSemasi = siparisSemasi.extend({ satirlar: z.array(siparisSatiriSemasi) });
 
 export const siparisListesiCevabi = listeCevapSemasi(siparisSemasi);
+// Alan sözleşmedeki adıdır (termin, birimFiyat ...); kalemSira başlık alanında null. Fiyat görmeyene fiyat değişikliğinin eski ve yeni değeri null.
+export const siparisRevizyonDegisikligiSemasi = z.object({
+  alan: z.string(), kalemSira: z.number().int().nullable(), eski: z.string().nullable(), yeni: z.string().nullable(), fiyat: z.boolean(),
+});
+export const siparisRevizyonuSemasi = z.object({
+  revNo: z.number().int(),
+  gerekce: z.string(),
+  kisi: z.string().nullable(),
+  an: zamanSemasi,
+  degisiklikler: z.array(siparisRevizyonDegisikligiSemasi),
+  // Sürüm verildiğinde sipariş Logo'ya gitmişti: Logo'daki kayıt elle güncellenir.
+  logoGitmisti: z.boolean(),
+});
+export const siparisRevizyonlariCevabi = z.object({ revizyonlar: z.array(siparisRevizyonuSemasi) });
+
 
 export type SiparisDurumu = z.output<typeof siparisDurumuSemasi>;
 export type SiparisEkleGovdesi = z.input<typeof siparisEkleGovdesi>;
@@ -185,6 +207,11 @@ export type Siparis = z.output<typeof siparisSemasi>;
 export type SiparisSatiri = z.output<typeof siparisSatiriSemasi>;
 export type SiparisAyrintisi = z.output<typeof siparisAyrintiSemasi>;
 export type SiparisListesiCevabi = z.output<typeof siparisListesiCevabi>;
+export type SiparisRevizyonGovdesi = z.input<typeof siparisRevizyonGovdesi>;
+export type SiparisRevizyonVerisi = z.output<typeof siparisRevizyonGovdesi>;
+export type SiparisRevizyonu = z.output<typeof siparisRevizyonuSemasi>;
+export type SiparisRevizyonDegisikligi = z.output<typeof siparisRevizyonDegisikligiSemasi>;
+export type SiparisRevizyonlariCevabi = z.output<typeof siparisRevizyonlariCevabi>;
 
 // ---- Satış teklifi (soru 148): talep satırları, fiyatlı sürümler, kabul edilen sürümden sipariş ----
 

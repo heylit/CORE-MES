@@ -8,6 +8,7 @@ import {
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
   SIPARIS_ARSIVDE, SIPARIS_ARSIVDE_DEGIL, SIPARIS_ARSIVLENEMEZ, siparisArsivReddi,
+  REVIZYON_KALEM_SABIT, REVIZYON_SABIT_ALAN, REVIZYON_YALNIZ_ONAYLI, degisiklikFiyatsiz, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi,
   FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
@@ -435,4 +436,46 @@ test('3425 a: yalnız iptal edilmiş ve arşivde olmayan sipariş arşive kalkar
   assert.equal(siparisArsivReddi('iptal', true, true), SIPARIS_ARSIVDE);
   assert.equal(siparisArsivReddi('iptal', true, false), null);
   assert.equal(siparisArsivReddi('iptal', false, false), SIPARIS_ARSIVDE_DEGIL);
+});
+
+describe('SIP-40 (3427-4 a) onaylı siparişin yeni sürümü', () => {
+  const baslik = {
+    firmaId: 7, siparisTarihi: '2026-10-01', paraBirimi: 'TRY', musteriSiparisNo: null, termin: '2026-11-15', kdvOrani: '20.00',
+    odemeKosulu: null, aciklama: null, cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: 30,
+  };
+  const kalem = { id: 5, sira: 1, malzemeNo: 31, miktar: '100.000', birimFiyat: '12.5000', termin: null, aciklama: null };
+  const onceki = { baslik, kalemler: [kalem] };
+
+  test('SIP-40 yalnız arşivde olmayan onaylı sipariş', () => {
+    assert.equal(revizyonReddi('onayli', false), null);
+    for (const d of ['taslak', 'kapandi', 'iptal'] as const) assert.equal(revizyonReddi(d, false), REVIZYON_YALNIZ_ONAYLI);
+    assert.equal(revizyonReddi('onayli', true), REVIZYON_YALNIZ_ONAYLI);
+  });
+
+  test('SIP-40 müşteri, para birimi, sipariş tarihi, kalem sayısı, kimliği, malzemesi ve miktarı değişmez; sayı biçimi fark sayılmaz', () => {
+    assert.equal(revizyonGirdiReddi(onceki, { baslik, kalemler: [{ ...kalem, miktar: '100' }] }), null);
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik: { ...baslik, firmaId: 8 }, kalemler: [kalem] }), { mesaj: REVIZYON_SABIT_ALAN, alan: 'firmaId' });
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik: { ...baslik, paraBirimi: 'EUR' }, kalemler: [kalem] })?.alan, 'paraBirimi');
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik: { ...baslik, siparisTarihi: '2026-10-02' }, kalemler: [kalem] })?.alan, 'siparisTarihi');
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik, kalemler: [kalem, { ...kalem, id: undefined }] }), { mesaj: REVIZYON_KALEM_SABIT, alan: 'satirlar' });
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik, kalemler: [{ ...kalem, miktar: '90' }] })?.alan, 'satirlar.0');
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik, kalemler: [{ ...kalem, malzemeNo: 32 }] })?.alan, 'satirlar.0');
+    assert.deepEqual(revizyonGirdiReddi(onceki, { baslik, kalemler: [{ ...kalem, id: 6 }] })?.alan, 'satirlar.0');
+  });
+
+  test('SIP-40 değişiklik listesi başlık sonra kalem sırasıyla; aynı sayı farklı yazılsa değişmemiştir; fiyat görmeyene değer gizli', () => {
+    assert.deepEqual(revizyonDegisiklikleri(onceki, { baslik: { ...baslik, kdvOrani: '20' }, kalemler: [{ ...kalem, birimFiyat: '12.50' }] }), []);
+    const d = revizyonDegisiklikleri(onceki, {
+      baslik: { ...baslik, termin: '2026-11-25', odemeVadesiGun: null }, kalemler: [{ ...kalem, birimFiyat: '13', termin: '2026-11-20', aciklama: 'Not' }],
+    });
+    assert.deepEqual(d, [
+      { alan: 'termin', kalemSira: null, eski: '2026-11-15', yeni: '2026-11-25', fiyat: false },
+      { alan: 'odemeVadesiGun', kalemSira: null, eski: '30', yeni: null, fiyat: false },
+      { alan: 'birimFiyat', kalemSira: 1, eski: '12.5000', yeni: '13', fiyat: true },
+      { alan: 'termin', kalemSira: 1, eski: null, yeni: '2026-11-20', fiyat: false },
+      { alan: 'aciklama', kalemSira: 1, eski: null, yeni: 'Not', fiyat: false },
+    ]);
+    assert.deepEqual(d.map(degisiklikFiyatsiz)[2], { alan: 'birimFiyat', kalemSira: 1, eski: null, yeni: null, fiyat: true });
+    assert.deepEqual(d.map(degisiklikFiyatsiz)[0], d[0]);
+  });
 });

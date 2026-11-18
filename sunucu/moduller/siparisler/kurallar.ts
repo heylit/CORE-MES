@@ -209,6 +209,76 @@ export function duzenlemeReddi(durum: SiparisDurumu): string | null {
   return durum === 'taslak' ? null : YALNIZ_TASLAK;
 }
 
+// SIP-40 (3427-4 a): onaylı sipariş "Düzenle" ile yeni sürüm alır; her sürüm gerekçe, kişi ve değişiklik listesiyle yalnız eklenir.
+// Müşteri, para birimi, sipariş tarihi, kalem sayısı, kalem malzemesi ve miktarı değişmez: emir ve plan bunlarla açılmıştır; bunlar için
+// bugünkü yol onayı geri almaktır (VARSAYIM). Fiyat, termin, açıklama ve ticari şartlar değişir.
+export const REVIZYON_YALNIZ_ONAYLI = 'Yalnız onaylı sipariş yeni sürümle düzenlenir.';
+export const REVIZYON_DEGISIKLIK_YOK = 'Değişiklik yok; yeni sürüm açılmadı.';
+export const REVIZYON_SABIT_ALAN = 'Onaylı siparişte bu alan değişmez; değiştirmek için önce onayı geri alın.';
+export const REVIZYON_KALEM_SABIT = 'Onaylı siparişte kalem eklenmez, silinmez; malzeme ve miktar değişmez. Değiştirmek için önce onayı geri alın.';
+
+export function revizyonReddi(durum: SiparisDurumu, arsivde: boolean): string | null {
+  return durum === 'onayli' && !arsivde ? null : REVIZYON_YALNIZ_ONAYLI;
+}
+
+export interface RevizyonBasligi {
+  firmaId: number; siparisTarihi: string; paraBirimi: string; musteriSiparisNo: string | null; termin: string; kdvOrani: string;
+  odemeKosulu: string | null; aciklama: string | null; cezaOraniGun: string | null; cezaTavaniOrani: string | null; odemeVadesiGun: number | null;
+}
+export interface RevizyonKalemi {
+  id: number; sira: number; malzemeNo: number; miktar: string; birimFiyat: string | null; termin: string | null; aciklama: string | null;
+}
+export interface RevizyonHali { baslik: RevizyonBasligi; kalemler: readonly RevizyonKalemi[] }
+export interface RevizyonGirdisi {
+  baslik: RevizyonBasligi;
+  kalemler: readonly { id?: number | undefined; malzemeNo: number; miktar: string; birimFiyat: string | null; termin: string | null; aciklama: string | null }[];
+}
+export interface RevizyonDegisikligi { alan: string; kalemSira: number | null; eski: string | null; yeni: string | null; fiyat: boolean }
+
+const SABIT_BASLIK = ['firmaId', 'siparisTarihi', 'paraBirimi'] as const;
+const SAYI_ALANI = new Set(['kdvOrani', 'cezaOraniGun', 'cezaTavaniOrani', 'odemeVadesiGun', 'birimFiyat']);
+const DEGISEN_BASLIK = ['musteriSiparisNo', 'termin', 'kdvOrani', 'odemeKosulu', 'aciklama', 'cezaOraniGun', 'cezaTavaniOrani', 'odemeVadesiGun'] as const;
+const KALEM_ALANI = ['birimFiyat', 'termin', 'aciklama'] as const;
+const revMetni = (v: string | number | null): string | null => (v === null ? null : String(v));
+const alanAyni = (alan: string, a: string | null, b: string | null): boolean => (SAYI_ALANI.has(alan) ? sayiAyni(a, b) : a === b);
+
+// Kalemler kimlikle ve sırayla eşlenir; reddedilen girdi { mesaj, alan } döner (alan form alanıdır).
+export function revizyonGirdiReddi(onceki: RevizyonHali, yeni: RevizyonGirdisi): { mesaj: string; alan: string } | null {
+  for (const a of SABIT_BASLIK) {
+    if (revMetni(onceki.baslik[a]) !== revMetni(yeni.baslik[a])) return { mesaj: REVIZYON_SABIT_ALAN, alan: a };
+  }
+  if (yeni.kalemler.length !== onceki.kalemler.length) return { mesaj: REVIZYON_KALEM_SABIT, alan: 'satirlar' };
+  for (const [i, k] of onceki.kalemler.entries()) {
+    const y = yeni.kalemler[i];
+    if (y === undefined || y.id !== k.id || y.malzemeNo !== k.malzemeNo || !sayiAyni(y.miktar, k.miktar)) {
+      return { mesaj: `${REVIZYON_KALEM_SABIT} (kalem ${k.sira}).`, alan: `satirlar.${i}` };
+    }
+  }
+  return null;
+}
+
+export function revizyonDegisiklikleri(onceki: RevizyonHali, yeni: RevizyonGirdisi): RevizyonDegisikligi[] {
+  const sonuc: RevizyonDegisikligi[] = [];
+  for (const a of DEGISEN_BASLIK) {
+    const eski = revMetni(onceki.baslik[a]);
+    const y = revMetni(yeni.baslik[a]);
+    if (!alanAyni(a, eski, y)) sonuc.push({ alan: a, kalemSira: null, eski, yeni: y, fiyat: false });
+  }
+  for (const [i, k] of onceki.kalemler.entries()) {
+    const y = yeni.kalemler[i];
+    if (y === undefined) continue;
+    for (const a of KALEM_ALANI) {
+      if (!alanAyni(a, k[a], y[a])) sonuc.push({ alan: a, kalemSira: k.sira, eski: k[a], yeni: y[a], fiyat: a === 'birimFiyat' });
+    }
+  }
+  return sonuc;
+}
+
+// Fiyat görmeyene fiyat değişikliğinin yalnız varlığı görünür (180).
+export function degisiklikFiyatsiz(d: RevizyonDegisikligi): RevizyonDegisikligi {
+  return d.fiyat ? { ...d, eski: null, yeni: null } : d;
+}
+
 // Aramada no ve müşteri sipariş no büyük-küçük harf duyarsız aranır (SQL tarafı ILIKE).
 export function aramaKalibi(ara: string | undefined): string | null {
   const m = ara?.trim();

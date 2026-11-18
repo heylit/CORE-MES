@@ -3,7 +3,7 @@ import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
   adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
-  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
+  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisRevizyonGovdesi, siparisRevizyonlariCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
   teklifFormuSablonKopyalaGovdesi, teklifFormuVarsayilanGovdesi,
@@ -134,6 +134,25 @@ export const uclar = [
     govde: onayGeriAlGovdesi,
     cevap: siparisAyrintiSemasi,
     isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.durumDegistir(db, kullanici, parametre.id, 'geri-al', govde)),
+  }),
+  // SIP-40 (3427-4 a): onaylı sipariş gerekçeyle yeni sürüm alır. Onaylı siparişi değiştirmek onayı geri almakla aynı yetkidir
+  // (siparisler.onayla; yeni rol yok). Sürüm geçmişini siparişi okuyan görür; fiyat değişikliğinin değeri yalnız fiyat görene.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/:id/yeni-surum',
+    yetki: 'siparisler.onayla',
+    parametre: idParametresi,
+    govde: siparisRevizyonGovdesi,
+    cevap: siparisAyrintiSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.siparisRevizeEt(db, kullanici, parametre.id, govde, fiyatGorur(kullanici))),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/:id/surumler',
+    yetki: 'siparisler.oku',
+    parametre: idParametresi,
+    cevap: siparisRevizyonlariCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.siparisRevizyonlari(db, parametre.id, fiyatGorur(kullanici)),
   }),
   uc({
     yontem: 'POST',

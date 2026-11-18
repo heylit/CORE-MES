@@ -53,3 +53,9 @@ export const siparisIptalEdildiBildir = iptalEdildi.bildir;
 const degisti = olay<SiparisDurumOlayi>();
 export const siparisDegistiDinle = degisti.dinle;
 export const siparisDegistiBildir = degisti.bildir;
+
+// 3427-4 a: onaylı sipariş yeni sürümle düzenlendi (SIP-40). Termin değişmiş olabilir: bağlı proje bitişi ve başlamamış emir teslimi
+// onaydaki dinleyicilerle kayar. Olay sürümle aynı işlemde verilir.
+const revizeEdildi = olay<SiparisDurumOlayi>();
+export const siparisRevizeEdildiDinle = revizeEdildi.dinle;
+export const siparisRevizeEdildiBildir = revizeEdildi.bildir;

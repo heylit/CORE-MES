@@ -24,7 +24,7 @@ describe('Siparişler sayfası ve ikinci menü', () => {
     const yollar = rotalar.map((r) => r.yol);
     for (const m of maddeler) expect(yollar).toContain(m.yol);
     expect(yollar.filter((y) => !maddeler.some((m) => m.yol === y)).sort()).toEqual([
-      '/siparisler/:id', '/siparisler/:id/duzenle', '/siparisler/teklifler/:id', '/siparisler/teklifler/:id/duzenle', '/siparisler/teklifler/:id/teklif-ver',
+      '/siparisler/:id', '/siparisler/:id/duzenle', '/siparisler/:id/yeni-surum', '/siparisler/teklifler/:id', '/siparisler/teklifler/:id/duzenle', '/siparisler/teklifler/:id/teklif-ver',
     ]);
   });
 

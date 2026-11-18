@@ -38,7 +38,7 @@ import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlar
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -478,6 +478,9 @@ export function sunucununBaglari(): Bag[] {
       bag(`üretim emri bekletme ${k} -> kademeli uyarı`, (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet(k, o); }, uretimEmirleri.bekletmeKademeOkuyucusu(k))),
     bag('projeler hazırlık görevi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.hazirlik', o); }, projeler.hazirlikKademeKayitlari),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
+    // 3427-4 a: onaylı siparişin yeni sürümünde termin değişmiş olabilir; proje bitişi ve başlamamış emir teslimi onaydaki gibi kayar.
+    bag('sipariş yeni sürüm -> proje bitişi', siparisRevizeEdildiDinle, projeler.projeBitisiniSiparisTermineKaydir),
+    bag('sipariş yeni sürüm -> emir teslimi', siparisRevizeEdildiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
     bag('emir bitti -> plan bayat işareti', uretimEmirleri.emirBittiDinle, bayatEmirBittiYansit),
