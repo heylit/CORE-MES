@@ -55,7 +55,7 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
       {adim === 'oner' && kismi.length > 0 && (
         <div className="tc-pyq-yol-govde" data-tur="risk" data-kismi="">
           <p role="status"><b>{ad}: {String(eksik)} adımın planda yeri yok; öteki adımlar planda.</b><small>Sistem eksik adımlara yer bulur; bu emrin planda olan adımları da yeniden dizilebilir, öteki emirler yerinde kalır.</small></p>
-          <Dugme tur={bekleyen > 0 ? 'ikincil' : 'birincil'} simge="play" disabled={mesgul} onClick={eksikPlanla}>Eksik adımları planla</Dugme>
+          <Dugme tur={bekleyen > 0 || taslakVar ? 'ikincil' : 'birincil'} simge="play" disabled={mesgul} onClick={eksikPlanla}>Eksik adımları planla</Dugme>
         </div>
       )}
       {adim === 'oner' && bekleyen > 0 && (

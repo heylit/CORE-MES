@@ -495,7 +495,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {`${String(e.adet)} adet · `}<b data-d={e.durum}>{kismi ? `kısmen planda, ${String(eksik.length)} adımın yeri yok` : durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
           {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
         </small>
-        {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad} (${eksikNedeni(plan, x.id)})`).join(', ')}. Yukarıdaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
+        {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad}: ${eksikNedeni(plan, x.id)}`).join('; ')}. Yoldaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
         {malNeden !== null && <small data-emir-neden="malzeme">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {malNeden}</small>}
         {bekleyen && <small data-emir-neden="">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {bekleyen.k + 1}. adım ({e.adimlar[bekleyen.k]?.ad}) {tz(bekleyen.tezgah)} tezgâhında {sureYaz(bekleyen.bekleme.sure)} sıra bekliyor.</small>}
       </div>

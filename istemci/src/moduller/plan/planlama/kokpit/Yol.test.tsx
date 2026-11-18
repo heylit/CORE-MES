@@ -31,6 +31,12 @@ describe('planlama yolunda yarım planlı emir', () => {
     expect(oner).not.toHaveBeenCalled();
   });
 
+  it('taslak çubuğu görünürken (Canlıya al birincil) "Eksik adımları planla" ikincildir', () => {
+    const m = model([YARIM]), kart = siraKartlari(m).find((k) => k.kok === '1') ?? null;
+    render(<Yol m={m} p={null} kart={kart} vurgu zaman={(t) => String(t)} pd={null} plansiz={1} taslakVar mesgul={false} oner={vi.fn()} eksikPlanla={vi.fn()} hepsiniPlanla={vi.fn()} yenidenPlanla={vi.fn()} onayaGec={vi.fn()} hamle={vi.fn()} surum={4} />);
+    expect(screen.getByRole('button', { name: 'Eksik adımları planla' }).className).not.toContain('tc-dugme-birincil');
+  });
+
   it('hiç planlanmamış emirde "Sistem önersin" kalır; "Eksik adımları planla" çıkmaz', () => {
     const { oner } = ciz([YENI], '2', { emirNo: 'ORN-2', adim: 1, isaretli: 0, ileriHazir: true, isaretliHazir: false, terminVar: true });
     expect(screen.queryByRole('button', { name: 'Eksik adımları planla' })).toBeNull();

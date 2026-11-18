@@ -137,7 +137,7 @@ export function planaAlDenetimi(deger: unknown, g: PlanaAl, an: number): { hata:
   const s = dizi(D.siparisler).find((x) => nesne(x) && String(x.id) === g.emirId);
   if (!nesne(s)) return h(dogrulama('Emir çalışmada yok.', 'emirId'));
   if (s.iptal === true || s.havuz === true) return h(cakisma('Emir plan dışında (iptal ya da havuzda); plana alınamaz.'));
-  if (Object.values(ops).some((r) => nesne(r) && String(r.job) === g.emirId)) return h(cakisma('Emrin planda adımı var; plana alınamaz. Eksik adımı varsa "Planla" yerleştirir; planda olanın yeri tahtadan değişir.'));
+  if (Object.values(ops).some((r) => nesne(r) && String(r.job) === g.emirId)) return h(cakisma('Emrin planda adımı var; plana alınamaz. Eksik adımı varsa "Planla" ya da "Eksik adımları planla" yerleştirir; planda olanın yeri tahtadan değişir.'));
   if (!kimligiVar(D.tezgahlar, 'id', g.tezgah)) return h(dogrulama('Tezgâh çalışmada yok.', 'tezgah'));
   const simdi = simdiSaati(deger, an);
   if (simdi === null) return h(cakisma(EKSENSIZ));

@@ -837,7 +837,7 @@ describe('yarım planlı emir (klasik düzen)', () => {
     if (!k) throw new Error('kart');
     render(<EmirAdimlari m={MY} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} planlaDurumu={durum} plan={{ fail: ['3.20'], failNeden: { '3.20': { kod: 'zaman' } } }} />);
     const not = document.querySelector('[data-emir-neden="kismi"]');
-    expect(not?.textContent).toContain('2. Freze (ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı)');
+    expect(not?.textContent).toContain('2. Freze: ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı. Yoldaki');
     expect(not?.textContent).toContain('Eksik adımları planla');
     expect(document.querySelector('[data-emir-ozet]')?.textContent).toContain('kısmen planda, 1 adımın yeri yok');
     expect(document.querySelector('[data-etkin]')).toBeNull();

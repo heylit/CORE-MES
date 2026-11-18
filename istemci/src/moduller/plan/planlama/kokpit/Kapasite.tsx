@@ -114,7 +114,7 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
   return (
     <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-kapasite" aria-label="Duruş ve mesai">
       <header>
-        <div><b>Duruş ve mesai</b><small>Tezgâhın arıza ve bakım duruşları, ek mesaisi.</small></div>
+        <div><b>Duruş ve mesai</b><small>Tezgâhın arıza, bakım ve vardiya duruşları, ek mesaisi.</small></div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Duruş ve mesaiyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!yazabilir && <p className="tc-pyq-not">Duruşu ve ek mesaiyi yalnız planı yazabilen kişi ekler ya da siler.</p>}
@@ -124,7 +124,7 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
           {tezgahlar.map((t) => <option key={t.id} value={t.id}>{t.ad ? `${t.kod} · ${t.ad}` : t.kod}</option>)}
         </select>
       </div>
-      <h3>Arıza ve bakım</h3>
+      <h3>Duruşlar</h3>
       {l.length === 0 ? <p className="tc-pyq-not">{`${kod(tezgah)} için önümüzdeki duruş yok.`}</p> : (
         <ul className="tc-pyq-kap-liste">
           {l.map((d) => (
