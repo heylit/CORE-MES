@@ -1,12 +1,12 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
-import type { TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { SifirlaCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
-import { temizlikEkiSatirlari, temizlikYedegiUygunMu } from './kurallar.ts';
+import { sifirlamaAcikMi, sifirlamaKapsami, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
 import {
-  denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, denemeIsaretle, denemeIsaretiKalkmaAniniOku, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
+  denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, sifirdanBaslat, sifirlamaSayilariniOku, denemeIsaretle, denemeIsaretiKalkmaAniniOku, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
 } from './sorgular.ts';
 import { yedekOrtaminiKur } from './yedek-dizini.ts';
 import { yedekleriListele } from './yedek.ts';
@@ -82,10 +82,7 @@ export interface TemizleIstegi {
 
 // Sıra: bayrak, parola (sunucuda), yedek (bu veritabanının, yakın zamanda tamamlanmış), sonra tek işlev. Parola yanlışsa ya da
 // yedek uygun değilse hiçbir şey silinmez. Silinen numaralar denetim ekine girer; parola deftere girmez (sözleşmede gizli).
-export async function veriTemizle(
-  db: Db, kisiId: number, istek: TemizleIstegi, denetimEki: (satirlar: readonly DenetimSecimi[]) => void, simdi: Date,
-): Promise<TemizleCevabi> {
-  await bayrakliIste(db, kisiId);
+async function parolaVeYedekIste(db: Db, kisiId: number, istek: { parola: string; yedekAdi: string }, simdi: Date): Promise<void> {
   const kullaniciAdi = await kisiKullaniciAdi(db, kisiId);
   const giris = kullaniciAdi === null ? null : await girisDogrula(db, kullaniciAdi, { parola: istek.parola });
   if (giris === null || giris.kisiId !== kisiId) throw dogrulama('Parola yanlış.', 'parola');
@@ -93,6 +90,13 @@ export async function veriTemizle(
   if (!temizlikYedegiUygunMu(yedekler.find((y) => y.ad === istek.yedekAdi), simdi, TEMIZLIK_YEDEK_EN_ESKI_DK)) {
     throw cakisma(`Temizlikten önce son ${TEMIZLIK_YEDEK_EN_ESKI_DK} dakikada alınmış tamamlanmış bir yedek gerekir.`);
   }
+}
+
+export async function veriTemizle(
+  db: Db, kisiId: number, istek: TemizleIstegi, denetimEki: (satirlar: readonly DenetimSecimi[]) => void, simdi: Date,
+): Promise<TemizleCevabi> {
+  await bayrakliIste(db, kisiId);
+  await parolaVeYedekIste(db, kisiId, istek, simdi);
   const kapsam: TemizlikKapsami = istek.tarih === undefined ? { secim: istek.secim ?? [] } : { tarih: istek.tarih };
   const sonuc = await veriyiTemizle(db, kapsamSatiri(kapsam), istek.ozet).catch(vtHatasiniCevir);
   const kokler = sonuc.kokler.map((k) => ({ tur: k.tur as TemizlikTuru, no: k.no }));
@@ -108,4 +112,27 @@ export function denemeIsaretliKimlikler(db: Db, tur: TemizlikTuru): Promise<numb
 // Türde son işaret kalkma anı (yoksa null): önbellekli liste bu andan eski "değişenler" okumasını tam okumaya çevirir.
 export function denemeIsaretiKalkmaAni(db: Db, tur: TemizlikTuru): Promise<string | null> {
   return denemeIsaretiKalkmaAniniOku(db, tur);
+}
+
+// "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner. Sıra temizlikle aynıdır: bayrak, parola, yedek, tek işlev.
+const sifirlamaSatiri = (kisiId: number, s: SifirlamaSecimi) => ({ ...sifirlamaKapsami(s), kullanicilar: s.kullanicilar, yoneticiId: kisiId });
+function sifirlamaAcikIste(): void {
+  if (!sifirlamaAcikMi(process.env)) throw cakisma('Sıfırdan başla bu sunucuda kapalı; bilgi işlem TMIV2_SIFIRLAMA_ACIK=1 ile açar.');
+}
+
+export async function sifirlamaOzeti(db: Db, kisiId: number, s: SifirlamaSecimi): Promise<SifirlamaOzetiCevabi> {
+  await bayrakliIste(db, kisiId);
+  sifirlamaAcikIste();
+  const sayilar = await sifirlamaSayilariniOku(db, sifirlamaSatiri(kisiId, s));
+  return { satirlar: sifirlamaOzetSatirlari(sayilar), toplam: Object.values(sayilar).reduce((t, n) => t + n, 0) };
+}
+
+export async function sifirdanBasla(
+  db: Db, kisiId: number, istek: SifirlamaSecimi & { yedekAdi: string; parola: string }, simdi: Date,
+): Promise<SifirlaCevabi> {
+  await bayrakliIste(db, kisiId);
+  sifirlamaAcikIste();
+  await parolaVeYedekIste(db, kisiId, istek, simdi);
+  const sonuc = await sifirdanBaslat(db, sifirlamaSatiri(kisiId, istek)).catch(vtHatasiniCevir);
+  return { toplam: Object.values(sonuc.tablolar).reduce((t, n) => t + n, 0), yedekAdi: istek.yedekAdi };
 }

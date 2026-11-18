@@ -9,3 +9,5 @@ export const TEMIZLIK_EN_COK_KOK = 500;
 export const TEMIZLIK_TARIHLE_EN_COK_KOK = 2000;
 // Temizlik bu süreden eski yedekle başlamaz.
 export const TEMIZLIK_YEDEK_EN_ESKI_DK = 30;
+// "Sıfırdan başla" (3426 a) onay metni; Türkçe harfsiz yazılır, klavye düzeninden bağımsız.
+export const SIFIRLAMA_ONAY_METNI = 'SIFIRDAN BASLA';
