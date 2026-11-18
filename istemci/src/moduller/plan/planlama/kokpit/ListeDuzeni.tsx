@@ -25,7 +25,12 @@ export interface ListeDuzeniOzellikleri {
   malzemeBekleyen?: Readonly<Record<string, number>>;
   // Açık siparişin tezgâhlardaki yeri (tahta ve telefondaki listesi); sayfa çizer, işleri vurgular.
   tahta: ReactNode;
+  // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
+  satirBirincil: boolean;
 }
+
+// Açık satırın kendi birincil düğmesi var mı: plansızda Planla, geç ya da riskli siparişte Seçenekleri göster.
+export const satirBirincilIster = (k: SiraKarti | undefined): boolean => k !== undefined && k.durum !== 'iyi';
 
 const durumYazisi = (k: SiraKarti): string => {
   if (k.durum === 'plansiz') return k.yerlesen > 0 ? `${String(k.yerlesen)} / ${String(k.adim)} planda` : 'Plansız';
@@ -35,7 +40,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil }: ListeDuzeniOzellikleri) {
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [acik]);
   const sirali = listeSirasi(kartlar);
@@ -61,7 +66,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
               <span role="cell" data-ad="Bitiş">{bitis === null ? '—' : zaman(bitis)}</span>
               <span role="cell"><Rozet ton={TON[k.durum]} gorunum="cizgi">{durumYazisi(k)}</Rozet></span>
               <span role="cell">
-                <Dugme tur={!secili && k.durum !== 'iyi' ? 'birincil' : 'ikincil'} aria-expanded={secili} onClick={() => { ac(secili ? null : k.kok); }}>{secili ? 'Kapat' : DUGME[k.durum]}</Dugme>
+                <Dugme aria-expanded={secili} onClick={() => { ac(secili ? null : k.kok); }}>{secili ? 'Kapat' : DUGME[k.durum]}</Dugme>
               </span>
             </div>
             {secili && (
@@ -70,12 +75,12 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                   {k.durum === 'plansiz' ? (
                     <div className="tc-pyq-yol-govde" data-tur="risk">
                       <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Canlıya almadan atölye görmez; Geri al ile alınır.</small></p>
-                      {planla && <Dugme tur="birincil" simge="play" disabled={mesgul} onClick={() => { planla(k); }}>Planla</Dugme>}
+                      {planla && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="play" disabled={mesgul} onClick={() => { planla(k); }}>Planla</Dugme>}
                     </div>
                   ) : sonuc && (
                     <div className="tc-pyq-yol-govde" data-tur={sonuc.tur}>
                       <p role="status"><b>{sonuc.baslik}</b>{sonuc.neden !== null && <small>Neden: {sonuc.neden}</small>}</p>
-                      {sonuc.emir && hamle && !secenekAcik && <Dugme tur="birincil" simge="route" onClick={() => { setSecenekAcik(true); }}>Seçenekleri göster</Dugme>}
+                      {sonuc.emir && hamle && !secenekAcik && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="route" onClick={() => { setSecenekAcik(true); }}>Seçenekleri göster</Dugme>}
                       {yenidenPlanla && <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" onClick={() => { yenidenPlanla(k); }}>Planla</Dugme>}
                       {sonuc.emir && secenekAcik && (
                         <div className="tc-pyq-yol-secenek" role="group" aria-label="Düzeltme seçenekleri">

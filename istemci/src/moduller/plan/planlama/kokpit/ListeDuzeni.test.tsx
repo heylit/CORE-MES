@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
-import { ListeDuzeni } from './ListeDuzeni.tsx';
+import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
 import { modelKur } from './kurallar.ts';
 import { siraKartlari } from './yerlestirme.ts';
 
@@ -18,7 +18,7 @@ function kur(ek: { w?: Record<string, unknown>; gercek?: Record<string, unknown>
 const zaman = (t: number): string => `01.01 ${String(Math.round(t))}`;
 function ciz(x: ReturnType<typeof kur>, acik: string | null, ek: Partial<Parameters<typeof ListeDuzeni>[0]> = {}) {
   const ac = vi.fn(), planla = vi.fn(), yenidenPlanla = vi.fn();
-  render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik={acik} ac={ac} zaman={zaman} mesgul={false} planla={planla} yenidenPlanla={yenidenPlanla} hamle={null} surum={4} tahta={<div data-test-tahta="" />} {...ek} />);
+  render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik={acik} ac={ac} zaman={zaman} mesgul={false} planla={planla} yenidenPlanla={yenidenPlanla} hamle={null} surum={4} tahta={<div data-test-tahta="" />} satirBirincil {...ek} />);
   return { ac, planla, yenidenPlanla };
 }
 
@@ -49,6 +49,22 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(yenidenPlanla).toHaveBeenCalledWith(x.kartlar.find((k) => k.kok === '2'));
     fireEvent.click(screen.getByRole('button', { name: 'Kapat' }));
     expect(ac).toHaveBeenCalledWith(null);
+  });
+
+  it('sayfada tek birincil düğme (2155-9 a): satır düğmeleri ikincildir; açık satırın düğmesi yalnız sayfa izin verince birincildir', () => {
+    const x = kur();
+    ciz(x, null);
+    expect(document.querySelectorAll('.tc-dugme-birincil').length).toBe(0);
+    cleanup();
+    ciz(x, '2', { hamle: vi.fn() });
+    expect([...document.querySelectorAll('.tc-dugme-birincil')].map((b) => b.textContent)).toEqual(['Seçenekleri göster']);
+    cleanup();
+    ciz(x, '2', { hamle: vi.fn(), satirBirincil: false });
+    expect(document.querySelectorAll('.tc-dugme-birincil').length).toBe(0);
+    expect(screen.getByRole('button', { name: 'Seçenekleri göster' })).toBeTruthy();
+    expect(satirBirincilIster(x.kartlar.find((k) => k.kok === '2'))).toBe(true);
+    expect(satirBirincilIster(undefined)).toBe(false);
+    expect(satirBirincilIster({ ...x.kartlar[0]!, durum: 'iyi' })).toBe(false);
   });
 
   it('yazamayan kişide satır açılır, plan değiştiren düğme çıkmaz', () => {
