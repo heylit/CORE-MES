@@ -284,6 +284,34 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.deepEqual(await uygula(['O3'], { ...calisma, plan: null }), { hata: 'plan-yok' });
   });
 
+  // 3414-6 a: süren iş taşınınca durdurulmuş sayılır (w.durdurulan): gerçekleşen yeri sabitlenmez, kalan adedi kilitlendiği yere dizilir.
+  test('PD-20c (3414-6 a): durdurulan süren iş kilitlendiği yere kalan adediyle dizilir ve sürüyor sayılmaz; işaret yokken yerinde kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number; act?: number };
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, Is> }).ops;
+    const simdi = 20, hedef = 'O6.10';
+    assert.ok(eski[hedef]!.S < simdi && eski[hedef]!.C > simdi, 'iş sürüyor olmalı');
+    const adet = BUYUK_KAYIT.orders.find((x) => x.id === 'O6')!.qty;
+    assert.ok(adet >= 2, 'yarısı sayılabilecek adet');
+    const yeniS = eski[hedef]!.C + 24;
+    const suren = (ek: Record<string, unknown>) => ({
+      ...calisma, gercek: { [hedef]: { m: eski[hedef]!.m, S: eski[hedef]!.S, n: Math.floor(adet / 2), A: adet } },
+      plan: { ...(calisma['plan'] as object), ops: { ...eski, [hedef]: { ...eski[hedef], act: 1, pin: 1 } } }, ...ek,
+    });
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const uygula = (c: unknown) => degerlendirmeYap({ calisma: c, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['O6'] } }, an);
+    const w = calisma['w'] as Record<string, unknown>;
+    const r = sonuc(await uygula(suren({ w: { ...w, durdurulan: { [hedef]: 1 } }, locks: { [hedef]: { m: eski[hedef]!.m, S: yeniS } } }))); if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+    const yeni = r.plan['ops'] as Record<string, Is>;
+    assert.equal(yeni[hedef]!.S, yeniS);
+    assert.ok(!yeni[hedef]!.act, 'taşınan kalan sürüyor sayılmaz');
+    assert.ok(Math.abs((yeni[hedef] as unknown as { run: number }).run - (eski[hedef] as unknown as { run: number }).run / 2) < 1e-6, 'kalan adet (yarısı) kadar işleme süresi');
+    // Ardılı taşıma hesabı iter ve kilitler (tasima.test TH-14); burada yalnız motorun durdurulan işi nasıl dizdiği ölçülür.
+    // İşaret yokken süren iş gerçekleşen yerinde kalır (kilit onu oynatmaz).
+    const k = sonuc(await uygula(suren({ locks: { [hedef]: { m: eski[hedef]!.m, S: yeniS } } }))); if (k.tur !== 'plan-uygula') return assert.fail(k.tur);
+    assert.equal((k.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
+  });
+
   // 3335-2b: başlaması geçmiş, başlamamış iş motor için "çalışıyor" gibidir ve yerinde kalır; kişi o emri yeniden planlarsa şimdiden sonraya dizilir.
   test('PD-20b (3335-2b): yeniden planlanan emrin geride kalan işi şimdiden sonraya taşınır, ardılı ondan sonra başlar; istenmeyen emrin geride işi, elle kilitli ve başlamış iş yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };

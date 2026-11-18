@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { planGirdisi } from './plan-girdisi.ts';
+import { planGirdisi, yeniCalisma } from './plan-girdisi.ts';
 import { TERMIN_SAATI } from './kurallar.ts';
 import { motorYukle } from './plan-motoru.ts';
 
@@ -41,6 +41,37 @@ describe('plan girdisi (sunucu)', () => {
     assert.deepEqual([st.gercek['O1.10']?.S, st.gercek['O1.10']?.kalan, st.gercek['O1.10']?.sunucu], [33, 1, 1]);
     assert.equal(st.now, 7);
     assert.doesNotThrow(() => motorYukle().compile(r.st));
+  });
+
+  // 3414-6 a: kalanı taşınan süren adım (w.durdurulan). Sunucu adımı hâlâ çalışıyor diye verir (33. saat); sayımı çalışmaya yazılır ama
+  // planlamacının taşıdığı çubuk (20. saat) gerçekleşen yerine geri çekilmez ve motor onu sürüyor saymaz.
+  test('durdurulan süren adım: sayım güncellenir, çubuk taşındığı yerde kalır; işaret yokken çubuk gerçekleşen yerine çekilir', () => {
+    type Cikti = { S: { plan: { ops: Record<string, { S: number; act?: number; pin?: number }> }; gercek: Record<string, { S: number; n?: number; sunucu?: number }> }; st: { gercek: Record<string, unknown> } };
+    const c = calisma(D0);
+    const isaretli = planGirdisi({ calisma: { ...c, w: { ...(c['w'] as object), durdurulan: { 'O1.10': 1 } } }, kayit: KAYIT, kaynak: KAYNAK }) as unknown as Cikti;
+    assert.deepEqual([isaretli.S.gercek['O1.10']?.S, isaretli.S.gercek['O1.10']?.n, isaretli.S.gercek['O1.10']?.sunucu], [33, 2, 1], 'sayım çalışmaya yazılır');
+    assert.equal(isaretli.S.plan.ops['O1.10']?.S, 20, 'çubuk taşındığı yerde');
+    assert.ok(!isaretli.S.plan.ops['O1.10']?.act && !isaretli.S.plan.ops['O1.10']?.pin, 'sürüyor ve sabit sayılmaz');
+    assert.equal(isaretli.st.gercek['O1.10'], undefined, 'motor kalanı gerçekleşen yerine bağlamaz');
+    const isaretsiz = planGirdisi({ calisma: c, kayit: KAYIT, kaynak: KAYNAK }) as unknown as Cikti;
+    assert.deepEqual([isaretsiz.S.plan.ops['O1.10']?.S, isaretsiz.S.plan.ops['O1.10']?.act, isaretsiz.S.plan.ops['O1.10']?.pin], [33, 1, 1]);
+    assert.ok(isaretsiz.st.gercek['O1.10']);
+  });
+
+  // 3414-4 b: yeni çalışma kapatılabilen kısıtlar kapalı başlar; rota sırası ve çalışma günü açık kalır (onlarsız plan uygulanamaz),
+  // arıza payı ve termin tamponu da kapalıdır. Var olan çalışmanın listesi ve tamponu kendi kararıdır, girdi kurulurken değişmez.
+  test('yeni çalışmanın kısıt varsayılanları; var olan çalışmanın kısıt listesi ve tamponu değişmez', () => {
+    const y = yeniCalisma(null, null, '2026-10-19') as { kapali: string[]; param: { tampon: boolean } };
+    assert.deepEqual([...y.kapali].sort(), ['aparat', 'ariza', 'ayar', 'ayarci', 'devam', 'fai', 'fasonGun', 'fasonKap', 'kalibrasyon', 'malzeme', 'personel', 'program', 'serbest', 'tasima', 'tatil', 'tvardiya', 'yetkin']);
+    for (const k of ['rota', 'calismaGunu', 'tampon']) assert.ok(!y.kapali.includes(k), `${k} açık başlar`);
+    assert.equal(y.param.tampon, false);
+    const c = calisma(D0);
+    for (const [kapali, tampon] of [[['personel'], true], [[], false]] as const) {
+      const r = planGirdisi({ calisma: { ...c, kapali: [...kapali], param: { ...(c['param'] as object), tampon } }, kayit: KAYIT, kaynak: KAYNAK })!;
+      const S = r.S as { kapali: string[]; param: { tampon: boolean } };
+      assert.deepEqual(S.kapali, [...kapali]);
+      assert.equal(S.param.tampon, tampon);
+    }
   });
 
   // 3335-3b: adıma bildirilen ek süre çalışmanın ağırlığında durur (w.adimEk). Çalışan adımda hedef bitiş olur: sunucunun kalanı 34'te

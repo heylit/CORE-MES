@@ -42,7 +42,8 @@ export function imza(c: unknown): TaslakImzasi {
   const yer: Record<string, string> = {}, kilit: Record<string, string> = {};
   for (const [id, x] of Object.entries(ops)) { const y = yerYazisi(x); if (y !== null) yer[id] = y; }
   for (const [id, x] of Object.entries(locks)) { const y = yerYazisi(x); if (y !== null) kilit[id] = y; }
-  const ayar = JSON.stringify([W_ALANLARI.map((k) => w[k] ?? null), PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
+  // gerideTasinir yalnız yazılmışsa imzaya girer: alan eklenmeden önce açılmış taslağın imzası değişmez.
+  const ayar = JSON.stringify([[...W_ALANLARI.map((k) => w[k] ?? null), ...(typeof w.gerideTasinir === 'boolean' ? [w.gerideTasinir] : [])], PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
   const yon = Object.fromEntries(Object.entries(nesne(w.yonEmir) ? w.yonEmir : {}).filter(([, v]) => v === 'ileri' || v === 'geri').map(([id, v]) => [id, String(v)]));
   const D = nesne(d.D) ? d.D : {}, meta = nesne(D.meta) ? D.meta : {};
   return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w), adimBekle: adimBekleImzasi(w) };
@@ -195,11 +196,15 @@ export function ayarUygula(deger: unknown, a: TaslakAyarlari, ayrinti: string, k
   const yeni = kopya(deger);
   const w: Nesne = nesne(yeni.w) ? yeni.w : (yeni.w = {}) as Nesne;
   const param: Nesne = nesne(yeni.param) ? yeni.param : (yeni.param = {}) as Nesne;
+  // Süre ayarı gelmediyse çalışmanın verisine dokunulmaz.
+  const sureAyari = a.ayarlar ?? {};
+  const D: Nesne = Object.keys(sureAyari).length === 0 ? {} : nesne(yeni.D) ? yeni.D : (yeni.D = {}) as Nesne;
+  const ayarlar: Nesne = Object.keys(sureAyari).length === 0 ? {} : nesne(D.ayarlar) ? D.ayarlar : (D.ayarlar = {}) as Nesne;
   const geri: GeriYama[] = [];
-  for (const [yer, hedef, alanlar] of [['w', w, a.w], ['param', param, a.param]] as const) {
+  for (const [yol, hedef, alanlar] of [[['w'], w, a.w], [['param'], param, a.param], [['D', 'ayarlar'], ayarlar, sureAyari]] as const) {
     for (const [id, v] of Object.entries(alanlar)) {
       if (v === undefined || hedef[id] === v) continue;
-      geri.push(hedef[id] === undefined ? { yol: [yer], id } : { yol: [yer], id, once: hedef[id] });
+      geri.push(hedef[id] === undefined ? { yol: [...yol], id } : { yol: [...yol], id, once: hedef[id] });
       hedef[id] = v;
     }
   }

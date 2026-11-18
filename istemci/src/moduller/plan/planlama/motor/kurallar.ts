@@ -29,6 +29,8 @@ export interface PlanIslemi {
   why: Neden | null;
   // Bolluk: işin planı bozmadan kayabileceği saat; aynı aileden gelen kısa ayar; başlamış iş.
   sl: number | null; famHit: boolean; act: boolean;
+  // Gerçekleşeni olan ve biten iş (yeri değişmez); süren işte yoktur.
+  bitti?: boolean;
   takim?: TakimOmru[];
   // İkincil kaynak yüzünden kayan işin ilk aday başlangıcı (çizelgedeki bekleme taraması ve Oynat).
   ikBas?: number;
@@ -94,6 +96,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       id, job, m, S: sayi(r.S) ?? Number.NaN, C: sayi(r.C) ?? Number.NaN,
       su: sayi(r.su) ?? 0, run: sayi(r.run) ?? 0, fas: !!r.fas, pin: !!r.pin, Su: sayi(r.Su), lot1: sayi(r.lot1), why,
       sl: sayi(r.sl), famHit: !!r.famHit, act: !!r.act,
+      ...(r.done && (r.act || r.bitti) ? { bitti: true } : {}),
       ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
       ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
     };

@@ -53,7 +53,7 @@
 .tc-pyq-suzgec button[data-d="risk"]::before { background: var(--d-risk); }
 .tc-pyq-suzgec button[data-d="plansiz"]::before { background: var(--d-plansiz); }
 .tc-pyq-ara {
-  display: inline-flex; align-items: center; gap: var(--b-1); flex: 1 1 calc(var(--b-6) * 5); max-width: var(--arama-genis); min-height: var(--dokunma); padding: 0 var(--b-2);
+  display: inline-flex; align-items: center; gap: var(--b-1); flex: 1 1 calc(var(--b-6) * 4); min-width: calc(var(--b-6) * 4); max-width: var(--arama-genis); min-height: var(--dokunma); padding: 0 var(--b-2);
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); color: var(--muted);
 }
 .tc-pyq-ara input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--yazi-s); outline: none; }
@@ -716,8 +716,6 @@
 .tc-pyq-acilir-menu .tc-pyq-menu-yon { flex: 0 0 auto; flex-direction: row; gap: var(--b-1); }
 .tc-pyq-acilir-menu .tc-pyq-menu-yon button { border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); padding: 0 var(--b-3); font-weight: 700; }
 .tc-pyq-planla .tc-pyq-acilir-menu button > span, .tc-pyq-menu-secili > span:first-child { font-weight: 700; }
-.tc-pyq-akis { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
-.tc-pyq-akis > small { color: var(--muted); font-size: var(--yazi-xs); }
 /* 3335-3b: operasyon satırında adıma sorun bildir düğmesi. Kart düzeninde (dar ekran) yazısıyla durur; geniş tabloda sütun dar olduğu için yalnız simgedir. */
 .tc-pyq-adim-sorun {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--b-1); min-width: var(--dokunma); min-height: var(--dokunma); padding: 0 var(--b-2);
@@ -727,4 +725,53 @@
 @media (min-width: 900px) {
   .tc-pyq-adim-sorun { padding: 0; border-color: transparent; color: var(--muted); }
   .tc-pyq-adim-sorun > span { display: none; }
+}
+
+/* Planlama yolu (3414): adımlar, sonuç cümlesi ve o adımın düğmeleri. */
+.tc-pyq-yol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.tc-pyq-yol-not { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-yol > .tc-pyq-yol-govde { flex: 1 1 100%; }
+.tc-pyq-yol .tc-pyq-onay-adimlar li[data-bitti] { color: var(--ink); }
+.tc-pyq-yol-govde { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-left: var(--kayma) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-pyq-yol-govde[data-tur="gec"] { border-left-color: var(--d-gec); }
+.tc-pyq-yol-govde[data-tur="risk"] { border-left-color: var(--d-risk); }
+.tc-pyq-yol-govde[data-tur="iyi"] { border-left-color: var(--d-iyi); }
+.tc-pyq-yol-govde > p { flex: 1 1 20rem; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pyq-yol-govde > p small { color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyq-yol-govde[data-tur="gec"] > p small { color: var(--ink); }
+.tc-pyq-yol-secenek { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pyq-yol-secenek > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-gorunum-satiri { display: contents; }
+.tc-pyq-gorunum-satiri[data-kapali], .tc-pyq-menu-diger[data-kapali] { display: none; }
+.tc-pyq-menu-diger { display: flex; flex-direction: column; }
+.tc-pyq-acilir-menu .tc-pyq-menu-diger-dugme { margin-top: var(--b-1); border-top: var(--cizgi-ince) solid var(--edge2); color: var(--muted); }
+
+/* Liste ortada düzeni (3414 b): sipariş tablosu; satır açılınca sonuç, adımlar ve tezgâhlardaki yer. */
+.tc-pyq-ld { display: flex; flex-direction: column; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); min-width: 0; }
+.tc-pyq-ld-bas, .tc-pyq-ld-satir { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) auto; align-items: center; gap: var(--b-3); padding: var(--b-2) var(--b-3); }
+.tc-pyq-ld-bas { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; border-bottom: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-ld-bas > span:last-child { min-width: calc(var(--b-6) * 3); }
+.tc-pyq-ld-satir > span:last-child { min-width: calc(var(--b-6) * 3); display: flex; justify-content: flex-end; }
+.tc-pyq-ld-kart { border-bottom: var(--cizgi-ince) solid var(--edge2); box-shadow: inset var(--kayma) 0 0 transparent; }
+.tc-pyq-ld-kart:last-child { border-bottom: 0; }
+.tc-pyq-ld-kart[data-d="gec"] { box-shadow: inset var(--kayma) 0 0 var(--d-gec); }
+.tc-pyq-ld-kart[data-d="risk"], .tc-pyq-ld-kart[data-d="plansiz"] { box-shadow: inset var(--kayma) 0 0 var(--d-risk); }
+.tc-pyq-ld-kart[data-acik] { background: var(--panel2); }
+.tc-pyq-ld-satir > [role="cell"] { min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tc-pyq-ld-ayrinti { display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: var(--b-3); align-items: start; padding: 0 var(--b-3) var(--b-3); }
+.tc-pyq-ld-panel { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-pyq-ld-tahta { min-width: 0; display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-pyq-ld-adimlar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-size: var(--yazi-s); }
+.tc-pyq-ld-adimlar li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-1) var(--b-3); padding: var(--b-1) 0; border-bottom: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-ld-adimlar small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-pyq-ld-adimlar li[data-yok] small { color: var(--d-risk); }
+.tc-pyq-ust-sade .tc-pyq-ara { flex: 1 1 calc(var(--b-6) * 6); }
+@media (max-width: 1023px) {
+  .tc-pyq-ld-ayrinti { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .tc-pyq-ld-bas { display: none; }
+  .tc-pyq-ld-satir { grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-2); }
+  .tc-pyq-ld-satir > [data-ad]::before { content: attr(data-ad) " "; color: var(--muted); }
+  .tc-pyq-ld-satir > span:last-child { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
 }

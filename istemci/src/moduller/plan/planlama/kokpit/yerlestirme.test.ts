@@ -145,8 +145,9 @@ describe('Kokpit planlı adımı taşıma adayları (3297-4)', () => {
     expect(tasimaAdaylari(model(), e, '5.20', 1)).toEqual([{ tezgah: 'M2', baslangic: 16 }]);
   });
 
-  it('başlamış iş, planda olmayan ve emrin olmayan adım aday vermez', () => {
-    expect(tasimaAdaylari(model({ basladi: true }), e, '5.20', 6)).toEqual([]);
+  it('biten iş, planda olmayan ve emrin olmayan adım aday vermez; süren iş aday verir (taşınınca durdurulur)', () => {
+    expect(tasimaAdaylari(model({ basladi: true, bitti: true }), e, '5.20', 6)).toEqual([]);
+    expect(tasimaAdaylari(model({ basladi: true }), e, '5.20', 6).length).toBe(2);
     expect(tasimaAdaylari({ ...model(), isler: {} }, e, '5.20', 6)).toEqual([]);
     expect(tasimaAdaylari(model(), e, '8.10', 6)).toEqual([]);
   });

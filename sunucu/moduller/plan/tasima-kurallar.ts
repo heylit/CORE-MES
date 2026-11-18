@@ -2,7 +2,8 @@
 // türüne göre yeniden yaslanır. Bekleyen bağda ardıl öncül bitince, örtülü bağda ilk devir partisi gelince başlar ve öncülden önce bitmez;
 // bağımsız adımın bağı yoktur, kımıldamaz. Başka emrin işi itilmez: itilen adım tezgâhtaki en yakın boş yere oturur (2794 2/3 b). Geri
 // çekilen öncül şimdiye, donuk bölgeye ya da başlamış adıma çarparsa engelden sonraki ilk uygun yere oturur, taşınan iş onun arkasına kayar
-// (3/3 b). Başlamış ve donuk adım kımıldamaz; onu geçersiz kılan ya da ufku aşan taşımanın tamamı yapılmaz (1/3 a). Taşınan işin kendisi elle
+// (3/3 b). Başlamış ve donuk adım kımıldamaz; onu geçersiz kılan ya da ufku aşan taşımanın tamamı yapılmaz (1/3 a). Taşınan işin kendisi
+// sürüyorsa çağıran onu sabit vermez: durdurulmuş sayılır, kalanı taşınır (3414-6 a). Taşınan iş elle
 // konduğu için donuk bölgede olabilir; sabit sayılması çağıranın kararıdır. Saf: takvim dışarıdan.
 
 export type BagTuru = 'b' | 'o';
@@ -10,6 +11,8 @@ export interface TasimaIsi {
   id: string; job: string; opNo: string; m: string; S: number; C: number; lot1: number;
   // Başlamış, biten ya da donuk bölgedeki iş yerinde kalır.
   sabit: boolean; fas: boolean;
+  // Sabitliğin nedeni; ileti ne yapılacağını buna göre söyler. Yoksa genel ileti yazılır.
+  neden?: 'basladi' | 'bitti' | 'geride' | 'donuk';
 }
 export interface TasimaYeri { S: number; C: number; lot1: number }
 export interface TasimaGirdisi {
@@ -64,6 +67,15 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     }
     return 'ufuk';
   };
+  // Yerinden oynamayan adımın nedeni ve ne yapılacağı (3414).
+  const sabitNedeni = (id: string): string => {
+    const n = g.isler.get(id)?.neden;
+    if (n === 'bitti') return `${op(id)} bitmiş; yeri değişmez. Taşıdığınız işi ondan önce bitecek bir saate bırakın.`;
+    if (n === 'basladi') return `${op(id)} başlamış; yeri değişmez. Taşıdığınız işi ondan sonraya bırakın.`;
+    if (n === 'geride') return `${op(id)} başlamamış ama başlama saati geçmiş; plan onu çalışıyor sayar ve yerinde tutar. Emri Yeniden planla ile şimdiden sonraya dizin ya da Ayarlar'da "Saati geçmiş, başlamamış iş taşınabilsin" seçeneğini açın.`;
+    if (n === 'donuk') return `${op(id)} dondurulmuş bölgede; yeri değişmez. Ayarlar'da Dondurulmuş bölge kısaltılırsa taşınır.`;
+    return `${op(id)} başlamış ya da donuk bölgede.`;
+  };
   const bosRed = (id: string, m: string, r: 'uygunsuz' | 'ufuk') => red(r === 'uygunsuz'
     ? `${op(id)} ${g.tezgahAdi(m)} tezgâhında yerleşemiyor; taşıma yapılmadı.` : `${op(id)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
   const alt = Math.max(g.simdi, g.donuk);
@@ -117,6 +129,34 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       notlar.push(`${op(isId)} ${g.saatMetni(y2.S)} saatine kaydı`);
     }
   }
+  // Başka siparişin işiyle çakışma (3414-3): taşınan iş öteki işin önüne doğru bırakıldıysa (ondan önce ya da aynı anda başlıyorsa) öteki iş
+  // arkadaki en yakın boş yere itilir; içine ya da arkasına doğru bırakıldıysa taşınan iş onun arkasındaki boşluğa oturur. Başlamış ve donuk
+  // iş itilmez: taşınan iş onun da arkasına oturur.
+  const otekiItilen: string[] = [];
+  {
+    const cakisan = (y: TasimaYeri) => dolu(m0, isId).filter((a) => g.isler.get(a.id)!.job !== x.job && a.S < y.C - E && a.C > y.S + E);
+    let ym: TasimaYeri = yeri(isId), kaydi = false;
+    for (let n = 0; n < 500; n++) {
+      const engel = cakisan(ym).filter((a) => a.S < ym.S - E || g.isler.get(a.id)!.sabit);
+      if (engel.length === 0) break;
+      const y = g.yer(isId, m0, Math.max(...engel.map((a) => a.C)));
+      if (y === null) return bosRed(isId, m0, 'uygunsuz');
+      if (y.C > g.ufuk + E) return bosRed(isId, m0, 'ufuk');
+      ym = y; kaydi = true;
+    }
+    if (kaydi) {
+      yeni.set(isId, { ...ym, m: m0, tur: 'tasinan' });
+      notlar.push(`${op(isId)} dolu yerin arkasındaki boşluğa, ${g.saatMetni(ym.S)} saatine yerleşti`);
+    }
+    for (const a of cakisan(ym).sort((p, q) => p.S - q.S)) {
+      const s = sinir(a.id);
+      const y = bosYer(a.id, a.m, Math.max(ym.C, s.bas), s.bit);
+      if (typeof y === 'string') return bosRed(a.id, a.m, y);
+      yeni.set(a.id, { ...y, m: a.m, tur: 'itilen' });
+      otekiItilen.push(a.id);
+    }
+    if (otekiItilen.length > 0) notlar.push(`başka siparişin ${String(otekiItilen.length)} işi arkaya itildi`);
+  }
   // İleri itme: yeri değişen her işin ardılı, öncüllerinin izin verdiği yerden önceyse tezgâhındaki en yakın boş yere itilir.
   const itilen: string[] = [];
   const fasonlar: string[] = [];
@@ -127,7 +167,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       const ai = g.isler.get(a)!;
       const s = sinir(a), y0 = yeri(a);
       if (y0.S >= s.bas - E && y0.C >= s.bit - E) continue;
-      if (ai.sabit) return red(`${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.`);
+      if (ai.sabit) return red(ai.neden === undefined ? `${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.` : `Taşıma yapılmadı: sonraki adım rota sırasının dışında kalırdı. ${sabitNedeni(a)}`);
       // Fason adım tezgâhta durmaz ve kilitlenmez; süresini motor plan uygulanınca kurar. Arkasındakiler bekleyecek diye aynı süreyle
       // kaydırılmış sayılır, kendisi sonuca girmez.
       if (ai.fas) {
@@ -148,7 +188,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
   if (fasonlar.length > 0) notlar.push(`${fasonlar.map(op).join(', ')} fason; süresi plan uygulanınca yeniden hesaplanır`);
   // Taşınan iş donuk bölgede başka işin yerine girerse operatörün yakın listesi değişir (Atölye N1).
   const xs = yeri(isId);
-  if (xs.S < g.donuk - E && dolu(m0, isId).some((a) => a.S < g.donuk - E && a.S < xs.C - E && a.C > xs.S + E)) {
+  if (xs.S < g.donuk - E && (otekiItilen.some((id) => g.isler.get(id)!.S < g.donuk - E) || dolu(m0, isId).some((a) => a.S < g.donuk - E && a.S < xs.C - E && a.C > xs.S + E))) {
     notlar.push(`${g.tezgahAdi(m0)} tezgâhında sıradaki iş değişir; operatör listesi güncellenir`);
   }
   const isler = [...yeni].map(([id, y]) => {

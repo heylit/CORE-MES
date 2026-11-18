@@ -143,6 +143,15 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     expect(screen.queryByRole('button', { name: 'İleriye yerleştir' })).toBeNull();
   });
 
+  it('durdurulup taşınan, sahada süren adımın başlangıcının altında "terminalde durdurulmayı bekliyor" yazar (3414-7 a)', () => {
+    const m = { ...M, isler: { '1.10': { ...is('1.10', 'T1', 8, 12), durdurmaBekliyor: true } } };
+    render(<EmirAdimlari m={m} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durdurma-bekliyor="1.10"]')?.textContent).toBe('terminalde durdurulmayı bekliyor; canlıda eski yerinde');
+    cleanup();
+    render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
+  });
+
   it('yazamayan kişi adımları görür, yerleştiremez', () => {
     onizlemeKur();
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={null} surum={4} adimAc={vi.fn()} />);
@@ -251,12 +260,12 @@ describe('Kokpit planlı operasyonu seç-yerleştir ile taşıma (3297-4)', () =
     expect(tasi).toHaveBeenLastCalledWith('1.10', 'T1', 12);
   });
 
-  it('başlamış iş taşınmaz: neden yazılır, sunucuya sorulmaz, tahtaya hedef verilmez', () => {
+  it('biten iş taşınmaz: neden yazılır, sunucuya sorulmaz, tahtaya hedef verilmez', () => {
     const oz = tasiOnizle();
     const hedef = vi.fn();
-    const m = { ...MT, isler: { ...MT.isler, '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna', basladi: true } } };
+    const m = { ...MT, isler: { ...MT.isler, '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna', basladi: true, bitti: true } } };
     render(<EmirAdimlari m={m} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} hedef={hedef} secIs="1.10" tasi={vi.fn()} />);
-    expect(screen.getByText('Başlamış iş taşınmaz.')).toBeTruthy();
+    expect(screen.getByText('Biten iş taşınmaz.')).toBeTruthy();
     expect(oz).not.toHaveBeenCalled();
     expect(hedef.mock.calls.every((x) => x[0] === null)).toBe(true);
   });
@@ -516,11 +525,11 @@ describe('Kokpit operasyon tablosu (3318 a)', () => {
     expect((within(satir('1.10')).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement).disabled).toBe(true);
     expect((within(satir('1.10')).getByLabelText('Torna başlangıcı') as HTMLInputElement).disabled).toBe(true);
     unmount();
-    const m = { ...MT, isler: { '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna', basladi: true } } };
+    const m = { ...MT, isler: { '1.10': { ...is('1.10', 'T1', 20, 24), ad: 'Torna', basladi: true, bitti: true } } };
     render(<EmirAdimlari m={m} kart={k1()} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} tasi={vi.fn()} saatGirdisi={girdi} />);
     const tezgah = within(satir('1.10')).getByRole('combobox', { name: 'Torna tezgâhı' }) as HTMLSelectElement;
     expect(tezgah.disabled).toBe(true);
-    expect(tezgah.getAttribute('title')).toBe('Başlamış iş taşınmaz');
+    expect(tezgah.getAttribute('title')).toBe('Biten iş taşınmaz');
   });
 });
 

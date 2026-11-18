@@ -76,8 +76,25 @@ describe('atölye komutlarının kuralı', () => {
     assert.deepEqual(hata(red), { tur: 'dogrulama', ileti: 'OP 50 planlama ufkuna sığmıyor; taşıma yapılmadı.', alan: 'baslangic' });
     // Denetimden geçmeyen taşımada itme hesaplanmaz.
     let cagrildi = false;
-    hata(isTasi(c, { isId: 'J1.20', tezgah: 'T2', baslangic: 16 }, KISI, () => { cagrildi = true; return itme(); }));
+    hata(isTasi(c, { isId: 'J1.30', tezgah: 'T2', baslangic: 16 }, KISI, () => { cagrildi = true; return itme(); }));
     assert.equal(cagrildi, false);
+  });
+
+  test('3414-6 a: süren iş taşınınca durdurulmuş sayılır; kilit ve durdurma işareti tek değişikliktir, kalanı olmayan iş taşınmaz', () => {
+    const suren = (): TasimaSonucu => ({ gecerli: true, ileti: 'OP 20 durdurulmuş sayıldı.', isler: [{ isId: 'J1.20', tezgah: 'T2', S: 16, C: 17, eskiTezgah: 'T1', eskiS: 8, tur: 'tasinan' }] });
+    const c = planli({ w: { dondurma: 0 }, gercek: { 'J1.20': { m: 'T1', S: 8, n: 3, A: 5 } } });
+    const y = deger(isTasi(c, { isId: 'J1.20', tezgah: 'T2', baslangic: 16 }, KISI, suren));
+    assert.deepEqual(y.locks, { 'J1.20': { m: 'T2', S: 16 } });
+    assert.deepEqual(y.w, { dondurma: 0, durdurulan: { 'J1.20': 1 } });
+    const b = y.bekleyen as { ne: string; geri: unknown }[];
+    assert.equal(b[0]?.ne, 'Süren iş durduruldu, kalanı taşındı');
+    assert.deepEqual(b[0]?.geri, [{ yol: ['locks'], id: 'J1.20' }, { yol: ['w'], id: 'durdurulan' }]);
+    // İkinci taşımada önceki işaret geri dönüş farkına yazılır.
+    const y2 = deger(isTasi({ ...planli({ w: { durdurulan: { 'J1.90': 1 } } }) }, { isId: 'J1.20', tezgah: 'T2', baslangic: 16 }, KISI, suren));
+    assert.deepEqual((y2.w as Record<string, unknown>).durdurulan, { 'J1.90': 1, 'J1.20': 1 });
+    assert.deepEqual((y2.bekleyen as { geri: unknown[] }[])[0]?.geri[1], { yol: ['w'], id: 'durdurulan', once: { 'J1.90': 1 } });
+    // Bütün adedi yapılmış süren işte taşınacak kalan yoktur.
+    assert.match(hata(isTasi(planli({ gercek: { 'J1.20': { m: 'T1', S: 8, n: 5, A: 5 } } }), { isId: 'J1.20', tezgah: 'T2', baslangic: 16 }, KISI, suren)).ileti, /kalan adet yok/);
   });
 
   test('aynı tezgâhta saat kaydırma önceki kilidi geri dönüş farkına yazar; aynı kilit değişiklik değildir', () => {
@@ -97,10 +114,9 @@ describe('atölye komutlarının kuralı', () => {
     assert.equal(o.dataVer, 4);
   });
 
-  test('taşı reddeder: plan yok, iş yok, başlamış, biten, fason iş, bilinmeyen tezgâh, geçmiş saat', () => {
+  test('taşı reddeder: plan yok, iş yok, biten, fason iş, bilinmeyen tezgâh, geçmiş saat', () => {
     assert.equal(hata(isTasi(planli({ plan: null }), { isId: 'J1.10', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).tur, 'cakisma');
     assert.match(hata(isTasi(planli(), { isId: 'J9.10', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /bulunamadı/);
-    assert.match(hata(isTasi(planli(), { isId: 'J1.20', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Başlamış/);
     assert.match(hata(isTasi(planli(), { isId: 'J1.30', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Biten/);
     assert.match(hata(isTasi(planli(), { isId: 'J1.40', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, /Fason/);
     assert.deepEqual(hata(isTasi(planli(), { isId: 'J1.10', tezgah: 'T9', baslangic: 16 }, KISI, yalniz)), { tur: 'dogrulama', ileti: 'Tezgâh çalışmada yok.', alan: 'tezgah' });

@@ -20,6 +20,15 @@ function kur() {
 }
 
 describe('planlama motoru hesapları', () => {
+
+  it('plan okunurken biten iş işaretlenir (bitmiş ve başlamış ya da bitti kayıtlı); süren ve başlamamış iş işaretlenmez', () => {
+    const c = ornekCalisma();
+    const ops = c.plan!.ops as Record<string, Record<string, unknown>>;
+    const [a, b, d, e] = Object.keys(ops) as [string, string, string, string];
+    const c2 = { ...c, plan: { ...c.plan!, ops: { ...ops, [a]: { ...ops[a], done: 1, act: 1 }, [b]: { ...ops[b], done: 1, act: 0, bitti: 1 }, [d]: { ...ops[d], done: 0, act: 1 }, [e]: { ...ops[e], done: 1, act: 0 } } } } as typeof c;
+    const p = planOku(c2)!;
+    expect([p.ops[a]?.bitti, p.ops[b]?.bitti, p.ops[d]?.bitti, p.ops[e]?.bitti]).toEqual([true, true, undefined, undefined]);
+  });
   it('Yapılacaklar ve veri denetimi eski sayfanınkiyle aynı', () => {
     const { c, p, cx } = kur();
     expect(sorunlar(c, p, cx, planGuncel(c)).map((s) => [s.ton, s.baslik, s.eylem.tur])).toEqual([
