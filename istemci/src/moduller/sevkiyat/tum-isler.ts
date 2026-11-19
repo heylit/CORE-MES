@@ -15,6 +15,7 @@ export const KAYNAKLAR: readonly { kod: KalemKaynagi; ad: string; simge: SimgeAd
   { kod: 'fason-donus', ad: 'Fason dönüşü', simge: 'download', sahip: 'Üretim / Planlama', aciklama: 'Fasona giden parçanın dönüşü' },
   { kod: 'alim', ad: 'Alım', simge: 'building', sahip: 'Satın alma', aciklama: 'Satın alma siparişinin malzemesi' },
   { kod: 'elle', ad: 'Elle iş', simge: 'list', sahip: 'Sevkiyat', aciklama: 'Elle girilen iş' },
+  { kod: 'siparis', ad: 'Satış kalemi', simge: 'tag', sahip: 'Sevkiyat', aciklama: 'Emirsiz satış kalemi (stoktan ya da satın alınan)' },
 ];
 export const KAYNAK = Object.fromEntries(KAYNAKLAR.map((k) => [k.kod, k])) as Record<KalemKaynagi, (typeof KAYNAKLAR)[number]>;
 
@@ -161,5 +162,5 @@ export function serbestKapaliNedeni(r: TumIsSatiri): string | null {
 
 // Kalemi kimin serbest bıraktığı (941 c): sahibi modülün yazma işlemi ya da sevkiyat.is-yaz.
 export const KALEM_SAHIBI: Record<KalemKaynagi, string> = {
-  urun: 'uretim-emirleri.duzenle', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
+  urun: 'uretim-emirleri.duzenle', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz', siparis: 'sevkiyat.is-yaz',
 };

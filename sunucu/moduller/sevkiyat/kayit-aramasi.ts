@@ -8,7 +8,7 @@ import * as tumIsler from './tum-isler.ts';
 
 // Üst çubuktaki genel aramanın sevkiyat kaynağı: emir numarasıyla o emrin sevk kalemleri (932 a) ve irsaliye numarasıyla sevk işi (1239).
 
-const KAYNAK_ADI: Record<KalemKaynagi, string> = { urun: 'Ürün', fason: 'Fason gidişi', 'fason-donus': 'Fason dönüşü', alim: 'Alım', elle: 'Elle iş' };
+const KAYNAK_ADI: Record<KalemKaynagi, string> = { urun: 'Ürün', fason: 'Fason gidişi', 'fason-donus': 'Fason dönüşü', alim: 'Alım', elle: 'Elle iş', siparis: 'Satış kalemi' };
 const ASAMA_ADI: Record<TumIsAsamasi, string> = {
   hazir: 'Hazır', 'hazir-degil': 'Hazır değil', bekliyor: 'Hazır olunca', havuzda: 'Havuzda', planlandi: 'Planlandı', yolda: 'Yolda', depoda: 'Depoda',
   tamamlandi: 'Tamamlandı',

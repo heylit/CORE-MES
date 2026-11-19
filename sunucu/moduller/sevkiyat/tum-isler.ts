@@ -9,7 +9,8 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaVarMi } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
-import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import { sevkEdilecekKalemler, siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import type { SevkEdilecekKalem } from '../siparisler/disari.ts';
 import { adimliEmirListesi, emirNolari, fasonGonderimleri, fasonIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { FasonGonderimi, FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import {
@@ -23,7 +24,8 @@ const varolan = <T>(x: readonly (T | null)[]): T[] => x.filter((y): y is T => y 
 const gun = (z: string | null): string | null => (z === null ? null : z.slice(0, 10));
 
 // Kalemin çıkabilirliği: ürün emri bitince (adet dolar), fason gidişi adımın sırası gelip gidecek parça varken (Dış operasyonlardan
-// yazılmış gidişin hareketi zaten vardır), dönüş gidişi depodan çıkınca. Alım ve elle gidiş hep hazırdır.
+// yazılmış gidişin hareketi zaten vardır), dönüş gidişi depodan çıkınca. Alım, elle gidiş ve sipariş kalemi hep hazırdır (stok depo
+// çıkışında görülür).
 interface Hazirlik { hazir: boolean; gidisCikti: boolean | null }
 async function hazirliklar(db: Db, kalemler: readonly KalemSatiri[], fason?: Map<number, FasonGonderimi>): Promise<Map<number, Hazirlik>> {
   const gidisler = new Map((await sorgu.kalemlerGetir(db, varolan(kalemler.map((k) => k.gidisBekleyenId)))).map((g) => [g.id, g]));
@@ -85,6 +87,7 @@ async function kalemSatirlari(db: Db, kalemler: readonly KalemSatiri[], fasonlar
   const kisiIdleri = kalemler.flatMap((k) => [k.sonYazanKisiId, k.erkenKisiId, k.depoKisiId]);
   const kisiler = await kisiAdlari(db, varolan(kisiIdleri));
   const ad = (id: number | null) => (id === null ? null : kisiler.get(id) ?? null);
+  const satislar = await siparisSatiriOzetleri(db, varolan(kalemler.map((k) => k.satisSiparisSatiriId)));
   const satirlar = kalemler.map((k): TumIsSatiri => {
     const h = hazir.get(k.id)!;
     const adim = k.isEmriId === null ? undefined : adimlar.get(k.isEmriId);
@@ -94,6 +97,7 @@ async function kalemSatirlari(db: Db, kalemler: readonly KalemSatiri[], fasonlar
       istenenTarih: k.istenenTarih, uretimEmriId: k.uretimEmriId, isEmriId: k.isEmriId, opNo: adim?.opNo ?? null, adim: adim?.adim ?? null,
       ilerleme: h.gidisCikti === false ? 'Gidiş henüz depodan çıkmadı' : k.kaynak === 'urun' && k.adet === null ? 'Emir bitince düşer' : null,
       malzemeNo: k.malzemeNo, adet: k.adet, firmaId: k.firmaId ?? k.isNoktaFirmaId, tasima: k.tasima, elleTuru: k.elleTuru, aciklama: k.aciklama,
+      siparisNo: k.satisSiparisSatiriId === null ? null : satislar.get(k.satisSiparisSatiriId)?.siparisNo ?? null,
       is: k.isId === null || k.isDurumu === null || k.isTarih === null ? null : { id: k.isId, tarih: k.isTarih, durum: k.isDurumu, tetiklendi: k.isTetiklendi },
       depo: k.depoZamani === null && k.kabulAdet === null ? null : { zaman: k.depoZamani, kisiAd: ad(k.depoKisiId), kabulAdet: k.kabulAdet },
       erken: k.erkenZamani === null || k.erkenGerekce === null ? null : { zaman: k.erkenZamani, kisiAd: ad(k.erkenKisiId), gerekce: k.erkenGerekce },
@@ -145,7 +149,26 @@ async function adaylar(db: Db, bitis: string, fasonlar: readonly FasonIsEmri[]):
       siparisNo: s.siparisNo, malzemeNo: s.malzemeNo, malzemeAd: s.kalemAdi, adet: s.kalanMiktar, firmaId: s.firmaId,
     }));
   }
+
+  for (const { k, kalan } of await siparisKalanlari(db, await sevkEdilecekKalemler(db))) {
+    if (!adayListede(k.termin, bitis)) continue;
+    sonuc.push(bosSatir({
+      anahtar: `siparis:${String(k.siparisSatiriId)}`, kaynak: 'siparis', yon: 'gidis', asama: 'hazir', hazirTarihi: k.termin, istenenTarih: k.termin,
+      siparisNo: k.siparisNo, malzemeNo: k.malzemeNo, adet: String(kalan), firmaId: k.firmaId,
+      ilerleme: k.karsilama === 'stok' ? 'Stoktan karşılanır' : 'Satın alınır',
+    }));
+  }
   return adlandir(db, sonuc);
+}
+
+// 3429-3 F4: emirsiz satış kaleminin sevke kalanı: kalem miktarı, açık (kaldırılmamış, işi iptal edilmemiş) sipariş kalemlerinin adedi
+// düşülerek. Kalan yoksa aday değildir.
+async function siparisKalanlari(db: Db, kalemler: readonly SevkEdilecekKalem[]): Promise<{ k: SevkEdilecekKalem; kalan: number }[]> {
+  const acilan = await sorgu.siparisKalemiAdetleri(db, kalemler.map((k) => k.siparisSatiriId));
+  return kalemler.flatMap((k) => {
+    const kalan = Number(k.miktar) - (acilan.get(k.siparisSatiriId) ?? 0);
+    return kalan > 1e-9 ? [{ k, kalan: Math.round(kalan * 10_000) / 10_000 }] : [];
+  });
 }
 
 export async function tumIsler(db: Db, aralik: { baslangic: string; bitis: string }): Promise<TumIsSatiri[]> {
@@ -180,7 +203,7 @@ export async function serbestBirak(db: Db, yazan: Yazan, govde: SerbestBirakGovd
   const yazi = (hazir: boolean): SerbestYazisi => ({ tasima: govde.tasima, yer, kisiId: yazan.kisiId, erken: !hazir && gerekce !== null ? { kisiId: yazan.kisiId, gerekce } : null });
   const idler: number[] = [];
   for (const anahtar of govde.anahtarlar) {
-    const [tur, no] = anahtar.split(':') as ['kalem' | 'urun' | 'fason' | 'alim', string];
+    const [tur, no] = anahtar.split(':') as ['kalem' | 'urun' | 'fason' | 'alim' | 'siparis', string];
     const id = Number(no);
     const kok = tur === 'urun' ? await sorgu.urunKokKalemi(db, id) : null;
     if (tur === 'kalem' || kok !== null) {
@@ -192,6 +215,7 @@ export async function serbestBirak(db: Db, yazan: Yazan, govde: SerbestBirakGovd
       idler.push(k.id);
     } else if (tur === 'urun') idler.push(await urunAdayiniAc(db, id, gerekce, yazan, yazi(false)));
     else if (tur === 'fason') idler.push(await fasonAdayiniAc(db, id, gerekce, yazan, yazi));
+    else if (tur === 'siparis') idler.push(await siparisAdayiniAc(db, id, yazan, yazi(true)));
     else idler.push(await alimAdayiniAc(db, id, yazan, yazi(true)));
   }
   return idler;
@@ -232,6 +256,20 @@ async function alimAdayiniAc(db: Db, satirId: number, yazan: Yazan, yazi: Serbes
   return (await sorgu.bekleyenEkle(db, {
     kaynak: 'alim', yon: 'gelis', uretimEmriId: null, fasonHareketId: null, talepId: s.talepId, firmaId: s.firmaId, malzemeNo: s.malzemeNo,
     adet: Number(s.kalanMiktar) > 0 ? s.kalanMiktar : null, istenenTarih: gun(s.beklenenTeslim), isId: null, siparisSatiriId: s.id, serbest: yazi,
+  }))!.id;
+}
+
+// 3429-3 F4: onaylı siparişin emirsiz kalemi kalan kadar kalem olur; müşteri siparişin firmasıdır. Satır kilidiyle iki bırakış aynı
+// kalanı iki kez açmaz.
+async function siparisAdayiniAc(db: Db, satirId: number, yazan: Yazan, yazi: SerbestYazisi): Promise<number> {
+  await sorgu.siparisKalemiKilidi(db, satirId);
+  const [aday] = await siparisKalanlari(db, await sevkEdilecekKalemler(db, [satirId]));
+  if (aday === undefined) throw cakisma('Bu sipariş kaleminin sevk edilecek kalanı yok ya da sipariş onaylı değil; listeyi yenileyin.');
+  ihlaliAt(serbestBirakmaIhlali({ kaynak: 'siparis', asama: 'hazir' }, null, yazan.yetkili));
+  const { k, kalan } = aday;
+  return (await sorgu.bekleyenEkle(db, {
+    kaynak: 'siparis', yon: 'gidis', uretimEmriId: null, fasonHareketId: null, talepId: null, firmaId: k.firmaId, malzemeNo: k.malzemeNo,
+    adet: String(kalan), istenenTarih: k.termin, isId: null, satisSiparisSatiriId: k.siparisSatiriId, serbest: yazi,
   }))!.id;
 }
 

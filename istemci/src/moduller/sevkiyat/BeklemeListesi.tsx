@@ -7,7 +7,7 @@ import { hataIletisi } from '../../ortak/veri/api.ts';
 import { sayiMetni, tarihMetni } from './bicim.ts';
 import { useBekleyenBol, useBekleyenKaldir } from './veri.ts';
 
-const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', fason: 'Fasona gidecek', 'fason-donus': 'Fasondan alınacak', alim: 'Alınacak malzeme', elle: 'Elle iş' };
+const KAYNAK_ADI: Record<BekleyenKaynagi, string> = { urun: 'Sevke hazır', fason: 'Fasona gidecek', 'fason-donus': 'Fasondan alınacak', alim: 'Alınacak malzeme', elle: 'Elle iş', siparis: 'Satış kalemi' };
 const YON_TURU = { gidis: 'teslimat', gelis: 'alim' } as const;
 const OK = { gidis: '↓', gelis: '↑' } as const;
 

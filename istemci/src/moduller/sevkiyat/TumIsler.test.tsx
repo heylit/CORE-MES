@@ -40,13 +40,13 @@ const FIRMA = { id: 9, ad: 'Örnek Firma B', kod: 'DENEME-F9', tur: 'musteri', f
 interface Istek { yontem: string; yol: string; govde: unknown }
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function sunucuKur(kullanici: Kullanici) {
+function sunucuKur(kullanici: Kullanici, satirlar: TumIslerCevabi = SATIRLAR) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const istek = { yontem: ayar?.method ?? 'GET', yol: adres.replace('/api', ''), govde: ayar?.body ? JSON.parse(String(ayar.body)) : undefined };
     istekler.push(istek);
     if (istek.yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
-    if (istek.yol.startsWith('/sevkiyat/tum-isler?')) return json(200, SATIRLAR);
+    if (istek.yol.startsWith('/sevkiyat/tum-isler?')) return json(200, satirlar);
     if (istek.yol.startsWith('/sevkiyat/firmalar?')) return json(200, { firmalar: [FIRMA] } satisfies FirmaAramaCevabi);
     if (istek.yol === '/sevkiyat/tum-isler/elle') return json(200, { kalemIdleri: [60, 61] });
     if (istek.yol === '/sevkiyat/tum-isler/serbest-birak') return json(200, { kalemIdleri: [50] });
@@ -84,6 +84,19 @@ describe('Tüm işler', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Şimdi sevke çıkar' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
     expect(yazmalar(istekler)[1]!.govde).toEqual({ anahtarlar: ['fason:70'], tasima: 'biz', erkenGerekce: 'Son kontrol bitti, emir kapatılmadı' });
+  });
+
+  it('3429-3 F4: emirsiz satış kalemi sipariş no ve karşılama yoluyla görünür, sevkiyat serbest bırakır', async () => {
+    const istekler = sunucuKur(SEVKIYATCI, { satirlar: [
+      satir({ anahtar: 'siparis:21', kaynak: 'siparis', yon: 'gidis', asama: 'hazir', siparisNo: 'ORN-SS-1', istenenTarih: BUGUN, adet: '5', ilerleme: 'Stoktan karşılanır' }),
+    ] });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Karar bekleyen kalemler' });
+    const sat = satirOf(tablo, 'Satış siparişi ORN-SS-1');
+    expect(within(sat).getByText('Sevkiyata hazır')).toBeTruthy();
+    fireEvent.click(within(sat).getByRole('button', { name: 'Serbest bırak' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/sevkiyat/tum-isler/serbest-birak', govde: { anahtarlar: ['siparis:21'], tasima: 'biz' } });
   });
 
   it('hazır olmayan kalem serbest bırakılamaz (3361): düğme nedeniyle kapalı, toplu seçim yalnız hazırı bırakır, rozet "Sevkiyata hazır"', async () => {

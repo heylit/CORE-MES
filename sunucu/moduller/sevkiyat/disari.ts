@@ -60,6 +60,8 @@ export type { SevkIsiOzeti } from './servis.ts';
 
 // Satış faturasına sevk seçimi (302 a, Finans): siparişin emirlerini taşıyan işler; iptal edilenler `iptal: true` ile döner.
 export { siparisinSevkleri } from './servis.ts';
+// 3429-3 F4: emirsiz satış kalemi (sipariş kaynağı): sipariş değişince işe girmemiş kalem kaldırılır; işe girmiş kalem siparişte kilitlidir.
+export { sevkeBagliSiparisSatirlari, siparisDegistiYansit } from './servis.ts';
 export type { SiparisSevki } from './servis.ts';
 
 // Depo son çıkışı ve kabulü (960, 962 a): stok listeyi okur, komutunu kendi işlemiyle aynı transaction'da yazar.

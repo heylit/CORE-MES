@@ -570,12 +570,16 @@ export const aramaMetni = (s: string): string => s.trim().toLocaleLowerCase('tr-
 // ya da tutarı bilinmeyen sipariş karşılaştırılamaz. Kuruş tam sayıyla karşılaştırılır (büyük tutarda kayan nokta şaşar).
 // SPA-3: aşama durumdan ve kaynak kayıtlardan; sıra faturadan geriye: faturalandı, sevk tamam, kısmi sevk, üretildi, üretimde, planlandı,
 // emir açıldı, emir bekliyor. Üretilen kalemi olmayan onaylı sipariş "onaylı" kalır. İptal edilmiş emir sayılmaz.
-// SPA-4: kapanış eksikleri: üretilen kalemin teslim edilen adedi miktarın altındaysa, ve fatura tam değilse. Emirsiz sevk siparişe
-// bağlı olmadığından üretilmeyen kalemin sevki ölçülmez, eksik sayılmaz.
+// SPA-4: kapanış eksikleri: üretilen ya da emirsiz ("Stoktan", "Satın al") kalemin teslim edilen adedi miktarın altındaysa, ve fatura tam
+// değilse. Emirsiz kalemin sevki sevkiyatın sipariş kalemiyle (3429-3 F4) kalemin kendisine bağlıdır.
 
-export interface SevkSatiri { uretimEmriId: number; durum: string; adet: string | null; iptal: boolean }
+export interface SevkSatiri { uretimEmriId: number | null; satisSiparisSatiriId?: number | null; durum: string; adet: string | null; iptal: boolean }
 export interface FaturaSatiri { tur: 'fatura' | 'iade'; paraBirimi: string; tutar: string }
-export interface AkisKalemi { sira: number; miktar: number; uretilir: boolean; emirler: readonly SiparisAkisEmri[]; sevkEdilen: number; yolda: number }
+export interface AkisKalemi {
+  sira: number; miktar: number; uretilir: boolean; karsilama?: 'uret' | 'stok' | 'satin-al'; emirler: readonly SiparisAkisEmri[]; sevkEdilen: number; yolda: number;
+}
+// Sevki ölçülen kalem: üretilen ya da emirsiz yolu seçilmiş kalem.
+const sevkiOlculur = (k: AkisKalemi): boolean => k.uretilir || k.karsilama === 'stok' || k.karsilama === 'satin-al';
 
 // SPA-5: plan bitişi en geç bitiştir (emirde iş emirlerinin, kalemde emirlerinin); bitiş yoksa null.
 export function enGecBitis(bitisler: readonly (string | null | undefined)[]): string | null {
@@ -597,14 +601,17 @@ export function siparisTerminRiski(durum: string, kalemler: readonly { terminRis
   return r.length === 0 ? null : Math.max(...r);
 }
 
-export function kalemSevki(emirler: readonly SiparisAkisEmri[], sevkler: readonly SevkSatiri[]): { sevkEdilen: number; yolda: number } {
+// satirId verilirse (emirsiz kalem) o satırın sipariş kalemi sevkleri de sayılır.
+export function kalemSevki(emirler: readonly SiparisAkisEmri[], sevkler: readonly SevkSatiri[], satirId: number | null = null): { sevkEdilen: number; yolda: number } {
   const emir = new Map(emirler.map((e) => [e.id, e]));
   let sevkEdilen = 0;
   let yolda = 0;
   for (const s of sevkler) {
-    const e = emir.get(s.uretimEmriId);
-    if (e === undefined || s.iptal) continue;
-    const adet = s.adet === null ? (e.saglam ?? e.adet) : Number(s.adet);
+    if (s.iptal) continue;
+    const e = s.uretimEmriId === null ? undefined : emir.get(s.uretimEmriId);
+    const kalemin = satirId !== null && s.satisSiparisSatiriId === satirId;
+    if (e === undefined && !kalemin) continue;
+    const adet = s.adet !== null ? Number(s.adet) : e === undefined ? 0 : (e.saglam ?? e.adet);
     if (s.durum === 'tamamlandi') sevkEdilen += adet;
     else if (s.durum === 'yolda') yolda += adet;
   }
@@ -651,7 +658,7 @@ export const FATURA_EKSIGI: Readonly<Record<Exclude<FaturaDurumu, 'tam'>, string
 // 3429-3 F3 (Risk N1): "Satın al" kalemine bağlı açık (iptal ya da teslim alınmamış) satın alma talebi de eksiktir; gerekçesiz kapanmaz.
 export const ACIK_TALEP_EKSIGI = 'Açık satın alma talebi';
 export function kapanisEksikleri(kalemler: readonly AkisKalemi[], fatura: FaturaDurumu, acikTalepler: readonly string[] = []): string[] {
-  const eksik = kalemler.filter((k) => k.uretilir && k.sevkEdilen < k.miktar)
+  const eksik = kalemler.filter((k) => sevkiOlculur(k) && k.sevkEdilen < k.miktar)
     .map((k) => `Kalem ${k.sira}: teslim edilen ${sayiMetni(k.sevkEdilen)} / ${sayiMetni(k.miktar)}.`);
   if (acikTalepler.length > 0) eksik.push(`${ACIK_TALEP_EKSIGI}: ${acikTalepler.join(', ')}.`);
   return fatura === 'tam' ? eksik : [...eksik, FATURA_EKSIGI[fatura]];

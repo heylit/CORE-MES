@@ -239,7 +239,7 @@ export async function siparisAkisiOku(db: Db, siparisId: number): Promise<Sipari
       uretilir: k.karsilama === 'uret' && tur !== undefined && URETILEN_TURLER.includes(tur), karsilama: k.karsilama, emirler: liste,
       planBitis: enGecBitis(gecerli.map((e) => e.planBitis)),
       uretilen: gecerli.length === 0 ? null : bitmis.reduce((t, e) => t + (e.saglam ?? 0), 0),
-      ...kalemSevki(liste, sevkler),
+      ...kalemSevki(liste, sevkler, k.karsilama === 'uret' ? null : k.id),
     };
     return { ...kalem, terminRiski: kalemTerminRiski(kalem) };
   });

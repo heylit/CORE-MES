@@ -420,6 +420,16 @@ describe('satış siparişi akışı (3429-1)', () => {
       { uretimEmriId: 1, durum: 'tamamlandi', adet: null, iptal: false },
       { uretimEmriId: 2, durum: 'tamamlandi', adet: null, iptal: false },
     ]), { sevkEdilen: 3 + 8 + 10, yolda: 2.5 });
+    // 3429-3 F4: emirsiz kalem kendi satırının sipariş kalemi sevklerini sayar; başka satırın ve emrin sevki sayılmaz.
+    const satirin = [
+      { uretimEmriId: null, satisSiparisSatiriId: 7, durum: 'tamamlandi', adet: '4', iptal: false },
+      { uretimEmriId: null, satisSiparisSatiriId: 7, durum: 'yolda', adet: '1', iptal: false },
+      { uretimEmriId: null, satisSiparisSatiriId: 7, durum: 'tamamlandi', adet: '5', iptal: true },
+      { uretimEmriId: null, satisSiparisSatiriId: 8, durum: 'tamamlandi', adet: '6', iptal: false },
+      { uretimEmriId: 1, durum: 'tamamlandi', adet: '3', iptal: false },
+    ];
+    assert.deepEqual(kalemSevki([], satirin, 7), { sevkEdilen: 4, yolda: 1 });
+    assert.deepEqual(kalemSevki([], satirin), { sevkEdilen: 0, yolda: 0 }, 'satırsız (üretilen) kalem sipariş kalemini saymaz');
   });
 
   test('SPA-2: fatura durumu KDV hariç net tutarla; iade düşülür, başka para birimi karşılaştırılamaz, kuruş tam sayıyla', () => {
@@ -450,11 +460,15 @@ describe('satış siparişi akışı (3429-1)', () => {
     assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'bitti'), emir(2, 'iptal')] })], 'yok'), 'uretildi');
   });
 
-  test('SPA-4: kapanış eksikleri üretilen kalemin teslim eksiği ve tam olmayan fatura; üretilmeyen kalemin sevki ölçülmez', () => {
+  test('SPA-4: kapanış eksikleri üretilen ya da emirsiz kalemin teslim eksiği ve tam olmayan fatura; üretilmeyen "Üret" kaleminin sevki ölçülmez', () => {
     assert.deepEqual(kapanisEksikleri([kalem({ sevkEdilen: 10 }), kalem({ uretilir: false })], 'tam'), []);
     assert.deepEqual(kapanisEksikleri([kalem({ sira: 2, miktar: 2.5, sevkEdilen: 1, yolda: 1.5 })], 'yok'), ['Kalem 2: teslim edilen 1 / 2,5.', FATURA_EKSIGI.yok]);
     assert.deepEqual(kapanisEksikleri([], 'karsilastirilamaz'), [FATURA_EKSIGI.karsilastirilamaz]);
     assert.deepEqual(kapanisEksikleri([], 'tam', ['ST-1', 'ST-2']), ['Açık satın alma talebi: ST-1, ST-2.'], '3429-3 F3: açık talep eksiktir');
+    assert.deepEqual(kapanisEksikleri([
+      kalem({ sira: 1, uretilir: false, karsilama: 'stok', sevkEdilen: 4 }), kalem({ sira: 2, uretilir: false, karsilama: 'satin-al', sevkEdilen: 10 }),
+      kalem({ sira: 3, uretilir: false, karsilama: 'uret' }),
+    ], 'tam'), ['Kalem 1: teslim edilen 4 / 10.'], '3429-3 F4: emirsiz kalemin sevki ölçülür; üretilmeyen "Üret" kalemi ölçülmez');
   });
 
   test('SPA-5: plan bitişi en geç bitiştir; sıra ve saat dilimi değiştirmez, boş değer atlanır, hiç yoksa null', () => {
