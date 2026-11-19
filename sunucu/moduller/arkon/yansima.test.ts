@@ -2295,6 +2295,10 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const satir = ieOlay(a1!, 'running', { machine: r.ilk });
     assert.equal((await ekle(operator, 'events', satir)).durum, 200);
     assert.equal((await yansima(satir.cid))?.sonuc, 'yazildi', 'rotasız adım plana girmez, ayar açıkken de başlar');
+    // Makinesiz iş emrinin istasyonu iş emrinin kendisindendir: istasyonu yazılınca paket o istasyonla gelir.
+    await ortam!.sahip.sorgu('UPDATE uretim_emirleri_is_emri SET istasyon_id = $2 WHERE id = $1', [a2, r.ikinciId]);
+    const p2b = (await paketler()).get(ieKimligi(a2!))?.govde as Paket | undefined;
+    assert.equal(p2b?.['machine'], r.ikinci, 'makinesiz adım iş emrinin istasyonuyla');
   });
 
   // A4 (kart #199), ayar açıkken: operatör paketi yalnız canlı planda iş emrinin kaynağına yerleşmiş işte görür; başlatma da yalnız onda kabul edilir.

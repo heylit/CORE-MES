@@ -5,7 +5,9 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { ArkonBenCevabi, ArkonKisilerCevabi } from '#paylasilan/sozlesme/arkon.ts';
+import type { Db } from '#cekirdek/db.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { ekiplerinUyeleri, ekipUyeleri } from '../istasyonlar/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -116,5 +118,40 @@ describe('arkon kişisi ekip istasyonu (gerçek PostgreSQL)', () => {
     await uyeYap(ekipId, '50');
     const kisi = await ben();
     assert.deepEqual([kisi.istasyon, kisi.istasyonlar], [atanan.kod, [atanan.kod, ekipIst.kod].sort((a, b) => a.localeCompare(b))]);
+  });
+
+  test('ekip üyeleri ekip başına değil tek okumayla gelir; sonuç ekip başına okumayla aynıdır', async () => {
+    const ist1 = await istasyonKur();
+    const ist2 = await istasyonKur();
+    const ekip1 = await ekipKur(ist1.id);
+    const ekip2 = await ekipKur(ist2.id);
+    const bos = await ekipKur((await istasyonKur()).id);
+    const kisi = (n: number) => ortam!.vt.tx((db) => yoneticiOlustur(db, { ad: `Deneme uye${String(n)}`, kullaniciAdi: `uye${String(n)}`, parola: PAROLA }));
+    const [k1, k2, k3] = [await kisi(1), await kisi(2), await kisi(3)];
+    const ata = async (ekipId: number, kisiId: number) => {
+      const c = await istek(yonetici, 'POST', `/ekipler/${ekipId}/uyeler/ata`, { kisiId, yuzde: '50' });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    };
+    await ata(ekip1, k1);
+    await ata(ekip1, k2);
+    await ata(ekip2, k3);
+    const idler = [ekip1, ekip2, bos];
+    let okuma = 0;
+    const sonuc = await ortam!.vt.okumaTx(async (db) => {
+      const s: Db = {
+        sorgu: (q, p) => { if (q.includes('FROM ekip_uye')) okuma += 1; return db.sorgu(q, p); },
+        tek: (q, p) => { if (q.includes('FROM ekip_uye')) okuma += 1; return db.tek(q, p); },
+      };
+      const toplu = await ekiplerinUyeleri(s, idler);
+      const tekTek = new Map<number, unknown>();
+      for (const id of idler) tekTek.set(id, await ekipUyeleri(db, id));
+      return { toplu, tekTek };
+    });
+    assert.equal(okuma, 1, 'ekip sayısından bağımsız tek okuma');
+    assert.deepEqual([...sonuc.toplu.keys()].sort(), [...idler].sort());
+    for (const id of idler) assert.deepEqual(sonuc.toplu.get(id), sonuc.tekTek.get(id));
+    assert.deepEqual(sonuc.toplu.get(bos), []);
+    assert.deepEqual(sonuc.toplu.get(ekip1)?.map((u) => u.kisiId).sort(), [k1, k2].sort());
+    assert.deepEqual(sonuc.toplu.get(ekip2)?.map((u) => u.kisiId), [k3]);
   });
 });
