@@ -2,11 +2,11 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  DosyaListesiCevabi, DosyalarCevabi, HazirListe, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
-  SurumluGovde, VerilenDuzey, YetkiCevabi, YetkiGovdesi, YukleGovdesi,
+  ArsivCevabi, DosyaListesiCevabi, DosyalarCevabi, HazirListe, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
+  KaliciSilGovdesi, SurumluGovde, VerilenDuzey, YetkiCevabi, YetkiGovdesi, YukleGovdesi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, KayitSecici, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type SeciliKayit, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
@@ -27,9 +27,12 @@ const DUZEYLER: readonly KlasorDuzeyi[] = ['yok', 'gorur', 'ekler', 'yonetir'];
 const OLAY_ADI: Record<GecmisOlayi, string> = {
   'klasor-acildi': 'Klasör açtı', yuklendi: 'Yükledi', 'yeni-surum': 'Yeni sürüm yükledi', arsivlendi: 'Arşive kaldırdı',
   'geri-alindi': 'Arşivden geri aldı', 'yetki-degisti': 'Yetkiyi değiştirdi',
+  'silme-istendi': 'Kalıcı silme istedi', silindi: 'Kalıcı sildi', 'silme-reddedildi': 'Silme isteğini reddetti',
+  'silme-geri-cekildi': 'Silme isteğini geri çekti', 'silme-dustu': 'Silme isteği düştü (arşivden geri alındı)',
 };
 const enAz = (d: KlasorDuzeyi, gereken: KlasorDuzeyi): boolean => DUZEYLER.indexOf(d) >= DUZEYLER.indexOf(gereken);
 const boyutMetni = (n: number): string => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
+const projeMetni = (p: { kod: string; ad: string } | null): string => (p === null ? '' : `${p.kod} · ${p.ad}`);
 const dosyaYolu = (d: { klasorId: number; id: number }): string => `/ortak-dosyalar/klasorler/${d.klasorId}/dosyalar/${d.id}`;
 
 // İndirme sunucunun ekli cevabıdır (Content-Disposition); aynı köken ve çerezle bağlantı açılır, denetim kaydı sunucuda yazılır.
@@ -180,6 +183,8 @@ function DosyaTablosu({ dosyalar, klasorSutunu, duzey, bosMesaj }: {
         ? <button type="button" className="tc-od-surum" onClick={() => surumleriYaz(d)} title="Sürümleri göster">s{d.surumSirasi}</button>
         : `s${d.surumSirasi}`),
     },
+    { anahtar: 'musteri', baslik: 'Müşteri', hucre: (d) => d.firma?.ad ?? '' },
+    { anahtar: 'proje', baslik: 'Proje', hucre: (d) => projeMetni(d.proje) },
     { anahtar: 'boyut', baslik: 'Boyut', hizala: 'sag', mono: true, hucre: (d) => boyutMetni(d.boyut) },
     { anahtar: 'yukleyen', baslik: 'Yükleyen', hucre: (d) => d.yukleyenAd ?? '' },
     { anahtar: 'tarih', baslik: 'Tarih', mono: true, hucre: (d) => zamanMetni(d.zaman) },
@@ -213,6 +218,14 @@ function DosyaTablosu({ dosyalar, klasorSutunu, duzey, bosMesaj }: {
   );
 }
 
+// Yüklemede müşteri ve proje (3443 a): yalnız dosya ilk kez yazılırken alınır; yeni sürüm dosyanın seçimini değiştirmez.
+interface Secim { firmaId: number | null; projeId: number | null }
+const SECIMSIZ: Secim = { firmaId: null, projeId: null };
+// Boş seçim gövdeye yazılmaz: kayda bağlı klasörde ve yeni sürümde gövde bugünküyle aynı kalır.
+const secimAlanlari = (s: Secim): Pick<YukleGovdesi, 'firmaId' | 'projeId'> => ({
+  ...(s.firmaId === null ? {} : { firmaId: s.firmaId }), ...(s.projeId === null ? {} : { projeId: s.projeId }),
+});
+
 // Seçilen her dosya yüklenir (özet, parça) ve klasöre bağlanır. Aynı ad yeni sürüm olur; ad, yeni sürümde mevcut dosyanın adıdır.
 function useYukleme() {
   const istemci = useQueryClient();
@@ -221,6 +234,9 @@ function useYukleme() {
   const yukle = async (klasorId: number, o: ChangeEvent<HTMLInputElement>, sabitAd?: string): Promise<void> => {
     const secilen = [...(o.target.files ?? [])];
     o.target.value = '';
+    await yukleListe(klasorId, secilen, SECIMSIZ, sabitAd);
+  };
+  const yukleListe = async (klasorId: number, secilen: readonly File[], secim: Secim, sabitAd?: string): Promise<void> => {
     if (secilen.length === 0 || suruyor) return;
     suruyorYaz(true);
     let tamam = 0;
@@ -228,7 +244,7 @@ function useYukleme() {
       for (const f of secilen) {
         try {
           const ozet = await dosyaYukle(new Uint8Array(await f.arrayBuffer()), () => {});
-          const govde: YukleGovdesi = { ad: sabitAd ?? f.name, ozet };
+          const govde: YukleGovdesi = { ad: sabitAd ?? f.name, ozet, ...secimAlanlari(secim) };
           await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, govde, { istekKimligi: yeniIstekKimligi() });
           tamam += 1;
         } catch (h) {
@@ -242,12 +258,12 @@ function useYukleme() {
     if (tamam > 0) bildir('tamam', `${tamam} dosya yüklendi.`);
   };
   // Ad önerisi penceresinden gelen tek dosya.
-  const yukleDosya = async (klasorId: number, f: File, ad: string): Promise<void> => {
+  const yukleDosya = async (klasorId: number, f: File, ad: string, secim: Secim = SECIMSIZ): Promise<void> => {
     if (suruyor) return;
     suruyorYaz(true);
     try {
       const ozet = await dosyaYukle(new Uint8Array(await f.arrayBuffer()), () => {});
-      await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, { ad, ozet } satisfies YukleGovdesi, { istekKimligi: yeniIstekKimligi() });
+      await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, { ad, ozet, ...secimAlanlari(secim) } satisfies YukleGovdesi, { istekKimligi: yeniIstekKimligi() });
       bildir('tamam', `${ad} yüklendi.`);
     } catch (h) {
       bildir('hata', `${ad}: ${h instanceof DosyaHatasi ? h.message : hataIletisi(h, 'Yüklenemedi')}`);
@@ -256,7 +272,7 @@ function useYukleme() {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
     }
   };
-  return { yukle, yukleDosya, suruyor };
+  return { yukle, yukleListe, yukleDosya, suruyor };
 }
 
 // Yükleme adı önerisi (zorunlu değil): "<no>_<alt klasör>_r1.<uzantı>"; aynı ad yeni sürüm olur.
@@ -266,25 +282,100 @@ function oneriAdi(o: { onek: string; altKlasor: string | null }, dosyaAdi: strin
   return `${[o.onek, o.altKlasor].filter(Boolean).join('_')}_r1${uzanti}`;
 }
 
-function AdPenceresi({ dosya, oneri, kapat, yukle }: { dosya: File; oneri: string; kapat: () => void; yukle: (ad: string) => void }) {
-  const [ad, adYaz] = useState(oneri);
+// Müşteri ve proje seçicisi (3443 a, 1): müşteri yalnız müşteri ve ikisi türü firmalar; proje seçilen müşteriye göre süzülür.
+// Müşteri değişince proje temizlenir; önce proje seçilirse müşterisi dolar. Sunucu her yüklemede yeniden denetler.
+function MusteriProjeSecimi({ musteri, proje, degistir, bosEtiket }: {
+  musteri: SeciliKayit | null; proje: SeciliKayit | null; degistir: (m: SeciliKayit | null, p: SeciliKayit | null, temizlendi: boolean) => void;
+  bosEtiket?: boolean;
+}) {
+  const musteriEtiketi = bosEtiket === true ? 'Müşteri' : 'Müşteri (isteğe bağlı)';
+  const projeEtiketi = bosEtiket === true ? 'Proje' : 'Proje (isteğe bağlı)';
+  // Seçici etiketini yalnız erişilebilir ad olarak taşır; pencerede görünür etiket alan sınıflarıyla yazılır.
+  return (
+    <>
+      <div className="tc-alan">
+        <span className="tc-alan-etiket" aria-hidden="true">{musteriEtiketi}</span>
+        <KayitSecici
+          etiket={musteriEtiketi} simge="building" yol="/ortak-dosyalar/secim/musteriler" bosaltilabilir
+          yerTutucu={bosEtiket === true ? 'Müşteri: tümü' : 'Seçilmedi'} deger={musteri}
+          sec={(k) => {
+            const yeni = k === null ? null : { id: k.id, kod: k.kod, ad: k.ad };
+            const temizle = proje !== null && yeni?.id !== musteri?.id;
+            degistir(yeni, temizle ? null : proje, temizle);
+          }}
+        />
+      </div>
+      <div className="tc-alan">
+        <span className="tc-alan-etiket" aria-hidden="true">{projeEtiketi}</span>
+        <KayitSecici
+          etiket={projeEtiketi} simge="kanban" yol="/ortak-dosyalar/secim/projeler" bosaltilabilir
+          yerTutucu={bosEtiket === true ? 'Proje: tümü' : 'Seçilmedi'} deger={proje} suzgec={{ firmaId: musteri?.id }}
+          sec={(k) => {
+            const yeni = k === null ? null : { id: k.id, kod: k.kod, ad: k.ad };
+            degistir(musteri ?? (k?.ust ?? null), yeni, false);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+// Yükleme penceresi: tek dosyada ad, müşteri ve proje; çok dosyada yalnız müşteri ve proje (hepsine uygulanır). Kayda bağlı
+// klasörde seçim klasörden gelir: pencere seçici göstermez, yalnız ad önerisi için açılır.
+function YuklemePenceresi({ dosyalar, oneri, kayitli, kapat, yukle }: {
+  dosyalar: readonly File[]; oneri: string | null; kayitli: DosyalarCevabi['kayitSecimi'];
+  kapat: () => void; yukle: (ad: string | null, secim: Secim) => void;
+}) {
+  const tek = dosyalar.length === 1 ? dosyalar[0] ?? null : null;
+  const [ad, adYaz] = useState(oneri ?? tek?.name ?? '');
+  const [musteri, musteriYaz] = useState<SeciliKayit | null>(null);
+  const [proje, projeYaz] = useState<SeciliKayit | null>(null);
+  const [temizlendi, temizlendiYaz] = useState(false);
+  const adGecersiz = tek !== null && ad.trim() === '';
   return (
     <Pencere
-      acik kapat={kapat} baslik="Dosya adı"
+      acik kapat={kapat} baslik={`Dosya yükle · ${dosyalar.length} dosya`}
       alt={(
         <>
           <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="upload" disabled={ad.trim() === ''} onClick={() => yukle(ad.trim())}>Yükle</Dugme>
+          <Dugme
+            tur="birincil" simge="upload" disabled={adGecersiz}
+            onClick={() => yukle(tek === null ? null : ad.trim(), kayitli !== null ? SECIMSIZ : { firmaId: musteri?.id ?? null, projeId: proje?.id ?? null })}
+          >
+            Yükle
+          </Dugme>
         </>
       )}
     >
       <div className="tc-od-form">
-        <Girdi etiket="Dosya adı" required maxLength={120} value={ad} onChange={(o) => adYaz(o.target.value)} autoFocus />
-        <p className="tc-od-ipucu tc-od-oneri">
-          Önerilen ad: sipariş ya da proje no, alt klasör, revizyon. Değiştirebilirsiniz.{' '}
-          <button type="button" className="tc-od-baglanti" onClick={() => adYaz(dosya.name)}>Özgün adı kullan</button>
-        </p>
-        <p className="tc-od-ipucu">Bu klasörde aynı adlı dosya varsa yeni sürüm olarak eklenir.</p>
+        {tek !== null && (
+          <>
+            <Girdi etiket="Dosya adı" required maxLength={120} value={ad} onChange={(o) => adYaz(o.target.value)} autoFocus />
+            {oneri !== null && (
+              <p className="tc-od-ipucu tc-od-oneri">
+                Önerilen ad: sipariş ya da proje no, alt klasör, revizyon. Değiştirebilirsiniz.{' '}
+                <button type="button" className="tc-od-baglanti" onClick={() => adYaz(tek.name)}>Özgün adı kullan</button>
+              </p>
+            )}
+            <p className="tc-od-ipucu">Bu klasörde aynı adlı dosya varsa yeni sürüm olarak eklenir.</p>
+          </>
+        )}
+        {kayitli !== null ? (
+          <p className="tc-od-ipucu">
+            {`Müşteri ve proje klasörün kaydından yazılır: ${[kayitli.firma?.ad, projeMetni(kayitli.proje)].filter(Boolean).join(' · ') || 'kayıt bulunamadı'}.`}
+          </p>
+        ) : (
+          <>
+            {tek === null && <p className="tc-od-ipucu">{`Dosyalar kendi adlarıyla yüklenir; seçim ${dosyalar.length} dosyanın hepsine uygulanır.`}</p>}
+            <MusteriProjeSecimi
+              musteri={musteri} proje={proje}
+              degistir={(m, p, t) => { musteriYaz(m); projeYaz(p); temizlendiYaz(t); }}
+            />
+            <p className="tc-od-ipucu" aria-live="polite">
+              {temizlendi ? 'Proje temizlendi: seçilen müşterinin projesi değildi.' : musteri !== null ? `Yalnız ${musteri.ad} projeleri listelenir.` : 'Seçim isteğe bağlıdır; dosyanın bütün sürümleri için geçerlidir.'}
+            </p>
+          </>
+        )}
       </div>
     </Pencere>
   );
@@ -297,15 +388,17 @@ function DosyalarSekmesi({ klasorId, ara, sec, yeniKlasor }: { klasorId: number;
   });
   const secim = useRef<HTMLInputElement | null>(null);
   const yukleme = useYukleme();
-  const [adla, adlaYaz] = useState<File | null>(null);
+  const [bekleyen, bekleyenYaz] = useState<readonly File[] | null>(null);
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Klasör okunamadı')} yenile={() => { void q.refetch(); }} />;
-  const { klasor, altKlasorler, dosyalar, adOnerisi } = q.data;
+  const { klasor, altKlasorler, dosyalar, adOnerisi, kayitSecimi } = q.data;
   const kaynak = kaynakBaglantisi(klasor);
-  // Tek dosyada öneri penceresi açılır; birden çok dosya kendi adlarıyla yüklenir.
+  // Serbest klasörde her yüklemede pencere açılır (ad, müşteri, proje). Kayda bağlı klasörde seçim klasördendir: pencere yalnız
+  // tek dosyada ad önerisi için açılır, birden çok dosya doğrudan kendi adlarıyla yüklenir.
   const secildi = (o: ChangeEvent<HTMLInputElement>) => {
-    const f = o.target.files;
-    if (adOnerisi !== null && f !== null && f.length === 1 && f[0] !== undefined) { adlaYaz(f[0]); o.target.value = ''; return; }
+    const f = [...(o.target.files ?? [])];
+    if (f.length === 0) return;
+    if (kayitSecimi === null || (adOnerisi !== null && f.length === 1)) { bekleyenYaz(f); o.target.value = ''; return; }
     void yukleme.yukle(klasor.id, o);
   };
   return (
@@ -327,10 +420,16 @@ function DosyalarSekmesi({ klasorId, ara, sec, yeniKlasor }: { klasorId: number;
           )}
         </div>
       )}
-      {adla !== null && adOnerisi !== null && (
-        <AdPenceresi
-          dosya={adla} oneri={oneriAdi(adOnerisi, adla.name)} kapat={() => adlaYaz(null)}
-          yukle={(ad) => { const f = adla; adlaYaz(null); void yukleme.yukleDosya(klasor.id, f, ad); }}
+      {bekleyen !== null && (
+        <YuklemePenceresi
+          dosyalar={bekleyen} kayitli={kayitSecimi} kapat={() => bekleyenYaz(null)}
+          oneri={adOnerisi !== null && bekleyen.length === 1 && bekleyen[0] !== undefined ? oneriAdi(adOnerisi, bekleyen[0].name) : null}
+          yukle={(ad, secim) => {
+            const f = bekleyen;
+            bekleyenYaz(null);
+            if (ad !== null && f.length === 1 && f[0] !== undefined) void yukleme.yukleDosya(klasor.id, f[0], ad, secim);
+            else void yukleme.yukleListe(klasor.id, f, secim);
+          }}
         />
       )}
       {altKlasorler.length > 0 && (
@@ -456,34 +555,176 @@ function GecmisSekmesi({ klasorId }: { klasorId: number }) {
   );
 }
 
+const sorgu = (s: Record<string, string | number | null>): string => {
+  const p = new URLSearchParams(Object.entries(s).flatMap(([a, d]) => (d === null || d === '' ? [] : [[a, String(d)]])));
+  const m = p.toString();
+  return m === '' ? '' : `?${m}`;
+};
+
 function SonEklenenler({ ara, klasorler }: { ara: string; klasorler: readonly Klasor[] }) {
+  const [musteri, musteriYaz] = useState<SeciliKayit | null>(null);
+  const [proje, projeYaz] = useState<SeciliKayit | null>(null);
+  const firmaId = musteri?.id ?? null;
+  const projeId = proje?.id ?? null;
   const q = useQuery({
-    queryKey: anahtarlar.son(ara),
-    queryFn: () => api.get<DosyaListesiCevabi>(`/ortak-dosyalar/son-eklenenler${ara.trim() === '' ? '' : `?ara=${encodeURIComponent(ara.trim())}`}`),
+    queryKey: anahtarlar.son(ara.trim(), firmaId, projeId),
+    queryFn: () => api.get<DosyaListesiCevabi>(`/ortak-dosyalar/son-eklenenler${sorgu({ ara: ara.trim(), firmaId, projeId })}`),
   });
-  if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Son eklenenler okunamadı')} />;
+  const suzulu = ara.trim() !== '' || firmaId !== null || projeId !== null;
   const duzey = (id: number): KlasorDuzeyi => klasorler.find((k) => k.id === id)?.duzey ?? 'gorur';
-  return <DosyaTablosu dosyalar={q.data.dosyalar} klasorSutunu duzey={duzey} bosMesaj={ara.trim() === '' ? 'Henüz dosya yok.' : 'Aramaya uyan dosya yok.'} />;
+  return (
+    <div>
+      <div className="tc-od-arac tc-od-suzgecler">
+        <MusteriProjeSecimi musteri={musteri} proje={proje} bosEtiket degistir={(m, p) => { musteriYaz(m); projeYaz(p); }} />
+        {(firmaId !== null || projeId !== null) && <Dugme simge="x" onClick={() => { musteriYaz(null); projeYaz(null); }}>Temizle</Dugme>}
+      </div>
+      {q.isPending && <DurumKutusu durum="yukleniyor" />}
+      {q.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Son eklenenler okunamadı')} />}
+      {q.data && <DosyaTablosu dosyalar={q.data.dosyalar} klasorSutunu duzey={duzey} bosMesaj={suzulu ? 'Süzgece uyan dosya yok.' : 'Henüz dosya yok.'} />}
+    </div>
+  );
 }
+
+const silmeAdiUyar = (yazilan: string, ad: string): boolean =>
+  yazilan.trim().normalize('NFC').toLocaleLowerCase('tr-TR') === ad.trim().normalize('NFC').toLocaleLowerCase('tr-TR');
+
+// Kalıcı silme onayı (3443 a, 4 ve 6): kişi dosyanın adını yazar; sunucu adı, arşivi ve sürümü yeniden denetler.
+function SilmePenceresi({ dosya, onay, kapat, sil, bekliyor, hata }: {
+  dosya: OrtakDosya; onay: boolean; kapat: () => void; sil: (ad: string) => void; bekliyor: boolean; hata: string | null;
+}) {
+  const [ad, adYaz] = useState('');
+  const surumMetni = dosya.surumSirasi > 1 ? `Dosya ve ${dosya.surumSirasi} sürümü` : 'Dosya';
+  return (
+    <Pencere
+      acik kapat={() => { if (!bekliyor) kapat(); }} baslik={`${dosya.ad} kalıcı silinsin mi?`}
+      alt={(
+        <>
+          <Dugme disabled={bekliyor} onClick={kapat}>Vazgeç</Dugme>
+          <Dugme tur="tehlike" simge="trash" disabled={!silmeAdiUyar(ad, dosya.ad)} yukleniyor={bekliyor} onClick={() => sil(ad)}>
+            {onay ? 'Onayla ve sil' : 'Kalıcı sil'}
+          </Dugme>
+        </>
+      )}
+    >
+      <div className="tc-od-form">
+        <p className="tc-od-uyari"><Simge ad="alert" boyut="k" />{`${surumMetni} geri alınamaz; yalnız tüm veritabanı yedeğinden döner.`}</p>
+        <p className="tc-od-ipucu">Klasörün Geçmiş'inde dosyanın adı ve silen kişi kalır.</p>
+        <Girdi etiket={onay ? 'Onaylamak için dosya adını yazın' : 'Silmek için dosya adını yazın'} maxLength={120} value={ad} onChange={(o) => adYaz(o.target.value)} autoFocus />
+        <p className="tc-od-ipucu mono">{dosya.ad}</p>
+        {hata !== null && <p className="tc-od-hata" role="alert">{hata}</p>}
+      </div>
+    </Pencere>
+  );
+}
+
+type SilmeEylemi = 'silme-iste' | 'silme-reddet' | 'silme-geri-cek';
+const SILME_BILDIRIMI: Record<SilmeEylemi, string> = {
+  'silme-iste': 'Silme istendi; klasörde Yönetir düzeyi olan başka bir kişinin onayını bekliyor.',
+  'silme-reddet': 'Silme isteği reddedildi; dosya arşivde kalır.',
+  'silme-geri-cek': 'Silme isteği geri çekildi.',
+};
 
 function Arsiv() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const q = useQuery({ queryKey: anahtarlar.arsiv, queryFn: () => api.get<DosyaListesiCevabi>('/ortak-dosyalar/arsiv') });
+  const [onayBekleyen, onayBekleyenYaz] = useState(false);
+  const [silinecek, silinecekYaz] = useState<OrtakDosya | null>(null);
+  const tum = useQuery({ queryKey: anahtarlar.arsiv(false), queryFn: () => api.get<ArsivCevabi>('/ortak-dosyalar/arsiv') });
+  const suzulu = useQuery({
+    queryKey: anahtarlar.arsiv(true), enabled: onayBekleyen,
+    queryFn: () => api.get<ArsivCevabi>('/ortak-dosyalar/arsiv?onayBekleyen=true'),
+  });
+  const yenile = () => istemci.invalidateQueries({ queryKey: anahtarlar.kok });
   const geriAl = useTekGonderim<OrtakDosya, OrtakDosya>({
     mutationFn: (d) => api.post<OrtakDosya>(`${dosyaYolu(d)}/arsivden-cikar`, { surum: d.surum } satisfies SurumluGovde),
-    onSuccess: async () => { await istemci.invalidateQueries({ queryKey: anahtarlar.kok }); bildir('tamam', 'Geri alındı.'); },
+    onSuccess: async (_c, d) => { await yenile(); bildir('tamam', d.silmeIstegi === null ? 'Geri alındı.' : 'Geri alındı; silme isteği düştü.'); },
     onError: (h) => bildir('hata', hataIletisi(h, 'Geri alınamadı')),
   });
+  const istek = useTekGonderim<{ d: OrtakDosya; eylem: SilmeEylemi }, OrtakDosya>({
+    mutationFn: ({ d, eylem }) => api.post<OrtakDosya>(`${dosyaYolu(d)}/${eylem}`, { surum: d.surum } satisfies SurumluGovde),
+    onSuccess: async (_c, { eylem }) => { await yenile(); bildir('tamam', SILME_BILDIRIMI[eylem]); },
+    onError: (h) => bildir('hata', hataIletisi(h, 'İşlem yapılamadı')),
+  });
+  const sil = useTekGonderim<{ d: OrtakDosya; ad: string }, undefined>({
+    mutationFn: ({ d, ad }) => api.post<undefined>(`${dosyaYolu(d)}/${d.silmeIstegi === null ? 'kalici-sil' : 'silme-onayla'}`, { surum: d.surum, ad } satisfies KaliciSilGovdesi),
+    onSuccess: async (_c, { d }) => { silinecekYaz(null); await yenile(); bildir('tamam', `${d.ad} kalıcı silindi; denetim kaydına ve klasörün Geçmiş'ine yazıldı.`); },
+  });
+  const q = onayBekleyen ? suzulu : tum;
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Arşiv okunamadı')} />;
+  const { dosyalar, silmeDortGoz } = q.data;
+  const bekleyenSayisi = tum.data?.dosyalar.filter((d) => d.silmeIstegi !== null).length ?? 0;
+  const silmeDugmeleri = (d: OrtakDosya) => {
+    const i = d.silmeIstegi;
+    if (i === null) {
+      return silmeDortGoz
+        ? <Dugme simge="trash" onClick={() => istek.mutate({ d, eylem: 'silme-iste' })}>Silme iste</Dugme>
+        : <Dugme tur="tehlike" simge="trash" onClick={() => { sil.reset(); silinecekYaz(d); }}>Kalıcı sil</Dugme>;
+    }
+    if (i.kendi) return <Dugme simge="x" onClick={() => istek.mutate({ d, eylem: 'silme-geri-cek' })}>İsteği geri çek</Dugme>;
+    return (
+      <>
+        <Dugme tur="tehlike" simge="trash" onClick={() => { sil.reset(); silinecekYaz(d); }}>Onayla ve sil</Dugme>
+        <Dugme simge="x" onClick={() => istek.mutate({ d, eylem: 'silme-reddet' })}>Reddet</Dugme>
+      </>
+    );
+  };
   const sutunlar: Sutun<OrtakDosya>[] = [
-    { anahtar: 'ad', baslik: 'Ad', hucre: (d) => <span className="tc-od-ad"><Simge ad="lock" boyut="k" /><span title={d.ad}>{d.ad}</span></span> },
+    {
+      anahtar: 'ad', baslik: 'Ad', kartTamSatir: true,
+      hucre: (d) => (
+        <span className="tc-od-arsiv-ad">
+          <span className="tc-od-ad"><Simge ad="lock" boyut="k" /><span title={d.ad}>{d.ad}</span></span>
+          {d.silmeIstegi !== null && (
+            <span className="tc-od-istek">
+              <Rozet ton="uyari"><Simge ad="clock" boyut="k" />Silme onayı bekliyor</Rozet>
+              <span className="tc-od-ipucu">
+                {d.silmeIstegi.kendi ? 'Kendi isteğiniz' : `${d.silmeIstegi.isteyenAd ?? 'Bilinmeyen kişi'} istedi`}
+                {' · '}<time className="mono">{zamanMetni(d.silmeIstegi.zaman)}</time>
+              </span>
+            </span>
+          )}
+        </span>
+      ),
+    },
     { anahtar: 'klasor', baslik: 'Klasör', hucre: (d) => d.klasorYolu.join(' / ') },
-    { anahtar: 'is', baslik: '', csv: false, hucre: (d) => <Dugme simge="back" onClick={() => geriAl.mutate(d)}>Geri al</Dugme> },
+    { anahtar: 'musteri', baslik: 'Müşteri', hucre: (d) => d.firma?.ad ?? '' },
+    {
+      anahtar: 'is', baslik: '', csv: false, kartTamSatir: true,
+      hucre: (d) => (
+        <span className="tc-od-satir-is">
+          <Dugme simge="back" onClick={() => geriAl.mutate(d)}>Geri al</Dugme>
+          {silmeDugmeleri(d)}
+        </span>
+      ),
+    },
   ];
-  return <Tablo etiket="Arşiv" sutunlar={sutunlar} satirlar={q.data.dosyalar} satirAnahtari={(d) => d.id} bosMesaj="Arşivde geri alabileceğiniz dosya yok." />;
+  return (
+    <div>
+      <div className="tc-od-arac">
+        <div className="tc-od-duzey" role="group" aria-label="Arşiv süzgeci">
+          <button type="button" aria-pressed={!onayBekleyen} onClick={() => onayBekleyenYaz(false)}>Tümü</button>
+          <button type="button" aria-pressed={onayBekleyen} onClick={() => onayBekleyenYaz(true)}>{`Onay bekleyen · ${bekleyenSayisi}`}</button>
+        </div>
+        <span className="tc-od-ipucu">
+          {silmeDortGoz
+            ? 'Kalıcı silme dört gözle: klasörde Yönetir düzeyi olan başka bir kişi onaylar.'
+            : 'Kalıcı silinen dosya geri alınamaz; arşive kaldırma geri alınabilir.'}
+        </span>
+      </div>
+      <Tablo
+        etiket="Arşiv" sutunlar={sutunlar} satirlar={dosyalar} satirAnahtari={(d) => d.id}
+        bosMesaj={onayBekleyen ? 'Onay bekleyen silme isteği yok.' : 'Arşivde geri alabileceğiniz dosya yok.'}
+      />
+      {silinecek !== null && (
+        <SilmePenceresi
+          key={silinecek.id} dosya={silinecek} onay={silinecek.silmeIstegi !== null} kapat={() => silinecekYaz(null)}
+          bekliyor={sil.isPending} hata={sil.isError ? hataIletisi(sil.error, 'Silinemedi') : null}
+          sil={(ad) => sil.mutate({ d: silinecek, ad })}
+        />
+      )}
+    </div>
+  );
 }
 
 function yolu(klasorler: readonly Klasor[], id: number | null): Klasor[] {

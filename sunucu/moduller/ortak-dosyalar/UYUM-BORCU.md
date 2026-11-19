@@ -24,3 +24,5 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 11. Proje iptal ya da kapanınca klasörü arşive kalkmaz (onaylı listede yalnız sipariş iptali var).
 12. Firma musteriden yalniz tedarikciye donerse klasoru ve siparis klasorleri Musteriler altinda kalir, arsive kalkmaz. Yeni siparis acilamaz
    (siparisler SIP-01 `firmaReddi`). VARSAYIM: seyrek; gerekirse firma olayina arsiv ayri kartla.
+13. (3443) Dosyanın müşteri ve projesi yüklemeden sonra değiştirilemez; firma türü sonradan değişirse eski bağ kalır. VARSAYIM; gerekirse ayrı kart.
+14. (3443) Seçici uçları bu modülde, firma ve proje modüllerinde değil; proje araması projeler `projeSecenekleri` üzerinden bellekte süzülür.

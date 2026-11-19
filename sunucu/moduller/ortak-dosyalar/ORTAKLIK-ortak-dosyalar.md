@@ -29,3 +29,11 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 | Alt klasör şablonu | sahibi | `ortak_dosyalar_sablon` | başka modüle açılmaz |
 | Açılamayan klasör | sahibi; zincir (kayıt adları) | `ortak_dosyalar_acilamayan` | başka modüle açılmaz |
 | Kayıt olayları (3288-2) | dinler | `firmaDegistiDinle`, `siparisDegistiDinle`, `projeAcildiDinle`, `projeDegistiDinle` | bağ `sunucu/kablolama.ts`; olay kimlik ve kişi taşır |
+
+## Kart 3443
+| Kavram | Modül ne tutuyor | Yer | Bağ |
+|---|---|---|---|
+| Dosyanın müşterisi | kimlik | `ortak_dosyalar_dosya.firma_id` | musteri-tedarikci (`musteri_tedarikci_firma`), yabancı anahtar; okuma kablolamadan |
+| Dosyanın projesi | kimlik | `ortak_dosyalar_dosya.proje_id` | projeler (`projeler_proje`), yabancı anahtar; okuma kablolamadan |
+| Kalıcı silme defteri, dört göz isteği | sahibi | `ortak_dosyalar_silme` | başka modüle açılmaz |
+| Dört göz ayarı | okur | `ortak-dosyalar.silme-dort-goz` | ayarlar (sistem ayarı); okuyucu kablolamadan |

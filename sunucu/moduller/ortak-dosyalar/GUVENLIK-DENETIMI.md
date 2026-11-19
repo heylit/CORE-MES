@@ -38,3 +38,15 @@ YETKI = `ortak-dosyalar.yetki-ver` (yalnız yönetici rolü; Risk K4 a: yeni iş
 
 - Sistem yazması (olay dinleyicisi, dilim 2) klasör düzeyine takılmaz: kaydın kendi ucu yetkiyi denetlemiştir. Olusturan kişi kaydı açandır.
 - Günlüğe kayıt adı yazılmaz; ad yalnız veritabanında (klasör adı, açılamayan satırının zinciri).
+
+## Kart 3443
+| Uç | Yetki | Sunucu denetimi | Test |
+|---|---|---|---|
+| `GET /ortak-dosyalar/secim/musteriler`, `/secim/projeler` | SAYFA | yalnız müşteri ve ikisi türü etkin firma; ad ve kod listelenir (VARSAYIM, Risk bakışında) | OD-30 |
+| `POST .../dosyalar/:dosyaId/kalici-sil` | SAYFA + klasörde Yönetir | arşivde, sürüm, ad; dört göz açıkken ya da açık istek varken 409 | OD-34 |
+| `POST .../silme-iste` | SAYFA + Yönetir | dört göz kapalıysa 409; dosya başına tek açık istek | OD-36 |
+| `POST .../silme-onayla`, `/silme-reddet` | SAYFA + Yönetir | isteyen değil (403); onayda sürüm ve ad | OD-36 |
+| `POST .../silme-geri-cek` | SAYFA + Yönetir | yalnız isteyen | OD-36 |
+| Ayar `ortak-dosyalar.silme-dort-goz` | `ayarlar.yaz` (genel uç) | denetime yazılır | OD-36 |
+
+- Silme yazıları satır kilidi altında; kilitli satırda arşiv ve sürüm yeniden denetlenir. Defter satırı ve denetim kaydı silinmez.

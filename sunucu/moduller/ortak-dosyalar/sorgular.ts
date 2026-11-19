@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import type { GecmisOlayi, VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 
 export interface KlasorSatiri {
   id: number;
@@ -81,11 +81,14 @@ export interface DosyaSatiri {
   boyut: number;
   yukleyenId: number;
   zaman: string;
+  firmaId: number | null;
+  projeId: number | null;
 }
 
 // Son sürüm yanal birleşimle; boyut bigint'tir, 200 MB tek dosya sınırı sayıya sığar.
 const DOSYA_SECIMI = `SELECT d.id, d.klasor_id AS "klasorId", d.ad, d.arsiv, d.surum, s.sira AS "surumSirasi", s.id AS "surumId", s.ozet,
-         s.boyut::int8::float8 AS boyut, s.yukleyen_kisi_id AS "yukleyenId", ${zamanMetni('s.zaman')} AS zaman
+         s.boyut::int8::float8 AS boyut, s.yukleyen_kisi_id AS "yukleyenId", ${zamanMetni('s.zaman')} AS zaman,
+         d.firma_id AS "firmaId", d.proje_id AS "projeId"
     FROM ortak_dosyalar_dosya d
     JOIN LATERAL (SELECT * FROM ortak_dosyalar_surum s WHERE s.dosya_id = d.id ORDER BY s.sira DESC LIMIT 1) s ON true`;
 
@@ -97,18 +100,23 @@ export function klasorDosyalari(db: Db, klasorId: number, ara: string | null): P
 }
 
 // Görünür klasörlerdeki son yüklenen sürümler (Son eklenenler).
-export function sonDosyalar(db: Db, klasorIdleri: readonly number[], ara: string | null, sinir: number): Promise<DosyaSatiri[]> {
+export function sonDosyalar(
+  db: Db, klasorIdleri: readonly number[], ara: string | null, sinir: number, suzgec: { firmaId: number | null; projeId: number | null },
+): Promise<DosyaSatiri[]> {
   return db.sorgu<DosyaSatiri>(
     `${DOSYA_SECIMI} WHERE d.klasor_id = ANY($1::int[]) AND NOT d.arsiv AND ($2::text IS NULL OR strpos(d.ad_anahtari, $2) > 0)
+        AND ($4::int IS NULL OR d.firma_id = $4) AND ($5::int IS NULL OR d.proje_id = $5)
       ORDER BY s.zaman DESC, d.id DESC LIMIT $3`,
-    [[...klasorIdleri], ara, sinir],
+    [[...klasorIdleri], ara, sinir, suzgec.firmaId, suzgec.projeId],
   );
 }
 
-export function arsivDosyalari(db: Db, klasorIdleri: readonly number[]): Promise<DosyaSatiri[]> {
+export function arsivDosyalari(db: Db, klasorIdleri: readonly number[], onayBekleyen: boolean): Promise<DosyaSatiri[]> {
   return db.sorgu<DosyaSatiri>(
-    `${DOSYA_SECIMI} WHERE d.klasor_id = ANY($1::int[]) AND d.arsiv ORDER BY d.arsiv_zamani DESC, d.id DESC`,
-    [[...klasorIdleri]],
+    `${DOSYA_SECIMI} WHERE d.klasor_id = ANY($1::int[]) AND d.arsiv
+        AND (NOT $2::boolean OR EXISTS (SELECT 1 FROM ortak_dosyalar_silme i WHERE i.dosya_id = d.id AND i.durum = 'acik'))
+      ORDER BY d.arsiv_zamani DESC, d.id DESC`,
+    [[...klasorIdleri], onayBekleyen],
   );
 }
 
@@ -126,10 +134,12 @@ export function etkinDosyaKilitle(db: Db, klasorId: number, adAnahtari: string):
   return db.tek('SELECT id FROM ortak_dosyalar_dosya WHERE klasor_id = $1 AND ad_anahtari = $2 AND NOT arsiv FOR UPDATE', [klasorId, adAnahtari]);
 }
 
-export async function dosyaEkle(db: Db, d: { klasorId: number; ad: string; adAnahtari: string }): Promise<number> {
+export async function dosyaEkle(
+  db: Db, d: { klasorId: number; ad: string; adAnahtari: string; firmaId: number | null; projeId: number | null },
+): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    'INSERT INTO ortak_dosyalar_dosya (klasor_id, ad, ad_anahtari) VALUES ($1, $2, $3) RETURNING id',
-    [d.klasorId, d.ad, d.adAnahtari],
+    'INSERT INTO ortak_dosyalar_dosya (klasor_id, ad, ad_anahtari, firma_id, proje_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [d.klasorId, d.ad, d.adAnahtari, d.firmaId, d.projeId],
   );
   if (satir === null) throw new Error('Dosya eklenemedi.');
   return satir.id;
@@ -174,7 +184,7 @@ export function surumOku(db: Db, dosyaId: number, sira: number): Promise<{ id: n
 }
 
 export interface GecmisHam {
-  olay: 'klasor-acildi' | 'yuklendi' | 'yeni-surum' | 'arsivlendi' | 'geri-alindi' | 'yetki-degisti';
+  olay: GecmisOlayi;
   kisiId: number | null;
   zaman: string;
   dosyaAdi: string | null;
@@ -198,6 +208,13 @@ export function gecmisOku(db: Db, klasorId: number, sinir: number): Promise<Gecm
        SELECT 'arsivlendi', arsiv_kisi_id, arsiv_zamani, ad, NULL FROM ortak_dosyalar_dosya WHERE klasor_id = $1 AND arsiv_zamani IS NOT NULL
        UNION ALL
        SELECT 'geri-alindi', geri_alan_kisi_id, geri_alma_zamani, ad, NULL FROM ortak_dosyalar_dosya WHERE klasor_id = $1 AND geri_alma_zamani IS NOT NULL
+       UNION ALL
+       -- Kalıcı silme defteri (3443): dosya silinse de satırı kalır; dört gözde istek ve sonucu ayrı olaydır.
+       SELECT 'silme-istendi', isteyen_kisi_id, istek_zamani, dosya_adi, NULL FROM ortak_dosyalar_silme WHERE klasor_id = $1 AND dort_goz
+       UNION ALL
+       SELECT CASE durum WHEN 'silindi' THEN 'silindi' WHEN 'reddedildi' THEN 'silme-reddedildi' WHEN 'geri-cekildi' THEN 'silme-geri-cekildi'
+                ELSE 'silme-dustu' END, sonuclayan_kisi_id, sonuc_zamani, dosya_adi, NULL
+         FROM ortak_dosyalar_silme WHERE klasor_id = $1 AND durum <> 'acik'
      ) o ORDER BY o.z DESC LIMIT $2`,
     [klasorId, sinir],
   );
@@ -303,4 +320,66 @@ export function topluIsKlasorleri(db: Db, topluIs: string): Promise<{ id: number
        FROM agac a GROUP BY a.kok ORDER BY a.kok`,
     [topluIs],
   );
+}
+
+// Kalıcı silme (kart 3443).
+
+// Silinecek ya da istenecek dosya satırı kilitlenir: aynı anda iki komut aynı dosyayı sonuçlamaz (Risk K3, S3).
+export function dosyaKilitle(db: Db, klasorId: number, dosyaId: number): Promise<{ id: number; ad: string; arsiv: boolean; surum: number } | null> {
+  return db.tek('SELECT id, ad, arsiv, surum FROM ortak_dosyalar_dosya WHERE id = $1 AND klasor_id = $2 FOR UPDATE', [dosyaId, klasorId]);
+}
+
+export interface SilmeIstegi { id: number; dosyaId: number; isteyenId: number; zaman: string; dosyaSurumu: number }
+
+export function acikIstekKilitle(db: Db, dosyaId: number): Promise<SilmeIstegi | null> {
+  return db.tek(
+    `SELECT id, dosya_id AS "dosyaId", isteyen_kisi_id AS "isteyenId", ${zamanMetni('istek_zamani')} AS zaman, dosya_surumu AS "dosyaSurumu"
+       FROM ortak_dosyalar_silme WHERE dosya_id = $1 AND durum = 'acik' FOR UPDATE`,
+    [dosyaId],
+  );
+}
+
+export function acikIstekler(db: Db, dosyaIdleri: readonly number[]): Promise<SilmeIstegi[]> {
+  if (dosyaIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT id, dosya_id AS "dosyaId", isteyen_kisi_id AS "isteyenId", ${zamanMetni('istek_zamani')} AS zaman, dosya_surumu AS "dosyaSurumu"
+       FROM ortak_dosyalar_silme WHERE dosya_id = ANY($1::int[]) AND durum = 'acik'`,
+    [[...dosyaIdleri]],
+  );
+}
+
+export async function silmeIstegiAc(
+  db: Db, i: { klasorId: number; dosyaId: number; dosyaAdi: string; dosyaSurumu: number; kisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO ortak_dosyalar_silme (klasor_id, dosya_id, dosya_adi, dosya_surumu, dort_goz, isteyen_kisi_id, durum)
+     VALUES ($1, $2, $3, $4, true, $5, 'acik')`,
+    [i.klasorId, i.dosyaId, i.dosyaAdi, i.dosyaSurumu, i.kisiId],
+  );
+}
+
+// Dört göz kapalıyken doğrudan silmenin satırı: isteyen ve silen aynı kişidir.
+export async function dogrudanSilmeYaz(
+  db: Db, i: { klasorId: number; dosyaId: number; dosyaAdi: string; dosyaSurumu: number; surumSayisi: number; kisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO ortak_dosyalar_silme (klasor_id, dosya_id, dosya_adi, dosya_surumu, surum_sayisi, dort_goz, isteyen_kisi_id, durum, sonuclayan_kisi_id, sonuc_zamani)
+     VALUES ($1, $2, $3, $4, $5, false, $6, 'silindi', $6, now())`,
+    [i.klasorId, i.dosyaId, i.dosyaAdi, i.dosyaSurumu, i.surumSayisi, i.kisiId],
+  );
+}
+
+export async function istekSonucla(
+  db: Db, id: number, durum: 'silindi' | 'reddedildi' | 'geri-cekildi' | 'dustu', kisiId: number, surumSayisi: number | null,
+): Promise<void> {
+  await db.sorgu(
+    `UPDATE ortak_dosyalar_silme SET durum = $2, sonuclayan_kisi_id = $3, sonuc_zamani = now(), surum_sayisi = $4 WHERE id = $1 AND durum = 'acik'`,
+    [id, durum, kisiId, surumSayisi],
+  );
+}
+
+// Sürümler önce silinir (dosyaya yabancı anahtarları var); bağlar dosya modülünün tutamağıyla önceden kaldırılır.
+export async function dosyaVeSurumleriniSil(db: Db, dosyaId: number): Promise<void> {
+  await db.sorgu('DELETE FROM ortak_dosyalar_surum WHERE dosya_id = $1', [dosyaId]);
+  await db.sorgu('DELETE FROM ortak_dosyalar_dosya WHERE id = $1', [dosyaId]);
 }

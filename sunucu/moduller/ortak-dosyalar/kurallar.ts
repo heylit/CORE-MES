@@ -19,7 +19,51 @@ export const ILETILER = {
   zatenArsivde: 'Dosya zaten arşivde.',
   arsivdeDegil: 'Dosya arşivde değil.',
   uzantiUyusmuyor: 'Dosya adının uzantısı içeriğiyle uyuşmuyor; dosyayı kendi uzantısıyla yükleyin.',
+  musteriYok: 'Müşteri bulunamadı.',
+  musteriDegil: 'Seçilen firma müşteri değil; yalnız müşteri ya da ikisi türündeki firma seçilir.',
+  projeYok: 'Proje bulunamadı.',
+  projeMusteriUyusmuyor: 'Seçilen proje bu müşterinin değil.',
+  silmeArsivde: 'Yalnız arşivdeki dosya kalıcı silinir; önce arşive kaldırın.',
+  silmeAdUyusmuyor: 'Yazılan ad dosyanın adıyla aynı değil.',
+  silmeDortGozAcik: 'Dört göz açık: kalıcı silme için istek açın; başka bir kişi onaylar.',
+  silmeDortGozKapali: 'Dört göz kapalı: istek açılmaz, dosya doğrudan silinir.',
+  silmeIstegiVar: 'Bu dosya için açık bir silme isteği var.',
+  silmeIstegiYok: 'Bu dosya için açık silme isteği yok.',
+  silmeKendiIstegi: 'Kendi silme isteğinizi onaylayamazsınız; başka bir Yönetir kişi onaylar.',
+  silmeGeriCekmeKendi: 'Silme isteğini yalnız açan kişi geri çeker.',
+  silmeIstegiEski: 'Dosya istekten sonra değişti; istek geçersiz, yeniden isteyin.',
 } as const;
+
+// OD-30 (3443 a, 1): müşteri yalnız müşteri ya da ikisi türündeki firmadır; proje varsa firması seçilen müşteriyle aynıdır.
+export const musteriTuruMu = (tur: string): boolean => tur === 'musteri' || tur === 'ikisi';
+export type SecimReddi = 'musteriDegil' | 'projeMusteriUyusmuyor';
+export function secimReddi(s: { firmaTuru: string | null; firmaId: number | null; projeFirmaId: number | null | undefined }): SecimReddi | null {
+  if (s.firmaTuru !== null && !musteriTuruMu(s.firmaTuru)) return 'musteriDegil';
+  // Proje seçildi, müşteri de seçildiyse proje o müşterinin olmalı; müşteri boşsa projenin müşterisi yazılır.
+  if (s.projeFirmaId !== undefined && s.firmaId !== null && s.projeFirmaId !== s.firmaId) return 'projeMusteriUyusmuyor';
+  return null;
+}
+
+// OD-31 (3443 a, 3): kayda bağlı klasörün zincirinden müşteri ve proje. Zincirde firma, sipariş ya da proje klasörü yoksa
+// klasör serbesttir (null): yükleyen seçer. Firma en yakın firma klasöründen, proje en yakın proje klasöründendir.
+export function kayitSecimiCoz(zincir: readonly { kaynakTur: string | null; kaynakId: number | null }[]): { firmaId: number | null; projeId: number | null } | null {
+  let firmaId: number | null = null;
+  let projeId: number | null = null;
+  let kayitli = false;
+  for (const k of zincir) {
+    if (k.kaynakTur === 'firma' || k.kaynakTur === 'siparis' || k.kaynakTur === 'proje') kayitli = true;
+    if (k.kaynakTur === 'firma') firmaId = k.kaynakId;
+    if (k.kaynakTur === 'proje') projeId = k.kaynakId;
+  }
+  return kayitli ? { firmaId, projeId } : null;
+}
+
+// OD-32 (3443 a, 4; Risk S7): kalıcı silmede yazılan ad dosyanın adıdır (büyük-küçük harf duyarsız, baştaki ve sondaki boşluk sayılmaz).
+export const silmeAdiUyarMi = (yazilan: string, dosyaAdi: string): boolean => adAnahtari(yazilan) === adAnahtari(dosyaAdi);
+
+// OD-33 (3443 a, 6): dört gözde isteyen kendi isteğini onaylayamaz; geri çekmeyi yalnız isteyen yapar.
+export const silmeOnaylayabilirMi = (isteyenId: number, kisiId: number): boolean => isteyenId !== kisiId;
+export const silmeGeriCekebilirMi = (isteyenId: number, kisiId: number): boolean => isteyenId === kisiId;
 
 // OD-1: düzeyler sıralıdır, üstteki alttakini içerir.
 export const duzeySirasi = (d: KlasorDuzeyi): number => KLASOR_DUZEYLERI.indexOf(d);

@@ -11,7 +11,8 @@ import type {
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { DOSYA_SINIRI, denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
-import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, gorunurMu, uzantiUyarMi, yetkiKaynagi } from './kurallar.ts';
+import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, gorunurMu, kayitSecimiCoz, uzantiUyarMi, yetkiKaynagi } from './kurallar.ts';
+import { adlariOku, kayitKimlikleri, secimDogrula } from './musteri-proje.ts';
 import type { KlasorDugumu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -22,6 +23,7 @@ const GECMIS_SINIRI = 200;
 
 // Bir isteğin yetki resmi: ağaç, satırlar ve kişinin rolleri her istekte veritabanından okunur (ekranda gizlemek yetki değildir).
 export interface Gorunum {
+  kisiId: number;
   klasorler: Map<number, s.KlasorSatiri>;
   yonetici: boolean;
   duzey: (id: number) => KlasorDuzeyi;
@@ -49,7 +51,7 @@ export async function gorunumKur(db: Db, kullanici: Kullanici): Promise<Gorunum>
   };
   // Arşivdeki klasör ve altı kimseye görünmez (ADR 0030 eki); toplu işin geri alınması ve sipariş iptali klasörü buraya kaldırır.
   return {
-    klasorler, yonetici: roller.some((r) => r.yonetici), duzey, gorunur: (id) => !arsivdeMi(id, klasorler) && gorunurMu(id, klasorler, duzey),
+    kisiId: kullanici.id, klasorler, yonetici: roller.some((r) => r.yonetici), duzey, gorunur: (id) => !arsivdeMi(id, klasorler) && gorunurMu(id, klasorler, duzey),
   };
 }
 
@@ -80,11 +82,26 @@ function klasorZinciri(g: Gorunum, id: number): s.KlasorSatiri[] {
 const klasorYolu = (g: Gorunum, id: number): string[] => klasorZinciri(g, id).map((k) => k.ad);
 
 async function dosyalariKur(db: Db, g: Gorunum, satirlar: s.DosyaSatiri[]): Promise<OrtakDosya[]> {
-  const adlar = await kisiAdlari(db, satirlar.map((d) => d.yukleyenId));
-  return satirlar.map((d) => ({
-    id: d.id, klasorId: d.klasorId, klasorYolu: klasorYolu(g, d.klasorId), ad: d.ad, surumSirasi: d.surumSirasi, boyut: d.boyut,
-    yukleyenAd: adlar.get(d.yukleyenId) ?? null, zaman: d.zaman, arsiv: d.arsiv, surum: d.surum,
-  }));
+  const istekler = new Map((await s.acikIstekler(db, satirlar.map((d) => d.id))).map((i) => [i.dosyaId, i]));
+  const adlar = await kisiAdlari(db, [...satirlar.map((d) => d.yukleyenId), ...[...istekler.values()].map((i) => i.isteyenId)]);
+  const kayit = await adlariOku(db, satirlar);
+  return satirlar.map((d) => {
+    const i = istekler.get(d.id);
+    return {
+      id: d.id, klasorId: d.klasorId, klasorYolu: klasorYolu(g, d.klasorId), ad: d.ad, surumSirasi: d.surumSirasi, boyut: d.boyut,
+      yukleyenAd: adlar.get(d.yukleyenId) ?? null, zaman: d.zaman, arsiv: d.arsiv, surum: d.surum,
+      firma: kayit.firma(d.firmaId), proje: kayit.proje(d.projeId),
+      silmeIstegi: i === undefined ? null : { isteyenAd: adlar.get(i.isteyenId) ?? null, zaman: i.zaman, kendi: i.isteyenId === g.kisiId },
+    };
+  });
+}
+
+// Kayda bağlı klasörün müşterisi ve projesi (OD-31); serbest klasörde null.
+export async function kayitSecimi(db: Db, g: Gorunum, klasorId: number): Promise<DosyalarCevabi['kayitSecimi']> {
+  const c = kayitSecimiCoz(klasorZinciri(g, klasorId));
+  if (c === null) return null;
+  const kayit = await adlariOku(db, [c]);
+  return { firma: kayit.firma(c.firmaId), proje: kayit.proje(c.projeId) };
 }
 
 const aramaAnahtari = (ara: string | undefined): string | null => (ara === undefined || ara.trim() === '' ? null : adAnahtari(ara));
@@ -109,20 +126,24 @@ export async function klasorDosyalari(db: Db, kullanici: Kullanici, klasorId: nu
     altKlasorler: altlar.map((a) => klasorCevabi(g, a)),
     dosyalar: await dosyalariKur(db, g, await s.klasorDosyalari(db, k.id, aramaAnahtari(ara))),
     adOnerisi: adOneki(klasorZinciri(g, k.id)),
+    kayitSecimi: await kayitSecimi(db, g, k.id),
   };
 }
 
-export async function sonEklenenler(db: Db, kullanici: Kullanici, ara: string | undefined): Promise<DosyaListesiCevabi> {
+export async function sonEklenenler(
+  db: Db, kullanici: Kullanici, sorgu: { ara?: string | undefined; firmaId?: number | undefined; projeId?: number | undefined },
+): Promise<DosyaListesiCevabi> {
   const g = await gorunumKur(db, kullanici);
   const gorunen = [...g.klasorler.keys()].filter((id) => g.gorunur(id));
-  return { dosyalar: await dosyalariKur(db, g, await s.sonDosyalar(db, gorunen, aramaAnahtari(ara), SON_EKLENEN_SINIRI)) };
+  const suzgec = { firmaId: sorgu.firmaId ?? null, projeId: sorgu.projeId ?? null };
+  return { dosyalar: await dosyalariKur(db, g, await s.sonDosyalar(db, gorunen, aramaAnahtari(sorgu.ara), SON_EKLENEN_SINIRI, suzgec)) };
 }
 
 // Arşiv yalnız yönetebildiği klasörlerin dosyalarını gösterir: geri alabileceği dosyalar.
-export async function arsiv(db: Db, kullanici: Kullanici): Promise<DosyaListesiCevabi> {
+export async function arsiv(db: Db, kullanici: Kullanici, onayBekleyen: boolean): Promise<DosyaListesiCevabi> {
   const g = await gorunumKur(db, kullanici);
   const yonetilen = [...g.klasorler.keys()].filter((id) => g.gorunur(id) && enAzMi(g.duzey(id), 'yonetir'));
-  return { dosyalar: await dosyalariKur(db, g, await s.arsivDosyalari(db, yonetilen)) };
+  return { dosyalar: await dosyalariKur(db, g, await s.arsivDosyalari(db, yonetilen, onayBekleyen)) };
 }
 
 export async function gecmis(db: Db, kullanici: Kullanici, klasorId: number): Promise<GecmisCevabi> {
@@ -137,7 +158,7 @@ export async function gecmis(db: Db, kullanici: Kullanici, klasorId: number): Pr
   };
 }
 
-async function dosyaIste(db: Db, g: Gorunum, klasorId: number, dosyaId: number, gereken: KlasorDuzeyi): Promise<s.DosyaSatiri> {
+export async function dosyaIste(db: Db, g: Gorunum, klasorId: number, dosyaId: number, gereken: KlasorDuzeyi): Promise<s.DosyaSatiri> {
   klasorIste(g, klasorId, gereken);
   const d = await s.dosyaOku(db, klasorId, dosyaId);
   if (d === null) throw bulunamadi(ILETILER.dosyaYok);
@@ -196,7 +217,9 @@ export async function klasorAc(db: Db, kullanici: Kullanici, ustId: number | nul
 // Aynı adlı etkin dosya varsa yeni sürüm eklenir, yoksa dosya açılır (ADR 0030, 7). Yükleyen içeriği kendisi göndermiş olmalıdır
 // (dosya modülü denetler); tür ve boyut modülün bağ sınırıyla denetlenir.
 export async function yukle(
-  db: Db, kullanici: Kullanici, klasorId: number, girdi: { ad: string; ozet: string }, denetimEki: (satirlar: readonly DenetimSecimi[]) => void,
+  db: Db, kullanici: Kullanici, klasorId: number,
+  girdi: { ad: string; ozet: string; firmaId?: number | null | undefined; projeId?: number | null | undefined },
+  denetimEki: (satirlar: readonly DenetimSecimi[]) => void,
 ): Promise<OrtakDosya> {
   const g = await gorunumKur(db, kullanici);
   klasorIste(g, klasorId, 'ekler');
@@ -204,7 +227,13 @@ export async function yukle(
   const ad = girdi.ad.trim();
   const anahtar = adAnahtari(ad);
   const var_ = await s.etkinDosyaKilitle(db, klasorId, anahtar);
-  const dosyaId = var_?.id ?? await kisitKorumali(DOSYA_KISITLARI, () => s.dosyaEkle(db, { klasorId, ad, adAnahtari: anahtar }));
+  // Müşteri ve proje yalnız dosya açılırken yazılır (yeni sürüm değiştirmez); kayda bağlı klasörde klasörün kaydıdır (OD-31).
+  let secim = { firmaId: null as number | null, projeId: null as number | null };
+  if (var_ === null) {
+    const kayitli = kayitSecimiCoz(klasorZinciri(g, klasorId));
+    secim = kayitli === null ? await secimDogrula(db, { firmaId: girdi.firmaId ?? null, projeId: girdi.projeId ?? null }) : await kayitKimlikleri(db, kayitli);
+  }
+  const dosyaId = var_?.id ?? await kisitKorumali(DOSYA_KISITLARI, () => s.dosyaEkle(db, { klasorId, ad, adAnahtari: anahtar, ...secim }));
   const sira = await s.surumEkle(db, { dosyaId, ozet: girdi.ozet, boyut: 0, kisiId: kullanici.id });
   const bag = await tutamak.dosyaBagla(db, kullanici, { ozet: girdi.ozet, kayit: String(sira.id), ad, belgeTuru: null }, BAG_SINIRI);
   // Uç transaction içindedir: ret açılan dosyayı, sürümü ve bağı geri alır.
@@ -219,6 +248,8 @@ export async function yukle(
   return cevap;
 }
 
+export { dosyalariKur };
+
 export async function arsivDegistir(
   db: Db, kullanici: Kullanici, klasorId: number, dosyaId: number, surum: number, arsive: boolean,
 ): Promise<OrtakDosya> {
@@ -230,6 +261,11 @@ export async function arsivDegistir(
     varMi: async () => (await s.dosyaOku(db, klasorId, dosyaId)) !== null,
     bulunamadiIletisi: ILETILER.dosyaYok,
   }));
+  // Arşivden geri alınan dosyanın açık silme isteği düşer: silinecek dosya artık arşivde değildir.
+  if (!arsive) {
+    const istek = await s.acikIstekKilitle(db, d.id);
+    if (istek !== null) await s.istekSonucla(db, istek.id, 'dustu', kullanici.id, null);
+  }
   const yeni = await s.dosyaOku(db, klasorId, dosyaId);
   if (yeni === null) throw new Error(`Dosya okunamadı: ${dosyaId}`);
   const [cevap] = await dosyalariKur(db, g, [yeni]);

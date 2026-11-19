@@ -13,6 +13,7 @@ import { LOGO_AYARLARI } from './ayarlar/logo.ts';
 import { MALZEMELER_AYARLARI } from './ayarlar/malzemeler.ts';
 import { MUSTERI_TEDARIKCI_AYARLARI } from './ayarlar/musteri-tedarikci.ts';
 import { NIZAMIYE_AYARLARI } from './ayarlar/nizamiye.ts';
+import { ORTAK_DOSYALAR_AYARLARI } from './ayarlar/ortak-dosyalar.ts';
 import { PLAN_AYARLARI } from './ayarlar/plan.ts';
 import { ROTA_AYARLARI } from './ayarlar/rota.ts';
 import { SATIN_ALMA_AYARLARI } from './ayarlar/satin-alma.ts';
@@ -42,6 +43,7 @@ export const AYAR_TANIMLARI = {
   ...MALZEMELER_AYARLARI,
   ...MUSTERI_TEDARIKCI_AYARLARI,
   ...NIZAMIYE_AYARLARI,
+  ...ORTAK_DOSYALAR_AYARLARI,
   ...PLAN_AYARLARI,
   ...ROTA_AYARLARI,
   ...SATIN_ALMA_AYARLARI,
