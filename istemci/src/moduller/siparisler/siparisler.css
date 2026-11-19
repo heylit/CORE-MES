@@ -201,6 +201,11 @@
 .tc-sp-akis-emir { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-sp-akis-teslim { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--b-2); }
 .tc-sp-akis-teslim > span { white-space: nowrap; }
+/* 3429-2: Durum'a ikinci rozet girince termin tarihi ve gecikme metni rakam ortasından kırılmaz; her biri kendi satırında. */
+.tc-sp-termin-hucre > span { white-space: nowrap; }
+.tc-sp-akis-rozetler { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-1); min-width: 0; }
+.tc-sp-akis-plan { display: inline-grid; justify-items: inherit; }
+.tc-sp-akis-risk { color: var(--stop); font-weight: 700; }
 .tc-sp-akis-no { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .tc-sp-kapanis-eksik { margin: 0; padding-left: var(--b-4); }
 @media (max-width: 767px) {

@@ -27,4 +27,5 @@ Testler: `kurallar.test.ts` (saf), `akis.test.ts` (gerçek PostgreSQL), `istemci
 | SPA-3 Aşama durumdan ve kaynak kayıtlardan, faturadan geriye; iptal emir sayılmaz; üretilen kalemi olmayan onaylı sipariş "onaylı" kalır | `kurallar.test.ts` `SPA-3 ...`; V `SPA-1..SPA-4 ...`; E `siparisler.test.tsx` 3429-1 |
 | SPA-4 Kapanış eksikleri: üretilen kalemin teslim eksiği ve tam olmayan fatura; üretilmeyen kalemin sevki ölçülmez | `kurallar.test.ts` `SPA-4 ...`; V `SPA-1..SPA-4 ...` |
 | SPA-5 Plan bitişi en geç bitiştir: emirde iş emirlerinin, kalemde iptal edilmemiş emirlerinin | `kurallar.test.ts` `SPA-5 ...`; V `siparis-akisi.test.ts` `SPA-1, SPA-4, SPA-5 ...` |
+| SPA-6 (3429-2 D) Termin riski: teslimi bitmemiş üretilen kalemin plan bitişi (tesis günü) termin gününden sonraysa gün farkı; sipariş riski en büyüğü, yalnız onaylıda; kademeli uyarı kaynağı `siparisler.plan-riski` | `kurallar.test.ts` `SPA-6 ...`; V `siparis-akisi.test.ts` `SPA-6 ...`; `kademe-okuyuculari.test.ts`; E `siparisler.test.tsx` 3429-2 D |
 | SPA-U1 Akış ve aşama listesi `siparisler.oku` ile; okumayan 403, olmayan sipariş 404 (listede atlanır), en çok 100 kimlik | V `SPA-U1 ...` |

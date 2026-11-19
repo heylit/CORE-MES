@@ -111,6 +111,12 @@ export const KADEME_KAYNAKLARI = {
     ad: 'Satış siparişi termini', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],
     yol: '/siparisler', varsayilan: sonGun(3, 1, 3),
   },
+  // 3429-2 D: planlanan bitiş kalem termininden sonra (Kokpit'teki canlı plan). Kayıt yalnız risk sürdükçe açıktır; son gün riskli kalemin
+  // terminidir. Plan düzelince ya da teslim tamamlanınca kayıt kendiliğinden kapanır.
+  'siparisler.plan-riski': {
+    ad: 'Satış siparişi termin riski (plan terminden sonra)', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],
+    yol: '/siparisler', varsayilan: sonGun(5, 1, 3),
+  },
   // 3416-1 a: bekletilen üretim emri, neden başına (İş Akışı v4.7 bekleme tablosu). K3 ilk sınır, K4 ikinci sınır: gecikmenin
   // k4'üncü günü ikinci sınırın günüdür (malzeme 2 / 5 iş günü: k3 2, k4 4). Motor iş günü sayar; saatli sınır en yakın iş gününe iner.
   'uretim-emirleri.bekleme-malzeme': {

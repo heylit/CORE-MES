@@ -553,19 +553,19 @@ describe('Satış siparişi ayrıntısı', () => {
 const AKIS_KALEMI = {
   id: 50, sira: 1, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: 100, termin: '2026-10-20', uretilir: true,
   emirler: [{ id: 70, no: 'UE-ORN-0070', durum: 'bitti', adet: 100, planBitis: '2026-10-15T14:00:00.000Z', saglam: 100 }],
-  planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20,
+  planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20, terminRiski: null,
 } satisfies SiparisAkisiCevabi['kalemler'][number];
 const AKIS = {
   siparisId: 6, asama: 'kismi-sevk', fatura: 'yok', faturaSayisi: 0,
   kalemler: [AKIS_KALEMI],
-  kapanisEksikleri: ['Kalem 1: teslim edilen 60 / 100.', 'Fatura kesilmedi.'],
+  kapanisEksikleri: ['Kalem 1: teslim edilen 60 / 100.', 'Fatura kesilmedi.'], terminRiski: null,
 } satisfies SiparisAkisiCevabi;
 
 describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
   const akisli = (akis: SiparisAkisiCevabi, kapat?: (govde: unknown) => Response | undefined) => sunucuKur(YONETICI, (yontem, yol, govde) => {
     // Örnek ayrıntının kimliği 5'tir (taslaktan türer); sayfa adresi 6.
     if (yontem === 'GET' && /^\/akis\/siparisler\/[56]$/.test(yol)) return json(200, akis);
-    if (yontem === 'GET' && yol.startsWith('/akis/siparis-asamalari?')) return json(200, { asamalar: [{ siparisId: 6, asama: akis.asama }] } satisfies SiparisAsamalariCevabi);
+    if (yontem === 'GET' && yol.startsWith('/akis/siparis-asamalari?')) return json(200, { asamalar: [{ siparisId: 6, asama: akis.asama, terminRiski: akis.terminRiski }] } satisfies SiparisAsamalariCevabi);
     if (yontem === 'POST' && yol === '/siparisler/6/kapat') return kapat?.(govde) ?? json(200, { ...AYRINTI_ONAYLI, durum: 'kapandi' } satisfies SiparisAyrintisi);
     return undefined;
   });
@@ -608,6 +608,23 @@ describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
     expect(await durumlar([tam, iptalli])).toEqual(['Emir 1 / 2 kismi', 'Plan 1 / 2 kismi', 'Üretim 1 / 2 kismi', 'Sevk 1 / 2 kismi']);
     expect(await durumlar([tam])).toEqual(['Emir 1 / 1 tam', 'Plan 1 / 1 tam', 'Üretim 1 / 1 tam', 'Sevk 1 / 1 tam']);
     expect(await durumlar([iptalli])).toEqual(['Emir 0 / 1 bos', 'Plan 0 / 1 bos', 'Üretim 0 / 1 bos', 'Sevk 0 / 1 bos']);
+  });
+
+  it('3429-2 D: plan bitişi termini aşan kalemde gün farkı, başlıkta ve listede termin riski rozeti', async () => {
+    const riskli = { ...AKIS, terminRiski: 3, kalemler: [{ ...AKIS_KALEMI, planBitis: '2026-10-23T09:00:00.000Z', terminRiski: 3 }] };
+    akisli(riskli);
+    ac('/siparisler/6');
+    expect(await screen.findByText('3 gün geç')).toBeTruthy();
+    expect(screen.getAllByText('Termin riski · 3 gün').length).toBe(2);
+    cleanup();
+    akisli(riskli);
+    ac('/siparisler');
+    expect(await screen.findByText('Termin riski · 3 gün')).toBeTruthy();
+    cleanup();
+    akisli(AKIS);
+    ac('/siparisler/6');
+    await screen.findByRole('heading', { name: 'Sipariş akışı' });
+    expect(screen.queryByText(/Termin riski/)).toBeNull();
   });
 
   it('taslakta akış istenmez ve bölüm çizilmez', async () => {

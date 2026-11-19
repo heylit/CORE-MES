@@ -313,6 +313,8 @@ export const siparisAkisKalemiSemasi = z.object({
   // Teslim edilen (tamamlanan) ve yoldaki teslimat işlerinin adedi; iptal edilen sayılmaz. Emirsiz sevk siparişe bağlı değildir.
   sevkEdilen: miktar,
   yolda: miktar,
+  // 3429-2 D: planlanan bitişin (tesis günü) kalem termininden kaç gün sonra olduğu; teslimi bitmemiş üretilen kalemde, geç değilse null.
+  terminRiski: z.number().int().positive().nullable(),
 });
 
 export const siparisAkisiCevabi = z.object({
@@ -324,6 +326,8 @@ export const siparisAkisiCevabi = z.object({
   kalemler: z.array(siparisAkisKalemiSemasi),
   // Kapanış için eksikler (kalem sevk eksiği, fatura eksiği); boşsa sipariş doğrudan kapanır.
   kapanisEksikleri: z.array(z.string()),
+  // Kalemlerin en büyük termin riski (gün); yalnız onaylı siparişte, yoksa null.
+  terminRiski: z.number().int().positive().nullable(),
 });
 
 export const SIPARIS_ASAMA_SINIRI = 100;
@@ -332,7 +336,9 @@ export const siparisAsamalariSorgusu = z.object({
     .pipe(z.array(KIMLIK).min(1).max(SIPARIS_ASAMA_SINIRI)),
 });
 // Olmayan sipariş listede yoktur.
-export const siparisAsamalariCevabi = z.object({ asamalar: z.array(z.object({ siparisId: KIMLIK, asama: z.enum(SIPARIS_ASAMALARI) })) });
+export const siparisAsamalariCevabi = z.object({
+  asamalar: z.array(z.object({ siparisId: KIMLIK, asama: z.enum(SIPARIS_ASAMALARI), terminRiski: z.number().int().positive().nullable() })),
+});
 
 export type SiparisAkisEmri = z.output<typeof siparisAkisEmriSemasi>;
 export type SiparisAkisKalemi = z.output<typeof siparisAkisKalemiSemasi>;

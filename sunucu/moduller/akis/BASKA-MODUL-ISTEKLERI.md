@@ -14,3 +14,6 @@ Var olanlardan kullanılanlar: `uretim-emirleri/disari.ts` `adimliEmirListesi`, 
 `uretim-emirleri/disari.ts` `siparisSatirlarininEmirleri`, `emirlerinIsEmriIdleri`, `uretimEmriOzeti`, `plan/disari.ts` `canliPlan`,
 `sevkiyat/disari.ts` `siparisinSevkleri`, `finans/disari.ts` `siparisFaturalari`, `malzemeler/disari.ts` `malzemeOzetleri`.
 Siparişler'in kapatma kapısı bu modülün `disari.ts` `siparisKapanisEksikleri` okumasını çözücüyle alır (kablolama.ts; Siparişler alt kattadır).
+
+3429-2 D (termin riski): yeni dışa aktarım istenmedi. Bu modülün `disari.ts` `siparisTerminRiskleri` okuması kademeli uyarı kaynağı
+`siparisler.plan-riski`ye kablolamada bağlanır; açık siparişler `siparisler/disari.ts` `takvimKayitlari` ile seçilir.
