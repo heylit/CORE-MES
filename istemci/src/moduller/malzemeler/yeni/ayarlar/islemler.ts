@@ -1,5 +1,6 @@
 // Malzeme ayarı üzerinde yapılan her değişiklik: girdi ayarı bozmaz, yeni ayar döner. Ekran yalnız sonucu kaydeder.
 import type { AyarliTablolar, Deger, HamTablolar, MalzemeAyari } from './kaynak.ts';
+import { STANDART_FORM_GRUPLARI, kimyasalStandartlari, mekanikFormaBagli, mekanikStandartlari } from './kaynak.ts';
 
 export interface ListeAyari { ekle: Deger[]; gizle: Deger[] }
 export interface EkAile { key: string; ad: string; kod: string; renk?: string; kaynak: string; forms: string[] }
@@ -70,7 +71,8 @@ export function anahtarUret(on: string, ad: string, varMi: (k: string) => boolea
 }
 
 /* ---------------- Liste düzenleyici ---------------- */
-// Liste kimliği: sertifika | belge | birim | birim|<tür> | tol|<form>|<aile> | opt|<aile>|<seçenek> | alan|<ALAN.x|SARF.x|DB.x>|<alan>
+// Liste kimliği: sertifika | belge | birim | birim|<tür> | tol|<form>|<aile> | opt|<aile>|<seçenek> | std|<aile>|<sınıf>|<kim|form grubu>
+// | alan|<ALAN.x|SARF.x|DB.x>|<alan>
 
 function alanBul(t: HamTablolar, yol: string, k: string) {
   const [tablo, x = ''] = yol.split('.');
@@ -97,6 +99,14 @@ export function listeTabani(id: string, t: HamTablolar): Deger[] | null {
       return tb;
     }
     return [...(o.opts ?? [])];
+  }
+  if (p[0] === 'std') {
+    const c = t.FAMS[p[1] ?? '']?.classes[p[2] ?? ''];
+    if (!c) return null;
+    if (p[3] === 'kim') return kimyasalStandartlari(c);
+    const grup = STANDART_FORM_GRUPLARI.find((g) => g.anahtar === p[3]);
+    if (!grup) return null;
+    return [...new Set(grup.formlar.flatMap((f) => (mekanikFormaBagli(c, f) ? mekanikStandartlari(c, f) : [])))];
   }
   if (p[0] === 'alan') {
     const a = alanBul(t, p[1] ?? '', p[2] ?? '');

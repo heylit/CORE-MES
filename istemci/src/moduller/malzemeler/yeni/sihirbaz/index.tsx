@@ -12,7 +12,7 @@ import { useKartlar, useSablonlar } from '../veri.ts';
 import { AdimCubugu, adimlariKur } from './AdimCubugu.tsx';
 import { kartStandardi } from '../standart-adlari.ts';
 import { SihirbazBaglami, type EkranSecimi, type Sihirbaz } from './baglam.ts';
-import { kopyala, useSihirbazDurumu, type Taslak } from './durum.ts';
+import { kopyala, useSihirbazDurumu, type Degistirici, type Taslak } from './durum.ts';
 import { FoyGorunumu } from './FoyGorunumu.tsx';
 import { CizimRafi, useCizimYukleme } from './CizimRafi.tsx';
 import type { BekleyenCizim } from './cizim-rafi.ts';
@@ -66,9 +66,20 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   const durum = useSihirbazDurumu(() => {
     const a = acilisTaslagi(arama, kartlar, sablonlar, b, yarim);
     acilisIletisi.current = a.ileti;
-    return { taslak: a.taslak, adim: a.adim };
+    return { taslak: K.standartlariDoldur(a.taslak, undefined, b), adim: a.adim };
   }, (t, adim) => { yarimYaz({ d: t, adim }); });
-  const { taslak: d, adim, degistir, yenisiniKur, adimaGec } = durum;
+  const { taslak: d, adim, degistir: hamDegistir, yenisiniKur: hamYenisiniKur, adimaGec } = durum;
+  // Yeni kartta kimyasal ve mekanik standart her değişiklikten sonra sınıf, kalite ve forma göre tamamlanır (kurallar: standartlariDoldur).
+  const bRef = useRef(b);
+  bRef.current = b;
+  const degistir = useCallback((fn: Degistirici) => {
+    hamDegistir((t) => {
+      const once = { cls: t.cls, form: t.form, grade: t.grade };
+      fn(t);
+      t.opts = K.standartlariDoldur(t, once, bRef.current).opts;
+    });
+  }, [hamDegistir]);
+  const yenisiniKur = useCallback((t: Taslak, a?: number) => { hamYenisiniKur(K.standartlariDoldur(t, undefined, bRef.current), a); }, [hamYenisiniKur]);
 
   // Sorgusuz adres yeni karttır: menüden ya da katalogdan "Yeni kart" yeniden istenince (adres aynı kalsa da) taslak
   // kayıtlı bir kartın kimliğini taşıyorsa bırakılır; yoksa yeni malzeme o karta değişiklik talebi olarak gider.
@@ -139,6 +150,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
       secimYaz({ kaliteArama: '' });
       sonaKoy(fam, y.cls, kod);
       if (!y.id) y = K.varsayilanlariUygula(y, b);
+      y = K.standartlariDoldur(y, { cls: d.cls, form: d.form, grade: d.grade }, b);
     }
     yenisiniKur(y, gidilen);
     if (kod === '__ozel') odakla('tc-my-ozel-ad');

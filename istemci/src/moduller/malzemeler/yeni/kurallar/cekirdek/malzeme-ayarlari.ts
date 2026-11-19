@@ -1,5 +1,6 @@
 import { ALAN, BIRIMLER, BIRIM_T, DB_KAT, DOCTIPS, FAMS, FAM_ICON, FORMS, HM_GRUP, MA, PROPS, SARF_KAT, SERTIFIKA, TABAN, TOLP, _hzSurum, ayarla__hzSurum } from './durum.ts';
 import { _asc } from './kod-yapisi.ts';
+import { STANDART_FORM_GRUPLARI, kimyasalStandartlari, mekanikFormaBagli, mekanikStandartlari } from './metal-standartlari.ts';
 import { _gnum } from './turler.ts';
 import type { MalzemeAyari } from '../../tipler.ts';
 import type { Alan, Sinif, Sozluk } from './tipler.ts';
@@ -76,6 +77,23 @@ export function listeHedef(id: string): ListeHedefi | null {
         }
         o.opts = o.opts || [];
         return { hedef: [o.opts], taban: (to && to.opts) || [] };
+    }
+    if (p[0] === 'std') {
+        const c = FAMS[String(p1)]?.classes[String(p2)], tc = TABAN.FAMS[String(p1)]?.classes[String(p2)];
+        if (!c || p[3] === undefined)
+            return null;
+        if (p[3] === 'kim') {
+            c.kimstd = Array.isArray(c.kimstd) ? c.kimstd : [];
+            return { hedef: [c.kimstd as string[]], taban: kimyasalStandartlari(tc) };
+        }
+        const grup = STANDART_FORM_GRUPLARI.find(g => g.anahtar === p[3]);
+        if (!grup)
+            return null;
+        const mf = (c.mekform = (c.mekform as Sozluk<string[]> | undefined) || {}) as Sozluk<string[]>;
+        const tb: string[] = [];
+        grup.formlar.forEach(f => mekanikFormaBagli(tc, f) && mekanikStandartlari(tc, f).forEach(x => { if (!tb.includes(x))
+            tb.push(x); }));
+        return { hedef: grup.formlar.map(f => (mf[f] = mf[f] || [])), taban: tb };
     }
     if (p[0] === 'alan') {
         const a = _alanBul(p[1]!, p[2]!);
@@ -186,4 +204,10 @@ export function malzemeAyarUygula(v?: MalzemeAyari): void {
                 arr.splice(i, 1); (l.ekle || []).forEach(x => { if (!arr.includes(x))
             arr.push(x); }); });
     }
+    // Form başına listeler değişmiş olabilir; sihirbazın seçim listesi (mekstd) onların birleşimidir.
+    Object.values(FAMS).forEach(f => Object.values(f.classes).forEach(c => {
+        const mf = c.mekform as Sozluk<string[]> | undefined;
+        if (mf)
+            c.mekstd = [...new Set(Object.values(mf).flat())];
+    }));
 }

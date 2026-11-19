@@ -7,6 +7,10 @@ import {
 import { ALAN, BIRIM_T, BIRIMLER, DB_KAT, DOCTIPS, FAMS, PROPS, SARF_KAT, SERTIFIKA, TOLP } from '../sabitler/index.ts';
 import type { GenelAyar, KatalogKarti, MalzemeAyari } from '../tipler.ts';
 
+export {
+  STANDART_FORM_GRUPLARI, kimyasalStandartlari, mekanikFormaBagli, mekanikStandartlari, standartSecenegiMi,
+} from '../kurallar/index.ts';
+
 export type Deger = string | number;
 export type { Aile, AileSecenegi, Alan, Form, Kalite, Kategori, Ozellik, Sinif, Tur };
 
