@@ -1,4 +1,5 @@
 import type { AyarTanimi } from '../ayar-tanimi.ts';
+import { siklikSecenekleri } from '../okuma-sikligi.ts';
 
 // Ana anahtar (karar 3b): okuma ve yazma (iş emri gönderimi) birlikte açılır ve kapanır. TMI "ERP'ye aktarıldı" işaretini koymaz (346 a).
 // Sonradan eklenen akışların her birinin ayrı anahtarı vardır ve kapalı gelir; ana anahtar kapalıysa hiçbiri çalışmaz.
@@ -37,5 +38,46 @@ export const SMARTES_AYARLARI = {
     varsayilan: false,
     baslik: 'SmartES: sayım aktarımı',
     aciklama: 'Açıkken sayım kaynağı SmartES seçilen istasyonların sağlam adetleri SmartES > Onay bekliyor listesine düşer ve o istasyonlarda terminalden sağlam sayım yapılmaz. Hiçbir adet onaylanmadan üretim emrine ve stoğa yazılmaz. Kapatılınca aktarım durur, terminal yeniden sayar; kapalıyken başlamış SmartES kayıtları sonradan aktarılmaz.',
+  },
+  // 3445 a: zamanlanmış okumaların sıklığı (SmartES sayfası); varsayılanlar bugünkü aralıklardır.
+  'smartes.is-emri-durumu-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '5dk', secenekler: siklikSecenekleri(['elle', '5dk', '15dk', '60dk']),
+    baslik: 'SmartES: üretim sayıları okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (üretim sayıları). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.durus-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '5dk', '15dk', '60dk']),
+    baslik: 'SmartES: duruşlar okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (duruşlar). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.alarm-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '5dk', '15dk', '60dk']),
+    baslik: 'SmartES: alarmlar okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (alarmlar). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.kalite-ambar-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '5dk', '15dk', '60dk']),
+    baslik: 'SmartES: kalite, hurda ve ambar okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (kalite, hurda ve ambar). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.makine-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '1dk', secenekler: siklikSecenekleri(['elle', '1dk', '5dk', '15dk']),
+    baslik: 'SmartES: canlı makine durumu okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (canlı makine durumu). Seyrekleşince Makineler canlı ekranı o kadar eski gösterir. SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.ilerleme-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '5dk', secenekler: siklikSecenekleri(['elle', '5dk', '15dk', '60dk']),
+    baslik: 'SmartES: iş emri ilerlemesi okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (iş emri ilerlemesi). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.hesap-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'SmartES: hesaplar (OEE, çevrim süresi) okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (SmartES hesapları: OEE, çevrim süresi). SmartES sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'smartes.liste-sikligi': {
+    modul: 'smartes', tur: 'secim', varsayilan: 'gunluk', secenekler: siklikSecenekleri(['elle', 'gunluk']),
+    baslik: 'SmartES: tanım listeleri okuma sıklığı',
+    aciklama: 'SmartES\'ten okuma sıklığı (tanım listeleri). SmartES sayfasındaki "Şimdi oku" hemen okur.',
   },
 } as const satisfies Record<string, AyarTanimi>;
