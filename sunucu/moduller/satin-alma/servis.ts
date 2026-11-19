@@ -24,6 +24,7 @@ import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/fina
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { alternatifKartiAc, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { dosyaTutamagi } from '../dosya/disari.ts';
+import { teklifIstekFormu } from './teklif-istek-formu.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
   acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
@@ -288,6 +289,8 @@ export async function acilis(db: Db, k: Kullanici): Promise<AcilisCevabi> {
     firmaKartlari: tam ? await firmaKartlari(db, new Set(tedarikciler.map((x) => x.firmaId))) : [],
     katalog: await katalogKur(db),
     ayarlar: ayarGorunumu(k, await ayarlariKur(db)),
+    // teklifi satın almayı yazan ister; formu o basar.
+    ...(k.islemler.includes(ISLEM.yaz) ? { teklifIstekFormu: await teklifIstekFormu(db) } : {}),
   };
 }
 // 3401-1 a: yıllık bütçe ve onay limiti tutarları fiyat görene; görmeyende bütçe boş, limit listesi boş gelir (limitsiz basamak ayırt edilmez).

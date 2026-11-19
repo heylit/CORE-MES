@@ -53,3 +53,5 @@ export type { SiparislerLogoSiparisi, SiparislerLogoSonucu, SiparislerLogoTeklif
 export { logoBaglamaSirasi, logoSirasiniGeriAl } from './logo-gonderim.ts';
 export type { SiparislerLogoBaglamaSirasi } from './logo-gonderim.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+// teklif formunun anteti (kurum bilgisi); satın almanın teklif isteme formu okur.
+export { kurumBilgisi as teklifFormuKurumBilgisi } from './teklif-formu.ts';

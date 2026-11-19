@@ -24,8 +24,9 @@ import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
 import { rehberSirasi } from "./onayli.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
+import { antetBosMu, istekFormuHTML, kagidiOlcekle } from "./istek-formu.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
-import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { OdemePlaniSatiri, SiparisBelgesi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
@@ -356,8 +357,41 @@ function rfqModal(r: PurchaseRequest): void {
     <div class="grid g3"><label class="f"><span>Son cevap tarihi</span><input type="date" id="rfq-due" value="${addDays(todayStr(), 3)}"></label><label class="f span2"><span>Önizleme</span><select id="rfq-prev"><option value="">Genel metin</option></select></label></div>
     <pre class="out" id="rfq-out"></pre>
   </div>
-  <div class="mf"><button class="btn" data-act="copy-rfq">Metni kopyala</button><span class="spacer"></span><button class="btn ghost" data-act="close">Kapat</button><button class="btn primary" data-act="mark-rfq">Seçilenlerden istendi olarak kaydet</button></div>`);
+  <div class="mf"><button class="btn" data-act="copy-rfq">Metni kopyala</button>${S.istekFormu ? '<button class="btn" data-act="rfq-form">Form hazırla (PDF)</button>' : ""}<span class="spacer"></span><button class="btn ghost" data-act="close">Kapat</button><button class="btn primary" data-act="mark-rfq">Seçilenlerden istendi olarak kaydet</button></div>`);
   syncRfqPreview();
+}
+// teklif isteme formu. Seçilen tedarikçiler ve son tarih teklif iste penceresinden gelir; geri dönünce korunur.
+// Metin şablondan dolar, burada değiştirilir ve basılır; değişiklik saklanmaz (şablon Sistem Ayarları > Formlar'da).
+interface IstekFormuTaslagi { secilen: string[]; sonTarih: string; tedarikci: string; icerik: TeklifIstekFormuIcerigi }
+let ISTEK_FORMU: IstekFormuTaslagi | null = null;
+function istekKagidi(r: PurchaseRequest, t: IstekFormuTaslagi): string {
+  return istekFormuHTML(r, S.suppliers[t.tedarikci], t.sonTarih, t.icerik, S.istekFormu!.kurum, settings().company, todayStr());
+}
+function istekFormuPenceresi(r: PurchaseRequest, t: IstekFormuTaslagi): void {
+  const alan = (ad: "baslik" | "giris" | "kapanis", etiket: string, satir = 0) => satir
+    ? `<label class="f"><span>${etiket}</span><textarea data-if="${ad}" rows="${String(satir)}">${esc(t.icerik[ad])}</textarea></label>`
+    : `<label class="f"><span>${etiket}</span><input data-if="${ad}" value="${esc(t.icerik[ad])}"></label>`;
+  openModal(`<div class="mh"><h2>Teklif isteme formu</h2><span class="spacer"></span><span class="muted small">${esc(r.no)}</span></div>
+  <div class="mb sa-istek-duzen">
+    <div class="sa-istek-alanlar" id="ifo">
+      <label class="f"><span>Tedarikçi</span><select data-if="tedarikci"><option value="">Genel (tedarikçisiz)</option>${t.secilen.map(id => `<option value="${esc(id)}" ${id === t.tedarikci ? "selected" : ""}>${esc(S.suppliers[id]?.name)}</option>`).join("")}</select></label>
+      ${alan("baslik", "Başlık")}${alan("giris", "Giriş", 3)}
+      <label class="f"><span>İstenen bilgiler <small>— her satır bir madde</small></span><textarea data-if="istenenler" rows="6">${esc(t.icerik.istenenler.join("\n"))}</textarea></label>
+      ${alan("kapanis", "Kapanış", 3)}
+      <p class="small muted">Kalemler talepten gelir. Buradaki değişiklik yalnız bu baskı içindir; kalıcı metin Sistem Ayarları &gt; Formlar &gt; Teklif isteme formu'ndadır.</p>
+    </div>
+    <div>${antetBosMu(S.istekFormu!.kurum) ? '<p class="sa-istek-uyari" role="note">Antet boş: firma adı ve adresi Sistem Ayarları &gt; Formlar &gt; Teklif formu\'nda girilir; boşken basılmaz.</p>' : ""}<div class="doc-wrap" id="ifo-kagit" aria-label="Formun ön izlemesi">${istekKagidi(r, t)}</div></div>
+  </div>
+  <div class="mf"><button class="btn" data-act="rfq-form-back">Geri</button><span class="spacer"></span><button class="btn primary" data-act="rfq-form-print">Yazdır / PDF olarak kaydet</button></div>`, "wide", true);
+  kagidiOlcekle($("#ifo-kagit"));
+}
+function istekFormuOku(): void {
+  const r = S.requests[V.id ?? ""]; const t = ISTEK_FORMU; if (!r || !t) return;
+  const v = (ad: string) => $(`[data-if="${ad}"]`)?.value ?? "";
+  t.tedarikci = v("tedarikci");
+  t.icerik = { ...t.icerik, baslik: v("baslik"), giris: v("giris"), kapanis: v("kapanis"), istenenler: v("istenenler").split("\n").map(x => x.trim()).filter(Boolean) };
+  $("#ifo-kagit").innerHTML = istekKagidi(r, t);
+  kagidiOlcekle($("#ifo-kagit"));
 }
 function syncRfqPreview(): void {
   const r = S.requests[V.id ?? ""]; if (!r || !$("#rfq-prev")) return;
@@ -1039,6 +1073,19 @@ const ACTIONS: Record<string, Action> = {
   /* teklif isteği */
   "rfq": (_el, r) => { if (r && canWrite()) { if (!(r.items || []).length) { toast("Önce kalem ekleyin."); return; } rfqModal(r); } },
   "copy-rfq": () => { void copyText($("#rfq-out").textContent ?? ""); },
+  "rfq-form": (_el, r) => {
+    if (!r || !S.istekFormu) return;
+    const secilen = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
+    ISTEK_FORMU = { secilen, sonTarih: $("#rfq-due").value, tedarikci: $("#rfq-prev").value || (secilen[0] ?? ""), icerik: clone(S.istekFormu.icerik) };
+    istekFormuPenceresi(r, ISTEK_FORMU);
+  },
+  "rfq-form-back": (_el, r) => {
+    if (!r) return; const t = ISTEK_FORMU; rfqModal(r);
+    if (!t) return;
+    $$("[data-rfq]").forEach(i => { i.checked = t.secilen.includes(i.dataset.rfq!); });
+    $("#rfq-due").value = t.sonTarih; syncRfqPreview();
+  },
+  "rfq-form-print": () => { const d = $("#ifo-kagit .doc"); if (d) printDoc(d.outerHTML); },
   "mark-rfq": (el, r) => {
     const sel = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
     if (!sel.length) { toast("İstendi olarak kaydetmek için en az bir tedarikçi seçin."); return; }
@@ -1403,6 +1450,7 @@ document.addEventListener("input", (e) => {
   if (t.closest("#bulk")) { terminEsle(t); BULK!.dirty = true; BULK!.confirmClose = false; bulkRead(); bulkLive(); return; }
   if (t.closest("#qform") && t.dataset.alt && draftQ) alternatifDegisti(draftQ, t.dataset.alt);
   if (t.closest("#qform")) { terminEsle(t); readQuoteForm(); updateQuoteLive(); return; }
+  if (t.closest("#ifo")) { istekFormuOku(); return; }
   if (t.closest("#items-box") && t.dataset.it === "name") {
     syncItems(); const tr = t.closest<HTMLElement>("tr")!; const i = +tr.dataset.i!; const it = draftReq.items[i]; if (!it) return;
     const mid = matIndex()[norm(it.name)];
@@ -1435,6 +1483,7 @@ document.addEventListener("change", (e) => {
   if (t.closest("#qform") && t.dataset.altAc) { const r = S.requests[V.id ?? ""]; if (draftQ) alternatifDegisti(draftQ, t.dataset.altAc); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); return; }
   if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); if (t.id === "q-sup" && t.value === "__new") $("#q-newsup").focus(); return; }
   if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(); return; }
+  if (t.closest("#ifo")) { istekFormuOku(); return; }
   if (t.dataset.w && UI.wDraft) { const r = S.requests[V.id ?? ""]; if (r && canWrite()) { const n = clone(r); n.weights = Object.assign({}, UI.wDraft.w); saveRequest(n); } }
 });
 // #205 S2 b: Logo'ya gitmiş siparişin teslim alınmamış kalanı gerekçeyle kapatılır; kapatılan siparişe teslim yazılmaz.

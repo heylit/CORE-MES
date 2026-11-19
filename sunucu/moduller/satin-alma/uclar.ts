@@ -1,6 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
+  teklifIstekFormuCevabi, teklifIstekFormuKaydetGovdesi,
   kabulZarfiCevabi, kalemZarflariCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, alternatifIzniGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
@@ -14,6 +15,7 @@ import { z } from 'zod';
 import { satinAlmaAnalizi } from './analiz.ts';
 import { CIZIM_OKUYAN_ISLEMLER, CIZIM_YAZAN_ISLEMLER, FIYAT_GOREN_ISLEMLER, KG_FIYATI_OKUR } from './kurallar.ts';
 import * as servis from './servis.ts';
+import * as istekFormu from './teklif-istek-formu.ts';
 
 const katalogParametresi = z.object({ id: z.guid() });
 
@@ -315,6 +317,15 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/satin-alma-ayarlari/kaydet', yetki: 'satin-alma.ayar', govde: ayarlarKaydetGovdesi, cevap: ayarlarSemasi,
     isle: ({ db, kullanici, govde }) => servis.ayarlarKaydet(db, kullanici, govde),
+  }),
+  // teklif isteme formu Sistem Ayarları > Formlar'da; satın alma ayarını yazan düzenler (öteki satın alma ayarları gibi).
+  uc({
+    yontem: 'GET', yol: '/satin-alma-teklif-istek-formu', yetki: 'satin-alma.ayar', cevap: teklifIstekFormuCevabi,
+    isle: ({ db }) => istekFormu.teklifIstekFormu(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-teklif-istek-formu/kaydet', yetki: 'satin-alma.ayar', govde: teklifIstekFormuKaydetGovdesi, cevap: teklifIstekFormuCevabi,
+    isle: ({ db, kullanici, govde }) => istekFormu.teklifIstekFormuKaydet(db, kullanici, govde),
   }),
   // SAT-77: malzeme kg fiyatları; satın almayı okuyan ve maliyet okuyan (215 a) görür, satın almayı yazan girer (geçmiş silinmez).
   uc({

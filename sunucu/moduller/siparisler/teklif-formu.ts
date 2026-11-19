@@ -27,6 +27,11 @@ export async function teklifFormu(db: Db): Promise<TeklifFormuCevabi> {
   };
 }
 
+// antet tek; satın almanın teklif isteme formu da bunu basar (yalnız okuma, disari.ts).
+export async function kurumBilgisi(db: Db): Promise<TeklifFormuKurumu> {
+  return kurumIcerigi((await sorgular.teklifFormuKurumu(db))?.icerik ?? null);
+}
+
 export async function sablonKaydet(db: Db, k: Kullanici, id: number, g: TeklifFormuSablonKaydetVerisi): Promise<TeklifFormuCevabi> {
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
     guncelle: () => sorgular.teklifFormuSablonuGuncelle(db, id, g, g.surum, k.id),

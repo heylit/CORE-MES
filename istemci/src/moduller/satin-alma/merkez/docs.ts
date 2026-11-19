@@ -98,13 +98,14 @@ export function siparisMetniGovdesi(r: PurchaseRequest, o: OrderInfo): string {
     <p class="small muted" id="po-out-not">Değişiklik kaydedilmez; kopyalayıp tedarikçiye gönderin.</p>`;
 }
 
-/** Yazdırma: belgeyi sayfanın dışındaki yazdırma alanına koyar ve yazdırma penceresini açar */
+/** Yazdırma: belgeyi sayfanın dışındaki yazdırma alanına koyar ve yazdırma penceresini açar. Alan body'nin doğrudan çocuğudur
+ * (pencereler body'ye açılır); baskıda body'nin öteki çocukları gizlenir, kağıt ölçeksiz ve beyaz zeminle A4'e basılır. */
 export function printDoc(html: string): void {
   let root = document.getElementById("print-root");
-  if (!root) { root = document.createElement("div"); root.id = "print-root"; document.body.appendChild(root); }
+  if (!root) { root = document.createElement("div"); root.id = "print-root"; root.className = "sa-kok sa-baski-koku"; document.body.appendChild(root); }
   root.innerHTML = html;
-  document.body.classList.add("printing");
-  const done = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", done); };
+  document.body.classList.add("sa-baskida");
+  const done = () => { document.body.classList.remove("sa-baskida"); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
   try { window.print(); } catch { /* yazdırma bu görünümde engellenmiş olabilir */ }
   setTimeout(done, 1500);

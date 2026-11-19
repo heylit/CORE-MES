@@ -2674,6 +2674,30 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("INSERT INTO satin_alma_kur (para_birimi) VALUES ('JPY')")), kisitla('satin_alma_kur_kod'));
   });
 
+  test('3442-4: teklif isteme formu satin-alma.ayar ister; açılışta satın almayı yazana gelir, yalnız okuyana gelmez; sürüm korunur; antet siparişlerden', async () => {
+    type Form = { icerik: { baslik: string; giris: string; istenenler: string[]; kapanis: string; imza1: string; imza2: string; alt: string }; surum: number; kurum: { unvan: string } };
+    const yol = '/satin-alma-teklif-istek-formu';
+    const ilk = tamam<Form>(await istek(c.sa, 'GET', yol));
+    assert.equal(ilk.icerik.baslik, 'TEKLİF İSTEME FORMU');
+    assert.equal(ilk.icerik.istenenler.length, 6);
+    assert.equal(typeof ilk.kurum.unvan, 'string');
+    for (const cerez of [c.mudur, c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', yol)).statusCode, 403);
+    assert.deepEqual(tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).teklifIstekFormu, ilk);
+    assert.equal(tamam<AcilisCevabi>(await istek(c.mudur, 'GET', '/satin-alma-acilis')).teklifIstekFormu, undefined);
+
+    const icerik = { ...ilk.icerik, baslik: 'ORN- FİYAT TEKLİFİ İSTEĞİ', istenenler: ['ORN- birim fiyat', 'ORN- termin'], imza2: 'Kalite' };
+    assert.equal((await istek(c.talep, 'POST', `${yol}/kaydet`, { icerik, surum: ilk.surum })).statusCode, 403);
+    assert.equal((await istek(c.sa, 'POST', `${yol}/kaydet`, { icerik: { ...icerik, baslik: '' }, surum: ilk.surum })).statusCode, 400);
+    const y = tamam<Form>(await istek(c.sa, 'POST', `${yol}/kaydet`, { icerik, surum: ilk.surum }));
+    assert.deepEqual([y.icerik.baslik, y.icerik.istenenler, y.icerik.imza2, y.surum], ['ORN- FİYAT TEKLİFİ İSTEĞİ', ['ORN- birim fiyat', 'ORN- termin'], 'Kalite', ilk.surum + 1]);
+    assert.equal((await istek(c.sa, 'POST', `${yol}/kaydet`, { icerik, surum: ilk.surum })).statusCode, 409);
+    // Antet tek: siparişlerin teklif formunda değişen ünvan burada da okunur.
+    await ortam!.sahip.sorgu(`UPDATE siparisler_teklif_formu_kurum SET icerik = jsonb_set(icerik, '{unvan}', '"ORN- Atölye"') WHERE tek`);
+    assert.equal(tamam<Form>(await istek(c.sa, 'GET', yol)).kurum.unvan, 'ORN- Atölye');
+    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("INSERT INTO satin_alma_teklif_istek_formu (tek, icerik) VALUES (false, '{}')")), kisitla('satin_alma_teklif_istek_formu_tek'));
+    tamam(await istek(c.sa, 'POST', `${yol}/kaydet`, { icerik: ilk.icerik, surum: y.surum }));
+  });
+
   test('SAT-77: kg fiyatını satın alma girer; liste kalite + form başına güncel fiyatı verir, ileri tarihli fiyat güncel sayılmaz; geçmiş silinmez', async () => {
     const g = await bugun();
     await kaliteKarti('DENEME-AL', 'cubuk');
