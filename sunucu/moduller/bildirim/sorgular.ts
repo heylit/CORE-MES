@@ -125,20 +125,6 @@ export function onayBekliyorMu(db: Db, kisiId: number, id: number): Promise<{ be
   );
 }
 
-export interface TercihSatiri { tur: string; mesaj: boolean; eposta: boolean }
-
-export function kisininTercihleri(db: Db, kisiId: number): Promise<TercihSatiri[]> {
-  return db.sorgu<TercihSatiri>('SELECT tur, mesaj, eposta FROM bildirim_tercihi WHERE kisi_id = $1', [kisiId]);
-}
-
-export async function tercihYaz(db: Db, kisiId: number, t: TercihSatiri): Promise<void> {
-  await db.sorgu(
-    `INSERT INTO bildirim_tercihi (kisi_id, tur, mesaj, eposta) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (kisi_id, tur) DO UPDATE SET mesaj = EXCLUDED.mesaj, eposta = EXCLUDED.eposta, guncellendi = now()`,
-    [kisiId, t.tur, t.mesaj, t.eposta],
-  );
-}
-
 export interface CagriEkibiSatiri { ekip: string; rolIdleri: number[]; surum: number; degistirenKisiId: number | null; degistirildi: string }
 
 export function cagriEkipleri(db: Db): Promise<CagriEkibiSatiri[]> {
@@ -566,10 +552,6 @@ export async function epostaSablonuYaz(
       WHERE konu = $1 AND surum = $2 RETURNING 1`,
     [konu, surum, s.simge, s.konuKalibi, s.govde, s.tabloAlanlari, kisiId],
   )) !== null;
-}
-
-export function epostaTercihleri(db: Db, tur: string, kisiIdleri: readonly number[]): Promise<{ kisiId: number; eposta: boolean }[]> {
-  return db.sorgu('SELECT kisi_id AS "kisiId", eposta FROM bildirim_tercihi WHERE tur = $1 AND kisi_id = ANY($2::int[])', [tur, kisiIdleri]);
 }
 
 export interface YeniEposta {

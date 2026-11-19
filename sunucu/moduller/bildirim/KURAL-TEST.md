@@ -2,9 +2,8 @@
 
 | Kural | Nerede | Test |
 |---|---|---|
-| BIL-1 Mesaj ve e-posta kanalları bu aşamada kapalı; seçim saklanır | `kurallar.ts` `ACIK_KANALLAR` | `tercihler: yalnız alabileceği olaylar ...` (`kanallar` iki kanal da false) |
-| ALT-8 Tercih yalnız kişinin tercih listesindeki türe yazılır; e-posta seçemeyenin e-posta isteği 400 (sessizce kapatılmaz) | `kurallar.test.ts` `tercih kuralı: ...` (izinli istek geçer); `bildirim.test.ts` `tercihler: yalnız alabileceği olaylar ...` | `bildirim.test.ts` `alamadığı türe tercih yazılamaz: 400, satır açılmaz`, `operatör e-posta seçemez ve tercih listesi yalnız alabildiği türlerdir: ...` |
-| BIL-2 Operatörde e-posta seçeneği çıkmaz | `kurallar.ts` `epostaSecilebilir` | `BIL-2: ...` (saf); `operatör e-posta seçemez ...` (akış) |
+| ALT-8 (3435-1) Kişi tercihi yoktur; kim hangi kanaldan alır yöneticinin ayarıdır. Tercih uçları kalktı; `bildirim_tercihi` tablosu okunmaz | `eposta.ts` `epostaKuyrugaAl` | `bildirim.test.ts` `3435-1: kişi tercihi yoktur ...`; `eposta.test.ts` `tetikleyici kapalıysa ... eski kişi tercihi satırı okunmaz`; `kademe.test.ts` `... eski kişi tercihi satırı okunmaz` |
+| BIL-2 Operatörde e-posta seçeneği çıkmaz | `kurallar.ts` `epostaSecilebilir` | `BIL-2: ...` (saf); `ayar kapalıyken ... operatör kuyruğa girmez` (akış) |
 | BIL-3 Alıcı: olay türünün işlem sahibi ya da adıyla verilen etkin kişi; tetikleyen almaz | `kurallar.ts` `alicilariSec` | `BIL-3` üç saf test; `olay işlem sahiplerine gider ...`, `adıyla verilen kişi de alır ...` |
 | BIL-4 Okunmamış aynı kaynak yeni satır açmaz, sayaç artar | `kurallar.ts` `tekilAnahtar`; dizin `bildirim_kaydi_tekil_okunmamis` | `BIL-4` (saf); `aynı kaynak okunmamışken ...` |
 | BIL-5 Başlık boş olamaz, uzun metin kesilir | `kurallar.ts` `metniHazirla`; kısıt `bildirim_kaydi_baslik_gecerli` | `BIL-5` (saf); `geçersiz yol ve boş başlık olayı yazmaz` |
@@ -36,7 +35,7 @@
 | BIL-43 E-posta gövdesi kaçışlanır; tablo yalnız seçili ve dolu alanlardan; simge cid ile gömülü, dış resim yok; bildirim metni e-postaya girmez | `kurallar.ts` `epostaKur`; `posta.ts` `iletiKur` | `BIL-43`; `posta.test.ts`: `ileti: ...`; `eposta.test.ts`: `ayar kapalıyken ...` |
 | BIL-44 Sessiz saatte acil olmayan bekler, acil gider | `kurallar.ts` `sessizMi`; `eposta.ts` `epostaTuru` | `BIL-44`; `eposta.test.ts`: `sessiz saatte ...` |
 | BIL-45 Ayarsız tür türün e-posta varsayılanıyla, hemen; tetikleyici kapalıysa kuyruğa girmez; tekrar gün ve sayısı birlikte, kademe gün ve alıcıyla | `kurallar.ts` `varsayilanTetikleyici`; sözleşme `epostaTetikleyiciDegistirGovdesi`; kısıt `bildirim_eposta_tetikleyici_tekrar_butun` | `BIL-45`; `eposta.test.ts`: `tetikleyici ...` |
-| BIL-46 Operatör (BIL-2), Profil'de kapatan, İK'da adresi olmayan ve izinsiz alan adlı kişi e-posta almaz | `kurallar.ts` `kisiEpostaAlir`; `eposta.ts` `epostaKuyrugaAl`, `epostaTuru`; `posta.ts` `izinliAdresMi` | `BIL-46`; `eposta.test.ts`: `ayar kapalıyken ...`, `tetikleyici kapalıysa ...` |
+| BIL-46 Operatör (BIL-2), İK'da adresi olmayan ve izinsiz alan adlı kişi e-posta almaz | `kurallar.ts` `kisiEpostaAlir`; `eposta.ts` `epostaKuyrugaAl`, `epostaTuru`; `posta.ts` `izinliAdresMi` | `BIL-46`; `eposta.test.ts`: `ayar kapalıyken ...`, `tetikleyici kapalıysa ...` |
 | BIL-47 Tekrar ve kademe kaynak bildirim açıkken sürer; iş kapanınca düşer | `kurallar.ts` `bildirimAcikMi`; `eposta.ts` `epostaTuru`, `kademeleriAc` | `BIL-47`; `eposta.test.ts`: `tekrar: ...`, `kademe: ...` |
 | BIL-48 Geçici hata en çok 3 deneme; kalıcı hata deftere gönderilemedi; defter yalnız eklenir; günlük sınırı aşan özet saatine kalır | `kurallar.ts` `sonrakiDenemeDk`; `eposta.ts` `epostaTuru`; tetik `bildirim_eposta_defteri_yalniz_ekleme` | `BIL-48`; `eposta.test.ts`: `geçici hata ...`, `günlük üst sınırı ...`, `defter yalnız eklenir ...` |
 | BIL-49 Kayıt no yalnız başlıktaki belge numarasından; ortam değişkeni yoksa kuyruk tutulmaz, ayar kapalıysa birikir | `eposta.ts` `basliktanKayitNo`, `epostaKuyrugaAl` | `BIL-49`; `eposta.test.ts`: `ayar kapalıyken ...` |

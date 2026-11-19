@@ -15,7 +15,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kademeKaynagiKaydet, kademeleriIlerlet, type KademeKaydi } from './kademe.ts';
 import { bildirimGonder } from './servis.ts';
-import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAyarHatasi, kisiEpostaAlir } from './kurallar.ts';
+import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAyarHatasi } from './kurallar.ts';
 
 const BOS = new Set<string>();
 const SON_GUN = { sayac: 'son-gun', k2Gun: 1, k3Gun: null, k4Gun: 1, k5Gun: 2 } as const;
@@ -124,10 +124,6 @@ describe('kademeli uyarı kuralı (3405)', () => {
     assert.deepEqual(KADEME_TURLERI.filter((x) => (ALICI_AYARLI_TURLER as readonly string[]).includes(x)), []);
   });
 
-  test('kapatılamaz e-postada kapalı tercih okunmaz; e-posta seçemeyen yine almaz', () => {
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.yaz'], false, true), true);
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.yaz'], false, false), false);
-  });
 });
 
 // Kaynak: kablolamada bağlı olmayan ikinci aşama kaynağı (test kendi okuyucusunu kaydeder). Bekleme sayacı.
@@ -273,18 +269,6 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
     assert.equal(await zil(okumayan, 'okumayan', 5), 0, 'okuma işlemi olmayan zil de almaz');
   });
 
-  test('kapatılamaz tercih: açıkken kişi e-postayı kapatamaz, kaynak ayarında kapatılınca kapatabilir (3405-2 a)', async () => {
-    const k = await kisi('kalite', 'malzemeler.onayla');
-    const tur = 'malzemeler.kademe-kart-onay-gecikti';
-    const tercih = () => gonder(k, '/bildirimler/tercihler/degistir', { tur, mesaj: false, eposta: false });
-    const satir = async () => (await oku(k, '/bildirimler/tercihler')).json<{ satirlar: { tur: string; kapatilamaz: boolean; eposta: boolean | null }[] }>().satirlar.find((s) => s.tur === tur);
-    assert.equal((await satir())?.kapatilamaz, true);
-    assert.equal((await tercih()).statusCode, 400);
-    assert.equal((await ayarla({ kapatilamaz: false })).statusCode, 200);
-    assert.equal((await satir())?.kapatilamaz, false);
-    assert.equal((await tercih()).statusCode, 200);
-  });
-
   test('kaynak kapatılınca açık kademe bildirimleri kapanır ve takip boşalır; Açık takipler yalnız açık kaynakları verir', async () => {
     const yapan = await kisi('kalite', 'malzemeler.onayla');
     kayitlar = [...kayitlar, { kayit: 'son', no: 'ORN-MK-4', baslik: 'x', yol: '/malzemeler', baslangic: '2030-01-04', yapanlar: [yapan.id], yoneticiler: [] }];
@@ -317,7 +301,7 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
     assert.deepEqual(await takip(okumayanYonetici), [], 'DÖF okuyamayan kademe yöneticisi');
   });
 
-  test('e-posta kademesinin altındaki kademe e-postasızdır; kapatılamaz yalnız K3 ve sonrasıdır (K2 tercihi okunur)', async () => {
+  test('e-posta kademesinin altındaki kademe e-postasızdır; eski kişi tercihi satırı okunmaz (3435-1)', async () => {
     const eski = { ...process.env };
     Object.assign(process.env, { TMIV2_POSTA_SUNUCUSU: '127.0.0.1:1', TMIV2_POSTA_ALAN_ADI: 'ornek.local', TMIV2_POSTA_GONDEREN: 'mes@ornek.local', TMIV2_POSTA_GUVENLIK: 'yok' });
     try {
@@ -329,14 +313,14 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
       dofKayitlari = [dof('e2', '2030-01-09', [b.id]), dof('e3', '2030-01-04', [b.id])];
       await ilerlet();
       assert.deepEqual([await zil(b, 'e2', 2), await posta(b, 'e2', 2), await zil(b, 'e3', 3), await posta(b, 'e3', 3)], [1, 0, 1, 1]);
-      // E-posta K2'den başlar; kişi K2 ve K3 e-postasını kapatmış: K2 kapatılabilir (almaz), K3 kapatılamaz (alır).
+      // E-posta K2'den başlar; tablodaki eski kapalı tercih satırları gönderimi değiştirmez: kim alır yöneticinin ayarıdır.
       assert.equal((await ayarla({ epostaKademe: 2 }, DOF)).statusCode, 200);
       const a = await kisi('kalite');
       for (const k of [2, 3] as const) await ortam!.sahip.sorgu('INSERT INTO bildirim_tercihi (kisi_id, tur, mesaj, eposta) VALUES ($1, $2, true, false)', [a.id, kademeTuru(DOF, k)]);
       const c = await kisi('kalite');
       dofKayitlari = [...dofKayitlari, dof('f2', '2030-01-09', [a.id, c.id]), dof('f3', '2030-01-04', [a.id])];
       await ilerlet();
-      assert.deepEqual([await zil(a, 'f2', 2), await posta(a, 'f2', 2), await posta(c, 'f2', 2), await posta(a, 'f3', 3)], [1, 0, 1, 1]);
+      assert.deepEqual([await zil(a, 'f2', 2), await posta(a, 'f2', 2), await posta(c, 'f2', 2), await posta(a, 'f3', 3)], [1, 1, 1, 1]);
     } finally {
       for (const k of Object.keys(process.env)) if (!(k in eski)) Reflect.deleteProperty(process.env, k);
       Object.assign(process.env, eski);

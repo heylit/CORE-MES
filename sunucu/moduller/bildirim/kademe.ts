@@ -16,7 +16,6 @@ import { bildirimGonder, bildirimKapat } from './servis.ts';
 import * as sk from './sorgular/kademe/sorgular.ts';
 import { gecerliAyarlar, type GecerliAyar } from './kademe-ayar.ts';
 
-export { kapatilamazKademeTurleri } from './kademe-ayar.ts';
 
 // 3405 a: kademeli uyarı bütün sistem için tek motordur. Her kaynak (hazırlık görevi, satın alma onayı, kalibrasyon vadesi...) açık
 // kayıtlarını bir okuyucuyla verir; okuyucuyu kablolama kaydeder (bildirim kaynak modülü ithal etmez). Motor gereken kademeyi hesaplar,
@@ -138,7 +137,7 @@ export async function kademeleriIlerlet(db: Db, simdi: Date = new Date()): Promi
         await bildirimGonder(db, {
           tur: kademeTuru(kaynak, kademe), baslik: `${r.no}: ${KADEME_KAYNAKLARI[kaynak].ad} · ${KADEME_ADLARI[kademe]}`, metin: r.baslik, yol: r.yol,
           kaynakKimlik: `${r.kayit}:k${String(k)}`, kisiler: hedef, yalnizKisiler: true, eposta: gecikme === null ? { kayitNo: r.no } : { kayitNo: r.no, gecikmeGunu: gecikme },
-          kapatilamaz: ayar.kapatilamaz && k >= 3, epostaYok: k < ayar.epostaKademe,
+          epostaYok: k < ayar.epostaKademe,
         });
         sonuc.bildirilen += 1;
       }

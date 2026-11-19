@@ -8,7 +8,7 @@
 | Önem | `bildirim_kaydi.onem` (bilgi, uyari, acil) | bildirim | |
 | Kaynak kayıt | `bildirim_kaydi.kaynak_modul`, `tekil_anahtar` (tür + kaynak kimliği), `yol` | olayı üreten modül | yabancı anahtar yok: kaynak her modülde ayrı |
 | Bildirim kaydı, okundu, arşiv | `bildirim_kaydi` | bildirim | yalnız bu modülde |
-| Kanal tercihi | `bildirim_tercihi` (mesaj, eposta) | bildirim | Mesaj (Faz 4) ve e-posta (Faz 3) gelince okunur |
+| Kanal tercihi | `bildirim_tercihi` (mesaj, eposta) | bildirim | 3435-1'den beri okunmaz (kişi tercihi yok); silinmesi ayrı kartla |
 | E-posta adresi | (tablo yok) | ik (iş e-postası) | Faz 3; bu aşamada okunmaz |
 | Rol (çağrı alıcısı) | `bildirim_cagri_alicisi.rol_id` -> `rol.id` | kisiler | yabancı anahtar, rol silinince satır düşer; kişiler `kisiler/disari.ts` `rollerdekiKisiler` ile |
 | Çağrı ekibi | `bildirim_cagri_ekibi.ekip`, `bildirim_cagri_alicisi.ekip` | durus-nedenleri sözleşmesi (`CAGRI_EKIPLERI`) | aynı liste `durus_nedeni.cagri_ekibi` kısıtında; Arkon `CALLS` listesi Arkon'da |

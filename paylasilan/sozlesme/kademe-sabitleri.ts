@@ -34,7 +34,7 @@ export interface KademeVarsayilani {
   epostaKademe: 2 | 3 | 4 | 5;
   // K3 ve sonrası kişisel oturumda kırmızı şeritte görünür.
   serit: boolean;
-  // K3 ve sonrasının e-postası kişi tercihinden kapatılamaz (3405-2 a: varsayılan kapatılamaz, kaynak ayarından açılabilir).
+  // Kişi tercihi kalktı (3435-1): ayar saklanır, gönderime etkisi yoktur; matris ekranında (3435-3) kaldırılır.
   kapatilamaz: boolean;
 }
 
@@ -181,7 +181,7 @@ export const KADEME_TUR_EKLERI = { 2: 'yaklasiyor', 3: 'gecikti', 4: 'yoneticide
 type Ek = (typeof KADEME_TUR_EKLERI)[keyof typeof KADEME_TUR_EKLERI];
 type Modul<K extends string> = K extends `${infer M}.${string}` ? M : never;
 type Ad<K extends string> = K extends `${string}.${infer A}` ? A : never;
-// Bekleme sayacında K2 yoktur: türü de yoktur (tercih ekranında hiç gelmeyecek bir satır olmasın).
+// Bekleme sayacında K2 yoktur: türü de yoktur (hiç gelmeyecek bir tür olmasın).
 type KaynakEkleri<K extends KademeKaynagi> = (typeof KADEME_KAYNAKLARI)[K]['sayac'] extends 'son-gun' ? Ek : Exclude<Ek, 'yaklasiyor'>;
 type TurAdi<K extends KademeKaynagi> = K extends KademeKaynagi ? `${Modul<K>}.kademe-${Ad<K>}-${KaynakEkleri<K>}` : never;
 export type KademeTuruAdi = TurAdi<Exclude<KademeKaynagi, 'projeler.hazirlik'>>;
@@ -190,7 +190,7 @@ export type KademeTuruAdi = TurAdi<Exclude<KademeKaynagi, 'projeler.hazirlik'>>;
 export const kaynakKademeleri = (kaynak: KademeKaynagi): (2 | 3 | 4 | 5)[] =>
   KADEME_KAYNAKLARI[kaynak].sayac === 'son-gun' ? [2, 3, 4, 5] : [3, 4, 5];
 
-// 3396'nın türleri korunur: kişi tercihleri ve e-posta tetikleyicileri onlara yazılmıştır.
+// 3396'nın türleri korunur: e-posta tetikleyicileri onlara yazılmıştır.
 const HAZIRLIK_TURLERI = { 2: 'projeler.hazirlik-hatirlatma', 3: 'projeler.hazirlik-gecikti', 4: 'projeler.hazirlik-yoneticiye', 5: 'projeler.hazirlik-devret' } as const;
 export type HazirlikKademeTuru = (typeof HAZIRLIK_TURLERI)[keyof typeof HAZIRLIK_TURLERI];
 export function kademeTuru(kaynak: KademeKaynagi, kademe: 2 | 3 | 4 | 5): KademeTuruAdi | HazirlikKademeTuru {

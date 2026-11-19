@@ -3,12 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { renderHook } from '@testing-library/react';
-import type { Bildirim, BildirimListeCevabi, BildirimSayacCevabi, BildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import type { Bildirim, BildirimListeCevabi, BildirimSayacCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { gorunenUstEylemler } from '../../ortak/rota/ust-eylemler.ts';
-import type { CihazIzni, CihazOrtami, PushOrtami } from './cihaz.ts';
-import { anahtarBaytlari } from './cihaz.ts';
-import { Tercihler } from './Bildirimler.tsx';
+import type { CihazIzni, CihazOrtami } from './cihaz.ts';
 import { rotalar } from './rotalar.tsx';
 import { ZilDugmesi, useCihazBildirimi, ustEylemler } from './ust-eylem.tsx';
 
@@ -58,12 +56,6 @@ const B = (ek: Partial<Bildirim>): Bildirim => ({
   onayIstenir: false, onaylandi: null, sinif: 'bilgi', yapildi: null, yayin: null, ...ek,
 });
 const liste = (satirlar: Bildirim[]): BildirimListeCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });
-const TERCIH: BildirimTercihleriCevabi = {
-  kanallar: { mesaj: false, eposta: false },
-  epostaSecilebilir: true,
-  satirlar: [{ tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', mesaj: false, eposta: false, varsayilan: true, kapatilamaz: false }],
-};
-
 describe('Bildirim zili', () => {
   const Zil = () => {
     const [eylem] = gorunenUstEylemler(ustEylemler, []);
@@ -156,28 +148,13 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
     expect(await screen.findByText('Arşiv boş.')).toBeTruthy();
   });
 
-  it('tercih anahtarı seçimi kaydeder; uygulama kanalı kilitli', async () => {
-    const istekler = sunucuKur({
-      'GET /bildirimler/tercihler': () => json(200, TERCIH),
-      'POST /bildirimler/tercihler/degistir': (g) => json(200, { ...TERCIH, satirlar: [{ ...TERCIH.satirlar[0], ...(g as object), varsayilan: false }] }),
-    });
-    ac('/bildirim-merkezi/tercihler');
-    const uygulama = await screen.findByRole('switch', { name: 'Makine durdu: uygulama, hep açık' });
-    expect((uygulama as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText(/kanalları henüz açılmadı/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('switch', { name: 'Makine durdu: e-posta' }));
-    await waitFor(() => expect(istekler.find((i) => i.yol === '/bildirimler/tercihler/degistir')?.govde)
-      .toEqual({ tur: 'istasyonlar.makine-durdu', mesaj: false, eposta: true }));
-    await waitFor(() => expect((screen.getByRole('switch', { name: 'Makine durdu: e-posta' }) as HTMLInputElement).checked).toBe(true));
-  });
-
-  it('e-posta seçemeyen kişide (operatör) e-posta anahtarı çıkmaz', async () => {
-    sunucuKur({
-      'GET /bildirimler/tercihler': () => json(200, { ...TERCIH, epostaSecilebilir: false, satirlar: [{ ...TERCIH.satirlar[0], eposta: null }] }),
-    });
-    ac('/bildirim-merkezi/tercihler');
-    expect(await screen.findByRole('switch', { name: 'Makine durdu: mesaj' })).toBeTruthy();
-    expect(screen.queryByRole('switch', { name: 'Makine durdu: e-posta' })).toBeNull();
+  it('3435-1: tercih ve Bu cihaz sayfası yoktur; eski adresler Profilim\'e gider', async () => {
+    for (const adres of ['/bildirim-merkezi/tercihler', '/bildirim-merkezi/cihaz', '/profil/bildirimler/tercihler']) {
+      sunucuKur({});
+      ac(adres);
+      await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/profil'));
+      cleanup();
+    }
   });
 });
 
@@ -255,6 +232,8 @@ describe('Cihaz bildirimi (342 a)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cihaz bildirimini aç' }));
     expect(ortam.izinIste).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Cihaz bildirimini aç' })).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Telefon bildirimi' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/profil'));
     cleanup();
 
     for (const izin of [null, 'denied'] as const) {
@@ -264,72 +243,5 @@ describe('Cihaz bildirimi (342 a)', () => {
       expect(screen.queryByRole('button', { name: 'Cihaz bildirimini aç' })).toBeNull();
       cleanup();
     }
-  });
-});
-
-// ADR 0031: kişi bu cihazı kendisi açar ve kapatır; sunucuda kapalıysa ya da tarayıcı desteklemiyorsa kart görünmez.
-describe('uygulama kapalıyken cihaz bildirimi (Web Push)', () => {
-  const UC = 'https://fcm.googleapis.com/fcm/send/deneme';
-  function pushSahte(destek = true, baslangic: string | null = null) {
-    let mevcut = baslangic;
-    const ortam: PushOrtami = {
-      destek,
-      mevcut: vi.fn(() => Promise.resolve(mevcut)),
-      aboneOl: vi.fn(() => { mevcut = UC; return Promise.resolve(UC); }),
-      birak: vi.fn(() => { const m = mevcut; mevcut = null; return Promise.resolve(m); }),
-    };
-    return ortam;
-  }
-  function tercihAc(push: PushOrtami) {
-    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    render(
-      <QueryClientProvider client={istemci}>
-        <BildirimSaglayici>
-          <MemoryRouter initialEntries={['/bildirim-merkezi/tercihler']}><Tercihler push={push} /></MemoryRouter>
-        </BildirimSaglayici>
-      </QueryClientProvider>,
-    );
-  }
-  const DURUM = { acik: true, acikAnahtar: 'BAAA', cihazSayisi: 0 };
-
-  it('açınca izin ister, abone olur ve adresi sunucuya yazar; kapatınca bırakır ve siler', async () => {
-    const istekler = sunucuKur({
-      'GET /bildirimler/tercihler': () => json(200, TERCIH),
-      'GET /bildirimler/push': () => json(200, DURUM),
-      'POST /bildirimler/push/abone-ol': () => json(200, { ...DURUM, cihazSayisi: 1 }),
-      'POST /bildirimler/push/abonelik-sil': () => json(200, DURUM),
-    });
-    const push = pushSahte();
-    tercihAc(push);
-    const anahtar = await screen.findByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' });
-    expect((anahtar as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByText(/içeriği şirket dışına çıkmaz/)).toBeTruthy();
-    fireEvent.click(anahtar);
-    await waitFor(() => expect(istekler.find((i) => i.yol === '/bildirimler/push/abone-ol')?.govde).toEqual({ ucNokta: UC }));
-    expect(push.aboneOl).toHaveBeenCalledWith('BAAA');
-    await waitFor(() => expect((screen.getByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' }) as HTMLInputElement).checked).toBe(true));
-    fireEvent.click(screen.getByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' }));
-    await waitFor(() => expect(istekler.find((i) => i.yol === '/bildirimler/push/abonelik-sil')?.govde).toEqual({ ucNokta: UC }));
-  });
-
-  it('sunucuda kapalıysa ya da tarayıcı desteklemiyorsa kart görünmez', async () => {
-    const istekler = sunucuKur({
-      'GET /bildirimler/tercihler': () => json(200, TERCIH),
-      'GET /bildirimler/push': () => json(200, { acik: false, acikAnahtar: null, cihazSayisi: 0 }),
-    });
-    tercihAc(pushSahte());
-    await screen.findByRole('switch', { name: 'Makine durdu: mesaj' });
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/bildirimler/push')).toBe(true));
-    expect(screen.queryByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' })).toBeNull();
-    cleanup();
-    const ikinci = sunucuKur({ 'GET /bildirimler/tercihler': () => json(200, TERCIH), 'GET /bildirimler/push': () => json(200, DURUM) });
-    tercihAc(pushSahte(false));
-    await screen.findByRole('switch', { name: 'Makine durdu: mesaj' });
-    expect(ikinci.some((i) => i.yol === '/bildirimler/push')).toBe(false);
-    expect(screen.queryByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' })).toBeNull();
-  });
-
-  it('açık anahtar base64url çözülür', () => {
-    expect([...anahtarBaytlari('AQID_-8')]).toEqual([1, 2, 3, 255, 239]);
   });
 });

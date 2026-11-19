@@ -1,15 +1,13 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import type {
-  BildirimListeCevabi, BildirimListeDurumu, BildirimPushDurumuCevabi, BildirimTercihDegistirGovdesi, BildirimTercihleriCevabi, BildirimTercihSatiri,
+  BildirimListeCevabi, BildirimListeDurumu,
 } from '#paylasilan/sozlesme/bildirim.ts';
-import { DurumKutusu, Dugme, Kart, Sayfalama, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { DurumKutusu, Dugme, Sayfalama } from '../../ortak/arayuz/index.ts';
+import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { tarayiciPushOrtami, type PushOrtami } from './cihaz.ts';
-import { modulAdi, modulSimgesi, ONEM_ADI } from './gorunum.ts';
 import { Hazirla } from './Hazirla.tsx';
 import { BildirimSatiri, BosListe, useBildirimKomutlari } from './ortak.tsx';
 import { Yayinlar } from './Yayinlar.tsx';
@@ -89,138 +87,6 @@ export function Arsiv() {
   return (
     <Cerceve>
       <Liste durum="arsiv" arsivde />
-    </Cerceve>
-  );
-}
-
-function Anahtar({ acik, etiket, kilitli = false, degistir }: { acik: boolean; etiket: string; kilitli?: boolean; degistir?: (acik: boolean) => void }) {
-  return (
-    <label className="tc-bildirim-anahtar" title={etiket}>
-      <input type="checkbox" role="switch" checked={acik} disabled={kilitli} aria-label={etiket} onChange={(o) => degistir?.(o.target.checked)} />
-      <span aria-hidden="true" />
-    </label>
-  );
-}
-
-function TercihSatiri({ s, epostaVar, yaz, bekliyor }: {
-  s: BildirimTercihSatiri; epostaVar: boolean; yaz: (g: BildirimTercihDegistirGovdesi) => void; bekliyor: boolean;
-}) {
-  const govde = (ek: Partial<BildirimTercihDegistirGovdesi>): BildirimTercihDegistirGovdesi => ({ tur: s.tur, mesaj: s.mesaj, eposta: s.eposta ?? false, ...ek });
-  return (
-    <li className="tc-bildirim-tercih">
-      <span className={`tc-bildirim-simge tc-bildirim-${s.onem}`}><Simge ad={modulSimgesi(s.kaynakModul)} /></span>
-      <span className="tc-bildirim-govde">
-        <span className="tc-bildirim-baslik">{s.baslik}</span>
-        <span className="tc-bildirim-kaynak">{modulAdi(s.kaynakModul)} · {ONEM_ADI[s.onem]}{s.varsayilan ? ' · varsayılan' : ''}</span>
-      </span>
-      <span className="tc-bildirim-kanallar">
-        <span className="tc-bildirim-kanal"><Simge ad="bell" boyut="k" /><span>Uygulama</span><Anahtar acik kilitli etiket={`${s.baslik}: uygulama, hep açık`} /></span>
-        <span className="tc-bildirim-kanal">
-          <Simge ad="users" boyut="k" /><span>Mesaj</span>
-          <Anahtar acik={s.mesaj} kilitli={bekliyor} etiket={`${s.baslik}: mesaj`} degistir={(mesaj) => yaz(govde({ mesaj }))} />
-        </span>
-        {epostaVar && (
-          <span className="tc-bildirim-kanal">
-            <Simge ad="upload" boyut="k" /><span>E-posta</span>
-            <Anahtar
-              acik={s.kapatilamaz || (s.eposta ?? false)} kilitli={bekliyor || s.kapatilamaz}
-              etiket={s.kapatilamaz ? `${s.baslik}: e-posta; yönetici kapatılamaz yaptı (geciken işin kademesi)` : `${s.baslik}: e-posta`} degistir={(eposta) => yaz(govde({ eposta }))}
-            />
-          </span>
-        )}
-      </span>
-    </li>
-  );
-}
-
-const PUSH_ANAHTARI = ['bildirim', 'push'] as const;
-
-// Web Push (ADR 0031): kişi bu cihazı kendisi açar ve kapatır. Sunucuda kapalıysa ya da tarayıcı desteklemiyorsa kart görünmez.
-function CihazPush({ ortam }: { ortam: PushOrtami }) {
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
-  const durum = useQuery({ queryKey: PUSH_ANAHTARI, queryFn: () => api.get<BildirimPushDurumuCevabi>('/bildirimler/push'), enabled: ortam.destek });
-  const mevcut = useQuery({ queryKey: [...PUSH_ANAHTARI, 'bu-cihaz'], queryFn: () => ortam.mevcut(), enabled: ortam.destek });
-  const degistir = useMutation({
-    mutationFn: async (ac: boolean): Promise<BildirimPushDurumuCevabi> => {
-      if (ac) {
-        const ucNokta = await ortam.aboneOl(durum.data?.acikAnahtar ?? '');
-        return api.post<BildirimPushDurumuCevabi>('/bildirimler/push/abone-ol', { ucNokta });
-      }
-      const ucNokta = await ortam.birak();
-      if (ucNokta === null) return durum.data as BildirimPushDurumuCevabi;
-      return api.post<BildirimPushDurumuCevabi>('/bildirimler/push/abonelik-sil', { ucNokta });
-    },
-    onSuccess: (v) => {
-      istemci.setQueryData(PUSH_ANAHTARI, v);
-      void mevcut.refetch();
-    },
-    onError: (h) => {
-      void mevcut.refetch();
-      bildir('hata', hataIletisi(h, 'Cihaz bildirimi değiştirilemedi.'));
-    },
-  });
-  if (!ortam.destek || durum.data?.acik !== true || durum.data.acikAnahtar === null || mevcut.isPending) return null;
-  const acik = mevcut.data !== null && mevcut.data !== undefined;
-  return (
-    <Kart baslik="Uygulama kapalıyken">
-      <ul className="tc-bildirim-liste">
-        <li className="tc-bildirim-tercih">
-          <span className="tc-bildirim-simge tc-bildirim-bilgi"><Simge ad="bell" /></span>
-          <span className="tc-bildirim-govde">
-            <span className="tc-bildirim-baslik">Bu cihaza bildir</span>
-            <span className="tc-bildirim-kaynak">Görev, hatırlatma ve acil bildirimler · açık cihazınız: {durum.data.cihazSayisi}</span>
-          </span>
-          <span className="tc-bildirim-kanallar">
-            <span className="tc-bildirim-kanal">
-              <Anahtar acik={acik} kilitli={degistir.isPending} etiket="Uygulama kapalıyken bu cihaza bildir" degistir={(ac) => degistir.mutate(ac)} />
-            </span>
-          </span>
-        </li>
-      </ul>
-      <p className="tc-bildirim-not">
-        Bildirimin içeriği şirket dışına çıkmaz: tarayıcının bildirim servisinden yalnız &quot;yeni bildirim var&quot; sinyali geçer, ayrıntıyı cihaz
-        sunucudan kendisi alır. Şirket ağı dışındayken yalnız genel bir uyarı görünür. iPhone&apos;da uygulama ana ekrana eklenmiş olmalıdır.
-      </p>
-    </Kart>
-  );
-}
-
-export function Tercihler({ push }: { push?: PushOrtami } = {}) {
-  const pushOrtami = useState(() => push ?? tarayiciPushOrtami())[0];
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
-  const sorgu = useQuery({ queryKey: anahtarlar.tercihler, queryFn: () => api.get<BildirimTercihleriCevabi>('/bildirimler/tercihler') });
-  const yaz = useMutation({
-    mutationFn: (g: BildirimTercihDegistirGovdesi) => api.post<BildirimTercihleriCevabi>('/bildirimler/tercihler/degistir', g),
-    onSuccess: (v) => istemci.setQueryData(anahtarlar.tercihler, v),
-    onError: (h) => bildir('hata', hataIletisi(h, 'Tercih kaydedilemedi.')),
-  });
-  return (
-    <Cerceve>
-      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
-        : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
-        : (
-          <>
-          <CihazPush ortam={pushOrtami} />
-          <Kart baslik="Hangi olay hangi kanaldan gelsin">
-            {(!sorgu.data.kanallar.mesaj || !sorgu.data.kanallar.eposta) && (
-              <p className="tc-bildirim-serit">
-                <Simge ad="alert" boyut="k" />
-                Mesaj ve e-posta kanalları henüz açılmadı. Seçimleriniz saklanır, kanal açılınca geçerli olur; o zamana kadar bildirimler zile gelir.
-              </p>
-            )}
-            {sorgu.data.satirlar.length === 0 ? <BosListe metin="Yetkinize göre size gelen bir olay türü yok. Size gelen bildirimler yine zilde görünür." /> : (
-              <ul className="tc-bildirim-liste">
-                {sorgu.data.satirlar.map((s) => (
-                  <TercihSatiri key={s.tur} s={s} epostaVar={sorgu.data.epostaSecilebilir} yaz={(g) => yaz.mutate(g)} bekliyor={yaz.isPending} />
-                ))}
-              </ul>
-            )}
-            <p className="tc-bildirim-not">Uygulama bildirimi kapatılamaz: kayıt her zaman tutulur. Değişiklik anında kaydedilir.</p>
-          </Kart>
-          </>
-        )}
     </Cerceve>
   );
 }

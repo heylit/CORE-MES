@@ -7,15 +7,14 @@ import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
   ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
-  type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, turSinifi,
+  type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, turSinifi,
   type BildirimPushAbonelikGovdesi, type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, turKapatilamaz, yolTureUyar,
+  ONAY_ILETILERI, alicilariSec, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
 } from './kurallar.ts';
-import { epostaKanaliAcik, epostaKuyrugaAl, type EpostaEki } from './eposta.ts';
-import { kapatilamazKademeTurleri } from './kademe-ayar.ts';
+import { epostaKuyrugaAl, type EpostaEki } from './eposta.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
 
@@ -35,8 +34,7 @@ interface BildirimOlayiTemeli {
   haric?: number | null;
   // E-postanın bilgi tablosu için isteğe bağlı alanlar (3397); metin ve serbest alan e-postaya girmez.
   eposta?: EpostaEki;
-  // 3405: kademeli uyarı e-postayı kaynağın ayarıyla verir. Kapatılamaz kişi tercihini geçer; e-posta yok bu olayda e-posta açmaz.
-  kapatilamaz?: boolean;
+  // 3405: kademeli uyarı e-postayı kaynağın ayarıyla verir; e-posta yok bu olayda e-posta açmaz.
   epostaYok?: boolean;
 }
 // 2453: yalnizKisiler true iken alıcı yalnız `kisiler` içinden türü alanlardır (liste yalnız daraltır); kişi listesi zorunludur.
@@ -72,7 +70,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
       ortada: gosterim.ortada, onayIstenir: gosterim.onayIstenir, sinif: turSinifi(olay.tur),
     }) });
   }
-  await epostaKuyrugaAl(db, { tur: olay.tur, baslik, yol: olay.yol ?? null, eposta: olay.eposta, kapatilamaz: olay.kapatilamaz, epostaYok: olay.epostaYok }, yazilan, islemler);
+  await epostaKuyrugaAl(db, { tur: olay.tur, baslik, yol: olay.yol ?? null, eposta: olay.eposta, epostaYok: olay.epostaYok }, yazilan, islemler);
   if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
   return alicilar.length;
 }
@@ -141,43 +139,6 @@ export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise
   if (b !== null) return b;
   if ((await s.onayBekliyorMu(db, kullanici.id, id))?.bekliyor === true) throw dogrulama(ONAY_ILETILERI.onaysizArsiv);
   throw bulunamadi(BULUNAMADI);
-}
-
-// Kişi yalnız alabileceği olayları görür: türde alıcı seçimi varsa seçilmişse, yoksa türün işlemlerinden birini taşıyorsa.
-// Seçmediği olayda varsayılan geçer.
-export async function tercihler(db: Db, kullanici: Kullanici): Promise<BildirimTercihleriCevabi> {
-  const kayitli = new Map((await s.kisininTercihleri(db, kullanici.id)).map((t) => [t.tur, t]));
-  const eposta = epostaSecilebilir(kullanici.islemler);
-  // Seçilmemiş türde e-posta, Sistem Ayarları'ndaki tetikleyiciyi izler (3397): tetikleyici kapalıysa e-posta gitmez.
-  const tetik = new Map((await s.epostaTetikleyicileri(db)).map((r) => [r.tur, r.eposta]));
-  const ayarli = new Map<string, boolean>();
-  for (const a of await s.turAyarlari(db)) {
-    ayarli.set(a.tur, a.kisiIdleri.includes(kullanici.id) || (await rollerdekiKisiler(db, a.rolIdleri)).includes(kullanici.id));
-  }
-  // 3405-2 a: kademe türünde kapatılamazlık kaynağın ayarındadır; öteki türlerde tanımdadır.
-  const kademeKapali = await kapatilamazKademeTurleri(db);
-  const satirlar = BILDIRIM_TUR_ANAHTARLARI
-    .filter((tur) => ayarli.get(tur) ?? BILDIRIM_TURLERI[tur].alanIslemler.some((i) => kullanici.islemler.includes(i)))
-    .map((tur) => {
-      const t = BILDIRIM_TURLERI[tur];
-      const k = kayitli.get(tur);
-      return {
-        tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur),
-        mesaj: k?.mesaj ?? t.varsayilan.mesaj,
-        eposta: eposta ? ((kademeKapali.get(tur) ?? turKapatilamaz(tur)) ? true : k?.eposta ?? tetik.get(tur) ?? t.varsayilan.eposta) : null,
-        varsayilan: k === undefined, kapatilamaz: kademeKapali.get(tur) ?? turKapatilamaz(tur),
-      };
-    });
-  return { kanallar: { ...ACIK_KANALLAR, eposta: await epostaKanaliAcik(db) }, epostaSecilebilir: eposta, satirlar };
-}
-
-// Tercih yalnız kişinin alabildiği türe yazılır; e-posta seçemeyenin e-posta isteği reddedilir, sessizce kapatılmaz.
-export async function tercihDegistir(db: Db, kullanici: Kullanici, govde: BildirimTercihDegistirGovdesi): Promise<BildirimTercihleriCevabi> {
-  const mevcut = await tercihler(db, kullanici);
-  const hata = tercihHatasi(mevcut.satirlar.map((t) => t.tur), mevcut.epostaSecilebilir, govde, mevcut.satirlar.filter((t) => t.kapatilamaz).map((t) => t.tur));
-  if (hata !== null) throw dogrulama(hata.mesaj, hata.alan);
-  await s.tercihYaz(db, kullanici.id, { tur: govde.tur, mesaj: govde.mesaj, eposta: govde.eposta });
-  return tercihler(db, kullanici);
 }
 
 // Ekip çağrısı yönlendirmesi (298 a). Değiştiren kişi ve zaman sunucudan yazılır; ad kisiler modülünden eklenir.

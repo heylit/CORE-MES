@@ -20,7 +20,7 @@ export const BILDIRIM_KANALLARI = ['mesaj', 'eposta'] as const;
 export type BildirimKanali = (typeof BILDIRIM_KANALLARI)[number];
 
 export interface BildirimTuruTanimi {
-  // Tercih ekranında görünen ad.
+  // Ekranda görünen ad.
   baslik: string;
   onem: BildirimOnemi;
   // Verilmezse bilgi. Görev yalnız kaynak modül işi yapılınca `bildirimKapat` çağırıyorsa verilir; çağırmayan türde görev
@@ -31,12 +31,10 @@ export interface BildirimTuruTanimi {
   // Bildirimin açtığı ekran: gönderilen yol bu yol ya da altıdır. Alıcı rollerin bu ekranı açabildiğini
   // `araclar/bildirim-yollari.test.ts` ölçer; alıcıyı işlem, ekranı sayfa işlemi seçtiği için ikisi ayrışabiliyordu.
   yol: `/${string}`;
-  // Kişi seçmediyse geçen kanallar; uygulama kanalı hep açıktır.
+  // E-posta tetikleyicisi ayarlanmadıysa geçen kanallar; uygulama kanalı hep açıktır.
   varsayilan: Record<BildirimKanali, boolean>;
   // Verilirse bildirim, Bildirim yönetimi ayarlanmadıkça "Okudum, anladım" denene dek kalır (3303-2 a).
   onayIstenir?: true;
-  // 3396-3: kişi tercihinde e-postası kapatılamaz (yalnız hazırlık kademeleri; uygulama kanalı zaten hep açıktır).
-  kapatilamaz?: true;
 }
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
@@ -88,8 +86,7 @@ const ELLE_TANIMLI_TURLER = {
     baslik: 'Takım ömrü doluyor', onem: 'uyari', alanIslemler: ['cnc-kurulum.takim-degistir'], yol: '/cnc-kurulum', varsayilan: { mesaj: false, eposta: false },
   },
   // 298 a: alıcı işlemden değil, çağrılan ekibin yönlendirmesindeki rollerden seçilir (Sistem Ayarları > Bildirim yönetimi).
-  // Alıcı roller ortak bir ekran açamadığı için bildirim yolsuz gider; tür yolu yalnız kayıt içindir. Acil çağrı kişi
-  // tercihinden kapatılamasın diye tercih listesinde görünmez (alan işlemi yok).
+  // Alıcı roller ortak bir ekran açamadığı için bildirim yolsuz gider; tür yolu yalnız kayıt içindir (alan işlemi yok).
   'arkon.ekip-cagrisi': {
     baslik: 'Ekip çağrısı', onem: 'acil', alanIslemler: [], yol: '/istasyonlar', varsayilan: { mesaj: false, eposta: false },
   },
@@ -175,7 +172,7 @@ const ELLE_TANIMLI_TURLER = {
     baslik: 'Geri bildirimin sonuçlandı', onem: 'bilgi', alanIslemler: [], yol: '/profil', varsayilan: { mesaj: false, eposta: false },
   },
   // 3269 a: görev kişiye ya da rolüne atanınca ve geri gönderilince; alıcı kayda bağlı kişilerdir. Metinde görev adı yoktur.
-  // 3303: işlem, türün kişinin tercihlerinde görünmesi içindir; gönderim yalnız kayda bağlı kişilere gider (yalnızKisiler),
+  // 3303: gönderim yalnız kayda bağlı kişilere gider (yalnızKisiler),
   // Bildirim yönetimi'ndeki alıcı seçimi yalnız daraltır, başka projelerin görevini yaymaz.
   'projeler.gorev-atandi': {
     baslik: 'Sana proje görevi var', onem: 'bilgi', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
@@ -189,23 +186,23 @@ const ELLE_TANIMLI_TURLER = {
   // ayarlıdır. Kademe yükselince projeler gönderir, görev bitince ya da kontrole düşünce kapatır. Gövde yalnız görev adı ve son gün (Risk K8).
   'projeler.hazirlik-hatirlatma': {
     baslik: 'Hazırlık görevinin son günü yaklaşıyor', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim',
-    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+    varsayilan: { mesaj: false, eposta: true },
   },
   'projeler.hazirlik-gecikti': {
     baslik: 'Hazırlık görevin gecikti', onem: 'acil', sinif: 'gorev', alanIslemler: ['projeler.gorev-isle'], yol: '/proje-gorevlerim',
-    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+    varsayilan: { mesaj: false, eposta: true },
   },
   'projeler.hazirlik-yoneticiye': {
     baslik: 'Geciken hazırlık görevi yöneticiye bildirildi', onem: 'acil', sinif: 'gorev',
-    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true },
   },
   'projeler.hazirlik-devret': {
     baslik: 'Geciken hazırlık görevini devret', onem: 'acil', sinif: 'gorev',
-    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+    alanIslemler: ['projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: true },
   },
   'projeler.hazirlik-ozet': {
     baslik: 'Geciken hazırlık görevleri günlük özeti', onem: 'uyari', alanIslemler: ['projeler.hazirlik-dagit'], yol: '/projeler',
-    varsayilan: { mesaj: false, eposta: true }, kapatilamaz: true,
+    varsayilan: { mesaj: false, eposta: true },
   },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
@@ -216,7 +213,7 @@ function kademeTurTanimi(kaynak: KademeKaynagi, k: 2 | 3 | 4 | 5): BildirimTuruT
   const t: KademeKaynagiTanimi = KADEME_KAYNAKLARI[kaynak];
   return {
     baslik: `${t.ad}: ${KADEME_ADLARI[k]}`, onem: k === 2 ? 'uyari' : 'acil', sinif: k === 2 ? 'hatirlatma' : 'gorev', alanIslemler: t.okumaIslemleri, yol: t.yol,
-    varsayilan: { mesaj: false, eposta: t.para !== true && k >= t.varsayilan.epostaKademe }, ...(t.varsayilan.kapatilamaz && k >= 3 ? { kapatilamaz: true } : {}),
+    varsayilan: { mesaj: false, eposta: t.para !== true && k >= t.varsayilan.epostaKademe },
   };
 }
 const KADEME_BILDIRIM_TURLERI = Object.fromEntries(KADEME_KAYNAK_ANAHTARLARI.filter((k) => k !== 'projeler.hazirlik')
@@ -292,31 +289,6 @@ export const bildirimSayacCevabi = z.object({ okunmamis: z.number().int().nonneg
 
 export const bildirimCevabi = bildirimSemasi;
 export const tumunuOkunduCevabi = z.object({ isaretlenen: z.number().int().nonnegative() });
-
-export const bildirimTercihSatiri = z.object({
-  tur: z.enum(BILDIRIM_TUR_ANAHTARLARI),
-  baslik: z.string(),
-  onem: z.enum(BILDIRIM_ONEMLERI),
-  kaynakModul: z.string(),
-  mesaj: z.boolean(),
-  // Kişi e-posta seçemiyorsa (operatör) null.
-  eposta: z.boolean().nullable(),
-  // Kişi bu olay için seçim yapmadı: olay türünün varsayılanı geçiyor.
-  varsayilan: z.boolean(),
-  // E-postası kişi tercihinden kapatılamaz (3396-3, kademe türünde kaynağın ayarı 3405-2 a).
-  kapatilamaz: z.boolean(),
-});
-export const bildirimTercihleriCevabi = z.object({
-  // Mesaj ve e-posta kanalları sonraki aşamalarda açılır; o zamana kadar seçim saklanır, gönderim yalnız uygulamadandır.
-  kanallar: z.object({ mesaj: z.boolean(), eposta: z.boolean() }),
-  epostaSecilebilir: z.boolean(),
-  satirlar: z.array(bildirimTercihSatiri),
-});
-export const bildirimTercihDegistirGovdesi = z.object({
-  tur: z.enum(BILDIRIM_TUR_ANAHTARLARI),
-  mesaj: z.boolean(),
-  eposta: z.boolean(),
-}).strict();
 
 // Ekip çağrısı yönlendirmesi (298 a): ekip başına alıcı roller. Okuma ve yazma `ayarlar.yaz` ister.
 export const CAGRI_EKIP_ADLARI = {
@@ -531,9 +503,6 @@ export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;
 export type BildirimSayacCevabi = z.output<typeof bildirimSayacCevabi>;
 export type TumunuOkunduCevabi = z.output<typeof tumunuOkunduCevabi>;
-export type BildirimTercihSatiri = z.output<typeof bildirimTercihSatiri>;
-export type BildirimTercihleriCevabi = z.output<typeof bildirimTercihleriCevabi>;
-export type BildirimTercihDegistirGovdesi = z.input<typeof bildirimTercihDegistirGovdesi>;
 export type CagriYonlendirmeSatiri = z.output<typeof cagriYonlendirmeSatiri>;
 export type CagriYonlendirmeCevabi = z.output<typeof cagriYonlendirmeCevabi>;
 export type CagriEkiplerimCevabi = z.output<typeof cagriEkiplerimCevabi>;

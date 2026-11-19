@@ -85,11 +85,10 @@ describe('e-posta kuralları (3397)', () => {
     assert.equal(varsayilanTetikleyici('satin-alma.talep-onaylandi').eposta, false);
   });
 
-  test('BIL-46: operatör e-posta almaz; kişi tercihi kapalıysa almaz; tür kapalıysa kimse almaz', () => {
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla'], undefined), true);
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla'], false), false);
-    assert.equal(kisiEpostaAlir(false, ['satin-alma.onayla'], true), false);
-    assert.equal(kisiEpostaAlir(true, ['arkon.operator'], true), false);
+  test('BIL-46: operatör e-posta almaz; tür kapalıysa kimse almaz; kişi tercihi yoktur (3435-1)', () => {
+    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla']), true);
+    assert.equal(kisiEpostaAlir(false, ['satin-alma.onayla']), false);
+    assert.equal(kisiEpostaAlir(true, ['arkon.operator']), false);
   });
 
   test('BIL-47: görev yapılınca, bilgi okununca, her sınıf arşivlenince kapanır', () => {
@@ -180,10 +179,11 @@ describe('e-posta kuralları (3397)', () => {
     assert.doesNotMatch(baglantisiz.html, /eylem=|>Onayla</);
   });
 
-  test('3431 a: alt bilgi kipten bağımsızdır ve tercih yolu Bildirim Merkezi\'dir; üst bilgi gönderen adını taşır', () => {
+  test('3431 a: alt bilgi kipten bağımsızdır, kişi tercihine yol göstermez (3435-1); üst bilgi gönderen adını taşır', () => {
     const g = epostaKur({ sablon: VARSAYILAN_SABLONLAR.genel, degerler: DEGER, baslik: 'Olay', onem: 'bilgi', simgeVar: false, gonderenAdi: 'ORN Makina' });
     assert.doesNotMatch(g.metin, /kurum içi/);
-    assert.match(g.metin, /Bildirim Merkezi > Tercihler/);
+    assert.doesNotMatch(g.metin, /Tercih/);
+    assert.match(g.metin, /sistem yöneticin belirler/);
     assert.match(g.metin, /CORE MES tarafından ORN Makina adına gönderildi/);
     assert.ok(g.html.includes('>ORN Makina<'));
   });

@@ -275,17 +275,19 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     await assert.rejects(o().vt.tx((db) => db.sorgu('DELETE FROM bildirim_eposta_defteri')));
   });
 
-  test('tetikleyici kapalıysa ve kişi Profil\'de kapattıysa e-posta kuyruğa girmez', async () => {
+  test('tetikleyici kapalıysa e-posta kuyruğa girmez; eski kişi tercihi satırı okunmaz (3435-1)', async () => {
     await ayar('bildirim.eposta', true);
     assert.equal((await tetikle(ONAY, { eposta: false })).durum, 200);
     await gonder(ONAY, ['mudur']);
     assert.equal((await kuyruk()).length, 0);
     assert.equal((await tetikle(ONAY, { eposta: true })).durum, 200);
 
-    await tamam('POST', '/bildirimler/tercihler/degistir', { tur: ONAY, mesaj: false, eposta: false });
+    await o().sahip.sorgu(
+      `INSERT INTO bildirim_tercihi (kisi_id, tur, mesaj, eposta) VALUES ($1, $2, false, false)
+       ON CONFLICT (kisi_id, tur) DO UPDATE SET eposta = false`, [kim('yonetici'), ONAY]);
     await gonder(ONAY, ['yonetici', 'mudur']);
-    assert.deepEqual((await kuyruk()).map((q) => q.kisiId), [kim('mudur')]);
-    await tamam('POST', '/bildirimler/tercihler/degistir', { tur: ONAY, mesaj: false, eposta: true });
+    assert.deepEqual((await kuyruk()).map((q) => q.kisiId).sort(), [kim('yonetici'), kim('mudur')].sort());
+    await o().sahip.sorgu('DELETE FROM bildirim_tercihi WHERE kisi_id = $1 AND tur = $2', [kim('yonetici'), ONAY]);
   });
 
   test('tetikleyici doğrulaması: eksik tekrar, günsüz kademe, olmayan rol, eski sürüm', async () => {
@@ -486,20 +488,6 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     await ayni();
     await ayni();
     assert.equal((await kuyruk()).length, 1);
-    await o().sahip.sorgu('DELETE FROM bildirim_eposta_kuyrugu');
-  });
-
-  test('kapatılamaz türde (3396-3) kişinin kapalı e-posta tercihi yok sayılır', async () => {
-    const KILITLI = 'projeler.hazirlik-hatirlatma' as BildirimTuru;
-    await ayar('bildirim.eposta', false);
-    assert.equal((await tetikle(KILITLI, { eposta: true })).durum, 200);
-    await o().sahip.sorgu(
-      `INSERT INTO bildirim_tercihi (kisi_id, tur, mesaj, eposta) VALUES ($1, $2, false, false)
-       ON CONFLICT (kisi_id, tur) DO UPDATE SET eposta = false`, [kim('yonetici'), KILITLI]);
-    await o().vt.tx((db) => bildirimGonder(db, {
-      tur: KILITLI, baslik: 'Hazırlık: ORN-PRJ-0001', metin: 'Gizli serbest metin', kaynakKimlik: 'kilitli-1', yol: '/proje-gorevlerim', kisiler: [kim('yonetici')], yalnizKisiler: true,
-    }));
-    assert.deepEqual((await kuyruk()).map((q) => q.kisiId), [kim('yonetici')]);
     await o().sahip.sorgu('DELETE FROM bildirim_eposta_kuyrugu');
   });
 

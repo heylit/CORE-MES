@@ -140,7 +140,6 @@ function AyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roll
           onChange={(o) => degistir({ epostaKademe: Number(o.target.value) })}
         />
         <IsaretKutusu etiket="Gecikince kişinin ekranında kırmızı şerit çıksın" checked={g.serit} onChange={(o) => degistir({ serit: o.target.checked })} />
-        <IsaretKutusu etiket="Gecikti ve sonrasının e-postası kişi tercihinden kapatılamasın" checked={g.kapatilamaz} onChange={(o) => degistir({ kapatilamaz: o.target.checked })} />
         {hata && <p className="tc-bildirim-hata" role="alert">{hata}</p>}
         {satir.degisti && <p className="tc-bildirim-not">Son değişiklik: {satir.degistiren ?? 'bilinmiyor'}, {new Date(satir.degisti).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}</p>}
       </div>

@@ -351,11 +351,7 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await komut(kalite2, g.id, 'onayla')).statusCode, 403, 'yeni yapan da onaylayamaz');
   });
 
-  test('bildirim (3303): türler alanın tercihlerinde görünür; alıcısı kayda bağlıdır, Bildirim yönetimi alıcı seçmez, gösterimi ayarlar', async () => {
-    const tercih = (await oku(operator1, '/bildirimler/tercihler')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
-    assert.ok(tercih.includes('projeler.gorev-atandi') && tercih.includes('projeler.gorev-kontrol-bekliyor'), tercih.join(','));
-    assert.ok(!(await oku(guvenlik, '/bildirimler/tercihler')).json<{ satirlar: { tur: string }[] }>().satirlar
-      .some((t) => t.tur.startsWith('projeler.gorev')), 'görev işlemi olmayan türü görmez');
+  test('bildirim (3303): alıcısı kayda bağlıdır, Bildirim yönetimi alıcı seçmez, gösterimi ayarlar', async () => {
     const ayar = await gonder(yonetici, '/bildirimler/alicilar/projeler.gorev-atandi/degistir', { rolIdleri: [rolId('kalite')], kisiIdleri: [], surum: null });
     assert.equal(ayar.statusCode, 400, 'kayda bağlı türün alıcısı seçilmez');
     const alicilar = (await oku(yonetici, '/bildirimler/alicilar')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);

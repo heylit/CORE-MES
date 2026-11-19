@@ -17,7 +17,7 @@ import { varsayilanDeger, type AyarAnahtari, type AyarDegeri } from '#paylasilan
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
   VARSAYILAN_SABLONLAR, bildirimAcikMi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
-  sessizMi, sonrakiDenemeDk, turKademesi, turKapatilamaz, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
+  sessizMi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
 import { disKipMi, epostaKipi } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
@@ -64,10 +64,6 @@ async function postaAyari(db: Db): Promise<PostaAyari | null> {
   return ortamPostaAyari(disKipMi(await sistemAyariOku(db, 'bildirim.eposta-kipi')));
 }
 
-export async function epostaKanaliAcik(db: Db): Promise<boolean> {
-  return await postaAyari(db) !== null && await sistemAyariOku(db, 'bildirim.eposta');
-}
-
 async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyicisi> {
   const t = await s.epostaTetikleyicisi(db, tur);
   return t === null ? varsayilanTetikleyici(tur) : t;
@@ -76,7 +72,7 @@ async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyici
 // bildirimGonder'in transaction'ında: yeni açılan bildirim satırlarının e-postası kuyruğa yazılır. Ortam değişkeni yoksa kuyruk
 // tutulmaz (posta sunucusu olmayan kurulumda birikmesin); ayar kapalıysa kuyruk birikir, gönderilmez (ADR 0015 md 5).
 export async function epostaKuyrugaAl(
-  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; kapatilamaz?: boolean | undefined; epostaYok?: boolean | undefined },
+  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; epostaYok?: boolean | undefined },
   yazilan: readonly { kisiId: number; id: number; yeni: boolean }[], islemler: ReadonlyMap<number, readonly string[]>,
 ): Promise<void> {
   if (olay.epostaYok === true || await postaAyari(db) === null) return;
@@ -84,9 +80,8 @@ export async function epostaKuyrugaAl(
   if (yeniler.length === 0) return;
   const t = await tetikleyici(db, olay.tur);
   if (!t.eposta) return;
-  const tercih = new Map((await s.epostaTercihleri(db, olay.tur, yeniler.map((y) => y.kisiId))).map((r) => [r.kisiId, r.eposta]));
-  const zorunlu = olay.kapatilamaz ?? turKapatilamaz(olay.tur);
-  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? [], tercih.get(y.kisiId), zorunlu));
+  // 3435-1: kişi tercihi yoktur; kim alır yöneticinin ayarıdır.
+  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? []));
   const ozet = t.zaman === 'ozet';
   const ozetZamani = ozet ? new Date(sonrakiSaat(Date.now(), await sistemAyariOku(db, 'bildirim.eposta-ozet-saati') ?? 7)).toISOString() : null;
   const ortak = {
@@ -265,9 +260,8 @@ async function kademeleriAc(db: Db): Promise<void> {
     const t = (BILDIRIM_TUR_ANAHTARLARI as readonly string[]).includes(q.tur) ? await tetikleyici(db, q.tur as BildirimTuru) : null;
     if (t !== null && q.kaynak !== null && bildirimAcikMi(q.kaynak)) {
       const adaylar = [...new Set([...await rollerdekiKisiler(db, t.yukseltRolIdleri), ...t.yukseltKisiIdleri])];
-      const tercih = new Map((await s.epostaTercihleri(db, q.tur, adaylar)).map((r) => [r.kisiId, r.eposta]));
       // Etkin girişli olmayan (pasif, çıkmış) kişi kademede de almaz.
-      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? [], tercih.get(k), turKapatilamaz(q.tur as BildirimTuru)));
+      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? []));
       await s.epostaKuyrugaYaz(db, kisiler.map((kisiId) => ({
         kisiId, bildirimId: null, tur: q.tur, onem: q.onem, baslik: q.baslik, kayitNo: q.kayitNo, yol: q.yol, gecikmeGunu: q.gecikmeGunu,
         istasyon: q.istasyon, kademe: 1 as const, ozet: false, zamani: null,

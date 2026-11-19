@@ -539,7 +539,7 @@ function SablonDuzenleyici({ sablon, olay }: { sablon: EpostaSablonu; olay: stri
             </dl>
           )}
           <span className="tc-eposta-dugme">Kayda git</span>
-          <p className="tc-eposta-alt">Bu e-posta CORE MES tarafından kurum içi posta sunucusundan gönderildi. Almak istemiyorsan Profil &gt; Bildirim tercihleri'nden kapatabilirsin.</p>
+          <p className="tc-eposta-alt">Bu e-posta CORE MES tarafından kurumunuz adına gönderildi. Bu e-postayı kimin alacağını sistem yöneticin belirler.</p>
         </div>
       </section>
     </div>

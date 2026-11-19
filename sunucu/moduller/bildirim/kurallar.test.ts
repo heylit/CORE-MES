@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  alicilariSec, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, TERCIH_ILETILERI, tercihHatasi, YAYIN_ONEMI,
+  alicilariSec, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
   yayinAlicilari, yayiniGorurMu, yayinZamaniHatasi, yolTureUyar,
 } from './kurallar.ts';
 
@@ -114,18 +114,6 @@ describe('BIL-8: yönlendirmeye yalnız var olan rol yazılır', () => {
     assert.deepEqual(olmayanKimlikler([1, 2, 9], [1, 2, 3]), [9]);
     assert.deepEqual(olmayanKimlikler([], [1]), []);
   });
-});
-
-test('tercih kuralı: listede olmayan tür ve seçemeyenin e-posta isteği reddedilir; izinli istek geçer', () => {
-  const liste = ['istasyonlar.makine-durdu'];
-  assert.equal(tercihHatasi(liste, true, { tur: 'istasyonlar.makine-durdu', eposta: true }), null);
-  assert.equal(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: false }), null);
-  // 3396-3 a: hazırlık kademesinin e-postası kapatılamaz; sıradan türünki kapatılır.
-  assert.match(tercihHatasi(['projeler.hazirlik-gecikti'], true, { tur: 'projeler.hazirlik-gecikti', eposta: false })?.mesaj ?? '', /kapatılamaz/);
-  assert.equal(tercihHatasi(['projeler.gorev-atandi'], true, { tur: 'projeler.gorev-atandi', eposta: false }), null);
-  assert.deepEqual(tercihHatasi(liste, false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' });
-  assert.deepEqual(tercihHatasi(liste, true, { tur: 'cnc-kurulum.takim-omru', eposta: false }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });
-  assert.deepEqual(tercihHatasi([], false, { tur: 'istasyonlar.makine-durdu', eposta: true }), { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' });
 });
 
 test('BIL-11: elle yayının önemi türünden; duyuru ve bilgi zil rengini değiştirmez', () => {

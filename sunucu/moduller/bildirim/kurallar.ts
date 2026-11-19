@@ -4,16 +4,12 @@ import {
 } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import {
-  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
+  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
   EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSimgesi, type EpostaTabloAlani, type EpostaZamani,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
-
-// BIL-1: mesaj kanalı kapalıdır (223 a Mesaj kanalını dördüncü aşamaya koydu). E-posta kanalı burada kapalı yazılır; açıklığı ortam
-// değişkeni ve `bildirim.eposta` ayarıyla sunucuda hesaplanır (3397, ADR 0015 md 5).
-export const ACIK_KANALLAR: Record<BildirimKanali, boolean> = { mesaj: false, eposta: false };
 
 // BIL-6: gönderilen yol türün ekranı ya da onun altıdır; başka ekrana giden bildirim alıcıya açılmayan sayfa gösterebilirdi.
 // Sorgu ekranı değiştirmez (`/malzemeler?kart=` aynı ekranda kaydı açar); denetim yolun sorgusuz kısmına bakar (3431).
@@ -82,23 +78,6 @@ export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly n
   return secilen.filter((r) => !kume.has(r));
 };
 
-export const TERCIH_ILETILERI = {
-  turYok: 'Bu bildirim size gelmiyor; tercihi kaydedilemez.',
-  epostaYok: 'E-posta bildirimi sizin için seçilemez.',
-  kapatilamaz: 'Bu bildirimin e-postası kapatılamaz: geciken işin kademesidir.',
-} as const;
-
-// alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak). kapali verilirse kapatılamazlık ondan okunur
-// (kademe türünde kaynağın ayarı, 3405-2 a); verilmezse türün tanımından.
-export function tercihHatasi(
-  alinabilen: readonly string[], epostaVar: boolean, govde: { tur: string; eposta: boolean }, kapali?: readonly string[],
-): { mesaj: string; alan: 'tur' | 'eposta' } | null {
-  if (!alinabilen.includes(govde.tur)) return { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' };
-  if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
-  if (!govde.eposta && epostaVar && (kapali === undefined ? bildirimTuruMu(govde.tur) && turKapatilamaz(govde.tur) : kapali.includes(govde.tur))) return { mesaj: TERCIH_ILETILERI.kapatilamaz, alan: 'eposta' };
-  return null;
-}
-
 // BIL-11 (2147): elle yayının önemi türünden gelir; önem listesi (zil rengi, "uyarı ve acil" süzgeci) değişmez.
 export const YAYIN_ONEMI: Record<YayinTuru, BildirimOnemi> = { uyari: 'uyari', acil: 'acil', duyuru: 'bilgi', bilgi: 'bilgi' };
 // Elle yayının satır türü; otomatik türlerin kataloğunda yoktur (tercih ve alıcı ayarına girmez, yayının kendi hedefi geçer).
@@ -147,8 +126,6 @@ export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
   return v.ortada === g.ortada && v.onayIstenir === g.onayIstenir;
 };
 
-// 3396-3: e-postası kişi tercihinden kapatılamayan tür (hazırlık kademeleri).
-export const turKapatilamaz = (tur: BildirimTuru): boolean => (BILDIRIM_TURLERI[tur] as BildirimTuruTanimi).kapatilamaz === true;
 
 // --- E-posta kanalı (ADR 0015, 3397) ---------------------------------------------------------------------------------
 
@@ -240,7 +217,7 @@ export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
   const altlar = [
     `Bu e-posta ${ad === 'CORE MES' ? 'CORE MES' : `CORE MES tarafından ${ad} adına`} gönderildi.`,
     ...(onay !== null ? ['Düğmeler CORE MES\'te bu kaydı açar; onay girişle ve kendi yetkinle verilir. Bu e-postayı iletmek kimseye onay yetkisi vermez.'] : []),
-    'Almak istemiyorsan Bildirim Merkezi > Tercihler sayfasından kapatabilirsin.',
+    'Bu e-postayı kimin alacağını sistem yöneticin belirler.',
   ];
   const metin = [
     govde, '', ...[kademeMetni, g.yukseltme ?? null].filter((x): x is string => x !== null && x !== ''), ...satirlar.map(([a, d]) => `${a}: ${d}`),
@@ -304,10 +281,8 @@ export const varsayilanTetikleyici = (tur: BildirimTuru): EpostaTetikleyicisi =>
   yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [],
 });
 
-// BIL-46: kişi e-postayı alır mı: tür açık, kişi e-posta seçebilen (operatör değil, BIL-2) ve kendi tercihinde kapatmamış.
-// Kapatılamaz e-postada (3396-3, 3405-2 a) kişinin kapalı tercihi okunmaz; seçemeyen (operatör) yine almaz.
-export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[], tercih: boolean | undefined, kapatilamaz = false): boolean =>
-  turAcik && epostaSecilebilir(islemler) && (kapatilamaz || tercih !== false);
+// BIL-46: kişi e-postayı alır mı: tür açık ve kişi e-posta seçebilen (operatör değil, BIL-2). Kişi tercihi yoktur (3435-1).
+export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[]): boolean => turAcik && epostaSecilebilir(islemler);
 
 // BIL-47: tekrar ve kademe kaynak bildirim açıkken sürer: görev ve hatırlatma yapılana, bilgi okunana dek; arşivlenen kapanmıştır.
 export const bildirimAcikMi = (b: { sinif: BildirimSinifi; okundu: string | null; arsivlendi: string | null; yapildi: string | null }): boolean =>

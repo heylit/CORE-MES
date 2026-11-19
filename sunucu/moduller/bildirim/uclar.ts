@@ -1,14 +1,14 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  bildirimAliciDegistirGovdesi, bildirimAliciParametresi, bildirimAlicilariCevabi, bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
-  bildirimTercihleriCevabi, cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
+  bildirimAliciDegistirGovdesi, bildirimAliciParametresi, bildirimAlicilariCevabi, bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi,
+  cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
   bildirimOnayCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, bildirimYayinListeSorgusu,
   bildirimYayinlaGovdesi, bildirimYayinParametresi, ortadakiBildirimlerCevabi,
   bildirimGosterimDegistirGovdesi, bildirimGosterimleriCevabi, bildirimGosterimParametresi,
   bildirimPushAbonelikGovdesi, bildirimPushDurumuCevabi, bildirimPushTurDegistirGovdesi, bildirimPushTurleriCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimGosterimleri, bildirimGosterimiYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+  arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimGosterimleri, bildirimGosterimiYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tumunuOkundu,
   pushAboneOl, pushAbonelikSil, pushDurumu, pushTuruYaz, pushTurleri,
 } from './servis.ts';
 import {
@@ -45,11 +45,6 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/bildirimler/:id/arsivle', yetki: 'oturum', sahiplik: 'kendi', parametre: bildirimParametresi, cevap: bildirimCevabi,
     isle: ({ db, kullanici, parametre }) => arsivle(db, kullanici, parametre.id),
-  }),
-  uc({ yontem: 'GET', yol: '/bildirimler/tercihler', yetki: 'oturum', sahiplik: 'kendi', cevap: bildirimTercihleriCevabi, isle: ({ db, kullanici }) => tercihler(db, kullanici) }),
-  uc({
-    yontem: 'POST', yol: '/bildirimler/tercihler/degistir', yetki: 'oturum', sahiplik: 'kendi', govde: bildirimTercihDegistirGovdesi, cevap: bildirimTercihleriCevabi,
-    isle: ({ db, kullanici, govde }) => tercihDegistir(db, kullanici, govde),
   }),
   // Web Push (ADR 0031): kişi yalnız kendi cihazını açar ve kapatır; gövde kişi seçemez. Açık anahtar gizli değildir.
   uc({ yontem: 'GET', yol: '/bildirimler/push', yetki: 'oturum', sahiplik: 'kendi', cevap: bildirimPushDurumuCevabi, isle: ({ db, kullanici }) => pushDurumu(db, kullanici) }),
