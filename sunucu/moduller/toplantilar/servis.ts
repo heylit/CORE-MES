@@ -35,6 +35,8 @@ const KISITLAR = {
 
 const butunuGorurMu = (k: Kullanici): boolean => k.islemler.includes('toplantilar.oku');
 const yazarMi = (k: Kullanici): boolean => k.islemler.includes('toplantilar.yaz');
+// Göreve çevirme projede görev açmaktır: projenin kendi görev yazma yetkisi de gerekir (3448-5 Risk K1).
+const gorevAcarMi = (k: Kullanici): boolean => yazarMi(k) && k.islemler.includes('projeler.gorev-yaz');
 
 // TOP-6: düzenleyen, katılımcı ya da `toplantilar.oku` görür; başkası 403 alır (uç 'oturum', sahiplik 'kendi').
 async function gorunurToplanti(db: Db, k: Kullanici, id: number): Promise<ToplantiSatiri> {
@@ -107,7 +109,7 @@ async function ayrintiKur(db: Db, k: Kullanici, t: ToplantiSatiri): Promise<Topl
       id: x.id, metin: x.metin, sorumlu: { id: x.sorumluKisiId, ad: ad(x.sorumluKisiId) }, sonTarih: x.sonTarih, durum: x.durum,
       gorev: gorevler.get(x.id) ?? null, surum: x.surum,
     })),
-    izinler: { yaz: yazarMi(k) },
+    izinler: { yaz: yazarMi(k), gorevAc: gorevAcarMi(k) },
     surum: t.surum,
   };
 }
@@ -221,6 +223,7 @@ export async function aksiyonDurumuYaz(db: Db, k: Kullanici, id: number, aksiyon
 
 // TOP-5, TOP-11: görev projenin görevidir; sorumlusu ve son tarihi aksiyondan gelir.
 export async function aksiyonuGorevYap(db: Db, k: Kullanici, id: number, aksiyonId: number, g: { surum: number }): Promise<Toplanti> {
+  if (!gorevAcarMi(k)) throw yetkiYok();
   const t = await yazilabilir(db, k, id);
   const a = await aksiyonKilitli(db, id, aksiyonId);
   const gorevVar = t.projeId !== null && (await toplantiAksiyonGorevleri(db, [aksiyonId])).has(aksiyonId);
