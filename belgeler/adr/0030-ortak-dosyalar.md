@@ -37,7 +37,7 @@ Seçenek a.
    satırlarını kullanır. Çözüm saf işlevdir (`kurallar.ts`) ve her istekte sunucuda yapılır; ekranda gizlemek yetki değildir.
 5. **Görünmezlik.** `yok` düzeyindeki klasör ve içindeki dosyalar listede, aramada ve "Son eklenenler"de görünmez; doğrudan istek 404
    döner (varlığı sızdırılmaz).
-6. **Silme yok.** Dosya ve klasör arşive kalkar ve geri alınır; arşivdeki dosya indirilmez. Otomatik imha yoktur.
+6. **Silme.** Klasör silinmez. Dosya önce arşive kalkar ve geri alınabilir; arşivdeki dosyayı klasörde Yönetir düzeyi olan kişi kalıcı siler, dosya adını yazarak onaylar. "Ortak Dosyalar'da kalıcı silmeye dört göz" ayarı (varsayılan kapalı) açıkken silme başka bir Yönetir kişinin onayıyla olur. Silinen dosya ve sürümleri geri alınamaz, yalnız tüm veritabanı yedeğinden döner. Silme denetim kaydında ve Geçmiş'te kalır. Otomatik imha yoktur.
 7. **Sürüm.** Aynı klasörde aynı adla (tr-TR, büyük-küçük harf duyarsız) yükleme yeni sürüm ekler; eski sürüm değişmez ve indirilebilir.
    Klasörde aynı adlı iki etkin dosya ya da aynı ebeveynde aynı adlı iki klasör olamaz (benzersiz dizin).
 8. **İz.** Yükleme, indirme, taşıma, arşiv, geri alma ve yetki değişikliği denetim kaydına yazılır (ADR 0008 eki); Geçmiş sekmesi

@@ -14,7 +14,7 @@ const ORTAK = klasor({ id: 1, ad: 'Ortak', ozelYetki: true });
 const DUYURU = klasor({ id: 2, ustId: 1, ad: 'Duyurular', dosyaSayisi: 1 });
 const DOSYA: OrtakDosya = {
   id: 9, klasorId: 2, klasorYolu: ['Ortak', 'Duyurular'], ad: 'Plan.pdf', surumSirasi: 2, boyut: 182000, yukleyenAd: 'Kişi A',
-  zaman: '2026-11-03T08:12:00Z', arsiv: false, surum: 1,
+  zaman: '2026-11-03T08:12:00Z', arsiv: false, surum: 1, firma: null, proje: null, silmeIstegi: null,
 };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 

@@ -16,6 +16,8 @@ const KOK = klasor({ id: 1, ad: 'Müşteriler', ozelYetki: true, kaynak: { tur: 
 const FIRMA = klasor({ id: 2, ustId: 1, ad: 'ORN-M001 ORN Hidrolik', kaynak: { tur: 'firma', id: 41 } });
 const SIPARIS = klasor({ id: 3, ustId: 2, ad: 'SS-2026-0412 (ORN-PO-7781)', kaynak: { tur: 'siparis', id: 77 } });
 const CIZIM = klasor({ id: 4, ustId: 3, ad: 'Çizim ve model' });
+// Sipariş klasörü ve altı kayda bağlıdır: yüklemede müşteri ve proje klasörün kaydından gelir (3443 a, 2).
+const KAYIT_SECIMI: DosyalarCevabi['kayitSecimi'] = { firma: { id: 7, ad: 'ORN-Musteri A' }, proje: null };
 const DIGER = klasor({ id: 5, ustId: 1, ad: 'ORN-M002 ORN Makina', kaynak: { tur: 'firma', id: 42 } });
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -32,13 +34,13 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
       return json(200, { klasorler: [KOK, FIRMA, SIPARIS, CIZIM, DIGER], yonetici: true, arsivSayisi: 0 } satisfies KlasorlerCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/1/dosyalar') {
-      return json(200, { klasor: KOK, altKlasorler: [FIRMA, DIGER], dosyalar: [], adOnerisi: null } satisfies DosyalarCevabi);
+      return json(200, { klasor: KOK, altKlasorler: [FIRMA, DIGER], dosyalar: [], adOnerisi: null, kayitSecimi: null } satisfies DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/3/dosyalar') {
-      return json(200, { klasor: SIPARIS, altKlasorler: [CIZIM], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: null } } satisfies DosyalarCevabi);
+      return json(200, { klasor: SIPARIS, altKlasorler: [CIZIM], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: null }, kayitSecimi: KAYIT_SECIMI } satisfies DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/4/dosyalar') {
-      return json(200, { klasor: CIZIM, altKlasorler: [], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: 'Çizim-ve-model' } } satisfies DosyalarCevabi);
+      return json(200, { klasor: CIZIM, altKlasorler: [], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: 'Çizim-ve-model' }, kayitSecimi: KAYIT_SECIMI } satisfies DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/4/yukle') return json(200, {});
     if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.ortak-dosyalar'] } } satisfies OturumCevabi);
@@ -46,7 +48,7 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
     if (yol === '/ortak-dosyalar/kayit/proje/5') return json(200, { klasorId: null } satisfies KaynakKlasoruCevabi);
     if (yol === '/ortak-dosyalar/ayarlar' || yol === '/ortak-dosyalar/ayarlar/kok-ac' || yol === '/ortak-dosyalar/ayarlar/sablon') {
       return json(200, {
-        kok: yol.endsWith('kok-ac') ? { id: 1, ad: 'Müşteriler' } : null, sablon: { siparis: ['Teklif'], proje: [] }, acilamayan: [], topluIsler: [], ...ayar,
+        kok: yol.endsWith('kok-ac') ? { id: 1, ad: 'Müşteriler' } : null, sablon: { siparis: ['Teklif'], proje: [] }, acilamayan: [], topluIsler: [], silmeDortGoz: false, ...ayar,
       } satisfies AyarlarCevabi);
     }
     if (yol === '/ortak-dosyalar/ayarlar/mevcut') return json(200, mevcut ?? { bagli: false, kokVar: false, klasorsuz: { firma: 0, siparis: 0, proje: 0 } });
@@ -54,6 +56,7 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
       acmaSayisi += 1;
       return json(200, (acmaSayisi === 1 ? { acilan: 100, acilamayan: 0, kalan: 20 } : { acilan: 20, acilamayan: 0, kalan: 0 }) satisfies MevcutAcCevabi);
     }
+    if (yol === '/ayarlar/ortak-dosyalar.silme-dort-goz/degistir') return json(200, {});
     return json(404, { kod: 'BULUNAMADI', mesaj: yol });
   }));
   return cagrilar;
@@ -112,9 +115,33 @@ describe('kayda bağlı klasörler (kart 3288)', () => {
     expect((ad as HTMLInputElement).value).toBe('SS-2026-0412_Çizim-ve-model_r1.step');
     fireEvent.click(screen.getByRole('button', { name: 'Özgün adı kullan' }));
     expect((ad as HTMLInputElement).value).toBe('ORN-valf.step');
+    // Kayda bağlı klasörde müşteri ve proje seçilmez; klasörün kaydından yazılır (3443 a, 2).
+    expect(screen.queryByRole('button', { name: /^Müşteri \(isteğe bağlı\)$/ })).toBeNull();
+    expect(screen.getByText(/klasörün kaydından yazılır: ORN-Musteri A/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Yükle$/ }));
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/ortak-dosyalar/klasorler/4/yukle')).toBe(true));
     expect(cagrilar.find((c) => c.yol === '/ortak-dosyalar/klasorler/4/yukle')?.govde).toEqual({ ad: 'ORN-valf.step', ozet: 'a'.repeat(64) });
+  });
+
+  it('kayda bağlı klasörde birden çok dosya pencere açmadan kendi adlarıyla yüklenir (3443 a, 2)', async () => {
+    const cagrilar = sunucuKur();
+    ciz();
+    fireEvent.click(await screen.findByRole('button', { name: /Çizim ve model/ }));
+    await screen.findByRole('button', { name: /Dosya yükle/ });
+    const f = (ad: string) => Object.assign(new File(['x'], ad), { arrayBuffer: async () => new ArrayBuffer(1) });
+    fireEvent.change(document.querySelector('input[type="file"][multiple]') as HTMLInputElement, { target: { files: [f('ORN-a.step'), f('ORN-b.step')] } });
+    await waitFor(() => expect(cagrilar.filter((c) => c.yol === '/ortak-dosyalar/klasorler/4/yukle')).toHaveLength(2));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('Ayarlar: kalıcı silmede dört göz genel ayar ucuyla, görülen değerle değişir (3443 a, 5)', async () => {
+    const cagrilar = sunucuKur();
+    ciz('ayarlar');
+    const anahtar = await screen.findByRole('checkbox', { name: /kalıcı silmeye dört göz/ });
+    expect((anahtar as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(anahtar);
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/ayarlar/ortak-dosyalar.silme-dort-goz/degistir')).toBe(true));
+    expect(cagrilar.find((c) => c.yol === '/ayarlar/ortak-dosyalar.silme-dort-goz/degistir')?.govde).toEqual({ deger: true, beklenen: false });
   });
 
   it('Ayarlar: kök yokken yönetici "Müşteriler" klasörünü açar', async () => {

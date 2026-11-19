@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AyarlarCevabi, MevcutAcCevabi, MevcutAcGovdesi, MevcutCevabi, SablonGovdesi, TopluGeriAlCevabi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import type { AyarDegistirGovdesi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -167,6 +168,38 @@ function Mevcut({ kokVar }: { kokVar: boolean }) {
   );
 }
 
+// Kalıcı silmede dört göz (3443 a, 5): genel ayar ucuyla yazılır (ayar yazma yetkisi, denetime girer). `beklenen` ekranın gördüğü
+// değerdir: arada başkası değiştirdiyse sunucu reddeder.
+const DORT_GOZ = 'ortak-dosyalar.silme-dort-goz';
+function DortGoz({ acik }: { acik: boolean }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const degistir = useTekGonderim<boolean, unknown>({
+    mutationFn: (deger) => api.post(`/ayarlar/${encodeURIComponent(DORT_GOZ)}/degistir`, { deger, beklenen: acik } satisfies AyarDegistirGovdesi),
+    onSuccess: async (_c, deger) => {
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+      bildir('tamam', deger ? 'Dört göz açıldı: kalıcı silme başka bir Yönetir kişinin onayıyla olur.' : 'Dört göz kapatıldı; bekleyen istekler yine ikinci kişiyle sonuçlanır.');
+    },
+    onError: (h) => bildir('hata', hataIletisi(h, 'Ayar değiştirilemedi')),
+  });
+  return (
+    <Kart baslik="Kalıcı silme" simge="trash" sag={<Rozet ton="bilgi">Yalnız yönetici</Rozet>}>
+      <div className="tc-od-ayar-govde">
+        <label className="tc-od-anahtar">
+          <input type="checkbox" checked={acik} disabled={degistir.isPending} onChange={(o) => degistir.mutate(o.target.checked)} />
+          Ortak Dosyalar'da kalıcı silmeye dört göz
+        </label>
+        <p className="tc-od-ipucu">
+          {acik
+            ? 'Açık: kalıcı silme bir istek açar; klasörde Yönetir düzeyi olan başka bir kişi onaylayınca dosya silinir.'
+            : 'Kapalı (varsayılan): Yönetir düzeyi olan kişi Arşiv\'deki dosyayı adını yazarak tek başına siler.'}
+        </p>
+        <p className="tc-od-ipucu">Arşive kaldırma ve geri alma dört göze girmez; sistem hiçbir dosyayı kendiliğinden kalıcı silmez.</p>
+      </div>
+    </Kart>
+  );
+}
+
 function TopluIsler({ ayar }: { ayar: AyarlarCevabi }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -226,6 +259,7 @@ export function Ayarlar() {
           </div>
         </Kart>
         <Sablon ayar={ayar} />
+        <DortGoz acik={ayar.silmeDortGoz} />
       </div>
       <div className="tc-od-ayar-sutun">
         <Acilamayanlar ayar={ayar} />

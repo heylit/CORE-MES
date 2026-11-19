@@ -8,3 +8,7 @@ export { planSaati } from './kurallar.ts';
 // Hazır listeler (kart 3390): sağlayıcılar kablolama.ts'te kaynakların `disari.ts`'inden kurulur.
 export { aramaUyar, hazirSaglayiciKaydet } from './hazir-listeler.ts';
 export type { HazirKayitSonucu, HazirSaglayici } from './hazir-listeler.ts';
+// Kart 3443: müşteri ve proje adları ile seçici listesi, kalıcı silmenin dört göz ayarı; ikisi de kablolama.ts'te bağlanır.
+export { musteriProjeKaynagiKaydet } from './musteri-proje.ts';
+export type { MusteriProjeKaynagi } from './musteri-proje.ts';
+export { silmeDortGozOkuyucuKaydet } from './kalici-silme.ts';

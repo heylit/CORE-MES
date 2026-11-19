@@ -8,6 +8,11 @@ import {
   klasorlerCevabi, surumParametresi, surumlerCevabi, surumluGovde, yetkiCevabi, yetkiGovdesi, yukleGovdesi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import {
+  arsivCevabi, arsivSorgusu, kaliciSilGovdesi, musteriSecimSorgusu, projeSecimSorgusu, secimCevabi, silmeCevabi, sonEklenenlerSorgusu,
+} from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import { dortGozAcikMi, kaliciSil, silmeGeriCek, silmeIste, silmeOnayla, silmeReddet } from './kalici-silme.ts';
+import { musteriSecimi, projeSecimi } from './musteri-proje.ts';
+import {
   arsiv, arsivDegistir, gecmis, indir, klasorAc, klasorDosyalari, klasorler, sonEklenenler, surumler, yetkiOku, yetkiYazKomutu, yukle,
 } from './servis.ts';
 import { hazirKayit, hazirKayitlar } from './hazir-listeler.ts';
@@ -34,12 +39,22 @@ export const uclar = [
     isle: ({ db, kullanici, parametre }) => gecmis(db, kullanici, parametre.klasorId),
   }),
   uc({
-    yontem: 'GET', yol: '/ortak-dosyalar/son-eklenenler', yetki: SAYFA, sorgu: aramaSorgusu, cevap: dosyaListesiCevabi,
-    isle: ({ db, kullanici, sorgu }) => sonEklenenler(db, kullanici, sorgu.ara),
+    yontem: 'GET', yol: '/ortak-dosyalar/son-eklenenler', yetki: SAYFA, sorgu: sonEklenenlerSorgusu, cevap: dosyaListesiCevabi,
+    isle: ({ db, kullanici, sorgu }) => sonEklenenler(db, kullanici, sorgu),
   }),
   uc({
-    yontem: 'GET', yol: '/ortak-dosyalar/arsiv', yetki: SAYFA, cevap: dosyaListesiCevabi,
-    isle: ({ db, kullanici }) => arsiv(db, kullanici),
+    yontem: 'GET', yol: '/ortak-dosyalar/arsiv', yetki: SAYFA, sorgu: arsivSorgusu, cevap: arsivCevabi,
+    isle: async ({ db, kullanici, sorgu }) => ({ ...await arsiv(db, kullanici, sorgu.onayBekleyen), silmeDortGoz: await dortGozAcikMi(db) }),
+  }),
+  // Yükleme penceresinin müşteri ve proje seçicisi (3443 a, 1 ve 10). Firma ve proje adları sayfayı açan herkese listelenir:
+  // seçim yükleyenin işidir ve klasör adları zaten bu adlardır (Risk bakışında; VARSAYIM).
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/secim/musteriler', yetki: SAYFA, sorgu: musteriSecimSorgusu, cevap: secimCevabi,
+    isle: ({ db, sorgu }) => musteriSecimi(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/secim/projeler', yetki: SAYFA, sorgu: projeSecimSorgusu, cevap: secimCevabi,
+    isle: ({ db, sorgu }) => projeSecimi(db, sorgu),
   }),
   uc({
     yontem: 'GET', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/surumler', yetki: SAYFA, parametre: dosyaParametresi,
@@ -74,6 +89,32 @@ export const uclar = [
     yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/arsivden-cikar', yetki: SAYFA, parametre: dosyaParametresi,
     govde: surumluGovde, cevap: dosyaSemasi,
     isle: ({ db, kullanici, parametre, govde }) => arsivDegistir(db, kullanici, parametre.klasorId, parametre.dosyaId, govde.surum, false),
+  }),
+  // Kalıcı silme (3443 a, 4-6; ADR 0030 madde 6). Düzey (Yönetir) ve dört göz servis içinde; kişi dosyanın adını yazar.
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/kalici-sil', yetki: SAYFA, parametre: dosyaParametresi,
+    govde: kaliciSilGovdesi, cevap: silmeCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => kaliciSil(db, kullanici, parametre.klasorId, parametre.dosyaId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/silme-iste', yetki: SAYFA, parametre: dosyaParametresi,
+    govde: surumluGovde, cevap: dosyaSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => silmeIste(db, kullanici, parametre.klasorId, parametre.dosyaId, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/silme-onayla', yetki: SAYFA, parametre: dosyaParametresi,
+    govde: kaliciSilGovdesi, cevap: silmeCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => silmeOnayla(db, kullanici, parametre.klasorId, parametre.dosyaId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/silme-reddet', yetki: SAYFA, parametre: dosyaParametresi,
+    govde: surumluGovde, cevap: dosyaSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => silmeReddet(db, kullanici, parametre.klasorId, parametre.dosyaId, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/dosyalar/:dosyaId/silme-geri-cek', yetki: SAYFA, parametre: dosyaParametresi,
+    govde: surumluGovde, cevap: dosyaSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => silmeGeriCek(db, kullanici, parametre.klasorId, parametre.dosyaId, govde.surum),
   }),
   uc({
     yontem: 'GET', yol: '/ortak-dosyalar/klasorler/:klasorId/yetki', yetki: YETKI_VER, parametre: klasorParametresi, cevap: yetkiCevabi,

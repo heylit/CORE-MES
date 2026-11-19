@@ -3,7 +3,7 @@ import { dosyaOzeti } from './dosya.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { zamanSemasi } from '../zaman.ts';
 
-// Ortak Dosyalar (kart 2067, ADR 0030): klasör ağacı, klasör x rol düzeyi, sürümlü dosya, silme yerine arşiv.
+// Ortak Dosyalar (kart 2067, ADR 0030): klasör ağacı, klasör x rol düzeyi, sürümlü dosya, önce arşiv; arşivdeki dosya kalıcı silinir (3443 a).
 // Düzeyler sıralıdır; üstteki alttakini içerir. `yok` satır olarak tutulmaz: satırı olmayan rol klasörü görmez.
 export const KLASOR_DUZEYLERI = ['yok', 'gorur', 'ekler', 'yonetir'] as const;
 export type KlasorDuzeyi = (typeof KLASOR_DUZEYLERI)[number];
@@ -23,6 +23,11 @@ export const klasorParametresi = z.object({ klasorId: id });
 export const dosyaParametresi = z.object({ klasorId: id, dosyaId: id });
 export const surumParametresi = z.object({ klasorId: id, dosyaId: id, sira: id });
 export const aramaSorgusu = z.object({ ara: z.string().trim().max(AZAMI_AD).optional() });
+// Son eklenenler müşteri ve projeye göre süzülür (3443 a, 3).
+export const sonEklenenlerSorgusu = aramaSorgusu.extend({ firmaId: id.optional(), projeId: id.optional() });
+const bayrak = z.enum(['true', 'false']).optional().transform((d) => d === 'true');
+// Arşivde "Onay bekleyen" süzgeci: yalnız açık silme isteği olan dosyalar.
+export const arsivSorgusu = z.object({ onayBekleyen: bayrak });
 
 // Kayda bağlı (sistem) klasörün kaynağı (kart 3288, ADR 0030 eki): adı kayıttan gelir, kişi adını değiştiremez.
 export const KAYNAK_TURLERI = ['kok', 'firmasiz-projeler', 'firma', 'siparissiz-projeler', 'siparis', 'proje'] as const;
@@ -62,6 +67,11 @@ export const dosyaSemasi = z.object({
   zaman: zamanSemasi,
   arsiv: z.boolean(),
   surum: surumSemasi,
+  // Dosyanın müşterisi ve projesi (3443 a, 1); seçilmediyse null.
+  firma: z.object({ id: z.number().int(), ad: z.string() }).nullable(),
+  proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  // Açık kalıcı silme isteği (dört göz açıkken); yoksa null. `kendi`: isteği oturumdaki kişi açtı, onaylayamaz.
+  silmeIstegi: z.object({ isteyenAd: z.string().nullable(), zaman: zamanSemasi, kendi: z.boolean() }).nullable(),
 });
 export const dosyalarCevabi = z.object({
   klasor: klasorSemasi,
@@ -69,8 +79,15 @@ export const dosyalarCevabi = z.object({
   dosyalar: z.array(dosyaSemasi),
   // Yükleme adı önerisi (zorunlu değil): en yakın sipariş ya da proje klasörünün numarası ve bu klasörün adı.
   adOnerisi: z.object({ onek: z.string(), altKlasor: z.string().nullable() }).nullable(),
+  // Kayda bağlı klasörde (firma, sipariş ya da proje zincirinde) müşteri ve proje klasörden gelir; yüklemede sorulmaz (3443 a, 3).
+  kayitSecimi: z.object({
+    firma: z.object({ id: z.number().int(), ad: z.string() }).nullable(),
+    proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  }).nullable(),
 });
 export const dosyaListesiCevabi = z.object({ dosyalar: z.array(dosyaSemasi) });
+// Arşiv ekranı silme düğmesini ayara göre seçer ("Kalıcı sil" ya da "Silme iste"); sunucu her komutta yeniden okur.
+export const arsivCevabi = dosyaListesiCevabi.extend({ silmeDortGoz: z.boolean() });
 
 export const surumSatiri = z.object({
   sira: z.number().int().positive(),
@@ -80,7 +97,10 @@ export const surumSatiri = z.object({
 });
 export const surumlerCevabi = z.object({ dosya: dosyaSemasi, surumler: z.array(surumSatiri) });
 
-export const GECMIS_OLAYLARI = ['klasor-acildi', 'yuklendi', 'yeni-surum', 'arsivlendi', 'geri-alindi', 'yetki-degisti'] as const;
+export const GECMIS_OLAYLARI = [
+  'klasor-acildi', 'yuklendi', 'yeni-surum', 'arsivlendi', 'geri-alindi', 'yetki-degisti',
+  'silme-istendi', 'silindi', 'silme-reddedildi', 'silme-geri-cekildi', 'silme-dustu',
+] as const;
 export type GecmisOlayi = (typeof GECMIS_OLAYLARI)[number];
 export const gecmisSatiri = z.object({
   olay: z.enum(GECMIS_OLAYLARI),
@@ -93,8 +113,14 @@ export const gecmisCevabi = z.object({ olaylar: z.array(gecmisSatiri) });
 
 export const klasorAcGovdesi = z.object({ ustId: id.nullable(), ad });
 // Aynı klasörde aynı adla (tr-TR, büyük-küçük harf duyarsız) yükleme yeni sürüm ekler.
-export const yukleGovdesi = z.object({ ad, ozet: dosyaOzeti });
+// Müşteri ve proje isteğe bağlıdır; yalnız dosya ilk açılırken yazılır, yeni sürüm değiştirmez. Kayda bağlı klasörde gönderilen değer
+// yok sayılır, klasörün kaydı yazılır (3443 a, 3).
+export const yukleGovdesi = z.object({ ad, ozet: dosyaOzeti, firmaId: id.nullable().optional(), projeId: id.nullable().optional() });
 export const surumluGovde = z.object({ ...beklenenSurum });
+// Kalıcı silme ve dört gözde onay: kişi dosyanın adını yazar, sunucu da denetler (Risk S7).
+export const kaliciSilGovdesi = z.object({ ...beklenenSurum, ad: z.string().trim().min(1).max(AZAMI_AD) });
+// Silinen dosyanın cevabı yoktur (204).
+export const silmeCevabi = z.undefined();
 
 export const yetkiSatiri = z.object({ rolId: id, duzey: z.enum(VERILEN_DUZEYLER) });
 export const yetkiCevabi = z.object({
@@ -119,6 +145,8 @@ export const yetkiGovdesi = z.object({
 const sablonAdi = ad;
 export const sablonGovdesi = z.object({ siparis: z.array(sablonAdi).max(20), proje: z.array(sablonAdi).max(20) });
 export const ayarlarCevabi = z.object({
+  // `ortak-dosyalar.silme-dort-goz` ayarının değeri; değiştirmek Sistem Ayarları ucundandır (ayarlar.yaz).
+  silmeDortGoz: z.boolean(),
   kok: z.object({ id: z.number().int(), ad: z.string() }).nullable(),
   sablon: z.object({ siparis: z.array(z.string()), proje: z.array(z.string()) }),
   acilamayan: z.array(z.object({
@@ -166,6 +194,19 @@ export const hazirDosyalarCevabi = z.object({
   // Kaydın kişiye görünen ilk klasörü (sipariş, yoksa proje); görünmüyorsa null.
   klasor: z.object({ tur: z.enum(KAYIT_TURLERI), id }).nullable(),
 });
+// Yükleme penceresinin müşteri ve proje seçicisi (ortak KayitSecici biçimi). Müşteri yalnız müşteri ve ikisi türü etkin firmalar,
+// proje müşterisine göre süzülür. Projenin `ust` alanı müşterisidir (önce proje seçilirse müşteri dolar).
+export const SECIM_SAYFA_BOYU = 30;
+export const musteriSecimSorgusu = z.object({
+  q: z.string().trim().max(80).prefault(''),
+  sayfa: z.coerce.number<number>().int().min(1).max(1000).prefault(1),
+});
+export const projeSecimSorgusu = musteriSecimSorgusu.extend({ firmaId: id.optional() });
+export const secimCevabi = z.object({
+  sonuclar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), aktif: z.boolean(), ust: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }).nullable() })),
+  dahaVar: z.boolean(),
+});
+
 export type HazirKayit = z.output<typeof hazirKayitSemasi>;
 export type HazirKayitlarCevabi = z.output<typeof hazirKayitlarCevabi>;
 export type HazirDosya = z.output<typeof hazirDosyaSemasi>;
@@ -184,6 +225,7 @@ export type KlasorlerCevabi = z.output<typeof klasorlerCevabi>;
 export type OrtakDosya = z.output<typeof dosyaSemasi>;
 export type DosyalarCevabi = z.output<typeof dosyalarCevabi>;
 export type DosyaListesiCevabi = z.output<typeof dosyaListesiCevabi>;
+export type ArsivCevabi = z.output<typeof arsivCevabi>;
 export type SurumlerCevabi = z.output<typeof surumlerCevabi>;
 export type GecmisSatiri = z.output<typeof gecmisSatiri>;
 export type GecmisCevabi = z.output<typeof gecmisCevabi>;
@@ -192,3 +234,5 @@ export type YukleGovdesi = z.input<typeof yukleGovdesi>;
 export type SurumluGovde = z.input<typeof surumluGovde>;
 export type YetkiCevabi = z.output<typeof yetkiCevabi>;
 export type YetkiGovdesi = z.input<typeof yetkiGovdesi>;
+export type KaliciSilGovdesi = z.input<typeof kaliciSilGovdesi>;
+export type SecimCevabi = z.output<typeof secimCevabi>;

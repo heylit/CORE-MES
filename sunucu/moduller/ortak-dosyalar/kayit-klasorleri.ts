@@ -12,6 +12,7 @@ import {
   sablonDenetle, siparisKlasorAdi, zincirKaynagi,
 } from './kurallar.ts';
 import type { FirmaBilgisi, KayitZinciri, SiparisBilgisi } from './kurallar.ts';
+import { dortGozAcikMi } from './kalici-silme.ts';
 import { gorunumKur } from './servis.ts';
 import * as s from './sorgular.ts';
 
@@ -145,6 +146,7 @@ export async function ayarlar(db: Db): Promise<AyarlarCevabi> {
   const kok = await s.kaynakKlasoru(db, 'kok', null);
   const sablon = await s.sablonOku(db);
   return {
+    silmeDortGoz: await dortGozAcikMi(db),
     kok: kok === null ? null : { id: kok.id, ad: kok.ad },
     sablon: { siparis: sablon.filter((x) => x.hedef === 'siparis').map((x) => x.ad), proje: sablon.filter((x) => x.hedef === 'proje').map((x) => x.ad) },
     acilamayan: (await s.acilamayanlar(db)).map((a) => ({ tur: a.tur, id: a.id, etiket: zincirEtiketi(a.zincir), neden: a.neden, zaman: a.zaman })),

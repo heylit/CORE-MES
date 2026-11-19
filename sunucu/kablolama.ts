@@ -34,7 +34,7 @@ import { satinAlmaKademeOkuyucusu, siparisSatiriBelgeleri, siparisSatirlari } fr
 import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
-import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, logoCrmCozucusuKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
+import { firmaAra, firmaDegistiDinle, firmaOzeti, firmaOzetleri, logoCariCozuculeriKaydet, logoCrmCozucusuKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
 import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlari } from './moduller/rota/disari.ts';
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
@@ -413,6 +413,24 @@ async function mevcutKayitlar(db: Db): Promise<Zincir[]> {
   return sonuc;
 }
 
+// 3443: Ortak Dosyalar'da dosyanın müşterisi ve projesi. Müşteri araması firma modülünün sınırıyla (en çok 50) gelir; proje listesi
+// müşteriye göre kaynakta, metinle burada süzülür (proje sayısı yüzlerle sınırlı, VARSAYIM).
+const kucuk = (m: string): string => m.trim().toLocaleLowerCase('tr-TR');
+export const ortakDosyalarMusteriProjeKaynagi = (): ortakDosyalar.MusteriProjeKaynagi => ({
+  firmalar: async (db, idler) => new Map([...(await firmaOzetleri(db, [...idler])).values()].map((f) => [f.id, { ad: f.ad, tur: f.tur }])),
+  projeler: async (db, idler) => {
+    const istenen = new Set(idler);
+    const satirlar = (await projeler.projeSecenekleri(db, { yalnizAktif: false })).filter((p) => istenen.has(p.id));
+    return new Map(satirlar.map((p) => [p.id, { kod: p.kod, ad: p.ad, firmaId: p.firmaId }]));
+  },
+  musteriAra: (db, metin, sinir) => firmaAra(db, { metin, sinir, tur: 'musteri' }),
+  projeAra: async (db, metin, firmaId, sinir) => {
+    const ara = kucuk(metin);
+    const satirlar = await projeler.projeSecenekleri(db, firmaId === null ? {} : { firmaId });
+    return satirlar.filter((p) => ara === '' || kucuk(`${p.kod} ${p.ad}`).includes(ara)).slice(0, sinir).map((p) => ({ id: p.id, kod: p.kod, ad: p.ad, firmaId: p.firmaId }));
+  },
+});
+
 export function sunucununBaglari(): Bag[] {
   return [
     bag('emir açıldı -> stok', uretimEmirleri.emirAcildiDinle, stok.emirAcildiYansit),
@@ -609,6 +627,8 @@ export function sunucununBaglari(): Bag[] {
     // 3315 madde 7: proje kartı kaydedilince Logo'nun reddettiği proje yeniden sıraya girer.
     bag('proje değişti -> Logo proje kartı', projeler.projeDegistiDinle, (db: Db, o: { projeId: number }) => logo.logoProjesiDegisti(db, o.projeId, new Date())),
     bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
+    bag('firma ve proje -> ortak dosyalar müşteri/proje seçimi', (f: () => ortakDosyalar.MusteriProjeKaynagi) => { ortakDosyalar.musteriProjeKaynagiKaydet(f()); }, ortakDosyalarMusteriProjeKaynagi),
+    bag('ayar -> ortak dosyalar kalıcı silme dört göz', ortakDosyalar.silmeDortGozOkuyucuKaydet, (db: Db) => sistemAyariOku(db, 'ortak-dosyalar.silme-dort-goz')),
     bag('üretim emri dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('uretim-emri', f()); }, () => uretimEmriSaglayicisi()),
     bag('üretim kaydı dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('uretim-kaydi', f()); }, () => uretimEmriSaglayicisi(URETIM_EMRI_KAYNAKLARI, 'uretim-kaydi')),
     bag('plan dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('plan', f()); }, () => uretimEmriSaglayicisi(URETIM_EMRI_KAYNAKLARI, 'plan')),

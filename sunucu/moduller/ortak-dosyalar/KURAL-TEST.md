@@ -40,3 +40,16 @@ Test adları başlığın başıdır.
 | KK-11 Toplu komut: sayı, grup, eşgüçlü, toplu iş arşivi | `KK-11 ...`, ekran "gruplar halinde" | aynı test: sayı değişince 409, yetkisiz 403 |
 | KB-1..4 Kayıt olayı klasörü aynı işlemde açar; firma, sipariş ve proje adını izler; iki yönlü firmaya açar, tedarikçiye açmaz; iptalde arşiv; toplu komut klasörsüz sipariş ve projeyi sayar ve açar (3288-2) | `kayit-baglari.test.ts` `KB-1..4` | Bildirimi kaldır (proje değişti, sipariş güncelle), `ikisi`yi müşteri sayma, toplu kaynaktan sipariş ya da projeyi çıkar: her biri 1 kırmızı |
 | Kayıt ekranında "Klasör" bağlantısı; `?klasor=` klasörü seçer | `KayitKlasorleri.test.tsx` "Klasör bağlantısı" | 404'te bağlantı çizilir |
+
+## Kart 3443
+| Kural | Test | Kırmızı denemesi |
+|---|---|---|
+| OD-30 Müşteri yalnız müşteri ya da ikisi; proje seçilen müşterinin; müşteri boşsa projeninki; yeni sürüm değiştirmez; süzgeç | `kalici-silme.test.ts` `OD-30` (saf, yükleme, seçici), ekran "tek dosyada", "müşteri değişince" | tedarikçi 400, başka müşterinin projesi 400 |
+| OD-31 Kayda bağlı klasörde seçim klasörden | `OD-31`, `KayitKlasorleri.test.tsx` "tek dosyada", "birden çok dosya" | gönderilen değer yok sayılır |
+| OD-32 Yazılan ad dosya adıyla aynı (Türkçe harf duyarsız, kenar boşluğu sayılmaz) | `OD-32`, `OD-34`, ekran "Kalıcı sil" | yanlış ad 400 |
+| OD-33 Kendi isteği onaylanmaz; yalnız isteyen geri çeker | `OD-32/33`, `OD-36` | 403 |
+| OD-34 Yalnız arşivde, Yönetir; sürümler ve bağlar kalkar; defter, denetim eki, Geçmiş kalır | `OD-34` | etkin dosya 409, Görür 403, görünmeyen 404, eski sürüm 409 |
+| OD-35 Paylaşılan içerik başka bağda kalır | `OD-35` | - |
+| OD-36 Dört göz: doğrudan silme 409; istek, onay, ret, geri çekme | `OD-36`, ekran "dört göz açık" | ikinci açık istek 409 |
+| OD-37 Geri alma isteği düşürür; ayar kapanınca açık istek sürer | `OD-37` | - |
+| OD-38 Veritabanı kısıtları (tek açık istek, dört gözde isteyen onaylayamaz) | `OD-38` | kısıt ihlali |

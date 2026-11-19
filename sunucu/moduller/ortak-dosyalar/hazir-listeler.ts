@@ -86,7 +86,7 @@ async function klasorDosyalari(
     }
   }
   const adlar = new Map([...icinde].map((id) => [id, g.klasorler.get(id)?.ad ?? '']));
-  const dosyalar = (await s.sonDosyalar(db, [...icinde], null, sinir)).map((d) => ({
+  const dosyalar = (await s.sonDosyalar(db, [...icinde], null, sinir, { firmaId: null, projeId: null })).map((d) => ({
     ad: d.ad, dosyaTuru: uzanti(d.ad), bilgi: adlar.get(d.klasorId) ?? null, zaman: d.zaman, ac: null,
     indir: `/ortak-dosyalar/klasorler/${String(d.klasorId)}/dosyalar/${String(d.id)}/surumler/${String(d.surumSirasi)}/dosya`,
   }));

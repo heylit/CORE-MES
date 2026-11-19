@@ -38,3 +38,10 @@ Başvuru: onaylı prototip (2067-1 a) ve ADR 0030 (2067-2 a), kodu "2067 teyit".
 - `kayitEsitle`: klasör yoksa açar, varsa adı ve sipariş arşivini eşitler. Zincir ve mevcut kayıt listesi `sunucu/kablolama.ts`'te kaynakların
   `disari.ts`'inden kurulur (bu modül kaynakları ithal etmez). Yalnız müşteri ya da ikisi türündeki firmaya klasör açılır.
 - Ekran: firma, sipariş ve proje ayrıntısında "Klasör" bağlantısı (ortak arayüzde, CEKIRDEK-ISTEKLERI 3); Ortak Dosyalar `?klasor=` ile açılır.
+
+## Kart 3443 (3443 a; ADR 0030 madde 6 değişti)
+- Yüklemede müşteri ve proje: `ortak_dosyalar_dosya.firma_id`, `proje_id` (boş olabilir); yalnız dosya ilk yazılırken; kayda bağlı klasörde
+  klasörün kaydından. Seçici uçları `GET /ortak-dosyalar/secim/musteriler`, `/secim/projeler`; Son eklenenler `firmaId`, `projeId` süzgeci.
+- Kalıcı silme: yalnız arşivdeki dosya, Yönetir, ad yazılarak; ayar `ortak-dosyalar.silme-dort-goz` (varsayılan kapalı) açıkken istek, başka
+  Yönetir kişinin onayı ya da reddi, isteyenin geri çekmesi. Defter `ortak_dosyalar_silme`; Geçmiş'e beş yeni olay; Arşiv'de "Onay bekleyen".
+- Ön izlemeden fark: seçici uçları firma ve proje modüllerinde değil bu modülde; okuma `sunucu/kablolama.ts`'ten (3020 a).
