@@ -14,6 +14,8 @@ export interface SecilenKart {
   aciklamalar: readonly string[];
   // 3400-3: kartın yerlilik oranı (yüzde); yoksa ya da bilinmiyorsa null.
   yerlilikOrani: string | null;
+  // 3429-3 F: kart türü (mamul, yarimamul, ticari...); yalnız aramadan seçilen kartta bilinir, kayıtlı kalemde yoktur.
+  tur?: string;
 }
 
 // 2120: satırda kartın adı, altında Açıklama 1-3; ad yoksa tire, açıklama yoksa ikinci satır çizilmez.
@@ -31,7 +33,7 @@ export const secilenKartMetni = (k: SecilenKart): string =>
 
 
 export const kartSecimi = (m: MalzemeSecenegi): SecilenKart => ({
-  no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: m.yerlilikOrani,
+  no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: m.yerlilikOrani, tur: m.tur,
 });
 
 // Sunucu yalnız aktif mamul, yarı mamul ve ticari mal kartlarını verir (SIP-02).

@@ -194,7 +194,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
   // Yetkisiz cevabı dolaşır, maliyet|kâr|bedel|ceza|vade adlı dolu alan kalmadığını ölçer. İzinli istisnalar adıyla listelenir:
   // anahtar adı bu kalıba uyan ama para ya da ticari şart taşımayan alanlar (kart bağlantısı, termin kayması gibi).
   const YASAK_AD = /maliyet|kar|bedel|ceza|vade/i;
-  const IZINLI_AD = new Set(['malzemeKarti', 'malzemeKartlari', 'kartsizSatir', 'kartBagli', 'kartNo', 'kartKodu']);
+  const IZINLI_AD = new Set(['malzemeKarti', 'malzemeKartlari', 'kartsizSatir', 'kartBagli', 'kartNo', 'kartKodu', 'karsilama']);
   function doluYasakAlanlar(deger: unknown, yol = ''): string[] {
     if (Array.isArray(deger)) return deger.flatMap((x, i) => doluYasakAlanlar(x, `${yol}[${String(i)}]`));
     if (deger === null || typeof deger !== 'object') return [];
@@ -420,6 +420,18 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const ozet = (await o().vt.tx((db) => siparisSatiriOzetleri(db, [satirId]))).get(satirId);
     assert.deepEqual(ozet?.partiler.map((p) => p.emirTuru), ['numune', 'seri']);
     assert.equal(ozet?.terminElle, false);
+  });
+
+  test('SIP-42 (3429-3 F): kalemin karşılama yolu kaydedilir ve okunur (verilmezse "uret"); stoktan kalemde parti 400; düzenleme yolu değiştirir', async () => {
+    const s = await siparisAc({ satirlar: [{ malzemeNo: mamulNo, miktar: '5', birimFiyat: '1' }, { malzemeNo: mamulNo, miktar: '3', birimFiyat: '1', karsilama: 'stok' }] });
+    assert.deepEqual(s.satirlar.map((k) => k.karsilama), ['uret', 'stok']);
+    const partili = await gonder(yonetici, '/siparisler/ekle', govde({ satirlar: [{ malzemeNo: mamulNo, miktar: '5', birimFiyat: '1', karsilama: 'satin-al', partiler: [{ emirTuru: 'seri', adet: '5' }] }] }));
+    assert.equal(partili.statusCode, 400, partili.body);
+    assert.match(partili.body, /Partiler yalnız/);
+    assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ satirlar: [{ malzemeNo: mamulNo, miktar: '5', birimFiyat: '1', karsilama: 'yok' }] }))).statusCode, 400);
+    const yeni = await guncelle(s, { satirlar: [{ malzemeNo: mamulNo, miktar: '5', birimFiyat: '1', karsilama: 'satin-al' }] });
+    assert.equal(yeni.statusCode, 200, yeni.body);
+    assert.deepEqual(yeni.json<SiparisAyrintisi>().satirlar.map((k) => k.karsilama), ['satin-al']);
   });
 
   test('SIP-19 (3254 a): onay gerekçeyle geri alınır; emre bağlı kalemde yalnız termin değişir; yeniden onayda bağlı proje bitişi ve emir teslimi kayar', async () => {
@@ -680,7 +692,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(harita.get(satirId), {
       id: satirId, siparisId: s.id, siparisNo: s.no, siparisDurumu: 'taslak', firmaId: musteriId, sira: 1, malzemeNo: mamulNo,
       miktar: '100.000', termin: '2026-12-01', birimFiyat: '12.5000', tutar: '1250.00', paraBirimi: 'TRY', cezaOraniGun: null, cezaTavaniOrani: null, odemeVadesiGun: null,
-      terminElle: false, partiler: [],
+      terminElle: false, partiler: [], karsilama: 'uret',
     });
     assert.equal((await o().vt.tx((db) => siparisSatiriOzetleri(db, []))).size, 0);
   });

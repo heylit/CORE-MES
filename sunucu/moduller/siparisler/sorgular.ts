@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { SiparisDurumu, TeklifArsivNedeni, TeklifDurumu, TeklifFormuMetni, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { KarsilamaYolu, SiparisDurumu, TeklifArsivNedeni, TeklifDurumu, TeklifFormuMetni, TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
@@ -100,9 +100,10 @@ export interface KalemSatiri {
   tutar: string | null;
   termin: string | null;
   aciklama: string | null;
+  karsilama: KarsilamaYolu;
 }
 
-const KALEM_SECIMI = `SELECT id, siparis_id, sira, malzeme_no, miktar, birim_fiyat, round(miktar * birim_fiyat, 2) AS tutar, termin, aciklama
+const KALEM_SECIMI = `SELECT id, siparis_id, sira, malzeme_no, miktar, birim_fiyat, round(miktar * birim_fiyat, 2) AS tutar, termin, aciklama, karsilama
                         FROM siparisler_siparis_satiri`;
 
 export function kalemler(db: Db, siparisId: number): Promise<KalemSatiri[]> {
@@ -184,6 +185,7 @@ export interface KalemAlanlari {
   termin: string | null;
   aciklama: string | null;
   partiler?: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[];
+  karsilama?: KarsilamaYolu | undefined;
 }
 
 // Satırlar taslakta bütün olarak yeniden yazılır; sıra gövdedeki sıradır.
@@ -201,10 +203,10 @@ export async function kalemleriYaz(
   }
   if (yazilacak.length === 0) return;
   await db.sorgu(
-    `INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin, aciklama)
-     SELECT $1, k.sira, k.malzeme_no, k.miktar, k.birim_fiyat, k.termin, k.aciklama
-       FROM unnest($2::int[], $3::int[], $4::numeric[], $5::numeric[], $6::date[], $7::text[])
-         AS k (sira, malzeme_no, miktar, birim_fiyat, termin, aciklama)`,
+    `INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama)
+     SELECT $1, k.sira, k.malzeme_no, k.miktar, k.birim_fiyat, k.termin, k.aciklama, k.karsilama
+       FROM unnest($2::int[], $3::int[], $4::numeric[], $5::numeric[], $6::date[], $7::text[], $8::text[])
+         AS k (sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama)`,
     [
       siparisId,
       yazilacak.map((k) => k.sira),
@@ -213,6 +215,7 @@ export async function kalemleriYaz(
       yazilacak.map((k) => k.birimFiyat),
       yazilacak.map((k) => k.termin),
       yazilacak.map((k) => k.aciklama),
+      yazilacak.map((k) => k.karsilama ?? 'uret'),
     ],
   );
   // 3244 b: partiler kalemin sırasıyla bağlanır; boş liste yazılmaz (kalem tek seri partidir).

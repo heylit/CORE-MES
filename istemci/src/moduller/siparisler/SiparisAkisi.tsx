@@ -4,7 +4,7 @@ import type { SiparisAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { DurumKutusu, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { SIPARIS_ASAMASI, tarihMetni, zamanMetni } from './gorunum.ts';
+import { KARSILAMA_YOLU_ADLARI, SIPARIS_ASAMASI, tarihMetni, zamanMetni } from './gorunum.ts';
 
 // 3429-1 a (A): onaydan kapanışa siparişin akışı. Akış modülü emir, plan, sevk ve faturadan okur; ekran yalnız gösterir.
 // Taslakta akış yoktur; okuma siparişi okuyan işlemle açıktır (sunucu denetler).
@@ -27,7 +27,9 @@ const EMIR_DURUMU: Record<SiparisAkisEmri['durum'], { etiket: string; ton: Rozet
 const FATURA: Record<SiparisAkisiCevabi['fatura'], string> = { yok: 'Kesilmedi', kismi: 'Kısmi', tam: 'Tamam', karsilastirilamaz: 'Kontrol edin' };
 
 function Emirler({ k }: { k: SiparisAkisKalemi }) {
-  if (k.emirler.length === 0) return <span className="tc-sp-soluk">{k.uretilir ? 'Emir yok' : 'Üretilmez'}</span>;
+  if (k.emirler.length === 0) {
+    return <span className="tc-sp-soluk">{k.karsilama !== 'uret' ? KARSILAMA_YOLU_ADLARI[k.karsilama] : k.uretilir ? 'Emir yok' : 'Üretilmez'}</span>;
+  }
   return (
     <span className="tc-sp-akis-emirler">
       {k.emirler.map((e) => (
@@ -111,7 +113,7 @@ export function SiparisAkisi({ siparis }: { siparis: SiparisAyrintisi }) {
           </ol>
           <Tablo etiket="Kalemlerin akışı" sutunlar={SUTUNLAR} satirlar={akis.data.kalemler} satirAnahtari={(k) => k.id} bosMesaj="Kalem yok." />
           {akis.data.kalemler.some((k) => !k.uretilir) && (
-            <p className="tc-sp-ipucu">Üretilmeyen kalemin (ticari mal) sevki siparişe bağlı değildir; teslim edilen sütunu boş kalır.</p>
+            <p className="tc-sp-ipucu">Üretilmeyen, stoktan ya da satın alınarak karşılanan kalemin sevki henüz siparişe bağlı değildir; teslim edilen sütunu boş kalır.</p>
           )}
         </div>
       )}

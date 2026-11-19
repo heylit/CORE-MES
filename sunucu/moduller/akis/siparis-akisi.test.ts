@@ -98,15 +98,15 @@ describe('akis satış siparişi akışı (gerçek PostgreSQL)', () => {
     }
   }
 
-  async function siparisAc(kalemler: readonly { malzemeNo: number; miktar: number; fiyat: number }[]): Promise<{ id: number; satirlar: number[] }> {
+  async function siparisAc(kalemler: readonly { malzemeNo: number; miktar: number; fiyat: number; karsilama?: 'uret' | 'stok' | 'satin-al' }[]): Promise<{ id: number; satirlar: number[] }> {
     sayac += 1;
     const id = await tek(
       `INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
        VALUES ($1, 'onayli', $2, current_date, current_date + 30, 20, $3, $3, now()) RETURNING id`, [`SS-2031-${String(700 + sayac)}`, firmaId, yoneticiId]);
     const satirlar: number[] = [];
     for (const [i, k] of kalemler.entries()) {
-      satirlar.push(await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [id, i + 1, k.malzemeNo, k.miktar, k.fiyat]));
+      satirlar.push(await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, karsilama) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [id, i + 1, k.malzemeNo, k.miktar, k.fiyat, k.karsilama ?? 'uret']));
     }
     return { id, satirlar };
   }
@@ -264,6 +264,17 @@ describe('akis satış siparişi akışı (gerçek PostgreSQL)', () => {
     a = await akis('mudur', s.id);
     assert.deepEqual([a.kalemler[0]!.emirler.find((e) => e.id === e1)?.saglam, a.kalemler[0]!.sevkEdilen, a.kalemler[0]!.uretilen], [null, 4, 0]);
     assert.equal(a.kapanisEksikleri[0], 'Kalem 1: teslim edilen 4 / 6.');
+  });
+
+  test('3429-3 F: üretilen türde "Stoktan" ya da "Satın al" kalem üretilmez sayılır, karşılama yolu akışta döner', async () => {
+    const s = await siparisAc([
+      { malzemeNo: yariNo, miktar: 6, fiyat: 10 },
+      { malzemeNo: yariNo, miktar: 2, fiyat: 10, karsilama: 'stok' },
+      { malzemeNo: yariNo, miktar: 1, fiyat: 10, karsilama: 'satin-al' },
+    ]);
+    const a = await akis('mudur', s.id);
+    assert.deepEqual(a.kalemler.map((k) => [k.uretilir, k.karsilama]), [[true, 'uret'], [false, 'stok'], [false, 'satin-al']]);
+    assert.deepEqual(a.kapanisEksikleri, ['Kalem 1: teslim edilen 0 / 6.', 'Fatura kesilmedi.'], 'emirsiz yolun sevki F4\'e kadar ölçülmez (Risk R1)');
   });
 
   test('SPA-6: Kokpit planı kalem termininden sonra bitince termin riski ve kademe kaydı; plan düzelince ya da teslim bitince kalkar', async () => {

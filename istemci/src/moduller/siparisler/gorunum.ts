@@ -1,4 +1,4 @@
-import type { PlanTaslagiGorunumu, SiparisDurumu, TeklifArsivNedeni, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { KarsilamaYolu, PlanTaslagiGorunumu, SiparisDurumu, TeklifArsivNedeni, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import type { SiparisAsamasi } from '#paylasilan/sozlesme/akis.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu, Sekme } from '../../ortak/arayuz/index.ts';
@@ -9,6 +9,9 @@ export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetT
   kapandi: { etiket: 'Tamamlandı', ton: 'tamam' },
   iptal: { etiket: 'İptal', ton: 'hata' },
 };
+
+// 3429-3 F: kalemin karşılama yolu; sözleşmedeki KARSILAMA_YOLLARI ile aynı sıra (tip denetler).
+export const KARSILAMA_YOLU_ADLARI: Readonly<Record<KarsilamaYolu, string>> = { uret: 'Üret', stok: 'Stoktan', 'satin-al': 'Satın al' };
 
 // 3429-1 (SPA-3): onaylı siparişin hesaplanan aşaması. Taslak, kapandı ve iptal durum rozetiyle zaten görünür; ayrı rozet çizilmez.
 export const SIPARIS_ASAMASI: Readonly<Partial<Record<SiparisAsamasi, { etiket: string; ton: RozetTonu }>>> = {

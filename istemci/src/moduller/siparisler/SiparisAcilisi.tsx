@@ -17,6 +17,8 @@ const PROJE_KODU_EN_COK = 24;
 const ATLAMA_METNI: Record<NonNullable<SiparisAcilisiSatiri['atlama']>, string> = {
   uretilmez: 'Üretilmez, emir açılmaz',
   'tam-sayi-degil': 'Adet tam sayı değil, emir açılmaz',
+  stoktan: 'Stoktan karşılanır, emir açılmaz',
+  'satin-alinir': 'Satın alınır, emir açılmaz',
 };
 
 export const useSiparisAcilisi = (siparisId: number, acik = true) => useQuery({

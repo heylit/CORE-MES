@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { EMIR_TURU_ADLARI, type EMIR_TURLERI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi, SiparisRevizyonGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { KarsilamaYolu, SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi, SiparisRevizyonGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliDeger, Rozet, Secim, YETKI_ADI, useBildirim, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/veri/firma-kodlari.tsx';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import type { SecilenFirma } from './FirmaSecici.tsx';
-import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
+import { BELIRSIZ_SAYI, KARSILAMA_YOLU_ADLARI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
 import { KartArama } from './KartArama.tsx';
 import { secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { MusteriArama } from './MusteriArama.tsx';
@@ -36,6 +36,7 @@ interface SatirDegeri {
   termin: string;
   aciklama: string;
   partiler: PartiDegeri[];
+  karsilama: KarsilamaYolu;
 }
 
 interface Degerler {
@@ -58,7 +59,7 @@ interface Degerler {
 }
 
 let satirSayaci = 0;
-const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, id: null, kilitli: false, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [] });
+const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, id: null, kilitli: false, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [], karsilama: 'uret' });
 
 function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
   if (s === null) {
@@ -87,6 +88,7 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       termin: m.termin === null || m.termin === s.termin ? '' : m.termin,
       aciklama: m.aciklama ?? '',
       partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet), rotaId: p.rotaId })),
+      karsilama: m.karsilama,
     })),
     gerekce: '',
   };
@@ -111,6 +113,7 @@ const dogrula = (yeniSurum: boolean) => (d: Degerler): AlanHatalari => {
     if (s.miktar.trim() === '') hata[`satirlar.${i}.miktar`] = 'Miktar zorunlu.';
     else if (belirsizSayi(s.miktar)) hata[`satirlar.${i}.miktar`] = BELIRSIZ_SAYI;
     if (belirsizSayi(s.birimFiyat)) hata[`satirlar.${i}.birimFiyat`] = BELIRSIZ_SAYI;
+    if (s.karsilama !== 'uret') return;
     if (s.partiler.some((p) => p.adet.trim() === '')) hata[`satirlar.${i}.partiler`] = 'Parti adedini girin ya da partiyi silin.';
     else if (s.partiler.some((p) => belirsizSayi(p.adet))) hata[`satirlar.${i}.partiler`] = BELIRSIZ_SAYI;
     else if (s.partiler.length > 0 && s.miktar.trim() !== '' && !belirsizSayi(s.miktar) && binde(s.miktar) !== s.partiler.reduce((t, p) => t + binde(p.adet), 0)) {
@@ -119,6 +122,20 @@ const dogrula = (yeniSurum: boolean) => (d: Degerler): AlanHatalari => {
   });
   return hata;
 };
+
+// 3429-3 F: onayda yalnız "Üret" kalemi emir açar; öteki yollar emir açmaz, partiler gönderilmez.
+// Sunucu yalnız mamul ve yarı mamul kartında emir açar (UE-SA-02); türü bilinen öteki kartta "Üret" sunulmaz, varsayılan "Stoktan"dır.
+// "Üret"te ipucu yazılmaz: üretim çeşidi bloğu emrin nasıl açılacağını söyler.
+const URETILEN_TURLER: readonly string[] = ['mamul', 'yarimamul'];
+const uretilmezKart = (k: SecilenKart | null): boolean => k?.tur !== undefined && !URETILEN_TURLER.includes(k.tur);
+const KARSILAMA_SECENEKLERI = (Object.keys(KARSILAMA_YOLU_ADLARI) as KarsilamaYolu[]).map((y) => ({ deger: y, baslik: KARSILAMA_YOLU_ADLARI[y] }));
+const karsilamaSecenekleri = (k: SecilenKart | null) => (uretilmezKart(k) ? KARSILAMA_SECENEKLERI.filter((o) => o.deger !== 'uret') : KARSILAMA_SECENEKLERI);
+const KARSILAMA_IPUCU: Record<KarsilamaYolu, string | null> = {
+  uret: null,
+  stok: 'Emir açılmaz; kalem depodaki stoktan karşılanır.',
+  'satin-al': 'Emir açılmaz; kalem satın alınarak karşılanır.',
+};
+const karsilamaIpucu = (y: KarsilamaYolu): { ipucu?: string } => { const m = KARSILAMA_IPUCU[y]; return m === null ? {} : { ipucu: m }; };
 
 // SIP-18 sunucuda da denetler; eski partili kalemde miktar değişince ekranda parti düzenleyicisi olmadığı için çıkış "Partileri kaldır"dır.
 const binde = (v: string): number => Math.round(Number(sayiGirdisi(v)) * 1000);
@@ -149,7 +166,8 @@ function govdeKur(d: Degerler, ticariSartGorur: boolean) {
       birimFiyat: s.birimFiyat.trim() === '' ? null : sayiGirdisi(s.birimFiyat),
       termin: s.termin === '' || s.termin === d.termin ? null : s.termin,
       aciklama: bosYap(s.aciklama),
-      partiler: s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet), rotaId: p.rotaId })),
+      partiler: s.karsilama === 'uret' ? s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet), rotaId: p.rotaId })) : [],
+      karsilama: s.karsilama,
     })),
   } satisfies SiparisEkleGovdesi;
 }
@@ -279,7 +297,7 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                   <KartArama
                     etiket={`Kalem ${i + 1} malzeme kartı`}
                     deger={s.kart}
-                    degistir={(kart) => satirDegistir(i, { kart })}
+                    degistir={(kart) => satirDegistir(i, uretilmezKart(kart) && s.karsilama === 'uret' ? { kart, karsilama: 'stok', partiler: [] } : { kart })}
                     {...(form.hata(`satirlar.${i}.kart`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.kart`) })}
                   />
                 )}
@@ -324,6 +342,15 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                       )}
                   </div>
                 </div>
+                <Secim
+                  etiket={`Kalem ${i + 1} karşılama`}
+                  value={s.karsilama}
+                  disabled={sabit}
+                  secenekler={karsilamaSecenekleri(s.kart)}
+                  {...karsilamaIpucu(s.karsilama)}
+                  onChange={(o) => satirDegistir(i, { karsilama: o.target.value as KarsilamaYolu })}
+                />
+                {s.karsilama === 'uret' && (
                 <div className="tc-sp-kalem-cesit" aria-label={`Kalem ${i + 1} üretim çeşidi`}>
                   <span className="tc-sp-parti-cipleri">
                     {s.partiler.length === 0
@@ -342,6 +369,7 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                   )}
                   {form.hata(`satirlar.${i}.partiler`) !== undefined && <span className="tc-sp-hata" role="alert">{form.hata(`satirlar.${i}.partiler`)}</span>}
                 </div>
+                )}
                 <Girdi
                   etiket={`Kalem ${i + 1} açıklama`}
                   autoComplete="off"

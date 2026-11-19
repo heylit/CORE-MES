@@ -79,6 +79,11 @@ const binde = (m: string): bigint => {
   const [tam = '0', kesir = ''] = m.trim().split('.');
   return BigInt(tam) * 1000n + BigInt((kesir + '000').slice(0, 3));
 };
+// SIP-42 (3429-3 F): parti üretim emrinin bölümüdür; stoktan ya da satın alınarak karşılanan kalemde parti olmaz.
+export const PARTI_YALNIZ_URETILENDE = 'Partiler yalnız "Üret" kalemde olur.';
+export const karsilamaPartiReddi = (karsilama: string, partiler: readonly unknown[]): string | null =>
+  karsilama !== 'uret' && partiler.length > 0 ? PARTI_YALNIZ_URETILENDE : null;
+
 export function partiReddi(birim: string | null, miktar: string, partiler: readonly { adet: string }[]): string | null {
   if (partiler.length === 0) return null;
   for (const p of partiler) {
@@ -89,7 +94,7 @@ export function partiReddi(birim: string | null, miktar: string, partiler: reado
 }
 
 // SIP-19 (3254 a): onayı geri alınmış siparişte emre bağlı kalem kilitlidir: silinmez, sırası değişmez; malzeme, miktar, fiyat, açıklama
-// ve partiler aynı kalır, yalnız termin değişir. Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
+// partiler ve karşılama yolu (3429-3) aynı kalır, yalnız termin değişir. Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
 export const KALEM_BASKA_SIPARISIN = 'Kalem bu siparişin değil.';
 export const KILITLI_KALEM_SILINMEZ = 'Emre bağlı kalem silinemez';
 export const KILITLI_KALEM_SIRASI = 'Emre bağlı kalemin sırası değişmez';
@@ -101,10 +106,12 @@ const sayiAyni = (a: string | null, b: string | null): boolean => {
 export interface KayitliKalem {
   id: number; sira: number; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
   partiler: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[];
+  karsilama: string;
 }
 export interface YeniKalem {
   id?: number | undefined; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
   partiler?: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[] | undefined;
+  karsilama?: string | undefined;
 }
 export function kilitliKalemReddi(
   kayitli: readonly KayitliKalem[], kilitli: ReadonlySet<number>, yeni: readonly YeniKalem[],
@@ -120,6 +127,7 @@ export function kilitliKalemReddi(
     if (i + 1 !== k.sira) return { mesaj: `${KILITLI_KALEM_SIRASI} (kalem ${k.sira}).`, alan: `satirlar.${i}` };
     const partiler = y.partiler ?? [];
     const ayni = y.malzemeNo === k.malzemeNo && sayiAyni(y.miktar, k.miktar) && sayiAyni(y.birimFiyat, k.birimFiyat) && y.aciklama === k.aciklama
+      && (y.karsilama ?? 'uret') === k.karsilama
       && partiler.length === k.partiler.length
       && partiler.every((p, j) => p.emirTuru === k.partiler[j]?.emirTuru && sayiAyni(p.adet, k.partiler[j]?.adet ?? null)
         && (p.rotaId ?? null) === (k.partiler[j]?.rotaId ?? null));

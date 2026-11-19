@@ -5,7 +5,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import { SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
+import { type KarsilamaYolu, SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -20,7 +20,7 @@ import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
+  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
@@ -67,6 +67,7 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
       aciklamalar: ayrintilar.get(k.malzeme_no)?.aciklamalar ?? [], birim: kart?.birim ?? null,
       miktar: k.miktar, birimFiyat: k.birim_fiyat, tutar: k.tutar, termin: k.termin, aciklama: k.aciklama,
       partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
+      karsilama: k.karsilama,
       emreBagli: bagli.has(k.id),
     };
   });
@@ -104,7 +105,7 @@ async function kalemleriDenetle(db: Db, g: SiparisEkleVerisi): Promise<void> {
     if (ret !== null) throw dogrulama(ret, `satirlar.${i}.malzemeNo`);
     const miktar = miktarReddi(kart?.birim ?? null, s.miktar);
     if (miktar !== null) throw dogrulama(miktar, `satirlar.${i}.miktar`);
-    const parti = partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
+    const parti = karsilamaPartiReddi(s.karsilama ?? 'uret', s.partiler ?? []) ?? partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
     if (parti !== null) throw dogrulama(parti, `satirlar.${i}.partiler`);
   });
   const tarih = tarihAraligiReddi(tesisGunu(Date.now()), g);
@@ -190,7 +191,7 @@ export async function siparisGuncelle(
     const partiler = await kalemPartileri(db, [...kilitli]);
     const kayitli = kayitlilar.map((k) => ({
       id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, birimFiyat: k.birim_fiyat, aciklama: k.aciklama,
-      partiler: (partiler.get(k.id) ?? []).map((p) => ({ emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
+      partiler: (partiler.get(k.id) ?? []).map((p) => ({ emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })), karsilama: k.karsilama,
     }));
     const kilit = kilitliKalemReddi(kayitli, kilitli, satirlar);
     if (kilit !== null) throw cakisma(kilit.mesaj);
@@ -377,6 +378,8 @@ export interface SiparisSatiriOzeti {
   // 3244 b: kalemin partileri; boşsa kalem tek seri partidir (çağıran öyle sayar).
   // 3296-3 a: rotaId partide elle seçilen rota; boşsa çeşidin rotası.
   partiler: { id: number; emirTuru: EmirTuru; adet: string; rotaId: number | null }[];
+  // 3429-3 F: yalnız "uret" kalemi emir açar.
+  karsilama: KarsilamaYolu;
 }
 
 // kisiAdlari kalıbı: satırlar ve başlıklar birer sorgu; boş dizide sorgu yok; olmayan kimlik haritada yok.
@@ -390,6 +393,7 @@ async function satirOzetleri(db: Db, kalemler: KalemSatiri[]): Promise<SiparisSa
       sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin ?? b.termin, birimFiyat: k.birim_fiyat,
       tutar: k.tutar, paraBirimi: b.para_birimi, cezaOraniGun: b.gecikme_ceza_orani, cezaTavaniOrani: b.ceza_tavani_orani, odemeVadesiGun: b.odeme_vadesi_gun,
       terminElle: k.termin !== null, partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
+      karsilama: k.karsilama,
     }];
   });
 }
