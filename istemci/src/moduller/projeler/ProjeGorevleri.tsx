@@ -1,9 +1,9 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type {
   Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi, SablonSecenekleriCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
-import { CokSatir, Dugme, Girdi, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
@@ -11,7 +11,7 @@ import {
 } from './gosterim.ts';
 import { AtamaSecimi, GorevPaneli, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
-import { HazirlikGorevleriAc, ProjeHazirlik } from './ProjeHazirlik.tsx';
+import { HazirlikGorevleriAc, ProjeHazirlik, useHazirlikAcilabilir } from './ProjeHazirlik.tsx';
 
 // Bitiş sapması: biten görevde gerçek bitiş, açık görevde bugün plan bitişini geçtiyse bugün; iptal edilen görevde yoktur.
 // CSV'de tür ayrı sütun değil, adın önekidir: ekrandaki rozetle aynı ayrım.
@@ -22,6 +22,8 @@ export function gorevSapmasi(g: Gorev, bugunTarihi: string): number | null {
   if (g.gercekBitis !== null) return gunFarki(g.planBitis, g.gercekBitis);
   return bugunTarihi > g.planBitis ? gunFarki(g.planBitis, bugunTarihi) : null;
 }
+// 3444 a: tablo kayan sütunlara sığsın diye bu yılın tarihi yılsız yazılır; CSV tam tarihi taşır.
+const kisaTarih = (t: string | null, yil: string): string => (t !== null && t.startsWith(yil) ? tarihMetni(t).slice(0, 5) : tarihMetni(t));
 export const gorevGecikiyor = (g: Gorev, bugunTarihi: string): boolean =>
   g.durum !== 'bitti' && g.durum !== 'iptal' && bugunTarihi > g.planBitis;
 
@@ -37,6 +39,22 @@ export function Ilerleme({ deger }: { deger: number | null }) {
 
 type Gorunum = 'tablo' | 'matris' | 'pano';
 
+// 3444 a: geniş ekranda Görevler sayfasının sol listesi tabloyu daraltır; orada tablo kart kipine dönmez, kendi kabında kayar.
+// Dar ekranda (tablet, telefon) satır kartları kalır. Eşik projeler.css'teki sol liste eşiğiyle aynıdır.
+const GENIS = '(min-width: 1024px)';
+function useGenisEkran(): boolean {
+  const sor = () => (typeof window.matchMedia === 'function' ? window.matchMedia(GENIS) : null);
+  const [genis, genisYaz] = useState(() => sor()?.matches ?? false);
+  useEffect(() => {
+    const medya = sor();
+    if (!medya) return undefined;
+    const degisti = () => { genisYaz(medya.matches); };
+    medya.addEventListener('change', degisti);
+    return () => { medya.removeEventListener('change', degisti); };
+  }, []);
+  return genis;
+}
+
 // 3430 a: proje görevleri ve hazırlık görevleri tek sekmede. Hazırlık görevi maddeye ve emre bağlı proje görevidir; listede rozetle ayrılır,
 // "Emir × madde" görünümü hazırlık görevlerini emir ve madde tablosunda, maddenin sistemdeki hâliyle gösterir (emri okuyamayana yok).
 export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
@@ -48,7 +66,16 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
   const [panel, panelYaz] = useState<number | null>(null);
   const [sablondan, sablondanYaz] = useState(false);
+  const [hazirlikAcik, hazirlikAcikYaz] = useState(false);
+  const hazirlikAcilabilir = useHazirlikAcilabilir(projeId, emirleriGorur);
+  // 3444: dar ekranda yalnız "Görev ekle" açıkta; öteki iki işlem bu menüde.
+  const digerleri: MenuOgesi[] = [
+    ...(yazabilir ? [{ anahtar: 'sablon', baslik: 'Şablondan ekle', simge: 'layers', sec: () => { sablondanYaz(true); } } satisfies MenuOgesi] : []),
+    ...(hazirlikAcilabilir ? [{ anahtar: 'hazirlik', baslik: 'Hazırlık görevlerini aç', simge: 'users', sec: () => { hazirlikAcikYaz(true); } } satisfies MenuOgesi] : []),
+  ];
   const gun = bugun();
+  const genis = useGenisEkran();
+  const yil = gun.slice(0, 4);
   const taslar = new Map(yonetim.kilometreTaslari.map((t) => [t.id, t.ad]));
   // 3269 a: satır görevin yan panelini açar (akış düğmeleri ve geçmiş); düzenleme panelden.
   const sec = (g: Gorev) => { panelYaz(g.id); };
@@ -65,16 +92,16 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
     ), csv: gorevCsvAdi },
     { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
     { anahtar: 'kontrol', baslik: 'Kontrol eden', hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
-    { anahtar: 'plan', baslik: 'Plan', mono: true, hucre: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
+    { anahtar: 'plan', baslik: 'Plan', mono: true, hucre: (g) => `${kisaTarih(g.planBaslangic, yil)} – ${kisaTarih(g.planBitis, yil)}`, csv: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
     { anahtar: 'gercek', baslik: 'Gerçekleşen', mono: true, hucre: (g) => (
-      g.gercekBaslangic === null ? '—' : `${tarihMetni(g.gercekBaslangic)} – ${tarihMetni(g.gercekBitis)}`
-    ) },
+      g.gercekBaslangic === null ? '—' : `${kisaTarih(g.gercekBaslangic, yil)} – ${kisaTarih(g.gercekBitis, yil)}`
+    ), csv: (g) => (g.gercekBaslangic === null ? '—' : `${tarihMetni(g.gercekBaslangic)} – ${tarihMetni(g.gercekBitis)}`) },
     { anahtar: 'sapma', baslik: 'Sapma', mono: true, kirilmaz: true, hizala: 'sag', hucre: (g) => {
       const s = gorevSapmasi(g, gun);
       return <span className={s !== null && s > 0 ? 'tc-prj-gec' : undefined}>{sapmaMetni(s)}</span>;
     } },
     { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <Ilerleme deger={g.ilerleme} /> },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
+    { anahtar: 'durum', baslik: 'Durum', sabit: 'sag', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
   ];
 
   return (
@@ -86,9 +113,10 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
           <Dugme simge="gantt" aria-pressed={gorunum === 'pano'} onClick={() => { gorunumYaz('pano'); }}>Pano</Dugme>
         </div>
         <div className="tc-prj-eylemler">
-          {yazabilir && <Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme>}
+          {yazabilir && <span className="tc-prj-genis"><Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme></span>}
+          {digerleri.length > 0 && <span className="tc-prj-dar"><Menu etiket="Diğer görev işlemleri" metin="Diğer" ogeler={digerleri} /></span>}
           {yazabilir && <Dugme simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
-          {emirleriGorur && <HazirlikGorevleriAc projeId={projeId} />}
+          {emirleriGorur && <HazirlikGorevleriAc projeId={projeId} acik={hazirlikAcik} acikYaz={hazirlikAcikYaz} />}
         </div>
       </div>
       {gorunum === 'matris' && <ProjeHazirlik projeId={projeId} />}
@@ -96,6 +124,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
         ? (
           <Tablo
             etiket="Projenin görevleri"
+            {...(genis ? { kip: 'kaydir' as const } : {})}
             sutunlar={sutunlar}
             satirlar={yonetim.gorevler}
             satirAnahtari={(g) => g.id}

@@ -50,6 +50,15 @@ describe('UE-SA kuralları (saf)', () => {
     ]);
   });
 
+  test('UE-SA-02 (3429-3 F): stoktan ya da satın alınarak karşılanan kalem emir açmaz; üretilmeyen malzemede de yol nedeni söylenir', () => {
+    const kalemler = [
+      { id: 1, sira: 1, malzemeNo: 10, miktar: '5', termin: null, partiler: [], karsilama: 'stok' as const },
+      { id: 2, sira: 2, malzemeNo: 40, miktar: '3', termin: null, partiler: [], karsilama: 'satin-al' as const },
+      { id: 3, sira: 3, malzemeNo: 10, miktar: '2', termin: null, partiler: [], karsilama: 'uret' as const },
+    ];
+    assert.deepEqual(acilacakPartiler(kalemler, '2026-12-20', (no) => no !== 40).map((x) => [x.kalemId, x.atlama]), [[1, 'stoktan'], [2, 'satin-alinir'], [3, null]]);
+  });
+
   test('UE-SA-03: yalnız siparişten açılmış, taslak, arşivsiz ve satın alma siparişi ya da stok bağı olmayan emir dokunulmamıştır', () => {
     const e = { acilisKaynagi: 'siparis_onayi' as const, durum: 'taslak', arsiv: false, tedarikVar: false, stokVar: false };
     assert.equal(dokunulmamisMi(e), true);
@@ -113,7 +122,7 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
        VALUES ($1, $2, 'ORN-', $3, 'aktif', $4, $5, $5) RETURNING no`,
       [`ornsa-${sayac}`, tur, sayac, JSON.stringify({ id: `ornsa-${sayac}`, com: { ad: 'Deneme malzeme' } }), yoneticiId]))!.no;
   };
-  interface Kalem { malzemeNo: number; miktar: number; partiler?: { tur: string; adet: number }[] }
+  interface Kalem { malzemeNo: number; miktar: number; partiler?: { tur: string; adet: number }[]; karsilama?: string }
   const siparis = async (kalemler: Kalem[]): Promise<{ id: number; no: string; satirlar: number[] }> => {
     sayac += 1;
     const no = `ORN-${String(sayac).padStart(4, '0')}`;
@@ -122,7 +131,8 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
        VALUES ($1, 'taslak', $2, current_date, current_date + 30, 20, $3) RETURNING id`, [no, firmaId, yoneticiId]);
     const satirlar: number[] = [];
     for (const [i, k] of kalemler.entries()) {
-      const satir = await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, $2, $3, $4, 5) RETURNING id', [id, i + 1, k.malzemeNo, k.miktar]);
+      const satir = await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, karsilama) VALUES ($1, $2, $3, $4, 5, $5) RETURNING id',
+        [id, i + 1, k.malzemeNo, k.miktar, k.karsilama ?? 'uret']);
       for (const [j, p] of (k.partiler ?? []).entries()) {
         await o().sahip.sorgu('INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, $2, $3, $4)', [satir, j + 1, p.tur, p.adet]);
       }
@@ -190,6 +200,15 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
     const tekrar = await istek<{ acilan: number; baglanan: number }>('yonetici', 'POST', `/uretim-emirleri/siparis-acilisi/${s.id}/ac`, {});
     assert.deepEqual([tekrar.durum, tekrar.govde.acilan, tekrar.govde.baglanan], [200, 0, 0]);
     assert.equal((await emirler(s.satirlar)).length, 2);
+  });
+
+  test('3429-3 F: onayda yalnız "uret" kalemi emir açar; stoktan ve satın alınan kalem atlanır ve nedeni açılışta görünür', async () => {
+    const m = await malzeme();
+    const s = await siparis([{ malzemeNo: m, miktar: 5 }, { malzemeNo: m, miktar: 3, karsilama: 'stok' }, { malzemeNo: m, miktar: 2, karsilama: 'satin-al' }]);
+    const once = await acilis(s.id);
+    assert.deepEqual(once.govde.satirlar.map((x) => [x.adet, x.atlama]), [[5, null], [3, 'stoktan'], [2, 'satin-alinir']]);
+    assert.equal((await onayla('yonetici', s.id)).durum, 200);
+    assert.deepEqual((await emirler(s.satirlar)).map((x) => [x.satir, Number(x.adet)]), [[s.satirlar[0], 5]]);
   });
 
   test('3272-2 a, Risk K3: rota bekleyen emir plana alınmaz (409, emir taslak kalır)', async () => {

@@ -6,6 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { Gorev, KilometreTasi, Proje, ProjeYonetimiCevabi, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { Gorevler } from './Gorevler.tsx';
 import { ProjeAyrinti } from './ProjeAyrinti.tsx';
 import { StatuListesi } from './StatuListesi.tsx';
 import { gorevCsvAdi, gorevSapmasi } from './ProjeGorevleri.tsx';
@@ -54,6 +55,8 @@ function sunucuKur(kullanici: Kullanici, durum: Proje['durum'] = 'aktif') {
     if (yontem === 'GET' && yol === '/projeler/1') return json(200, proje(durum));
     if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
+    if (yontem === 'GET' && yol.startsWith('/projeler?')) return json(200, { satirlar: [proje(durum)], toplam: 1, sayfa: 1, sayfaBoyu: 200 });
+    if (yontem === 'GET' && yol === '/projeler/gorevlerim/liste') return json(200, { gorevler: [] });
     if (yontem === 'GET' && yol === '/hazirlik-matrisi?projeId=1') return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum: 'aktif' }, dagitir: false, maddeler: [], emirler: [], gorevler: [] });
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 3, ad: 'Deneme Planlamacı' }] });
     if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 8, ad: 'Kalite' }] });
@@ -73,6 +76,7 @@ function ac(adres = '/projeler/1') {
           <Routes>
             <Route path="/projeler/statuler" element={<StatuListesi />} />
             <Route path="/projeler/:id" element={<ProjeAyrinti />} />
+            <Route path="/proje-gorevlerim" element={<Gorevler />} />
           </Routes>
         </BildirimSaglayici>
       </QueryClientProvider>
@@ -107,7 +111,7 @@ describe('Proje yönetimi (890 c)', () => {
     await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
     await screen.findByText('Açık görev');
     expect(screen.queryByRole('button', { name: /Statü: / })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: /Görevler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Görevler \(/ }));
     await screen.findByRole('table', { name: 'Projenin görevleri' });
     expect(screen.queryByRole('button', { name: /Görev ekle/ })).toBeNull();
     cleanup();
@@ -118,15 +122,16 @@ describe('Proje yönetimi (890 c)', () => {
     expect(screen.queryByRole('button', { name: /Kilometre taşı ekle/ })).toBeNull();
   });
 
-  // 3430 a: Hazırlık ayrı sekme değil; Görevler sekmesinde Liste, Emir × madde (emri okuyana) ve Pano; hazırlık görevi rozetle ayrılır.
-  it('hazırlık görevi Görevler sekmesinde rozetle; Emir × madde yalnız emri okuyana; Hazırlık sekmesi yok', async () => {
+  // 3430 a, 3444 a: Hazırlık ve Görevler projede sekme değil; Görevler sayfasında proje seçili Liste, Emir × madde (emri okuyana) ve Pano.
+  it('hazırlık görevi Görevler sayfasında rozetle; Emir × madde yalnız emri okuyana; projede Görevler ve Hazırlık sekmesi yok', async () => {
     YONETIM.gorevler = [gorev({}), gorev({ id: 8, ad: 'CNC programı', hazirlikMaddesi: 'cnc' })];
     try {
       sunucuKur({ ...PLANLAMACI, islemler: [...PLANLAMACI.islemler, 'sayfa.uretim-emirleri'] });
       ac();
       await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' });
       expect(screen.queryByRole('tab', { name: /^Hazırlık/ })).toBeNull();
-      fireEvent.click(screen.getByRole('tab', { name: /Görevler/ }));
+      expect(screen.queryByRole('tab', { name: /Görevler/ })).toBeNull();
+      fireEvent.click(await screen.findByRole('button', { name: /^Görevler \(/ }));
       const tablo = await screen.findByRole('table', { name: 'Projenin görevleri' });
       expect(within(tablo).getByRole('row', { name: /CNC programı/ }).textContent).toContain('Hazırlık');
       expect(within(tablo).getByRole('row', { name: /Fikstür tasarımı/ }).textContent).toContain('Proje');
@@ -141,7 +146,7 @@ describe('Proje yönetimi (890 c)', () => {
       cleanup();
       sunucuKur(PLANLAMACI);
       ac();
-      fireEvent.click(await screen.findByRole('tab', { name: /Görevler/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^Görevler \(/ }));
       await screen.findByRole('table', { name: 'Projenin görevleri' });
       expect(screen.queryByRole('button', { name: 'Emir × madde' })).toBeNull();
     } finally {
@@ -152,7 +157,7 @@ describe('Proje yönetimi (890 c)', () => {
   it('görev eklenir; plan alanları ve kilometre taşı gövdeye girer', async () => {
     const cagrilar = sunucuKur(PLANLAMACI);
     ac();
-    fireEvent.click(await screen.findByRole('tab', { name: /Görevler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Görevler \(/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Görev ekle/ }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.change(within(pencere).getByLabelText(/Görev adı/), { target: { value: 'Numune ölçümü' } });

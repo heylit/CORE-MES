@@ -23,6 +23,8 @@ export const projeKoduGecerliMi = (kod: string): boolean => PROJE_KODU_BICIMI.te
 export interface AcilisKalemi {
   id: number; sira: number; malzemeNo: number; miktar: string; termin: string | null;
   partiler: readonly { id: number; emirTuru: EmirTuru; adet: string; rotaId?: number | null | undefined }[];
+  // 3429-3 F: "uret" dışındaki kalem emir açmaz (stoktan ya da satın alınarak karşılanır); verilmezse "uret".
+  karsilama?: 'uret' | 'stok' | 'satin-al' | undefined;
 }
 export interface AcilisPartisi {
   kalemId: number; kalemSira: number; partiId: number | null; malzemeNo: number; emirTuru: EmirTuru; adet: number | null; teslim: string | null;
@@ -39,7 +41,8 @@ export function acilacakPartiler(kalemler: readonly AcilisKalemi[], siparisTermi
     const partiler = k.partiler.length === 0 ? [{ id: null, emirTuru: 'seri' as EmirTuru, adet: k.miktar, rotaId: null }] : k.partiler;
     return partiler.map((p) => {
       const adet = tamSayi(p.adet);
-      const atlama: SiparisAcilisiAtlamasi | null = !uretilir(k.malzemeNo) ? 'uretilmez' : adet === null ? 'tam-sayi-degil' : null;
+      const atlama: SiparisAcilisiAtlamasi | null = k.karsilama === 'stok' ? 'stoktan' : k.karsilama === 'satin-al' ? 'satin-alinir'
+        : !uretilir(k.malzemeNo) ? 'uretilmez' : adet === null ? 'tam-sayi-degil' : null;
       return {
         kalemId: k.id, kalemSira: k.sira, partiId: p.id, malzemeNo: k.malzemeNo, emirTuru: p.emirTuru, adet, teslim: k.termin ?? siparisTermini,
         rotaId: p.rotaId ?? null, atlama,

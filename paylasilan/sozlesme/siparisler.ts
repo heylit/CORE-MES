@@ -49,6 +49,11 @@ export const PARTI_EN_COK = 8;
 export const partiGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), adet: miktarSemasi, rotaId: z.number().int().positive().max(2147483647).nullish().transform((r) => r ?? null) });
 export const partiListesiSemasi = z.array(partiGovdesi).max(PARTI_EN_COK, `Kalemde en çok ${PARTI_EN_COK} parti olabilir.`);
 
+// 3429-3 F (kart 3429 a): kalem nasıl karşılanır. Onayda yalnız "uret" kalemi emir açar; "stok" depodan ayrılır, "satin-al" satın
+// alınır. Verilmezse "uret" (bugünkü davranış).
+export const KARSILAMA_YOLLARI = ['uret', 'stok', 'satin-al'] as const;
+export type KarsilamaYolu = (typeof KARSILAMA_YOLLARI)[number];
+
 export const siparisSatiriGovdesi = z.object({
   // SIP-19 (3254 a): var olan kalemin kimliği; onayı geri alınmış siparişte emre bağlı kalem bununla eşlenir. Yeni kalemde yok.
   id: z.number().int().positive().max(2147483647).optional(),
@@ -60,6 +65,7 @@ export const siparisSatiriGovdesi = z.object({
   termin: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(500),
   partiler: partiListesiSemasi.optional(),
+  karsilama: z.enum(KARSILAMA_YOLLARI).optional(),
 });
 
 const siparisAlanlari = {
@@ -140,6 +146,7 @@ export const siparisSatiriSemasi = z.object({
   aciklama: z.string().nullable(),
   // Kaydedilmiş partiler; boşsa kalem tek seri partidir.
   partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: ondalikMetinSemasi, rotaId: z.number().int().nullable() })),
+  karsilama: z.enum(KARSILAMA_YOLLARI),
   // SIP-19 (3254 a): kaleme üretim emri bağlı; onayı geri alınmış siparişte bu kalemde yalnız termin değişir.
   emreBagli: z.boolean(),
 });

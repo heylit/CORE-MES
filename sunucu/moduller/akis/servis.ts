@@ -235,7 +235,7 @@ export async function siparisAkisiOku(db: Db, siparisId: number): Promise<Sipari
     const tur = kartlar.get(k.malzemeNo)?.tur;
     const kalem = {
       id: k.id, sira: k.sira, malzemeKodu: k.malzemeKodu, malzemeAdi: k.malzemeAdi, birim: k.birim, miktar: Number(k.miktar), termin: k.termin ?? s.termin,
-      uretilir: tur !== undefined && URETILEN_TURLER.includes(tur), emirler: liste,
+      uretilir: k.karsilama === 'uret' && tur !== undefined && URETILEN_TURLER.includes(tur), karsilama: k.karsilama, emirler: liste,
       planBitis: enGecBitis(gecerli.map((e) => e.planBitis)),
       uretilen: gecerli.length === 0 ? null : bitmis.reduce((t, e) => t + (e.saglam ?? 0), 0),
       ...kalemSevki(liste, sevkler),

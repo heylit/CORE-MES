@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { emirDurumu } from './uretim-emirleri.ts';
+import { KARSILAMA_YOLLARI } from './siparisler.ts';
 
 // Akış Süresi (kart #1338): üretim emrinin hammadde kabulünden sevke kadar geçen zamanı, bekleme dahil, kaynak modüllerin
 // kayıtlarından okur ve hesaplar. Yalnız okur; süreler dakikadır (takvim saati), ölçülemeyen değer null döner.
@@ -303,8 +304,10 @@ export const siparisAkisKalemiSemasi = z.object({
   birim: z.string().nullable(),
   miktar,
   termin: tarihSemasi,
-  // Mamul ve yarı mamul üretilir; ticari mal ve öteki türler bugün emirle karşılanmaz (karşılama yolu 3429-3).
+  // Mamul ve yarı mamul, karşılama yolu "uret" ise üretilir; ticari mal ve öteki türler emirle karşılanmaz.
   uretilir: z.boolean(),
+  // 3429-3 F: kalemin karşılama yolu (siparişler).
+  karsilama: z.enum(KARSILAMA_YOLLARI),
   emirler: z.array(siparisAkisEmriSemasi),
   // Emirlerin en geç plan bitişi; emri ya da planı olmayan kalemde null.
   planBitis: zamanSemasi.nullable(),

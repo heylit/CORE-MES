@@ -8,7 +8,7 @@ const KIMLIK = z.number().int().positive();
 const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] as const;
 
 // Emri açılmayacak kalem partisinin nedeni: malzeme üretilmiyor (ticari mal, hammadde) ya da adet tam sayı değil.
-export const SIPARIS_ACILISI_ATLAMALARI = ['uretilmez', 'tam-sayi-degil'] as const;
+export const SIPARIS_ACILISI_ATLAMALARI = ['uretilmez', 'tam-sayi-degil', 'stoktan', 'satin-alinir'] as const;
 
 // 3272-2 (Atölye şartı, KURGU 9): dokunulmamış emirde malzeme talebi ya da tamamlanmış hazırlık maddesi varsa onay geri alma ve iptal
 // kilitlemez ama uyarır (satın alma siparişi ve stok fişi kilitler).

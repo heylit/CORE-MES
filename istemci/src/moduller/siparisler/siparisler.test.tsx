@@ -39,7 +39,7 @@ const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'o
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
 const SATIR = {
   id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1', 'Deneme aciklama 2'], birim: 'adet', miktar: '100', birimFiyat: '12.5000',
-  tutar: '1250.00', termin: null, aciklama: null, partiler: [], emreBagli: false,
+  tutar: '1250.00', termin: null, aciklama: null, partiler: [], karsilama: 'uret' as const, emreBagli: false,
 };
 const AYRINTI_TASLAK = { ...SIPARIS_TASLAK, satirlar: [SATIR] } satisfies SiparisAyrintisi;
 const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-10-02T10:00:00+03:00', surum: 3 } satisfies SiparisAyrintisi;
@@ -551,7 +551,7 @@ describe('Satış siparişi ayrıntısı', () => {
 
 // 3429-1 a (A, B, C): siparişin akışı, aşama rozeti ve kapatma kapısı. Akış Akış modülünün cevabıdır; ekran yalnız gösterir.
 const AKIS_KALEMI = {
-  id: 50, sira: 1, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: 100, termin: '2026-10-20', uretilir: true,
+  id: 50, sira: 1, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: 100, termin: '2026-10-20', uretilir: true, karsilama: 'uret' as const,
   emirler: [{ id: 70, no: 'UE-ORN-0070', durum: 'bitti', adet: 100, planBitis: '2026-10-15T14:00:00.000Z', saglam: 100 }],
   planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20, terminRiski: null,
 } satisfies SiparisAkisiCevabi['kalemler'][number];
@@ -579,6 +579,14 @@ describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
     expect(screen.getByText(/20 yolda/)).toBeTruthy();
     expect(screen.getByText('Kesilmedi')).toBeTruthy();
     expect(screen.getAllByText('Kısmi sevk').length).toBeGreaterThan(0);
+  });
+
+  it('3429-3 F: stoktan karşılanan kalemin emir hücresi yolu söyler, şeritte üretilen sayılmaz', async () => {
+    akisli({ ...AKIS, kalemler: [AKIS_KALEMI, { ...AKIS_KALEMI, id: 51, sira: 2, uretilir: false, karsilama: 'stok', emirler: [], planBitis: null, uretilen: null, sevkEdilen: 0, yolda: 0 }] });
+    ac('/siparisler/6');
+    const tablo = await screen.findByRole('table', { name: 'Kalemlerin akışı' });
+    expect(within(tablo).getByText('Stoktan')).toBeTruthy();
+    expect(screen.getByText(/stoktan ya da satın alınarak karşılanan kalemin sevki henüz siparişe bağlı değildir/)).toBeTruthy();
   });
 
   it('başlamış ama bitmemiş sevk ve üretim şeritte kısmi görünür; tam/toplam sayısı kalır', async () => {
@@ -981,6 +989,44 @@ describe('Yeni satış siparişi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ partiler: [] }] });
+  });
+
+  it('3429-3 F: kalemin karşılama yolu seçilir; Stoktan seçilince üretim çeşidi gizlenir, gövdede yol gider ve parti gitmez', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
+    ac('/siparisler/yeni');
+    await musteriSec();
+    fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
+    await kartSec();
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '7' } });
+    const yol = screen.getByLabelText(/^Kalem 1 karşılama/) as HTMLSelectElement;
+    expect(yol.value).toBe('uret');
+    expect(screen.getByText(/^Onayda tek emir açılır/)).toBeTruthy();
+    fireEvent.change(yol, { target: { value: 'stok' } });
+    expect(screen.queryByLabelText('Kalem 1 üretim çeşidi')).toBeNull();
+    expect(screen.getByText('Emir açılmaz; kalem depodaki stoktan karşılanır.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ karsilama: 'stok', partiler: [] }] });
+  });
+
+  it('3429-3 F: ticari mal kartında "Üret" sunulmaz, yol "Stoktan" olur (sunucu bu kalemde emir açmaz)', async () => {
+    const ticari = { ...MALZEMELER, satirlar: [{ no: 33, kod: 'DNM-003', ad: 'Deneme Rulman', tur: 'ticari', birim: 'adet', aciklamalar: [], yerlilikOrani: null }], toplam: 1 } satisfies MalzemeSecenekleriCevabi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol.startsWith('/siparisler/malzeme-secenekleri')) return json(200, ticari);
+      return yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined;
+    });
+    ac('/siparisler/yeni');
+    await musteriSec();
+    fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
+    await kartSec('Deneme Rulman');
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '7' } });
+    const yol = screen.getByLabelText(/^Kalem 1 karşılama/) as HTMLSelectElement;
+    expect(yol.value).toBe('stok');
+    expect([...yol.options].map((o) => o.value)).toEqual(['stok', 'satin-al']);
+    expect(screen.queryByLabelText('Kalem 1 üretim çeşidi')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 33, karsilama: 'stok', partiler: [] }] });
   });
 
   it('3427-3 a, 3429-4: eski kayıttaki partiler ve elle seçilmiş rota salt okunur görünür, değişmeden geri gider', async () => {

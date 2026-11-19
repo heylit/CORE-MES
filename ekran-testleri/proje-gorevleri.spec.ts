@@ -50,13 +50,16 @@ async function projeVeGorev(page: Page, ad: string, kontrolde: boolean): Promise
 test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
-  test('proje Görevler sekmesi, yan panel ve görev formu taşmaz; kapatmak yazmaz', async ({ page, ac, ag }) => {
+  // 3444 a: projenin görevleri Görevler sayfasında; proje başlığındaki düğme sayfayı proje seçili açar.
+  test('projenin Görevler sayfası, yan panel ve görev formu taşmaz; kapatmak yazmaz', async ({ page, ac, ag }) => {
     const ad = `ORN görev ${randomUUID().slice(0, 6)}`;
     const { projeId } = await projeVeGorev(page, ad, false);
     await ac(`/projeler/${String(projeId)}`);
-    await page.getByRole('tab', { name: /Görevler/ }).click();
+    await page.getByRole('button', { name: /^Görevler \(/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/proje-gorevlerim\\?proje=${String(projeId)}$`));
     await expect(page.getByText(ad).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /Şablondan ekle/ })).toBeVisible();
+    // Dar ekranda "Şablondan ekle" Diğer menüsündedir.
+    await expect(page.getByRole('button', { name: /Şablondan ekle|Diğer görev işlemleri/ })).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
     ag.sifirla();
     await page.getByText(ad).first().click();

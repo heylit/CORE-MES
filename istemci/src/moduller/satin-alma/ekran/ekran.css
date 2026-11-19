@@ -105,3 +105,6 @@
   .sa-serit-ad { max-width: 100%; flex: 1 1 60%; order: 1; }
 }
 
+/* 3442-7a: kim onaylayabilir, karar için önemli bilgi: soluk değil. */
+.sa-kok .kv .d.sa-onaylayan { color: var(--ink); }
+
