@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { DurumCevabi, GelenlerCevabi } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, EntegrasyonYonetimi, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -60,8 +60,10 @@ export function BaglantiDurumu() {
 
   return (
     <div className="tc-sg-sayfa">
+    {/* 3445: bağlantı, akış ayarları ve akış günlüğü; aşağıda okunan kayıtların özeti kalır. */}
+    <EntegrasyonYonetimi ad="SmartES" kok="/smartes" />
     <Kart
-      baslik="SmartES bağlantısı"
+      baslik="Okunan kayıtlar"
       sag={<Dugme simge="rotate" aria-label="Yenile" yukleniyor={durum.isFetching} onClick={() => { void durum.refetch(); }} />}
     >
       <div className="tc-smartes">

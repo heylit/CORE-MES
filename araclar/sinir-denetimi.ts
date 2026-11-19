@@ -418,7 +418,7 @@ export const KATMANLAR: Katmanlar = {
   istemci: [
     /* 0 */ [
       'akis', 'atolye', 'bildirim', 'degisiklik-yonetimi', 'denetim', 'denetim-hazirlik', 'durus-nedenleri', 'etiket-merkezi',
-      'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
+      'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'logo', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
       'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'proses', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
       'tezgah-baglantisi',
     ],

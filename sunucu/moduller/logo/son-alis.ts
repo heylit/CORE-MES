@@ -20,7 +20,7 @@ export function sonAlisTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     const hata = o.bellek.okumaDenemeleri.get(AKIS);
     if (hata && o.saat().getTime() - hata.getTime() < OKUMA_HATA_BEKLEME_MS) return { tur: 'bos' };
     const imlec = await s.sonAlisImleci(db);
-    if (!sonAlisOkunmaliMi(imlec, o.saat())) return { tur: 'bos' };
+    if (!sonAlisOkunmaliMi(imlec, o.saat(), o.zorlaAni ?? null)) return { tur: 'bos' };
     return async (): Promise<Yazici<TurSonucu>> => {
       const r = await kopru.topluAlislariOku(imlec?.sonRef ?? 0);
       if (r.tur !== 'basarili') {

@@ -1475,3 +1475,73 @@ export function parametreAdimi(wsdl: WsdlParametreleri): { sonuc: 'tamam' | 'hat
     ileti: [ozet, ...gerekli.map((f) => f.metin), ...istegeBagli.map((f) => `İsteğe bağlı · ${f.metin}`)].join('\n'),
   };
 }
+
+/* ---------------- 3445: yönetim sayfası (akış kataloğu, günlük satırı) ---------------- */
+
+export interface YonetimAkisi {
+  anahtar: string;
+  ad: string;
+  ne: string;
+  yon: 'okuma' | 'yazma';
+  // null: yalnız "SmartES bağlantısı" ile açılır.
+  acikAyari: string | null;
+  siklikAyari?: string;
+  // Sıklık kapısının anahtarları: işin adı (kalite, hurda ve ambar üç ayrı işte aynı ayarla okunur).
+  isler: readonly string[];
+}
+
+export const YONETIM_AKISLARI: readonly YonetimAkisi[] = [
+  { anahtar: 'is-emri-durumu', ad: 'Üretim sayıları', ne: 'İş emri durumu ve adetler', yon: 'okuma', acikAyari: null, siklikAyari: 'smartes.is-emri-durumu-sikligi', isler: ['smartes-okuma-is-emri-durumu'] },
+  { anahtar: 'durus', ad: 'Duruşlar', ne: 'Makine duruşları', yon: 'okuma', acikAyari: null, siklikAyari: 'smartes.durus-sikligi', isler: ['smartes-okuma-durus'] },
+  { anahtar: 'alarm', ad: 'Alarmlar', ne: 'Makine alarmları', yon: 'okuma', acikAyari: null, siklikAyari: 'smartes.alarm-sikligi', isler: ['smartes-okuma-alarm'] },
+  {
+    anahtar: 'kalite-ambar', ad: 'Kalite, fire, ambar', ne: 'Ölçüm, hurda, ambar hareketi', yon: 'okuma', acikAyari: 'smartes.kalite-ambar-okumasi',
+    siklikAyari: 'smartes.kalite-ambar-sikligi', isler: KALITE_AMBAR_KAYNAKLARI.map((k) => `smartes-okuma-${k}`),
+  },
+  { anahtar: 'makine', ad: 'Makineler canlı', ne: 'Anlık makine durumu', yon: 'okuma', acikAyari: 'smartes.makine-okumasi', siklikAyari: 'smartes.makine-sikligi', isler: ['smartes-makine-okumasi'] },
+  { anahtar: 'ilerleme', ad: 'İş emri ilerlemesi', ne: 'Tamamlanma ve tahmini bitiş', yon: 'okuma', acikAyari: 'smartes.makine-okumasi', siklikAyari: 'smartes.ilerleme-sikligi', isler: ['smartes-ilerleme-okumasi'] },
+  { anahtar: 'hesap', ad: 'SmartES hesapları', ne: 'OEE, çevrim süresi', yon: 'okuma', acikAyari: null, siklikAyari: 'smartes.hesap-sikligi', isler: ['smartes-hesap-okumasi'] },
+  { anahtar: 'liste', ad: 'Tanım listeleri', ne: 'Makine, operatör, neden listeleri', yon: 'okuma', acikAyari: null, siklikAyari: 'smartes.liste-sikligi', isler: ['smartes-liste-okumasi'] },
+  { anahtar: 'is-emri-gonderimi', ad: 'İş emri gönderimi', ne: 'SmartES karşılığı olan istasyonların iş emirleri', yon: 'yazma', acikAyari: null, isler: ['smartes-is-emri-gonderimi'] },
+  { anahtar: 'tanim-gonderimi', ad: 'Tanım gönderimi', ne: 'İstasyon ve stok kartı tanımları', yon: 'yazma', acikAyari: 'smartes.tanim-gonderimi', isler: ['smartes-tanim-gonderimi'] },
+];
+
+export const yonetimAkisi = (anahtar: string): YonetimAkisi | undefined => YONETIM_AKISLARI.find((a) => a.anahtar === anahtar);
+export const isinAkisi = (isAdi: string): YonetimAkisi | undefined => YONETIM_AKISLARI.find((a) => a.isler.includes(isAdi));
+
+// Sık okunan akışta (makine, ilerleme) başarılı satır en sık bu aralıkla yazılır; hata her zaman yazılır.
+export const SIK_TAMAM_ARALIGI_MS = 15 * 60_000;
+
+type TurCevabi =
+  | { tur: 'kapali' | 'ortam-degiskeni-yok' | 'akis-kapali' | 'erken' }
+  | { tur: 'okundu'; okunan: number }
+  | { tur: 'hata' | 'atlandi'; ileti: string }
+  | { tur: 'islendi'; okunan?: number | readonly unknown[]; hatali?: number | readonly unknown[]; gonderilen?: number; kapanan?: number; belirsiz?: number; hata?: string | null; turHatasi?: string | null };
+
+const say = (x: number | readonly unknown[] | undefined): number => (x === undefined ? 0 : typeof x === 'number' ? x : x.length);
+
+// Turun sonucu günlüğe hangi satırla girer (saf). Engel (kapalı, adres yok), erken tur ve yapacak işi olmayan gönderim yazılmaz.
+export function gunlukSatiri(a: YonetimAkisi, r: TurCevabi): { sonuc: 'tamam' | 'hata'; sayi: number | null; ileti: string | null } | null {
+  switch (r.tur) {
+    case 'kapali': case 'ortam-degiskeni-yok': case 'akis-kapali': case 'erken':
+      return null;
+    case 'okundu':
+      return { sonuc: 'tamam', sayi: r.okunan, ileti: null };
+    case 'hata': case 'atlandi':
+      return { sonuc: 'hata', sayi: null, ileti: r.ileti };
+    case 'islendi': {
+      const hatali = say(r.hatali) + (r.belirsiz ?? 0);
+      const hata = r.hata ?? r.turHatasi ?? null;
+      const sayi = a.yon === 'yazma' ? (r.gonderilen ?? 0) + (r.kapanan ?? 0) : say(r.okunan);
+      if (a.yon === 'yazma' && sayi === 0 && hatali === 0 && hata === null) return null;
+      if (a.yon === 'okuma' && (a.anahtar === 'hesap' || a.anahtar === 'liste') && sayi === 0 && hatali === 0) return null;
+      if (hata !== null || hatali > 0) return { sonuc: 'hata', sayi, ileti: hata ?? `${hatali} kayıt işlenemedi` };
+      return { sonuc: 'tamam', sayi, ileti: null };
+    }
+  }
+}
+
+// Sıklık kapısına giden sonuç: SmartES okuması pencereyle okur, tur başına bir istek yeter; engelde null (zaman yazılmaz).
+export function kapiSonucu(r: { tur: string }): { kayitGeldi: boolean } | null {
+  return r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok' || r.tur === 'akis-kapali' ? null : { kayitGeldi: false };
+}

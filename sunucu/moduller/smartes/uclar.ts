@@ -11,9 +11,44 @@ import {
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import * as servis from './servis.ts';
+import { entegrasyonAkisParametresi, entegrasyonGunlukCevabi, entegrasyonGunlukSorgusu, entegrasyonKomutCevabi, entegrasyonYonetimiCevabi } from '#paylasilan/sozlesme/entegrasyon.ts';
+import { baglantiTesti, gunlukListesi, simdiOku, yonetimOzeti } from './yonetim.ts';
 
 // Okuma uçları SmartES sayfasını görene açıktır; eşleme yazmak `smartes.esleme-yaz` ister (Aşama 1: yalnız yönetici).
 export const uclar = [
+  // 3445 a: SmartES bağlantı ve akış yönetimi. Görmek sayfa işlemiyle; "Şimdi oku" ve bağlantı testi ayarlar.yaz ister.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/yonetim',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: entegrasyonYonetimiCevabi,
+    isle: ({ db }) => yonetimOzeti(db, new Date()),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/yonetim/gunluk',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: entegrasyonGunlukSorgusu,
+    cevap: entegrasyonGunlukCevabi,
+    isle: ({ db, sorgu }) => gunlukListesi(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/yonetim/akislar/:anahtar/simdi-oku',
+    yetki: 'ayarlar.yaz',
+    parametre: entegrasyonAkisParametresi,
+    cevap: entegrasyonKomutCevabi,
+    isle: ({ db, parametre }) => simdiOku(db, parametre.anahtar),
+  }),
+  // Servis cevabını beklerken transaction açık tutulmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/yonetim/baglanti-testi',
+    yetki: 'ayarlar.yaz',
+    txDisi: true,
+    cevap: entegrasyonKomutCevabi,
+    isle: ({ db }) => baglantiTesti({ tx: (f) => f(db) }),
+  }),
   uc({
     yontem: 'GET',
     yol: '/smartes/menu-sayaclari',
