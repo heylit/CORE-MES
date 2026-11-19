@@ -4,7 +4,7 @@ import {
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
-  sifirlaCevabi, sifirlaGovdesi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
+  sifirlaCevabi, sifirlaGovdesi, sunucuSureciCevabi, yenidenBaslatCevabi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
   temizlikIsaretGovdesi,
   temizlikTarihleIsaretGovdesi,
   temizlikTarihSayisiCevabi,
@@ -14,6 +14,7 @@ import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumu
 import {
   ayarDegistir, ayarlariListele, firmaKoduDuzenle, firmaKoduEkle, firmaKodlari, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
+import { sunucuSureciOku, yenidenBaslatIste } from './sunucu-sureci.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
 import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, sifirdanBasla, sifirlamaOzeti, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
@@ -199,6 +200,23 @@ export const uclar = [
     parametre: guncellemeUygulaParametresi,
     cevap: guncellemeSilCevabi,
     isle: ({ parametre }) => surumuSil(ortamdanOku(), parametre.commit),
+  }),
+  // Ekrandan yeniden başlatma: güncellemeyi uygulayabilen kişi sunucuyu da yeniden başlatabilir (uygulama zaten yeniden başlatır).
+  // Sunucu kendini kapatır, bekçi açar; bekçi görülmezse reddedilir (sunucu-sureci.ts).
+  uc({
+    yontem: 'GET',
+    yol: '/sunucu-sureci',
+    yetki: 'ayarlar.guncelleme-yukle',
+    txDisi: true,
+    cevap: sunucuSureciCevabi,
+    isle: () => sunucuSureciOku(ortamdanOku()),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/sunucu-sureci/yeniden-baslat',
+    yetki: 'ayarlar.guncelleme-yukle',
+    cevap: yenidenBaslatCevabi,
+    isle: ({ kullanici }) => yenidenBaslatIste(ortamdanOku(), kullanici.id, new Date()),
   }),
   // Veritabanı yedeği (kart #1205): klasör her istekte ayardan, yoksa ortamdan okunur; gece yedeğini `isler.ts` alır.
   uc({

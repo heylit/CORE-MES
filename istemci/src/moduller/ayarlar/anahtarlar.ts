@@ -4,6 +4,7 @@ export const anahtarlar = {
   rolIslemleri: ['ayarlar', 'rol-islemleri'] as const,
   kisiEkIslemleri: ['ayarlar', 'kisi-ek-islemleri'] as const,
   guncellemePaketleri: ['ayarlar', 'guncelleme-paketleri'] as const,
+  sunucuSureci: ['ayarlar', 'sunucu-sureci'] as const,
   yedekler: ['ayarlar', 'yedekler'] as const,
   temizlikAdaylari: ['ayarlar', 'temizlik-adaylari'] as const,
   temizlikEtkisi: ['ayarlar', 'temizlik-etkisi'] as const,

@@ -363,6 +363,14 @@ export async function ilerlemeOku(o: GuncellemeOrtami): Promise<GuncellemeIlerle
   };
 }
 
+// Sunucuyu yeniden başlatma istenmiş ya da süren güncellemeyi kesmesin (sunucu-sureci.ts).
+export async function guncellemeSuruyor(o: GuncellemeOrtami): Promise<boolean> {
+  const k = await kanal(o);
+  if (k.durum !== 'acik') return false;
+  const { bekleyen, uygulaniyor } = await istekler(k.dizin);
+  return bekleyen !== null || uygulaniyor !== null;
+}
+
 const SUREN_UYGULAMA_ILETISI = 'Bir güncelleme uygulanıyor; o bitmeden yenisi istenemez.';
 const ayniIstek = (a: GuncellemeUygulamaIstegi, b: GuncellemeUygulamaIstegi): boolean =>
   a.commit === b.commit && a.isteyenId === b.isteyenId && a.istenme === b.istenme;

@@ -7,11 +7,11 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   GuncellemeIlerlemesiCevabi, GuncellemeKanali, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi, GuncellemeParcasiCevabi,
-  GuncellemeUygulamaSonucu,
+  GuncellemeUygulamaSonucu, SunucuSureciCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { PARCA_BAYT, taramaRozeti, yeniGocSayisi } from './Guncelleme.tsx';
+import { GEC_ACILIS_SN, PARCA_BAYT, taramaRozeti, yeniGocSayisi } from './Guncelleme.tsx';
 import { GuncellemeIlerlemesi, adimSatirlari, ilerlemeYuzdesi } from './GuncellemeIlerlemesi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
@@ -35,9 +35,20 @@ function cevap(
   };
 }
 
-function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response | Promise<Response> = () => json(200, PAKET), saglik: Record<string, unknown> = {}) {
+const ACILIS = '2026-11-19T05:00:00.000Z';
+const YENI_ACILIS = '2026-11-19T05:12:00.000Z';
+const BEKCILI: SunucuSureciCevabi = { bekci: 'var', guncellemeSuruyor: false, acilis: ACILIS };
+
+function sunucuKur(
+  liste: GuncellemePaketleriCevabi, bitir: () => Response | Promise<Response> = () => json(200, PAKET), saglik: Record<string, unknown> = {},
+  surecIlk: SunucuSureciCevabi = BEKCILI,
+  // acilmaz: istekten sonra açılış anı değişmez; kapanir: istekten sonra yoklama ağ hatası verir; red: komutun hata cevabı.
+  yb: { acilmaz?: boolean; kapanir?: boolean; red?: () => Response } = {},
+) {
+  let istendi = false;
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   let paketler = liste;
+  let surec = surecIlk;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
     const yol = adres.replace('/api', '');
     const govde = secenek.body === undefined ? undefined : JSON.parse(secenek.body);
@@ -45,6 +56,17 @@ function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response | Pro
     if (yol === '/ayarlar') return json(200, { ayarlar: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
     if (yol === '/guncelleme/paketler') return json(200, paketler);
+    if (yol === '/sunucu-sureci') {
+      if (istendi && yb.kapanir === true) throw new TypeError('Failed to fetch');
+      return json(200, surec);
+    }
+    if (yol === '/sunucu-sureci/yeniden-baslat') {
+      if (yb.red) return yb.red();
+      istendi = true;
+      const cevabi = { istenme: '2026-11-19T05:10:00.000Z', acilis: surec.acilis };
+      if (yb.acilmaz !== true) surec = { ...surec, acilis: YENI_ACILIS };
+      return json(200, cevabi);
+    }
     if (yol === '/saglik/ayrinti') return json(200, { sonGoc: '20261011000000_eski.sql', commit: null, ...saglik });
     if (/\/parca$/.test(yol)) {
       const { sira } = govde as { sira: number };
@@ -216,7 +238,84 @@ describe('Sistem Ayarları, güncelleme', () => {
     ac([...YONETICI, 'saglik.ayrinti-oku']);
     fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
     await screen.findByText('Kanal açık');
-    expect(screen.queryByText('Sunucu açılışı')).toBeNull();
+    expect(screen.getByText('Sunucu açılışı')).toBeTruthy();
+    expect(screen.queryByText(/Bilgisayar başlarken/)).toBeNull();
+  });
+
+  it('bekçi açıksa yeniden başlatma onayla istenir; açılış anı değişince sunucunun açıldığı yazılır', async () => {
+    const istekler = sunucuKur(cevap('acik', []));
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText('Bekçi açık')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Sunucuyu yeniden başlat/ }));
+    expect(await screen.findByText('Sunucu yeniden başlatılsın mı?')).toBeTruthy();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /^Yeniden başlat$/ }));
+    expect(await screen.findByText('Yeniden başlatılıyor')).toBeTruthy();
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/sunucu-sureci/yeniden-baslat']);
+    expect((screen.getByRole('button', { name: /Sunucuyu yeniden başlat/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText(/\.env yeniden okundu/, undefined, { timeout: 6000 })).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Sunucuyu yeniden başlat/ }) as HTMLButtonElement).disabled).toBe(false);
+  }, 10_000);
+
+  const yenidenBaslatIste = async () => {
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    await screen.findByText('Bekçi açık');
+    fireEvent.click(screen.getByRole('button', { name: /Sunucuyu yeniden başlat/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Yeniden başlat$/ }));
+  };
+
+  it('yoklama hata verince sunucunun kapandığı adım görünür', async () => {
+    sunucuKur(cevap('acik', []), undefined, {}, BEKCILI, { kapanir: true });
+    ac(YONETICI);
+    await yenidenBaslatIste();
+    await screen.findByText('Yeniden başlatılıyor');
+    expect(screen.queryByText(/Sunucu kapandı/)).toBeNull();
+    expect(await screen.findByText(/Sunucu kapandı/, undefined, { timeout: 6000 })).toBeTruthy();
+  }, 10_000);
+
+  it('beş dakikaya kadar açılmadı uyarısı çıkmaz, sonra çıkar ve bekleme sürer', async () => {
+    sunucuKur(cevap('acik', []), undefined, {}, BEKCILI, { acilmaz: true });
+    ac(YONETICI);
+    await yenidenBaslatIste();
+    await screen.findByText('Yeniden başlatılıyor');
+    const gercek = Date.now();
+    const saat = vi.spyOn(Date, 'now').mockReturnValue(gercek + GEC_ACILIS_SN * 1000 - 5000);
+    await act(async () => { await new Promise((coz) => { setTimeout(coz, 1100); }); });
+    expect(screen.queryByText(/dakikadır cevap vermiyor/)).toBeNull();
+    saat.mockReturnValue(gercek + GEC_ACILIS_SN * 1000 + 5000);
+    expect(await screen.findByText(/dakikadır cevap vermiyor/, undefined, { timeout: 3000 })).toBeTruthy();
+    expect(screen.getByText(/Açılmadı · 5 dk/)).toBeTruthy();
+    expect(screen.getByText('Yeniden başlatılıyor')).toBeTruthy();
+    saat.mockRestore();
+  }, 10_000);
+
+  it('komut reddedilirse sunucunun iletisi bildirilir ve durum yeniden okunur', async () => {
+    const mesaj = 'Güncelleme istendi ya da kuruluyor; bitmeden sunucu yeniden başlatılamaz.';
+    const istekler = sunucuKur(cevap('acik', []), undefined, {}, BEKCILI, { red: () => json(409, { kod: 'CAKISMA', mesaj }) });
+    ac(YONETICI);
+    await yenidenBaslatIste();
+    expect(await screen.findByText(mesaj)).toBeTruthy();
+    const okuma = () => istekler.filter((i) => i.yol === '/sunucu-sureci').length;
+    // İlk okuma ve red sonrası yeniden okuma.
+    await waitFor(() => { expect(okuma()).toBe(2); });
+    expect(screen.queryByText('Yeniden başlatılıyor')).toBeNull();
+  });
+
+  it('bekçi yoksa, bilinmiyorsa ya da güncelleme sürüyorsa düğme kapalıdır ve nedeni yazar', async () => {
+    const durumlar: [SunucuSureciCevabi, RegExp][] = [
+      [{ ...BEKCILI, bekci: 'yok' }, /bekçiyle açılmadı/],
+      [{ ...BEKCILI, bekci: 'bilinmiyor' }, /doğrulanamadı/],
+      [{ ...BEKCILI, guncellemeSuruyor: true }, /Güncelleme istendi ya da kuruluyor/],
+    ];
+    for (const [durum, metin] of durumlar) {
+      sunucuKur(cevap('acik', []), undefined, {}, durum);
+      ac(YONETICI);
+      fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+      expect(await screen.findByText(metin)).toBeTruthy();
+      expect((screen.getByRole('button', { name: /Sunucuyu yeniden başlat/ }) as HTMLButtonElement).disabled).toBe(true);
+      cleanup();
+    }
   });
 
   it('yeni göç sayısı sunucunun son göçünden sonrakileri sayar', () => {

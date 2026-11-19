@@ -292,6 +292,21 @@ export type GuncellemeUygulamaSonucu = z.output<typeof guncellemeUygulamaSonucu>
 export type GuncellemeGecmisKaydi = z.output<typeof guncellemeGecmisKaydi>;
 export const GUNCELLEME_GECMISI_EN_COK = 50;
 
+// Sunucuyu ekrandan yeniden başlatma: sunucu kendini kapatır, bekçi (araclar/bekci.ts) yeniden açar ve .env yeniden okunur.
+// "bekci": sunucunun üst süreçlerinde bekçi var mı; yoksa kapanan sunucu kendiliğinden açılmaz ve istek reddedilir.
+export const BEKCI_DURUMLARI = ['var', 'yok', 'bilinmiyor'] as const;
+export const sunucuSureciCevabi = z.object({
+  bekci: z.enum(BEKCI_DURUMLARI),
+  // Güncelleme istendi ya da kuruluyor: o bitmeden yeniden başlatma reddedilir.
+  guncellemeSuruyor: z.boolean(),
+  // Bu sunucu sürecinin açıldığı an; ekran yeniden açılışı bunun değişmesinden anlar.
+  acilis: zamanSemasi,
+});
+export const yenidenBaslatCevabi = z.object({ istenme: zamanSemasi, acilis: zamanSemasi });
+export type SunucuSureciCevabi = z.output<typeof sunucuSureciCevabi>;
+export type YenidenBaslatCevabi = z.output<typeof yenidenBaslatCevabi>;
+export type BekciDurumu = (typeof BEKCI_DURUMLARI)[number];
+
 // Veritabanı yedeği (kart #1205): sunucu her gece pg_dump ile dosyaya alır, ayarlardan elle de alınır ve indirilir.
 // Dosya adı veritabanı, UTC zamanı ve türü taşır; zaman adla okunur, dosya tarihine güvenilmez (kopyalanınca değişir).
 export const YEDEK_TURLERI = ['gece', 'elle'] as const;
