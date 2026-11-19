@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
-import type { TalepDurumu,
+import type { KabulSiniri, TalepDurumu,
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -1385,6 +1385,31 @@ export async function kalemBaglariYaz(db: Db, talepId: string, baglar: readonly 
     [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId), baglar.map((b) => b.dieId)],
   );
 }
+// 3437: kalemin kabul sınırı (yalnız kartlı kalem); null sınır sütunları boşaltır (zarfın tamamı).
+export async function kalemKabulleriYaz(db: Db, talepId: string, kabuller: readonly { kalemId: string; kabul: KabulSiniri | null }[]): Promise<void> {
+  if (kabuller.length === 0) return;
+  const k = kabuller.map((x) => x.kabul);
+  await db.sorgu(
+    `UPDATE satin_alma_talep_kalemi k SET yalniz_ayni = b.ayni, sartli_kabul = b.sartli,
+            kabul_kaliteleri = CASE WHEN b.kalite IS NULL THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(b.kalite)) END,
+            kabul_durumlari = CASE WHEN b.durum IS NULL THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(b.durum)) END,
+            kabul_pay_mm = b.pay
+       FROM unnest($2::uuid[], $3::boolean[], $4::boolean[], $5::jsonb[], $6::jsonb[], $7::numeric[]) AS b(id, ayni, sartli, kalite, durum, pay)
+      WHERE k.talep_id = $1 AND k.id = b.id`,
+    [talepId, kabuller.map((x) => x.kalemId), k.map((x) => x?.yalnizAyni ?? false), k.map((x) => x?.sartliKabul ?? false),
+      k.map((x) => (x?.kaliteler == null ? null : JSON.stringify(x.kaliteler))), k.map((x) => (x?.durumlar == null ? null : JSON.stringify(x.durumlar))),
+      k.map((x) => x?.payMm ?? null)],
+  );
+}
+export interface KalemKabulSatiri { kalemId: string; yalnizAyni: boolean; sartliKabul: boolean; kaliteler: string[] | null; durumlar: string[] | null; payMm: number | null }
+export function kalemKabulleriOku(db: Db, talepIdleri: readonly string[]): Promise<KalemKabulSatiri[]> {
+  return db.sorgu(
+    `SELECT id AS "kalemId", yalniz_ayni AS "yalnizAyni", sartli_kabul AS "sartliKabul", kabul_kaliteleri AS kaliteler, kabul_durumlari AS durumlar,
+            kabul_pay_mm::float8 AS "payMm"
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND katalog_id IS NOT NULL`,
+    [talepIdleri],
+  );
+}
 // Talepteki kalem sırasıyla: sıra burada verilir, PostgreSQL ORDER BY olmadan sıra garantisi vermez (kalem bağları ekranda bu sırayla).
 export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
   return db.sorgu(
@@ -2000,12 +2025,15 @@ export async function stoktanKalemGeriAl(db: Db, talepId: string, kalemId: strin
     if (satir === null) return false;
     const eklenen = await db.sorgu(
       `INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, katalog_id, ad, ozellik, miktar, birim, kategori, logo_satir_ref, uygulanan_malzeme_no,
-              is_emri_id, kaynak_talep_id, kaynak_sira, kaynak_ihtiyac_tarihi, kaynak_birim, die_id)
+              is_emri_id, kaynak_talep_id, kaynak_sira, kaynak_ihtiyac_tarihi, kaynak_birim, die_id,
+              yalniz_ayni, sartli_kabul, kabul_kaliteleri, kabul_durumlari, kabul_pay_mm)
        SELECT (r).talep_id, (r).id,
               CASE WHEN EXISTS (SELECT 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id AND x.sira = (r).sira)
                    THEN (SELECT coalesce(max(sira), 0) + 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id) ELSE (r).sira END,
               (r).katalog_id, (r).ad, (r).ozellik, $3::numeric, (r).birim, (r).kategori, (r).logo_satir_ref, (r).uygulanan_malzeme_no,
-              (r).is_emri_id, (r).kaynak_talep_id, (r).kaynak_sira, (r).kaynak_ihtiyac_tarihi, (r).kaynak_birim, (r).die_id
+              (r).is_emri_id, (r).kaynak_talep_id, (r).kaynak_sira, (r).kaynak_ihtiyac_tarihi, (r).kaynak_birim, (r).die_id,
+              -- 3437-2 öncesi saklanan satırda kabul anahtarı yoktur: varsayılan sınır (NOT NULL sütunlar false).
+              coalesce((r).yalniz_ayni, false), coalesce((r).sartli_kabul, false), (r).kabul_kaliteleri, (r).kabul_durumlari, (r).kabul_pay_mm
          FROM (SELECT jsonb_populate_record(NULL::satin_alma_talep_kalemi, $1::jsonb) AS r) q
         WHERE (r).talep_id = $2 RETURNING id`, [JSON.stringify(satir), talepId, miktar]);
     if (eklenen.length === 0) return false;

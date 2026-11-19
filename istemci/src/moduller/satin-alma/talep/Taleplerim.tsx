@@ -2,6 +2,14 @@ import { Fragment, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
+
+// 3437-2: kalemin daraltılmış kabul sınırı tek satırda; sınırsız kalemde (kartın sınırı) satır yok.
+const kabulOzeti = (k: NonNullable<Talebim['kalemler'][number]['kabul']>): string => (k.yalnizAyni ? 'yalnız aynı malzeme' : [
+  k.kaliteler === null ? null : k.kaliteler.length === 0 ? 'kalite yalnız istenen' : `kalite muadili ${k.kaliteler.join(', ')}`,
+  k.durumlar === null ? null : k.durumlar.length === 0 ? 'durum yalnız istenen' : `durum muadili ${k.durumlar.join(', ')}`,
+  k.payMm === null ? null : `ölçü en çok +${k.payMm.toLocaleString('tr-TR')} mm`,
+  k.sartliKabul ? 'şartlı muadil kabul' : null,
+].filter(Boolean).join(' · '));
 import { ADIMLAR, ADIM_SIRASI, DURUM, KAYNAK, SURE, anahtarlar, cagri, gunYaz, karsilikYaz } from './ortak.ts';
 import './talep.css';
 
@@ -101,6 +109,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                       <span className="sa-talep-not">{[x.uygulanan && `Uygulanacak malzeme: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
                     )}
                     {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
+                    {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
                     <OzellikAlti m={x.malzeme ?? null} />
                     <KartAyrintisi m={x.malzeme ?? null} />
                   </td>

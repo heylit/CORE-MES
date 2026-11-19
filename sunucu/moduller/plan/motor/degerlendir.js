@@ -24,11 +24,44 @@ const ymAnahtar = e => `${e.m}|${e.gun}|${e.vardiya}`;
 
 /* plan dengesine göre dondurma bölgesi (t-tekyer): bölgedeki işler bugünkü yerinde geçici kilitlenir */
 const DENGE_UFUK = { elle: 72, dengeli: 24, otomatik: 0 };
-/** @param {MotorDurumu} [st] */
-function dengeKilit(st) {
+/** @param {MotorDurumu} [st] @param {boolean} [geriyiKaydir] */
+function dengeKilit(st, geriyiKaydir = false) {
   const u = DENGE_UFUK[S.w.denge] != null ? DENGE_UFUK[S.w.denge] : DENGE_UFUK.dengeli; if (!u || !S.plan) return st;
   const a = st.now, b = a + u; const var_ = new Set(st.D.siparisler.map(s => s.id));
-  for (const r of Object.values(S.plan.ops)) if (!st.locks[r.id] && !r.fas && !r.done && isFinite(r.S) && r.S >= a && r.S < b && var_.has(r.job)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
+  const elle = { ...st.locks }, g = st.gercek || {};
+  const gecici = [], geride = new Set();
+  for (const r of Object.values(S.plan.ops)) {
+    if (elle[r.id] || r.fas || r.done || !isFinite(r.S) || !var_.has(r.job)) continue;
+    if (r.S >= a && r.S < b) gecici.push(r);
+    else if (geriyiKaydir && r.S < a - 1e-9 && !r.act && !(g[r.id] && g[r.id].S != null)) { gecici.push(r); geride.add(r.id); }
+  }
+  /* 3447: sıfırdan kurulan planda (geriyiKaydir) kayıtlı planda başlaması şimdiden önce kalmış, başlamamış iş (geride: operatör geç
+     başlıyor) şimdiye alınır; bölgedeki işler sıralarını koruyarak gerektiği kadar ileri kayar (tezgâhtaki önceki işin ve öncülünün bitişi).
+     Geride iş kilitsiz kalsaydı ardılı eski yerinde kilitli kalır, öncülünden önce başlardı ("Planı kur" OP 20'yi OP 10'un önüne koyuyordu)
+     ya da önündeki boşluğa yeni iş girerdi (4 saat kuralı). Bölgenin dışına kayan iş ve kilitsiz kalan işin ardılı kilitlenmez, motor dizer.
+     Geride iş yoksa kilitler bugünkü yerindedir. Elle kilit ve başlamış iş yerinde kalır, kayan iş onlarla ve birbiriyle çakışmaz. Kayıtlı planı çözen
+     hesaplar (lnsDecode) geride işi yerinde tutar; onlarda kaydırılmaz. */
+  if (!geride.size) { for (const r of gecici) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 }; return st; }
+  /* Kilitli işin bitişi motorun kilit yeridir (kilitYeri: tezgâhın takvimi ve molası dahil); çalışan işin bitişi kayıtlı plandakidir, en az şimdi. */
+  const cx = cxAl(), byId = cx.byId, sure = r => Math.max(0, r.C - r.S);
+  const ucu = (id, m, t) => { const o = byId[id], k = o && kilitYeri(o, { m, S: t }, cx), r = S.plan.ops[id]; return k ? k.C : t + (r ? sure(r) : 0); };
+  const dolu = {}, bitis = {}; const ekle = (id, m, s, c) => { (dolu[m] = dolu[m] || []).push([s, c]); bitis[id] = c; };
+  for (const [id, l] of Object.entries(elle)) { const r = S.plan.ops[id]; const m = l && l.m != null ? l.m : r && r.m; if (l && isFinite(l.S) && m != null) ekle(id, String(m), l.S, ucu(id, m, l.S)); }
+  for (const [id, x] of Object.entries(g)) {
+    if (!x || x.S == null || x.m == null) continue;
+    const r = S.plan.ops[id]; ekle(id, String(x.m), x.S, x.C != null ? x.C : Math.max(a, r && isFinite(r.C) ? r.C : a));
+  }
+  const serbest = new Set();
+  for (const r of gecici.sort((x, y) => x.S - y.S)) {
+    const m = String(r.m), o = byId[r.id];
+    if (o && o.pr.some(([p]) => serbest.has(p))) { serbest.add(r.id); continue; }
+    let t = Math.max(r.S, a);
+    if (o) for (const [p] of o.pr) if (bitis[p] != null) t = Math.max(t, bitis[p]);
+    for (let k = true; k;) { k = false; const e = ucu(r.id, r.m, t); for (const [s, c] of dolu[m] || []) if (t < c - 1e-9 && e > s + 1e-9) { t = c; k = true; break; } }
+    if (t >= b) { serbest.add(r.id); continue; }
+    st.locks[r.id] = { m: r.m, S: t, gecici: 1 };
+    ekle(r.id, m, t, ucu(r.id, r.m, t));
+  }
   return st;
 }
 
@@ -363,7 +396,7 @@ function partiBol(jid, dagitim, adetler) {
    (S.w.sure sn, sabit adımlı saatle). Kayıtlı planı iyileştirme burada yok (579 b: HiGHS gelene kadar). Canlı plana göre değişim (ozet.chg)
    burada ölçülmez: null. */
 function planKur() {
-  const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
+  const st = stHazirla(dengeKilit(stOf(), true)); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
   let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx);
   let E = evaluate(cur, st, null, true); const ilk = E.wT;
   const lbx = lowerBound(st, cx); const lbC = {}; for (const j in lbx.C) lbC[j] = isFinite(lbx.C[j]) ? lbx.C[j] : null;

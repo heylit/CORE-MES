@@ -17,7 +17,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 - `satin_alma_katalog_takma_adi`: `katalog_id`, `takma_ad`
 - `satin_alma_talep_sayaci`: `yil`, `son_sira`
 - `satin_alma_talep`: `id`, `yil`, `sira`, `no` (üretilen: ST-yıl-sıra), `baslik`, `birim`, `talep_eden_kisi_id`, `acan_kisi_id`, `oncelik`, `ihtiyac_tarihi`, `notlar`, `durum`, `iptal_nedeni`, `agirlik_maliyet`, `agirlik_termin`, `agirlik_tedarikci`, `agirlik_garanti`, `teslim_yontemi` (kart #1310), `surum`, `olusturma`, `guncelleme`
-- `satin_alma_talep_kalemi`: `talep_id`, `id`, `sira`, `katalog_id`, `ad`, `ozellik`, `miktar`, `birim`, `kategori`
+- `satin_alma_talep_kalemi`: `talep_id`, `id`, `sira`, `katalog_id`, `ad`, `ozellik`, `miktar`, `birim`, `kategori`; 3437-2 kabul sınırı `yalniz_ayni`, `sartli_kabul`, `kabul_kaliteleri`, `kabul_durumlari`, `kabul_pay_mm` (malzemeler alternatif zarfının daraltılmışı; zarf malzemelerin `alternatifZarfiOku` ile okunur, kopyalanmaz)
 - `satin_alma_teklif_istegi`: `talep_id`, `firma_id`, `gonderim`, `son_tarih`
 - `satin_alma_teklif`: `talep_id`, `id`, `sira`, `firma_id`, `tedarikci_adi`, `teklif_tarihi`, `gecerlilik`, `para_birimi`, `kur`, `iskonto_yuzdesi`, `nakliye`, `diger_masraf`, `teslim_sekli`, `nakliye_dahil`, `termin_gun`, `vade_gun`, `avans_yuzdesi`, `garanti_ay`, `teknik_uygun`, `notlar`, `ilk_toplam`, `revizyon`, `olusturma`
 - `satin_alma_teklif_satiri`: `talep_id`, `teklif_id`, `kalem_id`, `birim_fiyat` (işlev `satin_alma_teklif_toplami`)

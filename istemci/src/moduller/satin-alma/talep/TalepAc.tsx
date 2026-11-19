@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcGovdesi, KabulSiniri, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
+import { KabulSinirlari } from './KabulSinirlari.tsx';
 import { KART_SAYFASI, SURE, adettenKg, anahtarlar, cagri, kartKarsiligi, karsilikYaz, parcaKg } from './ortak.ts';
 import './talep.css';
 
@@ -20,14 +21,17 @@ interface KalemTaslagi {
   mevcut: { id: string; bagli: boolean } | null;
   // 3100: adet alanına yazılan (yalnız giriş yardımcısı, gönderilmez); kg değişince silinir. parcaKg: düzenlenen kalemde sunucunun karşılığından.
   adet: string; parcaKg: number | null;
+  // 3437-2: kabul sınırı (null: kartın zarfının tamamı). zarfNo: sınırın okunduğu kart; düzenlenen kalemde kartı hammadde olan kalemin kartı.
+  kabul: KabulSiniri | null; zarfNo: number | null; kabulHatali: boolean;
 }
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (): KalemTaslagi => ({
-  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, mevcut: null, adet: '', parcaKg: null,
+  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, mevcut: null, adet: '', parcaKg: null, kabul: null, zarfNo: null, kabulHatali: false,
 });
 const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
   ...bosKalem(), ad: x.ad, birim: x.birim, miktar: (x.miktar ?? '').replace('.', ','), aciklama: x.aciklama ?? '',
   mevcut: { id: x.id!, bagli: x.uygulanan !== null || x.fasonAdim !== null },
+  kabul: x.kabul ?? null, zarfNo: x.malzemeNo !== undefined && x.malzeme?.kalite != null ? x.malzemeNo : null,
   parcaKg: x.karsilik?.birim === 'adet' && x.miktar !== null && Number(x.karsilik.miktar) > 0 ? Number(x.miktar) / Number(x.karsilik.miktar) : null,
 });
 // Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi. Plan ihtiyacında kalem
@@ -41,6 +45,10 @@ const ontalepKalemi = (o: OnTalep): KalemTaslagi => (o.kaynak === 'plan'
     ...bosKalem(), serbest: true, ad: o.adim ?? `Op ${o.opNo}`, birim: o.birim, miktar: String(o.miktar), uygulanan: o.parca, isEmriId: o.isEmriId,
     kaynak: `${o.emirNo} · Op ${o.opNo}`,
   });
+
+// 3437-2: sınır yalnız kartlı malzeme kaleminde gider; düzenlemede sınırı gösterilen kalem her zaman gönderir (null: sınır kaldırıldı).
+const kabulAlani = (tur: TalepTuru, k: KalemTaslagi): { kabul?: KabulSiniri | null } =>
+  (tur !== 'malzeme' ? {} : k.mevcut !== null ? (k.zarfNo === null ? {} : { kabul: k.kabul }) : k.kart === null || k.kabul === null ? {} : { kabul: k.kabul });
 
 // Denetim #37: miktar ortak ayrıştırıcıdan okunur ("12.5" = "12,5", virgül varsa nokta binliktir). Virgülsüz "1.250" belirsizdir,
 // okunamayan miktar gibi gönderilmez (Y2: noktayı binlik sayıp silmek "12.5"i 125 yapıyordu).
@@ -158,7 +166,7 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
       ) : k.kart !== null ? (
         <div className="sa-talep-secili">
           <span><b>{k.kart.ad}</b> <span className="sa-talep-not">{k.kart.kod}</span></span>
-          <Dugme simge="edit" onClick={() => degistir({ kart: null })}>Değiştir</Dugme>
+          <Dugme simge="edit" onClick={() => degistir({ kart: null, kabul: null, kabulHatali: false })}>Değiştir</Dugme>
         </div>
       ) : k.serbest ? (
         <div className="sa-talep-serbest">
@@ -181,6 +189,9 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
               ipucu="İsteğe bağlı. Hizmet hangi parça ya da malzeme üzerinde yapılacak; satın alma teklif isterken bu bilgiyle gider." />
           )}
         </div>
+      )}
+      {tur === 'malzeme' && (k.mevcut !== null ? k.zarfNo : k.kart?.hammadde === true ? k.kart.no : null) !== null && (
+        <KabulSinirlari no={(k.mevcut !== null ? k.zarfNo : k.kart!.no)!} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />
       )}
       <div className="sa-talep-miktar">
         <div className="sa-talep-miktar-grup">
@@ -280,6 +291,10 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
   const eksiMiktar = kalemler.some((k) => /^-\s*\d/.test(miktarGirdisi(k.miktar)));
 
   const gonderTikla = () => {
+    if (kalemler.some((k) => k.kabulHatali)) {
+      hataYaz('Kabul sınırındaki ölçü payını düzeltin ya da boş bırakın.');
+      return;
+    }
     if (eksik || miktarsiz) {
       hataYaz(eksik ? `Her kalem için ${tur === 'hizmet' ? 'hizmeti' : 'malzemeyi'} seçin (ya da adını ve birimini yazın) ve miktarı girin.`
         : belirsiz ? BELIRSIZ_MIKTAR : eksiMiktar ? 'Miktar sıfırdan büyük olmalı.' : 'Miktarı sayı olarak yazın; ondalık için virgül, binlik için nokta (1.250,5).');
@@ -290,7 +305,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
         surum: duzenlenen.surum!, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(),
         kalemler: kalemler.map((k) => ({
           id: k.mevcut?.id ?? null, malzemeNo: k.kart?.no ?? null, ad: k.kart || k.mevcut ? '' : k.ad.trim(), birim: k.kart || k.mevcut ? '' : k.birim.trim(),
-          miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(),
+          miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(), ...kabulAlani(tur, k),
         })),
       } });
       return;
@@ -299,7 +314,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
       id: kimlik, tur, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(), uretimEmriId: emirId === '' ? null : Number(emirId),
       kalemler: kalemler.map((k) => ({
         malzemeNo: k.kart?.no ?? null, ad: k.kart ? '' : k.ad.trim(), birim: k.kart ? '' : k.birim.trim(), miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(),
-        uygulananMalzemeNo: tur === 'hizmet' ? (k.uygulanan?.no ?? null) : null, isEmriId: tur === 'hizmet' ? k.isEmriId : null,
+        uygulananMalzemeNo: tur === 'hizmet' ? (k.uygulanan?.no ?? null) : null, isEmriId: tur === 'hizmet' ? k.isEmriId : null, ...kabulAlani(tur, k),
       })),
     });
   };

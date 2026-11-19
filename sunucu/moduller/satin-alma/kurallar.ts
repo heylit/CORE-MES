@@ -4,7 +4,8 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
-import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifZarfi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { HizliKalem, KabulSiniri, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
@@ -173,6 +174,13 @@ export const ILETILER = {
   kartBirimi: (ad: string, birim: string): string => `${ad}: birim malzeme kartının birimiyle girilir (${birim}); başka birimle sipariş verilmez.`,
   teslimdenAz: (teslim: string): string => `Miktar teslim alınandan (${teslim}) az olamaz.`,
   hizliKalemBos: 'Kalem için malzeme kartı seçin ya da adını yazın.',
+  kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
+  kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
+  kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
+  kabulDisi: (ad: string, l: readonly string[]) => `${ad} kartın kabul sınırında yok: ${l.join(', ')}. Talepte sınır yalnız daraltılır.`,
+  kabulPaysiz: 'Bu kartta kesit ölçüsü yok; ölçü payı girilmez.',
+  kabulPayGenis: (enCok: number) => `Ölçü payı kartın sınırından geniş olamaz (en çok +${enCok.toLocaleString('tr-TR')} mm).`,
+  kabulYalnizAyniGerekce: 'Talepte yalnız aynı malzeme istendi.',
   hizliKalemBirimsiz: 'Kartı olmayan kalemde birim zorunlu.',
   kartTuruTalepteYok: 'Bu tür kart talepte seçilemez.',
   birimYok: (ad: string): string => `Birim listede yok: ${ad}. Ayarlar'dan ekleyin ya da listeden seçin.`,
@@ -1060,7 +1068,7 @@ export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kay
 }
 export function talebim(
   t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
-  ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(),
+  ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(), kabuller: ReadonlyMap<string, KalemKabulu> = new Map(),
 ): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
@@ -1070,7 +1078,7 @@ export function talebim(
     guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
-    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null })),
+    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id) })),
   };
 }
 
@@ -1833,4 +1841,48 @@ export function emirSatinAlmaDurumlari(
 export function onayliTalepGelisi(bugun: string, terminGun: number | null): string | null {
   if (terminGun === null || !Number.isInteger(terminGun) || terminGun < 0) return null;
   return new Date(Date.parse(`${bugun}T00:00:00Z`) + terminGun * GUN_MS).toISOString().slice(0, 10);
+}
+
+// 3437 a (dilim 2): talep kaleminin kabul sınırı. Kartın zarfı (3437-1 motoru) talep edenin daraltmasıyla kesişir; daraltma yalnız daraltır:
+// liste zarfın muadilleriyle kesişir, pay zarfınkinden büyük olamaz, "yalnız aynı" zarfı kapatır. Şartlı kabul, şartlı muadili talep edenin
+// baştan onayıdır (satın almada ayrıca sorulmaz). Sınır yoksa (null) zarfın kendisi.
+export interface KalemKabulu { malzemeNo: number; kabul: KabulSiniri | null }
+export const VARSAYILAN_KABUL: KabulSiniri = { yalnizAyni: false, sartliKabul: false, kaliteler: null, durumlar: null, payMm: null };
+const varsayilanMi = (k: KabulSiniri): boolean =>
+  !k.yalnizAyni && !k.sartliKabul && k.kaliteler === null && k.durumlar === null && k.payMm === null;
+// Yazılacak hâl: varsayılan sınır null saklanmaz (boş sütunlar), yalnız aynıda öteki alanlar boşalır; listeler tekrarsız ve sıralı.
+export function kabulYazimi(k: KabulSiniri | null): KabulSiniri | null {
+  if (k === null || varsayilanMi(k)) return null;
+  if (k.yalnizAyni) return { ...VARSAYILAN_KABUL, yalnizAyni: true };
+  const tek = (l: readonly string[] | null) => (l === null ? null : [...new Set(l)].sort());
+  return { yalnizAyni: false, sartliKabul: k.sartliKabul, kaliteler: tek(k.kaliteler), durumlar: tek(k.durumlar), payMm: k.payMm };
+}
+const enBuyukPay = (z: AlternatifZarfi): number => Math.max(0, ...z.olcu.map((o) => o.enCok - o.istenen));
+export function kabulReddi(zarf: AlternatifZarfi | null, k: KabulSiniri | null): string | null {
+  const y = kabulYazimi(k);
+  if (y === null || y.yalnizAyni) return null;
+  if (zarf === null) return ILETILER.kabulZarfsiz;
+  if (zarf.kapali) return ILETILER.kabulKapali;
+  const disi = (l: readonly string[] | null, s: readonly { deger: string }[]) => (l ?? []).filter((d) => !s.some((x) => x.deger === d));
+  const k1 = disi(y.kaliteler, zarf.kalite.acik ? zarf.kalite.secenekler : []);
+  if (k1.length > 0) return ILETILER.kabulDisi('Kalite', k1);
+  const d1 = disi(y.durumlar, zarf.durum.acik ? zarf.durum.secenekler : []);
+  if (d1.length > 0) return ILETILER.kabulDisi('Durum', d1);
+  if (y.payMm !== null && zarf.olcu.length === 0) return ILETILER.kabulPaysiz;
+  if (y.payMm !== null && y.payMm > enBuyukPay(zarf) + 1e-6) return ILETILER.kabulPayGenis(enBuyukPay(zarf));
+  return null;
+}
+// Daraltılmış zarf: satın alma ve stok kontrol bu zarfla değerlendirir (3437-3, 3437-4).
+export function kabulZarfi(zarf: AlternatifZarfi, k: KabulSiniri | null): AlternatifZarfi {
+  const y = kabulYazimi(k);
+  if (y === null) return zarf;
+  if (y.yalnizAyni) return { ...zarf, kapali: true, gerekce: ILETILER.kabulYalnizAyniGerekce, kapaliKaynak: null };
+  const suz = <T extends { deger: string }>(s: readonly T[], l: readonly string[] | null) => (l === null ? [...s] : s.filter((x) => l.includes(x.deger)));
+  return {
+    ...zarf,
+    sartliAcik: zarf.sartliAcik || y.sartliKabul,
+    kalite: { ...zarf.kalite, secenekler: suz(zarf.kalite.secenekler, y.kaliteler) },
+    durum: { ...zarf.durum, secenekler: suz(zarf.durum.secenekler, y.durumlar) },
+    olcu: y.payMm === null ? zarf.olcu : zarf.olcu.map((o) => ({ ...o, enCok: Math.min(o.enCok, Math.round((o.istenen + y.payMm!) * 1000) / 1000) })),
+  };
 }

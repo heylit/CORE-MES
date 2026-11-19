@@ -6,6 +6,7 @@ import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 import { kmOnayliListeSatiri } from './kalite-merkezi-kategori-onayi.ts';
+import { alternatifZarfi } from './malzeme-alternatifleri.ts';
 import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
@@ -556,6 +557,21 @@ export const malzemeSecenekleriCevabi = z.object({
   })),
 });
 
+// 3437 a (dilim 2): kalemin kabul sınırı, kartın alternatif zarfının daraltılmışıdır. Boş alan zarfın tamamıdır; boş liste yalnız istenen.
+// Talep eden yalnız daraltır: zarfta olmayan kalite, durum ya da zarfınkinden geniş pay reddedilir. Şartlı muadil varsayılan kapalıdır.
+export const kabulSiniriSemasi = z.object({
+  yalnizAyni: z.boolean(),
+  sartliKabul: z.boolean().prefault(false),
+  kaliteler: z.array(z.string().trim().min(1).max(40)).max(50).nullable().prefault(null),
+  durumlar: z.array(z.string().trim().min(1).max(60)).max(50).nullable().prefault(null),
+  payMm: z.number().min(0).max(1000).nullable().prefault(null),
+}).strict();
+export type KabulSiniri = z.output<typeof kabulSiniriSemasi>;
+export const kabulZarfiParametresi = z.object({ no: z.coerce.number<number>().int().positive().max(2147483647) });
+// Hammadde dışı ya da kalitesiz kartta zarf yoktur (kalem yalnız aynı malzemeyle karşılanır).
+export const kabulZarfiCevabi = z.object({ zarf: alternatifZarfi.nullable() });
+export type KabulZarfiCevabi = z.output<typeof kabulZarfiCevabi>;
+
 // Ana sayfadan talep (kart #375): talep eden kalemi malzeme kartından seçer ya da adıyla yazar ("kart bekliyor").
 // Kişi alanı yoktur: talep oturumdaki kişi adına açılır, gövdede gelen başka alan yok sayılır.
 export const hizliKalemSemasi = z.object({
@@ -570,6 +586,8 @@ export const hizliKalemSemasi = z.object({
   // 2428: fason kalemi emrin adımına (isEmriId) ya da stoktaki partiye bağlanır; parti uygulanan parçanın partisidir, konum isteğe bağlı.
   partiId: z.number().int().positive().max(2147483647).nullable().prefault(null),
   konumId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  // 3437: yalnız kartlı kalemde; gelmezse (ya da null) zarfın tamamı. Düzenlemede gelmeyen var olan kalemin sınırı korunur.
+  kabul: kabulSiniriSemasi.nullable().optional(),
 });
 export const hizliAcGovdesi = z.object({
   id: uuid,
@@ -605,6 +623,9 @@ export const talebimSemasi = z.object({
     karsilik: z.object({ miktar: z.string(), birim: z.string() }).nullable().optional(),
     // 3121: kartın kalite, durum, işlem ve ölçüsü; kartsız kalemde null.
     malzeme: z.object(malzemeOzelligiAlanlari).nullable().optional(),
+    // 3437: kalemin kartı ve kabul sınırı (düzenleme formu zarfı karttan okur); kartsız kalemde gelmez, varsayılan sınırda kabul null.
+    malzemeNo: z.number().int().optional(),
+    kabul: kabulSiniriSemasi.nullable().optional(),
   })),
 });
 // 2871-1 a: talep edenin kendi taslağını düzenlemesi. Var olan kalem kimliğiyle gelir (yalnız miktar ve açıklama değişir); kimliksiz kalem
@@ -612,7 +633,7 @@ export const talebimSemasi = z.object({
 export const talebimiDuzenleGovdesi = z.object({
   ihtiyacTarihi: tarih.nullable().prefault(null),
   aciklama: metin(4000),
-  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true })
+  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true, kabul: true })
     .extend({ id: uuid.nullable().prefault(null) })).min(1, 'En az bir kalem girin.').max(50),
   ...beklenenSurum,
 });
@@ -731,6 +752,7 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-talepleri/proje-secenekleri': { cevap: ProjeSecenekleriCevabi };
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
   'GET /satin-alma-taleplerim': { sorgu: z.input<typeof taleplerimSorgusu>; cevap: TaleplerimCevabi };
+  'GET /satin-alma-kabul-zarfi/:no': { cevap: KabulZarfiCevabi };
   'POST /satin-alma-talepleri/hizli-ac': { govde: z.input<typeof hizliAcGovdesi>; cevap: Talebim };
   'GET /satin-alma-on-talepleri': { cevap: OnTalepleriCevabi };
   'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };
