@@ -14,6 +14,11 @@ export async function emirlerinSevkDurumu(db: Db, emirIdleri: readonly number[])
   return new Map(satirlar.map(({ uretimEmriId, ...durum }) => [uretimEmriId, durum]));
 }
 
+// 3429-3 F4b (Risk K1): satış kaleminin depo çıkışı bu emirlerin partisine dokunmaz; parça kendi müşterisine gidecek.
+export async function acikUrunSevkliEmirler(db: Db, emirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  return new Set(emirIdleri.length === 0 ? [] : await sorgu.acikUrunSevkliEmirler(db, emirIdleri));
+}
+
 export type EmirSevki = Omit<sorgu.EmirSevkiSatiri, 'uretimEmriId'> & { firmaAdi: string | null };
 
 // İleri izlenebilirlik (E-12): lot -> emir (stok) -> sevk -> müşteri. Emrin ürününü taşıyan iptal edilmemiş işler; müşteri işin bırakış

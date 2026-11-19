@@ -52,7 +52,7 @@ export {
 } from './sorgular/teslim/sorgular.ts';
 export {
   istasyondakiEmirBakiyeleri, konumFirmasi, konumdakiParcaBakiyeleri, netStatuDonusumleri, konumdanTeslimEdilen, geriAlinmamisUretimGirisleri, firmaKonumu,
-  firmaKonumuAc, firmadakiEmirler, emrinSevkBakiyeleri, geriAlinmamisSevkHareketleri, uretimGirdiKaynaklari, gozdekiKullanilamazKalite,
+  firmaKonumuAc, firmadakiEmirler, emrinSevkBakiyeleri, geriAlinmamisSevkHareketleri, malzemeninSevkBakiyeleri, geriAlinmamisEmirsizSevkHareketleri, uretimGirdiKaynaklari, gozdekiKullanilamazKalite,
   konumKaliteToplamlari, kaliteBekleyenIstasyonKonumu, kaliteBakiyeleri, emrinIstasyonEksileri, emrinIstasyonArtilari, emrinStatuCevirmeleri, geriAlinmamisSarflar, emrinStatusuzSarfi,
   geriAlinmamisHurdaCikislari, type RezerveSatiri, rezerveKilidi, rezerveArtir, rezerveAzalt, rezerveler, tumRezerveler, statuToplami, emrinRezerveleriniSil,
   emirRezerveIstegiYaz, rezerveIsteyenEmirler, emrinNetSarfi, rezerveKaydiYaz, fasonaTasinan, type GirdiKaynagiAnahtari, uretimGirdiKaynaklariToplu,
@@ -93,6 +93,6 @@ export {
 
 export {
   type KullanilabilirStokHam, kullanilabilirStoklar, type ArtikParcaHam, acikArtiklar, artikParcalar, artikParcaEkle, artikParcaKapat, artikParcaVarMi,
-  type AyirmaKaynagiHam, acikAyirmaKaynaklari, ayirmaKilidi, ayirmaIstegiEkle, type AyirmaIstegiHam, ayirmaIstekleri, ayirmaIstegiKilitle, ayirmaIstegiIlerlet, ayirmaIstegiIptal,
+  type AyirmaKaynagiHam, acikAyirmaKaynaklari, ayirmaKilidi, ayirmaIstegiEkle, type AyirmaIstegiHam, ayirmaIstekleri, ayirmaIstegiKilitle, ayirmaIstegiIlerlet, ayirmaIstegiIptal, siparisAyirmasiniTeslimEt, siparisAyirmaTesliminiGeriAl,
   siparisAyirmaIstegiEkle, siparisAyirmalari,
 } from './sorgular/kontrol/sorgular.ts';

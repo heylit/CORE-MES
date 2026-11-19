@@ -1380,7 +1380,7 @@ export function sevkAdediBinde(adet: string): bigint | null {
 // 147 b: karar bekleyen ve karantinadaki parça sevk edilmez; red parça uyarıyla çıkar. 1222 a: açık uygunsuzluğu (NCR) olan parti
 // sevk edilmez; red parça serbest ve şartlı bitmeden alınmaz. Bunun dışında bakiyeler verilen sırayla (öncelik çağıranda) tüketilir;
 // yolda teslime ayrılan dokunulmaz. Yetmezse eksik, kalite yüzünden ve açık NCR yüzünden alınamayan miktar döner.
-export interface SevkBakiyesi { konumId: number; konumTuru: KonumTuru; partiId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string; ayrilan: string }
+export interface SevkBakiyesi { konumId: number; konumTuru: KonumTuru; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string; ayrilan: string }
 export function sevkKaynaklariSec(
   bakiyeler: readonly SevkBakiyesi[], istenen: bigint, acikNcrPartileri: ReadonlySet<number> = new Set(),
 ): { secim: (SevkBakiyesi & { alinan: bigint })[]; eksik: bigint; engelli: bigint; ncrEngelli: bigint } {
@@ -1390,7 +1390,7 @@ export function sevkKaynaklariSec(
   for (const b of sirali) {
     const serbest = binde(b.miktar) - binde(b.ayrilan);
     if (serbest <= 0n) continue;
-    if (acikNcrPartileri.has(b.partiId)) { ncrEngelli += serbest; continue; }
+    if (b.partiId !== null && acikNcrPartileri.has(b.partiId)) { ncrEngelli += serbest; continue; }
     if (b.kaliteDurumu === 'karar_bekliyor' || b.konumTuru === 'karantina') { engelli += serbest; continue; }
     if (kalan === 0n) continue;
     const alinan = serbest < kalan ? serbest : kalan;

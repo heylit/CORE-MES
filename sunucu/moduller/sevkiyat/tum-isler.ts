@@ -361,12 +361,13 @@ export async function onayKalkincaTetikGeriAl(db: Db, isIdleri: readonly number[
 export interface DepoKalemi {
   kalemId: number; is: 'cikis' | 'kabul'; kaynak: KalemSatiri['kaynak']; uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null;
   adet: string | null; kabulAdet: string | null; firmaId: number | null; tasima: Tasima; tetiklendi: string; erken: boolean; siparisSatiriId: number | null;
-  fasonHareketId: number | null;
+  fasonHareketId: number | null; satisSiparisSatiriId: number | null;
 }
 const depoKalemi = (k: KalemSatiri): DepoKalemi => ({
   kalemId: k.id, is: k.yon === 'gidis' ? 'cikis' : 'kabul', kaynak: k.kaynak, uretimEmriId: k.uretimEmriId, isEmriId: k.isEmriId, malzemeNo: k.malzemeNo,
   adet: k.adet, kabulAdet: k.kabulAdet, firmaId: k.firmaId ?? k.isNoktaFirmaId, tasima: k.tasima ?? 'biz', tetiklendi: k.isTetiklendi ?? k.serbestZamani!,
   erken: k.erkenZamani !== null, siparisSatiriId: k.siparisSatiriId, fasonHareketId: k.fasonHareketId,
+  satisSiparisSatiriId: k.satisSiparisSatiriId,
 });
 // Firma taşımasında kalem çıkabilir olunca depoya düşer; araçla taşımada tetik yeter (tetik çıkabilirliği zaten aradı).
 export async function depoBekleyenleri(db: Db): Promise<DepoKalemi[]> {
