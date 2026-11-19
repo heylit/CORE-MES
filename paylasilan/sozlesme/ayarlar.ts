@@ -8,7 +8,7 @@ import { istekKimligiMi } from '../istek-kimligi.ts';
 import { enUzunNumara, kalipHatasi } from '../numara.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihAraligiHatasi } from '../tarih-araligi.ts';
-import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_ONAY_METNI, TEMIZLIK_TURLERI } from '../veri-temizleme.ts';
+import { SIFIRLAMA_ONAY_METNI, TEMIZLIK_EN_COK_KOK, TEMIZLIK_ONAY_METNI, TEMIZLIK_TURLERI } from '../veri-temizleme.ts';
 import { zamanSemasi } from '../zaman.ts';
 
 export const SAYI_ONDALIK_EN_COK = 6;
@@ -502,6 +502,24 @@ export const temizleCevabi = z.object({
   yedekAdi: z.string(),
 });
 export type TemizleCevabi = z.output<typeof temizleCevabi>;
+
+// "Sıfırdan başla" (3426 a): seçenekler sorguda "1" ya da "0".
+const bayrak = z.enum(['0', '1']).transform((x) => x === '1');
+export const sifirlamaOzetiSorgusu = z.object({ kullanicilar: bayrak, tanimlar: bayrak });
+export const sifirlamaOzetiCevabi = z.object({
+  satirlar: z.array(z.object({ ad: z.string(), sayi: z.number().int().nonnegative() })),
+  toplam: z.number().int().nonnegative(),
+});
+export type SifirlamaOzetiCevabi = z.output<typeof sifirlamaOzetiCevabi>;
+export const sifirlaGovdesi = z.object({
+  kullanicilar: z.boolean(),
+  tanimlar: z.boolean(),
+  yedekAdi: z.string().max(120).regex(YEDEK_ADI, 'Yedek adı geçersiz.'),
+  onay: z.literal(SIFIRLAMA_ONAY_METNI, { message: `Onay için ${SIFIRLAMA_ONAY_METNI} yazın.` }),
+  parola: gizli(z.string().min(1, 'Parola zorunlu.').max(200)),
+});
+export const sifirlaCevabi = z.object({ toplam: z.number().int().nonnegative(), yedekAdi: z.string() });
+export type SifirlaCevabi = z.output<typeof sifirlaCevabi>;
 
 // 3399 a: kendi firmalarımızın kodu. Kod verildikten sonra değişmez; ad, varsayılan ve aktiflik değişir.
 const firmaAdi = z.string().trim().min(1, 'Ad zorunlu.').max(FIRMA_ADI_EN_UZUN, `Ad en çok ${FIRMA_ADI_EN_UZUN} karakter olur.`);

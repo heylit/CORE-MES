@@ -224,3 +224,18 @@ export function firmaKoduGuncelle(
 export async function firmaKodlariniKilitle(db: Db): Promise<void> {
   await islemKilidiAl(db, 'ayar-firma-kodu');
 }
+
+export interface SifirlamaKapsamSatiri { kalan: readonly string[]; kismi: readonly string[]; kullanicilar: boolean; yoneticiId: number }
+
+export async function sifirlamaSayilariniOku(db: Db, k: SifirlamaKapsamSatiri): Promise<Record<string, number>> {
+  const satir = await db.tek<{ sayilar: Record<string, number> }>(
+    'SELECT ayarlar_sifirlama_sayilari($1::text[], $2::text[], $3, $4) AS sayilar', [k.kalan, k.kismi, k.kullanicilar, k.yoneticiId]);
+  return satir?.sayilar ?? {};
+}
+
+export async function sifirdanBaslat(db: Db, k: SifirlamaKapsamSatiri): Promise<{ tablolar: Record<string, number>; cozulen: Record<string, number> }> {
+  const satir = await db.tek<{ sonuc: { tablolar: Record<string, number>; cozulen: Record<string, number> } }>(
+    'SELECT ayarlar_sifirdan_basla($1::text[], $2::text[], $3, $4) AS sonuc', [k.kalan, k.kismi, k.kullanicilar, k.yoneticiId]);
+  if (satir === null) throw new Error('Sıfırlama sonucu okunamadı');
+  return satir.sonuc;
+}

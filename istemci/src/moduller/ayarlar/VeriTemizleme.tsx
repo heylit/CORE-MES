@@ -1,11 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi, TemizlikTarihSayisiCevabi, YedekAlCevabi, YedeklerCevabi,
+  SifirlaCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi, TemizlikTarihSayisiCevabi, YedekAlCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
-import { TEMIZLIK_ONAY_METNI, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_TURLERI, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
+import { SIFIRLAMA_ONAY_METNI, TEMIZLIK_ONAY_METNI, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_TURLERI, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import './veri-temizleme.css';
@@ -512,10 +512,116 @@ function HizliTemizlik() {
   );
 }
 
-type Yol = 'hizli' | 'gelismis';
+// Sıfırdan başla (3426 a): uygulama verisi ilk kurulum haline döner. Kilit ve bağ denetimi yoktur; sunucu bayrak, parola ve yedeği
+// yeniden denetler. Seçenek değişince özet yeniden sayılır ve istek yeni kimlikle gider; yedek reddedilirse (409) yeniden alınır.
+interface SifirlamaSecimi { kullanicilar: boolean; tanimlar: boolean }
+const SILINIR = [
+  'Üretim emirleri, iş emirleri, sayımlar, duruşlar', 'Siparişler, teklifler, sevkiyat', 'Malzeme kartları, reçete ve rotalar',
+  'Stok, sayım ve hareket defterleri', 'Satın alma, finans, kalite, bakım kayıtları', 'Firmalar, projeler, belgeler ve yüklenen dosyalar',
+  "Logo'ya gönderim sırası ve eşleşmeler", 'Bildirimler, oturumlar',
+] as const;
+const KALIR = [
+  'Sizin yönetici hesabınız ve parolanız', 'Sistem ayarları: kurum adı ve logosu, yedek, posta, Logo bağlantı ayarı', 'Yedek dosyaları (diskte)',
+  'Veritabanı yapısı (göçler)',
+] as const;
+const bit = (b: boolean): string => (b ? '1' : '0');
+
+function SifirdanBasla() {
+  const istemci = useQueryClient();
+  const [secim, setSecim] = useState<SifirlamaSecimi>({ kullanicilar: false, tanimlar: false });
+  const [yedekAdi, setYedekAdi] = useState<string | null>(null);
+  const [onay, setOnay] = useState('');
+  const [parola, setParola] = useState('');
+  const [istekKimligi, setIstekKimligi] = useState(yeniIstekKimligi);
+  const [sonuc, setSonuc] = useState<SifirlaCevabi | null>(null);
+  const ozet = useQuery({
+    queryKey: [...anahtarlar.temizlikAdaylari, 'sifirlama', secim],
+    queryFn: () => api.get<SifirlamaOzetiCevabi>(
+      `/veri-temizleme/sifirlama-ozeti?kullanicilar=${bit(secim.kullanicilar)}&tanimlar=${bit(secim.tanimlar)}`),
+  });
+  const sifirla = useMutation({
+    mutationFn: () => api.post<SifirlaCevabi>('/veri-temizleme/sifirla', { ...secim, yedekAdi, onay, parola }, { istekKimligi }),
+    onSuccess: (c) => { setSonuc(c); setParola(''); setOnay(''); void istemci.invalidateQueries(); },
+    onError: (h) => { if (h instanceof ApiHatasi && h.durum === 409) { setYedekAdi(null); setIstekKimligi(yeniIstekKimligi()); } },
+  });
+  const degistir = (k: keyof SifirlamaSecimi) => (e: { target: { checked: boolean } }) => { setSecim({ ...secim, [k]: e.target.checked }); setIstekKimligi(yeniIstekKimligi()); };
+  const gonder = (olay: FormEvent) => { olay.preventDefault(); sifirla.mutate(); };
+  if (sonuc !== null) {
+    return (
+      <div className="tc-temizlik-hizli">
+        <p className="tc-temizlik-bilgi"><Rozet ton="tamam">Sıfırlandı</Rozet>{` ${String(sonuc.toplam)} kayıt silindi. Uygulama ilk kurulum haline döndü.`}</p>
+        <p className="tc-ayar-aciklama">{`Geri dönüş için yedek: ${sonuc.yedekAdi}`}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="tc-temizlik-hizli">
+      <div className="tc-temizlik-tehlike" role="note">
+        <b>Uygulama ilk kurulduğu güne döner.</b>
+        <span>Kilit ve bağ denetimi yapılmaz; aşağıdaki "Silinir" listesindeki her şey gider. Geri dönüş yalnız bu adımda alınan yedekten olur.</span>
+      </div>
+      <h3 className="tc-ayar-baslik">1 Ne silinir, ne kalır</h3>
+      <div className="tc-temizlik-kutular">
+        <div className="tc-temizlik-sil">
+          <b>Silinir</b>
+          <ul>
+            {SILINIR.map((m) => <li key={m}>{m}</li>)}
+            {!secim.kullanicilar && <li>Kullanıcılar, roller ve yetkiler (sizin hesabınız hariç)</li>}
+            {!secim.tanimlar && <li>Tanımlar (istasyon, makine, operasyon tipi, duruş nedeni, vardiya, takvim)</li>}
+          </ul>
+        </div>
+        <div className="tc-temizlik-kal">
+          <b>Kalır</b>
+          <ul>
+            {KALIR.map((m) => <li key={m}>{m}</li>)}
+            {secim.kullanicilar && <li>Kullanıcılar, roller ve yetkiler</li>}
+            {secim.tanimlar && <li>Tanımlar (istasyon, makine, operasyon tipi, duruş nedeni, vardiya, takvim)</li>}
+            <li>Denetim izi (kim ne zaman ne yaptı; sıfırlama da buraya yazılır)</li>
+          </ul>
+        </div>
+      </div>
+      <IsaretKutusu etiket="Kullanıcılar, roller ve yetkiler de kalsın" checked={secim.kullanicilar} onChange={degistir('kullanicilar')} />
+      <IsaretKutusu etiket="Tanımlar da kalsın (istasyon, makine, operasyon tipi, duruş nedeni, vardiya, takvim)" checked={secim.tanimlar} onChange={degistir('tanimlar')} />
+      {ozet.isError && <DurumKutusu durum="hata" hata={ozet.error} mesaj={hataIletisi(ozet.error, 'Özet okunamadı.')} />}
+      {ozet.data !== undefined && (
+        <>
+          <Tablo<{ ad: string; sayi: number }> etiket="Silinecek kayıtlar" satirlar={ozet.data.satirlar} satirAnahtari={(r) => r.ad}
+            sutunlar={[
+              { anahtar: 'ad', baslik: 'Silinecek', hucre: (r) => r.ad },
+              { anahtar: 'sayi', baslik: 'Kayıt', hizala: 'sag', hucre: (r) => r.sayi.toLocaleString('tr-TR') },
+            ]} />
+          <p className="tc-ayar-aciklama">{`Toplam ${ozet.data.toplam.toLocaleString('tr-TR')} kayıt silinir.`}</p>
+        </>
+      )}
+      <h3 className="tc-ayar-baslik">2 Yedek</h3>
+      {yedekAdi === null
+        ? <YedekAdimi ilerle={setYedekAdi} />
+        : <p className="tc-temizlik-bilgi"><Rozet ton="tamam">Yedek alındı</Rozet>{' '}<span className="tc-temizlik-no">{yedekAdi}</span></p>}
+      <p className="tc-ayar-aciklama">Yedek alınmadan onay açılmaz. Geri dönmek için Sistem Ayarları, Yedekler bölümünden bu yedek geri yüklenir.</p>
+      <h3 className="tc-ayar-baslik">3 Onay</h3>
+      <p className="tc-temizlik-uyari" role="note">İşlem birkaç dakika sürebilir; diğer kullanıcıların oturumu kapanır.</p>
+      <form className="tc-temizlik-onay" onSubmit={gonder}>
+        <div className="tc-temizlik-suzgec">
+          <Girdi etiket="Parolanız" type="password" value={parola} autoComplete="current-password" disabled={yedekAdi === null} onChange={(e) => setParola(e.target.value)} />
+          <Girdi etiket={`Onay için ${SIFIRLAMA_ONAY_METNI} yazın`} value={onay} autoComplete="off" disabled={yedekAdi === null} onChange={(e) => setOnay(e.target.value)} />
+        </div>
+        {sifirla.isError && <DurumKutusu durum="hata" hata={sifirla.error} mesaj={hataIletisi(sifirla.error, 'Sıfırlama yapılamadı; hiçbir kayıt silinmedi.')} />}
+        <div className="tc-temizlik-cubuk">
+          <Dugme type="submit" tur="tehlike" simge="trash" yukleniyor={sifirla.isPending}
+            disabled={yedekAdi === null || onay !== SIFIRLAMA_ONAY_METNI || parola === '' || ozet.data === undefined}>
+            Sıfırla
+          </Dugme>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+type Yol = 'hizli' | 'gelismis' | 'sifirdan';
 const YOL_SEKMELERI: readonly Sekme<Yol>[] = [
   { anahtar: 'hizli', baslik: 'Hızlı temizlik', simge: 'trash' },
   { anahtar: 'gelismis', baslik: 'Kayıt seçerek (gelişmiş)', simge: 'list' },
+  { anahtar: 'sifirdan', baslik: 'Sıfırdan başla', simge: 'rotate' },
 ];
 
 export function VeriTemizleme() {
@@ -523,7 +629,9 @@ export function VeriTemizleme() {
   return (
     <Kart baslik="Deneme verisini temizle" simge="trash">
       <Sekmeler etiket="Temizlik yolu" sekmeler={YOL_SEKMELERI} secili={yol} sec={setYol} />
-      {yol === 'hizli' ? <HizliTemizlik /> : <GelismisTemizlik />}
+      {yol === 'hizli' && <HizliTemizlik />}
+      {yol === 'gelismis' && <GelismisTemizlik />}
+      {yol === 'sifirdan' && <SifirdanBasla />}
     </Kart>
   );
 }

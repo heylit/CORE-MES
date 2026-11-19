@@ -4,7 +4,7 @@ import {
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
-  temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
+  sifirlaCevabi, sifirlaGovdesi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
   temizlikIsaretGovdesi,
   temizlikTarihleIsaretGovdesi,
   temizlikTarihSayisiCevabi,
@@ -15,7 +15,7 @@ import {
   ayarDegistir, ayarlariListele, firmaKoduDuzenle, firmaKoduEkle, firmaKodlari, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
-import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
+import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, sifirdanBasla, sifirlamaOzeti, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
 
 export const uclar = [
@@ -293,5 +293,23 @@ export const uclar = [
     govde: temizleGovdesi,
     cevap: temizleCevabi,
     isle: ({ db, govde, kullanici, denetimEki }) => veriTemizle(db, kullanici.id, govde, denetimEki, new Date()),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/veri-temizleme/sifirlama-ozeti',
+    yetki: 'ayarlar.veri-temizle',
+    sorgu: sifirlamaOzetiSorgusu,
+    cevap: sifirlamaOzetiCevabi,
+    isle: ({ db, sorgu, kullanici }) => sifirlamaOzeti(db, kullanici.id, sorgu),
+  }),
+  // "Sıfırdan başla" (3426 a); parola sözleşmede gizlidir. Denetim kaydı (seçenekler dahil) sıfırlamadan sonra yazılır.
+  uc({
+    yontem: 'POST',
+    yol: '/veri-temizleme/sifirla',
+    yetki: 'ayarlar.veri-temizle',
+    tekrarKorumali: true,
+    govde: sifirlaGovdesi,
+    cevap: sifirlaCevabi,
+    isle: ({ db, govde, kullanici }) => sifirdanBasla(db, kullanici.id, govde, new Date()),
   }),
 ];
