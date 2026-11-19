@@ -9,6 +9,8 @@ export const anahtarlar = {
   siparisSurumleri: (id: number) => ['siparisler', 'siparis', 'surumler', id] as const,
   // 3429-1: Akış modülünün cevabı (emir, sevk, fatura); sipariş yazınca ayrıntı önekiyle değil kendi anahtarıyla yenilenir.
   siparisAkisi: (id: number) => ['siparisler', 'siparis', 'akis', id] as const,
+  // 3429-3 G: Üretim Emirleri'nin cevabı (emir teslimi ile kalem termini farkı).
+  terminOnerileri: (id: number) => ['siparisler', 'siparis', 'termin-onerileri', id] as const,
   siparisAsamalari: (idler: readonly number[]) => ['siparisler', 'siparis', 'liste', 'asama', idler] as const,
   teklifDuzenle: (id: number) => ['siparisler', 'teklif', 'duzenle', id] as const,
   teklifListeleri: ['siparisler', 'teklif', 'liste'] as const,

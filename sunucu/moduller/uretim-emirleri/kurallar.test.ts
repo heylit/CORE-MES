@@ -11,6 +11,7 @@ import {
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartDagilimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
+import { terminKarariAnahtari, terminOnerisiVarMi } from './kurallar.ts';
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi, ATLAMA_TEK_IS_EMRI, atlamaIhlali } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
@@ -399,4 +400,23 @@ test('3338-4: talimat atlama tek iş emrinin adımlarıdır; iş emrisiz eski ad
   assert.equal(atlamaIhlali([{ isEmriId: 5 }, { isEmriId: 5 }]), null);
   assert.equal(atlamaIhlali([{ isEmriId: 5 }, { isEmriId: 6 }]), ATLAMA_TEK_IS_EMRI);
   assert.equal(atlamaIhlali([{ isEmriId: null }]), ATLAMA_TEK_IS_EMRI);
+});
+
+describe('3429-3 G: termin önerisi kuralı (UE-TB-6)', () => {
+  const e = (d: Partial<{ durum: string; arsiv: boolean; teslim: string | null }> = {}) => ({ durum: 'planli', arsiv: false, teslim: '2027-01-20', ...d });
+  test('taslak, planlı ve başlamış açık emirde fark öneri; biten, iptal ve arşivdeki emirde yok; termin yoksa ya da eşitse yok', () => {
+    for (const durum of ['taslak', 'planli', 'basladi']) assert.equal(terminOnerisiVarMi(e({ durum }), '2027-02-10', new Set()), true, durum);
+    for (const durum of ['bitti', 'iptal']) assert.equal(terminOnerisiVarMi(e({ durum }), '2027-02-10', new Set()), false, durum);
+    assert.equal(terminOnerisiVarMi(e({ arsiv: true }), '2027-02-10', new Set()), false, 'arşiv');
+    assert.equal(terminOnerisiVarMi(e(), null, new Set()), false);
+    assert.equal(terminOnerisiVarMi(e({ teslim: '2027-02-10' }), '2027-02-10', new Set()), false);
+    assert.equal(terminOnerisiVarMi(e({ teslim: null }), '2027-02-10', new Set()), true, 'teslimsiz emir');
+  });
+  test('karar o termin ve kararın verildiği teslim içindir; teslim sonradan değişirse öneri yeniden çıkar', () => {
+    const k = new Set([terminKarariAnahtari('2027-02-10', '2027-01-20')]);
+    assert.equal(terminOnerisiVarMi(e(), '2027-02-10', k), false);
+    assert.equal(terminOnerisiVarMi(e({ teslim: '2027-03-01' }), '2027-02-10', k), true);
+    assert.equal(terminOnerisiVarMi(e(), '2027-02-11', k), true);
+    assert.equal(terminOnerisiVarMi(e({ teslim: null }), '2027-02-10', new Set([terminKarariAnahtari('2027-02-10', null)])), false);
+  });
 });

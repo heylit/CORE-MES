@@ -5,7 +5,7 @@ import {
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
-  asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
+  asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, terminOnerisiCevabi, terminOnerileriSorgusu, terminOnerileriCevabi, terminKarariGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
@@ -13,6 +13,7 @@ import {
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
+import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
 import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
@@ -555,6 +556,36 @@ const adimliUclar = [
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),
+  // 3429-3 G: sipariş kaleminin termini emrin tesliminden farklıysa öneri; planlayıcı uygular ya da yoksayar.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/termin-onerisi',
+    yetki: ADIMLI_OKUMA,
+    parametre: emirParametresi,
+    cevap: terminOnerisiCevabi,
+    isle: async ({ db, parametre }) => ({ oneri: await emrinTerminOnerisi(db, parametre.id) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/uretim-emirleri/termin-onerileri',
+    yetki: ADIMLI_OKUMA,
+    sorgu: terminOnerileriSorgusu,
+    cevap: terminOnerileriCevabi,
+    isle: async ({ db, sorgu }) => ({ oneriler: await siparisinTerminOnerileri(db, sorgu.siparisId) }),
+  }),
+  ...(['uygula', 'yoksay'] as const).map((karar) => uc({
+    yontem: 'POST',
+    yol: `/adimli-emirler/:id/termin-onerisi/${karar}`,
+    yetki: 'uretim-emirleri.duzenle',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: terminKarariGovdesi,
+    cevap: adimliEmirCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await terminKarariVer(db, kullanici, parametre.id, govde, karar);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  })),
   // 3099: bölünmüş alt emrin türü sonradan değişir; eski ve yeni değer kim ve ne zamanla kayda girer.
   uc({
     yontem: 'POST',

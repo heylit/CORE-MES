@@ -14,6 +14,7 @@ import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
 import { AsamaRozeti, SiparisAkisi, useSiparisAkisi } from './SiparisAkisi.tsx';
 import { SiparisSurumleri } from './SiparisSurumleri.tsx';
+import { SiparisTerminOnerileri } from './SiparisTerminOnerileri.tsx';
 import { GeriAlmaUyarisi, SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
@@ -285,6 +286,8 @@ export function SiparisAyrinti() {
       </Kart>
 
       <SiparisSurumleri siparis={s} />
+
+      <SiparisTerminOnerileri siparisId={s.id} />
 
       <SiparisAkisi siparis={s} />
 

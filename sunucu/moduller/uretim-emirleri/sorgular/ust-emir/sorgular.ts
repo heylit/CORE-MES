@@ -408,3 +408,32 @@ export function dilimUstEmirleri(db: Db, gun: number, dahil: readonly number[]):
     [gun, [...dahil]],
   );
 }
+
+// 3429-3 G: sipariş satırlarına bağlı emirler (öneri listesi): teslim, durum, başlamışlık, sürüm.
+export interface SatirEmriSatiri {
+  id: number; emirNo: string; siparisSatiriId: number; teslim: string | null; durum: string; arsiv: boolean; baslangic: string | null; baslamis: boolean; surum: number;
+}
+export function satirlarinEmirleri(db: Db, satirIdleri: readonly number[]): Promise<SatirEmriSatiri[]> {
+  return db.sorgu<SatirEmriSatiri>(
+    `SELECT e.id, e.emir_no AS "emirNo", e.siparis_satiri_id AS "siparisSatiriId", to_char(e.teslim, 'YYYY-MM-DD') AS teslim, e.durum, e.arsiv,
+            to_char(e.baslangic, 'YYYY-MM-DD') AS baslangic, e.surum,
+            (e.durum NOT IN ('taslak', 'planli') OR EXISTS (SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.durum <> 'bekliyor')) AS baslamis
+       FROM uretim_emri e WHERE e.siparis_satiri_id = ANY($1::int[]) ORDER BY e.siparis_satiri_id, e.id`,
+    [[...new Set(satirIdleri)]],
+  );
+}
+export function terminKararlari(db: Db, emirIdleri: readonly number[]): Promise<{ emirId: number; termin: string; eskiTeslim: string | null }[]> {
+  return db.sorgu(
+    `SELECT uretim_emri_id AS "emirId", to_char(termin, 'YYYY-MM-DD') AS termin, to_char(eski_teslim, 'YYYY-MM-DD') AS "eskiTeslim"
+       FROM uretim_emri_termin_karari WHERE uretim_emri_id = ANY($1::int[])`,
+    [[...new Set(emirIdleri)]]);
+}
+export function terminKarariYaz(db: Db, k: { emirId: number; termin: string; karar: 'uygula' | 'yoksay'; eskiTeslim: string | null; kisiId: number }): Promise<unknown> {
+  return db.sorgu('INSERT INTO uretim_emri_termin_karari (uretim_emri_id, termin, karar, eski_teslim, kisi_id) VALUES ($1, $2::date, $3, $4::date, $5)',
+    [k.emirId, k.termin, k.karar, k.eskiTeslim, k.kisiId]);
+}
+// Teslim termine yazılır ve bağ işaretlenir; kendiliğinden kayma yalnız başlamamış emirde çalışır (3244 b), başlamış emirde işaret
+// yalnız "teslim kalem terminidir" bilgisidir.
+export function teslimYaz(db: Db, id: number, surum: number, teslim: string): Promise<{ id: number } | null> {
+  return db.tek('UPDATE uretim_emri SET teslim = $3::date, teslim_bagli = true, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, teslim]);
+}
