@@ -561,6 +561,12 @@ export const teklifEkiSemasi = z.object({ ozet: dosyaOzeti, ad: z.string(), boyu
 export const teklifEkleriCevabi = z.object({ ekler: z.array(teklifEkiSemasi) });
 export type TeklifEki = z.output<typeof teklifEkiSemasi>;
 export type TeklifEkiYazimi = z.output<typeof teklifEkiGovdesi>;
+// 3442-2: talebin çizimi (PDF). Talep eden açarken ya da taslakta ekler; satın alma her adımda görür ve ekler.
+export const TALEP_CIZIMI_AZAMI_BAYT = 20 * 1024 * 1024;
+export const talepCizimiDosyaParametresi = z.object({ id: uuid, ozet: dosyaOzeti });
+export const talepCizimiGovdesi = teklifEkiGovdesi;
+export const talepCizimleriCevabi = z.object({ cizimler: z.array(teklifEkiSemasi) });
+export type TalepCizimleriCevabi = z.output<typeof talepCizimleriCevabi>;
 export type TeklifEkleriCevabi = z.output<typeof teklifEkleriCevabi>;
 // Talep türü (#1192): malzeme talebi fiziksel kartları, hizmet talebi yalnız alınan hizmet kartlarını seçer. Fason talebi (2428) de
 // alınan hizmet kartını (işlem) seçer; her kalemi emrin fason adımına ya da stoktaki partiye bağlanır ve dış işlem emri açar.
@@ -575,6 +581,8 @@ export const malzemeSecenekleriCevabi = z.object({
     stokBirimi: z.string().nullable().optional(), birimKg: z.number().nullable().optional(),
     // 3100: hammadde kartı mı (parça ağırlığı yalnız hammaddede olur; yoksa formda "hesaplanamaz" satırı çıkar).
     hammadde: z.boolean().optional(),
+    // 3442-2: kartın föyündeki ayrıntılar (kalite, form, ölçü, standart...); seçilince talep formunda açık görünür.
+    ayrinti: z.array(z.object({ ad: z.string(), deger: z.string() })).optional(),
   })),
 });
 
@@ -817,6 +825,9 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-talepleri/:id/teklifler/:teklifId/ekler': { cevap: TeklifEkleriCevabi };
   'POST /satin-alma-talepleri/:id/teklifler/:teklifId/ek-bagla': { govde: z.input<typeof teklifEkiGovdesi>; cevap: TeklifEkleriCevabi };
   'POST /satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/kaldir': { cevap: TeklifEkleriCevabi };
+  'GET /satin-alma-talepleri/:id/cizimler': { cevap: TalepCizimleriCevabi };
+  'POST /satin-alma-talepleri/:id/cizim-bagla': { govde: z.input<typeof talepCizimiGovdesi>; cevap: TalepCizimleriCevabi };
+  'POST /satin-alma-talepleri/:id/cizimler/:ozet/kaldir': { cevap: TalepCizimleriCevabi };
   'GET /satin-alma-siparis-faturalari': { sorgu: z.input<typeof siparisFaturalariSorgusu>; cevap: SiparisFaturalariCevabi };
   'POST /satin-alma-talepleri/:id/siparis-faturasi': { govde: z.input<typeof siparisFaturasiGovdesi>; cevap: SiparisFaturalariCevabi };
   'GET /satin-alma-firma-secenekleri': { sorgu: z.input<typeof firmaSecenekleriSorgusu>; cevap: FirmaSecenekleriCevabi };

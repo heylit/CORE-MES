@@ -637,8 +637,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([tam.teklifler.map((q) => q.id), tam.notlar], [[a.id], t.notlar]);
     // Kart arama, katalog kaydı ve menü sayaçları fiyat, tedarikçi ve ayar taşımaz.
     const sec = tamam<MalzemeSecenekleriCevabi>(await istek(c.talep, 'GET', '/satin-alma-malzeme-secenekleri?ara=HM-SAT'));
-    // SAT-78 (2871): stok birimi ve birim ağırlık kartın fiziksel bilgisidir, fiyat değildir.
-    assert.deepEqual(Object.keys(sec.malzemeler[0]!).sort(), ['ad', 'birim', 'birimKg', 'hammadde', 'katalogId', 'kategori', 'kod', 'no', 'stokBirimi']);
+    // SAT-78 (2871): stok birimi ve birim ağırlık kartın fiziksel bilgisidir, fiyat değildir. 3442-2: föy ayrıntısı da (iç alanlar yok, kopyaOzelligi).
+    assert.deepEqual(Object.keys(sec.malzemeler[0]!).sort(), ['ad', 'ayrinti', 'birim', 'birimKg', 'hammadde', 'katalogId', 'kategori', 'kod', 'no', 'stokBirimi']);
+    assert.doesNotMatch(JSON.stringify(sec.malzemeler.map((m) => m.ayrinti)), SIZINTI);
     const kat = tamam<KatalogKaydi>(await istek(c.talep, 'POST', '/satin-alma-katalogu/kaydet', {
       id: randomUUID(), malzemeNo: await kartNo('HM-SAT-00002'), ozellik: '', notlar: '', takmaAdlari: [], surum: null,
     }));
@@ -3633,6 +3634,59 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await kaldir()).statusCode, 404);
   });
 
+  test('3442-2: talebin PDF çizimi; talep eden kendi taslağına ekler, sonra yalnız görür; satın alma her adımda ekler; başkası göremez', async () => {
+    type Cizimler = { cizimler: { ozet: string; ad: string; boyut: number }[] };
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const yol = `/satin-alma-talepleri/${t.id}`;
+    const liste = (cerez: string) => istek(cerez, 'GET', `${yol}/cizimler`);
+    const bagla = (cerez: string, ozet: string, kimlik?: string) => istek(cerez, 'POST', `${yol}/cizim-bagla`, { ozet, dosyaAdi: 'ORN-cizim.pdf' }, kimlik);
+    assert.deepEqual(tamam<Cizimler>(await liste(c.talep)).cizimler, []);
+
+    // Talep eden taslakta ekler; yinelenen bağlama ikinci bağ açmaz.
+    const { ozet, icerik } = await belgeYukle(c.talep);
+    const kimlik = randomUUID();
+    const ilk = tamam<Cizimler>(await bagla(c.talep, ozet, kimlik));
+    assert.deepEqual(ilk.cizimler.map((x) => [x.ozet, x.ad, x.boyut]), [[ozet, 'ORN-cizim.pdf', icerik.length]]);
+    assert.deepEqual(tamam<Cizimler>(await bagla(c.talep, ozet, kimlik)), ilk);
+
+    // Satın alma, okuyan ve talep eden açar; başka talep eden ve satın almasız kişi ne listeyi ne dosyayı alır, ekleyemez.
+    for (const cerez of [c.sa, c.mudur, c.talep]) {
+      const d = await istek(cerez, 'GET', `${yol}/cizimler/${ozet}/dosya`);
+      assert.equal(d.statusCode, 200, d.body);
+      assert.ok(d.rawPayload.equals(icerik));
+    }
+    for (const cerez of [c.talep2, c.operator]) {
+      assert.equal((await liste(cerez)).statusCode, 403);
+      assert.equal((await istek(cerez, 'GET', `${yol}/cizimler/${ozet}/dosya`)).statusCode, 403);
+      assert.equal((await bagla(cerez, ozet)).statusCode, 403);
+    }
+    assert.equal((await bagla(c.mudur, ozet)).statusCode, 403);
+
+    // Teklif istendikten sonra talep eden ekleyemez ve kaldıramaz, görmeye devam eder; satın alma ekler ve kaldırır.
+    const gonder = await teklifIste(t);
+    const { ozet: ozet2 } = await belgeYukle(c.talep);
+    assert.equal((await bagla(c.talep, ozet2)).statusCode, 403);
+    assert.equal((await istek(c.talep, 'POST', `${yol}/cizimler/${ozet}/kaldir`)).statusCode, 403);
+    assert.equal(tamam<Cizimler>(await liste(c.talep)).cizimler.length, 1);
+    const { ozet: ozet3 } = await belgeYukle(c.sa);
+    assert.equal(tamam<Cizimler>(await bagla(c.sa, ozet3)).cizimler.length, 2);
+    assert.equal(gonder.durum, 'teklif_isteniyor');
+
+    // Yalnız PDF; olmayan talep 404; başka talebin ucundan dosya verilmez.
+    const duz = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), randomBytes(500)]);
+    const duzOzet = createHash('sha256').update(duz).digest('hex');
+    tamam(await istek(c.sa, 'POST', `/dosyalar/${duzOzet}/parca`, { sira: 0, toplam: 1, veri: duz.toString('base64') }, null));
+    assert.equal((await bagla(c.sa, duzOzet)).statusCode, 400);
+    assert.equal((await istek(c.sa, 'GET', `/satin-alma-talepleri/${randomUUID()}/cizimler`)).statusCode, 404);
+    const baska = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    assert.equal((await istek(c.talep, 'GET', `/satin-alma-talepleri/${baska.id}/cizimler/${ozet}/dosya`)).statusCode, 404);
+
+    // Kaldırılan çizim düşer; ikinci kaldırma 404.
+    const kaldir = () => istek(c.sa, 'POST', `${yol}/cizimler/${ozet}/kaldir`);
+    assert.deepEqual(tamam<Cizimler>(await kaldir()).cizimler.map((x) => x.ozet), [ozet3]);
+    assert.equal((await kaldir()).statusCode, 404);
+  });
+
   test('3404: talep silinince tekliflerinin PDF ekleri düşer', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
@@ -3645,6 +3699,16 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Yalnız taslak silinir; teklifler taslağa dönen talepte de durur (silme ekleri bırakmalı).
     await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'taslak' WHERE id = $1", [t.id]);
     tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: deg.surum }));
+    assert.equal((await baglar()).length, 0);
+  });
+
+  test('3442-2: çizimli taslak silinir, çizim bağı kalmaz', async () => {
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const { ozet } = await belgeYukle(c.talep);
+    tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t.id}/cizim-bagla`, { ozet, dosyaAdi: 'ORN-cizim.pdf' }));
+    const baglar = () => vt().tx((db) => db.sorgu("SELECT 1 FROM dosya_bagi WHERE modul = 'satin-alma' AND kayit = $1", [`talep:${t.id}:cizim`]));
+    assert.equal((await baglar()).length, 1);
+    tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: t.surum }));
     assert.equal((await baglar()).length, 0);
   });
 

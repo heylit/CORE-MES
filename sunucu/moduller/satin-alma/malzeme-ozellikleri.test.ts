@@ -96,6 +96,9 @@ describe('3121: Taleplerim ve satın alma merkezinde kalite, durum, işlem, öl�
     const merkez = (acilis.json() as { talepler: { id: string; kalemOzellikleri?: object[] }[] }).talepler.find((t) => t.id === talep.id);
     assert.equal(merkez?.kalemOzellikleri?.length, 1);
     assert.deepEqual(merkez?.kalemOzellikleri?.[0], { kalemId: (merkez?.kalemOzellikleri?.[0] as { kalemId: string }).kalemId, ...beklenen });
+    // 3442-2: kart seçilirken de föy ayrıntısı gelir (talep formu seçilen kartın ayrıntısını açık gösterir).
+    const secenek = (await get(c.talep, '/satin-alma-malzeme-secenekleri?ara=HM-MOZ-00001')).json() as { malzemeler: { no: number; ayrinti?: unknown }[] };
+    assert.deepEqual(secenek.malzemeler.find((m) => m.no === kart)?.ayrinti, beklenen.ayrinti);
   });
 
   test('yasak: kartta durum ve işlem yoksa uydurulmaz; Taleplerim fiyat ve teklif taşımaz', async () => {

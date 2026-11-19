@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
+import { TalepCizimleri } from './Cizimler.tsx';
 
 // 3437-2: kalemin daraltılmış kabul sınırı tek satırda; sınırsız kalemde (kartın sınırı) satır yok.
 const kabulOzeti = (k: NonNullable<Talebim['kalemler'][number]['kabul']>): string => (k.yalnizAyni ? 'yalnız aynı malzeme' : [
@@ -128,6 +129,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
           </table>
         </div>
       )}
+      {acik && <div className="sa-talep-cizim-blok"><TalepCizimleri talepId={t.id} yazabilir={t.duzenlenebilir === true} /></div>}
       {acik && t.duzenlenebilir && duzenle && (
         <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t, 'duzenle')}>Düzenle</Dugme></div>
       )}
