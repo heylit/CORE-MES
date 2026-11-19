@@ -63,6 +63,8 @@ export type AlternatifIzni = (typeof ALTERNATIF_IZINLERI)[number];
 export const alternatifSonucu = z.object({
   sonuc: z.enum(ZARF_SONUCLARI), nedenler: z.array(z.string()).max(20), izin: z.enum(ALTERNATIF_IZINLERI).nullable(),
   izinKisiId: z.number().int().nullable().optional(), izinZaman: z.string().nullable().optional(), izinNotu: z.string().nullable().optional(),
+  // 3437 a (dilim 3b-2): karar onaylanınca açılan (ya da bulunan) alternatif kartın numarası; yalnız sunucu yazar.
+  kartNo: z.number().int().nullable().optional(),
 });
 export type AlternatifSonucu = z.output<typeof alternatifSonucu>;
 

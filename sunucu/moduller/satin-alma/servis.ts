@@ -22,7 +22,7 @@ import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEs
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { alternatifKartiAc, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { dosyaTutamagi } from '../dosya/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
@@ -42,7 +42,7 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
-import { alternatifIzniReddi, alternatifKararReddi, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
+import { alternatifIzniReddi, alternatifKararReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
@@ -188,7 +188,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
             .map((b) => ({ esik: sade(b.esik), birimFiyat: sade(b.birimFiyat) })),
           alternatif: f.alternatif, alternatifSonucu: f.alternatifSonuc === null ? null : {
             sonuc: f.alternatifSonuc, nedenler: f.alternatifNedenler ?? [], izin: f.alternatifIzin,
-            izinKisiId: f.alternatifIzinKisiId, izinZaman: f.alternatifIzinZaman, izinNotu: f.alternatifIzinNotu,
+            izinKisiId: f.alternatifIzinKisiId, izinZaman: f.alternatifIzinZaman, izinNotu: f.alternatifIzinNotu, kartNo: f.alternatifKartNo,
           },
         })),
       })),
@@ -698,6 +698,28 @@ export async function alternatifIzni(db: Db, k: Kullanici, id: string, g: Altern
   return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
 }
 
+// 3437 a (dilim 3b-2): karar bu kayıtta onaylanınca seçilen alternatiflerin kartı açılır (ONAYDA, açan onaylayan kişi) ya da aynı nitelikli
+// kart bulunur; numara teklif satırına yazılır, sipariş satırı oradan alır. Kart onaylanana kadar mal kabul yapılamaz (aktif kart kuralı).
+async function alternatifKartlariniAc(db: Db, k: Kullanici, id: string, t: TalepYazimi): Promise<TalepYazimi> {
+  const bekleyen = kartBekleyenAlternatifler(t);
+  if (bekleyen.length === 0) return t;
+  const kabuller = await kalemKabulleri(db, [t]);
+  const kartlar = new Map<string, number>();
+  for (const b of bekleyen) {
+    const kk = kabuller.get(b.kalemId);
+    const ad = t.kalemler.find((x) => x.id === b.kalemId)?.ad ?? '';
+    if (kk === undefined) throw gecersiz(ILETILER.alternatifZarfsiz(ad));
+    const r = await alternatifKartiAc(db, k, kk.malzemeNo, b.alternatif);
+    kartlar.set(`${b.teklifId}/${b.kalemId}`, r.no);
+    const kod = (await malzemeOzetleri(db, [r.no])).get(r.no)?.kod ?? String(r.no);
+    await s.hareketEkle(db, id, randomUUID(), r.yeni ? `${ad}: alternatif malzeme kartı açıldı, malzeme onayı bekliyor: ${kod}` : `${ad}: var olan alternatif kart kullanıldı: ${kod}`, k.id);
+  }
+  return { ...t, teklifler: t.teklifler.map((q) => ({ ...q, fiyatlar: q.fiyatlar.map((f) => {
+    const no = kartlar.get(`${q.id}/${f.kalemId}`);
+    return no === undefined || !f.alternatifSonucu ? f : { ...f, alternatifSonucu: { ...f.alternatifSonucu, kartNo: no } };
+  }) })) };
+}
+
 // SAT-81 (2871-2 a): gruptaki talep siparişe geçince öteki açık talepler aynı işlemde iptal olur; gerekçe iptal nedenine ve geçmişe yazılır.
 // İptal genel kayıttan geçer (onay bildirimi kapanır, Logo iptali işaretlenir) ve "İptali geri al" ile geri alınır.
 async function guncellemeGrubunuKapat(db: Db, k: Kullanici, siparisteki: Talep, izYaz: FiyatIziYazici): Promise<void> {
@@ -1116,7 +1138,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   await askidakiTedarikciyiDenetle(db, eski, temel);
   await kalemKartlariniDenetle(db, temel.kalemler, eski.kalemler);
   const sunucudan = await sunucuAlanlari(db, k, temel, eski);
-  const yazilacak: TalepYazimi = sunucudan.durum === 'teslim_alindi' ? { ...sunucudan, durum: 'siparis_verildi' } : sunucudan;
+  const kartli = talepFisiGiderMi(eski.onaylar, yeniOnaylar, sunucudan.durum) ? await alternatifKartlariniAc(db, k, id, sunucudan) : sunucudan;
+  const yazilacak: TalepYazimi = kartli.durum === 'teslim_alindi' ? { ...kartli, durum: 'siparis_verildi' } : kartli;
   // 2540 (Veri 2, Maliyet): tedarikçi alacağı olan sipariş (düşüldü dahil) karar değişikliğiyle silinmez; para kaydı sessizce kaybolmaz.
   const kalanlar = new Set((yazilacak.karar?.siparisler ?? []).map((x) => x.teklifId));
   const silinen = (eski.karar?.siparisler ?? []).map((x) => x.teklifId).filter((x) => !kalanlar.has(x));

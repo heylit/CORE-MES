@@ -10,7 +10,8 @@ import type { AcilisCevabi, KalemZarflariCevabi, Talebim, Talep } from '#paylasi
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { zarfDegerlendir } from '../malzemeler/disari.ts';
+import { alternatifKartiAc, zarfDegerlendir } from '../malzemeler/disari.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kablola } from '../../kablolama.ts';
 import { ILETILER, VARSAYILAN_KABUL, alternatifIzniReddi, alternatifKararReddi, alternatifOlcuReddi, alternatifSonucuHesapla, kalemAyrintisiniKoru } from './kurallar.ts';
@@ -93,6 +94,16 @@ describe('3437-3b-1: talep edenin sonradan şartlı izni (saf)', () => {
     assert.equal(hesap(alt({ kalite: '6061' }), izinli('soru', alt({ kalite: '6061' }))).izin, null);
   });
 
+  test('3b-2: açılan kartın numarası aynı alternatifte korunur; alternatif değişince ya da sonuç aynı/dışı olunca düşer', () => {
+    const a = alt({ olcu: { d: 52 } });
+    const kartli = (x = a) => ({ alternatif: x, alternatifSonucu: { sonuc: 'icinde' as const, nedenler: [], izin: null, kartNo: 9 } });
+    assert.equal(hesap({ yuzey: null, olcu: { d: 52 }, kalite: null, durum: null }, kartli()).kartNo, 9);
+    assert.equal(hesap(alt({ olcu: { d: 53 } }), kartli()).kartNo, undefined);
+    assert.equal(hesap(alt({ olcu: { d: 56 } }), kartli(alt({ olcu: { d: 56 } }))).kartNo, undefined);
+    const s0 = izinli('soru');
+    assert.deepEqual([hesap(s0.alternatif, { ...s0, alternatifSonucu: { ...s0.alternatifSonucu, kartNo: 9 } }).kartNo, hesap(s0.alternatif, s0).kartNo], [9, undefined]);
+  });
+
   test('izin yalnız teklif toplanırken, onaysız kararda, gördüğü alternatife ve kararda seçili olmayan satıra verilir', () => {
     const a = alt({ kalite: '6060' });
     const t = (ek: Record<string, unknown> = {}, s: Record<string, unknown> = {}) => ({
@@ -154,7 +165,7 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     c.operator = await rolluKisi('operator', 'operator');
     c.sa = await rolluKisi('satinalma', 'satin_alma');
     c.mudur = await rolluKisi('mudur', 'mudur');
-    await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-ALT-', 0) ON CONFLICT (onek) DO NOTHING");
+    await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-ALT-', 100) ON CONFLICT (onek) DO NOTHING");
     kart = await kartAc({ grade: '6082', form: 'cubuk', dims: { d: 50, l: 3000 }, opts: { durum: 'T6', yuzey: 'Ham' } });
     sarf = await kartAc({ com: { ad: 'Örnek eldiven', birim: 'çift' } }, 'sarf');
     const kural = await post(c.yonetici, '/malzeme-alternatifleri/kurallar/kaydet', {
@@ -304,17 +315,59 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     // Kararda seçili satırın izni değişmez.
     const r3 = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) });
     assert.deepEqual([r3.statusCode, (r3.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniKararda]);
-    // T1: onaylı kararla siparişe geçiş alternatif kart açılmadan reddedilir.
+    // 3b-2: karar onaylanınca alternatifin kartı ONAYDA açılır (açan onaylayan), ana kartın alternatif alt kartı olur.
     const onaylaR = await post(c.mudur, `/satin-alma-talepleri/${t.id}/kaydet`, { ...govde(r2.json() as Talep), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] });
     assert.equal(onaylaR.statusCode, 200, onaylaR.body);
     const o = onaylaR.json() as Talep;
+    const kartNo = o.teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.kartNo;
+    assert.equal(typeof kartNo, 'number');
+    const yeniKart = (await ortam!.sahip.tek<{ durum: string; acan: number; ana: number | null; alt: string | null; grade: string; d: number }>(
+      `SELECT onay_durumu AS durum, acan_kisi_id AS acan, ana_kart_no AS ana, alt_tur AS alt, kayit->>'grade' AS grade, (kayit->'dims'->>'d')::int AS d
+         FROM malzeme_katalog_karti WHERE no = $1`, [kartNo]))!;
+    const mudurId = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'mudur'"))!.id;
+    assert.deepEqual(yeniKart, { durum: 'onayda', acan: mudurId, ana: kart, alt: 'alternatif', grade: '6262', d: 50 });
+    assert.ok(o.hareketler.some((h) => /alternatif malzeme kartı açıldı, malzeme onayı bekliyor: HM-ALT-/.test(h.metin)));
+    // Test T1: onaylı talep aynı alternatifle yeniden kaydedilince kart no korunur, ikinci kart açılmaz.
+    const yeniden = await kaydet({ ...govde(o) });
+    assert.equal(yeniden.statusCode, 200, yeniden.body);
+    assert.equal((yeniden.json() as Talep).teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.kartNo, kartNo);
+    assert.equal((await ortam!.sahip.tek<{ kn: number }>('SELECT alternatif_kart_no AS kn FROM satin_alma_teklif_satiri WHERE talep_id = $1', [t.id]))!.kn, kartNo);
+    const ad = (await ortam!.sahip.tek<{ ad: string }>("SELECT kayit->'com'->>'ad' AS ad FROM malzeme_katalog_karti WHERE no = $1", [kartNo]))!.ad;
+    assert.equal(ad, 'Örnek alt-1 (alternatif 6262)');
     const sip = await kaydet({ ...govde(o), durum: 'siparis_verildi', karar: { ...o.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'ALT-1', siparisTarihi: '2026-11-19', beklenenTeslim: '2026-11-26' }] } });
+    // Okuyucular (3b-3) gelene kadar sipariş verilmez: mal ana kartın stoğuna girerdi.
     assert.deepEqual([sip.statusCode, (sip.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifSiparis('Örnek alt-1')]);
-    assert.equal((await satinAlmaGorur(t.id)).durum, 'onayda');
     // Onaylı karardan sonra izin aşaması kapalı (Test bakışı): 422, satır değişmez.
     const gec = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) });
     assert.deepEqual([gec.statusCode, (gec.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniAsamasi]);
     assert.equal((await ortam!.sahip.tek<{ izin: string }>('SELECT alternatif_izin AS izin FROM satin_alma_teklif_satiri WHERE talep_id = $1', [t.id]))!.izin, 'soru');
+  });
+
+  test('yasak: sınır dışı alternatif için kart açılmaz (malzemeler yeniden denetler); kart sayısı değişmez', async () => {
+    const k: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: [] };
+    const say = async () => (await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM malzeme_katalog_karti'))!.n;
+    const once = await say();
+    await assert.rejects(ortam!.vt.tx((db) => alternatifKartiAc(db, k, kart, { kalite: null, durum: null, yuzey: null, olcu: { d: 56 } })), /kabul sınırı dışında; kart açılmaz/);
+    assert.equal(await say(), once);
+  });
+
+  // 3b-2: aynı nitelikli alternatif başka talepte onaylanınca yeni kart açılmaz, ilk açılan kart kullanılır; kod ana kartın önekinden.
+  test('izinli: aynı nitelikli alternatif ikinci talepte kart bulur, yeni kart açmaz', async () => {
+    const onayla = async (): Promise<number> => {
+      const t = await tekliflik();
+      const q = teklif([{ kalemId: t.kalemler[0]!.id, birimFiyat: '12', alternatif: alt({ olcu: { d: 52, l: 3200 } }) }]);
+      const d = (await kaydet({ ...govde(t), teklifler: [q] })).json() as Talep;
+      const g = await kaydet({ ...govde(d), durum: 'onayda', karar: karar(q.id) });
+      assert.equal(g.statusCode, 200, g.body);
+      const o = await post(c.mudur, `/satin-alma-talepleri/${t.id}/kaydet`, { ...govde(g.json() as Talep), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] });
+      assert.equal(o.statusCode, 200, o.body);
+      return (o.json() as Talep).teklifler[0]!.fiyatlar[0]!.alternatifSonucu!.kartNo!;
+    };
+    const n1 = await onayla();
+    const n2 = await onayla();
+    assert.equal(n2, n1);
+    const kartlar = await ortam!.sahip.sorgu<{ onek: string }>(`SELECT onek FROM malzeme_katalog_karti WHERE ana_kart_no = $1 AND kayit->'dims'->>'l' = '3200'`, [kart]);
+    assert.deepEqual(kartlar.map((x) => x.onek), ['HM-ALT-']);
   });
 
   test('yasak: reddedilen şartlı alternatif seçilemez; başkası 403; değişmiş alternatife izin yazılmaz ve değişince izin düşer', async () => {

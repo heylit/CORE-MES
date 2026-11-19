@@ -119,6 +119,8 @@ export { kartIzleriCozucusuKaydet as kartIzleriCozucusu } from './servis.ts';
 export { alternatifZarfiOku, alternatifDegerlendir } from './alternatif/servis.ts';
 // Saf: aday nitelikleri daraltılmış bir zarfa göre değerlendirmek için (satın alma teklifindeki alternatif).
 export { zarfDegerlendir } from './alternatif/kurallar.ts';
+// 3437 a (dilim 3b-2): satın almada onaylanan alternatifin kartı (varsa aynı nitelikli kart, yoksa ONAYDA yeni alt kart). Yetki denetlemez.
+export { alternatifKartiAc, type AlternatifNitelikleri } from './alternatif/kart-ac.ts';
 export type { AlternatifZarfi, ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 // 3438 a: alt kart ailesi. Emir ve sipariş ana kod girilince ailenin yürürlükteki revizyon kartını alır; alternatif bağını alternatif
 // yazımı (3437) kurar, zarfı kendisi denetler. Yetki denetlemez; çağıran kendi işlemini korur.

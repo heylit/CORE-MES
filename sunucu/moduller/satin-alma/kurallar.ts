@@ -182,7 +182,7 @@ export const ILETILER = {
   alternatifIzniYok: 'Bu şartlı alternatif artık yok ya da teklif değişti; Taleplerim\'i yenileyip yeniden bakın.',
   alternatifIzniAsamasi: 'Şartlı alternatife yalnız teklif toplanırken ve karar onaylanmadan karar verilir.',
   alternatifIzniKararda: 'Bu alternatif kararda seçili; kararınızı değiştirmek için satın almaya yazın.',
-  alternatifSiparis: (ad: string) => `${ad}: alternatif seçilen satırda sipariş, alternatif malzeme kartı açılınca verilir.`,
+  alternatifSiparis: (ad: string) => `${ad}: alternatif seçilen satır için sipariş henüz açık değil; alternatif kartla sipariş sonraki güncellemede gelir.`,
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
   kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
@@ -756,9 +756,11 @@ export function alternatifSonucuHesapla(
   const r = degerlendir(kabulZarfi(zarf, y === null ? null : { ...y, sartliKabul: false }), alternatifAdayi(zarf, a));
   const sonuc: AlternatifSonucu = { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
   const o = onceki?.alternatifSonucu;
-  if (sonuc.sonuc !== 'sartli' || sonuc.izin !== null || !o || (o.izin !== 'soru' && o.izin !== 'ret') || !onceki.alternatif) return sonuc;
-  if (alternatifIzi(onceki.alternatif) !== alternatifIzi(a)) return sonuc;
-  return { ...sonuc, izin: o.izin, izinKisiId: o.izinKisiId ?? null, izinZaman: o.izinZaman ?? null, izinNotu: o.izinNotu ?? null };
+  if (!o || !onceki.alternatif || alternatifIzi(onceki.alternatif) !== alternatifIzi(a)) return sonuc;
+  // 3b-2: açılan kart aynı alternatifte kalır; alternatif değişince düşer.
+  const kart = o.kartNo != null && sonuc.sonuc !== 'ayni' && sonuc.sonuc !== 'disi' ? { kartNo: o.kartNo } : {};
+  if (sonuc.sonuc !== 'sartli' || sonuc.izin !== null || (o.izin !== 'soru' && o.izin !== 'ret')) return { ...sonuc, ...kart };
+  return { ...sonuc, izin: o.izin, izinKisiId: o.izinKisiId ?? null, izinZaman: o.izinZaman ?? null, izinNotu: o.izinNotu ?? null, ...kart };
 }
 // Alternatifin anahtar sırasından bağımsız izi (boş nitelik ile null aynıdır).
 export const alternatifIzi = (a: TeklifAlternatifi): string =>
@@ -786,6 +788,7 @@ export function alternatifKararReddi(t: Pick<TalepYazimi, 'teklifler' | 'karar' 
     if (s.sonuc === 'disi') return ILETILER.alternatifDisi(ad(f.kalemId), s.nedenler.join(', ') || 'sınır dışı');
     if (s.sonuc === 'sartli' && s.izin === null) return ILETILER.alternatifSartli(ad(f.kalemId));
     if (s.sonuc === 'sartli' && s.izin === 'ret') return ILETILER.alternatifReddedildi(ad(f.kalemId));
+    // Kart açılsa da stok, fiyat ve plan okuyucuları alternatif kartı okuyana kadar (3437-3b-3) sipariş verilmez: mal ana karta girerdi.
     if (t.durum === 'siparis_verildi' || t.durum === 'teslim_alindi') return ILETILER.alternatifSiparis(ad(f.kalemId));
   }
   return null;
@@ -818,6 +821,11 @@ export function sartliAlternatifler(
   return m;
 }
 type SartliAlternatif = NonNullable<Talebim['kalemler'][number]['sartliAlternatifler']>[number];
+// 3437 a (dilim 3b-2): karar onaylanınca kartı açılacak alternatifler (seçilen, aynı olmayan, kartı henüz olmayan satırlar).
+export function kartBekleyenAlternatifler(t: Pick<TalepYazimi, 'teklifler' | 'karar'>): { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi }[] {
+  return secilenSatirlar(t).flatMap((f) => (f.alternatif && f.alternatifSonucu && f.alternatifSonucu.sonuc !== 'ayni' && f.alternatifSonucu.kartNo == null
+    ? [{ teklifId: f.teklifId, kalemId: f.kalemId, alternatif: f.alternatif }] : []));
+}
 type LogoKiyas = Pick<TalepYazimi, 'kalemler' | 'teklifler' | 'karar'>;
 const sadeOndalik = (x: string | null | undefined): string | null => (x === null || x === undefined ? null : x.includes('.') ? x.replace(/0+$/, '').replace(/\.$/, '') : x);
 // Logo'daki siparişin içeriği: iskonto, termin ve satırlar (kalem, miktar, birim, birim fiyat). Kapsam sipariş satırlarının kuralıyla aynı.

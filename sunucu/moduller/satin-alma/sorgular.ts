@@ -84,7 +84,7 @@ export interface AltKayitlar {
   fiyatlar: {
     talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null;
     alternatif: TeklifAlternatifi | null; alternatifSonuc: ZarfSonucu | null; alternatifNedenler: string[] | null; alternatifIzin: AlternatifIzni | null;
-    alternatifIzinKisiId: number | null; alternatifIzinZaman: string | null; alternatifIzinNotu: string | null;
+    alternatifIzinKisiId: number | null; alternatifIzinZaman: string | null; alternatifIzinNotu: string | null; alternatifKartNo: number | null;
   }[];
   basamaklar: { talepId: string; teklifId: string; kalemId: string; esik: string; birimFiyat: string }[];
   kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string; kurKilidi: string | null }[];
@@ -123,7 +123,8 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
     fiyatlar: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.kalem_id AS "kalemId", s.birim_fiyat AS "birimFiyat",
       s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar",
       s.alternatif, s.alternatif_sonuc AS "alternatifSonuc", s.alternatif_nedenler AS "alternatifNedenler", s.alternatif_izin AS "alternatifIzin",
-      s.alternatif_izin_kisi_id AS "alternatifIzinKisiId", ${ISO('s.alternatif_izin_zaman')} AS "alternatifIzinZaman", s.alternatif_izin_notu AS "alternatifIzinNotu"
+      s.alternatif_izin_kisi_id AS "alternatifIzinKisiId", ${ISO('s.alternatif_izin_zaman')} AS "alternatifIzinZaman", s.alternatif_izin_notu AS "alternatifIzinNotu",
+      s.alternatif_kart_no AS "alternatifKartNo"
       FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     basamaklar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", esik, birim_fiyat AS "birimFiyat"
@@ -374,18 +375,19 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
     await db.sorgu('DELETE FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2', [id, q.id]);
     await db.sorgu(
       `INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat, iskonto_yuzdesi, termin_gun, en_az_miktar,
-         alternatif, alternatif_sonuc, alternatif_nedenler, alternatif_izin, alternatif_izin_kisi_id, alternatif_izin_zaman, alternatif_izin_notu)
+         alternatif, alternatif_sonuc, alternatif_nedenler, alternatif_izin, alternatif_izin_kisi_id, alternatif_izin_zaman, alternatif_izin_notu, alternatif_kart_no)
        SELECT $1, $2, u.k, u.f, u.i, u.t, u.e, u.a, u.s, CASE WHEN u.s IS NULL THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(u.n)) END, u.z,
-           u.ik, u.iz, u.inot
+           u.ik, u.iz, u.inot, u.kn
          FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[], $8::jsonb[], $9::text[], $10::jsonb[], $11::text[],
-           $12::int[], $13::timestamptz[], $14::text[])
-           AS u(k, f, i, t, e, a, s, n, z, ik, iz, inot)`,
+           $12::int[], $13::timestamptz[], $14::text[], $15::int[])
+           AS u(k, f, i, t, e, a, s, n, z, ik, iz, inot, kn)`,
       [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat), q.fiyatlar.map((f) => f.iskontoYuzdesi ?? null),
         q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null),
         q.fiyatlar.map((f) => (f.alternatif ? JSON.stringify(f.alternatif) : null)), q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.sonuc ?? null : null)),
         q.fiyatlar.map((f) => (f.alternatif && f.alternatifSonucu ? JSON.stringify(f.alternatifSonucu.nedenler) : null)),
         q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.izin ?? null : null)),
-        ...(['izinKisiId', 'izinZaman', 'izinNotu'] as const).map((a) => q.fiyatlar.map((f) => (sonradanIzin(f) ? f.alternatifSonucu?.[a] ?? null : null)))]);
+        ...(['izinKisiId', 'izinZaman', 'izinNotu'] as const).map((a) => q.fiyatlar.map((f) => (sonradanIzin(f) ? f.alternatifSonucu?.[a] ?? null : null))),
+        q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.kartNo ?? null : null))]);
     // Basamaklar satırla birlikte silinir (yabancı anahtar, CASCADE) ve yeniden yazılır.
     const basamaklar = q.fiyatlar.flatMap((f) => (f.basamaklar ?? []).map((b) => ({ kalemId: f.kalemId, ...b })));
     if (basamaklar.length > 0) {
@@ -447,8 +449,12 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
         [id, s.teklifId, kalemler.map((x) => x.id)]);
       for (const x of kalemler) {
         await db.sorgu(
-          `INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, GREATEST($4::numeric, $6::numeric), $5)
-           ON CONFLICT (talep_id, teklif_id, kalem_id) DO UPDATE SET miktar = EXCLUDED.miktar, birim = EXCLUDED.birim`,
+          // 3437 a (dilim 3b-2): siparişin kartı teklif satırındaki alternatifin kartıdır (boş = kalemin kartı).
+          `INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim, alternatif_malzeme_no)
+           VALUES ($1, $2, $3, GREATEST($4::numeric, $6::numeric), $5,
+             (SELECT alternatif_kart_no FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2 AND kalem_id = $3))
+           ON CONFLICT (talep_id, teklif_id, kalem_id) DO UPDATE SET miktar = EXCLUDED.miktar, birim = EXCLUDED.birim,
+             alternatif_malzeme_no = EXCLUDED.alternatif_malzeme_no`,
           [id, s.teklifId, x.id, x.miktar, x.birim, enAz.get(x.id) ?? null],
         );
       }
