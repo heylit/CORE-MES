@@ -18,6 +18,9 @@ import { sifirdanBaslat } from './sorgular.ts';
 // Örnek veriyle sıfırlama (3433): ertelenmiş kısıtlı tablolar (rota adımı, iş emri sırası, stok defteri) doluyken
 // sıfırlama hatasız biter; istasyona bağlı konumun stok hareketi konumdan önce gider.
 const PAROLA = 'dogru-parola-1';
+// Sıfırlama tek deyimdir ve isteğin sorgu sınırıyla koşar; sekiz dosyanın aynı veritabanında koştuğu CI'da örnek veriyle de 10 sn'yi
+// aşabilir. Bu dosya sınırı değil işlevin doğruluğunu ölçer: sınır yalnız bu dosyanın bağlantılarında uzar.
+const SORGU_SURESI_MS = '60000';
 
 class GeriAl extends Error {}
 
@@ -27,6 +30,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
   let yonetici = '';
   let yoneticiId = 0;
   let dizin = '';
+  const oncekiSorguSuresi = process.env['TMIV2_PG_SORGU_SURE_MS'];
   const o = (): TestVeritabani => { if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ayarları).'); return ortam; };
   const say = async (t: string) => (await o().sahip.tek<{ n: number }>(`SELECT count(*)::int AS n FROM "${t}"`))!.n;
   const ertelenebilirDolu = async () => (await o().sahip.sorgu<{ t: string }>(
@@ -39,6 +43,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     process.env['TMIV2_YEDEK_DIZINI'] = dizin;
     process.env['TMIV2_YEDEK_ANAHTARI'] = Buffer.alloc(32, 7).toString('base64');
     process.env['TMIV2_SIFIRLAMA_ACIK'] = '1';
+    process.env['TMIV2_PG_SORGU_SURE_MS'] = SORGU_SURESI_MS;
     ortam = await testVeritabaniKur('ayarlar_sifirlama_ornek');
     await ornekVeriYukle(ortam.vt, await modulOrnekVerileriniKesfet(), { ortam: 'gelistirme', bildir: () => undefined });
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
@@ -53,6 +58,8 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     delete process.env['TMIV2_YEDEK_DIZINI'];
     delete process.env['TMIV2_YEDEK_ANAHTARI'];
     delete process.env['TMIV2_SIFIRLAMA_ACIK'];
+    if (oncekiSorguSuresi === undefined) delete process.env['TMIV2_PG_SORGU_SURE_MS'];
+    else process.env['TMIV2_PG_SORGU_SURE_MS'] = oncekiSorguSuresi;
   });
 
   test('örnek veri ertelenmiş kısıtlı tabloları ve istasyon konumundaki stok hareketini doldurur', async () => {

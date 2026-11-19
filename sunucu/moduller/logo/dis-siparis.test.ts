@@ -181,7 +181,9 @@ describe('D7 Logo\'da açılmış siparişi düzeltme (gerçek PostgreSQL, sahte
     const liste = await app.inject({ method: 'GET', url: `/api/logo/dis-siparis/duzeltmeler?no=${no}`, headers: { cookie: cerez.mudur } });
     assert.equal(liste.statusCode, 200, liste.body);
     assert.equal(liste.json().kayitlar[0].durum, 'gonderildi');
-    assert.equal(liste.body.includes('11.5'), false, 'liste fiyat taşımaz');
+    // Zaman alanları ("...:11.5xxZ") fiyatın metnini taşıyabilir; fiyat aranırken dışarıda kalır.
+    const zamansiz = JSON.stringify(liste.json().kayitlar, (anahtar: string, deger: unknown) => (anahtar === 'olusturma' || anahtar === 'sonucZamani' ? undefined : deger));
+    assert.equal(zamansiz.includes('11.5'), false, 'liste fiyat taşımaz');
     assert.deepEqual(await tur(), { tur: 'bos' });
   });
 
