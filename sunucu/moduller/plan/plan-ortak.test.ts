@@ -71,8 +71,14 @@ export function planTestOrtami() {
       headers: { cookie: cerez, ...(yontem === 'POST' && kimlik !== null ? { [ISTEK_KIMLIGI_BASLIGI]: kimlik } : {}) },
     });
 
+  // MESGUL "biraz sonra yeniden dene" demektir (cekirdek/hata.ts): yük altındaki test makinesinde okuma bir kez yinelenir.
+  // Yazma yinelenmez; ikinci MESGUL yine düşer.
   async function tamam<T>(cerez: string, yontem: 'GET' | 'POST', url: string, payload?: unknown): Promise<T> {
-    const cevap = await istek(cerez, yontem, url, payload);
+    let cevap = await istek(cerez, yontem, url, payload);
+    if (yontem === 'GET' && cevap.statusCode === 503 && cevap.json<{ kod?: string }>().kod === 'MESGUL') {
+      await new Promise((t) => { setTimeout(t, 1000); });
+      cevap = await istek(cerez, yontem, url, payload);
+    }
     assert.equal(cevap.statusCode, 200, `${yontem} ${url}: ${cevap.body}`);
     return cevap.json();
   }
