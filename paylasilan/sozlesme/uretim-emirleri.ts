@@ -523,14 +523,23 @@ export const rotasizEmirGovdesi = z.object({
   siparisSatiriId: KIMLIK.nullish(),
   // 3244 b: satırın üretim çeşidi partisi; verilirse emrin türü partinin türüdür. Teslim boşsa satırın termini olur ve ona bağlanır.
   siparisPartiId: KIMLIK.nullish(),
+  // 3438 a: kart yürürlükteki revizyon değilse ve emir sipariş kalemine bağlı değilse zorunlu (sunucu denetler).
+  eskiRevizyonGerekcesi: z.string().trim().max(300, 'Gerekçe en çok 300 karakter.').nullish(),
 }).strict();
 export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 
 // E-1, 224: emir açma ekranlarının (rotasız emir, Emre kopyala) proje ve sipariş satırı seçenekleri. Satırlar sunucunun bağlayacağı
 // satırlardır (projenin onaylı siparişi, aynı malzeme). Tek satırlı projede seçim gerekmez, sunucu bağlar; birden çoksa seçilir. Fiyat yok.
 export const acilisSecenekleriSorgusu = z.object({ malzemeNo: z.coerce.number<number>().int().positive(), emirTuru: z.enum(EMIR_TURLERI).optional() });
+// 3438 a: açılacak kartın revizyonu ve ailenin yürürlükteki kartı; kart revizyon ailesinde değilse null.
+export const emirRevizyonuSemasi = z.object({
+  etiket: z.string().nullable(), yururlukte: z.boolean(), yururluktekiNo: KIMLIK, yururluktekiKodu: z.string(), yururluktekiEtiketi: z.string().nullable(),
+});
+export type EmirRevizyonu = z.output<typeof emirRevizyonuSemasi>;
 export const acilisSecenekleriCevabi = z.object({
   projeZorunlu: z.boolean(),
+  // İsteğe bağlı: sunucu her zaman yazar (eski istemci ve testler alanı bilmez).
+  revizyon: emirRevizyonuSemasi.nullable().optional(),
   // "Rotasız üretim emri" ayarı (B13, B-2500-6): kapalıyken ekran rotasız emir yolunu sunmaz; açma ucu yine kendisi denetler.
   rotasizAcik: z.boolean(),
   projeler: z.array(z.object({

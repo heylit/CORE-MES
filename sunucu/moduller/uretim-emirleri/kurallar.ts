@@ -2034,3 +2034,16 @@ export function gorevinSistemHali(h: HazirlikCevabi | undefined, madde: string, 
   }
   return h.maddeler.find((m) => m.madde === madde)?.durum ?? null;
 }
+
+// 3438 a: emir kart ailesinin yürürlükteki revizyonuyla açılır; başka revizyon (müşteri eskisini isterse) gerekçeyle. Sipariş kalemine
+// bağlı emir kalemin kartıyla açılır: revizyon kararı kalemde verildi (gerekçesi orada).
+export interface EmirRevizyonDurumu { kod: string; etiket: string | null; yururlukte: boolean; yururluktekiKodu: string; yururluktekiEtiketi: string | null }
+export const ESKI_REVIZYON_GEREKCESI_EN_COK = 300;
+export function emirEskiRevizyonIhlali(r: EmirRevizyonDurumu | null, gerekce: string | null, siparisKalemli: boolean): string | null {
+  if (r === null || r.yururlukte || siparisKalemli) return null;
+  const g = (gerekce ?? '').trim();
+  if (g.length > ESKI_REVIZYON_GEREKCESI_EN_COK) return `Gerekçe en çok ${ESKI_REVIZYON_GEREKCESI_EN_COK} karakter.`;
+  if (g !== '') return null;
+  const ek = (e: string | null) => (e === null ? '' : ` (${e})`);
+  return `${r.kod}${ek(r.etiket)} yürürlükteki revizyon değil; yürürlükteki ${r.yururluktekiKodu}${ek(r.yururluktekiEtiketi)}. Eski revizyonla emir açmak için gerekçe yazın.`;
+}

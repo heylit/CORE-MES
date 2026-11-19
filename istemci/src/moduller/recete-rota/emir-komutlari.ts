@@ -124,6 +124,9 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         ...(girdi['projeId'] === undefined ? {} : { projeId: kimlik(girdi['projeId'], 'proje') }),
         ...(girdi['siparisSatiriId'] === undefined ? {} : { siparisSatiriId: kimlik(girdi['siparisSatiriId'], 'sipariş satırı') }),
         ...(girdi['siparisPartiId'] === undefined ? {} : { siparisPartiId: kimlik(girdi['siparisPartiId'], 'parti') }),
+        // 3438 a: kart yürürlükteki revizyon değilse ekranın sorduğu neden; gerekip gerekmediğine uretim-emirleri karar verir.
+        ...(typeof girdi['eskiRevizyonGerekcesi'] === 'string' && girdi['eskiRevizyonGerekcesi'].trim() !== ''
+          ? { eskiRevizyonGerekcesi: girdi['eskiRevizyonGerekcesi'].trim() } : {}),
       };
       if (girdi['rotasiz'] === true) {
         const aciklama = typeof girdi['note'] === 'string' && girdi['note'].trim() !== '' ? girdi['note'].trim() : null;

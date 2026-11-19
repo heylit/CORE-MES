@@ -649,6 +649,8 @@ export const emreKopyalaGovdesi = z.object({
   stoktanDugumler: z.array(DUGUM_YOLU).max(200).optional(),
   // 3296 (Risk N2): rota formda elle seçildi. Verilmezse revizyon emrin türünün rotasından olmalı (değilse 409).
   rotaElle: z.boolean().optional(),
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse ve emir sipariş kalemine bağlı değilse zorunlu; uretim-emirleri denetler.
+  eskiRevizyonGerekcesi: z.string().trim().max(300, 'Gerekçe en çok 300 karakter.').nullish(),
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
 

@@ -2406,4 +2406,20 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       assert.equal((await yaz(fAdim.adimId, { tur: 'islem', sureDk: 1 })).statusCode, 422);
     });
   });
+
+  // 3438 a: rota kartın kendi rotasıdır; kart ailesinde eskiye düştüyse emir gerekçeyle açılır, gerekçe uretim-emirleri'ne aktarılır.
+  test('3438 a: eski revizyon kartının rotasından emir gerekçesiz açılmaz; gerekçe emre geçer', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim()]);
+    const r2 = await mamulAc();
+    await ortam!.sahip.sorgu("UPDATE malzeme_katalog_karti SET rev_durumu = 'eski' WHERE no = $1", [urun]);
+    await ortam!.sahip.sorgu("UPDATE malzeme_katalog_karti SET ana_kart_no = $1, alt_tur = 'revizyon', alt_etiket = 'R02', rev_durumu = 'yururlukte' WHERE no = $2", [urun, r2]);
+    const govde = { projeId: denemeProjeId, adet: 2, teslim: null, taslak: true };
+    const ret = await istek(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, govde);
+    assert.equal(ret.statusCode, 400, ret.body);
+    assert.match(ret.body, /yürürlükteki revizyon değil/);
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { ...govde, eskiRevizyonGerekcesi: 'Müşteri R01 istedi' });
+    const g = await vt().tx((db) => db.tek<{ g: string | null }>('SELECT eski_revizyon_gerekcesi AS g FROM uretim_emri WHERE id = $1', [k.uretimEmriId]));
+    assert.equal(g?.g, 'Müşteri R01 istedi');
+  });
 });
