@@ -99,11 +99,14 @@ describe('3437-3b-3a: alternatif kartla sipariş satırının okuyucuları (ger�
     assert.notEqual(kodlar.get(alt)!.kod, kodlar.get(ana)!.kod);
   });
 
-  test('yolda ana kartta: alternatifle verilen sipariş ana kartın gelişidir, alternatif kartın değildir', async () => {
+  // 3b-3b: sipariş emrin bileşenini alternatif karta geçirdiği için yolda da alternatif karttadır; ana kart için geliş yoktur.
+  test('yolda alternatif kartta: alternatifle verilen sipariş alternatif kartın gelişidir, ana kartın değildir', async () => {
     const [ana, alt] = [await kart(), await kart()];
-    await siparisSatiri(ana, alt);
+    const a = await siparisSatiri(ana, alt);
     const gelis = await s.malzemeGelisleriOku(o().vt, [ana, alt]);
-    assert.deepEqual(gelis.map((x) => [x.malzemeNo, x.miktar]), [[ana, '10.0000']]);
+    assert.deepEqual(gelis.map((x) => [x.malzemeNo, x.miktar]), [[alt, '10.0000']]);
+    assert.deepEqual((await s.talepGelisleriOku(o().vt, a.talepId)).map((x) => x.malzemeNo), [alt]);
+    assert.deepEqual((await s.terminKalemleriOku(o().vt)).filter((x) => x.talepId === a.talepId).map((x) => x.malzemeNo), [alt]);
   });
 
   test('mal kabul: ana kartla reddedilir (K2), onaydaki alternatif kartla reddedilir (B1 a), aktif alternatif kartla kabul; fiyat alternatif kartta', async () => {
@@ -117,8 +120,8 @@ describe('3437-3b-3a: alternatif kartla sipariş satırının okuyucuları (ger�
     await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE no = $1", [alt]);
     const r3 = await kabul(alt, a.satirId);
     assert.equal(r3.durum, 200, JSON.stringify(r3.govde));
-    // Kabulden sonra satır kapanır, ana kartın yoldası düşer.
-    assert.deepEqual(await s.malzemeGelisleriOku(o().vt, [ana]), []);
+    // Kabulden sonra satır kapanır, alternatif kartın yoldası düşer.
+    assert.deepEqual(await s.malzemeGelisleriOku(o().vt, [ana, alt]), []);
     assert.deepEqual((await s.sonAlisFiyatlariOku(o().vt, [ana, alt])).map((x) => [x.malzemeNo, x.birimFiyat]), [[alt, '12.0000']]);
     assert.deepEqual((await s.ortalamaAlisFiyatlariOku(o().vt, [ana, alt])).map((x) => [x.malzemeNo, x.teslimSayisi]).sort(), [[ana, 0], [alt, 1]].sort());
     const teslimli = await s.teslimliMalzemeNolari(o().vt);

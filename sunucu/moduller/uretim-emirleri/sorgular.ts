@@ -26,7 +26,7 @@ export {
 export {
   type IsEmriSatiri, isEmirleriGetir, isEmirleriBul, isEmriBul, isEmriAyrimBilgileri, isEmriVarliklari, type AcikIsEmri, acikIsEmirleri, acikIsEmri, type PlanEmriBilgisi,
   planlanacakIsEmirleriGetir, type IsEmriYazisi, isEmriEkle, onculleriSil, onculleriYaz, isaretliListeVar, bekleyenIsEmriniGuncelle, bekleyenIsEmriniSil,
-  isEmriEkAciklamasiYaz, isEmriSirasiYaz, adayEkle, bilesenEkle, type AdaySatiri, adaylariGetir, bilesenleriGetir, isEmriKaynagiYaz, adaySil,
+  isEmriEkAciklamasiYaz, isEmriSirasiYaz, adayEkle, bilesenEkle, type BilesenIkamesi, bilesenIkameleri, ikameAdayBilesenleri, bilesenIkamesiYaz, bilesenIkamesiKaldir, emirSurumuArttir, type AdaySatiri, adaylariGetir, bilesenleriGetir, isEmriKaynagiYaz, adaySil,
   type UretimYeriYazisi, uretimYeriYaz, type UretimYeriDegisimiSatiri, uretimYeriDegisimleriGetir, uretimYeriDegisimiEkle, kisiAdimiIstasyonunuYaz,
   isEmriBaslat, isEmriBitir, type FasonHareketiSatiri, fasonHareketleriGetir, fasonIsEmirleri, type FasonIsEmri, fasonHareketiBul, fasonHareketiEkle,
 } from './sorgular/is-emri/sorgular.ts';

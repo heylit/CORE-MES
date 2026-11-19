@@ -14,8 +14,9 @@ const etkin = (f: string, miktar: string): string =>
   `satin_alma_etkin_birim_fiyat(${f}.talep_id, ${f}.teklif_id, ${f}.kalem_id, ${f}.birim_fiyat, ${miktar})`;
 
 // ---- Numaralar ayardaki kalıptan gelir (ayarlar numaraAl); kalıp değişince çakışan numara atlanır.
-// 3437 a (dilim 3b-3): alternatifle verilen sipariş satırının kartı (boşsa istenen kart). Stok, fiyat, Logo ve kart kopyası alınan
-// kartı okur; ihtiyaç ve yolda istenen kartta kalır (plan ana kartı arar, alternatif onun yerine gelir).
+// 3437 a (dilim 3b-3): alternatifle verilen sipariş satırının kartı (boşsa istenen kart). Siparişten sonraki her okuma (stok, fiyat, Logo,
+// kart kopyası, yolda, termin, emir tedariki) alınan kartı okur: sipariş emrin bileşenini alternatif karta geçirir (3b-3b), emir artık onu
+// bekler. Siparişten önceki talep düzeyi okumalar istenen kartta kalır.
 const ALTERNATIF_KARTI = (satir: string): string => `coalesce(${satir}.alternatif_malzeme_no, c.malzeme_no)`;
 
 export async function talepNoVarMi(db: Db, no: string): Promise<boolean> {
@@ -902,12 +903,34 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
   );
 }
 
+// 3437-3b-3b: talebin alternatifle verilen sipariş satırları; emir kalemin emridir (KALEM_EMRI), fason iş emri bağı ayrıca. Talep durumu
+// ikamenin açık olup olmadığını verir (sipariş verildi). Teslim net teslimdir.
+export interface AlternatifSiparisSatiri {
+  satirId: number; kalemId: string; ad: string; anaNo: number; alternatifNo: number; emirId: number | null; fason: boolean;
+  miktar: string; birim: string; teslim: string; talepDurumu: string;
+}
+export function alternatifSiparisSatirlari(db: Db, talepId: string): Promise<AlternatifSiparisSatiri[]> {
+  return db.sorgu<AlternatifSiparisSatiri>(
+    `SELECT s.id AS "satirId", k.id AS "kalemId", k.ad, c.malzeme_no AS "anaNo", s.alternatif_malzeme_no AS "alternatifNo", ${KALEM_EMRI} AS "emirId",
+            (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason, s.miktar::text AS miktar, s.birim,
+            coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim, t.durum AS "talepDurumu"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_talep t ON t.id = s.talep_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE s.talep_id = $1 AND s.alternatif_malzeme_no IS NOT NULL
+      ORDER BY k.sira, s.id`,
+    [talepId],
+  );
+}
+
 // ---- Plan için: açık siparişte gelecek malzeme. Kalan = sipariş miktarı - net teslim (> 0); kalanı kapatılmış sipariş gelmez.
 // satirId: sipariş satırının kimliği (talepGelisleriOku ile aynı anahtar); tedarikciAdi: siparişin teklifindeki ad, yazılmadıysa boş.
 export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Promise<MalzemeGelisiOkuma[]> {
   return db.sorgu<MalzemeGelisiOkuma>(
-    `SELECT c.malzeme_no AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
         coalesce(p.no, p.siparis_no) AS "siparisNo", s.id AS "satirId", nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -916,8 +939,8 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
        JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
-      WHERE c.malzeme_no = ANY($1::int[]) AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
-      ORDER BY c.malzeme_no, p.beklenen_teslim NULLS LAST, t.yil, t.sira, k.sira`,
+      WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[]) AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
+      ORDER BY ${ALTERNATIF_KARTI('s')}, p.beklenen_teslim NULLS LAST, t.yil, t.sira, k.sira`,
     [[...malzemeNolar]],
   );
 }
@@ -939,14 +962,14 @@ const ONAYLI_TALEP_KALEMI = `FROM satin_alma_talep t
 export interface TalepGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; satirId: number }
 export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiOkuma[]> {
   return db.sorgu<TalepGelisiOkuma>(
-    `SELECT c.malzeme_no AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
        JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
-      WHERE s.talep_id = $1 AND c.malzeme_no IS NOT NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL
+      WHERE s.talep_id = $1 AND ${ALTERNATIF_KARTI('s')} IS NOT NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL
         AND coalesce(m.toplam, 0) < s.miktar
      UNION ALL
      -- 3256-2: onaylı, siparişe geçmemiş talep kalemi de planın gelişidir (ONAYLI_TALEP_KALEMI). Anahtar kalemin sayı
@@ -1792,7 +1815,7 @@ export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
       WHERE t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
      UNION ALL
      SELECT 'siparis', t.id, t.no, t.durum, to_char(coalesce(k.kaynak_ihtiyac_tarihi, t.ihtiyac_tarihi), 'YYYY-MM-DD'),
-        k.id, k.ad, s.birim, (s.miktar - coalesce(m.toplam, 0))::text, c.malzeme_no, k.is_emri_id,
+        k.id, k.ad, s.birim, (s.miktar - coalesce(m.toplam, 0))::text, ${ALTERNATIF_KARTI('s')}, k.is_emri_id,
         s.teklif_id, coalesce(p.no, p.siparis_no), to_char(p.beklenen_teslim, 'YYYY-MM-DD'), t.yil, t.sira, k.sira
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -1937,7 +1960,7 @@ export interface EmirTedarikSatiri {
 }
 export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedarikSatiri[]> {
   return db.sorgu<EmirTedarikSatiri>(
-    `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", c.malzeme_no AS "malzemeNo",
+    `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", ${ALTERNATIF_KARTI('s')} AS "malzemeNo",
             t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
             s.miktar::text AS miktar, coalesce(m.toplam, 0)::text AS teslim, (p.logo_kapatma_durumu IS NOT NULL) AS kapali,
             tk.firma_id AS "firmaId"

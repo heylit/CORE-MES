@@ -261,11 +261,50 @@ export function adayEkle(
   );
 }
 
+// 3437-3b-3b: emirde ikamesi olan ana kart, bileşen hangi yoldan yeniden yazılırsa yazılsın alternatif kartla girer (ikame kaybolmaz).
 export function bilesenEkle(db: Db, isEmriId: number, b: { malzemeNo: number; miktar: string; fireYuzde: string }): Promise<unknown> {
   return db.sorgu(
-    'INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, $3, $4)',
+    `INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde)
+     SELECT $1, coalesce((SELECT k.alternatif_malzeme_no FROM uretim_emirleri_bilesen_ikamesi k JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = k.uretim_emri_id
+                           WHERE i.id = $1 AND k.ana_malzeme_no = $2), $2), $3, $4`,
     [isEmriId, b.malzemeNo, b.miktar, b.fireYuzde],
   );
+}
+export interface BilesenIkamesi { uretimEmriId: number; anaMalzemeNo: number; alternatifMalzemeNo: number; kaynak: string; kisiId: number; zaman: string }
+export function bilesenIkameleri(db: Db, uretimEmriIdleri: readonly number[]): Promise<BilesenIkamesi[]> {
+  return db.sorgu(
+    `SELECT uretim_emri_id AS "uretimEmriId", ana_malzeme_no AS "anaMalzemeNo", alternatif_malzeme_no AS "alternatifMalzemeNo", kaynak, kisi_id AS "kisiId",
+            ${ISO('zaman')} AS zaman
+       FROM uretim_emirleri_bilesen_ikamesi WHERE uretim_emri_id = ANY($1::int[]) ORDER BY uretim_emri_id, ana_malzeme_no`, [[...uretimEmriIdleri]]);
+}
+// Emrin kendi iş emirlerinde ana kartlı bileşen sayısı ve aynı iş emrinde alternatif kartın zaten bileşen olup olmadığı.
+export async function ikameAdayBilesenleri(db: Db, uretimEmriId: number, anaNo: number, alternatifNo: number): Promise<{ ana: number; cakisan: number }> {
+  return (await db.tek<{ ana: number; cakisan: number }>(
+    `SELECT count(*) FILTER (WHERE b.malzeme_no = $2)::int AS ana,
+            count(*) FILTER (WHERE b.malzeme_no = $3 AND EXISTS (SELECT 1 FROM uretim_emirleri_is_emri_bileseni x WHERE x.is_emri_id = b.is_emri_id AND x.malzeme_no = $2))::int AS cakisan
+       FROM uretim_emirleri_is_emri_bileseni b JOIN uretim_emirleri_is_emri i ON i.id = b.is_emri_id
+      WHERE i.uretim_emri_id = $1`, [uretimEmriId, anaNo, alternatifNo]))!;
+}
+export async function bilesenIkamesiYaz(db: Db, g: { uretimEmriId: number; anaNo: number; alternatifNo: number; kaynak: string; kisiId: number }): Promise<number> {
+  await db.sorgu(
+    `INSERT INTO uretim_emirleri_bilesen_ikamesi (uretim_emri_id, ana_malzeme_no, alternatif_malzeme_no, kaynak, kisi_id) VALUES ($1, $2, $3, $4, $5)`,
+    [g.uretimEmriId, g.anaNo, g.alternatifNo, g.kaynak, g.kisiId]);
+  return (await db.sorgu(
+    `UPDATE uretim_emirleri_is_emri_bileseni b SET malzeme_no = $3 FROM uretim_emirleri_is_emri i
+      WHERE i.id = b.is_emri_id AND i.uretim_emri_id = $1 AND b.malzeme_no = $2 RETURNING b.id`, [g.uretimEmriId, g.anaNo, g.alternatifNo])).length;
+}
+// İkame geri alınır: bileşen ana karta döner, kayıt silinir. Kayıt yoksa 0.
+export async function bilesenIkamesiKaldir(db: Db, uretimEmriId: number, alternatifNo: number): Promise<{ anaNo: number } | null> {
+  const k = await db.tek<{ anaNo: number }>(
+    'DELETE FROM uretim_emirleri_bilesen_ikamesi WHERE uretim_emri_id = $1 AND alternatif_malzeme_no = $2 RETURNING ana_malzeme_no AS "anaNo"', [uretimEmriId, alternatifNo]);
+  if (k === null) return null;
+  await db.sorgu(
+    `UPDATE uretim_emirleri_is_emri_bileseni b SET malzeme_no = $3 FROM uretim_emirleri_is_emri i
+      WHERE i.id = b.is_emri_id AND i.uretim_emri_id = $1 AND b.malzeme_no = $2`, [uretimEmriId, alternatifNo, k.anaNo]);
+  return k;
+}
+export function emirSurumuArttir(db: Db, uretimEmriId: number): Promise<unknown> {
+  return db.sorgu('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1', [uretimEmriId]);
 }
 
 export interface AdaySatiri {

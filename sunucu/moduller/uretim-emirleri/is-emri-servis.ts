@@ -28,7 +28,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  EMIR_YOK, IKAME_BASKA, IKAME_BILESEN_YOK, IKAME_CAKISMA, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, isEmriFarki, rotayiEmreCevir, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
@@ -848,6 +848,40 @@ export async function siparisTerminiYansit(db: Db, olay: { siparisId: number; ku
       await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId: olay.kullanici.id });
     }
   }
+}
+
+// 3437-3b-3b (3437 a): satın almanın alternatifle verdiği sipariş emrin bileşenini (bütün iş emirlerinde) alternatif karta geçirir; miktar ve
+// fire aynıdır. Emir kilitlenir, sürüm artar, iş emirleri değişti olayı planı bayat işaretler. İkame kaydı kalıcıdır: bileşen yeniden yazılsa da
+// ana kart alternatifle girer (bilesenEkle). Aynı ikame ikinci kez gelirse değişmez. Yetki denetlemez; çağıran (satın alma siparişi) korur.
+export async function bilesenIkamesiYap(db: Db, kisiId: number, g: { uretimEmriId: number; anaNo: number; alternatifNo: number; kaynak: string }): Promise<void> {
+  const e = await kilitliUstEmir(db, g.uretimEmriId);
+  const acik = acikEmirIhlali(e.durum, e.arsiv);
+  if (acik !== null) throw cakisma(acik);
+  const var_ = (await s.bilesenIkameleri(db, [g.uretimEmriId])).find((x) => x.anaMalzemeNo === g.anaNo);
+  if (var_ !== undefined) {
+    if (var_.alternatifMalzemeNo === g.alternatifNo) return;
+    throw cakisma(IKAME_BASKA);
+  }
+  const aday = await s.ikameAdayBilesenleri(db, g.uretimEmriId, g.anaNo, g.alternatifNo);
+  if (aday.ana === 0) throw cakisma(IKAME_BILESEN_YOK);
+  if (aday.cakisan > 0) throw cakisma(IKAME_CAKISMA);
+  await s.bilesenIkamesiYaz(db, { ...g, kaynak: g.kaynak.slice(0, 200), kisiId });
+  await s.emirSurumuArttir(db, g.uretimEmriId);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: g.uretimEmriId, kisiId });
+}
+// İkame geri alınır (sipariş iptali): bileşen ana karta döner. İkame yoksa false; kapanmış emirde dokunulmaz (false).
+export async function bilesenIkamesiGeriAl(db: Db, kisiId: number, g: { uretimEmriId: number; alternatifNo: number }): Promise<boolean> {
+  const e = await kilitliUstEmir(db, g.uretimEmriId);
+  if (acikEmirIhlali(e.durum, e.arsiv) !== null) return false;
+  if ((await s.bilesenIkamesiKaldir(db, g.uretimEmriId, g.alternatifNo)) === null) return false;
+  await s.emirSurumuArttir(db, g.uretimEmriId);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: g.uretimEmriId, kisiId });
+  return true;
+}
+export const bilesenIkameleri = (db: Db, uretimEmriIdleri: readonly number[]) => s.bilesenIkameleri(db, uretimEmriIdleri);
+// İkameden önce emir kilitlenir: kullanım (sarf, ayırma) ve ihtiyaç kilitten sonra okunur, üretim adımı sarfıyla yarışılmaz. Emir yoksa 404.
+export async function ikameIcinEmriKilitle(db: Db, uretimEmriId: number): Promise<void> {
+  await kilitliUstEmir(db, uretimEmriId);
 }
 
 // 163 a: planlama yetkisiyle başlamamış emrin önceliği doğrudan değişir; eski ve yeni değer kişi ve zamanla kayda girer.

@@ -334,9 +334,9 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     assert.equal((await ortam!.sahip.tek<{ kn: number }>('SELECT alternatif_kart_no AS kn FROM satin_alma_teklif_satiri WHERE talep_id = $1', [t.id]))!.kn, kartNo);
     const ad = (await ortam!.sahip.tek<{ ad: string }>("SELECT kayit->'com'->>'ad' AS ad FROM malzeme_katalog_karti WHERE no = $1", [kartNo]))!.ad;
     assert.equal(ad, 'Örnek alt-1 (alternatif 6262)');
-    const sip = await kaydet({ ...govde(o), durum: 'siparis_verildi', karar: { ...o.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'ALT-1', siparisTarihi: '2026-11-19', beklenenTeslim: '2026-11-26' }] } });
-    // Okuyucular (3b-3) gelene kadar sipariş verilmez: mal ana kartın stoğuna girerdi.
-    assert.deepEqual([sip.statusCode, (sip.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifSiparis('Örnek alt-1')]);
+    const sip = await kaydet({ ...govde(yeniden.json() as Talep), durum: 'siparis_verildi', karar: { ...o.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'ALT-1', siparisTarihi: '2026-11-19', beklenenTeslim: '2026-11-26' }] } });
+    // 3b-3b: alternatif yalnız emre bağlı kalemde sipariş edilir (ikame ve kart kuralları alternatif-ikame.test.ts).
+    assert.deepEqual([sip.statusCode, (sip.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifEmirsiz('Örnek alt-1')]);
     // Onaylı karardan sonra izin aşaması kapalı (Test bakışı): 422, satır değişmez.
     const gec = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) });
     assert.deepEqual([gec.statusCode, (gec.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniAsamasi]);
