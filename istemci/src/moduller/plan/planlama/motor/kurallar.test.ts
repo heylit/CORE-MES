@@ -29,6 +29,15 @@ describe('planlama motoru hesapları', () => {
     const p = planOku(c2)!;
     expect([p.ops[a]?.bitti, p.ops[b]?.bitti, p.ops[d]?.bitti, p.ops[e]?.bitti]).toEqual([true, true, undefined, undefined]);
   });
+  it('3457: plan kaydındaki zaman alt nedeni okunur; bilinmeyen alt neden ve zaman dışı kodda tanı atılır', () => {
+    const c = ornekCalisma();
+    const tani = { alt: 'sure', m: '100', ad: 'ORN-Torna 1', gerek: 1170, mevcut: 640, ufukGun: 120 };
+    const c2 = { ...c, plan: { ...c.plan!, failNeden: { a: { kod: 'zaman', tani }, b: { kod: 'zaman', tani: { ...tani, alt: 'uydurma' } }, d: { kod: 'aday', tani } } } } as typeof c;
+    const n = planOku(c2)!.failNeden!;
+    expect(n['a']).toEqual({ kod: 'zaman', tani });
+    expect(n['b']).toEqual({ kod: 'zaman' });
+    expect(n['d']).toEqual({ kod: 'aday' });
+  });
   it('Yapılacaklar ve veri denetimi eski sayfanınkiyle aynı', () => {
     const { c, p, cx } = kur();
     expect(sorunlar(c, p, cx, planGuncel(c)).map((s) => [s.ton, s.baslik, s.eylem.tur])).toEqual([

@@ -505,6 +505,63 @@ function tMach(o,c,cx,ctx,b,fast){
 }
 /** @param {any} [o] @param {any} [c] @param {Derleme} [cx] @param {any} [ctx] @param {any} [fast] */
 function timing(o,c,cx,ctx,fast){const b=predBound(o,cx,ctx);if(!b)return null;return c.fas?tFason(o,c,cx,ctx,b):tMach(o,c,cx,ctx,b,fast);}
+/* 3457: motorun 'zaman' nedeni (aday tezgâh var, ufukta yer yok) aday tezgâhların ufuktaki ölçüsüyle tek alt nedene iner. Ölçü burada tek
+   yerdedir: sunucunun yerleşmeme iletisi (plan-cozucusu zamanOlcumu, 2780 zamanNedeni) ve Kokpit'in plan kaydı (degerlendir.js planKaydi)
+   aynısını okur. Açık saat vardiya takvimi, tatil ve duruş düşülmüş işleme süresidir (rw); işçi kısıtı checkUse'un kalıcı ret koşuludur;
+   hazırlık tek parçadır ve tezgâhın kesintisiz bloğunda biter (2785 b). plan verilirse tezgâhın ufukta kalan boş saati de ölçülür. */
+/** @param {Derleme} [cx] @param {any} [o] @param {any} [plan] */
+function zamanOlcusu(cx,o,plan){
+  const st=cx.st,H=HDAYS*24;
+  const enBuyuk=a=>{let m=-Infinity;if(a)for(let k=0;k<a.length;k++)if(a[k]>m)m=a[k];return m;};
+  const herhangi=a=>{if(a)for(let k=0;k<a.length;k++)if(a[k])return true;return false;};
+  const mr=cx.mat.res[o.job],mt=mr&&mr.op?mr.op[o.id]:null;
+  const adaylar=(o.c||[]).filter(c=>!c.fas&&cx.M[c.m]).map(c=>{
+    const M=cx.M[c.m],d=M.opOran;
+    const personelYok=d>0&&(M.kisiler?!herhangi(M.kav):enBuyuk(cx.capTot)<d-1e-6||(cx.capG&&cx.capG[M.grup]?enBuyuk(cx.capG[M.grup])<d-1e-6:false));
+    let blok=null,ayarci=null;
+    if(+c.su>0){
+      const ileri=(M.sblok||[]).filter(([,z])=>z>st.now);
+      blok={gerekSaat:+c.su,enUzunSaat:ileri.reduce((x,[a,z])=>Math.max(x,workIn(M.sw,Math.max(a,st.now),z)),0)};
+      if(!o.ayarsiz&&o.ayarSaat!==0){
+        const bm=mask(ileri);let sure=0,enUzun=0;
+        for(let k=Math.max(0,Math.floor(st.now/SL));k<NS;k++){
+          if(!bm[k]){sure=0;continue;}
+          if(!M.smask[k])continue;
+          if(cx.capAyar[k]>=1-1e-6){sure+=SL;if(sure>enUzun)enUzun=sure;}else sure=0;}
+        ayarci={gerekSaat:o.ayarSaat!=null&&o.ayarSaat<+c.su?o.ayarSaat:+c.su,enUzunSaat:enUzun};}}
+    const acikSaat=workIn(M.rw,st.now,H);
+    let bosSaat=null;
+    if(plan&&plan.ops){
+      /* tezgâhın dolu saati plan başına bir kez sayılır: çok adım yerleşmediğinde her adım için bütün planı taramaz */
+      if(!plan.doluSaat)Object.defineProperty(plan,'doluSaat',{value:{},enumerable:false,writable:true});
+      let dolu=plan.doluSaat[c.m];
+      if(dolu==null){dolu=0;for(const id in plan.ops){const r=plan.ops[id];if(r.fas||r.m!==c.m||!isFinite(r.S)||!isFinite(r.C)||r.C<=st.now)continue;dolu+=workIn(M.rw,Math.max(r.S,st.now),Math.min(r.C,H));}plan.doluSaat[c.m]=dolu;}
+      bosSaat=Math.max(0,acikSaat-dolu);}
+    return {m:String(c.m),ad:M.ad==null?null:String(M.ad),acikSaat,sureSaat:(+c.su||0)+(+c.run||0),personelYok,blok,ayarci,bosSaat};});
+  return {ufukGun:HDAYS,malzemeHazirSaat:st.w.mat==='sert'&&mt!=null&&isFinite(mt)?mt:st.w.mat==='sert'&&mt!=null?Infinity:null,adaylar};
+}
+/* 3457: ölçüden tek alt neden; sıra 2780 zamanNedeni'nin sırasıdır (malzeme, vardiya, kişi, hazırlık bloğu, ayarcı, süre, dolu) ve
+   plan-zaman-tanisi.test.ts ikisinin aynı nedene indiğini sınar. gerek ve mevcut saattir; ölçülemeyen null. Infinity kayda yazılmaz. */
+/** @param {any} [z] */
+function zamanTanisi(z){
+  const s=x=>x==null||!isFinite(x)?null:Math.round(x*100)/100;
+  if(!z)return {alt:'bilinmiyor'};
+  if(z.malzemeHazirSaat!==null&&z.malzemeHazirSaat>=z.ufukGun*24)return {alt:'malzeme',ufukGun:z.ufukGun,mevcut:s(z.malzemeHazirSaat)};
+  const l=z.adaylar;if(!l.length)return {alt:'bilinmiyor'};
+  const yaz=(alt,a,gerek,mevcut)=>({alt,m:a.m,ad:a.ad,gerek:s(gerek),mevcut:s(mevcut),ufukGun:z.ufukGun});
+  if(l.every(a=>!(a.acikSaat>0)))return yaz('vardiya',l[0],null,0);
+  const vardiyali=l.filter(a=>a.acikSaat>0);
+  if(vardiyali.every(a=>a.personelYok))return yaz('kisi',vardiyali[0],null,null);
+  const personelli=vardiyali.filter(a=>!a.personelYok);
+  const blokSigmaz=a=>a.blok!=null&&a.blok.gerekSaat>a.blok.enUzunSaat+1e-9;
+  if(personelli.every(blokSigmaz)){const p=personelli.reduce((x,y)=>y.blok.enUzunSaat>x.blok.enUzunSaat?y:x);return yaz('hazirlik',p,p.blok.gerekSaat,p.blok.enUzunSaat);}
+  const ayarSigmaz=a=>blokSigmaz(a)||(a.ayarci!=null&&a.ayarci.gerekSaat>a.ayarci.enUzunSaat+1e-9);
+  if(personelli.every(ayarSigmaz)){const p=personelli.filter(a=>!blokSigmaz(a)).reduce((x,y)=>y.ayarci.enUzunSaat>x.ayarci.enUzunSaat?y:x);return yaz('ayarci',p,p.ayarci.gerekSaat,p.ayarci.enUzunSaat);}
+  const uygun=personelli.filter(a=>!ayarSigmaz(a));
+  if(uygun.every(a=>a.sureSaat>a.acikSaat)){const p=uygun.reduce((x,y)=>y.acikSaat>x.acikSaat?y:x);return yaz('sure',p,p.sureSaat,p.acikSaat);}
+  const p=uygun.reduce((x,y)=>(y.bosSaat??-1)>(x.bosSaat??-1)?y:x);
+  return yaz('dolu',p,p.sureSaat,p.bosSaat);
+}
 /** @param {Derleme} [cx] @param {any} [ctx] @param {any} [r] */
 function commit(cx,ctx,r){
   ctx.P[r.id]=r;

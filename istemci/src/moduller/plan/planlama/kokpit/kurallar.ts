@@ -1,5 +1,5 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
-import { acikSaat, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
+import { acikSaat, zamanTanisiYazisi, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
@@ -420,6 +420,7 @@ export const eksikAdimlar = (m: Pick<KokpitModeli, 'isler'>, e: KokpitEmri): Kok
 const EKSIK_NEDENI = { aday: 'uygun tezgâh ya da fasoncu yok', oncul: 'önceki adım yerleşmedi', zaman: 'ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı' } as const;
 export function eksikNedeni(p: Pick<OkunanPlan, 'fail' | 'failNeden'> | null, id: string): string {
   const n = p?.failNeden?.[id];
+  if (n?.tani) return zamanTanisiYazisi(n.tani);
   if (n) return EKSIK_NEDENI[n.kod];
   return p?.fail.includes(id) ? EKSIK_NEDENI.zaman : 'son planlamada yoktu';
 }

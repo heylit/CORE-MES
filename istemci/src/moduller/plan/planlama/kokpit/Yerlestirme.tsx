@@ -657,7 +657,12 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {!uygula ? <p className="tc-pyq-not">Emri yalnız planı yazabilen kişi yerleştirir.</p>
             : seciliAdim === null ? null
               : y.yerler === null ? <p className="tc-pyq-not" role="status">Boş yerler hesaplanıyor</p>
-                : y.yerler.length === 0 ? <p className="tc-pyq-not" role="status">Bu adım için uygun boş yer bulunamadı; "{gorunum === 'akis' ? 'Hepsini en erken yere yerleştir' : 'İleriye yerleştir'}" sistemin seçimini dener.</p>
+                : y.yerler.length === 0 ? (
+                  <>
+                    {plan?.failNeden?.[seciliAdim] ? <p className="tc-pyq-not" data-yerlesmeme-nedeni={seciliAdim}>Son planlamada yerleşmedi: {eksikNedeni(plan, seciliAdim)}</p> : null}
+                    <p className="tc-pyq-not" role="status">Bu adım için uygun boş yer bulunamadı; "{gorunum === 'akis' ? 'Hepsini en erken yere yerleştir' : 'İleriye yerleştir'}" sistemin seçimini dener.</p>
+                  </>
+                )
                   : (
                     <>
                       <p className="tc-pyq-not"><b>{seciliAd}</b> seçili. Yere basın.</p>

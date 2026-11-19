@@ -172,37 +172,10 @@ function zamanOlcumu(durum: MotorDurumu, idler: readonly string[]): Record<strin
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
   b['durum'] = durum; b['idler'] = [...idler];
+  // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur.
   const ham = vm.runInContext(`(() => {
-    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } })), st = cx.st, H = HDAYS * 24;
-    const enBuyuk = (a) => { let m = -Infinity; if (a) for (let k = 0; k < a.length; k++) if (a[k] > m) m = a[k]; return m; };
-    const herhangi = (a) => { if (a) for (let k = 0; k < a.length; k++) if (a[k]) return true; return false; };
-    return idler.map((id) => {
-      const o = cx.byId[id]; if (!o) return null;
-      const mr = cx.mat.res[o.job], mt = mr && mr.op ? mr.op[o.id] : null;
-      const adaylar = (o.c || []).filter((c) => !c.fas && cx.M[c.m]).map((c) => {
-        const M = cx.M[c.m], d = M.opOran;
-        const personelYok = d > 0 && (M.kisiler ? !herhangi(M.kav) : enBuyuk(cx.capTot) < d - 1e-6 || (cx.capG && cx.capG[M.grup] ? enBuyuk(cx.capG[M.grup]) < d - 1e-6 : false));
-        // 2785 b (tMach): hazırlık tek parçadır, tezgâhın kesintisiz bloğunda (molalar içinde) biter; checkUse her hazırlık diliminde ayarcı
-        // ister. Blok dışı ve ayarcısız dilim aralığı keser, mola kesmez.
-        let blok = null, ayarci = null;
-        if (+c.su > 0) {
-          const ileri = (M.sblok || []).filter(([, z]) => z > st.now);
-          blok = { gerekSaat: +c.su, enUzunSaat: ileri.reduce((x, [a, z]) => Math.max(x, workIn(M.sw, Math.max(a, st.now), z)), 0) };
-          if (!o.ayarsiz && o.ayarSaat !== 0) {
-            const bm = mask(ileri);
-            let sure = 0, enUzun = 0;
-            for (let k = Math.max(0, Math.floor(st.now / SL)); k < NS; k++) {
-              if (!bm[k]) { sure = 0; continue; }
-              if (!M.smask[k]) continue;
-              if (cx.capAyar[k] >= 1 - 1e-6) { sure += SL; if (sure > enUzun) enUzun = sure; } else sure = 0;
-            }
-            ayarci = { gerekSaat: o.ayarSaat != null && o.ayarSaat < +c.su ? o.ayarSaat : +c.su, enUzunSaat: enUzun };
-          }
-        }
-        return { m: String(c.m), ad: M.ad == null ? null : String(M.ad), acikSaat: workIn(M.rw, st.now, H), sureSaat: (+c.su || 0) + (+c.run || 0), personelYok, blok, ayarci };
-      });
-      return { ufukGun: HDAYS, malzemeHazirSaat: st.w.mat === 'sert' && mt != null && isFinite(mt) ? mt : st.w.mat === 'sert' && mt != null ? Infinity : null, adaylar };
-    });
+    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
+    return idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; });
   })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[];
   return Object.fromEntries(idler.map((id, n) => {
     const x = ham[n] ?? null;

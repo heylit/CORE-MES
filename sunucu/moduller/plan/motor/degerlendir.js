@@ -83,6 +83,16 @@ function malKaydi(p, st) {
       return { kod: d.kod, adim: d.adim, need: d.need, t: d.t != null && isFinite(d.t) ? d.t : null, stok, eksik: d.eksikQ || 0, pay }; }); }
   return mal;
 }
+/* 3457: Kokpit yerleşmeyen adımın somut nedenini gösterir: motorun genel 'zaman' nedeni (ya da nedensiz fail) aday tezgâhların ölçüsüyle
+   alt nedene iner (engine.js zamanTanisi: süre ufka sığmıyor, vardiya yok, hazırlık sığmıyor, kişi ya da ayarcı yok, tezgâh dolu, malzeme). */
+/** @param {any} [p] @param {MotorDurumu} [st] */
+function failNedenKaydi(p, st) {
+  const n = { ...(p.failNeden || {}) }; const fail = p.fail || []; if (!fail.length) return n;
+  const cx = p.cx || compile(st);
+  for (const id of fail) { const x = n[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
+    n[id] = { kod: 'zaman', tani: zamanTanisi(zamanOlcusu(cx, o, p)) }; }
+  return n;
+}
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const ef = evaluate(p, st, ref, false);
@@ -90,7 +100,7 @@ function planKaydi(p, st, ref) {
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
-  return { ops, fail: p.fail || [], failNeden: p.failNeden || {}, ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
+  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */
