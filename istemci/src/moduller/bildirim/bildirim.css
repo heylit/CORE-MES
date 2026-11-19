@@ -155,3 +155,41 @@
   .tc-bildirim-kserit-ek { display: none; }
   .tc-bildirim-kserit a { white-space: nowrap; }
 }
+
+/* 3456-2 a: Gelenler; geciken işler bağlantısı, gün başlıkları, satır seçimi ve toplu iş çubuğu. */
+.tc-bildirim-geciken {
+  display: inline-flex; align-items: center; gap: var(--b-2); align-self: flex-start; min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--stop); border-radius: var(--yari-2); color: var(--stop); font-weight: 600; text-decoration: none;
+}
+.tc-bildirim-geciken:hover { background: var(--panel2); }
+.tc-bildirim-geciken:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-bildirim-cip-sayi { font-weight: 400; }
+.tc-bildirim-suzgec .tc-alan { min-inline-size: calc(var(--dokunma) * 4); }
+.tc-bildirim-gun { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-bildirim-gun-baslik { margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-transform: uppercase; }
+.tc-bildirim-sec { flex: none; align-self: center; inline-size: var(--b-5); block-size: var(--b-5); margin-inline-start: var(--b-3); accent-color: var(--hazard); }
+.tc-bildirim-satir[data-secili] { background: var(--panel2); }
+.tc-bildirim-toplu {
+  position: sticky; inset-block-start: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);
+  padding: var(--b-2) var(--b-3); border: 1px solid var(--ink); border-radius: var(--yari-2); background: var(--panel-solid);
+}
+.tc-bildirim-toplu > span { flex: 1 1 auto; font-weight: 600; }
+.tc-bildirim-dugme-yazi { display: none; }
+@media (min-width: 1024px) {
+  .tc-bildirim-arsivle:has(.tc-bildirim-dugme-yazi) { display: flex; gap: var(--b-1); inline-size: auto; padding: 0 var(--b-3); }
+  .tc-bildirim-dugme-yazi { display: inline; font-size: var(--yazi-s); }
+}
+.tc-bildirim-kademe-cip { gap: var(--b-2); }
+.tc-bildirim-kademe-cip[data-ton="bilgi"] b { color: var(--done); }
+.tc-bildirim-kademe-cip[data-ton="uyari"] b { color: var(--hold); }
+.tc-bildirim-kademe-cip[data-ton="hata"] { border-color: var(--stop); }
+.tc-bildirim-kademe-cip[data-ton="hata"] b { color: var(--stop); }
+.tc-bildirim-kademe-cip[data-ton="pasif"] { color: var(--faint); cursor: default; }
+
+/* 3456-2 a: Duyurular tablosu; okunma çubuğu ve sayı yan yana. */
+.tc-bildirim-duyuru { display: flex; align-items: flex-start; gap: var(--b-3); min-width: 0; }
+.tc-bildirim-okunma { display: inline-flex; align-items: center; gap: var(--b-2); min-inline-size: calc(var(--dokunma) * 3); }
+.tc-bildirim-cubuk { flex: 1 1 auto; inline-size: calc(var(--dokunma) * 2); block-size: var(--b-2); accent-color: var(--run); }
+.tc-pencere .tc-bildirim-izgara { grid-template-columns: minmax(0, 1fr); }
+.tc-bildirim-cihaz-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); color: var(--muted); font-size: var(--yazi-s); }
+.tc-bildirim-cihaz-satiri > span { flex: 1 1 auto; }

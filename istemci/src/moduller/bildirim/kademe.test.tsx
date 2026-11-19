@@ -53,6 +53,23 @@ describe('Kademeli uyarı (3405)', () => {
     });
   });
 
+  it('3456: takip anahtarı pencere açmadan bütün ayarla ve sürümle yazar; Geri al yeni sürümle geri açar', async () => {
+    const c = kur(<KademeliUyari />, (yol, yontem, govde) => {
+      if (yol === '/bildirim-kademe/kaynaklar') return json(200, AYARLAR);
+      if (yontem === 'POST') return json(200, { ...AYARLAR, kaynaklar: [{ ...SATIR, ...(govde as object), surum: ((govde as { surum: number }).surum) + 1 }] });
+      return json(404, {});
+    });
+    fireEvent.click(await screen.findByRole('switch', { name: 'Kalibrasyon vadesi: takip' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => { expect(c.filter((x) => x.yontem === 'POST')).toHaveLength(1); });
+    expect(c.find((x) => x.yontem === 'POST')?.govde).toEqual({
+      acik: false, k2Gun: 10, k3Gun: null, k3Birim: 'gun', k4Gun: 3, k5Gun: 7, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, surum: 1,
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
+    await waitFor(() => { expect(c.filter((x) => x.yontem === 'POST')).toHaveLength(2); });
+    expect(c.filter((x) => x.yontem === 'POST')[1]?.govde).toMatchObject({ acik: true, surum: 2 });
+  });
+
   it('boş bırakılan gün kademeyi kapatır (null gider)', async () => {
     const c = kur(<KademeliUyari />, (yol, yontem) => (yontem === 'POST' ? json(200, AYARLAR) : yol === '/bildirim-kademe/kaynaklar' ? json(200, AYARLAR) : json(404, {})));
     fireEvent.click(await screen.findByText('Kalibrasyon vadesi'));
@@ -116,6 +133,29 @@ describe('Kademeli uyarı (3405)', () => {
   it('Açık takipler işin kimde olduğunu yazar', async () => {
     kur(<AcikTakipler />, (yol) => (yol === '/bildirim-kademe/acik-takipler' ? json(200, { kayitlar: [{ ...KAYIT, kimde: ['ORN Kişi', 'ORN Yönetici'] }], kesik: false }) : json(404, {})));
     expect((await screen.findAllByText('ORN Kişi, ORN Yönetici')).length).toBeGreaterThan(0);
+  });
+
+  it('3456-2 a: kademe sayısı basınca süzer; sıfır olan basılamaz; arama kimde içinde de arar', async () => {
+    const kayitlar = [
+      { ...KAYIT, kimde: ['ORN Kişi'] },
+      { ...KAYIT, kayit: '8:2026-11-12', no: 'ORN-ALET-8', baslik: 'Mikrometre', kademe: 3, kimde: ['ORN Ayarcı'] },
+      { ...KAYIT, kaynak: 'satin-alma.talep-onay', kayit: '9', no: 'ORN-TLP-9', baslik: 'Talep', kademe: 2, kimde: ['ORN Alıcı'] },
+    ];
+    kur(<AcikTakipler />, (yol) => (yol === '/bildirim-kademe/acik-takipler' ? json(200, { kayitlar, kesik: false }) : json(404, {})));
+    const k3 = await screen.findByRole('button', { name: '1 K3 Gecikti' });
+    expect((screen.getByRole('button', { name: '0 K5 Devret' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(k3);
+    expect(screen.queryAllByText('Kumpas')).toHaveLength(0);
+    expect(screen.getAllByText('Mikrometre').length).toBeGreaterThan(0);
+    fireEvent.click(k3);
+    fireEvent.change(screen.getByLabelText('Kaynak'), { target: { value: 'satin-alma.talep-onay' } });
+    expect(screen.queryAllByText('Kumpas')).toHaveLength(0);
+    expect(screen.getAllByText('Talep').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Kaynak'), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Kayıt, iş ya da kimde ara' }), { target: { value: 'ayarcı' } });
+    expect(screen.queryAllByText('Kumpas')).toHaveLength(0);
+    expect(screen.queryAllByText('Talep')).toHaveLength(0);
+    expect(screen.getAllByText('Mikrometre').length).toBeGreaterThan(0);
   });
 
   it('kişisel oturumda geciken iş kapanmayan şerit açar', async () => {

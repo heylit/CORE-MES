@@ -124,7 +124,7 @@ describe('Merkez listesi', () => {
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/bildirimler/21/onayla')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Onay bekleyen' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=onay-bekleyen'))).toBe(true));
-    expect(screen.getByRole('button', { name: 'Duyuru' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Duyuru' })).toBeTruthy();
   });
 });
 
@@ -142,6 +142,17 @@ describe('Hazırla ve Yayınlar', () => {
     ac('/bildirim-merkezi/hazirla');
     expect(await screen.findByText(/Bu sekme için yetkiniz yok/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yayınla' })).toBeNull();
+  });
+
+  it('3456-2 a: yalnız okuma yetkisi olana "Yeni duyuru" çıkmaz', async () => {
+    sunucuKur({
+      'GET /oturum': oturum(['bildirim.yayin-oku']),
+      'GET /bildirimler/yayinlar': () => json(200, { satirlar: [Y({ yazan: { id: 9, ad: 'Deneme Müdür' } })], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies BildirimYayinListeCevabi),
+      'GET /bildirimler/yayinlar/3/alicilar': () => json(200, { yayinId: 3, satirlar: [] } satisfies BildirimYayinAlicilariCevabi),
+    });
+    ac('/bildirim-merkezi/yayinlar');
+    expect(await screen.findByRole('table', { name: 'Duyurular' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeni duyuru' })).toBeNull();
   });
 
   it('rol hedefli onaylı bildirim tekrar korumalı tek komutla yayınlanır', async () => {
@@ -167,6 +178,8 @@ describe('Hazırla ve Yayınlar', () => {
       ortada: true, onayIstenir: true, yayinZamani: null, bitis: null,
     });
     expect(istek?.basliklar['istek-kimligi']).toMatch(/^[0-9a-f-]{36}$/);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yeni duyuru' })).toBeNull());
+    expect(await screen.findByRole('table', { name: 'Duyurular' })).toBeTruthy();
   });
 
   it('Yayınlar okunma sayılarını ve kişi listesini verir; geri çekme yalnız kendi yayınında ve onayla', async () => {
@@ -185,7 +198,8 @@ describe('Hazırla ve Yayınlar', () => {
       'POST /bildirimler/yayinlar/3/geri-cek': () => json(200, Y({ geriCekildi: '2026-11-05T10:00:00+03:00' })),
     });
     ac('/bildirim-merkezi/yayinlar');
-    expect((await screen.findAllByText('Okudu 1 / 2 · Onayladı 1 / 2')).length).toBe(2);
+    expect((await screen.findAllByRole('progressbar', { name: 'Okudu yüzde 50' })).length).toBe(2);
+    expect(screen.getAllByText('1 / 2').length).toBe(4);
     expect(await screen.findByText('Deneme Ayarcı')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Bekliyor' }));
     expect(screen.queryByText('Deneme Operatör')).toBeNull();

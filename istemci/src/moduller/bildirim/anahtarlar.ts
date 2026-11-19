@@ -11,3 +11,6 @@ export const anahtarlar = {
   acikTakipler: ['bildirim', 'kademe', 'acik-takipler'] as const,
   seridim: ['bildirim', 'kademe', 'seridim'] as const,
 };
+
+// Oturumun cihazı (kişisel ya da ortak); kademe şeridi ve zil çekmecesi aynı okumayı paylaşır.
+export const CIHAZ_ANAHTARI = ['bildirim', 'bu-cihaz'] as const;

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import type { z } from 'zod';
 import type { BildirimListeCevabi, BildirimSayacCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import type { cihazDurumuCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { DurumKutusu, Dugme, Pencere, Sekmeler, Simge, type Sekme } from '../../ortak/arayuz/index.ts';
 import type { UstEylem, UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
-import { anahtarlar } from './anahtarlar.ts';
+import { anahtarlar, CIHAZ_ANAHTARI } from './anahtarlar.ts';
 import { CIHAZ_LISTE_BOYU, cihazBildirimi, tarayiciCihazOrtami, yeniBildirimler, type CihazIzni, type CihazOrtami } from './cihaz.ts';
 import { SAYAC_YOKLAMA_MS, sayacMetni } from './gorunum.ts';
 import { OrtadakiPencere } from './OrtadakiPencere.tsx';
@@ -30,6 +32,9 @@ function Cekmece({ kapat, cihaz }: { kapat: () => void; cihaz: CihazIzinDugmesi 
     queryFn: () => api.get<BildirimListeCevabi>(`/bildirimler?durum=${sekme}&sayfaBoyu=${CEKMECE_BOYU}`),
   });
   const sayfayaGit = (yol: string) => { kapat(); void git(yol); };
+  // 3456-2 a: altta iki düğme kalır; telefon bildirimi anahtarı Profilim'dedir. Cihaz izni satırı ortak cihazda (terminal, istasyon) çıkmaz.
+  const cihazDurumu = useQuery({ queryKey: CIHAZ_ANAHTARI, queryFn: () => api.get<z.output<typeof cihazDurumuCevabi>>('/oturum/cihaz'), staleTime: 600_000 });
+  const kisisel = cihazDurumu.data?.ortak === false;
   return (
     <Pencere
       acik
@@ -40,11 +45,15 @@ function Cekmece({ kapat, cihaz }: { kapat: () => void; cihaz: CihazIzinDugmesi 
         <div className="tc-bildirim-cekmece-alt">
           <Dugme simge="check" onClick={() => tumu.mutate()} yukleniyor={tumu.isPending}>Tümünü okundu yap</Dugme>
           <Dugme simge="list" onClick={() => sayfayaGit('/bildirim-merkezi')}>Hepsini gör</Dugme>
-          <Dugme simge="gear" onClick={() => sayfayaGit('/profil')}>Telefon bildirimi</Dugme>
-          {cihaz.izin === 'default' && <Dugme simge="bell" onClick={cihaz.iste}>Cihaz bildirimini aç</Dugme>}
         </div>
       )}
     >
+      {cihaz.izin === 'default' && kisisel && (
+        <p className="tc-bildirim-cihaz-satiri">
+          <Simge ad="bell" boyut="k" /><span>Bu cihazda bildirim kapalı.</span>
+          <Dugme simge="bell" onClick={cihaz.iste}>Bu cihazda bildirimi aç</Dugme>
+        </p>
+      )}
       <Sekmeler etiket="Bildirim süzgeci" sekmeler={SEKMELER} secili={sekme} sec={sekmeYaz} />
       {liste.isPending ? <DurumKutusu durum="yukleniyor" />
         : liste.isError ? <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />

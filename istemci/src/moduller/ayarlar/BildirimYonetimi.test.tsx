@@ -144,15 +144,24 @@ const SABLONLAR = {
 function matrisSunucusu(hataliYol?: string) {
   const yazilanlar: { yol: string; govde: unknown }[] = [];
   const okunanlar: string[] = [];
+  // Alıcı yazımı sunucudaki gibi satırı değiştirir ve sürümü artırır; Geri al yeniden okunan sürümü taşımalıdır.
+  const alicilar: BildirimAlicilariCevabi = structuredClone(ALICILAR);
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
     const yol = adres.replace('/api', '');
     if (secenek.method === 'POST') {
-      yazilanlar.push({ yol, govde: JSON.parse(secenek.body ?? '{}') });
+      const govde = JSON.parse(secenek.body ?? '{}') as { rolIdleri?: number[]; kisiIdleri?: number[]; surum?: number | null };
+      yazilanlar.push({ yol, govde });
       if (yol === hataliYol) return json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' });
+      const alici = /^\/bildirimler\/alicilar\/([^/]+)\/degistir$/.exec(yol);
+      const satir = alici ? alicilar.satirlar.find((a) => a.tur === alici[1]) : undefined;
+      if (satir) {
+        if (govde.surum !== satir.surum) return json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' });
+        Object.assign(satir, { rolIdleri: govde.rolIdleri ?? [], kisiIdleri: govde.kisiIdleri ?? [], surum: (satir.surum ?? 0) + 1 });
+      }
       return json(200, {});
     }
     okunanlar.push(yol);
-    if (yol === '/bildirimler/alicilar') return json(200, ALICILAR);
+    if (yol === '/bildirimler/alicilar') return json(200, alicilar);
     if (yol === '/bildirimler/gosterim') return json(200, GOSTERIM);
     if (yol === '/bildirimler/push/turler') return json(200, PUSH);
     if (yol === '/bildirimler/eposta/tetikleyiciler') return json(200, TETIK);
@@ -164,41 +173,115 @@ function matrisSunucusu(hataliYol?: string) {
   return { yazilanlar, okunanlar };
 }
 
-describe('bildirim ve uyarı yönetimi: olaylar (3435-3)', () => {
-  it('her olay tek satırda: zil, ortada, telefon, e-posta ve şablonu, alıcılar', async () => {
+const ayrintiAc = async (baslik: string) => {
+  fireEvent.click(await screen.findByRole('button', { name: `${baslik}: ayrıntı` }));
+  return screen.findByRole('dialog', { name: baslik });
+};
+const anahtar = (ad: string) => screen.getByRole('switch', { name: ad });
+
+describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
+  it('her olay tek satırda: kanal anahtarları, e-posta zamanı ve şablonu, alıcılar; varsayılan alıcı işaretli', async () => {
     matrisSunucusu();
     ac();
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     const satin = within(tablo).getByText('Satın alma talebi onay bekliyor').closest('tr');
     if (!satin) throw new Error('satır yok');
-    expect(within(satin).getByText('Hemen')).toBeTruthy();
-    expect(within(satin).getByText('ORN Acil talep')).toBeTruthy();
+    expect(within(satin).getByText('Hemen · ORN Acil talep')).toBeTruthy();
     expect(within(satin).getByText('Müdür, 1 kişi')).toBeTruthy();
+    expect(anahtar('Satın alma talebi onay bekliyor: E-posta').getAttribute('aria-checked')).toBe('true');
+    expect(anahtar('Makine durdu: Ekran ortası').getAttribute('aria-checked')).toBe('true');
+    expect(anahtar('Makine durdu: Telefon').getAttribute('aria-checked')).toBe('true');
+    expect(anahtar('Malzeme bırakıldı: Telefon').getAttribute('aria-checked')).toBe('false');
     const makine = within(tablo).getByText('Makine durdu').closest('tr');
-    if (!makine) throw new Error('satır yok');
-    expect(within(makine).getByText('Ortada')).toBeTruthy();
-    expect(within(makine).getByText(/Yetkisi olanlar/)).toBeTruthy();
+    expect(makine?.textContent).toMatch(/Yetkisi olanlar .*\(varsayılan\)/);
     expect(within(tablo).getByText('Malzeme bırakıldı').closest('tr')?.textContent).toMatch(/Kayda bağlı kişi/);
+    expect(within(tablo).queryByText('Zil')).toBeNull();
     expect(screen.getByRole('tab', { name: /Kademeli uyarı/ })).toBeTruthy();
   });
 
-  it('panel tek Kaydet ile yalnız değişen kanalları kendi sürümüyle yazar', async () => {
+  it('anahtar basınca o kanal hemen, okunan sürümle yazılır; öteki gösterim alanı korunur', async () => {
     const { yazilanlar } = matrisSunucusu();
     ac();
-    fireEvent.click(await screen.findByText('Satın alma talebi onay bekliyor'));
-    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(anahtar('Satın alma talebi onay bekliyor: Okudum onayı'));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/gosterim/satin-alma.talep-onay-bekliyor/degistir', govde: { ortada: false, onayIstenir: true, surum: 2 } });
+    fireEvent.click(anahtar('Malzeme bırakıldı: Telefon'));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/push/turler/stok.birakildi/degistir', govde: { acik: true } });
+  });
+
+  it('e-posta anahtarı yalnız açık-kapalıyı değiştirir; şablon ve zaman olduğu gibi gider', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(anahtar('Satın alma talebi onay bekliyor: E-posta'));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({
+      yol: '/bildirimler/eposta/tetikleyiciler/satin-alma.talep-onay-bekliyor/degistir',
+      govde: { eposta: false, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], sablonId: 9, surum: 4 },
+    });
+  });
+
+  it('Geri al eski değeri yeniden okunan sürümle yazar', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(anahtar('Makine durdu: Okudum onayı'));
+    expect(await screen.findByText('Makine durdu: Okudum onayı açıldı.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/gosterim/istasyonlar.makine-durdu/degistir', govde: { ortada: true, onayIstenir: false, surum: null } });
+    expect(await screen.findByText('Geri alındı.')).toBeTruthy();
+  });
+
+  it('kanal kaydedilemezse olay adıyla hata görünür', async () => {
+    matrisSunucusu('/bildirimler/gosterim/istasyonlar.makine-durdu/degistir');
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(anahtar('Makine durdu: Ekran ortası'));
+    expect(await screen.findByText(/Makine durdu: kaydedilemedi/)).toBeTruthy();
+  });
+
+  it('modülün toplu e-posta açması önce kaç olayı etkilediğini sorar, onayla yazar', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    const toplu = screen.getByRole('checkbox', { name: 'İstasyonlar: E-posta, 0/1 açık' });
+    expect(toplu.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(toplu);
+    const sor = await screen.findByRole('dialog', { name: 'İstasyonlar: E-posta açılsın mı?' });
+    expect(yazilanlar).toHaveLength(0);
+    fireEvent.click(within(sor).getByRole('button', { name: '1 olayda aç' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]?.yol).toBe('/bildirimler/eposta/tetikleyiciler/istasyonlar.makine-durdu/degistir');
+    expect(yazilanlar[0]?.govde).toMatchObject({ eposta: true });
+  });
+
+  it('toplu kapatma sormadan yazar; aramaya uymayan olaya dokunmaz', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.change(screen.getByLabelText('Olay ara'), { target: { value: 'makine' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'İstasyonlar: Telefon, 1/1 açık' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/push/turler/istasyonlar.makine-durdu/degistir', govde: { acik: false } });
+    expect(screen.queryByRole('checkbox', { name: /Stok: Telefon/ })).toBeNull();
+  });
+
+  it('panel tek Kaydet ile yalnız alıcıyı ve e-posta ayrıntısını kendi sürümüyle yazar', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
+    expect(within(panel).queryByRole('switch')).toBeNull();
     const kaydet = within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
     expect(kaydet.disabled).toBe(true);
     fireEvent.click(within(within(panel).getByRole('group', { name: 'Alıcı rolleri' })).getByRole('checkbox', { name: 'Bakım' }));
-    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Ekran ortasında' }));
-    fireEvent.click(within(panel).getByRole('switch', { name: 'Telefon bildirimi' }));
     fireEvent.change(within(panel).getByLabelText('E-posta şablonu'), { target: { value: '' } });
     fireEvent.click(kaydet);
-    await waitFor(() => { expect(yazilanlar).toHaveLength(4); });
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
     expect(yazilanlar).toEqual([
       { yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [1, 2], kisiIdleri: [7], surum: 3 } },
-      { yol: '/bildirimler/gosterim/satin-alma.talep-onay-bekliyor/degistir', govde: { ortada: true, onayIstenir: false, surum: 2 } },
-      { yol: '/bildirimler/push/turler/satin-alma.talep-onay-bekliyor/degistir', govde: { acik: true } },
       {
         yol: '/bildirimler/eposta/tetikleyiciler/satin-alma.talep-onay-bekliyor/degistir',
         govde: { eposta: true, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], sablonId: null, surum: 4 },
@@ -207,12 +290,18 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3)', () => {
     expect(await screen.findByText('Satın alma talebi onay bekliyor: kaydedildi.')).toBeTruthy();
   });
 
+  it('e-posta kapalı olayın panelinde ayrıntı yerine tablodan açma notu çıkar', async () => {
+    matrisSunucusu();
+    ac();
+    const panel = await ayrintiAc('Makine durdu');
+    expect(within(panel).getByText(/e-posta kapalı; tablodaki E-posta anahtarıyla açılır/)).toBeTruthy();
+    expect(within(panel).queryByLabelText('E-posta şablonu')).toBeNull();
+  });
+
   it('e-posta tekrar ve üst kademe birlikte yazılır; eksik alan kaydı kapatır', async () => {
     const { yazilanlar } = matrisSunucusu();
     ac();
-    fireEvent.click(await screen.findByText('Makine durdu'));
-    const panel = await screen.findByRole('dialog', { name: 'Makine durdu' });
-    fireEvent.click(within(panel).getByRole('switch', { name: 'E-posta gönder' }));
+    const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
     fireEvent.click(within(panel).getByLabelText('İş açık kaldıkça tekrarla'));
     fireEvent.change(within(panel).getByLabelText('Kaç günde bir'), { target: { value: '2' } });
     fireEvent.click(within(panel).getByLabelText('İş açık kalırsa üst kademeye de e-posta gönder'));
@@ -223,21 +312,9 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3)', () => {
     fireEvent.click(kaydet);
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]).toEqual({
-      yol: '/bildirimler/eposta/tetikleyiciler/istasyonlar.makine-durdu/degistir',
-      govde: { eposta: true, zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 2, yukseltRolIdleri: [2], yukseltKisiIdleri: [], sablonId: null, surum: null },
+      yol: '/bildirimler/eposta/tetikleyiciler/satin-alma.talep-onay-bekliyor/degistir',
+      govde: { eposta: true, zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 2, yukseltRolIdleri: [2], yukseltKisiIdleri: [], sablonId: 9, surum: 4 },
     });
-  });
-
-  it('bir kanal kaydedilemezse adıyla bildirilir, öteki yazılır', async () => {
-    const { yazilanlar } = matrisSunucusu('/bildirimler/gosterim/istasyonlar.makine-durdu/degistir');
-    ac();
-    fireEvent.click(await screen.findByText('Makine durdu'));
-    const panel = await screen.findByRole('dialog', { name: 'Makine durdu' });
-    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Okudum onayı iste' }));
-    fireEvent.click(within(panel).getByRole('switch', { name: 'Telefon bildirimi' }));
-    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
-    expect(await screen.findByText(/Ekran ortası kaydedilemedi/)).toBeTruthy();
-    expect(yazilanlar.map((y) => y.yol)).toEqual(['/bildirimler/gosterim/istasyonlar.makine-durdu/degistir', '/bildirimler/push/turler/istasyonlar.makine-durdu/degistir']);
   });
 
   it('yalnız e-posta yönetimi olan kişi e-posta sütununu görür; alıcı ve kademe uçlarını okumaz', async () => {
@@ -245,7 +322,7 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3)', () => {
     ac(['bildirim.eposta-yonet']);
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     expect(within(tablo).queryByText('Alıcılar')).toBeNull();
-    expect(within(tablo).getByText('E-posta')).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: 'E-posta' })).toBeTruthy();
     expect(okunanlar).not.toContain('/bildirimler/alicilar');
     expect(okunanlar).not.toContain('/bildirim-kademe/kaynaklar');
     expect(screen.queryByRole('tab', { name: /Ekip çağrıları/ })).toBeNull();
@@ -254,24 +331,47 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3)', () => {
   it('günlük özet seçimi zaman olarak "ozet" yazar', async () => {
     const { yazilanlar } = matrisSunucusu();
     ac();
-    fireEvent.click(await screen.findByText('Satın alma talebi onay bekliyor'));
-    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
+    const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
     fireEvent.click(within(panel).getByLabelText('Hemen değil, günlük özette gönder'));
     fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]?.govde).toMatchObject({ eposta: true, zaman: 'ozet', surum: 4 });
   });
 
-  it('kayıttan sonra değişen kanalın sorgusu yeniden okunur (sonraki kayıt güncel sürümle yazar)', async () => {
+  it('anahtar yazımından sonra değişen kanalın sorgusu yeniden okunur', async () => {
     const { okunanlar } = matrisSunucusu();
     ac();
-    fireEvent.click(await screen.findByText('Makine durdu'));
-    const panel = await screen.findByRole('dialog', { name: 'Makine durdu' });
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
     const once = okunanlar.filter((y) => y === '/bildirimler/gosterim').length;
-    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Okudum onayı iste' }));
-    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
-    expect(await screen.findByText('Makine durdu: kaydedildi.')).toBeTruthy();
-    await waitFor(() => { expect(okunanlar.filter((y) => y === '/bildirimler/gosterim').length).toBeGreaterThan(once); });
+    fireEvent.click(anahtar('Makine durdu: Okudum onayı'));
+    expect(await screen.findByText('Makine durdu: Okudum onayı açıldı.')).toBeTruthy();
+    expect(okunanlar.filter((y) => y === '/bildirimler/gosterim').length).toBeGreaterThan(once);
+  });
+
+  it('Kim alır: kutucuk rolü anında ekler, kişiler ve sürüm korunur', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac(HEPSI, '/bildirim-merkezi/yonetim?sekme=kim-alir');
+    const tablo = await screen.findByRole('table', { name: 'Kim alır' });
+    fireEvent.click(within(tablo).getByRole('checkbox', { name: 'Satın alma talebi onay bekliyor: Bakım' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [1, 2], kisiIdleri: [7], surum: 3 } });
+    expect(await screen.findByText('Satın alma talebi onay bekliyor: Bakım eklendi.')).toBeTruthy();
+    expect(within(tablo).getByText('Malzeme bırakıldı').closest('tr')?.textContent).toMatch(/Kayda bağlı kişi \(varsayılan\)/);
+    fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [2], kisiIdleri: [7], surum: 4 } });
+    expect(await screen.findByText('Geri alındı.')).toBeTruthy();
+  });
+
+  it('eski şablonlar adresi E-posta sekmesini açar; E-posta sekmesi yalnız e-posta yöneticisine görünür', async () => {
+    matrisSunucusu();
+    ac(HEPSI, '/bildirim-merkezi/yonetim?sekme=sablonlar');
+    expect((await screen.findByRole('tab', { name: /E-posta/ })).getAttribute('aria-selected')).toBe('true');
+    cleanup();
+    ac(['ayarlar.yaz']);
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(screen.queryByRole('tab', { name: /E-posta/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: /Kim alır/ })).toBeTruthy();
   });
 
   it('kademe sekmesi adresle de yetkisiz kişiye açılmaz: Olaylar açılır, kademe ucu okunmaz', async () => {

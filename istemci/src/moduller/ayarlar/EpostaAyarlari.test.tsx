@@ -88,6 +88,8 @@ function ac() {
       <BildirimSaglayici><EpostaAyarlari gonderimAyarlari={() => <p>Gönderim ayarları listesi</p>} /></BildirimSaglayici>
     </QueryClientProvider>,
   );
+  // 3456: ilk sekme Şablonlar; sunucu sınamaları Sunucu sekmesinden başlar.
+  fireEvent.click(screen.getByRole('tab', { name: /Sunucu/ }));
 }
 function sablonAc() {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -112,7 +114,7 @@ describe('E-posta ayarları (3397, 3435-3)', () => {
     expect(screen.getByText(/kuyrukta bekler/)).toBeTruthy();
     expect(screen.getByText('Gönderim ayarları listesi')).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: /Sunucu adresi/ })).toBeNull();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Sunucu', 'Gönderim defteri']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Şablonlar', 'Sunucu', 'Gönderim defteri']);
   });
 
   it('deneme e-postası ve sınama uçlarını çağırır, sonucu bildirir', async () => {

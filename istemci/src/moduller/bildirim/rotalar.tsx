@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
-import { Arsiv, Gelenler, HazirlaSayfasi, YayinlarSayfasi } from './Bildirimler.tsx';
+import { Gelenler, YayinlarSayfasi } from './Bildirimler.tsx';
 import { AcikTakipler, Gecikenlerim } from './Kademe.tsx';
 
 // Bildirim Merkezi (3405-4 a): bildirim, duyuru ve kademeli takip tek sayfada. Bildirim yönetimi ve E-posta ayarları da bu menüdedir;
@@ -13,10 +13,11 @@ function EskiAdres({ yeni }: { yeni: string }) {
 export const rotalar: ModulRotasi[] = [
   { yol: '/bildirim-merkezi', ekran: Gelenler },
   { yol: '/bildirim-merkezi/gecikenlerim', ekran: Gecikenlerim },
-  { yol: '/bildirim-merkezi/arsiv', ekran: Arsiv },
+  // 3456-2 a: Arşiv Gelenler'de cip oldu; eski adres oraya gider.
+  { yol: '/bildirim-merkezi/arsiv', ekran: () => <Navigate to="/bildirim-merkezi?durum=arsiv" replace /> },
   // Kişide yalnız telefon bildirimi anahtarı kalır, o da Profilim'dedir; eski Tercihlerim adresleri oraya gider.
   ...(['cihaz', 'tercihler'] as const).map((a) => ({ yol: `/bildirim-merkezi/${a}`, ekran: () => <Navigate to="/profil" replace /> })),
-  { yol: '/bildirim-merkezi/hazirla', ekran: HazirlaSayfasi },
+  { yol: '/bildirim-merkezi/hazirla', ekran: () => <Navigate to="/bildirim-merkezi/yayinlar?yeni=1" replace /> },
   { yol: '/bildirim-merkezi/yayinlar', ekran: YayinlarSayfasi },
   { yol: '/bildirim-merkezi/acik-takipler', ekran: AcikTakipler },
   // 3435-3 a: kademeli uyarı kaynakları Bildirim ve uyarı yönetiminde sekmedir.

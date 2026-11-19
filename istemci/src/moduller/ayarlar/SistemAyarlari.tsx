@@ -546,7 +546,7 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
         {gecerli === 'baglanti' && <Baglantilar ekranlar={baglantiEkranlari} hazirlikGorur={islemler.includes('saglik.ayrinti-oku')} />}
         {gecerli === 'eposta' && (
           <p className="tc-ayar-aciklama">
-            E-posta ayarları Bildirim Merkezi&apos;ne taşındı: <Link to="/bildirim-merkezi/eposta">Bildirim Merkezi &gt; Ayarlar &gt; E-posta</Link>.
+            E-posta ayarları Bildirim Merkezi&apos;ne taşındı: <Link to="/bildirim-merkezi/yonetim?sekme=eposta">Bildirim Merkezi &gt; Bildirim ayarları &gt; E-posta</Link>.
             Kademeli uyarı da aynı menüdedir.
           </p>
         )}

@@ -20,8 +20,10 @@ export function useBildirimKomutlari() {
 }
 
 // Satıra basınca okundu olur ve kayıt varsa açılır; bildirim yetki vermez, açılan ekran kendi yetkisini sorar.
-export function BildirimSatiri({ b, kisa = false, acildi, arsivle }: {
+// secim verilirse satırın başında toplu iş kutucuğu durur (Gelenler); zil çekmecesinde yoktur.
+export function BildirimSatiri({ b, kisa = false, acildi, arsivle, secim }: {
   b: Bildirim; kisa?: boolean; acildi?: () => void; arsivle?: () => void;
+  secim?: { secili: boolean; degistir: (secili: boolean) => void };
 }) {
   const git = useNavigate();
   const { okundu, onayla } = useBildirimKomutlari();
@@ -35,7 +37,10 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle }: {
     acildi?.();
   };
   return (
-    <li className={`tc-bildirim-satir${yeni ? ' tc-bildirim-yeni' : ''}`} data-onay-bekliyor={onayBekliyor ? '' : undefined}>
+    <li className={`tc-bildirim-satir${yeni ? ' tc-bildirim-yeni' : ''}`} data-onay-bekliyor={onayBekliyor ? '' : undefined} data-secili={secim?.secili ? '' : undefined}>
+      {secim && (
+        <input type="checkbox" className="tc-bildirim-sec" checked={secim.secili} onChange={(o) => secim.degistir(o.target.checked)} aria-label={`Seç: ${b.baslik}`} />
+      )}
       <button type="button" className="tc-bildirim-ac" onClick={ac} aria-label={`${b.baslik}${yeni ? ', okunmamış' : ''}`}>
         <span className="tc-bildirim-nokta" aria-hidden="true" />
         <span className={`tc-bildirim-simge tc-bildirim-${b.onem}`} title={ONEM_ADI[b.onem]}><Simge ad={satirSimgesi(b)} /></span>
@@ -59,6 +64,7 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle }: {
       {arsivle && !onayBekliyor && (
         <button type="button" className="tc-bildirim-arsivle" onClick={arsivle} aria-label={`Arşive kaldır: ${b.baslik}`} title="Arşive kaldır">
           <Simge ad="layers" />
+          {secim && <span className="tc-bildirim-dugme-yazi">Arşive kaldır</span>}
         </button>
       )}
     </li>
