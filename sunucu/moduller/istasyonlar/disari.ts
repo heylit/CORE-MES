@@ -149,6 +149,17 @@ export const ekipUyeleri = async (
   return (await sorgular.gecerliAtamalar(db, 'ekip', { hedefId: ekipId, kisiId: null, tarih: await gun(db, tarih) })).map(kisiYuzdesi);
 };
 
+// ekipUyeleri'nin toplu biçimi: verilen ekiplerin geçerli üyeleri ekip başına sorgu atmadan tek okumayla. Ekip süzgeci çağıranındır
+// (ekipler() yalnız aktifleri verir); listede olmayan ekip haritada yoktur, üyesiz ekip boş dizidir.
+export const ekiplerinUyeleri = async (db: Db, ekipIdleri: readonly number[]): Promise<Map<number, KisiYuzdesi[]>> => {
+  const sonuc = new Map<number, KisiYuzdesi[]>(ekipIdleri.map((id) => [id, []]));
+  if (sonuc.size === 0) return sonuc;
+  for (const a of await sorgular.gecerliAtamalar(db, 'ekip', { hedefId: null, kisiId: null, tarih: await sorgular.bugun(db) })) {
+    sonuc.get(a.hedefId)?.push(kisiYuzdesi(a));
+  }
+  return sonuc;
+};
+
 // Kişiye uygulanan kısıt; boş liste "kısıt yok" demektir (bütün işlemleri taşıyan rolü olan kişide hep boştur).
 // Seçimde süzgeç için isMerkeziIzinliMi kullanılır.
 export const kisininIzinliIsMerkezleri = (db: Db, kisiId: number): Promise<number[]> =>

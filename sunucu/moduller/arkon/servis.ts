@@ -25,7 +25,7 @@ import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.t
 import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, emirNumuneleri, numuneIste, numuneKarariVer, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
-  ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
+  ekipler, ekiplerinUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri, smartesSayimIstasyonlari,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
@@ -111,9 +111,11 @@ async function makineIstasyonlari(db: Db, kisiId: number | null, tarih?: string)
 // ekiplerinin istasyonları; pasif ekip ve istasyonsuz ekip sayılmaz.
 async function ekipIstasyonlari(db: Db, kisiId: number | null): Promise<Map<number, number[]>> {
   const sonuc = new Map<number, number[]>();
-  for (const ekip of await ekipler(db)) {
+  const istasyonlu = (await ekipler(db)).filter((e) => e.istasyonId !== null);
+  const uyeler = await ekiplerinUyeleri(db, istasyonlu.map((e) => e.id));
+  for (const ekip of istasyonlu) {
     if (ekip.istasyonId === null) continue;
-    for (const u of await ekipUyeleri(db, ekip.id)) {
+    for (const u of uyeler.get(ekip.id) ?? []) {
       if (kisiId === null || u.kisiId === kisiId) sonuc.set(u.kisiId, [...(sonuc.get(u.kisiId) ?? []), ekip.istasyonId]);
     }
   }
@@ -322,10 +324,12 @@ async function isEmriTaslaklari(
   const govdeler = kayitli.map((b) => b.govde);
   const kayitliGovde = new Map(kayitli.map((b) => [b.kimlik, b.govde]));
   const girdiler: IsEmriPaketGirdisi[] = [];
+  // Makinesiz iş emrinin istasyonu iş emri başına okunmaz: hepsi tek toplu okumayla.
+  const makinesizler = await isEmriOzetleri(db, isEmirleri.flatMap((ie) => (ie.kaynak?.tur === 'makine' && makineler.get(ie.kaynak.id)?.istasyonId != null ? [] : [ie.id])));
   for (const ie of isEmirleri) {
     const emir = emirler.get(ie.uretimEmriId);
     const makine = ie.kaynak?.tur === 'makine' ? makineler.get(ie.kaynak.id) : undefined;
-    const istasyonId = makine?.istasyonId ?? (await isEmriOzeti(db, ie.id))?.istasyonId ?? null;
+    const istasyonId = makine?.istasyonId ?? makinesizler.get(ie.id)?.istasyonId ?? null;
     const istasyon = istasyonId === null ? null : istasyonlarById.get(istasyonId);
     if (emir === undefined || istasyon === undefined) continue;
     const revizyonId = ie.kaynakRotaRevizyonId;
