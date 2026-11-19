@@ -13,7 +13,7 @@ import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 
 const FASON_DONUS_SAATI_MS = 8 * 60 * 60_000;
 import type {
-  AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
+  AcilisSecenekleri, EmirRevizyonu, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
   ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
@@ -23,7 +23,7 @@ import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
-import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
+import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari, revizyonBilgileri } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
@@ -34,7 +34,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -123,6 +123,8 @@ export interface UretimEmriGirdisi {
   stoktanRezerve?: boolean;
   // 1476: emir bu patlamış rotadan açıldı (çok katmanlı); her iş emri düğümünü taşır.
   patlatmaId?: number | null;
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse ve emir sipariş kalemine bağlı değilse zorunlu neden.
+  eskiRevizyonGerekcesi?: string | null;
 }
 
 // Dışa açık komut işlemi kendisi arar: üst modülün ucunda aranan işlem bu komutun işlemi değildir.
@@ -301,6 +303,7 @@ interface DenetlenmisBaslik {
   baslangic: string | null;
   aciklama: string | null;
   emirTuru: EmirTuru;
+  eskiRevizyonGerekcesi: string | null;
   proje: { id: number; kod: string; firmaKodu: string | null } | null;
   siparisSatiriId: number | null;
   teslim: string | null;
@@ -350,9 +353,21 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   const teslim = kalemTeslimi(g.teslim, satir?.termin ?? null);
   const tarihIhlali = teslimIhlali(baslangic, teslim.teslim);
   if (tarihIhlali !== null) throw dogrulama(tarihIhlali, 'teslim');
+  const rev = await emirRevizyonu(db, g.malzemeNo);
+  const revIhlali = emirEskiRevizyonIhlali(rev === null ? null : { ...rev, kod: urun.kod }, g.eskiRevizyonGerekcesi ?? null, siparisSatiriId !== null);
+  if (revIhlali !== null) throw dogrulama(revIhlali, 'eskiRevizyonGerekcesi');
+  const eskiRevizyonGerekcesi = rev === null || rev.yururlukte ? null : (g.eskiRevizyonGerekcesi?.trim() || null);
   return {
-    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod, firmaKodu: proje.firmaKodu }, siparisSatiriId,
+    urun, oncelik, baslangic, aciklama, emirTuru, eskiRevizyonGerekcesi, proje: proje === null ? null : { id: proje.id, kod: proje.kod, firmaKodu: proje.firmaKodu }, siparisSatiriId,
     teslim: teslim.teslim, teslimBagli: teslim.bagli, siparisPartiId,
+  };
+}
+
+// 3438 a: kartın revizyonu ve ailenin yürürlükteki kartı; revizyon ailesinde değilse null.
+async function emirRevizyonu(db: Db, malzemeNo: number): Promise<EmirRevizyonu | null> {
+  const r = (await revizyonBilgileri(db, [malzemeNo])).get(malzemeNo);
+  return r === undefined ? null : {
+    etiket: r.etiket, yururlukte: r.yururlukteki.no === malzemeNo, yururluktekiNo: r.yururlukteki.no, yururluktekiKodu: r.yururlukteki.stokKodu, yururluktekiEtiketi: r.yururlukteki.etiket,
   };
 }
 
@@ -372,7 +387,7 @@ async function basligiYaz(
     malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: b.teslim, aciklama: b.aciklama,
     durum: g.taslak === true ? 'taslak' : 'planli', emirTuru: b.emirTuru, emirNo, projeId: b.proje?.id ?? null,
     siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null, teslimBagli: b.teslimBagli, siparisPartiId: b.siparisPartiId,
-    acilisKaynagi: ek?.acilisKaynagi ?? null, rotaBekliyor: ek?.rotaBekliyor ?? false,
+    acilisKaynagi: ek?.acilisKaynagi ?? null, rotaBekliyor: ek?.rotaBekliyor ?? false, eskiRevizyonGerekcesi: b.eskiRevizyonGerekcesi,
   }, acanId);
 }
 
@@ -385,6 +400,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
   return {
     projeZorunlu: projeZorunluMu(emirTuru),
     rotasizAcik: await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'),
+    revizyon: await emirRevizyonu(db, malzemeNo),
     projeler: projeler.map((p) => {
       const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
       return {

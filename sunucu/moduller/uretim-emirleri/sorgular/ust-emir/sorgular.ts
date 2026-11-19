@@ -120,17 +120,19 @@ export interface UstEmirYazisi {
   siparisPartiId?: number | null;
   acilisKaynagi?: 'siparis_onayi' | null;
   rotaBekliyor?: boolean;
+  eskiRevizyonGerekcesi?: string | null;
 }
 
 export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, oncelik, baslangic, teslim,
        aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id,
-       teslim_bagli, siparis_parti_id, acilis_kaynagi, rota_bekliyor)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING id`,
+       teslim_bagli, siparis_parti_id, acilis_kaynagi, rota_bekliyor, eski_revizyon_gerekcesi)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING id`,
     [e.parcaNo, e.parcaAd, e.adet, e.istasyonId, acanId, e.malzemeNo, e.kaynakRotaRevizyonId, e.oncelik, e.baslangic, e.teslim, e.aciklama, e.durum,
       e.ustEmirId ?? null, e.bolunmeSira ?? null, e.birlesmeOpNo ?? null, e.emirTuru, e.emirNo ?? null, e.projeId ?? null,
-      e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null, e.acilisKaynagi ?? null, e.rotaBekliyor ?? false],
+      e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null, e.acilisKaynagi ?? null, e.rotaBekliyor ?? false,
+      e.eskiRevizyonGerekcesi ?? null],
   );
   if (satir === null) throw new Error('Üretim emri eklenemedi.');
   return satir.id;
