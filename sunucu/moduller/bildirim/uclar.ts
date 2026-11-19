@@ -13,10 +13,12 @@ import {
 } from './servis.ts';
 import {
   epostaDefterCevabi, epostaDefterSorgusu, epostaDenemeCevabi, epostaDenemeGovdesi, epostaDurumuCevabi, epostaSablonDegistirGovdesi, epostaSablonParametresi,
+  epostaOzelSablonDegistirGovdesi, epostaOzelSablonParametresi, epostaOzelSablonSilGovdesi, epostaOzelSablonYeniGovdesi,
   epostaSablonlariCevabi, epostaSinamaCevabi, epostaTetikleyiciDegistirGovdesi, epostaTetikleyiciParametresi, epostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import {
   epostaDefteri, epostaDenemesi, epostaDurumu, epostaSablonlari, epostaSablonuYaz, epostaSinamasi, epostaTetikleyicileri, epostaTetikleyicisiYaz,
+  ozelSablonDegistir, ozelSablonEkle, ozelSablonSil,
 } from './eposta.ts';
 import {
   acikTakiplerCevabi, gecikenlerimCevabi, kademeAyarDegistirGovdesi, kademeAyarlariCevabi, kademeKaynagiParametresi,
@@ -123,6 +125,21 @@ export const uclar = [
     govde: epostaSablonDegistirGovdesi, cevap: epostaSablonlariCevabi,
     isle: ({ db, kullanici, parametre, govde }) => epostaSablonuYaz(db, kullanici, parametre.konu, govde),
   }),
+  // 3435-2 a: yöneticinin açtığı şablon (yeni ya da kopya); olaya tetikleyicideki şablon seçimiyle bağlanır.
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/ozel-sablonlar/yeni', yetki: 'bildirim.eposta-yonet', govde: epostaOzelSablonYeniGovdesi,
+    cevap: epostaSablonlariCevabi, isle: ({ db, kullanici, govde }) => ozelSablonEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/ozel-sablonlar/:id/degistir', yetki: 'bildirim.eposta-yonet', parametre: epostaOzelSablonParametresi,
+    govde: epostaOzelSablonDegistirGovdesi, cevap: epostaSablonlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => ozelSablonDegistir(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/eposta/ozel-sablonlar/:id/sil', yetki: 'bildirim.eposta-yonet', parametre: epostaOzelSablonParametresi,
+    govde: epostaOzelSablonSilGovdesi, cevap: epostaSablonlariCevabi,
+    isle: ({ db, parametre, govde }) => ozelSablonSil(db, parametre.id, govde.surum),
+  }),
   uc({ yontem: 'GET', yol: '/bildirimler/eposta/tetikleyiciler', yetki: 'bildirim.eposta-yonet', cevap: epostaTetikleyicileriCevabi, isle: ({ db }) => epostaTetikleyicileri(db) }),
   uc({
     yontem: 'POST', yol: '/bildirimler/eposta/tetikleyiciler/:tur/degistir', yetki: 'bildirim.eposta-yonet', parametre: epostaTetikleyiciParametresi,
@@ -135,7 +152,7 @@ export const uclar = [
   }),
   uc({
     yontem: 'POST', yol: '/bildirimler/eposta/deneme', yetki: 'bildirim.eposta-yonet', govde: epostaDenemeGovdesi, cevap: epostaDenemeCevabi,
-    isle: ({ db, kullanici, govde }) => epostaDenemesi(db, kullanici, govde.konu),
+    isle: ({ db, kullanici, govde }) => epostaDenemesi(db, kullanici, govde),
   }),
   uc({ yontem: 'POST', yol: '/bildirimler/eposta/sina', yetki: 'bildirim.eposta-yonet', cevap: epostaSinamaCevabi, isle: ({ db }) => epostaSinamasi(db) }),
   // Kademeli uyarı (3405): ayar ve bütün açık takipler yalnız `bildirim.kademe-yonet` (yönetici bayrağı, 3405-3 a). Kişinin kendi

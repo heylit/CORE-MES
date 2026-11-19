@@ -458,7 +458,10 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     assert.ok(s0);
     assert.equal(s0.surum, null);
     const yol = '/bildirimler/eposta/sablonlar/satin-alma/degistir';
-    const govde = { simge: 'cart', konuKalibi: 'Onay: {kayit_no}', govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kayit_no'], surum: null };
+    const govde = {
+      simge: 'cart', konuKalibi: 'Onay: {kayit_no}', baslikKalibi: '', govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kayit_no'], dugmeYazisi: '', onayDugmesi: true,
+      altBilgi: '', serit: 'onem', logo: false, surum: null,
+    };
     const red = await istek<{ hata?: { ileti?: string } }>('yonetici', 'POST', yol, { ...govde, govde: 'Müşteri {musteri_adi}' });
     assert.equal(red.durum, 400);
     assert.match(JSON.stringify(red.govde), /musteri_adi/);
@@ -470,6 +473,91 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     assert.equal((await istek('yonetici', 'POST', yol, govde)).durum, 409);
     const s2 = epostaSablonlariCevabi.parse(await tamam('POST', yol, { ...govde, varsayilan: true, surum: 1 })).satirlar.find((x) => x.konu === 'satin-alma');
     assert.deepEqual(s2, s0);
+  });
+
+  test('3435-2: yönetici şablonu açar, olaya atar; e-posta o şablonla gider; ad tekil; silinince konunun şablonuna döner', async () => {
+    await ayar('bildirim.eposta', true);
+    const icerik = {
+      simge: 'alert', konuKalibi: 'Özel: {kayit_no}', baslikKalibi: '{onem} · {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kayit_no', 'onem'],
+      dugmeYazisi: 'Talebi aç', onayDugmesi: false, altBilgi: 'Satın alma birimi', serit: 'kirmizi', logo: true,
+    };
+    // Kurum logosu Sistem Ayarları'ndan (1x1 temiz PNG); şablonda açık olduğu için iletiye gömülür (BIL-57).
+    await tamam('POST', '/kurum-logosu/degistir', { logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=' });
+    const red = await istek('yonetici', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Acil', ...icerik, altBilgi: '{fiyat}' });
+    assert.equal(red.durum, 400);
+    assert.match(JSON.stringify(red.govde), /altBilgi/);
+    assert.equal((await istek('operator', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Acil', ...icerik })).durum, 403);
+    const c1 = epostaSablonlariCevabi.parse(await tamam('POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Acil', ...icerik }));
+    const ozel = c1.ozel.find((x) => x.ad === 'ORN Acil');
+    assert.ok(ozel);
+    assert.equal(ozel.olaySayisi, 0);
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: ' orn acil ', ...icerik })).durum, 400);
+    const tYol = `/bildirimler/eposta/tetikleyiciler/${TUR}/degistir`;
+    const tGovde = { eposta: true, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [] };
+    const t0 = epostaTetikleyicileriCevabi.parse(await tamam('GET', '/bildirimler/eposta/tetikleyiciler')).satirlar.find((x) => x.tur === TUR);
+    const surum0 = t0?.surum ?? null;
+    assert.equal((await istek('yonetici', 'POST', tYol, { ...tGovde, sablonId: 999_999, surum: surum0 })).durum, 400);
+    const t1 = epostaTetikleyicileriCevabi.parse(await tamam('POST', tYol, { ...tGovde, sablonId: ozel.id, surum: surum0 })).satirlar.find((x) => x.tur === TUR);
+    assert.equal(t1?.sablonId, ozel.id);
+    // Şablon verilmeyen yazım atamayı korur.
+    const t2 = epostaTetikleyicileriCevabi.parse(await tamam('POST', tYol, { ...tGovde, surum: t1?.surum ?? null })).satirlar.find((x) => x.tur === TUR);
+    assert.equal(t2?.sablonId, ozel.id);
+    const c2 = epostaSablonlariCevabi.parse(await tamam('GET', '/bildirimler/eposta/sablonlar'));
+    assert.equal(c2.ozel.find((x) => x.id === ozel.id)?.olaySayisi, 1);
+    await gonder(TUR, ['mudur'], { kayitNo: 'ORN-TLP-0078' });
+    await tur();
+    const veri = posta.iletiler.at(-1)?.veri ?? '';
+    assert.equal(konuBasligi(veri), 'Özel: ORN-TLP-0078');
+    // Uygulama adresi ayarsız: bağlantı ve düğme yok; düğme yazısı kural testinde (eposta-kurallar).
+    assert.match(metinParcasi(veri), /Satın alma birimi/);
+    assert.match(metinParcasi(veri), /Önem: Bilgi/);
+    assert.doesNotMatch(metinParcasi(veri), /Onayla:/);
+    assert.match(veri, /Content-ID: <logo>/);
+    // Logo yüklü kalsa da şablonda kapalıysa e-postaya gömülmez. Aynı turdaki onay e-postasının sistem şablonu logoyu açık tutar:
+    // logo okunur, onay e-postasına girer, özel şablonlu e-postaya girmez.
+    const pYol = '/bildirimler/eposta/sablonlar/satin-alma/degistir';
+    const pGovde = {
+      simge: 'cart', konuKalibi: 'Onay {kayit_no}', baslikKalibi: '', govde: '{olay}', tabloAlanlari: [], dugmeYazisi: '', onayDugmesi: true,
+      altBilgi: '', serit: 'onem', logo: true, surum: null,
+    };
+    const p1 = epostaSablonlariCevabi.parse(await tamam('POST', pYol, pGovde)).satirlar.find((x) => x.konu === 'satin-alma');
+    const oYol = `/bildirimler/eposta/ozel-sablonlar/${String(ozel.id)}/degistir`;
+    const c3 = epostaSablonlariCevabi.parse(await tamam('POST', oYol, { ad: 'ORN Acil', ...icerik, logo: false, surum: ozel.surum }));
+    const ozel2 = c3.ozel.find((x) => x.id === ozel.id);
+    assert.ok(ozel2);
+    const once = posta.iletiler.length;
+    await gonder(TUR, ['mudur'], { kayitNo: 'ORN-TLP-0079' });
+    await gonder(ONAY, ['mudur'], { kayitNo: 'ORN-TLP-0080' });
+    await tur();
+    const yeni = posta.iletiler.slice(once).map((x) => x.veri);
+    assert.match(yeni.find((v) => konuBasligi(v).endsWith('Onay ORN-TLP-0080')) ?? '', /Content-ID: <logo>/);
+    const veri2 = yeni.find((v) => konuBasligi(v) === 'Özel: ORN-TLP-0079') ?? '';
+    assert.notEqual(veri2, '');
+    assert.doesNotMatch(veri2, /Content-ID: <logo>/);
+    assert.doesNotMatch(veri2, /cid:logo/);
+    await tamam('POST', pYol, { ...pGovde, varsayilan: true, surum: p1?.surum ?? null });
+    await tamam('POST', '/kurum-logosu/degistir', { logo: null });
+    // Düzenlemede de ad tekildir: başka şablonun adına yeniden adlandırma reddedilir.
+    const c4 = epostaSablonlariCevabi.parse(await tamam('POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Ikinci', ...icerik }));
+    const ikinci = c4.ozel.find((x) => x.ad === 'ORN Ikinci');
+    assert.ok(ikinci);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/eposta/ozel-sablonlar/${String(ikinci.id)}/degistir`, { ad: ' orn acil ', ...icerik, surum: ikinci.surum })).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/eposta/ozel-sablonlar/${String(ikinci.id)}/sil`, { surum: ikinci.surum })).durum, 200);
+    const tOnce = epostaTetikleyicileriCevabi.parse(await tamam('GET', '/bildirimler/eposta/tetikleyiciler')).satirlar.find((x) => x.tur === TUR);
+    const sil = await istek('yonetici', 'POST', `/bildirimler/eposta/ozel-sablonlar/${String(ozel.id)}/sil`, { surum: ozel2.surum });
+    assert.equal(sil.durum, 200);
+    const t3 = epostaTetikleyicileriCevabi.parse(await tamam('GET', '/bildirimler/eposta/tetikleyiciler')).satirlar.find((x) => x.tur === TUR);
+    assert.equal(t3?.sablonId, null);
+    // Tetikleyici satırı silinmez (ON DELETE SET NULL): kayıtlı satır sürümüyle kalır, yalnız şablon boşalır.
+    assert.ok(tOnce?.surum !== null && tOnce?.surum !== undefined);
+    assert.equal(t3?.surum, tOnce.surum);
+    assert.equal(t3?.zaman, tOnce.zaman);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/eposta/ozel-sablonlar/${String(ozel.id)}/sil`, { surum: 1 })).durum, 404);
+    assert.ok(t0 && t3);
+    await tamam('POST', tYol, {
+      eposta: t0.eposta, zaman: t0.zaman, tekrarGun: t0.tekrarGun, tekrarEnCok: t0.tekrarEnCok, yukseltGun: t0.yukseltGun, yukseltRolIdleri: t0.yukseltRolIdleri,
+      yukseltKisiIdleri: t0.yukseltKisiIdleri, sablonId: null, surum: t3.surum,
+    });
   });
 
   test('ortam değişkeni yokken kuyruğa yazılmaz; aynı olay okunmadan yinelenince ikinci e-posta doğmaz', async () => {

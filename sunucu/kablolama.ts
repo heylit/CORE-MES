@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
-import { ayarDegistiDinle, sistemAyariOku } from './moduller/ayarlar/disari.ts';
+import { ayarDegistiDinle, kurumLogosuOku, sistemAyariOku } from './moduller/ayarlar/disari.ts';
 import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
 import * as akis from './moduller/akis/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
@@ -13,7 +13,7 @@ import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
 import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyonlar/disari.ts';
 import * as bildirim from './moduller/bildirim/disari.ts';
-import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
+import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, epostaLogoOkuyucusuKaydet as bildirimEpostaLogoOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
@@ -626,6 +626,7 @@ export function sunucununBaglari(): Bag[] {
     bag('İK iş e-postası -> bildirim e-postası', bildirimEpostaAdresCozucusu, typeof ik.kisilerinIsEpostalari === 'function'
       ? (db: Db, kisiIdleri: readonly number[]) => ik.kisilerinIsEpostalari(db, kisiIdleri) : undefined),
     bag('sistem ayarları -> bildirim e-postası', bildirimEpostaAyarOkuyucusu, sistemAyariOku),
+    bag('kurum logosu -> bildirim e-postası', bildirimEpostaLogoOkuyucusu, async (db) => (await kurumLogosuOku(db)).logo),
     // 2647 a, 2659: genel gider personel bileşenleri İK'dan; yalnız toplam, gerçek değerle (gizleme Finans'ta, 2652 a). Emilmeyen için
     // katılım üretim emirlerinden (İK onu ithal etmez).
     bag('İK dolaylı personel -> finans genel gider', dolayliPersonelCozucusu, typeof ik.dolayliPersonelToplamiYalnizHesapIcin === 'function'

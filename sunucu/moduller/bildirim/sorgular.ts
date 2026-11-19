@@ -485,9 +485,9 @@ export async function pushTurYaz(db: Db, tur: string, acik: boolean, varsayilan:
 
 export interface TetikleyiciSatiri {
   tur: string; eposta: boolean; zaman: 'hemen' | 'ozet'; tekrarGun: number | null; tekrarEnCok: number | null; yukseltGun: number | null;
-  yukseltRolIdleri: number[]; yukseltKisiIdleri: number[]; surum: number;
+  yukseltRolIdleri: number[]; yukseltKisiIdleri: number[]; sablonId: number | null; surum: number;
 }
-const TETIKLEYICI_SECIM = `t.tur, t.eposta, t.zaman, t.tekrar_gun AS "tekrarGun", t.tekrar_en_cok AS "tekrarEnCok", t.yukselt_gun AS "yukseltGun",
+const TETIKLEYICI_SECIM = `t.tur, t.eposta, t.sablon_id AS "sablonId", t.zaman, t.tekrar_gun AS "tekrarGun", t.tekrar_en_cok AS "tekrarEnCok", t.yukselt_gun AS "yukseltGun",
   COALESCE((SELECT array_agg(r.rol_id ORDER BY r.rol_id) FROM bildirim_eposta_yukselt_rolu r WHERE r.tur = t.tur), '{}') AS "yukseltRolIdleri",
   COALESCE((SELECT array_agg(k.kisi_id ORDER BY k.kisi_id) FROM bildirim_eposta_yukselt_kisisi k WHERE k.tur = t.tur), '{}') AS "yukseltKisiIdleri",
   t.surum`;
@@ -503,16 +503,16 @@ export function epostaTetikleyicisi(db: Db, tur: string): Promise<TetikleyiciSat
 export async function epostaTetikleyiciYaz(
   db: Db, tur: string, a: Omit<TetikleyiciSatiri, 'tur' | 'surum'>, surum: number | null, kisiId: number,
 ): Promise<boolean> {
-  const degerler = [tur, a.eposta, a.zaman, a.tekrarGun, a.tekrarEnCok, a.yukseltGun, kisiId];
+  const degerler = [tur, a.eposta, a.zaman, a.tekrarGun, a.tekrarEnCok, a.yukseltGun, kisiId, a.sablonId];
   const yazildi = surum === null
     ? await db.tek(
-      `INSERT INTO bildirim_eposta_tetikleyici (tur, eposta, zaman, tekrar_gun, tekrar_en_cok, yukselt_gun, degistiren_kisi_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (tur) DO NOTHING RETURNING 1`, degerler,
+      `INSERT INTO bildirim_eposta_tetikleyici (tur, eposta, zaman, tekrar_gun, tekrar_en_cok, yukselt_gun, degistiren_kisi_id, sablon_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (tur) DO NOTHING RETURNING 1`, degerler,
     )
     : await db.tek(
       `UPDATE bildirim_eposta_tetikleyici SET eposta = $2, zaman = $3, tekrar_gun = $4, tekrar_en_cok = $5, yukselt_gun = $6,
-              degistiren_kisi_id = $7, degistirildi = now(), surum = surum + 1
-        WHERE tur = $1 AND surum = $8 RETURNING 1`, [...degerler, surum],
+              degistiren_kisi_id = $7, sablon_id = $8, degistirildi = now(), surum = surum + 1
+        WHERE tur = $1 AND surum = $9 RETURNING 1`, [...degerler, surum],
     );
   if (yazildi === null) return false;
   await db.sorgu('DELETE FROM bildirim_eposta_yukselt_rolu WHERE tur = $1', [tur]);
@@ -522,10 +522,20 @@ export async function epostaTetikleyiciYaz(
   return true;
 }
 
-export interface SablonSatiri {
-  konu: string; simge: string; konuKalibi: string; govde: string; tabloAlanlari: string[]; surum: number; degistirildi: string;
+// Boş sütun kod varsayılanı demektir (3435-2 a göçü eski satırları değiştirmedi).
+export interface SablonIcerikSatiri {
+  simge: string; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: string[]; dugmeYazisi: string | null;
+  onayDugmesi: boolean | null; altBilgi: string | null; serit: string | null; logo: boolean | null;
 }
-const SABLON_SECIM = `konu, simge, konu_kalibi AS "konuKalibi", govde, tablo_alanlari AS "tabloAlanlari", surum, ${zamanMetni('degistirildi')} AS degistirildi`;
+export interface SablonSatiri extends SablonIcerikSatiri { konu: string; surum: number; degistirildi: string }
+export interface SablonYazimi {
+  simge: string; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: readonly string[]; dugmeYazisi: string | null;
+  onayDugmesi: boolean; altBilgi: string | null; serit: string; logo: boolean;
+}
+const ICERIK_SECIM = `simge, konu_kalibi AS "konuKalibi", baslik_kalibi AS "baslikKalibi", govde, tablo_alanlari AS "tabloAlanlari",
+  dugme_yazisi AS "dugmeYazisi", onay_dugmesi AS "onayDugmesi", alt_bilgi AS "altBilgi", serit, logo`;
+const SABLON_SECIM = `konu, ${ICERIK_SECIM}, surum, ${zamanMetni('degistirildi')} AS degistirildi`;
+const icerikDegerleri = (s: SablonYazimi): unknown[] => [s.simge, s.konuKalibi, s.baslikKalibi, s.govde, s.tabloAlanlari, s.dugmeYazisi, s.onayDugmesi, s.altBilgi, s.serit, s.logo];
 export function epostaSablonlari(db: Db): Promise<SablonSatiri[]> {
   return db.sorgu<SablonSatiri>(`SELECT ${SABLON_SECIM} FROM bildirim_eposta_sablonu ORDER BY konu`);
 }
@@ -533,25 +543,56 @@ export function epostaSablonu(db: Db, konu: string): Promise<SablonSatiri | null
   return db.tek<SablonSatiri>(`SELECT ${SABLON_SECIM} FROM bildirim_eposta_sablonu WHERE konu = $1`, [konu]);
 }
 // Sürüm tutmazsa false. `varsayilan` satırı siler (kod varsayılanı geçer).
-export async function epostaSablonuYaz(
-  db: Db, konu: string, s: { simge: string; konuKalibi: string; govde: string; tabloAlanlari: readonly string[] }, surum: number | null,
-  varsayilan: boolean, kisiId: number,
-): Promise<boolean> {
+export async function epostaSablonuYaz(db: Db, konu: string, s: SablonYazimi, surum: number | null, varsayilan: boolean, kisiId: number): Promise<boolean> {
   if (surum === null) {
     if (varsayilan) return (await db.tek('SELECT 1 FROM bildirim_eposta_sablonu WHERE konu = $1', [konu])) === null;
     return (await db.tek(
-      `INSERT INTO bildirim_eposta_sablonu (konu, simge, konu_kalibi, govde, tablo_alanlari, degistiren_kisi_id)
-       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (konu) DO NOTHING RETURNING 1`,
-      [konu, s.simge, s.konuKalibi, s.govde, s.tabloAlanlari, kisiId],
+      `INSERT INTO bildirim_eposta_sablonu (konu, simge, konu_kalibi, baslik_kalibi, govde, tablo_alanlari, dugme_yazisi, onay_dugmesi, alt_bilgi, serit, logo, degistiren_kisi_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (konu) DO NOTHING RETURNING 1`,
+      [konu, ...icerikDegerleri(s), kisiId],
     )) !== null;
   }
   if (varsayilan) return (await db.tek('DELETE FROM bildirim_eposta_sablonu WHERE konu = $1 AND surum = $2 RETURNING 1', [konu, surum])) !== null;
   return (await db.tek(
-    `UPDATE bildirim_eposta_sablonu SET simge = $3, konu_kalibi = $4, govde = $5, tablo_alanlari = $6, degistiren_kisi_id = $7,
-            degistirildi = now(), surum = surum + 1
+    `UPDATE bildirim_eposta_sablonu SET simge = $3, konu_kalibi = $4, baslik_kalibi = $5, govde = $6, tablo_alanlari = $7, dugme_yazisi = $8,
+            onay_dugmesi = $9, alt_bilgi = $10, serit = $11, logo = $12, degistiren_kisi_id = $13, degistirildi = now(), surum = surum + 1
       WHERE konu = $1 AND surum = $2 RETURNING 1`,
-    [konu, surum, s.simge, s.konuKalibi, s.govde, s.tabloAlanlari, kisiId],
+    [konu, surum, ...icerikDegerleri(s), kisiId],
   )) !== null;
+}
+
+export interface OzelSablonSatiri extends SablonIcerikSatiri { id: number; ad: string; onayDugmesi: boolean; serit: string; logo: boolean; surum: number; degistirildi: string }
+const OZEL_SECIM = `id, ad, ${ICERIK_SECIM}, surum, ${zamanMetni('degistirildi')} AS degistirildi`;
+export function ozelSablonlar(db: Db): Promise<OzelSablonSatiri[]> {
+  return db.sorgu<OzelSablonSatiri>(`SELECT ${OZEL_SECIM} FROM bildirim_eposta_ozel_sablon ORDER BY lower(ad), id`);
+}
+export function ozelSablon(db: Db, id: number): Promise<OzelSablonSatiri | null> {
+  return db.tek<OzelSablonSatiri>(`SELECT ${OZEL_SECIM} FROM bildirim_eposta_ozel_sablon WHERE id = $1`, [id]);
+}
+// Aynı adda (büyük-küçük harf ve baştaki/sondaki boşluk farkı sayılmaz) başka şablon var mı.
+export async function ozelSablonAdiVar(db: Db, ad: string, haricId: number | null): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM bildirim_eposta_ozel_sablon WHERE lower(btrim(ad)) = lower(btrim($1)) AND id IS DISTINCT FROM $2', [ad, haricId])) !== null;
+}
+// Ad çakışırsa null (tekil dizin; eşzamanlı ekleme de buraya düşer).
+export async function ozelSablonEkle(db: Db, ad: string, s: SablonYazimi, kisiId: number): Promise<number | null> {
+  const r = await db.tek<{ id: number }>(
+    `INSERT INTO bildirim_eposta_ozel_sablon (ad, simge, konu_kalibi, baslik_kalibi, govde, tablo_alanlari, dugme_yazisi, onay_dugmesi, alt_bilgi, serit, logo, degistiren_kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT DO NOTHING RETURNING id`,
+    [ad, ...icerikDegerleri(s), kisiId],
+  );
+  return r?.id ?? null;
+}
+export async function ozelSablonDegistir(db: Db, id: number, ad: string, s: SablonYazimi, surum: number, kisiId: number): Promise<boolean> {
+  return (await db.tek(
+    `UPDATE bildirim_eposta_ozel_sablon SET ad = $3, simge = $4, konu_kalibi = $5, baslik_kalibi = $6, govde = $7, tablo_alanlari = $8,
+            dugme_yazisi = $9, onay_dugmesi = $10, alt_bilgi = $11, serit = $12, logo = $13, degistiren_kisi_id = $14, degistirildi = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING 1`,
+    [id, surum, ad, ...icerikDegerleri(s), kisiId],
+  )) !== null;
+}
+// Silinen şablonu kullanan olaylar konularının şablonuna döner (yabancı anahtar ON DELETE SET NULL).
+export async function ozelSablonSil(db: Db, id: number, surum: number): Promise<boolean> {
+  return (await db.tek('DELETE FROM bildirim_eposta_ozel_sablon WHERE id = $1 AND surum = $2 RETURNING 1', [id, surum])) !== null;
 }
 
 export interface YeniEposta {
