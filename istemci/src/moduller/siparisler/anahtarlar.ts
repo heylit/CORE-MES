@@ -19,7 +19,6 @@ export const anahtarlar = {
   atolyeTaslaklari: ['siparisler', 'teklif', 'atolye-taslaklari'] as const,
   // Projeler modülünün verisi; sipariş ayrıntısında yalnız okunur.
   // 3296-3 a: Reçete ve Rota'nın verisi; kalem partisinde rota seçmek için yalnız okunur.
-  urunRotalari: (malzemeNo: number) => ['siparisler', 'urun-rotalari', malzemeNo] as const,
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
   // 3272: Üretim Emirleri'nin cevabı; onay penceresi ve "Proje ve emirler" kartı okur.
   siparisAcilisi: (id: number) => ['siparisler', 'siparis', 'acilis', id] as const,

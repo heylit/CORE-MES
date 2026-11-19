@@ -366,20 +366,7 @@ describe('Satış siparişi ayrıntısı', () => {
     expect((await within(pencere).findByRole('alert')).textContent).toBe('Onaylı sipariş onaylanamaz.');
   });
 
-  it('3296-3 a: onay penceresi partide elle seçilen rotayı ve yürürlükte olmadığı için türün rotasına düşeni söyler', async () => {
-    const acilis = { ...ACILIS, satirlar: [
-      { ...ACILIS_SATIRI, rota: { ad: 'ORN FAI', harf: 'A', elle: true } },
-      { ...ACILIS_SATIRI, kalemId: 51, kalemSira: 2, rota: { ad: 'Standart', harf: 'B', elleDustu: true } },
-    ] };
-    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, acilis) : undefined));
-    ac('/siparisler/5');
-    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
-    expect(await within(pencere).findByText('ORN FAI · Rev A · elle')).toBeTruthy();
-    expect(within(pencere).getByText('Standart · Rev B · seçilen rota yürürlükte değil, türün rotası')).toBeTruthy();
-  });
-
-  it('3411 a: türünün yürürlükte rotası olmadığı için Seri rotasıyla açılacak emirler satırda ve özette sayıyla söylenir', async () => {
+  it('3411 a: türünün yürürlükte rotası olmadığı için Seri rotasıyla açılacak emirler özette sayıyla söylenir', async () => {
     const acilis = { ...ACILIS, satirlar: [
       ACILIS_SATIRI,
       { ...ACILIS_SATIRI, kalemId: 51, kalemSira: 2, emirTuru: 'numune' as const, rota: { ad: 'Seri', harf: 'B', seriyeDustu: true } },
@@ -388,11 +375,10 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/5');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
-    expect(await within(pencere).findByText('Seri · Rev B · Numune türünün yürürlükte rotası yok')).toBeTruthy();
-    expect(within(pencere).getByText('1 emir Seri rotasıyla açılır')).toBeTruthy();
+    expect(await within(pencere).findByText('1 emir Seri rotasıyla açılır')).toBeTruthy();
   });
 
-  it('3272: onay penceresi açılacak projeyi, emirleri ve rota bekleyeni gösterir; proje no değişince gövdeye girer', async () => {
+  it('3272: onay penceresi açılacak projeyi, emir sayısını ve rota bekleyeni gösterir (3427-3 b: emir tablosu yok); proje no değişince gövdeye girer', async () => {
     const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/5/onayla' ? json(200, AYRINTI_ONAYLI) : undefined));
     ac('/siparisler/5');
     fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
@@ -402,9 +388,9 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(within(pencere).getByText('1 proje açılır')).toBeTruthy();
     expect(within(pencere).getByText('1 emir dolu')).toBeTruthy();
     expect(within(pencere).getByText('1 emir rota bekliyor')).toBeTruthy();
-    expect(within(pencere).getByText('Standart · Rev B')).toBeTruthy();
-    expect(within(pencere).getByText('Üretilmez, emir açılmaz')).toBeTruthy();
     expect(within(pencere).getByText(/DNM-002 için yürürlükte rota yok/)).toBeTruthy();
+    expect(within(pencere).queryByText('Onaylayınca açılacak emirler')).toBeNull();
+    expect(within(pencere).queryByText('Standart · Rev B')).toBeNull();
     fireEvent.change(kod, { target: { value: 'ss_ozel.1' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla, proje ve 2 emri aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
@@ -853,13 +839,8 @@ describe('Yeni satış siparişi', () => {
     });
   });
 
-  it('3296-3 a: aynı türden ikinci parti eklenir; ürünün iki yürürlükte rotası varsa partiye rota seçilir ve gövdede gider', async () => {
-    const ROTALAR = {
-      revizyonlar: [{ id: 71, rotaId: 1, harf: 'A', durum: 'yururlukte' }, { id: 72, rotaId: 2, harf: 'A', durum: 'yururlukte' }],
-      rotalar: [{ id: 1, ad: 'Standart', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: false }, { id: 2, ad: 'ORN FAI', standart: false, surum: 1, emirTurleri: ['fai'], taslakAcilabilir: false }],
-    };
-    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK)
-      : yontem === 'GET' && yol === '/rota/urunler/31' ? json(200, ROTALAR) : undefined));
+  it('3427-3 a: aynı türden ikinci parti eklenir; partide rota seçimi yok, rota sorulmaz, partiler türün rotasıyla gider', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
     ac('/siparisler/yeni');
     await musteriSec();
     fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
@@ -871,13 +852,29 @@ describe('Yeni satış siparişi', () => {
     fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 1 adet/), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 2 adet/), { target: { value: '60' } });
     fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 3 adet/), { target: { value: '30' } });
-    const rota = await screen.findByLabelText(/^Kalem 1 parti 3 rota/);
-    fireEvent.change(rota, { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 3 çeşit/), { target: { value: 'numune' } });
+    expect(screen.queryByLabelText(/^Kalem 1 parti \d+ rota/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({
-      satirlar: [{ partiler: [{ emirTuru: 'fai', adet: '10', rotaId: null }, { emirTuru: 'seri', adet: '60', rotaId: null }, { emirTuru: 'seri', adet: '30', rotaId: 2 }] }],
+      satirlar: [{ partiler: [{ emirTuru: 'fai', adet: '10', rotaId: null }, { emirTuru: 'seri', adet: '60', rotaId: null }, { emirTuru: 'numune', adet: '30', rotaId: null }] }],
     });
+    expect(istekler.some((i) => i.yol.startsWith('/rota/urunler/'))).toBe(false);
+  });
+
+  it('3427-3 a: eski kayıtta elle seçilmiş rota görünür not olur ve değişmeden geri gider', async () => {
+    const rotali = { ...AYRINTI_TASLAK, satirlar: [
+      { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000', rotaId: 2 }, { id: 2, emirTuru: 'seri', adet: '90.000', rotaId: null }] },
+    ] } satisfies SiparisAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, rotali)
+      : yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, rotali) : undefined));
+    ac('/siparisler/5/duzenle');
+    await screen.findByText('Düzenle: SS-2026-0005');
+    expect(screen.getAllByText('Elle seçilmiş rota korunur.')).toHaveLength(1);
+    expect(screen.queryByLabelText(/^Kalem 1 parti 1 rota/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ partiler: [{ emirTuru: 'fai', rotaId: 2 }, { emirTuru: 'seri', rotaId: null }] }] });
   });
 
   it('kalem kartı yeni seçime kadar kalır: yazıp seçmeyince önceki kart gider, ipucu söyler; seçilen kart başka satırda yinelenmez', async () => {
@@ -895,17 +892,6 @@ describe('Yeni satış siparişi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, miktar: '2' }] });
-  });
-
-  it('3296-3 a: Reçete ve Rota okunamıyorsa partide rota seçimi görünmez', async () => {
-    sunucuKur(FIYATCI);
-    ac('/siparisler/yeni');
-    await screen.findByRole('combobox', { name: /^Müşteri/ });
-    await kartSec();
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
-    await screen.findByLabelText(/^Kalem 1 parti 1 adet/);
-    expect(screen.queryByLabelText(/^Kalem 1 parti 1 rota/)).toBeNull();
   });
 
   it('3244 b: kalem termini elle değişince "Elle" olur ve gövdede gider; "Siparişe bağla" geri bağlar', async () => {
