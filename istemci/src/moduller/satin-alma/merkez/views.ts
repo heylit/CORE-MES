@@ -3,6 +3,7 @@ import type { Award, ExcessLine, MalzemeOzelligi, Priority, PurchaseRequest, Qua
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
+import { onaylayabilecekler } from "./onaylayan.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
@@ -770,7 +771,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const p2 = `${panel(2, "Onay", approved ? '<span class="flag good">onaylandı</span>' : aps.state === "rejected" ? '<span class="flag bad">reddedildi</span>' : aps.resubmitted ? '<span class="flag warn">yeniden onay bekliyor</span>' : decided ? '<span class="flag warn">onay bekliyor</span>' : '<span class="flag mute">karardan sonra</span>', `
     <div class="kv">
       <div><div class="k">Tutar</div><div class="v">${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</div><div class="d">KDV hariç${isSplit ? ", nakliye dahil" : ""}</div></div>
-      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "Limit tanımlı değil"}</div><div class="d">${ap ? "Ayarlar'daki limitlere göre" : "Ayarlar'da onay limiti girilince yazılır"}</div></div>
+      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "Limit tanımlı değil"}</div><div class="d${ap ? " sa-onaylayan" : ""}">${ap ? esc(onaylayabilecekler(settings(), ap)) : "Ayarlar'da onay limiti girilince yazılır"}</div></div>
       ${bu && tt ? `<div><div class="k">${esc(r.department)} bütçesi</div><div class="v">${bu.budget ? pct((bu.used + (ordered ? 0 : tt!.totalTRY)) / bu.budget * 100) : "–"}</div><div class="d">${bu.budget ? `bu alımla ${short(bu.used + (ordered ? 0 : tt!.totalTRY))} / ${short(bu.budget)}` : "bütçe tanımlı değil"}</div></div>` : ""}
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}

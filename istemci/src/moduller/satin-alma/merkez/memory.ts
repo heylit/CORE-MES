@@ -210,7 +210,7 @@ function onayBasamaklariPaneli(s: Settings): string {
   const rolAdi = (l: Basamak) => l.rolAdi ?? (l.rolId ? ROLLER.find(r => r.id === l.rolId)?.ad ?? null : null);
   const kademe = s.onayKademesi === undefined ? "" : `<p class="small">${s.onayKademesi
     ? `<span class="flag good">${simge(SIMGELER.check)} Basamak denetimi açık</span> <span class="muted">Onaylayan, karar tutarının düştüğü basamağın ya da üst basamağın rolünü taşımalı.</span>`
-    : `<span class="flag mute">Basamak denetimi kapalı</span> <span class="muted">Onaylama yetkisi olan herkes onaylar; roller kayıtlı kalır.</span>`}${basamakYazar ? ' <span class="muted">Açıp kapatmak: Sistem Ayarları, “Satın alma onay basamakları”.</span>' : ""}</p>`;
+    : `<span class="flag mute">Basamak denetimi kapalı</span> <span class="muted">Onay yetkisi olan herkes onaylar; roller kayıtlı kalır.</span>`}${basamakYazar ? ' <span class="muted">Açıp kapatmak: Sistem Ayarları, “Satın alma onay basamakları”.</span>' : ""}</p>`;
   const rolSecenekleri = (l: Basamak) => {
     const bilinen = ROLLER.some(r => r.id === l.rolId);
     const eski = !bilinen && l.rolId ? `<option value="${l.rolId}" selected>${esc(rolAdi(l) ?? `Rol #${l.rolId}`)}</option>` : "";
@@ -219,7 +219,7 @@ function onayBasamaklariPaneli(s: Settings): string {
   const satirlar = basamakYazar
     ? L.map((l, i) => `<tr data-ap="${i}"><td><input type="text" inputmode="decimal" data-apk="max" value="${limit(l.max)}" placeholder="limitsiz" aria-label="Üst limit (TL)"></td><td><input type="text" data-apk="role" value="${esc(l.role)}" aria-label="Basamak adı"></td><td><select data-apk="rolId" aria-label="Onaylayan rol">${rolSecenekleri(l)}</select></td><td class="acts"><button class="btn ghost danger sa-kaldir" data-act="rm-ap" data-i="${i}" aria-label="${esc(`${l.role || "Basamak"}: kaldır`)}" title="Kaldır; kaydedene kadar geri alınabilir">${simge(SIMGELER.trash)}</button></td></tr>`).join("")
     : L.map(l => { const r = rolAdi(l); return `<tr><td class="num">${l.max === null || l.max === undefined ? '<span class="muted">limitsiz</span>' : `${numIn(l.max)} ₺`}</td><td>${esc(l.role)}</td><td>${r ? esc(r) : l.rolId ? '<span class="muted">Rol atanmış</span>' : '<span class="muted">Rol yok</span>'}</td></tr>`; }).join("");
-  return `<section class="panel" data-sa-basamaklar><div class="panel-h"><h2>Onay basamakları</h2><span class="sub">tutar (KDV hariç TL) bu değere kadar</span></div><div class="panel-b">
+  return `<section class="panel" data-sa-basamaklar><div class="panel-h"><h2>Onay limitleri</h2><span class="sub">karar tutarı (KDV hariç TL) bu değere kadar bu basamağın onayıyla</span></div><div class="panel-b">
       ${kademe}
       ${basamakYazar ? "" : `<p class="small"><span class="flag mute">${simge(SIMGELER.lock)} Salt okunur</span> <span class="muted">Basamakları, eşikleri ve rolleri yalnız yönetici değiştirir. Diğer ayarları kaydedebilirsiniz.</span></p>`}
       <table class="itbl rt"><thead><tr><th>Üst limit (TL)</th><th>Basamak</th><th>Onaylayan rol</th>${basamakYazar ? "<th></th>" : ""}</tr></thead><tbody id="ap-rows">${satirlar}</tbody></table>
@@ -227,8 +227,9 @@ function onayBasamaklariPaneli(s: Settings): string {
 }
 export function viewSettings(draft?: Settings | null): string {
   const s = draft ?? settings();
-  return `<div class="phead"><div><h1>Ayarlar</h1><p class="lead">Kurlar ve fırsat maliyeti tüm karşılaştırmaları, onay limitleri ve bütçeler karar ekranını etkiler.</p></div><span class="spacer"></span><button class="btn primary" data-act="save-settings">Ayarları kaydet</button></div>
+  return `<div class="phead"><div><h1>Ayarlar</h1><p class="lead">Onay limitleri kararın kimin onayına gideceğini belirler; kurlar, fırsat maliyeti ve bütçeler karşılaştırmayı etkiler.</p></div><span class="spacer"></span><button class="btn primary" data-act="save-settings">Ayarları kaydet</button></div>
   <div class="stack" id="settings-form">
+  ${onayBasamaklariPaneli(s)}
   <section class="panel"><div class="panel-h"><h2>Kurlar ve vade maliyeti</h2>${s.ratesDate ? `<span class="sub">kurlar finanstan, ${fmtDate(s.ratesDate)}</span>` : '<span class="flag warn">finansta kur yok</span>'}</div>
     <div class="panel-b"><div class="tw"><table class="rt"><thead><tr><th>Para birimi</th><th>TL kuru</th><th>Aylık fırsat maliyeti (%)</th></tr></thead><tbody>
     ${CURS.map(c => `<tr><td class="lead"><b>${c}</b> ${SYM[c]}</td><td class="num">${c === "TRY" ? "1" : isNum(s.currencies[c].rate) ? nfx.format(s.currencies[c].rate!) : '<span class="muted">finansta kur yok</span>'}</td><td class="num" data-sa-y="15">%${numIn(parseNum(s.currencies[c].monthly))}</td></tr>`).join("")}
@@ -248,7 +249,6 @@ export function viewSettings(draft?: Settings | null): string {
       <li>Garanti: 12 aya kadar orantılı; fazlası ek puan getirmez.</li>
       <li>Bilinmeyen ölçüt (termin girilmemiş, tedarikçinin verisi yok) o teklifte hesaba katılmaz; ağırlığı bilinen ölçütlere dağılır. Sıralamada önce bütün kalemlere teklif verenler gelir.</li>
     </ul></div></section>
-  ${onayBasamaklariPaneli(s)}
   <div class="cols">
     <section class="panel"><div class="panel-h"><h2>Birimler ve yıllık bütçe</h2></div><div class="panel-b">
       <table class="itbl rt"><thead><tr><th>Birim</th><th>Yıllık bütçe (TL)</th><th></th></tr></thead><tbody id="dep-rows">${(s.departments || []).map((d, i) => `<tr data-dep="${i}"><td><input type="text" data-dk="name" value="${esc(d.name)}"></td><td><input type="text" inputmode="decimal" data-dk="budget" value="${numIn(parseNum(d.budget))}" placeholder="tanımsız"></td><td class="acts"><button class="btn sm ghost danger" data-act="rm-dep" data-i="${i}">Kaldır</button></td></tr>`).join("")}</tbody></table>

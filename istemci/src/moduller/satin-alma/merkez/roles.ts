@@ -8,6 +8,7 @@
 import type { PurchaseRequest } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
+import { onaylayabilecekler } from "./onaylayan.ts";
 import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
@@ -224,7 +225,7 @@ export function viewApproval(r: PurchaseRequest): string {
       ${r.award.reason ? `<div class="note"><span class="xs muted">Gerekçe</span><br>${esc(r.award.reason)}</div>` : !chosenIsTop && r.award.mode === "single" ? '<div class="note small">Önerilen teklif seçilmedi; gerekçe yazılmamış.</div>' : ""}
     </div></section>
     <section class="panel"><div class="panel-b kv">
-      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${esc(req?.role || "–")}</div></div>
+      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${esc(req?.role || "–")}</div>${req ? `<div class="d sa-onaylayan">${esc(onaylayabilecekler(settings(), req))}</div>` : ""}</div>
       <div><div class="k">${esc(r.department || "Birim")} bütçesi</div><div class="v">${bu && bu.budget ? pct((bu.used + (r.status === "approval" ? tt.totalTRY : 0)) / bu.budget * 100) : "–"}</div><div class="d">${bu && bu.budget ? "bu alımla birlikte" : "bütçe tanımlı değil"}</div></div>
       <div><div class="k">Değerlendirilen</div><div class="v">${ev.elig.length} teklif</div><div class="d">${(r.rfqs || []).length} tedarikçiden istendi</div></div>
     </div></section>
