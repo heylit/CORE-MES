@@ -8,6 +8,7 @@ import type {
   GeriBildirimAyrintiCevabi, GeriBildirimListeCevabi, GeriBildirimOzetiCevabi, GeriBildirimSecenekleriCevabi, KendiGeriBildirimi, ProfilCevabi,
   MiniPanoCevabi, TemaCevabi,
 } from '#paylasilan/sozlesme/profil.ts';
+import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { temayiSifirla } from '../../ortak/veri/tema.ts';
 import { TemaEsitleyici } from './tema-tercihi.ts';
 import { gorunenUstEylemler } from '../../ortak/rota/ust-eylemler.ts';
@@ -36,10 +37,12 @@ function ac(adres: string, ek?: React.ReactNode) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
+      <BildirimSaglayici>
       <MemoryRouter initialEntries={[adres]}>
         <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
         {ek}
       </MemoryRouter>
+      </BildirimSaglayici>
     </QueryClientProvider>,
   );
 }
@@ -111,6 +114,13 @@ describe('Profil sayfası', () => {
     sunucuKur({ 'GET /profil': () => json(200, PROFIL) });
     ac('/profil');
     expect((await screen.findByRole('link', { name: /Bildirimlerim/ })).getAttribute('href')).toBe('/bildirim-merkezi');
+  });
+
+  it('3435-1: telefon bildirimi anahtarı Profilim\'dedir; kim neyi alır notu altında durur', async () => {
+    sunucuKur({ 'GET /profil': () => json(200, PROFIL) });
+    ac('/profil');
+    expect(await screen.findByRole('heading', { name: 'Telefon bildirimi' })).toBeTruthy();
+    expect(screen.getByText(/sistem yöneticiniz belirler/)).toBeTruthy();
   });
 
   it('Üretim Terminali sayfası olana Özetim bağlantısı görünür, olmayana görünmez', async () => {

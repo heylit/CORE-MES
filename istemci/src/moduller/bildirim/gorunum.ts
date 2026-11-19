@@ -10,6 +10,14 @@ const MODUL: Record<string, { ad: string; simge: SimgeAdi }> = {
   siparisler: { ad: 'Siparişler', simge: 'list' },
   ik: { ad: 'İK', simge: 'user' },
   istasyonlar: { ad: 'İstasyonlar', simge: 'cpu' },
+  stok: { ad: 'Stok', simge: 'box' },
+  arkon: { ad: 'Arkon', simge: 'gantt' },
+  projeler: { ad: 'Projeler', simge: 'layers' },
+  malzemeler: { ad: 'Malzemeler', simge: 'cube' },
+  'cnc-kurulum': { ad: 'CNC kurulum', simge: 'wrench' },
+  guvenlik: { ad: 'Güvenlik', simge: 'lock' },
+  saglik: { ad: 'Sağlık', simge: 'gauge' },
+  profil: { ad: 'Profil', simge: 'user' },
 };
 export const modulAdi = (modul: string): string => MODUL[modul]?.ad ?? modul;
 export const modulSimgesi = (modul: string): SimgeAdi => MODUL[modul]?.simge ?? 'bell';

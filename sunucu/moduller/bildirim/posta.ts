@@ -126,6 +126,8 @@ export interface Ileti {
   html: string;
   // HTML'de cid:simge ile anılan gömülü küçük resim (PNG); dış adresten resim çekilmez.
   simgePng: Buffer | null;
+  // HTML'de cid:logo ile anılan kurum logosu (PNG, kart 3435-2 logo a); şablonda kapalıysa ya da yüklü değilse null.
+  logoPng?: Buffer | null | undefined;
 }
 
 const b64Satirlar = (b: Buffer): string => (b.toString('base64').match(/.{1,76}/g) ?? []).join('\r\n');
@@ -167,13 +169,19 @@ export function iletiKur(gonderen: string, i: Ileti, simdi: Date, sinir: string)
     `--a${sinir}`,
   ];
   const html = ['Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64Satirlar(Buffer.from(i.html))];
-  if (i.simgePng === null) satirlar.push(...html);
+  const gomulu: [string, Buffer][] = [];
+  if (i.simgePng !== null) gomulu.push(['simge', i.simgePng]);
+  if (i.logoPng) gomulu.push(['logo', i.logoPng]);
+  if (gomulu.length === 0) satirlar.push(...html);
   else {
-    satirlar.push(
-      `Content-Type: multipart/related; boundary="r${sinir}"`, '', `--r${sinir}`, ...html, `--r${sinir}`,
-      'Content-Type: image/png', 'Content-Transfer-Encoding: base64', 'Content-ID: <simge>', 'Content-Disposition: inline; filename="simge.png"', '',
-      b64Satirlar(i.simgePng), `--r${sinir}--`,
-    );
+    satirlar.push(`Content-Type: multipart/related; boundary="r${sinir}"`, '', `--r${sinir}`, ...html);
+    for (const [ad, png] of gomulu) {
+      satirlar.push(
+        `--r${sinir}`, 'Content-Type: image/png', 'Content-Transfer-Encoding: base64', `Content-ID: <${ad}>`, `Content-Disposition: inline; filename="${ad}.png"`, '',
+        b64Satirlar(png),
+      );
+    }
+    satirlar.push(`--r${sinir}--`);
   }
   satirlar.push(`--a${sinir}--`, '');
   return satirlar.join('\r\n');

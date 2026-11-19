@@ -19,7 +19,7 @@ export const EPOSTA_SIMGELERI = ['cart', 'clipboard-check', 'tag', 'calendar', '
 export type EpostaSimgesi = (typeof EPOSTA_SIMGELERI)[number];
 
 // Gövdeye yalnız bu alanlar girer (ADR 0015 md 6, 3397): müşteri ve tedarikçi adı, fiyat, parça no ve serbest metin yer tutucusu yoktur.
-export const EPOSTA_YER_TUTUCULARI = ['alici_adi', 'olay', 'kayit_no', 'tarih', 'gecikme_gunu', 'istasyon', 'kayit_baglantisi'] as const;
+export const EPOSTA_YER_TUTUCULARI = ['alici_adi', 'olay', 'kayit_no', 'tarih', 'gecikme_gunu', 'istasyon', 'kayit_baglantisi', 'onem', 'kademe'] as const;
 export type EpostaYerTutucusu = (typeof EPOSTA_YER_TUTUCULARI)[number];
 // Kalıpta yalnız izinli yer tutucu geçer; bilinmeyen {ad} kaydı reddeder (müşteri adı gibi alan sonradan sızmasın).
 export function bilinmeyenYerTutucular(metin: string): string[] {
@@ -31,13 +31,32 @@ export type EpostaDegerleri = Record<EpostaYerTutucusu, string | null>;
 export const sablonDoldur = (kalip: string, d: EpostaDegerleri): string =>
   kalip.replace(/\{([a-z_]+)\}/g, (butun, ad: string) => ((EPOSTA_YER_TUTUCULARI as readonly string[]).includes(ad) ? d[ad as EpostaYerTutucusu] ?? '' : butun));
 // Bilgi tablosunun satırları; boş değerli satır e-postaya yazılmaz.
-export const EPOSTA_TABLO_ALANLARI = ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon'] as const;
+export const EPOSTA_TABLO_ALANLARI = ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon', 'onem', 'kademe'] as const;
 export type EpostaTabloAlani = (typeof EPOSTA_TABLO_ALANLARI)[number];
 export const EPOSTA_TABLO_ADLARI: Record<EpostaTabloAlani, string> = {
-  kayit_no: 'Kayıt no', olay: 'Olay', tarih: 'Tarih', gecikme_gunu: 'Gecikme günü', istasyon: 'İstasyon',
+  kayit_no: 'Kayıt no', olay: 'Olay', tarih: 'Tarih', gecikme_gunu: 'Gecikme günü', istasyon: 'İstasyon', onem: 'Önem', kademe: 'Kademe',
 };
 export const EPOSTA_KONU_EN_UZUN = 150;
 export const EPOSTA_GOVDE_EN_UZUN = 2000;
+export const EPOSTA_BASLIK_EN_UZUN = 150;
+export const EPOSTA_DUGME_EN_UZUN = 40;
+export const EPOSTA_ALT_BILGI_EN_UZUN = 300;
+export const EPOSTA_SABLON_AD_EN_UZUN = 80;
+export const EPOSTA_VARSAYILAN_DUGME = 'Kayda git';
+
+// 3435-2 a: şablonun renk şeridi. 'onem' bildirimin önem rengini kullanır; 'yok' şerit çizmez.
+export const EPOSTA_SERITLERI = ['onem', 'sari', 'turuncu', 'kirmizi', 'mavi', 'yesil', 'yok'] as const;
+export type EpostaSeridi = (typeof EPOSTA_SERITLERI)[number];
+export const EPOSTA_SERIT_ADLARI: Readonly<Record<EpostaSeridi, string>> = {
+  onem: 'Önemden', sari: 'Sarı', turuncu: 'Turuncu', kirmizi: 'Kırmızı', mavi: 'Mavi', yesil: 'Yeşil', yok: 'Yok',
+};
+
+// Bir şablonun düzenlenen her parçası. Boş başlık olayın adı, boş düğme yazısı "Kayda git", boş alt bilgi sistemin cümlesidir.
+// logo: Sistem Ayarları'ndaki kurum logosu e-postanın üst bilgisine gömülür (yüklü değilse yazılmaz).
+export interface EpostaSablonIcerigi {
+  simge: EpostaSimgesi; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: EpostaTabloAlani[];
+  dugmeYazisi: string | null; onayDugmesi: boolean; altBilgi: string | null; serit: EpostaSeridi; logo: boolean;
+}
 
 // Posta sunucusu kipi (3397-4 a): kurum içi sunucu ve yerel aktarıcı kurum içi adresi, dış servis tek tanımlı dış adresi kullanır.
 export const EPOSTA_KIPLERI = ['kurum-ici', 'yerel-aktarici', 'dis-servis'] as const;

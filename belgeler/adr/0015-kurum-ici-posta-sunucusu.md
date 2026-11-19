@@ -22,7 +22,8 @@ içi zil ve mesajla ulaşmıyor. Kullanıcı kararı 223 a: bildirimler şirket 
 5. **Bağlantı varsayılan kapalıdır.** Gönderim ancak değişken tanımlıyken VE Sistem Ayarları'ndaki `bildirim.eposta` açıkken çıkar;
    değilse kuyruk birikir, gönderilmez.
 6. **Her deneme yalnız eklenen deftere yazılır** (kişi, olay, sonuç, neden). Hata metni sunucu adresini ve parolayı taşımaz. İçerikte ek
-   ve dış görsel yoktur.
+   ve dış görsel yoktur. Gömülü görsel yalnız şablon simgesi ve, şablonda açıksa, Sistem Ayarları'ndaki kurum logosudur (PNG, iletinin
+   içinde; dış adresten resim çekilmez; varsayılan kapalı; kullanıcı kararı kart 3435-2 logo a, 19.11.2026).
 7. **Yeni paket yok.** SMTP konuşması Node'un kendi modülleriyle yazılır; paket istenirse ayrı yazılı onay gerekir.
 
 ## Ek: dış posta servisi (3397-3, 3397-4 a; 17.11.2026)
@@ -37,7 +38,7 @@ Madde 1 ve 3 bu kipte şöyle genişler; diğer maddeler aynen geçer.
 3. **Şifre ve kimlik zorunlu:** 465'te doğrudan TLS, 587'de STARTTLS; sunucu STARTTLS sunmazsa parola ve ileti gönderilmez. Sertifika
    sistemin güven deposuyla ve sunucu adıyla doğrulanır (kurum içi sertifika otoritesi bu kipte kullanılmaz). Kullanıcı ve parola zorunlu.
 4. **Madde 4, 5 ve 6 aynen:** alıcı yalnız şirket alan adları, kanal varsayılan kapalı (`bildirim.eposta`), gövde yalnız gereken alanlar,
-   gömülü küçük simge dışında ek ve dış görsel yok.
+   gömülü küçük simge ve şablonda açıksa gömülü kurum logosu dışında ek ve dış görsel yok.
 5. **Dış istek kodu yalnız `posta.ts`'tedir** (`npm run sinir` kural j). Geri alma: kip kurum içine çekilir, değişken silinir.
 
 Bedeli: posta içeriği (konu, olay adı, kayıt no) firma dışındaki servise çıkar. Bu, firmanın zaten kullandığı posta servisidir; yeni bir

@@ -4,16 +4,12 @@ import {
 } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import {
-  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, bildirimTuruMu, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
+  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSimgesi, type EpostaTabloAlani, type EpostaZamani,
+  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSablonIcerigi, type EpostaSeridi, type EpostaSimgesi, type EpostaTabloAlani, EPOSTA_VARSAYILAN_DUGME, EPOSTA_SIMGELERI, EPOSTA_TABLO_ALANLARI, EPOSTA_SERITLERI, type EpostaZamani,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
-
-// BIL-1: mesaj kanalı kapalıdır (223 a Mesaj kanalını dördüncü aşamaya koydu). E-posta kanalı burada kapalı yazılır; açıklığı ortam
-// değişkeni ve `bildirim.eposta` ayarıyla sunucuda hesaplanır (3397, ADR 0015 md 5).
-export const ACIK_KANALLAR: Record<BildirimKanali, boolean> = { mesaj: false, eposta: false };
 
 // BIL-6: gönderilen yol türün ekranı ya da onun altıdır; başka ekrana giden bildirim alıcıya açılmayan sayfa gösterebilirdi.
 // Sorgu ekranı değiştirmez (`/malzemeler?kart=` aynı ekranda kaydı açar); denetim yolun sorgusuz kısmına bakar (3431).
@@ -82,23 +78,6 @@ export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly n
   return secilen.filter((r) => !kume.has(r));
 };
 
-export const TERCIH_ILETILERI = {
-  turYok: 'Bu bildirim size gelmiyor; tercihi kaydedilemez.',
-  epostaYok: 'E-posta bildirimi sizin için seçilemez.',
-  kapatilamaz: 'Bu bildirimin e-postası kapatılamaz: geciken işin kademesidir.',
-} as const;
-
-// alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak). kapali verilirse kapatılamazlık ondan okunur
-// (kademe türünde kaynağın ayarı, 3405-2 a); verilmezse türün tanımından.
-export function tercihHatasi(
-  alinabilen: readonly string[], epostaVar: boolean, govde: { tur: string; eposta: boolean }, kapali?: readonly string[],
-): { mesaj: string; alan: 'tur' | 'eposta' } | null {
-  if (!alinabilen.includes(govde.tur)) return { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' };
-  if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
-  if (!govde.eposta && epostaVar && (kapali === undefined ? bildirimTuruMu(govde.tur) && turKapatilamaz(govde.tur) : kapali.includes(govde.tur))) return { mesaj: TERCIH_ILETILERI.kapatilamaz, alan: 'eposta' };
-  return null;
-}
-
 // BIL-11 (2147): elle yayının önemi türünden gelir; önem listesi (zil rengi, "uyarı ve acil" süzgeci) değişmez.
 export const YAYIN_ONEMI: Record<YayinTuru, BildirimOnemi> = { uyari: 'uyari', acil: 'acil', duyuru: 'bilgi', bilgi: 'bilgi' };
 // Elle yayının satır türü; otomatik türlerin kataloğunda yoktur (tercih ve alıcı ayarına girmez, yayının kendi hedefi geçer).
@@ -147,20 +126,45 @@ export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
   return v.ortada === g.ortada && v.onayIstenir === g.onayIstenir;
 };
 
-// 3396-3: e-postası kişi tercihinden kapatılamayan tür (hazırlık kademeleri).
-export const turKapatilamaz = (tur: BildirimTuru): boolean => (BILDIRIM_TURLERI[tur] as BildirimTuruTanimi).kapatilamaz === true;
 
 // --- E-posta kanalı (ADR 0015, 3397) ---------------------------------------------------------------------------------
 
 // BIL-40: konu başına varsayılan şablon. Gövdede yalnız izinli yer tutucular; müşteri, tedarikçi, fiyat, parça no ve serbest metin yok.
-export const VARSAYILAN_SABLONLAR: Record<EpostaKonusu, { simge: EpostaSimgesi; konuKalibi: string; govde: string; tabloAlanlari: EpostaTabloAlani[] }> = {
-  'satin-alma': { simge: 'cart', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih'] },
-  proje: { simge: 'clipboard-check', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu'] },
-  satis: { simge: 'tag', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih'] },
-  planlama: { simge: 'calendar', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon'] },
-  uretim: { simge: 'route', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'istasyon'] },
-  genel: { simge: 'bell', konuKalibi: '[CORE MES] {olay}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['olay', 'tarih'] },
+const EK: Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo'> = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false };
+export const VARSAYILAN_SABLONLAR: Record<EpostaKonusu, EpostaSablonIcerigi> = {
+  'satin-alma': { simge: 'cart', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih'], ...EK },
+  proje: { simge: 'clipboard-check', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu'], ...EK },
+  satis: { simge: 'tag', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih'], ...EK },
+  planlama: { simge: 'calendar', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon'], ...EK },
+  uretim: { simge: 'route', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'istasyon'], ...EK },
+  genel: { simge: 'bell', konuKalibi: '[CORE MES] {olay}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['olay', 'tarih'], ...EK },
 };
+
+// BIL-55 (3435-2 a): kayıtlı şablon satırı; boş sütun (göçten önceki satır ya da boş bırakılan alan) konunun varsayılanıdır.
+export interface SablonKaydi {
+  simge: string; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: readonly string[]; dugmeYazisi: string | null;
+  onayDugmesi: boolean | null; altBilgi: string | null; serit: string | null; logo: boolean | null;
+}
+export function sablonIcerigi(v: EpostaSablonIcerigi, r: SablonKaydi | null): EpostaSablonIcerigi {
+  if (r === null) return v;
+  return {
+    simge: (EPOSTA_SIMGELERI as readonly string[]).includes(r.simge) ? r.simge as EpostaSimgesi : v.simge,
+    konuKalibi: r.konuKalibi, baslikKalibi: r.baslikKalibi, govde: r.govde,
+    tabloAlanlari: r.tabloAlanlari.filter((a): a is EpostaTabloAlani => (EPOSTA_TABLO_ALANLARI as readonly string[]).includes(a)),
+    dugmeYazisi: r.dugmeYazisi, onayDugmesi: r.onayDugmesi ?? v.onayDugmesi, altBilgi: r.altBilgi,
+    serit: r.serit !== null && (EPOSTA_SERITLERI as readonly string[]).includes(r.serit) ? r.serit as EpostaSeridi : v.serit,
+    logo: r.logo ?? v.logo,
+  };
+}
+
+// BIL-56 (3435-2 a): şablonun metin alanlarında yalnız izinli yer tutucu; ilk hatalı alan ve bilinmeyenler, yoksa null.
+export function sablonYerTutucuHatasi(s: Pick<EpostaSablonIcerigi, 'konuKalibi' | 'baslikKalibi' | 'govde' | 'altBilgi'>): { alan: string; bilinmeyen: string[] } | null {
+  for (const [alan, metin] of [['konuKalibi', s.konuKalibi], ['baslikKalibi', s.baslikKalibi], ['govde', s.govde], ['altBilgi', s.altBilgi]] as const) {
+    const bilinmeyen = metin === null ? [] : bilinmeyenYerTutucular(metin);
+    if (bilinmeyen.length > 0) return { alan, bilinmeyen };
+  }
+  return null;
+}
 
 // BIL-41: yer tutucu sınaması ve doldurma sözleşmededir (ekranın canlı ön izlemesi de aynısını kullanır).
 export { bilinmeyenYerTutucular, sablonDoldur, type EpostaDegerleri };
@@ -184,15 +188,23 @@ const ONEM_RENGI: Record<BildirimOnemi, { serit: string; zemin: string }> = {
   bilgi: { serit: '#2456c9', zemin: '#e3ebfb' }, uyari: { serit: '#b45f06', zemin: '#fbe9d3' }, acil: { serit: '#c62f45', zemin: '#f9e0e4' },
 };
 
+const SERIT_RENGI: Record<Exclude<EpostaSeridi, 'onem' | 'yok'>, string> = {
+  sari: '#f6c400', turuncu: '#b45f06', kirmizi: '#c62f45', mavi: '#2456c9', yesil: '#1f7a4a',
+};
+// 3435-2 a: şablonun renk şeridi; 'onem' önem rengi, 'yok' şerit yok (null).
+export const seritRengi = (s: EpostaSeridi, onem: BildirimOnemi): string | null => (s === 'yok' ? null : s === 'onem' ? ONEM_RENGI[onem].serit : SERIT_RENGI[s]);
+
 export interface EpostaGovdesi { konu: string; metin: string; html: string }
 // 3431 a: kademeli uyarının basamağı (K2-K5) ve 3397 tetikleyicisinin yükseltmesi e-postada görünür.
 export interface EpostaKademesi { no: number; toplam: number; ad: string }
 export interface EpostaGirdisi {
-  sablon: { konuKalibi: string; govde: string; tabloAlanlari: readonly EpostaTabloAlani[] };
+  sablon: { konuKalibi: string; govde: string; tabloAlanlari: readonly EpostaTabloAlani[] } & Partial<Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo'>>;
   degerler: EpostaDegerleri;
   baslik: string;
   onem: BildirimOnemi;
   simgeVar: boolean;
+  // Kurum logosu iletiye gömülü (cid:logo); şablonda açık ve logo yüklüyse true.
+  logoVar?: boolean | undefined;
   // Üst bilgideki ad (Sistem Ayarları > gönderen adı); verilmezse CORE MES.
   gonderenAdi?: string | undefined;
   // Onay türünde Onayla (ve türde ret varsa Reddet) düğmesi; bağlantı yoksa düğme yok.
@@ -211,7 +223,9 @@ export function turKademesi(tur: string): EpostaKademesi | null {
   return n === undefined ? null : { no: n, toplam: 5, ad: KADEME_ADLARI[n] };
 }
 
-const ONEM_ADI: Record<BildirimOnemi, string> = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' };
+export const ONEM_ADI: Record<BildirimOnemi, string> = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' };
+// {kademe} yer tutucusunun değeri; kademeli uyarı türü değilse null (satır yazılmaz).
+export const kademeDegeri = (tur: string): string | null => { const k = turKademesi(tur); return k === null ? null : `${String(k.no)} / ${String(k.toplam)}: ${k.ad}`; };
 
 // BIL-51 (3431 a): konu satırının başında önem (yalnız acil), onay ve kademe etiketi. Bilgi ve uyarıda etiket yok: her e-postada
 // "[UYARI]" görmek önemi değersizleştirir.
@@ -234,22 +248,27 @@ export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
     return d === null || d === '' ? [] : [[EPOSTA_TABLO_ADLARI[a], d] as const];
   });
   const baglanti = g.degerler.kayit_baglantisi;
-  const onay = g.onay && baglanti !== null ? g.onay : null;
+  const onay = g.onay && baglanti !== null && g.sablon.onayDugmesi !== false ? g.onay : null;
+  // 3435-2 a: şablonun başlığı, düğme yazısı ve alt bilgisi; boşsa olayın adı, "Kayda git" ve sistemin cümlesi.
+  const baslik = (g.sablon.baslikKalibi ? sablonDoldur(g.sablon.baslikKalibi, g.degerler).trim() : '') || g.baslik;
+  const dugmeYazisi = g.sablon.dugmeYazisi?.trim() || EPOSTA_VARSAYILAN_DUGME;
+  const altBilgi = (g.sablon.altBilgi ? sablonDoldur(g.sablon.altBilgi, g.degerler).trim() : '') || 'Bu e-postayı kimin alacağını sistem yöneticin belirler.';
   const ad = g.gonderenAdi?.trim() || 'CORE MES';
   const kademeMetni = g.kademe ? `Kademe ${String(g.kademe.no)} / ${String(g.kademe.toplam)}: ${g.kademe.ad}` : null;
   const altlar = [
     `Bu e-posta ${ad === 'CORE MES' ? 'CORE MES' : `CORE MES tarafından ${ad} adına`} gönderildi.`,
     ...(onay !== null ? ['Düğmeler CORE MES\'te bu kaydı açar; onay girişle ve kendi yetkinle verilir. Bu e-postayı iletmek kimseye onay yetkisi vermez.'] : []),
-    'Almak istemiyorsan Bildirim Merkezi > Tercihler sayfasından kapatabilirsin.',
+    altBilgi,
   ];
   const metin = [
     govde, '', ...[kademeMetni, g.yukseltme ?? null].filter((x): x is string => x !== null && x !== ''), ...satirlar.map(([a, d]) => `${a}: ${d}`),
     ...(baglanti === null ? [] : onay !== null
       ? ['', `Onayla: ${onayEylemiYolu(baglanti, 'onayla')}`, ...(onay.reddet ? [`Reddet: ${onayEylemiYolu(baglanti, 'reddet')}`] : []), `Kaydı aç: ${baglanti}`]
-      : ['', `Kayda git: ${baglanti}`]),
+      : ['', `${dugmeYazisi}: ${baglanti}`]),
     '', '--', ...altlar,
   ].join('\n');
   const r = ONEM_RENGI[g.onem];
+  const serit = seritRengi(g.sablon.serit ?? 'onem', g.onem);
   const tablo = satirlar.length === 0 ? '' : `<table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #e3dfd6;border-collapse:collapse;margin:12px 0;width:100%">${
     satirlar.map(([a, d]) => `<tr><td style="padding:7px 10px;border-bottom:1px solid #eeeeee;color:#6d685d;width:40%;font-size:13px">${kacis(a)}</td><td style="padding:7px 10px;border-bottom:1px solid #eeeeee;color:#1c1a14;font-size:13px">${kacis(d)}</td></tr>`).join('')}</table>`;
   const simge = g.simgeVar ? `<td style="width:56px;vertical-align:middle"><img src="cid:simge" width="44" height="44" alt="" style="display:block;border-radius:10px;background:${r.zemin}"></td>` : '';
@@ -259,22 +278,34 @@ export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
     ? `<p style="margin:16px 0 0"><a href="${kacis(onayEylemiYolu(baglanti, 'onayla'))}" style="${dugmeStili('#1f7a4a', '#ffffff', '#1f7a4a')}">Onayla</a>`
       + (onay.reddet ? `<a href="${kacis(onayEylemiYolu(baglanti, 'reddet'))}" style="${dugmeStili('#ffffff', '#c62f45', '#c62f45')}">Reddet</a>` : '')
       + `<a href="${kacis(baglanti)}" style="${dugmeStili('#ffffff', '#1c1a14', '#1c1a14')}">Kaydı aç</a></p>`
-    : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="${dugmeStili('#1c1a14', '#f6c400', '#f6c400')}">Kayda git</a></p>`;
+    : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="${dugmeStili('#1c1a14', '#f6c400', '#f6c400')}">${kacis(dugmeYazisi)}</a></p>`;
   const kademeCubugu = g.kademe ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:4px 0 2px"><tr>${
     Array.from({ length: g.kademe.toplam }, (_, i) => `<td style="height:6px;padding:0 2px"><div style="height:6px;border-radius:3px;background:${i < (g.kademe?.no ?? 0) ? r.serit : '#e3dfd6'}"></div></td>`).join('')
   }</tr></table><div style="font-size:12px;color:#6d685d;margin-bottom:8px">${kacis(kademeMetni ?? '')}</div>` : '';
   const yukseltme = g.yukseltme ? `<div style="font-size:12.5px;color:#6d685d;margin:0 0 10px">${kacis(g.yukseltme)}</div>` : '';
   const paragraflar = govde.split(/\n{2,}/).map((p) => `<p style="margin:0 0 10px">${kacis(p).replace(/\n/g, '<br>')}</p>`).join('');
   const ust = `<tr><td style="padding:10px 22px;background:#1c1a14;border-radius:6px 6px 0 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr>`
-    + `<td style="color:#ffffff;font-weight:bold;font-size:14px">${kacis(ad)}</td>`
+    + `<td style="color:#ffffff;font-weight:bold;font-size:14px">${g.logoVar === true ? `<img src="cid:logo" height="28" alt="${kacis(ad)}" style="display:block;height:28px;max-width:180px;background:#ffffff;border-radius:4px;padding:2px">` : kacis(ad)}</td>`
     + `<td style="text-align:right"><span style="display:inline-block;background:${r.zemin};color:${r.serit};font-size:12px;font-weight:bold;padding:2px 8px;border-radius:999px">${ONEM_ADI[g.onem]}</span></td></tr></table></td></tr>`;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="color-scheme" content="light"></head><body style="margin:0;padding:16px;background:#f1eee7">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;margin:0 auto;background:#ffffff;border-radius:6px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#1c1a14">`
-    + `${ust}<tr><td style="height:6px;background:${r.serit}"></td></tr><tr><td style="padding:20px 22px">`
-    + `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:14px"><tr>${simge}<td style="vertical-align:middle"><div style="font-size:18px;font-weight:bold">${kacis(g.baslik)}</div>`
+    + `${ust}${serit === null ? '' : `<tr><td style="height:6px;background:${serit}"></td></tr>`}<tr><td style="padding:20px 22px">`
+    + `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:14px"><tr>${simge}<td style="vertical-align:middle"><div style="font-size:18px;font-weight:bold">${kacis(baslik)}</div>`
     + `<div style="font-size:12px;color:#6d685d">${kacis([g.degerler.kayit_no, g.degerler.tarih].filter((x) => x !== null && x !== '').join(' · '))}</div></td></tr></table>`
     + `${kademeCubugu}${yukseltme}${paragraflar}${tablo}${dugme}</td></tr><tr><td style="padding:12px 22px;background:#f3f1ec;color:#6d685d;font-size:12.5px;border-radius:0 0 6px 6px">${altlar.map(kacis).join('<br>')}</td></tr></table></body></html>`;
   return { konu, metin, html };
+}
+
+// BIL-57 (kart 3435-2 logo a): e-postaya gömülecek kurum logosu. Yalnız PNG veri adresi alınır; büyük dosya her iletiyi ağırlaştırır,
+// sınırı aşan logo gömülmez (e-posta logosuz gider). Logo Sistem Ayarları'nda temiz PNG olarak saklanır.
+export const EPOSTA_LOGO_EN_BUYUK = 150_000;
+// Önek yetmez: içerik de PNG imzasıyla başlamalı (yanlış etiketli dosya gömülmez).
+const PNG_IMZASI = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+export function epostaLogosu(veri: string | null): Buffer | null {
+  const parca = veri === null ? null : /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(veri);
+  if (parca === null) return null;
+  const b = Buffer.from(parca[1] ?? '', 'base64');
+  return b.length <= EPOSTA_LOGO_EN_BUYUK && b.subarray(0, PNG_IMZASI.length).equals(PNG_IMZASI) ? b : null;
 }
 
 // BIL-52 (3431 a): yükseltme cümlesi. İlk alıcıya "kapanmazsa kime gideceği", yükseltmeyle alana "neden aldığı" yazılır. Kişi adı yazılmaz,
@@ -298,16 +329,16 @@ export function sessizMi(saat: number, bas: number | null, bit: number | null): 
 export interface EpostaTetikleyicisi {
   eposta: boolean; zaman: EpostaZamani; tekrarGun: number | null; tekrarEnCok: number | null;
   yukseltGun: number | null; yukseltRolIdleri: number[]; yukseltKisiIdleri: number[];
+  // Yöneticinin atadığı şablon; null ise olayın konusunun şablonu.
+  sablonId: number | null;
 }
 export const varsayilanTetikleyici = (tur: BildirimTuru): EpostaTetikleyicisi => ({
   eposta: BILDIRIM_TURLERI[tur].varsayilan.eposta, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null,
-  yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [],
+  yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], sablonId: null,
 });
 
-// BIL-46: kişi e-postayı alır mı: tür açık, kişi e-posta seçebilen (operatör değil, BIL-2) ve kendi tercihinde kapatmamış.
-// Kapatılamaz e-postada (3396-3, 3405-2 a) kişinin kapalı tercihi okunmaz; seçemeyen (operatör) yine almaz.
-export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[], tercih: boolean | undefined, kapatilamaz = false): boolean =>
-  turAcik && epostaSecilebilir(islemler) && (kapatilamaz || tercih !== false);
+// BIL-46: kişi e-postayı alır mı: tür açık ve kişi e-posta seçebilen (operatör değil, BIL-2). Kişi tercihi yoktur (3435-1).
+export const kisiEpostaAlir = (turAcik: boolean, islemler: readonly string[]): boolean => turAcik && epostaSecilebilir(islemler);
 
 // BIL-47: tekrar ve kademe kaynak bildirim açıkken sürer: görev ve hatırlatma yapılana, bilgi okunana dek; arşivlenen kapanmıştır.
 export const bildirimAcikMi = (b: { sinif: BildirimSinifi; okundu: string | null; arsivlendi: string | null; yapildi: string | null }): boolean =>

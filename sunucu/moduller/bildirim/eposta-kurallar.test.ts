@@ -3,13 +3,13 @@ import { describe, test } from 'node:test';
 import { EPOSTA_KONULARI, EPOSTA_YER_TUTUCULARI, adrestekiOnayEylemi, onayEylemiYolu, turKonusu, turOnayi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { basliktanKayitNo } from './eposta.ts';
 import {
-  VARSAYILAN_SABLONLAR, bildirimAcikMi, disKipMi, epostaKipi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, sablonDoldur, sessizMi,
+  EPOSTA_LOGO_EN_BUYUK, VARSAYILAN_SABLONLAR, bildirimAcikMi, epostaLogosu, kademeDegeri, sablonIcerigi, sablonYerTutucuHatasi, seritRengi, disKipMi, epostaKipi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, sablonDoldur, sessizMi,
   konuEtiketi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri,
 } from './kurallar.ts';
 
 const DEGER: EpostaDegerleri = {
   alici_adi: 'Deneme Kişi', olay: 'Satın alma talebi onay bekliyor', kayit_no: 'ORN-TLP-0042', tarih: '17.11.2026 09:30', gecikme_gunu: null,
-  istasyon: null, kayit_baglantisi: 'http://10.0.0.5:4100/satin-alma/onaylar',
+  istasyon: null, kayit_baglantisi: 'http://10.0.0.5:4100/satin-alma/onaylar', onem: 'Uyarı', kademe: null,
 };
 
 describe('e-posta kuralları (3397)', () => {
@@ -80,16 +80,15 @@ describe('e-posta kuralları (3397)', () => {
 
   test('BIL-45: ayarsız tür türün e-posta varsayılanıyla, hemen, tekrarsız ve kademesiz', () => {
     assert.deepEqual(varsayilanTetikleyici('satin-alma.talep-onay-bekliyor'), {
-      eposta: true, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [],
+      eposta: true, zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], sablonId: null,
     });
     assert.equal(varsayilanTetikleyici('satin-alma.talep-onaylandi').eposta, false);
   });
 
-  test('BIL-46: operatör e-posta almaz; kişi tercihi kapalıysa almaz; tür kapalıysa kimse almaz', () => {
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla'], undefined), true);
-    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla'], false), false);
-    assert.equal(kisiEpostaAlir(false, ['satin-alma.onayla'], true), false);
-    assert.equal(kisiEpostaAlir(true, ['arkon.operator'], true), false);
+  test('BIL-46: operatör e-posta almaz; tür kapalıysa kimse almaz; kişi tercihi yoktur (3435-1)', () => {
+    assert.equal(kisiEpostaAlir(true, ['satin-alma.onayla']), true);
+    assert.equal(kisiEpostaAlir(false, ['satin-alma.onayla']), false);
+    assert.equal(kisiEpostaAlir(true, ['arkon.operator']), false);
   });
 
   test('BIL-47: görev yapılınca, bilgi okununca, her sınıf arşivlenince kapanır', () => {
@@ -180,11 +179,75 @@ describe('e-posta kuralları (3397)', () => {
     assert.doesNotMatch(baglantisiz.html, /eylem=|>Onayla</);
   });
 
-  test('3431 a: alt bilgi kipten bağımsızdır ve tercih yolu Bildirim Merkezi\'dir; üst bilgi gönderen adını taşır', () => {
+  test('3431 a: alt bilgi kipten bağımsızdır, kişi tercihine yol göstermez (3435-1); üst bilgi gönderen adını taşır', () => {
     const g = epostaKur({ sablon: VARSAYILAN_SABLONLAR.genel, degerler: DEGER, baslik: 'Olay', onem: 'bilgi', simgeVar: false, gonderenAdi: 'ORN Makina' });
     assert.doesNotMatch(g.metin, /kurum içi/);
-    assert.match(g.metin, /Bildirim Merkezi > Tercihler/);
+    assert.doesNotMatch(g.metin, /Tercih/);
+    assert.match(g.metin, /sistem yöneticin belirler/);
     assert.match(g.metin, /CORE MES tarafından ORN Makina adına gönderildi/);
     assert.ok(g.html.includes('>ORN Makina<'));
+  });
+
+  test('BIL-55 (3435-2): kayıtlı şablonun boş sütunu konunun varsayılanıdır; bilinmeyen simge, alan ve şerit düşer', () => {
+    const v = VARSAYILAN_SABLONLAR.uretim;
+    assert.equal(sablonIcerigi(v, null), v);
+    const eski = sablonIcerigi(v, {
+      simge: 'yok-boyle', konuKalibi: 'K', baslikKalibi: null, govde: 'G', tabloAlanlari: ['olay', 'fiyat'], dugmeYazisi: null, onayDugmesi: null, altBilgi: null, serit: null, logo: null,
+    });
+    assert.deepEqual(eski, { ...v, konuKalibi: 'K', govde: 'G', tabloAlanlari: ['olay'] });
+    const yeni = sablonIcerigi(v, {
+      simge: 'alert', konuKalibi: 'K', baslikKalibi: 'B', govde: 'G', tabloAlanlari: [], dugmeYazisi: 'Aç', onayDugmesi: false, altBilgi: 'A', serit: 'kirmizi', logo: true,
+    });
+    assert.deepEqual(yeni, { simge: 'alert', konuKalibi: 'K', baslikKalibi: 'B', govde: 'G', tabloAlanlari: [], dugmeYazisi: 'Aç', onayDugmesi: false, altBilgi: 'A', serit: 'kirmizi', logo: true });
+  });
+
+  test('BIL-56 (3435-2): başlık ve alt bilgide de yalnız izinli yer tutucu', () => {
+    const s = { konuKalibi: '{olay}', baslikKalibi: '{onem} · {kademe}', govde: '{alici_adi}', altBilgi: null };
+    assert.equal(sablonYerTutucuHatasi(s), null);
+    assert.deepEqual(sablonYerTutucuHatasi({ ...s, altBilgi: '{musteri}' }), { alan: 'altBilgi', bilinmeyen: ['musteri'] });
+    assert.deepEqual(sablonYerTutucuHatasi({ ...s, baslikKalibi: '{fiyat}' }), { alan: 'baslikKalibi', bilinmeyen: ['fiyat'] });
+  });
+
+  test('3435-2: başlık, düğme yazısı, alt bilgi, onay düğmesi ve şerit şablondan; boşsa varsayılan', () => {
+    const temel = { degerler: DEGER, baslik: 'Olay adı', onem: 'uyari' as const, simgeVar: false };
+    const varsayilan = epostaKur({ ...temel, sablon: VARSAYILAN_SABLONLAR.genel });
+    assert.match(varsayilan.html, /Olay adı/);
+    assert.match(varsayilan.metin, /Kayda git: http/);
+    assert.match(varsayilan.metin, /sistem yöneticin belirler/);
+    const ozel = epostaKur({
+      ...temel, onay: { reddet: true },
+      sablon: { ...VARSAYILAN_SABLONLAR.genel, baslikKalibi: '{onem}: {olay}', dugmeYazisi: 'Talebi aç', altBilgi: 'Satın alma birimi', onayDugmesi: false, serit: 'yesil' },
+    });
+    assert.match(ozel.html, /Uyarı: Satın alma talebi onay bekliyor/);
+    assert.match(ozel.metin, /Talebi aç: http/);
+    assert.doesNotMatch(ozel.metin, /Onayla:/);
+    assert.match(ozel.metin, /Satın alma birimi/);
+    assert.doesNotMatch(ozel.metin, /sistem yöneticin belirler/);
+    assert.match(ozel.html, /background:#1f7a4a"><\/td>/);
+    const seritsiz = epostaKur({ ...temel, sablon: { ...VARSAYILAN_SABLONLAR.genel, serit: 'yok' } });
+    assert.doesNotMatch(seritsiz.html, /height:6px;background:/);
+    assert.equal(seritRengi('onem', 'acil'), '#c62f45');
+    assert.equal(seritRengi('yok', 'acil'), null);
+  });
+
+  test('BIL-57 (3435-2 logo a): kurum logosu yalnız PNG veri adresinden ve sınır içindeyse gömülür; varsayılan şablonlarda kapalı', () => {
+    assert.equal(epostaLogosu(null), null);
+    assert.equal(epostaLogosu('data:image/jpeg;base64,AAAA'), null);
+    assert.equal(epostaLogosu('https://ornek.local/logo.png'), null);
+    assert.deepEqual([...epostaLogosu('data:image/png;base64,iVBORw0KGgo=') ?? []], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.equal(epostaLogosu('data:image/png;base64,iVBORw=='), null, 'PNG imzası eksik');
+    assert.equal(epostaLogosu(`data:image/png;base64,${Buffer.from('<svg></svg>').toString('base64')}`), null, 'içerik PNG değil');
+    assert.equal(epostaLogosu(`data:image/png;base64,${Buffer.concat([Buffer.from('iVBORw0KGgo=', 'base64'), Buffer.alloc(EPOSTA_LOGO_EN_BUYUK)]).toString('base64')}`), null, 'sınırı aşan PNG');
+    assert.ok(Object.values(VARSAYILAN_SABLONLAR).every((s) => !s.logo));
+    const temel = { degerler: DEGER, baslik: 'Olay adı', onem: 'uyari' as const, simgeVar: false, gonderenAdi: 'ORN Makina' };
+    const logolu = epostaKur({ ...temel, sablon: VARSAYILAN_SABLONLAR.genel, logoVar: true });
+    assert.match(logolu.html, /<img src="cid:logo"[^>]*alt="ORN Makina"/);
+    assert.doesNotMatch(logolu.html, /src="http/);
+    assert.doesNotMatch(epostaKur({ ...temel, sablon: VARSAYILAN_SABLONLAR.genel }).html, /cid:logo/);
+  });
+
+  test('3435-2: {kademe} yalnız kademeli uyarı türünde dolar', () => {
+    assert.equal(kademeDegeri('bildirim.deneme'), null);
+    assert.equal(kademeDegeri('malzemeler.kademe-kart-onay-gecikti'), '3 / 5: Gecikti');
   });
 });

@@ -1,4 +1,6 @@
 export { numaraAl, sistemAyariOku, type NumaraIstegi } from './servis.ts';
+// Bildirim e-postası şablonda açıksa kurum logosunu gömer (kart 3435-2 logo a); bağ sunucu/kablolama.ts'te.
+export { kurumLogosuOku } from './servis.ts';
 // 3399 a: kendi firmalarımızın kodu; proje, malzeme, teklif ve sipariş seçimi buradan doğrular.
 export { firmaKoduListesi, firmaKoduSecenekleri, firmaKoduSecimi, firmaKoduVarMi, varsayilanFirmaKodu } from './servis.ts';
 // Modül kendi ayarını kendi ekranından değiştirir (Fabrika Haritası kroki saydamlığı, 2122-5 a).

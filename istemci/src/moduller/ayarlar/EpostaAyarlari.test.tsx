@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
-  EpostaDefterCevabi, EpostaDurumuCevabi, EpostaSablonDegistirGovdesi, EpostaSablonlariCevabi, EpostaTetikleyiciDegistirGovdesi, EpostaTetikleyicileriCevabi,
+  EpostaDefterCevabi, EpostaDurumuCevabi, EpostaSablonDegistirGovdesi, EpostaSablonlariCevabi, EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { EpostaAyarlari } from './EpostaAyarlari.tsx';
+import { EpostaAyarlari, EpostaSablonlari } from './EpostaAyarlari.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -18,24 +18,34 @@ const TETIK = {
   satirlar: [
     {
       tur: 'satin-alma.talep-onay-bekliyor', baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', sinif: 'gorev', konu: 'satin-alma', eposta: true,
-      zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], surum: null,
+      zaman: 'hemen', tekrarGun: null, tekrarEnCok: null, yukseltGun: null, yukseltRolIdleri: [], yukseltKisiIdleri: [], sablonId: null, surum: null,
     },
     {
       tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', sinif: 'bilgi', konu: 'uretim', eposta: false,
-      zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 1, yukseltRolIdleri: [2], yukseltKisiIdleri: [], surum: 4,
+      zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 1, yukseltRolIdleri: [2], yukseltKisiIdleri: [], sablonId: 9, surum: 4,
     },
   ],
   roller: [{ id: 1, ad: 'Bakım' }, { id: 2, ad: 'Müdür' }],
   kisiler: [{ id: 7, ad: 'Deneme Kalite' }],
 } satisfies EpostaTetikleyicileriCevabi;
 
+const EK = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false } as const;
 const SABLONLAR = {
   satirlar: [
     {
       konu: 'satin-alma', simge: 'cart', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.', tabloAlanlari: ['kayit_no', 'tarih'],
-      surum: null, degistirildi: null,
+      ...EK, olaySayisi: 1, surum: null, degistirildi: null,
     },
-    { konu: 'genel', simge: 'bell', konuKalibi: '[CORE MES] {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: [], surum: 2, degistirildi: '2026-11-17T09:00:00.000+03:00' },
+    {
+      konu: 'genel', simge: 'bell', konuKalibi: '[CORE MES] {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: [], ...EK, olaySayisi: 0, surum: 2,
+      degistirildi: '2026-11-17T09:00:00.000+03:00',
+    },
+  ],
+  ozel: [
+    {
+      id: 9, ad: 'ORN Acil durus', simge: 'alert', konuKalibi: 'Acil: {olay}', baslikKalibi: '{onem} · {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kademe'],
+      dugmeYazisi: 'Tezgahı aç', onayDugmesi: false, altBilgi: 'Bakım birimi', serit: 'kirmizi', logo: true, olaySayisi: 1, surum: 3, degistirildi: '2026-11-18T09:00:00.000+03:00',
+    },
   ],
 } satisfies EpostaSablonlariCevabi;
 
@@ -47,7 +57,7 @@ const DEFTER = {
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 } satisfies EpostaDefterCevabi;
 
-function sunucuKur() {
+function sunucuKur(kurumLogosu: string | null = null) {
   const yazilanlar: { yol: string; govde: unknown }[] = [];
   const okunanlar: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
@@ -58,10 +68,11 @@ function sunucuKur() {
       if (yol === '/bildirimler/eposta/deneme') return json(200, { sonuc: 'gonderildi', neden: null });
       if (yol === '/bildirimler/eposta/sina') return json(200, { tamam: false, neden: 'Sunucu STARTTLS sunmuyor' });
       if (yol.startsWith('/bildirimler/eposta/tetikleyiciler/')) return json(200, TETIK);
-      if (yol.startsWith('/bildirimler/eposta/sablonlar/')) return json(200, SABLONLAR);
+      if (yol.startsWith('/bildirimler/eposta/sablonlar/') || yol.startsWith('/bildirimler/eposta/ozel-sablonlar/')) return json(200, SABLONLAR);
     }
     okunanlar.push(yol);
     if (yol === '/bildirimler/eposta/durum') return json(200, DURUM);
+    if (yol === '/kurum-logosu') return json(200, { logo: kurumLogosu });
     if (yol === '/bildirimler/eposta/tetikleyiciler') return json(200, TETIK);
     if (yol === '/bildirimler/eposta/sablonlar') return json(200, SABLONLAR);
     if (yol.startsWith('/bildirimler/eposta/defter')) return json(200, DEFTER);
@@ -78,11 +89,19 @@ function ac() {
     </QueryClientProvider>,
   );
 }
+function sablonAc() {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={istemci}>
+      <BildirimSaglayici><EpostaSablonlari /></BildirimSaglayici>
+    </QueryClientProvider>,
+  );
+}
 const sekme = (ad: string) => { fireEvent.click(screen.getByRole('tab', { name: new RegExp(ad) })); };
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('E-posta ayarları (3397)', () => {
+describe('E-posta ayarları (3397, 3435-3)', () => {
   it('sunucu: durum, sayılar ve ortam ayarındaki kilitli değerler görünür; gönderim ayarları altta', async () => {
     sunucuKur();
     ac();
@@ -93,6 +112,7 @@ describe('E-posta ayarları (3397)', () => {
     expect(screen.getByText(/kuyrukta bekler/)).toBeTruthy();
     expect(screen.getByText('Gönderim ayarları listesi')).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: /Sunucu adresi/ })).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Sunucu', 'Gönderim defteri']);
   });
 
   it('deneme e-postası ve sınama uçlarını çağırır, sonucu bildirir', async () => {
@@ -114,45 +134,9 @@ describe('E-posta ayarları (3397)', () => {
     expect((screen.getByRole('button', { name: 'Kendime deneme gönder' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('tetikleyici: satıra dokununca panel açılır; tekrar ve kademe birlikte kaydedilir', async () => {
-    const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Tetikleyiciler');
-    fireEvent.click(await screen.findByText('Satın alma talebi onay bekliyor'));
-    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
-    fireEvent.click(within(panel).getByLabelText('İş açık kaldıkça tekrarla'));
-    fireEvent.change(within(panel).getByLabelText('Kaç günde bir'), { target: { value: '2' } });
-    fireEvent.click(within(panel).getByLabelText('İş açık kalırsa üst kademeye de gönder'));
-    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
-    expect(kaydet.disabled).toBe(true);
-    expect(within(panel).getByText('En az bir rol ya da kişi seçin.')).toBeTruthy();
-    fireEvent.click(within(panel).getByLabelText('Müdür'));
-    expect(kaydet.disabled).toBe(false);
-    fireEvent.click(kaydet);
-    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
-    expect(yazilanlar[0]).toEqual({
-      yol: '/bildirimler/eposta/tetikleyiciler/satin-alma.talep-onay-bekliyor/degistir',
-      govde: {
-        eposta: true, zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 2, yukseltRolIdleri: [2], yukseltKisiIdleri: [], surum: null,
-      } satisfies EpostaTetikleyiciDegistirGovdesi,
-    });
-  });
-
-  it('tetikleyici tablosu konuya göre süzülür ve özetleri yazar', async () => {
-    sunucuKur();
-    ac();
-    sekme('Tetikleyiciler');
-    expect(await screen.findAllByText('2 günde bir, en çok 3 kez')).not.toHaveLength(0);
-    expect(screen.getAllByText('1 gün sonra 1 rol')).not.toHaveLength(0);
-    fireEvent.click(within(screen.getByRole('group', { name: 'Konu' })).getByRole('button', { name: 'Üretim devir alma' }));
-    await waitFor(() => { expect(screen.queryByText('Satın alma talebi onay bekliyor')).toBeNull(); });
-    expect(screen.getAllByText('Makine durdu')).not.toHaveLength(0);
-  });
-
   it('şablon: ön izleme canlıdır; bilinmeyen alan kaydı kapatır; kayıt seçili alanlarla gider', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     const konu = await screen.findByLabelText('Konu satırı');
     const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
     expect(within(onizleme).getByText(/Satın alma talebi onay bekliyor · ORN-0042/)).toBeTruthy();
@@ -168,19 +152,89 @@ describe('E-posta ayarları (3397)', () => {
     fireEvent.click(kaydet);
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]?.govde).toEqual({
-      simge: 'clipboard-check', konuKalibi: 'Onay: {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.', tabloAlanlari: ['kayit_no', 'tarih', 'istasyon'], surum: null,
+      simge: 'clipboard-check', konuKalibi: 'Onay: {kayit_no}', baslikKalibi: '', govde: 'Merhaba {alici_adi},\n\n{olay}.', tabloAlanlari: ['kayit_no', 'tarih', 'istasyon'],
+      dugmeYazisi: '', onayDugmesi: true, altBilgi: '', serit: 'onem', logo: false, surum: null,
     } satisfies EpostaSablonDegistirGovdesi);
     expect(screen.queryByRole('button', { name: 'Varsayılana dön' })).toBeNull();
   });
 
   it('değiştirilmiş şablonda varsayılana dönülür', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
-    fireEvent.change(await screen.findByLabelText('Konu'), { target: { value: 'genel' } });
+    sablonAc();
+    fireEvent.click(await screen.findByRole('button', { name: /^Genel/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Varsayılana dön' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]).toMatchObject({ yol: '/bildirimler/eposta/sablonlar/genel/degistir', govde: { varsayilan: true, surum: 2 } });
+  });
+
+  it('3435-2: yeni şablon adıyla açılır; boş ad kaydı kapatır; başlık, düğme ve alt bilgi ön izlemede', async () => {
+    const { yazilanlar } = sunucuKur();
+    sablonAc();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni şablon' }));
+    const ac_ = screen.getByRole('button', { name: 'Şablonu aç' }) as HTMLButtonElement;
+    expect(ac_.disabled).toBe(true);
+    expect(screen.getByText('Şablon adı boş olamaz.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Şablon adı'), { target: { value: 'ORN Gecikme' } });
+    fireEvent.change(screen.getByLabelText('Başlık'), { target: { value: '{onem}: {olay}' } });
+    fireEvent.change(screen.getByLabelText('Düğme yazısı'), { target: { value: 'Talebi aç' } });
+    fireEvent.change(screen.getByLabelText('Alt bilgi'), { target: { value: '{fiyat}' } });
+    expect(screen.getByText('Bilinmeyen alan: {fiyat}')).toBeTruthy();
+    expect(ac_.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Alt bilgi'), { target: { value: 'Satın alma birimi' } });
+    fireEvent.change(screen.getByLabelText('Renk şeridi'), { target: { value: 'yesil' } });
+    const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
+    expect(within(onizleme).getByText('Uyarı: Örnek olay')).toBeTruthy();
+    expect(within(onizleme).getByText('Talebi aç')).toBeTruthy();
+    expect(within(onizleme).getByText(/Satın alma birimi/)).toBeTruthy();
+    fireEvent.click(ac_);
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({
+      yol: '/bildirimler/eposta/ozel-sablonlar/yeni',
+      govde: {
+        ad: 'ORN Gecikme', simge: 'bell', konuKalibi: '[CORE MES] {olay}', baslikKalibi: '{onem}: {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: [],
+        dugmeYazisi: 'Talebi aç', onayDugmesi: true, altBilgi: 'Satın alma birimi', serit: 'yesil', logo: false,
+      },
+    });
+  });
+
+  it('3435-2: yönetici şablonu kopyalanır, kaydedilir ve onayla silinir', async () => {
+    const { yazilanlar } = sunucuKur();
+    sablonAc();
+    fireEvent.click(await screen.findByRole('button', { name: /^ORN Acil durus/ }));
+    expect((screen.getByLabelText('Şablon adı') as HTMLInputElement).value).toBe('ORN Acil durus');
+    expect(screen.getByText(/Bu şablonu kullanan olaylar: Makine durdu/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kopyala' }));
+    expect((screen.getByLabelText('Şablon adı') as HTMLInputElement).value).toBe('ORN Acil durus (kopya)');
+    expect((screen.getByLabelText('Düğme yazısı') as HTMLInputElement).value).toBe('Tezgahı aç');
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^ORN Acil durus/ }));
+    fireEvent.change(screen.getByLabelText('Şablon adı'), { target: { value: 'ORN Acil' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toMatchObject({ yol: '/bildirimler/eposta/ozel-sablonlar/9/degistir', govde: { ad: 'ORN Acil', serit: 'kirmizi', onayDugmesi: false, surum: 3 } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Sil' }));
+    const onay = await screen.findByRole('dialog', { name: /silinsin mi/ });
+    fireEvent.click(within(onay).getByRole('button', { name: 'Sil' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/eposta/ozel-sablonlar/9/sil', govde: { surum: 3 } });
+  });
+
+  it('3435-2 logo: şablon kurum logosunu açar; logo yoksa uyarır, varsa ön izlemede görünür; kayıt logo ile gider', async () => {
+    const { yazilanlar } = sunucuKur();
+    sablonAc();
+    const kutu = await screen.findByLabelText('Kurum logosunu üst bilgiye koy');
+    fireEvent.click(kutu);
+    expect(await screen.findByText(/Kurum logosu yüklü değil/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]?.govde).toMatchObject({ logo: true });
+    cleanup();
+    sunucuKur('data:image/png;base64,iVBORw0KGgo=');
+    sablonAc();
+    fireEvent.click(await screen.findByRole('button', { name: /^ORN Acil durus/ }));
+    const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
+    expect((await within(onizleme).findByRole('img', { name: 'Kurum logosu' })).getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(screen.queryByText(/Kurum logosu yüklü değil/)).toBeNull();
   });
 
   it('defter sonuçları ve nedenleri gösterir; süzgeç sunucuya gider', async () => {

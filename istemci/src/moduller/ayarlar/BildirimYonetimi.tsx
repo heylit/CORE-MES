@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { islemAdi } from '#paylasilan/islem-adlari.ts';
-import type {
-  BildirimAliciDegistirGovdesi, BildirimAliciSatiri, BildirimAlicilariCevabi, BildirimGosterimDegistirGovdesi, BildirimGosterimSatiri,
-  BildirimGosterimleriCevabi, BildirimOnemi, CagriYonlendirmeCevabi, CagriYonlendirmeSatiri,
-} from '#paylasilan/sozlesme/bildirim.ts';
+import { useSearchParams } from 'react-router-dom';
+import type { CagriYonlendirmeCevabi, CagriYonlendirmeSatiri } from '#paylasilan/sozlesme/bildirim.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
-import { Dugme, DurumKutusu, IsaretKutusu, Kart, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, IsaretKutusu, Kart, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
+import { useYetki } from '../../ortak/veri/yetki.ts';
+import { KademeliUyari } from '../bildirim/disari.ts';
+import { BildirimMatrisi } from './BildirimMatrisi.tsx';
+import { EpostaSablonlari } from './EpostaAyarlari.tsx';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import './ayarlar.css';
 
 // Sözleşmedeki ad listesi zod'lu dosyadadır; istemci yalnız tip ithal eder, adlar burada tekrarlanır ve tip eksik ekibi yakalar.
 const CAGRI_EKIP_ADLARI: Record<CagriEkibi, string> = {
@@ -20,13 +22,38 @@ interface Degisim { ekip: CagriEkibi; rolIdleri: number[]; surum: number }
 
 const zaman = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
+// 3435-3 a: bildirim ve uyarının bütün ayarları tek sayfada. Olaylar sekmesi olay başına kanalları (alıcı, ekran ortası, telefon,
+// e-posta, şablon) birlikte gösterir; şablonlar, kademeli uyarı kaynakları ve ekip çağrıları kendi sekmesindedir. Her sekme
+// bugünkü işlemiyle görünür; yetki modeli değişmez.
+// Olaylar tablosu alıcı, gösterim, telefon ve e-posta uçlarından dolar: yalnız kademeli uyarı yöneten kişiye boş kalır, ona gösterilmez.
+type YonetimSekmesi = 'olaylar' | 'sablonlar' | 'kademe' | 'ekip';
+type YonetimIslemi = 'ayarlar.yaz' | 'bildirim.eposta-yonet' | 'bildirim.kademe-yonet';
+const SEKMELER: readonly (Sekme<YonetimSekmesi> & { islemler: readonly YonetimIslemi[] })[] = [
+  { anahtar: 'olaylar', baslik: 'Olaylar', simge: 'grid', islemler: ['ayarlar.yaz', 'bildirim.eposta-yonet'] },
+  { anahtar: 'sablonlar', baslik: 'E-posta şablonları', simge: 'mail', islemler: ['bildirim.eposta-yonet'] },
+  { anahtar: 'kademe', baslik: 'Kademeli uyarı', simge: 'alert', islemler: ['bildirim.kademe-yonet'] },
+  { anahtar: 'ekip', baslik: 'Ekip çağrıları', simge: 'users', islemler: ['ayarlar.yaz'] },
+];
+const sekmeMi = (d: string | null): d is YonetimSekmesi => SEKMELER.some((s) => s.anahtar === d);
+
 export function BildirimYonetimi() {
+  const yetki = useYetki();
+  const [sorgu, setSorgu] = useSearchParams();
+  const gorunen = SEKMELER.filter((s) => s.islemler.some((i) => yetki.var(i)));
+  const ilk = gorunen[0]?.anahtar ?? 'olaylar';
+  const istenen = sorgu.get('sekme');
+  const secili = sekmeMi(istenen) && gorunen.some((s) => s.anahtar === istenen) ? istenen : ilk;
+  const sec = (s: YonetimSekmesi) => { setSorgu(s === ilk ? {} : { sekme: s }, { replace: true }); };
   return (
-    <>
-      <EkipCagrilari />
-      <BildirimAlicilari />
-      <BildirimGosterimi />
-    </>
+    <div className="tc-eposta">
+      <Sekmeler etiket="Bildirim ve uyarı yönetimi" sekmeler={gorunen} secili={secili} sec={sec} />
+      <div className="tc-ayar-bolum" role="tabpanel" aria-label={gorunen.find((s) => s.anahtar === secili)?.baslik}>
+        {secili === 'olaylar' && <BildirimMatrisi />}
+        {secili === 'sablonlar' && <EpostaSablonlari />}
+        {secili === 'kademe' && <KademeliUyari />}
+        {secili === 'ekip' && <EkipCagrilari />}
+      </div>
+    </div>
   );
 }
 
@@ -87,180 +114,6 @@ function EkipCagrilari() {
                   onChange={(o) => { cevir(s, r.id, o.target.checked); }}
                 />
               ))}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Kart>
-  );
-}
-
-const ONEM_SIMGELERI: Record<BildirimOnemi, SimgeAdi> = { bilgi: 'bell', uyari: 'alert', acil: 'alert' };
-
-interface AliciDegisimi extends BildirimAliciDegistirGovdesi { tur: BildirimAliciSatiri['tur'] }
-
-// Tür başına alıcılar (760 c, 761 b): seçim yapılan türde bildirim yalnız seçilen rollerdeki ve seçilen kişilere gider, yönetici de
-// seçilmediyse almaz. Seçimsiz türde türün işlemini taşıyanlar alır. Talebi açan gibi kayda bağlı kişi her durumda alır.
-function BildirimAlicilari() {
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
-  const liste = useQuery({ queryKey: anahtarlar.bildirimAlicilari, queryFn: () => api.get<BildirimAlicilariCevabi>('/bildirimler/alicilar') });
-  const degisim = useMutation({
-    mutationFn: ({ tur, ...govde }: AliciDegisimi) => api.post<BildirimAlicilariCevabi>(`/bildirimler/alicilar/${tur}/degistir`, govde),
-    onSuccess: (guncel) => {
-      istemci.setQueryData(anahtarlar.bildirimAlicilari, guncel);
-      bildir('tamam', 'Bildirim alıcıları kaydedildi.');
-    },
-    onError: (hata) => {
-      bildir('hata', hataIletisi(hata, 'Bildirim alıcıları kaydedilemedi.'));
-      void liste.refetch();
-    },
-  });
-
-  if (liste.isPending) return <Kart baslik="Bildirim alıcıları"><DurumKutusu durum="yukleniyor" /></Kart>;
-  if (liste.isError) {
-    return (
-      <Kart baslik="Bildirim alıcıları">
-        <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Bildirim alıcıları alınamadı.')} yenile={() => { void liste.refetch(); }} />
-      </Kart>
-    );
-  }
-  const { satirlar, roller, kisiler } = liste.data;
-  const kisiAdi = new Map(kisiler.map((k) => [k.id, k.ad]));
-  const yaz = (s: BildirimAliciSatiri, rolIdleri: number[], kisiIdleri: number[]) => {
-    degisim.mutate({ tur: s.tur, rolIdleri, kisiIdleri, surum: s.surum });
-  };
-  const ozet = (s: BildirimAliciSatiri): string => {
-    if (s.surum === null) {
-      return s.varsayilanIslemler.length === 0
-        ? 'Varsayılan: yalnız kayda bağlı kişiler'
-        : `Varsayılan: ${s.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar`;
-    }
-    const parcalar = [s.rolIdleri.length > 0 ? `${s.rolIdleri.length} rol` : null, s.kisiIdleri.length > 0 ? `${s.kisiIdleri.length} kişi` : null];
-    return `Yalnız seçilenler: ${parcalar.filter(Boolean).join(', ')}`;
-  };
-
-  return (
-    <Kart baslik="Bildirim alıcıları">
-      <p className="tc-ayar-aciklama">
-        Rol ya da kişi seçilen bildirim yalnız seçilenlere gider; yönetici de seçilmediyse almaz. Seçim yapılmayan bildirim, türün yetkisini
-        taşıyanlara gider. Talebi açan gibi kayda bağlı kişi her durumda alır. Seçim yetki vermez.
-      </p>
-      <ul className="tc-ayarlar" aria-label="Bildirim alıcıları">
-        {satirlar.map((s) => {
-          const eklenebilir = kisiler.filter((k) => !s.kisiIdleri.includes(k.id));
-          return (
-            <li key={s.tur} className="tc-ayar tc-cagri-ekibi">
-              <div className="tc-ayar-metin">
-                <p className="tc-ayar-baslik"><Simge ad={ONEM_SIMGELERI[s.onem]} boyut="k" /> {s.baslik}</p>
-                <p className="tc-ayar-aciklama">
-                  {ozet(s)}
-                  {s.degistiren !== null && s.degistirildi !== null && ` · ${s.degistiren.ad ?? 'Silinmiş kişi'}, ${zaman(s.degistirildi)}`}
-                </p>
-                {s.surum !== null && (
-                  <Dugme simge="x" disabled={degisim.isPending} onClick={() => { yaz(s, [], []); }}>Seçimi kaldır</Dugme>
-                )}
-              </div>
-              <div className="tc-alici-secimi">
-                <div className="tc-cagri-rolleri" role="group" aria-label={`${s.baslik} alıcı rolleri`}>
-                  {roller.map((r) => (
-                    <IsaretKutusu
-                      key={r.id}
-                      etiket={r.ad}
-                      checked={s.rolIdleri.includes(r.id)}
-                      disabled={degisim.isPending}
-                      onChange={(o) => {
-                        yaz(s, o.target.checked ? [...s.rolIdleri, r.id] : s.rolIdleri.filter((x) => x !== r.id), s.kisiIdleri);
-                      }}
-                    />
-                  ))}
-                </div>
-                <ul className="tc-alici-kisiler" aria-label={`${s.baslik} alıcı kişiler`}>
-                  {s.kisiIdleri.map((id) => (
-                    <li key={id}>
-                      <Dugme
-                        simge="x"
-                        disabled={degisim.isPending}
-                        aria-label={`${kisiAdi.get(id) ?? `Kişi ${id}`} çıkar`}
-                        onClick={() => { yaz(s, s.rolIdleri, s.kisiIdleri.filter((x) => x !== id)); }}
-                      >
-                        {kisiAdi.get(id) ?? `Kişi ${id}`}
-                      </Dugme>
-                    </li>
-                  ))}
-                </ul>
-                <Secim
-                  etiket="Kişi ekle"
-                  value=""
-                  bosSecenek="Kişi seçin"
-                  disabled={degisim.isPending || eklenebilir.length === 0}
-                  secenekler={eklenebilir.map((k) => ({ deger: String(k.id), baslik: k.ad }))}
-                  onChange={(o) => {
-                    const id = Number(o.target.value);
-                    if (id > 0) yaz(s, s.rolIdleri, [...s.kisiIdleri, id]);
-                  }}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </Kart>
-  );
-}
-
-// Sistem Ayarları'nın kendi önbellek anahtarı (ayarlar/anahtarlar.ts bu kartın kilidinde değil).
-const GOSTERIM_ANAHTARI = ['ayarlar', 'bildirim-gosterim'] as const;
-interface GosterimDegisimi extends BildirimGosterimDegistirGovdesi { tur: BildirimGosterimSatiri['tur'] }
-
-// Otomatik bildirimin gösterimi (2147 Y4): tür başına ekran ortasında çıkar mı, "Okudum, anladım" ister mi. Ayarlanmayan türde
-// varsayılan geçer: yalnız acil ortada, onay yok. Değişiklik sonraki bildirimden geçerlidir; yazılmış bildirim değişmez.
-function BildirimGosterimi() {
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
-  const liste = useQuery({ queryKey: GOSTERIM_ANAHTARI, queryFn: () => api.get<BildirimGosterimleriCevabi>('/bildirimler/gosterim') });
-  const degisim = useMutation({
-    mutationFn: ({ tur, ...govde }: GosterimDegisimi) => api.post<BildirimGosterimleriCevabi>(`/bildirimler/gosterim/${tur}/degistir`, govde),
-    onSuccess: (guncel) => {
-      istemci.setQueryData(GOSTERIM_ANAHTARI, guncel);
-      bildir('tamam', 'Bildirim gösterimi kaydedildi.');
-    },
-    onError: (hata) => {
-      bildir('hata', hataIletisi(hata, 'Bildirim gösterimi kaydedilemedi.'));
-      void liste.refetch();
-    },
-  });
-
-  if (liste.isPending) return <Kart baslik="Ekran ortası ve onay"><DurumKutusu durum="yukleniyor" /></Kart>;
-  if (liste.isError) {
-    return (
-      <Kart baslik="Ekran ortası ve onay">
-        <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Bildirim gösterimi alınamadı.')} yenile={() => { void liste.refetch(); }} />
-      </Kart>
-    );
-  }
-  const yaz = (s: BildirimGosterimSatiri, ek: Partial<BildirimGosterimDegistirGovdesi>) => {
-    degisim.mutate({ tur: s.tur, ortada: s.ortada, onayIstenir: s.onayIstenir, surum: s.surum, ...ek });
-  };
-  return (
-    <Kart baslik="Ekran ortası ve onay">
-      <p className="tc-ayar-aciklama">
-        Otomatik bildirimin ekranın ortasında çıkıp çıkmayacağını ve "Okudum, anladım" onayı isteyip istemeyeceğini seçin. Seçilmeyen türde
-        yalnız acil olanlar ortada çıkar. Değişiklik bundan sonraki bildirimlerde geçerlidir.
-      </p>
-      <ul className="tc-ayarlar" aria-label="Ekran ortası ve onay">
-        {liste.data.satirlar.map((s) => (
-          <li key={s.tur} className="tc-ayar tc-cagri-ekibi">
-            <div className="tc-ayar-metin">
-              <p className="tc-ayar-baslik"><Simge ad={ONEM_SIMGELERI[s.onem]} boyut="k" /> {s.baslik}</p>
-              <p className="tc-ayar-aciklama">
-                {s.surum === null ? 'Varsayılan' : 'Ayarlandı'}
-                {s.degistiren !== null && s.degistirildi !== null && ` · ${s.degistiren.ad ?? 'Silinmiş kişi'}, ${zaman(s.degistirildi)}`}
-              </p>
-            </div>
-            <div className="tc-cagri-rolleri" role="group" aria-label={`${s.baslik} gösterimi`}>
-              <IsaretKutusu etiket="Ekran ortasında" checked={s.ortada} disabled={degisim.isPending} onChange={(o) => { yaz(s, { ortada: o.target.checked }); }} />
-              <IsaretKutusu etiket="Onay iste" checked={s.onayIstenir} disabled={degisim.isPending} onChange={(o) => { yaz(s, { onayIstenir: o.target.checked }); }} />
             </div>
           </li>
         ))}

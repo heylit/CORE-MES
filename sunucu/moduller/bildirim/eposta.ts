@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { isBekliyor, type IsBekliyor } from '#cekirdek/zamanlayici.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -10,16 +10,16 @@ import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts
 import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, turSinifi, type BildirimOnemi, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import {
   EPOSTA_KONULARI, turKonusu, turOnayi, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
-  type EpostaSablonlariCevabi, type EpostaSablonu, type EpostaSimgesi, type EpostaSinamaCevabi, type EpostaSonucu, type EpostaTabloAlani,
-  type EpostaTetikleyiciDegistirGovdesi, type EpostaTetikleyicileriCevabi,
+  type EpostaOzelSablonDegistirGovdesi, type EpostaOzelSablonYeniGovdesi, type EpostaSablonIcerigi, type EpostaSablonlariCevabi, type EpostaSablonu,
+  type EpostaSinamaCevabi, type EpostaSonucu, type EpostaTetikleyiciDegistirGovdesi, type EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { varsayilanDeger, type AyarAnahtari, type AyarDegeri } from '#paylasilan/ayarlar.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  VARSAYILAN_SABLONLAR, bildirimAcikMi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
-  sessizMi, sonrakiDenemeDk, turKademesi, turKapatilamaz, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
+  ONEM_ADI, VARSAYILAN_SABLONLAR, bildirimAcikMi, epostaKur, kademeDegeri, sablonIcerigi, sablonYerTutucuHatasi, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
+  sessizMi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
-import { disKipMi, epostaKipi } from './kurallar.ts';
+import { disKipMi, epostaKipi, epostaLogosu } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
 import { simgePng } from './posta-simgeleri.ts';
 import * as s from './sorgular.ts';
@@ -34,6 +34,12 @@ export const epostaAdresCozucusuKaydet = (c: EpostaAdresCozucusu | null): void =
 export type AyarOkuyucusu = <A extends AyarAnahtari>(db: Db, anahtar: A) => Promise<AyarDegeri<A>>;
 let ayarOkuyucusu: AyarOkuyucusu | null = null;
 export const epostaAyarOkuyucusuKaydet = (o: AyarOkuyucusu | null): void => { ayarOkuyucusu = o; };
+
+// Kurum logosu ayarlar modülündedir (Sistem Ayarları > görünüm); okuyucu kablolamada verilir. Bağlı değilse e-posta logosuz gider.
+export type LogoOkuyucusu = (db: Db) => Promise<string | null>;
+let logoOkuyucusu: LogoOkuyucusu | null = null;
+export const epostaLogoOkuyucusuKaydet = (o: LogoOkuyucusu | null): void => { logoOkuyucusu = o; };
+const logoOku = async (db: Db): Promise<Buffer | null> => (logoOkuyucusu === null ? null : epostaLogosu(await logoOkuyucusu(db)));
 function sistemAyariOku<A extends AyarAnahtari>(db: Db, anahtar: A): Promise<AyarDegeri<A>> {
   if (ayarOkuyucusu !== null) return ayarOkuyucusu(db, anahtar);
   return Promise.resolve(anahtar === 'bildirim.eposta' ? false as AyarDegeri<A> : varsayilanDeger(anahtar));
@@ -64,10 +70,6 @@ async function postaAyari(db: Db): Promise<PostaAyari | null> {
   return ortamPostaAyari(disKipMi(await sistemAyariOku(db, 'bildirim.eposta-kipi')));
 }
 
-export async function epostaKanaliAcik(db: Db): Promise<boolean> {
-  return await postaAyari(db) !== null && await sistemAyariOku(db, 'bildirim.eposta');
-}
-
 async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyicisi> {
   const t = await s.epostaTetikleyicisi(db, tur);
   return t === null ? varsayilanTetikleyici(tur) : t;
@@ -76,7 +78,7 @@ async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyici
 // bildirimGonder'in transaction'ında: yeni açılan bildirim satırlarının e-postası kuyruğa yazılır. Ortam değişkeni yoksa kuyruk
 // tutulmaz (posta sunucusu olmayan kurulumda birikmesin); ayar kapalıysa kuyruk birikir, gönderilmez (ADR 0015 md 5).
 export async function epostaKuyrugaAl(
-  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; kapatilamaz?: boolean | undefined; epostaYok?: boolean | undefined },
+  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; epostaYok?: boolean | undefined },
   yazilan: readonly { kisiId: number; id: number; yeni: boolean }[], islemler: ReadonlyMap<number, readonly string[]>,
 ): Promise<void> {
   if (olay.epostaYok === true || await postaAyari(db) === null) return;
@@ -84,9 +86,8 @@ export async function epostaKuyrugaAl(
   if (yeniler.length === 0) return;
   const t = await tetikleyici(db, olay.tur);
   if (!t.eposta) return;
-  const tercih = new Map((await s.epostaTercihleri(db, olay.tur, yeniler.map((y) => y.kisiId))).map((r) => [r.kisiId, r.eposta]));
-  const zorunlu = olay.kapatilamaz ?? turKapatilamaz(olay.tur);
-  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? [], tercih.get(y.kisiId), zorunlu));
+  // 3435-1: kişi tercihi yoktur; kim alır yöneticinin ayarıdır.
+  const alanlar = yeniler.filter((y) => kisiEpostaAlir(true, islemler.get(y.kisiId) ?? []));
   const ozet = t.zaman === 'ozet';
   const ozetZamani = ozet ? new Date(sonrakiSaat(Date.now(), await sistemAyariOku(db, 'bildirim.eposta-ozet-saati') ?? 7)).toISOString() : null;
   const ortak = {
@@ -107,10 +108,13 @@ export async function epostaKuyrugaAl(
 
 // --- Gönderim turu (iş, transaction dışı) --------------------------------------------------------------------------------
 
-interface Sablon { simge: EpostaSimgesi; konuKalibi: string; govde: string; tabloAlanlari: EpostaTabloAlani[] }
+type Sablon = EpostaSablonIcerigi;
 async function sablonOku(db: Db, konu: EpostaKonusu): Promise<Sablon> {
-  const r = await s.epostaSablonu(db, konu);
-  return r === null ? VARSAYILAN_SABLONLAR[konu] : r as Sablon;
+  return sablonIcerigi(VARSAYILAN_SABLONLAR[konu], await s.epostaSablonu(db, konu));
+}
+async function ozelSablonOku(db: Db, id: number): Promise<Sablon | null> {
+  const r = await s.ozelSablon(db, id);
+  return r === null ? null : sablonIcerigi(VARSAYILAN_SABLONLAR.genel, r);
 }
 
 interface GonderimAyarlari { gonderenAdi: string; uygulamaAdresi: string; gunlukEnCok: number | null; sessizBas: number | null; sessizBit: number | null; ozetSaati: number | null }
@@ -131,16 +135,20 @@ function degerler(q: s.KuyrukSatiri, aliciAdi: string | null, uygulamaAdresi: st
   return {
     alici_adi: aliciAdi, olay: q.baslik, kayit_no: q.kayitNo, tarih: tarihMetni(q.olayZamani),
     gecikme_gunu: q.gecikmeGunu === null ? null : String(q.gecikmeGunu), istasyon: q.istasyon, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, q.yol),
+    onem: ONEM_ADI[q.onem], kademe: kademeDegeri(q.tur),
   };
 }
 
 export interface EpostaTuruSonucu { gonderilen: number; hata: number; atlanan: number; ertelenen: number }
 type Sonuc = { durum: EpostaSonucu; neden: string | null; kalici: boolean };
 
-async function tekGonder(ayar: PostaAyari, alici: string, aliciAdi: string | null, gonderenAdi: string, sablon: Sablon, g: Parameters<typeof epostaKur>[0], ac: HatAc | undefined): Promise<Sonuc> {
-  const govde = epostaKur(g);
+async function tekGonder(
+  ayar: PostaAyari, alici: string, aliciAdi: string | null, gonderenAdi: string, sablon: Sablon, g: Parameters<typeof epostaKur>[0], logoPng: Buffer | null, ac: HatAc | undefined,
+): Promise<Sonuc> {
+  const logo = sablon.logo ? logoPng : null;
+  const govde = epostaKur({ ...g, logoVar: logo !== null });
   const ileti = iletiKur(ayar.gonderen, {
-    alici, aliciAdi, gonderenAdi, konu: govde.konu, metin: govde.metin, html: govde.html, simgePng: simgePng(sablon.simge),
+    alici, aliciAdi, gonderenAdi, konu: govde.konu, metin: govde.metin, html: govde.html, simgePng: simgePng(sablon.simge), logoPng: logo,
   }, new Date(), randomBytes(9).toString('hex'));
   const r = await postaGonder(ayar, ileti, alici, ac);
   return r.tamam ? { durum: 'gonderildi', neden: null, kalici: true } : { durum: 'gonderilemedi', neden: r.neden, kalici: r.kalici };
@@ -168,9 +176,19 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
       for (const tur of new Set(sira.map((q) => q.tur))) {
         if ((BILDIRIM_TUR_ANAHTARLARI as readonly string[]).includes(tur)) tetikler.set(tur, await tetikleyici(db, tur as BildirimTuru));
       }
+      // Olaya atanmış yönetici şablonu; silinmişse (bulunamazsa) konunun şablonu geçer.
+      const ozelSablonlar = new Map<number, Sablon>();
+      for (const id of new Set([...tetikler.values()].flatMap((t) => (t.sablonId === null ? [] : [t.sablonId])))) {
+        const o = await ozelSablonOku(db, id);
+        if (o !== null) ozelSablonlar.set(id, o);
+      }
       const gunBasi = new Date(tesisGunBasi(tesisGunu(simdi()))).toISOString();
       const rolAdlari = [...tetikler.values()].some((t) => t.yukseltRolIdleri.length > 0) ? new Map((await rolSecenekleri(db)).map((r) => [r.id, r.ad])) : new Map<number, string>();
-      return { sira, adresler, adlar, sablonlar, tetikler, rolAdlari, ayarlar: await gonderimAyarlari(db), bugun: await s.epostaBugunGidenler(db, kisiler, gunBasi) };
+      const logoGerek = !ozet && [...sablonlar.values(), ...ozelSablonlar.values()].some((x) => x.logo);
+      return {
+        sira, adresler, adlar, sablonlar, ozelSablonlar, tetikler, rolAdlari, ayarlar: await gonderimAyarlari(db), bugun: await s.epostaBugunGidenler(db, kisiler, gunBasi),
+        logo: logoGerek ? await logoOku(db) : null,
+      };
     });
     const { ayarlar } = hazirlik;
     const saat = saatSayisi(simdi());
@@ -215,15 +233,16 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
       for (const parca of parcalar) {
         const ilk = parca[0] as s.KuyrukSatiri;
         const konu = ozet ? 'genel' : turKonusu(ilk.tur);
-        const sablon = hazirlik.sablonlar.get(konu) ?? VARSAYILAN_SABLONLAR[konu];
         const tetik = hazirlik.tetikler.get(ilk.tur);
+        const ozelSablon = ozet || tetik?.sablonId == null ? undefined : hazirlik.ozelSablonlar.get(tetik.sablonId);
+        const sablon = ozelSablon ?? hazirlik.sablonlar.get(konu) ?? VARSAYILAN_SABLONLAR[konu];
         const g = ozet ? { ...ozetGirdisi(parca, ad, ayarlar.uygulamaAdresi), gonderenAdi: ayarlar.gonderenAdi } : {
           sablon, degerler: degerler(ilk, ad, ayarlar.uygulamaAdresi), baslik: ilk.baslik, onem: ilk.onem, simgeVar: true,
           gonderenAdi: ayarlar.gonderenAdi, onay: turOnayi(ilk.tur), kademe: turKademesi(ilk.tur),
           yukseltme: tetik === undefined ? null
             : yukseltmeCumlesi(ilk.kademe, tetik.yukseltGun, tetik.yukseltRolIdleri.flatMap((id) => hazirlik.rolAdlari.get(id) ?? []), tetik.yukseltKisiIdleri.length > 0),
         };
-        const r = await tekGonder(ayar, adres, ad, ayarlar.gonderenAdi, ozet ? VARSAYILAN_SABLONLAR.genel : sablon, g, ac);
+        const r = await tekGonder(ayar, adres, ad, ayarlar.gonderenAdi, ozet ? VARSAYILAN_SABLONLAR.genel : sablon, g, hazirlik.logo, ac);
         for (const q of parca) {
           if (r.durum !== 'gonderildi' && !r.kalici) {
             const dk = sonrakiDenemeDk(q.deneme + 1);
@@ -252,7 +271,7 @@ function ozetGirdisi(satirlar: readonly s.KuyrukSatiri[], ad: string | null, uyg
   const liste = satirlar.map((q) => `- ${q.baslik}${q.kayitNo === null ? '' : ` · ${q.kayitNo}`}`).join('\n');
   return {
     sablon: { konuKalibi: `[CORE MES] Günlük özet · ${String(satirlar.length)} bildirim`, govde: `Merhaba {alici_adi},\n\nBekleyen bildirimlerin:\n\n${liste}\n\nAyrıntıyı uygulamada görebilirsin.`, tabloAlanlari: [] },
-    degerler: { alici_adi: ad, olay: 'Günlük özet', kayit_no: null, tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: null, istasyon: null, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, '/bildirimler') },
+    degerler: { alici_adi: ad, olay: 'Günlük özet', kayit_no: null, tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: null, istasyon: null, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, '/bildirimler'), onem: null, kademe: null },
     baslik: 'Günlük özet', onem: 'bilgi', simgeVar: true,
   };
 }
@@ -265,9 +284,8 @@ async function kademeleriAc(db: Db): Promise<void> {
     const t = (BILDIRIM_TUR_ANAHTARLARI as readonly string[]).includes(q.tur) ? await tetikleyici(db, q.tur as BildirimTuru) : null;
     if (t !== null && q.kaynak !== null && bildirimAcikMi(q.kaynak)) {
       const adaylar = [...new Set([...await rollerdekiKisiler(db, t.yukseltRolIdleri), ...t.yukseltKisiIdleri])];
-      const tercih = new Map((await s.epostaTercihleri(db, q.tur, adaylar)).map((r) => [r.kisiId, r.eposta]));
       // Etkin girişli olmayan (pasif, çıkmış) kişi kademede de almaz.
-      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? [], tercih.get(k), turKapatilamaz(q.tur as BildirimTuru)));
+      const kisiler = adaylar.filter((k) => islemler.has(k) && kisiEpostaAlir(true, islemler.get(k) ?? []));
       await s.epostaKuyrugaYaz(db, kisiler.map((kisiId) => ({
         kisiId, bildirimId: null, tur: q.tur, onem: q.onem, baslik: q.baslik, kayitNo: q.kayitNo, yol: q.yol, gecikmeGunu: q.gecikmeGunu,
         istasyon: q.istasyon, kademe: 1 as const, ozet: false, zamani: null,
@@ -300,26 +318,79 @@ export async function epostaDurumu(db: Db): Promise<EpostaDurumuCevabi> {
   };
 }
 
+// Şablonu kullanan olay sayısı: olaya yönetici şablonu atanmışsa o, değilse olayın konusunun şablonu sayılır.
+async function sablonKullanimi(db: Db): Promise<{ konu: Map<EpostaKonusu, number>; ozel: Map<number, number> }> {
+  const atanan = new Map((await s.epostaTetikleyicileri(db)).map((r) => [r.tur, r.sablonId]));
+  const konu = new Map<EpostaKonusu, number>();
+  const ozel = new Map<number, number>();
+  for (const tur of BILDIRIM_TUR_ANAHTARLARI) {
+    const id = atanan.get(tur) ?? null;
+    if (id === null) konu.set(turKonusu(tur), (konu.get(turKonusu(tur)) ?? 0) + 1);
+    else ozel.set(id, (ozel.get(id) ?? 0) + 1);
+  }
+  return { konu, ozel };
+}
+
 export async function epostaSablonlari(db: Db): Promise<EpostaSablonlariCevabi> {
   const kayitli = new Map((await s.epostaSablonlari(db)).map((r) => [r.konu, r]));
+  const kullanim = await sablonKullanimi(db);
   return {
     satirlar: EPOSTA_KONULARI.map((konu): EpostaSablonu => {
-      const r = kayitli.get(konu);
-      const v = VARSAYILAN_SABLONLAR[konu];
-      return r === undefined
-        ? { konu, ...v, surum: null, degistirildi: null }
-        : { konu, simge: r.simge as EpostaSimgesi, konuKalibi: r.konuKalibi, govde: r.govde, tabloAlanlari: r.tabloAlanlari as EpostaTabloAlani[], surum: r.surum, degistirildi: r.degistirildi };
+      const r = kayitli.get(konu) ?? null;
+      return {
+        konu, ...sablonIcerigi(VARSAYILAN_SABLONLAR[konu], r), olaySayisi: kullanim.konu.get(konu) ?? 0,
+        surum: r?.surum ?? null, degistirildi: r?.degistirildi ?? null,
+      };
     }),
+    ozel: (await s.ozelSablonlar(db)).map((r) => ({
+      id: r.id, ad: r.ad, ...sablonIcerigi(VARSAYILAN_SABLONLAR.genel, r), olaySayisi: kullanim.ozel.get(r.id) ?? 0, surum: r.surum, degistirildi: r.degistirildi,
+    })),
   };
 }
 
+function yerTutucuSina(g: Pick<EpostaSablonIcerigi, 'konuKalibi' | 'baslikKalibi' | 'govde' | 'altBilgi'>): void {
+  const h = sablonYerTutucuHatasi(g);
+  if (h !== null) throw dogrulama(`Bilinmeyen yer tutucu: ${h.bilinmeyen.map((b) => `{${b}}`).join(', ')}`, h.alan);
+}
+const yazim = (g: EpostaSablonIcerigi): s.SablonYazimi => ({
+  simge: g.simge, konuKalibi: g.konuKalibi, baslikKalibi: g.baslikKalibi, govde: g.govde, tabloAlanlari: g.tabloAlanlari,
+  dugmeYazisi: g.dugmeYazisi, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi, serit: g.serit, logo: g.logo,
+});
+// Gövde şemasının çıktısı (boş metin null'a dönmüş) içerikle aynı alanlardır.
+type IcerikGovdesi = Omit<EpostaSablonDegistirGovdesi, 'varsayilan' | 'surum'>;
+const icerik = (g: IcerikGovdesi): EpostaSablonIcerigi => ({
+  simge: g.simge, konuKalibi: g.konuKalibi, baslikKalibi: g.baslikKalibi ?? null, govde: g.govde, tabloAlanlari: g.tabloAlanlari,
+  dugmeYazisi: g.dugmeYazisi ?? null, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi ?? null, serit: g.serit, logo: g.logo,
+});
+
 export async function epostaSablonuYaz(db: Db, kullanici: Kullanici, konu: EpostaKonusu, g: EpostaSablonDegistirGovdesi): Promise<EpostaSablonlariCevabi> {
-  for (const [alan, metin] of [['konuKalibi', g.konuKalibi], ['govde', g.govde]] as const) {
-    const bilinmeyen = bilinmeyenYerTutucular(metin);
-    if (bilinmeyen.length > 0) throw dogrulama(`Bilinmeyen yer tutucu: ${bilinmeyen.map((b) => `{${b}}`).join(', ')}`, alan);
-  }
-  const yazildi = await s.epostaSablonuYaz(db, konu, { simge: g.simge, konuKalibi: g.konuKalibi, govde: g.govde, tabloAlanlari: g.tabloAlanlari }, g.surum, g.varsayilan === true, kullanici.id);
+  const v = icerik(g);
+  if (g.varsayilan !== true) yerTutucuSina(v);
+  const yazildi = await s.epostaSablonuYaz(db, konu, yazim(v), g.surum, g.varsayilan === true, kullanici.id);
   if (!yazildi) throw eskiSurum();
+  return epostaSablonlari(db);
+}
+
+const AD_VAR = 'Bu adda bir şablon zaten var.';
+export async function ozelSablonEkle(db: Db, kullanici: Kullanici, g: EpostaOzelSablonYeniGovdesi): Promise<EpostaSablonlariCevabi> {
+  const v = icerik(g);
+  yerTutucuSina(v);
+  if (await s.ozelSablonAdiVar(db, g.ad, null) || await s.ozelSablonEkle(db, g.ad, yazim(v), kullanici.id) === null) throw dogrulama(AD_VAR, 'ad');
+  return epostaSablonlari(db);
+}
+
+export async function ozelSablonDegistir(db: Db, kullanici: Kullanici, id: number, g: EpostaOzelSablonDegistirGovdesi): Promise<EpostaSablonlariCevabi> {
+  if (await s.ozelSablon(db, id) === null) throw bulunamadi('Şablon bulunamadı.');
+  const v = icerik(g);
+  yerTutucuSina(v);
+  if (await s.ozelSablonAdiVar(db, g.ad, id)) throw dogrulama(AD_VAR, 'ad');
+  if (!(await s.ozelSablonDegistir(db, id, g.ad, yazim(v), g.surum, kullanici.id))) throw eskiSurum();
+  return epostaSablonlari(db);
+}
+
+export async function ozelSablonSil(db: Db, id: number, surum: number): Promise<EpostaSablonlariCevabi> {
+  if (await s.ozelSablon(db, id) === null) throw bulunamadi('Şablon bulunamadı.');
+  if (!(await s.ozelSablonSil(db, id, surum))) throw eskiSurum();
   return epostaSablonlari(db);
 }
 
@@ -334,7 +405,7 @@ export async function epostaTetikleyicileri(db: Db): Promise<EpostaTetikleyicile
       return {
         tur, baslik: t.baslik, onem: t.onem, sinif: turSinifi(tur), konu: turKonusu(tur), eposta: a.eposta, zaman: a.zaman,
         tekrarGun: a.tekrarGun, tekrarEnCok: a.tekrarEnCok, yukseltGun: a.yukseltGun, yukseltRolIdleri: a.yukseltRolIdleri,
-        yukseltKisiIdleri: a.yukseltKisiIdleri, surum: r?.surum ?? null,
+        yukseltKisiIdleri: a.yukseltKisiIdleri, sablonId: a.sablonId, surum: r?.surum ?? null,
       };
     }),
     roller: (await rolSecenekleri(db)).map(({ id, ad }) => ({ id, ad })),
@@ -348,9 +419,12 @@ export async function epostaTetikleyicisiYaz(db: Db, kullanici: Kullanici, tur: 
   const girisli = await kisilerinIslemleri(db);
   const kisiYok = g.yukseltKisiIdleri.filter((k) => !girisli.has(k));
   if (kisiYok.length > 0) throw dogrulama(`Kişi bulunamadı ya da girişi yok: ${kisiYok.join(', ')}`, 'yukseltKisiIdleri');
+  // Şablon verilmezse olayın şablonu değişmez (yalnız kanal ayarını yazan ekran şablonu silmesin).
+  const sablonId = g.sablonId === undefined ? (await s.epostaTetikleyicisi(db, tur))?.sablonId ?? null : g.sablonId;
+  if (sablonId !== null && await s.ozelSablon(db, sablonId) === null) throw dogrulama('Şablon bulunamadı.', 'sablonId');
   const yazildi = await s.epostaTetikleyiciYaz(db, tur, {
     eposta: g.eposta, zaman: g.zaman, tekrarGun: g.tekrarGun, tekrarEnCok: g.tekrarEnCok, yukseltGun: g.yukseltGun,
-    yukseltRolIdleri: g.yukseltRolIdleri, yukseltKisiIdleri: g.yukseltKisiIdleri,
+    yukseltRolIdleri: g.yukseltRolIdleri, yukseltKisiIdleri: g.yukseltKisiIdleri, sablonId,
   }, g.surum, kullanici.id);
   if (!yazildi) throw eskiSurum();
   return epostaTetikleyicileri(db);
@@ -369,7 +443,9 @@ export function epostaDefteri(db: Db, sorgu: { sayfa: number; sayfaBoyu?: number
 }
 
 // Deneme e-postası yalnız isteyen kişinin kendi iş adresine gider; sonuç deftere yazılır. Ayar kapalı olsa da gider (kurulum sınaması).
-export async function epostaDenemesi(db: Db, kullanici: Kullanici, konu: EpostaKonusu | undefined, ac?: HatAc): Promise<EpostaDenemeCevabi> {
+export async function epostaDenemesi(
+  db: Db, kullanici: Kullanici, secim: { konu?: EpostaKonusu | undefined; ozelSablonId?: number | undefined }, ac?: HatAc,
+): Promise<EpostaDenemeCevabi> {
   const ayar = await postaAyari(db);
   const kayit = (r: { sonuc: EpostaSonucu; neden: string | null }) =>
     s.epostaDefterineYaz(db, [{ kisiId: kullanici.id, tur: 'bildirim.deneme', baslik: 'Deneme e-postası', kayitNo: null, sonuc: r.sonuc, neden: r.neden }]).then(() => r);
@@ -377,17 +453,18 @@ export async function epostaDenemesi(db: Db, kullanici: Kullanici, konu: EpostaK
   const adres = adresCozucusu === null ? undefined : (await adresCozucusu(db, [kullanici.id])).get(kullanici.id);
   if (adres === undefined) return kayit({ sonuc: 'atlandi', neden: 'İK\'da iş e-postanız yok' });
   if (!izinliAdresMi(adres, ayar.alanAdlari)) return kayit({ sonuc: 'atlandi', neden: 'İş e-postanız izinli alan adında değil' });
-  const k = konu ?? 'genel';
-  const sablon = await sablonOku(db, k);
+  const ozel = secim.ozelSablonId === undefined ? null : await ozelSablonOku(db, secim.ozelSablonId);
+  if (secim.ozelSablonId !== undefined && ozel === null) throw bulunamadi('Şablon bulunamadı.');
+  const sablon = ozel ?? await sablonOku(db, secim.konu ?? 'genel');
   const ayarlar = await gonderimAyarlari(db);
   const onem: BildirimOnemi = 'bilgi';
   const r = await tekGonder(ayar, adres, kullanici.ad, ayarlar.gonderenAdi, sablon, {
     sablon, baslik: 'Deneme e-postası', onem, simgeVar: true, gonderenAdi: ayarlar.gonderenAdi,
     degerler: {
       alici_adi: kullanici.ad, olay: 'Deneme e-postası', kayit_no: 'ORN-0001', tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: '0',
-      istasyon: null, kayit_baglantisi: kayitBaglantisi(ayarlar.uygulamaAdresi, '/ayarlar'),
+      istasyon: null, kayit_baglantisi: kayitBaglantisi(ayarlar.uygulamaAdresi, '/ayarlar'), onem: ONEM_ADI[onem], kademe: null,
     },
-  }, ac);
+  }, sablon.logo ? await logoOku(db) : null, ac);
   return kayit({ sonuc: r.durum, neden: r.neden });
 }
 

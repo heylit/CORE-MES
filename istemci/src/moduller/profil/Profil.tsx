@@ -8,6 +8,7 @@ import { miniPanoDestekli } from '../../ortak/arayuz/MiniPano.tsx';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { tabanTema, useTemaTercihi, type TemaTercihi } from '../../ortak/veri/tema.ts';
+import { TelefonBildirimiKarti } from './TelefonBildirimi.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
 import { useMiniPanoSec, useMiniPanoTercihi } from './mini-pano-tercihi.tsx';
@@ -318,6 +319,7 @@ export function Profil() {
         <BilgiKarti veri={veri} />
         <IletisimKarti veri={veri} />
         <HesapKarti />
+        <TelefonBildirimiKarti />
         <GorunumKarti />
         <MiniPanoKarti />
       </div>

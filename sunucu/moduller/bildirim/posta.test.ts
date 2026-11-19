@@ -256,6 +256,13 @@ describe('posta göndericisi (ADR 0015, 3397)', () => {
     assert.match(m, /Content-Type: image\/png/);
     const resimsiz = iletiKur('mes@ornek.local', { alici: 'deneme@ornek.local', aliciAdi: null, gonderenAdi: 'CORE MES', konu: 'k', metin: 'm', html: 'h', simgePng: null }, new Date(), 's');
     assert.doesNotMatch(resimsiz, /image\/png/);
+    const logolu = iletiKur('mes@ornek.local', {
+      alici: 'deneme@ornek.local', aliciAdi: null, gonderenAdi: 'CORE MES', konu: 'k', metin: 'm', html: 'h', simgePng: png, logoPng: png,
+    }, new Date(), 's');
+    assert.match(logolu, /Content-ID: <simge>/);
+    assert.match(logolu, /Content-ID: <logo>/);
+    assert.equal(logolu.match(/^--rs$/gm)?.length, 3);
+    assert.match(logolu, /^--rs--$/m);
   });
 
   test('gerçek soketle şifresiz gönderim: zarf, nokta ikileme ve QUIT', async () => {

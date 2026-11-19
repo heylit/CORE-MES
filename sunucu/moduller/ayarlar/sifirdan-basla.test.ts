@@ -164,6 +164,8 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     assert.equal(ozet.statusCode, 200, ozet.body);
     const o1 = sifirlamaOzetiCevabi.parse(ozet.json());
     for (const ad of ['Üretim emri', 'Sipariş', 'Malzeme kartı', 'Kişi (silinir ya da girişsiz kalır)']) assert.ok(o1.satirlar.some((s) => s.ad === ad && s.sayi > 0), ad);
+    // Yöneticinin açtığı e-posta şablonu sistem ayarıdır, sıfırlamada kalır (3435-2); değiştiren kişi silinse de satır kalır.
+    await s.sorgu("INSERT INTO bildirim_eposta_ozel_sablon (ad, simge, konu_kalibi, govde, degistiren_kisi_id) VALUES ('ORN Ozel', 'bell', '{olay}', '{olay}', $1)", [planciId]);
     const sistemOnce = await sayilar();
     const c = await sifirla({ kullanicilar: false, tanimlar: false });
     assert.equal(c.statusCode, 200, c.body);
@@ -173,6 +175,7 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     const { kalan } = sifirlamaKapsami({ kullanicilar: false, tanimlar: false });
     const korunur = new Set<string>(['goc_kaydi', 'kisi', ...kalan, ...SIFIRLAMA_KISI, ...SIFIRLAMA_HER_ZAMAN_KISMI]);
     for (const [t, n] of sonra) if (!korunur.has(t)) assert.equal(n, 0, `${t} boşalmalı`);
+    assert.equal((await s.tek<{ n: number }>("SELECT count(*)::int AS n FROM bildirim_eposta_ozel_sablon WHERE ad = 'ORN Ozel'"))!.n, 1, 'özel e-posta şablonu kalmalı');
     for (const t of SIFIRLAMA_SISTEM) {
       if (t === 'stok_konum' || t === 'rol') continue;
       assert.equal(sonra.get(t), sistemOnce.get(t), `${t} değişmemeli`);

@@ -9,8 +9,6 @@ Bütün uçlar `oturum` ile herkese açıktır (222 a, yetki genişletme onaylı
 | `POST /bildirimler/:id/okundu` | `oturum` | `WHERE id AND kisi_id = oturum`; zaman sunucudan | `okundu, tümünü okundu ve arşiv ...` | oturumsuz 401; başkasının kimliği 404 ve satır değişmez |
 | `POST /bildirimler/tumunu-okundu` | `oturum` | yalnız kendi satırları | bakım 1 satır işaretler | CAM'ın çağrısı bakımın satırına dokunmaz; yöneticinin satırları bakımın işaretinden etkilenmez |
 | `POST /bildirimler/:id/arsivle` | `oturum` | `WHERE id AND kisi_id = oturum`; arşiv okundu da sayar (kısıt `bildirim_kaydi_arsiv_okunmus`) | arşiv listesinde görünür, gelenlerde görünmez | oturumsuz 401; başkasının kimliği 404 |
-| `GET /bildirimler/tercihler` | `oturum` | yalnız kişinin alabileceği olay türleri (işlemine göre); operatörde e-posta `null` | bakım 1 satır, yönetici 4 | CAM 0 satır |
-| `POST /bildirimler/tercihler/degistir` | `oturum` | gövde katı; tür kod listesinden; operatörün e-posta değeri kapalı saklanır | seçim saklanır, `varsayilan: false` | oturumsuz 401; bilinmeyen tür 400; `kisiId` alanı 400; operatör `eposta: true` gönderse de `false` saklanır |
 
 - Sürüm denetimi yok: satırı yalnız sahibi değiştirir, iki kişinin düzenlediği kayıt değildir. Okundu ve arşiv yinelemede aynı sonucu verir (`coalesce`), tekrar koruması gerekmez.
 - Veri kapsamı (iş merkezi) yok: bildirim iş merkezine bağlı kayıt değildir; açtığı kayıt kendi ekranının yetkisiyle açılır.

@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { ALICI_AYARLI_TURLER, bildirimAlicilariCevabi, bildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import { ALICI_AYARLI_TURLER, bildirimAlicilariCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import type { BildirimAliciSatiri, BildirimAlicilariCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -138,14 +138,6 @@ describe('bildirim alıcıları (760 c, 761 b, gerçek PostgreSQL)', () => {
     await bosalt();
     await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu', kisiler: [kim('mudur')], haric: kim('operator') });
     assert.deepEqual(await alanlar('istasyonlar.makine-durdu'), sirala([kim('kalite'), kim('mudur')]));
-  });
-
-  test('tercih listesi seçime uyar: seçilen kalite türü görür, seçilmeyen bakım görmez', async () => {
-    const tercih = async (ad: string): Promise<string[]> =>
-      bildirimTercihleriCevabi.parse((await istek(ad, 'GET', '/bildirimler/tercihler')).govde).satirlar.map((s) => s.tur);
-    assert.ok((await tercih('kalite')).includes('istasyonlar.makine-durdu'));
-    assert.ok(!(await tercih('bakim')).includes('istasyonlar.makine-durdu'));
-    assert.ok(!(await tercih('yonetici')).includes('istasyonlar.makine-durdu'));
   });
 
   test('sürüm denetimi: eski sürüm 409, sürümsüz yazım ayarlı türü açamaz', async () => {
