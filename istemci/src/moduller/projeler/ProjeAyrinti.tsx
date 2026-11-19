@@ -11,7 +11,6 @@ import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_METNI, DURUM_TONU, MALIYET_ISLEMI, STATU_ISLEMI, butceMetni, tarihMetni } from './gosterim.ts';
 import { KilometreTaslari } from './KilometreTaslari.tsx';
 import { useIslemVar } from './komut.ts';
-import { ProjeGorevleri } from './ProjeGorevleri.tsx';
 import { ProjeOzeti } from './ProjeOzeti.tsx';
 import { StatuGecmisi } from './StatuGecmisi.tsx';
 import { StatuCipi, StatuPenceresi } from './StatuPenceresi.tsx';
@@ -22,9 +21,9 @@ import { ProjeLogoSatiri } from './ProjeLogoSatiri.tsx';
 import { BitisBagi, ProjeKalemleri } from './ProjeKalemleri.tsx';
 import './projeler.css';
 
-type SekmeAdi = 'ozet' | 'kalemler' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
+type SekmeAdi = 'ozet' | 'kalemler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
 
-const YONETIM_SEKMELERI: ReadonlySet<SekmeAdi> = new Set(['ozet', 'gorevler', 'taslar', 'gecmis']);
+const YONETIM_SEKMELERI: ReadonlySet<SekmeAdi> = new Set(['ozet', 'taslar', 'gecmis']);
 
 export function ProjeAyrinti() {
   const { id: ham } = useParams();
@@ -52,8 +51,6 @@ export function ProjeAyrinti() {
     { anahtar: 'ozet', baslik: 'Özet', simge: 'chart' },
     // 3244: siparişten gelen kalemler terminleri ve partileriyle; siparişsiz projede sekme yok.
     ...(siparisli ? [{ anahtar: 'kalemler', baslik: 'Sipariş kalemleri', simge: 'box' } as const] : []),
-    // 3430 a: proje görevleri ve hazırlık görevleri tek sekmede (Liste, Emir × madde, Pano).
-    { anahtar: 'gorevler', baslik: 'Görevler', simge: 'check' },
     { anahtar: 'taslar', baslik: 'Kilometre taşları', simge: 'flag' },
     { anahtar: 'plan', baslik: 'Plan', simge: 'clock' },
     ...(emirleriGorur ? [{ anahtar: 'emirler', baslik: 'Üretim emirleri', simge: 'list' } as const] : []),
@@ -79,6 +76,10 @@ export function ProjeAyrinti() {
         <StatuCipi statu={y?.statu ?? p.statu} {...(statuYazabilir && y ? { tikla: () => { statuAcikYaz(true); } } : {})} />
         <div className="tc-prj-bas-sag">
           <KlasorBaglantisi tur="proje" id={p.id} />
+          {/* 3444 a: görevler sekmede değil, tek Görevler sayfasında; düğme sayfayı bu proje seçili açar. */}
+          <Dugme simge="check" onClick={() => { void yonlendir(`/proje-gorevlerim?proje=${String(p.id)}`); }}>
+            {y ? `Görevler (${String(y.gorevler.length)})` : 'Görevler'}
+          </Dugme>
           {yazabilir && <Dugme simge="edit" onClick={() => { duzenleYaz(true); }}>Düzenle</Dugme>}
           {yazabilir && p.durum === 'aktif' && <ProjeIptal proje={p} />}
         </div>
@@ -88,7 +89,6 @@ export function ProjeAyrinti() {
         ? <DurumKutusu durum="hata" mesaj={hataIletisi(yonetim.error, 'Proje yönetimi alınamadı')} yenile={() => { void yonetim.refetch(); }} />
         : !y && <DurumKutusu durum="yukleniyor" />)}
       {y && sekme === 'ozet' && <ProjeOzeti projeId={p.id} yonetim={y} emirleriGorur={emirleriGorur} />}
-      {y && sekme === 'gorevler' && <ProjeGorevleri projeId={p.id} yonetim={y} acik={p.durum === 'aktif'} emirleriGorur={emirleriGorur} />}
       {y && sekme === 'taslar' && <KilometreTaslari projeId={p.id} yonetim={y} acik={p.durum === 'aktif'} />}
       {y && sekme === 'gecmis' && <StatuGecmisi gecmis={y.statuGecmisi} />}
       {sekme === 'genel' && <Kart baslik="Proje bilgisi">

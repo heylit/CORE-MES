@@ -172,13 +172,23 @@ export function useHazirlikMatrisi(projeId: number, acik = true) {
 }
 
 // 3430 a: görev çubuğundaki "Hazırlık görevlerini aç"; dağıtma yetkisi ve açık emri olmayan projede görünmez.
-export function HazirlikGorevleriAc({ projeId }: { projeId: number }) {
-  const [acik, acikYaz] = useState(false);
-  const v = useHazirlikMatrisi(projeId).data;
-  if (!v || !v.dagitir || !v.emirler.some((e) => e.acik)) return null;
+// Dar ekranda aynı pencere "Diğer" menüsünden açılır; o zaman pencere durumu dışarıdan verilir.
+export function useHazirlikAcilabilir(projeId: number, etkin = true): boolean {
+  const v = useHazirlikMatrisi(projeId, etkin).data;
+  return etkin && v !== undefined && v.dagitir && v.emirler.some((e) => e.acik);
+}
+
+export function HazirlikGorevleriAc({ projeId, acik: disAcik, acikYaz: disAcikYaz }: {
+  projeId: number; acik?: boolean; acikYaz?: (a: boolean) => void;
+}) {
+  const [icAcik, icAcikYaz] = useState(false);
+  const acik = disAcik ?? icAcik;
+  const acikYaz = disAcikYaz ?? icAcikYaz;
+  const acilabilir = useHazirlikAcilabilir(projeId);
+  if (!acilabilir) return null;
   return (
     <>
-      <Dugme tur="birincil" simge="users" onClick={() => { acikYaz(true); }}>Hazırlık görevlerini aç</Dugme>
+      <span className="tc-prj-genis"><Dugme tur="birincil" simge="users" onClick={() => { acikYaz(true); }}>Hazırlık görevlerini aç</Dugme></span>
       {acik && <DagitPenceresi projeId={projeId} kapat={() => { acikYaz(false); }} />}
     </>
   );
