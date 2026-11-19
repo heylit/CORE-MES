@@ -233,7 +233,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     await vt().sorgu('DELETE FROM logo_mal_kabul_satiri');
     await vt().sorgu('DELETE FROM logo_mal_kabul_imleci');
     kopru.malKabulBicimi = 'bozuk';
-    assert.deepEqual(await malKabulTuru(vt(), ortami()), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'belirsiz', sayi: 0 });
+    assert.deepEqual(await malKabulTuru(vt(), ortami()), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'belirsiz', sayi: 0, ileti: 'Köprü cevabı beklenen biçimde değil; okunan kayıt yazılmadı.' });
     assert.equal(await sayi('logo_mal_kabul_satiri'), 0);
     assert.equal(await sayi('logo_mal_kabul_imleci'), 0, 'imleç ilerlemedi');
   });
@@ -243,7 +243,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     kopru.malKabulSatirlari.push({ logicalRef: 31, quantity: 1 });
     kopru.senaryo = 'yetkisiz';
     const bellek = yeniSurecBellegi();
-    assert.deepEqual(await malKabulTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'yetkisiz', sayi: 0 });
+    assert.deepEqual(await malKabulTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'yetkisiz', sayi: 0, ileti: 'Köprü anahtarı reddedildi (401).' });
     assert.equal(istekSayisi(), 1);
     assert.deepEqual(await malKabulTuru(vt(), ortami(bellek)), { tur: 'bos' }, 'bekleme dolmadan ikinci istek yok');
     assert.equal(istekSayisi(), 1);
@@ -257,7 +257,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     const adres = kopru.adres;
     await kopru.kapat();
     const o: TurOrtami = { kopru: kopruIstemcisiKur({ adres, anahtar: 'x' }, { sureMs: 2000 }), bellek: yeniSurecBellegi(), saat: () => new Date(simdi) };
-    assert.deepEqual(await malKabulTuru(vt(), o), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'ulasilamadi', sayi: 0 });
+    assert.deepEqual(await malKabulTuru(vt(), o), { tur: 'okuma', akis: 'mal-kabul', sonuc: 'ulasilamadi', sayi: 0, ileti: 'Köprüye ulaşılamadı (ECONNREFUSED).' });
     assert.equal(await sayi('logo_mal_kabul_satiri'), 1, 'önceki kayıtlar durur');
   });
 
@@ -292,7 +292,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.equal((await listeOkumaTuru(vt(), ortami(bellek))).tur, 'okuma');
     simdi += LISTE_TAZELEME_MS + 1000;
     kopru.senaryo = 'yetkisiz';
-    assert.deepEqual(await listeOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'cari', sonuc: 'yetkisiz', sayi: 0 });
+    assert.deepEqual(await listeOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'cari', sonuc: 'yetkisiz', sayi: 0, ileti: 'Köprü anahtarı reddedildi (401).' });
     assert.equal(await sayi('logo_cari'), 1);
   });
 
@@ -333,7 +333,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     }
     kopru.senaryo = 'yetkisiz';
     const bellek = yeniSurecBellegi();
-    assert.deepEqual(await faturaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'fatura', sonuc: 'yetkisiz', sayi: 0 });
+    assert.deepEqual(await faturaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'fatura', sonuc: 'yetkisiz', sayi: 0, ileti: 'Köprü anahtarı reddedildi (401).' });
     assert.equal(istekSayisi(), 1);
     assert.deepEqual(await faturaTuru(vt(), ortami(bellek)), { tur: 'bos' });
     assert.equal(istekSayisi(), 1);

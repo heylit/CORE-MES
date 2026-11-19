@@ -135,7 +135,7 @@ export type TurSonucu =
   | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
   | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali' }
-  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye' | 'son-alis'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
+  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye' | 'son-alis'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number; ileti?: string }
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
@@ -1039,7 +1039,7 @@ export function malKabulTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
       const r = await kopru.malKabulOku(imlec?.sonRef ?? 0);
       if (r.tur !== 'basarili') {
         o.bellek.okumaDenemeleri.set('mal-kabul', o.saat());
-        return async () => ({ tur: 'okuma', akis: 'mal-kabul', sonuc: r.tur, sayi: 0 });
+        return async () => ({ tur: 'okuma', akis: 'mal-kabul', sonuc: r.tur, sayi: 0, ileti: r.ileti });
       }
       o.bellek.okumaDenemeleri.delete('mal-kabul');
       return async (db2) => {
@@ -1061,7 +1061,7 @@ export function listeOkumaTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
       return async (): Promise<Yazici<TurSonucu>> => {
         o.bellek.okumaDenemeleri.set(liste, o.saat());
         const r = liste === 'cari' ? await kopru.cariListesiOku() : await kopru.ambarListesiOku();
-        if (r.tur !== 'basarili') return async () => ({ tur: 'okuma', akis: liste, sonuc: r.tur, sayi: 0 });
+        if (r.tur !== 'basarili') return async () => ({ tur: 'okuma', akis: liste, sonuc: r.tur, sayi: 0, ileti: r.ileti });
         return async (db2) => {
           await s.listeYaz(db2, liste, r.veri, o.saat());
           return { tur: 'okuma', akis: liste, sonuc: 'okundu', sayi: r.veri.length };
@@ -1083,7 +1083,7 @@ export function malzemeKoduTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     return async (): Promise<Yazici<TurSonucu>> => {
       o.bellek.okumaDenemeleri.set('malzeme-kodu', o.saat());
       const r = await kopru.malzemeKodlari();
-      if (r.tur !== 'basarili') return async () => ({ tur: 'okuma', akis: 'malzeme-kodu', sonuc: r.tur, sayi: 0 });
+      if (r.tur !== 'basarili') return async () => ({ tur: 'okuma', akis: 'malzeme-kodu', sonuc: r.tur, sayi: 0, ileti: r.ileti });
       return async (db2) => {
         await s.malzemeKodlariniYaz(db2, r.kodlar, o.saat());
         return { tur: 'okuma', akis: 'malzeme-kodu', sonuc: 'okundu', sayi: r.kodlar.length };
@@ -1120,7 +1120,7 @@ function sayfaliOkumaTuru<T>(
       const r = await oku(kopru, since);
       if (r.tur !== 'basarili') {
         o.bellek.okumaDenemeleri.set(akis, o.saat());
-        return async () => ({ tur: 'okuma', akis, sonuc: r.tur, sayi: 0 });
+        return async () => ({ tur: 'okuma', akis, sonuc: r.tur, sayi: 0, ileti: r.ileti });
       }
       o.bellek.okumaDenemeleri.delete(akis);
       return async (db2) => {
@@ -1468,7 +1468,7 @@ export async function faturaTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
       await vt.tx((db) => s.faturaDenemesiYaz(db, siparisNo, o.saat()));
     } else {
       o.bellek.okumaDenemeleri.set('fatura', o.saat());
-      return { tur: 'okuma', akis: 'fatura', sonuc: r.tur, sayi: okunan };
+      return { tur: 'okuma', akis: 'fatura', sonuc: r.tur, sayi: okunan, ileti: r.ileti };
     }
   }
   o.bellek.okumaDenemeleri.delete('fatura');

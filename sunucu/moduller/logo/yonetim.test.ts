@@ -6,13 +6,15 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { EntegrasyonGunlukCevabi, EntegrasyonYonetimiCevabi } from '#paylasilan/sozlesme/entegrasyon.ts';
+import type { IrsaliyeListesiCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { gunlugeYaz, kapiliTur, kapilariSifirla } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
-import { yonetimAkisi } from './kurallar.ts';
+import { ESKI_YARDIMCI_OKUMA_ILETISI, yonetimAkisi } from './kurallar.ts';
+import { irsaliyeTuru } from './irsaliye.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { malKabulTuru, yeniSurecBellegi } from './servis.ts';
@@ -76,7 +78,7 @@ describe('Logo yönetimi: sıklık kapısı, akış günlüğü ve sayfa uçlar�
     kapilariSifirla();
     bellek = yeniSurecBellegi();
     simdi += 24 * 3600_000;
-    for (const t of ['logo_akis_gunlugu', 'logo_mal_kabul_satiri', 'logo_mal_kabul_imleci']) await o().sahip.sorgu(`DELETE FROM ${t}`);
+    for (const t of ['logo_akis_gunlugu', 'logo_mal_kabul_satiri', 'logo_mal_kabul_imleci', 'logo_irsaliye_imleci']) await o().sahip.sorgu(`DELETE FROM ${t}`);
     await ayar('logo.baglanti', true);
     await ayar('logo.mal-kabul-okumasi', true);
     await ayar('logo.mal-kabul-sikligi', '15dk');
@@ -142,6 +144,30 @@ describe('Logo yönetimi: sıklık kapısı, akış günlüğü ve sayfa uçlar�
     const irsaliyeIsi = () => kapiliTur(o().vt, 'logo-irsaliye-okumasi', async () => { tur++; return { tur: 'okuma', akis: 'irsaliye', sonuc: 'okundu', sayi: 0 }; }, yonetimAkisi('irsaliye'), saat);
     for (let i = 0; i < 5; i++) { await irsaliyeIsi(); simdi += DK; }
     assert.equal(tur, 2);
+  });
+
+  test('3453: eski yardımcının 404\'ü nedeniyle günlüğe, Logo sayfasına ve irsaliye ekranına yazılır; başarılı turdan sonra irsaliye ekranındaki uyarı kalkar', async () => {
+    await ayar('logo.irsaliye-okumasi', true);
+    await ayar('logo.irsaliye-sikligi', '15dk');
+    const irsaliyeIsi = () => kapiliTur(o().vt, 'logo-irsaliye-okumasi', (vt, zorlaAni) => irsaliyeTuru(vt, { kopru: istemci(), bellek, saat, zorlaAni }), yonetimAkisi('irsaliye'), saat);
+    const liste = async () => (await oku('/logo/irsaliyeler?yon=alis&gun=30&sayfa=1')).json<IrsaliyeListesiCevabi>();
+    assert.equal((await liste()).okuma.sonHata, null, 'tur yokken uyarı yok');
+    kopru.irsaliyeUcuYok = true;
+    await irsaliyeIsi();
+    assert.ok(kopru.irsaliyeIstekleri.length > 0, 'istek gerçekten yardımcıya gitti');
+    const g = await gunluk();
+    assert.deepEqual(g.map((x) => [x.akis, x.sonuc, x.ileti]), [['irsaliye', 'hata', ESKI_YARDIMCI_OKUMA_ILETISI]]);
+    assert.match(ESKI_YARDIMCI_OKUMA_ILETISI, /eski sürüm.*404.*güncelleyin/);
+    const ozet = (await oku('/logo/yonetim')).json<EntegrasyonYonetimiCevabi>();
+    assert.equal(ozet.akislar.find((a) => a.anahtar === 'irsaliye')?.son?.ileti, ESKI_YARDIMCI_OKUMA_ILETISI);
+    const hatali = await liste();
+    assert.equal(hatali.okuma.sonHata?.ileti, ESKI_YARDIMCI_OKUMA_ILETISI);
+    kopru.irsaliyeUcuYok = false;
+    bellek = yeniSurecBellegi();
+    kapilariSifirla();
+    await irsaliyeIsi();
+    assert.equal((await gunluk()).at(-1)?.sonuc, 'tamam');
+    assert.equal((await liste()).okuma.sonHata, null, 'başarılı turdan sonra uyarı kalkar');
   });
 
   test('günlüğe giden hata tek satır ve kırpılır; köprü adresi ve anahtarı yazılmaz', async () => {

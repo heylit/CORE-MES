@@ -24,9 +24,9 @@ const LISTE: IrsaliyeListesiCevabi = {
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
   turler: [{ tur: 1, ad: 'Satın alma', sayi: 2 }, { tur: 6, ad: 'Satın alma iade', sayi: 0 }],
   durumlar: [{ durum: 'fark', sayi: 1 }, { durum: 'eslesti', sayi: 1 }],
-  okuma: { acik: true, sonOkuma: '2026-11-16T10:00:00+03:00' },
+  okuma: { acik: true, sonOkuma: '2026-11-16T10:00:00+03:00', sonHata: null },
 };
-const BOS_KAPALI: IrsaliyeListesiCevabi = { ...LISTE, satirlar: [], toplam: 0, turler: [{ tur: 1, ad: 'Satın alma', sayi: 0 }], okuma: { acik: false, sonOkuma: null } };
+const BOS_KAPALI: IrsaliyeListesiCevabi = { ...LISTE, satirlar: [], toplam: 0, turler: [{ tur: 1, ad: 'Satın alma', sayi: 0 }], okuma: { acik: false, sonOkuma: null, sonHata: null } };
 const ayrinti = (fiyatGorunur: boolean): IrsaliyeCevabi => ({
   baslik: { ...SATIR, ambar: 'Merkez', iptal: false, logodaYok: false, okumaZamani: '2026-11-16T10:00:00+03:00' },
   fiyatGorunur,
@@ -108,6 +108,30 @@ describe('Logo irsaliyeleri (3345 a)', () => {
     sunucuKur(YONETICI, LISTE, ayrinti(true));
     ac(undefined, '/logo-irsaliyeleri/1/1/101');
     expect(await screen.findByText(/Fiyat 12,5 TL · Tutar 375 TL/)).toBeTruthy();
+  });
+
+  it('3453: son okuma reddedildiyse nedeni listenin üstünde yazar; hata yoksa uyarı çıkmaz', async () => {
+    const ileti = 'Logo yardımcısı eski sürümde (404), bu okumayı tanımıyor; Logo bilgisayarındaki yardımcı programı güncelleyin.';
+    sunucuKur(DEPOCU, { ...LISTE, okuma: { ...LISTE.okuma, sonHata: { zaman: '2026-11-19T14:00:00+03:00', ileti } } });
+    ac();
+    const uyari = await screen.findByRole('alert');
+    expect(uyari.textContent).toContain('yapılamadı');
+    expect(uyari.textContent).toContain(ileti);
+    expect(uyari.textContent).toContain('Liste son başarılı okumaya göre.');
+    expect(uyari.textContent).toContain('Sistem yöneticisine iletin.');
+    expect(within(uyari).queryByRole('link')).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'sayfa.logo'] }, { ...BOS_KAPALI, okuma: { acik: true, sonOkuma: null, sonHata: { zaman: '2026-11-19T14:00:00+03:00', ileti } } });
+    ac();
+    const bos = await screen.findByRole('alert');
+    expect(within(bos).getByRole('link', { name: 'Logo sayfasını aç' }).getAttribute('href')).toBe('/logo');
+    expect(screen.getByText('Son okuma yapılamadığı için liste güncel olmayabilir.')).toBeTruthy();
+    expect(screen.queryByText('Bu dönemde irsaliye yok')).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(DEPOCU);
+    ac();
+    expect(await screen.findByText('ORN-IRS-101')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('okuma kapalı ve kayıt yokken kapalı kartı; ayar düğmesi yalnız ayar yazabilene', async () => {

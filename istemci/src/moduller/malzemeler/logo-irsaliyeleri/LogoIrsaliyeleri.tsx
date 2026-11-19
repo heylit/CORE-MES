@@ -53,7 +53,7 @@ function KapaliDurum() {
       <div className="tc-li-kapali">
         <Simge ad="lock" />
         <h3>Logo&apos;dan irsaliye okuması kapalı</h3>
-        <p>Sistem Ayarları&apos;nda &quot;Logo bağlantısı&quot; ve &quot;Logo: irsaliye okuması&quot; açılınca irsaliyeler dakikada bir okunur.</p>
+        <p>Sistem Ayarları&apos;nda &quot;Logo bağlantısı&quot; ve &quot;Logo: irsaliye okuması&quot; açılınca irsaliyeler Logo sayfasında seçilen sıklıkla okunur.</p>
         {yetki.var('ayarlar.yaz') && <Link to="/ayarlar"><Dugme tur="birincil" simge="gear">Sistem Ayarları</Dugme></Link>}
       </div>
     </Kart>
@@ -94,6 +94,7 @@ export function LogoIrsaliyeleri({ yon }: { yon: IrsaliyeYonu }) {
     queryFn: () => api.get<IrsaliyeListesiCevabi>(`/logo/irsaliyeler?${sorgu.toString()}`),
     placeholderData: keepPreviousData,
   });
+  const yetki = useYetki();
   const degistir = <T,>(yaz: (d: T) => void) => (d: T) => { yaz(d); sayfaYaz(1); };
   const suzgecsiz = tur === '' && durum === '' && ara.trim() === '';
 
@@ -109,9 +110,19 @@ export function LogoIrsaliyeleri({ yon }: { yon: IrsaliyeYonu }) {
         <Secim etiket="Eşleşme" value={durum} onChange={(e) => { degistir(durumYaz)(e.target.value as EslesmeDurumu | ''); }} secenekler={DURUM_SECENEKLERI} />
         <span className="tc-li-soluk tc-li-okuma">
           <Simge ad="clock" />
-          {v.okuma.acik ? 'Dakikada bir okunur' : 'Okuma kapalı'}{v.okuma.sonOkuma !== null && <> · son okuma {zamanMetni(v.okuma.sonOkuma)}</>}
+          {v.okuma.acik ? 'Logo sayfasında seçilen sıklıkla okunur' : 'Okuma kapalı'}{v.okuma.sonOkuma !== null && <> · son okuma {zamanMetni(v.okuma.sonOkuma)}</>}
         </span>
       </div>
+      {v.okuma.sonHata !== null && (
+        <p className="tc-li-hata" role="alert">
+          <Simge ad="alert" />
+          <span>
+            <strong>Son okuma {zamanMetni(v.okuma.sonHata.zaman)} yapılamadı:</strong> {v.okuma.sonHata.ileti}
+            {v.satirlar.length > 0 && ' Liste son başarılı okumaya göre.'}
+            {' '}{yetki.var('sayfa.logo') ? <Link to="/logo">Logo sayfasını aç</Link> : 'Sistem yöneticisine iletin.'}
+          </span>
+        </p>
+      )}
       <Tablo<IrsaliyeListeSatiri>
         etiket={yon === 'alis' ? 'Alış irsaliyeleri' : 'Satış irsaliyeleri'}
         sutunlar={SUTUNLAR}
@@ -119,7 +130,7 @@ export function LogoIrsaliyeleri({ yon }: { yon: IrsaliyeYonu }) {
         satirAnahtari={anahtarMetni}
         satirSec={(s) => { seciliYaz({ firma: s.firma, donem: s.donem, kayitNo: s.kayitNo }); }}
         mesgul={q.isPlaceholderData}
-        bosMesaj={suzgecsiz ? 'Bu dönemde irsaliye yok' : 'Süzgece uyan irsaliye yok'}
+        bosMesaj={v.okuma.sonHata !== null ? 'Son okuma yapılamadığı için liste güncel olmayabilir.' : suzgecsiz ? 'Bu dönemde irsaliye yok' : 'Süzgece uyan irsaliye yok'}
         arac={{
           arama: { deger: ara, degistir: degistir(araYaz), etiket: 'İrsaliye ara', yerTutucu: 'Fiş no, belge no, cari ya da malzeme' },
           suzgec: {
