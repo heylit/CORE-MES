@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
+import { EMIR_TURU_ADLARI, type EMIR_TURLERI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi, SiparisRevizyonGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
@@ -10,13 +10,19 @@ import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import type { SecilenFirma } from './FirmaSecici.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
-import { KalemPartileri, type PartiDegeri, partiAnahtari } from './KalemPartileri.tsx';
 import { KartArama } from './KartArama.tsx';
 import { secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { MusteriArama } from './MusteriArama.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useFiyatGorur, useKorumaliGonderim } from './yazma.ts';
 import './siparisler.css';
+
+// 3429-4 (3429-2 E b): kalem siparişte partilere bölünmez; onayda tek seri emir açılır, bölme üretim emrinde yapılır. Eski kayıtların
+// partileri değişmeden geri gider (rotaId null: emir türünün rotası; elle seçilmiş eski rota korunur).
+type EmirTuru = (typeof EMIR_TURLERI)[number];
+interface PartiDegeri { anahtar: number; emirTuru: EmirTuru; adet: string; rotaId: number | null }
+let partiSayaci = 0;
+const partiAnahtari = (): number => ++partiSayaci;
 
 interface SatirDegeri {
   anahtar: number;
@@ -107,9 +113,15 @@ const dogrula = (yeniSurum: boolean) => (d: Degerler): AlanHatalari => {
     if (belirsizSayi(s.birimFiyat)) hata[`satirlar.${i}.birimFiyat`] = BELIRSIZ_SAYI;
     if (s.partiler.some((p) => p.adet.trim() === '')) hata[`satirlar.${i}.partiler`] = 'Parti adedini girin ya da partiyi silin.';
     else if (s.partiler.some((p) => belirsizSayi(p.adet))) hata[`satirlar.${i}.partiler`] = BELIRSIZ_SAYI;
+    else if (s.partiler.length > 0 && s.miktar.trim() !== '' && !belirsizSayi(s.miktar) && binde(s.miktar) !== s.partiler.reduce((t, p) => t + binde(p.adet), 0)) {
+      hata[`satirlar.${i}.partiler`] = 'Miktar eski partilerle tutmuyor; "Partileri kaldır" ile kalemi tek seri emre çevirin.';
+    }
   });
   return hata;
 };
+
+// SIP-18 sunucuda da denetler; eski partili kalemde miktar değişince ekranda parti düzenleyicisi olmadığı için çıkış "Partileri kaldır"dır.
+const binde = (v: string): number => Math.round(Number(sayiGirdisi(v)) * 1000);
 
 const alanEsle = (alan: string): string => (alan === 'firmaId' ? 'firma' : alan.replace(/^(satirlar\.\d+)\.malzemeNo$/, '$1.kart'));
 
@@ -312,19 +324,24 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                       )}
                   </div>
                 </div>
-                {sabit ? (
+                <div className="tc-sp-kalem-cesit" aria-label={`Kalem ${i + 1} üretim çeşidi`}>
                   <span className="tc-sp-parti-cipleri">
                     {s.partiler.length === 0
-                      ? <Rozet ton="bilgi" gorunum="cizgi">{`${s.miktar} Seri`}</Rozet>
+                      ? <Rozet ton="bilgi" gorunum="cizgi">{`${s.miktar === '' ? '' : `${s.miktar} `}Seri`}</Rozet>
                       : s.partiler.map((p) => <Rozet key={p.anahtar} ton="bilgi" gorunum="cizgi">{`${p.adet} ${EMIR_TURU_ADLARI[p.emirTuru]}`}</Rozet>)}
                   </span>
-                ) : <KalemPartileri
-                  sira={i + 1}
-                  miktar={s.miktar}
-                  partiler={s.partiler}
-                  degistir={(partiler) => satirDegistir(i, { partiler })}
-                  {...(form.hata(`satirlar.${i}.partiler`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.partiler`) })}
-                />}
+                  {!sabit && (
+                    <span className="tc-sp-parti-bos">
+                      {s.partiler.length === 0 ? 'Onayda tek emir açılır; FAI, numune gibi partiler üretim emrinde bölünür.' : `Eski kayıt: partiler değişmeden kalır; yeni bölme üretim emrinde yapılır.${s.partiler.some((p) => p.rotaId !== null) ? ' Elle seçilmiş rota korunur.' : ''}`}
+                    </span>
+                  )}
+                  {!sabit && !yalnizTermin && s.partiler.length > 0 && (
+                    <span>
+                      <Dugme simge="trash" onClick={() => satirDegistir(i, { partiler: [] })}>Partileri kaldır</Dugme>
+                    </span>
+                  )}
+                  {form.hata(`satirlar.${i}.partiler`) !== undefined && <span className="tc-sp-hata" role="alert">{form.hata(`satirlar.${i}.partiler`)}</span>}
+                </div>
                 <Girdi
                   etiket={`Kalem ${i + 1} açıklama`}
                   autoComplete="off"
