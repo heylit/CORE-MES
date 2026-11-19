@@ -4,7 +4,8 @@ import { describe, test } from 'node:test';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { degerlendirmeKodu } from './degerlendirme.ts';
 import { coz } from './plan-cozucusu.ts';
-import { cozumGirdisi } from './plan-girdisi.ts';
+import { calismaPlani, cozumGirdisi } from './plan-girdisi.ts';
+import { calismaIsleri } from './planlama-kurallar.ts';
 
 // 3457: Kokpit'in plan kaydı yerleşmeyen adımın 'zaman' nedenini alt nedene indirir (motor/engine.js zamanTanisi, degerlendir.js
 // failNedenKaydi). Alt neden sunucu iletisinin (2780 zamanNedeni) koduyla aynıdır; ikisi aynı ölçüyü (zamanOlcusu) okur.
@@ -130,5 +131,27 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
     assert.deepEqual(tani(z([a('A', 'bosSaat: 20'), a('B', 'bosSaat: 50')])), { alt: 'dolu', m: 'B', ad: 'ORN-B', gerek: 100, mevcut: 50, ufukGun: 120 });
     assert.equal(tani(z([])).alt, 'bilinmiyor');
     assert.equal(tani('null').alt, 'bilinmiyor');
+  });
+  // ZT-07 (Test T1-T3, 3457-3): kayıtlı plandan canlıya yazıma kadar ufka taşan iş: plan kaydı ufukDisi ve ufukEksik taşır, özet geç sayar,
+  // sunucunun okuduğu çalışma planı ufukDisi'ni korur ve taslak yazımı onu yazılamaz sayar.
+  test('ZT-07: ufka taşan iş plan kaydında, özette ve çalışma planında görünür; canlıya yazılmaz', () => {
+    const k = kaynak(30, 60_000, [V], V, 1);
+    // Termin ufkun sonundan sonra: bitiş (ufuk sonu) terminden önce görünse de iş geç sayılır.
+    (k.kaynak.durum.emirler.orders[0] as { due: string }).due = '2027-06-30';
+    const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    vm.runInContext(degerlendirmeKodu(), b); b['durum'] = g.st;
+    const kayit = JSON.parse(vm.runInContext(`(() => { const st = stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }); const cx = compile(st);
+      return JSON.stringify(planKaydi(schedule(st, 'dagit', null, { cx }), st)); })()`, b) as string) as {
+      ops: Record<string, { ufukDisi?: number }>; J: Record<string, { ufukEksik?: number }>; ozet: { late: number; onT: number } };
+    const [id, op] = Object.entries(kayit.ops)[0]!;
+    assert.ok((op.ufukDisi ?? 0) > 0, JSON.stringify(op));
+    assert.ok((Object.values(kayit.J)[0]?.ufukEksik ?? 0) > 0, JSON.stringify(kayit.J));
+    assert.deepEqual([kayit.ozet.late, kayit.ozet.onT], [1, 0]);
+    const c = calismaPlani({ ...k, calisma: { ...k.calisma, plan: kayit } } as never, Date.parse(ISTEK.simdi));
+    const islem = c?.ops?.find((x) => x.id === id);
+    assert.equal(islem?.ufukDisi, op.ufukDisi);
+    const r = calismaIsleri(c?.ops ?? [], c?.kimlik ?? {}, new Set(Object.values(c?.kimlik ?? {})));
+    assert.deepEqual([r.yazilacak, r.yazilamaz], [[], [c?.kimlik[id]]]);
   });
 });
