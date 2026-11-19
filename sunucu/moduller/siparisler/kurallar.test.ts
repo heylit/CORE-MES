@@ -10,7 +10,7 @@ import {
   SIPARIS_ARSIVDE, SIPARIS_ARSIVDE_DEGIL, SIPARIS_ARSIVLENEMEZ, siparisArsivReddi,
   REVIZYON_KALEM_SABIT, REVIZYON_SABIT_ALAN, REVIZYON_YALNIZ_ONAYLI, degisiklikFiyatsiz, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi,
   FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
-  KAPANIS_GEREKCESI, kapanisReddi,
+  KAPANIS_GEREKCESI, kapanisReddi, BAGLI_ACIK_TALEP, bagliTalepReddi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -156,6 +156,12 @@ describe('SIP-42 karşılama yolu (saf)', () => {
     assert.equal(kalemKarsilamasi('mamul', undefined), 'uret');
     assert.equal(kalemKarsilamasi('yarimamul', 'stok'), 'stok');
     assert.equal(kalemKarsilamasi(null, undefined), 'uret');
+  });
+  test('SIP-44 (3429-3 F3): açık satın alma talebine bağlı kalem varken sipariş iptal edilmez; ileti talepleri sayar; öteki komutlar etkilenmez', () => {
+    assert.equal(bagliTalepReddi('iptal', []), null);
+    assert.equal(bagliTalepReddi('geri-al', ['ST-1']), null);
+    assert.equal(bagliTalepReddi('iptal', ['ST-1', 'ST-2']), `${BAGLI_ACIK_TALEP}: ST-1, ST-2.`);
+    assert.equal(bagliTalepReddi('iptal', ['A', 'B', 'C', 'D', 'E', 'F', 'G']), `${BAGLI_ACIK_TALEP}: A, B, C, D, E ve 2 talep daha.`);
   });
 });
 

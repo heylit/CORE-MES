@@ -37,6 +37,10 @@ const PLAN_TALEBI: OnTalep = {
   kaynak: 'plan', malzeme: { no: 7, kod: 'HM-00007', ad: 'Deneme rulman' }, miktar: 6.5, birim: 'adet', gerekenTarih: '2026-11-10',
   emirler: ['UE-000031', 'UE-000032'], stokBilinmiyor: true, hesap: { eksik: 10, siparis: 2, talep: 1.5, yoksayilan: 0 },
 };
+const SATIS_TALEBI: OnTalep = {
+  kaynak: 'siparis', siparisSatiriId: 81, siparisId: 8, siparisNo: 'ORN-SS-008', musteriAdi: 'Deneme Müşteri', malzeme: { no: 7, kod: 'HM-00007', ad: 'Deneme rulman' },
+  miktar: '4.5', birim: 'adet', gerekenTarih: '2026-11-20',
+};
 let onListe: OnTalepleriCevabi = ON_TALEPLER;
 let kartListesi: MalzemeSecenekleriCevabi = KARTLAR;
 
@@ -536,13 +540,47 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     ]]);
   });
 
+  it('3429-3 F3: satış siparişi kalemi siparişiyle görünür, yoksayılmaz; talebe çevirince kart, miktar ve sipariş kalemiyle gider', async () => {
+    onListe = { onTalepler: [SATIS_TALEBI], yoksayilanlar: [] };
+    const cagrilar = sunucuKur();
+    sar(<TaleplerimSayfasi />);
+    expect(await screen.findByText('ORN-SS-008')).toBeTruthy();
+    expect(screen.getByText(/Deneme Müşteri/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yoksay' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Talebe çevir' }));
+    expect(screen.getByRole('button', { name: 'Malzeme' }).getAttribute('aria-pressed')).toBe('true');
+    expect((screen.getByRole('button', { name: 'Hizmet' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Satış siparişi', { selector: '.sa-talep-kaynak *' })).toBeTruthy();
+    expect(screen.getByText(/Kart siparişteki karttır/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Değiştir' })).toBeNull();
+    expect((screen.getByLabelText('İstenen tarih') as HTMLInputElement).value).toBe('2026-11-20');
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    const g = cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as Record<string, unknown>;
+    expect([g.tur, g.kalemler]).toEqual(['malzeme', [
+      { malzemeNo: 7, ad: '', birim: '', miktar: '4.5', aciklama: '', uygulananMalzemeNo: null, isEmriId: null, satisSiparisSatiriId: 81 },
+    ]]);
+  });
+
+  it('3429-3 F3: satış kalemi ile plan ihtiyacı aynı malzeme talebinde birleşir; fason adımla birleşmez', async () => {
+    onListe = { onTalepler: [ON_TALEP, PLAN_TALEBI, SATIS_TALEBI], yoksayilanlar: [] };
+    sunucuKur();
+    sar(<TaleplerimSayfasi />);
+    fireEvent.click(await screen.findByLabelText('HM-00007 seç'));
+    fireEvent.click(screen.getByLabelText('ORN-SS-008 HM-00007 seç'));
+    expect((screen.getByRole('button', { name: 'Tek talepte birleştir' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByLabelText('UE-000031 Op 30 Deneme ısıl işlem seç'));
+    expect(screen.getByText(/fason adım ile malzeme ihtiyacı ayrı talep olur/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Tek talepte birleştir' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('898 a Dal 2: fason adım ve plan ihtiyacı birlikte seçilince birleştirme kapalıdır', async () => {
     onListe = { onTalepler: [ON_TALEP, PLAN_TALEBI], yoksayilanlar: [] };
     sunucuKur();
     sar(<TaleplerimSayfasi />);
     fireEvent.click(await screen.findByLabelText('UE-000031 Op 30 Deneme ısıl işlem seç'));
     fireEvent.click(screen.getByLabelText('HM-00007 seç'));
-    expect(screen.getByText(/fason adım ve plan ihtiyacı ayrı talep olur/)).toBeTruthy();
+    expect(screen.getByText(/fason adım ile malzeme ihtiyacı ayrı talep olur/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Tek talepte birleştir' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

@@ -9,7 +9,7 @@ import {
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikBol, sonAlisKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
-import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
+import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, satisBagReddi, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
 import { basamakEsigiReddi, fiyatsizGorunum } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
@@ -464,6 +464,18 @@ test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açı
   assert.equal(uygulananKartReddi(undefined), ILETILER.uygulananKartYok);
   assert.equal(uygulananKartReddi({ tur: 'hizmet' }), ILETILER.uygulananHizmet);
   assert.equal(uygulananKartReddi({ tur: 'mamul' }), null);
+});
+
+test('SAT-83 (3429-3 F3): satış siparişi kalemi yalnız malzeme talebinde, bir kez, ön talepteyken ve siparişteki kartla açılır', () => {
+  const bekleyen = (id: number) => (id === 5 ? 40 : undefined);
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: 40 }], bekleyen), null);
+  assert.equal(satisBagReddi('hizmet', [{ malzemeNo: 40 }], bekleyen), null, 'bağsız kalem denetlenmez');
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: 40, satisSiparisSatiriId: 5 }, { malzemeNo: 41, satisSiparisSatiriId: null }], bekleyen), null);
+  assert.equal(satisBagReddi('hizmet', [{ malzemeNo: 40, satisSiparisSatiriId: 5 }], bekleyen), ILETILER.satisYalnizMalzemede);
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: 40, satisSiparisSatiriId: 5 }, { malzemeNo: 40, satisSiparisSatiriId: 5 }], bekleyen), ILETILER.satisTekrar);
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: 40, satisSiparisSatiriId: 6 }], bekleyen), ILETILER.satisOnTalepYok);
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: 41, satisSiparisSatiriId: 5 }], bekleyen), ILETILER.satisKartFarkli);
+  assert.equal(satisBagReddi('malzeme', [{ malzemeNo: null, satisSiparisSatiriId: 5 }], bekleyen), ILETILER.satisKartFarkli);
 });
 
 test('SA-FAS-1 (2428): fason kalemi tek kaynak taşır; partide işlem, parça ve tam sayı adet; parti yalnız fasonda; fasonda bağ serbest', () => {

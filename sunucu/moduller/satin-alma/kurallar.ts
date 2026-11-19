@@ -237,6 +237,10 @@ export const ILETILER = {
   fasonTekrar: 'Aynı fason adım talepte iki kez var.',
   onTalepYoksayYok: 'Yoksayma kaydı bulunamadı; sayfayı yenileyin.',
   planOnTalepYok: 'Bu malzeme için plan ön talebi yok: ihtiyaç karşılandı ya da plan değişti. Sayfayı yenileyin.',
+  satisOnTalepYok: 'Bu satış siparişi kalemi için ön talep yok: onay geri alındı, yolu değişti ya da talebi zaten açıldı. Sayfayı yenileyin.',
+  satisYalnizMalzemede: 'Satış siparişi kalemi yalnız malzeme talebine girer.',
+  satisKartFarkli: 'Kalemin kartı satış siparişindeki kartla aynı olmalı.',
+  satisTekrar: 'Aynı satış siparişi kalemi talepte iki kez var.',
   planIhtiyaciTekrar: 'Aynı malzeme plan ihtiyacı listesinde iki kez var.',
 } as const;
 
@@ -1367,6 +1371,23 @@ export function hizliBagReddi(
     const emir = fasonEmri(i);
     if (emir === undefined) return ILETILER.fasonOnTalepYok;
     if (emirId !== null && emir !== emirId) return ILETILER.fasonEmirFarkli;
+  }
+  return null;
+}
+// SAT-83 (3429-3 F3): satış siparişinden gelen kalem malzeme talebindedir, kalem başına bir kez ve siparişteki kartla açılır; kalem hâlâ
+// ön talepte olmalıdır (onaylı, "Satın al", açık talebe bağsız). `bekleyen` kalemin kartını döner, ön talepte değilse undefined.
+export function satisBagReddi(
+  tur: TalepTuru, kalemler: readonly { malzemeNo: number | null; satisSiparisSatiriId?: number | null | undefined }[],
+  bekleyen: (satirId: number) => number | undefined,
+): string | null {
+  const bagli = kalemler.filter((k) => (k.satisSiparisSatiriId ?? null) !== null);
+  if (bagli.length === 0) return null;
+  if (tur !== 'malzeme') return ILETILER.satisYalnizMalzemede;
+  if (new Set(bagli.map((k) => k.satisSiparisSatiriId)).size !== bagli.length) return ILETILER.satisTekrar;
+  for (const k of bagli) {
+    const kart = bekleyen(k.satisSiparisSatiriId!);
+    if (kart === undefined) return ILETILER.satisOnTalepYok;
+    if (k.malzemeNo !== kart) return ILETILER.satisKartFarkli;
   }
   return null;
 }

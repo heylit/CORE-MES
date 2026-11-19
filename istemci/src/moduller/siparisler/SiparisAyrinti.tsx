@@ -46,7 +46,7 @@ const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string
   // SIP-19 (3254 a): onay geri alınır, sipariş taslağa döner; emre bağlı kalemde yalnız termin değişir.
   'onay-geri-al': {
     baslik: 'Onayı geri al', dugme: 'Onayı geri al', basari: 'Onay geri alındı; sipariş taslakta.',
-    govde: 'Sipariş taslağa döner. Üretim emri açılmış kalemlerde yalnız termin değişir. Yeniden onaylanınca bağlı proje bitişi ve başlamamış emir teslimi yeni termine kayar. Nedeni yazın.',
+    govde: 'Sipariş taslağa döner. Üretim emri ya da satın alma talebi açılmış kalemlerde yalnız termin değişir. Yeniden onaylanınca bağlı proje bitişi ve başlamamış emir teslimi yeni termine kayar. Nedeni yazın.',
   },
 };
 const GEREKCELI: ReadonlySet<Komut> = new Set(['iptal', 'onay-geri-al']);
@@ -168,7 +168,7 @@ export function SiparisAyrinti() {
         <span className="tc-sp-kalem-termin">
           {tarihMetni(m.termin ?? s.termin)}
           {m.termin === null || m.termin === s.termin ? <Rozet ton="pasif" gorunum="cizgi">Sipariş termini</Rozet> : <Rozet ton="uyari" gorunum="cizgi">Elle</Rozet>}
-          {m.emreBagli && <Rozet ton="bilgi" gorunum="cizgi">Emre bağlı</Rozet>}
+          {m.emreBagli && <Rozet ton="bilgi" gorunum="cizgi">{m.karsilama === 'satin-al' ? 'Talebe bağlı' : 'Emre bağlı'}</Rozet>}
         </span>
       ),
     },
@@ -224,7 +224,7 @@ export function SiparisAyrinti() {
       )}
       {s.durum === 'taslak' && emreBagliVar && (
         <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
-          <strong>Onay geri alındı</strong> Üretim emri açılmış kalemlerde yalnız termin değişir. Yeniden onaylanana kadar bu siparişten proje ya da emir açılmaz.
+          <strong>Onay geri alındı</strong> Üretim emri ya da satın alma talebi açılmış kalemlerde yalnız termin değişir. Yeniden onaylanana kadar bu siparişten proje ya da emir açılmaz.
         </p>
       )}
       {fiyatGorur && s.durum === 'taslak' && sifirFiyatliKalem > 0 && (

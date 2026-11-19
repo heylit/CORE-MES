@@ -247,7 +247,7 @@ export async function stoktanKarsila(db: Db, kul: Kullanici, g: z.output<typeof 
   await sorgular.ayirmaKilidi(db);
   const [k] = await stokKontroluKalemleri(db, 1, { talepId: g.talepId, kalemId: g.kalemId });
   if (k === undefined) throw bulunamadi('Teklif istenmemiş talepte bu kalem bulunamadı.');
-  if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
+  if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp, satış siparişi ya da teklife bağlı; stoktan karşılanamaz.');
   const b = await baglamKur(db, [k.malzemeNo]);
   const d = await kalemiDegerlendir(db, k, b);
   const istenen = Number(g.miktar);

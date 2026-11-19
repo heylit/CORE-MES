@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FasonOnTalep, OnTalep, PlanOnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { FasonOnTalep, OnTalep, PlanOnTalep, SiparisOnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { SURE, anahtarlar, cagri, gunYaz } from './ortak.ts';
 import './talep.css';
 
-const NEDENLER: Record<OnTalep['kaynak'], readonly string[]> = {
+// 3429-3 F3: satış siparişi kalemi yoksayılmaz; kalem siparişte değişir (yol ya da onay).
+type YoksayilanOnTalep = FasonOnTalep | PlanOnTalep;
+const NEDENLER: Record<YoksayilanOnTalep['kaynak'], readonly string[]> = {
   fason: ['Atölyede yapılacak, fasona gitmeyecek', 'Başka talepte var', 'Stoktan ya da hazır parçadan karşılanacak', 'Diğer'],
   plan: ['Stokta var, sayım güncel değil', 'Başka talepte ya da siparişte var', 'Plan değişecek', 'Diğer'],
 };
@@ -21,8 +23,10 @@ function aciliyet(gerekenTarih: string | null, gun: number | null, bugun: Date):
   return kalan < 0 ? 'gec' : kalan <= 2 ? 'bugun' : null;
 }
 const adimAdi = (o: { opNo: number; adim: string | null }) => `Op ${o.opNo}${o.adim ? ` ${o.adim}` : ''}`;
-const anahtar = (o: OnTalep) => (o.kaynak === 'fason' ? `f${o.isEmriId}` : `p${o.malzeme.no}`);
+const anahtar = (o: OnTalep) => (o.kaynak === 'fason' ? `f${o.isEmriId}` : o.kaynak === 'plan' ? `p${o.malzeme.no}` : `s${o.siparisSatiriId}`);
 const baslik = (o: OnTalep) => (o.kaynak === 'fason' ? `${o.emirNo} ${adimAdi(o)}` : `${o.malzeme.kod} ${o.malzeme.ad}`);
+// Fason adım hizmet, plan ihtiyacı ve satış kalemi malzeme talebi açar; aynı türdekiler birleşir.
+const talepTuru = (o: OnTalep) => (o.kaynak === 'fason' ? 'hizmet' : 'malzeme');
 const sayi = (n: number) => n.toLocaleString('tr-TR', { maximumFractionDigits: 4 });
 
 function AciliyetRozeti({ a }: { a: 'gec' | 'bugun' | null }) {
@@ -67,6 +71,33 @@ function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun }: {
   );
 }
 
+// 3429-3 F3: onaylı satış siparişinin "Satın al" kalemi. Miktar kalemin, gereken tarih kalemin (yoksa siparişin) termini.
+function SiparisSatiri({ o, secili, sec, cevir, bugun }: {
+  o: SiparisOnTalep; secili: boolean; sec: (v: boolean) => void; cevir: () => void; bugun: Date;
+}) {
+  return (
+    <li className={`sa-ot${secili ? ' sa-ot-secili' : ''}`}>
+      <IsaretKutusu etiket={`${o.siparisNo} ${o.malzeme.kod} seç`} checked={secili} onChange={(e) => sec(e.target.checked)} className="sa-ot-sec" />
+      <div className="sa-ot-govde">
+        <div className="sa-talep-satir-ust">
+          <Rozet ton="uyari" gorunum="cizgi">Satış siparişi</Rozet>
+          <b>{o.malzeme.ad || o.malzeme.kod}</b>
+          <span className="sa-talep-no">{o.miktar.replace('.', ',')} {o.birim}</span>
+          <span className="sa-talep-not">termin {gunYaz(o.gerekenTarih)}</span>
+          <AciliyetRozeti a={aciliyet(o.gerekenTarih, 0, bugun)} />
+        </div>
+        <div className="sa-ot-bilgi">
+          <span><Simge ad="box" boyut="k" /> <span className="sa-talep-no">{o.malzeme.kod}</span></span>
+          <span><Simge ad="file" boyut="k" /> <span className="sa-talep-no">{o.siparisNo}</span>{o.musteriAdi ? ` · ${o.musteriAdi}` : ''}</span>
+        </div>
+      </div>
+      <div className="sa-ot-eylem">
+        <Dugme tur="birincil" simge="check" onClick={cevir}>Talebe çevir</Dugme>
+      </div>
+    </li>
+  );
+}
+
 function Satir({ o, secili, sec, cevir, yoksay, bugun }: {
   o: FasonOnTalep; secili: boolean; sec: (v: boolean) => void; cevir: () => void; yoksay: () => void; bugun: Date;
 }) {
@@ -101,7 +132,7 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
   const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.onTalepler, queryFn: () => cagri.get('/satin-alma-on-talepleri', SURE) });
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(new Set());
-  const [yoksayilan, yoksayilanYaz] = useState<OnTalep | null>(null);
+  const [yoksayilan, yoksayilanYaz] = useState<YoksayilanOnTalep | null>(null);
   const [neden, nedenYaz] = useState<string>(NEDENLER.fason[0]!);
   const [not, notYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
@@ -109,7 +140,7 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
   const yenile = () => void istemci.invalidateQueries({ queryKey: anahtarlar.onTalepler });
   const iletisi = (h: unknown) => (h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Kaydedilemedi; yeniden deneyin.');
   const yoksay = useMutation({
-    mutationFn: (g: { o: OnTalep; neden: string }) => cagri.post('/satin-alma-on-talepleri/yoksay', {
+    mutationFn: (g: { o: YoksayilanOnTalep; neden: string }) => cagri.post('/satin-alma-on-talepleri/yoksay', {
       govde: g.o.kaynak === 'fason' ? { kaynak: 'fason', isEmriId: g.o.isEmriId, neden: g.neden } : { kaynak: 'plan', malzemeNo: g.o.malzeme.no, neden: g.neden },
       ...SURE,
     }),
@@ -121,7 +152,7 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
     onSuccess: yenile,
     onError: (h) => bildir('hata', iletisi(h)),
   });
-  const ac = (o: OnTalep) => { yoksayilanYaz(o); nedenYaz(NEDENLER[o.kaynak][0]!); notYaz(''); hataYaz(null); };
+  const ac = (o: YoksayilanOnTalep) => { yoksayilanYaz(o); nedenYaz(NEDENLER[o.kaynak][0]!); notYaz(''); hataYaz(null); };
   const kaydet = () => {
     if (yoksayilan === null) return;
     const metin = (neden === DIGER ? not.trim() : [neden, not.trim()].filter(Boolean).join(': ')).slice(0, 200);
@@ -132,13 +163,13 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
   const ontalepler = liste.data?.onTalepler ?? [];
   const fasonlar = ontalepler.filter((o): o is FasonOnTalep => o.kaynak === 'fason');
   const planlar = ontalepler.filter((o): o is PlanOnTalep => o.kaynak === 'plan');
+  const satislar = ontalepler.filter((o): o is SiparisOnTalep => o.kaynak === 'siparis');
   const secilenler = ontalepler.filter((o) => secili.has(anahtar(o)));
   const isaretle = (k: string, v: boolean) => seciliYaz((s) => { const y = new Set(s); if (v) y.add(k); else y.delete(k); return y; });
-  const karisik = new Set(secilenler.map((o) => o.kaynak)).size > 1;
+  const karisik = new Set(secilenler.map(talepTuru)).size > 1;
   const emirler = new Set(secilenler.flatMap((o) => (o.kaynak === 'fason' ? [o.uretimEmriId] : [])));
-  const satirOzellikleri = (o: OnTalep) => ({
-    bugun, secili: secili.has(anahtar(o)), sec: (v: boolean) => isaretle(anahtar(o), v), cevir: () => cevir([o]), yoksay: () => ac(o),
-  });
+  const secimOzellikleri = (o: OnTalep) => ({ bugun, secili: secili.has(anahtar(o)), sec: (v: boolean) => isaretle(anahtar(o), v), cevir: () => cevir([o]) });
+  const satirOzellikleri = (o: YoksayilanOnTalep) => ({ ...secimOzellikleri(o), yoksay: () => ac(o) });
 
   return (
     <Kart baslik="Ön talepler">
@@ -155,11 +186,14 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
               <h3 className="sa-ot-grup"><Simge ad="box" boyut="k" /> Plan ihtiyacı <span className="sa-talep-not">canlı planın stokla, açık sipariş ve taleple karşılanmayan malzemesi</span></h3>
               {planlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Canlı planda karşılanmayan malzeme yok." />
                 : <ul className="sa-talep-liste">{planlar.map((o) => <PlanSatiri key={anahtar(o)} o={o} {...satirOzellikleri(o)} />)}</ul>}
+              <h3 className="sa-ot-grup"><Simge ad="file" boyut="k" /> Satış siparişi kalemleri <span className="sa-talep-not">onaylı siparişte "Satın al" yolundaki, talebi açılmamış; yoksayılmaz, sipariş tarafında değişir</span></h3>
+              {satislar.length === 0 ? <DurumKutusu durum="bos" mesaj="Talebi bekleyen satış siparişi kalemi yok." />
+                : <ul className="sa-talep-liste">{satislar.map((o) => <SiparisSatiri key={anahtar(o)} o={o} {...secimOzellikleri(o)} />)}</ul>}
               {secilenler.length > 1 && (
                 <div className="sa-ot-serit" role="region" aria-label="Seçili ön talepler">
                   <span>
                     {secilenler.length} ön talep seçildi
-                    {karisik ? ' · fason adım ve plan ihtiyacı ayrı talep olur' : emirler.size > 1 ? ' · farklı emirler, talep emre bağlanmaz' : ''}
+                    {karisik ? ' · fason adım ile malzeme ihtiyacı ayrı talep olur' : emirler.size > 1 ? ' · farklı emirler, talep emre bağlanmaz' : ''}
                   </span>
                   <span className="sa-ot-eylem">
                     <Dugme onClick={() => seciliYaz(new Set())}>Seçimi kaldır</Dugme>

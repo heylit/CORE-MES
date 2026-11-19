@@ -46,3 +46,15 @@ export async function kapanisEksikleri(db: Db, siparisId: number): Promise<strin
   if (kapanisCozucusu === null) throw new Error('Sipariş kapatma için eksik çözücüsü kayıtlı değil (kablolama.ts).');
   return kapanisCozucusu(db, siparisId);
 }
+
+// SIP-44 (3429-3 F3): kalemlere bağlı açık satın alma taleplerinin numaraları (iptal reddi). Satın alma bu modülü ithal etmez; karşılık
+// kablolama.ts'te kaydedilir. Kayıtsızken iptal sessizce geçmez.
+export type BagliTalepCozucusu = (db: Db, satirIdleri: readonly number[]) => Promise<string[]>;
+
+let talepCozucusu: BagliTalepCozucusu | null = null;
+export function bagliTalepCozucusuKaydet(c: BagliTalepCozucusu | null): void { talepCozucusu = c; }
+
+export async function bagliTalepler(db: Db, satirIdleri: readonly number[]): Promise<string[]> {
+  if (talepCozucusu === null) throw new Error('Sipariş iptali için bağlı talep çözücüsü kayıtlı değil (kablolama.ts).');
+  return satirIdleri.length === 0 ? [] : talepCozucusu(db, satirIdleri);
+}

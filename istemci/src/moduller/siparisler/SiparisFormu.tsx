@@ -145,7 +145,7 @@ const karsilamaSecenekleri = (k: SecilenKart | null) => (uretilmezKart(k) ? KARS
 const KARSILAMA_IPUCU: Record<KarsilamaYolu, string | null> = {
   uret: null,
   stok: 'Emir açılmaz; onayda eldeki stok kadar depoya ayırma isteği açılır. Eksik kalan için istek açılmaz.',
-  'satin-al': 'Emir açılmaz; kalem satın alınarak karşılanır.',
+  'satin-al': 'Emir açılmaz; onayda satın almanın ön talep listesine düşer, talebi satın alma açar.',
 };
 const karsilamaIpucu = (y: KarsilamaYolu): { ipucu?: string } => { const m = KARSILAMA_IPUCU[y]; return m === null ? {} : { ipucu: m }; };
 
@@ -302,8 +302,8 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
               <li key={s.anahtar} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
                 <div className="tc-sp-kalem-ust">
                   <strong>{`Kalem ${i + 1}`}</strong>
-                  {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">Emre bağlı</Rozet>}
-                  {yalnizTermin && <span className="tc-sp-parti-bos">Üretim emri açıldı; yalnız termin değişir.</span>}
+                  {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">{s.karsilama === 'satin-al' ? 'Talebe bağlı' : 'Emre bağlı'}</Rozet>}
+                  {yalnizTermin && <span className="tc-sp-parti-bos">{s.karsilama === 'satin-al' ? 'Satın alma talebi açıldı; yalnız termin değişir.' : 'Üretim emri açıldı; yalnız termin değişir.'}</span>}
                   {d.satirlar.length > 1 && !sabit && (
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}

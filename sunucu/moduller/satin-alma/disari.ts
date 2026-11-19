@@ -138,6 +138,11 @@ export const onayliListeCozucusu = (cozucu: servis.OnayliListeCozucusu): void =>
 // 2424: dış operasyonlarda planlanan gidiş canlı plandan (plan satın almayı okuduğu için bağ kablolamada).
 export const fasonKonumuCozucusu = (cozucu: servis.FasonKonumuCozucusu): void => servis.fasonKonumuCozucusuKaydet(cozucu);
 export const planlananGidisCozucusu = (cozucu: servis.PlanlananGidisCozucusu): void => servis.planlananGidisCozucusuKaydet(cozucu);
+// 3429-3 F3: satış siparişinin "Satın al" kalemleri ön talep kaynağıdır; bağlı kalemler siparişte kilitlidir ve açık talep iptali durdurur
+// (siparişler satın almayı ithal etmez; bağlar kablolamada).
+export type { SatisSiparisiKalemi, SatisSiparisiKalemCozucusu } from './servis.ts';
+export const satisSiparisiKalemCozucusu = (cozucu: servis.SatisSiparisiKalemCozucusu | null): void => servis.satisSiparisiKalemCozucusuKaydet(cozucu);
+export { satisSatiriAcikTalepleriKilitle, satisSatiriAcikTalepNolari, satisSatiriBagliKalemler } from './servis.ts';
 // Takvim (891): beklenen teslim günündeki siparişler. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
@@ -185,7 +190,7 @@ export async function kalemiStoktanKarsila(db: Db, talepId: string, kalemId: str
   const k = await sorgu.stoktanKalemKilitle(db, talepId, kalemId);
   if (k === null) throw bulunamadi('Talep kalemi bulunamadı.');
   if (k.durum !== 'taslak') throw gecersiz('Teklif istenmiş talepte stoktan karşılanamaz.');
-  if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp ya da teklife bağlı; stoktan karşılanamaz.');
+  if (k.engel !== null) throw gecersiz('Bu kalem Logo, iş emri, kalıp, satış siparişi ya da teklife bağlı; stoktan karşılanamaz.');
   if (k.malzemeNo === null || k.miktar === null) throw gecersiz('Kalemin malzeme kartı ya da miktarı yok.');
   if (Number(miktar) > Number(k.miktar) + 1e-9) throw dogrulama(`Kalemde ${servis.sade(k.miktar)} ${k.birim} var; daha fazlası karşılanamaz.`, 'miktar');
   const satir = await sorgu.stoktanKalemAzalt(db, talepId, kalemId, miktar);

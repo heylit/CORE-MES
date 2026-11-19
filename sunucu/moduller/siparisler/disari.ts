@@ -28,6 +28,11 @@ export { kalemEmirCozucusuKaydet as kalemEmirCozucusu } from './bagli-emirler.ts
 export type { KalemEmirCozucusu } from './bagli-emirler.ts';
 // 3429-1: kapatma kapısının eksikleri (sevk, fatura) siparişin akışından gelir.
 export { kapanisEksigiCozucusuKaydet as kapanisEksigiCozucusu } from './bagli-emirler.ts';
+// 3429-3 F3: "Satın al" kalemine bağlı açık talepler (iptal reddi) ve satın almanın ön talep kaynağı.
+export { bagliTalepCozucusuKaydet as bagliTalepCozucusu } from './bagli-emirler.ts';
+export type { BagliTalepCozucusu } from './bagli-emirler.ts';
+export { satinAlinacakKalemler } from './servis.ts';
+export type { SatinAlinacakKalem } from './servis.ts';
 export type { KapanisEksigiCozucusu } from './bagli-emirler.ts';
 export type { SiparisOnaylandiDinleyicisi, SiparisOnaylandiOlayi } from './siparis-olaylari.ts';
 // Teklif (soru 148): okuma, talep, sürüm, kabul, revizyon ya da red ve siparişe dönüşüm; hepsi siparisler.yaz.

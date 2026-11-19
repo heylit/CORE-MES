@@ -648,8 +648,11 @@ export const FATURA_EKSIGI: Readonly<Record<Exclude<FaturaDurumu, 'tam'>, string
   kismi: 'Faturalanan tutar sipariş tutarının altında.',
   karsilastirilamaz: 'Fatura tutarı sipariş tutarıyla karşılaştırılamadı (para birimi farklı); faturaları kontrol edin.',
 };
-export function kapanisEksikleri(kalemler: readonly AkisKalemi[], fatura: FaturaDurumu): string[] {
+// 3429-3 F3 (Risk N1): "Satın al" kalemine bağlı açık (iptal ya da teslim alınmamış) satın alma talebi de eksiktir; gerekçesiz kapanmaz.
+export const ACIK_TALEP_EKSIGI = 'Açık satın alma talebi';
+export function kapanisEksikleri(kalemler: readonly AkisKalemi[], fatura: FaturaDurumu, acikTalepler: readonly string[] = []): string[] {
   const eksik = kalemler.filter((k) => k.uretilir && k.sevkEdilen < k.miktar)
     .map((k) => `Kalem ${k.sira}: teslim edilen ${sayiMetni(k.sevkEdilen)} / ${sayiMetni(k.miktar)}.`);
+  if (acikTalepler.length > 0) eksik.push(`${ACIK_TALEP_EKSIGI}: ${acikTalepler.join(', ')}.`);
   return fatura === 'tam' ? eksik : [...eksik, FATURA_EKSIGI[fatura]];
 }
