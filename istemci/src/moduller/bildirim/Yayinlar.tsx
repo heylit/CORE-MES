@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BildirimYayini, BildirimYayinAlicilariCevabi, BildirimYayinListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
-import { DurumKutusu, Kart, OnayPenceresi, Sayfalama, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, OnayPenceresi, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { YAYIN_TURU, gecenZaman } from './gorunum.ts';
@@ -59,9 +59,22 @@ function Alicilar({ yayin }: { yayin: BildirimYayini }) {
   );
 }
 
-// Yayınlar ve okunma (2147): bildirim.yayinla kendi yayınlarını, bildirim.yayin-oku hepsini görür (sunucu süzer). Geri çekme
-// yalnız yazanındır; düğme yalnız kendi yayınında görünür.
-export function Yayinlar({ kisiId, secili: ilkSecili }: { kisiId: number | null; secili?: number | null }) {
+const oran = (n: number | null, toplam: number | null): number | null => (n === null || toplam === null || toplam === 0 ? null : Math.round((n / toplam) * 100));
+
+// 3456-2 a: okunma satırda çubukla görünür; sayı yoksa çubuk çizilmez (sıfır uydurulmaz).
+function OkunmaCubugu({ n, toplam, ad }: { n: number | null; toplam: number | null; ad: string }) {
+  const y = oran(n, toplam);
+  return (
+    <span className="tc-bildirim-okunma">
+      {y !== null && <progress className="tc-bildirim-cubuk" max={100} value={y} aria-label={`${ad} yüzde ${String(y)}`} />}
+      <span className="mono">{sayi(n, toplam)}</span>
+    </span>
+  );
+}
+
+// Duyurular (2147, 3456-2 a): tek sayfa; tablo, seçilen duyurunun okunması ve "Yeni duyuru" yan pencerede. bildirim.yayinla kendi
+// yayınlarını, bildirim.yayin-oku hepsini görür (sunucu süzer). Geri çekme yalnız yazanındır; düğme yalnız kendi yayınında görünür.
+export function Yayinlar({ kisiId, secili: ilkSecili, yeni }: { kisiId: number | null; secili?: number | null; yeni?: React.ReactNode }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [sayfa, sayfaYaz] = useState(1);
@@ -81,46 +94,52 @@ export function Yayinlar({ kisiId, secili: ilkSecili }: { kisiId: number | null;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   const v = liste.data;
   const acik = v.satirlar.find((y) => y.id === secili) ?? v.satirlar[0];
+  const sutunlar: Sutun<BildirimYayini>[] = [
+    {
+      anahtar: 'duyuru', baslik: 'Duyuru', kartTamSatir: true, csv: (y) => y.baslik,
+      hucre: (y) => {
+        const tur = YAYIN_TURU[y.tur];
+        return (
+          <span className="tc-bildirim-duyuru">
+            <span className={`tc-bildirim-simge tc-bildirim-${tur.ton}`} title={tur.ad}><Simge ad={y.simge} /></span>
+            <span className="tc-bildirim-govde">
+              <span className={`tc-bildirim-baslik${y.geriCekildi !== null ? ' tc-bildirim-geri' : ''}`}>{y.baslik}</span>
+              <span className="tc-bildirim-kaynak">
+                {tur.ad} · {hedefMetni(y)}{y.yazan.id !== kisiId ? ` · ${y.yazan.ad ?? ''}` : ''}
+                {y.geriCekildi !== null ? ' · geri çekildi' : y.dagitildi === null ? ' · zamanlandı' : ''}
+              </span>
+            </span>
+          </span>
+        );
+      },
+    },
+    { anahtar: 'okudu', baslik: 'Okudu', csv: (y) => sayi(y.okuyanSayisi, y.aliciSayisi), hucre: (y) => <OkunmaCubugu n={y.okuyanSayisi} toplam={y.aliciSayisi} ad="Okudu" /> },
+    {
+      anahtar: 'onayladi', baslik: 'Onayladı', csv: (y) => (y.onayIstenir ? sayi(y.onaylayanSayisi, y.aliciSayisi) : ''),
+      hucre: (y) => (y.onayIstenir ? <OkunmaCubugu n={y.onaylayanSayisi} toplam={y.aliciSayisi} ad="Onayladı" /> : <span className="tc-bildirim-kaynak">Onay istenmedi</span>),
+    },
+    { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, csv: (y) => y.yayinZamani, hucre: (y) => <span className="tc-bildirim-zaman">{gecenZaman(y.yayinZamani, new Date())}</span> },
+  ];
   return (
-    <div className="tc-bildirim-izgara">
-      <Kart baslik="Yayınlar">
-        {v.satirlar.length === 0 ? <BosListe metin="Henüz yayın yok." /> : (
-          <>
-            <ul className="tc-bildirim-liste">
-              {v.satirlar.map((y) => {
-                const tur = YAYIN_TURU[y.tur];
-                return (
-                  <li key={y.id} className="tc-bildirim-satir" aria-current={acik?.id === y.id ? 'true' : undefined}>
-                    <button type="button" className="tc-bildirim-ac" onClick={() => seciliYaz(y.id)} aria-label={`${y.baslik}, okunma`}>
-                      <span className="tc-bildirim-nokta" aria-hidden="true" />
-                      <span className={`tc-bildirim-simge tc-bildirim-${tur.ton}`} title={tur.ad}><Simge ad={y.simge} /></span>
-                      <span className="tc-bildirim-govde">
-                        <span className={`tc-bildirim-baslik${y.geriCekildi !== null ? ' tc-bildirim-geri' : ''}`}>{y.baslik}</span>
-                        <span className="tc-bildirim-kaynak">
-                          {tur.ad} · {hedefMetni(y)}{y.yazan.id !== kisiId ? ` · ${y.yazan.ad ?? ''}` : ''}
-                          {y.geriCekildi !== null ? ' · geri çekildi' : y.dagitildi === null ? ' · zamanlandı' : ''}
-                        </span>
-                        <span className="tc-bildirim-kaynak">
-                          Okudu {sayi(y.okuyanSayisi, y.aliciSayisi)}{y.onayIstenir ? ` · Onayladı ${sayi(y.onaylayanSayisi, y.aliciSayisi)}` : ''}
-                        </span>
-                      </span>
-                      <span className="tc-bildirim-zaman">{gecenZaman(y.yayinZamani, new Date())}</span>
-                    </button>
-                    {y.yazan.id === kisiId && y.geriCekildi === null && (
-                      <button type="button" className="tc-bildirim-arsivle" onClick={() => geriSorYaz(y)} aria-label={`Geri çek: ${y.baslik}`} title="Geri çek">
-                        <Simge ad="x" />
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <Sayfalama sayfa={v.sayfa} sayfaBoyu={v.sayfaBoyu} toplam={v.toplam} satirSayisi={v.satirlar.length} degistir={sayfaYaz} />
-          </>
-        )}
-      </Kart>
+    <>
+      <Tablo
+        etiket="Duyurular"
+        sutunlar={sutunlar}
+        satirlar={v.satirlar}
+        satirAnahtari={(y) => y.id}
+        satirSec={(y) => seciliYaz(y.id)}
+        bosMesaj="Henüz duyuru yok."
+        bosEylem={yeni}
+        arac={{ sag: yeni, csv: { ad: 'duyurular' } }}
+        sayfalama={{ sayfa: v.sayfa, sayfaBoyu: v.sayfaBoyu, toplam: v.toplam, degistir: sayfaYaz }}
+      />
       {acik !== undefined && (
-        <Kart baslik={`Okunma: ${acik.baslik}`}>
+        <Kart
+          baslik={`Okunma: ${acik.baslik}`}
+          sag={acik.yazan.id === kisiId && acik.geriCekildi === null ? (
+            <Dugme simge="x" onClick={() => geriSorYaz(acik)} aria-label={`Geri çek: ${acik.baslik}`}>Geri çek</Dugme>
+          ) : undefined}
+        >
           <Alicilar key={acik.id} yayin={acik} />
         </Kart>
       )}
@@ -137,6 +156,6 @@ export function Yayinlar({ kisiId, secili: ilkSecili }: { kisiId: number | null;
           <p>"{geriSor.baslik}" ortada artık çıkmaz; alıcıların merkezinde üstü çizili kalır. Geri alınamaz.</p>
         </OnayPenceresi>
       )}
-    </div>
+    </>
   );
 }

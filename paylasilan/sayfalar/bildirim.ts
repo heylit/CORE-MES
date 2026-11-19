@@ -15,35 +15,26 @@ export const BILDIRIM_IKINCI_MENU = {
       maddeler: [
         { anahtar: 'gelenler', baslik: 'Gelenler', yol: '/bildirim-merkezi', simge: 'bell', islem: 'sayfa.bildirim-merkezi' },
         { anahtar: 'gecikenlerim', baslik: 'Gecikenlerim', yol: '/bildirim-merkezi/gecikenlerim', simge: 'clock', islem: 'sayfa.bildirim-merkezi' },
-        { anahtar: 'arsiv', baslik: 'Arşiv', yol: '/bildirim-merkezi/arsiv', simge: 'layers', islem: 'sayfa.bildirim-merkezi' },
-      ],
-    },
-    {
-      baslik: 'Duyurular',
-      maddeler: [
-        { anahtar: 'hazirla', baslik: 'Hazırla', yol: '/bildirim-merkezi/hazirla', simge: 'plus', islem: 'bildirim.yayinla', okur: ['/bildirimler/yayinlar/hedefler'] },
+        // 3456-2 a: Arşiv Gelenler'de cip, yeni duyuru Duyurular sayfasında düğmedir.
         {
-          anahtar: 'yayinlar', baslik: 'Yayınlar ve okunma', yol: '/bildirim-merkezi/yayinlar', simge: 'eye', islem: 'bildirim.yayinla',
+          anahtar: 'yayinlar', baslik: 'Duyurular', yol: '/bildirim-merkezi/yayinlar', simge: 'eye', islem: 'bildirim.yayinla',
           veya: ['bildirim.yayin-oku'], okur: ['/bildirimler/yayinlar'],
         },
       ],
     },
     {
-      baslik: 'Takip',
+      baslik: 'Yönetim',
       maddeler: [
         { anahtar: 'acik-takipler', baslik: 'Açık takipler', yol: '/bildirim-merkezi/acik-takipler', simge: 'list', islem: 'bildirim.kademe-yonet', okur: ['/bildirim-kademe/acik-takipler'] },
-      ],
-    },
-    {
-      baslik: 'Ayarlar',
-      maddeler: [
-        // 3435-3 a: olay ve kanal ayarları, e-posta şablonları, kademeli uyarı ve ekip çağrıları tek sayfada; her sekme kendi işlemiyle.
+        // 3456: olaylar, kim alır, kademeli uyarı, ekip çağrıları ve e-posta (şablon, sunucu, defter) tek sayfada; her sekme kendi işlemiyle.
         {
-          anahtar: 'yonetim', baslik: 'Bildirim ve uyarı yönetimi', yol: '/bildirim-merkezi/yonetim', simge: 'grid', islem: 'ayarlar.yaz',
+          anahtar: 'yonetim', baslik: 'Bildirim ayarları', yol: '/bildirim-merkezi/yonetim', simge: 'gear', islem: 'ayarlar.yaz',
           veya: ['bildirim.eposta-yonet', 'bildirim.kademe-yonet'],
-          okur: ['/bildirimler/cagri-yonlendirme', '/bildirimler/alicilar', '/bildirimler/gosterim', '/bildirimler/push/turler', '/bildirim-kademe/kaynaklar'],
+          okur: [
+            '/bildirimler/cagri-yonlendirme', '/bildirimler/alicilar', '/bildirimler/gosterim', '/bildirimler/push/turler', '/bildirim-kademe/kaynaklar',
+            '/bildirimler/eposta/durum',
+          ],
         },
-        { anahtar: 'eposta', baslik: 'E-posta', yol: '/bildirim-merkezi/eposta', simge: 'mail', islem: 'bildirim.eposta-yonet', okur: ['/bildirimler/eposta/durum'] },
       ],
     },
   ],

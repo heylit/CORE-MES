@@ -6,7 +6,8 @@ import { DurumKutusu, IsaretKutusu, Kart, Sekmeler, Simge, useBildirim, type Sek
 import { useYetki } from '../../ortak/veri/yetki.ts';
 import { KademeliUyari } from '../bildirim/disari.ts';
 import { BildirimMatrisi } from './BildirimMatrisi.tsx';
-import { EpostaSablonlari } from './EpostaAyarlari.tsx';
+import { KimAlir } from './KimAlir.tsx';
+import { EpostaSayfasi } from './SistemAyarlari.tsx';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -26,32 +27,38 @@ const zaman = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateS
 // e-posta, şablon) birlikte gösterir; şablonlar, kademeli uyarı kaynakları ve ekip çağrıları kendi sekmesindedir. Her sekme
 // bugünkü işlemiyle görünür; yetki modeli değişmez.
 // Olaylar tablosu alıcı, gösterim, telefon ve e-posta uçlarından dolar: yalnız kademeli uyarı yöneten kişiye boş kalır, ona gösterilmez.
-type YonetimSekmesi = 'olaylar' | 'sablonlar' | 'kademe' | 'ekip';
+// 3456: Kim alır sekmesi eklendi; e-posta şablonları, sunucu ve gönderim defteri tek E-posta sekmesindedir.
+type YonetimSekmesi = 'olaylar' | 'kim-alir' | 'kademe' | 'ekip' | 'eposta';
 type YonetimIslemi = 'ayarlar.yaz' | 'bildirim.eposta-yonet' | 'bildirim.kademe-yonet';
 const SEKMELER: readonly (Sekme<YonetimSekmesi> & { islemler: readonly YonetimIslemi[] })[] = [
   { anahtar: 'olaylar', baslik: 'Olaylar', simge: 'grid', islemler: ['ayarlar.yaz', 'bildirim.eposta-yonet'] },
-  { anahtar: 'sablonlar', baslik: 'E-posta şablonları', simge: 'mail', islemler: ['bildirim.eposta-yonet'] },
+  { anahtar: 'kim-alir', baslik: 'Kim alır', simge: 'user', islemler: ['ayarlar.yaz'] },
   { anahtar: 'kademe', baslik: 'Kademeli uyarı', simge: 'alert', islemler: ['bildirim.kademe-yonet'] },
   { anahtar: 'ekip', baslik: 'Ekip çağrıları', simge: 'users', islemler: ['ayarlar.yaz'] },
+  { anahtar: 'eposta', baslik: 'E-posta', simge: 'mail', islemler: ['bildirim.eposta-yonet'] },
 ];
 const sekmeMi = (d: string | null): d is YonetimSekmesi => SEKMELER.some((s) => s.anahtar === d);
+// Eski yer imi: şablonlar sekmesi E-posta sekmesine girdi.
+const ESKI_SEKME: Record<string, YonetimSekmesi> = { sablonlar: 'eposta' };
 
 export function BildirimYonetimi() {
   const yetki = useYetki();
   const [sorgu, setSorgu] = useSearchParams();
   const gorunen = SEKMELER.filter((s) => s.islemler.some((i) => yetki.var(i)));
   const ilk = gorunen[0]?.anahtar ?? 'olaylar';
-  const istenen = sorgu.get('sekme');
+  const ham = sorgu.get('sekme');
+  const istenen = ham !== null ? (ESKI_SEKME[ham] ?? ham) : null;
   const secili = sekmeMi(istenen) && gorunen.some((s) => s.anahtar === istenen) ? istenen : ilk;
   const sec = (s: YonetimSekmesi) => { setSorgu(s === ilk ? {} : { sekme: s }, { replace: true }); };
   return (
     <div className="tc-eposta">
-      <Sekmeler etiket="Bildirim ve uyarı yönetimi" sekmeler={gorunen} secili={secili} sec={sec} />
+      <Sekmeler etiket="Bildirim ayarları" sekmeler={gorunen} secili={secili} sec={sec} />
       <div className="tc-ayar-bolum" role="tabpanel" aria-label={gorunen.find((s) => s.anahtar === secili)?.baslik}>
         {secili === 'olaylar' && <BildirimMatrisi />}
-        {secili === 'sablonlar' && <EpostaSablonlari />}
+        {secili === 'kim-alir' && <KimAlir />}
         {secili === 'kademe' && <KademeliUyari />}
         {secili === 'ekip' && <EkipCagrilari />}
+        {secili === 'eposta' && <EpostaSayfasi />}
       </div>
     </div>
   );

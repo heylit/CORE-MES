@@ -8,11 +8,11 @@ import type {
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { KADEME_ADLARI, KADEME_GUN_EN_COK, KADEME_KAYNAKLARI, type Kademe } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import {
-  Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
+  AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
-import { anahtarlar } from './anahtarlar.ts';
+import { anahtarlar, CIHAZ_ANAHTARI } from './anahtarlar.ts';
 import './bildirim.css';
 
 // Kademeli uyarı (3405 a): kaynak başına ayar (yan pencere), kişinin Gecikenlerim listesi, bütün Açık takipler ve kişisel
@@ -32,9 +32,29 @@ function gunOzeti(s: KademeAyarSatiri): string {
   return parcalar.join(' · ');
 }
 
+// 3456 a: takip aç-kapa tablodan anında yazılır; öteki ayarlar okunan hâliyle aynen gider (uç tam gövde ister).
+export const kademeGovdesi = (s: KademeAyarSatiri, acik: boolean): KademeAyarDegistirGovdesi => ({
+  acik, k2Gun: s.k2Gun, k3Gun: s.k3Gun, k4Gun: s.k4Gun, k5Gun: s.k5Gun, k3Birim: s.k3Birim, epostaKademe: s.epostaKademe,
+  serit: s.serit, kapatilamaz: s.kapatilamaz, yoneticiRolId: s.yoneticiRolId, surum: s.surum,
+});
+
 export function KademeliUyari() {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
   const d = useQuery({ queryKey: anahtarlar.kademeKaynaklari, queryFn: () => api.get<KademeAyarlariCevabi>('/bildirim-kademe/kaynaklar') });
   const [secili, seciliYaz] = useState<string | null>(null);
+  const takip = useMutation({
+    mutationFn: ({ s, acik }: { s: KademeAyarSatiri; acik: boolean }) => api.post<KademeAyarlariCevabi>(`/bildirim-kademe/kaynaklar/${s.kaynak}/ayarla`, kademeGovdesi(s, acik)),
+    onSuccess: (v, { s, acik }) => {
+      istemci.setQueryData(anahtarlar.kademeKaynaklari, v);
+      const yeni = v.kaynaklar.find((x) => x.kaynak === s.kaynak);
+      bildir('tamam', `${s.ad}: takip ${acik ? 'açıldı' : 'kapandı'}.`, yeni ? { eylem: { etiket: 'Geri al', yap: () => { takip.mutate({ s: yeni, acik: !acik }); } } } : undefined);
+    },
+    onError: (h) => {
+      bildir('hata', hataIletisi(h, 'Takip değiştirilemedi.'));
+      void istemci.invalidateQueries({ queryKey: anahtarlar.kademeKaynaklari });
+    },
+  });
   if (d.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (d.isError) return <DurumKutusu durum="hata" yenile={() => { void d.refetch(); }} />;
   const satirlar = d.data.kaynaklar;
@@ -49,7 +69,15 @@ export function KademeliUyari() {
         </span>
       ),
     },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={s.acik ? 'tamam' : 'pasif'}>{s.acik ? 'Açık' : 'Kapalı'}</Rozet>, csv: (s) => (s.acik ? 'Açık' : 'Kapalı') },
+    {
+      anahtar: 'durum', baslik: 'Takip', csv: (s) => (s.acik ? 'Açık' : 'Kapalı'),
+      // Satıra basmak ayar penceresini açar; anahtarın tıklaması ve klavyesi satıra geçmez.
+      hucre: (s) => (
+        <span className="tc-bildirim-kaynak-anahtar" onClick={(o) => { o.stopPropagation(); }} onKeyDown={(o) => { o.stopPropagation(); }}>
+          <AcKapa etiket={`${s.ad}: takip`} acik={s.acik} disabled={takip.isPending} degistir={(acik) => { takip.mutate({ s, acik }); }} />
+        </span>
+      ),
+    },
     { anahtar: 'gunler', baslik: 'Kademeler', hucre: gunOzeti, csv: gunOzeti, kartTamSatir: true },
     { anahtar: 'eposta', baslik: 'E-posta', hucre: (s) => `K${String(s.epostaKademe)} ve sonrası`, kirilmaz: true },
     { anahtar: 'takipte', baslik: 'Takipte', hizala: 'sag', hucre: (s) => s.takipte ?? null, csv: (s) => s.takipte ?? '' },
@@ -181,24 +209,48 @@ const KIMDE: Sutun<AcikTakip> = {
   anahtar: 'kimde', baslik: 'Kimde', kartTamSatir: true, hucre: (s) => (s.kimde.length === 0 ? null : s.kimde.join(', ')), csv: (s) => s.kimde.join(', '),
 };
 
+// 3456-2 a: kademe sayıları basınca süzer (bir daha basınca bırakır), kaynak seçimi ve arama (kayıt, iş, kimde) istemcide süzer.
+const SUZULEN_KADEMELER = [2, 3, 4, 5] as const;
 export function AcikTakipler() {
   const d = useQuery({ queryKey: anahtarlar.acikTakipler, queryFn: () => api.get<AcikTakiplerCevabi>('/bildirim-kademe/acik-takipler') });
+  const [kademe, kademeYaz] = useState<number | null>(null);
+  const [kaynak, kaynakYaz] = useState('');
+  const [arama, aramaYaz] = useState('');
+  const kayitlar = d.data?.kayitlar ?? [];
+  const kaynaklar = [...new Set(kayitlar.map((s) => s.kaynak))].map((k) => ({ deger: k, baslik: kaynakAdi(k) }));
+  const aranan = arama.trim().toLocaleLowerCase('tr');
+  const satirlar = kayitlar.filter((s) => (kademe === null || s.kademe === kademe) && (kaynak === '' || s.kaynak === kaynak)
+    && (aranan === '' || [s.no, s.baslik, ...s.kimde].some((m) => m.toLocaleLowerCase('tr').includes(aranan))));
   return (
     <div className="tc-bildirim-sayfa">
       <Kart baslik="Açık takipler">
         {d.data?.kesik && <p className="tc-bildirim-serit"><Simge ad="alert" boyut="k" />En çok geciken 500 kayıt gösteriliyor; liste tam değil.</p>}
         {d.isError ? <DurumKutusu durum="hata" yenile={() => { void d.refetch(); }} /> : (
-          <Tablo
-            etiket="Açık takipler" sutunlar={[...takipSutunlari(true), KIMDE]} satirlar={d.data?.kayitlar ?? []} yukleniyor={d.isPending}
-            satirAnahtari={(s) => `${s.kaynak}:${s.kayit}`} bosMesaj="Takipte kayıt yok." arac={{ csv: { ad: 'acik-takipler' } }}
-          />
+          <>
+            <div className="tc-bildirim-suzgec">
+              {SUZULEN_KADEMELER.map((k) => {
+                const n = kayitlar.filter((s) => s.kademe === k).length;
+                return (
+                  <button key={k} type="button" className="tc-bildirim-cip tc-bildirim-kademe-cip" data-ton={n === 0 ? 'pasif' : KADEME_TONU[k]}
+                    aria-pressed={kademe === k} disabled={n === 0 && kademe !== k} onClick={() => kademeYaz(kademe === k ? null : k)}>
+                    <b className="mono">{d.isPending ? '…' : String(n)}</b>{` K${String(k)} ${kademeAdi(k)}`}
+                  </button>
+                );
+              })}
+              <span className="tc-bildirim-ara" />
+              <Secim etiket="Kaynak" value={kaynak} bosSecenek="Hepsi" secenekler={kaynaklar} onChange={(o) => kaynakYaz(o.target.value)} />
+            </div>
+            <Tablo
+              etiket="Açık takipler" sutunlar={[...takipSutunlari(true), KIMDE]} satirlar={satirlar} yukleniyor={d.isPending}
+              satirAnahtari={(s) => `${s.kaynak}:${s.kayit}`} bosMesaj={kayitlar.length === 0 ? 'Takipte kayıt yok.' : 'Bu süzgece uyan kayıt yok.'}
+              arac={{ arama: { deger: arama, degistir: aramaYaz, etiket: 'Kayıt, iş ya da kimde ara' }, csv: { ad: 'acik-takipler', satirlar } }}
+            />
+          </>
         )}
       </Kart>
     </div>
   );
 }
-
-const CIHAZ_ANAHTARI = ['bildirim', 'bu-cihaz'] as const;
 
 // 3405-4 Arayüz ön bakışı 2: tek ortak şerit, sayfanın en üstünde. Ortak cihazda (terminal, istasyon) çıkmaz, orada yalnız zil çalar.
 // İş bitince ya da kapanınca kendiliğinden kalkar; kapatma düğmesi bilerek yoktur.

@@ -92,3 +92,23 @@
 /* 3435-3 a: olay ve kanal tablosu. */
 .tc-matris-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-matris-yok { color: var(--muted); }
+
+/* 3456 a: olay tablosunda kanal anahtarları ve modül başlığında toplu anahtar. */
+.tc-matris-anahtar { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); }
+.tc-matris-alt { display: block; color: var(--muted); font-size: var(--yazi-xs); font-weight: 400; }
+.tc-matris-olay { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-matris-onem { display: inline-flex; flex-shrink: 0; margin-top: var(--b-1); }
+.tc-matris-onem-bilgi { color: var(--faint); }
+.tc-matris-onem-uyari { color: var(--hold); }
+.tc-matris-onem-acil { color: var(--stop); }
+.tc-matris-varsayilan { color: var(--faint); }
+.tc-eposta .tc-tablo-grup-ic:has(.tc-matris-toplular) { flex-wrap: wrap; }
+.tc-matris-toplular { order: 1; display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin-left: auto; font-weight: 400; }
+.tc-matris-toplu { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.tc-matris-toplu-ad { font-weight: 400; color: var(--muted); }
+.tc-matris-toplu-sayi { color: var(--faint); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+.tc-matris-toplu-dugme[aria-checked="true"] .tc-ackapa-ray { background: var(--run); border-color: transparent; }
+.tc-matris-toplu-dugme[aria-checked="true"] .tc-ackapa-top { left: calc(100% - var(--b-4) - var(--b-1)); background: var(--on-sig); }
+.tc-matris-toplu-dugme[aria-checked="mixed"] .tc-ackapa-top { left: calc(50% - var(--b-4) / 2); background: var(--faint); }
+.tc-kim-alir-kutu { width: var(--b-5); height: var(--b-5); accent-color: var(--run); cursor: pointer; }
+.tc-kim-alir-kutu:disabled { cursor: progress; }

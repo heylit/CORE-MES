@@ -122,6 +122,7 @@ describe('Sistem Ayarları', () => {
     });
     // 3405-4 a: E-posta Bildirim Merkezi > Ayarlar'dadır; Sistem Ayarları'nda yalnız bağlantı kalır.
     ac(undefined, ['bildirim.eposta-yonet'], null, <EpostaSayfasi />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Sunucu/ }));
     fireEvent.click(await anahtar(ACKAPA));
     const pencere = await screen.findByRole('dialog');
     expect(pencere.textContent).toContain('kuyruktaki 3 e-posta Dış posta servisi üzerinden hemen gidecek');

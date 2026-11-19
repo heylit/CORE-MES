@@ -116,8 +116,9 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
     ac('/bildirim-merkezi');
     expect(await screen.findByText('Okunmuş haber')).toBeTruthy();
     expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=gelen'))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Uyarı ve acil' }));
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'onemli' } });
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=onemli'))).toBe(true));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/bildirim-merkezi?durum=onemli'));
     fireEvent.click(await screen.findByRole('button', { name: 'Arşive kaldır: Okunmuş haber' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/bildirimler/2/arsivle')).toBe(true));
   });
@@ -133,20 +134,60 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
     });
     ac('/bildirim-merkezi');
     const satir = async (baslik: string) => (await screen.findByText(baslik)).closest('li') as HTMLElement;
-    expect(within(await satir('Kart onay bekliyor')).getByText('Görev')).toBeTruthy();
+    expect(within(await satir('Kart onay bekliyor')).getByText('Sizden bekleniyor')).toBeTruthy();
     expect(within(await satir('Termin yaklaşıyor')).getByText('Hatırlatma')).toBeTruthy();
     expect(within(await satir('Kart onaylandı')).getByText('Yapıldı')).toBeTruthy();
-    expect(within(await satir('Makine durdu')).queryByText(/Görev|Hatırlatma|Yapıldı/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'İş bildirimleri' }));
+    expect(within(await satir('Makine durdu')).queryByText(/Sizden bekleniyor|Hatırlatma|Yapıldı/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'gorev' } });
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=gorev'))).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Yapıldı' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=yapildi'))).toBe(true));
   });
 
-  it('arşivde kaldırma düğmesi yok; boş arşiv söylenir', async () => {
-    sunucuKur({ 'GET /bildirimler': () => json(200, liste([])) });
+  it('3456-2 a: eski arşiv adresi Arşiv cipine gider; boş arşiv söylenir', async () => {
+    const istekler = sunucuKur({ 'GET /bildirimler': () => json(200, liste([])) });
     ac('/bildirim-merkezi/arsiv');
     expect(await screen.findByText('Arşiv boş.')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('/bildirim-merkezi?durum=arsiv');
+    expect(screen.getByRole('button', { name: 'Arşiv' }).getAttribute('aria-pressed')).toBe('true');
+    expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=arsiv'))).toBe(true);
+  });
+
+  it('3456-2 a: Okunmamış cipinde sayı, üstte geciken iş bağlantısı; liste gün başlıklarıyla ayrılır', async () => {
+    const bugun = new Date();
+    const dun = new Date(bugun.getFullYear(), bugun.getMonth(), bugun.getDate() - 1, 10).toISOString();
+    const eski = new Date(bugun.getFullYear(), bugun.getMonth(), bugun.getDate() - 5, 10).toISOString();
+    sunucuKur({
+      'GET /bildirimler/sayac': () => json(200, { okunmamis: 4, acilVar: false }),
+      'GET /bildirim-kademe/gecikenlerim': () => json(200, { kayitlar: [{ kaynak: 'satin-alma-talebi', kayit: '1', no: 'ORN-1', baslik: 'x', yol: '/x', sonGun: null, baslangic: null, kademe: 3, gecikmeGun: 2 }] }),
+      'GET /bildirimler': () => json(200, liste([
+        B({ id: 1, baslik: 'Bugünkü', olusturuldu: bugun.toISOString() }), B({ id: 2, baslik: 'Dünkü', olusturuldu: dun }), B({ id: 3, baslik: 'Eski', olusturuldu: eski }),
+      ])),
+    });
+    ac('/bildirim-merkezi');
+    expect(await screen.findByRole('button', { name: /Okunmamış · 4/ })).toBeTruthy();
+    expect((await screen.findByRole('link', { name: /1 geciken işiniz/ })).getAttribute('href')).toBe('/bildirim-merkezi/gecikenlerim');
+    expect(within(await screen.findByRole('region', { name: 'Bugün' })).getByText('Bugünkü')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Dün' })).getByText('Dünkü')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Daha önce' })).getByText('Eski')).toBeTruthy();
+  });
+
+  it('3456-2 a: seçilenler toplu arşive kaldırılır; onay bekleyen atlanır ve nedeni yazılır', async () => {
+    const istekler = sunucuKur({
+      'GET /bildirimler': () => json(200, liste([
+        B({ id: 1, baslik: 'Birinci' }), B({ id: 2, baslik: 'İkinci' }), B({ id: 3, baslik: 'Onaylı duyuru', onayIstenir: true }),
+      ])),
+      'POST /bildirimler/1/arsivle': () => json(200, B({ id: 1 })),
+      'POST /bildirimler/2/arsivle': () => json(200, B({ id: 2 })),
+    });
+    ac('/bildirim-merkezi');
+    for (const ad of ['Birinci', 'İkinci', 'Onaylı duyuru']) fireEvent.click(await screen.findByRole('checkbox', { name: `Seç: ${ad}` }));
+    const cubuk = screen.getByRole('toolbar', { name: 'Seçili bildirimler' });
+    expect(within(cubuk).getByText('3 seçili')).toBeTruthy();
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Arşive kaldır' }));
+    expect(await screen.findByText(/2 bildirim arşive kaldırıldı\. 1 bildirim onay beklediği için kaldırılmadı/)).toBeTruthy();
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/bildirimler/1/arsivle', '/bildirimler/2/arsivle']);
+    expect(screen.queryByRole('toolbar', { name: 'Seçili bildirimler' })).toBeNull();
   });
 
   it('3435-1: tercih ve Bu cihaz sayfası yoktur; eski adresler Profilim\'e gider', async () => {
@@ -231,23 +272,30 @@ describe('Cihaz bildirimi (342 a)', () => {
     sunucuKur({
       'GET /bildirimler/sayac': () => json(200, { okunmamis: 0, acilVar: false }),
       'GET /bildirimler': () => json(200, liste([])),
+      'GET /oturum/cihaz': () => json(200, { ortak: false }),
     });
     const { ortam } = cihazSahte('default');
     ac('/', <ZilDugmesi cihaz={ortam} />);
     expect(ortam.izinIste).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Bildirimler' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Cihaz bildirimini aç' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bu cihazda bildirimi aç' }));
     expect(ortam.izinIste).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cihaz bildirimini aç' })).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Telefon bildirimi' }));
-    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/profil'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Bu cihazda bildirimi aç' })).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Telefon bildirimi' })).toBeNull();
     cleanup();
 
-    for (const izin of [null, 'denied'] as const) {
+    // Reddedilmiş ya da desteksizse ve ortak cihazda (terminal, istasyon) satır çıkmaz.
+    for (const [izin, ortak] of [[null, false], ['denied', false], ['default', true]] as const) {
+      sunucuKur({
+        'GET /bildirimler/sayac': () => json(200, { okunmamis: 0, acilVar: false }),
+        'GET /bildirimler': () => json(200, liste([])),
+        'GET /oturum/cihaz': () => json(200, { ortak }),
+      });
       ac('/', <ZilDugmesi cihaz={cihazSahte(izin).ortam} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Bildirimler' }));
       await screen.findByRole('dialog', { name: 'Bildirimler' });
-      expect(screen.queryByRole('button', { name: 'Cihaz bildirimini aç' })).toBeNull();
+      await new Promise((r) => { setTimeout(r, 20); });
+      expect(screen.queryByRole('button', { name: 'Bu cihazda bildirimi aç' })).toBeNull();
       cleanup();
     }
   });

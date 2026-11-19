@@ -25,7 +25,8 @@ export const modulSimgesi = (modul: string): SimgeAdi => MODUL[modul]?.simge ?? 
 export const ONEM_ADI = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' } as const satisfies Record<BildirimOnemi, string>;
 
 // 2174-2 a: satırın sınıf etiketi. Bilgi etiketsizdir (bugünkü satır görünümü); görev ve hatırlatma yapılınca "Yapıldı" olur.
-export const SINIF_ADI = { gorev: 'Görev', hatirlatma: 'Hatırlatma', bilgi: 'Bilgi' } as const satisfies Record<BildirimSinifi, string>;
+// 3456-2 a: görev "Sizden bekleniyor" diye okunur; kişiden iş beklendiğini söyler.
+export const SINIF_ADI = { gorev: 'Sizden bekleniyor', hatirlatma: 'Hatırlatma', bilgi: 'Bilgi' } as const satisfies Record<BildirimSinifi, string>;
 export function sinifEtiketi(b: Pick<Bildirim, 'sinif' | 'yapildi'>): { ad: string; durum: BildirimSinifi | 'yapildi' } | null {
   if (b.sinif === 'bilgi') return null;
   return b.yapildi !== null ? { ad: 'Yapıldı', durum: 'yapildi' } : { ad: SINIF_ADI[b.sinif], durum: b.sinif };

@@ -21,8 +21,8 @@ import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
 import type { AyarListesiEki } from './SistemAyarlari.tsx';
 import './eposta.css';
 
-// E-posta kanalı (ADR 0015, 3397): sunucu bağlantısı ortam değişkenindedir ve burada yalnız okunur; gönderim ayarları ve gönderim
-// defteri buradadır. Olay başına e-posta ayarı ve şablonlar Bildirim ve uyarı yönetimindedir (3435-3 a). Uçlar `bildirim.eposta-yonet` ister.
+// E-posta kanalı (ADR 0015, 3397): sunucu bağlantısı ortam değişkenindedir ve burada yalnız okunur; şablonlar, gönderim ayarları ve
+// gönderim defteri buradadır; ekran Bildirim ayarlarının E-posta sekmesidir (3456). Olay başına e-posta ayarı Olaylar sekmesindedir. Uçlar `bildirim.eposta-yonet` ister.
 const ANAHTAR = {
   durum: ['ayarlar', 'eposta', 'durum'] as const,
   tetikleyiciler: ['ayarlar', 'eposta', 'tetikleyiciler'] as const,
@@ -30,8 +30,9 @@ const ANAHTAR = {
   defter: (sayfa: number, sonuc: string) => ['ayarlar', 'eposta', 'defter', sayfa, sonuc] as const,
 };
 
-type EpostaSekmesi = 'sunucu' | 'defter';
+type EpostaSekmesi = 'sablonlar' | 'sunucu' | 'defter';
 const SEKMELER: readonly Sekme<EpostaSekmesi>[] = [
+  { anahtar: 'sablonlar', baslik: 'Şablonlar', simge: 'edit' },
   { anahtar: 'sunucu', baslik: 'Sunucu', simge: 'mail' },
   { anahtar: 'defter', baslik: 'Gönderim defteri', simge: 'list' },
 ];
@@ -53,11 +54,12 @@ const SIMGE_ADI: Record<EpostaSimgesi, string> = {
 const zaman = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
 export function EpostaAyarlari({ gonderimAyarlari }: { gonderimAyarlari: (ek: AyarListesiEki) => ReactNode }) {
-  const [secili, setSecili] = useState<EpostaSekmesi>('sunucu');
+  const [secili, setSecili] = useState<EpostaSekmesi>('sablonlar');
   return (
     <div className="tc-eposta">
       <Sekmeler etiket="E-posta" sekmeler={SEKMELER} secili={secili} sec={setSecili} />
       <div className="tc-ayar-bolum" role="tabpanel" aria-label={SEKMELER.find((s) => s.anahtar === secili)?.baslik}>
+        {secili === 'sablonlar' && <EpostaSablonlari />}
         {secili === 'sunucu' && <Sunucu gonderimAyarlari={gonderimAyarlari} />}
         {secili === 'defter' && <Defter />}
       </div>
