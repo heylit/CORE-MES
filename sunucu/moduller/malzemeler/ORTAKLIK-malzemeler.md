@@ -6,6 +6,7 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 ## Tablolar
 - `malzeme_katalog_karti`: `kimlik` (metin, birincil), `no` (sayı kimlik, tekil, değişmez), `tur`, `onek`, `sira_no`, `stok_kodu` (üretilmiş), `benzersiz_anahtar`, `mukerrer_gerekcesi`, `onay_durumu`, `kayit` (jsonb: kartın bütünü), `surum`, kişi ve zaman sütunları, `aktif_oldu`.
 - `malzemeler_demirbas_teknik` (1595): `kart_kimlik` (birincil, kart), `makine_id` (istasyonlar `makine`, tekil), tipli CNC sınırları ve enerji; `malzemeler_demirbas_ozellik`: serbest ad, değer, birim. Fiyat ve amortisman finans `finans_sabit_kiymet`'tedir (makine kimliğiyle).
+- İkame ve alternatifler (3437): `malzeme_kalite_muadili` (`kalite`, `muadil`, `tur` tam/ust/sartli), `malzeme_durum_muadili` (`durum`, `muadil`, `tur`), `malzeme_alternatif_kurali` (`kapsam_turu` aile/sinif/kalite/kart, `kapsam`, pay ve kabul bayrakları, `kapali`, `gerekce`). Standart karşılıkları (kimstd/mekstd) 3436'nındır.
 - `malzeme_katalog_kod_sirasi` (`onek`, `son_sira`), `malzeme_katalog_sablonu` (`kimlik`, `sablon` jsonb), `malzeme_katalog_ayari` (`anahtar`: malzeme, operasyonlar, genel; `deger` jsonb).
 
 ## Kavramlar
@@ -38,7 +39,7 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 
 ## Başka modüle bağlar
 - Yabancı anahtar: yalnız `kisi`. İthal: `kisiler/disari.ts` (`kisiAdlari`, `kisiBayrakliMi`), `ayarlar/disari.ts` (`sistemAyariOku`).
-- Dışa verilen (`disari.ts`): `malzemeOzeti(db, no)`, `malzemeKullanilabilirMi(db, no)`, `malzemeAdlari(db, nolar)`; Logo bağlantısı için `logoyaGidecekMalzemeler(db, sinir)`, `malzemeLogoSonucu(db, no, sonuc)`, `logoBirimSetiKullaniliyorMu(db, kod)` (kart #232), ad güncellemesi `logoyaGuncellemeGidecekMalzemeler(db, sinir)`, `malzemeLogoGuncellemeSonucu(db, no, sonuc)` (kart #783); bağlama tur 1: `malzemeOzetleri(db, idler)`, `malzemeAra(db, g)`, `olcuBirimleri(db)` (kart #163). Firma kodu `firmaKodu(db)` (kart #802, üretim emri numarası). Örnek veri: `malzemeNoKoddan(db, stokKodu)`, `ornekMalzemeNo(db, anahtar)` (kart #906). Bugün başka modül çağırmıyor.
+- Dışa verilen (`disari.ts`): `malzemeOzeti(db, no)`, `malzemeKullanilabilirMi(db, no)`, `malzemeAdlari(db, nolar)`; Logo bağlantısı için `logoyaGidecekMalzemeler(db, sinir)`, `malzemeLogoSonucu(db, no, sonuc)`, `logoBirimSetiKullaniliyorMu(db, kod)` (kart #232), ad güncellemesi `logoyaGuncellemeGidecekMalzemeler(db, sinir)`, `malzemeLogoGuncellemeSonucu(db, no, sonuc)` (kart #783); bağlama tur 1: `malzemeOzetleri(db, idler)`, `malzemeAra(db, g)`, `olcuBirimleri(db)` (kart #163). Firma kodu `firmaKodu(db)` (kart #802, üretim emri numarası). Örnek veri: `malzemeNoKoddan(db, stokKodu)`, `ornekMalzemeNo(db, anahtar)` (kart #906). Zarf (3437): `alternatifZarfiOku(db, no)`, `alternatifDegerlendir(db, no, aday)`. Bugün başka modül çağırmıyor.
 
 ## Doğal sahibi başka modül olabilecekler
 Tedarikçi ve müşteri (musteri-tedarikci: firma); depo yeri ve konum (stok, istasyonlar); istasyon, operasyon, rota ve reçete (istasyonlar, rota); birim ve para birimi listeleri (ortak tanım); fiyat ve en az sipariş (satın alma); zimmetli kişi (personel); kalite, bakım ve kalibrasyon alanları (kalite, bakım, kalibrasyon).

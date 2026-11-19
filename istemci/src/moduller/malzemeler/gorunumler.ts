@@ -19,6 +19,7 @@ export const GORUNUM_YOLLARI = {
   cat: '/malzemeler',
   tpl: '/malzemeler/sablonlar',
   arsiv: '/malzemeler/arsiv',
+  alternatif: '/malzemeler/alternatifler',
   mayar: '/malzemeler/ayarlar',
   kilavuz: '/malzemeler/kilavuz',
 } as const satisfies { [A in KatalogGorunumu]: Extract<Madde, { anahtar: A }>['yol'] };

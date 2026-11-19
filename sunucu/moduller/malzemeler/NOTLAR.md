@@ -45,3 +45,9 @@ Bağlantıyı yazacak modül için. Bu modül Logo'ya bağlanmaz; yalnız kuyru�
    Aynı kod aynı malzeme demek değildir (2116h): aynı kodlu bağsız kart kullanıcı seçimiyle ya bağlanır ya da "yeni koda geçer": aynı önekte,
    Logo'da da boş sıradaki kod (`logoyuAtlayanSira`); eski kod `onceki_kodlar`'a eklenir, aramada (trigram indeksi) ve `malzemeNoKoddan`'da bulunur
    (önce güncel kod). Tetikleyici `onceki_kodlar`'a yalnız bu geçişte ekleme yapılmasına izin verir; Logo kaydı olan kart geçemez.
+
+9. İkame ve alternatifler (3437-1, sürüm 2 a): zarf (kartın kabul sınırı) `alternatif/kurallar.ts`'te saftır; kural kapsamı kart > kalite > sınıf ("aile/sınıf") > aile,
+   boş alan üstten gelir, kural yoksa pay 3398'in `VARSAYILAN_PAY`'ı. Ölçü karşılaştırması `stok/olcu-kurallar.ts`'in küçük bir kopyasıdır: stok malzemeler'i ithal eder,
+   tersi döngü olur (sınır f); pay tek yerde tanımlanmalı (3398-5 kart bazında pay ile çakışır). Muadil tek yönlüdür; başlangıç satırları istemcinin eski `MUADIL` sabitinden.
+   Başka modüller zarfı `alternatifZarfiOku` / `alternatifDegerlendir` ile okur (talep, satın alma, stok kontrol sonraki dilimlerde). Alternatif alt kart 3438'in modeliyledir.
+
