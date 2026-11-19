@@ -19,7 +19,7 @@ import {
   ONEM_ADI, VARSAYILAN_SABLONLAR, bildirimAcikMi, epostaKur, kademeDegeri, sablonIcerigi, sablonYerTutucuHatasi, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
   sessizMi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
-import { disKipMi, epostaKipi, epostaLogosu } from './kurallar.ts';
+import { BOS_TOPLANTI_DEGERLERI, disKipMi, epostaKipi, epostaLogosu, toplantiAlanlari } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
 import { simgePng } from './posta-simgeleri.ts';
 import * as s from './sorgular.ts';
@@ -46,7 +46,11 @@ function sistemAyariOku<A extends AyarAnahtari>(db: Db, anahtar: A): Promise<Aya
 }
 
 // Üreten modülün isteğe bağlı e-posta alanları; verilmezse e-postada o satır yazılmaz.
-export interface EpostaEki { kayitNo?: string; gecikmeGunu?: number; istasyon?: string }
+// toplanti: 3448 (ADR 0015 md 6 eki) davetin başlığı, saat aralığı, yeri ve düzenleyeni; yalnız `toplantilar.` türlerinde e-postaya girer.
+export interface EpostaEki {
+  kayitNo?: string; gecikmeGunu?: number; istasyon?: string;
+  toplanti?: { baslik: string; zamanAraligi: string; yer: string | null; duzenleyen: string };
+}
 
 const SAAT_MS = 3_600_000;
 const GUN_MS = 24 * SAAT_MS;
@@ -75,6 +79,12 @@ async function tetikleyici(db: Db, tur: BildirimTuru): Promise<EpostaTetikleyici
   return t === null ? varsayilanTetikleyici(tur) : t;
 }
 
+// 3448: olayın e-postası şu an gider mi (posta adresi kurulu, ayar açık, olayın tetikleyicisi e-posta): ekran seçeneği buna göre gösterir.
+export async function epostaGiderMi(db: Db, tur: BildirimTuru): Promise<boolean> {
+  if (await postaAyari(db) === null || !(await sistemAyariOku(db, 'bildirim.eposta'))) return false;
+  return (await tetikleyici(db, tur)).eposta;
+}
+
 // bildirimGonder'in transaction'ında: yeni açılan bildirim satırlarının e-postası kuyruğa yazılır. Ortam değişkeni yoksa kuyruk
 // tutulmaz (posta sunucusu olmayan kurulumda birikmesin); ayar kapalıysa kuyruk birikir, gönderilmez (ADR 0015 md 5).
 export async function epostaKuyrugaAl(
@@ -94,6 +104,7 @@ export async function epostaKuyrugaAl(
     tur: olay.tur, onem: BILDIRIM_TURLERI[olay.tur].onem, baslik: BILDIRIM_TURLERI[olay.tur].baslik,
     kayitNo: olay.eposta?.kayitNo ?? basliktanKayitNo(olay.baslik), yol: olay.yol,
     gecikmeGunu: olay.eposta?.gecikmeGunu ?? null, istasyon: olay.eposta?.istasyon ?? null,
+    ...toplantiAlanlari(olay.tur, olay.eposta?.toplanti),
   };
   const satirlar: s.YeniEposta[] = alanlar.map((y) => ({ ...ortak, kisiId: y.kisiId, bildirimId: y.id, kademe: 0, ozet, zamani: ozetZamani }));
   // Kademe: kaynak bildirimlerden biri yeter; zamanı gelince hâlâ açıksa kademe alıcılarına gider.
@@ -136,6 +147,7 @@ function degerler(q: s.KuyrukSatiri, aliciAdi: string | null, uygulamaAdresi: st
     alici_adi: aliciAdi, olay: q.baslik, kayit_no: q.kayitNo, tarih: tarihMetni(q.olayZamani),
     gecikme_gunu: q.gecikmeGunu === null ? null : String(q.gecikmeGunu), istasyon: q.istasyon, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, q.yol),
     onem: ONEM_ADI[q.onem], kademe: kademeDegeri(q.tur),
+    kayit_basligi: q.kayitBasligi, zaman_araligi: q.zamanAraligi, yer: q.yer, duzenleyen: q.duzenleyen,
   };
 }
 
@@ -271,7 +283,7 @@ function ozetGirdisi(satirlar: readonly s.KuyrukSatiri[], ad: string | null, uyg
   const liste = satirlar.map((q) => `- ${q.baslik}${q.kayitNo === null ? '' : ` · ${q.kayitNo}`}`).join('\n');
   return {
     sablon: { konuKalibi: `[CORE MES] Günlük özet · ${String(satirlar.length)} bildirim`, govde: `Merhaba {alici_adi},\n\nBekleyen bildirimlerin:\n\n${liste}\n\nAyrıntıyı uygulamada görebilirsin.`, tabloAlanlari: [] },
-    degerler: { alici_adi: ad, olay: 'Günlük özet', kayit_no: null, tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: null, istasyon: null, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, '/bildirimler'), onem: null, kademe: null },
+    degerler: { alici_adi: ad, olay: 'Günlük özet', kayit_no: null, tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: null, istasyon: null, kayit_baglantisi: kayitBaglantisi(uygulamaAdresi, '/bildirimler'), onem: null, kademe: null, ...BOS_TOPLANTI_DEGERLERI },
     baslik: 'Günlük özet', onem: 'bilgi', simgeVar: true,
   };
 }
@@ -289,6 +301,7 @@ async function kademeleriAc(db: Db): Promise<void> {
       await s.epostaKuyrugaYaz(db, kisiler.map((kisiId) => ({
         kisiId, bildirimId: null, tur: q.tur, onem: q.onem, baslik: q.baslik, kayitNo: q.kayitNo, yol: q.yol, gecikmeGunu: q.gecikmeGunu,
         istasyon: q.istasyon, kademe: 1 as const, ozet: false, zamani: null,
+        kayitBasligi: q.kayitBasligi, zamanAraligi: q.zamanAraligi, yer: q.yer, duzenleyen: q.duzenleyen,
       })));
     }
   }
@@ -463,6 +476,7 @@ export async function epostaDenemesi(
     degerler: {
       alici_adi: kullanici.ad, olay: 'Deneme e-postası', kayit_no: 'ORN-0001', tarih: tarihMetni(new Date().toISOString()), gecikme_gunu: '0',
       istasyon: null, kayit_baglantisi: kayitBaglantisi(ayarlar.uygulamaAdresi, '/ayarlar'), onem: ONEM_ADI[onem], kademe: null,
+      kayit_basligi: 'ORN-Haftalık termin toplantısı', zaman_araligi: '21.11.2026 09:30-10:15', yer: 'ORN-Toplantı odası 1', duzenleyen: kullanici.ad,
     },
   }, sablon.logo ? await logoOku(db) : null, ac);
   return kayit({ sonuc: r.durum, neden: r.neden });

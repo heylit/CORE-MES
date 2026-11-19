@@ -133,6 +133,8 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'proses.oku': 'Parça proses dosyasını görme',
   'akis.kart-oku': 'Refakat kartının akışını görme',
   'takvim.oku': 'Takvimi görme',
+  'toplantilar.oku': 'Bütün toplantıları görme',
+  'toplantilar.yaz': 'Toplantı açma ve yönetme',
   'pano.sirket-ozeti': 'Ana sayfada şirket özetini görme',
   'plan.planlama-oku': 'Planlama sayfalarını görme',
   'plan.oku': 'Planı ve senaryoları görme',

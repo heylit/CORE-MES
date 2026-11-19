@@ -43,6 +43,7 @@ import { SMARTES_ISLEMLERI } from './islemler/smartes.ts';
 import { STOK_ESKI_ISLEMLERI, STOK_FIS_ISLEMLERI, STOK_ISLEMLERI, STOK_ISTEK_ISLEMLERI } from './islemler/stok.ts';
 import { STOK_SAYIM_ONAY_ISLEMLERI } from './islemler/stok.ts';
 import { TAKVIM_ISLEMLERI } from './islemler/takvim.ts';
+import { TOPLANTILAR_ISLEMLERI } from './islemler/toplantilar.ts';
 import { TERMINAL_ISLEMLERI } from './islemler/terminal.ts';
 import { URETIM_EMIRLERI_ISLEMLERI } from './islemler/uretim-emirleri.ts';
 import { VARDIYA_ISLEMLERI } from './islemler/vardiya.ts';
@@ -102,6 +103,7 @@ export const VERI_ISLEMLERI = [
   ...STOK_FIS_ISLEMLERI,
   ...STOK_SAYIM_ONAY_ISLEMLERI,
   ...TAKVIM_ISLEMLERI,
+  ...TOPLANTILAR_ISLEMLERI,
   ...TERMINAL_ISLEMLERI,
   ...URETIM_EMIRLERI_ISLEMLERI,
   ...VARDIYA_ISLEMLERI,

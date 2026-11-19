@@ -3,14 +3,14 @@ import type { BildirimTuru } from './bildirim.ts';
 // E-posta kanalının (ADR 0015, 3397) zod'suz sabitleri: istemci de değer olarak ithal eder (canlı ön izleme, seçenekler).
 
 // Şablon konusu olayın kaynak modülünden gelir; gecikme ve hatırlatma konu değil süzgeçtir (olayın sınıfı ve adı).
-export const EPOSTA_KONULARI = ['satin-alma', 'proje', 'satis', 'planlama', 'uretim', 'genel'] as const;
+export const EPOSTA_KONULARI = ['satin-alma', 'proje', 'satis', 'planlama', 'uretim', 'toplanti', 'genel'] as const;
 export type EpostaKonusu = (typeof EPOSTA_KONULARI)[number];
 export const EPOSTA_KONU_ADLARI: Record<EpostaKonusu, string> = {
-  'satin-alma': 'Satın alma', proje: 'Proje', satis: 'Satış', planlama: 'Planlama', uretim: 'Üretim devir alma', genel: 'Genel',
+  'satin-alma': 'Satın alma', proje: 'Proje', satis: 'Satış', planlama: 'Planlama', uretim: 'Üretim devir alma', toplanti: 'Toplantı', genel: 'Genel',
 };
 const KONU_MODULLERI: Record<string, EpostaKonusu> = {
   'satin-alma': 'satin-alma', malzemeler: 'satin-alma', projeler: 'proje', 'uretim-emirleri': 'proje', siparisler: 'satis',
-  arkon: 'planlama', plan: 'planlama', stok: 'uretim', istasyonlar: 'uretim', 'cnc-kurulum': 'uretim',
+  arkon: 'planlama', plan: 'planlama', stok: 'uretim', istasyonlar: 'uretim', 'cnc-kurulum': 'uretim', toplantilar: 'toplanti',
 };
 export const turKonusu = (tur: BildirimTuru | string): EpostaKonusu => KONU_MODULLERI[tur.slice(0, tur.indexOf('.'))] ?? 'genel';
 
@@ -19,7 +19,10 @@ export const EPOSTA_SIMGELERI = ['cart', 'clipboard-check', 'tag', 'calendar', '
 export type EpostaSimgesi = (typeof EPOSTA_SIMGELERI)[number];
 
 // Gövdeye yalnız bu alanlar girer (ADR 0015 md 6, 3397): müşteri ve tedarikçi adı, fiyat, parça no ve serbest metin yer tutucusu yoktur.
-export const EPOSTA_YER_TUTUCULARI = ['alici_adi', 'olay', 'kayit_no', 'tarih', 'gecikme_gunu', 'istasyon', 'kayit_baglantisi', 'onem', 'kademe'] as const;
+// Son dördü (3448, md 6 eki) yalnız toplantı davetinde dolar: başlık, saat aralığı, yer, düzenleyen; öteki olaylarda boştur.
+export const EPOSTA_YER_TUTUCULARI = [
+  'alici_adi', 'olay', 'kayit_no', 'tarih', 'gecikme_gunu', 'istasyon', 'kayit_baglantisi', 'onem', 'kademe', 'kayit_basligi', 'zaman_araligi', 'yer', 'duzenleyen',
+] as const;
 export type EpostaYerTutucusu = (typeof EPOSTA_YER_TUTUCULARI)[number];
 // Kalıpta yalnız izinli yer tutucu geçer; bilinmeyen {ad} kaydı reddeder (müşteri adı gibi alan sonradan sızmasın).
 export function bilinmeyenYerTutucular(metin: string): string[] {
@@ -31,10 +34,11 @@ export type EpostaDegerleri = Record<EpostaYerTutucusu, string | null>;
 export const sablonDoldur = (kalip: string, d: EpostaDegerleri): string =>
   kalip.replace(/\{([a-z_]+)\}/g, (butun, ad: string) => ((EPOSTA_YER_TUTUCULARI as readonly string[]).includes(ad) ? d[ad as EpostaYerTutucusu] ?? '' : butun));
 // Bilgi tablosunun satırları; boş değerli satır e-postaya yazılmaz.
-export const EPOSTA_TABLO_ALANLARI = ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon', 'onem', 'kademe'] as const;
+export const EPOSTA_TABLO_ALANLARI = ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon', 'onem', 'kademe', 'zaman_araligi', 'yer', 'duzenleyen'] as const;
 export type EpostaTabloAlani = (typeof EPOSTA_TABLO_ALANLARI)[number];
 export const EPOSTA_TABLO_ADLARI: Record<EpostaTabloAlani, string> = {
   kayit_no: 'Kayıt no', olay: 'Olay', tarih: 'Tarih', gecikme_gunu: 'Gecikme günü', istasyon: 'İstasyon', onem: 'Önem', kademe: 'Kademe',
+  zaman_araligi: 'Zaman', yer: 'Yer', duzenleyen: 'Düzenleyen',
 };
 export const EPOSTA_KONU_EN_UZUN = 150;
 export const EPOSTA_GOVDE_EN_UZUN = 2000;

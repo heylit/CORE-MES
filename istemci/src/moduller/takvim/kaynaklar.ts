@@ -17,6 +17,8 @@ export const KAYNAK_BILGISI: Readonly<Record<TakvimKaynagi, { ad: string; simge:
   'izin': { ad: 'İzin', simge: 'user', modul: 'İnsan Kaynakları', yol: () => '/ik/izinler' },
   'vergi': { ad: 'Vergi beyanı', simge: 'lira', modul: 'Finans', yol: () => '/finans/vergi' },
   'planli-durus': { ad: 'Planlı duruş', simge: 'pause', modul: 'Vardiya', yol: () => '/vardiya/planli-duruslar' },
+  // 3448: katılımcı ekranı herkese açıktır; toplantıyı gören kişi orada açar.
+  'toplanti': { ad: 'Toplantı', simge: 'users', modul: 'Toplantılar', yol: (k) => `/profil/toplantilarim/${k.kimlik}` },
 };
 
 // Çok günlük kayıt (izin) son günü geçince gecikir; ilk günü geçmiş ama son günü gelmemiş kayıt sürüyor sayılır ve bugünün kaydıdır.

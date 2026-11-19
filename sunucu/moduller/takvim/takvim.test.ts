@@ -106,7 +106,7 @@ describe('takvim (gerçek PostgreSQL)', () => {
 
   test('TK-02: yönetici bütün kaynakları okur, bekleyen kaynak kalmadı; vergi tarihleri sıralı gelir', async () => {
     const g = (await oku(c.yonetici)).govde;
-    assert.deepEqual(g.kaynaklar, ['siparis', 'emir-plan', 'emir-bitis', 'sevk', 'satin-alma', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus']);
+    assert.deepEqual(g.kaynaklar, ['siparis', 'emir-plan', 'emir-bitis', 'sevk', 'satin-alma', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus', 'toplanti']);
     assert.deepEqual(g.bekleyenler, []);
     const vergi = g.kayitlar.filter((k) => k.kaynak === 'vergi');
     assert.deepEqual(vergi.map((k) => k.tarih), ['2031-03-25', '2031-03-26', '2031-03-28', '2031-03-31']);
@@ -116,11 +116,11 @@ describe('takvim (gerçek PostgreSQL)', () => {
 
   test('TK-03 (1163 a): yalnız takvim.oku olan kaynak yetkisi kadar görür; yetki verilince kaynak eklenir', async () => {
     const once = (await oku(c.izleyici)).govde;
-    assert.deepEqual([once.kaynaklar, once.bekleyenler], [['izin', 'planli-durus'], []]);
-    assert.ok(once.kayitlar.every((k) => k.kaynak === 'planli-durus' || k.kaynak === 'izin'));
+    assert.deepEqual([once.kaynaklar, once.bekleyenler], [['izin', 'planli-durus', 'toplanti'], []]);
+    assert.ok(once.kayitlar.every((k) => ['planli-durus', 'izin', 'toplanti'].includes(k.kaynak)));
     await islemVer('izleyici', 'finans.oku');
     const sonra = (await oku(c.izleyici)).govde;
-    assert.deepEqual(sonra.kaynaklar, ['izin', 'vergi', 'planli-durus']);
+    assert.deepEqual(sonra.kaynaklar, ['izin', 'vergi', 'planli-durus', 'toplanti']);
     assert.equal(sonra.kayitlar.filter((k) => k.kaynak === 'vergi').length, 4);
   });
 
@@ -144,7 +144,7 @@ describe('takvim (gerçek PostgreSQL)', () => {
 
   test('TK-06 (1816): geciken okuması kaynak yetkisine uyar (izleyici TK-03 ve TK-04 sonrası finans.oku ve ik.izin-oku taşır)', async () => {
     const z = (await gecikenOku(c.izleyici)).govde;
-    assert.ok(z.kayitlar.every((k) => ['izin', 'vergi', 'planli-durus'].includes(k.kaynak)));
+    assert.ok(z.kayitlar.every((k) => ['izin', 'vergi', 'planli-durus', 'toplanti'].includes(k.kaynak)));
     assert.deepEqual(z.kayitlar.filter((k) => k.kaynak === 'izin').map((k) => k.kimlik).sort(), ['leave_dun', 'leave_eski_bekleyen']);
   });
 

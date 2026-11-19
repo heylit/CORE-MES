@@ -15,6 +15,8 @@ export const KAYNAK_YETKILERI: Readonly<Record<TakvimKaynagi, { islem: Islem | n
   'izin': { islem: null, bagli: true },
   'vergi': { islem: 'finans.oku', bagli: true },
   'planli-durus': { islem: null, bagli: true },
+  // 3448: kişi kendi toplantısını görür; süzme toplantılar modülündedir.
+  'toplanti': { islem: null, bagli: true },
 };
 
 export function gorulenKaynaklar(islemler: readonly string[]): { okunan: TakvimKaynagi[]; bekleyen: TakvimKaynagi[] } {

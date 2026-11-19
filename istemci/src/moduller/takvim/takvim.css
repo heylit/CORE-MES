@@ -9,6 +9,7 @@
 [data-kaynak='izin'] { --k: var(--idle); }
 [data-kaynak='vergi'] { --k: var(--bp); }
 [data-kaynak='planli-durus'] { --k: var(--faint); }
+[data-kaynak='toplanti'] { --k: var(--grafik-3); }
 
 .tc-takvim { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
 .tc-takvim-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); max-width: 80ch; }

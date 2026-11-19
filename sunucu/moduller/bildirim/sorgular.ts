@@ -595,31 +595,36 @@ export async function ozelSablonSil(db: Db, id: number, surum: number): Promise<
   return (await db.tek('DELETE FROM bildirim_eposta_ozel_sablon WHERE id = $1 AND surum = $2 RETURNING 1', [id, surum])) !== null;
 }
 
-export interface YeniEposta {
+export type YeniEposta = {
   kisiId: number | null; bildirimId: number | null; tur: string; onem: string; baslik: string; kayitNo: string | null; yol: string | null;
   gecikmeGunu: number | null; istasyon: string | null; kademe: 0 | 1; ozet: boolean; zamani: string | null;
-}
+} & ToplantiAlanlari;
+// 3448 (ADR 0015 md 6 eki): yalnız toplantı türlerinde dolu; öteki türlerde hepsi null.
+export interface ToplantiAlanlari { kayitBasligi: string | null; zamanAraligi: string | null; yer: string | null; duzenleyen: string | null }
 export async function epostaKuyrugaYaz(db: Db, satirlar: readonly YeniEposta[]): Promise<void> {
   if (satirlar.length === 0) return;
   await db.sorgu(
-    `INSERT INTO bildirim_eposta_kuyrugu (kisi_id, bildirim_id, tur, onem, baslik, kayit_no, yol, gecikme_gunu, istasyon, kademe, ozet, zamani)
-     SELECT k.kisi_id, k.bildirim_id, k.tur, k.onem, k.baslik, k.kayit_no, k.yol, k.gecikme_gunu, k.istasyon, k.kademe, k.ozet, COALESCE(k.zamani, now())
+    `INSERT INTO bildirim_eposta_kuyrugu (kisi_id, bildirim_id, tur, onem, baslik, kayit_no, yol, gecikme_gunu, istasyon, kademe, ozet, zamani,
+                                          kayit_basligi, zaman_araligi, yer, duzenleyen)
+     SELECT k.kisi_id, k.bildirim_id, k.tur, k.onem, k.baslik, k.kayit_no, k.yol, k.gecikme_gunu, k.istasyon, k.kademe, k.ozet, COALESCE(k.zamani, now()),
+            k.kayit_basligi, k.zaman_araligi, k.yer, k.duzenleyen
        FROM jsonb_to_recordset($1::jsonb) AS k(kisi_id int, bildirim_id int, tur text, onem text, baslik text, kayit_no text, yol text,
-            gecikme_gunu int, istasyon text, kademe int, ozet boolean, zamani timestamptz)`,
+            gecikme_gunu int, istasyon text, kademe int, ozet boolean, zamani timestamptz, kayit_basligi text, zaman_araligi text, yer text, duzenleyen text)`,
     [JSON.stringify(satirlar.map((s) => ({
       kisi_id: s.kisiId, bildirim_id: s.bildirimId, tur: s.tur, onem: s.onem, baslik: s.baslik, kayit_no: s.kayitNo, yol: s.yol,
       gecikme_gunu: s.gecikmeGunu, istasyon: s.istasyon, kademe: s.kademe, ozet: s.ozet, zamani: s.zamani,
+      kayit_basligi: s.kayitBasligi, zaman_araligi: s.zamanAraligi, yer: s.yer, duzenleyen: s.duzenleyen,
     })))],
   );
 }
 
-export interface KuyrukSatiri {
+export type KuyrukSatiri = ToplantiAlanlari & {
   id: number; kisiId: number | null; bildirimId: number | null; tur: string; onem: 'bilgi' | 'uyari' | 'acil'; baslik: string;
   kayitNo: string | null; yol: string | null; gecikmeGunu: number | null; istasyon: string | null; olayZamani: string;
   kademe: number; tekrarNo: number; ozet: boolean; deneme: number;
   // Kaynak bildirimin durumu; kaynaksız satırda null.
   kaynak: { sinif: BildirimSinifi; okundu: string | null; arsivlendi: string | null; yapildi: string | null } | null;
-}
+};
 // Zamanı gelen satırlar kilitlenir ve 10 dakika ileri itilir: gönderim transaction dışında sürerken başka tur aynı satırı almaz,
 // süreç düşerse satır 10 dakika sonra yeniden denenir.
 // `bekleme`: true kademe beklemelerini (kişisiz), false kişi satırlarını alır.
@@ -633,7 +638,7 @@ export function epostaSiradakiler(db: Db, ozet: boolean, sinir: number, bekleme:
      )
      SELECT q.id, q.kisi_id AS "kisiId", q.bildirim_id AS "bildirimId", q.tur, q.onem, q.baslik, q.kayit_no AS "kayitNo", q.yol,
             q.gecikme_gunu AS "gecikmeGunu", q.istasyon, ${zamanMetni('q.olay_zamani')} AS "olayZamani", q.kademe, q.tekrar_no AS "tekrarNo",
-            q.ozet, q.deneme,
+            q.ozet, q.deneme, q.kayit_basligi AS "kayitBasligi", q.zaman_araligi AS "zamanAraligi", q.yer, q.duzenleyen,
             CASE WHEN b.id IS NULL THEN NULL ELSE json_build_object('sinif', b.sinif, 'okundu', ${zamanMetni('b.okundu')},
               'arsivlendi', ${zamanMetni('b.arsivlendi')}, 'yapildi', ${zamanMetni('b.yapildi')}) END AS kaynak
        FROM itilen q LEFT JOIN bildirim_kaydi b ON b.id = q.bildirim_id

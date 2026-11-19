@@ -4,7 +4,7 @@ import { tarihSemasi } from '../zaman.ts';
 // Takvim (891 a, 1160 a): başka modüllerin tarihlerini tek yerde gösterir, yalnız okur (1161 a). Kaynak listesi 1162 b.
 // Her kaynak kendi modülünün disari.ts `takvimKayitlari(db, baslangic, bitis)` işlevinden gelir; sahibi o modüldür.
 export const TAKVIM_KAYNAKLARI = [
-  'siparis', 'emir-plan', 'emir-bitis', 'sevk', 'satin-alma', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus',
+  'siparis', 'emir-plan', 'emir-bitis', 'sevk', 'satin-alma', 'kalibrasyon', 'denetim', 'izin', 'vergi', 'planli-durus', 'toplanti',
 ] as const;
 export const takvimKaynagiSemasi = z.enum(TAKVIM_KAYNAKLARI);
 export type TakvimKaynagi = z.output<typeof takvimKaynagiSemasi>;

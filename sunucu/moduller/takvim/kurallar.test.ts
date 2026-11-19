@@ -4,12 +4,12 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { butunIzinleriGorurMu, gecikenAraligi, gorulenKaynaklar, kayitlariSirala } from './kurallar.ts';
 
 test('TK-K1: yetkisi olmayan kaynak hiç görünmez; emir kaynakları emir listesi sayfasıyla açılır; izin herkese (kendi izni)', () => {
-  assert.deepEqual(gorulenKaynaklar([]), { okunan: ['izin', 'planli-durus'], bekleyen: [] });
+  assert.deepEqual(gorulenKaynaklar([]), { okunan: ['izin', 'planli-durus', 'toplanti'], bekleyen: [] });
   assert.deepEqual(gorulenKaynaklar(['kalibrasyon.oku', 'plan.oku', 'sevkiyat.oku']), {
-    okunan: ['sevk', 'kalibrasyon', 'izin', 'planli-durus'], bekleyen: [],
+    okunan: ['sevk', 'kalibrasyon', 'izin', 'planli-durus', 'toplanti'], bekleyen: [],
   });
   assert.deepEqual(gorulenKaynaklar(['sayfa.uretim-emirleri', 'siparisler.oku', 'denetim-hazirlik.oku', 'finans.oku', 'satin-alma.oku']), {
-    okunan: ['siparis', 'emir-plan', 'emir-bitis', 'satin-alma', 'denetim', 'izin', 'vergi', 'planli-durus'], bekleyen: [],
+    okunan: ['siparis', 'emir-plan', 'emir-bitis', 'satin-alma', 'denetim', 'izin', 'vergi', 'planli-durus', 'toplanti'], bekleyen: [],
   });
 });
 

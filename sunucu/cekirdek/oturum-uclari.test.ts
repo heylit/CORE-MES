@@ -63,6 +63,9 @@ const OTURUM_UCLARI: Readonly<Record<string, Beyan>> = {
   'GET /stok/malzeme-kart-bilgileri': { sahiplik: 'yok' },
   'GET /stok/menu-sayaclari': { sahiplik: 'yok' },
   'GET /stok/ozet': { sahiplik: 'yok' },
+  // Düzenleyen ya da katılımcı kendi toplantısını görür, `toplantilar.oku` hepsini (kullanıcı kararı 3448-2 a, 19.11.2026).
+  'GET /toplantilar': { sahiplik: 'kendi', test: ['toplantilar/toplantilar.test.ts', 'yabancı görmez'] },
+  'GET /toplantilar/:id': { sahiplik: 'kendi', test: ['toplantilar/toplantilar.test.ts', 'yabancı görmez'] },
   'GET /uretim-emirleri/ozet': { sahiplik: 'yok' },
   'GET /vardiya-takvimi': { sahiplik: 'yok' },
   'GET /ziyaretcilerim': { sahiplik: 'kendi' },

@@ -690,3 +690,24 @@ export function takipGorevleri(db: Db): Promise<TakipGorevi[]> {
       ORDER BY g.id`,
   );
 }
+
+// 3448: toplantı aksiyonundan açılan görev. Aksiyonu yalnız toplantılar tutar; burada yalnız bağ sütunu yazılır ve okunur.
+export async function toplantiGorevEkle(
+  db: Db, projeId: number, g: { aksiyonId: number; ad: string; sorumluKisiId: number; planBaslangic: string; planBitis: string }, kisiId: number,
+): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO projeler_gorev (proje_id, ad, sorumlu_kisi_id, plan_baslangic, plan_bitis, olusturan_id, toplanti_aksiyon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [projeId, g.ad, g.sorumluKisiId, g.planBaslangic, g.planBitis, kisiId, g.aksiyonId],
+  );
+  if (satir === null) throw new Error('Görev eklenemedi');
+  return satir.id;
+}
+// İptal edilen görev bağ sayılmaz: aksiyon yeniden göreve çevrilebilir (tekil dizin de iptali dışarıda bırakır).
+export function toplantiAksiyonGorevleri(db: Db, aksiyonIdler: readonly number[]): Promise<{ aksiyonId: number; id: number; durum: string }[]> {
+  return db.sorgu<{ aksiyonId: number; id: number; durum: string }>(
+    `SELECT toplanti_aksiyon_id AS "aksiyonId", id, durum FROM projeler_gorev
+      WHERE toplanti_aksiyon_id = ANY($1::int[]) AND durum <> 'iptal' ORDER BY id`,
+    [aksiyonIdler],
+  );
+}

@@ -8,6 +8,7 @@ import { resmiTatilGunleri, takvimKayitlari as izinler } from '../ik/disari.ts';
 import { takvimKayitlari as kalibrasyonlar } from '../kalibrasyon/disari.ts';
 import { takvimKayitlari as satinAlmalar } from '../satin-alma/disari.ts';
 import { takvimKayitlari as sevkler } from '../sevkiyat/disari.ts';
+import { takvimKayitlari as toplantilar } from '../toplantilar/disari.ts';
 import { takvimKayitlari as siparisler } from '../siparisler/disari.ts';
 import { takvimKayitlari as emirler } from '../uretim-emirleri/disari.ts';
 import { takvimKayitlari as duruslar } from '../vardiya/disari.ts';
@@ -28,6 +29,7 @@ const OKUYUCULAR: Partial<Record<TakvimKaynagi, Okuyucu>> = {
   'izin': (db, b, e, k) => izinler(db, b, e, butunIzinleriGorurMu(k.islemler) ? null : k.id),
   'vergi': (db, b, e) => vergiler(db, b, e),
   'planli-durus': (db, b, e) => duruslar(db, b, e),
+  'toplanti': (db, b, e, k) => toplantilar(db, b, e, k),
 };
 
 // Yalnız okur (1161 a). Okuma yetkisi olmayan kaynak hiç okunmaz; tatiller herkese açıktır (vardiya takvimi gibi).
