@@ -15,6 +15,8 @@ import {
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
+import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
+import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -631,6 +633,33 @@ const adimliUclar = [
     isle: async ({ db, kullanici, parametre, govde }) => {
       await isEmri.ekAdimEkle(db, kullanici, parametre.id, govde);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // 3455-1: geçmiş adım girişi ve son girişin geri alınması; 3455-S2 a: yalnız yönetici (işlemin rol satırı yok).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/gecmis-giris',
+    yetki: 'uretim-emirleri.gecmis-giris',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: gecmisGirisGovdesi,
+    cevap: gecmisGirisCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      const { uyari } = await gecmisGir(db, kullanici, parametre.id, govde);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id), uyari };
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/gecmis-giris/geri-al',
+    yetki: 'uretim-emirleri.gecmis-giris',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: gecmisGeriAlGovdesi,
+    cevap: gecmisGirisCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      const { uyari } = await gecmisGeriAl(db, kullanici, parametre.id, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id), uyari };
     },
   }),
   uc({

@@ -223,3 +223,20 @@
 @media (max-width: 767px) { .tc-emir-adim-statu .tc-smartes-adim { align-items: flex-start; } }
 /* Satırın sağı (statü, SmartES rozeti, menü) orta genişlikte ad sütununu daraltmasın: sağ taraf kendi içinde alt satıra sarılır. */
 @media (min-width: 768px) and (max-width: 1279px) { .tc-emir-adim-statu { max-width: var(--acilir-encok); } }
+/* 3455-1: geçmiş giriş penceresi ve şeridi. Adım alanları telefonda alt alta, genişte yan yana. */
+.tc-gecmis { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-gecmis-tarihler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--sutun-dar)), 1fr)); gap: var(--b-3); }
+.tc-gecmis-adim {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--sutun-dar)), 1fr)); gap: var(--b-3); margin: 0; padding: var(--b-3);
+  min-width: 0; border: thin solid var(--edge); border-radius: var(--yari-1);
+}
+.tc-gecmis-adim legend { padding-inline: var(--b-1); overflow-wrap: anywhere; }
+.tc-gecmis-adim legend small { color: var(--muted); }
+.tc-gecmis-serit {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); margin: 0 0 var(--b-4); padding: var(--b-3); min-width: 0;
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel);
+}
+.tc-gecmis-serit > svg { color: var(--muted); flex: none; }
+.tc-gecmis-serit-metin { display: grid; gap: var(--b-1); flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+.tc-gecmis-serit-metin ul { margin: 0; padding-inline-start: var(--b-4); }
+.tc-gecmis-serit-metin small { color: var(--muted); font-size: var(--yazi-s); }
