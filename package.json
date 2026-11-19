@@ -40,6 +40,7 @@
     "harita": "node araclar/harita.ts",
     "dizin": "node araclar/harita.ts",
     "durum": "node araclar/durum.ts",
+    "logo-yardimci-ayar": "node araclar/logo-yardimci-ayar.ts",
     "teslim": "node araclar/teslim.ts",
     "teslim-denetle": "node araclar/teslim-denetle.ts",
     "paket": "node araclar/paket-yap.ts",
