@@ -596,7 +596,7 @@ export function TumIsler() {
       alt: r.tasima === 'firma' ? 'sevk yok: firma alır ya da getirir' : r.is?.tetiklendi ? tarihMetni(r.is.tetiklendi.slice(0, 10)) : 'sevk mi alım mı burada seçilir',
     });
     adimlar.push(r.yon === 'gidis'
-      ? { ad: 'Depoda son çıkış', alt: r.kaynak === 'fason' ? 'stok fason firmasının konumuna geçer' : r.kaynak === 'urun' ? 'stoktan düşer; iş kapanır' : r.kaynak === 'siparis' ? 'depodan çıkar; stok çıkışı ayrıca yazılır' : 'depodan çıkar; iş kapanır', bitti: kapali(r) }
+      ? { ad: 'Depoda son çıkış', alt: r.kaynak === 'fason' ? 'stok fason firmasının konumuna geçer' : r.kaynak === 'urun' || r.kaynak === 'siparis' ? 'stoktan düşer; iş kapanır' : 'depodan çıkar; iş kapanır', bitti: kapali(r) }
       : { ad: 'Depoda kabul', alt: r.kaynak === 'fason-donus' ? 'sarf, fire, üretimden giriş; adım biter (istasyon gibi)' : 'giriş fişi; iş kapanır', bitti: kapali(r) });
     const ilkAcik = adimlar.findIndex((a) => !a.bitti);
     return (

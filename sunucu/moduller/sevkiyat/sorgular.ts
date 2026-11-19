@@ -524,6 +524,12 @@ export interface SevkDurumuSatiri {
   uretimEmriId: number; hazirZamani: string; kaldirildi: string | null; isId: number | null;
   isDurumu: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi' | null; isDurumZamani: string | null; isIptalEdildi: boolean;
 }
+// Ürünü hâlâ sevk bekleyen emirler: kaldırılmamış, depodan çıkmamış ürün kalemi, işsiz ya da işi iptal edilmemiş ve tamamlanmamış.
+export const acikUrunSevkliEmirler = async (db: Db, emirIdleri: readonly number[]): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT b.uretim_emri_id AS id FROM sevkiyat_bekleyen b LEFT JOIN sevkiyat_isi i ON i.id = b.is_id
+      WHERE b.kaynak = 'urun' AND b.uretim_emri_id = ANY($1::int[]) AND b.kaldirildi IS NULL AND b.depo_zamani IS NULL
+        AND (i.id IS NULL OR (i.iptal_edildi IS NULL AND i.durum <> 'tamamlandi'))`, [[...new Set(emirIdleri)]])).map((r) => r.id);
 export function emirlerinSevkDurumu(db: Db, emirIdleri: readonly number[]): Promise<SevkDurumuSatiri[]> {
   return db.sorgu<SevkDurumuSatiri>(
     `SELECT DISTINCT ON (b.uretim_emri_id)

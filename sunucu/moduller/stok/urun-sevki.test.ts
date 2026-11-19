@@ -20,6 +20,8 @@ import type { SevkIsDurumu, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { urunSevkiYansit } from './disari.ts';
+import { binde } from './kurallar.ts';
+import { bakiyeDegistir } from './servis/ortak.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -448,5 +450,42 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.deepEqual(s2 && [s2.is, s2.kabulAdet], ['kabul', '3.0000'], '2 + 3 kabul, 3 geri alındı, düzeltmede 1 yeniden kabul: kalem açık');
     assert.equal((await kabul('2', gelis)).durum, 200);
     assert.equal(await kalemAsamasi(gelis), 'tamamlandi');
+  });
+  test('3429-3 F4b (Risk K1): satış kaleminin depo çıkışı sevk bekleyen emrin partisine dokunmaz; eksik emirsiz bakiyede eksiye düşer', async () => {
+    const id = await bitenEmir(5);
+    const firmaId = await musteriKur();
+    const nokta = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, firma_id) VALUES ('US Satış Noktası', 'musteri', 39.95, 32.75, $1) RETURNING id", [firmaId]))!.id;
+    const kabul = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    await o().vt.tx(async (db) => {
+      await db.sorgu(
+        `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ('giris', pg_current_xact_id(), $3) RETURNING id),
+           h AS (INSERT INTO stok_hareketi (zaman, tur, malzeme_id, hedef_konum_id, miktar, kisi_id, giris_kaynagi)
+                 VALUES (now(), 'giris', $1, $2, 2, $3, 'mal_kabul') RETURNING id)
+         INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f`, [urunNo, kabul, yoneticiId]);
+      await bakiyeDegistir(db, { malzemeId: urunNo, konumId: kabul, partiId: null, kaliteDurumu: 'serbest', fark: binde('2') });
+    });
+    sayac += 1;
+    const siparisId = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
+       VALUES ($1, 'onayli', $2, current_date, current_date + 3, 20, $3, $3, now()) RETURNING id`, [`ORN-US-${String(sayac)}`, firmaId, yoneticiId]))!.id;
+    const satirId = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, karsilama) VALUES ($1, 1, $2, 4, 5, 'stok') RETURNING id",
+      [siparisId, urunNo]))!.id;
+    const b = await istek<{ kalemIdleri: number[] }>('planlama_proje', 'POST', '/sevkiyat/tum-isler/serbest-birak', { anahtarlar: [`siparis:${String(satirId)}`], tasima: 'biz' });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const kalemId = b.govde.kalemIdleri[0]!;
+    const c = await istek<{ is: { id: number } }>('depo', 'POST', `/sevkiyat/bekleyenler/${kalemId}/ise-cevir`, isGovdesi(await bugun(), nokta));
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${c.govde.is.id}/tetikle`)).durum, 200);
+    const emirStogu = async () => Number((await o().sahip.tek<{ m: string }>(
+      'SELECT COALESCE(sum(b.miktar), 0)::text AS m FROM stok_bakiye b JOIN stok_parti p ON p.id = b.parti_id WHERE p.uretim_emri_id = $1', [id]))!.m);
+    const emirsiz = async () => Number((await o().sahip.tek<{ m: string }>(
+      'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND parti_id IS NULL', [urunNo]))!.m);
+    assert.deepEqual([await emirStogu(), await emirsiz()], [5, 2]);
+    const cikis = await istek<{ uyarilar?: string[] }>('depo', 'POST', `/stok/depo-sevk/${kalemId}/cikis`);
+    assert.equal(cikis.durum, 200, JSON.stringify(cikis.govde));
+    assert.deepEqual([await emirStogu(), await emirsiz()], [5, -2], 'sevk bekleyen emrin partisi müşterisine kalır');
+    assert.ok(cikis.govde.uyarilar?.some((u) => u.includes('2 adet stokta yoktu')), JSON.stringify(cikis.govde));
   });
 });

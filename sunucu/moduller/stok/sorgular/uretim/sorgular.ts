@@ -78,6 +78,24 @@ export const emrinSevkBakiyeleri = (db: Db, malzemeId: number, uretimEmriId: num
        FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id JOIN stok_parti p ON p.id = b.parti_id
       WHERE b.malzeme_id = $1 AND p.uretim_emri_id = $2 AND b.miktar > 0 AND k.firma_id IS NULL AND k.tur <> 'hurda'
       ORDER BY (k.tur = 'sevkiyat') DESC, (b.statu_id IS NULL) DESC, b.ilk_giris, b.parti_id, b.konum_id`, [malzemeId, uretimEmriId]);
+// 3429-3 F4b: satış siparişi kaleminin ("Stoktan", "Satın al") sevk edilebilecek bakiyeleri: malzemenin son hâldeki (statüsüz) her
+// bakiyesi (partisiz dahil), emirsiz parti (alım, sayım) önce. Ürünü sevk bekleyen emrin partisini çağıran ayıklar (Risk K1). Konum sırası emrin sevkiyle aynıdır.
+export const malzemeninSevkBakiyeleri = (db: Db, malzemeId: number): Promise<(SevkBakiyesi & { uretimEmriId: number | null })[]> =>
+  db.sorgu(
+    `SELECT b.konum_id AS "konumId", k.tur AS "konumTuru", b.parti_id AS "partiId", b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu",
+            b.miktar::text AS miktar, p.uretim_emri_id AS "uretimEmriId",
+            COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id AND t.malzeme_id = b.malzeme_id
+                        AND t.parti_id IS NOT DISTINCT FROM b.parti_id AND t.statu_id IS NOT DISTINCT FROM b.statu_id AND t.kalite_durumu = b.kalite_durumu), 0)::text AS ayrilan
+       FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id LEFT JOIN stok_parti p ON p.id = b.parti_id
+      WHERE b.malzeme_id = $1 AND b.statu_id IS NULL AND b.miktar > 0 AND k.firma_id IS NULL AND k.tur <> 'hurda'
+      ORDER BY (p.uretim_emri_id IS NULL) DESC, (k.tur = 'sevkiyat') DESC, b.ilk_giris, b.parti_id, b.konum_id`, [malzemeId]);
+// Emirsiz sevkin (satış siparişi kalemi) geri alınmamış hareketleri, en yeniden.
+export const geriAlinmamisEmirsizSevkHareketleri = async (db: Db, malzemeId: number, aciklama: string, ek: string): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `SELECT h.id FROM stok_hareketi h
+      WHERE h.uretim_emri_id IS NULL AND h.malzeme_id = $1 AND h.aciklama IN ($2, $2 || $3) AND h.tur = 'cikis'
+        AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)
+      ORDER BY h.id DESC`, [malzemeId, aciklama, ek])).map((r) => r.id);
 // Sevkin geri alınmamış hareketleri (en yeniden): iş kimliği hareketin açıklamasındadır (red parçada ekiyle), geri alma bunlardan yazılır.
 export const geriAlinmamisSevkHareketleri = async (db: Db, uretimEmriId: number, aciklama: string, ek: string): Promise<number[]> =>
   (await db.sorgu<{ id: number }>(

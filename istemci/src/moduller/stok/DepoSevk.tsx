@@ -13,7 +13,7 @@ const KAYNAK_ADI: Record<KalemKaynagi, string> = { urun: 'Ürün', fason: 'Fason
 // Çıkışta stoğun gittiği yer; kabulde yazılan fişler.
 const CIKIS_YERI: Record<KalemKaynagi, string> = {
   urun: 'Stoktan sevk çıkışıyla düşer', fason: 'Yarı parça firmanın fason konumuna geçer', 'fason-donus': '', alim: '', elle: 'Parça firmanın konumuna geçer',
-  siparis: 'Stok değişmez; çıkışı stok çıkışıyla yazın',
+  siparis: 'Stoktan sevk çıkışıyla düşer; ayırma isteği teslim olur',
 };
 const KABUL_FISI: Record<KalemKaynagi, string> = {
   urun: '', fason: '', 'fason-donus': 'Karantinaya giriş; kararı GKK verir', alim: 'Sipariş satırına giriş fişi', elle: 'Giriş fişi', siparis: '',
@@ -56,9 +56,7 @@ export function DepoSevk() {
       hucre: (s) => zamanMetni(s.tetiklendi),
     },
     { anahtar: 'erken', baslik: 'Erken', csv: (s) => (s.erken ? 'Erken çıkış' : ''), hucre: (s) => (s.erken ? <Rozet ton="uyari">Erken çıkış</Rozet> : '—') },
-    { anahtar: 'ne', baslik: tur === 'cikis' ? 'Stok' : 'Fiş', kes: true, hucre: (s) => (tur === 'cikis' && s.kaynak === 'siparis'
-      ? <Rozet ton="uyari">{CIKIS_YERI.siparis}</Rozet>
-      : (tur === 'cikis' ? CIKIS_YERI[s.kaynak] : KABUL_FISI[s.kaynak]) || '—') },
+    { anahtar: 'ne', baslik: tur === 'cikis' ? 'Stok' : 'Fiş', kes: true, hucre: (s) => (tur === 'cikis' ? CIKIS_YERI[s.kaynak] : KABUL_FISI[s.kaynak]) || '—' },
     {
       anahtar: 'eylem', baslik: '', hizala: 'sag', sabit: 'sag',
       hucre: (s) => (tur === 'cikis'

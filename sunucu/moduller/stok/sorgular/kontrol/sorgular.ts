@@ -84,6 +84,18 @@ export const ayirmaIstekleri = (db: Db, acik: boolean, sinir: number): Promise<A
 export const ayirmaIstegiKilitle = (db: Db, id: number): Promise<AyirmaIstegiHam | null> => db.tek(`${AYIRMA_SECIMI} WHERE id = $1 FOR UPDATE`, [id]);
 export const ayirmaIstegiIlerlet = (db: Db, id: number, durum: 'ayrildi' | 'teslim', kisiId: number): Promise<{ id: number; surum: number } | null> =>
   db.tek('UPDATE stok_ayirma_istegi SET durum = $2, karar_kisi_id = $3, karar_zamani = now(), surum = surum + 1 WHERE id = $1 RETURNING id, surum', [id, durum, kisiId]);
+// 3429-3 F4b: satış kaleminin depo son çıkışı satırın açık isteğini teslim eder; çıkışın geri alınması en son teslimi, satırda açık istek
+// yoksa, ayrılmış hâle döndürür (satırın tek açık isteği kuralı korunur).
+export const siparisAyirmasiniTeslimEt = async (db: Db, siparisSatiriId: number, kisiId: number): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `UPDATE stok_ayirma_istegi SET durum = 'teslim', karar_kisi_id = $2, karar_zamani = now(), surum = surum + 1
+      WHERE kaynak = 'siparis' AND siparis_satiri_id = $1 AND durum IN ('bekliyor', 'ayrildi') RETURNING id`, [siparisSatiriId, kisiId])).map((r) => r.id);
+export const siparisAyirmaTesliminiGeriAl = async (db: Db, siparisSatiriId: number, kisiId: number): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `UPDATE stok_ayirma_istegi SET durum = 'ayrildi', karar_kisi_id = $2, karar_zamani = now(), surum = surum + 1
+      WHERE id = (SELECT id FROM stok_ayirma_istegi WHERE kaynak = 'siparis' AND siparis_satiri_id = $1 AND durum = 'teslim' ORDER BY karar_zamani DESC, id DESC LIMIT 1)
+        AND NOT EXISTS (SELECT 1 FROM stok_ayirma_istegi WHERE kaynak = 'siparis' AND siparis_satiri_id = $1 AND durum IN ('bekliyor', 'ayrildi'))
+      RETURNING id`, [siparisSatiriId, kisiId])).map((r) => r.id);
 export const ayirmaIstegiIptal = (db: Db, id: number, neden: string, geriEklendi: boolean, kisiId: number): Promise<{ id: number; surum: number } | null> =>
   db.tek(`UPDATE stok_ayirma_istegi SET durum = 'iptal', iptal_nedeni = $2, geri_eklendi = $3, karar_kisi_id = $4, karar_zamani = now(), surum = surum + 1
            WHERE id = $1 RETURNING id, surum`, [id, neden, geriEklendi, kisiId]);
