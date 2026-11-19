@@ -88,7 +88,19 @@ güncelleyici yardımcıya dokunmaz.
 gösterge dosyasına yeni exe yolunu yazın (güncelleyici yazmışsa olduğu gibi kalır), eski yardımcıyı Görev Zamanlayıcı'dan durdurup
 görevi yeniden çalıştırın ve Bağlantı izleme'de "Eski sürüm" uyarısının kalktığını görün. Sonraki güncellemeler kendiliğinden olur.
 
-Bu kerelik ayarı `logo-yardimci-ayar` aracı yapar (kart 3432). Paketin kurulduğu sürüm klasöründe, yardımcıyı açan kullanıcıyla:
+Canlıda bu kerelik geçiş kendiliğinden olur (kart 3432-2): yeni sürüm güncelleyiciyle ilk açıldığında, Windows'ta ve `TMIV2_ORTAM=canli`
+iken, sunucu arka planda `araclar/logo-yardimci-ilk-gecis.ts`'yi bir kez başlatır. Güncelleme klasörüne `logo-yardimci-ilk-gecis.json`
+(işaret; varsa bir daha başlamaz) ve `logo-yardimci-ilk-gecis.log` yazar. Sıra: 4195'i dinleyen `logo-yardimcisi.exe` bulunur; betik,
+kurulum klasöründe ya da "TMIV2 Bekci" görevinin klasöründe bu exe yolunu içeren tek `.cmd`/`.bat`'tır; ilk kurulumun `.env`'i, içeriği
+sürüm klasöründeki kopyayla aynı olan klasördür. Aşağıdaki aracın `--uygula`'sı yapılır, yardımcı 3314 sırasıyla yenilenir; eski
+yardımcı kendi ucundan kapanmazsa yalnız o süreç (4195'i dinleyen `logo-yardimcisi.exe`) durdurulur. Bulunamayan ya da güvenli olmayan
+her durumda hiçbir dosyaya dokunulmaz, nedeni günlüğe yazılır ve "Eski sürüm" uyarısı kalır. Yenisi doğrulanmazsa 3314 eskisine döner,
+betik ve `.env` yedekten geri konur. Durdurma yetkisi yoksa yenisi açılmaz, eski çalışır (DOĞRULANMADI: aynı kullanıcının oturum 0
+sürecini yöneticisiz durdurabilmesi). İlk kurulum `.env`'i bulunamazsa yardımcı yine yenilenir ama sonraki paketler için `.env`
+satırları elle eklenir. Geçişi yeniden denemek için işaret dosyası silinip sunucu yeniden başlatılır. Geçiş sırasında Logo bağlantısı kısa süre kesilir; eski yardımcı zorla durdurulursa elindeki yazma "sonucu bilinmiyor" sayılır ve TMI önce
+"var mı" ile okur (yukarıda). Bu yüzden ilk geçişi taşıyan paketi mesai dışında uygulayın.
+
+Aynı ayar elle de yapılabilir: `logo-yardimci-ayar` aracı (kart 3432). Paketin kurulduğu sürüm klasöründe, yardımcıyı açan kullanıcıyla:
 
 ```
 npm.cmd run logo-yardimci-ayar -- --betik <kurulum>\logo-yardimcisi-baslat.cmd --env <ilk kurulum>\.env
