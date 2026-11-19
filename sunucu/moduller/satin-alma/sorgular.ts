@@ -14,6 +14,10 @@ const etkin = (f: string, miktar: string): string =>
   `satin_alma_etkin_birim_fiyat(${f}.talep_id, ${f}.teklif_id, ${f}.kalem_id, ${f}.birim_fiyat, ${miktar})`;
 
 // ---- Numaralar ayardaki kalıptan gelir (ayarlar numaraAl); kalıp değişince çakışan numara atlanır.
+// 3437 a (dilim 3b-3): alternatifle verilen sipariş satırının kartı (boşsa istenen kart). Stok, fiyat, Logo ve kart kopyası alınan
+// kartı okur; ihtiyaç ve yolda istenen kartta kalır (plan ana kartı arar, alternatif onun yerine gelir).
+const ALTERNATIF_KARTI = (satir: string): string => `coalesce(${satir}.alternatif_malzeme_no, c.malzeme_no)`;
+
 export async function talepNoVarMi(db: Db, no: string): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_talep WHERE no = $1', [no])) !== null;
 }
@@ -259,7 +263,7 @@ export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]
             (s.miktar * ${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
             s.miktar::text AS miktar,
             coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim,
-            c.malzeme_no AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason,
+            ${ALTERNATIF_KARTI('s')} AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason,
             ${KALEM_EMRI} AS "emirId", t.proje_id AS "projeId",
             (CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf)::text AS masraf
        ${YOL_KAYNAGI}
@@ -558,7 +562,7 @@ export interface LogoSiparisKalemi {
 }
 export function logoSiparisKalemleriOku(db: Db, siparisIdler: readonly number[]): Promise<LogoSiparisKalemi[]> {
   return db.sorgu<LogoSiparisKalemi>(
-    `SELECT p.id AS "siparisId", s.id AS "satirId", c.malzeme_no AS "malzemeNo", s.miktar::text AS miktar, s.birim, round(${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100), 4)::text AS "birimFiyat",
+    `SELECT p.id AS "siparisId", s.id AS "satirId", ${ALTERNATIF_KARTI('s')} AS "malzemeNo", s.miktar::text AS miktar, s.birim, round(${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100), 4)::text AS "birimFiyat",
         s.logo_satir_ref AS "logoSatirRef"
        FROM satin_alma_siparis p
        JOIN satin_alma_siparis_satiri s ON s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
@@ -881,9 +885,9 @@ export interface SiparisSatiriOkuma {
 export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Promise<SiparisSatiriOkuma[]> {
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
-        c.malzeme_no AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
+        ${ALTERNATIF_KARTI('s')} AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
         p.beklenen_teslim AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
-        coalesce(k.uygulanan_malzeme_no, c.malzeme_no) AS "revizyonMalzemeNo"
+        coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')}) AS "revizyonMalzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -998,10 +1002,10 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
     `SELECT n.no AS "malzemeNo", (round(sum(x.tl * x.net) / nullif(sum(x.net), 0), 4))::text AS "tryBirimFiyat", count(x.net)::int AS "teslimSayisi"
        FROM unnest($1::int[]) AS n(no)
        LEFT JOIN (
-         SELECT c.malzeme_no, sum(${STOK_MIKTARI}) AS net, ${ALIS_BIRIM_FIYATI} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
+         SELECT ${ALTERNATIF_KARTI('s')} AS malzeme_no, sum(${STOK_MIKTARI}) AS net, ${ALIS_BIRIM_FIYATI} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
-          WHERE c.malzeme_no = ANY($1::int[])
-          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[])
+          GROUP BY ${ALTERNATIF_KARTI('s')}, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x ON x.malzeme_no = n.no AND x.tl IS NOT NULL
       GROUP BY n.no`,
     [malzemeNolar],
@@ -1019,14 +1023,14 @@ export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], p
             CASE WHEN bool_or(x.tl IS NULL) THEN NULL ELSE (round(sum(x.tl * x.net) / sum(x.net), 4))::text END AS "tryBirimFiyati",
             sum(x.net)::text AS "teslimMiktari"
        FROM (
-         SELECT h.hedef, h.hedef_id, c.malzeme_no, sum(${STOK_MIKTARI}) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
+         SELECT h.hedef, h.hedef_id, ${ALTERNATIF_KARTI('s')} AS malzeme_no, sum(${STOK_MIKTARI}) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} * ${STOK_BIRIMINE} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
            JOIN satin_alma_talep t ON t.id = s.talep_id
            LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
            CROSS JOIN LATERAL (VALUES ('emir', ${KALEM_EMRI}), ('proje', CASE WHEN ${KALEM_EMRI} IS NULL THEN t.proje_id END)) AS h(hedef, hedef_id)
-          WHERE t.durum <> 'iptal' AND s.is_emri_id IS NULL AND k.is_emri_id IS NULL AND c.malzeme_no = ANY($3::int[])
+          WHERE t.durum <> 'iptal' AND s.is_emri_id IS NULL AND k.is_emri_id IS NULL AND ${ALTERNATIF_KARTI('s')} = ANY($3::int[])
             AND ((h.hedef = 'emir' AND h.hedef_id = ANY($1::int[])) OR (h.hedef = 'proje' AND h.hedef_id = ANY($2::int[])))
-          GROUP BY h.hedef, h.hedef_id, c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          GROUP BY h.hedef, h.hedef_id, ${ALTERNATIF_KARTI('s')}, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x
       GROUP BY x.hedef, x.hedef_id, x.malzeme_no
       ORDER BY x.hedef, x.hedef_id, x.malzeme_no`,
@@ -1039,11 +1043,11 @@ export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Pr
     `SELECT DISTINCT ON (x.malzeme_no) x.malzeme_no AS "malzemeNo", (round(x.net_fiyat, 4))::text AS "birimFiyat", x.para_birimi AS "paraBirimi",
         (round(x.net_fiyat * x.kur, 4))::text AS "tryBirimFiyat", ${ISO('x.zaman')} AS zaman
        FROM (
-         SELECT c.malzeme_no, ${ALIS_BIRIM_FIYATI} * ${STOK_BIRIMINE} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
+         SELECT ${ALTERNATIF_KARTI('s')} AS malzeme_no, ${ALIS_BIRIM_FIYATI} * ${STOK_BIRIMINE} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
                 max(m.zaman) FILTER (WHERE m.miktar > 0) AS zaman, max(m.id) FILTER (WHERE m.miktar > 0) AS id
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
-          WHERE c.malzeme_no = ANY($1::int[])
-          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[])
+          GROUP BY ${ALTERNATIF_KARTI('s')}, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x
       WHERE x.net_fiyat IS NOT NULL
       ORDER BY x.malzeme_no, x.zaman DESC, x.id DESC`,
@@ -1343,7 +1347,7 @@ export async function kgFiyatiIptalEt(db: Db, id: number, kisiId: number, gerekc
 // 2455-A son alış: teslimi olan malzeme numaraları (karttan kalite ve form, satın almadan fiyat okunur).
 export async function teslimliMalzemeNolari(db: Db): Promise<number[]> {
   return (await db.sorgu<{ no: number }>(
-    `SELECT DISTINCT c.malzeme_no AS no FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI} WHERE m.miktar > 0 AND c.malzeme_no IS NOT NULL ORDER BY 1`)).map((r) => r.no);
+    `SELECT DISTINCT ${ALTERNATIF_KARTI('s')} AS no FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI} WHERE m.miktar > 0 AND ${ALTERNATIF_KARTI('s')} IS NOT NULL ORDER BY 1`)).map((r) => r.no);
 }
 
 // ---- 533 a: tedarik termini (malzeme başına tek satır). Planın gereken tarihi sürümü artırmaz: plan her kayıtta tam listeyi
@@ -1505,7 +1509,7 @@ export function dieSiparisSatirIdleri(db: Db, dieIdleri: readonly number[]): Pro
 // 1105 a: kart kopyası henüz alınmamış sipariş satırları (kartlı kalemler); kopyası olan ve kartsız kalem dönmez.
 export function kopyasizSiparisSatirlari(db: Db, talepId: string): Promise<{ satirId: number; malzemeNo: number }[]> {
   return db.sorgu(
-    `SELECT ss.id AS "satirId", c.malzeme_no AS "malzemeNo"
+    `SELECT ss.id AS "satirId", ${ALTERNATIF_KARTI('ss')} AS "malzemeNo"
        FROM satin_alma_siparis_satiri ss
        JOIN satin_alma_talep_kalemi k ON k.talep_id = ss.talep_id AND k.id = ss.kalem_id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
@@ -1609,7 +1613,7 @@ export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Pro
 
 // 1647: revizyonu henüz yazılmamış, malzemeli sipariş satırları (talep başına) ve revizyonun bir kez yazılması.
 // 2881: fason kaleminin revizyonu hizmet kartının değil, uygulanacak parçanındır (REVIZYON_KARTI).
-const REVIZYON_KARTI = 'coalesce(k.uygulanan_malzeme_no, c.malzeme_no)';
+const REVIZYON_KARTI = `coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')})`;
 // Yalnız bu kayıtta açılan satır (oncekiler dışındaki): eski boş satıra kayıt anının revizyonu yazılmaz (2881 Test B1).
 export function siparisSatirIdleri(db: Db, talepId: string): Promise<number[]> {
   return db.sorgu<{ id: number }>('SELECT id FROM satin_alma_siparis_satiri WHERE talep_id = $1', [talepId]).then((l) => l.map((x) => x.id));
@@ -1672,7 +1676,7 @@ export function analizSiparisSatirlari(db: Db, basTarih: string, saatDilimi: str
     `SELECT r.id, s.siparis_tarihi::text AS "siparisTarihi", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
             trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur, q.iskonto_yuzdesi::text AS "genelIskonto",
             ${etkin('f', 'r.miktar')}::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto", COALESCE(f.termin_gun, q.termin_gun) AS "terminGun",
-            r.miktar::text AS miktar, r.birim, k.katalog_id::text AS "katalogId", k.ad, c.malzeme_no AS "malzemeNo",
+            r.miktar::text AS miktar, r.birim, k.katalog_id::text AS "katalogId", k.ad, ${ALTERNATIF_KARTI('r')} AS "malzemeNo",
             t.teslim::text AS "teslimMiktari", t.son AS "sonTeslimGunu"
        FROM satin_alma_siparis_satiri r
        JOIN satin_alma_siparis s ON s.talep_id = r.talep_id AND s.teklif_id = r.teklif_id
