@@ -26,3 +26,22 @@ export function yakalanmamisRetYaz(gunluk: HataGunlugu, sebep: unknown): void {
 export function yakalanmamisRetiDinle(kaynak: RetKaynagi, gunluk: HataGunlugu): void {
   kaynak.on('unhandledRejection', (sebep) => { yakalanmamisRetYaz(gunluk, sebep); });
 }
+
+// Sunucunun kendi isteğiyle kapanması (ekrandan yeniden başlatma): ana.ts kapanış işini kaydeder, modül yalnız ister. Süreci yeniden
+// açan bekçidir (araclar/bekci.ts); kayıt yoksa (testler, ana.ts dışı açılış) istek kabul edilmez.
+type KapanisIsi = (neden: string) => void;
+let kapanisIsi: KapanisIsi | null = null;
+
+export function kapanisIsiKur(is: KapanisIsi | null): void {
+  kapanisIsi = is;
+}
+
+export function kapanisKurulu(): boolean {
+  return kapanisIsi !== null;
+}
+
+export function kapanisIste(neden: string): boolean {
+  if (kapanisIsi === null) return false;
+  kapanisIsi(neden);
+  return true;
+}

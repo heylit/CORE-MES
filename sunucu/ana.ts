@@ -3,7 +3,7 @@ import type { ArayuzKapisi } from '#cekirdek/arayuz.ts';
 import { ayarOku, dinlemeAdresi } from '#cekirdek/ayar.ts';
 import { baglantiHatasiniYaz, mesgulGunlugu, uygulamaHavuzuAc, type Veritabani } from '#cekirdek/db.ts';
 import { bekleyenGocler } from '#cekirdek/goc.ts';
-import { yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
+import { kapanisIsiKur, yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isHavuzuBoyutu, modulIsleriniKesfet, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { kablola } from './kablolama.ts';
@@ -35,6 +35,8 @@ try {
 }
 // Süren iş turu en çok bu kadar beklenir; sonra uygulama ve havuz kapanır.
 const KAPANIS_IS_BEKLEMESI_MS = 10_000;
+// Kendi isteğiyle kapanışta (yeniden başlatma) kapanış takılırsa süreç yine biter; yeniden açan bekçidir.
+const KAPANIS_ZORLA_MS = 30_000;
 // Günlükleyici uygulamayla doğar, uygulama veritabanını ister: bildirim uygulama kurulunca bağlanır.
 let mesgulYaz: (bekleyen: number) => void = () => undefined;
 let baglantiHatasiYaz = baglantiHatasiniYaz;
@@ -85,6 +87,11 @@ try {
   };
   process.on('SIGINT', () => void kapat('SIGINT'));
   process.on('SIGTERM', () => void kapat('SIGTERM'));
+  // Sinyal kapanışından farkı: süreç kendiliğinden bitmeyi beklemez, kapanış bitince çıkar ki bekçi yeniden açsın.
+  kapanisIsiKur((neden) => {
+    setTimeout(() => { process.exit(1); }, KAPANIS_ZORLA_MS).unref();
+    void kapat(neden).finally(() => { process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0); });
+  });
 
   await app.listen({ host: dinlemeAdresi(ayar.ortam), port: ayar.port });
   if (arayuzKodu !== null && arayuzSecenegi !== null) {

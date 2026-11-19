@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import { kapanisIsiKur } from '#cekirdek/surec.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import {
-  GUNCELLEME_PARCASI, type GuncellemeIlerlemesiCevabi, type GuncellemePaketi, type GuncellemePaketleriCevabi,
+  GUNCELLEME_PARCASI, type SunucuSureciCevabi, type GuncellemeIlerlemesiCevabi, type GuncellemePaketi, type GuncellemePaketleriCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -19,6 +20,7 @@ import {
   UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
 } from './kurallar.ts';
 import { UYGULAMA_DURUMU_DOSYASI, calisanPaketiOku } from './guncelleme.ts';
+import { BEKCI_ILETISI, sunucuSureciSifirla } from './sunucu-sureci.ts';
 import { YEDEK_DIZINI_DOSYASI } from './yedek-dizini.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -152,6 +154,34 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     assert.deepEqual(await yuklemeler(), [], 'reddedilen parça diske yazılmadı');
     assert.equal((await liste()).statusCode, 200);
     assert.equal((await parca(kimlik, paket, 0)).statusCode, 200);
+  });
+
+  test('sunucuyu yeniden başlatma yalnız güncelleme yükleyende; bekçi görülmeyen sunucuda reddedilir ve kapanış istenmez', async () => {
+    for (const { rol, cerez } of bayraksizlar) {
+      assert.equal((await istek(cerez, 'GET', '/sunucu-sureci')).statusCode, 403, `${rol.ad}: durum`);
+      assert.equal((await istek(cerez, 'POST', '/sunucu-sureci/yeniden-baslat', {})).statusCode, 403, `${rol.ad}: yeniden başlat`);
+    }
+    assert.equal((await istek(null, 'POST', '/sunucu-sureci/yeniden-baslat', {})).statusCode, 401);
+    sunucuSureciSifirla();
+    const durum = await istek(yonetici, 'GET', '/sunucu-sureci');
+    assert.equal(durum.statusCode, 200, durum.body);
+    // Test süreci ana.ts'ten açılmadı: kapanış işi yoktur, bekçi bilinmiyor sayılır.
+    assert.equal((durum.json() as SunucuSureciCevabi).bekci, 'bilinmiyor');
+    const red = await istek(yonetici, 'POST', '/sunucu-sureci/yeniden-baslat', {});
+    assert.equal(red.statusCode, 422, red.body);
+    assert.equal((red.json() as { mesaj: string }).mesaj, BEKCI_ILETISI.bilinmiyor);
+    // Kapanış işi kurulu ama test koşucusunun üstünde bekçi yok.
+    const kapanislar: string[] = [];
+    kapanisIsiKur((neden) => { kapanislar.push(neden); });
+    try {
+      sunucuSureciSifirla();
+      const bekcisiz = await istek(yonetici, 'POST', '/sunucu-sureci/yeniden-baslat', {});
+      assert.equal(bekcisiz.statusCode, 422, bekcisiz.body);
+      assert.equal((bekcisiz.json() as { mesaj: string }).mesaj, BEKCI_ILETISI[process.platform === 'linux' || process.platform === 'win32' ? 'yok' : 'bilinmiyor']);
+    } finally {
+      kapanisIsiKur(null);
+    }
+    assert.deepEqual(kapanislar, []);
   });
 
   test('imzalı paket parça parça yüklenir, doğrulanır, listede görünür; dosya baytı baytına saklanır', async () => {

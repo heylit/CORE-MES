@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import type {
   GuncellemeGecmisKaydi, GuncellemeKanali, GuncellemeKuruluSurum, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi,
   GuncellemeParcasiCevabi, GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu, PaketTaramaSayilari, PaketTaramasi,
+  BekciDurumu, SunucuSureciCevabi, YenidenBaslatCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -83,15 +84,151 @@ const ACILIS: Readonly<Record<OtomatikAcilis['durum'], { ton: RozetTonu; metin: 
   bilinmiyor: { ton: 'pasif', metin: 'Bilinmiyor', uyari: 'Görev Zamanlayıcı okunamadı.' },
 };
 
-// Yalnız gösterir: görevi kurmak ve değiştirmek yönetici hesabı ister, uygulamanın işi değildir. null: sunucu Windows'ta değil.
-function SunucuAcilisi({ acilis }: { acilis: OtomatikAcilis | null }) {
+const BEKCI_ROZETI: Readonly<Record<BekciDurumu, { ton: RozetTonu; metin: string }>> = {
+  var: { ton: 'tamam', metin: 'Bekçi açık' },
+  yok: { ton: 'uyari', metin: 'Bekçi yok' },
+  bilinmiyor: { ton: 'pasif', metin: 'Bekçi bilinmiyor' },
+};
+
+const BEKCISIZ_METNI: Readonly<Record<Exclude<BekciDurumu, 'var'>, string>> = {
+  yok: 'Sunucu bekçiyle açılmadı (ör. konsoldan "npm run baslat"). Kapanırsa kendiliğinden açılmaz; yeniden başlatma sunucu bilgisayarından yapılır. Bekçiyle açmak için kurulum belgesi: kurulum/servis.md.',
+  bilinmiyor: 'Sunucunun bekçiyle açıldığı doğrulanamadı; kapanırsa açılmayabilir. Yeniden başlatma sunucu bilgisayarından yapılır.',
+};
+
+// Açılış bu süreyi geçince ekran beklemeyi sürdürür ama uyarır: .env'deki değişiklik açılışı bozmuş olabilir.
+export const GEC_ACILIS_SN = 5 * 60;
+const YOKLAMA_MS = 3000;
+
+export function sureMetni(sn: number): string {
+  const dk = Math.floor(sn / 60);
+  return dk === 0 ? `${String(sn)} sn` : `${String(dk)} dk ${String(sn % 60)} sn`;
+}
+
+interface Suren { baslangic: number; oncekiAcilis: string; kapandi: boolean }
+
+// Sunucu kapanınca yoklama hata verir (kapandı görüldü); açılış anı değişince yeni süreç gelmiştir.
+function YenidenBaslatma() {
+  const { bildir } = useBildirim();
+  const [onay, setOnay] = useState(false);
+  const [isteniyor, setIsteniyor] = useState(false);
+  const [suren, setSuren] = useState<Suren | null>(null);
+  const [sonSure, setSonSure] = useState<number | null>(null);
+  const [an, setAn] = useState(() => Date.now());
+  const durum = useQuery({
+    queryKey: anahtarlar.sunucuSureci,
+    queryFn: () => api.get<SunucuSureciCevabi>('/sunucu-sureci'),
+    refetchInterval: suren ? YOKLAMA_MS : false,
+    retry: suren ? false : 3,
+  });
+  useEffect(() => {
+    if (!suren) return undefined;
+    const sayac = setInterval(() => { setAn(Date.now()); }, 1000);
+    return () => { clearInterval(sayac); };
+  }, [suren]);
+  useEffect(() => {
+    if (!suren) return;
+    if (durum.isError && !suren.kapandi) { setSuren({ ...suren, kapandi: true }); return; }
+    if (durum.data && durum.data.acilis !== suren.oncekiAcilis) {
+      const sn = Math.round((Date.now() - suren.baslangic) / 1000);
+      setSuren(null);
+      setSonSure(sn);
+      bildir('tamam', `Sunucu yeniden açıldı (${sureMetni(sn)}).`);
+    }
+  }, [durum.data, durum.isError, suren, bildir]);
+
+  const baslat = async () => {
+    setIsteniyor(true);
+    try {
+      const cevap = await api.post<YenidenBaslatCevabi>('/sunucu-sureci/yeniden-baslat', {});
+      setSuren({ baslangic: Date.now(), oncekiAcilis: cevap.acilis, kapandi: false });
+      setAn(Date.now());
+      setSonSure(null);
+      setOnay(false);
+    } catch (hata) {
+      bildir('hata', hataIletisi(hata, 'Yeniden başlatma istenemedi.'));
+      setOnay(false);
+      void durum.refetch();
+    } finally {
+      setIsteniyor(false);
+    }
+  };
+
+  const veri = durum.data;
+  const gecen = suren ? Math.max(0, Math.round((an - suren.baslangic) / 1000)) : 0;
+  const gec = suren !== null && gecen >= GEC_ACILIS_SN;
+  const engel = suren ? 'Yeniden başlatma sürüyor.'
+    : !veri ? null
+      : veri.bekci !== 'var' ? BEKCISIZ_METNI[veri.bekci]
+        : veri.guncellemeSuruyor ? 'Güncelleme istendi ya da kuruluyor. Bitmeden sunucu yeniden başlatılamaz; güncelleme sonunda sunucu zaten yeniden açılır.'
+          : null;
+  const rozet = suren
+    ? (gec ? { ton: 'hata' as const, metin: `Açılmadı · ${String(Math.floor(gecen / 60))} dk` } : { ton: 'bilgi' as const, metin: `Sürüyor · ${sureMetni(gecen)}` })
+    : veri?.guncellemeSuruyor === true && veri.bekci === 'var' ? { ton: 'pasif' as const, metin: 'Güncelleme sürüyor' }
+      : veri ? BEKCI_ROZETI[veri.bekci] : null;
+  return (
+    <>
+      <div className="tc-ayar">
+        <div className="tc-ayar-metin">
+          <p className="tc-ayar-baslik">{suren ? 'Yeniden başlatılıyor' : 'Yeniden başlat'} {rozet && <Rozet ton={rozet.ton}>{rozet.metin}</Rozet>}</p>
+          {durum.isPending && <DurumKutusu durum="yukleniyor" />}
+          {durum.isError && !suren && (
+            <DurumKutusu durum="hata" mesaj={hataIletisi(durum.error, 'Sunucu süreci okunamadı.')} yenile={() => { void durum.refetch(); }} />
+          )}
+          {suren ? (
+            <div role="status">
+              <p className="tc-ayar-aciklama tc-ayar-simgeli">
+                <Simge ad="check" boyut="k" /> İstendi{suren.kapandi && <> · <Simge ad="check" boyut="k" /> Sunucu kapandı</>} · <Simge ad="rotate" boyut="k" /> Yeniden açılıyor
+              </p>
+              <progress aria-label="Yeniden başlatma sürüyor" />
+              <p className={gec ? 'tc-ayar-aciklama tc-ayar-simgeli' : 'tc-ayar-aciklama'}>
+                {gec
+                  ? <><Simge ad="alert" boyut="k" /> Sunucu {String(Math.floor(gecen / 60))} dakikadır cevap vermiyor. .env'deki son değişiklik açılışı bozmuş olabilir. Sunucu bilgisayarında günlük: <code>TMIV2-GUNLUK\bekci.log</code>. Ekran beklemeyi sürdürür.</>
+                  : 'Bu sayfayı kapatmanız işi durdurmaz. Açılış 1 ile 3 dakika sürebilir.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {sonSure !== null && <p className="tc-ayar-aciklama tc-ayar-simgeli" role="status"><Simge ad="check" boyut="k" /> Sunucu yeniden açıldı ({sureMetni(sonSure)}); .env yeniden okundu.</p>}
+              {engel !== null
+                ? <p className="tc-ayar-aciklama tc-ayar-simgeli"><Simge ad="alert" boyut="k" /> {engel}</p>
+                : veri && sonSure === null && <p className="tc-ayar-aciklama">.env değişikliğinden sonra kullanın. Sunucu kapanır, bekçi yeniden açar; açılış 1 ile 3 dakika sürebilir, o sürede kimse sistemi kullanamaz.</p>}
+              {veri && <p className="tc-ayar-aciklama tc-ayar-simgeli"><Simge ad="clock" boyut="k" /> Sunucu {derlemeTarihi(veri.acilis, true)} tarihinden beri açık.</p>}
+            </>
+          )}
+        </div>
+        <Dugme simge="rotate" disabled={!veri || engel !== null} title={engel ?? undefined} onClick={() => { setOnay(true); }}>
+          Sunucuyu yeniden başlat
+        </Dugme>
+      </div>
+      <OnayPenceresi
+        acik={onay} baslik="Sunucu yeniden başlatılsın mı?" onayMetni="Yeniden başlat" tehlikeli yukleniyor={isteniyor}
+        onayla={() => { void baslat(); }} vazgec={() => { setOnay(false); }}
+      >
+        <ul>
+          <li>Sunucu süren işleri en çok 10 sn bekleyip kapanır, bekçi yeniden açar.</li>
+          <li>Açılış 1 ile 3 dakika sürer; o sürede kimse sistemi kullanamaz, terminaller bağlantıyı bekler.</li>
+          <li>.env yeniden okunur. Kapı (TMIV2_PORT) ya da güncelleme klasörü değiştiyse bekçinin de sunucu bilgisayarında yeniden açılması gerekir.</li>
+        </ul>
+      </OnayPenceresi>
+    </>
+  );
+}
+
+// Otomatik açılış yalnız gösterilir: görevi kurmak ve değiştirmek yönetici hesabı ister, uygulamanın işi değildir. null: sunucu
+// Windows'ta değil; undefined: sağlık ayrıntısı okunamadı (yetki) ya da eski sunucu.
+function SunucuAcilisi({ acilis }: { acilis: OtomatikAcilis | null | undefined }) {
   const durum = ACILIS[acilis?.durum ?? 'bilinmiyor'];
   const uyari = acilis === null ? 'Sunucu Windows\'ta çalışmıyor; Görev Zamanlayıcı okunmadı.' : durum.uyari;
   return (
     <Kart baslik="Sunucu açılışı" simge="bolt">
-      <p>Bilgisayar başlarken otomatik açılış <Rozet ton={durum.ton}>{durum.metin}</Rozet></p>
-      {acilis && <p className="tc-ayar-aciklama">Görev adı: {acilis.gorevAdi}</p>}
-      {uyari !== null && <p className="tc-ayar-aciklama"><Simge ad="alert" boyut="k" /> {uyari}</p>}
+      {acilis !== undefined && (
+        <>
+          <p>Bilgisayar başlarken otomatik açılış <Rozet ton={durum.ton}>{durum.metin}</Rozet></p>
+          {acilis && <p className="tc-ayar-aciklama">Görev adı: {acilis.gorevAdi}</p>}
+          {uyari !== null && <p className="tc-ayar-aciklama tc-ayar-simgeli"><Simge ad="alert" boyut="k" /> {uyari}</p>}
+        </>
+      )}
+      <YenidenBaslatma />
     </Kart>
   );
 }
@@ -394,8 +531,7 @@ export function Guncelleme() {
           />
         </Kart>
       )}
-      {/* Alanı taşımayan eski sunucuda kart çıkmaz. */}
-      {ayrinti.data?.otomatikAcilis !== undefined && <SunucuAcilisi acilis={ayrinti.data.otomatikAcilis} />}
+      <SunucuAcilisi acilis={ayrinti.data?.otomatikAcilis} />
       {silinecek && (
         <OnayPenceresi
           acik baslik={`${silinecek.ad} silinsin mi?`} onayMetni="Sil" tehlikeli yukleniyor={siliniyor}

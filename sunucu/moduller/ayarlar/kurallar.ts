@@ -601,3 +601,31 @@ export function sifirlamaOzetSatirlari(sayilar: Record<string, number>): { ad: s
 
 // Varsayılan kapalı: canlı pakette de açık gelmesin; sunucu ortamında TMIV2_SIFIRLAMA_ACIK=1 ile açılır (kullanıcı denemesinden sonra).
 export const sifirlamaAcikMi = (env: Readonly<Record<string, string | undefined>>): boolean => env['TMIV2_SIFIRLAMA_ACIK']?.trim() === '1';
+
+// Ekrandan yeniden başlatma: sunucunun üst süreç zinciri (ilk eleman sunucunun kendisi). Başlangıç aynı birimdedir (Windows'ta
+// milisaniye, Linux'ta açılıştan beri tık); bilinmiyorsa null.
+export interface SurecHalkasi {
+  pid: number;
+  ppid: number;
+  komut: string | null;
+  baslangic: number | null;
+}
+
+// Bekçi `node araclar/bekci.ts` olarak koşar (npm run bekci, başlangıç betiği, Görev Zamanlayıcı).
+const BEKCI_KOMUTU = /(^|[\s"'\\/])bekci\.ts(?=["'\s]|$)/;
+
+// Zincir üst sürece göre yürünür. Üst süreç ölmüşse numarası başka sürece verilmiş olabilir: ondan sonra açılmış süreç ata sayılmaz.
+// Komut satırı okunamayan halka varsa ve bekçi bulunmadıysa "bilinmiyor": kapanıp açılmayan sunucu riski alınmaz.
+export function bekciDurumu(zincir: readonly SurecHalkasi[] | null): 'var' | 'yok' | 'bilinmiyor' {
+  if (zincir === null || zincir.length === 0) return 'bilinmiyor';
+  let okunamadi = false;
+  for (let i = 1; i < zincir.length; i++) {
+    const cocuk = zincir[i - 1]!;
+    const ata = zincir[i]!;
+    if (ata.pid !== cocuk.ppid) break;
+    if (ata.baslangic !== null && cocuk.baslangic !== null && ata.baslangic > cocuk.baslangic) break;
+    if (ata.komut === null) { okunamadi = true; continue; }
+    if (BEKCI_KOMUTU.test(ata.komut)) return 'var';
+  }
+  return okunamadi ? 'bilinmiyor' : 'yok';
+}
