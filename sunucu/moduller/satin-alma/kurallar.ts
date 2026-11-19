@@ -185,7 +185,18 @@ export const ILETILER = {
   alternatifIzniYok: 'Bu şartlı alternatif artık yok ya da teklif değişti; Taleplerim\'i yenileyip yeniden bakın.',
   alternatifIzniAsamasi: 'Şartlı alternatife yalnız teklif toplanırken ve karar onaylanmadan karar verilir.',
   alternatifIzniKararda: 'Bu alternatif kararda seçili; kararınızı değiştirmek için satın almaya yazın.',
-  alternatifSiparis: (ad: string) => `${ad}: alternatif seçilen satır için sipariş henüz açık değil; alternatif kartla sipariş sonraki güncellemede gelir.`,
+  alternatifSiparis: (ad: string) => `${ad}: alternatifin malzeme kartı henüz açılmadı; karar onaylanınca açılır, sipariş ondan sonra verilir.`,
+  alternatifEmirsiz: (ad: string) => `${ad}: alternatif yalnız bir üretim emrinin ihtiyacı için sipariş edilir; bu kalem bir emre bağlı değil.`,
+  alternatifFason: (ad: string) => `${ad}: fason iş emrine bağlı kalemde alternatif kullanılmaz.`,
+  alternatifKartOnayda: (ad: string, kod: string) => `${ad}: alternatif kartı ${kod} malzeme onayı bekliyor; kart onaylanınca sipariş verilir.`,
+  alternatifKartIptal: (ad: string, kod: string) => `${ad}: alternatif kartı ${kod} iptal edildi; kararı yeniden onaya gönderin, yeni kart açılır.`,
+  alternatifBirim: (ad: string, alt: string | null, ana: string | null) => (alt === null || ana === null
+    ? `${ad}: ${alt === null ? 'alternatif kartın' : 'istenen malzemenin'} stok birimi tanımlı değil; bu alternatifle sipariş verilemez.`
+    : `${ad}: alternatif kartın stok birimi (${alt}) istenen malzemeninkinden (${ana}) farklı; bu alternatifle sipariş verilemez.`),
+  alternatifSiparisBirimi: (ad: string, siparis: string, ana: string) => `${ad}: sipariş birimi (${siparis}) istenen malzemenin stok birimi (${ana}) değil; alternatifli sipariş stok birimiyle verilir.`,
+  alternatifEmirdeKullanildi: (ad: string, emir: string) => `${ad}: ${emir} emrine istenen malzemeden sarf ya da ayırma yapılmış; alternatif yalnız hiç kullanılmamış ihtiyaca gelir.`,
+  alternatifEksik: (ad: string, emir: string, ihtiyac: string) => `${ad}: alternatif ${emir} emrinin bütün ihtiyacını (${ihtiyac}) karşılamalı; kısmi alternatif alınmaz.`,
+  alternatifEmirdeYok: (ad: string, emir: string) => `${ad}: ${emir} emrinin bileşenlerinde istenen malzeme yok; alternatif emre bağlanamaz.`,
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
   kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
@@ -791,8 +802,8 @@ export function alternatifKararReddi(t: Pick<TalepYazimi, 'teklifler' | 'karar' 
     if (s.sonuc === 'disi') return ILETILER.alternatifDisi(ad(f.kalemId), s.nedenler.join(', ') || 'sınır dışı');
     if (s.sonuc === 'sartli' && s.izin === null) return ILETILER.alternatifSartli(ad(f.kalemId));
     if (s.sonuc === 'sartli' && s.izin === 'ret') return ILETILER.alternatifReddedildi(ad(f.kalemId));
-    // Kart açılsa da stok, fiyat ve plan okuyucuları alternatif kartı okuyana kadar (3437-3b-3) sipariş verilmez: mal ana karta girerdi.
-    if (t.durum === 'siparis_verildi' || t.durum === 'teslim_alindi') return ILETILER.alternatifSiparis(ad(f.kalemId));
+    // 3b-3b: sipariş yalnız kartı açılmış alternatifle; kartın durumu, emir bağı ve ihtiyaç servis denetler (alternatifSiparisReddi).
+    if ((t.durum === 'siparis_verildi' || t.durum === 'teslim_alindi') && s.kartNo == null) return ILETILER.alternatifSiparis(ad(f.kalemId));
   }
   return null;
 }
@@ -824,9 +835,34 @@ export function sartliAlternatifler(
   return m;
 }
 type SartliAlternatif = NonNullable<Talebim['kalemler'][number]['sartliAlternatifler']>[number];
+// 3437-3b-3b (Risk plan 2, P3 ve C1): alternatifle verilen sipariş satırı emrin bileşenini ikame eder. Satır tek emre bağlı, fason değil;
+// alternatif kart aktif; iki kartın stok birimi ve sipariş birimi aynı; emirde istenen kart hiç kullanılmamış (sarf ve ayırma yok) ve sipariş
+// emrin istenen kart ihtiyacının tamamını karşılar (kısmi ikame yok). İhtiyaç null: emrin bileşenlerinde istenen kart yok.
+export function alternatifSiparisReddi(g: {
+  ad: string; emirNo: string; fason: boolean; emirVar: boolean; kart: { kod: string; onayDurumu: string; birim: string | null } | undefined;
+  anaBirim: string | null; siparisBirimi: string; miktar: string; ihtiyac: string | null; kullanilan: string;
+}): string | null {
+  if (g.fason) return ILETILER.alternatifFason(g.ad);
+  if (!g.emirVar) return ILETILER.alternatifEmirsiz(g.ad);
+  if (g.kart === undefined) return ILETILER.alternatifSiparis(g.ad);
+  if (g.kart.onayDurumu === 'iptal') return ILETILER.alternatifKartIptal(g.ad, g.kart.kod);
+  if (g.kart.onayDurumu !== 'aktif') return ILETILER.alternatifKartOnayda(g.ad, g.kart.kod);
+  const birim = (x: string | null) => (x ?? '').trim().toLocaleLowerCase('tr');
+  const [alt, ana] = [birim(g.kart.birim) === '' ? null : g.kart.birim!.trim(), birim(g.anaBirim) === '' ? null : g.anaBirim!.trim()];
+  if (alt === null || ana === null || birim(alt) !== birim(ana)) return ILETILER.alternatifBirim(g.ad, alt, ana);
+  if (birim(g.siparisBirimi) !== birim(ana)) return ILETILER.alternatifSiparisBirimi(g.ad, g.siparisBirimi.trim(), ana);
+  if (g.ihtiyac === null) return ILETILER.alternatifEmirdeYok(g.ad, g.emirNo);
+  if (ondalikKiyas(g.kullanilan, '0') > 0) return ILETILER.alternatifEmirdeKullanildi(g.ad, g.emirNo);
+  if (ondalikKiyas(g.miktar, g.ihtiyac) < 0) return ILETILER.alternatifEksik(g.ad, g.emirNo, `${g.ihtiyac} ${g.anaBirim ?? ''}`.trim());
+  return null;
+}
 // 3437 a (dilim 3b-2): karar onaylanınca kartı açılacak alternatifler (seçilen, aynı olmayan, kartı henüz olmayan satırlar).
-export function kartBekleyenAlternatifler(t: Pick<TalepYazimi, 'teklifler' | 'karar'>): { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi }[] {
-  return secilenSatirlar(t).flatMap((f) => (f.alternatif && f.alternatifSonucu && f.alternatifSonucu.sonuc !== 'ayni' && f.alternatifSonucu.kartNo == null
+// 3b-3b (Risk N1): kartı malzemelerde iptal edilmiş satır da yeniden kart bekler (iptaller).
+export function kartBekleyenAlternatifler(
+  t: Pick<TalepYazimi, 'teklifler' | 'karar'>, iptaller: ReadonlySet<number> = new Set(),
+): { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi }[] {
+  return secilenSatirlar(t).flatMap((f) => (f.alternatif && f.alternatifSonucu && f.alternatifSonucu.sonuc !== 'ayni'
+    && (f.alternatifSonucu.kartNo == null || iptaller.has(f.alternatifSonucu.kartNo))
     ? [{ teklifId: f.teklifId, kalemId: f.kalemId, alternatif: f.alternatif }] : []));
 }
 type LogoKiyas = Pick<TalepYazimi, 'kalemler' | 'teklifler' | 'karar'>;

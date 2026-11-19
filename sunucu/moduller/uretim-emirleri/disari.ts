@@ -529,6 +529,13 @@ export type { FasonGecmisSatiri } from './sorgular.ts';
 
 // Stok ve plan (EK "Malzeme ihtiyacı", "Stok ve tamamlama"): emrin brüt malzeme ihtiyacı; net ihtiyaç ve eksikler stoğu okuyan tarafta.
 export const emirMalzemeIhtiyaci = isEmri.emirMalzemeIhtiyaci;
+// 3437-3b-3b: satın almanın alternatifle verdiği sipariş emrin bileşenini alternatif karta geçirir (ve iptalde geri alır). Yetki denetlemez;
+// çağıran (satın alma sipariş işlemi) korur. Kayıt kalıcıdır: bileşen yeniden yazılsa da ikame korunur.
+export const bilesenIkamesiYap = isEmri.bilesenIkamesiYap;
+export const bilesenIkamesiGeriAl = isEmri.bilesenIkamesiGeriAl;
+export const bilesenIkameleri = isEmri.bilesenIkameleri;
+export const ikameIcinEmriKilitle = isEmri.ikameIcinEmriKilitle;
+export type { BilesenIkamesi } from './sorgular.ts';
 export const emirlerinMalzemeIhtiyaci = isEmri.emirlerinMalzemeIhtiyaci;
 
 // Stok, emrin refakat kartlarına (Arkon kart listesi) sayılanı ve sınırı buradan alır; kartla verilen miktarı kendisi verir. Yetki denetlemez.

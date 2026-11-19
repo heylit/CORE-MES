@@ -27,6 +27,7 @@ import { dosyaTutamagi } from '../dosya/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
   acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
+  bilesenIkamesiGeriAl, bilesenIkamesiYap, emirMalzemeIhtiyaci, ikameIcinEmriKilitle,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat, type KademeKaydi } from '../bildirim/disari.ts';
@@ -39,10 +40,10 @@ import {
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
-import { alternatifIzniReddi, cizimIzni, alternatifKararReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
+import { alternatifIzniReddi, cizimIzni, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
@@ -701,7 +702,9 @@ export async function alternatifIzni(db: Db, k: Kullanici, id: string, g: Altern
 // 3437 a (dilim 3b-2): karar bu kayıtta onaylanınca seçilen alternatiflerin kartı açılır (ONAYDA, açan onaylayan kişi) ya da aynı nitelikli
 // kart bulunur; numara teklif satırına yazılır, sipariş satırı oradan alır. Kart onaylanana kadar mal kabul yapılamaz (aktif kart kuralı).
 async function alternatifKartlariniAc(db: Db, k: Kullanici, id: string, t: TalepYazimi): Promise<TalepYazimi> {
-  const bekleyen = kartBekleyenAlternatifler(t);
+  const kartNolari = t.teklifler.flatMap((q) => q.fiyatlar.flatMap((f) => (f.alternatifSonucu?.kartNo == null ? [] : [f.alternatifSonucu.kartNo])));
+  const iptaller = new Set([...(await malzemeOzetleri(db, kartNolari))].flatMap(([no, o]) => (o.onayDurumu === 'iptal' ? [no] : [])));
+  const bekleyen = kartBekleyenAlternatifler(t, iptaller);
   if (bekleyen.length === 0) return t;
   const kabuller = await kalemKabulleri(db, [t]);
   const kartlar = new Map<string, number>();
@@ -718,6 +721,55 @@ async function alternatifKartlariniAc(db: Db, k: Kullanici, id: string, t: Talep
     const no = kartlar.get(`${q.id}/${f.kalemId}`);
     return no === undefined || !f.alternatifSonucu ? f : { ...f, alternatifSonucu: { ...f.alternatifSonucu, kartNo: no } };
   }) })) };
+}
+
+// 3437-3b-3b (Risk plan 2): siparişe geçen alternatifli satır emrin bileşenini alternatif karta geçirir (ikame); satır kalkınca ya da talep
+// iptal olunca, alternatifle teslim yoksa ikame geri alınır ve emir yeniden istenen kartı bekler. Teslimden sonra iptalde ikame kalır, kalan
+// ihtiyaç alternatif kartla tamamlanır (varsayım). Kayıt öncesi ve sonrası satırlar karşılaştırılır; aynı satır yeniden kaydedilince değişmez.
+async function alternatifIkameleriniEsitle(
+  db: Db, k: Kullanici, id: string, talepNo: string, oncekiDurum: TalepDurumu, onceki: readonly s.AlternatifSiparisSatiri[],
+): Promise<void> {
+  // Önceki satırlar talep satırı yazılmadan önce okunur ama talebin durumu daha önce yazılmış olabilir: önceki durum kayıttan önceki talebinkidir.
+  const once = onceki.map((x) => ({ ...x, talepDurumu: oncekiDurum }));
+  const acik = (l: readonly s.AlternatifSiparisSatiri[]) => l.filter((x) => x.talepDurumu === 'siparis_verildi' && x.emirId !== null && !x.fason);
+  const anahtar = (x: s.AlternatifSiparisSatiri) => `${String(x.satirId)}:${String(x.emirId)}:${String(x.alternatifNo)}`;
+  const sonra = await s.alternatifSiparisSatirlari(db, id);
+  const yeni = new Set(acik(sonra).map(anahtar));
+  for (const x of acik(once)) {
+    if (yeni.has(anahtar(x)) || Number(x.teslim) > 0) continue;
+    if (await bilesenIkamesiGeriAl(db, k.id, { uretimEmriId: x.emirId!, alternatifNo: x.alternatifNo })) {
+      const emirNo = (await emirNolari(db, [x.emirId!])).get(x.emirId!) ?? String(x.emirId);
+      const anaKod = (await malzemeOzetleri(db, [x.anaNo])).get(x.anaNo)?.kod ?? String(x.anaNo);
+      await s.hareketEkle(db, id, randomUUID(), `${x.ad}: alternatif sipariş iptal edildi; ${emirNo} emri yeniden ${anaKod} malzemesini bekler.`, k.id);
+    }
+  }
+  const eski = new Set(acik(once).map(anahtar));
+  const gelen = sonra.filter((x) => x.talepDurumu === 'siparis_verildi' && !eski.has(anahtar(x)));
+  if (gelen.length === 0) return;
+  // Emirler artan sırayla kilitlenir (iki kayıt birbirini beklemez); kullanım ve ihtiyaç kilitten sonra okunur (Risk D1).
+  for (const e of [...new Set(gelen.flatMap((x) => (x.emirId === null || x.fason ? [] : [x.emirId])))].sort((a, b) => a - b)) await ikameIcinEmriKilitle(db, e);
+  const kartlar = await malzemeOzetleri(db, gelen.flatMap((x) => [x.anaNo, x.alternatifNo]));
+  const emirler = await emirNolari(db, gelen.flatMap((x) => (x.emirId === null ? [] : [x.emirId])));
+  for (const x of gelen) {
+    const emirNo = x.emirId === null ? '' : emirler.get(x.emirId) ?? String(x.emirId);
+    let ihtiyac: string | null = null;
+    let kullanilan = '0';
+    if (x.emirId !== null && !x.fason) {
+      if (emirKartKullanimiCozucu === null) throw gecersiz(ILETILER.alternatifEmirdeKullanildi(x.ad, emirNo));
+      const l = ((await emirMalzemeIhtiyaci(db, x.emirId)) ?? []).filter((m) => m.malzemeNo === x.anaNo);
+      ihtiyac = l.length === 0 ? null : ondalikTopla(l.map((m) => m.brut));
+      const u = await emirKartKullanimiCozucu(db, x.emirId, x.anaNo);
+      kullanilan = ondalikTopla([u.netSarf, u.rezerve]);
+    }
+    const alt = kartlar.get(x.alternatifNo);
+    const red = alternatifSiparisReddi({
+      ad: x.ad, emirNo, fason: x.fason, emirVar: x.emirId !== null, kart: alt && { kod: alt.kod, onayDurumu: alt.onayDurumu, birim: alt.birim },
+      anaBirim: kartlar.get(x.anaNo)?.birim ?? null, siparisBirimi: x.birim, miktar: x.miktar, ihtiyac, kullanilan,
+    });
+    if (red !== null) throw gecersiz(red);
+    await bilesenIkamesiYap(db, k.id, { uretimEmriId: x.emirId!, anaNo: x.anaNo, alternatifNo: x.alternatifNo, kaynak: `Satın alma ${talepNo}` });
+    await s.hareketEkle(db, id, randomUUID(), `${x.ad}: ${emirNo} emrinde ${kartlar.get(x.anaNo)?.kod ?? ''} yerine alternatif ${alt!.kod} kullanılır.`, k.id);
+  }
 }
 
 // SAT-81 (2871-2 a): gruptaki talep siparişe geçince öteki açık talepler aynı işlemde iptal olur; gerekçe iptal nedenine ve geçmişe yazılır.
@@ -1138,7 +1190,9 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   await askidakiTedarikciyiDenetle(db, eski, temel);
   await kalemKartlariniDenetle(db, temel.kalemler, eski.kalemler);
   const sunucudan = await sunucuAlanlari(db, k, temel, eski);
-  const kartli = talepFisiGiderMi(eski.onaylar, yeniOnaylar, sunucudan.durum) ? await alternatifKartlariniAc(db, k, id, sunucudan) : sunucudan;
+  // Yeniden onayda (onay kaydı silinmez, son onay yine "onay") kart da bu kayıtta eklenen onayla açılır; kartı iptal edilmiş satır (N1) yeni kart alır.
+  const buKayittaOnaylandi = sunucudan.durum !== 'iptal' && yeniOnaylar.some((x) => x.sonuc === 'onay') && kararOnayliMi([...eski.onaylar, ...yeniOnaylar]);
+  const kartli = buKayittaOnaylandi ? await alternatifKartlariniAc(db, k, id, sunucudan) : sunucudan;
   const yazilacak: TalepYazimi = kartli.durum === 'teslim_alindi' ? { ...kartli, durum: 'siparis_verildi' } : kartli;
   // 2540 (Veri 2, Maliyet): tedarikçi alacağı olan sipariş (düşüldü dahil) karar değişikliğiyle silinmez; para kaydı sessizce kaybolmaz.
   const kalanlar = new Set((yazilacak.karar?.siparisler ?? []).map((x) => x.teklifId));
@@ -1163,7 +1217,9 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);
   // 2642 b, Veri 2: faturaya eşlenmiş satır (kaldırılmış eşleme dahil) ve onun siparişi silinmez (RESTRICT).
   const oncekiSatirlar = await s.siparisSatirIdleri(db, id);
+  const oncekiAlternatifler = await s.alternatifSiparisSatirlari(db, id);
   await kisitKorumali({ satin_alma_fatura_eslemesi_satir: ILETILER.eslemeliSatir }, () => s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db)));
+  await alternatifIkameleriniEsitle(db, k, id, eski.no, eski.durum, oncekiAlternatifler);
   await siparisRevizyonlariniYaz(db, id, oncekiSatirlar);
   await teklifEkleriniBirak(db, id, eski.teklifler.filter((q) => !yazilacak.teklifler.some((y) => y.id === q.id)).map((q) => q.id));
   await s.siparisGuncellemesiniIsaretle(db, id, guncellenecek);
@@ -2299,6 +2355,12 @@ export async function kgFiyatlari(db: Db, islemler: readonly string[]): Promise<
   const stokDegeri = islemler.includes('finans.oku') ? await kgStokDegeri(db) : null;
   return { fiyatlar: talasSuz(await kgIzleme(db, fiyatlar, kur, kullanilan), islemler), fiyatsizKaliteler, stokDegeri };
 }
+
+// 3437-3b-3b: emrin bir kartından net sarfı ve ayrılmış (rezerve) miktarı; stok satın almayı ithal ettiği için bağ kablolamadadır.
+// Bağlı değilse alternatifli sipariş verilmez (kullanım bilinmeden ikame yapılmaz).
+export type EmirKartKullanimiCozucusu = (db: Db, emirId: number, malzemeNo: number) => Promise<{ netSarf: string; rezerve: string }>;
+let emirKartKullanimiCozucu: EmirKartKullanimiCozucusu | null = null;
+export function emirKartKullanimiCozucusuKaydet(cozucu: EmirKartKullanimiCozucusu | null): void { emirKartKullanimiCozucu = cozucu; }
 
 // Stok satın almayı ithal ettiği için satın alma stoğu ithal edemez: miktarı sunucu açılışında kablolama kaydeder (stokYokCozucusu gibi).
 // Stok bütün kartların bakiyesini değer grubuyla verir (228 a, stok/disari degerGrubuToplamlari); satın alma hammaddeyi süzer.

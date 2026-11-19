@@ -45,3 +45,10 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 - Kokpit Gelenler satırı (siparişten gelen emir, "Rota bekliyor" ve bekleme yaşı) 3282 ile gelir; bu teslimde yok.
 - Reçete ve Rota emir listesinde "Rota bekliyor" rozeti ve rota sayfasında "bekleyen emir" şeridi 3273-2'den sonra.
 - Satın alma talebi bağlı dokunulmamış emirde iptal ve kalemden çözme uyarısı (3272-3 a "talep varsa uyarı") yok; talep kilitlemez.
+
+### 3437-3b-3b (bileşen ikamesi) - bağlamada kapanacak
+
+- Satın alma emir bileşenini ikame eder (alternatifli sipariş): Aşama 2 yetki matrisinde bu bağ yazılmalı (komutun yetkisi satın almanın kaydetme işlemidir, üretim emri işlemi istenmez).
+- Emir malzeme listesinde ve sipariş takibinde ikame notu ("Alternatif: <kod> (istenen <kod>)") arayüz bakışına bırakıldı; bu teslimde ekran yok.
+- Elle stok çıkışı emri kilitlemez: ikameyle aynı anda istenen karttan elle sarf olursa ikisi de yazılır (bileşen dışı kartla sarf bugün de serbest).
+

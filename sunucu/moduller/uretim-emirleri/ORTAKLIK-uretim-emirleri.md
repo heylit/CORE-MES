@@ -4,6 +4,7 @@
 |---|---|---|
 | Üretim emri, iş emri | `uretim_emri`, `uretim_emirleri_is_emri` | uretim-emirleri (sahip) |
 | Malzeme (ürün, bileşen) | `uretim_emri.malzeme_no`, `uretim_emirleri_is_emri_bileseni.malzeme_no` -> `malzeme_katalog_karti.no` | malzemeler |
+| Bileşen ikamesi (3437-3b-3b) | `uretim_emirleri_bilesen_ikamesi` (`uretim_emri_id`, `ana_malzeme_no`, `alternatif_malzeme_no` -> `malzeme_katalog_karti.no`, `kaynak`, `kisi_id`); yazan satın alma, `disari.ts` `bilesenIkamesiYap` / `bilesenIkamesiGeriAl` ile | uretim-emirleri (sahip); satın alma emir bileşenini ikame eder |
 | Ürün kodu ve adı (açılış anındaki) | `uretim_emri.parca_no`, `parca_ad` | malzemeler (kart) |
 | Firma (fason) | `uretim_emirleri_is_emri.fason_firma_id` -> `finans_firma` | finans |
 | Makine, istasyon | `makine_id`, `istasyon_id` (iş emri, aday, defterler) | istasyonlar |

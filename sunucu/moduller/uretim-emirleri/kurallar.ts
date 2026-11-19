@@ -13,6 +13,10 @@ export const ADIM_DURUMU_OKUMA_ISLEMLERI = [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.ad
 export type IstasyonDurumu = 'yok' | 'pasif' | 'aktif';
 
 export const EMIR_YOK = 'Üretim emri bulunamadı.';
+// 3437-3b-3b: satın almanın alternatif kartla emrin bileşenini ikamesi.
+export const IKAME_BILESEN_YOK = 'Emrin bileşenlerinde istenen malzeme yok; alternatif emre bağlanamaz.';
+export const IKAME_CAKISMA = 'Alternatif malzeme bu emrin aynı adımında zaten bileşen; ikame yapılamaz.';
+export const IKAME_BASKA = 'Bu emirde istenen malzeme başka bir alternatifle değiştirilmiş.';
 export const ISTASYON_YOK = 'İstasyon bulunamadı.';
 export const ISTASYON_PASIF_ACMA = 'Pasif istasyona emir açılamaz.';
 export const ISTASYON_PASIF_BASLATMA = 'Emrin istasyonu pasif; emir başlatılamaz.';

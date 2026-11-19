@@ -28,7 +28,7 @@ import * as projeler from './moduller/projeler/disari.ts';
 import * as plan from './moduller/plan/disari.ts';
 import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, emirKartKullanimiCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import { satinAlmaKademeOkuyucusu, siparisSatiriBelgeleri, siparisSatirlari } from './moduller/satin-alma/disari.ts';
 import {
@@ -570,6 +570,11 @@ export function sunucununBaglari(): Bag[] {
     bag('plan motoru -> plan', planMotoruCozucusu, sunucuPlanCozucusu),
     bag('stok değer grupları -> satın alma kg stok değeri', stokMiktariCozucusu, stok.degerGrubuToplamlari),
     bag('stok tüketim serisi -> satın alma analizi', tuketimSerisiCozucusu, stok.tuketimSerisi),
+    // 3437-3b-3b: alternatifli sipariş emrin bileşenini ikame etmeden önce emirde istenen karttan sarf ve ayırma olmadığını sorar.
+    bag('stok emir kart kullanımı -> satın alma alternatif ikamesi', emirKartKullanimiCozucusu, async (db: Db, emirId: number, malzemeNo: number) => ({
+      netSarf: (await stok.emirlerinNetSarfi(db, [emirId])).find((x) => x.malzemeId === malzemeNo)?.miktar ?? '0',
+      rezerve: (await stok.emrinRezerveleri(db, emirId)).get(malzemeNo) ?? '0',
+    })),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
     bag('kalite onay durumu -> satın alma siparişi', kaliteDurumuCozucusu, kaliteMerkezi.tedarikciOnayDurumlari),
     bag('kalite onaylı liste -> satın alma onaylı liste ve teklif rehberi', onayliListeCozucusu, kaliteMerkezi.onayliListe),
