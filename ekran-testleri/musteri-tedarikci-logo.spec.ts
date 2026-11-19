@@ -186,8 +186,11 @@ test.describe('Logo geçişinde CRM bağı denetimi (3391-2)', () => {
     await tablo.scrollIntoViewIfNeeded();
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     await page.screenshot({ path: test.info().outputPath('crm-denetimi.png') });
+    // Firmalar sayfası `firma=` isteğini karşılayıp adresten düşürür; adres yalnız bir an taşır. Açılan firma ayrıntı isteğiyle ölçülür.
+    const ayrinti = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/musteri-tedarikci/firmalar/900002');
     await tablo.getByRole('button', { name: 'ORN Deneme Müşteri 2 firmasını aç' }).first().click();
-    await expect(page).toHaveURL(/\/musteri-tedarikci\?firma=900002/);
+    await ayrinti;
+    await expect(page).toHaveURL(/\/musteri-tedarikci$/);
     expect(istek).toBe(1);
     expect(ag.yazmalar).toEqual([]);
   });
