@@ -138,8 +138,27 @@ export function SiparisAyrinti() {
   const tumSutunlar: Sutun<SiparisSatiri>[] = [
     // 224: emir açılırken satır bu numarayla seçilir.
     { anahtar: 'sira', baslik: 'No', mono: true, kirilmaz: true, hucre: (m) => m.sira },
-    { anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true, hucre: (m) => m.malzemeKodu ?? `Kart ${m.malzemeNo}` },
-    { anahtar: 'ad', baslik: 'Kalem', hucre: (m) => <KalemMetni ad={m.malzemeAdi} aciklamalar={m.aciklamalar} /> },
+    {
+      anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true,
+      // 3438 a: kartın revizyonu; yürürlükteki değilse işaretli. Gerekçe uzun olabilir, kırılan "Kalem" sütunundadır.
+      hucre: (m) => (m.revizyon === null ? (m.malzemeKodu ?? `Kart ${m.malzemeNo}`) : (
+        <span className="tc-sp-kalem-termin">
+          {m.malzemeKodu ?? `Kart ${m.malzemeNo}`}
+          {m.revizyon.yururlukte
+            ? <Rozet ton="pasif" gorunum="cizgi">{m.revizyon.etiket ?? 'Revizyon'}</Rozet>
+            : <Rozet ton="uyari" gorunum="cizgi">{`${m.revizyon.etiket ?? 'Revizyon'} yürürlükte değil`}</Rozet>}
+        </span>
+      )),
+    },
+    {
+      anahtar: 'ad', baslik: 'Kalem',
+      hucre: (m) => (m.revizyon?.yururlukte === false && m.eskiRevizyonGerekcesi !== null ? (
+        <span className="tc-sp-kalem-termin">
+          <KalemMetni ad={m.malzemeAdi} aciklamalar={m.aciklamalar} />
+          <span className="tc-sp-ipucu">{`Eski revizyon gerekçesi: ${m.eskiRevizyonGerekcesi}`}</span>
+        </span>
+      ) : <KalemMetni ad={m.malzemeAdi} aciklamalar={m.aciklamalar} />),
+    },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (m) => `${miktarMetni(m.miktar)}${m.birim ? ` ${m.birim}` : ''}` },
     { anahtar: 'fiyat', baslik: 'Birim fiyat', hizala: 'sag', kirilmaz: true, hucre: (m) => fiyatMetni(m.birimFiyat, s.paraBirimi) },
     // 3244 b: kalem termini hep tarihle görünür; siparişten geliyorsa işaretlidir, elle verildiyse "Elle".

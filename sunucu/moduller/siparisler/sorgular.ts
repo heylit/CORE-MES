@@ -101,9 +101,10 @@ export interface KalemSatiri {
   termin: string | null;
   aciklama: string | null;
   karsilama: KarsilamaYolu;
+  eski_revizyon_gerekcesi: string | null;
 }
 
-const KALEM_SECIMI = `SELECT id, siparis_id, sira, malzeme_no, miktar, birim_fiyat, round(miktar * birim_fiyat, 2) AS tutar, termin, aciklama, karsilama
+const KALEM_SECIMI = `SELECT id, siparis_id, sira, malzeme_no, miktar, birim_fiyat, round(miktar * birim_fiyat, 2) AS tutar, termin, aciklama, karsilama, eski_revizyon_gerekcesi
                         FROM siparisler_siparis_satiri`;
 
 export function kalemler(db: Db, siparisId: number): Promise<KalemSatiri[]> {
@@ -184,6 +185,8 @@ export interface KalemAlanlari {
   birimFiyat: string | null;
   termin: string | null;
   aciklama: string | null;
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse nedeni; yürürlükteki kartta null.
+  eskiRevizyonGerekcesi?: string | null | undefined;
   partiler?: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[];
   karsilama?: KarsilamaYolu | undefined;
 }
@@ -203,10 +206,10 @@ export async function kalemleriYaz(
   }
   if (yazilacak.length === 0) return;
   await db.sorgu(
-    `INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama)
-     SELECT $1, k.sira, k.malzeme_no, k.miktar, k.birim_fiyat, k.termin, k.aciklama, k.karsilama
-       FROM unnest($2::int[], $3::int[], $4::numeric[], $5::numeric[], $6::date[], $7::text[], $8::text[])
-         AS k (sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama)`,
+    `INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama, eski_revizyon_gerekcesi)
+     SELECT $1, k.sira, k.malzeme_no, k.miktar, k.birim_fiyat, k.termin, k.aciklama, k.karsilama, k.gerekce
+       FROM unnest($2::int[], $3::int[], $4::numeric[], $5::numeric[], $6::date[], $7::text[], $8::text[], $9::text[])
+         AS k (sira, malzeme_no, miktar, birim_fiyat, termin, aciklama, karsilama, gerekce)`,
     [
       siparisId,
       yazilacak.map((k) => k.sira),
@@ -216,6 +219,7 @@ export async function kalemleriYaz(
       yazilacak.map((k) => k.termin),
       yazilacak.map((k) => k.aciklama),
       yazilacak.map((k) => k.karsilama ?? 'uret'),
+      yazilacak.map((k) => k.eskiRevizyonGerekcesi ?? null),
     ],
   );
   // 3244 b: partiler kalemin sırasıyla bağlanır; boş liste yazılmaz (kalem tek seri partidir).

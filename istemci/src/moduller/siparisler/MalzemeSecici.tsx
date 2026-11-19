@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { MalzemeSecenegi, MalzemeSecenekleriCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { KalemRevizyonu, MalzemeSecenegi, MalzemeSecenekleriCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { DurumKutusu, Girdi, Pencere, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni } from '../../ortak/veri/liste-durumu.ts';
@@ -16,6 +16,8 @@ export interface SecilenKart {
   yerlilikOrani: string | null;
   // 3429-3 F: kart türü (mamul, yarimamul, ticari...); yalnız aramadan seçilen kartta bilinir, kayıtlı kalemde yoktur.
   tur?: string;
+  // 3438 a: kartın revizyonu ve ailenin yürürlükteki kartı; revizyon ailesinde değilse null, bilinmiyorsa yok.
+  revizyon?: KalemRevizyonu | null;
 }
 
 // 2120: satırda kartın adı, altında Açıklama 1-3; ad yoksa tire, açıklama yoksa ikinci satır çizilmez.
@@ -33,7 +35,7 @@ export const secilenKartMetni = (k: SecilenKart): string =>
 
 
 export const kartSecimi = (m: MalzemeSecenegi): SecilenKart => ({
-  no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: m.yerlilikOrani, tur: m.tur,
+  no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: m.yerlilikOrani, tur: m.tur, revizyon: m.revizyon,
 });
 
 // Sunucu yalnız aktif mamul, yarı mamul ve ticari mal kartlarını verir (SIP-02).

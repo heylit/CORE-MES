@@ -37,6 +37,12 @@ interface SatirDegeri {
   aciklama: string;
   partiler: PartiDegeri[];
   karsilama: KarsilamaYolu;
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse zorunlu neden.
+  eskiRevizyonGerekcesi: string;
+  // Seçim yürürlükteki revizyona yönlendiyse kullanıcının seçtiği eski kart; "Eski revizyonu kullan" onu geri getirir.
+  eskiOneri: SecilenKart | null;
+  // Kayıtlı sürümdeki kartı; sunucu siparişte zaten kayıtlı karta gerekçe sormaz, alan da zorunlu görünmez.
+  kayitliKartNo: number | null;
 }
 
 interface Degerler {
@@ -59,7 +65,10 @@ interface Degerler {
 }
 
 let satirSayaci = 0;
-const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, id: null, kilitli: false, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [], karsilama: 'uret' });
+const bosSatir = (): SatirDegeri => ({
+  anahtar: ++satirSayaci, id: null, kilitli: false, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [], karsilama: 'uret',
+  eskiRevizyonGerekcesi: '', eskiOneri: null, kayitliKartNo: null,
+});
 
 function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
   if (s === null) {
@@ -82,13 +91,16 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       anahtar: ++satirSayaci,
       id: m.id,
       kilitli: m.emreBagli,
-      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: null },
+      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar, yerlilikOrani: null, revizyon: m.revizyon },
       miktar: girdiMetni(m.miktar),
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
       termin: m.termin === null || m.termin === s.termin ? '' : m.termin,
       aciklama: m.aciklama ?? '',
       partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet), rotaId: p.rotaId })),
       karsilama: m.karsilama,
+      eskiRevizyonGerekcesi: m.eskiRevizyonGerekcesi ?? '',
+      eskiOneri: null,
+      kayitliKartNo: m.malzemeNo,
     })),
     gerekce: '',
   };
@@ -168,9 +180,13 @@ function govdeKur(d: Degerler, ticariSartGorur: boolean) {
       aciklama: bosYap(s.aciklama),
       partiler: s.karsilama === 'uret' ? s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet), rotaId: p.rotaId })) : [],
       karsilama: s.karsilama,
+      ...(eskiRevizyonda(s.kart) ? { eskiRevizyonGerekcesi: bosYap(s.eskiRevizyonGerekcesi) } : {}),
     })),
   } satisfies SiparisEkleGovdesi;
 }
+
+const eskiRevizyonda = (k: SecilenKart | null): boolean => k?.revizyon?.yururlukte === false;
+const etiketli = (kod: string | null, etiket: string | null | undefined) => `${kod ?? ''}${etiket ? ` (${etiket})` : ''}`.trim();
 
 interface FormOzellikleri {
   // null: yeni sipariş; dolu: taslak düzenleme ya da (yeniSurum) onaylı siparişin yeni sürümü.
@@ -280,6 +296,7 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
           <ol className="tc-sp-kalemler">
             {d.satirlar.map((s, i) => {
               const sabit = yeniSurum || s.kilitli;
+              const gerekceZorunlu = s.kart !== null && !d.satirlar.some((k) => k.kayitliKartNo === s.kart?.no);
               const yalnizTermin = s.kilitli && !yeniSurum;
               return (
               <li key={s.anahtar} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
@@ -297,9 +314,36 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                   <KartArama
                     etiket={`Kalem ${i + 1} malzeme kartı`}
                     deger={s.kart}
-                    degistir={(kart) => satirDegistir(i, uretilmezKart(kart) && s.karsilama === 'uret' ? { kart, karsilama: 'stok', partiler: [] } : { kart })}
+                    degistir={(kart, eski) => satirDegistir(i, {
+                      ...(uretilmezKart(kart) && s.karsilama === 'uret' ? { karsilama: 'stok', partiler: [] } : {}), kart, eskiOneri: eski ?? null,
+                    })}
                     {...(form.hata(`satirlar.${i}.kart`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.kart`) })}
                   />
+                )}
+                {!sabit && s.eskiOneri !== null && !eskiRevizyonda(s.kart) && (
+                  <p className="tc-sp-revizyon" role="status">
+                    <span>{`${etiketli(s.eskiOneri.kod, s.eskiOneri.revizyon?.etiket)} yürürlükte değil; yürürlükteki ${etiketli(s.kart?.kod ?? null, s.kart?.revizyon?.etiket)} seçildi.`}</span>
+                    <Dugme simge="back" onClick={() => satirDegistir(i, { kart: s.eskiOneri, eskiOneri: null })}>Eski revizyonu kullan</Dugme>
+                  </p>
+                )}
+                {eskiRevizyonda(s.kart) && (
+                  <div className="tc-sp-revizyon">
+                    <Rozet ton="uyari" gorunum="cizgi">{`${s.kart?.revizyon?.etiket ?? 'Revizyon'} yürürlükte değil`}</Rozet>
+                    <span className="tc-sp-ipucu">{`Yürürlükteki: ${etiketli(s.kart?.revizyon?.yururluktekiKodu ?? null, s.kart?.revizyon?.yururluktekiEtiketi)}`}</span>
+                    {!sabit && (
+                      <Girdi
+                        etiket={`Kalem ${i + 1} eski revizyon gerekçesi`}
+                        autoComplete="off"
+                        required={gerekceZorunlu}
+                        maxLength={300}
+                        placeholder="Örnek: Müşteri bu revizyonu istedi"
+                        value={s.eskiRevizyonGerekcesi}
+                        onChange={(o) => satirDegistir(i, { eskiRevizyonGerekcesi: o.target.value })}
+                        {...(form.hata(`satirlar.${i}.eskiRevizyonGerekcesi`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.eskiRevizyonGerekcesi`) })}
+                      />
+                    )}
+                    {sabit && s.eskiRevizyonGerekcesi !== '' && <span className="tc-sp-ipucu">{`Gerekçe: ${s.eskiRevizyonGerekcesi}`}</span>}
+                  </div>
                 )}
                 <div className="tc-sp-izgara">
                   <Girdi

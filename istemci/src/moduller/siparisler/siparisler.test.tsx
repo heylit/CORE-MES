@@ -39,7 +39,7 @@ const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'o
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
 const SATIR = {
   id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1', 'Deneme aciklama 2'], birim: 'adet', miktar: '100', birimFiyat: '12.5000',
-  tutar: '1250.00', termin: null, aciklama: null, partiler: [], karsilama: 'uret' as const, emreBagli: false,
+  tutar: '1250.00', termin: null, aciklama: null, partiler: [], karsilama: 'uret' as const, emreBagli: false, revizyon: null, eskiRevizyonGerekcesi: null,
 };
 const AYRINTI_TASLAK = { ...SIPARIS_TASLAK, satirlar: [SATIR] } satisfies SiparisAyrintisi;
 const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-10-02T10:00:00+03:00', surum: 3 } satisfies SiparisAyrintisi;
@@ -74,7 +74,7 @@ const FIRMALAR = {
 } satisfies FirmaSecimCevabi;
 // Satılan türlerin süzgeci sunucudadır; seçici gelen satırları olduğu gibi gösterir.
 const MALZEMELER = {
-  satirlar: [{ no: 31, kod: 'DNM-001', ad: 'Deneme Braket', tur: 'mamul', birim: 'adet', aciklamalar: ['Deneme aciklama 1'], yerlilikOrani: '62.50' }, { no: 32, kod: 'DNM-002', ad: 'Deneme Mil', tur: 'mamul', birim: 'adet', aciklamalar: [], yerlilikOrani: null }],
+  satirlar: [{ no: 31, kod: 'DNM-001', ad: 'Deneme Braket', tur: 'mamul', birim: 'adet', aciklamalar: ['Deneme aciklama 1'], yerlilikOrani: '62.50', revizyon: null }, { no: 32, kod: 'DNM-002', ad: 'Deneme Mil', tur: 'mamul', birim: 'adet', aciklamalar: [], yerlilikOrani: null, revizyon: null }],
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 } satisfies MalzemeSecenekleriCevabi;
 
@@ -1010,7 +1010,7 @@ describe('Yeni satış siparişi', () => {
   });
 
   it('3429-3 F: ticari mal kartında "Üret" sunulmaz, yol "Stoktan" olur (sunucu bu kalemde emir açmaz)', async () => {
-    const ticari = { ...MALZEMELER, satirlar: [{ no: 33, kod: 'DNM-003', ad: 'Deneme Rulman', tur: 'ticari', birim: 'adet', aciklamalar: [], yerlilikOrani: null }], toplam: 1 } satisfies MalzemeSecenekleriCevabi;
+    const ticari = { ...MALZEMELER, satirlar: [{ no: 33, kod: 'DNM-003', ad: 'Deneme Rulman', tur: 'ticari', birim: 'adet', aciklamalar: [], yerlilikOrani: null, revizyon: null }], toplam: 1 } satisfies MalzemeSecenekleriCevabi;
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
       if (yontem === 'GET' && yol.startsWith('/siparisler/malzeme-secenekleri')) return json(200, ticari);
       return yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined;
@@ -2425,4 +2425,67 @@ describe('Başlıkta cari Logo hazırlığı belgenin Logo durumunu bekler (3359
       await waitFor(() => expect(hazirlikSorulan(istekler)).toEqual(['/logo/cari-hazirligi?firma=7']));
     });
   }
+});
+
+describe('3438 a: kalem yürürlükteki revizyonu seçer', () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+  const rev = (yururlukte: boolean) => ({ etiket: yururlukte ? 'R02' : 'R01', yururlukte, yururluktekiNo: 42, yururluktekiKodu: 'ORN-MM-2', yururluktekiEtiketi: 'R02' });
+  const ESKI = { no: 41, kod: 'ORN-MM-1', ad: 'ORN Mil', tur: 'mamul', birim: 'adet', aciklamalar: [], yerlilikOrani: null, revizyon: rev(false) };
+  const YENI = { ...ESKI, no: 42, kod: 'ORN-MM-2', revizyon: rev(true) };
+  const secenekler = (satirlar: (typeof ESKI)[]) => json(200, { satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemeSecenekleriCevabi);
+
+  it('eski revizyon seçilince yürürlükteki seçilir; "Eski revizyonu kullan" gerekçe ister ve gerekçe gövdede gider', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol.startsWith('/siparisler/malzeme-secenekleri')) return secenekler(yol.includes('ORN-MM-2') ? [YENI] : [ESKI]);
+      return yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined;
+    });
+    ac('/siparisler/yeni');
+    await musteriSec();
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
+    await kartSec('ORN Mil');
+    expect(await screen.findByText('ORN-MM-1 (R01) yürürlükte değil; yürürlükteki ORN-MM-2 (R02) seçildi.')).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: /^Kalem 1 malzeme kartı/ }) as HTMLInputElement).value).toBe('ORN-MM-2 · ORN Mil');
+    expect(screen.queryByLabelText(/^Kalem 1 eski revizyon gerekçesi/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Eski revizyonu kullan' }));
+    expect(screen.getByText('R01 yürürlükte değil')).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: /^Kalem 1 malzeme kartı/ }) as HTMLInputElement).value).toBe('ORN-MM-1 · ORN Mil');
+    const gerekce = screen.getByLabelText(/^Kalem 1 eski revizyon gerekçesi/) as HTMLInputElement;
+    // Yeni kalemde zorunlu (yıldız) ve sunucu sınırıyla aynı uzunlukta.
+    expect(gerekce.required).toBe(true);
+    expect(gerekce.maxLength).toBe(300);
+    fireEvent.change(gerekce, { target: { value: 'Müşteri R01 istedi' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 41, eskiRevizyonGerekcesi: 'Müşteri R01 istedi' }] });
+  });
+
+  it('ayrıntıda rozet Kod sütununda, gerekçe kırılan Kalem sütununda durur', async () => {
+    const gerekce = 'Müşteri bu revizyonu istedi; çizim onayı bekleniyor';
+    const ayrinti = { ...AYRINTI_TASLAK, satirlar: [{ ...SATIR, malzemeKodu: 'ORN-MM-1', revizyon: rev(false), eskiRevizyonGerekcesi: gerekce }] } satisfies SiparisAyrintisi;
+    sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, ayrinti) : undefined));
+    ac('/siparisler/5');
+    const rozet = await screen.findByText('R01 yürürlükte değil');
+    expect(rozet.closest('td')?.textContent).not.toContain(gerekce);
+    const metin = screen.getByText(`Eski revizyon gerekçesi: ${gerekce}`);
+    expect(metin.closest('td')?.textContent).toContain('Deneme Braket');
+  });
+
+  it('yürürlükteki kartla kalem gerekçe göndermez', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol.startsWith('/siparisler/malzeme-secenekleri')) return secenekler([YENI]);
+      return yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined;
+    });
+    ac('/siparisler/yeni');
+    await musteriSec();
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
+    await kartSec('ORN Mil');
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    const kalem = (yazmalar(istekler)[0]?.govde as { satirlar: Record<string, unknown>[] }).satirlar[0];
+    expect(kalem?.['malzemeNo']).toBe(42);
+    expect('eskiRevizyonGerekcesi' in (kalem ?? {})).toBe(false);
+  });
 });

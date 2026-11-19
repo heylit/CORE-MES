@@ -310,6 +310,8 @@ export async function siparisDonustur(
     cezaOraniGun: g.cezaOraniGun, cezaTavaniOrani: g.cezaTavaniOrani, odemeVadesiGun: g.odemeVadesiGun,
     satirlar: teklif.satirlar.map((s) => ({
       malzemeNo: s.malzemeNo ?? 0, miktar: s.miktar, birimFiyat: fiyat.get(s.id) ?? null, termin: null, aciklama: null,
+      // 3438 a: müşteri teklifteki kartı kabul etti; kart sonradan eskiye düştüyse sipariş o revizyonla açılır. Yürürlükteki kartta silinir.
+      eskiRevizyonGerekcesi: `${teklif.no} teklifinde kabul edilen revizyon.`,
     })),
   }, true, mevcut.firma_kodu);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
