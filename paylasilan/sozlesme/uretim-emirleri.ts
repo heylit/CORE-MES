@@ -701,6 +701,12 @@ export const isEmriSemasi = z.object({
   // K21 a: adım alt parça bitmeden de başlar (626 a); bu adıma giren ve son adımı bitmemiş alt parça dalları uyarı olarak gösterilir.
   // Bitmiş adımda boştur. İsteğe bağlı: sunucu her zaman yazar.
   eksikAltParcalar: z.array(z.object({ ad: z.string(), malzeme: kodluKayit })).optional(),
+  // 3455-1: adım terminalde değil geçmiş girişle bitti. Girilmeyen tarih ve operatör null (iş emrinin zamanı emrin genel aralığından
+  // dolmuştur); geri alınan giriş görünmez. İsteğe bağlı: sunucu her zaman yazar.
+  gecmisGiris: z.object({
+    giren: adliKayit, zaman: zamanSemasi, stokYazildi: z.boolean(), operator: adliKayit.nullable(), baslama: tarihSemasi.nullable(), bitis: tarihSemasi.nullable(),
+    hurda: z.number().int().nonnegative().optional(), hurdaNedeni: adliKayit.nullable().optional(),
+  }).nullable().optional(),
 });
 
 export const adimliEmirAyrintisi = adimliEmirOzeti.extend({
@@ -723,6 +729,32 @@ export const adimliOzetCevabi = z.object({
 });
 export const adimliBitenlerCevabi = listeCevapSemasi(adimliEmirOzeti);
 export const adimliEmirCevabi = z.object({ emir: adimliEmirAyrintisi });
+
+// 3455-1: geçmiş giriş. Adımlar, emrin bitmiş adımlarından sonra gelen ardışık bekleyen adımlardır, sırayla; son adım girilmez.
+// Emrin genel aralığı (baslama, bitis) girilmeyen adım tarihini doldurur. Hurda varsa nedeni zorunludur, yoksa boştur.
+// stokaYaz (3455-S1 c): kişi her girişte seçer; yazılmazsa sayım stoğa hareket yazmaz.
+export const gecmisGirisAdimi = z.object({
+  opNo: z.number().int().positive(),
+  baslama: tarihSemasi.nullable(),
+  bitis: tarihSemasi.nullable(),
+  saglam: z.number().int('Adet tam sayı olmalı.').nonnegative('Adet eksi olamaz.').max(TAM_SAYI_UST),
+  hurda: z.number().int('Adet tam sayı olmalı.').nonnegative('Adet eksi olamaz.').max(TAM_SAYI_UST),
+  hurdaNedeniId: KIMLIK.nullable(),
+  operatorId: KIMLIK.nullable(),
+}).strict();
+export const gecmisGirisGovdesi = z.object({
+  surum: surumSemasi,
+  baslama: tarihSemasi,
+  bitis: tarihSemasi,
+  stokaYaz: z.boolean(),
+  adimlar: z.array(gecmisGirisAdimi).min(1, 'En az bir adım girin.').max(AZAMI_ADIM),
+}).strict();
+// Son girilen adımın girişi geri alınır; ondan sonraki adımlar hiç başlamamış olmalıdır.
+export const gecmisGeriAlGovdesi = z.object({ surum: surumSemasi }).strict();
+export const gecmisGirisCevabi = z.object({ emir: adimliEmirAyrintisi, uyari: z.string().nullable() });
+export type GecmisGirisGirdisi = z.output<typeof gecmisGirisGovdesi>;
+export type GecmisGirisAdimi = z.output<typeof gecmisGirisAdimi>;
+export type GecmisGirisCevabi = z.output<typeof gecmisGirisCevabi>;
 
 // Sayım sınırı aşımı (647 a): adımın sayımı, önceki adımın o anki sağlamını aştığında yazılır ama iz bırakır. Satır, aşımı yapan
 // sayımdır; adet sınırı geçen kısım, oncekiSaglam aşım anında önceki adımın sağlamıdır. Aşım yoksa liste boştur.

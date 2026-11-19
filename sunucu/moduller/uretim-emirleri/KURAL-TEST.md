@@ -138,3 +138,16 @@ Bağsız kural: yok.
 | UE-SA-04 | 3272-2 a: türünün yürürlükte rotası olmayan partinin emri adımsız ve `rota_bekliyor` açılır; plana alınmaz (409). Rota yürürlüğe girince rota modülü uygular | siparis-acilisi.test.ts "UE-SA-04", "3272-2 a"; rota `bekleyen-emir.test.ts` | `uretim_emri_rota_bekliyor_rotasiz` |
 | UE-SA-05 | 3272-3 a: yeniden onayda çözülmüş emir aynı malzeme ve türdeki eksik partiye bağlanır, adet ve teslim kaleme uyar; eşi kalmayan iptal olur, eşi olmayan parti yeni emir açar | siparis-acilisi.test.ts "UE-SA-05", "3272-3 a" | yok |
 | UE-SA-06 | 3272-1 b: onaylayanda `projeler.yaz` ve emir açma (`uretim-emirleri.emir-ac` ya da `rota.emre-kopyala`) yoksa onay 403 ile reddedilir, ileti eksik işlemi söyler. Ayar ("Sipariş onayında proje ve emir aç", varsayılan açık) kapalıyken onay açmaz; elle açılış aynı kural | siparis-acilisi.test.ts "UE-SA-06", "3272-1 b", "ayar kapalıyken" | yok |
+
+## 3455-1: geçmiş adım girişi (tarih ve adetle)
+GK: `gecmis-giris-kurallar.test.ts` (saf), GG: `gecmis-giris.test.ts` (gerçek PostgreSQL).
+
+| Kural | Madde | Test (izinli ve reddedilen) | Kısıt |
+|---|---|---|---|
+| UE-GG-1 | Yalnız taslak ya da planlı, arşivsiz, kolsuz, dalsız emirde; bitmiş adımlardan sonraki ardışık bekleyen adımlar; son, fason ve istasyonsuz adım girilmez | GK "emir", "sıra" (2); GG "ret" | yok |
+| UE-GG-2 | Tarih bugünden ileri değil, en çok iki yıl önce, başlama bitişten sonra değil; bilinmeyen tarih ve operatör boş kalır | GK "tarih", "zaman"; GG "giriş", "ret" | `uretim_emirleri_gecmis_giris_tarih_sirasi` |
+| UE-GG-3 | Adımın sağlam ve hurda toplamı önceki adımın sağlamını aşmaz; hurda nedeniyle birlikte | GK "adet"; GG "ret" | `uretim_emirleri_gecmis_giris_hurda_nedenli` |
+| UE-GG-4 | Sayım 'gecmis' kaynağıyla yazılır; süre, OEE, kişi ve gün toplamları görmez; terminal kaydı yazılmaz; sıradaki adım olağan başlar | GG "giriş", "süre, OEE ve gün toplamları" | `uretim_sayimi_kaynak_degeri` |
+| UE-GG-5 | Stok hareketi yalnız seçilince (3455-S1 c) | GG "stok" | yok |
+| UE-GG-6 | Geri alma son girilen adımdandır, ayrı defter satırıdır; sonraki adım başladıysa ya da sayım aldıysa reddedilir | GK "geri alma"; GG "geri alma" (2) | `uretim_emirleri_gecmis_giris_tek_geri` |
+| UE-GG-7 | Yalnız yönetici (3455-S2 a, rol satırı yok); eşzamanlı iki giriş ya da iki geri alma çiftlemez | GG "yetki", "eşzamanlı iki giriş", "eşzamanlı iki geri alma" | `uretim_emirleri_gecmis_giris_tek_geri` |

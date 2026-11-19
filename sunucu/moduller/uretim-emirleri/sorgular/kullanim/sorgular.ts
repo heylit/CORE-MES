@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { KatilimKapanisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { ISO, NULLU_ISO, TARIH, TERMINAL_IS_EMRI } from '../ortak/sorgular.ts';
+import { CANLI_SAYIM, ISO, NULLU_ISO, TARIH, TERMINAL_IS_EMRI } from '../ortak/sorgular.ts';
 
 export interface ArsivSatiri {
   eskiDurum: string;
@@ -40,7 +40,7 @@ export async function ozetGetir(db: Db, kisiId: number, gizli: readonly number[]
        (SELECT count(*)::int FROM uretim_emri e WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND e.durum IN ('planli', 'basladi') AND NOT (e.id = ANY($2::int[]))) AS acik,
        (SELECT count(*)::int FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
          WHERE i.kisi_id = $1 AND i.durum <> 'tamam' AND NOT e.arsiv AND e.durum IN ('planli', 'basladi') AND NOT (e.id = ANY($2::int[]))) AS kuyrugum,
-       (SELECT sum(s.adet)::int FROM uretim_sayimi s
+       (SELECT sum(s.adet)::int FROM ${CANLI_SAYIM} s
          WHERE s.kisi_id = $1 AND s.tur = 'saglam' AND s.zaman >= current_date::timestamptz AND s.zaman < (current_date + 1)::timestamptz
            AND NOT (s.emir_id = ANY($2::int[]))) AS "bugunSaglam",
        count(*) FILTER (WHERE a.durum = 'planli' AND NOT a.baslamis)::int AS planda,
@@ -62,7 +62,7 @@ export function gunlukUretimGetir(db: Db, gun: number, gizli: readonly number[])
     `SELECT ${TARIH('s.zaman')} AS gun,
             COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'saglam'), 0)::int AS saglam,
             COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'hurda'), 0)::int AS hurda
-       FROM uretim_sayimi s WHERE s.zaman >= (current_date - ($1::int - 1))::timestamptz AND NOT (s.emir_id = ANY($2::int[]))
+       FROM ${CANLI_SAYIM} s WHERE s.zaman >= (current_date - ($1::int - 1))::timestamptz AND NOT (s.emir_id = ANY($2::int[]))
       GROUP BY 1 ORDER BY 1`,
     [gun, [...gizli]],
   );

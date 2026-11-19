@@ -23,6 +23,7 @@ import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
 import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, beklemeSuresi, useBekletOgesi } from './Bekletme.tsx';
 import { RotaBekliyorSeridi } from './RotaBekliyor.tsx';
+import { GecmisGirisPenceresi, GecmisGirisSeridi, useGecmisGirisOgesi, useSonGecmisGiris } from './GecmisGiris.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
@@ -154,6 +155,8 @@ function OzetKutulari({ emir, veri, kayitlariAc, statu, bekleme }: {
   const biten = il ? il.adimlar.filter((a) => a.durum === 'tamam').length : null;
   const adim = suAnkiAdim(il);
   const son = veri.kayitlar.reduce<UretimKaydi | null>((s, k) => (s === null || k.zaman > s.zaman ? k : s), null);
+  const gecmis = useSonGecmisGiris(emir.id, emir.malzemeNo != null);
+  const gecmisSon = gecmis !== null && (son === null || gecmis.zaman > son.zaman) ? gecmis : null;
   const fark = emir.durum === 'bitti' ? farkMetni(emir.adet, emir.saglamAdet) : null;
   const durdu = canli?.durusNedeni ?? null;
   const st = adim ? statu(adim.opNo) : null;
@@ -178,8 +181,9 @@ function OzetKutulari({ emir, veri, kayitlariAc, statu, bekleme }: {
       <Ozet baslik="Şu an" simge="gauge" deger={suAn.deger} alt={suAn.alt} ton={suAn.ton} />
       <div className="tc-emir-ozet">
         <span className="tc-emir-ozet-baslik"><Simge ad="clock" boyut="k" /> Son hareket</span>
-        <b className="tc-emir-ozet-deger">{son ? OLAY_ETIKETI[son.olay] : 'Henüz kayıt yok'}</b>
-        {son && <small className="tc-emir-ozet-alt">{kayitKisisi(son)} · {zamanMetni(son.zaman)}</small>}
+        <b className="tc-emir-ozet-deger">{gecmisSon ? 'Geçmiş giriş' : son ? OLAY_ETIKETI[son.olay] : 'Henüz kayıt yok'}</b>
+        {gecmisSon && <small className="tc-emir-ozet-alt">{gecmisSon.giren} · {zamanMetni(gecmisSon.zaman)}</small>}
+        {!gecmisSon && son && <small className="tc-emir-ozet-alt">{kayitKisisi(son)} · {zamanMetni(son.zaman)}</small>}
         {son && <Dugme simge="next" onClick={kayitlariAc}>Bütün kayıtlar</Dugme>}
       </div>
     </div>
@@ -210,6 +214,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
   const emir = ayrinti.data?.emir;
   const bekleme = emir?.bekletme ?? null;
   const bekletOgesi = useBekletOgesi(emir);
+  const gecmisOgesi = useGecmisGirisOgesi(emir);
   const durum = emir ? durumGosterimi(emir) : { etiket: '', ton: 'bilgi' as const };
   const kontrolAdimlari = ayrinti.data?.adimlar ?? [];
   const malzemeNo = emir?.malzemeNo ?? null;
@@ -261,7 +266,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     <Kart
       baslik={emir ? emir.emirNo : 'Üretim emri'}
       baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{emir.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}{satirEki.smartes.gorunur && <> <SmartesEmirBasligi bilgi={satirEki.smartes.bilgi} hata={satirEki.smartes.hata} /></>}</>}
-      sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id, bekletOgesi)}</div> : undefined}
+      sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id, [...bekletOgesi, ...gecmisOgesi])}</div> : undefined}
     >
       {ayrinti.isPending && <DurumKutusu durum="yukleniyor" />}
       {ayrinti.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Emir alınamadı.')} yenile={() => { void ayrinti.refetch(); }} />}
@@ -283,6 +288,8 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
           <YasamSeridi emir={emir} bekleme={bekleme} />
           <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} bekleme={bekleme} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
           <BekletPenceresi emirId={emir.id} emirNo={emir.emirNo} />
+          {emir.malzemeNo != null && <GecmisGirisSeridi emirId={emir.id} />}
+          {gecmisOgesi.length > 0 && <GecmisGirisPenceresi emirId={emir.id} emirNo={emir.emirNo} adet={emir.adet} />}
 
           <Sekmeler etiket="Emrin bölümleri" sekmeler={sekmeler} secili={sekme} sec={sekmeSec} />
           <div className="tc-emir-sekme" role="tabpanel" aria-label={sekmeler.find((s) => s.anahtar === sekme)?.baslik}>

@@ -41,6 +41,7 @@ import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu,
 import * as s from './sorgular.ts';
 import { rotaBekliyorIhlali } from './siparis-acilisi-kurallar.ts';
 import { dilimUstEmirleri } from './sorgular/ust-emir/sorgular.ts';
+import { etkinGirisler as gecmisGirisleri } from './sorgular/gecmis-giris/sorgular.ts';
 import type { AdimDugumu, AdimUretimBilgisi } from './disari.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
@@ -710,6 +711,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
   const kisi = await kisiAdlari(db, [...hareketler.map((h) => h.kisiId), ...yerDegisimleri.map((d) => d.kisiId)]);
   const eski = e.arsiv ? await s.arsivSatiri(db, id) : null;
   const eksikler = await adimEksikHaritasi(db, id, kendi);
+  const gecmis = await gecmisRozetleri(db, id);
   const dalOf = (isEmriId: number): IsEmri['dal'] => {
     const d = dugumler.get(isEmriId);
     if (d === undefined) return null;
@@ -755,6 +757,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
       kararBekliyor: kararlar.get(i.id) ?? 0,
       dal: dalOf(i.id),
       eksikAltParcalar: eksikAltParcalar(i),
+      gecmisGiris: gecmis.get(i.id) ?? null,
     };
   });
   const altEmirIdleri = (await s.altPartilerGetir(db, [id])).filter((a) => a.ustEmirId === id && a.durum !== 'iptal').map((a) => a.id);
@@ -767,6 +770,21 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
       durum: eski.eskiDurum, istasyon: istasyonAdi(ad, eski.istasyonId), baslama: eski.baslama, bitis: eski.bitis, saglamAdet: eski.saglamAdet,
     },
   };
+}
+
+// 3455-1: emir ayrıntısının "Geçmiş giriş" rozeti; iş emri başına etkin (geri alınmamış) giriş.
+async function gecmisRozetleri(db: Db, emirId: number): Promise<Map<number, NonNullable<IsEmri['gecmisGiris']>>> {
+  const girisler = await gecmisGirisleri(db, [emirId]);
+  const adlar = await kisiAdlari(db, girisler.flatMap((x) => (x.operatorId === null ? [x.girenId] : [x.girenId, x.operatorId])));
+  const ad = (k: number) => ({ id: k, ad: adlar.get(k) ?? `#${String(k)}` });
+  const nedenler = girisler.some((x) => x.hurdaNedeniId !== null)
+    ? new Map((await hurdaNedenleriniListele(db, { yalnizAktif: false })).map((n) => [n.id, n.ad]))
+    : new Map<number, string>();
+  return new Map(girisler.map((x) => [x.isEmriId, {
+    giren: ad(x.girenId), zaman: x.zaman, stokYazildi: x.stokYazildi, operator: x.operatorId === null ? null : ad(x.operatorId), baslama: x.baslama, bitis: x.bitis,
+    hurda: x.hurdaAdet,
+    hurdaNedeni: x.hurdaNedeniId === null ? null : { id: x.hurdaNedeniId, ad: nedenler.get(x.hurdaNedeniId) ?? `#${String(x.hurdaNedeniId)}` },
+  }]));
 }
 
 /* ---------------- emir komutları (ekran ve plan) ---------------- */

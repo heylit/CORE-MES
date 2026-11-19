@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { ISO, KARAR_SATIRI, TARIH } from '../ortak/sorgular.ts';
+import { CANLI_SAYIM, ISO, KARAR_SATIRI, TARIH } from '../ortak/sorgular.ts';
 
 export type SayimKirilimi = 'istasyon' | 'kisi' | 'makine' | 'is_emri';
 // Sayım satırında makine yoktur: sayım, zamanında emrin açık kullanımı olan makineye yazılır (bitişteki sayım dahil, bitirme
@@ -14,7 +14,7 @@ const MAKINE_SAYIMI = `(SELECT p.id, p.emir_id, p.is_emri_id, p.kisi_id, p.istas
            + CASE WHEN p.r <= abs(p.adet - trunc(p.adet::numeric / p.n)::int * p.n) THEN sign(p.adet)::int ELSE 0 END AS adet
     FROM (SELECT s.id, s.emir_id, s.is_emri_id, s.kisi_id, s.istasyon_id, s.zaman, s.tur, s.adet, m.makine_id,
                  count(*) OVER (PARTITION BY s.id) AS n, row_number() OVER (PARTITION BY s.id ORDER BY m.makine_id) AS r
-            FROM uretim_sayimi s
+            FROM ${CANLI_SAYIM} s
             JOIN LATERAL (
               SELECT DISTINCT a.makine_id FROM (
                 SELECT k.makine_id, e.etkin, max(e.etkin) OVER () AS en
@@ -25,9 +25,9 @@ const MAKINE_SAYIMI = `(SELECT p.id, p.emir_id, p.is_emri_id, p.kisi_id, p.istas
                WHERE a.etkin = a.en) m ON true) p) s`;
 
 const KIRILIM: Record<SayimKirilimi, { kimlik: string; kaynak: string }> = {
-  istasyon: { kimlik: 's.istasyon_id', kaynak: 'uretim_sayimi s' },
-  kisi: { kimlik: 's.kisi_id', kaynak: 'uretim_sayimi s' },
-  is_emri: { kimlik: 's.is_emri_id', kaynak: 'uretim_sayimi s' },
+  istasyon: { kimlik: 's.istasyon_id', kaynak: `${CANLI_SAYIM} s` },
+  kisi: { kimlik: 's.kisi_id', kaynak: `${CANLI_SAYIM} s` },
+  is_emri: { kimlik: 's.is_emri_id', kaynak: `${CANLI_SAYIM} s` },
   makine: { kimlik: 's.makine_id', kaynak: MAKINE_SAYIMI },
 };
 
@@ -289,7 +289,7 @@ export function kisininIsEmirleriGetir(db: Db, kisiId: number, baslangic: string
     `WITH say AS (
        SELECT s.emir_id, COALESCE(s.is_emri_id, 0) AS ie, sum(s.adet) FILTER (WHERE s.tur = 'saglam') AS saglam,
               sum(s.adet) FILTER (WHERE s.tur = 'hurda') AS hurda, max(s.zaman) AS son
-         FROM uretim_sayimi s WHERE s.kisi_id = $1 AND s.zaman >= $2::timestamptz AND s.zaman < $3::timestamptz GROUP BY 1, 2
+         FROM ${CANLI_SAYIM} s WHERE s.kisi_id = $1 AND s.zaman >= $2::timestamptz AND s.zaman < $3::timestamptz GROUP BY 1, 2
      ), kat AS (
        SELECT k.emir_id, COALESCE(k.is_emri_id, 0) AS ie,
               floor(sum(extract(epoch FROM LEAST(COALESCE(k.cikis, now()), $3::timestamptz) - GREATEST(k.giris, $2::timestamptz)))) AS saniye,
@@ -321,7 +321,7 @@ export function kisininGunlukIsEmirleriGetir(
     `WITH g AS (${ARALIKLAR}), say AS (
        SELECT g.gun, s.emir_id, COALESCE(s.is_emri_id, 0) AS ie, sum(s.adet) FILTER (WHERE s.tur = 'saglam') AS saglam,
               sum(s.adet) FILTER (WHERE s.tur = 'hurda') AS hurda, max(s.zaman) AS son
-         FROM uretim_sayimi s JOIN g ON s.zaman >= g.bas AND s.zaman < g.bit
+         FROM ${CANLI_SAYIM} s JOIN g ON s.zaman >= g.bas AND s.zaman < g.bit
         WHERE s.kisi_id = $1 AND s.zaman >= ($2::timestamptz[])[1] AND s.zaman < ($2::timestamptz[])[cardinality($2::timestamptz[])]
         GROUP BY 1, 2, 3
      ), kat AS (
@@ -351,7 +351,7 @@ export function kisininGunlukIsEmirleriGetir(
 export function kisininHurdalariGetir(db: Db, kisiId: number, baslangic: string, bitis: string): Promise<{ hurdaNedeniId: number; adet: number }[]> {
   return db.sorgu(
     `SELECT s.hurda_nedeni_id AS "hurdaNedeniId", sum(s.adet)::int AS adet
-       FROM uretim_sayimi s
+       FROM ${CANLI_SAYIM} s
       WHERE s.kisi_id = $1 AND s.tur = 'hurda' AND s.hurda_nedeni_id IS NOT NULL AND s.zaman >= $2::timestamptz AND s.zaman < $3::timestamptz
       GROUP BY s.hurda_nedeni_id HAVING sum(s.adet) <> 0
       ORDER BY adet DESC, s.hurda_nedeni_id`,

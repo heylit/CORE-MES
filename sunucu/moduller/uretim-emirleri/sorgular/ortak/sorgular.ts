@@ -3,6 +3,10 @@ export const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
 export const NULLU_ISO = (sutun: string) => `CASE WHEN ${sutun} IS NULL THEN NULL ELSE ${ISO(sutun)} END`;
 export const TARIH = (sutun: string) => `to_char(${sutun}, 'YYYY-MM-DD')`;
 
+// 3455: geçmiş girişin sayımı (kaynak 'gecmis') giriş anında yazılır ama o anda üretilmemiştir; zaman penceresiyle okunan süre,
+// OEE, kişi ve gün toplamları onu saymaz. Adet akışı (adıma giren, sayaç, ilerleme) bu süzgeci kullanmaz, geçmiş adet orada gerçektir.
+export const CANLI_SAYIM = "(SELECT * FROM uretim_sayimi WHERE kaynak IS DISTINCT FROM 'gecmis')";
+
 // Terminalin işlediği iş emri: çalışan, yoksa sıradaki bekleyen, hepsi bittiyse son biten. İş emirsiz emirde boştur;
 // sayaç, olay ve kontrol listesi bu iş emri kapsamında okunur ve yazılır (iş emirsiz emirde kapsam boş iş emridir).
 export const TERMINAL_IS_EMRI = (emir: string) => `(SELECT ie.id FROM uretim_emirleri_is_emri ie WHERE ie.uretim_emri_id = ${emir}
