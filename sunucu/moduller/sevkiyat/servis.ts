@@ -14,7 +14,7 @@ import { malzemeAdlari } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaAra, firmaKonumlari, firmaOzeti, firmaOzetleri, firmaVarMi, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDegistiOlayi, FirmaKonumu } from '../musteri-tedarikci/disari.ts';
 import type { AyarDegistiOlayi } from '../ayarlar/disari.ts';
-import { siparisinSatirOzetleri, siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import { sevkEdilecekKalemler, siparisinSatirOzetleri, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { emirNolari, fasonHareketiOzeti, siparisSatirlarininEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi, FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import { talepNolari } from '../satin-alma/disari.ts';
@@ -427,7 +427,12 @@ export async function isIptalEt(db: Db, id: number): Promise<Is> {
   if (!isDuzenlenebilir(onceki.durum as IsDurumu)) throw gecersiz(DUZENLENEMEZ_IS);
   const planda = plan !== null && isDegistirilebilir(plan.onaylandi !== null) && await sorgu.isPlandaMi(db, plan.id, id);
   if (plan && planda) { await sorgu.isiPlandanCikar(db, id); await sorgu.planSurumunuArtir(db, plan.id, plan.amac); }
-  await sorgu.isinBekleyenleriniCoz(db, id);
+  // 3429-3 F4 (Risk D1): sipariş kaleminin yükü yalnız satır hâlâ emirsiz ve sipariş onaylıysa açık kayda döner.
+  const satisSatirlari = [...new Set((await sorgu.isinKalemleri(db, id)).flatMap((k) => (k.kaynak === 'siparis' && k.satisSiparisSatiriId !== null ? [k.satisSiparisSatiriId] : [])))]
+    .sort((a, b) => a - b);
+  for (const s of satisSatirlari) await sorgu.siparisKalemiKilidi(db, s);
+  const gecerli = satisSatirlari.length === 0 ? [] : (await sevkEdilecekKalemler(db, satisSatirlari)).map((k) => k.siparisSatiriId);
+  await sorgu.isinBekleyenleriniCoz(db, id, gecerli);
   return isCevabi((await sorgu.isIptalEt(db, id))!);
 }
 const ARADA_DEGISTI = 'İş bu sırada değişti; yeniden açıp deneyin.';
@@ -473,19 +478,42 @@ export interface SevkIsiOzeti { tur: IsTuru; firmaId: number | null; siparisId: 
 export async function sevkIsiOzeti(db: Db, id: number): Promise<SevkIsiOzeti | null> {
   const is = await sorgu.isOzeti(db, id);
   if (is === null) return null;
-  const satirId = is.uretimEmriId === null ? null : (await uretimEmriOzeti(db, is.uretimEmriId))?.siparisSatiriId ?? null;
+  // 3429-3 F4: emirsiz satış kaleminde satır kalemin kendisindedir.
+  const satirId = is.satisSiparisSatiriId ?? (is.uretimEmriId === null ? null : (await uretimEmriOzeti(db, is.uretimEmriId))?.siparisSatiriId ?? null);
   const siparisId = satirId === null ? null : (await siparisSatiriOzetleri(db, [satirId])).get(satirId)?.siparisId ?? null;
   return { tur: is.tur, firmaId: is.firmaId, siparisId, iptal: is.iptal };
 }
 
 // Satış faturasına sevk seçilirken (302 a): siparişin satırlarına bağlı emirlerin ürününü taşıyan teslimat işleri, iptal edilenler işaretli.
 // Aynı iş birden çok emrin ürününü taşıyabilir; her emir ayrı satırdır. Siparişsiz ya da sevki olmayan siparişte boş liste.
-export interface SiparisSevki { isId: number; durum: IsDurumu; tarih: string; durumZamani: string; firmaId: number | null; belgeNo: string | null; siparisId: number; uretimEmriId: number; adet: string | null; iptal: boolean }
+// 3429-3 F4: emirsiz kalemin (sipariş kaynağı) işleri de gelir; onlarda emir boş, satış satırı doludur.
+export interface SiparisSevki {
+  isId: number; durum: IsDurumu; tarih: string; durumZamani: string; firmaId: number | null; belgeNo: string | null; siparisId: number;
+  uretimEmriId: number | null; satisSiparisSatiriId: number | null; adet: string | null; iptal: boolean;
+}
 export async function siparisinSevkleri(db: Db, siparisId: number): Promise<SiparisSevki[]> {
   const satirlar = await siparisinSatirOzetleri(db, siparisId);
   const emirler = await siparisSatirlarininEmirleri(db, satirlar.map((s) => s.id));
   const isler = await sorgu.emirlerinIsleri(db, [...emirler.values()].flat());
-  return isler.map((i) => ({ ...i, siparisId }));
+  const kalemIsleri = await sorgu.siparisKalemlerininIsleri(db, satirlar.map((s) => s.id));
+  return [
+    ...isler.map((i) => ({ ...i, siparisId, satisSiparisSatiriId: null })),
+    ...kalemIsleri.map((i) => ({ ...i, siparisId, uretimEmriId: null })),
+  ].sort((a, b) => a.tarih.localeCompare(b.tarih) || a.isId - b.isId);
+}
+
+// 3429-3 F4: işe girmiş sipariş kalemi olan satış satırları (SIP-19 kilidi; kablolama.ts).
+export const sevkeBagliSiparisSatirlari = (db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> => sorgu.iseGirmisSiparisSatirlari(db, satirIdleri);
+
+// 3429-3 F4: sipariş değişti (onay, geri alma, iptal, kapanış, düzenleme). Sipariş onaylı değilse ya da kalem emirsiz değilse işe
+// girmemiş sipariş kalemleri kaldırılır; işteki kaleme dokunulmaz (sevkiyat işi iptal eder). Tekrarlanabilir.
+export async function siparisDegistiYansit(db: Db, olay: { siparisId: number; kullanici: { id: number } }): Promise<void> {
+  const satirlar = await siparisinSatirOzetleri(db, olay.siparisId);
+  if (satirlar.length === 0) return;
+  // Satır kilidi (Risk N1): aynı anda bırakılan kalem eski durumu görüp açılmasın.
+  for (const id of satirlar.map((x) => x.id).sort((a, b) => a - b)) await sorgu.siparisKalemiKilidi(db, id);
+  const gecerli = new Set((await sevkEdilecekKalemler(db, satirlar.map((s) => s.id))).map((k) => k.siparisSatiriId));
+  await sorgu.siparisKalemleriniKaldir(db, satirlar.map((s) => s.id).filter((id) => !gecerli.has(id)), olay.kullanici.id);
 }
 
 // ---------- bekleme listesi (kart #1310) ----------

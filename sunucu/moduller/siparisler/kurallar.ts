@@ -110,9 +110,9 @@ export function partiReddi(birim: string | null, miktar: string, partiler: reado
 // SIP-19 (3254 a): onayı geri alınmış siparişte emre bağlı kalem kilitlidir: silinmez, sırası değişmez; malzeme, miktar, fiyat, açıklama
 // partiler ve karşılama yolu (3429-3) aynı kalır, yalnız termin değişir. Satın alma talebine bağlı "Satın al" kalemi de kilitlidir (3429-3 F3). Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
 export const KALEM_BASKA_SIPARISIN = 'Kalem bu siparişin değil.';
-export const KILITLI_KALEM_SILINMEZ = 'Emre ya da satın alma talebine bağlı kalem silinemez';
-export const KILITLI_KALEM_SIRASI = 'Emre ya da satın alma talebine bağlı kalemin sırası değişmez';
-export const KILITLI_KALEM_DEGISMEZ = 'Emre ya da satın alma talebine bağlı kalemde yalnız termin değişir';
+export const KILITLI_KALEM_SILINMEZ = 'Emre, satın alma talebine ya da sevk işine bağlı kalem silinemez';
+export const KILITLI_KALEM_SIRASI = 'Emre, satın alma talebine ya da sevk işine bağlı kalemin sırası değişmez';
+export const KILITLI_KALEM_DEGISMEZ = 'Emre, satın alma talebine ya da sevk işine bağlı kalemde yalnız termin değişir';
 const sayiAyni = (a: string | null, b: string | null): boolean => {
   const n = (m: string) => { const [t = '0', k = ''] = m.trim().split('.'); return `${BigInt(t)}.${k.replace(/0+$/, '')}`; };
   return a === null || b === null ? a === b : n(a) === n(b);

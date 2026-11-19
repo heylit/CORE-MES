@@ -124,7 +124,7 @@ describe('satış siparişi ön talebi (3429-3 F3, gerçek PostgreSQL)', () => {
       kdvOrani: '20', odemeKosulu: 'Peşin', aciklama: null, surum: ayrinti.govde.surum,
       satirlar: [{ id: s.satirlar[0], malzemeNo: m, miktar: '3', birimFiyat: '5', termin: null, aciklama: null, karsilama: 'uret' }],
     });
-    assert.deepEqual([g.durum, g.govde.mesaj], [409, 'Emre ya da satın alma talebine bağlı kalemde yalnız termin değişir (kalem 1).']);
+    assert.deepEqual([g.durum, g.govde.mesaj], [409, 'Emre, satın alma talebine ya da sevk işine bağlı kalemde yalnız termin değişir (kalem 1).']);
 
     assert.equal((await komut(s.id, 'onayla')).durum, 200);
     await o().sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [t.govde.id]);

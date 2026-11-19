@@ -9,7 +9,7 @@ import { FirmaKoduSecimi, kayitliKodIpucu, useFirmaKodlari } from '../../ortak/v
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import type { SecilenFirma } from './FirmaSecici.tsx';
-import { BELIRSIZ_SAYI, KARSILAMA_YOLU_ADLARI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
+import { BAGLI_METNI, BAGLI_ROZETI, BELIRSIZ_SAYI, KARSILAMA_YOLU_ADLARI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
 import { KartArama } from './KartArama.tsx';
 import { secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { MusteriArama } from './MusteriArama.tsx';
@@ -302,8 +302,8 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
               <li key={s.anahtar} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
                 <div className="tc-sp-kalem-ust">
                   <strong>{`Kalem ${i + 1}`}</strong>
-                  {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">{s.karsilama === 'satin-al' ? 'Talebe bağlı' : 'Emre bağlı'}</Rozet>}
-                  {yalnizTermin && <span className="tc-sp-parti-bos">{s.karsilama === 'satin-al' ? 'Satın alma talebi açıldı; yalnız termin değişir.' : 'Üretim emri açıldı; yalnız termin değişir.'}</span>}
+                  {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">{BAGLI_ROZETI[s.karsilama]}</Rozet>}
+                  {yalnizTermin && <span className="tc-sp-parti-bos">{BAGLI_METNI[s.karsilama]}</span>}
                   {d.satirlar.length > 1 && !sabit && (
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}

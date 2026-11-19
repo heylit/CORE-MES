@@ -540,9 +540,13 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş yeni sürüm -> proje bitişi', siparisRevizeEdildiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     bag('sipariş yeni sürüm -> emir teslimi', siparisRevizeEdildiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     // 3429-3 F3: satın alma talebine bağlı "Satın al" kalemi de emre bağlı kalem gibi kilitlidir (SIP-19).
-    bag('emre ya da talebe bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari && satisSatiriBagliKalemler && (async (
-      db: Db, satirIdleri: readonly number[],
-    ) => new Set([...await uretimEmirleri.emreBagliSiparisSatirlari(db, satirIdleri), ...await satisSatiriBagliKalemler(db, satirIdleri)]))),
+    // 3429-3 F4: işe girmiş emirsiz sevk kalemi de aynı kilidi verir.
+    bag('emre, talebe ya da sevk işine bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu,
+      uretimEmirleri.emreBagliSiparisSatirlari && satisSatiriBagliKalemler && sevkiyat.sevkeBagliSiparisSatirlari && (async (db: Db, satirIdleri: readonly number[]) => new Set([
+        ...await uretimEmirleri.emreBagliSiparisSatirlari(db, satirIdleri), ...await satisSatiriBagliKalemler(db, satirIdleri),
+        ...await sevkiyat.sevkeBagliSiparisSatirlari(db, satirIdleri),
+      ]))),
+    bag('sipariş değişti -> sevkiyat sipariş kalemi', siparisDegistiDinle, sevkiyat.siparisDegistiYansit),
     bag('talebe bağlı kalemler -> sipariş iptali', bagliTalepCozucusu, satisSatiriAcikTalepleriKilitle),
     bag('sipariş "Satın al" kalemleri -> satın alma ön talebi', satisSiparisiKalemCozucusu, satinAlinacakKalemler),
     bag('sipariş akışı eksikleri -> sipariş kapatma', kapanisEksigiCozucusu, akis.siparisKapanisEksikleri),

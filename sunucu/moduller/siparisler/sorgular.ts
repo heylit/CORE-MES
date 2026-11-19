@@ -121,17 +121,20 @@ export function kalemleriGetir(db: Db, idler: number[]): Promise<KalemSatiri[]> 
 
 // 3429-3 F3: onaylı, arşivde olmayan siparişlerin "Satın al" kalemleri (satın almanın ön talep kaynağı). Termin kalemin, yoksa siparişin.
 export interface SatinAlinacakKalemSatiri {
-  id: number; siparis_id: number; siparis_no: string; firma_id: number; malzeme_no: number; miktar: string; termin: string;
+  id: number; siparis_id: number; siparis_no: string; firma_id: number; malzeme_no: number; miktar: string; termin: string; karsilama: 'stok' | 'satin-al';
 }
-export function satinAlinacakKalemler(db: Db): Promise<SatinAlinacakKalemSatiri[]> {
+// Onaylı, arşivsiz siparişin emirsiz kalemleri (verilen yollar); idler verilirse yalnız onlar.
+export function emirsizKalemler(db: Db, yollar: readonly ('stok' | 'satin-al')[], idler: readonly number[] | null = null): Promise<SatinAlinacakKalemSatiri[]> {
   return db.sorgu<SatinAlinacakKalemSatiri>(
     `SELECT k.id, k.siparis_id, s.no AS siparis_no, s.firma_id, k.malzeme_no, k.miktar::text AS miktar,
-            to_char(coalesce(k.termin, s.termin), 'YYYY-MM-DD') AS termin
+            to_char(coalesce(k.termin, s.termin), 'YYYY-MM-DD') AS termin, k.karsilama
        FROM siparisler_siparis_satiri k JOIN siparisler_siparis s ON s.id = k.siparis_id
-      WHERE s.durum = 'onayli' AND s.arsiv_an IS NULL AND k.karsilama = 'satin-al'
+      WHERE s.durum = 'onayli' AND s.arsiv_an IS NULL AND k.karsilama = ANY($1::text[]) AND ($2::int[] IS NULL OR k.id = ANY($2::int[]))
       ORDER BY coalesce(k.termin, s.termin), s.no, k.sira`,
+    [[...yollar], idler === null ? null : [...idler]],
   );
 }
+export const satinAlinacakKalemler = (db: Db): Promise<SatinAlinacakKalemSatiri[]> => emirsizKalemler(db, ['satin-al']);
 
 export interface SiparisKilidi {
   durum: SiparisDurumu; firma_id: number; surum: number; arsivde: boolean;

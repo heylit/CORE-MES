@@ -33,6 +33,9 @@ export { bagliTalepCozucusuKaydet as bagliTalepCozucusu } from './bagli-emirler.
 export type { BagliTalepCozucusu } from './bagli-emirler.ts';
 export { satinAlinacakKalemler } from './servis.ts';
 export type { SatinAlinacakKalem } from './servis.ts';
+// 3429-3 F4: sevkiyatın emirsiz kalem adayları.
+export { sevkEdilecekKalemler } from './servis.ts';
+export type { SevkEdilecekKalem } from './servis.ts';
 export type { KapanisEksigiCozucusu } from './bagli-emirler.ts';
 export type { SiparisOnaylandiDinleyicisi, SiparisOnaylandiOlayi } from './siparis-olaylari.ts';
 // Teklif (soru 148): okuma, talep, sürüm, kabul, revizyon ya da red ve siparişe dönüşüm; hepsi siparisler.yaz.

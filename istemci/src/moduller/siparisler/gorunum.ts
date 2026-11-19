@@ -12,6 +12,12 @@ export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetT
 
 // 3429-3 F: kalemin karşılama yolu; sözleşmedeki KARSILAMA_YOLLARI ile aynı sıra (tip denetler).
 export const KARSILAMA_YOLU_ADLARI: Readonly<Record<KarsilamaYolu, string>> = { uret: 'Üret', stok: 'Stoktan', 'satin-al': 'Satın al' };
+// Kilitli kalemin rozeti (SIP-19): üretilen emre, stoktan karşılanan sevk işine bağlıdır; satın alınan talebe ya da sevk işine (sunucu nedeni
+// dönmez, rozet genel kalır).
+export const BAGLI_METNI: Readonly<Record<KarsilamaYolu, string>> = {
+  uret: 'Üretim emri açıldı; yalnız termin değişir.', stok: 'Sevk işine girdi; yalnız termin değişir.', 'satin-al': 'Satın alma talebi ya da sevk işi açıldı; yalnız termin değişir.',
+};
+export const BAGLI_ROZETI: Readonly<Record<KarsilamaYolu, string>> = { uret: 'Emre bağlı', stok: 'Sevke bağlı', 'satin-al': 'Bağlı' };
 
 // 3429-1 (SPA-3): onaylı siparişin hesaplanan aşaması. Taslak, kapandı ve iptal durum rozetiyle zaten görünür; ayrı rozet çizilmez.
 export const SIPARIS_ASAMASI: Readonly<Partial<Record<SiparisAsamasi, { etiket: string; ton: RozetTonu }>>> = {

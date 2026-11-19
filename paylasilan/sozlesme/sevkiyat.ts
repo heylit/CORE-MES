@@ -125,7 +125,8 @@ export const isCevabi = z.object({ is: isSemasi, uyarilar: sevkUyarilari });
 // ---------- bekleme listesi (kart #1310) ----------
 // Serbest bırakılmış, araçla taşınacak kalem işe çevrilene kadar burada durur: biten ürün, fason gidişi ve dönüşü, alım, elle iş (960);
 // tarih, nokta ve yükü planlayıcı verir. Yön işin türünü belirler: gidiş teslimat, geliş alım.
-export const KALEM_KAYNAGI = z.enum(['urun', 'fason', 'fason-donus', 'alim', 'elle']);
+// 3429-3 F4: siparis = emirsiz satış kalemi ("Stoktan" ya da "Satın al"); müşteriye gider.
+export const KALEM_KAYNAGI = z.enum(['urun', 'fason', 'fason-donus', 'alim', 'elle', 'siparis']);
 export const KALEM_YONU = z.enum(['gidis', 'gelis']);
 export const BEKLEYEN_KAYNAGI = KALEM_KAYNAGI;
 export const bekleyenSemasi = z.object({
@@ -169,8 +170,9 @@ export const ELLE_TURU = z.enum(['numune', 'tamir', 'kalibrasyon', 'iade', 'dige
 // hazir-degil: kaynağı bitmedi (erken serbest bırakılabilir); hazir: serbest bırakılabilir; bekliyor: önceden bırakıldı, kaynağı bitince düşer;
 // havuzda, planlandi, yolda: sevkiyat işinin durumu; depoda: tetiklendi, depo çıkış ya da kabul bekliyor; tamamlandi: depo yaptı.
 export const TUM_IS_ASAMASI = z.enum(['hazir-degil', 'hazir', 'bekliyor', 'havuzda', 'planlandi', 'yolda', 'depoda', 'tamamlandi']);
-// Kalemin anahtarı "kalem:<id>"; adayınki kaynağın kaydıdır: "urun:<emir>", "fason:<fason iş emri>", "alim:<sipariş satırı>".
-export const TUM_IS_ANAHTARI = /^(kalem|urun|fason|alim):[1-9]\d{0,9}$/;
+// Kalemin anahtarı "kalem:<id>"; adayınki kaynağın kaydıdır: "urun:<emir>", "fason:<fason iş emri>", "alim:<sipariş satırı>",
+// "siparis:<satış sipariş satırı>".
+export const TUM_IS_ANAHTARI = /^(kalem|urun|fason|alim|siparis):[1-9]\d{0,9}$/;
 const anahtar = z.string().regex(TUM_IS_ANAHTARI, 'Kalem anahtarı okunamadı.');
 
 export const tumIslerSorgusu = z.object({ baslangic: tarih, bitis: tarih });

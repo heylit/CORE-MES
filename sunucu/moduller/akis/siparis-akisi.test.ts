@@ -274,7 +274,8 @@ describe('akis satış siparişi akışı (gerçek PostgreSQL)', () => {
     ]);
     const a = await akis('mudur', s.id);
     assert.deepEqual(a.kalemler.map((k) => [k.uretilir, k.karsilama]), [[true, 'uret'], [false, 'stok'], [false, 'satin-al']]);
-    assert.deepEqual(a.kapanisEksikleri, ['Kalem 1: teslim edilen 0 / 6.', 'Fatura kesilmedi.'], 'emirsiz yolun sevki F4\'e kadar ölçülmez (Risk R1)');
+    assert.deepEqual(a.kapanisEksikleri, ['Kalem 1: teslim edilen 0 / 6.', 'Kalem 2: teslim edilen 0 / 2.', 'Kalem 3: teslim edilen 0 / 1.', 'Fatura kesilmedi.'],
+      '3429-3 F4: emirsiz kalemin sevki de ölçülür');
   });
 
   test('SPA-6: Kokpit planı kalem termininden sonra bitince termin riski ve kademe kaydı; plan düzelince ya da teslim bitince kalkar', async () => {

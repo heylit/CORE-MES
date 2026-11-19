@@ -201,7 +201,7 @@ export function TumIsler() {
     const adim = r.opNo === null ? null : `OP ${r.opNo}${r.adim ? ` ${r.adim}` : ''}`;
     const alt = r.kaynak === 'elle' ? [r.elleTuru && ELLE_ADI[r.elleTuru], r.malzemeAd ? r.aciklama : null].filter(Boolean).join(' · ') : null;
     const nolar = r.kaynak === 'alim' ? [r.siparisNo] : [r.emirNo, r.kaynak === 'urun' ? null : adim];
-    const siparis = r.kaynak !== 'alim' && r.siparisNo ? `Sipariş ${r.siparisNo}` : null;
+    const siparis = r.kaynak !== 'alim' && r.siparisNo ? `${r.kaynak === 'siparis' ? 'Satış siparişi' : 'Sipariş'} ${r.siparisNo}` : null;
     const cift = r.bagliAnahtar ? anahtarla.get(r.bagliAnahtar) ?? null : null;
     const donus = r.yon === 'gelis';
     return (
@@ -533,7 +533,7 @@ export function TumIsler() {
       <dl className="tc-ti-alanlar">{l.filter((x): x is readonly [string, ReactNode] => Boolean(x)).map(([a, d]) => <Fragment key={a}><dt>{a}</dt><dd>{d}</dd></Fragment>)}</dl>
     );
     const bagAdaylari: (readonly [string, ReactNode] | false)[] = [
-      r.siparisNo !== null && [r.kaynak === 'alim' ? 'Satın alma siparişi' : 'Sipariş satırı', <span className="mono">{r.siparisNo}</span>],
+      r.siparisNo !== null && [r.kaynak === 'alim' ? 'Satın alma siparişi' : r.kaynak === 'siparis' ? 'Satış siparişi' : 'Sipariş satırı', <span className="mono">{r.siparisNo}</span>],
       r.uretimEmriId !== null && ['Üretim emri', <a className="tc-ti-bag" href={`/uretim-emirleri/${r.uretimEmriId}`}
         onClick={(e) => { e.preventDefault(); void yonlendir(`/uretim-emirleri/${r.uretimEmriId}`); }}>{r.emirNo ?? `#${r.uretimEmriId}`}</a>],
       r.opNo !== null && ['Rota adımı', `OP ${r.opNo}${r.adim ? ` ${r.adim}` : ''}`],
@@ -579,7 +579,7 @@ export function TumIsler() {
   }
 
   function yolAdimlari(r: TumIsSatiri) {
-    const ilk = { urun: 'Üretim emri biter', fason: 'Önceki adım biter', 'fason-donus': 'Fason firması adımı bitirir', alim: 'Satın alma siparişi verilir', elle: 'İş elle girilir' }[r.kaynak];
+    const ilk = { urun: 'Üretim emri biter', fason: 'Önceki adım biter', 'fason-donus': 'Fason firması adımı bitirir', alim: 'Satın alma siparişi verilir', elle: 'İş elle girilir', siparis: 'Satış siparişi onaylanır' }[r.kaynak];
     const sevkte = !adayMi(r) && r.tasima !== 'firma';
     const sira = ASAMA_SIRASI[r.asama];
     const adimlar: { ad: string; alt?: string | null; bitti: boolean }[] = [
@@ -596,7 +596,7 @@ export function TumIsler() {
       alt: r.tasima === 'firma' ? 'sevk yok: firma alır ya da getirir' : r.is?.tetiklendi ? tarihMetni(r.is.tetiklendi.slice(0, 10)) : 'sevk mi alım mı burada seçilir',
     });
     adimlar.push(r.yon === 'gidis'
-      ? { ad: 'Depoda son çıkış', alt: r.kaynak === 'fason' ? 'stok fason firmasının konumuna geçer' : r.kaynak === 'urun' ? 'stoktan düşer; iş kapanır' : 'depodan çıkar; iş kapanır', bitti: kapali(r) }
+      ? { ad: 'Depoda son çıkış', alt: r.kaynak === 'fason' ? 'stok fason firmasının konumuna geçer' : r.kaynak === 'urun' ? 'stoktan düşer; iş kapanır' : r.kaynak === 'siparis' ? 'depodan çıkar; stok çıkışı ayrıca yazılır' : 'depodan çıkar; iş kapanır', bitti: kapali(r) }
       : { ad: 'Depoda kabul', alt: r.kaynak === 'fason-donus' ? 'sarf, fire, üretimden giriş; adım biter (istasyon gibi)' : 'giriş fişi; iş kapanır', bitti: kapali(r) });
     const ilkAcik = adimlar.findIndex((a) => !a.bitti);
     return (

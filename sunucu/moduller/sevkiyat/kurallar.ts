@@ -387,11 +387,13 @@ export function bolmeIhlali(kayit: { kaynak: string; adet: string | null }, parc
 // sahibin işlemi ayrıca aranır.
 export const KALEM_SAHIBI: Record<KalemKaynagi, Islem> = {
   urun: 'uretim-emirleri.duzenle', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
+  // 3429-3 F4: emirsiz satış kalemini sevkiyat bırakır (yetki modeli değişmez).
+  siparis: 'sevkiyat.is-yaz',
 };
 export const SERBEST_BIRAKMA_ISLEMLERI = ['sevkiyat.is-yaz', 'uretim-emirleri.duzenle', 'uretim-emirleri.fason', 'satin-alma.yaz'] as const satisfies readonly Islem[];
 // Erken çıkışı yalnız sevkiyat sorumlusu ya da yönetici zorlar (956 b, 963 a): planı onaylayan işlem.
 export const ERKEN_CIKIS_ISLEMI = 'sevkiyat.onayla' satisfies Islem;
-export const KAYNAK_YONU: Record<Exclude<KalemKaynagi, 'elle'>, KalemYonu> = { urun: 'gidis', fason: 'gidis', 'fason-donus': 'gelis', alim: 'gelis' };
+export const KAYNAK_YONU: Record<Exclude<KalemKaynagi, 'elle'>, KalemYonu> = { urun: 'gidis', fason: 'gidis', 'fason-donus': 'gelis', alim: 'gelis', siparis: 'gidis' };
 
 // Aşamanın girdisi: kalem yoksa serbest false. erken: gerekçeyle hazır olmadan çıkabilir. depoTamam: depo son çıkışı ya da kabulü bitti.
 export interface AsamaGirdisi {

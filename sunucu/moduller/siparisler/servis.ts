@@ -438,10 +438,16 @@ export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise
 
 // 3429-3 F3: satın almanın ön talep kaynağı; onaylı siparişin "Satın al" kalemleri. Yetki denetlemez; çağıran satın alma okumasını denetler.
 export interface SatinAlinacakKalem { siparisSatiriId: number; siparisId: number; siparisNo: string; firmaId: number; malzemeNo: number; miktar: string; termin: string }
+const emirsizKalem = (k: sorgular.SatinAlinacakKalemSatiri): SatinAlinacakKalem => ({
+  siparisSatiriId: k.id, siparisId: k.siparis_id, siparisNo: k.siparis_no, firmaId: k.firma_id, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin,
+});
 export async function satinAlinacakKalemler(db: Db): Promise<SatinAlinacakKalem[]> {
-  return (await sorgular.satinAlinacakKalemler(db)).map((k) => ({
-    siparisSatiriId: k.id, siparisId: k.siparis_id, siparisNo: k.siparis_no, firmaId: k.firma_id, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin,
-  }));
+  return (await sorgular.satinAlinacakKalemler(db)).map(emirsizKalem);
+}
+// 3429-3 F4: sevkiyatın emirsiz kalem adayları ("Stoktan" ve "Satın al"); emri olmadığı için sevk siparişe kalemden bağlanır.
+export interface SevkEdilecekKalem extends SatinAlinacakKalem { karsilama: 'stok' | 'satin-al' }
+export async function sevkEdilecekKalemler(db: Db, idler: readonly number[] | null = null): Promise<SevkEdilecekKalem[]> {
+  return (await sorgular.emirsizKalemler(db, ['stok', 'satin-al'], idler)).map((k) => ({ ...emirsizKalem(k), karsilama: k.karsilama }));
 }
 
 export const siparisOzeti = async (db: Db): Promise<SiparisOzetiCevabi> =>
