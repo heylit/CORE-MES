@@ -57,16 +57,30 @@ function kokpitNedeni(k: ReturnType<typeof kaynak>): Record<string, { kod: strin
 const sunucuNedeni = async (k: ReturnType<typeof kaynak>) => Object.values((await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never)).nedenler)[0];
 
 describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
-  test('ZT-01: işin süresi ufuktaki açık süreden uzun: alt neden süre, gereken ve mevcut saatle; sunucu iletisiyle aynı kod', async () => {
+  test('ZT-01 (1681 b değişti): işleme ufka sığmıyorsa iş düşmez; ufkun sonuna kadar yerleşir, sığmayan saat ufuk dışıdır', async () => {
     const k = kaynak(30, 60_000, [V], V, 1);
-    const n = Object.values(kokpitNedeni(k))[0];
-    assert.equal(n?.kod, 'zaman');
-    assert.equal(n?.tani?.['alt'], 'sure');
-    assert.equal(n?.tani?.['ad'], 'Torna 1');
-    assert.equal(n?.tani?.['ufukGun'], 120);
-    assert.ok((n?.tani?.['gerek'] as number) > (n?.tani?.['mevcut'] as number), JSON.stringify(n));
-    assert.equal(n?.tani?.['gerek'], 1000.5);
-    assert.equal((await sunucuNedeni(k))?.kod, ALT_KODU['sure']);
+    assert.deepEqual(kokpitNedeni(k), {});
+    const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    vm.runInContext(degerlendirmeKodu(), b); b['durum'] = g.st;
+    const r = JSON.parse(vm.runInContext(`(() => { const st = stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }); const cx = compile(st);
+      const p = schedule(st, 'dagit', null, { cx }); const id = Object.keys(p.ops)[0]; const M = cx.M[p.ops[id].m];
+      return JSON.stringify({ ...p.ops[id], acik: workIn(M.rw, st.now, HDAYS * 24), ufukSonu: HDAYS * 24 }); })()`, b) as string) as { ufukDisi: number; run: number; su: number; C: number; acik: number; ufukSonu: number };
+    assert.ok(r.C <= r.ufukSonu, JSON.stringify(r));
+    // Ufuk dışı saat, işin süresinden ufukta yapılabilenin çıkarılmasıdır (hazırlık ufkun içindedir).
+    assert.ok(Math.abs(r.ufukDisi - (r.su + r.run - r.acik)) < 0.01, JSON.stringify(r));
+    const sunucu = await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never);
+    assert.equal(sunucu.yerlesimler.length, 1);
+  });
+  test('ZT-01b: ufka taşan adımın ardılı "önceki adım ufuk dışında" nedeniyle yerleşmez', () => {
+    const k = kaynak(30, 60_000, [V], V, 1);
+    const adimlar = (k.kaynak.durum.routes as Record<string, { steps: Record<string, unknown>[] }>)['50']!.steps;
+    adimlar.push({ ...adimlar[0]!, id: '50-o20', opNo: 20, seq: 20, setup: 10, proc: 10, cycle: 10 });
+    const n = kokpitNedeni(k);
+    const ardil = Object.entries(n).find(([id]) => id.endsWith('.20'));
+    assert.ok(ardil, JSON.stringify(n));
+    assert.equal(ardil[1].kod, 'oncul');
+    assert.equal((ardil[1] as { ufukDisi?: number }).ufukDisi, 1);
   });
   test('ZT-02: hazırlık tezgâhın kesintisiz bloğuna sığmaz: alt neden hazırlık, 30 sa ve 8 sa', async () => {
     const k = kaynak(1800, 900, [V], V, 1);
@@ -82,5 +96,37 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
   });
   test('ZT-04: yerleşen adımda neden yazılmaz', () => {
     assert.deepEqual(kokpitNedeni(kaynak(60, 600, [V], V, 1)), {});
+  });
+  test('ZT-05 (Test T1): zamandan başka nedeni olan adımın nedeni korunur; nedeni yazılmamış adım zaman tanısı alır', () => {
+    const k = kaynak(60, 600, [V], V, 1);
+    const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    vm.runInContext(degerlendirmeKodu(), b); b['durum'] = g.st;
+    const n = JSON.parse(vm.runInContext(`(() => { const st = stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }); const cx = compile(st);
+      const p = schedule(st, 'dagit', null, { cx }); const id = Object.keys(p.ops)[0];
+      const kayit = (neden) => failNedenKaydi({ ...p, fail: [id], failNeden: neden === undefined ? {} : { [id]: neden } }, st)[id];
+      return JSON.stringify({ oncul: kayit({ kod: 'oncul', oncul: 'x' }), aday: kayit({ kod: 'aday' }), yok: kayit(undefined) }); })()`, b) as string) as Record<string, { kod: string; oncul?: string; tani?: { alt: string } }>;
+    assert.deepEqual(n['oncul'], { kod: 'oncul', oncul: 'x' });
+    assert.deepEqual(n['aday'], { kod: 'aday' });
+    assert.equal(n['yok']?.kod, 'zaman');
+    assert.ok(n['yok']?.tani?.alt, JSON.stringify(n));
+  });
+  // ZT-06 (Test T2, T3): ölçüden alt nedene iniş; ölçüler elle kurulur, her dal ve seçilen tezgâh sınanır.
+  test('ZT-06: zamanTanisi her dalda doğru alt nedeni, tezgâhı ve saatleri yazar', () => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    vm.runInContext(degerlendirmeKodu(), b);
+    const tani = (z: string) => JSON.parse(vm.runInContext(`JSON.stringify(zamanTanisi(${z}))`, b) as string) as Record<string, unknown>;
+    const a = (m: string, ek: string) => `{ m: '${m}', ad: 'ORN-${m}', acikSaat: 600, sureSaat: 100, personelYok: false, blok: null, ayarci: null, bosSaat: 300, ${ek} }`;
+    const z = (adaylar: string[], mal = 'null') => `{ ufukGun: 120, malzemeHazirSaat: ${mal}, adaylar: [${adaylar.join(',')}] }`;
+    assert.deepEqual(tani(z([a('A', '')], 'Infinity')), { alt: 'malzeme', ufukGun: 120, mevcut: null });
+    assert.deepEqual(tani(z([a('A', '')], '3000')), { alt: 'malzeme', ufukGun: 120, mevcut: 3000 });
+    assert.equal(tani(z([a('A', 'acikSaat: 0')])).alt, 'vardiya');
+    assert.deepEqual(tani(z([a('A', 'personelYok: true'), a('B', 'acikSaat: 0')])), { alt: 'kisi', m: 'A', ad: 'ORN-A', gerek: null, mevcut: null, ufukGun: 120 });
+    // Süre: ikisi de sığmaz; en çok açık saati olan tezgâh yazılır.
+    assert.deepEqual(tani(z([a('A', 'sureSaat: 900, acikSaat: 400'), a('B', 'sureSaat: 900, acikSaat: 640')])), { alt: 'sure', m: 'B', ad: 'ORN-B', gerek: 900, mevcut: 640, ufukGun: 120 });
+    // Dolu: süre sığar; mevcut boş saattir (açık saat değil), en çok boş saati olan tezgâh yazılır.
+    assert.deepEqual(tani(z([a('A', 'bosSaat: 20'), a('B', 'bosSaat: 50')])), { alt: 'dolu', m: 'B', ad: 'ORN-B', gerek: 100, mevcut: 50, ufukGun: 120 });
+    assert.equal(tani(z([])).alt, 'bilinmiyor');
+    assert.equal(tani('null').alt, 'bilinmiyor');
   });
 });

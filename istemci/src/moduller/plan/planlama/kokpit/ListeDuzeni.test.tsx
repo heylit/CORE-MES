@@ -142,6 +142,18 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
   });
 
+  it('3457-3 a: ufkun sonuna kadar yerleşen adım ufuk dışında kalan saatini yazar; sonraki adım bunu söyler', () => {
+    const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
+    const ids = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort();
+    const [ilk, son] = [ids[0] as string, ids.at(-1) as string];
+    const { [son]: _cikan, ...kalan } = plan.ops;
+    const c = { ...c0, plan: { ...plan, ops: { ...kalan, [ilk]: { ...kalan[ilk], ufukDisi: 6 } }, fail: [son], failNeden: { [son]: { kod: 'oncul', oncul: ilk, ufukDisi: 1 } } } } as unknown as typeof c0;
+    const p = planOku(c), m = modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => `ORN-${id}`);
+    ciz({ m, p, kartlar: siraKartlari(m) }, '3');
+    expect(document.querySelector(`.tc-pyq-ld-adimlar button[data-adim="${ilk}"]`)?.textContent).toContain('6 sa ufuk dışında');
+    expect(document.querySelector(`[data-yeri-yok="${son}"]`)?.textContent).toContain('planlama süresinin dışına taşıyor');
+  });
+
   it('planda yeri olan adım düğmedir ve basınca emri ile işi bildirir; seçili adım basılı görünür; yeri olmayan adım düğme değildir', () => {
     const x = yarimKur({ kod: 'aday' });
     const adimSec = vi.fn();

@@ -34,12 +34,15 @@ export interface PlanIslemi {
   takim?: TakimOmru[];
   // İkincil kaynak yüzünden kayan işin ilk aday başlangıcı (çizelgedeki bekleme taraması ve Oynat).
   ikBas?: number;
+  // 3457: iş ufkun sonuna kadar yerleşti; bu kadar saati ufkun dışında kaldı.
+  ufukDisi?: number;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 // 3457: 'zaman' nedeninin motordaki alt nedeni (engine.js zamanTanisi). gerek ve mevcut saattir; m ve ad aday tezgâhtır. Eski kayıtta yok.
 export const ZAMAN_ALTLARI = ['sure', 'vardiya', 'kisi', 'hazirlik', 'ayarci', 'dolu', 'malzeme', 'bilinmiyor'] as const;
 export interface ZamanTanisi { alt: (typeof ZAMAN_ALTLARI)[number]; m: string | null; ad: string | null; gerek: number | null; mevcut: number | null; ufukGun: number | null }
-export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string; tani?: ZamanTanisi }
+// ufukDisi: öncül ufka taştığı için yerleşmedi (3457, zincir boyunca).
+export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string; tani?: ZamanTanisi; ufukDisi?: true }
 // 3457: motor 'zaman' nedenini ölçtüyse kişiye ne olduğunu, sayısıyla nedenini ve ne yapacağını yazar (kod ve teknik ad yazılmaz).
 // Sayı bilinmiyorsa cümle sayısız kurulur; tezgâhın adı yoksa "uygun tezgâh" yazılır.
 const sa = (x: number): string => `${(Math.round(x * 10) / 10).toLocaleString('tr-TR')} sa`;
@@ -123,6 +126,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       ...(r.done && (r.act || r.bitti) ? { bitti: true } : {}),
       ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
       ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
+      ...((sayi(r.ufukDisi) ?? 0) > 0 ? { ufukDisi: r.ufukDisi as number } : {}),
     };
   }
   const o = p.ozet;
@@ -149,7 +153,7 @@ function failNedenOku(v: unknown): Record<string, FailNedeni> {
     const t = nesne(x.tani) ? x.tani : null;
     const alt = t === null ? undefined : ZAMAN_ALTLARI.find((a) => a === t.alt);
     l[id] = {
-      kod: x.kod, ...(typeof x.oncul === 'string' ? { oncul: x.oncul } : {}),
+      kod: x.kod, ...(typeof x.oncul === 'string' ? { oncul: x.oncul } : {}), ...(x.kod === 'oncul' && x.ufukDisi ? { ufukDisi: true as const } : {}),
       ...(t !== null && alt !== undefined && x.kod === 'zaman'
         ? { tani: { alt, m: metin(t.m), ad: metin(t.ad), gerek: sayi(t.gerek), mevcut: sayi(t.mevcut), ufukGun: sayi(t.ufukGun) } } : {}),
     };

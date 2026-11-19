@@ -476,7 +476,10 @@ function tMach(o,c,cx,ctx,b,fast){
        vardiya sınırında bölünür; tezgâh S..C boyunca bu işindir (ctx.av), bekleme aralığına başka işin hazırlığı girmez. */
     if(su>0){const bi=M.sblok.findIndex(([a,z])=>s>=a-1e-9&&s<z-1e-9);
       if(bi<0||Su>M.sblok[bi][1]+1e-9){const nx=M.sblok.findIndex(([a,z],i)=>i>bi&&a>s+1e-9&&workIn(M.sw,a,z)>=su-1e-9);if(nx<0)return null;s=M.sblok[nx][0];continue;}}
-    const C=adv(M.rw,Su,run+tkEk);if(!isFinite(C))return null;
+    /* 3457 (1681 b değişir): işleme ufka sığmıyorsa iş düşmez; tezgâhın ufuktaki son çalışma anına kadar yerleşir, sığmayan saat
+       ufukDisi'nde durur. Hazırlık bile başlayamıyorsa (Su ufuk dışı) iş yine yerleşmez. */
+    let C=adv(M.rw,Su,run+tkEk),ufukDisi=0;
+    if(!isFinite(C)){const son=M.rw.length?M.rw[M.rw.length-1][1]:-Infinity;if(!(son>Su+1e-9))return null;ufukDisi=run+tkEk-workIn(M.rw,Su,son);C=son;}
     if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
     const kl=ctx.kilit&&ctx.kilit[c.m]&&ctx.kilit[c.m].find(([a,z])=>s<z-1e-9&&C>a+1e-9);if(kl){s=kl[1];why={t:'tezgah',r:kl[2]};continue;}
     const r={S:s,Su,C,su};
@@ -486,7 +489,7 @@ function tMach(o,c,cx,ctx,b,fast){
       if(bad.kalici&&bad.kisi){while(k<NS&&!M.kav[k])k++;}
       else if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
-    const lot1=adv(M.rw,Su,Math.min(run,c.tbRun));
+    const lot1=Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun)));
     const cost=M.ucret==null?null:(run*(1-M.pay)*M.ucret+su*(M.ucret+(+cx.A.ayarciUcret||0)));
     const dl=(st.down||[]).filter(d=>d.m===c.m);
     const downHit=dl.some(d=>d.from<C-1e-9&&d.to>s+1e-9)||dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9&&s>s_in+1e-9);
@@ -494,6 +497,7 @@ function tMach(o,c,cx,ctx,b,fast){
     /* 2509 a: pay, işleme süresini uzatan pay oranıdır (acil iş payı ve arıza payı); canlı plan saati uzatılmış süredir, sapma ve öğrenme
        ölçümü işleme süresini (run) (1-pay) ile çarparak uzatılmamış süreye döner */
     const res={id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit,pay:c.pay||0};
+    if(ufukDisi>1e-9)res.ufukDisi=ufukDisi;
     /* Çizelgedeki bekleme taraması ve "Oynat": iş ikincil kaynak yüzünden kaydıysa ilk aday başlangıç (kaymadan önceki yer).
        Bir dakikadan kısa kayma dilim yuvarlamasıdır, bekleme sayılmaz. */
     if(ikBas!==null&&why&&why.t==='ikincil'&&s-ikBas>=1/60-1e-9)res.ikBas=ikBas;
@@ -708,6 +712,10 @@ function schedule(st,mode,base,opt={}){
   }
   for(const id of U){ctx.fail.push(id);const p=(cx.byId[id].pr.find(([q])=>!ctx.P[q])||[])[0];if(p)ctx.neden[id]={kod:'oncul',oncul:p};}
   const fail=[...new Set(ctx.fail)],failNeden={};for(const id of fail)failNeden[id]=ctx.neden[id]||{kod:'zaman'};
+  /* 3457: ufka taşan adımın ardılı ufkun sonundan sonra başlayamaz; nedeni "önceki adım ufuk dışında"dır (zincir boyunca) */
+  for(let deg=true;deg;){deg=false;for(const id of fail){const n=failNeden[id];if(n.ufukDisi)continue;const o=cx.byId[id];if(!o)continue;
+    const p=o.pr.map(([q])=>q).find(q=>(ctx.P[q]&&ctx.P[q].ufukDisi)||(failNeden[q]&&failNeden[q].ufukDisi));
+    if(p!=null&&(n.kod==='zaman'||(n.kod==='oncul'&&n.oncul===p))){failNeden[id]={kod:'oncul',oncul:p,ufukDisi:1};deg=true;}}}
   const plan={ops:ctx.P,fail,failNeden,mode,downIds:(st.down||[]).map(d=>d.id)};
   if(!opt.noSlack)slack(plan,cx);
   plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
@@ -749,8 +757,9 @@ function bitenAdimMaliyeti(D, bitti, j) {
 function evaluate(plan,st,ref,fast){
   const cx=plan.cx||compile(st),w=st.w,J={},A=cx.A;
   let Z=0,rev=0,cost=0,pen=0,hold=0,onT=0,late=0,yerN=0,sumT=0,wT=0,suH=0,suN=0,famN=0,Cmax=st.now,chg=0,fas=0,unk=0,warn=[],score=0,wB=0,bufN=0;
-  for(const jid in cx.jobs){const j=cx.jobs[jid];let C=-Infinity,mc=0,sc=0,fc=0,miss=[],nOps=0,nIn=0;
+  for(const jid in cx.jobs){const j=cx.jobs[jid];let C=-Infinity,mc=0,sc=0,fc=0,miss=[],nOps=0,nIn=0,uE=0;
     for(const o of j.ops){nOps++;const r=plan.ops[o.id];if(!r)continue;nIn++;C=Math.max(C,r.C);
+      if(r.ufukDisi>0){uE+=r.ufukDisi;if(!fast)warn.push({t:'ufuk',j:jid,txt:`${jid}: ${o.id} planlama süresinin sonuna kadar yerleşti; ${Math.round(r.ufukDisi*10)/10} sa ufuk dışında kaldı`});}
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
@@ -766,9 +775,10 @@ function evaluate(plan,st,ref,fast){
     if(j.gelir==null)miss.push('gelir');
     const h=E*w.mu;
     let kar=null;if(!miss.length&&p!=null)kar=j.gelir-(mf||0)-mc-sc-fc-p-h;
-    J[jid]={id:jid,C,T,E,buf:j.buf,dueB:j.dueB,mc,sc,fc,mf,p,h,kar,miss:[...new Set(miss)],comp};
+    J[jid]={id:jid,C,T,E,buf:j.buf,dueB:j.dueB,mc,sc,fc,mf,p,h,kar,miss:[...new Set(miss)],comp,...(uE>0?{ufukEksik:uE}:{})};
     /* B-2483-9 (1478): terminsiz sipariş zamanında da geç de sayılmaz; yerleşmemiş sipariş geç değil, ayrı sayılır (yerlesmeyenSip) */
-    if(!comp)yerN++;else if(due!=null){if(T<=1e-6)onT++;else late++;}
+    /* 3457: ufka taşan sipariş geç sayılır; bitişi ufuk sonundan sonradır, gecikmesi (T) bilinen alt sınırdır */
+    if(!comp)yerN++;else if(due!=null){if(T<=1e-6&&!(uE>0))onT++;else late++;}
     if(T!=null){sumT+=T;wT+=T*pw;}
     const B=j.dueB==null||!isFinite(C)?0:Math.max(0,C-j.dueB);wB+=B*pw;if(j.buf>0&&B>1e-6)bufN++;
     if(isFinite(C))Cmax=Math.max(Cmax,C);
