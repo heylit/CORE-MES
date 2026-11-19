@@ -2,10 +2,10 @@ import { useState } from 'react';
 import * as K from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
 import type { KartKaydi } from '../tipler.ts';
-import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi } from '../veri.ts';
+import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi, useRevizyonOlarakBagla } from '../veri.ts';
 import type { SihirbazAdimi } from './AdimCubugu.tsx';
 import type { Sihirbaz } from './baglam.ts';
-import { kopyala, RECETE_KAYNAGI, receteKaynagi, type Taslak } from './durum.ts';
+import { ALT_BAG, altBag, kopyala, RECETE_KAYNAGI, receteKaynagi, type Taslak } from './durum.ts';
 import { kartStandardi } from '../standart-adlari.ts';
 
 // Prototipteki yeni kimlik biçimi ('m' kart, 't' şablon): sunucu kendi kimliğini dönerse o geçerlidir.
@@ -30,6 +30,7 @@ export interface Kaydetme { calistir: () => Promise<void>; suruyor: boolean; ile
 export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kaydetme {
   const kaydet = useKartKaydet();
   const kopyaIste = useReceteRotaKopyasi();
+  const bagla = useRevizyonOlarakBagla();
   const [ilerleme, ilerlemeYaz] = useState<string | null>(null);
   const { taslak: D, b, kartlar, adimaGec, bildir, secimYaz, degistir, sonaKoy } = s;
   const son = adimlar.length - 1;
@@ -49,6 +50,16 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
         : `Kart onaylanınca ${kaynak.ad} reçete ve rotası Reçete ve Rota'da taslak olarak açılacak.`, 'tamam');
     } catch (e) {
       bildir(`Kart kaydedildi; reçete ve rota kopyası istenemedi: ${kayitHatasi(e).ileti}`, 'hata');
+    }
+  };
+  // 3438 a: yeni revizyon kartı kaydedilince ana kartın altına bağlanır. Bağ başarısızsa kart kayıtlıdır; ana kartın Alt kartlar bölümünden bağlanır.
+  const revizyonBagla = async (kimlik: string, bag: { anaKimlik: string; anaKod: string }, etiket: string) => {
+    try {
+      await bagla.mutateAsync({ kimlik, anaKimlik: bag.anaKimlik, etiket });
+      degistir((d) => { delete d[ALT_BAG]; });
+      bildir(`Kart ${bag.anaKod} altına ${etiket} revizyonu olarak bağlandı; onaylanınca yürürlüğe alınabilir.`, 'tamam');
+    } catch (e) {
+      bildir(`Kart kaydedildi; revizyon bağı kurulamadı: ${kayitHatasi(e).ileti}`, 'hata');
     }
   };
   const hata = (e: unknown) => {
@@ -98,9 +109,15 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
       return;
     }
 
+    if (altBag(D) && !String(D.g.rev ?? '').trim()) {
+      bildir('Yeni revizyonun çizim revizyonunu (ör. R03) gir; kart bu etiketle ana kartın altına bağlanır.');
+      return;
+    }
     let item: Taslak = kopyala(D);
     const kaynak = receteKaynagi(D);
+    const bag = altBag(D);
     delete item[RECETE_KAYNAGI];
+    delete item[ALT_BAG];
     item.id = D.id ?? yeniKimlik('m');
     item.com.kod = kod;
     item.com.ad = K.finalAd(D, b);
@@ -155,6 +172,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
       if (D.fam && D.grade) sonaKoy(D.fam, K.clsKeyFor(D, b), D.grade);
       bildir(`${c.kod} kaydedildi${K.onayDurum(item, b) === 'onayda' ? '; onaya gönderildi' : ''}.`, 'tamam');
       if (kaynak) await receteRotaIste(c.id, kaynak);
+      if (bag) await revizyonBagla(c.id, bag, String(item.g.rev ?? '').trim());
     } catch (e) {
       hata(e);
     }
@@ -187,6 +205,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
       }
       let item: Taslak = kopyala(vd);
       delete item[RECETE_KAYNAGI];
+      delete item[ALT_BAG];
       delete item.vmode;
       delete item.vsel;
       item.id = yeniKimlik('m', String(i));
@@ -226,5 +245,5 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
     }
   };
 
-  return { calistir, suruyor: kaydet.isPending || kopyaIste.isPending || ilerleme !== null, ilerleme };
+  return { calistir, suruyor: kaydet.isPending || kopyaIste.isPending || bagla.isPending || ilerleme !== null, ilerleme };
 }

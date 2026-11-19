@@ -216,3 +216,16 @@
 .tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-hucre { flex-direction: row; align-items: center; gap: var(--b-2); }
 .tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-hucre .tc-rozet { white-space: nowrap; }
 .tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-logo-rozet-neden { display: block; max-width: var(--menu-genis); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 3438 a: Alt kartlar bölümü (revizyon ve alternatif ailesi). */
+.tc-mk-alt { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-mk-alt-baslik { margin: 0; font-size: var(--yazi-s); color: var(--muted); text-transform: uppercase; }
+.tc-mk-alt-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-1); }
+.tc-mk-alt-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); }
+.tc-mk-alt-girinti { margin-left: var(--b-4); }
+.tc-mk-alt-bu { border-color: var(--edge); background: var(--panel2); }
+.tc-mk-alt-kim, .tc-mk-alt-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-mk-alt-ad { overflow-wrap: anywhere; }
+.tc-mk-alt-not { margin: 0; font-size: var(--yazi-s); }
+.tc-mk-alt-form { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-mk-alt-form-dugmeler { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }

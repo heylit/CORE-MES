@@ -2,7 +2,7 @@ import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
 import type { KatalogKarti, Sablon } from '../tipler.ts';
-import { kopyala, type Taslak } from './durum.ts';
+import { ALT_BAG, kopyala, RECETE_KAYNAGI, type AltBag, type Taslak } from './durum.ts';
 import type { SablonAlanlari } from './turler.ts';
 
 export interface Acilis { taslak: Taslak; adim: number; ileti: string | null }
@@ -26,6 +26,17 @@ export function duzenlemeTaslagi(kart: KatalogKarti, b: KuralBaglami): Acilis {
   d.adManual = x.adManual !== false && x.com.ad !== K.autoAd(d, b);
   const adim = K.isGen(d, b) ? K.turAdimlari(d, b).length : 6;
   return { taslak: d, adim, ileti: talepli ? 'Bekleyen değişiklik talebi üzerinden düzenliyorsun.' : null };
+}
+
+// "Revizyon ekle" (3438 a): yürürlükteki kartın kopyası; çizim revizyonu boşalır, reçete ve rota kaynağı kopyalanan karttır.
+// Kaydedilince ana kartın altına bağlanır.
+export function revizyonTaslagi(kaynak: KatalogKarti, ana: KatalogKarti, b: KuralBaglami): Acilis {
+  const a = kopyaTaslagi(kaynak, b);
+  const d = a.taslak;
+  d.g = { ...d.g, rev: '' };
+  d[ALT_BAG] = { anaKimlik: ana.kimlik, anaKod: ana.kayit.com.kod } satisfies AltBag;
+  d[RECETE_KAYNAGI] = { no: kaynak.no, ad: `${kaynak.kayit.com.kod} ${kaynak.kayit.com.ad}`.trim() };
+  return { taslak: d, adim: a.adim, ileti: `${ana.kayit.com.kod} için yeni revizyon. Çizim revizyonunu (ör. R03) girip kaydet; kart ana kartın altına revizyon olarak bağlanır.` };
 }
 
 // "Kopyasını oluştur" ve "Şablon yap": kimlik, revizyon, onay, mükerrer onayı ve türetilen kod alanları kopyaya geçmez.

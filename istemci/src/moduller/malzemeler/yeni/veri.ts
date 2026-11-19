@@ -5,6 +5,7 @@ import type {
   KatalogKartiIptalCevabi, KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { AgirlikOzetiCevabi, GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { AltKartaBaglaGovdesi, AltKartAilesiCevabi } from '#paylasilan/sozlesme/malzeme-alt-kart.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -413,3 +414,29 @@ function useArsivKomutu<G>(yol: (g: G) => [string, unknown?]) {
 export const useArsivdenGeriGetir = () => useArsivKomutu((kimlik: string) => [`/malzeme-arsivi/${yolParcasi(kimlik)}/geri-getir`]);
 export const useArsivKaliciSil = () =>
   useArsivKomutu((g: { kimlik: string; stokKodu: string }) => [`/malzeme-arsivi/${yolParcasi(g.kimlik)}/kalici-sil`, { stokKodu: g.stokKodu }]);
+
+// 3438 a: kartın alt kart ailesi (revizyonlar ve alternatifler). Kart kaydedilince kartlar anahtarıyla birlikte yenilenir.
+export function useAltKartAilesi(kimlik: string) {
+  return useQuery({
+    queryKey: [...MALZEMELER_YENI, 'kartlar', 'alt-kartlar', kimlik],
+    queryFn: () => api.get<AltKartAilesiCevabi>(`/malzeme-katalogu-kartlari/${yolParcasi(kimlik)}/alt-kartlar`),
+  });
+}
+
+export function useRevizyonOlarakBagla() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kimlik, ...govde }: { kimlik: string } & AltKartaBaglaGovdesi) =>
+      api.post(`/malzeme-katalogu-kartlari/${yolParcasi(kimlik)}/revizyon-olarak-bagla`, govde),
+    onSettled: () => istemci.invalidateQueries({ queryKey: [...MALZEMELER_YENI, 'kartlar'] }),
+  });
+}
+
+export function useAltKartIslemi() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kimlik, islem }: { kimlik: string; islem: 'yururluge-al' | 'alt-bagi-kaldir' }) =>
+      api.post(`/malzeme-katalogu-kartlari/${yolParcasi(kimlik)}/${islem}`),
+    onSettled: () => istemci.invalidateQueries({ queryKey: [...MALZEMELER_YENI, 'kartlar'] }),
+  });
+}

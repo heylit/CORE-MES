@@ -34,6 +34,7 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 | Ölçü aleti (sahibi kalibrasyon, 885 a) | demirbaş kartının bağlı aleti; vade ve durum Kalibrasyon'dan, eski kalibrasyon alanları salt okunur | `malzeme_katalog_karti.olcu_aleti_id` -> `olcu_aleti.id`; `kayit.g.aletNo` | sayı (yabancı anahtar), metin |
 | Son kullanma takibi (kart 2099) | kartın SKT takibi işareti; lotun tarihi stoktadır | `kayit.com.skt` (true ise takip) | stok `stok_parti_son_kullanma` okur, `sktTakipliKartlar` ile |
 | Onay ve dört göz | onay akışı ayarı; dört göz | ayar `genel.onayAkisi`; Sistem Ayarları `malzemeler.dort-goz` | `ayarlar` modülü |
+| Alt kart ailesi (3438 a) | revizyon ve alternatif alt kartı; ailede tek yürürlükteki revizyon; ana kart ilk revizyon | `malzeme_katalog_karti.ana_kart_no`, `.alt_tur`, `.alt_etiket`, `.rev_durumu` | `disari.ts` `revizyonBilgileri`, `altKartaBagla` (alternatif yazımı 3437) |
 | Dosya, ek | yok (belge yükleme kapalı) | | yok |
 | ERP (Logo) | gönderim durumu, kayıt no, ad güncelleme durumu, gönderilen tür ve birim karşılığı; TMI türü ve birimi karşılığında Logo değeri; barkod alanları | `malzeme_katalog_karti.logo_*`; `malzeme_logo_karsiligi`; `kayit.g.gtin`, `kayit.g.gtip` | bağlantı modülü (`disari.ts` ile) |
 

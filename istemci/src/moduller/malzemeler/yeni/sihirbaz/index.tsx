@@ -18,11 +18,11 @@ import { CizimRafi, useCizimYukleme } from './CizimRafi.tsx';
 import type { BekleyenCizim } from './cizim-rafi.ts';
 import { AdimGovdesi } from './adimlar/AdimGovdesi.tsx';
 import { KategoriUyarisi } from './adimlar/KategoriUyarisi.tsx';
-import { baslangicTaslagi, duzenlemeTaslagi, kopyaTaslagi, sablonTaslagi, type Acilis } from './acilis.ts';
+import { baslangicTaslagi, duzenlemeTaslagi, kopyaTaslagi, revizyonTaslagi, sablonTaslagi, type Acilis } from './acilis.ts';
 import { odakla, useKaydet } from './kaydet.ts';
 import './sihirbaz.css';
 
-const ACILIS_SORGUSU = ['kopya', 'sablon', 'sablonYap', 'tur'] as const;
+const ACILIS_SORGUSU = ['kopya', 'sablon', 'sablonYap', 'tur', 'revizyon', 'ana'] as const;
 
 const SECIM_BOS: EkranSecimi = {
   kaliteArama: '', tumFormlar: false, tumSecenekler: false, sablonAcik: false, sonKayit: null, cokluKayit: null, katUyari: null,
@@ -248,6 +248,9 @@ function acilisTaslagi(
     if (yarim && yarim.taslak.id === kart.kimlik) return { ...yarim, ileti: null };
     return duzenlemeTaslagi(kart, b);
   }
+  const revizyon = bul(arama.get('revizyon'));
+  const ana = bul(arama.get('ana'));
+  if (revizyon && ana) return revizyonTaslagi(revizyon, ana, b);
   const kopya = bul(arama.get('kopya'));
   if (kopya) return kopyaTaslagi(kopya, b);
   const sablonYap = bul(arama.get('sablonYap'));
