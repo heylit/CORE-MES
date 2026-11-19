@@ -10,6 +10,7 @@ import type { Gezinti } from '../sekmeler.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import type { KgFiyati } from '../veri.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
+import { AltKartlarBolumu } from './AltKartlarBolumu.tsx';
 import { DemirbasBolumu } from './DemirbasBolumu.tsx';
 import { DepodaBolumu } from './DepodaBolumu.tsx';
 import { TurKunyesi } from '../ortak/TurKunyesi.tsx';
@@ -106,6 +107,7 @@ export function KartPenceresi({
       {x.tur === 'demirbas' && <DemirbasBolumu kimlik={kart.kimlik} yazar={yetki.yaz && !kilitli} />}
       <ResimAlani tur={x.tur} no={kart.no} />
       {!hizmet && x.com.kod && <DepodaBolumu no={kart.no} kod={x.com.kod} birim={x.com.birim ?? ''} />}
+      {!hizmet && <AltKartlarBolumu kart={kart} kartlar={kartlar} yetki={yetki} git={git} ac={ac} />}
       <Muadiller x={x} kayitlar={kayitlar} b={b} ac={ac} />
       <Revizyonlar x={x} />
       <OnayPenceresi

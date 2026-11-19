@@ -73,6 +73,17 @@ export function useSihirbazDurumu(ilk: () => { taslak: Taslak; adim: number }, k
   return useMemo(() => ({ taslak: durum.taslak, adim: durum.adim, degistir, yenisiniKur, adimaGec }), [durum, degistir, yenisiniKur, adimaGec]);
 }
 
+// Yeni revizyon kartı (3438 a): kaydedilince ana kartın altına revizyon olarak bağlanır; etiket kartın çizim revizyonu (g.rev) alanıdır.
+// Yalnız taslakta yaşar ve kayıttan önce silinir.
+export interface AltBag { anaKimlik: string; anaKod: string }
+export const ALT_BAG = '_altBag';
+export function altBag(d: Taslak): AltBag | null {
+  const k = d[ALT_BAG];
+  if (k === null || typeof k !== 'object') return null;
+  const { anaKimlik, anaKod } = k as Partial<AltBag>;
+  return typeof anaKimlik === 'string' && typeof anaKod === 'string' ? { anaKimlik, anaKod } : null;
+}
+
 // Reçete ve rotası alınacak ürün (306 a): yalnız taslakta yaşar ve kayıttan önce silinir; kopya isteği kayıttan sonra Rota'ya gider.
 export interface ReceteKaynagi { no: number; ad: string }
 export const RECETE_KAYNAGI = '_receteKaynagi';

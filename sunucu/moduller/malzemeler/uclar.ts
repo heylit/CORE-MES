@@ -15,6 +15,8 @@ import {
 import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import * as servis from './servis.ts';
+import * as altKart from './alt-kart/servis.ts';
+import { altKartaBaglaGovdesi, altKartAilesiCevabi, altKartIslemCevabi } from '#paylasilan/sozlesme/malzeme-alt-kart.ts';
 
 // Kart ve şablon kaydetme uçları bütün içeriği gövdede taşır; denetim kaydına gövde yerine özet girer (kullanıcı kararı 07.10.2026, #227 madde 23).
 // Ekran prototiptir, veri burada. Okuma uçları malzemeler sayfasının işlemini ister (kullanıcı kararı Ç1 = A); başka modüller kartı disari.ts ile okur.
@@ -183,5 +185,23 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/durum-muadilleri/kaldir', yetki: 'malzemeler.tanim-yaz', govde: durumMuadiliKaldirGovdesi, cevap: alternatifKomutCevabi,
     isle: ({ db, govde }) => alternatif.muadilKaldir(db, 'durum', govde.durum, govde.muadil, govde.surum),
+  }),
+  // 3438 a: revizyon ve alternatif alt kartları. Bağ kart yazımıdır (malzemeler.yaz); yürürlüğe alma ürün tanımını değiştirir, onaycıdadır.
+  uc({
+    yontem: 'GET', yol: '/malzeme-katalogu-kartlari/:kimlik/alt-kartlar', yetki: OKUMA, parametre: katalogKimlikParametresi, cevap: altKartAilesiCevabi,
+    isle: ({ db, parametre }) => altKart.aileGetir(db, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/revizyon-olarak-bagla', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,
+    govde: altKartaBaglaGovdesi, cevap: altKartIslemCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => altKart.altKartaBagla(db, kullanici, parametre.kimlik, { ...govde, tur: 'revizyon' }),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/alt-bagi-kaldir', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,
+    cevap: altKartIslemCevabi, isle: ({ db, kullanici, parametre }) => altKart.altBaginiKaldir(db, kullanici, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/yururluge-al', yetki: 'malzemeler.onayla', parametre: katalogKimlikParametresi,
+    cevap: altKartIslemCevabi, isle: ({ db, kullanici, parametre }) => altKart.yururlugeAl(db, kullanici, parametre.kimlik),
   }),
 ];

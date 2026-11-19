@@ -306,6 +306,50 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(istekler.indexOf(kopya!)).toBeGreaterThan(istekler.indexOf(kayit!));
   });
 
+  test('3438 a: Revizyon ekle yürürlükteki kartı kopyalar, çizim revizyonu boş açılır; revizyonsuz kayıt gitmez, kayıttan sonra ana karta bağlanır', async () => {
+    const mamul = (kimlik: string, kod: string, rev: string) => ({
+      ...ornekKayit(kimlik, kod, 'Deneme mamul', 'mamul'), g: { ad: 'Deneme mamul', resim: 'ORN-DWG-1', rev }, onay: { durum: 'aktif' },
+    });
+    const istekler = sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mana', kayit: mamul('mana', 'MM-DNM-00011', 'R01') }, { kimlik: 'mr2', kayit: mamul('mr2', 'MM-DNM-00012', 'R02') }),
+    });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const m = /\/malzeme-katalogu-kartlari\/([^/]+)\/(kaydet|revizyon-olarak-bagla)$/.exec(adres);
+      if (m && secenek?.method === 'POST') {
+        istekler.push({ yontem: 'POST', yol: adres.replace('/api', ''), govde: JSON.parse(String(secenek.body)) as unknown });
+        return json(200, m[2] === 'kaydet' ? { id: decodeURIComponent(m[1]!), stok_kodu: 'MM-DNM-00013', surum: 1 } : { id: decodeURIComponent(m[1]!) });
+      }
+      return asil(adres, secenek);
+    }));
+    const kayit = () => istekler.filter((i) => i.yontem === 'POST' && i.yol.endsWith('/kaydet'));
+    const bag = () => istekler.filter((i) => i.yol.endsWith('/revizyon-olarak-bagla'));
+    ac('?revizyon=mr2&ana=mana');
+    expect(await screen.findByText(/MM-DNM-00011 için yeni revizyon/)).toBeTruthy();
+    const adimlar = within(screen.getByRole('navigation', { name: 'Adımlar' }));
+    fireEvent.click(adimlar.getByRole('button', { name: /Tanım/ }));
+    const rev = await screen.findByLabelText('Revizyon') as HTMLInputElement;
+    expect(rev.value).toBe('');
+    expect((screen.getByLabelText('Teknik resim no') as HTMLInputElement).value).toBe('ORN-DWG-1');
+    fireEvent.click(adimlar.getByRole('button', { name: /Operasyon/ }));
+    expect(await screen.findByText(/Reçete ve rota MM-DNM-00012 Deneme mamul ürününden alınacak/)).toBeTruthy();
+    fireEvent.click(adimlar.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kataloğa kaydet' }));
+    expect(await screen.findByText(/Yeni revizyonun çizim revizyonunu/)).toBeTruthy();
+    expect(kayit()).toHaveLength(0);
+    fireEvent.click(adimlar.getByRole('button', { name: /Tanım/ }));
+    fireEvent.change(await screen.findByLabelText('Revizyon'), { target: { value: 'R03' } });
+    fireEvent.click(adimlar.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kataloğa kaydet' }));
+    await waitFor(() => expect(kayit()).toHaveLength(1));
+    const k = kayit()[0]!;
+    expect((k.govde as { kayit: Record<string, unknown> }).kayit['_altBag']).toBeUndefined();
+    expect((k.govde as { kayit: { g: { rev: unknown } } }).kayit.g.rev).toBe('R03');
+    await waitFor(() => expect(bag()).toHaveLength(1));
+    expect(bag()[0]!.govde).toEqual({ anaKimlik: 'mana', etiket: 'R03' });
+    expect(istekler.indexOf(bag()[0]!)).toBeGreaterThan(istekler.indexOf(k));
+  });
+
   test('resim paneli (688): kayıtlı yarı mamulde Tanım adımında ve kayıttan sonra Özet adımında kart no ile; teknik resim alanı olmayan hammaddenin Tanım adımında yok', async () => {
     const ymKarti = {
       ...ornekKayit('mym5', 'YM-DNM-00005', 'Deneme yarı mamul', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},

@@ -15,7 +15,8 @@ import type { MalzemeYetkisi } from './yetki.ts';
 // Yeni ekran menünün adresindedir (572, 527 1 a): bölüm yolları ikinci menünün yollarıdır (`/malzemeler`, `/malzemeler/yeni` ...).
 export const YENI_KOK = '/malzemeler';
 
-export interface YeniKartSecenegi { kart?: string; kopya?: string; sablon?: string; sablonYap?: string; tur?: KatalogTuru }
+// `revizyon`: yeni revizyonun kopyalanacağı kart (ailenin yürürlükteki kartı); `ana`: kaydedilince altına bağlanacağı ana kart (3438 a).
+export interface YeniKartSecenegi { kart?: string; kopya?: string; sablon?: string; sablonYap?: string; tur?: KatalogTuru; revizyon?: string; ana?: string }
 export type DisSayfa = 'operasyon-tipleri' | 'rota-sablonlari' | 'urun-rotalari';
 
 export interface Gezinti {
