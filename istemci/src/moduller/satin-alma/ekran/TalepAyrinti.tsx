@@ -5,10 +5,12 @@ import { PRIO } from '../merkez/constants.ts';
 import { S, V } from '../merkez/store.ts';
 import type { PurchaseRequest } from '../merkez/tipler.ts';
 import { AYRINTI, eylemCalistir, go } from '../merkez/ui.ts';
-import { dayDiff, fmtDate, todayStr } from '../merkez/util.ts';
+import { fmtDate, todayStr } from '../merkez/util.ts';
 import {
-  ADIMLAR, KARAR_SONRASI, adimBilgisi, adimSirasi, gecikmisMi, headerFacts, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
+  ADIMLAR, KARAR_SONRASI, adimBilgisi, adimSirasi, headerFacts, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
 } from '../merkez/views.ts';
+import { gelisGunu, kalemOzeti } from '../merkez/kimlik.ts';
+import { KimlikSeridi, durumTonu, ihtiyacMetni } from './KimlikSeridi.tsx';
 
 // Talep ayrıntısı (2412-2): altı adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
 // başlıkta. Seçili adımın içeriği merkezin gövdesindedir (#main); düğmeler merkezin işlemlerini adıyla çağırır.
@@ -32,19 +34,21 @@ function calistir(b: NextBtn) {
   eylemCalistir(b[0], dugmeVerisi(b));
 }
 
+// 3442-3: talebin kimliği (geliş günü, kalemler, ihtiyaç) başlığın altında koyu yazıyla durur; sayılar da soluk değil.
 function Meta({ r }: { r: PurchaseRequest }) {
   const bugun = todayStr();
-  const d = r.needDate ? dayDiff(bugun, r.needDate) : null;
-  const acik = ['draft', 'rfq', 'eval', 'approval'].includes(r.status);
+  const gelis = gelisGunu(r);
   return (
     <span className="sa-ekran-meta">
-      <Rozet ton={r.status === 'cancelled' ? 'pasif' : gecikmisMi(r, bugun) ? 'hata' : r.status === 'received' ? 'tamam' : 'uyari'}>{durumEtiketi(r)}</Rozet>
+      <Rozet ton={durumTonu(r, bugun)}>{durumEtiketi(r)}</Rozet>
       {r.priority === 'urgent' && <Rozet ton="hata">{PRIO.urgent}</Rozet>}
+      {gelis && <span><Simge ad="clock" boyut="k" />Geliş {fmtDate(gelis)}</span>}
+      {r.needDate && <span><Simge ad="calendar" boyut="k" />{ihtiyacMetni(r, bugun)}</span>}
+      <span className="sa-ekran-kalemler"><Simge ad="list" boyut="k" />{kalemOzeti(r)}</span>
       {r.department && <span><Simge ad="building" boyut="k" />{r.department}</span>}
       {r.requester && <span><Simge ad="user" boyut="k" />Talep eden {r.requester}</span>}
-      {r.needDate && <span><Simge ad="calendar" boyut="k" />İhtiyaç {fmtDate(r.needDate)}{acik && d !== null ? (d < 0 ? `, ${-d} gün geçti` : ` (${d} gün)`) : ''}</span>}
       {r.uretimEmriNo && <span><Simge ad="route" boyut="k" />Üretim emri {r.uretimEmriNo}</span>}
-      {headerFacts(r).map((f) => <span key={f} className="sa-ekran-soluk">{duzMetin(f)}</span>)}
+      {headerFacts(r).map((f) => <span key={f}>{duzMetin(f)}</span>)}
     </span>
   );
 }
@@ -55,7 +59,7 @@ export function TalepAyrinti() {
   const geri = (
     <div className="sa-ekran-geri">
       <Dugme tur="ikincil" simge="chev-left" onClick={() => { if (AYRINTI.geri) AYRINTI.geri(); else go(AYRINTI.donus); }} data-sa-geri="">{donus}</Dugme>
-      {r && <span className="sa-ekran-soluk">{r.no}</span>}
+      {r && <span className="sa-ekran-kimlik-no">{r.no}</span>}
     </div>
   );
   if (!r) return <div className="sa-ekran">{geri}<DurumKutusu durum="bos" mesaj="Talep bulunamadı; silinmiş olabilir." /></div>;
@@ -82,6 +86,7 @@ export function TalepAyrinti() {
   })), { anahtar: 'log', baslik: 'Geçmiş', simge: ADIM_SIMGESI.log! }];
   return (
     <div className="sa-ekran sa-ekran-ayrinti">
+      <KimlikSeridi r={r} adim={sekmeler.find((x) => x.anahtar === sec)?.baslik ?? ''} baslik=".sa-ekran-ayrinti .tc-sbaslik" />
       {geri}
       <SayfaBasligi
         baslik={r.title}
@@ -100,7 +105,7 @@ export function TalepAyrinti() {
         </div>
       )}
       <Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} />
-      {bilgi[sec] && <p className="sa-ekran-not sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
+      {bilgi[sec] && <p className="sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
     </div>
   );
 }

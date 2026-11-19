@@ -30,6 +30,7 @@ const ISKELET = `<div class="app">
       <span class="flag warn" id="kayit-uyari" role="status" hidden></span>
     </div>
     <div id="sa-ekran"></div>
+    <div id="sa-serit"></div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
 </div>`;
