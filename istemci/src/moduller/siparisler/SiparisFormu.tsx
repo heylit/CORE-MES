@@ -320,7 +320,6 @@ function Form({ siparis, yeniSurum = false }: FormOzellikleri) {
                   </span>
                 ) : <KalemPartileri
                   sira={i + 1}
-                  malzemeNo={s.kart?.no ?? null}
                   miktar={s.miktar}
                   partiler={s.partiler}
                   degistir={(partiler) => satirDegistir(i, { partiler })}

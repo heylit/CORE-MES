@@ -125,17 +125,18 @@
 .tc-sp-kalem-elle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-sp-partiler { display: grid; gap: var(--b-2); min-width: 0; margin: 0; padding: var(--b-3); border: 1px dashed var(--edge2); border-radius: var(--yari-2); }
 .tc-sp-partiler > legend { padding: 0 var(--b-1); color: var(--muted); font-size: var(--yazi-s); }
-.tc-sp-parti { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; min-width: 0; }
+.tc-sp-parti { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; gap: var(--b-2); align-items: end; min-width: 0; }
 .tc-sp-parti-bos { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-sp-parti-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2) var(--b-3); }
 .tc-sp-parti-toplam { margin-right: auto; color: var(--muted); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
 .tc-sp-parti-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-1); }
-/* 3296-3 a: rota seçimi olan parti; dar ekranda rota adı okunsun diye kendi tam satırına iner (çeşit, adet ve sil üstte). */
-.tc-sp-parti-rotali { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+/* Dar ekranda çeşit adı (Numune, Prototip) kesilmesin diye kendi satırına çıkar; adet ve sil altta. */
 @media (max-width: 479px) {
-  .tc-sp-parti-rotali { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-  .tc-sp-parti-rotali > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .tc-sp-parti { grid-template-columns: minmax(0, 1fr) auto; }
+  .tc-sp-parti > :first-child { grid-column: 1 / -1; }
 }
+/* Eski kayıtta elle seçilmiş rota notu partinin altında tam satır. */
+.tc-sp-parti-not { grid-column: 1 / -1; color: var(--muted); font-size: var(--yazi-s); }
 
 /* 3272: onay penceresinde açılacak proje ve emirler; "Proje ve emirler" kartının düğmeleri. */
 .tc-sp-acilis-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); }
