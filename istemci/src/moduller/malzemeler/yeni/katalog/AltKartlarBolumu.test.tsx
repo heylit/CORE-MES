@@ -80,7 +80,7 @@ describe('Alt kartlar bölümü (3438 a)', () => {
     fireEvent.change(screen.getByLabelText('Revizyon'), { target: { value: 'R00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Bağla' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
-    expect(istekler.find((i) => i.yontem === 'POST')!.govde).toEqual({ anaKimlik: 'k1', etiket: 'R00', eski: true });
+    expect(istekler.find((i) => i.yontem === 'POST')!.govde).toEqual({ anaKimlik: 'k1', etiket: 'R00', eskiRevizyon: true });
   });
 
   it('onaylanmamış revizyonda Yürürlüğe al, yürürlükteki revizyonda Bağı kaldır yok; onay durumu adıyla yazar', async () => {

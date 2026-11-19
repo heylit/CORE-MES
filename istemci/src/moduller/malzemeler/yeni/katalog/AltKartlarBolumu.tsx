@@ -124,7 +124,7 @@ function VarOlaniBagla({ ana, kartlar, kapat, bildir }: {
   const secilen = adaylar.find((k) => k.kayit.com.kod.toLocaleUpperCase('tr') === kod.trim().toLocaleUpperCase('tr'));
   const gonder = () => {
     if (!secilen) { bildir({ metin: 'Bu kodla aynı türde kart bulunamadı.', ton: 'hata' }); return; }
-    bagla.mutate({ kimlik: secilen.kimlik, anaKimlik: ana.kimlik, etiket: etiket.trim(), eski }, {
+    bagla.mutate({ kimlik: secilen.kimlik, anaKimlik: ana.kimlik, etiket: etiket.trim(), eskiRevizyon: eski }, {
       onSuccess: () => { bildir({ metin: `${secilen.kayit.com.kod} ${etiket.trim()} revizyonu olarak bağlandı.`, ton: 'tamam' }); kapat(); },
       onError: (e) => bildir({ metin: kayitHatasi(e).ileti, ton: 'hata' }),
     });

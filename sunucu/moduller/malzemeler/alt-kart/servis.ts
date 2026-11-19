@@ -39,7 +39,7 @@ export async function aileGetir(db: Db, kimlik: string): Promise<AltKartAilesiCe
 
 // Kart, ana kartın altına bağlanır. Alternatif bağı 3437'nin kuralıyla (zarf içi) alternatif modülünün yazımından gelir; bu işlev zarfı denetlemez.
 export async function altKartaBagla(
-  db: Db, kullanici: Kullanici, kimlik: string, g: { anaKimlik: string; tur: AltKartTuru; etiket: string; eski?: boolean },
+  db: Db, kullanici: Kullanici, kimlik: string, g: { anaKimlik: string; tur: AltKartTuru; etiket: string; eskiRevizyon?: boolean },
 ): Promise<{ id: string }> {
   const anaNo = await s.anaKartNoKimlikle(db, g.anaKimlik);
   if (!anaNo) throw bulunamadi('Ana kart bulunamadı.');
@@ -50,7 +50,7 @@ export async function altKartaBagla(
   if (hata) throw gecersiz(hata);
   await kisitKorumali(KISITLAR, async () => {
     if (g.tur === 'revizyon') {
-      const d = revizyonBagDurumlari(ana, g.eski ?? false);
+      const d = revizyonBagDurumlari(ana, g.eskiRevizyon ?? false);
       if (d.ana) await s.revDurumuYaz(db, ana.no, d.ana, kullanici.id);
       await s.altBagYaz(db, kart.no, { anaKartNo: ana.no, altTur: 'revizyon', altEtiket: etiket, revDurumu: d.kart }, kullanici.id);
     } else {

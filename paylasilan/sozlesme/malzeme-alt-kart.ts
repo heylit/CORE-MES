@@ -30,7 +30,7 @@ export const altKartAilesiCevabi = z.object({
 export type AltKartAilesiCevabi = z.output<typeof altKartAilesiCevabi>;
 
 // Var olan kart revizyon olarak bağlanır (yeni revizyon kartı kopyayla açılıp kaydedildikten sonra da bu uçla bağlanır).
-// `eski`: geçmişte kullanılmış eski revizyon kartı; yürürlüğe alınmadan eski olarak bağlanır.
-export const altKartaBaglaGovdesi = z.object({ anaKimlik: z.string().min(1).max(64), etiket: altKartEtiketi, eski: z.boolean().default(false) });
+// `eskiRevizyon`: geçmişte kullanılmış eski revizyon kartı; yürürlüğe alınmadan eski olarak bağlanır.
+export const altKartaBaglaGovdesi = z.object({ anaKimlik: z.string().min(1).max(64), etiket: altKartEtiketi, eskiRevizyon: z.boolean().default(false) });
 export type AltKartaBaglaGovdesi = z.input<typeof altKartaBaglaGovdesi>;
 export const altKartIslemCevabi = z.object({ id: z.string() });
