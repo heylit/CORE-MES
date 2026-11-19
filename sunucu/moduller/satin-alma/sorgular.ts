@@ -927,6 +927,7 @@ export function alternatifSiparisSatirlari(db: Db, talepId: string): Promise<Alt
 
 // ---- Plan için: açık siparişte gelecek malzeme. Kalan = sipariş miktarı - net teslim (> 0); kalanı kapatılmış sipariş gelmez.
 // satirId: sipariş satırının kimliği (talepGelisleriOku ile aynı anahtar); tedarikciAdi: siparişin teklifindeki ad, yazılmadıysa boş.
+// Satış siparişi kalemi için alınan (3429-3 F3) müşterinindir: plana gelmez (Risk D1).
 export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Promise<MalzemeGelisiOkuma[]> {
   return db.sorgu<MalzemeGelisiOkuma>(
@@ -940,6 +941,7 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[]) AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
+        AND k.satis_siparis_satiri_id IS NULL
       ORDER BY ${ALTERNATIF_KARTI('s')}, p.beklenen_teslim NULLS LAST, t.yil, t.sira, k.sira`,
     [[...malzemeNolar]],
   );
@@ -947,14 +949,14 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
 
 // 3256-2: onaylanmış (kararı var, son onay kaydı "onay"), durumu hâlâ "onayda" olan talebin siparişe geçmemiş malzeme kalemleri; q kalemin
 // karardaki teklifidir (tek kararda kararın teklifi, bölünmüş kararda kalemin teklifi). Karara girmemiş, miktarsız ve fason iş emrine bağlı
-// kalem gelmez. Plan girdisi ve canlı planın eskime karşılaştırması aynı süzgeci kullanır.
+// kalem ve satış siparişi kalemi için alınan (3429-3 F3) gelmez. Plan girdisi ve canlı planın eskime karşılaştırması aynı süzgeci kullanır.
 const ONAYLI_TALEP_KALEMI = `FROM satin_alma_talep t
        JOIN satin_alma_karar r ON r.talep_id = t.id
        JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
        LEFT JOIN satin_alma_karar_kalemi rk ON rk.talep_id = t.id AND rk.kalem_id = k.id
        JOIN satin_alma_teklif q ON q.talep_id = t.id AND q.id = coalesce(rk.teklif_id, r.teklif_id)
-      WHERE t.durum = 'onayda' AND c.malzeme_no IS NOT NULL AND k.miktar IS NOT NULL AND k.is_emri_id IS NULL
+      WHERE t.durum = 'onayda' AND c.malzeme_no IS NOT NULL AND k.miktar IS NOT NULL AND k.is_emri_id IS NULL AND k.satis_siparis_satiri_id IS NULL
         AND (SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) = 'onay'
         AND NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri x WHERE x.talep_id = t.id AND x.kalem_id = k.id)`;
 
@@ -970,7 +972,7 @@ export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiO
        JOIN satin_alma_katalog c ON c.id = k.katalog_id
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE s.talep_id = $1 AND ${ALTERNATIF_KARTI('s')} IS NOT NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL
-        AND coalesce(m.toplam, 0) < s.miktar
+        AND coalesce(m.toplam, 0) < s.miktar AND k.satis_siparis_satiri_id IS NULL
      UNION ALL
      -- 3256-2: onaylı, siparişe geçmemiş talep kalemi de planın gelişidir (ONAYLI_TALEP_KALEMI). Anahtar kalemin sayı
      -- kimliğinin eksisidir (sipariş satırı kimliğiyle karışmaz); onaylı karar değişmediği için geliş günü karşılaştırılmaz (boş).
@@ -1428,6 +1430,20 @@ export async function fasonBagliIsEmirleri(db: Db, isEmriIdleri: readonly number
 export async function fasonBagKilidi(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
   for (const id of [...new Set(isEmriIdleri)].sort((a, b) => a - b)) await islemKilidiAl(db, 'satin-alma-fason-bag', id);
 }
+// 3429-3 F3: satış siparişi kalemine bağlı talepler. `iptal` dışındaki talep kalemi bağı tutar (ön talep düşmez, sipariş kalemi kilitli);
+// açık talep (iptal ya da teslim alınmış olmayan) siparişin iptalini durdurur. Güncelleme grubunda yalnız bağı taşıyan kalem sayılır.
+export function satisSatiriTalepleri(db: Db, satirIdleri: readonly number[]): Promise<{ satirId: number; no: string; durum: string }[]> {
+  if (satirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT k.satis_siparis_satiri_id AS "satirId", t.no, t.durum FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id
+      WHERE k.satis_siparis_satiri_id = ANY($1::int[]) AND t.durum <> 'iptal' ORDER BY t.no`,
+    [[...satirIdleri]],
+  );
+}
+// Aynı satış kalemini iki talep aynı anda bağlamasın: bağ denetimi ile yazma arası kalem başına sıralanır.
+export async function satisBagKilidi(db: Db, satirIdleri: readonly number[]): Promise<void> {
+  for (const id of [...new Set(satirIdleri)].sort((a, b) => a - b)) await islemKilidiAl(db, 'satin-alma-satis-bag', id);
+}
 export interface OnTalepYoksaySatiri { id: number; isEmriId: number; neden: string; kisiId: number; zaman: string }
 export function fasonYoksaylari(db: Db): Promise<OnTalepYoksaySatiri[]> {
   return db.sorgu<OnTalepYoksaySatiri>(
@@ -1445,13 +1461,15 @@ export async function fasonYoksayEkle(db: Db, g: { isEmriId: number; neden: stri
 export async function onTalepYoksaySil(db: Db, id: number): Promise<boolean> {
   return (await db.tek('DELETE FROM satin_alma_on_talep_yoksay WHERE id = $1 RETURNING id', [id])) !== null;
 }
-export interface KalemBagSatiri { kalemId: string; uygulananMalzemeNo: number | null; isEmriId: number | null; dieId: number | null }
+// satisSiparisSatiriId (3429-3 F3): kalem satış siparişinin "Satın al" kaleminden açıldı; isteğe bağlı, yazılmazsa boş.
+export interface KalemBagSatiri { kalemId: string; uygulananMalzemeNo: number | null; isEmriId: number | null; dieId: number | null; satisSiparisSatiriId?: number | null }
 export async function kalemBaglariYaz(db: Db, talepId: string, baglar: readonly KalemBagSatiri[]): Promise<void> {
   if (baglar.length === 0) return;
   await db.sorgu(
-    `UPDATE satin_alma_talep_kalemi k SET uygulanan_malzeme_no = b.uygulanan, is_emri_id = b.is_emri, die_id = b.die
-       FROM unnest($2::uuid[], $3::int[], $4::int[], $5::int[]) AS b(id, uygulanan, is_emri, die) WHERE k.talep_id = $1 AND k.id = b.id`,
-    [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId), baglar.map((b) => b.dieId)],
+    `UPDATE satin_alma_talep_kalemi k SET uygulanan_malzeme_no = b.uygulanan, is_emri_id = b.is_emri, die_id = b.die, satis_siparis_satiri_id = b.satis
+       FROM unnest($2::uuid[], $3::int[], $4::int[], $5::int[], $6::int[]) AS b(id, uygulanan, is_emri, die, satis) WHERE k.talep_id = $1 AND k.id = b.id`,
+    [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId), baglar.map((b) => b.dieId),
+      baglar.map((b) => b.satisSiparisSatiriId ?? null)],
   );
 }
 // 3437: kalemin kabul sınırı (yalnız kartlı kalem); null sınır sütunları boşaltır (zarfın tamamı).
@@ -1482,8 +1500,10 @@ export function kalemKabulleriOku(db: Db, talepIdleri: readonly string[]): Promi
 // Talepteki kalem sırasıyla: sıra burada verilir, PostgreSQL ORDER BY olmadan sıra garantisi vermez (kalem bağları ekranda bu sırayla).
 export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
   return db.sorgu(
-    `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId", die_id AS "dieId"
-       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL OR die_id IS NOT NULL)
+    `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId", die_id AS "dieId",
+            satis_siparis_satiri_id AS "satisSiparisSatiriId"
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[])
+        AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL OR die_id IS NOT NULL OR satis_siparis_satiri_id IS NOT NULL)
       ORDER BY talep_id, sira`,
     [talepIdleri],
   );
@@ -1593,7 +1613,7 @@ export function acikTalepMiktarlari(db: Db, malzemeNolar: readonly number[]): Pr
         ORDER BY coalesce(guncellenen_talep_id, id), olusturma DESC, id DESC)
      SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
        FROM satin_alma_talep_kalemi k JOIN sayilan t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
-      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL
+      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL AND k.satis_siparis_satiri_id IS NULL
       GROUP BY c.malzeme_no, k.birim`,
     [[...malzemeNolar]],
   );
@@ -2039,14 +2059,15 @@ export function logoSiparisKalemleri(db: Db, nolar: readonly string[]): Promise<
 }
 
 // 3398-2: teklif istenmeden önce stokla karşılaştırılacak kalemler: taslak talebin kartlı, miktarlı kalemleri. Fiyat yok.
-// Stoktan karşılamanın engeli (yoksa null): Logo'ya gitmiş, iş emrine ya da kalıba bağlı, teklif, karar, senaryo ya da siparişe girmiş kalem.
+// Stoktan karşılamanın engeli (yoksa null): Logo'ya gitmiş, iş emrine, kalıba ya da satış siparişine bağlı (3429-3 F3), teklif, karar, senaryo ya da siparişe girmiş kalem.
 const STOKTAN_ENGEL = `CASE WHEN k.logo_satir_ref IS NOT NULL THEN 'logo' WHEN k.is_emri_id IS NOT NULL THEN 'is-emri' WHEN k.die_id IS NOT NULL THEN 'kalip'
+          WHEN k.satis_siparis_satiri_id IS NOT NULL THEN 'satis-siparisi'
           WHEN EXISTS (SELECT 1 FROM satin_alma_teklif_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
             OR EXISTS (SELECT 1 FROM satin_alma_karar_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
             OR EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
             OR EXISTS (SELECT 1 FROM satin_alma_senaryo_kalemi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id)
             OR EXISTS (SELECT 1 FROM satin_alma_senaryo_payi s WHERE s.talep_id = k.talep_id AND s.kalem_id = k.id) THEN 'teklif' END`;
-export type StoktanEngel = 'logo' | 'is-emri' | 'kalip' | 'teklif';
+export type StoktanEngel = 'logo' | 'is-emri' | 'kalip' | 'satis-siparisi' | 'teklif';
 export interface StokKontroluKalemiOkuma {
   talepId: string; talepNo: string; baslik: string; kalemId: string; ad: string; malzemeNo: number; miktar: string; birim: string;
   uretimEmriId: number | null; ihtiyacTarihi: string | null; engel: StoktanEngel | null;
@@ -2094,13 +2115,13 @@ export async function stoktanKalemGeriAl(db: Db, talepId: string, kalemId: strin
     if (satir === null) return false;
     const eklenen = await db.sorgu(
       `INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, katalog_id, ad, ozellik, miktar, birim, kategori, logo_satir_ref, uygulanan_malzeme_no,
-              is_emri_id, kaynak_talep_id, kaynak_sira, kaynak_ihtiyac_tarihi, kaynak_birim, die_id,
+              is_emri_id, kaynak_talep_id, kaynak_sira, kaynak_ihtiyac_tarihi, kaynak_birim, die_id, satis_siparis_satiri_id,
               yalniz_ayni, sartli_kabul, kabul_kaliteleri, kabul_durumlari, kabul_pay_mm)
        SELECT (r).talep_id, (r).id,
               CASE WHEN EXISTS (SELECT 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id AND x.sira = (r).sira)
                    THEN (SELECT coalesce(max(sira), 0) + 1 FROM satin_alma_talep_kalemi x WHERE x.talep_id = (r).talep_id) ELSE (r).sira END,
               (r).katalog_id, (r).ad, (r).ozellik, $3::numeric, (r).birim, (r).kategori, (r).logo_satir_ref, (r).uygulanan_malzeme_no,
-              (r).is_emri_id, (r).kaynak_talep_id, (r).kaynak_sira, (r).kaynak_ihtiyac_tarihi, (r).kaynak_birim, (r).die_id,
+              (r).is_emri_id, (r).kaynak_talep_id, (r).kaynak_sira, (r).kaynak_ihtiyac_tarihi, (r).kaynak_birim, (r).die_id, (r).satis_siparis_satiri_id,
               -- 3437-2 öncesi saklanan satırda kabul anahtarı yoktur: varsayılan sınır (NOT NULL sütunlar false).
               coalesce((r).yalniz_ayni, false), coalesce((r).sartli_kabul, false), (r).kabul_kaliteleri, (r).kabul_durumlari, (r).kabul_pay_mm
          FROM (SELECT jsonb_populate_record(NULL::satin_alma_talep_kalemi, $1::jsonb) AS r) q

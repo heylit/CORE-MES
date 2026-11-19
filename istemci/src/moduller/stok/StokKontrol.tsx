@@ -267,7 +267,7 @@ function KarsilaPenceresi({ satir, kapat }: { satir: IhtiyacSatiri | null; kapat
 }
 
 const ENGEL_METNI: Record<NonNullable<IhtiyacSatiri['engel']>, string> = {
-  logo: "Logo'ya bağlı", 'is-emri': 'İş emrine bağlı', kalip: 'Kalıba bağlı', teklif: 'Teklifte',
+  logo: "Logo'ya bağlı", 'is-emri': 'İş emrine bağlı', kalip: 'Kalıba bağlı', 'satis-siparisi': 'Satış siparişine bağlı', teklif: 'Teklifte',
 };
 
 function Ihtiyaclar() {

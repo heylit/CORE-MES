@@ -12,6 +12,7 @@ import { siparisAyrintisi } from '../siparisler/disari.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { canliPlan, tabanPlani } from '../plan/disari.ts';
+import { satisSatiriAcikTalepNolari } from '../satin-alma/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { receteRotaStatuleri } from '../recete-rota/disari.ts';
 import { emirlerinSevkDurumu, siparisinSevkleri } from '../sevkiyat/disari.ts';
@@ -246,7 +247,9 @@ export async function siparisAkisiOku(db: Db, siparisId: number): Promise<Sipari
   const fatura = faturaDurumu(s.araToplam, s.paraBirimi, faturalar);
   return {
     siparisId, asama: siparisAsamasi(s.durum, kalemler, fatura), fatura, faturaSayisi: faturalar.filter((f) => f.tur === 'fatura').length, kalemler,
-    kapanisEksikleri: s.durum === 'onayli' ? kapanisEksikleri(kalemler, fatura) : [],
+    kapanisEksikleri: s.durum === 'onayli'
+      ? kapanisEksikleri(kalemler, fatura, await satisSatiriAcikTalepNolari(db, s.satirlar.filter((k) => k.karsilama === 'satin-al').map((k) => k.id)))
+      : [],
     terminRiski: siparisTerminRiski(s.durum, kalemler),
   };
 }

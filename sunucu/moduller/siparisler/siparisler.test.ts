@@ -467,11 +467,11 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
 
     const kalem = { id: satirId, malzemeNo: mamulNo, miktar: '100', birimFiyat: '12.5', termin: null, aciklama: null };
     const miktar = await guncelle(t, { satirlar: [{ ...kalem, miktar: '90' }] });
-    assert.deepEqual([miktar.statusCode, miktar.json().mesaj], [409, 'Emre bağlı kalemde yalnız termin değişir (kalem 1).']);
+    assert.deepEqual([miktar.statusCode, miktar.json().mesaj], [409, 'Emre ya da satın alma talebine bağlı kalemde yalnız termin değişir (kalem 1).']);
     const silme = await guncelle(t, { satirlar: [{ ...kalem, id: undefined }] });
-    assert.deepEqual([silme.statusCode, silme.json().mesaj], [409, 'Emre bağlı kalem silinemez (kalem 1).']);
+    assert.deepEqual([silme.statusCode, silme.json().mesaj], [409, 'Emre ya da satın alma talebine bağlı kalem silinemez (kalem 1).']);
     const sira = await guncelle(t, { satirlar: [{ ...kalem, id: undefined }, kalem] });
-    assert.deepEqual([sira.statusCode, sira.json().mesaj], [409, 'Emre bağlı kalemin sırası değişmez (kalem 1).']);
+    assert.deepEqual([sira.statusCode, sira.json().mesaj], [409, 'Emre ya da satın alma talebine bağlı kalemin sırası değişmez (kalem 1).']);
     const yabanci = await guncelle(t, { satirlar: [kalem, { ...kalem, id: 2_000_000_000 }] });
     assert.equal(yabanci.statusCode, 409, yabanci.body);
 
@@ -612,7 +612,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(t.satirlar[0]?.emreBagli, true);
 
     const kalem = { id: satir.id, malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', termin: null, aciklama: null };
-    const DEGISMEZ = 'Emre bağlı kalemde yalnız termin değişir (kalem 1).';
+    const DEGISMEZ = 'Emre ya da satın alma talebine bağlı kalemde yalnız termin değişir (kalem 1).';
     const cikar = await guncelle(t, { satirlar: [{ ...kalem, partiler: [] }] });
     assert.deepEqual([cikar.statusCode, cikar.json().mesaj], [409, DEGISMEZ], 'parti çıkarılamaz');
     const degistir = await guncelle(t, { satirlar: [{ ...kalem, partiler: [{ emirTuru: 'fai', adet: '20' }, { emirTuru: 'seri', adet: '80' }] }] });

@@ -43,6 +43,7 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
+import { satisBagReddi } from './kurallar.ts';
 import { alternatifIzniReddi, cizimIzni, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
@@ -897,6 +898,7 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
         };
       }),
       ...plan.onTalepler,
+      ...(await siparisOnTalepleri(db)),
     ],
     yoksayilanlar: [
       ...yoksaylar.map((y) => ({
@@ -908,6 +910,49 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
     ],
   };
 }
+// 3429-3 F3: satış siparişinin "Satın al" kalemleri. Siparişler satın almayı ithal etmez, satın alma da siparişleri; kaynak kablolamada
+// kaydedilir. Kayıtsız süreçte satış ön talebi yoktur ve hızlı açma satış kalemini reddeder (ön talepte değil).
+export interface SatisSiparisiKalemi { siparisSatiriId: number; siparisId: number; siparisNo: string; firmaId: number; malzemeNo: number; miktar: string; termin: string }
+export type SatisSiparisiKalemCozucusu = (db: Db) => Promise<readonly SatisSiparisiKalemi[]>;
+let satisKalemCozucu: SatisSiparisiKalemCozucusu | null = null;
+export function satisSiparisiKalemCozucusuKaydet(c: SatisSiparisiKalemCozucusu | null): void { satisKalemCozucu = c; }
+// İptal edilmemiş talepteki kalem bağı tutar: o kalem ön talep olmaz. Yalnız ticari mal (Risk D1 b): gelen mal kabulde bekleyen emirlere
+// dağıtılabilir; satış kalemine ayırma 3429-3 F4'tedir, o gelene kadar üretimde kullanılabilen kart ön talep olmaz.
+const SATIS_ON_TALEP_TURLERI: readonly string[] = ['ticari_mal'];
+async function satisOnTalepAdaylari(db: Db): Promise<readonly SatisSiparisiKalemi[]> {
+  if (satisKalemCozucu === null) return [];
+  const l = await satisKalemCozucu(db);
+  const bagli = new Set((await s.satisSatiriTalepleri(db, l.map((x) => x.siparisSatiriId))).map((r) => r.satirId));
+  const kartlar = await malzemeOzetleri(db, [...new Set(l.map((x) => x.malzemeNo))]);
+  return l.filter((x) => !bagli.has(x.siparisSatiriId) && SATIS_ON_TALEP_TURLERI.includes(kartlar.get(x.malzemeNo)?.tur ?? ''));
+}
+async function siparisOnTalepleri(db: Db) {
+  const l = await satisOnTalepAdaylari(db);
+  const kartlar = await malzemeOzetleri(db, [...new Set(l.map((x) => x.malzemeNo))]);
+  const musteriler = await firmaAdlari(db, l.map((x) => x.firmaId));
+  return l.flatMap((x) => {
+    const k = kartlar.get(x.malzemeNo);
+    if (!k) return [];
+    return [{
+      kaynak: 'siparis' as const, siparisSatiriId: x.siparisSatiriId, siparisId: x.siparisId, siparisNo: x.siparisNo,
+      musteriAdi: musteriler.get(x.firmaId) ?? null, malzeme: { no: x.malzemeNo, kod: k.kod, ad: k.ad ?? '' }, miktar: sade(x.miktar),
+      birim: k.birim ?? '', gerekenTarih: x.termin,
+    }];
+  });
+}
+// 3429-3 F3 (SIP-19, SIP-44): satış kalemine bağlı talepler. Kilit iptal edilmemiş her talepte, iptal reddi yalnız açık (teslim alınmamış) talepte.
+export async function satisSatiriBagliKalemler(db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  return new Set((await s.satisSatiriTalepleri(db, satirIdleri)).map((r) => r.satirId));
+}
+export async function satisSatiriAcikTalepNolari(db: Db, satirIdleri: readonly number[]): Promise<string[]> {
+  return [...new Set((await s.satisSatiriTalepleri(db, satirIdleri)).filter((r) => r.durum !== 'teslim_alindi').map((r) => r.no))];
+}
+// Sipariş iptali talep açmayla aynı kalem kilidini alır (Risk N2): ikisi aynı anda gelirse biri ötekini bekler. Akış okuması kilitsizdir.
+export async function satisSatiriAcikTalepleriKilitle(db: Db, satirIdleri: readonly number[]): Promise<string[]> {
+  await s.satisBagKilidi(db, satirIdleri);
+  return satisSatiriAcikTalepNolari(db, satirIdleri);
+}
+
 // Plan ihtiyacının ön talepleri ve hâlâ ihtiyaçta olan malzemelerin yoksayma kararları.
 async function planOnTalepleri(db: Db) {
   const ihtiyaclar = await s.planIhtiyaclariOku(db);
@@ -1023,6 +1068,15 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
   const fasonRed = fasonKalemReddi(g.tur, g.kalemler);
   if (fasonRed !== null) throw dogrulama(fasonRed.ileti, `kalemler.${fasonRed.sira}`);
   await hizliBaglariDenetle(db, g);
+  const satislar = g.kalemler.flatMap((x) => (typeof x.satisSiparisSatiriId === 'number' ? [x.satisSiparisSatiriId] : []));
+  const satisNolari: string[] = [];
+  if (satislar.length > 0) {
+    await s.satisBagKilidi(db, satislar);
+    const bekleyen = new Map((await satisOnTalepAdaylari(db)).map((x) => [x.siparisSatiriId, x]));
+    const satisRed = satisBagReddi(g.tur, g.kalemler, (id) => bekleyen.get(id)?.malzemeNo);
+    if (satisRed !== null) throw dogrulama(satisRed, 'kalemler');
+    satisNolari.push(...new Set(satislar.map((id) => bekleyen.get(id)!.siparisNo)));
+  }
   const nolar = [...new Set(g.kalemler.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))];
   const kartlar = await malzemeOzetleri(db, nolar);
   for (const no of nolar) {
@@ -1055,8 +1109,9 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
     return kabul === null ? [] : [{ kalemId: kalemler[i]!.id, kabul }];
   }));
   const dieler = g.tur === 'fason' ? await fasonDieleriAc(db, k, g) : g.kalemler.map(() => null);
-  await s.kalemBaglariYaz(db, t.id, g.kalemler.flatMap((x, i) => (x.uygulananMalzemeNo === null && x.isEmriId === null && dieler[i] === null ? []
-    : [{ kalemId: kalemler[i]!.id, uygulananMalzemeNo: x.uygulananMalzemeNo, isEmriId: x.isEmriId, dieId: dieler[i] ?? null }])));
+  await s.kalemBaglariYaz(db, t.id, g.kalemler.flatMap((x, i) => (x.uygulananMalzemeNo === null && x.isEmriId === null && dieler[i] === null && (x.satisSiparisSatiriId ?? null) === null ? []
+    : [{ kalemId: kalemler[i]!.id, uygulananMalzemeNo: x.uygulananMalzemeNo, isEmriId: x.isEmriId, dieId: dieler[i] ?? null, satisSiparisSatiriId: x.satisSiparisSatiriId ?? null }])));
+  if (satisNolari.length > 0) await s.hareketEkle(db, t.id, randomUUID(), `Satış siparişi kaleminden açıldı: ${satisNolari.join(', ')}`, k.id);
   return talebim(acilan, await kalemBagGorunumu(db, [t.id]), await kalemKarsiliklari(db, [acilan]), await kalemOzellikleri(db, [acilan]), await kalemKabulleri(db, [acilan]), sartliAlternatifler(acilan));
 }
 

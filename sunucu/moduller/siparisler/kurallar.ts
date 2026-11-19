@@ -108,11 +108,11 @@ export function partiReddi(birim: string | null, miktar: string, partiler: reado
 }
 
 // SIP-19 (3254 a): onayı geri alınmış siparişte emre bağlı kalem kilitlidir: silinmez, sırası değişmez; malzeme, miktar, fiyat, açıklama
-// partiler ve karşılama yolu (3429-3) aynı kalır, yalnız termin değişir. Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
+// partiler ve karşılama yolu (3429-3) aynı kalır, yalnız termin değişir. Satın alma talebine bağlı "Satın al" kalemi de kilitlidir (3429-3 F3). Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
 export const KALEM_BASKA_SIPARISIN = 'Kalem bu siparişin değil.';
-export const KILITLI_KALEM_SILINMEZ = 'Emre bağlı kalem silinemez';
-export const KILITLI_KALEM_SIRASI = 'Emre bağlı kalemin sırası değişmez';
-export const KILITLI_KALEM_DEGISMEZ = 'Emre bağlı kalemde yalnız termin değişir';
+export const KILITLI_KALEM_SILINMEZ = 'Emre ya da satın alma talebine bağlı kalem silinemez';
+export const KILITLI_KALEM_SIRASI = 'Emre ya da satın alma talebine bağlı kalemin sırası değişmez';
+export const KILITLI_KALEM_DEGISMEZ = 'Emre ya da satın alma talebine bağlı kalemde yalnız termin değişir';
 const sayiAyni = (a: string | null, b: string | null): boolean => {
   const n = (m: string) => { const [t = '0', k = ''] = m.trim().split('.'); return `${BigInt(t)}.${k.replace(/0+$/, '')}`; };
   return a === null || b === null ? a === b : n(a) === n(b);
@@ -224,6 +224,15 @@ export function bagliEmirReddi(komut: DurumKomutu, emirler: readonly { emirNo: s
   if (acik.length === 0) return null;
   const fazla = acik.length > GOSTERILEN_EMIR ? ` ve ${acik.length - GOSTERILEN_EMIR} emir daha` : '';
   return `${BAGLI_ACIK_EMIR}: ${acik.slice(0, GOSTERILEN_EMIR).join(', ')}${fazla}.`;
+}
+
+// SIP-44 (3429-3 F3): "Satın al" kalemi açık (iptal edilmemiş, teslim alınmamış) satın alma talebine bağlıyken sipariş iptal edilemez;
+// talep kendiliğinden iptal edilmez (teklif ve sipariş satın almanındır).
+export const BAGLI_ACIK_TALEP = 'Siparişe bağlı açık satın alma talebi var; önce talebi iptal edin';
+export function bagliTalepReddi(komut: DurumKomutu, talepNolari: readonly string[]): string | null {
+  if (komut !== 'iptal' || talepNolari.length === 0) return null;
+  const fazla = talepNolari.length > GOSTERILEN_EMIR ? ` ve ${talepNolari.length - GOSTERILEN_EMIR} talep daha` : '';
+  return `${BAGLI_ACIK_TALEP}: ${talepNolari.slice(0, GOSTERILEN_EMIR).join(', ')}${fazla}.`;
 }
 
 // SIP-41 (3429-1 a): sevk ya da fatura eksikken onaylı sipariş yalnız gerekçeyle kapanır; eksikler iletide listelenir. Gerekçe uç

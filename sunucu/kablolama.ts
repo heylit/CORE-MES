@@ -28,6 +28,7 @@ import * as projeler from './moduller/projeler/disari.ts';
 import * as plan from './moduller/plan/disari.ts';
 import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
+import { satisSatiriAcikTalepleriKilitle, satisSatiriBagliKalemler, satisSiparisiKalemCozucusu } from './moduller/satin-alma/disari.ts';
 import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, emirKartKullanimiCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import { satinAlmaKademeOkuyucusu, siparisSatiriBelgeleri, siparisSatirlari } from './moduller/satin-alma/disari.ts';
@@ -39,6 +40,7 @@ import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlar
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
+import { bagliTalepCozucusu, satinAlinacakKalemler } from './moduller/siparisler/disari.ts';
 import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -537,7 +539,12 @@ export function sunucununBaglari(): Bag[] {
     // 3427-4 a: onaylı siparişin yeni sürümünde termin değişmiş olabilir; proje bitişi ve başlamamış emir teslimi onaydaki gibi kayar.
     bag('sipariş yeni sürüm -> proje bitişi', siparisRevizeEdildiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     bag('sipariş yeni sürüm -> emir teslimi', siparisRevizeEdildiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
-    bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
+    // 3429-3 F3: satın alma talebine bağlı "Satın al" kalemi de emre bağlı kalem gibi kilitlidir (SIP-19).
+    bag('emre ya da talebe bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari && satisSatiriBagliKalemler && (async (
+      db: Db, satirIdleri: readonly number[],
+    ) => new Set([...await uretimEmirleri.emreBagliSiparisSatirlari(db, satirIdleri), ...await satisSatiriBagliKalemler(db, satirIdleri)]))),
+    bag('talebe bağlı kalemler -> sipariş iptali', bagliTalepCozucusu, satisSatiriAcikTalepleriKilitle),
+    bag('sipariş "Satın al" kalemleri -> satın alma ön talebi', satisSiparisiKalemCozucusu, satinAlinacakKalemler),
     bag('sipariş akışı eksikleri -> sipariş kapatma', kapanisEksigiCozucusu, akis.siparisKapanisEksikleri),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
     bag('emir bitti -> plan bayat işareti', uretimEmirleri.emirBittiDinle, bayatEmirBittiYansit),

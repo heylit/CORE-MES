@@ -10,16 +10,18 @@ const GOSTERILEN = 8;
 
 const yerelGun = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const gunYaz = (g: string) => new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(`${g}T00:00:00Z`));
-const ne = (o: OnTalep) => (o.kaynak === 'plan' ? `${o.malzeme.kod} · ${o.malzeme.ad}` : `${o.emirNo} Op ${o.opNo}${o.adim ? ` ${o.adim}` : ''}`);
-const anahtar = (o: OnTalep) => (o.kaynak === 'fason' ? `f${o.isEmriId}` : `p${o.malzeme.no}`);
+const ne = (o: OnTalep) => (o.kaynak === 'fason' ? `${o.emirNo} Op ${o.opNo}${o.adim ? ` ${o.adim}` : ''}` : o.kaynak === 'siparis' ? `${o.siparisNo} · ${o.malzeme.kod} · ${o.malzeme.ad}` : `${o.malzeme.kod} · ${o.malzeme.ad}`);
+const anahtar = (o: OnTalep) => (o.kaynak === 'fason' ? `f${o.isEmriId}` : o.kaynak === 'plan' ? `p${o.malzeme.no}` : `s${o.siparisSatiriId}`);
+const KAYNAK_ADI: Record<OnTalep['kaynak'], string> = { plan: 'Plan', fason: 'Fason', siparis: 'Sipariş' };
+const miktarYaz = (m: number | string) => (typeof m === 'string' ? m.replace('.', ',') : m.toLocaleString('tr-TR', { maximumFractionDigits: 4 }));
 // Tarihi olmayan sona gider: ne zaman gerektiği bilinmeyen iş, bilinenin önüne geçmez.
 const sirala = (a: OnTalep, b: OnTalep) => (a.gerekenTarih ?? '9999').localeCompare(b.gerekenTarih ?? '9999');
 
 function sutunlar(bugun: string): Sutun<OnTalep>[] {
   return [
-    { anahtar: 'kaynak', baslik: 'Kaynak', kirilmaz: true, hucre: (o) => <Rozet ton={o.kaynak === 'plan' ? 'bilgi' : 'pasif'}>{o.kaynak === 'plan' ? 'Plan' : 'Fason'}</Rozet> },
+    { anahtar: 'kaynak', baslik: 'Kaynak', kirilmaz: true, hucre: (o) => <Rozet ton={o.kaynak === 'plan' ? 'bilgi' : o.kaynak === 'siparis' ? 'uyari' : 'pasif'}>{KAYNAK_ADI[o.kaynak]}</Rozet> },
     { anahtar: 'ne', baslik: 'Malzeme ya da adım', hucre: ne },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (o) => `${o.miktar.toLocaleString('tr-TR', { maximumFractionDigits: 4 })} ${o.birim}` },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (o) => `${miktarYaz(o.miktar)} ${o.birim}` },
     {
       anahtar: 'gereken', baslik: 'Gereken', kirilmaz: true,
       hucre: (o) => (o.gerekenTarih === null ? '' : o.gerekenTarih < bugun ? <Rozet ton="hata">{gunYaz(o.gerekenTarih)} geçti</Rozet> : gunYaz(o.gerekenTarih)),
@@ -27,7 +29,7 @@ function sutunlar(bugun: string): Sutun<OnTalep>[] {
   ];
 }
 
-// İş kutusu kartı: planın stokla karşılanamayan malzemesi ve firmaya gidecek fason adımlar (898 a). Salt okunur; talebe çevirme
+// İş kutusu kartı: planın stokla karşılanamayan malzemesi, firmaya gidecek fason adımlar (898 a) ve satış siparişinin "Satın al" kalemleri (3429-3 F3). Salt okunur; talebe çevirme
 // ve yoksayma Taleplerim'de kalır. Uç talep açabilene açıktır; kart yalnız satın almayı yazana çizilir (iş kutusunun sahibi).
 export function OnTalepKarti() {
   const islemler = useOturum().data?.islemler ?? [];
@@ -38,9 +40,10 @@ export function OnTalepKarti() {
   const bugun = yerelGun(new Date());
   const hepsi = [...(liste.data?.onTalepler ?? [])].sort(sirala);
   const plan = hepsi.filter((o) => o.kaynak === 'plan').length;
+  const satis = hepsi.filter((o) => o.kaynak === 'siparis').length;
   const gecen = hepsi.filter((o) => o.gerekenTarih !== null && o.gerekenTarih < bugun).length;
   const ozet = liste.data === undefined ? undefined
-    : `${plan.toLocaleString('tr-TR')} plan, ${(hepsi.length - plan).toLocaleString('tr-TR')} fason${gecen ? `; ${gecen.toLocaleString('tr-TR')} tanesinin günü geçti` : ''}`;
+    : `${plan.toLocaleString('tr-TR')} plan, ${(hepsi.length - plan - satis).toLocaleString('tr-TR')} fason${satis ? `, ${satis.toLocaleString('tr-TR')} sipariş` : ''}${gecen ? `; ${gecen.toLocaleString('tr-TR')} tanesinin günü geçti` : ''}`;
   return (
     <Kart
       baslik="Ön talepler"

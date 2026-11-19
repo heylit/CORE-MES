@@ -19,10 +19,10 @@ import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, bagliTalepReddi, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
   TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, eskiRevizyonReddi, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, kalemKarsilamasi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
-import { bagliEmirler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
+import { bagliEmirler, bagliTalepler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
 import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisRevizeEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
@@ -244,7 +244,8 @@ export async function durumDegistir(
     if (eksik !== null) throw dogrulama(eksik, 'neden');
   }
   if (komut === 'iptal') {
-    const bagli = bagliEmirReddi(komut, await bagliEmirler(db, { siparisId: id, satirIdleri: (await sorgular.kalemler(db, id)).map((k) => k.id) }));
+    const satirIdleri = (await sorgular.kalemler(db, id)).map((k) => k.id);
+    const bagli = bagliEmirReddi(komut, await bagliEmirler(db, { siparisId: id, satirIdleri })) ?? bagliTalepReddi(komut, await bagliTalepler(db, satirIdleri));
     if (bagli !== null) throw cakisma(bagli);
   }
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
@@ -432,6 +433,14 @@ export async function siparisSatiriOzetleri(db: Db, idler: number[]): Promise<Ma
 // 224: emir açılırken siparişin satırı seçilir; satırlar sıra ile, sipariş yoksa boş dizi.
 export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise<SiparisSatiriOzeti[]> {
   return satirOzetleri(db, await sorgular.kalemler(db, siparisId));
+}
+
+// 3429-3 F3: satın almanın ön talep kaynağı; onaylı siparişin "Satın al" kalemleri. Yetki denetlemez; çağıran satın alma okumasını denetler.
+export interface SatinAlinacakKalem { siparisSatiriId: number; siparisId: number; siparisNo: string; firmaId: number; malzemeNo: number; miktar: string; termin: string }
+export async function satinAlinacakKalemler(db: Db): Promise<SatinAlinacakKalem[]> {
+  return (await sorgular.satinAlinacakKalemler(db)).map((k) => ({
+    siparisSatiriId: k.id, siparisId: k.siparis_id, siparisNo: k.siparis_no, firmaId: k.firma_id, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin,
+  }));
 }
 
 export const siparisOzeti = async (db: Db): Promise<SiparisOzetiCevabi> =>

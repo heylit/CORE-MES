@@ -454,6 +454,7 @@ describe('satış siparişi akışı (3429-1)', () => {
     assert.deepEqual(kapanisEksikleri([kalem({ sevkEdilen: 10 }), kalem({ uretilir: false })], 'tam'), []);
     assert.deepEqual(kapanisEksikleri([kalem({ sira: 2, miktar: 2.5, sevkEdilen: 1, yolda: 1.5 })], 'yok'), ['Kalem 2: teslim edilen 1 / 2,5.', FATURA_EKSIGI.yok]);
     assert.deepEqual(kapanisEksikleri([], 'karsilastirilamaz'), [FATURA_EKSIGI.karsilastirilamaz]);
+    assert.deepEqual(kapanisEksikleri([], 'tam', ['ST-1', 'ST-2']), ['Açık satın alma talebi: ST-1, ST-2.'], '3429-3 F3: açık talep eksiktir');
   });
 
   test('SPA-5: plan bitişi en geç bitiştir; sıra ve saat dilimi değiştirmez, boş değer atlanır, hiç yoksa null', () => {

@@ -115,6 +115,20 @@ export function kalemleriGetir(db: Db, idler: number[]): Promise<KalemSatiri[]> 
   return db.sorgu<KalemSatiri>(`${KALEM_SECIMI} WHERE id = ANY($1::int[]) ORDER BY id`, [idler]);
 }
 
+// 3429-3 F3: onaylı, arşivde olmayan siparişlerin "Satın al" kalemleri (satın almanın ön talep kaynağı). Termin kalemin, yoksa siparişin.
+export interface SatinAlinacakKalemSatiri {
+  id: number; siparis_id: number; siparis_no: string; firma_id: number; malzeme_no: number; miktar: string; termin: string;
+}
+export function satinAlinacakKalemler(db: Db): Promise<SatinAlinacakKalemSatiri[]> {
+  return db.sorgu<SatinAlinacakKalemSatiri>(
+    `SELECT k.id, k.siparis_id, s.no AS siparis_no, s.firma_id, k.malzeme_no, k.miktar::text AS miktar,
+            to_char(coalesce(k.termin, s.termin), 'YYYY-MM-DD') AS termin
+       FROM siparisler_siparis_satiri k JOIN siparisler_siparis s ON s.id = k.siparis_id
+      WHERE s.durum = 'onayli' AND s.arsiv_an IS NULL AND k.karsilama = 'satin-al'
+      ORDER BY coalesce(k.termin, s.termin), s.no, k.sira`,
+  );
+}
+
 export interface SiparisKilidi {
   durum: SiparisDurumu; firma_id: number; surum: number; arsivde: boolean;
   gecikme_ceza_orani: string | null; ceza_tavani_orani: string | null; odeme_vadesi_gun: number | null;

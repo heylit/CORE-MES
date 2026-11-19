@@ -136,7 +136,7 @@ export const ihtiyacSatiri = z.object({
   enIyi: olcuAdayi.nullable(),
   adaySayisi: z.number().int(),
   // Kalem Logo'ya, iş emrine, kalıba ya da teklife bağlıysa stoktan karşılanamaz (3398-2 a); bağlı değilse null.
-  engel: z.enum(['logo', 'is-emri', 'kalip', 'teklif']).nullable(),
+  engel: z.enum(['logo', 'is-emri', 'kalip', 'satis-siparisi', 'teklif']).nullable(),
 });
 export type IhtiyacSatiri = z.output<typeof ihtiyacSatiri>;
 export const ihtiyaclarCevabi = z.object({ satirlar: z.array(ihtiyacSatiri), sinirli: z.boolean() });

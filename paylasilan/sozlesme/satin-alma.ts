@@ -625,6 +625,8 @@ export const hizliKalemSemasi = z.object({
   // 2428: fason kalemi emrin adımına (isEmriId) ya da stoktaki partiye bağlanır; parti uygulanan parçanın partisidir, konum isteğe bağlı.
   partiId: z.number().int().positive().max(2147483647).nullable().prefault(null),
   konumId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  // 3429-3 F3: satış siparişi ön talebinden gelen malzeme kalemi siparişin kalemini taşır; kart kalemin kartıdır.
+  satisSiparisSatiriId: z.number().int().positive().max(2147483647).nullable().optional(),
   // 3437: yalnız kartlı kalemde; gelmezse (ya da null) zarfın tamamı. Düzenlemede gelmeyen var olan kalemin sınırı korunur.
   kabul: kabulSiniriSemasi.nullable().optional(),
 });
@@ -718,7 +720,20 @@ const planOnTalepSemasi = z.object({
   stokBilinmiyor: z.boolean(),
   hesap: z.object({ eksik: z.number(), siparis: z.number(), talep: z.number(), yoksayilan: z.number() }),
 });
-export const onTalepSemasi = z.discriminatedUnion('kaynak', [fasonOnTalepSemasi, planOnTalepSemasi]);
+// 3429-3 F3: onaylı satış siparişinin "Satın al" kalemi, talebe bağlanmamışsa (iptal edilen talepteki bağ sayılmaz). Miktar kalemin, birim
+// kartın stok birimi; gereken tarih kalemin, yoksa siparişin termini. Yoksayma yoktur: kalem siparişte değişir.
+const siparisOnTalepSemasi = z.object({
+  kaynak: z.literal('siparis'),
+  siparisSatiriId: z.number().int(),
+  siparisId: z.number().int(),
+  siparisNo: z.string(),
+  musteriAdi: z.string().nullable(),
+  malzeme: z.object({ no: z.number().int(), kod: z.string(), ad: z.string() }),
+  miktar: z.string(),
+  birim: z.string(),
+  gerekenTarih: z.string(),
+});
+export const onTalepSemasi = z.discriminatedUnion('kaynak', [fasonOnTalepSemasi, planOnTalepSemasi, siparisOnTalepSemasi]);
 export const yoksayilanOnTalepSemasi = z.object({
   id: z.number().int(), kaynak: z.enum(['fason', 'plan']), baslik: z.string(), neden: z.string(), kisiAdi: z.string().nullable(), zaman: z.string(),
 });
@@ -733,6 +748,7 @@ export const onTalepGeriAlGovdesi = z.object({ id: z.number().int().positive().m
 export type OnTalep = z.output<typeof onTalepSemasi>;
 export type FasonOnTalep = z.output<typeof fasonOnTalepSemasi>;
 export type PlanOnTalep = z.output<typeof planOnTalepSemasi>;
+export type SiparisOnTalep = z.output<typeof siparisOnTalepSemasi>;
 export type YoksayilanOnTalep = z.output<typeof yoksayilanOnTalepSemasi>;
 export type OnTalepleriCevabi = z.output<typeof onTalepleriCevabi>;
 export type OnTalepYoksayYazimi = z.output<typeof onTalepYoksayGovdesi>;

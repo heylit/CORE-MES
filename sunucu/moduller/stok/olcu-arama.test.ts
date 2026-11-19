@@ -292,8 +292,8 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     // Geri yükleme sütun listesiyle yazar: kaleme yeni sütun eklenirse buradan haber verir (sayi_id kimliktir, yeniden üretilir).
     const sutunlar = (await o().sahip.sorgu<{ c: string }>("SELECT column_name AS c FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'satin_alma_talep_kalemi' ORDER BY column_name COLLATE \"C\"")).map((r) => r.c);
     assert.deepEqual(sutunlar, ['ad', 'birim', 'die_id', 'id', 'is_emri_id', 'kabul_durumlari', 'kabul_kaliteleri', 'kabul_pay_mm', 'katalog_id', 'kategori', 'kaynak_birim',
-      'kaynak_ihtiyac_tarihi', 'kaynak_sira', 'kaynak_talep_id', 'logo_satir_ref', 'miktar', 'ozellik', 'sartli_kabul', 'sayi_id', 'sira', 'talep_id', 'uygulanan_malzeme_no',
-      'yalniz_ayni']);
+      'kaynak_ihtiyac_tarihi', 'kaynak_sira', 'kaynak_talep_id', 'logo_satir_ref', 'miktar', 'ozellik', 'sartli_kabul', 'satis_siparis_satiri_id', 'sayi_id', 'sira', 'talep_id',
+      'uygulanan_malzeme_no', 'yalniz_ayni']);
     // Logo'ya gitmiş kalem: neden kuyrukta görünür, karşılama 422.
     const e = await talep(olcusuz, '1');
     await o().sahip.sorgu("UPDATE satin_alma_talep_kalemi SET logo_satir_ref = 'ORN-1' WHERE id = $1", [e.kalemId]);
