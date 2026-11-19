@@ -10,6 +10,7 @@ import type {
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { ButceKullanimiCevabi, FaturaEslemesiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi, TeklifEkleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi, TedarikciAlacagi, TedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
+import { SIPARIS_ODEME_YONTEMLERI } from '#paylasilan/sozlesme/finans.ts';
 import type { BildirimListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -1832,6 +1833,36 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // 2132-6 a: tekliften kurulan plan sipariş tarihi ve beklenen teslimle yeniden kurulur (önceden bir kez kurulurdu).
     tamam(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: [{ teklifId: a.id, siparisNo: 'L-9', siparisTarihi: '2026-10-11', beklenenTeslim: '2026-10-25' }] } }));
     assert.deepEqual((await plan()).map((x) => x.vade), ['2026-10-11', '2026-12-24']);
+  });
+
+  test('3442-6: teklifin ödeme yöntemi saklanır, gönderilmeyince korunur ve sipariş planı o yöntemle kurulur', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10'], [k2, '2.5']], { avansYuzdesi: '30', vadeGun: 60, odemeYontemi: 'cek' });
+    const kayitli = tamam<Talep>(await kaydet(c.sa, { ...govde(t), teklifler: [a] }));
+    assert.equal(kayitli.teklifler[0]!.odemeYontemi, 'cek');
+    // Alanı bilmeyen ekranın kaydı yöntemi silmez; null "belirtilmedi"ye çevirir.
+    const { odemeYontemi: _y, ...yontemsiz } = kayitli.teklifler[0]!;
+    const korunan = tamam<Talep>(await kaydet(c.sa, { ...govde(kayitli), teklifler: [yontemsiz] }));
+    assert.equal(korunan.teklifler[0]!.odemeYontemi, 'cek');
+    const silinen = tamam<Talep>(await kaydet(c.sa, { ...govde(korunan), teklifler: [{ ...korunan.teklifler[0]!, odemeYontemi: null }] }));
+    assert.equal(silinen.teklifler[0]!.odemeYontemi, null);
+    const geri = tamam<Talep>(await kaydet(c.sa, { ...govde(silinen), teklifler: [{ ...silinen.teklifler[0]!, odemeYontemi: 'cek' }] }));
+    const onayda = tamam<Talep>(await kaydet(c.sa, {
+      ...govde(geri), durum: 'onayda',
+      karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
+    }));
+    // Risk K1: alanı bilmeyen gövdeyle onay (satin-alma.yaz yok) değişiklik sayılmaz; yöntem korunur.
+    const alansiz = { ...govde(onayda), teklifler: onayda.teklifler.map(({ odemeYontemi: _o, ...q }) => q), onaylar: [onayKaydi()] };
+    const onayli = tamam<Talep>(await kaydet(c.mudur, alansiz));
+    assert.equal(onayli.teklifler[0]!.odemeYontemi, 'cek');
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: a.id, siparisNo: '', siparisTarihi: '2026-10-10', beklenenTeslim: '2026-10-20' }] } }));
+    const plan = tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`)).siparisler[0]!.odemePlani;
+    assert.deepEqual(plan.map((x) => [x.tur, x.yontem]), [['avans', 'cek'], ['vade', 'cek']]);
+    // Risk N3: sütunun kısıtı finansın sipariş ödeme yöntemleriyle aynı listedir.
+    const kisit = await vt().tx((db) => db.sorgu<{ d: string }>("SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = 'satin_alma_teklif_odeme_yontemi'"));
+    assert.deepEqual([...kisit[0]!.d.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort(), [...SIPARIS_ODEME_YONTEMLERI].sort());
   });
 
   test('2132a: iptal edilen siparişin planı beklenen ödemelerden çıkar; faturalı siparişin planı takipte kalır; iptal geri alınınca plan yeniden kurulur; yetkisiz iptal planı silmez', async () => {

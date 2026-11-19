@@ -182,6 +182,7 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
       <fieldset class="fs"><legend>Ödeme</legend>
         <div class="grid g2"><label class="f"><span>Vade (gün)</span><input type="number" min="0" id="q-pay" value="${parseNum(draftQ.payDays) ?? ""}"></label><label class="f"><span>Avans (%)</span><input type="text" inputmode="decimal" id="q-adv" value="${numIn(parseNum(draftQ.advancePct))}"></label></div>
         <div class="chips">${[["Peşin", 0], ["30 gün", 30], ["60 gün", 60], ["90 gün", 90], ["120 gün", 120]].map(([l, v]) => `<button class="chip" data-act="pay-chip" data-v="${v}">${l}</button>`).join("")}</div>
+        <label class="f"><span>Ödeme yöntemi <small>— belirtilmezse sipariş ödeme planında banka havalesi varsayılır</small></span><select id="q-pm"><option value="">Belirtilmedi</option>${(Object.entries(ODEME_SEKLI) as [string, string][]).map(([v, l]) => `<option value="${v}"${draftQ.payMethod === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       </fieldset>
       <fieldset class="fs"><legend>Teslimat ve garanti</legend>
         <div class="grid g2"><label class="f"><span>Termin (gün)</span><input type="number" min="0" id="q-lead" value="${parseNum(draftQ.leadDays) ?? ""}" placeholder="Siparişten teslime"></label><label class="f"><span>Termin tarihi <small>— teklif tarihinden</small></span><input type="date" id="q-lead-date" value="${esc(terminTarihi(terminTabani(draftQ.date), parseNum(draftQ.leadDays)))}"></label></div>
@@ -298,6 +299,7 @@ function readQuoteForm(): void {
     t.price = parseNum($(`[data-tprice="${i.dataset.tmin}"][data-ti="${i.dataset.ti}"]`)?.value ?? "") ?? NaN;
   });
   draftQ.payDays = parseNum(g("q-pay").value) || 0; draftQ.advancePct = parseNum(g("q-adv").value) || 0;
+  draftQ.payMethod = (g("q-pm").value || null) as Quote["payMethod"];
   draftQ.leadDays = parseNum(g("q-lead").value); draftQ.deliveryTerm = g("q-dterm").value.trim();
   draftQ.warrantyMonths = parseNum(g("q-war").value);
   draftQ.deliveryIncluded = g("q-incl").checked; draftQ.shipping = parseNum(g("q-ship").value) || 0; draftQ.otherCost = parseNum(g("q-other").value) || 0;
@@ -1599,9 +1601,10 @@ function onerilenPlan(r: PurchaseRequest, o: ReturnType<typeof awardOrders>[numb
   const avans = kdvli(avansHaric, oran);
   const kalan = Math.round((kdvli(Math.round(toplam * 100) / 100, oran) - avans) * 100) / 100;
   const baslangic = o.orderDate || todayStr();
+  const yontem = o.q.payMethod ?? "banka";
   return [
-    ...(avans > 0 ? [{ tur: "avans" as const, vade: baslangic, yontem: "banka" as const, tutar: avans.toFixed(2) }] : []),
-    ...(kalan > 0 ? [{ tur: "vade" as const, vade: addDays(o.expectedDate || baslangic, parseNum(o.q.payDays) || 0), yontem: "banka" as const, tutar: kalan.toFixed(2) }] : []),
+    ...(avans > 0 ? [{ tur: "avans" as const, vade: baslangic, yontem, tutar: avans.toFixed(2) }] : []),
+    ...(kalan > 0 ? [{ tur: "vade" as const, vade: addDays(o.expectedDate || baslangic, parseNum(o.q.payDays) || 0), yontem, tutar: kalan.toFixed(2) }] : []),
   ];
 }
 function planSatirlariHTML(p: NonNullable<typeof planDuzeni>): string {

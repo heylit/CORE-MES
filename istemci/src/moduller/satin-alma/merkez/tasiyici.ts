@@ -88,6 +88,8 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     })),
     lessons: k.ogrenilenler,
     fx: Object.fromEntries(k.sabitKurlar.map((s) => [s.paraBirimi, Number(s.kur)])),
+    kurKilidi: k.kurKilidi ?? null,
+    sabitFaiz: Object.fromEntries(k.sabitKurlar.map((s) => [s.paraBirimi, s.aylikFaizYuzdesi == null ? null : Number(s.aylikFaizYuzdesi)])),
     ...(tekSiparis ? {
       orderNo: tekSiparis.no ?? '', poNo: tekSiparis.siparisNo, orderDate: tekSiparis.siparisTarihi ?? '', expectedDate: tekSiparis.beklenenTeslim ?? '', vadeBaslangici: tekSiparis.vadeBaslangici,
       deliveredDate: teslimTarihi(tekSiparis), excess: fazlasi(tekSiparis), ...(tekSiparis.kalite ? { quality: KALITE_T[tekSiparis.kalite] } : {}),
@@ -133,7 +135,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
       ...(q.fiyatlar.some((f) => f.alternatifSonucu) ? { altResults: Object.fromEntries(q.fiyatlar.filter((f) => f.alternatifSonucu).map((f) => [f.kalemId, f.alternatifSonucu!])) } : {}),
       ...(q.fiyatlar.some((f) => f.basamaklar?.length) ? { tiers: Object.fromEntries(q.fiyatlar.filter((f) => f.basamaklar?.length).map((f) => [f.kalemId, f.basamaklar!.map((b) => ({ min: Number(b.esik), price: Number(b.birimFiyat) }))])) } : {}),
       discountPct: Number(q.iskontoYuzdesi), shipping: Number(q.nakliye), otherCost: Number(q.digerMasraf), deliveryTerm: q.teslimSekli,
-      deliveryIncluded: q.nakliyeDahil, leadDays: q.terminGun, payDays: q.vadeGun, advancePct: Number(q.avansYuzdesi), warrantyMonths: q.garantiAy,
+      deliveryIncluded: q.nakliyeDahil, leadDays: q.terminGun, payDays: q.vadeGun, advancePct: Number(q.avansYuzdesi), ...(q.odemeYontemi !== undefined ? { payMethod: q.odemeYontemi } : {}), warrantyMonths: q.garantiAy,
       compliant: q.teknikUygun, note: q.notlar, ...(q.ilkToplam !== null ? { firstTotal: Number(q.ilkToplam) } : {}), revisions: q.revizyon,
     })),
     award,
@@ -219,7 +221,7 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
       id: q.id, firmaId: q.supplierId ? Number(q.supplierId) : null, tedarikciAdi: q.supplierName ?? '', teklifTarihi: q.date, gecerlilik: tarihN(q.validUntil),
       paraBirimi: q.currency, kur: q.currency === 'TRY' ? null : ondN(q.fxRate, 6), iskontoYuzdesi: ond(q.discountPct || 0, 3), nakliye: ond(q.shipping || 0),
       digerMasraf: ond(q.otherCost || 0), teslimSekli: q.deliveryTerm ?? '', nakliyeDahil: q.deliveryIncluded, terminGun: q.leadDays, vadeGun: q.payDays || 0,
-      avansYuzdesi: ond(q.advancePct || 0, 3), garantiAy: q.warrantyMonths, teknikUygun: q.compliant, notlar: q.note ?? '',
+      avansYuzdesi: ond(q.advancePct || 0, 3), ...('payMethod' in q ? { odemeYontemi: q.payMethod ?? null } : {}), garantiAy: q.warrantyMonths, teknikUygun: q.compliant, notlar: q.note ?? '',
       ilkToplam: ondN(q.firstTotal ?? null), revizyon: q.revisions ?? 0,
       fiyatlar: Object.entries(q.prices ?? {}).filter(([, p]) => typeof p === 'number' && !Number.isNaN(p)).map(([kalemId, p]) => ({
         kalemId, birimFiyat: ond(p),

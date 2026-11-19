@@ -84,6 +84,8 @@ export const teklifSemasi = z.object({
   terminGun: z.number().int().min(0).max(3650).nullable(),
   vadeGun: z.number().int().min(0).max(3650),
   avansYuzdesi: yuzde,
+  // Ödeme yöntemi; boş belirtilmedi. Gönderilmeyen alan saklanan değeri korur.
+  odemeYontemi: z.enum(SIPARIS_ODEME_YONTEMLERI).nullable().optional(),
   garantiAy: z.number().int().min(0).max(600).nullable(),
   teknikUygun: z.boolean(),
   notlar: metin(2000),

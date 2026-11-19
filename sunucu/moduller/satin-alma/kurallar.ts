@@ -1,6 +1,7 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
 import { KUR_KILIDI, ONCELIKLER, PARA_BIRIMLERI, teklifIstekFormuIcerigi, type TeklifIstekFormuIcerigi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { SiparisOdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
@@ -384,12 +385,15 @@ export function kilittenSonraOnayliMi(kilit: string | null, onaylar: readonly Pi
 type FiyatAyrintisi = Pick<TalepYazimi['teklifler'][number]['fiyatlar'][number], 'iskontoYuzdesi' | 'terminGun' | 'enAzMiktar' | 'basamaklar'>;
 export function kalemAyrintisiniKoru<T extends Pick<TalepYazimi, 'teklifler'>>(eski: Pick<TalepYazimi, 'teklifler'> | null, yeni: T): T {
   const eskiler = new Map((eski?.teklifler ?? []).flatMap((q) => q.fiyatlar.map((f) => [`${q.id}/${f.kalemId}`, f] as const)));
+  const eskiTeklif = new Map((eski?.teklifler ?? []).map((q) => [q.id, q] as const));
   const al = <K extends keyof FiyatAyrintisi>(gelen: FiyatAyrintisi[K], onceki: FiyatAyrintisi | undefined, k: K): NonNullable<FiyatAyrintisi[K]> | null =>
     (gelen !== undefined ? gelen : onceki?.[k] ?? null) as NonNullable<FiyatAyrintisi[K]> | null;
   return {
     ...yeni,
     teklifler: yeni.teklifler.map((q) => ({
       ...q,
+      // Ödeme yöntemini bilmeyen ekran kaydedince saklanan yöntem silinmez; null siler.
+      odemeYontemi: q.odemeYontemi !== undefined ? q.odemeYontemi : eskiTeklif.get(q.id)?.odemeYontemi ?? null,
       fiyatlar: q.fiyatlar.map((f) => {
         const o = eskiler.get(`${q.id}/${f.kalemId}`);
         // Basamakları bilmeyen ekran (gönderilmeyen alan) kaydedince kademeli fiyat silinmez; boş liste siler.
@@ -1011,7 +1015,10 @@ export interface OdemeKosulu {
   toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul?: string | null;
   vadeBaslangici?: 'teslim' | 'siparis'; partiler?: readonly { gun: string; oran: string }[]; tamTeslim?: boolean;
   kapali?: boolean; satirlar?: readonly { mal: string; miktar: string; teslim: string }[]; masraf?: string;
+  // Teklifin ödeme yöntemi; belirtilmediyse plan banka ile dolar.
+  odemeYontemi?: OdemeYontemi | null;
 }
+export type OdemeYontemi = SiparisOdemeYontemi;
 // 2463 a, 2472: kalanı kapatılmış siparişin planı gerçekleşen teslim değerine iner (bütçe kullanımıyla aynı tanım, gerceklesenPay).
 // Toplam gerçekleşen değerdir; avans siparişin avansı olarak kalır (önceden ödenir), kalan farktır: avans aşarsa kalan eksidir ve vadeli
 // satır yazılmaz (2480-1 a: plandaki avans gerçekleşen değere iner). Partiler gerçekleşen teslime oranlanır (payların toplamı 1); kapatılan kalan için dilim yoktur. Açık sipariş değişmez.
@@ -1069,8 +1076,9 @@ export function kdvEkle(tutar: string, oran: string): string {
   const k = (c + 5_000n) / 10_000n;
   return `${k / 100n}.${(k % 100n).toString().padStart(2, '0')}`;
 }
-export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani: string | null): { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] {
+export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani: string | null): { tur: 'avans' | 'vade'; vade: string; yontem: OdemeYontemi; tutar: string }[] {
   const k = gerceklesenKosul(kosul);
+  const yontem = k.odemeYontemi ?? 'banka';
   const baslangic = k.siparisTarihi ?? bugun;
   const gunEkle = (tarih: string, gun: number) => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * GUN_MS).toISOString().slice(0, 10);
   const tamAvans = kdvOrani === null ? k.avans : kdvEkle(k.avans, kdvOrani);
@@ -1078,8 +1086,8 @@ export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani
   // 2480-1 a: kapalı siparişte plandaki avans gerçekleşen değeri aşmaz (KDV dahil, sipariş dövizinde); aşan kısım geçmiş notundadır.
   const avans = k.kapali === true && ondalikKiyas(tamAvans, kdvliToplam) > 0 ? kdvliToplam : tamAvans;
   const kalan = kdvOrani === null && k.kapali !== true ? k.kalan : ondalikMetni(tamSayiya(kdvliToplam) - tamSayiya(avans));
-  const plan: { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] = [];
-  if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem: 'banka', tutar: avans });
+  const plan: { tur: 'avans' | 'vade'; vade: string; yontem: OdemeYontemi; tutar: string }[] = [];
+  if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem, tutar: avans });
   if (ondalikKiyas(kalan, '0') <= 0) return plan;
   // Parti bilgisi gelmeyen çağıran (eski kurgu) son mal kabul gününü tek satır kullanır.
   const dilimler = k.partiler === undefined && k.vadeBaslangici === undefined
@@ -1095,7 +1103,7 @@ export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani
     gunler.set(vade, (gunler.get(vade) ?? 0n) + kurus);
   });
   for (const [vade, kurus] of [...gunler].sort(([a], [b]) => a.localeCompare(b))) {
-    if (kurus > 0n) plan.push({ tur: 'vade', vade, yontem: 'banka', tutar: ondalikMetni(kurus * 10n ** BigInt(OLCEK - 2)) });
+    if (kurus > 0n) plan.push({ tur: 'vade', vade, yontem, tutar: ondalikMetni(kurus * 10n ** BigInt(OLCEK - 2)) });
   }
   return plan;
 }

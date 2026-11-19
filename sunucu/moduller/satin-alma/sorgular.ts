@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { SiparisOdemeYontemi as OdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { AlternatifIzni, KabulSiniri, TalepDurumu, TeklifAlternatifi,
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
@@ -122,7 +123,7 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
     teklifler: await q(`SELECT talep_id AS "talepId", id, firma_id AS "firmaId", tedarikci_adi AS "tedarikciAdi", teklif_tarihi AS "teklifTarihi",
       gecerlilik, para_birimi AS "paraBirimi", kur, iskonto_yuzdesi AS "iskontoYuzdesi", nakliye, diger_masraf AS "digerMasraf",
       teslim_sekli AS "teslimSekli", nakliye_dahil AS "nakliyeDahil", termin_gun AS "terminGun", vade_gun AS "vadeGun",
-      avans_yuzdesi AS "avansYuzdesi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon
+      avans_yuzdesi AS "avansYuzdesi", odeme_yontemi AS "odemeYontemi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon
       FROM satin_alma_teklif WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, sira, id`),
     // Satırlar silinip yeniden yazıldığı için sıra veritabanına bırakılmaz: kalemin sırası esastır.
     fiyatlar: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.kalem_id AS "kalemId", s.birim_fiyat AS "birimFiyat",
@@ -366,16 +367,19 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
       'SELECT ilk_toplam AS ilk, revizyon, satin_alma_teklif_toplami(talep_id, id) AS toplam FROM satin_alma_teklif WHERE talep_id = $1 AND id = $2', [id, q.id]);
     await db.sorgu(
       `INSERT INTO satin_alma_teklif (talep_id, id, sira, firma_id, tedarikci_adi, teklif_tarihi, gecerlilik, para_birimi, kur, iskonto_yuzdesi,
-         nakliye, diger_masraf, teslim_sekli, nakliye_dahil, termin_gun, vade_gun, avans_yuzdesi, garanti_ay, teknik_uygun, notlar, ilk_toplam, revizyon)
-       VALUES ($1, $2, $22, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+         nakliye, diger_masraf, teslim_sekli, nakliye_dahil, termin_gun, vade_gun, avans_yuzdesi, garanti_ay, teknik_uygun, notlar, ilk_toplam, revizyon,
+         odeme_yontemi)
+       VALUES ($1, $2, $22, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $23)
        ON CONFLICT (talep_id, id) DO UPDATE SET sira = EXCLUDED.sira, firma_id = EXCLUDED.firma_id, tedarikci_adi = EXCLUDED.tedarikci_adi,
          teklif_tarihi = EXCLUDED.teklif_tarihi, gecerlilik = EXCLUDED.gecerlilik, para_birimi = EXCLUDED.para_birimi, kur = EXCLUDED.kur,
          iskonto_yuzdesi = EXCLUDED.iskonto_yuzdesi, nakliye = EXCLUDED.nakliye, diger_masraf = EXCLUDED.diger_masraf,
          teslim_sekli = EXCLUDED.teslim_sekli, nakliye_dahil = EXCLUDED.nakliye_dahil, termin_gun = EXCLUDED.termin_gun,
          vade_gun = EXCLUDED.vade_gun, avans_yuzdesi = EXCLUDED.avans_yuzdesi, garanti_ay = EXCLUDED.garanti_ay,
-         teknik_uygun = EXCLUDED.teknik_uygun, notlar = EXCLUDED.notlar, ilk_toplam = EXCLUDED.ilk_toplam, revizyon = EXCLUDED.revizyon`,
+         teknik_uygun = EXCLUDED.teknik_uygun, notlar = EXCLUDED.notlar, ilk_toplam = EXCLUDED.ilk_toplam, revizyon = EXCLUDED.revizyon,
+         odeme_yontemi = EXCLUDED.odeme_yontemi`,
       [id, q.id, q.firmaId, q.tedarikciAdi, q.teklifTarihi, q.gecerlilik, q.paraBirimi, q.kur, q.iskontoYuzdesi, q.nakliye, q.digerMasraf,
-        q.teslimSekli, q.nakliyeDahil, q.terminGun, q.vadeGun, q.avansYuzdesi, q.garantiAy, q.teknikUygun, q.notlar, q.ilkToplam, q.revizyon, sira],
+        q.teslimSekli, q.nakliyeDahil, q.terminGun, q.vadeGun, q.avansYuzdesi, q.garantiAy, q.teknikUygun, q.notlar, q.ilkToplam, q.revizyon, sira,
+        q.odemeYontemi ?? null],
     );
     await db.sorgu('DELETE FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2', [id, q.id]);
     await db.sorgu(
@@ -1251,6 +1255,7 @@ export interface SiparisOdemeKosulu {
   // 2472: kalanı kapatılmış (Logo kapatma durumu dolu) siparişin gerçekleşen değeri kuralda hesaplanır; SQL satır değerlerini verir:
   // satırın genel iskontolu mal tutarı, sipariş miktarı ve net teslimi; masraf nakliye (hariçse) ve diğer masraf.
   kapali: boolean; satirlar: { mal: string; miktar: string; teslim: string }[]; masraf: string;
+  odemeYontemi: OdemeYontemi | null;
 }
 export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisOdemeKosulu[]> {
   return db.sorgu<SiparisOdemeKosulu>(
@@ -1260,7 +1265,7 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,
-         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.logo_kapatma_durumu IS NOT NULL AS kapali,
+         q.avans_yuzdesi, q.vade_gun, q.odeme_yontemi, o.siparis_tarihi, o.logo_kapatma_durumu IS NOT NULL AS kapali,
          (SELECT COALESCE(json_agg(json_build_object(
                    'mal', (ss.miktar * ${etkin('ts', 'ss.miktar')} * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text,
                    'miktar', ss.miktar::text,
@@ -1290,7 +1295,7 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
      SELECT teklif_id AS "teklifId", toplam, round(toplam * avans_yuzdesi / 100, 2) AS avans, toplam - round(toplam * avans_yuzdesi / 100, 2) AS kalan,
             vade_gun AS "vadeGun", ${ISO('siparis_tarihi')} AS "siparisTarihi", ${ISO('beklenen_teslim')} AS "beklenenTeslim",
             ${ISO('mal_kabul')} AS "malKabul", kdv_orani::text AS "kdvOrani", vade_baslangici AS "vadeBaslangici", partiler, tam_teslim AS "tamTeslim",
-            kapali, satirlar, masraf
+            kapali, satirlar, masraf, odeme_yontemi AS "odemeYontemi"
        FROM t`, [talepId]);
 }
 // 2132-7: siparişin elle seçilen KDV oranı (boş: genel oran).

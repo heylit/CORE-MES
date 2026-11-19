@@ -1,4 +1,5 @@
 import type { AlternatifSonucu, SiparisLogo, TeklifAlternatifi, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { SiparisOdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 /**
  * Sunucu ve arayüzün ortak veri tipleri.
  * Arayüz talepleri "toplu kayıt" (aggregate) olarak işler: kalemler, teklif istekleri,
@@ -161,6 +162,8 @@ export interface Quote {
   leadDays: number | null;
   payDays: number;
   advancePct: number;
+  /** Ödeme yöntemi; boş belirtilmedi. Alan yoksa sunucu saklananı korur. */
+  payMethod?: SiparisOdemeYontemi | null;
   warrantyMonths: number | null;
   compliant: boolean;
   note: string;
@@ -218,6 +221,10 @@ export interface Award {
   lessons?: string;
   /** Sipariş anında sabitlenen kurlar (para birimi → TL). Açık taleplerde güncel kur kullanılır. */
   fx?: Record<string, number>;
+  /** Karar onaya gönderilince sunucunun kuru ve aylık faizi sabitlediği an (yalnız okunur); eski kararlarda yok. */
+  kurKilidi?: string | null;
+  /** Sabitlenen aylık faiz (para birimi → yüzde); finansta faiz yoksa boş. */
+  sabitFaiz?: Record<string, number | null>;
   /** teklif kimliği → sipariş (yalnızca kalem bazlı kararda) */
   orders?: Record<string, AwardOrder>;
   /** Sipariş satırları (sunucu kimliğiyle): sertifika ve rapor satıra bağlanır. */
