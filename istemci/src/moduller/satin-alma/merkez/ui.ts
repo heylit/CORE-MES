@@ -29,6 +29,7 @@ import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/sati
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
+import { alternatifDegisti, alternatifSatiri, alternatifleriOku, type KalemZarfi } from "./alternatif.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import "../../../ortak/arayuz/pencere.css";
 import "../../../ortak/arayuz/simge.css";
@@ -200,6 +201,17 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
   <div class="mf"><div class="live" id="q-live"></div><span class="spacer"></span><button class="btn ghost" data-act="close">Vazgeç</button><button class="btn primary" data-act="save-quote">${q ? "Değişiklikleri kaydet" : "Teklifi kaydet"}</button></div>`);
   readQuoteForm(); updateQuoteLive();
   if (q) void teklifEkleriniGoster(r.id, q.id);
+  void kalemZarflariniYukle(r);
+}
+/** 3437 a: kalemlerin kabul zarfı gelince alternatif satırları çizilir; zarfı olmayan kalemde satır yoktur. */
+let kalemZarflari: { talepId: string; kalemler: Map<string, KalemZarfi> } | null = null;
+async function kalemZarflariniYukle(r: PurchaseRequest): Promise<void> {
+  // Talep eden sınırı değiştirmiş olabilir: her açılışta yeniden okunur.
+  kalemZarflari = null;
+  const l = await backend.kalemZarflari(r.id);
+  kalemZarflari = { talepId: r.id, kalemler: new Map((l ?? []).map((x) => [x.kalemId, x])) };
+  if (!kalemZarflari.kalemler.size || !$("#q-items") || !draftQ) return;
+  readQuoteForm(); $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive();
 }
 /** 3404: teklifin PDF ekleri; uç yalnız fiyat görebilene açılır, açamayan için liste boş kalır. */
 async function teklifEkleriniGoster(talepId: string, teklifId: string): Promise<void> {
@@ -243,7 +255,8 @@ function fiyatSatirlari(r: PurchaseRequest, q: Quote): string {
     const ekle = tiers.length < BASAMAK_SINIRI ? `<button type="button" class="kademe-ekle" data-act="add-tier" data-k="${it.id}" aria-label="${esc(it.name)} için kademe ekle">${BASAMAK_SIMGESI}Kademe ekle</button>` : "";
     const ana = `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : ""}${tiers.length || isNum(q.minQty?.[it.id]) ? `<span class="basamak-esik ilk"><span class="muted small">1. basamak</span><input class="qty" type="text" inputmode="decimal" data-tmin0="${it.id}" value="${numIn(q.minQty?.[it.id] ?? null)}" placeholder="0" aria-label="${esc(it.name)} 1. basamak eşiği (en az miktar)"><span class="muted small">ve üstü</span></span>` : ""}</td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(q.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı"></span>${ekle}</td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`;
     const alt = tiers.map((t, i) => `<tr class="basamak"><td class="lead"><span class="sub">${i + 2}. basamak</span></td><td class="r"><span class="basamak-esik"><input class="qty" type="text" inputmode="decimal" data-tmin="${it.id}" data-ti="${i}" value="${numIn(t.min)}" aria-label="${esc(it.name)} ${i + 2}. basamak eşik miktarı"><span class="muted small">${esc(it.unit)} ve üstü</span></span></td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-tprice="${it.id}" data-ti="${i}" value="${numIn(t.price)}" aria-label="${esc(it.name)} ${i + 2}. basamak birim fiyatı"><button type="button" class="btn sm ghost danger" data-act="rm-tier" data-k="${it.id}" data-ti="${i}" aria-label="${esc(it.name)} ${i + 2}. basamağı kaldır" title="Basamağı kaldır">${KALDIR_SIMGESI}</button></span></td><td></td><td></td></tr>`).join("");
-    return ana + alt;
+    const kz = kalemZarflari?.talepId === r.id ? kalemZarflari.kalemler.get(it.id) : undefined;
+    return ana + alt + (kz ? alternatifSatiri(it, q, kz) : "");
   }).join("");
 }
 
@@ -288,6 +301,7 @@ function readQuoteForm(): void {
   draftQ.warrantyMonths = parseNum(g("q-war").value);
   draftQ.deliveryIncluded = g("q-incl").checked; draftQ.shipping = parseNum(g("q-ship").value) || 0; draftQ.otherCost = parseNum(g("q-other").value) || 0;
   draftQ.compliant = g("q-comp").checked; draftQ.note = g("q-note").value.trim();
+  alternatifleriOku(draftQ, g("qform"));
   g("q-newsup-wrap").hidden = draftQ.supplierId !== "__new";
   g("q-ship").disabled = draftQ.deliveryIncluded;
 }
@@ -1387,6 +1401,7 @@ document.addEventListener("input", (e) => {
   const sk = t.dataset.in ? SEARCH_KEYS[t.dataset.in] : undefined;
   if (sk) { V[sk] = t.value; render(); return; }
   if (t.closest("#bulk")) { terminEsle(t); BULK!.dirty = true; BULK!.confirmClose = false; bulkRead(); bulkLive(); return; }
+  if (t.closest("#qform") && t.dataset.alt && draftQ) alternatifDegisti(draftQ, t.dataset.alt);
   if (t.closest("#qform")) { terminEsle(t); readQuoteForm(); updateQuoteLive(); return; }
   if (t.closest("#items-box") && t.dataset.it === "name") {
     syncItems(); const tr = t.closest<HTMLElement>("tr")!; const i = +tr.dataset.i!; const it = draftReq.items[i]; if (!it) return;
@@ -1417,6 +1432,7 @@ document.addEventListener("change", (e) => {
   if (t.name === "d-sec") { teklifSec(t.value); return; }
   if (t.dataset.split) { updateSplitSum(); return; }
   if (t.id === "calc-q") { const r = S.requests[V.id ?? ""]; if (r) calcModal(r, t.value); return; }
+  if (t.closest("#qform") && t.dataset.altAc) { const r = S.requests[V.id ?? ""]; if (draftQ) alternatifDegisti(draftQ, t.dataset.altAc); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); return; }
   if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); if (t.id === "q-sup" && t.value === "__new") $("#q-newsup").focus(); return; }
   if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(); return; }
   if (t.dataset.w && UI.wDraft) { const r = S.requests[V.id ?? ""]; if (r && canWrite()) { const n = clone(r); n.weights = Object.assign({}, UI.wDraft.w); saveRequest(n); } }

@@ -22,10 +22,19 @@ import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } 
 import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
+import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
 const DINLEYICILER = new Set<() => void>();
+/** 3437 a: alternatif teklif edilen hücrede sonuç (sınır içinde, şartlı, sınır dışı) ve teklif edilen nitelikler. */
+export function alternatifRozeti(q: Pick<Quote, "alternatives" | "altResults">, it: RequestItem): string {
+  const a = q.alternatives?.[it.id];
+  const s = q.altResults?.[it.id];
+  if (!a || !s || s.sonuc === "ayni") return "";
+  const nit = [a.kalite, a.durum, a.yuzey, ...Object.entries(a.olcu).map(([k, v]) => `${k} ${numIn(v)}`)].filter(Boolean).join(" ");
+  return `<span class="sub">Alternatif ${esc(nit)}: ${sonucRozeti(s)}</span>`;
+}
 /** Kademeli fiyat (2975): basamaklı hücrede rozet; liste üzerine gelince görünür, ekran okuyucuya görünmez metinle okunur. */
 export function kademeRozeti(q: Pick<Quote, "prices" | "tiers" | "currency">, it: RequestItem): string {
   const t = (q.tiers?.[it.id] ?? []).filter(b => isNum(b.min) && isNum(b.price)).sort((a, b) => a.min - b.min);
@@ -670,10 +679,11 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   let h = `<div class="tw"><table class="matrix"><thead><tr><th class="rl">Kalem / şart</th>${cols.map(x => `<th class="r ${x.q.id === winner ? "win" : ""}"><span class="sn">${esc(supName(x.q))}</span>${esc(x.q.currency)}, ${fmtDate(x.q.date)}</th>`).join("")}</tr></thead><tbody>`;
   h += sec("Birim fiyatlar");
   items.forEach(it => {
-    const vals = cols.map(x => x.c.lines[it.id] ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
+    // 3437 a: sınır dışı alternatif seçilemez; en düşük fiyat vurgusunu almaz.
+    const vals = cols.map(x => x.c.lines[it.id] && !secilemezAlternatif(x.q.altResults?.[it.id]) ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
     h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
-      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
+      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
   h += row("Ara toplam", cols.map(x => money(x.c.sub, x.q.currency)));

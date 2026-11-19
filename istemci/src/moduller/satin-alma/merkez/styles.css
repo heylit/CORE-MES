@@ -832,3 +832,9 @@
 .sa-kok .todo[data-sa-takip-listesi] li[data-sa-takip="fark"] b{ color:var(--sa-ink); }
 .sa-kok .sa-logo-kalemler summary{ cursor:pointer; font-weight:600; }
 .sa-kok .sa-logo-kalemler .sa-logo-fark{ color:var(--sa-warn); }
+/* 3437 a: teklif formunda kalemin alternatif satırı (kalite, durum, yüzey, ölçü) ve sonuç rozeti. */
+.sa-kok .alt-satir > td{ border-top:0; padding-top:0; }
+.sa-kok table.rt .alt-satir > td{ grid-column:1 / -1; }
+.sa-kok .alt-kutu{ display:grid; gap:var(--b-2); padding:var(--b-2) 0 var(--b-3); }
+.sa-kok .alt-alanlar{ display:grid; gap:var(--b-2); grid-template-columns:repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
+.sa-kok .alt-sonuc{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-1); }

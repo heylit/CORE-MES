@@ -6,7 +6,7 @@ import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 import { kmOnayliListeSatiri } from './kalite-merkezi-kategori-onayi.ts';
-import { alternatifZarfi } from './malzeme-alternatifleri.ts';
+import { ZARF_SONUCLARI, alternatifZarfi } from './malzeme-alternatifleri.ts';
 import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
@@ -49,6 +49,23 @@ export const kalemSemasi = z.object({
 
 export const teklifIstegiSemasi = z.object({ firmaId: firmaKimligi, gonderim: tarih, sonTarih: tarih.nullable() });
 
+// 3437 a (dilim 3a): teklif satırında istenenin yerine teklif edilen nitelikler; boş alan istenenle aynıdır. Ölçü anahtarı kartın
+// ölçüsüdür (d, a, b, l ...). Sonucu sunucu kalemin kabul sınırıyla hesaplar ve yazar; gelen sonuç yok sayılır.
+const alternatifNiteligi = z.string().trim().min(1).max(60).nullable();
+export const teklifAlternatifi = z.object({
+  kalite: alternatifNiteligi, durum: alternatifNiteligi, yuzey: alternatifNiteligi,
+  olcu: z.record(z.string().regex(/^[a-z][a-z0-9]{0,9}$/), z.number().positive().max(100000)).refine((o) => Object.keys(o).length <= 10, 'En çok on ölçü.'),
+}).strict();
+export type TeklifAlternatifi = z.output<typeof teklifAlternatifi>;
+// 'talep': talepte şartlı kabul işareti; 'soru': talep eden sonradan onayladı; 'ret': talep eden reddetti (kim, ne zaman, not ile).
+export const ALTERNATIF_IZINLERI = ['talep', 'soru', 'ret'] as const;
+export type AlternatifIzni = (typeof ALTERNATIF_IZINLERI)[number];
+export const alternatifSonucu = z.object({
+  sonuc: z.enum(ZARF_SONUCLARI), nedenler: z.array(z.string()).max(20), izin: z.enum(ALTERNATIF_IZINLERI).nullable(),
+  izinKisiId: z.number().int().nullable().optional(), izinZaman: z.string().nullable().optional(), izinNotu: z.string().nullable().optional(),
+});
+export type AlternatifSonucu = z.output<typeof alternatifSonucu>;
+
 export const teklifSemasi = z.object({
   id: uuid,
   firmaId: firmaKimligi.nullable(),
@@ -83,6 +100,8 @@ export const teklifSemasi = z.object({
       esik: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Basamak eşiği sıfırdan büyük olur.'),
       birimFiyat: eksiOlmayan,
     })).max(4).refine((b) => new Set(b.map((x) => Number(x.esik))).size === b.length, 'Aynı eşik iki kez yazılmaz.').optional(),
+    alternatif: teklifAlternatifi.nullable().optional(),
+    alternatifSonucu: alternatifSonucu.nullable().optional(),
   })).max(500),
 });
 
@@ -571,6 +590,16 @@ export const kabulZarfiParametresi = z.object({ no: z.coerce.number<number>().in
 // Hammadde dışı ya da kalitesiz kartta zarf yoktur (kalem yalnız aynı malzemeyle karşılanır).
 export const kabulZarfiCevabi = z.object({ zarf: alternatifZarfi.nullable() });
 export type KabulZarfiCevabi = z.output<typeof kabulZarfiCevabi>;
+// 3437 a (dilim 3a): satın almanın teklif formu kalem başına daraltılmış zarfı okur (alternatif satırı ve sonuç rozeti için).
+export const kalemZarflariCevabi = z.object({
+  kalemler: z.array(z.object({ kalemId: uuid, malzemeNo: z.number().int(), kabul: kabulSiniriSemasi.nullable(), zarf: alternatifZarfi })),
+});
+export type KalemZarflariCevabi = z.output<typeof kalemZarflariCevabi>;
+// 3437 a (dilim 3b-1): talep eden şartlı alternatifi onaylar ya da reddeder. Gördüğü alternatif gönderilir: teklif o arada değiştiyse izin yazılmaz.
+export const alternatifIzniGovdesi = z.object({
+  teklifId: uuid, kalemId: uuid, karar: z.enum(['onay', 'ret']), notu: z.string().trim().max(500).default(''), alternatif: teklifAlternatifi,
+}).strict();
+export type AlternatifIzniYazimi = z.output<typeof alternatifIzniGovdesi>;
 
 // Ana sayfadan talep (kart #375): talep eden kalemi malzeme kartından seçer ya da adıyla yazar ("kart bekliyor").
 // Kişi alanı yoktur: talep oturumdaki kişi adına açılır, gövdede gelen başka alan yok sayılır.
@@ -626,6 +655,11 @@ export const talebimSemasi = z.object({
     // 3437: kalemin kartı ve kabul sınırı (düzenleme formu zarfı karttan okur); kartsız kalemde gelmez, varsayılan sınırda kabul null.
     malzemeNo: z.number().int().optional(),
     kabul: kabulSiniriSemasi.nullable().optional(),
+    // 3437 a (dilim 3b-1): kalem için teklif edilen şartlı alternatifler ve talep edenin izni (fiyat ve tedarikçi yok).
+    sartliAlternatifler: z.array(z.object({
+      teklifId: uuid, alternatif: teklifAlternatifi, nedenler: z.array(z.string()), izin: z.enum(ALTERNATIF_IZINLERI).nullable(),
+      izinZaman: z.string().nullable(), izinNotu: z.string().nullable(),
+    })).optional(),
   })),
 });
 // 2871-1 a: talep edenin kendi taslağını düzenlemesi. Var olan kalem kimliğiyle gelir (yalnız miktar ve açıklama değişir); kimliksiz kalem
@@ -753,6 +787,8 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
   'GET /satin-alma-taleplerim': { sorgu: z.input<typeof taleplerimSorgusu>; cevap: TaleplerimCevabi };
   'GET /satin-alma-kabul-zarfi/:no': { cevap: KabulZarfiCevabi };
+  'GET /satin-alma-talepleri/:id/kalem-zarflari': { cevap: KalemZarflariCevabi };
+  'POST /satin-alma-talepleri/:id/alternatif-izni': { govde: z.input<typeof alternatifIzniGovdesi>; cevap: Talebim };
   'POST /satin-alma-talepleri/hizli-ac': { govde: z.input<typeof hizliAcGovdesi>; cevap: Talebim };
   'GET /satin-alma-on-talepleri': { cevap: OnTalepleriCevabi };
   'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };

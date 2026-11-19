@@ -5,7 +5,7 @@
  *   - transport.artifact.ts: claude.ai önizlemesinin kendi veritabanı (önizleme derlemesinde bu dosya seçilir)
  */
 import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
-import type { SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { KalemZarflariCevabi, SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
 import type { OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DEFAULT_SETTINGS } from "./constants.ts";
@@ -200,6 +200,8 @@ export interface Backend {
   siparisBelgesiKaldir(satirId: number, belgeId: number): Promise<SiparisBelgesi[] | null>;
   /** 3404: teklifin PDF ekleri. Başarısızsa ileti gösterilir, null döner. */
   teklifEkleri(talepId: string, teklifId: string): Promise<TeklifEki[] | null>;
+  /** 3437 a: kalemlerin daraltılmış kabul zarfı (teklif formundaki alternatif satırı). Başarısızsa ileti gösterilir, null döner. */
+  kalemZarflari(talepId: string): Promise<KalemZarflariCevabi["kalemler"] | null>;
   /** 3404: yüklenmiş PDF teklife bağlanır; teklif sunucuya yazılmadan bağlanamaz, önce o talebin yazımı beklenir. */
   teklifEkiBagla(talepId: string, teklifId: string, kimlik: string, g: TeklifEkiYazimi): Promise<TeklifEki[] | null>;
   /** Hammadde sertifikası partidedir: malzemenin son tedarikçi partileri stoktan okunur. Başarısızsa ileti gösterilir, null döner. */
