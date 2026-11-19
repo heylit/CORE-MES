@@ -199,6 +199,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'siparisler.termin-dene': 'Teklifi plana deneyip termin görme, satış taslağı açma',
   'siparisler.maliyet-oku': 'Teklif denemesinin maliyet dökümünü görme',
   'siparisler.termin-onayla': 'Başka siparişi geciktiren teklif terminini onaylama',
+  'siparisler.toplu-yukle': "Satış siparişlerini Excel'den taslak olarak toplu yükleme",
   'saat.oku': 'Akıllı saatte istasyon, emir ve uyarıları görme',
   'saat.uyari-ustlen': 'Saatten uyarıyı üstlenme',
   'oturum.ortak-cihaz': 'Ortak cihazları kaydetme ve iptal etme',

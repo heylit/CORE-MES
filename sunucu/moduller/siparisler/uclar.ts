@@ -7,10 +7,12 @@ import {
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
   teklifFormuSablonKopyalaGovdesi, teklifFormuVarsayilanGovdesi,
+  topluSiparisDenetleCevabi, topluSiparisDenetleGovdesi, topluSiparisYukleCevabi, topluSiparisYukleGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import type { AdetDenemesiCevabi, AtolyeTaslagi, PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { FIYAT_YETKISI_YOK, denemeSuzgeci, siparisAyrintisiFiyatsiz, siparisFiyatsiz, teklifFiyatsiz } from './kurallar.ts';
 import * as servis from './servis.ts';
+import * as toplu from './toplu-yukleme.ts';
 import * as deneme from './teklif-deneme.ts';
 import * as form from './teklif-formu.ts';
 import * as teklif from './teklif-servis.ts';
@@ -96,6 +98,25 @@ export const uclar = [
     parametre: idParametresi,
     cevap: siparisAyrintiSemasi,
     isle: ({ db, kullanici, parametre }) => siparisCevabi(kullanici)(servis.siparisAyrintisi(db, parametre.id)),
+  }),
+  // 3455-3: Excel'den toplu satış siparişi; yalnız yönetici (3455-S2 a). Denetle yazmaz; yükle hepsini ya da hiçbirini taslak açar.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/toplu-yukleme/denetle',
+    yetki: 'siparisler.toplu-yukle',
+    tekrarKorumali: true,
+    govde: topluSiparisDenetleGovdesi,
+    cevap: topluSiparisDenetleCevabi,
+    isle: ({ db, govde }) => toplu.topluSiparisDenetle(db, govde.satirlar),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/toplu-yukleme',
+    yetki: 'siparisler.toplu-yukle',
+    tekrarKorumali: true,
+    govde: topluSiparisYukleGovdesi,
+    cevap: topluSiparisYukleCevabi,
+    isle: ({ db, kullanici, govde }) => toplu.topluSiparisYukle(db, kullanici, govde),
   }),
   uc({
     yontem: 'POST',

@@ -5,6 +5,7 @@ import { SiparisListesi } from './SiparisListesi.tsx';
 import { TeklifAyrinti } from './TeklifAyrinti.tsx';
 import { TeklifListesi } from './TeklifListesi.tsx';
 import { TeklifVer } from './TeklifVer.tsx';
+import { TopluYukleme } from './TopluYukleme.tsx';
 
 const YeniSiparis = () => <SiparisFormu />;
 const SiparisDuzenle = () => <SiparisFormu duzenle />;
@@ -16,6 +17,7 @@ const TeklifDuzenle = () => <TeklifVer duzenle />;
 export const rotalar: ModulRotasi[] = [
   { yol: '/siparisler', ekran: SiparisListesi },
   { yol: '/siparisler/yeni', ekran: YeniSiparis },
+  { yol: '/siparisler/toplu-yukleme', ekran: TopluYukleme },
   { yol: '/siparisler/teklifler', ekran: TeklifListesi },
   { yol: '/siparisler/teklifler/yeni', ekran: YeniTeklif },
   { yol: '/siparisler/teklifler/:id', ekran: TeklifAyrinti },

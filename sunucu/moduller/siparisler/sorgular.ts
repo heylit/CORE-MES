@@ -32,6 +32,9 @@ export interface SiparisSatiri {
   surum: number;
   arsiv_an: string | null;
   arsivleyen_id: number | null;
+  // 3455-3: SECIM okur; başka seçimde yoksa işaretsiz sayılır.
+  toplu?: boolean;
+  logo_baglanacak?: boolean;
 }
 
 // Satır tutarı iki ondalığa yuvarlanır; toplam yuvarlanmış satırların toplamıdır, KDV toplamdan hesaplanır.
@@ -40,7 +43,8 @@ const SECIM = `SELECT s.id, s.no, s.durum, s.firma_id, s.firma_kodu, s.musteri_s
                       t.ara_toplam + round(t.ara_toplam * s.kdv_orani / 100, 2) AS genel_toplam, s.gecikme_ceza_orani,
                       s.ceza_tavani_orani, s.odeme_vadesi_gun, s.iptal_nedeni,
                       ${zamanMetni('s.olusturma')} AS olusturma, ${zamanMetni('s.guncelleme')} AS guncelleme,
-                      ${zamanMetni('s.onay_zamani')} AS onay_zamani, s.surum, ${zamanMetni('s.arsiv_an')} AS arsiv_an, s.arsivleyen_id
+                      ${zamanMetni('s.onay_zamani')} AS onay_zamani, s.surum, ${zamanMetni('s.arsiv_an')} AS arsiv_an, s.arsivleyen_id,
+                      s.toplu_yukleme_id IS NOT NULL AS toplu, s.logo_baglanacak
                  FROM siparisler_siparis s
                  CROSS JOIN LATERAL (
                    SELECT CASE WHEN bool_and(r.birim_fiyat IS NOT NULL) IS FALSE THEN NULL
@@ -1143,4 +1147,32 @@ export async function revizyonEkle(
   );
   if (satir === null) throw new Error('Sipariş sürümü eklenemedi');
   return satir;
+}
+
+// ---- 3455-3 toplu yükleme.
+
+// SIP-08 ile aynı koşul: iptal edilmemiş siparişte (firma, müşteri sipariş no) tekildir.
+export async function varOlanMusteriNolari(db: Db, ciftler: readonly { firmaId: number; no: string }[]): Promise<Set<string>> {
+  if (ciftler.length === 0) return new Set();
+  const r = await db.sorgu<{ firma_id: number; musteri_siparis_no: string }>(
+    `SELECT s.firma_id, s.musteri_siparis_no FROM siparisler_siparis s
+       JOIN unnest($1::int[], $2::text[]) AS c(firma_id, no) ON c.firma_id = s.firma_id AND c.no = s.musteri_siparis_no
+      WHERE s.durum <> 'iptal'`,
+    [ciftler.map((c) => c.firmaId), ciftler.map((c) => c.no)],
+  );
+  return new Set(r.map((x) => `${String(x.firma_id)}|${x.musteri_siparis_no}`));
+}
+
+export async function topluYuklemeEkle(db: Db, y: { yukleyenId: number; dosyaAdi: string; siparisSayisi: number; satirSayisi: number }): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    'INSERT INTO siparisler_toplu_yukleme (yukleyen_id, dosya_adi, siparis_sayisi, satir_sayisi) VALUES ($1, $2, $3, $4) RETURNING id',
+    [y.yukleyenId, y.dosyaAdi, y.siparisSayisi, y.satirSayisi],
+  );
+  if (satir === null) throw new Error('Toplu yükleme yazılamadı.');
+  return satir.id;
+}
+
+// Yeni açılmış taslak siparişe yükleme bağı ve Logo işareti; sürüm değişmez (açılışın parçasıdır).
+export function topluIsaretle(db: Db, id: number, yuklemeId: number, logoBaglanacak: boolean): Promise<unknown> {
+  return db.sorgu('UPDATE siparisler_siparis SET toplu_yukleme_id = $2, logo_baglanacak = $3 WHERE id = $1 AND durum = \'taslak\'', [id, yuklemeId, logoBaglanacak]);
 }

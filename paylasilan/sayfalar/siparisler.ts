@@ -22,6 +22,7 @@ export const SIPARISLER_IKINCI_MENU = {
       maddeler: [
         { anahtar: 'yeni-teklif', baslik: 'Yeni teklif', yol: '/siparisler/teklifler/yeni', simge: 'plus', islem: 'siparisler.yaz' },
         { anahtar: 'yeni-siparis', baslik: 'Yeni sipariş', yol: '/siparisler/yeni', simge: 'plus', islem: 'siparisler.yaz' },
+        { anahtar: 'toplu-yukleme', baslik: 'Toplu yükleme', yol: '/siparisler/toplu-yukleme', simge: 'upload', islem: 'siparisler.toplu-yukle' },
       ],
     },
   ],

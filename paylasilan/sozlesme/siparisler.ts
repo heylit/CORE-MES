@@ -3,6 +3,7 @@ import { secilenFirmaKodu } from './ayarlar.ts';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { PARA_BIRIMLERI } from './satin-alma.ts';
 import { EMIR_TURLERI } from './emir-turleri.ts';
@@ -196,6 +197,9 @@ export const siparisSemasi = z.object({
   surum: surumSemasi,
   // 3425 a: iptal edilip arşive kalkan sipariş; kim ve ne zaman. Arşivde değilse null.
   arsiv: z.object({ an: zamanSemasi, kisi: z.string().nullable() }).nullable(),
+  // 3455-3: Excel'den toplu yüklendi; 3455-logo c: Logo'daki kaydına elle bağlanacak (gönderim değil). İsteğe bağlı: sunucu her zaman yazar.
+  topluYukleme: z.boolean().optional(),
+  logoBaglanacak: z.boolean().optional(),
 });
 
 export const siparisAyrintiSemasi = siparisSemasi.extend({ satirlar: z.array(siparisSatiriSemasi) });
@@ -768,3 +772,45 @@ export type TeklifFormuVerisiCevabi = z.output<typeof teklifFormuVerisiCevabi>;
 export type TeklifFormuSorgusu = z.output<typeof teklifFormuSorgusu>;
 export type TeklifFormuDili = (typeof TEKLIF_FORMU_DILLERI)[number];
 export type TeklifFormuAlani = (typeof TEKLIF_FORMU_ALANLARI)[number];
+
+// 3455-3: Excel'den toplu satış siparişi. Her satır bir kalemdir; aynı firma ve müşteri sipariş no'lu satırlar tek siparişte birleşir.
+// Hücreler ham metin gelir; sunucu satır satır denetler ve hatayı satıra yazar (gövde şeması yalnız boyutu sınar). Sipariş taslak
+// girer (3455-S4 a); onaylanınca emir, ayırma ve satın alma açılır. Yalnız yönetici (3455-S2 a).
+export const TOPLU_SIPARIS_ALANLARI = ['siparisNo', 'firma', 'siparisTarihi', 'termin', 'malzeme', 'miktar', 'birimFiyat', 'karsilama', 'paraBirimi', 'kdvOrani'] as const;
+export type TopluSiparisAlani = (typeof TOPLU_SIPARIS_ALANLARI)[number];
+const hucre = z.string().max(200, 'En çok 200 karakter.').nullable();
+export const topluSiparisSatiri = z.object({
+  sira: z.number().int().min(1).max(1_000_000),
+  siparisNo: hucre, firma: hucre, siparisTarihi: hucre, termin: hucre, malzeme: hucre, miktar: hucre, birimFiyat: hucre, karsilama: hucre,
+  paraBirimi: hucre, kdvOrani: hucre,
+  // 3455-logo c: gönderim değil işarettir; siparişin bir satırında işaretliyse sipariş "Logo'ya bağlanacak" olur.
+  logo: z.boolean(),
+}).strict();
+const topluSatirlar = z.array(topluSiparisSatiri).min(1, 'En az bir satır girin.').max(TOPLU_EN_COK_SATIR, `En çok ${TOPLU_EN_COK_SATIR} satır; dosyayı bölün.`);
+export const topluSiparisDenetleGovdesi = z.object({ satirlar: topluSatirlar }).strict();
+export const topluSiparisYukleGovdesi = z.object({
+  dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120, 'En çok 120 karakter.'),
+  satirlar: topluSatirlar,
+}).strict();
+export const topluSiparisSatirDenetimi = z.object({
+  sira: z.number().int(),
+  firma: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  malzeme: z.object({ no: z.number().int(), kod: z.string(), ad: z.string() }).nullable(),
+  // Birleştiği siparişin anahtarı (firma kodu ve müşteri sipariş no); firma bulunamadıysa null.
+  grup: z.string().nullable(),
+  hatalar: z.array(z.object({ alan: z.enum(TOPLU_SIPARIS_ALANLARI), ileti: z.string() })),
+});
+export const topluSiparisDenetleCevabi = z.object({
+  satirlar: z.array(topluSiparisSatirDenetimi),
+  siparisSayisi: z.number().int(),
+  hataliSatir: z.number().int(),
+});
+// Denetim tutmazsa hiçbir şey yazılmaz: siparişler null, denetim satırlarla döner.
+export const topluSiparisYukleCevabi = z.object({
+  siparisler: z.array(z.object({ id: z.number().int(), no: z.string(), musteriSiparisNo: z.string() })).nullable(),
+  denetim: topluSiparisDenetleCevabi.nullable(),
+});
+export type TopluSiparisSatiri = z.output<typeof topluSiparisSatiri>;
+export type TopluSiparisDenetleCevabi = z.output<typeof topluSiparisDenetleCevabi>;
+export type TopluSiparisYukleCevabi = z.output<typeof topluSiparisYukleCevabi>;
+export type TopluSiparisSatirDenetimi = z.output<typeof topluSiparisSatirDenetimi>;

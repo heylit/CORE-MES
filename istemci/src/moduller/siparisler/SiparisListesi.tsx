@@ -27,6 +27,7 @@ const SUTUNLAR: Sutun<Siparis>[] = [
       <span className="tc-sp-ad">
         <strong className="mono">{s.no}</strong>
         {s.musteriSiparisNo && <span className="tc-sp-soluk">Müşteri no: {s.musteriSiparisNo}</span>}
+        {s.logoBaglanacak === true && <span className="tc-sp-soluk">Logo'ya bağlanacak</span>}
       </span>
     ),
   },
