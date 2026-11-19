@@ -493,6 +493,13 @@ export function hammaddeKaliteSatirlari(db: Db, nolar: readonly number[]): Promi
       WHERE k.no = ANY($1::int[]) AND k.onay_durumu = 'aktif' AND k.tur = 'hammadde' ORDER BY k.no`, [nolar]);
 }
 
+// 3437 a (dilim 3b-2): alternatif kart açmak için ana kartın kimliği ve kaydı.
+export function kartKimlikVeKayit(db: Db, no: number): Promise<{ kimlik: string; tur: string; onayDurumu: string; onek: string; kayit: Record<string, unknown> } | null> {
+  return db.tek(`SELECT kimlik, tur, onay_durumu AS "onayDurumu", onek, kayit FROM malzeme_katalog_karti WHERE no = $1`, [no]);
+}
+export async function kartNoKimlikle(db: Db, kimlik: string): Promise<number | null> {
+  return (await db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.no ?? null;
+}
 export function katalogKartKaydiNoIle(db: Db, no: number): Promise<{ kayit: Record<string, unknown> } | null> {
   return db.tek<{ kayit: Record<string, unknown> }>(`SELECT kayit FROM malzeme_katalog_karti WHERE no = $1`, [no]);
 }

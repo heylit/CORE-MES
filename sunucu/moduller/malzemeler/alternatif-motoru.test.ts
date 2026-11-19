@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KAPSAM_DOGRULAMA, uyanKurallar, zarfaGirenler, zarfDegerlendir, zarfHesapla, type KuralSatiri, type ZarfKarti } from './alternatif/kurallar.ts';
+import { KAPSAM_DOGRULAMA, alternatifEtiketi, alternatifKartAdi, uyanKurallar, zarfaGirenler, zarfDegerlendir, zarfHesapla, type KuralSatiri, type ZarfKarti } from './alternatif/kurallar.ts';
 import type { DurumMuadili, KaliteMuadili } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 
 const kart: ZarfKarti = { no: 42, aile: 'metal', sinif: 'aluminyum', kalite: '6082', durum: 'T6', yuzey: 'Ham', form: 'cubuk', olcu: { d: 50, l: 3000 } };
@@ -116,4 +116,15 @@ test('kapsam ve pay doğrulaması', () => {
   assert.equal(KAPSAM_DOGRULAMA.payHatasi('mm', 5, 3), 'En az mm yalnız yüzdeli payda girilir.');
   assert.equal(KAPSAM_DOGRULAMA.payHatasi('tam', null, null), null);
   assert.equal(KAPSAM_DOGRULAMA.payHatasi(null, 5, null), 'Pay türü seçilmeden değer girilemez.');
+});
+
+test('3b-2: alternatif kartının adı ana adı korur, etiket ölçüyü mm ile yazar ve sınırda kısalır', () => {
+  const e = alternatifEtiketi({ kalite: '6262', durum: null, yuzey: null, olcu: { l: 3200, d: 52.5 } });
+  assert.equal(e, '6262 d 52,5 mm l 3.200 mm');
+  assert.equal(alternatifKartAdi('Örnek çubuk', e), 'Örnek çubuk (alternatif 6262 d 52,5 mm l 3.200 mm)');
+  const uzun = 'Ö'.repeat(180);
+  const ad = alternatifKartAdi(uzun, e);
+  assert.deepEqual([ad.length, ad.startsWith(uzun), ad.endsWith(')')], [200, true, true]);
+  assert.equal(alternatifKartAdi('Ö'.repeat(205), e), 'Ö'.repeat(200));
+  assert.equal(alternatifEtiketi({ kalite: null, durum: null, yuzey: null, olcu: {} }), 'alternatif');
 });

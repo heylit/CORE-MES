@@ -213,3 +213,18 @@ export const KAPSAM_DOGRULAMA = {
     return null;
   },
 };
+
+// 3437 a (dilim 3b-2): onaylanan alternatifin kartı.
+export interface AlternatifNitelikleri { kalite: string | null; durum: string | null; yuzey: string | null; olcu: Record<string, number> }
+const sayi = (v: number): string => v.toLocaleString('tr-TR');
+// Ailede alternatifin etiketi: istenenden farklı nitelikler ("6262 T651 d 52 mm"); ölçü biçimi Taleplerim'deki şartlı alternatifle aynı.
+export const alternatifEtiketi = (a: AlternatifNitelikleri): string =>
+  [a.kalite, a.durum, a.yuzey, ...Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : 1)).map(([k, v]) => `${k} ${sayi(v)} mm`)]
+    .filter((x): x is string => !!x).join(' ').slice(0, 60) || 'alternatif';
+const AD_EN_COK = 200;
+// Ad sınırında ana ad kesilmez, etiket kısalır (ana ad tek başına sınırı aşıyorsa yalnız o kalır).
+export const alternatifKartAdi = (anaAd: string, etiket: string): string => {
+  const kalan = AD_EN_COK - anaAd.length - ' (alternatif )'.length;
+  if (kalan <= 0) return anaAd.slice(0, AD_EN_COK);
+  return `${anaAd} (alternatif ${etiket.slice(0, kalan).trim()})`.trim();
+};
