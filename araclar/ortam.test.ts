@@ -191,7 +191,7 @@ test('hariç tutulan değişken dosyadan alınmaz, ortamda tanımlıysa silinir 
 
 // Ön yükleme dosyaları gerçek süreçte ölçülür. Kök dosyanın yerinden bulunduğu için dosyalar depo dışındaki
 // geçici bir köke kopyalanır: orada .env yalnız test koyarsa vardır, ana ağaca da düşülmez.
-const ON_YUKLEMELER = ['ortam.ts', 'ortam-yukle.ts', 'ortam-yukle-goc.ts'];
+const ON_YUKLEMELER = ['ortam.ts', 'ortam-yukle.ts', 'ortam-yukle-goc.ts', 'logo-yardimci-ilk-gecis-tetik.ts'];
 const IZLENENLER = ['TMIV2_ORTAM', 'TMIV2_PORT', 'TMIV2_PG_GOC_USER', 'TMIV2_PG_GOC_PASSWORD', 'TMIV2_DENEME_IZI'];
 const TMIV2SIZ = Object.fromEntries(Object.entries(process.env).filter(([ad]) => !ad.toUpperCase().startsWith('TMIV2_')));
 

@@ -18,7 +18,8 @@ const TIRNAKLI_EXE = /"([^"]*logo-yardimcisi\.exe)"/gi;
 export interface AyarGirdisi {
   betikYolu: string;
   betik: string;
-  envYolu: string;
+  // null: ilk kurulumun .env'i bulunamadı (ilk geçiş); .env'e dokunulmaz, plan uyarı taşır.
+  envYolu: string | null;
   env: string;
   // Verilmezse exe yolundan çıkarılır: <kurulum>\logo-yardimcisi-<sürüm>\cikti\logo-yardimcisi.exe
   kurulum: string | null;
@@ -39,9 +40,9 @@ function guvenliMi(yol: string): boolean { return GUVENLI_YOL.test(yol) && isAbs
 // Saf: ne yazılacağını söyler, yazmaz. Önizleme ve uygulama aynı planı kullanır.
 export function ayarPlani(g: AyarGirdisi): AyarPlani {
   if (!guvenliMi(g.betikYolu)) return red(`Betik yolu mutlak olmalı ve yalnız İngilizce harf, rakam, boşluk ve . _ - \\ : ( ) içermeli: ${g.betikYolu}`);
-  if (!guvenliMi(g.envYolu)) return red(`.env yolu mutlak olmalı ve yalnız İngilizce harf, rakam, boşluk ve . _ - \\ : ( ) içermeli: ${g.envYolu}`);
+  if (g.envYolu !== null && !guvenliMi(g.envYolu)) return red(`.env yolu mutlak olmalı ve yalnız İngilizce harf, rakam, boşluk ve . _ - \\ : ( ) içermeli: ${g.envYolu}`);
   // Sürüm klasöründeki .env ilk kurulumunkinin kopyasıdır; açılışta üzerine yazılır (araclar/guncelleyici.ts envKopyala).
-  if (g.envYolu.split(/[\\/]/).includes('surumler')) return red('Verilen .env bir sürüm klasöründe; ilk kurulum klasörünün .env dosyası verilmeli.');
+  if (g.envYolu?.split(/[\\/]/).includes('surumler') === true) return red('Verilen .env bir sürüm klasöründe; ilk kurulum klasörünün .env dosyası verilmeli.');
 
   const eol = g.betik.includes('\r\n') ? '\r\n' : '\n';
   const satirlar = g.betik.split(/\r?\n/);
@@ -99,7 +100,7 @@ export function ayarPlani(g: AyarGirdisi): AyarPlani {
     uyarilar.push(`Gösterge dosyasındaki exe yok (${gosterge}); betik ${eskiExe ?? 'önceki sabit yol'} açar.`);
   }
 
-  const ortam = parseEnv(g.env);
+  const ortam = g.envYolu === null ? {} : parseEnv(g.env);
   const istenen = { TMIV2_LOGO_YARDIMCI_KURULUM: kurulum, TMIV2_LOGO_YARDIMCI_BASLAT: g.betikYolu };
   let yeniEnv: string | null = null;
   const eksik: string[] = [];
@@ -108,14 +109,16 @@ export function ayarPlani(g: AyarGirdisi): AyarPlani {
     if (var_ === undefined || var_ === '') { eksik.push(`${ad}=${deger}`); continue; }
     if (var_.toLowerCase() !== deger.toLowerCase()) return red(`.env'de ${ad} başka bir değerle var (${var_}); elle bakılmalı.`);
   }
-  if (eksik.length > 0) {
+  if (g.envYolu === null) {
+    uyarilar.push('İlk kurulumun .env dosyası bulunamadı; TMIV2_LOGO_YARDIMCI_KURULUM ve TMIV2_LOGO_YARDIMCI_BASLAT eklenmedi. Sonraki paketlerde yardımcı kendiliğinden yenilenmez.');
+  } else if (eksik.length > 0) {
     const envEol = g.env.includes('\r\n') ? '\r\n' : '\n';
     const ayrac = g.env === '' || g.env.endsWith('\n') ? '' : envEol;
     yeniEnv = `${g.env}${ayrac}# Logo yardimcisi guncellemesi (kurulum/logo-yardimcisi.md)${envEol}${eksik.join(envEol)}${envEol}`;
     ozet.push(`.env: ${eksik.map((s) => s.split('=')[0] ?? '').join(' ve ')} eklenir (${g.envYolu}); sunucu yeniden başlayınca okunur.`);
   }
   const sonra = yardimciGuncellemeAyariOku({ ...ortam, ...istenen });
-  if (sonra !== null && 'hata' in sonra) uyarilar.push(`Güncelleyici yardımcıya yine dokunmaz: ${sonra.hata}`);
+  if (g.envYolu !== null && sonra !== null && 'hata' in sonra) uyarilar.push(`Güncelleyici yardımcıya yine dokunmaz: ${sonra.hata}`);
 
   if (yeniBetik === null && yeniGosterge === null && yeniEnv === null) {
     return { tur: 'zaten', ileti: 'Zaten ayarlı; hiçbir dosya değişmedi.', uyarilar };
@@ -140,7 +143,7 @@ async function yerindeYaz(yol: string, icerik: string): Promise<void> {
 // Yedek üzerine yazılmaz (COPYFILE_EXCL); aynı saniyede ikinci uygulama yedeği bozmasın diye durur.
 // Ortada hata olursa çağıran, o ana kadar alınan yedekleri `durum`dan okuyup ekrana yazar.
 export async function uygula(
-  p: Extract<AyarPlani, { tur: 'yaz' }>, betikYolu: string, envYolu: string, simdi: Date,
+  p: Extract<AyarPlani, { tur: 'yaz' }>, betikYolu: string, envYolu: string | null, simdi: Date,
   durum: AyarDurumu = { tarih: simdi.toISOString(), betik: null, env: null, gosterge: null },
 ): Promise<AyarDurumu> {
   const d = damga(simdi);
@@ -149,7 +152,7 @@ export async function uygula(
     await copyFile(betikYolu, yedek, constants.COPYFILE_EXCL);
     durum.betik = { yol: betikYolu, yedek };
   }
-  if (p.env !== null) {
+  if (p.env !== null && envYolu !== null) {
     const yedek = `${envYolu}.yedek-${d}`;
     await copyFile(envYolu, yedek, constants.COPYFILE_EXCL);
     durum.env = { yol: envYolu, yedek };
@@ -159,7 +162,7 @@ export async function uygula(
     await yerindeYaz(yol, p.gosterge);
     durum.gosterge = yol;
   }
-  if (p.env !== null) await yerindeYaz(envYolu, p.env);
+  if (p.env !== null && envYolu !== null) await yerindeYaz(envYolu, p.env);
   // Betik en son: önceki adımlardan biri bozulursa betik bugünkü haliyle kalır.
   if (p.betik !== null) await yerindeYaz(betikYolu, p.betik);
   await yerindeYaz(join(p.kurulum, DURUM_DOSYASI), `${JSON.stringify(durum, null, 2)}\n`);
