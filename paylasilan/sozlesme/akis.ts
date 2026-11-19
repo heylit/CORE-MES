@@ -268,3 +268,73 @@ export type KartRotasi = z.output<typeof kartRotasiSemasi>;
 export type SureOzeti = z.output<typeof sureOzetiSemasi>;
 export type KartTeslimi = z.output<typeof kartTeslimiSemasi>;
 export type KartOzetleriCevabi = z.output<typeof kartOzetleriCevabi>;
+
+// ---- Satış siparişinin akışı (3429-1) ----
+// Onaydan kapanışa: kalem başına emir, plan bitişi, üretilen, sevk ve fatura. Yalnız okur; kaynak modüllerin kayıtlarından hesaplanır.
+// Fiyat taşınmaz: fatura yalnız durumuyla gelir (yok, kısmi, tam). Ölçülemeyen değer null döner, sıfır uydurulmaz.
+export const siparisParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
+
+// Sipariş durumu dört tanedir (siparisler); aşama ondan ve kaynak kayıtlardan hesaplanır, saklanmaz.
+export const SIPARIS_ASAMALARI = [
+  'taslak', 'onayli', 'emir-bekliyor', 'emir-acildi', 'planlandi', 'uretimde', 'uretildi', 'kismi-sevk', 'sevk-tamam', 'faturalandi', 'kapandi', 'iptal',
+] as const;
+export type SiparisAsamasi = (typeof SIPARIS_ASAMALARI)[number];
+export const FATURA_DURUMLARI = ['yok', 'kismi', 'tam', 'karsilastirilamaz'] as const;
+export type FaturaDurumu = (typeof FATURA_DURUMLARI)[number];
+
+const miktar = z.number().nonnegative();
+
+export const siparisAkisEmriSemasi = z.object({
+  id: KIMLIK,
+  no: z.string(),
+  durum: emirDurumu,
+  adet: z.number().int().nonnegative(),
+  // Canlı plandaki son iş emrinin bitişi; planda olmayan emirde null.
+  planBitis: zamanSemasi.nullable(),
+  // Yalnız bitmiş emirde dolu (son iş emrinin sağlamı).
+  saglam: z.number().int().nonnegative().nullable(),
+});
+
+export const siparisAkisKalemiSemasi = z.object({
+  id: KIMLIK,
+  sira: z.number().int(),
+  malzemeKodu: z.string().nullable(),
+  malzemeAdi: z.string().nullable(),
+  birim: z.string().nullable(),
+  miktar,
+  termin: tarihSemasi,
+  // Mamul ve yarı mamul üretilir; ticari mal ve öteki türler bugün emirle karşılanmaz (karşılama yolu 3429-3).
+  uretilir: z.boolean(),
+  emirler: z.array(siparisAkisEmriSemasi),
+  // Emirlerin en geç plan bitişi; emri ya da planı olmayan kalemde null.
+  planBitis: zamanSemasi.nullable(),
+  // Bitmiş emirlerin sağlamı; emri olmayan kalemde null.
+  uretilen: miktar.nullable(),
+  // Teslim edilen (tamamlanan) ve yoldaki teslimat işlerinin adedi; iptal edilen sayılmaz. Emirsiz sevk siparişe bağlı değildir.
+  sevkEdilen: miktar,
+  yolda: miktar,
+});
+
+export const siparisAkisiCevabi = z.object({
+  siparisId: KIMLIK,
+  asama: z.enum(SIPARIS_ASAMALARI),
+  fatura: z.enum(FATURA_DURUMLARI),
+  // Fatura sayısı (iade hariç); tutar yoktur.
+  faturaSayisi: z.number().int().nonnegative(),
+  kalemler: z.array(siparisAkisKalemiSemasi),
+  // Kapanış için eksikler (kalem sevk eksiği, fatura eksiği); boşsa sipariş doğrudan kapanır.
+  kapanisEksikleri: z.array(z.string()),
+});
+
+export const SIPARIS_ASAMA_SINIRI = 100;
+export const siparisAsamalariSorgusu = z.object({
+  idler: z.string().trim().max(1200).regex(/^\d+(,\d+)*$/).transform((m) => [...new Set(m.split(',').map(Number))])
+    .pipe(z.array(KIMLIK).min(1).max(SIPARIS_ASAMA_SINIRI)),
+});
+// Olmayan sipariş listede yoktur.
+export const siparisAsamalariCevabi = z.object({ asamalar: z.array(z.object({ siparisId: KIMLIK, asama: z.enum(SIPARIS_ASAMALARI) })) });
+
+export type SiparisAkisEmri = z.output<typeof siparisAkisEmriSemasi>;
+export type SiparisAkisKalemi = z.output<typeof siparisAkisKalemiSemasi>;
+export type SiparisAkisiCevabi = z.output<typeof siparisAkisiCevabi>;
+export type SiparisAsamalariCevabi = z.output<typeof siparisAsamalariCevabi>;

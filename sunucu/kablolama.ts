@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ayarDegistiDinle, sistemAyariOku } from './moduller/ayarlar/disari.ts';
 import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
+import * as akis from './moduller/akis/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import { kaydaBagliBelgeler } from './moduller/belge-merkezi/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
@@ -38,7 +39,7 @@ import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlar
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -482,6 +483,7 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş yeni sürüm -> proje bitişi', siparisRevizeEdildiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     bag('sipariş yeni sürüm -> emir teslimi', siparisRevizeEdildiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
     bag('emre bağlı kalemler -> sipariş düzenleme', kalemEmirCozucusu, uretimEmirleri.emreBagliSiparisSatirlari),
+    bag('sipariş akışı eksikleri -> sipariş kapatma', kapanisEksigiCozucusu, akis.siparisKapanisEksikleri),
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
     bag('emir bitti -> plan bayat işareti', uretimEmirleri.emirBittiDinle, bayatEmirBittiYansit),
     bag('fason hareketi -> plan bayat işareti', uretimEmirleri.fasonHareketiDinle, bayatFasonHareketiYansit),

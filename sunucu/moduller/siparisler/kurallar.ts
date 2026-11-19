@@ -204,6 +204,16 @@ export function bagliEmirReddi(komut: DurumKomutu, emirler: readonly { emirNo: s
   return `${BAGLI_ACIK_EMIR}: ${acik.slice(0, GOSTERILEN_EMIR).join(', ')}${fazla}.`;
 }
 
+// SIP-41 (3429-1 a): sevk ya da fatura eksikken onaylı sipariş yalnız gerekçeyle kapanır; eksikler iletide listelenir. Gerekçe uç
+// denetim kaydında gövdeyle durur (onay geri alma gibi, SIP-19). Eksik yoksa gerekçe istenmez.
+export const KAPANIS_GEREKCESI = 'Eksikle kapatmak için gerekçe yazın';
+const GOSTERILEN_EKSIK = 5;
+export function kapanisReddi(komut: DurumKomutu, eksikler: readonly string[], neden: string | undefined): string | null {
+  if (komut !== 'kapat' || eksikler.length === 0 || (neden ?? '').trim() !== '') return null;
+  const fazla = eksikler.length > GOSTERILEN_EKSIK ? ` ve ${eksikler.length - GOSTERILEN_EKSIK} eksik daha` : '';
+  return `${KAPANIS_GEREKCESI}: ${eksikler.slice(0, GOSTERILEN_EKSIK).join(' ')}${fazla}`;
+}
+
 // SIP-03: içerik yalnız taslakta değişir; onaylı kayıt onaysız değişmez.
 export function duzenlemeReddi(durum: SiparisDurumu): string | null {
   return durum === 'taslak' ? null : YALNIZ_TASLAK;

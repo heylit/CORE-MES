@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, idParametresi, kapatGovdesi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisRevizyonGovdesi, siparisRevizyonlariCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
@@ -159,7 +159,7 @@ export const uclar = [
     yol: '/siparisler/:id/kapat',
     yetki: 'siparisler.onayla',
     parametre: idParametresi,
-    govde: durumGovdesi,
+    govde: kapatGovdesi,
     cevap: siparisAyrintiSemasi,
     isle: ({ db, kullanici, parametre, govde }) => siparisCevabi(kullanici)(servis.durumDegistir(db, kullanici, parametre.id, 'kapat', govde)),
   }),

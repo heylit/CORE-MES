@@ -1,5 +1,5 @@
 import type {
-  AdimOlcusu, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, KartKonumu, KartRotasi, Olcu, Serit, StatuKalisi,
+  AdimOlcusu, FaturaDurumu, SiparisAkisEmri, SiparisAsamasi, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, KartKonumu, KartRotasi, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
 
 // Akış Süresi hesabı (kart #1338). Saf: veritabanı ve saat yok; "şimdi" girdidir. Kurallar AKS-<n> numarasıyla KURAL-TEST.md'dedir.
@@ -562,3 +562,80 @@ export function kartSarfi(hareketler: readonly AkisHareketi[], partiId: number |
 // Arama Türkçe harfi düz harfle eşler ("burc" "Burç"u bulur); büyük-küçük harf Türkçe kuralıyla (I -> ı, İ -> i).
 const DUZ_HARF: Readonly<Record<string, string>> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
 export const aramaMetni = (s: string): string => s.trim().toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (h) => DUZ_HARF[h] ?? h);
+
+// ---- Satış siparişinin akışı (3429-1) ----
+// SPA-1: kalemin sevki emirlerinin teslimat işlerinden; iptal edilen iş sayılmaz. Adedi boş iş emrin bütün ürünüdür (sağlam, yoksa emir adedi).
+// SPA-2: fatura durumu KDV hariç tutarla: iptal edilmemiş faturalar eksi iadeler, siparişin ara toplamına göre. Başka para biriminde belge
+// ya da tutarı bilinmeyen sipariş karşılaştırılamaz. Kuruş tam sayıyla karşılaştırılır (büyük tutarda kayan nokta şaşar).
+// SPA-3: aşama durumdan ve kaynak kayıtlardan; sıra faturadan geriye: faturalandı, sevk tamam, kısmi sevk, üretildi, üretimde, planlandı,
+// emir açıldı, emir bekliyor. Üretilen kalemi olmayan onaylı sipariş "onaylı" kalır. İptal edilmiş emir sayılmaz.
+// SPA-4: kapanış eksikleri: üretilen kalemin teslim edilen adedi miktarın altındaysa, ve fatura tam değilse. Emirsiz sevk siparişe
+// bağlı olmadığından üretilmeyen kalemin sevki ölçülmez, eksik sayılmaz.
+
+export interface SevkSatiri { uretimEmriId: number; durum: string; adet: string | null; iptal: boolean }
+export interface FaturaSatiri { tur: 'fatura' | 'iade'; paraBirimi: string; tutar: string }
+export interface AkisKalemi { sira: number; miktar: number; uretilir: boolean; emirler: readonly SiparisAkisEmri[]; sevkEdilen: number; yolda: number }
+
+// SPA-5: plan bitişi en geç bitiştir (emirde iş emirlerinin, kalemde emirlerinin); bitiş yoksa null.
+export function enGecBitis(bitisler: readonly (string | null | undefined)[]): string | null {
+  let son: string | null = null;
+  for (const b of bitisler) if (b != null && (son === null || Date.parse(b) > Date.parse(son))) son = b;
+  return son;
+}
+
+export function kalemSevki(emirler: readonly SiparisAkisEmri[], sevkler: readonly SevkSatiri[]): { sevkEdilen: number; yolda: number } {
+  const emir = new Map(emirler.map((e) => [e.id, e]));
+  let sevkEdilen = 0;
+  let yolda = 0;
+  for (const s of sevkler) {
+    const e = emir.get(s.uretimEmriId);
+    if (e === undefined || s.iptal) continue;
+    const adet = s.adet === null ? (e.saglam ?? e.adet) : Number(s.adet);
+    if (s.durum === 'tamamlandi') sevkEdilen += adet;
+    else if (s.durum === 'yolda') yolda += adet;
+  }
+  return { sevkEdilen, yolda };
+}
+
+const kurus = (m: string): bigint => {
+  const eksi = m.trim().startsWith('-');
+  const [tam = '0', kesir = ''] = m.trim().replace(/^[-+]/, '').split('.');
+  const v = BigInt(tam === '' ? '0' : tam) * 100n + BigInt((kesir + '00').slice(0, 2));
+  return eksi ? -v : v;
+};
+
+export function faturaDurumu(araToplam: string | null, paraBirimi: string, faturalar: readonly FaturaSatiri[]): FaturaDurumu {
+  if (!faturalar.some((f) => f.tur === 'fatura')) return 'yok';
+  if (araToplam === null || faturalar.some((f) => f.paraBirimi.trim() !== paraBirimi.trim())) return 'karsilastirilamaz';
+  const net = faturalar.reduce((t, f) => t + (f.tur === 'iade' ? -kurus(f.tutar) : kurus(f.tutar)), 0n);
+  return net >= kurus(araToplam) ? 'tam' : 'kismi';
+}
+
+export function siparisAsamasi(durum: string, kalemler: readonly AkisKalemi[], fatura: FaturaDurumu): SiparisAsamasi {
+  if (durum === 'taslak' || durum === 'iptal') return durum;
+  if (durum === 'kapandi') return 'kapandi';
+  if (fatura === 'tam') return 'faturalandi';
+  if (kalemler.length > 0 && kalemler.every((k) => k.sevkEdilen >= k.miktar)) return 'sevk-tamam';
+  if (kalemler.some((k) => k.sevkEdilen > 0 || k.yolda > 0)) return 'kismi-sevk';
+  const uretilen = kalemler.filter((k) => k.uretilir);
+  if (uretilen.length === 0) return 'onayli';
+  const emirler = uretilen.map((k) => k.emirler.filter((e) => e.durum !== 'iptal'));
+  const hepsindeEmir = emirler.every((l) => l.length > 0);
+  const tum = emirler.flat();
+  if (hepsindeEmir && tum.every((e) => e.durum === 'bitti')) return 'uretildi';
+  if (tum.some((e) => e.durum === 'basladi' || e.durum === 'bitti')) return 'uretimde';
+  if (hepsindeEmir && tum.every((e) => e.durum === 'planli' || e.planBitis !== null)) return 'planlandi';
+  return tum.length > 0 ? 'emir-acildi' : 'emir-bekliyor';
+}
+
+const sayiMetni = (n: number): string => (Number.isInteger(n) ? String(n) : n.toLocaleString('tr-TR', { maximumFractionDigits: 3 }));
+export const FATURA_EKSIGI: Readonly<Record<Exclude<FaturaDurumu, 'tam'>, string>> = {
+  yok: 'Fatura kesilmedi.',
+  kismi: 'Faturalanan tutar sipariş tutarının altında.',
+  karsilastirilamaz: 'Fatura tutarı sipariş tutarıyla karşılaştırılamadı (para birimi farklı); faturaları kontrol edin.',
+};
+export function kapanisEksikleri(kalemler: readonly AkisKalemi[], fatura: FaturaDurumu): string[] {
+  const eksik = kalemler.filter((k) => k.uretilir && k.sevkEdilen < k.miktar)
+    .map((k) => `Kalem ${k.sira}: teslim edilen ${sayiMetni(k.sevkEdilen)} / ${sayiMetni(k.miktar)}.`);
+  return fatura === 'tam' ? eksik : [...eksik, FATURA_EKSIGI[fatura]];
+}

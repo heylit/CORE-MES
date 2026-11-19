@@ -11,6 +11,7 @@ import type { FirmaSecimCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts
 import type { SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { SiparisAcilisiCevabi } from '#paylasilan/sozlesme/siparis-acilisi.ts';
+import type { SiparisAkisiCevabi, SiparisAsamalariCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
   AdetDenemesiCevabi, AtolyeTaslaklariCevabi, BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, SiparisRevizyonlariCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
@@ -545,6 +546,122 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3 } });
     await screen.findByText('Sipariş tamamlandı olarak kapandı');
     expect(screen.getByText('Tamamlandı')).toBeTruthy();
+  });
+});
+
+// 3429-1 a (A, B, C): siparişin akışı, aşama rozeti ve kapatma kapısı. Akış Akış modülünün cevabıdır; ekran yalnız gösterir.
+const AKIS_KALEMI = {
+  id: 50, sira: 1, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: 100, termin: '2026-10-20', uretilir: true,
+  emirler: [{ id: 70, no: 'UE-ORN-0070', durum: 'bitti', adet: 100, planBitis: '2026-10-15T14:00:00.000Z', saglam: 100 }],
+  planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20,
+} satisfies SiparisAkisiCevabi['kalemler'][number];
+const AKIS = {
+  siparisId: 6, asama: 'kismi-sevk', fatura: 'yok', faturaSayisi: 0,
+  kalemler: [AKIS_KALEMI],
+  kapanisEksikleri: ['Kalem 1: teslim edilen 60 / 100.', 'Fatura kesilmedi.'],
+} satisfies SiparisAkisiCevabi;
+
+describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
+  const akisli = (akis: SiparisAkisiCevabi, kapat?: (govde: unknown) => Response | undefined) => sunucuKur(YONETICI, (yontem, yol, govde) => {
+    // Örnek ayrıntının kimliği 5'tir (taslaktan türer); sayfa adresi 6.
+    if (yontem === 'GET' && /^\/akis\/siparisler\/[56]$/.test(yol)) return json(200, akis);
+    if (yontem === 'GET' && yol.startsWith('/akis/siparis-asamalari?')) return json(200, { asamalar: [{ siparisId: 6, asama: akis.asama }] } satisfies SiparisAsamalariCevabi);
+    if (yontem === 'POST' && yol === '/siparisler/6/kapat') return kapat?.(govde) ?? json(200, { ...AYRINTI_ONAYLI, durum: 'kapandi' } satisfies SiparisAyrintisi);
+    return undefined;
+  });
+
+  it('onaylı siparişte akış bölümü emir, plan, üretilen ve teslimi gösterir; başlıkta aşama rozeti', async () => {
+    akisli(AKIS);
+    ac('/siparisler/6');
+    expect(await screen.findByRole('heading', { name: 'Sipariş akışı' })).toBeTruthy();
+    expect(await screen.findByText('UE-ORN-0070')).toBeTruthy();
+    expect(screen.getByText('60 / 100')).toBeTruthy();
+    expect(screen.getByText(/20 yolda/)).toBeTruthy();
+    expect(screen.getByText('Kesilmedi')).toBeTruthy();
+    expect(screen.getAllByText('Kısmi sevk').length).toBeGreaterThan(0);
+  });
+
+  it('başlamış ama bitmemiş sevk ve üretim şeritte kısmi görünür; tam/toplam sayısı kalır', async () => {
+    akisli({ ...AKIS, kalemler: [{ ...AKIS_KALEMI, uretilen: 30, sevkEdilen: 0, yolda: 20 }] });
+    ac('/siparisler/6');
+    const serit = await screen.findByRole('list', { name: 'Sipariş aşamaları' });
+    const adim = (ad: string) => within(serit).getByText(ad).closest('li');
+    expect(adim('Sevk')?.className).toContain('tc-sp-akis-kismi');
+    expect(adim('Üretim')?.className).toContain('tc-sp-akis-kismi');
+    expect(within(adim('Sevk') as HTMLElement).getByText('0 / 1')).toBeTruthy();
+    expect(adim('Fatura')?.className).toContain('tc-sp-akis-bos');
+  });
+
+  it('şerit Emir, Plan, Üretim ve Sevk değerlerini ve hallerini sayar; iptal edilmiş emirli kalem emirsiz sayılır', async () => {
+    const iptalli = { ...AKIS_KALEMI, id: 51, sira: 2, emirler: [{ id: 71, no: 'UE-ORN-0071', durum: 'iptal' as const, adet: 100, planBitis: null, saglam: null }], planBitis: null, uretilen: null, sevkEdilen: 0, yolda: 0 };
+    const tam = { ...AKIS_KALEMI, sevkEdilen: 100, yolda: 0 };
+    const durumlar = async (kalemler: SiparisAkisiCevabi['kalemler']) => {
+      cleanup();
+      akisli({ ...AKIS, kalemler });
+      ac('/siparisler/6');
+      const serit = await screen.findByRole('list', { name: 'Sipariş aşamaları' });
+      return ['Emir', 'Plan', 'Üretim', 'Sevk'].map((ad) => {
+        const li = within(serit).getByText(ad).closest('li') as HTMLElement;
+        return `${ad} ${li.textContent?.replace(ad, '') ?? ''} ${/tc-sp-akis-(tam|kismi|bos)/.exec(li.className)?.[1] ?? '?'}`;
+      });
+    };
+    expect(await durumlar([tam, iptalli])).toEqual(['Emir 1 / 2 kismi', 'Plan 1 / 2 kismi', 'Üretim 1 / 2 kismi', 'Sevk 1 / 2 kismi']);
+    expect(await durumlar([tam])).toEqual(['Emir 1 / 1 tam', 'Plan 1 / 1 tam', 'Üretim 1 / 1 tam', 'Sevk 1 / 1 tam']);
+    expect(await durumlar([iptalli])).toEqual(['Emir 0 / 1 bos', 'Plan 0 / 1 bos', 'Üretim 0 / 1 bos', 'Sevk 0 / 1 bos']);
+  });
+
+  it('taslakta akış istenmez ve bölüm çizilmez', async () => {
+    const istekler = sunucuKur(YONETICI);
+    ac('/siparisler/5');
+    await screen.findByText('Taslak sipariş');
+    expect(screen.queryByRole('heading', { name: 'Sipariş akışı' })).toBeNull();
+    expect(istekler.some((i) => i.yol.startsWith('/akis/'))).toBe(false);
+  });
+
+  it('eksik varken kapatma eksikleri listeler, gerekçesiz göndermez, gerekçeyi gövdeyle yollar', async () => {
+    const istekler = akisli(AKIS);
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi tamamlandı olarak kapat' });
+    expect(await within(pencere).findByText('Kalem 1: teslim edilen 60 / 100.')).toBeTruthy();
+    expect(within(pencere).getByText('Fatura kesilmedi.')).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    expect(await within(pencere).findByText('Eksikle kapatmak için gerekçe zorunlu.')).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Kapanış gerekçesi/ }), { target: { value: 'Müşteri kalanı istemedi' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/kapat', govde: { surum: 3, neden: 'Müşteri kalanı istemedi' } });
+  });
+
+  it('teslimat ve fatura tamamsa pencere bunu söyler ve gerekçesiz kapatır', async () => {
+    const istekler = akisli({ ...AKIS, asama: 'faturalandi', fatura: 'tam', faturaSayisi: 1, kapanisEksikleri: [] });
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi tamamlandı olarak kapat' });
+    expect(await within(pencere).findByText('Teslimat ve fatura tamam')).toBeTruthy();
+    expect(within(pencere).queryByRole('textbox', { name: /Kapanış gerekçesi/ })).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ govde: { surum: 3 } });
+    expect((yazmalar(istekler)[0]?.govde as { neden?: string }).neden).toBeUndefined();
+  });
+
+  it('sunucu gerekçe isterse ileti pencerede görünür', async () => {
+    akisli({ ...AKIS, kapanisEksikleri: [] }, () => json(400, { kod: 'DOGRULAMA', mesaj: 'Eksikle kapatmak için gerekçe yazın: Fatura kesilmedi.', alan: 'neden' } satisfies HataGovdesi));
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi tamamlandı olarak kapat' });
+    await within(pencere).findByText('Teslimat ve fatura tamam');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Tamamlandı olarak kapat' }));
+    expect(await within(pencere).findByText(/Eksikle kapatmak için gerekçe yazın/)).toBeTruthy();
+  });
+
+  it('listede onaylı satırın aşaması durumun yanında; aşama tek istekle görünen sayfadan', async () => {
+    const istekler = akisli(AKIS);
+    ac('/siparisler');
+    expect(await screen.findByText('Kısmi sevk')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/akis/siparis-asamalari?')).map((i) => i.yol)).toEqual(['/akis/siparis-asamalari?idler=6']);
   });
 });
 

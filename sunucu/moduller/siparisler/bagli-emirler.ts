@@ -34,3 +34,15 @@ export async function emreBagliKalemler(db: Db, satirIdleri: readonly number[]):
 export async function emreBagliKalemlerOku(db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
   return kalemCozucusu === null || satirIdleri.length === 0 ? new Set() : kalemCozucusu(db, satirIdleri);
 }
+
+// 3429-1 (SIP-41): kapatma kapısı. Siparişin eksikleri (sevk, fatura) siparişin akışını hesaplayan modüldedir (akis, üst katta);
+// karşılık kablolama.ts'te kaydedilir. Kayıtsızken kapatma sessizce geçmez.
+export type KapanisEksigiCozucusu = (db: Db, siparisId: number) => Promise<string[]>;
+
+let kapanisCozucusu: KapanisEksigiCozucusu | null = null;
+export function kapanisEksigiCozucusuKaydet(c: KapanisEksigiCozucusu | null): void { kapanisCozucusu = c; }
+
+export async function kapanisEksikleri(db: Db, siparisId: number): Promise<string[]> {
+  if (kapanisCozucusu === null) throw new Error('Sipariş kapatma için eksik çözücüsü kayıtlı değil (kablolama.ts).');
+  return kapanisCozucusu(db, siparisId);
+}

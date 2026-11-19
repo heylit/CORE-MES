@@ -1,19 +1,27 @@
 import type { Db } from '#cekirdek/db.ts';
 import { AZAMI_TAKVIM_GUNU } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import type { EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, KonumHareketi, SureOzeti } from '#paylasilan/sozlesme/akis.ts';
+import type {
+  EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, KonumHareketi, SiparisAkisEmri, SiparisAkisiCevabi, SiparisAsamalariCevabi, SureOzeti,
+} from '#paylasilan/sozlesme/akis.ts';
+import { siparisFaturalari } from '../finans/disari.ts';
+import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { siparisAyrintisi } from '../siparisler/disari.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { canliPlan, tabanPlani } from '../plan/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { receteRotaStatuleri } from '../recete-rota/disari.ts';
-import { emirlerinSevkDurumu } from '../sevkiyat/disari.ts';
+import { emirlerinSevkDurumu, siparisinSevkleri } from '../sevkiyat/disari.ts';
 import { emrinAkisHareketleri, partiGirisZamanlari, refakatKartiKapsami, type AkisHareketi } from '../stok/disari.ts';
-import { adimliEmirListesi, emirAkisKaydi, sureOzetiHesapla } from '../uretim-emirleri/disari.ts';
+import { adimliEmirListesi, emirAkisKaydi, emirlerinIsEmriIdleri, siparisSatirlarininEmirleri, sureOzetiHesapla, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
-import { aralikBirlesimi, aramaMetni, emirAkisi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, type AkisGirdisi } from './kurallar.ts';
+import {
+  aralikBirlesimi, aramaMetni, emirAkisi, enGecBitis, faturaDurumu, kalemSevki, kapanisEksikleri, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, siparisAsamasi,
+  type AkisGirdisi,
+} from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Standart süreler numeric metin gelir; ekranda dakika sayısıdır.
@@ -200,4 +208,61 @@ export async function kartOzetleri(db: Db, idler: readonly number[]): Promise<Ka
     if (a !== null) kartlar.push({ id, konum: a.konum, rota: a.rota, lead: a.lead, sonAn: a.anlar.at(-1) ?? null });
   }
   return { kartlar };
+}
+
+// Satış siparişinin akışı (3429-1, SPA-1..SPA-4). Kaynak modüllerin dışa açık okumalarıyla; yetki ucundadır, burada denetlenmez.
+const URETILEN_TURLER: readonly string[] = ['mamul', 'yarimamul'];
+
+export async function siparisAkisiOku(db: Db, siparisId: number): Promise<SiparisAkisiCevabi> {
+  const s = await siparisAyrintisi(db, siparisId);
+  const kartlar = await malzemeOzetleri(db, s.satirlar.map((k) => k.malzemeNo));
+  const kalemEmirleri = await siparisSatirlarininEmirleri(db, s.satirlar.map((k) => k.id));
+  const emirIdleri = tekil([...kalemEmirleri.values()].flat());
+  const isEmirleri = await emirlerinIsEmriIdleri(db, emirIdleri);
+  const plan = await canliPlan(db, [...isEmirleri.values()].flat());
+  const isBitisi = new Map(plan.map((p) => [p.isEmriId, p.bitis]));
+  const emirler = new Map<number, SiparisAkisEmri>();
+  for (const id of emirIdleri) {
+    const e = await uretimEmriOzeti(db, id);
+    if (e === null) continue;
+    emirler.set(id, { id, no: e.emirNo, durum: e.durum, adet: e.adet, planBitis: enGecBitis((isEmirleri.get(id) ?? []).map((i) => isBitisi.get(i))), saglam: e.durum === 'bitti' ? e.saglamAdet : null });
+  }
+  const sevkler = s.durum === 'taslak' ? [] : await siparisinSevkleri(db, siparisId);
+  const kalemler = s.satirlar.map((k) => {
+    const liste = (kalemEmirleri.get(k.id) ?? []).flatMap((id) => { const e = emirler.get(id); return e === undefined ? [] : [e]; });
+    const gecerli = liste.filter((e) => e.durum !== 'iptal');
+    const bitmis = gecerli.filter((e) => e.durum === 'bitti');
+    const tur = kartlar.get(k.malzemeNo)?.tur;
+    return {
+      id: k.id, sira: k.sira, malzemeKodu: k.malzemeKodu, malzemeAdi: k.malzemeAdi, birim: k.birim, miktar: Number(k.miktar), termin: k.termin ?? s.termin,
+      uretilir: tur !== undefined && URETILEN_TURLER.includes(tur), emirler: liste,
+      planBitis: enGecBitis(gecerli.map((e) => e.planBitis)),
+      uretilen: gecerli.length === 0 ? null : bitmis.reduce((t, e) => t + (e.saglam ?? 0), 0),
+      ...kalemSevki(liste, sevkler),
+    };
+  });
+  const faturalar = (await siparisFaturalari(db, [siparisId])).get(siparisId) ?? [];
+  const fatura = faturaDurumu(s.araToplam, s.paraBirimi, faturalar);
+  return {
+    siparisId, asama: siparisAsamasi(s.durum, kalemler, fatura), fatura, faturaSayisi: faturalar.filter((f) => f.tur === 'fatura').length, kalemler,
+    kapanisEksikleri: s.durum === 'onayli' ? kapanisEksikleri(kalemler, fatura) : [],
+  };
+}
+
+// SPA-4: siparişler modülünün kapatma kapısı bunu çözücüyle okur (kablolama.ts); kapatmayla aynı işlemde.
+export async function siparisKapanisEksikleri(db: Db, siparisId: number): Promise<string[]> {
+  return (await siparisAkisiOku(db, siparisId)).kapanisEksikleri;
+}
+
+// Liste rozetleri: olmayan sipariş atlanır. VARSAYIM: sayfa en çok 100 sipariş; her biri tam akışla okunur (liste sayfası 25).
+export async function siparisAsamalari(db: Db, idler: readonly number[]): Promise<SiparisAsamalariCevabi> {
+  const asamalar: SiparisAsamalariCevabi['asamalar'] = [];
+  for (const id of idler) {
+    try {
+      asamalar.push({ siparisId: id, asama: (await siparisAkisiOku(db, id)).asama });
+    } catch (h) {
+      if (!(h instanceof UygulamaHatasi) || h.kod !== 'BULUNAMADI') throw h;
+    }
+  }
+  return { asamalar };
 }

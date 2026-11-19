@@ -7,7 +7,7 @@
 | `POST /siparisler/ekle` | `siparisler.yaz` | tekrar korumalı; SIP-01, 02, 07, 08, 09; açan ve zaman sunucudan | `SIP-01`, `SIP-02`, `tutarlar` | `yetki` (kayıt sayısı değişmez), `SIP-01`, `SIP-02`, `SIP-07`, `SIP-08` |
 | `POST /siparisler/:id/guncelle` | `siparisler.yaz` | satır kilidi, SIP-03, sürüm; güncelleyen ve zaman sunucudan | `SIP-03 ve sürüm` | `SIP-03 ve sürüm` (409, 422) |
 | `POST /siparisler/:id/onayla` | `siparisler.onayla` | SIP-04, sürüm; onaylayan ve zaman sunucudan | `SIP-03 ve sürüm` | `yetki`, `SIP-04` |
-| `POST /siparisler/:id/kapat` | `siparisler.onayla` | SIP-04, sürüm | `SIP-04` | `SIP-04` |
+| `POST /siparisler/:id/kapat` | `siparisler.onayla` | SIP-04, sürüm; SIP-41 eksikte gerekçe (eksik sunucuda hesaplanır) | `SIP-04`, `akis/siparis-akisi.test.ts` SIP-41 | `SIP-04`, SIP-41 (gerekçesiz 400) |
 | `POST /siparisler/:id/iptal` | `siparisler.onayla` | SIP-04, neden zorunlu, sürüm | `SIP-04` | `SIP-04` (nedensiz 400, kapanmış 422) |
 | `POST /siparisler/:id/onay-geri-al` | `siparisler.onayla` | SIP-19, gerekçe zorunlu (denetim kaydında gövdeyle), sürüm; yalnız onaylı | `SIP-19` | `SIP-15` (403, 404), `SIP-19` (nedensiz 400, taslakta 422) |
 | `GET /siparisler/teklifler`, `/:id` | `siparisler.oku` | sayfalı, arama joker kaçırılır; yoksa 404 | `TKL` testleri | `teklif.test.ts` `yetki` |

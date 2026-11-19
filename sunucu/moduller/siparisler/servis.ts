@@ -19,10 +19,10 @@ import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
   TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
-import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
+import { bagliEmirler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
 import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisRevizeEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
@@ -216,6 +216,10 @@ export async function durumDegistir(
   if (komut === 'onayla') {
     const eksik = fiyatEksikReddi((await sorgular.kalemler(db, id)).map((k) => ({ birimFiyat: k.birim_fiyat })));
     if (eksik !== null) throw cakisma(eksik);
+  }
+  if (komut === 'kapat') {
+    const eksik = kapanisReddi(komut, await kapanisEksikleri(db, id), g.neden);
+    if (eksik !== null) throw dogrulama(eksik, 'neden');
   }
   if (komut === 'iptal') {
     const bagli = bagliEmirReddi(komut, await bagliEmirler(db, { siparisId: id, satirIdleri: (await sorgular.kalemler(db, id)).map((k) => k.id) }));

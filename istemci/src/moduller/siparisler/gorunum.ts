@@ -1,4 +1,5 @@
 import type { PlanTaslagiGorunumu, SiparisDurumu, TeklifArsivNedeni, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisAsamasi } from '#paylasilan/sozlesme/akis.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu, Sekme } from '../../ortak/arayuz/index.ts';
 
@@ -7,6 +8,18 @@ export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetT
   onayli: { etiket: 'Onaylı', ton: 'bilgi' },
   kapandi: { etiket: 'Tamamlandı', ton: 'tamam' },
   iptal: { etiket: 'İptal', ton: 'hata' },
+};
+
+// 3429-1 (SPA-3): onaylı siparişin hesaplanan aşaması. Taslak, kapandı ve iptal durum rozetiyle zaten görünür; ayrı rozet çizilmez.
+export const SIPARIS_ASAMASI: Readonly<Partial<Record<SiparisAsamasi, { etiket: string; ton: RozetTonu }>>> = {
+  'emir-bekliyor': { etiket: 'Emir bekliyor', ton: 'uyari' },
+  'emir-acildi': { etiket: 'Emir açıldı', ton: 'bilgi' },
+  planlandi: { etiket: 'Planlandı', ton: 'bilgi' },
+  uretimde: { etiket: 'Üretimde', ton: 'bilgi' },
+  uretildi: { etiket: 'Üretildi', ton: 'bilgi' },
+  'kismi-sevk': { etiket: 'Kısmi sevk', ton: 'uyari' },
+  'sevk-tamam': { etiket: 'Sevk tamam', ton: 'tamam' },
+  faturalandi: { etiket: 'Faturalandı', ton: 'tamam' },
 };
 
 // 291 a: sözleşmedeki ISKONTO_ONAY_ESIGI (istemci sözleşmeden değer ithal etmez); sınırı sunucu uygular, ekran yalnız haber verir.

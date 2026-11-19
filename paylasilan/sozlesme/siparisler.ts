@@ -97,6 +97,8 @@ export const siparisRevizyonGovdesi = z.object({
   gerekce: z.string().trim().min(REVIZYON_GEREKCESI_EN_AZ, 'Değişiklik gerekçesi zorunlu (en az 3 harf).').max(500, 'En çok 500 karakter.'),
 }).refine(tarihSirasi, TARIH_SIRASI);
 export const durumGovdesi = z.object({ ...beklenenSurum });
+// SIP-41 (3429-1 a): sevk ya da fatura eksikken kapatma gerekçe ister; gerekçe uç denetim kaydına gövdeyle düşer.
+export const kapatGovdesi = z.object({ ...beklenenSurum, neden: z.string().trim().max(500, 'En çok 500 karakter.').optional() }).strict();
 // 3272: onayda kendiliğinden açılan projenin numarası; verilmezse sipariş numarasından türetilir. Biçimi Projeler denetler (PRJ-01).
 export const onayGovdesi = z.object({ ...beklenenSurum, projeKodu: z.string().trim().min(1).max(24).optional() });
 // SIP-19 (3254 a): onay gerekçeyle geri alınır; gerekçe uç denetim kaydına gövdeyle düşer.

@@ -10,6 +10,7 @@ import {
   SIPARIS_ARSIVDE, SIPARIS_ARSIVDE_DEGIL, SIPARIS_ARSIVLENEMEZ, siparisArsivReddi,
   REVIZYON_KALEM_SABIT, REVIZYON_SABIT_ALAN, REVIZYON_YALNIZ_ONAYLI, degisiklikFiyatsiz, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi,
   FORM_METNI_KAPALI, firmaAdresi, formMetni, formMetniReddi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
+  KAPANIS_GEREKCESI, kapanisReddi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -478,4 +479,13 @@ describe('SIP-40 (3427-4 a) onaylı siparişin yeni sürümü', () => {
     assert.deepEqual(d.map(degisiklikFiyatsiz)[2], { alan: 'birimFiyat', kalemSira: 1, eski: null, yeni: null, fiyat: true });
     assert.deepEqual(d.map(degisiklikFiyatsiz)[0], d[0]);
   });
+});
+
+test('SIP-41 (3429-1 a): eksikle kapatma gerekçe ister; eksik yoksa ya da başka komutta istenmez, ilk beş eksik iletide', () => {
+  assert.equal(kapanisReddi('kapat', [], undefined), null);
+  assert.equal(kapanisReddi('kapat', ['Fatura kesilmedi.'], 'Müşteri istemedi'), null);
+  assert.equal(kapanisReddi('iptal', ['Fatura kesilmedi.'], undefined), null);
+  assert.equal(kapanisReddi('kapat', ['Fatura kesilmedi.'], '  '), `${KAPANIS_GEREKCESI}: Fatura kesilmedi.`);
+  const yedi = Array.from({ length: 7 }, (_, i) => `E${String(i)}.`);
+  assert.equal(kapanisReddi('kapat', yedi, undefined), `${KAPANIS_GEREKCESI}: E0. E1. E2. E3. E4. ve 2 eksik daha`);
 });
