@@ -20,7 +20,7 @@ import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, eskiRevizyonReddi, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
+  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, eskiRevizyonReddi, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, kalemKarsilamasi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
@@ -105,29 +105,31 @@ async function firmayiDenetle(db: Db, firmaId: number, mevcut: number | null): P
 }
 
 // `kayitliKartlar`: siparişte zaten kayıtlı kalemlerin kartları; onlar sonradan eskiye düşse de kalemi durdurmaz (3438 a).
-// Dönen satırlarda yürürlükteki karttaki gerekçe silinir (eski gerekçe yeni kartla kalmaz).
+// Kalemleri yazılacak haliyle döner: karşılama yolu kart türüne göre tamamlanır (SIP-43); yürürlükteki karttaki gerekçe silinir (eski gerekçe yeni kartla kalmaz).
 async function kalemleriDenetle<T extends SiparisEkleVerisi['satirlar'][number]>(
   db: Db, g: Omit<SiparisEkleVerisi, 'satirlar'> & { satirlar: T[] }, kayitliKartlar: ReadonlySet<number> = new Set(),
 ): Promise<T[]> {
   const kartlar = await malzemeOzetleri(db, g.satirlar.map((s) => s.malzemeNo));
   const revizyonlar = await revizyonBilgileri(db, g.satirlar.map((s) => s.malzemeNo));
-  g.satirlar.forEach((s, i) => {
+  const satirlar = g.satirlar.map((s, i) => {
     const kart = kartlar.get(s.malzemeNo) ?? null;
     const ret = malzemeReddi(kart);
     if (ret !== null) throw dogrulama(ret, `satirlar.${i}.malzemeNo`);
     const miktar = miktarReddi(kart?.birim ?? null, s.miktar);
     if (miktar !== null) throw dogrulama(miktar, `satirlar.${i}.miktar`);
-    const parti = karsilamaPartiReddi(s.karsilama ?? 'uret', s.partiler ?? []) ?? partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
+    const karsilama = kalemKarsilamasi(kart?.tur ?? null, s.karsilama);
+    const parti = karsilamaPartiReddi(karsilama, s.partiler ?? []) ?? partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
     if (parti !== null) throw dogrulama(parti, `satirlar.${i}.partiler`);
     const r = kalemRevizyonu(s.malzemeNo, revizyonlar.get(s.malzemeNo));
     const rev = eskiRevizyonReddi(r === null ? null : { ...r, kod: kart?.kod ?? null }, s.eskiRevizyonGerekcesi ?? null, kayitliKartlar.has(s.malzemeNo));
     if (rev !== null) throw dogrulama(rev, `satirlar.${i}.eskiRevizyonGerekcesi`);
+    return { ...s, karsilama };
   });
   const tarih = tarihAraligiReddi(tesisGunu(Date.now()), g);
   if (tarih !== null) throw dogrulama(tarih.mesaj, tarih.alan);
   const tasma = tutarTasmaReddi(g.kdvOrani, g.satirlar);
   if (tasma !== null) throw dogrulama(tasma.mesaj, tasma.alan);
-  return g.satirlar.map((s) => {
+  return satirlar.map((s) => {
     const r = revizyonlar.get(s.malzemeNo);
     return r === undefined || r.yururlukteki.no === s.malzemeNo ? { ...s, eskiRevizyonGerekcesi: null } : s;
   });

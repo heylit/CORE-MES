@@ -62,6 +62,17 @@ export interface Bag {
 }
 
 // Tip denetimi derlemede yakalar; işlevin çalışma anında yokluğu (ihraç adı değişti, modül yarım yüklendi) burada yakalanır.
+// 3429-3 F2: stok ile siparişler birbirini ithal etmez; sipariş kalemleri stoka buradan verilir.
+const siparisStokAyirmasi = siparisAyrintisi && stok.siparisAyirmalariniEsitle && (async (db: Db, olay: { siparisId: number; kullanici: { id: number } }) => {
+  const sp = await siparisAyrintisi(db, olay.siparisId);
+  await stok.siparisAyirmalariniEsitle(db, olay.kullanici.id, {
+    siparisId: sp.id, siparisNo: sp.no, onayli: sp.durum === 'onayli',
+    kalemler: sp.satirlar.map((k) => ({
+      id: k.id, malzemeNo: k.malzemeNo, ad: k.malzemeAdi ?? k.malzemeKodu ?? `Kart ${String(k.malzemeNo)}`, miktar: k.miktar, birim: k.birim, stoktan: k.karsilama === 'stok',
+    })),
+  });
+});
+
 export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, karsilik: T | undefined): Bag {
   return {
     ad,
@@ -495,6 +506,9 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş onaylandı -> proje ve emir açılışı', siparisOnaylandiDinle, uretimEmirleri.siparisOnaylandiAc),
     bag('sipariş onayı geri alındı -> emirler kalemden çözülür', siparisOnayiGeriAlindiDinle, uretimEmirleri.siparisOnayiGeriAlindiCoz),
     bag('sipariş iptal edildi -> dokunulmamış emirler iptal', siparisIptalEdildiDinle, uretimEmirleri.siparisIptalEdildiIptal),
+    // 3429-3 F2: "Stoktan" kalemin depoya ayırma isteği siparişin her değişikliğinde (açılış, düzenleme, her durum geçişi) eşitlenir: onayda açılır,
+    // onay geri alınınca, iptalde ve kapanışta kapanır. Yeni sürüm (SIP-40) kalem, miktar ve yolu değiştirmez. Eşitleme tekrarlanabilir.
+    bag('sipariş değişti -> stok ayırma isteği', siparisDegistiDinle, siparisStokAyirmasi),
     bag('rota, satın alma ve stok -> sipariş açılışı', (emirBaglari: typeof siparisEmirBaglari) => uretimEmirleri.siparisAcilisiCozuculeriKaydet({
       turunRotasi: rotaSiparisAcilisiRotasi, revizyonunRotasi: rotaRevizyonunRotasi, emreKopyala: rotaEmreKopyala, emirBaglari,
       rezervesiVar: async (db, emirId) => (await stok.emrinRezerveleri(db, emirId)).size > 0,

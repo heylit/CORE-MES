@@ -1003,7 +1003,7 @@ describe('Yeni satış siparişi', () => {
     expect(screen.getByText(/^Onayda tek emir açılır/)).toBeTruthy();
     fireEvent.change(yol, { target: { value: 'stok' } });
     expect(screen.queryByLabelText('Kalem 1 üretim çeşidi')).toBeNull();
-    expect(screen.getByText('Emir açılmaz; kalem depodaki stoktan karşılanır.')).toBeTruthy();
+    expect(screen.getByText('Emir açılmaz; onayda eldeki stok kadar depoya ayırma isteği açılır. Eksik kalan için istek açılmaz.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ karsilama: 'stok', partiler: [] }] });

@@ -291,7 +291,7 @@ export async function ayirmaIstekleriListesi(db: Db, s: z.output<typeof ayirmaIs
   return {
     sinirli: l.length > AYIRMA_SINIRI,
     satirlar: satirlar.map((r) => ({
-      id: r.id, talepId: r.talepId, kalemId: r.kalemId, talepNo: r.talepNo, kalemAd: r.kalemAd, malzemeNo: r.malzemeId, kod: kod(r.malzemeId), miktar: r.miktar,
+      id: r.id, kaynak: r.kaynak, talepId: r.talepId, kalemId: r.kalemId, siparisId: r.siparisId, talepNo: r.talepNo, kalemAd: r.kalemAd, malzemeNo: r.malzemeId, kod: kod(r.malzemeId), miktar: r.miktar,
       birim: r.birim, uretimEmriId: r.uretimEmriId, kaynaklar: r.kaynaklar.map((x) => ({ ...x, kod: kod(x.malzemeNo) })), durum: r.durum,
       iptalNedeni: r.iptalNedeni, geriEklendi: r.geriEklendi, isteyen: kisiler.get(r.isteyenKisiId) ?? null, istekZamani: r.istekZamani,
       karar: r.kararKisiId === null ? null : kisiler.get(r.kararKisiId) ?? null, kararZamani: r.kararZamani, surum: r.surum,
@@ -319,8 +319,69 @@ export async function ayirmaIlerlet(db: Db, kul: Kullanici, id: number, g: z.out
 export async function ayirmaIptal(db: Db, kul: Kullanici, id: number, g: z.output<typeof ayirmaIptalGovdesi>): Promise<AyirmaCevabi> {
   const r = await acikIstek(db, id, g.surum);
   if (r.durum !== 'bekliyor' && r.durum !== 'ayrildi') throw gecersiz('Teslim edilmiş ya da iptal edilmiş istek iptal edilemez.');
-  const geriEklendi = await kalemiStoktanGeriAl(db, r.talepId, r.kalemId, r.miktar, r.kalemSatiri, kul.id);
+  // Sipariş kaynağında geri eklenecek talep yoktur; sipariş kalemi yerinde kalır.
+  const geriEklendi = r.kaynak === 'siparis' || r.talepId === null || r.kalemId === null
+    ? false : await kalemiStoktanGeriAl(db, r.talepId, r.kalemId, r.miktar, r.kalemSatiri, kul.id);
   const y = await sorgular.ayirmaIstegiIptal(db, id, g.neden, geriEklendi, kul.id);
   if (y === null) throw new Error('Ayırma isteği yazılamadı.');
   return { ...y, durum: 'iptal', geriEklendi };
+}
+
+// ---- 3429-3 F2: satış siparişinin "Stoktan" kalemi. Onaylı siparişin her stoktan kalemi için en çok bir açık ayırma isteği olur.
+// Açılacak miktar kalem miktarından teslim edilenler düşülerek bulunur ve eldeki kullanılabilir stokla (açık isteklerin tuttuğu düşülür)
+// sınırlanır; stok yoksa istek açılmaz, onay reddedilmez. Açık istek varken ek istek açılmaz (kısmi istek kalır, kalan için depo ya
+// da satın alma). Bekleyen istek kalanı aşarsa (miktar düştü) iptal edilip kalan kadar yeniden açılır; ayrılmış isteğe dokunulmaz.
+// Depo bir isteği kendi nedeniyle iptal ettiyse o kaleme yeniden istek açılmaz. Sipariş onaylı değilse (onay geri alındı, iptal,
+// kapandı) ya da kalem stoktan çıktıysa açık istek iptal olur.
+export interface SiparisAyirmaKalemi { id: number; malzemeNo: number; ad: string; miktar: string; birim: string | null; stoktan: boolean }
+export interface SiparisAyirmaGirdisi { siparisId: number; siparisNo: string; onayli: boolean; kalemler: readonly SiparisAyirmaKalemi[] }
+export const SIPARIS_AYIRMA_NEDENI = {
+  kapandi: 'Sipariş artık onaylı değil (onay geri alındı, iptal ya da kapandı).',
+  yolDegisti: 'Sipariş kalemi artık stoktan karşılanmıyor.',
+  miktarDegisti: 'Sipariş kaleminin miktarı azaldı; istek kalan kadar yeniden açıldı.',
+} as const;
+const SISTEM_NEDENLERI: readonly string[] = Object.values(SIPARIS_AYIRMA_NEDENI);
+const acikMi = (r: sorgular.AyirmaIstegiHam) => r.durum === 'bekliyor' || r.durum === 'ayrildi';
+export async function siparisAyirmalariniEsitle(db: Db, kisiId: number, g: SiparisAyirmaGirdisi): Promise<void> {
+  await sorgular.ayirmaKilidi(db);
+  const hepsi = await sorgular.siparisAyirmalari(db, g.siparisId);
+  const kalemler = new Map((g.onayli ? g.kalemler.filter((k) => k.stoktan) : []).map((k) => [k.id, k]));
+  const iptal = async (r: sorgular.AyirmaIstegiHam, neden: string) => {
+    if ((await sorgular.ayirmaIstegiIptal(db, r.id, neden, false, kisiId)) === null) throw new Error('Ayırma isteği yazılamadı.');
+  };
+  const acilacak: { k: SiparisAyirmaKalemi; miktar: number }[] = [];
+  for (const r of hepsi) {
+    if (acikMi(r) && (r.siparisSatiriId === null || !kalemler.has(r.siparisSatiriId))) await iptal(r, g.onayli ? SIPARIS_AYIRMA_NEDENI.yolDegisti : SIPARIS_AYIRMA_NEDENI.kapandi);
+  }
+  for (const k of kalemler.values()) {
+    const ait = hepsi.filter((r) => r.siparisSatiriId === k.id);
+    if (ait.some((r) => r.durum === 'iptal' && !SISTEM_NEDENLERI.includes(r.iptalNedeni ?? ''))) continue;
+    const kalan = Number(k.miktar) - ait.filter((r) => r.durum === 'teslim').reduce((t, r) => t + Number(r.miktar), 0);
+    const acik = ait.find(acikMi);
+    if (acik !== undefined) {
+      if (acik.durum === 'ayrildi' || Number(acik.miktar) <= kalan + 1e-9) continue;
+      await iptal(acik, SIPARIS_AYIRMA_NEDENI.miktarDegisti);
+    }
+    if (kalan > 1e-9) acilacak.push({ k, miktar: kalan });
+  }
+  if (acilacak.length === 0) return;
+  const nolar = [...new Set(acilacak.map((a) => a.k.malzemeNo))];
+  const stoklar = new Map((await sorgular.kullanilabilirStoklar(db, nolar)).map((x) => [x.malzemeId, x]));
+  const ozetler = await malzemeOzetleri(db, nolar);
+  const ayrilan = await ayrilanOku(db);
+  for (const { k, miktar } of acilacak) {
+    const st = stoklar.get(k.malzemeNo);
+    const kartBirimi = ozetler.get(k.malzemeNo)?.birim ?? null;
+    const birim = k.birim ?? kartBirimi;
+    if (st === undefined || birim === null || !ayniBirim(kartBirimi ?? birim, birim)) continue;
+    const eldeki = Math.max(0, Number(st.miktar) - (ayrilan.stok.get(k.malzemeNo) ?? 0));
+    const al = yuvarla4(Math.min(miktar, eldeki));
+    if (al <= 1e-9) continue;
+    const r = await sorgular.siparisAyirmaIstegiEkle(db, {
+      siparisId: g.siparisId, siparisSatiriId: k.id, siparisNo: g.siparisNo, kalemAd: k.ad.slice(0, 160), malzemeId: k.malzemeNo, miktar: String(al), birim,
+      kaynaklar: [{ malzemeNo: k.malzemeNo, artikId: null, stokMiktari: al, karsilanan: al, konumlar: st.konumlar }], kisiId,
+    });
+    if (r === null) throw new Error('Ayırma isteği yazılamadı.');
+    ayrilan.stok.set(k.malzemeNo, (ayrilan.stok.get(k.malzemeNo) ?? 0) + al);
+  }
 }

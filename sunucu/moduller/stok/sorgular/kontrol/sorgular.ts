@@ -58,12 +58,24 @@ export const ayirmaIstegiEkle = (db: Db, a: {
     [a.talepId, a.kalemId, a.talepNo, a.kalemAd, a.malzemeId, a.miktar, a.birim, a.uretimEmriId, JSON.stringify(a.kaynaklar),
       a.kalemSatiri === null ? null : JSON.stringify(a.kalemSatiri), a.kisiId]);
 
+// 3429-3 F2: satış siparişinin "Stoktan" kalemi için istek; talep_no sipariş numarasıdır, talep alanları boştur.
+export const siparisAyirmaIstegiEkle = (db: Db, a: {
+  siparisId: number; siparisSatiriId: number; siparisNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string;
+  kaynaklar: AyirmaKaynagiHam[]; kisiId: number;
+}): Promise<{ id: number; surum: number } | null> =>
+  db.tek(`INSERT INTO stok_ayirma_istegi (kaynak, siparis_id, siparis_satiri_id, talep_no, kalem_ad, malzeme_id, miktar, birim, kaynaklar, isteyen_kisi_id)
+          VALUES ('siparis', $1, $2, $3, $4, $5, $6::numeric, $7, $8::jsonb, $9) RETURNING id, surum`,
+    [a.siparisId, a.siparisSatiriId, a.siparisNo, a.kalemAd, a.malzemeId, a.miktar, a.birim, JSON.stringify(a.kaynaklar), a.kisiId]);
+// Siparişin bütün istekleri (açık, teslim, iptal), kilitli: teslim edilen ve depoca iptal edilen yeniden açılmasın diye.
+export const siparisAyirmalari = async (db: Db, siparisId: number): Promise<AyirmaIstegiHam[]> =>
+  db.sorgu(`${AYIRMA_SECIMI} WHERE kaynak = 'siparis' AND siparis_id = $1 ORDER BY id FOR UPDATE`, [siparisId]);
+
 export interface AyirmaIstegiHam {
-  id: number; talepId: string; kalemId: string; talepNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string; uretimEmriId: number | null;
+  id: number; kaynak: 'satin-alma' | 'siparis'; talepId: string | null; kalemId: string | null; siparisId: number | null; siparisSatiriId: number | null; talepNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string; uretimEmriId: number | null;
   kaynaklar: AyirmaKaynagiHam[]; kalemSatiri: unknown; durum: 'bekliyor' | 'ayrildi' | 'teslim' | 'iptal'; iptalNedeni: string | null; geriEklendi: boolean | null;
   isteyenKisiId: number; istekZamani: string; kararKisiId: number | null; kararZamani: string | null; surum: number;
 }
-const AYIRMA_SECIMI = `SELECT id, talep_id::text AS "talepId", kalem_id::text AS "kalemId", talep_no AS "talepNo", kalem_ad AS "kalemAd", malzeme_id AS "malzemeId",
+const AYIRMA_SECIMI = `SELECT id, kaynak, talep_id::text AS "talepId", siparis_id AS "siparisId", siparis_satiri_id AS "siparisSatiriId", kalem_id::text AS "kalemId", talep_no AS "talepNo", kalem_ad AS "kalemAd", malzeme_id AS "malzemeId",
   miktar::text AS miktar, birim, uretim_emri_id AS "uretimEmriId", kaynaklar, kalem_satiri AS "kalemSatiri", durum, iptal_nedeni AS "iptalNedeni",
   geri_eklendi AS "geriEklendi", isteyen_kisi_id AS "isteyenKisiId", ${zamanMetni('istek_zamani')} AS "istekZamani", karar_kisi_id AS "kararKisiId",
   ${zamanMetni('karar_zamani')} AS "kararZamani", surum FROM stok_ayirma_istegi`;

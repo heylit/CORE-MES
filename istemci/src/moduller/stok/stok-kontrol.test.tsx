@@ -31,7 +31,7 @@ const IHTIYAC: IhtiyaclarCevabi = {
 
 const AYIRMA: AyirmaIstekleriCevabi = {
   sinirli: false,
-  satirlar: [{ id: 9, talepId: 't1', kalemId: 'k1', talepNo: 'ST-2026-001', kalemAd: 'ORN kalem', malzemeNo: 11, kod: 'ORN-HM-1', miktar: '2.0000', birim: 'adet',
+  satirlar: [{ id: 9, kaynak: 'satin-alma', talepId: 't1', kalemId: 'k1', siparisId: null, talepNo: 'ST-2026-001', kalemAd: 'ORN kalem', malzemeNo: 11, kod: 'ORN-HM-1', miktar: '2.0000', birim: 'adet',
     uretimEmriId: null, kaynaklar: [{ malzemeNo: 12, kod: 'ORN-HM-2', artikId: null, stokMiktari: 2, karsilanan: 2, konumlar: ['A-02-1'] }], durum: 'bekliyor',
     iptalNedeni: null, geriEklendi: null, isteyen: 'Deneme Satın Alma', istekZamani: '2026-11-17T10:00:00+03:00', karar: null, kararZamani: null, surum: 1 }],
 };
@@ -180,5 +180,16 @@ describe('Stok kontrol (3398)', () => {
     expect(within(t2).getByText('ORN kalem')).toBeTruthy();
     expect(within(t2).queryByRole('button', { name: 'Ayrıldı' })).toBeNull();
     expect(within(t2).getByRole('button', { name: 'İptal' })).toBeTruthy();
+  });
+
+  it('3429-3 F2: satış siparişinden gelen istek belgeyi "Sipariş" diye yazar; iptal penceresi talebe geri eklemeyi anmaz', async () => {
+    const siparisten: AyirmaIstekleriCevabi = { sinirli: false, satirlar: [{ ...AYIRMA.satirlar[0]!, kaynak: 'siparis', talepId: null, kalemId: null, siparisId: 5, talepNo: 'SS-ORN-005' }] };
+    sunucuKur(DEPOCU, { 'GET /stok/kontrol-ihtiyaclari': () => json(200, IHTIYAC), 'GET /stok/ayirma-istekleri': () => json(200, siparisten) });
+    ac('/stok/kontrol');
+    const tablo = await screen.findByRole('table', { name: 'Ayırma istekleri' });
+    expect(within(tablo).getByText('Sipariş SS-ORN-005')).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'İptal' }));
+    const onay = await screen.findByRole('dialog', { name: 'Ayırma isteğini iptal et' });
+    expect(within(onay).getByText(/sipariş kalemi değişmez/)).toBeTruthy();
   });
 });

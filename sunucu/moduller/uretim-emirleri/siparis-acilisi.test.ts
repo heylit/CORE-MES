@@ -115,12 +115,12 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
     cerezler.set(kullaniciAdi, String(g.headers['set-cookie']).split(';')[0] ?? '');
   }
 
-  const malzeme = async (tur: 'mamul' | 'ticari_mal' = 'mamul'): Promise<number> => {
+  const malzeme = async (tur: 'mamul' | 'ticari_mal' = 'mamul', birim?: string): Promise<number> => {
     sayac += 1;
     return (await o().sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
        VALUES ($1, $2, 'ORN-', $3, 'aktif', $4, $5, $5) RETURNING no`,
-      [`ornsa-${sayac}`, tur, sayac, JSON.stringify({ id: `ornsa-${sayac}`, com: { ad: 'Deneme malzeme' } }), yoneticiId]))!.no;
+      [`ornsa-${sayac}`, tur, sayac, JSON.stringify({ id: `ornsa-${sayac}`, com: { ad: 'Deneme malzeme', ...(birim === undefined ? {} : { birim }) } }), yoneticiId]))!.no;
   };
   interface Kalem { malzemeNo: number; miktar: number; partiler?: { tur: string; adet: number }[]; karsilama?: string }
   const siparis = async (kalemler: Kalem[]): Promise<{ id: number; no: string; satirlar: number[] }> => {
@@ -209,6 +209,33 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(once.govde.satirlar.map((x) => [x.adet, x.atlama]), [[5, null], [3, 'stoktan'], [2, 'satin-alinir']]);
     assert.equal((await onayla('yonetici', s.id)).durum, 200);
     assert.deepEqual((await emirler(s.satirlar)).map((x) => [x.satir, Number(x.adet)]), [[s.satirlar[0], 5]]);
+  });
+
+  test('3429-3 F2: onayda "Stoktan" kalem depoya ayırma isteği açar (kablolama); onay geri alınınca ve iptalde kapanır', async () => {
+    const m = await malzeme('ticari_mal', 'adet');
+    const raf = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_konum (depo_id, kod, tur, ad) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), $1, 'depo_zemini', 'Deneme zemini') RETURNING id", [`ORN-F2-${String(m)}`]))!.id;
+    // Tablo sahibi bakiye-defter tetiğinden muaftır: stok hareketi yazılmadan bakiye konur (yalnız test).
+    await o().sahip.sorgu('INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, 8, now())', [m, raf]);
+    const istekler = async (id: number) => (await o().sahip.sorgu<{ satir: number; miktar: string; durum: string }>(
+      "SELECT siparis_satiri_id AS satir, miktar::text AS miktar, durum FROM stok_ayirma_istegi WHERE kaynak = 'siparis' AND siparis_id = $1 ORDER BY id", [id]));
+    const s = await siparis([{ malzemeNo: m, miktar: 3, karsilama: 'stok' }, { malzemeNo: m, miktar: 2, karsilama: 'satin-al' }]);
+    assert.equal((await onayla('yonetici', s.id)).durum, 200);
+    assert.deepEqual(await istekler(s.id), [{ satir: s.satirlar[0], miktar: '3.0000', durum: 'bekliyor' }]);
+    assert.equal((await geriAl(s.id)).durum, 200);
+    assert.deepEqual((await istekler(s.id)).map((r) => r.durum), ['iptal']);
+    assert.equal((await onayla('yonetici', s.id)).durum, 200);
+    assert.equal((await iptal(s.id)).durum, 200);
+    assert.deepEqual((await istekler(s.id)).map((r) => r.durum), ['iptal', 'iptal']);
+
+    // Test T1, T2: geri alınan siparişte miktar değişip yeniden onaylanınca yeni miktarla açılır; aynı kartın ikinci kalemi kalanı alır.
+    const s2 = await siparis([{ malzemeNo: m, miktar: 2, karsilama: 'stok' }]);
+    assert.equal((await onayla('yonetici', s2.id)).durum, 200);
+    assert.equal((await geriAl(s2.id)).durum, 200);
+    await o().sahip.sorgu('UPDATE siparisler_siparis_satiri SET miktar = 4 WHERE id = $1', [s2.satirlar[0]]);
+    await o().sahip.sorgu("INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, karsilama) VALUES ($1, 2, $2, 9, 1, 'stok')", [s2.id, m]);
+    assert.equal((await onayla('yonetici', s2.id)).durum, 200);
+    assert.deepEqual((await istekler(s2.id)).filter((r) => r.durum !== 'iptal').map((r) => r.miktar), ['4.0000', '4.0000'], 'eldeki 8: ilk kalem 4, ikinci kalan 4');
   });
 
   test('3272-2 a, Risk K3: rota bekleyen emir plana alınmaz (409, emir taslak kalır)', async () => {
