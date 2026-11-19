@@ -219,7 +219,7 @@ export async function katalogKartiIptal(db: Db, kimlik: string, kisiId: number):
 }
 
 // Ad yalnız `kayit.com.ad` metin ise ve boş değilse vardır; `com` nesne değilse ya da ad metin değilse null.
-const KATALOG_AD = `CASE WHEN jsonb_typeof(kayit -> 'com') = 'object' AND jsonb_typeof(kayit -> 'com' -> 'ad') = 'string'
+export const KATALOG_AD = `CASE WHEN jsonb_typeof(kayit -> 'com') = 'object' AND jsonb_typeof(kayit -> 'com' -> 'ad') = 'string'
                          THEN NULLIF(btrim(kayit -> 'com' ->> 'ad'), '') END`;
 
 // Arşiv (2114c): iptal kartlar. Silen ve silinme, iptal satırına son yazandır: iptal kart değiştirilemez (kurallar), son yazım silmedir.
@@ -374,8 +374,8 @@ export function katalogKayitAra(
 
 // Kg fiyatı (satın alma) için kartın kalitesi ve formu `kayit`'tadır: hazır kalitede `grade`, özel kalitede `custom.kod` (yoksa `custom.ad`).
 // Yalnız dolu metin alınır; hammadde dışı kartta kalite ve form yoktur, uydurulmaz.
-const KATALOG_METIN = (yol: string): string => `NULLIF(btrim(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'string' THEN k.kayit #>> '{${yol}}' END), '')`;
-const KATALOG_KALITE = `CASE WHEN k.kayit ->> 'grade' = '__ozel' THEN COALESCE(${KATALOG_METIN('custom,kod')}, ${KATALOG_METIN('custom,ad')})
+export const KATALOG_METIN = (yol: string): string => `NULLIF(btrim(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'string' THEN k.kayit #>> '{${yol}}' END), '')`;
+export const KATALOG_KALITE = `CASE WHEN k.kayit ->> 'grade' = '__ozel' THEN COALESCE(${KATALOG_METIN('custom,kod')}, ${KATALOG_METIN('custom,ad')})
                              ELSE ${KATALOG_METIN('grade')} END`;
 
 export interface KatalogMaliyetSatiri {

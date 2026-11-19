@@ -3,6 +3,7 @@ import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { LogoGonderimi } from '../LogoGonderimi.tsx';
 import { MalzemeAyarlari } from './ayarlar/index.tsx';
+import { Alternatifler } from './alternatifler/index.tsx';
 import { Arsiv } from './arsiv/index.tsx';
 import { Katalog } from './katalog/index.tsx';
 import { Kilavuz } from './kilavuz/index.tsx';
@@ -34,7 +35,7 @@ export interface EkranOzellikleri {
   git: Gezinti;
 }
 
-export type Bolum = 'katalog' | 'kart' | 'sablonlar' | 'arsiv' | 'ayarlar' | 'logo' | 'kilavuz';
+export type Bolum = 'katalog' | 'kart' | 'sablonlar' | 'arsiv' | 'alternatif' | 'ayarlar' | 'logo' | 'kilavuz';
 
 export interface BolumTanimi {
   anahtar: Bolum;
@@ -54,6 +55,8 @@ export const BOLUMLER: readonly BolumTanimi[] = [
   { anahtar: 'sablonlar', baslik: 'Şablonlar', simge: 'grid', yol: 'sablonlar', ekran: Sablonlar, gorur: (y) => y.oku },
   // Arşiv (2114c): silinen kartları okuyan görür; geri getirme ve kalıcı silme düğmeleri yalnız onaycıda.
   { anahtar: 'arsiv', baslik: 'Arşiv', simge: 'box', yol: 'arsiv', ekran: Arsiv, gorur: (y) => y.oku },
+  // 3437: kabul sınırları ve muadiller; düzenleme yalnız tanım yazanda.
+  { anahtar: 'alternatif', baslik: 'İkame ve alternatifler', simge: 'layers', yol: 'alternatifler', ekran: Alternatifler, gorur: (y) => y.oku },
   { anahtar: 'ayarlar', baslik: 'Malzeme ayarları', simge: 'gear', yol: 'ayarlar', ekran: MalzemeAyarlari, gorur: (y) => y.oku },
   { anahtar: 'logo', baslik: 'Logo gönderimi', simge: 'upload', yol: 'logo', ekran: LogoGonderimi, gorur: (y) => y.oku },
   { anahtar: 'kilavuz', baslik: 'Kılavuz', simge: 'eye', yol: 'kilavuz', ekran: Kilavuz, gorur: (y) => y.oku },

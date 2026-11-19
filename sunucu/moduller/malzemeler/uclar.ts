@@ -8,6 +8,11 @@ import {
   arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi, katalogKartiIptalCevabi,
   logoKartSurumCevabi, logoKartSurumGovdesi, logoYeniKodCevabi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
+import {
+  alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
+  durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, kartZarfiCevabi, kartZarfiParametresi,
+} from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import * as servis from './servis.ts';
 
@@ -148,5 +153,35 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-arsivi/:kimlik/kalici-sil', yetki: 'malzemeler.onayla', parametre: katalogKimlikParametresi, govde: arsivKaliciSilGovdesi,
     cevap: katalogKimlikCevabi, isle: ({ db, parametre, govde }) => servis.arsivdenKaliciSil(db, parametre.kimlik, govde.stokKodu),
+  }),
+  // 3437: İkame ve alternatifler. Okuma sayfayı okuyana açık; kurallar ve muadiller tanım yazanın (yeni yetki işlemi yok, 3437 a).
+  uc({ yontem: 'GET', yol: '/malzeme-alternatifleri', yetki: OKUMA, cevap: alternatifTanimlariCevabi, isle: ({ db }) => alternatif.alternatifTanimlari(db) }),
+  uc({
+    yontem: 'GET', yol: '/malzeme-alternatifleri/zarf/:no', yetki: OKUMA, parametre: kartZarfiParametresi, cevap: kartZarfiCevabi,
+    isle: ({ db, parametre }) => alternatif.kartZarfi(db, parametre.no),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/kurallar/kaydet', yetki: 'malzemeler.tanim-yaz', govde: alternatifKuraliKaydetGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.alternatifKuraliKaydet(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/kurallar/:id/kaldir', yetki: 'malzemeler.tanim-yaz', parametre: alternatifKuraliParametresi,
+    govde: alternatifKuraliKaldirGovdesi, cevap: alternatifKomutCevabi, isle: ({ db, parametre, govde }) => alternatif.alternatifKuraliKaldir(db, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/kalite-muadilleri/kaydet', yetki: 'malzemeler.tanim-yaz', govde: kaliteMuadiliKaydetGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde: { kalite, ...g } }) => alternatif.muadilKaydet(db, kullanici, 'kalite', { deger: kalite, ...g }),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/kalite-muadilleri/kaldir', yetki: 'malzemeler.tanim-yaz', govde: kaliteMuadiliKaldirGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, govde }) => alternatif.muadilKaldir(db, 'kalite', govde.kalite, govde.muadil, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/durum-muadilleri/kaydet', yetki: 'malzemeler.tanim-yaz', govde: durumMuadiliKaydetGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde: { durum, ...g } }) => alternatif.muadilKaydet(db, kullanici, 'durum', { deger: durum, ...g }),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/durum-muadilleri/kaldir', yetki: 'malzemeler.tanim-yaz', govde: durumMuadiliKaldirGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, govde }) => alternatif.muadilKaldir(db, 'durum', govde.durum, govde.muadil, govde.surum),
   }),
 ];
