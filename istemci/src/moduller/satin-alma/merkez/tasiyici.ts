@@ -412,6 +412,7 @@ async function yukle(): Promise<void> {
   FIRMA_KARTLARI.splice(0, FIRMA_KARTLARI.length, ...a.firmaKartlari.map((f) => ({ id: String(f.id), ad: f.ad })));
   S.materials = kimlikle(a.katalog.map(katalogEkrana));
   S.settings = ayarEkrana(a.ayarlar);
+  S.istekFormu = a.teklifIstekFormu ?? null;
   // 3279 a: Kalite rehberi; okunamazsa rehber çıkmaz (kimse onaylı sayılmaz), ekranın geri kalanı açılır.
   // Eksik ya da beklenmeyen cevap (ör. uç henüz olmayan sunucu) rehbersiz açılır; kimse onaylı sayılmaz.
   try {

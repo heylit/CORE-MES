@@ -5,7 +5,7 @@
  *   - transport.artifact.ts: claude.ai önizlemesinin kendi veritabanı (önizleme derlemesinde bu dosya seçilir)
  */
 import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
-import type { KalemZarflariCevabi, SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { KalemZarflariCevabi, SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi, TeklifIstekFormuCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
 import type { OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DEFAULT_SETTINGS } from "./constants.ts";
@@ -18,6 +18,8 @@ export interface State {
   suppliers: Record<string, Supplier>;
   materials: Record<string, Material>;
   settings: Settings | null;
+  // teklif isteme formunun şablonu ve anteti; yalnız satın almayı yazana gelir.
+  istekFormu?: TeklifIstekFormuCevabi | null;
   users: Record<string, AppUser>;
   me: AppUser | null;
   ready: boolean;

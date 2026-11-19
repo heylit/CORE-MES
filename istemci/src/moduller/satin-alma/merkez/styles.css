@@ -590,12 +590,23 @@
 .sa-kok .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:var(--b-4); margin-top:var(--b-5); }
 .sa-kok .sig{ border:1px solid silver; padding:var(--b-2) var(--b-2); min-height:110px; display:flex; flex-direction:column; }
 .sa-kok .sig-t{ font-weight:600; } .sa-kok .sig-n{ color:dimgray; } .sa-kok .sig-l{ margin-top:auto; border-top:1px dashed darkgray; padding-top:var(--b-1); font-size:var(--yazi-xs); color:gray; }
-.sa-kok #print-root{ display:none; }
+/* teklif isteme formu; geniş ekranda alanlar solda kağıt sağda, dar ekranda alt alta. Fiyat sütunları tedarikçi doldursun diye boş. */
+.sa-kok .sa-istek-duzen{ display:grid; grid-template-columns:minmax(16rem, 22rem) minmax(0, 1fr); gap:var(--b-4); align-items:start; }
+.sa-kok .sa-istek-alanlar{ display:flex; flex-direction:column; gap:var(--b-3); min-width:0; }
+.sa-kok .sa-istek-alanlar textarea{ resize:vertical; }
+@media (max-width:900px){ .sa-kok .sa-istek-duzen{ grid-template-columns:minmax(0, 1fr); } .sa-kok .sa-istek-duzen .doc-wrap{ padding:var(--b-2); } }
+.sa-kok .doc-antet{ font-size:var(--yazi-xs); color:dimgray; }
+.sa-kok .doc-metin{ margin:var(--b-3) 0; }
+.sa-kok .doc-liste{ margin:0; padding-left:var(--b-5); }
+.sa-kok .doc td.doc-bos{ min-width:6rem; }
+.sa-kok .doc-istek{ width:794px; max-width:none; zoom:var(--sa-kagit-olcek, 1); }
+.sa-kok .sa-istek-uyari{ margin:0 0 var(--b-2); font-size:var(--yazi-s); color:var(--sa-ink); }
+.sa-baski-koku{ display:none; }
 @media print{
-  .sa-kok.printing > *:not(#print-root){ display:none !important; }
-  .sa-kok.printing #print-root{ display:block; }
-  .sa-kok.printing{ background:white; }
-  .sa-kok #print-root .doc{ box-shadow:none; max-width:none; padding:0; }
+  body.sa-baskida > *:not(.sa-baski-koku){ display:none !important; }
+  body.sa-baskida{ background:white; margin:0; }
+  body.sa-baskida > .sa-baski-koku{ display:block; background:white; margin:0; padding:0; width:auto; min-height:0; height:auto; overflow:visible; }
+  .sa-baski-koku .doc{ box-shadow:none; max-width:none; width:auto; padding:0; zoom:1; }
   @page{ size:A4; margin:16mm; }
 }
 /* senaryo karşılaştırması */

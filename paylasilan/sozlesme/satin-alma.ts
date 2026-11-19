@@ -499,6 +499,28 @@ export const ayarlarKaydetGovdesi = z.object({
   ...beklenenSurum,
 });
 
+// tedarikçiye giden teklif isteme formu (PDF). Şablon Sistem Ayarları > Formlar'da; pencerede basmadan önce değiştirilir,
+// değişiklik saklanmaz. Antet siparişlerin teklif formundaki kurum bilgisidir (tek antet). Değeri olmayan alanın satırı basılmaz.
+export const TEKLIF_ISTEK_FORMU_ALANLARI = ['{TEDARIKCI}', '{YETKILI}', '{TALEP_NO}', '{KONU}', '{IHTIYAC}', '{SON_TARIH}', '{FIRMA}'] as const;
+export const TEKLIF_ISTEK_FORMU_SORU_EN_COK = 20;
+const istekFormMetni = (enCok: number, ad: string) => z.string().trim().max(enCok, `${ad} en çok ${String(enCok)} karakter olabilir.`);
+export const teklifIstekFormuIcerigi = z.object({
+  baslik: z.string().trim().min(1, 'Form başlığı boş olamaz.').max(80, 'Form başlığı en çok 80 karakter olabilir.'),
+  giris: istekFormMetni(1000, 'Giriş metni'),
+  istenenler: z.array(z.string().trim().min(1, 'Soru boş olamaz.').max(300, 'Soru en çok 300 karakter olabilir.'))
+    .max(TEKLIF_ISTEK_FORMU_SORU_EN_COK, `En çok ${String(TEKLIF_ISTEK_FORMU_SORU_EN_COK)} soru yazılır.`),
+  kapanis: istekFormMetni(1000, 'Kapanış metni'),
+  imza1: istekFormMetni(60, 'İmza başlığı'),
+  imza2: istekFormMetni(60, 'İmza başlığı'),
+  alt: istekFormMetni(200, 'Alt bilgi'),
+});
+// Antet siparişlerden okunur (yalnız okuma; siparisler.ts bu dosyayı ithal ettiği için şekil burada yeniden yazılır).
+export const teklifIstekFormuKurumu = z.object({ unvan: z.string(), adres: z.string(), telefon: z.string(), eposta: z.string(), vergi: z.string() });
+export const teklifIstekFormuCevabi = z.object({ icerik: teklifIstekFormuIcerigi, surum: surumSemasi, kurum: teklifIstekFormuKurumu });
+export const teklifIstekFormuKaydetGovdesi = z.object({ ...beklenenSurum, icerik: teklifIstekFormuIcerigi });
+export type TeklifIstekFormuIcerigi = z.output<typeof teklifIstekFormuIcerigi>;
+export type TeklifIstekFormuCevabi = z.output<typeof teklifIstekFormuCevabi>;
+
 export const acilisCevabi = z.object({
   kullanici: z.object({ id: z.number().int(), ad: z.string() }),
   talepler: z.array(talepSemasi),
@@ -507,6 +529,8 @@ export const acilisCevabi = z.object({
   firmaKartlari: z.array(z.object({ id: firmaKimligi, ad: z.string() })),
   katalog: z.array(katalogSemasi),
   ayarlar: ayarlarSemasi,
+  // teklif iste penceresi basar; eski ekran fikstürleri için isteğe bağlı.
+  teklifIstekFormu: teklifIstekFormuCevabi.optional(),
 });
 
 // Tedarikçi eklerken finanstaki firmayı seçmek için arama (kullanıcı kararı S1, 07.10.2026).
@@ -844,6 +868,8 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-talepleri/:id/cizimler': { cevap: TalepCizimleriCevabi };
   'POST /satin-alma-talepleri/:id/cizim-bagla': { govde: z.input<typeof talepCizimiGovdesi>; cevap: TalepCizimleriCevabi };
   'POST /satin-alma-talepleri/:id/cizimler/:ozet/kaldir': { cevap: TalepCizimleriCevabi };
+  'GET /satin-alma-teklif-istek-formu': { cevap: TeklifIstekFormuCevabi };
+  'POST /satin-alma-teklif-istek-formu/kaydet': { govde: z.input<typeof teklifIstekFormuKaydetGovdesi>; cevap: TeklifIstekFormuCevabi };
   'GET /satin-alma-siparis-faturalari': { sorgu: z.input<typeof siparisFaturalariSorgusu>; cevap: SiparisFaturalariCevabi };
   'POST /satin-alma-talepleri/:id/siparis-faturasi': { govde: z.input<typeof siparisFaturasiGovdesi>; cevap: SiparisFaturalariCevabi };
   'GET /satin-alma-firma-secenekleri': { sorgu: z.input<typeof firmaSecenekleriSorgusu>; cevap: FirmaSecenekleriCevabi };

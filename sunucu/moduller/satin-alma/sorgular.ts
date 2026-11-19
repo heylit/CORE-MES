@@ -2131,3 +2131,15 @@ export async function stoktanKalemGeriAl(db: Db, talepId: string, kalemId: strin
   await db.sorgu('UPDATE satin_alma_talep SET surum = surum + 1, guncelleme = now() WHERE id = $1', [talepId]);
   return true;
 }
+
+// teklif isteme formunun şablonu (tek satır).
+export function teklifIstekFormuOku(db: Db): Promise<{ icerik: unknown; surum: number } | null> {
+  return db.tek<{ icerik: unknown; surum: number }>('SELECT icerik, surum FROM satin_alma_teklif_istek_formu WHERE tek');
+}
+export function teklifIstekFormuGuncelle(db: Db, icerik: object, surum: number, kisiId: number): Promise<{ surum: number } | null> {
+  return db.tek<{ surum: number }>(
+    `UPDATE satin_alma_teklif_istek_formu SET icerik = $1::jsonb, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE tek AND surum = $2 RETURNING surum`,
+    [JSON.stringify(icerik), surum, kisiId],
+  );
+}

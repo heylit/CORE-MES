@@ -26,7 +26,7 @@ describe('satın alma ayarları yalnız Sistem Ayarları\'nda', () => {
     expect(yollar).toContain('/satin-alma/talepler');
     expect(yollar.some((y) => y.includes('ayar'))).toBe(false);
     expect(rotalar.some((r) => r.yol.includes('ayar'))).toBe(false);
-    expect(ayarEkranlari.map((e) => [e.anahtar, e.islem])).toEqual([['satin-alma', 'satin-alma.ayar']]);
+    expect(ayarEkranlari.map((e) => [e.anahtar, e.islem])).toEqual([['satin-alma', 'satin-alma.ayar'], ['teklif-isteme-formu', 'satin-alma.ayar']]);
   });
 });
 

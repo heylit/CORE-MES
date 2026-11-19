@@ -1,5 +1,5 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
-import { KUR_KILIDI, ONCELIKLER, PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
+import { KUR_KILIDI, ONCELIKLER, PARA_BIRIMLERI, teklifIstekFormuIcerigi, type TeklifIstekFormuIcerigi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
@@ -102,6 +102,7 @@ export const ILETILER = {
   cizimGoremez: 'Bu talebin çizimini göremezsiniz.',
   cizimEklenemez: 'Çizim yalnız taslaktaki kendi talebinize eklenir; sonrasında satın alma ekler.',
   cizimYok: 'Dosya bu talebe bağlı değil.',
+  istekFormuYok: 'Teklif isteme formu kurulumda yok; göçleri uygulayın.',
   talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; teklif toplanırken güncelleme talebi açın, sonrasında değişikliği satın almaya iletin.',
   guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
   guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
@@ -2062,4 +2063,11 @@ export function kabulZarfi(zarf: AlternatifZarfi, k: KabulSiniri | null): Altern
     durum: { ...zarf.durum, secenekler: suz(zarf.durum.secenekler, y.durumlar) },
     olcu: y.payMm === null ? zarf.olcu : zarf.olcu.map((o) => ({ ...o, enCok: Math.min(o.enCok, Math.round((o.istenen + y.payMm!) * 1000) / 1000) })),
   };
+}
+
+// kayıtlı şablon sözleşmeye uymuyorsa (elle bozulmuş satır) boş başlıklı form basılmaz, hazır başlıkla açılır.
+const BOS_ISTEK_FORMU: TeklifIstekFormuIcerigi = { baslik: 'TEKLİF İSTEME FORMU', giris: '', istenenler: [], kapanis: '', imza1: '', imza2: '', alt: '' };
+export function istekFormuIcerigi(ham: unknown): TeklifIstekFormuIcerigi {
+  const c = teklifIstekFormuIcerigi.safeParse(ham);
+  return c.success ? c.data : BOS_ISTEK_FORMU;
 }
