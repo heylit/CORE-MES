@@ -29,7 +29,8 @@ function sunucuKur(yollar: Record<string, (govde: unknown) => Response>) {
 }
 
 function Adres() {
-  return <output data-testid="adres">{useLocation().pathname}</output>;
+  const { pathname, search } = useLocation();
+  return <output data-testid="adres">{pathname + search}</output>;
 }
 
 function ac(adres: string, ek?: React.ReactNode) {
@@ -156,6 +157,12 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
       cleanup();
     }
   });
+
+  it('3435-3: eski kademeli uyarı adresi yönetim sayfasının kademe sekmesine gider', async () => {
+    sunucuKur({});
+    ac('/bildirim-merkezi/kademeli-uyari');
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/bildirim-merkezi/yonetim?sekme=kademe'));
+  });
 });
 
 // 342 a: uygulama açıkken (arka sekmede de) yeni okunmamış bildirim cihaz bildirimi olarak düşer; izin yalnız düğmeyle istenir.
@@ -190,7 +197,7 @@ describe('Cihaz bildirimi (342 a)', () => {
     satirlar = [B({ id: 6, baslik: 'Takım ömrü doluyor', metin: null, yol: '/cnc-kurulum', kaynakModul: 'cnc-kurulum' }), B({ id: 5 })];
     h.rerender({ n: 2 });
     await waitFor(() => expect(gosterilen).toHaveLength(1));
-    expect(gosterilen[0]).toEqual({ baslik: 'Takım ömrü doluyor', secenek: { body: 'cnc-kurulum', tag: 'tmi-bildirim-6', data: { yol: '/cnc-kurulum' } } });
+    expect(gosterilen[0]).toEqual({ baslik: 'Takım ömrü doluyor', secenek: { body: 'CNC kurulum', tag: 'tmi-bildirim-6', data: { yol: '/cnc-kurulum' } } });
 
     satirlar = [B({ id: 6 })];
     h.rerender({ n: 1 });

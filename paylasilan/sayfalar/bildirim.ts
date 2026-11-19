@@ -37,10 +37,11 @@ export const BILDIRIM_IKINCI_MENU = {
     {
       baslik: 'Ayarlar',
       maddeler: [
-        { anahtar: 'kademeli-uyari', baslik: 'Kademeli uyarı', yol: '/bildirim-merkezi/kademeli-uyari', simge: 'alert', islem: 'bildirim.kademe-yonet', okur: ['/bildirim-kademe/kaynaklar'] },
+        // 3435-3 a: olay ve kanal ayarları, e-posta şablonları, kademeli uyarı ve ekip çağrıları tek sayfada; her sekme kendi işlemiyle.
         {
-          anahtar: 'yonetim', baslik: 'Bildirim yönetimi', yol: '/bildirim-merkezi/yonetim', simge: 'users', islem: 'ayarlar.yaz',
-          okur: ['/bildirimler/cagri-yonlendirme', '/bildirimler/alicilar', '/bildirimler/gosterim'],
+          anahtar: 'yonetim', baslik: 'Bildirim ve uyarı yönetimi', yol: '/bildirim-merkezi/yonetim', simge: 'grid', islem: 'ayarlar.yaz',
+          veya: ['bildirim.eposta-yonet', 'bildirim.kademe-yonet'],
+          okur: ['/bildirimler/cagri-yonlendirme', '/bildirimler/alicilar', '/bildirimler/gosterim', '/bildirimler/push/turler', '/bildirim-kademe/kaynaklar'],
         },
         { anahtar: 'eposta', baslik: 'E-posta', yol: '/bildirim-merkezi/eposta', simge: 'mail', islem: 'bildirim.eposta-yonet', okur: ['/bildirimler/eposta/durum'] },
       ],

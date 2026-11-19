@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { Arsiv, Gelenler, HazirlaSayfasi, YayinlarSayfasi } from './Bildirimler.tsx';
-import { AcikTakipler, Gecikenlerim, KademeliUyari } from './Kademe.tsx';
+import { AcikTakipler, Gecikenlerim } from './Kademe.tsx';
 
 // Bildirim Merkezi (3405-4 a): bildirim, duyuru ve kademeli takip tek sayfada. Bildirim yönetimi ve E-posta ayarları da bu menüdedir;
 // ekranları Sistem Ayarları modülündedir ve oradan bu adrese kaydedilir.
@@ -19,7 +19,8 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/bildirim-merkezi/hazirla', ekran: HazirlaSayfasi },
   { yol: '/bildirim-merkezi/yayinlar', ekran: YayinlarSayfasi },
   { yol: '/bildirim-merkezi/acik-takipler', ekran: AcikTakipler },
-  { yol: '/bildirim-merkezi/kademeli-uyari', ekran: KademeliUyari },
+  // 3435-3 a: kademeli uyarı kaynakları Bildirim ve uyarı yönetiminde sekmedir.
+  { yol: '/bildirim-merkezi/kademeli-uyari', ekran: () => <Navigate to="/bildirim-merkezi/yonetim?sekme=kademe" replace /> },
   // Eski adresler (yer imi, gönderilmiş bildirim bağlantısı) yeni yere gider.
   { yol: '/profil/bildirimler', ekran: () => <EskiAdres yeni="/bildirim-merkezi" /> },
   ...(['arsiv', 'hazirla', 'yayinlar'] as const).map((a) => ({ yol: `/profil/bildirimler/${a}`, ekran: () => <EskiAdres yeni={`/bildirim-merkezi/${a}`} /> })),

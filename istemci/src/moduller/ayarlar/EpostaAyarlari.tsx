@@ -2,18 +2,17 @@ import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import {
-  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_EN_UZUN, EPOSTA_GOVDE_EN_UZUN, EPOSTA_KIP_ADLARI, EPOSTA_KONULARI, EPOSTA_KONU_ADLARI,
+  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_EN_UZUN, EPOSTA_GOVDE_EN_UZUN, EPOSTA_KIP_ADLARI, EPOSTA_KONU_ADLARI,
   EPOSTA_KONU_EN_UZUN, EPOSTA_SABLON_AD_EN_UZUN, EPOSTA_SERITLERI, EPOSTA_SERIT_ADLARI, EPOSTA_SIMGELERI, EPOSTA_TABLO_ADLARI, EPOSTA_TABLO_ALANLARI,
   EPOSTA_VARSAYILAN_DUGME, EPOSTA_YER_TUTUCULARI, bilinmeyenYerTutucular, sablonDoldur, type EpostaDegerleri, type EpostaKonusu, type EpostaSablonIcerigi,
   type EpostaSeridi, type EpostaSimgesi, type EpostaSonucu, type EpostaTabloAlani, type EpostaYerTutucusu,
 } from '#paylasilan/sozlesme/eposta-sabitleri.ts';
 import type {
   EpostaDefterCevabi, EpostaDefterSatiri, EpostaDenemeCevabi, EpostaDurumuCevabi, EpostaOzelSablonu, EpostaSablonlariCevabi, EpostaSablonu,
-  EpostaSinamaCevabi, EpostaTetikleyiciDegistirGovdesi, EpostaTetikleyiciSatiri, EpostaTetikleyicileriCevabi,
+  EpostaSinamaCevabi, EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
-import type { BildirimOnemi } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  AcKapa, CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, OnayPenceresi, Pencere, Rozet, SayiKarti, Secim, Sekmeler, Simge, Tablo, useBildirim,
+  CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, OnayPenceresi, Rozet, SayiKarti, Secim, Sekmeler, Simge, Tablo, useBildirim,
   type RozetTonu, type Sekme, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -22,8 +21,8 @@ import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
 import type { AyarListesiEki } from './SistemAyarlari.tsx';
 import './eposta.css';
 
-// E-posta kanalı (ADR 0015, 3397): sunucu bağlantısı ortam değişkenindedir ve burada yalnız okunur; gönderim ayarları, tür başına
-// tetikleyici, konu başına şablon ve gönderim defteri buradan yönetilir. Uçlar `bildirim.eposta-yonet` ister.
+// E-posta kanalı (ADR 0015, 3397): sunucu bağlantısı ortam değişkenindedir ve burada yalnız okunur; gönderim ayarları ve gönderim
+// defteri buradadır. Olay başına e-posta ayarı ve şablonlar Bildirim ve uyarı yönetimindedir (3435-3 a). Uçlar `bildirim.eposta-yonet` ister.
 const ANAHTAR = {
   durum: ['ayarlar', 'eposta', 'durum'] as const,
   tetikleyiciler: ['ayarlar', 'eposta', 'tetikleyiciler'] as const,
@@ -31,17 +30,12 @@ const ANAHTAR = {
   defter: (sayfa: number, sonuc: string) => ['ayarlar', 'eposta', 'defter', sayfa, sonuc] as const,
 };
 
-type EpostaSekmesi = 'sunucu' | 'tetik' | 'sablon' | 'defter';
+type EpostaSekmesi = 'sunucu' | 'defter';
 const SEKMELER: readonly Sekme<EpostaSekmesi>[] = [
   { anahtar: 'sunucu', baslik: 'Sunucu', simge: 'mail' },
-  { anahtar: 'tetik', baslik: 'Tetikleyiciler', simge: 'bolt' },
-  { anahtar: 'sablon', baslik: 'Şablonlar', simge: 'file' },
   { anahtar: 'defter', baslik: 'Gönderim defteri', simge: 'list' },
 ];
 
-const ONEM_SIMGESI: Record<BildirimOnemi, SimgeAdi> = { bilgi: 'bell', uyari: 'alert', acil: 'alert' };
-const ONEM_TONU: Record<BildirimOnemi, RozetTonu> = { bilgi: 'bilgi', uyari: 'uyari', acil: 'hata' };
-const ONEM_ADI: Record<BildirimOnemi, string> = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' };
 const SONUC_ADI: Record<EpostaSonucu, string> = { gonderildi: 'Gönderildi', gonderilemedi: 'Gönderilemedi', atlandi: 'Atlandı' };
 const SONUC_TONU: Record<EpostaSonucu, RozetTonu> = { gonderildi: 'tamam', gonderilemedi: 'hata', atlandi: 'pasif' };
 const YER_TUTUCU_ADI: Record<EpostaYerTutucusu, string> = {
@@ -55,7 +49,6 @@ const SIMGE: Record<EpostaSimgesi, SimgeAdi> = {
 const SIMGE_ADI: Record<EpostaSimgesi, string> = {
   cart: 'Sepet', 'clipboard-check': 'Onaylı liste', tag: 'Etiket', calendar: 'Takvim', route: 'Rota', clock: 'Saat', bell: 'Zil', alert: 'Uyarı',
 };
-const SINIF_ADI: Record<EpostaTetikleyiciSatiri['sinif'], string> = { bilgi: 'Bilgi', gorev: 'Görev', hatirlatma: 'Hatırlatma' };
 
 const zaman = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -66,8 +59,6 @@ export function EpostaAyarlari({ gonderimAyarlari }: { gonderimAyarlari: (ek: Ay
       <Sekmeler etiket="E-posta" sekmeler={SEKMELER} secili={secili} sec={setSecili} />
       <div className="tc-ayar-bolum" role="tabpanel" aria-label={SEKMELER.find((s) => s.anahtar === secili)?.baslik}>
         {secili === 'sunucu' && <Sunucu gonderimAyarlari={gonderimAyarlari} />}
-        {secili === 'tetik' && <Tetikleyiciler />}
-        {secili === 'sablon' && <Sablonlar />}
         {secili === 'defter' && <Defter />}
       </div>
     </div>
@@ -169,229 +160,6 @@ function Sunucu({ gonderimAyarlari }: { gonderimAyarlari: (ek: AyarListesiEki) =
   );
 }
 
-// --- Tetikleyiciler -----------------------------------------------------------------------------------------------------
-
-const tekrarMetni = (s: EpostaTetikleyiciSatiri): string =>
-  (s.tekrarGun === null || s.tekrarEnCok === null ? 'Yok' : `${s.tekrarGun} günde bir, en çok ${s.tekrarEnCok} kez`);
-const kademeMetni = (s: EpostaTetikleyiciSatiri): string => {
-  if (s.yukseltGun === null) return 'Yok';
-  const kime = [s.yukseltRolIdleri.length > 0 ? `${s.yukseltRolIdleri.length} rol` : null, s.yukseltKisiIdleri.length > 0 ? `${s.yukseltKisiIdleri.length} kişi` : null];
-  return `${s.yukseltGun} gün sonra ${kime.filter(Boolean).join(', ')}`;
-};
-
-function Tetikleyiciler() {
-  const liste = useQuery({ queryKey: ANAHTAR.tetikleyiciler, queryFn: () => api.get<EpostaTetikleyicileriCevabi>('/bildirimler/eposta/tetikleyiciler') });
-  const [konu, setKonu] = useState('');
-  const [arama, setArama] = useState('');
-  const [acik, setAcik] = useState<EpostaTetikleyiciSatiri['tur'] | null>(null);
-
-  if (liste.isPending) return <Kart baslik="Tetikleyiciler"><DurumKutusu durum="yukleniyor" /></Kart>;
-  if (liste.isError) {
-    return (
-      <Kart baslik="Tetikleyiciler">
-        <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Tetikleyiciler alınamadı.')} yenile={() => { void liste.refetch(); }} />
-      </Kart>
-    );
-  }
-  const aranan = arama.trim().toLocaleLowerCase('tr');
-  const satirlar = liste.data.satirlar
-    .filter((s) => konu === '' || s.konu === konu)
-    .filter((s) => aranan === '' || s.baslik.toLocaleLowerCase('tr').includes(aranan));
-  const secili = liste.data.satirlar.find((s) => s.tur === acik) ?? null;
-  const sutunlar: readonly Sutun<EpostaTetikleyiciSatiri>[] = [
-    {
-      anahtar: 'olay', baslik: 'Olay', csv: (s) => s.baslik,
-      hucre: (s) => <span className="tc-eposta-olay-hucre"><Simge ad={ONEM_SIMGESI[s.onem]} boyut="k" /><span>{s.baslik}</span></span>,
-    },
-    { anahtar: 'konu', baslik: 'Konu', hucre: (s) => EPOSTA_KONU_ADLARI[s.konu] },
-    { anahtar: 'sinif', baslik: 'Sınıf', hucre: (s) => SINIF_ADI[s.sinif] },
-    {
-      anahtar: 'eposta', baslik: 'E-posta', csv: (s) => (s.eposta ? 'Açık' : 'Kapalı'),
-      hucre: (s) => <Rozet ton={s.eposta ? 'tamam' : 'pasif'}>{s.eposta ? 'Açık' : 'Kapalı'}</Rozet>,
-    },
-    { anahtar: 'zaman', baslik: 'Ne zaman', hucre: (s) => (s.zaman === 'hemen' ? 'Hemen' : 'Günlük özet') },
-    { anahtar: 'tekrar', baslik: 'Tekrar', hucre: tekrarMetni },
-    { anahtar: 'kademe', baslik: 'Kademe', hucre: kademeMetni },
-  ];
-  return (
-    <Kart baslik="Tetikleyiciler">
-      <p className="tc-ayar-aciklama">
-        Olay başına e-postanın gidip gitmeyeceğini, ne zaman gideceğini, iş açık kaldıkça tekrarını ve kademesini seçin. Alıcılar bildirimin
-        alıcılarıdır (Bildirim yönetimi, Bildirim alıcıları); operatöre e-posta gitmez.
-      </p>
-      <Tablo
-        etiket="E-posta tetikleyicileri"
-        sutunlar={sutunlar}
-        satirlar={satirlar}
-        satirAnahtari={(s) => s.tur}
-        satirSec={(s) => { setAcik(s.tur); }}
-        bosMesaj="Bu süzgece uyan olay yok."
-        arac={{
-          arama: { deger: arama, degistir: setArama, etiket: 'Olay ara' },
-          suzgec: {
-            etiket: 'Konu', secili: konu, sec: setKonu,
-            secenekler: [{ deger: '', baslik: 'Bütün konular' }, ...EPOSTA_KONULARI.map((k) => ({ deger: k, baslik: EPOSTA_KONU_ADLARI[k] }))],
-          },
-          csv: { ad: 'eposta-tetikleyicileri' },
-        }}
-      />
-      {secili && (
-        <TetikleyiciPenceresi
-          key={`${secili.tur}:${String(secili.surum)}`}
-          satir={secili}
-          roller={liste.data.roller}
-          kisiler={liste.data.kisiler}
-          kapat={() => { setAcik(null); }}
-        />
-      )}
-    </Kart>
-  );
-}
-
-const sayiMi = (m: string): number | null => (/^\d{1,3}$/.test(m.trim()) ? Number(m.trim()) : null);
-
-function TetikleyiciPenceresi({ satir, roller, kisiler, kapat }: {
-  satir: EpostaTetikleyiciSatiri;
-  roller: EpostaTetikleyicileriCevabi['roller'];
-  kisiler: EpostaTetikleyicileriCevabi['kisiler'];
-  kapat: () => void;
-}) {
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
-  const [eposta, setEposta] = useState(satir.eposta);
-  const [ozet, setOzet] = useState(satir.zaman === 'ozet');
-  const [tekrar, setTekrar] = useState(satir.tekrarGun !== null);
-  const [tekrarGun, setTekrarGun] = useState(String(satir.tekrarGun ?? 3));
-  const [tekrarEnCok, setTekrarEnCok] = useState(String(satir.tekrarEnCok ?? 3));
-  const [kademe, setKademe] = useState(satir.yukseltGun !== null);
-  const [kademeGun, setKademeGun] = useState(String(satir.yukseltGun ?? 2));
-  const [rolIdleri, setRolIdleri] = useState(satir.yukseltRolIdleri);
-  const [kisiIdleri, setKisiIdleri] = useState(satir.yukseltKisiIdleri);
-  const [sablonId, setSablonId] = useState(satir.sablonId);
-  const sablonlar = useQuery({ queryKey: ANAHTAR.sablonlar, queryFn: () => api.get<EpostaSablonlariCevabi>('/bildirimler/eposta/sablonlar') });
-  const kisiAdi = new Map(kisiler.map((k) => [k.id, k.ad]));
-  const kaydet = useMutation({
-    mutationFn: (g: EpostaTetikleyiciDegistirGovdesi) => api.post<EpostaTetikleyicileriCevabi>(`/bildirimler/eposta/tetikleyiciler/${satir.tur}/degistir`, g),
-    onSuccess: (guncel) => {
-      istemci.setQueryData(ANAHTAR.tetikleyiciler, guncel);
-      bildir('tamam', 'Tetikleyici kaydedildi.');
-      kapat();
-    },
-    onError: (h) => {
-      bildir('hata', hataIletisi(h, 'Tetikleyici kaydedilemedi.'));
-      void istemci.invalidateQueries({ queryKey: ANAHTAR.tetikleyiciler });
-    },
-  });
-  const gunHatasi = (m: string, enCok: number): string | undefined => {
-    const n = sayiMi(m);
-    return n === null || n < 1 || n > enCok ? `1 ile ${enCok} arasında olmalı.` : undefined;
-  };
-  const hatalar = {
-    tekrarGun: tekrar ? gunHatasi(tekrarGun, 60) : undefined,
-    tekrarEnCok: tekrar ? gunHatasi(tekrarEnCok, 10) : undefined,
-    kademeGun: kademe ? gunHatasi(kademeGun, 60) : undefined,
-    kademeKime: kademe && rolIdleri.length + kisiIdleri.length === 0 ? 'En az bir rol ya da kişi seçin.' : undefined,
-  };
-  const gecerli = Object.values(hatalar).every((h) => h === undefined);
-  const gonder = () => {
-    kaydet.mutate({
-      eposta, zaman: ozet ? 'ozet' : 'hemen',
-      tekrarGun: tekrar ? sayiMi(tekrarGun) : null, tekrarEnCok: tekrar ? sayiMi(tekrarEnCok) : null,
-      yukseltGun: kademe ? sayiMi(kademeGun) : null, yukseltRolIdleri: kademe ? rolIdleri : [], yukseltKisiIdleri: kademe ? kisiIdleri : [],
-      sablonId, surum: satir.surum,
-    });
-  };
-  const eklenebilir = kisiler.filter((k) => !kisiIdleri.includes(k.id));
-  return (
-    <Pencere
-      acik
-      kapat={kapat}
-      baslik={satir.baslik}
-      tur="yan"
-      alt={(
-        <div className="tc-eposta-eylemler">
-          <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="check" disabled={!gecerli} yukleniyor={kaydet.isPending} onClick={gonder}>Kaydet</Dugme>
-        </div>
-      )}
-    >
-      <div className="tc-eposta-form">
-        <p className="tc-eposta-olay">
-          <Rozet ton={ONEM_TONU[satir.onem]}>{ONEM_ADI[satir.onem]}</Rozet>
-          <Rozet ton="bilgi">{sablonId === null ? `${EPOSTA_KONU_ADLARI[satir.konu]} şablonu` : sablonlar.data?.ozel.find((o) => o.id === sablonId)?.ad ?? 'Şablon'}</Rozet>
-          <Rozet ton="pasif">{SINIF_ADI[satir.sinif]}</Rozet>
-        </p>
-        <div className="tc-ayar">
-          <div className="tc-ayar-metin">
-            <p className="tc-ayar-baslik">E-posta gönder</p>
-            <p className="tc-ayar-aciklama">Kapalıyken bu olay yalnız uygulama içinde bildirilir.</p>
-          </div>
-          <AcKapa etiket="E-posta gönder" acik={eposta} degistir={setEposta} />
-        </div>
-        <Secim
-          etiket="Şablon"
-          value={sablonId === null ? '' : String(sablonId)}
-          disabled={!eposta}
-          secenekler={[
-            { deger: '', baslik: `${EPOSTA_KONU_ADLARI[satir.konu]} (sistem şablonu)` },
-            ...(sablonlar.data?.ozel ?? []).map((o) => ({ deger: String(o.id), baslik: o.ad })),
-          ]}
-          onChange={(o) => { setSablonId(o.target.value === '' ? null : Number(o.target.value)); }}
-        />
-        <fieldset className="tc-eposta-grup" disabled={!eposta}>
-          <legend>Ne zaman</legend>
-          <IsaretKutusu etiket="Hemen değil, günlük özette gönder" checked={ozet} onChange={(o) => { setOzet(o.target.checked); }} />
-          <IsaretKutusu etiket="İş açık kaldıkça tekrarla" checked={tekrar} onChange={(o) => { setTekrar(o.target.checked); }} />
-          {tekrar && (
-            <div className="tc-eposta-satir">
-              <Girdi etiket="Kaç günde bir" inputMode="numeric" value={tekrarGun} hata={hatalar.tekrarGun} onChange={(o) => { setTekrarGun(o.target.value); }} />
-              <Girdi etiket="En çok kaç kez" inputMode="numeric" value={tekrarEnCok} hata={hatalar.tekrarEnCok} onChange={(o) => { setTekrarEnCok(o.target.value); }} />
-            </div>
-          )}
-          <p className="tc-ayar-aciklama">Tekrar ve kademe, görev ve hatırlatma yapılınca, bilgi okununca durur.</p>
-        </fieldset>
-        <fieldset className="tc-eposta-grup" disabled={!eposta}>
-          <legend>Kademe</legend>
-          <IsaretKutusu etiket="İş açık kalırsa üst kademeye de gönder" checked={kademe} onChange={(o) => { setKademe(o.target.checked); }} />
-          {kademe && (
-            <>
-              <Girdi etiket="Kaç gün sonra" inputMode="numeric" value={kademeGun} hata={hatalar.kademeGun} onChange={(o) => { setKademeGun(o.target.value); }} />
-              <div className="tc-cagri-rolleri" role="group" aria-label="Kademe rolleri">
-                {roller.map((r) => (
-                  <IsaretKutusu
-                    key={r.id}
-                    etiket={r.ad}
-                    checked={rolIdleri.includes(r.id)}
-                    onChange={(o) => { setRolIdleri(o.target.checked ? [...rolIdleri, r.id] : rolIdleri.filter((x) => x !== r.id)); }}
-                  />
-                ))}
-              </div>
-              <ul className="tc-alici-kisiler" aria-label="Kademe kişileri">
-                {kisiIdleri.map((id) => (
-                  <li key={id}>
-                    <Dugme simge="x" aria-label={`${kisiAdi.get(id) ?? `Kişi ${id}`} çıkar`} onClick={() => { setKisiIdleri(kisiIdleri.filter((x) => x !== id)); }}>
-                      {kisiAdi.get(id) ?? `Kişi ${id}`}
-                    </Dugme>
-                  </li>
-                ))}
-              </ul>
-              <Secim
-                etiket="Kişi ekle"
-                value=""
-                bosSecenek="Kişi seçin"
-                hata={hatalar.kademeKime}
-                disabled={eklenebilir.length === 0}
-                secenekler={eklenebilir.map((k) => ({ deger: String(k.id), baslik: k.ad }))}
-                onChange={(o) => { const id = Number(o.target.value); if (id > 0) setKisiIdleri([...kisiIdleri, id]); }}
-              />
-            </>
-          )}
-        </fieldset>
-      </div>
-    </Pencere>
-  );
-}
-
 // --- Şablonlar ----------------------------------------------------------------------------------------------------------
 
 // Ön izleme uydurma ORN- değerleriyle doldurulur; gerçek kayıt okunmaz.
@@ -410,7 +178,7 @@ const icerigi = (s: EpostaSablonu | EpostaOzelSablonu): EpostaSablonIcerigi => (
   dugmeYazisi: s.dugmeYazisi, onayDugmesi: s.onayDugmesi, altBilgi: s.altBilgi, serit: s.serit, logo: s.logo,
 });
 
-function Sablonlar() {
+export function EpostaSablonlari() {
   const liste = useQuery({ queryKey: ANAHTAR.sablonlar, queryFn: () => api.get<EpostaSablonlariCevabi>('/bildirimler/eposta/sablonlar') });
   const tetik = useQuery({ queryKey: ANAHTAR.tetikleyiciler, queryFn: () => api.get<EpostaTetikleyicileriCevabi>('/bildirimler/eposta/tetikleyiciler') });
   const [secim, setSecim] = useState<SablonSecimi>({ tur: 'sistem', konu: 'satin-alma' });
@@ -447,7 +215,7 @@ function Sablonlar() {
       )}
     >
       <p className="tc-ayar-aciklama">
-        Gövdeye yalnız listedeki alanlar girer; müşteri, tedarikçi, fiyat ve parça no yazılmaz. Olaya şablon Tetikleyiciler'den seçilir; seçilmeyen olay
+        Gövdeye yalnız listedeki alanlar girer; müşteri, tedarikçi, fiyat ve parça no yazılmaz. Olaya şablon Olaylar sekmesinde seçilir; seçilmeyen olay
         konusunun sistem şablonunu kullanır.
       </p>
       <div className="tc-eposta-sablonlar">
@@ -721,7 +489,7 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
           <p className="tc-eposta-alt">Bu e-posta CORE MES tarafından kurumunuz adına gönderildi. {onizlemeAlt}</p>
         </div>
         <p className="tc-ayar-aciklama">
-          {kullananlar.length === 0 ? 'Bu şablonu kullanan olay yok. Olaya Tetikleyiciler\'den atanır.' : `Bu şablonu kullanan olaylar: ${kullananlar.slice(0, 5).join(', ')}${kullananlar.length > 5 ? ` ve ${String(kullananlar.length - 5)} olay daha` : ''}.`}
+          {kullananlar.length === 0 ? 'Bu şablonu kullanan olay yok. Olaya Olaylar sekmesinden atanır.' : `Bu şablonu kullanan olaylar: ${kullananlar.slice(0, 5).join(', ')}${kullananlar.length > 5 ? ` ve ${String(kullananlar.length - 5)} olay daha` : ''}.`}
         </p>
       </section>
       {silinsin && hedef.tur === 'ozel' && (

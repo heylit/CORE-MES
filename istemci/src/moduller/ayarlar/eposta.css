@@ -88,3 +88,7 @@
 .tc-eposta-dugme-ikincil { background: var(--panel); color: var(--ink); border-color: var(--edge); }
 .tc-eposta-logo { display: flex; align-items: center; padding-block: var(--b-2); border-block-end: 1px solid var(--edge); }
 .tc-eposta-logo img { display: block; max-block-size: var(--dokunma); max-inline-size: 40%; object-fit: contain; }
+
+/* 3435-3 a: olay ve kanal tablosu. */
+.tc-matris-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-matris-yok { color: var(--muted); }

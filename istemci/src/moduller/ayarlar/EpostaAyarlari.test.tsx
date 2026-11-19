@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
-  EpostaDefterCevabi, EpostaDurumuCevabi, EpostaSablonDegistirGovdesi, EpostaSablonlariCevabi, EpostaTetikleyiciDegistirGovdesi, EpostaTetikleyicileriCevabi,
+  EpostaDefterCevabi, EpostaDurumuCevabi, EpostaSablonDegistirGovdesi, EpostaSablonlariCevabi, EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { EpostaAyarlari } from './EpostaAyarlari.tsx';
+import { EpostaAyarlari, EpostaSablonlari } from './EpostaAyarlari.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -89,11 +89,19 @@ function ac() {
     </QueryClientProvider>,
   );
 }
+function sablonAc() {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={istemci}>
+      <BildirimSaglayici><EpostaSablonlari /></BildirimSaglayici>
+    </QueryClientProvider>,
+  );
+}
 const sekme = (ad: string) => { fireEvent.click(screen.getByRole('tab', { name: new RegExp(ad) })); };
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('E-posta ayarları (3397)', () => {
+describe('E-posta ayarları (3397, 3435-3)', () => {
   it('sunucu: durum, sayılar ve ortam ayarındaki kilitli değerler görünür; gönderim ayarları altta', async () => {
     sunucuKur();
     ac();
@@ -104,6 +112,7 @@ describe('E-posta ayarları (3397)', () => {
     expect(screen.getByText(/kuyrukta bekler/)).toBeTruthy();
     expect(screen.getByText('Gönderim ayarları listesi')).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: /Sunucu adresi/ })).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Sunucu', 'Gönderim defteri']);
   });
 
   it('deneme e-postası ve sınama uçlarını çağırır, sonucu bildirir', async () => {
@@ -125,45 +134,9 @@ describe('E-posta ayarları (3397)', () => {
     expect((screen.getByRole('button', { name: 'Kendime deneme gönder' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('tetikleyici: satıra dokununca panel açılır; tekrar ve kademe birlikte kaydedilir', async () => {
-    const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Tetikleyiciler');
-    fireEvent.click(await screen.findByText('Satın alma talebi onay bekliyor'));
-    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
-    fireEvent.click(within(panel).getByLabelText('İş açık kaldıkça tekrarla'));
-    fireEvent.change(within(panel).getByLabelText('Kaç günde bir'), { target: { value: '2' } });
-    fireEvent.click(within(panel).getByLabelText('İş açık kalırsa üst kademeye de gönder'));
-    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
-    expect(kaydet.disabled).toBe(true);
-    expect(within(panel).getByText('En az bir rol ya da kişi seçin.')).toBeTruthy();
-    fireEvent.click(within(panel).getByLabelText('Müdür'));
-    expect(kaydet.disabled).toBe(false);
-    fireEvent.click(kaydet);
-    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
-    expect(yazilanlar[0]).toEqual({
-      yol: '/bildirimler/eposta/tetikleyiciler/satin-alma.talep-onay-bekliyor/degistir',
-      govde: {
-        eposta: true, zaman: 'hemen', tekrarGun: 2, tekrarEnCok: 3, yukseltGun: 2, yukseltRolIdleri: [2], yukseltKisiIdleri: [], sablonId: null, surum: null,
-      } satisfies EpostaTetikleyiciDegistirGovdesi,
-    });
-  });
-
-  it('tetikleyici tablosu konuya göre süzülür ve özetleri yazar', async () => {
-    sunucuKur();
-    ac();
-    sekme('Tetikleyiciler');
-    expect(await screen.findAllByText('2 günde bir, en çok 3 kez')).not.toHaveLength(0);
-    expect(screen.getAllByText('1 gün sonra 1 rol')).not.toHaveLength(0);
-    fireEvent.click(within(screen.getByRole('group', { name: 'Konu' })).getByRole('button', { name: 'Üretim devir alma' }));
-    await waitFor(() => { expect(screen.queryByText('Satın alma talebi onay bekliyor')).toBeNull(); });
-    expect(screen.getAllByText('Makine durdu')).not.toHaveLength(0);
-  });
-
   it('şablon: ön izleme canlıdır; bilinmeyen alan kaydı kapatır; kayıt seçili alanlarla gider', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     const konu = await screen.findByLabelText('Konu satırı');
     const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
     expect(within(onizleme).getByText(/Satın alma talebi onay bekliyor · ORN-0042/)).toBeTruthy();
@@ -187,8 +160,7 @@ describe('E-posta ayarları (3397)', () => {
 
   it('değiştirilmiş şablonda varsayılana dönülür', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     fireEvent.click(await screen.findByRole('button', { name: /^Genel/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Varsayılana dön' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
@@ -197,8 +169,7 @@ describe('E-posta ayarları (3397)', () => {
 
   it('3435-2: yeni şablon adıyla açılır; boş ad kaydı kapatır; başlık, düğme ve alt bilgi ön izlemede', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     fireEvent.click(await screen.findByRole('button', { name: 'Yeni şablon' }));
     const ac_ = screen.getByRole('button', { name: 'Şablonu aç' }) as HTMLButtonElement;
     expect(ac_.disabled).toBe(true);
@@ -228,8 +199,7 @@ describe('E-posta ayarları (3397)', () => {
 
   it('3435-2: yönetici şablonu kopyalanır, kaydedilir ve onayla silinir', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     fireEvent.click(await screen.findByRole('button', { name: /^ORN Acil durus/ }));
     expect((screen.getByLabelText('Şablon adı') as HTMLInputElement).value).toBe('ORN Acil durus');
     expect(screen.getByText(/Bu şablonu kullanan olaylar: Makine durdu/)).toBeTruthy();
@@ -249,24 +219,9 @@ describe('E-posta ayarları (3397)', () => {
     expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/eposta/ozel-sablonlar/9/sil', govde: { surum: 3 } });
   });
 
-  it('3435-2: tetikleyicide olaya şablon seçilir', async () => {
-    const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Tetikleyiciler');
-    fireEvent.click(await screen.findByText('Satın alma talebi onay bekliyor'));
-    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
-    const secim = within(panel).getByLabelText('Şablon');
-    await waitFor(() => { expect(within(secim).getByRole('option', { name: 'ORN Acil durus' })).toBeTruthy(); });
-    fireEvent.change(secim, { target: { value: '9' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
-    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
-    expect(yazilanlar[0]?.govde).toMatchObject({ sablonId: 9 });
-  });
-
   it('3435-2 logo: şablon kurum logosunu açar; logo yoksa uyarır, varsa ön izlemede görünür; kayıt logo ile gider', async () => {
     const { yazilanlar } = sunucuKur();
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     const kutu = await screen.findByLabelText('Kurum logosunu üst bilgiye koy');
     fireEvent.click(kutu);
     expect(await screen.findByText(/Kurum logosu yüklü değil/)).toBeTruthy();
@@ -275,8 +230,7 @@ describe('E-posta ayarları (3397)', () => {
     expect(yazilanlar[0]?.govde).toMatchObject({ logo: true });
     cleanup();
     sunucuKur('data:image/png;base64,iVBORw0KGgo=');
-    ac();
-    sekme('Şablonlar');
+    sablonAc();
     fireEvent.click(await screen.findByRole('button', { name: /^ORN Acil durus/ }));
     const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
     expect((await within(onizleme).findByRole('img', { name: 'Kurum logosu' })).getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=');
