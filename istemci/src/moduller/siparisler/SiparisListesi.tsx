@@ -41,7 +41,7 @@ const SUTUNLAR: Sutun<Siparis>[] = [
       const acik = s.durum === 'taslak' || s.durum === 'onayli';
       const kalan = acik ? kalanGun(s.termin) : null;
       return (
-        <span className="tc-sp-ad">
+        <span className="tc-sp-ad tc-sp-termin-hucre">
           <span>{tarihMetni(s.termin)}</span>
           {kalan && <span className={kalan.gecikti ? 'tc-sp-gecikme' : 'tc-sp-soluk'}>{kalan.metin}</span>}
         </span>
@@ -100,20 +100,20 @@ export function SiparisListesi() {
     anahtar: 'logo', baslik: 'Logo', hucre: (s) => <LogoRozetHucresi bilgi={logo.durum(s.id)} hata={logo.hata} />,
     csv: (s) => { const d = logo.durum(s.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
   };
-  // 3429-1 (B): onaylı satırların aşaması, görünen sayfa için tek istek; okunamazsa rozet çizilmez, durum yine görünür.
+  // 3429-1 (B), 3429-2 (D): onaylı satırların aşaması ve termin riski, görünen sayfa için tek istek; okunamazsa rozet çizilmez, durum yine görünür.
   const onaylilar = (siparisler.data?.satirlar ?? []).filter((s) => s.durum === 'onayli').map((s) => s.id);
   const asamalar = useQuery({
     queryKey: anahtarlar.siparisAsamalari(onaylilar),
     queryFn: () => api.get<SiparisAsamalariCevabi>(`/akis/siparis-asamalari?idler=${onaylilar.join(',')}`),
     enabled: onaylilar.length > 0,
   });
-  const asama = new Map((asamalar.data?.asamalar ?? []).map((a) => [a.siparisId, a.asama]));
+  const asama = new Map((asamalar.data?.asamalar ?? []).map((a) => [a.siparisId, a]));
   const durumSutunu: Sutun<Siparis> = {
     anahtar: 'durum', baslik: 'Durum', kartTamSatir: true,
     hucre: (s) => (
       <span className="tc-sp-parti-cipleri">
         <Rozet ton={SIPARIS_DURUMU[s.durum].ton}>{SIPARIS_DURUMU[s.durum].etiket}</Rozet>
-        {s.durum === 'onayli' && <AsamaRozeti asama={asama.get(s.id)} />}
+        {s.durum === 'onayli' && <AsamaRozeti asama={asama.get(s.id)?.asama} terminRiski={asama.get(s.id)?.terminRiski} />}
       </span>
     ),
     csv: (s) => SIPARIS_DURUMU[s.durum].etiket,

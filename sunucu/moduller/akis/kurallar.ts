@@ -1,3 +1,4 @@
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   AdimOlcusu, FaturaDurumu, SiparisAkisEmri, SiparisAsamasi, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, KartKonumu, KartRotasi, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
@@ -581,6 +582,19 @@ export function enGecBitis(bitisler: readonly (string | null | undefined)[]): st
   let son: string | null = null;
   for (const b of bitisler) if (b != null && (son === null || Date.parse(b) > Date.parse(son))) son = b;
   return son;
+}
+
+// SPA-6 (3429-2 D): termin riski. Teslimi bitmemiş üretilen kalemin planlanan bitişi (tesis günü) termin gününden sonraysa aradaki gün
+// sayısı; plan yoksa, kalem üretilmiyorsa ya da teslim tamamsa null. Sipariş riski kalemlerin en büyüğüdür, yalnız onaylı siparişte.
+export function kalemTerminRiski(k: { uretilir: boolean; planBitis: string | null; termin: string; sevkEdilen: number; miktar: number }): number | null {
+  if (!k.uretilir || k.planBitis === null || k.sevkEdilen >= k.miktar) return null;
+  const gun = Math.round((Date.parse(`${tesisGunu(Date.parse(k.planBitis))}T00:00:00Z`) - Date.parse(`${k.termin}T00:00:00Z`)) / 86_400_000);
+  return gun > 0 ? gun : null;
+}
+export function siparisTerminRiski(durum: string, kalemler: readonly { terminRiski: number | null }[]): number | null {
+  if (durum !== 'onayli') return null;
+  const r = kalemler.flatMap((k) => (k.terminRiski === null ? [] : [k.terminRiski]));
+  return r.length === 0 ? null : Math.max(...r);
 }
 
 export function kalemSevki(emirler: readonly SiparisAkisEmri[], sevkler: readonly SevkSatiri[]): { sevkEdilen: number; yolda: number } {

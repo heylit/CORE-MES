@@ -44,7 +44,12 @@ const SUTUNLAR: Sutun<SiparisAkisKalemi>[] = [
   { anahtar: 'sira', baslik: 'No', mono: true, kirilmaz: true, hucre: (k) => k.sira },
   { anahtar: 'kalem', baslik: 'Kalem', hucre: (k) => k.malzemeAdi ?? k.malzemeKodu ?? '—' },
   { anahtar: 'emir', baslik: 'Emir', kartTamSatir: true, hucre: (k) => <Emirler k={k} />, csv: (k) => k.emirler.map((e) => e.no).join(' ') },
-  { anahtar: 'plan', baslik: 'Plan bitişi', kirilmaz: true, hucre: (k) => zamanMetni(k.planBitis) },
+  {
+    anahtar: 'plan', baslik: 'Plan bitişi', kirilmaz: true,
+    hucre: (k) => (k.terminRiski === null ? zamanMetni(k.planBitis)
+      : <span className="tc-sp-akis-plan"><span>{zamanMetni(k.planBitis)}</span><span className="tc-sp-akis-risk">{`${String(k.terminRiski)} gün geç`}</span></span>),
+    csv: (k) => k.planBitis ?? '',
+  },
   { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (k) => tarihMetni(k.termin) },
   { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (k) => `${sayi(k.miktar)}${k.birim ? ` ${k.birim}` : ''}` },
   { anahtar: 'uretilen', baslik: 'Üretilen', hizala: 'sag', kirilmaz: true, hucre: (k) => sayi(k.uretilen) },
@@ -76,16 +81,22 @@ function adimlar(a: SiparisAkisiCevabi): Adim[] {
   ];
 }
 
-export function AsamaRozeti({ asama }: { asama: SiparisAkisiCevabi['asama'] | undefined }) {
+export function AsamaRozeti({ asama, terminRiski = null }: { asama: SiparisAkisiCevabi['asama'] | undefined; terminRiski?: number | null }) {
   const a = asama === undefined ? undefined : SIPARIS_ASAMASI[asama];
-  return a === undefined ? null : <Rozet ton={a.ton} gorunum="cizgi">{a.etiket}</Rozet>;
+  return (
+    <>
+      {a !== undefined && <Rozet ton={a.ton} gorunum="cizgi">{a.etiket}</Rozet>}
+      {/* 3429-2 D: Kokpit'teki planlanan bitiş kalem termininden sonra. */}
+      {terminRiski !== null && <Rozet ton="hata" gorunum="cizgi">{`Termin riski · ${String(terminRiski)} gün`}</Rozet>}
+    </>
+  );
 }
 
 export function SiparisAkisi({ siparis }: { siparis: SiparisAyrintisi }) {
   const akis = useSiparisAkisi(siparis);
   if (siparis.durum === 'taslak') return null;
   return (
-    <Kart baslik="Sipariş akışı" simge="route" sag={akis.data && <AsamaRozeti asama={akis.data.asama} />}>
+    <Kart baslik="Sipariş akışı" simge="route" sag={akis.data && <span className="tc-sp-akis-rozetler"><AsamaRozeti asama={akis.data.asama} terminRiski={akis.data.terminRiski} /></span>}>
       {akis.isPending && <DurumKutusu durum="yukleniyor" />}
       {akis.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(akis.error, 'Sipariş akışı alınamadı')} yenile={() => { void akis.refetch(); }} />}
       {akis.data && (

@@ -19,7 +19,7 @@ import { emrinAkisHareketleri, partiGirisZamanlari, refakatKartiKapsami, type Ak
 import { adimliEmirListesi, emirAkisKaydi, emirlerinIsEmriIdleri, siparisSatirlarininEmirleri, sureOzetiHesapla, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import {
-  aralikBirlesimi, aramaMetni, emirAkisi, enGecBitis, faturaDurumu, kalemSevki, kapanisEksikleri, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, siparisAsamasi,
+  aralikBirlesimi, aramaMetni, emirAkisi, enGecBitis, faturaDurumu, kalemSevki, kalemTerminRiski, siparisTerminRiski, kapanisEksikleri, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, siparisAsamasi,
   type AkisGirdisi,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -233,19 +233,21 @@ export async function siparisAkisiOku(db: Db, siparisId: number): Promise<Sipari
     const gecerli = liste.filter((e) => e.durum !== 'iptal');
     const bitmis = gecerli.filter((e) => e.durum === 'bitti');
     const tur = kartlar.get(k.malzemeNo)?.tur;
-    return {
+    const kalem = {
       id: k.id, sira: k.sira, malzemeKodu: k.malzemeKodu, malzemeAdi: k.malzemeAdi, birim: k.birim, miktar: Number(k.miktar), termin: k.termin ?? s.termin,
       uretilir: tur !== undefined && URETILEN_TURLER.includes(tur), emirler: liste,
       planBitis: enGecBitis(gecerli.map((e) => e.planBitis)),
       uretilen: gecerli.length === 0 ? null : bitmis.reduce((t, e) => t + (e.saglam ?? 0), 0),
       ...kalemSevki(liste, sevkler),
     };
+    return { ...kalem, terminRiski: kalemTerminRiski(kalem) };
   });
   const faturalar = (await siparisFaturalari(db, [siparisId])).get(siparisId) ?? [];
   const fatura = faturaDurumu(s.araToplam, s.paraBirimi, faturalar);
   return {
     siparisId, asama: siparisAsamasi(s.durum, kalemler, fatura), fatura, faturaSayisi: faturalar.filter((f) => f.tur === 'fatura').length, kalemler,
     kapanisEksikleri: s.durum === 'onayli' ? kapanisEksikleri(kalemler, fatura) : [],
+    terminRiski: siparisTerminRiski(s.durum, kalemler),
   };
 }
 
@@ -259,10 +261,31 @@ export async function siparisAsamalari(db: Db, idler: readonly number[]): Promis
   const asamalar: SiparisAsamalariCevabi['asamalar'] = [];
   for (const id of idler) {
     try {
-      asamalar.push({ siparisId: id, asama: (await siparisAkisiOku(db, id)).asama });
+      const a = await siparisAkisiOku(db, id);
+      asamalar.push({ siparisId: id, asama: a.asama, terminRiski: a.terminRiski });
     } catch (h) {
       if (!(h instanceof UygulamaHatasi) || h.kod !== 'BULUNAMADI') throw h;
     }
   }
   return { asamalar };
+}
+
+// 3429-2 D: kademeli uyarı kaynağı için termin riskli onaylı siparişler. Son gün riskli kalemlerin en erken terminidir; termin
+// değişirse yeni dönem olur. Olmayan sipariş atlanır.
+export interface SiparisTerminRiski { siparisId: number; termin: string; gun: number }
+export async function siparisTerminRiskleri(db: Db, idler: readonly number[]): Promise<SiparisTerminRiski[]> {
+  const sonuc: SiparisTerminRiski[] = [];
+  for (const id of idler) {
+    let a: SiparisAkisiCevabi;
+    try {
+      a = await siparisAkisiOku(db, id);
+    } catch (h) {
+      if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') continue;
+      throw h;
+    }
+    if (a.terminRiski === null) continue;
+    const riskli = a.kalemler.filter((k) => k.terminRiski !== null).map((k) => k.termin).sort();
+    sonuc.push({ siparisId: id, termin: riskli[0]!, gun: a.terminRiski });
+  }
+  return sonuc;
 }

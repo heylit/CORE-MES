@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   adimAraliklari, aralikBirlesimi, aramaMetni, calisilanSure, emirAkisi, fasonAraligi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi,
-  enGecBitis, FATURA_EKSIGI, faturaDurumu, kalemSevki, kapanisEksikleri, siparisAsamasi, type AkisKalemi,
+  enGecBitis, FATURA_EKSIGI, faturaDurumu, kalemSevki, kalemTerminRiski, kapanisEksikleri, siparisAsamasi, siparisTerminRiski, type AkisKalemi,
 } from './kurallar.ts';
 import type { SiparisAkisEmri } from '#paylasilan/sozlesme/akis.ts';
 
@@ -461,5 +461,18 @@ describe('satış siparişi akışı (3429-1)', () => {
     assert.equal(enGecBitis([undefined, '2026-10-16T07:00:00+03:00', null, '2026-10-16T05:00:00.000Z']), '2026-10-16T05:00:00.000Z', 'saat dilimine göre en geç');
     assert.equal(enGecBitis([null, undefined]), null);
     assert.equal(enGecBitis([]), null);
+  });
+
+  test('SPA-6: termin riski planın tesis gününe göre gün farkıdır; teslimi bitmiş, üretilmeyen ya da plansız kalemde ve onaysız siparişte yoktur', () => {
+    const k = { uretilir: true, planBitis: '2026-10-22T21:30:00.000Z', termin: '2026-10-20', sevkEdilen: 0, miktar: 10 };
+    assert.equal(kalemTerminRiski(k), 3, '22.10 21:30Z tesis saatinde 23.10 00:30 sayılır');
+    assert.equal(kalemTerminRiski({ ...k, planBitis: '2026-10-20T20:00:00.000Z' }), null, 'termin günü içinde biten risk değil');
+    assert.equal(kalemTerminRiski({ ...k, planBitis: '2026-10-20T21:30:00.000Z' }), 1);
+    assert.equal(kalemTerminRiski({ ...k, sevkEdilen: 10 }), null);
+    assert.equal(kalemTerminRiski({ ...k, uretilir: false }), null);
+    assert.equal(kalemTerminRiski({ ...k, planBitis: null }), null);
+    assert.equal(siparisTerminRiski('onayli', [{ terminRiski: 2 }, { terminRiski: null }, { terminRiski: 5 }]), 5);
+    assert.equal(siparisTerminRiski('onayli', [{ terminRiski: null }]), null);
+    assert.equal(siparisTerminRiski('kapandi', [{ terminRiski: 5 }]), null);
   });
 });

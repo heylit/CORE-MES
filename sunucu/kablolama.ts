@@ -103,11 +103,33 @@ export const siparisTerminKademeKayitlari = (kayitlar: Awaited<ReturnType<typeof
     kayit: `${k.kimlik}:${k.tarih}`, no: k.no ?? k.kimlik, baslik: k.baslik, yol: '/siparisler' as const, sonGun: k.tarih, yapanlar: yazan, yoneticiler: onaylayan,
   }]));
 };
+// 3429-2 D: termin riskli onaylı sipariş; işi satış yazanlar yapar, onaylayanlar yönetir (siparisler.termin ile aynı alıcılar).
+export const siparisTerminRiskiKademeKayitlari = (
+  riskler: readonly akis.SiparisTerminRiski[], numaralar: ReadonlyMap<number, string>, sahip: Sahip,
+): bildirim.KademeKaydi[] => {
+  const yazan = sahip('siparisler.yaz');
+  const onaylayan = sahip('siparisler.onayla');
+  return riskler.map((r) => {
+    const no = numaralar.get(r.siparisId) ?? String(r.siparisId);
+    return {
+      kayit: `${String(r.siparisId)}:${r.termin}`, no, baslik: `Sipariş ${no}: plan termini ${String(r.gun)} gün aşıyor`, yol: `/siparisler/${String(r.siparisId)}` as const,
+      sonGun: r.termin, yapanlar: yazan, yoneticiler: onaylayan,
+    };
+  });
+};
 const kalibrasyonVadeleri = async (db: Db) => kalibrasyonKademeKayitlari(await kalibrasyonAletleri(db), await islemSahipleri(db));
 const bakimVadeleri = async (db: Db) => bakimKademeKayitlari(await arkon.periyodikBakimlar(db), await islemSahipleri(db));
 const siparisTerminleri = async (db: Db) => {
   const bugun = tesisGunu(new Date());
   return siparisTerminKademeKayitlari(await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60)), await islemSahipleri(db));
+};
+// Açık (bitmemiş) siparişler termin takviminden; risk yalnız onaylıda hesaplanır (akış). VARSAYIM: termini 60 günden uzak sipariş
+// henüz izlenmez (takvim penceresi siparisler.termin ile aynı).
+const siparisTerminRiskleriOku = async (db: Db) => {
+  const bugun = tesisGunu(new Date());
+  const acik = (await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60))).filter((k) => !k.bitti);
+  const numaralar = new Map(acik.map((k) => [Number(k.kimlik), k.no ?? k.kimlik]));
+  return siparisTerminRiskiKademeKayitlari(await akis.siparisTerminRiskleri(db, [...numaralar.keys()]), numaralar, await islemSahipleri(db));
 };
 
 // 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik ya da stok fişi. Talep kilitlemez, uyarır (3272-2).
@@ -473,6 +495,7 @@ export function sunucununBaglari(): Bag[] {
     bag('kalibrasyon vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalibrasyon.vade', o); }, typeof kalibrasyonAletleri === 'function' ? kalibrasyonVadeleri : undefined),
     bag('arkon bakım vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('arkon.bakim-vade', o); }, typeof arkon.periyodikBakimlar === 'function' ? bakimVadeleri : undefined),
     bag('satış siparişi termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.termin', o); }, typeof siparisTakvimi === 'function' ? siparisTerminleri : undefined),
+    bag('satış siparişi termin riski -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.plan-riski', o); }, typeof akis.siparisTerminRiskleri === 'function' ? siparisTerminRiskleriOku : undefined),
     // 3416-1 a: bekletilen emir neden başına ve aynı nedenle süren bekleme.
     ...(['uretim-emirleri.bekleme-malzeme', 'uretim-emirleri.bekleme-fason', 'uretim-emirleri.bekleme-takim', 'uretim-emirleri.bekleme-kalite',
       'uretim-emirleri.bekleme-muhendislik', 'uretim-emirleri.bekleme-teslim', 'uretim-emirleri.bekleme-suruyor'] as const).map((k) =>

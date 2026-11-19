@@ -10,6 +10,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { siparisAkisiCevabi, siparisAsamalariCevabi } from '#paylasilan/sozlesme/akis.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { siparisTerminRiskleri } from './disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -265,6 +266,26 @@ describe('akis satış siparişi akışı (gerçek PostgreSQL)', () => {
     assert.equal(a.kapanisEksikleri[0], 'Kalem 1: teslim edilen 4 / 6.');
   });
 
+  test('SPA-6: Kokpit planı kalem termininden sonra bitince termin riski ve kademe kaydı; plan düzelince ya da teslim bitince kalkar', async () => {
+    const s = await siparisAc([{ malzemeNo: urunNo, miktar: 2, fiyat: 10 }]);
+    const termin = (await o().sahip.tek<{ t: string }>("SELECT to_char(termin, 'YYYY-MM-DD') AS t FROM siparisler_siparis WHERE id = $1", [s.id]))!.t;
+    const e = await emirAc(s.satirlar[0]!, 2);
+    const ie = (await o().vt.tx((db) => emirlerinIsEmriIdleri(db, [e]))).get(e)![0]!;
+    const m = await makineKur();
+    const bitis = (gun: number) => new Date(Date.parse(`${termin}T09:00:00Z`) + gun * 86_400_000).toISOString();
+    await o().sahip.sorgu('INSERT INTO plan_yerlesimi (is_emri_id, makine_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, $3::timestamptz - interval \'1 hour\', $3, $4)', [ie, m, bitis(4), yoneticiId]);
+    let a = await akis('mudur', s.id);
+    assert.deepEqual([a.kalemler[0]?.terminRiski, a.terminRiski], [4, 4]);
+    const l = await istek<{ asamalar: { terminRiski: number | null }[] }>('mudur', 'GET', `/akis/siparis-asamalari?idler=${String(s.id)}`);
+    assert.equal(l.govde.asamalar[0]?.terminRiski, 4);
+    assert.deepEqual(await o().vt.tx((db) => siparisTerminRiskleri(db, [s.id, 999999])), [{ siparisId: s.id, termin, gun: 4 }]);
+
+    await o().sahip.sorgu('UPDATE plan_yerlesimi SET baslangic = $2::timestamptz - interval \'1 hour\', bitis = $2 WHERE is_emri_id = $1', [ie, bitis(0)]);
+    a = await akis('mudur', s.id);
+    assert.deepEqual([a.kalemler[0]?.terminRiski, a.terminRiski], [null, null], 'termin günü içinde biten plan risk değil');
+    assert.deepEqual(await o().vt.tx((db) => siparisTerminRiskleri(db, [s.id])), []);
+  });
+
   test('SPA-U1: akış ve aşama listesi siparişi okuyana açık, okumayana 403; olmayan sipariş 404, listede atlanır', async () => {
     const s = await siparisAc([{ malzemeNo: urunNo, miktar: 1, fiyat: 1 }]);
     assert.equal((await istek('cam', 'GET', `/akis/siparisler/${String(s.id)}`)).durum, 403);
@@ -272,7 +293,7 @@ describe('akis satış siparişi akışı (gerçek PostgreSQL)', () => {
     assert.equal((await istek('mudur', 'GET', '/akis/siparisler/999999')).durum, 404);
     const l = await istek('mudur', 'GET', `/akis/siparis-asamalari?idler=${String(s.id)},999999`);
     assert.equal(l.durum, 200, JSON.stringify(l.govde));
-    assert.deepEqual(siparisAsamalariCevabi.parse(l.govde).asamalar, [{ siparisId: s.id, asama: 'emir-bekliyor' }]);
+    assert.deepEqual(siparisAsamalariCevabi.parse(l.govde).asamalar, [{ siparisId: s.id, asama: 'emir-bekliyor', terminRiski: null }]);
     assert.equal((await istek('mudur', 'GET', '/akis/siparis-asamalari?idler=abc')).durum, 400);
   });
 });

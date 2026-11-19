@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { bakimKademeKayitlari, kalibrasyonKademeKayitlari, siparisTerminKademeKayitlari } from './kablolama.ts';
+import { bakimKademeKayitlari, kalibrasyonKademeKayitlari, siparisTerminKademeKayitlari, siparisTerminRiskiKademeKayitlari } from './kablolama.ts';
 
 // Kablolamadaki kademe okuyucularının eşlemesi: açık kayıt kimliği, son günü ve alıcılarıyla döner; kapanma koşulundaki kayıt dönmez.
 const SAHIPLER: Partial<Record<Islem, number[]>> = {
@@ -32,5 +32,13 @@ test('satış siparişi termini: biten kayıt dönmez; numarası olmayan kimliğ
   assert.deepEqual(l.map((k) => [k.kayit, k.no, k.sonGun, k.yapanlar, k.yoneticiler]), [
     ['a:2030-01-15', 'ORN-SS-a', '2030-01-15', [31], [32]],
     ['c:2030-01-15', 'c', '2030-01-15', [31], [32]],
+  ]);
+});
+
+test('satış siparişi termin riski: kayıt sipariş ve riskli termin döneminde; numara yoksa kimlik; yol siparişin kendisi (3429-2 D)', () => {
+  const l = siparisTerminRiskiKademeKayitlari([{ siparisId: 7, termin: '2030-01-15', gun: 3 }, { siparisId: 8, termin: '2030-02-01', gun: 1 }], new Map([[7, 'ORN-SS-7']]), sahip);
+  assert.deepEqual(l.map((k) => [k.kayit, k.no, k.baslik, k.yol, k.sonGun, k.yapanlar, k.yoneticiler]), [
+    ['7:2030-01-15', 'ORN-SS-7', 'Sipariş ORN-SS-7: plan termini 3 gün aşıyor', '/siparisler/7', '2030-01-15', [31], [32]],
+    ['8:2030-02-01', '8', 'Sipariş 8: plan termini 1 gün aşıyor', '/siparisler/8', '2030-02-01', [31], [32]],
   ]);
 });

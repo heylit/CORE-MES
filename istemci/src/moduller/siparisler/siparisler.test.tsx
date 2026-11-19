@@ -553,19 +553,19 @@ describe('Satış siparişi ayrıntısı', () => {
 const AKIS_KALEMI = {
   id: 50, sira: 1, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: 100, termin: '2026-10-20', uretilir: true,
   emirler: [{ id: 70, no: 'UE-ORN-0070', durum: 'bitti', adet: 100, planBitis: '2026-10-15T14:00:00.000Z', saglam: 100 }],
-  planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20,
+  planBitis: '2026-10-15T14:00:00.000Z', uretilen: 100, sevkEdilen: 60, yolda: 20, terminRiski: null,
 } satisfies SiparisAkisiCevabi['kalemler'][number];
 const AKIS = {
   siparisId: 6, asama: 'kismi-sevk', fatura: 'yok', faturaSayisi: 0,
   kalemler: [AKIS_KALEMI],
-  kapanisEksikleri: ['Kalem 1: teslim edilen 60 / 100.', 'Fatura kesilmedi.'],
+  kapanisEksikleri: ['Kalem 1: teslim edilen 60 / 100.', 'Fatura kesilmedi.'], terminRiski: null,
 } satisfies SiparisAkisiCevabi;
 
 describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
   const akisli = (akis: SiparisAkisiCevabi, kapat?: (govde: unknown) => Response | undefined) => sunucuKur(YONETICI, (yontem, yol, govde) => {
     // Örnek ayrıntının kimliği 5'tir (taslaktan türer); sayfa adresi 6.
     if (yontem === 'GET' && /^\/akis\/siparisler\/[56]$/.test(yol)) return json(200, akis);
-    if (yontem === 'GET' && yol.startsWith('/akis/siparis-asamalari?')) return json(200, { asamalar: [{ siparisId: 6, asama: akis.asama }] } satisfies SiparisAsamalariCevabi);
+    if (yontem === 'GET' && yol.startsWith('/akis/siparis-asamalari?')) return json(200, { asamalar: [{ siparisId: 6, asama: akis.asama, terminRiski: akis.terminRiski }] } satisfies SiparisAsamalariCevabi);
     if (yontem === 'POST' && yol === '/siparisler/6/kapat') return kapat?.(govde) ?? json(200, { ...AYRINTI_ONAYLI, durum: 'kapandi' } satisfies SiparisAyrintisi);
     return undefined;
   });
@@ -608,6 +608,23 @@ describe('Siparişin akışı ve kapatma kapısı (3429-1 a)', () => {
     expect(await durumlar([tam, iptalli])).toEqual(['Emir 1 / 2 kismi', 'Plan 1 / 2 kismi', 'Üretim 1 / 2 kismi', 'Sevk 1 / 2 kismi']);
     expect(await durumlar([tam])).toEqual(['Emir 1 / 1 tam', 'Plan 1 / 1 tam', 'Üretim 1 / 1 tam', 'Sevk 1 / 1 tam']);
     expect(await durumlar([iptalli])).toEqual(['Emir 0 / 1 bos', 'Plan 0 / 1 bos', 'Üretim 0 / 1 bos', 'Sevk 0 / 1 bos']);
+  });
+
+  it('3429-2 D: plan bitişi termini aşan kalemde gün farkı, başlıkta ve listede termin riski rozeti', async () => {
+    const riskli = { ...AKIS, terminRiski: 3, kalemler: [{ ...AKIS_KALEMI, planBitis: '2026-10-23T09:00:00.000Z', terminRiski: 3 }] };
+    akisli(riskli);
+    ac('/siparisler/6');
+    expect(await screen.findByText('3 gün geç')).toBeTruthy();
+    expect(screen.getAllByText('Termin riski · 3 gün').length).toBe(2);
+    cleanup();
+    akisli(riskli);
+    ac('/siparisler');
+    expect(await screen.findByText('Termin riski · 3 gün')).toBeTruthy();
+    cleanup();
+    akisli(AKIS);
+    ac('/siparisler/6');
+    await screen.findByRole('heading', { name: 'Sipariş akışı' });
+    expect(screen.queryByText(/Termin riski/)).toBeNull();
   });
 
   it('taslakta akış istenmez ve bölüm çizilmez', async () => {
@@ -931,7 +948,7 @@ describe('Yeni satış siparişi', () => {
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, miktar: '3', birimFiyat: null }] });
   });
 
-  it('3244 b: termin gün yazılınca tarih, tarih yazılınca gün hesaplanır; kalem termini siparişten dolu gelir, partiler gövdede gider', async () => {
+  it('3244 b: termin gün yazılınca tarih, tarih yazılınca gün hesaplanır; kalem termini siparişten dolu gelir', async () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
     ac('/siparisler/yeni');
     await musteriSec();
@@ -944,42 +961,29 @@ describe('Yeni satış siparişi', () => {
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
     expect((screen.getByLabelText(/^Kalem 1 termin/) as HTMLInputElement).value).toBe('2027-01-13');
     expect(screen.getByText('Sipariş termini')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 1 adet/), { target: { value: '10' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 2 adet/), { target: { value: '90' } });
-    expect(screen.getByText('Toplam 100 / 100')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({
-      siparisTarihi: '2026-11-14', termin: '2027-01-13',
-      satirlar: [{ termin: null, partiler: [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }] }],
-    });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ siparisTarihi: '2026-11-14', termin: '2027-01-13', satirlar: [{ termin: null }] });
   });
 
-  it('3427-3 a: aynı türden ikinci parti eklenir; partide rota seçimi yok, rota sorulmaz, partiler türün rotasıyla gider', async () => {
+  it('3429-4 (E b): kalem siparişte partilere bölünmez; tek seri emir açılır, bölme üretim emrinde', async () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
     ac('/siparisler/yeni');
     await musteriSec();
-    fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
     fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
     await kartSec();
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 1 adet/), { target: { value: '10' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 2 adet/), { target: { value: '60' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 3 adet/), { target: { value: '30' } });
-    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 3 çeşit/), { target: { value: 'numune' } });
-    expect(screen.queryByLabelText(/^Kalem 1 parti \d+ rota/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Parti ekle' })).toBeNull();
+    expect(screen.queryByLabelText(/^Kalem 1 parti/)).toBeNull();
+    const cesit = screen.getByLabelText('Kalem 1 üretim çeşidi');
+    expect(within(cesit).getByText('100 Seri')).toBeTruthy();
+    expect(within(cesit).getByText(/Onayda tek emir açılır; FAI, numune gibi partiler üretim emrinde bölünür\./)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({
-      satirlar: [{ partiler: [{ emirTuru: 'fai', adet: '10', rotaId: null }, { emirTuru: 'seri', adet: '60', rotaId: null }, { emirTuru: 'numune', adet: '30', rotaId: null }] }],
-    });
-    expect(istekler.some((i) => i.yol.startsWith('/rota/urunler/'))).toBe(false);
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ partiler: [] }] });
   });
 
-  it('3427-3 a: eski kayıtta elle seçilmiş rota görünür not olur ve değişmeden geri gider', async () => {
+  it('3427-3 a, 3429-4: eski kayıttaki partiler ve elle seçilmiş rota salt okunur görünür, değişmeden geri gider', async () => {
     const rotali = { ...AYRINTI_TASLAK, satirlar: [
       { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000', rotaId: 2 }, { id: 2, emirTuru: 'seri', adet: '90.000', rotaId: null }] },
     ] } satisfies SiparisAyrintisi;
@@ -987,11 +991,34 @@ describe('Yeni satış siparişi', () => {
       : yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, rotali) : undefined));
     ac('/siparisler/5/duzenle');
     await screen.findByText('Düzenle: SS-2026-0005');
-    expect(screen.getAllByText('Elle seçilmiş rota korunur.')).toHaveLength(1);
-    expect(screen.queryByLabelText(/^Kalem 1 parti 1 rota/)).toBeNull();
+    const cesit = screen.getByLabelText('Kalem 1 üretim çeşidi');
+    expect([within(cesit).getByText('10 FAI'), within(cesit).getByText('90 Seri')]).toHaveLength(2);
+    expect(within(cesit).getByText('Eski kayıt: partiler değişmeden kalır; yeni bölme üretim emrinde yapılır. Elle seçilmiş rota korunur.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Parti ekle' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ partiler: [{ emirTuru: 'fai', rotaId: 2 }, { emirTuru: 'seri', rotaId: null }] }] });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ partiler: [{ emirTuru: 'fai', adet: '10', rotaId: 2 }, { emirTuru: 'seri', adet: '90', rotaId: null }] }] });
+  });
+
+  it('3429-4 Arayüz: eski partili kalemde miktar değişince kayıt durur, "Partileri kaldır" tek seri emre çevirir', async () => {
+    const partili = { ...AYRINTI_TASLAK, satirlar: [
+      { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000', rotaId: null }, { id: 2, emirTuru: 'seri', adet: '90.000', rotaId: null }] },
+    ] } satisfies SiparisAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, partili)
+      : yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, partili) : undefined));
+    ac('/siparisler/5/duzenle');
+    await screen.findByText('Düzenle: SS-2026-0005');
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '120' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    expect(await screen.findByText('Miktar eski partilerle tutmuyor; "Partileri kaldır" ile kalemi tek seri emre çevirin.')).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Partileri kaldır' }));
+    const cesit = screen.getByLabelText('Kalem 1 üretim çeşidi');
+    expect(within(cesit).getByText('120 Seri')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Partileri kaldır' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ miktar: '120', partiler: [] }] });
   });
 
   it('kalem kartı yeni seçime kadar kalır: yazıp seçmeyince önceki kart gider, ipucu söyler; seçilen kart başka satırda yinelenmez', async () => {
