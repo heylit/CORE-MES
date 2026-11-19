@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import type { SiparisAsamalariCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { Siparis, SiparisListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import {
   LogoBelgeAramasi, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, LOGO_DURUM_ADI, LogoRozetHucresi, Rozet, Sekmeler, Tablo, YETKI_ADI, useLogoRozetleri, type Sutun,
@@ -10,6 +11,7 @@ import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
 import { SIPARIS_DURUMU, SIPARIS_SEKMELERI, kalanGun, paraMetni, tarihMetni, zamanMetni, type SiparisSekmesi } from './gorunum.ts';
+import { AsamaRozeti } from './SiparisAkisi.tsx';
 import { useFiyatGorur, useYazabilir } from './yazma.ts';
 import './siparisler.css';
 
@@ -98,9 +100,27 @@ export function SiparisListesi() {
     anahtar: 'logo', baslik: 'Logo', hucre: (s) => <LogoRozetHucresi bilgi={logo.durum(s.id)} hata={logo.hata} />,
     csv: (s) => { const d = logo.durum(s.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
   };
+  // 3429-1 (B): onaylı satırların aşaması, görünen sayfa için tek istek; okunamazsa rozet çizilmez, durum yine görünür.
+  const onaylilar = (siparisler.data?.satirlar ?? []).filter((s) => s.durum === 'onayli').map((s) => s.id);
+  const asamalar = useQuery({
+    queryKey: anahtarlar.siparisAsamalari(onaylilar),
+    queryFn: () => api.get<SiparisAsamalariCevabi>(`/akis/siparis-asamalari?idler=${onaylilar.join(',')}`),
+    enabled: onaylilar.length > 0,
+  });
+  const asama = new Map((asamalar.data?.asamalar ?? []).map((a) => [a.siparisId, a.asama]));
+  const durumSutunu: Sutun<Siparis> = {
+    anahtar: 'durum', baslik: 'Durum', kartTamSatir: true,
+    hucre: (s) => (
+      <span className="tc-sp-parti-cipleri">
+        <Rozet ton={SIPARIS_DURUMU[s.durum].ton}>{SIPARIS_DURUMU[s.durum].etiket}</Rozet>
+        {s.durum === 'onayli' && <AsamaRozeti asama={asama.get(s.id)} />}
+      </span>
+    ),
+    csv: (s) => SIPARIS_DURUMU[s.durum].etiket,
+  };
   // Arşivde yalnız iptal edilmiş sipariş durur; hep aynı olan Durum sütunu yerine arşivleyen gösterilir.
   const temel = SUTUNLAR.filter((k) => (fiyatGorur || k.anahtar !== 'tutar') && (!arsivde || k.anahtar !== 'durum'));
-  const sutunlar = [...temel, logoSutunu, ...(arsivde ? [ARSIV_SUTUNU] : [])];
+  const sutunlar = [...temel.map((k) => (k.anahtar === 'durum' ? durumSutunu : k)), logoSutunu, ...(arsivde ? [ARSIV_SUTUNU] : [])];
 
   return (
     <section className="tc-sp">

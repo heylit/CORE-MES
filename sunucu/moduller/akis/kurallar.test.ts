@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   adimAraliklari, aralikBirlesimi, aramaMetni, calisilanSure, emirAkisi, fasonAraligi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi,
+  enGecBitis, FATURA_EKSIGI, faturaDurumu, kalemSevki, kapanisEksikleri, siparisAsamasi, type AkisKalemi,
 } from './kurallar.ts';
+import type { SiparisAkisEmri } from '#paylasilan/sozlesme/akis.ts';
 
 // Saat 08:00'den dakika sayar; okunaklı örnek için.
 const z = (dakika: number): string => new Date(Date.UTC(2026, 0, 5, 8, 0) + dakika * 60_000).toISOString();
@@ -400,5 +402,64 @@ describe('aramaMetni (AKS-3, AKS-5 a)', () => {
   test('Türkçe küçük harfe çevirir, ç ğ ı ö ş ü düz harfe iner', () => {
     assert.equal(aramaMetni(' Burç IŞIK İğne Ölçü '), 'burc isik igne olcu');
     assert.equal(aramaMetni('burc'), 'burc');
+  });
+});
+
+describe('satış siparişi akışı (3429-1)', () => {
+  const emir = (id: number, durum: SiparisAkisEmri['durum'], g: Partial<SiparisAkisEmri> = {}): SiparisAkisEmri => ({ id, no: `E-${String(id)}`, durum, adet: 10, planBitis: null, saglam: null, ...g });
+  const kalem = (g: Partial<AkisKalemi> = {}): AkisKalemi => ({ sira: 1, miktar: 10, uretilir: true, emirler: [], sevkEdilen: 0, yolda: 0, ...g });
+
+  test('SPA-1: teslimat işleri emre göre toplanır; iptal ve başka emrin işi sayılmaz, adedi boş iş emrin bütün ürünüdür', () => {
+    const emirler = [emir(1, 'bitti', { saglam: 8 }), emir(2, 'basladi')];
+    assert.deepEqual(kalemSevki(emirler, [
+      { uretimEmriId: 1, durum: 'tamamlandi', adet: '3', iptal: false },
+      { uretimEmriId: 1, durum: 'yolda', adet: '2.5', iptal: false },
+      { uretimEmriId: 1, durum: 'tamamlandi', adet: '9', iptal: true },
+      { uretimEmriId: 9, durum: 'tamamlandi', adet: '9', iptal: false },
+      { uretimEmriId: 1, durum: 'havuzda', adet: '1', iptal: false },
+      { uretimEmriId: 1, durum: 'tamamlandi', adet: null, iptal: false },
+      { uretimEmriId: 2, durum: 'tamamlandi', adet: null, iptal: false },
+    ]), { sevkEdilen: 3 + 8 + 10, yolda: 2.5 });
+  });
+
+  test('SPA-2: fatura durumu KDV hariç net tutarla; iade düşülür, başka para birimi karşılaştırılamaz, kuruş tam sayıyla', () => {
+    const f = (tutar: string, tur: 'fatura' | 'iade' = 'fatura', paraBirimi = 'TRY') => ({ tur, paraBirimi, tutar });
+    assert.equal(faturaDurumu('100.00', 'TRY', []), 'yok');
+    assert.equal(faturaDurumu('100.00', 'TRY', [f('20', 'iade')]), 'yok', 'yalnız iade fatura sayılmaz');
+    assert.equal(faturaDurumu('100.00', 'TRY', [f('99.99')]), 'kismi');
+    assert.equal(faturaDurumu('100.00', 'TRY', [f('60'), f('40.00')]), 'tam');
+    assert.equal(faturaDurumu('100.00', 'TRY', [f('110'), f('10.01', 'iade')]), 'kismi');
+    assert.equal(faturaDurumu('100.00', 'TRY', [f('100', 'fatura', 'EUR')]), 'karsilastirilamaz');
+    assert.equal(faturaDurumu(null, 'TRY', [f('100')]), 'karsilastirilamaz');
+    assert.equal(faturaDurumu('9007199254740993.01', 'TRY', [f('9007199254740993.00')]), 'kismi', 'büyük tutarda kayan nokta şaşmaz');
+  });
+
+  test('SPA-3: aşama faturadan geriye; iptal edilen emir sayılmaz, üretilen kalemi olmayan sipariş onaylı kalır', () => {
+    assert.equal(siparisAsamasi('taslak', [kalem()], 'yok'), 'taslak');
+    assert.equal(siparisAsamasi('iptal', [kalem()], 'tam'), 'iptal');
+    assert.equal(siparisAsamasi('kapandi', [kalem()], 'yok'), 'kapandi');
+    assert.equal(siparisAsamasi('onayli', [kalem({ sevkEdilen: 2 })], 'tam'), 'faturalandi');
+    assert.equal(siparisAsamasi('onayli', [kalem({ sevkEdilen: 10 }), kalem({ uretilir: false, miktar: 1, sevkEdilen: 1 })], 'yok'), 'sevk-tamam');
+    assert.equal(siparisAsamasi('onayli', [kalem({ yolda: 1 })], 'kismi'), 'kismi-sevk');
+    assert.equal(siparisAsamasi('onayli', [kalem({ uretilir: false })], 'yok'), 'onayli');
+    assert.equal(siparisAsamasi('onayli', [kalem()], 'yok'), 'emir-bekliyor');
+    assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'iptal')] })], 'yok'), 'emir-bekliyor');
+    assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'taslak')] }), kalem()], 'yok'), 'emir-acildi');
+    assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'planli')] }), kalem({ emirler: [emir(2, 'taslak', { planBitis: '2031-01-01T10:00:00.000Z' })] })], 'yok'), 'planlandi');
+    assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'basladi')] }), kalem()], 'yok'), 'uretimde');
+    assert.equal(siparisAsamasi('onayli', [kalem({ emirler: [emir(1, 'bitti'), emir(2, 'iptal')] })], 'yok'), 'uretildi');
+  });
+
+  test('SPA-4: kapanış eksikleri üretilen kalemin teslim eksiği ve tam olmayan fatura; üretilmeyen kalemin sevki ölçülmez', () => {
+    assert.deepEqual(kapanisEksikleri([kalem({ sevkEdilen: 10 }), kalem({ uretilir: false })], 'tam'), []);
+    assert.deepEqual(kapanisEksikleri([kalem({ sira: 2, miktar: 2.5, sevkEdilen: 1, yolda: 1.5 })], 'yok'), ['Kalem 2: teslim edilen 1 / 2,5.', FATURA_EKSIGI.yok]);
+    assert.deepEqual(kapanisEksikleri([], 'karsilastirilamaz'), [FATURA_EKSIGI.karsilastirilamaz]);
+  });
+
+  test('SPA-5: plan bitişi en geç bitiştir; sıra ve saat dilimi değiştirmez, boş değer atlanır, hiç yoksa null', () => {
+    assert.equal(enGecBitis(['2026-10-15T14:00:00.000Z', '2026-10-17T08:00:00.000Z', '2026-10-16T09:00:00.000Z']), '2026-10-17T08:00:00.000Z');
+    assert.equal(enGecBitis([undefined, '2026-10-16T07:00:00+03:00', null, '2026-10-16T05:00:00.000Z']), '2026-10-16T05:00:00.000Z', 'saat dilimine göre en geç');
+    assert.equal(enGecBitis([null, undefined]), null);
+    assert.equal(enGecBitis([]), null);
   });
 });

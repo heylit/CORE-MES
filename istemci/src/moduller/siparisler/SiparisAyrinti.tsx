@@ -12,6 +12,7 @@ import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
+import { AsamaRozeti, SiparisAkisi, useSiparisAkisi } from './SiparisAkisi.tsx';
 import { SiparisSurumleri } from './SiparisSurumleri.tsx';
 import { GeriAlmaUyarisi, SiparisOnayPenceresi } from './SiparisAcilisi.tsx';
 import { KalemMetni } from './MalzemeSecici.tsx';
@@ -27,6 +28,7 @@ const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string
   kapat: {
     baslik: 'Siparişi tamamlandı olarak kapat', dugme: 'Tamamlandı olarak kapat', basari: 'Sipariş tamamlandı olarak kapandı.',
     govde: 'Teslimat ve fatura bittiyse kullanın. Sipariş satış raporlarında ve beklenen tahsilatta kalır; yeniden açılmaz.',
+    // SIP-41 (3429-1 a): eksik varken gerekçe istenir; eksikleri sunucu hesaplar ve kapatmada yeniden denetler.
   },
   iptal: {
     baslik: 'Siparişi iptal et', dugme: 'Siparişi iptal et', basari: 'Sipariş iptal edildi.',
@@ -48,6 +50,27 @@ const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string
   },
 };
 const GEREKCELI: ReadonlySet<Komut> = new Set(['iptal', 'onay-geri-al']);
+
+// SIP-41: eksik listesi ve gerekçe. Eksikler okunamadıysa gerekçe alanı yine açıktır; kapatmada sunucu denetler.
+function KapanisEksikleri({ akis, neden, nedenYaz }: { akis: ReturnType<typeof useSiparisAkisi>; neden: string; nedenYaz: (n: string) => void }) {
+  const eksik = akis.data?.kapanisEksikleri;
+  if (eksik !== undefined && eksik.length === 0) {
+    return <p className="tc-sp-bildirim tc-sp-bildirim-tamam" role="status"><strong>Teslimat ve fatura tamam</strong> Sipariş doğrudan kapanır.</p>;
+  }
+  return (
+    <>
+      {eksik === undefined ? (
+        <p className="tc-sp-ipucu">{akis.isPending ? 'Eksikler okunuyor…' : 'Eksikler okunamadı; kapatırken sunucu denetler. Eksik varsa gerekçe yazın.'}</p>
+      ) : (
+        <div className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
+          <strong>Kapanışta eksik var</strong>
+          <ul className="tc-sp-kapanis-eksik">{eksik.map((e) => <li key={e}>{e}</li>)}</ul>
+        </div>
+      )}
+      <CokSatir etiket="Kapanış gerekçesi" required={eksik !== undefined} value={neden} onChange={(o) => nedenYaz(o.target.value)} maxLength={500} />
+    </>
+  );
+}
 
 function Ozellik({ ad, children }: { ad: string; children: ReactNode }) {
   return (
@@ -76,13 +99,17 @@ export function SiparisAyrinti() {
     enabled: Number.isInteger(id) && id > 0,
   });
   useOnayOdagi(siparis.data !== undefined);
+  const akis = useSiparisAkisi({ id, durum: siparis.data?.durum ?? 'taslak' });
+  const kapanisEksikleri = akis.data?.kapanisEksikleri ?? [];
+  const gerekceli = (k: Komut): boolean => GEREKCELI.has(k) || (k === 'kapat' && neden.trim() !== '');
 
   const kapat = () => { komutYaz(null); nedenYaz(''); hataYaz(null); };
   const gonder = useMutation({
     mutationFn: ({ k, surum }: { k: Komut; surum: number }) =>
-      api.post<SiparisAyrintisi>(`/siparisler/${id}/${k}`, GEREKCELI.has(k) ? { surum, neden: neden.trim() } : { surum }),
+      api.post<SiparisAyrintisi>(`/siparisler/${id}/${k}`, gerekceli(k) ? { surum, neden: neden.trim() } : { surum }),
     onSuccess: (cevap, { k }) => {
       istemci.setQueryData(anahtarlar.siparis(id), cevap);
+      void istemci.invalidateQueries({ queryKey: anahtarlar.siparisAkisi(id) });
       void istemci.invalidateQueries({ queryKey: anahtarlar.siparisListeleri });
       if (k === 'arsivle') {
         bildir('tamam', `${cevap.no} ${KOMUT_METNI.arsivle.basari}`);
@@ -167,7 +194,7 @@ export function SiparisAyrinti() {
       <SayfaBasligi
         baslik={s.no}
         alt={`${s.firmaAd ?? `Firma ${s.firmaId}`}, ${tarihMetni(s.siparisTarihi)} tarihli sipariş.`}
-        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet><LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={s.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={false} /><LogoBagi tur="satis-siparisi" id={id} bilgi={logo.durum(id)} /></>}
+        ek={<><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{s.durum === 'onayli' && <AsamaRozeti asama={akis.data?.asama} />}<LogoRozeti bilgi={logo.durum(id)} hata={logo.hata} baslik /><LogoCariHazirligi firmaId={s.firmaId} logoda={logo.hazir || logo.hata ? logo.durum(id)?.durum === 'logoda' : null} crm={false} /><LogoBagi tur="satis-siparisi" id={id} bilgi={logo.durum(id)} /></>}
         geriYol="/siparisler"
         geriMetni="Siparişlere dön"
         islemler={islemler}
@@ -240,6 +267,8 @@ export function SiparisAyrinti() {
 
       <SiparisSurumleri siparis={s} />
 
+      <SiparisAkisi siparis={s} />
+
       <SiparisCarpani siparis={s} />
 
       <SiparisProjeleri siparis={s} />
@@ -255,6 +284,7 @@ export function SiparisAyrinti() {
           vazgec={kapat}
           onayla={() => {
             if (GEREKCELI.has(komut) && neden.trim() === '') { hataYaz(komut === 'iptal' ? 'İptal nedeni zorunlu.' : 'Onayı geri alma nedeni zorunlu.'); return; }
+            if (komut === 'kapat' && kapanisEksikleri.length > 0 && neden.trim() === '') { hataYaz('Eksikle kapatmak için gerekçe zorunlu.'); return; }
             hataYaz(null);
             gonder.mutate({ k: komut, surum: s.surum });
           }}
@@ -265,6 +295,7 @@ export function SiparisAyrinti() {
             {GEREKCELI.has(komut) && (
               <CokSatir etiket={komut === 'iptal' ? 'İptal nedeni' : 'Geri alma nedeni'} required value={neden} onChange={(o) => nedenYaz(o.target.value)} maxLength={500} />
             )}
+            {komut === 'kapat' && <KapanisEksikleri akis={akis} neden={neden} nedenYaz={nedenYaz} />}
             {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}
           </div>
         </OnayPenceresi>

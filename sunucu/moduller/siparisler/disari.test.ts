@@ -143,7 +143,7 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
       const s = await ac();
       const onayli = await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, s.id, 'onayla', { surum: s.surum }));
       assert.deepEqual(gelen, [{ siparisId: s.id, kisiId: kisi.id, durum: 'onayli' }]);
-      await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, s.id, 'kapat', { surum: onayli.surum }));
+      await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, s.id, 'kapat', { surum: onayli.surum, neden: 'Deneme kapanış (SIP-41)' }));
       const iptal = await ac();
       await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, iptal.id, 'iptal', { surum: iptal.surum, neden: 'Deneme' }));
       assert.equal(gelen.length, 1);
@@ -173,7 +173,7 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
     const taslak = await ac('2031-03-02');
     const kapanan = await ac('2031-03-10');
     const k1 = await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, kapanan.id, 'onayla', { surum: kapanan.surum }));
-    await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, kapanan.id, 'kapat', { surum: k1.surum }));
+    await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, kapanan.id, 'kapat', { surum: k1.surum, neden: 'Deneme kapanış (SIP-41)' }));
     const iptal = await ac('2031-03-05');
     await o().vt.tx((db) => siparisler.durumDegistir(db, kisi, iptal.id, 'iptal', { surum: iptal.surum, neden: 'Deneme' }));
     await ac('2031-04-01');

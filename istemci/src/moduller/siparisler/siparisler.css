@@ -189,3 +189,20 @@
 .tc-sp-rev-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
 .tc-sp-rev-neden { margin: 0; overflow-wrap: anywhere; }
 .tc-sp-rev-degisiklik { display: grid; gap: var(--b-1); margin: 0; padding-left: var(--b-5); color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+
+/* 3429-1: sipariş akışı şeridi; telefonda iki sütuna iner. */
+.tc-sp-akis-serit { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-sp-akis-adim { display: grid; gap: var(--b-1); min-width: 0; padding-top: var(--b-2); border-top: var(--ikinci-vurgu) solid var(--edge); }
+.tc-sp-akis-tam { border-top-color: var(--run); }
+.tc-sp-akis-kismi { border-top-color: var(--hold); }
+.tc-sp-akis-ad { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tc-sp-akis-deger { font-weight: 700; overflow-wrap: anywhere; }
+.tc-sp-akis-emirler { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; }
+.tc-sp-akis-emir { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-sp-akis-teslim { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--b-2); }
+.tc-sp-akis-teslim > span { white-space: nowrap; }
+.tc-sp-akis-no { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.tc-sp-kapanis-eksik { margin: 0; padding-left: var(--b-4); }
+@media (max-width: 767px) {
+  .tc-sp-akis-serit { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--b-3); }
+}

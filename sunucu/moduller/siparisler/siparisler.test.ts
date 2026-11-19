@@ -327,7 +327,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const a = await siparisAc();
     assert.equal((await gonder(yonetici, `/siparisler/${a.id}/kapat`, { surum: a.surum })).statusCode, 422);
     const onayli = (await gonder(yonetici, `/siparisler/${a.id}/onayla`, { surum: a.surum })).json<SiparisAyrintisi>();
-    const kapandi = await gonder(yonetici, `/siparisler/${a.id}/kapat`, { surum: onayli.surum });
+    const kapandi = await gonder(yonetici, `/siparisler/${a.id}/kapat`, { surum: onayli.surum, neden: 'Deneme kapanış (SIP-41)' });
     assert.equal(kapandi.statusCode, 200, kapandi.body);
     const k = kapandi.json<SiparisAyrintisi>();
     assert.equal(k.durum, 'kapandi');
@@ -344,7 +344,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const acik = await siparisAc();
     assert.equal((await gonder(yonetici, `/siparisler/${acik.id}/arsivle`, { surum: acik.surum })).statusCode, 422);
     const onayli = (await gonder(yonetici, `/siparisler/${acik.id}/onayla`, { surum: acik.surum })).json<SiparisAyrintisi>();
-    const kapali = (await gonder(yonetici, `/siparisler/${acik.id}/kapat`, { surum: onayli.surum })).json<SiparisAyrintisi>();
+    const kapali = (await gonder(yonetici, `/siparisler/${acik.id}/kapat`, { surum: onayli.surum, neden: 'Deneme kapanış (SIP-41)' })).json<SiparisAyrintisi>();
     assert.equal((await gonder(yonetici, `/siparisler/${acik.id}/arsivle`, { surum: kapali.surum })).statusCode, 422);
 
     const s = await siparisAc();
@@ -777,7 +777,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await fatura(750)).statusCode, 200);
     assert.equal(await satiri(a.id), undefined);
     // Kapanan sipariş kalır; iptal edilen siparişin satırı silinir.
-    const k = await gonder(yonetici, `/siparisler/${b.id}/kapat`, { surum: b.surum });
+    const k = await gonder(yonetici, `/siparisler/${b.id}/kapat`, { surum: b.surum, neden: 'Deneme kapanış (SIP-41)' });
     assert.equal(k.statusCode, 200, k.body);
     assert.notEqual(await satiri(b.id), undefined);
     const ip = await gonder(yonetici, `/siparisler/${c.id}/iptal`, { surum: c.surum, neden: 'müşteri vazgeçti' });
@@ -799,7 +799,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
       ['/siparisler/ekle', govde()],
       [`/siparisler/${id}/guncelle`, { ...govde(), surum }],
       [`/siparisler/${id}/onayla`, { surum }],
-      [`/siparisler/${id}/kapat`, { surum }],
+      [`/siparisler/${id}/kapat`, { surum, neden: 'Deneme' }],
       [`/siparisler/${id}/iptal`, { surum, neden: 'Deneme' }],
       [`/siparisler/${id}/onay-geri-al`, { surum, neden: 'Deneme' }],
       [`/siparisler/${id}/yeni-surum`, { ...govde(), surum, gerekce: 'Deneme' }],
