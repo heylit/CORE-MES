@@ -204,14 +204,25 @@ describe('planlama değerlendirmesi: hesap', () => {
     const ozet = s.plan['ozet'] as { wT: number; n: number };
     assert.equal(ozet.n, 2);
     assert.ok(ozet.wT <= (s.plan['ilk'] as number) + 1e-9);
-    // kayıtlı plan yalnız dondurma bölgesinde (dengeli: şimdiden 24 saat) kullanılır: orada başlayan iş yerinde kalır (eski sayfanın dengeKilit'i)
-    const c = planli(); const eski = (c['plan'] as { ops: Record<string, { m: string; S: number }> }).ops;
+    // kayıtlı plan yalnız dondurma bölgesinde (dengeli: şimdiden 24 saat) kullanılır: orada başlayan iş yerinde kalır (eski sayfanın dengeKilit'i).
+    // Kayıtlı plan 08:00'de kurulmuştur, şimdi 09:00: başlamayan O1 bölgenin gerisinde kalır. Plan bir saat ileri alınınca hiçbir iş geride değildir.
+    type Yer = Record<string, { m: string; S: number; C: number }>;
+    const c0 = planli(); const p0 = c0['plan'] as { ops: Yer };
+    const ileri: Yer = Object.fromEntries(Object.entries(p0.ops).map(([id, o]) => [id, { ...o, S: o.S + 1, C: o.C + 1 }]));
+    const c = { ...c0, plan: { ...p0, ops: ileri } }; const eski = ileri;
     const k = sonuc(await dene({ tur: 'plan-kur' }, c));
     if (k.tur !== 'plan-kur') return assert.fail(k.tur);
-    const yeni = k.plan['ops'] as Record<string, { m: string; S: number }>;
+    const yeni = k.plan['ops'] as Yer;
     const bolge = Object.keys(eski).filter((id) => (eski[id]?.S ?? -1) >= 9 && (eski[id]?.S ?? 99) < 33);
     assert.ok(bolge.length > 0);
     for (const id of bolge) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]?.m, eski[id]?.S], id);
+    // 3447: geride iş (O1, 08:00'de başlayacaktı) şimdiye alınır, bölgedeki O2 sırasını koruyarak onun arkasına kayar. Eskiden O2 yerinde
+    // kalır, O1 onun arkasına (ertesi güne) düşer ve canlıda O1'in önüne iş girmiş olurdu (4 saat kuralı, 248 a).
+    const g = sonuc(await dene({ tur: 'plan-kur' }, c0));
+    if (g.tur !== 'plan-kur') return assert.fail(g.tur);
+    const gy = g.plan['ops'] as Yer;
+    assert.equal(gy['O1.10']?.S, 9);
+    assert.equal(gy['O2.10']?.S, gy['O1.10']?.C);
   });
 
   test('PD-19: planı kur gövdesi tur dışı alan almaz (iyileştirme kipi yok, 579 b)', () => {
