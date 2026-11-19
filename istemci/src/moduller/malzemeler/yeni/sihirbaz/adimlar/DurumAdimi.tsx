@@ -19,6 +19,7 @@ export function DurumAdimi() {
   const { taslak: d, b, degistir, yenisiniKur, secim, secimYaz, bildir } = useSihirbaz();
   const standart = kartStandardi(d);
   const [ara, araYaz] = useState('');
+  const [stdAcik, stdAcikYaz] = useState(false);
   const adlar = useMemo(() => standartAdlari(b.ortam.malzemeAyari), [b.ortam.malzemeAyari]);
   const f = d.fam ? aileler(b)[d.fam] : undefined;
   if (!f) return <p className="tc-my-bos">Önce bir malzeme ailesi seç.</p>;
@@ -33,6 +34,7 @@ export function DurumAdimi() {
   let gizli = 0;
   const liste = (o: Secenek): readonly string[] => {
     if (!o.from) return o.opts ?? [];
+    if (o.k === 'mekstd') return K.mekanikStandartlari(c, d.form);
     const l = c?.[o.from];
     return Array.isArray(l) ? l.map(String) : [];
   };
@@ -113,6 +115,9 @@ export function DurumAdimi() {
     );
   };
   const govde = gruplar.map((g) => {
+    if (g.ad === 'Standartlar' && !stdAcik && !ara.trim()) {
+      return <StandartOzeti key={g.ad} ogeler={g.ogeler} ac={() => { stdAcikYaz(true); }} />;
+    }
     const ic = g.ogeler.map(bir).filter(Boolean);
     if (!ic.length) return null;
     const ik = S.GRP_ICON[g.ad];
@@ -164,5 +169,47 @@ export function DurumAdimi() {
       )}
       {govde}
     </>
+  );
+}
+
+// Kimyasal ve mekanik standart kendiliğinden seçilir; kutu seçimi özetler, "Değiştir" iki listeyi açar.
+function StandartOzeti({ ogeler, ac }: { ogeler: readonly Secenek[]; ac: () => void }) {
+  const { taslak: d, b } = useSihirbaz();
+  const ik = S.GRP_ICON['Standartlar'];
+  const durumStd = d.cls ? K.DURUM_ADI_STANDARDI[d.cls] : undefined;
+  const durum = typeof d.opts['durum'] === 'string' ? d.opts['durum'] : '';
+  const sorun = (k: string) => {
+    const v = d.opts[k];
+    return typeof v === 'string' && v ? K.optStatus(k, v, d, b) : null;
+  };
+  return (
+    <section className="tc-my-sbolum">
+      <h4>{ik && <KatalogSimgesi yol={S.OPT_ICON[ik]} />}Standartlar</h4>
+      <div className="tc-my-std-ozet">
+        <dl>
+          {ogeler.map((o) => {
+            const v = d.opts[o.k];
+            const st = sorun(o.k);
+            return (
+              <div key={o.k}>
+                <dt>{o.ad}</dt>
+                <dd>
+                  <b className="tc-my-std-kod">{typeof v === 'string' && v ? v : '—'}</b>
+                  {st?.s === 'no' && <span className="tc-my-hata">Uyumsuz: {st.m}</span>}
+                </dd>
+              </div>
+            );
+          })}
+          {durumStd && durum && (
+            <div>
+              <dt>Durum adı</dt>
+              <dd><b className="tc-my-std-kod">{durumStd} · {durum}</b></dd>
+            </div>
+          )}
+        </dl>
+        <BagDugmesi tikla={ac}>Değiştir</BagDugmesi>
+      </div>
+      <p className="tc-my-kucuk">Sınıf, kalite ve forma göre seçildi; form değişince elle seçmediğin standart yenisiyle değişir.</p>
+    </section>
   );
 }

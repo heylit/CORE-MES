@@ -197,6 +197,12 @@
 .tc-my-sbolum { display: grid; gap: var(--b-3); }
 .tc-my-sbolum h4 { display: flex; gap: var(--b-2); align-items: center; margin: 0; font-size: var(--yazi-m); }
 .tc-my-sbilgi { margin: 0; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-my-std-ozet { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: center; justify-content: space-between; padding: var(--b-3); border: thin solid var(--run); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-my-std-ozet dl { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: 0; min-inline-size: 0; }
+.tc-my-std-ozet dl > div { display: grid; gap: var(--b-1); min-inline-size: 0; }
+.tc-my-std-ozet dt { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-my-std-ozet dd { margin: 0; display: grid; gap: var(--b-1); }
+.tc-my-std-kod { white-space: nowrap; }
 .tc-my-lejant { display: flex; flex-wrap: wrap; gap: var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-my-lj { display: inline-flex; gap: var(--b-1); align-items: center; }
 .tc-my-lj::before { content: ''; inline-size: var(--b-3); block-size: var(--b-2); border: thin solid var(--edge); border-radius: var(--yari-tam); }

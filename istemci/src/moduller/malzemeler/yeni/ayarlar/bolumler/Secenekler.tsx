@@ -1,17 +1,18 @@
 // Hammaddenin seçim listeleri: durum ve işlem seçenekleri, sınıf varsayılanları, tolerans normları.
 import { Secim } from '../../../../../ortak/arayuz/index.ts';
 import { gecerliAileSinif, type Duzen } from '../duzen.ts';
-import { FORMS, type Aile, type Deger, type AileSecenegi } from '../kaynak.ts';
+import { FORMS, STANDART_FORM_GRUPLARI, standartSecenegiMi, type Aile, type Deger, type AileSecenegi } from '../kaynak.ts';
 import { sinifVarsayilanlari, varsayilanYaz } from '../islemler.ts';
 import { ListeDuzenleyici } from '../ListeDuzenleyici.tsx';
 import { BolumBasligi, Secici } from '../parcalar.tsx';
 import { aileSecenekleri } from './Kaliteler.tsx';
 
 export function DurumSecenekleri({ d }: { d: Duzen }) {
-  const { aile } = gecerliAileSinif(d);
+  const { aile, sinif } = gecerliAileSinif(d);
   const F = d.t.FAMS[aile] as Aile;
   const gruplar = new Map<string, AileSecenegi[]>();
-  F.opts.forEach((o) => { const g = o.grp ?? 'Durum'; gruplar.set(g, [...(gruplar.get(g) ?? []), o]); });
+  F.opts.filter((o) => !standartSecenegiMi(o.k)).forEach((o) => { const g = o.grp ?? 'Durum'; gruplar.set(g, [...(gruplar.get(g) ?? []), o]); });
+  const standartli = F.opts.some((o) => standartSecenegiMi(o.k));
   return (
     <>
       <BolumBasligi
@@ -28,7 +29,45 @@ export function DurumSecenekleri({ d }: { d: Duzen }) {
           {os.map((o) => <ListeDuzenleyici key={`${aile}|${o.k}`} d={d} id={`opt|${aile}|${o.k}`} baslik={o.ad} />)}
         </section>
       ))}
+      {standartli && <StandartListeleri d={d} aile={aile} sinif={sinif} />}
     </>
+  );
+}
+
+const FORM_GRUBU_ADI: Record<string, string> = {
+  levha: 'Levha / rulo', cubuk: 'Çubuk / altıgen / lama', kosebent: 'Köşebent / profil', boru: 'Boru / kutu', tel: 'Tel', blok: 'Blok / disk / dövme',
+};
+
+// Sınıf başına kimyasal kompozisyon ve forma göre mekanik dayanım standartları; formun ilk standardı yeni kartta varsayılandır.
+function StandartListeleri({ d, aile, sinif }: { d: Duzen; aile: string; sinif: string }) {
+  const F = d.t.FAMS[aile] as Aile;
+  const c = F.classes[sinif];
+  return (
+    <section className="tc-ma-grup">
+      <h4>Standartlar</h4>
+      <p className="tc-ma-yardim">
+        Kimyasal kompozisyon standardı bileşimi, mekanik dayanım standardı ürün formuna göre çekme, akma ve uzama değerini verir.
+        Yeni kartta sınıf, kalite ve forma göre ilk uyan standart kendiliğinden seçilir.
+      </p>
+      <Secici<string>
+        satirlar={[{
+          anahtar: 'sinif', baslik: 'Sınıf', secili: sinif, sec: (k) => d.sec({ sinif: k }),
+          secenekler: Object.entries(F.classes).filter(([, x]) => !x.gizli).map(([k, x]) => ({ deger: k, baslik: x.ad })),
+        }]}
+        ozet={c && <><b data-aile={aile}>{F.ad}</b> › <b>{c.ad}</b></>}
+      />
+      {c && (
+        <>
+          <ListeDuzenleyici key={`${aile}|${sinif}|kim`} d={d} id={`std|${aile}|${sinif}|kim`} baslik="Kimyasal kompozisyon" />
+          {STANDART_FORM_GRUPLARI.filter((g) => g.formlar.some((f) => F.forms.includes(f))).map((g) => (
+            <ListeDuzenleyici
+              key={`${aile}|${sinif}|${g.anahtar}`} d={d} id={`std|${aile}|${sinif}|${g.anahtar}`}
+              baslik={`Mekanik dayanım · ${FORM_GRUBU_ADI[g.anahtar] ?? g.anahtar}`}
+            />
+          ))}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -38,7 +77,7 @@ export function SinifVarsayilanlari({ d }: { d: Duzen }) {
   const c = F.classes[sinif];
   const secili = sinifVarsayilanlari(d.v, aile, sinif);
   const dolu = Object.entries(d.v.varsayilanlar).filter(([, x]) => Object.keys(x?.opts ?? {}).length);
-  const alanlar = c ? F.opts.filter((o) => o.type === 'select').map((o) => {
+  const alanlar = c ? F.opts.filter((o) => o.type === 'select' && !standartSecenegiMi(o.k)).map((o) => {
     const degerler = (o.from ? (c[o.from] as Deger[] | undefined) ?? [] : o.opts ?? []).map(String);
     return { o, degerler };
   }).filter((x) => x.degerler.length) : [];

@@ -18,6 +18,9 @@ export type {
   OperasyonGrubu, OperasyonTanimi, Ozellik, OzellikDegerleri, Sinif, Sozluk, Taslak, Tur, TurAdimi,
 } from './cekirdek/tipler.ts';
 export type { UyumSorunu } from './cekirdek/uyumluluk.ts';
+export {
+  DURUM_ADI_STANDARDI, STANDART_FORM_GRUPLARI, kimyasalStandartlari, mekanikFormaBagli, mekanikStandartlari, standartSecenegiMi,
+} from './cekirdek/metal-standartlari.ts';
 export type { BenzerKart, MukerrerGrubu, MuadilKart } from './cekirdek/onay.ts';
 export type { OlcuGrubu, VaryantSecimi } from './cekirdek/varyant.ts';
 export type { RotaAdimi } from './cekirdek/operasyon.ts';
@@ -405,6 +408,7 @@ export function feOf(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['feOf']
 export function compatIssues(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['compatIssues']> { return taslakla(b, d, (m, d) => m.compatIssues(d)); }
 export function formStatus(f: Parameters<Cekirdek['formStatus']>[0], d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['formStatus']> { return taslakla(b, d, (m, d) => m.formStatus(f, d)); }
 export function optStatus(k: Parameters<Cekirdek['optStatus']>[0], v: Parameters<Cekirdek['optStatus']>[1], d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['optStatus']> { return taslakla(b, d, (m, d) => m.optStatus(k, v, d)); }
+export function standartlariDoldur(d: KartKaydi, once: Parameters<Cekirdek['standartlariDoldur']>[1], b: KuralBaglami): KartKaydi { return cekirdek(b).standartlariDoldur(clone(d), once); }
 export function varsayilanlariUygula(d: Parameters<Cekirdek['varsayilanlariUygula']>[0], b: KuralBaglami): ReturnType<Cekirdek['varsayilanlariUygula']> { return cekirdek(b).varsayilanlariUygula(d); }
 export function presetGroups(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['presetGroups']> { return taslakla(b, d, (m, d) => m.presetGroups(d)); }
 export function variantList(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['variantList']> { return taslakla(b, d, (m, d) => m.variantList(d)); }
