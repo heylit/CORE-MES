@@ -22,7 +22,7 @@ function toplanti(t: Partial<Toplanti> = {}): Toplanti {
     katilimcilar: [{ kisiId: 2, ad: 'ORN-Şef', zorunlu: true }, { kisiId: 4, ad: 'ORN-Uzman', zorunlu: false }],
     gundem: ['Açık aksiyonlar'], kararlar: [],
     aksiyonlar: [{ id: 11, metin: 'Planı yayınla', sorumlu: { id: 2, ad: 'ORN-Şef' }, sonTarih: '2026-11-22', durum: 'acik', gorev: null, surum: 1 }],
-    izinler: { yaz: true }, surum: 1, ...t,
+    izinler: { yaz: true, gorevAc: true }, surum: 1, ...t,
   };
 }
 
@@ -70,6 +70,12 @@ describe('Toplantılar (3448)', () => {
     await waitFor(() => expect(gonderilen).toEqual(['/toplantilar/7/aksiyonlar/11/gorev {"surum":1}']));
   });
 
+  it('projeler.gorev-yaz yoksa (gorevAc false) "Göreve çevir" görünmez; Bitti ve İptal kalır', () => {
+    ac(<ToplantiGorunumu t={toplanti({ izinler: { yaz: true, gorevAc: false } })} eposta={false} />);
+    expect(screen.queryByRole('button', { name: /Göreve çevir/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Bitti/ })).toBeTruthy();
+  });
+
   it('serbest konuda aksiyon toplantıda izlenir; başlamış toplantıda "Yapıldı işaretle" çıkar', () => {
     ac(<ToplantiGorunumu t={toplanti({ konuTuru: 'serbest', konu: null, baslangic: new Date(Date.now() - SAAT).toISOString() })} eposta={false} />);
     expect(screen.queryByRole('button', { name: /Göreve çevir/ })).toBeNull();
@@ -78,7 +84,7 @@ describe('Toplantılar (3448)', () => {
   });
 
   it('yazma izni olmayan katılımcı düğme görmez', () => {
-    ac(<ToplantiGorunumu t={toplanti({ izinler: { yaz: false } })} eposta={false} />);
+    ac(<ToplantiGorunumu t={toplanti({ izinler: { yaz: false, gorevAc: false } })} eposta={false} />);
     expect(screen.queryByRole('button', { name: /Değiştir|Karar ekle|Aksiyon ekle|Göreve çevir/ })).toBeNull();
     expect(screen.getByText('Zorunlu')).toBeTruthy();
     expect(screen.getByText('Bilgi için')).toBeTruthy();

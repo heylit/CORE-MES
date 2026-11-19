@@ -205,6 +205,20 @@ describe('toplantılar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.yonetici, 'POST', yol, { surum: sonra.aksiyonlar[0]!.surum })).durum, 409);
   });
 
+  test('göreve çevirme projeler.gorev-yaz da ister: yalnız toplantilar.yaz 403 alır, düğmesi kapalı gelir', async () => {
+    const giris = rolluGiris({ giris: app, vt: ortam.vt, kisiOlustur: yoneticiOlustur });
+    const cevir = async (islemler: string[]): Promise<[number, boolean]> => {
+      const cerez = await giris(['sayfa.toplantilar', 'toplantilar.yaz', ...islemler]);
+      const t = await tamam<Toplanti>(cerez, 'POST', '/toplantilar', govde({ konu: { tur: 'proje', id: projeId } }));
+      const sonra = await tamam<Toplanti>(cerez, 'POST', `/toplantilar/${String(t.id)}/aksiyonlar`, { metin: 'Aksiyon', sorumluKisiId: kisi.katilimci, sonTarih: gun(4) });
+      const a = sonra.aksiyonlar[0]!;
+      const r = await istek(cerez, 'POST', `/toplantilar/${String(t.id)}/aksiyonlar/${String(a.id)}/gorev`, { surum: a.surum });
+      return [r.durum, sonra.izinler.gorevAc];
+    };
+    assert.deepEqual(await cevir([]), [403, false]);
+    assert.deepEqual(await cevir(['projeler.gorev-yaz']), [200, true]);
+  });
+
   test('takvim: kişi kendi toplantısını görür; toplantilar.oku hepsini', async () => {
     const t = await tamam<Toplanti>(c.yonetici, 'POST', '/toplantilar', govde({ baslik: 'Takvim denemesi', katilimcilar: [{ kisiId: kisi.katilimci, zorunlu: true }] }));
     const oku = (id: number, islemler: string[]) => ortam.vt.tx((db) => takvimKayitlari(db, gun(1), gun(1), { id, ad: 'x', islemler } as never));

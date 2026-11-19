@@ -122,8 +122,8 @@ export const toplantiSemasi = z.object({
   gundem: z.array(z.string()),
   kararlar: z.array(z.object({ id: z.number().int(), metin: z.string(), yazan: kisiSemasi, yazildi: zamanSemasi })),
   aksiyonlar: z.array(aksiyonSemasi),
-  // Okuyanın yapabildikleri (sunucu kararı; ekran düğmeyi buna göre gösterir).
-  izinler: z.object({ yaz: z.boolean() }),
+  // Okuyanın yapabildikleri (sunucu kararı; ekran düğmeyi buna göre gösterir). gorevAc: aksiyonu proje görevine çevirme (projeler.gorev-yaz).
+  izinler: z.object({ yaz: z.boolean(), gorevAc: z.boolean() }),
   surum: surumSemasi,
 });
 export type Toplanti = z.output<typeof toplantiSemasi>;

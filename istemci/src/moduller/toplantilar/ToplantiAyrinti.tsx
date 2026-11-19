@@ -121,7 +121,7 @@ function AksiyonSatiri({ t, a }: { t: Toplanti; a: ToplantiAksiyonu }) {
       </div>
       {yaz && a.durum === 'acik' && (
         <div className="tc-top-grup">
-          {t.konuTuru === 'proje' && a.gorev === null && (
+          {t.konuTuru === 'proje' && a.gorev === null && t.izinler.gorevAc && (
             <Dugme simge="clipboard-check" yukleniyor={komut.yukleniyor} onClick={() => komut.gonder(`/aksiyonlar/${String(a.id)}/gorev`, { surum: a.surum })}>Göreve çevir</Dugme>
           )}
           <Dugme simge="check" disabled={komut.yukleniyor} onClick={() => durumYaz('bitti')}>Bitti</Dugme>

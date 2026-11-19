@@ -12,4 +12,4 @@
 | TOP-8, TOP-9 | E-posta zaman aralığı tesis saatiyle; saat değişince önceki aralık yazılır | kurallar.test.ts "TOP-8, TOP-9" |
 | TOP-10 | Davet eklenene, değişiklik kalana, iptal çıkana; yapan almaz | kurallar.test.ts "TOP-10"; toplantilar.test.ts "açılan toplantıyı ...", "değişiklik ..." |
 | TOP-11 | Görev planı bugünden son tarihe | kurallar.test.ts "TOP-11"; toplantilar.test.ts "projeli toplantının aksiyonu" |
-| Yetki | Okuma oturum (süzme serviste), bütün yazma `toplantilar.yaz` | uc-yetkisi.test.ts |
+| Yetki | Okuma oturum (süzme serviste), bütün yazma `toplantilar.yaz`; göreve çevirme ayrıca `projeler.gorev-yaz` | uc-yetkisi.test.ts; toplantilar.test.ts "göreve çevirme projeler.gorev-yaz da ister" |

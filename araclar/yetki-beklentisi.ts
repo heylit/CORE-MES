@@ -54,6 +54,7 @@ export const ROL_MATRISI = {
   genel_mudur: {
     ad: 'Genel Müdür',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz', 'toplantilar.oku',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'etiket-merkezi.bas', 'etiket-merkezi.oku',
       'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'idari-isler.arac-talebi-ac',
@@ -89,6 +90,7 @@ export const ROL_MATRISI = {
   genel_mudur_yardimcisi: {
     ad: 'Genel Müdür Yardımcısı',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz', 'toplantilar.oku',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'etiket-merkezi.bas', 'etiket-merkezi.oku',
       'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'idari-isler.arac-talebi-ac',
@@ -181,6 +183,7 @@ export const ROL_MATRISI = {
   mudur: {
     ad: 'Müdür',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz', 'toplantilar.oku',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'durus-nedenleri.yaz', 'etiket-merkezi.bas',
       'etiket-merkezi.oku', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'geometri.oku',
@@ -241,6 +244,7 @@ export const ROL_MATRISI = {
   planlama_muduru: {
     ad: 'Planlama Müdürü',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz',
       'arkon.kuyruk-sirala', 'arkon.planlama', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'atolye.yaz', 'belge-merkezi.oku',
       // 3165 a: atolye.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
       'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz',
@@ -272,6 +276,7 @@ export const ROL_MATRISI = {
   planlama_proje: {
     ad: 'Planlama ve Proje',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz',
       'arkon.kuyruk-sirala', 'arkon.planlama', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'atolye.yaz', 'belge-merkezi.oku',
       // 3165 a: atolye.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
       'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz',
@@ -331,6 +336,7 @@ export const ROL_MATRISI = {
   satin_alma_muduru: {
     ad: 'Satın Alma Müdürü',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz',
       'finans.kur-yaz', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay',
       'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'logo.siparis-duzelt', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
       'musteri-tedarikci.yaz', 'portal.oku', 'portal.satinalma', 'portal.yaz', 'projeler.oku', 'satin-alma.ayar',
@@ -367,6 +373,7 @@ export const ROL_MATRISI = {
   uretim_muduru: {
     ad: 'Üretim Müdürü',
     islemler: [
+      'sayfa.toplantilar', 'toplantilar.yaz',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'cnc-kurulum.hazirlik-onayla', 'cnc-kurulum.oku',
       'cnc-kurulum.takim-degistir', 'cnc-kurulum.yaz', 'etiket-merkezi.bas', 'etiket-merkezi.oku', 'idari-isler.arac-talebi-ac',
       'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay',
