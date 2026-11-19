@@ -13,6 +13,7 @@ import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, today
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
+import { gelisGunu, kalemOzeti } from "./kimlik.ts";
 
 export type Role = "buyer" | "requester" | "approver";
 export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "Talep eden", approver: "Onaylayan" };
@@ -193,8 +194,10 @@ export function viewApproval(r: PurchaseRequest): string {
   const tt = r.award ? awardTotals(r) : null;
   const aps = approvalState(r);
   const back = geriDugmesiHTML(r.no, "Onay bekleyenlere dön");
-  const head = `<div class="rhead"><div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
-    <p class="rmeta"><span>${esc(r.department || "")}</span>${r.requester ? `<span>Talep eden ${esc(r.requester)}</span>` : ""}<span>İhtiyaç ${fmtDate(r.needDate)}</span>${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
+  // 3442-3: onaylayan kaydırınca da talebin kimliği (no, ad, geliş, ihtiyaç, kalemler) üstte kalır; yazılar soluk değil.
+  const gelis = gelisGunu(r);
+  const head = `<div class="rhead sa-onay-kimlik"><div class="ttl"><div class="row" data-sa-y="19"><span class="sa-kimlik-no">${esc(r.no)}</span><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
+    <p class="rmeta">${gelis ? `<span>Geliş ${fmtDate(gelis)}</span>` : ""}<span>İhtiyaç ${fmtDate(r.needDate)}</span><span>${esc(kalemOzeti(r))}</span>${r.department ? `<span>${esc(r.department)}</span>` : ""}${r.requester ? `<span>Talep eden ${esc(r.requester)}</span>` : ""}${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
     <div class="ract">${COMMITTED.includes(r.status) && r.award ? '<button class="btn" data-act="order-item-change">Siparişteki kalemi değiştir</button>' : ""}<button class="btn" data-act="approval-form">Onay formu</button></div></div>`;
   if (!r.award || !tt) return back + head + `<div class="panel">${empty("Bu talepte henüz karar yok", "Satın alma karar verip onaya gönderdiğinde burada görünür.")}</div>`;
   const ev = tt.ev, top = ev.ranking[0];

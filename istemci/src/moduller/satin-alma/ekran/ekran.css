@@ -77,3 +77,31 @@
 .sa-sp-logo-ozet > span[data-fark] { color: var(--sa-warn); font-weight: 600; }
 .sa-sp-kart-dugme { display: grid; cursor: pointer; border-radius: var(--sa-radius); }
 .sa-sp-kart-dugme:focus-visible { outline: var(--cizgi-kalin) solid var(--sa-signal); outline-offset: var(--cizgi-kalin); }
+
+/* 3442-3: talebin kimliği soluk değil; no kod yazısıyla öne çıkar, bilgi satırı ve adım özeti koyu yazıdır. */
+.sa-ekran-kimlik-no, .sa-serit-no, .sa-kok .sa-kimlik-no { font-family: var(--font-mono); font-weight: 600; color: var(--ink); white-space: nowrap; }
+.sa-ekran-ayrinti .tc-sbaslik-alt, .sa-ekran-ayrinti .sa-ekran-meta, .sa-ekran-adim-ozet { color: var(--ink); }
+.sa-ekran-adim-ozet { font-size: var(--yazi-s); margin: calc(-1 * var(--b-2)) 0 0; }
+.sa-ekran-kalemler { min-width: 0; overflow-wrap: anywhere; }
+.sa-kok .sa-onay-kimlik .rmeta { color: var(--ink); }
+.sa-kok .sa-onay-kimlik .row { align-items: baseline; gap: var(--b-2); flex-wrap: wrap; }
+
+/* Kimlik şeridi üst çubuğun altında yapışkan durur; kabı yüksekliksizdir, görünmesi içeriği kaydırmaz. Başlık görünürken gizlidir. */
+.sa-kok #sa-serit { position: sticky; top: var(--sa-ust, 0px); height: 0; z-index: 7; }
+.sa-serit {
+  display: flex; align-items: center; gap: var(--b-1) var(--b-3); flex-wrap: wrap; padding: var(--b-2) var(--b-6);
+  background: var(--panel-solid); border-bottom: var(--cizgi-ince) solid var(--edge); box-shadow: var(--shadow); color: var(--ink);
+}
+.sa-serit:not([data-gorunur]) { display: none; }
+.sa-serit-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40ch; }
+.sa-serit-bilgi { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); }
+.sa-serit-adim { margin-inline-start: auto; font-weight: 600; }
+.sa-serit-kisa { display: none; }
+/* Telefonda şerit en çok iki satırdır (Arayüz bakışı): üstte no ve durum, altta talebin adı ve ihtiyaç tarihi. */
+@media (max-width: 767px) {
+  .sa-serit { padding: var(--b-1) var(--b-4); gap: 0 var(--b-2); }
+  .sa-serit-kalem, .sa-serit-adim, .sa-serit-ihtiyac { display: none; }
+  .sa-serit-kisa { display: inline-flex; order: 2; flex: none; }
+  .sa-serit-ad { max-width: 100%; flex: 1 1 60%; order: 1; }
+}
+
