@@ -203,3 +203,9 @@
 @media (max-width: 767px) {
   .tc-sp-akis-serit { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--b-3); }
 }
+
+/* 3455-3: toplu sipariş yükleme. */
+.tc-sp-hata-satir { color: var(--stop); font-size: var(--yazi-s); }
+.tc-sp-adimlar, .tc-sp-acilan { margin: 0; padding-left: var(--b-5); display: grid; gap: var(--b-2); }
+.tc-sp-toplu-ozet { margin: 0 0 var(--b-3); }
+.tc-sp-toplu-arac { display: flex; flex-wrap: wrap; gap: var(--b-4); margin-bottom: var(--b-3); }

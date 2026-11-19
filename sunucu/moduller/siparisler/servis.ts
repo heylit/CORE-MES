@@ -49,7 +49,7 @@ async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
     musteriSiparisNo: s.musteri_siparis_no, siparisTarihi: s.siparis_tarihi, termin: s.termin, paraBirimi: s.para_birimi,
     kdvOrani: s.kdv_orani, odemeKosulu: s.odeme_kosulu, aciklama: s.aciklama, araToplam: s.ara_toplam, kdvTutari: s.kdv_tutari,
     genelToplam: s.genel_toplam, cezaOraniGun: s.gecikme_ceza_orani, cezaTavaniOrani: s.ceza_tavani_orani, odemeVadesiGun: s.odeme_vadesi_gun, iptalNedeni: s.iptal_nedeni, olusturma: s.olusturma, guncelleme: s.guncelleme,
-    onayZamani: s.onay_zamani, surum: s.surum,
+    onayZamani: s.onay_zamani, surum: s.surum, topluYukleme: s.toplu ?? false, logoBaglanacak: s.logo_baglanacak ?? false,
     arsiv: s.arsiv_an === null ? null : { an: s.arsiv_an, kisi: s.arsivleyen_id === null ? null : (arsivleyenler.get(s.arsivleyen_id) ?? null) },
   }));
 }
@@ -145,8 +145,9 @@ const kayitliTicariSart = (m: SiparisKilidi) => ({ cezaOraniGun: m.gecikme_ceza_
 
 // `fiyatYazar` uçta `siparisler.fiyat-oku`dan gelir (201 a); disari çağıranlar (Portal) fiyatı kendi yetkisiyle yazar.
 // `devralinanFirmaKodu`: tekliften dönüşümde teklifin kodu; sonradan pasife alınmış olsa da sipariş onu taşır (3399 a).
+// `bildirimsiz`: toplu yükleme (3455-3) yüzlerce siparişte "onay bekliyor" bildirimi göndermez.
 export async function siparisEkle(
-  db: Db, kullanici: Kullanici, g: SiparisEkleVerisi, fiyatYazar = true, devralinanFirmaKodu: string | null = null,
+  db: Db, kullanici: Kullanici, g: SiparisEkleVerisi, fiyatYazar = true, devralinanFirmaKodu: string | null = null, bildirimsiz = false,
 ): Promise<SiparisAyrintisi> {
   const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
@@ -159,7 +160,7 @@ export async function siparisEkle(
   await sorgular.kalemleriYaz(db, id, satirlar);
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.
-  await bildirimGonder(db, {
+  if (!bildirimsiz) await bildirimGonder(db, {
     tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
   });
   return siparisAyrintisi(db, id);

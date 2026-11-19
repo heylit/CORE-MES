@@ -34,6 +34,11 @@ describe('Siparişler sayfası ve ikinci menü', () => {
     expect(gorunen(ONAYLAYAN)).toEqual(['siparisler', 'teklifler', 'yeni-teklif', 'yeni-siparis']);
   });
 
+  it('3455-3: toplu yükleme yalnız siparisler.toplu-yukle işlemi olana görünür', () => {
+    expect(gorunen(ONAYLAYAN)).not.toContain('toplu-yukleme');
+    expect(gorunen([...ONAYLAYAN, 'siparisler.toplu-yukle'])).toEqual(['siparisler', 'teklifler', 'yeni-teklif', 'yeni-siparis', 'toplu-yukleme']);
+  });
+
   it('işlemi olmayan menüyü görmez', () => {
     expect(gorunen(['sayfa.siparisler'])).toEqual([]);
   });
