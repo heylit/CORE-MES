@@ -56,6 +56,15 @@ export function malzemeReddi(kart: { tur: string; onayDurumu: string } | null): 
   return null;
 }
 
+// 3438 a: yeni kalem kart ailesinin yürürlükteki revizyonuyla açılır; başka revizyon (müşteri eskisini isterse) gerekçeyle seçilir.
+// Daha önce kayıtlı kalemin kartı değişmediyse sonradan yürürlüğe giren revizyon kalemi durdurmaz.
+export interface KalemRevizyonDurumu { kod: string | null; etiket: string | null; yururlukte: boolean; yururluktekiKodu: string; yururluktekiEtiketi: string | null }
+export function eskiRevizyonReddi(r: KalemRevizyonDurumu | null, gerekce: string | null, kayitliKart: boolean): string | null {
+  if (r === null || r.yururlukte || kayitliKart || (gerekce ?? '').trim() !== '') return null;
+  const ek = (e: string | null) => (e === null ? '' : ` (${e})`);
+  return `${r.kod ?? 'Bu kart'}${ek(r.etiket)} yürürlükteki revizyon değil; yürürlükteki ${r.yururluktekiKodu}${ek(r.yururluktekiEtiketi)}. Eski revizyonla açmak için gerekçe yazın.`;
+}
+
 // SIP-4 a (02.11.2026): adet birimli kart parçayla satılır; kesirli adet siparişe girmez. Yalnız "adet" (karar metni); öteki sayılabilir
 // birimler (takım, kutu) ayrı karar ister.
 export const MIKTAR_TAM_SAYI = 'Bu kartın birimi adet; miktar tam sayı olmalı.';

@@ -64,6 +64,8 @@ export const siparisSatiriGovdesi = z.object({
   // Boşsa siparişin termini geçerlidir.
   termin: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(500),
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse yeni kalemde zorunlu (sunucu denetler); yürürlükteki kartta yok sayılır.
+  eskiRevizyonGerekcesi: istege(300).optional(),
   partiler: partiListesiSemasi.optional(),
   karsilama: z.enum(KARSILAMA_YOLLARI).optional(),
 });
@@ -128,6 +130,15 @@ export const siparisListesiSorgusu = z.object({
   arsiv: z.enum(['evet', 'hayir']).optional(),
 });
 
+// 3438 a: kart ailesinin yürürlükteki kartı; kalem yürürlükteki kartla değilse seçim ona yönlenir.
+export const kalemRevizyonuSemasi = z.object({
+  etiket: z.string().nullable(),
+  yururlukte: z.boolean(),
+  yururluktekiNo: z.number().int(),
+  yururluktekiKodu: z.string(),
+  yururluktekiEtiketi: z.string().nullable(),
+});
+export type KalemRevizyonu = z.output<typeof kalemRevizyonuSemasi>;
 export const siparisSatiriSemasi = z.object({
   id: z.number().int(),
   sira: z.number().int(),
@@ -149,6 +160,9 @@ export const siparisSatiriSemasi = z.object({
   karsilama: z.enum(KARSILAMA_YOLLARI),
   // SIP-19 (3254 a): kaleme üretim emri bağlı; onayı geri alınmış siparişte bu kalemde yalnız termin değişir.
   emreBagli: z.boolean(),
+  // 3438 a: kartın revizyonu; kart revizyon ailesinde değilse null.
+  revizyon: kalemRevizyonuSemasi.nullable(),
+  eskiRevizyonGerekcesi: z.string().nullable(),
 });
 
 export const siparisSemasi = z.object({
@@ -454,6 +468,7 @@ export const malzemeSecenegiSemasi = z.object({
   aciklamalar: z.array(z.string()),
   // 3400-3: kartın yerlilik oranı (yüzde); yoksa null.
   yerlilikOrani: ondalikMetinSemasi.nullable(),
+  revizyon: kalemRevizyonuSemasi.nullable(),
 });
 export const malzemeSecenekleriCevabi = z.object({
   satirlar: z.array(malzemeSecenegiSemasi), toplam: z.number().int().nullable(), sayfa: z.number().int(), sayfaBoyu: z.number().int(),

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import type { Db } from '#cekirdek/db.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -466,11 +467,20 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual([await cikti(10), await cikti(20)], [ym2, null], 'emirsiz: yürürlükteki B; OP 20 B\'de yok');
     const eskiEmir = await emir(a);
     assert.deepEqual([await cikti(10, eskiEmir), await cikti(20, eskiEmir)], [ym1, ym2], 'A ile açılmış emir A\'nın bağını okur');
-    assert.equal(await cikti(10, await emir(b)), ym2, 'B ile açılmış emir');
+    const yeniEmir = await emir(b);
+    assert.equal(await cikti(10, yeniEmir), ym2, 'B ile açılmış emir');
     assert.equal(await cikti(10, await emir(null)), ym2, 'rotasız emir yürürlükteki');
     assert.equal(await cikti(10, null), ym2, 'boş emir kimliği emirsiz gibi');
     assert.equal(await cikti(10, 2_000_000_000), ym2, 'bilinmeyen emir yürürlükteki');
     assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20, uretimEmriId: eskiEmir }), null, 'A\'da OP 20 karta bağlı: statü açmaz, çıktıyla tutarlı');
+    // Teslim al aynı okuma işleminde aynı ürünün farklı revizyonlu emirlerini sorar: bellek anahtarı revizyonu ve emri ayırmalıdır.
+    const sorular: [number, number | null][] = [[10, eskiEmir], [10, yeniEmir], [10, null], [20, eskiEmir], [20, yeniEmir], [10, eskiEmir]];
+    const tek = await vt().okumaTx(async (db) => {
+      const r: (number | null)[] = [];
+      for (const [opNo, e] of sorular) r.push(await adimCiktisi(db, { malzemeNo: kart, opNo, uretimEmriId: e }));
+      return r;
+    });
+    assert.deepEqual(tek, [ym1, ym2, ym2, ym2, null, ym1], 'tek okuma işleminde emir ve revizyon karışmaz');
   });
   test('1558 a: çok katmanlı emrin alt düğümü statü ve çıktıyı patlatmada donmuş revizyondan alır; patlatmada olmayan malzeme ve emirsiz yürürlükteki', async () => {
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('DGR-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -561,5 +571,40 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 10 }), op10, 'ikinci sayım aynı statüyü kullanır');
     assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20 }), null, 'son adım statü açmaz');
     assert.equal(await adimCiktisi(vt(), { malzemeNo: kart, opNo: 10 }), null, 'bağ yok');
+  });
+
+  test('3449: salt okunur işlemde belge bir kez kurulur, sonuç aynıdır; yazma işleminde her çağrı yeniden okur; işlemler belleği paylaşmaz', async () => {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('BLK-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kart = async (sira: number, tur: string) => String((await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, $2, 'BLK-', $3, 'aktif', $4, $5, $5) RETURNING no`,
+      [`blk-${String(sira)}`, tur, sira, JSON.stringify({ id: `blk-${String(sira)}`, com: { ad: 'Bellek deneme' } }), yoneticiId]))!.no);
+    const m = await kart(1, 'mamul');
+    const y = await kart(2, 'yarimamul');
+    const rota = (cikti: string) => ({
+      items: [{ id: m, code: 'ORN-E', type: 'mamul' }, { id: y, code: 'ORN-F', type: 'yari' }],
+      opdefs: [{ id: 'op1', name: 'Kesim' }],
+      routes: { [m]: { steps: [adim(`${m}-o10`, 10, { opNo: 10 }), adim(`${m}-o20`, 20, { opNo: 20, outItem: cikti }), adim(`${m}-o30`, 30, { opNo: 30 })] } },
+    });
+    await kaydet(rota(y));
+    const sayan = (db: Db, n: { okuma: number }): Db => {
+      const say = (q: string) => { if (q.includes('FROM recete_rota_kayit')) n.okuma += 1; };
+      return { sorgu: (q, p) => { say(q); return db.sorgu(q, p); }, tek: (q, p) => { say(q); return db.tek(q, p); } };
+    };
+    const sor = async (db: Db) => {
+      const n = { okuma: 0 };
+      const s = sayan(db, n);
+      const ciktilar: (number | null)[] = [];
+      for (const opNo of [10, 20, 30, 10, 20]) ciktilar.push(await adimCiktisi(s, { malzemeNo: Number(m), opNo }));
+      return { ciktilar, okuma: n.okuma };
+    };
+    const yazmada = await vt().tx(sor);
+    const okumada = await vt().okumaTx(sor);
+    assert.deepEqual(yazmada.ciktilar, [null, Number(y), null, null, Number(y)]);
+    assert.deepEqual(okumada.ciktilar, yazmada.ciktilar, 'bellekli sonuç belleksizle aynı');
+    assert.equal(yazmada.okuma, 5, 'yazma işleminde saklanmaz');
+    assert.equal(okumada.okuma, 1, 'okuma işleminde kayıt bir kez okunur');
+    await kaydet(rota(''));
+    assert.equal(await vt().okumaTx((db) => adimCiktisi(db, { malzemeNo: Number(m), opNo: 20 })), null, 'sonraki işlem yeni kaydı görür');
   });
 });

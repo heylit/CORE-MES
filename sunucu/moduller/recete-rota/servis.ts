@@ -378,7 +378,32 @@ export const KAYNAK_OKUMA = {
 // tablosundan (sayimBelgesiTablodan). Revizyon verilirse rota o
 // revizyonun hâlidir: eski revizyonla açılmış emir, yeni revizyonda kalkmış adımında da kendi rotasıyla sayılır. Yeni ekran ana kaydı yazmaz:
 // kayıt yoksa sayım boş belgeyle yürür (rota ve bağ tablodan okunur); yoksa ara adımın çıktısı statüsüz stoğa düşer (B-2484-1).
-async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null = null): Promise<unknown> {
+// Salt okunur işlemde sonuç işlem boyunca saklanır (3449): Teslim al listesi istasyondaki her adım ve önceki adım için statü ve çıktı sorar;
+// bellek olmadan her soru kaydı, rotayı, bağları ve kartları baştan okur. Bellek işlem nesnesine bağlıdır, işlem bitince
+// düşer. Yazma işleminde saklanmaz: aynı işlemde rota ya da bağ değişebilir.
+const islemBellekleri = new WeakMap<Db, Promise<Map<string, Promise<unknown>> | null>>();
+function islemBellegi(db: Db): Promise<Map<string, Promise<unknown>> | null> {
+  let bellek = islemBellekleri.get(db);
+  if (bellek === undefined) {
+    bellek = sorgular.saltOkunurMu(db).then((salt) => (salt ? new Map<string, Promise<unknown>>() : null));
+    islemBellekleri.set(db, bellek);
+  }
+  return bellek;
+}
+async function islemdeBirKez<T>(db: Db, anahtar: string, hesapla: () => Promise<T>): Promise<T> {
+  const bellek = await islemBellegi(db);
+  if (bellek === null) return hesapla();
+  const onceki = bellek.get(anahtar) as Promise<T> | undefined;
+  if (onceki !== undefined) return onceki;
+  const yeni = hesapla();
+  bellek.set(anahtar, yeni);
+  return yeni;
+}
+
+function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null = null): Promise<unknown> {
+  return islemdeBirKez(db, `sayim-durumu:${String(malzemeNo)}:${String(revizyonId)}`, () => sayimDurumuOku(db, malzemeNo, revizyonId));
+}
+async function sayimDurumuOku(db: Db, malzemeNo: number, revizyonId: number | null): Promise<unknown> {
   const kayit = await sorgular.kayitGetir(db, DURUM_ANAHTARI);
   if (kayit !== null && kayit.bicim !== 'json') return null;
   const kayitliBelge: unknown = kayit === null ? {} : kayit.deger;
@@ -408,7 +433,10 @@ const emirOzeti = async (db: Db, uretimEmriId: number | null | undefined) =>
 // Sayımın rota revizyonu; null ise yürürlükteki okunur. Emir yoksa null. Çok katmanlı emrin alt düğümünde (malzeme emrin ürünü değil) revizyon
 // patlatmada donmuş olandır (1558 a, 1481 a): emir açıldıktan sonra alt parçanın yeni revizyonu yürürlüğe girse de açık emir kendi rotasıyla
 // sayılır. Patlatmada bulunmayan malzeme yürürlükteki revizyondan okunur. Kökte ve tek katmanlı emirde emrin açıldığı revizyondur.
-async function sayimRevizyonu(db: Db, malzemeNo: number, uretimEmriId: number | null | undefined): Promise<number | null> {
+function sayimRevizyonu(db: Db, malzemeNo: number, uretimEmriId: number | null | undefined): Promise<number | null> {
+  return islemdeBirKez(db, `sayim-revizyonu:${String(malzemeNo)}:${String(uretimEmriId)}`, () => sayimRevizyonuOku(db, malzemeNo, uretimEmriId));
+}
+async function sayimRevizyonuOku(db: Db, malzemeNo: number, uretimEmriId: number | null | undefined): Promise<number | null> {
   const emir = await emirOzeti(db, uretimEmriId);
   if (emir === null) return null;
   const patlatma = emir.malzemeNo === malzemeNo ? null : await emrinPatlatmasi(db, emir.id);

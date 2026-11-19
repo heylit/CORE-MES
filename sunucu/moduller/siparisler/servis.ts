@@ -10,17 +10,17 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
-  BirimSecenekleriCevabi, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisRevizyonlariCevabi, SiparisRevizyonVerisi, SiparisSatiri,
+  BirimSecenekleriCevabi, KalemRevizyonu, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisRevizyonlariCevabi, SiparisRevizyonVerisi, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
-import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, revizyonBilgileri, satisBirimleri, type RevizyonBilgisi } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, siparisArsivReddi, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, kapanisReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, ticariSartReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
+  TAKVIM_SIPARIS_DURUMU, REVIZYON_DEGISIKLIK_YOK, eskiRevizyonReddi, degisiklikFiyatsiz, kilitliKalemReddi, revizyonDegisiklikleri, revizyonGirdiReddi, revizyonReddi, malzemeReddi, miktarReddi, karsilamaPartiReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
 import { bagliEmirler, kapanisEksikleri, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu, RevizyonDegisikligi, RevizyonHali } from './kurallar.ts';
@@ -60,6 +60,7 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
   const ayrintilar = await malzemeSatinAlmaAyrintilari(db, nolar);
   const partiler = await kalemPartileri(db, kalemler.map((k) => k.id));
   const bagli = await emreBagliKalemlerOku(db, kalemler.map((k) => k.id));
+  const revizyonlar = await revizyonBilgileri(db, nolar);
   return kalemler.map((k) => {
     const kart = kartlar.get(k.malzeme_no);
     return {
@@ -69,9 +70,15 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
       partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
       karsilama: k.karsilama,
       emreBagli: bagli.has(k.id),
+      revizyon: kalemRevizyonu(k.malzeme_no, revizyonlar.get(k.malzeme_no)),
+      eskiRevizyonGerekcesi: k.eski_revizyon_gerekcesi,
     };
   });
 }
+
+const kalemRevizyonu = (no: number, r: RevizyonBilgisi | undefined): KalemRevizyonu | null => (r === undefined ? null : {
+  etiket: r.etiket, yururlukte: r.yururlukteki.no === no, yururluktekiNo: r.yururlukteki.no, yururluktekiKodu: r.yururlukteki.stokKodu, yururluktekiEtiketi: r.yururlukteki.etiket,
+});
 
 export async function siparisListesi(db: Db, sorgu: SiparisListesiSuzgeci): Promise<SayfaliListe<Siparis>> {
   const suzgec = {
@@ -97,8 +104,13 @@ async function firmayiDenetle(db: Db, firmaId: number, mevcut: number | null): P
   if (ret !== null) throw dogrulama(ret, 'firmaId');
 }
 
-async function kalemleriDenetle(db: Db, g: SiparisEkleVerisi): Promise<void> {
+// `kayitliKartlar`: siparişte zaten kayıtlı kalemlerin kartları; onlar sonradan eskiye düşse de kalemi durdurmaz (3438 a).
+// Dönen satırlarda yürürlükteki karttaki gerekçe silinir (eski gerekçe yeni kartla kalmaz).
+async function kalemleriDenetle<T extends SiparisEkleVerisi['satirlar'][number]>(
+  db: Db, g: Omit<SiparisEkleVerisi, 'satirlar'> & { satirlar: T[] }, kayitliKartlar: ReadonlySet<number> = new Set(),
+): Promise<T[]> {
   const kartlar = await malzemeOzetleri(db, g.satirlar.map((s) => s.malzemeNo));
+  const revizyonlar = await revizyonBilgileri(db, g.satirlar.map((s) => s.malzemeNo));
   g.satirlar.forEach((s, i) => {
     const kart = kartlar.get(s.malzemeNo) ?? null;
     const ret = malzemeReddi(kart);
@@ -107,11 +119,18 @@ async function kalemleriDenetle(db: Db, g: SiparisEkleVerisi): Promise<void> {
     if (miktar !== null) throw dogrulama(miktar, `satirlar.${i}.miktar`);
     const parti = karsilamaPartiReddi(s.karsilama ?? 'uret', s.partiler ?? []) ?? partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
     if (parti !== null) throw dogrulama(parti, `satirlar.${i}.partiler`);
+    const r = kalemRevizyonu(s.malzemeNo, revizyonlar.get(s.malzemeNo));
+    const rev = eskiRevizyonReddi(r === null ? null : { ...r, kod: kart?.kod ?? null }, s.eskiRevizyonGerekcesi ?? null, kayitliKartlar.has(s.malzemeNo));
+    if (rev !== null) throw dogrulama(rev, `satirlar.${i}.eskiRevizyonGerekcesi`);
   });
   const tarih = tarihAraligiReddi(tesisGunu(Date.now()), g);
   if (tarih !== null) throw dogrulama(tarih.mesaj, tarih.alan);
   const tasma = tutarTasmaReddi(g.kdvOrani, g.satirlar);
   if (tasma !== null) throw dogrulama(tasma.mesaj, tasma.alan);
+  return g.satirlar.map((s) => {
+    const r = revizyonlar.get(s.malzemeNo);
+    return r === undefined || r.yururlukteki.no === s.malzemeNo ? { ...s, eskiRevizyonGerekcesi: null } : s;
+  });
 }
 
 const baslik = (g: SiparisEkleVerisi): BaslikAlanlari => ({
@@ -130,12 +149,12 @@ export async function siparisEkle(
   const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
   await firmayiDenetle(db, g.firmaId, null);
-  await kalemleriDenetle(db, g);
+  const satirlar = await kalemleriDenetle(db, g);
   // 3399 a: seçilmediyse varsayılan kod; numara bu kodla verilir.
   const firmaKodu = await firmaKoduSecimi(db, g.firmaKodu, 'firmaKodu', devralinanFirmaKodu);
   const no = await numaraAl(db, 'siparisler.siparis-no', { alanlar: { FIRMA: firmaKodu }, varMi: (n) => sorgular.siparisNoVarMi(db, n) });
   const id = await kisitKorumali(KISITLAR, () => sorgular.siparisEkle(db, no, { ...baslik(g), firmaKodu }, kullanici.id));
-  await sorgular.kalemleriYaz(db, id, g.satirlar);
+  await sorgular.kalemleriYaz(db, id, satirlar);
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.
   await bildirimGonder(db, {
@@ -197,13 +216,13 @@ export async function siparisGuncelle(
     if (kilit !== null) throw cakisma(kilit.mesaj);
   }
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
-  await kalemleriDenetle(db, { ...g, satirlar });
+  const denetli = await kalemleriDenetle(db, { ...g, satirlar }, new Set(kayitlilar.map((k) => k.malzeme_no)));
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
     guncelle: () => sorgular.siparisGuncelle(db, id, fiyatYazar ? baslik(g) : { ...baslik(g), ...kayitliTicariSart(mevcut) }, g.surum, kullanici.id),
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));
-  await sorgular.kalemleriYaz(db, id, satirlar, kilitli);
+  await sorgular.kalemleriYaz(db, id, denetli, kilitli);
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   return siparisAyrintisi(db, id);
 }
@@ -342,10 +361,14 @@ export async function malzemeSecenekleri(db: Db, g: { ara: string | null; sayfa:
   const r = await malzemeAra(db, { metin: g.ara, turler: SATILAN_TURLER, yalnizAktif: true, sayfa: g.sayfa });
   const ayrintilar = await malzemeSatinAlmaAyrintilari(db, r.satirlar.map((m) => m.id));
   const oranlar = await malzemeYerlilikOranlari(db, r.satirlar.map((m) => m.id));
+  const revizyonlar = await revizyonBilgileri(db, r.satirlar.map((m) => m.id));
+  const satirlar = r.satirlar.map((m) => ({
+    no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim, aciklamalar: ayrintilar.get(m.id)?.aciklamalar ?? [], yerlilikOrani: oranlar.get(m.id) ?? null,
+    revizyon: kalemRevizyonu(m.id, revizyonlar.get(m.id)),
+  }));
+  // 3438 a: yürürlükteki olmayan revizyon önerilmez; sayfanın sonuna iner, seçilirse gerekçe ister.
   return {
-    satirlar: r.satirlar.map((m) => ({
-      no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim, aciklamalar: ayrintilar.get(m.id)?.aciklamalar ?? [], yerlilikOrani: oranlar.get(m.id) ?? null,
-    })),
+    satirlar: [...satirlar.filter((m) => m.revizyon?.yururlukte !== false), ...satirlar.filter((m) => m.revizyon?.yururlukte === false)],
     toplam: r.toplam, sayfa: r.sayfa, sayfaBoyu: r.sayfaBoyu,
   };
 }
