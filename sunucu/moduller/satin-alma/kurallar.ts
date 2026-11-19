@@ -4,8 +4,8 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
-import type { AlternatifZarfi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
-import type { HizliKalem, KabulSiniri, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifZarfi, ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { AlternatifSonucu, HizliKalem, KabulSiniri, TeklifAlternatifi, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
@@ -174,6 +174,11 @@ export const ILETILER = {
   kartBirimi: (ad: string, birim: string): string => `${ad}: birim malzeme kartının birimiyle girilir (${birim}); başka birimle sipariş verilmez.`,
   teslimdenAz: (teslim: string): string => `Miktar teslim alınandan (${teslim}) az olamaz.`,
   hizliKalemBos: 'Kalem için malzeme kartı seçin ya da adını yazın.',
+  alternatifZarfsiz: (ad: string) => `${ad}: bu kalemde alternatif teklif edilemez (malzeme kartının kabul zarfı yok).`,
+  alternatifOlcu: (ad: string, a: string) => `${ad}: "${a}" bu kartın ölçüsü değil.`,
+  alternatifDisi: (ad: string, n: string) => `${ad}: seçilen teklifteki alternatif kabul sınırı dışında (${n}); seçilemez.`,
+  alternatifSartli: (ad: string) => `${ad}: seçilen teklifteki alternatif şartlı; talep eden talepte şartlı muadilleri kabul etmedi. Talep edenin onayı gerekir.`,
+  alternatifSiparis: (ad: string) => `${ad}: alternatif seçilen satırda sipariş, alternatif malzeme kartı açılınca verilir.`,
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
   kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
@@ -366,7 +371,9 @@ export function kalemAyrintisiniKoru<T extends Pick<TalepYazimi, 'teklifler'>>(e
         const o = eskiler.get(`${q.id}/${f.kalemId}`);
         // Basamakları bilmeyen ekran (gönderilmeyen alan) kaydedince kademeli fiyat silinmez; boş liste siler.
         return { ...f, iskontoYuzdesi: al(f.iskontoYuzdesi, o, 'iskontoYuzdesi'), terminGun: al(f.terminGun, o, 'terminGun'), enAzMiktar: al(f.enAzMiktar, o, 'enAzMiktar'),
-          basamaklar: f.basamaklar ?? o?.basamaklar ?? [] };
+          basamaklar: f.basamaklar ?? o?.basamaklar ?? [],
+          // 3437 a: alternatifi bilmeyen ekran kaydedince teklif edilen alternatif silinmez; null siler. Sonucu sunucu yeniden yazar.
+          alternatif: f.alternatif !== undefined ? f.alternatif : o?.alternatif ?? null, alternatifSonucu: o?.alternatifSonucu ?? null };
       }),
     })),
   };
@@ -722,6 +729,50 @@ export function siparisKalemiDegisikligiReddi(eski: Pick<Talep, 'durum' | 'kalem
 }
 // #205 karar 1, S2 b: Logo'ya gitmiş siparişin değişikliği Logo'ya düzenleme olarak gider. Tedarikçi ve para birimi değişmez, sipariş
 // karardan çıkmaz; irsaliye görmüş (teslimi olan) siparişin satırı, miktarı, birim fiyatı, iskontosu ve termini de değişmez.
+// 3437 a (dilim 3a): teklif edilen alternatifin aday kartı: boş nitelik istenenin aynısıdır; ölçü kartın istenen ölçüsünün üstüne yazılır.
+export function alternatifAdayi(zarf: AlternatifZarfi, a: TeklifAlternatifi) {
+  const olcu: Record<string, number> = Object.fromEntries(zarf.olcu.map((o) => [o.anahtar, o.istenen]));
+  if (zarf.boy && zarf.boy.istenen !== null) olcu[zarf.boy.anahtar] = zarf.boy.istenen;
+  return {
+    no: 0, aile: null, sinif: null, form: zarf.form,
+    kalite: a.kalite ?? zarf.kalite.istenen, durum: a.durum ?? zarf.durum.istenen, yuzey: a.yuzey ?? zarf.yuzey.istenen,
+    olcu: { ...olcu, ...a.olcu },
+  };
+}
+export type ZarfDegerlendirici = (z: AlternatifZarfi, aday: ReturnType<typeof alternatifAdayi>) => { sonuc: ZarfSonucu; nedenler: string[] };
+// Sonuç talep edenin şartlı işareti olmadan hesaplanır; şartlı çıkan sonuç işaret varsa "talep" izniyle yazılır. Böylece onay kaydında
+// iznin talepte mi (işaret) yoksa sonradan mı verildiği ayrılır.
+export function alternatifSonucuHesapla(zarf: AlternatifZarfi, k: KabulSiniri | null, a: TeklifAlternatifi, degerlendir: ZarfDegerlendirici): AlternatifSonucu {
+  const y = kabulYazimi(k);
+  const r = degerlendir(kabulZarfi(zarf, y === null ? null : { ...y, sartliKabul: false }), alternatifAdayi(zarf, a));
+  return { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
+}
+// Teklifte bilinmeyen ölçü anahtarı yazılmaz (motor tanımadığı anahtarı karşılaştırmaz, sonuç yanlış "aynı" çıkardı).
+export function alternatifOlcuReddi(zarf: AlternatifZarfi, a: TeklifAlternatifi, ad: string): string | null {
+  const bilinen = new Set([...zarf.olcu.map((o) => o.anahtar), ...(zarf.boy ? [zarf.boy.anahtar] : [])]);
+  const yabanci = Object.keys(a.olcu).find((x) => !bilinen.has(x));
+  return yabanci === undefined ? null : ILETILER.alternatifOlcu(ad, yabanci);
+}
+// Kararın seçtiği satırlar: tek teklifte teklifin bütün fiyatları, bölünmüş kararda kalemin teklifi.
+function secilenSatirlar(t: Pick<TalepYazimi, 'teklifler' | 'karar'>) {
+  const k = t.karar;
+  if (k === null) return [];
+  return t.teklifler.flatMap((q) => q.fiyatlar
+    .filter((f) => (k.mod === 'tek' ? k.teklifId === q.id : k.bolunme.some((b) => b.teklifId === q.id && b.kalemId === f.kalemId)))
+    .map((f) => ({ teklifId: q.id, ...f })));
+}
+// Karar sınır dışı alternatifi seçemez; şartlı alternatif talep edenin izni ister; alternatifli satırın siparişi alternatif kartı bekler.
+export function alternatifKararReddi(t: Pick<TalepYazimi, 'teklifler' | 'karar' | 'kalemler' | 'durum'>): string | null {
+  const ad = (id: string) => t.kalemler.find((x) => x.id === id)?.ad ?? id;
+  for (const f of secilenSatirlar(t)) {
+    const s = f.alternatifSonucu;
+    if (!s || s.sonuc === 'ayni') continue;
+    if (s.sonuc === 'disi') return ILETILER.alternatifDisi(ad(f.kalemId), s.nedenler.join(', ') || 'sınır dışı');
+    if (s.sonuc === 'sartli' && s.izin === null) return ILETILER.alternatifSartli(ad(f.kalemId));
+    if (t.durum === 'siparis_verildi' || t.durum === 'teslim_alindi') return ILETILER.alternatifSiparis(ad(f.kalemId));
+  }
+  return null;
+}
 type LogoKiyas = Pick<TalepYazimi, 'kalemler' | 'teklifler' | 'karar'>;
 const sadeOndalik = (x: string | null | undefined): string | null => (x === null || x === undefined ? null : x.includes('.') ? x.replace(/0+$/, '').replace(/\.$/, '') : x);
 // Logo'daki siparişin içeriği: iskonto, termin ve satırlar (kalem, miktar, birim, birim fiyat). Kapsam sipariş satırlarının kuralıyla aynı.

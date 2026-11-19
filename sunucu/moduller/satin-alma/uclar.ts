@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  kabulZarfiCevabi, kabulZarfiParametresi,
+  kabulZarfiCevabi, kalemZarflariCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
@@ -81,6 +81,11 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-kabul-zarfi/:no', yetki: { biri: ['satin-alma.talep-ac', 'satin-alma.oku', 'satin-alma.yaz'] },
     parametre: kabulZarfiParametresi, cevap: kabulZarfiCevabi, isle: ({ db, parametre }) => servis.kabulZarfi(db, parametre.no),
+  }),
+  // 3437 a (dilim 3a): teklif formu kalemlerin daraltılmış zarfını okur (alternatif satırı); teklifi gören satın alma okur.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/kalem-zarflari', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] },
+    parametre: talepParametresi, cevap: kalemZarflariCevabi, isle: ({ db, parametre }) => servis.kalemZarflari(db, parametre.id),
   }),
   uc({ yontem: 'GET', yol: '/satin-alma-on-talepleri', yetki: 'satin-alma.talep-ac', cevap: onTalepleriCevabi, isle: ({ db }) => servis.onTalepleri(db) }),
   uc({

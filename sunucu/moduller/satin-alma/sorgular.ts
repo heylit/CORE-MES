@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
+import type { ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
-import type { KabulSiniri, TalepDurumu,
+import type { KabulSiniri, TalepDurumu, TeklifAlternatifi,
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -64,7 +65,10 @@ export interface AltKayitlar {
   kalemler: (Talep['kalemler'][number] & { talepId: string })[];
   istekler: (Talep['teklifIstekleri'][number] & { talepId: string })[];
   teklifler: (Omit<Teklif, 'fiyatlar'> & { talepId: string })[];
-  fiyatlar: { talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null }[];
+  fiyatlar: {
+    talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null;
+    alternatif: TeklifAlternatifi | null; alternatifSonuc: ZarfSonucu | null; alternatifNedenler: string[] | null; alternatifIzin: 'talep' | null;
+  }[];
   basamaklar: { talepId: string; teklifId: string; kalemId: string; esik: string; birimFiyat: string }[];
   kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string; kurKilidi: string | null }[];
   bolunmeler: { talepId: string; kalemId: string; teklifId: string }[];
@@ -100,7 +104,8 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       FROM satin_alma_teklif WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, sira, id`),
     // Satırlar silinip yeniden yazıldığı için sıra veritabanına bırakılmaz: kalemin sırası esastır.
     fiyatlar: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.kalem_id AS "kalemId", s.birim_fiyat AS "birimFiyat",
-      s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar"
+      s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar",
+      s.alternatif, s.alternatif_sonuc AS "alternatifSonuc", s.alternatif_nedenler AS "alternatifNedenler", s.alternatif_izin AS "alternatifIzin"
       FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     basamaklar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", esik, birim_fiyat AS "birimFiyat"
@@ -350,10 +355,16 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
     );
     await db.sorgu('DELETE FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2', [id, q.id]);
     await db.sorgu(
-      `INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat, iskonto_yuzdesi, termin_gun, en_az_miktar)
-       SELECT $1, $2, * FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[])`,
+      `INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat, iskonto_yuzdesi, termin_gun, en_az_miktar,
+         alternatif, alternatif_sonuc, alternatif_nedenler, alternatif_izin)
+       SELECT $1, $2, u.k, u.f, u.i, u.t, u.e, u.a, u.s, CASE WHEN u.s IS NULL THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(u.n)) END, u.z
+         FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[], $8::jsonb[], $9::text[], $10::jsonb[], $11::text[])
+           AS u(k, f, i, t, e, a, s, n, z)`,
       [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat), q.fiyatlar.map((f) => f.iskontoYuzdesi ?? null),
-        q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null)]);
+        q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null),
+        q.fiyatlar.map((f) => (f.alternatif ? JSON.stringify(f.alternatif) : null)), q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.sonuc ?? null : null)),
+        q.fiyatlar.map((f) => (f.alternatif && f.alternatifSonucu ? JSON.stringify(f.alternatifSonucu.nedenler) : null)),
+        q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.izin ?? null : null))]);
     // Basamaklar satırla birlikte silinir (yabancı anahtar, CASCADE) ve yeniden yazılır.
     const basamaklar = q.fiyatlar.flatMap((f) => (f.basamaklar ?? []).map((b) => ({ kalemId: f.kalemId, ...b })));
     if (basamaklar.length > 0) {

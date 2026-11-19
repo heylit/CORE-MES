@@ -129,6 +129,8 @@ export function talepEkrana(t: Talep): PurchaseRequest {
       id: q.id, supplierId: q.firmaId === null ? '' : String(q.firmaId), supplierName: q.tedarikciAdi, date: q.teklifTarihi, validUntil: q.gecerlilik ?? '',
       currency: q.paraBirimi, fxRate: sayi(q.kur), prices: Object.fromEntries(q.fiyatlar.map((f) => [f.kalemId, Number(f.birimFiyat)])),
       ...(q.fiyatlar.some((f) => f.enAzMiktar) ? { minQty: Object.fromEntries(q.fiyatlar.filter((f) => f.enAzMiktar).map((f) => [f.kalemId, Number(f.enAzMiktar)])) } : {}),
+      ...(q.fiyatlar.some((f) => f.alternatif) ? { alternatives: Object.fromEntries(q.fiyatlar.filter((f) => f.alternatif).map((f) => [f.kalemId, f.alternatif!])) } : {}),
+      ...(q.fiyatlar.some((f) => f.alternatifSonucu) ? { altResults: Object.fromEntries(q.fiyatlar.filter((f) => f.alternatifSonucu).map((f) => [f.kalemId, f.alternatifSonucu!])) } : {}),
       ...(q.fiyatlar.some((f) => f.basamaklar?.length) ? { tiers: Object.fromEntries(q.fiyatlar.filter((f) => f.basamaklar?.length).map((f) => [f.kalemId, f.basamaklar!.map((b) => ({ min: Number(b.esik), price: Number(b.birimFiyat) }))])) } : {}),
       discountPct: Number(q.iskontoYuzdesi), shipping: Number(q.nakliye), otherCost: Number(q.digerMasraf), deliveryTerm: q.teslimSekli,
       deliveryIncluded: q.nakliyeDahil, leadDays: q.terminGun, payDays: q.vadeGun, advancePct: Number(q.avansYuzdesi), warrantyMonths: q.garantiAy,
@@ -223,6 +225,8 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
         kalemId, birimFiyat: ond(p),
         // Basamak yalnız ekran tuttuysa gider; gönderilmeyen alan sunucuda saklananı korur.
         ...(q.minQty && kalemId in q.minQty ? { enAzMiktar: ondN(q.minQty[kalemId] ?? null) } : {}),
+        // 3437 a: alternatif yalnız ekran tuttuysa gider (null siler); gönderilmeyen alan sunucuda saklananı korur.
+        ...(q.alternatives && kalemId in q.alternatives ? { alternatif: q.alternatives[kalemId] ?? null } : {}),
         ...(q.tiers?.[kalemId] ? { basamaklar: q.tiers[kalemId]!.filter((t) => t.min > 0 && t.price >= 0).map((t) => ({ esik: ond(t.min), birimFiyat: ond(t.price) })) } : {}),
       })),
     })),
@@ -531,6 +535,14 @@ const backend: Backend = {
   async siparisBelgesiEkle(satirId, kimlik, govde) {
     try {
       return (await korumali((deneme) => uc.post('/satin-alma-siparis-satirlari/:id/belge-ekle', { ...deneme, parametre: { id: satirId }, govde }), kimlik)).belgeler;
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
+  async kalemZarflari(talepId) {
+    try {
+      return (await uc.get('/satin-alma-talepleri/:id/kalem-zarflari', { parametre: { id: talepId }, ...sure })).kalemler;
     } catch (h) {
       await hata(h);
       return null;

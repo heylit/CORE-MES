@@ -1,4 +1,4 @@
-import type { SiparisLogo, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifSonucu, SiparisLogo, TeklifAlternatifi, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
 /**
  * Sunucu ve arayüzün ortak veri tipleri.
  * Arayüz talepleri "toplu kayıt" (aggregate) olarak işler: kalemler, teklif istekleri,
@@ -149,6 +149,10 @@ export interface Quote {
   /** 2974-1 a: ilk basamağın eşiği satırın en az miktarıdır; talep altında kalırsa alınan miktar eşiğe yükselir.
    *  Anahtarı olmayan kalemde alan gönderilmez (sunucu saklananı korur); null temizler. */
   minQty?: Record<string, number | null>;
+  /** 3437 a: kalem kimliği → teklif edilen alternatif (boş nitelik istenenle aynı); null alternatifi kaldırır. */
+  alternatives?: Record<string, TeklifAlternatifi | null>;
+  /** 3437 a: sunucunun hesapladığı sonuç (yalnız okunur). */
+  altResults?: Record<string, AlternatifSonucu>;
   discountPct: number;
   shipping: number;
   otherCost: number;
