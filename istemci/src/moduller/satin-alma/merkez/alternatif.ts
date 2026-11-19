@@ -9,6 +9,9 @@ export type KalemZarfi = KalemZarflariCevabi["kalemler"][number];
 const SONUC_ADI: Record<AlternatifSonucu["sonuc"], [string, string]> = {
   ayni: ["İstenenle aynı", "mute"], icinde: ["Sınır içinde", "good"], sartli: ["Şartlı", "warn"], disi: ["Sınır dışı: seçilemez", "bad"],
 };
+const IZIN_ADI: Record<NonNullable<AlternatifSonucu["izin"]> | "yok", string> = {
+  talep: ", talep eden kabul etti", soru: ", talep eden onayladı", ret: ", talep eden reddetti: seçilemez", yok: ", talep edenin onayı bekleniyor",
+};
 const BEKLER = '<span class="muted small">Sonuç kaydedince hesaplanır.</span>';
 // Kayıtlı sonuç, alan değişince geçersizdir: kaydedilene kadar eski rozet gösterilmez.
 export function alternatifDegisti(q: Quote, id: string, kok: ParentNode = document): void {
@@ -16,10 +19,14 @@ export function alternatifDegisti(q: Quote, id: string, kok: ParentNode = docume
   const kutu = kok.querySelector(`[data-alt-sonuc-kutu="${id}"]`);
   if (kutu) kutu.innerHTML = '<span class="muted small">Değişti; sonuç kaydedince yeniden hesaplanır.</span>';
 }
+// Seçilemeyen alternatif (sınır dışı ya da talep edenin reddettiği şartlı) en düşük fiyat vurgusu almaz.
+export const secilemezAlternatif = (s: AlternatifSonucu | undefined): boolean => s?.sonuc === "disi" || (s?.sonuc === "sartli" && s.izin === "ret");
 export function sonucRozeti(s: AlternatifSonucu | undefined): string {
   if (!s) return "";
-  const [ad, ton] = SONUC_ADI[s.sonuc];
-  const izin = s.sonuc !== "sartli" ? "" : s.izin === "talep" ? ", talep eden kabul etti" : ", talep edenin onayı gerekir";
+  const [ad, ton0] = SONUC_ADI[s.sonuc];
+  // 3437-3b-1: şartlıda izin talepte işaretle (talep), sonradan Taleplerim'den (soru) ya da ret ile gelir; ret seçilemez.
+  const izin = s.sonuc !== "sartli" ? "" : IZIN_ADI[s.izin ?? "yok"];
+  const ton = s.sonuc === "sartli" && s.izin === "ret" ? "bad" : ton0;
   return `<span class="flag ${ton}" data-alt-sonuc="${s.sonuc}">${esc(ad + izin)}</span>${s.nedenler.length ? ` <span class="muted small">${esc(s.nedenler.join(", "))}</span>` : ""}`;
 }
 

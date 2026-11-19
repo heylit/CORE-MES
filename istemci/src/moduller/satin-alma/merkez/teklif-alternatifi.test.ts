@@ -5,6 +5,7 @@ import './store.ts';
 import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
 import { S } from './store.ts';
 import { quoteModal } from './ui.ts';
+import { sonucRozeti } from './alternatif.ts';
 
 // 3437-3a: teklif formunda zarfı olan kalemin altında alternatif satırı; gövdeye yalnız ekranın tuttuğu alternatif gider, sonuç sunucudandır.
 const K1 = '00000000-0000-4000-8000-0000000000c1';
@@ -108,7 +109,7 @@ describe('3437-3a: teklif formunda alternatif', () => {
     quoteModal(S.requests[talep.id]!, S.requests[talep.id]!.quotes![0]);
     await vi.waitFor(() => expect(q(`[data-alt="${K1}"][data-alt-f="kalite"]`)).not.toBeNull());
     expect(q(`[data-alt="${K1}"][data-alt-f="kalite"]`)!.value).toBe('6061');
-    expect(q('[data-alt-sonuc="sartli"]')!.textContent).toBe('Şartlı, talep edenin onayı gerekir');
+    expect(q('[data-alt-sonuc="sartli"]')!.textContent).toBe('Şartlı, talep edenin onayı bekleniyor');
     // Alan değişince kayıtlı sonuç gösterilmez: kaydedilene kadar bilinmez.
     yaz(q(`[data-alt="${K1}"][data-alt-f="kalite"]`)!, '7075');
     expect(q('[data-alt-sonuc="sartli"]')).toBeNull();
@@ -119,5 +120,23 @@ describe('3437-3a: teklif formunda alternatif', () => {
     await vi.waitFor(() => expect(govdeler.length).toBeGreaterThan(0));
     expect(fiyatlar()[0]!.alternatif).toBeNull();
     kapat();
+  });
+});
+
+// T2 (3437-3a Test bakışı): dört sonuç ve şartlının dört izin durumu ayrı rozetle; ret seçilemez gibi okunur.
+describe('3437-3b-1: alternatif sonuç rozeti', () => {
+  it('her sonuç ve izin kendi metni ve tonuyla', () => {
+    const r = (sonuc: 'ayni' | 'icinde' | 'sartli' | 'disi', izin: 'talep' | 'soru' | 'ret' | null = null) => {
+      const d = document.createElement('div');
+      d.innerHTML = sonucRozeti({ sonuc, nedenler: [], izin });
+      const s = d.querySelector('[data-alt-sonuc]')!;
+      return [s.textContent, s.className];
+    };
+    expect([r('ayni'), r('icinde'), r('disi')]).toEqual([
+      ['İstenenle aynı', 'flag mute'], ['Sınır içinde', 'flag good'], ['Sınır dışı: seçilemez', 'flag bad']]);
+    expect([r('sartli'), r('sartli', 'talep'), r('sartli', 'soru'), r('sartli', 'ret')]).toEqual([
+      ['Şartlı, talep edenin onayı bekleniyor', 'flag warn'], ['Şartlı, talep eden kabul etti', 'flag warn'],
+      ['Şartlı, talep eden onayladı', 'flag warn'], ['Şartlı, talep eden reddetti: seçilemez', 'flag bad']]);
+    expect(sonucRozeti(undefined)).toBe('');
   });
 });

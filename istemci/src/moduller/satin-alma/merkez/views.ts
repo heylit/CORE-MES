@@ -22,7 +22,7 @@ import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } 
 import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
-import { sonucRozeti } from "./alternatif.ts";
+import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
@@ -680,7 +680,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   h += sec("Birim fiyatlar");
   items.forEach(it => {
     // 3437 a: sınır dışı alternatif seçilemez; en düşük fiyat vurgusunu almaz.
-    const vals = cols.map(x => x.c.lines[it.id] && x.q.altResults?.[it.id]?.sonuc !== "disi" ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
+    const vals = cols.map(x => x.c.lines[it.id] && !secilemezAlternatif(x.q.altResults?.[it.id]) ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
     h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
       cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");

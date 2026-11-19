@@ -13,7 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { zarfDegerlendir } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kablola } from '../../kablolama.ts';
-import { ILETILER, VARSAYILAN_KABUL, alternatifKararReddi, alternatifOlcuReddi, alternatifSonucuHesapla, kalemAyrintisiniKoru } from './kurallar.ts';
+import { ILETILER, VARSAYILAN_KABUL, alternatifIzniReddi, alternatifKararReddi, alternatifOlcuReddi, alternatifSonucuHesapla, kalemAyrintisiniKoru } from './kurallar.ts';
 import { uclar } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -79,11 +79,42 @@ describe('3437-3a: teklifteki alternatifin sonucu (saf)', () => {
   });
 });
 
+describe('3437-3b-1: talep edenin sonradan şartlı izni (saf)', () => {
+  const hesap = (a: ReturnType<typeof alt>, onceki: Parameters<typeof alternatifSonucuHesapla>[4]) => alternatifSonucuHesapla(zarf(), null, a, zarfDegerlendir, onceki);
+  const izinli = (izin: 'soru' | 'ret', a = alt({ kalite: '6060', olcu: { d: 51 } })) => ({
+    alternatif: a, alternatifSonucu: { sonuc: 'sartli' as const, nedenler: [], izin, izinKisiId: 7, izinZaman: '2026-11-19T10:00:00Z', izinNotu: 'Deneme' },
+  });
+
+  test('aynı alternatif yeniden kaydedilince izin korunur (anahtar sırası önemsiz); alternatif değişince ya da sonuç şartlı değilse düşer', () => {
+    const a = alt({ kalite: '6060', olcu: { d: 51 } });
+    assert.deepEqual(hesap({ olcu: { d: 51 }, yuzey: null, durum: null, kalite: '6060' }, izinli('soru', a)), { sonuc: 'sartli', nedenler: hesap(a, null).nedenler, izin: 'soru', izinKisiId: 7, izinZaman: '2026-11-19T10:00:00Z', izinNotu: 'Deneme' });
+    assert.equal(hesap(a, izinli('ret', a)).izin, 'ret');
+    assert.equal(hesap(alt({ kalite: '6060', olcu: { d: 52 } }), izinli('soru', a)).izin, null);
+    assert.equal(hesap(alt({ kalite: '6061' }), izinli('soru', alt({ kalite: '6061' }))).izin, null);
+  });
+
+  test('izin yalnız teklif toplanırken, onaysız kararda, gördüğü alternatife ve kararda seçili olmayan satıra verilir', () => {
+    const a = alt({ kalite: '6060' });
+    const t = (ek: Record<string, unknown> = {}, s: Record<string, unknown> = {}) => ({
+      durum: 'degerlendirme', onaylar: [], karar: null,
+      teklifler: [{ id: 'q', fiyatlar: [{ kalemId: 'k', birimFiyat: '1', alternatif: a, alternatifSonucu: { sonuc: 'sartli', nedenler: [], izin: null, ...s } }] }], ...ek,
+    }) as unknown as Parameters<typeof alternatifIzniReddi>[0];
+    const g = { teklifId: 'q', kalemId: 'k', alternatif: a };
+    assert.equal(alternatifIzniReddi(t(), g), null);
+    assert.equal(alternatifIzniReddi(t({ durum: 'taslak' }), g), ILETILER.alternatifIzniAsamasi);
+    assert.equal(alternatifIzniReddi(t({ durum: 'onayda', onaylar: [{ sonuc: 'onay' }] }), g), ILETILER.alternatifIzniAsamasi);
+    assert.equal(alternatifIzniReddi(t(), { ...g, alternatif: alt({ kalite: '6061' }) }), ILETILER.alternatifIzniYok);
+    assert.equal(alternatifIzniReddi(t({}, { izin: 'talep' }), g), ILETILER.alternatifIzniYok);
+    assert.equal(alternatifIzniReddi(t({}, { sonuc: 'icinde' }), g), ILETILER.alternatifIzniYok);
+    assert.equal(alternatifIzniReddi(t({ karar: { mod: 'tek', teklifId: 'q', bolunme: [] } }), g), ILETILER.alternatifIzniKararda);
+  });
+});
+
 describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yoneticiId = 0;
-  const c = { yonetici: '', talep: '', operator: '', sa: '' };
+  const c = { yonetici: '', talep: '', operator: '', sa: '', mudur: '' };
   const giris = async (k: string) => {
     const r = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: k, parola: PAROLA } });
     assert.equal(r.statusCode, 200, r.body);
@@ -122,6 +153,7 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     c.talep = await rolluKisi('cam', 'cam');
     c.operator = await rolluKisi('operator', 'operator');
     c.sa = await rolluKisi('satinalma', 'satin_alma');
+    c.mudur = await rolluKisi('mudur', 'mudur');
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-ALT-', 0) ON CONFLICT (onek) DO NOTHING");
     kart = await kartAc({ grade: '6082', form: 'cubuk', dims: { d: 50, l: 3000 }, opts: { durum: 'T6', yuzey: 'Ham' } });
     sarf = await kartAc({ com: { ad: 'Örnek eldiven', birim: 'çift' } }, 'sarf');
@@ -228,5 +260,76 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     assert.deepEqual([d.teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.sonuc, d.teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.izin], ['sartli', 'talep']);
     const r = await kaydet({ ...govde(d), durum: 'onayda', karar: karar(q.id) });
     assert.equal(r.statusCode, 200, r.body);
+  });
+
+  // 3437-3b-1: talepte şartlı kabul işaretli değilse talep eden şartlı alternatifi Taleplerim'den onaylar ya da reddeder.
+  const izinIste = (cerez: string, id: string, g: Record<string, unknown>) => post(cerez, `/satin-alma-talepleri/${id}/alternatif-izni`, g);
+  const benim = async (id: string) => ((await get(c.talep, '/satin-alma-taleplerim')).json() as { talepler: Talebim[] }).talepler.find((x) => x.id === id)!;
+  async function sartliTeklifli(): Promise<{ t: Talep; q: ReturnType<typeof teklif>; k0: string }> {
+    const t = await tekliflik();
+    const k0 = t.kalemler[0]!.id;
+    const q = teklif([{ kalemId: k0, birimFiyat: '11', alternatif: alt({ kalite: '6262' }) }]);
+    const d = (await kaydet({ ...govde(t), teklifler: [q] })).json() as Talep;
+    return { t: d, q, k0 };
+  }
+
+  test('uç tanımı: alternatif izni talep açma işlemiyle, tekrar korumalı', () => {
+    const u = uclar.find((x) => x.yol === '/satin-alma-talepleri/:id/alternatif-izni')!;
+    assert.deepEqual([u.yetki, u.tekrarKorumali], ['satin-alma.talep-ac', true]);
+  });
+
+  test('izinli: talep eden şartlı alternatifi fiyatsız görür, onaylar; kim, ne zaman, not ve geçmiş yazılır; karar onaya gider', async () => {
+    const { t, q, k0 } = await sartliTeklifli();
+    const once = (await benim(t.id)).kalemler[0]!;
+    assert.deepEqual(once.sartliAlternatifler?.map((x) => [x.teklifId, x.alternatif.kalite, x.izin]), [[q.id, '6262', null]]);
+    assert.equal(JSON.stringify(once).includes('Deneme Tedarik'), false);
+    assert.equal(JSON.stringify(once).includes('"birimFiyat"'), false);
+    const eskiSa = await satinAlmaGorur(t.id);
+    const r = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'onay', notu: 'Deneme izin', alternatif: alt({ kalite: '6262' }) });
+    assert.equal(r.statusCode, 200, r.body);
+    // Risk D1: izin sürümü artırır; eski sürümle kayıt izni sessizce silemez.
+    const eskiKayit = await kaydet({ ...govde(eskiSa), durum: 'onayda', karar: karar(q.id) });
+    assert.equal(eskiKayit.statusCode, 409, eskiKayit.body);
+    assert.deepEqual((r.json() as Talebim).kalemler[0]!.sartliAlternatifler?.map((x) => [x.izin, x.izinNotu]), [['soru', 'Deneme izin']]);
+    const satir = (await ortam!.sahip.tek<{ izin: string; kisi: number; zaman: string | null }>(
+      'SELECT alternatif_izin AS izin, alternatif_izin_kisi_id AS kisi, alternatif_izin_zaman::text AS zaman FROM satin_alma_teklif_satiri WHERE talep_id = $1', [t.id]))!;
+    const kisi = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'cam'"))!.id;
+    assert.deepEqual([satir.izin, satir.kisi, satir.zaman !== null], ['soru', kisi, true]);
+    const sa = await satinAlmaGorur(t.id);
+    assert.ok(sa.hareketler.some((h) => h.metin.includes('şartlı alternatif onaylandı (Deneme izin)')));
+    // Satın alma aynı alternatifle yeniden kaydedince izin korunur; karar onaya gider.
+    const r2 = await kaydet({ ...govde(sa), durum: 'onayda', karar: karar(q.id) });
+    assert.equal(r2.statusCode, 200, r2.body);
+    assert.equal((r2.json() as Talep).teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.izin, 'soru');
+    // Kararda seçili satırın izni değişmez.
+    const r3 = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) });
+    assert.deepEqual([r3.statusCode, (r3.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniKararda]);
+    // T1: onaylı kararla siparişe geçiş alternatif kart açılmadan reddedilir.
+    const onaylaR = await post(c.mudur, `/satin-alma-talepleri/${t.id}/kaydet`, { ...govde(r2.json() as Talep), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] });
+    assert.equal(onaylaR.statusCode, 200, onaylaR.body);
+    const o = onaylaR.json() as Talep;
+    const sip = await kaydet({ ...govde(o), durum: 'siparis_verildi', karar: { ...o.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'ALT-1', siparisTarihi: '2026-11-19', beklenenTeslim: '2026-11-26' }] } });
+    assert.deepEqual([sip.statusCode, (sip.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifSiparis('Örnek alt-1')]);
+    assert.equal((await satinAlmaGorur(t.id)).durum, 'onayda');
+    // Onaylı karardan sonra izin aşaması kapalı (Test bakışı): 422, satır değişmez.
+    const gec = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) });
+    assert.deepEqual([gec.statusCode, (gec.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniAsamasi]);
+    assert.equal((await ortam!.sahip.tek<{ izin: string }>('SELECT alternatif_izin AS izin FROM satin_alma_teklif_satiri WHERE talep_id = $1', [t.id]))!.izin, 'soru');
+  });
+
+  test('yasak: reddedilen şartlı alternatif seçilemez; başkası 403; değişmiş alternatife izin yazılmaz ve değişince izin düşer', async () => {
+    const { t, q, k0 } = await sartliTeklifli();
+    assert.equal((await izinIste(c.operator, t.id, { teklifId: q.id, kalemId: k0, karar: 'onay', alternatif: alt({ kalite: '6262' }) })).statusCode, 403);
+    assert.equal((await izinIste(c.sa, t.id, { teklifId: q.id, kalemId: k0, karar: 'onay', alternatif: alt({ kalite: '6262' }) })).statusCode, 403);
+    const eskiGorulen = await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'onay', alternatif: alt({ kalite: '6262', olcu: { d: 51 } }) });
+    assert.deepEqual([eskiGorulen.statusCode, (eskiGorulen.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifIzniYok]);
+    assert.equal((await izinIste(c.talep, t.id, { teklifId: q.id, kalemId: k0, karar: 'ret', alternatif: alt({ kalite: '6262' }) })).statusCode, 200);
+    const sa = await satinAlmaGorur(t.id);
+    const r = await kaydet({ ...govde(sa), durum: 'onayda', karar: karar(q.id) });
+    assert.deepEqual([r.statusCode, (r.json() as { mesaj: string }).mesaj], [422, ILETILER.alternatifReddedildi('Örnek alt-1')]);
+    // Satın alma alternatifi değiştirince ret düşer, yeniden sorulur.
+    const yeni = (await kaydet({ ...govde(sa), teklifler: [{ ...q, fiyatlar: [{ kalemId: k0, birimFiyat: '11', alternatif: alt({ kalite: '6262', olcu: { d: 51 } }) }] }] })).json() as Talep;
+    assert.deepEqual([yeni.teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.sonuc, yeni.teklifler[0]!.fiyatlar[0]!.alternatifSonucu?.izin], ['sartli', null]);
+    assert.equal((await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND alternatif_izin_kisi_id IS NOT NULL', [t.id]))!.n, 0);
   });
 });

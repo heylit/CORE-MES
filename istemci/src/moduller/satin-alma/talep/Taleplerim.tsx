@@ -11,6 +11,7 @@ const kabulOzeti = (k: NonNullable<Talebim['kalemler'][number]['kabul']>): strin
   k.sartliKabul ? 'şartlı muadil kabul' : null,
 ].filter(Boolean).join(' · '));
 import { ADIMLAR, ADIM_SIRASI, DURUM, KAYNAK, SURE, anahtarlar, cagri, gunYaz, karsilikYaz } from './ortak.ts';
+import { SartliAlternatifler, bekleyenSartli } from './SartliAlternatifler.tsx';
 import './talep.css';
 
 const SON = 10;
@@ -64,6 +65,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
   const d = DURUM[t.durum];
   const bekleyen = t.kalemler.filter((k) => k.kartBekliyor).length;
   const k = KAYNAK[t.kaynak];
+  const sartli = bekleyenSartli(t);
   const ust = (
     <>
       <div className="sa-talep-satir-ust">
@@ -71,6 +73,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         <Rozet ton={d.ton}>{d.metin}</Rozet>
         {t.kaynak !== 'elle' && <Rozet ton="uyari" gorunum="cizgi">{k.metin}</Rozet>}
         {bekleyen > 0 && <Rozet ton="uyari">{bekleyen} kalem kart bekliyor</Rozet>}
+        {sartli > 0 && <span className="sa-talep-rozet-sar"><Rozet ton="uyari">{sartli > 1 ? `${String(sartli)} alternatif` : 'Alternatif'} onayınızda</Rozet></span>}
         {tam && <span className="sa-talep-ok"><Simge ad={acik ? 'up' : 'down'} boyut="k" /></span>}
       </div>
       <div><b>{t.baslik}</b></div>
@@ -112,6 +115,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                     {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
                     <OzellikAlti m={x.malzeme ?? null} />
                     <KartAyrintisi m={x.malzeme ?? null} />
+                    <SartliAlternatifler talepId={t.id} kalem={x} />
                   </td>
                   {OZELLIKLER.map(([k, b]) => <td key={k} className={`sa-talep-oz sa-talep-oz-${k}`} data-etiket={b}>{x.malzeme?.[k] ?? <span className="sa-talep-bos">–</span>}</td>)}
                   <td className="sa-talep-sag">

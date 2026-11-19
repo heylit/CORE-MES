@@ -135,3 +135,11 @@
 .sa-kabul-pay { display: grid; gap: var(--b-2); }
 .sa-kabul-pay-girdi { max-width: 12ch; }
 .sa-kabul-secim { display: grid; gap: var(--b-1); }
+/* 3437-3b-1: talep edenin şartlı alternatif onayı; kalem hücresinde, dar ekranda alt alta. */
+.sa-talep-sartli { display: grid; gap: var(--b-1); margin-top: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); }
+.sa-talep-sartli-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); overflow-wrap: anywhere; }
+.sa-talep-sartli-karar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
+.sa-talep-sartli-karar > .tc-alan { flex: 1 1 100%; min-width: 0; }
+.sa-talep-sartli input { width: 100%; min-width: 0; }
+.sa-talep-rozet-sar { min-width: 0; }
+.sa-talep-rozet-sar .tc-rozet, .sa-talep-sartli .tc-rozet { white-space: normal; }

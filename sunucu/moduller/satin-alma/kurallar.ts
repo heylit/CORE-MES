@@ -177,7 +177,11 @@ export const ILETILER = {
   alternatifZarfsiz: (ad: string) => `${ad}: bu kalemde alternatif teklif edilemez (malzeme kartının kabul zarfı yok).`,
   alternatifOlcu: (ad: string, a: string) => `${ad}: "${a}" bu kartın ölçüsü değil.`,
   alternatifDisi: (ad: string, n: string) => `${ad}: seçilen teklifteki alternatif kabul sınırı dışında (${n}); seçilemez.`,
-  alternatifSartli: (ad: string) => `${ad}: seçilen teklifteki alternatif şartlı; talep eden talepte şartlı muadilleri kabul etmedi. Talep edenin onayı gerekir.`,
+  alternatifSartli: (ad: string) => `${ad}: seçilen teklifteki alternatif şartlı; talep eden henüz onaylamadı. Talep eden Taleplerim'den onaylayınca seçilebilir.`,
+  alternatifReddedildi: (ad: string) => `${ad}: seçilen teklifteki şartlı alternatifi talep eden reddetti; seçilemez.`,
+  alternatifIzniYok: 'Bu şartlı alternatif artık yok ya da teklif değişti; Taleplerim\'i yenileyip yeniden bakın.',
+  alternatifIzniAsamasi: 'Şartlı alternatife yalnız teklif toplanırken ve karar onaylanmadan karar verilir.',
+  alternatifIzniKararda: 'Bu alternatif kararda seçili; kararınızı değiştirmek için satın almaya yazın.',
   alternatifSiparis: (ad: string) => `${ad}: alternatif seçilen satırda sipariş, alternatif malzeme kartı açılınca verilir.`,
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
@@ -742,11 +746,23 @@ export function alternatifAdayi(zarf: AlternatifZarfi, a: TeklifAlternatifi) {
 export type ZarfDegerlendirici = (z: AlternatifZarfi, aday: ReturnType<typeof alternatifAdayi>) => { sonuc: ZarfSonucu; nedenler: string[] };
 // Sonuç talep edenin şartlı işareti olmadan hesaplanır; şartlı çıkan sonuç işaret varsa "talep" izniyle yazılır. Böylece onay kaydında
 // iznin talepte mi (işaret) yoksa sonradan mı verildiği ayrılır.
-export function alternatifSonucuHesapla(zarf: AlternatifZarfi, k: KabulSiniri | null, a: TeklifAlternatifi, degerlendir: ZarfDegerlendirici): AlternatifSonucu {
+// 3437 a (dilim 3b-1, Risk B8): talep edenin sonradan verdiği izin (soru, ret) yalnız aynı alternatif yeniden kaydedilirse korunur;
+// alternatif değişince izin düşer ve yeniden sorulur.
+export function alternatifSonucuHesapla(
+  zarf: AlternatifZarfi, k: KabulSiniri | null, a: TeklifAlternatifi, degerlendir: ZarfDegerlendirici,
+  onceki: { alternatif: TeklifAlternatifi | null; alternatifSonucu: AlternatifSonucu | null } | null = null,
+): AlternatifSonucu {
   const y = kabulYazimi(k);
   const r = degerlendir(kabulZarfi(zarf, y === null ? null : { ...y, sartliKabul: false }), alternatifAdayi(zarf, a));
-  return { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
+  const sonuc: AlternatifSonucu = { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
+  const o = onceki?.alternatifSonucu;
+  if (sonuc.sonuc !== 'sartli' || sonuc.izin !== null || !o || (o.izin !== 'soru' && o.izin !== 'ret') || !onceki.alternatif) return sonuc;
+  if (alternatifIzi(onceki.alternatif) !== alternatifIzi(a)) return sonuc;
+  return { ...sonuc, izin: o.izin, izinKisiId: o.izinKisiId ?? null, izinZaman: o.izinZaman ?? null, izinNotu: o.izinNotu ?? null };
 }
+// Alternatifin anahtar sırasından bağımsız izi (boş nitelik ile null aynıdır).
+export const alternatifIzi = (a: TeklifAlternatifi): string =>
+  JSON.stringify([a.kalite ?? null, a.durum ?? null, a.yuzey ?? null, Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))]);
 // Teklifte bilinmeyen ölçü anahtarı yazılmaz (motor tanımadığı anahtarı karşılaştırmaz, sonuç yanlış "aynı" çıkardı).
 export function alternatifOlcuReddi(zarf: AlternatifZarfi, a: TeklifAlternatifi, ad: string): string | null {
   const bilinen = new Set([...zarf.olcu.map((o) => o.anahtar), ...(zarf.boy ? [zarf.boy.anahtar] : [])]);
@@ -769,10 +785,39 @@ export function alternatifKararReddi(t: Pick<TalepYazimi, 'teklifler' | 'karar' 
     if (!s || s.sonuc === 'ayni') continue;
     if (s.sonuc === 'disi') return ILETILER.alternatifDisi(ad(f.kalemId), s.nedenler.join(', ') || 'sınır dışı');
     if (s.sonuc === 'sartli' && s.izin === null) return ILETILER.alternatifSartli(ad(f.kalemId));
+    if (s.sonuc === 'sartli' && s.izin === 'ret') return ILETILER.alternatifReddedildi(ad(f.kalemId));
     if (t.durum === 'siparis_verildi' || t.durum === 'teslim_alindi') return ILETILER.alternatifSiparis(ad(f.kalemId));
   }
   return null;
 }
+// 3437 a (dilim 3b-1): talep eden şartlı alternatife teklif toplanırken ve onaylı karardan önce karar verir. Teklif satırı gördüğü
+// alternatifi taşımalı; talepteki işaretle verilmiş izin değişmez; kararda seçili satırın izni değişmez (karar geçersiz kalmasın).
+export function alternatifIzniReddi(
+  t: Pick<TalepYazimi, 'teklifler' | 'karar' | 'durum' | 'onaylar'>, g: { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi },
+): string | null {
+  if (!['teklif_isteniyor', 'degerlendirme', 'onayda'].includes(t.durum) || kararOnayliMi(t.onaylar)) return ILETILER.alternatifIzniAsamasi;
+  const f = t.teklifler.find((q) => q.id === g.teklifId)?.fiyatlar.find((x) => x.kalemId === g.kalemId);
+  if (!f?.alternatif || f.alternatifSonucu?.sonuc !== 'sartli' || f.alternatifSonucu.izin === 'talep') return ILETILER.alternatifIzniYok;
+  if (alternatifIzi(f.alternatif) !== alternatifIzi(g.alternatif)) return ILETILER.alternatifIzniYok;
+  return secilenSatirlar(t).some((x) => x.teklifId === g.teklifId && x.kalemId === g.kalemId) ? ILETILER.alternatifIzniKararda : null;
+}
+// Talep edenin gördüğü şartlı alternatifler, kalem başına (fiyat ve tedarikçi yok).
+export function sartliAlternatifler(
+  t: { teklifler: readonly { id: string; fiyatlar: readonly { kalemId: string; alternatif?: TeklifAlternatifi | null; alternatifSonucu?: AlternatifSonucu | null }[] }[] },
+): Map<string, SartliAlternatif[]> {
+  const m = new Map<string, SartliAlternatif[]>();
+  for (const q of t.teklifler) {
+    for (const f of q.fiyatlar) {
+      const s = f.alternatifSonucu;
+      if (!f.alternatif || s?.sonuc !== 'sartli') continue;
+      m.set(f.kalemId, [...(m.get(f.kalemId) ?? []), {
+        teklifId: q.id, alternatif: f.alternatif, nedenler: s.nedenler, izin: s.izin, izinZaman: s.izinZaman ?? null, izinNotu: s.izinNotu ?? null,
+      }]);
+    }
+  }
+  return m;
+}
+type SartliAlternatif = NonNullable<Talebim['kalemler'][number]['sartliAlternatifler']>[number];
 type LogoKiyas = Pick<TalepYazimi, 'kalemler' | 'teklifler' | 'karar'>;
 const sadeOndalik = (x: string | null | undefined): string | null => (x === null || x === undefined ? null : x.includes('.') ? x.replace(/0+$/, '').replace(/\.$/, '') : x);
 // Logo'daki siparişin içeriği: iskonto, termin ve satırlar (kalem, miktar, birim, birim fiyat). Kapsam sipariş satırlarının kuralıyla aynı.
@@ -1120,6 +1165,7 @@ export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kay
 export function talebim(
   t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
   ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(), kabuller: ReadonlyMap<string, KalemKabulu> = new Map(),
+  sartli: ReadonlyMap<string, SartliAlternatif[]> = new Map(),
 ): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
@@ -1129,7 +1175,8 @@ export function talebim(
     guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
-    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id) })),
+    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id),
+      ...(sartli.has(k.id) ? { sartliAlternatifler: sartli.get(k.id)! } : {}) })),
   };
 }
 
