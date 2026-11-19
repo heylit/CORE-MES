@@ -16,6 +16,7 @@ export const anahtarlar = {
   disOperasyonlar: ['satin-alma', 'dis-operasyonlar'] as const,
   fasonSureleri: (sonGun: number) => ['satin-alma', 'fason-sureleri', sonGun] as const,
   kartlar: (tur: string, ara: string) => ['satin-alma', 'malzeme-secenekleri', tur, ara] as const,
+  kabulZarfi: (no: number) => ['satin-alma', 'kabul-zarfi', no] as const,
 };
 
 // Malzeme kartı yalnız Malzemeler ve Hizmetler'de oluşturulur; bağlantı oranın yeni kart formuna gider. Ad ve yol tanımdan okunur (yeniden adlanınca izler).

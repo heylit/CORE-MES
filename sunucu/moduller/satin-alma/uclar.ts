@@ -1,6 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
+  kabulZarfiCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
@@ -76,6 +77,11 @@ export const uclar = [
     isle: ({ db, kullanici, govde, denetimEki }) => servis.hizliAc(db, kullanici, govde, denetimEki),
   }),
   // 898 a, 903 a: ön talepler talep açabilen herkese açıktır (yeni işlem yok); yoksayma ve geri alma ayrı komuttur.
+  // 3437 a (dilim 2): talep formunda kalemin kabul sınırı kartın alternatif zarfından gelir; satın alma da aynı zarfı okur.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-kabul-zarfi/:no', yetki: { biri: ['satin-alma.talep-ac', 'satin-alma.oku', 'satin-alma.yaz'] },
+    parametre: kabulZarfiParametresi, cevap: kabulZarfiCevabi, isle: ({ db, parametre }) => servis.kabulZarfi(db, parametre.no),
+  }),
   uc({ yontem: 'GET', yol: '/satin-alma-on-talepleri', yetki: 'satin-alma.talep-ac', cevap: onTalepleriCevabi, isle: ({ db }) => servis.onTalepleri(db) }),
   uc({
     yontem: 'POST', yol: '/satin-alma-on-talepleri/yoksay', yetki: 'satin-alma.talep-ac', govde: onTalepYoksayGovdesi, cevap: tamamCevabi,
