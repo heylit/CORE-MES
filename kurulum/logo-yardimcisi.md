@@ -88,7 +88,30 @@ güncelleyici yardımcıya dokunmaz.
 gösterge dosyasına yeni exe yolunu yazın (güncelleyici yazmışsa olduğu gibi kalır), eski yardımcıyı Görev Zamanlayıcı'dan durdurup
 görevi yeniden çalıştırın ve Bağlantı izleme'de "Eski sürüm" uyarısının kalktığını görün. Sonraki güncellemeler kendiliğinden olur.
 
-Başlatma betiği bir kez elle değişir: exe yolunu sabit yazmak yerine gösterge dosyasından okur. Böylece bilgisayar yeniden açılınca da
+Bu kerelik ayarı `logo-yardimci-ayar` aracı yapar (kart 3432). Paketin kurulduğu sürüm klasöründe, yardımcıyı açan kullanıcıyla:
+
+```
+npm.cmd run logo-yardimci-ayar -- --betik <kurulum>\logo-yardimcisi-baslat.cmd --env <ilk kurulum>\.env
+npm.cmd run logo-yardimci-ayar -- --betik <kurulum>\logo-yardimcisi-baslat.cmd --env <ilk kurulum>\.env --uygula
+npm.cmd run logo-yardimci-ayar -- --geri-al --kurulum <kurulum>
+```
+
+İlki yalnız ne değişeceğini yazar. `--uygula`: betik ve `.env` yedeklenir (`.yedek-<tarih>`); betikte yalnız exe yolunu taşıyan tek satır
+`%LOGO_YARDIMCI_EXE%` olur, betiğin başına gösterge dosyasını okuyan ve okunamazsa önceki sabit exe'ye dönen üç satır eklenir; gösterge
+dosyası yoksa bugünkü exe ile yazılır; `.env`'e iki değişken eklenir. Yardımcı durdurulmaz, başlatılmaz; Logo'ya bağlanılmaz. Kurulum klasörü
+verilmezse exe yolundan çıkarılır (`<kurulum>\logo-yardimcisi-<sürüm>\cikti\logo-yardimcisi.exe`). Araç şu durumlarda hiçbir dosyaya
+dokunmadan durur: exe birden çok satırda ya da tırnaksız, exe yok, yolda İngilizce dışı harf ya da cmd özel karakteri var (`set /p` yolu
+kod sayfasıyla okur), `.env`'de değişken başka değerle var, verilen `.env` sürüm klasöründeki kopya. Ayarlıysa ikinci çalıştırma bir şey
+yazmaz. Betikte yardımcının çalışıp çalışmadığına bakan denetim görmezse uyarır. Geri alma yedekleri yerine koyar; gösterge dosyası kalır.
+`.env` değişikliği sunucu yeniden başlayınca geçer.
+Betik o sırada çalışmıyorken uygulayın: cmd çalışan betiği satır satır diskten okur, araya eklenen satırlar çalışmakta olan betiği kaydırır
+(yardımcı açıkken betik çoktan bitmiştir; Görev Zamanlayıcı görevi "Çalışıyor" görünüyorsa bitmesini bekleyin). `.env.yedek-<tarih>` dosyaları
+parola ve anahtar taşır: ayar doğrulanınca silin ya da yedeklerle aynı korumalı yere taşıyın.
+
+Güncelleyicinin kendi kodu ilk kurulum klasöründendir (kurulum/guncelleme.md): ilk kurulum klasörü 3314'ten eskiyse bu ayar yapılsa da
+paket yardımcıyı yenilemez; önce ilk kurulum klasörü yenilenir ya da yardımcı o pakette elle yenilenir.
+
+Aracı kullanmadan elle: başlatma betiği exe yolunu sabit yazmak yerine gösterge dosyasından okur. Böylece bilgisayar yeniden açılınca da
 yeni exe gelir. Örnek (`<kurulum>` yer tutucudur; mevcut gizli pencere sarmalayıcısı ve günlük yönlendirmesi olduğu gibi kalır):
 
 ```
