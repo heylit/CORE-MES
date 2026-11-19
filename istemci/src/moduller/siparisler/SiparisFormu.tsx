@@ -144,7 +144,7 @@ const KARSILAMA_SECENEKLERI = (Object.keys(KARSILAMA_YOLU_ADLARI) as KarsilamaYo
 const karsilamaSecenekleri = (k: SecilenKart | null) => (uretilmezKart(k) ? KARSILAMA_SECENEKLERI.filter((o) => o.deger !== 'uret') : KARSILAMA_SECENEKLERI);
 const KARSILAMA_IPUCU: Record<KarsilamaYolu, string | null> = {
   uret: null,
-  stok: 'Emir açılmaz; kalem depodaki stoktan karşılanır.',
+  stok: 'Emir açılmaz; onayda eldeki stok kadar depoya ayırma isteği açılır. Eksik kalan için istek açılmaz.',
   'satin-al': 'Emir açılmaz; kalem satın alınarak karşılanır.',
 };
 const karsilamaIpucu = (y: KarsilamaYolu): { ipucu?: string } => { const m = KARSILAMA_IPUCU[y]; return m === null ? {} : { ipucu: m }; };

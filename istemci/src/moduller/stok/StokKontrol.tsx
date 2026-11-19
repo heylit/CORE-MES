@@ -304,6 +304,8 @@ const AYIRMA_ROZETI: Record<AyirmaDurumu, { ton: 'bilgi' | 'tamam' | 'uyari' | '
   bekliyor: { ton: 'uyari', metin: 'Depoda bekliyor' }, ayrildi: { ton: 'bilgi', metin: 'Ayrıldı' }, teslim: { ton: 'tamam', metin: 'Teslim edildi' },
   iptal: { ton: 'pasif', metin: 'İptal' },
 };
+// 3429-3 F2: satış siparişinden gelen istekte belge sipariş numarasıdır.
+const belgeMetni = (s: AyirmaIstegiSatiri) => (s.kaynak === 'siparis' ? `Sipariş ${s.talepNo}` : s.talepNo);
 const kaynakMetni = (s: AyirmaIstegiSatiri) => s.kaynaklar.map((k) => `${k.artikId === null ? '' : 'Artık · '}${k.kod} · ${k.konumlar.join(', ')}`).join('; ');
 
 // Depo bekleyeni ayırır, ayrılanı teslim eder; satın alma ve depo iptal eder (miktar talebe geri eklenir).
@@ -325,15 +327,16 @@ function AyirmaIstekleri() {
   });
   const iptal = useMutation({
     mutationFn: (s: AyirmaIstegiSatiri) => korumaliPost<AyirmaCevabi>(`/stok/ayirma-istekleri/${s.id}/iptal`, { neden: neden.trim(), surum: s.surum }),
-    onSuccess: (c) => {
+    onSuccess: (c, istek) => {
       iptalEdilenYaz(null); nedenYaz(''); yenile();
-      bildir(c.geriEklendi === true ? 'tamam' : 'bilgi', c.geriEklendi === true ? 'İstek iptal edildi; miktar talebe geri eklendi.' : 'İstek iptal edildi; talep teklif aşamasında olduğundan miktar geri eklenmedi.');
+      bildir(c.geriEklendi === true || istek.kaynak === 'siparis' ? 'tamam' : 'bilgi', c.geriEklendi === true ? 'İstek iptal edildi; miktar talebe geri eklendi.'
+        : istek.kaynak === 'siparis' ? 'İstek iptal edildi.' : 'İstek iptal edildi; talep teklif aşamasında olduğundan miktar geri eklenmedi.');
     },
     onError: (h) => bildir('hata', hataMetni(h)),
   });
   const sutunlar: Sutun<AyirmaIstegiSatiri>[] = [
-    { anahtar: 'talep', baslik: 'Talep', sabit: 'sol', hucre: (s) => <>{s.talepNo}<span className="tc-stok-goz-alt tc-stok-blok">{s.kalemAd}</span></>,
-      csv: (s) => `${s.talepNo} ${s.kalemAd}` },
+    { anahtar: 'talep', baslik: 'Belge', sabit: 'sol', hucre: (s) => <>{belgeMetni(s)}<span className="tc-stok-goz-alt tc-stok-blok">{s.kalemAd}</span></>,
+      csv: (s) => `${belgeMetni(s)} ${s.kalemAd}` },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => `${miktarMetni(s.miktar)} ${s.birim}` },
     { anahtar: 'kaynak', baslik: 'Stoktan', kes: true, hucre: kaynakMetni },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={AYIRMA_ROZETI[s.durum].ton}>{AYIRMA_ROZETI[s.durum].metin}</Rozet>, csv: (s) => s.durum },
@@ -353,11 +356,11 @@ function AyirmaIstekleri() {
       {liste.isPending ? <DurumKutusu durum="yukleniyor" />
         : liste.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />
           : <Tablo etiket="Ayırma istekleri" kip="kaydir" sutunlar={sutunlar} satirlar={liste.data.satirlar} satirAnahtari={(s) => s.id}
-              bosMesaj={kapali ? 'Kapanmış ayırma isteği yok.' : 'Açık ayırma isteği yok. Talepler sekmesinde "Stoktan karşıla" ile açılır.'} />}
+              bosMesaj={kapali ? 'Kapanmış ayırma isteği yok.' : 'Açık ayırma isteği yok. Talepler sekmesinde "Stoktan karşıla" ile ya da satış siparişinin "Stoktan" kalemi onaylanınca açılır.'} />}
       <OnayPenceresi acik={iptalEdilen !== null} baslik="Ayırma isteğini iptal et" onayMetni="İptal et" tehlikeli yukleniyor={iptal.isPending}
         onayla={() => { if (iptalEdilen !== null && neden.trim() !== '') iptal.mutate(iptalEdilen); }} vazgec={() => { iptalEdilenYaz(null); nedenYaz(''); }}>
         <div className="tc-stok-form">
-          <p>{iptalEdilen === null ? '' : `${iptalEdilen.talepNo} · ${miktarMetni(iptalEdilen.miktar)} ${iptalEdilen.birim}. Ayrılan stok serbest kalır; talep henüz teklif aşamasında değilse miktar talebe geri eklenir.`}</p>
+          <p>{iptalEdilen === null ? '' : `${belgeMetni(iptalEdilen)} · ${miktarMetni(iptalEdilen.miktar)} ${iptalEdilen.birim}. Ayrılan stok serbest kalır; ${iptalEdilen.kaynak === 'siparis' ? 'sipariş kalemi değişmez.' : 'talep henüz teklif aşamasında değilse miktar talebe geri eklenir.'}`}</p>
           <Girdi etiket="İptal nedeni" value={neden} maxLength={200} onChange={(e) => nedenYaz(e.target.value)} required />
         </div>
       </OnayPenceresi>

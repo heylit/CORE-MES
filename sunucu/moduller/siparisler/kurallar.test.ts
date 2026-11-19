@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
   MIKTAR_TAM_SAYI, PARTI_TOPLAMI_TUTMUYOR, partiReddi, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
-  BAGLI_ACIK_EMIR, KALEM_BASKA_SIPARISIN, KILITLI_KALEM_DEGISMEZ, KILITLI_KALEM_SILINMEZ, KILITLI_KALEM_SIRASI, PARTI_YALNIZ_URETILENDE, karsilamaPartiReddi, kilitliKalemReddi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
+  BAGLI_ACIK_EMIR, KALEM_BASKA_SIPARISIN, KILITLI_KALEM_DEGISMEZ, KILITLI_KALEM_SILINMEZ, KILITLI_KALEM_SIRASI, PARTI_YALNIZ_URETILENDE, kalemKarsilamasi, karsilamaPartiReddi, kilitliKalemReddi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
@@ -148,6 +148,14 @@ describe('SIP-42 karşılama yolu (saf)', () => {
     assert.equal(karsilamaPartiReddi('satin-al', parti), PARTI_YALNIZ_URETILENDE);
     assert.equal(karsilamaPartiReddi('uret', parti), null);
     assert.equal(karsilamaPartiReddi('stok', []), null);
+  });
+  test('SIP-43 (3429-3 F2): üretilmeyen kartta "Üret" ya da boş yol "Stoktan" olur; üretilende ve seçilmiş başka yolda değişmez', () => {
+    assert.equal(kalemKarsilamasi('ticari_mal', undefined), 'stok');
+    assert.equal(kalemKarsilamasi('ticari_mal', 'uret'), 'stok');
+    assert.equal(kalemKarsilamasi('ticari_mal', 'satin-al'), 'satin-al');
+    assert.equal(kalemKarsilamasi('mamul', undefined), 'uret');
+    assert.equal(kalemKarsilamasi('yarimamul', 'stok'), 'stok');
+    assert.equal(kalemKarsilamasi(null, undefined), 'uret');
   });
 });
 

@@ -1,7 +1,7 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, teklifFormuMetniSemasi, terminYerlesimi, type TerminAraligi, type TerminYerlesimi } from '#paylasilan/sozlesme/siparisler.ts';
-import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu, TeklifFormuMetni } from '#paylasilan/sozlesme/siparisler.ts';
+import type { KarsilamaYolu, TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu, TeklifFormuMetni } from '#paylasilan/sozlesme/siparisler.ts';
 import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
@@ -92,6 +92,11 @@ const binde = (m: string): bigint => {
 export const PARTI_YALNIZ_URETILENDE = 'Partiler yalnız "Üret" kalemde olur.';
 export const karsilamaPartiReddi = (karsilama: string, partiler: readonly unknown[]): string | null =>
   karsilama !== 'uret' && partiler.length > 0 ? PARTI_YALNIZ_URETILENDE : null;
+
+// SIP-43 (3429-3 F2, Risk R4): üretilmeyen kart (ticari mal) üretim emriyle karşılanmaz; "Üret" gelirse ya da yol verilmezse "Stoktan" kaydedilir.
+export const URETILEN_TURLER: readonly string[] = ['mamul', 'yarimamul'];
+export const kalemKarsilamasi = (tur: string | null, karsilama: KarsilamaYolu | undefined): KarsilamaYolu =>
+  (karsilama ?? 'uret') === 'uret' && tur !== null && !URETILEN_TURLER.includes(tur) ? 'stok' : karsilama ?? 'uret';
 
 export function partiReddi(birim: string | null, miktar: string, partiler: readonly { adet: string }[]): string | null {
   if (partiler.length === 0) return null;

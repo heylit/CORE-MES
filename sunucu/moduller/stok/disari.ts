@@ -457,3 +457,7 @@ export async function emrinPartiBelgeleri(db: Db, emirId: number): Promise<Sipar
   const parti = await servis.partiBelgeleri(db, [...partiler.keys()]);
   return [...partiler].flatMap(([partiId, lotNo]) => (parti.get(partiId) ?? []).map((b) => ({ partiId, lotNo, belgeId: b.id, ad: b.ad, revKodu: b.revKodu ?? null })));
 }
+// 3429-3 F2: satış siparişinin "Stoktan" kalemleri için depoya ayırma isteği; onay, onay geri alma, iptal ve yeni sürümde çağrılır
+// (kablolama.ts). Sipariş verisini çağıran verir; yetkiyi siparişin komutu korur.
+export const siparisAyirmalariniEsitle = (db: Db, kisiId: number, g: servis.SiparisAyirmaGirdisi) => servis.siparisAyirmalariniEsitle(db, kisiId, g);
+export type { SiparisAyirmaGirdisi } from './servis.ts';

@@ -161,10 +161,14 @@ export const ayirmaKaynagi = z.object({
   karsilanan: z.number(),
   konumlar: z.array(z.string()),
 });
+export const AYIRMA_KAYNAKLARI = ['satin-alma', 'siparis'] as const;
 export const ayirmaIstegiSatiri = z.object({
   id: z.number().int(),
-  talepId: z.string(),
-  kalemId: z.string(),
+  // 3429-3 F2: satın alma talebinden ya da satış siparişinin "Stoktan" kaleminden; siparişte talep alanları boş, talepNo sipariş no.
+  kaynak: z.enum(AYIRMA_KAYNAKLARI),
+  talepId: z.string().nullable(),
+  kalemId: z.string().nullable(),
+  siparisId: z.number().int().nullable(),
   talepNo: z.string(),
   kalemAd: z.string(),
   malzemeNo: z.number().int(),

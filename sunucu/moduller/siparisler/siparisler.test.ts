@@ -434,6 +434,15 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(yeni.json<SiparisAyrintisi>().satirlar.map((k) => k.karsilama), ['satin-al']);
   });
 
+  test('SIP-43 (3429-3 F2): ticari mal kaleminde yol verilmezse ya da "uret" gelirse "stok" kaydedilir; "satin-al" korunur', async () => {
+    const ticari = await kartAc('ticari_mal');
+    const s = await siparisAc({ satirlar: [
+      { malzemeNo: ticari, miktar: '2', birimFiyat: '1' }, { malzemeNo: ticari, miktar: '1', birimFiyat: '1', karsilama: 'uret' },
+      { malzemeNo: ticari, miktar: '1', birimFiyat: '1', karsilama: 'satin-al' }, { malzemeNo: mamulNo, miktar: '1', birimFiyat: '1' },
+    ] });
+    assert.deepEqual(s.satirlar.map((k) => k.karsilama), ['stok', 'stok', 'satin-al', 'uret']);
+  });
+
   test('SIP-19 (3254 a): onay gerekçeyle geri alınır; emre bağlı kalemde yalnız termin değişir; yeniden onayda bağlı proje bitişi ve emir teslimi kayar', async () => {
     const taslak = await siparisAc();
     const onayli = (await gonder(yonetici, `/siparisler/${taslak.id}/onayla`, { surum: taslak.surum })).json<SiparisAyrintisi>();
