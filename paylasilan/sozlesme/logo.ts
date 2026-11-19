@@ -433,6 +433,8 @@ const irsaliyeOkumasi = z.object({
   // "Logo bağlantısı" ve "Logo: irsaliye okuması" ikisi de açık mı.
   acik: z.boolean(),
   sonOkuma: zamanSemasi.nullable(),
+  // 3453: son okuma turu hatayla bittiyse nedeni (örn. eski yardımcının 404'ü); son tur başarılıysa ya da hiç tur yoksa null.
+  sonHata: z.object({ zaman: zamanSemasi, ileti: z.string() }).nullable(),
 });
 
 export const irsaliyeListesiCevabi = z.object({

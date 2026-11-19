@@ -32,9 +32,9 @@ export function irsaliyeTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     const imlec = await s.irsaliyeImleci(db);
     const sira = imlec?.sira ?? 'yeni';
     const baslangic = irsaliyeBaslangicGunu(o.saat());
-    const hata = (sonuc: Exclude<KopruSonucu, { tur: 'basarili' }>['tur']): Yazici<TurSonucu> => {
+    const hata = (r: Exclude<KopruSonucu, { tur: 'basarili' }>): Yazici<TurSonucu> => {
       o.bellek.irsaliyeHatasi = { sayi: (o.bellek.irsaliyeHatasi?.sayi ?? 0) + 1, son: o.saat() };
-      return async () => ({ tur: 'okuma', akis: 'irsaliye', sonuc, sayi: 0 });
+      return async () => ({ tur: 'okuma', akis: 'irsaliye', sonuc: r.tur, sayi: 0, ileti: r.ileti });
     };
     // Dönem değişti: yeni dönemin imleci açılır, okunan sayfa yazılmaz (bir sonraki tur o dönemde baştan okur).
     const yeniDonem = (firma: number, donem: number): Yazici<TurSonucu> => async (db2) => {
@@ -45,7 +45,7 @@ export function irsaliyeTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     return async (): Promise<Yazici<TurSonucu>> => {
       if (sira === 'refler') {
         const r = await kopru.irsaliyeRefleriOku(baslangic);
-        if (r.tur !== 'basarili') return hata(r.tur);
+        if (r.tur !== 'basarili') return hata(r);
         o.bellek.irsaliyeHatasi = null;
         if (!ayniDonem(r.veri.firma, r.veri.donem)) return yeniDonem(r.veri.firma, r.veri.donem);
         return async (db2) => {
@@ -57,7 +57,7 @@ export function irsaliyeTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
       const degismeZamani = sira === 'degisen' ? (imlec?.degisme ?? null) : null;
       const degisen = degismeZamani !== null;
       const r = await kopru.irsaliyeOku(degisen ? (imlec?.degismeRef ?? 0) : (imlec?.sonRef ?? 0), baslangic, degismeZamani);
-      if (r.tur !== 'basarili') return hata(r.tur);
+      if (r.tur !== 'basarili') return hata(r);
       o.bellek.irsaliyeHatasi = null;
       const v = r.veri;
       if (!ayniDonem(v.firma, v.donem)) return yeniDonem(v.firma, v.donem);
@@ -95,7 +95,9 @@ const fiyatYetkisi = (k: Kullanici, tur: IrsaliyeTuru): boolean =>
 
 async function okumaDurumu(db: Db): Promise<IrsaliyeListesiCevabi['okuma']> {
   const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, AYAR)) === true;
-  return { acik, sonOkuma: await s.irsaliyeSonOkumasi(db) };
+  const son = acik ? await s.gunlukSonu(db, 'irsaliye') : null;
+  const sonHata = son !== null && son.sonuc === 'hata' ? { zaman: son.zaman, ileti: son.ileti ?? 'Okunamadı' } : null;
+  return { acik, sonOkuma: await s.irsaliyeSonOkumasi(db), sonHata };
 }
 
 // Eşleşme için gereken CORE kayıtları tek seferde okunur (sahibi modüllerin disari.ts'iyle); hiçbir kayıt yazılmaz.

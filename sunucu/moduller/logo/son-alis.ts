@@ -25,7 +25,7 @@ export function sonAlisTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
       const r = await kopru.topluAlislariOku(imlec?.sonRef ?? 0);
       if (r.tur !== 'basarili') {
         o.bellek.okumaDenemeleri.set(AKIS, o.saat());
-        return async () => ({ tur: 'okuma', akis: AKIS, sonuc: r.tur, sayi: 0 });
+        return async () => ({ tur: 'okuma', akis: AKIS, sonuc: r.tur, sayi: 0, ileti: r.ileti });
       }
       o.bellek.okumaDenemeleri.delete(AKIS);
       const v = r.veri;

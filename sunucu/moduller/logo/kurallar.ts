@@ -95,6 +95,7 @@ function logoKayitNo(d: unknown): number | null {
   return typeof d === 'number' && Number.isSafeInteger(d) && d > 0 ? d : null;
 }
 
+export const ESKI_YARDIMCI_OKUMA_ILETISI = 'Logo yardımcısı eski sürümde (404), bu okumayı tanımıyor; Logo bilgisayarındaki yardımcı programı güncelleyin.';
 export const ESKI_YARDIMCI_ILETISI = 'Logo bilgisayarındaki yardımcı program eski sürümde; bu işlem için güncellenmesi gerekir.';
 
 // HTTP durumu ve gövdeden sonuç. govde null: gövde JSON değildi.
@@ -2380,16 +2381,25 @@ const SONUC_ADI: Readonly<Record<string, string>> = {
   belirsiz: 'Sonuç belirsiz; Logo\'da kontrol edin', yazilamadi: 'CORE\'a yazılamadı', silindi: 'Silindi', 'zaten-vardi': 'Logo\'da zaten vardı',
 };
 
+// 3453: okuma reddinin nedeni günlükte ve ekranda görünür (eski yardımcının 404'ü gibi); köprünün iletisi yoksa sonucun adı yazılır.
+export function okumaHataIletisi(sonuc: string | undefined, ileti: string | undefined): string {
+  const ad = SONUC_ADI[sonuc ?? ''] ?? 'Okunamadı';
+  const neden = ileti?.trim() ?? '';
+  if (neden === ESKI_YARDIMCI_ILETISI) return ESKI_YARDIMCI_OKUMA_ILETISI;
+  if (neden === '' || neden.startsWith(ad)) return neden === '' ? ad : neden;
+  return `${ad}: ${neden}`;
+}
+
 // Turun sonucu günlüğe hangi satırla girer (saf). Boş tur, kapalı akış ve ara adım (niyet) yazılmaz.
 // İşin varsayılan akışı tur türüne göre ayrılır (malzeme işi kart, güncelleme ve pasif; satın alma işi bekletmeyi ayrı akışa yazar).
 export function gunlukSatiri(
-  isAdi: string, r: { tur: string; sonuc?: string; sayi?: number; akis?: string; no?: number },
+  isAdi: string, r: { tur: string; sonuc?: string; sayi?: number; akis?: string; no?: number; ileti?: string },
 ): { akis: string; yon: 'okuma' | 'yazma'; sonuc: 'tamam' | 'hata'; sayi: number | null; ileti: string | null } | null {
   if (r.tur === 'okuma') {
     const akis = r.akis === 'cari' || r.akis === 'ambar' ? 'liste' : (r.akis ?? 'okuma');
     const tamam = r.sonuc === 'okundu';
     const ileti = r.akis === 'cari' ? 'Cari listesi' : r.akis === 'ambar' ? 'Ambar listesi' : null;
-    return { akis, yon: 'okuma', sonuc: tamam ? 'tamam' : 'hata', sayi: tamam ? (r.sayi ?? 0) : null, ileti: tamam ? ileti : (SONUC_ADI[r.sonuc ?? ''] ?? 'Okunamadı') };
+    return { akis, yon: 'okuma', sonuc: tamam ? 'tamam' : 'hata', sayi: tamam ? (r.sayi ?? 0) : null, ileti: tamam ? ileti : okumaHataIletisi(r.sonuc, r.ileti) };
   }
   if (r.sonuc === undefined || r.no === undefined) return null;
   const varsayilan: Readonly<Record<string, string>> = {

@@ -259,7 +259,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     await turuYenidenIste();
     kopru.senaryo = 'yetkisiz';
     const once = kopru.istekler.length;
-    assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'malzeme-karti', sonuc: 'yetkisiz', sayi: 0 });
+    assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'malzeme-karti', sonuc: 'yetkisiz', sayi: 0, ileti: 'Köprü anahtarı reddedildi (401).' });
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'bos' }, 'başarısız okuma hemen yinelenmez');
     assert.equal(kopru.istekler.length, once + 1);
     assert.deepEqual(await kodlar(), ['LG-1']);

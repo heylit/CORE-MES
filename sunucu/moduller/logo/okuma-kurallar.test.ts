@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import {
   faturalariAyikla, FIS_GONDERIM_AYARI, listeKayitlariniAyikla, LOGO_AKISLARI, LOGO_FIS_TURLERI, logoFisDurumu, malKabulSatirlariniAyikla, malzemeFisiGovdesi,
-  eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
+  ESKI_YARDIMCI_ILETISI, ESKI_YARDIMCI_OKUMA_ILETISI, gunlukSatiri, eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
 } from './kurallar.ts';
 import type { FisGidenDurumu, GonderilecekMalzemeFisi, StokFisi } from './kurallar.ts';
 
@@ -234,5 +234,16 @@ describe('LOGO-O19 fişin Logo durumu (295 a, 298 a)', () => {
     assert.match(elle.neden ?? '', /Gönder/);
     assert.equal(logoFisDurumu(soru, null, ac).durum, 'bekliyor', 'imleçten yeni fiş sıraya alınacak');
     assert.equal(logoFisDurumu({ ...soru, id: 9 }, null, ac).durum, 'gonderilmez', 'izleme öncesi değişmemiş fiş');
+  });
+});
+
+describe('3453 okuma reddinin nedeni günlük satırında', () => {
+  test('köprünün iletisi sonucun adıyla yazılır; eski yardımcının 404\'ü güncelleme der; ileti yoksa yalnız sonuç adı; başarıda neden yok', () => {
+    const satir = (sonuc: string, ileti?: string) => gunlukSatiri('logo-irsaliye-okumasi', { tur: 'okuma', akis: 'irsaliye', sonuc, sayi: 0, ...(ileti === undefined ? {} : { ileti }) });
+    assert.equal(satir('reddedildi', ESKI_YARDIMCI_ILETISI)?.ileti, ESKI_YARDIMCI_OKUMA_ILETISI);
+    assert.equal(satir('ulasilamadi', 'Bağlantı reddedildi (ECONNREFUSED).')?.ileti, 'Logo yardımcısına ulaşılamadı: Bağlantı reddedildi (ECONNREFUSED).');
+    assert.equal(satir('reddedildi', 'Logo reddetti: Dönem kapalı')?.ileti, 'Logo reddetti: Dönem kapalı', 'aynı ön ek iki kez yazılmaz');
+    assert.equal(satir('yetkisiz')?.ileti, 'Logo yardımcısı anahtarı kabul etmedi');
+    assert.deepEqual(satir('okundu', 'yok sayılır'), { akis: 'irsaliye', yon: 'okuma', sonuc: 'tamam', sayi: 0, ileti: null });
   });
 });

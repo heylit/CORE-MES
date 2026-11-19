@@ -113,6 +113,8 @@ export interface SahteKopru {
   logoAlislari: Record<string, unknown>[];
   // Bu ucu bilmeyen eski yardımcı gibi 404 "Not found".
   topluAlisUcuYok: boolean;
+  // 3453: irsaliye uçlarını (3360) bilmeyen eski yardımcı gibi 404 "Not found".
+  irsaliyeUcuYok: boolean;
   logoCarileri: Record<string, unknown>[];
   // 3360 a: Document/search için tür başına belgeler (yardımcının cevap biçiminde; type alanı yardımcıdaki tür adı).
   logoBelgeleri: Record<string, unknown>[];
@@ -209,6 +211,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     logoKullanimlari: [],
     logoAlislari: [],
     topluAlisUcuYok: false,
+    irsaliyeUcuYok: false,
     logoCarileri: [],
     logoBelgeleri: [],
     sayfaBoyu: 500,
@@ -313,6 +316,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       if (istek.method === 'GET' && (yol === '/api/Dispatch/list' || yol === '/api/Dispatch/refs')) {
         const q = new URL(istek.url ?? '', 'http://sahte').searchParams;
         kopru.irsaliyeIstekleri.push(`${yol}?${q.toString()}`);
+        if (kopru.irsaliyeUcuYok) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null }); return; }
         const from = q.get('from') ?? '';
         if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { json(cevap, 400, { success: false, error: 'from yyyy-MM-dd olmalı.' }); return; }
         const ref = (x: Record<string, unknown>): number => Number(x['logicalRef']);

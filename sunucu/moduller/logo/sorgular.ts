@@ -1111,6 +1111,15 @@ export function gunlukSonlari(db: Db): Promise<GunlukSatiri[]> {
   );
 }
 
+// Bir akışın son günlük satırı (yoksa null).
+export function gunlukSonu(db: Db, akis: string): Promise<GunlukSatiri | null> {
+  return db.tek<GunlukSatiri>(
+    `SELECT id::float8 AS id, ${zamanMetni('zaman')} AS zaman, akis, yon, sonuc, sayi, ileti
+       FROM logo_akis_gunlugu WHERE akis = $1 ORDER BY zaman DESC, id DESC LIMIT 1`,
+    [akis],
+  );
+}
+
 export async function gunlukHataSayisi(db: Db, bas: Date): Promise<number> {
   return (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM logo_akis_gunlugu WHERE sonuc = 'hata' AND zaman >= $1", [bas]))?.n ?? 0;
 }
