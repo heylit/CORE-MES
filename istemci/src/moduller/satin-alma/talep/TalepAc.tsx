@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HizliAcGovdesi, KabulSiniri, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
+import { CizimSecici, TalepCizimleri, cizimBagla, type SecilenCizim } from './Cizimler.tsx';
 import { KabulSinirlari } from './KabulSinirlari.tsx';
 import { KART_SAYFASI, SURE, adettenKg, anahtarlar, cagri, kartKarsiligi, karsilikYaz, parcaKg } from './ortak.ts';
 import './talep.css';
@@ -167,6 +168,10 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
         <div className="sa-talep-secili">
           <span><b>{k.kart.ad}</b> <span className="sa-talep-not">{k.kart.kod}</span></span>
           <Dugme simge="edit" onClick={() => degistir({ kart: null, kabul: null, kabulHatali: false })}>Değiştir</Dugme>
+          {(k.kart.ayrinti ?? []).length > 0 && (
+            // 3442-2: seçilen kartın föyü (kalite, form, ölçü, standart...) talepte açık görünür; satın alma aynısını görür.
+            <dl className="sa-talep-foy" aria-label="Kartın ayrıntısı">{k.kart.ayrinti!.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}</dl>
+          )}
         </div>
       ) : k.serbest ? (
         <div className="sa-talep-serbest">
@@ -221,6 +226,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
   const [aciklama, aciklamaYaz] = useState('');
   const [emirId, emirIdYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
+  const [cizimler, cizimlerYaz] = useState<SecilenCizim[]>([]);
   // Komutun kimliği başarıya ya da formun değişmesine kadar korunur: ağ kopup elle yeniden gönderilen talep ikinci kez açılmaz (KD-010).
   const [kimlik, kimlikYaz] = useState(yeniIstekKimligi);
   useEffect(() => { kimlikYaz(yeniIstekKimligi()); }, [tur, kalemler, tarih, aciklama, emirId]);
@@ -243,13 +249,21 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
     emirIdYaz('');
     hataYaz(null);
   }, [duzenlenen]);
-  const temizle = () => { kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null); };
+  const temizle = () => { kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null); cizimlerYaz([]); };
+  // 3442-2: talep açılınca seçilen çizimler bağlanır; bağlanamayan çizim talebi geri almaz, kişiye söylenir.
+  const cizimleriBagla = async (talepId: string, no: string) => {
+    const l = cizimler;
+    let olmayan = 0;
+    for (const c of l) { try { await cizimBagla(talepId, c); } catch { olmayan += 1; } }
+    if (olmayan > 0) bildir('hata', `${no}: ${String(olmayan)} çizim eklenemedi; Taleplerim'de talebi açıp yeniden ekleyin.`);
+  };
   const duzenleme = useMutation({
     mutationFn: ({ id, govde }: { id: string; govde: TalebimiDuzenleYazimi }) => (guncelleme
       ? tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/:id/guncelleme-ac', { parametre: { id }, govde: { ...govde, id: kimlik } satisfies TalebimGuncellemeYazimi, ...deneme, ...SURE }),
         { ...SURE, istekKimligi: kimlik })
       : cagri.post('/satin-alma-talepleri/:id/talebimi-duzenle', { parametre: { id }, govde, ...SURE })),
-    onSuccess: (t) => {
+    onSuccess: async (t) => {
+      if (guncelleme) await cizimleriBagla(t.id, t.no);
       bildir('tamam', guncelleme && duzenlenen !== null ? `${t.no} güncelleme talebi olarak açıldı; ${duzenlenen.no} yerinde duruyor.` : `${t.no} güncellendi.`);
       temizle();
       void istemci.invalidateQueries({ queryKey: anahtarlar.taleplerimHepsi });
@@ -274,9 +288,10 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
   const gonder = useMutation({
     mutationFn: (govde: HizliAcGovdesi) =>
       tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/hizli-ac', { govde, ...deneme, ...SURE }), { ...SURE, istekKimligi: govde.id }),
-    onSuccess: (t) => {
+    onSuccess: async (t) => {
+      await cizimleriBagla(t.id, t.no);
       bildir('tamam', `${t.no} açıldı; satın almaya düştü.`);
-      kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null);
+      kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null); cizimlerYaz([]);
       void istemci.invalidateQueries({ queryKey: anahtarlar.taleplerimHepsi });
       void istemci.invalidateQueries({ queryKey: anahtarlar.ozet });
       void istemci.invalidateQueries({ queryKey: anahtarlar.onTalepler });
@@ -338,6 +353,9 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
           <Girdi etiket="İstenen tarih" type="date" value={tarih} onChange={(e) => tarihYaz(e.target.value)} />
           <CokSatir etiket="Açıklama" value={aciklama} onChange={(e) => aciklamaYaz(e.target.value)} maxLength={4000} rows={2} placeholder="Nerede, ne için kullanılacak" />
         </div>
+        {duzenlenen !== null && !guncelleme
+          ? <TalepCizimleri talepId={duzenlenen.id} yazabilir={duzenlenen.duzenlenebilir === true} />
+          : <CizimSecici secilen={cizimler} degistir={cizimlerYaz} />}
         {duzenlenen === null && <Secim etiket="Üretim emri (isteğe bağlı)" value={emirId} onChange={(e) => emirIdYaz(e.target.value)} bosSecenek="Üretim emrine bağlı değil"
           secenekler={(emirler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.parcaNo} ${e.parcaAd}` }))}
           ipucu={emirler.isError ? 'Açık emirler okunamadı; emre bağlamadan gönderebilirsiniz.' : 'Malzeme bir emir için alınıyorsa seçin; yalnız planlı ve başlamış emirler listelenir.'} />}

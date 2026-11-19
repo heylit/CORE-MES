@@ -10,6 +10,8 @@ import {
   ADIMLAR, KARAR_SONRASI, adimBilgisi, adimSirasi, headerFacts, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
 } from '../merkez/views.ts';
 import { gelisGunu, kalemOzeti } from '../merkez/kimlik.ts';
+import { useOturum } from '../../../ortak/veri/oturum.ts';
+import { TalepCizimleri } from '../talep/Cizimler.tsx';
 import { KimlikSeridi, durumTonu, ihtiyacMetni } from './KimlikSeridi.tsx';
 
 // Talep ayrıntısı (2412-2): altı adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
@@ -54,6 +56,8 @@ function Meta({ r }: { r: PurchaseRequest }) {
 }
 
 export function TalepAyrinti() {
+  // 3442-2: talebin çizimi her adımda görünür; yazan ekler. Kanca erken dönüşten önce.
+  const yazar = (useOturum().data?.islemler ?? []).includes('satin-alma.yaz');
   const r = V.id ? S.requests[V.id] : undefined;
   const donus = DONUS[AYRINTI.donus] ?? 'Taleplere dön';
   const geri = (
@@ -104,6 +108,7 @@ export function TalepAyrinti() {
           </span>
         </div>
       )}
+      <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle /></div>
       <Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} />
       {bilgi[sec] && <p className="sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
     </div>

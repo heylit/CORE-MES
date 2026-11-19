@@ -99,6 +99,9 @@ export const ILETILER = {
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
   talebimSahibiDegil: 'Yalnız kendi açtığınız ya da adınıza açılan talebi düzenleyebilirsiniz.',
+  cizimGoremez: 'Bu talebin çizimini göremezsiniz.',
+  cizimEklenemez: 'Çizim yalnız taslaktaki kendi talebinize eklenir; sonrasında satın alma ekler.',
+  cizimYok: 'Dosya bu talebe bağlı değil.',
   talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; teklif toplanırken güncelleme talebi açın, sonrasında değişikliği satın almaya iletin.',
   guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
   guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
@@ -1191,6 +1194,17 @@ export function talebim(
 // SAT-79 (2871-1 a): talep eden kendi talebini yalnız teklif istenmeden önce (taslak) düzenler; birleştirilmiş kaynak talep düzenlenmez
 // (kalemleri birleşik taleptedir). Sahiplik servis denetler. Teklif toplanırken güncelleme ayrı talep olarak açılır (kart 2876).
 export const talebimDuzenlenirMi = (t: Pick<Talep, 'durum' | 'birlesme'>): boolean => t.durum === 'taslak' && t.birlesme == null;
+
+// 3442-2: talebin çizimi. Satın almayı okuyan, yazan ya da onaylayan görür; talep eden (açan ya da adına açılan) kendi talebini görür.
+// Ekleyip kaldırmak satın almayı yazanın her adımda, talep edenin yalnız talep düzenlenirken (taslak) işidir.
+export function cizimIzni(islemler: readonly string[], sahip: boolean, duzenlenir: boolean, istenen: 'oku' | 'yaz'): boolean {
+  if (islemler.includes(ISLEM.yaz)) return true;
+  if (istenen === 'oku' && (islemler.includes(ISLEM.oku) || islemler.includes(ISLEM.onayla))) return true;
+  if (!sahip || !islemler.includes(ISLEM.talepAc)) return false;
+  return istenen === 'oku' || duzenlenir;
+}
+export const CIZIM_OKUYAN_ISLEMLER = [ISLEM.oku, ISLEM.yaz, ISLEM.onayla, ISLEM.talepAc] as const;
+export const CIZIM_YAZAN_ISLEMLER = [ISLEM.yaz, ISLEM.talepAc] as const;
 // SAT-80 (2876, 2871-1 b): teklif toplanırken (teklif isteniyor, değerlendirme) sahibi asıl talebi bozmadan güncelleme talebi açar.
 // Birleştirilmiş ya da birleşik talepte ve bağlı (fason adım, uygulanan parça) kalemi olan talepte açılmaz: bağ ikinci kez kurulmasın.
 // Sahiplik servis denetler.

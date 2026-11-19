@@ -7,12 +7,12 @@ import {
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
-  teklifEkiDosyaParametresi, teklifEkiGovdesi, teklifEkiParametresi, teklifEkleriCevabi,
+  talepCizimiDosyaParametresi, talepCizimiGovdesi, talepCizimleriCevabi, teklifEkiDosyaParametresi, teklifEkiGovdesi, teklifEkiParametresi, teklifEkleriCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
 import { satinAlmaAnalizi } from './analiz.ts';
-import { FIYAT_GOREN_ISLEMLER, KG_FIYATI_OKUR } from './kurallar.ts';
+import { CIZIM_OKUYAN_ISLEMLER, CIZIM_YAZAN_ISLEMLER, FIYAT_GOREN_ISLEMLER, KG_FIYATI_OKUR } from './kurallar.ts';
 import * as servis from './servis.ts';
 
 const katalogParametresi = z.object({ id: z.guid() });
@@ -240,6 +240,27 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/teklifler/:teklifId/ekler/:ozet/kaldir', yetki: 'satin-alma.yaz',
     parametre: teklifEkiDosyaParametresi, cevap: teklifEkleriCevabi,
     isle: ({ db, parametre }) => servis.teklifEkiKaldir(db, parametre.id, parametre.teklifId, parametre.ozet),
+  }),
+  // 3442-2: talebin çizimi. Kapı geniştir; kimin gördüğü ve eklediği servisteki kuraldadır (talep eden yalnız kendi talebinde).
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/cizimler', yetki: { biri: CIZIM_OKUYAN_ISLEMLER },
+    parametre: talepParametresi, cevap: talepCizimleriCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.talepCizimleri(db, kullanici, parametre.id),
+  }),
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/:id/cizimler/:ozet/dosya', yetki: { biri: CIZIM_OKUYAN_ISLEMLER },
+    parametre: talepCizimiDosyaParametresi, cevap: ikiliCevap,
+    isle: ({ db, kullanici, parametre }) => servis.talepCizimiDosyasi(db, kullanici, parametre.id, parametre.ozet),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/cizim-bagla', yetki: { biri: CIZIM_YAZAN_ISLEMLER }, tekrarKorumali: true,
+    parametre: talepParametresi, govde: talepCizimiGovdesi, cevap: talepCizimleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.talepCizimiBagla(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/cizimler/:ozet/kaldir', yetki: { biri: CIZIM_YAZAN_ISLEMLER },
+    parametre: talepCizimiDosyaParametresi, cevap: talepCizimleriCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.talepCizimiKaldir(db, kullanici, parametre.id, parametre.ozet),
   }),
   // D6 b: sipariş ve finanstaki alış faturası bağı. Seçici tutarsız liste okur; bağı satın almayı yazan ya da yalnız fatura bağlayan işlem kurar.
   // Ağ kopunca aynı kimlikle yinelenen bağ ilk cevabı alır; geçmişe ikinci satır yazılmaz.

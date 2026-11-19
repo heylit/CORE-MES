@@ -108,3 +108,8 @@
 /* 3442-7a: kim onaylayabilir, karar için önemli bilgi: soluk değil. */
 .sa-kok .kv .d.sa-onaylayan { color: var(--ink); }
 
+/* 3442-1: ilk sayfa tablosu kayan tabloda malzemeyi ve talebin adını sarar; rozetler hücreyi doldurmaz, sütunlar 1280'de
+   menü açıkken sığar. */
+.sa-is-tablosu .tc-tablo-kap[data-kaydir] .sa-ekran-govde { align-items: flex-start; }
+.sa-is-tablosu .tc-tablo-kap[data-kaydir] td[data-baslik="Malzeme"] { white-space: normal; min-width: 12rem; max-width: 17rem; }
+.sa-is-malzeme { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }

@@ -1,6 +1,6 @@
 import type { Aciliyet } from '#paylasilan/sozlesme/pano.ts';
 import { DurumKutusu, Kart, SayfaBasligi, SayiKarti, Simge } from '../../../ortak/arayuz/index.ts';
-import { IsListesi } from '../../../ortak/arayuz/IsListesi.tsx';
+import { IsTablosu } from './IsTablosu.tsx';
 import type { IsSatiri } from '../../../ortak/rota/ana-sayfa.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { panoSayilari, teslimBasarimi } from '../merkez/calc.ts';
@@ -66,14 +66,13 @@ export function IsKutusu() {
     p.buAyHarcama > 0 && <SayiKarti key="spend" baslik="Bu ay harcama" simge="lira" metin={money(p.buAyHarcama, 'TRY', 0)} altMetin="iskonto ve masraf dahil" yol="/satin-alma/raporlar" />,
   ].filter(Boolean);
   const teslim = teslimBasarimi().slice(0, 6);
-  const onayda = (jobs().approval ?? []).length;
   return (
     <div className="sa-ekran">
       <SayfaBasligi baslik="Bugün" simge="cart" alt={alt} />
       {kartlar.length > 0 && <div className="sa-ekran-sayilar" aria-label="Özet">{kartlar}</div>}
       {Object.keys(S.requests).length === 0
         ? <DurumKutusu durum="bos" mesaj="Henüz talep yok. Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer." />
-        : <IsListesi satirlar={liste} yolunda={onayda ? [`Onayda ${nf0.format(onayda)} karar`] : []} alinamayan={[]} yukleniyor={false} />}
+        : <IsTablosu />}
       <Kart baslik="Tedarikçi teslim başarımı" simge="truck" baslikEki={<span className="sa-ekran-soluk">Teslim alınan siparişlerde termine uyum</span>}>
         {teslim.length === 0
           ? <p className="sa-ekran-not">Henüz teslim alınmış sipariş yok.</p>
