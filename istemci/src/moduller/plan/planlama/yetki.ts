@@ -11,6 +11,8 @@ export interface PlanlamaYetkisi {
   planCanliyaAl: boolean;
   // Çalışmayı (tercih, ağırlık, karar, sayfa içi kilit) değiştirebilir: yalnız ortak plan.yaz (925 a).
   calismaYazabilir: boolean;
+  // Başka sayfaya geçiş düğmesi (Engeller paneli): kişi o sayfayı açabiliyor mu.
+  islemVar: (islem: string) => boolean;
 }
 
 export function yetkiKur(islemler: readonly string[]): PlanlamaYetkisi {
@@ -22,5 +24,6 @@ export function yetkiKur(islemler: readonly string[]): PlanlamaYetkisi {
     planStudyo: var_('plan.studyo'),
     planCanliyaAl: var_('plan.canliya-al'),
     calismaYazabilir: var_('plan.yaz'),
+    islemVar: var_,
   };
 }
