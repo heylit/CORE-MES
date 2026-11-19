@@ -39,6 +39,10 @@ export interface BildirimTuruTanimi {
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
 const ELLE_TANIMLI_TURLER = {
+  // 3448: toplantı daveti, değişikliği ve iptali katılımcılara gider (kayda bağlı kişi, alan işlemi yok); yapan kendisi almaz.
+  'toplantilar.davet': { baslik: 'Toplantıya davet edildin', onem: 'bilgi', alanIslemler: [], yol: '/profil/toplantilarim', varsayilan: { mesaj: false, eposta: true } },
+  'toplantilar.degisti': { baslik: 'Toplantı değişti', onem: 'bilgi', alanIslemler: [], yol: '/profil/toplantilarim', varsayilan: { mesaj: false, eposta: true } },
+  'toplantilar.iptal': { baslik: 'Toplantı iptal edildi', onem: 'uyari', alanIslemler: [], yol: '/profil/toplantilarim', varsayilan: { mesaj: false, eposta: true } },
   'satin-alma.talep-onay-bekliyor': {
     // 2432: karar verilince (onay, ret, iptal ya da onaydan çıkış) satın alma kendi transaction'ında kapatır.
     baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: true },

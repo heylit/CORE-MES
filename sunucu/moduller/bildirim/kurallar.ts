@@ -138,7 +138,23 @@ export const VARSAYILAN_SABLONLAR: Record<EpostaKonusu, EpostaSablonIcerigi> = {
   planlama: { simge: 'calendar', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu', 'istasyon'], ...EK },
   uretim: { simge: 'route', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'istasyon'], ...EK },
   genel: { simge: 'bell', konuKalibi: '[CORE MES] {olay}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı uygulamada görebilirsin.', tabloAlanlari: ['olay', 'tarih'], ...EK },
+  // 3448 (ADR 0015 md 6 eki): davette başlık, saat aralığı, yer, bağlı kayıt no ve düzenleyen; gündem ve takvim eki yok.
+  toplanti: {
+    simge: 'calendar', konuKalibi: '[CORE MES] {olay}: {kayit_basligi}',
+    govde: 'Merhaba {alici_adi},\n\n{olay}: {kayit_basligi}.\n\nGündemi ve katılımcıları uygulamada görebilirsin.',
+    tabloAlanlari: ['zaman_araligi', 'yer', 'kayit_no', 'duzenleyen'], ...EK, dugmeYazisi: 'Uygulamada aç', serit: 'mavi',
+  },
 };
+
+// BIL-60 (3448, ADR 0015 md 6 eki): toplantı alanları yalnız `toplantilar.` türlerinde e-postaya girer; başka tür verse de yazılmaz.
+type ToplantiEki = { baslik: string; zamanAraligi: string; yer: string | null; duzenleyen: string };
+export function toplantiAlanlari(tur: string, ek: ToplantiEki | undefined): {
+  kayitBasligi: string | null; zamanAraligi: string | null; yer: string | null; duzenleyen: string | null;
+} {
+  if (ek === undefined || !tur.startsWith('toplantilar.')) return { kayitBasligi: null, zamanAraligi: null, yer: null, duzenleyen: null };
+  return { kayitBasligi: ek.baslik.slice(0, 200), zamanAraligi: ek.zamanAraligi.slice(0, 120), yer: ek.yer?.slice(0, 120) ?? null, duzenleyen: ek.duzenleyen.slice(0, 120) };
+}
+export const BOS_TOPLANTI_DEGERLERI = { kayit_basligi: null, zaman_araligi: null, yer: null, duzenleyen: null } as const;
 
 // BIL-55 (3435-2 a): kayıtlı şablon satırı; boş sütun (göçten önceki satır ya da boş bırakılan alan) konunun varsayılanıdır.
 export interface SablonKaydi {

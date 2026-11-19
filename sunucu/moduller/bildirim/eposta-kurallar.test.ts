@@ -9,7 +9,7 @@ import {
 
 const DEGER: EpostaDegerleri = {
   alici_adi: 'Deneme Kişi', olay: 'Satın alma talebi onay bekliyor', kayit_no: 'ORN-TLP-0042', tarih: '17.11.2026 09:30', gecikme_gunu: null,
-  istasyon: null, kayit_baglantisi: 'http://10.0.0.5:4100/satin-alma/onaylar', onem: 'Uyarı', kademe: null,
+  istasyon: null, kayit_baglantisi: 'http://10.0.0.5:4100/satin-alma/onaylar', onem: 'Uyarı', kademe: null, kayit_basligi: null, zaman_araligi: null, yer: null, duzenleyen: null,
 };
 
 describe('e-posta kuralları (3397)', () => {

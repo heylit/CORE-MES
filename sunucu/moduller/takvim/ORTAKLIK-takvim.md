@@ -14,3 +14,4 @@ Modül tablo tutmaz; bütün kayıtlar başka modülün `disari.ts` okumasıdır
 | üretim emri başlangıç ve teslim tarihi, emir no, parça adı | uretim-emirleri | `takvimKayitlari` |
 | sevkiyat işi günü, belge no, nokta ve firma adı | sevkiyat | `takvimKayitlari` |
 | satın alma siparişi beklenen teslimi, sipariş no, tedarikçi adı | satin-alma | `takvimKayitlari` |
+| toplantı (gün, saat aralığı, başlık, yer, durum) | toplantilar | `takvimKayitlari` (kişi kendi toplantısını, `toplantilar.oku` hepsini; süzme toplantılarda) |

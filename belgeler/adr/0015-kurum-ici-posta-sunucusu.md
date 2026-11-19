@@ -24,6 +24,8 @@ içi zil ve mesajla ulaşmıyor. Kullanıcı kararı 223 a: bildirimler şirket 
 6. **Her deneme yalnız eklenen deftere yazılır** (kişi, olay, sonuç, neden). Hata metni sunucu adresini ve parolayı taşımaz. İçerikte ek
    ve dış görsel yoktur. Gömülü görsel yalnız şablon simgesi ve, şablonda açıksa, Sistem Ayarları'ndaki kurum logosudur (PNG, iletinin
    içinde; dış adresten resim çekilmez; varsayılan kapalı; kullanıcı kararı kart 3435-2 logo a, 19.11.2026).
+   Toplantı davetinde (3448) başlık, tarih-saat, yer, bağlı kayıt no ve düzenleyen yazılır; gündem ve takvim eki (.ics) yoktur
+   (kullanıcı kararı kart 3448 onay a, 19.11.2026).
 7. **Yeni paket yok.** SMTP konuşması Node'un kendi modülleriyle yazılır; paket istenirse ayrı yazılı onay gerekir.
 
 ## Ek: dış posta servisi (3397-3, 3397-4 a; 17.11.2026)

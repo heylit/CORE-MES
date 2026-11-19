@@ -40,7 +40,7 @@ const SONUC_ADI: Record<EpostaSonucu, string> = { gonderildi: 'Gönderildi', gon
 const SONUC_TONU: Record<EpostaSonucu, RozetTonu> = { gonderildi: 'tamam', gonderilemedi: 'hata', atlandi: 'pasif' };
 const YER_TUTUCU_ADI: Record<EpostaYerTutucusu, string> = {
   alici_adi: 'Alıcı adı', olay: 'Olay', kayit_no: 'Kayıt no', tarih: 'Tarih', gecikme_gunu: 'Gecikme günü', istasyon: 'İstasyon', kayit_baglantisi: 'Kayıt bağlantısı',
-  onem: 'Önem', kademe: 'Kademe',
+  onem: 'Önem', kademe: 'Kademe', kayit_basligi: 'Kayıt başlığı (toplantı)', zaman_araligi: 'Zaman (toplantı)', yer: 'Yer (toplantı)', duzenleyen: 'Düzenleyen (toplantı)',
 };
 // E-posta simgeleri ortak simge setinin adlarıdır; ekranda aynı çizim görünür.
 const SIMGE: Record<EpostaSimgesi, SimgeAdi> = {
@@ -168,10 +168,11 @@ function ornekDegerler(olay: string): EpostaDegerleri {
   return {
     alici_adi: 'Deneme Kişi', olay, kayit_no: 'ORN-0042', tarih: `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)} ${t.slice(11, 16)}`,
     gecikme_gunu: '2', istasyon: 'ORN-TZG-01', kayit_baglantisi: 'Kayda git', onem: 'Uyarı', kademe: '3 / 5: Gecikti',
+    kayit_basligi: 'ORN-Haftalık termin toplantısı', zaman_araligi: '21.11.2026 09:30-10:15', yer: 'ORN-Toplantı odası 1', duzenleyen: 'ORN-Planlama Sorumlusu',
   };
 }
 
-// 3435-2 a: altı sistem şablonu (konu başına, silinmez, varsayılana döner) ve yöneticinin açtığı şablonlar. Olay şablonu tetikleyiciden seçer.
+// 3435-2 a: sistem şablonları (konu başına, silinmez, varsayılana döner) ve yöneticinin açtığı şablonlar. Olay şablonu tetikleyiciden seçer.
 type SablonSecimi = { tur: 'sistem'; konu: EpostaKonusu } | { tur: 'ozel'; id: number } | { tur: 'yeni'; ad: string; icerik: EpostaSablonIcerigi };
 const icerigi = (s: EpostaSablonu | EpostaOzelSablonu): EpostaSablonIcerigi => ({
   simge: s.simge, konuKalibi: s.konuKalibi, baslikKalibi: s.baslikKalibi, govde: s.govde, tabloAlanlari: s.tabloAlanlari,
