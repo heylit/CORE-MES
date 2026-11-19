@@ -6,6 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { Ayrinti, SaglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { ULASILAMADI_ILETISI } from '../../ortak/veri/api.ts';
+import { MemoryRouter } from 'react-router-dom';
 import { SistemDurumu } from './SistemDurumu.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 
@@ -318,6 +319,19 @@ describe('SistemDurumu zamanlanmis isler', () => {
     ]);
     // Okunur ad kod adını ipucunda taşır; bilinmeyen iş kod adıyla kalır (ad uydurulmaz).
     expect(within(tablo).getByText('Üretim Hazırlık: CORE yansımalarını yeniden deneme').getAttribute('title')).toBe('arkon-yansima-yineleyici');
+  });
+
+  it('3445: Logo isi Logo sayfasina baglanir (sayfayi gorebilene); SmartES sayfasini goremeyende SmartES isi duz metin kalir', async () => {
+    const BASLAMA = '2026-10-08T09:00:00.000Z';
+    const is = (ad: string) => ({ ad, sonBaslama: BASLAMA, sonBitis: BASLAMA, sonSonuc: 'tamam' as const, sonHata: null, sonNeden: null });
+    sunucuKur({
+      kullanici: { ...YONETICI, islemler: ['saglik.ayrinti-oku', 'sayfa.logo'] },
+      ayrinti: ayrintiVer({ ...AYRINTI, isler: [is('logo-irsaliye-okumasi'), is('smartes-okuma-durus')] }),
+    });
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><SistemDurumu /></MemoryRouter></QueryClientProvider>);
+    const tablo = await screen.findByRole('table', { name: 'Zamanlanmış işler' });
+    await waitFor(() => expect(within(tablo).getByRole('link', { name: 'Logo: irsaliye okuması' }).getAttribute('href')).toBe('/logo'));
+    expect(within(tablo).queryByRole('link', { name: 'SmartES: duruş okuması' })).toBeNull();
   });
 
   it('is listesi bossa "Is yok" yazar; yonetici olmayan is bolumunu gormez', async () => {

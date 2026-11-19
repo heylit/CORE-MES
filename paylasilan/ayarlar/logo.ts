@@ -1,4 +1,5 @@
 import type { AyarSecenegi, AyarTanimi } from '../ayar-tanimi.ts';
+import { siklikSecenekleri } from '../okuma-sikligi.ts';
 
 const FIS_GONDERIM_SECENEKLERI: readonly AyarSecenegi[] = [
   { deger: 'kapali', etiket: 'Kapalı' },
@@ -90,7 +91,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: mal kabul okuması',
-    aciklama: 'Açıkken dakikada bir Logo\'dan satın alma irsaliyesi satırları okunur ve yalnız saklanır; stoka ya da satın almaya işlenmez. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken seçilen sıklıkla Logo\'dan satın alma irsaliyesi satırları okunur ve yalnız saklanır; stoka ya da satın almaya işlenmez. "Logo bağlantısı" da açık olmalı.',
   },
   // 3345 a: alış ve satış irsaliyeleri yalnız okunur ve CORE karşılığıyla gösterilir; Logo'ya yazılmaz, stok değişmez.
   'logo.irsaliye-okumasi': {
@@ -98,14 +99,14 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: irsaliye okuması',
-    aciklama: 'Açıkken dakikada bir Logo\'dan alış ve satış irsaliyeleri (son 90 gün) okunur ve Logo İrsaliyeleri sayfasında gösterilir; hiçbir kayıt değişmez. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken seçilen sıklıkla Logo\'dan alış ve satış irsaliyeleri (son 90 gün) okunur ve Logo İrsaliyeleri sayfasında gösterilir; hiçbir kayıt değişmez. "Logo bağlantısı" da açık olmalı.',
   },
   'logo.liste-okumasi': {
     modul: 'logo',
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: cari ve ambar listesi okuması',
-    aciklama: 'Açıkken saatte bir Logo\'dan cari ve ambar listeleri okunur ve önbelleğe (kod, ad) yazılır. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken seçilen sıklıkla (en sık saatte bir) Logo\'dan cari ve ambar listeleri okunur ve önbelleğe (kod, ad) yazılır. "Logo bağlantısı" da açık olmalı.',
   },
   'logo.fatura-okumasi': {
     modul: 'logo',
@@ -151,7 +152,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: son alış fiyatı kopyası',
-    aciklama: 'Açıkken Logo\'daki alış faturası satırları okunup CORE\'da kopyalanır (önce bütün geçmiş sayfa sayfa, sonra saatte bir yenileri). Teklifte ve proje maliyetinde fiyatı bilinmeyen malzemenin yanında "Logo son alış" önerisi olarak görünür, hesaba girmez. Logo yardımcısının bu sürümü gerekir; Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken Logo\'daki alış faturası satırları okunup CORE\'da kopyalanır (önce bütün geçmiş sayfa sayfa, sonra seçilen sıklıkla yenileri). Teklifte ve proje maliyetinde fiyatı bilinmeyen malzemenin yanında "Logo son alış" önerisi olarak görünür, hesaba girmez. Logo yardımcısının bu sürümü gerekir; Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
   },
   'logo.cari-aramasi': {
     modul: 'logo',
@@ -264,5 +265,37 @@ export const LOGO_AYARLARI = {
     varsayilan: false,
     baslik: 'Logo: ödeme planı, masraf merkezi, proje, kur okuması',
     aciklama: 'Açıkken formlardaki seçim listeleri ve günün kurları Logo\'dan okunur. "Logo bağlantısı" da açık olmalı.',
+  },
+  // 3445 a: zamanlanmış okumaların sıklığı (Logo sayfası). Dakikalık okumalar varsayılan 15 dakikaya iner; saatte bir tazelenen
+  // listeler saatten sık okunamaz. "Yalnız elle" yalnız "Şimdi oku" ile okur.
+  'logo.mal-kabul-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '1dk', '5dk', '15dk', '60dk', 'gunluk']),
+    baslik: 'Logo: mal kabul okuma sıklığı',
+    aciklama: 'Mal kabul satırlarının Logo\'dan ne sıklıkla okunacağı. Yeni kayıt en çok bu süre kadar geç gelir; Logo sayfasındaki "Şimdi oku" hemen okur.',
+  },
+  'logo.irsaliye-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '1dk', '5dk', '15dk', '60dk', 'gunluk']),
+    baslik: 'Logo: irsaliye okuma sıklığı',
+    aciklama: 'Alış ve satış irsaliyelerinin Logo\'dan ne sıklıkla okunacağı. Yeni kayıt en çok bu süre kadar geç gelir; "Şimdi oku" hemen okur.',
+  },
+  'logo.fatura-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '15dk', secenekler: siklikSecenekleri(['elle', '1dk', '5dk', '15dk', '60dk', 'gunluk']),
+    baslik: 'Logo: fatura okuma sıklığı',
+    aciklama: 'Siparişe bağlı faturaların Logo\'dan ne sıklıkla okunacağı (bir sipariş en erken saatte bir yeniden okunur). "Şimdi oku" hemen okur.',
+  },
+  'logo.liste-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'Logo: cari ve ambar listesi okuma sıklığı',
+    aciklama: 'Cari ve ambar listelerinin Logo\'dan ne sıklıkla okunacağı. "Şimdi oku" hemen okur.',
+  },
+  'logo.malzeme-kodu-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'Logo: malzeme kodu listesi okuma sıklığı',
+    aciklama: 'Logo\'da kullanılan malzeme kodlarının ne sıklıkla okunacağı (yeni stok kodu bunları atlar). "Şimdi oku" hemen okur.',
+  },
+  'logo.son-alis-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'Logo: son alış kopyası okuma sıklığı',
+    aciklama: 'Logo alış faturası satırlarının ne sıklıkla okunacağı; geçmiş okunurken sayfalar arka arkaya gelir. "Şimdi oku" hemen okur.',
   },
 } as const satisfies Record<string, AyarTanimi>;

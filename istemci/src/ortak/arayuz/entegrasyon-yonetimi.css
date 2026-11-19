@@ -1,0 +1,34 @@
+/* 3445: dış sistem yönetimi (liste ve ayrıntı). 1280 ve üstünde liste solda, ayrıntı sağda; altında liste üstte. */
+.tc-ey { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-ey-baglanti, .tc-ey-ayrinti-ic, .tc-ey-gunluk, .tc-ey-ayarlar { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-ey-alanlar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--b-3) var(--b-5); margin: 0;
+}
+.tc-ey-alanlar dt { color: var(--muted); font-size: var(--yazi-s); }
+.tc-ey-alanlar dd { margin: 0; overflow-wrap: anywhere; }
+.tc-ey-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-5); margin: 0; font-size: var(--yazi-s); }
+.tc-ey-hata { color: var(--stop); font-weight: 700; }
+.tc-ey-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-ey-dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-ey-altbaslik { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-m); font-weight: 700; }
+.tc-ey-altbaslik .tc-simge { color: var(--muted); }
+
+.tc-ey-ikili { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }
+@media (min-width: 1280px) {
+  .tc-ey-ikili { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+}
+.tc-ey-liste, .tc-ey-grup { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-ey-liste { gap: var(--b-4); }
+.tc-ey-satir {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); min-width: 0; min-height: var(--dokunma);
+  padding: var(--b-3) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2);
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.tc-ey-satir:hover { border-color: var(--edge2); }
+.tc-ey-satir[aria-pressed="true"] { background: var(--secili-zemin); color: var(--secili-yazi); border-color: var(--done); }
+.tc-ey-satir-ad { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-ey-satir-ad small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ey-satir[aria-pressed="true"] .tc-ey-satir-ad small { color: inherit; }
+.tc-ey-ayrinti { min-width: 0; scroll-margin-top: var(--b-5); }
+.tc-ey-gunluk-ust { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); }

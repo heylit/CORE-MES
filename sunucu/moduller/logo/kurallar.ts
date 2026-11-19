@@ -248,8 +248,10 @@ export function gecerliBirimSetleri(setler: readonly { kod: string; elle: boolea
   return new Set(setler.filter((s) => (listeOkundu ? s.kopruListesinde : s.elle)).map((s) => s.kod));
 }
 
-export function listeOkunmaliMi(sonOkuma: Date | null, sonDeneme: Date | null, simdi: Date): boolean {
+// 3445: "Şimdi oku" (zorlaAni) saatlik tazelemeyi beklemez; o andan önce okunmuş liste yeniden okunur. Hata sonrası bekleme yine geçerlidir.
+export function listeOkunmaliMi(sonOkuma: Date | null, sonDeneme: Date | null, simdi: Date, zorlaAni: Date | null = null): boolean {
   if (sonDeneme && simdi.getTime() - sonDeneme.getTime() < LISTE_DENEME_ARALIGI_MS) return false;
+  if (zorlaAni !== null && (sonOkuma === null || sonOkuma.getTime() < zorlaAni.getTime())) return true;
   return sonOkuma === null || simdi.getTime() - sonOkuma.getTime() >= LISTE_TAZELEME_MS;
 }
 
@@ -1574,7 +1576,8 @@ export function topluAlisSayfasiniAyikla(govde: unknown): TopluAlisSayfasi | nul
 
 // Okuma sırası: son sayfa doluysa hemen devam, değilse en çok saatte bir (yeni fatura satırı için).
 export const SON_ALIS_ARALIGI_MS = 60 * 60 * 1000;
-export function sonAlisOkunmaliMi(imlec: { dolu: boolean; sonOkuma: Date } | null, simdi: Date): boolean {
+export function sonAlisOkunmaliMi(imlec: { dolu: boolean; sonOkuma: Date } | null, simdi: Date, zorlaAni: Date | null = null): boolean {
+  if (zorlaAni !== null && imlec !== null && imlec.sonOkuma.getTime() < zorlaAni.getTime()) return true;
   return imlec === null || imlec.dolu || simdi.getTime() - imlec.sonOkuma.getTime() >= SON_ALIS_ARALIGI_MS;
 }
 
@@ -2312,3 +2315,99 @@ export function seciliCrmEngeli(secili: string | null, cari: string, r: KopruSon
 export const crmSorulurMu = (f: { tur: string; logoCariKodu: string | null }): boolean =>
   f.tur !== 'tedarikci' && (f.logoCariKodu ?? '').trim() !== '';
 export const crmSorguyuKeser = (r: KopruSonucu): boolean => r.tur === 'ulasilamadi' || r.tur === 'belirsiz';
+
+/* ---------------- 3445: yönetim sayfası (akış kataloğu, sıklık kapısı, günlük satırı) ---------------- */
+
+export type YonetimYonu = 'okuma' | 'yazma' | 'istek';
+export interface YonetimAkisi {
+  anahtar: string;
+  ad: string;
+  ne: string;
+  yon: YonetimYonu;
+  // null: yalnız "Logo bağlantısı" ile açılır.
+  acikAyari: string | null;
+  // Zamanlanmış okumanın sıklık ayarı ve işin adı (yalnız okuma).
+  siklikAyari?: string;
+  isAdi?: string;
+  // Pencerede en az kaç tur koşar (irsaliye: yeni ve değişen başlıklar ayrı turdadır).
+  enAzTur?: number;
+  // Sayfalı tam okuma (malzeme kartı, stok, kullanım): sıklık yok, "Şimdi oku" tam turu yeniden başlatır.
+  sayfali?: 'malzeme-karti' | 'stok' | 'kullanim';
+  // Yazmanın giden kutusundaki belge türleri (bekleyen sayısı).
+  belgeTurleri?: readonly string[];
+}
+
+export const YONETIM_AKISLARI: readonly YonetimAkisi[] = [
+  { anahtar: 'mal-kabul', ad: 'Mal kabul', ne: 'Satın alma siparişi kabulleri', yon: 'okuma', acikAyari: 'logo.mal-kabul-okumasi', siklikAyari: 'logo.mal-kabul-sikligi', isAdi: 'logo-mal-kabul-okumasi' },
+  { anahtar: 'irsaliye', ad: 'İrsaliyeler', ne: 'Alış ve satış irsaliyeleri', yon: 'okuma', acikAyari: 'logo.irsaliye-okumasi', siklikAyari: 'logo.irsaliye-sikligi', isAdi: 'logo-irsaliye-okumasi', enAzTur: 2 },
+  { anahtar: 'fatura', ad: 'Faturalar', ne: 'Siparişe bağlı alış faturaları', yon: 'okuma', acikAyari: 'logo.fatura-okumasi', siklikAyari: 'logo.fatura-sikligi', isAdi: 'logo-fatura-okumasi' },
+  { anahtar: 'liste', ad: 'Cari ve ambar listesi', ne: 'Cari kartlar, ambarlar', yon: 'okuma', acikAyari: 'logo.liste-okumasi', siklikAyari: 'logo.liste-sikligi', isAdi: 'logo-liste-okumasi' },
+  { anahtar: 'malzeme-kodu', ad: 'Malzeme kodları', ne: 'Logo\'da kullanılan stok kodları', yon: 'okuma', acikAyari: null, siklikAyari: 'logo.malzeme-kodu-sikligi', isAdi: 'logo-malzeme-kodu-okumasi' },
+  { anahtar: 'son-alis', ad: 'Son alış kopyası', ne: 'Alış faturası satırları', yon: 'okuma', acikAyari: 'logo.son-alis-okumasi', siklikAyari: 'logo.son-alis-sikligi', isAdi: 'logo-son-alis-okumasi' },
+  { anahtar: 'malzeme-karti', ad: 'Malzeme kartları', ne: 'Malzeme kartları (tam liste)', yon: 'okuma', acikAyari: 'logo.malzeme-okumasi', sayfali: 'malzeme-karti' },
+  { anahtar: 'stok', ad: 'Stok toplamları', ne: 'Ambar başına eldeki miktar', yon: 'okuma', acikAyari: 'logo.stok-okumasi', sayfali: 'stok' },
+  { anahtar: 'kullanim', ad: 'Malzeme kullanımı', ne: 'Son hareket ve açık sipariş', yon: 'okuma', acikAyari: 'logo.kullanim-okumasi', sayfali: 'kullanim' },
+  { anahtar: 'malzeme', ad: 'Malzeme kartı', ne: 'Malzeme kartı açma', yon: 'yazma', acikAyari: 'logo.malzeme-gonderimi', belgeTurleri: ['malzeme'] },
+  { anahtar: 'malzeme-guncelleme', ad: 'Malzeme adı güncellemesi', ne: 'Logo\'daki kartın adı', yon: 'yazma', acikAyari: 'logo.malzeme-guncelleme-gonderimi', belgeTurleri: ['malzeme-guncelleme'] },
+  { anahtar: 'malzeme-pasif', ad: 'Kullanım dışı bırakma', ne: 'Silinen kartın Logo\'daki karşılığı', yon: 'yazma', acikAyari: 'logo.malzeme-pasif-gonderimi' },
+  { anahtar: 'hizmet-alinan', ad: 'Alınan hizmet kartı', ne: 'Hizmet kartı (alınan)', yon: 'yazma', acikAyari: 'logo.hizmet-alinan-gonderimi' },
+  { anahtar: 'hizmet-verilen', ad: 'Verilen hizmet kartı', ne: 'Hizmet kartı (verilen)', yon: 'yazma', acikAyari: 'logo.hizmet-verilen-gonderimi' },
+  {
+    anahtar: 'satin-alma', ad: 'Satın alma talebi ve siparişi', ne: 'Talep fişi, sipariş açma, düzenleme, kapatma, iptal, karşılama', yon: 'yazma',
+    acikAyari: 'logo.satin-alma-gonderimi', belgeTurleri: ['siparis', 'siparis-guncelleme', 'siparis-kapatma', 'siparis-iptal', 'talep', 'karsilama'],
+  },
+  { anahtar: 'siparis-bekletme', ad: 'Sipariş bekletme', ne: 'Satın alma siparişini bekletme', yon: 'yazma', acikAyari: 'logo.siparis-bekletme-gonderimi', belgeTurleri: ['siparis-bekletme'] },
+  { anahtar: 'talep-iptali', ad: 'Talep fişi iptali', ne: 'Talep fişini iptal', yon: 'yazma', acikAyari: 'logo.talep-iptali-gonderimi' },
+  {
+    anahtar: 'satis', ad: 'Satış teklifi ve siparişi', ne: 'Teklif, tekliften sipariş', yon: 'yazma', acikAyari: 'logo.satis-gonderimi',
+    belgeTurleri: ['satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi'],
+  },
+  { anahtar: 'teklif-kapatma', ad: 'Satış teklifi kapatma', ne: 'Teklifi kapatma', yon: 'yazma', acikAyari: 'logo.teklif-kapatma-gonderimi' },
+  { anahtar: 'proje', ad: 'Proje kartı', ne: 'Proje kodu', yon: 'yazma', acikAyari: 'logo.proje-gonderimi', belgeTurleri: ['proje'] },
+  { anahtar: 'malzeme-fisi', ad: 'Malzeme fişleri', ne: 'Sarf, üretimden giriş, fire, ambar, sayım', yon: 'yazma', acikAyari: 'logo.malzeme-fisi-gonderimi', belgeTurleri: ['malzeme-fisi'] },
+  { anahtar: 'cari-aramasi', ad: 'Cari arama', ne: 'Firma kartında Logo carisi arama', yon: 'istek', acikAyari: 'logo.cari-aramasi' },
+  { anahtar: 'malzeme-aramasi', ad: 'Malzeme arama', ne: 'Logo geçişinde tek kart arama', yon: 'istek', acikAyari: 'logo.malzeme-aramasi' },
+  { anahtar: 'belge-aramasi', ad: 'Belge arama', ne: 'Listelerdeki "Logo\'da ara"', yon: 'istek', acikAyari: 'logo.belge-aramasi' },
+  { anahtar: 'malzeme-hareketleri', ad: 'Malzeme hareketleri', ne: 'Malzeme kartındaki Logo hareketleri', yon: 'istek', acikAyari: 'logo.malzeme-hareketleri-okumasi' },
+  { anahtar: 'son-alis-fiyatlari', ad: 'Son alış fiyatları', ne: 'Malzeme kartındaki son alışlar', yon: 'istek', acikAyari: 'logo.son-alis-fiyatlari-okumasi' },
+  { anahtar: 'sozluk', ad: 'Seçim listeleri ve kurlar', ne: 'Ödeme planı, masraf merkezi, proje, kur', yon: 'istek', acikAyari: 'logo.sozluk-okumasi' },
+];
+
+export const yonetimAkisi = (anahtar: string): YonetimAkisi | undefined => YONETIM_AKISLARI.find((a) => a.anahtar === anahtar);
+
+const SONUC_ADI: Readonly<Record<string, string>> = {
+  reddedildi: 'Logo reddetti', yetkisiz: 'Logo yardımcısı anahtarı kabul etmedi', ulasilamadi: 'Logo yardımcısına ulaşılamadı',
+  belirsiz: 'Sonuç belirsiz; Logo\'da kontrol edin', yazilamadi: 'CORE\'a yazılamadı', silindi: 'Silindi', 'zaten-vardi': 'Logo\'da zaten vardı',
+};
+
+// Turun sonucu günlüğe hangi satırla girer (saf). Boş tur, kapalı akış ve ara adım (niyet) yazılmaz.
+// İşin varsayılan akışı tur türüne göre ayrılır (malzeme işi kart, güncelleme ve pasif; satın alma işi bekletmeyi ayrı akışa yazar).
+export function gunlukSatiri(
+  isAdi: string, r: { tur: string; sonuc?: string; sayi?: number; akis?: string; no?: number },
+): { akis: string; yon: 'okuma' | 'yazma'; sonuc: 'tamam' | 'hata'; sayi: number | null; ileti: string | null } | null {
+  if (r.tur === 'okuma') {
+    const akis = r.akis === 'cari' || r.akis === 'ambar' ? 'liste' : (r.akis ?? 'okuma');
+    const tamam = r.sonuc === 'okundu';
+    const ileti = r.akis === 'cari' ? 'Cari listesi' : r.akis === 'ambar' ? 'Ambar listesi' : null;
+    return { akis, yon: 'okuma', sonuc: tamam ? 'tamam' : 'hata', sayi: tamam ? (r.sayi ?? 0) : null, ileti: tamam ? ileti : (SONUC_ADI[r.sonuc ?? ''] ?? 'Okunamadı') };
+  }
+  if (r.sonuc === undefined || r.no === undefined) return null;
+  const varsayilan: Readonly<Record<string, string>> = {
+    'logo-malzeme-gonderimi': 'malzeme', 'logo-satin-alma-gonderimi': 'satin-alma', 'logo-satis-gonderimi': 'satis', 'logo-proje-gonderimi': 'proje',
+    'logo-malzeme-fisi-gonderimi': 'malzeme-fisi', 'logo-dis-siparis-duzeltme': 'dis-duzeltme',
+  };
+  let akis = varsayilan[isAdi];
+  if (akis === undefined) return null;
+  if (isAdi === 'logo-malzeme-gonderimi' && r.tur === 'guncelleme') akis = 'malzeme-guncelleme';
+  if (isAdi === 'logo-malzeme-gonderimi' && r.tur === 'pasif') akis = 'malzeme-pasif';
+  if (isAdi === 'logo-satin-alma-gonderimi' && r.tur === 'bekletme') akis = 'siparis-bekletme';
+  const tamam = r.sonuc === 'gonderildi' || r.sonuc === 'zaten-vardi' || r.sonuc === 'silindi';
+  const no = `Belge ${r.no}`;
+  return { akis, yon: 'yazma', sonuc: tamam ? 'tamam' : 'hata', sayi: null, ileti: tamam ? (r.sonuc === 'gonderildi' ? no : `${no}: ${SONUC_ADI[r.sonuc]}`) : `${no}: ${SONUC_ADI[r.sonuc] ?? r.sonuc}` };
+}
+
+// Sıklık kapısına giden sonuç: kayıt geldi mi; kapalı akışta ya da bağlantı yokken null (pencere kapanır, zaman yazılmaz).
+export function kapiSonucu(r: { tur: string; sonuc?: string; sayi?: number }): { kayitGeldi: boolean } | null {
+  if (r.tur.endsWith('-kapali') || r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok') return null;
+  return { kayitGeldi: r.tur === 'okuma' && r.sonuc === 'okundu' && (r.sayi ?? 0) > 0 };
+}

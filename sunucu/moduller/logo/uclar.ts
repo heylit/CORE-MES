@@ -17,6 +17,8 @@ import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import { kartBolumu } from './kart-bolumu.ts';
+import { entegrasyonAkisParametresi, entegrasyonGunlukCevabi, entegrasyonGunlukSorgusu, entegrasyonKomutCevabi, entegrasyonYonetimiCevabi } from '#paylasilan/sozlesme/entegrasyon.ts';
+import { baglantiTesti, gunlukListesi, simdiOku, yonetimOzeti } from './yonetim.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { FIYAT_GOREN_ISLEMLER as SATIN_ALMA_FIYAT_GOREN_ISLEMLER } from '../satin-alma/disari.ts';
@@ -65,6 +67,40 @@ const ARAMA_FIYAT_YETKISI: Readonly<Record<LogoBelgeAramaTuru, readonly Islem[]>
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
+  // 3445 a: Logo yönetim sayfası. Görmek sayfa işlemiyle; "Şimdi oku" ve bağlantı testi ayarlar.yaz ister (aç/kapat ve sıklık genel
+  // ayar ucundan, aynı yetkiyle). Adres ve anahtar cevaba girmez.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/yonetim',
+    yetki: { biri: ['sayfa.logo'] },
+    cevap: entegrasyonYonetimiCevabi,
+    isle: ({ db }) => yonetimOzeti(db, new Date()),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/yonetim/gunluk',
+    yetki: { biri: ['sayfa.logo'] },
+    sorgu: entegrasyonGunlukSorgusu,
+    cevap: entegrasyonGunlukCevabi,
+    isle: ({ db, sorgu }) => gunlukListesi(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/yonetim/akislar/:anahtar/simdi-oku',
+    yetki: 'ayarlar.yaz',
+    parametre: entegrasyonAkisParametresi,
+    cevap: entegrasyonKomutCevabi,
+    isle: ({ db, parametre }) => simdiOku(db, parametre.anahtar),
+  }),
+  // Test yardımcıya yalnız GET atar ve cevabını beklerken transaction açık tutmaz (köprüyü bekleyen öteki okumalar gibi).
+  uc({
+    yontem: 'GET',
+    yol: '/logo/yonetim/baglanti-testi',
+    yetki: 'ayarlar.yaz',
+    txDisi: true,
+    cevap: entegrasyonKomutCevabi,
+    isle: ({ db }) => baglantiTesti({ tx: (f) => f(db) }),
+  }),
   // 3345 a: Logo irsaliyeleri, yalnız okuma (aynadan; Logo'ya istek atmaz). Fiyat ve tutar yalnız tek irsaliyede ve fiyat yetkisiyle.
   uc({
     yontem: 'GET',

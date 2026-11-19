@@ -1,4 +1,8 @@
-import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
+import { hataOzeti, isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
+import { okumaSikligiMi, turBaslasinMi, turBitti, yeniSiklikDurumu, type SiklikDurumu } from '#paylasilan/okuma-sikligi.ts';
+import { GUNLUK_ILETI_EN_COK, GUNLUK_SAKLAMA_GUN, gunlukIletisi } from '#paylasilan/sozlesme/entegrasyon.ts';
+import * as s from './sorgular.ts';
+import type { AyarAnahtari } from '#paylasilan/ayarlar.ts';
 import type { IsBekliyor, IsTanimi } from '#cekirdek/zamanlayici.ts';
 import { logoyaGuncellemeGidecekMalzemeler, logoyaPasifGidecekMalzemeler, malzemeLogoGuncellemeSonucu, malzemeLogoPasifSonucu } from '../malzemeler/disari.ts';
 import {
@@ -12,7 +16,8 @@ import { disDuzeltmeAcik, ortamKoprusu } from './baglanti.ts';
 import { disDuzeltmeTuru, disSiparisOku } from './dis-siparis.ts';
 import type { DisDuzeltmeOrtami } from './dis-siparis.ts';
 import type { KopruIstemcisi } from './kopru.ts';
-import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
+import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS, gunlukSatiri, kapiSonucu, yonetimAkisi } from './kurallar.ts';
+import type { YonetimAkisi } from './kurallar.ts';
 import { irsaliyeTuru } from './irsaliye.ts';
 import { sonAlisTuru } from './son-alis.ts';
 import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeKartiOkumaTuru, malzemeKoduTuru, malzemeTuru, stokOkumaTuru, kullanimOkumaTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
@@ -70,9 +75,65 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
   }
 }
 
+// 3445: akış günlüğü. Yazılamayan günlük satırı turu düşürmez (günlük bilgi içindir). Eski satırlar saatte bir silinir.
+let sonTemizlik = 0;
+export async function gunlugeYaz(vt: TxAcan, k: s.GunlukKaydi, saat: () => Date = () => new Date()): Promise<void> {
+  const simdi = saat();
+  try {
+    await vt.tx(async (db) => {
+      await s.gunlukYaz(db, { ...k, ileti: gunlukIletisi(k.ileti, GUNLUK_ILETI_EN_COK) }, simdi);
+      if (simdi.getTime() - sonTemizlik >= 3_600_000) {
+        sonTemizlik = simdi.getTime();
+        await s.gunlukTemizle(db, new Date(simdi.getTime() - GUNLUK_SAKLAMA_GUN * 24 * 3_600_000));
+      }
+    });
+  } catch {
+    // Günlük yazılamadıysa tur yine sayılır; hata zamanlayıcının kendi kaydında görünür.
+  }
+}
+
+// 3445: zamanlanmış okumaların sıklık kapısı (süreç belleği). İş her zamanki aralığıyla döner; istek ancak tur sırası gelince çıkar.
+const kapilar = new Map<string, SiklikDurumu>();
+export const kapiDurumu = (anahtar: string): SiklikDurumu => kapilar.get(anahtar) ?? yeniSiklikDurumu();
+// "Şimdi oku": bir sonraki iş turunda okuma hemen başlar; art arda basmak tek istek sayılır (Risk K8).
+export function simdiOkuIste(anahtar: string): void {
+  kapilar.set(anahtar, { ...kapiDurumu(anahtar), istendi: true });
+}
+export function kapilariSifirla(): void {
+  kapilar.clear();
+}
+
 // İş transaction dışında koşar: tur kendi kısa transaction'larını açar, köprü cevabını transaction dışında bekler (UYUM-BORCU 2).
-function kopruIsi(ad: string, aralikMs: number, tur: (vt: TxAcan) => Promise<TurSonucu>): IsTanimi {
-  return isTanimi({ ad, aralikMs, txDisi: (vt) => sirali(async () => beklemeyeCevir(await tur(vt))) });
+// Sıklık kapısı olan okumada tur yalnız sırası gelince koşar; her turun sonucu akış günlüğüne yazılır.
+function kopruIsi(ad: string, aralikMs: number, tur: (vt: TxAcan, zorlaAni: Date | null) => Promise<TurSonucu>, kapi?: YonetimAkisi): IsTanimi {
+  return isTanimi({ ad, aralikMs, txDisi: (vt) => sirali(() => kapiliTur(vt, ad, tur, kapi)) });
+}
+
+export async function kapiliTur(
+  vt: TxAcan, ad: string, tur: (vt: TxAcan, zorlaAni: Date | null) => Promise<TurSonucu>, kapi?: YonetimAkisi, saat: () => Date = () => new Date(),
+): Promise<IsBekliyor | undefined> {
+  let d: SiklikDurumu | null = null;
+  if (kapi?.siklikAyari !== undefined) {
+    const anahtar = kapi.siklikAyari;
+    const deger: unknown = await vt.tx((db) => sistemAyariOku(db, anahtar as AyarAnahtari));
+    const acilan = turBaslasinMi(kapiDurumu(kapi.anahtar), typeof deger === 'string' && okumaSikligiMi(deger) ? deger : '15dk', saat());
+    if (acilan === null) return undefined;
+    d = acilan;
+    kapilar.set(kapi.anahtar, d);
+  }
+  let sonuc: TurSonucu;
+  try {
+    sonuc = await tur(vt, d?.zorlaAni ?? null);
+  } catch (e) {
+    if (kapi && d) kapilar.set(kapi.anahtar, turBitti(d, { kayitGeldi: false }, 1, saat()));
+    const akis = kapi?.anahtar ?? gunlukSatiri(ad, { tur: 'gonderim', sonuc: 'belirsiz', no: 0 })?.akis;
+    if (akis !== undefined) await gunlugeYaz(vt, { akis, yon: kapi ? 'okuma' : 'yazma', sonuc: 'hata', sayi: null, ileti: hataOzeti(e) }, saat);
+    throw e;
+  }
+  if (kapi && d) kapilar.set(kapi.anahtar, turBitti(d, kapiSonucu(sonuc), kapi.enAzTur ?? 1, saat()));
+  const satir = gunlukSatiri(ad, sonuc as Parameters<typeof gunlukSatiri>[1]);
+  if (satir !== null) await gunlugeYaz(vt, satir, saat);
+  return beklemeyeCevir(sonuc);
 }
 
 // Satın alma işi (talep fişi, sipariş, karşılama): kaynağı satın almanın disari.ts işlevleridir; istek ancak "Logo: satın alma gönderimi"
@@ -105,7 +166,12 @@ const projeKaynagi: ProjeKaynagi = {
 
 // Okuma işleri (logo -> TMI): ayrı bellek; her biri kendi anahtarı açıkken istek atar, okunanı yalnız saklar.
 const okumaBellegi = yeniSurecBellegi();
-const okumaOrtami = () => ({ kopru: ortamKoprusu, bellek: okumaBellegi, saat: () => new Date() });
+const okumaOrtami = (zorlaAni: Date | null = null) => ({ kopru: ortamKoprusu, bellek: okumaBellegi, saat: () => new Date(), zorlaAni });
+const kapisi = (anahtar: string): YonetimAkisi => {
+  const a = yonetimAkisi(anahtar);
+  if (a === undefined) throw new Error(`Logo yönetim akışı yok: ${anahtar}`);
+  return a;
+};
 
 // Kayıtlı işin ortamı; testte köprü sahtesiyle kurulur, anahtar bağlantısı ise burada kalır (anahtar kuyruğa girmiş işi de durdurur).
 export const disDuzeltmeIsOrtami = (kopru: KopruIstemcisi | null = ortamKoprusu): DisDuzeltmeOrtami => ({ kopru, acik: disDuzeltmeAcik, saat: () => new Date() });
@@ -143,23 +209,26 @@ export const isler = [
   }),
   projeIsi(projeKaynagi),
   malzemeFisiIsi(stokMalzemeFisiKaynagi({ degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri, emirProjeleri: emirlerinProjeleri })),
-  kopruIsi('logo-mal-kabul-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malKabulTuru(vt, okumaOrtami())),
-  kopruIsi('logo-liste-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => listeOkumaTuru(vt, okumaOrtami())),
-  kopruIsi('logo-fatura-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => faturaTuru(vt, okumaOrtami())),
+  kopruIsi('logo-mal-kabul-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => malKabulTuru(vt, okumaOrtami(z)), kapisi('mal-kabul')),
+  kopruIsi('logo-liste-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => listeOkumaTuru(vt, okumaOrtami(z)), kapisi('liste')),
+  kopruIsi('logo-fatura-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => faturaTuru(vt, okumaOrtami(z)), kapisi('fatura')),
   // Logo malzeme kodu aynası (2089-2 a): yeni stok kodu Logo'da kullanılan numarayı atlar.
-  kopruIsi('logo-malzeme-kodu-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malzemeKoduTuru(vt, okumaOrtami())),
+  kopruIsi('logo-malzeme-kodu-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => malzemeKoduTuru(vt, okumaOrtami(z)), kapisi('malzeme-kodu')),
   // 2116: Logo malzeme kartı ve stok toplamı aynası (yalnız okunur).
   kopruIsi('logo-malzeme-karti-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malzemeKartiOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-stok-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => stokOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-kullanim-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => kullanimOkumaTuru(vt, okumaOrtami())),
-  kopruIsi('logo-irsaliye-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => irsaliyeTuru(vt, okumaOrtami())),
+  kopruIsi('logo-irsaliye-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => irsaliyeTuru(vt, okumaOrtami(z)), kapisi('irsaliye')),
   // 3384-c a: Logo son alış kopyası (yalnız okunur, yalnız eklenir).
-  kopruIsi('logo-son-alis-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => sonAlisTuru(vt, okumaOrtami())),
+  kopruIsi('logo-son-alis-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => sonAlisTuru(vt, okumaOrtami(z)), kapisi('son-alis')),
   // 3314: çalışan yardımcının sürümü saatte bir sorulur (yalnız GET); bağlantı kapalıyken ya da köprü yokken istek atılmaz.
   isTanimi({ ad: 'logo-yardimci-surumu', aralikMs: YARDIMCI_SURUM_ARALIGI_MS, txDisi: (vt) => sirali(() => yardimciSurumIsi(vt, ortamKoprusu)) }),
   // D7: Logo'da açılmış siparişin düzeltmesi; istek ancak TMIV2_LOGO_SIPARIS_DUZELTME=acik ve "Logo bağlantısı" açıkken çıkar.
   kopruIsi('logo-dis-siparis-duzeltme', IS_ARALIGI_MS, (vt) => disDuzeltmeTuru(vt, disDuzeltmeIsOrtami())),
 ];
+
+// 3445: yönetim sayfasındaki "Bağlantıyı test et"; zamanlanmış işlerle aynı sıradan (tek oturum).
+export const siraliYardimciSurumu = (kopru: KopruIstemcisi) => sirali(() => yardimciSurumunuSor(kopru));
 
 // 2118: cari arama kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider (tek oturum). Uç transaction dışında çağırır.
 export const logodaCariAra = (vt: TxAcan, metin: string): Promise<CariOkumasi<LogoCari[]>> => sirali(() => logoCariAra(vt, ortamKoprusu, metin));

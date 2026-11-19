@@ -1175,3 +1175,39 @@ export function onaySatirlari(db: Db, durum: 'bekliyor' | 'karar', d: Dilim): Pr
     [d.sinir, d.atla],
   );
 }
+
+/* ---------------- 3445: yönetim sayfası, akış günlüğü ---------------- */
+
+export interface GunlukKaydi { akis: string; yon: 'okuma' | 'yazma' | 'istek' | 'baglanti'; sonuc: 'tamam' | 'hata'; sayi: number | null; ileti: string | null }
+export interface GunlukSatiri extends GunlukKaydi { id: number; zaman: string }
+
+export async function gunlukYaz(db: Db, k: GunlukKaydi, zaman: Date): Promise<void> {
+  await db.sorgu('INSERT INTO smartes_akis_gunlugu (zaman, akis, yon, sonuc, sayi, ileti) VALUES ($1, $2, $3, $4, $5, $6)', [zaman, k.akis, k.yon, k.sonuc, k.sayi, k.ileti]);
+}
+
+export async function gunlukTemizle(db: Db, sinir: Date): Promise<void> {
+  await db.sorgu('DELETE FROM smartes_akis_gunlugu WHERE zaman < $1', [sinir]);
+}
+
+export function gunlukOku(db: Db, o: { akis: string | null; yalnizHata: boolean; once: number | null; sinir: number }): Promise<GunlukSatiri[]> {
+  return db.sorgu<GunlukSatiri>(
+    `SELECT id::float8 AS id, ${zamanMetni('zaman')} AS zaman, akis, yon, sonuc, sayi, ileti
+       FROM smartes_akis_gunlugu
+      WHERE ($1::text IS NULL OR akis = $1) AND (NOT $2 OR sonuc = 'hata') AND ($3::bigint IS NULL OR id < $3)
+      ORDER BY id DESC LIMIT $4`,
+    [o.akis, o.yalnizHata, o.once, o.sinir],
+  );
+}
+
+// Her akışın son günlük satırı (ekrandaki "son sonuç").
+export function gunlukSonlari(db: Db): Promise<GunlukSatiri[]> {
+  return db.sorgu<GunlukSatiri>(
+    `SELECT DISTINCT ON (akis) id::float8 AS id, ${zamanMetni('zaman')} AS zaman, akis, yon, sonuc, sayi, ileti
+       FROM smartes_akis_gunlugu WHERE zaman >= $1 ORDER BY akis, zaman DESC, id DESC`,
+    [new Date(Date.now() - 30 * 24 * 3_600_000)],
+  );
+}
+
+export async function gunlukHataSayisi(db: Db, bas: Date): Promise<number> {
+  return (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM smartes_akis_gunlugu WHERE sonuc = 'hata' AND zaman >= $1", [bas]))?.n ?? 0;
+}

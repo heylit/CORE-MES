@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
 import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, TabloBuyuklugu, Uyari, VeritabaniBuyumesi } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo } from '../../ortak/arayuz/index.ts';
 import type { RozetTonu, Sutun } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { isAdi, ortamAdi } from './is-adlari.ts';
 import { baytMetni } from './saglik-ozeti.ts';
 import { useSistemSagligi } from './saglik-sorgusu.ts';
@@ -58,9 +60,22 @@ function DenemeSatiri({ deneme }: { deneme: GeriYuklemeDenemesi | null }) {
   );
 }
 
+// 3445: Logo ve SmartES işleri o sistemin yönetim sayfasına bağlanır (sayfayı görebilene).
+const YONETIM_SAYFASI = [
+  { onek: 'logo-', yol: '/logo', islem: 'sayfa.logo' },
+  { onek: 'smartes-', yol: '/smartes', islem: 'sayfa.smartes' },
+] as const;
+function IsAdiHucresi({ ad }: { ad: string }) {
+  const islemler = useOturum().data?.islemler;
+  const yonlendirici = useInRouterContext();
+  const sayfa = YONETIM_SAYFASI.find((s) => ad.startsWith(s.onek));
+  if (sayfa && yonlendirici && islemler?.includes(sayfa.islem)) return <Link to={sayfa.yol} title={ad}>{isAdi(ad)}</Link>;
+  return <span title={ad}>{isAdi(ad)}</span>;
+}
+
 // Süren turda sonuç önceki turundur; son çalışma bu yüzden başlama anıdır.
 const IS_SUTUNLARI: readonly Sutun<IsDurumuOzeti>[] = [
-  { anahtar: 'ad', baslik: 'İş', hucre: (i) => <span title={i.ad}>{isAdi(i.ad)}</span> },
+  { anahtar: 'ad', baslik: 'İş', hucre: (i) => <IsAdiHucresi ad={i.ad} /> },
   { anahtar: 'sonBaslama', baslik: 'Son çalışma', hucre: (i) => zamanMetni(i.sonBaslama), kirilmaz: true },
   {
     anahtar: 'sonSonuc', baslik: 'Sonuç',

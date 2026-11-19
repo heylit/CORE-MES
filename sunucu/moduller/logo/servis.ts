@@ -70,6 +70,8 @@ export interface TurOrtami {
   kopru: KopruIstemcisi | null;
   bellek: SurecBellegi;
   saat: () => Date;
+  // 3445: "Şimdi oku" anı; saatlik iç aralığı olan okumalar (liste, malzeme kodu, son alış) bu andan eski okumayı beklemez.
+  zorlaAni?: Date | null;
   // Yalnız test verir; üretimde Sistem Ayarları'ndaki yön anahtarları geçerlidir (HIZMET_AYARI).
   hizmetAcik?: Readonly<Record<HizmetYonu, boolean>>;
   // Yalnız test verir; üretimde "Logo: malzeme kartı gönderimi" geçerlidir (MALZEME_GONDERIM_AYARI).
@@ -1055,7 +1057,7 @@ export function listeOkumaTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     if ('tur' in kopru) return kopru;
     for (const liste of ['cari', 'ambar'] as const) {
       const okuma = await s.listeOkumasi(db, liste);
-      if (!listeOkunmaliMi(okuma?.sonOkumaAn ?? null, o.bellek.okumaDenemeleri.get(liste) ?? null, o.saat())) continue;
+      if (!listeOkunmaliMi(okuma?.sonOkumaAn ?? null, o.bellek.okumaDenemeleri.get(liste) ?? null, o.saat(), o.zorlaAni ?? null)) continue;
       return async (): Promise<Yazici<TurSonucu>> => {
         o.bellek.okumaDenemeleri.set(liste, o.saat());
         const r = liste === 'cari' ? await kopru.cariListesiOku() : await kopru.ambarListesiOku();
@@ -1077,7 +1079,7 @@ export function malzemeKoduTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     const kopru = o.kopru;
     if (kopru === null) return { tur: 'ortam-degiskeni-yok' };
     const okuma = await s.listeOkumasi(db, 'malzeme');
-    if (!listeOkunmaliMi(okuma?.sonOkumaAn ?? null, o.bellek.okumaDenemeleri.get('malzeme-kodu') ?? null, o.saat())) return { tur: 'bos' };
+    if (!listeOkunmaliMi(okuma?.sonOkumaAn ?? null, o.bellek.okumaDenemeleri.get('malzeme-kodu') ?? null, o.saat(), o.zorlaAni ?? null)) return { tur: 'bos' };
     return async (): Promise<Yazici<TurSonucu>> => {
       o.bellek.okumaDenemeleri.set('malzeme-kodu', o.saat());
       const r = await kopru.malzemeKodlari();

@@ -6,6 +6,9 @@ import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 export const LOGO_SAYFALARI = [
   { yol: '/logo-gecisi', islem: 'sayfa.logo-gecisi', baslik: 'Logo geçişi', simge: 'login', grup: 'Tanımlar', sira: 60 },
   { yol: '/logo-irsaliyeleri', islem: 'sayfa.logo-irsaliyeleri', baslik: 'Logo İrsaliyeleri', simge: 'sort', grup: 'Stok', sira: 50 },
+  // 3445 a: Logo bağlantısı, okuma ve yazma ayarları ve akış günlüğü. Yönetici bayraklı rol satırsız alır; başka role Yetkiler ekranından verilir.
+  // Okuma sayfa işlemiyle, ayar ve komutlar ayarlar.yaz ile.
+  { yol: '/logo', islem: 'sayfa.logo', baslik: 'Logo', simge: 'gear', grup: 'Yönetim', sira: 9 },
 ] as const satisfies readonly SayfaTanimi[];
 
 export const LOGO_IRSALIYELERI_IKINCI_MENU = {
