@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AcilisSecenekleri, EmirRevizyonu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
@@ -183,7 +183,14 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 // K19 a: bugünden önceki teslim uyarı ve onayla açılır, engellenmez. İki değer de ISO gün ("2026-11-02"); boş ya da bozuk teslim geçmiş sayılmaz.
 export const gecmisTeslimMi = (teslim: string, bugunGun: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(teslim) && teslim < bugunGun;
 
-interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string }
+// 3438 a: sipariş kalemindeki uyarıyla aynı sözcükler. Etiketi olmayan kartta kod yerine "Bu kartın revizyonu" denir.
+export const eskiRevizyonUyarisi = (kod: string | null, r: EmirRevizyonu): string => {
+  const secilen = r.etiket !== null && kod !== null ? `${kod} (${r.etiket})` : 'Bu kartın revizyonu';
+  const yururlukteki = `${r.yururluktekiKodu}${r.yururluktekiEtiketi ? ` (${r.yururluktekiEtiketi})` : ''}`;
+  return `${secilen} yürürlükte değil; yürürlükteki ${yururlukteki}. Emri eski revizyonla açmak için gerekçe yazın. Sipariş kaleminden açılıyorsa gerekçe gerekmez.`;
+};
+
+interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string; revizyonGerekcesi: string }
 
 export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, ilkTur = null, ilkAdet = null }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
@@ -199,7 +206,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
     urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet) ? ilkAdet : '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest',
-    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: '',
+    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: '', revizyonGerekcesi: '',
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
@@ -231,6 +238,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   // B-2500-6: rotasız emir ayarı kapalıyken rotasız ürün seçilse de emir açılamaz (sahibi 409 verir); form bunu baştan söyler ve rota
   // kurulacak yere götürür. Ayarı açılış seçenekleri taşır; alan yoksa (eski sunucu) karar yine sahibindedir.
   const rotasizKapali = acilis.data?.rotasizAcik === false && !uretilirMi(d, f.urun);
+  // 3438 a: kart ailesinin yürürlükteki revizyonu değilse emir gerekçeyle açılır. Sipariş kalemi proje penceresinde seçildiği için
+  // gerekçenin gerekip gerekmediğine sunucu karar verir; form yalnız uyarır ve alanı gösterir.
+  const eskiRevizyon = acilis.data?.revizyon?.yururlukte === false ? acilis.data.revizyon : null;
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
@@ -261,6 +271,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     if (b && !b.hazir) { setHata(b.ileti ?? b.ipucu ?? 'Bölmeyi tamamlayın.'); return; }
     const govde = {
       itemId: f.urun, qty: adet.deger, start: f.baslangic, due: f.teslim, priority: Number(f.oncelik), note: f.not.trim(), tur: f.tur, taslak: f.durum === 'taslak',
+      ...(eskiRevizyon === null ? {} : { eskiRevizyonGerekcesi: f.revizyonGerekcesi.trim() }),
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
       // Rota yalnız elle seçildiyse gider; seçilmediyse sahibi emrin türünün rotasını bulur. Proje penceresinde sipariş partisi seçilince
       // tür partiden gelir, rota da o türün rotası olur (formun ilk türüne göre seçilmiş rota partiye taşınmaz).
@@ -323,6 +334,18 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
         )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
+      {eskiRevizyon !== null && (
+        <>
+          <p className="tc-rr3-uyari-kutu" role="status">
+            <Simge ad="alert" />
+            <span>{eskiRevizyonUyarisi(urunler.find((u) => u.id === f.urun)?.code ?? null, eskiRevizyon)}</span>
+          </p>
+          <div className="tc-rr3-form">
+            <Girdi etiket="Eski revizyon gerekçesi" placeholder="Örnek: Müşteri bu revizyonu istedi" maxLength={300} value={f.revizyonGerekcesi}
+              onChange={(o) => { yaz({ revizyonGerekcesi: o.target.value }); }} />
+          </div>
+        </>
+      )}
       {rotali && rotaSecimi?.seriyeDusus && (
         <p className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{rotaSecimi.seriyeDusus}</span></p>
       )}

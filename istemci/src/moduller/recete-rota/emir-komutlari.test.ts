@@ -138,3 +138,22 @@ describe('Risk N1: çok katmanlı emir formun önizlediği revizyondan açılır
     expect(k.govde).toMatchObject({ cokKatmanli: true, emirTuru: 'fai' });
   });
 });
+
+describe('3438 a: eski revizyon gerekçesi emir gövdesine geçer', () => {
+  const rotalar = {
+    urun: { id: 12, kod: 'ORN-0001', ad: 'Deneme mil' }, taslakAcilabilir: false, kartOperasyonlari: null,
+    rotalar: [{ id: 1, ad: 'Standart', standart: true, emirTurleri: [], surum: 1 }], revizyonlar: [{ id: 10, rotaId: 1, durum: 'yururlukte' }],
+  };
+  const ac = (ek: Record<string, unknown>) => EMIR_KOMUTLARI['emir-ac']!.hazirla({ itemId: 12, qty: 5, due: '2030-01-20', ...ek });
+
+  it('rotalı ve rotasız gövdede kırpılmış gerekçe gider; boş gerekçe gönderilmez', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, rotalar)));
+    const rotali = await ac({ eskiRevizyonGerekcesi: ' Müşteri R01 istedi ' });
+    expect(rotali.yol).toBe('/rota/revizyonlar/10/emre-kopyala');
+    expect(rotali.govde).toMatchObject({ eskiRevizyonGerekcesi: 'Müşteri R01 istedi' });
+    const rotasiz = await ac({ rotasiz: true, eskiRevizyonGerekcesi: 'Müşteri R01 istedi' });
+    expect(rotasiz.yol).toBe('/adimli-emirler/rotasiz');
+    expect(rotasiz.govde).toMatchObject({ eskiRevizyonGerekcesi: 'Müşteri R01 istedi' });
+    expect(Object.keys((await ac({ eskiRevizyonGerekcesi: '   ' })).govde as object)).not.toContain('eskiRevizyonGerekcesi');
+  });
+});

@@ -4,6 +4,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { zaman } from '../bicim.ts';
 import { emirSayfasiAc, json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, yeniEmirAc, YONETICI, type Istek } from '../test-ortak.tsx';
 import { durumAdi } from './kurallar.ts';
+import { eskiRevizyonUyarisi } from './UretimEmirleri.tsx';
 import { adimOrnegi, revizyonOrnegi } from '../rotalar/test-veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -348,6 +349,40 @@ describe('R3 Üretim emirleri: komutlar', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/adimli-emirler/rotasiz')).toBe(true));
     expect(istekler.find((i) => i.yol === '/adimli-emirler/rotasiz')?.govde).toMatchObject({ malzemeNo: 11, adet: 25, emirTuru: 'seri' });
+  });
+
+  it('3438 a: kart yürürlükteki revizyon değilse form uyarır, gerekçe emir isteğine girer', async () => {
+    const revizyon = { etiket: 'R01', yururlukte: false, yururluktekiNo: 2, yururluktekiKodu: 'ORN-MM-00002', yururluktekiEtiketi: 'R02' };
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: {
+        'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], revizyon }),
+        'POST /adimli-emirler/rotasiz': () => json(200, { uretimEmriId: 62 }),
+      },
+    });
+    const form = await pencere();
+    const uyari = await within(form).findByText(/yürürlükte değil; yürürlükteki ORN-MM-00002 \(R02\)\. Emri eski revizyonla açmak için gerekçe yazın\./);
+    const alan = within(form).getByLabelText('Eski revizyon gerekçesi');
+    expect(alan.getAttribute('maxlength')).toBe('300');
+    // Uyarı alanın üstündedir: kullanıcı önce nedeni okur.
+    expect(uyari.compareDocumentPosition(alan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText('Eski revizyon gerekçesi'), { target: { value: ' Müşteri R01 istedi ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/adimli-emirler/rotasiz')).toBe(true));
+    expect(istekler.find((i) => i.yol === '/adimli-emirler/rotasiz')?.govde).toMatchObject({ eskiRevizyonGerekcesi: 'Müşteri R01 istedi' });
+  });
+
+  it('3438 a: uyarı cümlesi etiketsiz kartta da tamdır', () => {
+    const r = { etiket: null, yururlukte: false, yururluktekiNo: 2, yururluktekiKodu: 'ORN-MM-00002', yururluktekiEtiketi: null };
+    expect(eskiRevizyonUyarisi('ORN-MM-00001', r)).toBe('Bu kartın revizyonu yürürlükte değil; yürürlükteki ORN-MM-00002. Emri eski revizyonla açmak için gerekçe yazın. Sipariş kaleminden açılıyorsa gerekçe gerekmez.');
+    expect(eskiRevizyonUyarisi('ORN-MM-00001', { ...r, etiket: 'R01', yururluktekiEtiketi: 'R02' }))
+      .toMatch(/^ORN-MM-00001 \(R01\) yürürlükte değil; yürürlükteki ORN-MM-00002 \(R02\)\./);
+  });
+
+  it('3438 a: yürürlükteki kartta uyarı ve gerekçe alanı çıkmaz', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], revizyon: null }) } });
+    const form = await pencere();
+    await within(form).findByRole('button', { name: 'Emri oluştur' });
+    expect(within(form).queryByLabelText('Eski revizyon gerekçesi')).toBeNull();
   });
 
   it('açık projesi olmayan üründe proje şartı form açılırken görünür, Emri oluştur kapalıdır; emir isteği gitmez (B-2502-3)', async () => {
