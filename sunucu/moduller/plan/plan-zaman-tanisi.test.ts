@@ -57,7 +57,7 @@ function kokpitNedeni(k: ReturnType<typeof kaynak>): Record<string, { kod: strin
 const sunucuNedeni = async (k: ReturnType<typeof kaynak>) => Object.values((await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never)).nedenler)[0];
 
 describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
-  test('ZT-01 (1681 b değişti): işleme ufka sığmıyorsa iş düşmez; ufkun sonuna kadar yerleşir, sığmayan saat ufuk dışıdır', async () => {
+  test('ZT-01 (1681 b değişti): işleme ufka sığmıyorsa iş düşmez; ufkun sonuna kadar yerleşir, sığmayan saat ufuk dışıdır; canlıya yazılmaz', async () => {
     const k = kaynak(30, 60_000, [V], V, 1);
     assert.deepEqual(kokpitNedeni(k), {});
     const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
@@ -69,8 +69,10 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
     assert.ok(r.C <= r.ufukSonu, JSON.stringify(r));
     // Ufuk dışı saat, işin süresinden ufukta yapılabilenin çıkarılmasıdır (hazırlık ufkun içindedir).
     assert.ok(Math.abs(r.ufukDisi - (r.su + r.run - r.acik)) < 0.01, JSON.stringify(r));
+    // Risk K1: sunucu bu işi canlı kuyruğa yazmaz (bitişi ufuk sonudur); nedeni ufuk.
     const sunucu = await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never);
-    assert.equal(sunucu.yerlesimler.length, 1);
+    assert.equal(sunucu.yerlesimler.length, 0);
+    assert.equal(Object.values(sunucu.nedenler)[0]?.kod, 'ufuk');
   });
   test('ZT-01b: ufka taşan adımın ardılı "önceki adım ufuk dışında" nedeniyle yerleşmez', () => {
     const k = kaynak(30, 60_000, [V], V, 1);

@@ -62,7 +62,9 @@ export async function coz(
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
   const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
   // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçü yalnız böyle iş varken bir kez kurulur.
-  const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined);
+  // 3457-3 a: ufka taşan (ufukDisi) iş canlıya yazılmaz; nedeni de aynı ölçüden yazılır.
+  const tasan = new Set(Object.entries(plan.ops).filter(([, x]) => Number((x as { ufukDisi?: unknown }).ufukDisi) > 0).map(([id]) => id));
+  const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined).concat([...tasan].map((id) => id.replace(/~\d+$/, '')));
   let olcum: Record<string, ZamanOlcumu | null> | null = null;
   const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli); return olcum[id] ?? null; };
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
@@ -75,7 +77,7 @@ export async function coz(
       if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
       const adetler = payAdetleri(g.st, id, paylar.length);
       const parcalar = paylar.map((p, n) => ({ p, n, r: plan.ops[p] })).flatMap(({ p, n, r: x }) => {
-        if (x === undefined || basarisiz.has(p) || !Number.isFinite(x.S) || !Number.isFinite(x.C) || adetler === null) return [];
+        if (x === undefined || basarisiz.has(p) || tasan.has(p) || !Number.isFinite(x.S) || !Number.isFinite(x.C) || adetler === null) return [];
         const m = String(x.m), kisiId = m.startsWith(KISI_TEZGAHI) ? Number(m.slice(KISI_TEZGAHI.length)) : null, makineId = kisiId === null ? Number(m) : null;
         if (!Number.isInteger(kisiId ?? makineId)) return [];
         return [{ no: n + 1, adet: adetler[n]!, makineId, kisiId, baslangic: planAni(g.baslangic, x.S), bitis: planAni(g.baslangic, x.C) }];
@@ -91,6 +93,13 @@ export async function coz(
     const kisiId = r !== undefined && String(r.m).startsWith(KISI_TEZGAHI) ? Number(String(r.m).slice(KISI_TEZGAHI.length)) : null;
     const makineId = r === undefined || kisiId !== null ? NaN : Number(r.m);
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
+    // 3457-3 a: ufka taşan iş (ufukDisi) canlıya yazılmaz; bitişi ufuk sonudur, gerçek değil.
+    if (r !== undefined && tasan.has(id)) {
+      yerlesmeyen.push(anahtar);
+      const z = zaman(id);
+      nedenler[anahtar] = z === null ? yerlesmemeNedeni('ufuk', `Adım planlama süresine sığmıyor: ${String(Math.round(Number(r.ufukDisi) * 10) / 10)} sa süre dışında kalıyor.`) : zamanNedeni(z);
+      continue;
+    }
     if (r === undefined || basarisiz.has(id) || !(Number.isInteger(makineId) || Number.isInteger(kisiId)) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
       yerlesmeyen.push(anahtar);
       nedenler[anahtar] = yerlesmemeNedeniOf(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p), neden(id), kaynak.kaynak, zaman);

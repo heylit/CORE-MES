@@ -233,11 +233,13 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.ok(r?.plan?.hatlar.some((h) => h.m === '@~belirsiz' && h.ad === 'Firma belirlenmedi' && h.fason));
   });
 
-  test('3347: adayı olan ama ufukta yer bulamayan adımda motorun zaman nedeni yazılır', async () => {
+  test('3347, 3457-3 a (Risk D1): ufka taşan adımlı kalem tamam sayılmaz, ufuk sonundan termin verilmez; sığmayan saat yazılır', async () => {
     const r = await teklifDenemesi(istek({ kalemler: [{ id: 'TK-1', urun: '60', adet: 1_000_000 }] }));
     const k = r?.kalemler[0];
     assert.equal(k?.tamam, false);
-    assert.deepEqual(k.eksik, ['OP 10 Taslama: ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri yok']);
+    assert.equal(k.bitis, null);
+    assert.equal(k.eksik.length, 1);
+    assert.match(k.eksik[0] ?? '', /^OP 10 Taslama: planlama süresinin dışına taşıyor, \d+ sa sığmadı$/);
   });
 
   test('ücreti girilmemiş tezgâhta işlemin TL si null, eksik listesinde yazar; sıfır sayılmaz', async () => {

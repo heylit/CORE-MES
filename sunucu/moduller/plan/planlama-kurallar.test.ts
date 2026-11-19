@@ -23,6 +23,13 @@ describe('planlama kuralları: çalışma planı ve canlı plan', () => {
     { id: '5.10', m: 'kisi-4', S: 9, C: 10, bitti: false },
     { id: '9.10', m: '5', S: 1, C: 2, bitti: false },
   ];
+  test('3457-3 a (Risk K1): ufka taşan iş canlıya yazılmaz, nedeni uyarıda yazar', () => {
+    const r = calismaIsleri([{ id: '1.10', m: '5', S: 10, C: 11, bitti: false, ufukDisi: 4 }, { id: '4.10', m: '6', S: 8, C: 9, bitti: false }], kimlik, new Set(['E1|10', 'E4|10']));
+    assert.deepEqual(r.yazilacak.map((i) => i.anahtar), ['E4|10']);
+    assert.deepEqual(r.yazilamaz, ['E1|10']);
+    assert.equal(r.uyarilar.length, 1);
+    assert.match(r.uyarilar[0] ?? '', /planlama süresinin dışına taşıyor; canlıya yazılmadı/);
+  });
   test('RR-499-1, B-2500-2: biten ve fason iş dokunulmaz; kişi tezgâhı (kisi-<id>) yazılır; tanınmayan kaynak, karşılıksız ve planlanacak olmayan iş yazılamaz', () => {
     const r = calismaIsleri(ops, { ...kimlik, '5.10': 'E5|10' }, new Set(['E1|10', 'E3|10', 'E5|10']));
     assert.deepEqual(r.yazilacak, [

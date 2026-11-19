@@ -17,7 +17,7 @@ function sunucuCalismaPlani(calisma, kayit, kaynak, bugun) {
   for (const [a, id] of Object.entries(tmiIslemler(k, D))) kimlik[id] = a;
   const P = S.plan && S.plan.ops ? S.plan.ops : null;
   const ops = P ? Object.entries(P).filter(([, r]) => r && isFinite(r.S) && isFinite(r.C))
-    .map(([id, r]) => ({ id, m: String(r.m == null ? '' : r.m), S: r.S, C: r.C, bitti: !!r.done, ...(Array.isArray(r.takim) && r.takim.length ? { takim: r.takim } : {}) })) : null;
+    .map(([id, r]) => ({ id, m: String(r.m == null ? '' : r.m), S: r.S, C: r.C, bitti: !!r.done, ...(r.ufukDisi > 0 ? { ufukDisi: r.ufukDisi } : {}), ...(Array.isArray(r.takim) && r.takim.length ? { takim: r.takim } : {}) })) : null;
   const ekMesai = (S.ekMesai || []).filter(e => e && Number.isInteger(e.gun)).map(e => ({ m: String(e.m == null ? '' : e.m), gun: e.gun, vardiya: String(e.vardiya == null ? '' : e.vardiya), ...(e.personel == null ? {} : { personel: String(e.personel) }) }));
   return { baslangic: D.meta.baslangic, guncel: !!S.plan && S.plan.dataVer === S.dataVer, kimlik, ops, ekMesai };
 }
