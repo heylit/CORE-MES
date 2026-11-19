@@ -494,6 +494,19 @@ export function partiIhlali(
 export const SIPARIS_ONAYI_GERI_ALINDI = 'Projenin siparişinin onayı geri alındı; sipariş yeniden onaylanınca emir açılır.';
 export const TESLIM_KALEMSIZ = 'Bu emir sipariş kalemine bağlı değil; teslim termine bağlanamaz.';
 export const TESLIM_BASLAMIS = 'Başlamış emrin teslimi termine bağlanmaz; elle değiştirilir.';
+
+// 3429-3 G: kalemin termini açık emrin tesliminden farklıysa öneri çıkar. Karar o termin ve kararın verildiği teslim içindir: termin
+// başka tarihe gidip geri gelirse ya da teslim sonradan değişirse öneri yeniden çıkar (uygulanan kararda teslim termine eşittir).
+// Bağlı ve başlamamış emrin teslimi olayla kendiliğinden kayar (3244 b, 3254 a); bu yine de farklı kalmışsa (başlangıcı yeni terminden
+// sonra) öneri çıkar. Arşivdeki, biten ve iptal emir öneri vermez.
+export const TERMIN_ONERISI_YOK = 'Bu emir için termin önerisi yok (termin değişmiş ya da karar verilmiş); sayfayı yenileyin.';
+export const terminKarariAnahtari = (termin: string, teslim: string | null): string => `${termin}|${teslim ?? ''}`;
+export function terminOnerisiVarMi(
+  e: { durum: string; arsiv: boolean; teslim: string | null }, termin: string | null, kararlar: ReadonlySet<string>,
+): boolean {
+  if (termin === null || e.arsiv || (e.durum !== 'taslak' && e.durum !== 'planli' && e.durum !== 'basladi')) return false;
+  return e.teslim !== termin && !kararlar.has(terminKarariAnahtari(termin, e.teslim));
+}
 // UE-TB (3244 b): teslim yalnız kalemden açılmış, başlamamış (taslak ya da planlı), arşivlenmemiş emirde yeniden bağlanır.
 export function teslimBaglaIhlali(e: { siparisSatiriId: number | null; durum: string; arsiv: boolean }, baslamis: boolean): string | null {
   if (e.siparisSatiriId === null) return TESLIM_KALEMSIZ;

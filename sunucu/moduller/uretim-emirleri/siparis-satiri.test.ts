@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimliEmirAyrintisi, TerminOnerisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -18,8 +18,9 @@ import {
   PROJE_ZORUNLU, SIPARIS_SATIRI_MALZEME, SIPARIS_SATIRI_ONAYSIZ, SIPARIS_SATIRI_PROJE_DISI, SIPARIS_SATIRI_PROJESIZ, SIPARIS_SATIRI_SECILMELI, SIPARIS_SATIRI_YOK,
   kendiligindenSatir, projeZorunluMu, siparisSatiriIhlali,
 } from './kurallar.ts';
-import { emirPlanBilgisiYaz, siparisSatirlarininEmirleri } from './disari.ts';
+import { emirPlanBilgisiYaz, isEmirleriDegistiDinle, siparisSatirlarininEmirleri } from './disari.ts';
 import { isEmriSureleri, projeninIsEmirleri, rotasizIsEmirleri } from './is-emri-servis.ts';
+import { terminKarariVer } from './termin-onerisi.ts';
 
 // UE-SS (176 a): emir sipariş satırına bağlanır; zincir sipariş, proje, emir. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -388,6 +389,74 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [farkli.govde.uretimEmriId]);
     const baslamis = await istek<Hata>('POST', `/adimli-emirler/${farkli.govde.uretimEmriId}/teslim-bagla`, { surum: (await ayrinti(farkli.govde.uretimEmriId)).surum });
     assert.deepEqual([baslamis.durum, baslamis.govde.mesaj], [409, TESLIM_BASLAMIS]);
+  });
+
+  test('3429-3 G: kalem termini emrin tesliminden farklıysa öneri; Yoksay o termini susturur, yeni termin yeniden öneri verir; Uygula teslimi yazar', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    const id = (await ac(m, p, s.satirId)).govde.uretimEmriId;
+    const oneri = async () => (await istek<{ oneri: TerminOnerisi | null }>('GET', `/adimli-emirler/${id}/termin-onerisi`)).govde.oneri;
+    const surum = async () => (await istek<{ emir: AdimliEmirAyrintisi }>('GET', `/adimli-emirler/${id}`)).govde.emir.surum;
+    const teslim = async () => (await istek<{ emir: AdimliEmirAyrintisi }>('GET', `/adimli-emirler/${id}`)).govde.emir.teslim;
+    const termin = (t: string) => o().sahip.sorgu('UPDATE siparisler_siparis_satiri SET termin = $2::date WHERE id = $1', [s.satirId, t]);
+    assert.equal(await oneri(), null, 'teslim termine eşit');
+    // Elle değişmiş teslim kendiliğinden kaymaz (3244 b): kalem termini değişince fark öneri olur.
+    const planlama: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler: ['uretim-emirleri.duzenle'] };
+    await o().vt.tx((db) => emirPlanBilgisiYaz(db, planlama, id, { teslim: '2027-01-20' }));
+    const ilk = await teslim();
+    assert.equal(ilk, '2027-01-20');
+    await termin('2027-02-10');
+    const o1 = (await oneri())!;
+    assert.deepEqual([o1.emirId, o1.siparisSatiriId, o1.kalemSira, o1.teslim, o1.termin, o1.baslamis], [id, s.satirId, 1, ilk, '2027-02-10', false]);
+    const liste = await istek<{ oneriler: TerminOnerisi[] }>('GET', `/uretim-emirleri/termin-onerileri?siparisId=${s.siparisId}`);
+    assert.deepEqual(liste.govde.oneriler.map((x) => x.emirId), [id]);
+
+    assert.equal((await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/yoksay`, { surum: await surum(), termin: '2027-02-11' })).durum, 409, 'ekranın gördüğü termin değilse');
+    assert.equal((await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/yoksay`, { surum: (await surum()) - 1, termin: '2027-02-10' })).durum, 409, 'eski sürüm');
+    const izinsiz: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler: [] };
+    await assert.rejects(o().vt.tx((db) => terminKarariVer(db, izinsiz, id, { surum: 1, termin: '2027-02-10' }, 'uygula')), (h: Error) => h.message.length > 0);
+    const y = await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/yoksay`, { surum: await surum(), termin: '2027-02-10' });
+    assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    assert.deepEqual([await oneri(), await teslim()], [null, ilk], 'yoksay teslimi değiştirmez');
+    assert.equal((await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/uygula`, { surum: await surum(), termin: '2027-02-10' })).durum, 409, 'karar verilmiş termin');
+
+    await termin('2027-03-01');
+    assert.equal((await oneri())?.termin, '2027-03-01', 'yeni termin yeniden öneri verir');
+    const u = await istek<{ emir: AdimliEmirAyrintisi }>('POST', `/adimli-emirler/${id}/termin-onerisi/uygula`, { surum: await surum(), termin: '2027-03-01' });
+    assert.equal(u.durum, 200, JSON.stringify(u.govde));
+    assert.deepEqual([u.govde.emir.teslim, u.govde.emir.teslimBagli], ['2027-03-01', true], 'uygula teslimi yazar ve termine bağlar');
+    assert.equal(await oneri(), null);
+    const kararlar = await o().sahip.sorgu<{ termin: string; karar: string; eski: string | null }>(
+      "SELECT to_char(termin, 'YYYY-MM-DD') AS termin, karar, to_char(eski_teslim, 'YYYY-MM-DD') AS eski FROM uretim_emri_termin_karari WHERE uretim_emri_id = $1 ORDER BY id", [id]);
+    assert.deepEqual(kararlar, [{ termin: '2027-02-10', karar: 'yoksay', eski: ilk }, { termin: '2027-03-01', karar: 'uygula', eski: ilk }]);
+    // Test B1: termin eski (yoksayılmış) tarihe döner; teslim artık başka olduğu için öneri yeniden çıkar.
+    await termin('2027-02-10');
+    assert.deepEqual([(await oneri())?.termin, (await oneri())?.teslim], ['2027-02-10', '2027-03-01'], 'A -> B -> A');
+    // Test T1: başlangıcı yeni terminden sonra olan emirde Uygula 400, teslim değişmez.
+    await o().vt.tx((db) => emirPlanBilgisiYaz(db, planlama, id, { baslangic: '2027-02-20' }));
+    const t1 = await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/uygula`, { surum: await surum(), termin: '2027-02-10' });
+    assert.equal(t1.durum, 400, JSON.stringify(t1.govde));
+    assert.equal(await teslim(), '2027-03-01');
+    await o().vt.tx((db) => emirPlanBilgisiYaz(db, planlama, id, { baslangic: null }));
+    // Test T2: Uygula iş emirleri değişti olayını yayar (plan ve atölye yeni teslimi okur).
+    const olaylar: { uretimEmriId: number }[] = [];
+    const birak = isEmirleriDegistiDinle(async (_db, olay) => { olaylar.push(olay); });
+    try {
+      assert.equal((await istek<Hata>('POST', `/adimli-emirler/${id}/termin-onerisi/uygula`, { surum: await surum(), termin: '2027-02-10' })).durum, 200);
+    } finally { birak(); }
+    assert.deepEqual(olaylar.map((x) => x.uretimEmriId), [id]);
+    // Test T3: iş emri çalışan emir başlamış sayılır; öneri yine çıkar.
+    const gtip = await tek("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('USS-G', 'Deneme tipi', 'TAL') RETURNING id");
+    await o().sahip.sorgu(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, durum, baslama) VALUES ($1, 1, 10, $2, 'Deneme adım', 'calisiyor', now())", [id, gtip]);
+    await termin('2027-03-15');
+    assert.deepEqual([(await oneri())?.termin, (await oneri())?.baslamis], ['2027-03-15', true], 'başlamış emirde öneri');
+    // İptal emir öneri vermez.
+    await termin('2027-04-01');
+    assert.equal((await oneri())?.termin, '2027-04-01');
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
+    assert.equal(await oneri(), null);
   });
 
   test('UE-TB (3244 b): emir satırın partisinden açılır, tür partiden gelir; başka satırın partisi ve farklı tür reddedilir; açılış seçenekleri partileri verir', async () => {

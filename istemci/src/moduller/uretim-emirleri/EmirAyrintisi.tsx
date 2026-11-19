@@ -13,6 +13,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
 import { TeslimBagi } from './TeslimBagi.tsx';
+import { EmrinTerminOnerisi } from './TerminOnerisi.tsx';
 import { EmirFisleri } from './EmirFisleri.tsx';
 import { stokOkur } from './refakat.ts';
 import { UretimYerleri } from './UretimYerleri.tsx';
@@ -283,6 +284,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
             </div>
           </div>
           <TeslimBagi emirId={emir.id} />
+          <EmrinTerminOnerisi emirId={emir.id} />
           {bekleme && <BeklemeSeridi emirId={emir.id} bilgi={bekleme} />}
           {emir.rotaBekliyor === true && <RotaBekliyorSeridi emirId={emir.id} />}
           <YasamSeridi emir={emir} bekleme={bekleme} />

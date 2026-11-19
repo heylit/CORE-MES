@@ -20,7 +20,7 @@ export {
   type UstEmirSatiri, ustEmirler, adimliOzetGruplari, bitenUstEmirSay, bitenUstEmirler, ustEmirBul, ustEmirlerBul, type UstEmirYazisi, ustEmirEkle,
   type DugumSatiri, dugumleriGetir, emrinPatlatmasi, emirNoVarMi, emirIdleri, kolSayisi, planaAlYaz, adetYaz, type AltPartiSatiri, altPartilerGetir,
   kontrolListesiGetir, ustIptalYaz, birlesenPartiyiKapat, kolKatildi, adetEkle, birlesmePlaniYaz, emirSurumunuArtir, surumArtir, type BirlesenKolSatiri,
-  birlesenKollarGetir, ustEmirVarMi, planBilgisiYaz, teslimBagla, bagliTeslimleriKaydir, oncelikYaz, oncelikDegisimiEkle, emirTuruYaz, turDegisimiEkle, emirIstasyonuYaz, emirKaynakRevizyonuYaz, sonrakiIsEmrineGec,
+  birlesenKollarGetir, ustEmirVarMi, planBilgisiYaz, teslimBagla, bagliTeslimleriKaydir, satirlarinEmirleri, terminKararlari, terminKarariYaz, teslimYaz, type SatirEmriSatiri, oncelikYaz, oncelikDegisimiEkle, emirTuruYaz, turDegisimiEkle, emirIstasyonuYaz, emirKaynakRevizyonuYaz, sonrakiIsEmrineGec,
   fasonlaBitir, emirDurumlariGetir, siparisSatiriEmirleriGetir, emirNolariGetir, type EtkilenenEmirSatiri, malzemelerinAcikEmirleriGetir,
 } from './sorgular/ust-emir/sorgular.ts';
 export {

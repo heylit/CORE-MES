@@ -756,6 +756,20 @@ export type GecmisGirisGirdisi = z.output<typeof gecmisGirisGovdesi>;
 export type GecmisGirisAdimi = z.output<typeof gecmisGirisAdimi>;
 export type GecmisGirisCevabi = z.output<typeof gecmisGirisCevabi>;
 
+// 3429-3 G: sipariş kaleminin termini emrin tesliminden farklıysa öneri (kendiliğinden kaymayan emir: başlamış ya da elle teslimli).
+// Planlayıcı Uygula (teslim termine yazılır) ya da Yoksay der; karar o termin ve o anki teslim için bir kez verilir.
+export const terminOnerisi = z.object({
+  emirId: z.number().int(), emirNo: z.string(), siparisSatiriId: z.number().int(), kalemSira: z.number().int(),
+  teslim: tarihSemasi.nullable(), termin: tarihSemasi, baslamis: z.boolean(), surum: z.number().int(),
+});
+export type TerminOnerisi = z.output<typeof terminOnerisi>;
+export const terminOnerisiCevabi = z.object({ oneri: terminOnerisi.nullable() });
+export type TerminOnerisiCevabi = z.output<typeof terminOnerisiCevabi>;
+export const terminOnerileriSorgusu = z.object({ siparisId: z.coerce.number().int().positive() }).strict();
+export const terminOnerileriCevabi = z.object({ oneriler: z.array(terminOnerisi) });
+export type TerminOnerileriCevabi = z.output<typeof terminOnerileriCevabi>;
+export const terminKarariGovdesi = z.object({ surum: surumSemasi, termin: tarihSemasi }).strict();
+
 // Sayım sınırı aşımı (647 a): adımın sayımı, önceki adımın o anki sağlamını aştığında yazılır ama iz bırakır. Satır, aşımı yapan
 // sayımdır; adet sınırı geçen kısım, oncekiSaglam aşım anında önceki adımın sağlamıdır. Aşım yoksa liste boştur.
 export const asimSemasi = z.object({
