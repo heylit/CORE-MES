@@ -26,8 +26,8 @@ const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Seri', true), rot
     yazmalar: {
       'GET /rota/urunler/11': () => json(200, cevap(liste)),
       'POST /rota/urunler/11/rotalar': (g) => {
-        const t = (g as { emirTuru: 'numune' }).emirTuru;
-        liste = [...liste, rota(3, t === 'numune' ? 'Numune' : t, false, [t])];
+        const { emirTuru: t, ad } = g as { emirTuru: 'numune'; ad?: string };
+        liste = [...liste, rota(3, ad ?? (t === 'numune' ? 'Numune' : t), false, [t])];
         return json(200, cevap(liste));
       },
       'POST /rota/urunler/11/rotalar/2/turler': (g) => {
@@ -38,6 +38,11 @@ const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Seri', true), rot
       'POST /rota/urunler/11/rotalar/3/turler': (g) => {
         const t = (g as { emirTurleri: Rota['emirTurleri'] }).emirTurleri;
         liste = liste.map((x) => (x.id === 3 ? { ...x, emirTurleri: t, surum: 2 } : x));
+        return json(200, cevap(liste));
+      },
+      'POST /rota/urunler/11/rotalar/4/ad': (g) => {
+        const { ad } = g as { ad: string };
+        liste = liste.map((x) => (x.id === 4 ? { ...x, ad, surum: 2 } : x));
         return json(200, cevap(liste));
       },
       'POST /rota/urunler/11/taslak-ac': () => json(200, { id: 91, durum: 'taslak', surum: 1 }),
@@ -82,13 +87,13 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(revizyonlar('FAI rotası')).toEqual(['Rev A · taslak']);
   });
 
-  it('3411 a: "Yeni rota" ad sormaz, emir türü seçilir; rotası olan tür seçilemez; açılan rotaya geçer ve Seri\'nin yürürlükteki revizyonundan taslak açar', async () => {
+  it('3411 a: "Yeni rota" emir türüyle açılır, ad boşsa türün adı olur; rotası olan tür seçilemez; açılan rotaya geçer ve Seri\'nin yürürlükteki revizyonundan taslak açar', async () => {
     const istekler = kur();
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
     menudenSec(bolge, 'Yeni rota');
-    expect(within(bolge).queryByRole('textbox', { name: 'Yeni rotanın adı' })).toBeNull();
+    expect((within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }) as HTMLInputElement).value).toBe('');
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
     expect(within(turler).queryByRole('button', { name: 'Seri' })).toBeNull();
     expect((within(turler).getByRole('button', { name: 'FAI (var)' }) as HTMLButtonElement).disabled).toBe(true);
@@ -102,13 +107,41 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'numune' });
     expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/taslak-ac')?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 71 }, rotaId: 3 });
-    // Türüyle açılan rotanın adı ve türü değişmez: menüde "Rotanın adı ve emir türleri" yoktur.
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Rota işlemleri' }));
-    expect(screen.queryByRole('menuitem', { name: 'Rotanın adı ve emir türleri' })).toBeNull();
+    // 3482-1 b: türüyle açılan rotanın adı sonradan değişir, türü değişmez.
+    menudenSec(bolge, 'Rotanın adı ve emir türleri');
+    expect(within(bolge).getByText(/Tür rotasının türü değişmez/)).toBeTruthy();
+    expect(within(bolge).queryByRole('group', { name: 'Bu rotayı kullanan emir türleri' })).toBeNull();
   });
 
-  it('"Rotanın adı ve emir türleri" türleri yazar; başka rotadan taşınan tür kaydetmeden önce yazılır', async () => {
-    const istekler = kur(YONETICI, [rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai']), rota(4, 'Numune rotası', false, ['numune'])]);
+  it('3482-1 b: yeni rotaya ad yazılırsa o adla açılır', async () => {
+    const istekler = kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    menudenSec(bolge, 'Yeni rota');
+    fireEvent.click(within(within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' })).getByRole('button', { name: 'Numune' }));
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: '  ORN Numune hattı ' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    await within(g).findByRole('button', { name: /^ORN Numune hattı/ });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'numune', ad: 'ORN Numune hattı' });
+  });
+
+  it('3482-1 b: tür rotasının adı değişir, türü yazılmaz', async () => {
+    const istekler = kur(YONETICI, [rota(1, 'Seri', true), rota(4, 'Numune', false, ['numune'])]);
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    fireEvent.click(await within(g).findByRole('button', { name: /^Numune/ }));
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    menudenSec(bolge, 'Rotanın adı ve emir türleri');
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Rota adı' }), { target: { value: 'ORN Numune hattı' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
+    await within(g).findByRole('button', { name: /^ORN Numune hattı/ });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/4/ad')?.govde).toEqual({ ad: 'ORN Numune hattı', surum: 1 });
+    expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
+  });
+
+  it('15.11\'den kalan türsüz rotada "Rotanın adı ve emir türleri" türleri yazar; başka rotadan taşınan tür kaydetmeden önce yazılır', async () => {
+    const istekler = kur(YONETICI, [rota(1, 'Seri', true), rota(2, 'FAI rotası', false, []), rota(4, 'Numune rotası', false, ['numune'])]);
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     fireEvent.click(await within(g).findByRole('button', { name: /FAI rotası/ }));
@@ -119,7 +152,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(within(bolge).getByText('Kaydedince başka rotadan bu rotaya geçer: Numune (Numune rotası).')).toBeTruthy();
     fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar/2/turler')).toBe(true); });
-    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/2/turler')?.govde).toEqual({ emirTurleri: ['fai', 'numune'], surum: 1 });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/2/turler')?.govde).toEqual({ emirTurleri: ['numune'], surum: 1 });
     expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar/2/ad')).toBe(false);
   });
 

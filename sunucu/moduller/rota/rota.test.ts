@@ -1676,7 +1676,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual(ilk.rotalar.map((r) => [r.ad, r.standart, r.emirTurleri]), [['Seri', true, []]]);
     assert.deepEqual(ilk.revizyonlar.map((r) => r.rotaId), [ilk.rotalar[0]!.id]);
     const standart = ilk.rotalar[0]!.id;
-    // 3411 a: rota emir türüyle açılır (taslak açma yetkisi); adı türün adıdır, tür hemen bağlanır. Seri ve ad verilen gövde 400,
+    // 3411 a: rota emir türüyle açılır (taslak açma yetkisi); ad verilmezse türün adıdır, tür hemen bağlanır. Seri ve türsüz gövde 400,
     // türün rotası varken 409, operatör 403.
     const rotaYol = `/rota/urunler/${urun}/rotalar`;
     assert.equal((await istek(c.operator, 'POST', rotaYol, { emirTuru: 'fai' })).statusCode, 403);
@@ -1686,6 +1686,11 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const fai = acildi.rotalar.find((r) => r.ad === 'FAI')!;
     assert.deepEqual([fai.standart, fai.emirTurleri, fai.taslakAcilabilir], [false, ['fai'], true]);
     assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'fai' })).statusCode, 409);
+    // 3482-1 b: ad serbesttir; boş ad 400, üründe aynı adla rota varken 409, verilen adla açılır ve tür yine bağlanır.
+    assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'prototip', ad: '   ' })).statusCode, 400);
+    assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'prototip', ad: 'FAI' })).statusCode, 409);
+    const adla = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', rotaYol, { emirTuru: 'prototip', ad: ' ORN Prototip hattı ' });
+    assert.deepEqual(adla.rotalar.filter((r) => r.emirTurleri.includes('prototip')).map((r) => r.ad), ['ORN Prototip hattı']);
     // Tür eşlemesi onay yetkisiyle (K4); Standart rotaya tür yazılmaz; başka ürünün rotası 409 (K8).
     const turYol = (rota: number, u = urun) => `/rota/urunler/${u}/rotalar/${rota}/turler`;
     assert.equal((await istek(c.planlama, 'POST', turYol(fai.id), { emirTurleri: ['fai'], surum: fai.surum })).statusCode, 403);
@@ -1753,7 +1758,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const numune = (await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', rotaYol, { emirTuru: 'numune' })).rotalar.find((r) => r.ad === 'Numune')!;
     assert.deepEqual(numune.emirTurleri, ['numune']);
     const tasindi = await tamam<UrunRevizyonlariCevabi>(c.mudur, 'POST', turYol(numune.id), { emirTurleri: ['numune', 'fai'], surum: numune.surum });
-    assert.deepEqual(tasindi.rotalar.map((r) => [r.ad, r.emirTurleri]), [['Seri', []], ['FAI', []], ['Numune', ['fai', 'numune']]]);
+    assert.deepEqual(tasindi.rotalar.map((r) => [r.ad, r.emirTurleri]), [['Seri', []], ['FAI', []], ['ORN Prototip hattı', ['prototip']], ['Numune', ['fai', 'numune']]]);
     assert.ok(tasindi.rotalar.find((r) => r.ad === 'FAI')!.surum > bagli.rotalar.find((r) => r.ad === 'FAI')!.surum);
     // Ad değişir; eski sürüm 409, başka ürünün rotası 409.
     const faiSon = tasindi.rotalar.find((r) => r.ad === 'FAI')!;

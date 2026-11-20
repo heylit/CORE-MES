@@ -174,7 +174,7 @@ export const uclar = [
     parametre: urunParametresi,
     govde: rotaEkleGovdesi,
     cevap: urunRevizyonlariCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => rotaEkle(db, kullanici, parametre.urunId, govde.emirTuru),
+    isle: ({ db, kullanici, parametre, govde }) => rotaEkle(db, kullanici, parametre.urunId, govde.emirTuru, govde.ad),
   }),
   uc({
     yontem: 'POST',

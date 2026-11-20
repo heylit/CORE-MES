@@ -11,7 +11,7 @@ import { urunRevizyonlari } from './liste.ts';
 
 /* ---------------- ürünün rotaları (3247 a) ---------------- */
 
-const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var; o rotaya türü "Adı ve türleri"nden bağlayın.';
+const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var; başka bir ad yazın.';
 const turunRotasiVarIletisi = (tur: string): string => `Bu üründe ${tur} türünün rotası var.`;
 const STANDART_TURSUZ = 'Seri rotasına emir türü bağlanmaz; bağlanmayan her tür zaten Seri rotasını kullanır.';
 
@@ -30,14 +30,14 @@ async function urununRotasi(db: Db, urunId: number, rotaId: number): Promise<s.R
   return rota;
 }
 
-// Yeni rota emir türüyle açılır (3411 a): adı türün adıdır ve tür hemen bağlanır; rota yürürlüğe girene kadar o türün emirleri Seri
+// Yeni rota emir türüyle açılır (3411 a): tür hemen bağlanır; ad verilmezse türün adıdır (3482-1 b: ad serbest, sonradan da değişir); rota yürürlüğe girene kadar o türün emirleri Seri
 // (Standart) rotasıyla açılır, bu yüzden bağlama onay yetkisi istemez. Revizyonu "taslak aç" ile gelir. Ürünün Standart rotası henüz
 // yoksa önce o açılır. Türün rotası varsa yeni rota açılmaz.
-export async function rotaEkle(db: Db, kullanici: Kullanici, urunId: number, emirTuru: EmirTuru): Promise<UrunRevizyonlariCevabi> {
+export async function rotaEkle(db: Db, kullanici: Kullanici, urunId: number, emirTuru: EmirTuru, ad?: string): Promise<UrunRevizyonlariCevabi> {
   await rotaKurulabilirUrun(db, urunId);
   await s.standartRotaAc(db, urunId, kullanici.id);
   if ((await s.urunRotalari(db, urunId)).some((r) => r.emirTurleri.includes(emirTuru))) throw cakisma(turunRotasiVarIletisi(EMIR_TURU_ADLARI[emirTuru]));
-  const id = await adiKoru(() => s.rotaEkle(db, urunId, EMIR_TURU_ADLARI[emirTuru], kullanici.id));
+  const id = await adiKoru(() => s.rotaEkle(db, urunId, ad ?? EMIR_TURU_ADLARI[emirTuru], kullanici.id));
   if ((await s.rotaTurleriniYaz(db, id, urunId, [emirTuru], 1)) === null) throw eskiSurum();
   return urunRevizyonlari(db, kullanici, urunId);
 }
