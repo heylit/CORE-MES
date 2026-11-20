@@ -18,7 +18,7 @@ import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
 import { bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, ozellikBasliklari, ozellikHucreleri, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
-import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
+import { basamakEksigi, basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
 import { rehberSirasi } from "./onayli.ts";
@@ -1408,6 +1408,8 @@ const ACTIONS: Record<string, Action> = {
   "rm-dep": el => { const s = readSettingsForm(); s.departments.splice(+el.dataset.i!, 1); SET_DRAFT = s; renderSettingsDraft(); },
   "save-settings": () => {
     if (!canWrite()) return;
+    const eksik = basamakEksigi();
+    if (eksik) { basamakEksiginiGoster(eksik); return; }
     const s = readSettingsForm();
     s.departments = s.departments.filter(d => d.name); s.approvalLimits = s.approvalLimits.filter(l => l.role);
     SET_DRAFT = null; persist("settings", "main", s); toast("Ayarlar kaydedildi");
@@ -1477,6 +1479,15 @@ const ACTIONS: Record<string, Action> = {
   "pick-top": (el, r) => { if (!r) return; const top = evaluate(r).ranking[0]; if (!top) return; V.tab = "compare"; render(); teklifSec(top.q.id); $<HTMLElement>(".sa-karar")?.scrollIntoView({ block: "center" }); },
   "export-report": () => offerFile(`satin-alma-harcama-${todayStr()}.csv`, reportCSV())
 };
+// Kaydı durduran eksik uyarı tonunda bildirilir ve satırın altında kalır: bildirim kapanınca da hangi alanın eksik olduğu görünür.
+function basamakEksiginiGoster(e: { ileti: string; not: string; odak: HTMLElement }): void {
+  $$("#ap-rows [data-ap-eksik]").forEach(n => n.remove());
+  $$("#ap-rows [aria-invalid]").forEach(n => { n.removeAttribute("aria-invalid"); n.removeAttribute("aria-describedby"); });
+  e.odak.setAttribute("aria-invalid", "true"); e.odak.setAttribute("aria-describedby", "ap-eksik");
+  e.odak.insertAdjacentHTML("afterend", `<p class="xs bad" id="ap-eksik" data-ap-eksik>${esc(e.not)}</p>`);
+  bildirimYolu?.bildir("hata", e.ileti);
+  e.odak.focus();
+}
 let SET_DRAFT: Settings | null = null;
 export function readSettingsForm(): Settings {
   const s = clone(SET_DRAFT || settings());

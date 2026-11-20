@@ -939,3 +939,5 @@
 .sa-kok .sa-oy-liste .flag{ display:inline-flex; align-items:center; gap:var(--pay-ince); }
 .sa-kok .sa-oy-nowrap{ white-space:nowrap; }
 @media (max-width:900px){ .sa-kok .sa-oy-ozetler{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.sa-kok [data-ap-eksik]{ color:var(--sa-bad); margin:var(--b-1) 0 0; }
+.sa-kok #ap-rows [aria-invalid="true"]{ border-color:var(--sa-bad); }
