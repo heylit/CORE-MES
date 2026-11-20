@@ -466,6 +466,11 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok((await acikSayisi('leave_bl3') ?? 0) > 0);
     await tamam<IkYazCevabi>(c.uzm, 'POST', '/ik/izinler/leave_bl3/iptal', { surum: silinecek.kayit.surum });
     assert.equal(await acikSayisi('leave_bl3'), 0, 'iptal edilen talebin onay bildirimi kapandı');
+    // Düzeltme: yönetici bekleyen talebi kayıt formundan Reddedildi'ye çekince de onay işi kapanır.
+    await kaydet(c.uzm, 'izinler', izin('leave_bl4', 'emp_bl', 'Beklemede', { baslangic: gunSonra(izinBasi, 21), bitis: gunSonra(izinBasi, 21), gun: 1 }));
+    assert.ok((await acikSayisi('leave_bl4') ?? 0) > 0);
+    await kaydet(c.yon, 'izinler', izin('leave_bl4', 'emp_bl', 'Reddedildi', { baslangic: gunSonra(izinBasi, 21), bitis: gunSonra(izinBasi, 21), gun: 1 }));
+    assert.equal(await acikSayisi('leave_bl4'), 0, 'düzeltmeyle karara çekilen talebin onay bildirimi kapandı');
     await kaydet(c.yon, 'izinler', izin('leave_bl2', 'emp_bl', 'Onaylandı', { baslangic: gunSonra(izinBasi, 7), bitis: gunSonra(izinBasi, 7), gun: 1 }));
     assert.deepEqual(await bildirimler('leave_bl2'), [], 'onay beklemeyen izin bildirim açmaz');
   });

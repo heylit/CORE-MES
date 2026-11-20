@@ -491,9 +491,17 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const kisi = await islemliKisi(['projeler.gorev-isle']);
     const p = await projeAc();
     const a = await gorevAc(p, { sorumluKisiId: kisi.id });
+    const b = await gorevAc(p, { sorumluKisiId: kisi.id });
     await gorevAc(p, { sorumluKisiId: kisi.id });
-    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 2, 'iki görev iki bildirim');
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 3, 'üç görev üç bildirim');
     await basarili(planlama, a.id, 'iptal');
-    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 1, 'iptal edilenin bildirimi kapandı, öteki kaldı');
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 2, 'iptal komutuyla kapanan görevin bildirimi kapandı, ötekiler kaldı');
+    // Düzenleme ekranından durum iptal yapılınca da o görevin atama bildirimi kapanır.
+    const surum = (await vt().tek<{ surum: number }>('SELECT surum FROM projeler_gorev WHERE id = $1', [b.id]))?.surum ?? 0;
+    const d = await gonder(planlama, `/projeler/gorevler/${b.id}/guncelle`, {
+      ad: 'Akış görevi', planBaslangic: '2026-12-01', planBitis: '2026-12-05', sorumluKisiId: kisi.id, ilerleme: 0, durum: 'iptal', surum,
+    });
+    assert.equal(d.statusCode, 200, d.body);
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 1, 'düzenlemede iptal edilenin bildirimi kapandı, sonuncusu kaldı');
   });
 });

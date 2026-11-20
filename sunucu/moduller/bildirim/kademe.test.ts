@@ -26,6 +26,11 @@ const bk = (baslangic: string, bugun: string, yapanVar = true) => gerekenKademel
 
 // 3405 a: kural saf; 3396'nın son gün davranışı aynen korunur, bekleme sayacı eklenir.
 describe('kademeli uyarı kuralı (3405)', () => {
+  test('3478: yeni bağlanan onay bekleme kaynakları (satış onayı, DÖF, hatalı parça) varsayılanda kapalı gelir', () => {
+    for (const k of ['siparisler.onay', 'kalite-merkezi.dof', 'kalite-merkezi.hatali-parca'] as const) {
+      assert.equal(KADEME_KAYNAKLARI[k].varsayilan.acik, false, k);
+    }
+  });
   test('iş günü farkı: cuma→pazartesi 1, pazartesi→cuma 4, tatil düşer, geriye eksi', () => {
     assert.equal(isGunuFarki('2026-11-20', '2026-11-23', BOS), 1);
     assert.equal(isGunuFarki('2026-11-16', '2026-11-20', BOS), 4);

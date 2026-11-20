@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { siparisDegistiDinle, siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
+import { onayBekleyenSiparisler, siparisDegistiDinle, siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
 import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { kablola } from '../../kablolama.ts';
 import { satisSevkleriCozucusu } from '../finans/disari.ts';
@@ -232,8 +232,10 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const acik = async () => (await o().sahip.tek<{ n: number }>(
       "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.onay-bekliyor' AND yol = $1 AND okundu IS NULL", [`/siparisler/${s.id}`]))?.n;
     assert.ok((await acik() ?? 0) > 0);
+    assert.ok((await o().vt.tx((db) => onayBekleyenSiparisler(db))).some((x) => x.id === s.id), 'taslak sipariş kademeli onay takibindedir');
     assert.equal((await gonder(onaylayan.cerez, `/siparisler/${s.id}/onayla`, { surum: s.surum })).statusCode, 200);
     assert.equal(await acik(), 0, 'onaylanan siparişin onay bildirimi kapandı');
+    assert.ok(!(await o().vt.tx((db) => onayBekleyenSiparisler(db))).some((x) => x.id === s.id), 'onaylanan sipariş kademeli onay takibinden düşer');
     // Risk N1: onayı geri alınan sipariş yeniden onay bekler.
     const onayli = (await oku(acan.cerez, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
     const geri = await gonder(onaylayan.cerez, `/siparisler/${s.id}/onay-geri-al`, { surum: onayli.surum, neden: 'Deneme geri alma' });

@@ -340,6 +340,7 @@ describe('soru 75: kişinin haftalık vardiya planı', () => {
   test('3478: bekleyen izin karara bağlanınca onay işi kapanır; bekleyen kalan ya da hiç beklememiş talep kapatmaz', () => {
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Onaylandı')), true);
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Reddedildi')), true);
+    assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('İptal')), true);
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Beklemede', { gun: 2 })), false);
     assert.equal(izinOnayKapanirMi(null, izin('Onaylandı')), false);
     assert.equal(izinOnayKapanirMi(izin('Onaylandı'), izin('Reddedildi')), false);
