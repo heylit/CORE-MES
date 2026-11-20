@@ -1284,6 +1284,46 @@ namespace LogoYardimcisi
             Icerir(s.Cagrilar.Last(), "STATUS=4");
         }
 
+        // 3471: not, satır açıklaması ve müşteri sipariş no Logo'ya gider; uzun not 50 karakterlik parçalara bölünür.
+        static void T_teklif_ve_siparise_not_aciklama_ve_musteri_siparis_no_yazilir()
+        {
+            var uzun = "Teslim adresi depo kapisi; ambalaj ahsap sandik olacak, her kutuya etiket yapistirilacak ve irsaliye ile birlikte gonderilecek ek notlar burada kesilir ve yazilmaz cunku dort parcayi asiyor uzun";
+            var p = Islemler.NotParcalari(uzun);
+            Esit(4, p.Count, "en çok dört parça");
+            Dogru(p.All(x => x.Length <= Islemler.NotParcasi && x.Length > 0), "parça 50 karakteri aşmaz");
+            Esit("Teslim adresi depo kapisi; ambalaj ahsap sandik", p[0], "kelime bölünmez");
+            Esit(0, Islemler.NotParcalari("  \n ").Count, "boş not yazılmaz");
+            Esit("a b", Islemler.NotParcalari(" a \n b ")[0], "boşluk sadeleşir");
+            Esit(new string('x', 50), Islemler.NotParcalari(new string('x', 70))[0], "boşluksuz uzun kelime 50'de kesilir");
+
+            var s = Logo();
+            var c = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-N", "date", "25.09.2026", "arpCode", Alici, "status", 1, "note", "Kisa not",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 2, "price", 100, "unitCode", "ADET", "description", new string('d', 300)),
+                    N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 100, "unitCode", "ADET") }));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit("Kisa not", s.SonBaslik.Deger("GENEXP1"), "teklif notu GENEXP1");
+            Dogru(!s.SonBaslik.Var("GENEXP2"), "kısa notta ikinci parça yok");
+            Esit(new string('d', 250), s.SonSatirlar[0].Deger("LINEEXP"), "satır açıklaması 250'de kesilir");
+            Dogru(!s.SonSatirlar[1].Var("LINEEXP"), "açıklamasız satırda alan yok");
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(c), null), "offer")[0];
+            var once = s.Cagrilar.Count;
+            Esit(400, C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N", "date", "26.09.2026", "orderStatus", 4, "customerOrderNo", new string('m', 41),
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) })).Durum, "41 karakter müşteri sipariş no");
+            Esit(once, s.Cagrilar.Count, "uzun numarada Logo'ya gidilmez");
+            var o = C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N", "date", "26.09.2026", "orderStatus", 4, "customerOrderNo", "MS-77", "note", uzun,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1, "description", "Satir notu") }));
+            Dogru(Basari(o), Json.Yaz(o.Govde));
+            Esit("MS-77", s.SonBaslik.Deger("CUST_ORD_NO"), "CUST_ORD_NO");
+            Esit(p[0], s.SonBaslik.Deger("NOTES1"), "NOTES1");
+            Esit(p[3], s.SonBaslik.Deger("NOTES4"), "NOTES4");
+            Esit("Satir notu", s.SonSatirlar[0].Deger("TRANS_DESCRIPTION"), "sipariş satırı açıklaması");
+            var sade = C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N2", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }));
+            Dogru(Basari(sade), Json.Yaz(sade.Govde));
+            foreach (var a in new[] { "CUST_ORD_NO", "NOTES1" }) Dogru(!s.SonBaslik.Var(a), a + " boşsa yazılmaz");
+            Dogru(!s.SonSatirlar[0].Var("TRANS_DESCRIPTION"), "açıklamasız sipariş satırı");
+        }
+
         /* ---------------- Malzeme fişi ---------------- */
 
         static Dictionary<string, object> Fis(int tur, string no)

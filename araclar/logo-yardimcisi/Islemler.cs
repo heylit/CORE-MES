@@ -1414,6 +1414,32 @@ namespace LogoYardimcisi
             return c;
         }
 
+        // 3471: not ve açıklama alanları. Logo'nun not alanları kısa ve sayılıdır (GENEXP1-4, NOTES1-4; 50 karakter, VARSAYIM: uzunluk ölçülmedi);
+        // uzun not kelime bölmeden parçalara ayrılır, sığmayan kısım yazılmaz. Satır açıklaması 250 karakterde kesilir (VARSAYIM, ölçülmedi).
+        public const int NotParcasi = 50, NotParcaSayisi = 4, SatirAciklamasiEnCok = 250, MusteriSiparisNoEnCok = 40;
+
+        internal static List<string> NotParcalari(string not)
+        {
+            var l = new List<string>();
+            if (string.IsNullOrWhiteSpace(not)) return l;
+            var kalan = string.Join(" ", not.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            while (kalan.Length > 0 && l.Count < NotParcaSayisi)
+            {
+                if (kalan.Length <= NotParcasi) { l.Add(kalan); break; }
+                var kes = kalan.LastIndexOf(' ', NotParcasi);
+                if (kes <= 0) kes = NotParcasi;
+                l.Add(kalan.Substring(0, kes).TrimEnd());
+                kalan = kalan.Substring(kes).TrimStart();
+            }
+            return l;
+        }
+
+        static string SatirAciklamasi(Dictionary<string, object> s)
+        {
+            var a = Json.Metin(s, "description", false);
+            return a == null ? null : a.Length <= SatirAciklamasiEnCok ? a : a.Substring(0, SatirAciklamasiEnCok);
+        }
+
         // New() + FieldByName; alan adları tablo kolonu stilinde. TRCODE 1 zorunlu (New() varsayılanı 2 = alınan teklif), SLSCUSTCODE zorunlu (yoksa 4208).
         // ALTNR yazılmaz, satıra STATUS yazılmaz, LASTREVISION satırlardan SONRA yazılır (tuzak 9).
         Cevap TeklifEkle(Dictionary<string, object> g)
@@ -1424,9 +1450,11 @@ namespace LogoYardimcisi
             var gecerlilik = Bicim.TarihDenetle(Json.Metin(g, "validUntil", false), "validUntil");
             var secili = Json.Metin(g, "salesCustomerCode", false);
             var durum = Secenek(g, "status", new[] { 0, 1, 4 });
+            var notlar = NotParcalari(Json.Metin(g, "note", false));
             var d = DovizCoz(g);
             var satirlar = new List<SiparisSatiri>();
             var iskontolar = new List<decimal?>();
+            var aciklamalar = new List<string>();
             foreach (var s in Satirlar(g, "lines"))
             {
                 var x = new SiparisSatiri();
@@ -1441,6 +1469,7 @@ namespace LogoYardimcisi
                 if (isk != null && isk.Value > 100) throw new GecersizIstek("discountRate 0-100 olmalı.");
                 satirlar.Add(x);
                 iskontolar.Add(isk);
+                aciklamalar.Add(SatirAciklamasi(s));
             }
             var varolan = oku.Teklif(no);
             if (varolan != null) return Cevap.Ret("Bu numarada satış teklifi zaten var (logicalRef " + varolan.Ref + ").");
@@ -1463,6 +1492,7 @@ namespace LogoYardimcisi
             b.Ekle("SLSCUSTCODE", musteri).Ekle("TRCODE", 1).Ekle("TYP", 1).Ekle("FICHENO", no).Ekle("DATE", tarih).Ekle("ARP_CODE", cari);
             b.Ekle("SOURCEINDEX", ayar.AmbarNo).Ekle("STATUS", durum).Ekle("POFFERBEGDT", tarih);
             if (gecerlilik != null) b.Ekle("POFFERENDDT", gecerlilik);
+            for (var i = 0; i < notlar.Count; i++) b.Ekle("GENEXP" + (i + 1), notlar[i]);
             if (d != null) b.Ekle("GENEXCTYP", 1).Ekle("LINEEXCTYP", 1).Ekle("TRCURR", d.Tur).Ekle("TRRATE", d.Kur).Ekle("REPORTRATE", d.Kur);
             var la = new List<AlanListesi>();
             decimal brut = 0;
@@ -1477,6 +1507,7 @@ namespace LogoYardimcisi
                 l.Ekle("UEDIT", x.Birim);
                 if (x.Termin != null) l.Ekle("DUEDATE", x.Termin);
                 if (iskontolar[i] != null && iskontolar[i].Value > 0) l.Ekle("DISCPER", iskontolar[i].Value);
+                if (aciklamalar[i] != null) l.Ekle("LINEEXP", aciklamalar[i]);
                 la.Add(l);
                 brut += x.Miktar * tl;
             }
@@ -1512,6 +1543,9 @@ namespace LogoYardimcisi
             var no = Kod(g, "number", FisNoEnCok);
             var tarih = Bicim.TarihDenetle(Json.Metin(g, "date", true), "date");
             var durum = Secenek(g, "orderStatus", new[] { 1, 4 });
+            var musteriNo = Json.Metin(g, "customerOrderNo", false);
+            if (musteriNo != null && musteriNo.Length > MusteriSiparisNoEnCok) throw new GecersizIstek("customerOrderNo en çok " + MusteriSiparisNoEnCok + " karakter.");
+            var notlar = NotParcalari(Json.Metin(g, "note", false));
             var govdeSatirlari = Satirlar(g, "lines");
             var t = oku.TeklifRefIle(teklifRef);
             if (t == null) return Cevap.Ret("Offer not found");
@@ -1525,6 +1559,8 @@ namespace LogoYardimcisi
             h0.Ekle("TYPE", 1).Ekle("NUMBER", no).Ekle("DATE", tarih).Ekle("ARP_CODE", t.CariKod).Ekle("SOURCE_WH", ayar.AmbarNo).Ekle("ORDER_STATUS", durum);
             var proje = ProjeKoduOku(g);
             if (proje != null) h0.Ekle("PROJECT_CODE", proje);
+            if (musteriNo != null) h0.Ekle("CUST_ORD_NO", musteriNo);
+            for (var i = 0; i < notlar.Count; i++) h0.Ekle("NOTES" + (i + 1), notlar[i]);
             var doviz = t.DovizTuru != 0;
             if (doviz) h0.Ekle("CURRSEL_TOTAL", 2).Ekle("CURRSEL_DETAILS", 2).Ekle("CURR_TRANSACTIN", t.DovizTuru).Ekle("TC_RATE", t.Kur).Ekle("RC_RATE", t.Kur);
             var la = new List<AlanListesi>();
@@ -1546,6 +1582,8 @@ namespace LogoYardimcisi
                 if (doviz) l.Ekle("EDT_CURR", ts.DovizTuru).Ekle("CURR_TRANSACTIN", ts.DovizTuru).Ekle("EDT_PRICE", ts.DovizFiyati).Ekle("RC_XRATE", t.Kur);
                 l.Ekle("PRICE", ts.Fiyat).Ekle("DISCOUNT_RATE", ts.Iskonto).Ekle("VAT_RATE", ts.Kdv).Ekle("UNIT_CODE", ts.Birim);
                 if (termin != null) l.Ekle("DUE_DATE", termin).Ekle("ORG_DUE_DATE", termin);
+                var aciklama = SatirAciklamasi(s);
+                if (aciklama != null) l.Ekle("TRANS_DESCRIPTION", aciklama);
                 l.Ekle("OFFERREF", teklifRef).Ekle("OFFTRANSREF", r);
                 la.Add(l);
                 bekleneRefler.Add(r);

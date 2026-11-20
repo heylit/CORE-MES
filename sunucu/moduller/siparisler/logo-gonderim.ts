@@ -7,13 +7,20 @@ import * as sorgular from './sorgular.ts';
 // Yetki denetlemez; çağıran Logo işidir.
 export interface SiparislerLogoTeklifi {
   id: number; no: string; tarih: string; gecerlilikBitis: string | null; paraBirimi: string; kur: string | null; firmaId: number | null;
-  satirlar: { satirId: number; stokKodu: string | null; hizmet: boolean; miktar: string; birim: string; birimFiyat: string; iskontoYuzdesi: string | null; termin: string | null }[];
+  // 3471: sürümün notu ve satırın tanımı Logo'da teklif notu ve satır açıklaması olur.
+  not: string | null;
+  satirlar: {
+    satirId: number; stokKodu: string | null; hizmet: boolean; miktar: string; birim: string; birimFiyat: string; iskontoYuzdesi: string | null; termin: string | null;
+    aciklama: string | null;
+  }[];
 }
 export interface SiparislerLogoSiparisi {
   id: number; no: string; tarih: string; teklifKayitNo: string | null;
   // 3315: Siparişler'deki sipariş kimliği; Logo projesini projelerden bununla bulur.
   siparisId: number;
-  satirlar: { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null }[];
+  // 3471: müşteri sipariş no, sipariş açıklaması ve satır açıklaması Logo siparişine gider.
+  musteriSiparisNo: string | null; not: string | null;
+  satirlar: { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null; aciklama: string | null }[];
 }
 export type SiparislerLogoSonucu = { kayitNo: string; satirlar: { satirId: number; logoSatirRef: string }[] } | { hata: string };
 
@@ -29,11 +36,12 @@ export async function logoyaGidecekSatisTeklifleri(db: Db, sinir: number): Promi
     const iskonto = Number(s.iskonto_orani) > 0 ? s.iskonto_orani : null;
     sonuc.push({
       id: s.id, no: surumluNo(s.no, s.surum_no), tarih: s.tarih, gecerlilikBitis: s.gecerlilik, paraBirimi: s.para_birimi, kur: null, firmaId: s.firma_id,
+      not: s.aciklama,
       satirlar: satirlar.map((r) => {
         const kart = r.malzeme_no === null ? undefined : kartlar.get(r.malzeme_no);
         return {
           satirId: r.satir_id, stokKodu: kart?.kod ?? null, hizmet: kart?.tur === 'hizmet', miktar: r.miktar, birim: r.birim ?? kart?.birim ?? '',
-          birimFiyat: r.birim_fiyat, iskontoYuzdesi: iskonto, termin: s.termin_tarihi,
+          birimFiyat: r.birim_fiyat, iskontoYuzdesi: iskonto, termin: s.termin_tarihi, aciklama: r.tanim,
         };
       }),
     });
@@ -46,10 +54,10 @@ export async function logoyaGidecekSatisSiparisleri(db: Db, sinir: number): Prom
   for (const s of await sorgular.logoyaGidecekSiparisSiralari(db, sinir)) {
     const satirlar = await sorgular.logoSiparisSatirlari(db, s.siparis_id, s.teklif_id);
     sonuc.push({
-      id: s.id, no: s.no, tarih: s.tarih, teklifKayitNo: s.teklif_kayit_no, siparisId: s.siparis_id,
+      id: s.id, no: s.no, tarih: s.tarih, teklifKayitNo: s.teklif_kayit_no, siparisId: s.siparis_id, musteriSiparisNo: s.musteri_siparis_no, not: s.aciklama,
       satirlar: satirlar.map((r) => {
         const ref = r.teklif_satir_id === null ? undefined : s.teklif_refleri[String(r.teklif_satir_id)];
-        return { satirId: r.satir_id, teklifSatirRef: typeof ref === 'string' ? ref : null, miktar: r.miktar, termin: r.termin };
+        return { satirId: r.satir_id, teklifSatirRef: typeof ref === 'string' ? ref : null, miktar: r.miktar, termin: r.termin, aciklama: r.aciklama };
       }),
     });
   }

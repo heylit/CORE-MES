@@ -109,6 +109,13 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     assert.deepEqual(ilk?.satirlar.map((s) => [s.satirId, s.stokKodu, s.hizmet, s.miktar, s.birimFiyat, s.iskontoYuzdesi]),
       t.satirlar.map((s, i) => [s.id, kod, false, s.miktar, i === 0 ? '10.0000' : '20.0000', '5.00']));
     assert.deepEqual(ikinci?.satirlar.map((s) => [s.birimFiyat, s.iskontoYuzdesi]), [['12.0000', null], ['22.0000', null]]);
+    // 3471: satır tanımı Logo satır açıklaması, sürüm notu teklif notu olur.
+    assert.deepEqual(ilk?.satirlar.map((s) => s.aciklama), ['Deneme parça A', 'Deneme parça B']);
+    assert.equal(ilk?.not, null);
+    t = await komut(`/siparisler/teklifler/${t.id}/surum-ver`, {
+      surum: t.surum, fiyatlar: t.satirlar.map((s) => ({ satirId: s.id, birimFiyat: '13' })), iskontoOrani: '0', gecerlilik: '2026-12-31', aciklama: 'Sürüm notu',
+    });
+    assert.equal((await teklifSirasi(t.no)).find((x) => x.no === `${t.no}-R3`)?.not, 'Sürüm notu');
   });
 
   test('3400-2: Logo satırına kartsız kalemin seçilen birimi, karta bağlı kalemde kartın birimi gider', async () => {
@@ -144,7 +151,7 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     t = await surumVer(t, '0', '11', '21');
     t = await komut(`/siparisler/teklifler/${t.id}/kabul`, { surum: t.surum, surumNo: 1 });
     const d = await komut<SiparisDonusumCevabi>(`/siparisler/teklifler/${t.id}/siparise-donustur`, {
-      surum: t.surum, siparisTarihi: '2026-10-19', termin: '2026-11-20', kdvOrani: '20', musteriSiparisNo: null,
+      surum: t.surum, siparisTarihi: '2026-10-19', termin: '2026-11-20', kdvOrani: '20', musteriSiparisNo: 'MS-DEN-1',
     });
     let s = await komut<SiparisAyrintisi>(`/siparisler/${d.siparisId}/onayla`, { surum: (await app.inject({
       method: 'GET', url: `/api/siparisler/${d.siparisId}`, headers: { cookie: yonetici },
@@ -161,6 +168,14 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     const [sp] = await siparisSirasi(s.no);
     assert.deepEqual([sp?.teklifKayitNo, sp?.tarih], ['7001', '2026-10-19']);
     assert.deepEqual(sp?.satirlar.map((x) => [x.teklifSatirRef, x.miktar]), [['7101', '100.000'], ['7102', '10.000']]);
+    // 3471: müşteri sipariş no, sipariş açıklaması ve satır açıklaması Logo'ya gidecek sıradadır.
+    assert.equal(sp?.musteriSiparisNo, 'MS-DEN-1');
+    await o().vt.tx(async (db) => {
+      await db.sorgu('UPDATE siparisler_siparis SET aciklama = $2 WHERE id = $1', [d.siparisId, 'Sipariş notu']);
+      await db.sorgu('UPDATE siparisler_siparis_satiri SET aciklama = $2 WHERE siparis_id = $1 AND sira = 1', [d.siparisId, 'Satır notu']);
+    });
+    const [sp2] = await siparisSirasi(s.no);
+    assert.deepEqual([sp2?.not, sp2?.satirlar.map((x) => x.aciklama)[0]], ['Sipariş notu', 'Satır notu']);
 
     await o().vt.tx((db) => satisSiparisiLogoSonucu(db, sp!.id, { kayitNo: '8001', satirlar: sp!.satirlar.map((x) => ({ satirId: x.satirId, logoSatirRef: '8101' })) }));
     assert.deepEqual(await siparisSirasi(s.no), []);
