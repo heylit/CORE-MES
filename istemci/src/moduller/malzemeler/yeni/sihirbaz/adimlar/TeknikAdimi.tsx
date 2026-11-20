@@ -68,7 +68,8 @@ function OzellikSatiri({ p }: { p: Ozellik }) {
 }
 
 // Hammadde 5. adım (prototipte `s4`).
-export function TeknikAdimi() {
+// Eksen düzeninde (3476) adım iki bölüme ayrılır: `anahtarlar` gösterilen özellikleri süzer, `ekler` ve `yardim` ikinci bölümde tekrarlanmaz.
+export function TeknikAdimi({ anahtarlar, haric, ekler: ekGoster = true, yardim = true }: { anahtarlar?: readonly string[]; haric?: readonly string[]; ekler?: boolean; yardim?: boolean } = {}) {
   const { taslak: d, b, degistir } = useSihirbaz();
   if (!d.fam || !b.t.FAMS[d.fam]) return <p className="tc-my-bos">Önce bir malzeme ailesi seç.</p>;
   const ekler = d.extra ?? [];
@@ -77,9 +78,9 @@ export function TeknikAdimi() {
   };
   return (
     <>
-      <Yardim>{K.TIPIK_DEGER_NOTU} Sertifikadaki değeri biliyorsan üstüne yaz; değiştirilen değer işaretlenir.</Yardim>
-      <div className="tc-my-ozellikler">{K.propsFor(d.fam, b).map((p) => <OzellikSatiri key={p.k} p={p} />)}</div>
-      <Kutu baslik="Ek özellikler">
+      {yardim && <Yardim>{K.TIPIK_DEGER_NOTU} Sertifikadaki değeri biliyorsan üstüne yaz; değiştirilen değer işaretlenir.</Yardim>}
+      <div className="tc-my-ozellikler">{K.propsFor(d.fam, b).filter((p) => (anahtarlar ? anahtarlar.includes(p.k) : !haric?.includes(p.k))).map((p) => <OzellikSatiri key={p.k} p={p} />)}</div>
+      {ekGoster && <Kutu baslik="Ek özellikler">
         <Yardim>Sürtünme katsayısı, renk kodu, test sonucu gibi listede olmayan her şey.</Yardim>
         {ekler.map((e, i) => (
           // Satırın kimliği yok; sıra kimliktir (prototipte de silme sıraya göredir).
@@ -93,7 +94,7 @@ export function TeknikAdimi() {
           </div>
         ))}
         <Dugme simge="plus" onClick={() => { degistir((t) => { t.extra = [...(t.extra ?? []), { ad: '', v: '', u: '' }]; }); }}>Özellik ekle</Dugme>
-      </Kutu>
+      </Kutu>}
     </>
   );
 }

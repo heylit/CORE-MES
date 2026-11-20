@@ -17,6 +17,7 @@ import { FoyGorunumu } from './FoyGorunumu.tsx';
 import { CizimRafi, useCizimYukleme } from './CizimRafi.tsx';
 import type { BekleyenCizim } from './cizim-rafi.ts';
 import { AdimGovdesi } from './adimlar/AdimGovdesi.tsx';
+import { EKSEN_ADIM_ADLARI, EksenAdimi, EksenSeridi, TanimSatiri } from './eksenler.tsx';
 import { KategoriUyarisi } from './adimlar/KategoriUyarisi.tsx';
 import { baslangicTaslagi, duzenlemeTaslagi, kopyaTaslagi, revizyonTaslagi, sablonTaslagi, type Acilis } from './acilis.ts';
 import { odakla, useKaydet } from './kaydet.ts';
@@ -113,7 +114,8 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
 
   const sayi = useMemo(() => adimlariKur(d, b).length, [d, b]);
   const etkinAdim = Math.min(adim, sayi - 1);
-  const adimlar = useMemo(() => adimlariKur(d, b, etkinAdim), [d, b, etkinAdim]);
+  const eksenli = !K.isGen(d, b);
+  const adimlar = useMemo(() => adimlariKur(d, b, etkinAdim).map((x, i) => (eksenli ? { ...x, ad: EKSEN_ADIM_ADLARI[i] ?? x.ad } : x)), [d, b, etkinAdim, eksenli]);
   const son = adimlar.length - 1;
 
   const adimaGit = (i: number) => {
@@ -214,7 +216,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
             </header>
             <KategoriUyarisi />
             <CizimRafi serit />
-            <AdimGovdesi />
+            {eksenli ? <><EksenSeridi /><EksenAdimi /></> : <AdimGovdesi />}
             <nav className="tc-my-alt" aria-label="Sihirbaz">
               <Dugme simge="back" onClick={() => { adimaGit(etkinAdim - 1); }} disabled={etkinAdim === 0}>Geri</Dugme>
               <span className="tc-my-alt-orta" aria-live="polite">{ortaMetin}</span>
@@ -223,7 +225,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
                 : <Dugme tur="birincil" onClick={ileri}>İleri</Dugme>}
             </nav>
           </section>
-          <aside className="tc-my-foy" aria-label="Canlı föy önizlemesi"><FoyGorunumu d={d} kisa /><CizimRafi /></aside>
+          <aside className="tc-my-foy" aria-label="Canlı föy önizlemesi"><TanimSatiri /><FoyGorunumu d={d} kisa /><CizimRafi /></aside>
         </div>
       </div>
     </SihirbazBaglami.Provider>

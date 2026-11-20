@@ -512,6 +512,26 @@ export function dofDurumu(kimlik: string, govde: Record<string, unknown>): DofDu
   return { kimlik, no: metin(govde.no) || kimlik, durum: kapali ? 'Kapalı' : 'Açık', kapanis: kapali && kapanis !== '' ? kapanis : null };
 }
 
+// 3478: kademeli uyarı kaynakları. Açık DÖF termini (son gün sayacı) ve MRB kararı bekleyen uygunsuzluk (bekleme sayacı, açılış
+// gününden). Kapanmış, arşivdeki ve tarihi okunamayan kayıt girmez.
+const GUN_BICIMI = /^\d{4}-\d{2}-\d{2}/;
+type BelgeKaydi = { kimlik: string; govde: Record<string, unknown> };
+const izlenir = (koleksiyon: string, k: BelgeKaydi): boolean => !kapanmisKayitMi(koleksiyon, k.govde) && k.govde[ARSIV_ALANI] !== true;
+export function acikDofTerminleri(kayitlar: readonly BelgeKaydi[]): { kimlik: string; no: string; termin: string }[] {
+  return kayitlar.flatMap((k) => {
+    const termin = metin(k.govde.termin);
+    if (!izlenir(DOF_KOLEKSIYONU, k) || !GUN_BICIMI.test(termin)) return [];
+    return [{ kimlik: k.kimlik, no: metin(k.govde.no) || k.kimlik, termin: termin.slice(0, 10) }];
+  });
+}
+export function kararBekleyenUygunsuzluklar(kayitlar: readonly BelgeKaydi[]): { kimlik: string; no: string; tarih: string }[] {
+  return kayitlar.flatMap((k) => {
+    const tarih = metin(k.govde.tarih);
+    if (!izlenir(UYGUNSUZLUK_KOLEKSIYONU, k) || !MRB_KARARSIZ.includes(k.govde.mrb) || !GUN_BICIMI.test(tarih)) return [];
+    return [{ kimlik: k.kimlik, no: metin(k.govde.no) || k.kimlik, tarih: tarih.slice(0, 10) }];
+  });
+}
+
 // 236 a: tedarikçi kaydının `firmaId` alanı Müşteri-Tedarikçi firmasının kimliğidir. Yok ya da boşsa null (eski kayıt); öteki
 // her değer (metin, sıfır, kesir) geçersizdir.
 export const TEDARIKCI_FIRMA_ALANI = 'firmaId';

@@ -155,8 +155,17 @@ export function KaliteAdimi() {
       }
     });
   };
+  const g = K.grade(d, b);
   return (
     <>
+      {g && d.grade !== '__ozel' && !ara && (
+        <div className="tc-ek-secili">
+          <span className="tc-my-etiket">Seçili kalite</span>
+          <b>{g.ad}</b>
+          <Esdegerler eq={g.eq} />
+        </div>
+      )}
+      {d.grade && d.grade !== '__ozel' && !ara && <StandartKutusu />}
       <FavoriSatiri />
       {yakinlar.length > 0 && (
         <div className="tc-my-satir"><span className="tc-my-etiket">Son kullanılanlar</span><SonKullanilanCipleri liste={yakinlar} ilerle={false} /></div>
@@ -175,7 +184,7 @@ export function KaliteAdimi() {
         </CipGrubu>
       )}
       <KaliteListesi />
-      {d.grade && d.grade !== '__ozel' && !ara && <><StandartKutusu /><MuadilKutusu /></>}
+      {d.grade && d.grade !== '__ozel' && !ara && <MuadilKutusu />}
       {d.grade === '__ozel' && <OzelKalite />}
     </>
   );

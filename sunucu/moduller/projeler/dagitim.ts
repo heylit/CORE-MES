@@ -85,12 +85,14 @@ export async function dagit(db: Db, kisiId: number, projeId: number, g: DagitVer
       duzen.set(s.kalemId, s);
     }
     if (duzen.size > 0 && [...kalemIdleri].every((id) => duzen.get(id)?.dahil === false) && g.ozel.length === 0) throw dogrulama(DAGITILACAK_YOK);
-    projeGorevi += await sablonUygula(db, kisiId, projeId, sablon, duzen);
+    projeGorevi += await sablonUygula(db, kisiId, projeId, sablon, duzen, atamalar);
     // Donan hazırlık kalemleri projeye bağlı açık emirlerde açılır (emir bazında son gün emrin tarihlerine göre).
     if (hedefCozucusu !== null) {
       const h = await hedefCozucusu(db, projeId);
       for (const { hedef, tarih } of h.hedefler) {
-        hazirlikGorevi += (await hazirlikGorevleriAc(db, kisiId, { projeId, sablonId: null, hedefler: [hedef], maddeler: h.maddeler, tarih })).eklenen;
+        const r = await hazirlikGorevleriAc(db, kisiId, { projeId, sablonId: null, hedefler: [hedef], maddeler: h.maddeler, tarih }, false, false);
+        hazirlikGorevi += r.eklenen;
+        atamalar.push(...r.plan.map((x) => ({ sorumluKisiId: x.yapanKisiId, yapanRolId: x.yapanRolId })));
       }
     }
   }

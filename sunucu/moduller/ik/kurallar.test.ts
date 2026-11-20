@@ -5,7 +5,7 @@ import {
   adayGecisiDenetle, gorusmeAdayiDenetle, gorusmeciMi, izinBakiyeUyarisi, izinTarihiDenetle,
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
-  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinOnayBildirimi,
+  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinOnayBildirimi, izinOnayKapanirMi,
   GUNLUK_AZAMI_SAAT, ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
   ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
@@ -335,6 +335,15 @@ describe('soru 75: kişinin haftalık vardiya planı', () => {
     assert.deepEqual(izinOnayBildirimi(null, izin('Beklemede'), '')?.metin, 'Yıllık izin · 2026-11-02 - 2026-11-04', 'ad yoksa atlanır');
     assert.equal(izinOnayBildirimi(izin('Beklemede'), izin('Beklemede', { gun: 2 }), 'Ad'), null);
     assert.equal(izinOnayBildirimi(null, izin('Onaylandı'), 'Ad'), null);
+  });
+
+  test('3478: bekleyen izin karara bağlanınca onay işi kapanır; bekleyen kalan ya da hiç beklememiş talep kapatmaz', () => {
+    assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Onaylandı')), true);
+    assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Reddedildi')), true);
+    assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('İptal')), true);
+    assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Beklemede', { gun: 2 })), false);
+    assert.equal(izinOnayKapanirMi(null, izin('Onaylandı')), false);
+    assert.equal(izinOnayKapanirMi(izin('Onaylandı'), izin('Reddedildi')), false);
   });
 });
 

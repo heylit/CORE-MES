@@ -297,7 +297,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
   type Dagit = { eklenen: number; gorevSayisi: number; toplamKisi: number; atanmamis: number };
   const dagitIstek = (proje: number, sablon: number | null, deneme: boolean) => istek<Dagit>('dagitici', '/hazirlik-matrisi/dagit', { projeId: proje, sablonId: sablon, deneme });
   const atamaZili = async (kisiId: number, proje: number) => (await o().sahip.tek<{ n: number }>(
-    "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi' AND tekil_anahtar = $2", [kisiId, `projeler.gorev-atandi:${String(proje)}`]))?.n;
+    "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi' AND tekil_anahtar = $2", [kisiId, `projeler.gorev-atandi:proje-${String(proje)}`]))?.n;
 
   test('T7 dağıtım engelleri: kapalı projede 400 ve dagitir false; kapalı emir atlanır; kapalı emre hazırlık projesi 409', async () => {
     const proje = await yeniProje('UE.HZK');
@@ -379,7 +379,10 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const ata = (id: number, surum: number) => istek(
       'dagitici', `/projeler/gorevler/${String(id)}/hazirlik-ata`, { sorumluKisiId: kim('atanan').id, yapanRolId: null, surum });
     assert.equal((await ata(birinci!.id, birinci!.surum)).durum, 200);
-    assert.equal(await atamaZili(kim('atanan').id, proje), 1);
+    // 3478: tek görev ataması görevin anahtarıyla yazılır.
+    const gorevZili = async (kisiId: number, gorevId: number) => (await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE kisi_id = $1 AND tekil_anahtar = $2", [kisiId, `projeler.gorev-atandi:gorev-${String(gorevId)}`]))?.n;
+    assert.equal(await gorevZili(kim('atanan').id, birinci!.id), 1);
     await o().sahip.sorgu("UPDATE projeler_gorev SET durum = 'kontrolde', kontrol_kisi_id = $2 WHERE id = $1", [ikinci!.id, yoneticiId]);
     assert.equal((await ata(ikinci!.id, ikinci!.surum)).durum, 400);
     const normal = (await o().sahip.tek<{ id: number; surum: number }>('SELECT id, surum FROM projeler_gorev WHERE proje_id = $1 AND hazirlik_maddesi IS NULL', [proje]))!;

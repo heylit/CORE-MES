@@ -420,7 +420,9 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await komut(operator1, a.id, 'geri-cevir', { gerekce: '  ' })).statusCode, 400, 'gerekçesiz geri çevrilmez');
     assert.equal((await komut(kalite1, a.id, 'geri-cevir', { gerekce: 'Benim değil' })).statusCode, 403, 'atanmayan geri çeviremez');
     // Projeyi okuyamayan atanan kişi geri çevirince de cevap alır (geçmişteki olayı onu ilgili tutar).
+    const atamaOnce = await okunmamis(operator1.id, 'projeler.gorev-atandi');
     const c = await basarili(operator1, a.id, 'geri-cevir', { gerekce: 'Tezgah arızalı' });
+    assert.equal(await okunmamis(operator1.id, 'projeler.gorev-atandi'), atamaOnce - 1, '3478: geri çevirenin atama bildirimi kapandı');
     assert.deepEqual([c.gorev.sorumluKisiId, c.gorev.yapanRolId, c.gorev.durum], [null, null, 'suruyor']);
     assert.deepEqual([c.olaylar[0]?.olay, c.olaylar[0]?.gerekce], ['cevir', 'Tezgah arızalı']);
     assert.equal(c.izinler.geriCevirebilir, false);
@@ -435,11 +437,10 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const satir = async () => vt().tek<{ yapan_rol_id: number | null; ustlenilen_rol_id: number | null; sorumlu_kisi_id: number | null }>(
       'SELECT yapan_rol_id, ustlenilen_rol_id, sorumlu_kisi_id FROM projeler_gorev WHERE id = $1', [r.id]);
     assert.deepEqual(await satir(), { yapan_rol_id: null, ustlenilen_rol_id: rolId('kalite'), sorumlu_kisi_id: kalite1.id });
-    // Atama zili proje başına tek kayıttır; önceki zil okununca yenisi sayılır.
+    // Önceki atama zilleri okunmuş sayılır; role dönen görevin zili görev başına yeni satırdır (3478).
     await vt().sorgu("UPDATE bildirim_kaydi SET okundu = now() WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi'", [kalite2.id]);
-    const atamaOnce = 0;
     const rc = await basarili(kalite1, r.id, 'geri-cevir', { gerekce: 'Ölçü aleti kalibrasyonda' });
-    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), atamaOnce + 1, 'role dönünce rolün öteki üyesine atama zili');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), 1, 'role dönünce rolün öteki üyesine atama zili');
     assert.deepEqual([rc.gorev.sorumluKisiId, rc.gorev.yapanRolId], [null, rolId('kalite')]);
     assert.deepEqual(await satir(), { yapan_rol_id: rolId('kalite'), ustlenilen_rol_id: null, sorumlu_kisi_id: null });
     assert.equal((await ayrinti(kalite2, r.id)).izinler.ustlenebilir, true, 'rolden başkası üstlenir');
@@ -484,5 +485,23 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const b = await gorevAc(p, { sorumluKisiId: isleyen.id });
     const c = await basarili(isleyen, b.id, 'geri-cevir', { gerekce: 'Bende değil' });
     assert.equal(c.gorev.sorumluKisiId, null);
+  });
+
+  test('3478: atama bildirimi görev başınadır; aynı projede ikinci görev ayrı satır açar, iptal edilen görevin bildirimi kapanır', async () => {
+    const kisi = await islemliKisi(['projeler.gorev-isle']);
+    const p = await projeAc();
+    const a = await gorevAc(p, { sorumluKisiId: kisi.id });
+    const b = await gorevAc(p, { sorumluKisiId: kisi.id });
+    await gorevAc(p, { sorumluKisiId: kisi.id });
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 3, 'üç görev üç bildirim');
+    await basarili(planlama, a.id, 'iptal');
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 2, 'iptal komutuyla kapanan görevin bildirimi kapandı, ötekiler kaldı');
+    // Düzenleme ekranından durum iptal yapılınca da o görevin atama bildirimi kapanır.
+    const surum = (await vt().tek<{ surum: number }>('SELECT surum FROM projeler_gorev WHERE id = $1', [b.id]))?.surum ?? 0;
+    const d = await gonder(planlama, `/projeler/gorevler/${b.id}/guncelle`, {
+      ad: 'Akış görevi', planBaslangic: '2026-12-01', planBitis: '2026-12-05', sorumluKisiId: kisi.id, ilerleme: 0, durum: 'iptal', surum,
+    });
+    assert.equal(d.statusCode, 200, d.body);
+    assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 1, 'düzenlemede iptal edilenin bildirimi kapandı, sonuncusu kaldı');
   });
 });

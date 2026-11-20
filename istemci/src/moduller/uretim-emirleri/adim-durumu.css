@@ -118,7 +118,8 @@
 .tc-ad-liste-hucre progress::-webkit-progress-bar { background: var(--panel); }
 .tc-ad-liste-hucre progress::-webkit-progress-value { background: var(--run); }
 .tc-ad-liste-hucre progress::-moz-progress-bar { background: var(--run); }
-.tc-tablo-kap[data-kaydir] .tc-ad-matris tr.tc-ad-mx-alt > td { background: var(--panel2); }
+/* Alt satır tonu yarı saydamdır; yapışık adım sütunu yana kayan düğme ve yazıyı örtsün diye dolu zeminin üstüne serilir. */
+.tc-tablo-kap[data-kaydir] .tc-ad-matris tr.tc-ad-mx-alt > td { background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
 .tc-ad-mx-alt > td.tc-tablo-sabit-sol { white-space: normal; }
 .tc-ad-mx-kim { font-size: var(--yazi-s); color: var(--muted); }
 .tc-ad-mx-ekle { display: flex; flex-wrap: wrap; gap: var(--b-2); }

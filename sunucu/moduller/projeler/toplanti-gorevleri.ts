@@ -11,7 +11,7 @@ const KISITLAR = { ...YONETIM_KISITLARI, projeler_gorev_toplanti_aksiyon_tekil: 
 export async function toplantiAksiyonundanGorevAc(db: Db, kisiId: number, g: ToplantiGoreviVerisi): Promise<{ id: number; durum: string }> {
   await projeKilitle(db, g.projeId, true);
   const id = await kisitKorumali(KISITLAR, () => sorgular.toplantiGorevEkle(db, g.projeId, g, kisiId));
-  await atamaBildir(db, g.projeId, [{ sorumluKisiId: g.sorumluKisiId, yapanRolId: null }], kisiId);
+  await atamaBildir(db, g.projeId, [{ sorumluKisiId: g.sorumluKisiId, yapanRolId: null }], kisiId, id);
   return { id, durum: 'yapilacak' };
 }
 

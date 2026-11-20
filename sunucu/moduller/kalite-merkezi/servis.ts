@@ -38,7 +38,7 @@ import { numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { GIRIS_KARNE_ANAHTARI, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi, gkkKontrolEngeli, gkkNoBicimi } from './kurallar.ts';
 import { GKK_NO_TURU, gkkSablonDenetle, gkkSablonlari, gkkTuruKarttan as gkkTuru } from '#paylasilan/gkk-sablonlari.ts';
-import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
+import { DOF_KOLEKSIYONU, acikDofTerminleri, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, kararBekleyenUygunsuzluklar } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
 import type { AqlSiddeti, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
@@ -784,6 +784,14 @@ export async function dofDurumlari(db: Db, kaynak: DofKaynagi, anahtarlar: reado
     const anahtar = kimlikler.get(s.kimlik);
     return anahtar === undefined ? [] : [[anahtar, dofDurumu(s.kimlik, s.govde)] as const];
   }));
+}
+
+// 3478: kademeli uyarı kaynakları (kalite-merkezi.dof, kalite-merkezi.hatali-parca); yetki denetlemez.
+export async function acikDofler(db: Db): Promise<{ kimlik: string; no: string; termin: string }[]> {
+  return acikDofTerminleri(await sorgular.koleksiyonKayitlari(db, DOF_KOLEKSIYONU));
+}
+export async function kararBekleyenNcrler(db: Db): Promise<{ kimlik: string; no: string; tarih: string }[]> {
+  return kararBekleyenUygunsuzluklar(await sorgular.koleksiyonKayitlari(db, UYGUNSUZLUK_KOLEKSIYONU));
 }
 
 // 564 2 a, 4 a: kalite istasyonunun lot planı. Ayar verilmezse (Hazırlık değiştirmediyse) uygulamanın varsayılan AQL ayarı; sıkılık

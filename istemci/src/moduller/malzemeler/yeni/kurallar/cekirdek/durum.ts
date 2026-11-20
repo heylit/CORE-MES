@@ -147,7 +147,10 @@ const FAMS: Sozluk<Aile> = {
             { k: 'ut', ad: 'Ultrasonik muayene (UT) kabul sınıfı', type: 'select', opts: M_UT, grp: 'Muayene ve test' },
             { k: 'test', ad: 'Diğer muayene ve testler', type: 'multi', opts: M_TEST, grp: 'Muayene ve test' },
             { k: 'ambalaj', ad: 'Ambalaj', type: 'select', opts: M_AMB, grp: 'Teslimat' },
-            { k: 'koruma', ad: 'Ek koruma', type: 'multi', opts: ['Koruyucu folyo (PE)', 'Lazer kesim folyosu', 'Yağlı', 'Kuru (yağsız)', 'Astar boyalı', 'Uç kapaklı'], grp: 'Teslimat' }],
+            { k: 'koruma', ad: 'Ek koruma', type: 'multi', opts: ['Koruyucu folyo (PE)', 'Lazer kesim folyosu', 'Yağlı', 'Kuru (yağsız)', 'Astar boyalı', 'Uç kapaklı'], grp: 'Teslimat' },
+            { k: 'olcustd', ad: 'Ölçü standardı', type: 'select', opts: ['EN 10278', 'EN 10060', 'EN 10058', 'EN 10059', 'EN 10029', 'EN 10051', 'EN 485-4', 'EN 754-3', 'EN 755-3', 'EN 755-9', 'ASTM A484', 'ASTM B209 tablo'], grp: 'Ölçü' },
+            { k: 'ra', ad: 'Yüzey pürüzlülüğü Ra en çok (µm)', type: 'number', ph: 'ör. 3,2', grp: 'Yüzey' },
+            { k: 'kaplamastd', ad: 'Kaplama standardı', type: 'select', opts: ['MIL-A-8625 Tip II', 'MIL-A-8625 Tip III', 'MIL-DTL-5541 Sınıf 1A', 'ASTM A967', 'AMS 2700', 'ISO 2081', 'ISO 7599'], grp: 'Yüzey' }],
         classes: {
             karbon: { ad: 'Yapı ve basınçlı kap çelikleri', kod: 'CEL', std: 'EN 10025-2', def: { korozyon: 'Zayıf', kaynak: 'Çok iyi', isleme: 'İyi' },
                 durum: ['Sıcak hadde (+AR)', 'Normalize hadde (+N)', 'Normalize (+N)', 'Termomekanik hadde (+M)', 'Su verilmiş + temperlenmiş (+QT)', 'Gerilim giderilmiş'],

@@ -970,6 +970,13 @@ export async function logoSirasiniGeriAl(db: Db, tur: 'teklif' | 'siparis', id: 
 
 // Takvim (891, 1162 b): termini aralıkta olan, iptal edilmemiş siparişler.
 export interface TakvimSiparisSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; termin: string }
+// 3478: onay bekleyen (taslak) sipariş; kademeli uyarı açılıştan sayar.
+export function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; olusturma: Date }[]> {
+  return db.sorgu<{ id: number; no: string; olusturma: Date }>(
+    `SELECT id, no, olusturma FROM siparisler_siparis WHERE durum = 'taslak' ORDER BY id`,
+  );
+}
+
 export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {
   return db.sorgu<TakvimSiparisSatiri>(
     `SELECT s.id, s.no, s.durum, s.firma_id, s.termin FROM siparisler_siparis s

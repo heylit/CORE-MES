@@ -95,17 +95,19 @@ export const KADEME_KAYNAKLARI = {
     ad: 'Bakım vadesi', grup: 'Bakım', sayac: 'son-gun', asama: 1, okumaIslemleri: ['arkon.bakim', 'arkon.amir', 'arkon.yonetici'],
     yol: '/arkon/bakim', varsayilan: sonGun(5, 2, 5),
   },
+  // 3478: DÖF ve hatalı parça okuyucuları bu işte bağlandı; yeni gelen uyarı kapalı başlar.
   'kalite-merkezi.dof': {
     ad: 'DÖF termini', grup: 'Kalite', sayac: 'son-gun', asama: 1, okumaIslemleri: ['kalite-merkezi.oku', 'kalite-merkezi.yaz'],
-    yol: '/kalite-merkezi/dof', varsayilan: sonGun(3, 3, 7),
+    yol: '/kalite-merkezi/dof', varsayilan: sonGun(3, 3, 7, { acik: false }),
   },
   'kalite-merkezi.hatali-parca': {
     ad: 'Hatalı parça kararı bekliyor', grup: 'Kalite', sayac: 'bekleme', asama: 1, okumaIslemleri: ['kalite-merkezi.yaz', 'kalite-merkezi.onayla'],
-    yol: '/kalite-merkezi/uygunsuzluklar', varsayilan: bekleme(1, 1, 3),
+    yol: '/kalite-merkezi/uygunsuzluklar', varsayilan: bekleme(1, 1, 3, { acik: false }),
   },
   'siparisler.onay': {
     ad: 'Satış siparişi onay bekliyor', grup: 'Satış', sayac: 'bekleme', asama: 1, okumaIslemleri: ['siparisler.onayla'],
-    yol: '/siparisler', varsayilan: bekleme(1, 2, 4),
+    // 3478: okuyucusu bu işte bağlandı; yeni gelen uyarı kapalı başlar (açık kayıtlar birden çalmaz).
+    yol: '/siparisler', varsayilan: bekleme(1, 2, 4, { acik: false }),
   },
   'siparisler.termin': {
     ad: 'Satış siparişi termini', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],

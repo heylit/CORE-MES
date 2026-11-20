@@ -13,7 +13,7 @@ import type {
   BirimSecenekleriCevabi, KalemRevizyonu, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisRevizyonlariCevabi, SiparisRevizyonVerisi, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
-import { bildirimGonder } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, revizyonBilgileri, satisBirimleri, type RevizyonBilgisi } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -257,13 +257,20 @@ export async function durumDegistir(
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));
+  // 3478: onay ya da iptalden sonra "onay bekleyen sipariş" işi Gelenler'de ve zilde kalmaz.
+  if (komut === 'onayla' || komut === 'iptal') await bildirimKapat(db, { tur: 'siparisler.onay-bekliyor', kaynakKimlik: String(id) });
   if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici, projeKodu: g.projeKodu });
   if (komut === 'geri-al') await siparisOnayiGeriAlindiBildir(db, { siparisId: id, kullanici });
   if (komut === 'iptal') await siparisIptalEdildiBildir(db, { siparisId: id, kullanici });
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
   if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
-  return siparisAyrintisi(db, id);
+  const sonuc = await siparisAyrintisi(db, id);
+  // 3478 Risk N1: onayı geri alınan sipariş yeniden onay bekler; iş onaylayanlara yeniden düşer.
+  if (komut === 'geri-al') await bildirimGonder(db, {
+    tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+  });
+  return sonuc;
 }
 
 // 3425 a: iptal edilmiş sipariş arşive kalkar ya da geri gelir; durum, iptal nedeni, tahsilat ve emirler değişmez.
@@ -456,6 +463,11 @@ export const siparisOzeti = async (db: Db): Promise<SiparisOzetiCevabi> =>
 export const terminDagilimi = async (db: Db): Promise<TerminDagilimiCevabi> => ({ araliklar: terminAraliklari(await sorgular.terminKalanlari(db, await denemeIsaretliKimlikler(db, 'siparis'))) });
 
 // Takvim (891): termini [baslangic, bitis] içindeki siparişler, firma adıyla. Yetki denetlemez; çağıran siparisler.oku'yu denetler.
+// 3478: kademeli uyarı kaynağı (siparisler.onay). VARSAYIM: bekleme açılıştan sayılır; geri alınan onay sayacı baştan başlatmaz.
+export async function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; beklemeAni: string }[]> {
+  return (await sorgular.onayBekleyenSiparisler(db)).map((s) => ({ id: s.id, no: s.no, beklemeAni: s.olusturma.toISOString() }));
+}
+
 export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
   const satirlar = await sorgular.takvimSiparisleri(db, baslangic, bitis);
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));

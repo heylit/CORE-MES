@@ -58,8 +58,9 @@ async function gorevVeAdimlar(db: Db, adimlar: readonly string[], id: number | n
 }
 
 // Denemede hiçbir şey yazılmaz: şablon uygulanmaz, görev açılmaz, bildirim gitmez; yalnız açılacak görevler (var olan hariç) döner.
+// `bildir` false ise atama bildirimini çağıran toplar (dağıtım tek zil, 3478).
 export async function hazirlikGorevleriAc(
-  db: Db, kisiId: number, v: HazirlikGorevleriAcVerisi, deneme = false,
+  db: Db, kisiId: number, v: HazirlikGorevleriAcVerisi, deneme = false, bildir = true,
 ): Promise<{ eklenen: number; plan: HazirlikPlani[] }> {
   const bos = { eklenen: 0, plan: [] };
   // Hazırlık kalemi yoksa proje kilitlenmez: her emir açılışı projeyi beklemesin.
@@ -103,7 +104,7 @@ export async function hazirlikGorevleriAc(
       }
     }
   }
-  if (!deneme && plan.length > 0) await atamaBildir(db, v.projeId, plan.map((x) => ({ sorumluKisiId: x.yapanKisiId, yapanRolId: x.yapanRolId })), kisiId);
+  if (!deneme && bildir && plan.length > 0) await atamaBildir(db, v.projeId, plan.map((x) => ({ sorumluKisiId: x.yapanKisiId, yapanRolId: x.yapanRolId })), kisiId);
   return { eklenen: deneme ? 0 : plan.length, plan };
 }
 
@@ -143,6 +144,6 @@ export async function hazirlikGoreviAta(db: Db, kullanici: Kullanici, gorevId: n
   const atama = { sorumluKisiId: g.sorumluKisiId ?? null, yapanRolId: g.yapanRolId ?? null };
   const s = await kisitKorumali(HAZIRLIK_KISITLARI, () => sorgular.hazirlikGoreviAta(db, gorevId, atama, g.surum, kullanici.id));
   if (s === null) throw eskiSurum();
-  await atamaBildir(db, s.proje_id, [atama], kullanici.id);
+  await atamaBildir(db, s.proje_id, [atama], kullanici.id, gorevId);
   return { id: s.id, surum: s.surum };
 }
