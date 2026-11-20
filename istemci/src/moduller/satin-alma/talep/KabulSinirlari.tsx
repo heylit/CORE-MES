@@ -59,14 +59,18 @@ function payOku(yazi: string, enCok: number): { deger: number | null; hata: stri
   return n > enCok ? { deger: null, hata: `Kartın sınırı en çok ${sayi(enCok)} mm; daha geniş pay yazılamaz.` } : { deger: n, hata: null };
 }
 
+// Tablo hücresi ve ayrıntı aynı önbelleği okur: zarf bir kez istenir.
+export const useKabulZarfi = (no: number) => useQuery({
+  queryKey: anahtarlar.kabulZarfi(no),
+  queryFn: () => cagri.get('/satin-alma-kabul-zarfi/:no', { parametre: { no }, ...SURE }),
+});
+export const kapaliZarfNotu = (gerekce: string | null) => `Bu kartta alternatif kapalı${gerekce ? `: ${gerekce}` : ''}.`;
+
 // hatali: alanda gönderilemeyecek bir değer var (talep formu gönderimi durdurur).
 export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: KabulSiniri | null; degistir: (k: KabulSiniri | null, hatali: boolean) => void }) {
   const [payYazi, payYaziYaz] = useState(() => (kabul?.payMm == null ? '' : sayi(kabul.payMm)));
   const [yalnizOncesi, yalnizOncesiYaz] = useState<KabulSiniri | null>(null);
-  const sorgu = useQuery({
-    queryKey: anahtarlar.kabulZarfi(no),
-    queryFn: () => cagri.get('/satin-alma-kabul-zarfi/:no', { parametre: { no }, ...SURE }),
-  });
+  const sorgu = useKabulZarfi(no);
   const z = sorgu.data?.zarf;
   if (sorgu.isPending) return <p className="sa-talep-not">Kabul sınırları okunuyor</p>;
   if (sorgu.isError) return <p className="sa-talep-not">Kabul sınırları okunamadı; kalem kartın sınırıyla gider.</p>;
@@ -93,7 +97,7 @@ export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: Kab
     return (
       <section className="sa-kabul" aria-label="Kabul sınırları">
         {baslik}
-        <p className="sa-talep-not">Bu kartta alternatif kapalı{z.gerekce ? `: ${z.gerekce}` : ''}. Kalem yalnız aynı malzemeyle karşılanır.</p>
+        <p className="sa-talep-not">{kapaliZarfNotu(z.gerekce)} Kalem yalnız aynı malzemeyle karşılanır.</p>
       </section>
     );
   }

@@ -8,6 +8,7 @@ import {
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikBol, sonAlisKgFiyati } from './kurallar.ts';
+import { kalemTerminEmriTuret } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, satisBagReddi, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
@@ -951,4 +952,19 @@ test('fiyatsizGorunum: onay notu, karar gerekçesi ve teklif fiyatı boşalır; 
   assert.deepEqual([g.karar?.gerekce, g.karar?.ogrenilenler, g.karar?.sabitKurlar, g.senaryolar, g.hareketler], ['', '', [], [], [{ kisiId: 5 }]]);
   assert.deepEqual([g.teklifler[0]?.notlar, g.teklifler[0]?.fiyatlar, g.teklifler[0]?.iskontoYuzdesi], ['', [], null]);
   assert.doesNotMatch(JSON.stringify(g), /777|888|555|1234\.5/);
+});
+
+test('3462 a kalemTerminEmriTuret: talep termini en erken, emir yalnız ortaksa; kalemde yalnız talepten farklı değer saklanır', () => {
+  const v = { ihtiyacTarihi: '2026-12-20', uretimEmriId: 5 };
+  assert.deepEqual(kalemTerminEmriTuret([{}, {}], v), { talep: v, kalemler: [{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: null, uretimEmriId: null }] });
+  assert.deepEqual(kalemTerminEmriTuret([{ ihtiyacTarihi: '2026-12-10', uretimEmriId: 7 }, {}], v), {
+    talep: { ihtiyacTarihi: '2026-12-10', uretimEmriId: null },
+    kalemler: [{ ihtiyacTarihi: null, uretimEmriId: 7 }, { ihtiyacTarihi: '2026-12-20', uretimEmriId: 5 }],
+  });
+  // Terminsiz kalem en erken terminden ayrı saklanmaz (talebi izler); emirsiz kalem karışık talepte emirsiz kalır.
+  assert.deepEqual(kalemTerminEmriTuret([{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: '2026-12-01' }], v), {
+    talep: { ihtiyacTarihi: '2026-12-01', uretimEmriId: null },
+    kalemler: [{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: null, uretimEmriId: 5 }],
+  });
+  assert.deepEqual(kalemTerminEmriTuret([{}], { ihtiyacTarihi: null, uretimEmriId: null }).talep, { ihtiyacTarihi: null, uretimEmriId: null });
 });

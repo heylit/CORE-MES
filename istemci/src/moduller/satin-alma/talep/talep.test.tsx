@@ -107,7 +107,7 @@ describe('Ana sayfadan talep (#375)', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     const secim = await screen.findByLabelText(/Üretim emri/);
-    await screen.findByRole('option', { name: /UE-000031 · P-31 Deneme parça/ });
+    await within(secim).findByRole('option', { name: /UE-000031 · P-31 Deneme parça/ });
     expect((secim as HTMLSelectElement).value).toBe('');
     fireEvent.change(secim, { target: { value: '31' } });
     serbestKalem('2');
@@ -179,7 +179,7 @@ describe('Ana sayfadan talep (#375)', () => {
     await waitFor(() => expect(cagrilar.some((c) => c.yol === `/satin-alma-talepleri/${duzenlenen.id}/talebimi-duzenle`)).toBe(true));
     expect(cagrilar.find((c) => c.yol.endsWith('/talebimi-duzenle'))!.govde).toEqual({
       surum: 3, ihtiyacTarihi: '2026-12-01', aciklama: 'Eski not',
-      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '5', aciklama: '' }],
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '5', aciklama: '', ihtiyacTarihi: '2026-12-01' }],
     });
   });
 
@@ -210,7 +210,7 @@ describe('Ana sayfadan talep (#375)', () => {
     expect(typeof govde.id).toBe('string');
     expect({ ...govde, id: undefined }).toEqual({
       id: undefined, surum: 5, ihtiyacTarihi: '2026-12-01', aciklama: 'Eski not',
-      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '6', aciklama: '' }],
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '6', aciklama: '', ihtiyacTarihi: '2026-12-01' }],
     });
   });
 
@@ -457,7 +457,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
       </MemoryRouter>,
     );
-    await screen.findByRole('option', { name: /UE-000031/ });
+    await within(await screen.findByLabelText(/Üretim emri/)).findByRole('option', { name: /UE-000031/ });
     expect((screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
     await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
@@ -498,7 +498,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><TaleplerimSayfasi /></BildirimSaglayici></QueryClientProvider>
       </MemoryRouter>,
     );
-    await screen.findByRole('option', { name: /UE-000031/ });
+    await within(await screen.findByLabelText(/Üretim emri/)).findByRole('option', { name: /UE-000031/ });
     expect((screen.getByLabelText(/Üretim emri/) as HTMLSelectElement).value).toBe('');
   });
 
