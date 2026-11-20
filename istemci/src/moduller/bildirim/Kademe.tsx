@@ -13,6 +13,7 @@ import {
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar, CIHAZ_ANAHTARI } from './anahtarlar.ts';
+import { DikeyMerdiven } from './Merdiven.tsx';
 import './bildirim.css';
 
 // Kademeli uyarı (3405 a): kaynak başına ayar (yan pencere), kişinin Gecikenlerim listesi, bütün Açık takipler ve kişisel
@@ -97,7 +98,7 @@ export function KademeliUyari() {
           arac={{ csv: { ad: 'kademeli-uyari' } }}
         />
       </Kart>
-      {acik && <AyarPenceresi key={acik.kaynak} satir={acik} roller={d.data.roller} kapat={() => seciliYaz(null)} />}
+      {acik && <KademeAyarPenceresi key={acik.kaynak} satir={acik} roller={d.data.roller} kapat={() => seciliYaz(null)} />}
     </div>
   );
 }
@@ -105,7 +106,7 @@ export function KademeliUyari() {
 const BIRIM_SECENEKLERI = [{ deger: 'gun', baslik: 'İş günü' }, { deger: 'saat', baslik: 'Saat (iş günlerinde)' }];
 const sayiYaz = (deger: string): number | null => (deger.trim() === '' ? null : Number(deger));
 
-function AyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roller: KademeAyarlariCevabi['roller']; kapat: () => void }) {
+export function KademeAyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roller: KademeAyarlariCevabi['roller']; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [g, gYaz] = useState<Omit<KademeAyarDegistirGovdesi, 'surum'>>({
@@ -142,6 +143,7 @@ function AyarPenceresi({ satir, roller, kapat }: { satir: KademeAyarSatiri; roll
       <div className="tc-bildirim-kademe-form">
         {satir.para && <p className="tc-bildirim-serit"><Simge ad="alert" boyut="k" />Bu kaynak para taşır: e-postaya yalnız kayıt numarası yazılır.</p>}
         <IsaretKutusu etiket="Bu kaynak takip edilsin" checked={g.acik} onChange={(o) => degistir({ acik: o.target.checked })} />
+        <DikeyMerdiven ayar={{ ...g, sayac: satir.sayac }} />
         {satir.sayac === 'son-gun'
           ? gunAlani('K2 Yaklaşıyor: son günden kaç iş günü önce', g.k2Gun, 'k2Gun', 'Boş bırakılırsa hatırlatma gitmez.')
           : (

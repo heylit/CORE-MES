@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
-  BildirimAlicilariCevabi, BildirimGosterimleriCevabi, BildirimPushTurleriCevabi, CagriYonlendirmeCevabi, CagriYonlendirmeDegistirGovdesi,
+  BildirimAlicilariCevabi, BildirimGosterimleriCevabi, BildirimOlayAciklariCevabi, BildirimPushTurleriCevabi, CagriYonlendirmeCevabi,
+  CagriYonlendirmeDegistirGovdesi,
 } from '#paylasilan/sozlesme/bildirim.ts';
+import type { KademeAyarlariCevabi, KademeAyarSatiri } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import type { EpostaSablonlariCevabi, EpostaTetikleyicileriCevabi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -141,9 +143,22 @@ const SABLONLAR = {
   }],
 } satisfies EpostaSablonlariCevabi;
 
-function matrisSunucusu(hataliYol?: string) {
+// 3478-1 a: olayın ana anahtarı ve kademe kaynağı satırı. Varsayılan sınama bütün olaylar açık; kapalı başlama ayrıca sınanır.
+const olayCevabi = (acik: boolean): BildirimOlayAciklariCevabi => ({
+  satirlar: GOSTERIM.satirlar.map((s) => ({ tur: s.tur, baslik: s.baslik, onem: s.onem, kaynakModul: s.kaynakModul, acik, surum: acik ? 1 : null })),
+  oncekiHal: { alindi: '2026-11-20T08:00:00.000Z', donuldu: null },
+});
+const KAYNAK: KademeAyarSatiri = {
+  kaynak: 'satin-alma.talep-onay', ad: 'Talep onayı', grup: 'Satın alma', sayac: 'bekleme', asama: 1, para: false, acik: false,
+  k2Gun: null, k3Gun: 2, k3Birim: 'gun', k4Gun: 2, k5Gun: 5, epostaKademe: 3, serit: true, kapatilamaz: false, yoneticiRolId: null,
+  varsayilan: true, surum: 0, degistiren: null, degisti: null, takipte: 3, gecikti: 1,
+};
+
+function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: boolean } = {}) {
   const yazilanlar: { yol: string; govde: unknown }[] = [];
   const okunanlar: string[] = [];
+  const olaylar = olayCevabi(secenek.acik ?? true);
+  const kademe: KademeAyarlariCevabi = { kaynaklar: secenek.kademe ? [structuredClone(KAYNAK)] : [], roller: [] };
   // Alıcı yazımı sunucudaki gibi satırı değiştirir ve sürümü artırır; Geri al yeniden okunan sürümü taşımalıdır.
   const alicilar: BildirimAlicilariCevabi = structuredClone(ALICILAR);
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
@@ -152,6 +167,18 @@ function matrisSunucusu(hataliYol?: string) {
       const govde = JSON.parse(secenek.body ?? '{}') as { rolIdleri?: number[]; kisiIdleri?: number[]; surum?: number | null };
       yazilanlar.push({ yol, govde });
       if (yol === hataliYol) return json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' });
+      const g = govde as { acik?: boolean; turler?: string[] };
+      const olay = /^\/bildirimler\/olaylar\/([^/]+)\/degistir$/.exec(yol);
+      const degisen = olay ? [olay[1]] : yol === '/bildirimler/olaylar/toplu' ? (g.turler ?? []) : yol === '/bildirimler/olaylar/onceki-hale-don' ? olaylar.satirlar.map((x) => x.tur) : null;
+      if (degisen) {
+        for (const x of olaylar.satirlar) if (degisen.includes(x.tur)) Object.assign(x, { acik: g.acik ?? true, surum: (x.surum ?? 0) + 1 });
+        return json(200, olaylar);
+      }
+      const kaynak = /^\/bildirim-kademe\/kaynaklar\/([^/]+)\/ayarla$/.exec(yol);
+      if (kaynak) {
+        for (const x of kademe.kaynaklar) if (x.kaynak === kaynak[1]) Object.assign(x, { acik: g.acik ?? false, surum: x.surum + 1 });
+        return json(200, kademe);
+      }
       const alici = /^\/bildirimler\/alicilar\/([^/]+)\/degistir$/.exec(yol);
       const satir = alici ? alicilar.satirlar.find((a) => a.tur === alici[1]) : undefined;
       if (satir) {
@@ -166,7 +193,8 @@ function matrisSunucusu(hataliYol?: string) {
     if (yol === '/bildirimler/push/turler') return json(200, PUSH);
     if (yol === '/bildirimler/eposta/tetikleyiciler') return json(200, TETIK);
     if (yol === '/bildirimler/eposta/sablonlar') return json(200, SABLONLAR);
-    if (yol === '/bildirim-kademe/kaynaklar') return json(200, { kaynaklar: [], roller: [] });
+    if (yol === '/bildirim-kademe/kaynaklar') return json(200, kademe);
+    if (yol === '/bildirimler/olaylar') return json(200, olaylar);
     if (yol === '/bildirimler/cagri-yonlendirme') return json(200, BASLANGIC);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -186,7 +214,7 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     const satin = within(tablo).getByText('Satın alma talebi onay bekliyor').closest('tr');
     if (!satin) throw new Error('satır yok');
-    expect(within(satin).getByText('Hemen · ORN Acil talep')).toBeTruthy();
+    expect(within(satin).getByText('E-posta hemen · ORN Acil talep')).toBeTruthy();
     expect(within(satin).getByText('Müdür, 1 kişi')).toBeTruthy();
     expect(anahtar('Satın alma talebi onay bekliyor: E-posta').getAttribute('aria-checked')).toBe('true');
     expect(anahtar('Makine durdu: Ekran ortası').getAttribute('aria-checked')).toBe('true');
@@ -196,7 +224,8 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     expect(makine?.textContent).toMatch(/Yetkisi olanlar .*\(varsayılan\)/);
     expect(within(tablo).getByText('Malzeme bırakıldı').closest('tr')?.textContent).toMatch(/Kayda bağlı kişi/);
     expect(within(tablo).queryByText('Zil')).toBeNull();
-    expect(screen.getByRole('tab', { name: /Kademeli uyarı/ })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /Kademeli uyarı/ })).toBeNull();
+    expect(anahtar('Makine durdu: Açık').getAttribute('aria-checked')).toBe('true');
   });
 
   it('anahtar basınca o kanal hemen, okunan sürümle yazılır; öteki gösterim alanı korunur', async () => {
@@ -322,7 +351,9 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     ac(['bildirim.eposta-yonet']);
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     expect(within(tablo).queryByText('Alıcılar')).toBeNull();
-    expect(within(tablo).getByRole('columnheader', { name: 'E-posta' })).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: 'Nasıl' })).toBeTruthy();
+    expect(anahtar('Satın alma talebi onay bekliyor: E-posta').getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('switch', { name: 'Makine durdu: Telefon' })).toBeNull();
     expect(okunanlar).not.toContain('/bildirimler/alicilar');
     expect(okunanlar).not.toContain('/bildirim-kademe/kaynaklar');
     expect(screen.queryByRole('tab', { name: /Ekip çağrıları/ })).toBeNull();
@@ -374,7 +405,7 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     expect(screen.getByRole('tab', { name: /Kim alır/ })).toBeTruthy();
   });
 
-  it('kademe sekmesi adresle de yetkisiz kişiye açılmaz: Olaylar açılır, kademe ucu okunmaz', async () => {
+  it('eski kademe sekmesi adresi Olaylar\'ı açar; kademe yetkisi olmayan kademe ucunu okumaz', async () => {
     const { okunanlar } = matrisSunucusu();
     ac(['ayarlar.yaz'], '/bildirim-merkezi/yonetim?sekme=kademe');
     expect(await screen.findByRole('table', { name: 'Bildirim olayları' })).toBeTruthy();
@@ -383,14 +414,57 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     expect(okunanlar).not.toContain('/bildirim-kademe/kaynaklar');
   });
 
-  it('yalnız kademeli uyarı yöneten kişi boş Olaylar yerine Kademeli uyarı sekmesini açar', async () => {
-    const { okunanlar } = matrisSunucusu();
+  it('yalnız kademeli uyarı yöneten kişi Olaylar\'da kaynağı tek satırda, merdiveniyle görür; olay uçlarını okumaz', async () => {
+    const { okunanlar } = matrisSunucusu(undefined, { kademe: true });
     ac(['bildirim.kademe-yonet']);
-    expect(await screen.findByRole('tab', { name: /Kademeli uyarı/ })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /Olaylar/ })).toBeNull();
-    expect(screen.getByRole('tab', { name: /Kademeli uyarı/ }).getAttribute('aria-selected')).toBe('true');
-    await waitFor(() => { expect(okunanlar).toContain('/bildirim-kademe/kaynaklar'); });
+    const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
+    const satir = within(tablo).getByText('Talep onayı').closest('tr');
+    expect(satir?.textContent).toMatch(/3 takipte · 1 gecikti/);
+    expect(within(tablo).getByRole('img', { name: /^Talep onayı merdiveni \(kapalı\): K1 Atandı: İş açılınca; K3 Gecikti: 2 iş günü bekleyince; K4/ })).toBeTruthy();
     expect(okunanlar).not.toContain('/bildirimler/alicilar');
+    expect(okunanlar).not.toContain('/bildirimler/olaylar');
+    fireEvent.click(screen.getByRole('button', { name: 'Talep onayı: ayrıntı' }));
+    const panel = await screen.findByRole('dialog', { name: 'Talep onayı' });
+    expect(within(panel).getByRole('list', { name: 'Merdiven' })).toBeTruthy();
+  });
+
+  it('3478: kapalı olay tek anahtarla sürümüyle açılır; modülün toplu açması önce sorar', async () => {
+    const { yazilanlar } = matrisSunucusu(undefined, { acik: false });
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(screen.getByRole('note').textContent).toMatch(/Gelenler'de kalır/);
+    fireEvent.click(anahtar('Makine durdu: Açık'));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/olaylar/istasyonlar.makine-durdu/degistir', govde: { acik: true, surum: null } });
+    await waitFor(() => { expect(anahtar('Makine durdu: Açık').getAttribute('aria-checked')).toBe('true'); });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Stok: Açık, 0/1 açık' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/olaylar/stok.birakildi/degistir', govde: { acik: true, surum: null } });
+  });
+
+  it('3478: kademe kaynağını açmak, bekleyen işlerin ilk turda çalacağını söyleyip sorar', async () => {
+    const { yazilanlar } = matrisSunucusu(undefined, { acik: false, kademe: true });
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(anahtar('Talep onayı: Açık'));
+    const pencere = await screen.findByRole('dialog', { name: 'Talep onayı: açılsın mı?' });
+    expect(pencere.textContent).toMatch(/ilk turda/);
+    expect(yazilanlar).toHaveLength(0);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Aç' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]?.yol).toBe('/bildirim-kademe/kaynaklar/satin-alma.talep-onay/ayarla');
+    expect(yazilanlar[0]?.govde).toMatchObject({ acik: true, k3Gun: 2, k4Gun: 2, k5Gun: 5, surum: 0 });
+  });
+
+  it('3478: Önceki hale dön onaydan sonra yazılır ve bütün olaylar açık görünür', async () => {
+    const { yazilanlar } = matrisSunucusu(undefined, { acik: false });
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki hale dön' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Önceki hale dönülsün mü?' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Önceki hale dön' }));
+    await waitFor(() => { expect(yazilanlar).toEqual([{ yol: '/bildirimler/olaylar/onceki-hale-don', govde: {} }]); });
+    await waitFor(() => { expect(anahtar('Malzeme bırakıldı: Açık').getAttribute('aria-checked')).toBe('true'); });
   });
 
   it('menü maddesi üç işlemden biriyle görünür: yalnız e-posta ya da yalnız kademe yöneten kişi de görür', () => {
