@@ -14,6 +14,10 @@ const SINIRLAR: GrupSinirlariCevabi = {
     { id: 4, kapsamTuru: 'kalite', kapsam: 'C45', nitelik: 'd', degerler: null, alt: 50, ust: 56, surum: 2 },
     { id: 5, kapsamTuru: 'sinif', kapsam: 'metal/celik', nitelik: 'kalite', degerler: [{ deger: 'C45', tur: 'tam' }, { deger: '42CrMo4', tur: 'ust' }], alt: null, ust: null, surum: 1 },
   ],
+  kapsamlar: [
+    { kapsamTuru: 'kalite', kapsam: 'C45', kart: 7 }, { kapsamTuru: 'sinif', kapsam: 'metal/celik', kart: 12 },
+    { kapsamTuru: 'sinif', kapsam: 'metal/pirinc', kart: 0 },
+  ],
 };
 const ZARF: KartZarfiCevabi = {
   kart: { no: 1, kod: 'HM-MET-C45-0001', ad: 'Örnek çubuk C45 Ø50', aile: 'metal', sinif: 'celik' },
@@ -59,7 +63,7 @@ describe('Grup sınırları (3463-1b)', () => {
     expect(within(ayrinti).getAllByText('Seçilen sınır')).toHaveLength(3);
   });
 
-  test('tanım yazan sınıfa ölçü aralığı ekler; var olanı sürümüyle kaldırır', async () => {
+  test('tanım yazan sınıfı listeden seçer, etkilenen kart sayısını görür; kaldırma onayla ve sürümüyle', async () => {
     const istekler = sunucuKur(YONETICI, yollar({
       'POST /malzeme-alternatifleri/siniri/kaydet': () => json(200, { tamam: true }),
       'POST /malzeme-alternatifleri/siniri/4/kaldir': () => json(200, { tamam: true }),
@@ -68,7 +72,13 @@ describe('Grup sınırları (3463-1b)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /Grup sınırları/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Sınır ekle' }));
     const pencere = await screen.findByRole('dialog');
-    fireEvent.change(within(pencere).getByLabelText('Uygulandığı yer'), { target: { value: ' metal/celik ' } });
+    const yer = within(pencere).getByLabelText('Uygulandığı yer');
+    expect(within(yer).getAllByRole('option').map((o) => o.textContent)).toEqual(['Seçin', 'metal/celik (12 kart)', 'metal/pirinc (0 kart)']);
+    expect((within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(yer, { target: { value: 'metal/pirinc' } });
+    expect(within(pencere).getByText('Bu kapsamda hammadde kartı yok')).toBeTruthy();
+    fireEvent.change(yer, { target: { value: 'metal/celik' } });
+    expect(within(pencere).getByText(/Sınıf metal\/celik: 12 hammadde kartı/)).toBeTruthy();
     fireEvent.change(within(pencere).getByLabelText('Nitelik'), { target: { value: 'd' } });
     fireEvent.change(within(pencere).getByLabelText('En az (mm)'), { target: { value: '49,5' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
@@ -78,6 +88,10 @@ describe('Grup sınırları (3463-1b)', () => {
     fireEvent.click(await screen.findByText('50 – 56 mm'));
     const ikinci = await screen.findByRole('dialog');
     fireEvent.click(within(ikinci).getByRole('button', { name: 'Sınırı kaldır' }));
+    const onay = await screen.findByRole('dialog', { name: 'Grup sınırı kaldırılsın mı?' });
+    expect(within(onay).getByText(/Kalite C45: 7 hammadde kartı bu sınırı kaybeder/)).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/malzeme-alternatifleri/siniri/4/kaldir')).toBe(false);
+    fireEvent.click(within(onay).getByRole('button', { name: 'Sınırı kaldır' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/siniri/4/kaldir')?.govde).toEqual({ surum: 2 }));
   });
 });

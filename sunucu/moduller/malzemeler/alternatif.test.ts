@@ -202,7 +202,11 @@ describe('Malzemeler ikame ve alternatifler', () => {
     assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 19, enCok: 23, sinirKaynak: { kapsamTuru: 'kalite', kapsam: '6063' } });
     await tamam(yonetici, 'POST', yol, { ...grup, kapsamTuru: 'kart', kapsam: String(ana), alt: 20, ust: 21 });
     assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 20, enCok: 21, sinirKaynak: { kapsamTuru: 'kart', kapsam: String(ana) } });
-    const liste = (await tamam<GrupSinirlariCevabi>(okuyucu, 'GET', '/malzeme-alternatifleri/siniri')).siniri;
+    const cevap = await tamam<GrupSinirlariCevabi>(okuyucu, 'GET', '/malzeme-alternatifleri/siniri');
+    const liste = cevap.siniri;
+    // Kapsam seçenekleri katalogdan gelir ve kart sayısını taşır; yazım hatası olan kapsam listede yoktur.
+    assert.ok((cevap.kapsamlar.find((k) => k.kapsamTuru === 'kalite' && k.kapsam === '6063')?.kart ?? 0) >= 1);
+    assert.equal(cevap.kapsamlar.some((k) => k.kapsam === 'ORN-YOK'), false);
     assert.deepEqual(liste.map((x) => [x.kapsamTuru, x.kapsam, x.nitelik, x.alt, x.ust]), [['kalite', '6063', 'd', 19, 23]]);
     for (const x of [...liste, ...(await tamam<KartAlternatifleriCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/kart/${String(ana)}`)).siniri]) {
       await tamam(yonetici, 'POST', `/malzeme-alternatifleri/siniri/${String(x.id)}/kaldir`, { surum: x.surum });

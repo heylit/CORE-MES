@@ -108,7 +108,9 @@ export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
     }
   }
   const sonuc: PlanIhtiyaci[] = [];
-  const toplam = new Map([...tuketimler].map(([no, l]) => [no, l.reduce((t, x) => t + x.miktar, 0)]));
+  // Açılan ürün stoğunu kendi talebine kullanır: eşdeğer payında yalnız artanı verir, pay almaz (Risk 3463-1b K1).
+  const toplam = new Map([...urunler].map(([no, l]) => [no, Math.min(Math.max(0, sayi(g.serbest.get(no) ?? '0')), l.reduce((t, x) => t + x.miktar, 0))]));
+  for (const [no, l] of tuketimler) toplam.set(no, (toplam.get(no) ?? 0) + l.reduce((t, x) => t + x.miktar, 0));
   const pay = esdegerStokPayi(toplam, g.serbest, g.esdegerler ?? new Map());
   for (const [no, l] of tuketimler) {
     l.sort((a, b) => a.zaman - b.zaman || a.emirNo.localeCompare(b.emirNo, 'tr'));

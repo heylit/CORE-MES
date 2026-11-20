@@ -55,6 +55,12 @@ export async function kuralGuncelle(db: Db, k: KuralYazimi, surum: number, kisiI
 const KAPSAM_IFADESI: Record<Exclude<KapsamTuru, 'kart'>, string> = {
   aile: KATALOG_METIN('fam'), sinif: `${KATALOG_METIN('fam')} || '/' || ${KATALOG_METIN('cls')}`, kalite: KATALOG_KALITE,
 };
+// Grup kapsamlarının seçenekleri ve her birinin hammadde kartı sayısı (iptal dışı); ekran yazım hatası yerine listeden seçer.
+export function kapsamSayilari(db: Db): Promise<{ kapsamTuru: Exclude<KapsamTuru, 'kart'>; kapsam: string; kart: number }[]> {
+  const parca = (t: Exclude<KapsamTuru, 'kart'>) => `SELECT '${t}' AS "kapsamTuru", ${KAPSAM_IFADESI[t]} AS kapsam, count(*)::int AS kart
+    FROM malzeme_katalog_karti k WHERE k.onay_durumu <> 'iptal' AND k.tur = 'hammadde' AND ${KAPSAM_IFADESI[t]} IS NOT NULL GROUP BY 2`;
+  return db.sorgu(`${(['aile', 'sinif', 'kalite'] as const).map(parca).join(' UNION ALL ')} ORDER BY 1, 2`);
+}
 export async function kapsamKatalogdaMi(db: Db, turu: Exclude<KapsamTuru, 'kart'>, kapsam: string): Promise<boolean> {
   return (await db.tek(`SELECT 1 AS v FROM malzeme_katalog_karti k WHERE k.onay_durumu <> 'iptal' AND ${KAPSAM_IFADESI[turu]} = $1 LIMIT 1`, [kapsam])) !== null;
 }

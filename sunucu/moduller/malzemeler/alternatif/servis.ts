@@ -203,5 +203,8 @@ export const esdegerGruplari = (db: Db, nolar: readonly number[]): Promise<Map<n
 
 // 3463-1b: grup şablonu (aile, sınıf, kalite kapsamındaki sınırlar), geniş kapsamdan dara.
 export async function grupSinirlari(db: Db): Promise<GrupSinirlariCevabi> {
-  return { siniri: (await s.siniri(db)).filter((x) => x.kapsamTuru !== 'kart').map((x) => ({ ...x, degerler: x.degerler === null ? null : [...x.degerler] })) };
+  return {
+    siniri: (await s.siniri(db)).filter((x) => x.kapsamTuru !== 'kart').map((x) => ({ ...x, degerler: x.degerler === null ? null : [...x.degerler] })),
+    kapsamlar: await s.kapsamSayilari(db),
+  };
 }

@@ -170,9 +170,12 @@ export function acilacakUrunler(g: Omit<MrpGirdisi, 'agaclar'>): Map<number, num
 export function mrpSatirlari(g: MrpGirdisi): MrpSatiri[] {
   const satirlar: MrpSatiri[] = [];
   const yapraklar: Talep[] = [];
+  // Açılan kart stoğunu üst düzeyde kendi talebine kullanır: eşdeğer payında yalnız artanı verir, pay almaz (Risk 3463-1b K1).
+  const acilanKullanim = new Map<number, number>();
   for (const [no, l] of grupla(brutTalepler(g))) {
     const agac = acilirMi(g, no) ? g.agaclar.get(no) : undefined;
     if (agac === undefined) { yapraklar.push(...l); continue; }
+    acilanKullanim.set(no, Math.min(Math.max(0, sayi(g.serbest.get(no) ?? '0')), l.reduce((t, x) => t + x.miktar, 0)));
     const n = netle(no, l, g, true);
     satirlar.push(n.satir);
     for (const t of n.acik) {
@@ -183,7 +186,8 @@ export function mrpSatirlari(g: MrpGirdisi): MrpSatiri[] {
     }
   }
   const yaprakGrubu = grupla(yapraklar);
-  const toplam = new Map([...yaprakGrubu].map(([no, l]) => [no, l.reduce((t, x) => t + x.miktar, 0)]));
+  const toplam = new Map(acilanKullanim);
+  for (const [no, l] of yaprakGrubu) toplam.set(no, (toplam.get(no) ?? 0) + l.reduce((t, x) => t + x.miktar, 0));
   const pay = esdegerStokPayi(toplam, g.serbest, g.esdegerler ?? new Map());
   for (const [no, l] of yaprakGrubu) satirlar.push(netle(no, l, g, false, pay.get(no) ?? 0).satir);
   return satirlar.sort((a, b) =>

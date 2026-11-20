@@ -48,4 +48,20 @@ describe('plan: eşdeğer kartların stoğu (3463-1b)', () => {
     assert.deepEqual([s(A).serbest, s(A).net, s(B).serbest, s(B).net], [10, 0, null, 6]);
     assert.equal(mrpSatirlari({ ...mrp, esdegerler: new Map() }).find((x) => x.malzemeNo === B)!.net, null, 'grupsuz: B stoğu bilinmez');
   });
+
+  test('Risk K1: reçeteli kart stoğunu kendi talebine kullanır, aynı stok yaprağa pay olarak verilmez', () => {
+    const Y = 13;
+    const mrp: MrpGirdisi = {
+      emirler: [{ id: 1, no: 'E-1', baslama: null }, { id: 2, no: 'E-2', baslama: null }],
+      ihtiyaclar: new Map([[1, [{ malzemeNo: A, opNo: 10, brut: '10' }]], [2, [{ malzemeNo: B, opNo: 10, brut: '5' }]]]),
+      sarflar: [], baslangiclar: new Map([['1:10', T0], ['2:10', T0]]),
+      kartlar: new Map([[A, { tur: 'yari-mamul' }], [B, { tur: 'yari-mamul' }], [Y, { tur: 'hammadde' }]]),
+      serbest: new Map([[A, '10'], [B, '0']]), kritik: new Map(), gelisler: new Map(),
+      agaclar: new Map([[A, new Map([[Y, 1]])]]), esdegerler: grup,
+    };
+    const l = mrpSatirlari(mrp);
+    assert.equal(l.find((x) => x.malzemeNo === B)!.net, 5, 'A stoğu kendi talebine gitti, B eksik 5');
+    const artan = mrpSatirlari({ ...mrp, serbest: new Map([[A, '12'], [B, '0']]) });
+    assert.equal(artan.find((x) => x.malzemeNo === B)!.net, 3, 'A artanı 2 B ye geçer');
+  });
 });

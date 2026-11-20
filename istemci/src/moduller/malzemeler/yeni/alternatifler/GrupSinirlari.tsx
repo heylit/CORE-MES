@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { KabulSiniri, KapsamTuru, MuadilTuru, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
-import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Tablo, useBildirim, type Secenek, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import type { GrupSinirlariCevabi, KabulSiniri, KapsamTuru, MuadilTuru, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import { Dugme, DurumKutusu, Girdi, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Secenek, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useGrupSinirlari, useSinirKaldir, useSinirKaydet } from './veri.ts';
 
@@ -9,17 +9,23 @@ import { useGrupSinirlari, useSinirKaldir, useSinirKaydet } from './veri.ts';
 type GrupKapsami = Exclude<KapsamTuru, 'kart'>;
 const KAPSAMLAR: readonly Secenek[] = [{ deger: 'aile', baslik: 'Aile' }, { deger: 'sinif', baslik: 'Sınıf' }, { deger: 'kalite', baslik: 'Kalite' }];
 const KAPSAM_ADI: Record<GrupKapsami, string> = { aile: 'Aile', sinif: 'Sınıf', kalite: 'Kalite' };
-const KAPSAM_IPUCU: Record<GrupKapsami, string> = { aile: 'ör. metal', sinif: 'ör. metal/aluminyum', kalite: 'ör. 6082' };
+type KapsamSecenegi = GrupSinirlariCevabi['kapsamlar'][number];
 // Sözleşmedeki SINIR_NITELIKLERI ile aynı sıra (istemci paylaşılandan yalnız tip alır).
 const LISTE_NITELIKLERI: readonly SinirNiteligi[] = ['kalite', 'durum', 'yuzey'];
 const SINIR_NITELIKLERI: readonly SinirNiteligi[] = [...LISTE_NITELIKLERI, 'd', 's', 'a', 'b', 't', 'D', 'h', 'l'];
-const NITELIK_ADI: Record<string, string> = { kalite: 'Kalite', durum: 'Durum', yuzey: 'Yüzey', l: 'Boy l (mm)' };
+// Harf formdan forma değişir (OLCU_ETIKETLERI); grup sınırı birden çok forma geçebildiği için ad genel tutulur, harf yanında kalır.
+const NITELIK_ADI: Record<string, string> = {
+  kalite: 'Kalite', durum: 'Durum', yuzey: 'Yüzey', d: 'Çap (d, mm)', s: 'Anahtar ağzı (s, mm)', a: 'Genişlik ya da kol (a, mm)',
+  b: 'Kalınlık ya da yükseklik (b, mm)', t: 'Kalınlık ya da et (t, mm)', D: 'Dış çap (D, mm)', h: 'Yükseklik (h, mm)', l: 'Boy (l, mm)',
+};
 export const nitelikAdi = (n: string): string => NITELIK_ADI[n] ?? `${n} (mm)`;
 const NITELIKLER: readonly Secenek[] = SINIR_NITELIKLERI.map((n) => ({ deger: n, baslik: nitelikAdi(n) }));
 const TUR_ACIK: Record<MuadilTuru, string> = { tam: 'tam muadil', ust: 'üst muadil', sartli: 'şartlı muadil' };
 const TURLER: readonly Secenek[] = (['tam', 'ust', 'sartli'] as const).map((t) => ({ deger: t, baslik: TUR_ACIK[t] }));
 const listeMi = (n: SinirNiteligi): boolean => LISTE_NITELIKLERI.includes(n);
 const sayi = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 3 });
+const kartSayisi = (kapsamlar: readonly KapsamSecenegi[], turu: string, kapsam: string): number =>
+  kapsamlar.find((k) => k.kapsamTuru === turu && k.kapsam === kapsam)?.kart ?? 0;
 
 export function sinirMetni(s: Pick<KabulSiniri, 'degerler' | 'alt' | 'ust'>): string {
   if (s.degerler !== null) return s.degerler.map((d) => `${d.deger} (${TUR_ACIK[d.tur]})`).join(', ');
@@ -48,12 +54,12 @@ export function GrupSinirlari({ yaz }: { yaz: boolean }) {
         etiket="Grup sınırları" sutunlar={sutunlar} satirlar={sinirlar.data.siniri} satirAnahtari={(s) => s.id}
         satirSec={yaz ? (s) => acikYaz(s) : undefined} bosMesaj="Grup sınırı yok; kartlar kurallarla ve kendi sınırlarıyla hesaplanır."
       />
-      {acik !== null && <GrupSiniriPenceresi kayit={acik === 'yeni' ? null : acik} kapat={() => acikYaz(null)} />}
+      {acik !== null && <GrupSiniriPenceresi kayit={acik === 'yeni' ? null : acik} kapsamlar={sinirlar.data.kapsamlar} kapat={() => acikYaz(null)} />}
     </section>
   );
 }
 
-function GrupSiniriPenceresi({ kayit, kapat }: { kayit: KabulSiniri | null; kapat: () => void }) {
+function GrupSiniriPenceresi({ kayit, kapsamlar, kapat }: { kayit: KabulSiniri | null; kapsamlar: readonly KapsamSecenegi[]; kapat: () => void }) {
   const kaydet = useSinirKaydet();
   const kaldir = useSinirKaldir();
   const { bildir } = useBildirim();
@@ -64,6 +70,13 @@ function GrupSiniriPenceresi({ kayit, kapat }: { kayit: KabulSiniri | null; kapa
   const [yeni, yeniYaz] = useState('');
   const [alt, altYaz] = useState(kayit?.alt === null || kayit === null ? '' : String(kayit.alt));
   const [ust, ustYaz] = useState(kayit?.ust === null || kayit === null ? '' : String(kayit.ust));
+  const [silOnayi, silOnayiYaz] = useState(false);
+  const etkilenen = kartSayisi(kapsamlar, kapsamTuru, kapsam);
+  const secenekler: readonly Secenek[] = [
+    { deger: '', baslik: 'Seçin' },
+    ...kapsamlar.filter((k) => k.kapsamTuru === kapsamTuru).map((k) => ({ deger: k.kapsam, baslik: `${k.kapsam} (${k.kart} kart)` })),
+  ];
+  const etkiMetni = `${KAPSAM_ADI[kapsamTuru]} ${kapsam}: ${etkilenen} hammadde kartı`;
   const liste = listeMi(nitelik);
   const sayiOku = (x: string): number | null => (x.trim() === '' ? null : Number(x.replace(',', '.')));
   const gonder = () => {
@@ -81,13 +94,14 @@ function GrupSiniriPenceresi({ kayit, kapat }: { kayit: KabulSiniri | null; kapa
     });
   };
   return (
+    <>
     <Pencere
       acik
       kapat={kapat}
       baslik={kayit ? `${KAPSAM_ADI[kapsamTuru]} ${kayit.kapsam}: ${nitelikAdi(kayit.nitelik)} sınırı` : 'Grup sınırı ekle'}
       alt={(
         <div className="tc-mk-pencere-alt">
-          {kayit && <Dugme simge="trash" yukleniyor={kaldir.isPending} onClick={sil}>Sınırı kaldır</Dugme>}
+          {kayit && <Dugme simge="trash" onClick={() => silOnayiYaz(true)}>Sınırı kaldır</Dugme>}
           <span className="tc-kalt-sag">
             <Dugme onClick={kapat}>Vazgeç</Dugme>
             <Dugme tur="birincil" yukleniyor={kaydet.isPending} disabled={kapsam.trim() === ''} onClick={gonder}>Kaydet</Dugme>
@@ -98,10 +112,15 @@ function GrupSiniriPenceresi({ kayit, kapat }: { kayit: KabulSiniri | null; kapa
       <div className="tc-alt-form">
         {kayit === null && (
           <div className="tc-kalt-bagla tc-kalt-aralik">
-            <Secim etiket="Kapsam" secenekler={KAPSAMLAR} value={kapsamTuru} onChange={(e) => kapsamTuruYaz(e.target.value as GrupKapsami)} />
-            <Girdi etiket="Uygulandığı yer" placeholder={KAPSAM_IPUCU[kapsamTuru]} maxLength={64} value={kapsam} onChange={(e) => kapsamYaz(e.target.value)} />
+            <Secim etiket="Kapsam" secenekler={KAPSAMLAR} value={kapsamTuru} onChange={(e) => { kapsamTuruYaz(e.target.value as GrupKapsami); kapsamYaz(''); }} />
+            <Secim etiket="Uygulandığı yer" secenekler={secenekler} value={kapsam} onChange={(e) => kapsamYaz(e.target.value)} />
             <Secim etiket="Nitelik" secenekler={NITELIKLER} value={nitelik} onChange={(e) => { nitelikYaz(e.target.value as SinirNiteligi); degerlerYaz([]); }} />
           </div>
+        )}
+        {kapsam !== '' && (
+          <p className="tc-alt-not" role="status">
+            {etkilenen === 0 ? <Rozet ton="uyari">Bu kapsamda hammadde kartı yok</Rozet> : `Bu sınır ${etkiMetni} için geçerli olur.`}
+          </p>
         )}
         {liste ? (
           <>
@@ -129,5 +148,12 @@ function GrupSiniriPenceresi({ kayit, kapat }: { kayit: KabulSiniri | null; kapa
         )}
       </div>
     </Pencere>
+    <OnayPenceresi
+      acik={silOnayi} baslik="Grup sınırı kaldırılsın mı?" onayMetni="Sınırı kaldır" tehlikeli yukleniyor={kaldir.isPending}
+      onayla={sil} vazgec={() => silOnayiYaz(false)}
+    >
+      <p>{etkiMetni} bu sınırı kaybeder; o nitelikte yeniden kurallar ve kartın kendi sınırı kullanılır.</p>
+    </OnayPenceresi>
+    </>
   );
 }
