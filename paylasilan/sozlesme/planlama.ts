@@ -482,6 +482,10 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   // gününün 00:00'ı 0, çeyrek saat adımlı); şimdiden sonra ve ufuk içinde olduğunu sunucu denetler. Aynı adıma yeni bildirim öncekinin yerine geçer.
   z.object({ tur: z.literal('adim-bekler'), isId: taslakKimlik, kadar: durusSaati, neden: z.enum(['malzeme', 'kisi']) }).strict(),
   z.object({ tur: z.literal('adim-bekler-sil'), isId: taslakKimlik }).strict(),
+  // 3488 c: adımı elle böl. isId adımın kimliğidir (emir.adım, pay eki yok); paylar 2-6 parça, her biri adet ve adımın uygun tezgâhı. Adet
+  // toplamı adımın adedidir (sunucu denetler). Aynı adıma yeni bölme öncekinin yerine geçer; sil bölmeyi kaldırır, motor yine kendisi yerleştirir.
+  z.object({ tur: z.literal('elle-bol'), isId: taslakKimlik, paylar: z.array(z.object({ adet: z.number().int().min(1).max(1_000_000), tezgah: taslakKimlik }).strict()).min(2).max(6) }).strict(),
+  z.object({ tur: z.literal('elle-bol-sil'), isId: taslakKimlik }).strict(),
 ]);
 // taslakSurumu: sayfanın gördüğü taslak sürümü (taslak yoksa null); iki sekmede aynı kişinin yazması birbirini ezmez.
 export const taslakKomutGovdesi = z.object({ taslakSurumu: z.number().int().nullable(), komut: taslakKomutu }).strict();

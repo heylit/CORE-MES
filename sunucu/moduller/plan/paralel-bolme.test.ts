@@ -24,7 +24,7 @@ const adim = (seq: number, stationId: string, ek: Record<string, unknown> = {}) 
   id: `50-o${String(seq)}`, seq, opNo: seq, opId: '13', stationId, setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [], split: 'tek', minLot: 0, ...ek,
 });
 type Ayar = { istasyon: '40' | '10'; split?: 'bol' | 'tek'; minLot?: number; adet?: number; ekip?: Record<string, string[]>;
-  bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string };
+  bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string; elleBol?: Record<string, { adet: number; m: string }[]>; locks?: Record<string, unknown> };
 const girdi = (a: Ayar) => {
   const steps = [adim(10, a.istasyon, { split: a.split ?? 'bol', minLot: a.minLot ?? 0 }), adim(20, '30')];
   const ROTA = {
@@ -52,7 +52,7 @@ const girdi = (a: Ayar) => {
   };
   const calisma = {
     surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
-    rrSavedAt: 5, dataVer: 1, kisitSurum: 2, down: [], ekMesai: [], locks: {}, gercek: {}, w: { famK: 0.3, mat: 'sert', dondurma: 4, rule: 'edd' },
+    rrSavedAt: 5, dataVer: 1, kisitSurum: 2, down: [], ekMesai: [], locks: a.locks ?? {}, gercek: {}, ...(a.elleBol ? { elleBol: a.elleBol } : {}), w: { famK: 0.3, mat: 'sert', dondurma: 4, rule: 'edd' },
     param: { tampon: false, tamponZ: 0, acilPay: 0, ...(a.kayitKip ? { bolmeKip: a.kayitKip } : {}) }, kapali: ['personel'], olaylar: [], plan: null,
   };
   const g = planGirdisi({ calisma: calismayaMotorAyari(calisma, {
@@ -109,6 +109,25 @@ describe('plan: paralel bölme planlama atölyesinde (1952 iş 2a)', () => {
     assert.deepEqual(new Set(e.paylar.map((id) => e.p.ops[id]!.m)), new Set(['kisi-8', 'kisi-9']));
     const t = planla({ istasyon: '40', adet: 9, ekip: { 40: ['8'] } });
     assert.deepEqual(new Set(t.paylar.map((id) => t.p.ops[id]!.m)), new Set(['kisi-7', 'kisi-8', 'kisi-9']));
+  });
+
+  test('3488 c: elle bölme otomatik bölmenin yerine geçer; pay sayısı, adedi ve tezgâhı ondan; rotada paralel böl ya da bölme ayarı aranmaz', () => {
+    const elle = { 'O1.10': [{ adet: 6, m: '102' }, { adet: 3, m: '100' }] };
+    for (const a of [{ split: 'tek' as const }, { bolmeKip: 'kapali' as const }, {}]) {
+      const { cx, p, paylar } = planla({ istasyon: '10', adet: 9, elleBol: elle, ...a });
+      assert.deepEqual(paylar, ['O1.10', 'O1.10~2']);
+      assert.equal(JSON.stringify(cx.ops.filter((o) => o.id.startsWith('O1.10')).map((o) => [o.adet, o.c.map((c) => c.m)])), JSON.stringify([[6, ['102']], [3, ['100']]]));
+      assert.deepEqual([...paylar.map((id) => p.ops[id]!.m)], ['102', '100']);
+      assert.ok(p.ops['O1.20']!.S >= Math.max(...paylar.map((id) => p.ops[id]!.C)) - 1e-9, 'ardıl iki payı da bekler');
+    }
+    // Adım adedi değiştiyse paylar orana göre uyar.
+    assert.equal(JSON.stringify(planla({ istasyon: '10', adet: 6, split: 'tek', elleBol: elle }).cx.ops.filter((o) => o.id.startsWith('O1.10')).map((o) => o.adet)), '[4,2]');
+  });
+
+  test('3488 c: geçersiz elle bölme yok sayılır (uygun olmayan tezgâh, tek pay, adet pay sayısından az)', () => {
+    assert.deepEqual(planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: { 'O1.10': [{ adet: 5, m: '100' }, { adet: 4, m: '300' }] } }).paylar, ['O1.10']);
+    assert.deepEqual(planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: { 'O1.10': [{ adet: 9, m: '100' }] } }).paylar, ['O1.10']);
+    assert.deepEqual(planla({ istasyon: '10', adet: 1, split: 'tek', elleBol: { 'O1.10': [{ adet: 1, m: '100' }, { adet: 1, m: '101' }] } }).paylar, ['O1.10']);
   });
 
   test('bölünmeyen adımın adayları ekipten etkilenmez', () => {
