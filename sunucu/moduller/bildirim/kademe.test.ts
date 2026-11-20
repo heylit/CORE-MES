@@ -27,8 +27,8 @@ const bk = (baslangic: string, bugun: string, yapanVar = true) => gerekenKademel
 
 // 3405 a: kural saf; 3396'nın son gün davranışı aynen korunur, bekleme sayacı eklenir.
 describe('kademeli uyarı kuralı (3405)', () => {
-  test('3478: yeni bağlanan onay bekleme kaynakları (satış onayı, DÖF, hatalı parça) varsayılanda kapalı gelir', () => {
-    for (const k of ['siparisler.onay', 'kalite-merkezi.dof', 'kalite-merkezi.hatali-parca'] as const) {
+  test('3478: bütün kademe kaynakları varsayılanda kapalı gelir (satış onayı, DÖF ve hatalı parça dahil)', () => {
+    for (const k of KADEME_KAYNAK_ANAHTARLARI) {
       assert.equal(KADEME_KAYNAKLARI[k].varsayilan.acik, false, k);
     }
   });

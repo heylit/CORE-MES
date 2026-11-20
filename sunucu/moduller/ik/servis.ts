@@ -30,7 +30,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   besHareketDenetle, besIsareti, korunanBesIsareti, ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, izinOnayKapanirMi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinKarari, izinOnayBildirimi, izinOnayKapanirMi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -371,6 +371,15 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: `/ik-islemlerim/onaylar?talep=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: kullanici.id });
     if (izinOnayKapanirMi(onceki, kayit.govde)) await bildirimKapat(db, { tur: 'ik.izin-onay-bekliyor', kaynakKimlik: g.kimlik });
+    const karar = izinKarari(onceki, kayit.govde);
+    const sahibi = d.harita.get(String(kayit.govde['empId']))?.govde['kisiId'];
+    if (karar !== null && typeof sahibi === 'number') {
+      await bildirimGonder(db, {
+        tur: karar === 'onaylandi' ? 'ik.izin-onaylandi' : 'ik.izin-reddedildi', baslik: karar === 'onaylandi' ? 'İzin talebin onaylandı' : 'İzin talebin reddedildi',
+        metin: [kayit.govde['tur'], `${String(kayit.govde['baslangic'] ?? '')} - ${String(kayit.govde['bitis'] ?? '')}`].filter((p) => typeof p === 'string' && p !== '').join(' · '),
+        yol: '/ik-islemlerim', kaynakKimlik: g.kimlik, kisiler: [sahibi], haric: kullanici.id,
+      });
+    }
   }
   const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde, kisiAcilacak !== null) : null;
   const uyari = g.tur === 'emp'

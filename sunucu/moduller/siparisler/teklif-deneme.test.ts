@@ -270,6 +270,13 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     await komut({ ...t, surum: t.surum - 1 }, 'termin-onayla', {}, 409, planlama.cerez);
     t = await komut(t, 'termin-onayla', {}, 200, planlama.cerez);
     assert.equal(t.durum, 'verildi');
+    // 3478: onaylanınca bekleyen onay işi kapanır; sürümü veren (onaylayan değilse) sonucu alır.
+    const yol = `/siparisler/teklifler/${t.id}`;
+    assert.equal((await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.termin-onay-bekliyor' AND yol = $1 AND okundu IS NULL", [yol]))?.n, 0);
+    const veren = (await o().sahip.tek<{ id: number }>('SELECT olusturan_id AS id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [t.id]))?.id;
+    assert.deepEqual(await o().sahip.sorgu<{ kisi_id: number }>("SELECT kisi_id FROM bildirim_kaydi WHERE tur = 'siparisler.termin-onaylandi' AND yol = $1", [yol]),
+      veren === planlama.id ? [] : [{ kisi_id: veren }]);
     const onayli = (await taslaklar(t))[0]!;
     assert.deepEqual([onayli.gorunum, onayli.onaylayan?.startsWith('Deneme tdeneme-'), onayli.onayAni !== null], ['satis', true, true]);
     await komut(t, 'termin-onayla', {}, 422, planlama.cerez);

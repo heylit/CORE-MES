@@ -776,6 +776,13 @@ async function kartOnayiBildir(db: Db, g: {
       kisiler: [g.gonderenKisiId], haric: g.kisiId,
     });
   }
+  // 3478: onaylanan kart onaya göndereni haberdar eder (olay varsayılan kapalı).
+  if (g.onceki === 'onayda' && g.yeni === 'aktif' && g.gonderenKisiId !== null) {
+    await bildirimGonder(db, {
+      tur: 'malzemeler.kart-onaylandi', baslik: `Malzeme kartın onaylandı: ${g.stokKodu}`, metin, yol: `/malzemeler?kart=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik,
+      kisiler: [g.gonderenKisiId], haric: g.kisiId,
+    });
+  }
 }
 
 const LOGO_PASIF_KAPALI = 'Logo\'da kullanım dışı bırakma Sistem Ayarları\'nda kapalı ("Logo: silinen kartı Logo\'da kullanım dışı bırakma"); Logo\'ya gönderilmiş kart şimdi silinemez, pasife alın.';

@@ -68,6 +68,14 @@ const ELLE_TANIMLI_TURLER = {
   'satin-alma.hatirlatma-kg-fiyati-eskidi': { baslik: 'Kg fiyatı eskidi', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/kg-fiyatlari', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-reddedildi': { baslik: 'Malzeme kartın reddedildi', onem: 'uyari', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
+  // 3478: onay sonuçları işi başlatana gider (alıcı kayda bağlı); olay anahtarı varsayılan kapalıdır.
+  'malzemeler.kart-onaylandi': { baslik: 'Malzeme kartın onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
+  'siparisler.siparis-onaylandi': { baslik: 'Açtığın sipariş onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/siparisler', varsayilan: { mesaj: false, eposta: false } },
+  'siparisler.siparis-iptal-edildi': { baslik: 'Açtığın sipariş iptal edildi', onem: 'uyari', alanIslemler: [], yol: '/siparisler', varsayilan: { mesaj: false, eposta: false } },
+  'siparisler.iskonto-onaylandi': { baslik: 'Teklif iskontosu onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: false } },
+  'siparisler.termin-onaylandi': { baslik: 'Teklif termini onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: false } },
+  'ik.izin-onaylandi': { baslik: 'İzin talebin onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/ik-islemlerim', varsayilan: { mesaj: false, eposta: false } },
+  'ik.izin-reddedildi': { baslik: 'İzin talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/ik-islemlerim', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {
     baslik: 'Sipariş onay bekliyor', onem: 'uyari', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
   },
@@ -190,6 +198,7 @@ const ELLE_TANIMLI_TURLER = {
   'projeler.gorev-geri-cevrildi': {
     baslik: 'Proje görevi geri çevrildi', onem: 'uyari', alanIslemler: ['projeler.gorev-yaz'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
   },
+  'projeler.gorev-onaylandi': { baslik: 'Proje görevin onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false } },
   // 3396 a: hazırlık görevinin kademeleri (K2-K5) ve günlük özet. Alıcı kayda bağlıdır (yapan, kontrol eden, ayardaki rol); özet alıcı
   // ayarlıdır. Kademe yükselince projeler gönderir, görev bitince ya da kontrole düşünce kapatır. Gövde yalnız görev adı ve son gün (Risk K8).
   'projeler.hazirlik-hatirlatma': {
@@ -330,7 +339,9 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // Alıcısı kayda bağlı türler (proje görevinin atananı, kontrol edeni) alıcı seçimine girmez: seçim ya başka projelerin görevini
 // yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
 const KAYDA_BAGLI_TURLER: readonly string[] = [
-  'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor', 'projeler.gorev-geri-cevrildi',
+  'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor', 'projeler.gorev-geri-cevrildi', 'projeler.gorev-onaylandi',
+  'malzemeler.kart-onaylandi', 'siparisler.siparis-onaylandi', 'siparisler.siparis-iptal-edildi', 'siparisler.iskonto-onaylandi', 'siparisler.termin-onaylandi',
+  'ik.izin-onaylandi', 'ik.izin-reddedildi',
   'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret', ...KADEME_TURLERI,
 ];
 export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];

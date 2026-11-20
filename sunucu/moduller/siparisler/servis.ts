@@ -266,6 +266,12 @@ export async function durumDegistir(
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
   if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
   const sonuc = await siparisAyrintisi(db, id);
+  // 3478: onay ve iptal siparişi açana haber verilir (kendi kararı değilse); olay varsayılan kapalıdır.
+  const acan = komut === 'onayla' || komut === 'iptal' ? await sorgular.siparisiAcan(db, id) : null;
+  if (acan !== null) await bildirimGonder(db, {
+    tur: komut === 'onayla' ? 'siparisler.siparis-onaylandi' : 'siparisler.siparis-iptal-edildi',
+    baslik: `${komut === 'onayla' ? 'Onaylanan' : 'İptal edilen'} sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), kisiler: [acan], haric: kullanici.id,
+  });
   // 3478 Risk N1: onayı geri alınan sipariş yeniden onay bekler; iş onaylayanlara yeniden düşer.
   if (komut === 'geri-al') await bildirimGonder(db, {
     tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,

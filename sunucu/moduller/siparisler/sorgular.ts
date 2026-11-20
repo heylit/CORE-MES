@@ -469,6 +469,12 @@ export function teklifSurumleri(db: Db, teklifId: number): Promise<TeklifSurumSa
   );
 }
 
+// 3478: onay sonucu siparişi açana gider.
+export async function siparisiAcan(db: Db, siparisId: number): Promise<number | null> {
+  const [s] = await db.sorgu<{ olusturan_id: number }>('SELECT olusturan_id FROM siparisler_siparis WHERE id = $1', [siparisId]);
+  return s?.olusturan_id ?? null;
+}
+
 export async function sonSurumuVeren(db: Db, teklifId: number): Promise<number | null> {
   const [s] = await db.sorgu<{ olusturan_id: number }>(
     'SELECT olusturan_id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [teklifId]);

@@ -610,6 +610,12 @@ export function izinOnayBildirimi(onceki: Govde | null, yeni: Govde, kisiAdi: st
   return { baslik: 'İzin talebi onay bekliyor', metin: parcalar.join(' · ') };
 }
 
+// 3478: bekleyen talebin kararı talep sahibine gider; yalnız Beklemede'den Onaylandı ya da Reddedildi'ye geçiş.
+export function izinKarari(onceki: Govde | null, yeni: Govde): 'onaylandi' | 'reddedildi' | null {
+  if (onceki?.['durum'] !== 'Beklemede') return null;
+  return yeni['durum'] === 'Onaylandı' ? 'onaylandi' : yeni['durum'] === 'Reddedildi' ? 'reddedildi' : null;
+}
+
 // 3478: bekleyen talep karara bağlanınca ya da başka duruma çekilince onay işi kapanır. İptal (silme) servisin işidir.
 export function izinOnayKapanirMi(onceki: Govde | null, yeni: Govde): boolean {
   return onceki?.['durum'] === 'Beklemede' && yeni['durum'] !== 'Beklemede';

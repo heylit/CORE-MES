@@ -421,7 +421,13 @@ export async function gorevDuzenle(db: Db, kisiId: number, id: number, g: GorevG
   }
   const yeniKisi = g.sorumluKisiId !== null && g.sorumluKisiId !== mevcut.sorumlu_kisi_id;
   const yeniRol = g.yapanRolId !== null && g.yapanRolId !== mevcut.yapan_rol_id;
-  if (yeniKisi || yeniRol) {
+  // 3478 Risk N4: atamadan çıkan kişi ya da rol varsa görevin atama satırları kapanır ve güncel atamaya yeniden yazılır; yalnız eklenen
+  // varsa eskiler dokunulmadan yalnız yeniye gider.
+  const cikan = (mevcut.sorumlu_kisi_id !== null && mevcut.sorumlu_kisi_id !== g.sorumluKisiId) || (mevcut.yapan_rol_id !== null && mevcut.yapan_rol_id !== g.yapanRolId);
+  if (cikan && g.durum !== 'iptal') {
+    await atamaKapat(db, id);
+    await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: g.sorumluKisiId, yapanRolId: g.yapanRolId }], kisiId, id);
+  } else if (yeniKisi || yeniRol) {
     await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: yeniKisi ? g.sorumluKisiId : null, yapanRolId: yeniRol ? g.yapanRolId : null }], kisiId, id);
   }
   return projeYonetimi(db, mevcut.proje_id);
@@ -509,10 +515,18 @@ async function kontrolHazirla(db: Db, kullanici: Kullanici, gorevId: number): Pr
 }
 
 export async function gorevOnayla(db: Db, kullanici: Kullanici, gorevId: number, g: GorevKomutuGovdesi): Promise<GorevAyrintisiCevabi> {
-  const { k } = await kontrolHazirla(db, kullanici, gorevId);
+  const { g: mevcut, k } = await kontrolHazirla(db, kullanici, gorevId);
   await akisYaz(db, gorevId, () => sorgular.gorevOnayla(db, gorevId, k.kisiId, g.surum));
   await sorgular.gorevOlayiEkle(db, gorevId, 'onay', k.kisiId, null);
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
+  // 3478: onaylanan görevi bitiren haber alır (olay varsayılan kapalı).
+  const bitiren = (await sorgular.sonBitirenler(db, [gorevId])).get(gorevId)?.kisiId ?? null;
+  if (bitiren !== null) {
+    await bildirimGonder(db, {
+      tur: 'projeler.gorev-onaylandi', baslik: 'Proje görevin onaylandı', metin: mevcut.ad, yol: '/proje-gorevlerim',
+      kaynakKimlik: `gorev-${String(gorevId)}`, kisiler: [bitiren], haric: k.kisiId,
+    });
+  }
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 

@@ -99,13 +99,15 @@ describe('Malzeme kartı onay bildirimleri (gerçek PostgreSQL, gerçek giriş)'
     assert.deepEqual(await bildirimler(kalite.id, tur, k), []);
   });
 
-  test('onaylanan kart ret bildirimi doğurmaz', async () => {
+  test('onaylanan kart ret bildirimi doğurmaz; gönderene "onaylandı" düşer, onaylayan almaz (3478)', async () => {
     const depo = await girisYap('b-depo-3', 'depo');
     const kalite = await girisYap('b-kalite-3', 'kalite');
     const k: Kart = { kimlik: `bil${++sayac}`, surum: null, stokKodu: null };
     await kaydet(depo, k, 'onayda');
     await kaydet(kalite, k, 'aktif');
     assert.deepEqual(await bildirimler(depo.id, 'malzemeler.kart-reddedildi', k), []);
+    assert.deepEqual((await bildirimler(depo.id, 'malzemeler.kart-onaylandi', k)).map((b) => b.baslik), [`Malzeme kartın onaylandı: ${k.stokKodu}`]);
+    assert.deepEqual(await bildirimler(kalite.id, 'malzemeler.kart-onaylandi', k), []);
   });
 
   test('karar verilince "onay bekliyor" bütün onaycılarda okundu olur; yeniden gönderilen kart yeni bildirim açar', async () => {
