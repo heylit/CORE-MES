@@ -2,12 +2,19 @@
 /* ================= Plan motoru v2: çekirdek ================= */
 /* 1477 a: ufuk (gün) ve dilim (saat) sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); sunucu çalışmanın w.ufukGun ve w.dilimDk alanlarıyla verir.
    Verilmezse ya da sınır dışındaysa 120 gün (1681 b) ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
-const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30];
+const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30],TAKVIM_ENCOK=730;
 /* 3484 c (3457-3 a değişir): ufka sığmayan emir için ufuk uzar. Motor takvimi ufkun iki katı kurar (HDAYS); UFUK ayardaki gündür.
-   UFUK'tan sonraki çalışma saati iş kaydında ufukDisi'dir, tarihleri gerçektir. Uzatılmış takvime de sığmayan adım yerleşmez. */
-let SL=0.25, UFUK=UFUK_VARSAYILAN, HDAYS=UFUK*2, NS=HDAYS*24/SL;
+   UFUK'tan sonraki çalışma saati iş kaydında ufukDisi'dir, tarihleri gerçektir.
+   3501 a (3484 c değişir): takvim ufkun iki katında durmaz. Hesap, adımı takvim bittiği için yerleştiremezse takvimi büyütüp baştan kurar
+   (TAKVIM_ISTENEN; degerlendir.js), en çok TAKVIM_ENCOK güne kadar. Büyük takvim her hesapta kurulmaz: dilim tabloları takvim boyuncadır,
+   boşuna büyütmek her hesabı yavaşlatır. */
+let SL=0.25, UFUK=UFUK_VARSAYILAN, HDAYS=UFUK*2, NS=HDAYS*24/SL, TAKVIM_ISTENEN=0;
 function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
-  UFUK=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;HDAYS=UFUK*2;SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}
+  UFUK=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;HDAYS=Math.min(TAKVIM_ENCOK,Math.max(UFUK*2,TAKVIM_ISTENEN));
+  SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}
+/* Sonraki derleme için takvimi iki katına çıkarır; üst sınırdaysa false. */
+function takvimBuyut(){if(HDAYS>=TAKVIM_ENCOK)return false;TAKVIM_ISTENEN=Math.min(TAKVIM_ENCOK,HDAYS*2);return true;}
+function takvimSifirla(){TAKVIM_ISTENEN=0;}
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
