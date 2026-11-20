@@ -666,6 +666,9 @@ export const hizliKalemSemasi = z.object({
   satisSiparisSatiriId: z.number().int().positive().max(2147483647).nullable().optional(),
   // 3437: yalnız kartlı kalemde; gelmezse (ya da null) zarfın tamamı. Düzenlemede gelmeyen var olan kalemin sınırı korunur.
   kabul: kabulSiniriSemasi.nullable().optional(),
+  // 3462 a: kalemin termini ve üretim emri; gelmezse talebin (formun varsayılanı). Talebin termini kalemlerin en erkeni, emri yalnız ortaksa doludur.
+  ihtiyacTarihi: tarih.nullable().optional(),
+  uretimEmriId: z.number().int().positive().max(2147483647).nullable().optional(),
 });
 export const hizliAcGovdesi = z.object({
   id: uuid,
@@ -697,6 +700,8 @@ export const talebimSemasi = z.object({
   kalemler: z.array(z.object({
     id: uuid.optional(), aciklama: z.string().optional(),
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
+    // 3462 a: kalemin geçerli termini ve üretim emri (kendi değeri yoksa talebinki).
+    ihtiyacTarihi: z.string().nullable().optional(), uretimEmriId: z.number().int().nullable().optional(), uretimEmriNo: z.string().nullable().optional(),
     // 2871: kg ile kartın stok birimi arasındaki karşılık (kartın birim ağırlığıyla); hesaplanamıyorsa null, uydurulmaz.
     karsilik: z.object({ miktar: z.string(), birim: z.string() }).nullable().optional(),
     // 3121: kartın kalite, durum, işlem ve ölçüsü; kartsız kalemde null.
@@ -716,7 +721,7 @@ export const talebimSemasi = z.object({
 export const talebimiDuzenleGovdesi = z.object({
   ihtiyacTarihi: tarih.nullable().prefault(null),
   aciklama: metin(4000),
-  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true, kabul: true })
+  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true, kabul: true, ihtiyacTarihi: true })
     .extend({ id: uuid.nullable().prefault(null) })).min(1, 'En az bir kalem girin.').max(50),
   ...beklenenSurum,
 });

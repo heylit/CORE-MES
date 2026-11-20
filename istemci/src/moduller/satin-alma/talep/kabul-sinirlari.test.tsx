@@ -48,6 +48,11 @@ async function kartSec(ad: RegExp) {
   fireEvent.focus(screen.getByRole('combobox', { name: 'Malzeme' }));
   fireEvent.click(await screen.findByRole('option', { name: ad }));
 }
+// Sınırlar tablo satırının altındaki ayrıntıda açılır: Alternatif sütunundaki düğmeyle.
+async function sinirlariAc() {
+  fireEvent.click(await screen.findByRole('button', { name: /alternatif sınırını değiştir/ }));
+  return screen.findByRole('region', { name: 'Kabul sınırları' });
+}
 const gonder = async (cagrilar: { yol: string; govde: unknown }[]) => {
   fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: '6' } });
   fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
@@ -62,7 +67,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
-    const bolum = await screen.findByRole('region', { name: 'Kabul sınırları' });
+    const bolum = await sinirlariAc();
     expect(within(bolum).getByText('Alternatif kabul')).toBeTruthy();
     expect(within(bolum).getByText('d 50 – 55 mm')).toBeTruthy();
     expect(within(bolum).getByText('3.000 ve uzun (kesilir)')).toBeTruthy();
@@ -75,7 +80,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
-    const bolum = await screen.findByRole('region', { name: 'Kabul sınırları' });
+    const bolum = await sinirlariAc();
     fireEvent.click(within(bolum).getByRole('button', { name: /7075/ }));
     expect(within(bolum).getByRole('button', { name: /7075/ }).getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(within(bolum).getByRole('button', { name: /T651/ }));
@@ -108,7 +113,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
-    const bolum = await screen.findByRole('region', { name: 'Kabul sınırları' });
+    const bolum = await sinirlariAc();
     fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
     expect(within(bolum).queryByRole('table')).toBeNull();
     expect(within(bolum).getByText('Satın alma alternatif seçemez.')).toBeTruthy();
@@ -119,7 +124,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
-    const bolum = await screen.findByRole('region', { name: 'Kabul sınırları' });
+    const bolum = await sinirlariAc();
     fireEvent.click(within(bolum).getByRole('button', { name: /7075/ }));
     fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
     fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
@@ -150,5 +155,24 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     fireEvent.click(await screen.findByRole('button', { expanded: false }));
     expect(await screen.findByText('Kabul sınırı: kalite muadili 6061 · durum yalnız istenen · ölçü en çok +2 mm')).toBeTruthy();
     expect(screen.getAllByText(/^Kabul sınırı:/)).toHaveLength(1);
+  });
+});
+
+describe('3462 a: Taleplerim kalem termini ve üretim emri', () => {
+  it('her kalem kendi termini ve emriyle sütunda görünür; değeri olmayan kalemde boş', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { talepler: [talep([
+      { ad: 'Deneme çubuk', miktar: '6', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, malzemeNo: 21, kabul: null,
+        ihtiyacTarihi: '2026-12-05', uretimEmriId: 41, uretimEmriNo: 'UE-ORN-0412' },
+      { ad: 'Deneme lama', miktar: '1', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, malzemeNo: 22, kabul: null,
+        ihtiyacTarihi: null, uretimEmriId: null, uretimEmriNo: null },
+    ])], toplam: 1 } satisfies TaleplerimCevabi)));
+    sar(<Taleplerim tam />);
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    const satirlar = (await screen.findAllByRole('row')).slice(1);
+    const hucre = (satir: HTMLElement, etiket: string) => satir.querySelector(`td[data-etiket="${etiket}"]`)!.textContent;
+    expect(hucre(satirlar[0]!, 'Üretim emri')).toBe('UE-ORN-0412');
+    expect(hucre(satirlar[0]!, 'Termin')).toMatch(/12\.2026|Ara/);
+    expect(hucre(satirlar[1]!, 'Üretim emri')).toBe('–');
+    expect(within(satirlar[0]!).getByText(/^Termin .* · Üretim emri UE-ORN-0412$/)).toBeTruthy();
   });
 });

@@ -1222,7 +1222,8 @@ export function fasonTerminUyumu(gecmis: readonly FasonGecmisiSatiri[]): FasonTe
 }
 
 // 898 a: kalemin bağları (uygulanan parça ve fason adım) ayrı okunur; tam talep görünümüne girmez. Bağı olmayan kalemde ikisi de null.
-export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null }
+// kendi: 3462 a kalemin talepten farklı termini ve emri (yalnız farklı olanda gelir).
+export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null; kendi?: { ihtiyacTarihi: string | null; uretimEmriId: number | null; uretimEmriNo: string | null } }
 // 3121: kalemin kartından kalite, durum, işlem ve ölçü; kartsız kalemde null.
 // 3133: kalem satırında kartın dört sütunu (kalite, durum, işlem, ölçü), açıklaması ve kart föyündeki ayrıntı listesi.
 export interface KalemOzelligi {
@@ -1243,6 +1244,14 @@ export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kay
   ];
   return { ...o, ayrinti: satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }])), kayitsiz: !('islem' in a) || !('olcu' in a) };
 }
+// 3462 a: kalemin geçerli termini ve emri; kendi değeri yoksa talebinki.
+function kalemTerminEmriGorunumu(t: Pick<TalepCikisi, 'ihtiyacTarihi' | 'uretimEmriId' | 'uretimEmriNo'>, kendi: KalemBagi['kendi']) {
+  return {
+    ihtiyacTarihi: kendi?.ihtiyacTarihi ?? t.ihtiyacTarihi,
+    uretimEmriId: kendi?.uretimEmriId ?? t.uretimEmriId ?? null,
+    uretimEmriNo: kendi?.uretimEmriId != null ? kendi.uretimEmriNo : t.uretimEmriNo,
+  };
+}
 export function talebim(
   t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
   ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(), kabuller: ReadonlyMap<string, KalemKabulu> = new Map(),
@@ -1256,7 +1265,8 @@ export function talebim(
     guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
-    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id),
+    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null,
+      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id),
       ...(sartli.has(k.id) ? { sartliAlternatifler: sartli.get(k.id)! } : {}) })),
   };
 }
@@ -1397,12 +1407,40 @@ export function hizliBagReddi(
   if (bagli.length > 0 && tur === 'malzeme') return ILETILER.bagYalnizHizmette;
   const isler = kalemler.flatMap((k) => (k.isEmriId === null ? [] : [k.isEmriId]));
   if (new Set(isler).size !== isler.length) return ILETILER.fasonTekrar;
-  for (const i of isler) {
-    const emir = fasonEmri(i);
+  for (const k of kalemler) {
+    if (k.isEmriId === null) continue;
+    const emir = fasonEmri(k.isEmriId);
     if (emir === undefined) return ILETILER.fasonOnTalepYok;
-    if (emirId !== null && emir !== emirId) return ILETILER.fasonEmirFarkli;
+    // 3462 a: kalemin kendi emri varsa fason adım o emrin adımı olmalı; yoksa talebin emri.
+    const kalemEmri = k.uretimEmriId !== undefined ? k.uretimEmriId : emirId;
+    if (kalemEmri !== null && emir !== kalemEmri) return ILETILER.fasonEmirFarkli;
   }
   return null;
+}
+
+// 3462 a: kalemin termini ve üretim emri. Kalem değeri gelmezse (undefined) formun varsayılanı geçerlidir. Talebin termini kalemlerin en
+// erkenidir (gecikme sayıları, listeler ve sıralama talebi okur); emri yalnız bütün kalemlerde aynıysa doludur. Kalemde yalnız talepten farklı
+// değer saklanır: boş kalem talebi izler, satın alma talebin termini ya da emrini değiştirdiğinde kalem de değişir. Terminsiz kalem, başka
+// kalemin termini varsa talebin (en erken) terminini alır.
+export interface KalemTerminEmri { ihtiyacTarihi: string | null; uretimEmriId: number | null }
+export function kalemTerminEmriTuret(
+  kalemler: readonly { ihtiyacTarihi?: string | null | undefined; uretimEmriId?: number | null | undefined }[], varsayilan: KalemTerminEmri,
+): { talep: KalemTerminEmri; kalemler: KalemTerminEmri[] } {
+  const gecerli = kalemler.map((k) => ({
+    ihtiyacTarihi: k.ihtiyacTarihi !== undefined ? k.ihtiyacTarihi : varsayilan.ihtiyacTarihi,
+    uretimEmriId: k.uretimEmriId !== undefined ? k.uretimEmriId : varsayilan.uretimEmriId,
+  }));
+  const tarihler = gecerli.flatMap((k) => (k.ihtiyacTarihi === null ? [] : [k.ihtiyacTarihi])).sort();
+  const ihtiyacTarihi = tarihler[0] ?? null;
+  const emirler = new Set(gecerli.map((k) => k.uretimEmriId));
+  const uretimEmriId = emirler.size === 1 ? [...emirler][0]! : null;
+  return {
+    talep: { ihtiyacTarihi, uretimEmriId },
+    kalemler: gecerli.map((k) => ({
+      ihtiyacTarihi: k.ihtiyacTarihi === ihtiyacTarihi ? null : k.ihtiyacTarihi,
+      uretimEmriId: uretimEmriId !== null ? null : k.uretimEmriId,
+    })),
+  };
 }
 // SAT-83 (3429-3 F3): satış siparişinden gelen kalem malzeme talebindedir, kalem başına bir kez ve siparişteki kartla açılır; kalem hâlâ
 // ön talepte olmalıdır (onaylı, "Satın al", açık talebe bağsız). `bekleyen` kalemin kartını döner, ön talepte değilse undefined.
