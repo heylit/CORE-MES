@@ -903,6 +903,6 @@ export function nedenMetni(r: PlanIslemi): string {
   if (w?.t === 'tezgah') return `Tezgâhta önceki iş ${w.r ?? ''} bitince başladı.`;
   if (w?.t === 'kilit') return 'Kilitli: planlamacının verdiği saatte, kendi tezgâhında sabit; öteki işler etrafına dizilir.';
   if (w?.t === 'oneri') return 'Çözücü önerisindeki saatte başladı; motor kısıtları yeniden uyguladı.';
-  if (w?.t === 'kilit-oncul') return `Kilitli adıma (${w.r ?? ''}) yetişecek en geç yerine kondu.`;
+  if (w?.t === 'kilit-oncul') return `Sonraki adım ${w.r ? `${w.r} ` : ''}kilitli; ona yetişecek en geç saate kondu.`;
   return (w && NEDEN[w.t]) ?? 'Bilinmiyor.';
 }

@@ -109,7 +109,8 @@ describe('çizelge hesapları', () => {
     const r = p.ops['3.10']; if (!r) throw new Error('iş yok');
     expect(nedenMetni(r)).toBe('Siparişin serbest bırakılma anını bekledi.');
     expect(nedenMetni({ ...r, why: { t: 'rota', o: 1, r: '2.10' } })).toBe('Önceki adım 2.10 ilk partisini bitirince örtüşmeli başladı.');
-    expect(nedenMetni({ ...r, why: { t: 'kilit-oncul', r: '3.20' } })).toBe('Kilitli adıma (3.20) yetişecek en geç yerine kondu.');
+    expect(nedenMetni({ ...r, why: { t: 'kilit-oncul', r: '3.20' } })).toBe('Sonraki adım 3.20 kilitli; ona yetişecek en geç saate kondu.');
+    expect(nedenMetni({ ...r, why: { t: 'kilit-oncul' } })).toBe('Sonraki adım kilitli; ona yetişecek en geç saate kondu.');
     expect(nedenMetni({ ...r, why: null })).toBe('Bilinmiyor.');
     // 3335-3c: adıma bildirilen bekleme (malzeme yok, kişi yok) motorun nedenidir; iki yazısı da vardır.
     expect(nedenMetni({ ...r, why: { t: 'bekleme' } })).toBe('Adıma bildirilen beklemenin (malzeme yok, kişi yok) bitmesini bekledi.');
