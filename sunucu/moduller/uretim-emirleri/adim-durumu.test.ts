@@ -572,6 +572,10 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     assert.equal(kaldirildi.durum, 200, JSON.stringify(kaldirildi.govde));
     assert.equal(kaldirildi.govde.adimlar[0]?.liste.some((x) => x.adimId === secimId), false, 'kaldırılan listede yok');
     assert.equal((await kaldir(secimId)).durum, 404, 'ikinci kez kaldırılmaz');
+    const terminal = await istek<{ adimlar: { id: number }[] }>('planlama_proje', 'GET', `/uretim-emirleri/${String(id)}`);
+    assert.equal(terminal.durum, 200);
+    assert.deepEqual([terminal.govde.adimlar.some((x) => x.id === fotoId), terminal.govde.adimlar.some((x) => x.id === secimId)], [true, false],
+      'terminal listesinde kalan madde var, kaldırılan yok');
     assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 404, 'kaldırılan işaretlenmez');
     const olaylar = await o().sahip.sorgu<{ olay: string }>('SELECT olay FROM emir_adimi_olayi WHERE adim_id = $1 ORDER BY id', [secimId]);
     assert.deepEqual(olaylar.map((x) => x.olay), ['tamamla', 'geri-al', 'kaldir'], 'iz kalır');
