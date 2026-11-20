@@ -1185,7 +1185,7 @@ const ACTIONS: Record<string, Action> = {
     if (mode === "single" && ev.ranking[0] && qid !== ev.ranking[0].q.id && !reason) { $("#d-reason-wrap").hidden = false; toast("Önerilen teklif seçilmedi; kısa bir gerekçe yazın."); $("#d-reason").focus(); return; }
     let plan = null;
     if (mode === "split") {
-      if (!ev.split) { toast("Kalem bazlı bölme için en az iki teklif ve iki kalem gerekiyor."); return; }
+      if (!ev.split) { toast("Kalemleri dağıtmak için en az iki teklif ve iki kalem gerekiyor."); return; }
       plan = planCost(r, ev.all, readSplitAssign());
       if (!plan.ok) { toast("Her kaleme bir tedarikçi atayın."); return; }
       if (plan.total > ev.split.plan.total + 0.5 && !reason) { toast("En uygun dağılım seçilmedi; kısa bir gerekçe yazın."); $(gerekceAlani).focus(); return; }
@@ -1538,10 +1538,12 @@ ACTIONS["order-item-change"] = (_el, r) => {
   if (!r || !canWrite()) return;
   const items = awardOrders(r).flatMap(o => o.items);
   if (!items.length) { toast("Siparişte kalem yok."); return; }
+  // 3442-5: sipariş adımının kalem tablosundaki "Değiştir" o kalemle açılır.
+  const secili = items.find(it => it.id === _el.dataset.item) ?? items[0]!;
   openModal(`<div class="mh"><h2>Siparişteki kalemi değiştir</h2></div><div class="mb"><p class="small muted">Değişiklik onay yetkisi ister ve gerekçesiyle geçmişe yazılır. Miktar teslim alınandan aşağı inmez; teslim alınmış kalemin birimi değişmez.</p>
-    <div class="grid g2"><label class="f"><span>Kalem</span><select id="oc-item">${items.map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join("")}</select></label>
-    <label class="f"><span>Yeni miktar</span><input type="text" inputmode="decimal" id="oc-qty" value="${miktarIn(items[0]!.qty)}"></label>
-    <label class="f"><span>Birim</span><input type="text" list="dl-units" id="oc-unit" value="${esc(items[0]!.unit)}"></label>
+    <div class="grid g2"><label class="f"><span>Kalem</span><select id="oc-item">${items.map(it => `<option value="${it.id}"${it.id === secili.id ? " selected" : ""}>${esc(it.name)}</option>`).join("")}</select></label>
+    <label class="f"><span>Yeni miktar</span><input type="text" inputmode="decimal" id="oc-qty" value="${miktarIn(secili.qty)}"></label>
+    <label class="f"><span>Birim</span><input type="text" list="dl-units" id="oc-unit" value="${esc(secili.unit)}"></label>
     <label class="f"><span>Gerekçe</span><input type="text" id="oc-reason" maxlength="500" placeholder="Örn. ihtiyaç arttı, tedarikçi ile anlaşıldı"></label></div></div>
     <div class="mf"><button class="btn primary" data-act="order-item-save">Değiştir</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
 };

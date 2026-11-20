@@ -11,6 +11,8 @@ import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { $, $$, addDays, clamp, clone, dayDiff, esc, fmtDate, money, nf0, numIn, parseNum, pct, sum, todayStr, uid, kokIcinde, type FormEl } from "./util.ts";
 import { empty, render } from "./views.ts";
 import { closeModal, openModal, toast } from "./ui.ts";
+import { kalemleriBol } from "./kalem-bol.ts";
+import { bolunemezNedeni, kabulReddi } from "./kalem-kalem.ts";
 
 /** kalem kimliği → teklif kimliği → miktar */
 type Alloc = Record<string, Record<string, number>>;
@@ -406,10 +408,20 @@ function setQty(r: PurchaseRequest, ev: Evaluation, st: SimState, itemId: string
 }
 
 /* ---------------- karara aktarma ---------------- */
-function applyModal(r: PurchaseRequest, ev: Evaluation, st: SimState): void {
+/**
+ * 3442-5 (Risk K1): miktarı bölünen kalemin bağı (parça, fason, satış siparişi, birleşik talep kaynağı) ve talep edenin
+ * daralttığı kabul sınırı kalem kimliğine bağlıdır; yeni satırlara geçmez. Böyle kalem Dağıtım denemesinden de bölünmez.
+ */
+export async function aktarmaReddi(r: PurchaseRequest, alloc: Record<string, Record<string, number>>): Promise<string | null> {
+  const bolunen = (r.items ?? []).filter((it) => Object.values(alloc[it.id] ?? {}).filter((v) => v > 0).length > 1);
+  return bolunen.map((it) => bolunemezNedeni(it)).find((x) => x !== null) ?? await kabulReddi(r.id, bolunen.map((it) => it.id));
+}
+async function applyModal(r: PurchaseRequest, ev: Evaluation, st: SimState): Promise<void> {
   const k = kpiOf(r, ev, st.alloc);
   if (!k.complete) { toast("Her kalemin tamamını dağıtın; dağıtılmamış miktar var."); return; }
   const splitItems = (r.items ?? []).filter((it) => Object.values(st.alloc[it.id] ?? {}).filter((v) => v > 0).length > 1);
+  const red = await aktarmaReddi(r, st.alloc);
+  if (red) { toast(red); return; }
   openModal(`<div class="mh"><h2>Dağılımı karara aktar</h2></div><div class="mb">
     <p>${k.orders === 1 ? "Tüm kalemler tek tedarikçiden alınacak." : `${k.orders} tedarikçiye ayrı sipariş verilecek.`} Net maliyet nakliye dahil <b>${money(k.total, "TRY", 0)}</b>.</p>
     <ul data-sa-y="25">${k.groups.map((g) => `<li><b>${esc(supName(g.x.q))}</b>: ${g.lines.map((l) => `${esc(l.it.name)} ${numIn(l.qty)} ${esc(l.it.unit)}`).join(", ")}</li>`).join("")}</ul>
@@ -419,22 +431,7 @@ function applyModal(r: PurchaseRequest, ev: Evaluation, st: SimState): void {
 }
 
 function applyAlloc(r: PurchaseRequest, st: SimState): void {
-  const n = clone(r);
-  const items: RequestItem[] = [];
-  const assign: Record<string, string> = {};
-  const moved: string[] = [];
-  for (const it of n.items ?? []) {
-    const parts = Object.entries(st.alloc[it.id] ?? {}).filter(([, v]) => v > 0);
-    if (parts.length <= 1) { items.push(it); if (parts[0]) assign[it.id] = parts[0][0]; continue; }
-    for (const [qid, qty] of parts) {
-      const ni: RequestItem = { ...it, id: uid(), qty };
-      for (const q of n.quotes) { const p = q.prices[it.id]; if (p !== undefined) q.prices[ni.id] = p; }
-      items.push(ni); assign[ni.id] = qid;
-    }
-    for (const q of n.quotes) delete q.prices[it.id];
-    moved.push(`${it.name} ${numIn(qtyOf(it))} → ${parts.map(([qid, qty]) => `${numIn(qty)} ${supName(n.quotes.find((q) => q.id === qid)!)}`).join(" + ")}`);
-  }
-  n.items = items;
+  const { talep: n, atama: assign, bolunenler: moved } = kalemleriBol(r, st.alloc, (qid) => supName(r.quotes.find((q) => q.id === qid)!));
   const used = [...new Set(Object.values(assign))];
   const award: Award = used.length === 1
     ? { mode: "single", quoteId: used[0]!, reason: "Dağıtım denemesinden aktarıldı", by: "", decidedAt: todayStr(), approvals: [] }
@@ -534,7 +531,7 @@ document.addEventListener("click", (e) => {
     const sc = (r.scenarios ?? []).find((x) => x.id === el.dataset.id); if (!sc) return;
     openModal(`<div class="mh"><h2>Senaryonun adı</h2></div><div class="mb"><label class="f"><span>Ad</span><input type="text" id="scn-name" maxlength="80" value="${esc(sc.name)}" placeholder="Örn. Acil kısmı hızlı tedarikçiden"></label></div><div class="mf"><button class="btn primary" data-act="sim-rename-ok" data-id="${sc.id}">Kaydet</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
   }
-  else if (act === "sim-apply-scn") { const sc = (r.scenarios ?? []).find((x) => x.id === el.dataset.id); if (sc) { st.alloc = clone(sc.alloc); st.itemBal = { ...(sc.itemBal ?? {}) }; syncInputs(st); simLive(); applyModal(r, ev, st); } }
-  else if (act === "sim-apply") applyModal(r, ev, st);
+  else if (act === "sim-apply-scn") { const sc = (r.scenarios ?? []).find((x) => x.id === el.dataset.id); if (sc) { st.alloc = clone(sc.alloc); st.itemBal = { ...(sc.itemBal ?? {}) }; syncInputs(st); simLive(); void applyModal(r, ev, st); } }
+  else if (act === "sim-apply") void applyModal(r, ev, st);
 });
 window.addEventListener("resize", () => { if ($("#sim")) { const c = current(); if (c) drawCurve(c.r, kpiOf(c.r, c.ev, c.st.alloc)); } });

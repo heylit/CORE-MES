@@ -7,7 +7,6 @@ import type { PurchaseRequest, Quote } from "./tipler.ts";
 import { OPEN } from "./constants.ts";
 import { nameOf, settings } from "./store.ts";
 import { approvalState, liveRate, payText, requiredApprover, supName, type EvalRow } from "./calc.ts";
-import { onaylayabilecekler } from "./onaylayan.ts";
 import { ODEME_SEKLI } from "./takip.ts";
 import { addDays, clamp, esc, fmtDate, fmtTs, isNum, money, nfx, parseNum, todayStr } from "./util.ts";
 
@@ -117,5 +116,6 @@ export function onaylayanOzeti(r: PurchaseRequest, tutarTl: number | null): { ba
     return { baslik: son.name || nameOf(son.by), ayrinti: `${aps.state === "approved" ? "onayladı" : "reddetti"}, ${fmtTs(son.at)}` };
   }
   const ap = tutarTl === null ? null : requiredApprover(tutarTl);
-  return { baslik: "Bekleniyor", ayrinti: ap ? `${ap.role}: ${onaylayabilecekler(settings(), ap)}` : "onay limiti tanımlı değil" };
+  // "Gereken onay" kutusu onaylayabilecekleri zaten sayar; burada yalnız hangi basamağın beklendiği yazılır (Arayüz 3442-6 a).
+  return { baslik: "Bekleniyor", ayrinti: ap ? `${ap.role} onayı bekleniyor` : "onay limiti tanımlı değil" };
 }
