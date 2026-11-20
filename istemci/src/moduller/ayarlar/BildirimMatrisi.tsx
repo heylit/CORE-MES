@@ -464,7 +464,11 @@ export function BildirimMatrisi() {
         : (
           <span className="tc-matris-ayrinti">
             <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setAcik(m.tur); }} />
-            {(kuralSayisi.get(m.tur) ?? 0) > 0 && <Rozet ton="pasif">{`${String(kuralSayisi.get(m.tur))} kural`}</Rozet>}
+            {(kuralSayisi.get(m.tur) ?? 0) > 0 && (
+              <span className={acikMi(m) === false ? 'tc-matris-kapali' : undefined} title={acikMi(m) === false ? 'Olay kapalı; kural çalışmaz.' : undefined}>
+                <Rozet ton="pasif">{`${String(kuralSayisi.get(m.tur))} kural`}</Rozet>
+              </span>
+            )}
           </span>
         )),
     },
@@ -618,6 +622,7 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
   const [yRolIdleri, setYRolIdleri] = useState(e?.yukseltRolIdleri ?? []);
   const [yKisiIdleri, setYKisiIdleri] = useState(e?.yukseltKisiIdleri ?? []);
   const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [kuralFormu, setKuralFormu] = useState(false);
   const kisiAdi = new Map([...kisiler, ...epostaKisileri].map((k) => [k.id, k.ad]));
 
   const gunHatasi = (m: string, enCok: number): string | undefined => {
@@ -675,7 +680,7 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
       kapat={kapat}
       baslik={satir.baslik}
       tur="yan"
-      alt={(
+      alt={kuralFormu ? undefined : (
         <div className="tc-eposta-eylemler">
           <Dugme onClick={kapat}>Vazgeç</Dugme>
           <Dugme tur="birincil" simge="check" disabled={!degisti || !gecerli} yukleniyor={kaydediliyor} onClick={() => { void kaydet(); }}>Kaydet</Dugme>
@@ -732,7 +737,7 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
             )}
           </fieldset>
         )}
-        {yetki.ayar && kuralliTurMu(satir.tur) && <KuralBolumu tur={satir.tur} roller={roller} kisiler={kisiler} />}
+        {yetki.ayar && kuralliTurMu(satir.tur) && <KuralBolumu tur={satir.tur} roller={roller} kisiler={kisiler} formAcik={setKuralFormu} />}
         {yetki.eposta && e && (
           <fieldset className="tc-eposta-grup">
             <legend>E-posta ayrıntısı</legend>

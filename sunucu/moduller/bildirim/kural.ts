@@ -68,6 +68,8 @@ export async function kuralOnIzleme(db: Db, g: BildirimKuralEkleGovdesi): Promis
   return { gun: KURAL_ON_IZLEME_GUN, olay: izler.length, uyan, kisi: uyan === 0 ? 0 : yetkili.length, yetkisiz };
 }
 
+export const olayIzleriniTemizle = (db: Db): Promise<void> => sr.eskiIzleriSil(db, KURAL_ON_IZLEME_GUN);
+
 export interface KuralSonucu { kisiId: number; id: number; yeni: boolean; eposta: boolean; telefon: boolean; baslik: string }
 
 // bildirimGonder'in transaction'ında, ana satırlardan sonra. Olay izi yazılır (ön izleme), sonra açık kurallar sırayla denenir.

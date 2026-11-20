@@ -499,11 +499,19 @@ describe('3478-3 olay kuralları', () => {
     ac();
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     expect(within(tablo).getByText('Makine durdu').closest('tr')?.textContent).toMatch(/1 kural/);
+    expect(within(tablo).getByText('1 kural').closest('[title]')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Makine durdu: ayrıntı' }));
     const liste = await screen.findByRole('list', { name: 'Kurallar' });
     expect(within(liste).getByText('M-1 bakıma')).toBeTruthy();
     expect(within(liste).getByText('Makine kodu eşit M-1')).toBeTruthy();
     expect(within(liste).getByRole('switch', { name: 'M-1 bakıma: Açık' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('olay kapalıyken kural rozeti soluk ve nedenini söyler', async () => {
+    matrisSunucusu(undefined, { acik: false });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(within(tablo).getByText('1 kural').closest('[title]')?.getAttribute('title')).toBe('Olay kapalı; kural çalışmaz.');
   });
 
   it('kural ön izlenmeden kaydedilmez; form değişince ön izleme yenilenmeli', async () => {
@@ -512,6 +520,8 @@ describe('3478-3 olay kuralları', () => {
     await screen.findByRole('table', { name: 'Bildirim olayları' });
     fireEvent.click(screen.getByRole('button', { name: 'Makine durdu: ayrıntı' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Kural ekle' }));
+    expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Kuraldan vazgeç' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Kural adı'), { target: { value: 'M-2 durunca' } });
     fireEvent.click(screen.getByRole('button', { name: 'Koşul ekle' }));
     fireEvent.change(screen.getByLabelText('Koşul 1: değer'), { target: { value: 'M-2' } });

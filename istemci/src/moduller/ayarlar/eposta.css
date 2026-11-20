@@ -146,7 +146,10 @@
 .tc-kural-eylem { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-kural-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
 .tc-kural-kosullar { display: flex; flex-direction: column; gap: var(--b-2); }
-.tc-kural-kosul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; gap: var(--b-2); }
+.tc-kural-kosul { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--b-2); }
+.tc-kural-kosul > :nth-child(3) { grid-column: 1 / 3; }
+.tc-kural-kosul > :last-child { grid-column: 3; }
+.tc-matris-ayrinti .tc-matris-kapali .tc-rozet { color: var(--faint); }
 .tc-kural-on-izleme { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); }
 .tc-kural-on-izleme p { margin: 0; }
 .tc-kural-on-izleme-eski { color: var(--faint); border-style: dashed; }

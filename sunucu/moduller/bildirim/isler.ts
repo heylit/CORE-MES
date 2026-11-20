@@ -1,6 +1,7 @@
 import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
 import { epostaTuru } from './eposta.ts';
 import { kademeleriIlerlet } from './kademe.ts';
+import { olayIzleriniTemizle } from './kural.ts';
 import { ortamPushAyari, pushTuru } from './push.ts';
 import { zamaniGelenleriDagit } from './yayin.ts';
 
@@ -9,6 +10,8 @@ import { zamaniGelenleriDagit } from './yayin.ts';
 export const isler = [
   // Kademeli uyarı (3405 a): 15 dakikada bir bütün kaynaklar; defter tekil olduğundan iki sunucu aynı kademeyi iki kez göndermez.
   isTanimi({ ad: 'bildirim-kademe', aralikMs: 15 * 60_000, calis: async (db) => { await kademeleriIlerlet(db); } }),
+  // 3478-3 Risk N2: kural ön izlemesinin olay izi 7 günden uzun tutulmaz.
+  isTanimi({ ad: 'bildirim-olay-izi-temizle', aralikMs: 60 * 60_000, calis: async (db) => { await olayIzleriniTemizle(db); } }),
   isTanimi({ ad: 'bildirim-yayin-dagit', aralikMs: 60_000, calis: async (db) => { await zamaniGelenleriDagit(db); } }),
   isTanimi({
     ad: 'bildirim-push-gonder', aralikMs: 15_000,

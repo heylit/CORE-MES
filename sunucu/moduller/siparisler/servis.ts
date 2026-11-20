@@ -276,7 +276,6 @@ export async function durumDegistir(
   if (acan !== null) await bildirimGonder(db, {
     tur: komut === 'onayla' ? 'siparisler.siparis-onaylandi' : 'siparisler.siparis-iptal-edildi',
     baslik: `${komut === 'onayla' ? 'Onaylanan' : 'İptal edilen'} sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), kisiler: [acan], haric: kullanici.id,
-    alanlar: kuralAlanlari(sonuc),
   });
   // 3478 Risk N1: onayı geri alınan sipariş yeniden onay bekler; iş onaylayanlara yeniden düşer.
   if (komut === 'geri-al') await bildirimGonder(db, {

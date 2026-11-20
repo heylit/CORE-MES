@@ -43,11 +43,13 @@ const govdeOf = (k: BildirimKuralSatiri) => ({
   ortada: k.ortada, eposta: k.eposta, telefon: k.telefon, sablonBaslik: k.sablonBaslik, sablonMetin: k.sablonMetin,
 });
 
-export function KuralBolumu({ tur, roller, kisiler }: { tur: KuralliTur; roller: Roller; kisiler: Kisiler }) {
+// formAcik: kural formu açıkken panelin kendi Vazgeç/Kaydet çubuğu gizlenir (iki Kaydet görünmesin).
+export function KuralBolumu({ tur, roller, kisiler, formAcik }: { tur: KuralliTur; roller: Roller; kisiler: Kisiler; formAcik?: (acik: boolean) => void }) {
   const sorgu = useKurallar(true);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [form, setForm] = useState<BildirimKuralSatiri | 'yeni' | null>(null);
+  const [form, setFormHali] = useState<BildirimKuralSatiri | 'yeni' | null>(null);
+  const setForm = (f: BildirimKuralSatiri | 'yeni' | null) => { setFormHali(f); formAcik?.(f !== null); };
   const [silinecek, setSilinecek] = useState<BildirimKuralSatiri | null>(null);
   const [bekliyor, setBekliyor] = useState(false);
   const rolAdi = new Map(roller.map((r) => [r.id, r.ad]));
@@ -236,9 +238,10 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
           const a = alan.get(k.alan);
           const no = String(i + 1);
           return (
-            <div key={no} className="tc-kural-kosul">
+            <div key={no} className="tc-kural-kosul" role="group" aria-label={`Koşul ${no}`}>
               <Secim
-                etiket={`Koşul ${no}: alan`}
+                etiket="Alan"
+                aria-label={`Koşul ${no}: alan`}
                 value={k.alan}
                 secenekler={alanlar.map((x) => ({ deger: x.ad, baslik: x.etiket }))}
                 onChange={(e) => {
@@ -247,7 +250,8 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
                 }}
               />
               <Secim
-                etiket={`Koşul ${no}: karşılaştırma`}
+                etiket="Karşılaştırma"
+                aria-label={`Koşul ${no}: karşılaştırma`}
                 value={k.karsilastirma}
                 secenekler={karsilastirmalar(a).map((x) => ({ deger: x, baslik: KARSILASTIRMA_ADI[x] }))}
                 onChange={(e) => { kosulDegistir(i, { karsilastirma: e.target.value as KuralKarsilastirmasi }); }}
@@ -266,7 +270,8 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
               )}
               {a?.tip === 'secim' && k.karsilastirma !== 'icinde' && (
                 <Secim
-                  etiket={`Koşul ${no}: değer`}
+                  etiket="Değer"
+                  aria-label={`Koşul ${no}: değer`}
                   value={k.secilenler[0] ?? ''}
                   bosSecenek="Seçin"
                   secenekler={(a.secenekler ?? []).map((s) => ({ deger: s.deger, baslik: s.etiket }))}
@@ -275,7 +280,8 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
               )}
               {a?.tip !== 'secim' && (
                 <Girdi
-                  etiket={`Koşul ${no}: değer`}
+                  etiket="Değer"
+                  aria-label={`Koşul ${no}: değer`}
                   value={k.metin}
                   inputMode={a?.tip === 'sayi' ? 'decimal' : undefined}
                   ipucu={k.karsilastirma === 'icinde' ? 'Virgülle ayırın.' : undefined}
@@ -340,7 +346,7 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
       )}
       {hata && <p className="tc-alan-alt" role="alert">{hata}</p>}
       <div className="tc-eposta-eylemler">
-        <Dugme onClick={kapat}>Vazgeç</Dugme>
+        <Dugme onClick={kapat}>Kuraldan vazgeç</Dugme>
         <Dugme simge="search" disabled={eksik !== null} yukleniyor={calisiyor === 'on-izleme'} title={eksik ?? undefined} onClick={() => { void onIzle(); }}>Ön izle</Dugme>
         <Dugme tur="birincil" simge="check" disabled={!gorulduMu || eksik !== null} yukleniyor={calisiyor === 'kaydet'} title={gorulduMu ? undefined : 'Önce ön izleyin.'} onClick={() => { void kaydet(); }}>
           Kuralı kaydet

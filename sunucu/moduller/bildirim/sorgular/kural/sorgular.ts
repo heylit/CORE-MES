@@ -55,9 +55,12 @@ export async function kuralVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM bildirim_kurali WHERE id = $1', [id])) !== null;
 }
 
-// İz yazılırken o türün süresi geçen izi silinir: ayrı temizlik işi gerekmez.
+// Süresi geçen iz hem yazılırken hem saatlik işte silinir: seyrek olayın izi (izin türü gibi kişisel değer) süreyi aşmasın.
+export async function eskiIzleriSil(db: Db, gun: number): Promise<void> {
+  await db.sorgu('DELETE FROM bildirim_olay_izi WHERE zaman < now() - make_interval(days => $1)', [gun]);
+}
 export async function olayIziYaz(db: Db, tur: string, d: Readonly<Record<string, string | number | null>>, gun: number): Promise<void> {
-  await db.sorgu(`DELETE FROM bildirim_olay_izi WHERE tur = $1 AND zaman < now() - make_interval(days => $2)`, [tur, gun]);
+  await eskiIzleriSil(db, gun);
   await db.sorgu('INSERT INTO bildirim_olay_izi (tur, degerler) VALUES ($1, $2::jsonb)', [tur, JSON.stringify(d)]);
 }
 

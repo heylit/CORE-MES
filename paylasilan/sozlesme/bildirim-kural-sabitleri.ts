@@ -26,7 +26,6 @@ export const KURAL_ALANLARI = {
     { ad: 'ihtiyaca_kalan_gun', etiket: 'İhtiyaca kalan gün', tip: 'sayi' },
   ],
   'siparisler.onay-bekliyor': [firma, tutar, paraBirimi, termineKalan],
-  'siparisler.siparis-onaylandi': [firma, tutar, paraBirimi, termineKalan],
   'siparisler.iskonto-onay-bekliyor': [{ ad: 'iskonto_orani', etiket: 'İskonto oranı (%)', tip: 'sayi' }],
   'siparisler.termin-onay-bekliyor': [termineKalan],
   'istasyonlar.makine-durdu': [{ ad: 'makine', etiket: 'Makine kodu', tip: 'metin' }],

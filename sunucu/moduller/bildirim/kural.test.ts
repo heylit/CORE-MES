@@ -12,6 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder, bildirimKapat, type BildirimOlayi } from './disari.ts';
+import { olayIzleriniTemizle } from './kural.ts';
 
 // 3478-3 a: kural uçları, ön izleme ve olay yazılırken kuralın uygulanışı. Olay "Makine durdu"dur (alanı: makine kodu);
 // ana bildirim yalnız A'ya gider (yalnizKisiler), kural B ve C'ye gider, C olayın okuma işlemini taşımaz (Risk K1).
@@ -107,6 +108,13 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
     assert.equal(r.durum, 200, r.metin);
     assert.deepEqual(bildirimKuralOnIzlemeCevabi.parse(r.govde), { gun: 7, olay: 4, uyan: 2, kisi: 1, yetkisiz: 1 });
     assert.equal((await o().sahip.sorgu('SELECT 1 FROM bildirim_kurali')).length, 0);
+  });
+
+  test('KM-9 saatlik iş 7 günden eski izi her türde siler (Risk N2: seyrek olayın kişisel değeri kalmaz)', async () => {
+    await o().sahip.sorgu(`INSERT INTO bildirim_olay_izi (tur, degerler, zaman) VALUES ('ik.izin-onay-bekliyor', '{"gun": 2}', now() - interval '8 days'), ($1, '{}', now())`, [TUR]);
+    await o().vt.tx((db) => olayIzleriniTemizle(db));
+    const kalan = await o().sahip.sorgu<{ tur: string }>('SELECT tur FROM bildirim_olay_izi');
+    assert.deepEqual(kalan.map((x) => x.tur), [TUR]);
   });
 
   test('KM-3 olay uyunca kural yetkili alıcıya kendi şablonuyla ayrı satır yazar; uymayınca yazmaz', async () => {
