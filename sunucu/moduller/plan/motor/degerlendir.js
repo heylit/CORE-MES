@@ -123,7 +123,7 @@ function planKaydi(p, st, ref) {
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */
 function dgPlanKur(st, ms = 0) {
-  stHazirla(st); const cx = compile(st); let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx); let E = evaluate(cur, st, null, true);
+  stHazirla(st); const cx = compile(st); const b = ilkYerlestirme(st, cx, ms); let cur = b.p, E = b.e; ms -= b.bedel;
   const t0 = Date.now(); let seed = 17, durgun = 0;
   while (ms > 0 && Date.now() - t0 < ms && durgun < 3) { const L = lns(st, cur, null, { ms: Math.max(200, Math.min(1000, ms - (Date.now() - t0))), seed: seed++, free: true }); if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++; }
   return planKaydi(tutulamayaniOnar(cur, st, cx, true), st, null);
@@ -435,14 +435,32 @@ function partiBol(jid, dagitim, adetler) {
    Kural tabanlı ilk plan, kalan bütçede LNS. Dondurma bölgesi plan dengesine göre kilitlenir (dengeKilit). Bütçe çalışmanın çözüm süresidir
    (S.w.sure sn, sabit adımlı saatle). Kayıtlı planı iyileştirme burada yok (579 b: HiGHS gelene kadar). Canlı plana göre değişim (ozet.chg)
    burada ölçülmez: null. */
+/* 3500: ilk yerleştirme kuralının (ATCS) iki katsayısı için tek doğru ayar yok: k1 termin sıkışıklığının, k2 ayar süresinin ağırlığıdır;
+   veriye göre biri ya da öteki daha az gecikme verir. Plan birkaç ayarla dizilir, en iyisi aramaya girer; arama katsayıları kullanmaz. İlk ayar
+   motorun varsayılanıdır: "ilk" gecikme onunla ölçülür. Saat sabit adımlıdır, dizme saati ilerletmez: her ek dizmenin bedeli (saat adımı
+   cinsinden) arama bütçesinden düşülür; bütçenin en çok ILK_PAY kadarı buna gider, kısa bütçede daha az ayar denenir. */
+const ILK_KATSAYILAR = [[W0.k1, W0.k2], [16, 2], [8, 4], [2, 2]], ILK_ADIM = 15, ILK_PAY = 0.3;
+/** @param {MotorDurumu} st @param {Derleme} cx @param {number} ms */
+function ilkYerlestirme(st, cx, ms) {
+  const bedel1 = ILK_ADIM * saatAdimi(cx.ops.length);
+  const n = st.w.rule === 'atcs' ? 1 + Math.max(0, Math.min(ILK_KATSAYILAR.length - 1, Math.floor(ILK_PAY * ms / bedel1))) : 1;
+  let en = null, ilk = 0; const w0 = [st.w.k1, st.w.k2];
+  for (const [k1, k2] of ILK_KATSAYILAR.slice(0, n)) {
+    st.w.k1 = k1; st.w.k2 = k2;
+    const p = schedule(st, 'dagit', null, { cx }); slack(p, cx); const e = evaluate(p, st, null, true);
+    if (!en) ilk = e.wT;
+    if (!en || cmpEv(e, en.e) > 0) en = { p, e };
+  }
+  [st.w.k1, st.w.k2] = w0;
+  return { p: en.p, e: en.e, ilk, bedel: (n - 1) * bedel1 };
+}
 function planKur() {
   const st = stHazirla(dengeKilit(stOf(), true)); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
-  let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx);
-  let E = evaluate(cur, st, null, true); const ilk = E.wT;
+  const b = ilkYerlestirme(st, cx, ms); let cur = b.p, E = b.e; const ilk = b.ilk; const araMs = ms - b.bedel;
   const lbx = lowerBound(st, cx); const lbC = {}; for (const j in lbx.C) lbC[j] = isFinite(lbx.C[j]) ? lbx.C[j] : null;
   let seed = 17, durgun = 0;
-  while (Date.now() - t0 < ms && durgun < 4) {
-    const L = lns(st, cur, null, { ms: Math.max(250, Math.min(1500, ms - (Date.now() - t0))), seed: seed++, free: true });
+  while (Date.now() - t0 < araMs && durgun < 4) {
+    const L = lns(st, cur, null, { ms: Math.max(250, Math.min(1500, araMs - (Date.now() - t0))), seed: seed++, free: true });
     if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++;
   }
   return { plan: { ...planKaydi(cur, st, null), lb: lbx.wT, lbC, ilk, dataVer: S.dataVer } };

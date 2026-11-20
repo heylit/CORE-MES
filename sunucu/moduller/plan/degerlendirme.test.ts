@@ -697,6 +697,40 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
   });
 });
 
+describe('planlama değerlendirmesi: çok başlangıçlı ilk yerleştirme (3500)', () => {
+  // 32 emir, üç ürün, iki tezgâh; üçüncü ürünün ayarı uzun, işlemi kısa. Varsayılan kural ayarı (k1 2, k2 0,6) bu veride en iyi ilk planı vermez.
+  const kayit = { ...BUYUK_KAYIT,
+    items: [...BUYUK_KAYIT.items, { id: '52', code: 'MM-3', name: 'Ornek govde', type: 'mamul' }],
+    routes: { ...BUYUK_KAYIT.routes, 52: { base: null, steps: [adim('52', 10, '10', 20, 150), adim('52', 20, '20', 35, 120)] } },
+    orders: Array.from({ length: 32 }, (_, i) => ({ id: `O${String(i)}`, no: `E-${String(i)}`, itemId: ['50', '51', '52'][i % 3]!, qty: 3 + ((i * 7) % 11), start: '2026-10-19',
+      due: `2026-10-${String(20 + ((i * 5) % 9))}`, priority: 1 + (i % 3), status: 'serbest' })) };
+  const iste = (sure: number, istek: DegerlendirmeIstegi) => degerlendirmeYap({ calisma: { ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure } }, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek }, AN);
+  const gecikme = (plan: Record<string, unknown>): number => (plan['ozet'] as { wT: number }).wT;
+  // Bütçe bir ek dizmeye yetmeyecek kadar kısa: tek ayarla dizilir, arama da koşmaz; dönen plan varsayılan ayarın ilk planıdır.
+  const varsayilan = async (): Promise<number> => {
+    const s = sonuc(await iste(0.001, { tur: 'plan-kur' })); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    assert.equal(gecikme(s.plan), s.plan['ilk'], 'kısa bütçede ek ayar denenmez');
+    return gecikme(s.plan);
+  };
+
+  test('CB-01: planı kur ilk planı birkaç kural ayarıyla dizer, en iyisinden arar; "ilk" varsayılan ayarın gecikmesidir, aynı girdi aynı sonucu verir', async () => {
+    const ilk = await varsayilan();
+    const a = await iste(0.6, { tur: 'plan-kur' });
+    const s = sonuc(a); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    assert.equal(s.plan['ilk'], ilk);
+    assert.ok(gecikme(s.plan) <= ilk * 0.96, `${String(gecikme(s.plan))} <= ${String(ilk * 0.96)}`);
+    assert.deepEqual(planBozuklari(s.plan['ops'] as Record<string, PlanIsi>), []);
+    assert.deepEqual(await iste(0.6, { tur: 'plan-kur' }), a);
+  });
+
+  test('CB-02: plan seçenekleri de ilk planı birkaç kural ayarıyla dizer', async () => {
+    const ilk = await varsayilan();
+    const s = sonuc(await iste(0.6, { tur: 'plan-secenekleri' })); if (s.tur !== 'plan-secenekleri') return assert.fail(s.tur);
+    assert.ok(s.secenekler.length > 0);
+    for (const x of s.secenekler) assert.ok(gecikme(x.plan) <= ilk * 0.96, `denge ${String(x.denge)}: ${String(gecikme(x.plan))} <= ${String(ilk * 0.96)}`);
+  });
+});
+
 const PAROLA = 'dogru-parola-1';
 const URL = '/api/plan/planlama-degerlendirmesi';
 
