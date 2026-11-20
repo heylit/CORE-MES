@@ -45,12 +45,15 @@ describe('Engeller (3457-1 A)', () => {
   it('uyarının başındaki iç kimlik atılır; "planlanamadı" uyarısı yerleşmeyen satırının kopyası olduğu için yazılmaz', () => {
     const { p, m, cx } = kur((plan) => {
       plan.warn = [{ t: 'malzeme', j: '2', txt: '2: malzeme eksik (stok ve sipariş yetmiyor)' }, { t: 'plan', j: '2', txt: '2.20 planlanamadı: x' },
-        { t: 'kilit', j: '2', txt: '2.40: kilitli iş 21.10 08:00 başlıyor, öncülü 2.30 o saatte bitmiyor' }];
+        { t: 'kilit', j: '2', txt: '2.40: kilitli iş 21.10 08:00 başlıyor, öncülü 2.30 o saatte bitmiyor' },
+        { t: 'cakisma', j: '2', id: '2.40', txt: '2.40: 21.10 08:00 başlıyor; ORN-T1 tezgâhındaki 2.30 21.10 10:00 bitiyor, iki iş üst üste geliyor' }];
     });
     const u = engeller(p, m, cx, 1e9, zaman).find((x) => x.tur === 'uyari')?.engeller ?? [];
     expect(u.map((e) => [e.baslik, e.neOldu, e.neYapmali, e.duzelt.map((d) => d.baslik)])).toEqual([
       ['ORN-2 · ORNEK Flanş · 50 adet', 'Malzeme eksik (stok ve sipariş yetmiyor).', 'Stok ve satın alma durumunu kontrol edin.', ['Stoku aç']],
       ['ORN-2 · ORNEK Flanş · 50 adet', 'Kilitli iş 21.10 08:00 başlıyor, öncülü ORN-2 OP 30 o saatte bitmiyor.', 'Kilidi kaldırın ya da kilitli işi taşıyın.', []],
+      ['ORN-2 · ORNEK Flanş · 50 adet', '21.10 08:00 başlıyor; ORN-T1 tezgâhındaki ORN-2 OP 30 21.10 10:00 bitiyor, iki iş üst üste geliyor.',
+        'Kilitli işi taşıyın ya da kilidi kaldırın; iş başladıysa gerçekleşen kaydın saatlerini kontrol edin.', []],
     ]);
   });
 

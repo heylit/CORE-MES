@@ -99,11 +99,12 @@ function failNedenKaydi(p, st) {
 /** @param {any} p @param {Derleme} cx */
 function cakisanIsler(p, cx) {
   const l = [], gecmis = r => r.act || r.done;
+  const ad = Object.fromEntries((cx.D.tezgahlar || []).map(x => [String(x.id), String(x.ad || x.id)]));
   const byM = {}; for (const r of Object.values(p.ops)) if (!r.fas && isFinite(r.S) && isFinite(r.C)) (byM[r.m] = byM[r.m] || []).push(r);
   for (const m in byM) {
     let on = null;
     for (const r of byM[m].sort((x, y) => x.S - y.S)) {
-      if (on && r.S < on.C - 1e-6 && !(gecmis(r) && gecmis(on))) l.push({ t: 'cakisma', j: r.job, id: r.id, txt: `${r.id}: ${fmtDT(cx.D, r.S)} başlıyor; aynı tezgâhtaki ${on.id} ${fmtDT(cx.D, on.C)} bitiyor, iki iş üst üste geliyor` });
+      if (on && r.S < on.C - 1e-6 && !(gecmis(r) && gecmis(on))) l.push({ t: 'cakisma', j: r.job, id: r.id, txt: `${r.id}: ${fmtDT(cx.D, r.S)} başlıyor; ${ad[m] || m} tezgâhındaki ${on.id} ${fmtDT(cx.D, on.C)} bitiyor, iki iş üst üste geliyor` });
       if (!on || r.C > on.C) on = r;
     }
   }

@@ -35,6 +35,7 @@ const UYARI_ONERISI: Readonly<Record<string, string>> = {
   malzeme: 'Stok ve satın alma durumunu kontrol edin.', kilit: 'Kilidi kaldırın ya da kilitli işi taşıyın.', geri: 'Termini ya da süreleri kontrol edin.',
   bekleme: 'Bildirilen beklemeyi ya da kilidi kontrol edin.', program: 'NC programını hazırlayın.', takim: 'Takımı yenileyin ya da başka takım ekleyin.',
   ikincil: 'Aparatı artırın ya da işleri kaydırın.', 'Ayarcı': 'Vardiyaya ayarcı atayın.',
+  cakisma: 'Kilitli işi taşıyın ya da kilidi kaldırın; iş başladıysa gerçekleşen kaydın saatlerini kontrol edin.',
 };
 
 // Grubun tonu: hata plana girmeyen iş, uyarı planda olup eksik kalan, bilgi motorun uyarısı.

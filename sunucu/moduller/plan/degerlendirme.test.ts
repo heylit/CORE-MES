@@ -653,7 +653,7 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.ok(yeni['O6.10']!.C > 40, 'süren iş kilit saatinden sonra bitiyor');
     const uyari = (s.plan['warn'] as { t: string; id?: string; txt: string }[]).filter((w) => w.t === 'cakisma');
     assert.deepEqual(uyari.map((w) => w.id), ['O4.10']);
-    assert.match(uyari[0]!.txt, /O6\.10/);
+    assert.match(uyari[0]!.txt, /Freze 1 tezgâhındaki O6\.10/);
     const temiz = sonuc(await iste(suren().calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (temiz.tur !== 'plan-uygula') return assert.fail(temiz.tur);
     assert.deepEqual((temiz.plan['warn'] as { t: string }[]).filter((w) => w.t === 'cakisma'), [], 'geçerli planda bu uyarı yok');
   });
