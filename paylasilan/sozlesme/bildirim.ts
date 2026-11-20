@@ -506,6 +506,44 @@ export const bildirimPushTurSatiri = z.object({
 export const bildirimPushTurleriCevabi = z.object({ satirlar: z.array(bildirimPushTurSatiri) });
 export const bildirimPushTurDegistirGovdesi = z.object({ acik: z.boolean() }).strict();
 
+// 3478 (3478-1 a, 3478-2 a): olay başına ana anahtar; satırı olmayan olay kapalıdır. Kademeli uyarının türleri kaynağın ayarına,
+// ekip çağrısı kendi yönlendirmesine bağlıdır: anahtar listesinde yoktur ve her zaman gider. Elle duyuru (yayın) bu yoldan geçmez.
+export const HER_ZAMAN_GIDEN_TURLER: readonly string[] = ['arkon.ekip-cagrisi'];
+export const KADEME_DENETIMLI_TURLER: readonly string[] = [
+  ...new Set(KADEME_KAYNAK_ANAHTARLARI.flatMap((k) => kaynakKademeleri(k).map((n) => kademeTuru(k, n) as string))), 'projeler.hazirlik-ozet',
+];
+export const ANAHTARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !HER_ZAMAN_GIDEN_TURLER.includes(t) && !KADEME_DENETIMLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];
+export const anahtarliTurMu = (tur: string): boolean => (ANAHTARLI_TURLER as readonly string[]).includes(tur);
+export const OLAY_TOPLU_EN_COK = 200;
+
+export const bildirimOlayParametresi = z.object({ tur: z.enum(ANAHTARLI_TURLER) });
+export const bildirimOlayAcikSatiri = z.object({
+  tur: z.enum(ANAHTARLI_TURLER),
+  baslik: z.string(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  kaynakModul: z.string(),
+  acik: z.boolean(),
+  // Satırı olmayan olayda null (kapalı); yazım bu sürümle gelir.
+  surum: z.number().int().nullable(),
+});
+export const bildirimOncekiHali = z.object({
+  // Kapanış anı (göç); kayıt yoksa null.
+  alindi: zamanSemasi.nullable(),
+  donuldu: zamanSemasi.nullable(),
+});
+export const bildirimOlayAciklariCevabi = z.object({ satirlar: z.array(bildirimOlayAcikSatiri), oncekiHal: bildirimOncekiHali });
+export const bildirimOlayAcikDegistirGovdesi = z.object({ acik: z.boolean(), surum: z.number().int().min(1).nullable() }).strict();
+export const bildirimOlayTopluGovdesi = z.object({
+  turler: z.array(z.enum(ANAHTARLI_TURLER)).min(1).max(OLAY_TOPLU_EN_COK).refine((l) => new Set(l).size === l.length, 'Aynı olay iki kez seçilemez.'),
+  acik: z.boolean(),
+}).strict();
+export const bildirimOncekiHaleDonGovdesi = z.object({}).strict();
+
+export type BildirimOlayAcikSatiri = z.output<typeof bildirimOlayAcikSatiri>;
+export type BildirimOlayAciklariCevabi = z.output<typeof bildirimOlayAciklariCevabi>;
+export type BildirimOlayAcikDegistirGovdesi = z.input<typeof bildirimOlayAcikDegistirGovdesi>;
+export type BildirimOlayTopluGovdesi = z.input<typeof bildirimOlayTopluGovdesi>;
+
 export type Bildirim = z.output<typeof bildirimSemasi>;
 export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;

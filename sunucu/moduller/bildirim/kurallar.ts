@@ -127,6 +127,15 @@ export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
 };
 
 
+// 3478: olayın ana anahtarı. Ekip çağrısı ve kademeli uyarı türleri anahtara bakmaz (kendi ayarları geçer). Kapalı olayda yalnız
+// görev sınıfı ve "Okudum, anladım" isteyen türün satırı Gelenler'e yazılır (Risk K1: onaylayanın iş listesi boşalmaz); zil ortası,
+// telefon ve e-posta gitmez. Öteki türde hiçbir şey yazılmaz.
+export type OlayYazimi = 'tam' | 'yalniz-gelenler' | 'yok';
+export function olayYazimi(t: { anahtarli: boolean; acik: boolean; sinif: string; onayIstenir: boolean }): OlayYazimi {
+  if (!t.anahtarli || t.acik) return 'tam';
+  return t.sinif === 'gorev' || t.onayIstenir ? 'yalniz-gelenler' : 'yok';
+}
+
 // --- E-posta kanalı (ADR 0015, 3397) ---------------------------------------------------------------------------------
 
 // BIL-40: konu başına varsayılan şablon. Gövdede yalnız izinli yer tutucular; müşteri, tedarikçi, fiyat, parça no ve serbest metin yok.

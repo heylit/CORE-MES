@@ -29,6 +29,7 @@ import { emirTedarikDurumlari, onayliTalepGelisleri, takvimKayitlari, terminDinl
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { acikTalepMiktarlari, siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
 import * as sorgu from './sorgular.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -139,6 +140,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     kablola();
     // Rol x işlem satırları kisiler göçünden gelir (kart #223); test hiçbir role işlem eklemez.
     ortam = await testVeritabaniKur('satin_alma6');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     kisi.yonetici = yoneticiId;
@@ -4567,6 +4570,8 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
 
   before(async () => {
     ortam = await testVeritabaniKur('satin_alma_kur0');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const r = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });

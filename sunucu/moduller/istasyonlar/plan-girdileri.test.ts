@@ -13,6 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   calisirMakineler, isMerkeziPersonelSayilari, istasyonKapasitesi, istasyonKisileri, istasyonYetkinlikleri, kisilerinIzinliIsMerkezleri, makineDurumuYaz, planAyarlari, yetkinMi,
 } from './disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -63,6 +64,8 @@ describe('istasyonlar T2: plan ayarı, makine durumu, yetkinlik, kişinin istasy
 
   before(async () => {
     ortam = await testVeritabaniKur('istasyonlar_plan_girdileri');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });

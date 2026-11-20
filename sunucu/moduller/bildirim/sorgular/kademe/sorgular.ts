@@ -18,7 +18,7 @@ export interface KademeAyarYazimi {
   kapatilamaz: boolean; yoneticiRolId: number | null; k3Birim: 'gun' | 'saat';
 }
 // Satırı olmayan kaynağın sürümü 1 sayılır (katalog varsayılanı): ilk yazım satırı 2 ile açar. Sürüm tutmazsa null döner.
-export async function ayarYaz(db: Db, kaynak: string, g: KademeAyarYazimi, surum: number, kisiId: number): Promise<{ surum: number } | null> {
+export async function ayarYaz(db: Db, kaynak: string, g: KademeAyarYazimi, surum: number, kisiId: number | null): Promise<{ surum: number } | null> {
   const degerler = [kaynak, g.acik, g.k2Gun, g.k3Gun, g.k4Gun, g.k5Gun, g.epostaKademe, g.serit, g.kapatilamaz, g.yoneticiRolId, surum, kisiId, g.k3Birim];
   const guncel = await db.tek<{ surum: number }>(
     `UPDATE bildirim_kademe_ayari SET acik = $2, k2_gun = $3, k3_gun = $4, k4_gun = $5, k5_gun = $6, eposta_kademe = $7, serit = $8, kapatilamaz = $9,

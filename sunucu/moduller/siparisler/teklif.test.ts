@@ -13,6 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { teklifDurumlari } from './disari.ts';
 import * as sorgular from './sorgular.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -94,6 +95,8 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler_teklif');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;

@@ -17,6 +17,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder } from './disari.ts';
 import { epostaTuru, type EpostaTuruSonucu } from './eposta.ts';
+import { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const ONAY: BildirimTuru = 'satin-alma.talep-onay-bekliyor';
@@ -174,6 +175,8 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
       TMIV2_POSTA_SUNUCUSU: `127.0.0.1:${String(f.kapi)}`, TMIV2_POSTA_ALAN_ADI: 'ornek.local', TMIV2_POSTA_GONDEREN: 'mes@ornek.local', TMIV2_POSTA_GUVENLIK: 'yok',
     });
     ortam = await testVeritabaniKur('eposta');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
     await giris('yonetici');

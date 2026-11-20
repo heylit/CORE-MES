@@ -10,6 +10,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -62,6 +63,8 @@ describe('Malzeme kartı onay bildirimleri (gerçek PostgreSQL, gerçek giriş)'
 
   before(async () => {
     ortam = await testVeritabaniKur('malzemebildirim');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
     yoneticiId = (await girisYap('b-yonetici', 'yonetici')).id;
   });

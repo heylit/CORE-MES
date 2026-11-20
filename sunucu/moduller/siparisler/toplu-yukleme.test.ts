@@ -12,6 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { TOPLU_GRUP_FARKI, TOPLU_SIPARIS_VAR, TOPLU_TERMIN_ONCE, TOPLU_ZORUNLU } from './toplu-kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -78,6 +79,8 @@ describe('3455-3 toplu satış siparişi yükleme (gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler_toplu');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;

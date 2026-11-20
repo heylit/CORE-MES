@@ -13,6 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { satisTaslagiKilitleri, teklifDenemeCozucusu } from './disari.ts';
 import type { TeklifDenemeGirdisi, TeklifDenemeSonucu } from './disari.ts';
 import { DENENECEK_KALEM_YOK, ONAYLANACAK_ISKONTO_YOK, TERMIN_DENEMESI_YOK } from './kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const GECERLILIK = '2099-06-30';
@@ -129,6 +130,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler_teklif_deneme');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;

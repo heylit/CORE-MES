@@ -14,6 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kapananEmirlerinGorevleri, kapaliEmirCozucusuKaydet } from './hazirlik-kademe.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 // 3405 a: hazırlık görevi ortak kademeli uyarı motorunun kaynağıdır (bildirim). Kademe kuralının saf testleri bildirim modülündedir;
@@ -70,6 +71,8 @@ describe('projeler hazırlık kademesi (3396, 3405 ortak motor, gerçek PostgreS
 
   before(async () => {
     ortam = await testVeritabaniKur('projeler_hazirlik_kademe');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     // Uydurma emir kimlikleri üretim emirlerinde yoktur; gerçek çözücü onları kapalı sayardı. Testte kapalı emirleri kendimiz veririz.
     kapaliEmirCozucusuKaydet(async (_db, idler) => new Set(idler.filter((i) => kapaliEmirler.has(i))));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });

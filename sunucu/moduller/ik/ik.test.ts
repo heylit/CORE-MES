@@ -16,6 +16,7 @@ import { acikZimmetCozucusu } from './disari.ts';
 import { ornekTckn } from './ornek-veri.ts';
 import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Govde = Record<string, unknown>;
@@ -93,6 +94,8 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('ik');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     gocDagilimi = await ortam.vt.sorgu<{ kod: string; islem: string }>(
       "SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem LIKE 'ik.%' OR ri.islem IN ('sayfa.ik', 'sayfa.ik-islemlerim') ORDER BY 1, 2");
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });

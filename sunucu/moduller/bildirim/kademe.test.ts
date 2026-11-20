@@ -16,6 +16,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { kademeKaynagiKaydet, kademeleriIlerlet, type KademeKaydi } from './kademe.ts';
 import { bildirimGonder } from './servis.ts';
 import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAyarHatasi } from './kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
 
 const BOS = new Set<string>();
 const SON_GUN = { sayac: 'son-gun', k2Gun: 1, k3Gun: null, k4Gun: 1, k5Gun: 2 } as const;
@@ -195,6 +196,8 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('bildirim_kademe');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     for (const r of await ortam.vt.sorgu<{ id: number; kod: string }>('SELECT id, kod FROM rol')) rol.set(r.kod, r.id);
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));

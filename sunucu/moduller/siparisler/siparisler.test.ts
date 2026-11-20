@@ -19,6 +19,7 @@ import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { kablola } from '../../kablolama.ts';
 import { satisSevkleriCozucusu } from '../finans/disari.ts';
 import { siparisinSevkleri } from '../sevkiyat/disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -92,6 +93,8 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;

@@ -15,6 +15,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   SIFIRLAMA_DENETIM, SIFIRLAMA_HER_ZAMAN_KISMI, SIFIRLAMA_KISI, SIFIRLAMA_SISTEM, SIFIRLAMA_TANIM, sifirlamaKapsami, yedekAdi,
 } from './kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 // "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner; yönetici, sistem ayarları ve seçilenler kalır.
 // Her test kendi verisini kurar: sıfırlama önceki testin bıraktığını da siler. Veriler uydurmadır.
@@ -86,6 +87,8 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     process.env['TMIV2_YEDEK_ANAHTARI'] = Buffer.alloc(32, 7).toString('base64');
     process.env['TMIV2_SIFIRLAMA_ACIK'] = '1';
     ortam = await testVeritabaniKur('ayarlar_sifirlama');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     ilkDolu = new Map([...(await sayilar())].filter(([, n]) => n > 0));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'ORN Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));

@@ -13,6 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { ADRES_TARAMASI, RED_SAKLAMA_GUN, YETKI_REDDI_SERISI } from './kurallar.ts';
 import { olayYazicisiniKur, taramaYap } from './servis.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -52,6 +53,8 @@ describe('guvenlik: reddedilen istekler, yeni sinyaller ve kritik alarm duyurusu
 
   before(async () => {
     ortam = await testVeritabaniKur('guvenlikret');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const rol = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'mudur'");
