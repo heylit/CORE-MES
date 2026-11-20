@@ -247,7 +247,7 @@ function calismaKodu(): string {
   return calismaKod;
 }
 // takim (3199 D): motorun işe yazdığı özel takım ömrü kaydı; n değişim sayısı (0: ömür yetti), at değişimin plan eksenindeki saati.
-// ufukDisi (3457-3 a): iş ufkun sonuna kadar yerleşti, bu kadar saati sığmadı; C gerçek bitiş değildir.
+// ufukDisi (3484 c): işin ayardaki ufuktan sonraki çalışma saati; ufuk bu emir için uzadı, S ve C gerçektir.
 export interface CalismaIslemi { id: string; m: string; S: number; C: number; bitti: boolean; ufukDisi?: number; takim?: { id: string; n: number; dk: number; at: number | null }[] }
 export interface CalismaPlani {
   // Planın saat ekseninin başlangıç günü ('GGGG-AA-GG').

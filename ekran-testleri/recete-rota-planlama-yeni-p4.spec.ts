@@ -21,6 +21,11 @@ test.describe('P4 malzeme planı', () => {
       await expect(page.getByRole('button', { name: 'Hesapla' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Hesapla' })).toBeEnabled();
     }
+    // 3485 a: günlük tüketim ve toplu plan kartı; toplama düğmesi seçilir, talep açılmaz (sayfa yazmaz).
+    if (await page.getByRole('table', { name: 'Günlük tüketim' }).isVisible()) {
+      const topla = page.getByRole('group', { name: 'Talebi topla' }).or(page.getByRole('combobox', { name: 'Talebi topla' }));
+      await expect(topla).toBeVisible();
+    }
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     // Stok uçlarının yetkisi olmayan hesapta 403 beklenir (ekran planın kopyasına döner); onun dışında hata yok.
     expect(ag.hatalar.filter((h) => !/^403 GET \/api\/stok\//.test(h))).toEqual([]);
@@ -32,6 +37,8 @@ test.describe('P4 malzeme planı', () => {
     test('yönetici olmayan kişi yeni ekranı görmez', async ({ page, ac }) => {
       await ac('/plan/malzplan');
       await expect(page.locator('[data-gorunum="malzplan"]')).toHaveCount(0);
+      // 3485 a: talep açma şeridi ve seçim kutusu da yoktur.
+      await expect(page.getByRole('region', { name: 'Toplu talep' })).toHaveCount(0);
     });
   });
 });

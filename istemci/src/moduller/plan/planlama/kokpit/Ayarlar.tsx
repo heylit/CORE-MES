@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
+import type { MotorAyarlari, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
-import { ACIL_PAY, AYAR_SECENEKLERI, degerAdi, surumMetni, yuzdeMetni } from '../../motor-ayarlari/kurallar.ts';
+import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, FASON_GUN, degerAdi, gunMetni, gunOku, secilebilir, secimDegeri, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from '../../motor-ayarlari/kurallar.ts';
 import { altEkranAdresi } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
@@ -27,11 +27,14 @@ export interface AyarlarOzellikleri {
   yon?: 'ileri' | 'geri' | null;
   // Etki ekrandayken (Uygula ya da Vazgeç bekliyor) true: sayfa ikinci bir birincil düğmeyi kapatır.
   etkiBekliyor?: (bekliyor: boolean) => void;
+  // 3487: motor ayarını değiştirebilen kişi (plan.motor-ayari) panelde değiştirir; kayıt bütün planlar içindir, sonra çalışma yeniden okunur.
+  motorYazabilir?: boolean;
+  motorDegisti?: () => void;
 }
 
 const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
 
-export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}: AyarlarOzellikleri) {
+export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor, motorYazabilir = false, motorDegisti }: AyarlarOzellikleri) {
   const [t, setT] = useState<AyarTaslagi>(() => {
     const t0 = ayarTaslagi(c), a = AYAR_ALANLARI.find((x) => x.k === 'yon');
     return yon !== null && a ? alanYaz(t0, a, yon) : t0;
@@ -141,23 +144,79 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor}
       <p className="tc-pyq-not">Aç kapa olmayanlar: tezgâhta aynı anda tek iş (tezgâh iki işi birden yapamaz) ve vardiya saatleri (Takvim sayfasından değişir). Süren iş de taşınır: durdurulmuş sayılır, yapılan kısım yerinde kalır, kalan adet yeni yerine planlanır; biten iş taşınmaz. Elle taşıdığınız işin yeri sizin kararınızdır; Geri al ile kalkar. Açıklamalar <Link to={altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })}>Kısıtlar</Link> sayfasında.</p>
 
       <h3>Motor ve onay</h3>
-      <dl>
-        {motor === null ? <div><dt>Motor ayarı</dt><dd>okunuyor</dd></div>
-          : 'hata' in motor ? <div><dt>Motor ayarı</dt><dd>{motor.hata}</dd></div>
+      {motor === null ? <dl><div><dt>Motor ayarı</dt><dd>okunuyor</dd></div></dl>
+        : 'hata' in motor ? <dl><div><dt>Motor ayarı</dt><dd>{motor.hata}</dd></div></dl>
+          : motorYazabilir ? <MotorFormu key={motor.surumId ?? 0} g={motor} kaydedildi={(x) => { setMotor(x); motorDegisti?.(); }} />
             : (
-              <>
+              <dl>
                 <div><dt>{AYAR_SECENEKLERI.kural.baslik}</dt><dd>{degerAdi('kural', motor.degerler.kural)}</dd></div>
                 <div><dt>{AYAR_SECENEKLERI.amac.baslik}</dt><dd>{degerAdi('amac', motor.degerler.amac)}</dd></div>
                 <div><dt>{AYAR_SECENEKLERI.bolmeKip.baslik}</dt><dd>{degerAdi('bolmeKip', motor.degerler.bolmeKip)} (en çok {motor.degerler.bolmeMaks} pay)</dd></div>
                 <div><dt>{AYAR_SECENEKLERI.eksikStok.baslik}</dt><dd>{degerAdi('eksikStok', motor.degerler.eksikStok)}</dd></div>
                 <div><dt>{ACIL_PAY.baslik}</dt><dd>{yuzdeMetni(motor.degerler.acilPay)}</dd></div>
-              </>
+              </dl>
             )}
-      </dl>
-      {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
+      {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir{motorYazabilir ? '; kaydedince yeni ayar bir sonraki Planla ya da Planı kur ile plana girer' : ''}: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
       <p className="tc-pyq-not">Dört göz (onaylayan gönderenden başkası olsun) <Link to="/ayarlar">Sistem Ayarları</Link> &gt; Plan altındadır.</p>
       {eylem}
     </aside>
   );
 }
 
+
+// 3487: Kokpit'te motor ayarı (Motor ayarları sayfasıyla aynı uç ve yetki, plan.motor-ayari). Okunan sürümle yazılır; arada başkası
+// yazdıysa sunucu reddeder (1786), panel güncel ayarı yeniden okur.
+const MOTOR_SECIMLERI: readonly SecimAyari[] = ['kural', 'amac', 'bolmeKip', 'bolmeMaks', 'eksikStok', 'ogrenme'];
+function MotorFormu({ g, kaydedildi }: { g: MotorAyarlariCevabi['guncel']; kaydedildi: (x: MotorAyarlariCevabi['guncel']) => void }) {
+  const { bildir } = useBildirim();
+  const d = g.degerler;
+  const [f, setF] = useState<MotorAyarlari>(d);
+  const [pay, setPay] = useState(yuzdeMetni(d.acilPay));
+  const [gun, setGun] = useState(String(d.fasonGun));
+  const [yaziyor, setYaziyor] = useState(false);
+  const payOrani = yuzdeOku(pay, ACIL_PAY_SINIRI), fasonGun = gunOku(gun);
+  const degisti = MOTOR_SECIMLERI.some((k) => f[k] !== d[k]) || (payOrani !== null && payOrani !== d.acilPay) || (fasonGun !== null && fasonGun !== d.fasonGun);
+  const kaydet = async (): Promise<void> => {
+    if (payOrani === null || fasonGun === null) return;
+    setYaziyor(true);
+    try {
+      const c = await api.post<MotorAyarlariCevabi>('/plan/motor-ayarlari', { ...f, acilPay: payOrani, fasonGun, surumId: g.surumId });
+      bildir('tamam', 'Motor ayarları kaydedildi; bir sonraki Planla ile plana girer.');
+      kaydedildi(c.guncel);
+    } catch (h) {
+      bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.'));
+      try { kaydedildi((await api.get<MotorAyarlariCevabi>('/plan/motor-ayarlari')).guncel); } catch { /* okunamazsa form eldeki değerle kalır */ }
+    } finally {
+      setYaziyor(false);
+    }
+  };
+  return (
+    <div className="tc-pyq-ayar-motor" role="group" aria-label="Motor ayarları">
+      {MOTOR_SECIMLERI.map((k) => {
+        const id = `tc-pyq-motor-${k}`;
+        return (
+          <div key={k} className="tc-pyq-ayar-alan">
+            <label htmlFor={id}>{AYAR_SECENEKLERI[k].baslik}</label>
+            <select id={id} className="tc-alan-kutu" value={String(f[k])} disabled={yaziyor} onChange={(ev) => { const v = secimDegeri(k, ev.target.value); if (v !== null) setF({ ...f, [k]: v }); }}>
+              {secilebilir(k, d[k]).map((x) => <option key={x.deger} value={x.deger}>{x.baslik}</option>)}
+            </select>
+            <small>{AYAR_SECENEKLERI[k].ipucu}</small>
+          </div>
+        );
+      })}
+      <div className="tc-pyq-ayar-alan">
+        <label htmlFor="tc-pyq-motor-acilPay">{ACIL_PAY.baslik}</label>
+        <input id="tc-pyq-motor-acilPay" className="tc-alan-kutu" inputMode="decimal" value={pay} disabled={yaziyor} aria-invalid={payOrani === null ? true : undefined} onChange={(ev) => { setPay(ev.target.value); }} />
+        <small className={payOrani === null ? 'tc-pyq-ayar-hata' : undefined} role={payOrani === null ? 'alert' : undefined}>{payOrani === null ? '0 ile 30 arasında bir sayı girin.' : ACIL_PAY.ipucu}</small>
+      </div>
+      <div className="tc-pyq-ayar-alan">
+        <label htmlFor="tc-pyq-motor-fasonGun">{FASON_GUN.baslik}</label>
+        <input id="tc-pyq-motor-fasonGun" className="tc-alan-kutu" inputMode="numeric" value={gun} disabled={yaziyor} aria-invalid={fasonGun === null ? true : undefined} onChange={(ev) => { setGun(ev.target.value); }} />
+        <small className={fasonGun === null ? 'tc-pyq-ayar-hata' : undefined} role={fasonGun === null ? 'alert' : undefined}>{fasonGun === null ? '1 ile 90 arasında bir tam sayı girin.' : `${FASON_GUN.ipucu} Şu an ${gunMetni(d.fasonGun)}.`}</small>
+      </div>
+      <div className="tc-pyq-ayar-dugmeler">
+        <Dugme tur="ikincil" simge="check" disabled={!degisti || payOrani === null || fasonGun === null} yukleniyor={yaziyor} onClick={() => { void kaydet(); }}>{yaziyor ? 'Kaydediliyor' : 'Motor ayarını kaydet'}</Dugme>
+      </div>
+    </div>
+  );
+}

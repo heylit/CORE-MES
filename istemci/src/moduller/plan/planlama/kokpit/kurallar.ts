@@ -147,7 +147,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
     });
     const plansiz = j.ops.length > 0 && yerlesen < j.ops.length;
     const gecikme = plansiz || bitis === null || j.due === null ? null : bitis - j.due;
-    const durum: EmirDurumu = plansiz ? 'plansiz' : ufukEksik > 0 ? 'gec' : gecikme === null ? 'iyi' : gecikme > 0.01 ? 'gec' : gecikme > -RISK_SAATI ? 'risk' : 'iyi';
+    const durum: EmirDurumu = plansiz ? 'plansiz' : gecikme === null ? 'iyi' : gecikme > 0.01 ? 'gec' : gecikme > -RISK_SAATI ? 'risk' : 'iyi';
     if (!j.ops.length) continue;
     emirler.push({
       id: j.id, no: emirNo(j.id), urun: urunAdi.get(s?.urun ?? '') ?? s?.ad ?? '', adet: j.adet, termin: j.due, bitis: plansiz ? null : bitis, durum, gecikme, ...(ufukEksik > 0 ? { ufukEksik } : {}),
@@ -442,7 +442,6 @@ export function engelleyenAdim(p: Pick<OkunanPlan, 'failNeden'> | null, isler: R
 }
 export function durumYazisi(e: KokpitEmri): string {
   if (e.durum === 'plansiz') return 'plansız';
-  if (e.ufukEksik) return `ufuk dışı, ${sureYaz(e.ufukEksik)} eksik`;
   if (e.gecikme === null) return 'termin yok';
   return e.gecikme > 0.01 ? `${sureYaz(e.gecikme)} geç` : e.durum === 'risk' ? `termine ${sureYaz(-e.gecikme)}` : 'zamanında';
 }

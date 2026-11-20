@@ -83,7 +83,7 @@ function teklifDene(st0, taban0, istek) {
   const cx = compile(s); const A = s.D.ayarlar || {};
   const ayarci = A.ayarciUcret == null || !isFinite(+A.ayarciUcret) ? null : +A.ayarciUcret;
   const kalemler = istek.kalemler.map(k => {
-    const j = e.J[k.id]; const tamam = !!(j && j.comp && isFinite(j.C) && !(j.ufukEksik > 0));
+    const j = e.J[k.id]; const tamam = !!(j && j.comp && isFinite(j.C));
     const malzeme = cx.mat.res[k.id] ? cx.mat.res[k.id].det.map(d => ({ kod: d.kod, birim: d.birim, miktar: d.need, kaynak: d.kaynak, gelis: d.t })) : [];
     const ek = eksik[k.id].slice();
     if (!tamam) {
@@ -97,8 +97,6 @@ function teklifDene(st0, taban0, istek) {
           : n && n.kod === 'aday' ? `${failNedenMetni(n)} (İstasyonlar > Makineler)` : failNedenMetni(n);
         return `${adimAdi(o.id)}: ${metin}`;
       });
-      /* 3457-3 a: ufkun sonuna kadar yerleşen adımın bitişi ufuk sonudur, gerçek bitiş değil; teklif bu bitişle termin vermez */
-      for (const o of adimlar) { const r = p.ops[o.id]; if (r && r.ufukDisi > 0) neden.unshift(`${adimAdi(o.id)}: planlama süresinin dışına taşıyor, ${Math.round(r.ufukDisi * 10) / 10} sa sığmadı`); }
       ek.push(...(neden.length ? neden : [adimlar.length ? 'plan ufku içinde yerleşmedi' : 'ürünün planda rotası yok (Reçete ve Rota)']));
       return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: istenenVar ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: [...new Set(ek)], fasonNotu: [], kilit: {} };
     }

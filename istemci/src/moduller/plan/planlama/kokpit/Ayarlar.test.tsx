@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { MotorAyarlari } from '#paylasilan/sozlesme/plan.ts';
+import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { planKurSifirla } from '../motor/coz.ts';
@@ -146,5 +147,53 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     expect(kutu.checked).toBe(true);
     fireEvent.click(kutu);
     expect(within(panel).getByText('Ölçü aleti adedi: açık → kapalı')).toBeTruthy();
+  });
+});
+
+// 3487: motor ayarı yetkisi olan kişi motor ayarını Kokpit'ten değiştirir; yetkisi olmayan okur.
+describe('Kokpit Ayarlar motor ayarı formu (3487)', () => {
+  function motorKur(motorYazabilir: boolean, motorDegisti = vi.fn()) {
+    vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: 'ORN-surum-1', degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ guncel: { surumId: 'ORN-surum-2', degerler: { ...MOTOR, kural: 'edd' }, yazan: null, zaman: null } });
+    const { t } = sahteTaslak(ornekCalisma().dataVer);
+    render(<MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Ayarlar c={ornekCalisma()} taslak={t} yazabilir kim="ORN-Planlamaci" kapat={vi.fn()} yon={null} motorYazabilir={motorYazabilir} motorDegisti={motorDegisti} /></BildirimSaglayici></MemoryRouter>);
+    return { post, motorDegisti };
+  }
+
+  it('yetkisi olmayan formu görmez, ayarı okur (reddedilen)', async () => {
+    motorKur(false);
+    expect(await screen.findByText('ATCS (öncelik, termin ve süre birlikte)')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Motor ayarları' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Motor ayarını kaydet' })).toBeNull();
+  });
+
+  it('yetkili kişide değişiklik yokken Kaydet kapalı; değişince sürüm kimliğiyle gönderilir ve yenilenir (izinli)', async () => {
+    const { post, motorDegisti } = motorKur(true);
+    const grup = await screen.findByRole('group', { name: 'Motor ayarları' });
+    const kaydet = within(grup).getByRole('button', { name: 'Motor ayarını kaydet' });
+    expect(kaydet.hasAttribute('disabled')).toBe(true);
+    const kural = within(grup).getByLabelText(/Sıralama kuralı/) as HTMLSelectElement;
+    const baska = [...kural.options].map((o) => o.value).find((v) => v !== 'atcs')!;
+    fireEvent.change(kural, { target: { value: baska } });
+    expect(kaydet.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(kaydet);
+    await waitFor(() => { expect(post).toHaveBeenCalledTimes(1); });
+    expect(post.mock.calls[0]?.[0]).toBe('/plan/motor-ayarlari');
+    expect(post.mock.calls[0]?.[1]).toMatchObject({ kural: baska, surumId: 'ORN-surum-1', acilPay: 0.05, fasonGun: 7 });
+    await waitFor(() => { expect(motorDegisti).toHaveBeenCalled(); });
+  });
+
+  it('geçersiz acil iş payı ve fason günü uyarı verir, Kaydet kapalı kalır', async () => {
+    motorKur(true);
+    const grup = await screen.findByRole('group', { name: 'Motor ayarları' });
+    const kural = within(grup).getByLabelText(/Sıralama kuralı/) as HTMLSelectElement;
+    fireEvent.change(kural, { target: { value: [...kural.options].map((o) => o.value).find((v) => v !== 'atcs')! } });
+    fireEvent.change(within(grup).getByLabelText(/Acil iş payı/), { target: { value: '80' } });
+    expect(within(grup).getByRole('alert').textContent).toBe('0 ile 30 arasında bir sayı girin.');
+    expect(within(grup).getByRole('button', { name: 'Motor ayarını kaydet' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(grup).getByLabelText(/Acil iş payı/), { target: { value: '5' } });
+    fireEvent.change(within(grup).getByLabelText(/Fason/), { target: { value: '0' } });
+    expect(within(grup).getByRole('alert').textContent).toBe('1 ile 90 arasında bir tam sayı girin.');
+    expect(within(grup).getByRole('button', { name: 'Motor ayarını kaydet' }).hasAttribute('disabled')).toBe(true);
   });
 });

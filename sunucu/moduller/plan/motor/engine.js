@@ -3,9 +3,11 @@
 /* 1477 a: ufuk (gün) ve dilim (saat) sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); sunucu çalışmanın w.ufukGun ve w.dilimDk alanlarıyla verir.
    Verilmezse ya da sınır dışındaysa 120 gün (1681 b) ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
 const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30];
-let SL=0.25, HDAYS=UFUK_VARSAYILAN, NS=HDAYS*24/SL;
+/* 3484 c (3457-3 a değişir): ufka sığmayan emir için ufuk uzar. Motor takvimi ufkun iki katı kurar (HDAYS); UFUK ayardaki gündür.
+   UFUK'tan sonraki çalışma saati iş kaydında ufukDisi'dir, tarihleri gerçektir. Uzatılmış takvime de sığmayan adım yerleşmez. */
+let SL=0.25, UFUK=UFUK_VARSAYILAN, HDAYS=UFUK*2, NS=HDAYS*24/SL;
 function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
-  HDAYS=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}
+  UFUK=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;HDAYS=UFUK*2;SL=(DILIM_DK.includes(d)?d:15)/60;NS=Math.round(HDAYS*24/SL);}
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
@@ -476,10 +478,8 @@ function tMach(o,c,cx,ctx,b,fast){
        vardiya sınırında bölünür; tezgâh S..C boyunca bu işindir (ctx.av), bekleme aralığına başka işin hazırlığı girmez. */
     if(su>0){const bi=M.sblok.findIndex(([a,z])=>s>=a-1e-9&&s<z-1e-9);
       if(bi<0||Su>M.sblok[bi][1]+1e-9){const nx=M.sblok.findIndex(([a,z],i)=>i>bi&&a>s+1e-9&&workIn(M.sw,a,z)>=su-1e-9);if(nx<0)return null;s=M.sblok[nx][0];continue;}}
-    /* 3457 (1681 b değişir): işleme ufka sığmıyorsa iş düşmez; tezgâhın ufuktaki son çalışma anına kadar yerleşir, sığmayan saat
-       ufukDisi'nde durur. Hazırlık bile başlayamıyorsa (Su ufuk dışı) iş yine yerleşmez. */
-    let C=adv(M.rw,Su,run+tkEk),ufukDisi=0;
-    if(!isFinite(C)){const son=M.rw.length?M.rw[M.rw.length-1][1]:-Infinity;if(!(son>Su+1e-9))return null;ufukDisi=run+tkEk-workIn(M.rw,Su,son);C=son;}
+    const C=adv(M.rw,Su,run+tkEk);if(!isFinite(C))return null;
+    const H0=UFUK*24,ufukDisi=C>H0+1e-9?workIn(M.rw,Math.max(Su,H0),C)+(Su>H0?workIn(M.sw,Math.max(s,H0),Su):0):0;
     if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
     const kl=ctx.kilit&&ctx.kilit[c.m]&&ctx.kilit[c.m].find(([a,z])=>s<z-1e-9&&C>a+1e-9);if(kl){s=kl[1];why={t:'tezgah',r:kl[2]};continue;}
     const r={S:s,Su,C,su};
@@ -712,10 +712,6 @@ function schedule(st,mode,base,opt={}){
   }
   for(const id of U){ctx.fail.push(id);const p=(cx.byId[id].pr.find(([q])=>!ctx.P[q])||[])[0];if(p)ctx.neden[id]={kod:'oncul',oncul:p};}
   const fail=[...new Set(ctx.fail)],failNeden={};for(const id of fail)failNeden[id]=ctx.neden[id]||{kod:'zaman'};
-  /* 3457: ufka taşan adımın ardılı ufkun sonundan sonra başlayamaz; nedeni "önceki adım ufuk dışında"dır (zincir boyunca) */
-  for(let deg=true;deg;){deg=false;for(const id of fail){const n=failNeden[id];if(n.ufukDisi)continue;const o=cx.byId[id];if(!o)continue;
-    const p=o.pr.map(([q])=>q).find(q=>(ctx.P[q]&&ctx.P[q].ufukDisi)||(failNeden[q]&&failNeden[q].ufukDisi));
-    if(p!=null&&(n.kod==='zaman'||(n.kod==='oncul'&&n.oncul===p))){failNeden[id]={kod:'oncul',oncul:p,ufukDisi:1};deg=true;}}}
   const plan={ops:ctx.P,fail,failNeden,mode,downIds:(st.down||[]).map(d=>d.id)};
   if(!opt.noSlack)slack(plan,cx);
   plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
@@ -759,7 +755,7 @@ function evaluate(plan,st,ref,fast){
   let Z=0,rev=0,cost=0,pen=0,hold=0,onT=0,late=0,yerN=0,sumT=0,wT=0,suH=0,suN=0,famN=0,Cmax=st.now,chg=0,fas=0,unk=0,warn=[],score=0,wB=0,bufN=0;
   for(const jid in cx.jobs){const j=cx.jobs[jid];let C=-Infinity,mc=0,sc=0,fc=0,miss=[],nOps=0,nIn=0,uE=0;
     for(const o of j.ops){nOps++;const r=plan.ops[o.id];if(!r)continue;nIn++;C=Math.max(C,r.C);
-      if(r.ufukDisi>0){uE+=r.ufukDisi;if(!fast)warn.push({t:'ufuk',j:jid,txt:`${jid}: ${o.id} planlama süresinin sonuna kadar yerleşti; ${Math.round(r.ufukDisi*10)/10} sa ufuk dışında kaldı`});}
+      if(r.ufukDisi>0){uE+=r.ufukDisi;if(!fast)warn.push({t:'ufuk',j:jid,txt:`${jid}: ${o.id} planlama ufkundan sonra bitiyor (${fmtDT(cx.D,r.C)}); ufuk bu emir için uzadı, ufuk sonrasında ${Math.round(r.ufukDisi*10)/10} sa çalışma`});}
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
@@ -777,8 +773,7 @@ function evaluate(plan,st,ref,fast){
     let kar=null;if(!miss.length&&p!=null)kar=j.gelir-(mf||0)-mc-sc-fc-p-h;
     J[jid]={id:jid,C,T,E,buf:j.buf,dueB:j.dueB,mc,sc,fc,mf,p,h,kar,miss:[...new Set(miss)],comp,...(uE>0?{ufukEksik:uE}:{})};
     /* B-2483-9 (1478): terminsiz sipariş zamanında da geç de sayılmaz; yerleşmemiş sipariş geç değil, ayrı sayılır (yerlesmeyenSip) */
-    /* 3457: ufka taşan sipariş geç sayılır; bitişi ufuk sonundan sonradır, gecikmesi (T) bilinen alt sınırdır */
-    if(!comp)yerN++;else if(due!=null){if(T<=1e-6&&!(uE>0))onT++;else late++;}
+    if(!comp)yerN++;else if(due!=null){if(T<=1e-6)onT++;else late++;}
     if(T!=null){sumT+=T;wT+=T*pw;}
     const B=j.dueB==null||!isFinite(C)?0:Math.max(0,C-j.dueB);wB+=B*pw;if(j.buf>0&&B>1e-6)bufN++;
     if(isFinite(C))Cmax=Math.max(Cmax,C);
@@ -987,8 +982,8 @@ function propose(st,base,ev,opts={}){
     const v1=cand.D.vardiyalar[0].id;
     for(const m of top){let n=0;for(const d of [...days[m]].sort((a,b)=>a-b)){if(n>=4)break;
       const own=(cx.M[m].vardiyalar||[]);const ok=x=>!own.length||own.includes(x);
-      if(cx.days[d].vard.length&&!cx.days[d].vard.includes('V3')&&ok('V3')&&fits(d,'V3')){c2.ekMesai.push({m,gun:d,vardiya:'V3'});added.push(m+' '+fmtDT(cand.D,d*24).slice(0,9)+' gece');n++;}
-      const e=d+1;if(e<HDAYS&&!cx.days[e].vard.length&&fits(e,v1)){c2.ekMesai.push({m,gun:e,vardiya:v1});added.push(m+' '+fmtDT(cand.D,e*24).slice(0,9)+' sabah');n++;}}}
+      if(d<UFUK&&cx.days[d].vard.length&&!cx.days[d].vard.includes('V3')&&ok('V3')&&fits(d,'V3')){c2.ekMesai.push({m,gun:d,vardiya:'V3'});added.push(m+' '+fmtDT(cand.D,d*24).slice(0,9)+' gece');n++;}
+      const e=d+1;if(e<UFUK&&!cx.days[e].vard.length&&fits(e,v1)){c2.ekMesai.push({m,gun:e,vardiya:v1});added.push(m+' '+fmtDT(cand.D,e*24).slice(0,9)+' sabah');n++;}}}
     if(added.length){const p=fill(c2,base,{},Math.min(800,opts.budget||800),fasonM?[{fasonM}]:[]).plan;
     list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret==null||cand.D.ayarlar.mesaiUcret===''?'mesai ücreti girilmemiş':cand.D.ayarlar.mesaiUcret+' TL/sa'}); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
   list.forEach(x=>{x.st=x.st||cand;x.ev=evaluate(x.plan,x.st,base);});

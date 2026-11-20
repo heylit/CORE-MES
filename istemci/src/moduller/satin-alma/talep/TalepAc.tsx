@@ -9,6 +9,8 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/iste
 import { CizimSecici, TalepCizimleri, cizimBagla, type SecilenCizim } from './Cizimler.tsx';
 import { KabulSinirlari, kapaliZarfNotu, useKabulZarfi } from './KabulSinirlari.tsx';
 import { KART_SAYFASI, SURE, adettenKg, anahtarlar, cagri, kartKarsiligi, karsilikYaz, parcaKg } from './ortak.ts';
+import { TeslimiBol, TeslimleriTopla, type BolunenSatir } from './TeslimAraclari.tsx';
+import { bolunmusKalemler, teslimGrubu, toplamaPlani, type Birlesme, type TopluDuzen } from './teslim.ts';
 import './talep.css';
 
 type KartSecenegi = MalzemeSecenekleriCevabi['malzemeler'][number];
@@ -30,17 +32,20 @@ interface KalemTaslagi {
   // 3462 a: kalemin termini ve üretim emri ('' boş; yeni kalem formun varsayılanını alır). emirNo: düzenlenen kalemin emri listede yoksa.
   // foy: düzenlenen kalemin kart föyü (yeni kalemde kartın ayrıntısı okunur).
   termin: string; emirId: string; emirNo: string | null; foy: readonly { ad: string; deger: string }[];
+  // 3485 a: düzenlenen kalemin kartı (bölünen kopyası yeni kalem olarak bu kartla gider); yeni kalemde kart alanındadır.
+  malzemeNo: number | null;
 }
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (v: { termin: string; emirId: string } = { termin: '', emirId: '' }): KalemTaslagi => ({
   anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, satisSatiriId: null, mevcut: null, adet: '', parcaKg: null, kabul: null, zarfNo: null, kabulHatali: false,
-  termin: v.termin, emirId: v.emirId, emirNo: null, foy: [],
+  termin: v.termin, emirId: v.emirId, emirNo: null, foy: [], malzemeNo: null,
 });
 const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
   ...bosKalem(), ad: x.ad, birim: x.birim, miktar: (x.miktar ?? '').replace('.', ','), aciklama: x.aciklama ?? '',
   mevcut: { id: x.id!, bagli: x.uygulanan !== null || x.fasonAdim !== null },
   termin: x.ihtiyacTarihi?.slice(0, 10) ?? '', emirId: x.uretimEmriId == null ? '' : String(x.uretimEmriId), emirNo: x.uretimEmriNo ?? null, foy: x.malzeme?.ayrinti ?? [],
   kabul: x.kabul ?? null, zarfNo: x.malzemeNo !== undefined && x.malzeme?.kalite != null ? x.malzemeNo : null,
+  malzemeNo: x.malzemeNo ?? null,
   parcaKg: x.karsilik?.birim === 'adet' && x.miktar !== null && Number(x.karsilik.miktar) > 0 ? Number(x.miktar) / Number(x.karsilik.miktar) : null,
 });
 // Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi. Plan ihtiyacında kalem
@@ -70,6 +75,13 @@ const miktarOku = (m: string): string | null => {
   const v = miktarGirdisi(m);
   return /^\d+(\.\d+)?$/.test(v) ? v : null;
 };
+const miktarSayisi = (m: string): number | null => { const v = miktarOku(m); return v === null ? null : Number(v); };
+const miktarYaz = (x: number): string => String(x).replace('.', ',');
+
+// Bölünen kalemin kopyası yeni kalemdir; düzenlenen kalemde kart, kalemin kartından kurulur (kartı değişmez).
+const kopyaKarti = (k: KalemTaslagi): KartSecenegi | null => k.kart ?? (k.malzemeNo === null ? null : {
+  no: k.malzemeNo, kod: '', ad: k.ad, birim: k.birim, kategori: null, katalogId: null, ayrinti: [...k.foy],
+});
 
 // #1192: açılır, aranabilir liste. Odaklanınca türün ilk kartları açılır; yazdıkça kod, ad ya da kart no'suyla daralır.
 // 3462 a: `tabloda` verilirse kalem tablosunun hücresinde etiketsiz girdi olur (etiket ekran okuyucuya); liste tablonun kaydırmasında
@@ -220,9 +232,9 @@ function AlternatifOzeti({ no, sira, kabul, ac }: { no: number; sira: number; ka
 }
 
 // 3462 a: her kalem tek satır; ayrıntı (ön talep kaynağı, uygulanacak parça, kabul sınırı, adet yardımcısı) satırın altında açılır.
-function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, emirDegisir, degistir, kaldir }: {
+function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, emirDegisir, degistir, kaldir, bol = null }: {
   tur: TalepTuru; sira: number; k: KalemTaslagi; foySutunlari: readonly string[]; emirSecenekleri: readonly { deger: string; baslik: string; no: string; parca: string }[];
-  emirDegisir: boolean; degistir: (d: Partial<KalemTaslagi>) => void; kaldir: (() => void) | null;
+  emirDegisir: boolean; degistir: (d: Partial<KalemTaslagi>) => void; kaldir: (() => void) | null; bol?: (() => void) | null;
 }) {
   // Ön talepten gelen kalemde kaynak ve bağ açık gelir (talep eden neyi çevirdiğini görsün).
   const [acik, acikYaz] = useState(k.kaynak !== null);
@@ -285,6 +297,7 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
         <td data-etiket="Açıklama"><input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} /></td>
         <td><span className="sa-talep-eylem">
           {ayrintiVar && <Dugme simge={acik ? 'up' : 'down'} aria-expanded={acik} aria-controls={`ayr-${ad}`} onClick={() => acikYaz(!acik)}>Ayrıntı</Dugme>}
+          {bol && <Dugme simge="layers" aria-label={`Kalem ${String(sira)}: teslimi böl`} onClick={bol}>Teslimi böl</Dugme>}
           {kaldir && <Dugme simge="trash" aria-label={`Kalem ${String(sira)}: kaldır`} onClick={kaldir} />}
         </span></td>
       </tr>
@@ -421,6 +434,28 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
     onError: (h) => hataYaz(h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Talep gönderilemedi; yeniden deneyin.'),
   });
   const degistir = (anahtar: string, d: Partial<KalemTaslagi>) => kalemlerYaz((l) => l.map((k) => (k.anahtar === anahtar ? { ...k, ...d } : k)));
+  // 3485 a: Teslimleri topla ve Teslimi böl. Kopya ve birleşen kalem yayılımla kurulur: sonradan eklenen kalem alanları da taşınır.
+  const [bolunen, bolunenYaz] = useState<string | null>(null);
+  const topluKalemler = kalemler.map((k) => ({ anahtar: k.anahtar, grup: teslimGrubu(tur, k), termin: k.termin, miktar: miktarSayisi(k.miktar) }));
+  const toplamaPlanla = (duzen: TopluDuzen, n: number) => toplamaPlani(topluKalemler, duzen, n);
+  const toplamaUygula = (b: readonly Birlesme[]) => {
+    const onceki = kalemler;
+    const sonra = onceki.length - b.reduce((t, x) => t + x.birlesenler.length, 0);
+    bildir('tamam', `Teslimler toplandı: ${String(onceki.length)} kalem ${String(sonra)} kaleme indi.`, { eylem: { etiket: 'Geri al', yap: () => kalemlerYaz(onceki) } });
+    const giden = new Set(b.flatMap((x) => x.birlesenler));
+    const kalan = new Map(b.map((x) => [x.kalan, x]));
+    kalemlerYaz((l) => l.filter((k) => !giden.has(k.anahtar)).map((k) => {
+      const x = kalan.get(k.anahtar);
+      if (!x) return k;
+      const aciklamalar = [k, ...l.filter((y) => x.birlesenler.includes(y.anahtar))].map((y) => y.aciklama.trim()).filter(Boolean);
+      return { ...k, miktar: miktarYaz(x.miktar), termin: x.termin, adet: '', aciklama: [...new Set(aciklamalar)].join('; ').slice(0, 500) };
+    }));
+  };
+  const bol = (anahtar: string, satirlar: readonly BolunenSatir[]) => {
+    kalemlerYaz((l) => l.flatMap((k) => (k.anahtar !== anahtar ? [k] : bolunmusKalemler(k, satirlar, yeniIstekKimligi, kopyaKarti))));
+    bolunenYaz(null);
+  };
+  const bolunenKalem = kalemler.find((k) => k.anahtar === bolunen) ?? null;
   const eksik = kalemler.some((k) => k.mevcut === null && k.kart === null && (!k.serbest || k.ad.trim() === '' || k.birim.trim() === ''));
   const miktarsiz = kalemler.some((k) => miktarOku(k.miktar) === null);
   const belirsiz = kalemler.some((k) => belirsizMiktarVar(miktarGirdisi(k.miktar)));
@@ -483,6 +518,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
           )}
           <div className="sa-talep-uygula"><Dugme onClick={tumuneUygula} disabled={kalemler.length < 2}>Tümüne uygula</Dugme></div>
         </div>
+        {tur === 'malzeme' && kalemler.length > 1 && <TeslimleriTopla kalemSayisi={kalemler.length} plan={toplamaPlanla} uygula={toplamaUygula} />}
         <div className="tc-tablo-kap sa-talep-tablo" role="region" aria-label="Kalemler" tabIndex={0}>
           <table className="tc-tablo">
             <thead>
@@ -503,7 +539,8 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
               {kalemler.map((k, i) => (
                 <KalemSatiri key={k.anahtar} tur={tur} sira={i + 1} k={k} foySutunlari={sutunlar} emirSecenekleri={emirSecenekleri} emirDegisir={duzenlenen === null}
                   degistir={(d) => degistir(k.anahtar, d)}
-                  kaldir={kalemler.length > 1 && k.mevcut?.bagli !== true ? () => kalemlerYaz((l) => l.filter((x) => x.anahtar !== k.anahtar)) : null} />
+                  kaldir={kalemler.length > 1 && k.mevcut?.bagli !== true ? () => kalemlerYaz((l) => l.filter((x) => x.anahtar !== k.anahtar)) : null}
+                  bol={teslimGrubu(tur, k, true) !== null && miktarSayisi(k.miktar) !== null && kalemler.length < 50 && kopyaKarti(k) !== null ? () => bolunenYaz(k.anahtar) : null} />
               ))}
             </tbody>
           </table>
@@ -517,6 +554,11 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
           ? <TalepCizimleri talepId={duzenlenen.id} yazabilir={duzenlenen.duzenlenebilir === true} />
           : <CizimSecici secilen={cizimler} degistir={cizimlerYaz} />}
         {hata && <p className="sa-talep-hata" role="alert">{hata}</p>}
+        {bolunenKalem !== null && (
+          <TeslimiBol key={bolunenKalem.anahtar} ad={bolunenKalem.kart?.ad ?? bolunenKalem.ad} birim={bolunenKalem.kart?.birim ?? bolunenKalem.birim}
+            toplam={miktarSayisi(bolunenKalem.miktar) ?? 0} termin={bolunenKalem.termin} miktar={bolunenKalem.miktar} enCok={51 - kalemler.length}
+            oku={miktarSayisi} kapat={() => bolunenYaz(null)} bol={(l) => bol(bolunenKalem.anahtar, l)} />
+        )}
         <div className="sa-talep-gonder">
           {duzenlenen !== null && <Dugme onClick={() => { temizle(); duzenlemeBitti?.(); }}>Vazgeç</Dugme>}
           {bagli && duzenlenen === null && (

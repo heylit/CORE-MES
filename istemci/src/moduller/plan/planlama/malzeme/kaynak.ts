@@ -16,6 +16,8 @@ const AZAMI_SAYFA = 50;
 export interface StokKaynagi {
   // Malzeme numarası (plan belgesindeki kod) -> kullanılabilir miktar. Kartı olan ama stoğu olmayan malzeme 0'dır (kartlar kapsamı).
   bakiye: Map<string, number>;
+  // 3485 a: kartın stok kodu ve stok birimi (talep taslağı kartın biriminde açılır).
+  kartlar?: Map<string, { kod: string | null; birim: string | null }>;
   satirlar: AcikSiparisSatirlariCevabi['satirlar'];
 }
 
@@ -24,16 +26,18 @@ export interface Okuyucu { get: <T>(yol: string) => Promise<T> }
 export async function stokOku(o: Okuyucu = api): Promise<StokKaynagi | null> {
   try {
     const bakiye = new Map<string, number>();
+    const kartlar = new Map<string, { kod: string | null; birim: string | null }>();
     for (let sayfa = 1; sayfa <= AZAMI_SAYFA; sayfa++) {
       const c = await o.get<MalzemelerCevabi>(`/stok/malzemeler?kapsam=kartlar&sayfa=${sayfa}&sayfaBoyu=${SAYFA_BOYU}`);
       for (const s of c.satirlar) {
         const kod = String(s.malzemeId);
         bakiye.set(kod, (bakiye.get(kod) ?? 0) + Number(s.serbest));
+        if (!kartlar.has(kod)) kartlar.set(kod, { kod: s.stokKodu, birim: s.birim });
       }
       if (c.satirlar.length < c.sayfaBoyu || (c.toplam !== null && sayfa * c.sayfaBoyu >= c.toplam)) break;
     }
     const acik = await o.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari');
-    return { bakiye, satirlar: acik.satirlar };
+    return { bakiye, kartlar, satirlar: acik.satirlar };
   } catch {
     return null;
   }

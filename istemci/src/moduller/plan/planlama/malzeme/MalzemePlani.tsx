@@ -14,6 +14,8 @@ import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSe
 import { OneCekme } from './OneCekme.tsx';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import { TedarikTerminiKarti } from './TedarikTermini.tsx';
+import { TopluPlan } from './TopluPlan.tsx';
+import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import './malzeme.css';
 
 // Malzeme satın alma planı (P4, malzplan). Düzen, araçlar ve akış bugünkü eski sayfanındır (TASARIM KORUMA): başta satın alma planı
@@ -77,6 +79,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const [dag, dagYaz] = useState<DagilimTuru>('malzeme');
   const [secim, secYaz] = useState<IsiSecimi | null>(null);
   const dar = useDar();
+  const talepAcar = useYetki().herhangi('satin-alma.talep-ac');
   const cizelge = (j: string): { yap: () => void } | { pasif: true } => (goster ? { yap: () => { goster(j); } } : { pasif: true });
   useEffect(() => {
     let bitti = false;
@@ -141,6 +144,8 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
 
   const fiyat = (kod: string, q: number): number | null => { const f = mats.get(kod)?.birimFiyat; return typeof f === 'number' ? f * q : null; };
   const malzemeAdi = (kod: string): string => mats.get(kod)?.ad ?? '';
+  // Stok sahibi okunamadıysa ya da kartı yoksa (kartsiz) stok bilinmiyor; sıfır uydurulmaz.
+  const stokMiktari = (kod: string): number | null => (k.nereden === 'sahip' && !k.kartsiz.includes(kod) ? (mats.get(kod)?.stok ?? null) : null);
   const isi = malzemeIsisi(alim, taban, g.simdi, miktar, malzemeAdi, fg ? fiyat : undefined);
   const tum = (
     <div className="tc-pyz-kartlar">
@@ -171,6 +176,8 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
           ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
           tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} emirNo={emirNo} />
       </Kart>
+      <TopluPlan satirlar={plan.satirlar} taban={taban} simdi={g.simdi} dar={dar} stok={stokMiktari} malzemeAdi={malzemeAdi}
+        birim={(kod) => mats.get(kod)?.birim ?? ''} kart={(kod) => stok?.kartlar?.get(kod) ?? null} emirNo={emirNo} talepAcar={talepAcar} />
       <OneCekme surum={calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
     </div>
   );

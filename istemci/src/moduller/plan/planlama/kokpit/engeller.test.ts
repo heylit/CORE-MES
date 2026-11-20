@@ -64,7 +64,7 @@ describe('Engeller (3457-1 A)', () => {
     const g = engeller(p, m, cx, 1, zaman);
     expect(g.map((x) => x.tur)).toEqual(['aday', 'ufuk', 'siparis', 'termin']);
     const bul = (t: string) => g.find((x) => x.tur === t)?.engeller ?? [];
-    expect(bul('ufuk')[0]?.neOldu).toBe('Adım planlama süresinin sonuna kadar yerleşti, 6 sa süre dışında kaldı.');
+    expect(bul('ufuk')[0]?.neOldu).toBe('Adım planlama ufkundan sonra bitiyor; ufuk bu emir için uzadı, 6 sa ufuk sonrasında.');
     expect(bul('siparis')[0]).toMatchObject({ emir: null, baslik: 'ORN-Dolgu · 5 adet', neOldu: 'Sipariş plana girmedi.' });
     expect(bul('termin').map((e) => e.neden)).toContain('Termin planlama süresinin dışında; plan t1 tarihine kadar.');
     expect(bul('aday')[0]?.duzelt.map((d) => d.baslik)).toEqual(['Kaynakları aç']);
@@ -101,7 +101,7 @@ describe('Engeller (3457-1 A)', () => {
     });
     const g = engeller(p, m, cx, 1, zaman);
     expect(g.map((x) => x.tur)).toEqual(['ufuk', 'termin']);
-    expect(g[0]?.engeller[0]?.neOldu).toBe('Adım planlama süresinin sonuna kadar yerleşti, 4 sa süre dışında kaldı; sonraki 2 adım bunu bekliyor.');
+    expect(g[0]?.engeller[0]?.neOldu).toBe('Adım planlama ufkundan sonra bitiyor; ufuk bu emir için uzadı, 4 sa ufuk sonrasında; sonraki 2 adım bunu bekliyor.');
     expect(g[1]?.engeller.map((e) => e.emir)).not.toContain('2');
   });
 });

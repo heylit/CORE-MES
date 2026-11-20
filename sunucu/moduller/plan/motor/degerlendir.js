@@ -260,7 +260,7 @@ function ymMesaiAdaylari() {
   for (const m of top) { let n = 0; const own = cx.M[m].vardiyalar || []; const ok = x => !own.length || own.includes(x);
     for (const d of [...dar.days[m]].sort((a, b2) => a - b2)) { if (n >= 3) break;
       if (cx.days[d] && cx.days[d].vard.length && !cx.days[d].vard.includes('V3') && D.vardiyalar.some(v => v.id === 'V3') && ok('V3')) { aday.push({ m, gun: d, vardiya: 'V3' }); n++; }
-      const e = d + 1; if (e < HDAYS && cx.days[e] && !cx.days[e].vard.length) { aday.push({ m, gun: e, vardiya: v1 }); n++; } } }
+      const e = d + 1; if (e < UFUK && cx.days[e] && !cx.days[e].vard.length) { aday.push({ m, gun: e, vardiya: v1 }); n++; } } }
   const l = [...new Map(aday.filter(a => !red.has(ymAnahtar(a)) && !var0.has(ymAnahtar(a))).map(a => [ymAnahtar(a), a])).values()].slice(0, 8); const liste = [];
   for (const a of l) {
     const stC = { ...stOf(), ekMesai: [...clone(S.ekMesai), a] }; const r = ymOlc(stC);
