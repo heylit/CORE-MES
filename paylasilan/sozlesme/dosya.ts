@@ -38,6 +38,22 @@ export const bagliDosyaSemasi = z.object({
   zaman: z.string(),
 });
 
+// Aynı içerikli dosyanın yerleri (kart 3468-1): yükleme öncesi uyarı. Yalnız soranın görebildiği yerler döner; görmediği yer
+// ne adıyla ne sayısıyla görünür. Uyarıdır, yüklemeyi engellemez.
+export const AYNI_DOSYA_KAYNAKLARI = ['cizimler', 'ortak-dosyalar'] as const;
+export const ayniDosyaSorgusu = z.object({ ozet: dosyaOzeti });
+export const ayniDosyaYeri = z.object({
+  kaynak: z.enum(AYNI_DOSYA_KAYNAKLARI),
+  baslik: z.string(),
+  ayrinti: z.string(),
+  // İstemci rotası; yer açılırken kendi uçları yetkiyi yeniden denetler.
+  yol: z.string(),
+  durum: z.string().nullable(),
+});
+export const ayniDosyaCevabi = z.object({ yerler: z.array(ayniDosyaYeri) });
+
 export type DosyaParcasiGovdesi = z.input<typeof dosyaParcasiGovdesi>;
 export type EksiklerGovdesi = z.input<typeof eksiklerGovdesi>;
 export type BagliDosya = z.output<typeof bagliDosyaSemasi>;
+export type AyniDosyaYeri = z.output<typeof ayniDosyaYeri>;
+export type AyniDosyaCevabi = z.output<typeof ayniDosyaCevabi>;

@@ -226,7 +226,7 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
 
 ## Kart güncelleme ve hizmet kartı (kart #777)
 
-- Logo'ya gitmiş malzeme kartının adı değişince `POST /api/Material/UpdateRich` gider (hizmet kartı kendi yönünün `UpdateRich` ucuna). Kod, tür ve birim değişmez.
+- Logo'ya gitmiş malzeme kartının adı ya da Açıklama 1-3'ü değişince `POST /api/Material/UpdateRich` gider (hizmet kartı kendi yönünün `UpdateRich` ucuna). Yardımcı NAME ile dolu gelen NAME3 (Açıklama 2) ve NAME4'ü (Açıklama 3) yazar ve geri okur; boşaltılan açıklama Logo'da kalır. Kod, tür ve birim değişmez.
 - Hizmet kartı gönderimi Sistem Ayarları'nda yön başına ayrı anahtardır ("Logo: alınan hizmet kartı gönderimi", "Logo: verilen hizmet kartı gönderimi"),
   kapalı gelir. Hizmet "var mı" ucu yardımcıda vardır (`GET /api/PurchaseService|SalesService/exists/{kod}`); sonucu bilinmeyen gönderim
   önce bununla okunur. Açmadan önce deneme firmasında bir kartla deneyin.

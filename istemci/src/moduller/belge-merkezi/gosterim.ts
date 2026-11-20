@@ -1,4 +1,4 @@
-import type { BagModulu, BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import type { BagModulu, BelgeTuru, Kullanim, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
@@ -82,3 +82,9 @@ export function gorunumTuru(t: DosyaTuru): GorunumTuru {
 export function modelBicimi(t: DosyaTuru): ModelBicimi | null {
   return t === 'step' || t === 'stl' || t === 'iges' || t === 'glb' || t === 'gltf' ? t : null;
 }
+
+// 3468-2: sözleşmedeki KULLANIMLAR ile aynı sıra (istemci paylaşılanı yalnız tip olarak ithal eder).
+export const KULLANIMLAR = ['ic-uretim', 'dis-uretim', 'dis-operasyon', 'kalite', 'teklif', 'diger'] as const satisfies readonly Kullanim[];
+export const KULLANIM_ADLARI: Readonly<Record<Kullanim, string>> = {
+  'ic-uretim': 'İç üretim', 'dis-uretim': 'Dış üretim', 'dis-operasyon': 'Dış operasyon', kalite: 'Kalite', teklif: 'Teklif', diger: 'Diğer',
+};

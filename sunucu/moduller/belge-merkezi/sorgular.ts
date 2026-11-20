@@ -3,7 +3,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
-import type { BagModulu, BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import type { BagModulu, BelgeTuru, Kullanim, RevizyonDurumu, TurevGirdisi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 
 export interface BelgeKaydi {
@@ -17,10 +17,15 @@ export interface BelgeKaydi {
   olusturanId: number;
   olusturuldu: string;
   guncellendi: string;
+  // 3468-2: türevde üçü dolu, orijinalde üçü null (göçteki kısıt).
+  kaynakBelgeId: number | null;
+  kaynakRevizyonId: number | null;
+  kullanim: Kullanim | null;
 }
 
 const BELGE_SECIMI = `b.id, b.ad, b.tur, b.aciklama, b.resim_no AS "resimNo", b.aktif, b.surum, b.olusturan_id AS "olusturanId",
-  ${zamanMetni('b.olusturuldu')} AS olusturuldu, ${zamanMetni('b.guncellendi')} AS guncellendi`;
+  ${zamanMetni('b.olusturuldu')} AS olusturuldu, ${zamanMetni('b.guncellendi')} AS guncellendi,
+  b.kaynak_belge_id AS "kaynakBelgeId", b.kaynak_revizyon_id AS "kaynakRevizyonId", b.kullanim`;
 
 export function belge(db: Db, id: number): Promise<BelgeKaydi | null> {
   return db.tek<BelgeKaydi>(`SELECT ${BELGE_SECIMI} FROM belge_merkezi_belge b WHERE b.id = $1`, [id]);
@@ -32,11 +37,12 @@ export function belgeKilitle(db: Db, id: number): Promise<BelgeKaydi | null> {
 }
 
 export async function belgeEkle(
-  db: Db, b: { ad: string; tur: BelgeTuru; aciklama: string | null; resimNo: string | null; kisiId: number },
+  db: Db, b: { ad: string; tur: BelgeTuru; aciklama: string | null; resimNo: string | null; kisiId: number; turev?: TurevGirdisi | null },
 ): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    'INSERT INTO belge_merkezi_belge (ad, tur, aciklama, resim_no, olusturan_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-    [b.ad, b.tur, b.aciklama, b.resimNo, b.kisiId],
+    `INSERT INTO belge_merkezi_belge (ad, tur, aciklama, resim_no, olusturan_id, kaynak_belge_id, kaynak_revizyon_id, kullanim)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [b.ad, b.tur, b.aciklama, b.resimNo, b.kisiId, b.turev?.kaynakBelgeId ?? null, b.turev?.kaynakRevizyonId ?? null, b.turev?.kullanim ?? null],
   );
   if (satir === null) throw new Error('Belge eklenemedi');
   return satir.id;
@@ -57,6 +63,47 @@ export function belgeGuncelle(
     `UPDATE belge_merkezi_belge SET ad = $3, aciklama = $4, resim_no = $5, surum = surum + 1, guncellendi = now()
       WHERE id = $1 AND surum = $2 RETURNING id`,
     [id, surum, g.ad, g.aciklama, g.resimNo],
+  );
+}
+
+// 3468-2: türev bağını yazar ya da (null) kaldırır; sürüm çağıranın `surumuIlerlet`iyle ilerler.
+export async function turevYaz(db: Db, id: number, t: TurevGirdisi | null): Promise<void> {
+  await db.sorgu(
+    'UPDATE belge_merkezi_belge SET kaynak_belge_id = $2, kaynak_revizyon_id = $3, kullanim = $4, guncellendi = now() WHERE id = $1',
+    [id, t?.kaynakBelgeId ?? null, t?.kaynakRevizyonId ?? null, t?.kullanim ?? null],
+  );
+}
+
+export async function turevSayisi(db: Db, kaynakBelgeId: number): Promise<number> {
+  const satir = await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM belge_merkezi_belge WHERE kaynak_belge_id = $1', [kaynakBelgeId]);
+  return satir?.n ?? 0;
+}
+
+export interface TurevSatiri {
+  id: number;
+  ad: string;
+  kullanim: Kullanim;
+  aktif: boolean;
+  kaynakBelgeId: number;
+  kaynakRevizyonId: number;
+  kaynakDurumu: RevizyonDurumu;
+  yayindakiRevizyonId: number | null;
+  yayindakiSira: number | null;
+  dosyaTuru: DosyaTuru | null;
+  ozet: string | null;
+}
+
+// Kaynak belgelerin türevleri ve türevin yayındaki revizyonu (yalnız taslağı olan türevde null).
+export function turevler(db: Db, kaynakBelgeIdler: readonly number[]): Promise<TurevSatiri[]> {
+  return db.sorgu<TurevSatiri>(
+    `SELECT b.id, b.ad, b.kullanim, b.aktif, b.kaynak_belge_id AS "kaynakBelgeId", b.kaynak_revizyon_id AS "kaynakRevizyonId",
+            kr.durum AS "kaynakDurumu", y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
+       FROM belge_merkezi_belge b
+       JOIN belge_merkezi_revizyon kr ON kr.id = b.kaynak_revizyon_id
+       LEFT JOIN belge_merkezi_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'
+      WHERE b.kaynak_belge_id = ANY($1::int[])
+      ORDER BY b.kaynak_belge_id, b.kullanim, b.ad, b.id`,
+    [[...kaynakBelgeIdler]],
   );
 }
 
@@ -200,14 +247,23 @@ export interface BelgeListeSatiri {
   bagSayisi: number;
   guncellendi: string;
   surum: number;
+  kullanim: Kullanim | null;
+  kaynakBelgeId: number | null;
+  kaynakAd: string | null;
+  kaynakSira: number | null;
+  kaynakDurumu: RevizyonDurumu | null;
+  turevSayisi: number;
 }
 
+// 3468-2 (D): türev orijinalinin altında durur. Sıralama orijinalin değeriyle yapılır (türev için k, kaynak belge); grup anahtarı
+// orijinalin kimliğidir, grupta önce orijinal sonra türevler ada göre gelir (`GRUP_ICI`, yönden bağımsız; satır sırası tekildir).
 export type BelgeSiralamasi = 'ad' | 'guncellendi';
 export const SIRALAMA: SiralamaTanimi<BelgeSiralamasi> = {
-  sutunlar: { ad: 'b.ad', guncellendi: 'b.guncellendi' },
-  ikincil: 'b.id',
-  varsayilan: { sutun: 'b.guncellendi', yon: 'azalan' },
+  sutunlar: { ad: 'COALESCE(k.ad, b.ad)', guncellendi: 'COALESCE(k.guncellendi, b.guncellendi)' },
+  ikincil: 'COALESCE(k.id, b.id)',
+  varsayilan: { sutun: 'COALESCE(k.guncellendi, b.guncellendi)', yon: 'azalan' },
 };
+const GRUP_ICI = '(b.kaynak_belge_id IS NOT NULL) ASC, b.ad ASC, b.id ASC';
 
 export interface BelgeSuzgeci {
   ara: string | null;
@@ -215,14 +271,17 @@ export interface BelgeSuzgeci {
   aktif: boolean;
   // null: süzülmez; true: istasyona bağlı; false: istasyona bağlı değil.
   makine: boolean | null;
+  // 3468-2: 'orijinal' türev olmayanlar, kullanım adı o kullanımdaki türevler; null süzülmez.
+  kullanim: Kullanim | 'orijinal' | null;
 }
 
 // Arama adda ya da resim numarasında geçer; genel aramayla aynı Türkçe sadeleştirmeden geçer ("flans" "Flanş"ı bulur) ve
 // aynı trigram ifade indeksine düşer (göç 20261029132000). Joker karakterler düz metin sayılır.
 const KOSUL = `WHERE b.aktif = $1 AND ($2::text IS NULL OR b.tur = $2)
     AND ($3::text IS NULL OR public.arama_sade(b.ad) LIKE $3 OR public.arama_sade(b.resim_no) LIKE $3)
-    AND ($4::boolean IS NULL OR $4 = EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id AND g.hedef_modul = 'istasyonlar'))`;
-const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : icindeDeseni(s.ara), s.makine];
+    AND ($4::boolean IS NULL OR $4 = EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id AND g.hedef_modul = 'istasyonlar'))
+    AND ($5::text IS NULL OR ($5 = 'orijinal' AND b.kaynak_belge_id IS NULL) OR b.kullanim = $5)`;
+const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : icindeDeseni(s.ara), s.makine, s.kullanim];
 
 export async function belgeSay(db: Db, s: BelgeSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM belge_merkezi_belge b ${KOSUL}`, kosulParametreleri(s));
@@ -233,12 +292,16 @@ export function belgeSatirlari(db: Db, s: BelgeSuzgeci, siralama: SiralamaIstegi
   return db.sorgu<BelgeListeSatiri>(
     `SELECT b.id, b.ad, b.tur, b.aktif, b.surum, ${zamanMetni('b.guncellendi')} AS guncellendi,
             y.sira AS "yayindakiSira", s.sira AS "sonSira", s.dosya_turu AS "dosyaTuru",
-            (SELECT count(*)::int FROM belge_merkezi_bag g WHERE g.belge_id = b.id) AS "bagSayisi"
+            (SELECT count(*)::int FROM belge_merkezi_bag g WHERE g.belge_id = b.id) AS "bagSayisi",
+            b.kullanim, b.kaynak_belge_id AS "kaynakBelgeId", k.ad AS "kaynakAd", kr.sira AS "kaynakSira", kr.durum AS "kaynakDurumu",
+            (SELECT count(*)::int FROM belge_merkezi_belge t WHERE t.kaynak_belge_id = b.id) AS "turevSayisi"
        FROM belge_merkezi_belge b
        JOIN LATERAL (SELECT r.sira, r.dosya_turu FROM belge_merkezi_revizyon r WHERE r.belge_id = b.id ORDER BY r.sira DESC LIMIT 1) s ON true
        LEFT JOIN belge_merkezi_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'
+       LEFT JOIN belge_merkezi_belge k ON k.id = b.kaynak_belge_id
+       LEFT JOIN belge_merkezi_revizyon kr ON kr.id = b.kaynak_revizyon_id
      ${KOSUL}
-      ORDER BY ${siralamaSql(SIRALAMA, siralama)} LIMIT $5 OFFSET $6`,
+      ORDER BY ${siralamaSql(SIRALAMA, siralama)}, ${GRUP_ICI} LIMIT $6 OFFSET $7`,
     [...kosulParametreleri(s), dilim.sinir, dilim.atla],
   );
 }
@@ -518,5 +581,26 @@ export function malzemeBaglari(db: Db, belgeIdler: readonly number[]): Promise<{
     `SELECT g.belge_id AS "belgeId", g.hedef_id AS "malzemeNo" FROM belge_merkezi_bag g
       WHERE g.belge_id = ANY($1::int[]) AND g.hedef_modul = 'malzemeler'`,
     [belgeIdler],
+  );
+}
+
+// 3468-1: özeti verilen dosyanın revizyon olduğu belgeler (aynı dosya uyarısı). En çok 20 satır; arşivdekiler sonda.
+export interface OzetliRevizyon {
+  belgeId: number;
+  ad: string;
+  resimNo: string | null;
+  aktif: boolean;
+  sira: number;
+  antetRev: string | null;
+  durum: RevizyonDurumu;
+}
+
+export function ozetliRevizyonlar(db: Db, ozet: string): Promise<OzetliRevizyon[]> {
+  return db.sorgu<OzetliRevizyon>(
+    `SELECT b.id AS "belgeId", b.ad, b.resim_no AS "resimNo", b.aktif, r.sira, r.antet_rev AS "antetRev", r.durum
+       FROM belge_merkezi_revizyon r JOIN belge_merkezi_belge b ON b.id = r.belge_id
+      WHERE r.ozet = $1
+      ORDER BY b.aktif DESC, b.id, r.sira LIMIT 20`,
+    [ozet],
   );
 }

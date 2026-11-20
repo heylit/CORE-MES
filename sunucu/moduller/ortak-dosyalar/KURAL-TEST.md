@@ -53,3 +53,6 @@ Test adları başlığın başıdır.
 | OD-36 Dört göz: doğrudan silme 409; istek, onay, ret, geri çekme | `OD-36`, ekran "dört göz açık" | ikinci açık istek 409 |
 | OD-37 Geri alma isteği düşürür; ayar kapanınca açık istek sürer | `OD-37` | - |
 | OD-38 Veritabanı kısıtları (tek açık istek, dört gözde isteyen onaylayamaz) | `OD-38` | kısıt ihlali |
+| AD-1 Aynı dosya uyarısı (3468-1): aynı içeriğin görünen klasördeki ve okunabilen çizimdeki yerleri; görünmeyen klasör yok | `ayni-dosya.test.ts` `AD-1` | görünmeyen klasördeki kopya ne satırla ne sayıyla |
+| AD-2 Çizim yeri yalnız çizim okuyana, klasör yeri yalnız sayfası olana; uçlar 403 | `AD-2` | iki uç 403 |
+| AD-3/4/5 Bilinmeyen içerik boş; uyarı yüklemeyi engellemez; arşivdeki dosya yok, arşivdeki belge "Arşivde" | `AD-3`, `AD-4`, `AD-5`; ekran `aynı dosya uyarısı (3468-1)` | bozuk özet 400 |

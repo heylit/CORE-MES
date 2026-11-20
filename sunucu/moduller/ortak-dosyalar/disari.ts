@@ -12,3 +12,6 @@ export type { HazirKayitSonucu, HazirSaglayici } from './hazir-listeler.ts';
 export { musteriProjeKaynagiKaydet } from './musteri-proje.ts';
 export type { MusteriProjeKaynagi } from './musteri-proje.ts';
 export { silmeDortGozOkuyucuKaydet } from './kalici-silme.ts';
+// 3468-1: aynı dosya uyarısı; kablolama Çizim Merkezi ile iki yönde bağlar.
+export { ayniDosyaKaynagiKaydet, klasordekiYerler } from './ayni-dosya.ts';
+export type { AyniDosyaKaynagi } from './ayni-dosya.ts';

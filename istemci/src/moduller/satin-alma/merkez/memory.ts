@@ -240,6 +240,21 @@ function onayBasamaklariPaneli(s: Settings): string {
       <table class="itbl rt"><thead><tr><th>Üst limit (TL)</th><th>Basamak</th><th>Onaylayan rol</th><th>Onaylayan kişiler</th>${basamakYazar ? "<th></th>" : ""}</tr></thead><tbody id="ap-rows">${satirlar}</tbody></table>
       ${basamakYazar ? `<div class="row" data-sa-y="5"><button class="btn sm" data-act="add-ap">${simge(SIMGELER.plus)} Basamak ekle</button><span class="small muted">Boş limit en üst basamaktır. Rolü ve kişisi boş basamak, rolü ya da kişisi olan basamağın üstünde olamaz. Basamağa yazılan kişi rolü olmasa da o basamağı ve alttakileri onaylar.</span></div>` : ""}</div></section>`;
 }
+// 3492: kayıt adı boş basamağı düşürür; bu yüzden limiti, rolü ya da kişisi girilmiş ama adı boş basamak ve "Ekle"ye basılmadan
+// seçili bırakılan kişi kaydı durdurur ("kaydedildi" deyip sessizce kaybetmesin). Tamamen boş satır sorun değildir, düşer.
+export function basamakEksigi(kok: ParentNode = document): { ileti: string; not: string; odak: HTMLElement } | null {
+  if (!basamakYazar) return null;
+  for (const [i, tr] of [...kok.querySelectorAll<HTMLElement>("#ap-rows tr")].entries()) {
+    const ad = tr.querySelector<HTMLInputElement>("[data-apk=role]");
+    const dolu = (tr.querySelector<HTMLInputElement>("[data-apk=max]")?.value.trim() ?? "") !== ""
+      || (tr.querySelector<HTMLSelectElement>("[data-apk=rolId]")?.value ?? "") !== ""
+      || tr.querySelector("[data-apk-kisi]") !== null;
+    if (ad && ad.value.trim() === "" && dolu) return { ileti: `${i + 1}. basamağın adı boş. Basamak sütununa bir ad yazıp yeniden kaydedin.`, not: "Basamak adı gerekli.", odak: ad };
+    const sec = tr.querySelector<HTMLSelectElement>("[data-apk=kisiSec]");
+    if (sec && sec.value !== "") return { ileti: `${i + 1}. basamakta seçilen kişi eklenmedi. Önce "Ekle"ye basın ya da seçimi kaldırın.`, not: "Seçilen kişi eklenmedi.", odak: sec };
+  }
+  return null;
+}
 export function viewSettings(draft?: Settings | null): string {
   const s = draft ?? settings();
   return `<div class="phead"><div><h1>Ayarlar</h1><p class="lead">Onay limitleri kararın kimin onayına gideceğini belirler; kurlar, fırsat maliyeti ve bütçeler karşılaştırmayı etkiler.</p></div><span class="spacer"></span><button class="btn primary" data-act="save-settings">Ayarları kaydet</button></div>

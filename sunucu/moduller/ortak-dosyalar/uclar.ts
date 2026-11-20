@@ -1,4 +1,5 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
+import { ayniDosyaCevabi, ayniDosyaSorgusu } from '#paylasilan/sozlesme/dosya.ts';
 import {
   ayarlarCevabi, hazirDosyalarCevabi, hazirKayitParametresi, hazirKayitlarCevabi, hazirListeParametresi, kayitParametresi, kaynakKlasoruCevabi, mevcutAcCevabi, mevcutAcGovdesi, mevcutCevabi, sablonGovdesi, topluGeriAlCevabi,
   topluIsParametresi,
@@ -16,6 +17,7 @@ import {
   arsiv, arsivDegistir, gecmis, indir, klasorAc, klasorDosyalari, klasorler, sonEklenenler, surumler, yetkiOku, yetkiYazKomutu, yukle,
 } from './servis.ts';
 import { hazirKayit, hazirKayitlar } from './hazir-listeler.ts';
+import { ayniDosyaYerleri } from './ayni-dosya.ts';
 import { ayarlar, kaynakKlasoruBul, kokAc, mevcutAc, mevcutSayim, sablonKaydet, topluArsiv, yenidenDene } from './kayit-klasorleri.ts';
 
 // İşlem sayfayı açar; klasör düzeyi (ADR 0030) her uçta servis içinde, oturumdaki kişinin rollerinden çözülür. Yetki sekmesi ayrı
@@ -72,6 +74,11 @@ export const uclar = [
     tekrarKorumali: true,
     govde: klasorAcGovdesi, cevap: klasorSemasi,
     isle: ({ db, kullanici, govde }) => klasorAc(db, kullanici, govde.ustId, govde.ad),
+  }),
+  uc({
+    // 3468-1: yüklemeden önce aynı içerikli dosyanın yerleri (görünen klasörler ve çizimler); uyarıdır, yüklemeyi engellemez.
+    yontem: 'GET', yol: '/ortak-dosyalar/ayni-dosya', yetki: SAYFA, sorgu: ayniDosyaSorgusu, cevap: ayniDosyaCevabi,
+    isle: async ({ db, kullanici, sorgu }) => ({ yerler: await ayniDosyaYerleri(db, kullanici, sorgu.ozet) }),
   }),
   uc({
     yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/yukle', yetki: SAYFA,

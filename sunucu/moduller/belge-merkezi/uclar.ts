@@ -4,8 +4,10 @@ import {
   bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeSilmeCevabi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi, kucukResimKareParametresi,
   kucukResimlerCevabi, kucukResimSorgusu, malzemeBelgeEkleGovdesi, malzemeBelgeleriCevabi, malzemeBelgeParametresi, malzemeBelgeSurumGovdesi,
   malzemeParametresi, malzemeRevizyonEkleGovdesi, malzemeRevizyonParametresi, malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi,
-  onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
+  onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi, turevBagGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import { ayniDosyaCevabi, ayniDosyaSorgusu } from '#paylasilan/sozlesme/dosya.ts';
+import { AYNI_DOSYA_YETKISI, ayniDosyaYerleri } from './ayni-dosya.ts';
 import * as servis from './servis.ts';
 
 // Sayfası olan rol okur; `belge-merkezi.oku` sayfasız okuma için ayrı verilebilir (başka ekranda belge gösteren rol).
@@ -16,6 +18,14 @@ const MALZEME_YAZMA = { biri: ['belge-merkezi.yaz', 'malzemeler.yaz'] } as const
 const MALZEME_OKUMA = { biri: ['sayfa.cizimler', 'belge-merkezi.oku', 'malzemeler.yaz'] } as const;
 
 export const uclar = [
+  uc({
+    // 3468-1: yüklemeden önce aynı içerikli dosyanın yerleri (çizimler ve Ortak Dosyalar); yalnız kişinin gördüğü yerler.
+    yontem: 'GET',
+    yol: '/cizimler/ayni-dosya',
+    yetki: { biri: AYNI_DOSYA_YETKISI },
+    sorgu: ayniDosyaSorgusu, cevap: ayniDosyaCevabi,
+    isle: async ({ db, kullanici, sorgu }) => ({ yerler: await ayniDosyaYerleri(db, kullanici, sorgu.ozet) }),
+  }),
   uc({
     yontem: 'GET',
     yol: '/cizimler/menu-sayaclari',
@@ -111,6 +121,25 @@ export const uclar = [
     govde: surumGovdesi,
     cevap: belgeSilmeCevabi,
     isle: ({ db, parametre, govde, denetimEki }) => servis.belgeSil(db, parametre.id, govde.surum, denetimEki),
+  }),
+  // 3468-2: türev bağı; yetki belge düzenlemeyle aynı (yeni yetki işlemi yok, 3468 a).
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/:id/turev-bagla',
+    yetki: 'belge-merkezi.yaz',
+    parametre: idParametresi,
+    govde: turevBagGovdesi,
+    cevap: belgeAyrintisi,
+    isle: ({ db, parametre, govde }) => servis.turevBagla(db, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/:id/turev-bagini-kaldir',
+    yetki: 'belge-merkezi.yaz',
+    parametre: idParametresi,
+    govde: surumGovdesi,
+    cevap: belgeAyrintisi,
+    isle: ({ db, parametre, govde }) => servis.turevBaginiKaldir(db, parametre.id, govde.surum),
   }),
   uc({
     yontem: 'POST',

@@ -182,8 +182,8 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
         { code: 'HM-GNC-00002', name: 'Yalniz TMI adi', name4: 'Uc' },
         { CODE: 'HZ-GNC-00001', DESCRIPTION: 'Hizmet adi' },
       ]);
-      // Sahibin karşılaştırması TMI adıyla yapılır: kuyruktaki ad olduğu gibi döner.
-      assert.deepEqual(sonuclar.get(9001), { ad: 'TMI adi', tamam: true });
+      // Sahibin karşılaştırması TMI adı ve açıklamalarla yapılır (3491): kuyruktaki değerler olduğu gibi döner.
+      assert.deepEqual(sonuclar.get(9001), { ad: 'TMI adi', aciklama1: 'Logo adi', aciklama2: 'Iki', aciklama3: ' ', tamam: true });
     } finally {
       await tamam('/ayarlar/logo.malzeme-guncelleme-gonderimi/degistir', { deger: false });
     }

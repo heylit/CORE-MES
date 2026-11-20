@@ -219,6 +219,20 @@ namespace LogoYardimcisi
             Dogru(!Basari(C(s, "POST", "/api/Material/UpdateRich", N("code", "YOK", "name", "x"))), "olmayan kart");
         }
 
+        static void T_malzeme_guncellemesi_aciklama_2_3_u_yazar_bos_olani_birakir()
+        {
+            var s = Logo();
+            Dogru(Basari(C(s, "POST", "/api/Material/UpdateRich", N("code", Malzeme, "name", "Ad", "name3", "A2", "name4", "A3"))), "güncelleme");
+            Icerir(s.Cagrilar.Last(), "NAME3=A2");
+            Esit("A2", s.Malzeme(Malzeme).Aciklama2, "Açıklama 2 NAME3'e");
+            Esit("A3", s.Malzeme(Malzeme).Aciklama3, "Açıklama 3 NAME4'e");
+            Dogru(Basari(C(s, "POST", "/api/Material/UpdateRich", N("code", Malzeme, "name", "Ad 2"))), "açıklamasız güncelleme");
+            Dogru(!s.Cagrilar.Last().Contains("NAME3"), "gelmeyen açıklama yazılmaz");
+            Esit("A2", s.Malzeme(Malzeme).Aciklama2, "gelmeyen açıklama Logo'da kalır");
+            Esit("A3", s.Malzeme(Malzeme).Aciklama3, "gelmeyen NAME4 boş yazılmaz");
+            Icerir(Hata(C(s, "POST", "/api/Material/UpdateRich", N("code", Malzeme, "name", "Ad", "name2", "x"))), "Açıklama 1");
+        }
+
         static void T_kart_kayit_numarasi_ve_koduyla_kullanim_disi_birakilir_silinmez()
         {
             var s = Logo();

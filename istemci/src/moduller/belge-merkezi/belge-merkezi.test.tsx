@@ -585,6 +585,58 @@ describe('cizimler ekranları', () => {
   });
 });
 
+describe('cizimler aynı dosya uyarısı (3468-1)', () => {
+  function ayniSunucusu(yerler: unknown[]) {
+    const cagrilar = sunucuKur(YAZAR);
+    const temel = vi.mocked(fetch);
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      if (yol.startsWith('/cizimler/ayni-dosya?')) { cagrilar.push({ yontem: 'GET', yol, govde: undefined }); return json(200, { yerler }); }
+      if (yol === '/dosyalar/eksikler') { cagrilar.push({ yontem: 'POST', yol, govde: undefined }); return json(200, { eksikler: [] }); }
+      return temel(adres, ayar);
+    }));
+    return cagrilar;
+  }
+  const dosya = () => Object.assign(new File(['%PDF-1.7 deneme'], 'ORN-flans.pdf', { type: 'application/pdf' }), {
+    arrayBuffer: async () => new TextEncoder().encode('%PDF-1.7 deneme').buffer,
+  });
+  async function revizyonYukle() {
+    ac('/cizimler/belge/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni revizyon' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(pencere.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [dosya()] } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yükle' }));
+  }
+  const YER = { kaynak: 'ortak-dosyalar', baslik: 'ORN-Ortak / ORN-Çizimler', ayrinti: 'Ortak dosyalar · ORN-flans.pdf · sürüm 2', yol: '/ortak-dosyalar?klasor=3', durum: 'Son sürüm' };
+
+  it('aynı içerik başka yerde varsa yükleme durur ve yerleri gösterir; Vazgeç hiçbir şey yüklemez', async () => {
+    const cagrilar = ayniSunucusu([YER]);
+    await revizyonYukle();
+    const uyari = await screen.findByRole('dialog', { name: 'Bu dosya zaten yüklü' });
+    expect(within(uyari).getByText('ORN-Ortak / ORN-Çizimler')).toBeTruthy();
+    expect(within(uyari).getByRole('button', { name: 'Yine de revizyon ekle' })).toBeTruthy();
+    fireEvent.click(within(uyari).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Bu dosya zaten yüklü' })).toBeNull(); });
+    // Vazgeç'ten sonra geç gelen bir yükleme de yakalansın: yükleme zinciri birkaç mikro görev sürer.
+    await new Promise((coz) => { setTimeout(coz, 50); });
+    expect(cagrilar.some((c) => c.yol === '/dosyalar/eksikler' || c.yol.endsWith('/revizyon-ekle'))).toBe(false);
+    expect(cagrilar.find((c) => c.yol.startsWith('/cizimler/ayni-dosya?'))?.yol).toMatch(/^\/cizimler\/ayni-dosya\?ozet=[0-9a-f]{64}$/);
+  });
+
+  it('Yine de revizyon ekle yüklemeyi sürdürür; yer yoksa pencere açılmadan yüklenir', async () => {
+    let cagrilar = ayniSunucusu([YER]);
+    await revizyonYukle();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yine de revizyon ekle' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/cizimler/7/revizyon-ekle')).toBe(true); });
+    expect(cagrilar.filter((c) => c.yol.startsWith('/cizimler/ayni-dosya?'))).toHaveLength(1);
+    cleanup();
+    cagrilar = ayniSunucusu([]);
+    await revizyonYukle();
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/cizimler/7/revizyon-ekle')).toBe(true); });
+    expect(screen.queryByRole('dialog', { name: 'Bu dosya zaten yüklü' })).toBeNull();
+  });
+});
+
 describe('cizimler önizleme kareleri', () => {
   it('sekiz kare Y ekseni çevresinde eşit aralıklı döner', () => {
     expect(KARE_SAYISI).toBe(8);
@@ -960,7 +1012,7 @@ describe('cizimler PDF düzenleme (2123)', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  async function pdfSunucusu(kullanici: Kullanici, ciz?: (b: PDFDocument, s: PDFPage) => Promise<void>) {
+  async function pdfSunucusu(kullanici: Kullanici, ciz?: (b: PDFDocument, s: PDFPage) => Promise<void>, ayrinti: BelgeAyrintisi = AYRINTI) {
     const b = await PDFDocument.create();
     const sayfa = b.addPage([595, 842]);
     if (ciz) await ciz(b, sayfa);
@@ -972,8 +1024,8 @@ describe('cizimler PDF düzenleme (2123)', () => {
       cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
       if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
       if (yol === '/kurum-logosu') return json(200, { logo: null });
-      if (yontem === 'GET' && yol === '/cizimler/7') return json(200, AYRINTI);
-      if (yontem === 'GET' && yol === '/cizimler/7/revizyonlar/11/dosya') return new Response(new Uint8Array(pdf), { status: 200 });
+      if (yontem === 'GET' && yol === '/cizimler/7') return json(200, ayrinti);
+      if (yontem === 'GET' && /^\/cizimler\/7\/revizyonlar\/1[12]\/dosya$/.test(yol)) return new Response(new Uint8Array(pdf), { status: 200 });
       if (yontem === 'POST' && yol === '/dosyalar/eksikler') return json(200, { eksikler: [] });
       if (yontem === 'POST' && yol === '/cizimler') return json(200, { ...AYRINTI, id: 8, ad: 'Deneme flanş (düzenlenmiş)' });
       if (yontem === 'GET' && yol === '/cizimler/8') return json(200, { ...AYRINTI, id: 8, ad: 'Deneme flanş (düzenlenmiş)' });
@@ -1035,8 +1087,8 @@ describe('cizimler PDF düzenleme (2123)', () => {
   });
 
   // Sağ alt köşedeki antet alanını temizler ve kaydet penceresini açar (görünüm 595x842, PDF ile bire bir).
-  async function temizleVeKaydetAc() {
-    ac('/cizimler/belge/7/duzenle/11');
+  async function temizleVeKaydetAc(revizyonId = 11, baslik = 'Türev olarak kaydet', kullanimSec = true) {
+    ac(`/cizimler/belge/7/duzenle/${String(revizyonId)}`);
     const alan = await screen.findByLabelText('Sayfa 1 düzenleme alanı');
     alan.getBoundingClientRect = () => ({ left: 0, top: 0, width: 595, height: 842, right: 595, bottom: 842, x: 0, y: 0, toJSON: () => ({}) });
     await screen.findByRole('button', { name: 'Sonraki' });
@@ -1045,7 +1097,10 @@ describe('cizimler PDF düzenleme (2123)', () => {
     fireEvent.pointerUp(alan, { clientX: 580, clientY: 830, pointerId: 1 });
     expect(await screen.findByRole('button', { name: 'Dolgu alanı' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Yeni belge olarak kaydet' }));
-    return screen.findByRole('dialog');
+    const pencere = await screen.findByRole('dialog', { name: baslik });
+    // 3468-2: yayındaki revizyondan düzenleme türev olur; kullanım seçilmeden kaydedilmez.
+    if (kullanimSec) fireEvent.click(within(pencere).getByRole('radio', { name: 'Dış üretim' }));
+    return pencere;
   }
   const yuklenen = (cagrilar: Cagri[]) => cagrilar.find((c) => c.yontem === 'POST' && c.yol === '/cizimler')?.govde as Record<string, unknown> | undefined;
   const yaziliAntet = async (b: PDFDocument, s: PDFPage) => {
@@ -1064,7 +1119,8 @@ describe('cizimler PDF düzenleme (2123)', () => {
     fireEvent.click(kaydet);
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/cizimler')).toBe(true); });
     expect(yuklenen(cagrilar)).toMatchObject({
-      ad: 'Deneme flanş (düzenlenmiş)', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf',
+      ad: 'Deneme flanş · Dış üretim', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf',
+      turev: { kaynakBelgeId: 7, kaynakRevizyonId: 11, kullanim: 'dis-uretim' },
       not: "Düzenlendi: Deneme flanş Rev 00. PDF'ten silinen: 1 yazı. Gerekçe: Kurum anteti",
     });
     expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol.startsWith('/cizimler/7'))).toBe(false);
@@ -1093,5 +1149,159 @@ describe('cizimler PDF düzenleme (2123)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Yine de kaydet' }));
     await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
     expect(yuklenen(cagrilar)?.not).toContain('yalnız örtüldü');
+  });
+
+  it('3468-2: kullanım seçilmeden kaydedilmez; taslak revizyondan düzenleme bağsız ayrı belge olur', async () => {
+    let cagrilar = await pdfSunucusu(YAZAR, yaziliAntet);
+    let pencere = await temizleVeKaydetAc(11, 'Türev olarak kaydet', false);
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    expect((within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(pencere).getByRole('radio', { name: 'Kalite' }));
+    expect((within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(false);
+    cleanup();
+    cagrilar = await pdfSunucusu(YAZAR, yaziliAntet);
+    pencere = await temizleVeKaydetAc(12, 'Yeni belge olarak kaydet', false);
+    expect(within(pencere).queryByRole('radio')).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
+    expect(yuklenen(cagrilar)?.turev ?? null).toBeNull();
+  });
+
+  it('3468-2: türev düzenlenirse yenisi aynı orijinalin ve revizyonun türevidir', async () => {
+    const turevBelge: BelgeAyrintisi = {
+      ...AYRINTI, turevler: [],
+      kaynak: { belgeId: 5, ad: 'ORN-Orijinal', aktif: true, revizyonId: 50, harf: 'C', revKodu: '02', kullanim: 'kalite', eski: false },
+    };
+    const cagrilar = await pdfSunucusu(YAZAR, yaziliAntet, turevBelge);
+    const pencere = await temizleVeKaydetAc(11, 'Türev olarak kaydet', false);
+    expect((within(pencere).getByRole('radio', { name: 'Kalite' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
+    expect(yuklenen(cagrilar)).toMatchObject({ ad: 'ORN-Orijinal · Kalite', turev: { kaynakBelgeId: 5, kaynakRevizyonId: 50, kullanim: 'kalite' } });
+  });
+});
+
+
+describe('cizimler türevleri (3468-2)', () => {
+  const TUREV_ORIJINAL: BelgeAyrintisi = {
+    ...AYRINTI,
+    revizyonlar: [
+      { ...AYRINTI.revizyonlar[0]!, durum: 'yayinda', yayinlandi: '2026-10-02T08:00:00.000Z', yayinlayanAd: 'Deneme Şef' },
+      { ...AYRINTI.revizyonlar[1]!, durum: 'eski' },
+    ],
+    turevler: [
+      { id: 20, ad: 'Deneme flanş · kalite', kullanim: 'kalite', aktif: true, kaynakRevizyonId: 11, yayindakiRevKodu: '00', yayindakiHarf: 'A', kaynakEski: true },
+      { id: 21, ad: 'Deneme flanş · dış üretim', kullanim: 'dis-uretim', aktif: true, kaynakRevizyonId: 12, yayindakiRevKodu: null, yayindakiHarf: null, kaynakEski: false },
+    ],
+  };
+  const TUREV: BelgeAyrintisi = {
+    ...AYRINTI, id: 20, ad: 'Deneme flanş · kalite', baglar: [], turevler: [],
+    kaynak: { belgeId: 7, ad: 'Deneme flanş', aktif: true, revizyonId: 11, harf: 'A', revKodu: '00', kullanim: 'kalite', eski: true },
+  };
+  function turevSunucusu(kullanici: Kullanici) {
+    const cagrilar: Cagri[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      const yontem = ayar?.method ?? 'GET';
+      cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
+      if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
+      if (yontem === 'GET' && yol === '/cizimler/7') return json(200, TUREV_ORIJINAL);
+      if (yontem === 'GET' && yol === '/cizimler/20') return json(200, TUREV);
+      if (yontem === 'GET' && yol.startsWith('/cizimler/ayni-dosya?')) return json(200, { yerler: [] });
+      if (yontem === 'GET' && yol.startsWith('/cizimler?')) {
+        return json(200, {
+          ...LISTE, satirlar: [{ ...SATIR, turevSayisi: 1 }, { ...SATIR, id: 20, ad: 'Deneme flanş · kalite', kullanim: 'kalite', kaynak: { belgeId: 7, ad: 'Deneme flanş', revKodu: '00', eski: true } }],
+        });
+      }
+      if (yontem === 'POST' && yol === '/dosyalar/eksikler') return json(200, { eksikler: [] });
+      if (yontem === 'POST') return json(200, { ...TUREV, id: 22 });
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    return cagrilar;
+  }
+  beforeEach(() => {
+    if (!('arrayBuffer' in File.prototype)) {
+      Object.defineProperty(File.prototype, 'arrayBuffer', {
+        configurable: true,
+        value(this: File) {
+          return new Promise<ArrayBuffer>((coz) => { const r = new FileReader(); r.onload = () => { coz(r.result as ArrayBuffer); }; r.readAsArrayBuffer(this); });
+        },
+      });
+    }
+  });
+
+  it('revizyon ağacı: türev çıktığı revizyonun altında; güncel revizyonda eksik kullanım eylemle, eski kaynaklı türev "Kaynağı eski"', async () => {
+    turevSunucusu(YAZAR);
+    ac('/cizimler/belge/7');
+    const yeni = await screen.findByRole('group', { name: 'Rev 01 türevleri' });
+    const eski = screen.getByRole('group', { name: 'Rev 00 türevleri' });
+    expect(within(yeni).getByRole('link', { name: 'Deneme flanş · dış üretim' })).toBeTruthy();
+    expect(within(eski).getByRole('link', { name: 'Deneme flanş · kalite' })).toBeTruthy();
+    expect(within(eski).getByText('Kaynağı eski')).toBeTruthy();
+    expect(within(yeni).queryByText('Kaynağı eski')).toBeNull();
+    expect(within(yeni).getByText('Kalite türevi yalnız eski revizyondan var (Rev 00).')).toBeTruthy();
+    expect(within(yeni).getByRole('button', { name: 'Rev 01 için türev ekle' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Türev olarak bağla' })).toBeNull();
+  });
+
+  it('okur türevleri görür, türev ekleyemez', async () => {
+    turevSunucusu(OKUR);
+    ac('/cizimler/belge/7');
+    const yeni = await screen.findByRole('group', { name: 'Rev 01 türevleri' });
+    expect(within(yeni).queryByRole('button')).toBeNull();
+  });
+
+  it('"Bu revizyondan yenile" kullanımı seçili açar; aynı kullanımda türev varken kısa ad zorunlu; türev bağıyla yüklenir', async () => {
+    const cagrilar = turevSunucusu(YAZAR);
+    ac('/cizimler/belge/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Bu revizyondan yenile' }));
+    const pencere = await screen.findByRole('dialog');
+    expect((within(pencere).getByRole('radio', { name: 'Kalite' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(pencere.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File(['%PDF-1.7 kalite'], 'ORN-flans-kalite.pdf', { type: 'application/pdf' })] },
+    });
+    const yukle = within(pencere).getByRole('button', { name: 'Yükle' }) as HTMLButtonElement;
+    expect(yukle.disabled).toBe(true);
+    // Kısa ad hatası alana dokunmadan kırmızı görünmez; alandan çıkınca alanın altında, aria-invalid ile görünür.
+    const kisa = within(pencere).getByLabelText(/Kısa ad/);
+    expect(within(pencere).queryByText('Bu kullanımda başka türev var; kısa ad zorunlu.')).toBeNull();
+    expect(kisa.getAttribute('aria-invalid')).not.toBe('true');
+    fireEvent.blur(kisa);
+    expect(within(pencere).getByText('Bu kullanımda başka türev var; kısa ad zorunlu.')).toBeTruthy();
+    expect(kisa.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.change(kisa, { target: { value: 'ölçü raporu' } });
+    expect(within(pencere).getByText(/Belge adı: Deneme flanş · ölçü raporu/)).toBeTruthy();
+    expect(yukle.disabled).toBe(false);
+    fireEvent.click(yukle);
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/cizimler')).toBe(true); });
+    expect(cagrilar.find((c) => c.yontem === 'POST' && c.yol === '/cizimler')?.govde).toMatchObject({
+      ad: 'Deneme flanş · ölçü raporu', antetRev: '01', turev: { kaynakBelgeId: 7, kaynakRevizyonId: 12, kullanim: 'kalite' },
+    });
+  });
+
+  it('türev sayfası kaynağı, kullanımı ve "Kaynağı eski"yi gösterir; bağ kaldırma onayla gider', async () => {
+    const cagrilar = turevSunucusu(YAZAR);
+    ac('/cizimler/belge/20');
+    expect(await screen.findByRole('link', { name: 'Deneme flanş' })).toBeTruthy();
+    expect(screen.getAllByText('Kalite').length).toBeGreaterThan(0);
+    expect(screen.getByText('Kaynağı eski')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Orijinale git ve yenile' }).getAttribute('href')).toBe('/cizimler/belge/7');
+    expect(screen.queryByRole('group', { name: /türevleri/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Türev bağını kaldır' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/cizimler/20/turev-bagini-kaldir')).toBe(true); });
+    expect(cagrilar.find((c) => c.yol === '/cizimler/20/turev-bagini-kaldir')?.govde).toEqual({ surum: 3 });
+  });
+
+  it('listede türev satırı kullanımı, kaynağı ve "Kaynağı eski"yi taşır; kullanım süzgeci sorguya yazılır', async () => {
+    const cagrilar = turevSunucusu(YAZAR);
+    ac('/cizimler');
+    expect(await screen.findByText('Kaynak Deneme flanş ·')).toBeTruthy();
+    expect(screen.getByText('1 türev')).toBeTruthy();
+    expect(screen.getByText('Kaynağı eski')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Kullanım'), { target: { value: 'kalite' } });
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol.startsWith('/cizimler?') && c.yol.includes('kullanim=kalite'))).toBe(true); });
   });
 });

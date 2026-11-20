@@ -31,7 +31,7 @@ Durum: malzemeler PR #348 ile karşılandı (ana dalda); logo `birimSetiKaldir` 
 4. Kullanım işlevi (`disari.ts`): `logoBirimSetiKullaniliyorMu(db, kod): Promise<boolean>`, bütün birim karşılıklarına bakar. Bugün logo yalnız
    kuyruktaki kartların karşılığına bakıyor (UYUM-BORCU 7).
 5. Karşılandı, `isler.ts`'e bağlı (ayar `logo.malzeme-guncelleme-gonderimi`). Ad güncellemesi (kart #777 S4 b): Logo'ya gitmiş kartın adı değişince kuyruğa düşer; `disari.ts` `logoyaGuncellemeGidecekMalzemeler(db, sinir)` ve
-   `malzemeLogoGuncellemeSonucu(db, no, { ad } & ({ tamam: true } | { hata }))` (gönderilen ad; kart bu arada değiştiyse bekliyor kalır) (tipler `logo/servis.ts` `MalzemeGuncellemeKaynagi`). Kod, tür, birim kilitli kalır.
+   `malzemeLogoGuncellemeSonucu(db, no, { ad, aciklama1-3 } & ({ tamam: true } | { hata }))` (gönderilen ad ve açıklamalar, 3491; kart bu arada değiştiyse bekliyor kalır) (tipler `logo/servis.ts` `MalzemeGuncellemeKaynagi`). Kod, tür, birim kilitli kalır.
 
 ## portal (satış teklifi ve siparişi, kart #777; istek 12.10.2026 portal oturumuna iletildi, imzalar ilke olarak kabul)
 1. `disari.ts` (tipler `logo/servis.ts` `SatisKaynagi`): `logoyaGidecekSatisTeklifleri(db, sinir)` (`requests/*`, sürüm gönderilince ya da kabulde),

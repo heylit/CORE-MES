@@ -101,7 +101,8 @@ describe('Logo kartının ad güncellemesi (kart #783, S4 b, gerçek PostgreSQL)
     await adYaz(a, 'Deneme a yeni');
     const sira = (await kuyruk()).filter((x) => x.no === a.no || x.no === b.no);
     assert.deepEqual(sira.map((x) => x.no), [b.no, a.no]);
-    assert.deepEqual(sira[1], { no: a.no, stokKodu: sira[1]!.stokKodu, ad: 'Deneme a yeni', logoKayitNo: 'LG-AD-2', durum: 'bekliyor', tur: 'hammadde', hizmetYonu: null });
+    assert.deepEqual(sira[1], { no: a.no, stokKodu: sira[1]!.stokKodu, ad: 'Deneme a yeni', logoKayitNo: 'LG-AD-2', durum: 'bekliyor', tur: 'hammadde', hizmetYonu: null,
+      aciklama1: null, aciklama2: null, aciklama3: null });
     assert.equal((await vt().tx((db) => logoyaGuncellemeGidecekMalzemeler(db, 1))).length, 1);
     await assert.rejects(vt().tx((db) => logoyaGuncellemeGidecekMalzemeler(db, 0)));
 
@@ -131,6 +132,35 @@ describe('Logo kartının ad güncellemesi (kart #783, S4 b, gerçek PostgreSQL)
     assert.equal(await hataKodu((db) => malzemeLogoGuncellemeSonucu(db, k.no, { ad: 'Deneme ikinci değişim', hata: '   ' })), 'DOGRULAMA');
     assert.equal((await guncelleme(k.kimlik))?.durum, 'bekliyor');
     assert.equal(await hataKodu((db) => malzemeLogoGuncellemeSonucu(db, 999_999, { ad: null, tamam: true })), 'BULUNAMADI');
+  });
+
+  test('3491: Açıklama 1-3 değişince de güncelleme "bekliyor" olur ve kuyruk açıklamaları verir; açıklamasız kayıt ve aynı açıklama açmaz', async () => {
+    const k = await kartAc('LG-AD-6');
+    const aciklamaYaz = async (a: [string | null, string | null, string | null]): Promise<void> => {
+      const g = govde(k.kimlik, `Deneme ${k.kimlik}`, k.surum);
+      k.surum = (await tamam<KatalogKartiKaydetCevabi>('POST', `/malzeme-katalogu-kartlari/${k.kimlik}/kaydet`,
+        { ...g, ozet: { ...g.ozet, aciklama_1: a[0], aciklama_2: a[1], aciklama_3: a[2] } })).surum;
+    };
+    await aciklamaYaz([null, null, null]);
+    assert.equal((await guncelleme(k.kimlik))?.durum, null, 'açıklama aynı (boş) kaldı');
+    await aciklamaYaz([null, ' Iki ', null]);
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'bekliyor', 'yalnız Açıklama 2 değişti');
+    const satir = (await kuyruk()).find((x) => x.no === k.no)!;
+    assert.deepEqual([satir.aciklama1, satir.aciklama2, satir.aciklama3], [null, 'Iki', null]);
+    await vt().tx((db) => malzemeLogoGuncellemeSonucu(db, k.no, { ad: satir.ad, aciklama1: null, aciklama2: 'Iki', aciklama3: null, tamam: true }));
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'gonderildi');
+    await adYaz(k, `Deneme ${k.kimlik}`);
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'gonderildi', 'açıklama gelmeyen kayıt açıklamaları korur, güncelleme açmaz');
+    await aciklamaYaz([null, 'Iki', null]);
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'gonderildi', 'kayıtlı açıklamalarla aynı açıklama güncelleme açmaz');
+    await aciklamaYaz(['Logo adi', 'Iki', null]);
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'bekliyor', 'Açıklama 1 (Logo adı) değişti');
+    const gonderilen = (await kuyruk()).find((x) => x.no === k.no)!;
+    assert.deepEqual([gonderilen.aciklama1, gonderilen.aciklama2, gonderilen.aciklama3], ['Logo adi', 'Iki', null], 'kuyruk Açıklama 1\'i (Logo adı) verir');
+    await aciklamaYaz(['Logo adi', 'Iki', 'Uc']);
+    assert.equal((await kuyruk()).find((x) => x.no === k.no)?.aciklama3, 'Uc');
+    await vt().tx((db) => malzemeLogoGuncellemeSonucu(db, k.no, { ...gonderilen, tamam: true }));
+    assert.equal((await guncelleme(k.kimlik))?.durum, 'bekliyor', 'açıklama gönderim sırasında değişti: bekliyor kalır');
   });
 
   test('kısıt: Logo kaydı olmayan kartta güncelleme durumu, zamansız durum ve hatasız "hata" yazılamaz', async () => {

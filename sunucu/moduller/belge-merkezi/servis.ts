@@ -10,8 +10,9 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { KayitAramaIstegi } from '#paylasilan/kayit-aramasi.ts';
 import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import type {
-  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeSilmeCevabi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, MalzemeBelgeEkleGovdesi,
-  MalzemeBelgeleriCevabi, MalzemeRevizyonEkleGovdesi, MalzemeSecimiCevabi, OnizlemeGovdesi, RevizyonEkleGovdesi,
+  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeSilmeCevabi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, Kullanim,
+  MalzemeBelgeEkleGovdesi, MalzemeBelgeleriCevabi, MalzemeRevizyonEkleGovdesi, MalzemeSecimiCevabi, OnizlemeGovdesi, RevizyonEkleGovdesi, TurevBagGovdesi,
+  TurevGirdisi, TurevKaynagi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { BELGE_TURLERI, ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
@@ -21,7 +22,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
   AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
-  belgeSilmeReddi, kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
+  belgeSilmeReddi, kartRevizyonu, kaynakEskiMi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, turevReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -83,11 +84,52 @@ async function revizyonYaz(
   return revizyonId;
 }
 
+// 3468-2: türev bağının denetimi. Kaynak satırı kilitlenir: aynı anda kaynağın kendisi türev yapılamaz (tetikleyici son savunma).
+const TUREV_ISLETILERI = {
+  belge_merkezi_turev_tek_seviye: { ileti: ILETILER.turevliBelge, alan: 'kaynakBelgeId' },
+  belge_merkezi_belge_kaynak_fk: { ileti: ILETILER.turevRevizyonYok, alan: 'kaynakRevizyonId' },
+} as const;
+
+async function turevDenetle(db: Db, hedefId: number | null, t: TurevGirdisi): Promise<void> {
+  const k = await sorgular.belgeKilitle(db, t.kaynakBelgeId);
+  const r = k === null ? null : await sorgular.revizyon(db, k.id, t.kaynakRevizyonId);
+  const ret = turevReddi({
+    hedefId, hedefTurevSayisi: hedefId === null ? 0 : await sorgular.turevSayisi(db, hedefId),
+    kaynak: k === null ? null : { id: k.id, aktif: k.aktif, turevMi: k.kaynakBelgeId !== null }, revizyonDurumu: r?.durum ?? null,
+  });
+  if (ret !== null) throw dogrulama(ILETILER[ret], ret === 'turevRevizyonYok' || ret === 'turevRevizyonTaslak' ? 'kaynakRevizyonId' : 'kaynakBelgeId');
+}
+
 export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlusturGovdesi, denetimEki: DenetimEki): Promise<BelgeAyrintisi> {
   const red = merkezAcmaReddi(g.tur);
   if (red !== null) throw dogrulama(red, 'tur');
-  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null, kisiId: kullanici.id });
+  const turev = g.turev ?? null;
+  if (turev !== null) await turevDenetle(db, null, turev);
+  const id = await kisitKorumali(TUREV_ISLETILERI, () => sorgular.belgeEkle(db, {
+    ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null, kisiId: kullanici.id, turev,
+  }));
   await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
+  return belgeAyrintisi(db, id);
+}
+
+// 3468-2: var olan belge türev olarak bağlanır (bugüne kadar ayrı belge açılmış düzenlemeler) ya da kaynağı/kullanımı değişir.
+// İki satır kimlik sırasıyla kilitlenir: karşılıklı bağ denemesi kilitlenmeye düşmez.
+export async function turevBagla(db: Db, id: number, g: TurevBagGovdesi): Promise<BelgeAyrintisi> {
+  for (const k of [id, g.kaynakBelgeId].sort((a, b) => a - b)) await sorgular.belgeKilitle(db, k);
+  etkinOlmali(await kilitliBelge(db, id));
+  const turev = { kaynakBelgeId: g.kaynakBelgeId, kaynakRevizyonId: g.kaynakRevizyonId, kullanim: g.kullanim };
+  await turevDenetle(db, id, turev);
+  await surumuIlerlet(db, id, g.surum);
+  await kisitKorumali(TUREV_ISLETILERI, () => sorgular.turevYaz(db, id, turev));
+  return belgeAyrintisi(db, id);
+}
+
+// Bağ kalkınca belge orijinal olur; revizyonları ve dosyası değişmez.
+export async function turevBaginiKaldir(db: Db, id: number, surum: number): Promise<BelgeAyrintisi> {
+  const b = await kilitliBelge(db, id);
+  if (b.kaynakBelgeId === null) throw cakisma(ILETILER.turevDegil);
+  await surumuIlerlet(db, id, surum);
+  await sorgular.turevYaz(db, id, null);
   return belgeAyrintisi(db, id);
 }
 
@@ -303,7 +345,8 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
   ];
   const dosya = new Map(dosyalar.map((d) => [d.ozet, d]));
   const hedefAdi = await bagHedefAdlari(db, baglar);
-  const kod = await revizyonKodcusu(db, [id]);
+  const turevSatirlari = b.kaynakBelgeId === null ? await sorgular.turevler(db, [id]) : [];
+  const kod = await revizyonKodcusu(db, [id, ...turevSatirlari.map((t) => t.id), ...(b.kaynakBelgeId === null ? [] : [b.kaynakBelgeId])]);
   const adlar = await kisiAdlari(db, [
     b.olusturanId, ...revizyonlar.flatMap((r) => [r.yukleyenId, ...(r.yayinlayanId === null ? [] : [r.yayinlayanId])]), ...baglar.map((g) => g.ekleyenId),
   ]);
@@ -324,20 +367,44 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
     baglar: baglar.map((g) => ({
       hedefModul: g.hedefModul, hedefId: g.hedefId, hedefAdi: hedefAdi(g), ekleyenAd: adlar.get(g.ekleyenId) ?? null, eklendi: g.eklendi, kapak: g.kapak,
     })),
+    kaynak: await turevKaynagi(db, b, kod),
+    turevler: turevSatirlari.map((t) => ({
+      id: t.id, ad: t.ad, kullanim: t.kullanim, aktif: t.aktif, kaynakRevizyonId: t.kaynakRevizyonId,
+      yayindakiRevKodu: kod(t.id, t.yayindakiSira), yayindakiHarf: t.yayindakiSira === null ? null : revizyonHarfi(t.yayindakiSira),
+      kaynakEski: kaynakEskiMi(t.kaynakDurumu),
+    })),
+  };
+}
+
+async function turevKaynagi(db: Db, b: BelgeKaydi, kod: (belgeId: number, sira: number | null) => string | null): Promise<TurevKaynagi | null> {
+  if (b.kaynakBelgeId === null || b.kaynakRevizyonId === null || b.kullanim === null) return null;
+  const [k, r] = [await sorgular.belge(db, b.kaynakBelgeId), await sorgular.revizyon(db, b.kaynakBelgeId, b.kaynakRevizyonId)];
+  // Yabancı anahtar kaynağı korur; satır yoksa veri bozuktur.
+  if (k === null || r === null) throw new Error(`Türevin kaynağı yok: belge ${String(b.id)}`);
+  return {
+    belgeId: k.id, ad: k.ad, aktif: k.aktif, revizyonId: r.id, harf: revizyonHarfi(r.sira), revKodu: kod(k.id, r.sira), kullanim: b.kullanim,
+    eski: kaynakEskiMi(r.durum),
   };
 }
 
 export async function belgeListesi(db: Db, sorgu: BelgeListesiSuzgeci): Promise<SayfaliListe<BelgeSatiri>> {
-  const suzgec = { ara: sorgu.ara ?? null, tur: sorgu.tur ?? null, aktif: sorgu.arsiv === 'hayir', makine: sorgu.makine === undefined ? null : sorgu.makine === 'evet' };
+  const suzgec = {
+    ara: sorgu.ara ?? null, tur: sorgu.tur ?? null, aktif: sorgu.arsiv === 'hayir', makine: sorgu.makine === undefined ? null : sorgu.makine === 'evet',
+    kullanim: sorgu.kullanim ?? null,
+  };
   return sayfaliListe(sorgu, {
     say: () => sorgular.belgeSay(db, suzgec),
     satirlar: async (dilim) => {
       const satirlar = await sorgular.belgeSatirlari(db, suzgec, sorgu, dilim);
-      const kod = await revizyonKodcusu(db, satirlar.map((s) => s.id));
+      const kod = await revizyonKodcusu(db, satirlar.flatMap((s) => (s.kaynakBelgeId === null ? [s.id] : [s.id, s.kaynakBelgeId])));
       return satirlar.map((s) => ({
         id: s.id, ad: s.ad, tur: s.tur, aktif: s.aktif, yayindakiHarf: s.yayindakiSira === null ? null : revizyonHarfi(s.yayindakiSira),
         sonHarf: revizyonHarfi(s.sonSira), yayindakiRevKodu: kod(s.id, s.yayindakiSira), sonRevKodu: kod(s.id, s.sonSira),
         dosyaTuru: s.dosyaTuru, bagSayisi: s.bagSayisi, guncellendi: s.guncellendi, surum: s.surum,
+        kullanim: s.kullanim, turevSayisi: s.turevSayisi,
+        kaynak: s.kaynakBelgeId === null || s.kaynakDurumu === null ? null : {
+          belgeId: s.kaynakBelgeId, ad: s.kaynakAd ?? '', revKodu: kod(s.kaynakBelgeId, s.kaynakSira), eski: kaynakEskiMi(s.kaynakDurumu),
+        },
       }));
     },
   });
@@ -742,4 +809,46 @@ export async function cizimAra(db: Db, istek: KayitAramaIstegi): Promise<KayitAr
       yol: `/cizimler/belge/${b.id}` as const,
     };
   });
+}
+
+/* ---------------- 3462 için: malzemenin çizimleri ve türevleri (3468-2) ---------------- */
+
+// Talep ekranı malzemeye bağlı yayındaki çizimleri ve onların türevlerini tek okumada alır. Taslak (yayında revizyonu olmayan)
+// belge ve türev, arşivdeki türev listelenmez. guncelMi: orijinalde her zaman true (yayındaki revizyon); türevde kaynağı yayında mı.
+// Yetki denetlemez; okuma yetkisi çağıran modülündür.
+export interface MalzemeCizimi {
+  belgeId: number;
+  ad: string;
+  tur: BelgeTuru;
+  revizyonId: number;
+  ozet: string;
+  revKodu: string | null;
+  guncelMi: boolean;
+  kullanim: Kullanim | null;
+  kaynakBelgeId: number | null;
+}
+
+export async function malzemelerinCizimleri(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeCizimi[]>> {
+  const sonuc = new Map<number, MalzemeCizimi[]>(nolar.map((no) => [no, []]));
+  if (nolar.length === 0) return sonuc;
+  const bagli = (await sorgular.bagliBelgelerToplu(db, 'malzemeler', nolar)).filter((b) => b.yayindakiRevizyonId !== null);
+  const turevSatirlari = (await sorgular.turevler(db, [...new Set(bagli.map((b) => b.id))])).filter((t) => t.aktif && t.yayindakiRevizyonId !== null);
+  const kod = await revizyonKodcusu(db, [...bagli.map((b) => b.id), ...turevSatirlari.map((t) => t.id)]);
+  for (const b of bagli) {
+    const liste = sonuc.get(b.hedefId);
+    if (liste === undefined || b.yayindakiRevizyonId === null || b.ozet === null) continue;
+    if (liste.some((c) => c.belgeId === b.id)) continue;
+    liste.push({
+      belgeId: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, ozet: b.ozet, revKodu: kod(b.id, b.yayindakiSira), guncelMi: true,
+      kullanim: null, kaynakBelgeId: null,
+    });
+    for (const t of turevSatirlari.filter((x) => x.kaynakBelgeId === b.id)) {
+      if (t.yayindakiRevizyonId === null || t.ozet === null || liste.some((c) => c.belgeId === t.id)) continue;
+      liste.push({
+        belgeId: t.id, ad: t.ad, tur: b.tur, revizyonId: t.yayindakiRevizyonId, ozet: t.ozet, revKodu: kod(t.id, t.yayindakiSira),
+        guncelMi: !kaynakEskiMi(t.kaynakDurumu), kullanim: t.kullanim, kaynakBelgeId: b.id,
+      });
+    }
+  }
+  return sonuc;
 }

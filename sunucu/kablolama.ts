@@ -4,7 +4,7 @@ import { ayarDegistiDinle, kurumLogosuOku, sistemAyariOku } from './moduller/aya
 import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
 import * as akis from './moduller/akis/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
-import { kaydaBagliBelgeler } from './moduller/belge-merkezi/disari.ts';
+import { ayniDosyaKaynagiKaydet as cizimAyniDosyaKaynagiKaydet, cizimdekiYerler, kaydaBagliBelgeler } from './moduller/belge-merkezi/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
 import { gkkOzetiCozucusuKaydet } from './moduller/etiket-merkezi/disari.ts';
@@ -660,6 +660,9 @@ export function sunucununBaglari(): Bag[] {
     bag('proje değişti -> ortak dosyalar proje klasörü', projeler.projeDegistiDinle, (db: Db, o: { projeId: number; kisiId: number }) => projeEsitle(db, o.kisiId, o.projeId)),
     // 3315 madde 7: proje kartı kaydedilince Logo'nun reddettiği proje yeniden sıraya girer.
     bag('proje değişti -> Logo proje kartı', projeler.projeDegistiDinle, (db: Db, o: { projeId: number }) => logo.logoProjesiDegisti(db, o.projeId, new Date())),
+    // 3468-1: aynı dosya uyarısı iki yönde; her kaynak yalnız kişinin gördüğü yeri verir.
+    bag('ortak dosyalar kopyaları -> çizim merkezi aynı dosya uyarısı', cizimAyniDosyaKaynagiKaydet, ortakDosyalar.klasordekiYerler),
+    bag('çizim kopyaları -> ortak dosyalar aynı dosya uyarısı', ortakDosyalar.ayniDosyaKaynagiKaydet, cizimdekiYerler),
     bag('mevcut kayıtlar -> ortak dosyalar toplu komut', ortakDosyalar.kayitKaynagiKaydet, mevcutKayitlar),
     bag('firma ve proje -> ortak dosyalar müşteri/proje seçimi', (f: () => ortakDosyalar.MusteriProjeKaynagi) => { ortakDosyalar.musteriProjeKaynagiKaydet(f()); }, ortakDosyalarMusteriProjeKaynagi),
     bag('ayar -> ortak dosyalar kalıcı silme dört göz', ortakDosyalar.silmeDortGozOkuyucuKaydet, (db: Db) => sistemAyariOku(db, 'ortak-dosyalar.silme-dort-goz')),

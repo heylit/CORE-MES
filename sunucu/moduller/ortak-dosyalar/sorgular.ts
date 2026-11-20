@@ -383,3 +383,16 @@ export async function dosyaVeSurumleriniSil(db: Db, dosyaId: number): Promise<vo
   await db.sorgu('DELETE FROM ortak_dosyalar_surum WHERE dosya_id = $1', [dosyaId]);
   await db.sorgu('DELETE FROM ortak_dosyalar_dosya WHERE id = $1', [dosyaId]);
 }
+
+// 3468-1: özeti verilen içeriğin etkin dosyalardaki sürümleri (aynı dosya uyarısı). Arşivdeki dosya sayılmaz; görünürlük
+// süzgeci servistedir (klasör yetkisi). `son`: sürüm dosyanın son sürümü mü.
+export function ozetliSurumler(db: Db, ozet: string): Promise<{ dosyaId: number; klasorId: number; ad: string; sira: number; son: boolean }[]> {
+  return db.sorgu(
+    `SELECT d.id AS "dosyaId", d.klasor_id AS "klasorId", d.ad, s.sira,
+            s.sira = (SELECT max(s2.sira) FROM ortak_dosyalar_surum s2 WHERE s2.dosya_id = d.id) AS son
+       FROM ortak_dosyalar_surum s JOIN ortak_dosyalar_dosya d ON d.id = s.dosya_id
+      WHERE s.ozet = $1 AND NOT d.arsiv
+      ORDER BY d.id, s.sira LIMIT 50`,
+    [ozet],
+  );
+}

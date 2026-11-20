@@ -1,4 +1,4 @@
-import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import type { AyniDosyaYeri, DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 
@@ -29,6 +29,14 @@ export const ILETILER = {
   malzemeYok: 'Malzeme kartı bulunamadı.',
   malzemeyeBagliDegil: 'Belge bu malzeme kartına bağlı değil.',
   kapakTaslak: 'Yayına girmiş revizyonu olmayan belge kapak olamaz.',
+  turevKaynakYok: 'Kaynak belge bulunamadı.',
+  turevKendisi: 'Belge kendi türevi olamaz.',
+  turevinTurevi: 'Türevin türevi olmaz; kaynağın orijinal belgesini seçin.',
+  turevKaynakArsivde: 'Arşivdeki belgeden türev çıkmaz.',
+  turevRevizyonYok: 'Kaynak revizyon bu belgede yok.',
+  turevRevizyonTaslak: 'Türev yalnız yayına girmiş revizyondan çıkar.',
+  turevliBelge: 'Türevi olan belge türev olamaz.',
+  turevDegil: 'Bu belge bir türev değil.',
 } as const;
 
 // CZ-03: belge türü, kabul ettiği dosya türlerini belirler (makine ve diğer her türü alır).
@@ -222,3 +230,40 @@ export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari
   }
   return null;
 }
+
+// 3468-1: aynı dosya uyarısında çizimin satırı. Revizyon antetteki koduyla, yoksa harfiyle yazılır; arşivdeki belge "Arşivde".
+const REVIZYON_DURUM_METNI: Record<RevizyonDurumu, string> = { taslak: 'Taslak', yayinda: 'Yayında', eski: 'Eski' };
+export function ayniDosyaCizimYeri(r: {
+  belgeId: number; ad: string; resimNo: string | null; aktif: boolean; sira: number; antetRev: string | null; durum: RevizyonDurumu;
+}): AyniDosyaYeri {
+  const rev = r.antetRev ?? revizyonHarfi(r.sira);
+  return {
+    kaynak: 'cizimler',
+    baslik: r.ad,
+    ayrinti: ['Çizim merkezi', `Rev ${rev}`, r.resimNo].filter((m): m is string => m !== null && m !== '').join(' · '),
+    yol: `/cizimler/belge/${String(r.belgeId)}`,
+    durum: r.aktif ? REVIZYON_DURUM_METNI[r.durum] : 'Arşivde',
+  };
+}
+
+// 3468-2: türev bağı. Kaynak orijinal (türev değil), etkin ve revizyonu yayına girmiş olmalı; türevi olan belge türev olamaz
+// (tek seviye; göçteki tetikleyici de aynı kuralı korur). Aynı belge yeniden bağlanabilir (kaynak revizyonu ya da kullanımı değişir).
+export function turevReddi(t: {
+  hedefId: number | null;
+  hedefTurevSayisi: number;
+  kaynak: { id: number; aktif: boolean; turevMi: boolean } | null;
+  revizyonDurumu: RevizyonDurumu | null;
+}): keyof typeof ILETILER | null {
+  if (t.kaynak === null) return 'turevKaynakYok';
+  if (t.hedefId === t.kaynak.id) return 'turevKendisi';
+  if (t.kaynak.turevMi) return 'turevinTurevi';
+  if (!t.kaynak.aktif) return 'turevKaynakArsivde';
+  if (t.revizyonDurumu === null) return 'turevRevizyonYok';
+  if (t.revizyonDurumu === 'taslak') return 'turevRevizyonTaslak';
+  if (t.hedefTurevSayisi > 0) return 'turevliBelge';
+  return null;
+}
+
+// "Kaynağı eski": türevin çıktığı revizyon artık yayında değil. Türev kendiliğinden eskiye düşmez; eski revizyonla üretilen
+// parçanın izi kalır, kullanıcı yenisini çıkarır.
+export const kaynakEskiMi = (kaynakDurumu: RevizyonDurumu): boolean => kaynakDurumu !== 'yayinda';

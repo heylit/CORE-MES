@@ -2,12 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
+import type { AyniDosyaYeri } from '#paylasilan/sozlesme/dosya.ts';
+import type * as CizimDisari from '../belge-merkezi/disari.ts';
 import type { DosyalarCevabi, GecmisCevabi, Klasor, KlasorlerCevabi, OrtakDosya, YetkiCevabi } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '../../ortak/veri/api.ts';
 import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
-vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)) }));
+// Aynı dosya uyarısı (3468-1): yer listesi testte verilir, pencere gerçek bileşendir.
+const { ayniDosyaYerleri } = vi.hoisted(() => ({ ayniDosyaYerleri: vi.fn(async (): Promise<AyniDosyaYeri[]> => []) }));
+vi.mock('../belge-merkezi/disari.ts', async () => {
+  const { AyniDosyaPenceresi } = await vi.importActual<typeof CizimDisari>('../belge-merkezi/disari.ts');
+  return {
+    DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)), sha256: vi.fn(async () => 'a'.repeat(64)), ayniDosyaYerleri, AyniDosyaPenceresi,
+  };
+});
 
 const klasor = (k: Partial<Klasor> & { id: number; ad: string }): Klasor => ({ ustId: null, ozelYetki: false, duzey: 'gorur', dosyaSayisi: 0, surum: 1, kaynak: null, ...k });
 const ORTAK = klasor({ id: 1, ad: 'Ortak', ozelYetki: true });
@@ -32,7 +41,7 @@ function sunucuKur(yonetici: boolean, duzey: Klasor['duzey']) {
     if (yol === '/ortak-dosyalar/klasorler' && yontem === 'GET') return json(200, { klasorler: kl, yonetici, arsivSayisi: 0 } satisfies KlasorlerCevabi);
     if (yol === '/ortak-dosyalar/klasorler' && yontem === 'POST') return json(200, klasor({ id: 3, ustId: 1, ad: 'Yeni', duzey }));
     if (yol === '/ortak-dosyalar/klasorler/1/dosyalar') {
-      return json(200, { klasor: kl[0], altKlasorler: [kl[1]], dosyalar: [] } as unknown as DosyalarCevabi);
+      return json(200, { klasor: kl[0], altKlasorler: [kl[1]], dosyalar: [], adOnerisi: null, kayitSecimi: null } as unknown as DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/2/dosyalar') return json(200, { klasor: kl[1], altKlasorler: [], dosyalar: [DOSYA] } as unknown as DosyalarCevabi);
     if (yol === '/ortak-dosyalar/klasorler/1/yetki') {
@@ -62,7 +71,7 @@ function ciz(gorunum: Gorunum = 'klasorler') {
   );
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); ayniDosyaYerleri.mockReset(); ayniDosyaYerleri.mockResolvedValue([]); });
 
 describe('Ortak Dosyalar ekranı', () => {
   it('ağaç sunucunun verdiği klasörleri çizer; Yetkiler sekmesi yalnız yöneticide', async () => {
@@ -119,5 +128,42 @@ describe('Ortak Dosyalar ekranı', () => {
     ciz();
     fireEvent.click(await screen.findByRole('tab', { name: /Geçmiş/ }));
     expect(await screen.findByText(/Kişi A: Klasör açtı/)).toBeTruthy();
+  });
+
+  describe('aynı dosya uyarısı (3468-1)', () => {
+    const YER: AyniDosyaYeri = { kaynak: 'cizimler', baslik: 'ORN-Flanş 120', ayrinti: 'Çizim merkezi · Rev A', yol: '/cizimler/belge/5', durum: 'Yayında' };
+    const f = (ad: string) => Object.assign(new File(['x'], ad), { arrayBuffer: async () => new ArrayBuffer(1) });
+    async function sec(dosyalar: File[]) {
+      fireEvent.change(document.querySelector('input[type="file"][multiple]') as HTMLInputElement, { target: { files: dosyalar } });
+      fireEvent.click(await screen.findByRole('button', { name: /^Yükle$/ }));
+    }
+
+    it('aynı içerik varsa o dosyada durur, yerleri Aç düğmesiyle gösterir; Vazgeç o dosyayı atlar, sıradaki yüklenir', async () => {
+      const cagrilar = sunucuKur(false, 'ekler');
+      ayniDosyaYerleri.mockResolvedValueOnce([YER]).mockResolvedValueOnce([]);
+      ciz();
+      await screen.findByRole('button', { name: /Dosya yükle/ });
+      await sec([f('ORN-a.pdf'), f('ORN-b.pdf')]);
+      const pencere = await screen.findByRole('dialog', { name: 'Bu dosya zaten yüklü' });
+      expect(within(pencere).getByText('ORN-Flanş 120')).toBeTruthy();
+      expect(within(pencere).getByRole('button', { name: 'ORN-Flanş 120 aç' })).toBeTruthy();
+      expect(within(pencere).getByText(/Yalnız görmeye yetkiniz olan yerler/)).toBeTruthy();
+      expect(cagrilar.filter((c) => c.yol.endsWith('/yukle'))).toHaveLength(0);
+      fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+      await waitFor(() => expect(cagrilar.filter((c) => c.yol.endsWith('/yukle'))).toHaveLength(1));
+      expect(cagrilar.find((c) => c.yol.endsWith('/yukle'))?.govde).toEqual({ ad: 'ORN-b.pdf', ozet: 'a'.repeat(64) });
+      expect(ayniDosyaYerleri).toHaveBeenCalledWith('/ortak-dosyalar/ayni-dosya', 'a'.repeat(64));
+    });
+
+    it('Yine de yükle aynı içeriği yükler: uyarı engel değildir', async () => {
+      const cagrilar = sunucuKur(false, 'ekler');
+      ayniDosyaYerleri.mockResolvedValueOnce([YER]);
+      ciz();
+      await screen.findByRole('button', { name: /Dosya yükle/ });
+      await sec([f('ORN-a.pdf')]);
+      fireEvent.click(await screen.findByRole('button', { name: 'Yine de yükle' }));
+      await waitFor(() => expect(cagrilar.filter((c) => c.yol.endsWith('/yukle'))).toHaveLength(1));
+      expect(screen.queryByRole('dialog', { name: 'Bu dosya zaten yüklü' })).toBeNull();
+    });
   });
 });
