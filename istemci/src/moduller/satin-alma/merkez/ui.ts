@@ -1327,7 +1327,19 @@ const ACTIONS: Record<string, Action> = {
   },
 
   /* ayarlar */
-  "add-ap": () => { const s = readSettingsForm(); s.approvalLimits.push({ max: null, role: "", rolId: null }); SET_DRAFT = s; renderSettingsDraft(); },
+  "add-ap": () => { const s = readSettingsForm(); s.approvalLimits.push({ max: null, role: "", rolId: null, kisiler: [] }); SET_DRAFT = s; renderSettingsDraft(); },
+  // 3442-7b a: basamağa kişi ekleme ve çıkarma taslakta kalır; "Ayarları kaydet" ile gider.
+  "ap-kisi-ekle": el => {
+    const sec = el.closest("tr")?.querySelector<HTMLSelectElement>("[data-apk=kisiSec]");
+    const id = Number(sec?.value); if (!sec || !id) { toast("Önce kişi seçin"); return; }
+    const ad = sec.selectedOptions[0]?.textContent ?? "";
+    const s = readSettingsForm(); const l = s.approvalLimits[+el.dataset.i!]; if (!l) return;
+    l.kisiler = [...(l.kisiler ?? []).filter(k => k.id !== id), { id, ad }]; SET_DRAFT = s; renderSettingsDraft();
+  },
+  "ap-kisi-cikar": el => {
+    const s = readSettingsForm(); const l = s.approvalLimits[+el.dataset.i!]; if (!l) return;
+    l.kisiler = (l.kisiler ?? []).filter(k => k.id !== Number(el.dataset.kisi)); SET_DRAFT = s; renderSettingsDraft();
+  },
   "rm-ap": el => { const s = readSettingsForm(); s.approvalLimits.splice(+el.dataset.i!, 1); SET_DRAFT = s; renderSettingsDraft(); },
   "add-dep": () => { const s = readSettingsForm(); s.departments.push({ name: "", budget: 0 }); SET_DRAFT = s; renderSettingsDraft(); },
   "rm-dep": el => { const s = readSettingsForm(); s.departments.splice(+el.dataset.i!, 1); SET_DRAFT = s; renderSettingsDraft(); },
@@ -1414,7 +1426,11 @@ export function readSettingsForm(): Settings {
   // Yönetici olmayan basamakları yazamaz: geldiği gibi kalır (2397-5 a).
   if (basamakYazabilir()) s.approvalLimits = $$("#ap-rows tr").map(tr => {
     const rol = tr.querySelector<HTMLSelectElement>("[data-apk=rolId]")?.value ?? "";
-    return { max: parseNum($("[data-apk=max]", tr).value), role: $("[data-apk=role]", tr).value.trim(), rolId: rol === "" ? null : Number(rol) };
+    const kisiler = $$("[data-apk-kisi]", tr).map(c => ({ id: Number(c.dataset.apkKisi), ad: c.dataset.ad ?? "" }));
+    const once = s.approvalLimits[Number(tr.dataset.ap)];
+    // Kişileri bilinmeyen (sunucudan gelmemiş) basamak kişi göndermez; sunucu kayıtlı kişileri korur.
+    const bilinmiyor = once !== undefined && once.kisiler === undefined && kisiler.length === 0;
+    return { max: parseNum($("[data-apk=max]", tr).value), role: $("[data-apk=role]", tr).value.trim(), rolId: rol === "" ? null : Number(rol), ...(bilinmiyor ? {} : { kisiler }) };
   });
   s.departments = $$("#dep-rows tr").map(tr => ({ name: $("[data-dk=name]", tr).value.trim(), budget: parseNum($("[data-dk=budget]", tr).value) || 0 }));
   const cats = $("#set-cats"); if (cats) s.categories = cats.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);

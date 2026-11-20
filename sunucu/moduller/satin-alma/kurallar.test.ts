@@ -10,7 +10,7 @@ import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kural
 import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikBol, sonAlisKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, satisBagReddi, uygulananKartReddi } from './kurallar.ts';
-import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
+import { onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
 import { basamakEsigiReddi, fiyatsizGorunum } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
@@ -607,25 +607,25 @@ test('2429-ekran b: talep eden tedarikçi bilgisini (teklif istekleri, fason fir
 });
 
 test('2397 b: onay basamağı tutarın düştüğü basamağın ya da üstünün rolünü ister; ret, kapalı ayar, rolsüz basamak ve yönetici serbest', () => {
-  const L = [{ azamiTutar: '100', seviye: 'Uzman', rolId: 1 }, { azamiTutar: '1000', seviye: 'Müdür', rolId: 2 }, { azamiTutar: null, seviye: 'GM', rolId: 3 }];
+  const L = [{ azamiTutar: '100', seviye: 'Uzman', rolId: 1, kisiIdleri: [] }, { azamiTutar: '1000', seviye: 'Müdür', rolId: 2, kisiIdleri: [] }, { azamiTutar: null, seviye: 'GM', rolId: 3, kisiIdleri: [] }];
   const r = (...idler: number[]) => idler.map((id) => ({ id, yonetici: false }));
-  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(1)), null);
-  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(3)), null, 'üst basamak alt basamağı onaylar');
-  assert.match(onayKademesiReddi(true, 'onay', 500, L, r(1)) ?? '', /Müdür/);
-  assert.equal(onayKademesiReddi(true, 'onay', 1000, L, r(2)), null, 'sınır dahil');
-  assert.match(onayKademesiReddi(true, 'onay', 1000.01, L, r(2)) ?? '', /GM/);
-  assert.match(onayKademesiReddi(true, 'onay', null, L, r(2)) ?? '', /GM/, 'tutar bilinmiyorsa en üst basamak');
-  assert.equal(onayKademesiReddi(true, 'ret', 5000, L, r(1)), null);
-  assert.equal(onayKademesiReddi(false, 'onay', 5000, L, r(1)), null);
-  assert.equal(onayKademesiReddi(true, 'onay', 5000, L, [{ id: 9, yonetici: true }]), null);
-  assert.equal(onayKademesiReddi(true, 'onay', 500, [{ ...L[0]! }, { ...L[1]!, rolId: null }, L[2]!], r(1)), null, 'rolsüz basamakta yetki yeter');
-  assert.equal(onayKademesiReddi(true, 'onay', 5000, [], r(1)), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(1), 77), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(3), 77), null, 'üst basamak alt basamağı onaylar');
+  assert.match(onayKademesiReddi(true, 'onay', 500, L, r(1), 77) ?? '', /Müdür/);
+  assert.equal(onayKademesiReddi(true, 'onay', 1000, L, r(2), 77), null, 'sınır dahil');
+  assert.match(onayKademesiReddi(true, 'onay', 1000.01, L, r(2), 77) ?? '', /GM/);
+  assert.match(onayKademesiReddi(true, 'onay', null, L, r(2), 77) ?? '', /GM/, 'tutar bilinmiyorsa en üst basamak');
+  assert.equal(onayKademesiReddi(true, 'ret', 5000, L, r(1), 77), null);
+  assert.equal(onayKademesiReddi(false, 'onay', 5000, L, r(1), 77), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 5000, L, [{ id: 9, yonetici: true }], 77), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 500, [{ ...L[0]! }, { ...L[1]!, rolId: null }, L[2]!], r(1), 77), null, 'rolsüz basamakta yetki yeter');
+  assert.equal(onayKademesiReddi(true, 'onay', 5000, [], r(1), 77), null);
   // Son basamağın da sınırı varsa aşan tutar son basamağa düşer.
-  assert.match(onayKademesiReddi(true, 'onay', 5000, [L[0]!, L[1]!], r(1)) ?? '', /Müdür/);
+  assert.match(onayKademesiReddi(true, 'onay', 5000, [L[0]!, L[1]!], r(1), 77) ?? '', /Müdür/);
 });
 
 test('2397 b v2: rolü gönderilmeyen basamak rolünü aynı addan, yoksa aynı sıradan alır; değişiklik sayıyla karşılaştırılır; rolsüz basamak rollünün üstünde olamaz', () => {
-  const eski = [{ azamiTutar: '1000.00', seviye: 'Uzman', rolId: 3 }, { azamiTutar: null, seviye: 'Müdür', rolId: 4 }];
+  const eski = [{ azamiTutar: '1000.00', seviye: 'Uzman', rolId: 3, kisiIdleri: [] }, { azamiTutar: null, seviye: 'Müdür', rolId: 4, kisiIdleri: [] }];
   assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: null, seviye: 'Müdür' }, { azamiTutar: '1000', seviye: 'Uzman' }]).map((l) => l.rolId), [4, 3]);
   assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: '1000', seviye: 'Yeni ad' }, { azamiTutar: null, seviye: 'Müdür', rolId: null }, { azamiTutar: null, seviye: 'Üçüncü' }])
     .map((l) => l.rolId), [3, null, null]);
@@ -633,10 +633,39 @@ test('2397 b v2: rolü gönderilmeyen basamak rolünü aynı addan, yoksa aynı 
   for (const yeni of [[eski[0]!], [{ ...eski[0]!, azamiTutar: '999' }, eski[1]!], [{ ...eski[0]!, rolId: null }, eski[1]!], [{ ...eski[0]!, seviye: 'X' }, eski[1]!], [eski[0]!, { ...eski[1]!, azamiTutar: '5' }]]) {
     assert.equal(onayLimitleriDegistiMi(eski, yeni), true, JSON.stringify(yeni));
   }
-  assert.equal(onayLimitiReddi([{ azamiTutar: null, seviye: 'Müdür', rolId: null }, { azamiTutar: '1000', seviye: 'Uzman', rolId: 3 }]), 'Rolü boş basamak, rolü olan basamağın üstünde olamaz: üst basamağa da rol verin.');
-  for (const l of [eski, [], [{ azamiTutar: '10', seviye: 'A', rolId: null }, { azamiTutar: null, seviye: 'B', rolId: 4 }], [{ azamiTutar: null, seviye: 'A', rolId: null }]]) {
+  assert.equal(onayLimitiReddi([{ azamiTutar: null, seviye: 'Müdür', rolId: null, kisiIdleri: [] }, { azamiTutar: '1000', seviye: 'Uzman', rolId: 3, kisiIdleri: [] }]), ILETILER.rolsuzUstBasamak);
+  for (const l of [eski, [], [{ azamiTutar: '10', seviye: 'A', rolId: null, kisiIdleri: [] }, { azamiTutar: null, seviye: 'B', rolId: 4, kisiIdleri: [] }], [{ azamiTutar: null, seviye: 'A', rolId: null, kisiIdleri: [] }]]) {
     assert.equal(onayLimitiReddi(l), null);
   }
+});
+
+test('3442-7b a: basamağa yazılı kişi rolü olmasa da o basamağı ve alttakileri onaylar; kişili basamak denetimlidir', () => {
+  const L = [{ azamiTutar: '100', seviye: 'Uzman', rolId: 1, kisiIdleri: [] }, { azamiTutar: '1000', seviye: 'Müdür', rolId: null, kisiIdleri: [21] },
+    { azamiTutar: null, seviye: 'GM', rolId: 3, kisiIdleri: [31] }];
+  const rolsuz: { id: number; yonetici: boolean }[] = [];
+  assert.equal(onayKademesiReddi(true, 'onay', 500, L, rolsuz, 21), null, 'basamağın kişisi');
+  assert.equal(onayKademesiReddi(true, 'onay', 50, L, rolsuz, 21), null, 'alt basamak');
+  assert.match(onayKademesiReddi(true, 'onay', 5000, L, rolsuz, 21) ?? '', /GM/, 'üst basamak değil');
+  assert.equal(onayKademesiReddi(true, 'onay', 5000, L, rolsuz, 31), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 500, L, rolsuz, 31), null, 'üst basamağın kişisi alttakini onaylar');
+  assert.match(onayKademesiReddi(true, 'onay', 500, L, rolsuz, 99) ?? '', /Müdür/, 'rolsüz ama kişili basamak denetimli');
+  assert.match(onayKademesiReddi(true, 'onay', 500, L, [{ id: 1, yonetici: false }], 99) ?? '', /Müdür/, 'alt basamağın rolü yetmez');
+  assert.equal(onayKademesiReddi(true, 'onay', 500, L, [{ id: 3, yonetici: false }], 99), null, 'üst basamağın rolü yeter');
+  // Kişili basamak denetimli sayılır: üstüne denetimsiz basamak konamaz; kişili basamak rolsüz de olsa denetimsizin üstünde durabilir.
+  assert.equal(onayLimitiReddi([{ azamiTutar: '10', seviye: 'A', rolId: null, kisiIdleri: [5] }, { azamiTutar: null, seviye: 'B', rolId: null, kisiIdleri: [] }]), ILETILER.rolsuzUstBasamak);
+  assert.equal(onayLimitiReddi([{ azamiTutar: '10', seviye: 'A', rolId: null, kisiIdleri: [] }, { azamiTutar: null, seviye: 'B', rolId: null, kisiIdleri: [5] }]), null);
+});
+
+test('3442-7b Risk K3: kişileri gönderilmeyen basamak kişilerini aynı addan, yoksa aynı sıradan alır; kişi değişimi sırasız karşılaştırılır; izler eklenen ve çıkanı yazar', () => {
+  const eski = [{ azamiTutar: '1000', seviye: 'Uzman', rolId: null, kisiIdleri: [7, 5] }, { azamiTutar: null, seviye: 'Müdür', rolId: 4, kisiIdleri: [9] }];
+  assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: null, seviye: 'Müdür' }, { azamiTutar: '1000', seviye: 'Uzman' }]).map((l) => l.kisiIdleri), [[9], [5, 7]], 'ad değişmeden yer değiştirdi');
+  assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: '1000', seviye: 'Yeni ad' }, { azamiTutar: null, seviye: 'Müdür', kisiIdleri: [] }]).map((l) => l.kisiIdleri), [[5, 7], []]);
+  assert.equal(onayLimitleriDegistiMi(eski, [{ ...eski[0]!, kisiIdleri: [5, 7] }, eski[1]!]), false, 'sıra farkı değişiklik değil');
+  assert.equal(onayLimitleriDegistiMi(eski, [{ ...eski[0]!, kisiIdleri: [5] }, eski[1]!]), true);
+  assert.equal(onayLimitleriDegistiMi(eski, [eski[0]!, { ...eski[1]!, kisiIdleri: [9, 11] }]), true);
+  assert.deepEqual(onayKisisiIzleri(eski, [{ ...eski[0]!, kisiIdleri: [5, 8] }, eski[1]!]),
+    [{ islem: 'eklendi', basamak: 'Uzman', kisiId: 8 }, { islem: 'cikarildi', basamak: 'Uzman', kisiId: 7 }]);
+  assert.deepEqual(onayKisisiIzleri(eski, eski), []);
 });
 
 test('2433-4 a: tarihsiz yeni sipariş ve tarihi boşaltılan sipariş reddedilir; tarihsiz eski sipariş kalır', () => {

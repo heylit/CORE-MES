@@ -180,10 +180,10 @@ export function katalogSunucuya(m: Material, surum: number | null): KatalogKayde
 }
 
 export const onayLimitleriEkrana = (l: Ayarlar['onayLimitleri']): ApprovalLimit[] =>
-  l.map((x) => ({ max: sayi(x.azamiTutar), role: x.seviye, rolId: x.rolId ?? null, rolAdi: x.rolAdi ?? null }));
+  l.map((x) => ({ max: sayi(x.azamiTutar), role: x.seviye, rolId: x.rolId ?? null, rolAdi: x.rolAdi ?? null, ...(x.kisiler ? { kisiler: x.kisiler } : {}) }));
 // 2397-5 a: basamaklar rolüyle geldiği gibi gider (rolAdi gitmez); yönetici olmayan değiştirmediği sürece sunucu 403 vermez.
 export const onayLimitleriGovdesi = (l: readonly ApprovalLimit[]) =>
-  l.map((x) => ({ azamiTutar: ondN(x.max, 2), seviye: x.role, ...(x.rolId === undefined ? {} : { rolId: x.rolId }) }));
+  l.map((x) => ({ azamiTutar: ondN(x.max, 2), seviye: x.role, ...(x.rolId === undefined ? {} : { rolId: x.rolId }), ...(x.kisiler === undefined ? {} : { kisiIdleri: x.kisiler.map((k) => k.id) }) }));
 
 function ayarEkrana(a: Ayarlar): Settings {
   const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: sayi(k.aylikFaizYuzdesi) }])) as Settings['currencies'];
