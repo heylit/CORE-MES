@@ -23,6 +23,9 @@
   border: var(--cizgi-ince) solid var(--edge); border-left: var(--cizgi-kalin) solid var(--hazard);
   border-radius: var(--yari-2); background: var(--panel);
 }
+.sa-ekran-simdi .sa-ekran-govde { flex: 1; min-width: 0; }
+.sa-ekran-simdi-eylem { display: flex; align-items: center; gap: var(--b-2); flex-shrink: 0; }
+@media (max-width: 560px) { .sa-ekran-simdi { flex-wrap: wrap; } .sa-ekran-simdi-eylem { width: 100%; justify-content: flex-end; } }
 .sa-ekran-simdi-warn { border-left-color: var(--hold); }
 .sa-ekran-simdi-bad { border-left-color: var(--stop); }
 .sa-ekran-simdi-done { border-left-color: var(--run); }

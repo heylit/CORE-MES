@@ -82,6 +82,10 @@ describe('talebin yedi adımı (kart #939, 3467 Teklif al)', () => {
     expect(kutu.textContent).toContain('Şimdi yapılacak');
     expect(kutu.textContent).toContain('Bekleyen: Satın alma.');
     expect(kok.querySelectorAll('#sa-ekran .tc-dugme-birincil')).toHaveLength(1);
+    // 3466-b b: ana düğme ve diğer işlemler bantta, başlıkta değil.
+    expect(kutu.querySelector('.tc-dugme-birincil')).not.toBeNull();
+    expect(kutu.querySelector('[aria-label$="diğer işlemler"]')).not.toBeNull();
+    expect(kok.querySelector('.tc-sbaslik-eylem')).toBeNull();
 
     // 3467: Teklif al adımı tedarikçi seçimi, e-posta taslağı ve kaydı adımın içinde taşır (pencere açılmaz).
     const kutucuk = () => kok.querySelector<HTMLInputElement>(`#main [data-rfq="${String(TED.firmaId)}"]`)!;

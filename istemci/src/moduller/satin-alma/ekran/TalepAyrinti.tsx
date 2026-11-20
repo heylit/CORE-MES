@@ -1,4 +1,4 @@
-import { DurumKutusu, Dugme, Rozet, SayfaBasligi, Sekmeler, Simge, type MenuOgesi } from '../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Menu, Rozet, SayfaBasligi, Sekmeler, Simge, type MenuOgesi } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { budgetUse, durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
@@ -56,7 +56,7 @@ function Bilgiler({ r }: { r: PurchaseRequest }) {
   kutular.push({ ad: 'Malzeme', simge: 'box', deger: kalemOzeti(r) });
   if (r.requester || r.department) kutular.push({ ad: 'Talep eden', simge: 'user', deger: r.requester || r.department, ...(r.requester && r.department ? { alt: r.department } : {}) });
   if (r.uretimEmriNo) kutular.push({ ad: 'Üretim emri', simge: 'route', deger: r.uretimEmriNo });
-  kutular.push({ ad: 'Teklif ve tutar', simge: 'lira', deger: `${String(nq)} teklif${nr ? ` / ${String(nr)} istendi` : ''}`, ...(tutar ? { alt: `${TUTAR_ETIKETI[tutar.tur]} ${money(tutar.tl, 'TRY', 0)}` } : {}) });
+  kutular.push({ ad: 'Teklif ve tutar', simge: 'lira', deger: `${String(nq)} teklif${nr ? ` / ${String(nr)} istendi` : ''}`, ...(tutar ? { alt: `${TUTAR_ETIKETI[tutar.tur]} ${money(tutar.tl, 'TRY', 0).replace(/ /g, '\u00a0')}` } : {}) });
   if (bu?.budget) kutular.push({ ad: `${r.department} bütçesi`, simge: 'chart', deger: pct((bu.used / bu.budget) * 100) });
   if (grup) kutular.push({ ad: 'Grup', simge: 'layers', deger: grup });
   return (
@@ -100,6 +100,8 @@ export function TalepAyrinti() {
       anahtar: act, baslik, simge: ISLEM_SIMGESI[act] ?? 'more', sec: () => { eylemCalistir(act); }, ...(tehlike ? { ton: 'tehlike' as const } : {}),
     })),
   ];
+  // Ana düğme ve menü "Şimdi yapılacak" bandında (3466-b b); iptal talepte bant yok, menü başlıkta kalır.
+  const bant = r.status !== 'cancelled';
   const sekmeler = [...ADIMLAR.map(([k, l], j) => ({
     anahtar: k as string,
     baslik: k === 'compare' ? 'Karar' : k === 'items' ? 'Kalemler' : k === 'quotes' ? 'Teklifler' : l,
@@ -113,17 +115,22 @@ export function TalepAyrinti() {
         baslik={r.title}
         simge="tag"
         alt={<Meta r={r} />}
-        {...(ana ? { birincil: { etiket: ana[1], yap: () => { calistir(ana); } } } : {})}
-        eylemler={eylemler}
+        {...(bant ? {} : { eylemler, ...(ana ? { birincil: { etiket: ana[1], yap: () => { calistir(ana); } } } : {}) })}
       />
       <Bilgiler r={r} />
-      {r.status !== 'cancelled' && (
+      {bant && (
         <div className={`sa-ekran-simdi${n.cls ? ` sa-ekran-simdi-${n.cls}` : ''}`} role="status">
           <Simge ad={n.cls === 'bad' ? 'alert' : n.cls === 'done' ? 'check' : 'flag'} />
           <span className="sa-ekran-govde">
             <b>{n.cls === 'done' ? n.t : `Şimdi yapılacak: ${n.t}`}</b>
             <small>{[n.s, kim ? `Bekleyen: ${kim}.` : ''].filter(Boolean).join(' ')}</small>
           </span>
+          {(ana || eylemler.length > 0) && (
+            <span className="sa-ekran-simdi-eylem">
+              {ana && <Dugme tur="birincil" onClick={() => { calistir(ana); }}>{ana[1]}</Dugme>}
+              {eylemler.length > 0 && <Menu etiket={`${r.title}: diğer işlemler`} ogeler={eylemler} ipucu="Diğer işlemler" />}
+            </span>
+          )}
         </div>
       )}
       <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle /></div>

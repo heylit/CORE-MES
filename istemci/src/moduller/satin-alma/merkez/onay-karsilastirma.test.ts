@@ -91,6 +91,18 @@ describe('Onaylar ayrıntısı: tedarikçi kartları (3466-1)', () => {
   });
 });
 
+describe('Arayüz 3466 kod sonrası', () => {
+  it('para tutarı bölünmez; bilinmeyen ödeme yöntemi boş değil "Belirtilmedi"', () => {
+    S.requests.t1!.quotes[0] = { ...S.requests.t1!.quotes[0]!, payMethod: 'gecersiz' } as unknown as Quote;
+    const k = kartlar(ciz());
+    const yontem = k.map((x) => [...x.querySelectorAll('.sa-oy-satir')].find((s) => s.querySelector('.sa-oy-k')?.textContent?.startsWith('Ödeme yöntemi'))!.querySelector('.sa-oy-v')!.textContent);
+    expect(yontem.every((t) => t === 'Belirtilmedi')).toBe(true);
+    const b = k.find((x) => x.textContent?.includes('ORN-Tedarikçi fb'))!;
+    const kalem = [...b.querySelectorAll('.sa-oy-satir')].find((s) => s.textContent?.includes('ORN- kalem 1'))!;
+    expect(kalem.querySelectorAll('.sa-oy-v .sub .sa-oy-nowrap').length).toBe(2);
+  });
+});
+
 describe('enIyiler', () => {
   it('yalnız uygun ve değeri olanlar; tek değer ya da hepsi eşitse yok', () => {
     expect([...enIyiler([3, 1, 2], 'min', [true, true, true])]).toEqual([1]);

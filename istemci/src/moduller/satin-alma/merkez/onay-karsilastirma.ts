@@ -51,8 +51,10 @@ function kalemSatiri(r: PurchaseRequest, it: RequestItem, kartlar: EvalRow[]): S
       if (!l) return '<span class="faint">teklif yok</span>';
       // Büyük sayı TL karşılığı (satırlar aynı birimde kıyaslansın); özgün para birimi alt satırda (Arayüz 3466 1).
       const tl = l.unit * x.c.unitTRY, d = vsLast(r, it, tl);
-      const ozgun = x.q.currency === "TRY" ? "" : `${money(l.unit, x.q.currency)}; `;
-      return `${money(tl)}${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}${sub(`${ozgun}${money(l.line * x.c.unitTRY)}${d ? " " + deltaHTML(d.pct) : ""}`)}`;
+      // Para tutarı satır sonunda bölünmesin (Arayüz 3466 kod sonrası 2).
+      const para = (t: string) => `<span class="sa-oy-nowrap">${t}</span>`;
+      const ozgun = x.q.currency === "TRY" ? "" : `${para(money(l.unit, x.q.currency))}; `;
+      return `${para(money(tl))}${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}${sub(`${ozgun}${para(money(l.line * x.c.unitTRY))}${d ? " " + deltaHTML(d.pct) : ""}`)}`;
     }),
   };
 }
