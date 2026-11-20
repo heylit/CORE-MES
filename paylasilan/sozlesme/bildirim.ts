@@ -186,6 +186,10 @@ const ELLE_TANIMLI_TURLER = {
   'projeler.gorev-kontrol-bekliyor': {
     baslik: 'Proje görevi kontrolünü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['projeler.gorev-kontrol'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3458-4 a: atanan kişi görevi gerekçeyle geri çevirince görevi yazana; alıcı kayda bağlıdır. Gerekçe görev sayfasındadır, gövdede yok.
+  'projeler.gorev-geri-cevrildi': {
+    baslik: 'Proje görevi geri çevrildi', onem: 'uyari', alanIslemler: ['projeler.gorev-yaz'], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+  },
   // 3396 a: hazırlık görevinin kademeleri (K2-K5) ve günlük özet. Alıcı kayda bağlıdır (yapan, kontrol eden, ayardaki rol); özet alıcı
   // ayarlıdır. Kademe yükselince projeler gönderir, görev bitince ya da kontrole düşünce kapatır. Gövde yalnız görev adı ve son gün (Risk K8).
   'projeler.hazirlik-hatirlatma': {
@@ -326,7 +330,7 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // Alıcısı kayda bağlı türler (proje görevinin atananı, kontrol edeni) alıcı seçimine girmez: seçim ya başka projelerin görevini
 // yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
 const KAYDA_BAGLI_TURLER: readonly string[] = [
-  'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor',
+  'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor', 'projeler.gorev-geri-cevrildi',
   'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret', ...KADEME_TURLERI,
 ];
 export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];

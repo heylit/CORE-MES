@@ -152,6 +152,7 @@ export const SANA_ATANMADI = 'Bu görev sana atanmadı.';
 export const BASLANAMAZ = 'Görev yalnız "Yapılacak" ya da "Bekliyor" iken başlar.';
 export const BITIRILEMEZ = 'Görev kontrolde, bitmiş ya da iptal; yeniden bitirilemez.';
 export const KONTROLDE_DEGIL = 'Görev kontrolde değil.';
+export const CEVRILEMEZ = 'Kontrolde, bitmiş ya da iptal edilmiş görev geri çevrilmez.';
 export const KONTROLUN_DEGIL = 'Bu görevin kontrolü sana atanmadı.';
 export const KENDI_ISIN = 'Kendi yaptığın görevi kontrol edemezsin.';
 export const KONTROLLU_DURUM = 'Kontrol edeni olan görev düzenlemeyle bitmez ya da kontrole geçmez; yapan "Bitti" der, kontrol eden onaylar.';
@@ -202,6 +203,12 @@ export function bitirSonucu(g: GorevAtamasi, k: Isleyen): { durum: 'kontrolde' |
   return { durum: kontrolluMu(g) ? 'kontrolde' : 'bitti' };
 }
 
+// 3458-4 a: görevi yalnız ona atanmış kişi geri çevirir; kontrolde ve kapanmış görev çevrilmez (iş teslim edilmiştir).
+export function cevirReddi(g: GorevAtamasi, k: Isleyen): string | null {
+  if (g.sorumluKisiId !== k.kisiId) return SANA_ATANMADI;
+  return g.durum === 'kontrolde' || kapaliMi(g.durum) ? CEVRILEMEZ : null;
+}
+
 // Onay ve geri gönderme: kontrol eden kişi ya da rolündeki kişi. İşi bitiren kişi (son "bitti" olayı) ve göreve atanmış yapan
 // kontrol edemez. Yedek kontrol eden yalnız asıl kontrol eden işi bitiren kişiyse ya da görev YEDEK_GUN gündür kontroldeyse onaylar.
 export function kontrolReddi(g: GorevAtamasi, k: Isleyen, bitirenId: number | null, kontroldeGun: number): string | null {
@@ -236,12 +243,13 @@ export function kontroldeAtamaReddi(durum: string, eski: KontrolAtamasi, yeni: K
 // Kişinin bu görevde açılan düğmeleri (ekran); yazma aynı kurallarla ayrıca denetlenir.
 export function gorevIzinleri(
   g: GorevAtamasi, k: Isleyen, islem: { isle: boolean; kontrol: boolean }, bitirenId: number | null, kontroldeGun: number,
-): { ustlenebilir: boolean; baslayabilir: boolean; bitirebilir: boolean; onaylayabilir: boolean } {
+): { ustlenebilir: boolean; baslayabilir: boolean; bitirebilir: boolean; onaylayabilir: boolean; geriCevirebilir: boolean } {
   return {
     ustlenebilir: islem.isle && g.sorumluKisiId === null && ustlenReddi(g, k) === null,
     baslayabilir: islem.isle && baslaReddi(g, k) === null,
     bitirebilir: islem.isle && !('ileti' in bitirSonucu(g, k)),
     onaylayabilir: islem.kontrol && kontrolReddi(g, k, bitirenId, kontroldeGun) === null,
+    geriCevirebilir: islem.isle && cevirReddi(g, k) === null,
   };
 }
 

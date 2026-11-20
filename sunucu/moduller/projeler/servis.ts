@@ -9,7 +9,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  BitisBaglaGovdesi, GeriGonderGovdesi, Gorev, GorevAyrintisiCevabi, GorevKomutuGovdesi, GorevlerimCevabi, GorevlerimSatiri, GorevOlayi,
+  BitisBaglaGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, Gorev, GorevAyrintisiCevabi, GorevKomutuGovdesi, GorevlerimCevabi, GorevlerimSatiri, GorevOlayi,
   Sablon, SablonEkleVerisi, SablonGuncelleVerisi, SablonListesiCevabi, SablonSecenekleriCevabi, GorevEkleVerisi, GorevGuncelleVerisi, GuncelStatu, KilometreTasi, KilometreTasiGuncelleVerisi, Proje, ProjeDurumu, ProjeGuncelleVerisi,
   ProjeListesiSuzgeci, ProjeOlusturVerisi, ProjeSiparisKalemleriCevabi, ProjeYonetimiCevabi, SiparistenProjeVerisi, Statu, StatuKaydi, StatuListesiCevabi, StatuTonu,
   StatuYazVerisi, AdimEkleGovdesi, AdimIsaretleGovdesi, NotEkleGovdesi, KanitBaglaGovdesi, GorevKaniti,
@@ -27,7 +27,7 @@ import {
   YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
-  gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
+  cevirReddi, gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
   ADIM_EN_COK, ADIM_ISARETLI_SILINMEZ, ADIM_SINIRI, ADIM_YOK, KANIT_AZAMI_BAYT, KANIT_TURLERI, KANIT_YOK, adimIlerlemesi, adimListesiReddi,
   icerikReddi, kanitKaydi, kanitReddi,
 } from './kurallar.ts';
@@ -520,6 +520,31 @@ export async function gorevGeriGonder(db: Db, kullanici: Kullanici, gorevId: num
   await sorgular.gorevOlayiEkle(db, gorevId, 'geri', k.kisiId, g.gerekce);
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
   await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: mevcut.sorumlu_kisi_id, yapanRolId: null }], k.kisiId);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+// 3458-4 a: atanan kişi görevi gerekçeyle geri çevirir. Görev role dönerse roldekilere yeniden atama zili, görevi yazana
+// "geri çevrildi" zili gider; gerekçe geçmişte kalır.
+export async function gorevGeriCevir(db: Db, kullanici: Kullanici, gorevId: number, g: GeriCevirGovdesi): Promise<GorevAyrintisiCevabi> {
+  const { g: mevcut, k } = await akisaHazirla(db, kullanici, gorevId);
+  const ret = cevirReddi(atamasi(mevcut), k);
+  if (ret !== null) throw reddet(ret);
+  let rol: number | null = null;
+  await akisYaz(db, gorevId, async () => {
+    const r = await sorgular.gorevGeriCevir(db, gorevId, k.kisiId, g.surum);
+    rol = r?.yapan_rol_id ?? null;
+    return r === null ? null : { id: gorevId };
+  });
+  await sorgular.gorevOlayiEkle(db, gorevId, 'cevir', k.kisiId, g.gerekce);
+  if (rol !== null) await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: null, yapanRolId: rol }], k.kisiId);
+  const yazan = await sorgular.gorevOlusturani(db, gorevId);
+  if (yazan !== null && yazan !== k.kisiId) {
+    const proje = await sorgular.projeGetir(db, mevcut.proje_id);
+    await bildirimGonder(db, {
+      tur: 'projeler.gorev-geri-cevrildi', baslik: 'Proje görevi geri çevrildi', metin: proje?.kod ?? null, yol: `/proje-gorevlerim/${String(gorevId)}`,
+      kaynakKimlik: String(gorevId), kisiler: [yazan], yalnizKisiler: true, haric: k.kisiId,
+    });
+  }
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 
