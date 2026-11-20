@@ -6,7 +6,7 @@ import { LogoBagi, CokSatir, Dugme, DurumKutusu, Girdi, Kart, KilitliSutunNotu, 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_ARSIV_NEDENI, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
+import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_ARSIV_NEDENI, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, kdvDegeri, kdvKutuMetni, kdvSecimleri, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
 import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
@@ -110,6 +110,12 @@ export function TeklifAyrinti() {
   const durum = TEKLIF_DURUMU[t.durum];
   const son = t.surumler.at(-1) ?? null;
   const gosterilen = t.kabulSurumu === null ? son : (t.surumler.find((s) => s.surumNo === t.kabulSurumu) ?? son);
+  // 3461: sipariş kabul edilen sürümün KDV oranıyla açılır (oransız eski sürümde genel oran, o da yoksa 20). Oran teklifteki gibi
+  // finansın oranlarından seçilir; teklifteki orandan ayrılırsa uyarı yazılır.
+  const kabulKdv = t.surumler.find((s) => s.surumNo === t.kabulSurumu)?.kdvOrani ?? null;
+  const kdvSecimli = t.kdvSecenekleri.oranlar.length > 0;
+  const kdvBaslangic = (kdvSecimli ? kdvDegeri : kdvKutuMetni)(kabulKdv ?? t.kdvSecenekleri.genel ?? '20');
+  const kdvSapti = kabulKdv !== null && donusum.kdvOrani.trim() !== '' && !belirsizSayi(donusum.kdvOrani) && Number(sayiGirdisi(donusum.kdvOrani)) !== Number(kabulKdv);
   const kartsiz = t.satirlar.filter((s) => s.malzemeNo === null).length;
   const arsivde = t.arsiv !== null;
   const surumVerilir = !arsivde && (t.durum === 'yeni' || t.durum === 'onay-bekliyor' || t.durum === 'verildi' || t.durum === 'revizyon');
@@ -160,7 +166,7 @@ export function TeklifAyrinti() {
       {yazabilir && !arsivde && t.durum === 'yeni' && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/duzenle`); }}>Düzenle</Dugme>}
       {yazabilir && !arsivde && t.durum === 'verildi' && son && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('kabul')}>Müşteri kabulünü kaydet</Dugme>}
       {yazabilir && !arsivde && t.durum === 'verildi' && <Dugme simge="rotate" onClick={() => dialogYaz('revizyon')}>Revizyon iste</Dugme>}
-      {yazabilir && !arsivde && t.durum === 'kabul' && <Dugme tur="birincil" simge="next" onClick={() => { donusumYaz((d) => (d.termin === '' && t.istenenTarih !== null ? { ...d, termin: t.istenenTarih } : d)); dialogYaz('siparis'); }}>Satış siparişine dönüştür</Dugme>}
+      {yazabilir && !arsivde && t.durum === 'kabul' && <Dugme tur="birincil" simge="next" onClick={() => { donusumYaz((d) => ({ ...d, ...(d.termin === '' && t.istenenTarih !== null ? { termin: t.istenenTarih } : {}), kdvOrani: kdvBaslangic })); dialogYaz('siparis'); }}>Satış siparişine dönüştür</Dugme>}
       {arsivlenir && <Dugme simge="box" onClick={() => dialogYaz('arsiv')}>Arşivle</Dugme>}
       {yazabilir && arsivde && <Dugme tur="birincil" simge="rotate" onClick={() => komut.mutate({ yol: 'arsivden-cikar', govde: { surum: t.surum }, basari: 'Teklif arşivden çıkarıldı.' })} yukleniyor={komut.isPending}>Arşivden çıkar</Dugme>}
       {silinir && <Dugme simge="trash" onClick={() => dialogYaz('sil')}>Teklifi sil</Dugme>}
@@ -424,7 +430,16 @@ export function TeklifAyrinti() {
           <Girdi etiket="Müşteri sipariş no" autoComplete="off" value={donusum.musteriSiparisNo} onChange={(o) => donusumYaz({ ...donusum, musteriSiparisNo: o.target.value })} />
           <Girdi etiket="Sipariş tarihi" type="date" required value={donusum.siparisTarihi} onChange={(o) => donusumYaz({ ...donusum, siparisTarihi: o.target.value })} />
           <Girdi etiket="Termin" type="date" required value={donusum.termin} onChange={(o) => donusumYaz({ ...donusum, termin: o.target.value })} />
-          <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" value={donusum.kdvOrani} onChange={(o) => donusumYaz({ ...donusum, kdvOrani: o.target.value })} />
+          {kdvSecimli
+            ? <Secim etiket="KDV oranı" required bosSecenek="Seçin" secenekler={kdvSecimleri(t.kdvSecenekleri.oranlar, kabulKdv ?? '')}
+              {...(kabulKdv === null || kdvSapti ? {} : { ipucu: `Kabul edilen teklifte %${miktarMetni(kabulKdv)}.` })}
+              value={donusum.kdvOrani} onChange={(o) => donusumYaz({ ...donusum, kdvOrani: o.target.value })} />
+            : <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off"
+              {...(kabulKdv === null || kdvSapti ? {} : { ipucu: `Kabul edilen teklifte %${miktarMetni(kabulKdv)}.` })}
+              value={donusum.kdvOrani} onChange={(o) => donusumYaz({ ...donusum, kdvOrani: o.target.value })} />}
+          {kdvSapti && kabulKdv !== null && (
+            <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">{`Kabul edilen teklifte %${miktarMetni(kabulKdv)}; siparişe %${miktarMetni(kdvDegeri(sayiGirdisi(donusum.kdvOrani)))} yazılacak.`}</p>
+          )}
           {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}
         </div>
       </Pencere>

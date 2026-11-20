@@ -22,6 +22,7 @@ const kopya = (m: TeklifFormuMetni): TeklifFormuMetni => ({ dil: m.dil, icerik: 
 const SEKMELER = [{ anahtar: 'duzen', baslik: 'Düzenle', simge: 'edit' }, { anahtar: 'kagit', baslik: 'Ön izleme', simge: 'file' }] as const;
 
 // Teklif formu penceresi (3245 d): şablon seçilir (varsayılan önce gelir), ilgili kişi ve KDV oranı yazılır; ikisi saklanmaz.
+// 3461: KDV oranı sürümün oranıyla açılır (oransız eski sürümde 20); pencerede değiştirilen oran yalnız o basıma girer.
 // 3328: teklifi yazan, formun metnini (başlık, giriş, şartlar, imzalar, alt bilgi) yanındaki canlı kâğıtla bu teklif için değiştirir;
 // "Bu teklif için kaydet" metni teklife yazar, "Şablona dön" kaydı kaldırır. Kaydetmeden de basılır: basım ekrandaki metinle olur.
 // "Yazdır / PDF" tarayıcının basım penceresini açar; PDF orada "PDF olarak kaydet" ile alınır (yeni paket yok, Türkçe harf sorunsuz).
@@ -30,8 +31,12 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
   const logo = useKurumLogosu(acik);
   const [sablonId, sablonIdYaz] = useState<number | null>(null);
   const [ilgili, ilgiliYaz] = useState('');
-  const [kdvGirdi, kdvGirdiYaz] = useState(KDV_VARSAYILAN);
+  const surumKdv = surum.kdvOrani === null ? KDV_VARSAYILAN : String(Number(surum.kdvOrani)).replace('.', ',');
+  const [kdvGirdi, kdvGirdiYaz] = useState(surumKdv);
+  useEffect(() => { kdvGirdiYaz(surumKdv); }, [surumKdv]);
   const kdvOrani = kdvOraniOku(kdvGirdi);
+  // Form müşteriye gider: sürümdeki orandan ayrılan oran sessiz kalmasın.
+  const formKdvSapti = surum.kdvOrani !== null && kdvOrani !== null && Number(kdvOrani) !== Number(surum.kdvOrani);
   const sorgu = { surumNo: surum.surumNo, kdvOrani: kdvOrani ?? KDV_VARSAYILAN };
   const veri = useQuery({
     queryKey: anahtarlar.teklifFormuVerisi(teklif.id, sorgu),
@@ -150,10 +155,14 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
             inputMode="decimal"
             autoComplete="off"
             value={kdvGirdi}
+            {...(surum.kdvOrani === null || formKdvSapti ? {} : { ipucu: `Teklifte %${surumKdv}; burada değiştirmek teklifi değiştirmez.` })}
             onChange={(o) => kdvGirdiYaz(o.target.value)}
             hata={kdvOrani === null ? 'KDV oranı 0 ile 100 arasında, en çok iki ondalıklı bir sayıdır.' : undefined}
           />
         </div>
+        {formKdvSapti && (
+          <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">{`Bu formda %${kdvGirdi.trim()} yazacak; teklif sürümünde %${surumKdv}.`}</p>
+        )}
         {ayar.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ayar.error, 'Form şablonları alınamadı')} yenile={() => { void ayar.refetch(); }} />}
         {veri.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(veri.error, 'Form verisi alınamadı')} yenile={() => { void veri.refetch(); }} />}
         {!ayar.isError && !veri.isError && kagitOzellikleri === null && <DurumKutusu durum="yukleniyor" />}

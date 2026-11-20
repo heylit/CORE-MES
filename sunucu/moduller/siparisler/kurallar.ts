@@ -439,7 +439,7 @@ export function teklifFiyatsiz(t: TeklifAyrintisi): TeklifAyrintiCevabi {
   return {
     ...t,
     surumler: t.surumler.map((v) => ({
-      ...v, iskontoOrani: null, toplam: null,
+      ...v, iskontoOrani: null, toplam: null, kdvTutari: null, genelToplam: null,
       fiyatlar: v.fiyatlar.map((f) => ({ satirId: f.satirId, birimFiyat: null, iskontoluFiyat: null, tutar: null })),
     })),
   };

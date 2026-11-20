@@ -6,6 +6,7 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifArsivVerisi, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci,
@@ -13,6 +14,7 @@ import type {
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { kdvSecenekleri } from '../finans/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -73,6 +75,7 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
       aciklama: v.aciklama, olusturma: v.olusturma,
       fiyatlar: kendi.map((f) => ({ satirId: f.satir_id, birimFiyat: f.birim_fiyat, iskontoluFiyat: f.iskontolu_fiyat, tutar: f.tutar })),
       toplam: v.toplam,
+      kdvOrani: v.kdv_orani, kdvTutari: v.kdv_tutari, genelToplam: v.genel_toplam,
       iskontoOnaylayan: v.onaylayan_id === null ? null : (onaylayanlar.get(v.onaylayan_id) ?? null), iskontoOnayAni: v.onay_ani,
     };
   });
@@ -87,6 +90,7 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
       };
     }),
     surumler,
+    kdvSecenekleri: await kdvSecenekleri(db, tesisGunu(Date.now())),
   };
 }
 

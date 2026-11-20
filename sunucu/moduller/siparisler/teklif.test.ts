@@ -250,6 +250,27 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     await komut({ ...t, surum: t.surum - 1 }, 'kabul', { surumNo: 2 }, 409);
   });
 
+  test('3461: sürüm KDV oranını taşır; KDV ve KDV dahil toplam sürümün KDV hariç toplamından; oransız sürümde üçü null; fiyat görmeyene oran gider, tutar gitmez', async () => {
+    let t = await teklifAc();
+    await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), kdvOrani: '101' }, 400);
+    await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), kdvOrani: '20.123' }, 400);
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20') });
+    assert.deepEqual([t.surumler[0]?.kdvOrani, t.surumler[0]?.kdvTutari, t.surumler[0]?.genelToplam], [null, null, null]);
+    t = await komut(t, 'revizyon-iste', { not: 'KDV yazılsın' });
+    // 1199.99 * %10 = 119.999 -> 120.00 (iki ondalık, siparişteki gibi toplamdan).
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '9.9999', '20'), kdvOrani: '10' });
+    const v = t.surumler[1];
+    assert.deepEqual([v?.toplam, v?.kdvOrani, v?.kdvTutari, v?.genelToplam], ['1199.99', '10.00', '120.00', '1319.99']);
+    assert.deepEqual(t.kdvSecenekleri, { oranlar: ['0.00', '1.00', '10.00', '20.00'], genel: '20.00' });
+    const planlama = (await girisYap('planlama_proje')).cerez;
+    const gizli = (await oku(planlama, `/siparisler/teklifler/${t.id}`)).json<TeklifAyrintiCevabi>().surumler[1];
+    assert.deepEqual([gizli?.kdvOrani, gizli?.kdvTutari, gizli?.genelToplam, gizli?.toplam], ['10.00', null, null, null]);
+    await assert.rejects(o().sahip.sorgu('UPDATE siparisler_teklif_surumu SET kdv_orani = 20 WHERE teklif_id = $1', [t.id]));
+    await assert.rejects(o().sahip.sorgu(
+      `INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, olusturan_id, kdv_orani) VALUES ($1, 9, $2, 100.01)`, [t.id, yoneticiId]),
+    /siparisler_teklif_surumu_kdv/);
+  });
+
   test('verilen sürüm değişmez: fiyat ve sürüm satırı veritabanında güncellenemez', async () => {
     let t = await teklifAc();
     t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '5', '6') });

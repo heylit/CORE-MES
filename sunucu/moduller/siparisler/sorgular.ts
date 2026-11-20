@@ -449,6 +449,9 @@ export interface TeklifSurumSatiri {
   aciklama: string | null;
   olusturma: string;
   toplam: string;
+  kdv_orani: string | null;
+  kdv_tutari: string | null;
+  genel_toplam: string | null;
   onaylayan_id: number | null;
   onay_ani: string | null;
 }
@@ -456,10 +459,12 @@ export interface TeklifSurumSatiri {
 export function teklifSurumleri(db: Db, teklifId: number): Promise<TeklifSurumSatiri[]> {
   return db.sorgu<TeklifSurumSatiri>(
     `SELECT v.id, v.surum_no, v.iskonto_orani, v.teslim_gun, v.termin_tarihi, v.odeme_kosulu, v.gecerlilik, v.aciklama, ${zamanMetni('v.olusturma')} AS olusturma,
-            o.onaylayan_id, ${zamanMetni('o.an')} AS onay_ani,
-            (SELECT coalesce(sum(round(round(f.birim_fiyat * (100 - v.iskonto_orani) / 100, 4) * r.miktar, 2)), 0)::numeric(20,2)
-               FROM siparisler_teklif_fiyati f JOIN siparisler_teklif_satiri r ON r.id = f.satir_id WHERE f.surum_id = v.id) AS toplam
+            o.onaylayan_id, ${zamanMetni('o.an')} AS onay_ani, t.toplam, v.kdv_orani,
+            round(t.toplam * v.kdv_orani / 100, 2)::numeric(20,2) AS kdv_tutari,
+            (t.toplam + round(t.toplam * v.kdv_orani / 100, 2))::numeric(20,2) AS genel_toplam
        FROM siparisler_teklif_surumu v LEFT JOIN siparisler_teklif_iskonto_onayi o ON o.surum_id = v.id
+      CROSS JOIN LATERAL (SELECT coalesce(sum(round(round(f.birim_fiyat * (100 - v.iskonto_orani) / 100, 4) * r.miktar, 2)), 0)::numeric(20,2) AS toplam
+               FROM siparisler_teklif_fiyati f JOIN siparisler_teklif_satiri r ON r.id = f.satir_id WHERE f.surum_id = v.id) t
       WHERE v.teklif_id = $1 ORDER BY v.surum_no`, [teklifId],
   );
 }
@@ -497,15 +502,16 @@ export function teklifFiyatlari(db: Db, teklifId: number): Promise<FiyatSatiri[]
 export async function surumEkle(
   db: Db, teklifId: number,
   g: {
-    iskontoOrani: string; teslimGun: number | null; terminTarihi: string | null; odemeKosulu: string | null; gecerlilik: string | null; aciklama: string | null;
+    iskontoOrani: string; kdvOrani: string | null; teslimGun: number | null; terminTarihi: string | null; odemeKosulu: string | null; gecerlilik: string | null;
+    aciklama: string | null;
   },
   fiyatlar: { satirId: number; birimFiyat: string }[], kisiId: number,
 ): Promise<{ id: number; surumNo: number }> {
   const satir = await db.tek<{ id: number; surum_no: number }>(
-    `INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, iskonto_orani, teslim_gun, termin_tarihi, odeme_kosulu, gecerlilik, aciklama, olusturan_id)
-     SELECT $1, coalesce(max(surum_no), 0) + 1, $2, $3, $4, $5, $6, $7, $8 FROM siparisler_teklif_surumu WHERE teklif_id = $1
+    `INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, iskonto_orani, teslim_gun, termin_tarihi, odeme_kosulu, gecerlilik, aciklama, olusturan_id, kdv_orani)
+     SELECT $1, coalesce(max(surum_no), 0) + 1, $2, $3, $4, $5, $6, $7, $8, $9 FROM siparisler_teklif_surumu WHERE teklif_id = $1
      RETURNING id, surum_no`,
-    [teklifId, g.iskontoOrani, g.teslimGun, g.terminTarihi, g.odemeKosulu, g.gecerlilik, g.aciklama, kisiId],
+    [teklifId, g.iskontoOrani, g.teslimGun, g.terminTarihi, g.odemeKosulu, g.gecerlilik, g.aciklama, kisiId, g.kdvOrani],
   );
   if (satir === null) throw new Error('Teklif sürümü eklenemedi');
   await db.sorgu(
@@ -932,7 +938,9 @@ export function logoBaglamaSirasi(db: Db, tur: 'teklif' | 'siparis', belgeId: nu
       ? `SELECT g.id, g.durum, g.logo_kayit_no, t.no, g.surum_no, t.firma_id, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih, t.para_birimi,
                 round(coalesce((SELECT sum(r.miktar * f.birim_fiyat) FROM siparisler_teklif_satiri r
                   JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id WHERE r.teklif_id = t.id), 0) * (1 - v.iskonto_orani / 100), 2)::text AS kdv_haric,
-                NULL AS kdv_dahil
+                round(round(coalesce((SELECT sum(r.miktar * f.birim_fiyat) FROM siparisler_teklif_satiri r
+                  JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id WHERE r.teklif_id = t.id), 0) * (1 - v.iskonto_orani / 100), 2)
+                  * (1 + v.kdv_orani / 100), 2)::text AS kdv_dahil
            FROM siparisler_logo_gonderim g
            JOIN siparisler_teklif t ON t.id = g.teklif_id
            JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no

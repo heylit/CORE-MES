@@ -98,6 +98,15 @@ export const TEKLIF_ARSIV_NEDENI: Record<TeklifArsivNedeni, string> = {
 const binlik = (s: string): string => s.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 // Miktar ve tutar metin (numeric) taşınır; ekranda Türkçe ondalıkla yazılır, sayıya çevrilmez. Veri yoksa tire.
+// 3461: KDV seçiminin değeri iki ondalıklıdır ('20.00'): finansın oranları ile sürümdeki oran aynı seçeneğe düşer.
+export const kdvDegeri = (v: string | null | undefined): string => (v === null || v === undefined || v === '' ? '' : Number(v).toFixed(2));
+// Sürümde kalmış ama bugün geçerli olmayan oran da listede durur; yoksa seçim sessizce boşalırdı.
+export const kdvSecimleri = (oranlar: readonly string[], secili: string): { deger: string; baslik: string }[] =>
+  [...new Set([...oranlar.map(kdvDegeri), ...(secili === '' ? [] : [kdvDegeri(secili)])])].sort((a, b) => Number(b) - Number(a))
+    .map((o) => ({ deger: o, baslik: `%${miktarMetni(o)}` }));
+// Seçim yokken (finansta geçerli oran yok) kutuya yazılan biçim: "20", "20,5".
+export const kdvKutuMetni = (v: string | null | undefined): string => (v === null || v === undefined || v === '' ? '' : miktarMetni(kdvDegeri(v)));
+
 export function miktarMetni(m: string | null | undefined): string {
   if (m === null || m === undefined) return '—';
   const [tam = '0', ondalik = ''] = m.split('.');

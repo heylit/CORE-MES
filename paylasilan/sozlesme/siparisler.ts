@@ -313,6 +313,8 @@ export const teklifSurumuGovdesi = z.object({
   // Talep satırlarının her biri için birim fiyat, satır sırasıyla (TKL-04).
   fiyatlar: z.array(z.object({ satirId: z.number().int().positive(), birimFiyat: birimFiyatSemasi })).min(1).max(SATIR_EN_COK),
   iskontoOrani: iskontoSemasi.prefault('0'),
+  // 3461: sürümün KDV oranı; ekran zorunlu tutar. Eski istemciden boş gelirse sürüm oransız yazılır (null, uydurulmaz).
+  kdvOrani: kdvOraniSemasi.nullish().transform((k) => k ?? null),
   teslimGun: z.number().int().min(1).max(365).nullish().transform((t) => t ?? null),
   odemeKosulu: istege(200),
   gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
@@ -397,6 +399,10 @@ export const teklifSurumuSemasi = z.object({
   // İskontolu birim fiyat sipariş satırına giden fiyattır (dört ondalık); tutar iki ondalık.
   fiyatlar: z.array(z.object({ satirId: z.number().int(), birimFiyat: ondalikMetinSemasi, iskontoluFiyat: ondalikMetinSemasi, tutar: ondalikMetinSemasi })),
   toplam: ondalikMetinSemasi,
+  // 3461: oran girilmeden verilmiş sürümde üçü de null; KDV toplamdan iki ondalıkla hesaplanır (siparişteki gibi).
+  kdvOrani: ondalikMetinSemasi.nullable(),
+  kdvTutari: ondalikMetinSemasi.nullable(),
+  genelToplam: ondalikMetinSemasi.nullable(),
   // 291 a: eşiği aşan iskontoyu onaylayan ve anı; onay gerekmeyen ya da bekleyen sürümde null.
   iskontoOnaylayan: z.string().nullable(),
   iskontoOnayAni: zamanSemasi.nullable(),
@@ -429,6 +435,8 @@ export const teklifSemasi = z.object({
 export const teklifAyrintiSemasi = teklifSemasi.extend({
   satirlar: z.array(teklifSatiriSemasi),
   surumler: z.array(teklifSurumuSemasi),
+  // 3461: sürüm verirken seçilecek KDV oranları finansın bugün geçerli oranlarıdır; genel en yüksek orandır, oran tanımlı değilse null.
+  kdvSecenekleri: z.object({ oranlar: z.array(ondalikMetinSemasi), genel: ondalikMetinSemasi.nullable() }),
 });
 export const teklifListesiCevabi = listeCevapSemasi(teklifSemasi);
 
@@ -746,8 +754,8 @@ export const teklifFormuVarsayilanGovdesi = z.object({ ...beklenenSurum });
 // 3328: teklife özel form metni; şablonla aynı biçim, dili seçilen şablonun dilidir. null: şablon basılır.
 export const teklifFormuMetniSemasi = z.object({ dil: z.enum(TEKLIF_FORMU_DILLERI), icerik: teklifFormuIcerikSemasi });
 export const teklifFormuMetniGovdesi = z.object({ ...beklenenSurum, metin: teklifFormuMetniSemasi.nullable() });
-// Formun verisi: müşteri kutusu firma kartından, toplamlar seçilen sürümden sunucuda hesaplanır. Teklifte KDV oranı tutulmaz;
-// pencerede girilir (varsayılan 20) ve saklanmaz. İlgili kişi firma kartında yoktur; pencerede elle yazılır, saklanmaz.
+// Formun verisi: müşteri kutusu firma kartından, toplamlar seçilen sürümden sunucuda hesaplanır. KDV oranı pencerede yazılır;
+// pencere sürümün oranıyla (3461; oransız eski sürümde 20) açılır, pencerede değiştirilen oran saklanmaz. İlgili kişi firma kartında yoktur; pencerede elle yazılır, saklanmaz.
 export const teklifFormuSorgusu = z.object({
   surumNo: z.coerce.number<number>().int().min(1).max(99),
   kdvOrani: kdvOraniSemasi,
