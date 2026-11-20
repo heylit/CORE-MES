@@ -174,7 +174,7 @@
 .sa-talep-etiketler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
 .sa-talep-alternatif { white-space: normal; min-width: 14rem; }
 .sa-talep-alternatif-ozet { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
-.sa-talep-eylem { display: flex; gap: var(--b-1); }
+.sa-talep-eylem { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .sa-talep-ayrinti-satir > td { white-space: normal; background: var(--panel2); }
 .sa-talep-ayrinti-ic { display: grid; gap: var(--b-3); max-width: 48rem; position: sticky; left: var(--b-3); }
 /* Tabloda liste katmana taşınır: yerinden açılan listenin top:100%'ü yukarı açılışı ekran dışına itmesin, satırların üstünde kalsın. */
@@ -211,4 +211,29 @@
   .sa-talep-tablo .sa-talep-ayrinti-satir { display: block; }
   .sa-talep-tablo .sa-talep-ayrinti-satir > td { display: block; }
   .sa-talep-ayrinti-ic { position: static; }
+}
+
+/* 3485 a: Teslimleri topla (geniş ekranda düğmeler, dar ekranda seçim kutusu) ve Teslimi böl penceresi. */
+.sa-talep-topla { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.sa-talep-topla > .sa-talep-not { flex-basis: 100%; }
+/* Plan sayfasındaki segment görünümü: seçili düğme birincil düğmeyle yarışmasın, uygulanmış gibi okunmasın. */
+.sa-talep-topla-seg { display: inline-flex; flex: none; max-width: 100%; overflow-x: auto; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); }
+.sa-talep-topla-seg button {
+  display: inline-flex; align-items: center; min-height: var(--dokunma); padding: 0 var(--b-3); border: 0; background: transparent;
+  color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.sa-talep-topla-seg button + button { border-left: var(--cizgi-ince) solid var(--edge); }
+.sa-talep-topla-seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.sa-talep-topla-sec { display: none; width: auto; }
+.sa-talep-topla-n { display: inline-flex; align-items: center; gap: var(--b-1); }
+.sa-talep-bol-satir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8rem) auto; gap: var(--b-2); align-items: center; }
+.sa-talep-bol-satir .tc-dugme { min-width: var(--dokunma); min-height: var(--dokunma); }
+.sa-talep-bol-miktar { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
+.sa-talep-bol-miktar input { min-width: 0; }
+.sa-talep-bol-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+@media (max-width: 767px) {
+  .sa-talep-topla-seg { display: none; }
+  .sa-talep-topla-sec { display: inline-block; }
+  .sa-talep-bol-satir { grid-template-columns: minmax(0, 1fr) auto; }
+  .sa-talep-bol-satir > input[type="date"] { grid-column: 1 / -1; }
 }
