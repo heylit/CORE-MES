@@ -419,6 +419,9 @@ function partiBol(jid, dagitim, adetler) {
   }
   /* Kişinin kilidi ilk partide kalır. Öteki partilere de kopyalansaydı hepsi aynı saatte aynı tezgâha kilitlenir, üst üste gelirdi. */
   for (const id of Object.keys(st.locks)) if (id.startsWith(pref)) { st.locks[`${jid}/1.${id.slice(pref.length)}`] = st.locks[id]; delete st.locks[id]; }
+  /* Kişinin elle bölmesi de ilk partide kalır: emir gerçekten bölününce üst emir kimliğini ve bölme kaydını korur, yeni parti kayıtsız açılır.
+     Kayıt taşınmasaydı ilk parti de tek tezgâha iner, bölünmüş payın kilidi sahipsiz kalırdı. Pay adetleri partinin adedine oranlanır (elleBolCoz). */
+  for (const id of Object.keys(st.elleBol || {})) if (id.startsWith(pref)) { st.elleBol[`${jid}/1.${id.slice(pref.length)}`] = st.elleBol[id]; delete st.elleBol[id]; }
   const r0 = S.plan.ops[opId];
   parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);

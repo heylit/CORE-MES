@@ -578,8 +578,8 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
 });
 
 // Hamleler bayat planı reddeder: kayıtlı plan veriyle aynı sürümde olmalı. Kaynak birleşmesi sürümü artırır; kararlı olana dek yinelenir (PD-21).
-function guncelPlanli(kayit = BUYUK_KAYIT, kaynak = BUYUK_KAYNAK): Record<string, unknown> {
-  let S: Record<string, unknown> = calismaKur();
+function guncelPlanli(kayit = BUYUK_KAYIT, kaynak = BUYUK_KAYNAK, ek: Record<string, unknown> = {}): Record<string, unknown> {
+  let S: Record<string, unknown> = { ...calismaKur(), ...ek };
   let g = planGirdisi({ calisma: S, kayit, kaynak, bugun: '2026-10-19' });
   for (let i = 0; i < 4 && g && g.S['dataVer'] !== S['dataVer']; i++) { S = g.S; g = planGirdisi({ calisma: S, kayit, kaynak, bugun: '2026-10-19' }); }
   assert.ok(g && g.S['dataVer'] === S['dataVer'], 'birleşme kararlı');
@@ -679,6 +679,28 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.deepEqual([yeni['O2/1.20']!.m, yeni['O2/1.20']!.S], [k.m, k.S], 'kilit ilk partide');
     assert.deepEqual(planBozuklari(yeni), []);
     assert.deepEqual((s.sonuc.plan['warn'] as { t: string }[]).filter((w) => w.t === 'cakisma'), []);
+  });
+
+  test('CD-09: parti böl: elle bölünmüş adımın bölme kaydı ilk partide kalır; ilk parti aynı tezgâhlara bölünür, öteki parti bölünmez', async () => {
+    const kayit = { ...BUYUK_KAYIT, machines: [...BUYUK_KAYIT.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', plan: tezgah('101', '10', 750) }] };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', status: 'aktif', aktif: true }] } };
+    const calisma = guncelPlanli(kayit, kaynak, { elleBol: { 'O2.20': [{ adet: 6, m: '100' }, { adet: 3, m: '101' }] } });
+    const eski = (calisma['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    assert.deepEqual([eski['O2.20']!.m, eski['O2.20~2']!.m], ['100', '101'], 'kayıtlı planda adım elle bölünmüş');
+    const s = sonuc(await degerlendirmeYap({ calisma, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
+    if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(s.tur);
+    const yeni = planOps(s.sonuc.plan);
+    assert.deepEqual([yeni['O2/1.20']!.m, yeni['O2/1.20~2']?.m], ['100', '101'], 'ilk parti kişinin böldüğü tezgâhlarda');
+    assert.equal(yeni['O2/2.20~2'], undefined, 'öteki parti bölünmez');
+    assert.ok(yeni['O2/2.20'], 'öteki parti planda');
+    assert.deepEqual(planBozuklari(yeni), []);
+    // Bölünmüş payın kilidi de ilk partinin payında kalır: sahipsiz kalmaz, pay kilit saatinde durur.
+    const k = eski['O2.20~2']!;
+    const kilitli = sonuc(await degerlendirmeYap({ calisma: { ...calisma, locks: { 'O2.20~2': { m: k.m, S: k.S } } }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
+    if (kilitli.tur !== 'parti-bolme' || !kilitli.sonuc) return assert.fail(kilitli.tur);
+    const kp = planOps(kilitli.sonuc.plan);
+    assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S], 'payın kilidi ilk partide');
+    assert.deepEqual(planBozuklari(kp), []);
   });
 
   test('CD-05: kişinin kilidi süren işle üst üste geliyorsa motor kilidi oynatmaz; çakışma planın uyarılarında bildirilir', async () => {
