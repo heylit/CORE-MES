@@ -56,7 +56,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
       {o.bayat && (
         <span className="tc-pyq-taslak-hata">
           Plan bu arada değişti; kararlarınız yeni plana göre yeniden planlanır.
-          <Dugme simge="rotate" disabled={bekle} onClick={() => { void taslak.diz(); }}>Planla</Dugme>
+          <Dugme simge="rotate" disabled={bekle} yukleniyor={taslak.diziliyor} onClick={() => { void taslak.diz(); }}>{taslak.diziliyor ? 'Planlanıyor' : 'Planla'}</Dugme>
         </span>
       )}
       <span className="tc-pyq-taslak-dugmeler">

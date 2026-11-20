@@ -105,4 +105,15 @@ describe('TaslakCubugu', () => {
     await waitFor(() => { expect(onayiAc).toHaveBeenCalledTimes(1); });
     expect(yazildi).toHaveBeenCalledWith('Değişiklikleriniz plana yazıldı. Onaya göndermek için onay sayfasını tamamlayın.');
   });
+  it('3486: dizme sürerken Planla düğmesi meşgul görünür ve "Planlanıyor" der; bitince yine "Planla"', () => {
+    const { t } = sahteTaslak(1);
+    t.cevap = cevap([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
+    t.diziliyor = true;
+    const { rerender } = render(<TaslakCubugu taslak={t} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
+    const d = dugme('Planlanıyor');
+    expect(d.getAttribute('aria-busy')).toBe('true');
+    expect(d.querySelector('.tc-dugme-doner')).not.toBeNull();
+    rerender(<TaslakCubugu taslak={{ ...t, diziliyor: false }} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
+    expect(dugme('Planla').getAttribute('aria-busy')).toBeNull();
+  });
 });

@@ -89,7 +89,7 @@ export function Cubuk(o: Ozellikler) {
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Başka sayfalarda yapılan ${String(uyg.say)} veri değişikliği plana işlenir: yalnız etkilenen işler yeniden dizilir; öteki işler yerinde kalır.`}
               aria-label="Veri değişikliklerini uygula" onClick={() => { uyg.uygula(); }}>
-              <Simge ad="play" boyut="k" />
+              {uyg.suruyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : <Simge ad="play" boyut="k" />}
               {o.yuva && !uyg.suruyor
                 ? <><span data-uzun="">{`Veri değişikliklerini uygula (${String(uyg.say)})`}</span><span data-kisa="" aria-hidden="true">{`Veriyi uygula (${String(uyg.say)})`}</span></>
                 : <span>{uyg.suruyor ? 'Uygulanıyor' : `Veri değişikliklerini uygula (${String(uyg.say)})`}</span>}
@@ -97,7 +97,7 @@ export function Cubuk(o: Ozellikler) {
           ) : o.planYaz && (kur ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
-              <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
+              {kur.suruyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : <Simge ad="play" boyut="k" />}<span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
             </button>
           ) : o.plan ? null : (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" aria-disabled="true" title={`Planı kur: ${CALISMA_ACILINCA}`} aria-label="Planı kur">

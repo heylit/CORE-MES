@@ -110,7 +110,8 @@ export function OnaySekmesi({ o: oGelen, c, p, cf: cfSunucu, sen, senYaz, planSe
   const o = useMemo(() => (saltOkunur ? okunur(oGelen) : oGelen), [oGelen, saltOkunur]);
   const { bildir } = useBildirim();
   const hataBildir = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
-  const planKur = usePlanKur(o, hataBildir);
+  const bilgiBildir = useCallback((ileti: string) => bildir('bilgi', ileti), [bildir]);
+  const planKur = usePlanKur(o, hataBildir, bilgiBildir);
   const karar = useBekleyenKarari(o, hataBildir);
   const [secim, setSecim] = useState<Secim>(ilkSecim ?? null);
   const [kars, setKars] = useState<number[]>([]);
