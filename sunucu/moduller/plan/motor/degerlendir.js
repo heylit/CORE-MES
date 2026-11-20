@@ -424,7 +424,7 @@ function planKur() {
    başlamış ve bitmiş iş gerçektir, yerinde kalır. Dönen liste: [işlem, 'kilit' | 'geride']. */
 /** @param {any} p @param {MotorDurumu} st @param {Derleme} cx */
 function yerindeTutmaBozuklari(p, st, cx) {
-  const tur = r => r.act || r.done || r.fas ? null : st.locks[r.id] ? (st.locks[r.id].gecici ? 'kilit' : null) : r.pin && !r.frz && r.S < st.now - 1e-9 ? 'geride' : null;
+  const tur = r => r.act || r.done || r.fas ? null : st.locks[r.id] ? (st.locks[r.id].gecici ? 'kilit' : null) : r.pin && !r.frz && !r.kilit && r.S < st.now - 1e-9 ? 'geride' : null;
   const out = {};
   for (const id in p.ops) {
     const r = p.ops[id], o = cx.byId[id], t = o && tur(r); if (!t) continue;
@@ -440,17 +440,22 @@ function yerindeTutmaBozuklari(p, st, cx) {
   }
   return Object.entries(out);
 }
-/* Tabanı çözer; yerinde tutulamayan iş kalmayana kadar kilidi kaldırıp yeniden çözer. Her tur en az bir işi serbest bırakır; tur sınırı
-   aşılırsa bozuk kalan emirlerin bütün geçici kilitleri kalkar. geride: çağıranın yeniden dizdirdiği işler; buraya eklenenler ona yazılır. */
+/* Tabanı çözer; yerinde tutulamayan iş kalmayana kadar kilidi kaldırıp yeniden çözer. Her tur en az bir işi serbest bırakır. Uzun
+   zincirde ihlal tur başına bir adım ilerler: 40. turdan sonra bozuk kalan emirlerin bütün geçici kilitleri kalkar. 60. turda hâlâ bozuk iş
+   varsa yerinde tutmaktan vazgeçilir: bütün geçici kilitler kalkar, tabanda çalışıyor sayılacak her iş yeniden dizilir. O çözümde yerinde
+   tutulan iş kalmadığı için plan sınıra takılıp sıraya aykırı dönemez. geride: çağıranın yeniden dizdirdiği işler; buraya eklenenler ona yazılır. */
 /** @param {MotorDurumu} st @param {Derleme} cx @param {any} taban @param {Record<string, number>} geride */
 function yerindeTutarakCoz(st, cx, taban, geride) {
+  const g = st.gercek || {};
   for (let tur = 0; ; tur++) {
     if (Object.keys(geride).length) st.geride = geride;
     const p = lnsDecode(st, taban, [], cx, false);
-    const boz = yerindeTutmaBozuklari(p, st, cx); if (!boz.length || tur >= 60) return p;
-    const emir = tur >= 40 ? new Set(boz.map(([id]) => p.ops[id].job)) : null;
-    if (emir) for (const id in st.locks) if (st.locks[id].gecici && p.ops[id] && emir.has(p.ops[id].job)) delete st.locks[id];
+    const boz = yerindeTutmaBozuklari(p, st, cx); if (!boz.length || tur > 60) return p;
     for (const [id, t] of boz) { if (t === 'kilit') delete st.locks[id]; else geride[id] = 1; }
+    if (tur < 40) continue;
+    const emir = new Set(boz.map(([id]) => p.ops[id].job));
+    for (const id in st.locks) if (st.locks[id].gecici && (tur >= 60 || (p.ops[id] && emir.has(p.ops[id].job)))) delete st.locks[id];
+    if (tur >= 60) for (const b of Object.values(taban.ops)) if (!st.locks[b.id] && !b.fas && !(g[b.id] && g[b.id].S != null) && b.S < st.now - 1e-9 && b.C > st.now + 1e-9) geride[b.id] = 1;
   }
 }
 

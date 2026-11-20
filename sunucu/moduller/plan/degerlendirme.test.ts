@@ -268,6 +268,33 @@ function buyukPlanli(): { calisma: Record<string, unknown>; kuralGecikme: number
   return { calisma: { ...c, plan: { ops: p.ops, fail: [], J, dataVer: 1 } }, kuralGecikme: Object.values(J).reduce((a, x) => a + x.T, 0) };
 }
 
+// Planda öncülü bitmeden başlayan adım ve tezgâhta üst üste binen iş; boş liste plan geçerli demektir. Öncül, emrin bir önceki adımıdır.
+type PlanIsi = { job: string; m: string; S: number; C: number };
+function planBozuklari(ops: Record<string, PlanIsi>): string[] {
+  const l: string[] = [];
+  for (const [id, r] of Object.entries(ops)) { const q = ops[`${r.job}.${String(Number(id.split('.')[1]) - 10)}`]; if (q && r.S < q.C - 1e-6) l.push(`${id} ${String(r.S)} öncülü ${String(q.C)}'de bitmeden başlıyor`); }
+  const tezgahlar: Record<string, [string, PlanIsi][]> = {}; for (const [id, r] of Object.entries(ops)) (tezgahlar[r.m] ??= []).push([id, r]);
+  for (const t of Object.values(tezgahlar)) { t.sort((a, b) => a[1].S - b[1].S); for (let i = 1; i < t.length; i++) if (t[i]![1].S < t[i - 1]![1].C - 1e-6) l.push(`${t[i]![0]} ile ${t[i - 1]![0]} aynı tezgâhta üst üste`); }
+  return l;
+}
+// Uzun rota: OA'nın n adımı torna ve freze arasında gidip gelir, her adım öncekinin bittiği saatte başlar. OB ve OC kısa emirlerdir.
+function zincirKayit(n: number) {
+  return { ...BUYUK_KAYIT,
+    items: [...BUYUK_KAYIT.items, { id: '52', code: 'MM-3', name: 'Ornek govde', type: 'mamul' }],
+    routes: { ...BUYUK_KAYIT.routes, 52: { base: null, steps: Array.from({ length: n }, (_, i) => adim('52', (i + 1) * 10, i % 2 ? '20' : '10', 30, 0)) } },
+    orders: [{ id: 'OA', no: 'E-A', itemId: '52', qty: 4, start: '2026-10-19', due: '2026-10-21', priority: 2, status: 'serbest' },
+      { id: 'OB', no: 'E-B', itemId: '50', qty: 2, start: '2026-10-19', due: '2026-10-30', priority: 1, status: 'serbest' },
+      { id: 'OC', no: 'E-C', itemId: '51', qty: 2, start: '2026-10-19', due: '2026-10-30', priority: 1, status: 'serbest' }] };
+}
+function kuralPlanli(kayit: typeof BUYUK_KAYIT): Record<string, unknown> {
+  const c = calismaKur();
+  const g = planGirdisi({ calisma: c, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19' });
+  assert.ok(g);
+  const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
+  const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
+  return { ...c, plan: { ops: p.ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }])), dataVer: 1 } };
+}
+
 describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
   test('PD-14: plan seçeneklerinde arama kural tabanlı planın gecikmesini düşürür; saat sabit adımlı olduğu için aynı girdi aynı sonucu verir', async () => {
     const { calisma, kuralGecikme } = buyukPlanli();
@@ -469,6 +496,47 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     // Yalnız tutulamayan iş serbest kalır: öncülü yerinde olan öteki emirlerin gelecekteki işleri kayıtlı plandaki yerindedir.
     for (const id of ['O3.10', 'O3.20', 'O2.20', 'O1.10', 'O1.20', 'O5.10', 'O5.20']) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]!.m, eski[id]!.S], id);
   });
+
+  // Şimdi 10,5. saat: OA.10 (8-10) hiç başlamamış, saati geçmiş; şimdiden sonraya yeniden dizilir. Rota bitişik olduğu için her adım bir
+  // sonrakini iter: ardılların hepsi eski yerinde tutulamaz. OA istenen emir değildir (istenen OB); OC'nin öncülü yerindedir.
+  const zincirUygula = async (n: number) => {
+    const kayit = zincirKayit(n), calisma = kuralPlanli(kayit);
+    const eski = (calisma['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    const simdi = 10.5, son = `OA.${String(n * 10)}`;
+    assert.ok(eski['OA.10']!.C <= simdi && eski['OA.30']!.S > simdi, 'örnek plan değişmiş');
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const s = sonuc(await degerlendirmeYap({ calisma, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['OB'] } }, an));
+    if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, PlanIsi>;
+    assert.deepEqual(s.plan['fail'], []);
+    assert.ok(yeni['OA.10']!.S >= simdi - 1e-6, `saati geçmiş adım şimdiden sonra: ${String(yeni['OA.10']?.S)}`);
+    assert.deepEqual(planBozuklari(yeni), []);
+    assert.ok(yeni[son]!.S > eski[son]!.S, 'kayma rotanın son adımına ulaşır');
+    for (const id of ['OC.10', 'OC.20']) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]!.m, eski[id]!.S], id);
+  };
+  test('PD-33 (3498): değişikliği uygula: bitişik rotada kayma adım adım ilerler; her ardıl öncülünden sonra başlar, öteki emir yerinde kalır', () => zincirUygula(8));
+
+  test('PD-34 (3498): değişikliği uygula: geç başlayıp süren işin tezgâhında sırası gelmiş, başlamamış iş çalışıyor sayılmaz; süren iş bitince başlar, plan geçerli kalır', async () => {
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    // Şimdi 38. saat. O6.10 (planda 12-37) 34'te başlamış, sürüyor: kalan işiyle 59'da biter. Aynı tezgâhtaki O4.10 (37-58) başlamamış;
+    // eski yerinde çalışıyor sayılsaydı süren işle üst üste gelirdi. İkisi de istenen emir değildir (istenen O7).
+    const simdi = 38, suren = 'O6.10', bekleyen = 'O4.10';
+    assert.ok(eski[bekleyen]!.m === eski[suren]!.m && eski[bekleyen]!.S < simdi && eski[bekleyen]!.C > simdi, 'örnek plan değişmiş');
+    const bitti = (id: string) => ({ m: eski[id]!.m, S: eski[id]!.S, C: eski[id]!.C });
+    const gercek = { 'O0.10': bitti('O0.10'), 'O0.20': bitti('O0.20'), [suren]: { m: eski[suren]!.m, S: 34 } };
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const s = sonuc(await degerlendirmeYap({ calisma: { ...calisma, gercek }, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['O7'] } }, an));
+    if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, PlanIsi>;
+    assert.deepEqual(s.plan['fail'], []);
+    assert.equal(yeni[suren]!.S, 34);
+    assert.ok(yeni[suren]!.C > eski[bekleyen]!.S, 'süren iş bekleyenin eski saatinden sonra bitiyor');
+    assert.ok(yeni[bekleyen]!.S >= yeni[suren]!.C - 1e-6, `bekleyen iş süren iş bitince: ${String(yeni[bekleyen]?.S)} >= ${String(yeni[suren]?.C)}`);
+    assert.deepEqual(planBozuklari(yeni), []);
+  });
+
+  test('PD-35 (3498): değişikliği uygula: 140 adımlı bitişik rotada da plan geçerli döner; yalnız kayan emrin işleri serbest kalır, öteki emir yerinde', () => zincirUygula(140));
 
   test('PD-30 (3233 a): plana yeni giren emir tek başına dizilir, yerleşmiş öteki işler tezgâhı ve başlangıcıyla yerinde kalır; plan kur bütün işleri yeniden dizer', async () => {
     type Is = { job: string; m: string; S: number };
