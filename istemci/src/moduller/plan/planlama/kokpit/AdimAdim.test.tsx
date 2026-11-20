@@ -37,7 +37,7 @@ describe('AdimAdim (3229 a)', () => {
     expect(within(iki).getAllByRole('button').map((b) => b.textContent)).toEqual(['Sistem seçsin', 'K-T2', 'K-T3']);
     expect(screen.getByText(/Fason adım; sistem yerleştirir/)).toBeTruthy();
     expect(screen.queryByRole('group', { name: '3. adımın tezgâhı' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Plana al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yerleştir' }));
     expect(uygula).toHaveBeenCalledWith({ isId: 'a.1', tezgah: 'T1', baslangic: 9, planaAl: 'a' }, false);
   });
 
@@ -50,7 +50,7 @@ describe('AdimAdim (3229 a)', () => {
     expect(await screen.findByText(/Biter 33 · termini 3 sa geçer/)).toBeTruthy();
     expect(oz.mock.calls.at(-1)?.[0]).toMatchObject({ adimlar: [{ isId: 'a.2', tezgah: 'T3', baslangic: 30 }] });
     expect(document.querySelector('[data-adim="a.2"] [data-sonuc]')?.textContent).toMatch(/^K-T3 30 – .*33 tezgâhı ve saati siz seçtiniz/);
-    fireEvent.click(screen.getByRole('button', { name: 'Plana al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yerleştir' }));
     expect(uygula).toHaveBeenCalledWith({ isId: 'a.1', tezgah: 'T1', baslangic: 9, planaAl: 'a', adimlar: [{ isId: 'a.2', tezgah: 'T3', baslangic: 30 }] }, true);
     fireEvent.click(screen.getByRole('button', { name: 'Hepsini sistem seçsin' }));
     expect(await screen.findByText(/Biter 15/)).toBeTruthy();
@@ -73,13 +73,13 @@ describe('AdimAdim (3229 a)', () => {
     expect(document.querySelector('[data-adim="a.2"] [data-sonuc]')?.textContent).toMatch(/sistem seçti/);
   });
 
-  it('sunucu seçimi reddederse neden yazılır ve "Plana al" kapanır', async () => {
+  it('sunucu seçimi reddederse neden yazılır ve "Yerleştir" kapanır', async () => {
     onizlemeKur('K-T3 bu emrin 2. adımını yapamaz.');
     render(<AdimAdim m={M} e={E} zaman={zaman} uygula={vi.fn()} surum={4} />);
     await screen.findByText(/Biter 15/);
     fireEvent.click(within(screen.getByRole('group', { name: '2. adımın tezgâhı' })).getByRole('button', { name: 'K-T3' }));
     expect(await screen.findByText('K-T3 bu emrin 2. adımını yapamaz.')).toBeTruthy();
-    await waitFor(() => { expect((screen.getByRole('button', { name: 'Plana al' }) as HTMLButtonElement).disabled).toBe(true); });
+    await waitFor(() => { expect((screen.getByRole('button', { name: 'Yerleştir' }) as HTMLButtonElement).disabled).toBe(true); });
   });
 
   it('kurallar: ilk adımın seçimi listeye girmez, boş seçim gitmez; saat seçenekleri geçmişi içermez', () => {

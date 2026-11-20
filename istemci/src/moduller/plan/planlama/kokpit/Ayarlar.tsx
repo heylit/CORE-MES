@@ -156,7 +156,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor,
                 <div><dt>{ACIL_PAY.baslik}</dt><dd>{yuzdeMetni(motor.degerler.acilPay)}</dd></div>
               </dl>
             )}
-      {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir{motorYazabilir ? '; kaydedince yeni ayar bir sonraki Planla ya da Planı kur ile plana girer' : ''}: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
+      {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir{motorYazabilir ? '; kaydedince yeni ayar bir sonraki Planı güncelle ya da Baştan kur ile plana girer' : ''}: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
       <p className="tc-pyq-not">Dört göz (onaylayan gönderenden başkası olsun) <Link to="/ayarlar">Sistem Ayarları</Link> &gt; Plan altındadır.</p>
       {eylem}
     </aside>
@@ -181,7 +181,7 @@ function MotorFormu({ g, kaydedildi }: { g: MotorAyarlariCevabi['guncel']; kayde
     setYaziyor(true);
     try {
       const c = await api.post<MotorAyarlariCevabi>('/plan/motor-ayarlari', { ...f, acilPay: payOrani, fasonGun, surumId: g.surumId });
-      bildir('tamam', 'Motor ayarları kaydedildi; bir sonraki Planla ile plana girer.');
+      bildir('tamam', 'Motor ayarları kaydedildi; bir sonraki Planı güncelle ile plana girer.');
       kaydedildi(c.guncel);
     } catch (h) {
       bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.'));

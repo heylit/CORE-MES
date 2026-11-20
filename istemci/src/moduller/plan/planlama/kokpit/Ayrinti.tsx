@@ -38,7 +38,7 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
               <button type="button" aria-current={secIs === a.id} disabled={!x} onClick={() => { adimSec(a.id); }}>
                 <b>{i + 1}. {a.ad}</b>
                 <small>
-                  {x ? `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · sürüyor' : ''}` : 'plansız'}
+                  {x ? `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · başladı, yerinde kalır' : ''}` : 'plansız'}
                   {b !== null && b.acik >= BEKLEME_ESIGI && <em> · {sureYaz(b.sure)} bekler</em>}
                 </small>
               </button>
@@ -50,8 +50,8 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
   );
   const cozum = e.durum === 'plansiz' ? (
     <>
-      <h3>Plana al</h3>
-      <span className="tc-pyq-seg" role="group" aria-label="Plana alma yolu">
+      <h3>Yerleştir</h3>
+      <span className="tc-pyq-seg" role="group" aria-label="Yerleştirme yolu">
         <button type="button" aria-pressed={!adimAdim} onClick={() => { setAdimAdim(false); }}>Hızlı (ilk adım)</button>
         <button type="button" aria-pressed={adimAdim} onClick={() => { setAdimAdim(true); }}>Adım adım</button>
       </span>

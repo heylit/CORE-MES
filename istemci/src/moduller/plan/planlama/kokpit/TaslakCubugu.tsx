@@ -16,13 +16,15 @@ export interface TaslakCubuguOzellikleri {
   canliyaAlir: boolean;
   // Sayfanın birincil düğmeyi kapatan durumu (ör. tur sürerken); null ise yok.
   kilit?: string | null;
+  // Şeritte Planı güncelle bekliyorsa (veri değişti) taslağın kendi düğmesi çizilmez: ekranda tek Planı güncelle durur (3504 b).
+  seritteGuncelle?: boolean;
   yazildi: (ileti: string) => void;
   onayiAc: () => void;
 }
 
 type Secim = Record<string, 'benim' | 'onun'>;
 
-export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
+export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteGuncelle = false, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
   const t = taslak.cevap?.taslak ?? null;
   const o = taslakOzeti(t);
   const [vazgecAcik, setVazgecAcik] = useState(false);
@@ -30,7 +32,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
   const [secim, setSecim] = useState<Secim>({});
   if (t === null && !taslak.mesgul) return null;
   const bekle = taslak.mesgul || taslak.diziliyor;
-  const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık geçerli olmayan değişikliği geri alın.' : o.bayat ? 'Önce Planla ile planı güncelleyin.' : null);
+  const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık geçerli olmayan değişikliği geri alın.' : o.bayat ? 'Önce Planı güncelle ile planı güncelleyin.' : null);
   const ad = canliyaAlir ? 'Canlıya al' : 'Onaya gönder';
 
   const yaz = async (s?: Secim) => {
@@ -49,14 +51,14 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, yazildi,
     <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz">
       <b>{o.n} değişiklik · canlıya alınmadı</b>
       {ozet}
-      {taslak.diziliyor ? <span role="status">Planlanıyor</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
+      {taslak.diziliyor ? <span role="status">Güncelleniyor</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
       {o.bozuk.map((b, i) => (
         <span key={`${String(i)}-${b.ne}`} className="tc-pyq-taslak-hata" role="alert"><Simge ad="alert" boyut="k" />{`Artık geçerli değil: ${b.ne} (${b.hata})`}</span>
       ))}
       {o.bayat && (
         <span className="tc-pyq-taslak-hata">
-          Plan bu arada değişti; kararlarınız yeni plana göre yeniden planlanır.
-          <Dugme simge="rotate" disabled={bekle} yukleniyor={taslak.diziliyor} onClick={() => { void taslak.diz(); }}>{taslak.diziliyor ? 'Planlanıyor' : 'Planla'}</Dugme>
+          {seritteGuncelle ? 'Plan bu arada değişti. Önce üstteki Planı güncelle; sonra değişiklikleriniz yeni plana göre dizilir.' : 'Plan bu arada değişti; değişiklikleriniz yeni plana göre yeniden dizilir.'}
+          {!seritteGuncelle && <Dugme simge="rotate" disabled={bekle} yukleniyor={taslak.diziliyor} onClick={() => { void taslak.diz(); }}>{taslak.diziliyor ? 'Güncelleniyor' : 'Planı güncelle'}</Dugme>}
         </span>
       )}
       <span className="tc-pyq-taslak-dugmeler">

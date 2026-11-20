@@ -181,7 +181,7 @@ function IsKarti({ c, p, cx, id, sipSec }: Ozellikler & { id: string }) {
   const o = cx.byId[id]; const kl = !!c.locks[id];
   return (
     <>
-      <Baslik tur="İş adımı" ad={id} alt={`${o?.ad ?? ''} · ${tezgahKodu(r.m, tezgahKodlari(D))}${kl ? ' · sabit' : ''}`} />
+      <Baslik tur="İş adımı" ad={id} alt={`${o?.ad ?? ''} · ${tezgahKodu(r.m, tezgahKodlari(D))}${kl ? ' · elle kilitli' : ''}`} />
       <p className="tc-pym-km-durum">
         <span className="tc-pym-mono">{saatYaz(D, r.S)} → {saatYaz(D, r.C)}</span> · <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => sipSec(r.job)}>{r.job} siparişine git</button>
       </p>

@@ -68,10 +68,20 @@ describe('TaslakCubugu', () => {
 
   it('dizme bayatsa yeniden dizme önerilir; Canlıya al o zamana kadar kapalıdır', () => {
     const { t } = ac([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
-    expect(screen.getByText(/Plan bu arada değişti; kararlarınız yeni plana göre yeniden planlanır\./)).toBeTruthy();
-    expect(dugme('Canlıya al').getAttribute('title')).toBe('Önce Planla ile planı güncelleyin.');
-    fireEvent.click(dugme('Planla'));
+    expect(screen.getByText(/Plan bu arada değişti; değişiklikleriniz yeni plana göre yeniden dizilir\./)).toBeTruthy();
+    expect(dugme('Canlıya al').getAttribute('title')).toBe('Önce Planı güncelle ile planı güncelleyin.');
+    fireEvent.click(dugme('Planı güncelle'));
     expect(t.diz).toHaveBeenCalledTimes(1);
+  });
+
+  // 3504 b: şeritte Planı güncelle bekliyorsa ekranda ikinci bir Planı güncelle çizilmez; çubuk önce şeridi işaret eder.
+  it('şeritte Planı güncelle bekliyorsa taslak çubuğu kendi düğmesini çizmez ve şeridi işaret eder', () => {
+    const { t } = sahteTaslak(1);
+    t.cevap = cevap([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
+    render(<TaslakCubugu taslak={t} ozet={null} canliyaAlir kilit={null} seritteGuncelle yazildi={vi.fn()} onayiAc={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Planı güncelle' })).toBeNull();
+    expect(screen.getByText(/Önce üstteki Planı güncelle; sonra değişiklikleriniz yeni plana göre dizilir\./)).toBeTruthy();
+    expect(t.diz).not.toHaveBeenCalled();
   });
 
   it('başkası da değiştirdiyse anahtar başına seçim ister; hepsi seçilince seçimle yazar', async () => {
@@ -105,15 +115,15 @@ describe('TaslakCubugu', () => {
     await waitFor(() => { expect(onayiAc).toHaveBeenCalledTimes(1); });
     expect(yazildi).toHaveBeenCalledWith('Değişiklikleriniz plana yazıldı. Onaya göndermek için onay sayfasını tamamlayın.');
   });
-  it('3486: dizme sürerken Planla düğmesi meşgul görünür ve "Planlanıyor" der; bitince yine "Planla"', () => {
+  it('3486: dizme sürerken Planı güncelle düğmesi meşgul görünür ve "Güncelleniyor" der; bitince yine "Planı güncelle"', () => {
     const { t } = sahteTaslak(1);
     t.cevap = cevap([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
     t.diziliyor = true;
     const { rerender } = render(<TaslakCubugu taslak={t} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
-    const d = dugme('Planlanıyor');
+    const d = dugme('Güncelleniyor');
     expect(d.getAttribute('aria-busy')).toBe('true');
     expect(d.querySelector('.tc-dugme-doner')).not.toBeNull();
     rerender(<TaslakCubugu taslak={{ ...t, diziliyor: false }} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
-    expect(dugme('Planla').getAttribute('aria-busy')).toBeNull();
+    expect(dugme('Planı güncelle').getAttribute('aria-busy')).toBeNull();
   });
 });
