@@ -1,12 +1,10 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type {
-  Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi, SablonSecenekleriCevabi,
+  Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { useNavigate } from 'react-router-dom';
 import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { anahtarlar } from './anahtarlar.ts';
 import {
   GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, bugun, gorevDurumMetni, gunFarki, sapmaMetni, tarihMetni,
 } from './gosterim.ts';
@@ -65,12 +63,15 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const [secilenGorunum, gorunumYaz] = useState<Gorunum>('tablo');
   const gorunum = secilenGorunum === 'matris' && !emirleriGorur ? 'tablo' : secilenGorunum;
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
-  const [sablondan, sablondanYaz] = useState(false);
   const [hazirlikAcik, hazirlikAcikYaz] = useState(false);
   const hazirlikAcilabilir = useHazirlikAcilabilir(projeId, emirleriGorur);
+  const yonlendir = useNavigate();
+  // Görevsiz projede şerit dağıt düğmesini taşır; araç çubuğunda ikincisi çıkmaz.
+  const seritVar = yazabilir && yonetim.gorevler.length === 0;
+  const dagitaGit = () => { void yonlendir(`/projeler/${String(projeId)}/gorev-dagit`); };
   // 3444: dar ekranda yalnız "Görev ekle" açıkta; öteki iki işlem bu menüde.
   const digerleri: MenuOgesi[] = [
-    ...(yazabilir ? [{ anahtar: 'sablon', baslik: 'Şablondan ekle', simge: 'layers', sec: () => { sablondanYaz(true); } } satisfies MenuOgesi] : []),
+    ...(yazabilir && !seritVar ? [{ anahtar: 'dagit', baslik: 'Görevleri dağıt', simge: 'users', sec: dagitaGit } satisfies MenuOgesi] : []),
     ...(hazirlikAcilabilir ? [{ anahtar: 'hazirlik', baslik: 'Hazırlık görevlerini aç', simge: 'users', sec: () => { hazirlikAcikYaz(true); } } satisfies MenuOgesi] : []),
   ];
   const gun = bugun();
@@ -78,7 +79,6 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const yil = gun.slice(0, 4);
   const taslar = new Map(yonetim.kilometreTaslari.map((t) => [t.id, t.ad]));
   // 3458 (1 b): satır görevin kendi sayfasını açar (içerik, akış düğmeleri, düzenleme ve geçmiş orada).
-  const yonlendir = useNavigate();
   const sec = (g: Gorev) => { void yonlendir(`/proje-gorevlerim/${String(g.id)}`); };
 
   const sutunlar: Sutun<Gorev>[] = [
@@ -106,6 +106,12 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
 
   return (
     <Kart baslik="Görevler" simge="list">
+      {seritVar && (
+        <div className="tc-prj-dagit-serit" role="note">
+          <span>Bu projeye henüz görev dağıtılmadı. Şablonu seç, yapan ve kontrol edeni ata, bu işe özel görev ekle.</span>
+          <Dugme tur="birincil" simge="users" onClick={dagitaGit}>Görevleri dağıt</Dugme>
+        </div>
+      )}
       <div className="tc-prj-gorunum">
         <div className="tc-prj-secici" role="group" aria-label="Görünüm">
           <Dugme simge="list" aria-pressed={gorunum === 'tablo'} onClick={() => { gorunumYaz('tablo'); }}>Liste</Dugme>
@@ -113,7 +119,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
           <Dugme simge="gantt" aria-pressed={gorunum === 'pano'} onClick={() => { gorunumYaz('pano'); }}>Pano</Dugme>
         </div>
         <div className="tc-prj-eylemler">
-          {yazabilir && <span className="tc-prj-genis"><Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme></span>}
+          {yazabilir && !seritVar && <span className="tc-prj-genis"><Dugme simge="users" onClick={dagitaGit}>Görevleri dağıt</Dugme></span>}
           {digerleri.length > 0 && <span className="tc-prj-dar"><Menu etiket="Diğer görev işlemleri" metin="Diğer" ogeler={digerleri} /></span>}
           {yazabilir && <Dugme simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
           {emirleriGorur && <HazirlikGorevleriAc projeId={projeId} acik={hazirlikAcik} acikYaz={hazirlikAcikYaz} />}
@@ -136,7 +142,6 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
       {form !== null && (
         <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />
       )}
-      {sablondan && <SablondanEkle projeId={projeId} kapat={() => { sablondanYaz(false); }} />}
     </Kart>
   );
 }
@@ -177,48 +182,6 @@ const durumSecenekleri = (mevcut: GorevDurumu | undefined) => GOREV_DURUMLARI
   .map((d) => ({ deger: d, baslik: GOREV_DURUM_METNI[d] }));
 
 // 3269: seçilen şablonun görevleri (hazırlık maddesine bağlı olmayanlar) projeye eklenir; tarihler projenin başlangıç ve bitişinden.
-function SablondanEkle({ projeId, kapat }: { projeId: number; kapat: () => void }) {
-  const kimlik = useId();
-  const [sablonId, sablonYaz] = useState('');
-  const [hata, hataYaz] = useState<string | undefined>(undefined);
-  const sablonlar = useQuery({ queryKey: anahtarlar.sablonSecenekleri, queryFn: () => api.get<SablonSecenekleriCevabi>('/projeler/sablon-secenekleri') });
-  const secenekler = (sablonlar.data?.sablonlar ?? []).map((x) => ({
-    deger: String(x.id), baslik: `${x.ad} · ${x.gorevSayisi} görev${x.varsayilan ? ' (varsayılan)' : ''}`,
-  }));
-  const komut = useYonetimKomutu<{ sablonId: number }>(
-    projeId, (govde, istekKimligi) => api.post(`/projeler/${projeId}/sablondan-ekle`, govde, { istekKimligi }), kapat,
-  );
-  const ilet = (o: FormEvent) => {
-    o.preventDefault();
-    if (sablonId === '') { hataYaz('Şablon seçin.'); return; }
-    komut.mutate({ sablonId: Number(sablonId) });
-  };
-  return (
-    <Pencere
-      acik
-      kapat={kapat}
-      baslik="Şablondan görev ekle"
-      alt={(
-        <>
-          <Dugme onClick={kapat} disabled={komut.isPending}>Vazgeç</Dugme>
-          <Dugme tur="birincil" type="submit" form={kimlik} yukleniyor={komut.isPending}>Ekle</Dugme>
-        </>
-      )}
-    >
-      <form id={kimlik} className="tc-form" onSubmit={ilet} noValidate>
-        <div className="tc-form-tam">
-          <Secim
-            etiket="Şablon" required value={sablonId} bosSecenek="Şablon seçin" secenekler={secenekler}
-            ipucu="Hazırlık maddesine bağlı görevler üretim emri açılınca doğar."
-            hata={hata ?? (sablonlar.isError ? hataIletisi(sablonlar.error, 'Şablonlar alınamadı') : undefined)}
-            onChange={(e) => { sablonYaz(e.target.value); hataYaz(undefined); }}
-          />
-        </div>
-        {komut.isError && <p className="tc-form-tam tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Şablon eklenemedi')}</p>}
-      </form>
-    </Pencere>
-  );
-}
 
 // 3458: rol görevinde kimin üstlendiği listede de görünür; adımı olan görevde ilerlemenin yanında adım sayısı ve kanıt zorunluluğu.
 export function YapanMetni({ g }: { g: Pick<Gorev, 'sorumluAd' | 'yapanRolAd'> }) {

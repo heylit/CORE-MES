@@ -10,7 +10,7 @@ import { kisiAdlari, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari
 import {
   hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
 } from '../projeler/disari.ts';
-import type { HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
+import type { HazirlikHedefleri, HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
 import { hazirliklar } from './hazirlik.ts';
 import { hazirlikMaddeTanimlari } from './hazirlik-maddeleri.ts';
 import { acikEmirIhlali, gorevinSistemHali } from './kurallar.ts';
@@ -119,6 +119,19 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
 }
 
 // Projenin açık emirlerine dağıtır. Alıcılar kişi ya da rol başına toplanır; toplam kişi rollerin üyeleriyle tekilleşir.
+// 3458 (dilim 2): projeler'in Görevleri dağıt ekranı projeye bağlı açık emirleri ve açık maddeleri buradan alır (kablolama bağı).
+export async function projeninHazirlikHedefleri(db: Db, projeId: number): Promise<HazirlikHedefleri> {
+  const emirler = (await s.ustEmirler(db, false, projeId)).reverse().filter((e) => acikEmirIhlali(e.durum, e.arsiv) === null);
+  const isEmirleri = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
+  return {
+    maddeler: await acikMaddeler(db),
+    hedefler: emirler.map((e) => ({
+      hedef: { emriId: e.id, emirNo: e.emirNo, isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo })) },
+      tarih: { baslangic: e.baslangic, bitis: e.teslim },
+    })),
+  };
+}
+
 export async function hazirlikDagit(db: Db, kullanici: Kullanici, g: HazirlikDagitGovdesi): Promise<HazirlikDagitCevabi> {
   const proje = await projeGetir(db, g.projeId);
   if (proje === null) throw bulunamadi(PROJE_YOK);

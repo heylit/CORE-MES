@@ -178,3 +178,18 @@ button.tc-prj-pano-kart { cursor: pointer; }
   .tc-prj-gorev-kol { display: contents; }
   .tc-prj-gorev-bilgi { order: -1; }
 }
+
+/* 3458-2 a: Görevleri dağıt. Satır başlığı tek satırda kırılarak, alanlar ekran genişliğine göre bir ile dört sütun. */
+.tc-prj-dagit-liste { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-prj-dagit-satir { display: flex; flex-direction: column; gap: var(--b-3); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); min-width: 0; }
+.tc-prj-dagit-satir[data-dahil='hayir'] { background: var(--panel2); }
+.tc-prj-dagit-satir[data-dahil='hayir'] .tc-prj-dagit-bas > .tc-isaret span { color: var(--muted); text-decoration: line-through; }
+.tc-prj-dagit-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; overflow-wrap: anywhere; }
+.tc-prj-dagit-bas > .tc-isaret { font-weight: 700; }
+.tc-prj-dagit-alanlar { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); align-items: end; min-width: 0; }
+.tc-prj-dagit-alt { margin-bottom: 0; }
+.tc-prj-dagit-serit {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2) var(--b-4);
+  padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); margin-bottom: var(--b-3);
+}
+.tc-prj-dagit-projeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }

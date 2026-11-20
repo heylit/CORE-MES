@@ -431,6 +431,7 @@ export const gorevlerimCevabi = z.object({ gorevler: z.array(gorevlerimSatiri) }
 export const SABLON_DAYANAKLARI = ['baslangic', 'termin'] as const;
 export const KONTROL_KOSULLARI = ['her-zaman', 'yeni-revize'] as const;
 export const SABLON_KALEMI_EN_COK = 100;
+export const SABLON_ADIM_EN_COK = 50;
 export const sablonKalemiGovdesi = z.object({
   // Kalemler sırayla gönderilir; önceki kalem bu listedeki sıra numarasıdır (0'dan), kimlik değil.
   ad: zorunluMetin(200, 'Görev adı zorunlu.'),
@@ -448,6 +449,9 @@ export const sablonKalemiGovdesi = z.object({
   oncekiSira: z.number().int().min(0).max(SABLON_KALEMI_EN_COK - 1).nullish().transform((v) => v ?? null),
   hazirlikMaddesi: hazirlikMaddeKodu.nullish().transform((v) => v ?? null),
   kontrolKosulu: z.enum(KONTROL_KOSULLARI).default('her-zaman'),
+  // 3458: kalemden açılan görevin yapılacak adımları ve kanıt zorunluluğu.
+  adimlar: z.array(zorunluMetin(200, 'Adım adı boş olamaz.')).max(SABLON_ADIM_EN_COK, `Bir görevde en çok ${SABLON_ADIM_EN_COK} adım olur.`).default([]),
+  kanitZorunlu: z.boolean().default(false),
 })
   .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, { message: TEK_YAPAN.message, path: ['yapanRolId'] })
   .refine((k) => tekKontrol(k), TEK_KONTROL).refine((k) => tekYedek(k), TEK_YEDEK).refine((k) => yedekKontrollu(k), YEDEK_KONTROLLU);
@@ -476,6 +480,8 @@ export const sablonKalemiSemasi = z.object({
   oncekiSira: z.number().int().nullable(),
   hazirlikMaddesi: hazirlikMaddeKodu.nullable(),
   kontrolKosulu: z.enum(KONTROL_KOSULLARI),
+  adimlar: z.array(z.string()),
+  kanitZorunlu: z.boolean(),
 });
 export const sablonSemasi = z.object({
   id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), etkin: z.boolean(),
@@ -487,6 +493,45 @@ export const sablonSecenekleriCevabi = z.object({
   sablonlar: z.array(z.object({ id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), gorevSayisi: z.number().int(), hazirlikSayisi: z.number().int() })),
 });
 export const sablondanEkleGovdesi = z.object({ sablonId: z.number().int().positive().max(2147483647) });
+
+// --- 3458 (dilim 2): Görevleri dağıt ---
+// İş başlangıcında şablonun satırları gözden geçirilir: kim yapar, kim kontrol eder, ne zamana kadar, kanıt ister mi. Proje görevi
+// hemen açılır; hazırlık satırı projeye bağlı açık her emir (ya da iş emri) için açılır ve sonra gelen emirde de bu hâliyle doğar.
+export const dagitimSorgusu = z.object({ sablonId: z.coerce.number<number>().int().positive().max(2147483647).optional() });
+export const dagitimSatiriSemasi = z.object({
+  kalemId: z.number().int(), ad: z.string(), aciklama: z.string().nullable(), asama: z.string().nullable(),
+  hazirlikMaddesi: z.string().nullable(), hazirlikAd: z.string().nullable(),
+  yapanKisiId: z.number().int().nullable(), yapanRolId: z.number().int().nullable(),
+  kontrolKisiId: z.number().int().nullable(), kontrolRolId: z.number().int().nullable(),
+  planBaslangic: tarihSemasi, planBitis: tarihSemasi, kanitZorunlu: z.boolean(), adimlar: z.array(z.string()),
+  // Hazırlık satırında projedeki açık emirlere göre kaç görev doğacağı; proje görevinde 1. Emir bilgisi okunamazsa null.
+  dogacak: z.number().int().nullable(),
+});
+export const dagitimCevabi = z.object({
+  proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), aktif: z.boolean() }),
+  sablonlar: z.array(z.object({ id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), dagitildi: z.boolean() })),
+  sablonId: z.number().int().nullable(),
+  // Projeye daha önce bir şablon dağıtıldı mı ya da projede görev var mı; ikisi de yoksa iş "dağıtılmadı" sayılır.
+  dagitildi: z.boolean(),
+  emirSayisi: z.number().int().nullable(),
+  satirlar: z.array(dagitimSatiriSemasi),
+});
+const dagitAtamasi = {
+  yapanKisiId: kimlikYaDaYok, yapanRolId: kimlikYaDaYok, kontrolKisiId: kimlikYaDaYok, kontrolRolId: kimlikYaDaYok, kanitZorunlu: z.boolean(),
+};
+export const dagitSatiriGovdesi = z.object({ kalemId: z.number().int().positive(), dahil: z.boolean(), ...dagitAtamasi, planBitis: tarihSemasi })
+  .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, TEK_YAPAN).refine((k) => tekKontrol(k), TEK_KONTROL);
+export const dagitOzelGovdesi = z.object({ ad: zorunluMetin(200, 'Görev adı zorunlu.'), ...dagitAtamasi, planBitis: tarihSemasi })
+  .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, TEK_YAPAN).refine((k) => tekKontrol(k), TEK_KONTROL);
+export const dagitGovdesi = z.object({
+  sablonId: z.number().int().positive().max(2147483647).nullable(),
+  // Verilmezse şablonun satırları olduğu gibi dağıtılır.
+  satirlar: z.array(dagitSatiriGovdesi).max(SABLON_KALEMI_EN_COK).optional(),
+  ozel: z.array(dagitOzelGovdesi).max(20, 'Bu işe özel en çok 20 görev eklenir.').default([]),
+});
+export const dagitCevabi = z.object({ projeGorevi: z.number().int(), hazirlikGorevi: z.number().int() });
+// Görevler sayfasındaki şerit: görevi dağıtılmamış aktif projeler (görev yazana).
+export const dagitilmamisCevabi = z.object({ projeler: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })) });
 
 export type StatuTonu = z.output<typeof statuTonuSemasi>;
 export type Statu = z.output<typeof statuSemasi>;
@@ -533,6 +578,12 @@ export type Sablon = z.output<typeof sablonSemasi>;
 export type SablonListesiCevabi = z.output<typeof sablonListesiCevabi>;
 export type SablonSecenekleriCevabi = z.output<typeof sablonSecenekleriCevabi>;
 export type SablondanEkleGovdesi = z.input<typeof sablondanEkleGovdesi>;
+export type DagitimSatiri = z.output<typeof dagitimSatiriSemasi>;
+export type DagitimCevabi = z.output<typeof dagitimCevabi>;
+export type DagitGovdesi = z.input<typeof dagitGovdesi>;
+export type DagitVerisi = z.output<typeof dagitGovdesi>;
+export type DagitCevabi = z.output<typeof dagitCevabi>;
+export type DagitilmamisCevabi = z.output<typeof dagitilmamisCevabi>;
 
 export type ProjeDurumu = z.output<typeof projeDurumuSemasi>;
 export type ProjeOlusturGovdesi = z.input<typeof projeOlusturGovdesi>;

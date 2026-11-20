@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { Gorevler } from './Gorevler.tsx';
+import { GorevDagit } from './GorevDagit.tsx';
 import { GorevSablonlari } from './GorevSablonlari.tsx';
 import { GorevSayfasi } from './GorevSayfasi.tsx';
 import { HazirlikMaddeleri } from './HazirlikMaddeleri.tsx';
@@ -20,5 +21,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/projeler/hazirlik-maddeleri', ekran: HazirlikMaddeleri },
   // Kademeli takip ayarı Bildirim Merkezi'ne taşındı (3405-4 a); eski adres oraya gider.
   { yol: '/projeler/hazirlik-kademe', ekran: () => <Navigate to="/bildirim-merkezi/kademeli-uyari" replace /> },
+  // 3458-2 a: iş başlangıcında görevler bu ekranda dağıtılır.
+  { yol: '/projeler/:id/gorev-dagit', ekran: GorevDagit },
   { yol: '/projeler/:id', ekran: ProjeAyrinti },
 ];

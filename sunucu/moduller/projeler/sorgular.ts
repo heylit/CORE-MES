@@ -522,13 +522,13 @@ export interface SablonKalemiSatiri {
   id: number; sablon_id: number; sira: number; ad: string; aciklama: string | null; asama: string | null; dayanak: 'baslangic' | 'termin'; gun: number;
   sure_gun: number; yapan_rol_id: number | null; yapan_kisi_id: number | null; kontrol_rol_id: number | null; kontrol_kisi_id: number | null;
   yedek_kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null; onceki_kalem_id: number | null; hazirlik_maddesi: string | null;
-  kontrol_kosulu: 'her-zaman' | 'yeni-revize';
+  kontrol_kosulu: 'her-zaman' | 'yeni-revize'; adimlar: string[]; kanit_zorunlu: boolean;
 }
 export function sablonKalemleri(db: Db, sablonIdleri: readonly number[]): Promise<SablonKalemiSatiri[]> {
   if (sablonIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<SablonKalemiSatiri>(
     `SELECT id, sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id, kontrol_kisi_id,
-            yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu
+            yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu, adimlar, kanit_zorunlu
        FROM projeler_gorev_sablon_kalemi WHERE sablon_id = ANY($1::int[]) ORDER BY sablon_id, sira, id`,
     [sablonIdleri],
   );
@@ -564,15 +564,16 @@ export async function sablonKalemleriniSil(db: Db, sablonId: number): Promise<vo
 export interface KalemAlanlari {
   ad: string; aciklama: string | null; asama: string | null; dayanak: string; gun: number; sureGun: number; yapanRolId: number | null;
   yapanKisiId: number | null; kontrolRolId: number | null; kontrolKisiId: number | null; yedekKontrolRolId: number | null;
-  yedekKontrolKisiId: number | null; hazirlikMaddesi: string | null; kontrolKosulu: string;
+  yedekKontrolKisiId: number | null; hazirlikMaddesi: string | null; kontrolKosulu: string; adimlar: readonly string[]; kanitZorunlu: boolean;
 }
 export async function sablonKalemiEkle(db: Db, sablonId: number, sira: number, k: KalemAlanlari, oncekiId: number | null): Promise<number> {
   const s = await db.tek<{ id: number }>(
     `INSERT INTO projeler_gorev_sablon_kalemi (sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id,
-                                               kontrol_kisi_id, yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+                                               kontrol_kisi_id, yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu,
+                                               adimlar, kanit_zorunlu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::text[], $19) RETURNING id`,
     [sablonId, sira, k.ad, k.aciklama, k.asama, k.dayanak, k.gun, k.sureGun, k.yapanRolId, k.yapanKisiId, k.kontrolRolId, k.kontrolKisiId,
-      k.yedekKontrolRolId, k.yedekKontrolKisiId, oncekiId, k.hazirlikMaddesi, k.kontrolKosulu],
+      k.yedekKontrolRolId, k.yedekKontrolKisiId, oncekiId, k.hazirlikMaddesi, k.kontrolKosulu, k.adimlar, k.kanitZorunlu],
   );
   if (s === null) throw new Error('Şablon kalemi eklenemedi');
   return s.id;
@@ -601,13 +602,14 @@ export async function hazirlikGoreviEkle(db: Db, projeId: number, g: HazirlikGor
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO projeler_gorev (proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, onceki_gorev_id, olusturan_id,
                                  asama, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id, yedek_kontrol_kisi_id, yedek_kontrol_rol_id,
-                                 hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                                 hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id, kanit_zorunlu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
      ON CONFLICT (hazirlik_emri_id, (COALESCE(hazirlik_is_emri_id, 0)), hazirlik_maddesi)
        WHERE hazirlik_maddesi IS NOT NULL AND durum <> 'iptal' DO NOTHING
      RETURNING id`,
     [projeId, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId, kisiId,
-      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId, g.hazirlikMaddesi, g.emriId, g.isEmriId],
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId, g.hazirlikMaddesi, g.emriId, g.isEmriId,
+      g.kanitZorunlu ?? false],
   );
   return satir?.id ?? null;
 }
@@ -616,6 +618,25 @@ export async function hazirlikGoreviEkle(db: Db, projeId: number, g: HazirlikGor
 export async function uygulananKalemler(db: Db, projeId: number): Promise<unknown[]> {
   const satirlar = await db.sorgu<{ kalemler: unknown[] }>('SELECT kalemler FROM projeler_proje_sablonu WHERE proje_id = $1 ORDER BY id', [projeId]);
   return satirlar.flatMap((s) => s.kalemler);
+}
+// 3458: iş dağıtıldı sayılır: projeye şablon dağıtılmış ya da projede görev açılmış.
+export async function dagitildiMi(db: Db, projeId: number): Promise<boolean> {
+  return (await db.tek(
+    `SELECT 1 AS var WHERE EXISTS (SELECT 1 FROM projeler_proje_sablonu WHERE proje_id = $1) OR EXISTS (SELECT 1 FROM projeler_gorev WHERE proje_id = $1)`,
+    [projeId],
+  )) !== null;
+}
+export function dagitilmamisProjeler(db: Db): Promise<{ id: number; kod: string; ad: string }[]> {
+  return db.sorgu<{ id: number; kod: string; ad: string }>(
+    `SELECT p.id, p.kod, p.ad FROM projeler_proje p
+      WHERE p.durum = 'aktif'
+        AND NOT EXISTS (SELECT 1 FROM projeler_proje_sablonu s WHERE s.proje_id = p.id)
+        AND NOT EXISTS (SELECT 1 FROM projeler_gorev g WHERE g.proje_id = p.id)
+      ORDER BY p.id DESC LIMIT 50`,
+  );
+}
+export function dagitilanSablonlar(db: Db, projeId: number): Promise<{ sablon_id: number }[]> {
+  return db.sorgu<{ sablon_id: number }>('SELECT DISTINCT sablon_id FROM projeler_proje_sablonu WHERE proje_id = $1', [projeId]);
 }
 export async function sablonUygulandiMi(db: Db, projeId: number, sablonId: number): Promise<boolean> {
   return (await db.tek('SELECT 1 AS var FROM projeler_proje_sablonu WHERE proje_id = $1 AND sablon_id = $2', [projeId, sablonId])) !== null;
@@ -745,6 +766,15 @@ export async function adimEkle(db: Db, gorevId: number, ad: string): Promise<voi
     `INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad)
      VALUES ($1, COALESCE((SELECT max(sira) FROM projeler_gorev_adimi WHERE gorev_id = $1), 0) + 1, $2)`,
     [gorevId, ad],
+  );
+}
+
+// Şablondan açılan görevin adımları sırayla (görev yeni açıldığından sıra 1'den başlar).
+export async function adimlariEkle(db: Db, gorevId: number, adlar: readonly string[]): Promise<void> {
+  if (adlar.length === 0) return;
+  await db.sorgu(
+    'INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad) SELECT $1, s.sira, s.ad FROM unnest($2::text[]) WITH ORDINALITY AS s(ad, sira)',
+    [gorevId, adlar],
   );
 }
 

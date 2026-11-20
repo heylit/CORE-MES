@@ -10,15 +10,17 @@ import {
   geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
   sablonGuncelleGovdesi, sablonListesiCevabi, sablonSecenekleriCevabi,
   adimEkleGovdesi, adimIsaretleGovdesi, adimParametresi, kanitBaglaGovdesi, kanitParametresi, notEkleGovdesi,
+  dagitCevabi, dagitGovdesi, dagitilmamisCevabi, dagitimCevabi, dagitimSorgusu,
 } from '#paylasilan/sozlesme/projeler.ts';
 import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
-  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
   adimEkle, adimIsaretle, adimSil, kanitBagla, kanitDosyasi, kanitKaldir, notEkle,
 } from './servis.ts';
+import { dagit, dagitilmamisProjeler, dagitimOnizleme } from './dagitim.ts';
 import { hazirlikGoreviAta } from './hazirlik-gorevleri.ts';
 import { kademeGecmisi } from './hazirlik-kademe.ts';
 
@@ -382,6 +384,37 @@ export const uclar = [
     govde: sablondanEkleGovdesi,
     cevap: projeYonetimiCevabi,
     tekrarKorumali: true,
-    isle: ({ db, kullanici, parametre, govde }) => sablondanEkle(db, kullanici.id, parametre.id, govde.sablonId),
+    // Eski "şablondan ekle" de Görevleri dağıt yolundan geçer: hazırlık satırları da açılır ve donar (Risk K2).
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await dagit(db, kullanici.id, parametre.id, { sablonId: govde.sablonId, ozel: [] });
+      return projeYonetimi(db, parametre.id);
+    },
+  }),
+  // 3458 (dilim 2, 3458-2 a): Görevleri dağıt. Önizleme yazmaz; dağıt proje görevlerini açar, hazırlık satırlarını açık emirlere açar ve dondurur.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/:id/dagitim',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    sorgu: dagitimSorgusu,
+    cevap: dagitimCevabi,
+    isle: ({ db, parametre, sorgu }) => dagitimOnizleme(db, parametre.id, sorgu.sablonId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/dagit',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    govde: dagitGovdesi,
+    cevap: dagitCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => dagit(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/dagitim/bekleyenler',
+    yetki: 'projeler.gorev-yaz',
+    cevap: dagitilmamisCevabi,
+    isle: ({ db }) => dagitilmamisProjeler(db),
   }),
 ];

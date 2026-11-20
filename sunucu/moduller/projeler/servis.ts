@@ -138,7 +138,7 @@ export async function siparistenProjeAc(
     ...butce(maliyetGorur, g.butceTutari, g.butceParaBirimi, null),
   };
   const id = await kisitKorumali(KISITLAR, () => sorgular.projeEkle(db, g.kod, alan, kisiId, siparis.id, bitis.bagli));
-  await acilisSablonu(db, kisiId, id, g.sablonId);
+  await acilisSablonu(db, g.sablonId);
   await projeAcildiBildir(db, { projeId: id, kisiId });
   return projeAyrintisi(db, id, maliyetGorur);
 }
@@ -217,6 +217,7 @@ export const YONETIM_KISITLARI = {
   projeler_gorev_yapan_rol: { ileti: 'Yapan rol bulunamadı.', alan: 'yapanRolId' },
   projeler_gorev_kontrol_rol: { ileti: 'Kontrol eden rol bulunamadı.', alan: 'kontrolRolId' },
   projeler_gorev_kontrol_kisi: { ileti: 'Kontrol eden kişi bulunamadı.', alan: 'kontrolKisiId' },
+  projeler_gorev_yedek_kontrollu: { ileti: 'Yedek kontrol eden yalnız kontrol eden varken atanır.', alan: 'yedekKontrolKisiId' },
   projeler_gorev_yedek_rol: { ileti: 'Yedek kontrol eden rol bulunamadı.', alan: 'yedekKontrolRolId' },
   projeler_gorev_yedek_kisi: { ileti: 'Yedek kontrol eden kişi bulunamadı.', alan: 'yedekKontrolKisiId' },
   projeler_gorev_kontrolde_kontrollu: { ileti: 'Kontrolde bekleyen görevin kontrol edeni kaldırılamaz.', alan: 'kontrolKisiId' },
@@ -748,6 +749,7 @@ async function sablonlariCevir(db: Db, satirlar: readonly SablonSatiri[]): Promi
         yedekKontrolRolId: k.yedek_kontrol_rol_id, yedekKontrolRolAd: ad(roller, k.yedek_kontrol_rol_id),
         oncekiSira: k.onceki_kalem_id === null ? null : sira.get(k.onceki_kalem_id) ?? null,
         hazirlikMaddesi: k.hazirlik_maddesi as Sablon['kalemler'][number]['hazirlikMaddesi'], kontrolKosulu: k.kontrol_kosulu,
+        adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
       })),
     };
   });
@@ -798,35 +800,63 @@ export async function sablonDuzenle(db: Db, kisiId: number, id: number, g: Sablo
   return sablonListesi(db);
 }
 
+// Dağıtımda bir şablon satırının değişen yanları (3458 dilim 2). Verilmeyen satır şablondaki hâliyle dağıtılır.
+export interface SatirDuzeni {
+  dahil: boolean; yapanKisiId: number | null; yapanRolId: number | null; kontrolKisiId: number | null; kontrolRolId: number | null;
+  planBitis: string; kanitZorunlu: boolean;
+}
+
 // Şablon projeye uygulanır: hazırlık maddesine bağlı olmayan kalemler proje görevi olur (hazırlık kalemleri emir açılınca, 3269-B).
-// Uygulanan şablon kalemleriyle projede donar.
-export async function sablonUygula(db: Db, kisiId: number, projeId: number, sablon: SablonSatiri): Promise<void> {
+// Dağıtılan satırlar düzenlenmiş hâliyle projede donar: sonradan gelen emrin hazırlık görevi de bu atamalarla doğar (Risk K2).
+// Dışarıda bırakılan satır donmaz; ona bağlı sonraki görevin öncülü boş kalır.
+export async function sablonUygula(
+  db: Db, kisiId: number, projeId: number, sablon: SablonSatiri, duzen: ReadonlyMap<number, SatirDuzeni> = new Map(),
+): Promise<number> {
   const proje = await sorgular.projeGetir(db, projeId);
   if (proje === null) throw bulunamadi(PROJE_YOK);
-  const kalemler = await sorgular.sablonKalemleri(db, [sablon.id]);
+  const kalemler = (await sorgular.sablonKalemleri(db, [sablon.id])).flatMap((k): (SablonKalemiSatiri & { planBitis: string | null })[] => {
+    const d = duzen.get(k.id);
+    if (d === undefined) return [{ ...k, planBitis: null }];
+    if (!d.dahil) return [];
+    // Kontrol kaldırılınca yedek kontrol de düşer: yedek kontrol edensiz yedek olmaz (projeler_gorev_yedek_kontrollu).
+    const kontrolYok = d.kontrolKisiId === null && d.kontrolRolId === null;
+    return [{
+      ...k, yapan_kisi_id: d.yapanKisiId, yapan_rol_id: d.yapanRolId, kontrol_kisi_id: d.kontrolKisiId, kontrol_rol_id: d.kontrolRolId,
+      yedek_kontrol_kisi_id: kontrolYok ? null : k.yedek_kontrol_kisi_id, yedek_kontrol_rol_id: kontrolYok ? null : k.yedek_kontrol_rol_id,
+      kanit_zorunlu: d.kanitZorunlu, planBitis: d.planBitis,
+    }];
+  });
   const bugun = await sorgular.bugun(db);
   const gorevIdleri = new Map<number, number>();
   const atamalar: { sorumluKisiId: number | null; yapanRolId: number | null }[] = [];
   for (const k of kalemler) {
     if (k.hazirlik_maddesi !== null) continue;
     const t = sablonTarihleri({ dayanak: k.dayanak, gun: k.gun, sureGun: k.sure_gun }, proje, bugun);
+    const planBitis = k.planBitis ?? t.planBitis;
     const id = await kisitKorumali(YONETIM_KISITLARI, () => sorgular.gorevEkle(db, projeId, {
-      kilometreTasiId: null, ad: k.ad, aciklama: k.aciklama, sorumluKisiId: k.yapan_kisi_id, planBaslangic: t.planBaslangic, planBitis: t.planBitis,
+      kilometreTasiId: null, ad: k.ad, aciklama: k.aciklama, sorumluKisiId: k.yapan_kisi_id,
+      planBaslangic: t.planBaslangic < planBitis ? t.planBaslangic : planBitis, planBitis,
       oncekiGorevId: k.onceki_kalem_id === null ? null : gorevIdleri.get(k.onceki_kalem_id) ?? null, asama: k.asama, yapanRolId: k.yapan_rol_id,
       kontrolKisiId: k.kontrol_kisi_id, kontrolRolId: k.kontrol_rol_id, yedekKontrolKisiId: k.yedek_kontrol_kisi_id, yedekKontrolRolId: k.yedek_kontrol_rol_id,
+      kanitZorunlu: k.kanit_zorunlu,
     }, kisiId));
+    await sorgular.adimlariEkle(db, id, k.adimlar);
     gorevIdleri.set(k.id, id);
     atamalar.push({ sorumluKisiId: k.yapan_kisi_id, yapanRolId: k.yapan_rol_id });
   }
-  await sorgular.projeSablonuEkle(db, projeId, sablon.id, sablon.surum, kalemler.map(kalemDonmus), kisiId);
+  const dahil = new Set(kalemler.map((k) => k.id));
+  await sorgular.projeSablonuEkle(db, projeId, sablon.id, sablon.surum, kalemler.map(({ planBitis: _p, ...k }) => kalemDonmus({
+    ...k, onceki_kalem_id: k.onceki_kalem_id !== null && dahil.has(k.onceki_kalem_id) ? k.onceki_kalem_id : null,
+  })), kisiId);
   await atamaBildir(db, projeId, atamalar, kisiId);
+  return atamalar.length;
 }
 
 const kalemDonmus = (k: SablonKalemiSatiri): Record<string, unknown> => ({
   kalemId: k.id, sira: k.sira, ad: k.ad, aciklama: k.aciklama, asama: k.asama, dayanak: k.dayanak, gun: k.gun, sureGun: k.sure_gun,
   yapanKisiId: k.yapan_kisi_id, yapanRolId: k.yapan_rol_id, kontrolKisiId: k.kontrol_kisi_id, kontrolRolId: k.kontrol_rol_id,
   yedekKontrolKisiId: k.yedek_kontrol_kisi_id, yedekKontrolRolId: k.yedek_kontrol_rol_id, oncekiKalemId: k.onceki_kalem_id,
-  hazirlikMaddesi: k.hazirlik_maddesi, kontrolKosulu: k.kontrol_kosulu,
+  hazirlikMaddesi: k.hazirlik_maddesi, kontrolKosulu: k.kontrol_kosulu, adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
 });
 
 export async function secilenSablon(db: Db, sablonId: number): Promise<SablonSatiri> {
@@ -836,17 +866,10 @@ export async function secilenSablon(db: Db, sablonId: number): Promise<SablonSat
   return s;
 }
 
-// Proje açılınca (3269 a): şablon seçilmediyse varsayılan şablon (varsa), `null` şablonsuz.
-async function acilisSablonu(db: Db, kisiId: number, projeId: number, sablonId: number | null | undefined): Promise<void> {
-  if (sablonId === null) return;
-  const sablon = sablonId === undefined ? await sorgular.varsayilanSablon(db) : await secilenSablon(db, sablonId);
-  if (sablon !== null) await sablonUygula(db, kisiId, projeId, sablon);
-}
-
-export async function sablondanEkle(db: Db, kisiId: number, projeId: number, sablonId: number): Promise<ProjeYonetimiCevabi> {
-  await projeKilitle(db, projeId, true);
-  await sablonUygula(db, kisiId, projeId, await secilenSablon(db, sablonId));
-  return projeYonetimi(db, projeId);
+// 3458-2 a (3269 a değişti): proje açılınca şablon sessiz uygulanmaz; görevler Görevleri dağıt ekranında dağıtılır. Açılışta seçilen
+// şablon yalnız denetlenir (kapalı şablon seçilemez); ekran onu seçili getirir.
+async function acilisSablonu(db: Db, sablonId: number | null | undefined): Promise<void> {
+  if (sablonId !== null && sablonId !== undefined) await secilenSablon(db, sablonId);
 }
 
 // --- Başka modüllere (disari.ts) ---
