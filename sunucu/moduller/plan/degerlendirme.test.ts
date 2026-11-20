@@ -651,7 +651,7 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     // Girilen termin satırı bugünkü terminle kurulur: taban planla aynı plandır, öteki emirlerin gecikmesi değişmez.
     const girilen = t.satirlar.find((x) => x.secenek === 'girilen');
     assert.ok(girilen, 'girilen termin satırı var');
-    assert.ok(Math.abs(girilen.digerGecikmeFarki) < 1e-6, String(girilen.digerGecikmeFarki));
+    assert.ok(girilen.digerGecikmeFarki != null && Math.abs(girilen.digerGecikmeFarki) < 1e-6, String(girilen.digerGecikmeFarki));
     // Bu veride termini iki gün uzatılan emir yerinden oynamaz, öteki emirler de öne gelmez: toplam gecikme en çok 48 saat azalır.
     const u = sonuc(await iste(calisma, { tur: 'termin-uzatma', gun: 2 })); if (u.tur !== 'termin-uzatma') return assert.fail(u.tur);
     assert.ok(u.satirlar.length > 0);
