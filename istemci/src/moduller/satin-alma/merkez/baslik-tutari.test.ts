@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PurchaseRequest, Quote } from './tipler.ts';
+import type { Material, PurchaseRequest, Quote } from './tipler.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
@@ -17,7 +17,7 @@ const talep = (ek: Partial<PurchaseRequest> = {}): PurchaseRequest => ({
 } as PurchaseRequest);
 beforeEach(() => {
   S.settings = { ...DEFAULT_SETTINGS };
-  S.materials = {};
+  S.materials = { m1: { id: 'm1', code: 'ORN-M1', name: 'ORN- kalem', category: '' } as Material };
   S.requests = {
     eski: talep({ id: 'eski', status: 'received', quotes: [teklif('qe', 1000)], award: { mode: 'single', quoteId: 'qe', reason: '', by: '', decidedAt: '2026-01-01', orderDate: '2026-01-01', deliveredDate: '2026-01-05', approvals: [] } }),
   };
@@ -30,7 +30,12 @@ describe('başlıktaki tutar (3466-3)', () => {
     expect(basliktakiTutar(t)).toEqual({ tur: 'teklif', tl: 90 });
     expect(headerFacts(t).join(' ')).toContain('en iyi teklif, net');
     expect(basliktakiTutar({ ...t, award: { mode: 'single', quoteId: 'q1', reason: '', by: '', decidedAt: '2026-11-02', approvals: [] } })).toEqual({ tur: 'karar', tl: 120 });
-    const yok = basliktakiTutar(talep());
-    expect(yok === null || yok.tur === 'tahmin').toBe(true);
+    expect(basliktakiTutar(talep())).toEqual({ tur: 'tahmin', tl: 10000 });
+  });
+
+  it('eksik kalemli teklif ucuz olsa da başlıkta tam teklifin tutarı', () => {
+    const iki = talep({ items: [...talep().items, { id: 'k2', materialId: null, name: 'ORN- kalem 2', spec: '', qty: 1, unit: 'adet' }],
+      quotes: [{ ...teklif('qt', 12), prices: { k1: 12, k2: 5 } }, teklif('qe2', 1)] });
+    expect(basliktakiTutar(iki)).toEqual({ tur: 'teklif', tl: 125 });
   });
 });

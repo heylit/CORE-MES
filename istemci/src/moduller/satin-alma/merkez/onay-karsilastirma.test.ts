@@ -4,7 +4,8 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
 import { viewApproval } from './roles.ts';
-import { enIyiler } from './onay-karsilastirma.ts';
+import { enIyiler, onayUyarilari } from './onay-karsilastirma.ts';
+import { evaluate } from './calc.ts';
 
 // 3466-1 (karar C): onaylayanın ekranında teklifler tedarikçi kartları olarak yan yana.
 const teklif = (id: string, supplierId: string, ek: Partial<Quote>): Quote => ({
@@ -69,6 +70,15 @@ describe('Onaylar ayrıntısı: tedarikçi kartları (3466-1)', () => {
     const b = k.find((x) => x.textContent?.includes('ORN-Tedarikçi fb'))!;
     expect(b.querySelector('.sa-oy-fark')!.textContent).toMatch(/Karardan .* ucuz/);
     expect(satir(b, 'Net bugünkü maliyet').classList.contains('best')).toBe(true);
+    // TL toplamı eksik kalemli teklifte doğal olarak düşüktür; en iyi sayılmaz.
+    expect(satir(c, 'TL karşılığı').classList.contains('best')).toBe(false);
+    expect(satir(b, 'TL karşılığı').classList.contains('best')).toBe(true);
+  });
+
+  it('tek uygun teklifte hiçbir satır en iyi diye işaretlenmez', () => {
+    S.requests.t1 = { ...talep(), quotes: [talep().quotes[0]!] };
+    bump();
+    expect(ciz().querySelectorAll('.sa-oy-satir.best').length).toBe(0);
   });
 
   it('uyarılarda iyi durum en sonda; önerilen seçilmediyse en başta', () => {
@@ -100,6 +110,21 @@ describe('Arayüz 3466 kod sonrası', () => {
     const b = k.find((x) => x.textContent?.includes('ORN-Tedarikçi fb'))!;
     const kalem = [...b.querySelectorAll('.sa-oy-satir')].find((s) => s.textContent?.includes('ORN- kalem 1'))!;
     expect(kalem.querySelectorAll('.sa-oy-v .sub .sa-oy-nowrap').length).toBe(2);
+  });
+});
+
+describe('onayUyarilari sırası', () => {
+  it('bütçe aşımı kötü uyarılardadır; aşılmayan bütçe ve önerilenin seçilmesi en sonda', () => {
+    const r = { ...talep(), department: 'ORN-Bakım', award: { ...talep().award!, quoteId: 'qb' } };
+    const ev = evaluate(r);
+    const asim = onayUyarilari(r, ev, new Set(['qb']), 120);
+    const butce = asim.findIndex((u) => u.includes('bütçesi'));
+    expect(asim[butce]).toContain('flag bad');
+    expect(asim.slice(butce + 1).every((u) => !u.includes('flag warn') && !u.includes('flag bad'))).toBe(true);
+    const altinda = onayUyarilari(r, ev, new Set(['qb']), 80);
+    expect(altinda.at(-1)).toContain('Önerilen teklif seçildi');
+    expect(altinda.at(-2)).toContain('bütçesi');
+    expect(altinda.at(-2)).toContain('flag info');
   });
 });
 
