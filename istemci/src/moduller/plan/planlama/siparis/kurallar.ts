@@ -439,6 +439,15 @@ export function partiAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
     .sort((a, b) => (p.J[b.id]?.T ?? 0) - (p.J[a.id]?.T ?? 0) || a.id.localeCompare(b.id, 'tr'));
 }
 export const PARTI_EN_COK = 20;
+// İş emrinin elle bölünmüş adımları (çalışmanın elleBol'u: işlem -> paylar). Parti bölme ölçümü bu kaydı ilk partide tutar, öteki partilerin
+// tezgâhını plan seçer (motor degerlendir.js partiBol); kart kişiye bölmesinin ne olacağını bununla söyler. En az iki pay bölmedir.
+export interface ElleBolunenAdim { k: string; tezgahlar: string[] }
+export function elleBolunenAdimlar(c: PlanlamaCalismasi, jid: string): ElleBolunenAdim[] {
+  const l = (c as unknown as { elleBol?: unknown }).elleBol; const on = `${jid}.`;
+  if (!nesne(l)) return [];
+  return Object.entries(l).filter(([id, p]) => id.startsWith(on) && Array.isArray(p) && p.length >= 2)
+    .map(([id, p]) => ({ k: id.slice(on.length), tezgahlar: (p as unknown[]).map((x) => (nesne(x) && typeof x.m === 'string' ? x.m : '')).filter((m) => m !== '') }));
+}
 
 // ---- örtüşme (zz16-ortusme orAdaylar, ze-rota rtTur, engine isAgirligi) ----
 // Adımın önceki adıma bağ türü: ilk adım ve "bitince" bağı b, örtüşen o, bağsız x.
