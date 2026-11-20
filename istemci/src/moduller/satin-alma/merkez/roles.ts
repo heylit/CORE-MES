@@ -9,9 +9,10 @@ import type { PurchaseRequest, RequestItem } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
 import { onaylayabilecekler } from "./onaylayan.ts";
-import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
+import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, lateBy, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, numIn, parseNum, pct, todayStr } from "./util.ts";
-import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
+import { empty, faizUyarisi, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
+import { onayUyarilari, simge, teklifKartlariHTML } from "./onay-karsilastirma.ts";
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
 import { gelisGunu, kalemOzeti } from "./kimlik.ts";
@@ -179,16 +180,64 @@ function pendingApprovals(): PurchaseRequest[] {
     .sort((a, b) => acil(a) - acil(b) || (a.needDate || "9999").localeCompare(b.needDate || "9999"));
 }
 export const pendingApprovalCount = (): number => pendingApprovals().length;
+/** Kararın onaya gönderildiği an: hareket geçmişindeki son "onaya gönderildi" kaydı, yoksa karar günü; ikisi de yoksa boş (V2). */
+export function onayaGidis(r: PurchaseRequest): number | null {
+  const l = [...(r.log || [])].reverse().find(x => /onaya gönderildi/i.test(x.t));
+  if (l) return l.at;
+  const g = r.award?.decidedAt ? Date.parse(`${r.award.decidedAt}T00:00:00`) : NaN;
+  return Number.isNaN(g) ? null : g;
+}
+export function beklemeMetni(an: number | null, simdi = Date.now()): string {
+  if (an === null) return "–";
+  const saat = Math.max(0, Math.floor((simdi - an) / 3600000));
+  return saat < 48 ? `${saat} saat` : `${Math.floor(saat / 24)} gün`;
+}
+/** Listede dikkat isteyenler: önerilen seçilmedi, kararın termini ihtiyacı kaçırır, yeniden gönderildi, bütçe aşılır. */
+export function onayDikkatleri(r: PurchaseRequest): string[] {
+  const tt = awardTotals(r); if (!tt) return [];
+  const top = tt.ev.ranking[0], fl: string[] = [];
+  if (r.award?.mode === "single" && top && r.award.quoteId !== top.q.id) fl.push(`<span class="flag warn">${simge("flag")} önerilen seçilmedi</span>`);
+  const gec = awardOrders(r).map(o => lateBy(r, o.q) ?? 0).reduce((m, v) => Math.max(m, v), 0);
+  if (gec > 0) fl.push(`<span class="flag bad">${simge("alert")} ihtiyacı ${gec} gün kaçırır</span>`);
+  if (approvalState(r).resubmitted) fl.push('<span class="flag warn">yeniden gönderildi</span>');
+  const bu = r.department ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
+  if (bu && bu.budget && bu.used + tt.totalTRY > bu.budget) fl.push(`<span class="flag bad">${simge("lira")} bütçe aşılır</span>`);
+  return fl;
+}
 export function viewApprovals(): string {
   const list = pendingApprovals();
   // "Son kararlarınız" yalnız bu kişinin onay ve retleridir; başkasının kararı listeye girmez.
   const ben = S.me?.id ?? null;
+  const benimkiler = Object.values(S.requests).flatMap(r => (r.award?.approvals || []).filter(a => ben !== null && a.by === ben).map(a => ({ r, a })));
   const recent = Object.values(S.requests).flatMap(r => (r.award?.approvals || []).filter(a => ben !== null && a.by === ben).slice(-1).map(a => ({ r, a }))).sort((x, y) => y.a.at - x.a.at).slice(0, 6);
-  return `<div class="phead"><div><h1>Onay bekleyenler</h1><p class="lead">${list.length ? `${list.length} karar onayınızı bekliyor.` : "Onay bekleyen karar yok."}</p></div></div>
+  // 3466-2: bekleyenler tablo; üstte dört özet sayı.
+  const satirlar = list.map(r => ({ r, tt: awardTotals(r), an: onayaGidis(r), dikkat: onayDikkatleri(r) }));
+  const toplam = satirlar.reduce((t, x) => t + (x.tt ? x.tt.totalTRY : 0), 0);
+  const enEski = satirlar.reduce<number | null>((m, x) => (x.an === null ? m : m === null ? x.an : Math.min(m, x.an)), null);
+  const ayBasi = Date.parse(`${todayStr().slice(0, 7)}-01T00:00:00`);
+  const buAy = benimkiler.filter(x => x.a.at >= ayBasi);
+  const ozet = (simgeAd: Parameters<typeof simge>[0], k: string, v: string, d: string) => `<section class="panel"><div class="panel-b sa-oy-ozet"><span class="xs muted">${simge(simgeAd)} ${k}</span><b class="num">${v}</b><span class="xs muted">${d}</span></div></section>`;
+  const karar = (r: PurchaseRequest, tt: ReturnType<typeof awardTotals>) => {
+    if (!tt) return "–";
+    if (r.award?.mode === "split") { const o = awardOrders(r); return `${o.length} tedarikçiye bölündü<span class="sub">${esc(o.map(x => supName(x.q)).join(", "))}</span>`; }
+    const i = tt.ev.ranking.findIndex(x => x.q.id === r.award?.quoteId);
+    return `${tt.x ? esc(supName(tt.x.q)) : "–"}<span class="sub">${i === 0 ? "önerilen" : i > 0 ? `${i + 1}. sıradaki teklif` : ""}</span>`;
+  };
+  return `<div class="phead"><div><h1>Onay bekleyenler</h1><p class="lead">${list.length ? `${list.length} karar onayınızı bekliyor. Toplam ${money(toplam, "TRY", 0)} (KDV hariç).` : "Onay bekleyen karar yok."}</p></div></div>
+  <div class="sa-oy-ozetler">
+    ${ozet("clock", "Bekleyen", String(list.length), enEski !== null ? `en eskisi ${beklemeMetni(enEski)}` : "–")}
+    ${ozet("lira", "Toplam tutar", money(toplam, "TRY", 0), "KDV hariç")}
+    ${ozet("alert", "Dikkat isteyen", String(satirlar.filter(x => x.dikkat.length).length), "önerilen seçilmedi, ihtiyaç kaçıyor, bütçe")}
+    ${ozet("check", "Bu ay kararlarınız", String(buAy.filter(x => x.a.decision === "approved").length), `${buAy.filter(x => x.a.decision === "rejected").length} ret`)}
+  </div>
   <div class="inbox">
     <section class="panel jobs"><div class="panel-h"><h2>Bekleyenler</h2><span class="cnt">${list.length}</span></div>
-    ${list.length ? `<ul class="joblist">${list.map(r => { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num">${esc(r.no)}</span><span class="tt"><span class="ln">${prioDot(r.priority)}<b>${esc(r.title)}</b></span><span class="sub">${esc([r.department, tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "", req ? `${req.role} onayı` : ""].filter(Boolean).join(", "))}${approvalState(r).resubmitted ? ' <span class="flag warn">yeniden gönderildi</span>' : ""}</span></span><span class="fl num"><b>${tt ? money(tt.totalTRY, "TRY", 0) : ""}</b></span><span class="btn sm primary">İncele</span></button></li>`; }).join("")}</ul>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
-    ${recent.length ? `<section class="panel jobs"><div class="panel-h"><h2>Son kararlarınız</h2></div><ul class="joblist">${recent.map(({ r, a }) => `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num">${esc(r.no)}</span><span class="tt"><b>${esc(r.title)}</b><span class="sub">${fmtTs(a.at)}, ${esc(a.name || nameOf(a.by))}${a.note ? ": " + esc(a.note) : ""}</span></span><span class="fl">${a.decision === "approved" ? '<span class="flag good">onaylandı</span>' : '<span class="flag bad">reddedildi</span>'}</span></button></li>`).join("")}</ul></section>` : ""}
+    ${list.length ? `<div class="tw"><table class="rt sa-oy-liste"><thead><tr><th>Talep</th><th>Karar</th><th class="r">Tutar</th><th>Gereken onay</th><th>İhtiyaç</th><th>Bekliyor</th><th>Dikkat</th><th><span class="sr-only">Aç</span></th></tr></thead><tbody>
+    ${satirlar.map(({ r, tt, an, dikkat }) => { const req = tt ? requiredApprover(tt.totalTRY) : null; return `<tr class="click" data-act="open" data-id="${r.id}"><td class="lead"><span class="no num">${esc(r.no)}</span> ${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, `${(r.items || []).length} kalem`, `${(r.quotes || []).length} teklif`].filter(Boolean).join(", "))}${tt ? `, ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}` : ""}${req ? `, ${esc(req.role)} onayı` : ""}</span></td>
+      <td data-l="Karar">${karar(r, tt)}</td><td class="r num" data-l="Tutar"><b>${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</b></td><td data-l="Gereken onay">${esc(req?.role || "–")}</td><td class="num" data-l="İhtiyaç">${r.needDate ? fmtDate(r.needDate) : "–"}</td><td class="num sa-oy-nowrap" data-l="Bekliyor">${beklemeMetni(an)}</td>
+      <td data-l="Dikkat">${dikkat.length ? `<div class="flags">${dikkat.join("")}</div>` : ""}</td><td class="acts"><span class="btn sm primary">İncele</span></td></tr>`; }).join("")}
+    </tbody></table></div>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
+    ${recent.length ? `<section class="panel jobs"><div class="panel-h"><h2>Son kararlarınız</h2></div><ul class="joblist">${recent.map(({ r, a }) => `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num sa-oy-nowrap">${esc(r.no)}</span><span class="tt"><b>${esc(r.title)}</b><span class="sub">${fmtTs(a.at)}, ${esc(a.name || nameOf(a.by))}${a.note ? ": " + esc(a.note) : ""}</span></span><span class="fl">${a.decision === "approved" ? '<span class="flag good">onaylandı</span>' : '<span class="flag bad">reddedildi</span>'}</span></button></li>`).join("")}</ul></section>` : ""}
   </div>`;
 }
 export function viewApproval(r: PurchaseRequest): string {
@@ -217,28 +266,41 @@ export function viewApproval(r: PurchaseRequest): string {
   // Bölünmüş kalem aynı adla birden çok satırdadır (3442-5): o adda miktar da yazılır, tedarikçiler arası pay görünsün.
   const adSayisi = new Map<string, number>(); for (const it of r.items || []) adSayisi.set(it.name, (adSayisi.get(it.name) ?? 0) + 1);
   const kalemAdi = (it: RequestItem) => ((adSayisi.get(it.name) ?? 0) > 1 ? `${it.name} ${numIn(it.qty ?? 0)} ${it.unit ?? ""}`.trim() : it.name);
-  return back + head + status + yeniden + `
-  <div class="appr">
-    <section class="panel appr-main"><div class="panel-b">
-      <div class="vk">Satın almanın kararı</div>
-      <h2 data-sa-y="21">${r.award.mode === "split" ? `${orders.length} tedarikçiye bölünmüş sipariş` : esc(supName(tt.x!.q))}</h2>
-      <div class="appr-amt"><b class="num">${money(tt.totalTRY, "TRY", 0)}</b><span class="muted">KDV hariç, net bugünkü maliyet ${money(tt.pvTRY, "TRY", 0)}</span></div>
-      <ul class="appr-why">${orders.map(o => `<li><b>${esc(supName(o.q))}</b>: ${o.items.map(it => esc(kalemAdi(it))).join(", ")}; ${esc(payText(o.q))}, termin ${parseNum(o.q.leadDays) ?? "?"} gün</li>`).join("")}
-        ${chosenIsTop ? verdictReasons(r, ev).map(w => `<li>${esc(w)}</li>`).join("") : ""}</ul>
-      ${r.award.reason ? `<div class="note"><span class="xs muted">Gerekçe</span><br>${esc(r.award.reason)}</div>` : !chosenIsTop && r.award.mode === "single" ? '<div class="note small">Önerilen teklif seçilmedi; gerekçe yazılmamış.</div>' : ""}
-    </div></section>
-    <section class="panel"><div class="panel-b kv">
-      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${esc(req?.role || "–")}</div>${req ? `<div class="d sa-onaylayan">${esc(onaylayabilecekler(settings(), req))}</div>` : ""}</div>
-      <div><div class="k">${esc(r.department || "Birim")} bütçesi</div><div class="v">${bu && bu.budget ? pct((bu.used + (r.status === "approval" ? tt.totalTRY : 0)) / bu.budget * 100) : "–"}</div><div class="d">${bu && bu.budget ? "bu alımla birlikte" : "bütçe tanımlı değil"}</div></div>
-      <div><div class="k">Değerlendirilen</div><div class="v">${ev.elig.length} teklif</div><div class="d">${(r.rfqs || []).length} tedarikçiden istendi</div></div>
-    </div></section>
-  </div>
-  <section class="panel"><div class="panel-h"><h2>Değerlendirilen teklifler</h2></div><div class="tw"><table class="rt"><thead><tr><th>#</th><th>Tedarikçi</th><th class="r">Net maliyet</th><th>Ödeme</th><th class="r">Termin</th><th class="r">Puan</th></tr></thead><tbody>
-    ${ev.ranking.map((x, i) => { const chosen = orders.some(o => o.qid === x.q.id); return `<tr class="${chosen ? "chosen" : ""}"><td>${i + 1}</td><td class="lead"><b>${esc(supName(x.q))}</b>${chosen ? ' <span class="flag good">seçilen</span>' : ""}${x.c.covered < (r.items || []).length ? ' <span class="flag warn">eksik kalemli</span>' : ""}</td><td class="r num">${money(x.c.pvTRY, "TRY", 0)}</td><td>${esc(payText(x.q))}</td><td class="r num">${parseNum(x.q.leadDays) ?? "–"} gün</td><td class="r num">${nf0.format(x.score)}</td></tr>`; }).join("")}
-  </tbody></table></div></section>
-  ${aps.state === "pending" && r.status === "approval" ? `<section class="panel appr-act"><div class="panel-b">
-    <label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin" data-onay-eylemi="reddet"></label>
-    <div class="row" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>
-  </div></section>` : ""}
-  <details class="adv"><summary>Kalemler ve hareket geçmişi</summary>${tabItems(r, true)}${tabLog(r)}</details>`;
+  // 3466-1 (karar C): teklifler tedarikçi kartları olarak yan yana; onay kutusu yanda sabit, telefonda Onayla/Reddet altta.
+  const secilen = new Set(orders.map(o => o.qid));
+  const butceYuzde = bu && bu.budget ? (bu.used + (r.status === "approval" ? tt.totalTRY : 0)) / bu.budget * 100 : null;
+  const uyarilar = onayUyarilari(r, ev, secilen, butceYuzde);
+  const bekliyor = aps.state === "pending" && r.status === "approval";
+  const disarida = ev.all.filter(x => !ev.elig.includes(x));
+  const onaylar = r.award.approvals || [];
+  const yan = `<aside class="sa-oy-yan"><section class="panel appr-act sa-oy-onay"><div class="panel-h"><h2>Onayınız</h2><span class="spacer"></span>${bekliyor ? '<span class="flag warn">bekliyor</span>' : aps.state === "approved" ? '<span class="flag good">onaylandı</span>' : aps.state === "rejected" ? '<span class="flag bad">reddedildi</span>' : ""}</div><div class="panel-b">
+    <div><div class="xs muted">Tutar (KDV hariç)</div><div class="sa-oy-tutar num">${money(tt.totalTRY, "TRY", 0)}</div><div class="xs muted">net bugünkü maliyet ${money(tt.pvTRY, "TRY", 0)}</div></div>
+    <div><div class="xs muted">Gereken onay</div><div class="v" data-sa-y="22"><b>${esc(req?.role || "Limit tanımlı değil")}</b></div>${req ? `<div class="xs muted sa-onaylayan">${esc(onaylayabilecekler(settings(), req))}</div>` : ""}</div>
+    <div><div class="xs muted">${esc(r.department || "Birim")} bütçesi</div><div>${butceYuzde !== null ? pct(butceYuzde) : "–"}</div><div class="xs muted">${butceYuzde !== null ? "bu alımla birlikte" : "bütçe tanımlı değil"}</div></div>
+    ${onaylar.length ? `<ul class="sa-oy-gecmis">${onaylar.map(x => `<li>${simge(x.decision === "approved" ? "check" : "x")} <span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}, ${fmtTs(x.at)}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
+    ${bekliyor ? `<label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin" data-onay-eylemi="reddet"></label>
+    <div class="row sa-oy-dugmeler" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">${simge("check")} Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>` : ""}
+  </div></section></aside>`;
+  const alt = bekliyor ? `<div class="sa-oy-alt" role="group" aria-label="Onay"><button class="btn good" data-act="approve">${simge("check")} Onayla</button><button class="btn bad" data-act="ret-penceresi">Reddet</button></div>` : "";
+  return back + head + status + yeniden + (uyarilar.length ? `<div class="flags sa-oy-uyari" role="note">${uyarilar.join("")}</div>` : "") + `
+  <div class="sa-oy">
+    <div class="stack sa-oy-ana">
+      <section class="panel appr-main"><div class="panel-b">
+        <div class="vk">Satın almanın kararı</div>
+        <h2 data-sa-y="21">${simge("user")} ${r.award.mode === "split" ? `${orders.length} tedarikçiye bölünmüş sipariş` : esc(supName(tt.x!.q))}</h2>
+        <div class="appr-amt"><b class="num">${money(tt.totalTRY, "TRY", 0)}</b><span class="muted">KDV hariç, net bugünkü maliyet ${money(tt.pvTRY, "TRY", 0)}</span></div>
+        <ul class="appr-why">${orders.map(o => `<li><b>${esc(supName(o.q))}</b>: ${o.items.map(it => esc(kalemAdi(it))).join(", ")}; ${esc(payText(o.q))}, termin ${parseNum(o.q.leadDays) ?? "?"} gün</li>`).join("")}
+          ${chosenIsTop ? verdictReasons(r, ev).map(w => `<li>${esc(w)}</li>`).join("") : ""}</ul>
+        ${r.award.reason ? `<div class="note"><span class="xs muted">Gerekçe</span><br>${esc(r.award.reason)}</div>` : !chosenIsTop && r.award.mode === "single" ? '<div class="note small">Önerilen teklif seçilmedi; gerekçe yazılmamış.</div>' : ""}
+      </div></section>
+      <section class="panel sa-oy-teklifler"><div class="panel-h"><h2>Teklifler yan yana</h2><span class="sub">${ev.ranking.length} teklif, karar ilk sırada</span></div><div class="panel-b stack">
+        ${teklifKartlariHTML(r, ev, secilen, tt.pvTRY)}
+        ${disarida.length ? `<p class="small muted">Değerlendirme dışı: ${disarida.map(x => esc(supName(x.q)) + (x.q.compliant === false ? " (teknik uygun değil)" : " (fiyat girilmemiş)")).join(", ")}</p>` : ""}
+        ${faizUyarisi(ev.elig.filter(x => x.c.faizYok).map(x => x.q.currency))}
+        <p class="small muted">${simge("target")} satırın en iyi değeri. Tutarlar KDV hariç. Net bugünkü maliyet vade etkisi dahil, ${r.status === "approval" ? "güncel" : "sipariş günü"} kurla TL.${r.award.mode === "split" ? " Bölünmüş kararda kartlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
+      </div></section>
+      <details class="adv"><summary>Kalemler ve hareket geçmişi</summary>${tabItems(r, true)}${tabLog(r)}</details>
+    </div>
+    ${yan}
+  </div>${alt}`;
 }

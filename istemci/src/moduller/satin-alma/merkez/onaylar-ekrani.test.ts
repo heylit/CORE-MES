@@ -30,7 +30,7 @@ function kur(talepler: PurchaseRequest[]): void {
   bump();
 }
 const ciz = (html: string): HTMLElement => { const k = document.createElement('div'); k.innerHTML = html; return k; };
-const bekleyenler = (k: HTMLElement) => [...k.querySelectorAll('.jobs')[0]!.querySelectorAll('.job .no')].map((e) => e.textContent);
+const bekleyenler = (k: HTMLElement) => [...k.querySelectorAll('.sa-oy-liste .no')].map((e) => e.textContent);
 
 beforeEach(() => kur([]));
 
@@ -71,5 +71,28 @@ describe('Onaylar ekranı (2422)', () => {
     expect(k.querySelector('#ap-name')).toBeNull();
     expect(k.querySelector('#ap-note')).not.toBeNull();
     expect(k.querySelector('[data-act="approve"]')).not.toBeNull();
+  });
+});
+
+describe('Onay listesi tablosu (3466-2)', () => {
+  it('bekleme süresi son "onaya gönderildi" kaydından; kayıt yoksa karar gününden; ikisi de yoksa tire', async () => {
+    const { beklemeMetni, onayaGidis } = await import('./roles.ts');
+    const r = talep('a', { log: [{ id: 'l1', at: 1_000, by: '3', t: 'Karar: X, 10 TL. Onaya gönderildi.' }, { id: 'l2', at: 2_000, by: '3', t: 'Not eklendi' }] });
+    expect(onayaGidis(r)).toBe(1_000);
+    expect(onayaGidis(talep('b'))).toBe(Date.parse('2026-09-02T00:00:00'));
+    expect(onayaGidis(talep('c', { award: { mode: 'single', quoteId: 'q1', reason: '', by: '', decidedAt: '', approvals: [] } }))).toBeNull();
+    expect(beklemeMetni(null)).toBe('–');
+    expect(beklemeMetni(0, 5 * 3_600_000)).toBe('5 saat');
+    expect(beklemeMetni(0, 72 * 3_600_000)).toBe('3 gün');
+  });
+
+  it('önerilen seçilmediyse dikkat rozeti ve kararın sırası; özet sayılar yazılır', () => {
+    const ucuz: Quote = { ...teklif, id: 'q0', supplierId: 'f1', prices: { k1: 1 } };
+    kur([talep('a', { quotes: [teklif, ucuz] })]);
+    const k = ciz(viewApprovals());
+    const satir = k.querySelector('.sa-oy-liste tbody tr')!;
+    expect(satir.textContent).toContain('önerilen seçilmedi');
+    expect(satir.textContent).toContain('2. sıradaki teklif');
+    expect(k.querySelectorAll('.sa-oy-ozet').length).toBe(4);
   });
 });

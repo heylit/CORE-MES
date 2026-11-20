@@ -45,13 +45,13 @@ describe('onay bekleyenler: sunucudan gelen ad ve ayardaki onay seviyesi metin o
     const kok = ciz(viewApprovals());
     expect(kok.querySelector('img')).toBeNull();
     expect(kok.querySelector('script')).toBeNull();
-    const alt = kok.querySelector('.joblist .sub')!;
+    const alt = kok.querySelector('.sa-oy-liste .lead .sub')!;
     expect(alt.textContent).toContain(IMG);
     expect(alt.textContent).toContain(`${SCRIPT} onayı`);
   });
 
   it('olağan adlarda görünen metin değişmez', () => {
-    const alt = ciz(viewApprovals()).querySelector('.joblist .sub')!;
-    expect(alt.textContent).toBe('Bakım, Deneme Tedarikçi, Genel müdür onayı');
+    const alt = ciz(viewApprovals()).querySelector('.sa-oy-liste .lead .sub')!;
+    expect(alt.textContent).toBe('Bakım, 1 kalem, 1 teklif, Deneme Tedarikçi, Genel müdür onayı');
   });
 });

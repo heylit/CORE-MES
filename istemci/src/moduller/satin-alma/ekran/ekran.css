@@ -113,3 +113,19 @@
 .sa-is-tablosu .tc-tablo-kap[data-kaydir] .sa-ekran-govde { align-items: flex-start; }
 .sa-is-tablosu .tc-tablo-kap[data-kaydir] td[data-baslik="Malzeme"] { white-space: normal; min-width: 12rem; max-width: 17rem; }
 .sa-is-malzeme { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* 3466-3 (H1): talebin bilgileri eşit kutularda; satır kalabalığı yerine ad, değer ve kısa açıklama */
+.sa-ekran-bilgi {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); margin: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); overflow: hidden;
+}
+.sa-ekran-bilgi > div {
+  display: grid; gap: var(--pay-ince); align-content: start; min-width: 0; padding: var(--b-2) var(--b-3);
+  border-right: var(--cizgi-ince) solid var(--edge); border-bottom: var(--cizgi-ince) solid var(--edge);
+}
+.sa-ekran-bilgi dt { display: flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); color: var(--muted); }
+.sa-ekran-bilgi dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sa-ekran-bilgi-deger { font-weight: 600; color: var(--ink); }
+.sa-ekran-bilgi-alt { font-size: var(--yazi-xs); color: var(--muted); }
+.sa-ekran-bilgi-gec .sa-ekran-bilgi-alt { color: var(--stop); font-weight: 600; }
+@media (max-width: 560px) { .sa-ekran-bilgi { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

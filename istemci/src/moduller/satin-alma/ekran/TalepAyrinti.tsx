@@ -1,18 +1,19 @@
 import { DurumKutusu, Dugme, Rozet, SayfaBasligi, Sekmeler, Simge, type MenuOgesi } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
-import { durumEtiketi } from '../merkez/calc.ts';
+import { budgetUse, durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
 import { S, V } from '../merkez/store.ts';
 import type { PurchaseRequest } from '../merkez/tipler.ts';
 import { AYRINTI, eylemCalistir, go } from '../merkez/ui.ts';
-import { fmtDate, todayStr } from '../merkez/util.ts';
+import { dayDiff, fmtDate, money, pct, todayStr } from '../merkez/util.ts';
+import { grupMetni } from '../merkez/guncelleme-grubu.ts';
 import {
-  ADIMLAR, KARAR_SONRASI, adimBilgisi, adimSirasi, headerFacts, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
+  ADIMLAR, KARAR_SONRASI, TUTAR_ETIKETI, adimBilgisi, adimSirasi, basliktakiTutar, gecikmisMi, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
 } from '../merkez/views.ts';
 import { gelisGunu, kalemOzeti } from '../merkez/kimlik.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { TalepCizimleri } from '../talep/Cizimler.tsx';
-import { KimlikSeridi, durumTonu, ihtiyacMetni } from './KimlikSeridi.tsx';
+import { KimlikSeridi, durumTonu } from './KimlikSeridi.tsx';
 
 // Talep ayrıntısı (2412-2): yedi adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
 // başlıkta. Seçili adımın içeriği merkezin gövdesindedir (#main); düğmeler merkezin işlemlerini adıyla çağırır.
@@ -24,34 +25,50 @@ const ISLEM_SIMGESI: Record<string, SimgeAdi> = {
 };
 const DONUS: Record<string, string> = { dash: "Bugün'e dön", requests: 'Taleplere dön', orders: 'Siparişlere dön' };
 
-// Merkezin metinleri kaçırılmış HTML'dir (b, span); başlık satırında düz metin gerekir.
-function duzMetin(html: string): string {
-  const t = document.createElement('template');
-  t.innerHTML = html;
-  return t.content.textContent ?? '';
-}
 const dugmeVerisi = (b: NextBtn): Record<string, string> => (b[3] ? { tab: b[3] } : {});
 function calistir(b: NextBtn) {
   if (b[0] === 'tab') { V.tab = b[3] ?? null; render(); return; }
   eylemCalistir(b[0], dugmeVerisi(b));
 }
 
-// 3442-3: talebin kimliği (geliş günü, kalemler, ihtiyaç) başlığın altında koyu yazıyla durur; sayılar da soluk değil.
+// 3466-3 (H1): başlığın altında yalnız durum rozetleri; talebin bilgileri eşit kutulu bir ızgarada, her kutuda ad, değer ve kısa açıklama.
 function Meta({ r }: { r: PurchaseRequest }) {
   const bugun = todayStr();
-  const gelis = gelisGunu(r);
   return (
     <span className="sa-ekran-meta">
       <Rozet ton={durumTonu(r, bugun)}>{durumEtiketi(r)}</Rozet>
       {r.priority === 'urgent' && <Rozet ton="hata">{PRIO.urgent}</Rozet>}
-      {gelis && <span><Simge ad="clock" boyut="k" />Geliş {fmtDate(gelis)}</span>}
-      {r.needDate && <span><Simge ad="calendar" boyut="k" />{ihtiyacMetni(r, bugun)}</span>}
-      <span className="sa-ekran-kalemler"><Simge ad="list" boyut="k" />{kalemOzeti(r)}</span>
-      {r.department && <span><Simge ad="building" boyut="k" />{r.department}</span>}
-      {r.requester && <span><Simge ad="user" boyut="k" />Talep eden {r.requester}</span>}
-      {r.uretimEmriNo && <span><Simge ad="route" boyut="k" />Üretim emri {r.uretimEmriNo}</span>}
-      {headerFacts(r).map((f) => <span key={f}>{duzMetin(f)}</span>)}
     </span>
+  );
+}
+const gunMetni = (d: number, ileri: string, geri: string): string => (d === 0 ? 'bugün' : d > 0 ? `${String(d)} ${ileri}` : `${String(-d)} ${geri}`);
+function Bilgiler({ r }: { r: PurchaseRequest }) {
+  const bugun = todayStr();
+  const gelis = gelisGunu(r);
+  const acik = ['draft', 'rfq', 'eval', 'approval'].includes(r.status);
+  const tutar = basliktakiTutar(r);
+  const nq = (r.quotes ?? []).length, nr = (r.rfqs ?? []).length;
+  const bu = r.department ? budgetUse(r.department, bugun.slice(0, 4)) : null;
+  const grup = grupMetni(r);
+  const kutular: { ad: string; simge: SimgeAdi; deger: string; alt?: string }[] = [];
+  if (gelis) kutular.push({ ad: 'Geliş', simge: 'clock', deger: fmtDate(gelis), alt: gunMetni(dayDiff(gelis, bugun), 'gün önce', 'gün sonra') });
+  if (r.needDate) kutular.push({ ad: 'İhtiyaç', simge: 'calendar', deger: fmtDate(r.needDate), ...(acik ? { alt: gunMetni(dayDiff(bugun, r.needDate), 'gün var', 'gün geçti') } : {}) });
+  kutular.push({ ad: 'Malzeme', simge: 'box', deger: kalemOzeti(r) });
+  if (r.requester || r.department) kutular.push({ ad: 'Talep eden', simge: 'user', deger: r.requester || r.department, ...(r.requester && r.department ? { alt: r.department } : {}) });
+  if (r.uretimEmriNo) kutular.push({ ad: 'Üretim emri', simge: 'route', deger: r.uretimEmriNo });
+  kutular.push({ ad: 'Teklif ve tutar', simge: 'lira', deger: `${String(nq)} teklif${nr ? ` / ${String(nr)} istendi` : ''}`, ...(tutar ? { alt: `${TUTAR_ETIKETI[tutar.tur]} ${money(tutar.tl, 'TRY', 0)}` } : {}) });
+  if (bu?.budget) kutular.push({ ad: `${r.department} bütçesi`, simge: 'chart', deger: pct((bu.used / bu.budget) * 100) });
+  if (grup) kutular.push({ ad: 'Grup', simge: 'layers', deger: grup });
+  return (
+    <dl className="sa-ekran-bilgi" aria-label="Talebin bilgileri">
+      {kutular.map((k) => (
+        <div key={k.ad} className={k.ad === 'İhtiyaç' && gecikmisMi(r, bugun) ? 'sa-ekran-bilgi-gec' : undefined}>
+          <dt><Simge ad={k.simge} boyut="k" />{k.ad}</dt>
+          <dd className="sa-ekran-bilgi-deger">{k.deger}</dd>
+          {k.alt && <dd className="sa-ekran-bilgi-alt">{k.alt}</dd>}
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -99,6 +116,7 @@ export function TalepAyrinti() {
         {...(ana ? { birincil: { etiket: ana[1], yap: () => { calistir(ana); } } } : {})}
         eylemler={eylemler}
       />
+      <Bilgiler r={r} />
       {r.status !== 'cancelled' && (
         <div className={`sa-ekran-simdi${n.cls ? ` sa-ekran-simdi-${n.cls}` : ''}`} role="status">
           <Simge ad={n.cls === 'bad' ? 'alert' : n.cls === 'done' ? 'check' : 'flag'} />
