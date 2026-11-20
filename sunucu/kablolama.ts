@@ -655,10 +655,7 @@ export function sunucununBaglari(): Bag[] {
     bag('CNC kurulumu (iş emri) -> başlatma hazırlığı', uretimEmirleri.cncHazirlikCozucusu, cncKurulum.isEmriHazirlikDurumlari),
     bag('çizim revizyonu -> başlatma hazırlığı', uretimEmirleri.cizimHazirlikCozucusu, arkon.emirCizimDurumlari),
     bag('paket yayını -> hazırlık matrisi', uretimEmirleri.yayinHazirlikCozucusu, arkon.isEmriYayinDurumlari),
-    bag('ek hazırlık maddesi -> hazırlık matrisi', uretimEmirleri.ekMaddeHazirlikCozucusu, arkon.isEmriEkMaddeDurumlari),
-    // 3249-2 a: Adım Durumu ek maddeleri tek tek okur ve Arkon'un komutuyla işaretler; "Şablona da ekle" rota şablonuna yazar.
-    bag('ek maddeler -> adım durumu', uretimEmirleri.ekMaddeListeleyiciKaydet, arkon.isEmriEkMaddeleri),
-    bag('ek madde işareti -> adım durumu', uretimEmirleri.ekMaddeIsaretleyiciKaydet, arkon.isEmriEkMaddesiIsaretle),
+    // 3249-2 a: "Şablona da ekle" rota şablonuna yazar. 3494-3 a: ek madde emrin listesindedir, ayrı bağı yoktur.
     bag('emre gelen şablon -> adım durumu', uretimEmirleri.sablonOzetleyiciKaydet, emreGelenSablonOzetleri),
     bag('şablona da ekle -> rota şablonu', uretimEmirleri.sablonaEkleyiciKaydet, emreGelenSablonaAdimEkle),
     bag('rota revizyonu -> hazırlık uyarısı', uretimEmirleri.rotaHazirlikCozucusu, emirRotaHazirliklari),

@@ -125,7 +125,9 @@ describe('uretim-emirleri hazırlık maddeleri (3396, gerçek PostgreSQL)', () =
   test('tohum satırları kod listesiyle aynıdır: 12 sistem maddesi, durduran yalnız CNC, çizim, terminal (Risk K2 eşleşme)', async () => {
     const v = await liste();
     assert.deepEqual(v.maddeler.map((m) => m.kod), [...HAZIRLIK_MADDELERI]);
-    assert.ok(v.maddeler.every((m) => m.sistem && m.acik));
+    // Ek madde sütunu göçle kapalıdır (3494-3 a: maddeler emrin listesinde, Talimat sütununda sayılır); öteki tohumlar açıktır.
+    assert.ok(v.maddeler.every((m) => m.sistem));
+    assert.deepEqual(v.maddeler.filter((m) => !m.acik).map((m) => m.kod), ['ek-madde']);
     assert.deepEqual(v.maddeler.filter((m) => m.durduran).map((m) => m.kod), HAZIRLIK_MADDELERI.filter((m) => !hazirlikUyarirMi(m)));
     assert.equal(v.yazabilir, false, 'planlama ayar yazamaz');
     assert.equal((await liste('ayarci')).yazabilir, true);

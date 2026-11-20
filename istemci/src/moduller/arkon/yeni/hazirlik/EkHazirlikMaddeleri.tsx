@@ -72,7 +72,8 @@ export function EkHazirlikMaddeleri({ isEmriId, degisti }: { isEmriId: number; d
                   <button type="button" className="tc-ay2-onay" aria-pressed={m.tamam} disabled={mesgul} onClick={() => isaretle(m.id, m.tamam ? 'geri-al' : 'tamamla')}>
                     {m.tamam ? 'Geri al' : 'Tamamlandı'}
                   </button>
-                  <button type="button" className="tc-ay2-arac" aria-label={`${m.ad}: kaldır`} disabled={mesgul} onClick={() => isaretle(m.id, 'kaldir')}><Simge ad="trash" /></button>
+                  <button type="button" className="tc-ay2-arac" aria-label={`${m.ad}: kaldır`} disabled={mesgul || m.tamam}
+                    title={m.tamam ? 'İşaretli madde kaldırılmaz; önce işareti geri alın.' : undefined} onClick={() => isaretle(m.id, 'kaldir')}><Simge ad="trash" /></button>
                 </span>
               ) : null}
             </div>

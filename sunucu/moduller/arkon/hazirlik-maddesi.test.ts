@@ -9,18 +9,18 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { AZAMI_HAZIRLIK_MADDESI, hazirlikMaddeleriCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import type { HazirlikMaddeleriCevabi } from '#paylasilan/sozlesme/arkon.ts';
-import { hazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimDurumuCevabi, hazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { ekMaddeHazirlikCozucusu, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
-import { isEmriEkMaddeDurumlari } from './disari.ts';
-import { ekMaddeHazirligi, hazirlikMaddesiOlayReddi } from './kurallar.ts';
+import { hazirlikMaddesiOlayReddi } from './kurallar.ts';
 
 // 2227-1 b: Üretim Hazırlık'ın iş emrine özel hazırlık maddesi. Hazırlık (CAM) ve yönetici yazar, planlama okur, operatör hiçbirini yapamaz.
-// Matriste "Ek madde" yalnız uyarır. Kişi, parça ve emir verisi uydurmadır.
+// 3494-3 a: madde emrin hazırlık listesindedir; matriste "Hazırlık talimatı" sütununda sayılır, "Ek madde" sütunu kapalıdır.
+// Kişi, parça ve emir verisi uydurmadır.
 describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -101,11 +101,7 @@ describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)',
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  test('kural: madde yoksa gerekmez, hepsi tamamsa tamam; kaldırılan değişmez, aynı hâle ikinci kez geçilmez', () => {
-    assert.deepEqual(ekMaddeHazirligi([]), { durum: 'yok', secildi: false });
-    assert.deepEqual(ekMaddeHazirligi([{ tamam: false }]), { durum: 'yok', secildi: true });
-    assert.deepEqual(ekMaddeHazirligi([{ tamam: true }, { tamam: false }]), { durum: 'suruyor', secildi: true });
-    assert.deepEqual(ekMaddeHazirligi([{ tamam: true }]), { durum: 'tamam', secildi: true });
+  test('kural: kaldırılan değişmez, aynı hâle ikinci kez geçilmez', () => {
     assert.equal(hazirlikMaddesiOlayReddi(null, 'tamamla'), null);
     assert.equal(hazirlikMaddesiOlayReddi('tamamla', 'tamamla'), 'zaten');
     assert.equal(hazirlikMaddesiOlayReddi(null, 'geri-al'), 'zaten');
@@ -114,7 +110,7 @@ describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)',
     assert.equal(hazirlikMaddesiOlayReddi('kaldir', 'tamamla'), 'maddeYok');
   });
 
-  test('hazırlık ekler ve işaretler, kişi ve zaman sunucudan; matriste ek madde yalnız uyarır; kaldırılan listeden çıkar', async () => {
+  test('hazırlık ekler ve işaretler, kişi ve zaman sunucudan; madde emrin listesinde ve Talimat sütununda; kaldırılan listeden çıkar', async () => {
     const e = await emirAc();
     const [ie] = e.isEmriIdleri;
     const yol = `/arkon/hazirlik-maddeleri?isEmriId=${String(ie)}`;
@@ -128,11 +124,16 @@ describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)',
     assert.equal(m?.tamam, false);
     await istek('yonetici', 'POST', '/arkon/hazirlik-maddeleri', { isEmriId: ie, ad: 'Ölçü aletini ayarla' });
 
-    // Matris: çözücü kablolamadaki gibi bağlanır (kablolamasız koşuda da); ek madde iş emri düzeyinde ve yalnız uyarır.
-    ekMaddeHazirlikCozucusu(isEmriEkMaddeDurumlari);
-    const matris = async () => hazirlikCevabi.parse((await istek('cam', 'GET', `/adimli-emirler/${String(e.uretimEmriId)}/hazirlik`)).govde)
-      .maddeler.find((x) => x.madde === 'ek-madde');
-    assert.deepEqual(await matris(), { madde: 'ek-madde', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true });
+    // Matris: madde emrin listesindedir, "Hazırlık talimatı" sütununda sayılır; "Ek madde" sütunu göçle kapalıdır.
+    const hazirlikOku = async (id: number) => hazirlikCevabi.parse((await istek('yonetici', 'GET', `/adimli-emirler/${String(id)}/hazirlik`)).govde);
+    const matris = async () => (await hazirlikOku(e.uretimEmriId)).maddeler.find((x) => x.madde === 'talimat');
+    assert.equal((await hazirlikOku(e.uretimEmriId)).maddeler.find((x) => x.madde === 'ek-madde')?.durum, 'gerekmez', 'Ek madde sütunu kapalı: sayılmaz');
+    assert.deepEqual(await matris(), { madde: 'talimat', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true });
+    const adimListesi = async () => adimDurumuCevabi.parse((await istek('yonetici', 'GET', `/adimli-emirler/${String(e.uretimEmriId)}/adim-durumu`)).govde)
+      .adimlar[0]?.liste ?? [];
+    assert.deepEqual((await adimListesi()).map((x) => [x.ad, x.asama, x.ekleyenAdi]), [
+      ['Bağlama aparatını getir', 'hazirlik', 'Deneme cam'], ['Ölçü aletini ayarla', 'hazirlik', 'Deneme Yönetici'],
+    ], 'tek liste: Adım Durumu aynı maddeleri gösterir');
     const tamam = await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'tamamla' });
     assert.equal(tamam.durum, 200);
     const t = liste(tamam.govde).maddeler[0];
@@ -140,20 +141,23 @@ describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)',
     assert.equal(t?.tamamlayanAdi, 'Deneme cam');
     assert.ok(t?.tamamlanma);
     assert.equal((await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'tamamla' })).durum, 409, 'aynı hâle ikinci kez');
+    // 3494-4 a: işaretli madde Üretim Hazırlık'tan da kaldırılmaz (Adım Durumu'yla tek kural).
+    const isaretli = await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'kaldir' });
+    assert.deepEqual([isaretli.durum, (isaretli.govde as { mesaj?: string }).mesaj], [409, 'İşaretli madde kaldırılmaz; önce işareti geri alın.']);
+    assert.equal(liste((await istek('cam', 'GET', yol)).govde).maddeler.length, 2, 'işaretli madde listede kalır');
     assert.equal((await matris())?.durum, 'eksik', 'öteki madde açık');
     const ikinci = liste((await istek('cam', 'GET', yol)).govde).maddeler[1];
     await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(ikinci?.id)}/isaretle`, { olay: 'kaldir' });
     assert.equal((await matris())?.durum, 'tamam', 'kaldırılan madde sayılmaz');
     assert.deepEqual(liste((await istek('cam', 'GET', yol)).govde).maddeler.map((x) => x.id), [m?.id]);
+    assert.deepEqual((await adimListesi()).map((x) => [x.adimId, x.tamam]), [[m?.id, true]], 'kaldırılan Adım Durumu listesinde de yok');
     assert.equal((await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(ikinci?.id)}/isaretle`, { olay: 'tamamla' })).durum, 404, 'kaldırılan madde değişmez');
     await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'geri-al' });
     assert.equal((await matris())?.durum, 'eksik', 'geri alınan madde tamam değil');
     const bos = await emirAc();
-    assert.equal((await istek('cam', 'GET', `/adimli-emirler/${String(bos.uretimEmriId)}/hazirlik`)).durum, 200);
-    assert.equal(hazirlikCevabi.parse((await istek('cam', 'GET', `/adimli-emirler/${String(bos.uretimEmriId)}/hazirlik`)).govde)
-      .maddeler.find((x) => x.madde === 'ek-madde')?.durum, 'gerekmez', 'maddesiz iş emrinde gerekmez');
-    await assert.rejects(o().sahip.sorgu('DELETE FROM arkon_hazirlik_maddesi_olayi'), /yalnız ekleme/);
-    await assert.rejects(o().sahip.sorgu("UPDATE arkon_hazirlik_maddesi SET ad = 'x'"), /yalnız ekleme/);
+    assert.equal((await hazirlikOku(bos.uretimEmriId)).maddeler.find((x) => x.madde === 'talimat')?.durum, 'gerekmez', 'maddesiz iş emrinde gerekmez');
+    await assert.rejects(o().sahip.sorgu('DELETE FROM emir_adimi_olayi WHERE adim_id = $1', [m?.id]), /yalnız ekleme/);
+    await assert.rejects(o().sahip.sorgu("UPDATE emir_adimi SET ad = 'x' WHERE id = $1", [m?.id]), /yalnız ekleme/);
   });
 
   test('yetki: planlama okur yazamaz, operatör ve oturumsuz hiçbirini yapamaz; bilinmeyen, bitmiş ve dolu iş emri; bozuk gövde', async () => {

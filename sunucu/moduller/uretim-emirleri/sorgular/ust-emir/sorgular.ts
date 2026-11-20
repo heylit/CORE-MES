@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import type { EmirDurumu, EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
-import { ARAMA, ISO, KAPALI, NULLU_ISO, TARIH } from '../ortak/sorgular.ts';
+import { ARAMA, ISO, KALDIRILMAMIS, KAPALI, NULLU_ISO, TARIH } from '../ortak/sorgular.ts';
 import type { BitenSuzgeci } from '../emir/sorgular.ts';
 
 /* ---------------- iş emirli üretim emri (kart #262) ---------------- */
@@ -211,7 +211,8 @@ export function kontrolListesiGetir(
   db: Db, isEmriIdleri: readonly number[],
 ): Promise<{ isEmriId: number; sira: number; ad: string; aciklama: string | null; asama: TalimatAsamasi; zorunlu: boolean; kontrol: object | null }[]> {
   return db.sorgu(
-    `SELECT is_emri_id AS "isEmriId", sira, ad, aciklama, asama, zorunlu, kontrol FROM emir_adimi WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
+    `SELECT a.is_emri_id AS "isEmriId", a.sira, a.ad, a.aciklama, a.asama, a.zorunlu, a.kontrol FROM emir_adimi a
+      WHERE a.is_emri_id = ANY($1::int[]) AND ${KALDIRILMAMIS('a')} ORDER BY a.is_emri_id, a.sira`,
     [[...isEmriIdleri]],
   );
 }

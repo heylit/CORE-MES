@@ -473,16 +473,15 @@ export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazir
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
 // Paket yayını (2227): iş emri başına; başlatma kancası sormaz, reddi Arkon verir (2189-1 a).
 export const yayinHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('yayin', c); };
-// 2227-1 b: iş emrine özel hazırlık maddesi; sahibi Arkon (Üretim Hazırlık).
-export const ekMaddeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('ek-madde', c); };
+// 3494-3 a: iş emrine özel madde emrin hazırlık listesindedir ("Hazırlık talimatı" sütunu); Üretim Hazırlık bu uçlarla yazar.
+export { elleMaddeBul, elleMaddeEkle, elleMaddeOlayiEkle, elleMaddeler, type ElleMaddeSatiri } from './elle-madde.ts';
 // 2893-4 a: aparat ve ölçü aleti listesi rota'nın iş emri kopyasındadır; çözücüleri rota verir.
 export const aparatHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('aparat', c); };
 export const olcuAletiHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('olcu-aleti', c); };
 // 2893 D2: Adım Durumu'nun açık tedarik okuması (satın alma verir).
 export { tedarikCozucusuKaydet as adimTedarikCozucusu } from './adim-durumu.ts';
-// 3249-2 a: Adım Durumu'nun Üretim Hazırlık ek maddeleri (Arkon) ve "Şablona da ekle" hedefi (rota); bağı kablolama.ts kurar.
-export { ekMaddeIsaretleyiciKaydet, ekMaddeListeleyiciKaydet, sablonOzetleyiciKaydet, sablonaEkleyiciKaydet } from './adim-durumu.ts';
-export type { EkMaddeSatiri } from './adim-durumu.ts';
+// 3249-2 a: Adım Durumu'nun "Şablona da ekle" hedefi (rota); bağı kablolama.ts kurar.
+export { sablonOzetleyiciKaydet, sablonaEkleyiciKaydet } from './adim-durumu.ts';
 export type { EmirTedarikSatiri, TedarikCozucusu } from './adim-durumu.ts';
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };

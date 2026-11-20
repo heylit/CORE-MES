@@ -512,7 +512,7 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     const d0 = await oku(id);
     assert.deepEqual(d0.adimlar[0]?.liste.map((x) => x.kontrol?.tur ?? null), ['olcum', null], 'talimatın kontrolü emre kopyalanır; yok kontrolsüzdür');
     assert.deepEqual(d0.adimlar[0]?.sablon, { id: sablon, kod: 'AD-SBL', ad: 'Deneme şablon' });
-    assert.deepEqual(d0.yetki, { ekMadde: false, sablon: true }, 'planlama: talimat yazar, Üretim Hazırlık yazmaz');
+    assert.deepEqual(d0.yetki, { sablon: true }, 'planlama: talimat yazar');
     const olcumId = d0.adimlar[0]!.liste[0]!.adimId;
 
     // Kanıt (K3): ölçüm maddesi kanıtsız ya da başka türle işaretlenmez; sınır dışı değer kaydolur, bayrağı sunucu verir.
@@ -561,25 +561,28 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     await o().sahip.sorgu('UPDATE rota_talimat_sablonu SET emre_gelir = false WHERE id = $1', [sablon]);
     assert.equal((await ekle({ ad: 'Şablonsuz', asama: 'hazirlik', sablonaEkle: true })).durum, 409, 'emre gelen şablon yoksa 409');
 
-    // Ek maddeler (K1): tek tek okunur; işaret Üretim Hazırlık yazma + adım durumu yazma birlikte ister.
-    const madde = (await o().sahip.tek<{ id: number }>("INSERT INTO arkon_hazirlik_maddesi (is_emri_id, ad, kisi_id) VALUES ($1, 'Özel pabuç', $2) RETURNING id", [ie1, yoneticiId]))!.id;
-    const d1 = await oku(id, 'ad_hazirlik');
-    assert.deepEqual(d1.adimlar[0]?.ekMaddeler.map((x) => [x.id, x.ad, x.tamam, x.ekleyenAdi]), [[madde, 'Özel pabuç', false, 'Deneme Yönetici']]);
-    assert.deepEqual(d1.yetki, { ekMadde: true, sablon: false });
-    const ek = (govde: unknown, kisi: string) => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('ek-madde-isaretle'), govde);
-    assert.equal((await ek({ maddeId: madde, tamam: true }, 'planlama_proje')).durum, 403, 'Üretim Hazırlık yazmayan');
-    assert.equal((await ek({ maddeId: madde, tamam: true }, 'hazirlik_yalniz')).durum, 403, 'adım durumu yazmayan');
-    const baska = (await o().sahip.tek<{ id: number }>("INSERT INTO arkon_hazirlik_maddesi (is_emri_id, ad, kisi_id) VALUES ($1, 'Başka', $2) RETURNING id", [r.isEmriIdleri[1], yoneticiId]))!.id;
-    assert.equal((await ek({ maddeId: baska, tamam: true }, 'ad_hazirlik')).durum, 404, 'başka iş emrinin maddesi');
-    const tik = await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik');
-    assert.equal(tik.durum, 200, JSON.stringify(tik.govde));
-    assert.deepEqual([tik.govde.adimlar[0]?.ekMaddeler[0]?.tamam, tik.govde.adimlar[0]?.ekMaddeler[0]?.kisiAdi], [true, 'Deneme ad_hazirlik']);
-    assert.equal((await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik')).durum, 409, 'aynı hâl');
-    assert.equal((await ek({ maddeId: madde, tamam: false }, 'ad_hazirlik')).govde.adimlar[0]?.ekMaddeler[0]?.tamam, false, 'tik kaldırılır');
+    // 3494-3 a: elle eklenen madde kaldırılır (iz kalır); talimattan gelen kaldırılmaz; kaldırılan listede, matriste ve işarette yoktur.
+    const kaldir = (adimId: number, kisi = 'planlama_proje') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('liste-kaldir'), { adimId });
+    assert.equal((await kaldir(olcumId)).durum, 409, 'talimattan gelen madde kaldırılmaz');
+    assert.equal((await kaldir(secimId, 'hazirlik_yalniz')).durum, 403, 'adım durumu yazmayan');
+    const isaretli = await kaldir(secimId);
+    assert.deepEqual([isaretli.durum, isaretli.govde.mesaj], [409, 'İşaretli madde kaldırılmaz; önce işareti geri alın.'], 'işaretli madde kaldırılmaz');
+    assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 200);
+    const kaldirildi = await kaldir(secimId);
+    assert.equal(kaldirildi.durum, 200, JSON.stringify(kaldirildi.govde));
+    assert.equal(kaldirildi.govde.adimlar[0]?.liste.some((x) => x.adimId === secimId), false, 'kaldırılan listede yok');
+    assert.equal((await kaldir(secimId)).durum, 404, 'ikinci kez kaldırılmaz');
+    const terminal = await istek<{ adimlar: { id: number }[] }>('planlama_proje', 'GET', `/uretim-emirleri/${String(id)}`);
+    assert.equal(terminal.durum, 200);
+    assert.deepEqual([terminal.govde.adimlar.some((x) => x.id === fotoId), terminal.govde.adimlar.some((x) => x.id === secimId)], [true, false],
+      'terminal listesinde kalan madde var, kaldırılan yok');
+    assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 404, 'kaldırılan işaretlenmez');
+    const olaylar = await o().sahip.sorgu<{ olay: string }>('SELECT olay FROM emir_adimi_olayi WHERE adim_id = $1 ORDER BY id', [secimId]);
+    assert.deepEqual(olaylar.map((x) => x.olay), ['tamamla', 'geri-al', 'kaldir'], 'iz kalır');
 
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
-    assert.equal((await ek({ maddeId: madde, tamam: true }, 'ad_hazirlik')).durum, 409, 'kapanmış emre yazılmaz');
-    assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 409);
+    assert.equal((await kaldir(fotoId)).durum, 409, 'kapanmış emre yazılmaz');
+    assert.equal((await isaretle({ adimId: fotoId, tamam: false })).durum, 409);
     await assert.rejects(o().sahip.sorgu(`INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama, kontrol) VALUES ($1, $2, 99, 'X', 'hazirlik', '{"tur":"yok"}')`, [id, ie1]),
       /emir_adimi_kontrol_turu/);
   });

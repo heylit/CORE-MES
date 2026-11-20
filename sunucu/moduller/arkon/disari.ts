@@ -1,12 +1,9 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
 import { yayindakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
-import { HAZIRLIK_MADDESI_ILETILERI, ekMaddeHazirligi, emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari, periyodikBakimPlanlari } from './kurallar.ts';
+import { emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari, periyodikBakimPlanlari } from './kurallar.ts';
 import type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
-import { hazirlikMaddesiIsaretle } from './servis.ts';
 
 export type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 
@@ -56,14 +53,6 @@ export async function isEmriYayinDurumlari(db: Db, isEmriIdler: readonly number[
   }));
 }
 
-// 2227-1 b: iş emrine özel hazırlık maddeleri, hazırlık maddesi olarak (toplu). İstenen her iş emri haritada olur; maddesi olmayan
-// "gerekmez" (secildi false). Yetki çağıran ucun işidir.
-export async function isEmriEkMaddeDurumlari(db: Db, isEmriIdler: readonly number[]): Promise<Map<number, { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean }>> {
-  const tekil = [...new Set(isEmriIdler)];
-  const satirlar = tekil.length === 0 ? [] : await sorgular.hazirlikMaddeleri(db, tekil);
-  return new Map(tekil.map((id) => [id, ekMaddeHazirligi(satirlar.filter((r) => r.isEmriId === id))]));
-}
-
 // Denetim #34: emrin hazırlık paketlerindeki merkez çizimlerinin durumu (toplu). İstenen her emir haritada olur; paketi ya da merkez çizimi
 // olmayan 'yok'. Yetki çağıran ucun işidir.
 export async function emirCizimDurumlari(db: Db, emirIdler: readonly number[]): Promise<Map<number, EmirCizimDurumu>> {
@@ -84,20 +73,3 @@ export async function periyodikBakimlar(db: Db): Promise<PeriyodikBakimPlani[]> 
   return periyodikBakimPlanlari(await sorgular.periyodikBakimBelgeleri(db));
 }
 
-// 3249-2 a: Adım Durumu ek maddeleri tek tek gösterir ve işaretler (bağı kablolama.ts kurar; uretim-emirleri Arkon'u ithal edemez).
-// Liste ekleniş sırasıyladır, kaldırılan madde yoktur. Yazım Üretim Hazırlık'ın kendi komutuyla (aynı kilit, kapalı iş emri ve aynı hâl
-// reddi) yapılır; madde verilen iş emrinin değilse bulunamadı. Yetki çağıran ucun işidir (Risk K1: iki yetki birlikte).
-export interface EkMadde { id: number; ad: string; tamam: boolean; ekleyenId: number; tamamlayanId: number | null; tamamlanma: string | null }
-export async function isEmriEkMaddeleri(db: Db, isEmriIdler: readonly number[]): Promise<Map<number, EkMadde[]>> {
-  const tekil = [...new Set(isEmriIdler)];
-  const sonuc = new Map<number, EkMadde[]>(tekil.map((id) => [id, []]));
-  for (const r of tekil.length === 0 ? [] : await sorgular.hazirlikMaddeleri(db, tekil)) {
-    sonuc.get(r.isEmriId)?.push({ id: r.id, ad: r.ad, tamam: r.tamam, ekleyenId: r.kisiId, tamamlayanId: r.tamamlayanId, tamamlanma: r.tamamlanma });
-  }
-  return sonuc;
-}
-export async function isEmriEkMaddesiIsaretle(db: Db, kullanici: Kullanici, isEmriId: number, maddeId: number, tamam: boolean): Promise<void> {
-  const madde = await sorgular.hazirlikMaddesiBul(db, maddeId);
-  if (madde === null || madde.isEmriId !== isEmriId) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
-  await hazirlikMaddesiIsaretle(db, kullanici, maddeId, tamam ? 'tamamla' : 'geri-al');
-}

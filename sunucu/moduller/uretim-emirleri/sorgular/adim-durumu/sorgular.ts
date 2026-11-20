@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { ISO } from '../ortak/sorgular.ts';
+import { ISO, KALDIRILMAMIS } from '../ortak/sorgular.ts';
 
 // Adım Durumu (2893): elle statü ve elle hazırlık onayı defterleri. Satır silinmez; açık kayıt iş emri (ve madde) başına son satırdır.
 export interface ElleStatuSatiri {
@@ -70,13 +70,13 @@ export function listeSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise
        FROM emir_adimi a
        LEFT JOIN LATERAL (SELECT id, olay, kisi_id, zaman, kaynak FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
        LEFT JOIN emir_adimi_kaniti k ON k.olay_id = o.id AND o.olay = 'tamamla'
-      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik')
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik') AND ${KALDIRILMAMIS('a')}
       ORDER BY a.is_emri_id, a.sira`,
     [[...isEmriIdleri]],
   );
 }
 
-export async function listeOlayiEkle(db: Db, adimId: number, kisiId: number, olay: 'tamamla' | 'geri-al'): Promise<number> {
+export async function listeOlayiEkle(db: Db, adimId: number, kisiId: number, olay: 'tamamla' | 'geri-al' | 'kaldir'): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay, kaynak) VALUES ($1, $2, $3, 'adim-durumu') RETURNING id`, [adimId, kisiId, olay],
   );
@@ -97,3 +97,39 @@ export async function listeMaddesiEkle(
 
 // Liste fotoğrafının bağı maddeye aittir: fotoğraf yalnız kendi maddesinin kaydından okunur (dosya tutamağı kayıt anahtarı).
 export const listeFotoKaydi = (adimId: number): string => `liste-kaniti:${String(adimId)}`;
+
+// 3494-3 a: Üretim Hazırlık'ın eklediği madde emrin listesindedir. Arkon elle eklenmiş, kontrolsüz (onay) maddeleri görür ve işaretler;
+// ölçüm, seçim ve fotoğraf isteyen madde kanıtla Adım Durumu'nda ya da terminalde işaretlenir.
+export interface ElleMaddeSatiri {
+  id: number; isEmriId: number; ad: string; kisiId: number; zaman: string; tamam: boolean; tamamlayanId: number | null; tamamlanma: string | null;
+}
+export function elleMaddeler(db: Db, isEmriIdleri: readonly number[]): Promise<ElleMaddeSatiri[]> {
+  return db.sorgu<ElleMaddeSatiri>(
+    `SELECT a.id, a.is_emri_id AS "isEmriId", a.ad, a.ekleyen_id AS "kisiId", ${ISO('a.eklenme')} AS zaman, COALESCE(o.olay = 'tamamla', false) AS tamam,
+            CASE WHEN o.olay = 'tamamla' THEN o.kisi_id END AS "tamamlayanId",
+            CASE WHEN o.olay = 'tamamla' THEN ${ISO('o.zaman')} END AS tamamlanma
+       FROM emir_adimi a
+       LEFT JOIN LATERAL (SELECT olay, kisi_id, zaman FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.ekleyen_id IS NOT NULL AND a.kontrol IS NULL AND a.asama IN ('on_hazirlik', 'hazirlik')
+        AND ${KALDIRILMAMIS('a')}
+      ORDER BY a.is_emri_id, a.sira`,
+    [[...isEmriIdleri]],
+  );
+}
+export function elleMaddeBul(db: Db, id: number): Promise<{ isEmriId: number; sonOlay: string | null } | null> {
+  return db.tek(
+    `SELECT a.is_emri_id AS "isEmriId", (SELECT olay FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) AS "sonOlay"
+       FROM emir_adimi a WHERE a.id = $1 AND a.ekleyen_id IS NOT NULL AND a.kontrol IS NULL AND a.asama IN ('on_hazirlik', 'hazirlik')
+        AND ${KALDIRILMAMIS('a')}`,
+    [id],
+  );
+}
+// İş emri satırı kilitlenir (Adım Durumu'nun eklemesiyle aynı sıra): iki ekleme aynı sırayı almaz. İş emri yoksa null.
+export function isEmrininEmriKilitle(db: Db, isEmriId: number): Promise<{ emirId: number } | null> {
+  return db.tek('SELECT uretim_emri_id AS "emirId" FROM uretim_emirleri_is_emri WHERE id = $1 FOR UPDATE', [isEmriId]);
+}
+export async function listeMaddeSayisi(db: Db, isEmriId: number): Promise<number> {
+  return (await db.tek<{ n: number }>(
+    `SELECT count(*)::int AS n FROM emir_adimi a WHERE a.is_emri_id = $1 AND a.asama IN ('on_hazirlik', 'hazirlik') AND ${KALDIRILMAMIS('a')}`, [isEmriId],
+  ))?.n ?? 0;
+}

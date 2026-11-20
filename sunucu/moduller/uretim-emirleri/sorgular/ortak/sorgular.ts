@@ -9,6 +9,8 @@ export const CANLI_SAYIM = "(SELECT * FROM uretim_sayimi WHERE kaynak IS DISTINC
 
 // Terminalin işlediği iş emri: çalışan, yoksa sıradaki bekleyen, hepsi bittiyse son biten. İş emirsiz emirde boştur;
 // sayaç, olay ve kontrol listesi bu iş emri kapsamında okunur ve yazılır (iş emirsiz emirde kapsam boş iş emridir).
+// 3494-3 a: kaldırılan liste maddesi (son olayı 'kaldir'; kaldırma geri alınmaz) listede, terminalde ve matriste yoktur.
+export const KALDIRILMAMIS = (adim: string) => `NOT EXISTS (SELECT 1 FROM emir_adimi_olayi ko WHERE ko.adim_id = ${adim}.id AND ko.olay = 'kaldir')`;
 export const TERMINAL_IS_EMRI = (emir: string) => `(SELECT ie.id FROM uretim_emirleri_is_emri ie WHERE ie.uretim_emri_id = ${emir}
   ORDER BY CASE ie.durum WHEN 'calisiyor' THEN 0 WHEN 'bekliyor' THEN 1 ELSE 2 END, CASE WHEN ie.durum = 'tamam' THEN -ie.sira ELSE ie.sira END
   LIMIT 1)`;

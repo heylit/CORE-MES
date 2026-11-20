@@ -50,6 +50,8 @@ describe('Ek hazırlık maddeleri (2227-1 b)', () => {
     const { istekler, degisti } = kur(HAZIRLIK, cevap(), () => json(200, cevap({ maddeler: [] })));
     expect(await screen.findByText('1 / 2 tamam')).toBeTruthy();
     expect(screen.getByText('Tamamlayan: Deneme Hazirlik')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Bağlama aparatını getir: kaldır' }) as HTMLButtonElement).disabled, 'işaretli madde kaldırılmaz (3494-4 a)').toBe(true);
+    expect((screen.getByRole('button', { name: 'Ölçü aletini ayarla: kaldır' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Tamamlandı' }));
     await waitFor(() => expect(degisti).toHaveBeenCalledTimes(1));
     expect(istekler.at(-1)).toEqual({ yontem: 'POST', yol: '/arkon/hazirlik-maddeleri/2/isaretle', govde: { olay: 'tamamla' } });

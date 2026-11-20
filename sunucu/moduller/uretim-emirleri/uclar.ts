@@ -9,12 +9,12 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, ekMaddeIsaretleGovdesi, listeEkleGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
-import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
 import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -461,16 +461,16 @@ const adimliUclar = [
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => listeMaddesiEkle(db, kullanici, parametre.id, parametre.isEmriId, govde, denetimEki),
   }),
-  // 3249-2 a: Üretim Hazırlık ek maddesi; uç adim-durumu-yaz'ı, servis Üretim Hazırlık yazma yetkisini arar (Risk K1).
+  // 3494-3 a: elle eklenen maddeyi kaldırır; rota talimatından gelen madde kaldırılmaz.
   uc({
     yontem: 'POST',
-    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/ek-madde-isaretle',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/liste-kaldir',
     yetki: 'uretim-emirleri.adim-durumu-yaz',
     parametre: isEmriParametresi,
-    govde: ekMaddeIsaretleGovdesi,
+    govde: listeKaldirGovdesi,
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
-    isle: ({ db, kullanici, parametre, govde }) => ekMaddeIsaretle(db, kullanici, parametre.id, parametre.isEmriId, govde),
+    isle: ({ db, kullanici, parametre, govde }) => listeMaddesiKaldir(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
   // Ofisten ya da terminalden eklenmiş liste fotoğrafı; Adım Durumu'nu okuyan görür.
   uc({
