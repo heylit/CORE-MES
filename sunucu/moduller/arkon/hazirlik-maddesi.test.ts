@@ -141,6 +141,10 @@ describe('arkon iş emrine özel hazırlık maddesi (2227, gerçek PostgreSQL)',
     assert.equal(t?.tamamlayanAdi, 'Deneme cam');
     assert.ok(t?.tamamlanma);
     assert.equal((await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'tamamla' })).durum, 409, 'aynı hâle ikinci kez');
+    // 3494-4 a: işaretli madde Üretim Hazırlık'tan da kaldırılmaz (Adım Durumu'yla tek kural).
+    const isaretli = await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(m?.id)}/isaretle`, { olay: 'kaldir' });
+    assert.deepEqual([isaretli.durum, (isaretli.govde as { mesaj?: string }).mesaj], [409, 'İşaretli madde kaldırılmaz; önce işareti geri alın.']);
+    assert.equal(liste((await istek('cam', 'GET', yol)).govde).maddeler.length, 2, 'işaretli madde listede kalır');
     assert.equal((await matris())?.durum, 'eksik', 'öteki madde açık');
     const ikinci = liste((await istek('cam', 'GET', yol)).govde).maddeler[1];
     await istek('cam', 'POST', `/arkon/hazirlik-maddeleri/${String(ikinci?.id)}/isaretle`, { olay: 'kaldir' });

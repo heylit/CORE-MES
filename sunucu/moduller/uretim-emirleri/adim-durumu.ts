@@ -13,7 +13,7 @@ import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
 import {
-  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, acikElleEksikler, elleEksikNedeni, elleEksikReddi, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
+  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, ISARETLI_KALDIRILMAZ, acikElleEksikler, elleEksikNedeni, elleEksikReddi, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
   ONAY_YOK, STATU_ESKIDI, acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, kanitMetni, listeEkleReddi, listeIsaretReddi, oncekiBekleniyor,
   listeKanitiReddi, listeKontrolu, sinirDisiMi,
 } from './kurallar.ts';
@@ -69,7 +69,6 @@ const sablonYazarMi = (k: Kullanici | null): boolean => k !== null && islemVarMi
 export const SABLON_YETKISI = 'Şablona eklemek talimat yazma yetkisi de ister.';
 export const SABLON_YOK = 'Bu adımın operasyon tipinin emre gelen şablonu yok.';
 export const KALDIRILAMAZ = 'Yalnız elle eklenen madde kaldırılır; rota talimatından gelen madde talimatla değişir.';
-export const ISARETLI_KALDIRILMAZ = 'İşaretli madde kaldırılmaz; önce işareti geri alın.';
 // Liste fotoğrafı (Risk K4): yalnız resim, en çok 10 MB; tür içerikten bulunur (dosya modülü). Konum bilgisi istemcide silinir (UYUM-BORCU).
 const fotoDeposu = medyaTutamagi('uretim-emirleri');
 const FOTO_SINIRI = { turler: ['png', 'jpeg', 'webp'] as const, azamiBayt: 10 * 1024 ** 2 };

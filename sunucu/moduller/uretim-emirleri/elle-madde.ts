@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import { AZAMI_LISTE_MADDESI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { LISTE_DOLU } from './kurallar.ts';
+import { ISARETLI_KALDIRILMAZ, LISTE_DOLU } from './kurallar.ts';
 import * as s from './sorgular/adim-durumu/sorgular.ts';
 
 // 3494-3 a: emre özel ek madde emrin hazırlık listesine yazılır (tek liste). Üretim Hazırlık (Arkon) kendi yetkisi ve kurallarıyla
@@ -16,6 +16,8 @@ export async function elleMaddeEkle(db: Db, isEmriId: number, ad: string, kisiId
   return true;
 }
 
+// Kaldırma kuralı Adım Durumu'nunkiyle aynıdır (3494-4 a): işaretli madde kaldırılmaz.
 export async function elleMaddeOlayiEkle(db: Db, id: number, olay: 'tamamla' | 'geri-al' | 'kaldir', kisiId: number): Promise<void> {
+  if (olay === 'kaldir' && (await s.elleMaddeBul(db, id))?.sonOlay === 'tamamla') throw cakisma(ISARETLI_KALDIRILMAZ);
   await s.listeOlayiEkle(db, id, kisiId, olay);
 }

@@ -1947,6 +1947,8 @@ export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';
 export const LISTE_MADDESI_YOK = 'Bu madde adımın hazırlık listesinde yok.';
 export const LISTE_ZATEN = 'Madde zaten bu durumda. Güncel listeyi görüp yeniden deneyin.';
 export const LISTE_ADIM_BITTI = 'Biten adımın hazırlık listesi değişmez.';
+// 3494-4 a: işaretli madde hiçbir yerden (Adım Durumu, Üretim Hazırlık) kaldırılmaz; yapılmış iş sessizce silinmez, önce işaret geri alınır.
+export const ISARETLI_KALDIRILMAZ = 'İşaretli madde kaldırılmaz; önce işareti geri alın.';
 export const LISTE_DOLU = 'Bir adımın hazırlık listesine en çok 40 madde olur.';
 // 3249-2 a: işaretli kanıtlı maddeye yeni kanıtla yeniden işaret değeri değiştirir (önce geri almak gerekmez); onay maddesinde aynı
 // hâle ikinci geçiş yine reddedilir.
