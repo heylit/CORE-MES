@@ -13,7 +13,7 @@ import {
 import { MOTOR_NOTU } from '../motor/ortak.tsx';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
-  PARTI_EN_COK, darbogaz, dengeAdi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, 
+  PARTI_EN_COK, darbogaz, dengeAdi, elleBolunenAdimlar, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, 
   katsayi, saatOku, saatYaz, sayi, simdi, terminAyari,
   taramaKapsami, taramaSecenekSayisi, tl, type KayitliPlan,
 } from './kurallar.ts';
@@ -345,6 +345,9 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
           {dar && ` Darboğaz adımı ${dar.k} (${dar.m}).`} Partiler {emirNo(s.id)}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
         </p>
         <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {kural.k ?? ''} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
+        {elleBolunenAdimlar(c, s.id).map((x) => (
+          <p key={x.k} className="tc-pys-kucuk">{x.k} adımını elle böldünüz ({x.tezgahlar.join(', ')}): bölmeniz 1. partide kalır, öteki partilerin tezgâhını plan seçer.</p>
+        ))}
         {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <div className="tc-pys-dugmeler">
           <Dugme tur="birincil" type="submit" simge="ruler" disabled={!degerlendir || Boolean(hata) || d.tur === 'bekliyor'}>Böl</Dugme>

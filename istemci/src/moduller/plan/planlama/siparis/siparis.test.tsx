@@ -382,6 +382,18 @@ describe('Partiyi böl (uç açılınca)', () => {
     expect((within(grup).getAllByRole('spinbutton') as HTMLInputElement[]).map((k) => k.value)).toEqual(['5', '5']);
   });
 
+  it('elle bölünmüş adımı olan iş emrinde bölmenin 1. partide kalacağı yazılır; elle bölme yoksa satır yoktur', () => {
+    const d = vi.fn() as unknown as Degerlendirici;
+    const c = calismaKur();
+    const { unmount } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    expect(screen.queryByText(/elle böldünüz/)).toBeNull();
+    unmount();
+    const bolunmus = calismaKur((x) => { (x as unknown as Record<string, unknown>)['elleBol'] = { 'S1.a1': [{ adet: 6, m: 'M1' }, { adet: 4, m: 'M2' }], 'S1.a2': [{ adet: 10, m: 'M1' }], 'S2.a1': [{ adet: 1, m: 'M1' }, { adet: 1, m: 'M2' }] }; });
+    render(<BildirimSaglayici><PartiBolmeKarti c={bolunmus} p={kayitliPlan(bolunmus)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    expect((screen.getByRole('combobox', { name: 'İş emri' }) as HTMLSelectElement).value).toBe('S1');
+    expect(screen.getAllByText(/elle böldünüz/).map((x) => x.textContent)).toEqual(['a1 adımını elle böldünüz (M1, M2): bölmeniz 1. partide kalır, öteki partilerin tezgâhını plan seçer.']);
+  });
+
   it('darboğaz plandan yazılır, tezgâh dağılımı seçilir; en küçük partinin altında Böl kilitli', () => {
     const d = vi.fn() as unknown as Degerlendirici;
     const c = calismaKur((x) => {
