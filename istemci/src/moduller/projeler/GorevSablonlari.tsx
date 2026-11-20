@@ -8,6 +8,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { SIKLIK_METNI, siklik, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
+import { HazirlikMaddeleri, MaddeFormu, sonrakiSira } from './HazirlikMaddeleri.tsx';
 import { HAZIRLIK_METNI, SABLON_ISLEMI, atamaMetni } from './gosterim.ts';
 import { bosIseNull, useIslemVar, useIstekKimligi } from './komut.ts';
 import { ORNEK_SABLON, ORNEK_SABLON_ADI } from './ornek-sablon.ts';
@@ -27,15 +28,29 @@ function useHazirlikSecenekleri(secili: readonly string[]): Secenek[] {
 const baslangicMetni = (k: Pick<SablonKalemi, 'dayanak' | 'gun'>): string =>
   `${k.dayanak === 'termin' ? 'Termin' : 'Başlangıç'} ${k.gun >= 0 ? '+' : '−'}${Math.abs(k.gun)} gün`;
 
-// Görev şablonları (Projeler > Ayarlar). 3458-2 a: şablon Görevleri dağıt ekranında dağıtılır; değişen şablon açık projelerin görevlerini değiştirmez.
+// 3494-1 a: hazırlık tek yerden yönetilir. Görevler > Şablonlar ekranında şablonlar ve matris sütunları birliktedir; sütunu
+// yöneten ama şablon yazamayan yalnız sütunları görür. Okuma ve yazma yetkileri değişmez, her bölüm kendi işlemini ister.
 export function GorevSablonlari() {
+  const yazabilir = useIslemVar(SABLON_ISLEMI);
+  const sutunYazar = useIslemVar('uretim-emirleri.hazirlik-ayar');
+  if (!yazabilir && !sutunYazar) return <DurumKutusu durum="hata" mesaj="Şablonları yalnız şablon ya da sütun yazma yetkisi olan görür." />;
+  return (
+    <div className="tc-prj-icerik">
+      {yazabilir && <SablonListesi />}
+      <HazirlikMaddeleri />
+    </div>
+  );
+}
+
+// 3458-2 a: şablon Görevleri dağıt ekranında dağıtılır; değişen şablon açık projelerin görevlerini değiştirmez.
+function SablonListesi() {
   const yazabilir = useIslemVar(SABLON_ISLEMI);
   const [form, formYaz] = useState<Sablon | 'yeni' | null>(null);
   const l = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonListesiCevabi>('/projeler/sablonlar/liste'), enabled: yazabilir });
   const sutunlar: Sutun<Sablon>[] = [
     { anahtar: 'ad', baslik: 'Şablon', hucre: (s) => s.ad },
     { anahtar: 'gorev', baslik: 'Proje başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi === null).length },
-    { anahtar: 'hazirlik', baslik: 'Emir başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
+    { anahtar: 'hazirlik', baslik: 'Emir ya da operasyon başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => (
       <span className="tc-prj-bag">
         {s.varsayilan && <Rozet ton="tamam">Varsayılan</Rozet>}
@@ -44,7 +59,6 @@ export function GorevSablonlari() {
       </span>
     ), csv: (s) => (s.varsayilan ? 'Varsayılan' : s.etkin ? 'Etkin' : 'Kapalı') },
   ];
-  if (!yazabilir) return <DurumKutusu durum="hata" mesaj="Görev şablonlarını yalnız şablon yazma yetkisi olan görür." />;
   return (
     <Kart
       baslik="Görev şablonları"
@@ -66,7 +80,8 @@ export function GorevSablonlari() {
             />
           )}
         <p className="tc-prj-soluk">
-          Varsayılan şablon Görevleri dağıt ekranında önce seçili gelir. Şablon değişince açık projelerin görevleri değişmez.
+          Varsayılan şablon Görevleri dağıt ekranında önce seçili gelir. Şablon değişince açık projelerin görevleri değişmez. Emir ya da
+          operasyon başına açılan görev aşağıdaki matris sütunlarından birine bağlıdır.
         </p>
       </div>
       {form !== null && <SablonFormu sablon={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />}
@@ -171,7 +186,10 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
     }]);
   };
   // Örnek yalnız boş yeni şablonu doldurur; açık olmayan madde proje başına satıra döner.
-  const maddeListesi = useHazirlikMaddeleri().data?.maddeler;
+  const maddeSorgusu = useHazirlikMaddeleri();
+  const maddeListesi = maddeSorgusu.data?.maddeler;
+  // Yeni sütun şablon formundan da açılır (3494-1 a); sütun yazma yetkisi yoksa düğme görünmez, sunucu da reddeder.
+  const [yeniSutun, yeniSutunYaz] = useState<KalemTaslagi | null>(null);
   const yapanAdi = (k: KalemTaslagi): string | null => (k.yapan === '' ? null : atamalar.secenekler.find((x) => x.deger === k.yapan)?.baslik ?? k.adlar.yapan);
   const siklikIpucu = (k: KalemTaslagi): string => {
     const m = maddeListesi?.find((x) => x.kod === k.hazirlik);
@@ -254,10 +272,15 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 etiket="Süre (gün)" type="number" inputMode="numeric" min={1} max={365} step={1} value={k.sureGun}
                 onChange={(e) => { degistir(k.anahtar, { sureGun: e.target.value }); }}
               />
-              <Secim
-                etiket="Kaç kez açılsın" value={k.hazirlik} bosSecenek={SIKLIK_METNI.proje} secenekler={hazirlikSecenekleri} ipucu={siklikIpucu(k)}
-                onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
-              />
+              <div className="tc-prj-alan-dugmeli">
+                <Secim
+                  etiket="Kaç kez açılsın (matris sütunu)" value={k.hazirlik} bosSecenek={SIKLIK_METNI.proje} secenekler={hazirlikSecenekleri} ipucu={siklikIpucu(k)}
+                  onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
+                />
+                {maddeSorgusu.data?.yazabilir === true && (
+                  <Dugme simge="plus" onClick={() => { yeniSutunYaz(k); }}>Yeni sütun</Dugme>
+                )}
+              </div>
               <AtamaSecimi
                 etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU}
                 degistir={(d) => { degistir(k.anahtar, { yapan: d }); }}
@@ -303,6 +326,13 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
         <div className="tc-form-tam tc-prj-gorunum">
           <Dugme simge="plus" onClick={ekle}>Görev ekle</Dugme>
         </div>
+        {yeniSutun !== null && (
+          <MaddeFormu
+            madde={null} sonraki={sonrakiSira(maddeListesi ?? [])} onAd={yeniSutun.ad.trim()}
+            eklendi={(kod) => { degistir(yeniSutun.anahtar, { hazirlik: kod }); }}
+            kapat={() => { yeniSutunYaz(null); }}
+          />
+        )}
         {(hata !== null || komut.isError) && (
           <p className="tc-form-tam tc-prj-hata" role="alert">{hata ?? hataIletisi(komut.error, 'Şablon kaydedilemedi')}</p>
         )}

@@ -22,8 +22,8 @@ export const PROJELER_IKINCI_MENU = {
   ],
 } as const satisfies IkinciMenuTanimi;
 
-// 3458 dilim 3: görev şablonları ve hazırlık maddeleri görevlerin yanında, Görevler sayfasının ikinci menüsündedir.
-// Madde listesinin sahibi Üretim Emirleri'dir (3396 a); burada yalnız ekranı durur.
+// 3494-1 a: görev şablonları ve matris sütunları (hazırlık maddeleri) tek ekrandadır. Madde listesinin sahibi Üretim Emirleri'dir
+// (3396 a); burada yalnız ekranı durur. Sütunları yöneten ama şablon yazamayan da ekrana girer, yalnız sütunları görür.
 export const GOREVLER_IKINCI_MENU = {
   kok: '/proje-gorevlerim',
   baslik: 'Görevler',
@@ -33,8 +33,7 @@ export const GOREVLER_IKINCI_MENU = {
       { anahtar: 'gorevler', baslik: 'Görevler', yol: '/proje-gorevlerim', simge: 'list', islem: 'sayfa.proje-gorevlerim' },
     ] },
     { baslik: 'Ayarlar', maddeler: [
-      { anahtar: 'sablonlar', baslik: 'Görev şablonları', yol: '/proje-gorevlerim/sablonlar', simge: 'layers', islem: 'projeler.sablon-yaz', okur: ['/projeler/sablonlar/liste'] },
-      { anahtar: 'hazirlik-maddeleri', baslik: 'Hazırlık maddeleri', yol: '/proje-gorevlerim/hazirlik-maddeleri', simge: 'flag', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/hazirlik-maddeleri'] },
+      { anahtar: 'sablonlar', baslik: 'Şablonlar', yol: '/proje-gorevlerim/sablonlar', simge: 'layers', islem: 'projeler.sablon-yaz', veya: ['uretim-emirleri.hazirlik-ayar'], okur: ['/hazirlik-maddeleri'] },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;
