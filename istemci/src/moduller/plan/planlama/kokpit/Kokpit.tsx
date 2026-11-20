@@ -60,6 +60,8 @@ const BOLUM_ADI: Record<Goz, string> = { T: 'Tezgâhlar', S: 'Emirlere göre pla
 // Matris ve 3B'de tahta yoktur: iş ok tuşuyla kaymaz; emrin neden geciktiği emrin satırında yazar.
 const tahtasiz = (g: Goz): boolean => g === 'M' || g === 'B';
 const DURUM_ADI: Record<Exclude<EmirDurumu, 'iyi'>, string> = { gec: 'Geç', risk: 'Riskli', plansiz: 'Plansız' };
+// 3493 b: liste düzeninin görünümleri; ilk açılış Emirler (emir satırlı Gantt).
+const LD_GORUNUMLER: readonly (readonly ['emir' | 'tezgah' | 'siparis', string, SimgeAdi])[] = [['emir', 'Emirler', 'gantt'], ['tezgah', 'Tezgâhlar', 'cpu'], ['siparis', 'Siparişler', 'list']];
 const DURUMLAR = ['gec', 'risk', 'plansiz'] as const;
 const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
 // Tahtada iş tutulurken ya da tutma menüsü açıkken ok tuşları iş kaydırmaz.
@@ -182,6 +184,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     sorguYaz((q) => { const y = new URLSearchParams(q); if (k) y.set('duzen', 'klasik'); else y.delete('duzen'); return y; });
   }, [sorguYaz]);
   const [butunTezgahlar, setButunTezgahlar] = useState(false);
+  // 3493 b: liste düzeninin görünümü. Emirler: emir satırlı Gantt ağacı (açılır kapanır); Tezgâhlar: tezgâh tahtası; Siparişler: sipariş tablosu.
+  const [ldGorunum, setLdGorunum] = useState<'emir' | 'tezgah' | 'siparis'>('emir');
+  const [agacAcik, setAgacAcik] = useState<ReadonlySet<string>>(() => new Set());
+  const agacAc = useCallback((id: string): void => { setAgacAcik((o) => { const y = new Set(o); if (y.has(id)) y.delete(id); else y.add(id); return y; }); }, []);
   const onayIstendi = useRef(onayIstegiVar());
   // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
   const [onayTaslaktan, setOnayTaslaktan] = useState(false);
@@ -682,6 +688,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {!onayAcik && !klasik && (
         <div className="tc-pyq-ust tc-pyq-ust-sade">
           {tahtasiz(goz) && <button type="button" className="tc-pyq-ok" title="Sipariş listesine dön" onClick={() => { setGoz('T'); }}><Simge ad="chev-left" boyut="k" /><span>Listeye dön</span></button>}
+          {!tahtasiz(goz) && (
+            <span className="tc-pyq-seg tc-pyq-ld-gorunum" role="group" aria-label="Görünüm">
+              {LD_GORUNUMLER.map(([k, ad, simge]) => (
+                <button type="button" key={k} data-ld-gorunum={k} aria-pressed={ldGorunum === k} onClick={() => { setLdGorunum(k); }}><Simge ad={simge} boyut="k" /><span>{ad}</span></button>
+              ))}
+            </span>
+          )}
           <span className="tc-pyq-suzgec" role="group" aria-label="Durum süzgeci">
             {DURUMLAR.map((d) => (
               <button type="button" key={d} data-d={d} aria-pressed={suz === d} onClick={() => { setSuz(suz === d ? null : d); }}><b>{say[d]}</b>{DURUM_ADI[d]}</button>
@@ -869,6 +882,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Matris">
               <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
             </section>
+          ) : ldGorunum === 'emir' ? (
+            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Emirler">
+              <Tahta
+                m={m} cx={cx} goz="S" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                yerlestirme={null} yanan={null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+                saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc }}
+              />
+              <Liste m={m} cx={cx} goz="S" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} />
+            </section>
+          ) : ldGorunum === 'tezgah' ? (
+            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Tezgâhlar">{listeTahtasi}</section>
           ) : (
             <>
           <ListeDuzeni

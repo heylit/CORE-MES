@@ -1564,7 +1564,11 @@ describe('Kokpit tek görünüm', () => {
       />
     );
   }
-  const sadeAc = (): void => { render(<MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali><SadeKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>); };
+  // Açılış Emirler ağacıdır (3493 b); bu testler sipariş tablosunu Siparişler görünümünde dener.
+  const sadeAc = (): void => {
+    render(<MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali><SadeKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
+  };
   const diger = (ad: string): HTMLElement => {
     if (!screen.queryByRole('menu', { name: 'Diğer' })) fireEvent.click(screen.getByRole('button', { name: 'Diğer' }));
     return within(screen.getByRole('menu', { name: 'Diğer' })).getByText(ad).closest('button')!;
@@ -1633,5 +1637,84 @@ describe('Kokpit tek görünüm', () => {
     fireEvent.click(document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[data-adim]')!);
     expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('Kokpit emir satırlı ağaç (3493 b)', () => {
+  function acListe() {
+    render(
+      <MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali>
+        <Kokpit
+          depo={DEPO} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+          olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
+        />
+      </Yuvali></BildirimSaglayici></MemoryRouter>,
+    );
+  }
+
+  it('açılışta Emirler: her satır bir emir, adımlar kapalı; açınca adımlar alt satır olur, emir satırında özet çubuğu kalır; Tezgâhlar ve Siparişler ayrı sekme', () => {
+    acListe();
+    const gorunum = screen.getByRole('group', { name: 'Görünüm' });
+    expect(within(gorunum).getAllByRole('button').map((x) => [x.textContent, x.getAttribute('aria-pressed')])).toEqual([['Emirler', 'true'], ['Tezgâhlar', 'false'], ['Siparişler', 'false']]);
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    const emirler = [...bolum.querySelectorAll<HTMLButtonElement>('button[data-agac]')];
+    expect(emirler.length).toBeGreaterThan(0);
+    expect(emirler.every((x) => x.getAttribute('aria-expanded') === 'false')).toBe(true);
+    expect(bolum.querySelectorAll('[data-agac-adim]').length).toBe(0);
+    const ilk = emirler[0]!;
+    const id = ilk.getAttribute('data-agac')!;
+    const satir = ilk.closest<HTMLElement>('[data-satir]')!;
+    const once = satir.querySelectorAll('[data-is]').length;
+    expect(once).toBeGreaterThan(0);
+    fireEvent.click(ilk);
+    expect(ilk.getAttribute('aria-expanded')).toBe('true');
+    const adimlar = [...bolum.querySelectorAll<HTMLElement>(`[data-agac-adim][data-satir^="${id}>"]`)];
+    expect(adimlar.length).toBeGreaterThan(0);
+    expect(adimlar[0]!.querySelector('.tc-pyq-bas b')?.textContent).toMatch(/^1\. /);
+    expect(satir.querySelectorAll('[data-is]').length).toBe(0);
+    expect(satir.querySelector(`[data-ozet="${id}"]`)).not.toBeNull();
+    fireEvent.click(ilk);
+    expect(bolum.querySelectorAll('[data-agac-adim]').length).toBe(0);
+    fireEvent.click(within(gorunum).getByRole('button', { name: 'Tezgâhlar' }));
+    expect(screen.getByRole('region', { name: 'Tezgâhlar' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Emirler' })).toBeNull();
+    fireEvent.click(within(gorunum).getByRole('button', { name: 'Siparişler' }));
+    expect(screen.getByRole('table', { name: 'Siparişler' })).toBeTruthy();
+  });
+
+  it('ağaçta taşıma: alt satırdaki çubuk kendi satırında bırakılınca aynı tezgâhla önizlenir; başka emrin satırına bırakılınca sorulmaz', async () => {
+    const eski = (window as { PointerEvent?: unknown }).PointerEvent;
+    class Imlec extends MouseEvent { pointerType: string; constructor(t: string, i: PointerEventInit = {}) { super(t, i); this.pointerType = i.pointerType ?? 'mouse'; } }
+    (window as { PointerEvent?: unknown }).PointerEvent = Imlec;
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockResolvedValue({ calismaSurumu: 1, gecerli: false, ileti: 'Örnek: yer dolu', isler: [] });
+    acListe();
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    const ac = [...bolum.querySelectorAll<HTMLButtonElement>('button[data-agac]')].find((b) => b.closest('[data-satir]')!.querySelectorAll('[data-is]').length > 0)!;
+    const id = ac.getAttribute('data-agac')!;
+    fireEvent.click(ac);
+    const adimSatiri = bolum.querySelector<HTMLElement>(`[data-agac-adim][data-satir^="${id}>"]:has([data-is])`)!;
+    const is = adimSatiri.querySelector<HTMLElement>('[data-is]')!;
+    const isId = is.getAttribute('data-is')!;
+    const tezgah = (ornekCalisma().plan as unknown as { ops: Record<string, { m: string }> }).ops[isId]!.m;
+    const surukle = (hedef: HTMLElement, hayalet?: () => void) => {
+      fireEvent.pointerDown(is, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(hedef, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+      fireEvent.pointerMove(hedef, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+      hayalet?.();
+      fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    };
+    // Başka emrin satırı geçerli hedef değildir.
+    const baska = [...bolum.querySelectorAll<HTMLElement>('[data-satir]')].find((r) => r.dataset.satir !== id && !r.dataset.satir!.startsWith(`${id}>`) && !r.hasAttribute('data-agac-adim'))!;
+    surukle(baska.querySelector<HTMLElement>('.tc-pyq-alan')!);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(oz).not.toHaveBeenCalled();
+    // Hayalet emir satırına değil, adımın kendi alt satırına çizilir.
+    surukle(adimSatiri.querySelector<HTMLElement>('.tc-pyq-alan')!, () => {
+      expect(adimSatiri.querySelector('.tc-pyq-hayalet')).not.toBeNull();
+      expect(bolum.querySelector(`[data-satir="${id}"] .tc-pyq-hayalet`)).toBeNull();
+    });
+    await waitFor(() => { expect(oz).toHaveBeenCalledTimes(1); });
+    expect(oz.mock.calls[0]![0]).toMatchObject({ isId, tezgah });
+    (window as { PointerEvent?: unknown }).PointerEvent = eski;
   });
 });
