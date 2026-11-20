@@ -753,7 +753,7 @@ export async function atamaBildir(
   const proje = await sorgular.projeGetir(db, projeId);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-atandi', baslik: 'Sana proje görevi var', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: atamaKaynagi(gorevId === null ? { projeId } : { gorevId }), kisiler: alicilar, yalnizKisiler: true, haric,
+    kaynakKimlik: atamaKaynagi(gorevId === null ? { projeId } : { gorevId }), kisiler: alicilar, yalnizKisiler: true, haric, alanlar: { proje: proje?.kod ?? null },
   });
 }
 export const atamaKapat = (db: Db, gorevId: number): Promise<number> => bildirimKapat(db, { tur: 'projeler.gorev-atandi', kaynakKimlik: atamaKaynagi({ gorevId }) });
@@ -768,7 +768,7 @@ async function kontrolBildir(db: Db, g: GorevSatiri, bitiren: number): Promise<v
   const proje = await sorgular.projeGetir(db, g.proje_id);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-kontrol-bekliyor', baslik: 'Proje görevi kontrolünü bekliyor', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: String(g.id), kisiler: alicilar, yalnizKisiler: true, haric: bitiren,
+    kaynakKimlik: String(g.id), kisiler: alicilar, yalnizKisiler: true, haric: bitiren, alanlar: { proje: proje?.kod ?? null },
   });
 }
 

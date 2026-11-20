@@ -682,6 +682,7 @@ export const makineDurumlari = async (db: Db): Promise<MakineDurumu[]> => degist
 const arizaBildir = (db: Db, kullanici: Kullanici, makine: { id: number; kod: string }, aciklama: string | null): Promise<number> =>
   bildirimGonder(db, {
     tur: 'istasyonlar.makine-durdu', baslik: `Makine durdu: ${makine.kod}`, metin: aciklama, yol: '/istasyonlar/makineler', kaynakKimlik: String(makine.id), haric: kullanici.id,
+    alanlar: { makine: makine.kod },
   });
 
 // IS-05: durum değişikliği kişi ve zamanla yazılır.

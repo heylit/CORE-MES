@@ -767,6 +767,7 @@ async function kartOnayiBildir(db: Db, g: {
   if (g.gonderildi) {
     await bildirimGonder(db, {
       tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: `/malzemeler?kart=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: g.kisiId,
+      alanlar: { stok_kodu: g.stokKodu },
     });
   }
   // Geri çekme (ret damgasında `geri`) ret değildir; gönderen kendi kartını taslağa aldıysa `haric` onu düşürür.

@@ -24,6 +24,11 @@ import {
   acikTakiplerCevabi, gecikenlerimCevabi, kademeAyarDegistirGovdesi, kademeAyarlariCevabi, kademeKaynagiParametresi,
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { acikTakipler, gecikenlerim, kademeAyarlari, kademeAyariYaz, seridim } from './kademe.ts';
+import {
+  bildirimKuralDegistirGovdesi, bildirimKuralEkleGovdesi, bildirimKuralOnIzlemeCevabi, bildirimKuralParametresi, bildirimKuralSilGovdesi,
+  bildirimKuralSorgusu, bildirimKurallariCevabi,
+} from '#paylasilan/sozlesme/bildirim-kural.ts';
+import { kuralDegistir, kuralEkle, kuralOnIzleme, kuralSil, kurallariOku } from './kural.ts';
 import { olayAnahtarlari, olayAnahtarlariTopluDegistir, olayAnahtariDegistir, oncekiHaleDon } from './olay-anahtari.ts';
 import {
   bildirimOlayAcikDegistirGovdesi, bildirimOlayAciklariCevabi, bildirimOlayParametresi, bildirimOlayTopluGovdesi, bildirimOncekiHaleDonGovdesi,
@@ -100,6 +105,26 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/bildirimler/olaylar/onceki-hale-don', yetki: 'ayarlar.yaz', govde: bildirimOncekiHaleDonGovdesi, cevap: bildirimOlayAciklariCevabi,
     isle: ({ db, kullanici }) => oncekiHaleDon(db, kullanici),
+  }),
+  // 3478-3 a: olay başına kurallar (koşul + alıcı + kanal + şablon). Sistem Ayarları'nın işlemiyle okunur ve yazılır; ön izleme kaydetmez.
+  uc({ yontem: 'GET', yol: '/bildirimler/kurallar', yetki: 'ayarlar.yaz', sorgu: bildirimKuralSorgusu, cevap: bildirimKurallariCevabi, isle: ({ db, sorgu }) => kurallariOku(db, sorgu.tur) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/kurallar/ekle', yetki: 'ayarlar.yaz', govde: bildirimKuralEkleGovdesi, cevap: bildirimKurallariCevabi,
+    isle: ({ db, kullanici, govde }) => kuralEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/kurallar/on-izleme', yetki: 'ayarlar.yaz', govde: bildirimKuralEkleGovdesi, cevap: bildirimKuralOnIzlemeCevabi,
+    isle: ({ db, govde }) => kuralOnIzleme(db, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/kurallar/:id/degistir', yetki: 'ayarlar.yaz', parametre: bildirimKuralParametresi,
+    govde: bildirimKuralDegistirGovdesi, cevap: bildirimKurallariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kuralDegistir(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/kurallar/:id/sil', yetki: 'ayarlar.yaz', parametre: bildirimKuralParametresi,
+    govde: bildirimKuralSilGovdesi, cevap: bildirimKurallariCevabi,
+    isle: ({ db, parametre, govde }) => kuralSil(db, parametre.id, govde.surum),
   }),
   // Otomatik bildirimin gösterimi (2147 Y4): Sistem Ayarları'nın işlemiyle okunur ve yazılır.
   uc({ yontem: 'GET', yol: '/bildirimler/gosterim', yetki: 'ayarlar.yaz', cevap: bildirimGosterimleriCevabi, isle: ({ db }) => bildirimGosterimleri(db) }),

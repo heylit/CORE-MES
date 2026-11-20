@@ -91,11 +91,12 @@ export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<Bild
 
 // Kaynak kaydın kararı verilince o kayda bağlı açık bildirim bütün alıcılarda okunur; görev ve hatırlatma ayrıca yapıldı olur
 // (okunmuş ama yapılmamış görev de). Bitmiş ve arşivdeki satıra dokunulmaz.
+// Kural satırları (3478-3) ana anahtarın sonuna `#kural-<id>` ekler; karar verilince onlar da kapanır.
 export async function kaynaktanOkunduIsaretle(db: Db, tekilAnahtar: string): Promise<number> {
   const r = await db.sorgu<{ id: number }>(
     `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()),
             yapildi = CASE WHEN sinif = 'bilgi' THEN NULL ELSE coalesce(yapildi, now()) END
-     WHERE tekil_anahtar = $1 AND arsivlendi IS NULL AND (okundu IS NULL OR (sinif <> 'bilgi' AND yapildi IS NULL)) RETURNING id`,
+     WHERE (tekil_anahtar = $1 OR left(tekil_anahtar, length($1) + 7) = $1 || '#kural-') AND arsivlendi IS NULL AND (okundu IS NULL OR (sinif <> 'bilgi' AND yapildi IS NULL)) RETURNING id`,
     [tekilAnahtar],
   );
   return r.length;

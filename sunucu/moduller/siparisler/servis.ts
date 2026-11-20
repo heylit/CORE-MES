@@ -13,7 +13,7 @@ import type {
   BirimSecenekleriCevabi, KalemRevizyonu, MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisRevizyonlariCevabi, SiparisRevizyonVerisi, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
-import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat, kalanGun } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, revizyonBilgileri, satisBirimleri, type RevizyonBilgisi } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -91,6 +91,9 @@ export async function siparisListesi(db: Db, sorgu: SiparisListesiSuzgeci): Prom
   });
 }
 
+// 3478-3: bildirim kuralının koşul alanları. Tutar yalnız koşulda kullanılır, bildirim metnine yazılmaz (bildirim modülü denetler).
+const kuralAlanlari = (s: SiparisAyrintisi) => ({ firma: s.firmaAd, tutar: s.genelToplam, para_birimi: s.paraBirimi, termine_kalan_gun: kalanGun(s.termin, Date.now()) });
+
 export async function siparisAyrintisi(db: Db, id: number): Promise<SiparisAyrintisi> {
   const satir = await sorgular.siparisGetir(db, id);
   if (satir === null) throw bulunamadi(SIPARIS_YOK);
@@ -160,10 +163,12 @@ export async function siparisEkle(
   await sorgular.kalemleriYaz(db, id, satirlar);
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.
+  const sonuc = await siparisAyrintisi(db, id);
   if (!bildirimsiz) await bildirimGonder(db, {
     tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+    alanlar: kuralAlanlari(sonuc),
   });
-  return siparisAyrintisi(db, id);
+  return sonuc;
 }
 
 export type TaslakSiparisVerisi = {
@@ -271,10 +276,11 @@ export async function durumDegistir(
   if (acan !== null) await bildirimGonder(db, {
     tur: komut === 'onayla' ? 'siparisler.siparis-onaylandi' : 'siparisler.siparis-iptal-edildi',
     baslik: `${komut === 'onayla' ? 'Onaylanan' : 'İptal edilen'} sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), kisiler: [acan], haric: kullanici.id,
+    alanlar: kuralAlanlari(sonuc),
   });
   // 3478 Risk N1: onayı geri alınan sipariş yeniden onay bekler; iş onaylayanlara yeniden düşer.
   if (komut === 'geri-al') await bildirimGonder(db, {
-    tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+    tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${sonuc.no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id, alanlar: kuralAlanlari(sonuc),
   });
   return sonuc;
 }

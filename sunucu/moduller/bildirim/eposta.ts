@@ -118,6 +118,26 @@ export async function epostaKuyrugaAl(
   await s.epostaKuyrugaYaz(db, satirlar);
 }
 
+// 3478-3: kural satırlarının e-postası. Kanalı kural seçer (olayın e-posta anahtarı değil); zaman (hemen ya da özet) olayın
+// ayarından, metin olayın e-posta şablonundan; "olay" yer tutucusu kuralın başlığıdır. Kural kademe açmaz. Para alanı kural
+// şablonunda geçemez (kuralGecersizligi), başlık e-postaya güvenle girer.
+export async function kuralEpostasiKuyrugaAl(
+  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined },
+  yazilan: readonly { kisiId: number; id: number; yeni: boolean }[], islemler: ReadonlyMap<number, readonly string[]>,
+): Promise<void> {
+  const alanlar = yazilan.filter((y) => y.yeni && kisiEpostaAlir(true, islemler.get(y.kisiId) ?? []));
+  if (alanlar.length === 0 || await postaAyari(db) === null) return;
+  const ozet = (await tetikleyici(db, olay.tur)).zaman === 'ozet';
+  const zamani = ozet ? new Date(sonrakiSaat(Date.now(), await sistemAyariOku(db, 'bildirim.eposta-ozet-saati') ?? 7)).toISOString() : null;
+  await s.epostaKuyrugaYaz(db, alanlar.map((y) => ({
+    tur: olay.tur, onem: BILDIRIM_TURLERI[olay.tur].onem, baslik: olay.baslik,
+    kayitNo: olay.eposta?.kayitNo ?? null, yol: olay.yol,
+    gecikmeGunu: olay.eposta?.gecikmeGunu ?? null, istasyon: olay.eposta?.istasyon ?? null,
+    ...toplantiAlanlari(olay.tur, olay.eposta?.toplanti),
+    kisiId: y.kisiId, bildirimId: y.id, kademe: 0, ozet, zamani,
+  })));
+}
+
 // --- Gönderim turu (iş, transaction dışı) --------------------------------------------------------------------------------
 
 type Sablon = EpostaSablonIcerigi;

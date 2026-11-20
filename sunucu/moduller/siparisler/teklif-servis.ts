@@ -13,7 +13,7 @@ import type {
   TeklifSilmeCevabi, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat, kalanGun } from '../bildirim/disari.ts';
 import { kdvSecenekleri } from '../finans/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
@@ -196,13 +196,14 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
   if (iskontoOnayiGerekir(g.iskontoOrani)) {
     await bildirimGonder(db, {
       tur: 'siparisler.iskonto-onay-bekliyor', baslik: `İskonto onayı bekleyen teklif: ${t.no}`, metin: `%${g.iskontoOrani} iskonto`,
-      yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+      yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id, alanlar: { iskonto_orani: g.iskontoOrani },
     });
   }
   if (terminOnayi) {
     await bildirimGonder(db, {
       tur: 'siparisler.termin-onay-bekliyor', baslik: `Termin onayı bekleyen teklif: ${t.no}`, metin: `İstenen termin ${g.planTaslagi?.istenenTermin ?? ''} başka siparişi geciktiriyor`,
       yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+      alanlar: { termine_kalan_gun: kalanGun(g.planTaslagi?.istenenTermin, Date.now()) },
     });
   }
   return t;
