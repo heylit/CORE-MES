@@ -6,12 +6,33 @@ import { fasonMu, ilkBosluk, tasimaSaati, tasinabilir, type AdimSecimi, type Emi
 
 export const kokKimligi = (id: string): string => (/^(.*?)(?:-Y\d+)*(?:\/\d+)?$/.exec(id)?.[1] ?? id) || id;
 
+// Partiye bölünen emrin partisi planda kendi kimliğiyle gelir (sunucudaki ayrı emir), kimliğinde "/<n>" yoktur; kökünü yalnız numarası
+// ("<kök no>/<n>") söyler. Çözücü kimliği önce numarayla kök emrin kimliğine, bulamazsa kimliğin kendi köküne indirir.
+export type KokCozucu = (id: string) => string;
+const partiNo = (no: string): number | null => { const p = /\/(\d+)$/.exec(no); return p ? Number(p[1]) : null; };
+export function kokCozucu(emirler: readonly Pick<KokpitEmri, 'id' | 'no'>[]): KokCozucu {
+  const noIle = new Map(emirler.map((e) => [e.no, e.id]));
+  // Kök emir modelde yoksa (bitti ya da plana gelmedi) kardeş partiler en küçük numaralısının kimliğinde toplanır.
+  const kardes = new Map<string, string>();
+  for (const e of [...emirler].sort((x, y) => (partiNo(x.no) ?? 0) - (partiNo(y.no) ?? 0))) {
+    const kokNo = partiNo(e.no) === null ? null : e.no.replace(/\/\d+$/, '');
+    if (kokNo !== null && !kardes.has(kokNo)) kardes.set(kokNo, noIle.get(kokNo) ?? e.id);
+  }
+  const kok = new Map<string, string>();
+  for (const e of emirler) {
+    const k = partiNo(e.no) === null ? undefined : kardes.get(e.no.replace(/\/\d+$/, ''));
+    if (k !== undefined && k !== e.id) kok.set(e.id, k);
+  }
+  // Partinin partisi ("<kök>/1/2") üst partisinin köküne iner.
+  return (id) => { let k = id; for (let i = 0; i < 16 && kok.has(k); i++) k = kok.get(k)!; return kokKimligi(k); };
+}
+
 // Emrin sipariş bağı (sunucudan, kök emir kimliğiyle): `siparis` gruplama anahtarıdır; no ve müşteri siparişi okuyamayan kişide null gelir.
 export interface SiparisBagi { siparis: string; no: string | null; musteri: string | null; kalem: number | null }
 export type SiparisBaglari = Readonly<Record<string, SiparisBagi>>;
 // Kartın anahtarı: emir siparişe bağlıysa sipariş, değilse kök emir. Sipariş anahtarı emir kimliğiyle çakışmasın diye ön eklidir.
-export const kartAnahtari = (id: string, bag?: SiparisBaglari | null): string => {
-  const kok = kokKimligi(id), b = bag?.[kok];
+export const kartAnahtari = (id: string, bag?: SiparisBaglari | null, kokBul: KokCozucu = kokKimligi): string => {
+  const kok = kokBul(id), b = bag?.[kok] ?? bag?.[id];
   return b ? `sp:${b.siparis}` : kok;
 };
 
@@ -43,19 +64,20 @@ const enErken = (l: readonly KokpitEmri[]): number | null => {
 };
 
 export function siraKartlari(m: Pick<KokpitModeli, 'emirler' | 'isler'>, bag: SiparisBaglari | null = null): SiraKarti[] {
+  const kokBul = kokCozucu(m.emirler);
   const grup = new Map<string, KokpitEmri[]>();
   for (const e of m.emirler) {
-    const k = kartAnahtari(e.id, bag);
+    const k = kartAnahtari(e.id, bag, kokBul);
     const l = grup.get(k);
     if (l) l.push(e); else grup.set(k, [e]);
   }
   const eksik = (l: readonly KokpitEmri[]): boolean => l.some((e) => e.adimlar.some((a) => tezgahAdimi(a) && m.isler[a.id] === undefined));
   const kartlar = [...grup].map(([kok, l]): SiraKarti => {
-    const b = bag?.[kokKimligi(l[0]?.id ?? '')] ?? null;
-    // Emirler köklerine göre öbeklenir: kök başta, düğümleri ardında.
+    const b = bag?.[kokBul(l[0]?.id ?? '')] ?? bag?.[l[0]?.id ?? ''] ?? null;
+    // Emirler köklerine göre öbeklenir: kök başta, düğümleri ardında, partileri numara sırasıyla (/2, /10'dan önce).
     const kokler = new Map<string, KokpitEmri[]>();
-    for (const e of l) { const k = kokKimligi(e.id), o = kokler.get(k); if (o) o.push(e); else kokler.set(k, [e]); }
-    const obekler = [...kokler].map(([k, o]) => [...o].sort((x, y) => Number(y.id === k) - Number(x.id === k)));
+    for (const e of l) { const k = kokBul(e.id), o = kokler.get(k); if (o) o.push(e); else kokler.set(k, [e]); }
+    const obekler = [...kokler].map(([k, o]) => [...o].sort((x, y) => Number(y.id === k) - Number(x.id === k) || (partiNo(x.no) ?? 0) - (partiNo(y.no) ?? 0)));
     if (b) obekler.sort((x, y) => Number(eksik(y)) - Number(eksik(x)) || (enErken(x) ?? SONSUZ) - (enErken(y) ?? SONSUZ));
     const emirler = obekler.flat();
     const kokEmri = b ? undefined : emirler.find((e) => e.id === kok);
@@ -73,7 +95,7 @@ export function siraKartlari(m: Pick<KokpitModeli, 'emirler' | 'isler'>, bag: Si
 
 // Arama sipariş no ve müşteri adıyla da bulur: emrin siparişi aranan metni taşıyorsa emir görünür kalır.
 export function siparisAramasi(id: string, bag: SiparisBaglari | null, ara: string): boolean {
-  const q = ara.trim().toLocaleLowerCase('tr-TR'), b = bag?.[kokKimligi(id)];
+  const q = ara.trim().toLocaleLowerCase('tr-TR'), b = bag?.[kokKimligi(id)] ?? bag?.[id];
   return q !== '' && b !== undefined && `${b.no ?? ''} ${b.musteri ?? ''}`.toLocaleLowerCase('tr-TR').includes(q);
 }
 

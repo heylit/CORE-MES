@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, eksikNedeni, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, durumYazisi as emirDurumYazisi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 import { kartSonucu, listeSirasi } from './yol.ts';
 
@@ -33,6 +33,12 @@ export interface ListeDuzeniOzellikleri {
 
 // Açık satırın kendi birincil düğmesi var mı: plansızda Planla, geç ya da riskli siparişte Seçenekleri göster.
 export const satirBirincilIster = (k: SiraKarti | undefined): boolean => k !== undefined && k.durum !== 'iyi';
+
+// Çok emirli satırda emir ve parti ayrı sayılır: partinin numarası "<emir no>/<n>" biçimindedir.
+const emirSayisi = (k: SiraKarti): string => {
+  const parti = k.emirler.filter((e) => /\/\d+$/.test(e.no)).length, emir = k.emirler.length - parti;
+  return [emir > 0 ? `${String(emir)} emir` : '', parti > 0 ? `${String(parti)} parti` : ''].filter(Boolean).join(', ');
+};
 
 const durumYazisi = (k: SiraKarti): string => {
   if (k.durum === 'plansiz') return k.yerlesen > 0 ? `${String(k.yerlesen)} / ${String(k.adim)} planda` : 'Plansız';
@@ -65,7 +71,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
           <div className="tc-pyq-ld-kart" key={k.kok} data-d={k.durum} data-acik={secili ? '' : undefined}>
             <div className="tc-pyq-ld-satir" role="row" data-kart={k.kok}>
               <b role="cell" className="tc-pyq-mono">{ad}</b>
-              <span role="cell">{bas?.urun ?? ''}{k.emirler.length > 1 ? ` · ${String(k.emirler.length)} emir` : bas ? ` · ${String(bas.adet)} adet` : ''}</span>
+              <span role="cell">{bas?.urun ?? ''}{k.emirler.length > 1 ? ` · ${emirSayisi(k)}` : bas ? ` · ${String(bas.adet)} adet` : ''}</span>
               <span role="cell" data-ad="Termin">{k.termin === null ? 'yok' : zaman(k.termin)}</span>
               <span role="cell" data-ad="Bitiş">{bitis === null ? '—' : zaman(bitis)}</span>
               <span role="cell"><Rozet ton={TON[k.durum]} gorunum="cizgi">{durumYazisi(k)}</Rozet></span>
@@ -96,25 +102,45 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                       )}
                     </div>
                   )}
-                  <ol className="tc-pyq-ld-adimlar" aria-label="Adımlar">
-                    {k.emirler.flatMap((e) => e.adimlar.map((a, i) => {
-                      const x = m.isler[a.id];
-                      const govde = (
-                        <>
-                          <span>{k.emirler.length > 1 ? `${e.no} · ` : ''}{String(i + 1)}. {a.ad}</span>
-                          <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ${sureYaz(x.ufukDisi)} ufuk dışında` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
-                          {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
-                        </>
-                      );
-                      return (
-                        <li key={a.id} data-yok={x ? undefined : ''}>
-                          {x
-                            ? <button type="button" data-adim={a.id} aria-pressed={seciliIs === a.id} title="Tezgâhlarda göster" onClick={() => { adimSec(e.id, a.id); }}>{govde}</button>
-                            : govde}
-                        </li>
-                      );
-                    }))}
-                  </ol>
+                  {k.emirler.map((e) => {
+                    // Çok emirli siparişte her emir (ana emir ve partileri) kendi başlığıyla ayrı öbektir; adım satırı emir no taşımaz.
+                    const ayri = k.emirler.length > 1;
+                    const adimlar = (
+                      <ol className="tc-pyq-ld-adimlar" aria-label={ayri ? `${e.no} adımları` : 'Adımlar'}>
+                        {e.adimlar.map((a, i) => {
+                          const x = m.isler[a.id];
+                          // Yerleşmeyen adımı tutan adım planda varsa (ör. ufka taşan önceki adım) basınca o gösterilir.
+                          const engel = x ? null : engelleyenAdim(p, m.isler, a.id);
+                          const hedef = x ? a.id : engel;
+                          const govde = (
+                            <>
+                              <span>{String(i + 1)}. {a.ad}</span>
+                              <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ${sureYaz(x.ufukDisi)} ufuk dışında` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
+                              {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
+                            </>
+                          );
+                          const hedefIs = hedef === null ? undefined : m.isler[hedef];
+                          return (
+                            <li key={a.id} data-yok={x ? undefined : ''}>
+                              {hedef !== null && hedefIs
+                                ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, hedef); }}>{govde}</button>
+                                : govde}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    );
+                    if (!ayri) return <div key={e.id}>{adimlar}</div>;
+                    return (
+                      <section key={e.id} className="tc-pyq-ld-emir" aria-label={e.no} data-emir={e.id}>
+                        <p className="tc-pyq-ld-emir-bas">
+                          <b className="tc-pyq-mono">{e.no}</b>
+                          <small>{String(e.adet)} adet · {emirDurumYazisi(e)}</small>
+                        </p>
+                        {adimlar}
+                      </section>
+                    );
+                  })}
                 </div>
                 <div className="tc-pyq-ld-tahta">{tahta}</div>
               </div>

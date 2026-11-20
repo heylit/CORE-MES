@@ -40,7 +40,7 @@ import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
 import { EmirAdimlari, SiraSeridi, type GeriOzeti, type PlanlaDurumu, type PlanlaIstegi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
-import { ilkKart, kartAnahtari, siparisAramasi, siraKartlari } from './yerlestirme.ts';
+import { ilkKart, kartAnahtari, kokCozucu, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import { Yol } from './Yol.tsx';
 import { eksikPlanlanacaklar, yenidenPlanlanacaklar } from './yol.ts';
@@ -251,6 +251,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const ilk = useRef(say);
   // Sipariş bağı (3297-5 a): kartlar siparişe göre toplanır; arama sipariş no ve müşteriyle de bulur. Dilim okunamadıysa kart kök emirdir.
   const bag = o.depo.durum?.siparisBaglari ?? null;
+  const kokBul = useMemo(() => kokCozucu(m.emirler), [m.emirler]);
   const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ara, bag]);
   const gorunenKume = useMemo(() => new Set(gorunen.map((e) => e.id)), [gorunen]);
   const uyar = useCallback((job: string) => gorunenKume.has(job), [gorunenKume]);
@@ -581,14 +582,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (d.emirId === null) return;
     setDegisiklikAcik(false);
     // Plansız emir kartında yerleştirilir (2. bölüm); planlı emirde kartı seçilir ve iş tahtada gösterilir.
-    if (emir.get(d.emirId)?.durum === 'plansiz') { sec(null, null); setKart(kartAnahtari(d.emirId, bag)); return; }
+    if (emir.get(d.emirId)?.durum === 'plansiz') { sec(null, null); setKart(kartAnahtari(d.emirId, bag, kokBul)); return; }
     sec(d.emirId, null); setGoster(d.isId ?? emir.get(d.emirId)?.adimlar.find((a) => m.isler[a.id])?.id ?? null);
-  }, [sec, emir, m, bag]);
+  }, [sec, emir, m, bag, kokBul]);
 
   const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
   const kartlar = useMemo(() => siraKartlari(m, bag), [m, bag]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
-  useEffect(() => { if (secEmir !== null) { setKart(kartAnahtari(secEmir, bag)); setVurgu(true); } }, [secEmir]);
+  useEffect(() => { if (secEmir !== null) { setKart(kartAnahtari(secEmir, bag, kokBul)); setVurgu(true); } }, [secEmir]);
   // 3330: kart açıkça seçildiyse (ilk kart kendiliğinden gösterilirken değil) tahtada o siparişin emirleri yanar, ötekiler solar. Hiçbir adımı
   // planda olmayan kartta tahta solmaz: yerleştirirken dolu yerler olduğu gibi görünür.
   const yanan = useMemo(() => { const k = !vurgu || kart === null ? undefined : kartlar.find((x) => x.kok === kart); return k && k.yerlesen > 0 ? new Set(k.emirler.map((e) => e.id)) : null; }, [vurgu, kart, kartlar]);
@@ -613,9 +614,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Karta bağlı değişiklikler (saha olayı, geride kalan iş) kartta sayıyla görünür.
   const kartOlayi = useMemo(() => {
     const k = new Map<string, number>();
-    for (const g of degisiklikListesi) if (g.emirId !== null) k.set(kartAnahtari(g.emirId, bag), (k.get(kartAnahtari(g.emirId, bag)) ?? 0) + 1);
+    for (const g of degisiklikListesi) if (g.emirId !== null) k.set(kartAnahtari(g.emirId, bag, kokBul), (k.get(kartAnahtari(g.emirId, bag, kokBul)) ?? 0) + 1);
     return k;
-  }, [degisiklikListesi, bag]);
+  }, [degisiklikListesi, bag, kokBul]);
   // Seç-yerleştir ile taşıma operasyon bölümünden başlar: tahtadan ya da Matristen seçilen iş bölümü büyütmez (bakılan yer kaymasın).
   // Başka iş ya da kart seçilince düşer.
   useEffect(() => { if (secIs !== null && secIs !== tasinacak) setTasinacak(null); }, [secIs]);

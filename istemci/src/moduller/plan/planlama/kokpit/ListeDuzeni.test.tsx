@@ -173,3 +173,44 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(screen.getByText('Bu süzgeçle eşleşen sipariş ya da emir yok.')).toBeTruthy();
   });
 });
+
+// 3483: partinin plandaki kimliği kendi emir kimliğidir; kökünü numarası söyler ("<kök no>/<n>"). Burada 3, 2'nin 1. partisidir.
+describe('partiye bölünen emir (3483)', () => {
+  const partili = (c: ReturnType<typeof ornekCalisma>, p: ReturnType<typeof planOku>) =>
+    modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => (id === '3' ? 'ORN-2/1' : `ORN-${id}`));
+
+  it('parti ana emrin kartında toplanır; satır emir ve partiyi ayrı sayar, açık satırda her emir başlığıyla ayrı öbektir', () => {
+    const c = ornekCalisma(), p = planOku(c), m = partili(c, p), kartlar = siraKartlari(m);
+    expect(kartlar.map((k) => k.kok)).toEqual(['2']);
+    expect(kartlar[0]?.emirler.map((e) => e.no)).toEqual(['ORN-2', 'ORN-2/1']);
+    ciz({ m, p, kartlar }, '2');
+    expect(document.querySelector('[data-kart="2"]')?.textContent).toContain('1 emir, 1 parti');
+    const obekler = [...document.querySelectorAll<HTMLElement>('.tc-pyq-ld-emir')];
+    expect(obekler.map((o) => o.querySelector('.tc-pyq-ld-emir-bas b')?.textContent)).toEqual(['ORN-2', 'ORN-2/1']);
+    // Adım satırı emir no taşımaz; emir başlıktadır.
+    expect(obekler[1]?.querySelector('.tc-pyq-ld-adimlar li span')?.textContent).toMatch(/^1\. /);
+    expect(obekler[1]?.querySelector('.tc-pyq-ld-emir-bas small')?.textContent).toContain(`${String(m.emirler.find((e) => e.id === '3')?.adet)} adet`);
+  });
+
+  it('yerleşmeyen adımı tutan önceki adım planda varsa adıma basınca o adım seçilir', () => {
+    const x = yarimKur({ kod: 'oncul', oncul: '__', ufukDisi: 1 });
+    const kalan = Object.keys(x.m.isler).filter((id) => x.m.isler[id]?.job === '3').sort().at(-1) as string;
+    const c = ornekCalisma(), plan = c.plan as unknown as { ops: Record<string, unknown> };
+    const { [x.eksik]: _c, ...ops } = plan.ops;
+    const c2 = { ...c, plan: { ...plan, ops, fail: [x.eksik], failNeden: { [x.eksik]: { kod: 'oncul', oncul: kalan, ufukDisi: 1 } } } } as unknown as typeof c;
+    const p = planOku(c2), m = modelKur(c2, p, derle(girdiKur(c2, plandanBitenler(c2, p))), (id) => `ORN-${id}`);
+    const adimSec = vi.fn();
+    ciz({ m, p, kartlar: siraKartlari(m) }, '3', { adimSec });
+    const d = document.querySelector<HTMLButtonElement>(`button[data-adim="${x.eksik}"]`);
+    expect(d?.dataset['engel']).toBe(kalan);
+    expect(d?.hasAttribute('aria-pressed')).toBe(false);
+    fireEvent.click(d!);
+    expect(adimSec).toHaveBeenCalledWith('3', kalan);
+  });
+
+  it('nedeni öncül olmayan yerleşmeyen adım düğme değildir', () => {
+    const x = yarimKur({ kod: 'aday' });
+    ciz(x, '3');
+    expect(document.querySelector(`button[data-adim="${x.eksik}"]`)).toBeNull();
+  });
+});

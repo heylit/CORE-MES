@@ -430,6 +430,16 @@ export function eksikNedeni(p: Pick<OkunanPlan, 'fail' | 'failNeden'> | null, id
   if (n) return EKSIK_NEDENI[n.kod];
   return p?.fail.includes(id) ? EKSIK_NEDENI.zaman : 'son planlamada yoktu';
 }
+// Yerleşmeyen adımı tutan, planda yeri olan adım: öncül zinciri (3457: ufka taşan adımın ardılları) yerleşmiş ilk adıma kadar yürünür.
+// Zincir yerleşmiş adıma varmazsa (öncül de yerleşmedi ya da neden öncül değil) null.
+export function engelleyenAdim(p: Pick<OkunanPlan, 'failNeden'> | null, isler: Readonly<Record<string, unknown>>, id: string): string | null {
+  const gorulen = new Set<string>();
+  for (let n = p?.failNeden?.[id]; n?.kod === 'oncul' && n.oncul !== undefined && !gorulen.has(n.oncul); n = p?.failNeden?.[n.oncul]) {
+    if (isler[n.oncul] !== undefined) return n.oncul;
+    gorulen.add(n.oncul);
+  }
+  return null;
+}
 export function durumYazisi(e: KokpitEmri): string {
   if (e.durum === 'plansiz') return 'plansız';
   if (e.ufukEksik) return `ufuk dışı, ${sureYaz(e.ufukEksik)} eksik`;
