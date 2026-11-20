@@ -9,7 +9,7 @@ import { setOnaylayabilir, setRole, type Role } from "./roles.ts";
 import { UNDO, V, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
 import { AYRINTI, bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, toast, type BildirimYolu } from "./ui.ts";
 import { onAfterRender, render } from "./views.ts";
-import { setBasamakYazar, setRoller } from "./memory.ts";
+import { setBasamakYazar, setOnayKisileri, setRoller } from "./memory.ts";
 import { setFiyatKilidi } from "./util.ts";
 import { api } from "../../../ortak/veri/api.ts";
 import { adrestekiOnayEylemi, ONAY_EYLEMI_PARAMETRESI, type OnayEylemi } from "#paylasilan/sozlesme/eposta-sabitleri.ts";
@@ -146,6 +146,8 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   setFiyatKilidi(!(secenek.fiyatGorur ?? true));
   // Basamağa rol seçimi yalnız yöneticide; rol listesi kişilerin ucundan (yönetici kisiler.oku taşır). Gelmezse seçimde yalnız kayıtlı rol görünür.
   if (secenek.basamakYazar && secenek.sayfa === "settings") void api.get<{ roller: { id: number; ad: string }[] }>("/roller").then((c) => { setRoller(c.roller); render(); }).catch(() => undefined);
+  // 3442-7b: basamağa yazılabilecek kişiler; gelmezse yalnız kayıtlı kişiler görünür, yenisi eklenemez.
+  if (secenek.basamakYazar && secenek.sayfa === "settings") void api.get<{ kisiler: { id: number; ad: string }[] }>("/satin-alma-onay-kisileri").then((c) => { setOnayKisileri(c.kisiler); render(); }).catch(() => undefined);
   etkin = secenek;
   AYRINTI.donus = secenek.sayfa;
   AYRINTI.geri = ayrintidanDon;

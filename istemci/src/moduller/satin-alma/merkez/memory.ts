@@ -202,6 +202,8 @@ let ROLLER: readonly { id: number; ad: string }[] = [];
 export function setBasamakYazar(v: boolean): void { basamakYazar = v; }
 export function basamakYazabilir(): boolean { return basamakYazar; }
 export function setRoller(l: readonly { id: number; ad: string }[]): void { ROLLER = l; }
+let ONAY_KISILERI: readonly { id: number; ad: string }[] = [];
+export function setOnayKisileri(l: readonly { id: number; ad: string }[]): void { ONAY_KISILERI = l; }
 const simge = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
 type Basamak = Settings["approvalLimits"][number];
 function onayBasamaklariPaneli(s: Settings): string {
@@ -209,21 +211,32 @@ function onayBasamaklariPaneli(s: Settings): string {
   const limit = (m: number | null | undefined) => (m === null || m === undefined ? "" : numIn(m));
   const rolAdi = (l: Basamak) => l.rolAdi ?? (l.rolId ? ROLLER.find(r => r.id === l.rolId)?.ad ?? null : null);
   const kademe = s.onayKademesi === undefined ? "" : `<p class="small">${s.onayKademesi
-    ? `<span class="flag good">${simge(SIMGELER.check)} Basamak denetimi açık</span> <span class="muted">Onaylayan, karar tutarının düştüğü basamağın ya da üst basamağın rolünü taşımalı.</span>`
+    ? `<span class="flag good">${simge(SIMGELER.check)} Basamak denetimi açık</span> <span class="muted">Onaylayan, karar tutarının düştüğü basamağın ya da üst basamağın rolünü taşımalı ya da o basamaklardan birinde kişi olarak yazılı olmalı.</span>`
     : `<span class="flag mute">Basamak denetimi kapalı</span> <span class="muted">Onay yetkisi olan herkes onaylar; roller kayıtlı kalır.</span>`}${basamakYazar ? ' <span class="muted">Açıp kapatmak: Sistem Ayarları, “Satın alma onay basamakları”.</span>' : ""}</p>`;
   const rolSecenekleri = (l: Basamak) => {
     const bilinen = ROLLER.some(r => r.id === l.rolId);
     const eski = !bilinen && l.rolId ? `<option value="${l.rolId}" selected>${esc(rolAdi(l) ?? `Rol #${l.rolId}`)}</option>` : "";
     return `<option value="">Rol yok (onay yetkisi yeter)</option>${eski}${ROLLER.map(r => `<option value="${r.id}"${l.rolId === r.id ? " selected" : ""}>${esc(r.ad)}</option>`).join("")}`;
   };
+  // 3442-7b a: basamağa yazılı kişi rolü olmasa da o basamağı ve alttakileri onaylar; seçenekler satın alma onaylama yetkisi taşıyanlar.
+  const kisiHucresi = (l: Basamak, i: number) => {
+    const yazili = l.kisiler ?? [];
+    const ciplar = yazili.map(k => `<span class="chip sa-onay-kisi" data-apk-kisi="${k.id}" data-ad="${esc(k.ad)}">${esc(k.ad)} <button type="button" class="sa-onay-kisi-cikar" data-act="ap-kisi-cikar" data-i="${i}" data-kisi="${k.id}" aria-label="${esc(`${k.ad}: basamaktan çıkar`)}">${simge(SIMGELER.x)}</button></span>`).join("");
+    const secilebilir = ONAY_KISILERI.filter(k => !yazili.some(y => y.id === k.id));
+    const ekle = secilebilir.length
+      ? `<span class="row sa-onay-kisi-ekle"><select data-apk="kisiSec" aria-label="Basamağa kişi ekle"><option value="">Kişi seç</option>${secilebilir.map(k => `<option value="${k.id}">${esc(k.ad)}</option>`).join("")}</select><button type="button" class="btn sm" data-act="ap-kisi-ekle" data-i="${i}">${simge(SIMGELER.plus)} Ekle</button></span>`
+      : "";
+    return `<div class="chips">${ciplar}</div>${ekle}`;
+  };
+  const kisiAdlari = (l: Basamak) => (l.kisiler ?? []).map(k => esc(k.ad)).join(", ");
   const satirlar = basamakYazar
-    ? L.map((l, i) => `<tr data-ap="${i}"><td><input type="text" inputmode="decimal" data-apk="max" value="${limit(l.max)}" placeholder="limitsiz" aria-label="Üst limit (TL)"></td><td><input type="text" data-apk="role" value="${esc(l.role)}" aria-label="Basamak adı"></td><td><select data-apk="rolId" aria-label="Onaylayan rol">${rolSecenekleri(l)}</select></td><td class="acts"><button class="btn ghost danger sa-kaldir" data-act="rm-ap" data-i="${i}" aria-label="${esc(`${l.role || "Basamak"}: kaldır`)}" title="Kaldır; kaydedene kadar geri alınabilir">${simge(SIMGELER.trash)}</button></td></tr>`).join("")
-    : L.map(l => { const r = rolAdi(l); return `<tr><td class="num">${l.max === null || l.max === undefined ? '<span class="muted">limitsiz</span>' : `${numIn(l.max)} ₺`}</td><td>${esc(l.role)}</td><td>${r ? esc(r) : l.rolId ? '<span class="muted">Rol atanmış</span>' : '<span class="muted">Rol yok</span>'}</td></tr>`; }).join("");
+    ? L.map((l, i) => `<tr data-ap="${i}"><td><input type="text" inputmode="decimal" data-apk="max" value="${limit(l.max)}" placeholder="limitsiz" aria-label="Üst limit (TL)"></td><td><input type="text" data-apk="role" value="${esc(l.role)}" aria-label="Basamak adı"></td><td><select data-apk="rolId" aria-label="Onaylayan rol">${rolSecenekleri(l)}</select></td><td>${kisiHucresi(l, i)}</td><td class="acts"><button class="btn ghost danger sa-kaldir" data-act="rm-ap" data-i="${i}" aria-label="${esc(`${l.role || "Basamak"}: kaldır`)}" title="Kaldır; kaydedene kadar geri alınabilir">${simge(SIMGELER.trash)}</button></td></tr>`).join("")
+    : L.map(l => { const r = rolAdi(l); return `<tr><td class="num">${l.max === null || l.max === undefined ? '<span class="muted">limitsiz</span>' : `${numIn(l.max)} ₺`}</td><td>${esc(l.role)}</td><td>${r ? esc(r) : l.rolId ? '<span class="muted">Rol atanmış</span>' : '<span class="muted">Rol yok</span>'}</td><td>${kisiAdlari(l) || '<span class="muted">–</span>'}</td></tr>`; }).join("");
   return `<section class="panel" data-sa-basamaklar><div class="panel-h"><h2>Onay limitleri</h2><span class="sub">karar tutarı (KDV hariç TL) bu değere kadar bu basamağın onayıyla</span></div><div class="panel-b">
       ${kademe}
-      ${basamakYazar ? "" : `<p class="small"><span class="flag mute">${simge(SIMGELER.lock)} Salt okunur</span> <span class="muted">Basamakları, eşikleri ve rolleri yalnız yönetici değiştirir. Diğer ayarları kaydedebilirsiniz.</span></p>`}
-      <table class="itbl rt"><thead><tr><th>Üst limit (TL)</th><th>Basamak</th><th>Onaylayan rol</th>${basamakYazar ? "<th></th>" : ""}</tr></thead><tbody id="ap-rows">${satirlar}</tbody></table>
-      ${basamakYazar ? `<div class="row" data-sa-y="5"><button class="btn sm" data-act="add-ap">${simge(SIMGELER.plus)} Basamak ekle</button><span class="small muted">Boş limit en üst basamaktır. Rolü boş basamak, rolü olan basamağın üstünde olamaz.</span></div>` : ""}</div></section>`;
+      ${basamakYazar ? "" : `<p class="small"><span class="flag mute">${simge(SIMGELER.lock)} Salt okunur</span> <span class="muted">Basamakları, eşikleri, rolleri ve kişileri yalnız yönetici değiştirir. Diğer ayarları kaydedebilirsiniz.</span></p>`}
+      <table class="itbl rt"><thead><tr><th>Üst limit (TL)</th><th>Basamak</th><th>Onaylayan rol</th><th>Onaylayan kişiler</th>${basamakYazar ? "<th></th>" : ""}</tr></thead><tbody id="ap-rows">${satirlar}</tbody></table>
+      ${basamakYazar ? `<div class="row" data-sa-y="5"><button class="btn sm" data-act="add-ap">${simge(SIMGELER.plus)} Basamak ekle</button><span class="small muted">Boş limit en üst basamaktır. Rolü ve kişisi boş basamak, rolü ya da kişisi olan basamağın üstünde olamaz. Basamağa yazılan kişi rolü olmasa da o basamağı ve alttakileri onaylar.</span></div>` : ""}</div></section>`;
 }
 export function viewSettings(draft?: Settings | null): string {
   const s = draft ?? settings();

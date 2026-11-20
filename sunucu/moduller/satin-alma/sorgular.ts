@@ -817,9 +817,13 @@ export function katalogSil(db: Db, id: string, surum: number): Promise<{ id: str
 
 // ---- Ayarlar
 // Kur bu tabloda değil, finanstadır (SA3 a); servis ekler.
-export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket' | 'dortGoz' | 'onayKademesi'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
-export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string; rolId: number | null }[]> {
-  return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye, rol_id AS "rolId" FROM satin_alma_onay_limiti ORDER BY sira');
+export type OnayLimitiSatiri = { azamiTutar: string | null; seviye: string; rolId: number | null; kisiIdleri: number[] };
+export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket' | 'dortGoz' | 'onayKademesi' | 'onayLimitleri'>
+  & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[]; onayLimitleri: OnayLimitiSatiri[] };
+export async function onayLimitleri(db: Db): Promise<OnayLimitiSatiri[]> {
+  return db.sorgu(`SELECT l.azami_tutar AS "azamiTutar", l.seviye, l.rol_id AS "rolId",
+      COALESCE((SELECT array_agg(k.kisi_id ORDER BY k.kisi_id) FROM satin_alma_onay_limiti_kisi k WHERE k.sira = l.sira), '{}') AS "kisiIdleri"
+    FROM satin_alma_onay_limiti l ORDER BY l.sira`);
 }
 export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
   const a = (await db.tek<{ m: number; t: number; td: number; g: number; gecerlilikGun: number; enAzTeklif: number; fiyatUyariYuzdesi: string; surum: number }>(
@@ -874,6 +878,7 @@ export async function ayarListeleriniYaz(db: Db, a: AyarlarKaydetYazimi): Promis
   for (const [i, l] of a.onayLimitleri.entries()) {
     await db.sorgu('INSERT INTO satin_alma_onay_limiti (sira, azami_tutar, seviye, rol_id) VALUES ($1, $2, $3, $4)',
       [i + 1, l.azamiTutar, l.seviye, l.rolId ?? null]);
+    await db.sorgu('INSERT INTO satin_alma_onay_limiti_kisi (sira, kisi_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING', [i + 1, l.kisiIdleri ?? []]);
   }
 }
 

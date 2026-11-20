@@ -1029,6 +1029,61 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await limitler([]);
   });
 
+  test('3442-7b a: basamağa yazılı kişi rolü olmasa da onaylar; onaylama yetkisi olmayan kişi yazılamaz; dört göz kişi yolunda da önce; ekleme denetime yazılır', async () => {
+    c.samuduru ||= await rolluKisi('samuduru', 'satin_alma_muduru');
+    const samRol = (await vt().tx((db) => db.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', ['satin_alma_muduru'])))!.id;
+    const ayarKaydi = async (cerez: string, l: object[]) => {
+      const a = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).ayarlar;
+      return istek(cerez, 'POST', '/satin-alma-ayarlari/kaydet', {
+        agirliklar: a.agirliklar, gecerlilikGun: a.gecerlilikGun, enAzTeklif: a.enAzTeklif, fiyatUyariYuzdesi: a.fiyatUyariYuzdesi,
+        kurlar: a.kurlar.map((k) => ({ paraBirimi: k.paraBirimi })), kategoriler: a.kategoriler, birimler: a.birimler, onayLimitleri: l, surum: a.surum,
+      });
+    };
+    const kademe = async (deger: boolean) => tamam(await istek(c.yonetici, 'POST', '/ayarlar/satin-alma.onay-kademesi/degistir', { deger }));
+    const onay = () => ({ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay' as const, dortGozsuz: false, notlar: '' });
+    // Seçenekler yalnız onaylama yetkisi taşıyanlar: müdür var, satın almacı yok.
+    const secenek = tamam<{ kisiler: { id: number; ad: string }[] }>(await istek(c.yonetici, 'GET', '/satin-alma-onay-kisileri')).kisiler.map((k) => k.id);
+    assert.ok(secenek.includes(kisi.mudur!) && !secenek.includes(kisi.sa!));
+    assert.equal((await istek(c.talep, 'GET', '/satin-alma-onay-kisileri')).statusCode, 403);
+    // Onaylama yetkisi olmayan kişi basamağa yazılamaz (V1).
+    const yetkisiz = await ayarKaydi(c.yonetici, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol, kisiIdleri: [kisi.sa!] }]);
+    assert.equal(yetkisiz.statusCode, 400);
+    assert.match((yetkisiz.json() as { mesaj: string }).mesaj, /onaylama yetkisi taşımıyor/);
+    // Kişi listesini satın alma müdürü değiştiremez (basamak değişikliği yalnız yöneticide).
+    assert.equal((await ayarKaydi(c.samuduru, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol, kisiIdleri: [kisi.mudur!] }])).statusCode, 403);
+    const a = tamam<Ayarlar>(await ayarKaydi(c.yonetici, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol, kisiIdleri: [kisi.mudur!] }]));
+    assert.deepEqual(a.onayLimitleri[0]!.kisiler, [{ id: kisi.mudur!, ad: 'Deneme mudur' }]);
+    // Risk K2: eklenen kişi denetim kaydında.
+    const iz = (await vt().tek<DenetimSatiri>("SELECT yol, govde FROM denetim_kaydi WHERE yol = '/satin-alma-ayarlari/kaydet' ORDER BY id DESC LIMIT 1"))!;
+    assert.deepEqual(iz.govde._ek, [{ islem: 'eklendi', basamak: 'Deneme müdür', kisiId: kisi.mudur! }]);
+    // Kişileri göndermeyen kayıt (eski ekran) kişileri korur.
+    const korunan = tamam<Ayarlar>(await ayarKaydi(c.yonetici, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol }]));
+    assert.deepEqual(korunan.onayLimitleri[0]!.kisiler?.map((k) => k.id), [kisi.mudur]);
+    await kademe(true);
+    try {
+      // Müdür rolü basamağın rolü değil; basamağa yazılı olduğu için onaylar.
+      let t = await kararli();
+      tamam(await kaydet(c.mudur, { ...govde(t), onaylar: [onay()] }));
+      // Risk K1: basamakta yazılı olsa da kendi açtığı talebi onaylayamaz (dört göz önce).
+      t = await kararli(c.mudur);
+      const red = await kaydet(c.mudur, { ...govde(t), onaylar: [onay()] });
+      assert.equal(red.statusCode, 403);
+      assert.doesNotMatch((red.json() as { mesaj: string }).mesaj, /basamağınız/);
+      // Kişi çıkarılınca müdür onaylayamaz; çıkarma da denetimde.
+      tamam(await ayarKaydi(c.yonetici, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol, kisiIdleri: [] }]));
+      const iz2 = (await vt().tek<DenetimSatiri>("SELECT yol, govde FROM denetim_kaydi WHERE yol = '/satin-alma-ayarlari/kaydet' ORDER BY id DESC LIMIT 1"))!;
+      assert.deepEqual(iz2.govde._ek, [{ islem: 'cikarildi', basamak: 'Deneme müdür', kisiId: kisi.mudur! }]);
+      t = await kararli();
+      assert.equal((await kaydet(c.mudur, { ...govde(t), onaylar: [onay()] })).statusCode, 403);
+      // Basamakta yazılı kişi silinemez.
+      tamam(await ayarKaydi(c.yonetici, [{ azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol, kisiIdleri: [kisi.mudur!] }]));
+      await assert.rejects(vt().tx((db) => db.sorgu('DELETE FROM kisi WHERE id = $1', [kisi.mudur])));
+    } finally {
+      await kademe(false);
+      tamam(await ayarKaydi(c.yonetici, []));
+    }
+  });
+
   test('3170: kademeli teklifte karar tutarı ve onay basamağı basamak fiyatından: ucuzlayan kademede alt basamak onaylar, pahalanan kademede limit aşımı reddedilir (403)', async () => {
     c.samuduru ||= await rolluKisi('samuduru', 'satin_alma_muduru');
     const rolId = async (kod: string) => (await vt().tx((db) => db.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod])))!.id;

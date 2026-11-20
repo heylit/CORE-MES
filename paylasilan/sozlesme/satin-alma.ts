@@ -480,13 +480,20 @@ export const ayarlarSemasi = z.object({
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi.nullable() })),
   // 2397 b: basamağın rolü (boş: onaylama yetkisi yeter). Sunucu her zaman yazar; eski ekran fikstürleri için isteğe bağlı.
   // rolAdi yalnız okumadır (2397-6): rolleri göremeyen satın almacı basamağın rolünü adıyla görür; kayıt gövdesi taşımaz.
-  onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string(), rolId: z.number().int().nullable().optional(), rolAdi: z.string().nullable().optional() })),
+  // 3442-7b a: basamağa yazılı kişiler (rolsüz de o basamağı ve alttakileri onaylar); eski fikstürler için isteğe bağlı.
+  onayLimitleri: z.array(z.object({
+    azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string(), rolId: z.number().int().nullable().optional(), rolAdi: z.string().nullable().optional(),
+    kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })).optional(),
+  })),
   // Sistem Ayarları 'satin-alma.dort-goz' (salt okunur): ekran kendi kararını onaylatmamayı söyler; ret sunucudadır.
   dortGoz: z.boolean(),
   // Sistem Ayarları 'satin-alma.onay-kademesi' (salt okunur, 2397 b): açıkken basamak rolü sunucuda denetlenir.
   onayKademesi: z.boolean().optional(),
   surum: surumSemasi,
 });
+// 3442-7b: onay basamağına yazılabilecek kişiler.
+export const onayKisileriCevabi = z.object({ kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
+export type OnayKisileriCevabi = z.output<typeof onayKisileriCevabi>;
 export const ayarlarKaydetGovdesi = z.object({
   agirliklar: agirliklarSemasi,
   gecerlilikGun: z.number().int().min(1).max(365),
@@ -497,7 +504,11 @@ export const ayarlarKaydetGovdesi = z.object({
   kategoriler: z.array(z.string().trim().min(1).max(60)).max(100),
   birimler: z.array(z.object({ ad: z.string().trim().min(1).max(60), yillikButce: eksiOlmayan })).max(100),
   // Rolü göndermeyen (eski) ekranın kaydı aynı adlı basamağın rolünü korur; null rolü kaldırır.
-  onayLimitleri: z.array(z.object({ azamiTutar: eksiOlmayan.nullable(), seviye: z.string().trim().min(1).max(80), rolId: z.number().int().positive().nullable().optional() })).max(20),
+  // Kişileri göndermeyen ekranın kaydı da aynı basamağın kişilerini korur; boş dizi kaldırır.
+  onayLimitleri: z.array(z.object({
+    azamiTutar: eksiOlmayan.nullable(), seviye: z.string().trim().min(1).max(80), rolId: z.number().int().positive().nullable().optional(),
+    kisiIdleri: z.array(z.number().int().positive()).max(20).optional(),
+  })).max(20),
   ...beklenenSurum,
 });
 

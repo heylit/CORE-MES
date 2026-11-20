@@ -34,7 +34,8 @@ export interface Weights { cost: number; lead: number; supplier: number; warrant
 export interface CurrencySetting { rate: number | null; monthly: number | null }
 export interface DepartmentSetting { name: string; budget: number }
 // rolId: basamağı onaylayan rol (2397 b; null rolsüz, undefined bilinmiyor); rolAdi yalnız okumadır, sunucu verir.
-export interface ApprovalLimit { max: number | null; role: string; rolId?: number | null; rolAdi?: string | null }
+// kisiler: basamağa yazılı kişiler (3442-7b a; undefined bilinmiyor, kayıtta gönderilmez ve sunucu eskisini korur).
+export interface ApprovalLimit { max: number | null; role: string; rolId?: number | null; rolAdi?: string | null; kisiler?: { id: number; ad: string }[] }
 
 export interface Settings {
   company: string;

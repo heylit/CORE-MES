@@ -866,3 +866,8 @@
 .sa-kok .alt-kutu{ display:grid; gap:var(--b-2); padding:var(--b-2) 0 var(--b-3); }
 .sa-kok .alt-alanlar{ display:grid; gap:var(--b-2); grid-template-columns:repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
 .sa-kok .alt-sonuc{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-1); }
+/* 3442-7b: onay basamağına yazılı kişi */
+.sa-kok .chip.sa-onay-kisi{ display:inline-flex; align-items:center; gap:var(--pay-ince); cursor:default; font-size:var(--yazi-s); }
+.sa-kok .sa-onay-kisi-cikar{ border:0; background:none; padding:0; display:inline-flex; color:var(--sa-muted); cursor:pointer; }
+.sa-kok .sa-onay-kisi-cikar:hover{ color:var(--sa-bad); }
+.sa-kok .sa-onay-kisi-ekle{ margin-top:var(--b-2); }
