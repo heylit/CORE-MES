@@ -94,3 +94,18 @@ tr:has(.tc-mt-ad[data-secili]) > td { background: var(--secili-zemin); color: va
 .tc-mt-gecis-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--b-2); }
 .tc-mt-gecis-liste li { display: flex; align-items: flex-start; gap: var(--b-2); overflow-wrap: anywhere; }
 .tc-mt-gecis-liste li > span { flex: 1 1 0; min-width: 0; }
+
+/* Logo geçişi eşleştirme listesi (3474-1): arama ve toplu seçim düğmeleri üstte; seçim çubuğu altta yapışık, 360'ta tam genişlik. */
+.tc-mt-cari-ust { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); min-width: 0; margin-bottom: var(--b-3); }
+.tc-mt-cari-ust > :first-child { flex: 1 1 calc(var(--b-6) * 12); min-width: 0; }
+.tc-mt-cari-dugmeler { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-mt-cari-islem { min-width: calc(var(--b-6) * 6); max-width: 100%; }
+/* Logo kodu tirede bölünmez (40 karakteri aşan alınamaz kod bölünür). */
+.tc-mt-cari-kod { white-space: nowrap; overflow-wrap: normal; }
+.tc-mt-cari-kutu { width: var(--isaret-kutu); height: var(--isaret-kutu); }
+.tc-mt-cari-serit, .tc-mt-cari-secim {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-3) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel); min-width: 0;
+}
+.tc-mt-cari-serit { margin-bottom: var(--b-4); }
+.tc-mt-cari-secim { position: sticky; bottom: var(--b-3); z-index: 1; margin-top: var(--b-4); background: var(--panel-solid); box-shadow: var(--shadow); }

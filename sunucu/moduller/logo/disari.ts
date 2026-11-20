@@ -9,7 +9,8 @@ export { logodaKullanilanMalzemeKodlari } from './servis.ts';
 // stok Logo toplamını karşılaştırma ve açılış devri için okur. Hepsini sunucu/kablolama.ts bağlar; yetki denetlemezler.
 export { logodakiMalzemeKartlari, logodakiMalzemeOzeti, logodakiStokToplamlari, malzemeEslemesiYaz, tmiStokKodlari } from './servis.ts';
 export type { LogoAynaOzeti } from './servis.ts';
-export type { CariOkumasi } from './servis.ts';
+export type { CariOkumasi, LogoCariAynasi } from './servis.ts';
+export { logodakiCariAynasi } from './servis.ts';
 export type { LogoCari, LogoMalzemeKarti, LogoStokSatiri } from './kurallar.ts';
 // 2118: müşteri-tedarikçi Logo carisini arar ve tek cariyi okur (yalnız GET); sunucu/kablolama.ts bağlar.
 export { logodaCariAra, logodanCariOku, logodanCrmKodlari } from './isler.ts';

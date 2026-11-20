@@ -5,7 +5,11 @@ export const LOGO_TOPLU_AZAMI = 200;
 // Cariler sekmesi (3343) ve tek cari araması (2118): arama en az bu kadar karakter, sonuç ve toplu iş en çok bu kadar cari.
 export const LOGO_CARI_ARAMA_EN_AZ = 3;
 export const LOGO_CARI_SONUC_SINIRI = 50;
-export const LOGO_CARI_TOPLU_SINIRI = LOGO_CARI_SONUC_SINIRI;
+// 3474-1: cariler sekmesi tam listeden seçer; toplu iş malzemeyle aynı sınırdadır.
+export const LOGO_CARI_TOPLU_SINIRI = LOGO_TOPLU_AZAMI;
+// 3474-1: aynadan liste sayfası ve ön kontrolde Logo'dan tek istekte okunan en çok cari (her biri yardımcıya bir GET).
+export const LOGO_CARI_SAYFA_BOYU = LOGO_GECIS_SAYFA_BOYU;
+export const LOGO_CARI_OKUMA_PARTISI = 20;
 // CRM satış müşterisi durumu (3359): tek istekte en çok bu kadar firma (cari sonucu ve liste sayfası kadar).
 export const LOGO_CRM_SINIRI = LOGO_CARI_SONUC_SINIRI;
 // 3391-2 a: Logo geçişinde CRM bağı denetiminde sorulan en çok müşteri carisi (her biri yardımcıya bir GET).

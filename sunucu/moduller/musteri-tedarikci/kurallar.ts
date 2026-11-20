@@ -375,6 +375,35 @@ export function logoyaBaglanabilir(a: Pick<LogoCariAdayi, 'logoKayitNo' | 'logoC
   return a.logoKayitNo === null && (a.logoCariKodu === null || ayni(a.logoCariKodu, logoKodu)) && logoCariKoduHatasi(logoKodu) === null;
 }
 
+// 3474-1: Logo geçişi tam listesi. Ayna yalnız kod ve ad taşır: eşleşme Logo cari kodu ve kodla kurulur; vergi no ve Logo kayıt
+// numarası ön kontrolde, cari Logo'dan okunurken denetlenir (logoCariEslesmesi). Logo cari kodu aynı ve Logo'ya bağlı firma "bağlı" sayılır.
+export interface AynaAdayi { id: number; kod: string | null; ad: string; aktif: boolean; logoKayitNo: number | null; logoCariKodu: string | null; surum: number }
+export type AynaDurumu = 'yeni' | 'baglanabilir' | 'bagli' | 'eslesik' | 'alinamaz';
+export interface AynaEslesmesi {
+  durum: AynaDurumu;
+  alinamaz: string | null;
+  adaylar: { firmaId: number; kod: string | null; ad: string; aktif: boolean; neden: 'cari-kodu' | 'kod'; logoyaBagli: boolean; baglanabilir: boolean; surum: number }[];
+}
+export function aynaCariDurumu(kod: string, adaylar: readonly AynaAdayi[]): AynaEslesmesi {
+  const ilgili = adaylar.flatMap((a) => {
+    const neden = ayni(a.logoCariKodu, kod) ? 'cari-kodu' as const : ayni(a.kod, kod) ? 'kod' as const : null;
+    return neden === null ? [] : [{
+      firmaId: a.id, kod: a.kod, ad: a.ad, aktif: a.aktif, neden, logoyaBagli: a.logoKayitNo !== null, baglanabilir: logoyaBaglanabilir(a, kod), surum: a.surum,
+    }];
+  }).sort((x, y) => (x.neden === y.neden ? x.firmaId - y.firmaId : x.neden === 'cari-kodu' ? -1 : 1));
+  const alinamaz = logoCariKoduHatasi(kod);
+  if (alinamaz !== null) return { durum: 'alinamaz', alinamaz, adaylar: ilgili };
+  if (ilgili.some((a) => a.neden === 'cari-kodu' && a.logoyaBagli)) return { durum: 'bagli', alinamaz: null, adaylar: ilgili };
+  if (ilgili.length === 0) return { durum: 'yeni', alinamaz: null, adaylar: [] };
+  return { durum: ilgili.length === 1 && ilgili[0]!.baglanabilir ? 'baglanabilir' : 'eslesik', alinamaz: null, adaylar: ilgili };
+}
+
+// Aynada arama: kod ya da adda geçen metin (Türkçe büyük-küçük harf duyarsız).
+export function aynadaAranir(c: { kod: string; ad: string | null }, ara: string): boolean {
+  const m = ara.toLocaleUpperCase('tr');
+  return c.kod.toLocaleUpperCase('tr').includes(m) || (c.ad ?? '').toLocaleUpperCase('tr').includes(m);
+}
+
 // Alma ve bağlama komutu köprüye gitmez (POST transaction'ında 60 saniyelik köprü beklenmez): aynı kişinin aramasında görülen cari
 // bu süre içinde kullanılır, sonra yeniden aranır.
 export const LOGO_CARI_BELLEK_MS = 10 * 60_000;

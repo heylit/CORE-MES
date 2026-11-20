@@ -6,7 +6,8 @@ import {
   fasonTuruHatasi, karneYazmaHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami, vergiNoHatasi, zamanindaMi,
 } from './kurallar.ts';
 import type { KarneAgirliklari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { KarneSayilari } from './kurallar.ts';
+import type { AynaAdayi, KarneSayilari } from './kurallar.ts';
+import { aynaCariDurumu, aynadaAranir } from './kurallar.ts';
 
 test('MT-1 (D-9): Türkiye\'deki firmada vergi numarası 10 ya da 11 rakamdır; harf ve kısa numara reddedilir', () => {
   assert.equal(vergiNoHatasi('TR', '1234567890'), null);
@@ -213,4 +214,17 @@ test('MT-30 (2118): Logo carisinin türü, kod sınırı, bağlanabilirlik ve be
   assert.equal(k.logoCariBellegiGecerliMi(1000, 1000 + k.LOGO_CARI_BELLEK_MS - 1), true);
   assert.equal(k.logoCariBellegiGecerliMi(1000, 1000 + k.LOGO_CARI_BELLEK_MS), false);
   assert.equal(k.logoCariBellegiGecerliMi(1000, 999), false);
+});
+
+test('3474-1: aynadaki carinin durumu; cari kodu eşleşmesi koddan önce gelir, tek bağlanabilir aday "bağlanabilir", çok aday elle bakılır', () => {
+  const f = (id: number, ek: Partial<AynaAdayi>): AynaAdayi => ({ id, kod: `ORN-F-${id}`, ad: `ORN ${id}`, aktif: true, logoKayitNo: null, logoCariKodu: null, surum: 1, ...ek });
+  assert.equal(aynaCariDurumu('ORN-C-1', []).durum, 'yeni');
+  assert.equal(aynaCariDurumu('ORN-C-1', [f(1, { kod: 'orn-c-1' })]).durum, 'baglanabilir');
+  assert.equal(aynaCariDurumu('ORN-C-1', [f(1, { logoCariKodu: 'ORN-C-1', logoKayitNo: 9 })]).durum, 'bagli');
+  assert.equal(aynaCariDurumu('ORN-C-1', [f(1, { kod: 'ORN-C-1', logoCariKodu: 'ORN-C-9' })]).durum, 'eslesik');
+  const iki = aynaCariDurumu('ORN-C-1', [f(2, { kod: 'ORN-C-1' }), f(1, { logoCariKodu: 'ORN-C-1' }), f(3, { kod: 'ORN-X' })]);
+  assert.deepEqual([iki.durum, iki.adaylar.map((a) => [a.firmaId, a.neden])], ['eslesik', [[1, 'cari-kodu'], [2, 'kod']]]);
+  assert.equal(aynaCariDurumu(`ORN-${'X'.repeat(40)}`, []).durum, 'alinamaz');
+  assert.equal(aynadaAranir({ kod: 'ORN-C-1', ad: 'Deneme İşletme' }, 'işletme'), true);
+  assert.equal(aynadaAranir({ kod: 'ORN-C-1', ad: null }, 'zz'), false);
 });

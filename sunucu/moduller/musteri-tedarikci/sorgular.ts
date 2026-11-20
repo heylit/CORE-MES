@@ -388,6 +388,91 @@ export function koduKullananFirma(db: Db, kod: string, haricId: number): Promise
   return db.tek('SELECT id, kod, ad FROM musteri_tedarikci_firma WHERE upper(kod) = upper($1) AND id <> $2 LIMIT 1', [kod, haricId]);
 }
 
+// 3474-1: Logo geçişi listesi; aynadaki kodlarla kodu ya da Logo cari kodu tutan firmalar (büyük harfle karşılaştırılır).
+export function aynaAdaylari(db: Db, kodlar: readonly string[]): Promise<{ id: number; kod: string | null; ad: string; aktif: boolean; logoKayitNo: number | null; logoCariKodu: string | null; surum: number }[]> {
+  return db.sorgu(
+    `SELECT id, kod, ad, aktif, logo_kayit_no AS "logoKayitNo", logo_cari_kodu AS "logoCariKodu", surum
+       FROM musteri_tedarikci_firma
+      WHERE upper(logo_cari_kodu) = ANY($1::text[]) OR upper(kod) = ANY($1::text[])
+      ORDER BY id`,
+    [kodlar.map((k) => k.toUpperCase())],
+  );
+}
+
+export interface LogoGecisIzi {
+  sira: number; tur: 'al' | 'bagla'; logoKodu: string; tamam: boolean; firmaId: number | null; ileti: string | null; firmaSurumu: number | null;
+  onceki: LogoBagOncesi | null;
+}
+export interface LogoBagOncesi { kod: string | null; logoCariKodu: string | null; logoGonderimDurumu: string | null }
+export async function logoGecisIziYaz(db: Db, islem: string, kisiId: number, izler: readonly LogoGecisIzi[]): Promise<void> {
+  if (izler.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO musteri_tedarikci_logo_gecis_izi (islem, sira, tur, logo_kodu, tamam, firma_id, ileti, firma_surumu, onceki, kisi_id)
+     SELECT $1, t.sira, t.tur, t.logo_kodu, t.tamam, t.firma_id, t.ileti, t.firma_surumu, t.onceki, $2
+       FROM jsonb_to_recordset($3::jsonb) AS t(sira int, tur text, logo_kodu text, tamam boolean, firma_id int, ileti text, firma_surumu int, onceki jsonb)`,
+    [islem, kisiId, JSON.stringify(izler.map((i) => ({
+      sira: i.sira, tur: i.tur, logo_kodu: i.logoKodu, tamam: i.tamam, firma_id: i.firmaId, ileti: i.ileti === null ? null : i.ileti.slice(0, 500),
+      firma_surumu: i.firmaSurumu, onceki: i.onceki,
+    })))],
+  );
+}
+
+export interface LogoGecisIziSatiri {
+  id: number; islem: string; zaman: Date; sira: number; tur: 'al' | 'bagla'; logoKodu: string; tamam: boolean; ileti: string | null;
+  firmaSurumu: number | null; onceki: LogoBagOncesi | null; geriAlindi: Date | null; geriIleti: string | null;
+  firma: { id: number; kod: string | null; ad: string; surum: number; aktif: boolean; logoKayitNo: number | null } | null;
+}
+// Kişinin son işlemi ya da verilen işlem (yalnız o kişinin); satırlar işlem sırasıyla. Geri almada satırlar kilitlenir.
+export async function logoGecisIzleri(db: Db, kisiId: number, islem: string | null, kilitle = false): Promise<LogoGecisIziSatiri[]> {
+  const hedef = islem ?? (await db.tek<{ islem: string }>(
+    'SELECT islem FROM musteri_tedarikci_logo_gecis_izi WHERE kisi_id = $1 ORDER BY zaman DESC, id DESC LIMIT 1', [kisiId],
+  ))?.islem ?? null;
+  if (hedef === null) return [];
+  return db.sorgu<LogoGecisIziSatiri>(
+    `SELECT i.id, i.islem, i.zaman, i.sira, i.tur, i.logo_kodu AS "logoKodu", i.tamam, i.ileti, i.firma_surumu AS "firmaSurumu", i.onceki,
+            i.geri_alindi AS "geriAlindi", i.geri_ileti AS "geriIleti",
+            CASE WHEN f.id IS NULL THEN NULL ELSE json_build_object('id', f.id, 'kod', f.kod, 'ad', f.ad, 'surum', f.surum, 'aktif', f.aktif, 'logoKayitNo', f.logo_kayit_no) END AS firma
+       FROM musteri_tedarikci_logo_gecis_izi i
+       LEFT JOIN musteri_tedarikci_firma f ON f.id = i.firma_id
+      WHERE i.kisi_id = $1 AND i.islem = $2
+      ORDER BY i.sira${kilitle ? ' FOR UPDATE OF i' : ''}`,
+    [kisiId, hedef],
+  );
+}
+export async function logoGecisIziGeriAlindi(db: Db, id: number, ileti: string | null): Promise<void> {
+  await db.sorgu(
+    `UPDATE musteri_tedarikci_logo_gecis_izi SET geri_alindi = CASE WHEN $2::text IS NULL THEN now() END, geri_ileti = $2 WHERE id = $1`,
+    [id, ileti === null ? null : ileti.slice(0, 500)],
+  );
+}
+
+// Bağlamanın geri alınması: önce Logo kaydı boşaltılır (kod kilidi Logo kaydı varken kodu korur, MT-5), sonra önceki kod ve Logo cari
+// kodu geri yazılır. İki yazım tek sürüm artışı sayılmaz: her biri sürümü artırır. Bağlamanın kod geçmişine yazdığı eski kod satırı
+// silinir (3473): kod yeniden firmanın bugünkü kodu olur, geçmişte ikinci kez durmaz.
+export async function logoBaginiGeriAl(db: Db, id: number, surum: number, o: LogoBagOncesi, kisiId: number, baglanma: Date): Promise<boolean> {
+  const bos = await db.tek<{ id: number }>(
+    `UPDATE musteri_tedarikci_firma
+        SET logo_kayit_no = NULL, logo_gonderim_durumu = $3, guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, surum, o.logoGonderimDurumu, kisiId],
+  );
+  if (bos === null) return false;
+  await db.sorgu(
+    `UPDATE musteri_tedarikci_firma
+        SET kod = $2, logo_cari_kodu = $3, logo_crm_kodu = CASE WHEN upper(logo_cari_kodu) IS NOT DISTINCT FROM upper($3) THEN logo_crm_kodu END,
+            guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1`,
+    [id, o.kod, o.logoCariKodu, kisiId],
+  );
+  if (o.kod !== null) {
+    await db.sorgu(
+      'DELETE FROM musteri_tedarikci_kod_gecmisi WHERE firma_id = $1 AND kod = $2 AND birakildi >= $3',
+      [id, o.kod, baglanma],
+    );
+  }
+  return true;
+}
+
 // 3473: bağlama Logo kayıt numarasını, Logo cari kodunu ve firma kodunu Logo cari kodu yapar; farklı eski kod geçmişe yazılır.
 // Firma Logo'ya bağlı değilken ve cari kodu boş ya da aynıyken (kod kilidi tetikte; bağlanmamış firmada kod değişebilir).
 const BAGLANABILIR = 'id = $1 AND surum = $2 AND logo_kayit_no IS NULL AND (logo_cari_kodu IS NULL OR upper(logo_cari_kodu) = upper($3))';
