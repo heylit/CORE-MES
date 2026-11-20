@@ -255,3 +255,23 @@ describe('TMI taşıyıcısı', () => {
     expect(durumu('Askıda')).toEqual(['suspended', 'Askıda']);
   });
 });
+
+// 3442-6 (Test T1): ekranda seçilen ödeme yöntemi gövdeye gider, sunucudan geleni geri okunur. Yazma kırılırsa sunucu alansız
+// gövdede saklananı koruduğu için eski değer sessizce kalır; bu yüzden gidiş ve dönüş ayrı ölçülür.
+describe('3442-6 teklifin ödeme yöntemi', () => {
+  const ilk = (t: ReturnType<typeof talepSunucuya>) => t.teklifler.find((q) => q.id === QA)!;
+  it('sunucudan gelen yöntem ekrana, ekrandaki yöntem gövdeye gider; boş seçim null, hiç bilinmeyen alan gönderilmez', () => {
+    const t: Talep = { ...TALEP, teklifler: [{ ...TALEP.teklifler[0]!, odemeYontemi: 'cek' }, TALEP.teklifler[1]!] };
+    const r = talepEkrana(t);
+    expect(r.quotes.find((q) => q.id === QA)?.payMethod).toBe('cek');
+    expect(ilk(talepSunucuya(r)).odemeYontemi).toBe('cek');
+    r.quotes.find((q) => q.id === QA)!.payMethod = 'senet';
+    expect(ilk(talepSunucuya(r)).odemeYontemi).toBe('senet');
+    r.quotes.find((q) => q.id === QA)!.payMethod = null;
+    expect(ilk(talepSunucuya(r)).odemeYontemi).toBeNull();
+    // Alanı hiç taşımayan teklif (eski istemci ya da sunucu alanı göndermedi): gövdede alan yok, sunucu saklananı korur.
+    const eski = talepEkrana(TALEP);
+    expect('payMethod' in eski.quotes.find((q) => q.id === QB)!).toBe(false);
+    expect('odemeYontemi' in talepSunucuya(eski).teklifler.find((q) => q.id === QB)!).toBe(false);
+  });
+});
