@@ -169,6 +169,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
             <section aria-label="Firma kartı">
               <dl className="tc-mt-ozellikler">
                 <Satir etiket="Kod">{firma.kod}</Satir>
+                {firma.eskiKod != null && <Satir etiket="Eski kod">{firma.eskiKod}</Satir>}
                 <Satir etiket="Tür">{TUR_ETIKETI[firma.tur]}</Satir>
                 {firma.tur !== 'tedarikci' && (
                   <Satir etiket="Müşteri sınıfı">{firma.musteriSinifi ? SINIF_ETIKETI[firma.musteriSinifi] : null}</Satir>

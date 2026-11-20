@@ -123,6 +123,8 @@ export const firmaSemasi = z.object({
   logoCrmKodu: z.string().nullable().optional(),
   // Sunucu her zaman yazar; isteğe bağlı olması alandan önce yazılmış istemci örneklerini (Finans çerçevesi testi) kırmamak içindir.
   musteriSinifi: musteriSinifi.nullable().optional(),
+  // 3473: Logo'ya bağlanırken bırakılan son kod; isteğe bağlı olması alandan önce yazılmış istemci örneklerini kırmamak içindir.
+  eskiKod: z.string().nullable().optional(),
   olusturma: zamanSemasi,
   guncelleme: zamanSemasi.nullable(),
   surum: surumSemasi,

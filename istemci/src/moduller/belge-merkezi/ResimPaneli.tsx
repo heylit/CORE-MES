@@ -23,6 +23,9 @@ import './belge-merkezi.css';
 
 const MALZEME_TURLERI: readonly MalzemeBelgeTuru[] = ['fotograf', 'teknik-resim', '3b-model'];
 
+// Panel yalnız resim değil teknik resim ve STEP de alır; başlık üç türü de söyler (3479).
+const PANEL_BASLIGI = 'Teknik resim, 3B model ve fotoğraf';
+
 const kok = (no: number): string => `/cizimler/malzemeler/${no}`;
 
 export function useMalzemeResimYetkisi() {
@@ -148,11 +151,11 @@ function BelgeEkle({ no, kartRev, kartResimNo, kapat }: { no: number; kartRev: s
       acik
       tur="yan"
       kapat={kapat}
-      baslik="Resim ya da çizim ekle"
+      baslik="Teknik resim, 3B model ya da fotoğraf ekle"
       alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.isPending} disabled={!dosya || red !== null} onClick={() => { if (dosya) komut.mutate(dosya); }}>Yükle</Dugme>}
     >
       <div className="tc-cz-form">
-        <Secim etiket="Tür" value={tur} onChange={(e) => { const t = e.target.value as MalzemeBelgeTuru; turYaz(t); if (!antetElle) antetRevYaz(antetOnDegeri(t, kartRev)); if (!resimNoElle) resimNoYaz(resimNoOnDegeri(t, kartResimNo)); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
+        <Secim etiket="Tür" value={tur} onChange={(e) => { const t = e.target.value as MalzemeBelgeTuru; turYaz(t); if (!antetElle) antetRevYaz(antetOnDegeri(t, kartRev)); if (!resimNoElle) resimNoYaz(resimNoOnDegeri(t, kartResimNo)); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: `${TUR_ADI[t]} (${izinliMetni(t)})` }))} />
         <Girdi
           etiket="Dosya" type="file" accept={kabulMetni(tur)} required
           onChange={(e) => { const d = e.target.files?.[0] ?? null; dosyaYaz(d); if (d && ad.trim() === '') adYaz(adindan(d.name)); }}
@@ -260,10 +263,10 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
     }
   };
 
-  if (sorgu.isError) return <Kart baslik="Resimler"><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Resimler alınamadı')} yenile={() => { void sorgu.refetch(); }} /></Kart>;
+  if (sorgu.isError) return <Kart baslik={PANEL_BASLIGI}><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Dosyalar alınamadı')} yenile={() => { void sorgu.refetch(); }} /></Kart>;
   const veri = sorgu.data;
   return (
-    <Kart baslik="Resimler" sag={yazar && <Dugme simge="plus" onClick={() => { acikYaz('ekle'); }}>Ekle</Dugme>}>
+    <Kart baslik={PANEL_BASLIGI} sag={yazar && <Dugme simge="plus" onClick={() => { acikYaz('ekle'); }}>Dosya ekle</Dugme>}>
       {!veri
         ? <DurumKutusu durum="yukleniyor" />
         : (
@@ -276,10 +279,10 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
                 </p>
               )}
               {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model yayınlanınca ölçülür ve atölyeye gider.</p>}
-              {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Foto, teknik resim ya da 3B model ekleyin.</p>}
+              {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Teknik resim (PDF), 3B model (STEP) ya da fotoğraf ekleyin.</p>}
             </div>
             {veri.belgeler.length === 0
-              ? <DurumKutusu durum="bos" mesaj="Bağlı resim ya da çizim yok" />
+              ? <DurumKutusu durum="bos" mesaj="Bağlı teknik resim, 3B model ya da fotoğraf yok" />
               : (
                 <div className="tc-cz-rp-gruplar">
                   {turGruplari(veri.belgeler).map(([tur, belgeler]) => (

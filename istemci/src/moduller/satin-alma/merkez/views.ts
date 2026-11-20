@@ -429,17 +429,27 @@ export function adimBilgisi(r: PurchaseRequest): Record<string, string> {
   };
 }
 export { ADIMLAR, kimde };
+/**
+ * Başlıktaki tutar (3466-3): karar varsa karar tutarı; karar yoksa ve bütün kalemlere teklif veren uygun teklif varsa en iyisinin
+ * net bugünkü maliyeti ("Şimdi yapılacak" ile aynı sayı); teklif yoksa son alış fiyatıyla tahmin. Hiçbiri yoksa boş.
+ */
+export function basliktakiTutar(r: PurchaseRequest): { tur: "karar" | "teklif" | "tahmin"; tl: number } | null {
+  const tt = r.award ? awardTotals(r) : null;
+  if (tt) return { tur: "karar", tl: tt.totalTRY };
+  const ev = (r.quotes || []).length ? evaluate(r) : null;
+  const best = ev ? ev.elig.filter(x => x.c.covered === (r.items || []).length).sort((a, b) => a.c.pvTRY - b.c.pvTRY)[0] : undefined;
+  if (best) return { tur: "teklif", tl: best.c.pvTRY };
+  const est = sum((r.items || []).map(it => { const mid = matOf(it); const st = mid ? matStats(mid) : null; return st && st.last ? st.last.unitTRY * (parseNum(it.qty) || 0) : 0; }));
+  return est ? { tur: "tahmin", tl: est } : null;
+}
+export const TUTAR_ETIKETI: Record<"karar" | "teklif" | "tahmin", string> = { karar: "karar", teklif: "en iyi teklif, net", tahmin: "son alışa göre tahmini" };
 /** Başlık satırında kısa sayılar: teklif durumu, tutar, bütçe */
 export function headerFacts(r: PurchaseRequest): string[] {
   const out: string[] = [];
   const nq = (r.quotes || []).length, nr = (r.rfqs || []).length;
   out.push(`${nq} teklif${nr ? ` / ${nr} istendi` : ""}`);
-  const tt = r.award ? awardTotals(r) : null;
-  if (tt) out.push(`karar <b class="num">${money(tt.totalTRY, "TRY", 0)}</b>`);
-  else {
-    const est = sum((r.items || []).map(it => { const mid = matOf(it); const st = mid ? matStats(mid) : null; return st && st.last ? st.last.unitTRY * (parseNum(it.qty) || 0) : 0; }));
-    if (est) out.push(`tahmini <b class="num">${money(est, "TRY", 0)}</b>`);
-  }
+  const t = basliktakiTutar(r);
+  if (t) out.push(`${TUTAR_ETIKETI[t.tur]} <b class="num">${money(t.tl, "TRY", 0)}</b>`);
   const bu = r.department ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
   if (bu && bu.budget) out.push(`${esc(r.department)} bütçesi ${pct(bu.used / bu.budget * 100)}`);
   if (grupMetni(r)) out.push(esc(grupMetni(r)));

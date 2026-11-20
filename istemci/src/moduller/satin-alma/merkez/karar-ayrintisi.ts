@@ -55,7 +55,7 @@ export function odemeAyrintisi(r: PurchaseRequest, x: EvalRow): OdemeAyrintisi {
     qid: q.id, kur: c.rate, kurKaynagi, kararKuru,
     avans: adv > 0 ? { yuzde: adv * 100, tl: c.totalTRY * adv, gun: siparisGunu } : null,
     kalan: adv < 1 ? { tl: c.totalTRY * (1 - adv), vadeGun, gun: kalanBaz === null ? null : addDays(kalanBaz, vadeGun), baslangic } : null,
-    yontem: q.payMethod ? ODEME_SEKLI[q.payMethod] : "Belirtilmedi",
+    yontem: (q.payMethod ? ODEME_SEKLI[q.payMethod] : undefined) ?? "Belirtilmedi",
     aylikFaiz: c.faizYok ? null : c.monthly * 100,
     kararFaizi,
   };

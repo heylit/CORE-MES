@@ -8,11 +8,17 @@ import type {
   KarneSinifi, LotKarari, MusteriSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
+// 3473: Logo'ya bağlanırken bırakılan son kod; kartta "Eski kod" olarak görünür.
+const ESKI_KOD = `(SELECT g.kod FROM musteri_tedarikci_kod_gecmisi g WHERE g.firma_id = musteri_tedarikci_firma.id
+  ORDER BY g.birakildi DESC, g.id DESC LIMIT 1) AS "eskiKod"`;
+// Firma listesinde eski kodla arama da firmayı bulur (3473). Seçici ve Ctrl K trigram indeksinde kalsın diye eski koda bakmaz.
+const ESKI_KODLA = (sutun: string, desen: string) =>
+  `EXISTS (SELECT 1 FROM musteri_tedarikci_kod_gecmisi g WHERE g.firma_id = ${sutun} AND public.arama_sade(g.kod) LIKE ${desen})`;
 // Koordinat numeric(9,6) sütunudur; ekrana ve sözleşmeye sayı gider (altı ondalık float8'de kaybolmaz).
 const FIRMA = `id, kod, ad, tur, fason, ulke_kodu AS "ulkeKodu", vergi_no AS "vergiNo", vergi_dairesi AS "vergiDairesi",
   para_birimi AS "paraBirimi", vade_gunu AS "vadeGunu", adres, ilce, il, posta_kodu AS "postaKodu", enlem::float8 AS enlem, boylam::float8 AS boylam,
   telefon, e_posta AS "ePosta", aktif, logo_cari_kodu AS "logoCariKodu", logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu",
-  logo_crm_kodu AS "logoCrmKodu", musteri_sinifi AS "musteriSinifi", ${zamanMetni('olusturma')} AS olusturma, ${zamanMetni('guncelleme')} AS guncelleme, surum`;
+  logo_crm_kodu AS "logoCrmKodu", musteri_sinifi AS "musteriSinifi", ${ESKI_KOD}, ${zamanMetni('olusturma')} AS olusturma, ${zamanMetni('guncelleme')} AS guncelleme, surum`;
 const SATIR = `f.id, f.kod, f.ad, f.tur, f.fason, f.vergi_no AS "vergiNo", f.il, f.aktif, f.logo_cari_kodu AS "logoCariKodu", f.logo_kayit_no AS "logoKayitNo",
   (SELECT count(*)::int FROM musteri_tedarikci_adres a WHERE a.firma_id = f.id) AS "adresSayisi",
   (f.enlem IS NOT NULL OR EXISTS (SELECT 1 FROM musteri_tedarikci_adres a WHERE a.firma_id = f.id AND a.enlem IS NOT NULL)) AS koordinatli`;
@@ -36,7 +42,8 @@ export interface FirmaSuzgeci {
 // bağlıdır, 'IŞIK' ile 'ışık'ı eşlemez. İfade trigram indeksinin aynısıdır (göç 20261029127000). Desen yoksa süzgeç yoktur.
 const desen = (metin: string | null): string | null => (metin === null ? null : icindeDeseni(metin));
 const SUZGEC = `FROM musteri_tedarikci_firma f
-  WHERE ($1::text IS NULL OR public.arama_sade(f.ad) LIKE $1 OR public.arama_sade(f.kod) LIKE $1 OR public.arama_sade(f.vergi_no) LIKE $1)
+  WHERE ($1::text IS NULL OR public.arama_sade(f.ad) LIKE $1 OR public.arama_sade(f.kod) LIKE $1 OR public.arama_sade(f.vergi_no) LIKE $1
+    OR ${ESKI_KODLA('f.id', '$1')})
     AND ($2::text[] IS NULL OR f.tur = ANY($2::text[]))
     AND ($3::boolean IS NULL OR f.fason = $3)
     AND ($4::boolean IS NULL OR f.aktif = $4)`;
@@ -113,12 +120,25 @@ export async function firmaVarMi(db: Db, id: number): Promise<{ aktif: boolean }
   return db.tek<{ aktif: boolean }>('SELECT aktif FROM musteri_tedarikci_firma WHERE id = $1', [id]);
 }
 
+// 3473: bugünkü kod önce gelir; yoksa en son bırakılan eski kod (Logo'ya bağlanmadan önceki kodla hazırlanmış dosyalar için).
 export async function firmaNoKoddan(db: Db, kod: string): Promise<number | null> {
-  return (await db.tek<{ id: number }>('SELECT id FROM musteri_tedarikci_firma WHERE kod = $1', [kod]))?.id ?? null;
+  return (await db.tek<{ id: number }>(
+    `SELECT id FROM (
+       SELECT id, 0 AS sira, NULL::timestamptz AS zaman, 0 AS gid FROM musteri_tedarikci_firma WHERE kod = $1
+       UNION ALL
+       SELECT firma_id, 1, birakildi, id FROM musteri_tedarikci_kod_gecmisi WHERE kod = $1
+     ) k ORDER BY sira, zaman DESC, gid DESC LIMIT 1`,
+    [kod],
+  ))?.id ?? null;
 }
 // Kod tekilliği büyük/küçük harfe bakmaz (musteri_tedarikci_firma_kod_tekil upper(kod)); sıra atlaması da öyle bakar.
+// Bırakılmış eski kod da dolu sayılır: otomatik numara onu başka firmaya vermez (3473).
 export async function firmaKoduVarMi(db: Db, kod: string): Promise<boolean> {
-  return (await db.tek('SELECT 1 FROM musteri_tedarikci_firma WHERE upper(kod) = upper($1) LIMIT 1', [kod])) !== null;
+  return (await db.tek(
+    `SELECT 1 FROM musteri_tedarikci_firma WHERE upper(kod) = upper($1)
+     UNION ALL SELECT 1 FROM musteri_tedarikci_kod_gecmisi WHERE upper(kod) = upper($1) LIMIT 1`,
+    [kod],
+  )) !== null;
 }
 // Örnek veri kodları ORN- ile başlar; elle girilen firma bu öneki kullanırsa örnek veri yüklü sayılır.
 export async function ornekFirmaVarMi(db: Db): Promise<boolean> {
@@ -363,14 +383,26 @@ export function logoCariAdaylari(db: Db, a: { kayitNolar: number[]; kodlar: stri
   );
 }
 
-// Logo bağı yalnız Logo alanlarını yazar; firma Logo'ya bağlı değilken ve cari kodu boş ya da aynıyken (kod kilidi tetikte).
-export function logoBagiYaz(
+// 3473: bağlanınca kod Logo cari kodu olur; bu kod başka firmanın bugünkü kodu ise bağlama durur.
+export function koduKullananFirma(db: Db, kod: string, haricId: number): Promise<{ id: number; kod: string; ad: string } | null> {
+  return db.tek('SELECT id, kod, ad FROM musteri_tedarikci_firma WHERE upper(kod) = upper($1) AND id <> $2 LIMIT 1', [kod, haricId]);
+}
+
+// 3473: bağlama Logo kayıt numarasını, Logo cari kodunu ve firma kodunu Logo cari kodu yapar; farklı eski kod geçmişe yazılır.
+// Firma Logo'ya bağlı değilken ve cari kodu boş ya da aynıyken (kod kilidi tetikte; bağlanmamış firmada kod değişebilir).
+const BAGLANABILIR = 'id = $1 AND surum = $2 AND logo_kayit_no IS NULL AND (logo_cari_kodu IS NULL OR upper(logo_cari_kodu) = upper($3))';
+export async function logoBagiYaz(
   db: Db, id: number, surum: number, b: { logoCariKodu: string; logoKayitNo: number }, kisiId: number,
 ): Promise<Firma | null> {
+  await db.sorgu(
+    `INSERT INTO musteri_tedarikci_kod_gecmisi (firma_id, kod, birakan_id)
+     SELECT id, kod, $4 FROM musteri_tedarikci_firma WHERE ${BAGLANABILIR} AND kod IS NOT NULL AND kod <> $3`,
+    [id, surum, b.logoCariKodu, kisiId],
+  );
   return db.tek<Firma>(
     `UPDATE musteri_tedarikci_firma
-        SET logo_cari_kodu = $3, logo_kayit_no = $4, logo_gonderim_durumu = 'gonderildi', guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
-      WHERE id = $1 AND surum = $2 AND logo_kayit_no IS NULL AND (logo_cari_kodu IS NULL OR upper(logo_cari_kodu) = upper($3))
+        SET kod = $3, logo_cari_kodu = $3, logo_kayit_no = $4, logo_gonderim_durumu = 'gonderildi', guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
+      WHERE ${BAGLANABILIR}
       RETURNING ${FIRMA}`,
     [id, surum, b.logoCariKodu, b.logoKayitNo, kisiId],
   );

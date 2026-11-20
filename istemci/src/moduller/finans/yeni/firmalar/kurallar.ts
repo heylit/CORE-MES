@@ -6,7 +6,7 @@ import { addDays, gross, real, sum, type FinansMotoru, type Islem } from '../mot
 // Firmalar ve cari hesabın saf kuralları (prototipte tam kipin firma ekleri, `ekstre`, `VIEWS.carid` ve `pasifOnKontrol`).
 
 export const FIRMA_TUR_ADI: Record<FirmaTuru, string> = { musteri: 'Müşteri', tedarikci: 'Tedarikçi', ikisi: 'Müşteri ve tedarikçi' };
-export const LOGO_DURUM_ADI = { bekliyor: 'Bekliyor', gonderildi: 'Gönderildi', hata: 'Hata' } as const;
+export const LOGO_DURUM_ADI = { bekliyor: 'Bekliyor', gonderildi: 'Logo\'ya bağlı', hata: 'Hata' } as const;
 // Cari hesabın tarafı: tedarikçi gider, müşteri ve "ikisi" gelir (prototipteki gibi).
 export const firmaTarafi = (tur: FirmaTuru): 'gelir' | 'gider' => (tur === 'tedarikci' ? 'gider' : 'gelir');
 

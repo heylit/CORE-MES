@@ -15,7 +15,7 @@ export const ADRES_TURU_ETIKETI = {
 
 export const LOGO_DURUMU = {
   bekliyor: { etiket: 'Logo: bekliyor', ton: 'uyari' },
-  gonderildi: { etiket: 'Logo: gönderildi', ton: 'tamam' },
+  gonderildi: { etiket: 'Logo\'ya bağlı', ton: 'tamam' },
   hata: { etiket: 'Logo: hata', ton: 'hata' },
 } as const satisfies Record<NonNullable<Firma['logoGonderimDurumu']>, { etiket: string; ton: RozetTonu }>;
 

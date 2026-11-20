@@ -7,7 +7,7 @@ import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { cevabiYaz } from './yazma.ts';
 
-// Logo'dan cari arama (2118). Eşleşen firma varsa yeni kart açılmaz, bağlanır (2118-2 a); bağlama yalnız Logo kodunu ve kaydını yazar.
+// Logo'dan cari arama (2118). Eşleşen firma varsa yeni kart açılmaz, bağlanır (2118-2 a); bağlama Logo kodunu, kaydını ve firma kodunu (3473) yazar.
 // Yeni firma formunda "Forma al" Logo'daki bilgileri forma koyar; firma ayrıntısında yalnız o firmaya bağlanır.
 const ESLESME_NEDENI: Record<NonNullable<LogoCariSatiri['eslesme']>['neden'], string> = {
   'kayit-no': 'Logo kaydıyla bağlı',
@@ -44,7 +44,9 @@ export function LogoCariArama({ hedef, formaAl, baglandi, ilkMetin = '' }: Ozell
     onSuccess: (cevap) => {
       cevabiYaz(istemci, cevap);
       void istemci.invalidateQueries({ queryKey: ['musteri-tedarikci', 'logo-cari'] });
-      bildir('tamam', 'Firma Logo carisine bağlandı.');
+      bildir('tamam', cevap.firma.eskiKod != null && cevap.firma.eskiKod !== cevap.firma.kod
+        ? `Firma Logo carisine bağlandı; kod ${cevap.firma.kod} oldu (eski kod ${cevap.firma.eskiKod} kartta kalır).`
+        : 'Firma Logo carisine bağlandı.');
       baglandi(cevap.firma);
     },
     onError: (e) => bildir('hata', hataIletisi(e, 'Bağlanamadı.')),

@@ -1263,10 +1263,22 @@ const ACTIONS: Record<string, Action> = {
   },
   "reject": (el, r) => {
     if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
-    const note = $("#ap-note").value.trim(); if (!note) { toast("Ret gerekçesini not alanına yazın."); $("#ap-note").focus(); return; }
+    // Telefondaki ret penceresi (3466-1) kendi not alanını data-not ile söyler; sayfadaki not alanı varsayılandır.
+    const alan = $(el.dataset.not ? `#${el.dataset.not}` : "#ap-note");
+    const note = alan.value.trim(); if (!note) { toast("Ret gerekçesini not alanına yazın."); alan.focus(); return; }
     const n = clone(r);
     const aw = n.award!; aw.approvals = aw.approvals || []; aw.approvals.push({ id: uid(), at: Date.now(), by: S.me?.id ?? "", name: S.me?.name ?? "", decision: "rejected", note });
+    if (el.dataset.not) closeModal();
     n.status = "eval"; saveRequest(n, `Reddedildi: ${note}`); toast("Reddedildi, değerlendirmeye döndü");
+  },
+  "ret-penceresi": (_el, r) => {
+    if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
+    const tt = awardTotals(r);
+    const sayfaNotu = document.querySelector<HTMLInputElement>("#ap-note"), onceki = sayfaNotu ? sayfaNotu.value : "";
+    openModal(`<div class="mh"><h2>Kararı reddet</h2></div><div class="mb stack"><p class="small muted">${esc(r.no)}, ${tt ? money(tt.totalTRY, "TRY", 0) : ""}. Ret notu satın almaya gider; talep değerlendirmeye döner.</p>
+      <label class="f"><span>Ret nedeni <small>— zorunlu</small></span><textarea id="ap-ret-notu" rows="3" placeholder="Örn. vade kısa, tekrar pazarlık edin">${esc(onceki)}</textarea></label></div>
+      <div class="mf"><button class="btn" data-act="close">Vazgeç</button><button class="btn bad" data-act="reject" data-not="ap-ret-notu">Reddet</button></div>`, true, true);
+    $("#ap-ret-notu").focus();
   },
   "place-order": (el, r) => {
     if (!canWrite() || !r || !r.award) return;

@@ -81,6 +81,30 @@ describe('3431 a: e-postadaki Onayla ve Reddet talebi açıp ilgili denetime oda
   }
 });
 
+describe('3466-1: telefondaki ret penceresi', () => {
+  afterEach(() => { window.history.replaceState(null, '', '/'); });
+  it('sayfadaki not pencereye taşınır; pencereye yazılan neden gönderilir ve pencere kapanır', async () => {
+    const fetch = vi.fn(async (_yol: string, _secenek?: RequestInit) => new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetch);
+    window.history.replaceState(null, '', `/satin-alma/onaylar?talep=${t.id}`);
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = ekranliBagla(kok, { rol: 'approver', sayfa: 'dash', yol: '/satin-alma/onaylar', git: () => {}, onaylayabilir: true });
+    await vi.waitFor(() => expect(kok.querySelector('.sa-oy-alt [data-act="ret-penceresi"]')).not.toBeNull());
+    kok.querySelector<HTMLTextAreaElement>('#ap-note')!.value = 'ORN- önceki not';
+    kok.querySelector<HTMLElement>('.sa-oy-alt [data-act="ret-penceresi"]')!.click();
+    const pencere = () => document.querySelector<HTMLTextAreaElement>('#modal-root #ap-ret-notu');
+    await vi.waitFor(() => expect(pencere()).not.toBeNull());
+    expect(pencere()!.value).toBe('ORN- önceki not');
+    pencere()!.value = 'ORN- vade kısa';
+    document.querySelector<HTMLElement>('#modal-root [data-act="reject"][data-not="ap-ret-notu"]')!.click();
+    await vi.waitFor(() => expect(fetch.mock.calls.some((c) => c[1]?.method === 'POST' && String(c[1]?.body).includes('ORN- vade kısa'))).toBe(true));
+    expect(fetch.mock.calls.some((c) => c[1]?.method === 'POST' && String(c[1]?.body).includes('ORN- önceki not'))).toBe(false);
+    expect(document.getElementById('modal-root')?.childElementCount ?? 0).toBe(0);
+    kapat();
+  });
+});
+
 describe('3431 a: onay yetkili satın almacının karar sekmesinde (views.ts) e-postadaki eylem aynı denetimi bulur', () => {
   afterEach(() => { window.history.replaceState(null, '', '/'); Reflect.deleteProperty(Element.prototype, 'scrollIntoView'); });
   it('onayla: Onayla görünür alana alınır, odak almaz; reddet: not alanı odak alır; yazma yok, eylem adresten silinir', async () => {

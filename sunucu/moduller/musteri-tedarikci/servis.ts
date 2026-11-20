@@ -31,7 +31,7 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, agirlikSurumHatasi, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
+  FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, agirlikSurumHatasi, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, logoKoduCakismasi, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari, LogoCariBilgisi } from './kurallar.ts';
 import { logoCariBellegiGecerliMi, logoCariEslesmesi, logoCariKoduHatasi, logoCariOnerisi, logoyaBaglanabilir } from './kurallar.ts';
@@ -576,7 +576,7 @@ export async function logodanFirmaAl(db: Db, kullanici: Kullanici, g: LogodanFir
   return bagli;
 }
 
-// Bağlama yalnız Logo kayıt numarasını ve cari kodunu yazar; firmanın öteki alanlarına dokunmaz (TMI kazanır, 2116-2 a ile aynı).
+// Bağlama Logo kayıt numarasını, cari kodunu ve firma kodunu (3473: Logo cari kodu) yazar; öteki alanlara dokunmaz (2116-2 a).
 export async function firmayiLogoyaBagla(db: Db, kullanici: Kullanici, id: number, g: LogoyaBaglaGovdesi & { surum: number }): Promise<Firma> {
   const cari = bellektenOku(kullanici.id, g.logoKodu);
   const eski = await kilitliGetir(db, id, g.surum);
@@ -585,6 +585,8 @@ export async function firmayiLogoyaBagla(db: Db, kullanici: Kullanici, id: numbe
       ? 'Firma zaten Logo\'ya bağlı.'
       : logoCariKoduHatasi(cari.kod) ?? 'Firmanın Logo cari kodu bu cariyle aynı değil; bağlanamaz.');
   }
+  const cakisan = await sorgular.koduKullananFirma(db, cari.kod, id);
+  if (cakisan !== null) throw gecersiz(logoKoduCakismasi(cari.kod, cakisan));
   const yeni = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.logoBagiYaz(db, id, g.surum, { logoCariKodu: cari.kod, logoKayitNo: cari.logoKayitNo }, kullanici.id));
   if (!yeni) throw eskiSurum();
   return yeni;
