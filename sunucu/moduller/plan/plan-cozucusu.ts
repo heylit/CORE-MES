@@ -59,12 +59,12 @@ export async function coz(
   if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
   const plan = await planCoz({ durum: g.st, kip: istek.kip, taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
-  const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
+  const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st, plan.takvimGun) : new Set<string>();
   const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
   // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçü yalnız böyle iş varken bir kez kurulur.
   const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined);
   let olcum: Record<string, ZamanOlcumu | null> | null = null;
-  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli); return olcum[id] ?? null; };
+  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli, plan.takvimGun); return olcum[id] ?? null; };
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
   const parcaliYerlesimler: ParcaliYerlesim[] = [];
   for (const id of g.sira) {
@@ -167,13 +167,14 @@ type MotorNedeni = NonNullable<MotorPlani['failNeden']>[string];
 // Aday tezgâhların ufuktaki ölçüsü motorun derlemesinden (malzemesiGelmeyenler gibi aynı hazırlık): açık saat vardiya takvimi, tatil ve
 // kapalı gündür (workIn); işçi kısıtı checkUse'un kalıcı ret koşuludur (yetkin kişi, grup ve toplam personel ufkun hiçbir diliminde yok).
 type ZamanOlcumu = Parameters<typeof zamanNedeni>[0];
-function zamanOlcumu(durum: MotorDurumu, idler: readonly string[]): Record<string, ZamanOlcumu | null> {
+function zamanOlcumu(durum: MotorDurumu, idler: readonly string[], takvimGun: number | undefined): Record<string, ZamanOlcumu | null> {
   if (idler.length === 0) return {};
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
-  b['durum'] = durum; b['idler'] = [...idler];
-  // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur.
+  b['durum'] = durum; b['idler'] = [...idler]; b['takvimGun'] = takvimGun ?? 0;
+  // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur. Ölçü çözümün kurduğu takvimle alınır (3501 a).
   const ham = vm.runInContext(`(() => {
+    takvimIste(takvimGun);
     const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
     return idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; });
   })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[];
@@ -227,12 +228,13 @@ export function adayNedeni(kaynak: AdayKaynagi | null, anahtar: string): Yerlesm
 // 525 4 a: katı malzeme kipinde (w.mat 'sert', K3) malzemesi stok ve satın almayla ufuk içinde karşılanmayan siparişin işleri motorda
 // yerleşmez. Bu bir çözüm hatası değildir: vardiyasız iş gibi (168 b) ayrı listede döner, plan komutu durmaz. Motor sipariş başına hazır
 // olma anını derlemede kurar (engine.js matAlloc); aynı derleme burada tekrarlanır, yalnız yerleşmeyen iş varken.
-function malzemesiGelmeyenler(durum: MotorDurumu): Set<string> {
+function malzemesiGelmeyenler(durum: MotorDurumu, takvimGun: number | undefined): Set<string> {
   if ((durum['w'] as { mat?: unknown } | undefined)?.mat !== 'sert') return new Set();
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
-  b['durum'] = durum;
+  b['durum'] = durum; b['takvimGun'] = takvimGun ?? 0;
   const sonuc = vm.runInContext(`(() => {
+    takvimIste(takvimGun);
     const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
     return Object.entries(cx.mat.res).filter(([, r]) => !(r.ready < HDAYS * 24)).map(([j]) => j);
   })()`, b) as string[];

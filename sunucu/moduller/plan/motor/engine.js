@@ -6,8 +6,8 @@ const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30],TAKVIM_EN
 /* 3484 c (3457-3 a değişir): ufka sığmayan emir için ufuk uzar. Motor takvimi ufkun iki katı kurar (HDAYS); UFUK ayardaki gündür.
    UFUK'tan sonraki çalışma saati iş kaydında ufukDisi'dir, tarihleri gerçektir.
    3501 a (3484 c değişir): takvim ufkun iki katında durmaz. Hesap, adımı takvim bittiği için yerleştiremezse takvimi büyütüp baştan kurar
-   (TAKVIM_ISTENEN; degerlendir.js), en çok TAKVIM_ENCOK güne kadar. Büyük takvim her hesapta kurulmaz: dilim tabloları takvim boyuncadır,
-   boşuna büyütmek her hesabı yavaşlatır. */
+   (TAKVIM_ISTENEN; Kokpit hesabında degerlendir.js, canlı plan ve kıyasta takvimliCoz), en çok TAKVIM_ENCOK güne kadar. Büyük takvim her
+   hesapta kurulmaz: dilim tabloları takvim boyuncadır, boşuna büyütmek her hesabı yavaşlatır. */
 let SL=0.25, UFUK=UFUK_VARSAYILAN, HDAYS=UFUK*2, NS=HDAYS*24/SL, TAKVIM_ISTENEN=0;
 function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
   UFUK=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;HDAYS=Math.min(TAKVIM_ENCOK,Math.max(UFUK*2,TAKVIM_ISTENEN));
@@ -15,6 +15,13 @@ function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
 /* Sonraki derleme için takvimi iki katına çıkarır; üst sınırdaysa false. */
 function takvimBuyut(){if(HDAYS>=TAKVIM_ENCOK)return false;TAKVIM_ISTENEN=Math.min(TAKVIM_ENCOK,HDAYS*2);return true;}
 function takvimSifirla(){TAKVIM_ISTENEN=0;}
+/* Bağlamın takvimi (gün). Çözümden sonra okunur; çözümün nedenini ayrı bağlamda ölçen derleme aynı takvimi takvimIste ile kurar. */
+function takvimGunu(){return HDAYS;}
+function takvimIste(gun){const g=Math.round(+gun);if(g>0)TAKVIM_ISTENEN=Math.min(TAKVIM_ENCOK,g);}
+/* Taban plan büyümüş takvimle kurulmuş olabilir: takvim en baştan o planın son bitişini kapsar. Yoksa planı izleyen çözüm ötedeki adımı
+   yerleştiremez, elle taşıma da o adımın yerini ufuk dışı sayar. */
+function takvimPlanaGore(w,ops){olcekKur(w);let son=0;for(const id in ops||{}){const C=+ops[id].C;if(isFinite(C)&&C>son)son=C;}
+  while(son>HDAYS*24&&takvimBuyut())olcekKur(w);}
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
@@ -635,6 +642,27 @@ function prio(r,cx,ctx,opt){
 function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
   return {u,n:()=>{let x=0;for(let i=0;i<6;i++)x+=u();return (x-3)/Math.SQRT2;}};}
 
+/* 3501 a: iş takvim bittiği için mi yerleşmedi? Öyleyse büyük takvim onu yerleştirir. Takvimle geçmeyen nedenler (vardiya, kişi ya da ayarcı
+   yok, hazırlık hiçbir bloğa sığmıyor, malzemenin tarihi yok, aday yok, öncülü yerleşmedi) takvimi büyütmez: büyük takvim o işi yine
+   yerleştirmez, yalnız hesabı yavaşlatır. Fasonda takvimle geçen tek neden çıkış gününün takvime sığmamasıdır. */
+/** @param {any} p @param {Derleme} cx */
+function takvimDarMi(p, cx) {
+  for (const id of p.fail || []) {
+    const x = (p.failNeden || {})[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
+    const z = zamanOlcusu(cx, o, p), alt = zamanTanisi(z).alt;
+    if (alt === 'sure' || alt === 'dolu' || (alt === 'malzeme' && isFinite(z.malzemeHazirSaat))) return true;
+    if (alt === 'bilinmiyor' && (o.c || []).some(c => { const f = c.fas && cx.FS[c.m.slice(1)]; return f && !f.hemen && (f.cikisGunleri || []).length > 0; })) return true;
+  }
+  return false;
+}
+/* schedule'ın, işi takvim bittiği için yerleştiremeyince takvimi büyütüp baştan çözen biçimi (canlı plan, kıyas). Büyüyen takvim bağlamda
+   kalır: sonraki derleme ve değerlendirme aynı takvimi görür; bağlam tek girdiyle çalışır. */
+/** @param {MotorDurumu} st @param {string} mode @param {any} [base] @param {any} [opt] */
+function takvimliCoz(st,mode,base,opt){
+  takvimPlanaGore(st.w,base&&base.ops);
+  for(;;){const p=schedule(st,mode,base,opt);
+    if(!(p.fail&&p.fail.length)||HDAYS>=TAKVIM_ENCOK||!takvimDarMi(p,compile(st))||!takvimBuyut())return p;}
+}
 /** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){
   const cx=opt.cx||compile(st);

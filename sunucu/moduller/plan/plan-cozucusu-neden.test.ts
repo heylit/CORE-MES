@@ -72,6 +72,20 @@ describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32, 2780)', (
     assert.deepEqual(n?.hedef, { tur: 'makine', id: 100, ad: 'Torna 1' });
     assert.match(n?.metin ?? '', /^İşin süresi \([\d.,]+ sa\) Torna 1 tezgâhının planlama ufkunda \(\d+ gün\) açık süresinden \([\d.,]+ sa\) uzun\.$/);
   });
+  test('YN-12 (3501 a): takvime (240 gün) sığmayan iş düşmez, takvim büyür; iki yıla da sığmayan işin nedeni büyümüş takvimi söyler', async () => {
+    // Haftada 40 saat: 240 günde 1.376 saat açık. 2.000 saatlik adım ancak büyüyen takvime sığar; ardılı da onunla yerleşir.
+    for (const kip of ['yeni', 'sabit'] as const) {
+      const r = await coz(kaynakKur({ adimlar: [adim(10, 60_000), adim(20, 30)] }), istek({ kip, kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|20'] }] }));
+      assert.deepEqual([r.yerlesmeyen, r.nedenler], [[], {}], kip);
+      const uzun = r.yerlesimler.find((y) => y.anahtar === 'E-1|10'), ardil = r.yerlesimler.find((y) => y.anahtar === 'E-1|20');
+      assert.ok(uzun && ardil, kip);
+      assert.ok(Date.parse(uzun.bitis) > Date.parse('2026-10-19T00:00:00Z') + 240 * 86_400_000, `${kip}: ${uzun.bitis}`);
+      assert.ok(Date.parse(ardil.baslangic) >= Date.parse(uzun.bitis), kip);
+    }
+    const r = await coz(kaynakKur({ adimlar: [adim(10, 1e7)] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
+    assert.match(r.nedenler['E-1|10']?.metin ?? '', /planlama ufkunda \(730 gün\)/);
+  });
   test('YN-10: vardiyası hiç tanımsız tezgâhın işi motora girmez, vardiyasız listesindedir (168 b; neden servisçe takvim-yok)', async () => {
     const k = kaynakKur({});
     (k.calisma as { D: { calismaGunleri: object } }).D.calismaGunleri = {};

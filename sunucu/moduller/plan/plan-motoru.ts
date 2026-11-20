@@ -12,7 +12,7 @@ import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor
 // sunucunun planı sayfanın ve değerlendirme ucunun modeliyle kurulur. Kancalar girdinin ayarlarını (durum.js) okur.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const MOTOR_DOSYALARI = ['engine', 'kisitlar', 'mip', 'girdi', 'durum', 'kancalar'] as const;
-const DISA = ['schedule', 'compile', 'evaluate', 'lowerBound', 'lbHeadsTails', 'W0', 'stHazirla'] as const;
+const DISA = ['schedule', 'takvimliCoz', 'takvimGunu', 'compile', 'evaluate', 'lowerBound', 'lbHeadsTails', 'W0', 'stHazirla'] as const;
 
 let kod: string | null = null;
 export function motorKodu(): string {
@@ -25,6 +25,9 @@ export type MotorDurumu = Record<string, unknown>;
 export type { MotorPlani, MotorYerlesimi } from './motor-sinir.ts';
 export interface Motor {
   schedule: (st: MotorDurumu, kip: string, taban: MotorPlani | null, secenek?: Record<string, unknown>) => MotorPlani;
+  // 3501 a: iş takvim bittiği için yerleşmezse takvimi büyütüp yeniden çözer (en çok iki yıl); takvimGunu çözümün kurduğu takvimdir.
+  takvimliCoz: (st: MotorDurumu, kip: string, taban: MotorPlani | null, secenek?: Record<string, unknown>) => MotorPlani;
+  takvimGunu: () => number;
   compile: (st: MotorDurumu) => unknown;
   evaluate: (plan: MotorPlani, st: MotorDurumu, ref: unknown, hizli?: boolean) => unknown;
   lowerBound: (st: MotorDurumu, cx?: unknown) => { C: Record<string, number>; wT: number };
@@ -54,8 +57,8 @@ const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
 b.self = b;
 const m = vm.runInContext(workerData.kod, b, { filename: 'plan-motoru.js' });
 const { durum, kip, taban } = workerData.istek;
-const p = m.schedule(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban);
-parentPort.postMessage({ ops: p.ops, fail: p.fail || [] });
+const p = m.takvimliCoz(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban);
+parentPort.postMessage({ ops: p.ops, fail: p.fail || [], takvimGun: m.takvimGunu() });
 `;
 
 // Aynı anda tek çözüm: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir.

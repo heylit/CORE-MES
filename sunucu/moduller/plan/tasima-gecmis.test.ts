@@ -38,3 +38,19 @@ test('TG-01: eski planda bitti görünen, başlamamış emir taşınır; motor k
   const yer = (id: string) => { const r = sonra.ops[id] as unknown as Record<string, unknown>; return [r['S'], r['C'], Boolean(r['done'])]; };
   assert.deepEqual([yer('S1.10'), yer('S1.20')], [[34, 36, false], [36, 38, false]]);
 });
+
+test('TG-02 (3501 a): büyümüş takvimle kurulmuş planda 240 günün ötesindeki adım elle taşınır; plan ötede değilken aynı saat ufuk dışıdır', () => {
+  const m = motorYukle();
+  // 301. gün pazartesidir. Adımlar 08:00-10:00 ve 10:00-12:00; ilki ertesi gün 08:00'e taşınır.
+  const G = 301 * 24;
+  const yer = (id: string, tezgah: string, S: number) => ({ id, job: 'S1', m: tezgah, S, Su: S, C: S + 2, lot1: S + 1, su: 0, run: 2 });
+  const calisma = (ops: Record<string, unknown>) => ({ surum: 2, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], w: { ...m.W0, tampon: false, dondurma: 0 }, param: {}, D, plan: { ops, fail: [] } });
+  const otede = calisma({ 'S1.10': yer('S1.10', 'T1', G + 8), 'S1.20': yer('S1.20', 'T2', G + 10) });
+  const t = tasimaHesabi(otede as unknown as Record<string, unknown>, 32, { isId: 'S1.10', tezgah: 'T1', baslangic: G + 32 });
+  assert.equal(t.gecerli, true, t.ileti ?? '');
+  assert.deepEqual(t.isler.map((x) => [x.isId, x.S, x.tur]), [['S1.10', G + 32, 'tasinan'], ['S1.20', G + 34, 'itilen']]);
+  const yakin = calisma({ 'S1.10': yer('S1.10', 'T1', 32), 'S1.20': yer('S1.20', 'T2', 34) });
+  const r = tasimaHesabi(yakin as unknown as Record<string, unknown>, 32, { isId: 'S1.10', tezgah: 'T1', baslangic: G + 32 });
+  assert.equal(r.gecerli, false);
+  assert.match(r.ileti ?? '', /ufk/);
+});
