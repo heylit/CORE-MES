@@ -24,7 +24,8 @@ const adim = (seq: number, stationId: string, ek: Record<string, unknown> = {}) 
   id: `50-o${String(seq)}`, seq, opNo: seq, opId: '13', stationId, setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [], split: 'tek', minLot: 0, ...ek,
 });
 type Ayar = { istasyon: '40' | '10'; split?: 'bol' | 'tek'; minLot?: number; adet?: number; ekip?: Record<string, string[]>;
-  bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string; elleBol?: Record<string, { adet: number; m: string }[]>; locks?: Record<string, unknown> };
+  bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string; elleBol?: Record<string, { adet: number; m: string }[]>; locks?: Record<string, unknown>;
+  gercek?: Record<string, { m: string; S: number }> };
 const girdi = (a: Ayar) => {
   const steps = [adim(10, a.istasyon, { split: a.split ?? 'bol', minLot: a.minLot ?? 0 }), adim(20, '30')];
   const ROTA = {
@@ -65,6 +66,7 @@ type Yer = { m: string; S: number; C: number };
 const planla = (a: Ayar) => {
   const m = motorYukle();
   const st = girdi(a).st;
+  if (a.gercek) Object.assign(st.gercek as Record<string, unknown>, a.gercek);
   const cx = m.compile(m.stHazirla(st)) as { ops: { id: string; adet: number; c: { m: string }[]; pr: [string, string][] }[] };
   const p = m.schedule(st, 'yeni', null) as { ops: Record<string, Yer> };
   return { cx, p, paylar: Object.keys(p.ops).filter((id) => id.startsWith('O1.10')).sort() };
@@ -125,9 +127,20 @@ describe('plan: paralel bölme planlama atölyesinde (1952 iş 2a)', () => {
   });
 
   test('3488 c: geçersiz elle bölme yok sayılır (uygun olmayan tezgâh, tek pay, adet pay sayısından az)', () => {
-    assert.deepEqual(planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: { 'O1.10': [{ adet: 5, m: '100' }, { adet: 4, m: '300' }] } }).paylar, ['O1.10']);
+    // Uygun olmayan tezgâhlı bölme bütünüyle yok sayılır: pay yerleşemeyip düşmez, adım bölünmeden tam adetle kurulur.
+    const uygunsuz = planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: { 'O1.10': [{ adet: 5, m: '100' }, { adet: 4, m: '300' }] } });
+    assert.deepEqual(uygunsuz.paylar, ['O1.10']);
+    assert.equal(JSON.stringify(uygunsuz.cx.ops.filter((o) => o.id.startsWith('O1.10')).map((o) => [o.id, o.adet])), '[["O1.10",9]]');
     assert.deepEqual(planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: { 'O1.10': [{ adet: 9, m: '100' }] } }).paylar, ['O1.10']);
     assert.deepEqual(planla({ istasyon: '10', adet: 1, split: 'tek', elleBol: { 'O1.10': [{ adet: 1, m: '100' }, { adet: 1, m: '101' }] } }).paylar, ['O1.10']);
+  });
+
+  test('3488 c: bölme yazıldıktan sonra adım başlarsa kayıtlı bölme uygulanmaz; adım başladığı tezgâhta bütün kalır', () => {
+    const elle = { 'O1.10': [{ adet: 6, m: '102' }, { adet: 3, m: '100' }] };
+    const { cx, p, paylar } = planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: elle, gercek: { 'O1.10': { m: '101', S: 0 } } });
+    assert.equal(JSON.stringify(cx.ops.filter((o) => o.id.startsWith('O1.10')).map((o) => [o.id, o.adet])), '[["O1.10",9]]');
+    assert.deepEqual(paylar, ['O1.10']);
+    assert.equal(p.ops['O1.10']?.m, '101');
   });
 
   test('bölünmeyen adımın adayları ekipten etkilenmez', () => {
