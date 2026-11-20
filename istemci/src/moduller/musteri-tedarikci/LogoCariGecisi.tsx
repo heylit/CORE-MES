@@ -19,7 +19,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CrmDenetimi } from './CrmDenetimi.tsx';
-import { CrmRozeti, useLogoCrm } from './logo-crm.tsx';
+import { CrmRozeti, useLogoCrmKodla } from './logo-crm.tsx';
 import {
   islemDegeri, islemSecenekleri, oneriIslemi, onKontrolPlani, type CariIslemi, type OnKontrolPlani,
 } from './logo-cari-gecisi.ts';
@@ -85,8 +85,8 @@ export function LogoCariGecisi() {
   });
 
   const satirlar = liste.data?.satirlar ?? [];
-  const bagliIdler = satirlar.filter((s) => s.durum === 'bagli').flatMap((s) => s.adaylar.filter((a) => a.neden === 'cari-kodu').map((a) => a.firmaId));
-  const crm = useLogoCrm(bagliIdler, yazabilir);
+  // 3480: CRM bağı Logo carisinin kendisinden; bağlanmamış satırda da görünür (alınamaz cari sorulmaz).
+  const crm = useLogoCrmKodla(satirlar.filter((s) => s.durum !== 'alinamaz').map((s) => s.kod), yazabilir);
 
   if (oturum.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (!yazabilir) {
@@ -159,13 +159,14 @@ export function LogoCariGecisi() {
         <span className="tc-mt-gecis-taraf">
           <span className={s.durum === 'alinamaz' ? 'tc-mt-gecis-kod' : 'tc-mt-gecis-kod tc-mt-cari-kod'}>{s.kod}</span>
           <span className="tc-mt-gecis-ek">{s.ad ?? '—'}</span>
+          <CrmRozeti bilgi={crm.durum(s.kod)} />
         </span>
       ),
       csv: (s) => `${s.kod} ${s.ad ?? ''}`.trim(),
     },
     {
       anahtar: 'core', baslik: 'CORE karşılığı', kartTamSatir: true,
-      hucre: (s) => <CoreKarsiligi satir={s} crm={(id) => crm.durum(id)} />,
+      hucre: (s) => <CoreKarsiligi satir={s} />,
       csv: (s) => [DURUM[s.durum].ad, ...s.adaylar.map((a) => `${a.kod ?? ''} ${a.ad}`.trim())].join(' / '),
     },
     {
@@ -298,7 +299,7 @@ function OkumaNotu({ cevap }: { cevap: LogoCariListeCevabi }) {
   );
 }
 
-function CoreKarsiligi({ satir: s, crm }: { satir: LogoCariListeSatiri; crm: (id: number) => ReturnType<ReturnType<typeof useLogoCrm>['durum']> }) {
+function CoreKarsiligi({ satir: s }: { satir: LogoCariListeSatiri }) {
   const d = DURUM[s.durum];
   return (
     <span className="tc-mt-gecis-taraf">
@@ -312,7 +313,6 @@ function CoreKarsiligi({ satir: s, crm }: { satir: LogoCariListeSatiri; crm: (id
           <span className="tc-mt-gecis-ek">
             {NEDEN_ADI[a.neden]}{!a.aktif ? ', pasif' : ''}{a.logoyaBagli && s.durum !== 'bagli' ? ', başka Logo carisine bağlı' : ''}
           </span>
-          {s.durum === 'bagli' && <CrmRozeti bilgi={crm(a.firmaId)} />}
         </span>
       ))}
     </span>

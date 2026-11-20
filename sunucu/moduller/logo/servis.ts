@@ -3,7 +3,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { LOGO_CRM_DENETIM_SINIRI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
-import type { BirimSetleriCevabi, LogoBaglanabilirTur, LogoBelgeAramaCevabi, LogoBelgeAramaTuru, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { BirimSetleriCevabi, LogoBaglanabilirTur, LogoBelgeAramaCevabi, LogoBelgeAramaTuru, LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmDenetimiCevabi, LogoCrmKodCevabi, LogoBaglantiDurumu, LogoGidenIzlemeCevabi, LogoRozetCevabi, LogoRozetTuru, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { LOGO_BAGLANABILIR_TURLER, LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
@@ -1352,6 +1352,35 @@ async function crmDenetimiYap(vt: TxAcan, kopru: KopruIstemcisi | null, saat: ()
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu, ekranda göstermek için (teklif gönderimindeki ön koşulla aynı okuma). Yalnız GET; firma ve
 // ayar kısa transaction'da okunur, yardımcı transaction dışında ve sırayla beklenir (yardımcı tek lisanslıdır).
+// Logo cari aramasında bağlanmamış carinin de CRM durumu (kullanıcı 20.11 08:15): koddan sorulur, CORE firması gerekmez.
+// Kapalıysa ya da yardımcıya ulaşılamazsa kalan kodlar okunamadı döner (aynı kesme kuralı).
+// 3480 Risk K1: yardımcı istekleri sırayla işler; liste her açılışta 50 GET atıp sipariş ve teklif gönderimini bekletmesin diye
+// okunmuş durum (var ya da yok) kod başına 5 dakika bellekte tutulur. Okunamayan tutulmaz.
+export const CRM_KOD_BELLEK_MS = 5 * 60_000;
+const crmKodBellegi = new Map<string, { zaman: number; durum: LogoCrmKodCevabi['durumlar'][number] }>();
+export function crmKodBelleginiTemizle(): void { crmKodBellegi.clear(); }
+export async function cariKodCrmDurumlari(
+  vt: TxAcan, kopru: KopruIstemcisi | null, kodlar: readonly string[], saat: () => number = Date.now,
+): Promise<LogoCrmKodCevabi> {
+  const acik = await vt.tx(async (db) => (await sistemAyariOku(db, 'logo.baglanti')) === true);
+  const durumlar: LogoCrmKodCevabi['durumlar'] = [];
+  let kesildi: string | null = crmKapaliNedeni(acik, kopru);
+  for (const kod of kodlar) {
+    if (kesildi !== null || kopru === null) { durumlar.push({ kod, durum: 'okunamadi', neden: kesildi, kodlar: null }); continue; }
+    const anahtar = kod.toUpperCase();
+    const bellek = crmKodBellegi.get(anahtar);
+    const simdi = saat();
+    if (bellek !== undefined && simdi - bellek.zaman >= 0 && simdi - bellek.zaman < CRM_KOD_BELLEK_MS) { durumlar.push({ ...bellek.durum, kod }); continue; }
+    const r = await kopru.satisMusterisiVarMi(kod);
+    const d = crmDurumu(r);
+    if (crmSorguyuKeser(r)) kesildi = d.neden;
+    const durum = { kod, ...d, kodlar: crmKodlari(r) };
+    if (durum.durum !== 'okunamadi') crmKodBellegi.set(anahtar, { zaman: simdi, durum });
+    durumlar.push(durum);
+  }
+  return { durumlar };
+}
+
 export async function cariCrmDurumlari(vt: TxAcan, kopru: KopruIstemcisi | null, idler: readonly number[]): Promise<LogoCrmCevabi> {
   const { acik, firmalar } = await vt.tx(async (db) => ({
     acik: (await sistemAyariOku(db, 'logo.baglanti')) === true,

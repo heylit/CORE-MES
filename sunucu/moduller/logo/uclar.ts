@@ -2,7 +2,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmDenetimiCevabi, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmDenetimiCevabi, logoCrmKodCevabi, logoCrmKodSorgusu, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
@@ -24,7 +24,7 @@ import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { FIYAT_GOREN_ISLEMLER as SATIN_ALMA_FIYAT_GOREN_ISLEMLER } from '../satin-alma/disari.ts';
 import { logodaBelgeAra, logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
-  BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
+  BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariKodCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
   logoAramaSonucunuEkle, logoBelgeAramasiAcik, logoMalzemeAramasiAcik,
 } from './servis.ts';
 
@@ -205,6 +205,16 @@ export const uclar = [
     sorgu: logoCrmSorgusu,
     cevap: logoCrmCevabi,
     isle: ({ db, sorgu }) => cariCrmDurumlari({ tx: (f) => f(db) }, ortamKoprusu, sorgu.id),
+  }),
+  // Logo cari aramasında bağlanmamış carinin de CRM durumu (kullanıcı 20.11 08:15); koddan, Logo'ya yazmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/cari-crm-kod',
+    yetki: { biri: ['musteri-tedarikci.oku', 'musteri-tedarikci.yaz'] },
+    txDisi: true,
+    sorgu: logoCrmKodSorgusu,
+    cevap: logoCrmKodCevabi,
+    isle: ({ db, sorgu }) => cariKodCrmDurumlari({ tx: (f) => f(db) }, ortamKoprusu, sorgu.kod),
   }),
   // 3391-2 a: Logo geçişinde CRM bağı denetimi; firma yazabilen çalıştırır (düzeltmesi firma kartındadır). Logo'ya yazmaz.
   uc({

@@ -72,7 +72,9 @@ function sunucuKur(kullanici: Kullanici, listeCevabi: LogoCariListeCevabi = LIST
     if (yol.startsWith('/musteri-tedarikci/logo-cari/kartlar?')) {
       return json(200, kartlar(decodeURIComponent(yol.split('kodlar=')[1] ?? '').split(',')));
     }
-    if (yol.startsWith('/logo/cari-crm?')) return json(200, { durumlar: [{ firmaId: 13, durum: 'var', neden: null, kodlar: null }] });
+    if (yol.startsWith('/logo/cari-crm-kod?')) {
+      return json(200, { durumlar: [{ kod: 'ORN-C-1', durum: 'var', neden: null, kodlar: null }, { kod: 'ORN-C-3', durum: 'var', neden: null, kodlar: null }, { kod: 'ORN-C-2', durum: 'yok', neden: null, kodlar: null }] });
+    }
     if (yol === '/logo/crm-denetimi') return json(200, crmDenetimiCevabi);
     if (yontem === 'POST' && yol === '/musteri-tedarikci/logo-cari/toplu') {
       return json(200, {
@@ -141,9 +143,11 @@ describe('Logo geçişi cariler sekmesi (3474-1)', () => {
     ciz();
     expect(await screen.findByText(/firma yazma yetkisi ister/)).toBeTruthy();
     expect(istekler.some((i) => i.yol.includes('/logo-cari/'))).toBe(false);
+    // 3480 Test T4: yazamayanda CRM de sorulmaz (yardımcıya istek gitmez).
+    expect(istekler.some((i) => i.yol.startsWith('/logo/cari-crm'))).toBe(false);
   });
 
-  it('liste aynadan gelir: durum, CORE karşılığı, süzgeç sayıları, son okuma; bağlı satırda CRM rozeti', async () => {
+  it('liste aynadan gelir: durum, CORE karşılığı, süzgeç sayıları, son okuma; CRM rozeti bağlanmamış satırda da (3480)', async () => {
     const istekler = sunucuKur(YAZAN);
     ciz();
     const tablo = await screen.findByRole('table', { name: 'Logo carileri' });
@@ -152,6 +156,11 @@ describe('Logo geçişi cariler sekmesi (3474-1)', () => {
     expect(screen.getByText(/Yeni \(1\)/)).toBeTruthy();
     expect(screen.getByText(/Liste Logo'dan en son 20\.11 09:00 okundu/)).toBeTruthy();
     expect(await satirBul(tablo, L_BAGLI.kod).findByText('CRM')).toBeTruthy();
+    // 3480: bağlanmamış carinin CRM'i de görünür; CRM'siz carede rozet yok; alınamaz cari sorulmaz.
+    expect(await satirBul(tablo, L_YENI.kod).findByText('CRM')).toBeTruthy();
+    expect(satirBul(tablo, L_BAGLANABILIR.kod).queryByText('CRM')).toBeNull();
+    const crm = istekler.filter((i) => i.yol.startsWith('/logo/cari-crm-kod?')).map((i) => decodeURIComponent(i.yol));
+    expect(crm).toEqual(['/logo/cari-crm-kod?kod=ORN-C-1,ORN-C-2,ORN-C-3,ORN-C-4']);
     expect(satirBul(tablo, L_ESLESIK.kod).getByRole('combobox', { name: `${L_ESLESIK.kod} ne yapılsın` })).toBeTruthy();
     expect(satirBul(tablo, L_BAGLI.kod).getByRole('button', { name: `${L_BAGLI.kod} firmayı aç` })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Bağlı \(1\)/ }));

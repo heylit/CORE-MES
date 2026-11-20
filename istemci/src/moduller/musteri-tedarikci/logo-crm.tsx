@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LOGO_CRM_SINIRI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
-import type { LogoCrmCevabi, LogoCrmDurumu } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoCrmCevabi, LogoCrmDurumu, LogoCrmKodCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { Firma, FirmaCevabi, FirmaLogoCrmSecGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { Dugme, OnayPenceresi, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { cevabiYaz, eskiyseYenile, yazmaIletisi } from './yazma.ts';
@@ -24,6 +24,22 @@ export function useLogoCrm(idler: readonly number[], etkin = true): { durum: (id
   });
   const harita = new Map((sorgu.data?.durumlar ?? []).map((d) => [d.firmaId, d]));
   return { durum: (id) => harita.get(id) ?? null };
+}
+
+// 3480: Logo cari aramasında ve geçiş listesinde CRM durumu Logo cari kodundan sorulur; bağlanmamış cari de görünür.
+// Virgül içeren kod sorgu ayırıcısıyla karışır, sorulmaz (rozet çıkmaz). Sunucu da kod başına 5 dakika bellekte tutar.
+export function useLogoCrmKodla(kodlar: readonly string[], etkin = true): { durum: (kod: string) => CrmBilgisi | null } {
+  const tekil = [...new Set(kodlar.map((k) => k.trim()).filter((k) => k !== '' && !k.includes(',')))].sort().slice(0, LOGO_CRM_SINIRI);
+  const sorgu = useQuery({
+    queryKey: ['logo', 'cari-crm-kod', tekil.join(',')],
+    queryFn: () => api.get<LogoCrmKodCevabi>(`/logo/cari-crm-kod?kod=${encodeURIComponent(tekil.join(','))}`),
+    enabled: etkin && tekil.length > 0,
+    // 3480 Risk K1: yardımcı sırayla işler; aynı sayfa 5 dakika yeniden sorulmaz, odakta yeniden okunmaz.
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const harita = new Map((sorgu.data?.durumlar ?? []).map((d) => [d.kod.toUpperCase(), d]));
+  return { durum: (kod) => harita.get(kod.trim().toUpperCase()) ?? null };
 }
 
 // 3359 a ek notu: CRM satış müşterisi varsa "CRM" yazar; yoksa, okunamadıysa ya da okunurken hiçbir şey yazmaz.
