@@ -214,3 +214,22 @@ describe('partiye bölünen emir (3483)', () => {
     expect(document.querySelector(`button[data-adim="${x.eksik}"]`)).toBeNull();
   });
 });
+
+describe('Planla düğmesinin geri bildirimi', () => {
+  it('basılan Planla iş sürerken döner ve "Planlanıyor" der; iş bitince eski haline döner', () => {
+    const x = yarimKur({ kod: 'aday' });
+    const { planla } = ciz(x, '3');
+    fireEvent.click(screen.getByRole('button', { name: 'Planla' }));
+    expect(planla).toHaveBeenCalled();
+    cleanup();
+    const ac = vi.fn();
+    const { rerender } = render(<ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik="3" ac={ac} zaman={zaman} mesgul={false} planla={vi.fn()} yenidenPlanla={null} hamle={null} surum={4} tahta={null} satirBirincil adimSec={vi.fn()} seciliIs={null} />);
+    const o = (mesgul: boolean) => <ListeDuzeni m={x.m} p={x.p} kartlar={x.kartlar} acik="3" ac={ac} zaman={zaman} mesgul={mesgul} planla={vi.fn()} yenidenPlanla={null} hamle={null} surum={4} tahta={null} satirBirincil adimSec={vi.fn()} seciliIs={null} />;
+    fireEvent.click(screen.getByRole('button', { name: 'Planla' }));
+    rerender(o(true));
+    const d = screen.getByRole('button', { name: 'Planlanıyor' });
+    expect(d.getAttribute('aria-busy')).toBe('true');
+    rerender(o(false));
+    expect(screen.getByRole('button', { name: 'Planla' }).hasAttribute('aria-busy')).toBe(false);
+  });
+});

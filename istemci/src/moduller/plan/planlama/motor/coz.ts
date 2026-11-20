@@ -104,7 +104,8 @@ export function usePlanKur(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' |
   const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
   const kur = useCallback(() => {
     if (!komut) return;
-    void planKur({ komut, kim }).then((h) => { if (h) uyar(h); });
+    const calisti = !suruyor;
+    void planKur({ komut, kim }).then((h) => { if (h) uyar(h); else if (calisti) uyar('Plan kuruldu.'); });
   }, [komut, kim, uyar]);
   return komut && calisma && o.yetki.planYaz ? { kur, suruyor: s } : null;
 }
@@ -133,7 +134,11 @@ export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
   const liste = useMemo(() => (calisma && calisma.plan !== null && calisma.plan.dataVer !== calisma.dataVer ? bekleyenListesi(calisma) : []), [calisma]);
   const uygula = useCallback((komutunDevami?: boolean) => {
     if (!komut || liste.length === 0) return;
-    void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id), ...(komutunDevami === true ? { komutunDevami: true } : {}) }).then((h) => { if (h) uyar(h); });
+    // Bitince sonuç söylenir: düğme çalışırken döner, biter bitmez kişi neyin işlendiğini görür. Zaten süren uygulama ikinci kez söylenmez.
+    const calisti = !suruyor, n = liste.length;
+    void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id), ...(komutunDevami === true ? { komutunDevami: true } : {}) }).then((h) => {
+      if (h) uyar(h); else if (calisti) uyar(n > 1 ? `${String(n)} veri değişikliği plana işlendi.` : 'Veri değişikliği plana işlendi.');
+    });
   }, [komut, kim, liste, uyar]);
   return komut && calisma && o.yetki.planYaz && liste.length > 0 ? { uygula, suruyor: s, say: liste.length } : null;
 }

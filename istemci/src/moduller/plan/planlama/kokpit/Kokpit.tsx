@@ -235,6 +235,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     bekleyenUygulayici.uygula();
   }, [onayAcik, bekleyenUygulayici, uyarYaz]);
   const mesgul = diziliyor || taslak?.mesgul === true || taslak?.diziliyor === true;
+  // Planla düğmesinin sonucu: dizme bitince bir kez bildirilir.
+  const planlaIletisi = useRef<string | null>(null);
+  useEffect(() => {
+    if (mesgul || planlaIletisi.current === null) return;
+    bildir('bilgi', planlaIletisi.current); planlaIletisi.current = null;
+  }, [mesgul, bildir]);
 
   const secEmir = o.secim.siparis !== null && emir.has(o.secim.siparis) ? o.secim.siparis : null;
   const secIs = o.secim.adim !== null && m.isler[o.secim.adim] ? o.secim.adim : null;
@@ -279,8 +285,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
-    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) bildir('bilgi', `${ileti} Geri al ile alınır.`);
-  }, [taslak, yazabilir, bildir]);
+    // Sonuç dizme bitince söylenir: komut yazıldığında plan henüz yeniden dizilmemiştir (kişi düğmenin işe yaradığını bitişte görür).
+    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) planlaIletisi.current = `${ileti} Geri al ile alınır.`;
+  }, [taslak, yazabilir]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
   // Tahtadan bırakılan iş: önce sunucu önizlemesi. Geçersiz yer yazılmaz; emri terminden sonraya atan taşıma onay ister.

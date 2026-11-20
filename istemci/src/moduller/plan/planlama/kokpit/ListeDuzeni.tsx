@@ -51,6 +51,9 @@ const durumYazisi = (k: SiraKarti): string => {
 export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs }: ListeDuzeniOzellikleri) {
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [acik]);
+  // Basılan Planla düğmesi iş sürerken döner; iş bitince (mesgul düşünce) bırakılır.
+  const [basilan, setBasilan] = useState<string | null>(null);
+  useEffect(() => { if (!mesgul) setBasilan(null); }, [mesgul]);
   const sirali = listeSirasi(kartlar);
   if (sirali.length === 0) return <p className="tc-pyq-not">Bu süzgeçle eşleşen sipariş ya da emir yok.</p>;
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
@@ -87,13 +90,13 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                       {eksik > 0 && k.yerlesen > 0
                         ? <p role="status" data-kismi=""><b>{String(eksik)} adımın planda yeri yok; {String(k.yerlesen)} adım planda.</b><small>Planla eksik adımlara yer bulur; bu siparişin planda olan adımları da yeniden dizilebilir, öteki siparişler yerinde kalır. Geri al ile alınır.</small></p>
                         : <p role="status"><b>{bekleyen > 1 ? `${String(bekleyen)} emrin planda yeri yok.` : 'Planda yeri yok.'}</b><small>Sistem tezgâhları ve saatleri seçer; sonucu burada görürsünüz. Canlıya almadan atölye görmez; Geri al ile alınır.</small></p>}
-                      {planla && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="play" disabled={mesgul} onClick={() => { planla(k); }}>Planla</Dugme>}
+                      {planla && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="play" disabled={mesgul} yukleniyor={mesgul && basilan === k.kok} onClick={() => { setBasilan(k.kok); planla(k); }}>{mesgul && basilan === k.kok ? 'Planlanıyor' : 'Planla'}</Dugme>}
                     </div>
                   ) : sonuc && (
                     <div className="tc-pyq-yol-govde" data-tur={sonuc.tur}>
                       <p role="status"><b>{sonuc.baslik}</b>{sonuc.neden !== null && <small>Neden: {sonuc.neden}</small>}</p>
                       {sonuc.emir && hamle && !secenekAcik && <Dugme tur={satirBirincil ? 'birincil' : 'ikincil'} simge="route" onClick={() => { setSecenekAcik(true); }}>Seçenekleri göster</Dugme>}
-                      {yenidenPlanla && <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" onClick={() => { yenidenPlanla(k); }}>Planla</Dugme>}
+                      {yenidenPlanla && <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" yukleniyor={mesgul && basilan === k.kok} onClick={() => { setBasilan(k.kok); yenidenPlanla(k); }}>{mesgul && basilan === k.kok ? 'Planlanıyor' : 'Planla'}</Dugme>}
                       {sonuc.emir && secenekAcik && (
                         <div className="tc-pyq-yol-secenek" role="group" aria-label="Düzeltme seçenekleri">
                           <small>Her seçeneğin sonucu basmadan önce yazılıdır</small>
