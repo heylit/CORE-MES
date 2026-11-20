@@ -15,6 +15,9 @@ export { yayindaOzetMi } from './servis.ts';
 // Liste ekranları (ör. üretim emirleri) satıra küçük resim koymak için: kayıt başına seçilmiş revizyon, tek sorguda (kart #688).
 // Kare dosyası herkese açık ortak uçtan okunur (`GET /cizimler/kucuk-resim/:revizyonId/:kare`); yetki denetlemez.
 export { kayitlarinKucukResimleri } from './servis.ts';
+// 3468-1: aynı dosya uyarısı; kablolama Ortak Dosyalar ile iki yönde bağlar.
+export { ayniDosyaKaynagiKaydet, cizimdekiYerler } from './ayni-dosya.ts';
+export type { AyniDosyaKaynagi } from './ayni-dosya.ts';
 // Üst çubuktaki genel aramanın çizim kaynağı (kart 1240); çekirdek bu adla bulur. Kişide okuma işlemlerinden biri yoksa
 // kaynak çağrılmaz; uçlardaki okuma yetkisiyle aynı liste.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [

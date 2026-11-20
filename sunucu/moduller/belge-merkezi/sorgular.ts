@@ -520,3 +520,24 @@ export function malzemeBaglari(db: Db, belgeIdler: readonly number[]): Promise<{
     [belgeIdler],
   );
 }
+
+// 3468-1: özeti verilen dosyanın revizyon olduğu belgeler (aynı dosya uyarısı). En çok 20 satır; arşivdekiler sonda.
+export interface OzetliRevizyon {
+  belgeId: number;
+  ad: string;
+  resimNo: string | null;
+  aktif: boolean;
+  sira: number;
+  antetRev: string | null;
+  durum: RevizyonDurumu;
+}
+
+export function ozetliRevizyonlar(db: Db, ozet: string): Promise<OzetliRevizyon[]> {
+  return db.sorgu<OzetliRevizyon>(
+    `SELECT b.id AS "belgeId", b.ad, b.resim_no AS "resimNo", b.aktif, r.sira, r.antet_rev AS "antetRev", r.durum
+       FROM belge_merkezi_revizyon r JOIN belge_merkezi_belge b ON b.id = r.belge_id
+      WHERE r.ozet = $1
+      ORDER BY b.aktif DESC, b.id, r.sira LIMIT 20`,
+    [ozet],
+  );
+}

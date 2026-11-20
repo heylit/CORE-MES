@@ -585,6 +585,58 @@ describe('cizimler ekranları', () => {
   });
 });
 
+describe('cizimler aynı dosya uyarısı (3468-1)', () => {
+  function ayniSunucusu(yerler: unknown[]) {
+    const cagrilar = sunucuKur(YAZAR);
+    const temel = vi.mocked(fetch);
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      if (yol.startsWith('/cizimler/ayni-dosya?')) { cagrilar.push({ yontem: 'GET', yol, govde: undefined }); return json(200, { yerler }); }
+      if (yol === '/dosyalar/eksikler') { cagrilar.push({ yontem: 'POST', yol, govde: undefined }); return json(200, { eksikler: [] }); }
+      return temel(adres, ayar);
+    }));
+    return cagrilar;
+  }
+  const dosya = () => Object.assign(new File(['%PDF-1.7 deneme'], 'ORN-flans.pdf', { type: 'application/pdf' }), {
+    arrayBuffer: async () => new TextEncoder().encode('%PDF-1.7 deneme').buffer,
+  });
+  async function revizyonYukle() {
+    ac('/cizimler/belge/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni revizyon' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(pencere.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [dosya()] } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yükle' }));
+  }
+  const YER = { kaynak: 'ortak-dosyalar', baslik: 'ORN-Ortak / ORN-Çizimler', ayrinti: 'Ortak dosyalar · ORN-flans.pdf · sürüm 2', yol: '/ortak-dosyalar?klasor=3', durum: 'Son sürüm' };
+
+  it('aynı içerik başka yerde varsa yükleme durur ve yerleri gösterir; Vazgeç hiçbir şey yüklemez', async () => {
+    const cagrilar = ayniSunucusu([YER]);
+    await revizyonYukle();
+    const uyari = await screen.findByRole('dialog', { name: 'Bu dosya zaten yüklü' });
+    expect(within(uyari).getByText('ORN-Ortak / ORN-Çizimler')).toBeTruthy();
+    expect(within(uyari).getByRole('button', { name: 'Yine de revizyon ekle' })).toBeTruthy();
+    fireEvent.click(within(uyari).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Bu dosya zaten yüklü' })).toBeNull(); });
+    // Vazgeç'ten sonra geç gelen bir yükleme de yakalansın: yükleme zinciri birkaç mikro görev sürer.
+    await new Promise((coz) => { setTimeout(coz, 50); });
+    expect(cagrilar.some((c) => c.yol === '/dosyalar/eksikler' || c.yol.endsWith('/revizyon-ekle'))).toBe(false);
+    expect(cagrilar.find((c) => c.yol.startsWith('/cizimler/ayni-dosya?'))?.yol).toMatch(/^\/cizimler\/ayni-dosya\?ozet=[0-9a-f]{64}$/);
+  });
+
+  it('Yine de revizyon ekle yüklemeyi sürdürür; yer yoksa pencere açılmadan yüklenir', async () => {
+    let cagrilar = ayniSunucusu([YER]);
+    await revizyonYukle();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yine de revizyon ekle' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/cizimler/7/revizyon-ekle')).toBe(true); });
+    expect(cagrilar.filter((c) => c.yol.startsWith('/cizimler/ayni-dosya?'))).toHaveLength(1);
+    cleanup();
+    cagrilar = ayniSunucusu([]);
+    await revizyonYukle();
+    await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/cizimler/7/revizyon-ekle')).toBe(true); });
+    expect(screen.queryByRole('dialog', { name: 'Bu dosya zaten yüklü' })).toBeNull();
+  });
+});
+
 describe('cizimler önizleme kareleri', () => {
   it('sekiz kare Y ekseni çevresinde eşit aralıklı döner', () => {
     expect(KARE_SAYISI).toBe(8);

@@ -8,7 +8,9 @@ import { BildirimSaglayici, KlasorBaglantisi } from '../../ortak/arayuz/index.ts
 import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
 // Kayda bağlı klasörler (kart 3288). ORN- adlar uydurmadır.
-vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)) }));
+vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)),
+  sha256: vi.fn(async () => 'a'.repeat(64)), ayniDosyaYerleri: vi.fn(async () => []), AyniDosyaPenceresi: () => null,
+}));
 
 const klasor = (k: Partial<Klasor> & { id: number; ad: string }): Klasor =>
   ({ ustId: null, ozelYetki: false, duzey: 'yonetir', dosyaSayisi: 0, surum: 1, kaynak: null, ...k });

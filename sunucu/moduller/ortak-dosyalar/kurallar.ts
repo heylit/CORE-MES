@@ -1,4 +1,4 @@
-import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import type { AyniDosyaYeri, DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { AZAMI_AD, KLASOR_DUZEYLERI } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import type { KlasorDuzeyi, VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
@@ -252,4 +252,16 @@ export function planSaati(an: number | Date): string {
   const [yil, ay, gun] = tesisGunu(an).split('-') as [string, string, string];
   const haftaGunu = new Date(Date.UTC(Number(yil), Number(ay) - 1, Number(gun))).getUTCDay();
   return `${GUN_ADLARI[haftaGunu] ?? ''} ${gun}.${ay} ${tesisSaati(an).slice(11)}`;
+}
+
+// 3468-1: aynı dosya uyarısında Ortak Dosyalar satırı. Başlık klasör yolu, ayrıntı dosya adı ve sürüm; son sürüm ayrıca yazılır
+// (aynı adla yüklemede "son sürümle aynı" bunu okur).
+export function ayniDosyaKlasorYeri(r: { klasorId: number; ad: string; sira: number; son: boolean }, yol: readonly string[]): AyniDosyaYeri {
+  return {
+    kaynak: 'ortak-dosyalar',
+    baslik: yol.join(' / '),
+    ayrinti: `Ortak dosyalar · ${r.ad} · sürüm ${String(r.sira)}`,
+    yol: `/ortak-dosyalar?klasor=${String(r.klasorId)}`,
+    durum: r.son ? 'Son sürüm' : 'Eski sürüm',
+  };
 }

@@ -6,6 +6,8 @@ import {
   malzemeParametresi, malzemeRevizyonEkleGovdesi, malzemeRevizyonParametresi, malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi,
   onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import { ayniDosyaCevabi, ayniDosyaSorgusu } from '#paylasilan/sozlesme/dosya.ts';
+import { AYNI_DOSYA_YETKISI, ayniDosyaYerleri } from './ayni-dosya.ts';
 import * as servis from './servis.ts';
 
 // Sayfası olan rol okur; `belge-merkezi.oku` sayfasız okuma için ayrı verilebilir (başka ekranda belge gösteren rol).
@@ -16,6 +18,14 @@ const MALZEME_YAZMA = { biri: ['belge-merkezi.yaz', 'malzemeler.yaz'] } as const
 const MALZEME_OKUMA = { biri: ['sayfa.cizimler', 'belge-merkezi.oku', 'malzemeler.yaz'] } as const;
 
 export const uclar = [
+  uc({
+    // 3468-1: yüklemeden önce aynı içerikli dosyanın yerleri (çizimler ve Ortak Dosyalar); yalnız kişinin gördüğü yerler.
+    yontem: 'GET',
+    yol: '/cizimler/ayni-dosya',
+    yetki: { biri: AYNI_DOSYA_YETKISI },
+    sorgu: ayniDosyaSorgusu, cevap: ayniDosyaCevabi,
+    isle: async ({ db, kullanici, sorgu }) => ({ yerler: await ayniDosyaYerleri(db, kullanici, sorgu.ozet) }),
+  }),
   uc({
     yontem: 'GET',
     yol: '/cizimler/menu-sayaclari',

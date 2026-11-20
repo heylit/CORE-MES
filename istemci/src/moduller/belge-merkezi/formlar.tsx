@@ -9,6 +9,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { useHaritadakiIstasyonlar } from '../atolye/disari.ts';
 import { IstasyonSecimi } from '../istasyonlar/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { AyniDosyaPenceresi } from './AyniDosya.tsx';
 import { useDosyaliKomut, useKomut } from './komut.ts';
 import { BELGE_TURLERI, IZINLI_DOSYA_TURLERI, TUR_ADI, boyutMetni, dosyaTuruBul, izinliMetni, kabulMetni } from './gosterim.ts';
 
@@ -60,6 +61,7 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
     }),
     (c) => { kapat(); void yonlendir(`/cizimler/belge/${c.id}`); },
     'Belge açılamadı',
+    true,
   );
   const red = dosyaReddi(dosya, tur);
   return (
@@ -81,6 +83,7 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
       </div>
+      {komut.ayni !== null && <AyniDosyaPenceresi {...komut.ayni} devamMetni="Yine de ayrı belge aç" />}
     </Pencere>
   );
 }
@@ -94,6 +97,7 @@ export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: (
     (ozet): RevizyonEkleGovdesi => ({ ozet, dosyaAdi: dosya?.name.slice(0, 120) ?? '', not, antetRev, surum: belge.surum }),
     kapat,
     'Revizyon eklenemedi',
+    true,
   );
   const red = dosyaReddi(dosya, belge.tur);
   return (
@@ -111,6 +115,7 @@ export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: (
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
       </div>
+      {komut.ayni !== null && <AyniDosyaPenceresi {...komut.ayni} devamMetni="Yine de revizyon ekle" />}
     </Pencere>
   );
 }

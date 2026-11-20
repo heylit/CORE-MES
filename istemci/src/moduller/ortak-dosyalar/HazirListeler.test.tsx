@@ -10,7 +10,9 @@ import { OrtakDosyalar } from './OrtakDosyalar.tsx';
 
 // Hazır listeler (kart 3390). ORN- adlar uydurmadır.
 const ikiliOku = vi.fn(async () => new Uint8Array([37, 80, 68, 70]).buffer);
-vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(), ikiliOku: (...a: unknown[]) => ikiliOku(...(a as [])) }));
+vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(), ikiliOku: (...a: unknown[]) => ikiliOku(...(a as [])),
+  sha256: vi.fn(async () => 'a'.repeat(64)), ayniDosyaYerleri: vi.fn(async () => []), AyniDosyaPenceresi: () => null,
+}));
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const KAYITLAR: HazirKayitlarCevabi = {

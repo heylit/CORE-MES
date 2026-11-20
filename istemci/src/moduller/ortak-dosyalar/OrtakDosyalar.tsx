@@ -1,11 +1,12 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ArsivCevabi, DosyaListesiCevabi, DosyalarCevabi, HazirListe, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
   KaliciSilGovdesi, SurumluGovde, VerilenDuzey, YetkiCevabi, YetkiGovdesi, YukleGovdesi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
-import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
+import type { AyniDosyaYeri } from '#paylasilan/sozlesme/dosya.ts';
+import { AyniDosyaPenceresi, DosyaHatasi, ayniDosyaYerleri, dosyaYukle, sha256 } from '../belge-merkezi/disari.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, KayitSecici, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type SeciliKayit, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -214,6 +215,7 @@ function DosyaTablosu({ dosyalar, klasorSutunu, duzey, bosMesaj }: {
         onChange={(o) => { const d = yeniSurum.current.dosya; if (d !== null) void yukleme.yukle(d.klasorId, o, d.ad); }}
       />
       {surumleri && <SurumPenceresi dosya={surumleri} kapat={() => surumleriYaz(null)} />}
+      {yukleme.soruPenceresi}
     </>
   );
 }
@@ -231,6 +233,13 @@ function useYukleme() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [suruyor, suruyorYaz] = useState(false);
+  // 3468-1: aynı içerik görülen bir yerde varsa yükleme o dosyada durur ve sorulur; cevap gelince sıradaki dosyaya geçilir.
+  const [soru, soruYaz] = useState<{ dosyaAdi: string; yerler: AyniDosyaYeri[]; surum: boolean; coz: (devam: boolean) => void } | null>(null);
+  const ayniDosyaOnayi = async (dosyaAdi: string, veri: Uint8Array, surum: boolean): Promise<boolean> => {
+    const yerler = await ayniDosyaYerleri('/ortak-dosyalar/ayni-dosya', await sha256(veri));
+    if (yerler.length === 0) return true;
+    return new Promise<boolean>((coz) => { soruYaz({ dosyaAdi, yerler, surum, coz: (devam) => { soruYaz(null); coz(devam); } }); });
+  };
   const yukle = async (klasorId: number, o: ChangeEvent<HTMLInputElement>, sabitAd?: string): Promise<void> => {
     const secilen = [...(o.target.files ?? [])];
     o.target.value = '';
@@ -243,7 +252,9 @@ function useYukleme() {
     try {
       for (const f of secilen) {
         try {
-          const ozet = await dosyaYukle(new Uint8Array(await f.arrayBuffer()), () => {});
+          const veri = new Uint8Array(await f.arrayBuffer());
+          if (!await ayniDosyaOnayi(f.name, veri, sabitAd !== undefined)) continue;
+          const ozet = await dosyaYukle(veri, () => {});
           const govde: YukleGovdesi = { ad: sabitAd ?? f.name, ozet, ...secimAlanlari(secim) };
           await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, govde, { istekKimligi: yeniIstekKimligi() });
           tamam += 1;
@@ -262,7 +273,9 @@ function useYukleme() {
     if (suruyor) return;
     suruyorYaz(true);
     try {
-      const ozet = await dosyaYukle(new Uint8Array(await f.arrayBuffer()), () => {});
+      const veri = new Uint8Array(await f.arrayBuffer());
+      if (!await ayniDosyaOnayi(f.name, veri, false)) return;
+      const ozet = await dosyaYukle(veri, () => {});
       await api.post<OrtakDosya>(`/ortak-dosyalar/klasorler/${klasorId}/yukle`, { ad, ozet, ...secimAlanlari(secim) } satisfies YukleGovdesi, { istekKimligi: yeniIstekKimligi() });
       bildir('tamam', `${ad} yüklendi.`);
     } catch (h) {
@@ -272,7 +285,13 @@ function useYukleme() {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
     }
   };
-  return { yukle, yukleListe, yukleDosya, suruyor };
+  const soruPenceresi: ReactNode = soru === null ? null : (
+    <AyniDosyaPenceresi
+      dosyaAdi={soru.dosyaAdi} yerler={soru.yerler} devamMetni={soru.surum ? 'Yine de sürüm aç' : 'Yine de yükle'}
+      devam={() => { soru.coz(true); }} vazgec={() => { soru.coz(false); }}
+    />
+  );
+  return { yukle, yukleListe, yukleDosya, suruyor, soruPenceresi };
 }
 
 // Yükleme adı önerisi (zorunlu değil): "<no>_<alt klasör>_r1.<uzantı>"; aynı ad yeni sürüm olur.
@@ -446,6 +465,7 @@ function DosyalarSekmesi({ klasorId, ara, sec, yeniKlasor }: { klasorId: number;
         dosyalar={dosyalar} klasorSutunu={false} duzey={() => klasor.duzey}
         bosMesaj={ara.trim() === '' ? 'Bu klasörde dosya yok.' : 'Aramaya uyan dosya yok.'}
       />
+      {yukleme.soruPenceresi}
     </div>
   );
 }

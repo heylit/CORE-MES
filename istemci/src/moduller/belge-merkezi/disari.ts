@@ -1,5 +1,5 @@
 // Başka modül ekranlarının ithal edebildiği tek dosya. Dosya önce yüklenir (özet döner), belge `POST /cizimler` ile açılır.
-export { DosyaHatasi, dosyaYukle, ikiliOku } from './dosya-aktarimi.ts';
+export { DosyaHatasi, dosyaYukle, ikiliOku, sha256 } from './dosya-aktarimi.ts';
 // Malzeme küçük resmi (kart #688): listeler `useKucukResimler` ile tek istekte okur, `KucukResimKutusu` çizer; malzeme kartı
 // `ResimPaneli`ni gömer. Kartın açılışında seçilen dosyalar kart ilk kaydedilince `malzemeBelgesiYukle` ile gönderilir.
 export { KucukResimKutusu, kucukResimAdresi, useKucukResimler, type KucukResimBoyu } from './KucukResim.tsx';
@@ -10,3 +10,5 @@ export { ResimPaneli, malzemeBelgesiYukle, useMalzemeResimYetkisi, type MalzemeB
 export { birak, modelOku, type ModelBicimi } from './goruntu/model.ts';
 // Montaj sahnesi oynatıcısı (3209 a): Reçete ve Rota stüdyosu ile Arkon terminali aynı oynatıcıyı ve oynatma kurallarını kullanır.
 export * from './goruntu/montaj/index.ts';
+// 3468-1: aynı dosya uyarısı (Ortak Dosyalar yüklemesi de kullanır).
+export { AyniDosyaPenceresi, ayniDosyaYerleri } from './AyniDosya.tsx';

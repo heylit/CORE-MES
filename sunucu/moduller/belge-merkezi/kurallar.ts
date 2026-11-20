@@ -1,4 +1,4 @@
-import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import type { AyniDosyaYeri, DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 
@@ -221,4 +221,19 @@ export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari
     }
   }
   return null;
+}
+
+// 3468-1: aynı dosya uyarısında çizimin satırı. Revizyon antetteki koduyla, yoksa harfiyle yazılır; arşivdeki belge "Arşivde".
+const REVIZYON_DURUM_METNI: Record<RevizyonDurumu, string> = { taslak: 'Taslak', yayinda: 'Yayında', eski: 'Eski' };
+export function ayniDosyaCizimYeri(r: {
+  belgeId: number; ad: string; resimNo: string | null; aktif: boolean; sira: number; antetRev: string | null; durum: RevizyonDurumu;
+}): AyniDosyaYeri {
+  const rev = r.antetRev ?? revizyonHarfi(r.sira);
+  return {
+    kaynak: 'cizimler',
+    baslik: r.ad,
+    ayrinti: ['Çizim merkezi', `Rev ${rev}`, r.resimNo].filter((m): m is string => m !== null && m !== '').join(' · '),
+    yol: `/cizimler/belge/${String(r.belgeId)}`,
+    durum: r.aktif ? REVIZYON_DURUM_METNI[r.durum] : 'Arşivde',
+  };
 }

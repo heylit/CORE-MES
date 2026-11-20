@@ -7,7 +7,9 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
 // Kart 3443: yüklemede müşteri ve proje, Arşiv'de kalıcı silme ve dört göz. Örnek veri ORN-.
-vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)) }));
+vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)),
+  sha256: vi.fn(async () => 'a'.repeat(64)), ayniDosyaYerleri: vi.fn(async () => []), AyniDosyaPenceresi: () => null,
+}));
 
 const klasor = (k: Partial<Klasor> & { id: number; ad: string }): Klasor => ({ ustId: null, ozelYetki: false, duzey: 'yonetir', dosyaSayisi: 0, surum: 1, kaynak: null, ...k });
 const ORTAK = klasor({ id: 1, ad: 'Ortak', ozelYetki: true });
