@@ -3,7 +3,7 @@ import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, AlternatifZarfi, KartZarfiCevabi, MuadilTuru,
+  AlternatifBaglami, AlternatifKarti, AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, AlternatifZarfi, KartZarfiCevabi, MuadilTuru,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { KAPSAM_DOGRULAMA, zarfaGirenler, zarfDegerlendir, zarfHesapla, type ZarfKarti } from './kurallar.ts';
@@ -112,3 +112,16 @@ export async function alternatifDegerlendir(db: Db, no: number, aday: Omit<ZarfK
 }
 
 
+
+// 3463: kartın yerine kabul edilen kartlar; eşdeğerler önce, sonra sınır içindekiler (aynı, içinde, şartlı). Bağlam koşullar için
+// (3463-2); bugün kullanılmaz. Kart yoksa ya da sınır hesaplanamıyorsa boş liste. Yetki denetlemez.
+export async function kartinAlternatifKartlari(db: Db, no: number, _baglam: AlternatifBaglami): Promise<AlternatifKarti[]> {
+  const r = await s.zarfKarti(db, no);
+  if (!r) return [];
+  const zarf = await zarfOku(db, r);
+  if (zarf === null || r.form === null) return [];
+  const adaylar = (await s.zarfAdaylari(db, r.form)).map((a) => ({ ...zarfKartina(a), kod: a.kod, ad: a.ad }));
+  return zarfaGirenler(zarf, zarfKartina(r), adaylar).flatMap((a) => (a.sonuc === 'disi' ? [] : [{
+    no: a.no, kod: a.kod, ad: a.ad, tur: 'alternatif' as const, sonuc: a.sonuc, nedenler: a.nedenler,
+  }]));
+}

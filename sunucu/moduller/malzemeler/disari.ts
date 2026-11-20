@@ -117,6 +117,9 @@ export { kartIzleriCozucusuKaydet as kartIzleriCozucusu } from './servis.ts';
 
 // 3437: kartın alternatif zarfı ve adayın zarfa göre sonucu (talep, satın alma ve stok kontrol okur). Yetki denetlemez.
 export { alternatifZarfiOku, alternatifDegerlendir } from './alternatif/servis.ts';
+// 3463: kartın yerine kabul edilen kartlar (eşdeğer ve sınır içindeki alternatifler); talep ve satın alma seçicileri yalnız bunu okur.
+export { kartinAlternatifKartlari } from './alternatif/servis.ts';
+export type { AlternatifBaglami, AlternatifKarti, KullanimYeri } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 // Saf: aday nitelikleri daraltılmış bir zarfa göre değerlendirmek için (satın alma teklifindeki alternatif).
 export { zarfDegerlendir } from './alternatif/kurallar.ts';
 // 3437 a (dilim 3b-2): satın almada onaylanan alternatifin kartı (varsa aynı nitelikli kart, yoksa ONAYDA yeni alt kart). Yetki denetlemez.

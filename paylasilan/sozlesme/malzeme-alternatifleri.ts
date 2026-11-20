@@ -111,3 +111,20 @@ export const kartZarfiCevabi = z.object({
   kartlar: z.array(zarfKarti),
 });
 export type KartZarfiCevabi = z.output<typeof kartZarfiCevabi>;
+
+// 3463: bir kartın yerine kabul edilen kartlar, tek okuma (talep, satın alma, stok kontrol bunu okur). esdeger: aynı malzemenin başka
+// kartı, her zaman kabul; alternatif: kartın kabul sınırına giren kart. Koşullar kullanım yerine ve mamule göre uygulanır (3463-2).
+export const KULLANIM_YERLERI = ['talep', 'satin_alma', 'uretim'] as const;
+export type KullanimYeri = (typeof KULLANIM_YERLERI)[number];
+export const ALTERNATIF_KART_TURLERI = ['esdeger', 'alternatif'] as const;
+export type AlternatifKartTuru = (typeof ALTERNATIF_KART_TURLERI)[number];
+export const alternatifKarti = z.object({
+  no: z.number().int(),
+  kod: z.string().nullable(),
+  ad: z.string().nullable(),
+  tur: z.enum(ALTERNATIF_KART_TURLERI),
+  sonuc: z.enum(['ayni', 'icinde', 'sartli']),
+  nedenler: z.array(z.string()),
+});
+export type AlternatifKarti = z.output<typeof alternatifKarti>;
+export interface AlternatifBaglami { kullanimYeri: KullanimYeri; mamulNo?: number | undefined }
