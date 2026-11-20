@@ -5,12 +5,12 @@
  *  - Onaylayan (approver): onay bekleyen kararları tek sayfada inceler, onaylar ya da reddeder
  * Rol tarayıcıda saklanan bir görünüm tercihidir; yetki denetimi değildir.
  */
-import type { PurchaseRequest } from "./tipler.ts";
+import type { PurchaseRequest, RequestItem } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
 import { onaylayabilecekler } from "./onaylayan.ts";
 import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
-import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
+import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, numIn, parseNum, pct, todayStr } from "./util.ts";
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
@@ -214,13 +214,16 @@ export function viewApproval(r: PurchaseRequest): string {
   const sonra = ret ? (r.log || []).filter(l => l.at > ret.at) : [];
   const yeniden = ret ? `<div class="callout sa-yeniden" role="note"><b>Yeniden gönderildi.</b> Önceki ret: ${esc(ret.name || nameOf(ret.by))}, ${fmtTs(ret.at)}${ret.note ? `: “${esc(ret.note)}”` : ""}
     ${sonra.length ? `<ul class="small">${sonra.slice(-8).map(l => `<li>${fmtTs(l.at)}: ${esc(l.t)}</li>`).join("")}</ul>` : '<p class="small muted">Retten sonra talepte kayıtlı değişiklik yok.</p>'}</div>` : "";
+  // Bölünmüş kalem aynı adla birden çok satırdadır (3442-5): o adda miktar da yazılır, tedarikçiler arası pay görünsün.
+  const adSayisi = new Map<string, number>(); for (const it of r.items || []) adSayisi.set(it.name, (adSayisi.get(it.name) ?? 0) + 1);
+  const kalemAdi = (it: RequestItem) => ((adSayisi.get(it.name) ?? 0) > 1 ? `${it.name} ${numIn(it.qty ?? 0)} ${it.unit ?? ""}`.trim() : it.name);
   return back + head + status + yeniden + `
   <div class="appr">
     <section class="panel appr-main"><div class="panel-b">
       <div class="vk">Satın almanın kararı</div>
       <h2 data-sa-y="21">${r.award.mode === "split" ? `${orders.length} tedarikçiye bölünmüş sipariş` : esc(supName(tt.x!.q))}</h2>
       <div class="appr-amt"><b class="num">${money(tt.totalTRY, "TRY", 0)}</b><span class="muted">KDV hariç, net bugünkü maliyet ${money(tt.pvTRY, "TRY", 0)}</span></div>
-      <ul class="appr-why">${orders.map(o => `<li><b>${esc(supName(o.q))}</b>: ${o.items.map(it => esc(it.name)).join(", ")}; ${esc(payText(o.q))}, termin ${parseNum(o.q.leadDays) ?? "?"} gün</li>`).join("")}
+      <ul class="appr-why">${orders.map(o => `<li><b>${esc(supName(o.q))}</b>: ${o.items.map(it => esc(kalemAdi(it))).join(", ")}; ${esc(payText(o.q))}, termin ${parseNum(o.q.leadDays) ?? "?"} gün</li>`).join("")}
         ${chosenIsTop ? verdictReasons(r, ev).map(w => `<li>${esc(w)}</li>`).join("") : ""}</ul>
       ${r.award.reason ? `<div class="note"><span class="xs muted">Gerekçe</span><br>${esc(r.award.reason)}</div>` : !chosenIsTop && r.award.mode === "single" ? '<div class="note small">Önerilen teklif seçilmedi; gerekçe yazılmamış.</div>' : ""}
     </div></section>
