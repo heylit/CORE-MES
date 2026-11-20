@@ -1,18 +1,18 @@
 // Günün sevkiyatı beş sıralı adımda (3348 a): Hazırla, Araca ver, Onayla, Yükle, Teslim. Adım şeridi tıklanır; seçilmeyince planın
-// durumundan sıradaki adım açılır. Araca ver ve Onayla aynı plan ekranıdır (bekleyen işler, araç rotaları, harita).
+// durumundan sıradaki adım açılır. Araca ver, Onayla ve Teslim aynı plan ekranıdır: havuz ve her araç bir sütun (3489 b), harita isteğe bağlı.
+// Adımın asıl eylemi adım cümlesinin yanındadır; dağıtım ayarları tek menüdedir.
 // Her değişiklik planı sunucuya kaydeder; saatler, uyarılar ve onay engelleri sunucudan gelir.
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Amac, Bekleyen, GunPlaniCevabi, Is } from '#paylasilan/sozlesme/sevkiyat.ts';
-import { CokSatir, Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Menu, OnayPenceresi, Pencere, Rozet, Sekmeler, Simge, useBildirim, type MenuOgesi } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
 import { AracRotasi } from './AracRotasi.tsx';
 import { BekleyenIsler, isBasligi } from './BekleyenIsler.tsx';
-import { AMAC_ADI, GUN_TIPI_ADI, bugun, gunAdi, gunKaydir, isaretli, kilometreMetni, paraMetni, sureMetni } from './bicim.ts';
+import { AMAC_ADI, AMACLAR, GUN_TIPI_ADI, bugun, gunAdi, gunKaydir, isaretli, kilometreMetni, paraMetni, sureMetni } from './bicim.ts';
 import type { HaritaCizgisi, HaritaIsareti, Konum } from './Harita.tsx';
 import { HaritaPaneli } from './HaritaPaneli.tsx';
 import { IsFormu, isinGovdesi } from './IsFormu.tsx';
-import { OncelikSecimi } from './OncelikSecimi.tsx';
 import {
   araDonusEkle, bekleyeneAl, isiTasi, kilitDegistir, kilitsizleriBosalt, ogeyiSil, ogeyiTasi, plandakiRotalar, type Rotalar,
 } from './rota-duzeni.ts';
@@ -44,6 +44,9 @@ export function SevkiyatPlani() {
   const yetki = useYetki();
   const [amacSecimi, setAmacSecimi] = useState<Amac | null>(null);
   const [secili, setSecili] = useState<number | null>(null);
+  // Haritayı isteyen açar; dar ekranda tek sütun görünür (havuz ya da bir araç).
+  const [haritaAcik, setHaritaAcik] = useState(false);
+  const [sutun, setSutun] = useState<string | null>(null);
   const [vurgulu, setVurgulu] = useState<string | null>(null);
   const [form, setForm] = useState<{ is: Is | null; bekleyen?: Bekleyen } | null>(null);
   const bekleyenler = useBekleyenler();
@@ -217,6 +220,47 @@ export function SevkiyatPlani() {
   };
   const tetik = (is: Is) => <TetikDugmesi kalemler={kalemler.get(is.id)} />;
   const sonucHaritasi = new Map(veri.sonuclar.map((x) => [x.isId, { sonuc: x.sonuc, not: x.not }]));
+  const planEkrani = acikAdim === 'dagit' || acikAdim === 'onay' || acikAdim === 'teslim';
+  // Sütun sekmeleri yalnız dar ekranda görünür (CSS); geniş ekranda bütün sütunlar yan yanadır.
+  // Onaylı planda boş havuz iş görmez; sütunu kaldırınca araçlar geniş ekrana sığar.
+  const havuzSutunu = veri.isler.length > 0 && !(onayli && veri.bekleyen.length === 0);
+  const sutunlar = [
+    ...(havuzSutunu ? [{ anahtar: 'havuz', baslik: 'Havuz', simge: 'layers' as const, sayi: veri.bekleyen.length }] : []),
+    ...veri.araclar.map((a) => ({ anahtar: `arac-${a.id}`, baslik: a.ad, simge: 'truck' as const })),
+  ];
+  // Seçilmemişse işi olan ilk sütun açılır: havuzda iş varsa havuz, yoksa durağı olan ilk araç.
+  const isliSutun = veri.bekleyen.length && havuzSutunu ? 'havuz'
+    : veri.araclar.find((a) => veri.rotalar.some((r) => r.aracId === a.id && r.ogeler.length > 0));
+  const varsayilanSutun = typeof isliSutun === 'string' ? isliSutun : isliSutun ? `arac-${isliSutun.id}` : sutunlar[0]?.anahtar ?? 'havuz';
+  const acikSutun = sutun !== null && sutunlar.some((x) => x.anahtar === sutun) ? sutun : varsayilanSutun;
+  const bekleyenSayisi = veri.bekleyen.length;
+  const onayDugmesi = (birincil: boolean) => yetki.onayla && !onayli && veri.surum !== null && (
+    <Dugme tur={birincil ? 'birincil' : 'ikincil'} simge="check" disabled={komut.isPending || veri.onayEngelleri.length > 0} title={veri.onayEngelleri.join('\n') || 'Planı onaylar; tahmini saatler kaydedilir ve plan kilitlenir'}
+      onClick={() => (bekleyenSayisi > 0 ? setOnayUyarisi(true) : planiOnayla())}>Planı onayla</Dugme>
+  );
+  // Adımın asıl eylemi: araçlar boşken otomatik dağıt, havuzda iş varken havuzu yerleştir, sonra planı onayla. Tek birincil (2155-9 a).
+  const yerlestirilebilir = duzenlenebilir && veri.haritaVar && veri.isler.length > 0;
+  const adimEylemleri = onayli || acikAdim === 'teslim' ? null : (
+    <span className="tc-sevkiyat-adim-eylemleri">
+      {yetki.planYaz && !planKurulu && veri.isler.length > 0 && (
+        <Dugme tur={bosGun ? 'ikincil' : 'birincil'} simge="bolt" disabled={!yerlestirilebilir} yukleniyor={komut.isPending && komut.variables?.tur === 'dagit'} onClick={() => dagit('dagit')}
+          title="Kilitli araçlar dışında bütün işleri seçili önceliğe göre araçlara baştan dağıtır">Otomatik dağıt</Dugme>
+      )}
+      {yetki.planYaz && planKurulu && bekleyenSayisi > 0 && (
+        <Dugme tur="birincil" simge="bolt" disabled={!yerlestirilebilir} yukleniyor={komut.isPending && komut.variables?.tur === 'yerlestir'} onClick={() => dagit('yerlestir')}
+          title="Araçlara verilmiş işlere dokunmadan havuzdaki işleri en uygun araca ve sıraya koyar">Havuzu yerleştir</Dugme>
+      )}
+      {planKurulu && onayDugmesi(!(yetki.planYaz && bekleyenSayisi > 0))}
+    </span>
+  );
+  const dagitimMenusu: MenuOgesi[] = [
+    { anahtar: 'dagit', baslik: 'Otomatik dağıt (baştan)', simge: 'bolt', pasif: !yerlestirilebilir, sec: () => dagit('dagit') },
+    ...AMACLAR.map((a): MenuOgesi => ({ anahtar: `amac-${a}`, baslik: `Öncelik: ${AMAC_ADI[a]}${a === amac ? ' ✓' : farklar?.[a] ? ` (${farklar[a]})` : ''}`, simge: a === 'sure' ? 'clock' : a === 'mesafe' ? 'route' : 'lira', sec: () => amacDegistir(a) })),
+    { anahtar: 'geri', baslik: geri.length ? `Geri al: ${geri[geri.length - 1]!.etiket}` : 'Geri al', simge: 'back', pasif: !geri.length, sec: () => gecmistenDon('geri') },
+    { anahtar: 'ileri', baslik: ileri.length ? `Yinele: ${ileri[ileri.length - 1]!.etiket}` : 'Yinele', simge: 'rotate', pasif: !ileri.length, sec: () => gecmistenDon('ileri') },
+    { anahtar: 'bosalt', baslik: 'Araçları boşalt', simge: 'trash', ton: 'tehlike', pasif: !veri.rotalar.some((r) => !r.kilitli && r.ogeler.length),
+      sec: () => kaydet(kilitsizleriBosalt(plandakiRotalar(veri)), 'Boşaltma') },
+  ];
 
   return (
     <div className="tc-sevkiyat">
@@ -231,15 +275,6 @@ export function SevkiyatPlani() {
         </div>
         <div className="tc-sevkiyat-eylemler">
           {yetki.isYaz && !onayli && <Dugme simge="plus" onClick={() => setForm({ is: null })}>Yeni iş</Dugme>}
-          {yetki.planYaz && !onayli && (acikAdim === 'dagit' || acikAdim === 'onay') && (
-            <Dugme tur={planKurulu || (bosGun && yetki.isYaz) ? 'ikincil' : 'birincil'} simge="bolt" disabled={!duzenlenebilir || !veri.haritaVar || !veri.isler.length}
-              yukleniyor={komut.isPending && komut.variables?.tur === 'dagit'} onClick={() => dagit('dagit')}
-              title="Kilitli araçlar dışında bütün işleri seçili önceliğe göre araçlara baştan dağıtır">Otomatik dağıt</Dugme>
-          )}
-          {yetki.onayla && !onayli && veri.surum !== null && (acikAdim === 'dagit' || acikAdim === 'onay') && (
-            <Dugme tur={planKurulu ? 'birincil' : 'ikincil'} simge="check" disabled={komut.isPending || veri.onayEngelleri.length > 0} title={veri.onayEngelleri.join('\n') || 'Planı onaylar; tahmini saatler kaydedilir ve plan kilitlenir'}
-              onClick={() => (veri.bekleyen.length > 0 ? setOnayUyarisi(true) : planiOnayla())}>Planı onayla</Dugme>
-          )}
           {yetki.onayla && onayli && (
             <Dugme simge="lock" disabled={komut.isPending || veri.sonuclar.length > 0} title={veri.sonuclar.length ? 'Teslim sonucu girilmiş plan onaydan çıkarılamaz; önce sonuçları geri alın.' : 'Planı yeniden düzenlenebilir yapar'} onClick={() => gonder({ tur: 'onayi-kaldir', govde: { surum: veri.surum! } }, () => 'Onay kaldırıldı; plan yeniden düzenlenebilir.')}>Onayı kaldır</Dugme>
           )}
@@ -261,6 +296,7 @@ export function SevkiyatPlani() {
           <Simge ad={adim.ton === 'tamam' ? 'check' : adim.ton === 'uyari' ? 'alert' : 'next'} />
           <span>{adim.metin}</span>
           {adim.baglanti && <Link className="tc-sevkiyat-baglanti-yazisi" to={adim.baglanti.yol}>{adim.baglanti.metin}</Link>}
+          {planEkrani && adimEylemleri}
         </p>
         {!onayli && (acikAdim === 'dagit' || acikAdim === 'onay') && veri.surum !== null && engelListesi.length > 0 && yetki.onayla && (
           <ul className="tc-sevkiyat-engeller" aria-label="Onay engelleri">{engelListesi.map((e) => <li key={e}>{e}</li>)}</ul>
@@ -295,64 +331,65 @@ export function SevkiyatPlani() {
         <YukleAdimi veri={veri} isler={isler} noktalar={noktalar} kalemler={kalemler} onayli={onayli} isYazabilir={yetki.isYaz}
           aracsiz={(gunSatirlari ?? []).filter((k) => k.tasima === 'firma' && (k.asama === 'depoda' || k.asama === 'tamamlandi'))} />
       )}
-      {(acikAdim === 'dagit' || acikAdim === 'onay' || acikAdim === 'teslim') && <div className="tc-sevkiyat-plan-duzen">
-        <section className="tc-sevkiyat-liste" aria-label="Sevkiyat listesi">
-          <header className="tc-sevkiyat-liste-baslik">
-            <div>
-              <h2>Sevkiyat listesi <em>{toplamIs} iş</em></h2>
-              <p className="tc-sevkiyat-toplamlar">
-                <span><b>{yerlesen}</b>/{toplamIs} iş yerleşti</span>
-                <span><b>{kullanilan}</b>/{veri.araclar.length} araç</span>
-                {toplam && yerlesen > 0 && <span><b>{kilometreMetni(toplam.kilometre)}</b></span>}
-                {toplam && yerlesen > 0 && <span><b>{sureMetni(toplam.toplamDakika)}</b> (sürüş {sureMetni(toplam.surusDakika)})</span>}
-                {toplam && yerlesen > 0 && toplam.maliyet !== null && <span><b>{paraMetni(toplam.maliyet)}</b></span>}
-              </p>
+      {planEkrani && <section className="tc-sevkiyat-liste" aria-label="Sevkiyat listesi">
+        <header className="tc-sevkiyat-liste-baslik">
+          <p className="tc-sevkiyat-toplamlar">
+            <span><b>{yerlesen}</b>/{toplamIs} iş yerleşti</span>
+            <span><b>{kullanilan}</b>/{veri.araclar.length} araç</span>
+            {toplam && yerlesen > 0 && <span><b>{kilometreMetni(toplam.kilometre)}</b></span>}
+            {toplam && yerlesen > 0 && <span><b>{sureMetni(toplam.toplamDakika)}</b> (sürüş {sureMetni(toplam.surusDakika)})</span>}
+            {toplam && yerlesen > 0 && toplam.maliyet !== null && <span><b>{paraMetni(toplam.maliyet)}</b></span>}
+          </p>
+          <div className="tc-sevkiyat-satir">
+            <Dugme simge="pin" aria-pressed={haritaAcik} onClick={() => setHaritaAcik(!haritaAcik)}>{haritaAcik ? 'Haritayı gizle' : 'Harita'}</Dugme>
+            {yetki.planYaz && !onayli && acikAdim !== 'teslim' && <>
+              <span className="tc-sevkiyat-ince tc-sevkiyat-oncelik-yazisi">Öncelik: <b>{AMAC_ADI[amac]}</b></span>
+              <Menu etiket="Dağıtım ayarları" metin="Dağıtım" simge="gear" pasif={!duzenlenebilir} ogeler={dagitimMenusu} />
+            </>}
+          </div>
+        </header>
+        {haritaAcik && (
+          <HaritaPaneli tarih={tarih} dakika={trafikDakikasi} cizgiler={harita.cizgiler} isaretler={harita.isaretler}
+            noktalar={veri.noktalar.filter((n) => n.aktif && n.tur !== 'fabrika')} fabrika={veri.fabrika} sigdirma={harita.sigdirma} onIsaret={isaretSecildi} trafikAcikBaslar={false}
+            aciklama={<span className="tc-sevkiyat-lejant"><i data-isaret="birak" />bırak<i data-isaret="al" />al<i data-isaret="bekleyen" />atanmamış</span>} />
+        )}
+        {bosGun && (
+          <div className="tc-sevkiyat-bos">
+            <p>Bu gün için sevkiyat yok.</p>
+            {yetki.isYaz && <Dugme tur="birincil" simge="plus" onClick={() => setForm({ is: null })}>İlk işi ekle</Dugme>}
+          </div>
+        )}
+        {sutunlar.length > 1 && <div className="tc-sevkiyat-sutun-sekmeleri"><Sekmeler etiket="Gösterilen sütun" sekmeler={sutunlar} secili={acikSutun} sec={setSutun} /></div>}
+        <div className="tc-sevkiyat-sutunlar">
+          {havuzSutunu && (
+            <div className="tc-sevkiyat-sutun" data-gizli={acikSutun !== 'havuz' || undefined}>
+              <BekleyenIsler plan={veri} isler={isler} noktalar={noktalar} araclar={veri.araclar} duzenlenebilir={duzenlenebilir} isYazabilir={yetki.isYaz} durumDegistir={islemler.durumDegistir}
+                vurgulu={vurgulu?.startsWith('bek|') ? Number(vurgulu.slice(4)) : null}
+                yerlestir={null}
+                aracaEkle={(isId, aracId) => isiTasiKomutu(isId, aracId)} bekleyeneAl={(isId) => isiTasiKomutu(isId, null)}
+                duzenle={islemler.duzenle} iptalEt={islemler.iptalEt} tetik={tetik} />
             </div>
-            {yetki.planYaz && !onayli && (
-              <div className="tc-sevkiyat-satir">
-                <Dugme disabled={!duzenlenebilir || !geri.length} onClick={() => gecmistenDon('geri')} title={geri.length ? `Geri al: ${geri[geri.length - 1]!.etiket} (Ctrl+Z)` : 'Geri alınacak işlem yok'}>Geri al</Dugme>
-                <Dugme disabled={!duzenlenebilir || !ileri.length} onClick={() => gecmistenDon('ileri')} title={ileri.length ? `Yinele: ${ileri[ileri.length - 1]!.etiket} (Ctrl+Y)` : 'Yinelenecek işlem yok'}>Yinele</Dugme>
-                <Dugme disabled={!duzenlenebilir || !veri.rotalar.some((r) => !r.kilitli && r.ogeler.length)} onClick={() => kaydet(kilitsizleriBosalt(plandakiRotalar(veri)), 'Boşaltma')} title="Kilitli olmayan araçlardaki bütün işleri atanmamışa alır">Boşalt</Dugme>
-              </div>
-            )}
-          </header>
-          {acikAdim !== 'teslim' && <div className="tc-sevkiyat-oncelik-satiri">
-            <span className="tc-sevkiyat-ince">Otomatik dağıtmada öncelik</span>
-            <OncelikSecimi secili={amac} farklar={farklar} kapali={yetki.planYaz && !duzenlenebilir} sec={(a) => { if (!yetki.planYaz || duzenlenebilir) amacDegistir(a); }} />
-          </div>}
-          {bosGun && (
-            <div className="tc-sevkiyat-bos">
-              <p>Bu gün için sevkiyat yok.</p>
-              {yetki.isYaz && <Dugme tur="birincil" simge="plus" onClick={() => setForm({ is: null })}>İlk işi ekle</Dugme>}
-            </div>
-          )}
-          {veri.isler.length > 0 && (
-            <BekleyenIsler plan={veri} isler={isler} noktalar={noktalar} araclar={veri.araclar} duzenlenebilir={duzenlenebilir} isYazabilir={yetki.isYaz} durumDegistir={islemler.durumDegistir}
-              vurgulu={vurgulu?.startsWith('bek|') ? Number(vurgulu.slice(4)) : null}
-              yerlestir={yetki.planYaz && !onayli ? { kapali: !duzenlenebilir || !veri.haritaVar, calisiyor: komut.isPending && komut.variables?.tur === 'yerlestir', yap: () => dagit('yerlestir') } : null}
-              aracaEkle={(isId, aracId) => isiTasiKomutu(isId, aracId)} bekleyeneAl={(isId) => isiTasiKomutu(isId, null)}
-              duzenle={islemler.duzenle} iptalEt={islemler.iptalEt} tetik={tetik} />
           )}
           {veri.araclar.map((a) => (
-            <AracRotasi key={a.id} arac={a} renk={renkler.get(a.id) ?? 1} rota={veri.rotalar.find((r) => r.aracId === a.id)} secili={secili === a.id} vurgulu={vurgulu}
-              isler={isler} noktalar={noktalar} araclar={veri.araclar} duzenlenebilir={duzenlenebilir}
-              isYazabilir={yetki.isYaz && !onayli} tarih={tarih} amac={amac} sonuclar={onayli ? sonucHaritasi : null} sonucYazabilir={yetki.isYaz && !ileriTarihli} tetik={tetik}
-              islem={{
-                ...islemler,
-                sec: () => setSecili(secili === a.id ? null : a.id),
-                kilit: () => kaydet(kilitDegistir(plandakiRotalar(veri), a.id), `${a.ad} kilidi`),
-                isiTasi: isiTasiKomutu,
-                siraDegistir: (eski, yeni) => kaydet(ogeyiTasi(plandakiRotalar(veri), a.id, eski, yeni), `${a.ad} sırası`),
-                araDonusEkle: (sira) => kaydet(araDonusEkle(plandakiRotalar(veri), a.id, sira), 'Ara dönüş eklendi'),
-                araDonusSil: (sira) => kaydet(ogeyiSil(plandakiRotalar(veri), a.id, sira), 'Ara dönüş kaldırıldı'),
-              }} />
+            <div key={a.id} className="tc-sevkiyat-sutun" data-gizli={acikSutun !== `arac-${a.id}` || undefined}
+              data-bos={!veri.rotalar.some((r) => r.aracId === a.id && r.ogeler.length > 0) || undefined}>
+              <AracRotasi arac={a} renk={renkler.get(a.id) ?? 1} rota={veri.rotalar.find((r) => r.aracId === a.id)} secili={secili === a.id} vurgulu={vurgulu}
+                isler={isler} noktalar={noktalar} araclar={veri.araclar} duzenlenebilir={duzenlenebilir}
+                isYazabilir={yetki.isYaz && !onayli} tarih={tarih} amac={amac} sonuclar={onayli ? sonucHaritasi : null} sonucYazabilir={yetki.isYaz && !ileriTarihli} tetik={tetik}
+                islem={{
+                  ...islemler,
+                  sec: () => setSecili(secili === a.id ? null : a.id),
+                  kilit: () => kaydet(kilitDegistir(plandakiRotalar(veri), a.id), `${a.ad} kilidi`),
+                  isiTasi: isiTasiKomutu,
+                  siraDegistir: (eski, yeni) => kaydet(ogeyiTasi(plandakiRotalar(veri), a.id, eski, yeni), `${a.ad} sırası`),
+                  araDonusEkle: (sira) => kaydet(araDonusEkle(plandakiRotalar(veri), a.id, sira), 'Ara dönüş eklendi'),
+                  araDonusSil: (sira) => kaydet(ogeyiSil(plandakiRotalar(veri), a.id, sira), 'Ara dönüş kaldırıldı'),
+                }} />
+            </div>
           ))}
-          {!veri.araclar.length && <p className="tc-sevkiyat-bos">{yetki.tanimYaz ? 'Aktif araç yok. Araçlar bölümünden ekleyin.' : 'Aktif araç yok.'}</p>}
-        </section>
-        <HaritaPaneli tarih={tarih} dakika={trafikDakikasi} cizgiler={harita.cizgiler} isaretler={harita.isaretler}
-          noktalar={veri.noktalar.filter((n) => n.aktif && n.tur !== 'fabrika')} fabrika={veri.fabrika} sigdirma={harita.sigdirma} onIsaret={isaretSecildi} trafikAcikBaslar={false}
-          aciklama={<span className="tc-sevkiyat-lejant"><i data-isaret="birak" />bırak<i data-isaret="al" />al<i data-isaret="bekleyen" />atanmamış</span>} />
-      </div>}
+        </div>
+        {!veri.araclar.length && <p className="tc-sevkiyat-bos">{yetki.tanimYaz ? 'Aktif araç yok. Araçlar bölümünden ekleyin.' : 'Aktif araç yok.'}</p>}
+      </section>}
     </div>
   );
 }
@@ -417,8 +454,8 @@ function siradakiAdim(d: {
   }
   if (!veri.haritaVar) return { ton: 'uyari', metin: 'Harita paketi yüklü değil: işleri araçlara elle verebilirsiniz; saat hesabı, otomatik dağıtma ve onay kapalı.' };
   if (!d.planYaz) return bekleyen ? { ton: 'uyari', metin: `${bekleyen} iş henüz bir araca verilmedi.` } : { ton: 'bilgi', metin: 'Plan taslak; onay bekliyor.' };
-  if (d.yerlesen === 0) return { ton: 'bilgi', metin: `Havuzda ${bekleyen} iş var. “Otomatik dağıt” ile hepsini dağıtın ya da her işin satırındaki “Araç” seçiminden elle verin.` };
-  if (bekleyen) return { ton: 'uyari', metin: `Havuzda ${bekleyen} iş kaldı. Nedeni satırında yazar; “Hepsini yerleştir” ile yeniden deneyin, “Araç” seçiminden elle verin ya da ertesi güne bırakın (havuzda kalan iş ertesi güne geçer).` };
+  if (d.yerlesen === 0) return { ton: 'bilgi', metin: `Havuzda ${bekleyen} iş var. “Otomatik dağıt” ile hepsini dağıtın ya da işin “Araç seç…” kutusundan verin.` };
+  if (bekleyen) return { ton: 'uyari', metin: `Havuzda ${bekleyen} iş kaldı. “Havuzu yerleştir” ile yeniden deneyin ya da işin “Araç seç…” kutusundan verin; kalan iş ertesi güne geçer.` };
   if (d.uyariSayisi) return { ton: 'uyari', metin: `Rotalarda ${d.uyariSayisi} uyarı var; kırmızı satırlara bakın. Sırayı ⋯ menüsünden ya da sürükleyerek değiştirebilirsiniz.` };
   if (veri.onayEngelleri.length) return { ton: 'uyari', metin: 'Onay engeli var; aşağıdaki listeye bakın.' };
   return { ton: 'tamam', metin: d.onaylayabilir ? 'Bütün işler araçta ve kurallara uygun. Kontrol edip “Planı onayla” ile kesinleştirin.' : 'Plan hazır ve kurallara uygun; onay bekliyor.' };
