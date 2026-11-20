@@ -128,11 +128,22 @@ function dgPlanKur(st, ms = 0) {
   while (ms > 0 && Date.now() - t0 < ms && durgun < 3) { const L = lns(st, cur, null, { ms: Math.max(200, Math.min(1000, ms - (Date.now() - t0))), seed: seed++, free: true }); if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++; }
   return planKaydi(tutulamayaniOnar(cur, st, cx, true), st, null);
 }
+/* Kişinin kilitlediği işlerden öncülü bitmeden başlayanların sayısı. Değerlendirme rota sırasını saymaz: arama, ardılı kilitli işi
+   geciktirmeyi bedelsiz görür. Kişinin kilidi yerinden oynamadığı için böyle bir sonuç onarılamaz; arama sonucu bu sayıyı artırıyorsa alınmaz. */
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx */
+function kilitliSiraIhlali(p, st, cx) {
+  let n = 0;
+  for (const id in st.locks) {
+    const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
+    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
+  }
+  return n;
+}
 /* sayfanın kısa araması (t-tekyer kisaArama) */
 /** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {
   const L = lns(st, p0, null, { ms, seed: 7, free: true });
-  let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length) p = L.plan;
+  let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length && kilitliSiraIhlali(L.plan, st, cx) <= kilitliSiraIhlali(p0, st, cx)) p = L.plan;
   slack(p, cx); return p;
 }
 /* sabit adımlı saat: her okunuşta bir plan çözümü kadar ilerler; adım veri boyuyla büyür (zz8) */
@@ -406,7 +417,8 @@ function partiBol(jid, dagitim, adetler) {
     const kk = id.slice(pref.length);
     parcalar.forEach((x, i) => { const j = `${jid}/${i + 1}`; ops[`${j}.${kk}`] = { ...r, id: `${j}.${kk}`, job: j, S: r.S + i * 1e-3, m: x.m && kk === k ? x.m : r.m }; });
   }
-  for (const id of Object.keys(st.locks)) if (id.startsWith(pref)) { const kk = id.slice(pref.length), l = st.locks[id]; delete st.locks[id]; parcalar.forEach((x, i) => { st.locks[`${jid}/${i + 1}.${kk}`] = { ...l }; }); }
+  /* Kişinin kilidi ilk partide kalır. Öteki partilere de kopyalansaydı hepsi aynı saatte aynı tezgâha kilitlenir, üst üste gelirdi. */
+  for (const id of Object.keys(st.locks)) if (id.startsWith(pref)) { st.locks[`${jid}/1.${id.slice(pref.length)}`] = st.locks[id]; delete st.locks[id]; }
   const r0 = S.plan.ops[opId];
   parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);
