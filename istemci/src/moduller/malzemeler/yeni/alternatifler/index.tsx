@@ -9,13 +9,14 @@ import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { KatalogKarti } from '../tipler.ts';
 import { useKartlar } from '../veri.ts';
+import { GrupSinirlari } from './GrupSinirlari.tsx';
 import { KuralPenceresi, MuadilPenceresi, type MuadilAcilisi } from './pencereler.tsx';
 import { useAlternatifTanimlari, useKartZarfi, useMuadilKaldir, type MuadilTablosu } from './veri.ts';
 import './alternatifler.css';
 
 // 3437 (sürüm 2 a): kartın kabul sınırı (zarf) kurallardan hesaplanır; dar kapsam geniş olanı ezer, boş alan miras kalır.
 // Ekran yalnız gösterir ve yazanda düzenler; denetim ve hesap sunucudadır.
-type Gorunum = 'zarf' | 'kurallar' | 'muadiller' | 'kapali';
+type Gorunum = 'zarf' | 'kurallar' | 'sinirlar' | 'muadiller' | 'kapali';
 
 export const KAPSAM_ADI: Record<KapsamTuru, string> = { aile: 'Aile', sinif: 'Sınıf', kalite: 'Kalite', kart: 'Kart' };
 export const MUADIL_ADI: Record<MuadilTuru, string> = { tam: 'Tam muadil', ust: 'Üst muadil', sartli: 'Şartlı' };
@@ -51,6 +52,7 @@ export function Alternatifler({ yetki }: EkranOzellikleri) {
   const sekmeler: Sekme<Gorunum>[] = [
     { anahtar: 'zarf', baslik: 'Kart zarfı', simge: 'target' },
     { anahtar: 'kurallar', baslik: 'Kurallar', simge: 'list', sayi: kurallar.length },
+    { anahtar: 'sinirlar', baslik: 'Grup sınırları', simge: 'target' },
     { anahtar: 'muadiller', baslik: 'Kalite ve durum muadilleri', simge: 'layers' },
     { anahtar: 'kapali', baslik: 'Kapalı kartlar', simge: 'lock', sayi: kapalilar.length },
   ];
@@ -67,6 +69,7 @@ export function Alternatifler({ yetki }: EkranOzellikleri) {
       <Sekmeler etiket="İkame ve alternatifler" sekmeler={sekmeler} secili={gorunum} sec={gorunumYaz} />
       {gorunum === 'zarf' && <KartZarfiGorunumu yaz={yetki.tanimYaz} kartKurali={kartKurali} />}
       {gorunum === 'kurallar' && <KuralListesi kurallar={kurallar} yaz={yetki.tanimYaz} ac={kuralAc} />}
+      {gorunum === 'sinirlar' && <GrupSinirlari yaz={yetki.tanimYaz} />}
       {gorunum === 'muadiller' && <Muadiller kalite={kaliteMuadilleri} durum={durumMuadilleri} yaz={yetki.tanimYaz} />}
       {gorunum === 'kapali' && <KapaliKartlar kurallar={kapalilar} yaz={yetki.tanimYaz} ac={kuralAc} />}
       {kural !== null && (
@@ -164,20 +167,38 @@ function Secenekler({ s, sartliAcik }: { s: AlternatifZarfi['kalite']; sartliAci
   );
 }
 
+// 3463-1b (Risk N1): kartta ya da grupta seçilen sınır o nitelikte kuralı ezer; satır bunu kaynağıyla söyler.
+const sinirKaynagi = (k: Kaynak): string => (k === null ? 'Varsayılan' : k.kapsamTuru === 'kart' ? 'Kartın sınırı' : `${KAPSAM_ADI[k.kapsamTuru]} sınırı: ${k.kapsam}`);
+const listeSiniri = (s: AlternatifZarfi['yuzey']) => (
+  <span className="tc-alt-secenekler">
+    <span>{s.istenen ?? 'yok'}</span>
+    {s.secenekler.map((x) => <Rozet key={x.deger} ton={MUADIL_TONU[x.tur]} gorunum="cizgi">{x.deger} · {MUADIL_ADI[x.tur]}</Rozet>)}
+  </span>
+);
+
 function ZarfSinirlari({ z }: { z: AlternatifZarfi }) {
-  const satirlar: { ad: string; deger: ReactNode; kaynak: Kaynak }[] = [
-    { ad: 'Kalite', deger: <Secenekler s={z.kalite} sartliAcik={z.sartliAcik} />, kaynak: z.kalite.kaynak },
-    { ad: 'Durum', deger: <Secenekler s={z.durum} sartliAcik={z.sartliAcik} />, kaynak: z.durum.kaynak },
-    { ad: 'Şartlı muadil', deger: z.sartliAcik ? 'Kabul edilir (açıkça onaylanır)' : 'Kabul edilmez', kaynak: z.sartliKaynak },
+  const olcuSiniri = z.olcu.find((o) => o.sinirKaynak !== null)?.sinirKaynak ?? null;
+  const boyAraligi = z.boy !== null && (z.boy.enAz !== null || z.boy.enCok !== null);
+  const satirlar: { ad: string; deger: ReactNode; kaynak: string; sinir: boolean }[] = [
+    { ad: 'Kalite', deger: <Secenekler s={z.kalite} sartliAcik={z.sartliAcik} />, kaynak: (z.kalite.sinir ? sinirKaynagi : kaynakMetni)(z.kalite.kaynak), sinir: z.kalite.sinir },
+    { ad: 'Durum', deger: <Secenekler s={z.durum} sartliAcik={z.sartliAcik} />, kaynak: (z.durum.sinir ? sinirKaynagi : kaynakMetni)(z.durum.kaynak), sinir: z.durum.sinir },
+    { ad: 'Şartlı muadil', deger: z.sartliAcik ? 'Kabul edilir (açıkça onaylanır)' : 'Kabul edilmez', kaynak: kaynakMetni(z.sartliKaynak), sinir: false },
     {
       ad: 'Kesit ölçüsü',
-      deger: z.olcu.length === 0 ? 'Ölçü yok' : `${z.olcu.map((o) => `${o.anahtar} ${sayi(o.istenen)} – ${sayi(o.enCok)} mm`).join(' · ')} (${payMetni(z.pay)})`,
-      kaynak: z.pay.kaynak,
+      deger: z.olcu.length === 0 ? 'Ölçü yok'
+        : `${z.olcu.map((o) => `${o.anahtar} ${sayi(o.enAz)} – ${sayi(o.enCok)} mm`).join(' · ')}${olcuSiniri === null ? ` (${payMetni(z.pay)})` : ''}`,
+      kaynak: olcuSiniri === null ? kaynakMetni(z.pay.kaynak) : sinirKaynagi(olcuSiniri), sinir: olcuSiniri !== null,
     },
     ...(z.boy ? [{
-      ad: 'Boy', deger: `${z.boy.istenen === null ? 'Boy yok' : `${sayi(z.boy.istenen)} mm`} · ${z.boy.uzunKesilir ? 'uzun boy kesilir' : 'yalnız aynı boy'}`, kaynak: z.boy.kaynak,
+      ad: 'Boy',
+      deger: boyAraligi ? `${z.boy.enAz === null ? '…' : sayi(z.boy.enAz)} – ${z.boy.enCok === null ? '…' : sayi(z.boy.enCok)} mm`
+        : `${z.boy.istenen === null ? 'Boy yok' : `${sayi(z.boy.istenen)} mm`} · ${z.boy.uzunKesilir ? 'uzun boy kesilir' : 'yalnız aynı boy'}`,
+      kaynak: boyAraligi ? sinirKaynagi(z.boy.sinirKaynak) : kaynakMetni(z.boy.kaynak), sinir: boyAraligi,
     }] : []),
-    { ad: 'Yüzey', deger: z.yuzey.serbest ? 'Serbest' : `Aynı (${z.yuzey.istenen ?? 'yok'})`, kaynak: z.yuzey.kaynak },
+    {
+      ad: 'Yüzey', deger: z.yuzey.sinir ? listeSiniri(z.yuzey) : z.yuzey.serbest ? 'Serbest' : `Aynı (${z.yuzey.istenen ?? 'yok'})`,
+      kaynak: (z.yuzey.sinir ? sinirKaynagi : kaynakMetni)(z.yuzey.kaynak), sinir: z.yuzey.sinir,
+    },
   ];
   return (
     <dl className="tc-alt-sinirlar">
@@ -185,7 +206,7 @@ function ZarfSinirlari({ z }: { z: AlternatifZarfi }) {
         <div key={s.ad}>
           <dt>{s.ad}</dt>
           <dd>{s.deger}</dd>
-          <dd className="tc-alt-kaynak">{kaynakMetni(s.kaynak)}</dd>
+          <dd className="tc-alt-kaynak">{s.sinir && <Rozet ton="bilgi">Seçilen sınır</Rozet>}<span>{s.kaynak}</span></dd>
         </div>
       ))}
     </dl>

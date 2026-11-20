@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, KabulSiniriKaydetGovdesi, KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
+  AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, GrupSinirlariCevabi, KabulSiniriKaydetGovdesi, KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { MALZEMELER_YENI } from '../veri.ts';
@@ -9,6 +9,7 @@ import { MALZEMELER_YENI } from '../veri.ts';
 const ANAHTAR = [...MALZEMELER_YENI, 'alternatifler'] as const;
 export const alternatifAnahtari = {
   tanimlar: [...ANAHTAR, 'tanimlar'] as const, zarf: (no: number) => [...ANAHTAR, 'zarf', no] as const, kart: (no: number) => [...ANAHTAR, 'kart', no] as const,
+  grupSinirlari: [...ANAHTAR, 'grup-sinirlari'] as const,
 };
 
 export function useAlternatifTanimlari() {
@@ -57,6 +58,11 @@ export function useMuadilKaldir() {
 // 3463: kartın Alternatifler bölümü (sınırlar ve eşdeğerler); her yazım bütün zarfları tazeler.
 export function useKartAlternatifleri(no: number) {
   return useQuery({ queryKey: alternatifAnahtari.kart(no), queryFn: () => api.get<KartAlternatifleriCevabi>(`/malzeme-alternatifleri/kart/${no}`) });
+}
+
+// 3463-1b: grup şablonu (aile, sınıf, kalite kapsamındaki sınırlar).
+export function useGrupSinirlari() {
+  return useQuery({ queryKey: alternatifAnahtari.grupSinirlari, queryFn: () => api.get<GrupSinirlariCevabi>('/malzeme-alternatifleri/siniri') });
 }
 
 export function useSinirKaydet() {

@@ -4,7 +4,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { AlternatifTanimlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { AlternatifTanimlariCevabi, GrupSinirlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -190,6 +190,24 @@ describe('Malzemeler ikame ve alternatifler', () => {
       await tamam(yonetici, 'POST', `/malzeme-alternatifleri/siniri/${String(x.id)}/kaldir`, { surum: x.surum });
     }
     assert.deepEqual(await vt().tx((db) => kartinAlternatifKartlari(db, ana, { kullanimYeri: 'talep' })), once);
+  });
+
+  test('ALT-7 (3463-1b): grup şablonu; kalite sınırı o kalitedeki kartlara geçer, kart sınırı ezer, liste yalnız grup sınırlarını verir', async () => {
+    const ana = await kartAc(cubuk('6063', 20, 'T5'));
+    const yol = '/malzeme-alternatifleri/siniri/kaydet';
+    const grup = { kapsamTuru: 'kalite', kapsam: '6063', nitelik: 'd', degerler: null, alt: 19, ust: 23 };
+    assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', yol, { ...grup, kapsam: 'ORN-YOK' })).alan, 'kapsam');
+    await tamam(yonetici, 'POST', yol, grup);
+    const z = async () => (await tamam<KartZarfiCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/zarf/${String(ana)}`)).zarf?.olcu[0];
+    assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 19, enCok: 23, sinirKaynak: { kapsamTuru: 'kalite', kapsam: '6063' } });
+    await tamam(yonetici, 'POST', yol, { ...grup, kapsamTuru: 'kart', kapsam: String(ana), alt: 20, ust: 21 });
+    assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 20, enCok: 21, sinirKaynak: { kapsamTuru: 'kart', kapsam: String(ana) } });
+    const liste = (await tamam<GrupSinirlariCevabi>(okuyucu, 'GET', '/malzeme-alternatifleri/siniri')).siniri;
+    assert.deepEqual(liste.map((x) => [x.kapsamTuru, x.kapsam, x.nitelik, x.alt, x.ust]), [['kalite', '6063', 'd', 19, 23]]);
+    for (const x of [...liste, ...(await tamam<KartAlternatifleriCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/kart/${String(ana)}`)).siniri]) {
+      await tamam(yonetici, 'POST', `/malzeme-alternatifleri/siniri/${String(x.id)}/kaldir`, { surum: x.surum });
+    }
+    assert.equal((await z())?.sinirKaynak, null);
   });
 
   test('ALT-6 (3463-1): eşdeğer kart; aynı tür, form, ölçü alanı ve birimde bağlanır, ortak okumada önce gelir, kaldırılınca grup çözülür', async () => {

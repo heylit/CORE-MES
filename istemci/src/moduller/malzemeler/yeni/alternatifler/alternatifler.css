@@ -40,7 +40,7 @@
 }
 .tc-alt-sinirlar dt { font-weight: 600; }
 .tc-alt-sinirlar dd { margin: 0; overflow-wrap: anywhere; }
-.tc-alt-kaynak { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-alt-kaynak { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-alt-secenekler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 
 .tc-alt-form { display: grid; gap: var(--b-3); }

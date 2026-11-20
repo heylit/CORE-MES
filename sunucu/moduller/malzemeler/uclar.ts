@@ -11,7 +11,7 @@ import {
 import {
   alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
   durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, esdegerBaglaGovdesi, esdegerKaldirGovdesi, kabulSiniriKaldirGovdesi, kabulSiniriKaydetGovdesi,
-  kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
+  kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, grupSinirlariCevabi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -168,6 +168,7 @@ export const uclar = [
     yontem: 'GET', yol: '/malzeme-alternatifleri/kart/:no', yetki: OKUMA, parametre: kartZarfiParametresi, cevap: kartAlternatifleriCevabi,
     isle: ({ db, parametre }) => alternatif.kartAlternatifleri(db, parametre.no),
   }),
+  uc({ yontem: 'GET', yol: '/malzeme-alternatifleri/siniri', yetki: OKUMA, cevap: grupSinirlariCevabi, isle: ({ db }) => alternatif.grupSinirlari(db) }),
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/siniri/kaydet', yetki: 'malzemeler.tanim-yaz', govde: kabulSiniriKaydetGovdesi, cevap: alternatifKomutCevabi,
     isle: ({ db, kullanici, govde }) => alternatif.kabulSiniriKaydet(db, kullanici, govde),

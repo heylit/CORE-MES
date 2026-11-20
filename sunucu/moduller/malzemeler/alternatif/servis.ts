@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
   AlternatifBaglami, AlternatifKarti, AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, AlternatifZarfi, KabulSiniriKaydetGovdesi,
-  KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
+  GrupSinirlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { SINIR_NITELIKLERI } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
@@ -200,3 +200,8 @@ export async function esdegerKaldir(db: Db, kartNo: number): Promise<{ tamam: tr
 
 // 3463-1b (Risk K1): stok ve plan, eşdeğer kartların stoğunu birlikte sayar. Yetki denetlemez.
 export const esdegerGruplari = (db: Db, nolar: readonly number[]): Promise<Map<number, number[]>> => s.esdegerUyeleri(db, nolar);
+
+// 3463-1b: grup şablonu (aile, sınıf, kalite kapsamındaki sınırlar), geniş kapsamdan dara.
+export async function grupSinirlari(db: Db): Promise<GrupSinirlariCevabi> {
+  return { siniri: (await s.siniri(db)).filter((x) => x.kapsamTuru !== 'kart').map((x) => ({ ...x, degerler: x.degerler === null ? null : [...x.degerler] })) };
+}
