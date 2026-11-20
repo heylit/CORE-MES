@@ -51,7 +51,7 @@ export function HazirlikMaddeleri() {
         <p className="tc-prj-soluk">
           Sistem maddesinin denetimi sahibi modülde kalır (CNC programı yüklü mü, çizim yürürlükte mi); burada adı, sırası ve açık ya da kapalı
           olması değişir. CNC, Çizim ve Terminal durduran maddedir: kapatılamaz, eksikken iş emri başlamaz. Kapalı madde emirde aranmaz.
-          Özel maddenin hâlini hazırlık görevi verir ve yalnız uyarır.
+          Özel maddenin hâlini emir görevi verir ve yalnız uyarır.
         </p>
       </div>
       {form !== null && (
@@ -114,7 +114,7 @@ function MaddeFormu({ madde, sonraki, kapat }: { madde: HazirlikMaddeTanimi | nu
             onChange={(e) => { acikYaz(e.target.checked); }}
           />
         </div>
-        {madde === null && <p className="tc-form-tam tc-prj-soluk">Özel madde yalnız uyarır; hâlini hazırlık görevi verir.</p>}
+        {madde === null && <p className="tc-form-tam tc-prj-soluk">Özel madde yalnız uyarır; hâlini emir görevi verir.</p>}
         {komut.isError && <p className="tc-form-tam tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Madde kaydedilemedi')}</p>}
       </form>
     </Pencere>

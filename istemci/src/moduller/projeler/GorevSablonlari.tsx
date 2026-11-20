@@ -3,37 +3,39 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   KontrolKosulu, Sablon, SablonDayanagi, SablonEkleGovdesi, SablonGuncelleGovdesi, SablonKalemi, SablonKalemiGovdesi, SablonListesiCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
-import { useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
+import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
+import { SIKLIK_METNI, siklik, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
 import { HAZIRLIK_METNI, SABLON_ISLEMI, atamaMetni } from './gosterim.ts';
 import { bosIseNull, useIslemVar, useIstekKimligi } from './komut.ts';
+import { ORNEK_SABLON, ORNEK_SABLON_ADI } from './ornek-sablon.ts';
 import './projeler.css';
 
 const DAYANAK_SECENEKLERI: Secenek[] = [{ deger: 'baslangic', baslik: 'Proje başlangıcından' }, { deger: 'termin', baslik: 'Proje bitişinden (termin)' }];
 const KOSUL_SECENEKLERI: Secenek[] = [{ deger: 'her-zaman', baslik: 'Her zaman' }, { deger: 'yeni-revize', baslik: 'Yalnız yeni ya da revize olunca' }];
-// 3396 a: seçenekler sunucudaki madde listesidir (açık maddeler, özel dahil); liste okunamazsa kod adları.
+// 3396 a: seçenekler sunucudaki madde listesidir (açık maddeler, özel dahil); liste okunamazsa kod adları. Dar ekranda kesilmesin diye
+// seçenekte kısa ad; tam ad alanın ipucundadır.
 function useHazirlikSecenekleri(secili: readonly string[]): Secenek[] {
   const l = useHazirlikMaddeleri().data?.maddeler;
-  if (l === undefined) return Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `${ad} (iş emri başına)` }));
+  if (l === undefined) return Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `${SIKLIK_METNI.emir} · ${ad}` }));
   return l.filter((m) => m.acik || secili.includes(m.kod))
-    .map((m) => ({ deger: m.kod, baslik: `${m.ad}${m.acik ? '' : ' (kapalı)'} (${m.isEmriDuzeyi ? 'iş emri' : 'emir'} başına)` }));
+    .map((m) => ({ deger: m.kod, baslik: `${SIKLIK_METNI[m.isEmriDuzeyi ? 'operasyon' : 'emir']} · ${m.kisa}${m.acik ? '' : ' (kapalı)'}` }));
 }
 
 const baslangicMetni = (k: Pick<SablonKalemi, 'dayanak' | 'gun'>): string =>
   `${k.dayanak === 'termin' ? 'Termin' : 'Başlangıç'} ${k.gun >= 0 ? '+' : '−'}${Math.abs(k.gun)} gün`;
 
-// 3269 a: görev şablonları (Projeler > Ayarlar). Şablon proje açılınca uygulanır; değişen şablon açık projelerin görevlerini değiştirmez.
+// Görev şablonları (Projeler > Ayarlar). 3458-2 a: şablon Görevleri dağıt ekranında dağıtılır; değişen şablon açık projelerin görevlerini değiştirmez.
 export function GorevSablonlari() {
   const yazabilir = useIslemVar(SABLON_ISLEMI);
   const [form, formYaz] = useState<Sablon | 'yeni' | null>(null);
   const l = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonListesiCevabi>('/projeler/sablonlar/liste'), enabled: yazabilir });
   const sutunlar: Sutun<Sablon>[] = [
     { anahtar: 'ad', baslik: 'Şablon', hucre: (s) => s.ad },
-    { anahtar: 'gorev', baslik: 'Proje görevi', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi === null).length },
-    { anahtar: 'hazirlik', baslik: 'Hazırlık görevi', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
+    { anahtar: 'gorev', baslik: 'Proje başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi === null).length },
+    { anahtar: 'hazirlik', baslik: 'Emir başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => (
       <span className="tc-prj-bag">
         {s.varsayilan && <Rozet ton="tamam">Varsayılan</Rozet>}
@@ -64,7 +66,7 @@ export function GorevSablonlari() {
             />
           )}
         <p className="tc-prj-soluk">
-          Varsayılan şablon elle ve siparişten açılan her projeye uygulanır. Şablon değişince açık projelerin görevleri değişmez.
+          Varsayılan şablon Görevleri dağıt ekranında önce seçili gelir. Şablon değişince açık projelerin görevleri değişmez.
         </p>
       </div>
       {form !== null && <SablonFormu sablon={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />}
@@ -76,6 +78,8 @@ export function GorevSablonlari() {
 interface KalemTaslagi {
   anahtar: number; ad: string; aciklama: string; asama: string; dayanak: SablonDayanagi; gun: string; sureGun: string;
   yapan: string; kontrol: string; yedek: string; onceki: number | null; hazirlik: string; kosul: KontrolKosulu;
+  // 3458 dilim 2: yapılacaklar her satırda bir adım; görev dağıtılınca adımlarıyla ve kanıt kuralıyla açılır.
+  adimlar: string; kanitZorunlu: boolean;
   adlar: { yapan: string | null; kontrol: string | null; yedek: string | null };
 }
 
@@ -88,13 +92,17 @@ function taslaklar(sablon: Sablon | null, yeniAnahtar: () => number): KalemTasla
     kontrol: atamaDegeri({ kisiId: k.kontrolKisiId, rolId: k.kontrolRolId }),
     yedek: atamaDegeri({ kisiId: k.yedekKontrolKisiId, rolId: k.yedekKontrolRolId }),
     onceki: k.oncekiSira === null ? null : anahtarlar[k.oncekiSira] ?? null,
-    hazirlik: k.hazirlikMaddesi ?? '', kosul: k.kontrolKosulu,
+    hazirlik: k.hazirlikMaddesi ?? '', kosul: k.kontrolKosulu, adimlar: k.adimlar.join('\n'), kanitZorunlu: k.kanitZorunlu,
     adlar: {
       yapan: atamaMetni(k.yapanKisiAd, k.yapanRolAd), kontrol: atamaMetni(k.kontrolKisiAd, k.kontrolRolAd),
       yedek: atamaMetni(k.yedekKontrolKisiAd, k.yedekKontrolRolAd),
     },
   }));
 }
+
+// Sözleşmedeki SABLON_ADIM_EN_COK ile aynı; istemci paylaşılanı yalnız tip olarak ithal eder, sunucu yine denetler.
+const ADIM_EN_COK = 50;
+const adimSatirlari = (metin: string): string[] => metin.split('\n').map((x) => x.trim()).filter((x) => x !== '');
 
 function govdeKalemi(k: KalemTaslagi, sira: Map<number, number>): SablonKalemiGovdesi {
   const y = atamaCoz(k.yapan);
@@ -105,7 +113,7 @@ function govdeKalemi(k: KalemTaslagi, sira: Map<number, number>): SablonKalemiGo
     yapanKisiId: y.kisiId, yapanRolId: y.rolId, kontrolKisiId: c.kisiId, kontrolRolId: c.rolId, yedekKontrolKisiId: yd.kisiId, yedekKontrolRolId: yd.rolId,
     oncekiSira: k.onceki === null ? null : sira.get(k.onceki) ?? null,
     hazirlikMaddesi: k.hazirlik === '' ? null : k.hazirlik as SablonKalemiGovdesi['hazirlikMaddesi'],
-    kontrolKosulu: k.kosul,
+    kontrolKosulu: k.kosul, adimlar: adimSatirlari(k.adimlar), kanitZorunlu: k.kanitZorunlu,
   };
 }
 
@@ -122,6 +130,9 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
   const [hata, hataYaz] = useState<string | null>(null);
   const atamalar = useAtamaSecenekleri();
   const hazirlikSecenekleri = useHazirlikSecenekleri(kalemler.map((k) => k.hazirlik));
+  // Uzun şablonda görev blokları katlanır; yeni eklenen açık gelir, var olan ve örnekten gelen kapalı.
+  const [aciklar, acikYaz] = useState<ReadonlySet<number>>(new Set());
+  const katla = (anahtar: number) => { acikYaz((a) => { const y = new Set(a); if (!y.delete(anahtar)) y.add(anahtar); return y; }); };
 
   const komut = useMutation({
     mutationFn: (govde: SablonEkleGovdesi) => (sablon === null
@@ -152,10 +163,31 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
     kalemlerYaz((l) => l.filter((k) => k.anahtar !== anahtar).map((k) => (k.onceki === anahtar ? { ...k, onceki: null } : k)));
   };
   const ekle = () => {
+    const anahtar = yeniAnahtar();
+    acikYaz((a) => new Set(a).add(anahtar));
     kalemlerYaz((l) => [...l, {
-      anahtar: yeniAnahtar(), ad: '', aciklama: '', asama: '', dayanak: 'baslangic', gun: '0', sureGun: '1', yapan: '', kontrol: '', yedek: '',
-      onceki: null, hazirlik: '', kosul: 'her-zaman', adlar: { yapan: null, kontrol: null, yedek: null },
+      anahtar, ad: '', aciklama: '', asama: '', dayanak: 'baslangic', gun: '0', sureGun: '1', yapan: '', kontrol: '', yedek: '',
+      onceki: null, hazirlik: '', kosul: 'her-zaman', adimlar: '', kanitZorunlu: false, adlar: { yapan: null, kontrol: null, yedek: null },
     }]);
+  };
+  // Örnek yalnız boş yeni şablonu doldurur; açık olmayan madde proje başına satıra döner.
+  const maddeListesi = useHazirlikMaddeleri().data?.maddeler;
+  const yapanAdi = (k: KalemTaslagi): string | null => (k.yapan === '' ? null : atamalar.secenekler.find((x) => x.deger === k.yapan)?.baslik ?? k.adlar.yapan);
+  const siklikIpucu = (k: KalemTaslagi): string => {
+    const m = maddeListesi?.find((x) => x.kod === k.hazirlik);
+    if (k.hazirlik === '') return 'Projeyle bir kez açılır.';
+    return `${m?.ad ?? k.hazirlik}: ${m?.isEmriDuzeyi === true ? 'her operasyon' : 'her üretim emri'} için ayrı görev açılır.`;
+  };
+  const acikMaddeler = new Set((maddeListesi ?? []).filter((m) => m.acik).map((m) => m.kod));
+  const ornekleDoldur = () => {
+    const anahtarlar = ORNEK_SABLON.map(() => yeniAnahtar());
+    if (ad.trim() === '') adYaz(ORNEK_SABLON_ADI);
+    kalemlerYaz(ORNEK_SABLON.map((o, i) => ({
+      anahtar: anahtarlar[i] ?? 0, ad: o.ad, aciklama: '', asama: o.asama, dayanak: o.dayanak, gun: String(o.gun), sureGun: String(o.sureGun),
+      yapan: '', kontrol: '', yedek: '', onceki: o.onceki === null ? null : anahtarlar[o.onceki] ?? null,
+      hazirlik: o.madde !== null && acikMaddeler.has(o.madde) ? o.madde : '', kosul: 'her-zaman', adimlar: o.adimlar.join('\n'),
+      kanitZorunlu: o.kanitZorunlu, adlar: { yapan: null, kontrol: null, yedek: null },
+    })));
   };
   const ilet = (o: FormEvent) => {
     o.preventDefault();
@@ -185,14 +217,28 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
           <Girdi etiket="Şablon adı" required value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
         </div>
         <IsaretKutusu
-          etiket="Varsayılan: her yeni projeye uygulanır" checked={varsayilan}
+          etiket="Varsayılan: Görevleri dağıt ekranında önce seçili gelir" checked={varsayilan}
           onChange={(e) => { varsayilanYaz(e.target.checked); }}
         />
         <IsaretKutusu etiket="Etkin (seçilebilir)" checked={varsayilan || etkin} disabled={varsayilan} onChange={(e) => { etkinYaz(e.target.checked); }} />
+        {sablon === null && kalemler.length === 0 && (
+          <div className="tc-form-tam tc-prj-dagit-serit" role="note">
+            <span>Boş başlamak yerine talaşlı imalat hazırlığı örneğiyle başlayabilirsin: 8 görev, adımları ve kanıt kuralıyla. Yapan ve kontrol edeni sen seçersin.</span>
+            <Dugme simge="layers" disabled={maddeListesi === undefined} onClick={ornekleDoldur}>Örnekle başla</Dugme>
+          </div>
+        )}
         {kalemler.map((k, i) => (
           <fieldset key={k.anahtar} className="tc-form-tam tc-prj-kalem">
-            <legend>{i + 1}. görev{k.hazirlik !== '' && ' · iş emri başına'}</legend>
-            <div className="tc-form">
+            <legend>{`${String(i + 1)}. ${k.ad.trim() || 'Adsız görev'}`}</legend>
+            <div className="tc-prj-bag">
+              <Rozet ton={k.hazirlik === '' ? 'pasif' : 'bilgi'}>{SIKLIK_METNI[siklik(k.hazirlik, maddeListesi)]}</Rozet>
+              {yapanAdi(k) === null ? <Rozet ton="uyari">Yapan yok</Rozet> : <span className="tc-prj-soluk">{yapanAdi(k)}</span>}
+              {adimSatirlari(k.adimlar).length > 0 && <span className="tc-prj-soluk">{`${String(adimSatirlari(k.adimlar).length)} adım`}</span>}
+              <Dugme simge={aciklar.has(k.anahtar) ? 'up' : 'edit'} aria-expanded={aciklar.has(k.anahtar)} onClick={() => { katla(k.anahtar); }}>
+                {aciklar.has(k.anahtar) ? 'Kapat' : 'Düzenle'}
+              </Dugme>
+            </div>
+            {aciklar.has(k.anahtar) && (<div className="tc-form">
               <Girdi etiket="Görev adı" required value={k.ad} maxLength={200} onChange={(e) => { degistir(k.anahtar, { ad: e.target.value }); }} />
               <Girdi etiket="Aşama" value={k.asama} maxLength={80} onChange={(e) => { degistir(k.anahtar, { asama: e.target.value }); }} />
               <Secim
@@ -209,11 +255,11 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 onChange={(e) => { degistir(k.anahtar, { sureGun: e.target.value }); }}
               />
               <Secim
-                etiket="Hazırlık görevi olsun" value={k.hazirlik} bosSecenek="Hayır, proje başına bir kez" secenekler={hazirlikSecenekleri}
+                etiket="Kaç kez açılsın" value={k.hazirlik} bosSecenek={SIKLIK_METNI.proje} secenekler={hazirlikSecenekleri} ipucu={siklikIpucu(k)}
                 onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
               />
               <AtamaSecimi
-                etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı"
+                etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU}
                 degistir={(d) => { degistir(k.anahtar, { yapan: d }); }}
               />
               <AtamaSecimi
@@ -237,7 +283,16 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 secenekler={kalemler.slice(0, i).map((o, j) => ({ deger: String(o.anahtar), baslik: `${j + 1}. ${o.ad || 'Adsız görev'}` }))}
                 onChange={(e) => { degistir(k.anahtar, { onceki: e.target.value === '' ? null : Number(e.target.value) }); }}
               />
-            </div>
+              <div className="tc-form-tam">
+                <CokSatir
+                  etiket="Yapılacaklar" rows={Math.min(12, Math.max(3, adimSatirlari(k.adimlar).length + 1))} value={k.adimlar} placeholder="Her satıra bir adım"
+                  ipucu={`${String(adimSatirlari(k.adimlar).length)}/${String(ADIM_EN_COK)} adım; ilerleme işaretlenen adımlardan hesaplanır.`}
+                  hata={adimSatirlari(k.adimlar).length > ADIM_EN_COK ? `En çok ${String(ADIM_EN_COK)} adım.` : adimSatirlari(k.adimlar).some((x) => x.length > 200) ? 'Bir adım en çok 200 karakter.' : undefined}
+                  onChange={(e) => { degistir(k.anahtar, { adimlar: e.target.value }); }}
+                />
+              </div>
+              <IsaretKutusu etiket="Bitirmek için kanıt (fotoğraf ya da PDF) ister" checked={k.kanitZorunlu} onChange={(e) => { degistir(k.anahtar, { kanitZorunlu: e.target.checked }); }} />
+            </div>)}
             <div className="tc-prj-gorunum">
               <Dugme simge="up" disabled={i === 0} onClick={() => { tasi(i, -1); }}>Yukarı</Dugme>
               <Dugme simge="down" disabled={i === kalemler.length - 1} onClick={() => { tasi(i, 1); }}>Aşağı</Dugme>

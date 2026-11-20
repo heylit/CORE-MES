@@ -22,7 +22,7 @@ const YONETIM: ProjeYonetimiCevabi = {
     planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 0, durum: 'yapilacak',
     oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
     kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
-    surum: 1,
+    kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 1,
   }],
 };
 const GOREVLERIM: GorevlerimCevabi = { gorevler: [] };
@@ -36,6 +36,7 @@ function sunucuKur(kullanici: Kullanici) {
     yollar.push(yol);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/projeler/gorevlerim/liste') return json(200, GOREVLERIM);
+    if (yol === '/projeler/dagitim/bekleyenler') return json(200, { projeler: [{ id: 2, kod: 'PRJ.02', ad: 'Deneme PRJ.02' }] });
     if (yol.startsWith('/projeler?')) return json(200, { satirlar: [proje(1, 'PRJ.01'), proje(2, 'PRJ.02')], toplam: 2, sayfa: 1, sayfaBoyu: 200 });
     if (yol === '/projeler/1') return json(200, proje(1, 'PRJ.01'));
     if (yol === '/projeler/2') return json(200, proje(2, 'PRJ.02'));
@@ -61,6 +62,7 @@ function ac(adres = '/proje-gorevlerim') {
           <Routes>
             <Route path="/proje-gorevlerim" element={<Gorevler />} />
             <Route path="/projeler/:id" element={<p>Proje ayrıntısı</p>} />
+            <Route path="/projeler/:id/gorev-dagit" element={<p>Görevleri dağıt ekranı</p>} />
           </Routes>
           <Adres />
         </BildirimSaglayici>
@@ -121,5 +123,21 @@ describe('Görevler sayfası (3444 a)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'PRJ.09' }));
     await screen.findByText('Proje ayrıntısı');
     expect(screen.getByLabelText('adres').textContent).toBe('/projeler/9');
+  });
+
+  it('3458-2 a: görev yazana dağıtılmamış projeler şeritte; tıklayınca Görevleri dağıt açılır, görev işleyene şerit yok', async () => {
+    sunucuKur(PLANLAMACI);
+    ac();
+    const serit = await screen.findByRole('note', { name: 'Görevi dağıtılmamış projeler' });
+    expect(within(serit).getByText('Görevi dağıtılmamış 1 proje var.')).toBeTruthy();
+    fireEvent.click(within(serit).getByRole('button', { name: 'PRJ.02' }));
+    expect(await screen.findByText('Görevleri dağıt ekranı')).toBeTruthy();
+    expect(screen.getByLabelText('adres').textContent).toBe('/projeler/2/gorev-dagit');
+    cleanup();
+    const yollar = sunucuKur(OPERATOR);
+    ac();
+    await waitFor(() => { expect(yollar).toContain('/projeler/gorevlerim/liste'); });
+    expect(yollar).not.toContain('/projeler/dagitim/bekleyenler');
+    expect(screen.queryByRole('note', { name: 'Görevi dağıtılmamış projeler' })).toBeNull();
   });
 });

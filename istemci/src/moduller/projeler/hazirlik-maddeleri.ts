@@ -8,3 +8,12 @@ export const HAZIRLIK_MADDE_ANAHTARI = ['uretim-emirleri', 'hazirlik-maddeleri']
 export function useHazirlikMaddeleri() {
   return useQuery({ queryKey: HAZIRLIK_MADDE_ANAHTARI, queryFn: () => api.get<HazirlikMaddeleriCevabi>('/hazirlik-maddeleri'), staleTime: 5 * 60_000 });
 }
+
+// Şablon satırının kaç kez açıldığı tek dille söylenir: madde yoksa proje başına, iş emri düzeyindeki madde operasyon başına,
+// öteki madde emir başına. Madde listesi okunamadıysa emir başına sayılır.
+export type Siklik = 'proje' | 'emir' | 'operasyon';
+export const SIKLIK_METNI: Record<Siklik, string> = { proje: 'Proje başına', emir: 'Emir başına', operasyon: 'Operasyon başına' };
+export function siklik(madde: string | null, maddeler: readonly { kod: string; isEmriDuzeyi: boolean }[] | undefined): Siklik {
+  if (madde === null || madde === '') return 'proje';
+  return maddeler?.find((m) => m.kod === madde)?.isEmriDuzeyi === true ? 'operasyon' : 'emir';
+}

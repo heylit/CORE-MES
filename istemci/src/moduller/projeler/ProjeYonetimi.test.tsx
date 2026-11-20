@@ -28,7 +28,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 40, durum: 'suruyor',
   oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
   kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
-  surum: 1, ...ek,
+  kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 1, ...ek,
 });
 const YONETIM: ProjeYonetimiCevabi = {
   statu: { statuId: 1, ad: 'Yolunda', ton: 'tamam', serbest: false, an: '2026-10-20T10:00:00+03:00' },
@@ -123,7 +123,7 @@ describe('Proje yönetimi (890 c)', () => {
   });
 
   // 3430 a, 3444 a: Hazırlık ve Görevler projede sekme değil; Görevler sayfasında proje seçili Liste, Emir × madde (emri okuyana) ve Pano.
-  it('hazırlık görevi Görevler sayfasında rozetle; Emir × madde yalnız emri okuyana; projede Görevler ve Hazırlık sekmesi yok', async () => {
+  it('emir görevi Görevler sayfasında rozetle; Emir × madde yalnız emri okuyana; projede Görevler ve Hazırlık sekmesi yok', async () => {
     YONETIM.gorevler = [gorev({}), gorev({ id: 8, ad: 'CNC programı', hazirlikMaddesi: 'cnc' })];
     try {
       sunucuKur({ ...PLANLAMACI, islemler: [...PLANLAMACI.islemler, 'sayfa.uretim-emirleri'] });
@@ -133,12 +133,12 @@ describe('Proje yönetimi (890 c)', () => {
       expect(screen.queryByRole('tab', { name: /Görevler/ })).toBeNull();
       fireEvent.click(await screen.findByRole('button', { name: /^Görevler \(/ }));
       const tablo = await screen.findByRole('table', { name: 'Projenin görevleri' });
-      expect(within(tablo).getByRole('row', { name: /CNC programı/ }).textContent).toContain('Hazırlık');
-      expect(within(tablo).getByRole('row', { name: /Fikstür tasarımı/ }).textContent).toContain('Proje');
+      expect(within(tablo).getByRole('row', { name: /CNC programı/ }).textContent).toContain('Emir görevi');
+      expect(within(tablo).getByRole('row', { name: /Fikstür tasarımı/ }).textContent).not.toContain('Emir görevi');
       fireEvent.click(screen.getByRole('button', { name: 'Pano' }));
       const kart = await screen.findByRole('button', { name: /CNC programı/ });
-      expect(kart.textContent).toContain('Hazırlık');
-      expect(screen.getByRole('button', { name: /Fikstür tasarımı/ }).textContent).not.toContain('Hazırlık');
+      expect(kart.textContent).toContain('Emir görevi');
+      expect(screen.getByRole('button', { name: /Fikstür tasarımı/ }).textContent).not.toContain('Emir görevi');
       fireEvent.click(screen.getByRole('button', { name: 'Emir × madde' }));
       expect(screen.getByRole('button', { name: 'Emir × madde' }).getAttribute('aria-pressed')).toBe('true');
       await screen.findByText('Projede üretim emri yok');
@@ -162,7 +162,7 @@ describe('Proje yönetimi (890 c)', () => {
     const pencere = await screen.findByRole('dialog');
     fireEvent.change(within(pencere).getByLabelText(/Görev adı/), { target: { value: 'Numune ölçümü' } });
     fireEvent.change(within(pencere).getByLabelText(/Kilometre taşı/), { target: { value: '5' } });
-    await within(pencere).findAllByRole('option', { name: 'Deneme Planlamacı' });
+    await within(pencere).findAllByRole('option', { name: 'Kişi: Deneme Planlamacı' });
     fireEvent.change(within(pencere).getByLabelText(/^Yapan/), { target: { value: 'k:3' } });
     await within(pencere).findAllByRole('option', { name: 'Rol: Kalite' });
     fireEvent.change(within(pencere).getByLabelText(/^Kontrol eden/), { target: { value: 'r:8' } });
@@ -174,7 +174,7 @@ describe('Proje yönetimi (890 c)', () => {
     expect(yazma?.yol).toBe('/projeler/1/gorevler');
     expect(yazma?.govde).toEqual({
       kilometreTasiId: 5, ad: 'Numune ölçümü', aciklama: null, sorumluKisiId: 3, planBaslangic: '2026-11-02', planBitis: '2026-11-05', oncekiGorevId: null,
-      asama: null, yapanRolId: null, kontrolKisiId: null, kontrolRolId: 8, yedekKontrolKisiId: null, yedekKontrolRolId: null,
+      asama: null, yapanRolId: null, kontrolKisiId: null, kontrolRolId: 8, yedekKontrolKisiId: null, yedekKontrolRolId: null, kanitZorunlu: false,
     });
     expect(yazma?.kimlik).toBeDefined();
   });
@@ -214,8 +214,8 @@ describe('Proje yönetimi (890 c)', () => {
   });
 
   it('CSV görev adı türü önekle taşır', () => {
-    expect(gorevCsvAdi(gorev({}))).toBe('Proje: Fikstür tasarımı');
-    expect(gorevCsvAdi(gorev({ ad: 'CNC programı', hazirlikMaddesi: 'cnc' }))).toBe('Hazırlık: CNC programı');
+    expect(gorevCsvAdi(gorev({}))).toBe('Fikstür tasarımı');
+    expect(gorevCsvAdi(gorev({ ad: 'CNC programı', hazirlikMaddesi: 'cnc' }))).toBe('Emir görevi: CNC programı');
   });
 
   it('görev sapması: biten görevde gerçek bitişe, açık görevde geçmişse bugüne göre; iptalde yok', () => {

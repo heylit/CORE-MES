@@ -1,12 +1,13 @@
 import { Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { GorevlerimCevabi, Proje, ProjeListesiCevabi, ProjeListesiSorgusu, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type { DagitilmamisCevabi, GorevlerimCevabi, Proje, ProjeListesiCevabi, ProjeListesiSorgusu, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import { Dugme, DurumKutusu, Secim, type Secenek } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni } from '../../ortak/veri/liste-durumu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { GOREV_ISLEMI } from './gosterim.ts';
 import { EMIR_OKUMA_ISLEMLERI } from './ProjeEmirleri.tsx';
 import { ProjeGorevleri } from './ProjeGorevleri.tsx';
 import { ProjeGorevlerim } from './ProjeGorevlerim.tsx';
@@ -44,6 +45,12 @@ export function Gorevler() {
   // Sol listedeki sayı; ProjeGorevlerim ile aynı sorgu, ikinci istek gitmez.
   const benim = useQuery({ queryKey: anahtarlar.gorevlerim, queryFn: () => api.get<GorevlerimCevabi>('/projeler/gorevlerim/liste'), enabled: projeOkur });
   const p = proje.data;
+  // 3458-2 a: görevi dağıtılmamış aktif projeler görev yazana şeritte; tıklayınca o projenin Görevleri dağıt ekranı açılır.
+  const dagitir = islemler.includes(GOREV_ISLEMI);
+  const bekleyen = useQuery({
+    queryKey: anahtarlar.dagitilmamis, queryFn: () => api.get<DagitilmamisCevabi>('/projeler/dagitim/bekleyenler'), enabled: dagitir && projeId === null,
+  });
+  const bekleyenler = projeId === null ? bekleyen.data?.projeler ?? [] : [];
 
   const projeSecenekleri: Secenek[] = (liste.data?.satirlar ?? []).map((s) => ({ deger: String(s.id), baslik: `${s.kod} · ${s.ad}` }));
   // Projeden açılan kapalı ya da listeye sığmayan proje de seçili görünsün.
@@ -51,8 +58,19 @@ export function Gorevler() {
   const secenekler: Secenek[] = [{ deger: BENIM, baslik: 'Benim görevlerim' }, ...projeSecenekleri];
   const sec = (deger: string) => { adresYaz(deger === BENIM ? {} : { proje: deger }); };
 
+  const serit = bekleyenler.length === 0 ? null : (
+    <div className="tc-prj-dagit-serit" role="note" aria-label="Görevi dağıtılmamış projeler">
+      <span>Görevi dağıtılmamış {bekleyenler.length} proje var.</span>
+      <div className="tc-prj-dagit-projeler">
+        {bekleyenler.slice(0, 5).map((x) => (
+          <Dugme key={x.id} simge="users" onClick={() => { void yonlendir(`/projeler/${String(x.id)}/gorev-dagit`); }}>{x.kod}</Dugme>
+        ))}
+        {bekleyenler.length > 5 && <span className="tc-prj-soluk">+{bekleyenler.length - 5}</span>}
+      </div>
+    </div>
+  );
   const icerik = projeId === null
-    ? <ProjeGorevlerim />
+    ? <>{serit}<ProjeGorevlerim /></>
     : proje.isError || yonetim.isError
       ? (
         <DurumKutusu
@@ -69,7 +87,7 @@ export function Gorevler() {
       {/* Sayfa adı kabuğun başlığındadır; burada yalnız projeden gelene geri dönüş. */}
       {p !== undefined && (
         <div className="tc-prj-bas">
-          <Dugme simge="back" onClick={() => { void yonlendir(`/projeler/${String(p.id)}`); }}>{p.kod}</Dugme>
+          <Dugme simge="chev-left" onClick={() => { void yonlendir(`/projeler/${String(p.id)}`); }}>{p.kod}</Dugme>
         </div>
       )}
       {projeOkur

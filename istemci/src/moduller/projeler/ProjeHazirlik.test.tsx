@@ -1,11 +1,10 @@
-import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { HazirlikDagitCevabi, HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { HazirlikGorevleriAc, ProjeHazirlik, celiskili } from './ProjeHazirlik.tsx';
+import { ProjeHazirlik, celiskili } from './ProjeHazirlik.tsx';
 
 const rol = { tur: 'rol' as const, id: 3, ad: 'CNC programcı', kisiSayisi: 2 };
 const gorev = (id: number, madde: string, isEmriId: number | null, ek: Partial<HazirlikMatrisiCevabi['gorevler'][number]> = {}) => ({
@@ -26,29 +25,23 @@ const MATRIS = (dagitir: boolean, emirAcik = true): HazirlikMatrisiCevabi => ({
     gorev(3, 'cizim', null, { yapan: null }),
   ],
 });
-const DENEME: HazirlikDagitCevabi = {
-  eklenen: 0, gorevSayisi: 3, toplamKisi: 2, atanmamis: 0,
-  alicilar: [{ ...rol, gorevler: [{ madde: 'cnc', ad: 'CNC kurulumu', sayi: 3 }] }],
-};
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 function kur(dagitir: boolean, emirAcik = true) {
-  const cagrilar: { yontem: string; yol: string; govde: unknown; kimlik: string | null }[] = [];
+  const cagrilar: { yontem: string; yol: string; govde: unknown; }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = ayar?.method ?? 'GET';
-    const govde = typeof ayar?.body === 'string' ? JSON.parse(ayar.body) as { deneme?: boolean } : undefined;
-    cagrilar.push({ yontem, yol, govde, kimlik: new Headers(ayar?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
+    const govde = typeof ayar?.body === 'string' ? JSON.parse(ayar.body) as unknown : undefined;
+    cagrilar.push({ yontem, yol, govde });
     if (yol.startsWith('/hazirlik-matrisi?')) return json(200, MATRIS(dagitir, emirAcik));
-    if (yol === '/hazirlik-matrisi/dagit') return json(200, govde?.deneme ? DENEME : { ...DENEME, eklenen: 3 });
-    if (yol === '/projeler/sablon-secenekleri') return json(200, { sablonlar: [{ id: 2, ad: 'ORN-CNC Standart', varsayilan: true, gorevSayisi: 1, hazirlikSayisi: 3 }] });
     if (yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 5, ad: 'ORN Burak Yıldız' }] });
     if (yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 3, ad: 'CNC programcı' }] });
     if (yol.endsWith('/hazirlik-ata')) return json(200, { id: 3, surum: 2 });
     return json(404, { kod: 'yok', mesaj: 'yok' });
   }));
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><HazirlikGorevleriAc projeId={9} /><ProjeHazirlik projeId={9} /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><ProjeHazirlik projeId={9} /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
   return cagrilar;
 }
 
@@ -58,14 +51,14 @@ describe('Proje > Görevler > Emir × madde (3396 A, 3430 a)', () => {
 
   it('sayılar süzgeçte, hücrede görev ve sistem hâli yazıyla; okuyanda Aç yok', async () => {
     kur(false);
-    const tablo = await screen.findByRole('table', { name: 'Hazırlık görevleri' });
+    const tablo = await screen.findByRole('table', { name: 'Emir görevleri' });
     expect(screen.getByRole('tab', { name: /Hepsi.*3/ })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Gecikmiş.*1/ })).toBeTruthy();
     expect(within(tablo).getByRole('button', { name: /OP20 CNC kurulumu: görev Yapılıyor, ORN Burak Yıldız, 2 gün gecikti; Sistem: Hazır/ }).textContent).toBe('Görev: YapılıyorSistem: Hazır2 gün gecikti · ORN Burak Yıldız');
     expect(within(tablo).getByRole('button', { name: /OP10 CNC kurulumu: görev Bitti, CNC programcı \(rol · 2 kişi\); Sistem: Eksik/ })).toBeTruthy();
     expect(within(tablo).getByRole('button', { name: /Çizim revizyonu: görev Atanmamış; Sistem hâli yok/ }).textContent).toBe('Görev: Atanmamış');
     expect(screen.getByRole('tab', { name: /Bitti.*1/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Hazırlık görevlerini aç/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /görevlerini aç/ })).toBeNull();
     fireEvent.click(within(tablo).getByRole('button', { name: /Çizim revizyonu: görev Atanmamış/ }));
     expect(screen.queryByRole('button', { name: 'Ata' })).toBeNull();
     fireEvent.click(within(tablo).getByRole('button', { name: /OP20 CNC kurulumu/ }));
@@ -80,15 +73,9 @@ describe('Proje > Görevler > Emir × madde (3396 A, 3430 a)', () => {
     expect(celiskili(g('kontrolde', 'eksik'))).toBe(false);
   });
 
-  it('açık emri olmayan projede açma yetkilisi için de Aç yok', async () => {
-    kur(true, false);
-    await screen.findByRole('table', { name: 'Hazırlık görevleri' });
-    expect(screen.queryByRole('button', { name: /Hazırlık görevlerini aç/ })).toBeNull();
-  });
-
   it('hücreye dokununca panel; atanmamış görev role atanır', async () => {
     const cagrilar = kur(true);
-    const tablo = await screen.findByRole('table', { name: 'Hazırlık görevleri' });
+    const tablo = await screen.findByRole('table', { name: 'Emir görevleri' });
     fireEvent.click(within(tablo).getByRole('button', { name: /Çizim revizyonu: görev Atanmamış/ }));
     const panel = screen.getByRole('region', { name: 'Görev ayrıntısı' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Ata' }));
@@ -100,26 +87,9 @@ describe('Proje > Görevler > Emir × madde (3396 A, 3430 a)', () => {
     expect(cagrilar.find((c) => c.yol.endsWith('/hazirlik-ata'))).toMatchObject({ yol: '/projeler/gorevler/3/hazirlik-ata', govde: { sorumluKisiId: null, yapanRolId: 3, surum: 1 } });
   });
 
-  it('Aç önce dener, alıcıyı kişi sayısıyla gösterir, onayla açar', async () => {
-    const cagrilar = kur(true);
-    fireEvent.click(await screen.findByRole('button', { name: /Hazırlık görevlerini aç/ }));
-    const p = await screen.findByRole('dialog');
-    await within(p).findByText('CNC programcı (rol · 2 kişi)');
-    expect(within(p).getByText('2 kişiye zil')).toBeTruthy();
-    expect(cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit')).toHaveLength(1);
-    fireEvent.click(within(p).getByRole('button', { name: '3 görevi aç' }));
-    await waitFor(() => expect(cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit')).toHaveLength(2));
-    expect(cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit')[1]?.govde).toEqual({ projeId: 9, sablonId: null, deneme: false });
-    // Uç tekrar korumalı: deneme de açma da istek kimliğiyle gider (canlıda "Bu komut istek kimliği ister." hatası).
-    const kimlikler = cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit').map((c) => c.kimlik);
-    expect(kimlikler.every((k) => k !== null && k !== '')).toBe(true);
-    expect(kimlikler[0]).not.toBe(kimlikler[1]);
-    await screen.findByText('3 hazırlık görevi açıldı.');
-  });
-
   it('görev bitti ama madde sistemde eksikse hücre işaretli, üstte uyarı satırı', async () => {
     kur(false);
-    const tablo = await screen.findByRole('table', { name: 'Hazırlık görevleri' });
+    const tablo = await screen.findByRole('table', { name: 'Emir görevleri' });
     expect(screen.getByRole('status').textContent).toContain('1 hücrede görev bitti ama madde sistemde hâlâ eksik: ORN-UE-1201 OP10 · CNC kurulumu');
     const celiskili = within(tablo).getByRole('button', { name: /OP10 CNC kurulumu: görev Bitti/ }).closest('td');
     expect(celiskili?.className).toContain('tc-prj-hz-celiski');

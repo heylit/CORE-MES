@@ -84,6 +84,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
   const emirAc = (proje: number | null) => o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
     malzemeNo: urunNo, adet: 3, teslim: null, kaynakRotaRevizyonId: rev, projeId: proje ?? emirProjesi, isEmirleri: [adim(1), adim(2)],
   }));
+  // 3458-2 a: şablon projeye yalnız Projeler > Görevleri dağıt ile uygulanır; hazırlık görevlerini de o açar.
+  const projeDagit = (proje: number, sablon: number) => istek<{ projeGorevi: number; hazirlikGorevi: number }>('mudur', `/projeler/${String(proje)}/dagit`, { sablonId: sablon });
   const gorevler = (emirId: number) => o().vt.okumaTx((db) => hazirlikGorevleri(db, [emirId]));
   const ozet = async (emirId: number) => (await gorevler(emirId)).map((g) => `${g.madde}:${g.isEmriId === null ? 'emir' : 'ie'}`).sort();
 
@@ -101,6 +103,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     // Emrin sistem hâli yalnız adımlı emri okuyana gider; satış projeyi okur, emri okumaz (yetki matrisi).
     await kisiEkle('okur', 'satis');
     await kisiEkle('dagitici', 'kalite', 'projeler.hazirlik-dagit');
+    // Görevleri dağıtan kişi atanan rolün üyesi olmasın: kişi kendine zil almaz.
+    await kisiEkle('mudur', 'mudur');
     planlamaRolId = (await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'planlama_proje'"))!.id;
     await ortam.sahip.sorgu("INSERT INTO uretim_emirleri_hazirlik_maddesi (kod, ad, kisa, sira, sistem) VALUES ('ozel-a', 'Boya onayı', 'Boya', 130, false)");
     await ortam.sahip.sorgu("UPDATE uretim_emirleri_hazirlik_maddesi SET acik = false WHERE kod = 'malzeme'");
@@ -135,6 +139,10 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
   test('şablonla kurulunca: CNC ve özel madde iş emri başına, çizim emir başına; kapalı malzeme yok; tekrarı çoğalmaz', async () => {
     const { uretimEmriId } = await emirAc(null);
     const yol = `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`;
+    assert.equal((await istek('dagitici', yol, { projeId, sablonId })).durum, 400, 'dağıtılmamış şablon hazırlıktan uygulanmaz');
+    const pd = await projeDagit(projeId, sablonId);
+    assert.equal(pd.durum, 200, JSON.stringify(pd.govde));
+    assert.deepEqual([pd.govde.projeGorevi, pd.govde.hazirlikGorevi], [1, 0], 'projeye bağlı emir yok; hazırlık görevi emir bağlanınca açılır');
     const c = await istek<{ eklenen: number }>('dagitici', yol, { projeId, sablonId });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     assert.equal(c.govde.eklenen, 5);
@@ -193,8 +201,11 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal(d.govde.toplamKisi, d.govde.alicilar[0]?.kisiSayisi);
     assert.equal((await gorevler(a.uretimEmriId)).length, 0, 'deneme görev açmaz');
     assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM projeler_proje_sablonu WHERE proje_id = $1', [dagitProjesi]))?.n, 0, 'deneme şablon uygulamaz');
-    const g = await dagit(false);
-    assert.deepEqual([g.govde.eklenen, g.govde.gorevSayisi], [10, 10]);
+    assert.equal((await dagit(false)).durum, 400, 'dağıtılmamış şablon hazırlıktan açılmaz');
+    const g = await projeDagit(dagitProjesi, sablonId);
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    assert.equal(g.govde.hazirlikGorevi, 10, 'Görevleri dağıt denemenin saydığı kadar hazırlık görevi açar');
+    assert.equal((await dagit(false)).govde.eklenen, 0);
     assert.equal((await dagit(true)).govde.gorevSayisi, 0, 'dağıtılmış görev yeniden sayılmaz');
 
     const m = await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(dagitProjesi)}`, headers: { cookie: cerezler.get('dagitici') ?? '' } });
@@ -222,7 +233,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const proje = (await o().sahip.tek<{ id: number }>("INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.HZS', 'Sistem', $1) RETURNING id", [yoneticiId]))!.id;
     const a = await emirAc(proje);
     const [ie1, ie2] = a.isEmriIdleri;
-    assert.equal((await istek('dagitici', '/hazirlik-matrisi/dagit', { projeId: proje, sablonId, deneme: false })).durum, 200);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
     await o().sahip.sorgu("UPDATE projeler_gorev SET durum = 'bitti', ilerleme = 100, gercek_baslangic = CURRENT_DATE, gercek_bitis = CURRENT_DATE WHERE hazirlik_emri_id = $1 AND hazirlik_maddesi = 'cnc'", [a.uretimEmriId]);
     const onceki = hazirlikCozucusuKaydet('cnc', async (_db, idler) => new Map(idler.filter((x) => x === ie1).map((x) => [x, { durum: 'tamam', secildi: true }] as const)));
     try {
@@ -293,9 +304,9 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const acik = await emirAc(proje);
     const kapali = await emirAc(proje);
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [kapali.uretimEmriId]);
-    const d = await dagitIstek(proje, sablonId, false);
+    const d = await projeDagit(proje, sablonId);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.equal(d.govde.eklenen, 5, 'yalnız açık emir');
+    assert.equal(d.govde.hazirlikGorevi, 5, 'yalnız açık emir');
     assert.equal((await gorevler(acik.uretimEmriId)).length, 5);
     assert.equal((await gorevler(kapali.uretimEmriId)).length, 0, 'kapalı emre görev açılmaz');
     assert.equal((await istek('dagitici', `/adimli-emirler/${String(kapali.uretimEmriId)}/hazirlik-projesi`, { projeId: proje, sablonId })).durum, 409);
@@ -332,7 +343,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const d = await dagitIstek(proje, sablon, true);
     assert.equal(d.govde.gorevSayisi, 2, 'iki CNC kalemi aynı iş emrinde bir kez sayılır');
     assert.equal(await atamaZili(uye, proje), 0, 'deneme bildirim göndermez');
-    assert.equal((await dagitIstek(proje, sablon, false)).govde.eklenen, 2);
+    assert.equal((await projeDagit(proje, sablon)).govde.hazirlikGorevi, 2);
     assert.equal(await atamaZili(uye, proje), 1, 'dağıt atama zilini çalar');
 
     const termin = await yeniSablon('Termin', [{ madde: 'cnc', dayanak: 'termin', gun: -3 }]);
@@ -340,6 +351,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const t = await o().sahip.tek<{ teslim: string; bitis: string; bitis2: string }>(
       "SELECT (current_date + 40)::text AS teslim, (current_date + 90)::text AS bitis, (current_date + 38)::text AS bitis2");
     await o().sahip.sorgu('UPDATE projeler_proje SET bitis = $2 WHERE id = $1', [p2, t!.bitis]);
+    assert.equal((await projeDagit(p2, termin)).govde.hazirlikGorevi, 0, 'projeye bağlı emir yok');
     const r = await o().vt.tx((db) => hazirlikGorevleriAc(db, yoneticiId, {
       projeId: p2, sablonId: termin, hedefler: [{ emriId: 990001, emirNo: 'ORN-UE-9', isEmirleri: [] }],
       maddeler: new Map([['cnc', { ad: 'CNC kurulumu', isEmriDuzeyi: true }]]), tarih: { baslangic: null, bitis: t!.teslim },
@@ -361,7 +373,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
   test('T8 atama: kontrolde görev atanmaz (400); hazırlık dışı görev 404; atanan kişiye zil gider', async () => {
     const proje = await yeniProje('UE.HZC');
     const e = await emirAc(proje);
-    await dagitIstek(proje, sablonId, false);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
     const [birinci, ikinci] = await gorevler(e.uretimEmriId);
     await kisiEkle('atanan', 'cam');
     const ata = (id: number, surum: number) => istek(

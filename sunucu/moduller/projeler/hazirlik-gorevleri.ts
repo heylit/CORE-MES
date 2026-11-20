@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { HazirlikAtaGovdesi } from '#paylasilan/sozlesme/projeler.ts';
 import { sablonTarihleri } from './kurallar.ts';
-import { YONETIM_KISITLARI, atamaBildir, projeKilitle, sablonUygula, secilenSablon } from './servis.ts';
+import { YONETIM_KISITLARI, atamaBildir, projeKilitle, secilenSablon } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { HazirlikGoreviSatiri } from './sorgular.ts';
 
@@ -16,7 +16,7 @@ export interface HazirlikHedefi { emriId: number; emirNo: string; isEmirleri: re
 export interface HazirlikMaddeBilgisi { ad: string; isEmriDuzeyi: boolean }
 export interface HazirlikGorevleriAcVerisi {
   projeId: number;
-  // Seçilen şablon projeye daha önce uygulanmadıysa önce uygulanır (hazırlık dışı kalemleri de proje görevi olur).
+  // 3458 Risk K2: şablon projeye yalnız Görevleri dağıt ile uygulanır. Dağıtılmamış şablon denemede önizlenir, açmada reddedilir.
   sablonId: number | null;
   hedefler: readonly HazirlikHedefi[];
   // Yalnız açık maddeler verilir; listede olmayan maddenin kalemi görev doğurmaz.
@@ -29,6 +29,8 @@ interface DonmusKalem {
   ad: string; aciklama: string | null; asama: string | null; dayanak: 'baslangic' | 'termin'; gun: number; sureGun: number;
   yapanKisiId: number | null; yapanRolId: number | null; kontrolKisiId: number | null; kontrolRolId: number | null;
   yedekKontrolKisiId: number | null; yedekKontrolRolId: number | null; hazirlikMaddesi: string | null;
+  // 3458 öncesi donan kalemde yoktur: adımsız ve kanıtsız sayılır.
+  adimlar?: readonly string[]; kanitZorunlu?: boolean;
 }
 const hazirlikKalemi = (k: unknown): k is DonmusKalem & { hazirlikMaddesi: string } =>
   typeof k === 'object' && k !== null && typeof (k as { hazirlikMaddesi?: unknown }).hazirlikMaddesi === 'string';
@@ -43,8 +45,17 @@ export interface HazirlikPlani { madde: string; yapanKisiId: number | null; yapa
 const kalemdenDonmus = (k: sorgular.SablonKalemiSatiri): DonmusKalem => ({
   ad: k.ad, aciklama: k.aciklama, asama: k.asama, dayanak: k.dayanak, gun: k.gun, sureGun: k.sure_gun, yapanKisiId: k.yapan_kisi_id, yapanRolId: k.yapan_rol_id,
   kontrolKisiId: k.kontrol_kisi_id, kontrolRolId: k.kontrol_rol_id, yedekKontrolKisiId: k.yedek_kontrol_kisi_id, yedekKontrolRolId: k.yedek_kontrol_rol_id,
-  hazirlikMaddesi: k.hazirlik_maddesi,
+  hazirlikMaddesi: k.hazirlik_maddesi, adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
 });
+
+export const SABLON_DAGITILMADI = 'Bu şablon projede dağıtılmadı: önce Projeler > Görevleri dağıt ekranında dağıt.';
+
+// Açılan hazırlık görevine kalemin adımları eklenir; tekil dizine takılıp açılmayan görev (null) atlanır.
+async function gorevVeAdimlar(db: Db, adimlar: readonly string[], id: number | null): Promise<boolean> {
+  if (id === null) return false;
+  await sorgular.adimlariEkle(db, id, adimlar);
+  return true;
+}
 
 // Denemede hiçbir şey yazılmaz: şablon uygulanmaz, görev açılmaz, bildirim gitmez; yalnız açılacak görevler (var olan hariç) döner.
 export async function hazirlikGorevleriAc(
@@ -58,8 +69,8 @@ export async function hazirlikGorevleriAc(
   let ekKalemler: DonmusKalem[] = [];
   if (yeniSablon !== null) {
     const sablon = await secilenSablon(db, yeniSablon);
-    if (deneme) ekKalemler = (await sorgular.sablonKalemleri(db, [sablon.id])).map(kalemdenDonmus);
-    else await sablonUygula(db, kisiId, v.projeId, sablon);
+    if (!deneme) throw dogrulama(SABLON_DAGITILMADI, 'sablonId');
+    ekKalemler = (await sorgular.sablonKalemleri(db, [sablon.id])).map(kalemdenDonmus);
   }
   const kalemler = [...(await sorgular.uygulananKalemler(db, v.projeId)), ...ekKalemler].filter(hazirlikKalemi);
   if (kalemler.length === 0 || v.hedefler.length === 0) return bos;
@@ -81,12 +92,12 @@ export async function hazirlikGorevleriAc(
         const anahtar = `${String(h.emriId)}:${String(y.isEmriId ?? 0)}:${k.hazirlikMaddesi}`;
         const acilir = deneme
           ? !denenen.has(anahtar) && !(await sorgular.hazirlikGoreviVarMi(db, h.emriId, y.isEmriId, k.hazirlikMaddesi))
-          : (await kisitKorumali(HAZIRLIK_KISITLARI, () => sorgular.hazirlikGoreviEkle(db, v.projeId, {
+          : await gorevVeAdimlar(db, k.adimlar ?? [], await kisitKorumali(HAZIRLIK_KISITLARI, () => sorgular.hazirlikGoreviEkle(db, v.projeId, {
             kilometreTasiId: null, ad: `${k.ad} · ${y.ek}`.slice(0, 200).trimEnd(), aciklama: k.aciklama, sorumluKisiId: k.yapanKisiId,
             planBaslangic: t.planBaslangic, planBitis: t.planBitis, oncekiGorevId: null, asama: k.asama ?? madde.ad, yapanRolId: k.yapanRolId,
             kontrolKisiId: k.kontrolKisiId, kontrolRolId: k.kontrolRolId, yedekKontrolKisiId: k.yedekKontrolKisiId, yedekKontrolRolId: k.yedekKontrolRolId,
-            hazirlikMaddesi: k.hazirlikMaddesi, emriId: h.emriId, isEmriId: y.isEmriId,
-          }, kisiId))) !== null;
+            hazirlikMaddesi: k.hazirlikMaddesi, emriId: h.emriId, isEmriId: y.isEmriId, kanitZorunlu: k.kanitZorunlu ?? false,
+          }, kisiId)));
         denenen.add(anahtar);
         if (acilir) plan.push({ madde: k.hazirlikMaddesi, yapanKisiId: k.yapanKisiId, yapanRolId: k.yapanRolId });
       }

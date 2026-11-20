@@ -757,3 +757,6 @@ export async function emrinTalimatKunyeleri(db: Db, emirId: number): Promise<{ i
 export const adimliBitenEmirler = isEmri.adimliBitenler;
 // 3416-1 a: bekletilen emirlerin kademeli uyarı kayıtları, kaynak başına (kablolama bağlar). Yetki denetlemez.
 export { bekletmeKademeOkuyucusu } from './bekleme-kademe.ts';
+
+// 3458 (dilim 2): Görevleri dağıt ekranı projeye bağlı açık emirlerin hazırlık hedeflerini buradan alır (kablolama.ts bağlar).
+export { projeninHazirlikHedefleri } from './hazirlik-gorevi.ts';

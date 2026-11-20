@@ -18,11 +18,23 @@ export const PROJELER_IKINCI_MENU = {
     ] },
     { baslik: 'Ayarlar', maddeler: [
       { anahtar: 'statuler', baslik: 'Statü listesi', yol: '/projeler/statuler', simge: 'tag', islem: 'projeler.statu-ayar' },
-      { anahtar: 'sablonlar', baslik: 'Görev şablonları', yol: '/projeler/sablonlar', simge: 'layers', islem: 'projeler.sablon-yaz', okur: ['/projeler/sablonlar/liste'] },
     ] },
-    // 3396 a: hazırlık ayarları tek yerde (Arayüz ön bakışı); madde listesinin sahibi Üretim Emirleri'dir.
-    { baslik: 'Hazırlık', maddeler: [
-      { anahtar: 'hazirlik-maddeleri', baslik: 'Hazırlık maddeleri', yol: '/projeler/hazirlik-maddeleri', simge: 'flag', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/hazirlik-maddeleri'] },
+  ],
+} as const satisfies IkinciMenuTanimi;
+
+// 3458 dilim 3: görev şablonları ve hazırlık maddeleri görevlerin yanında, Görevler sayfasının ikinci menüsündedir.
+// Madde listesinin sahibi Üretim Emirleri'dir (3396 a); burada yalnız ekranı durur.
+export const GOREVLER_IKINCI_MENU = {
+  kok: '/proje-gorevlerim',
+  baslik: 'Görevler',
+  simge: 'user-plus',
+  gruplar: [
+    { maddeler: [
+      { anahtar: 'gorevler', baslik: 'Görevler', yol: '/proje-gorevlerim', simge: 'list', islem: 'sayfa.proje-gorevlerim' },
+    ] },
+    { baslik: 'Ayarlar', maddeler: [
+      { anahtar: 'sablonlar', baslik: 'Görev şablonları', yol: '/proje-gorevlerim/sablonlar', simge: 'layers', islem: 'projeler.sablon-yaz', okur: ['/projeler/sablonlar/liste'] },
+      { anahtar: 'hazirlik-maddeleri', baslik: 'Hazırlık maddeleri', yol: '/proje-gorevlerim/hazirlik-maddeleri', simge: 'flag', islem: 'uretim-emirleri.hazirlik-ayar', okur: ['/hazirlik-maddeleri'] },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

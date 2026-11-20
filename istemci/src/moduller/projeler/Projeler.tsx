@@ -9,7 +9,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { DURUMLAR, DURUM_METNI, DURUM_TONU, tarihMetni } from './gosterim.ts';
+import { DURUMLAR, DURUM_METNI, DURUM_TONU, GOREV_ISLEMI, tarihMetni } from './gosterim.ts';
 import { ProjeFormu } from './ProjeFormu.tsx';
 import { Ilerleme } from './ProjeGorevleri.tsx';
 import { StatuCipi } from './StatuPenceresi.tsx';
@@ -32,6 +32,7 @@ const DURUM_SECENEKLERI = DURUMLAR.map((d) => ({ deger: d, baslik: DURUM_METNI[d
 export function Projeler() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('projeler.yaz') === true;
+  const dagitir = oturum.data?.islemler.includes(GOREV_ISLEMI) === true;
   const yonlendir = useNavigate();
   const [yeni, yeniYaz] = useState(false);
   const liste = useListeDurumu({
@@ -122,7 +123,15 @@ export function Projeler() {
             </div>
           )}
       </div>
-      {yeni && <ProjeFormu proje={null} kapat={() => { yeniYaz(false); }} acildi={(p) => { void yonlendir(`/projeler/${p.id}`); }} />}
+      {yeni && (
+        <ProjeFormu
+          proje={null} kapat={() => { yeniYaz(false); }}
+          acildi={(p, sablon) => {
+            // 3458-2 a: yeni projede ilk iş görevleri dağıtmaktır; görev yazamayan ya da "Şablonsuz" seçen projeye gider.
+            void yonlendir(sablon === null || !dagitir ? `/projeler/${p.id}` : `/projeler/${p.id}/gorev-dagit${sablon === '' ? '' : `?sablon=${sablon}`}`);
+          }}
+        />
+      )}
     </Kart>
   );
 }

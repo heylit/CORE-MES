@@ -1,4 +1,4 @@
-import { uc } from '#cekirdek/uc.ts';
+import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
@@ -9,14 +9,18 @@ import {
   statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
   geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
   sablonGuncelleGovdesi, sablonListesiCevabi, sablonSecenekleriCevabi,
+  adimEkleGovdesi, adimIsaretleGovdesi, adimParametresi, kanitBaglaGovdesi, kanitParametresi, notEkleGovdesi,
+  dagitCevabi, dagitGovdesi, dagitilmamisCevabi, dagitimCevabi, dagitimSorgusu,
 } from '#paylasilan/sozlesme/projeler.ts';
 import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
-  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
+  adimEkle, adimIsaretle, adimSil, kanitBagla, kanitDosyasi, kanitKaldir, notEkle,
 } from './servis.ts';
+import { dagit, dagitilmamisProjeler, dagitimOnizleme } from './dagitim.ts';
 import { hazirlikGoreviAta } from './hazirlik-gorevleri.ts';
 import { kademeGecmisi } from './hazirlik-kademe.ts';
 
@@ -27,6 +31,9 @@ const maliyetGorur = (k: Kullanici): boolean => islemVarMi(k, 'finans.maliyet-ok
 // 3269: görev işleyen ve kontrol eden yalnız kendisine düşen kaydı görür; kayıt düzeyi denetim serviste.
 const GOREVLERIM = { biri: ['sayfa.proje-gorevlerim', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
 const GOREV_OKUMA = { biri: ['sayfa.projeler', 'projeler.oku', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
+// 3458: adım listesini görev yazan da değiştirir; not görev işlemlerinden biri olanındır. Kayıt düzeyi denetim serviste.
+const ADIM_LISTESI = { biri: ['projeler.gorev-isle', 'projeler.gorev-yaz'] } as const;
+const NOT_YAZMA = { biri: ['projeler.gorev-isle', 'projeler.gorev-kontrol', 'projeler.gorev-yaz'] } as const;
 const ATAMA_SECICI = { biri: ['projeler.gorev-yaz', 'projeler.sablon-yaz', 'projeler.hazirlik-dagit', 'uretim-emirleri.hazirlik-ayar'] } as const;
 const gorevKomutu = (
   yol: string, yetki: 'projeler.gorev-isle' | 'projeler.gorev-kontrol',
@@ -167,6 +174,42 @@ export const uclar = [
     govde: geriGonderGovdesi,
     cevap: gorevAyrintisiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gorevGeriGonder(db, kullanici, parametre.gorevId, govde),
+  }),
+  // 3458: görevin içi. Adımı işaretleyen ve kanıtı ekleyen atanmış yapandır (servis denetler).
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/adimlar', yetki: ADIM_LISTESI, tekrarKorumali: true,
+    parametre: gorevParametresi, govde: adimEkleGovdesi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => adimEkle(db, kullanici, parametre.gorevId, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/adimlar/:adimId/isaretle', yetki: 'projeler.gorev-isle',
+    parametre: adimParametresi, govde: adimIsaretleGovdesi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => adimIsaretle(db, kullanici, parametre.gorevId, parametre.adimId, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/adimlar/:adimId/sil', yetki: ADIM_LISTESI,
+    parametre: adimParametresi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre }) => adimSil(db, kullanici, parametre.gorevId, parametre.adimId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/notlar', yetki: NOT_YAZMA, tekrarKorumali: true,
+    parametre: gorevParametresi, govde: notEkleGovdesi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => notEkle(db, kullanici, parametre.gorevId, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/kanitlar', yetki: 'projeler.gorev-isle', tekrarKorumali: true,
+    parametre: gorevParametresi, govde: kanitBaglaGovdesi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => kanitBagla(db, kullanici, parametre.gorevId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST', yol: '/projeler/gorevler/:gorevId/kanitlar/:ozet/kaldir', yetki: 'projeler.gorev-isle',
+    parametre: kanitParametresi, cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, denetimEki }) => kanitKaldir(db, kullanici, parametre.gorevId, parametre.ozet, denetimEki),
+  }),
+  uc({
+    yontem: 'GET', yol: '/projeler/gorevler/:gorevId/kanitlar/:ozet/dosya', yetki: GOREV_OKUMA,
+    parametre: kanitParametresi, cevap: ikiliCevap,
+    isle: ({ db, kullanici, parametre }) => kanitDosyasi(db, kullanici, parametre.gorevId, parametre.ozet),
   }),
   // 3303-1 c: görev silinmez; görev yazan iptal eder.
   uc({
@@ -341,6 +384,37 @@ export const uclar = [
     govde: sablondanEkleGovdesi,
     cevap: projeYonetimiCevabi,
     tekrarKorumali: true,
-    isle: ({ db, kullanici, parametre, govde }) => sablondanEkle(db, kullanici.id, parametre.id, govde.sablonId),
+    // Eski "şablondan ekle" de Görevleri dağıt yolundan geçer: hazırlık satırları da açılır ve donar (Risk K2).
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await dagit(db, kullanici.id, parametre.id, { sablonId: govde.sablonId, ozel: [] });
+      return projeYonetimi(db, parametre.id);
+    },
+  }),
+  // 3458 (dilim 2, 3458-2 a): Görevleri dağıt. Önizleme yazmaz; dağıt proje görevlerini açar, hazırlık satırlarını açık emirlere açar ve dondurur.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/:id/dagitim',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    sorgu: dagitimSorgusu,
+    cevap: dagitimCevabi,
+    isle: ({ db, parametre, sorgu }) => dagitimOnizleme(db, parametre.id, sorgu.sablonId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/dagit',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    govde: dagitGovdesi,
+    cevap: dagitCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => dagit(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/dagitim/bekleyenler',
+    yetki: 'projeler.gorev-yaz',
+    cevap: dagitilmamisCevabi,
+    isle: ({ db }) => dagitilmamisProjeler(db),
   }),
 ];

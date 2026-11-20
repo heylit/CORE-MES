@@ -6,12 +6,13 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { Gorev, GorevAyrintisiCevabi, GorevlerimCevabi, GorevlerimSatiri, SablonListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { GorevPaneli } from './GorevPaneli.tsx';
 import { GorevSablonlari } from './GorevSablonlari.tsx';
+import { GorevSayfasi } from './GorevSayfasi.tsx';
 import { uretimIlerlemesi } from './ProjeEmirleri.tsx';
 import { ProjeGorevlerim } from './ProjeGorevlerim.tsx';
 
 const KONTROLCU: Kullanici = { id: 5, ad: 'Deneme Kontrolcü', islemler: ['sayfa.proje-gorevlerim', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] };
+const YAZAN: Kullanici = { ...KONTROLCU, islemler: [...KONTROLCU.islemler, 'projeler.gorev-yaz'] };
 const SABLONCU: Kullanici = { id: 6, ad: 'Deneme Şablon', islemler: ['projeler.sablon-yaz'] };
 
 const gorev = (ek: Partial<Gorev>): Gorev => ({
@@ -19,7 +20,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   planBaslangic: '2026-12-01', planBitis: '2099-12-03', gercekBaslangic: '2026-12-01', gercekBitis: null, ilerleme: 50, durum: 'kontrolde',
   oncekiGorevId: null, asama: 'Mühendislik', yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: 2,
   kontrolRolAd: 'Kalite', yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
-  surum: 4, ...ek,
+  kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 4, ...ek,
 });
 const IZIN = { ustlenebilir: false, baslayabilir: false, bitirebilir: false, onaylayabilir: true };
 const satir = (ek: Partial<GorevlerimSatiri>): GorevlerimSatiri => ({
@@ -36,6 +37,7 @@ const LISTE: GorevlerimCevabi = {
 const ayrinti = (g: Gorev): GorevAyrintisiCevabi => ({
   gorev: g, proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi' }, izinler: IZIN,
   olaylar: [{ olay: 'bitti', kisiAd: 'Deneme Yapan', gerekce: null, an: '2026-12-02T10:00:00+03:00' }],
+  adimlar: [], notlar: [], kanitlar: [], icerikIzinleri: { adimIsaretler: false, adimYazar: false, kanitEkler: false, notYazar: true },
 });
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -56,6 +58,10 @@ function sunucuKur(kullanici: Kullanici) {
     if (yontem === 'GET' && yol === '/projeler/sablonlar/liste') return json(200, { sablonlar: [] } satisfies SablonListesiCevabi);
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Yapan' }] });
     if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 2, ad: 'Kalite' }] });
+    if (yontem === 'GET' && yol === '/hazirlik-maddeleri') {
+      const m = (kod: string, ad: string, acik: boolean) => ({ kod, ad, kisa: ad, sira: 10, acik, sistem: true, durduran: false, sahip: 'Deneme', isEmriDuzeyi: true, surum: 1 });
+      return json(200, { yazabilir: false, maddeler: [m('cnc', 'CNC kurulumu', true), m('malzeme', 'Malzeme', true), m('cizim', 'Çizim revizyonu', false)] });
+    }
     if (yontem === 'POST' && yol === '/projeler/sablonlar') return json(200, { sablonlar: [] } satisfies SablonListesiCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -71,8 +77,7 @@ function ac(adres: string) {
           <Routes>
             <Route path="/proje-gorevlerim" element={<ProjeGorevlerim />} />
             <Route path="/projeler/sablonlar" element={<GorevSablonlari />} />
-            <Route path="/panel" element={<GorevPaneli gorevId={7} kapat={() => undefined} iptalEdebilir />} />
-            <Route path="/panel-salt" element={<GorevPaneli gorevId={7} kapat={() => undefined} />} />
+            <Route path="/proje-gorevlerim/:gorevId" element={<GorevSayfasi />} />
           </Routes>
         </BildirimSaglayici>
       </QueryClientProvider>
@@ -84,8 +89,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('3303 görev iptali ve üretim ilerlemesi', () => {
   it('İptal et onay sorar; Vazgeç yazmaz; onaylanınca sürümle iptal gider ve düğme kalkar', async () => {
-    const cagrilar = sunucuKur(KONTROLCU);
-    ac('/panel');
+    const cagrilar = sunucuKur(YAZAN);
+    ac('/proje-gorevlerim/7');
     fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
     const soru = screen.getByRole('group', { name: 'Görevi iptal et' });
     expect(within(soru).getByText(/silinmez/)).toBeDefined();
@@ -97,9 +102,9 @@ describe('3303 görev iptali ve üretim ilerlemesi', () => {
     await waitFor(() => { expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull(); });
   });
 
-  it('görev yazmayan panelde İptal görmez', async () => {
+  it('görev yazmayan görev sayfasında İptal görmez', async () => {
     sunucuKur(KONTROLCU);
-    ac('/panel-salt');
+    ac('/proje-gorevlerim/7');
     await screen.findByRole('button', { name: 'Onayla' });
     expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
@@ -114,7 +119,7 @@ describe('3303 görev iptali ve üretim ilerlemesi', () => {
 });
 
 describe('3269 proje görevlerim ve şablon', () => {
-  it('görevlerim türe göre süzülür; kontrolümdeki görev panelden sürümle onaylanır', async () => {
+  it('görevlerim türe göre süzülür; kontrolümdeki görev kendi sayfasında sürümle onaylanır', async () => {
     const cagrilar = sunucuKur(KONTROLCU);
     ac('/proje-gorevlerim');
     const tablo = await screen.findByRole('table', { name: 'Görevlerim' });
@@ -122,8 +127,8 @@ describe('3269 proje görevlerim ve şablon', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Kontrolümde/ }));
     await waitFor(() => { expect(within(tablo).queryByText('İlk parça onayı')).toBeNull(); });
     fireEvent.click(within(tablo).getByText('Teknik resim kontrolü'));
-    const panel = await screen.findByRole('dialog');
-    await within(panel).findByText(/Deneme Yapan bitirdi/);
+    const panel = await screen.findByRole('region', { name: 'Görev bilgisi' });
+    await screen.findByText(/Deneme Yapan bitirdi/);
     expect(within(panel).queryByRole('button', { name: 'Üstlen' })).toBeNull();
     fireEvent.click(within(panel).getByRole('button', { name: 'Onayla' }));
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
@@ -146,7 +151,7 @@ describe('3269 proje görevlerim ve şablon', () => {
     const cagrilar = sunucuKur(KONTROLCU);
     ac('/proje-gorevlerim');
     fireEvent.click(await screen.findByText('Teknik resim kontrolü'));
-    const panel = await screen.findByRole('dialog');
+    const panel = await screen.findByRole('region', { name: 'Görev bilgisi' });
     fireEvent.click(await within(panel).findByRole('button', { name: 'Geri gönder' }));
     const gonder = within(panel).getAllByRole('button', { name: 'Geri gönder' }).at(-1);
     if (!gonder) throw new Error('düğme yok');
@@ -184,5 +189,35 @@ describe('3269 proje görevlerim ve şablon', () => {
     expect(govde.kalemler).toHaveLength(2);
     expect(govde.kalemler[0]).toMatchObject({ ad: 'Çizim incelemesi', yapanRolId: 2, yapanKisiId: null, kontrolKisiId: 9, kontrolRolId: null, oncekiSira: null });
     expect(govde.kalemler[1]).toMatchObject({ ad: 'Sevk öncesi', dayanak: 'termin', gun: -2, oncekiSira: 0, hazirlikMaddesi: null });
+  });
+
+  it('yeni şablon talaşlı imalat örneğiyle dolar; açık olmayan madde proje başına kalır, yapan boş', async () => {
+    const cagrilar = sunucuKur(SABLONCU);
+    ac('/projeler/sablonlar');
+    fireEvent.click(await screen.findByRole('button', { name: /Şablon ekle/ }));
+    const pencere = await screen.findByRole('dialog');
+    const ornek = within(pencere).getByRole('button', { name: 'Örnekle başla' });
+    await waitFor(() => { expect((ornek as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(ornek);
+        expect(within(pencere).queryByRole('button', { name: 'Örnekle başla' })).toBeNull();
+    expect((within(pencere).getByLabelText(/Şablon adı/) as HTMLInputElement).value).toBe('Talaşlı imalat hazırlığı (örnek)');
+    // Örnekten gelen bloklar kapalı: başlıkta ad, kaç kez ve atanmamış yapan uyarısı.
+    expect(within(pencere).queryAllByLabelText(/Görev adı/)).toHaveLength(0);
+    const bloklar = within(pencere).getAllByRole('group').filter((g) => g.tagName === 'FIELDSET');
+    expect(bloklar[5]?.textContent).toContain('6. CNC programı ve simülasyon');
+    expect(bloklar[5]?.textContent).toContain('Operasyon başına');
+    expect(bloklar[0]?.textContent).toContain('Proje başına');
+    expect(within(bloklar[5]!).getByText('Yapan yok')).toBeTruthy();
+    fireEvent.click(within(bloklar[5]!).getByRole('button', { name: 'Düzenle' }));
+    expect((within(bloklar[5]!).getByLabelText(/Görev adı/) as HTMLInputElement).value).toBe('CNC programı ve simülasyon');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
+    const govde = cagrilar.find((c) => c.yontem === 'POST')?.govde as { kalemler: Record<string, unknown>[] };
+    expect(govde.kalemler).toHaveLength(8);
+    expect(govde.kalemler[0]).toMatchObject({ ad: 'Sipariş ve çizim gözden geçirme', hazirlikMaddesi: null, yapanKisiId: null, yapanRolId: null });
+    expect(govde.kalemler[2]).toMatchObject({ hazirlikMaddesi: 'malzeme', kanitZorunlu: true, oncekiSira: 0 });
+    expect(govde.kalemler[5]).toMatchObject({ ad: 'CNC programı ve simülasyon', hazirlikMaddesi: 'cnc', oncekiSira: 1 });
+    expect(govde.kalemler[7]).toMatchObject({ ad: 'İlk parça onayı', hazirlikMaddesi: null, kanitZorunlu: true, oncekiSira: 5 });
+    expect((govde.kalemler[7]?.adimlar as string[]).length).toBe(3);
   });
 });

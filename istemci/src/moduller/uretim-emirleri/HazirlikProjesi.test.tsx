@@ -27,7 +27,7 @@ describe('Hazırlık projesi penceresi (3396)', () => {
     const p = await screen.findByRole('dialog');
     await within(p).findByText(/7 görev/);
     expect((within(p).getByLabelText(/^Proje/) as HTMLSelectElement).value).toBe('4');
-    expect((within(p).getByLabelText(/Hazırlık şablonu/) as HTMLSelectElement).value).toBe('2');
+    expect((within(p).getByLabelText(/Görev şablonu/) as HTMLSelectElement).value).toBe('2');
     expect(within(p).getByText(/24\.11\.2026/)).toBeTruthy();
     fireEvent.change(within(p).getByLabelText(/^Proje/), { target: { value: '5' } });
     fireEvent.click(within(p).getByRole('button', { name: 'Kaydet ve dağıt' }));
@@ -35,7 +35,7 @@ describe('Hazırlık projesi penceresi (3396)', () => {
     const post = istekler.find((i) => i.yontem === 'POST');
     expect(post?.govde).toEqual({ projeId: 5, sablonId: 2 });
     expect(post?.kimlik).toBeTruthy();
-    await screen.findByText('7 hazırlık görevi dağıtıldı.');
+    await screen.findByText('7 emir görevi açıldı.');
   });
 
   it('açık maddesi olmayan şablonda görev doğmayacağını söyler', async () => {
@@ -43,7 +43,7 @@ describe('Hazırlık projesi penceresi (3396)', () => {
     ac([{ yol: '/', ekran: Ekran }], '/');
     fireEvent.click(await screen.findByRole('button', { name: /Hazırlık projesi/ }));
     const p = await screen.findByRole('dialog');
-    fireEvent.change(await within(p).findByLabelText(/Hazırlık şablonu/), { target: { value: '1' } });
+    fireEvent.change(await within(p).findByLabelText(/Görev şablonu/), { target: { value: '1' } });
     expect(within(p).getByText(/görev doğmaz/)).toBeTruthy();
   });
 });

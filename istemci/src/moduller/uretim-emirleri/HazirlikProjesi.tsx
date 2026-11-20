@@ -37,7 +37,7 @@ function HazirlikProjesiPenceresi({ emirId, kapat }: { emirId: number; kapat: ()
       yol, { projeId: Number(projeDeger), sablonId: secili?.id ?? null } satisfies HazirlikProjesiGovdesi, { istekKimligi: yeniIstekKimligi() },
     ),
     onSuccess: async (c) => {
-      bildir('tamam', c.eklenen === 0 ? 'Yeni görev doğmadı: görevler zaten açık ya da madde kapalı.' : `${String(c.eklenen)} hazırlık görevi dağıtıldı.`);
+      bildir('tamam', c.eklenen === 0 ? 'Yeni görev doğmadı: görevler zaten açık ya da madde kapalı.' : `${String(c.eklenen)} emir görevi açıldı.`);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hazirlik(emirId) });
       kapat();
     },
@@ -73,13 +73,13 @@ function HazirlikProjesiPenceresi({ emirId, kapat }: { emirId: number; kapat: ()
               bosSecenek="Proje seçin"
               secenekler={projeler}
               onChange={(e) => { projeYaz(e.target.value); }}
-              ipucu="Projesiz emirde hazırlık görevi açılmaz; yeni proje siparişle Projeler sayfasında açılır."
+              ipucu="Projesiz emirde emir görevi açılmaz; yeni proje siparişle Projeler sayfasında açılır."
             />
             <Link to="/projeler" className="tc-emir-not">Yeni proje aç</Link>
           </div>
           <div className="tc-form-tam">
             <Secim
-              etiket="Hazırlık şablonu"
+              etiket="Görev şablonu"
               value={sablonDeger}
               bosSecenek="Projeye uygulanmış şablonlar"
               secenekler={v.sablonlar.map((x) => ({ deger: String(x.id), baslik: `${x.ad}${x.varsayilan ? ' (varsayılan)' : ''}` }))}
@@ -93,10 +93,10 @@ function HazirlikProjesiPenceresi({ emirId, kapat }: { emirId: number; kapat: ()
           <p className="tc-form-tam tc-emir-not">
             <Simge ad="check" />{' '}
             {secili === null
-              ? 'Projeye uygulanmış şablonların hazırlık kalemleri görev olur.'
-              : secili.dogacak === 0 ? 'Bu şablonda açık hazırlık maddesi yok; görev doğmaz.'
+              ? 'Projeye dağıtılmış şablonların "Her üretim emri için" satırları görev olur.'
+              : secili.dogacak === 0 ? 'Bu şablonda emir başına açık satır yok; görev doğmaz.'
                 : <>Kaydedince en çok <b>{secili.dogacak} görev</b> doğar: {secili.ozet}. Role atananlar o roldeki herkese bildirim olarak düşer, ilk üstlenen alır.</>}
-            {v.acikGorev > 0 && ` Bu emirde ${String(v.acikGorev)} hazırlık görevi zaten açık; aynısı yeniden açılmaz.`}
+            {v.acikGorev > 0 && ` Bu emirde ${String(v.acikGorev)} emir görevi zaten açık; aynısı yeniden açılmaz.`}
           </p>
           {komut.isError && <p className="tc-form-tam tc-emir-not" role="alert">{hataIletisi(komut.error, 'Görevler dağıtılamadı.')}</p>}
         </form>

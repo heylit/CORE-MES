@@ -63,7 +63,7 @@ function SiparisSecimi({ siparisId, hata, degistir }: {
   );
 }
 
-// 3269 a: yeni proje açılınca görev şablonu uygulanır. Boş seçim varsayılan şablondur (varsa); "Şablonsuz" görev doğurmaz.
+// 3458-2 a: seçilen şablon proje açılınca uygulanmaz; Görevleri dağıt ekranı onu seçili açar. Boş seçim varsayılan şablondur (varsa).
 const SABLONSUZ = 'yok';
 function SablonSecimi({ deger, degistir }: { deger: string; degistir: (d: string) => void }) {
   const sablonlar = useQuery({ queryKey: anahtarlar.sablonSecenekleri, queryFn: () => api.get<SablonSecenekleriCevabi>('/projeler/sablon-secenekleri') });
@@ -77,7 +77,7 @@ function SablonSecimi({ deger, degistir }: { deger: string; degistir: (d: string
     <Secim
       etiket="Görev şablonu" value={deger} secenekler={secenekler}
       bosSecenek={varsayilan === undefined ? 'Varsayılan şablon yok' : `${varsayilan.ad} (varsayılan) · ${varsayilan.gorevSayisi} görev`}
-      ipucu="Görevler projenin başlangıç ve bitişine göre tarihlenir."
+      ipucu="Proje açılınca görevler Görevleri dağıt ekranında atanır; tarihler projenin başlangıç ve bitişinden gelir."
       hata={sablonlar.isError ? hataIletisi(sablonlar.error, 'Şablonlar alınamadı') : undefined}
       onChange={(e) => { degistir(e.target.value); }}
     />
@@ -90,7 +90,8 @@ function bitisIpucu(proje: Proje | null, bitis: string, termin: string | null): 
   return bitis === proje.bitis ? 'Sipariş terminine bağlı; değiştirirseniz bağ kopar.' : 'Bitiş değişti; sipariş termini bağı kopacak.';
 }
 
-export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapat: () => void; acildi?: (p: Proje) => void }) {
+// acildi: şablon seçildiyse (boş: varsayılan) Görevleri dağıt ekranına, "Şablonsuz"da null ile projeye gidilir.
+export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapat: () => void; acildi?: (p: Proje, sablon: string | null) => void }) {
   const kimlik = useId();
   const istemci = useQueryClient();
   const [kod, kodYaz] = useState(proje?.kod ?? '');
@@ -134,7 +135,7 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
       kapat();
       // Yeni projede ilk iş görev ve kilometre taşı yazmaktır; kullanıcı listede aramadan ayrıntıya geçer.
-      if (proje === null) acildi?.(kayit);
+      if (proje === null) acildi?.(kayit, sablon === SABLONSUZ ? null : sablon);
     },
   });
   const ilet = (o: FormEvent) => {

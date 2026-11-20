@@ -10,6 +10,9 @@ export type { ProjeOlayi, ProjeOlayiDinleyicisi } from './proje-olaylari.ts';
 export type { SiparistenProjeVerisi } from '#paylasilan/sozlesme/projeler.ts';
 export { hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeninHazirlikGorevleri } from './hazirlik-gorevleri.ts';
 export type { HazirlikGorevi, HazirlikGorevleriAcVerisi, HazirlikHedefi, HazirlikMaddeBilgisi, HazirlikPlani } from './hazirlik-gorevleri.ts';
+// 3458: Görevleri dağıt ekranı projeye bağlı açık emirleri Üretim Emirleri'nden alır; bağ kablolamadadır.
+export { hazirlikHedefCozucusuKaydet } from './dagitim.ts';
+export type { HazirlikHedefCozucusu, HazirlikHedefleri } from './dagitim.ts';
 // 3405: kademeli uyarı kaynakları (hazırlık görevi ve proje görevi); bağ kablolamadadır.
 export { hazirlikKademeKayitlari, kapaliEmirCozucusuKaydet, projeGoreviKademeKayitlari } from './hazirlik-kademe.ts';
 export type { KapaliEmirCozucusu } from './hazirlik-kademe.ts';
