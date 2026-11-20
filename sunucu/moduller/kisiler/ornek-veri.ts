@@ -1,6 +1,8 @@
+import { randomInt } from 'node:crypto';
 import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Db } from '#cekirdek/db.ts';
-import { hesapAc, kisiEkle, yoneticiOlustur } from './servis.ts';
+import { rastgelePin } from './kurallar.ts';
+import { hesapAc, ilkPiniYaz, kisiEkle, yoneticiOlustur } from './servis.ts';
 import { onekliKullaniciVarMi, rolNoKodundan } from './sorgular.ts';
 
 // Adlar açıkça uydurmadır; başka modüller örnek kişiyi kullanıcı adıyla bulur (disari.ts kisiNoKullaniciAdindan).
@@ -27,6 +29,12 @@ export const ORNEK_KISILER = [
   { kullaniciAdi: 'ornek.satis', ad: 'Örnek Satışçı', sicilNo: 'ORN-017', gorev: 'Satış uzmanı', rol: 'satis' },
 ] as const;
 
+// Terminalde PIN'le giren operatör (3464): canlıdaki gibi PIN'li kişi olsun ki sıfırlama ve giriş testleri onu da görsün.
+// PIN verilen kişi parolayla giremez; öteki örnek hesaplar parolayla girmeye devam eder.
+export const ORNEK_TERMINAL_KISISI = {
+  kullaniciAdi: 'ornek.terminal', ad: 'Örnek Terminal Operatörü', sicilNo: 'ORN-018', gorev: 'CNC operatörü', rol: 'operator',
+} as const;
+
 async function rolNo(db: Db, kod: string): Promise<number> {
   const id = await rolNoKodundan(db, kod);
   if (id === null) throw new Error(`Örnek veri: "${kod}" rolü yok (göçler uygulanmış mı?)`);
@@ -48,5 +56,11 @@ export const ornekVeri = ornekVeriTanimi({
       await hesapAc(db, yoneticiId, kisiId, { kullaniciAdi: k.kullaniciAdi, parola, rolId: await rolNo(db, k.rol) });
       baglam.bildir(`${k.kullaniciAdi}: ${parola}`);
     }
+    const t = ORNEK_TERMINAL_KISISI;
+    const terminalId = await kisiEkle(db, { ad: t.ad, sicilNo: t.sicilNo, gorev: t.gorev });
+    await hesapAc(db, yoneticiId, terminalId, { kullaniciAdi: t.kullaniciAdi, parola: baglam.parolaUret(), rolId: await rolNo(db, t.rol) });
+    const pin = rastgelePin(() => randomInt(10));
+    await ilkPiniYaz(db, terminalId, pin);
+    baglam.bildir(`${t.kullaniciAdi} (PIN): ${pin}`);
   },
 });

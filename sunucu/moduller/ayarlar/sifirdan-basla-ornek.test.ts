@@ -99,6 +99,43 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     assert.ok((r.cozulen['stok_konum'] ?? 0) > 0, 'istasyon konumu kalan tablodan çözülür');
   });
 
+  // Canlıdaki iki hata (3464): PIN'li kişi girişsiz kalamıyordu (23514); aynı emrin iki refakat partisi, silme sırası için
+  // refakat bağı boşaltılınca stok_parti_emir_tek'e çarpıyordu (23505). Dört seçenek birleşimi de hatasız biter.
+  for (const kullanicilar of [true, false]) for (const tanimlar of [true, false]) {
+    test(`PIN'li kişiler ve aynı emrin iki refakat partisiyle: kullanıcılar ${kullanicilar ? 'kalsın' : 'kalmasın'}, tanımlar ${tanimlar ? 'kalsın' : 'kalmasın'} (işlem geri alınır)`, async () => {
+      const k = sifirlamaKapsami({ kullanicilar, tanimlar });
+      let sonuc: Awaited<ReturnType<typeof sifirdanBaslat>> | null = null;
+      let kisiler: { yonetici: boolean; girisli: boolean; pinli: boolean; belirlenecek: boolean }[] = [];
+      await assert.rejects(o().vt.tx(async (db) => {
+        const pinli = await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM kisi WHERE pin_ozeti IS NOT NULL AND id <> $1", [yoneticiId]);
+        assert.ok(pinli!.n > 0, 'örnek veride PIN\'li kişi yok');
+        await db.sorgu(
+          `UPDATE kisi SET pin_ozeti = parola_ozeti, pin_belirlenecek = true
+            WHERE id = (SELECT min(id) FROM kisi WHERE kullanici_adi IS NOT NULL AND pin_ozeti IS NULL AND id <> $1)`, [yoneticiId]);
+        const ilk = await db.tek<{ malzeme_id: number; uretim_emri_id: number; acan_kisi_id: number }>(
+          'SELECT malzeme_id, uretim_emri_id, acan_kisi_id FROM stok_parti WHERE refakat_partisi_id IS NOT NULL ORDER BY id LIMIT 1');
+        assert.ok(ilk, 'örnek veride refakat partili lot yok');
+        const r = await db.tek<{ id: number }>(
+          `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, acan_kisi_id)
+           SELECT $1, max(sira) + 1, $2, $3 FROM stok_refakat_partisi WHERE uretim_emri_id = $1 RETURNING id`,
+          [ilk.uretim_emri_id, ilk.malzeme_id, ilk.acan_kisi_id]);
+        await db.sorgu(
+          "INSERT INTO stok_parti (malzeme_id, uretim_emri_id, acan_kisi_id, lot_no, refakat_partisi_id) VALUES ($1, $2, $3, 'ORN-LOT-3464', $4)",
+          [ilk.malzeme_id, ilk.uretim_emri_id, ilk.acan_kisi_id, r!.id]);
+        sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar, yoneticiId });
+        kisiler = await db.sorgu(
+          `SELECT id = $1 AS yonetici, kullanici_adi IS NOT NULL AS girisli, pin_ozeti IS NOT NULL AS pinli, pin_belirlenecek AS belirlenecek
+             FROM kisi ORDER BY id`, [yoneticiId]);
+        throw new GeriAl();
+      }), GeriAl);
+      assert.ok(sonuc !== null && ((sonuc as { tablolar: Record<string, number> }).tablolar['stok_parti'] ?? 0) > 0, JSON.stringify(sonuc));
+      assert.ok(kisiler.some((x) => x.yonetici && x.girisli));
+      const oteki = kisiler.filter((x) => !x.yonetici);
+      if (kullanicilar) assert.ok(oteki.some((x) => x.pinli && x.belirlenecek) && oteki.some((x) => x.pinli && !x.belirlenecek));
+      else assert.ok(oteki.every((x) => !x.girisli && !x.pinli && !x.belirlenecek), JSON.stringify(oteki));
+    });
+  }
+
   test('dal: kalan tablodaki boş olabilen bağ boşaltılır, satır kalır; silinen tablodaki bağlı satır silinir', async () => {
     await assert.rejects(o().sahip.tx(async (db) => {
       await db.sorgu('CREATE TABLE orn_ana (id int PRIMARY KEY)');
