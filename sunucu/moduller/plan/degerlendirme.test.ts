@@ -696,11 +696,35 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.deepEqual(planBozuklari(yeni), []);
     // Bölünmüş payın kilidi de ilk partinin payında kalır: sahipsiz kalmaz, pay kilit saatinde durur.
     const k = eski['O2.20~2']!;
-    const kilitli = sonuc(await degerlendirmeYap({ calisma: { ...calisma, locks: { 'O2.20~2': { m: k.m, S: k.S } } }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
+    const kilitli = sonuc(await degerlendirmeYap({ calisma: { ...calisma, locks: { 'O2.20~2': { m: k.m, S: k.S + 30 } } }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
     if (kilitli.tur !== 'parti-bolme' || !kilitli.sonuc) return assert.fail(kilitli.tur);
     const kp = planOps(kilitli.sonuc.plan);
-    assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S], 'payın kilidi ilk partide');
+    assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S + 30], 'payın kilidi ilk partide');
     assert.deepEqual(planBozuklari(kp), []);
+  });
+  test('CD-10: parti böl: adıma bildirilen bekleme her partide geçerlidir, ek süre partilere adetle paylaşılır', async () => {
+    // İki torna: partiler ayrı tezgâha dağıtılınca ikinci parti ilkini beklemez; beklemesi yoksa erken başlar.
+    const kayit = { ...BUYUK_KAYIT, machines: [...BUYUK_KAYIT.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', plan: tezgah('101', '10', 750) }] };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', status: 'aktif', aktif: true }] } };
+    // Kayıtlı plan bildirimden önce kurulmuştur: adım kayıtta beklemeden önce, ek süresiz durur.
+    const kayitli = guncelPlanli(kayit, kaynak);
+    const bol = async (w: Record<string, unknown>, dagitim: 'ayni' | 'dag'): Promise<Record<string, PlanIsi>> => {
+      const calisma = { ...kayitli, w: { ...(kayitli['w'] as Record<string, unknown>), ...w } };
+      const s = sonuc(await degerlendirmeYap({ calisma, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim, adetler: [6, 3] } }, AN));
+      if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(s.tur);
+      const y = planOps(s.sonuc.plan); assert.deepEqual(planBozuklari(y), []); return y;
+    };
+    const dagitik = await bol({}, 'dag');
+    assert.notEqual(dagitik['O2/1.20']!.m, dagitik['O2/2.20']!.m, 'partiler ayrı tezgâhta');
+    // Bekleme: yalın ölçümde iki parti de bu andan önce başlar.
+    const kadar = Math.max(dagitik['O2/1.20']!.S, dagitik['O2/2.20']!.S) + 40;
+    const bekleyen = await bol({ adimBekle: { 'O2.20': { kadar, neden: 'malzeme' } } }, 'dag');
+    assert.ok(bekleyen['O2/1.20']!.S >= kadar && bekleyen['O2/2.20']!.S >= kadar, `iki parti de beklemeden sonra başlar: ${String(bekleyen['O2/1.20']?.S)}, ${String(bekleyen['O2/2.20']?.S)} >= ${String(kadar)}`);
+    // Ek süre 9 saat, partiler 6 + 3 adet: 6 ve 3 saat.
+    const sure = (r: PlanIsi): number => (r as PlanIsi & { run: number }).run;
+    const yalin = await bol({}, 'ayni'), ekli = await bol({ adimEk: { 'O2.20': { ekSaat: 9, bitis0: null } } }, 'ayni');
+    assert.ok(Math.abs(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!) - 6) < 1e-6, `ilk parti 6 saat uzar: ${String(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!))}`);
+    assert.ok(Math.abs(sure(ekli['O2/2.20']!) - sure(yalin['O2/2.20']!) - 3) < 1e-6, `ikinci parti 3 saat uzar: ${String(sure(ekli['O2/2.20']!) - sure(yalin['O2/2.20']!))}`);
   });
 
   test('CD-05: kişinin kilidi süren işle üst üste geliyorsa motor kilidi oynatmaz; çakışma planın uyarılarında bildirilir', async () => {
