@@ -101,7 +101,7 @@ export function TusTakimi({
             </button>
           ) : (
             <button key={tus} type="button" className="tc-tus" aria-label={tus === 'sil' ? 'Sil' : tus} onClick={() => bas(tus)}>
-              {tus === 'sil' ? <Simge ad="back" boyut="b" /> : tus}
+              {tus === 'sil' ? <Simge ad="backspace" boyut="b" /> : tus}
             </button>
           ))}
         </div>
