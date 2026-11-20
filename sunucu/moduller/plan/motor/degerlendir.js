@@ -137,17 +137,6 @@ function dgPlanKur(st, ms = 0) {
   while (ms > 0 && Date.now() - t0 < ms && durgun < 3) { const L = lns(st, cur, null, { ms: Math.max(200, Math.min(1000, ms - (Date.now() - t0))), seed: seed++, free: true }); if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++; }
   return planKaydi(tutulamayaniOnar(cur, st, cx, true), st, null);
 }
-/* Kişinin kilitlediği işlerden öncülü bitmeden başlayanların sayısı. Değerlendirme rota sırasını saymaz: arama, ardılı kilitli işi
-   geciktirmeyi bedelsiz görür. Kişinin kilidi yerinden oynamadığı için böyle bir sonuç onarılamaz; arama sonucu bu sayıyı artırıyorsa alınmaz. */
-/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx @param {string[]} [idler] */
-function kilitliSiraIhlali(p, st, cx, idler) {
-  let n = 0;
-  for (const id of idler || Object.keys(st.locks)) {
-    const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
-    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
-  }
-  return n;
-}
 /* sayfanın kısa araması (t-tekyer kisaArama) */
 /** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {

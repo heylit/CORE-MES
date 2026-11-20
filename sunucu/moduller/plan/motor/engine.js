@@ -1224,12 +1224,26 @@ function lnsDecode(st,cur,mods,cx,free,bekletme){
   const b=schedule(st,'sabit',fake,{...o,bekletme:true});
   return (b.fail||[]).length<=(a.fail||[]).length&&cmpEv(evaluate(b,st,null,true),evaluate(a,st,null,true))>0?b:a;
 }
+/* Kişinin kilitlediği işlerden öncülü bitmeden başlayanların sayısı. Değerlendirme rota sırasını saymaz: arama, ardılı kilitli işi
+   geciktirmeyi bedelsiz görür. Kişinin kilidi yerinden oynamadığı için böyle bir sonuç onarılamaz; arama sonucu bu sayıyı artırıyorsa alınmaz. */
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx @param {string[]} [idler] */
+function kilitliSiraIhlali(p, st, cx, idler) {
+  let n = 0;
+  for (const id of idler || Object.keys(st.locks)) {
+    const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
+    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
+  }
+  return n;
+}
 /** @param {MotorDurumu} [st] @param {any} [start] @param {any} [ref] @param {any} [opt] */
 function lns(st,start,ref,opt={}){
   const t0=Date.now(),cx=start.cx||compile(st),budget=opt.ms||1500,maxChg=opt.maxChg==null?Infinity:opt.maxChg;
   const R=rng(opt.seed||17),free=opt.free!=null?!!opt.free:!ref,frz=free?st.now:st.now+(st.w.dondurma||0);
   let cur=start,E=evaluate(cur,st,ref),failN=(cur.fail||[]).length;const E0=E;let dec=0,acc=0;const log=[];
-  const ok=(p,e)=>(p.fail||[]).length<=failN&&e.chg<=maxChg;
+  /* Değerlendirme rota sırasını saymaz: kişinin kilitlediği adımın öncülünü kilidin sonrasına iten aday bedelsiz görünür ve onarılamaz.
+     Böyle adımların sayısını artıran aday alınmaz. Elle kilit yoksa denetim hiç çalışmaz. */
+  const elle=Object.keys(st.locks||{}).filter(id=>!st.locks[id].gecici);
+  const ok=(p,e)=>(p.fail||[]).length<=failN&&e.chg<=maxChg&&(!elle.length||kilitliSiraIhlali(p,st,cx,elle)<=kilitliSiraIhlali(cur,st,cx,elle));
   { const p=lnsDecode(st,cur,[],cx,free),e=evaluate(p,st,ref);dec++;if(ok(p,e)&&cmpEv(e,E)>=0){slack(p,cx);cur=p;E=e;} }
   const movable=r=>r&&!r.act&&!r.done&&(free||!r.pin)&&!r.fas&&r.S>=frz-1e-9&&!st.locks[r.id];
   let stale=0;const tried=new Set();const HT=lbHeadsTails(st,cx);

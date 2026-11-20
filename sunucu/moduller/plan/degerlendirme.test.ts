@@ -1005,18 +1005,38 @@ describe('planlama değerlendirmesi: elle kilitli adımın öncülü (3502)', ()
     assert.ok(kilit.S - p[x]!.C < 0.5 && p[x]!.S > Math.min(...Object.values(p).map((r) => r.S)), `${String(p[x]!.S)}-${String(p[x]!.C)}, kilit ${String(kilit.S)}`);
   });
 
-  test('KZ-03: kayıtlı planda bir adım yerine kilitlenip değişiklik uygulanınca öncülü kilide doğru ileri kaymaz', async () => {
+  test('KZ-03: kayıtlı planda bir adım yerine kilitlenip değişiklik uygulanınca hiçbir işe kilit öncülü diye yer ayrılmaz', async () => {
     const c = guncelPlanli(kayit); const eski = (c['plan'] as { ops: Record<string, PlanIsi> }).ops;
     // Öncülü ile arasında boşluk olan adım: öncül kilide yaslansaydı ileri kayardı.
     const k = Object.keys(eski).filter((id) => id.endsWith('.20') && eski[id]!.S - eski[id.replace(/\.20$/, '.10')]!.C > 2).sort()[0]!;
     assert.ok(k, 'öncülüyle arası açık adım var');
-    const x = k.replace(/\.20$/, '.10');
     const s = sonuc(await degerlendirmeYap({ calisma: { ...c, locks: { [k]: { m: eski[k]!.m, S: eski[k]!.S } } }, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['*'] } }, AN));
     if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
     const yeni = s.plan['ops'] as Record<string, PlanIsi>;
-    assert.ok(yeni[x]!.S <= eski[x]!.S + 1e-6, `${String(yeni[x]!.S)} <= ${String(eski[x]!.S)}`);
+    // Öncülün yeri aramanın izlediği yola bağlıdır; ölçülen, zincir yerleşiminin bu kipte hiçbir işe yer ayırmamasıdır.
+    assert.deepEqual(Object.entries(yeni).filter(([, r]) => (r as PlanIsi & { why?: { t?: string } | null }).why?.t === 'kilit-oncul').map(([id]) => id), []);
     assert.deepEqual([yeni[k]!.m, yeni[k]!.S], [eski[k]!.m, eski[k]!.S]);
     assert.deepEqual(planBozuklari(yeni), []);
+  });
+
+  test('KZ-04: arama, kilitli adımı öncülünden önce başlatan adım sayısını artırmaz; motorun kendi aramasında da, büyük planların aramasında da', async () => {
+    const p0 = await kur(0.001, {});
+    // Kilitsiz planda, ilk adım dışındaki adımların yarısı (sırayla birer atlayarak) bulunduğu yere kilitlenir.
+    const locks = Object.fromEntries(Object.keys(p0).filter((id) => !id.endsWith('.10')).sort().filter((_, i) => i % 2 === 1).map((id) => [id, { m: p0[id]!.m, S: p0[id]!.S }]));
+    const say = (p: Record<string, PlanIsi>): number => planBozuklari(p).filter((x) => locks[x.split(' ')[0]!]).length;
+    const aramasiz = say(await kur(0.001, locks));
+    for (const sure of [0.6, 1.5]) assert.ok(say(await kur(sure, locks)) <= aramasiz, `motorun araması, süre ${String(sure)}`);
+    // Büyük planların araması (kayan pencere) 1000 adımdan sonra devreye girer; küçük veride eşik sıfırlanarak koşturulur. Motor boş bağlamda yüklenir.
+    const ESIK = 'var KP_ESIK = 1000;';
+    assert.ok(degerlendirmeKodu().includes(ESIK), 'eşik satırı değişmiş');
+    const pencereli = (sure: number): Record<string, PlanIsi> => {
+      const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+      const m = vm.runInContext(degerlendirmeKodu().replace(ESIK, 'var KP_ESIK = 0;'), b) as { degerlendir: (...a: unknown[]) => unknown };
+      const r = m.degerlendir({ ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure }, locks }, kayit, BUYUK_KAYNAK, '2026-10-19', AN, { tur: 'plan-kur' });
+      return (JSON.parse(JSON.stringify(r)) as { sonuc: { plan: { ops: Record<string, PlanIsi> } } }).sonuc.plan.ops;
+    };
+    const pencereAramasiz = say(pencereli(0.001));
+    for (const sure of [0.6, 1.5]) assert.ok(say(pencereli(sure)) <= pencereAramasiz, `büyük plan araması, süre ${String(sure)}`);
   });
 
   test('KZ-02: zincir kilide sığmıyorsa hiçbir öncülün yeri ayrılmaz; sıra yalnız kilitli adımda bozulur, kilitsiz adımlar sıralı kalır', async () => {
