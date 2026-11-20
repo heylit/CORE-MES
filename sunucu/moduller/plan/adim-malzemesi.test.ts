@@ -92,4 +92,14 @@ describe('plan motoru: malzeme tükettiği adımda beklenir (1473 a)', () => {
     assert.equal(uyari.length, 1, uyari.join(' | '));
     assert.match(uyari[0] ?? '', /^S1: malzeme .* geliyor/);
   });
+
+  test('3488: elle kilitlenen adım malzemeyi beklemez ama malzemeden önce başlıyorsa uyarılır', () => {
+    // S1.20 salı 08:00'e (32) kilitli; H2 çarşamba 08:00'de (56) gelir. Motor kilidi kaydırmaz; uyarı verir.
+    const s = st({ locks: { 'S1.20': { m: 'T2', S: 32 } } });
+    const p = m.schedule(s, 'yeni', null);
+    assert.equal(p.ops['S1.20']?.S, 32);
+    const uyari = (m.evaluate(p, s, null, false) as { warn: { t: string; txt: string }[] }).warn.filter((w) => w.t === 'malzeme').map((w) => w.txt);
+    assert.equal(uyari.length, 1, uyari.join(' | '));
+    assert.match(uyari[0] ?? '', /^S1: malzeme .* geliyor, iş .* başlıyor/);
+  });
 });

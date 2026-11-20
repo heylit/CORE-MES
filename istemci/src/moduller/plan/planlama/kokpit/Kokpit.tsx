@@ -37,7 +37,7 @@ import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
 import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
-import { emirMalzemeleri } from './malzeme.ts';
+import { adimMalzemeAnlari, emirMalzemeleri } from './malzeme.ts';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
@@ -147,6 +147,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
   const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
+  const malzemeAni = useMemo(() => adimMalzemeAnlari(malzeme, m.emirler), [malzeme, m.emirler]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
   const saatGirdisi = useMemo(() => ({ yaz: (t: number) => girdiSaati(c.D, t), oku: (v: string) => girdidenSaat(c.D, v) }), [c]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
@@ -876,7 +877,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
-            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
+            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
           {butunTezgahlar && !vurgu && <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Tezgâhlar"><h2>Tezgâhlar</h2>{listeTahtasi}</section>}
             </>

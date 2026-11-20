@@ -2330,7 +2330,9 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
 test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl paneli açılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   // S1'in Freze adımı planda yeri olmadan başlar; kilitlenince (taslakta elle yerleştirilince) plana girer.
   const { 'S1.a2': _, ...yerlesmeyen } = ILK;
-  const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: d.locks['S1.a2'] ? plan(d.ops) : { ...plan(d.ops), fail: ['S1.a2'] } }));
+  // Freze adımının malzemesi salı 16:00'da (40) gelir: daha erken başlayan yerde uyarı yazar (0004).
+  const mal = { S1: [{ kod: 'ORN-H1', adim: 'a2', need: 8, t: 40, stok: 0, eksik: 0, pay: [{ tur: 'sa', kim: null, q: 8, gelis: 40, tb: false }] }] };
+  const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: { ...(d.locks['S1.a2'] ? plan(d.ops) : { ...plan(d.ops), fail: ['S1.a2'] }), mal } }));
   t.s.ortak = { ...t.s.ortak, ops: yerlesmeyen };
   await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
     const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
@@ -2370,7 +2372,9 @@ test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl pa
   const elle = s1.getByRole('group', { name: 'Freze için elle yerleştirme' });
   await expect(elle.getByRole('list', { name: 'Boş yerler' })).toBeVisible();
   await expect(elle.locator('[data-gerekli]')).toContainText('Gerekli 8 sa');
+  await expect(elle.locator('[data-elle-yer="M3"] [data-elle-malzeme]')).toContainText('malzeme 20.10 Sal 16:00 geliyor');
   await elle.locator('[data-elle-yer="M3"]').click();
+  await expect(elle.locator('[data-elle-malzeme-uyari]')).toContainText('kilitli adım malzemeyi beklemez');
   await expect(elle.locator('[data-elle-secilen="M3"]')).toContainText('Adım biter');
   await tasma();
   await cek('1-elle');

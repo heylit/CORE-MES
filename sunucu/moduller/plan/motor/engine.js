@@ -774,7 +774,8 @@ function evaluate(plan,st,ref,fast){
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
-      if(!fast&&!r.pin){const mr=cx.mat.res[jid],mt=mr&&mr.op?mr.op[o.id]:undefined;if(mt!=null&&r.S<mt-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mt)?`${jid}: malzeme ${fmtDT(cx.D,mt)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      /* 3488: elle kilitlenen (kilit) ama başlamamış adım da malzemeden önce başlıyorsa uyarılır; motor kilidi malzemeye göre kaydırmaz */
+      if(!fast&&(!r.pin||(r.kilit&&!r.act&&!r.done))){const mr=cx.mat.res[jid],mt=mr&&mr.op?mr.op[o.id]:undefined;if(mt!=null&&r.S<mt-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mt)?`${jid}: malzeme ${fmtDT(cx.D,mt)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));

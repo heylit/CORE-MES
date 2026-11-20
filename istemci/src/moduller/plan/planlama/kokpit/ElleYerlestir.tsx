@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dugme } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sureYaz, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 import { useElleYer, type YerlestirmeHedefi } from './Yerlestirme.tsx';
 
@@ -20,10 +20,12 @@ export interface ElleYerlestirOzellikleri {
   tasi: (isId: string, tezgah: string, baslangic: number) => void;
   // Elle böl panelini açar; yazamayan kişide null.
   bol: ((isId: string) => void) | null;
+  // Adımın malzemesinin hazır anı (Infinity: eksik); beklenecek malzeme yoksa undefined. Kilitli adım malzemeyi beklemez, yalnız yazılır.
+  malzeme?: number;
   kapat: () => void;
 }
 
-export function ElleYerlestir({ m, e, isId, ad, zaman, surum, hedef, tasi, bol, kapat }: ElleYerlestirOzellikleri) {
+export function ElleYerlestir({ m, e, isId, ad, zaman, surum, hedef, tasi, bol, malzeme, kapat }: ElleYerlestirOzellikleri) {
   const { yerler, gerekli } = useElleYer(m, e, isId, surum);
   const [secilen, setSecilen] = useState<string | null>(null);
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
@@ -41,6 +43,7 @@ export function ElleYerlestir({ m, e, isId, ad, zaman, surum, hedef, tasi, bol, 
   }, [kapat]);
   // Bitiş başka güne düşüyorsa gün adıyla yazılır ("→ Sal 00:00").
   const bitisYaz = (s: number, c: number): string => (zaman(s).slice(0, -6) === zaman(c).slice(0, -6) ? zaman(c).slice(-5) : zaman(c).slice(6));
+  const malzemeOnce = (s: number): string | null => (malzeme === undefined || s >= malzeme - 0.01 ? null : Number.isFinite(malzeme) ? `malzeme ${zaman(malzeme)} geliyor` : 'malzeme eksik');
   const yer = secilen === null ? undefined : yerler?.find((b) => b.tezgah === secilen);
   const termin = (b: number | null): string => {
     if (b === null || e.termin === null) return '';
@@ -62,6 +65,7 @@ export function ElleYerlestir({ m, e, isId, ad, zaman, surum, hedef, tasi, bol, 
                   <button type="button" data-elle-yer={b.tezgah} aria-pressed={secilen === b.tezgah} onClick={() => { setSecilen(b.tezgah); }}>
                     <b className="tc-pyq-mono">{kod(b.tezgah)}</b>
                     <span>{zaman(b.S)} → {bitisYaz(b.S, b.C)}{b.enErken ? ' · en erken biten' : ''}</span>
+                    {malzemeOnce(b.S) !== null && <small className="tc-pyq-elle-malzeme" data-elle-malzeme=""><Simge ad="alert" boyut="k" />{malzemeOnce(b.S)}</small>}
                   </button>
                 </li>
               ))}
@@ -71,6 +75,7 @@ export function ElleYerlestir({ m, e, isId, ad, zaman, surum, hedef, tasi, bol, 
         <div className="tc-pyq-elle-sonuc" role="status" data-elle-secilen={yer.tezgah}>
           <span>Seçilen: <b className="tc-pyq-mono">{kod(yer.tezgah)}</b> · {zaman(yer.S)}</span>
           <span>Adım biter <b>{zaman(yer.C)}</b></span>
+          {malzemeOnce(yer.S) !== null && <span className="tc-pyq-elle-malzeme" data-elle-malzeme-uyari=""><Simge ad="alert" boyut="k" />Adım malzemeden önce başlar ({malzemeOnce(yer.S)}); kilitli adım malzemeyi beklemez, plan uyarı verir.</span>}
           {yer.bitis !== null && <span>Emir biter <b>{zaman(yer.bitis)}</b>{termin(yer.bitis) !== '' && ` · ${termin(yer.bitis)}`}</span>}
         </div>
       )}

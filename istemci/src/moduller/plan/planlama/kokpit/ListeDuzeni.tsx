@@ -37,6 +37,8 @@ export interface ListeDuzeniOzellikleri {
   // Elle yerleştirmede tahtada yanan yerler; seçili iş varsa elle yerleştirme açılınca seçim bırakılır (tahta seçili işin yerlerini çizer).
   hedef?: (h: YerlestirmeHedefi | null) => void;
   secimiBirak?: () => void;
+  // 3488: adım → malzemesinin hazır anı (malzeme.ts adimMalzemeAnlari).
+  malzemeAni?: Readonly<Record<string, number>>;
 }
 
 // Açık satırın kendi birincil düğmesi var mı: plansızda Planla, geç ya da riskli siparişte Seçenekleri göster.
@@ -56,7 +58,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -155,7 +157,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                                 </span>
                               )}
                               {elleOlur && elle === a.id && tasi && (
-                                <ElleYerlestir m={m} e={e} isId={a.id} ad={a.ad} zaman={zaman} surum={surum} hedef={hedef ?? bosHedef} tasi={tasi} bol={bol} kapat={elleKapat} />
+                                <ElleYerlestir m={m} e={e} isId={a.id} ad={a.ad} zaman={zaman} surum={surum} hedef={hedef ?? bosHedef} tasi={tasi} bol={bol} malzeme={malzemeAni?.[a.id]} kapat={elleKapat} />
                               )}
                             </li>
                           );

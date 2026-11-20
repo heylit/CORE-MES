@@ -4,7 +4,7 @@ import { ornekCalisma } from '../motor/ornek.ts';
 import { planOku, type OkunanPlan, type PlanIslemi } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
-import { emirMalzemeleri, malzemeNedeni, malzemeVarsayimi, miktarYaz, terminYazisi, type AcikSiparisler } from './malzeme.ts';
+import { adimMalzemeAnlari, emirMalzemeleri, malzemeNedeni, malzemeVarsayimi, miktarYaz, terminYazisi, type AcikSiparisler } from './malzeme.ts';
 import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import { EmirAdimlari } from './Yerlestirme.tsx';
 import { siraKartlari } from './yerlestirme.ts';
@@ -83,6 +83,16 @@ describe('Kokpit malzeme satırı: hesap (3369)', () => {
     const e = { adimlar: [{ id: '1.10', ad: 'Torna', adaylar: [] }, { id: '1.20', ad: 'Freze', adaylar: [] }] } as unknown as KokpitEmri;
     expect(malzemeNedeni(e, 0, bekleyen, zaman)).toBe('1. adım (Torna) malzemeyi bekliyor; malzeme g3 08:00 geliyor.');
     expect(malzemeNedeni(e, 1, bekleyen, zaman)).toBeNull();
+  });
+
+  it('3488: adımın malzeme anı: gelen malzemede en geç an, eksikte Infinity; stokta ve termini girilmemişte yok; adımsız satır ilk adıma', () => {
+    const satir = (adimId: string | null, durum: 'stokta' | 'geliyor' | 'terminsiz' | 'eksik', an: number | null) => ({ kod: 'K', ad: 'K', birim: '', adimId, ihtiyac: 1, stoktan: 0, siparisten: 0, eksik: 0, durum, an, siparisler: [] });
+    const mz = { bekleyen: {}, satirlar: {
+      E1: [satir('E1.20', 'geliyor', 40), satir('E1.20', 'geliyor', 50), satir('E1.30', 'stokta', null), satir('E1.40', 'terminsiz', 60)],
+      E2: [satir(null, 'eksik', null)],
+    } };
+    const emirler = [{ id: 'E1', adimlar: [{ id: 'E1.10' }, { id: 'E1.20' }] }, { id: 'E2', adimlar: [{ id: 'E2.10' }] }] as unknown as Pick<KokpitEmri, 'id' | 'adimlar'>[];
+    expect(adimMalzemeAnlari(mz, emirler)).toEqual({ 'E1.20': 50, 'E2.10': Infinity });
   });
 
   it('termin yazıları ve varsayım', () => {
